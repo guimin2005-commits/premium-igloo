@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(ls -la \"C:\\\\Users\\\\user\\\\Downloads\\\\\" | grep -i \"logo\\\\|igloo\" | head -10)"
+    ]
+  }
+}
