@@ -16,7 +16,7 @@ const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => vo
 
     const patterns = [
       { regex: /\[([^\]]+)\]\(([^)]+)\)/g, type: "link" },
-      { regex: /\[([^\]]+)\](?!\()/g, type: "copy-box" },
+      { regex: /\{([^}]+)\}/g, type: "copy-box" },
       { regex: /\*\*(.*?)\*\*/g, type: "bold" },
       { regex: /__(.*?)__/g, type: "underline" },
       { regex: /~~(.*?)~~/g, type: "strikethrough" },

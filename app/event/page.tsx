@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -17,7 +17,7 @@ const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => vo
 
     const patterns = [
       { regex: /\[([^\]]+)\]\(([^)]+)\)/g, type: "link" },
-      { regex: /\[([^\]]+)\](?!\()/g, type: "copy-box" },
+      { regex: /\{([^}]+)\}/g, type: "copy-box" },
       { regex: /\*\*(.*?)\*\*/g, type: "bold" },
       { regex: /__(.*?)__/g, type: "underline" },
       { regex: /~~(.*?)~~/g, type: "strikethrough" },

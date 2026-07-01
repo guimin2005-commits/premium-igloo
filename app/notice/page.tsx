@@ -18,7 +18,7 @@ const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => vo
     // 모든 패턴을 찾기 위한 정규표현식
     const patterns = [
       { regex: /\[([^\]]+)\]\(([^)]+)\)/g, type: "link" },
-      { regex: /\[([^\]]+)\](?!\()/g, type: "copy-box" },
+      { regex: /\{([^}]+)\}/g, type: "copy-box" },
       { regex: /\*\*(.*?)\*\*/g, type: "bold" },
       { regex: /__(.*?)__/g, type: "underline" },
       { regex: /~~(.*?)~~/g, type: "strikethrough" },
