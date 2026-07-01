@@ -7,87 +7,176 @@ import { useRouter } from "next/navigation";
 // 📌 [관리자 명단 설정]
 const ADMIN_USERS = ["elahw.06"]; 
 
-const RenderFormattedText = ({ text }: { text: string }) => {
+const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => void }) => {
   if (!text) return null;
 
-  const parseMarkdownWithTable = (text: string): string => {
-    const lines = text.split("\n");
-    const result: string[] = [];
-    let i = 0;
+  const renderContent = (content: string) => {
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let key = 0;
 
-    while (i < lines.length) {
-      const line = lines[i];
+    const patterns = [
+      { regex: /\[([^\]]+)\]\(([^)]+)\)/g, type: "link" },
+      { regex: /\[([^\]]+)\](?!\()/g, type: "copy-box" },
+      { regex: /\*\*(.*?)\*\*/g, type: "bold" },
+      { regex: /__(.*?)__/g, type: "underline" },
+      { regex: /~~(.*?)~~/g, type: "strikethrough" },
+      { regex: /==(.*?)==/g, type: "highlight" },
+    ];
 
-      if (line.trim().startsWith("|")) {
-        const tableLines: string[] = [];
-        while (i < lines.length && lines[i].trim().startsWith("|")) {
-          tableLines.push(lines[i]);
-          i++;
-        }
+    const matches: { index: number; length: number; type: string; groups: string[] }[] = [];
+    patterns.forEach(({ regex, type }) => {
+      let match;
+      while ((match = regex.exec(content)) !== null) {
+        matches.push({
+          index: match.index,
+          length: match[0].length,
+          type,
+          groups: Array.from(match).slice(1),
+        });
+      }
+    });
 
-        const table = parseMarkdownTable(tableLines);
-        if (table) {
-          result.push(table);
-        } else {
-          result.push(...tableLines.map(l => formatInlineMarkdown(l)));
-        }
-      } else {
-        result.push(formatInlineMarkdown(line));
+    matches.sort((a, b) => a.index - b.index || b.length - a.length);
+    const filtered: typeof matches = [];
+    const used = new Set<number>();
+    matches.forEach(m => {
+      if (!Array.from({ length: m.length }, (_, i) => m.index + i).some(i => used.has(i))) {
+        filtered.push(m);
+        m.index + Array.from({ length: m.length }, (_, i) => i).forEach(i => used.add(m.index + i));
+      }
+    });
+
+    filtered.sort((a, b) => a.index - b.index);
+
+    filtered.forEach(match => {
+      if (match.index > lastIndex) {
+        parts.push(
+          <span key={key++}>
+            {content.substring(lastIndex, match.index).split("\n").map((line, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && <br />}
+                {line}
+              </React.Fragment>
+            ))}
+          </span>
+        );
+      }
+
+      if (match.type === "link") {
+        parts.push(
+          <a key={key++} href={match.groups[1]} target="_blank" rel="noopener noreferrer" className="text-[#e91e3f] hover:underline">
+            {match.groups[0]}
+          </a>
+        );
+      } else if (match.type === "copy-box") {
+        parts.push(
+          <span key={key++} className="inline-flex items-center gap-1.5 bg-[#2a2a2a] px-2.5 py-1 rounded">
+            <code className="text-[#e91e3f] font-mono text-sm">{match.groups[0]}</code>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(match.groups[0]);
+                onCopy?.();
+              }}
+              className="text-[#e91e3f] hover:text-white transition-colors flex-shrink-0"
+              title="복사"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </button>
+          </span>
+        );
+      } else if (match.type === "bold") {
+        parts.push(<strong key={key++}>{match.groups[0]}</strong>);
+      } else if (match.type === "underline") {
+        parts.push(<span key={key++} className="underline">{match.groups[0]}</span>);
+      } else if (match.type === "strikethrough") {
+        parts.push(<span key={key++} className="line-through">{match.groups[0]}</span>);
+      } else if (match.type === "highlight") {
+        parts.push(<span key={key++} className="text-[#e91e3f] font-bold">{match.groups[0]}</span>);
+      }
+
+      lastIndex = match.index + match.length;
+    });
+
+    if (lastIndex < content.length) {
+      parts.push(
+        <span key={key++}>
+          {content.substring(lastIndex).split("\n").map((line, i) => (
+            <React.Fragment key={i}>
+              {i > 0 && <br />}
+              {line}
+            </React.Fragment>
+          ))}
+        </span>
+      );
+    }
+
+    return parts;
+  };
+
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (line.trim().startsWith("|")) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        tableLines.push(lines[i]);
         i++;
       }
+
+      const isValidTable = tableLines.length >= 2 && /^\|[\s|-]+\|$/.test(tableLines[1].trim());
+      if (isValidTable) {
+        const parseRow = (line: string): string[] => line.split("|").slice(1, -1).map(cell => cell.trim());
+        const headerCells = parseRow(tableLines[0]);
+        const dataRows = tableLines.slice(2).map(parseRow);
+
+        elements.push(
+          <table key={key++} className="w-full border-collapse border border-white/10 my-4">
+            <thead>
+              <tr>
+                {headerCells.map((cell, idx) => (
+                  <th key={idx} className="border border-white/10 px-3 py-2 bg-white/5 text-left font-bold">
+                    {renderContent(cell)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {dataRows.map((cells, rowIdx) => (
+                <tr key={rowIdx}>
+                  {cells.map((cell, cellIdx) => (
+                    <td key={cellIdx} className="border border-white/10 px-3 py-2">
+                      {renderContent(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      } else {
+        tableLines.forEach(tableLine => {
+          elements.push(
+            <p key={key++}>{renderContent(tableLine)}</p>
+          );
+        });
+      }
+    } else {
+      elements.push(
+        <p key={key++}>{renderContent(line)}</p>
+      );
+      i++;
     }
+  }
 
-    return result.join("\n");
-  };
-
-  const parseMarkdownTable = (lines: string[]): string | null => {
-    if (lines.length < 2) return null;
-
-    const headerLine = lines[0].trim();
-    const separatorLine = lines[1].trim();
-
-    if (!/^\|.*\|$/.test(headerLine) || !/^\|[\s|-]+\|$/.test(separatorLine)) {
-      return null;
-    }
-
-    const parseRow = (line: string): string[] => {
-      return line.split("|").slice(1, -1).map(cell => cell.trim());
-    };
-
-    const headerCells = parseRow(headerLine);
-    const dataRows = lines.slice(2).map(parseRow);
-
-    let html = "<table class='w-full border-collapse border border-white/10 my-4'>";
-    html += "<thead><tr>";
-    headerCells.forEach(cell => {
-      html += `<th class='border border-white/10 px-3 py-2 bg-white/5 text-left font-bold'>${formatInlineMarkdown(cell)}</th>`;
-    });
-    html += "</tr></thead>";
-
-    html += "<tbody>";
-    dataRows.forEach(cells => {
-      html += "<tr>";
-      cells.forEach(cell => {
-        html += `<td class='border border-white/10 px-3 py-2'>${formatInlineMarkdown(cell)}</td>`;
-      });
-      html += "</tr>";
-    });
-    html += "</tbody></table>";
-
-    return html;
-  };
-
-  const formatInlineMarkdown = (text: string): string => {
-    return text
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href='$2' target='_blank' rel='noopener noreferrer' class='text-[#e91e3f] hover:underline'>$1</a>")
-      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-      .replace(/__(.*?)__/g, "<span class='underline'>$1</span>")
-      .replace(/~~(.*?)~~/g, "<span class='line-through'>$1</span>")
-      .replace(/==(.*?)==/g, "<span class='text-[#e91e3f] font-bold'>$1</span>");
-  };
-
-  const formatted = parseMarkdownWithTable(text);
-  return <div dangerouslySetInnerHTML={{ __html: formatted }} />;
+  return <div className="space-y-2">{elements}</div>;
 };
 
 const stripMarkdown = (text: string) => {
@@ -109,11 +198,11 @@ export default function EventPage() {
 
   const isAdmin = isLoggedIn && session?.user?.name && ADMIN_USERS.includes(session.user.name);
 
-  const [activeTab, setActiveTab] = useState("ongoing"); 
+  const [activeTab, setActiveTab] = useState("ongoing");
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
+  const [copyNotification, setCopyNotification] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [popupConfig, setPopupConfig] = useState({ isOpen: false, message: "", isError: false });
 
@@ -270,7 +359,7 @@ export default function EventPage() {
                 </div>
               </div>
               <h2 className="text-2xl font-bold text-white mb-4 border-b border-white/5 pb-4">{selectedEvent.title}</h2>
-              <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap"><RenderFormattedText text={selectedEvent.content} /></div>
+              <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap"><RenderFormattedText text={selectedEvent.content} onCopy={() => { setCopyNotification(true); setTimeout(() => setCopyNotification(false), 2000); }} /></div>
             </div>
           </div>
         </div>
