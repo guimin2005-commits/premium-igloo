@@ -79,33 +79,36 @@ export default function SupportPage() {
   }, [isAdmin]);
 
   useEffect(() => {
-    if (!content.trim()) {
+    const trimmedContent = content.trim();
+    if (trimmedContent.length < 5) {
       setSuggestedFaqs([]);
       return;
     }
 
-    const searchText = content.toLowerCase();
-    const suggestions = [];
-    const seenQuestions = new Set();
+    const searchText = trimmedContent.toLowerCase();
+    const suggestions: any[] = [];
+    const seenQuestions = new Set<string>();
 
-    for (const section of FAQ_DATA) {
-      for (const faq of section.items) {
+    FAQ_DATA.forEach((section: any) => {
+      section.items.forEach((faq: any) => {
+        if (seenQuestions.has(faq.q)) return;
+
         const questionLower = faq.q.toLowerCase();
         const answerLower = faq.a.toLowerCase();
         let matchScore = 0;
 
-        const keywords = searchText.split(/[\s,.!?]+/).filter(k => k.length > 2);
-        for (const keyword of keywords) {
+        const keywords = searchText.split(/[\s,.!?]+/).filter((k: string) => k.length > 2);
+        keywords.forEach((keyword: string) => {
           if (questionLower.includes(keyword)) matchScore += 3;
           if (answerLower.includes(keyword)) matchScore += 1;
-        }
+        });
 
-        if (matchScore > 0 && !seenQuestions.has(faq.q)) {
+        if (matchScore > 0) {
           suggestions.push({ ...faq, category: section.category, score: matchScore });
           seenQuestions.add(faq.q);
         }
-      }
-    }
+      });
+    });
 
     suggestions.sort((a, b) => b.score - a.score);
     setSuggestedFaqs(suggestions.slice(0, 3));
@@ -140,6 +143,28 @@ export default function SupportPage() {
   };
 
   const handleSubmit = async () => {
+    // 필수 필드 검증
+    if (mainType === "일반" && !subType) {
+      setPopupConfig({ isOpen: true, message: "문의 분류를 선택해주세요.", isError: true });
+      return;
+    }
+    if (mainType === "오류" && !errorDesc.trim()) {
+      setPopupConfig({ isOpen: true, message: "발생 오류를 입력해주세요.", isError: true });
+      return;
+    }
+    if (mainType === "신고" && (!reportDate.trim() || !reportType)) {
+      setPopupConfig({ isOpen: true, message: "발생 일시와 신고 유형을 입력해주세요.", isError: true });
+      return;
+    }
+    if (mainType === "환불 및 교환" && (!productName.trim() || !refundType)) {
+      setPopupConfig({ isOpen: true, message: "상품명과 유형을 선택해주세요.", isError: true });
+      return;
+    }
+    if (!content.trim()) {
+      setPopupConfig({ isOpen: true, message: "상세 내용을 입력해주세요.", isError: true });
+      return;
+    }
+
     const inquiryData = { user: session?.user?.name, mainType, subType, errorDesc, reportDate, reportType, productName, refundType, content, email: isEmailChecked ? email : "미제공" };
     try {
       const res = await fetch("/api/inquiry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(inquiryData) });
