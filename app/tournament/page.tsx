@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 const ADMIN_USERS = ["elahw.06"];
@@ -104,7 +104,8 @@ export default function TournamentPage() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [selected, setSelected] = useState<any>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [popup, setPopup] = useState({ isOpen: false, message: "", isError: false, isLoginRequired: false });
+  const [popup, setPopup] = useState({ isOpen: false, message: "", isError: false });
+  const [isLoginReqModalOpen, setIsLoginReqModalOpen] = useState(false);
 
   const fetchTournaments = async () => {
     setIsLoading(true);
@@ -141,7 +142,7 @@ export default function TournamentPage() {
   const handleApply = (t: any) => {
     if (getStatus(t) !== "진행중") return;
     if (status !== "authenticated") {
-      setPopup({ isOpen: true, message: "로그인이 필요합니다.", isError: true, isLoginRequired: true });
+      setIsLoginReqModalOpen(true);
       return;
     }
     if (t.tournamentLink) window.open(t.tournamentLink, "_blank", "noopener,noreferrer");
@@ -295,19 +296,30 @@ export default function TournamentPage() {
         </div>
       )}
 
+      {isLoginReqModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl relative">
+            <div className="w-16 h-16 bg-[#5865F2]/10 rounded-full flex items-center justify-center mb-6 mx-auto">
+              <svg className="w-8 h-8 text-[#5865F2]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">로그인 필요</h2>
+            <p className="text-sm text-gray-400 mb-8 whitespace-pre-line">대회 참가 신청을 위해서는<br/>디스코드 로그인이 필요합니다.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setIsLoginReqModalOpen(false)} className="flex-1 py-3 rounded-xl font-bold text-sm bg-[#2a2a2a] hover:bg-[#333] text-white transition-colors">취소</button>
+              <button onClick={() => signIn("discord")} className="flex-1 py-3 rounded-xl font-bold text-sm bg-[#5865F2] hover:bg-[#4752C4] text-white transition-colors">Discord 로그인</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {popup.isOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
-            <h2 className="text-xl font-bold text-white mb-3">{popup.isError ? "알림" : "완료"}</h2>
+            <h2 className="text-xl font-bold text-white mb-3">{popup.isError ? "오류" : "완료"}</h2>
             <p className="text-sm text-gray-400 mb-8">{popup.message}</p>
-            {popup.isLoginRequired ? (
-              <div className="flex gap-3">
-                <button onClick={() => setPopup({ ...popup, isOpen: false })} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">취소</button>
-                <button onClick={() => router.push("/auth/signin")} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-colors">로그인</button>
-              </div>
-            ) : (
-              <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">확인</button>
-            )}
+            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">확인</button>
           </div>
         </div>
       )}
