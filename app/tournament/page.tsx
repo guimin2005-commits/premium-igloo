@@ -104,7 +104,7 @@ export default function TournamentPage() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [selected, setSelected] = useState<any>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [popup, setPopup] = useState({ isOpen: false, message: "", isError: false });
+  const [popup, setPopup] = useState({ isOpen: false, message: "", isError: false, isLoginRequired: false });
 
   const fetchTournaments = async () => {
     setIsLoading(true);
@@ -141,7 +141,7 @@ export default function TournamentPage() {
   const handleApply = (t: any) => {
     if (getStatus(t) !== "진행중") return;
     if (status !== "authenticated") {
-      router.push("/auth/signin");
+      setPopup({ isOpen: true, message: "로그인이 필요합니다.", isError: true, isLoginRequired: true });
       return;
     }
     if (t.tournamentLink) window.open(t.tournamentLink, "_blank", "noopener,noreferrer");
@@ -298,9 +298,16 @@ export default function TournamentPage() {
       {popup.isOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
-            <h2 className="text-xl font-bold text-white mb-3">{popup.isError ? "오류" : "완료"}</h2>
+            <h2 className="text-xl font-bold text-white mb-3">{popup.isError ? "알림" : "완료"}</h2>
             <p className="text-sm text-gray-400 mb-8">{popup.message}</p>
-            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">확인</button>
+            {popup.isLoginRequired ? (
+              <div className="flex gap-3">
+                <button onClick={() => setPopup({ ...popup, isOpen: false })} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">취소</button>
+                <button onClick={() => router.push("/auth/signin")} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-colors">로그인</button>
+              </div>
+            ) : (
+              <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">확인</button>
+            )}
           </div>
         </div>
       )}
