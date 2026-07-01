@@ -140,6 +140,10 @@ export default function TournamentPage() {
 
   const handleApply = (t: any) => {
     if (getStatus(t) !== "진행중") return;
+    if (status !== "authenticated") {
+      router.push("/auth/signin");
+      return;
+    }
     if (t.tournamentLink) window.open(t.tournamentLink, "_blank", "noopener,noreferrer");
     else setSelected(t);
   };
