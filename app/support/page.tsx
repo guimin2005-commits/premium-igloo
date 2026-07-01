@@ -15,6 +15,8 @@ export default function SupportPage() {
   const [errorDesc, setErrorDesc] = useState("");
   const [reportDate, setReportDate] = useState("");
   const [reportType, setReportType] = useState("");
+  const [productName, setProductName] = useState("");
+  const [refundType, setRefundType] = useState("환불");
   const [content, setContent] = useState("");
   const [isEmailChecked, setIsEmailChecked] = useState(false);
   const [email, setEmail] = useState("");
@@ -75,7 +77,7 @@ export default function SupportPage() {
   };
 
   const handleSubmit = async () => {
-    const inquiryData = { user: session?.user?.name, mainType, subType, errorDesc, reportDate, reportType, content, email: isEmailChecked ? email : "미제공" };
+    const inquiryData = { user: session?.user?.name, mainType, subType, errorDesc, reportDate, reportType, productName, refundType, content, email: isEmailChecked ? email : "미제공" };
     try {
       const res = await fetch("/api/inquiry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(inquiryData) });
       if (res.ok) setIsSubmitted(true);
@@ -209,7 +211,7 @@ export default function SupportPage() {
         <div className="w-20 h-20 bg-[#e91e3f]/10 border border-[#e91e3f]/20 rounded-full flex items-center justify-center mx-auto mb-8"><svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-[#e91e3f]" fill="none" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg></div>
         <h2 className="text-3xl font-black text-white mb-4 tracking-tight">문의 접수 완료</h2>
         <p className="text-gray-400 text-sm mb-10 leading-relaxed text-center">소중한 의견을 보내주셔서 감사합니다.<br />관리자 확인 후 빠른 시일 내에 답변해 드리겠습니다.</p>
-        <button onClick={() => { setIsSubmitted(false); setMainType("일반"); setSubType(""); setErrorDesc(""); setReportDate(""); setReportType(""); setContent(""); setEmail(""); setIsEmailChecked(false); }} className="px-10 py-4 bg-white hover:bg-gray-200 text-black font-bold rounded-xl transition-all shadow-lg shadow-white/10 outline-none focus:outline-none">새 문의 작성하기</button>
+        <button onClick={() => { setIsSubmitted(false); setMainType("일반"); setSubType(""); setErrorDesc(""); setReportDate(""); setReportType(""); setProductName(""); setRefundType("환불"); setContent(""); setEmail(""); setIsEmailChecked(false); }} className="px-10 py-4 bg-white hover:bg-gray-200 text-black font-bold rounded-xl transition-all shadow-lg shadow-white/10 outline-none focus:outline-none">새 문의 작성하기</button>
       </main>
     );
   }
@@ -229,8 +231,8 @@ export default function SupportPage() {
       </div>
 
       <div className="flex gap-8 border-b border-white/10 mb-10 overflow-x-auto scrollbar-hide">
-        {["일반", "오류", "신고"].map((type) => (
-          <button key={type} type="button" onClick={() => { setMainType(type); setSubType(""); setReportType(""); }} className={`pb-4 text-sm font-bold whitespace-nowrap transition-colors outline-none focus:outline-none relative ${mainType === type ? "text-[#e91e3f]" : "text-gray-500 hover:text-white"}`}>
+        {["일반", "오류", "신고", "환불 및 교환"].map((type) => (
+          <button key={type} type="button" onClick={() => { setMainType(type); setSubType(""); setReportType(""); setProductName(""); setRefundType("환불"); }} className={`pb-4 text-sm font-bold whitespace-nowrap transition-colors outline-none focus:outline-none relative ${mainType === type ? "text-[#e91e3f]" : "text-gray-500 hover:text-white"}`}>
             {type}{mainType === type && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#e91e3f]" />}
           </button>
         ))}
@@ -275,6 +277,23 @@ export default function SupportPage() {
                       ))}
                     </div></>
                 )}
+              </div>
+            </div>
+          )}
+
+          {mainType === "환불 및 교환" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">상품명 <span className="text-[#e91e3f]">*</span></label>
+                <input type="text" required placeholder="예시: 쿠폰, 아이템, 역할 등" value={productName} onChange={(e) => setProductName(e.target.value)} className="w-full bg-transparent border-b border-white/10 py-3 text-white focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-700" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">유형 <span className="text-[#e91e3f]">*</span></label>
+                <div className="flex gap-4">
+                  {["환불", "교환"].map((type) => (
+                    <button type="button" key={type} onClick={() => setRefundType(type)} className={`px-5 py-2.5 text-sm font-bold rounded-full border transition-all outline-none focus:outline-none ${refundType === type ? "bg-white text-black border-white" : "bg-transparent border-white/10 text-gray-400 hover:border-white/30"}`}>{type}</button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
