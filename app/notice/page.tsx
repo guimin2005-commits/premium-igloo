@@ -46,7 +46,7 @@ const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => vo
     matches.forEach(m => {
       if (!Array.from({ length: m.length }, (_, i) => m.index + i).some(i => used.has(i))) {
         filtered.push(m);
-        m.index + Array.from({ length: m.length }, (_, i) => i).forEach(i => used.add(m.index + i));
+        for (let i = 0; i < m.length; i++) used.add(m.index + i);
       }
     });
 
