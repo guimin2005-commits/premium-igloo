@@ -78,6 +78,7 @@ const RenderFormattedText = ({ text }: { text: string }) => {
 
   const formatInlineMarkdown = (text: string): string => {
     return text
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href='$2' target='_blank' rel='noopener noreferrer' class='text-[#e91e3f] hover:underline'>$1</a>")
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/__(.*?)__/g, "<span class='underline'>$1</span>")
       .replace(/~~(.*?)~~/g, "<span class='line-through'>$1</span>")
