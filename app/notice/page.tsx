@@ -237,11 +237,11 @@ export default function NoticePage() {
       </div>
 
       {isLoading ? <div className="text-center py-20 text-gray-500 font-bold">로딩 중...</div> : filteredNotices.length === 0 ? <div className="text-center py-20 text-gray-600 bg-white/[0.02] rounded-3xl border border-white/5">등록된 공지가 없습니다.</div> : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2 md:gap-4">
           {filteredNotices.map((notice) => {
             const tagMeta = getNoticeTagMeta(notice);
             return (
-              <div key={notice._id} onClick={() => setSelectedNotice(notice)} className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-6 cursor-pointer hover:border-[#e91e3f]/30 transition-all duration-300 relative group">
+              <div key={notice._id} onClick={() => setSelectedNotice(notice)} className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-4 md:p-6 cursor-pointer hover:border-[#e91e3f]/30 transition-all duration-300 relative group">
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex items-center gap-2 min-h-[24px] shrink-0">
                     {notice.isPinned && (
