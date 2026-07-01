@@ -39,6 +39,7 @@ const handler = NextAuth({
             token.hasScrimRole = SCRIM_ROLE ? memberData.roles.includes(SCRIM_ROLE) : false;
             // 부스터 역할 확인
             token.isBooster = BOOSTER_ROLE ? memberData.roles.includes(BOOSTER_ROLE) : false;
+            console.log("🎀 BOOSTER_ROLE:", BOOSTER_ROLE, "User roles:", memberData.roles, "isBooster:", token.isBooster);
           } else {
             token.isVerified = false;
             token.hasScrimRole = false;
