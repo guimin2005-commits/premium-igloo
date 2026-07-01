@@ -136,7 +136,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           )}
           
           <div className="flex-1 flex justify-end items-center gap-4 h-full relative z-10">
-            {!mounted ? (
+            {!mounted || status === "loading" ? (
                <div className="w-20 h-8"></div>
             ) : status === "authenticated" && session ? (
               <div className="relative flex items-center h-full" ref={profileDropdownRef}>
@@ -348,7 +348,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     <button onClick={() => { setIsMobileMenuOpen(false); signOut(); }} className="text-left px-3 py-3 rounded-xl text-sm font-bold text-[#e91e3f] hover:bg-[#e91e3f]/10 transition-colors outline-none">로그아웃</button>
                   </>
                 ) : (
-                  <button onClick={() => { setIsMobileMenuOpen(false); setIsLoginModalOpen(true); }} className="w-full py-3 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-xl transition-colors outline-none">Discord 로그인</button>
+                  <button onClick={() => { setIsMobileMenuOpen(false); signIn("discord", { callbackUrl: "/" }); }} className="w-full py-3 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-xl transition-colors outline-none">Discord 로그인</button>
                 )}
                 <Link href="/policy" onClick={() => setIsMobileMenuOpen(false)} className="px-3 py-3 text-xs text-gray-500 hover:text-white transition-colors">이용약관 및 개인정보처리방침</Link>
               </div>
