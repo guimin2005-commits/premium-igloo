@@ -86,12 +86,15 @@ export default function PolicyPage() {
               "본인의 디스코드 계정 관리 소홀로 인해 발생하는 피해는 본인에게 책임이 있습니다.",
             ]} />
           </Article>
+
+          <div className="pt-6 border-t border-white/10">
+            <h3 className="text-white font-bold mb-2">부칙</h3>
+            <p className="text-gray-400">본 정책은 2023년 1월 22일부터 시행됩니다.</p>
+          </div>
         </div>
       ) : tab === "tournament" ? (
         <div className="space-y-10 text-sm">
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-white mb-2">[고급이글루] 종합 e스포츠 대회 공식 규정</h2>
-          </div>
+          <p className="text-gray-300 leading-relaxed">고급 이글루의 종합 e스포츠 대회를 공정하고 쾌적하게 진행하기 위한 공식 규정입니다. 대회 참가 신청 시 본 규정에 동의한 것으로 간주합니다.</p>
 
           <Article title="01. 대회 참가 및 자격 규정">
             <ul className="space-y-2">
@@ -114,7 +117,7 @@ export default function PolicyPage() {
           <Article title="03. 경기 중단(퍼즈) 및 분쟁 규정">
             <ul className="space-y-2">
               <li>경기 중 인터넷 문제, 튕김(디스콘), 심각한 렉 등이 발생할 경우 즉시 퍼즈(일시정지)를 걸고 관리자를 호출해야 합니다. (팀당 최대 퍼즈 시간 <span className="text-[#e91e3f] font-bold">[10분]</span> 제한)</li>
-              <li>경기 중 분쟁 발생 시 선수 간의 직접적인 언쟁을 절대 금합니다. 문제가 있을 시 즉시 경기를 일시 정지하고 디스코드 <span className="text-white font-semibold">[문의 채널]</span> 또는 관리자를 호출하여 접수해야 합니다.</li>
+              <li>경기 중 분쟁 발생 시 선수 간의 직접적인 언쟁을 절대 금합니다. 문제가 있을 시 즉시 경기를 일시 정지하고 관리자를 호출하여 문의를 접수해야 합니다.</li>
               <li>모든 사안의 최종 판결권은 관리자(운영진)에게 있으며, 관리자의 판정에 불응할 시 즉각 제재(실격 처리 등)됩니다.</li>
             </ul>
           </Article>
