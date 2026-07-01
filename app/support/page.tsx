@@ -5,35 +5,6 @@ import { useSession, signIn } from "next-auth/react";
 
 const ADMIN_USERS = ["elahw.06"];
 
-const FAQ_DATA = [
-  {
-    category: "XP & LEVEL 시스템",
-    items: [
-      { q: "레벨업에 필요한 XP 양은 모든 구간이 같나요?", a: "상위 레벨로 진입할수록 다음 단계 달성에 필요한 XP 요구량이 점진적으로 증가합니다." },
-      { q: "채팅을 빠르고 많이 치면 XP를 빨리 획득할 수 있나요?", a: "획득할 수 있는 쿨타임이 존재합니다." },
-      { q: "음성 채널에 혼자 있어도 XP 획득이 가능한가요?", a: "네, 가능합니다. 단, 마이크 및 헤드셋 음소거 시 XP 획득량이 90% 감소됩니다." },
-      { q: "레벨이 오르면 어떤 구체적인 혜택이 있나요?", a: "특정 레벨마다 전용 레벨 역할 및 색상 혜택이 적용됩니다." },
-      { q: "서버 퇴장 시 XP 및 LEVEL이 유지 되나요?", a: "유지되지 않습니다. 서버 퇴장 시 즉시 XP 및 LEVEL이 모두 초기화 됩니다." }
-    ]
-  },
-  {
-    category: "XP SHOP 및 아이템 상품",
-    items: [
-      { q: "레벨에 따라 구매할 수 있는 상품이 다른가요?", a: "네, 레벨이 높아질수록 구매할 수 있는 상품의 폭이 커집니다." },
-      { q: "상품 구매 후 환불 및 교환이 가능한가요?", a: "네, 가능합니다. 구매 후 30분 이내로 1:1 문의를 통해 환불 및 교환 신청 시에만 처리 가능합니다." },
-      { q: "실물 상품 수령을 위해 꼭 개인정보를 입력해야 하나요?", a: "네, 이벤트 경품이나 기프트 상품을 전송해 드리기 위해 최소한의 정보가 필요합니다." }
-    ]
-  },
-  {
-    category: "MUSIC BOT",
-    items: [
-      { q: "MUSIC BOT이 무엇인지, 어떻게 사용하는지 궁금해요.", a: "음성 채널에서 사용자가 원하는 음악을 재생할 수 있는 봇입니다." },
-      { q: "재생이 끊기거나 소리가 들리지 않아요.", a: "사용자의 네트워크 상태 또는 봇 서버가 불안정할 때 발생합니다." },
-      { q: "MUSIC BOT이 재생되지 않거나, 음성 채널에 접속하지 않아요.", a: "봇의 내부적인 시스템 문제이거나 봇 자체가 오프라인 상태일 가능성이 높습니다." }
-    ]
-  }
-];
-
 export default function SupportPage() {
   const { data: session, status } = useSession();
   const isAdmin = session?.user?.name && ADMIN_USERS.includes(session.user.name);
@@ -49,7 +20,6 @@ export default function SupportPage() {
   const [content, setContent] = useState("");
   const [isEmailChecked, setIsEmailChecked] = useState(false);
   const [email, setEmail] = useState("");
-  const [suggestedFaqs, setSuggestedFaqs] = useState<any[]>([]);
 
   const [isReportDropdownOpen, setIsReportDropdownOpen] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -77,42 +47,6 @@ export default function SupportPage() {
       setViewMode("admin");
     }
   }, [isAdmin]);
-
-  useEffect(() => {
-    const trimmedContent = content.trim();
-    if (trimmedContent.length < 5) {
-      setSuggestedFaqs([]);
-      return;
-    }
-
-    const searchText = trimmedContent.toLowerCase();
-    const suggestions: any[] = [];
-    const seenQuestions = new Set<string>();
-
-    FAQ_DATA.forEach((section: any) => {
-      section.items.forEach((faq: any) => {
-        if (seenQuestions.has(faq.q)) return;
-
-        const questionLower = faq.q.toLowerCase();
-        const answerLower = faq.a.toLowerCase();
-        let matchScore = 0;
-
-        const keywords = searchText.split(/[\s,.!?]+/).filter((k: string) => k.length > 2);
-        keywords.forEach((keyword: string) => {
-          if (questionLower.includes(keyword)) matchScore += 3;
-          if (answerLower.includes(keyword)) matchScore += 1;
-        });
-
-        if (matchScore > 0) {
-          suggestions.push({ ...faq, category: section.category, score: matchScore });
-          seenQuestions.add(faq.q);
-        }
-      });
-    });
-
-    suggestions.sort((a, b) => b.score - a.score);
-    setSuggestedFaqs(suggestions.slice(0, 3));
-  }, [content]);
 
   const executeDelete = async () => {
     if(!deleteConfirmId) return;
@@ -389,20 +323,6 @@ export default function SupportPage() {
           <div>
             <label className="block text-xs font-bold text-gray-500 mb-4 uppercase tracking-wider">상세 내용 <span className="text-[#e91e3f]">*</span></label>
             <textarea required placeholder="상세한 내용을 입력해 주세요." rows={6} value={content} onChange={(e) => setContent(e.target.value)} className="w-full px-5 py-4 bg-white/[0.02] border border-white/10 rounded-xl text-white outline-none resize-none focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-700" />
-
-            {suggestedFaqs.length > 0 && (
-              <div className="mt-4 p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg">
-                <p className="text-xs font-bold text-blue-400 mb-3">💡 관련 FAQ</p>
-                <div className="flex flex-col gap-2">
-                  {suggestedFaqs.map((faq, idx) => (
-                    <div key={idx} className="p-3 bg-white/5 rounded border border-white/5 hover:border-blue-500/30 transition-colors cursor-pointer group">
-                      <p className="text-xs text-blue-300 group-hover:text-blue-200 transition-colors font-medium line-clamp-2">{faq.q}</p>
-                      <p className="text-xs text-gray-500 mt-1">{faq.category}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
