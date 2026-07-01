@@ -22,6 +22,7 @@ export default function MyInfoPage() {
   const isVerified = userSession?.isVerified;
   const hasScrimRole = userSession?.hasScrimRole;
   const isBooster = userSession?.isBooster || false;
+  const isServerBooster = userSession?.isBooster || false;
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.name) {
@@ -91,7 +92,7 @@ export default function MyInfoPage() {
               {session?.user?.name}
               {isBooster && <span className="text-[10px] bg-[#e91e3f]/20 text-[#e91e3f] px-2 py-0.5 rounded border border-[#e91e3f]/30">BOOSTER</span>}
             </h1>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {isVerified && hasScrimRole ? (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>
@@ -106,6 +107,12 @@ export default function MyInfoPage() {
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-1.72 6.97a.75.75 0 10-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 101.06 1.06L12 13.06l1.72 1.72a.75.75 0 101.06-1.06L13.06 12l1.72-1.72a.75.75 0 10-1.06-1.06L12 10.94l-1.72-1.72z" clipRule="evenodd" /></svg>
                   미인증
+                </span>
+              )}
+              {isServerBooster && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 text-[#ff41cf] border border-[#ff41cf]/30">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M8.684 2.687C8.886 1.148 10.379.5 11.77.5h.46c1.39 0 2.884.648 3.086 2.187l.272 1.95h3.6c1.39 0 2.643 1.253 2.643 2.643v.31c0 .844-.224 1.668-.648 2.392l-1.276 2.037a3.5 3.5 0 01-.921 1.023V19.5a2.5 2.5 0 01-2.5 2.5h-8a2.5 2.5 0 01-2.5-2.5V10.979a3.5 3.5 0 01-.921-1.023L2.204 7.92A3.5 3.5 0 011.556 5.527v-.31C1.556 3.822 2.809 2.57 4.199 2.57h3.6l.272-1.95zM9.5 16a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm6 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" /></svg>
+                  SERVER BOOSTER
                 </span>
               )}
             </div>
