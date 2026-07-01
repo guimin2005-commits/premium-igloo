@@ -94,8 +94,6 @@ export default function PolicyPage() {
         </div>
       ) : tab === "tournament" ? (
         <div className="space-y-10 text-sm">
-          <p className="text-gray-300 leading-relaxed">고급 이글루의 종합 e스포츠 대회를 공정하고 쾌적하게 진행하기 위한 공식 규정입니다. 대회 참가 신청 시 본 규정에 동의한 것으로 간주합니다.</p>
-
           <Article title="01. 대회 참가 및 자격 규정">
             <ul className="space-y-2">
               <li>본 대회는 사전 참가 신청을 통해 확정된 인원 및 팀만 참여할 수 있습니다.</li>
@@ -143,8 +141,6 @@ export default function PolicyPage() {
         </div>
       ) : tab === "privacy" ? (
         <div className="space-y-10 text-sm">
-          <p className="text-gray-300 leading-relaxed">본 방침은 관련 법령에 의거하여 고급 이글루 서버 내에서 처리되는 이용자의 개인정보 보호 및 권익을 보호하기 위해 수립되었습니다.</p>
-
           <Article title="제1조 (개인정보의 수집 항목 및 방법)">
             <p>본 서버는 디스코드 플랫폼 위에서 운영되므로 멤버의 민감한 개인정보(주민등록번호, 금융정보 등)를 직접 수집하지 않습니다. 다만, 서비스 운영을 위해 아래의 정보가 자동으로 기록되거나 수집될 수 있습니다.</p>
             <DefList items={[
@@ -182,14 +178,13 @@ export default function PolicyPage() {
           </Article>
 
           <div className="pt-6 border-t border-white/10">
+            <p className="text-gray-300 leading-relaxed mb-6">본 방침은 관련 법령에 의거하여 고급 이글루 서버 내에서 처리되는 이용자의 개인정보 보호 및 권익을 보호하기 위해 수립되었습니다.</p>
             <h3 className="text-white font-bold mb-2">부칙</h3>
             <p className="text-gray-400">본 정책은 2023년 1월 22일부터 시행됩니다.</p>
           </div>
         </div>
       ) : (
         <div className="space-y-10 text-sm">
-          <p className="text-gray-300 leading-relaxed">내전을 자유롭고 쾌적하게 즐기기 위한 운영 규정입니다. 내전 채널 이용 권한 획득 시 아래 규정에 동의한 것으로 간주합니다.</p>
-
           <Article title="제1조 (참여 규정)">
             <p>모든 인원은 내전을 자유롭게 주최 및 참여할 수 있습니다. 참가 확정 인원은 지정된 시간을 엄수해야 하며, 무단 불참이나 상습적인 지각 시에는 참여 권한이 제한될 수 있습니다.</p>
           </Article>
