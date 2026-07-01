@@ -15,6 +15,7 @@ const handler = NextAuth({
       if (trigger === "update" && session) {
         if (session.isVerified !== undefined) token.isVerified = session.isVerified;
         if (session.hasScrimRole !== undefined) token.hasScrimRole = session.hasScrimRole;
+        if (session.isBooster !== undefined) token.isBooster = session.isBooster;
       }
       
       // 📌 최초 로그인 시 유저의 인증/내전/부스터 역할 보유 여부 확인
