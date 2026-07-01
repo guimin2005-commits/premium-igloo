@@ -254,13 +254,13 @@ export default function NoticePage() {
                     <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded shrink-0 whitespace-nowrap ${tagMeta.className}`}>{tagMeta.label}</span>
                   </div>
                   <div className="flex items-center gap-2 ml-auto shrink-0">
-                    <span className="text-xs text-gray-500 whitespace-nowrap">{formatDate(notice.createdAt)}</span>
                     {isAdmin && (
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={(e) => handleEdit(notice._id, e)} className="text-xs font-bold text-gray-500 hover:text-white bg-white/5 px-2 py-1 rounded">수정</button>
                         <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(notice._id); }} className="text-xs font-bold text-red-500/60 hover:text-red-500 bg-white/5 px-2 py-1 rounded">삭제</button>
                       </div>
                     )}
+                    <span className="text-xs text-gray-500 whitespace-nowrap">{formatDate(notice.createdAt)}</span>
                   </div>
                 </div>
                 <h3 className="text-base font-bold text-white transition-colors line-clamp-1 mb-3">{notice.title}</h3>
