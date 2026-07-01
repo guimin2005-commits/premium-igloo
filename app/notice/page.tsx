@@ -125,6 +125,8 @@ export default function NoticePage() {
   const [selectedNotice, setSelectedNotice] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("all");
   const [copyNotification, setCopyNotification] = useState(false);
+  const [selectedText, setSelectedText] = useState("");
+  const [selectionPos, setSelectionPos] = useState({ x: 0, y: 0 });
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [popupConfig, setPopupConfig] = useState({ isOpen: false, message: "", isError: false });
@@ -168,6 +170,25 @@ export default function NoticePage() {
     if (!selectedNotice) return;
     const url = `${window.location.origin}/notice?id=${selectedNotice._id}`;
     navigator.clipboard.writeText(url);
+    setCopyNotification(true);
+    setTimeout(() => setCopyNotification(false), 2000);
+  };
+
+  const handleTextSelection = (e: React.MouseEvent<HTMLDivElement>) => {
+    const selection = window.getSelection();
+    if (selection && selection.toString().length > 0) {
+      setSelectedText(selection.toString());
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      setSelectionPos({ x: rect.left, y: rect.top - 40 });
+    } else {
+      setSelectedText("");
+    }
+  };
+
+  const copySelectedText = () => {
+    navigator.clipboard.writeText(selectedText);
+    setSelectedText("");
     setCopyNotification(true);
     setTimeout(() => setCopyNotification(false), 2000);
   };
@@ -270,8 +291,8 @@ export default function NoticePage() {
               <h2 className="text-xl md:text-2xl font-bold text-white mb-6 pb-6 border-b border-white/5 line-clamp-2">{selectedNotice.title}</h2>
             </div>
             
-            <div className="p-8 pt-0 flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden flex flex-col">
-              <p className="text-gray-300 text-base leading-loose whitespace-pre-wrap flex-1"><RenderFormattedText text={selectedNotice.content} /></p>
+            <div className="p-8 pt-0 flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden flex flex-col" onMouseUp={handleTextSelection}>
+              <p className="text-gray-300 text-base leading-loose whitespace-pre-wrap flex-1 select-text"><RenderFormattedText text={selectedNotice.content} /></p>
               
               {selectedNotice.bannerUrl && (
                 <div className="mt-8 w-full h-52 bg-[#1a1a1a] rounded-2xl flex items-center justify-center border border-white/5 relative overflow-hidden shrink-0">
@@ -293,6 +314,16 @@ export default function NoticePage() {
           </div>
         </div>
       )}
+
+      {selectedText && (
+        <div className="fixed z-[200] bg-[#1a1a1a] border border-white/10 rounded-xl p-3 shadow-2xl" style={{ left: `${selectionPos.x}px`, top: `${selectionPos.y}px` }}>
+          <button onClick={copySelectedText} className="flex items-center gap-2 text-sm font-bold text-[#e91e3f] hover:text-white transition-colors px-3 py-1">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+            복사
+          </button>
+        </div>
+      )}
+
       {deleteConfirmId && <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4"><div className="bg-[#121212] border border-red-500/30 rounded-3xl w-full max-w-sm p-8 text-center"><h2 className="text-xl font-bold text-white mb-3">삭제 안내</h2><p className="text-sm text-gray-400 mb-8">영구 삭제하시겠습니까?</p><div className="flex gap-3"><button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button><button onClick={executeDelete} className="flex-1 py-3 bg-red-500/80 text-white rounded-xl">삭제</button></div></div></div>}
     </main>
   );
