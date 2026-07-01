@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 // 📌 [관리자 명단 설정]
 const ADMIN_USERS = ["elahw.06"]; 
@@ -114,6 +114,7 @@ const getNoticeTagMeta = (n: any) => {
 
 export default function NoticePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession() as any;
   const isLoggedIn = status === "authenticated";
 
@@ -122,7 +123,8 @@ export default function NoticePage() {
   const [notices, setNotices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedNotice, setSelectedNotice] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState("all"); 
+  const [activeTab, setActiveTab] = useState("all");
+  const [copyNotification, setCopyNotification] = useState(false);
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [popupConfig, setPopupConfig] = useState({ isOpen: false, message: "", isError: false });
@@ -135,6 +137,14 @@ export default function NoticePage() {
   };
 
   useEffect(() => { fetchNotices(); }, []);
+
+  useEffect(() => {
+    const noticeId = searchParams.get("id");
+    if (noticeId && notices.length > 0) {
+      const notice = notices.find(n => n._id === noticeId);
+      if (notice) setSelectedNotice(notice);
+    }
+  }, [notices, searchParams]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -152,6 +162,14 @@ export default function NoticePage() {
       }
     } catch { setPopupConfig({ isOpen: true, message: "에러 발생", isError: true }); }
     finally { setDeleteConfirmId(null); }
+  };
+
+  const copyNoticeUrl = () => {
+    if (!selectedNotice) return;
+    const url = `${window.location.origin}/notice?id=${selectedNotice._id}`;
+    navigator.clipboard.writeText(url);
+    setCopyNotification(true);
+    setTimeout(() => setCopyNotification(false), 2000);
   };
 
   const handleEdit = (id: string, e: React.MouseEvent) => { e.stopPropagation(); router.push(`/write?id=${id}`); };
@@ -236,7 +254,12 @@ export default function NoticePage() {
       {selectedNotice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="bg-[#121212] border border-white/10 rounded-[2rem] w-full max-w-2xl h-[80vh] flex flex-col relative shadow-2xl overflow-hidden [&::-webkit-scrollbar]:hidden">
-            <button onClick={() => setSelectedNotice(null)} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-white bg-white/5 rounded-full z-10"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            <div className="absolute top-6 right-6 flex gap-2 z-10">
+              <button onClick={copyNoticeUrl} className={`p-2 rounded-full transition-all ${copyNotification ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-gray-400 hover:text-white"}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+              </button>
+              <button onClick={() => setSelectedNotice(null)} className="p-2 text-gray-400 hover:text-white bg-white/5 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
             
             <div className="p-8 pb-0 shrink-0">
               <div className="flex items-center gap-3 mb-4 min-h-[28px]">
