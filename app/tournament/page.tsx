@@ -92,8 +92,11 @@ const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => vo
     <div
       dangerouslySetInnerHTML={{ __html: formatted }}
       onClick={(e: React.MouseEvent) => {
-        const target = e.target as HTMLElement;
-        if (target.classList.contains('copy-btn')) {
+        let target = e.target as HTMLElement;
+        while (target && !target.classList.contains('copy-btn')) {
+          target = target.parentElement as HTMLElement;
+        }
+        if (target?.classList.contains('copy-btn')) {
           const code = target.getAttribute('data-copy');
           if (code) {
             navigator.clipboard.writeText(code);
