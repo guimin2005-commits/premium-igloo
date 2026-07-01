@@ -243,7 +243,7 @@ export default function NoticePage() {
                 {(() => { const m = getNoticeTagMeta(selectedNotice); return <span className={`px-2.5 py-1 text-xs font-bold rounded-md ${m.className}`}>{m.label}</span>; })()}
                 <span className="text-sm text-gray-500">{formatDate(selectedNotice.createdAt)}</span>
               </div>
-              <h2 className="text-2xl font-bold text-white mb-6 pb-6 border-b border-white/5">{selectedNotice.title}</h2>
+              <h2 className="text-xl md:text-2xl font-bold text-white mb-6 pb-6 border-b border-white/5 line-clamp-2">{selectedNotice.title}</h2>
             </div>
             
             <div className="p-8 pt-0 flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden flex flex-col">
@@ -258,10 +258,10 @@ export default function NoticePage() {
             </div>
 
             <div className="p-6 shrink-0 border-t border-white/5 bg-[#1a1a1a]/50 rounded-b-[2rem] flex items-center justify-between">
-              <button onClick={() => prevNotice && setSelectedNotice(prevNotice)} disabled={!prevNotice} className="flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+              <button onClick={() => nextNotice && setSelectedNotice(nextNotice)} disabled={!nextNotice} className="flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg> 이전 공지
               </button>
-              <button onClick={() => nextNotice && setSelectedNotice(nextNotice)} disabled={!nextNotice} className="flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+              <button onClick={() => prevNotice && setSelectedNotice(prevNotice)} disabled={!prevNotice} className="flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                 다음 공지 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
               </button>
             </div>
