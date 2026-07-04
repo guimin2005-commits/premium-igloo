@@ -22,6 +22,8 @@ const PostSchema = new mongoose.Schema({
   tournamentDate: { type: String, default: "" },   // 리그 일정 텍스트
   tournamentStatus: { type: String, default: "예정됨" }, // 진행중 / 예정됨 / 종료됨
   tournamentLink: { type: String, default: "" },   // 참가 신청 링크
+  tournamentBracket: { type: String, default: "" },// 대진표 텍스트 (라운드명: / A vs B > 승자)
+  tournamentWinner: { type: String, default: "" }, // 우승팀/우승자 (명예의 전당 표시용)
 
   recruitRole: { type: String, default: "" },
   recruitPeriod: { type: String, default: "" },

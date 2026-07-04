@@ -145,6 +145,28 @@ export default function NoticePage() {
   const [selectedNotice, setSelectedNotice] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("all");
   const [copyNotification, setCopyNotification] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+
+  // 📌 읽은 공지 ID 로드 (NEW 뱃지용)
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("readNotices") || "[]");
+      if (Array.isArray(stored)) setReadIds(new Set(stored));
+    } catch {}
+  }, []);
+
+  const markAsRead = (id: string) => {
+    setReadIds(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      try { localStorage.setItem("readNotices", JSON.stringify(Array.from(next).slice(-200))); } catch {}
+      return next;
+    });
+  };
+
+  const isNewNotice = (notice: any) =>
+    !readIds.has(notice._id) && Date.now() - new Date(notice.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000;
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [popupConfig, setPopupConfig] = useState({ isOpen: false, message: "", isError: false });
@@ -201,10 +223,18 @@ export default function NoticePage() {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
-  const filteredNotices =
+  const tabFiltered =
     activeTab === "important" ? sortedNotices.filter(n => isImportantNotice(n)) :
     activeTab === "update" ? sortedNotices.filter(n => n.noticeTag === "업데이트") :
     sortedNotices;
+
+  // 📌 검색어 필터 (제목 + 내용)
+  const filteredNotices = searchQuery.trim()
+    ? tabFiltered.filter(n =>
+        (n.title || "").toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
+        (n.content || "").toLowerCase().includes(searchQuery.trim().toLowerCase())
+      )
+    : tabFiltered;
 
   const currentIndex = selectedNotice ? sortedNotices.findIndex(n => n._id === selectedNotice._id) : -1;
   const prevNotice = currentIndex > 0 ? sortedNotices[currentIndex - 1] : null;
@@ -242,14 +272,27 @@ export default function NoticePage() {
 
       {/* ── 탭 (알약 스타일) ── */}
       <div className="sticky top-16 z-30 w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
-        <div className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto whitespace-nowrap">
-          {[{ id: "all", label: "전체 공지" }, { id: "important", label: "중요 공지" }, { id: "update", label: "업데이트" }].map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-5 py-2.5 text-xs md:text-sm font-bold rounded-full shrink-0 outline-none focus:outline-none transition-all duration-300 ${
-              activeTab === tab.id
-                ? "bg-[#e91e3f] text-white shadow-[0_4px_20px_rgba(233,30,63,0.35)]"
-                : "bg-white/[0.04] text-gray-500 hover:text-white hover:bg-white/[0.08] border border-white/5"
-            }`}>{tab.label}</button>
-          ))}
+        <div className="max-w-5xl mx-auto flex items-center gap-3">
+          <div className="flex gap-1.5 overflow-x-auto whitespace-nowrap flex-1 min-w-0">
+            {[{ id: "all", label: "전체 공지" }, { id: "important", label: "중요 공지" }, { id: "update", label: "업데이트" }].map((tab) => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-5 py-2.5 text-xs md:text-sm font-bold rounded-full shrink-0 outline-none focus:outline-none transition-all duration-300 ${
+                activeTab === tab.id
+                  ? "bg-[#e91e3f] text-white shadow-[0_4px_20px_rgba(233,30,63,0.35)]"
+                  : "bg-white/[0.04] text-gray-500 hover:text-white hover:bg-white/[0.08] border border-white/5"
+              }`}>{tab.label}</button>
+            ))}
+          </div>
+          {/* 📌 공지 검색 */}
+          <div className="relative shrink-0 w-36 md:w-56">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="공지 검색"
+              className="w-full pl-10 pr-4 py-2.5 bg-white/[0.04] border border-white/5 rounded-full text-xs md:text-sm text-white outline-none focus:border-[#e91e3f]/50 focus:bg-white/[0.06] transition-colors placeholder:text-gray-600"
+            />
+          </div>
         </div>
       </div>
 
@@ -260,7 +303,7 @@ export default function NoticePage() {
             const tagMeta = getNoticeTagMeta(notice);
             return (
               <Reveal key={notice._id} delay={Math.min(listIdx, 5) * 70}>
-              <div onClick={() => setSelectedNotice(notice)} className="relative rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px cursor-pointer group hover:from-[#e91e3f]/40 hover:to-white/[0.02] transition-all duration-300">
+              <div onClick={() => { markAsRead(notice._id); setSelectedNotice(notice); }} className="relative rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px cursor-pointer group hover:from-[#e91e3f]/40 hover:to-white/[0.02] transition-all duration-300">
               <div className="rounded-2xl bg-[#111111]/95 p-4 md:p-6 group-hover:bg-[#141414] transition-colors duration-300">
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex items-center gap-2 min-h-[24px] shrink-0">
@@ -283,7 +326,10 @@ export default function NoticePage() {
                     <span className="text-xs text-gray-500 whitespace-nowrap">{formatDate(notice.createdAt)}</span>
                   </div>
                 </div>
-                <h3 className="text-base font-bold text-white transition-colors line-clamp-1 mb-2.5 group-hover:text-[#ff5c77]">{notice.title}</h3>
+                <h3 className="text-base font-bold text-white transition-colors line-clamp-1 mb-2.5 group-hover:text-[#ff5c77] flex items-center gap-2">
+                  {isNewNotice(notice) && <span className="shrink-0 text-[8px] font-black tracking-widest bg-[#e91e3f] text-white px-1.5 py-0.5 rounded animate-[pulseGlow_2.5s_ease-in-out_infinite]">N</span>}
+                  <span className="truncate">{notice.title}</span>
+                </h3>
                 <p className="text-gray-500 text-sm leading-relaxed line-clamp-2">{stripMarkdown(notice.content)}</p>
               </div>
               </div>

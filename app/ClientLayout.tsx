@@ -41,7 +41,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // 📌 카테고리 그룹화: 큰 카테고리 → 세부 카테고리 (메가 메뉴)
   const categoryGroups = [
     { name: "소식", desc: "고급 이글루의 최신 소식", items: [{ name: "공지사항", path: "/notice", desc: "최신 소식과 주요 안내" }, { name: "이벤트", path: "/event", desc: "다양한 이벤트와 혜택" }] },
-    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "구인", path: "/recruit", desc: "스태프 및 서포터즈 모집" }] },
+    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }, { name: "구인", path: "/recruit", desc: "스태프 및 서포터즈 모집" }] },
     { name: "지원", desc: "도움이 필요하신가요?", items: [{ name: "1:1 문의", path: "/support", desc: "불편 사항 및 문의 접수" }, { name: "FAQ", path: "/faq", desc: "자주 묻는 질문" }] },
   ];
   const [openMegaMenu, setOpenMegaMenu] = useState<string | null>(null);
@@ -265,9 +265,29 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         })()}
       </header>
 
-      <main className="flex-1 flex flex-col w-full relative">
+      <main className="flex-1 flex flex-col w-full relative pb-16 md:pb-0">
         {children}
       </main>
+
+      {/* 📌 모바일 하단 고정 탭 바 */}
+      {!isVerifyPage && mounted && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/10 grid grid-cols-4">
+          {[
+            { name: "홈", path: "/", icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" },
+            { name: "공지", path: "/notice", icon: "M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73" },
+            { name: "이벤트", path: "/event", icon: "M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" },
+            { name: "내 정보", path: "/profile", icon: "M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" },
+          ].map((tab) => {
+            const isActive = pathname === tab.path;
+            return (
+              <Link key={tab.path} href={tab.path} className={`flex flex-col items-center justify-center gap-1 py-2.5 transition-colors ${isActive ? "text-[#e91e3f]" : "text-gray-500 active:text-white"}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={isActive ? 2 : 1.6} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} /></svg>
+                <span className="text-[10px] font-bold">{tab.name}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      )}
 
       <footer className="w-full border-t border-white/5 bg-[#090909] mt-auto flex-shrink-0 hidden md:block relative overflow-hidden">
         <div className="absolute bottom-[-80px] left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-[#e91e3f]/[0.04] blur-[90px] rounded-full pointer-events-none"></div>

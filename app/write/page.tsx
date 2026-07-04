@@ -73,6 +73,8 @@ export default function AdminWritePage() {
   const [tournamentPrize, setTournamentPrize] = useState("");
   const [tournamentStatus, setTournamentStatus] = useState("예정됨");
   const [tournamentLink, setTournamentLink] = useState("");
+  const [tournamentBracket, setTournamentBracket] = useState("");
+  const [tournamentWinner, setTournamentWinner] = useState("");
   const [tournamentStartDate, setTournamentStartDate] = useState("");
   const [tournamentEndDate, setTournamentEndDate] = useState("");
 
@@ -112,6 +114,8 @@ export default function AdminWritePage() {
             setTournamentPrize(post.tournamentPrize || "");
             setTournamentStatus(post.tournamentStatus || "예정됨");
             setTournamentLink(post.tournamentLink || "");
+            setTournamentBracket(post.tournamentBracket || "");
+            setTournamentWinner(post.tournamentWinner || "");
             if (post.tournamentDate && post.tournamentDate.includes("~")) {
               const [start, end] = post.tournamentDate.split("~").map((s: string) => s.trim());
               setTournamentStartDate(start.replace(/\./g, "-"));
@@ -245,6 +249,7 @@ export default function AdminWritePage() {
        }),
       ...(category === "대회" && {
          content, bannerUrl, tournamentGame, tournamentPrize, tournamentStatus, tournamentLink,
+         tournamentBracket, tournamentWinner,
          tournamentDate: computedTournamentDate
        })
     };
@@ -375,6 +380,13 @@ export default function AdminWritePage() {
               <div className="flex flex-col gap-3">
                 <span className="text-xs font-bold text-gray-400">참가 신청 링크 (선택)</span>
                 <input type="text" placeholder="https://..." value={tournamentLink} onChange={(e) => setTournamentLink(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+
+                <span className="text-xs font-bold text-gray-400 mt-4 block">대진표 (선택)</span>
+                <p className="text-[10px] text-gray-600 mb-1">라운드명 뒤에 콜론(:), 매치는 &quot;팀A vs 팀B&quot;, 승자는 &quot;&gt; 팀A&quot; 형식으로 입력<br/>예시)  4강:  ↵  이글루A vs 이글루B &gt; 이글루A  ↵  결승:  ↵  이글루A vs 이글루C</p>
+                <textarea rows={5} placeholder={"4강:\n이글루A vs 이글루B > 이글루A\n이글루C vs 이글루D > 이글루C\n결승:\n이글루A vs 이글루C"} value={tournamentBracket} onChange={(e) => setTournamentBracket(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f] resize-none font-mono" />
+
+                <span className="text-xs font-bold text-gray-400 mt-4 block">우승팀 / 우승자 (선택 · 명예의 전당 표시)</span>
+                <input type="text" placeholder="예시: 이글루A" value={tournamentWinner} onChange={(e) => setTournamentWinner(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
               </div>
               <div className="flex flex-col gap-3 md:col-span-2">
                 <span className="text-xs font-bold text-gray-400">배너 이미지 URL (선택)</span>

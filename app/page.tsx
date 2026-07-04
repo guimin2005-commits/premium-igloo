@@ -3,16 +3,59 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Reveal, CountUp, LuxStyles } from "./components/Lux";
 
+// 📌 24시간 온라인 활동 스파크라인
+const Sparkline = ({ history }: { history: { ts: string; online: number }[] }) => {
+  if (!history || history.length < 2) return null;
+  const w = 220, h = 40;
+  const values = history.map((p) => p.online);
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = max - min || 1;
+  const points = values.map((v, i) => `${(i / (values.length - 1)) * w},${h - 4 - ((v - min) / range) * (h - 8)}`).join(" ");
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase">24H Activity</span>
+        <span className="text-[9px] font-bold text-gray-600">피크 {max.toLocaleString()}명</span>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-[220px] h-10 overflow-visible">
+        <defs>
+          <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#e91e3f" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#e91e3f" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polygon points={`0,${h} ${points} ${w},${h}`} fill="url(#sparkFill)" />
+        <polyline points={points} fill="none" stroke="#e91e3f" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+    </div>
+  );
+};
+
 export default function Home() {
-  const [stats, setStats] = useState<{ memberCount: number; onlineCount: number } | null>(null);
+  const [stats, setStats] = useState<{ memberCount: number; onlineCount: number; history: any[] } | null>(null);
+  const [schedule, setSchedule] = useState<any[]>([]);
 
   useEffect(() => {
     fetch("/api/stats")
       .then((res) => res.json())
       .then((data) => {
-        if (data.success) setStats({ memberCount: data.memberCount, onlineCount: data.onlineCount });
+        if (data.success) setStats({ memberCount: data.memberCount, onlineCount: data.onlineCount, history: data.history || [] });
       })
       .catch(() => {});
+
+    // 📌 다가오는 일정: 최신 이벤트 + 진행/예정 대회
+    Promise.all([
+      fetch("/api/posts?category=이벤트", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/posts?category=대회", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+    ]).then(([ev, tn]) => {
+      const events = (Array.isArray(ev?.data) ? ev.data : []).slice(0, 2).map((p: any) => ({ type: "이벤트", title: p.title, path: "/event", period: p.eventPeriod }));
+      const tournaments = (Array.isArray(tn?.data) ? tn.data : [])
+        .filter((p: any) => p.tournamentStatus !== "종료됨")
+        .slice(0, 2)
+        .map((p: any) => ({ type: p.tournamentStatus === "진행중" ? "대회 진행중" : "대회 예정", title: p.title, path: "/tournament", period: p.tournamentDate }));
+      setSchedule([...tournaments, ...events].slice(0, 3));
+    });
   }, []);
 
   return (
@@ -89,6 +132,23 @@ export default function Home() {
                     <div className="text-xl md:text-2xl font-black text-white tracking-tight">2023</div>
                     <div className="text-[9px] font-bold tracking-[0.25em] text-gray-600 mt-1 uppercase">Since</div>
                   </div>
+                </div>
+                <Sparkline history={stats.history} />
+              </Reveal>
+            )}
+
+            {/* 📌 다가오는 일정 위젯 */}
+            {schedule.length > 0 && (
+              <Reveal delay={400}>
+                <div className="mt-8 w-full space-y-1.5">
+                  <p className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase mb-2.5 text-center md:text-left">Live &amp; Upcoming</p>
+                  {schedule.map((item, i) => (
+                    <Link key={i} href={item.path} className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-[#e91e3f]/30 hover:bg-white/[0.05] transition-all group/sch">
+                      <span className={`shrink-0 text-[9px] font-black px-2 py-0.5 rounded-full ${item.type.includes("진행중") ? "bg-emerald-500/15 text-emerald-400" : item.type.includes("대회") ? "bg-blue-500/15 text-blue-400" : "bg-[#e91e3f]/15 text-[#e91e3f]"}`}>{item.type}</span>
+                      <span className="text-xs font-bold text-gray-300 group-hover/sch:text-white truncate transition-colors">{item.title}</span>
+                      {item.period && <span className="ml-auto shrink-0 text-[10px] text-gray-600 hidden sm:block">{item.period}</span>}
+                    </Link>
+                  ))}
                 </div>
               </Reveal>
             )}
