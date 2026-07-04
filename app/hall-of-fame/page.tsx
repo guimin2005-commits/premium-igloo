@@ -15,18 +15,14 @@ export default function HallOfFamePage() {
 
   const [champions, setChampions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // 📌 디스코드 ID → 프로필 캐시 { [id]: { avatarUrl, globalName, username } }
+  const [profiles, setProfiles] = useState<Record<string, any>>({});
 
   // 📌 관리자 수정/삭제 상태 (수동 기록 전용)
   const [editTarget, setEditTarget] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
-
-  const copyWinnerId = (id: string, key: string) => {
-    navigator.clipboard.writeText(id);
-    setCopiedId(key);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
 
   const executeDelete = async () => {
     if (!deleteTarget) return;
@@ -100,6 +96,17 @@ export default function HallOfFamePage() {
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
         setChampions(merged);
+
+        // 📌 디스코드 ID가 있는 기록들의 프로필 조회
+        const ids = Array.from(new Set(merged.map((c: any) => c.winnerId).filter(Boolean)));
+        ids.forEach((id: any) => {
+          fetch(`/api/discord-user?id=${id}`)
+            .then((r) => r.json())
+            .then((u) => {
+              if (u.success) setProfiles((prev) => ({ ...prev, [id]: u }));
+            })
+            .catch(() => {});
+        });
       })
       .finally(() => setIsLoading(false));
   }, []);
@@ -169,30 +176,25 @@ export default function HallOfFamePage() {
                     {c.dateLabel && <p className="text-xs text-gray-500">{c.dateLabel}</p>}
                   </div>
 
-                  {/* 우승자 */}
+                  {/* 우승자 — 디스코드 ID가 있으면 실제 프로필(아바타+이름) 표시 */}
                   <div className="shrink-0 md:text-right">
-                    <p className="text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1">🏆 Champion</p>
-                    <p className="text-xl md:text-2xl font-black text-[#e91e3f] tracking-tight">{c.winner}</p>
-                    {c.winnerId && (
-                      <button
-                        onClick={() => copyWinnerId(c.winnerId, c._id)}
-                        title="디스코드 ID 복사"
-                        className={`mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-mono font-bold transition-all ${copiedId === c._id ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" : "border-white/10 bg-white/[0.03] text-gray-500 hover:text-white hover:border-white/25"}`}
-                      >
-                        {copiedId === c._id ? (
-                          <>
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                            복사됨!
-                          </>
-                        ) : (
-                          <>
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                            {c.winnerId}
-                          </>
-                        )}
-                      </button>
+                    <p className="text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-2">🏆 Champion</p>
+                    {c.winnerId && profiles[c.winnerId] ? (
+                      <div className="flex items-center gap-3 md:flex-row-reverse">
+                        <div className="relative shrink-0">
+                          <div className="absolute -inset-1 bg-[#e91e3f]/20 blur-md rounded-full pointer-events-none"></div>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={profiles[c.winnerId].avatarUrl} alt={profiles[c.winnerId].globalName} className="relative w-11 h-11 md:w-12 md:h-12 rounded-full bg-gray-800 ring-2 ring-[#e91e3f]/50 ring-offset-2 ring-offset-[#090909]" />
+                        </div>
+                        <div className="min-w-0 md:text-right">
+                          <p className="text-lg md:text-xl font-black text-[#e91e3f] tracking-tight leading-tight truncate">{profiles[c.winnerId].globalName}</p>
+                          <p className="text-[10px] text-gray-500 font-medium truncate">@{profiles[c.winnerId].username}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xl md:text-2xl font-black text-[#e91e3f] tracking-tight">{c.winner}</p>
                     )}
-                    {c.detail && <p className="text-[11px] text-gray-500 mt-1">{c.detail}</p>}
+                    {c.detail && <p className="text-[11px] text-gray-500 mt-1.5">{c.detail}</p>}
                   </div>
                 </div>
               </Reveal>
