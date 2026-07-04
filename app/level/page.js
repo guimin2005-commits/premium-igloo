@@ -312,8 +312,8 @@ export default function LevelPage() {
             <div className="grid grid-cols-3 gap-px bg-white/10 rounded-2xl overflow-hidden mt-12 max-w-2xl border border-white/10">
               {[
                 { n: 1000, l: "MAX LEVEL", s: "" },
-                { n: 7000, l: "출석 1회 XP", s: "" },
-                { n: 3500, l: "내전 채널 XP", s: "" },
+                { n: 15, l: "레벨 구간", s: "" },
+                { n: 6000, l: "최고 구간 추가 XP", s: "" },
               ].map((stat, i) => (
                 <div key={i} className="bg-[#0d0d0d] px-4 py-6 md:px-8 md:py-8 text-center group hover:bg-[#121212] transition-colors">
                   <div className="text-2xl md:text-4xl font-black text-white group-hover:text-[#e91e3f] transition-colors tracking-tight">
@@ -423,8 +423,8 @@ export default function LevelPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
                   { t: "채팅 채널", x: "200", c: "쿨타임 1분", d: "채팅 입력 시 XP를 획득하며, 오남용 방지를 위해 쿨타임 1분이 적용됩니다." },
-                  { t: "음성 채널", x: "3,000", c: "쿨타임 5분", d: "최소 5분 동안 접속 지속 시 XP가 지급됩니다." },
-                  { t: "내전 채널", x: "3,500", c: "쿨타임 5분", d: "음성 채널과 동일하게 적용되며, 보너스 500 XP가 추가 지급됩니다." },
+                  { t: "음성 채널", x: "3,000", c: "쿨타임 5분", d: "음성 채널에서 최소 5분 동안 접속 지속 시 XP가 지급됩니다." },
+                  { t: "내전 음성 채널", x: "3,500", c: "쿨타임 5분", d: "음성 채널과 동일하게 적용되며, 보너스 500 XP가 추가 지급됩니다." },
                 ].map((item, i) => (
                   <Reveal key={i} delay={i * 130}>
                     <LuxCard className="p-7 h-full group hover:bg-[#141414] transition-colors duration-300">

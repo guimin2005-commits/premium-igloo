@@ -279,6 +279,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             </div>
             <div className="flex items-center gap-6">
               <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">Discord</a>
+              <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">Kakao Talk</a>
               <Link href="/faq" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">FAQ</Link>
               <Link href="/policy" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">이용약관 및 개인정보처리방침</Link>
             </div>
@@ -419,6 +420,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 ) : (
                   <button onClick={() => { setIsMobileMenuOpen(false); signIn("discord", { callbackUrl: "/" }); }} className="w-full py-3 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-xl transition-colors outline-none">Discord 로그인</button>
                 )}
+                <div className="flex items-center gap-4 px-3 pt-3">
+                  <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">Discord</a>
+                  <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">Kakao Talk</a>
+                </div>
                 <Link href="/policy" onClick={() => setIsMobileMenuOpen(false)} className="px-3 py-3 text-xs text-gray-500 hover:text-white transition-colors">이용약관 및 개인정보처리방침</Link>
               </div>
             </div>
