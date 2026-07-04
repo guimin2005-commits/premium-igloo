@@ -26,6 +26,19 @@ export async function POST(request) {
   }
 }
 
+export async function PUT(request) {
+  try {
+    await connectToDatabase();
+    const body = await request.json();
+    if (!body.id) return NextResponse.json({ success: false }, { status: 400 });
+    const { id, ...fields } = body;
+    const honor = await Honor.findByIdAndUpdate(id, fields, { new: true });
+    return NextResponse.json({ success: true, data: honor });
+  } catch (e) {
+    return NextResponse.json({ success: false }, { status: 500 });
+  }
+}
+
 export async function DELETE(request) {
   try {
     await connectToDatabase();

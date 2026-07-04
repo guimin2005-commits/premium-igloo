@@ -2,17 +2,65 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Reveal, LuxStyles } from "../components/Lux";
 
+const ADMIN_USERS = ["elahw.06"];
+
 export default function HallOfFamePage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+
   const [champions, setChampions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // 📌 관리자 수정/삭제 상태 (수동 기록 전용)
+  const [editTarget, setEditTarget] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const copyWinnerId = (id: string, key: string) => {
     navigator.clipboard.writeText(id);
     setCopiedId(key);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const executeDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      const res = await fetch(`/api/honors?id=${deleteTarget._id}`, { method: "DELETE" });
+      if (res.ok) setChampions((prev) => prev.filter((c) => c._id !== deleteTarget._id));
+    } catch {}
+    setDeleteTarget(null);
+  };
+
+  const executeEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTarget || isSaving) return;
+    setIsSaving(true);
+    try {
+      const res = await fetch("/api/honors", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editTarget._id,
+          category: editTarget.category,
+          title: editTarget.title,
+          winner: editTarget.winner,
+          winnerId: editTarget.winnerId,
+          detail: editTarget.detail,
+          dateLabel: editTarget.dateLabel,
+        }),
+      });
+      if (res.ok) {
+        setChampions((prev) => prev.map((c) => (c._id === editTarget._id ? { ...c, ...editTarget } : c)));
+        setEditTarget(null);
+      }
+    } catch {}
+    setIsSaving(false);
   };
 
   useEffect(() => {
@@ -33,6 +81,7 @@ export default function HallOfFamePage() {
             detail: p.tournamentPrize || "",
             dateLabel: p.tournamentDate || "",
             createdAt: p.createdAt,
+            source: "tournament",
           }));
 
         const manual = (Array.isArray(hn?.data) ? hn.data : []).map((h: any) => ({
@@ -44,6 +93,7 @@ export default function HallOfFamePage() {
           detail: h.detail || "",
           dateLabel: h.dateLabel || "",
           createdAt: h.createdAt,
+          source: "manual",
         }));
 
         const merged = [...fromTournaments, ...manual].sort(
@@ -100,7 +150,21 @@ export default function HallOfFamePage() {
 
                   {/* 기록 정보 */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-black tracking-[0.25em] text-gray-600 uppercase mb-1.5">{c.category}</p>
+                    <div className="flex items-center gap-3 mb-1.5">
+                      <p className="text-[10px] font-black tracking-[0.25em] text-gray-600 uppercase">{c.category}</p>
+                      {isAdmin && (
+                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {c.source === "manual" ? (
+                            <>
+                              <button onClick={() => setEditTarget({ ...c })} className="text-[10px] font-bold text-gray-500 hover:text-white bg-white/5 px-2 py-0.5 rounded">수정</button>
+                              <button onClick={() => setDeleteTarget(c)} className="text-[10px] font-bold text-red-500/60 hover:text-red-500 bg-white/5 px-2 py-0.5 rounded">삭제</button>
+                            </>
+                          ) : (
+                            <button onClick={() => router.push(`/write?id=${c._id}`)} className="text-[10px] font-bold text-gray-500 hover:text-white bg-white/5 px-2 py-0.5 rounded">대회 글에서 수정</button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <h3 className="text-lg md:text-xl font-black text-white tracking-tight mb-1 group-hover:text-[#ff5c77] transition-colors">{c.title}</h3>
                     {c.dateLabel && <p className="text-xs text-gray-500">{c.dateLabel}</p>}
                   </div>
@@ -136,6 +200,61 @@ export default function HallOfFamePage() {
           </div>
         )}
       </div>
+
+      {/* 📌 관리자 — 수동 기록 수정 모달 */}
+      {editTarget && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <form onSubmit={executeEdit} className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl ring-1 ring-white/5 w-full max-w-md p-8 shadow-2xl max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
+            <h2 className="text-xl font-bold text-white mb-6">기록 수정</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2">분류</label>
+                <div className="flex flex-wrap gap-2">
+                  {["SYSTEM : LEVEL", "대회", "이벤트", "기타"].map((cat) => (
+                    <button type="button" key={cat} onClick={() => setEditTarget({ ...editTarget, category: cat })} className={`px-3.5 py-1.5 text-xs font-bold rounded-full border transition-all ${editTarget.category === cat ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{cat}</button>
+                  ))}
+                </div>
+              </div>
+              {[
+                { label: "기록 제목", key: "title", required: true },
+                { label: "우승자 / 1등", key: "winner", required: true },
+                { label: "우승자 디스코드 ID", key: "winnerId", required: false },
+                { label: "부가 설명", key: "detail", required: false },
+                { label: "표시 기간", key: "dateLabel", required: false },
+              ].map((f) => (
+                <div key={f.key}>
+                  <label className="block text-xs font-bold text-gray-500 mb-2">{f.label}{f.required && <span className="text-[#e91e3f]"> *</span>}</label>
+                  <input
+                    type="text"
+                    required={f.required}
+                    value={editTarget[f.key] || ""}
+                    onChange={(e) => setEditTarget({ ...editTarget, [f.key]: e.target.value })}
+                    className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3 mt-8">
+              <button type="button" onClick={() => setEditTarget(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">취소</button>
+              <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20">{isSaving ? "저장 중..." : "저장"}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* 📌 관리자 — 삭제 확인 모달 */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4">
+          <div className="bg-[#121212] border border-red-500/30 rounded-3xl w-full max-w-sm p-8 text-center">
+            <h2 className="text-xl font-bold text-white mb-3">삭제 확인</h2>
+            <p className="text-sm text-gray-400 mb-8"><span className="text-white font-bold">{deleteTarget.title}</span> 기록을<br/>명예의 전당에서 삭제하시겠습니까?</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button>
+              <button onClick={executeDelete} className="flex-1 py-3 bg-red-500/80 text-white rounded-xl">삭제</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
