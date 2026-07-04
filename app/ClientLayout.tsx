@@ -46,6 +46,50 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   ];
   const [openMegaMenu, setOpenMegaMenu] = useState<string | null>(null);
 
+  // 📌 알림 센터 — 내 문의에 답변이 달리면 종 아이콘에 빨간 점
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [seenNotifIds, setSeenNotifIds] = useState<Set<string>>(new Set());
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("seenAnswerIds") || "[]");
+      if (Array.isArray(stored)) setSeenNotifIds(new Set(stored));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (status !== "authenticated" || !session?.user?.name) return;
+    fetch(`/api/inquiry?user=${encodeURIComponent(session.user.name)}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        const list = Array.isArray(data?.data) ? data.data : [];
+        const answered = list
+          .filter((i: any) => i.status === "답변 완료")
+          .sort((a: any, b: any) => new Date(b.answeredAt || b.updatedAt || b.createdAt).getTime() - new Date(a.answeredAt || a.updatedAt || a.createdAt).getTime());
+        setNotifications(answered);
+      })
+      .catch(() => {});
+  }, [status, session?.user?.name]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) setIsNotifOpen(false);
+    };
+    if (isNotifOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isNotifOpen]);
+
+  const unseenCount = notifications.filter((n) => !seenNotifIds.has(n._id)).length;
+
+  const markNotifsSeen = () => {
+    const next = new Set(seenNotifIds);
+    notifications.forEach((n) => next.add(n._id));
+    setSeenNotifIds(next);
+    try { localStorage.setItem("seenAnswerIds", JSON.stringify(Array.from(next).slice(-200))); } catch {}
+  };
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
@@ -147,6 +191,42 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             {!mounted || status === "loading" ? (
                <div className="w-20 h-8"></div>
             ) : status === "authenticated" && session ? (
+              <>
+              {/* 📌 알림 센터 종 아이콘 */}
+              <div className="relative flex items-center" ref={notifRef}>
+                <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) markNotifsSeen(); }} aria-label="알림" className="relative p-2 text-gray-400 hover:text-white transition-colors outline-none focus:outline-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+                  {unseenCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#e91e3f] shadow-[0_0_6px_rgba(233,30,63,0.8)]"></span>
+                  )}
+                </button>
+
+                {isNotifOpen && (
+                  <div className="absolute top-[52px] right-0 z-50 w-72 bg-[#1e1e1e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="px-5 py-3.5 border-b border-white/5 flex items-center justify-between">
+                      <span className="text-sm font-black text-white">알림</span>
+                      <span className="text-[10px] font-bold text-gray-500">답변 완료된 문의</span>
+                    </div>
+                    {notifications.length === 0 ? (
+                      <div className="px-5 py-8 text-center text-xs text-gray-500">아직 알림이 없습니다.</div>
+                    ) : (
+                      <div className="max-h-72 overflow-y-auto [&::-webkit-scrollbar]:hidden divide-y divide-white/[0.04]">
+                        {notifications.slice(0, 5).map((n) => (
+                          <Link key={n._id} href="/profile" onClick={() => setIsNotifOpen(false)} className="block px-5 py-3.5 hover:bg-white/[0.03] transition-colors">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[9px] font-black tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded">답변 완료</span>
+                              <span className="text-[10px] text-gray-600">{n.mainType || "문의"}</span>
+                            </div>
+                            <p className="text-xs font-bold text-gray-300 line-clamp-1">{n.title || n.content?.slice(0, 40) || "문의 내역"}</p>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                    <Link href="/profile" onClick={() => setIsNotifOpen(false)} className="block px-5 py-3 text-center text-xs font-bold text-[#e91e3f] hover:bg-[#e91e3f]/5 transition-colors border-t border-white/5">전체 문의 내역 보기</Link>
+                  </div>
+                )}
+              </div>
+
               <div className="relative flex items-center h-full" ref={profileDropdownRef}>
                 <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="hidden md:flex items-center gap-2 p-1.5 rounded-xl hover:bg-white/5 transition-colors outline-none focus:outline-none">
                   <img src={session.user?.image || ""} alt="Profile" className={`w-8 h-8 rounded-full bg-gray-700 transition-all ${isBooster ? 'ring-2 ring-[#e91e3f]/60 ring-offset-2 ring-offset-[#090909]' : ''}`} />
@@ -213,6 +293,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   </div>
                 )}
               </div>
+              </>
             ) : (
               <button onClick={() => setIsLoginModalOpen(true)} className="flex items-center gap-2 px-4 md:px-5 py-2 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-xl transition-colors shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">로그인</button>
             )}
