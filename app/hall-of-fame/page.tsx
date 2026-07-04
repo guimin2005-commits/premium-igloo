@@ -9,16 +9,39 @@ export default function HallOfFamePage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/posts?category=대회", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        const posts = Array.isArray(data?.data) ? data.data : [];
-        const ended = posts
+    Promise.all([
+      fetch("/api/posts?category=대회", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/honors", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+    ])
+      .then(([tn, hn]) => {
+        const posts = Array.isArray(tn?.data) ? tn.data : [];
+        const fromTournaments = posts
           .filter((p: any) => p.tournamentStatus === "종료됨" && p.tournamentWinner?.trim())
-          .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setChampions(ended);
+          .map((p: any) => ({
+            _id: p._id,
+            category: p.tournamentGame || "TOURNAMENT",
+            title: p.title,
+            winner: p.tournamentWinner,
+            detail: p.tournamentPrize || "",
+            dateLabel: p.tournamentDate || "",
+            createdAt: p.createdAt,
+          }));
+
+        const manual = (Array.isArray(hn?.data) ? hn.data : []).map((h: any) => ({
+          _id: h._id,
+          category: h.category || "기타",
+          title: h.title,
+          winner: h.winner,
+          detail: h.detail || "",
+          dateLabel: h.dateLabel || "",
+          createdAt: h.createdAt,
+        }));
+
+        const merged = [...fromTournaments, ...manual].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        setChampions(merged);
       })
-      .catch(() => {})
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -41,7 +64,7 @@ export default function HallOfFamePage() {
             <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
               <span className="text-white">명예의 </span><span className="lux-shimmer">전당</span>
             </h1>
-            <p className="text-gray-400 text-sm md:text-base leading-relaxed">고급 이글루의 역사를 만든 역대 대회 우승자들을 기록합니다.</p>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">고급 이글루의 역사를 기록합니다.</p>
           </Reveal>
         </div>
       </section>
@@ -66,18 +89,18 @@ export default function HallOfFamePage() {
                     <p className="text-3xl md:text-4xl font-black text-white/[0.08] group-hover:text-[#e91e3f]/25 transition-colors duration-500 leading-none tracking-tighter select-none">{formatYear(c.createdAt)}</p>
                   </div>
 
-                  {/* 대회 정보 */}
+                  {/* 기록 정보 */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-black tracking-[0.25em] text-gray-600 uppercase mb-1.5">{c.tournamentGame || "TOURNAMENT"}</p>
+                    <p className="text-[10px] font-black tracking-[0.25em] text-gray-600 uppercase mb-1.5">{c.category}</p>
                     <h3 className="text-lg md:text-xl font-black text-white tracking-tight mb-1 group-hover:text-[#ff5c77] transition-colors">{c.title}</h3>
-                    {c.tournamentDate && <p className="text-xs text-gray-500">{c.tournamentDate}</p>}
+                    {c.dateLabel && <p className="text-xs text-gray-500">{c.dateLabel}</p>}
                   </div>
 
                   {/* 우승자 */}
                   <div className="shrink-0 md:text-right">
                     <p className="text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1">🏆 Champion</p>
-                    <p className="text-xl md:text-2xl font-black text-[#e91e3f] tracking-tight">{c.tournamentWinner}</p>
-                    {c.tournamentPrize && <p className="text-[11px] text-gray-500 mt-1">{c.tournamentPrize}</p>}
+                    <p className="text-xl md:text-2xl font-black text-[#e91e3f] tracking-tight">{c.winner}</p>
+                    {c.detail && <p className="text-[11px] text-gray-500 mt-1">{c.detail}</p>}
                   </div>
                 </div>
               </Reveal>
