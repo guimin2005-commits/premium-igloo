@@ -312,8 +312,8 @@ export default function LevelPage() {
             <div className="grid grid-cols-3 gap-px bg-white/10 rounded-2xl overflow-hidden mt-12 max-w-2xl border border-white/10">
               {[
                 { n: 1000, l: "MAX LEVEL", s: "" },
-                { n: 15, l: "레벨 구간", s: "" },
-                { n: 6000, l: "최고 구간 추가 XP", s: "" },
+                { n: 7000, l: "출석 1회 XP", s: "" },
+                { n: 3500, l: "내전 채널 XP", s: "" },
               ].map((stat, i) => (
                 <div key={i} className="bg-[#0d0d0d] px-4 py-6 md:px-8 md:py-8 text-center group hover:bg-[#121212] transition-colors">
                   <div className="text-2xl md:text-4xl font-black text-white group-hover:text-[#e91e3f] transition-colors tracking-tight">
