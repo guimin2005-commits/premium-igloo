@@ -2,14 +2,21 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { Reveal, LuxStyles } from "../components/Lux";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Reveal, LuxStyles, ScrollProgress } from "../components/Lux";
 
 export default function MyInfoPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("inquiry");
+
+  // 📌 URL 쿼리로 탭 직접 진입 지원 (/profile?tab=booster)
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam) setActiveTab(tabParam);
+  }, [searchParams]);
   const [inquiryFilter, setInquiryFilter] = useState("all");
   const [recruitFilter, setRecruitFilter] = useState("all");
   const [fetchedInquiries, setFetchedInquiries] = useState<any[]>([]);
@@ -86,6 +93,7 @@ export default function MyInfoPage() {
   return (
     <main className="w-full flex-1 flex flex-col relative">
       <LuxStyles />
+      <ScrollProgress />
 
       {/* ── PROFILE HERO ── */}
       <section className="relative w-full pt-16 pb-10 md:pt-20 md:pb-12 px-6">
@@ -225,12 +233,20 @@ export default function MyInfoPage() {
 
         {activeTab === "booster" && (
           <div className="space-y-16 animate-in fade-in duration-300">
-            {/* 인트로 — 플랫 에디토리얼 */}
+            {/* 인트로 — 플랫 에디토리얼 + 임팩트 타이포 */}
             <Reveal>
-            <div className="relative pt-2">
-              <div className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f]/80 uppercase mb-3">Server Booster Program</div>
-              <h3 className="text-2xl md:text-3xl font-black text-white mb-3 tracking-tight">SERVER BOOSTER 시스템이란?</h3>
-              <p className="text-sm text-gray-400 leading-relaxed max-w-xl">서버의 환경 개선을 위한 직접적인 후원 시스템입니다. 본 서버의 성장을 지원해 주시는 유저분들께 깊은 감사를 드립니다.</p>
+            <div className="relative pt-2 overflow-hidden">
+              <div className="absolute -top-8 -right-4 text-[120px] md:text-[160px] font-black text-white/[0.025] leading-none select-none pointer-events-none tracking-tighter">BOOST</div>
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="w-8 h-px bg-[#e91e3f]"></span>
+                  <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Server Booster Program</span>
+                </div>
+                <h3 className="text-3xl md:text-5xl font-black tracking-tighter mb-4 leading-none">
+                  <span className="text-white">SERVER </span><span className="lux-shimmer">BOOSTER</span>
+                </h3>
+                <p className="text-sm md:text-base text-gray-400 leading-relaxed max-w-xl">서버의 환경 개선을 위한 직접적인 후원 시스템입니다.<br className="hidden md:block" />본 서버의 성장을 지원해 주시는 유저분들께 깊은 감사를 드립니다.</p>
+              </div>
             </div>
             </Reveal>
 
@@ -241,7 +257,7 @@ export default function MyInfoPage() {
                 <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
                 <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
               </div>
-              <h4 className="text-lg md:text-xl font-black text-white tracking-tight mb-2">SERVER 전용 기능 권한</h4>
+              <h4 className="text-xl md:text-2xl font-black text-white tracking-tight mb-2">SERVER 전용 기능 권한</h4>
               <div className="divide-y divide-white/[0.06]">
                 {[
                   { t: "전용 역할 및 뱃지 지급", d: "@SERVER BOOSTER 고유 역할 부여 및 차별화된 프로필 전용 특수 배지 자동 장착", note: "" },
@@ -268,20 +284,26 @@ export default function MyInfoPage() {
                 <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
                 <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
               </div>
-              <h4 className="text-lg md:text-xl font-black text-white tracking-tight mb-2">XP BOOSTER 경험치 혜택</h4>
+              <h4 className="text-xl md:text-2xl font-black text-white tracking-tight mb-2">XP BOOSTER 경험치 혜택</h4>
               <div className="divide-y divide-white/[0.06]">
                 {[
-                  { k: "WELCOME", t: "부스팅 시작 보너스 보상 지급!", v: <><p className="text-white font-bold">최초 부스팅: <span className="text-[#e91e3f]">100,000 XP</span> 즉시 지급!</p><p className="text-gray-500 mt-0.5">추가 부스팅: 개당 <span className="text-white">50,000 XP</span> 추가 지급!</p></> },
-                  { k: "PASSIVE", t: "경험치 획득 조건 충족 시 상시 추가!", v: <p className="text-[#e91e3f] font-bold">상시 <span className="text-white">+2,000 XP</span> 추가 지급!</p> },
-                  { k: "SHOP", t: "경험치샵 이용 전용 정산 혜택!", v: <p className="text-white font-bold">사용 금액의 <span className="text-[#e91e3f]">35% XP</span> 환급!</p> },
-                  { k: "DAILY", t: "일일 출석체크 추가 보상!", v: <p className="text-white font-bold">일일 출석체크 시 <span className="text-[#e91e3f]">10,000 XP</span> 보너스 추가!</p> },
+                  { k: "WELCOME", t: "부스팅 시작 보너스 보상 지급!", big: "100,000", unit: "XP 즉시 지급", sub: "추가 부스팅: 개당 50,000 XP 추가 지급!" },
+                  { k: "PASSIVE", t: "경험치 획득 조건 충족 시 상시 추가!", big: "+2,000", unit: "XP 상시 지급", sub: "" },
+                  { k: "SHOP", t: "경험치샵 이용 전용 정산 혜택!", big: "35%", unit: "XP 환급", sub: "경험치샵 사용 금액 기준" },
+                  { k: "DAILY", t: "일일 출석체크 추가 보상!", big: "10,000", unit: "XP 보너스", sub: "일일 출석체크 시 추가 지급" },
                 ].map((row, idx) => (
-                  <div key={idx} className="py-5 flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-4">
+                  <div key={idx} className="py-6 flex flex-col md:flex-row md:justify-between md:items-center gap-3 md:gap-4 group">
                     <div className="min-w-0 md:flex md:items-baseline md:gap-8">
-                      <p className="font-black text-white text-sm tracking-widest md:w-52 shrink-0">{row.k}</p>
+                      <p className="font-black text-white text-sm tracking-[0.2em] md:w-52 shrink-0 group-hover:text-[#ff5c77] transition-colors">{row.k}</p>
                       <p className="text-xs text-gray-500 mt-0.5 md:mt-0">{row.t}</p>
                     </div>
-                    <div className="md:text-right text-xs shrink-0">{row.v}</div>
+                    <div className="md:text-right shrink-0">
+                      <p className="leading-none">
+                        <span className="text-2xl md:text-3xl font-black text-[#e91e3f] tracking-tighter">{row.big}</span>
+                        <span className="text-[11px] font-bold text-gray-400 ml-2">{row.unit}</span>
+                      </p>
+                      {row.sub && <p className="text-[11px] text-gray-600 mt-1.5">{row.sub}</p>}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -295,13 +317,13 @@ export default function MyInfoPage() {
                 <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
                 <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
               </div>
-              <h4 className="text-lg md:text-xl font-black text-white tracking-tight mb-2">누적 유지 개월별 추가 혜택 (RANK)</h4>
+              <h4 className="text-xl md:text-2xl font-black text-white tracking-tight mb-2">누적 유지 개월별 추가 혜택 (RANK)</h4>
               <div className="divide-y divide-white/[0.06]">
-                {[{ r: "RANK 01", m: "1개월", x: "100,000 XP" }, { r: "RANK 02", m: "3개월", x: "300,000 XP" }, { r: "RANK 03", m: "6개월", x: "600,000 XP" }, { r: "RANK 04", m: "9개월", x: "900,000 XP" }, { r: "RANK 06", m: "15개월", x: "1,500,000 XP" }, { r: "RANK 07", m: "18개월", x: "1,800,000 XP" }, { r: "RANK 08", m: "21개월", x: "2,100,000 XP" }, { r: "RANK 09", m: "24개월", x: "2,400,000 XP" }].map((item, idx) => (
-                  <div key={idx} className="py-3.5 grid grid-cols-3 items-center text-sm group">
+                {[{ r: "RANK 01", m: "1개월", x: "100,000" }, { r: "RANK 02", m: "3개월", x: "300,000" }, { r: "RANK 03", m: "6개월", x: "600,000" }, { r: "RANK 04", m: "9개월", x: "900,000" }, { r: "RANK 06", m: "15개월", x: "1,500,000" }, { r: "RANK 07", m: "18개월", x: "1,800,000" }, { r: "RANK 08", m: "21개월", x: "2,100,000" }, { r: "RANK 09", m: "24개월", x: "2,400,000" }].map((item, idx) => (
+                  <div key={idx} className="py-4 grid grid-cols-3 items-center text-sm group hover:bg-white/[0.015] transition-colors">
                     <p className="text-[10px] font-black tracking-[0.2em] text-gray-600 uppercase group-hover:text-[#e91e3f] transition-colors">{item.r}</p>
                     <p className="font-bold text-white text-center">{item.m}</p>
-                    <p className="text-xs font-bold text-[#e91e3f] text-right">{item.x}</p>
+                    <p className="text-right"><span className="text-base md:text-lg font-black text-[#e91e3f] tracking-tight">{item.x}</span><span className="text-[10px] font-bold text-gray-500 ml-1.5">XP</span></p>
                   </div>
                 ))}
               </div>

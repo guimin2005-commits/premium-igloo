@@ -125,6 +125,39 @@ export const PageHero = ({ eyebrow, title, accent, desc, children }) => (
   </section>
 );
 
+// 스크롤 진행 인디케이터 — 우측에 스크롤한 만큼 선이 차오름
+export const ScrollProgress = () => {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const doc = document.documentElement;
+      const max = doc.scrollHeight - doc.clientHeight;
+      setProgress(max > 0 ? Math.min(window.scrollY / max, 1) : 0);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, []);
+
+  return (
+    <div className="hidden md:flex fixed right-6 top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-3 pointer-events-none">
+      <span className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase [writing-mode:vertical-rl]">Scroll</span>
+      <div className="relative h-[34vh] w-px bg-white/10 rounded-full overflow-hidden">
+        <div
+          className="absolute top-0 left-0 w-full bg-gradient-to-b from-[#e91e3f] to-[#ff5c77] rounded-full shadow-[0_0_8px_rgba(233,30,63,0.6)]"
+          style={{ height: `${progress * 100}%`, transition: "height 0.1s linear" }}
+        />
+      </div>
+      <span className="text-[9px] font-black text-[#e91e3f] tabular-nums">{Math.round(progress * 100)}%</span>
+    </div>
+  );
+};
+
 // 공용 CSS (히어로 그리드/시머) — 페이지당 1회 삽입
 export const LuxStyles = () => (
   <style dangerouslySetInnerHTML={{__html: `

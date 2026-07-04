@@ -63,6 +63,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => { setIsMobileMenuOpen(false); }, [pathname]);
 
+  // 📌 모바일 메뉴 열림 시 배경 스크롤 잠금 (메뉴가 비정상적으로 늘어나는 버그 방지)
+  useEffect(() => {
+    document.body.style.overflow = isMobileMenuOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [isMobileMenuOpen]);
+
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
       if (isVerified === false && !isVerifyPage) router.push("/verify");
@@ -125,11 +131,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 const isGroupActive = group.items.some((item) => pathname === item.path);
                 const isOpen = openMegaMenu === group.name;
                 return (
-                  <div key={group.name} className="h-full flex items-center" onMouseEnter={() => setOpenMegaMenu(group.name)}>
-                    <button className={`relative h-full flex items-center gap-1.5 px-4 transition-colors outline-none focus:outline-none ${isGroupActive || isOpen ? "text-[#e91e3f]" : "text-gray-400 hover:text-white"}`}>
+                  <div key={group.name} className="h-full flex items-center group/gnav" onMouseEnter={() => setOpenMegaMenu(group.name)}>
+                    <button className={`relative h-full flex items-center px-4 transition-colors outline-none focus:outline-none ${isGroupActive || isOpen ? "text-[#e91e3f]" : "text-gray-400 hover:text-white"}`}>
                       {group.name}
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3 h-3 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                      {isGroupActive && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#e91e3f]" />}
+                      {/* 대분류 라인 차오름 이펙트 */}
+                      <span className={`absolute bottom-4 left-4 h-px bg-[#e91e3f] transition-all duration-500 ${isGroupActive ? "right-4" : isOpen ? "right-4" : "right-[calc(100%-1.5rem)] group-hover/gnav:right-4"}`} />
                     </button>
                   </div>
                 );
@@ -186,6 +192,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       {!isVerifyPage && (
                         <Link href="/profile" onClick={() => setIsProfileOpen(false)} className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors font-medium">내 정보</Link>
                       )}
+                      {!isVerifyPage && (
+                        <Link href="/profile?tab=booster" onClick={() => setIsProfileOpen(false)} className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors font-medium">서버 부스트 혜택</Link>
+                      )}
                       {!isVerifyPage && isVerified && (
                         <Link href="/invite" onClick={() => setIsProfileOpen(false)} className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors font-medium">친구 초대 이벤트</Link>
                       )}
@@ -221,12 +230,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           const group = categoryGroups.find((g) => g.name === openMegaMenu);
           if (!group) return null;
           return (
-            <div className="hidden md:block absolute top-full left-0 right-0 bg-[#0d0d0d]/95 backdrop-blur-2xl border-b border-white/10 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.8)] animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="hidden md:block absolute top-full left-0 right-0 bg-[#161616] border-b border-white/15 shadow-[0_40px_80px_-16px_rgba(0,0,0,0.9)] animate-in fade-in slide-in-from-top-2 duration-200">
+              {/* 상단 크림슨 라인으로 패널 경계 명확화 */}
+              <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/60 to-transparent"></div>
               <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-4 gap-8">
-                <div className="col-span-1 border-r border-white/5 pr-8">
+                <div className="col-span-1 border-r border-white/10 pr-8">
                   <div className="flex items-center gap-2.5 mb-3">
                     <span className="w-6 h-px bg-[#e91e3f]"></span>
-                    <span className="text-[9px] font-black tracking-[0.3em] text-gray-600 uppercase">Category</span>
+                    <span className="text-[9px] font-black tracking-[0.3em] text-gray-500 uppercase">Category</span>
                   </div>
                   <p className="text-xl font-black text-white tracking-tight mb-1.5">{group.name}</p>
                   <p className="text-xs text-gray-500 leading-relaxed">{group.desc}</p>
@@ -239,11 +250,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         key={item.path}
                         href={item.path}
                         onClick={() => setOpenMegaMenu(null)}
-                        className={`group/item p-5 rounded-2xl border transition-all duration-300 ${isActive ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : "border-white/5 hover:border-[#e91e3f]/30 hover:bg-white/[0.03]"}`}
+                        className={`group/item p-5 rounded-2xl border transition-all duration-300 ${isActive ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.08]" : "border-white/10 bg-white/[0.04] hover:border-[#e91e3f]/40 hover:bg-white/[0.07]"}`}
                       >
                         <p className={`text-sm font-black mb-1.5 transition-colors ${isActive ? "text-[#e91e3f]" : "text-white group-hover/item:text-[#ff5c77]"}`}>{item.name}</p>
                         <p className="text-xs text-gray-500 leading-relaxed">{item.desc}</p>
-                        <div className={`mt-4 h-px bg-[#e91e3f]/40 transition-all duration-500 ${isActive ? "w-full" : "w-6 group-hover/item:w-full"}`}></div>
+                        <div className={`mt-4 h-px bg-[#e91e3f]/50 transition-all duration-500 ${isActive ? "w-full" : "w-6 group-hover/item:w-full"}`}></div>
                       </Link>
                     );
                   })}
@@ -350,7 +361,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       {isMobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-[200]">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
-          <div className="absolute right-0 top-0 bottom-0 w-[80%] max-w-xs bg-[#121212] border-l border-white/10 shadow-2xl flex flex-col overflow-y-auto">
+          <div className="absolute right-0 top-0 bottom-0 w-[80%] max-w-xs bg-[#121212] border-l border-white/10 shadow-2xl flex flex-col overflow-y-auto overscroll-contain">
             <div className="flex items-center justify-between px-6 h-16 border-b border-white/10 shrink-0">
               <span className="text-lg font-black tracking-widest text-white">메뉴</span>
               <button onClick={() => setIsMobileMenuOpen(false)} aria-label="메뉴 닫기" className="p-2 -mr-2 text-gray-400 hover:text-white transition-colors outline-none">
@@ -390,6 +401,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   <>
                     {!isVerifyPage && (
                       <Link href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="px-3 py-3 rounded-xl text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors">내 정보</Link>
+                    )}
+                    {!isVerifyPage && (
+                      <Link href="/profile?tab=booster" onClick={() => setIsMobileMenuOpen(false)} className="px-3 py-3 rounded-xl text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors">서버 부스트 혜택</Link>
                     )}
                     {!isVerifyPage && isVerified && (
                       <Link href="/invite" onClick={() => setIsMobileMenuOpen(false)} className="px-3 py-3 rounded-xl text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors">친구 초대 이벤트</Link>
