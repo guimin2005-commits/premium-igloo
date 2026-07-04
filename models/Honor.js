@@ -5,6 +5,7 @@ const HonorSchema = new mongoose.Schema({
   category: { type: String, default: "대회" },   // 예: SYSTEM : LEVEL, 대회, 이벤트
   title: { type: String, required: true },        // 예: LEVEL SEASON 1
   winner: { type: String, required: true },       // 우승자/1등
+  winnerId: { type: String, default: "" },        // 우승자 디스코드 사용자 ID (복사용)
   detail: { type: String, default: "" },          // 부가 설명 (보상 등)
   dateLabel: { type: String, default: "" },       // 표시용 기간 (예: 2026.01 ~ 2026.06)
   createdAt: { type: Date, default: Date.now },

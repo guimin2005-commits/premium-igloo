@@ -7,6 +7,13 @@ import { Reveal, LuxStyles } from "../components/Lux";
 export default function HallOfFamePage() {
   const [champions, setChampions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyWinnerId = (id: string, key: string) => {
+    navigator.clipboard.writeText(id);
+    setCopiedId(key);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   useEffect(() => {
     Promise.all([
@@ -22,6 +29,7 @@ export default function HallOfFamePage() {
             category: p.tournamentGame || "TOURNAMENT",
             title: p.title,
             winner: p.tournamentWinner,
+            winnerId: p.tournamentWinnerId || "",
             detail: p.tournamentPrize || "",
             dateLabel: p.tournamentDate || "",
             createdAt: p.createdAt,
@@ -32,6 +40,7 @@ export default function HallOfFamePage() {
           category: h.category || "기타",
           title: h.title,
           winner: h.winner,
+          winnerId: h.winnerId || "",
           detail: h.detail || "",
           dateLabel: h.dateLabel || "",
           createdAt: h.createdAt,
@@ -100,6 +109,25 @@ export default function HallOfFamePage() {
                   <div className="shrink-0 md:text-right">
                     <p className="text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1">🏆 Champion</p>
                     <p className="text-xl md:text-2xl font-black text-[#e91e3f] tracking-tight">{c.winner}</p>
+                    {c.winnerId && (
+                      <button
+                        onClick={() => copyWinnerId(c.winnerId, c._id)}
+                        title="디스코드 ID 복사"
+                        className={`mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-mono font-bold transition-all ${copiedId === c._id ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" : "border-white/10 bg-white/[0.03] text-gray-500 hover:text-white hover:border-white/25"}`}
+                      >
+                        {copiedId === c._id ? (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            복사됨!
+                          </>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                            {c.winnerId}
+                          </>
+                        )}
+                      </button>
+                    )}
                     {c.detail && <p className="text-[11px] text-gray-500 mt-1">{c.detail}</p>}
                   </div>
                 </div>

@@ -19,6 +19,7 @@ export default function AdminHonorsPage() {
   const [category, setCategory] = useState("SYSTEM : LEVEL");
   const [title, setTitle] = useState("");
   const [winner, setWinner] = useState("");
+  const [winnerId, setWinnerId] = useState("");
   const [detail, setDetail] = useState("");
   const [dateLabel, setDateLabel] = useState("");
 
@@ -40,10 +41,10 @@ export default function AdminHonorsPage() {
       const res = await fetch("/api/honors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, title, winner, detail, dateLabel }),
+        body: JSON.stringify({ category, title, winner, winnerId, detail, dateLabel }),
       });
       if (res.ok) {
-        setTitle(""); setWinner(""); setDetail(""); setDateLabel("");
+        setTitle(""); setWinner(""); setWinnerId(""); setDetail(""); setDateLabel("");
         fetchHonors();
         setPopup({ isOpen: true, message: "명예의 전당에 기록되었습니다.", isError: false });
       } else {
@@ -139,9 +140,15 @@ export default function AdminHonorsPage() {
                 <input type="text" required placeholder="예: elahw.06" value={winner} onChange={(e) => setWinner(e.target.value)} className={inputClass} />
               </div>
             </div>
-            <div className="mb-6">
-              <label className="block text-xs font-bold text-gray-500 mb-2">부가 설명 (선택)</label>
-              <input type="text" placeholder="예: 최종 레벨 512 달성 · 보상 문화상품권 5만원" value={detail} onChange={(e) => setDetail(e.target.value)} className={inputClass} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2">우승자 디스코드 ID (선택 · 복사 버튼 표시)</label>
+                <input type="text" placeholder="예: 1104242935664492666" value={winnerId} onChange={(e) => setWinnerId(e.target.value)} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2">부가 설명 (선택)</label>
+                <input type="text" placeholder="예: 최종 레벨 512 달성 · 보상 문화상품권 5만원" value={detail} onChange={(e) => setDetail(e.target.value)} className={inputClass} />
+              </div>
             </div>
             <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg shadow-[#e91e3f]/20">
               {isSubmitting ? "등재 중..." : "명예의 전당에 등재"}

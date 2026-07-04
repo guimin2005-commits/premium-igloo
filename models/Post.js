@@ -24,6 +24,7 @@ const PostSchema = new mongoose.Schema({
   tournamentLink: { type: String, default: "" },   // 참가 신청 링크
   tournamentBracket: { type: String, default: "" },// 대진표 텍스트 (라운드명: / A vs B > 승자)
   tournamentWinner: { type: String, default: "" }, // 우승팀/우승자 (명예의 전당 표시용)
+  tournamentWinnerId: { type: String, default: "" }, // 우승자 디스코드 사용자 ID (복사용)
 
   recruitRole: { type: String, default: "" },
   recruitPeriod: { type: String, default: "" },

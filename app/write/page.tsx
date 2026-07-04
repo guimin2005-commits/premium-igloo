@@ -75,6 +75,7 @@ export default function AdminWritePage() {
   const [tournamentLink, setTournamentLink] = useState("");
   const [tournamentBracket, setTournamentBracket] = useState("");
   const [tournamentWinner, setTournamentWinner] = useState("");
+  const [tournamentWinnerId, setTournamentWinnerId] = useState("");
   const [tournamentStartDate, setTournamentStartDate] = useState("");
   const [tournamentEndDate, setTournamentEndDate] = useState("");
 
@@ -116,6 +117,7 @@ export default function AdminWritePage() {
             setTournamentLink(post.tournamentLink || "");
             setTournamentBracket(post.tournamentBracket || "");
             setTournamentWinner(post.tournamentWinner || "");
+            setTournamentWinnerId(post.tournamentWinnerId || "");
             if (post.tournamentDate && post.tournamentDate.includes("~")) {
               const [start, end] = post.tournamentDate.split("~").map((s: string) => s.trim());
               setTournamentStartDate(start.replace(/\./g, "-"));
@@ -249,7 +251,7 @@ export default function AdminWritePage() {
        }),
       ...(category === "대회" && {
          content, bannerUrl, tournamentGame, tournamentPrize, tournamentStatus, tournamentLink,
-         tournamentBracket, tournamentWinner,
+         tournamentBracket, tournamentWinner, tournamentWinnerId,
          tournamentDate: computedTournamentDate
        })
     };
@@ -387,6 +389,9 @@ export default function AdminWritePage() {
 
                 <span className="text-xs font-bold text-gray-400 mt-4 block">우승팀 / 우승자 (선택 · 명예의 전당 표시)</span>
                 <input type="text" placeholder="예시: 이글루A" value={tournamentWinner} onChange={(e) => setTournamentWinner(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+
+                <span className="text-xs font-bold text-gray-400 mt-4 block">우승자 디스코드 ID (선택 · 명예의 전당에서 복사 가능)</span>
+                <input type="text" placeholder="예시: 1104242935664492666" value={tournamentWinnerId} onChange={(e) => setTournamentWinnerId(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
               </div>
               <div className="flex flex-col gap-3 md:col-span-2">
                 <span className="text-xs font-bold text-gray-400">배너 이미지 URL (선택)</span>
