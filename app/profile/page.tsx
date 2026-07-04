@@ -224,47 +224,125 @@ export default function MyInfoPage() {
         )}
 
         {activeTab === "booster" && (
-          <div className="space-y-12 animate-in fade-in duration-300">
-            <div className="border border-white/10 bg-white/[0.01] rounded-2xl p-6">
-              <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2"><span className="text-[#e91e3f]">✨</span> SERVER BOOSTER 시스템이란?</h3>
-              <p className="text-sm text-gray-400 leading-relaxed">서버의 환경 개선을 위한 직접적인 후원 시스템입니다. 본 서버의 성장을 지원해 주시는 유저분들께 깊은 감사를 드립니다.</p>
-            </div>
-            
-            <div>
-              <h4 className="text-lg font-bold text-white mb-5 flex items-center gap-3"><span className="w-1.5 h-5 bg-[#e91e3f] rounded-full"></span>01. SERVER 전용 기능 권한</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-5 bg-white/[0.01] border border-white/5 rounded-xl"><p className="font-bold text-white text-sm mb-1">전용 역할 및 뱃지 지급</p><p className="text-xs text-gray-500">@SERVER BOOSTER 고유 역할 부여 및 차별화된 프로필 전용 특수 배지 자동 장착</p></div>
-                <div className="p-5 bg-white/[0.01] border border-white/5 rounded-xl"><p className="font-bold text-white text-sm mb-1">사용자 관리 권한 제공</p><p className="text-xs text-gray-500 mb-2">서버 내 일부 사용자 관리 부가 기능 상시 이용 가능</p></div>
-                <div className="p-5 bg-white/[0.01] border border-white/5 rounded-xl"><p className="font-bold text-white text-sm mb-1">권한 제한 채널 이용</p><p className="text-xs text-gray-500 mb-2">별도의 권한 구매 없이 제한된 채널 이용 가능!</p><p className="text-[10px] text-gray-600">* 권한이 없을 경우, XP SHOP에서 관련 권한 상품을 구매해야 합니다.</p></div>
-                <div className="p-5 bg-white/[0.01] border border-white/5 rounded-xl"><p className="font-bold text-white text-sm mb-1">슬로우 모드 제한 해제</p><p className="text-xs text-gray-500 mb-2">채팅 대기 시간 제한 없이 연속 채팅 가능!</p><p className="text-[10px] text-gray-600">* 권한이 없을 경우, XP SHOP에서 관련 권한 상품을 구매해야 합니다.</p></div>
+          <div className="space-y-14 animate-in fade-in duration-300">
+            {/* 인트로 히어로 카드 */}
+            <Reveal>
+            <div className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/50 via-[#e91e3f]/15 to-transparent p-px shadow-[0_24px_70px_-24px_rgba(233,30,63,0.35)]">
+              <div className="rounded-2xl bg-[#120a0c] p-7 md:p-9 relative overflow-hidden">
+                <div className="absolute -top-16 -right-16 w-52 h-52 bg-[#e91e3f]/15 blur-[70px] rounded-full pointer-events-none animate-[pulseGlow_4s_ease-in-out_infinite]"></div>
+                <div className="relative z-10">
+                  <div className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f]/80 uppercase mb-3">Server Booster Program</div>
+                  <h3 className="text-xl md:text-2xl font-black text-white mb-3 tracking-tight">SERVER BOOSTER 시스템이란?</h3>
+                  <p className="text-sm text-gray-400 leading-relaxed max-w-xl">서버의 환경 개선을 위한 직접적인 후원 시스템입니다. 본 서버의 성장을 지원해 주시는 유저분들께 깊은 감사를 드립니다.</p>
+                </div>
               </div>
             </div>
-            
+            </Reveal>
+
+            {/* 01. 전용 기능 권한 */}
+            <Reveal>
             <div>
-              <h4 className="text-lg font-bold text-white mb-5 flex items-center gap-3"><span className="w-1.5 h-5 bg-[#e91e3f] rounded-full"></span>02. XP BOOSTER 경험치 혜택</h4>
-              <div className="border border-white/5 divide-y divide-white/5 rounded-xl overflow-hidden bg-white/[0.005]">
-                <div className="p-5 flex justify-between items-center"><div><p className="font-bold text-white text-sm">WELCOME BOOSTING</p><p className="text-xs text-gray-500 mt-0.5">부스팅 시작 보너스 보상 지급!</p></div><div className="text-right text-xs"><p className="text-white font-bold">최초 부스팅: <span className="text-[#e91e3f]">100,000 XP</span> 즉시 지급!</p><p className="text-gray-500">추가 부스팅: 개당 <span className="text-white">50,000 XP</span> 추가 지급!</p></div></div>
-                <div className="p-5 flex justify-between items-center"><div><p className="font-bold text-white text-sm">PASSIVE</p><p className="text-xs text-gray-500 mt-0.5">경험치 획득 조건 충족 시 상시 추가!</p></div><div className="text-right text-xs"><p className="text-[#e91e3f] font-bold">상시 <span className="text-white">+2,000 XP</span> 추가 지급!</p></div></div>
-                <div className="p-5 flex justify-between items-center"><div><p className="font-bold text-white text-sm">SHOP</p><p className="text-xs text-gray-500 mt-0.5">경험치샵 이용 전용 정산 혜택!</p></div><div className="text-right text-xs"><p className="text-white font-bold">사용 금액의 <span className="text-[#e91e3f]">35% XP</span> 환급!</p></div></div>
-                <div className="p-5 flex justify-between items-center"><div><p className="font-bold text-white text-sm">DAILY</p><p className="text-xs text-gray-500 mt-0.5">일일 출석체크 추가 보상!</p></div><div className="text-right text-xs"><p className="text-white font-bold">일일 출석체크 시 <span className="text-[#e91e3f]">10,000 XP</span> 보너스 추가!</p></div></div>
+              <div className="flex items-baseline gap-4 mb-2">
+                <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
+                <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+              </div>
+              <h4 className="text-lg md:text-xl font-black text-white tracking-tight mb-6">SERVER 전용 기능 권한</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  { t: "전용 역할 및 뱃지 지급", d: "@SERVER BOOSTER 고유 역할 부여 및 차별화된 프로필 전용 특수 배지 자동 장착", note: "" },
+                  { t: "사용자 관리 권한 제공", d: "서버 내 일부 사용자 관리 부가 기능 상시 이용 가능", note: "" },
+                  { t: "권한 제한 채널 이용", d: "별도의 권한 구매 없이 제한된 채널 이용 가능!", note: "* 권한이 없을 경우, XP SHOP에서 관련 권한 상품을 구매해야 합니다." },
+                  { t: "슬로우 모드 제한 해제", d: "채팅 대기 시간 제한 없이 연속 채팅 가능!", note: "* 권한이 없을 경우, XP SHOP에서 관련 권한 상품을 구매해야 합니다." },
+                ].map((item, idx) => (
+                  <div key={idx} className="relative rounded-2xl bg-gradient-to-b from-white/[0.07] to-white/[0.02] p-px group">
+                    <div className="rounded-2xl bg-[#111111]/95 p-5 h-full group-hover:bg-[#141414] transition-colors duration-300">
+                      <p className="font-bold text-white text-sm mb-1.5">{item.t}</p>
+                      <p className="text-xs text-gray-500 leading-relaxed">{item.d}</p>
+                      {item.note && <p className="text-[10px] text-gray-600 mt-2">{item.note}</p>}
+                      <div className="mt-4 h-px w-6 bg-[#e91e3f]/40 group-hover:w-full transition-all duration-500"></div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-            
+            </Reveal>
+
+            {/* 02. XP 혜택 */}
+            <Reveal>
             <div>
-              <h4 className="text-lg font-bold text-white mb-5 flex items-center gap-3"><span className="w-1.5 h-5 bg-[#e91e3f] rounded-full"></span>03. 누적 유지 개월별 추가 혜택 (RANK)</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              <div className="flex items-baseline gap-4 mb-2">
+                <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
+                <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+              </div>
+              <h4 className="text-lg md:text-xl font-black text-white tracking-tight mb-6">XP BOOSTER 경험치 혜택</h4>
+              <div className="relative rounded-2xl bg-gradient-to-b from-white/[0.07] to-white/[0.02] p-px">
+                <div className="rounded-2xl bg-[#111111]/95 divide-y divide-white/[0.04] overflow-hidden">
+                  {[
+                    { k: "WELCOME", t: "부스팅 시작 보너스 보상 지급!", v: <><p className="text-white font-bold">최초 부스팅: <span className="text-[#e91e3f]">100,000 XP</span> 즉시 지급!</p><p className="text-gray-500">추가 부스팅: 개당 <span className="text-white">50,000 XP</span> 추가 지급!</p></> },
+                    { k: "PASSIVE", t: "경험치 획득 조건 충족 시 상시 추가!", v: <p className="text-[#e91e3f] font-bold">상시 <span className="text-white">+2,000 XP</span> 추가 지급!</p> },
+                    { k: "SHOP", t: "경험치샵 이용 전용 정산 혜택!", v: <p className="text-white font-bold">사용 금액의 <span className="text-[#e91e3f]">35% XP</span> 환급!</p> },
+                    { k: "DAILY", t: "일일 출석체크 추가 보상!", v: <p className="text-white font-bold">일일 출석체크 시 <span className="text-[#e91e3f]">10,000 XP</span> 보너스 추가!</p> },
+                  ].map((row, idx) => (
+                    <div key={idx} className="p-5 flex justify-between items-center gap-4 hover:bg-white/[0.02] transition-colors">
+                      <div className="min-w-0">
+                        <p className="font-black text-white text-sm tracking-wide">{row.k}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{row.t}</p>
+                      </div>
+                      <div className="text-right text-xs shrink-0">{row.v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            </Reveal>
+
+            {/* 03. RANK */}
+            <Reveal>
+            <div>
+              <div className="flex items-baseline gap-4 mb-2">
+                <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
+                <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+              </div>
+              <h4 className="text-lg md:text-xl font-black text-white tracking-tight mb-6">누적 유지 개월별 추가 혜택 (RANK)</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                 {[{ r: "RANK 01", m: "1개월", x: "100,000 XP" }, { r: "RANK 02", m: "3개월", x: "300,000 XP" }, { r: "RANK 03", m: "6개월", x: "600,000 XP" }, { r: "RANK 04", m: "9개월", x: "900,000 XP" }, { r: "RANK 06", m: "15개월", x: "1,500,000 XP" }, { r: "RANK 07", m: "18개월", x: "1,800,000 XP" }, { r: "RANK 08", m: "21개월", x: "2,100,000 XP" }, { r: "RANK 09", m: "24개월", x: "2,400,000 XP" }].map((item, idx) => (
-                  <div key={idx} className="p-4 border border-white/5 bg-white/[0.005] rounded-xl text-center flex flex-col justify-center"><p className="text-[10px] font-bold text-gray-600 mb-0.5">{item.r}</p><p className="text-sm font-black text-white mb-1">{item.m}</p><p className="text-xs font-bold text-[#e91e3f]">{item.x}</p></div>
+                  <div key={idx} className="p-4 border border-white/5 bg-[#111111]/95 rounded-xl text-center flex flex-col justify-center hover:border-[#e91e3f]/25 hover:bg-[#141414] transition-all duration-300 group">
+                    <p className="text-[9px] font-black tracking-[0.2em] text-gray-600 mb-1 uppercase">{item.r}</p>
+                    <p className="text-sm font-black text-white mb-1">{item.m}</p>
+                    <p className="text-xs font-bold text-[#e91e3f]">{item.x}</p>
+                  </div>
                 ))}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                <div className="p-4 border border-[#e91e3f]/30 bg-[#e91e3f]/5 rounded-xl flex flex-col justify-center"><p className="text-[10px] font-bold text-[#e91e3f] mb-0.5">RANK 05 SPECIAL BLOCK</p><p className="text-sm font-black text-white mb-2">🏆 12개월 연속 달성</p><div className="text-xs text-gray-400 space-y-1 text-left pl-1"><p>• 누적 보너스 <span className="text-white font-bold">1,200,000 XP</span> 즉시 수령</p><p>• <strong>@BOOSTER RANK 05</strong> 역할 추가 지급</p><p>• 상시 고정 버프 <strong>+2,000 XP</strong> 추가 영구 결합</p><p>• 일일 출석 시 <span className="text-white font-bold">2,000 XP</span> 영구 가산 누적 지급</p></div></div>
-
-                <div className="p-4 border border-[#e91e3f]/30 bg-[#e91e3f]/5 rounded-xl flex flex-col justify-center"><p className="text-[10px] font-bold text-[#e91e3f] mb-0.5">RANK 10 SPECIAL BLOCK</p><p className="text-sm font-black text-white mb-2">👑 24개월 연속 달성</p><div className="text-xs text-gray-400 space-y-1 text-left pl-1"><p>• 누적 보너스 <span className="text-white font-bold">2,400,000 XP</span> 즉시 수령</p><p>• <strong>@BOOSTER RANK 10</strong> 특수 역할 추가 지급</p><p>• 상시 고정 버프 <strong>+4,000 XP</strong> 추가 영구 결합</p><p>• 일일 출석 시 <span className="text-white font-bold">5,000 XP</span> 영구 가산 누적 지급</p></div></div>
+                {[
+                  { rank: "RANK 05 SPECIAL BLOCK", title: "🏆 12개월 연속 달성", items: [<>누적 보너스 <span className="text-white font-bold">1,200,000 XP</span> 즉시 수령</>, <><strong>@BOOSTER RANK 05</strong> 역할 추가 지급</>, <>상시 고정 버프 <strong>+2,000 XP</strong> 추가 영구 결합</>, <>일일 출석 시 <span className="text-white font-bold">2,000 XP</span> 영구 가산 누적 지급</>] },
+                  { rank: "RANK 10 SPECIAL BLOCK", title: "👑 24개월 연속 달성", items: [<>누적 보너스 <span className="text-white font-bold">2,400,000 XP</span> 즉시 수령</>, <><strong>@BOOSTER RANK 10</strong> 특수 역할 추가 지급</>, <>상시 고정 버프 <strong>+4,000 XP</strong> 추가 영구 결합</>, <>일일 출석 시 <span className="text-white font-bold">5,000 XP</span> 영구 가산 누적 지급</>] },
+                ].map((block, idx) => (
+                  <div key={idx} className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/40 via-[#e91e3f]/10 to-transparent p-px">
+                    <div className="rounded-2xl bg-[#150b0e] p-5 h-full relative overflow-hidden">
+                      <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#e91e3f]/10 blur-[50px] rounded-full pointer-events-none"></div>
+                      <div className="relative z-10">
+                        <p className="text-[9px] font-black tracking-[0.25em] text-[#e91e3f] mb-1.5 uppercase">{block.rank}</p>
+                        <p className="text-base font-black text-white mb-3">{block.title}</p>
+                        <div className="text-xs text-gray-400 space-y-1.5 text-left">
+                          {block.items.map((it, i) => (
+                            <p key={i} className="flex gap-2"><span className="text-[#e91e3f] shrink-0">•</span><span>{it}</span></p>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="text-center pt-4 border-t border-white/10"><p className="text-sm text-gray-300 font-bold">📢 디스코드 서버 부스트 진행 시 시스템이 자동으로 감지하여 모든 혜택을 즉시 지급합니다!</p></div>
+            </Reveal>
+
+            <Reveal>
+            <div className="rounded-2xl border border-white/5 bg-white/[0.02] px-6 py-5 text-center">
+              <p className="text-sm text-gray-300 font-bold">📢 디스코드 서버 부스트 진행 시 시스템이 자동으로 감지하여 모든 혜택을 즉시 지급합니다!</p>
+            </div>
+            </Reveal>
           </div>
         )}
       </div>

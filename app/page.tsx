@@ -56,10 +56,9 @@ export default function Home() {
                   href="https://discord.gg/V2uW2nUczU"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group px-8 py-4 bg-[#e91e3f] text-white rounded-full font-bold text-base md:text-lg hover:bg-[#d01634] transition-all shadow-[0_10px_36px_rgba(233,30,63,0.35)] hover:shadow-[0_14px_44px_rgba(233,30,63,0.5)] hover:-translate-y-0.5 flex items-center gap-2.5 outline-none focus:outline-none"
+                  className="px-8 py-4 bg-[#e91e3f] text-white rounded-full font-bold text-base md:text-lg hover:bg-[#d01634] transition-all shadow-[0_10px_36px_rgba(233,30,63,0.35)] hover:shadow-[0_14px_44px_rgba(233,30,63,0.5)] hover:-translate-y-0.5 outline-none focus:outline-none"
                 >
                   서버 바로가기
-                  <span className="group-hover:translate-x-1 transition-transform duration-300">→</span>
                 </a>
                 <Link
                   href="/faq"

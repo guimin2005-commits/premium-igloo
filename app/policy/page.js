@@ -1,49 +1,95 @@
 "use client";
 
 import React, { useState } from "react";
+import { Reveal, LuxStyles } from "../components/Lux";
 
 const Article = ({ title, children }) => (
-  <section>
-    <h2 className="text-xl font-bold text-white mb-4 border-l-4 border-[#e91e3f] pl-3">{title}</h2>
-    <div className="text-gray-400 space-y-3 leading-relaxed">{children}</div>
+  <Reveal>
+  <section className="relative rounded-2xl bg-gradient-to-b from-white/[0.07] to-white/[0.02] p-px">
+    <div className="rounded-2xl bg-[#111111]/95 p-6 md:p-8">
+      <h2 className="text-base md:text-lg font-black text-white mb-5 tracking-tight flex items-center gap-3">
+        <span className="w-1 h-5 bg-[#e91e3f] rounded-full shrink-0"></span>
+        {title}
+      </h2>
+      <div className="text-gray-400 space-y-3 leading-relaxed">{children}</div>
+    </div>
   </section>
+  </Reveal>
 );
 
 const NumberedList = ({ items }) => (
-  <ol className="list-decimal pl-5 space-y-2">
-    {items.map((it, i) => <li key={i}>{it}</li>)}
+  <ol className="space-y-2.5">
+    {items.map((it, i) => (
+      <li key={i} className="flex gap-3">
+        <span className="text-[#e91e3f] font-black text-xs pt-0.5 shrink-0">{String(i + 1).padStart(2, "0")}</span>
+        <span>{it}</span>
+      </li>
+    ))}
   </ol>
 );
 
 const DefList = ({ items }) => (
-  <ul className="space-y-3">
+  <ul className="space-y-2">
     {items.map((it, i) => (
-      <li key={i} className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+      <li key={i} className="bg-black/30 border border-white/5 rounded-xl p-4 hover:border-white/15 transition-colors">
         <p className="text-white font-bold text-sm mb-1">{it.term}</p>
-        <p className="text-gray-400 text-sm leading-relaxed">{it.desc}</p>
+        <p className="text-gray-500 text-sm leading-relaxed">{it.desc}</p>
       </li>
     ))}
   </ul>
+);
+
+const Addendum = ({ date }) => (
+  <Reveal>
+  <div className="rounded-2xl border border-white/5 bg-white/[0.02] px-6 py-5 flex items-center justify-between">
+    <h3 className="text-white font-black text-sm tracking-widest">부칙</h3>
+    <p className="text-gray-500 text-xs">본 정책은 <span className="text-gray-300 font-bold">{date}</span>부터 시행됩니다.</p>
+  </div>
+  </Reveal>
 );
 
 export default function PolicyPage() {
   const [tab, setTab] = useState("terms");
 
   return (
-    <main className="w-full max-w-4xl mx-auto px-6 py-16 flex-1 flex flex-col">
-      <div className="mb-10 border-b border-white/10 pb-6">
-        <h1 className="text-4xl font-black text-white mb-3 tracking-tight">이용약관 및 개인정보처리방침</h1>
-        <p className="text-gray-400 text-base">본 문서는 서버 이용 시 필요한 권리와 의무, 그리고 개인정보 수집 및 처리 방법에 대한 투명한 안내를 포함하고 있습니다.</p>
+    <main className="w-full flex-1 flex flex-col relative">
+      <LuxStyles />
+
+      {/* ── HERO ── */}
+      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6">
+        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
+        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
+        <div className="max-w-4xl mx-auto relative z-10">
+          <Reveal>
+            <div className="flex items-center gap-3 mb-5">
+              <span className="w-8 h-px bg-[#e91e3f]"></span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Terms &amp; Privacy</span>
+            </div>
+            <h1 className="text-3xl md:text-5xl font-black tracking-tighter leading-tight mb-4">
+              <span className="text-white">이용약관 및 </span><span className="lux-shimmer">개인정보처리방침</span>
+            </h1>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed max-w-2xl">본 문서는 서버 이용 시 필요한 권리와 의무, 그리고 개인정보 수집 및 처리 방법에 대한 투명한 안내를 포함하고 있습니다.</p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── 탭 (알약 스타일 · 스티키) ── */}
+      <div className="sticky top-16 z-30 w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
+        <div className="max-w-4xl mx-auto flex gap-1.5 overflow-x-auto whitespace-nowrap">
+          {[{ id: "terms", label: "서버 이용약관 (운영정책)" }, { id: "privacy", label: "개인정보처리방침" }, { id: "tournament", label: "e스포츠 대회 규정" }, { id: "scrim", label: "내전 규정" }].map((t) => (
+            <button key={t.id} onClick={() => setTab(t.id)} className={`px-5 py-2.5 text-xs md:text-sm font-bold rounded-full shrink-0 outline-none focus:outline-none transition-all duration-300 ${
+              tab === t.id
+                ? "bg-[#e91e3f] text-white shadow-[0_4px_20px_rgba(233,30,63,0.35)]"
+                : "bg-white/[0.04] text-gray-500 hover:text-white hover:bg-white/[0.08] border border-white/5"
+            }`}>{t.label}</button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex gap-2 border-b border-white/10 mb-10 pb-px overflow-x-auto whitespace-nowrap">
-        {[{ id: "terms", label: "서버 이용약관 (운영정책)" }, { id: "privacy", label: "개인정보처리방침" }, { id: "tournament", label: "e스포츠 대회 규정" }, { id: "scrim", label: "내전 규정" }].map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`px-6 py-3 text-sm font-bold transition-all border-b-2 outline-none ${tab === t.id ? "border-[#e91e3f] text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}>{t.label}</button>
-        ))}
-      </div>
+      <div className="w-full max-w-4xl mx-auto px-6 py-10 flex-1 flex flex-col">
 
       {tab === "terms" ? (
-        <div className="space-y-10 text-sm">
+        <div className="space-y-4 text-sm">
           <Article title="제1조 (목적)">
             <p>본 약관(이하 &lsquo;운영정책&rsquo;)은 디스코드 커뮤니티 서버 &lsquo;고급 이글루&rsquo;를 이용함에 있어, 서버 운영진과 이용자(이하 &lsquo;멤버&rsquo;) 간의 권리와 의무, 책임 사항 및 커뮤니티 이용 규칙을 규정함을 목적으로 합니다.</p>
           </Article>
@@ -87,13 +133,10 @@ export default function PolicyPage() {
             ]} />
           </Article>
 
-          <div className="pt-6 border-t border-white/10">
-            <h3 className="text-white font-bold mb-2">부칙</h3>
-            <p className="text-gray-400">본 정책은 2023년 1월 22일부터 시행됩니다.</p>
-          </div>
+          <Addendum date="2023년 1월 22일" />
         </div>
       ) : tab === "tournament" ? (
-        <div className="space-y-10 text-sm">
+        <div className="space-y-4 text-sm">
           <Article title="01. 대회 참가 및 자격 규정">
             <ul className="space-y-2">
               <li>본 대회는 사전 참가 신청을 통해 확정된 인원 및 팀만 참여할 수 있습니다.</li>
@@ -134,13 +177,10 @@ export default function PolicyPage() {
             </ul>
           </Article>
 
-          <div className="pt-6 border-t border-white/10">
-            <h3 className="text-white font-bold mb-2">부칙</h3>
-            <p className="text-gray-400">본 정책은 2026년 6월 23일부터 시행됩니다.</p>
-          </div>
+          <Addendum date="2026년 6월 23일" />
         </div>
       ) : tab === "privacy" ? (
-        <div className="space-y-10 text-sm">
+        <div className="space-y-4 text-sm">
           <Article title="제1조 (개인정보의 수집 항목 및 방법)">
             <p>본 서버는 디스코드 플랫폼 위에서 운영되므로 멤버의 민감한 개인정보(주민등록번호, 금융정보 등)를 직접 수집하지 않습니다. 다만, 서비스 운영을 위해 아래의 정보가 자동으로 기록되거나 수집될 수 있습니다.</p>
             <DefList items={[
@@ -177,14 +217,13 @@ export default function PolicyPage() {
             <p><span className="text-white font-bold">문의:</span> 고급 이글루 공식 사이트의 문의 카테고리 이용</p>
           </Article>
 
-          <div className="pt-6 border-t border-white/10">
-            <p className="text-gray-300 leading-relaxed mb-6">본 방침은 관련 법령에 의거하여 고급 이글루 서버 내에서 처리되는 이용자의 개인정보 보호 및 권익을 보호하기 위해 수립되었습니다.</p>
-            <h3 className="text-white font-bold mb-2">부칙</h3>
-            <p className="text-gray-400">본 정책은 2023년 1월 22일부터 시행됩니다.</p>
-          </div>
+          <Reveal>
+          <p className="text-gray-400 leading-relaxed text-sm px-1">본 방침은 관련 법령에 의거하여 고급 이글루 서버 내에서 처리되는 이용자의 개인정보 보호 및 권익을 보호하기 위해 수립되었습니다.</p>
+          </Reveal>
+          <Addendum date="2023년 1월 22일" />
         </div>
       ) : (
-        <div className="space-y-10 text-sm">
+        <div className="space-y-4 text-sm">
           <Article title="제1조 (참여 규정)">
             <p>모든 인원은 내전을 자유롭게 주최 및 참여할 수 있습니다. 참가 확정 인원은 지정된 시간을 엄수해야 하며, 무단 불참이나 상습적인 지각 시에는 참여 권한이 제한될 수 있습니다.</p>
           </Article>
@@ -201,16 +240,16 @@ export default function PolicyPage() {
             <p>내전은 반드시 지정된 <span className="text-white font-semibold">내전 전용 음성 채널</span>에서만 진행해야 하며, 내전 목적 외 해당 채널의 사적 이용은 제한됩니다.</p>
           </Article>
 
-          <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-            <p className="text-gray-400 leading-relaxed"><span className="text-[#e91e3f] font-bold">[주의]</span> 위 운영 정책 미확인으로 인해 발생하는 불이익이나 제재에 대한 책임은 이용자 본인에게 있습니다.</p>
+          <Reveal>
+          <div className="rounded-2xl border border-[#e91e3f]/15 bg-gradient-to-b from-[#e91e3f]/[0.04] to-transparent p-5">
+            <p className="text-gray-400 leading-relaxed text-sm"><span className="text-[#e91e3f] font-bold">[주의]</span> 위 운영 정책 미확인으로 인해 발생하는 불이익이나 제재에 대한 책임은 이용자 본인에게 있습니다.</p>
           </div>
+          </Reveal>
 
-          <div className="pt-6 border-t border-white/10">
-            <h3 className="text-white font-bold mb-2">부칙</h3>
-            <p className="text-gray-400">본 정책은 2026년 4월 16일부터 시행됩니다.</p>
-          </div>
+          <Addendum date="2026년 4월 16일" />
         </div>
       )}
+      </div>
     </main>
   );
 }

@@ -38,14 +38,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   const [isCodeSubmitting, setIsCodeSubmitting] = useState(false);
 
-  const categories = [
-    { name: "공지사항", path: "/notice" },
-    { name: "이벤트", path: "/event" },
-    { name: "SYSTEM : LEVEL", path: "/level" },
-    { name: "대회", path: "/tournament" }, 
-    { name: "구인", path: "/recruit" },
-    { name: "1:1 문의", path: "/support" },
-    { name: "FAQ", path: "/faq" }
+  // 📌 카테고리 그룹화: 큰 카테고리 → 세부 카테고리 (드롭다운)
+  const categoryGroups = [
+    { name: "소식", items: [{ name: "공지사항", path: "/notice" }, { name: "이벤트", path: "/event" }] },
+    { name: "콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level" }, { name: "대회", path: "/tournament" }, { name: "구인", path: "/recruit" }] },
+    { name: "지원", items: [{ name: "1:1 문의", path: "/support" }, { name: "FAQ", path: "/faq" }] },
   ];
 
   useEffect(() => {
@@ -122,14 +119,30 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           
           {/* 비로그인(게스트) 또는 인증 유저에게만 카테고리 노출 (로그인 후 미인증 유저는 숨김 → /verify로 유도) */}
           {!isVerifyPage && (status !== "authenticated" || isVerified) && (
-            <nav className="hidden md:flex items-center justify-center gap-8 text-sm font-bold absolute left-1/2 transform -translate-x-1/2 h-full z-50">
-              {categories.map((category) => {
-                const isActive = pathname === category.path;
+            <nav className="hidden md:flex items-center justify-center gap-2 text-sm font-bold absolute left-1/2 transform -translate-x-1/2 h-full z-50">
+              {categoryGroups.map((group) => {
+                const isGroupActive = group.items.some((item) => pathname === item.path);
                 return (
-                  <Link key={category.path} href={category.path} className={`relative h-full flex items-center px-2 transition-colors outline-none focus:outline-none ${isActive ? "text-[#e91e3f]" : "text-gray-400 hover:text-white"}`}>
-                    {category.name}
-                    {isActive && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#e91e3f]" />}
-                  </Link>
+                  <div key={group.name} className="relative h-full flex items-center group/nav">
+                    <button className={`relative h-full flex items-center gap-1.5 px-4 transition-colors outline-none focus:outline-none ${isGroupActive ? "text-[#e91e3f]" : "text-gray-400 group-hover/nav:text-white"}`}>
+                      {group.name}
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 transition-transform duration-200 group-hover/nav:rotate-180"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                      {isGroupActive && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#e91e3f]" />}
+                    </button>
+                    {/* 드롭다운 */}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 pt-1 opacity-0 invisible translate-y-1 group-hover/nav:opacity-100 group-hover/nav:visible group-hover/nav:translate-y-0 transition-all duration-200 z-50">
+                      <div className="min-w-[180px] bg-[#141414]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-1.5">
+                        {group.items.map((item) => {
+                          const isActive = pathname === item.path;
+                          return (
+                            <Link key={item.path} href={item.path} className={`block px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-colors ${isActive ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}>
+                              {item.name}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
             </nav>
@@ -332,13 +345,17 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
               {!isVerifyPage && (status !== "authenticated" || isVerified) && (
                 <>
-                  <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wider px-3 mb-1">카테고리</p>
-                  {categories.map((category) => {
-                    const isActive = pathname === category.path;
-                    return (
-                      <Link key={category.path} href={category.path} onClick={() => setIsMobileMenuOpen(false)} className={`px-3 py-3 rounded-xl text-sm font-bold transition-colors ${isActive ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-gray-300 hover:bg-white/5 hover:text-white"}`}>{category.name}</Link>
-                    );
-                  })}
+                  {categoryGroups.map((group, gIdx) => (
+                    <div key={group.name} className={gIdx > 0 ? "mt-4" : ""}>
+                      <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wider px-3 mb-1">{group.name}</p>
+                      {group.items.map((item) => {
+                        const isActive = pathname === item.path;
+                        return (
+                          <Link key={item.path} href={item.path} onClick={() => setIsMobileMenuOpen(false)} className={`block px-3 py-3 rounded-xl text-sm font-bold transition-colors ${isActive ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-gray-300 hover:bg-white/5 hover:text-white"}`}>{item.name}</Link>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </>
               )}
 
