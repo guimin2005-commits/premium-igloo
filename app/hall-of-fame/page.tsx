@@ -112,12 +112,12 @@ export default function HallOfFamePage() {
   }, []);
 
   // 📌 연도 라벨 — 표시 기간(dateLabel)에 적힌 연도를 우선 사용.
-  //    두 해에 걸치면 "2025-26", 한 해면 "2025", 없으면 등재일 기준
-  const formatYear = (c: any) => {
+  //    두 해에 걸치면 "2025 -" / "  2026" 두 줄, 한 해면 "2025", 없으면 등재일 기준
+  const getYears = (c: any): [string, string | null] => {
     const years = Array.from(new Set((c.dateLabel || "").match(/20\d{2}/g) || [])).map(Number).sort();
-    if (years.length >= 2) return `${years[0]}-${String(years[years.length - 1]).slice(2)}`;
-    if (years.length === 1) return `${years[0]}`;
-    return `${new Date(c.createdAt).getFullYear()}`;
+    if (years.length >= 2) return [`${years[0]}`, `${years[years.length - 1]}`];
+    if (years.length === 1) return [`${years[0]}`, null];
+    return [`${new Date(c.createdAt).getFullYear()}`, null];
   };
 
   return (
@@ -159,7 +159,17 @@ export default function HallOfFamePage() {
                 <div className="py-8 md:py-10 flex flex-col md:flex-row md:items-center gap-4 md:gap-10 group">
                   {/* 연도 + 순번 */}
                   <div className="shrink-0 md:w-28">
-                    <p className="text-3xl md:text-4xl font-black text-white/[0.08] group-hover:text-[#e91e3f]/25 transition-colors duration-500 leading-none tracking-tighter select-none">{formatYear(c)}</p>
+                    {(() => {
+                      const [startYear, endYear] = getYears(c);
+                      return endYear ? (
+                        <div className="text-2xl md:text-3xl font-black text-white/[0.08] group-hover:text-[#e91e3f]/25 transition-colors duration-500 leading-[1.05] tracking-tighter select-none">
+                          <p>{startYear} -</p>
+                          <p className="pl-4 md:pl-6">{endYear}</p>
+                        </div>
+                      ) : (
+                        <p className="text-3xl md:text-4xl font-black text-white/[0.08] group-hover:text-[#e91e3f]/25 transition-colors duration-500 leading-none tracking-tighter select-none">{startYear}</p>
+                      );
+                    })()}
                   </div>
 
                   {/* 기록 정보 */}
