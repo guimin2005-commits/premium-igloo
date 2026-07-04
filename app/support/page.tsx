@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
+import { Reveal, LuxStyles } from "../components/Lux";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -239,24 +240,41 @@ export default function SupportPage() {
   }
 
   return (
-    <main key={viewMode} className="w-full max-w-3xl mx-auto px-6 py-16 flex-1 flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-white/10 pb-6">
-        <div>
-          <h1 className="text-3xl font-black text-white mb-3 tracking-tight">1:1 문의 접수</h1>
-          <p className="text-gray-400 text-sm">이용 중 불편한 사항 또는 궁금하신 사항을 남겨주세요.</p>
-        </div>
-        {isAdmin && (
-          <button onClick={() => setViewMode("admin")} className="px-5 py-2.5 bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/20 hover:bg-[#e91e3f]/20 text-sm font-bold rounded-xl transition-colors shrink-0">
-            관리자 대시보드 열기
-          </button>
-        )}
-      </div>
+    <main key={viewMode} className="w-full flex-1 flex flex-col relative">
+      <LuxStyles />
 
-      <div className="flex gap-8 border-b border-white/10 mb-10 overflow-x-auto scrollbar-hide">
+      {/* ── HERO ── */}
+      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6">
+        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
+        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
+        <div className="max-w-3xl mx-auto relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <Reveal>
+            <div className="flex items-center gap-3 mb-5">
+              <span className="w-8 h-px bg-[#e91e3f]"></span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Support Center</span>
+            </div>
+            <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-4">
+              <span className="text-white">1:1 </span><span className="lux-shimmer">문의</span>
+            </h1>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">이용 중 불편한 사항 또는 궁금하신 사항을 남겨주세요.</p>
+          </Reveal>
+          {isAdmin && (
+            <button onClick={() => setViewMode("admin")} className="px-5 py-2.5 bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/20 hover:bg-[#e91e3f]/20 text-sm font-bold rounded-full transition-colors shrink-0 self-start md:self-auto">
+              관리자 대시보드 열기
+            </button>
+          )}
+        </div>
+      </section>
+
+      <div className="w-full max-w-3xl mx-auto px-6 pb-16 flex-1 flex flex-col">
+
+      <div className="flex gap-1.5 mb-10 overflow-x-auto scrollbar-hide">
         {["일반", "오류", "신고", "환불 및 교환"].map((type) => (
-          <button key={type} type="button" onClick={() => { setMainType(type); setSubType(""); setReportType(""); setProductName(""); setRefundType("환불"); }} className={`pb-4 text-sm font-bold whitespace-nowrap transition-colors outline-none focus:outline-none relative ${mainType === type ? "text-[#e91e3f]" : "text-gray-500 hover:text-white"}`}>
-            {type}{mainType === type && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#e91e3f]" />}
-          </button>
+          <button key={type} type="button" onClick={() => { setMainType(type); setSubType(""); setReportType(""); setProductName(""); setRefundType("환불"); }} className={`px-5 py-2.5 text-xs md:text-sm font-bold rounded-full shrink-0 whitespace-nowrap outline-none focus:outline-none transition-all duration-300 ${
+            mainType === type
+              ? "bg-[#e91e3f] text-white shadow-[0_4px_20px_rgba(233,30,63,0.35)]"
+              : "bg-white/[0.04] text-gray-500 hover:text-white hover:bg-white/[0.08] border border-white/5"
+          }`}>{type}</button>
         ))}
       </div>
 
@@ -358,6 +376,7 @@ export default function SupportPage() {
           </div>
         </div>
       )}
+      </div>
     </main>
   );
 }

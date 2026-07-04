@@ -215,7 +215,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col w-full relative z-0">
+      <main className="flex-1 flex flex-col w-full relative">
         {children}
       </main>
 

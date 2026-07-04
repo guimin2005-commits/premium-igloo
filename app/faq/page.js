@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link"; // 만약 Link 관련 에러가 난다면 이 줄이 필요합니다.
+import { Reveal, LuxStyles } from "../components/Lux";
 
 export default function FaqPage() {
   // 📌 <string | null> 같은 타입스크립트 문법을 모두 제거했습니다.
@@ -64,14 +65,30 @@ export default function FaqPage() {
     : faqData.filter(section => section.category === activeCategory);
 
   return (
-    <main className="w-full max-w-5xl mx-auto px-6 py-16 flex-1 flex flex-col relative animate-in fade-in slide-in-from-bottom-4 duration-500">
-      
-      <div className="mb-10 border-b border-white/10 pb-6">
-        <h1 className="text-4xl font-black text-white mb-3 tracking-tight">FAQ</h1>
-        <p className="text-gray-400 text-sm">고급 이글루 이용과 관련한 자주 묻는 질문들입니다.</p>
-      </div>
+    <main className="w-full flex-1 flex flex-col relative">
+      <LuxStyles />
 
-      <div className="flex flex-wrap gap-2 mb-12">
+      {/* ── HERO ── */}
+      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6">
+        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
+        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
+        <div className="max-w-5xl mx-auto relative z-10">
+          <Reveal>
+            <div className="flex items-center gap-3 mb-5">
+              <span className="w-8 h-px bg-[#e91e3f]"></span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Frequently Asked Questions</span>
+            </div>
+            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
+              <span className="lux-shimmer">FAQ</span>
+            </h1>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">고급 이글루 이용과 관련한 자주 묻는 질문들입니다.</p>
+          </Reveal>
+        </div>
+      </section>
+
+      <div className="w-full max-w-5xl mx-auto px-6 pb-16 flex-1 flex flex-col">
+
+      <div className="flex flex-wrap gap-1.5 mb-12">
         <button
           onClick={() => { setActiveCategory("전체"); setOpenFaqIndex(null); }}
           className={`px-5 py-2.5 rounded-full text-sm font-bold transition-colors outline-none focus:outline-none ${activeCategory === "전체" ? "bg-[#e91e3f] text-white shadow-lg shadow-[#e91e3f]/20" : "bg-[#1a1a1a] text-gray-400 border border-white/5 hover:border-white/20"}`}
@@ -148,6 +165,7 @@ export default function FaqPage() {
             </div>
           </section>
         ))}
+      </div>
       </div>
     </main>
   );

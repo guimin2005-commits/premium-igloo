@@ -28,7 +28,7 @@ export default function Home() {
         <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-16 items-center">
 
           {/* 로고 — 투명 PNG 경계선이 보이지 않도록 프레임 없이 글로우만 */}
-          <Reveal className="flex justify-center md:justify-end order-1 md:order-none">
+          <Reveal className="flex justify-center md:justify-end">
             <div className="relative">
               <div className="absolute inset-0 scale-90 bg-[#e91e3f]/15 blur-[80px] rounded-full animate-[pulseGlow_5s_ease-in-out_infinite] pointer-events-none"></div>
               <img
@@ -72,7 +72,7 @@ export default function Home() {
 
             {stats && (
               <Reveal delay={300}>
-                <div className="flex items-center gap-10 mt-12 pt-8 border-t border-white/5 w-full justify-center md:justify-start">
+                <div className="flex items-center gap-8 md:gap-10 mt-12 pt-8 border-t border-white/5 w-full justify-center md:justify-start">
                   <div className="text-center md:text-left">
                     <div className="text-xl md:text-2xl font-black text-white tracking-tight">
                       <CountUp end={stats.memberCount} />
@@ -85,6 +85,10 @@ export default function Home() {
                       <CountUp end={stats.onlineCount} />
                     </div>
                     <div className="text-[9px] font-bold tracking-[0.25em] text-gray-600 mt-1 uppercase">현재 온라인</div>
+                  </div>
+                  <div className="text-center md:text-left">
+                    <div className="text-xl md:text-2xl font-black text-white tracking-tight">2023</div>
+                    <div className="text-[9px] font-bold tracking-[0.25em] text-gray-600 mt-1 uppercase">Since</div>
                   </div>
                 </div>
               </Reveal>

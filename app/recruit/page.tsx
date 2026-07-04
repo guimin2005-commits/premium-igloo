@@ -2,6 +2,7 @@
 import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { Reveal, LuxStyles } from "../components/Lux";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -211,32 +212,55 @@ export default function RecruitPage() {
   }
 
   return (
-    <main key={viewMode} className="flex-1 w-full max-w-5xl mx-auto px-6 py-16 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="mb-10 border-b border-white/10 pb-6 flex justify-between items-end">
-        <div>
-          <h1 className="text-4xl font-black text-white mb-3 tracking-tight">구인</h1>
-          <p className="text-gray-400 text-sm">고급 이글루의 가치를 높여줄 역량 있는 분을 모십니다.</p>
+    <main key={viewMode} className="flex-1 w-full flex flex-col relative">
+      <LuxStyles />
+
+      {/* ── HERO ── */}
+      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6">
+        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
+        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
+        <div className="max-w-5xl mx-auto relative z-10 flex justify-between items-end gap-6">
+          <Reveal>
+            <div className="flex items-center gap-3 mb-5">
+              <span className="w-8 h-px bg-[#e91e3f]"></span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Join Our Team</span>
+            </div>
+            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
+              <span className="text-white">구</span><span className="lux-shimmer">인</span>
+            </h1>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">고급 이글루의 가치를 높여줄 역량 있는 분을 모십니다.</p>
+          </Reveal>
+          {isAdmin && (
+            <div className="flex gap-3 shrink-0">
+              <button onClick={() => setViewMode("admin")} className="px-5 py-2.5 bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/20 hover:bg-[#e91e3f]/20 text-sm font-bold rounded-full transition-colors">지원자 관리</button>
+              <button onClick={() => router.push("/write?category=구인")} className="px-5 py-2.5 bg-white text-black font-bold text-sm rounded-full hover:bg-gray-200 transition-colors">구인글 작성</button>
+            </div>
+          )}
         </div>
-        {isAdmin && (
-          <div className="flex gap-3">
-            <button onClick={() => setViewMode("admin")} className="px-5 py-2.5 bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/20 hover:bg-[#e91e3f]/20 text-sm font-bold rounded-xl transition-colors">지원자 관리</button>
-            <button onClick={() => router.push("/write?category=구인")} className="px-5 py-2.5 bg-white text-black font-bold text-sm rounded-xl hover:bg-gray-200 transition-colors">구인글 작성</button>
-          </div>
-        )}
+      </section>
+
+      {/* ── 탭 (알약 스타일 · 스티키) ── */}
+      <div className="sticky top-16 z-30 w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
+        <div className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto whitespace-nowrap">
+          {[{ id: "all", label: "전체보기" }, { id: "staff", label: "스태프 모집" }, { id: "sup", label: "서포터즈 모집" }, { id: "ended", label: "마감" }].map((tab) => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-5 py-2.5 text-xs md:text-sm font-bold rounded-full shrink-0 outline-none focus:outline-none transition-all duration-300 ${
+              activeTab === tab.id
+                ? "bg-[#e91e3f] text-white shadow-[0_4px_20px_rgba(233,30,63,0.35)]"
+                : "bg-white/[0.04] text-gray-500 hover:text-white hover:bg-white/[0.08] border border-white/5"
+            }`}>{tab.label}</button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex gap-2 border-b border-white/10 mb-8 pb-px overflow-x-auto whitespace-nowrap">
-        {[{ id: "all", label: "전체보기" }, { id: "staff", label: "스태프 모집" }, { id: "sup", label: "서포터즈 모집" }, { id: "ended", label: "마감" }].map((tab) => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-6 py-3 text-sm font-bold transition-all border-b-2 outline-none ${activeTab === tab.id ? "border-[#e91e3f] text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}>{tab.label}</button>
-        ))}
-      </div>
+      <div className="w-full max-w-5xl mx-auto px-6 py-10 flex-1 flex flex-col">
 
       {isLoading ? <div className="text-center py-20 text-gray-500 font-bold">불러오는 중...</div> : sortedPositions.length === 0 ? <div className="text-center py-20 text-gray-600 bg-white/[0.02] rounded-3xl border border-white/5">등록된 구인글이 없습니다.</div> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
-          {sortedPositions.map((post) => {
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-16">
+          {sortedPositions.map((post, listIdx) => {
             const isEnded = getRecruitStatus(post) === "ended";
             return (
-              <div key={post._id} className="p-6 rounded-3xl bg-[#121212] border border-white/5 hover:border-[#e91e3f]/40 transition-all flex flex-col justify-between group">
+              <Reveal key={post._id} delay={Math.min(listIdx, 5) * 90} className="h-full">
+              <div className="p-6 md:p-7 rounded-2xl bg-[#111111]/95 border border-white/5 hover:border-[#e91e3f]/40 hover:bg-[#141414] transition-all duration-300 flex flex-col justify-between group h-full">
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-xs font-black tracking-widest text-[#e91e3f] bg-[#e91e3f]/10 px-2.5 py-1 rounded-md">{post.recruitRole?.toUpperCase()}</span>
@@ -265,6 +289,7 @@ export default function RecruitPage() {
                 </div>
                 <button disabled={isEnded} onClick={() => handleApplyClick(post.title)} className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${isEnded ? "bg-white/5 text-gray-500 cursor-not-allowed" : "bg-[#e91e3f] text-white hover:bg-[#d01634] shadow-lg shadow-[#e91e3f]/20"}`}>{isEnded ? "마감됨" : "지원하기"}</button>
               </div>
+              </Reveal>
             );
           })}
         </div>
@@ -334,6 +359,7 @@ export default function RecruitPage() {
 
       {deleteConfirmId && <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4 animate-in fade-in"><div className="bg-[#121212] border border-red-500/30 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl"><h2 className="text-xl font-bold text-white mb-3">삭제 확인</h2><p className="text-sm text-gray-400 mb-8">해당 구인글을 삭제하시겠습니까?</p><div className="flex gap-3"><button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">취소</button><button onClick={executeDelete} className="flex-1 py-3 bg-red-500/80 hover:bg-red-500 text-white font-bold rounded-xl transition-colors">삭제</button></div></div></div>}
       {popupConfig.isOpen && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in"><div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl flex flex-col items-center"><div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 ${popupConfig.isError ? "bg-red-500/10 text-red-500" : "bg-[#e91e3f]/10 text-[#e91e3f]"}`}>{popupConfig.isError ? <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> : <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}</div><h2 className="text-xl font-bold text-white mb-3">{popupConfig.isError ? "오류" : "완료"}</h2><p className="text-sm text-gray-400 mb-8 whitespace-pre-line leading-relaxed">{popupConfig.message}</p><button onClick={() => setPopupConfig({ ...popupConfig, isOpen: false })} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-all">확인</button></div></div>}
+      </div>
     </main>
   );
 }
