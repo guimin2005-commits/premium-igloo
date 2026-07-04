@@ -84,6 +84,27 @@ const UserXpSchema = new mongoose.Schema({
 });
 const UserXp = mongoose.models.UserXp || mongoose.model("UserXp", UserXpSchema);
 
+// 📌 역할 설정 (관리자 대시보드 /admin/bot 에서 관리 → 봇이 1분마다 자동 갱신)
+const RoleConfigSchema = new mongoose.Schema({
+  roleId: { type: String, required: true, unique: true },
+  roleName: { type: String, default: "" },
+  rewardLevel: { type: Number, default: null }, // 이 레벨 도달 시 자동 지급
+  buffXp: { type: Number, default: 0 },         // 채팅/음성 1회당 추가 XP
+  attendBuffXp: { type: Number, default: 0 },   // 출석 1회당 추가 XP
+  createdAt: { type: Date, default: Date.now },
+});
+const RoleConfig = mongoose.models.RoleConfig || mongoose.model("RoleConfig", RoleConfigSchema);
+
+// 역할 설정 캐시 (1분 갱신)
+let roleConfigCache = [];
+async function refreshRoleConfigs() {
+  try {
+    roleConfigCache = await RoleConfig.find().lean();
+  } catch (e) {
+    console.error("역할 설정 갱신 오류:", e.message);
+  }
+}
+
 // ── 유틸 ──────────────────────────────────
 const kstToday = () => {
   const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
@@ -91,18 +112,51 @@ const kstToday = () => {
 };
 
 // 역할 기반 버프 합산 (채팅/음성 공통 추가분)
+// 📌 대시보드 설정(RoleConfig)이 최우선, env 설정은 하위 호환용
 const getBuffXp = (member) => {
   let buff = 0;
   const has = (id) => id && member.roles.cache.has(id);
-  if (has(XP_BOOST_ROLE_ID)) buff += 300;
-  if (has(S1_BOOST_ROLE_ID)) buff += 100;
-  if (has(PENGUIN_CHILD_ROLE_ID)) buff += 250;
-  if (has(PENGUIN_YOUTH_ROLE_ID)) buff += 350;
-  if (has(PENGUIN_ADULT_ROLE_ID)) buff += 450;
-  if (has(PENGUIN_MOTHER_ROLE_ID)) buff += 550;
+
+  // 1) 대시보드에서 설정한 역할별 Boost
+  for (const cfg of roleConfigCache) {
+    if (cfg.buffXp > 0 && has(cfg.roleId)) buff += cfg.buffXp;
+  }
+
+  // 2) env 기반 (대시보드에 동일 역할이 등록되어 있으면 중복 방지를 위해 건너뜀)
+  const inDashboard = (id) => roleConfigCache.some((c) => c.roleId === id);
+  if (has(XP_BOOST_ROLE_ID) && !inDashboard(XP_BOOST_ROLE_ID)) buff += 300;
+  if (has(S1_BOOST_ROLE_ID) && !inDashboard(S1_BOOST_ROLE_ID)) buff += 100;
+  if (has(PENGUIN_CHILD_ROLE_ID) && !inDashboard(PENGUIN_CHILD_ROLE_ID)) buff += 250;
+  if (has(PENGUIN_YOUTH_ROLE_ID) && !inDashboard(PENGUIN_YOUTH_ROLE_ID)) buff += 350;
+  if (has(PENGUIN_ADULT_ROLE_ID) && !inDashboard(PENGUIN_ADULT_ROLE_ID)) buff += 450;
+  if (has(PENGUIN_MOTHER_ROLE_ID) && !inDashboard(PENGUIN_MOTHER_ROLE_ID)) buff += 550;
+
   buff += parseInt(EVENT_BONUS_XP || "0", 10) || 0;
   return buff;
 };
+
+// 📌 출석 Boost 합산 (대시보드 설정 기반)
+const getAttendBuffXp = (member) => {
+  let buff = 0;
+  for (const cfg of roleConfigCache) {
+    if (cfg.attendBuffXp > 0 && member.roles.cache.has(cfg.roleId)) buff += cfg.attendBuffXp;
+  }
+  return buff;
+};
+
+// 📌 레벨 보상 역할 지급 — 도달한 레벨 이하의 보상 역할 중 미보유분 지급
+async function grantRewardRoles(member, level) {
+  for (const cfg of roleConfigCache) {
+    if (cfg.rewardLevel != null && level >= cfg.rewardLevel && !member.roles.cache.has(cfg.roleId)) {
+      try {
+        await member.roles.add(cfg.roleId, `레벨 ${cfg.rewardLevel} 도달 보상`);
+        console.log(`🎖 ${member.displayName} → ${cfg.roleName || cfg.roleId} 지급 (Lv.${level})`);
+      } catch (e) {
+        console.error(`역할 지급 실패 (${cfg.roleName || cfg.roleId}):`, e.message);
+      }
+    }
+  }
+}
 
 // XP 지급 + 레벨업 감지
 async function grantXp(member, amount, reason) {
@@ -120,6 +174,11 @@ async function grantXp(member, amount, reason) {
     const oldLevel = doc.level;
     doc.level = newLevel;
     await doc.save();
+
+    // 📌 레벨 도달 보상 역할 자동 지급
+    if (newLevel > oldLevel) {
+      grantRewardRoles(member, newLevel).catch(() => {});
+    }
 
     if (newLevel > oldLevel && LEVELUP_CHANNEL_ID) {
       const channel = member.guild.channels.cache.get(LEVELUP_CHANNEL_ID);
@@ -226,6 +285,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       let amount = 7000;
       if (ATTEND_BOOST_ROLE_ID && interaction.member.roles.cache.has(ATTEND_BOOST_ROLE_ID)) amount += 7000;
+      amount += getAttendBuffXp(interaction.member); // 대시보드 설정 출석 Boost
 
       await UserXp.updateOne(
         { userId: interaction.user.id },
@@ -300,6 +360,11 @@ client.once(Events.ClientReady, async (c) => {
   // 음성 XP 루프 시작
   setInterval(voiceXpTick, VOICE_INTERVAL_MS);
   console.log("✅ 음성 XP 루프 시작 (5분 주기)");
+
+  // 역할 설정 로드 + 1분 주기 갱신 (대시보드 변경 자동 반영)
+  await refreshRoleConfigs();
+  setInterval(refreshRoleConfigs, 60 * 1000);
+  console.log(`✅ 역할 설정 로드 완료 (${roleConfigCache.length}건, 1분 주기 갱신)`);
 });
 
 // ── 부팅 ──────────────────────────────────
