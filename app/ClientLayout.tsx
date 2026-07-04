@@ -134,8 +134,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   <div key={group.name} className="h-full flex items-center group/gnav" onMouseEnter={() => setOpenMegaMenu(group.name)}>
                     <button className={`relative h-full flex items-center px-4 transition-colors outline-none focus:outline-none ${isGroupActive || isOpen ? "text-[#e91e3f]" : "text-gray-400 hover:text-white"}`}>
                       {group.name}
-                      {/* 대분류 라인 차오름 이펙트 */}
-                      <span className={`absolute bottom-4 left-4 h-px bg-[#e91e3f] transition-all duration-500 ${isGroupActive ? "right-4" : isOpen ? "right-4" : "right-[calc(100%-1.5rem)] group-hover/gnav:right-4"}`} />
+                      {/* 대분류 라인 차오름 이펙트 — 평소엔 숨김, 호버 시 왼쪽부터 차오름 */}
+                      <span className={`absolute bottom-4 left-4 right-4 h-px bg-[#e91e3f] origin-left transition-transform duration-500 ${isGroupActive || isOpen ? "scale-x-100" : "scale-x-0 group-hover/gnav:scale-x-100"}`} />
                     </button>
                   </div>
                 );

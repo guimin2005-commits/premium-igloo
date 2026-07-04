@@ -378,32 +378,37 @@ export default function LevelPage() {
 
             <Reveal>
               <SectionHeader no="02" title="기본 명령어" desc="디스코드 서버 내에서 사용 가능한 슬래시 커맨드" />
-              <div className="divide-y divide-white/[0.06]">
+              <LuxCard className="divide-y divide-white/5">
                 {[
                   { c: "/레벨", d: "다음 레벨 도달까지 필요 XP 확인" },
                   { c: "/랭크", d: "XP, 레벨, 서버 내 순위 확인" },
                   { c: "/출석체크", d: "출석체크를 통한 7,000 XP 지급" },
                   { c: "/경험치샵", d: "XP SHOP 상점으로 이동" },
                 ].map((item, i) => (
-                  <div key={i} className="flex items-center justify-between py-5 group">
-                    <span className="text-[#e91e3f] font-mono font-bold text-sm tracking-tight group-hover:text-[#ff5c77] transition-colors">{item.c}</span>
+                  <div key={i} className="flex items-center justify-between px-6 py-5 group hover:bg-white/[0.02] transition-colors">
+                    <div className="flex items-center gap-4">
+                      <span className="text-[#e91e3f] font-mono font-bold text-sm tracking-tight">{item.c}</span>
+                    </div>
                     <span className="text-gray-500 text-xs md:text-sm text-right">{item.d}</span>
                   </div>
                 ))}
-              </div>
+              </LuxCard>
             </Reveal>
 
             <Reveal>
               <SectionHeader no="03" title="이용 시 주의사항" />
-              <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
                   { t: "XP 획득 제한", d: "잠수 음성 채널 이용 시 XP 획득이 전면 제한되며, 마이크/헤드셋 음소거 시 XP 획득량이 90% 감소됩니다." },
                   { t: "상점 이용 주의", d: "XP SHOP 상품은 보유 XP 소모 방식입니다. 구매로 인해 레벨이 하락할 수 있습니다." },
                 ].map((item, i) => (
-                  <div key={i} className="border-l-2 border-[#e91e3f] pl-5 md:pl-7">
-                    <strong className="text-white text-sm font-bold block mb-1.5">{item.t}</strong>
-                    <p className="text-gray-500 text-[13px] leading-relaxed break-keep">{item.d}</p>
-                  </div>
+                  <Reveal key={i} delay={i * 130}>
+                    <div className="relative rounded-2xl border border-[#e91e3f]/15 bg-gradient-to-b from-[#e91e3f]/[0.04] to-transparent p-6 h-full">
+                      <div className="absolute top-6 right-6 w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_2.5s_ease-in-out_infinite]"></div>
+                      <strong className="text-white text-sm font-bold block mb-2">{item.t}</strong>
+                      <p className="text-gray-500 text-[13px] leading-relaxed break-keep">{item.d}</p>
+                    </div>
+                  </Reveal>
                 ))}
               </div>
             </Reveal>
@@ -523,11 +528,11 @@ export default function LevelPage() {
 
             <Reveal>
               <SectionHeader no="03" title="레벨 구간별 추가 기준" desc="음성/내전 채널 이용 시 레벨 구간에 따른 추가 XP" />
-              <div>
-                <div className="grid grid-cols-3 py-3 border-b border-white/15 text-[10px] font-black tracking-[0.15em] text-gray-500 uppercase text-center">
+              <LuxCard>
+                <div className="grid grid-cols-3 px-6 py-4 border-b border-white/10 text-[10px] font-black tracking-[0.15em] text-gray-500 uppercase text-center">
                   <div className="text-left">진입 조건 레벨</div><div>구간 추가 XP</div><div className="text-right">변동량</div>
                 </div>
-                <div className="divide-y divide-white/[0.06]">
+                <div className="divide-y divide-white/[0.04]">
                   {[
                     { l: "0 ~ 49 Lv", x: "+3,000", d: "기본값", c: "text-gray-600" },
                     { l: "50 ~ 99 Lv", x: "+3,150", d: "▲ 150", c: "text-[#e91e3f]" },
@@ -545,14 +550,14 @@ export default function LevelPage() {
                     { l: "649 ~ 699 Lv", x: "+5,000", d: "▲ 200", c: "text-[#e91e3f]" },
                     { l: "700 Lv 이상 최고 구간", x: "+6,000", d: "▲ 1,000", c: "text-[#e91e3f]" },
                   ].map((row, i) => (
-                    <div key={i} className="grid grid-cols-3 py-3.5 text-xs items-center hover:bg-white/[0.02] transition-colors group">
+                    <div key={i} className="grid grid-cols-3 px-6 py-3.5 text-xs items-center hover:bg-white/[0.03] transition-colors group">
                       <div className="text-gray-300 text-left font-medium">{row.l}</div>
                       <div className="text-white font-bold text-center group-hover:text-[#e91e3f] transition-colors">{row.x} <span className="text-gray-600 font-medium">XP</span></div>
                       <div className={`font-bold text-right ${row.c}`}>{row.d}</div>
                     </div>
                   ))}
                 </div>
-              </div>
+              </LuxCard>
             </Reveal>
           </div>
         )}
