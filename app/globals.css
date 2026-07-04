@@ -12,16 +12,19 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* 📌 화면 축소·오버스크롤 시 흰 바탕이 보이지 않도록 html까지 다크 배경 고정 */
+/* 📌 확대·스와이프 시 사이트 영역을 이탈하지 않도록 고정 (SYSTEM : LEVEL과 동일한 동작) */
 html {
   background-color: #090909;
-  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  overflow-x: hidden;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  overscroll-behavior: none;
+  overflow-x: hidden;
 }
 
 /* 사이트 통일 스크롤바 디자인 (세로/가로 공통) */
