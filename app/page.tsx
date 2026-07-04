@@ -1,9 +1,20 @@
 "use client";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Reveal, CountUp, LuxStyles } from "./components/Lux";
 
 export default function Home() {
+  const [stats, setStats] = useState<{ memberCount: number; onlineCount: number } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/stats")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) setStats({ memberCount: data.memberCount, onlineCount: data.onlineCount });
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <main className="flex-1 w-full relative overflow-hidden flex flex-col">
       <LuxStyles />
@@ -16,17 +27,15 @@ export default function Home() {
       <div className="flex-1 w-full max-w-7xl mx-auto px-6 py-16 md:py-12 flex items-center relative z-10">
         <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-16 items-center">
 
-          {/* 로고 */}
+          {/* 로고 — 투명 PNG 경계선이 보이지 않도록 프레임 없이 글로우만 */}
           <Reveal className="flex justify-center md:justify-end order-1 md:order-none">
-            <div className="relative group">
-              <div className="absolute -inset-4 bg-[#e91e3f]/10 blur-3xl rounded-full opacity-60 group-hover:opacity-100 transition-opacity duration-700 animate-[pulseGlow_5s_ease-in-out_infinite]"></div>
-              <div className="relative rounded-[2.5rem] bg-gradient-to-b from-white/15 to-white/[0.02] p-px shadow-2xl">
-                <img
-                  src="/logo.png"
-                  alt="고급 이글루"
-                  className="w-56 h-56 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-[2.5rem] object-cover"
-                />
-              </div>
+            <div className="relative">
+              <div className="absolute inset-0 scale-90 bg-[#e91e3f]/15 blur-[80px] rounded-full animate-[pulseGlow_5s_ease-in-out_infinite] pointer-events-none"></div>
+              <img
+                src="/logo.png"
+                alt="고급 이글루"
+                className="relative w-56 h-56 md:w-80 md:h-80 lg:w-96 lg:h-96 object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
+              />
             </div>
           </Reveal>
 
@@ -61,22 +70,25 @@ export default function Home() {
               </div>
             </Reveal>
 
-            <Reveal delay={300}>
-              <div className="flex items-center gap-8 md:gap-10 mt-12 pt-8 border-t border-white/5 w-full justify-center md:justify-start">
-                {[
-                  { n: 1000, l: "MAX LEVEL" },
-                  { n: 24, l: "상시 운영 (H)" },
-                  { n: 2023, l: "SINCE" },
-                ].map((stat, i) => (
-                  <div key={i} className="text-center md:text-left">
+            {stats && (
+              <Reveal delay={300}>
+                <div className="flex items-center gap-10 mt-12 pt-8 border-t border-white/5 w-full justify-center md:justify-start">
+                  <div className="text-center md:text-left">
                     <div className="text-xl md:text-2xl font-black text-white tracking-tight">
-                      <CountUp end={stat.n} />
+                      <CountUp end={stats.memberCount} />
                     </div>
-                    <div className="text-[9px] font-bold tracking-[0.25em] text-gray-600 mt-1 uppercase">{stat.l}</div>
+                    <div className="text-[9px] font-bold tracking-[0.25em] text-gray-600 mt-1 uppercase">전체 멤버</div>
                   </div>
-                ))}
-              </div>
-            </Reveal>
+                  <div className="text-center md:text-left">
+                    <div className="text-xl md:text-2xl font-black text-white tracking-tight flex items-center gap-2 justify-center md:justify-start">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>
+                      <CountUp end={stats.onlineCount} />
+                    </div>
+                    <div className="text-[9px] font-bold tracking-[0.25em] text-gray-600 mt-1 uppercase">현재 온라인</div>
+                  </div>
+                </div>
+              </Reveal>
+            )}
           </div>
         </div>
       </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { Reveal, LuxStyles } from "../components/Lux";
 
 export default function MyInfoPage() {
   const { data: session, status } = useSession();
@@ -83,12 +84,26 @@ export default function MyInfoPage() {
   });
 
   return (
-    <main className="w-full max-w-4xl mx-auto px-6 py-16 flex-1 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border-b border-white/10 pb-8 mb-8">
-        <div className="flex items-center gap-5">
-          <img src={session?.user?.image || ""} alt="Profile" className={`w-20 h-20 rounded-full bg-gray-800 border border-white/10 shadow-xl ${isBooster ? 'ring-2 ring-[#e91e3f]/60 ring-offset-4 ring-offset-[#090909]' : ''}`} />
+    <main className="w-full flex-1 flex flex-col relative">
+      <LuxStyles />
+
+      {/* ── PROFILE HERO ── */}
+      <section className="relative w-full pt-16 pb-10 md:pt-20 md:pb-12 px-6">
+        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
+        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
+        <div className="max-w-4xl mx-auto relative z-10">
+          <Reveal>
+            <div className="flex items-center gap-3 mb-6">
+              <span className="w-8 h-px bg-[#e91e3f]"></span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">My Account</span>
+            </div>
+            <div className="flex items-center gap-5 md:gap-6">
+              <div className="relative shrink-0">
+                {isBooster && <div className="absolute -inset-2 bg-[#e91e3f]/15 blur-xl rounded-full pointer-events-none"></div>}
+                <img src={session?.user?.image || ""} alt="Profile" className={`relative w-20 h-20 md:w-24 md:h-24 rounded-full bg-gray-800 border border-white/10 shadow-xl ${isBooster ? 'ring-2 ring-[#e91e3f]/60 ring-offset-4 ring-offset-[#090909]' : ''}`} />
+              </div>
           <div>
-            <h1 className="text-3xl font-black text-white tracking-tight mb-1.5 flex items-center gap-2">
+            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-2 flex items-center gap-2.5">
               {session?.user?.name}
               {isBooster && <span className="text-[10px] bg-[#e91e3f]/20 text-[#e91e3f] px-2 py-0.5 rounded border border-[#e91e3f]/30">BOOSTER</span>}
             </h1>
@@ -117,8 +132,12 @@ export default function MyInfoPage() {
               )}
             </div>
           </div>
+            </div>
+          </Reveal>
         </div>
-      </div>
+      </section>
+
+      <div className="w-full max-w-4xl mx-auto px-6 pb-16 flex-1 flex flex-col border-t border-white/5 pt-10">
 
       {/* 내전 채널 이용 권한 획득 - 고정형 배너 */}
       {isVerified && !hasScrimRole && (
@@ -308,6 +327,7 @@ export default function MyInfoPage() {
           </div>
         </div>
       )}
+      </div>
     </main>
   );
 }

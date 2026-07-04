@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { Reveal, LuxStyles } from "../components/Lux";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -171,33 +172,56 @@ export default function TournamentPage() {
   };
 
   return (
-    <main className="flex-1 w-full max-w-5xl mx-auto px-6 py-16 animate-in fade-in">
-      <div className="mb-10 border-b border-white/10 pb-6 flex justify-between items-end">
-        <div>
-          <h1 className="text-4xl font-black text-white mb-3 tracking-tight">대회</h1>
-          <p className="text-gray-400 text-sm">고급 이글루의 e스포츠 리그 허브입니다.</p>
+    <main className="flex-1 w-full flex flex-col relative">
+      <LuxStyles />
+
+      {/* ── HERO ── */}
+      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6">
+        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
+        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
+        <div className="max-w-5xl mx-auto relative z-10 flex justify-between items-end gap-6">
+          <Reveal>
+            <div className="flex items-center gap-3 mb-5">
+              <span className="w-8 h-px bg-[#e91e3f]"></span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">E-Sports League Hub</span>
+            </div>
+            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
+              <span className="text-white">대</span><span className="lux-shimmer">회</span>
+            </h1>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">고급 이글루의 e스포츠 리그 허브입니다.</p>
+          </Reveal>
+          {isAdmin && (
+            <button onClick={() => router.push("/write?category=대회")} className="shrink-0 bg-white text-black font-black text-xs px-5 py-3 rounded-full hover:bg-gray-200 transition-all active:scale-95">대회 등록</button>
+          )}
         </div>
-        {isAdmin && (
-          <button onClick={() => router.push("/write?category=대회")} className="bg-white text-black font-black text-xs px-5 py-3 rounded-xl hover:bg-gray-200 transition-all active:scale-95 shrink-0">대회 등록</button>
-        )}
+      </section>
+
+      {/* ── 탭 (알약 스타일 · 스티키) ── */}
+      <div className="sticky top-16 z-30 w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
+        <div className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto whitespace-nowrap">
+          {[{ id: "all", label: "전체 대회" }, { id: "진행중", label: "진행 중 리그" }, { id: "예정됨", label: "예정된 리그" }, { id: "종료됨", label: "종료된 리그" }].map((tab) => (
+            <button key={tab.id} onClick={() => setActiveFilter(tab.id)} className={`px-5 py-2.5 text-xs md:text-sm font-bold rounded-full shrink-0 outline-none focus:outline-none transition-all duration-300 ${
+              activeFilter === tab.id
+                ? "bg-[#e91e3f] text-white shadow-[0_4px_20px_rgba(233,30,63,0.35)]"
+                : "bg-white/[0.04] text-gray-500 hover:text-white hover:bg-white/[0.08] border border-white/5"
+            }`}>{tab.label}</button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex gap-2 border-b border-white/10 mb-10 pb-px overflow-x-auto whitespace-nowrap">
-        {[{ id: "all", label: "전체 대회" }, { id: "진행중", label: "진행 중 리그" }, { id: "예정됨", label: "예정된 리그" }, { id: "종료됨", label: "종료된 리그" }].map((tab) => (
-          <button key={tab.id} onClick={() => setActiveFilter(tab.id)} className={`px-6 py-3 text-sm font-bold transition-all border-b-2 outline-none ${activeFilter === tab.id ? "border-[#e91e3f] text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}>{tab.label}</button>
-        ))}
-      </div>
+      <div className="w-full max-w-5xl mx-auto px-6 py-10 flex-1 flex flex-col">
 
       {isLoading ? (
         <div className="text-center py-20 text-gray-500 font-bold">불러오는 중...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-gray-600 bg-white/[0.02] rounded-3xl border border-white/5">등록된 대회가 없습니다.</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {filtered.map((t) => {
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {filtered.map((t, listIdx) => {
             const st = getStatus(t);
             return (
-              <div key={t._id} onClick={() => setSelected(t)} className="bg-[#121212] border border-white/5 rounded-3xl overflow-hidden hover:border-[#e91e3f]/40 transition-all duration-300 group flex flex-col relative cursor-pointer">
+              <Reveal key={t._id} delay={Math.min(listIdx, 5) * 90}>
+              <div onClick={() => setSelected(t)} className="bg-[#111111]/95 border border-white/5 rounded-2xl overflow-hidden hover:border-[#e91e3f]/40 hover:bg-[#141414] transition-all duration-300 group flex flex-col relative cursor-pointer h-full">
                 <div className="w-full h-48 bg-[#1a1a1a] relative overflow-hidden">
                   {t.bannerUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -245,6 +269,7 @@ export default function TournamentPage() {
                   </button>
                 </div>
               </div>
+              </Reveal>
             );
           })}
         </div>
@@ -344,6 +369,7 @@ export default function TournamentPage() {
           </div>
         </div>
       )}
+      </div>
     </main>
   );
 }
