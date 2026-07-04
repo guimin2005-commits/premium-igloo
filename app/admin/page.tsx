@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { Reveal, LuxStyles } from "../components/Lux";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -78,28 +79,55 @@ export default function AdminHubPage() {
   );
 
   return (
-    <main className="w-full max-w-5xl mx-auto px-6 py-16 flex-1 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="mb-10 border-b border-white/10 pb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[10px] font-black tracking-widest text-[#e91e3f] uppercase">Admin Console</span>
-        </div>
-        <h1 className="text-4xl font-black text-white mb-3 tracking-tight">관리자 페이지</h1>
-        <p className="text-gray-400 text-sm">{session?.user?.name}님, 고급 이글루의 모든 관리 기능을 한 곳에서 이용하세요.</p>
-      </div>
+    <main className="w-full flex-1 flex flex-col relative">
+      <LuxStyles />
 
-      <section className="mb-12">
-        <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">콘텐츠 작성</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── HERO ── */}
+      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6">
+        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
+        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
+        <div className="max-w-5xl mx-auto relative z-10">
+          <Reveal>
+            <div className="flex items-center gap-3 mb-5">
+              <span className="w-8 h-px bg-[#e91e3f]"></span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Admin Console</span>
+            </div>
+            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
+              <span className="text-white">관리자 </span><span className="lux-shimmer">페이지</span>
+            </h1>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">{session?.user?.name}님, 고급 이글루의 모든 관리 기능을 한 곳에서 이용하세요.</p>
+          </Reveal>
+        </div>
+      </section>
+
+      <div className="w-full max-w-5xl mx-auto px-6 pb-16 flex-1 flex flex-col">
+
+      <Reveal>
+      <section className="mb-14">
+        <div className="flex items-baseline gap-4 mb-2">
+          <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
+          <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+        </div>
+        <h2 className="text-lg md:text-xl font-black text-white tracking-tight mb-6">콘텐츠 작성</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {writeItems.map(item => <Card key={item.href} item={item} />)}
         </div>
       </section>
+      </Reveal>
 
+      <Reveal>
       <section>
-        <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">운영 관리</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="flex items-baseline gap-4 mb-2">
+          <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
+          <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+        </div>
+        <h2 className="text-lg md:text-xl font-black text-white tracking-tight mb-6">운영 관리</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {manageItems.map(item => <Card key={item.href} item={item} />)}
         </div>
       </section>
+      </Reveal>
+      </div>
     </main>
   );
 }

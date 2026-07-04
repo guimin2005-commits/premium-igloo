@@ -38,12 +38,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   const [isCodeSubmitting, setIsCodeSubmitting] = useState(false);
 
-  // 📌 카테고리 그룹화: 큰 카테고리 → 세부 카테고리 (드롭다운)
+  // 📌 카테고리 그룹화: 큰 카테고리 → 세부 카테고리 (메가 메뉴)
   const categoryGroups = [
-    { name: "소식", items: [{ name: "공지사항", path: "/notice" }, { name: "이벤트", path: "/event" }] },
-    { name: "콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level" }, { name: "대회", path: "/tournament" }, { name: "구인", path: "/recruit" }] },
-    { name: "지원", items: [{ name: "1:1 문의", path: "/support" }, { name: "FAQ", path: "/faq" }] },
+    { name: "소식", desc: "고급 이글루의 최신 소식", items: [{ name: "공지사항", path: "/notice", desc: "최신 소식과 주요 안내" }, { name: "이벤트", path: "/event", desc: "다양한 이벤트와 혜택" }] },
+    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "구인", path: "/recruit", desc: "스태프 및 서포터즈 모집" }] },
+    { name: "지원", desc: "도움이 필요하신가요?", items: [{ name: "1:1 문의", path: "/support", desc: "불편 사항 및 문의 접수" }, { name: "FAQ", path: "/faq", desc: "자주 묻는 질문" }] },
   ];
+  const [openMegaMenu, setOpenMegaMenu] = useState<string | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -107,7 +108,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="flex flex-col min-h-screen bg-[#090909]">
-      <header className="sticky top-0 z-40 bg-[#090909]/80 backdrop-blur-md border-b border-white/10 px-6 h-16 flex-shrink-0">
+      <header className="sticky top-0 z-40 bg-[#090909]/80 backdrop-blur-md border-b border-white/10 px-6 h-16 flex-shrink-0" onMouseLeave={() => setOpenMegaMenu(null)}>
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
           <div className="flex-1 flex items-center z-10">
             {isVerifyPage ? (
@@ -122,26 +123,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <nav className="hidden md:flex items-center justify-center gap-2 text-sm font-bold absolute left-1/2 transform -translate-x-1/2 h-full z-50">
               {categoryGroups.map((group) => {
                 const isGroupActive = group.items.some((item) => pathname === item.path);
+                const isOpen = openMegaMenu === group.name;
                 return (
-                  <div key={group.name} className="relative h-full flex items-center group/nav">
-                    <button className={`relative h-full flex items-center gap-1.5 px-4 transition-colors outline-none focus:outline-none ${isGroupActive ? "text-[#e91e3f]" : "text-gray-400 group-hover/nav:text-white"}`}>
+                  <div key={group.name} className="h-full flex items-center" onMouseEnter={() => setOpenMegaMenu(group.name)}>
+                    <button className={`relative h-full flex items-center gap-1.5 px-4 transition-colors outline-none focus:outline-none ${isGroupActive || isOpen ? "text-[#e91e3f]" : "text-gray-400 hover:text-white"}`}>
                       {group.name}
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 transition-transform duration-200 group-hover/nav:rotate-180"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3 h-3 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                       {isGroupActive && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#e91e3f]" />}
                     </button>
-                    {/* 드롭다운 */}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 pt-1 opacity-0 invisible translate-y-1 group-hover/nav:opacity-100 group-hover/nav:visible group-hover/nav:translate-y-0 transition-all duration-200 z-50">
-                      <div className="min-w-[180px] bg-[#141414]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-1.5">
-                        {group.items.map((item) => {
-                          const isActive = pathname === item.path;
-                          return (
-                            <Link key={item.path} href={item.path} className={`block px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-colors ${isActive ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}>
-                              {item.name}
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    </div>
                   </div>
                 );
               })}
@@ -226,6 +215,43 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             )}
           </div>
         </div>
+
+        {/* 📌 메가 메뉴 패널 — 대분류 호버 시 큰 박스가 내려옴 */}
+        {openMegaMenu && (() => {
+          const group = categoryGroups.find((g) => g.name === openMegaMenu);
+          if (!group) return null;
+          return (
+            <div className="hidden md:block absolute top-full left-0 right-0 bg-[#0d0d0d]/95 backdrop-blur-2xl border-b border-white/10 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.8)] animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-4 gap-8">
+                <div className="col-span-1 border-r border-white/5 pr-8">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <span className="w-6 h-px bg-[#e91e3f]"></span>
+                    <span className="text-[9px] font-black tracking-[0.3em] text-gray-600 uppercase">Category</span>
+                  </div>
+                  <p className="text-xl font-black text-white tracking-tight mb-1.5">{group.name}</p>
+                  <p className="text-xs text-gray-500 leading-relaxed">{group.desc}</p>
+                </div>
+                <div className="col-span-3 grid grid-cols-3 gap-3">
+                  {group.items.map((item) => {
+                    const isActive = pathname === item.path;
+                    return (
+                      <Link
+                        key={item.path}
+                        href={item.path}
+                        onClick={() => setOpenMegaMenu(null)}
+                        className={`group/item p-5 rounded-2xl border transition-all duration-300 ${isActive ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : "border-white/5 hover:border-[#e91e3f]/30 hover:bg-white/[0.03]"}`}
+                      >
+                        <p className={`text-sm font-black mb-1.5 transition-colors ${isActive ? "text-[#e91e3f]" : "text-white group-hover/item:text-[#ff5c77]"}`}>{item.name}</p>
+                        <p className="text-xs text-gray-500 leading-relaxed">{item.desc}</p>
+                        <div className={`mt-4 h-px bg-[#e91e3f]/40 transition-all duration-500 ${isActive ? "w-full" : "w-6 group-hover/item:w-full"}`}></div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </header>
 
       <main className="flex-1 flex flex-col w-full relative">
@@ -255,7 +281,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
       {isCodeModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-[#1e1e1e] border border-white/10 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl relative p-8">
+          <div className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl ring-1 ring-white/5 w-full max-w-sm overflow-hidden shadow-2xl relative p-8">
             <button onClick={() => setIsCodeModalOpen(false)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/20 rounded-full transition-colors outline-none">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
@@ -290,7 +316,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
       {isLoginModalOpen && !isGuestInquiryOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-[#1e1e1e] border border-white/10 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative">
+          <div className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl ring-1 ring-white/5 w-full max-w-md overflow-hidden shadow-2xl relative">
             <button onClick={() => setIsLoginModalOpen(false)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/20 rounded-full transition-colors outline-none focus:outline-none">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
@@ -306,7 +332,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
       {isGuestInquiryOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-[#1e1e1e] border border-white/10 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative p-8">
+          <div className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl ring-1 ring-white/5 w-full max-w-md overflow-hidden shadow-2xl relative p-8">
             <button onClick={() => {setIsGuestInquiryOpen(false); setIsLoginModalOpen(false);}} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/20 rounded-full transition-colors outline-none focus:outline-none">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>

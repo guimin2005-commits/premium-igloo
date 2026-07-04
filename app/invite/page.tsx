@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
+import { Reveal, LuxStyles } from "../components/Lux";
 
 const MILESTONES = [
   { count: 1, reward: "+10,000 XP", desc: "첫 친구 초대 보너스" },
@@ -86,12 +87,28 @@ export default function InvitePage() {
   const nextMilestone = MILESTONES.find(m => m.count > invites);
 
   return (
-    <main className="w-full max-w-3xl mx-auto px-6 py-16 flex-1 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="mb-10 border-b border-white/10 pb-6">
-        <span className="text-[10px] font-black tracking-widest text-[#e91e3f] uppercase">Invite Event</span>
-        <h1 className="text-4xl font-black text-white mb-3 mt-2 tracking-tight">친구 초대 이벤트</h1>
-        <p className="text-gray-400 text-sm">내 초대 코드를 친구에게 공유하세요. 친구가 코드를 입력하면 둘 다 보상을 받습니다.</p>
-      </div>
+    <main className="w-full flex-1 flex flex-col relative">
+      <LuxStyles />
+
+      {/* ── HERO ── */}
+      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6">
+        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
+        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
+        <div className="max-w-3xl mx-auto relative z-10">
+          <Reveal>
+            <div className="flex items-center gap-3 mb-5">
+              <span className="w-8 h-px bg-[#e91e3f]"></span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Invite Event</span>
+            </div>
+            <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-4">
+              <span className="text-white">친구 초대 </span><span className="lux-shimmer">이벤트</span>
+            </h1>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">내 초대 코드를 친구에게 공유하세요. 친구가 코드를 입력하면 둘 다 보상을 받습니다.</p>
+          </Reveal>
+        </div>
+      </section>
+
+      <div className="w-full max-w-3xl mx-auto px-6 pb-16 flex-1 flex flex-col">
 
       {/* 내 초대 코드 카드 */}
       <div className="relative w-full rounded-2xl overflow-hidden border border-[#e91e3f]/20 bg-[#161213] mb-8">
@@ -172,6 +189,7 @@ export default function InvitePage() {
           </div>
         </div>
       )}
+      </div>
     </main>
   );
 }
