@@ -1,0 +1,15 @@
+{
+  "name": "premium-igloo-bot",
+  "version": "1.0.0",
+  "description": "고급 이글루 레벨링 봇",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "mongoose": "^8.9.0",
+    "dotenv": "^16.4.7"
+  }
+}
