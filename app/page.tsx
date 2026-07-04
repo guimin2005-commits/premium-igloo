@@ -1,44 +1,82 @@
 "use client";
 import React from "react";
 import Link from "next/link";
+import { Reveal, CountUp, LuxStyles } from "./components/Lux";
 
 export default function Home() {
   return (
-    <main className="flex-1 w-full max-w-7xl mx-auto px-6 py-12 flex items-center relative">
-      <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
-        
-        {/* 이미지 부분 */}
-        <div className="flex justify-center md:justify-end">
-          <img 
-            src="/logo.png" 
-            alt="로고 이미지" 
-            className="w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-[2.5rem] shadow-2xl object-cover" 
-          />
-        </div>
-        
-        {/* 텍스트 및 버튼 부분 */}
-        <div className="flex flex-col justify-center items-center md:items-start text-center md:text-left">
-          <h1 className="text-6xl md:text-8xl font-black tracking-tight text-white mb-2">고급 이글루</h1>
-          <p className="text-lg md:text-xl font-light tracking-[0.4em] text-gray-500 mb-12 pl-1">PREMIUM IGLOO</p>
-          <div className="flex flex-wrap justify-center md:justify-start gap-4">
-            
-            {/* 📌 수정 완료: 서버 바로가기 */}
-            <a 
-              href="https://discord.gg/V2uW2nUczU" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="px-8 py-4 bg-[#e91e3f] text-white rounded-full font-bold text-lg hover:bg-[#d01634] transition-colors shadow-lg shadow-[#e91e3f]/20 flex items-center gap-2 outline-none focus:outline-none"
-            >
-              서버 바로가기
-            </a>
-            
-            {/* 📌 수정 완료: 이용 가이드 */}
-            <Link 
-              href="/faq"
-              className="px-8 py-4 bg-transparent border border-gray-700 text-white rounded-full font-bold text-lg hover:bg-white/5 transition-colors outline-none focus:outline-none"
-            >
-              이용 가이드
-            </Link>
+    <main className="flex-1 w-full relative overflow-hidden flex flex-col">
+      <LuxStyles />
+
+      {/* 배경 레이어 */}
+      <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
+      <div className="absolute top-[-150px] left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#e91e3f]/[0.08] blur-[130px] rounded-full pointer-events-none"></div>
+      <div className="absolute bottom-[-200px] right-[-100px] w-[500px] h-[400px] bg-[#e91e3f]/[0.04] blur-[130px] rounded-full pointer-events-none"></div>
+
+      <div className="flex-1 w-full max-w-7xl mx-auto px-6 py-16 md:py-12 flex items-center relative z-10">
+        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-16 items-center">
+
+          {/* 로고 */}
+          <Reveal className="flex justify-center md:justify-end order-1 md:order-none">
+            <div className="relative group">
+              <div className="absolute -inset-4 bg-[#e91e3f]/10 blur-3xl rounded-full opacity-60 group-hover:opacity-100 transition-opacity duration-700 animate-[pulseGlow_5s_ease-in-out_infinite]"></div>
+              <div className="relative rounded-[2.5rem] bg-gradient-to-b from-white/15 to-white/[0.02] p-px shadow-2xl">
+                <img
+                  src="/logo.png"
+                  alt="고급 이글루"
+                  className="w-56 h-56 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-[2.5rem] object-cover"
+                />
+              </div>
+            </div>
+          </Reveal>
+
+          {/* 텍스트 */}
+          <div className="flex flex-col justify-center items-center md:items-start text-center md:text-left">
+            <Reveal>
+              <div className="flex items-center gap-3 mb-6 justify-center md:justify-start">
+                <span className="w-8 h-px bg-[#e91e3f]"></span>
+                <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Since 2023 · Community</span>
+              </div>
+              <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter text-white mb-3 leading-none">고급 이글루</h1>
+              <p className="text-base md:text-lg font-light tracking-[0.45em] text-transparent bg-clip-text bg-gradient-to-r from-gray-400 to-gray-600 mb-10 pl-1 uppercase">Premium Igloo</p>
+            </Reveal>
+
+            <Reveal delay={150}>
+              <div className="flex flex-wrap justify-center md:justify-start gap-4">
+                <a
+                  href="https://discord.gg/V2uW2nUczU"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group px-8 py-4 bg-[#e91e3f] text-white rounded-full font-bold text-base md:text-lg hover:bg-[#d01634] transition-all shadow-[0_10px_36px_rgba(233,30,63,0.35)] hover:shadow-[0_14px_44px_rgba(233,30,63,0.5)] hover:-translate-y-0.5 flex items-center gap-2.5 outline-none focus:outline-none"
+                >
+                  서버 바로가기
+                  <span className="group-hover:translate-x-1 transition-transform duration-300">→</span>
+                </a>
+                <Link
+                  href="/faq"
+                  className="px-8 py-4 bg-white/[0.03] border border-white/10 text-white rounded-full font-bold text-base md:text-lg hover:bg-white/[0.07] hover:border-white/25 transition-all outline-none focus:outline-none"
+                >
+                  이용 가이드
+                </Link>
+              </div>
+            </Reveal>
+
+            <Reveal delay={300}>
+              <div className="flex items-center gap-8 md:gap-10 mt-12 pt-8 border-t border-white/5 w-full justify-center md:justify-start">
+                {[
+                  { n: 1000, l: "MAX LEVEL" },
+                  { n: 24, l: "상시 운영 (H)" },
+                  { n: 2023, l: "SINCE" },
+                ].map((stat, i) => (
+                  <div key={i} className="text-center md:text-left">
+                    <div className="text-xl md:text-2xl font-black text-white tracking-tight">
+                      <CountUp end={stat.n} />
+                    </div>
+                    <div className="text-[9px] font-bold tracking-[0.25em] text-gray-600 mt-1 uppercase">{stat.l}</div>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
           </div>
         </div>
       </div>

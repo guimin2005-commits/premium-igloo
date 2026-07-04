@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Reveal, LuxStyles } from "../components/Lux";
 
 // 📌 [관리자 명단 설정]
 const ADMIN_USERS = ["elahw.06"]; 
@@ -210,42 +211,61 @@ export default function NoticePage() {
   const nextNotice = currentIndex !== -1 && currentIndex < sortedNotices.length - 1 ? sortedNotices[currentIndex + 1] : null;
 
   return (
-    <main className="w-full max-w-5xl mx-auto px-6 py-16 flex-1 flex flex-col relative">
-      
-      {/* 📌 관리자 글쓰기 버튼이 추가된 헤더 영역 */}
-      <div className="mb-10 border-b border-white/10 pb-6 flex justify-between items-end">
-        <div>
-          <h1 className="text-4xl font-black text-white mb-3 tracking-tight">공지사항</h1>
-          <p className="text-gray-400 text-sm">고급 이글루의 최신 소식과 주요 안내를 확인하세요.</p>
+    <main className="w-full flex-1 flex flex-col relative">
+      <LuxStyles />
+
+      {/* ── HERO ── */}
+      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6">
+        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
+        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
+        <div className="max-w-5xl mx-auto relative z-10 flex justify-between items-end gap-6">
+          <Reveal>
+            <div className="flex items-center gap-3 mb-5">
+              <span className="w-8 h-px bg-[#e91e3f]"></span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Official Announcements</span>
+            </div>
+            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
+              <span className="text-white">공지</span><span className="lux-shimmer">사항</span>
+            </h1>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">고급 이글루의 최신 소식과 주요 안내를 확인하세요.</p>
+          </Reveal>
+          {isAdmin && (
+            <button
+              onClick={() => router.push("/write?category=공지사항")}
+              className="shrink-0 bg-white text-black font-black text-xs px-5 py-3 rounded-full hover:bg-gray-200 transition-all active:scale-95"
+            >
+              글쓰기
+            </button>
+          )}
         </div>
-        
-        {/* 관리자(isAdmin)일 때만 글쓰기 버튼 표출 */}
-        {isAdmin && (
-          <button 
-            onClick={() => router.push("/write?category=공지사항")}
-            className="bg-white text-black font-black text-xs px-5 py-3 rounded-xl hover:bg-gray-200 transition-all active:scale-95"
-          >
-            글쓰기
-          </button>
-        )}
+      </section>
+
+      {/* ── 탭 (알약 스타일) ── */}
+      <div className="sticky top-16 z-30 w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
+        <div className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto whitespace-nowrap">
+          {[{ id: "all", label: "전체 공지" }, { id: "important", label: "중요 공지" }, { id: "update", label: "업데이트" }].map((tab) => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-5 py-2.5 text-xs md:text-sm font-bold rounded-full shrink-0 outline-none focus:outline-none transition-all duration-300 ${
+              activeTab === tab.id
+                ? "bg-[#e91e3f] text-white shadow-[0_4px_20px_rgba(233,30,63,0.35)]"
+                : "bg-white/[0.04] text-gray-500 hover:text-white hover:bg-white/[0.08] border border-white/5"
+            }`}>{tab.label}</button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex gap-2 border-b border-white/10 mb-8 pb-px overflow-x-auto whitespace-nowrap">
-        {[{ id: "all", label: "전체 공지" }, { id: "important", label: "중요 공지" }, { id: "update", label: "업데이트" }].map((tab) => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-6 py-3 text-sm font-bold transition-all border-b-2 outline-none ${activeTab === tab.id ? "border-[#e91e3f] text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}>{tab.label}</button>
-        ))}
-      </div>
-
+      <div className="w-full max-w-5xl mx-auto px-6 py-10 flex-1 flex flex-col">
       {isLoading ? <div className="text-center py-20 text-gray-500 font-bold">로딩 중...</div> : filteredNotices.length === 0 ? <div className="text-center py-20 text-gray-600 bg-white/[0.02] rounded-3xl border border-white/5">등록된 공지가 없습니다.</div> : (
-        <div className="flex flex-col gap-2 md:gap-4">
-          {filteredNotices.map((notice) => {
+        <div className="flex flex-col gap-2 md:gap-3">
+          {filteredNotices.map((notice, listIdx) => {
             const tagMeta = getNoticeTagMeta(notice);
             return (
-              <div key={notice._id} onClick={() => setSelectedNotice(notice)} className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-4 md:p-6 cursor-pointer hover:border-[#e91e3f]/30 transition-all duration-300 relative group">
+              <Reveal key={notice._id} delay={Math.min(listIdx, 5) * 70}>
+              <div onClick={() => setSelectedNotice(notice)} className="relative rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px cursor-pointer group hover:from-[#e91e3f]/40 hover:to-white/[0.02] transition-all duration-300">
+              <div className="rounded-2xl bg-[#111111]/95 p-4 md:p-6 group-hover:bg-[#141414] transition-colors duration-300">
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex items-center gap-2 min-h-[24px] shrink-0">
                     {notice.isPinned && (
-                      <div className="bg-white/10 p-1.5 rounded-md shrink-0 text-white" title="고정 공지">
+                      <div className="bg-[#e91e3f]/10 border border-[#e91e3f]/20 p-1.5 rounded-md shrink-0 text-[#e91e3f]" title="고정 공지">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
                           <path fillRule="evenodd" d="M5.25 7.5A6.75 6.75 0 0 1 12 .75h.008a6.75 6.75 0 0 1 6.742 6.75v3.19l1.644 4.931a.75.75 0 0 1-.712.987h-6.932v5.642a.75.75 0 0 1-1.5 0v-5.642H4.25a.75.75 0 0 1-.712-.987l1.644-4.931V7.5Z" clipRule="evenodd" />
                         </svg>
@@ -263,9 +283,11 @@ export default function NoticePage() {
                     <span className="text-xs text-gray-500 whitespace-nowrap">{formatDate(notice.createdAt)}</span>
                   </div>
                 </div>
-                <h3 className="text-base font-bold text-white transition-colors line-clamp-1 mb-3">{notice.title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed line-clamp-2">{stripMarkdown(notice.content)}</p>
+                <h3 className="text-base font-bold text-white transition-colors line-clamp-1 mb-2.5 group-hover:text-[#ff5c77]">{notice.title}</h3>
+                <p className="text-gray-500 text-sm leading-relaxed line-clamp-2">{stripMarkdown(notice.content)}</p>
               </div>
+              </div>
+              </Reveal>
             );
           })}
         </div>
@@ -321,6 +343,7 @@ export default function NoticePage() {
       )}
 
       {deleteConfirmId && <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4"><div className="bg-[#121212] border border-red-500/30 rounded-3xl w-full max-w-sm p-8 text-center"><h2 className="text-xl font-bold text-white mb-3">삭제 안내</h2><p className="text-sm text-gray-400 mb-8">영구 삭제하시겠습니까?</p><div className="flex gap-3"><button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button><button onClick={executeDelete} className="flex-1 py-3 bg-red-500/80 text-white rounded-xl">삭제</button></div></div></div>}
+      </div>
     </main>
   );
 }

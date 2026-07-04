@@ -219,10 +219,22 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         {children}
       </main>
 
-      <footer className="w-full border-t border-white/10 bg-[#090909] mt-auto flex-shrink-0 hidden md:block">
-        <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col items-center text-center">
-          <Link href="/policy" className="text-sm text-gray-400 hover:text-white transition-colors font-medium mb-2">이용약관 및 개인정보처리방침</Link>
-          <p className="text-[11px] text-gray-600 font-medium tracking-wide leading-relaxed">
+      <footer className="w-full border-t border-white/5 bg-[#090909] mt-auto flex-shrink-0 hidden md:block relative overflow-hidden">
+        <div className="absolute bottom-[-80px] left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-[#e91e3f]/[0.04] blur-[90px] rounded-full pointer-events-none"></div>
+        <div className="max-w-7xl mx-auto px-6 py-10 relative z-10">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <div className="text-base font-black tracking-widest text-white mb-1">고급 이글루</div>
+              <div className="text-[9px] font-bold tracking-[0.35em] text-gray-600 uppercase">Premium Igloo Community</div>
+            </div>
+            <div className="flex items-center gap-6">
+              <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">Discord</a>
+              <Link href="/faq" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">FAQ</Link>
+              <Link href="/policy" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">이용약관 및 개인정보처리방침</Link>
+            </div>
+          </div>
+          <div className="h-px w-full bg-gradient-to-r from-white/10 via-white/5 to-transparent mb-6"></div>
+          <p className="text-[11px] text-gray-700 font-medium tracking-wide leading-relaxed">
             © 2026 Premium Igloo. All rights reserved. Unauthorized reproduction or redistribution is strictly prohibited.
           </p>
         </div>
