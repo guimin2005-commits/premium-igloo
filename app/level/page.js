@@ -1,6 +1,81 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
+
+// 📌 스크롤 등장 모션 컴포넌트 (Intersection Observer)
+const Reveal = ({ children, delay = 0, className = "" }) => {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.unobserve(el);
+        }
+      },
+      { threshold: 0.15 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className={className}
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(28px)",
+        transition: `opacity 0.7s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.7s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+      }}
+    >
+      {children}
+    </div>
+  );
+};
+
+// 📌 숫자 카운트업 모션
+const CountUp = ({ end, duration = 1200, suffix = "" }) => {
+  const ref = useRef(null);
+  const [value, setValue] = useState(0);
+  const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setStarted(true);
+          observer.unobserve(el);
+        }
+      },
+      { threshold: 0.3 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!started) return;
+    let raf;
+    const start = performance.now();
+    const tick = (now) => {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.floor(end * eased));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [started, end, duration]);
+
+  return <span ref={ref}>{value.toLocaleString()}{suffix}</span>;
+};
 
 const getCumulativeXpByLevel = (lvl) => {
   if (lvl <= 0) return 0;
@@ -163,6 +238,10 @@ export default function LevelPage() {
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
+        @keyframes pulseGlow {
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.15); }
+        }
       `}} />
 
       <div className="mb-10 border-b border-white/10 pb-6">
@@ -190,20 +269,38 @@ export default function LevelPage() {
       </div>
 
       {activeMainTab === "intro" && (
-        <div className="animate-[fadeInBlur_0.3s_ease-out] flex flex-col gap-6">
-          <div className="bg-gradient-to-br from-[#1a1a1a] to-[#121212] border border-white/5 rounded-3xl p-8 md:p-12 relative overflow-hidden shadow-2xl">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-[#e91e3f]/10 blur-[100px] rounded-full pointer-events-none"></div>
-            <div className="relative z-10">
-              <h3 className="text-2xl md:text-3xl font-black text-white mb-4 leading-snug">
-                활동이 쌓일수록 커지는 혜택,<br />
-                <span className="text-[#e91e3f]">고급 이글루 레벨 시스템</span>
-              </h3>
-              <p className="text-gray-400 text-sm leading-relaxed max-w-lg">
-                채팅과 음성 채널 활동으로 XP를 획득하여 레벨을 올리세요.<br className="hidden md:block"/>
-                전용 역할과 권한, 특별한 상점 아이템이 여러분을 기다립니다.
-              </p>
+        <div className="flex flex-col gap-6">
+          <Reveal>
+            <div className="bg-gradient-to-br from-[#1a1a1a] to-[#121212] border border-white/5 rounded-3xl p-8 md:p-12 relative overflow-hidden shadow-2xl">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-[#e91e3f]/10 blur-[100px] rounded-full pointer-events-none animate-[pulseGlow_4s_ease-in-out_infinite]"></div>
+              <div className="absolute -bottom-20 -left-20 w-72 h-72 bg-[#e91e3f]/5 blur-[120px] rounded-full pointer-events-none"></div>
+              <div className="relative z-10">
+                <h3 className="text-2xl md:text-3xl font-black text-white mb-4 leading-snug">
+                  활동이 쌓일수록 커지는 혜택,<br />
+                  <span className="text-[#e91e3f]">고급 이글루 레벨 시스템</span>
+                </h3>
+                <p className="text-gray-400 text-sm leading-relaxed max-w-lg">
+                  채팅과 음성 채널 활동으로 XP를 획득하여 레벨을 올리세요.<br className="hidden md:block"/>
+                  전용 역할과 권한, 특별한 상점 아이템이 여러분을 기다립니다.
+                </p>
+
+                <div className="grid grid-cols-3 gap-4 mt-10 max-w-md">
+                  {[
+                    { n: 1000, s: "", l: "최대 레벨" },
+                    { n: 7000, s: "", l: "출석 XP" },
+                    { n: 3500, s: "", l: "최대 채널 XP" },
+                  ].map((stat, i) => (
+                    <div key={i} className="text-center md:text-left">
+                      <div className="text-xl md:text-2xl font-black text-[#e91e3f]">
+                        <CountUp end={stat.n} suffix={stat.s} />
+                      </div>
+                      <div className="text-[11px] text-gray-500 mt-1 font-medium">{stat.l}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+          </Reveal>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
@@ -211,52 +308,59 @@ export default function LevelPage() {
               { t: "전용 역할 부여", d: "특정 레벨 도달 시 프리미엄 권한이 부여됩니다." },
               { t: "XP SHOP 혜택", d: "모은 XP로 시즌 상품과 특별 권한을 구매하세요." },
             ].map((f, i) => (
-              <div key={i} className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-6 hover:border-[#e91e3f]/30 transition-all group">
-                <div className="w-10 h-10 bg-[#e91e3f]/10 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <div className="w-3 h-3 bg-[#e91e3f] rounded-sm rotate-45"></div>
+              <Reveal key={i} delay={i * 120}>
+                <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-6 hover:border-[#e91e3f]/30 hover:-translate-y-1 hover:shadow-[0_12px_30px_rgba(233,30,63,0.08)] transition-all duration-300 group h-full">
+                  <div className="w-10 h-10 bg-[#e91e3f]/10 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">
+                    <div className="w-3 h-3 bg-[#e91e3f] rounded-sm rotate-45"></div>
+                  </div>
+                  <div className="text-white font-bold text-base mb-2">{f.t}</div>
+                  <div className="text-gray-500 text-sm break-keep">{f.d}</div>
                 </div>
-                <div className="text-white font-bold text-base mb-2">{f.t}</div>
-                <div className="text-gray-500 text-sm break-keep">{f.d}</div>
-              </div>
+              </Reveal>
             ))}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
-            <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-8">
-              <h4 className="text-lg font-bold text-white mb-6 border-b border-white/5 pb-4">기본 명령어</h4>
-              <ul className="space-y-4">
-                {[
-                  { c: "/레벨", d: "다음 레벨 도달까지 필요 XP 확인" },
-                  { c: "/랭크", d: "XP, 레벨, 서버 내 순위 확인" },
-                  { c: "/출석체크", d: "출석체크를 통한 7,000 XP 지급" },
-                  { c: "/경험치샵", d: "XP SHOP 상점으로 이동" },
-                ].map((item, i) => (
-                  <li key={i} className="flex flex-col md:flex-row md:items-center text-sm gap-2 md:gap-4">
-                    <span className="bg-[#121212] text-[#e91e3f] px-3 py-1.5 rounded-lg border border-white/10 font-mono font-bold shrink-0 w-max">{item.c}</span>
-                    <span className="text-gray-400">{item.d}</span>
+            <Reveal delay={0}>
+              <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-8 h-full">
+                <h4 className="text-lg font-bold text-white mb-6 border-b border-white/5 pb-4">기본 명령어</h4>
+                <ul className="space-y-4">
+                  {[
+                    { c: "/레벨", d: "다음 레벨 도달까지 필요 XP 확인" },
+                    { c: "/랭크", d: "XP, 레벨, 서버 내 순위 확인" },
+                    { c: "/출석체크", d: "출석체크를 통한 7,000 XP 지급" },
+                    { c: "/경험치샵", d: "XP SHOP 상점으로 이동" },
+                  ].map((item, i) => (
+                    <li key={i} className="flex flex-col md:flex-row md:items-center text-sm gap-2 md:gap-4 group/cmd">
+                      <span className="bg-[#121212] text-[#e91e3f] px-3 py-1.5 rounded-lg border border-white/10 font-mono font-bold shrink-0 w-max group-hover/cmd:border-[#e91e3f]/40 transition-colors">{item.c}</span>
+                      <span className="text-gray-400">{item.d}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+            <Reveal delay={150}>
+              <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-8 h-full">
+                <h4 className="text-lg font-bold text-white mb-6 border-b border-white/5 pb-4">이용 시 주의사항</h4>
+                <ul className="space-y-4 text-sm text-gray-400">
+                  <li className="flex items-start bg-[#121212] p-4 rounded-xl border border-white/5">
+                    <span className="mr-3 text-xl">⚠️</span>
+                    <div><strong className="text-white block mb-1">XP 획득 제한</strong>잠수 음성 채널 이용 시 XP 획득이 전면 제한되며, 마이크/헤드셋 음소거 시 XP 획득량이 90% 감소됩니다.</div>
                   </li>
-                ))}
-              </ul>
-            </div>
-            <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-8">
-              <h4 className="text-lg font-bold text-white mb-6 border-b border-white/5 pb-4">이용 시 주의사항</h4>
-              <ul className="space-y-4 text-sm text-gray-400">
-                <li className="flex items-start bg-[#121212] p-4 rounded-xl border border-white/5">
-                  <span className="mr-3 text-xl">⚠️</span>
-                  <div><strong className="text-white block mb-1">XP 획득 제한</strong>잠수 음성 채널 이용 시 XP 획득이 전면 제한되며, 마이크/헤드셋 음소거 시 XP 획득량이 90% 감소됩니다.</div>
-                </li>
-                <li className="flex items-start bg-[#121212] p-4 rounded-xl border border-white/5">
-                  <span className="mr-3 text-xl">🛒</span>
-                  <div><strong className="text-white block mb-1">상점 이용 주의</strong>XP SHOP 상품은 보유 XP 소모 방식입니다. 구매로 인해 레벨이 하락할 수 있습니다.</div>
-                </li>
-              </ul>
-            </div>
+                  <li className="flex items-start bg-[#121212] p-4 rounded-xl border border-white/5">
+                    <span className="mr-3 text-xl">🛒</span>
+                    <div><strong className="text-white block mb-1">상점 이용 주의</strong>XP SHOP 상품은 보유 XP 소모 방식입니다. 구매로 인해 레벨이 하락할 수 있습니다.</div>
+                  </li>
+                </ul>
+              </div>
+            </Reveal>
           </div>
         </div>
       )}
 
       {activeMainTab === "policy" && (
-        <div className="animate-[fadeInBlur_0.3s_ease-out] flex flex-col gap-16">
+        <div className="flex flex-col gap-16">
+          <Reveal>
           <section>
             <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-3">
               <span className="w-1.5 h-6 bg-[#e91e3f] rounded-full"></span> 기본 XP 획득량
@@ -280,12 +384,14 @@ export default function LevelPage() {
               ))}
             </div>
           </section>
+          </Reveal>
 
+          <Reveal>
           <section>
             <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-3">
               <span className="w-1.5 h-6 bg-[#e91e3f] rounded-full"></span> 추가 XP & 출석 보상
             </h3>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               
               {/* 📌 변경: 아이템 상품 [영구제] (이모지 및 색상 제거) */}
@@ -369,7 +475,9 @@ export default function LevelPage() {
 
             </div>
           </section>
+          </Reveal>
 
+          <Reveal>
           <section>
             <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-3">
               <span className="w-1.5 h-6 bg-[#e91e3f] rounded-full"></span> 레벨 구간별 추가 기준
@@ -395,7 +503,7 @@ export default function LevelPage() {
                 { l: "649Lv ~ 699Lv", x: "+5,000 XP", d: "▲ 200", c: "text-[#e91e3f]" },
                 { l: "700Lv 이상 최고 구간", x: "+6,000 XP", d: "▲ 1,000", c: "text-[#e91e3f]" },
               ].map((row, i) => (
-                <div key={i} className="grid grid-cols-3 p-3 bg-[#1a1a1a] border border-white/5 rounded-xl text-xs items-center text-center">
+                <div key={i} className="grid grid-cols-3 p-3 bg-[#1a1a1a] border border-white/5 rounded-xl text-xs items-center text-center hover:bg-[#1e1e1e] hover:border-[#e91e3f]/20 transition-colors duration-200">
                   <div className="text-gray-300">{row.l}</div>
                   <div className="text-gray-400 font-bold">{row.x}</div>
                   <div className={`font-bold ${row.c}`}>{row.d}</div>
@@ -403,11 +511,13 @@ export default function LevelPage() {
               ))}
             </div>
           </section>
+          </Reveal>
         </div>
       )}
 
       {activeMainTab === "table" && (
-        <div className="animate-[fadeInBlur_0.3s_ease-out]">
+        <Reveal>
+        <div>
           <h3 className="text-sm font-bold text-white mb-3 pl-1">레벨별 필요 및 누적 XP 검색</h3>
           
           <div className="bg-[#1a1a1a] border border-white/5 p-6 rounded-2xl mb-6 flex flex-col lg:flex-row gap-6 items-center shadow-lg">
@@ -468,10 +578,12 @@ export default function LevelPage() {
             </table>
           </div>
         </div>
+        </Reveal>
       )}
 
       {activeMainTab === "sim" && (
-        <div className="animate-[fadeInBlur_0.3s_ease-out]">
+        <Reveal>
+        <div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
             
             <div className="flex flex-col gap-6">
@@ -636,6 +748,7 @@ export default function LevelPage() {
 
           </div>
         </div>
+        </Reveal>
       )}
     </main>
   );
