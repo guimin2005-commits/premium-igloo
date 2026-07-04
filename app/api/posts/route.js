@@ -15,6 +15,11 @@ export async function GET(request) {
       query.category = category;
     }
 
+    // 📌 예약 발행: 공개 시각이 미래인 글은 목록에서 제외 (?all=1 은 관리자용 전체 조회)
+    if (searchParams.get("all") !== "1") {
+      query.$or = [{ publishAt: null }, { publishAt: { $lte: new Date() } }];
+    }
+
     const posts = await Post.find(query).sort({ createdAt: -1 });
 
     return NextResponse.json({ success: true, data: posts }, { status: 200 });

@@ -166,6 +166,10 @@ export default function LevelPage() {
 
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
 
+  // 📌 목표 모드 — 목표 레벨까지 예상 소요일 계산
+  const [goalLevel, setGoalLevel] = useState("");
+  const [goalDailyTime, setGoalDailyTime] = useState("");
+
   const handleLimitInput = (setter, maxLimit) => (e) => {
     let val = e.target.value;
     if (val === "") {
@@ -249,6 +253,25 @@ export default function LevelPage() {
       cycleText, cycleBaseText
     };
   }, [simLevel, simChannel, simTime, simBoost1, simBoost2, simEvent, penChild, penYouth, penAdult, penMother, simAttend, simAttendBoost]);
+
+  // 📌 목표 모드 계산 — 현재 시뮬레이터 조건(레벨/채널/버프) 기준 하루 활동량으로 예상 소요일 산출
+  const goalResult = useMemo(() => {
+    const currentLv = Math.max(0, parseInt(simLevel) || 0);
+    const targetLv = Math.min(1000, Math.max(0, parseInt(goalLevel) || 0));
+    const dailyMin = Math.max(0, parseInt(goalDailyTime) || 0);
+    if (!targetLv || targetLv <= currentLv || dailyMin <= 0) return null;
+
+    const neededXp = getCumulativeXpByLevel(targetLv) - getCumulativeXpByLevel(currentLv);
+    const checkInterval = simChannel === "chat" ? 1 : 5;
+    const perCycle = simResult.channelBaseXp + simResult.levelBonusXp + simResult.b1Add + simResult.b2Add + simResult.evAdd + simResult.penguinAdd;
+    const cyclesPerDay = Math.floor(dailyMin / checkInterval);
+    const attendDaily = 7000 + (simAttendBoost ? 7000 : 0); // 하루 1회 출석 가정
+    const dailyXp = perCycle * cyclesPerDay + attendDaily;
+    if (dailyXp <= 0) return null;
+
+    const days = Math.ceil(neededXp / dailyXp);
+    return { neededXp, dailyXp, days, months: Math.floor(days / 30), remDays: days % 30, targetLv };
+  }, [simLevel, goalLevel, goalDailyTime, simChannel, simResult, simAttendBoost]);
 
   return (
     <main className="w-full flex-1 flex flex-col relative overflow-hidden">
@@ -795,6 +818,37 @@ export default function LevelPage() {
                       ))}
                     </tbody>
                   </table>
+                </LuxCard>
+
+                {/* 🎯 목표 모드 */}
+                <LuxCard className="p-6">
+                  <div className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase mb-1.5">Goal Mode</div>
+                  <p className="text-[11px] text-gray-600 mb-5 leading-relaxed">위 조건(레벨·채널·아이템) 기준으로, 목표 레벨까지 걸리는 예상 기간을 계산합니다.</p>
+                  <div className="grid grid-cols-2 gap-3 mb-5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1.5">목표 레벨</label>
+                      <input type="number" placeholder="예: 500" value={goalLevel} onChange={handleLimitInput(setGoalLevel, 1000)} className="w-full px-3 py-2.5 bg-black/40 border border-white/10 rounded-lg text-white text-xs text-center outline-none focus:border-[#e91e3f] transition-colors font-bold" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1.5">하루 활동 시간 (분)</label>
+                      <input type="number" placeholder="예: 120" value={goalDailyTime} onChange={handleLimitInput(setGoalDailyTime, 1440)} className="w-full px-3 py-2.5 bg-black/40 border border-white/10 rounded-lg text-white text-xs text-center outline-none focus:border-[#e91e3f] transition-colors font-bold" />
+                    </div>
+                  </div>
+
+                  {goalResult ? (
+                    <div className="rounded-xl border border-[#e91e3f]/20 bg-gradient-to-b from-[#e91e3f]/[0.06] to-transparent p-5 text-center">
+                      <p className="text-[10px] font-bold text-gray-500 mb-2">Lv.{goalResult.targetLv} 도달까지</p>
+                      <p className="text-3xl font-black text-[#e91e3f] tracking-tighter mb-1.5">
+                        약 {goalResult.days.toLocaleString()}일
+                        {goalResult.months > 0 && <span className="text-sm text-gray-400 font-bold ml-2">({goalResult.months}개월 {goalResult.remDays}일)</span>}
+                      </p>
+                      <p className="text-[10px] text-gray-500">필요 XP {goalResult.neededXp.toLocaleString()} · 일일 예상 획득 {goalResult.dailyXp.toLocaleString()} XP (출석 1회 포함)</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-white/5 bg-black/20 p-5 text-center text-[11px] text-gray-600">
+                      목표 레벨과 하루 활동 시간을 입력하면<br/>예상 소요 기간이 표시됩니다.
+                    </div>
+                  )}
                 </LuxCard>
               </div>
 

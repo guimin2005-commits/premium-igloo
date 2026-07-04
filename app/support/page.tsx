@@ -184,6 +184,19 @@ export default function SupportPage() {
 
                 <form onSubmit={handleAnswerSubmit} className="space-y-4 border-t border-white/5 pt-6">
                   <span className="block text-xs font-bold text-[#e91e3f] mb-2 uppercase tracking-wider">MANAGER ANSWER</span>
+                  {/* 📌 자주 쓰는 답변 템플릿 원클릭 삽입 */}
+                  <div className="flex flex-wrap gap-1.5 mb-2.5">
+                    {[
+                      { l: "접수 완료", t: "안녕하세요, 고급 이글루 운영진입니다.\n문의하신 내용이 정상적으로 접수되었습니다. 확인 후 순차적으로 처리해 드리겠습니다.\n감사합니다." },
+                      { l: "버그 확인", t: "안녕하세요, 고급 이글루 운영진입니다.\n제보해 주신 오류를 확인하였으며, 현재 수정 작업을 진행하고 있습니다. 빠른 시일 내에 해결하겠습니다.\n소중한 제보 감사드립니다." },
+                      { l: "환불 안내", t: "안녕하세요, 고급 이글루 운영진입니다.\n환불 및 교환은 기프트 상품을 제외한 모든 상품에 한해 구매 후 30분 이내 신청 시 처리가 가능합니다.\n요청하신 건은 확인 후 처리 결과를 안내드리겠습니다." },
+                      { l: "처리 완료", t: "안녕하세요, 고급 이글루 운영진입니다.\n문의하신 사항이 정상적으로 처리 완료되었습니다. 이용에 불편을 드려 죄송하며, 추가 문의 사항이 있으시면 언제든지 1:1 문의를 이용해 주세요.\n감사합니다." },
+                    ].map((tpl) => (
+                      <button key={tpl.l} type="button" onClick={() => setAnswerText(tpl.t)} className="px-3 py-1.5 text-[11px] font-bold rounded-full border border-white/10 bg-white/[0.03] text-gray-400 hover:text-white hover:border-[#e91e3f]/40 transition-all">
+                        {tpl.l}
+                      </button>
+                    ))}
+                  </div>
                   <textarea rows={5} value={answerText} onChange={(e) => setAnswerText(e.target.value)} placeholder="답변을 작성해주세요..." className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl p-5 text-sm text-white focus:border-[#e91e3f] outline-none resize-none transition-colors" />
                   <div className="flex gap-4 pt-2">
                     <button type="submit" className="flex-1 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#e91e3f]/20 outline-none">답변 저장하기</button>

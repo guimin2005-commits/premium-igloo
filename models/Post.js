@@ -31,6 +31,7 @@ const PostSchema = new mongoose.Schema({
   recruitTasks: { type: String, default: "" },
   recruitQual: { type: String, default: "" },
   recruitExtra: { type: String, default: "" },
+  publishAt: { type: Date, default: null }, // 📌 예약 발행 시각 (null이면 즉시 공개)
   createdAt: { type: Date, default: Date.now },
 });
 

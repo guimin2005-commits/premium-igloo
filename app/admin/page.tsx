@@ -20,7 +20,7 @@ export default function AdminHubPage() {
   const router = useRouter();
   const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
 
-  const [stats, setStats] = useState({ inquiries: 0, pending: 0, applies: 0, codes: 0, payoutPending: 0 });
+  const [stats, setStats] = useState({ inquiries: 0, pending: 0, applies: 0, codes: 0, payoutPending: 0, weeklyInquiries: 0, weeklyApplies: 0 });
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -31,12 +31,16 @@ export default function AdminHubPage() {
       fetch("/api/payout", { cache: "no-store" }).then(r => r.json()).catch(() => ({ pendingCount: 0 })),
     ]).then(([inq, app, code, payout]) => {
       const inquiries = Array.isArray(inq?.data) ? inq.data : [];
+      const applies = Array.isArray(app?.data) ? app.data : [];
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
       setStats({
         inquiries: inquiries.length,
         pending: inquiries.filter((i: any) => i.status === "접수 중").length,
-        applies: Array.isArray(app?.data) ? app.data.length : 0,
+        applies: applies.length,
         codes: Array.isArray(code?.data) ? code.data.length : 0,
         payoutPending: payout?.pendingCount || 0,
+        weeklyInquiries: inquiries.filter((i: any) => new Date(i.createdAt).getTime() > weekAgo).length,
+        weeklyApplies: applies.filter((a: any) => new Date(a.createdAt).getTime() > weekAgo).length,
       });
     });
   }, [isAdmin]);
@@ -102,6 +106,23 @@ export default function AdminHubPage() {
       </section>
 
       <div className="w-full max-w-5xl mx-auto px-6 pb-16 flex-1 flex flex-col">
+
+      {/* 📌 이번 주 요약 통계 */}
+      <Reveal>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10 rounded-2xl overflow-hidden border border-white/10 mb-14">
+        {[
+          { n: stats.weeklyInquiries, l: "이번 주 문의", accent: stats.weeklyInquiries > 0 },
+          { n: stats.pending, l: "미답변 문의", accent: stats.pending > 0 },
+          { n: stats.weeklyApplies, l: "이번 주 지원", accent: false },
+          { n: stats.payoutPending, l: "지급 대기", accent: stats.payoutPending > 0 },
+        ].map((s, i) => (
+          <div key={i} className="bg-[#0d0d0d] px-4 py-6 text-center">
+            <div className={`text-2xl md:text-3xl font-black tracking-tight ${s.accent ? "text-[#e91e3f]" : "text-white"}`}>{s.n}</div>
+            <div className="text-[9px] md:text-[10px] font-bold tracking-[0.2em] text-gray-600 mt-1.5 uppercase">{s.l}</div>
+          </div>
+        ))}
+      </div>
+      </Reveal>
 
       <Reveal>
       <section className="mb-14">

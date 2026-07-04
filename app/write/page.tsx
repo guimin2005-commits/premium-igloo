@@ -52,7 +52,8 @@ export default function AdminWritePage() {
   
   const [content, setContent] = useState("");
   const [noticeTag, setNoticeTag] = useState("일반");
-  const [isPinned, setIsPinned] = useState(false); 
+  const [isPinned, setIsPinned] = useState(false);
+  const [publishAt, setPublishAt] = useState(""); // 📌 예약 발행 (비우면 즉시 공개)
   const [eventTag, setEventTag] = useState("NONE");
   const [bannerUrl, setBannerUrl] = useState("");
   const [eventStartDate, setEventStartDate] = useState("");
@@ -95,6 +96,11 @@ export default function AdminWritePage() {
           const post = json.data;
           setCategory(post.category);
           setTitle(post.title);
+          if (post.publishAt) {
+            const d = new Date(post.publishAt);
+            const pad = (n: number) => String(n).padStart(2, "0");
+            setPublishAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+          }
           
           if (post.category === "구인") {
             setRecruitSubCategory(post.recruitSubCategory || "staff");
@@ -243,6 +249,7 @@ export default function AdminWritePage() {
     }
     const postData = {
       author: session.user?.name || "관리자", category, title,
+      publishAt: publishAt ? new Date(publishAt).toISOString() : null,
       ...(category === "공지사항" && { content, noticeTag, isPinned, bannerUrl }),
       ...(category === "이벤트" && { content, eventTag, bannerUrl, eventPeriod: computedEventPeriod }),
       ...(category === "구인" && {
@@ -278,6 +285,18 @@ export default function AdminWritePage() {
         <div className="flex flex-col gap-2 border-b border-white/10 pb-4 focus-within:border-[#e91e3f] transition-colors">
           <span className="text-xs font-bold text-[#e91e3f] tracking-wider uppercase">{category} TITLE</span>
           <input type="text" placeholder="제목을 입력하세요" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} required className="w-full bg-transparent text-3xl md:text-4xl font-black text-white placeholder:text-neutral-800 outline-none tracking-tight"/>
+
+          {/* 📌 예약 발행 */}
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <span className="text-xs font-bold text-gray-500">예약 발행 (선택)</span>
+            <input type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} className="bg-[#1a1a1a] border border-white/5 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-[#e91e3f] [color-scheme:dark]" />
+            {publishAt && (
+              <>
+                <span className="text-[10px] font-bold text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/20 px-2.5 py-1 rounded-full">해당 시각부터 공개됩니다</span>
+                <button type="button" onClick={() => setPublishAt("")} className="text-[10px] font-bold text-gray-500 hover:text-white underline underline-offset-2">해제</button>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="bg-[#121212] border border-white/5 rounded-2xl p-6 flex flex-col gap-6">

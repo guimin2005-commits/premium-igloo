@@ -7,6 +7,31 @@ import Link from "next/link";
 
 const ADMIN_USERS = ["elahw.06"];
 
+// 📌 페이지 전환 시 상단 크림슨 프로그레스 바
+function RouteProgress({ pathname }: { pathname: string }) {
+  const [animKey, setAnimKey] = useState(0);
+  const firstRender = useRef(true);
+
+  useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return; }
+    setAnimKey((k) => k + 1);
+  }, [pathname]);
+
+  if (animKey === 0) return null;
+  return (
+    <div key={animKey} className="fixed top-0 left-0 right-0 z-[300] h-[2px] pointer-events-none">
+      <div className="h-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] shadow-[0_0_10px_rgba(233,30,63,0.7)] animate-[routeBar_0.7s_cubic-bezier(0.16,1,0.3,1)_forwards]"></div>
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes routeBar {
+          0% { width: 0%; opacity: 1; }
+          70% { width: 100%; opacity: 1; }
+          100% { width: 100%; opacity: 0; }
+        }
+      `}} />
+    </div>
+  );
+}
+
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isGuestInquiryOpen, setIsGuestInquiryOpen] = useState(false);
@@ -158,6 +183,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="flex flex-col min-h-screen bg-[#090909]">
+      <RouteProgress pathname={pathname} />
       <header className="sticky top-0 z-40 bg-[#090909]/80 backdrop-blur-md border-b border-white/10 px-6 h-16 flex-shrink-0" onMouseLeave={() => setOpenMegaMenu(null)}>
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
           <div className="flex-1 flex items-center z-10">
