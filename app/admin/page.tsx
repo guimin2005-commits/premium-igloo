@@ -28,6 +28,7 @@ export default function AdminHubPage() {
     memberCount: 0, onlineCount: 0,
     inquiryDaily: [] as { label: string; count: number }[],
   });
+  const [discordStats, setDiscordStats] = useState<any>(null);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -77,6 +78,12 @@ export default function AdminHubPage() {
         inquiryDaily,
       });
     });
+
+    // 📌 디스코드 서버 상세 통계
+    fetch("/api/discord-stats", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (d.success) setDiscordStats(d); })
+      .catch(() => {});
   }, [isAdmin]);
 
   if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
@@ -168,6 +175,32 @@ export default function AdminHubPage() {
             </div>
           ))}
         </div>
+
+        {/* 📌 디스코드 서버 현황 */}
+        {discordStats && (
+          <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-6 mb-4">
+            <div className="flex items-center justify-between mb-5">
+              <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">Discord 서버 현황</span>
+              <span className="text-[10px] font-bold text-gray-600">개설 D+{discordStats.ageDays.toLocaleString()}일</span>
+            </div>
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
+              {[
+                { n: discordStats.boostCount, l: "부스트", sub: `Tier ${discordStats.boostTier}`, accent: true },
+                { n: discordStats.roleCount, l: "역할" },
+                { n: discordStats.textChannels, l: "텍스트 채널" },
+                { n: discordStats.voiceChannels, l: "음성 채널" },
+                { n: discordStats.categories, l: "카테고리" },
+                { n: discordStats.emojiCount + discordStats.stickerCount, l: "이모지·스티커" },
+              ].map((s: any, i: number) => (
+                <div key={i} className="text-center">
+                  <div className={`text-xl md:text-2xl font-black tracking-tight ${s.accent ? "text-[#e91e3f]" : "text-white"}`}>{s.n.toLocaleString()}</div>
+                  <div className="text-[9px] font-bold tracking-[0.15em] text-gray-600 mt-1 uppercase">{s.l}</div>
+                  {s.sub && <div className="text-[9px] font-bold text-[#e91e3f]/70 mt-0.5">{s.sub}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* 최근 7일 문의 추이 바 차트 */}
