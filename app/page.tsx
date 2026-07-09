@@ -13,12 +13,12 @@ const Sparkline = ({ history }: { history: { ts: string; online: number }[] }) =
   const points = values.map((v, i) => `${(i / (values.length - 1)) * w},${h - 4 - ((v - min) / range) * (h - 8)}`).join(" ");
 
   return (
-    <div className="mt-6">
-      <div className="flex items-center justify-between mb-2">
+    <div className="mt-4">
+      <div className="flex items-center justify-between mb-1.5">
         <span className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase">24H Activity</span>
         <span className="text-[9px] font-bold text-gray-600">피크 {max.toLocaleString()}명</span>
       </div>
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-[220px] h-10 overflow-visible">
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-[220px] h-8 overflow-visible">
         <defs>
           <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#e91e3f" stopOpacity="0.25" />
@@ -118,7 +118,7 @@ export default function Home() {
 
             {stats && (
               <Reveal delay={300}>
-                <div className="flex items-center gap-8 md:gap-10 mt-12 pt-8 border-t border-white/5 w-full justify-center md:justify-start">
+                <div className="flex items-center gap-8 md:gap-10 mt-8 pt-6 border-t border-white/5 w-full justify-center md:justify-start">
                   <div className="text-center md:text-left">
                     <div className="text-xl md:text-2xl font-black text-white tracking-tight">
                       <CountUp end={stats.memberCount} />
@@ -141,18 +141,20 @@ export default function Home() {
               </Reveal>
             )}
 
-            {/* 📌 다가오는 일정 위젯 */}
+            {/* 📌 다가오는 일정 위젯 — 컴팩트 스크롤 박스 */}
             {schedule.length > 0 && (
               <Reveal delay={400}>
-                <div className="mt-8 w-full space-y-1.5">
-                  <p className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase mb-2.5 text-center md:text-left">Live &amp; Upcoming</p>
-                  {schedule.map((item, i) => (
-                    <Link key={i} href={item.path} className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-[#e91e3f]/30 hover:bg-white/[0.05] transition-all group/sch">
-                      <span className={`shrink-0 text-[9px] font-black px-2 py-0.5 rounded-full ${item.type.includes("진행중") ? "bg-emerald-500/15 text-emerald-400" : item.type.includes("대회") ? "bg-blue-500/15 text-blue-400" : "bg-[#e91e3f]/15 text-[#e91e3f]"}`}>{item.type}</span>
-                      <span className="text-xs font-bold text-gray-300 group-hover/sch:text-white truncate transition-colors">{item.title}</span>
-                      {item.period && <span className="ml-auto shrink-0 text-[10px] text-gray-600 hidden sm:block">{item.period}</span>}
-                    </Link>
-                  ))}
+                <div className="mt-6 w-full">
+                  <p className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase mb-2 text-center md:text-left">Live &amp; Upcoming</p>
+                  <div className="max-h-[104px] overflow-y-auto overscroll-contain pr-1 space-y-1.5 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#e91e3f]/50">
+                    {schedule.map((item, i) => (
+                      <Link key={i} href={item.path} className="flex items-center gap-3 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5 hover:border-[#e91e3f]/30 hover:bg-white/[0.05] transition-all group/sch">
+                        <span className={`shrink-0 text-[9px] font-black px-2 py-0.5 rounded-full ${item.type.includes("진행중") ? "bg-emerald-500/15 text-emerald-400" : item.type.includes("대회") ? "bg-blue-500/15 text-blue-400" : "bg-[#e91e3f]/15 text-[#e91e3f]"}`}>{item.type}</span>
+                        <span className="text-xs font-bold text-gray-300 group-hover/sch:text-white truncate transition-colors">{item.title}</span>
+                        {item.period && <span className="ml-auto shrink-0 text-[10px] text-gray-600 hidden sm:block">{item.period}</span>}
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               </Reveal>
             )}
