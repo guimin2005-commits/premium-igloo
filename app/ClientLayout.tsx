@@ -71,6 +71,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   ];
   const [openMegaMenu, setOpenMegaMenu] = useState<string | null>(null);
 
+  // 📌 점검 모드 — 관리자 외에는 점검 화면 표시
+  const [isMaintenance, setIsMaintenance] = useState(false);
+  useEffect(() => {
+    fetch("/api/settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setIsMaintenance(!!d.maintenance))
+      .catch(() => {});
+  }, [pathname]);
+
   // 📌 알림 센터 — 내 문의에 답변이 달리면 종 아이콘에 빨간 점
   const [notifications, setNotifications] = useState<any[]>([]);
   const [seenNotifIds, setSeenNotifIds] = useState<Set<string>>(new Set());
@@ -370,7 +379,25 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       </header>
 
       <main className="flex-1 flex flex-col w-full relative pb-16 md:pb-0">
-        {children}
+        {isMaintenance && mounted && !isAdmin && status !== "loading" ? (
+          /* 📌 점검 모드 화면 (관리자는 정상 이용 가능) */
+          <div className="flex-1 flex items-center justify-center px-6 py-32 relative overflow-hidden">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-[#e91e3f]/[0.06] blur-[120px] rounded-full pointer-events-none"></div>
+            <div className="relative z-10 text-center max-w-md">
+              <p className="text-5xl mb-8">🔧</p>
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <span className="w-8 h-px bg-[#e91e3f]"></span>
+                <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Under Maintenance</span>
+                <span className="w-8 h-px bg-[#e91e3f]"></span>
+              </div>
+              <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-4">더 나은 이글루를 짓는 중입니다</h1>
+              <p className="text-sm text-gray-400 leading-relaxed mb-8">현재 사이트 점검이 진행 중입니다.<br />잠시 후 다시 방문해 주세요.</p>
+              <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="inline-block px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드에서 소식 받기</a>
+            </div>
+          </div>
+        ) : (
+          children
+        )}
       </main>
 
       {/* 📌 모바일 하단 고정 탭 바 */}

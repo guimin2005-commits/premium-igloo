@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Reveal, LuxStyles } from "../components/Lux";
@@ -29,6 +29,24 @@ export default function AdminHubPage() {
     inquiryDaily: [] as { label: string; count: number }[],
   });
   const [discordStats, setDiscordStats] = useState<any>(null);
+  const [activitySamples, setActivitySamples] = useState<any[]>([]);
+  const [maintenance, setMaintenance] = useState(false);
+  const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+
+  const toggleMaintenance = async () => {
+    if (maintenanceLoading) return;
+    setMaintenanceLoading(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maintenance: !maintenance }),
+      });
+      const d = await res.json();
+      if (d.success) setMaintenance(d.maintenance);
+    } catch {}
+    setMaintenanceLoading(false);
+  };
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -84,7 +102,46 @@ export default function AdminHubPage() {
       .then((r) => r.json())
       .then((d) => { if (d.success) setDiscordStats(d); })
       .catch(() => {});
+
+    // 📌 30일 활동 샘플 (히트맵 + 멤버 증감)
+    fetch("/api/stats?days=30", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (d.success) setActivitySamples(d.history || []); })
+      .catch(() => {});
+
+    // 📌 점검 모드 상태
+    fetch("/api/settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setMaintenance(!!d.maintenance))
+      .catch(() => {});
   }, [isAdmin]);
+
+  // 📌 요일×시간대 온라인 히트맵 (KST, 최근 7일 평균)
+  const heatmap = (() => {
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const cells: { sum: number; n: number }[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => ({ sum: 0, n: 0 })));
+    activitySamples.forEach((s: any) => {
+      const t = new Date(s.ts).getTime();
+      if (t < weekAgo) return;
+      const kst = new Date(t + 9 * 60 * 60 * 1000);
+      cells[kst.getUTCDay()][kst.getUTCHours()].sum += s.online || 0;
+      cells[kst.getUTCDay()][kst.getUTCHours()].n += 1;
+    });
+    const avg = cells.map((row) => row.map((c) => (c.n ? c.sum / c.n : -1)));
+    const max = Math.max(...avg.flat().filter((v) => v >= 0), 1);
+    return { avg, max, hasData: avg.flat().some((v) => v >= 0) };
+  })();
+
+  // 📌 일별 멤버 수 (최근 30일, 각 날짜의 마지막 샘플)
+  const memberDaily = (() => {
+    const byDay = new Map<string, number>();
+    activitySamples.forEach((s: any) => {
+      if (!s.members) return;
+      const kst = new Date(new Date(s.ts).getTime() + 9 * 60 * 60 * 1000);
+      byDay.set(kst.toISOString().slice(0, 10), s.members);
+    });
+    return Array.from(byDay.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([date, members]) => ({ date, members }));
+  })();
 
   if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
   if (!isAdmin) {
@@ -156,7 +213,16 @@ export default function AdminHubPage() {
           <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">00</span>
           <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
         </div>
-        <h2 className="text-lg md:text-xl font-black text-white tracking-tight mb-6">통계 대시보드</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg md:text-xl font-black text-white tracking-tight">통계 대시보드</h2>
+          {/* 📌 점검 모드 토글 */}
+          <div className="flex items-center gap-2.5">
+            <span className={`text-[10px] font-black tracking-wider ${maintenance ? "text-[#e91e3f]" : "text-gray-600"}`}>{maintenance ? "🔧 점검 중" : "점검 모드"}</span>
+            <button onClick={toggleMaintenance} disabled={maintenanceLoading} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors ${maintenance ? "bg-[#e91e3f]" : "bg-white/10"}`}>
+              <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform duration-200 ${maintenance ? "translate-x-5" : ""}`}></div>
+            </button>
+          </div>
+        </div>
 
         {/* 핵심 지표 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10 rounded-2xl overflow-hidden border border-white/10 mb-4">
@@ -201,6 +267,70 @@ export default function AdminHubPage() {
             </div>
           </div>
         )}
+
+        {/* 📌 요일×시간대 온라인 히트맵 */}
+        {heatmap.hasData && (
+          <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-6 mb-4 overflow-x-auto">
+            <div className="flex items-center justify-between mb-5 min-w-[560px]">
+              <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">활동 골든타임 (최근 7일 · 평균 온라인)</span>
+              <span className="text-[10px] font-bold text-gray-600">피크 {Math.round(heatmap.max)}명</span>
+            </div>
+            <div className="min-w-[560px]">
+              <div className="grid gap-[3px]" style={{ gridTemplateColumns: "28px repeat(24, 1fr)" }}>
+                <div></div>
+                {Array.from({ length: 24 }, (_, h) => (
+                  <div key={h} className="text-center text-[8px] font-bold text-gray-600">{h % 3 === 0 ? h : ""}</div>
+                ))}
+                {["일", "월", "화", "수", "목", "금", "토"].map((dayName, d) => (
+                  <React.Fragment key={d}>
+                    <div className="text-[9px] font-bold text-gray-500 flex items-center">{dayName}</div>
+                    {heatmap.avg[d].map((v, h) => (
+                      <div
+                        key={h}
+                        title={v >= 0 ? `${dayName} ${h}시 · 평균 ${Math.round(v)}명` : "데이터 없음"}
+                        className="aspect-square rounded-[3px]"
+                        style={{ backgroundColor: v < 0 ? "rgba(255,255,255,0.03)" : `rgba(233,30,63,${0.08 + (v / heatmap.max) * 0.85})` }}
+                      ></div>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </div>
+              <p className="text-[9px] text-gray-600 mt-3">색이 진할수록 온라인 인원이 많은 시간대 · 데이터가 쌓일수록 정확해집니다</p>
+            </div>
+          </div>
+        )}
+
+        {/* 📌 멤버 증감 그래프 (최근 30일) */}
+        {memberDaily.length >= 2 && (() => {
+          const w = 600, h = 80;
+          const vals = memberDaily.map((d) => d.members);
+          const min = Math.min(...vals), max = Math.max(...vals);
+          const range = max - min || 1;
+          const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - 6 - ((v - min) / range) * (h - 12)}`).join(" ");
+          const delta = vals[vals.length - 1] - vals[0];
+          return (
+            <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-6 mb-4">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">멤버 증감 (최근 {memberDaily.length}일)</span>
+                <span className={`text-[11px] font-black ${delta >= 0 ? "text-emerald-400" : "text-[#e91e3f]"}`}>{delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toLocaleString()}명</span>
+              </div>
+              <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-20 overflow-visible">
+                <defs>
+                  <linearGradient id="memberFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#e91e3f" stopOpacity="0.2" />
+                    <stop offset="100%" stopColor="#e91e3f" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <polygon points={`0,${h} ${pts} ${w},${h}`} fill="url(#memberFill)" />
+                <polyline points={pts} fill="none" stroke="#e91e3f" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+              </svg>
+              <div className="flex justify-between text-[9px] font-bold text-gray-600 mt-2">
+                <span>{memberDaily[0].date.slice(5).replace("-", "/")} · {vals[0].toLocaleString()}명</span>
+                <span>{memberDaily[memberDaily.length - 1].date.slice(5).replace("-", "/")} · {vals[vals.length - 1].toLocaleString()}명</span>
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* 최근 7일 문의 추이 바 차트 */}

@@ -211,7 +211,20 @@ export default function TournamentPage() {
     finally { setDeleteConfirmId(null); }
   };
 
-  const getStatus = (t: any) => STATUS_META[t.tournamentStatus] ? t.tournamentStatus : "예정됨";
+  const getStatus = (t: any) => {
+    const manual = STATUS_META[t.tournamentStatus] ? t.tournamentStatus : "예정됨";
+    if (manual === "종료됨") return manual;
+    // 📌 리그 일정 종료일이 지나면 자동으로 종료 처리
+    if (t.tournamentDate?.includes("~")) {
+      const endDateStr = t.tournamentDate.split("~")[1]?.trim();
+      if (endDateStr) {
+        const kstDate = new Date(Date.now() + 9 * 60 * 60 * 1000);
+        const todayStr = kstDate.toISOString().split("T")[0].replace(/-/g, ".");
+        if (endDateStr < todayStr) return "종료됨";
+      }
+    }
+    return manual;
+  };
 
   const sorted = [...tournaments].sort((a, b) => {
     const order: Record<string, number> = { "진행중": 0, "예정됨": 1, "종료됨": 2 };

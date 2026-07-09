@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import Stat from "@/models/Stat";
 
-// 📌 서버 통계 (멤버 수 / 온라인 수 / 24시간 활동 그래프) — 5분 캐시
-export async function GET() {
+// 📌 서버 통계 (멤버 수 / 온라인 수 / 활동 그래프) — 5분 캐시
+// ?days=N 으로 히스토리 기간 지정 가능 (기본 1일, 최대 60일)
+export async function GET(request) {
   try {
     const res = await fetch(
       `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}?with_counts=true`,
@@ -31,10 +32,11 @@ export async function GET() {
         await Stat.create({ online: onlineCount, members: memberCount });
       }
 
-      // 최근 24시간 샘플 + 7일 지난 데이터 정리
-      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      history = await Stat.find({ ts: { $gte: dayAgo } }).sort({ ts: 1 }).select("ts online -_id").lean();
-      Stat.deleteMany({ ts: { $lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }).catch(() => {});
+      // 요청 기간만큼 샘플 반환 (기본 1일, 최대 60일) + 60일 지난 데이터 정리
+      const days = Math.min(60, Math.max(1, parseInt(new URL(request.url).searchParams.get("days") || "1", 10) || 1));
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      history = await Stat.find({ ts: { $gte: since } }).sort({ ts: 1 }).select("ts online members -_id").lean();
+      Stat.deleteMany({ ts: { $lt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000) } }).catch(() => {});
     } catch (dbErr) {
       // DB 실패해도 기본 통계는 반환
     }

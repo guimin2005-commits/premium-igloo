@@ -164,13 +164,17 @@ export default function EventPage() {
   const getEventStatus = (event: any) => {
     if (event.eventTag === "종료") return "ended";
     if (event.eventPeriod) {
-      const startDateStr = event.eventPeriod.split("~")[0].trim(); 
+      const parts = event.eventPeriod.split("~").map((s: string) => s.trim());
+      const startDateStr = parts[0];
+      const endDateStr = parts[1] || "";
       const now = new Date();
       const kstDate = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-      const todayStr = kstDate.toISOString().split('T')[0].replace(/-/g, "."); 
-      if (startDateStr > todayStr) return "upcoming"; 
+      const todayStr = kstDate.toISOString().split('T')[0].replace(/-/g, ".");
+      // 📌 종료일이 지나면 자동 마감 ("상시"는 제외)
+      if (endDateStr && endDateStr !== "상시" && endDateStr < todayStr) return "ended";
+      if (startDateStr > todayStr) return "upcoming";
     }
-    return "ongoing"; 
+    return "ongoing";
   };
 
   const ongoingEvents = posts.filter(p => getEventStatus(p) === "ongoing");
