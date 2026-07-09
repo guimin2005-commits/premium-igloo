@@ -20,7 +20,14 @@ export default function AdminHubPage() {
   const router = useRouter();
   const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
 
-  const [stats, setStats] = useState({ inquiries: 0, pending: 0, applies: 0, codes: 0, payoutPending: 0, weeklyInquiries: 0, weeklyApplies: 0 });
+  const [stats, setStats] = useState({
+    inquiries: 0, pending: 0, applies: 0, codes: 0, payoutPending: 0,
+    weeklyInquiries: 0, weeklyApplies: 0,
+    codeUses: 0, honors: 0,
+    postCounts: { 공지사항: 0, 이벤트: 0, 대회: 0, 구인: 0 },
+    memberCount: 0, onlineCount: 0,
+    inquiryDaily: [] as { label: string; count: number }[],
+  });
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -29,18 +36,45 @@ export default function AdminHubPage() {
       fetch("/api/user/applies?admin=true", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
       fetch("/api/code", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
       fetch("/api/payout", { cache: "no-store" }).then(r => r.json()).catch(() => ({ pendingCount: 0 })),
-    ]).then(([inq, app, code, payout]) => {
+      fetch("/api/posts?all=1", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/honors", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/stats", { cache: "no-store" }).then(r => r.json()).catch(() => ({})),
+    ]).then(([inq, app, code, payout, posts, honors, discord]) => {
       const inquiries = Array.isArray(inq?.data) ? inq.data : [];
       const applies = Array.isArray(app?.data) ? app.data : [];
+      const codes = Array.isArray(code?.data) ? code.data : [];
+      const allPosts = Array.isArray(posts?.data) ? posts.data : [];
       const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+      // 카테고리별 게시글 수
+      const postCounts = { 공지사항: 0, 이벤트: 0, 대회: 0, 구인: 0 } as any;
+      allPosts.forEach((p: any) => { if (postCounts[p.category] !== undefined) postCounts[p.category]++; });
+
+      // 최근 7일 일별 문의 추이
+      const inquiryDaily: { label: string; count: number }[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const day = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+        const dayStr = day.toISOString().slice(0, 10);
+        inquiryDaily.push({
+          label: `${day.getMonth() + 1}/${day.getDate()}`,
+          count: inquiries.filter((q: any) => (q.createdAt || "").slice(0, 10) === dayStr).length,
+        });
+      }
+
       setStats({
         inquiries: inquiries.length,
         pending: inquiries.filter((i: any) => i.status === "접수 중").length,
         applies: applies.length,
-        codes: Array.isArray(code?.data) ? code.data.length : 0,
+        codes: codes.length,
+        codeUses: codes.reduce((sum: number, c: any) => sum + (c.usedBy?.length || 0), 0),
+        honors: Array.isArray(honors?.data) ? honors.data.length : 0,
         payoutPending: payout?.pendingCount || 0,
         weeklyInquiries: inquiries.filter((i: any) => new Date(i.createdAt).getTime() > weekAgo).length,
         weeklyApplies: applies.filter((a: any) => new Date(a.createdAt).getTime() > weekAgo).length,
+        postCounts,
+        memberCount: discord?.memberCount || 0,
+        onlineCount: discord?.onlineCount || 0,
+        inquiryDaily,
       });
     });
   }, [isAdmin]);
@@ -101,28 +135,84 @@ export default function AdminHubPage() {
             <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
               <span className="text-white">관리자 </span><span className="lux-shimmer">페이지</span>
             </h1>
-            <p className="text-gray-400 text-sm md:text-base leading-relaxed">{session?.user?.name}님, 고급 이글루의 모든 관리 기능을 한 곳에서 이용하세요.</p>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">고급 이글루의 모든 관리 기능을 한 곳에서</p>
           </Reveal>
         </div>
       </section>
 
       <div className="w-full max-w-5xl mx-auto px-6 pb-16 flex-1 flex flex-col">
 
-      {/* 📌 이번 주 요약 통계 */}
+      {/* 📌 종합 통계 대시보드 */}
       <Reveal>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10 rounded-2xl overflow-hidden border border-white/10 mb-14">
-        {[
-          { n: stats.weeklyInquiries, l: "이번 주 문의", accent: stats.weeklyInquiries > 0 },
-          { n: stats.pending, l: "미답변 문의", accent: stats.pending > 0 },
-          { n: stats.weeklyApplies, l: "이번 주 지원", accent: false },
-          { n: stats.payoutPending, l: "지급 대기", accent: stats.payoutPending > 0 },
-        ].map((s, i) => (
-          <div key={i} className="bg-[#0d0d0d] px-4 py-6 text-center">
-            <div className={`text-2xl md:text-3xl font-black tracking-tight ${s.accent ? "text-[#e91e3f]" : "text-white"}`}>{s.n}</div>
-            <div className="text-[9px] md:text-[10px] font-bold tracking-[0.2em] text-gray-600 mt-1.5 uppercase">{s.l}</div>
+      <section className="mb-14">
+        <div className="flex items-baseline gap-4 mb-2">
+          <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">00</span>
+          <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+        </div>
+        <h2 className="text-lg md:text-xl font-black text-white tracking-tight mb-6">통계 대시보드</h2>
+
+        {/* 핵심 지표 */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10 rounded-2xl overflow-hidden border border-white/10 mb-4">
+          {[
+            { n: stats.memberCount, l: "전체 멤버", accent: false },
+            { n: stats.onlineCount, l: "현재 온라인", accent: false, dot: true },
+            { n: stats.pending, l: "미답변 문의", accent: stats.pending > 0 },
+            { n: stats.payoutPending, l: "지급 대기", accent: stats.payoutPending > 0 },
+          ].map((s, i) => (
+            <div key={i} className="bg-[#0d0d0d] px-4 py-6 text-center">
+              <div className={`text-2xl md:text-3xl font-black tracking-tight flex items-center justify-center gap-2 ${s.accent ? "text-[#e91e3f]" : "text-white"}`}>
+                {s.dot && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>}
+                {s.n.toLocaleString()}
+              </div>
+              <div className="text-[9px] md:text-[10px] font-bold tracking-[0.2em] text-gray-600 mt-1.5 uppercase">{s.l}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 최근 7일 문의 추이 바 차트 */}
+          <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-6">
+            <div className="flex items-center justify-between mb-5">
+              <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">최근 7일 문의</span>
+              <span className="text-[10px] font-bold text-gray-600">총 {stats.weeklyInquiries}건</span>
+            </div>
+            <div className="flex items-end justify-between gap-2 h-24">
+              {stats.inquiryDaily.map((d, i) => {
+                const max = Math.max(...stats.inquiryDaily.map((x) => x.count), 1);
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                    {d.count > 0 && <span className="text-[9px] font-black text-[#e91e3f]">{d.count}</span>}
+                    <div
+                      className={`w-full rounded-t-md transition-all ${d.count > 0 ? "bg-gradient-to-t from-[#e91e3f]/60 to-[#e91e3f]" : "bg-white/5"}`}
+                      style={{ height: d.count > 0 ? `${Math.max((d.count / max) * 100, 12)}%` : "4px" }}
+                    ></div>
+                    <span className="text-[8px] font-bold text-gray-600">{d.label}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        ))}
-      </div>
+
+          {/* 콘텐츠/활동 현황 */}
+          <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-6">
+            <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase block mb-5">콘텐츠 & 활동 현황</span>
+            <div className="space-y-2.5">
+              {[
+                { l: "게시글", v: `공지 ${stats.postCounts.공지사항} · 이벤트 ${stats.postCounts.이벤트} · 대회 ${stats.postCounts.대회} · 구인 ${stats.postCounts.구인}` },
+                { l: "문의", v: `전체 ${stats.inquiries}건 · 이번 주 ${stats.weeklyInquiries}건` },
+                { l: "구인 지원", v: `전체 ${stats.applies}건 · 이번 주 ${stats.weeklyApplies}건` },
+                { l: "코드", v: `발급 ${stats.codes}개 · 누적 사용 ${stats.codeUses}회` },
+                { l: "명예의 전당", v: `수동 기록 ${stats.honors}건` },
+              ].map((row, i) => (
+                <div key={i} className="flex items-baseline justify-between gap-4 py-1.5 border-b border-white/[0.04] last:border-0">
+                  <span className="text-[11px] font-bold text-gray-500 shrink-0">{row.l}</span>
+                  <span className="text-[11px] font-bold text-gray-300 text-right">{row.v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
       </Reveal>
 
       <Reveal>
