@@ -400,7 +400,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           <div className="flex items-center justify-between mb-6">
             <div>
               <div className="text-base font-black tracking-widest text-white mb-1">고급 이글루</div>
-              <div className="text-[9px] font-bold tracking-[0.35em] text-gray-600 uppercase">Premium Igloo Community</div>
+              <div className="text-[9px] font-bold tracking-[0.35em] text-gray-600 uppercase mb-1.5">Premium Igloo Community</div>
+              <div className="text-[11px] font-bold text-gray-500">활동이 곧 자산이 되는 곳.</div>
             </div>
             <div className="flex items-center gap-6">
               <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">Discord</a>

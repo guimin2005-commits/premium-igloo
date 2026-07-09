@@ -90,7 +90,11 @@ export default function Home() {
                 <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Since 2023 · Community</span>
               </div>
               <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter text-white mb-3 leading-none">고급 이글루</h1>
-              <p className="text-base md:text-lg font-light tracking-[0.45em] text-transparent bg-clip-text bg-gradient-to-r from-gray-400 to-gray-600 mb-10 pl-1 uppercase">Premium Igloo</p>
+              <p className="text-base md:text-lg font-light tracking-[0.45em] text-transparent bg-clip-text bg-gradient-to-r from-gray-400 to-gray-600 mb-5 pl-1 uppercase">Premium Igloo</p>
+              {/* 📌 서버 대표 슬로건 */}
+              <p className="text-sm md:text-base font-bold text-gray-300 mb-10">
+                <span className="lux-shimmer">활동이 곧 자산이 되는 곳.</span>
+              </p>
             </Reveal>
 
             <Reveal delay={150}>
