@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function VerifyPage() {
@@ -100,6 +100,46 @@ export default function VerifyPage() {
   if (status === "unauthenticated") {
     router.push("/");
     return null;
+  }
+
+  // 📌 디스코드 서버에 입장하지 않은 유저 — 입장 안내 화면
+  if ((session?.user as any)?.isGuildMember === false) {
+    return (
+      <div className="w-full flex-1 bg-[#090909] text-white flex flex-col items-center justify-center py-24 px-6 relative min-h-[70vh]">
+        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[500px] h-[280px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
+        <div className="relative z-10 text-center max-w-md">
+          <p className="text-5xl mb-8">🧊</p>
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <span className="w-8 h-px bg-[#e91e3f]"></span>
+            <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Join Required</span>
+            <span className="w-8 h-px bg-[#e91e3f]"></span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight mb-4">아직 이글루에 입장하지 않으셨네요!</h1>
+          <p className="text-sm text-gray-400 leading-relaxed mb-10">
+            사이트의 모든 기능을 이용하시려면<br />
+            먼저 <span className="text-white font-bold">고급 이글루 디스코드 서버</span>에 입장해야 합니다.<br />
+            입장 후 아래 버튼으로 다시 확인해주세요.
+          </p>
+          <div className="flex flex-col gap-3">
+            <a
+              href="https://discord.gg/V2uW2nUczU"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#5865F2]/20"
+            >
+              디스코드 서버 입장하기
+            </a>
+            <button
+              onClick={() => signIn("discord", { callbackUrl: "/verify" })}
+              className="w-full py-4 bg-white/[0.04] border border-white/10 text-white font-bold rounded-2xl hover:bg-white/[0.08] hover:border-white/25 transition-all"
+            >
+              입장 완료 — 다시 확인하기
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-600 mt-6">서버 입장 후 &lsquo;다시 확인하기&rsquo;를 누르면 인증 절차가 시작됩니다.</p>
+        </div>
+      </div>
+    );
   }
 
   return (

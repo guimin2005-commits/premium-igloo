@@ -34,19 +34,22 @@ const handler = NextAuth({
 
           if (res.ok) {
             const memberData = await res.json();
+            token.isGuildMember = true; // 서버 입장 상태
             token.isVerified = memberData.roles.includes(AUTH_ROLE);
             // 환경변수에 스크림 역할이 정의되어 있을 때만 검사
             token.hasScrimRole = SCRIM_ROLE ? memberData.roles.includes(SCRIM_ROLE) : false;
             // 부스터 역할 확인
             token.isBooster = BOOSTER_ROLE ? memberData.roles.includes(BOOSTER_ROLE) : false;
-            console.log("🎀 BOOSTER_ROLE:", BOOSTER_ROLE, "User roles:", memberData.roles, "isBooster:", token.isBooster);
           } else {
+            // 📌 404 = 디스코드 서버에 입장하지 않은 유저
+            token.isGuildMember = false;
             token.isVerified = false;
             token.hasScrimRole = false;
             token.isBooster = false;
           }
         } catch (e) {
           console.error("역할 확인 에러:", e);
+          token.isGuildMember = false;
           token.isVerified = false;
           token.hasScrimRole = false;
           token.isBooster = false;
@@ -57,6 +60,7 @@ const handler = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id;
+        session.user.isGuildMember = token.isGuildMember; // 서버 입장 여부
         session.user.isVerified = token.isVerified; // 기본 인증 상태
         session.user.hasScrimRole = token.hasScrimRole; // 내전 권한 상태
         session.user.isBooster = token.isBooster; // 부스터 상태
