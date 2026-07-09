@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Reveal, LuxStyles, ScrollProgress } from "../components/Lux";
 
@@ -76,7 +76,17 @@ export default function MyInfoPage() {
   };
 
   if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
-  if (status === "unauthenticated") { router.push("/"); return null; }
+  if (status === "unauthenticated") {
+    return (
+      <main className="w-full max-w-md mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center animate-in fade-in duration-500">
+        <h2 className="text-2xl font-black text-white mb-4 tracking-tight">로그인 필요</h2>
+        <p className="text-gray-400 mb-8 text-sm">내 정보를 확인하시려면 로그인이 필요합니다.</p>
+        <button onClick={() => signIn("discord", { callbackUrl: "/profile" })} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">
+          Discord 로그인
+        </button>
+      </main>
+    );
+  }
 
   const filteredInquiries = fetchedInquiries.filter(inq => {
     if (inquiryFilter === "pending") return inq.status === "접수 중";

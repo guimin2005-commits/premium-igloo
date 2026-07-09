@@ -5,14 +5,12 @@ import { Reveal, LuxStyles } from "../components/Lux";
 
 const Article = ({ title, children }) => (
   <Reveal>
-  <section className="relative rounded-2xl bg-gradient-to-b from-white/[0.07] to-white/[0.02] p-px">
-    <div className="rounded-2xl bg-[#111111]/95 p-6 md:p-8">
-      <h2 className="text-base md:text-lg font-black text-white mb-5 tracking-tight flex items-center gap-3">
-        <span className="w-1 h-5 bg-[#e91e3f] rounded-full shrink-0"></span>
-        {title}
-      </h2>
-      <div className="text-gray-400 space-y-3 leading-relaxed">{children}</div>
-    </div>
+  <section className="pb-2">
+    <h2 className="text-base md:text-lg font-black text-white mb-5 tracking-tight flex items-center gap-3">
+      <span className="w-1 h-5 bg-[#e91e3f] rounded-full shrink-0"></span>
+      {title}
+    </h2>
+    <div className="text-gray-400 space-y-3 leading-relaxed pl-4">{children}</div>
   </section>
   </Reveal>
 );
@@ -29,9 +27,9 @@ const NumberedList = ({ items }) => (
 );
 
 const DefList = ({ items }) => (
-  <ul className="space-y-2">
+  <ul className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
     {items.map((it, i) => (
-      <li key={i} className="bg-black/30 border border-white/5 rounded-xl p-4 hover:border-white/15 transition-colors">
+      <li key={i} className="py-3.5">
         <p className="text-white font-bold text-sm mb-1">{it.term}</p>
         <p className="text-gray-500 text-sm leading-relaxed">{it.desc}</p>
       </li>
@@ -137,7 +135,7 @@ export default function PolicyPage() {
         </div>
       ) : tab === "tournament" ? (
         <div className="space-y-4 text-sm">
-          <Article title="01. 대회 참가 및 자격 규정">
+          <Article title="제1조 (대회 참가 및 자격 규정)">
             <ul className="space-y-2">
               <li>본 대회는 사전 참가 신청을 통해 확정된 인원 및 팀만 참여할 수 있습니다.</li>
               <li>고급 이글루 카카오톡 채팅방 및 디스코드 채널에 모두 참여해야 참가 신청이 가능합니다.</li>
@@ -147,7 +145,7 @@ export default function PolicyPage() {
             </ul>
           </Article>
 
-          <Article title="02. 상호 존중 및 스포츠맨십">
+          <Article title="제2조 (상호 존중 및 스포츠맨십)">
             <ul className="space-y-2">
               <li>모든 경기는 상호 존중을 바탕으로 진행하며, 정정당당한 스포츠맨십을 준수해야 합니다.</li>
               <li>경기 중 전체 채팅을 통한 도발, 욕설, 비하 발언 및 상대방에게 불쾌감을 주는 비매너 행위(티배깅 등)를 엄격히 금지합니다.</li>
@@ -155,7 +153,7 @@ export default function PolicyPage() {
             </ul>
           </Article>
 
-          <Article title="03. 경기 중단(퍼즈) 및 분쟁 규정">
+          <Article title="제3조 (경기 중단·퍼즈 및 분쟁 규정)">
             <ul className="space-y-2">
               <li>경기 중 인터넷 문제, 튕김(디스콘), 심각한 렉 등이 발생할 경우 즉시 퍼즈(일시정지)를 걸고 관리자를 호출해야 합니다. (팀당 최대 퍼즈 시간 <span className="text-[#e91e3f] font-bold">[10분]</span> 제한)</li>
               <li>경기 중 분쟁 발생 시 선수 간의 직접적인 언쟁을 절대 금합니다. 문제가 있을 시 즉시 경기를 일시 정지하고 관리자를 호출하여 문의를 접수해야 합니다.</li>
@@ -163,14 +161,14 @@ export default function PolicyPage() {
             </ul>
           </Article>
 
-          <Article title="04. 디스코드 채널 이용 및 화면 공유">
+          <Article title="제4조 (디스코드 채널 이용 및 화면 공유)">
             <ul className="space-y-2">
               <li>대회가 진행되는 동안 모든 참가자는 반드시 지정된 <span className="text-white font-semibold">[대회 전용 팀별 음성 채널]</span>에 접속해 있어야 하며, 마이크를 켜고 소통해야 합니다.</li>
               <li>대리 게임 및 부정행위(방플 등) 방지를 위해 관리자가 경기 중 임의로 디스코드 화면 공유를 요청할 수 있으며, 정당한 사유 없이 이에 불응할 경우 실격 처리될 수 있습니다. (참가자가 아닌 일반 유저들은 모두 해설 방송을 통해 볼 수 있습니다.)</li>
             </ul>
           </Article>
 
-          <Article title="05. 상금 수령 및 취소 규정">
+          <Article title="제5조 (상금 수령 및 취소 규정)">
             <ul className="space-y-2">
               <li>상금의 경우, 참가 신청서에 작성한 계좌를 통해 수령하는 것을 원칙으로 합니다. 단, 요청 시 혼선 방지를 위해 대표 1인이 상금을 전액 수령하여 분배 할 수 있습니다.</li>
               <li>대회 종료 후라도 부정한 방법을 통해 대리 게임이나 중대한 규정 위반 사실이 적발될 경우, 해당 팀의 우승은 취소되며 상금 지급은 전면 무효(차순위 팀 양도 또는 환수) 처리됩니다.</li>

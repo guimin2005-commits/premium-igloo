@@ -259,7 +259,7 @@ export default function VerifyPage() {
               disabled={!isAllChecked}
               className={`w-full py-4 rounded-xl font-bold text-lg transition-all outline-none focus:outline-none ${isAllChecked ? 'bg-[#e91e3f] hover:bg-[#d01634] text-white shadow-lg shadow-[#e91e3f]/20' : 'bg-white/5 text-gray-600 cursor-not-allowed'}`}
             >
-              다음 단계로
+              다음
             </button>
           </div>
         )}

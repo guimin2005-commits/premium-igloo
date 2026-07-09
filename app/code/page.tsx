@@ -13,12 +13,22 @@ export default function CodeAdminPage() {
 
   const [codes, setCodes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [form, setForm] = useState({ code: "", reward: "", roleId: "", maxUses: "1", expiresAt: "" });
+  const [form, setForm] = useState({ code: "", reward: "", roleId: "", requiredRoleId: "", maxUses: "1", expiresAt: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [popup, setPopup] = useState({ isOpen: false, message: "", isError: false });
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ reward: "", roleId: "", maxUses: "1", expiresAt: "" });
+  const [editForm, setEditForm] = useState({ reward: "", roleId: "", requiredRoleId: "", maxUses: "1", expiresAt: "" });
+  const [guildRoles, setGuildRoles] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/discord-roles", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setGuildRoles(Array.isArray(d?.data) ? d.data : []))
+      .catch(() => {});
+  }, []);
+
+  const roleNameOf = (id: string) => guildRoles.find((r) => r.id === id)?.name || "";
 
   const fetchCodes = async () => {
     setIsLoading(true);
@@ -46,11 +56,11 @@ export default function CodeAdminPage() {
       const res = await fetch("/api/code", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, maxUses: Number(form.maxUses) }),
+        body: JSON.stringify({ ...form, requiredRoleName: roleNameOf(form.requiredRoleId), maxUses: Number(form.maxUses) }),
       });
       const json = await res.json();
       if (json.success) {
-        setForm({ code: "", reward: "", roleId: "", maxUses: "1", expiresAt: "" });
+        setForm({ code: "", reward: "", roleId: "", requiredRoleId: "", maxUses: "1", expiresAt: "" });
         fetchCodes();
       } else {
         setPopup({ isOpen: true, message: json.error || "생성에 실패했습니다.", isError: true });
@@ -73,6 +83,7 @@ export default function CodeAdminPage() {
     setEditForm({
       reward: code.reward,
       roleId: code.roleId || "",
+      requiredRoleId: code.requiredRoleId || "",
       maxUses: String(code.maxUses),
       expiresAt: code.expiresAt ? code.expiresAt.split('T')[0] : ""
     });
@@ -86,7 +97,7 @@ export default function CodeAdminPage() {
       const res = await fetch("/api/code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: editId, ...editForm, maxUses: Number(editForm.maxUses) }),
+        body: JSON.stringify({ id: editId, ...editForm, requiredRoleName: roleNameOf(editForm.requiredRoleId), maxUses: Number(editForm.maxUses) }),
       });
       const json = await res.json();
       if (json.success) {
@@ -150,6 +161,14 @@ export default function CodeAdminPage() {
             <label className="text-xs font-bold text-gray-400">만료일 (선택)</label>
             <input type="date" value={form.expiresAt} onChange={e => setForm({ ...form, expiresAt: e.target.value })} className={`${inputClass} [color-scheme:dark]`} />
           </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-gray-400">사용 가능 역할 제한 (선택)</label>
+            <select value={form.requiredRoleId} onChange={e => setForm({ ...form, requiredRoleId: e.target.value })} className={`${inputClass} [color-scheme:dark]`}>
+              <option value="">제한 없음 — 모두 사용 가능</option>
+              {guildRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+            <span className="text-[10px] text-gray-600">선택 시 해당 역할 소지자만 코드 사용 가능</span>
+          </div>
         </div>
         <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg shadow-[#e91e3f]/20">{isSubmitting ? "생성 중..." : "코드 발급하기"}</button>
       </form>
@@ -171,6 +190,7 @@ export default function CodeAdminPage() {
                       : exhausted ? <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-500/10 text-gray-400">소진</span>
                       : <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400">사용 가능</span>}
                     {c.roleId && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400">역할 지급</span>}
+                    {c.requiredRoleId && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#e91e3f]/10 text-[#e91e3f]">{c.requiredRoleName || "특정 역할"} 전용</span>}
                   </div>
                   <p className="text-sm text-gray-400 truncate">{c.reward}</p>
                   <p className="text-xs text-gray-600 mt-1">사용 {c.usedBy.length} / {c.maxUses === 0 ? "무제한" : c.maxUses}{c.expiresAt ? ` · ~${new Date(c.expiresAt).toLocaleDateString()}` : ""}</p>
@@ -197,6 +217,13 @@ export default function CodeAdminPage() {
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold text-gray-400">지급 디스코드 역할 ID (선택)</label>
                 <input value={editForm.roleId} onChange={e => setEditForm({ ...editForm, roleId: e.target.value })} placeholder="역할 ID (비우면 미지급)" className={inputClass} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-gray-400">사용 가능 역할 제한 (선택)</label>
+                <select value={editForm.requiredRoleId} onChange={e => setEditForm({ ...editForm, requiredRoleId: e.target.value })} className={`${inputClass} [color-scheme:dark]`}>
+                  <option value="">제한 없음 — 모두 사용 가능</option>
+                  {guildRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-2">

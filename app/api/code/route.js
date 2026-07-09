@@ -20,7 +20,7 @@ export async function POST(request) {
   try {
     await connectToDatabase();
     const body = await request.json();
-    const { id, reward, roleId, maxUses, expiresAt, code, userId, userName } = body;
+    const { id, reward, roleId, requiredRoleId, requiredRoleName, maxUses, expiresAt, code, userId, userName } = body;
 
     // 관리자: 코드 수정
     if (id) {
@@ -31,6 +31,8 @@ export async function POST(request) {
       const updated = await Code.findByIdAndUpdate(id, {
         reward: reward.trim(),
         roleId: roleId || "",
+        requiredRoleId: requiredRoleId || "",
+        requiredRoleName: requiredRoleName || "",
         maxUses: maxUses === undefined || maxUses === null ? 1 : Number(maxUses),
         expiresAt: expiresAt || undefined,
       }, { new: true });
@@ -63,6 +65,30 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "사용 한도가 초과된 코드입니다." }, { status: 409 });
     }
 
+    // 📌 특정 역할 소지자 전용 코드 — 디스코드에서 실시간 역할 확인
+    if (found.requiredRoleId) {
+      if (!userId) {
+        return NextResponse.json({ success: false, message: "이 코드는 특정 역할 소지자 전용입니다." }, { status: 403 });
+      }
+      const GUILD_ID = process.env.DISCORD_GUILD_ID;
+      const TOKEN = process.env.DISCORD_BOT_TOKEN;
+      try {
+        const memberRes = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${userId}`, {
+          headers: { Authorization: `Bot ${TOKEN}` },
+        });
+        if (!memberRes.ok) {
+          return NextResponse.json({ success: false, message: "서버 멤버 정보를 확인할 수 없습니다." }, { status: 403 });
+        }
+        const memberData = await memberRes.json();
+        if (!memberData.roles.includes(found.requiredRoleId)) {
+          const roleLabel = found.requiredRoleName ? `[${found.requiredRoleName}] ` : "";
+          return NextResponse.json({ success: false, message: `이 코드는 ${roleLabel}역할 소지자만 사용할 수 있습니다.` }, { status: 403 });
+        }
+      } catch {
+        return NextResponse.json({ success: false, message: "역할 확인 중 오류가 발생했습니다." }, { status: 500 });
+      }
+    }
+
     // (선택) 디스코드 역할 지급
     if (found.roleId && userId) {
       const GUILD_ID = process.env.DISCORD_GUILD_ID;
@@ -88,7 +114,7 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     await connectToDatabase();
-    const { code, reward, roleId, maxUses, expiresAt } = await request.json();
+    const { code, reward, roleId, requiredRoleId, requiredRoleName, maxUses, expiresAt } = await request.json();
 
     if (!code || !code.trim() || !reward || !reward.trim()) {
       return NextResponse.json({ success: false, error: "코드와 보상 설명은 필수입니다." }, { status: 400 });
@@ -98,6 +124,8 @@ export async function PUT(request) {
       code: code.trim().toUpperCase(),
       reward: reward.trim(),
       roleId: roleId || "",
+      requiredRoleId: requiredRoleId || "",
+      requiredRoleName: requiredRoleName || "",
       maxUses: maxUses === undefined || maxUses === null ? 1 : Number(maxUses),
       expiresAt: expiresAt || undefined,
     });
