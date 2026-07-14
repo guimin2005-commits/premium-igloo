@@ -216,7 +216,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
               { no: "I", t: "SYSTEM : LEVEL", d: "채팅과 음성 활동으로 XP를 쌓아 최대 1,000레벨까지 성장하세요.", path: "/level" },
-              { no: "II", t: "e스포츠 대회", d: "정기 리그와 토너먼트에 도전하고 명예의 전당에 이름을 남기세요.", path: "/tournament" },
+              { no: "II", t: "e스포츠 대회", d: "토너먼트에 도전하고 특별한 상금과 명예의 전당에 이름을 남기세요.", path: "/tournament" },
               { no: "III", t: "SERVER BOOSTER", d: "서버를 후원하고 전용 역할과 압도적인 XP 혜택을 받으세요.", path: "/booster" },
             ].map((f, i) => (
               <Reveal key={i} delay={i * 130}>
@@ -243,7 +243,7 @@ export default function Home() {
             <h2 className="text-3xl md:text-5xl font-black tracking-tighter text-white mb-4 leading-tight">
               지금, <span className="lux-shimmer">이글루</span>의 문을 두드리세요
             </h2>
-            <p className="text-sm md:text-base text-gray-400 mb-10">당신의 활동이 자산이 되는 순간을 경험할 수 있습니다.</p>
+            <p className="text-sm md:text-base text-gray-400 mb-10">나의 활동이 나의 자산이 되는 순간을.</p>
             <a
               href="https://discord.gg/V2uW2nUczU"
               target="_blank"
