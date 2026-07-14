@@ -113,8 +113,25 @@ const LuxCard = ({ children, className = "", glow = false }) => (
   </div>
 );
 
+// 📌 시즌 설정 — 시즌 교체 시 여기만 수정
+const SEASON = {
+  number: 1,
+  name: "UP!",
+  start: "2026-05-01",
+  end: "2026-09-30",
+};
+
 export default function LevelPage() {
   const [activeMainTab, setActiveMainTab] = useState("intro");
+
+  // 시즌 D-Day (KST 기준)
+  const seasonDday = useMemo(() => {
+    const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const todayStr = kstNow.toISOString().slice(0, 10);
+    const end = new Date(`${SEASON.end}T23:59:59+09:00`).getTime();
+    const days = Math.ceil((end - Date.now()) / (24 * 60 * 60 * 1000));
+    return { days, ended: todayStr > SEASON.end };
+  }, []);
 
   const [searchLevel, setSearchLevel] = useState("");
   const searchResult = useMemo(() => {
@@ -325,6 +342,19 @@ export default function LevelPage() {
               <span className="text-[#e91e3f] mx-2 md:mx-3">:</span>
               <span className="lux-shimmer">LEVEL</span>
             </h1>
+
+            {/* 📌 현재 시즌 배지 */}
+            <div className="flex flex-wrap items-center gap-2.5 mb-6">
+              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#e91e3f]/10 border border-[#e91e3f]/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_2.5s_ease-in-out_infinite]"></span>
+                <span className="text-xs font-black text-[#e91e3f] tracking-wide">SEASON {SEASON.number} · {SEASON.name}</span>
+              </span>
+              <span className="text-[11px] font-bold text-gray-500">{SEASON.start.replace(/-/g, ".")} ~ {SEASON.end.replace(/-/g, ".")}</span>
+              {!seasonDday.ended && seasonDday.days >= 0 && (
+                <span className="text-[11px] font-black text-white bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">종료까지 D-{seasonDday.days}</span>
+              )}
+            </div>
+
             <p className="text-gray-400 text-sm md:text-base leading-relaxed max-w-xl">
               활동이 곧 자산이 되는 곳. 채팅과 음성으로 XP를 쌓고,<br className="hidden md:block" />
               레벨이 오를수록 깊어지는 프리미엄 혜택을 경험하세요.
@@ -418,8 +448,58 @@ export default function LevelPage() {
               </LuxCard>
             </Reveal>
 
+            {/* 📌 시즌 안내 */}
             <Reveal>
-              <SectionHeader no="03" title="이용 시 주의사항" />
+              <SectionHeader no="03" title={`시즌 안내 — SEASON ${SEASON.number} '${SEASON.name}'`} desc={`레벨 시스템은 시즌제로 운영됩니다 · 현재 시즌 기간 ${SEASON.start.replace(/-/g, ".")} ~ ${SEASON.end.replace(/-/g, ".")}`} />
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* 시즌 한정 상품 */}
+                <LuxCard className="p-7">
+                  <div className="flex items-center gap-2.5 mb-6">
+                    <span className="text-[10px] font-black tracking-[0.2em] text-[#e91e3f] uppercase">Season Limited</span>
+                    <span className="text-sm font-bold text-white">시즌 한정 상품</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-5 leading-relaxed">실물 기프트카드로 구성된 시즌 한정 라인업입니다. 한정 수량 소진 시 조기 마감됩니다.</p>
+                  <div className="space-y-2">
+                    {[
+                      { name: "올리브영 기프트카드", value: "3만원권", stock: 1 },
+                      { name: "배달의민족 기프트카드", value: "3만원권", stock: 1 },
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-center justify-between bg-black/30 border border-white/5 rounded-xl px-4 py-3.5 hover:border-[#e91e3f]/25 transition-colors">
+                        <div>
+                          <p className="text-sm font-bold text-white">{item.name}</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5">{item.value} · 실물 상품</p>
+                        </div>
+                        <span className="shrink-0 text-[10px] font-black bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25 px-2.5 py-1 rounded-full">한정 {item.stock}개</span>
+                      </div>
+                    ))}
+                  </div>
+                </LuxCard>
+
+                {/* 시즌 종료 보상 — RANKER */}
+                <div className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/50 via-[#e91e3f]/15 to-transparent p-px">
+                  <div className="rounded-2xl bg-[#150b0e] p-7 h-full relative overflow-hidden">
+                    <div className="absolute -top-12 -right-12 w-40 h-40 bg-[#e91e3f]/12 blur-[60px] rounded-full pointer-events-none animate-[pulseGlow_4s_ease-in-out_infinite]"></div>
+                    <div className="relative z-10">
+                      <div className="flex items-center gap-2.5 mb-6">
+                        <span className="text-[10px] font-black tracking-[0.2em] text-[#e91e3f] uppercase">Season Finale</span>
+                        <span className="text-sm font-bold text-white">시즌 종료 보상</span>
+                      </div>
+                      <p className="text-2xl font-black text-white tracking-tight mb-1.5">TOP 3 <span className="lux-shimmer">RANKER</span></p>
+                      <p className="text-xs text-gray-400 leading-relaxed mb-5">시즌 종료 시 최종 레벨 상위 3인은 RANKER로 선정됩니다.</p>
+                      <div className="space-y-2 text-xs text-gray-400">
+                        <p className="flex gap-2.5"><span className="text-[#e91e3f] shrink-0">—</span><span><strong className="text-white">@RANKER</strong> 전용 역할 지급</span></p>
+                        <p className="flex gap-2.5"><span className="text-[#e91e3f] shrink-0">—</span><span>다음 시즌 특전 <strong className="text-white">[XP] Boost+</strong> 제공</span></p>
+                        <p className="flex gap-2.5"><span className="text-[#e91e3f] shrink-0">—</span><span>명예의 전당 영구 등재</span></p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+
+            <Reveal>
+              <SectionHeader no="04" title="이용 시 주의사항" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
                   { t: "XP 획득 제한", d: "잠수 음성 채널 이용 시 XP 획득이 전면 제한되며, 마이크/헤드셋 음소거 시 XP 획득량이 90% 감소됩니다." },
