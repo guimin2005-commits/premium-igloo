@@ -54,7 +54,7 @@ export default function AuctionListPage() {
     }));
 
     if (!title.trim() || validLeaders.length < 2 || validPlayers.length < 1) {
-      setPopup({ isOpen: true, message: "제목, 팀장 2명 이상, 선수 1명 이상이 필요합니다.", isError: true });
+      setPopup({ isOpen: true, message: "제목, 리더 2명 이상, 선수 1명 이상이 필요합니다.", isError: true });
       return;
     }
 
@@ -140,7 +140,7 @@ export default function AuctionListPage() {
                 <label className="block text-xs font-bold text-gray-500 mb-3">경매 룰 설정</label>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   {[
-                    { k: "leaderPoints", l: "팀장 시작 Point" },
+                    { k: "leaderPoints", l: "리더 시작 Point" },
                     { k: "basePrice", l: "기본 시작가" },
                     { k: "goldenBasePrice", l: "황금카드 시작가" },
                     { k: "scoutCost", l: "스카우터 비용" },
@@ -160,11 +160,11 @@ export default function AuctionListPage() {
                 </div>
               </div>
 
-              {/* 팀장 카드 목록 */}
+              {/* 리더 카드 목록 */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-bold text-gray-500">팀장 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({leaders.filter(l => l.name.trim()).length}명)</span></label>
-                  <button type="button" onClick={() => setLeaders([...leaders, { name: "", position: "", discordId: "" }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">팀장 추가</button>
+                  <label className="text-xs font-bold text-gray-500">리더 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({leaders.filter(l => l.name.trim()).length}명)</span></label>
+                  <button type="button" onClick={() => setLeaders([...leaders, { name: "", position: "", discordId: "" }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">리더 추가</button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   {leaders.map((l, i) => (
@@ -175,7 +175,7 @@ export default function AuctionListPage() {
                           <button type="button" onClick={() => setLeaders(leaders.filter((_, idx) => idx !== i))} className="text-[10px] font-bold text-gray-600 hover:text-red-400 transition-colors">제거</button>
                         )}
                       </div>
-                      <input type="text" placeholder="팀장 이름" value={l.name} onChange={(e) => updateLeader(i, "name", e.target.value)} className={`${inputClass} mb-2.5`} />
+                      <input type="text" placeholder="리더 이름" value={l.name} onChange={(e) => updateLeader(i, "name", e.target.value)} className={`${inputClass} mb-2.5`} />
                       <input type="text" placeholder="디스코드 ID (선택 · 프로필 표시)" value={l.discordId} onChange={(e) => updateLeader(i, "discordId", e.target.value)} className={`${inputClass} mb-2.5`} />
                       <div className="flex gap-1.5">
                         {["탱커", "딜러", "힐러"].map((pos) => (
@@ -185,7 +185,7 @@ export default function AuctionListPage() {
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] text-gray-600 mt-2">탱커 포지션 팀장은 1페이즈 참가가 자동 차단됩니다. 디스코드 ID를 입력하면 팀 현황판에 프로필이 표시되고, 해당 유저는 접속 시 자동으로 팀장 화면이 지정됩니다.</p>
+                <p className="text-[10px] text-gray-600 mt-2">탱커 포지션 리더은 1페이즈 참가가 자동 차단됩니다. 디스코드 ID를 입력하면 팀 현황판에 프로필이 표시되고, 해당 유저는 접속 시 자동으로 리더 화면이 지정됩니다.</p>
               </div>
 
               {/* 선수 카드 목록 */}

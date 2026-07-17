@@ -83,6 +83,18 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const sfxAllin = useCallback(() => { playTone(392, 0.09, 0.04); setTimeout(() => playTone(523, 0.09, 0.04), 90); setTimeout(() => playTone(659, 0.09, 0.045), 180); setTimeout(() => playTone(784, 0.2, 0.05), 270); }, [playTone]);
   const sfxReveal = useCallback(() => { playTone(523, 0.12, 0.04); setTimeout(() => playTone(659, 0.12, 0.04), 130); setTimeout(() => playTone(1047, 0.28, 0.045), 260); }, [playTone]);
   const sfxStrategy = useCallback(() => { playTone(880, 0.25, 0.03, "triangle"); setTimeout(() => playTone(660, 0.3, 0.025, "triangle"), 260); }, [playTone]);
+  // 경매 시작 팡파레 (도-미-솔-도 상승)
+  const sfxStart = useCallback(() => { [262, 330, 392, 523].forEach((f, i) => setTimeout(() => playTone(f, 0.14, 0.045), i * 120)); setTimeout(() => playTone(784, 0.35, 0.05), 500); }, [playTone]);
+  // 경매 종료 (장엄한 하강 마무리)
+  const sfxEnd = useCallback(() => { [784, 659, 523].forEach((f, i) => setTimeout(() => playTone(f, 0.18, 0.045), i * 160)); setTimeout(() => playTone(392, 0.5, 0.05), 500); }, [playTone]);
+  // 페이즈 전환 (두 번 울리는 공)
+  const sfxPhase = useCallback(() => { playTone(440, 0.3, 0.04, "triangle"); setTimeout(() => playTone(554, 0.4, 0.045, "triangle"), 320); }, [playTone]);
+  // 5초 경고 (긴박한 이중음)
+  const sfxWarn = useCallback(() => { playTone(988, 0.08, 0.04, "square"); setTimeout(() => playTone(880, 0.08, 0.04, "square"), 90); }, [playTone]);
+  // 타임업 버저
+  const sfxTimeUp = useCallback(() => { playTone(220, 0.35, 0.05, "sawtooth"); }, [playTone]);
+  // 채팅 수신 (아주 미세한 블립)
+  const sfxChat = useCallback(() => playTone(520, 0.04, 0.015), [playTone]);
 
   // ── 폴링 (중복 방지: in-flight 가드 + 메시지 _id 중복 제거) ──
   useEffect(() => {
@@ -113,13 +125,17 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         if (passCount > (ps.passCount || 0)) sfxPass();
         if (revealIdx !== null && revealIdx !== ps.revealIdx) sfxReveal();
         if (strategyOn && !ps.strategyOn) sfxStrategy();
-        prevState.current = { ...ps, price: a.current.price, playerIdx: a.current.playerIdx, soldCount, passCount, revealIdx, strategyOn };
+        if (ps.status === "준비중" && a.status === "진행중") sfxStart();
+        if (ps.status === "진행중" && a.status === "종료") sfxEnd();
+        if ((ps.phase ?? 0) < a.phase) sfxPhase();
+        prevState.current = { ...ps, price: a.current.price, playerIdx: a.current.playerIdx, soldCount, passCount, revealIdx, strategyOn, status: a.status, phase: a.phase };
 
         setAuction(a);
         if (d.chat?.length) {
           const fresh = d.chat.filter((m: any) => !chatIds.current.has(m._id));
           if (fresh.length) {
             fresh.forEach((m: any) => chatIds.current.add(m._id));
+            if (fresh.some((m: any) => !m.isSystem)) sfxChat();
             setChat((prev) => [...prev, ...fresh].slice(-150));
             lastChatAt.current = d.chat[d.chat.length - 1].createdAt;
           }
@@ -129,23 +145,26 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     poll();
     const t = setInterval(poll, POLL_MS);
     return () => { alive = false; clearInterval(t); };
-  }, [id, isAdmin, sfxBid, sfxCall, sfxSold, sfxPass, sfxAllin, sfxReveal, sfxStrategy]);
+  }, [id, isAdmin, sfxBid, sfxCall, sfxSold, sfxPass, sfxAllin, sfxReveal, sfxStrategy, sfxStart, sfxEnd, sfxPhase, sfxChat]);
 
-  // 타이머 시계 + 마감 3초 전 틱
+  // 타이머 시계 + 마감 임박 사운드 (5초 경고 → 3·2·1 틱 → 타임업 버저)
   useEffect(() => {
     const t = setInterval(() => {
       setNow(Date.now());
       const endsAt = auction?.current?.endsAt ? new Date(auction.current.endsAt).getTime() : null;
       if (endsAt) {
         const left = Math.ceil((endsAt - Date.now()) / 1000);
-        if (left >= 1 && left <= 3 && left !== prevState.current.lastTick) {
+        if (left !== prevState.current.lastTick) {
+          const prev = prevState.current.lastTick;
           prevState.current.lastTick = left;
-          sfxTick();
+          if (left === 5) sfxWarn();
+          else if (left >= 1 && left <= 3) sfxTick();
+          else if (left <= 0 && prev === 1) sfxTimeUp();
         }
       }
     }, 250);
     return () => clearInterval(t);
-  }, [auction, sfxTick]);
+  }, [auction, sfxTick, sfxWarn, sfxTimeUp]);
 
   // 채팅 자동 스크롤 — 채팅 박스 내부만 스크롤 (페이지 스크롤 강제 이동 방지)
   useEffect(() => {
@@ -155,7 +174,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     if (nearBottom) box.scrollTop = box.scrollHeight;
   }, [chat.length]);
 
-  // 디스코드 프로필 로드 (팀장 + 공개된 선수)
+  // 디스코드 프로필 로드 (리더 + 공개된 선수)
   useEffect(() => {
     if (!auction) return;
     const ids = new Set<string>();
@@ -170,7 +189,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     });
   }, [auction]); // eslint-disable-line
 
-  // 접속 유저 디스코드 ID가 팀장과 일치하면 자동으로 해당 팀장 화면 지정
+  // 접속 유저 디스코드 ID가 리더과 일치하면 자동으로 해당 리더 화면 지정
   useEffect(() => {
     if (!auction || autoRoleDone.current || !myDiscordId) return;
     const idx = auction.leaders.findIndex((l: any) => l.discordId && l.discordId === myDiscordId);
@@ -246,23 +265,30 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
   const slotFilled = (leader: any, slot: string) => leader.roster.filter((r: any) => r.slot === slot).length;
   const slotLimitOf = (slot: string) => (slot === "탱커" ? S.slotTank : slot === "딜러" ? S.slotDealer : S.slotHealer);
+  // 포지션은 낙찰/프로필 공개 후에도 비공개 — 스카우터 사용자 · 진행자 · 경매 종료 시에만 공개
   const canSeePos = (p: any) =>
-    role === "host" || p.status === "낙찰" || (myLeaderIdx !== null && p.scoutedBy.includes(myLeaderIdx));
-  // 팀장에게 익명 처리: 대기/경매중이 아닌 선수만 정보 공개 (호명 중엔 메인 카드에 표시)
+    role === "host" || auction.status === "종료" || (myLeaderIdx !== null && p.scoutedBy.includes(myLeaderIdx));
+  // 리더에게 익명 처리: 대기/경매중이 아닌 선수만 정보 공개 (호명 중엔 메인 카드에 표시)
   const isHiddenFor = (p: any) => role !== "host" && (p.status === "대기" || p.status === "배정중");
 
   const emptySlotsOf = (leader: any) => totalSlots - leader.roster.length;
   const allinMax = myLeader ? myLeader.points - Math.max(0, emptySlotsOf(myLeader) - 1) * S.basePrice : 0;
 
   const doBid = async (amount: number) => {
-    if (myLeaderIdx === null) { showToast("입찰하려면 상단에서 팀장 역할을 선택하세요"); return; }
+    if (myLeaderIdx === null) { showToast("입찰하려면 상단에서 리더 역할을 선택하세요"); return; }
     if (myLeader && amount > myLeader.points) { showToast(`보유 Point가 부족합니다. (보유 ${myLeader.points.toLocaleString()} Point)`); return; }
     await act({ action: "bid", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx, amount });
   };
 
-  const rosterName = (l: any, r: any) => (r.playerIdx === -1 ? l.name : auction.players[r.playerIdx]?.alias);
+  // 로스터 이름 — 프로필이 공개된 선수는 실제 디스코드 이름으로 동기화
+  const rosterName = (l: any, r: any) => {
+    if (r.playerIdx === -1) return l.name;
+    const p = auction.players[r.playerIdx];
+    if (p?.revealed && p.discordId && profiles[p.discordId]) return profiles[p.discordId].globalName;
+    return p?.alias;
+  };
 
-  // ── 팀장 슬롯 보드 (배정/오버플로우 인라인 처리) ──
+  // ── 리더 슬롯 보드 (배정/오버플로우 인라인 처리) ──
   const SlotBoard = ({ leader, leaderIdx, big }: { leader: any; leaderIdx: number; big?: boolean }) => {
     const assigning = hasPending && pa.leaderIdx === leaderIdx && (role === "host" || myLeaderIdx === leaderIdx);
     const overflowing = hasOverflow && po.leaderIdx === leaderIdx && (role === "host" || myLeaderIdx === leaderIdx);
@@ -297,9 +323,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       onClick={() => movable && setMoveFrom(selected ? null : ri)}
                       className={`w-full flex items-center gap-2 rounded-lg px-2.5 border text-left transition-all ${big ? "py-2.5 text-xs" : "py-1.5 text-[11px]"} ${selected ? "border-[#e91e3f] bg-[#e91e3f]/15" : movable ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06] animate-pulse cursor-pointer" : "border-white/5 bg-black/25 cursor-default"}`}
                     >
+                      {/* 슬롯 역할 표기 — 컴팩트 모드에서도 항상 표시 */}
+                      {!big && (
+                        <span className={`shrink-0 text-[9px] font-black rounded px-1 py-0.5 border ${SLOT_COLORS[slot]}`}>{slot[0]}</span>
+                      )}
                       <span className="text-gray-200 font-bold truncate">
                         {rosterName(leader, r)}
-                        {r.playerIdx === -1 && <span className="ml-1 text-[9px] text-gray-500 font-black">팀장</span>}
+                        {r.playerIdx === -1 && <span className="ml-1 text-[9px] text-gray-500 font-black">리더</span>}
                         {r.golden && <span className="ml-1 text-[9px] text-[#e91e3f] font-black">ALL</span>}
                       </span>
                       <span className="ml-auto text-gray-600 tabular-nums text-[10px] shrink-0">{r.playerIdx === -1 ? "" : `${r.price.toLocaleString()} Pt`}</span>
@@ -367,13 +397,31 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           <select value={role} onChange={(e) => setRole(e.target.value)} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white font-bold outline-none focus:border-[#e91e3f] [color-scheme:dark]">
             <option value="host">진행자</option>
             {auction.leaders.map((l: any, i: number) => (
-              <option key={i} value={i}>팀장 · {l.name}{l.position ? ` (${l.position})` : ""}</option>
+              <option key={i} value={i}>리더 · {l.name}{l.position ? ` (${l.position})` : ""}</option>
             ))}
           </select>
 
-          {role === "host" && auction.status === "준비중" && (
-            <button onClick={() => act({ action: "host:start" })} className="text-xs font-black bg-emerald-500/90 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-lg transition-colors">경매 시작</button>
+          {/* 리더: 준비 완료 토글 (경매 시작 전) */}
+          {myLeader && auction.status === "준비중" && (
+            <button onClick={() => act({ action: "leader:ready", leaderIdx: myLeaderIdx, ready: !myLeader.ready })} className={`text-xs font-black px-4 py-1.5 rounded-lg transition-colors ${myLeader.ready ? "bg-emerald-500/90 hover:bg-emerald-500 text-white" : "bg-white/10 hover:bg-emerald-500/60 text-white"}`}>
+              {myLeader.ready ? "준비 완료" : "준비하기"}
+            </button>
           )}
+
+          {role === "host" && auction.status === "준비중" && (() => {
+            const readyCount = auction.leaders.filter((l: any) => l.ready).length;
+            const allReady = readyCount === auction.leaders.length;
+            return (
+              <button onClick={async () => {
+                const d = await act({ action: "host:start" });
+                if (!d.success && d.notReady) {
+                  setConfirmCfg({ title: "강제 시작", message: `${d.message}\n\n그래도 경매를 시작하시겠습니까?`, confirmLabel: "강제 시작", onConfirm: () => act({ action: "host:start", force: true }) });
+                }
+              }} className={`text-xs font-black px-4 py-1.5 rounded-lg transition-colors ${allReady ? "bg-emerald-500/90 hover:bg-emerald-500 text-white" : "bg-white/10 hover:bg-white/20 text-gray-300"}`}>
+                경매 시작 ({readyCount}/{auction.leaders.length} 준비)
+              </button>
+            );
+          })()}
           {role === "host" && auction.status === "진행중" && (
             <>
               {auction.phase < 1 && <button onClick={() => act({ action: "host:phase", phase: 1 })} className="text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white px-4 py-1.5 rounded-lg transition-colors">1페이즈 시작</button>}
@@ -422,19 +470,25 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         </p>
                         <p className="text-xs font-black text-[#e91e3f] tabular-nums">{l.points.toLocaleString()}<span className="text-[9px] text-gray-500 ml-1 font-bold">Point</span></p>
                       </div>
-                      {/* 슬롯 요약 칩 */}
-                      <div className="flex gap-1 shrink-0">
-                        {["탱커", "딜러", "힐러"].map((slot) => {
-                          const filled = slotFilled(l, slot);
-                          const limit = slotLimitOf(slot);
-                          return (
-                            <span key={slot} className={`text-[9px] font-black rounded px-1.5 py-0.5 border ${filled >= limit ? SLOT_COLORS[slot] : "bg-white/[0.03] text-gray-600 border-white/10"}`}>
-                              {slot[0]}{filled}/{limit}
-                            </span>
-                          );
-                        })}
-                      </div>
+                      {/* 준비 상태 (경매 시작 전) */}
+                      {auction.status === "준비중" && (
+                        <span className={`shrink-0 text-[8px] font-black tracking-widest px-2 py-1 rounded-full border ${l.ready ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" : "bg-white/[0.03] text-gray-600 border-white/10"}`}>
+                          {l.ready ? "READY" : "대기"}
+                        </span>
+                      )}
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3 h-3 text-gray-600 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                    {/* 슬롯 요약 칩 — 겹침 방지를 위해 별도 행 */}
+                    <div className="flex gap-1 mt-2 pl-[42px]">
+                      {["탱커", "딜러", "힐러"].map((slot) => {
+                        const filled = slotFilled(l, slot);
+                        const limit = slotLimitOf(slot);
+                        return (
+                          <span key={slot} className={`text-[9px] font-black rounded px-1.5 py-0.5 border ${filled >= limit ? SLOT_COLORS[slot] : "bg-white/[0.03] text-gray-600 border-white/10"}`}>
+                            {slot[0]} {filled}/{limit}
+                          </span>
+                        );
+                      })}
                     </div>
                   </button>
 
@@ -442,8 +496,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {isOpen && (
                     <div className="px-3.5 pb-3.5">
                       <SlotBoard leader={l} leaderIdx={li} />
-                      {auction.status === "종료" && role === "host" && !l.positionChanged && l.roster.length >= 2 && (
-                        <button onClick={() => { setPosSwapTarget({ leaderIdx: li }); setSwapA(""); setSwapB(""); }} className="mt-2.5 w-full text-[10px] font-bold text-gray-500 hover:text-white bg-white/5 py-1.5 rounded-lg transition-colors">포지션 체인지 ({S.posChangeCost.toLocaleString()} Point · 1회)</button>
+                      {/* 포지션 체인지 — 경매 진행 중 리더 재량 1회 (진행자 대행 가능, 종료 후 불가) */}
+                      {auction.status === "진행중" && role === "host" && !l.positionChanged && l.roster.length >= 2 && (
+                        <button onClick={() => { setPosSwapTarget({ leaderIdx: li }); setSwapA(""); setSwapB(""); }} className="mt-2.5 w-full text-[10px] font-bold text-gray-500 hover:text-white bg-white/5 py-1.5 rounded-lg transition-colors">포지션 체인지 대행 ({S.posChangeCost.toLocaleString()} Point · 1회)</button>
                       )}
                     </div>
                   )}
@@ -460,7 +515,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {strategyLeft > 0 && (
             <div className="rounded-2xl border border-blue-500/30 bg-blue-500/[0.06] px-5 py-4 flex items-center gap-3">
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-[pulseGlow_1.5s_ease-in-out_infinite] shrink-0"></span>
-              <p className="text-xs font-bold text-gray-300 flex-1">전략 타임 진행 중 — 팀장과 팀원들이 전략을 논의하는 시간입니다. 입찰이 일시 중지됩니다.</p>
+              <p className="text-xs font-bold text-gray-300 flex-1">전략 타임 진행 중 — 리더과 팀원들이 전략을 논의하는 시간입니다. 입찰이 일시 중지됩니다.</p>
               <span className="text-lg font-black text-blue-400 tabular-nums shrink-0">{Math.floor(strategyLeft / 60)}:{String(strategyLeft % 60).padStart(2, "0")}</span>
             </div>
           )}
@@ -469,7 +524,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {hasPending && !iAmAssigner && (
             <div className="rounded-2xl border border-[#e91e3f]/25 bg-[#e91e3f]/[0.05] px-5 py-4 flex items-center gap-3">
               <span className="w-2 h-2 rounded-full bg-[#e91e3f] animate-[pulseGlow_1.5s_ease-in-out_infinite] shrink-0"></span>
-              <p className="text-xs font-bold text-gray-300"><span className="text-white">{pendingLeader?.name}</span> 팀장이 슬롯을 배정하고 있습니다...</p>
+              <p className="text-xs font-bold text-gray-300"><span className="text-white">{pendingLeader?.name}</span> 리더이 슬롯을 배정하고 있습니다...</p>
             </div>
           )}
           {isMyPending && (
@@ -487,7 +542,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {hasOverflow && !isMyOverflow && role !== "host" && (
             <div className="rounded-2xl border border-orange-500/25 bg-orange-500/[0.04] px-5 py-4 flex items-center gap-3">
               <span className="w-2 h-2 rounded-full bg-orange-400 animate-[pulseGlow_1.5s_ease-in-out_infinite] shrink-0"></span>
-              <p className="text-xs font-bold text-gray-300"><span className="text-white">{overflowLeader?.name}</span> 팀장이 슬롯을 정리하고 있습니다...</p>
+              <p className="text-xs font-bold text-gray-300"><span className="text-white">{overflowLeader?.name}</span> 리더이 슬롯을 정리하고 있습니다...</p>
             </div>
           )}
 
@@ -543,7 +598,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       {curLeader && <p className="text-xs font-bold text-white mt-1.5">{curLeader.name}</p>}
                     </div>
 
-                    {/* 팀장: 스카우터 + 입찰 */}
+                    {/* 리더: 스카우터 + 입찰 */}
                     {role !== "host" && auction.status === "진행중" && (
                       <div className="flex flex-col items-end gap-2.5">
                         {/* 스카우터 버튼 (호명된 선수 대상, 경매 중에도 사용 가능) */}
@@ -579,7 +634,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     {/* 진행자 컨트롤 */}
                     {role === "host" && (
                       <div className="flex gap-2">
-                        <button onClick={() => { if (cur.leaderIdx !== null) setConfirmCfg({ title: "낙찰 확정", message: `${curLeader?.name} — ${cur.price.toLocaleString()} Point 낙찰을 확정합니다.${auction.phase === 1 ? " (1페이즈: 탱커 슬롯 자동 배정)" : " 슬롯은 팀장이 배정합니다."}`, confirmLabel: "낙찰", onConfirm: () => act({ action: "host:sold" }) }); }} disabled={cur.leaderIdx === null} className="px-5 py-2.5 text-xs font-black bg-emerald-500/90 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl transition-colors">낙찰</button>
+                        <button onClick={() => { if (cur.leaderIdx !== null) setConfirmCfg({ title: "낙찰 확정", message: `${curLeader?.name} — ${cur.price.toLocaleString()} Point 낙찰을 확정합니다.${auction.phase === 1 ? " (1페이즈: 탱커 슬롯 자동 배정)" : " 슬롯은 리더이 배정합니다."}`, confirmLabel: "낙찰", onConfirm: () => act({ action: "host:sold" }) }); }} disabled={cur.leaderIdx === null} className="px-5 py-2.5 text-xs font-black bg-emerald-500/90 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl transition-colors">낙찰</button>
                         <button onClick={() => act({ action: "host:pass", playerIdx: cur.playerIdx })} className="px-5 py-2.5 text-xs font-black bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors">유찰</button>
                       </div>
                     )}
@@ -614,12 +669,21 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* 팀장 전용: 내 팀 슬롯 보드 (크게) */}
+          {/* 리더 전용: 내 팀 슬롯 보드 (크게) */}
           {myLeader && (
             <div className={`rounded-2xl border p-5 transition-colors ${isMyPending || isMyOverflow ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.03]" : "border-white/5 bg-[#111111]/95"}`}>
               <div className="flex items-center justify-between mb-4">
                 <p className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">My Team Slots</p>
-                <p className="text-sm font-black text-[#e91e3f] tabular-nums">{myLeader.points.toLocaleString()} <span className="text-[10px] text-gray-500">Point</span></p>
+                <div className="flex items-center gap-3">
+                  {/* 포지션 체인지 — 경매 진행 중 리더가 유동적으로 1회 사용 */}
+                  {auction.status === "진행중" && !myLeader.positionChanged && myLeader.roster.length >= 2 && (
+                    <button onClick={() => { setPosSwapTarget({ leaderIdx: myLeaderIdx }); setSwapA(""); setSwapB(""); }} className="text-[10px] font-black text-gray-400 hover:text-white bg-white/5 border border-white/10 hover:border-[#e91e3f]/40 px-3 py-1.5 rounded-full transition-all">
+                      포지션 체인지 ({S.posChangeCost.toLocaleString()} Point · 1회)
+                    </button>
+                  )}
+                  {myLeader.positionChanged && <span className="text-[9px] font-bold text-gray-600">포지션 체인지 사용됨</span>}
+                  <p className="text-sm font-black text-[#e91e3f] tabular-nums">{myLeader.points.toLocaleString()} <span className="text-[10px] text-gray-500">Point</span></p>
+                </div>
               </div>
               <SlotBoard leader={myLeader} leaderIdx={myLeaderIdx!} big />
             </div>
@@ -676,7 +740,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           </div>
 
                           {hidden ? (
-                            /* 팀장에겐 익명 — 물음표 표시 */
+                            /* 리더에겐 익명 — 물음표 표시 */
                             <div className="flex-1 flex flex-col items-center justify-center py-3">
                               <span className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-1.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-600"><path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>
@@ -742,11 +806,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             <div ref={chatBoxRef} className="flex-1 overflow-y-auto overscroll-contain p-3 space-y-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
               {chat.length === 0 && <p className="text-center text-[11px] text-gray-700 py-6">아직 메시지가 없습니다.</p>}
               {chat.map((m, i) => m.isSystem ? (
-                <div key={m._id || i} className="flex items-start gap-2 bg-[#e91e3f]/[0.05] border border-[#e91e3f]/10 rounded-lg px-3 py-2">
-                  <span className="shrink-0 mt-px w-5 h-5 rounded-md bg-[#e91e3f]/15 flex items-center justify-center">
+                <div key={m._id || i} className="flex items-center justify-center gap-2 bg-[#e91e3f]/[0.05] border border-[#e91e3f]/10 rounded-lg px-3 py-2">
+                  <span className="shrink-0 w-5 h-5 rounded-md bg-[#e91e3f]/15 flex items-center justify-center">
                     <MegaphoneIcon className="w-3 h-3 text-[#e91e3f]" />
                   </span>
-                  <p className="text-[11px] font-bold text-[#e91e3f]/90 leading-relaxed min-w-0">{m.message}</p>
+                  <p className="text-[11px] font-bold text-[#e91e3f]/90 leading-relaxed min-w-0 text-center">{m.message}</p>
                 </div>
               ) : (
                 <div key={m._id || i} className="flex items-start gap-2">
@@ -798,7 +862,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             <div className="rounded-3xl bg-[#121212] p-8 text-center">
               <p className="text-[10px] font-black tracking-[0.3em] text-blue-400 uppercase mb-3">Strategy Time</p>
               <h2 className="text-lg font-black text-white mb-3">전략 타임 시작</h2>
-              <p className="text-xs text-gray-400 mb-6">팀장과 선정된 팀원들이 전략을 논의하는 시간입니다.<br/>진행 시간을 선택하세요. (진행 중 입찰 중지)</p>
+              <p className="text-xs text-gray-400 mb-6">리더과 선정된 팀원들이 전략을 논의하는 시간입니다.<br/>진행 시간을 선택하세요. (진행 중 입찰 중지)</p>
               <div className="grid grid-cols-3 gap-2 mb-6">
                 {[1, 3, 5].map((min) => (
                   <button key={min} onClick={() => { act({ action: "host:strategy", seconds: min * 60 }); setStrategyModalOpen(false); }} className="py-3.5 rounded-xl text-sm font-black border border-white/10 bg-white/5 text-white hover:border-blue-400 hover:bg-blue-500/10 transition-all">{min}분</button>
@@ -833,7 +897,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 ))}
                 <div className="flex gap-3 mt-6">
                   <button onClick={() => setPosSwapTarget(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">취소</button>
-                  <button onClick={async () => { if (swapA !== "" && swapB !== "" && swapA !== swapB) { const d = await act({ action: "host:posSwap", leaderIdx: posSwapTarget.leaderIdx, a: Number(swapA), b: Number(swapB) }); if (d.success) setPosSwapTarget(null); } else showToast("서로 다른 두 선수를 선택해주세요"); }} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors">교환</button>
+                  <button onClick={async () => { if (swapA !== "" && swapB !== "" && swapA !== swapB) { const d = await act({ action: "host:posSwap", leaderIdx: posSwapTarget.leaderIdx, a: Number(swapA), b: Number(swapB), byLeaderIdx: myLeaderIdx }); if (d.success) setPosSwapTarget(null); } else showToast("서로 다른 두 선수를 선택해주세요"); }} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors">교환</button>
                 </div>
               </div>
             </div>

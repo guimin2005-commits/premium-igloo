@@ -6,7 +6,8 @@ const LeaderSchema = new mongoose.Schema({
   discordId: { type: String, default: "" },      // 디스코드 ID (프로필 표시 + 자동 역할 매칭)
   position: { type: String, default: "" },       // 리더 본인 슬롯: 탱커/딜러/힐러 (탱커면 1페이즈 참가 불가)
   points: { type: Number, default: 100000 },
-  positionChanged: { type: Boolean, default: false }, // 경매 종료 후 1회 포지션 체인지 사용 여부
+  ready: { type: Boolean, default: false },           // 리더 준비 완료 여부 (전원 준비 시 시작 가능)
+  positionChanged: { type: Boolean, default: false }, // 포지션 체인지 1회 사용 여부 (경매 진행 중 사용, 종료 후 불가)
   roster: {
     type: [{
       playerIdx: Number,   // players 배열 인덱스 (-1 = 팀장 본인)

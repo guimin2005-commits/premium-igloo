@@ -81,9 +81,9 @@ export async function POST(request, { params }) {
       if (!leader || !player) return NextResponse.json({ success: false }, { status: 400 });
 
       if (player.phase === 1 && auction.phase === 1 && leader.position === "탱커") {
-        return NextResponse.json({ success: false, message: "탱커 포지션 팀장은 1페이즈 경매에 참가할 수 없습니다." }, { status: 403 });
+        return NextResponse.json({ success: false, message: "탱커 포지션 리더는 1페이즈 경매에 참가할 수 없습니다." }, { status: 403 });
       }
-      // 1페이즈에선 탱커 슬롯이 이미 찬 팀장 입찰 불가
+      // 1페이즈에선 탱커 슬롯이 이미 찬 리더 입찰 불가
       if (auction.phase === 1 && slotCount(leader, "탱커") >= auction.settings.slotTank) {
         return NextResponse.json({ success: false, message: "탱커 슬롯이 이미 채워져 1페이즈에 입찰할 수 없습니다." }, { status: 403 });
       }
@@ -151,12 +151,29 @@ export async function POST(request, { params }) {
         return NextResponse.json({ success: true });
       }
 
-      case "host:start":
+      // 리더: 준비 완료 토글
+      case "leader:ready": {
+        const { leaderIdx, ready } = body;
+        const leader = auction.leaders[leaderIdx];
+        if (!leader) return NextResponse.json({ success: false }, { status: 400 });
+        leader.ready = !!ready;
+        addLog(auction, `${leader.name} ${ready ? "준비 완료" : "준비 해제"}`);
+        await auction.save();
+        sysChat(id, `${leader.name} 리더가 ${ready ? "준비를 완료했습니다." : "준비를 해제했습니다."}`);
+        return NextResponse.json({ success: true });
+      }
+
+      case "host:start": {
+        const notReady = auction.leaders.filter((l) => !l.ready);
+        if (notReady.length > 0 && !body.force) {
+          return NextResponse.json({ success: false, message: `아직 준비하지 않은 리더가 있습니다: ${notReady.map((l) => l.name).join(", ")}`, notReady: true }, { status: 409 });
+        }
         auction.status = "진행중";
         addLog(auction, "경매 시작");
         await auction.save();
         sysChat(id, "경매가 시작되었습니다.");
         return NextResponse.json({ success: true });
+      }
 
       case "host:end":
         auction.status = "종료";
@@ -222,7 +239,7 @@ export async function POST(request, { params }) {
         const player = auction.players[playerIdx];
         const leader = auction.leaders[leaderIdx];
 
-        // 1페이즈: 탱커 슬롯 자동 배정 (팀장 선택 없음)
+        // 1페이즈: 탱커 슬롯 자동 배정 (리더 선택 없음)
         if (auction.phase === 1) {
           if (slotCount(leader, "탱커") >= S.slotTank) {
             return NextResponse.json({ success: false, message: "해당 팀의 탱커 슬롯이 가득 찼습니다." }, { status: 400 });
@@ -244,11 +261,11 @@ export async function POST(request, { params }) {
         auction.current = { playerIdx: null, price: 0, leaderIdx: null, endsAt: null, scoutUntil: null, isAllin: false };
         addLog(auction, `${player.alias} 낙찰 — ${leader.name} 슬롯 배정 대기`);
         await auction.save();
-        sysChat(id, `낙찰. ${player.isAllPos ? "올 포지션 선수" : player.alias} — ${leader.name} 팀장이 슬롯을 배정하고 있습니다. (${price.toLocaleString()} Point)`);
+        sysChat(id, `낙찰. ${player.isAllPos ? "올 포지션 선수" : player.alias} — ${leader.name} 리더가 슬롯을 배정하고 있습니다. (${price.toLocaleString()} Point)`);
         return NextResponse.json({ success: true });
       }
 
-      // 낙찰 팀장(또는 진행자 대행): 슬롯 배정 확정
+      // 낙찰 리더(또는 진행자 대행): 슬롯 배정 확정
       case "assignSlot": {
         const { slot, byLeaderIdx } = body;
         const paPlayerIdx = auction.pendingAssign?.playerIdx;
@@ -258,7 +275,7 @@ export async function POST(request, { params }) {
           return NextResponse.json({ success: false, message: "배정 대기 중인 선수가 없습니다." }, { status: 400 });
         }
         if (byLeaderIdx !== null && byLeaderIdx !== undefined && byLeaderIdx !== paLeaderIdx) {
-          return NextResponse.json({ success: false, message: "낙찰 팀장만 슬롯을 배정할 수 있습니다." }, { status: 403 });
+          return NextResponse.json({ success: false, message: "낙찰 리더만 슬롯을 배정할 수 있습니다." }, { status: 403 });
         }
         const player = auction.players[paPlayerIdx];
         const leader = auction.leaders[paLeaderIdx];
@@ -280,7 +297,7 @@ export async function POST(request, { params }) {
           auction.pendingOverflow = { leaderIdx: paLeaderIdx, slot };
           addLog(auction, `올 포지션 선수 → ${leader.name} [${slot}] 초과 배정 — 기존 선수 이동 필요`);
           await auction.save();
-          sysChat(id, `올 포지션 선수가 ${leader.name} 팀 [${slot}] 슬롯에 배정되었습니다. ${leader.name} 팀장은 기존 선수 한 명을 다른 슬롯으로 이동해주세요.`);
+          sysChat(id, `올 포지션 선수가 ${leader.name} 팀 [${slot}] 슬롯에 배정되었습니다. ${leader.name} 리더는 기존 선수 한 명을 다른 슬롯으로 이동해주세요.`);
           return NextResponse.json({ success: true, overflow: true });
         }
 
@@ -299,7 +316,7 @@ export async function POST(request, { params }) {
           return NextResponse.json({ success: false, message: "이동이 필요한 상태가 아닙니다." }, { status: 400 });
         }
         if (byLeaderIdx !== null && byLeaderIdx !== undefined && byLeaderIdx !== poLeaderIdx) {
-          return NextResponse.json({ success: false, message: "해당 팀장만 이동할 수 있습니다." }, { status: 403 });
+          return NextResponse.json({ success: false, message: "해당 리더만 이동할 수 있습니다." }, { status: 403 });
         }
         const leader = auction.leaders[poLeaderIdx];
         const entry = leader.roster[rosterIdx];
@@ -317,7 +334,7 @@ export async function POST(request, { params }) {
         if (slotCount(leader, toSlot) >= slotLimitOf(S, toSlot)) {
           return NextResponse.json({ success: false, message: `${toSlot} 슬롯이 가득 찼습니다.` }, { status: 400 });
         }
-        const movedName = entry.playerIdx === -1 ? `${leader.name} (팀장)` : auction.players[entry.playerIdx]?.alias;
+        const movedName = entry.playerIdx === -1 ? `${leader.name} (리더)` : auction.players[entry.playerIdx]?.alias;
         entry.slot = toSlot;
         auction.pendingOverflow = { leaderIdx: null, slot: null };
         addLog(auction, `${leader.name} 팀 — ${movedName} [${poSlot} → ${toSlot}] 이동`);
@@ -353,7 +370,7 @@ export async function POST(request, { params }) {
           auction.strategyUntil = new Date(Date.now() + seconds * 1000);
           addLog(auction, `전략 타임 ${Math.round(seconds / 60)}분 시작`);
           await auction.save();
-          sysChat(id, `전략 타임이 시작되었습니다. (${Math.round(seconds / 60)}분) 팀장과 팀원들은 전략을 논의해주세요.`);
+          sysChat(id, `전략 타임이 시작되었습니다. (${Math.round(seconds / 60)}분) 리더와 팀원들은 전략을 논의해주세요.`);
         }
         return NextResponse.json({ success: true });
       }
@@ -401,11 +418,17 @@ export async function POST(request, { params }) {
         return NextResponse.json({ success: true, assigned });
       }
 
-      // 개최자: 경매 종료 후 포지션 체인지
+      // 포지션 체인지 — 경매 진행 중 리더가 유동적으로 1회 사용 (종료 후 불가)
       case "host:posSwap": {
-        const { leaderIdx, a, b } = body;
+        const { leaderIdx, a, b, byLeaderIdx } = body;
         const leader = auction.leaders[leaderIdx];
         if (!leader) return NextResponse.json({ success: false }, { status: 400 });
+        if (auction.status === "종료") {
+          return NextResponse.json({ success: false, message: "경매 종료 후에는 포지션 체인지를 사용할 수 없습니다." }, { status: 403 });
+        }
+        if (byLeaderIdx !== null && byLeaderIdx !== undefined && byLeaderIdx !== leaderIdx) {
+          return NextResponse.json({ success: false, message: "본인 팀만 포지션 체인지를 사용할 수 있습니다." }, { status: 403 });
+        }
         if (leader.positionChanged) return NextResponse.json({ success: false, message: "이미 포지션 체인지를 사용했습니다." }, { status: 409 });
         if (leader.points < S.posChangeCost) return NextResponse.json({ success: false, message: "보유 Point가 부족합니다." }, { status: 400 });
         const ra = leader.roster[a], rb = leader.roster[b];
