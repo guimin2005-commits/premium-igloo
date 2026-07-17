@@ -38,6 +38,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [soundOn, setSoundOn] = useState(true);
   const [volume, setVolume] = useState(60); // 0~100
   const [scoutResult, setScoutResult] = useState<any>(null); // 스카우터 결과 연출 오버레이
+  const [goldenFx, setGoldenFx] = useState(false);           // 황금카드 등장 애니메이션
   const [profiles, setProfiles] = useState<Record<string, any>>({});
   const [confirmCfg, setConfirmCfg] = useState<any>(null); // {title, message, confirmLabel, onConfirm}
   const [strategyModalOpen, setStrategyModalOpen] = useState(false);
@@ -96,6 +97,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   }, [playTone]);
   // 스카우터 결과 (신비로운 차임)
   const sfxScout = useCallback(() => { playTone(880, 0.1, 0.035, "triangle"); setTimeout(() => playTone(1175, 0.14, 0.04, "triangle"), 110); setTimeout(() => playTone(1568, 0.2, 0.035, "triangle"), 240); }, [playTone]);
+  // 황금카드 등장 (웅장한 스웰 + 반짝이는 상승 아르페지오)
+  const sfxGolden = useCallback(() => {
+    playTone(130, 0.9, 0.045, "sawtooth");
+    [523, 659, 784, 1047, 1319].forEach((f, i) => setTimeout(() => playTone(f, 0.16, 0.04, "triangle"), 300 + i * 130));
+    setTimeout(() => playTone(1568, 0.45, 0.045, "triangle"), 980);
+  }, [playTone]);
   const sfxTick = useCallback(() => playTone(1050, 0.05, 0.03, "square"), [playTone]);
   const sfxPass = useCallback(() => { playTone(440, 0.12, 0.035); setTimeout(() => playTone(330, 0.18, 0.035), 130); }, [playTone]);
   const sfxAllin = useCallback(() => { playTone(392, 0.09, 0.04); setTimeout(() => playTone(523, 0.09, 0.04), 90); setTimeout(() => playTone(659, 0.09, 0.045), 180); setTimeout(() => playTone(784, 0.2, 0.05), 270); }, [playTone]);
@@ -135,7 +142,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         const strategyOn = !!(a.strategyUntil && new Date(a.strategyUntil).getTime() > Date.now());
         const ps: any = prevState.current;
 
-        if (ps.playerIdx !== a.current.playerIdx && a.current.playerIdx !== null) sfxCall();
+        if (ps.playerIdx !== a.current.playerIdx && a.current.playerIdx !== null) {
+          // 황금카드 호명 → 전원 화면에 등장 애니메이션 + 전용 사운드
+          if (a.players[a.current.playerIdx]?.isAllPos) {
+            sfxGolden();
+            setGoldenFx(true);
+            setTimeout(() => setGoldenFx(false), 3000);
+          } else {
+            sfxCall();
+          }
+        }
         else if (a.current.price > ps.price && a.current.playerIdx === ps.playerIdx) {
           if (a.current.isAllin) sfxAllin(); else sfxBid();
         }
@@ -163,7 +179,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     poll();
     const t = setInterval(poll, POLL_MS);
     return () => { alive = false; clearInterval(t); };
-  }, [id, status, sfxBid, sfxCall, sfxSold, sfxPass, sfxAllin, sfxReveal, sfxStrategy, sfxStart, sfxEnd, sfxPhase, sfxChat]);
+  }, [id, status, sfxBid, sfxCall, sfxSold, sfxPass, sfxAllin, sfxReveal, sfxStrategy, sfxStart, sfxEnd, sfxPhase, sfxChat, sfxGolden]);
 
   // 타이머 시계 + 마감 임박 사운드 (5초 경고 → 3·2·1 틱 → 타임업 버저)
   useEffect(() => {
@@ -209,10 +225,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
   // 접속 유저 디스코드 ID가 리더과 일치하면 자동으로 해당 리더 화면 지정
   useEffect(() => {
-    if (!auction || autoRoleDone.current || !myDiscordId) return;
-    const idx = auction.leaders.findIndex((l: any) => l.discordId && l.discordId === myDiscordId);
+    if (!auction || autoRoleDone.current) return;
+    const idx = myDiscordId ? auction.leaders.findIndex((l: any) => l.discordId && l.discordId === myDiscordId) : -1;
+    const admin = session?.user?.name && ADMIN_USERS.includes(session.user.name);
     if (idx >= 0) { setRole(String(idx)); autoRoleDone.current = true; }
-  }, [auction, myDiscordId]);
+    else if (!admin && session) { setRole("spec"); autoRoleDone.current = true; } // 미등록 유저 → 관전자
+  }, [auction, myDiscordId, session]);
 
   const act = async (payload: any) => {
     try {
@@ -252,23 +270,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   }
   if (!auction) return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">경매장 입장 중...</div>;
 
-  // 📌 입장 권한: 관리자 또는 이 경매에 등록된 리더 (디스코드 ID 매칭)
+  // 📌 입장 권한: 관리자(진행자) / 등록된 리더 / 그 외 로그인 유저는 관전자로 입장
   const isLeaderUser = !isAdmin && auction.leaders.some((l: any) => l.discordId && l.discordId === myDiscordId);
-  if (!isAdmin && !isLeaderUser) {
-    return (
-      <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-xl font-black text-white mb-2">입장 권한 없음</h2>
-        <p className="text-gray-400 text-sm">이 경매에 등록된 리더 또는 관리자만 입장할 수 있습니다.<br/>개최자에게 디스코드 ID 등록을 요청하세요.</p>
-      </main>
-    );
-  }
+  const isSpectator = !isAdmin && !isLeaderUser;
 
   const S = auction.settings;
   const totalSlots = S.slotTank + S.slotDealer + S.slotHealer;
   const cur = auction.current;
   const curPlayer = cur.playerIdx !== null ? auction.players[cur.playerIdx] : null;
   const curLeader = cur.leaderIdx !== null ? auction.leaders[cur.leaderIdx] : null;
-  const myLeaderIdx = role === "host" ? null : Number(role);
+  const myLeaderIdx = role === "host" || role === "spec" ? null : Number(role);
   const myLeader = myLeaderIdx !== null ? auction.leaders[myLeaderIdx] : null;
   const timeLeft = cur.endsAt ? Math.max(0, Math.ceil((new Date(cur.endsAt).getTime() - now) / 1000)) : null;
   const scoutLeft = cur.scoutUntil ? Math.max(0, Math.ceil((new Date(cur.scoutUntil).getTime() - now) / 1000)) : 0;
@@ -467,8 +478,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <option key={i} value={i}>리더 · {l.name}{l.position ? ` (${l.position})` : ""}</option>
               ))}
             </select>
+          ) : myLeader ? (
+            <span className="text-xs font-black text-white bg-[#e91e3f]/15 border border-[#e91e3f]/30 px-3 py-1.5 rounded-lg">리더 · {myLeader.name}</span>
           ) : (
-            myLeader && <span className="text-xs font-black text-white bg-[#e91e3f]/15 border border-[#e91e3f]/30 px-3 py-1.5 rounded-lg">리더 · {myLeader.name}</span>
+            <span className="text-xs font-black text-gray-300 bg-white/5 border border-white/15 px-3 py-1.5 rounded-lg">관전 모드</span>
           )}
 
           {/* 리더: 준비 완료 토글 (경매 시작 전) */}
@@ -685,8 +698,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       {curLeader && <p className="text-xs font-bold text-white mt-1.5">{curLeader.name}</p>}
                     </div>
 
-                    {/* 리더: 스카우터 + 입찰 */}
-                    {role !== "host" && auction.status === "진행중" && (
+                    {/* 리더: 스카우터 + 입찰 (관전자는 열람만) */}
+                    {myLeader && auction.status === "진행중" && (
                       <div className="flex flex-col items-end gap-2.5">
                         {/* 스카우터 버튼 (호명된 선수 대상, 경매 중에도 사용 가능) */}
                         {myLeaderIdx !== null && !curPlayer.isAllPos && !curPlayer.scoutedBy.includes(myLeaderIdx) && (
@@ -1002,6 +1015,61 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           </div>
         );
       })()}
+
+      {/* 황금카드 등장 애니메이션 — 전원 화면에 화려하게 지나감 */}
+      {goldenFx && (
+        <div className="fixed inset-0 z-[135] pointer-events-none overflow-hidden">
+          {/* 황금빛 섬광 */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-500/[0.07] to-transparent animate-[goldenFlash_3s_ease-in-out_forwards]"></div>
+
+          {/* 날아가는 황금 카드 */}
+          <div className="absolute top-1/2 left-0 -translate-y-1/2 animate-[goldenFly_2.6s_cubic-bezier(0.4,0,0.2,1)_forwards]">
+            <div className="relative">
+              <div className="absolute -inset-8 bg-yellow-400/25 blur-3xl rounded-full"></div>
+              <div className="relative w-36 h-52 md:w-44 md:h-64 rounded-2xl p-[2px] shadow-[0_0_60px_rgba(250,204,21,0.6)]" style={{ background: "linear-gradient(135deg, #fde047, #f59e0b, #fde047, #fbbf24)", backgroundSize: "300% 300%", animation: "goldenShine 1.2s linear infinite" }}>
+                <div className="w-full h-full rounded-2xl bg-[#1a1305] flex flex-col items-center justify-center gap-3 border border-yellow-300/30">
+                  <span className="text-4xl md:text-5xl">★</span>
+                  <p className="text-[10px] md:text-xs font-black tracking-[0.3em] text-yellow-300 uppercase">Golden</p>
+                  <p className="text-sm md:text-base font-black text-yellow-100">올 포지션</p>
+                </div>
+              </div>
+              {/* 꼬리 잔상 */}
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="absolute top-1/2 -translate-y-1/2 rounded-2xl border border-yellow-400/30 w-36 h-52 md:w-44 md:h-64" style={{ right: `${(i + 1) * 28}px`, opacity: 0.25 - i * 0.07 }}></div>
+              ))}
+            </div>
+          </div>
+
+          {/* 중앙 텍스트 플래시 */}
+          <div className="absolute inset-0 flex items-center justify-center animate-[goldenText_3s_ease-in-out_forwards]">
+            <p className="text-3xl md:text-6xl font-black tracking-[0.2em] uppercase" style={{ background: "linear-gradient(110deg, #fef9c3 20%, #f59e0b 45%, #fde047 55%, #fef9c3 80%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "goldenShine 1.5s linear infinite", filter: "drop-shadow(0 0 24px rgba(250,204,21,0.5))" }}>
+              GOLDEN CARD
+            </p>
+          </div>
+
+          <style dangerouslySetInnerHTML={{__html: `
+            @keyframes goldenFly {
+              0% { transform: translate(-110%, -50%) rotate(-14deg) scale(0.8); }
+              45% { transform: translate(42vw, -50%) rotate(4deg) scale(1.08); }
+              55% { transform: translate(48vw, -50%) rotate(6deg) scale(1.08); }
+              100% { transform: translate(115vw, -50%) rotate(16deg) scale(0.85); }
+            }
+            @keyframes goldenFlash {
+              0%, 100% { opacity: 0; }
+              40%, 60% { opacity: 1; }
+            }
+            @keyframes goldenText {
+              0%, 25% { opacity: 0; transform: scale(0.9); }
+              45%, 70% { opacity: 1; transform: scale(1); }
+              100% { opacity: 0; transform: scale(1.05); }
+            }
+            @keyframes goldenShine {
+              0% { background-position: 0% center; }
+              100% { background-position: 300% center; }
+            }
+          `}} />
+        </div>
+      )}
 
       {/* 스카우터 결과 — 게임식 판정 연출 */}
       {scoutResult && (
