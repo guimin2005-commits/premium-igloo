@@ -484,13 +484,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             <span className="text-xs font-black text-gray-300 bg-white/5 border border-white/15 px-3 py-1.5 rounded-lg">관전 모드</span>
           )}
 
-          {/* 리더: 준비 완료 토글 (경매 시작 전) */}
-          {myLeader && auction.status === "준비중" && (
-            <button onClick={() => act({ action: "leader:ready", leaderIdx: myLeaderIdx, ready: !myLeader.ready })} className={`text-xs font-black px-4 py-1.5 rounded-lg transition-colors ${myLeader.ready ? "bg-emerald-500/90 hover:bg-emerald-500 text-white" : "bg-white/10 hover:bg-emerald-500/60 text-white"}`}>
-              {myLeader.ready ? "준비 완료" : "준비하기"}
-            </button>
-          )}
-
           {role === "host" && auction.status === "준비중" && (() => {
             const readyCount = auction.leaders.filter((l: any) => l.ready).length;
             const allReady = readyCount === auction.leaders.length;
@@ -717,25 +710,38 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         ) : strategyLeft > 0 ? (
                           <p className="text-[11px] font-bold text-blue-400">전략 타임 중 — 입찰 일시 중지</p>
                         ) : (
-                          <div className="flex flex-col items-end gap-1.5">
-                            <div className="flex flex-wrap items-center justify-end gap-2">
-                              {[S.minIncrement, S.minIncrement * 5, S.minIncrement * 10].map((inc) => (
-                                <button key={inc} onClick={() => doBid(cur.leaderIdx === null ? basePrice : cur.price + inc)} className="px-4 py-2.5 text-xs font-black bg-white/5 border border-white/10 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 text-white rounded-xl transition-all">
-                                  +{inc.toLocaleString()}
-                                </button>
-                              ))}
-                              <input
-                                type="number"
-                                placeholder={`${nextMinBid.toLocaleString()}~`}
-                                value={bidInput}
-                                onChange={(e) => setBidInput(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") submitDirectBid(); }}
-                                className="w-28 px-3 py-2.5 bg-black/40 border border-white/10 rounded-xl text-white text-xs text-center outline-none focus:border-[#e91e3f] font-bold"
-                              />
-                              <button onClick={submitDirectBid} className="px-4 py-2.5 text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white rounded-xl transition-colors shadow-[0_4px_16px_rgba(233,30,63,0.4)]">입찰</button>
+                          <div className="flex flex-col items-end gap-2">
+                            {/* 빠른 입찰 — 결과 금액이 바로 보이는 카드형 버튼 */}
+                            <div className="flex flex-wrap items-stretch justify-end gap-1.5">
+                              {[S.minIncrement, S.minIncrement * 5, S.minIncrement * 10, S.minIncrement * 50].map((inc) => {
+                                const result = (cur.leaderIdx === null ? basePrice : cur.price + inc);
+                                const affordable = myLeader && result <= myLeader.points;
+                                return (
+                                  <button key={inc} onClick={() => doBid(result)} disabled={!affordable} className={`px-3.5 py-2 rounded-xl border text-center transition-all ${affordable ? "bg-white/5 border-white/10 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10" : "bg-white/[0.02] border-white/5 opacity-40 cursor-not-allowed"}`}>
+                                    <span className="block text-xs font-black text-white leading-tight">+{inc.toLocaleString()}</span>
+                                    <span className="block text-[9px] font-bold text-gray-500 tabular-nums">→ {result.toLocaleString()}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {/* 직접 입력 + 스테퍼 */}
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="flex items-center bg-black/40 border border-white/10 rounded-xl overflow-hidden focus-within:border-[#e91e3f] transition-colors">
+                                <button type="button" onClick={() => setBidInput(String(Math.max(nextMinBid, (Number(bidInput) || nextMinBid) - S.minIncrement)))} className="px-3 py-2.5 text-gray-500 hover:text-white hover:bg-white/5 text-sm font-black transition-colors">−</button>
+                                <input
+                                  type="number"
+                                  placeholder={`${nextMinBid.toLocaleString()}`}
+                                  value={bidInput}
+                                  onChange={(e) => setBidInput(e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === "Enter") submitDirectBid(); }}
+                                  className="w-24 py-2.5 bg-transparent text-white text-xs text-center outline-none font-bold"
+                                />
+                                <button type="button" onClick={() => setBidInput(String((Number(bidInput) || (nextMinBid - S.minIncrement)) + S.minIncrement))} className="px-3 py-2.5 text-gray-500 hover:text-white hover:bg-white/5 text-sm font-black transition-colors">+</button>
+                              </div>
+                              <button onClick={submitDirectBid} className="px-5 py-2.5 text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white rounded-xl transition-colors shadow-[0_4px_16px_rgba(233,30,63,0.4)]">입찰</button>
                               <button onClick={() => setConfirmCfg({ title: "올인", message: `남은 슬롯 최소 예산을 제외한 전액 ${allinMax.toLocaleString()} Point를 베팅합니다.`, confirmLabel: "올인", onConfirm: () => act({ action: "allin", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx }) })} className="px-4 py-2.5 text-xs font-black bg-gradient-to-r from-orange-600 to-[#e91e3f] hover:brightness-110 text-white rounded-xl transition-all">올인</button>
                             </div>
-                            <p className="text-[10px] text-gray-600">입찰 단위 {S.minIncrement.toLocaleString()} Point · Enter로 즉시 입찰 · 올인 가능 <span className="text-gray-400 font-bold">{allinMax.toLocaleString()} Point</span></p>
+                            <p className="text-[10px] text-gray-600">Enter 즉시 입찰 · 단위 자동 보정 · 올인 가능 <span className="text-gray-400 font-bold">{allinMax.toLocaleString()} Point</span></p>
                           </div>
                         )}
                       </div>
@@ -1022,21 +1028,40 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {/* 황금빛 섬광 */}
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-500/[0.07] to-transparent animate-[goldenFlash_3s_ease-in-out_forwards]"></div>
 
-          {/* 날아가는 황금 카드 */}
-          <div className="absolute top-1/2 left-0 -translate-y-1/2 animate-[goldenFly_2.6s_cubic-bezier(0.4,0,0.2,1)_forwards]">
+          {/* 날아가는 황금 카드 — 끊김 없이 회전하며 통과 */}
+          <div className="absolute top-1/2 left-0 animate-[goldenFly_2.8s_cubic-bezier(0.45,0.05,0.35,0.95)_forwards]" style={{ perspective: "1200px" }}>
             <div className="relative">
-              <div className="absolute -inset-8 bg-yellow-400/25 blur-3xl rounded-full"></div>
-              <div className="relative w-36 h-52 md:w-44 md:h-64 rounded-2xl p-[2px] shadow-[0_0_60px_rgba(250,204,21,0.6)]" style={{ background: "linear-gradient(135deg, #fde047, #f59e0b, #fde047, #fbbf24)", backgroundSize: "300% 300%", animation: "goldenShine 1.2s linear infinite" }}>
-                <div className="w-full h-full rounded-2xl bg-[#1a1305] flex flex-col items-center justify-center gap-3 border border-yellow-300/30">
-                  <span className="text-4xl md:text-5xl">★</span>
-                  <p className="text-[10px] md:text-xs font-black tracking-[0.3em] text-yellow-300 uppercase">Golden</p>
-                  <p className="text-sm md:text-base font-black text-yellow-100">올 포지션</p>
+              <div className="absolute -inset-10 bg-yellow-400/30 blur-3xl rounded-full animate-[pulseGlow_1s_ease-in-out_infinite]"></div>
+              {/* 방사형 광선 */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                {[0, 30, 60, 90, 120, 150].map((deg) => (
+                  <span key={deg} className="absolute w-[280px] h-px bg-gradient-to-r from-transparent via-yellow-300/40 to-transparent" style={{ transform: `rotate(${deg}deg)` }}></span>
+                ))}
+              </div>
+              {/* 카드 본체 */}
+              <div className="relative w-36 h-52 md:w-44 md:h-64 rounded-2xl p-[3px] shadow-[0_0_80px_rgba(250,204,21,0.7),0_0_30px_rgba(250,204,21,0.9)]" style={{ background: "linear-gradient(135deg, #fef9c3, #f59e0b, #fde047, #b45309, #fde047)", backgroundSize: "400% 400%", animation: "goldenShine 1s linear infinite" }}>
+                <div className="relative w-full h-full rounded-[13px] overflow-hidden" style={{ background: "radial-gradient(ellipse at 50% 35%, #3a2a08 0%, #1a1305 70%)" }}>
+                  {/* 내부 장식 프레임 */}
+                  <div className="absolute inset-[7px] rounded-[9px] border border-yellow-400/40"></div>
+                  <div className="absolute inset-[11px] rounded-[7px] border border-yellow-400/15"></div>
+                  {/* 코너 별 장식 */}
+                  <span className="absolute top-2.5 left-3 text-[11px] text-yellow-400/80">★</span>
+                  <span className="absolute bottom-2.5 right-3 text-[11px] text-yellow-400/80 rotate-180 inline-block">★</span>
+                  {/* 광택 스윕 */}
+                  <div className="absolute inset-0 animate-[goldenGloss_1.4s_ease-in-out_infinite]" style={{ background: "linear-gradient(115deg, transparent 30%, rgba(255,255,220,0.22) 48%, rgba(255,255,220,0.32) 50%, rgba(255,255,220,0.22) 52%, transparent 70%)" }}></div>
+                  {/* 콘텐츠 */}
+                  <div className="relative h-full flex flex-col items-center justify-center gap-2.5">
+                    <div className="relative">
+                      <span className="absolute inset-0 blur-md text-5xl md:text-6xl text-yellow-300/70 flex items-center justify-center">★</span>
+                      <span className="relative text-5xl md:text-6xl" style={{ background: "linear-gradient(180deg, #fef9c3, #f59e0b)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.6))" }}>★</span>
+                    </div>
+                    <div className="w-12 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
+                    <p className="text-[9px] md:text-[10px] font-black tracking-[0.35em] uppercase" style={{ background: "linear-gradient(180deg, #fef9c3, #fbbf24)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>Golden Card</p>
+                    <p className="text-base md:text-lg font-black text-yellow-50 tracking-tight" style={{ textShadow: "0 0 14px rgba(250,204,21,0.6)" }}>올 포지션</p>
+                    <div className="w-12 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
+                  </div>
                 </div>
               </div>
-              {/* 꼬리 잔상 */}
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="absolute top-1/2 -translate-y-1/2 rounded-2xl border border-yellow-400/30 w-36 h-52 md:w-44 md:h-64" style={{ right: `${(i + 1) * 28}px`, opacity: 0.25 - i * 0.07 }}></div>
-              ))}
             </div>
           </div>
 
@@ -1049,10 +1074,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
           <style dangerouslySetInnerHTML={{__html: `
             @keyframes goldenFly {
-              0% { transform: translate(-110%, -50%) rotate(-14deg) scale(0.8); }
-              45% { transform: translate(42vw, -50%) rotate(4deg) scale(1.08); }
-              55% { transform: translate(48vw, -50%) rotate(6deg) scale(1.08); }
-              100% { transform: translate(115vw, -50%) rotate(16deg) scale(0.85); }
+              0% { transform: translate(-130%, -50%) rotate(-8deg) scale(0.8); }
+              38% { transform: translate(36vw, -50%) rotate(0deg) scale(1.05); }
+              62% { transform: translate(52vw, -50%) rotate(360deg) scale(1.12); }
+              100% { transform: translate(125vw, -50%) rotate(372deg) scale(0.85); }
+            }
+            @keyframes goldenGloss {
+              0% { transform: translateX(-100%); }
+              60%, 100% { transform: translateX(100%); }
             }
             @keyframes goldenFlash {
               0%, 100% { opacity: 0; }

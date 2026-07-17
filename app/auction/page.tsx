@@ -84,12 +84,12 @@ export default function AuctionListPage() {
   };
 
   if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
-  if (!isAdmin) {
+  if (status === "unauthenticated") {
     return (
       <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-xl font-black text-white mb-2">권한 없음</h2>
-        <p className="text-gray-400 text-sm mb-4">관리자 권한이 필요합니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
+        <h2 className="text-2xl font-black text-white mb-4 tracking-tight">로그인 필요</h2>
+        <p className="text-gray-400 mb-8 text-sm">선수 경매를 보시려면 로그인이 필요합니다.</p>
+        <button onClick={() => signIn("discord")} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#5865F2]/20">Discord 로그인</button>
       </main>
     );
   }
@@ -108,16 +108,18 @@ export default function AuctionListPage() {
           <Reveal>
             <div className="flex items-center gap-3 mb-5">
               <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Player Auction · Admin Only</span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Player Auction</span>
             </div>
             <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
               <span className="text-white">선수 </span><span className="lux-shimmer">경매</span>
             </h1>
-            <p className="text-gray-400 text-sm md:text-base leading-relaxed">대회 팀 구성을 위한 실시간 선수 경매 시스템입니다.</p>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">대회 팀 구성을 위한 실시간 선수 경매 — 리더는 입찰로, 모두는 관전과 채팅으로 함께합니다.</p>
           </Reveal>
-          <button onClick={() => setShowCreate(!showCreate)} className="shrink-0 bg-[#e91e3f] hover:bg-[#d01634] text-white font-black text-xs px-5 py-3 rounded-full transition-all active:scale-95 shadow-[0_8px_24px_rgba(233,30,63,0.3)]">
-            {showCreate ? "닫기" : "+ 경매 개최"}
-          </button>
+          {isAdmin && (
+            <button onClick={() => setShowCreate(!showCreate)} className="shrink-0 bg-[#e91e3f] hover:bg-[#d01634] text-white font-black text-xs px-5 py-3 rounded-full transition-all active:scale-95 shadow-[0_8px_24px_rgba(233,30,63,0.3)]">
+              {showCreate ? "닫기" : "+ 경매 개최"}
+            </button>
+          )}
         </div>
       </section>
 
@@ -252,7 +254,14 @@ export default function AuctionListPage() {
         {isLoading ? (
           <div className="text-center py-16 text-gray-500">불러오는 중...</div>
         ) : auctions.length === 0 ? (
-          <div className="text-center py-16 text-gray-600 bg-white/[0.02] rounded-2xl border border-white/5">개최된 경매가 없습니다. 우측 상단에서 경매를 개최해보세요.</div>
+          <div className="text-center py-20 text-gray-600 bg-white/[0.02] rounded-2xl border border-white/5">
+            {isAdmin ? "개최된 경매가 없습니다. 우측 상단에서 경매를 개최해보세요." : (
+              <>
+                <p className="text-white font-black text-base mb-2">현재 진행 중인 경매가 없습니다</p>
+                <p className="text-sm">대회 시즌이 시작되면 이곳에서 실시간 선수 경매가 열립니다.<br/>공지사항을 통해 일정을 확인해주세요.</p>
+              </>
+            )}
+          </div>
         ) : (
           <div className="space-y-3">
             {auctions.map((a) => (
@@ -263,7 +272,7 @@ export default function AuctionListPage() {
                     <p className="text-sm font-bold text-white truncate group-hover:text-[#ff5c77] transition-colors">{a.title}</p>
                     <p className="text-[11px] text-gray-600 mt-0.5">리더 {a.leaderCount}명 · 선수 {a.playerCount}명 · {new Date(a.createdAt).toLocaleDateString()}</p>
                   </div>
-                  <button onClick={(e) => { e.stopPropagation(); setDeleteId(a._id); }} className="shrink-0 text-xs font-bold text-red-500/60 hover:text-red-500 bg-white/5 px-3 py-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100">삭제</button>
+                  {isAdmin && <button onClick={(e) => { e.stopPropagation(); setDeleteId(a._id); }} className="shrink-0 text-xs font-bold text-red-500/60 hover:text-red-500 bg-white/5 px-3 py-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100">삭제</button>}
                   <span className="shrink-0 text-gray-600 group-hover:text-[#e91e3f] group-hover:translate-x-1 transition-all">→</span>
                 </div>
               </Reveal>
