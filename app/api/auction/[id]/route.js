@@ -268,6 +268,10 @@ export async function POST(request, { params }) {
         if (isFull && !player.isAllPos) {
           return NextResponse.json({ success: false, message: `${slot} 슬롯이 가득 찼습니다.` }, { status: 400 });
         }
+        // 탱커 슬롯은 타 포지션과 이동이 불가하므로, 꽉 찬 탱커 슬롯에는 황금카드도 초과 배정 불가
+        if (isFull && player.isAllPos && slot === "탱커") {
+          return NextResponse.json({ success: false, message: "탱커 슬롯은 기존 선수를 이동할 수 없어 초과 배정이 불가합니다." }, { status: 400 });
+        }
 
         leader.points -= paPrice;
         leader.roster.push({ playerIdx: paPlayerIdx, slot, price: paPrice, golden: player.isAllPos });
@@ -310,6 +314,10 @@ export async function POST(request, { params }) {
           return NextResponse.json({ success: false, message: "올 포지션 선수는 이동할 수 없습니다." }, { status: 400 });
         }
         if (toSlot === poSlot) return NextResponse.json({ success: false, message: "다른 슬롯을 선택해주세요." }, { status: 400 });
+        // 탱커 ↔ 타 포지션 이동 금지
+        if (poSlot === "탱커" || toSlot === "탱커") {
+          return NextResponse.json({ success: false, message: "탱커 슬롯은 타 포지션과 이동할 수 없습니다." }, { status: 400 });
+        }
         if (slotCount(leader, toSlot) >= slotLimitOf(S, toSlot)) {
           return NextResponse.json({ success: false, message: `${toSlot} 슬롯이 가득 찼습니다.` }, { status: 400 });
         }
@@ -406,6 +414,10 @@ export async function POST(request, { params }) {
         if (leader.points < S.posChangeCost) return NextResponse.json({ success: false, message: "보유 Point가 부족합니다." }, { status: 400 });
         const ra = leader.roster[a], rb = leader.roster[b];
         if (!ra || !rb) return NextResponse.json({ success: false }, { status: 400 });
+        // 탱커 ↔ 타 포지션 교환 금지
+        if ((ra.slot === "탱커") !== (rb.slot === "탱커")) {
+          return NextResponse.json({ success: false, message: "탱커 슬롯은 타 포지션과 교환할 수 없습니다." }, { status: 400 });
+        }
         [ra.slot, rb.slot] = [rb.slot, ra.slot];
         leader.points -= S.posChangeCost;
         leader.positionChanged = true;

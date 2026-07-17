@@ -42,6 +42,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [posSwapTarget, setPosSwapTarget] = useState<any>(null); // {leaderIdx} 포지션 체인지 모달
   const [swapA, setSwapA] = useState(""); const [swapB, setSwapB] = useState("");
   const [moveFrom, setMoveFrom] = useState<number | null>(null); // 오버플로우: 이동할 선수 rosterIdx
+  const [expandedTeams, setExpandedTeams] = useState<Set<number>>(new Set()); // 팀 레일 펼침 상태
 
   const chatBoxRef = useRef<HTMLDivElement>(null);
   const lastChatAt = useRef<string | null>(null);
@@ -78,6 +79,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const sfxCall = useCallback(() => { playTone(520, 0.1, 0.04); setTimeout(() => playTone(780, 0.12, 0.04), 110); }, [playTone]);
   const sfxSold = useCallback(() => { playTone(660, 0.1, 0.04); setTimeout(() => playTone(880, 0.16, 0.045), 120); }, [playTone]);
   const sfxTick = useCallback(() => playTone(1050, 0.05, 0.03, "square"), [playTone]);
+  const sfxPass = useCallback(() => { playTone(440, 0.12, 0.035); setTimeout(() => playTone(330, 0.18, 0.035), 130); }, [playTone]);
+  const sfxAllin = useCallback(() => { playTone(392, 0.09, 0.04); setTimeout(() => playTone(523, 0.09, 0.04), 90); setTimeout(() => playTone(659, 0.09, 0.045), 180); setTimeout(() => playTone(784, 0.2, 0.05), 270); }, [playTone]);
+  const sfxReveal = useCallback(() => { playTone(523, 0.12, 0.04); setTimeout(() => playTone(659, 0.12, 0.04), 130); setTimeout(() => playTone(1047, 0.28, 0.045), 260); }, [playTone]);
+  const sfxStrategy = useCallback(() => { playTone(880, 0.25, 0.03, "triangle"); setTimeout(() => playTone(660, 0.3, 0.025, "triangle"), 260); }, [playTone]);
 
   // ── 폴링 (중복 방지: in-flight 가드 + 메시지 _id 중복 제거) ──
   useEffect(() => {
@@ -95,10 +100,20 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         // 사운드 트리거 (상태 변화 감지)
         const a = d.auction;
         const soldCount = a.players.filter((p: any) => p.status === "낙찰").length;
-        if (prevState.current.playerIdx !== a.current.playerIdx && a.current.playerIdx !== null) sfxCall();
-        else if (a.current.price > prevState.current.price && a.current.playerIdx === prevState.current.playerIdx) sfxBid();
-        if (soldCount > prevState.current.soldCount) sfxSold();
-        prevState.current = { ...prevState.current, price: a.current.price, playerIdx: a.current.playerIdx, soldCount };
+        const passCount = a.players.filter((p: any) => p.status === "유찰").length;
+        const revealIdx = a.reveal?.playerIdx ?? null;
+        const strategyOn = !!(a.strategyUntil && new Date(a.strategyUntil).getTime() > Date.now());
+        const ps: any = prevState.current;
+
+        if (ps.playerIdx !== a.current.playerIdx && a.current.playerIdx !== null) sfxCall();
+        else if (a.current.price > ps.price && a.current.playerIdx === ps.playerIdx) {
+          if (a.current.isAllin) sfxAllin(); else sfxBid();
+        }
+        if (soldCount > (ps.soldCount || 0)) sfxSold();
+        if (passCount > (ps.passCount || 0)) sfxPass();
+        if (revealIdx !== null && revealIdx !== ps.revealIdx) sfxReveal();
+        if (strategyOn && !ps.strategyOn) sfxStrategy();
+        prevState.current = { ...ps, price: a.current.price, playerIdx: a.current.playerIdx, soldCount, passCount, revealIdx, strategyOn };
 
         setAuction(a);
         if (d.chat?.length) {
@@ -114,7 +129,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     poll();
     const t = setInterval(poll, POLL_MS);
     return () => { alive = false; clearInterval(t); };
-  }, [id, isAdmin, sfxBid, sfxCall, sfxSold]);
+  }, [id, isAdmin, sfxBid, sfxCall, sfxSold, sfxPass, sfxAllin, sfxReveal, sfxStrategy]);
 
   // 타이머 시계 + 마감 3초 전 틱
   useEffect(() => {
@@ -382,28 +397,55 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             <span className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f]">TEAMS</span>
             <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
             {auction.leaders.map((l: any, li: number) => {
               const prof = l.discordId ? profiles[l.discordId] : null;
+              // 배정/이동이 필요한 팀은 강제 펼침 (모든 화면 크기에서 동일 정보 노출)
+              const forceOpen = (hasPending && pa.leaderIdx === li && (role === "host" || myLeaderIdx === li)) || (hasOverflow && po.leaderIdx === li && (role === "host" || myLeaderIdx === li));
+              const isOpen = forceOpen || expandedTeams.has(li);
+              const toggle = () => setExpandedTeams((prev) => { const next = new Set(prev); if (next.has(li)) next.delete(li); else next.add(li); return next; });
               return (
-                <div key={li} className={`rounded-2xl border p-4 transition-colors ${cur.leaderIdx === li ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.05]" : myLeaderIdx === li ? "border-white/20 bg-[#141414]" : "border-white/5 bg-[#111111]/95"}`}>
-                  <div className="flex items-center gap-2.5 mb-2">
-                    {prof ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={prof.avatarUrl} alt="" className="w-8 h-8 rounded-full bg-gray-800 ring-1 ring-white/15 shrink-0" />
-                    ) : (
-                      <span className="w-8 h-8 rounded-full bg-white/5 border border-white/10 shrink-0 flex items-center justify-center text-[10px] font-black text-gray-600">{l.name[0]}</span>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-black text-white truncate leading-tight">{l.name}</p>
-                      <p className="text-[9px] font-bold text-gray-500">{l.position || "포지션 미지정"}</p>
+                <div key={li} className={`rounded-2xl border transition-colors ${cur.leaderIdx === li ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.05]" : myLeaderIdx === li ? "border-white/20 bg-[#141414]" : "border-white/5 bg-[#111111]/95"}`}>
+                  {/* 컴팩트 헤더 — 클릭으로 펼침/접힘 */}
+                  <button type="button" onClick={toggle} className="w-full text-left p-3.5 outline-none focus:outline-none">
+                    <div className="flex items-center gap-2.5">
+                      {prof ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={prof.avatarUrl} alt="" className="w-8 h-8 rounded-full bg-gray-800 ring-1 ring-white/15 shrink-0" />
+                      ) : (
+                        <span className="w-8 h-8 rounded-full bg-white/5 border border-white/10 shrink-0 flex items-center justify-center text-[10px] font-black text-gray-600">{l.name[0]}</span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-black text-white truncate leading-tight">
+                          {l.name}
+                          {myLeaderIdx === li && <span className="ml-1.5 text-[8px] font-black tracking-widest text-[#e91e3f]">ME</span>}
+                        </p>
+                        <p className="text-xs font-black text-[#e91e3f] tabular-nums">{l.points.toLocaleString()}<span className="text-[9px] text-gray-500 ml-1 font-bold">Point</span></p>
+                      </div>
+                      {/* 슬롯 요약 칩 */}
+                      <div className="flex gap-1 shrink-0">
+                        {["탱커", "딜러", "힐러"].map((slot) => {
+                          const filled = slotFilled(l, slot);
+                          const limit = slotLimitOf(slot);
+                          return (
+                            <span key={slot} className={`text-[9px] font-black rounded px-1.5 py-0.5 border ${filled >= limit ? SLOT_COLORS[slot] : "bg-white/[0.03] text-gray-600 border-white/10"}`}>
+                              {slot[0]}{filled}/{limit}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3 h-3 text-gray-600 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                     </div>
-                    {myLeaderIdx === li && <span className="text-[8px] font-black tracking-widest text-[#e91e3f] shrink-0">ME</span>}
-                  </div>
-                  <p className="text-lg font-black text-[#e91e3f] tabular-nums mb-3">{l.points.toLocaleString()}<span className="text-[10px] text-gray-500 ml-1">Point</span></p>
-                  <SlotBoard leader={l} leaderIdx={li} />
-                  {auction.status === "종료" && role === "host" && !l.positionChanged && l.roster.length >= 2 && (
-                    <button onClick={() => { setPosSwapTarget({ leaderIdx: li }); setSwapA(""); setSwapB(""); }} className="mt-2.5 w-full text-[10px] font-bold text-gray-500 hover:text-white bg-white/5 py-1.5 rounded-lg transition-colors">포지션 체인지 ({S.posChangeCost.toLocaleString()} Point · 1회)</button>
+                  </button>
+
+                  {/* 펼침 영역 — 로스터 상세 */}
+                  {isOpen && (
+                    <div className="px-3.5 pb-3.5">
+                      <SlotBoard leader={l} leaderIdx={li} />
+                      {auction.status === "종료" && role === "host" && !l.positionChanged && l.roster.length >= 2 && (
+                        <button onClick={() => { setPosSwapTarget({ leaderIdx: li }); setSwapA(""); setSwapB(""); }} className="mt-2.5 w-full text-[10px] font-bold text-gray-500 hover:text-white bg-white/5 py-1.5 rounded-lg transition-colors">포지션 체인지 ({S.posChangeCost.toLocaleString()} Point · 1회)</button>
+                      )}
+                    </div>
                   )}
                 </div>
               );
@@ -583,6 +625,25 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
           )}
 
+          {/* 진행자: 낙찰 직후 프로필 공개 대기 바 — 공개 여부는 주최자 재량 */}
+          {role === "host" && (() => {
+            const unrevealed = auction.players.map((p: any, i: number) => ({ p, i })).filter(({ p }: any) => p.status === "낙찰" && p.discordId && !p.revealed);
+            if (unrevealed.length === 0) return null;
+            return (
+              <div className="rounded-2xl border border-[#e91e3f]/20 bg-[#e91e3f]/[0.03] p-4">
+                <p className="text-[10px] font-black tracking-[0.25em] text-[#e91e3f] uppercase mb-2.5">프로필 공개 대기 — 공개 여부는 진행자 재량</p>
+                <div className="flex flex-wrap gap-2">
+                  {unrevealed.map(({ p, i }: any) => (
+                    <button key={i} onClick={() => act({ action: "host:reveal", playerIdx: i })} className="flex items-center gap-2 text-[11px] font-bold text-gray-200 bg-white/5 border border-white/10 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 px-3 py-1.5 rounded-full transition-all">
+                      {p.alias} <span className="text-[9px] text-gray-500">({auction.leaders[p.soldTo]?.name})</span>
+                      <span className="text-[9px] font-black text-[#e91e3f]">공개</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* 선수 목록 */}
           <div className="rounded-2xl bg-[#111111]/95 border border-white/5 p-5">
             <div className="flex items-center justify-between mb-4">
@@ -597,7 +658,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               if (list.length === 0) return null;
               return (
                 <div key={phase} className="mb-4 last:mb-0">
-                  <p className="text-[10px] font-black text-gray-600 mb-2">PHASE {phase}{phase === 2 ? " · 일반 + 황금카드" : ""}</p>
+                  <p className="text-[10px] font-black text-gray-600 mb-2">PHASE {phase}</p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2.5">
                     {list.map(({ p, i }: any) => {
                       const hidden = isHiddenFor(p);
