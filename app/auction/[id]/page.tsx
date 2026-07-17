@@ -161,10 +161,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 py-6 flex-1 grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="w-full max-w-[1720px] mx-auto px-4 md:px-8 py-6 flex-1 grid grid-cols-1 lg:grid-cols-3 2xl:grid-cols-4 gap-5">
 
-        {/* ═══ 좌측 2열: 경매 메인 ═══ */}
-        <div className="lg:col-span-2 space-y-5">
+        {/* ═══ 좌측: 경매 메인 ═══ */}
+        <div className="lg:col-span-2 2xl:col-span-3 space-y-5">
 
           {/* 슬롯 배정 대기 배너 */}
           {hasPending && !iAmAssigner && (
@@ -221,8 +221,15 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       {curLeader && <p className="text-xs font-bold text-white mt-1.5">{curLeader.name}</p>}
                     </div>
 
+                    {/* 카운트다운 종료 시 입찰 마감 */}
+                    {role !== "host" && auction.status === "진행중" && timeLeft === 0 && (
+                      <div className="px-5 py-3 rounded-xl border border-white/10 bg-white/[0.03]">
+                        <p className="text-xs font-black text-gray-400">입찰 마감 — 진행자의 낙찰/유찰 처리를 기다리는 중</p>
+                      </div>
+                    )}
+
                     {/* 입찰 컨트롤 (팀장 역할일 때) */}
-                    {role !== "host" && auction.status === "진행중" && (
+                    {role !== "host" && auction.status === "진행중" && timeLeft !== 0 && (
                       <div className="flex flex-wrap items-center gap-2">
                         {[S.minIncrement, S.minIncrement * 5, S.minIncrement * 10].map((inc) => (
                           <button key={inc} onClick={() => doBid(cur.leaderIdx === null ? basePrice : cur.price + inc)} className="px-4 py-2.5 text-xs font-black bg-white/5 border border-white/10 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 text-white rounded-xl transition-all">
@@ -270,7 +277,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {/* 팀 현황판 */}
           <div className="rounded-2xl bg-[#111111]/95 border border-white/5 p-5">
             <p className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase mb-4">팀 현황판</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
               {auction.leaders.map((l: any, li: number) => (
                 <div key={li} className={`rounded-xl border p-4 ${cur.leaderIdx === li ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.05]" : "border-white/5 bg-black/20"}`}>
                   <div className="flex items-center justify-between mb-2.5">
@@ -281,8 +288,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     {l.roster.map((r: any, ri: number) => (
                       <div key={ri} className="flex items-center gap-2 text-[11px]">
                         <span className={`shrink-0 w-8 text-center font-black rounded px-1 py-0.5 ${r.slot === "탱커" ? "bg-blue-500/15 text-blue-400" : r.slot === "딜러" ? "bg-[#e91e3f]/15 text-[#e91e3f]" : "bg-emerald-500/15 text-emerald-400"}`}>{r.slot[0]}</span>
-                        <span className="text-gray-300 font-bold truncate">{auction.players[r.playerIdx]?.alias}{r.golden ? <span className="ml-1 text-[9px] text-[#e91e3f] font-black">ALL</span> : ""}</span>
-                        <span className="ml-auto text-gray-600 tabular-nums">{r.price.toLocaleString()}pt</span>
+                        <span className="text-gray-300 font-bold truncate">
+                          {r.playerIdx === -1 ? <>{l.name} <span className="text-[9px] text-gray-500 font-black">팀장</span></> : auction.players[r.playerIdx]?.alias}
+                          {r.golden ? <span className="ml-1 text-[9px] text-[#e91e3f] font-black">ALL</span> : ""}
+                        </span>
+                        <span className="ml-auto text-gray-600 tabular-nums">{r.playerIdx === -1 ? "-" : `${r.price.toLocaleString()}pt`}</span>
                       </div>
                     ))}
                     {l.roster.length === 0 && <p className="text-[10px] text-gray-700">아직 낙찰 선수 없음</p>}
@@ -318,7 +328,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               return (
                 <div key={phase} className="mb-4 last:mb-0">
                   <p className="text-[10px] font-black text-gray-600 mb-2">{phase === 1 ? "PHASE 1 · 탱일까? 아닐까?" : "PHASE 2 · 일반 + 황금카드"}</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5">
                     {list.map(({ p, i }: any) => (
                       <div key={i} className={`flex items-center gap-2.5 rounded-lg px-3 py-2 border text-xs ${p.status === "경매중" ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.06]" : p.status === "낙찰" ? "border-white/5 bg-black/20 opacity-50" : p.status === "유찰" ? "border-orange-500/20 bg-orange-500/[0.03]" : p.status === "배정중" ? "border-[#e91e3f]/25 bg-[#e91e3f]/[0.03]" : "border-white/5 bg-black/20"}`}>
                         <span className="font-bold text-white truncate">{p.isAllPos ? "올 포지션" : p.alias}</span>
@@ -332,7 +342,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             : role === "host" && auction.status === "진행중" ? (
                               <button onClick={() => act({ action: "host:call", playerIdx: i })} className="text-[10px] font-black text-white bg-[#e91e3f]/80 hover:bg-[#e91e3f] px-2.5 py-1 rounded transition-colors">호명</button>
                             ) : myLeaderIdx !== null && !p.isAllPos && !p.scoutedBy.includes(myLeaderIdx) && p.status === "대기" ? (
-                              <button onClick={() => { if (confirm(`스카우터 사용 (${S.scoutCost.toLocaleString()}pt) — ${p.alias}의 포지션을 확인합니까?`)) act({ action: "scout", leaderIdx: myLeaderIdx, playerIdx: i }); }} className="text-[10px] font-bold text-gray-400 hover:text-white bg-white/5 px-2.5 py-1 rounded transition-colors">스카우트</button>
+                              <button onClick={() => { if (confirm(`스카우터 사용 (${S.scoutCost.toLocaleString()}pt) — ${p.alias}의 포지션을 확인합니까?`)) act({ action: "scout", leaderIdx: myLeaderIdx, playerIdx: i }); }} className="text-[10px] font-bold text-gray-400 hover:text-white bg-white/5 px-2.5 py-1 rounded transition-colors">스카우터</button>
                             ) : null}
                         </span>
                       </div>

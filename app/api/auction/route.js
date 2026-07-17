@@ -34,13 +34,14 @@ export async function POST(request) {
     }
 
     const settings = { ...body.settings };
+    // 📌 팀장 본인도 팀의 한 슬롯을 차지 (playerIdx: -1 = 팀장 자신)
     const leaders = (body.leaders || []).map((l) => ({
       name: l.name,
       discordId: l.discordId || "",
       position: l.position || "",
       points: settings.leaderPoints ?? 100000,
       positionChanged: false,
-      roster: [],
+      roster: l.position ? [{ playerIdx: -1, slot: l.position, price: 0, golden: false }] : [],
     }));
 
     // 페이즈 자동 분류: 탱커 가능(주/부 탱커) & 올포 아님 → 1페이즈

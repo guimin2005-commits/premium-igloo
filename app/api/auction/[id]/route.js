@@ -62,6 +62,11 @@ export async function POST(request, { params }) {
       if (!auction || auction.status !== "진행중") return NextResponse.json({ success: false, message: "진행 중인 경매가 아닙니다." }, { status: 400 });
       if (auction.current.playerIdx !== playerIdx) return NextResponse.json({ success: false, message: "경매 대상이 변경되었습니다." }, { status: 409 });
 
+      // 📌 카운트다운 종료 후 입찰 차단
+      if (auction.current.endsAt && Date.now() > new Date(auction.current.endsAt).getTime()) {
+        return NextResponse.json({ success: false, message: "카운트다운이 종료되어 입찰할 수 없습니다." }, { status: 403 });
+      }
+
       const leader = auction.leaders[leaderIdx];
       const player = auction.players[playerIdx];
       if (!leader || !player) return NextResponse.json({ success: false }, { status: 400 });
@@ -187,29 +192,32 @@ export async function POST(request, { params }) {
       // 낙찰 팀장(또는 진행자 대행): 슬롯 배정 확정
       case "assignSlot": {
         const { slot, byLeaderIdx } = body;
-        const pa = auction.pendingAssign;
-        if (pa?.playerIdx === null || pa?.playerIdx === undefined) {
+        // 📌 pendingAssign 초기화 전에 값을 먼저 복사 (서브도큐먼트 참조 문제 방지)
+        const paPlayerIdx = auction.pendingAssign?.playerIdx;
+        const paLeaderIdx = auction.pendingAssign?.leaderIdx;
+        const paPrice = auction.pendingAssign?.price;
+        if (paPlayerIdx === null || paPlayerIdx === undefined) {
           return NextResponse.json({ success: false, message: "배정 대기 중인 선수가 없습니다." }, { status: 400 });
         }
         // 낙찰 팀장 본인 또는 진행자(byLeaderIdx === null)만 배정 가능
-        if (byLeaderIdx !== null && byLeaderIdx !== undefined && byLeaderIdx !== pa.leaderIdx) {
+        if (byLeaderIdx !== null && byLeaderIdx !== undefined && byLeaderIdx !== paLeaderIdx) {
           return NextResponse.json({ success: false, message: "낙찰 팀장만 슬롯을 배정할 수 있습니다." }, { status: 403 });
         }
-        const player = auction.players[pa.playerIdx];
-        const leader = auction.leaders[pa.leaderIdx];
+        const player = auction.players[paPlayerIdx];
+        const leader = auction.leaders[paLeaderIdx];
 
         const slotLimit = slot === "탱커" ? S.slotTank : slot === "딜러" ? S.slotDealer : S.slotHealer;
         if (slotCount(leader, slot) >= slotLimit) {
           return NextResponse.json({ success: false, message: `${slot} 슬롯이 가득 찼습니다.` }, { status: 400 });
         }
 
-        leader.points -= pa.price;
-        leader.roster.push({ playerIdx: pa.playerIdx, slot, price: pa.price, golden: player.isAllPos });
+        leader.points -= paPrice;
+        leader.roster.push({ playerIdx: paPlayerIdx, slot, price: paPrice, golden: player.isAllPos });
         player.status = "낙찰";
-        player.soldTo = pa.leaderIdx;
-        player.soldPrice = pa.price;
+        player.soldTo = paLeaderIdx;
+        player.soldPrice = paPrice;
         auction.pendingAssign = { playerIdx: null, leaderIdx: null, price: null };
-        addLog(auction, `${player.alias} → ${leader.name} [${slot}] 배정 완료 (${pa.price.toLocaleString()}pt)`);
+        addLog(auction, `${player.alias} → ${leader.name} [${slot}] 배정 완료 (${(paPrice || 0).toLocaleString()}pt)`);
         await auction.save();
         sysChat(id, `${player.alias} 선수가 ${leader.name} 팀 [${slot}] 슬롯에 배정되었습니다.`);
         return NextResponse.json({ success: true });
