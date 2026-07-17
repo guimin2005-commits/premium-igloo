@@ -23,11 +23,11 @@ export default function AuctionListPage() {
   const [title, setTitle] = useState("");
   const [settings, setSettings] = useState({
     leaderPoints: 100000, basePrice: 1000, goldenBasePrice: 4000,
-    scoutCost: 2000, posChangeCost: 10000, minIncrement: 100, timerSeconds: 15,
+    scoutCost: 2000, posChangeCost: 10000, minIncrement: 100, timerSeconds: 15, scoutSeconds: 7,
     slotTank: 1, slotDealer: 2, slotHealer: 2,
   });
-  const [leaders, setLeaders] = useState<any[]>([{ name: "", position: "" }]);
-  const [players, setPlayers] = useState<any[]>([{ alias: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", isAllPos: false }]);
+  const [leaders, setLeaders] = useState<any[]>([{ name: "", position: "", discordId: "" }]);
+  const [players, setPlayers] = useState<any[]>([{ alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", isAllPos: false }]);
 
   const updateLeader = (i: number, key: string, value: any) =>
     setLeaders((prev) => prev.map((l, idx) => (idx === i ? { ...l, [key]: value } : l)));
@@ -140,13 +140,14 @@ export default function AuctionListPage() {
                 <label className="block text-xs font-bold text-gray-500 mb-3">경매 룰 설정</label>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   {[
-                    { k: "leaderPoints", l: "리더 시작 pt" },
+                    { k: "leaderPoints", l: "팀장 시작 Point" },
                     { k: "basePrice", l: "기본 시작가" },
                     { k: "goldenBasePrice", l: "황금카드 시작가" },
                     { k: "scoutCost", l: "스카우터 비용" },
                     { k: "posChangeCost", l: "포지션 체인지" },
                     { k: "minIncrement", l: "최소 입찰 단위" },
-                    { k: "timerSeconds", l: "타이머(초)" },
+                    { k: "timerSeconds", l: "입찰 타이머(초)" },
+                    { k: "scoutSeconds", l: "스카우터 타임(초)" },
                     { k: "slotTank", l: "탱커 슬롯" },
                     { k: "slotDealer", l: "딜러 슬롯" },
                     { k: "slotHealer", l: "힐러 슬롯" },
@@ -163,7 +164,7 @@ export default function AuctionListPage() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-xs font-bold text-gray-500">팀장 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({leaders.filter(l => l.name.trim()).length}명)</span></label>
-                  <button type="button" onClick={() => setLeaders([...leaders, { name: "", position: "" }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">팀장 추가</button>
+                  <button type="button" onClick={() => setLeaders([...leaders, { name: "", position: "", discordId: "" }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">팀장 추가</button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   {leaders.map((l, i) => (
@@ -175,6 +176,7 @@ export default function AuctionListPage() {
                         )}
                       </div>
                       <input type="text" placeholder="팀장 이름" value={l.name} onChange={(e) => updateLeader(i, "name", e.target.value)} className={`${inputClass} mb-2.5`} />
+                      <input type="text" placeholder="디스코드 ID (선택 · 프로필 표시)" value={l.discordId} onChange={(e) => updateLeader(i, "discordId", e.target.value)} className={`${inputClass} mb-2.5`} />
                       <div className="flex gap-1.5">
                         {["탱커", "딜러", "힐러"].map((pos) => (
                           <button type="button" key={pos} onClick={() => updateLeader(i, "position", l.position === pos ? "" : pos)} className={`flex-1 py-2 text-[11px] font-bold rounded-lg border transition-all ${l.position === pos ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos}</button>
@@ -183,14 +185,14 @@ export default function AuctionListPage() {
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] text-gray-600 mt-2">탱커 포지션 팀장은 1페이즈(탱일까? 아닐까?) 참가가 자동 차단됩니다.</p>
+                <p className="text-[10px] text-gray-600 mt-2">탱커 포지션 팀장은 1페이즈 참가가 자동 차단됩니다. 디스코드 ID를 입력하면 팀 현황판에 프로필이 표시되고, 해당 유저는 접속 시 자동으로 팀장 화면이 지정됩니다.</p>
               </div>
 
               {/* 선수 카드 목록 */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-xs font-bold text-gray-500">선수 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({players.filter(p => p.alias.trim()).length}명)</span></label>
-                  <button type="button" onClick={() => setPlayers([...players, { alias: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", isAllPos: false }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">선수 추가</button>
+                  <button type="button" onClick={() => setPlayers([...players, { alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", isAllPos: false }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">선수 추가</button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   {players.map((p, i) => (
@@ -205,6 +207,7 @@ export default function AuctionListPage() {
                         </div>
                       </div>
                       <input type="text" placeholder="익명 닉네임" value={p.alias} onChange={(e) => updatePlayer(i, "alias", e.target.value)} className={`${inputClass} mb-2.5`} />
+                      <input type="text" placeholder="디스코드 ID (선택 · 낙찰 후 프로필 공개용)" value={p.discordId} onChange={(e) => updatePlayer(i, "discordId", e.target.value)} className={`${inputClass} mb-2.5`} />
                       <div className="grid grid-cols-2 gap-2 mb-2.5">
                         <input type="text" placeholder="최고 티어" value={p.peakTier} onChange={(e) => updatePlayer(i, "peakTier", e.target.value)} className={inputClass} />
                         <input type="text" placeholder="현재 티어" value={p.currentTier} onChange={(e) => updatePlayer(i, "currentTier", e.target.value)} className={inputClass} />

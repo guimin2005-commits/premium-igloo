@@ -47,6 +47,8 @@ export async function POST(request) {
     // 페이즈 자동 분류: 탱커 가능(주/부 탱커) & 올포 아님 → 1페이즈
     const players = (body.players || []).map((p) => ({
       alias: p.alias,
+      discordId: p.discordId || "",
+      revealed: false,
       peakTier: p.peakTier || "",
       currentTier: p.currentTier || "",
       mainPos: p.mainPos || "",
