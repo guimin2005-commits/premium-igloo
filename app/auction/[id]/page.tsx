@@ -1024,12 +1024,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
       {/* 황금카드 등장 애니메이션 — 전원 화면에 화려하게 지나감 */}
       {goldenFx && (
-        <div className="fixed inset-0 z-[135] pointer-events-none overflow-hidden">
+        <div className="fixed inset-0 z-[135] pointer-events-none overflow-hidden" style={{ perspective: "1400px" }}>
           {/* 황금빛 섬광 */}
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-500/[0.07] to-transparent animate-[goldenFlash_3s_ease-in-out_forwards]"></div>
 
           {/* 날아가는 황금 카드 — 끊김 없이 회전하며 통과 */}
-          <div className="absolute top-1/2 left-0 animate-[goldenFly_2.8s_cubic-bezier(0.45,0.05,0.35,0.95)_forwards]" style={{ perspective: "1200px" }}>
+          <div className="absolute top-1/2 left-0 animate-[goldenFly_2.8s_cubic-bezier(0.45,0.05,0.35,0.95)_forwards]" style={{ transformStyle: "preserve-3d" }}>
             <div className="relative">
               <div className="absolute -inset-10 bg-yellow-400/30 blur-3xl rounded-full animate-[pulseGlow_1s_ease-in-out_infinite]"></div>
               {/* 방사형 광선 */}
@@ -1038,27 +1038,39 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   <span key={deg} className="absolute w-[280px] h-px bg-gradient-to-r from-transparent via-yellow-300/40 to-transparent" style={{ transform: `rotate(${deg}deg)` }}></span>
                 ))}
               </div>
-              {/* 카드 본체 */}
-              <div className="relative w-36 h-52 md:w-44 md:h-64 rounded-2xl p-[3px] shadow-[0_0_80px_rgba(250,204,21,0.7),0_0_30px_rgba(250,204,21,0.9)]" style={{ background: "linear-gradient(135deg, #fef9c3, #f59e0b, #fde047, #b45309, #fde047)", backgroundSize: "400% 400%", animation: "goldenShine 1s linear infinite" }}>
-                <div className="relative w-full h-full rounded-[13px] overflow-hidden" style={{ background: "radial-gradient(ellipse at 50% 35%, #3a2a08 0%, #1a1305 70%)" }}>
-                  {/* 내부 장식 프레임 */}
-                  <div className="absolute inset-[7px] rounded-[9px] border border-yellow-400/40"></div>
-                  <div className="absolute inset-[11px] rounded-[7px] border border-yellow-400/15"></div>
-                  {/* 코너 별 장식 */}
-                  <span className="absolute top-2.5 left-3 text-[11px] text-yellow-400/80">★</span>
-                  <span className="absolute bottom-2.5 right-3 text-[11px] text-yellow-400/80 rotate-180 inline-block">★</span>
-                  {/* 광택 스윕 */}
-                  <div className="absolute inset-0 animate-[goldenGloss_1.4s_ease-in-out_infinite]" style={{ background: "linear-gradient(115deg, transparent 30%, rgba(255,255,220,0.22) 48%, rgba(255,255,220,0.32) 50%, rgba(255,255,220,0.22) 52%, transparent 70%)" }}></div>
-                  {/* 콘텐츠 */}
-                  <div className="relative h-full flex flex-col items-center justify-center gap-2.5">
-                    <div className="relative">
-                      <span className="absolute inset-0 blur-md text-5xl md:text-6xl text-yellow-300/70 flex items-center justify-center">★</span>
-                      <span className="relative text-5xl md:text-6xl" style={{ background: "linear-gradient(180deg, #fef9c3, #f59e0b)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.6))" }}>★</span>
+              {/* 카드 본체 — 3D 회전 (앞/뒷면) */}
+              <div className="relative w-36 h-52 md:w-44 md:h-64" style={{ transformStyle: "preserve-3d" }}>
+
+                {/* ── 앞면 ── */}
+                <div className="absolute inset-0 rounded-2xl p-[3px] shadow-[0_0_80px_rgba(250,204,21,0.7),0_0_30px_rgba(250,204,21,0.9)]" style={{ backfaceVisibility: "hidden", background: "linear-gradient(135deg, #fef9c3, #f59e0b, #fde047, #b45309, #fde047)", backgroundSize: "400% 400%", animation: "goldenShine 1s linear infinite" }}>
+                  <div className="relative w-full h-full rounded-[13px] overflow-hidden" style={{ background: "radial-gradient(ellipse at 50% 35%, #3a2a08 0%, #1a1305 70%)" }}>
+                    <div className="absolute inset-[7px] rounded-[9px] border border-yellow-400/40"></div>
+                    <div className="absolute inset-[11px] rounded-[7px] border border-yellow-400/15"></div>
+                    <span className="absolute top-2.5 left-3 text-[11px] text-yellow-400/80">★</span>
+                    <span className="absolute bottom-2.5 right-3 text-[11px] text-yellow-400/80 rotate-180 inline-block">★</span>
+                    <div className="absolute inset-0 animate-[goldenGloss_1.4s_ease-in-out_infinite]" style={{ background: "linear-gradient(115deg, transparent 30%, rgba(255,255,220,0.22) 48%, rgba(255,255,220,0.32) 50%, rgba(255,255,220,0.22) 52%, transparent 70%)" }}></div>
+                    <div className="relative h-full flex flex-col items-center justify-center gap-2.5">
+                      <div className="relative">
+                        <span className="absolute inset-0 blur-md text-5xl md:text-6xl text-yellow-300/70 flex items-center justify-center">★</span>
+                        <span className="relative text-5xl md:text-6xl" style={{ background: "linear-gradient(180deg, #fef9c3, #f59e0b)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.6))" }}>★</span>
+                      </div>
+                      <div className="w-12 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
+                      <p className="text-[9px] md:text-[10px] font-black tracking-[0.35em] uppercase" style={{ background: "linear-gradient(180deg, #fef9c3, #fbbf24)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>Golden Card</p>
+                      <p className="text-base md:text-lg font-black text-yellow-50 tracking-tight" style={{ textShadow: "0 0 14px rgba(250,204,21,0.6)" }}>올 포지션</p>
+                      <div className="w-12 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
                     </div>
-                    <div className="w-12 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
-                    <p className="text-[9px] md:text-[10px] font-black tracking-[0.35em] uppercase" style={{ background: "linear-gradient(180deg, #fef9c3, #fbbf24)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>Golden Card</p>
-                    <p className="text-base md:text-lg font-black text-yellow-50 tracking-tight" style={{ textShadow: "0 0 14px rgba(250,204,21,0.6)" }}>올 포지션</p>
-                    <div className="w-12 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
+                  </div>
+                </div>
+
+                {/* ── 뒷면 (카드 백 디자인) ── */}
+                <div className="absolute inset-0 rounded-2xl p-[3px] shadow-[0_0_80px_rgba(250,204,21,0.7)]" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)", background: "linear-gradient(135deg, #b45309, #fde047, #f59e0b, #fde047, #b45309)", backgroundSize: "400% 400%", animation: "goldenShine 1s linear infinite" }}>
+                  <div className="relative w-full h-full rounded-[13px] overflow-hidden flex items-center justify-center" style={{ background: "radial-gradient(ellipse at 50% 50%, #2a1e06 0%, #140e03 75%)" }}>
+                    {/* 다이아 격자 패턴 */}
+                    <div className="absolute inset-[7px] rounded-[9px] border border-yellow-400/30" style={{ backgroundImage: "repeating-linear-gradient(45deg, rgba(250,204,21,0.07) 0 2px, transparent 2px 14px), repeating-linear-gradient(-45deg, rgba(250,204,21,0.07) 0 2px, transparent 2px 14px)" }}></div>
+                    {/* 중앙 엠블럼 */}
+                    <div className="relative w-16 h-16 md:w-20 md:h-20 rounded-full border-2 border-yellow-400/50 flex items-center justify-center" style={{ background: "radial-gradient(circle, rgba(250,204,21,0.15), transparent 70%)" }}>
+                      <span className="text-2xl md:text-3xl text-yellow-400/90" style={{ filter: "drop-shadow(0 0 10px rgba(250,204,21,0.7))" }}>★</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1074,10 +1086,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
           <style dangerouslySetInnerHTML={{__html: `
             @keyframes goldenFly {
-              0% { transform: translate(-130%, -50%) rotate(-8deg) scale(0.8); }
-              38% { transform: translate(36vw, -50%) rotate(0deg) scale(1.05); }
-              62% { transform: translate(52vw, -50%) rotate(360deg) scale(1.12); }
-              100% { transform: translate(125vw, -50%) rotate(372deg) scale(0.85); }
+              0% { transform: translate(-130%, -50%) rotateY(0deg) rotateZ(-6deg) scale(0.8); }
+              38% { transform: translate(36vw, -50%) rotateY(180deg) rotateZ(-2deg) scale(1.05); }
+              62% { transform: translate(52vw, -50%) rotateY(540deg) rotateZ(2deg) scale(1.12); }
+              100% { transform: translate(125vw, -50%) rotateY(720deg) rotateZ(6deg) scale(0.85); }
             }
             @keyframes goldenGloss {
               0% { transform: translateX(-100%); }
