@@ -102,13 +102,13 @@ export async function POST(request, { params }) {
         { _id: id, "current.playerIdx": playerIdx, "current.price": { $lt: bidAmount } },
         {
           $set: { "current.price": bidAmount, "current.leaderIdx": leaderIdx, "current.endsAt": endsAt, "current.isAllin": action === "allin" },
-          $push: { log: { $each: [{ t: new Date(), msg: `${leader.name} ${action === "allin" ? "🔥 올인" : "입찰"} ${bidAmount.toLocaleString()}pt` }], $slice: -100 } },
+          $push: { log: { $each: [{ t: new Date(), msg: `${leader.name} ${action === "allin" ? "올인" : "입찰"} ${bidAmount.toLocaleString()}pt` }], $slice: -100 } },
         },
         { new: true }
       );
       if (!updated) return NextResponse.json({ success: false, message: "먼저 들어온 더 높은 입찰이 있습니다." }, { status: 409 });
 
-      sysChat(id, `🔨 ${leader.name}님이 [${player.isAllPos ? "황금카드" : player.alias}] ${action === "allin" ? "🔥 올인" : "입찰"} — ${bidAmount.toLocaleString()}pt!`);
+      sysChat(id, `${leader.name}님이 [${player.isAllPos ? "올 포지션 선수" : player.alias}] ${action === "allin" ? "올인" : "입찰"} — ${bidAmount.toLocaleString()}pt`);
       return NextResponse.json({ success: true });
     }
 
@@ -137,17 +137,17 @@ export async function POST(request, { params }) {
       // 개최자: 경매 시작/종료
       case "host:start":
         auction.status = "진행중";
-        addLog(auction, "▶ 경매 시작");
+        addLog(auction, "경매 시작");
         await auction.save();
-        sysChat(id, "▶ 경매가 시작되었습니다!");
+        sysChat(id, "경매가 시작되었습니다.");
         return NextResponse.json({ success: true });
 
       case "host:end":
         auction.status = "종료";
         auction.current = { playerIdx: null, price: 0, leaderIdx: null, endsAt: null, isAllin: false };
-        addLog(auction, "■ 경매 종료");
+        addLog(auction, "경매 종료");
         await auction.save();
-        sysChat(id, "■ 모든 경매가 종료되었습니다.");
+        sysChat(id, "모든 경매가 종료되었습니다.");
         return NextResponse.json({ success: true });
 
       // 개최자: 선수 호명 (경매 개시)
@@ -155,42 +155,63 @@ export async function POST(request, { params }) {
         const { playerIdx } = body;
         const player = auction.players[playerIdx];
         if (!player || player.status === "낙찰") return NextResponse.json({ success: false }, { status: 400 });
+        if (auction.pendingAssign?.playerIdx !== null && auction.pendingAssign?.playerIdx !== undefined) {
+          return NextResponse.json({ success: false, message: "이전 낙찰 선수의 슬롯 배정이 완료되지 않았습니다." }, { status: 409 });
+        }
         const base = player.isAllPos ? S.goldenBasePrice : S.basePrice;
         auction.players.forEach((p) => { if (p.status === "경매중") p.status = "대기"; });
         player.status = "경매중";
         auction.current = { playerIdx, price: base - 1, leaderIdx: null, endsAt: null, isAllin: false }; // base부터 입찰 가능하도록 base-1
-        addLog(auction, `📢 ${player.isAllPos ? "황금카드" : player.alias} 경매 시작 (시작가 ${base.toLocaleString()}pt)`);
+        addLog(auction, `${player.isAllPos ? "올 포지션 선수" : player.alias} 경매 시작 (시작가 ${base.toLocaleString()}pt)`);
         await auction.save();
-        sysChat(id, `📢 ${player.isAllPos ? "✨ 황금카드 [올 포지션 선수]" : player.alias} 경매 시작! 시작가 ${base.toLocaleString()}pt`);
+        sysChat(id, `${player.isAllPos ? "[올 포지션 선수]" : player.alias} 경매가 시작되었습니다. 시작가 ${base.toLocaleString()}pt`);
         return NextResponse.json({ success: true });
       }
 
-      // 개최자: 낙찰 확정 (+슬롯 배정)
+      // 개최자: 낙찰 확정 → 팀장의 슬롯 배정 대기 상태로 전환
       case "host:sold": {
-        const { slot } = body;
         const { playerIdx, price, leaderIdx } = auction.current;
         if (playerIdx === null || leaderIdx === null) return NextResponse.json({ success: false, message: "입찰자가 없습니다." }, { status: 400 });
         const player = auction.players[playerIdx];
         const leader = auction.leaders[leaderIdx];
 
-        // 슬롯 검증 (황금카드는 슬롯제 무시하고 자유 배정)
-        const slotLimit = slot === "탱커" ? S.slotTank : slot === "딜러" ? S.slotDealer : S.slotHealer;
-        if (!player.isAllPos && slotCount(leader, slot) >= slotLimit) {
-          return NextResponse.json({ success: false, message: `${slot} 슬롯이 가득 찼습니다.` }, { status: 400 });
+        player.status = "배정중";
+        auction.pendingAssign = { playerIdx, leaderIdx, price };
+        auction.current = { playerIdx: null, price: 0, leaderIdx: null, endsAt: null, isAllin: false };
+        addLog(auction, `${player.alias} 낙찰 — ${leader.name} 슬롯 배정 대기`);
+        await auction.save();
+        sysChat(id, `낙찰. ${player.isAllPos ? "올 포지션 선수" : player.alias} — ${leader.name} 팀장이 슬롯을 배정하고 있습니다. (${price.toLocaleString()}pt)`);
+        return NextResponse.json({ success: true });
+      }
+
+      // 낙찰 팀장(또는 진행자 대행): 슬롯 배정 확정
+      case "assignSlot": {
+        const { slot, byLeaderIdx } = body;
+        const pa = auction.pendingAssign;
+        if (pa?.playerIdx === null || pa?.playerIdx === undefined) {
+          return NextResponse.json({ success: false, message: "배정 대기 중인 선수가 없습니다." }, { status: 400 });
         }
+        // 낙찰 팀장 본인 또는 진행자(byLeaderIdx === null)만 배정 가능
+        if (byLeaderIdx !== null && byLeaderIdx !== undefined && byLeaderIdx !== pa.leaderIdx) {
+          return NextResponse.json({ success: false, message: "낙찰 팀장만 슬롯을 배정할 수 있습니다." }, { status: 403 });
+        }
+        const player = auction.players[pa.playerIdx];
+        const leader = auction.leaders[pa.leaderIdx];
+
+        const slotLimit = slot === "탱커" ? S.slotTank : slot === "딜러" ? S.slotDealer : S.slotHealer;
         if (slotCount(leader, slot) >= slotLimit) {
           return NextResponse.json({ success: false, message: `${slot} 슬롯이 가득 찼습니다.` }, { status: 400 });
         }
 
-        leader.points -= price;
-        leader.roster.push({ playerIdx, slot, price, golden: player.isAllPos });
+        leader.points -= pa.price;
+        leader.roster.push({ playerIdx: pa.playerIdx, slot, price: pa.price, golden: player.isAllPos });
         player.status = "낙찰";
-        player.soldTo = leaderIdx;
-        player.soldPrice = price;
-        auction.current = { playerIdx: null, price: 0, leaderIdx: null, endsAt: null, isAllin: false };
-        addLog(auction, `✅ ${player.alias} → ${leader.name} 낙찰 ${price.toLocaleString()}pt [${slot}]`);
+        player.soldTo = pa.leaderIdx;
+        player.soldPrice = pa.price;
+        auction.pendingAssign = { playerIdx: null, leaderIdx: null, price: null };
+        addLog(auction, `${player.alias} → ${leader.name} [${slot}] 배정 완료 (${pa.price.toLocaleString()}pt)`);
         await auction.save();
-        sysChat(id, `✅ 낙찰! ${player.alias} → ${leader.name} 팀 [${slot}] · ${price.toLocaleString()}pt`);
+        sysChat(id, `${player.alias} 선수가 ${leader.name} 팀 [${slot}] 슬롯에 배정되었습니다.`);
         return NextResponse.json({ success: true });
       }
 
@@ -201,9 +222,9 @@ export async function POST(request, { params }) {
         const player = auction.players[playerIdx];
         player.status = "유찰";
         auction.current = { playerIdx: null, price: 0, leaderIdx: null, endsAt: null, isAllin: false };
-        addLog(auction, `↩ ${player.alias} 유찰`);
+        addLog(auction, `${player.alias} 유찰`);
         await auction.save();
-        sysChat(id, `↩ ${player.alias} 선수 유찰되었습니다.`);
+        sysChat(id, `${player.alias} 선수가 유찰되었습니다.`);
         return NextResponse.json({ success: true });
       }
 
@@ -233,10 +254,10 @@ export async function POST(request, { params }) {
           p.soldTo = li;
           p.soldPrice = S.basePrice;
           assigned++;
-          addLog(auction, `🎲 유찰 배정: ${p.alias} → ${l.name} [${fit}]`);
+          addLog(auction, `유찰 배정: ${p.alias} → ${l.name} [${fit}]`);
         }
         await auction.save();
-        sysChat(id, `🎲 유찰 선수 ${assigned}명이 랜덤 배정되었습니다.`);
+        sysChat(id, `유찰 선수 ${assigned}명이 랜덤 배정되었습니다.`);
         return NextResponse.json({ success: true, assigned });
       }
 
@@ -252,7 +273,7 @@ export async function POST(request, { params }) {
         [ra.slot, rb.slot] = [rb.slot, ra.slot];
         leader.points -= S.posChangeCost;
         leader.positionChanged = true;
-        addLog(auction, `🔄 ${leader.name} 포지션 체인지 사용`);
+        addLog(auction, `${leader.name} 포지션 체인지 사용`);
         await auction.save();
         return NextResponse.json({ success: true });
       }

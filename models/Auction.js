@@ -56,6 +56,12 @@ const AuctionSchema = new mongoose.Schema({
     endsAt: { type: Date, default: null },
     isAllin: { type: Boolean, default: false },
   },
+  // 낙찰 후 팀장의 슬롯 배정 대기 상태
+  pendingAssign: {
+    playerIdx: { type: Number, default: null },
+    leaderIdx: { type: Number, default: null },
+    price: { type: Number, default: null },
+  },
   log: { type: [{ t: Date, msg: String }], default: [] }, // 입찰/시스템 로그 (최근 100개)
   createdAt: { type: Date, default: Date.now },
 });

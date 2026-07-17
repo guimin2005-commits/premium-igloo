@@ -26,8 +26,13 @@ export default function AuctionListPage() {
     scoutCost: 2000, posChangeCost: 10000, minIncrement: 100, timerSeconds: 15,
     slotTank: 1, slotDealer: 2, slotHealer: 2,
   });
-  const [leadersText, setLeadersText] = useState("");
-  const [playersText, setPlayersText] = useState("");
+  const [leaders, setLeaders] = useState<any[]>([{ name: "", position: "" }]);
+  const [players, setPlayers] = useState<any[]>([{ alias: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", isAllPos: false }]);
+
+  const updateLeader = (i: number, key: string, value: any) =>
+    setLeaders((prev) => prev.map((l, idx) => (idx === i ? { ...l, [key]: value } : l)));
+  const updatePlayer = (i: number, key: string, value: any) =>
+    setPlayers((prev) => prev.map((p, idx) => (idx === i ? { ...p, [key]: value } : p)));
 
   const fetchList = () => {
     fetch("/api/auction", { cache: "no-store" })
@@ -41,21 +46,15 @@ export default function AuctionListPage() {
     e.preventDefault();
     if (isSubmitting) return;
 
-    // 리더 파싱: "이름, 포지션" 한 줄씩
-    const leaders = leadersText.split("\n").map((l) => l.trim()).filter(Boolean).map((line) => {
-      const [name, position] = line.split(",").map((s) => s.trim());
-      return { name, position: ["탱커", "딜러", "힐러"].includes(position) ? position : "" };
-    });
+    const validLeaders = leaders.filter((l) => l.name.trim());
+    const validPlayers = players.filter((p) => p.alias.trim()).map((p) => ({
+      ...p,
+      mainPos: p.isAllPos ? "" : p.mainPos,
+      subPos: p.isAllPos ? "" : p.subPos,
+    }));
 
-    // 선수 파싱: "익명닉, 최고티어, 현재티어, 주포, 부포" / 올포지션은 주포에 "올포"
-    const players = playersText.split("\n").map((l) => l.trim()).filter(Boolean).map((line) => {
-      const [alias, peakTier, currentTier, mainPos, subPos] = line.split(",").map((s) => (s || "").trim());
-      const isAllPos = mainPos === "올포" || mainPos === "올포지션";
-      return { alias, peakTier, currentTier, mainPos: isAllPos ? "" : mainPos || "", subPos: isAllPos ? "" : subPos || "", isAllPos };
-    });
-
-    if (!title.trim() || leaders.length < 2 || players.length < 1) {
-      setPopup({ isOpen: true, message: "제목, 리더 2명 이상, 선수 1명 이상이 필요합니다.", isError: true });
+    if (!title.trim() || validLeaders.length < 2 || validPlayers.length < 1) {
+      setPopup({ isOpen: true, message: "제목, 팀장 2명 이상, 선수 1명 이상이 필요합니다.", isError: true });
       return;
     }
 
@@ -64,7 +63,7 @@ export default function AuctionListPage() {
       const res = await fetch("/api/auction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, settings, leaders, players }),
+        body: JSON.stringify({ title, settings, leaders: validLeaders, players: validPlayers }),
       });
       const d = await res.json();
       if (d.success) {
@@ -160,17 +159,82 @@ export default function AuctionListPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-2">리더 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">— 한 줄에 "이름, 포지션(탱커/딜러/힐러)"</span></label>
-                  <textarea rows={6} placeholder={"팀장A, 탱커\n팀장B, 딜러\n팀장C, 힐러"} value={leadersText} onChange={(e) => setLeadersText(e.target.value)} className={`${inputClass} resize-none font-mono text-xs`} />
-                  <p className="text-[10px] text-gray-600 mt-1.5">탱커 포지션 리더는 1페이즈(탱일까? 아닐까?) 참가가 자동 차단됩니다.</p>
+              {/* 팀장 카드 목록 */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-bold text-gray-500">팀장 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({leaders.filter(l => l.name.trim()).length}명)</span></label>
+                  <button type="button" onClick={() => setLeaders([...leaders, { name: "", position: "" }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">팀장 추가</button>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-2">선수 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">— "익명닉, 최고티어, 현재티어, 주포, 부포"</span></label>
-                  <textarea rows={6} placeholder={"펭귄1, 다이아, 플래티넘, 탱커, 딜러\n펭귄2, 마스터, 다이아, 딜러, 힐러\n펭귄3, 그마, 마스터, 올포"} value={playersText} onChange={(e) => setPlayersText(e.target.value)} className={`${inputClass} resize-none font-mono text-xs`} />
-                  <p className="text-[10px] text-gray-600 mt-1.5">주포에 &quot;올포&quot; 입력 시 황금카드(티어 비공개·스카우터 불가·시작가 상향)로 자동 설정 · 주/부에 탱커가 있으면 1페이즈로 자동 분류</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                  {leaders.map((l, i) => (
+                    <div key={i} className="relative rounded-xl border border-white/10 bg-black/25 p-4 hover:border-white/20 transition-colors">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase">Leader {String(i + 1).padStart(2, "0")}</span>
+                        {leaders.length > 1 && (
+                          <button type="button" onClick={() => setLeaders(leaders.filter((_, idx) => idx !== i))} className="text-[10px] font-bold text-gray-600 hover:text-red-400 transition-colors">제거</button>
+                        )}
+                      </div>
+                      <input type="text" placeholder="팀장 이름" value={l.name} onChange={(e) => updateLeader(i, "name", e.target.value)} className={`${inputClass} mb-2.5`} />
+                      <div className="flex gap-1.5">
+                        {["탱커", "딜러", "힐러"].map((pos) => (
+                          <button type="button" key={pos} onClick={() => updateLeader(i, "position", l.position === pos ? "" : pos)} className={`flex-1 py-2 text-[11px] font-bold rounded-lg border transition-all ${l.position === pos ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos}</button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
+                <p className="text-[10px] text-gray-600 mt-2">탱커 포지션 팀장은 1페이즈(탱일까? 아닐까?) 참가가 자동 차단됩니다.</p>
+              </div>
+
+              {/* 선수 카드 목록 */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-bold text-gray-500">선수 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({players.filter(p => p.alias.trim()).length}명)</span></label>
+                  <button type="button" onClick={() => setPlayers([...players, { alias: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", isAllPos: false }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">선수 추가</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                  {players.map((p, i) => (
+                    <div key={i} className={`relative rounded-xl border p-4 transition-colors ${p.isAllPos ? "border-[#e91e3f]/35 bg-[#e91e3f]/[0.04]" : "border-white/10 bg-black/25 hover:border-white/20"}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase">Player {String(i + 1).padStart(2, "0")}</span>
+                        <div className="flex items-center gap-2.5">
+                          <button type="button" onClick={() => updatePlayer(i, "isAllPos", !p.isAllPos)} className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${p.isAllPos ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "border-white/10 text-gray-600 hover:border-white/30"}`}>올 포지션</button>
+                          {players.length > 1 && (
+                            <button type="button" onClick={() => setPlayers(players.filter((_, idx) => idx !== i))} className="text-[10px] font-bold text-gray-600 hover:text-red-400 transition-colors">제거</button>
+                          )}
+                        </div>
+                      </div>
+                      <input type="text" placeholder="익명 닉네임" value={p.alias} onChange={(e) => updatePlayer(i, "alias", e.target.value)} className={`${inputClass} mb-2.5`} />
+                      <div className="grid grid-cols-2 gap-2 mb-2.5">
+                        <input type="text" placeholder="최고 티어" value={p.peakTier} onChange={(e) => updatePlayer(i, "peakTier", e.target.value)} className={inputClass} />
+                        <input type="text" placeholder="현재 티어" value={p.currentTier} onChange={(e) => updatePlayer(i, "currentTier", e.target.value)} className={inputClass} />
+                      </div>
+                      {p.isAllPos ? (
+                        <p className="text-[10px] text-[#e91e3f]/80 font-bold">황금카드 — 티어 비공개 · 스카우터 불가 · 시작가 {settings.goldenBasePrice.toLocaleString()}pt · 슬롯 자유 배정</p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <p className="text-[9px] font-bold text-gray-600 mb-1">주 포지션</p>
+                            <div className="flex gap-1">
+                              {["탱커", "딜러", "힐러"].map((pos) => (
+                                <button type="button" key={pos} onClick={() => updatePlayer(i, "mainPos", p.mainPos === pos ? "" : pos)} className={`flex-1 py-1.5 text-[10px] font-bold rounded-md border transition-all ${p.mainPos === pos ? "bg-white text-black border-white" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos[0]}</button>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-bold text-gray-600 mb-1">부 포지션</p>
+                            <div className="flex gap-1">
+                              {["탱커", "딜러", "힐러"].map((pos) => (
+                                <button type="button" key={pos} onClick={() => updatePlayer(i, "subPos", p.subPos === pos ? "" : pos)} className={`flex-1 py-1.5 text-[10px] font-bold rounded-md border transition-all ${p.subPos === pos ? "bg-white/60 text-black border-white/60" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos[0]}</button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-600 mt-2">주/부 포지션에 탱커가 포함된 선수는 1페이즈로 자동 분류됩니다.</p>
               </div>
 
               <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg shadow-[#e91e3f]/20">
