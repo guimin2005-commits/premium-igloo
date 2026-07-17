@@ -1030,8 +1030,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
           {/* 날아가는 황금 카드 — 끊김 없이 회전하며 통과 */}
           <div className="absolute top-1/2 left-0 animate-[goldenFly_2.8s_cubic-bezier(0.45,0.05,0.35,0.95)_forwards]" style={{ transformStyle: "preserve-3d" }}>
-            <div className="relative">
-              <div className="absolute -inset-10 bg-yellow-400/30 blur-3xl rounded-full animate-[pulseGlow_1s_ease-in-out_infinite]"></div>
+            <div className="relative" style={{ transformStyle: "preserve-3d" }}>
+              <div className="absolute -inset-10 bg-yellow-400/30 blur-3xl rounded-full animate-[pulseGlow_1s_ease-in-out_infinite]" style={{ transform: "translateZ(-1px)" }}></div>
               {/* 방사형 광선 */}
               <div className="absolute inset-0 flex items-center justify-center">
                 {[0, 30, 60, 90, 120, 150].map((deg) => (
