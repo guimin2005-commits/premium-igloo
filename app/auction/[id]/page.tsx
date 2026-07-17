@@ -36,6 +36,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [toast, setToast] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [soundOn, setSoundOn] = useState(true);
+  const [volume, setVolume] = useState(60); // 0~100
+  const [scoutResult, setScoutResult] = useState<any>(null); // 스카우터 결과 연출 오버레이
   const [profiles, setProfiles] = useState<Record<string, any>>({});
   const [confirmCfg, setConfirmCfg] = useState<any>(null); // {title, message, confirmLabel, onConfirm}
   const [strategyModalOpen, setStrategyModalOpen] = useState(false);
@@ -53,13 +55,22 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const prevState = useRef<{ price: number; playerIdx: any; soldCount: number; lastTick: number }>({ price: 0, playerIdx: null, soldCount: 0, lastTick: 0 });
   const audioCtx = useRef<AudioContext | null>(null);
   const soundOnRef = useRef(true);
+  const volumeRef = useRef(60);
   useEffect(() => { soundOnRef.current = soundOn; }, [soundOn]);
+  useEffect(() => { volumeRef.current = volume; try { localStorage.setItem("auctionVolume", String(volume)); } catch {} }, [volume]);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("auctionVolume");
+      if (saved !== null) setVolume(Math.min(100, Math.max(0, Number(saved))));
+    } catch {}
+  }, []);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
   // ── 사운드 (적당한 볼륨의 신스 톤) ──
-  const playTone = useCallback((freq: number, dur = 0.08, gain = 0.04, type: OscillatorType = "sine") => {
-    if (!soundOnRef.current) return;
+  const playTone = useCallback((freq: number, dur = 0.08, baseGain = 0.04, type: OscillatorType = "sine") => {
+    if (!soundOnRef.current || volumeRef.current <= 0) return;
+    const gain = baseGain * (volumeRef.current / 60); // 볼륨 60 = 기준 음량
     try {
       if (!audioCtx.current) audioCtx.current = new AudioContext();
       const ctx = audioCtx.current;
@@ -77,7 +88,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   }, []);
   const sfxBid = useCallback(() => playTone(760, 0.07, 0.035), [playTone]);
   const sfxCall = useCallback(() => { playTone(520, 0.1, 0.04); setTimeout(() => playTone(780, 0.12, 0.04), 110); }, [playTone]);
-  const sfxSold = useCallback(() => { playTone(660, 0.1, 0.04); setTimeout(() => playTone(880, 0.16, 0.045), 120); }, [playTone]);
+  // 낙찰 축하 (경쾌한 아르페지오 + 반짝임, 과하지 않게)
+  const sfxSold = useCallback(() => {
+    [523, 659, 784].forEach((f, i) => setTimeout(() => playTone(f, 0.1, 0.04), i * 80));
+    setTimeout(() => playTone(1047, 0.22, 0.045), 260);
+    setTimeout(() => playTone(1568, 0.12, 0.02, "triangle"), 340);
+  }, [playTone]);
+  // 스카우터 결과 (신비로운 차임)
+  const sfxScout = useCallback(() => { playTone(880, 0.1, 0.035, "triangle"); setTimeout(() => playTone(1175, 0.14, 0.04, "triangle"), 110); setTimeout(() => playTone(1568, 0.2, 0.035, "triangle"), 240); }, [playTone]);
   const sfxTick = useCallback(() => playTone(1050, 0.05, 0.03, "square"), [playTone]);
   const sfxPass = useCallback(() => { playTone(440, 0.12, 0.035); setTimeout(() => playTone(330, 0.18, 0.035), 130); }, [playTone]);
   const sfxAllin = useCallback(() => { playTone(392, 0.09, 0.04); setTimeout(() => playTone(523, 0.09, 0.04), 90); setTimeout(() => playTone(659, 0.09, 0.045), 180); setTimeout(() => playTone(784, 0.2, 0.05), 270); }, [playTone]);
@@ -98,7 +116,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
   // ── 폴링 (중복 방지: in-flight 가드 + 메시지 _id 중복 제거) ──
   useEffect(() => {
-    if (!isAdmin) return;
+    if (status !== "authenticated") return;
     let alive = true;
     const poll = async () => {
       if (pollBusy.current) return;
@@ -145,7 +163,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     poll();
     const t = setInterval(poll, POLL_MS);
     return () => { alive = false; clearInterval(t); };
-  }, [id, isAdmin, sfxBid, sfxCall, sfxSold, sfxPass, sfxAllin, sfxReveal, sfxStrategy, sfxStart, sfxEnd, sfxPhase, sfxChat]);
+  }, [id, status, sfxBid, sfxCall, sfxSold, sfxPass, sfxAllin, sfxReveal, sfxStrategy, sfxStart, sfxEnd, sfxPhase, sfxChat]);
 
   // 타이머 시계 + 마감 임박 사운드 (5초 경고 → 3·2·1 틱 → 타임업 버저)
   useEffect(() => {
@@ -223,16 +241,27 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   };
 
   if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
-  if (!isAdmin) {
+  if (status === "unauthenticated") {
     return (
       <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-xl font-black text-white mb-2">권한 없음</h2>
-        <p className="text-gray-400 text-sm mb-4">관리자 권한이 필요합니다.</p>
+        <h2 className="text-xl font-black text-white mb-2">로그인 필요</h2>
+        <p className="text-gray-400 text-sm mb-4">경매장 입장을 위해 디스코드 로그인이 필요합니다.</p>
         <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
       </main>
     );
   }
   if (!auction) return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">경매장 입장 중...</div>;
+
+  // 📌 입장 권한: 관리자 또는 이 경매에 등록된 리더 (디스코드 ID 매칭)
+  const isLeaderUser = !isAdmin && auction.leaders.some((l: any) => l.discordId && l.discordId === myDiscordId);
+  if (!isAdmin && !isLeaderUser) {
+    return (
+      <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
+        <h2 className="text-xl font-black text-white mb-2">입장 권한 없음</h2>
+        <p className="text-gray-400 text-sm">이 경매에 등록된 리더 또는 관리자만 입장할 수 있습니다.<br/>개최자에게 디스코드 ID 등록을 요청하세요.</p>
+      </main>
+    );
+  }
 
   const S = auction.settings;
   const totalSlots = S.slotTank + S.slotDealer + S.slotHealer;
@@ -278,6 +307,29 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     if (myLeaderIdx === null) { showToast("입찰하려면 상단에서 리더 역할을 선택하세요"); return; }
     if (myLeader && amount > myLeader.points) { showToast(`보유 Point가 부족합니다. (보유 ${myLeader.points.toLocaleString()} Point)`); return; }
     await act({ action: "bid", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx, amount });
+  };
+
+  // 직접 입력 입찰: 입찰 단위로 자동 보정 + Enter 지원
+  const submitDirectBid = () => {
+    const raw = Number(bidInput);
+    if (!raw) return;
+    const snapped = Math.floor(raw / S.minIncrement) * S.minIncrement; // 입찰 단위로 내림 보정
+    if (snapped !== raw) showToast(`입찰 단위(${S.minIncrement.toLocaleString()} Point)에 맞춰 ${snapped.toLocaleString()} Point로 보정되었습니다`);
+    if (snapped <= (cur.leaderIdx === null ? basePrice - 1 : cur.price)) { showToast(`${nextMinBid.toLocaleString()} Point 이상 입력해주세요`); return; }
+    doBid(snapped);
+    setBidInput("");
+  };
+
+  // 스카우터 사용 → 성공 시 게임식 결과 연출
+  const useScouter = async () => {
+    if (myLeaderIdx === null || cur.playerIdx === null) return;
+    const target = auction.players[cur.playerIdx];
+    const d = await act({ action: "scout", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx });
+    if (d.success) {
+      sfxScout();
+      setScoutResult({ alias: target.alias, mainPos: target.mainPos, subPos: target.subPos });
+      setTimeout(() => setScoutResult(null), 3200);
+    }
   };
 
   // 로스터 이름 — 프로필이 공개된 선수는 실제 디스코드 이름으로 동기화
@@ -357,8 +409,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     <span className="text-[8px] font-black tracking-widest text-[#e91e3f]/80">초과 배정 (선수 이동 필요)</span>
                   </button>
                 )}
-                {/* 오버플로우: 이동 대상 슬롯 선택 */}
-                {overflowing && moveFrom !== null && slot !== po.slot && entries.length < limit && (
+                {/* 오버플로우: 이동 대상 슬롯 선택 (탱커 슬롯으로는 이동 불가 → 표시 안 함) */}
+                {overflowing && moveFrom !== null && slot !== po.slot && slot !== "탱커" && entries.length < limit && (
                   <button
                     type="button"
                     onClick={async () => { const d = await act({ action: "moveSlot", rosterIdx: moveFrom, toSlot: slot, byLeaderIdx: myLeaderIdx }); if (d.success) setMoveFrom(null); }}
@@ -389,17 +441,35 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           )}
           <h1 className="text-sm md:text-base font-black text-white truncate flex-1">{auction.title}</h1>
 
-          {/* 사운드 토글 */}
-          <button onClick={() => setSoundOn(!soundOn)} title="효과음" className={`text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors ${soundOn ? "border-white/15 bg-white/5 text-gray-300" : "border-white/5 text-gray-600"}`}>
-            {soundOn ? "SOUND ON" : "SOUND OFF"}
-          </button>
+          {/* 사운드 볼륨 컨트롤 */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.03]">
+            <button onClick={() => setSoundOn(!soundOn)} title={soundOn ? "음소거" : "소리 켜기"} className="outline-none focus:outline-none">
+              {soundOn && volume > 0 ? (
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-gray-300"><path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" /></svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-gray-600"><path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" /></svg>
+              )}
+            </button>
+            <input
+              type="range" min={0} max={100} value={soundOn ? volume : 0}
+              onChange={(e) => { const v = Number(e.target.value); setVolume(v); if (v > 0 && !soundOn) setSoundOn(true); }}
+              onMouseUp={() => playTone(660, 0.06, 0.04)}
+              className="w-16 h-1 accent-[#e91e3f] cursor-pointer"
+              title={`볼륨 ${volume}%`}
+            />
+          </div>
 
-          <select value={role} onChange={(e) => setRole(e.target.value)} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white font-bold outline-none focus:border-[#e91e3f] [color-scheme:dark]">
-            <option value="host">진행자</option>
-            {auction.leaders.map((l: any, i: number) => (
-              <option key={i} value={i}>리더 · {l.name}{l.position ? ` (${l.position})` : ""}</option>
-            ))}
-          </select>
+          {/* 역할: 관리자는 자유 전환, 리더 유저는 본인 역할 고정 */}
+          {isAdmin ? (
+            <select value={role} onChange={(e) => setRole(e.target.value)} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white font-bold outline-none focus:border-[#e91e3f] [color-scheme:dark]">
+              <option value="host">진행자</option>
+              {auction.leaders.map((l: any, i: number) => (
+                <option key={i} value={i}>리더 · {l.name}{l.position ? ` (${l.position})` : ""}</option>
+              ))}
+            </select>
+          ) : (
+            myLeader && <span className="text-xs font-black text-white bg-[#e91e3f]/15 border border-[#e91e3f]/30 px-3 py-1.5 rounded-lg">리더 · {myLeader.name}</span>
+          )}
 
           {/* 리더: 준비 완료 토글 (경매 시작 전) */}
           {myLeader && auction.status === "준비중" && (
@@ -511,6 +581,23 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         {/* ═══ 중앙: 경매 메인 ═══ */}
         <div className="flex-1 min-w-0 w-full lg:w-auto space-y-5 order-1 lg:order-2" style={{ minWidth: "min(100%, 400px)" }}>
 
+          {/* 리더: 준비 배너 (경매 시작 전, 눈에 확 띄게) */}
+          {myLeader && auction.status === "준비중" && (
+            <div className={`relative rounded-2xl p-px ${myLeader.ready ? "bg-gradient-to-b from-emerald-500/50 via-emerald-500/15 to-transparent" : "bg-gradient-to-b from-[#e91e3f]/60 via-[#e91e3f]/20 to-transparent"}`}>
+              <div className="rounded-2xl bg-[#120a0c] p-6 flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden">
+                {!myLeader.ready && <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#e91e3f]/15 blur-[60px] rounded-full pointer-events-none animate-[pulseGlow_2.5s_ease-in-out_infinite]"></div>}
+                <div className="relative z-10 text-center sm:text-left">
+                  <p className="text-[10px] font-black tracking-[0.3em] uppercase mb-1.5 text-gray-500">Ready Check</p>
+                  <p className="text-lg font-black text-white">{myLeader.ready ? "준비 완료 — 다른 리더를 기다리는 중" : "경매 시작 전, 준비 버튼을 눌러주세요"}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">전체 리더 준비 완료 시 진행자가 경매를 시작합니다. ({auction.leaders.filter((l: any) => l.ready).length}/{auction.leaders.length} 준비)</p>
+                </div>
+                <button onClick={() => act({ action: "leader:ready", leaderIdx: myLeaderIdx, ready: !myLeader.ready })} className={`relative z-10 shrink-0 px-10 py-4 rounded-2xl text-base font-black transition-all ${myLeader.ready ? "bg-white/10 hover:bg-white/20 text-gray-300" : "bg-[#e91e3f] hover:bg-[#d01634] text-white shadow-[0_10px_30px_rgba(233,30,63,0.4)] animate-pulse"}`}>
+                  {myLeader.ready ? "준비 해제" : "준비 완료"}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* 전략 타임 배너 */}
           {strategyLeft > 0 && (
             <div className="rounded-2xl border border-blue-500/30 bg-blue-500/[0.06] px-5 py-4 flex items-center gap-3">
@@ -603,7 +690,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       <div className="flex flex-col items-end gap-2.5">
                         {/* 스카우터 버튼 (호명된 선수 대상, 경매 중에도 사용 가능) */}
                         {myLeaderIdx !== null && !curPlayer.isAllPos && !curPlayer.scoutedBy.includes(myLeaderIdx) && (
-                          <button onClick={() => setConfirmCfg({ title: "스카우터 사용", message: `${S.scoutCost.toLocaleString()} Point를 사용하여 이 선수의 주/부 포지션을 확인합니다.`, confirmLabel: "사용", onConfirm: () => act({ action: "scout", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx }) })} className="px-4 py-2 text-[11px] font-black bg-white/5 border border-white/15 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 text-gray-200 rounded-xl transition-all">
+                          <button onClick={() => setConfirmCfg({ title: "스카우터 사용", message: `${S.scoutCost.toLocaleString()} Point를 사용하여 이 선수의 주/부 포지션을 확인합니다.`, confirmLabel: "사용", onConfirm: useScouter })} className="px-4 py-2 text-[11px] font-black bg-white/5 border border-white/15 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 text-gray-200 rounded-xl transition-all">
                             스카우터 사용 ({S.scoutCost.toLocaleString()} Point)
                           </button>
                         )}
@@ -617,15 +704,25 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         ) : strategyLeft > 0 ? (
                           <p className="text-[11px] font-bold text-blue-400">전략 타임 중 — 입찰 일시 중지</p>
                         ) : (
-                          <div className="flex flex-wrap items-center justify-end gap-2">
-                            {[S.minIncrement, S.minIncrement * 5, S.minIncrement * 10].map((inc) => (
-                              <button key={inc} onClick={() => doBid(cur.leaderIdx === null ? basePrice : cur.price + inc)} className="px-4 py-2.5 text-xs font-black bg-white/5 border border-white/10 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 text-white rounded-xl transition-all">
-                                +{inc.toLocaleString()}
-                              </button>
-                            ))}
-                            <input type="number" placeholder={`${nextMinBid.toLocaleString()}~`} value={bidInput} onChange={(e) => setBidInput(e.target.value)} className="w-28 px-3 py-2.5 bg-black/40 border border-white/10 rounded-xl text-white text-xs text-center outline-none focus:border-[#e91e3f] font-bold" />
-                            <button onClick={() => { const v = Number(bidInput); if (v) { doBid(v); setBidInput(""); } }} className="px-4 py-2.5 text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white rounded-xl transition-colors shadow-[0_4px_16px_rgba(233,30,63,0.4)]">입찰</button>
-                            <button onClick={() => setConfirmCfg({ title: "올인", message: `남은 슬롯 최소 예산을 제외한 전액 ${allinMax.toLocaleString()} Point를 베팅합니다.`, confirmLabel: "올인", onConfirm: () => act({ action: "allin", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx }) })} className="px-4 py-2.5 text-xs font-black bg-gradient-to-r from-orange-600 to-[#e91e3f] hover:brightness-110 text-white rounded-xl transition-all">올인</button>
+                          <div className="flex flex-col items-end gap-1.5">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              {[S.minIncrement, S.minIncrement * 5, S.minIncrement * 10].map((inc) => (
+                                <button key={inc} onClick={() => doBid(cur.leaderIdx === null ? basePrice : cur.price + inc)} className="px-4 py-2.5 text-xs font-black bg-white/5 border border-white/10 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 text-white rounded-xl transition-all">
+                                  +{inc.toLocaleString()}
+                                </button>
+                              ))}
+                              <input
+                                type="number"
+                                placeholder={`${nextMinBid.toLocaleString()}~`}
+                                value={bidInput}
+                                onChange={(e) => setBidInput(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") submitDirectBid(); }}
+                                className="w-28 px-3 py-2.5 bg-black/40 border border-white/10 rounded-xl text-white text-xs text-center outline-none focus:border-[#e91e3f] font-bold"
+                              />
+                              <button onClick={submitDirectBid} className="px-4 py-2.5 text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white rounded-xl transition-colors shadow-[0_4px_16px_rgba(233,30,63,0.4)]">입찰</button>
+                              <button onClick={() => setConfirmCfg({ title: "올인", message: `남은 슬롯 최소 예산을 제외한 전액 ${allinMax.toLocaleString()} Point를 베팅합니다.`, confirmLabel: "올인", onConfirm: () => act({ action: "allin", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx }) })} className="px-4 py-2.5 text-xs font-black bg-gradient-to-r from-orange-600 to-[#e91e3f] hover:brightness-110 text-white rounded-xl transition-all">올인</button>
+                            </div>
+                            <p className="text-[10px] text-gray-600">입찰 단위 {S.minIncrement.toLocaleString()} Point · Enter로 즉시 입찰 · 올인 가능 <span className="text-gray-400 font-bold">{allinMax.toLocaleString()} Point</span></p>
                           </div>
                         )}
                       </div>
@@ -889,7 +986,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     <label className="block text-[10px] font-bold text-gray-500 mb-1.5">{f.l}</label>
                     <select value={f.v} onChange={(e) => f.set(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white font-bold outline-none focus:border-[#e91e3f] [color-scheme:dark]">
                       <option value="">선택...</option>
-                      {leader.roster.map((r: any, ri: number) => (
+                      {/* 탱커 슬롯은 교환 불가 → 목록에서 제외 */}
+                      {leader.roster.map((r: any, ri: number) => r.slot === "탱커" ? null : (
                         <option key={ri} value={ri}>[{r.slot}] {rosterName(leader, r)}</option>
                       ))}
                     </select>
@@ -904,6 +1002,33 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           </div>
         );
       })()}
+
+      {/* 스카우터 결과 — 게임식 판정 연출 */}
+      {scoutResult && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in zoom-in-95 duration-300" onClick={() => setScoutResult(null)}>
+          <div className="relative w-full max-w-md text-center">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[300px] bg-[#e91e3f]/15 blur-[100px] rounded-full pointer-events-none animate-[pulseGlow_2s_ease-in-out_infinite]"></div>
+            <div className="relative z-10">
+              <p className="text-[11px] font-black tracking-[0.5em] text-[#e91e3f] uppercase mb-2 animate-pulse">Scout Report</p>
+              <p className="text-2xl font-black text-white tracking-tight mb-8">{scoutResult.alias}</p>
+              <div className="grid grid-cols-2 gap-4 max-w-xs mx-auto">
+                {[
+                  { label: "주 포지션", value: scoutResult.mainPos || "?", primary: true },
+                  { label: "부 포지션", value: scoutResult.subPos || "없음", primary: false },
+                ].map((item, i) => (
+                  <div key={i} className={`relative rounded-2xl p-px ${item.primary ? "bg-gradient-to-b from-[#e91e3f] via-[#e91e3f]/30 to-transparent" : "bg-gradient-to-b from-white/25 via-white/10 to-transparent"}`}>
+                    <div className="rounded-2xl bg-[#120a0c] px-4 py-7">
+                      <p className="text-[9px] font-black tracking-[0.3em] text-gray-500 uppercase mb-3">{item.label}</p>
+                      <p className={`text-3xl font-black tracking-tight ${item.value === "탱커" ? "text-blue-400" : item.value === "딜러" ? "text-[#e91e3f]" : item.value === "힐러" ? "text-emerald-400" : "text-gray-500"}`}>{item.value}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-gray-600 mt-8">이 정보는 나에게만 공개됩니다 · 클릭하여 닫기</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className="fixed bottom-20 md:bottom-8 left-1/2 -translate-x-1/2 z-[200] bg-[#1a1a1a] border border-white/15 text-white text-xs font-bold px-5 py-3 rounded-full shadow-2xl animate-in fade-in slide-in-from-bottom-2">
