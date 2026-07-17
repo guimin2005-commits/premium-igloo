@@ -268,10 +268,6 @@ export async function POST(request, { params }) {
         if (isFull && !player.isAllPos) {
           return NextResponse.json({ success: false, message: `${slot} 슬롯이 가득 찼습니다.` }, { status: 400 });
         }
-        // 탱커 슬롯은 타 포지션과 이동이 불가하므로, 꽉 찬 탱커 슬롯에는 황금카드도 초과 배정 불가
-        if (isFull && player.isAllPos && slot === "탱커") {
-          return NextResponse.json({ success: false, message: "탱커 슬롯은 기존 선수를 이동할 수 없어 초과 배정이 불가합니다." }, { status: 400 });
-        }
 
         leader.points -= paPrice;
         leader.roster.push({ playerIdx: paPlayerIdx, slot, price: paPrice, golden: player.isAllPos });
@@ -314,9 +310,9 @@ export async function POST(request, { params }) {
           return NextResponse.json({ success: false, message: "올 포지션 선수는 이동할 수 없습니다." }, { status: 400 });
         }
         if (toSlot === poSlot) return NextResponse.json({ success: false, message: "다른 슬롯을 선택해주세요." }, { status: 400 });
-        // 탱커 ↔ 타 포지션 이동 금지
-        if (poSlot === "탱커" || toSlot === "탱커") {
-          return NextResponse.json({ success: false, message: "탱커 슬롯은 타 포지션과 이동할 수 없습니다." }, { status: 400 });
+        // 탱커 슬롯으로의 이동은 금지 (단, 황금카드 초과로 밀려나는 탱커 슬롯 이탈은 허용)
+        if (toSlot === "탱커") {
+          return NextResponse.json({ success: false, message: "탱커 슬롯으로는 이동할 수 없습니다." }, { status: 400 });
         }
         if (slotCount(leader, toSlot) >= slotLimitOf(S, toSlot)) {
           return NextResponse.json({ success: false, message: `${toSlot} 슬롯이 가득 찼습니다.` }, { status: 400 });
