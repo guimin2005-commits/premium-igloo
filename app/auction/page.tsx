@@ -255,7 +255,7 @@ export default function AuctionListPage() {
         <div className="grid grid-cols-3 gap-px bg-white/10 rounded-2xl overflow-hidden border border-white/10">
           {[
             { no: "01", t: "리더는 입찰", d: "Point로 원하는 선수를 낙찰" },
-            { no: "02", t: "모두가 관전", d: "실시간 라이브 채팅으로 응원" },
+            { no: "02", t: "모두가 관전", d: "실시간 라이브 채팅으로 즐기기" },
             { no: "03", t: "팀 완성", d: "종료 후 최종 로스터 공개" },
           ].map((s, i) => (
             <div key={i} className="bg-[#0d0d0d] px-3 py-5 md:px-6 md:py-6 text-center group hover:bg-[#121212] transition-colors">

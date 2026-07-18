@@ -47,13 +47,19 @@ export default function Home() {
     Promise.all([
       fetch("/api/posts?category=이벤트", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/posts?category=대회", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-    ]).then(([ev, tn]) => {
+      fetch("/api/auction", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+    ]).then(([ev, tn, au]) => {
       const events = (Array.isArray(ev?.data) ? ev.data : []).slice(0, 2).map((p: any) => ({ type: "이벤트", title: p.title, path: "/event", period: p.eventPeriod }));
       const tournaments = (Array.isArray(tn?.data) ? tn.data : [])
         .filter((p: any) => p.tournamentStatus !== "종료됨")
         .slice(0, 2)
         .map((p: any) => ({ type: p.tournamentStatus === "진행중" ? "대회 진행중" : "대회 예정", title: p.title, path: "/tournament", period: p.tournamentDate }));
-      setSchedule([...tournaments, ...events].slice(0, 4));
+      // 진행 중인 선수 경매는 최상단 LIVE로 노출
+      const liveAuctions = (Array.isArray(au?.data) ? au.data : [])
+        .filter((a: any) => a.status === "진행중")
+        .slice(0, 2)
+        .map((a: any) => ({ type: "경매 LIVE", title: a.title, path: `/auction/${a._id}`, period: "" }));
+      setSchedule([...liveAuctions, ...tournaments, ...events].slice(0, 4));
     });
   }, []);
 
@@ -186,8 +192,16 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {schedule.map((item, i) => (
                 <Reveal key={i} delay={i * 100}>
-                  <Link href={item.path} className="flex items-center gap-4 px-6 py-5 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-[#e91e3f]/30 hover:bg-white/[0.05] transition-all group/sch h-full">
-                    <span className={`shrink-0 text-[10px] font-black px-2.5 py-1 rounded-full ${item.type.includes("진행중") ? "bg-emerald-500/15 text-emerald-400" : item.type.includes("대회") ? "bg-blue-500/15 text-blue-400" : "bg-[#e91e3f]/15 text-[#e91e3f]"}`}>{item.type}</span>
+                  <Link href={item.path} className={`flex items-center gap-4 px-6 py-5 rounded-2xl border transition-all group/sch h-full ${item.type === "경매 LIVE" ? "bg-emerald-500/[0.05] border-emerald-500/30 hover:border-emerald-400/60 hover:bg-emerald-500/[0.08]" : "bg-white/[0.03] border-white/5 hover:border-[#e91e3f]/30 hover:bg-white/[0.05]"}`}>
+                    <span className={`shrink-0 text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1.5 ${item.type === "경매 LIVE" ? "bg-emerald-500/15 text-emerald-400" : item.type.includes("진행중") ? "bg-emerald-500/15 text-emerald-400" : item.type.includes("대회") ? "bg-blue-500/15 text-blue-400" : "bg-[#e91e3f]/15 text-[#e91e3f]"}`}>
+                      {item.type === "경매 LIVE" && (
+                        <span className="relative flex w-1.5 h-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
+                        </span>
+                      )}
+                      {item.type}
+                    </span>
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-gray-200 group-hover/sch:text-white truncate transition-colors">{item.title}</p>
                       {item.period && <p className="text-[11px] text-gray-600 mt-0.5">{item.period}</p>}
