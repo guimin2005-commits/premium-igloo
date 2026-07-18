@@ -48,6 +48,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [swapA, setSwapA] = useState(""); const [swapB, setSwapB] = useState("");
   const [moveFrom, setMoveFrom] = useState<number | null>(null); // 오버플로우: 이동할 선수 rosterIdx
   const [expandedTeams, setExpandedTeams] = useState<Set<number>>(new Set()); // 팀 레일 펼침 상태
+  const [adjustTarget, setAdjustTarget] = useState<number | null>(null); // 포인트 조정 모달 (leaderIdx)
+  const [adjustAmount, setAdjustAmount] = useState("");
+  const [posSetTarget, setPosSetTarget] = useState<number | null>(null); // 리더 포지션 지정 모달
 
   const chatBoxRef = useRef<HTMLDivElement>(null);
   const lastChatAt = useRef<string | null>(null);
@@ -633,6 +636,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       {auction.status === "진행중" && role === "host" && !l.positionChanged && l.roster.length >= 2 && (
                         <button onClick={() => { setPosSwapTarget({ leaderIdx: li }); setSwapA(""); setSwapB(""); }} className="mt-2.5 w-full text-[10px] font-bold text-gray-500 hover:text-white bg-white/5 py-1.5 rounded-lg transition-colors">포지션 체인지 대행 ({S.posChangeCost.toLocaleString()} Point · 1회)</button>
                       )}
+                      {/* 진행자 실시간 관리 도구 */}
+                      {role === "host" && (
+                        <div className="mt-2.5 grid grid-cols-2 gap-1.5">
+                          <button onClick={() => { setAdjustTarget(li); setAdjustAmount(""); }} className="text-[10px] font-black text-gray-400 hover:text-white bg-white/5 border border-white/10 hover:border-[#e91e3f]/40 py-1.5 rounded-lg transition-all">포인트 조정</button>
+                          <button onClick={() => setPosSetTarget(li)} className="text-[10px] font-black text-gray-400 hover:text-white bg-white/5 border border-white/10 hover:border-[#e91e3f]/40 py-1.5 rounded-lg transition-all">{l.position ? "포지션 변경" : "포지션 지정"}</button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -952,7 +962,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                 {role === "host" && p.discordId && !p.revealed && (
                                   <button onClick={() => act({ action: "host:reveal", playerIdx: i })} className="shrink-0 text-[9px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-2 py-0.5 rounded hover:bg-[#e91e3f]/20 transition-colors">공개</button>
                                 )}
+                                {role === "host" && (
+                                  <button onClick={() => setConfirmCfg({ title: "낙찰 취소", message: `${p.alias} 선수의 낙찰을 취소합니다.\n${auction.leaders[p.soldTo]?.name} 팀에서 제외되고 ${p.soldPrice?.toLocaleString()} Point가 환불됩니다.`, confirmLabel: "취소 확정", onConfirm: () => act({ action: "host:unsold", playerIdx: i }) })} className="shrink-0 text-[9px] font-black text-orange-400/80 hover:text-orange-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded transition-colors">취소</button>
+                                )}
                               </div>
+                            ) : p.status === "배정중" && role === "host" ? (
+                              <button onClick={() => setConfirmCfg({ title: "낙찰 취소", message: `${p.alias} 선수의 낙찰(배정 대기)을 취소하고 대기 상태로 되돌립니다.`, confirmLabel: "취소 확정", onConfirm: () => act({ action: "host:unsold", playerIdx: i }) })} className="w-full text-[10px] font-black text-orange-400/80 hover:text-orange-400 bg-white/5 border border-white/10 py-1.5 rounded-lg transition-colors">낙찰 취소</button>
                             ) : callable ? (
                               <button onClick={() => act({ action: "host:call", playerIdx: i })} className="w-full text-[10px] font-black text-white bg-[#e91e3f]/80 hover:bg-[#e91e3f] py-1.5 rounded-lg transition-colors">호명</button>
                             ) : (
@@ -1246,6 +1261,52 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
       )}
+
+      {/* 진행자: 포인트 조정 모달 */}
+      {adjustTarget !== null && (() => {
+        const leader = auction.leaders[adjustTarget];
+        return (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="relative rounded-3xl bg-gradient-to-b from-white/[0.1] to-white/[0.02] p-px w-full max-w-sm">
+              <div className="rounded-3xl bg-[#121212] p-8 text-center">
+                <p className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-3">Point Adjustment</p>
+                <h2 className="text-lg font-black text-white mb-1">{leader.name} — 포인트 조정</h2>
+                <p className="text-xs text-gray-400 mb-6">현재 보유: <span className="text-[#e91e3f] font-black">{leader.points.toLocaleString()} Point</span></p>
+                <input type="number" placeholder="조정할 금액 (예: 5000)" value={adjustAmount} onChange={(e) => setAdjustAmount(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white text-center font-bold outline-none focus:border-[#e91e3f] transition-colors mb-3" />
+                <div className="grid grid-cols-2 gap-2 mb-6">
+                  <button onClick={async () => { const v = Math.abs(Number(adjustAmount)); if (!v) return; const d = await act({ action: "host:adjustPoints", leaderIdx: adjustTarget, delta: v }); if (d.success) setAdjustTarget(null); }} className="py-3 rounded-xl text-sm font-black bg-emerald-500/90 hover:bg-emerald-500 text-white transition-colors">+ 추가</button>
+                  <button onClick={async () => { const v = Math.abs(Number(adjustAmount)); if (!v) return; const d = await act({ action: "host:adjustPoints", leaderIdx: adjustTarget, delta: -v }); if (d.success) setAdjustTarget(null); }} className="py-3 rounded-xl text-sm font-black bg-[#e91e3f] hover:bg-[#d01634] text-white transition-colors">− 차감</button>
+                </div>
+                <button onClick={() => setAdjustTarget(null)} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">닫기</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 진행자: 리더 포지션 지정/변경 모달 */}
+      {posSetTarget !== null && (() => {
+        const leader = auction.leaders[posSetTarget];
+        return (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="relative rounded-3xl bg-gradient-to-b from-white/[0.1] to-white/[0.02] p-px w-full max-w-sm">
+              <div className="rounded-3xl bg-[#121212] p-8 text-center">
+                <p className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-3">Leader Position</p>
+                <h2 className="text-lg font-black text-white mb-2">{leader.name} — 포지션 {leader.position ? "변경" : "지정"}</h2>
+                <p className="text-xs text-gray-400 mb-6">{leader.position ? `현재 [${leader.position}] — 선택한 포지션 슬롯으로 이동합니다.` : "리더 본인이 차지할 슬롯을 지정합니다."}</p>
+                <div className="grid grid-cols-3 gap-2 mb-6">
+                  {["탱커", "딜러", "힐러"].map((pos) => (
+                    <button key={pos} disabled={leader.position === pos} onClick={async () => { const d = await act({ action: "host:setLeaderPos", leaderIdx: posSetTarget, position: pos }); if (d.success) setPosSetTarget(null); }} className={`py-4 rounded-xl text-sm font-black border transition-all ${leader.position === pos ? "border-[#e91e3f]/40 bg-[#e91e3f]/10 text-[#e91e3f] cursor-default" : "border-white/10 bg-white/5 text-white hover:border-[#e91e3f] hover:bg-[#e91e3f]/10"}`}>
+                      {pos}{leader.position === pos && <span className="block text-[9px] font-bold text-gray-500 mt-0.5">현재</span>}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setPosSetTarget(null)} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">닫기</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {toast && (
         <div className="fixed bottom-20 md:bottom-8 left-1/2 -translate-x-1/2 z-[200] bg-[#1a1a1a] border border-white/15 text-white text-xs font-bold px-5 py-3 rounded-full shadow-2xl animate-in fade-in slide-in-from-bottom-2">

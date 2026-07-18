@@ -387,6 +387,76 @@ export async function POST(request, { params }) {
         return NextResponse.json({ success: true });
       }
 
+      // 개최자: 리더 포인트 실시간 조정 (+/-)
+      case "host:adjustPoints": {
+        const { leaderIdx, delta } = body;
+        const leader = auction.leaders[leaderIdx];
+        if (!leader || !delta) return NextResponse.json({ success: false, message: "조정할 값이 없습니다." }, { status: 400 });
+        leader.points = Math.max(0, leader.points + Number(delta));
+        addLog(auction, `${leader.name} 포인트 ${delta > 0 ? "+" : ""}${Number(delta).toLocaleString()} 조정 (현재 ${leader.points.toLocaleString()})`);
+        await auction.save();
+        sysChat(id, `운영진이 ${leader.name} 리더의 포인트를 조정했습니다. (${delta > 0 ? "+" : ""}${Number(delta).toLocaleString()} Point)`);
+        return NextResponse.json({ success: true });
+      }
+
+      // 개최자: 낙찰 취소 (환불 + 선수 대기 복귀) / 배정 대기 취소
+      case "host:unsold": {
+        const { playerIdx } = body;
+        const player = auction.players[playerIdx];
+        if (!player) return NextResponse.json({ success: false }, { status: 400 });
+
+        // 배정 대기 중이면 대기로만 복귀 (포인트는 아직 차감 전)
+        if (player.status === "배정중" && auction.pendingAssign?.playerIdx === playerIdx) {
+          player.status = "대기";
+          auction.pendingAssign = { playerIdx: null, leaderIdx: null, price: null };
+          addLog(auction, `${player.alias} 낙찰 취소 (배정 전)`);
+          await auction.save();
+          sysChat(id, `운영진이 ${player.alias} 선수의 낙찰을 취소했습니다.`);
+          return NextResponse.json({ success: true });
+        }
+
+        if (player.status !== "낙찰") return NextResponse.json({ success: false, message: "낙찰된 선수만 취소할 수 있습니다." }, { status: 400 });
+        const leader = auction.leaders[player.soldTo];
+        if (leader) {
+          const ri = leader.roster.findIndex((r) => r.playerIdx === playerIdx);
+          if (ri >= 0) {
+            leader.points += leader.roster[ri].price || 0; // 환불
+            leader.roster.splice(ri, 1);
+          }
+        }
+        player.status = "대기";
+        player.soldTo = null;
+        player.soldPrice = null;
+        player.revealed = false;
+        if (auction.reveal?.playerIdx === playerIdx) auction.reveal = { playerIdx: null };
+        addLog(auction, `${player.alias} 낙찰 취소 — ${leader?.name || ""} 포인트 환불`);
+        await auction.save();
+        sysChat(id, `운영진이 ${player.alias} 선수의 낙찰을 취소했습니다. (포인트 환불 완료)`);
+        return NextResponse.json({ success: true });
+      }
+
+      // 개최자: 리더 포지션 지정/변경 (본인 슬롯 배치)
+      case "host:setLeaderPos": {
+        const { leaderIdx, position } = body;
+        const leader = auction.leaders[leaderIdx];
+        if (!leader || !["탱커", "딜러", "힐러"].includes(position)) return NextResponse.json({ success: false }, { status: 400 });
+
+        const selfIdx = leader.roster.findIndex((r) => r.playerIdx === -1);
+        // 대상 슬롯 잔여 확인 (본인 기존 슬롯 제외)
+        const occupied = leader.roster.filter((r, i) => r.slot === position && i !== selfIdx).length;
+        if (occupied >= slotLimitOf(S, position)) {
+          return NextResponse.json({ success: false, message: `${position} 슬롯이 이미 가득 찼습니다.` }, { status: 400 });
+        }
+
+        leader.position = position;
+        if (selfIdx >= 0) leader.roster[selfIdx].slot = position;
+        else leader.roster.push({ playerIdx: -1, slot: position, price: 0, golden: false });
+        addLog(auction, `${leader.name} 리더 포지션 → ${position}`);
+        await auction.save();
+        sysChat(id, `운영진이 ${leader.name} 리더의 포지션을 [${position}]으로 지정했습니다.`);
+        return NextResponse.json({ success: true });
+      }
+
       // 개최자: 유찰
       case "host:pass": {
         const { playerIdx } = auction.current;
