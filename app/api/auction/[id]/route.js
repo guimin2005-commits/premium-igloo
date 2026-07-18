@@ -44,6 +44,18 @@ export async function POST(request, { params }) {
     const body = await request.json();
     const { action } = body;
 
+    // ── 입장 알림 (최소화 표시용) ──
+    if (action === "enter") {
+      if (!body.userName?.trim()) return NextResponse.json({ success: true });
+      await AuctionChat.create({
+        auctionId: id,
+        message: `${body.userName.trim()}님이 입장했습니다`,
+        isSystem: true,
+        kind: "join",
+      });
+      return NextResponse.json({ success: true });
+    }
+
     // ── 채팅 ──
     if (action === "chat") {
       if (!body.message?.trim()) return NextResponse.json({ success: false }, { status: 400 });

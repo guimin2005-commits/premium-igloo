@@ -39,6 +39,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [volume, setVolume] = useState(60); // 0~100
   const [scoutResult, setScoutResult] = useState<any>(null); // 스카우터 결과 연출 오버레이
   const [goldenFx, setGoldenFx] = useState(false);           // 황금카드 등장 애니메이션
+  const [nextFx, setNextFx] = useState<string | null>(null); // 다음 매물 전환 배너
+  const [mobileTab, setMobileTab] = useState<"main" | "teams" | "chat">("main"); // 모바일 섹션 전환
   const [profiles, setProfiles] = useState<Record<string, any>>({});
   const [confirmCfg, setConfirmCfg] = useState<any>(null); // {title, message, confirmLabel, onConfirm}
   const [strategyModalOpen, setStrategyModalOpen] = useState(false);
@@ -88,7 +90,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     } catch {}
   }, []);
   const sfxBid = useCallback(() => playTone(760, 0.07, 0.035), [playTone]);
-  const sfxCall = useCallback(() => { playTone(520, 0.1, 0.04); setTimeout(() => playTone(780, 0.12, 0.04), 110); }, [playTone]);
+  // 다음 매물 호명 — 리더들이 바로 인지하도록 또렷한 3음 차임
+  const sfxCall = useCallback(() => { playTone(523, 0.11, 0.05); setTimeout(() => playTone(659, 0.11, 0.05), 120); setTimeout(() => playTone(988, 0.2, 0.055), 240); }, [playTone]);
   // 낙찰 축하 (경쾌한 아르페지오 + 반짝임, 과하지 않게)
   const sfxSold = useCallback(() => {
     [523, 659, 784].forEach((f, i) => setTimeout(() => playTone(f, 0.1, 0.04), i * 80));
@@ -158,6 +161,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             setTimeout(() => setGoldenFx(false), 4300);
           } else {
             sfxCall();
+            // 다음 매물 전환 배너 (리더 즉시 인지용)
+            setNextFx(a.players[a.current.playerIdx]?.alias || "");
+            setTimeout(() => setNextFx(null), 2200);
           }
         }
         else if (a.current.price > ps.price && a.current.playerIdx === ps.playerIdx) {
@@ -255,6 +261,17 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       return { success: false };
     }
   };
+
+  // 📌 입장 알림 — 세션당 1회만 전송
+  useEffect(() => {
+    if (!auction || status !== "authenticated" || !session?.user?.name) return;
+    const key = `auctionJoined:${id}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    } catch {}
+    act({ action: "enter", userName: session.user.name });
+  }, [auction ? id : null, status]); // eslint-disable-line
 
   const sendChat = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -521,10 +538,21 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      <div className="w-full max-w-[1720px] mx-auto px-4 md:px-8 py-6 flex-1 flex flex-wrap gap-5 items-start">
+      {/* 📱 모바일 섹션 전환 탭 */}
+      <div className="lg:hidden sticky top-[6.7rem] z-20 w-full px-4 py-2 bg-[#090909]/92 backdrop-blur-xl border-b border-white/5">
+        <div className="grid grid-cols-3 gap-1.5">
+          {([["main", "경매"], ["teams", "팀 현황"], ["chat", "채팅"]] as const).map(([key, label]) => (
+            <button key={key} onClick={() => setMobileTab(key)} className={`py-2 text-xs font-black rounded-lg transition-all ${mobileTab === key ? "bg-[#e91e3f] text-white shadow-[0_3px_14px_rgba(233,30,63,0.35)]" : "bg-white/[0.04] text-gray-500 border border-white/5"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="w-full max-w-[1720px] mx-auto px-4 md:px-8 py-4 lg:py-6 flex-1 flex flex-wrap gap-5 items-start">
 
         {/* ═══ 좌측 세로 레일: 팀 현황판 ═══ */}
-        <aside className="w-full lg:w-[280px] shrink-0 order-2 lg:order-1 lg:sticky lg:top-36 lg:max-h-[calc(100vh-11rem)] lg:overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full lg:pr-1">
+        <aside className={`${mobileTab === "teams" ? "block" : "hidden"} lg:block w-full lg:w-[280px] shrink-0 order-2 lg:order-1 lg:sticky lg:top-36 lg:max-h-[calc(100vh-11rem)] lg:overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full lg:pr-1`}>
           <div className="flex items-baseline gap-3 mb-3 px-1">
             <span className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f]">TEAMS</span>
             <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
@@ -593,7 +621,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </aside>
 
         {/* ═══ 중앙: 경매 메인 ═══ */}
-        <div className="flex-1 min-w-0 w-full lg:w-auto space-y-5 order-1 lg:order-2" style={{ minWidth: "min(100%, 400px)" }}>
+        <div className={`${mobileTab === "main" ? "block" : "hidden"} lg:block flex-1 min-w-0 w-full lg:w-auto space-y-4 lg:space-y-5 order-1 lg:order-2`} style={{ minWidth: "min(100%, 400px)" }}>
 
           {/* 리더: 준비 배너 (경매 시작 전, 눈에 확 띄게) */}
           {myLeader && auction.status === "준비중" && (
@@ -921,7 +949,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </div>
 
         {/* ═══ 우측: 실시간 채팅 + 로그 ═══ */}
-        <div className="w-full xl:w-[350px] shrink-0 order-3 flex flex-col gap-5 xl:sticky xl:top-36 xl:self-start xl:max-h-[calc(100vh-11rem)]">
+        <div className={`${mobileTab === "chat" ? "flex" : "hidden"} lg:flex w-full xl:w-[350px] shrink-0 order-3 flex-col gap-5 xl:sticky xl:top-36 xl:self-start xl:max-h-[calc(100vh-11rem)]`}>
           <div className="rounded-2xl bg-[#111111]/95 border border-white/5 flex flex-col flex-1 min-h-[380px] xl:min-h-0 overflow-hidden">
             <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>
@@ -929,7 +957,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
             <div ref={chatBoxRef} className="flex-1 overflow-y-auto overscroll-contain p-3 space-y-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
               {chat.length === 0 && <p className="text-center text-[11px] text-gray-700 py-6">아직 메시지가 없습니다.</p>}
-              {chat.map((m, i) => m.isSystem ? (
+              {chat.map((m, i) => m.kind === "join" ? (
+                /* 입장 알림 — 최소화 표시 */
+                <p key={m._id || i} className="text-center text-[10px] text-gray-600 py-0.5">{m.message}</p>
+              ) : m.isSystem ? (
                 <div key={m._id || i} className="flex items-center justify-center gap-2 bg-[#e91e3f]/[0.05] border border-[#e91e3f]/10 rounded-lg px-3 py-2">
                   <span className="shrink-0 w-5 h-5 rounded-md bg-[#e91e3f]/15 flex items-center justify-center">
                     <MegaphoneIcon className="w-3 h-3 text-[#e91e3f]" />
@@ -1029,6 +1060,32 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           </div>
         );
       })()}
+
+      {/* 다음 매물 전환 배너 — 호명 즉시 전원 인지 */}
+      {nextFx !== null && (
+        <div className="fixed top-32 left-1/2 -translate-x-1/2 z-[125] pointer-events-none">
+          <div className="animate-[nextFxIn_2.2s_ease-in-out_forwards]">
+            <div className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/70 via-[#e91e3f]/25 to-transparent p-px shadow-[0_16px_50px_rgba(233,30,63,0.45)]">
+              <div className="rounded-2xl bg-[#150a0d] px-7 py-4 flex items-center gap-3.5">
+                <span className="w-8 h-8 rounded-xl bg-[#e91e3f]/15 flex items-center justify-center shrink-0">
+                  <MegaphoneIcon className="w-4 h-4 text-[#e91e3f]" />
+                </span>
+                <div>
+                  <p className="text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase">Next Player</p>
+                  <p className="text-lg font-black text-white tracking-tight leading-tight">{nextFx} <span className="text-xs text-gray-400 font-bold">경매 시작</span></p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <style dangerouslySetInnerHTML={{__html: `
+            @keyframes nextFxIn {
+              0% { opacity: 0; transform: translateY(-16px) scale(0.92); }
+              12%, 82% { opacity: 1; transform: translateY(0) scale(1); }
+              100% { opacity: 0; transform: translateY(-10px) scale(0.96); }
+            }
+          `}} />
+        </div>
+      )}
 
       {/* 황금카드 소환 연출 — 중앙에서 실체화 → 플립 공개 → 소멸 */}
       {goldenFx && (
