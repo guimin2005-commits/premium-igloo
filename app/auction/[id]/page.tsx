@@ -40,7 +40,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [scoutResult, setScoutResult] = useState<any>(null); // 스카우터 결과 연출 오버레이
   const [goldenFx, setGoldenFx] = useState(false);           // 황금카드 등장 애니메이션
   const [nextFx, setNextFx] = useState<string | null>(null); // 다음 매물 전환 배너
-  const [mobileTab, setMobileTab] = useState<"main" | "teams" | "chat">("main"); // 모바일 섹션 전환
+  const [mobileTab, setMobileTab] = useState<"main" | "teams">("main"); // 모바일 섹션 전환 (경매+채팅 통합 / 팀 현황)
   const [profiles, setProfiles] = useState<Record<string, any>>({});
   const [confirmCfg, setConfirmCfg] = useState<any>(null); // {title, message, confirmLabel, onConfirm}
   const [strategyModalOpen, setStrategyModalOpen] = useState(false);
@@ -97,6 +97,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     [523, 659, 784].forEach((f, i) => setTimeout(() => playTone(f, 0.1, 0.04), i * 80));
     setTimeout(() => playTone(1047, 0.22, 0.045), 260);
     setTimeout(() => playTone(1568, 0.12, 0.02, "triangle"), 340);
+  }, [playTone]);
+  // 낙찰 선언 (경매봉 두드림 — 탁! 탁!)
+  const sfxHammer = useCallback(() => {
+    playTone(180, 0.09, 0.07, "square");
+    playTone(90, 0.12, 0.06, "sine");
+    setTimeout(() => { playTone(180, 0.09, 0.075, "square"); playTone(90, 0.14, 0.065, "sine"); }, 180);
+    setTimeout(() => playTone(659, 0.25, 0.04), 420);
   }, [playTone]);
   // 스카우터 결과 (신비로운 차임)
   const sfxScout = useCallback(() => { playTone(880, 0.1, 0.035, "triangle"); setTimeout(() => playTone(1175, 0.14, 0.04, "triangle"), 110); setTimeout(() => playTone(1568, 0.2, 0.035, "triangle"), 240); }, [playTone]);
@@ -169,6 +176,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         else if (a.current.price > ps.price && a.current.playerIdx === ps.playerIdx) {
           if (a.current.isAllin) sfxAllin(); else sfxBid();
         }
+        // 낙찰 선언(배정 대기 진입) → 망치 소리
+        const paIdx = a.pendingAssign?.playerIdx ?? null;
+        if (paIdx !== null && paIdx !== (ps.paIdx ?? null)) sfxHammer();
         if (soldCount > (ps.soldCount || 0)) sfxSold();
         if (passCount > (ps.passCount || 0)) sfxPass();
         if (revealIdx !== null && revealIdx !== ps.revealIdx) sfxReveal();
@@ -176,7 +186,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         if (ps.status === "준비중" && a.status === "진행중") sfxStart();
         if (ps.status === "진행중" && a.status === "종료") sfxEnd();
         if ((ps.phase ?? 0) < a.phase) sfxPhase();
-        prevState.current = { ...ps, price: a.current.price, playerIdx: a.current.playerIdx, soldCount, passCount, revealIdx, strategyOn, status: a.status, phase: a.phase };
+        prevState.current = { ...ps, price: a.current.price, playerIdx: a.current.playerIdx, soldCount, passCount, revealIdx, strategyOn, status: a.status, phase: a.phase, paIdx };
 
         setAuction(a);
         if (d.chat?.length) {
@@ -193,7 +203,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     poll();
     const t = setInterval(poll, POLL_MS);
     return () => { alive = false; clearInterval(t); };
-  }, [id, status, sfxBid, sfxCall, sfxSold, sfxPass, sfxAllin, sfxReveal, sfxStrategy, sfxStart, sfxEnd, sfxPhase, sfxChat, sfxGolden]);
+  }, [id, status, sfxBid, sfxCall, sfxSold, sfxPass, sfxAllin, sfxReveal, sfxStrategy, sfxStart, sfxEnd, sfxPhase, sfxChat, sfxGolden, sfxHammer]);
 
   // 타이머 시계 + 마감 임박 사운드 (5초 경고 → 3·2·1 틱 → 타임업 버저)
   useEffect(() => {
@@ -538,10 +548,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      {/* 📱 모바일 섹션 전환 탭 */}
+      {/* 📱 모바일 섹션 전환 탭 — 경매+채팅 통합 (라이브 스트리밍 스타일) */}
       <div className="lg:hidden sticky top-[6.7rem] z-20 w-full px-4 py-2 bg-[#090909]/92 backdrop-blur-xl border-b border-white/5">
-        <div className="grid grid-cols-3 gap-1.5">
-          {([["main", "경매"], ["teams", "팀 현황"], ["chat", "채팅"]] as const).map(([key, label]) => (
+        <div className="grid grid-cols-2 gap-1.5">
+          {([["main", "경매 · 채팅"], ["teams", "팀 현황"]] as const).map(([key, label]) => (
             <button key={key} onClick={() => setMobileTab(key)} className={`py-2 text-xs font-black rounded-lg transition-all ${mobileTab === key ? "bg-[#e91e3f] text-white shadow-[0_3px_14px_rgba(233,30,63,0.35)]" : "bg-white/[0.04] text-gray-500 border border-white/5"}`}>
               {label}
             </button>
@@ -949,8 +959,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </div>
 
         {/* ═══ 우측: 실시간 채팅 + 로그 ═══ */}
-        <div className={`${mobileTab === "chat" ? "flex" : "hidden"} lg:flex w-full xl:w-[350px] shrink-0 order-3 flex-col gap-5 xl:sticky xl:top-36 xl:self-start xl:max-h-[calc(100vh-11rem)]`}>
-          <div className="rounded-2xl bg-[#111111]/95 border border-white/5 flex flex-col flex-1 min-h-[380px] xl:min-h-0 overflow-hidden">
+        {/* 모바일: 경매 탭에 채팅이 함께 표시 (스트리밍 스타일 · 컴팩트 높이) */}
+        <div className={`${mobileTab === "main" ? "flex" : "hidden"} lg:flex w-full xl:w-[350px] shrink-0 order-3 flex-col gap-5 xl:sticky xl:top-36 xl:self-start xl:max-h-[calc(100vh-11rem)]`}>
+          <div className="rounded-2xl bg-[#111111]/95 border border-white/5 flex flex-col overflow-hidden h-[38vh] max-h-[340px] lg:h-auto lg:max-h-none lg:flex-1 lg:min-h-[380px] xl:min-h-0">
             <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>
               <span className="text-xs font-black text-white">실시간 채팅</span>
@@ -980,7 +991,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </form>
           </div>
 
-          <div className="rounded-2xl bg-[#111111]/95 border border-white/5 p-4 max-h-44 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10">
+          <div className="hidden lg:block rounded-2xl bg-[#111111]/95 border border-white/5 p-4 max-h-44 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10">
             <p className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase mb-2.5">경매 로그</p>
             <div className="space-y-1">
               {[...auction.log].reverse().map((l: any, i: number) => (
