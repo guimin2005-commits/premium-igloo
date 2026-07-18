@@ -1220,28 +1220,28 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {/* 스카우터 결과 — 게임식 판정 연출 */}
+      {/* 스카우터 결과 — 화면을 가리지 않는 플로팅 리포트 (입찰 UI 유지) */}
       {scoutResult && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in zoom-in-95 duration-300" onClick={() => setScoutResult(null)}>
-          <div className="relative w-full max-w-md text-center">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[300px] bg-[#e91e3f]/15 blur-[100px] rounded-full pointer-events-none animate-[pulseGlow_2s_ease-in-out_infinite]"></div>
-            <div className="relative z-10">
-              <p className="text-[11px] font-black tracking-[0.5em] text-[#e91e3f] uppercase mb-2 animate-pulse">Scout Report</p>
-              <p className="text-2xl font-black text-white tracking-tight mb-8">{scoutResult.alias}</p>
-              <div className="grid grid-cols-2 gap-4 max-w-xs mx-auto">
+        <div className="fixed top-32 right-4 md:right-8 z-[130] pointer-events-none animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/60 via-[#e91e3f]/20 to-transparent p-px shadow-[0_16px_50px_rgba(233,30,63,0.4)]">
+            <div className="rounded-2xl bg-[#150a0d]/98 backdrop-blur-md px-5 py-4 min-w-[240px]">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_1.5s_ease-in-out_infinite]"></span>
+                <p className="text-[9px] font-black tracking-[0.35em] text-[#e91e3f] uppercase">Scout Report</p>
+                <span className="ml-auto text-[10px] font-bold text-gray-500">{scoutResult.alias}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
                 {[
                   { label: "주 포지션", value: scoutResult.mainPos || "?", primary: true },
                   { label: "부 포지션", value: scoutResult.subPos || "없음", primary: false },
                 ].map((item, i) => (
-                  <div key={i} className={`relative rounded-2xl p-px ${item.primary ? "bg-gradient-to-b from-[#e91e3f] via-[#e91e3f]/30 to-transparent" : "bg-gradient-to-b from-white/25 via-white/10 to-transparent"}`}>
-                    <div className="rounded-2xl bg-[#120a0c] px-4 py-7">
-                      <p className="text-[9px] font-black tracking-[0.3em] text-gray-500 uppercase mb-3">{item.label}</p>
-                      <p className={`text-3xl font-black tracking-tight ${item.value === "탱커" ? "text-blue-400" : item.value === "딜러" ? "text-[#e91e3f]" : item.value === "힐러" ? "text-emerald-400" : "text-gray-500"}`}>{item.value}</p>
-                    </div>
+                  <div key={i} className={`rounded-xl border px-3 py-3 text-center ${item.primary ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : "border-white/10 bg-white/[0.03]"}`}>
+                    <p className="text-[8px] font-black tracking-[0.25em] text-gray-500 uppercase mb-1.5">{item.label}</p>
+                    <p className={`text-xl font-black tracking-tight ${item.value === "탱커" ? "text-blue-400" : item.value === "딜러" ? "text-[#e91e3f]" : item.value === "힐러" ? "text-emerald-400" : "text-gray-500"}`}>{item.value}</p>
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] text-gray-600 mt-8">이 정보는 나에게만 공개됩니다 · 클릭하여 닫기</p>
+              <p className="text-[9px] text-gray-600 mt-2.5 text-center">이 정보는 나에게만 공개됩니다</p>
             </div>
           </div>
         </div>
