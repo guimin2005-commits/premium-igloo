@@ -80,6 +80,58 @@ export default function AdminWritePage() {
   const [tournamentStartDate, setTournamentStartDate] = useState("");
   const [tournamentEndDate, setTournamentEndDate] = useState("");
 
+  // 📌 보류(임시저장) — 작성 중인 글을 저장해두고 나중에 이어서 작성
+  const [hasDraft, setHasDraft] = useState(false);
+  const DRAFT_KEY = "writeDraft";
+
+  const collectDraft = () => ({
+    category, title, content, publishAt, noticeTag, isPinned, bannerUrl,
+    eventTag, eventStartDate, eventEndDate, isEventAlways,
+    recruitSubCategory, recruitRole, recruitStartDate, recruitEndDate, isRecruitAlways, recruitQual, recruitTasks, recruitExtra,
+    tournamentGame, tournamentPrize, tournamentStatus, tournamentLink, tournamentBracket, tournamentWinner, tournamentWinnerId, tournamentStartDate, tournamentEndDate,
+    savedAt: new Date().toISOString(),
+  });
+
+  const saveDraft = () => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(collectDraft()));
+      setHasDraft(true);
+      setPopupConfig({ isOpen: true, message: "작성 중인 글이 보류되었습니다.\n다음에 글쓰기 페이지에 들어오면 이어서 작성할 수 있습니다.", isError: false });
+    } catch {
+      setPopupConfig({ isOpen: true, message: "보류 저장에 실패했습니다.", isError: true });
+    }
+  };
+
+  const restoreDraft = () => {
+    try {
+      const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+      if (!d) return;
+      setCategory(d.category || "공지사항"); setTitle(d.title || ""); setContent(d.content || ""); setPublishAt(d.publishAt || "");
+      setNoticeTag(d.noticeTag || "일반"); setIsPinned(!!d.isPinned); setBannerUrl(d.bannerUrl || "");
+      setEventTag(d.eventTag || "NONE"); setEventStartDate(d.eventStartDate || ""); setEventEndDate(d.eventEndDate || ""); setIsEventAlways(!!d.isEventAlways);
+      setRecruitSubCategory(d.recruitSubCategory || "staff"); setRecruitRole(d.recruitRole || ""); setRecruitStartDate(d.recruitStartDate || ""); setRecruitEndDate(d.recruitEndDate || "");
+      setIsRecruitAlways(!!d.isRecruitAlways); setRecruitQual(d.recruitQual || ""); setRecruitTasks(d.recruitTasks || ""); setRecruitExtra(d.recruitExtra || "");
+      setTournamentGame(d.tournamentGame || ""); setTournamentPrize(d.tournamentPrize || ""); setTournamentStatus(d.tournamentStatus || "예정됨"); setTournamentLink(d.tournamentLink || "");
+      setTournamentBracket(d.tournamentBracket || ""); setTournamentWinner(d.tournamentWinner || ""); setTournamentWinnerId(d.tournamentWinnerId || "");
+      setTournamentStartDate(d.tournamentStartDate || ""); setTournamentEndDate(d.tournamentEndDate || "");
+      setHasDraft(false);
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {}
+  };
+
+  const discardDraft = () => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+    setHasDraft(false);
+  };
+
+  useEffect(() => {
+    // 수정 모드가 아닐 때만 보류 글 안내
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (!params.get("id") && localStorage.getItem(DRAFT_KEY)) setHasDraft(true);
+    } catch {}
+  }, []);
+
   const categories = ["공지사항", "이벤트", "구인", "대회"];
 
   useEffect(() => {
@@ -284,6 +336,20 @@ export default function AdminWritePage() {
 
         <div className="flex flex-col gap-2 border-b border-white/10 pb-4 focus-within:border-[#e91e3f] transition-colors">
           <span className="text-xs font-bold text-[#e91e3f] tracking-wider uppercase">{category} TITLE</span>
+          {/* 보류된 글 이어서 작성 배너 */}
+          {hasDraft && (
+            <div className="mb-6 rounded-2xl border border-[#e91e3f]/25 bg-[#e91e3f]/[0.05] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-white">보류된 글이 있습니다</p>
+                <p className="text-xs text-gray-400 mt-0.5">이전에 작성하다 보류한 글을 이어서 작성할 수 있습니다.</p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button type="button" onClick={discardDraft} className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white bg-white/5 rounded-lg transition-colors">삭제</button>
+                <button type="button" onClick={restoreDraft} className="px-4 py-2 text-xs font-black text-white bg-[#e91e3f] hover:bg-[#d01634] rounded-lg transition-colors">이어서 작성</button>
+              </div>
+            </div>
+          )}
+
           <input type="text" placeholder="제목을 입력하세요" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} required className="w-full bg-transparent text-3xl md:text-4xl font-black text-white placeholder:text-neutral-800 outline-none tracking-tight"/>
 
           {/* 📌 예약 발행 */}
@@ -466,6 +532,9 @@ export default function AdminWritePage() {
 
         <div className="flex items-center justify-between pt-6 border-t border-white/5">
           <button type="button" onClick={() => router.back()} className="text-sm font-bold text-gray-600 hover:text-white transition-colors">취소</button>
+          {!editId && (
+            <button type="button" onClick={saveDraft} className="px-6 py-3.5 rounded-xl text-sm font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/25 transition-all">보류</button>
+          )}
           <button type="submit" disabled={isSubmitting || !isFormValid()} className={`px-8 py-3.5 rounded-xl text-sm font-bold transition-all ${isSubmitting || !isFormValid() ? "bg-white/5 text-gray-600 cursor-not-allowed" : "bg-white text-black hover:bg-gray-200"}`}>{isSubmitting ? "처리 중..." : editId ? "수정하기" : "등록하기"}</button>
         </div>
       </form>

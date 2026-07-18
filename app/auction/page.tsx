@@ -7,6 +7,27 @@ import { Reveal, LuxStyles } from "../components/Lux";
 
 const ADMIN_USERS = ["elahw.06"];
 
+// 📌 아무 의미 없는 랜덤 익명 닉네임 생성기
+const NICK_ADJ = [
+  "무지개", "눅눅한", "바삭한", "졸린", "신난", "수줍은", "당당한", "미지근한", "얼어붙은", "말랑한",
+  "시큼한", "달콤한", "매콤한", "심심한", "화려한", "투명한", "반짝이는", "느긋한", "재빠른", "엉뚱한",
+  "고요한", "우렁찬", "조그만", "커다란", "삐딱한", "동그란", "네모난", "푹신한", "딱딱한", "촉촉한",
+  "건조한", "뜨끈한", "서늘한", "몽롱한", "또렷한", "낡은", "새것같은", "빈티지", "미래형", "전설의",
+];
+const NICK_NOUN = [
+  "머그컵", "감자칩", "슬리퍼", "선인장", "고등어", "우산", "베개", "양말", "타코야키", "붕어빵",
+  "책갈피", "리모컨", "화분", "물티슈", "계란찜", "주전자", "목도리", "냄비뚜껑", "젤리", "식빵",
+  "돌멩이", "구름", "만두", "김밥", "라디오", "스탬프", "지우개", "테이프", "빨대", "단추",
+  "쿠션", "달력", "옷걸이", "삼각김밥", "가습기", "멀티탭", "귤껍질", "아이스크림", "종이비행기", "고무장갑",
+];
+const randomNick = (used: Set<string>) => {
+  for (let i = 0; i < 80; i++) {
+    const nick = `${NICK_ADJ[Math.floor(Math.random() * NICK_ADJ.length)]} ${NICK_NOUN[Math.floor(Math.random() * NICK_NOUN.length)]}`;
+    if (!used.has(nick)) return nick;
+  }
+  return `익명${Math.floor(Math.random() * 1000)}`;
+};
+
 export default function AuctionListPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -33,6 +54,25 @@ export default function AuctionListPage() {
     setLeaders((prev) => prev.map((l, idx) => (idx === i ? { ...l, [key]: value } : l)));
   const updatePlayer = (i: number, key: string, value: any) =>
     setPlayers((prev) => prev.map((p, idx) => (idx === i ? { ...p, [key]: value } : p)));
+
+  // 랜덤 닉네임: 개별 지정 (현재 목록과 중복 방지)
+  const rollNick = (i: number) => {
+    setPlayers((prev) => {
+      const used = new Set(prev.filter((_, idx) => idx !== i).map((p) => p.alias));
+      return prev.map((p, idx) => (idx === i ? { ...p, alias: randomNick(used) } : p));
+    });
+  };
+  // 랜덤 닉네임: 전체 일괄 지정
+  const rollAllNicks = () => {
+    setPlayers((prev) => {
+      const used = new Set<string>();
+      return prev.map((p) => {
+        const nick = randomNick(used);
+        used.add(nick);
+        return { ...p, alias: nick };
+      });
+    });
+  };
 
   const fetchList = () => {
     fetch("/api/auction", { cache: "no-store" })
@@ -194,7 +234,10 @@ export default function AuctionListPage() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-xs font-bold text-gray-500">선수 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({players.filter(p => p.alias.trim()).length}명)</span></label>
-                  <button type="button" onClick={() => setPlayers([...players, { alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", isAllPos: false }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">선수 추가</button>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={rollAllNicks} className="text-[11px] font-black text-gray-400 bg-white/5 border border-white/10 px-3.5 py-1.5 rounded-full hover:text-white hover:border-white/25 transition-colors">전체 랜덤 닉네임</button>
+                    <button type="button" onClick={() => setPlayers([...players, { alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", isAllPos: false }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">선수 추가</button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   {players.map((p, i) => (
@@ -208,7 +251,12 @@ export default function AuctionListPage() {
                           )}
                         </div>
                       </div>
-                      <input type="text" placeholder="익명 닉네임" value={p.alias} onChange={(e) => updatePlayer(i, "alias", e.target.value)} className={`${inputClass} mb-2.5`} />
+                      <div className="flex gap-1.5 mb-2.5">
+                        <input type="text" placeholder="익명 닉네임" value={p.alias} onChange={(e) => updatePlayer(i, "alias", e.target.value)} className={inputClass} />
+                        <button type="button" onClick={() => rollNick(i)} title="랜덤 닉네임" className="shrink-0 px-3.5 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-[#e91e3f]/40 transition-all">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                        </button>
+                      </div>
                       <input type="text" placeholder="디스코드 ID (선택 · 낙찰 후 프로필 공개용)" value={p.discordId} onChange={(e) => updatePlayer(i, "discordId", e.target.value)} className={`${inputClass} mb-2.5`} />
                       <div className="grid grid-cols-2 gap-2 mb-2.5">
                         <input type="text" placeholder="최고 티어" value={p.peakTier} onChange={(e) => updatePlayer(i, "peakTier", e.target.value)} className={inputClass} />
