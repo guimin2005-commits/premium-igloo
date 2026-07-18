@@ -147,7 +147,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           if (a.players[a.current.playerIdx]?.isAllPos) {
             sfxGolden();
             setGoldenFx(true);
-            setTimeout(() => setGoldenFx(false), 3600);
+            setTimeout(() => setGoldenFx(false), 4000);
           } else {
             sfxCall();
           }
@@ -1026,10 +1026,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       {goldenFx && (
         <div className="fixed inset-0 z-[135] pointer-events-none overflow-hidden" style={{ perspective: "1400px" }}>
           {/* 황금빛 섬광 */}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-500/[0.07] to-transparent animate-[goldenFlash_3.2s_ease-in-out_forwards]"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-500/[0.07] to-transparent animate-[goldenFlash_3.6s_ease-in-out_forwards]"></div>
 
           {/* 날아가는 황금 카드 — 끊김 없이 회전하며 통과 */}
-          <div className="absolute top-1/2 left-0 animate-[goldenFly_3.2s_cubic-bezier(0.3,0,0.3,1)_forwards]" style={{ transformStyle: "preserve-3d" }}>
+          <div className="absolute top-1/2 left-0 animate-[goldenFly_3.6s_cubic-bezier(0.3,0,0.3,1)_forwards]" style={{ transformStyle: "preserve-3d" }}>
             <div className="relative" style={{ transformStyle: "preserve-3d" }}>
               <div className="absolute -inset-10 bg-yellow-400/30 blur-3xl rounded-full animate-[pulseGlow_1s_ease-in-out_infinite]" style={{ transform: "translateZ(-1px)" }}></div>
               {/* 방사형 광선 */}
@@ -1077,8 +1077,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* 상단 텍스트 플래시 (중앙 카드와 겹치지 않게 위쪽 배치) */}
-          <div className="absolute inset-x-0 top-[10vh] flex items-start justify-center animate-[goldenText_3.2s_ease-in-out_forwards]">
+          {/* 텍스트 — 중앙 카드 바로 아래, 공개(플립) 순간에 등장 */}
+          <div className="absolute inset-x-0 top-1/2 flex justify-center animate-[goldenText_3.6s_ease-in-out_forwards]" style={{ transform: "translateY(9.5rem)" }}>
             <p className="text-3xl md:text-6xl font-black tracking-[0.2em] uppercase" style={{ background: "linear-gradient(110deg, #fef9c3 20%, #f59e0b 45%, #fde047 55%, #fef9c3 80%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "goldenShine 1.5s linear infinite", filter: "drop-shadow(0 0 24px rgba(250,204,21,0.5))" }}>
               GOLDEN CARD
             </p>
@@ -1086,12 +1086,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
           <style dangerouslySetInnerHTML={{__html: `
             @keyframes goldenFly {
-              /* 좌하단 대각선 진입 → 날아오며 딱 한 바퀴 → 중앙 정지(앞면 감상) → 우측 퇴장 */
-              0% { transform: translateY(-50%) translate(-30vw, 42vh) rotateY(0deg) rotateZ(-16deg) scale(0.65); opacity: 0; }
-              8% { opacity: 1; }
-              40% { transform: translateY(-50%) translate(42vw, 0vh) rotateY(360deg) rotateZ(0deg) scale(1.18); }
-              68% { transform: translateY(-50%) translate(42vw, 0vh) rotateY(360deg) rotateZ(0deg) scale(1.18); }
-              100% { transform: translateY(-50%) translate(125vw, -6vh) rotateY(360deg) rotateZ(10deg) scale(0.9); opacity: 1; }
+              /* 히든 카드 공개 연출: 왼쪽에서 뒷면으로 등장 → 중앙 정지 → 뒤집으며 공개 → 앞면 감상 → 퇴장 */
+              0% { transform: translateY(-50%) translateX(-30vw) rotateY(180deg) scale(0.8); opacity: 0; }
+              6% { opacity: 1; }
+              30% { transform: translateY(-50%) translateX(42vw) rotateY(180deg) scale(1.1); }
+              44% { transform: translateY(-50%) translateX(42vw) rotateY(180deg) scale(1.1); }
+              56% { transform: translateY(-50%) translateX(42vw) rotateY(360deg) scale(1.2); }
+              82% { transform: translateY(-50%) translateX(42vw) rotateY(360deg) scale(1.2); }
+              100% { transform: translateY(-50%) translateX(125vw) rotateY(360deg) rotateZ(8deg) scale(0.9); opacity: 1; }
             }
             @keyframes goldenGloss {
               0% { transform: translateX(-100%); }
@@ -1102,9 +1104,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               40%, 60% { opacity: 1; }
             }
             @keyframes goldenText {
-              0%, 25% { opacity: 0; transform: scale(0.9); }
-              45%, 70% { opacity: 1; transform: scale(1); }
-              100% { opacity: 0; transform: scale(1.05); }
+              /* 카드가 뒤집혀 공개되는 순간(약 56%)에 맞춰 등장 */
+              0%, 50% { opacity: 0; }
+              58%, 84% { opacity: 1; }
+              100% { opacity: 0; }
             }
             @keyframes goldenShine {
               0% { background-position: 0% center; }
