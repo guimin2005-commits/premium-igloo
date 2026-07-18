@@ -147,7 +147,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           if (a.players[a.current.playerIdx]?.isAllPos) {
             sfxGolden();
             setGoldenFx(true);
-            setTimeout(() => setGoldenFx(false), 4000);
+            setTimeout(() => setGoldenFx(false), 4300);
           } else {
             sfxCall();
           }
@@ -1022,96 +1022,107 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         );
       })()}
 
-      {/* 황금카드 등장 애니메이션 — 전원 화면에 화려하게 지나감 */}
+      {/* 황금카드 소환 연출 — 중앙에서 실체화 → 플립 공개 → 소멸 */}
       {goldenFx && (
         <div className="fixed inset-0 z-[135] pointer-events-none overflow-hidden" style={{ perspective: "1400px" }}>
-          {/* 황금빛 섬광 */}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-500/[0.07] to-transparent animate-[goldenFlash_3.6s_ease-in-out_forwards]"></div>
+          {/* 배경 딤 + 골드 비네트 */}
+          <div className="absolute inset-0 animate-[gcBackdrop_4s_ease-in-out_forwards]" style={{ background: "radial-gradient(ellipse at 50% 50%, rgba(30,22,4,0.55) 0%, rgba(0,0,0,0.75) 100%)" }}></div>
 
-          {/* 날아가는 황금 카드 — 끊김 없이 회전하며 통과 */}
-          <div className="absolute top-1/2 left-0 animate-[goldenFly_3.6s_cubic-bezier(0.3,0,0.3,1)_forwards]" style={{ transformStyle: "preserve-3d" }}>
-            <div className="relative" style={{ transformStyle: "preserve-3d" }}>
-              <div className="absolute -inset-10 bg-yellow-400/30 blur-3xl rounded-full animate-[pulseGlow_1s_ease-in-out_infinite]" style={{ transform: "translateZ(-1px)" }}></div>
-              {/* 방사형 광선 */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                {[0, 30, 60, 90, 120, 150].map((deg) => (
-                  <span key={deg} className="absolute w-[280px] h-px bg-gradient-to-r from-transparent via-yellow-300/40 to-transparent" style={{ transform: `rotate(${deg}deg)` }}></span>
-                ))}
-              </div>
-              {/* 카드 본체 — 3D 회전 (앞/뒷면) */}
-              <div className="relative w-36 h-52 md:w-44 md:h-64" style={{ transformStyle: "preserve-3d" }}>
+          {/* 회전하는 광선 */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] h-[560px] animate-[gcRays_4s_linear_forwards]">
+            {[0, 30, 60, 90, 120, 150].map((deg) => (
+              <span key={deg} className="absolute top-1/2 left-1/2 w-[560px] h-[2px] -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-transparent via-yellow-300/35 to-transparent" style={{ transform: `translate(-50%,-50%) rotate(${deg}deg)` }}></span>
+            ))}
+          </div>
 
-                {/* ── 앞면 ── */}
-                <div className="absolute inset-0 rounded-2xl p-[3px] shadow-[0_0_80px_rgba(250,204,21,0.7),0_0_30px_rgba(250,204,21,0.9)]" style={{ backfaceVisibility: "hidden", background: "linear-gradient(135deg, #fef9c3, #f59e0b, #fde047, #b45309, #fde047)", backgroundSize: "400% 400%", animation: "goldenShine 1s linear infinite" }}>
-                  <div className="relative w-full h-full rounded-[13px] overflow-hidden" style={{ background: "radial-gradient(ellipse at 50% 35%, #3a2a08 0%, #1a1305 70%)" }}>
-                    <div className="absolute inset-[7px] rounded-[9px] border border-yellow-400/40"></div>
-                    <div className="absolute inset-[11px] rounded-[7px] border border-yellow-400/15"></div>
-                    <span className="absolute top-2.5 left-3 text-[11px] text-yellow-400/80">★</span>
-                    <span className="absolute bottom-2.5 right-3 text-[11px] text-yellow-400/80 rotate-180 inline-block">★</span>
-                    <div className="absolute inset-0 animate-[goldenGloss_1.4s_ease-in-out_infinite]" style={{ background: "linear-gradient(115deg, transparent 30%, rgba(255,255,220,0.22) 48%, rgba(255,255,220,0.32) 50%, rgba(255,255,220,0.22) 52%, transparent 70%)" }}></div>
-                    <div className="relative h-full flex flex-col items-center justify-center gap-2.5">
-                      <div className="relative">
-                        <span className="absolute inset-0 blur-md text-5xl md:text-6xl text-yellow-300/70 flex items-center justify-center">★</span>
-                        <span className="relative text-5xl md:text-6xl" style={{ background: "linear-gradient(180deg, #fef9c3, #f59e0b)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.6))" }}>★</span>
-                      </div>
-                      <div className="w-12 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
-                      <p className="text-[9px] md:text-[10px] font-black tracking-[0.35em] uppercase" style={{ background: "linear-gradient(180deg, #fef9c3, #fbbf24)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>Golden Card</p>
-                      <p className="text-base md:text-lg font-black text-yellow-50 tracking-tight" style={{ textShadow: "0 0 14px rgba(250,204,21,0.6)" }}>올 포지션</p>
-                      <div className="w-12 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
-                    </div>
+          {/* 중앙 글로우 */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[380px] h-[380px] bg-yellow-400/20 blur-[90px] rounded-full animate-[gcBackdrop_4s_ease-in-out_forwards]"></div>
+
+          {/* 카드 — 중앙 실체화 + 플립 공개 */}
+          <div className="absolute top-1/2 left-1/2 animate-[gcCard_4s_cubic-bezier(0.25,0.1,0.25,1)_forwards]" style={{ transformStyle: "preserve-3d" }}>
+            <div className="relative w-40 h-56 md:w-48 md:h-72" style={{ transformStyle: "preserve-3d" }}>
+
+              {/* 앞면 */}
+              <div className="absolute inset-0 rounded-2xl p-[3px] shadow-[0_0_70px_rgba(250,204,21,0.55)]" style={{ backfaceVisibility: "hidden", background: "linear-gradient(135deg, #fef9c3, #f59e0b, #fde047, #b45309, #fde047)", backgroundSize: "400% 400%", animation: "gcShine 1.4s linear infinite" }}>
+                <div className="relative w-full h-full rounded-[13px] overflow-hidden" style={{ background: "radial-gradient(ellipse at 50% 35%, #3a2a08 0%, #1a1305 70%)" }}>
+                  <div className="absolute inset-[8px] rounded-[9px] border border-yellow-400/40"></div>
+                  <div className="absolute inset-[13px] rounded-[7px] border border-yellow-400/15"></div>
+                  <span className="absolute top-3 left-3.5 text-xs text-yellow-400/80">★</span>
+                  <span className="absolute bottom-3 right-3.5 text-xs text-yellow-400/80 rotate-180 inline-block">★</span>
+                  <div className="absolute inset-0" style={{ background: "linear-gradient(115deg, transparent 32%, rgba(255,255,220,0.2) 48%, rgba(255,255,220,0.3) 50%, rgba(255,255,220,0.2) 52%, transparent 68%)", animation: "gcGloss 1.6s ease-in-out infinite" }}></div>
+                  <div className="relative h-full flex flex-col items-center justify-center gap-3">
+                    <span className="text-6xl md:text-7xl" style={{ background: "linear-gradient(180deg, #fef9c3, #f59e0b)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 0 14px rgba(250,204,21,0.55))" }}>★</span>
+                    <div className="w-14 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
+                    <p className="text-[10px] md:text-[11px] font-black tracking-[0.35em] uppercase text-yellow-200/90">Golden Card</p>
+                    <p className="text-lg md:text-xl font-black text-yellow-50 tracking-tight" style={{ textShadow: "0 0 16px rgba(250,204,21,0.55)" }}>올 포지션</p>
+                    <div className="w-14 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
                   </div>
                 </div>
+              </div>
 
-                {/* ── 뒷면 (카드 백 디자인) ── */}
-                <div className="absolute inset-0 rounded-2xl p-[3px] shadow-[0_0_80px_rgba(250,204,21,0.7)]" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)", background: "linear-gradient(135deg, #b45309, #fde047, #f59e0b, #fde047, #b45309)", backgroundSize: "400% 400%", animation: "goldenShine 1s linear infinite" }}>
-                  <div className="relative w-full h-full rounded-[13px] overflow-hidden flex items-center justify-center" style={{ background: "radial-gradient(ellipse at 50% 50%, #2a1e06 0%, #140e03 75%)" }}>
-                    {/* 다이아 격자 패턴 */}
-                    <div className="absolute inset-[7px] rounded-[9px] border border-yellow-400/30" style={{ backgroundImage: "repeating-linear-gradient(45deg, rgba(250,204,21,0.07) 0 2px, transparent 2px 14px), repeating-linear-gradient(-45deg, rgba(250,204,21,0.07) 0 2px, transparent 2px 14px)" }}></div>
-                    {/* 중앙 엠블럼 */}
-                    <div className="relative w-16 h-16 md:w-20 md:h-20 rounded-full border-2 border-yellow-400/50 flex items-center justify-center" style={{ background: "radial-gradient(circle, rgba(250,204,21,0.15), transparent 70%)" }}>
-                      <span className="text-2xl md:text-3xl text-yellow-400/90" style={{ filter: "drop-shadow(0 0 10px rgba(250,204,21,0.7))" }}>★</span>
-                    </div>
+              {/* 뒷면 */}
+              <div className="absolute inset-0 rounded-2xl p-[3px] shadow-[0_0_70px_rgba(250,204,21,0.55)]" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)", background: "linear-gradient(135deg, #b45309, #fde047, #f59e0b, #fde047, #b45309)", backgroundSize: "400% 400%", animation: "gcShine 1.4s linear infinite" }}>
+                <div className="relative w-full h-full rounded-[13px] overflow-hidden flex items-center justify-center" style={{ background: "radial-gradient(ellipse at 50% 50%, #2a1e06 0%, #140e03 75%)" }}>
+                  <div className="absolute inset-[8px] rounded-[9px] border border-yellow-400/30" style={{ backgroundImage: "repeating-linear-gradient(45deg, rgba(250,204,21,0.07) 0 2px, transparent 2px 14px), repeating-linear-gradient(-45deg, rgba(250,204,21,0.07) 0 2px, transparent 2px 14px)" }}></div>
+                  <div className="relative w-20 h-20 rounded-full border-2 border-yellow-400/50 flex items-center justify-center" style={{ background: "radial-gradient(circle, rgba(250,204,21,0.15), transparent 70%)" }}>
+                    <span className="text-3xl text-yellow-400/90" style={{ filter: "drop-shadow(0 0 10px rgba(250,204,21,0.7))" }}>★</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 텍스트 — 중앙 카드 바로 아래, 공개(플립) 순간에 등장 */}
-          <div className="absolute inset-x-0 top-1/2 flex justify-center animate-[goldenText_3.6s_ease-in-out_forwards]" style={{ transform: "translateY(9.5rem)" }}>
-            <p className="text-3xl md:text-6xl font-black tracking-[0.2em] uppercase" style={{ background: "linear-gradient(110deg, #fef9c3 20%, #f59e0b 45%, #fde047 55%, #fef9c3 80%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "goldenShine 1.5s linear infinite", filter: "drop-shadow(0 0 24px rgba(250,204,21,0.5))" }}>
-              GOLDEN CARD
+          {/* 공개 순간 파티클 버스트 */}
+          {[...Array(10)].map((_, i) => {
+            const angle = (i / 10) * 360;
+            return (
+              <span key={i} className="absolute top-1/2 left-1/2 text-yellow-300 text-sm" style={{ opacity: 0, animation: `gcSpark 0.9s ease-out ${1.75 + (i % 3) * 0.06}s forwards`, ["--sx" as any]: `${Math.cos((angle * Math.PI) / 180) * 170}px`, ["--sy" as any]: `${Math.sin((angle * Math.PI) / 180) * 170}px` }}>✦</span>
+            );
+          })}
+
+          {/* 타이틀 — 공개 순간 카드 아래에 등장 */}
+          <div className="absolute inset-x-0 top-1/2 flex justify-center animate-[gcTitle_4s_ease-in-out_forwards]" style={{ transform: "translateY(10.5rem)" }}>
+            <p className="text-2xl md:text-4xl font-black tracking-[0.25em] uppercase" style={{ background: "linear-gradient(110deg, #fef9c3 20%, #f59e0b 45%, #fde047 55%, #fef9c3 80%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "gcShine 1.5s linear infinite", filter: "drop-shadow(0 0 20px rgba(250,204,21,0.45))" }}>
+              Golden Card
             </p>
           </div>
 
           <style dangerouslySetInnerHTML={{__html: `
-            @keyframes goldenFly {
-              /* 히든 카드 공개 연출: 왼쪽에서 뒷면으로 등장 → 중앙 정지 → 뒤집으며 공개 → 앞면 감상 → 퇴장 */
-              0% { transform: translateY(-50%) translateX(-30vw) rotateY(180deg) scale(0.8); opacity: 0; }
-              6% { opacity: 1; }
-              30% { transform: translateY(-50%) translateX(42vw) rotateY(180deg) scale(1.1); }
-              44% { transform: translateY(-50%) translateX(42vw) rotateY(180deg) scale(1.1); }
-              56% { transform: translateY(-50%) translateX(42vw) rotateY(360deg) scale(1.2); }
-              82% { transform: translateY(-50%) translateX(42vw) rotateY(360deg) scale(1.2); }
-              100% { transform: translateY(-50%) translateX(125vw) rotateY(360deg) rotateZ(8deg) scale(0.9); opacity: 1; }
-            }
-            @keyframes goldenGloss {
-              0% { transform: translateX(-100%); }
-              60%, 100% { transform: translateX(100%); }
-            }
-            @keyframes goldenFlash {
-              0%, 100% { opacity: 0; }
-              40%, 60% { opacity: 1; }
-            }
-            @keyframes goldenText {
-              /* 카드가 뒤집혀 공개되는 순간(약 56%)에 맞춰 등장 */
-              0%, 50% { opacity: 0; }
-              58%, 84% { opacity: 1; }
+            @keyframes gcBackdrop {
+              0% { opacity: 0; }
+              12%, 82% { opacity: 1; }
               100% { opacity: 0; }
             }
-            @keyframes goldenShine {
+            @keyframes gcRays {
+              0% { opacity: 0; transform: translate(-50%, -50%) rotate(0deg); }
+              15%, 80% { opacity: 1; }
+              100% { opacity: 0; transform: translate(-50%, -50%) rotate(70deg); }
+            }
+            @keyframes gcCard {
+              /* 실체화(뒷면) → 부유 → 플립 공개 → 감상 → 소멸 */
+              0% { transform: translate(-50%, -46%) rotateY(180deg) scale(0.25); opacity: 0; filter: blur(14px); }
+              16% { transform: translate(-50%, -50%) rotateY(180deg) scale(1); opacity: 1; filter: blur(0); }
+              40% { transform: translate(-50%, -51%) rotateY(180deg) scale(1); }
+              54% { transform: translate(-50%, -50%) rotateY(360deg) scale(1.08); }
+              84% { transform: translate(-50%, -50.5%) rotateY(360deg) scale(1.08); opacity: 1; }
+              100% { transform: translate(-50%, -50%) rotateY(360deg) scale(1.22); opacity: 0; filter: blur(6px); }
+            }
+            @keyframes gcSpark {
+              0% { opacity: 1; transform: translate(-50%, -50%) scale(0.4); }
+              100% { opacity: 0; transform: translate(calc(-50% + var(--sx)), calc(-50% + var(--sy))) scale(1.3); }
+            }
+            @keyframes gcTitle {
+              0%, 46% { opacity: 0; letter-spacing: 0.5em; }
+              56%, 84% { opacity: 1; letter-spacing: 0.25em; }
+              100% { opacity: 0; }
+            }
+            @keyframes gcShine {
               0% { background-position: 0% center; }
               100% { background-position: 300% center; }
+            }
+            @keyframes gcGloss {
+              0% { transform: translateX(-110%); }
+              55%, 100% { transform: translateX(110%); }
             }
           `}} />
         </div>
