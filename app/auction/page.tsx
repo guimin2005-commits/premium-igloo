@@ -113,7 +113,7 @@ export default function AuctionListPage() {
             <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
               <span className="text-white">선수 </span><span className="lux-shimmer">경매</span>
             </h1>
-            <p className="text-gray-400 text-sm md:text-base leading-relaxed">대회 팀 구성을 위한 실시간 선수 경매 — 리더는 입찰로, 모두는 관전과 채팅으로 함께합니다.</p>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">실시간 선수 경매! 실시간 라이브 채팅으로 모두 함께!</p>
           </Reveal>
           {isAdmin && (
             <button onClick={() => setShowCreate(!showCreate)} className="shrink-0 bg-[#e91e3f] hover:bg-[#d01634] text-white font-black text-xs px-5 py-3 rounded-full transition-all active:scale-95 shadow-[0_8px_24px_rgba(233,30,63,0.3)]">
@@ -250,33 +250,95 @@ export default function AuctionListPage() {
           </Reveal>
         )}
 
+        {/* 이용 안내 — 3단계 */}
+        <Reveal>
+        <div className="grid grid-cols-3 gap-px bg-white/10 rounded-2xl overflow-hidden border border-white/10">
+          {[
+            { no: "01", t: "리더는 입찰", d: "Point로 원하는 선수를 낙찰" },
+            { no: "02", t: "모두가 관전", d: "실시간 라이브 채팅으로 응원" },
+            { no: "03", t: "팀 완성", d: "종료 후 최종 로스터 공개" },
+          ].map((s, i) => (
+            <div key={i} className="bg-[#0d0d0d] px-3 py-5 md:px-6 md:py-6 text-center group hover:bg-[#121212] transition-colors">
+              <p className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] mb-1.5">{s.no}</p>
+              <p className="text-xs md:text-sm font-black text-white mb-1">{s.t}</p>
+              <p className="text-[9px] md:text-[11px] text-gray-500 break-keep">{s.d}</p>
+            </div>
+          ))}
+        </div>
+        </Reveal>
+
         {/* 목록 */}
         {isLoading ? (
           <div className="text-center py-16 text-gray-500">불러오는 중...</div>
         ) : auctions.length === 0 ? (
-          <div className="text-center py-20 text-gray-600 bg-white/[0.02] rounded-2xl border border-white/5">
-            {isAdmin ? "개최된 경매가 없습니다. 우측 상단에서 경매를 개최해보세요." : (
-              <>
-                <p className="text-white font-black text-base mb-2">현재 진행 중인 경매가 없습니다</p>
-                <p className="text-sm">대회 시즌이 시작되면 이곳에서 실시간 선수 경매가 열립니다.<br/>공지사항을 통해 일정을 확인해주세요.</p>
-              </>
-            )}
+          <Reveal>
+          <div className="relative rounded-2xl bg-gradient-to-b from-white/[0.07] to-white/[0.02] p-px">
+            <div className="rounded-2xl bg-[#111111]/95 py-20 px-6 text-center relative overflow-hidden">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[200px] bg-[#e91e3f]/[0.05] blur-[90px] rounded-full pointer-events-none"></div>
+              <div className="relative z-10">
+                <div className="w-14 h-14 mx-auto mb-6 rounded-2xl bg-[#e91e3f]/10 border border-[#e91e3f]/20 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" className="w-6 h-6 text-[#e91e3f]"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <p className="text-white font-black text-lg mb-2">{isAdmin ? "개최된 경매가 없습니다" : "현재 진행 중인 경매가 없습니다"}</p>
+                <p className="text-sm text-gray-500 leading-relaxed">{isAdmin ? "우측 상단에서 첫 경매를 개최해보세요." : <>대회 시즌이 시작되면 이곳에서 실시간 선수 경매가 열립니다.<br/>공지사항을 통해 일정을 확인해주세요.</>}</p>
+              </div>
+            </div>
           </div>
+          </Reveal>
         ) : (
           <div className="space-y-3">
-            {auctions.map((a) => (
-              <Reveal key={a._id}>
-                <div className="flex items-center gap-4 rounded-2xl bg-[#111111]/95 border border-white/5 hover:border-[#e91e3f]/30 transition-all p-5 group cursor-pointer" onClick={() => router.push(`/auction/${a._id}`)}>
-                  <span className={`shrink-0 text-[10px] font-black px-2.5 py-1 rounded-full ${a.status === "진행중" ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25" : a.status === "종료" ? "bg-white/5 text-gray-500 border border-white/10" : "bg-blue-500/15 text-blue-400 border border-blue-500/25"}`}>{a.status}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-white truncate group-hover:text-[#ff5c77] transition-colors">{a.title}</p>
-                    <p className="text-[11px] text-gray-600 mt-0.5">리더 {a.leaderCount}명 · 선수 {a.playerCount}명 · {new Date(a.createdAt).toLocaleDateString()}</p>
+            {auctions.map((a, idx) => {
+              const isLive = a.status === "진행중";
+              return (
+                <Reveal key={a._id} delay={Math.min(idx, 4) * 80}>
+                  <div
+                    onClick={() => router.push(`/auction/${a._id}`)}
+                    className={`relative rounded-2xl p-px cursor-pointer group transition-all duration-300 ${isLive ? "bg-gradient-to-r from-emerald-500/50 via-white/[0.06] to-white/[0.02] shadow-[0_10px_40px_-12px_rgba(16,185,129,0.25)]" : "bg-gradient-to-b from-white/[0.08] to-white/[0.02] hover:from-[#e91e3f]/40"}`}
+                  >
+                    <div className="rounded-2xl bg-[#111111]/95 p-5 md:p-6 flex items-center gap-4 md:gap-5 group-hover:bg-[#141414] transition-colors">
+                      {/* 상태 */}
+                      <div className="shrink-0 flex flex-col items-center gap-1.5 w-16">
+                        {isLive ? (
+                          <>
+                            <span className="relative flex w-3 h-3">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-400"></span>
+                            </span>
+                            <span className="text-[9px] font-black tracking-widest text-emerald-400">LIVE</span>
+                          </>
+                        ) : a.status === "종료" ? (
+                          <>
+                            <span className="w-3 h-3 rounded-full bg-white/15"></span>
+                            <span className="text-[9px] font-black tracking-widest text-gray-500">종료</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="w-3 h-3 rounded-full bg-blue-400/70"></span>
+                            <span className="text-[9px] font-black tracking-widest text-blue-400">준비중</span>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="w-px self-stretch bg-white/5 shrink-0"></div>
+
+                      {/* 정보 */}
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-base md:text-lg font-black truncate transition-colors ${isLive ? "text-white" : "text-gray-200"} group-hover:text-[#ff5c77]`}>{a.title}</p>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                          <span className="text-[10px] font-bold text-gray-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">리더 {a.leaderCount}</span>
+                          <span className="text-[10px] font-bold text-gray-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">선수 {a.playerCount}</span>
+                          <span className="text-[10px] font-bold text-gray-600 px-1">{new Date(a.createdAt).toLocaleDateString("ko-KR", { month: "long", day: "numeric" })}</span>
+                        </div>
+                      </div>
+
+                      {isLive && <span className="hidden sm:block shrink-0 text-[11px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-3.5 py-1.5 rounded-full">지금 입장하기</span>}
+                      {isAdmin && <button onClick={(e) => { e.stopPropagation(); setDeleteId(a._id); }} className="shrink-0 text-xs font-bold text-red-500/60 hover:text-red-500 bg-white/5 px-3 py-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100">삭제</button>}
+                      <span className="shrink-0 text-gray-600 group-hover:text-[#e91e3f] group-hover:translate-x-1 transition-all">→</span>
+                    </div>
                   </div>
-                  {isAdmin && <button onClick={(e) => { e.stopPropagation(); setDeleteId(a._id); }} className="shrink-0 text-xs font-bold text-red-500/60 hover:text-red-500 bg-white/5 px-3 py-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100">삭제</button>}
-                  <span className="shrink-0 text-gray-600 group-hover:text-[#e91e3f] group-hover:translate-x-1 transition-all">→</span>
-                </div>
-              </Reveal>
-            ))}
+                </Reveal>
+              );
+            })}
           </div>
         )}
       </div>

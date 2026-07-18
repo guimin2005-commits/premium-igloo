@@ -449,6 +449,10 @@ export async function POST(request, { params }) {
         if ((ra.slot === "탱커") !== (rb.slot === "탱커")) {
           return NextResponse.json({ success: false, message: "탱커 슬롯은 타 포지션과 교환할 수 없습니다." }, { status: 400 });
         }
+        // 같은 포지션끼리는 교환 의미가 없으므로 금지
+        if (ra.slot === rb.slot) {
+          return NextResponse.json({ success: false, message: "같은 포지션끼리는 변경할 수 없습니다." }, { status: 400 });
+        }
         [ra.slot, rb.slot] = [rb.slot, ra.slot];
         leader.points -= S.posChangeCost;
         leader.positionChanged = true;
