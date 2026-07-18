@@ -168,8 +168,10 @@ const BracketView = ({ text }: { text: string }) => {
   );
 };
 
+// 📌 대회 상태: 예정됨 → 모집중(참가 신청 접수) → 진행중(리그 진행) → 종료됨
 const STATUS_META: Record<string, { badge: string; label: string }> = {
-  "진행중": { badge: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30", label: "진행중" },
+  "모집중": { badge: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30", label: "모집중" },
+  "진행중": { badge: "bg-[#e91e3f]/20 text-[#e91e3f] border border-[#e91e3f]/30", label: "리그 진행중" },
   "예정됨": { badge: "bg-blue-500/20 text-blue-400 border border-blue-500/30", label: "예정됨" },
   "종료됨": { badge: "bg-gray-500/20 text-gray-400 border border-white/10", label: "종료됨" },
 };
@@ -227,14 +229,15 @@ export default function TournamentPage() {
   };
 
   const sorted = [...tournaments].sort((a, b) => {
-    const order: Record<string, number> = { "진행중": 0, "예정됨": 1, "종료됨": 2 };
-    return (order[getStatus(a)] ?? 1) - (order[getStatus(b)] ?? 1);
+    const order: Record<string, number> = { "모집중": 0, "진행중": 1, "예정됨": 2, "종료됨": 3 };
+    return (order[getStatus(a)] ?? 2) - (order[getStatus(b)] ?? 2);
   });
 
   const filtered = activeFilter === "all" ? sorted : sorted.filter(t => getStatus(t) === activeFilter);
 
+  // 참가 신청은 "모집중" 상태에서만 가능
   const handleApply = (t: any) => {
-    if (getStatus(t) !== "진행중") return;
+    if (getStatus(t) !== "모집중") return;
     if (status !== "authenticated") {
       setIsLoginReqModalOpen(true);
       return;
@@ -271,7 +274,7 @@ export default function TournamentPage() {
       {/* ── 탭 (알약 스타일 · 스티키) ── */}
       <div className="sticky top-16 z-30 w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
         <div className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto whitespace-nowrap">
-          {[{ id: "all", label: "전체 대회" }, { id: "진행중", label: "진행 중 리그" }, { id: "예정됨", label: "예정된 리그" }, { id: "종료됨", label: "종료된 리그" }].map((tab) => (
+          {[{ id: "all", label: "전체 대회" }, { id: "모집중", label: "참가 신청 접수" }, { id: "진행중", label: "리그 진행 중" }, { id: "예정됨", label: "예정된 리그" }, { id: "종료됨", label: "종료된 리그" }].map((tab) => (
             <button key={tab.id} onClick={() => setActiveFilter(tab.id)} className={`px-5 py-2.5 text-xs md:text-sm font-bold rounded-full shrink-0 outline-none focus:outline-none transition-all duration-300 ${
               activeFilter === tab.id
                 ? "bg-[#e91e3f] text-white shadow-[0_4px_20px_rgba(233,30,63,0.35)]"
@@ -333,11 +336,11 @@ export default function TournamentPage() {
                   </div>
 
                   <button
-                    disabled={st !== "진행중"}
+                    disabled={st !== "모집중"}
                     onClick={(e) => { e.stopPropagation(); handleApply(t); }}
-                    className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all ${st !== "진행중" ? "bg-white/5 text-gray-600 cursor-not-allowed" : "bg-[#e91e3f] text-white hover:bg-[#d01634] active:scale-95"}`}
+                    className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all ${st === "모집중" ? "bg-[#e91e3f] text-white hover:bg-[#d01634] active:scale-95" : st === "진행중" ? "bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25 cursor-default" : "bg-white/5 text-gray-600 cursor-not-allowed"}`}
                   >
-                    {st === "진행중" ? "참가 신청하기" : st === "예정됨" ? "대진표 공개 대기" : "대회 종료"}
+                    {st === "모집중" ? "참가 신청하기" : st === "진행중" ? "리그 진행 중 — 대진표 확인" : st === "예정됨" ? "오픈 예정" : "대회 종료"}
                   </button>
                 </div>
               </div>
@@ -392,11 +395,11 @@ export default function TournamentPage() {
               {selected.tournamentBracket && <BracketView text={selected.tournamentBracket} />}
 
               <button
-                disabled={getStatus(selected) !== "진행중"}
+                disabled={getStatus(selected) !== "모집중"}
                 onClick={() => handleApply(selected)}
-                className={`w-full py-4 rounded-xl font-bold text-sm transition-all ${getStatus(selected) !== "진행중" ? "bg-white/5 text-gray-600 cursor-not-allowed" : "bg-[#e91e3f] text-white hover:bg-[#d01634] shadow-lg shadow-[#e91e3f]/20"}`}
+                className={`w-full py-4 rounded-xl font-bold text-sm transition-all ${getStatus(selected) === "모집중" ? "bg-[#e91e3f] text-white hover:bg-[#d01634] shadow-lg shadow-[#e91e3f]/20" : getStatus(selected) === "진행중" ? "bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25 cursor-default" : "bg-white/5 text-gray-600 cursor-not-allowed"}`}
               >
-                {getStatus(selected) === "진행중" ? "참가 신청하기" : getStatus(selected) === "예정됨" ? "대진표 공개 대기" : "대회 종료"}
+                {getStatus(selected) === "모집중" ? "참가 신청하기" : getStatus(selected) === "진행중" ? "리그 진행 중 — 위 대진표를 확인하세요" : getStatus(selected) === "예정됨" ? "오픈 예정" : "대회 종료"}
               </button>
             </div>
           </div>

@@ -75,6 +75,50 @@ export default function AdminWritePage() {
   const [tournamentStatus, setTournamentStatus] = useState("예정됨");
   const [tournamentLink, setTournamentLink] = useState("");
   const [tournamentBracket, setTournamentBracket] = useState("");
+
+  // 📌 대진표 비주얼 빌더 — 텍스트 형식 대신 라운드/매치 단위로 편집
+  type BracketMatch = { a: string; b: string; winner: string };
+  type BracketRound = { name: string; matches: BracketMatch[] };
+  const [bracketRounds, setBracketRounds] = useState<BracketRound[]>([]);
+
+  // 기존 텍스트 형식 ↔ 빌더 상호 변환 (표시 컴포넌트 호환 유지)
+  const parseBracket = (text: string): BracketRound[] => {
+    const rounds: BracketRound[] = [];
+    let current: BracketRound | null = null;
+    (text || "").split("\n").forEach((raw) => {
+      const line = raw.trim();
+      if (!line) return;
+      if (line.endsWith(":")) { current = { name: line.slice(0, -1).trim(), matches: [] }; rounds.push(current); return; }
+      const [matchPart, winnerPart] = line.split(">");
+      const teams = matchPart.split(/vs/i);
+      if (teams.length !== 2) return;
+      if (!current) { current = { name: "대진", matches: [] }; rounds.push(current); }
+      current.matches.push({ a: teams[0].trim(), b: teams[1].trim(), winner: (winnerPart || "").trim() });
+    });
+    return rounds;
+  };
+  const serializeBracket = (rounds: BracketRound[]): string =>
+    rounds
+      .filter((r) => r.matches.some((m) => m.a.trim() || m.b.trim()))
+      .map((r) => `${r.name || "라운드"}:\n` + r.matches.filter((m) => m.a.trim() || m.b.trim()).map((m) => `${m.a.trim()} vs ${m.b.trim()}${m.winner ? ` > ${m.winner}` : ""}`).join("\n"))
+      .join("\n");
+
+  const updateRound = (ri: number, patch: Partial<BracketRound>) =>
+    setBracketRounds((prev) => prev.map((r, i) => (i === ri ? { ...r, ...patch } : r)));
+  const updateMatch = (ri: number, mi: number, patch: Partial<BracketMatch>) =>
+    setBracketRounds((prev) => prev.map((r, i) => (i === ri ? { ...r, matches: r.matches.map((m, j) => (j === mi ? { ...m, ...patch } : m)) } : r)));
+
+  // 빠른 생성: 팀 수에 맞는 토너먼트 골격 자동 구성
+  const quickBracket = (teams: number) => {
+    const names: Record<number, string[]> = { 4: ["4강", "결승"], 8: ["8강", "4강", "결승"], 16: ["16강", "8강", "4강", "결승"] };
+    const rounds: BracketRound[] = [];
+    let matches = teams / 2;
+    (names[teams] || []).forEach((name) => {
+      rounds.push({ name, matches: Array.from({ length: matches }, () => ({ a: "", b: "", winner: "" })) });
+      matches = Math.max(1, matches / 2);
+    });
+    setBracketRounds(rounds);
+  };
   const [tournamentWinner, setTournamentWinner] = useState("");
   const [tournamentWinnerId, setTournamentWinnerId] = useState("");
   const [tournamentStartDate, setTournamentStartDate] = useState("");
@@ -88,7 +132,7 @@ export default function AdminWritePage() {
     category, title, content, publishAt, noticeTag, isPinned, bannerUrl,
     eventTag, eventStartDate, eventEndDate, isEventAlways,
     recruitSubCategory, recruitRole, recruitStartDate, recruitEndDate, isRecruitAlways, recruitQual, recruitTasks, recruitExtra,
-    tournamentGame, tournamentPrize, tournamentStatus, tournamentLink, tournamentBracket, tournamentWinner, tournamentWinnerId, tournamentStartDate, tournamentEndDate,
+    tournamentGame, tournamentPrize, tournamentStatus, tournamentLink, tournamentBracket: serializeBracket(bracketRounds), tournamentWinner, tournamentWinnerId, tournamentStartDate, tournamentEndDate,
     savedAt: new Date().toISOString(),
   });
 
@@ -112,7 +156,7 @@ export default function AdminWritePage() {
       setRecruitSubCategory(d.recruitSubCategory || "staff"); setRecruitRole(d.recruitRole || ""); setRecruitStartDate(d.recruitStartDate || ""); setRecruitEndDate(d.recruitEndDate || "");
       setIsRecruitAlways(!!d.isRecruitAlways); setRecruitQual(d.recruitQual || ""); setRecruitTasks(d.recruitTasks || ""); setRecruitExtra(d.recruitExtra || "");
       setTournamentGame(d.tournamentGame || ""); setTournamentPrize(d.tournamentPrize || ""); setTournamentStatus(d.tournamentStatus || "예정됨"); setTournamentLink(d.tournamentLink || "");
-      setTournamentBracket(d.tournamentBracket || ""); setTournamentWinner(d.tournamentWinner || ""); setTournamentWinnerId(d.tournamentWinnerId || "");
+      setTournamentBracket(d.tournamentBracket || ""); setBracketRounds(parseBracket(d.tournamentBracket || "")); setTournamentWinner(d.tournamentWinner || ""); setTournamentWinnerId(d.tournamentWinnerId || "");
       setTournamentStartDate(d.tournamentStartDate || ""); setTournamentEndDate(d.tournamentEndDate || "");
       setHasDraft(false);
       localStorage.removeItem(DRAFT_KEY);
@@ -174,6 +218,7 @@ export default function AdminWritePage() {
             setTournamentStatus(post.tournamentStatus || "예정됨");
             setTournamentLink(post.tournamentLink || "");
             setTournamentBracket(post.tournamentBracket || "");
+            setBracketRounds(parseBracket(post.tournamentBracket || ""));
             setTournamentWinner(post.tournamentWinner || "");
             setTournamentWinnerId(post.tournamentWinnerId || "");
             if (post.tournamentDate && post.tournamentDate.includes("~")) {
@@ -310,7 +355,7 @@ export default function AdminWritePage() {
        }),
       ...(category === "대회" && {
          content, bannerUrl, tournamentGame, tournamentPrize, tournamentStatus, tournamentLink,
-         tournamentBracket, tournamentWinner, tournamentWinnerId,
+         tournamentBracket: serializeBracket(bracketRounds), tournamentWinner, tournamentWinnerId,
          tournamentDate: computedTournamentDate
        })
     };
@@ -462,15 +507,63 @@ export default function AdminWritePage() {
               </div>
               <div className="flex flex-col gap-3">
                 <span className="text-xs font-bold text-gray-400">진행 상태</span>
-                <CustomSelect value={tournamentStatus} onChange={setTournamentStatus} options={[{value:"예정됨", label:"예정됨"}, {value:"진행중", label:"진행중"}, {value:"종료됨", label:"종료됨"}]} />
+                <CustomSelect value={tournamentStatus} onChange={setTournamentStatus} options={[{value:"예정됨", label:"예정됨"}, {value:"모집중", label:"모집중 (참가 신청 접수)"}, {value:"진행중", label:"진행중 (리그 진행)"}, {value:"종료됨", label:"종료됨"}]} />
               </div>
               <div className="flex flex-col gap-3">
                 <span className="text-xs font-bold text-gray-400">참가 신청 링크 (선택)</span>
                 <input type="text" placeholder="https://..." value={tournamentLink} onChange={(e) => setTournamentLink(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
 
-                <span className="text-xs font-bold text-gray-400 mt-4 block">대진표 (선택)</span>
-                <p className="text-[10px] text-gray-600 mb-1">라운드명 뒤에 콜론(:), 매치는 &quot;팀A vs 팀B&quot;, 승자는 &quot;&gt; 팀A&quot; 형식으로 입력<br/>예시)  4강:  ↵  이글루A vs 이글루B &gt; 이글루A  ↵  결승:  ↵  이글루A vs 이글루C</p>
-                <textarea rows={5} placeholder={"4강:\n이글루A vs 이글루B > 이글루A\n이글루C vs 이글루D > 이글루C\n결승:\n이글루A vs 이글루C"} value={tournamentBracket} onChange={(e) => setTournamentBracket(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f] resize-none font-mono" />
+                {/* 📌 대진표 비주얼 빌더 */}
+                <div className="mt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <span className="text-xs font-bold text-gray-400">대진표 (선택)</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[4, 8, 16].map((n) => (
+                        <button key={n} type="button" onClick={() => quickBracket(n)} className="text-[10px] font-black text-gray-400 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full hover:text-white hover:border-[#e91e3f]/40 transition-all">{n}팀 자동 생성</button>
+                      ))}
+                      <button type="button" onClick={() => setBracketRounds([...bracketRounds, { name: bracketRounds.length === 0 ? "8강" : "", matches: [{ a: "", b: "", winner: "" }] }])} className="text-[10px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">라운드 추가</button>
+                      {bracketRounds.length > 0 && (
+                        <button type="button" onClick={() => setBracketRounds([])} className="text-[10px] font-bold text-gray-600 hover:text-red-400 px-2 py-1.5 transition-colors">초기화</button>
+                      )}
+                    </div>
+                  </div>
+
+                  {bracketRounds.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-white/10 bg-[#161616] py-8 text-center">
+                      <p className="text-xs text-gray-500">위 버튼으로 토너먼트 골격을 자동 생성하거나, 라운드를 직접 추가하세요.</p>
+                      <p className="text-[10px] text-gray-600 mt-1">팀 이름은 나중에 채워도 되고, 승자는 경기 후 수정으로 지정하면 됩니다.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {bracketRounds.map((round, ri) => (
+                        <div key={ri} className="rounded-xl border border-white/10 bg-[#161616] p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <input type="text" placeholder="라운드명 (예: 8강)" value={round.name} onChange={(e) => updateRound(ri, { name: e.target.value })} className="w-32 bg-[#0f0f0f] border border-white/10 rounded-lg px-3 py-2 text-xs font-black text-white focus:outline-none focus:border-[#e91e3f]" />
+                            <button type="button" onClick={() => updateRound(ri, { matches: [...round.matches, { a: "", b: "", winner: "" }] })} className="text-[10px] font-black text-gray-400 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full hover:text-white transition-colors">매치 추가</button>
+                            <button type="button" onClick={() => setBracketRounds(bracketRounds.filter((_, i) => i !== ri))} className="ml-auto text-[10px] font-bold text-gray-600 hover:text-red-400 transition-colors">라운드 삭제</button>
+                          </div>
+                          <div className="space-y-2">
+                            {round.matches.map((m, mi) => (
+                              <div key={mi} className="flex flex-wrap items-center gap-2">
+                                <span className="text-[9px] font-black text-gray-700 w-5 text-center shrink-0">{mi + 1}</span>
+                                <input type="text" placeholder="팀 A" value={m.a} onChange={(e) => updateMatch(ri, mi, { a: e.target.value, winner: m.winner === m.a ? e.target.value : m.winner })} className={`flex-1 min-w-[100px] bg-[#0f0f0f] border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#e91e3f] ${m.winner && m.winner === m.a ? "border-emerald-500/50" : "border-white/10"}`} />
+                                <span className="text-[9px] font-black text-gray-600 shrink-0">VS</span>
+                                <input type="text" placeholder="팀 B" value={m.b} onChange={(e) => updateMatch(ri, mi, { b: e.target.value, winner: m.winner === m.b ? e.target.value : m.winner })} className={`flex-1 min-w-[100px] bg-[#0f0f0f] border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#e91e3f] ${m.winner && m.winner === m.b ? "border-emerald-500/50" : "border-white/10"}`} />
+                                {/* 승자 지정 — 클릭 한 번 */}
+                                <div className="flex gap-1 shrink-0">
+                                  <button type="button" disabled={!m.a.trim()} onClick={() => updateMatch(ri, mi, { winner: m.winner === m.a ? "" : m.a })} className={`px-2.5 py-2 text-[10px] font-black rounded-lg border transition-all ${m.winner && m.winner === m.a ? "bg-emerald-500/90 border-emerald-500 text-white" : "border-white/10 text-gray-500 hover:border-emerald-500/50 disabled:opacity-30"}`}>A승</button>
+                                  <button type="button" disabled={!m.b.trim()} onClick={() => updateMatch(ri, mi, { winner: m.winner === m.b ? "" : m.b })} className={`px-2.5 py-2 text-[10px] font-black rounded-lg border transition-all ${m.winner && m.winner === m.b ? "bg-emerald-500/90 border-emerald-500 text-white" : "border-white/10 text-gray-500 hover:border-emerald-500/50 disabled:opacity-30"}`}>B승</button>
+                                </div>
+                                <button type="button" onClick={() => updateRound(ri, { matches: round.matches.filter((_, j) => j !== mi) })} className="shrink-0 text-gray-700 hover:text-red-400 text-sm font-black px-1 transition-colors">×</button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                      <p className="text-[10px] text-gray-600">승자 버튼(A승/B승)을 누르면 대회 페이지 대진표에 승리 팀이 하이라이트됩니다. 다시 누르면 해제.</p>
+                    </div>
+                  )}
+                </div>
 
                 <span className="text-xs font-bold text-gray-400 mt-4 block">우승팀 / 우승자 (선택 · 명예의 전당 표시)</span>
                 <input type="text" placeholder="예시: 이글루A" value={tournamentWinner} onChange={(e) => setTournamentWinner(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
