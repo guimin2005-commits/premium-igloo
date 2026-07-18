@@ -369,12 +369,23 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   // 스카우터 사용 → 성공 시 게임식 결과 연출
   const useScouter = async () => {
     if (myLeaderIdx === null || cur.playerIdx === null) return;
-    const target = auction.players[cur.playerIdx];
-    const d = await act({ action: "scout", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx });
+    const targetIdx = cur.playerIdx;
+    const target = auction.players[targetIdx];
+    const d = await act({ action: "scout", leaderIdx: myLeaderIdx, playerIdx: targetIdx });
     if (d.success) {
       sfxScout();
       setScoutResult({ alias: target.alias, mainPos: target.mainPos, subPos: target.subPos });
       setTimeout(() => setScoutResult(null), 3200);
+      // 📌 즉시 반영 (폴링 지연 동안 버튼 잔존/포인트 미차감/포지션 미표시 방지)
+      setAuction((prev: any) => {
+        if (!prev) return prev;
+        const next = structuredClone(prev);
+        const p = next.players[targetIdx];
+        if (p && !p.scoutedBy.includes(myLeaderIdx)) p.scoutedBy.push(myLeaderIdx);
+        const l = next.leaders[myLeaderIdx];
+        if (l) l.points = Math.max(0, l.points - next.settings.scoutCost);
+        return next;
+      });
     }
   };
 
