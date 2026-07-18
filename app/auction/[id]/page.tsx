@@ -97,11 +97,19 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   }, [playTone]);
   // 스카우터 결과 (신비로운 차임)
   const sfxScout = useCallback(() => { playTone(880, 0.1, 0.035, "triangle"); setTimeout(() => playTone(1175, 0.14, 0.04, "triangle"), 110); setTimeout(() => playTone(1568, 0.2, 0.035, "triangle"), 240); }, [playTone]);
-  // 황금카드 등장 (웅장한 스웰 + 반짝이는 상승 아르페지오)
+  // 황금카드 소환 (시네마틱: 어둠의 드론 → 심장박동 → 상승 텐션 → 공개 임팩트 → 잔광)
   const sfxGolden = useCallback(() => {
-    playTone(130, 0.9, 0.045, "sawtooth");
-    [523, 659, 784, 1047, 1319].forEach((f, i) => setTimeout(() => playTone(f, 0.16, 0.04, "triangle"), 300 + i * 130));
-    setTimeout(() => playTone(1568, 0.45, 0.045, "triangle"), 980);
+    // 낮게 깔리는 드론 (어둠)
+    playTone(52, 1.6, 0.055, "sawtooth");
+    setTimeout(() => playTone(49, 1.5, 0.065, "sawtooth"), 750);
+    // 심장박동 (점점 빨라짐)
+    [250, 800, 1250, 1600].forEach((t) => setTimeout(() => { playTone(72, 0.12, 0.075, "sine"); setTimeout(() => playTone(58, 0.1, 0.05, "sine"), 95); }, t));
+    // 상승 텐션
+    [440, 494, 554, 622, 698, 784, 880].forEach((f, i) => setTimeout(() => playTone(f, 0.08, 0.018, "triangle"), 1350 + i * 85));
+    // 공개 임팩트 (플립 순간)
+    setTimeout(() => { playTone(98, 0.55, 0.08, "sawtooth"); playTone(523, 0.4, 0.05); playTone(1047, 0.6, 0.05, "triangle"); }, 2050);
+    // 잔광 쉬머
+    [1319, 1568, 2093].forEach((f, i) => setTimeout(() => playTone(f, 0.5, 0.028, "triangle"), 2280 + i * 150));
   }, [playTone]);
   const sfxTick = useCallback(() => playTone(1050, 0.05, 0.03, "square"), [playTone]);
   const sfxPass = useCallback(() => { playTone(440, 0.12, 0.035); setTimeout(() => playTone(330, 0.18, 0.035), 130); }, [playTone]);
@@ -1025,8 +1033,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       {/* 황금카드 소환 연출 — 중앙에서 실체화 → 플립 공개 → 소멸 */}
       {goldenFx && (
         <div className="fixed inset-0 z-[135] pointer-events-none overflow-hidden" style={{ perspective: "1400px" }}>
-          {/* 배경 딤 + 골드 비네트 */}
-          <div className="absolute inset-0 animate-[gcBackdrop_4s_ease-in-out_forwards]" style={{ background: "radial-gradient(ellipse at 50% 50%, rgba(30,22,4,0.55) 0%, rgba(0,0,0,0.75) 100%)" }}></div>
+          {/* 배경 딤 + 골드 비네트 (극적으로 어둡게) */}
+          <div className="absolute inset-0 animate-[gcBackdrop_4s_ease-in-out_forwards]" style={{ background: "radial-gradient(ellipse at 50% 50%, rgba(24,17,3,0.88) 0%, rgba(0,0,0,0.96) 100%)" }}></div>
 
           {/* 회전하는 광선 */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] h-[560px] animate-[gcRays_4s_linear_forwards]">
@@ -1038,9 +1046,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {/* 중앙 글로우 */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[380px] h-[380px] bg-yellow-400/20 blur-[90px] rounded-full animate-[gcBackdrop_4s_ease-in-out_forwards]"></div>
 
-          {/* 카드 — 중앙 실체화 + 플립 공개 */}
-          <div className="absolute top-1/2 left-1/2 animate-[gcCard_4s_cubic-bezier(0.25,0.1,0.25,1)_forwards]" style={{ transformStyle: "preserve-3d" }}>
-            <div className="relative w-40 h-56 md:w-48 md:h-72" style={{ transformStyle: "preserve-3d" }}>
+          {/* 카드 — 페이드/블러(외부)와 3D 회전(내부)을 분리해 뒷면이 정상 표시되도록 */}
+          <div className="absolute top-1/2 left-1/2 animate-[gcCardOuter_4s_cubic-bezier(0.25,0.1,0.25,1)_forwards]">
+            <div className="relative w-40 h-56 md:w-48 md:h-72 animate-[gcCardSpin_4s_cubic-bezier(0.25,0.1,0.25,1)_forwards]" style={{ transformStyle: "preserve-3d" }}>
 
               {/* 앞면 */}
               <div className="absolute inset-0 rounded-2xl p-[3px] shadow-[0_0_70px_rgba(250,204,21,0.55)]" style={{ backfaceVisibility: "hidden", background: "linear-gradient(135deg, #fef9c3, #f59e0b, #fde047, #b45309, #fde047)", backgroundSize: "400% 400%", animation: "gcShine 1.4s linear infinite" }}>
@@ -1098,14 +1106,19 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               15%, 80% { opacity: 1; }
               100% { opacity: 0; transform: translate(-50%, -50%) rotate(70deg); }
             }
-            @keyframes gcCard {
-              /* 실체화(뒷면) → 부유 → 플립 공개 → 감상 → 소멸 */
-              0% { transform: translate(-50%, -46%) rotateY(180deg) scale(0.25); opacity: 0; filter: blur(14px); }
-              16% { transform: translate(-50%, -50%) rotateY(180deg) scale(1); opacity: 1; filter: blur(0); }
-              40% { transform: translate(-50%, -51%) rotateY(180deg) scale(1); }
-              54% { transform: translate(-50%, -50%) rotateY(360deg) scale(1.08); }
-              84% { transform: translate(-50%, -50.5%) rotateY(360deg) scale(1.08); opacity: 1; }
-              100% { transform: translate(-50%, -50%) rotateY(360deg) scale(1.22); opacity: 0; filter: blur(6px); }
+            /* 외부: 위치/크기/페이드/블러 (3D 평면화 방지를 위해 회전과 분리) */
+            @keyframes gcCardOuter {
+              0% { transform: translate(-50%, -46%) scale(0.25); opacity: 0; filter: blur(14px); }
+              16% { transform: translate(-50%, -50%) scale(1); opacity: 1; filter: blur(0); }
+              40% { transform: translate(-50%, -51%) scale(1); opacity: 1; filter: blur(0); }
+              54% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; filter: blur(0); }
+              84% { transform: translate(-50%, -50.5%) scale(1.08); opacity: 1; filter: blur(0); }
+              100% { transform: translate(-50%, -50%) scale(1.22); opacity: 0; filter: blur(6px); }
+            }
+            /* 내부: 순수 3D 회전만 담당 */
+            @keyframes gcCardSpin {
+              0%, 40% { transform: rotateY(180deg); }
+              54%, 100% { transform: rotateY(360deg); }
             }
             @keyframes gcSpark {
               0% { opacity: 1; transform: translate(-50%, -50%) scale(0.4); }
