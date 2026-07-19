@@ -17,6 +17,11 @@ const PostSchema = new mongoose.Schema({
   eventPeriod: { type: String, default: "" },
 
   // 📌 대회 전용 데이터 항목
+  tournamentType: { type: String, default: "모집" }, // 글 타입: "모집"(참가 신청) / "대진표"(리그 진행)
+  tournamentSchedule: {
+    type: [{ label: String, start: String, end: String }], // 리그 상세 일정 (팀원 배정, 스크림, 본선 등)
+    default: [],
+  },
   tournamentGame: { type: String, default: "" },   // 영문 부제 (예: LEAGUE OF LEGENDS)
   tournamentPrize: { type: String, default: "" },  // 보상 및 상금
   tournamentDate: { type: String, default: "" },   // 리그 일정 텍스트

@@ -169,11 +169,50 @@ const BracketView = ({ text }: { text: string }) => {
 };
 
 // 📌 대회 상태: 예정됨 → 모집중(참가 신청 접수) → 진행중(리그 진행) → 종료됨
-const STATUS_META: Record<string, { badge: string; label: string }> = {
-  "모집중": { badge: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30", label: "모집중" },
-  "진행중": { badge: "bg-[#e91e3f]/20 text-[#e91e3f] border border-[#e91e3f]/30", label: "리그 진행중" },
-  "예정됨": { badge: "bg-blue-500/20 text-blue-400 border border-blue-500/30", label: "예정됨" },
-  "종료됨": { badge: "bg-gray-500/20 text-gray-400 border border-white/10", label: "종료됨" },
+const STATUS_META: Record<string, { badge: string; label: string; dot: string; ring: string }> = {
+  "모집중": { badge: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30", label: "모집중", dot: "bg-emerald-400", ring: "border-emerald-500/40" },
+  "진행중": { badge: "bg-[#e91e3f]/20 text-[#e91e3f] border border-[#e91e3f]/30", label: "리그 진행중", dot: "bg-[#e91e3f]", ring: "border-[#e91e3f]/40" },
+  "예정됨": { badge: "bg-blue-500/20 text-blue-400 border border-blue-500/30", label: "예정됨", dot: "bg-blue-400", ring: "border-blue-500/30" },
+  "종료됨": { badge: "bg-gray-500/20 text-gray-400 border border-white/10", label: "종료됨", dot: "bg-gray-500", ring: "border-white/10" },
+};
+
+// 📌 리그 상세 일정 타임라인 (팀원 배정, 스크림, 본선 등)
+const fmtDate = (s: string) => (s ? s.replace(/-/g, ".").slice(2) : "");
+const ScheduleTimeline = ({ schedule }: { schedule: any[] }) => {
+  if (!schedule?.length) return null;
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return (
+    <div>
+      <div className="flex items-baseline gap-4 mb-4">
+        <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">SCHEDULE</span>
+        <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+      </div>
+      <div className="space-y-0">
+        {schedule.map((ph: any, i: number) => {
+          const isPast = ph.end && ph.end < today;
+          const isNow = ph.start && ph.start <= today && (!ph.end || ph.end >= today);
+          return (
+            <div key={i} className="flex gap-3.5 group/ph">
+              {/* 타임라인 선 + 점 */}
+              <div className="flex flex-col items-center shrink-0">
+                <span className={`w-3 h-3 rounded-full border-2 mt-1 ${isNow ? "border-[#e91e3f] bg-[#e91e3f] shadow-[0_0_10px_rgba(233,30,63,0.6)]" : isPast ? "border-white/20 bg-white/20" : "border-white/30 bg-transparent"}`}></span>
+                {i < schedule.length - 1 && <span className={`w-px flex-1 min-h-[24px] ${isPast ? "bg-white/15" : "bg-white/8"}`}></span>}
+              </div>
+              <div className="pb-4 min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className={`text-sm font-black ${isNow ? "text-[#e91e3f]" : isPast ? "text-gray-500" : "text-white"}`}>{ph.label}</p>
+                  {isNow && <span className="text-[9px] font-black tracking-widest bg-[#e91e3f]/15 text-[#e91e3f] px-2 py-0.5 rounded-full animate-pulse">진행 중</span>}
+                </div>
+                {(ph.start || ph.end) && (
+                  <p className="text-[11px] text-gray-500 mt-0.5">{fmtDate(ph.start)}{ph.end ? ` ~ ${fmtDate(ph.end)}` : ""}</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 };
 
 export default function TournamentPage() {
@@ -289,60 +328,90 @@ export default function TournamentPage() {
       {isLoading ? (
         <div className="text-center py-20 text-gray-500 font-bold">불러오는 중...</div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-20 text-gray-600 bg-white/[0.02] rounded-3xl border border-white/5">등록된 대회가 없습니다.</div>
+        <div className="relative rounded-3xl bg-gradient-to-b from-white/[0.06] to-white/[0.01] p-px">
+          <div className="rounded-3xl bg-[#0d0d0d] py-24 px-6 text-center relative overflow-hidden">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[200px] bg-[#e91e3f]/[0.05] blur-[90px] rounded-full pointer-events-none"></div>
+            <div className="relative z-10">
+              <div className="w-14 h-14 mx-auto mb-6 rounded-2xl bg-[#e91e3f]/10 border border-[#e91e3f]/20 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.4} stroke="currentColor" className="w-6 h-6 text-[#e91e3f]"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 002.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 012.916.52 6.003 6.003 0 01-5.395 4.972m0 0a6.726 6.726 0 01-2.749 1.35" /></svg>
+              </div>
+              <p className="text-white font-black text-lg mb-2">{activeFilter === "all" ? "등록된 대회가 없습니다" : "해당하는 대회가 없습니다"}</p>
+              <p className="text-sm text-gray-500">대회 시즌이 시작되면 이곳에서 참가 신청과 리그 진행이 열립니다.</p>
+            </div>
+          </div>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {filtered.map((t, listIdx) => {
             const st = getStatus(t);
+            const meta = STATUS_META[st];
+            const isRecruit = t.tournamentType !== "대진표";
+            const isLive = st === "모집중" || st === "진행중";
             return (
-              <Reveal key={t._id} delay={Math.min(listIdx, 5) * 90}>
-              <div onClick={() => setSelected(t)} className="bg-[#111111]/95 border border-white/5 rounded-2xl overflow-hidden hover:border-[#e91e3f]/40 hover:bg-[#141414] transition-all duration-300 group flex flex-col relative cursor-pointer h-full">
-                <div className="w-full h-48 bg-[#1a1a1a] relative overflow-hidden">
+              <Reveal key={t._id} delay={Math.min(listIdx, 5) * 80}>
+              <div onClick={() => setSelected(t)} className={`relative rounded-2xl p-px cursor-pointer group h-full transition-all duration-300 ${isLive ? `bg-gradient-to-b from-white/10 ${st === "모집중" ? "hover:from-emerald-500/40" : "hover:from-[#e91e3f]/40"} to-white/[0.02]` : "bg-gradient-to-b from-white/[0.06] to-white/[0.02]"} ${st === "종료됨" ? "opacity-70 hover:opacity-100" : ""}`}>
+              <div className="rounded-2xl bg-[#111111]/97 overflow-hidden h-full flex flex-col group-hover:bg-[#141414] transition-colors duration-300">
+                <div className="w-full h-44 bg-[#181818] relative overflow-hidden shrink-0">
                   {t.bannerUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={t.bannerUrl} alt={t.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-70" />
+                    <img src={t.bannerUrl} alt={t.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out opacity-70" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-700">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-16 h-16"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 002.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 012.916.52 6.003 6.003 0 01-5.395 4.972m0 0a6.726 6.726 0 01-2.749 1.35m0 0a6.772 6.772 0 01-3.044 0" /></svg>
+                    <div className="w-full h-full flex items-center justify-center text-gray-800">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-16 h-16"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516" /></svg>
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#121212] to-transparent" />
-                  <span className={`absolute top-5 right-5 px-3 py-1 text-xs font-bold rounded-md ${STATUS_META[st].badge}`}>{STATUS_META[st].label}</span>
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#111111] via-[#111111]/30 to-transparent" />
+                  {/* 상태 + 타입 뱃지 */}
+                  <div className="absolute top-4 right-4 flex flex-col items-end gap-1.5">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-black rounded-full ${meta.badge}`}>
+                      {isLive && <span className="relative flex w-1.5 h-1.5"><span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${meta.dot} opacity-60`}></span><span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${meta.dot}`}></span></span>}
+                      {meta.label}
+                    </span>
+                    <span className={`text-[9px] font-black tracking-widest px-2 py-0.5 rounded-full ${isRecruit ? "bg-blue-500/15 text-blue-300 border border-blue-500/25" : "bg-white/10 text-gray-300 border border-white/15"}`}>{isRecruit ? "참가 신청" : "대진표"}</span>
+                  </div>
                   {isAdmin && (
-                    <div className="absolute top-5 left-5 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={(e) => { e.stopPropagation(); router.push(`/write?id=${t._id}`); }} className="text-xs font-bold text-white bg-black/50 backdrop-blur px-2 py-1 rounded hover:bg-black/70">수정</button>
-                      <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(t._id); }} className="text-xs font-bold text-red-400 bg-black/50 backdrop-blur px-2 py-1 rounded hover:bg-black/70">삭제</button>
+                    <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={(e) => { e.stopPropagation(); router.push(`/write?id=${t._id}`); }} className="text-[10px] font-bold text-white bg-black/60 backdrop-blur px-2 py-1 rounded hover:bg-black/80">수정</button>
+                      <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(t._id); }} className="text-[10px] font-bold text-red-400 bg-black/60 backdrop-blur px-2 py-1 rounded hover:bg-black/80">삭제</button>
                     </div>
                   )}
+                  <div className="absolute bottom-4 left-5 right-5">
+                    <span className="text-[10px] font-black tracking-widest text-gray-400">{t.tournamentGame}</span>
+                    <h3 className="text-xl font-black text-white leading-tight line-clamp-1 group-hover:text-[#ff5c77] transition-colors">{t.title}</h3>
+                  </div>
                 </div>
 
-                <div className="p-6 flex-1 flex flex-col justify-between">
-                  <div>
-                    <span className="text-[10px] font-black tracking-widest text-gray-500">{t.tournamentGame}</span>
-                    <h3 className="text-2xl font-black text-white mt-1 mb-4">{t.title}</h3>
-                    <div className="space-y-2 mb-6 bg-white/[0.02] p-4 rounded-xl border border-white/5">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-500 font-bold">보상 및 상금</span>
-                        <span className="text-white font-black text-right">{t.tournamentPrize}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-500 font-bold">리그 일정</span>
-                        <span className="text-gray-400 font-medium text-right flex items-center gap-1">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
-                          {t.tournamentDate || "미정"}
-                        </span>
-                      </div>
+                <div className="p-5 flex-1 flex flex-col justify-between">
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div className="bg-white/[0.02] px-3.5 py-2.5 rounded-xl border border-white/5">
+                      <p className="text-[9px] font-black tracking-widest text-gray-600 uppercase mb-1">상금</p>
+                      <p className="text-xs font-black text-white truncate">{t.tournamentPrize || "미정"}</p>
+                    </div>
+                    <div className="bg-white/[0.02] px-3.5 py-2.5 rounded-xl border border-white/5">
+                      <p className="text-[9px] font-black tracking-widest text-gray-600 uppercase mb-1">기간</p>
+                      <p className="text-xs font-black text-gray-300 truncate">{t.tournamentDate || "미정"}</p>
                     </div>
                   </div>
+
+                  {/* 상세 일정 미니 프리뷰 */}
+                  {Array.isArray(t.tournamentSchedule) && t.tournamentSchedule.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-4">
+                      {t.tournamentSchedule.slice(0, 4).map((ph: any, i: number) => (
+                        <span key={i} className="text-[9px] font-bold text-gray-500 bg-white/[0.03] border border-white/5 px-2 py-0.5 rounded-full">{ph.label}</span>
+                      ))}
+                      {t.tournamentSchedule.length > 4 && <span className="text-[9px] font-bold text-gray-600 px-1">+{t.tournamentSchedule.length - 4}</span>}
+                    </div>
+                  )}
 
                   <button
                     disabled={st !== "모집중"}
                     onClick={(e) => { e.stopPropagation(); handleApply(t); }}
-                    className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all ${st === "모집중" ? "bg-[#e91e3f] text-white hover:bg-[#d01634] active:scale-95" : st === "진행중" ? "bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25 cursor-default" : "bg-white/5 text-gray-600 cursor-not-allowed"}`}
+                    className={`w-full py-3 rounded-xl font-black text-sm transition-all ${st === "모집중" ? "bg-emerald-500/90 text-white hover:bg-emerald-500 active:scale-95 shadow-[0_6px_20px_rgba(16,185,129,0.3)]" : st === "진행중" ? "bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25" : "bg-white/5 text-gray-600 cursor-not-allowed"}`}
                   >
-                    {st === "모집중" ? "참가 신청하기" : st === "진행중" ? "리그 진행 중 — 대진표 확인" : st === "예정됨" ? "오픈 예정" : "대회 종료"}
+                    {st === "모집중" ? "참가 신청하기" : st === "진행중" ? "대진표 확인하기" : st === "예정됨" ? "오픈 예정" : "대회 종료"}
                   </button>
                 </div>
+              </div>
               </div>
               </Reveal>
             );
@@ -380,16 +449,21 @@ export default function TournamentPage() {
               <div className="grid grid-cols-2 gap-4 mb-8">
                 <div className="bg-white/[0.02] p-4 rounded-xl border border-white/5">
                   <p className="text-xs text-gray-500 font-bold mb-1">보상 및 상금</p>
-                  <p className="text-white font-black">{selected.tournamentPrize}</p>
+                  <p className="text-white font-black">{selected.tournamentPrize || "미정"}</p>
                 </div>
                 <div className="bg-white/[0.02] p-4 rounded-xl border border-white/5">
-                  <p className="text-xs text-gray-500 font-bold mb-1">리그 일정</p>
+                  <p className="text-xs text-gray-500 font-bold mb-1">전체 대회 기간</p>
                   <p className="text-gray-300 font-bold">{selected.tournamentDate || "미정"}</p>
                 </div>
               </div>
 
               {selected.content && (
                 <div className="text-gray-300 text-base leading-loose whitespace-pre-wrap mb-8"><RenderFormattedText text={selected.content} onCopy={() => { setCopyNotification(true); setTimeout(() => setCopyNotification(false), 2000); }} /></div>
+              )}
+
+              {/* 리그 상세 일정 타임라인 */}
+              {Array.isArray(selected.tournamentSchedule) && selected.tournamentSchedule.length > 0 && (
+                <div className="mb-8"><ScheduleTimeline schedule={selected.tournamentSchedule} /></div>
               )}
 
               {selected.tournamentBracket && <BracketView text={selected.tournamentBracket} />}

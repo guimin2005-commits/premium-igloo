@@ -124,6 +124,18 @@ export default function AdminWritePage() {
   const [tournamentStartDate, setTournamentStartDate] = useState("");
   const [tournamentEndDate, setTournamentEndDate] = useState("");
 
+  // 📌 대회 글 타입: "모집"(참가 신청) / "대진표"(리그 진행)
+  const [tournamentType, setTournamentType] = useState("모집");
+
+  // 📌 리그 상세 일정 (팀원 배정, 스크림, 본선 등)
+  type SchedulePhase = { label: string; start: string; end: string };
+  const [tournamentSchedule, setTournamentSchedule] = useState<SchedulePhase[]>([]);
+  const updatePhase = (i: number, patch: Partial<SchedulePhase>) =>
+    setTournamentSchedule((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  const addPhase = (label = "") =>
+    setTournamentSchedule((prev) => [...prev, { label, start: "", end: "" }]);
+  const PHASE_PRESETS = ["팀원 배정", "스크림 (연습 경기)", "본선 경기", "결승전", "시상식"];
+
   // 📌 보류(임시저장) — 작성 중인 글을 저장해두고 나중에 이어서 작성
   const [hasDraft, setHasDraft] = useState(false);
   const DRAFT_KEY = "writeDraft";
@@ -133,6 +145,7 @@ export default function AdminWritePage() {
     eventTag, eventStartDate, eventEndDate, isEventAlways,
     recruitSubCategory, recruitRole, recruitStartDate, recruitEndDate, isRecruitAlways, recruitQual, recruitTasks, recruitExtra,
     tournamentGame, tournamentPrize, tournamentStatus, tournamentLink, tournamentBracket: serializeBracket(bracketRounds), tournamentWinner, tournamentWinnerId, tournamentStartDate, tournamentEndDate,
+    tournamentType, tournamentSchedule,
     savedAt: new Date().toISOString(),
   });
 
@@ -158,6 +171,7 @@ export default function AdminWritePage() {
       setTournamentGame(d.tournamentGame || ""); setTournamentPrize(d.tournamentPrize || ""); setTournamentStatus(d.tournamentStatus || "예정됨"); setTournamentLink(d.tournamentLink || "");
       setTournamentBracket(d.tournamentBracket || ""); setBracketRounds(parseBracket(d.tournamentBracket || "")); setTournamentWinner(d.tournamentWinner || ""); setTournamentWinnerId(d.tournamentWinnerId || "");
       setTournamentStartDate(d.tournamentStartDate || ""); setTournamentEndDate(d.tournamentEndDate || "");
+      setTournamentType(d.tournamentType || "모집"); setTournamentSchedule(Array.isArray(d.tournamentSchedule) ? d.tournamentSchedule : []);
       setHasDraft(false);
       localStorage.removeItem(DRAFT_KEY);
     } catch {}
@@ -221,6 +235,8 @@ export default function AdminWritePage() {
             setBracketRounds(parseBracket(post.tournamentBracket || ""));
             setTournamentWinner(post.tournamentWinner || "");
             setTournamentWinnerId(post.tournamentWinnerId || "");
+            setTournamentType(post.tournamentType || "모집");
+            setTournamentSchedule(Array.isArray(post.tournamentSchedule) ? post.tournamentSchedule.map((p: any) => ({ label: p.label || "", start: p.start || "", end: p.end || "" })) : []);
             if (post.tournamentDate && post.tournamentDate.includes("~")) {
               const [start, end] = post.tournamentDate.split("~").map((s: string) => s.trim());
               setTournamentStartDate(start.replace(/\./g, "-"));
@@ -355,6 +371,8 @@ export default function AdminWritePage() {
        }),
       ...(category === "대회" && {
          content, bannerUrl, tournamentGame, tournamentPrize, tournamentStatus, tournamentLink,
+         tournamentType,
+         tournamentSchedule: tournamentSchedule.filter((p) => p.label.trim()),
          tournamentBracket: serializeBracket(bracketRounds), tournamentWinner, tournamentWinnerId,
          tournamentDate: computedTournamentDate
        })
@@ -497,6 +515,23 @@ export default function AdminWritePage() {
 
           {category === "대회" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* 📌 글 타입 선택 — 참가 신청 vs 대진표 */}
+              <div className="md:col-span-2 flex flex-col gap-3">
+                <span className="text-xs font-bold text-gray-400">대회 글 타입 <span className="text-[#e91e3f]">*</span></span>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { v: "모집", t: "참가 신청", d: "참가팀 모집·신청 접수" },
+                    { v: "대진표", t: "대진표 / 리그", d: "본선 대진·경기 진행" },
+                  ].map((opt) => (
+                    <button key={opt.v} type="button" onClick={() => { setTournamentType(opt.v); if (opt.v === "모집" && tournamentStatus === "진행중") setTournamentStatus("모집중"); if (opt.v === "대진표" && tournamentStatus === "모집중") setTournamentStatus("진행중"); }}
+                      className={`text-left rounded-2xl border p-4 transition-all ${tournamentType === opt.v ? "border-[#e91e3f] bg-[#e91e3f]/[0.08]" : "border-white/10 bg-[#161616] hover:border-white/25"}`}>
+                      <p className={`text-sm font-black mb-0.5 ${tournamentType === opt.v ? "text-[#e91e3f]" : "text-white"}`}>{opt.t}</p>
+                      <p className="text-[11px] text-gray-500">{opt.d}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex flex-col gap-3">
                 <span className="text-xs font-bold text-gray-400">종목 영문명 (부제) <span className="text-[#e91e3f]">*</span></span>
                 <input type="text" placeholder="예: LEAGUE OF LEGENDS" value={tournamentGame} onChange={(e) => setTournamentGame(e.target.value)} className="w-full bg-[#121212] border border-white/10 rounded-xl px-5 py-3 text-sm text-white font-bold tracking-wider focus:border-[#e91e3f] focus:outline-none" />
@@ -510,11 +545,46 @@ export default function AdminWritePage() {
                 <CustomSelect value={tournamentStatus} onChange={setTournamentStatus} options={[{value:"예정됨", label:"예정됨"}, {value:"모집중", label:"모집중 (참가 신청 접수)"}, {value:"진행중", label:"진행중 (리그 진행)"}, {value:"종료됨", label:"종료됨"}]} />
               </div>
               <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-gray-400">참가 신청 링크 (선택)</span>
+                <span className="text-xs font-bold text-gray-400">참가 신청 링크 {tournamentType === "모집" ? <span className="text-[#e91e3f]">(권장)</span> : "(선택)"}</span>
                 <input type="text" placeholder="https://..." value={tournamentLink} onChange={(e) => setTournamentLink(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+              </div>
 
-                {/* 📌 대진표 비주얼 빌더 */}
-                <div className="mt-4">
+              {/* 📌 리그 상세 일정 (양쪽 타입 공통) */}
+              <div className="md:col-span-2 flex flex-col gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-gray-400">리그 상세 일정 (선택) <span className="text-gray-600 font-medium">— 팀원 배정, 스크림, 본선 등 단계별 기간</span></span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PHASE_PRESETS.map((p) => (
+                      <button key={p} type="button" onClick={() => addPhase(p)} className="text-[10px] font-black text-gray-400 bg-white/5 border border-white/10 px-2.5 py-1.5 rounded-full hover:text-white hover:border-[#e91e3f]/40 transition-all">+ {p}</button>
+                    ))}
+                    <button type="button" onClick={() => addPhase()} className="text-[10px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-2.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">+ 직접 입력</button>
+                  </div>
+                </div>
+                {tournamentSchedule.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-white/10 bg-[#161616] py-6 text-center">
+                    <p className="text-xs text-gray-500">위 버튼으로 대회 단계별 일정을 추가하세요. (예: 팀원 배정 → 스크림 → 본선 → 결승)</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {tournamentSchedule.map((ph, i) => (
+                      <div key={i} className="flex flex-wrap items-center gap-2 bg-[#161616] border border-white/10 rounded-xl p-3">
+                        <span className="text-[9px] font-black text-gray-600 w-5 text-center shrink-0">{i + 1}</span>
+                        <input type="text" placeholder="단계명 (예: 본선 경기)" value={ph.label} onChange={(e) => updatePhase(i, { label: e.target.value })} className="flex-1 min-w-[120px] bg-[#0f0f0f] border border-white/10 rounded-lg px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-[#e91e3f]" />
+                        <input type="date" value={ph.start} onChange={(e) => updatePhase(i, { start: e.target.value })} className="bg-[#0f0f0f] border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#e91e3f] [color-scheme:dark]" />
+                        <span className="text-[10px] text-gray-600 font-bold shrink-0">~</span>
+                        <input type="date" value={ph.end} onChange={(e) => updatePhase(i, { end: e.target.value })} className="bg-[#0f0f0f] border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#e91e3f] [color-scheme:dark]" />
+                        <button type="button" onClick={() => setTournamentSchedule(tournamentSchedule.filter((_, j) => j !== i))} className="shrink-0 text-gray-700 hover:text-red-400 text-sm font-black px-1 transition-colors">×</button>
+                      </div>
+                    ))}
+                    <p className="text-[10px] text-gray-600">종료일을 비우면 단일 날짜로 표시됩니다.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* 📌 대진표 — '대진표' 타입일 때만 표시 */}
+              {tournamentType === "대진표" && (
+              <div className="md:col-span-2 flex flex-col gap-3">
+                <div className="mt-1">
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                     <span className="text-xs font-bold text-gray-400">대진표 (선택)</span>
                     <div className="flex flex-wrap gap-1.5">
@@ -571,12 +641,13 @@ export default function AdminWritePage() {
                 <span className="text-xs font-bold text-gray-400 mt-4 block">우승자 디스코드 ID (선택 · 명예의 전당에서 복사 가능)</span>
                 <input type="text" placeholder="예시: 1104242935664492666" value={tournamentWinnerId} onChange={(e) => setTournamentWinnerId(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
               </div>
+              )}
               <div className="flex flex-col gap-3 md:col-span-2">
                 <span className="text-xs font-bold text-gray-400">배너 이미지 URL (선택)</span>
                 <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
               </div>
               <div className="flex flex-col gap-3 md:col-span-2">
-                <span className="text-xs font-bold text-gray-400">리그 일정 <span className="text-[#e91e3f]">*</span></span>
+                <span className="text-xs font-bold text-gray-400">전체 대회 기간 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">— 카드에 표시되는 대표 기간</span></span>
                 <div className="flex flex-wrap items-center gap-3 w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-4 py-2.5 focus-within:border-[#e91e3f] transition-colors">
                   <div className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-lg px-3 py-1.5 flex-1 min-w-[140px]">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-gray-400 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
