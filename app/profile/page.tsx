@@ -26,6 +26,10 @@ export default function MyInfoPage() {
   
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
 
+  // 📌 관리자 알림함
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [expandedNotif, setExpandedNotif] = useState<string | null>(null);
+
   const userSession = session?.user as any;
   const isVerified = userSession?.isVerified;
   const hasScrimRole = userSession?.hasScrimRole;
@@ -57,6 +61,33 @@ export default function MyInfoPage() {
       }).catch(err => console.error("데이터 로드 실패:", err)).finally(() => setIsDataLoading(false));
     }
   }, [status, session]);
+
+  // 📌 관리자 알림 로드 (닉네임 + 디스코드 ID 매칭)
+  const loadNotifications = () => {
+    if (status !== "authenticated" || !session?.user?.name) return;
+    const uid = (session.user as any)?.id;
+    const qs = `user=${encodeURIComponent(session.user.name)}${uid ? `&id=${encodeURIComponent(uid)}` : ""}`;
+    fetch(`/api/notifications?${qs}`, { cache: "no-store" })
+      .then(res => res.json())
+      .then(data => { if (data?.success && Array.isArray(data.data)) setNotifications(data.data); })
+      .catch(() => {});
+  };
+  useEffect(() => { loadNotifications(); }, [status, session]);
+
+  // 📌 알림함 탭 진입 시 안 읽은 알림을 읽음 처리
+  useEffect(() => {
+    if (activeTab !== "notice") return;
+    if (status !== "authenticated" || !session?.user?.name) return;
+    if (!notifications.some((n) => !n.read)) return;
+    const uid = (session.user as any)?.id;
+    fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markAll: true, user: session.user.name, id: uid }),
+    })
+      .then(() => setNotifications((prev) => prev.map((n) => ({ ...n, read: true }))))
+      .catch(() => {});
+  }, [activeTab, notifications, status, session]);
 
   const executeCancelApply = async () => {
     if (!cancelConfirmId) return;
@@ -181,15 +212,63 @@ export default function MyInfoPage() {
       )}
 
       <div className="flex gap-8 border-b border-white/10 mb-8 overflow-x-auto scrollbar-hide">
-        {["inquiry", "recruit", "booster"].map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-4 text-sm md:text-base font-bold whitespace-nowrap transition-colors relative outline-none ${activeTab === tab ? "text-[#e91e3f]" : "text-gray-400 hover:text-white"}`}>
-            {tab === "inquiry" ? "1:1 문의 내역" : tab === "recruit" ? "구인 지원 목록" : "서버 부스터 혜택"}
-            {activeTab === tab && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#e91e3f]" />}
-          </button>
-        ))}
+        {["notice", "inquiry", "recruit", "booster"].map((tab) => {
+          const unread = tab === "notice" ? notifications.filter((n) => !n.read).length : 0;
+          const label = tab === "notice" ? "알림함" : tab === "inquiry" ? "1:1 문의 내역" : tab === "recruit" ? "구인 지원 목록" : "서버 부스터 혜택";
+          return (
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-4 text-sm md:text-base font-bold whitespace-nowrap transition-colors relative outline-none flex items-center gap-1.5 ${activeTab === tab ? "text-[#e91e3f]" : "text-gray-400 hover:text-white"}`}>
+              {label}
+              {unread > 0 && <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-black rounded-full bg-[#e91e3f] text-white">{unread}</span>}
+              {activeTab === tab && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#e91e3f]" />}
+            </button>
+          );
+        })}
       </div>
 
       <div>
+        {activeTab === "notice" && (() => {
+          const TYPE_STYLES: Record<string, string> = {
+            경고: "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25",
+            제재: "bg-orange-500/10 text-orange-400 border-orange-500/25",
+            안내: "bg-sky-500/10 text-sky-400 border-sky-500/25",
+            축하: "bg-emerald-500/10 text-emerald-400 border-emerald-500/25",
+            일반: "bg-white/5 text-gray-300 border-white/15",
+          };
+          return (
+            <div className="space-y-4 animate-in fade-in duration-300">
+              {isDataLoading && notifications.length === 0 ? (
+                <p className="text-gray-600 text-sm py-12 text-center">데이터 로딩 중...</p>
+              ) : notifications.length === 0 ? (
+                <div className="text-center py-16 text-gray-600 text-sm bg-white/[0.02] rounded-2xl border border-white/5">
+                  <p className="mb-1">받은 알림이 없습니다.</p>
+                  <p className="text-xs text-gray-700">운영팀이 보낸 경고·안내가 여기에 표시됩니다.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {notifications.map((n) => {
+                    const open = expandedNotif === n._id;
+                    const badge = TYPE_STYLES[n.type] || TYPE_STYLES["일반"];
+                    return (
+                      <div key={n._id} onClick={() => setExpandedNotif(open ? null : n._id)} className={`cursor-pointer rounded-2xl border transition-colors ${n.type === "경고" || n.type === "제재" ? "border-[#e91e3f]/20 bg-[#e91e3f]/[0.03]" : "border-white/8 bg-white/[0.02]"} hover:bg-white/[0.04]`}>
+                        <div className="p-5">
+                          <div className="flex items-center gap-2.5 mb-2">
+                            <span className={`shrink-0 text-[10px] font-black tracking-wider border px-2 py-0.5 rounded-full ${badge}`}>{n.type}</span>
+                            {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] shadow-[0_0_6px_rgba(233,30,63,0.8)]"></span>}
+                            <span className="ml-auto text-[11px] text-gray-600">{n.createdAt ? new Date(n.createdAt).toLocaleString("ko-KR") : ""}</span>
+                          </div>
+                          <h4 className="text-sm md:text-base font-bold text-white break-keep">{n.title}</h4>
+                          <p className={`text-sm text-gray-400 leading-relaxed break-keep whitespace-pre-wrap mt-2 ${open ? "" : "line-clamp-2"}`}>{n.content}</p>
+                          {n.sentBy && open && <p className="text-[11px] text-gray-600 mt-3 pt-3 border-t border-white/5">보낸 사람 · 운영팀 ({n.sentBy})</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {activeTab === "inquiry" && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="flex gap-2 mb-4">

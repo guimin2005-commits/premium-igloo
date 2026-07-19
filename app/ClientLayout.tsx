@@ -82,6 +82,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   // 📌 알림 센터 — 내 문의에 답변이 달리면 종 아이콘에 빨간 점
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [adminNotifs, setAdminNotifs] = useState<any[]>([]);
   const [seenNotifIds, setSeenNotifIds] = useState<Set<string>>(new Set());
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -105,7 +106,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         setNotifications(answered);
       })
       .catch(() => {});
-  }, [status, session?.user?.name]);
+
+    // 📌 관리자 발송 알림 (경고·안내 등)
+    const uid = (session.user as any)?.id;
+    const qs = `user=${encodeURIComponent(session.user.name)}${uid ? `&id=${encodeURIComponent(uid)}` : ""}`;
+    fetch(`/api/notifications?${qs}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => { if (Array.isArray(data?.data)) setAdminNotifs(data.data); })
+      .catch(() => {});
+  }, [status, session?.user?.name, pathname]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -115,7 +124,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isNotifOpen]);
 
-  const unseenCount = notifications.filter((n) => !seenNotifIds.has(n._id)).length;
+  const unreadAdminCount = adminNotifs.filter((n) => !n.read).length;
+  const unseenCount = notifications.filter((n) => !seenNotifIds.has(n._id)).length + unreadAdminCount;
 
   const markNotifsSeen = () => {
     const next = new Set(seenNotifIds);
@@ -240,12 +250,25 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   <div className="absolute top-[52px] right-0 z-50 w-72 bg-[#1e1e1e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="px-5 py-3.5 border-b border-white/5 flex items-center justify-between">
                       <span className="text-sm font-black text-white">알림</span>
-                      <span className="text-[10px] font-bold text-gray-500">답변 완료된 문의</span>
+                      <span className="text-[10px] font-bold text-gray-500">운영팀 알림 · 문의 답변</span>
                     </div>
-                    {notifications.length === 0 ? (
+                    {notifications.length === 0 && adminNotifs.length === 0 ? (
                       <div className="px-5 py-8 text-center text-xs text-gray-500">아직 알림이 없습니다.</div>
                     ) : (
                       <div className="max-h-72 overflow-y-auto [&::-webkit-scrollbar]:hidden divide-y divide-white/[0.04]">
+                        {adminNotifs.slice(0, 5).map((n) => {
+                          const warn = n.type === "경고" || n.type === "제재";
+                          return (
+                            <Link key={n._id} href="/profile?tab=notice" onClick={() => setIsNotifOpen(false)} className="block px-5 py-3.5 hover:bg-white/[0.03] transition-colors">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`text-[9px] font-black tracking-wider px-1.5 py-0.5 rounded border ${warn ? "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25" : "bg-sky-500/10 text-sky-400 border-sky-500/20"}`}>{n.type || "안내"}</span>
+                                {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>}
+                                <span className="ml-auto text-[10px] text-gray-600">운영팀</span>
+                              </div>
+                              <p className="text-xs font-bold text-gray-200 line-clamp-1">{n.title}</p>
+                            </Link>
+                          );
+                        })}
                         {notifications.slice(0, 5).map((n) => (
                           <Link key={n._id} href="/profile" onClick={() => setIsNotifOpen(false)} className="block px-5 py-3.5 hover:bg-white/[0.03] transition-colors">
                             <div className="flex items-center gap-2 mb-1">
@@ -257,7 +280,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         ))}
                       </div>
                     )}
-                    <Link href="/profile" onClick={() => setIsNotifOpen(false)} className="block px-5 py-3 text-center text-xs font-bold text-[#e91e3f] hover:bg-[#e91e3f]/5 transition-colors border-t border-white/5">전체 문의 내역 보기</Link>
+                    <Link href="/profile?tab=notice" onClick={() => setIsNotifOpen(false)} className="block px-5 py-3 text-center text-xs font-bold text-[#e91e3f] hover:bg-[#e91e3f]/5 transition-colors border-t border-white/5">알림함에서 전체 보기</Link>
                   </div>
                 )}
               </div>
