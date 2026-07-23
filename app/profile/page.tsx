@@ -15,6 +15,15 @@ const stripMd = (t: string) =>
     .replace(/==(.*?)==/g, "$1")
     .replace(/\{([^}]+)\}/g, "$1");
 
+// 통지 유형별 색상
+const NOTI_TYPE_STYLES: Record<string, string> = {
+  경고: "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25",
+  제재: "bg-orange-500/10 text-orange-400 border-orange-500/25",
+  안내: "bg-sky-500/10 text-sky-400 border-sky-500/25",
+  축하: "bg-emerald-500/10 text-emerald-400 border-emerald-500/25",
+  일반: "bg-white/5 text-gray-300 border-white/15",
+};
+
 export default function MyInfoPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -38,7 +47,7 @@ export default function MyInfoPage() {
 
   // 📌 관리자 알림함
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [expandedNotif, setExpandedNotif] = useState<string | null>(null);
+  const [selectedNotif, setSelectedNotif] = useState<any | null>(null);
 
   const userSession = session?.user as any;
   const isVerified = userSession?.isVerified;
@@ -236,75 +245,64 @@ export default function MyInfoPage() {
       </div>
 
       <div>
-        {activeTab === "notice" && (() => {
-          const TYPE_STYLES: Record<string, string> = {
-            경고: "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25",
-            제재: "bg-orange-500/10 text-orange-400 border-orange-500/25",
-            안내: "bg-sky-500/10 text-sky-400 border-sky-500/25",
-            축하: "bg-emerald-500/10 text-emerald-400 border-emerald-500/25",
-            일반: "bg-white/5 text-gray-300 border-white/15",
-          };
-          return (
-            <div className="space-y-4 animate-in fade-in duration-300">
-              {isDataLoading && notifications.length === 0 ? (
-                <p className="text-gray-600 text-sm py-12 text-center">데이터 로딩 중...</p>
-              ) : notifications.length === 0 ? (
-                <div className="text-center py-16 text-gray-600 text-sm bg-white/[0.02] rounded-2xl border border-white/5">
-                  <p className="mb-1">받은 알림이 없습니다.</p>
-                  <p className="text-xs text-gray-700">운영팀이 보낸 경고·안내가 여기에 표시됩니다.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {notifications.map((n) => {
-                    const open = expandedNotif === n._id;
-                    const badge = TYPE_STYLES[n.type] || TYPE_STYLES["일반"];
-                    return (
-                      <div key={n._id} onClick={() => setExpandedNotif(open ? null : n._id)} className={`cursor-pointer rounded-2xl border transition-colors ${n.type === "경고" || n.type === "제재" ? "border-[#e91e3f]/20 bg-[#e91e3f]/[0.03]" : "border-white/8 bg-white/[0.02]"} hover:bg-white/[0.04]`}>
-                        <div className="p-5">
-                          <div className="flex items-center gap-2.5 mb-2">
-                            <span className={`shrink-0 text-[10px] font-black tracking-wider border px-2 py-0.5 rounded-full ${badge}`}>{n.type}</span>
-                            {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] shadow-[0_0_6px_rgba(233,30,63,0.8)]"></span>}
-                            <span className="ml-auto text-[11px] text-gray-600">{n.createdAt ? new Date(n.createdAt).toLocaleString("ko-KR") : ""}</span>
-                          </div>
-                          <h4 className="text-sm md:text-base font-bold text-white break-keep">{n.title}</h4>
-                          {open ? (
-                            <div className="text-sm text-gray-300 mt-2" onClick={(e) => e.stopPropagation()}>
-                              <RenderFormattedText text={n.content} />
-                            </div>
-                          ) : (
-                            <p className="text-sm text-gray-400 leading-relaxed break-keep line-clamp-2 mt-2">{stripMd(n.content)}</p>
-                          )}
-                          {n.sentBy && open && <p className="text-[11px] text-gray-600 mt-3 pt-3 border-t border-white/5">보낸 사람 · 운영팀 ({n.sentBy})</p>}
+        {activeTab === "notice" && (
+          <div className="animate-in fade-in duration-300">
+            {isDataLoading && notifications.length === 0 ? (
+              <p className="text-gray-600 text-sm py-12 text-center">데이터 로딩 중...</p>
+            ) : notifications.length === 0 ? (
+              <div className="text-center py-20 border border-dashed border-white/8 rounded-xl">
+                <p className="text-gray-500 text-sm mb-1">받은 통지가 없습니다.</p>
+                <p className="text-xs text-gray-700">운영팀이 보낸 경고·안내 등이 이곳에 도착합니다.</p>
+              </div>
+            ) : (
+              <div className="border-y border-white/[0.07] divide-y divide-white/[0.07]">
+                {notifications.map((n) => {
+                  const badge = NOTI_TYPE_STYLES[n.type] || NOTI_TYPE_STYLES["일반"];
+                  return (
+                    <button key={n._id} onClick={() => setSelectedNotif(n)} className="w-full text-left py-4 px-1 flex items-center gap-3.5 hover:bg-white/[0.02] transition-colors group outline-none">
+                      <span className={`shrink-0 text-[10px] font-black tracking-wider border px-2 py-1 rounded ${badge}`}>{n.type}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] shrink-0 shadow-[0_0_6px_rgba(233,30,63,0.8)]"></span>}
+                          <h4 className={`text-sm font-bold truncate ${n.read ? "text-gray-200" : "text-white"}`}>{n.title}</h4>
                         </div>
+                        <p className="text-xs text-gray-500 truncate mt-0.5">{stripMd(n.content)}</p>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })()}
+                      <span className="text-[11px] text-gray-600 shrink-0 hidden sm:block tabular-nums">{n.createdAt ? new Date(n.createdAt).toLocaleDateString("ko-KR") : ""}</span>
+                      <svg className="w-4 h-4 text-gray-700 group-hover:text-gray-400 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {activeTab === "inquiry" && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="flex gap-2 mb-4">
+          <div className="space-y-5 animate-in fade-in duration-300">
+            <div className="flex gap-1.5">
               {[{ label: "전체", key: "all" }, { label: "접수 중", key: "pending" }, { label: "답변 완료", key: "completed" }].map(f => (
-                <button key={f.key} onClick={() => setInquiryFilter(f.key)} className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-colors ${inquiryFilter === f.key ? "bg-white text-black border-white" : "bg-transparent border-white/10 text-gray-400 hover:border-white/20"}`}>{f.label}</button>
+                <button key={f.key} onClick={() => setInquiryFilter(f.key)} className={`px-3.5 py-1.5 rounded-md text-xs font-bold border transition-colors ${inquiryFilter === f.key ? "bg-white/10 text-white border-white/20" : "bg-transparent border-white/8 text-gray-500 hover:border-white/20 hover:text-gray-300"}`}>{f.label}</button>
               ))}
             </div>
-            <div className="border-t border-white/5 divide-y divide-white/5">
-              {isDataLoading ? <p className="text-gray-600 text-sm py-12 text-center">데이터 로딩 중...</p> : filteredInquiries.length === 0 ? <p className="text-gray-600 text-sm py-12 text-center">등록된 문의 내역이 없습니다.</p> : (
-                filteredInquiries.map(inq => (
-                  <div key={inq.id} onClick={() => setSelectedInquiry(inq)} className="py-5 px-3 cursor-pointer hover:bg-white/[0.02] rounded-xl transition-colors">
-                    <div className="flex items-center justify-between gap-4 mb-2">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${inq.status === '접수 중' ? 'bg-[#e91e3f]/10 text-[#e91e3f]' : 'bg-blue-500/10 text-blue-400'}`}>{inq.status}</span>
-                      <span className="text-xs text-gray-600">{inq.date}</span>
+            {isDataLoading ? <p className="text-gray-600 text-sm py-12 text-center">데이터 로딩 중...</p> : filteredInquiries.length === 0 ? (
+              <div className="text-center py-20 border border-dashed border-white/8 rounded-xl">
+                <p className="text-gray-500 text-sm">등록된 문의 내역이 없습니다.</p>
+              </div>
+            ) : (
+              <div className="border-y border-white/[0.07] divide-y divide-white/[0.07]">
+                {filteredInquiries.map(inq => (
+                  <button key={inq.id} onClick={() => setSelectedInquiry(inq)} className="w-full text-left py-4 px-1 flex items-center gap-3.5 hover:bg-white/[0.02] transition-colors group outline-none">
+                    <span className={`shrink-0 text-[10px] font-black tracking-wider border px-2 py-1 rounded ${inq.status === '접수 중' ? 'bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25' : 'bg-sky-500/10 text-sky-400 border-sky-500/25'}`}>{inq.status}</span>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-sm font-bold text-white truncate"><span className="text-gray-500 font-medium mr-1.5">[{inq.type}]</span>{inq.title}</h4>
+                      <p className="text-xs text-gray-600 mt-0.5 tabular-nums">{inq.date}</p>
                     </div>
-                    <h4 className="text-sm font-bold text-white"><span className="text-gray-500 mr-2">[{inq.type}]</span> {inq.title}</h4>
-                  </div>
-                ))
-              )}
-            </div>
+                    <svg className="w-4 h-4 text-gray-700 group-hover:text-gray-400 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
         
@@ -312,7 +310,7 @@ export default function MyInfoPage() {
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="flex gap-2 mb-4">
               {[{ label: "전체", key: "all" }, { label: "심사 중", key: "심사 중" }, { label: "합격", key: "합격" }, { label: "불합격", key: "불합격" }].map(f => (
-                <button key={f.key} onClick={() => setRecruitFilter(f.key)} className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-colors ${recruitFilter === f.key ? "bg-white text-black border-white" : "bg-transparent border-white/10 text-gray-400 hover:border-white/20"}`}>{f.label}</button>
+                <button key={f.key} onClick={() => setRecruitFilter(f.key)} className={`px-3.5 py-1.5 rounded-md text-xs font-bold border transition-colors ${recruitFilter === f.key ? "bg-white/10 text-white border-white/20" : "bg-transparent border-white/8 text-gray-500 hover:border-white/20 hover:text-gray-300"}`}>{f.label}</button>
               ))}
             </div>
             <div className="border-t border-white/5 divide-y divide-white/5">
@@ -462,45 +460,84 @@ export default function MyInfoPage() {
         )}
       </div>
 
-      {selectedInquiry && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-2xl h-[600px] max-h-[80vh] shadow-2xl relative flex flex-col overflow-hidden">
-            <div className="p-8 pb-6 shrink-0 border-b border-white/10 relative">
-              <button onClick={() => setSelectedInquiry(null)} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-white bg-white/5 rounded-full transition-colors outline-none focus:outline-none">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+      {/* 📌 통지 상세 모달 (사무적 통지서) */}
+      {selectedNotif && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in" onClick={() => setSelectedNotif(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-2xl w-full max-w-lg max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
+              <span className="text-[10px] font-black tracking-[0.3em] text-gray-500 uppercase">Official Notice · 운영팀 통지</span>
+              <button onClick={() => setSelectedNotif(null)} className="p-1.5 -mr-1.5 text-gray-500 hover:text-white rounded-md hover:bg-white/5 transition-colors outline-none">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded mb-4 inline-block ${selectedInquiry.status === '접수 중' ? 'bg-[#e91e3f]/10 text-[#e91e3f]' : 'bg-blue-500/10 text-blue-400'}`}>
-                {selectedInquiry.status}
-              </span>
-              <h3 className="text-xl font-bold text-white pr-12 break-words leading-snug">
-                {selectedInquiry.title}
-              </h3>
             </div>
-            
-            <div className="p-8 pt-8 overflow-y-auto flex-1 flex flex-col [&::-webkit-scrollbar]:hidden">
-              <div className="flex flex-col gap-4 mb-8 bg-[#1a1a1a] rounded-xl p-6 border border-white/5 shadow-inner">
-                <div className="flex justify-between items-center text-xs w-full">
-                  <span className="text-gray-500 font-bold shrink-0">문의 접수일시</span>
-                  <span className="text-gray-300 font-bold text-right">{selectedInquiry.createdAt ? new Date(selectedInquiry.createdAt).toLocaleString() : selectedInquiry.date}</span>
+            <div className="p-6 md:p-7 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden">
+              <div className="flex items-center gap-2 mb-4">
+                <span className={`text-[10px] font-black tracking-wider border px-2 py-1 rounded ${NOTI_TYPE_STYLES[selectedNotif.type] || NOTI_TYPE_STYLES["일반"]}`}>{selectedNotif.type}</span>
+                <span className="ml-auto text-[11px] text-gray-600 tabular-nums">{selectedNotif.createdAt ? new Date(selectedNotif.createdAt).toLocaleString("ko-KR") : ""}</span>
+              </div>
+              <h3 className="text-lg md:text-xl font-bold text-white break-keep leading-snug mb-5">{selectedNotif.title}</h3>
+
+              <div className="rounded-lg border border-white/8 bg-white/[0.02] divide-y divide-white/[0.06] mb-6">
+                <div className="flex items-center justify-between px-4 py-2.5 text-xs">
+                  <span className="text-gray-500 font-bold">수신</span>
+                  <span className="text-gray-300 font-bold">{session?.user?.name}</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-2.5 text-xs">
+                  <span className="text-gray-500 font-bold">발신</span>
+                  <span className="text-gray-300 font-bold">고급 이글루 운영팀{selectedNotif.sentBy ? ` (${selectedNotif.sentBy})` : ""}</span>
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-300 leading-relaxed break-keep">
+                <RenderFormattedText text={selectedNotif.content} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📌 문의 상세 모달 (사무적) */}
+      {selectedInquiry && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in" onClick={() => setSelectedInquiry(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
+              <span className="text-[10px] font-black tracking-[0.3em] text-gray-500 uppercase">1:1 문의 내역</span>
+              <button onClick={() => setSelectedInquiry(null)} className="p-1.5 -mr-1.5 text-gray-500 hover:text-white rounded-md hover:bg-white/5 transition-colors outline-none">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <div className="p-6 md:p-7 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden">
+              <div className="flex items-center gap-2 mb-3">
+                <span className={`text-[10px] font-black tracking-wider border px-2 py-1 rounded ${selectedInquiry.status === '접수 중' ? 'bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25' : 'bg-sky-500/10 text-sky-400 border-sky-500/25'}`}>{selectedInquiry.status}</span>
+                <span className="text-[11px] text-gray-600 font-medium">[{selectedInquiry.type}]</span>
+              </div>
+              <h3 className="text-lg md:text-xl font-bold text-white break-keep leading-snug mb-5">{selectedInquiry.title}</h3>
+
+              <div className="rounded-lg border border-white/8 bg-white/[0.02] divide-y divide-white/[0.06] mb-6">
+                <div className="flex items-center justify-between px-4 py-2.5 text-xs">
+                  <span className="text-gray-500 font-bold">접수일시</span>
+                  <span className="text-gray-300 font-bold tabular-nums">{selectedInquiry.createdAt ? new Date(selectedInquiry.createdAt).toLocaleString("ko-KR") : selectedInquiry.date}</span>
                 </div>
                 {selectedInquiry.status === '답변 완료' && (
-                  <div className="flex justify-between items-center text-xs pt-4 border-t border-white/5 w-full">
-                    <span className="text-[#e91e3f] font-bold shrink-0">답변 완료일시</span>
-                    <span className="text-gray-300 font-bold text-right">{selectedInquiry.answeredAt ? new Date(selectedInquiry.answeredAt).toLocaleString() : selectedInquiry.updatedAt ? new Date(selectedInquiry.updatedAt).toLocaleString() : "처리 완료"}</span>
+                  <div className="flex items-center justify-between px-4 py-2.5 text-xs">
+                    <span className="text-[#e91e3f] font-bold">답변일시</span>
+                    <span className="text-gray-300 font-bold tabular-nums">{selectedInquiry.answeredAt ? new Date(selectedInquiry.answeredAt).toLocaleString("ko-KR") : selectedInquiry.updatedAt ? new Date(selectedInquiry.updatedAt).toLocaleString("ko-KR") : "처리 완료"}</span>
                   </div>
                 )}
-              </div> 
-              
-              <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap flex-1 px-1">
+              </div>
+
+              <p className="text-[11px] font-black tracking-wide text-gray-500 uppercase mb-2">문의 내용</p>
+              <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap break-keep">
                 {selectedInquiry.content}
               </div>
-              
+
               {selectedInquiry.answer && (
-                <div className="mt-8 bg-[#e91e3f]/5 border border-[#e91e3f]/20 p-6 rounded-2xl text-sm shrink-0">
-                  <span className="block text-xs font-black text-[#e91e3f] tracking-wide mb-3 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>관리자 답변
+                <div className="mt-6 bg-[#e91e3f]/[0.04] border border-[#e91e3f]/20 p-5 rounded-lg">
+                  <span className="text-[11px] font-black text-[#e91e3f] tracking-wide uppercase mb-2.5 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>운영팀 답변
                   </span>
-                  <p className="text-gray-300 leading-relaxed break-words">{selectedInquiry.answer}</p>
+                  <p className="text-sm text-gray-300 leading-relaxed break-keep whitespace-pre-wrap">{selectedInquiry.answer}</p>
                 </div>
               )}
             </div>
