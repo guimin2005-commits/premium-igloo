@@ -34,12 +34,25 @@ async function resolveDiscordId(username: string): Promise<string | null> {
   }
 }
 
+// ── 실제 배포 도메인 판별 ─────────────────────────────────
+// NEXTAUTH_URL이 localhost로 잡혀 있어도, 관리자가 실제로 접속한 도메인(요청 헤더)을 사용
+function getBaseUrl(request: Request): string {
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  const proto = request.headers.get("x-forwarded-proto") || "https";
+  if (host && !host.startsWith("localhost") && !host.startsWith("127.0.0.1")) {
+    return `${proto}://${host}`;
+  }
+  const origin = request.headers.get("origin");
+  if (origin) return origin;
+  if (host) return `${proto}://${host}`;
+  return process.env.NEXTAUTH_URL || "https://premium-igloo.vercel.app";
+}
+
 // ── 디스코드 DM 발송 (가벼운 "새 알림 도착" 핑) ────────────────
-async function sendDiscordDM(userId: string, type: string, title: string): Promise<boolean> {
+async function sendDiscordDM(userId: string, type: string, title: string, siteUrl: string): Promise<boolean> {
   try {
     const token = process.env.DISCORD_BOT_TOKEN;
     if (!token) return false;
-    const siteUrl = process.env.NEXTAUTH_URL || "https://gaia-igloo.com";
 
     // 1) DM 채널 생성
     const dmRes = await fetch("https://discord.com/api/v10/users/@me/channels", {
@@ -135,7 +148,7 @@ export async function POST(request: Request) {
     // 디스코드 ID를 찾은 경우에만 DM 핑 발송 (본문은 사이트에 저장)
     let dmSent = false;
     if (recipientId) {
-      dmSent = await sendDiscordDM(recipientId, type || "안내", title.trim());
+      dmSent = await sendDiscordDM(recipientId, type || "안내", title.trim(), getBaseUrl(request));
     }
 
     const doc = await Notification.create({

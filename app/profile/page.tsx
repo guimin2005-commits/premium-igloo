@@ -4,6 +4,16 @@ import { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Reveal, LuxStyles, ScrollProgress } from "../components/Lux";
+import { RenderFormattedText } from "../components/FormattedText";
+
+// 미리보기(접힘)용 마크다운 기호 제거
+const stripMd = (t: string) =>
+  (t || "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/~~(.*?)~~/g, "$1")
+    .replace(/==(.*?)==/g, "$1")
+    .replace(/\{([^}]+)\}/g, "$1");
 
 export default function MyInfoPage() {
   const { data: session, status } = useSession();
@@ -257,7 +267,13 @@ export default function MyInfoPage() {
                             <span className="ml-auto text-[11px] text-gray-600">{n.createdAt ? new Date(n.createdAt).toLocaleString("ko-KR") : ""}</span>
                           </div>
                           <h4 className="text-sm md:text-base font-bold text-white break-keep">{n.title}</h4>
-                          <p className={`text-sm text-gray-400 leading-relaxed break-keep whitespace-pre-wrap mt-2 ${open ? "" : "line-clamp-2"}`}>{n.content}</p>
+                          {open ? (
+                            <div className="text-sm text-gray-300 mt-2" onClick={(e) => e.stopPropagation()}>
+                              <RenderFormattedText text={n.content} />
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-400 leading-relaxed break-keep line-clamp-2 mt-2">{stripMd(n.content)}</p>
+                          )}
                           {n.sentBy && open && <p className="text-[11px] text-gray-600 mt-3 pt-3 border-t border-white/5">보낸 사람 · 운영팀 ({n.sentBy})</p>}
                         </div>
                       </div>
