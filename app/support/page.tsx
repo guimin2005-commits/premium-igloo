@@ -155,54 +155,63 @@ export default function SupportPage() {
         )}
 
         {selectedAdminInquiry && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-            <div className="bg-[#121212] border border-[#e91e3f]/20 rounded-3xl w-full max-w-3xl shadow-2xl relative flex flex-col max-h-[90vh] overflow-hidden">
-              <div className="p-8 pb-4 shrink-0 border-b border-white/5 relative">
-                <button onClick={() => setSelectedAdminInquiry(null)} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-white bg-white/5 rounded-full transition-colors z-10">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in" onClick={() => setSelectedAdminInquiry(null)}>
+            <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-2xl w-full max-w-5xl h-[88vh] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+              {/* 문서 헤더 바 */}
+              <div className="flex items-center gap-4 px-6 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
+                <span className={`shrink-0 text-[10px] font-black px-2 py-1 rounded ${selectedAdminInquiry.status === '답변 완료' ? 'bg-sky-500/10 text-sky-400 border border-sky-500/25' : 'bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25'}`}>{selectedAdminInquiry.status}</span>
+                <h2 className="text-sm md:text-base font-bold text-white leading-tight truncate flex-1">{selectedAdminInquiry.title}</h2>
+                <button onClick={() => setSelectedAdminInquiry(null)} className="shrink-0 p-1.5 -mr-1.5 text-gray-500 hover:text-white rounded-md hover:bg-white/5 transition-colors outline-none">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
-                <div className="pr-12">
-                  <span className={`text-[10px] font-black px-2.5 py-1 rounded-md mb-3 inline-block ${selectedAdminInquiry.status === '답변 완료' ? 'bg-blue-500/10 text-blue-400' : 'bg-[#e91e3f]/10 text-[#e91e3f]'}`}>{selectedAdminInquiry.status}</span>
-                  <h2 className="text-2xl font-bold text-white leading-tight break-words">{selectedAdminInquiry.title}</h2>
-                </div>
               </div>
-              
-              <div className="p-8 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden">
-                <div className="grid grid-cols-2 gap-y-3 gap-x-6 mb-6 text-sm bg-[#1a1a1a] p-5 rounded-xl border border-white/5">
-                  <div className="text-gray-300"><strong className="text-gray-500 mr-2">작성자</strong> {selectedAdminInquiry.user}</div>
-                  <div className="text-gray-300"><strong className="text-gray-500 mr-2">이메일</strong> {selectedAdminInquiry.email}</div>
-                  <div className="text-gray-300"><strong className="text-gray-500 mr-2">분류</strong> {selectedAdminInquiry.mainType} {selectedAdminInquiry.subType && `> ${selectedAdminInquiry.subType}`}</div>
-                  <div className="text-gray-300"><strong className="text-gray-500 mr-2">접수일</strong> {new Date(selectedAdminInquiry.createdAt).toLocaleString()}</div>
+
+              {/* 2분할 본문: 좌 문의 내용 / 우 답변 작성 */}
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 min-h-0 overflow-y-auto md:overflow-hidden [&::-webkit-scrollbar]:hidden">
+                {/* ── 좌: 문의 내용 ── */}
+                <div className="flex flex-col min-h-0 md:border-r border-white/8 border-b md:border-b-0">
+                  <div className="flex items-center gap-2 px-6 py-3 border-b border-white/5 shrink-0 bg-white/[0.01]">
+                    <span className="w-1 h-3.5 bg-gray-500 rounded-full"></span>
+                    <span className="text-[11px] font-black tracking-[0.2em] text-gray-400 uppercase">문의 내용</span>
+                  </div>
+                  <div className="md:overflow-y-auto md:flex-1 p-6 [&::-webkit-scrollbar]:hidden">
+                    <div className="rounded-lg border border-white/8 bg-white/[0.02] divide-y divide-white/[0.06] mb-5 text-xs">
+                      <div className="flex items-center justify-between px-4 py-2.5"><span className="text-gray-500 font-bold">작성자</span><span className="text-gray-300 font-bold">{selectedAdminInquiry.user}</span></div>
+                      <div className="flex items-center justify-between px-4 py-2.5 gap-4"><span className="text-gray-500 font-bold shrink-0">이메일</span><span className="text-gray-300 font-bold truncate text-right">{selectedAdminInquiry.email || "—"}</span></div>
+                      <div className="flex items-center justify-between px-4 py-2.5 gap-4"><span className="text-gray-500 font-bold shrink-0">분류</span><span className="text-gray-300 font-bold text-right">{selectedAdminInquiry.mainType}{selectedAdminInquiry.subType && ` › ${selectedAdminInquiry.subType}`}</span></div>
+                      <div className="flex items-center justify-between px-4 py-2.5 gap-4"><span className="text-gray-500 font-bold shrink-0">접수일시</span><span className="text-gray-300 font-bold tabular-nums text-right">{new Date(selectedAdminInquiry.createdAt).toLocaleString("ko-KR")}</span></div>
+                    </div>
+                    <div className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed break-keep">{selectedAdminInquiry.content}</div>
+                  </div>
                 </div>
 
-                <div className="mb-8">
-                  <span className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">상세 내용</span>
-                  <div className="text-gray-300 text-sm bg-white/[0.02] p-5 rounded-xl border border-white/5 whitespace-pre-wrap leading-relaxed min-h-[120px]">
-                    {selectedAdminInquiry.content}
+                {/* ── 우: 답변 작성 ── */}
+                <div className="flex flex-col min-h-0">
+                  <div className="flex items-center gap-2 px-6 py-3 border-b border-white/5 shrink-0 bg-white/[0.01]">
+                    <span className="w-1 h-3.5 bg-[#e91e3f] rounded-full"></span>
+                    <span className="text-[11px] font-black tracking-[0.2em] text-[#e91e3f] uppercase">답변 작성</span>
                   </div>
+                  <form onSubmit={handleAnswerSubmit} className="flex flex-col flex-1 min-h-0 p-6 gap-3">
+                    {/* 자주 쓰는 답변 템플릿 원클릭 삽입 */}
+                    <div className="flex flex-wrap gap-1.5 shrink-0">
+                      {[
+                        { l: "접수 완료", t: "안녕하세요, 고급 이글루 운영진입니다.\n문의하신 내용이 정상적으로 접수되었습니다. 확인 후 순차적으로 처리해 드리겠습니다.\n감사합니다." },
+                        { l: "버그 확인", t: "안녕하세요, 고급 이글루 운영진입니다.\n제보해 주신 오류를 확인하였으며, 현재 수정 작업을 진행하고 있습니다. 빠른 시일 내에 해결하겠습니다.\n소중한 제보 감사드립니다." },
+                        { l: "환불 안내", t: "안녕하세요, 고급 이글루 운영진입니다.\n환불 및 교환은 기프트 상품을 제외한 모든 상품에 한해 구매 후 30분 이내 신청 시 처리가 가능합니다.\n요청하신 건은 확인 후 처리 결과를 안내드리겠습니다." },
+                        { l: "처리 완료", t: "안녕하세요, 고급 이글루 운영진입니다.\n문의하신 사항이 정상적으로 처리 완료되었습니다. 이용에 불편을 드려 죄송하며, 추가 문의 사항이 있으시면 언제든지 1:1 문의를 이용해 주세요.\n감사합니다." },
+                      ].map((tpl) => (
+                        <button key={tpl.l} type="button" onClick={() => setAnswerText(tpl.t)} className="px-3 py-1.5 text-[11px] font-bold rounded-md border border-white/10 bg-white/[0.03] text-gray-400 hover:text-white hover:border-[#e91e3f]/40 transition-all">
+                          {tpl.l}
+                        </button>
+                      ))}
+                    </div>
+                    <textarea value={answerText} onChange={(e) => setAnswerText(e.target.value)} placeholder="답변을 작성해주세요..." className="flex-1 min-h-[200px] w-full bg-[#0d0d0d] border border-white/10 rounded-lg p-4 text-sm text-white focus:border-[#e91e3f] outline-none resize-none transition-colors leading-relaxed [&::-webkit-scrollbar]:hidden" />
+                    <div className="flex gap-3 shrink-0">
+                      <button type="submit" className="flex-1 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-lg transition-all outline-none">답변 저장하기</button>
+                      <button type="button" onClick={() => setDeleteConfirmId(selectedAdminInquiry._id)} className="px-6 py-3.5 bg-[#1a1a1a] hover:bg-red-500/20 text-red-500 font-bold rounded-lg transition-all border border-red-500/20 outline-none">삭제</button>
+                    </div>
+                  </form>
                 </div>
-
-                <form onSubmit={handleAnswerSubmit} className="space-y-4 border-t border-white/5 pt-6">
-                  <span className="block text-xs font-bold text-[#e91e3f] mb-2 uppercase tracking-wider">MANAGER ANSWER</span>
-                  {/* 📌 자주 쓰는 답변 템플릿 원클릭 삽입 */}
-                  <div className="flex flex-wrap gap-1.5 mb-2.5">
-                    {[
-                      { l: "접수 완료", t: "안녕하세요, 고급 이글루 운영진입니다.\n문의하신 내용이 정상적으로 접수되었습니다. 확인 후 순차적으로 처리해 드리겠습니다.\n감사합니다." },
-                      { l: "버그 확인", t: "안녕하세요, 고급 이글루 운영진입니다.\n제보해 주신 오류를 확인하였으며, 현재 수정 작업을 진행하고 있습니다. 빠른 시일 내에 해결하겠습니다.\n소중한 제보 감사드립니다." },
-                      { l: "환불 안내", t: "안녕하세요, 고급 이글루 운영진입니다.\n환불 및 교환은 기프트 상품을 제외한 모든 상품에 한해 구매 후 30분 이내 신청 시 처리가 가능합니다.\n요청하신 건은 확인 후 처리 결과를 안내드리겠습니다." },
-                      { l: "처리 완료", t: "안녕하세요, 고급 이글루 운영진입니다.\n문의하신 사항이 정상적으로 처리 완료되었습니다. 이용에 불편을 드려 죄송하며, 추가 문의 사항이 있으시면 언제든지 1:1 문의를 이용해 주세요.\n감사합니다." },
-                    ].map((tpl) => (
-                      <button key={tpl.l} type="button" onClick={() => setAnswerText(tpl.t)} className="px-3 py-1.5 text-[11px] font-bold rounded-full border border-white/10 bg-white/[0.03] text-gray-400 hover:text-white hover:border-[#e91e3f]/40 transition-all">
-                        {tpl.l}
-                      </button>
-                    ))}
-                  </div>
-                  <textarea rows={5} value={answerText} onChange={(e) => setAnswerText(e.target.value)} placeholder="답변을 작성해주세요..." className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl p-5 text-sm text-white focus:border-[#e91e3f] outline-none resize-none transition-colors" />
-                  <div className="flex gap-4 pt-2">
-                    <button type="submit" className="flex-1 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#e91e3f]/20 outline-none">답변 저장하기</button>
-                    <button type="button" onClick={() => setDeleteConfirmId(selectedAdminInquiry._id)} className="px-8 py-3.5 bg-[#1a1a1a] hover:bg-red-500/20 text-red-500 font-bold rounded-xl transition-all border border-red-500/20 outline-none">삭제</button>
-                  </div>
-                </form>
               </div>
             </div>
           </div>
