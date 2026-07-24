@@ -462,9 +462,9 @@ export default function MyInfoPage() {
 
       {/* 📌 통지 상세 모달 (사무적 통지서) */}
       {selectedNotif && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in" onClick={() => setSelectedNotif(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-2xl w-full max-w-lg max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-6 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setSelectedNotif(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
               <span className="text-[10px] font-black tracking-[0.3em] text-gray-500 uppercase">Official Notice · 운영팀 통지</span>
               <button onClick={() => setSelectedNotif(null)} className="p-1.5 -mr-1.5 text-gray-500 hover:text-white rounded-md hover:bg-white/5 transition-colors outline-none">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -498,9 +498,9 @@ export default function MyInfoPage() {
 
       {/* 📌 문의 상세 모달 (사무적) */}
       {selectedInquiry && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in" onClick={() => setSelectedInquiry(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-6 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setSelectedInquiry(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-2xl max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
               <span className="text-[10px] font-black tracking-[0.3em] text-gray-500 uppercase">1:1 문의 내역</span>
               <button onClick={() => setSelectedInquiry(null)} className="p-1.5 -mr-1.5 text-gray-500 hover:text-white rounded-md hover:bg-white/5 transition-colors outline-none">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>

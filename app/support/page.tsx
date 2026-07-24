@@ -125,12 +125,12 @@ export default function SupportPage() {
   if (viewMode === "admin" && isAdmin) {
     return (
       <main key={viewMode} className="flex-1 w-full max-w-6xl mx-auto px-6 py-16 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <div className="mb-10 border-b border-white/10 pb-6 flex justify-between items-end">
-          <div>
-            <h1 className="text-4xl font-black text-white mb-3">1:1 문의 관리</h1>
-            <p className="text-gray-400 text-sm">유저들의 모든 문의 내역을 확인하고 답변합니다.</p>
+        <div className="mb-8 md:mb-10 border-b border-white/10 pb-6 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl md:text-4xl font-black text-white mb-2 md:mb-3">1:1 문의 관리</h1>
+            <p className="text-gray-400 text-xs md:text-sm break-keep">유저들의 모든 문의 내역을 확인하고 답변합니다.</p>
           </div>
-          <button onClick={() => setViewMode("user")} className="px-5 py-2.5 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">
+          <button onClick={() => setViewMode("user")} className="shrink-0 self-start sm:self-auto px-5 py-2.5 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">
             ← 사용자 화면
           </button>
         </div>
@@ -155,43 +155,43 @@ export default function SupportPage() {
         )}
 
         {selectedAdminInquiry && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in" onClick={() => setSelectedAdminInquiry(null)}>
-            <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-2xl w-full max-w-5xl h-[88vh] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm md:p-4 animate-in fade-in" onClick={() => setSelectedAdminInquiry(null)}>
+            <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl md:rounded-2xl w-full max-w-5xl max-h-[92dvh] md:max-h-none md:h-[88vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200">
               {/* 문서 헤더 바 */}
-              <div className="flex items-center gap-4 px-6 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
+              <div className="flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
                 <span className={`shrink-0 text-[10px] font-black px-2 py-1 rounded ${selectedAdminInquiry.status === '답변 완료' ? 'bg-sky-500/10 text-sky-400 border border-sky-500/25' : 'bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25'}`}>{selectedAdminInquiry.status}</span>
                 <h2 className="text-sm md:text-base font-bold text-white leading-tight truncate flex-1">{selectedAdminInquiry.title}</h2>
-                <button onClick={() => setSelectedAdminInquiry(null)} className="shrink-0 p-1.5 -mr-1.5 text-gray-500 hover:text-white rounded-md hover:bg-white/5 transition-colors outline-none">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <button onClick={() => setSelectedAdminInquiry(null)} className="shrink-0 p-1.5 -mr-1 text-gray-500 hover:text-white rounded-md hover:bg-white/5 transition-colors outline-none">
+                  <svg className="w-5 h-5 md:w-4 md:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
 
-              {/* 2분할 본문: 좌 문의 내용 / 우 답변 작성 */}
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 min-h-0 overflow-y-auto md:overflow-hidden [&::-webkit-scrollbar]:hidden">
+              {/* 본문 — 모바일: 세로 스택(전체 스크롤) / 데스크톱: 좌우 2분할(각각 스크롤) */}
+              <div className="flex-1 min-h-0 flex flex-col md:grid md:grid-cols-2 overflow-y-auto md:overflow-hidden [&::-webkit-scrollbar]:hidden">
                 {/* ── 좌: 문의 내용 ── */}
-                <div className="flex flex-col min-h-0 md:border-r border-white/8 border-b md:border-b-0">
-                  <div className="flex items-center gap-2 px-6 py-3 border-b border-white/5 shrink-0 bg-white/[0.01]">
+                <div className="flex flex-col shrink-0 md:shrink md:min-h-0 md:border-r border-white/8 border-b md:border-b-0">
+                  <div className="flex items-center gap-2 px-4 md:px-6 py-3 border-b border-white/5 shrink-0 bg-white/[0.01]">
                     <span className="w-1 h-3.5 bg-gray-500 rounded-full"></span>
                     <span className="text-[11px] font-black tracking-[0.2em] text-gray-400 uppercase">문의 내용</span>
                   </div>
-                  <div className="md:overflow-y-auto md:flex-1 p-6 [&::-webkit-scrollbar]:hidden">
+                  <div className="md:overflow-y-auto md:flex-1 p-4 md:p-6 [&::-webkit-scrollbar]:hidden">
                     <div className="rounded-lg border border-white/8 bg-white/[0.02] divide-y divide-white/[0.06] mb-5 text-xs">
-                      <div className="flex items-center justify-between px-4 py-2.5"><span className="text-gray-500 font-bold">작성자</span><span className="text-gray-300 font-bold">{selectedAdminInquiry.user}</span></div>
-                      <div className="flex items-center justify-between px-4 py-2.5 gap-4"><span className="text-gray-500 font-bold shrink-0">이메일</span><span className="text-gray-300 font-bold truncate text-right">{selectedAdminInquiry.email || "—"}</span></div>
-                      <div className="flex items-center justify-between px-4 py-2.5 gap-4"><span className="text-gray-500 font-bold shrink-0">분류</span><span className="text-gray-300 font-bold text-right">{selectedAdminInquiry.mainType}{selectedAdminInquiry.subType && ` › ${selectedAdminInquiry.subType}`}</span></div>
-                      <div className="flex items-center justify-between px-4 py-2.5 gap-4"><span className="text-gray-500 font-bold shrink-0">접수일시</span><span className="text-gray-300 font-bold tabular-nums text-right">{new Date(selectedAdminInquiry.createdAt).toLocaleString("ko-KR")}</span></div>
+                      <div className="flex items-center justify-between px-3.5 md:px-4 py-2.5 gap-3"><span className="text-gray-500 font-bold shrink-0">작성자</span><span className="text-gray-300 font-bold truncate text-right">{selectedAdminInquiry.user}</span></div>
+                      <div className="flex items-center justify-between px-3.5 md:px-4 py-2.5 gap-3"><span className="text-gray-500 font-bold shrink-0">이메일</span><span className="text-gray-300 font-bold truncate text-right">{selectedAdminInquiry.email || "—"}</span></div>
+                      <div className="flex items-center justify-between px-3.5 md:px-4 py-2.5 gap-3"><span className="text-gray-500 font-bold shrink-0">분류</span><span className="text-gray-300 font-bold text-right break-keep">{selectedAdminInquiry.mainType}{selectedAdminInquiry.subType && ` › ${selectedAdminInquiry.subType}`}</span></div>
+                      <div className="flex items-center justify-between px-3.5 md:px-4 py-2.5 gap-3"><span className="text-gray-500 font-bold shrink-0">접수일시</span><span className="text-gray-300 font-bold tabular-nums text-right">{new Date(selectedAdminInquiry.createdAt).toLocaleString("ko-KR")}</span></div>
                     </div>
                     <div className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed break-keep">{selectedAdminInquiry.content}</div>
                   </div>
                 </div>
 
                 {/* ── 우: 답변 작성 ── */}
-                <div className="flex flex-col min-h-0">
-                  <div className="flex items-center gap-2 px-6 py-3 border-b border-white/5 shrink-0 bg-white/[0.01]">
+                <div className="flex flex-col shrink-0 md:shrink md:min-h-0">
+                  <div className="flex items-center gap-2 px-4 md:px-6 py-3 border-b border-white/5 shrink-0 bg-white/[0.01]">
                     <span className="w-1 h-3.5 bg-[#e91e3f] rounded-full"></span>
                     <span className="text-[11px] font-black tracking-[0.2em] text-[#e91e3f] uppercase">답변 작성</span>
                   </div>
-                  <form onSubmit={handleAnswerSubmit} className="flex flex-col flex-1 min-h-0 p-6 gap-3">
+                  <form onSubmit={handleAnswerSubmit} className="flex flex-col md:flex-1 md:min-h-0 p-4 md:p-6 gap-3">
                     {/* 자주 쓰는 답변 템플릿 원클릭 삽입 */}
                     <div className="flex flex-wrap gap-1.5 shrink-0">
                       {[
@@ -205,10 +205,11 @@ export default function SupportPage() {
                         </button>
                       ))}
                     </div>
-                    <textarea value={answerText} onChange={(e) => setAnswerText(e.target.value)} placeholder="답변을 작성해주세요..." className="flex-1 min-h-[200px] w-full bg-[#0d0d0d] border border-white/10 rounded-lg p-4 text-sm text-white focus:border-[#e91e3f] outline-none resize-none transition-colors leading-relaxed [&::-webkit-scrollbar]:hidden" />
-                    <div className="flex gap-3 shrink-0">
+                    {/* 모바일: 고정 높이 / 데스크톱: 남는 높이를 모두 채움. text-base로 iOS 자동 확대 방지 */}
+                    <textarea value={answerText} onChange={(e) => setAnswerText(e.target.value)} placeholder="답변을 작성해주세요..." className="h-52 md:h-auto md:flex-1 md:min-h-0 w-full bg-[#0d0d0d] border border-white/10 rounded-lg p-4 text-base md:text-sm text-white focus:border-[#e91e3f] outline-none resize-none transition-colors leading-relaxed [&::-webkit-scrollbar]:hidden" />
+                    <div className="flex gap-2.5 shrink-0">
                       <button type="submit" className="flex-1 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-lg transition-all outline-none">답변 저장하기</button>
-                      <button type="button" onClick={() => setDeleteConfirmId(selectedAdminInquiry._id)} className="px-6 py-3.5 bg-[#1a1a1a] hover:bg-red-500/20 text-red-500 font-bold rounded-lg transition-all border border-red-500/20 outline-none">삭제</button>
+                      <button type="button" onClick={() => setDeleteConfirmId(selectedAdminInquiry._id)} className="px-5 md:px-6 py-3.5 bg-[#1a1a1a] hover:bg-red-500/20 text-red-500 font-bold rounded-lg transition-all border border-red-500/20 outline-none shrink-0">삭제</button>
                     </div>
                   </form>
                 </div>
