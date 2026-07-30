@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Reveal, LuxStyles } from "../components/Lux";
 
 const ADMIN_USERS = ["elahw.06"];
+const GOLD = "#d4af37";
 
 // 여러 명(팀 로스터)의 디스코드 ID 파싱 — 쉼표/공백/줄바꿈 구분
 const parseIds = (s: string): string[] =>
@@ -123,17 +124,30 @@ export default function HallOfFamePage() {
     <main className="w-full flex-1 flex flex-col relative bg-[#080808]">
       <LuxStyles />
 
-      {/* ── 히어로 (절제된 모노톤 · 에디토리얼) ── */}
-      <section className="relative w-full pt-20 pb-10 md:pt-28 md:pb-14 px-6 overflow-hidden">
-        <div className="absolute inset-0 lux-grid-bg pointer-events-none opacity-40"></div>
+      {/* ── 히어로 (골드 프레스티지 제목 · 목록은 절제) ── */}
+      <section className="relative w-full pt-20 pb-12 md:pt-28 md:pb-16 px-6 overflow-hidden">
+        <div className="absolute inset-0 lux-grid-bg pointer-events-none opacity-50"></div>
+        <div className="absolute top-[-150px] left-1/2 -translate-x-1/2 w-[680px] h-[340px] rounded-full pointer-events-none" style={{ background: `${GOLD}10`, filter: "blur(130px)" }}></div>
+        <div className="absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${GOLD}55, transparent)` }}></div>
         <div className="max-w-4xl mx-auto relative z-10 text-center">
           <Reveal>
-            <div className="flex items-center justify-center gap-3 mb-6">
-              <span className="w-10 h-px bg-white/20"></span>
-              <span className="text-[10px] font-black tracking-[0.5em] uppercase text-gray-500">Hall of Fame</span>
-              <span className="w-10 h-px bg-white/20"></span>
+            {/* 월계관 엠블럼 */}
+            <div className="flex justify-center mb-6">
+              <svg viewBox="0 0 120 120" className="w-16 h-16 md:w-[72px] md:h-[72px]" fill="none">
+                <path d="M40 30c-14 8-20 26-14 44 3 9 9 16 16 20" stroke={GOLD} strokeWidth="3" strokeLinecap="round" opacity="0.9" />
+                <path d="M80 30c14 8 20 26 14 44-3 9-9 16-16 20" stroke={GOLD} strokeWidth="3" strokeLinecap="round" opacity="0.9" />
+                <path d="M60 24l4.6 9.3 10.3 1.5-7.4 7.3L73 52 60 47l-13 5 5.5-9.9-7.4-7.3 10.3-1.5z" fill={GOLD} />
+              </svg>
             </div>
-            <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-none mb-5 text-white">명예의 전당</h1>
+            <div className="flex items-center justify-center gap-3 mb-5">
+              <span className="w-10 h-px" style={{ background: `${GOLD}80` }}></span>
+              <span className="text-[10px] font-black tracking-[0.5em] uppercase" style={{ color: GOLD }}>Hall of Fame</span>
+              <span className="w-10 h-px" style={{ background: `${GOLD}80` }}></span>
+            </div>
+            <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-none mb-5">
+              <span className="text-white">명예의 </span>
+              <span style={{ color: GOLD, textShadow: `0 0 40px ${GOLD}55` }}>전당</span>
+            </h1>
             <p className="text-gray-400 text-sm md:text-base leading-relaxed">고급 이글루의 역사를 기록합니다.</p>
           </Reveal>
         </div>

@@ -227,15 +227,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       <span className={`absolute bottom-4 left-4 right-4 h-px bg-[#e91e3f] origin-left transition-transform duration-500 ${isGroupActive || isOpen ? "scale-x-100" : "scale-x-0 group-hover/gnav:scale-x-100"}`} />
                     </button>
 
-                    {/* 📌 컴팩트 드롭다운 — 콘텐츠 양에 맞춰 세로로 자람 (항목 추가에 유연) */}
+                    {/* 📌 PC 드롭다운 — 2열 그리드, 콘텐츠 양에 비례(항목 늘면 행 추가) */}
                     {isOpen && (
                       <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3 z-50">
-                        <div className="w-64 bg-[#161616]/98 backdrop-blur-md border border-white/10 rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.85)] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
-                          <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/60 to-transparent"></div>
-                          <div className="px-3 pt-3 pb-1.5">
-                            <span className="text-[9px] font-black tracking-[0.3em] text-gray-600 uppercase">{group.desc}</span>
+                        <div className="bg-[#161616]/98 backdrop-blur-md border border-white/10 rounded-2xl shadow-[0_40px_80px_-20px_rgba(0,0,0,0.9)] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+                          <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/70 to-transparent"></div>
+                          <div className="flex items-center gap-2.5 px-5 pt-4 pb-1">
+                            <span className="w-5 h-px bg-[#e91e3f]"></span>
+                            <span className="text-[9px] font-black tracking-[0.3em] text-gray-500 uppercase">{group.desc}</span>
                           </div>
-                          <div className="p-1.5 pt-0.5">
+                          <div className={`p-3 grid gap-1.5 ${group.items.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
                             {group.items.map((item) => {
                               const isActive = pathname === item.path;
                               return (
@@ -243,14 +244,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                                   key={item.path}
                                   href={item.path}
                                   onClick={() => setOpenMegaMenu(null)}
-                                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-colors group/item ${isActive ? "bg-[#e91e3f]/10" : "hover:bg-white/[0.06]"}`}
+                                  className={`w-56 flex flex-col gap-1 px-4 py-3 rounded-xl border transition-all duration-200 group/item ${isActive ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.08]" : "border-transparent hover:border-white/10 hover:bg-white/[0.05]"}`}
                                 >
-                                  <span className={`w-1 h-1 rounded-full shrink-0 transition-colors ${isActive ? "bg-[#e91e3f]" : "bg-gray-600 group-hover/item:bg-[#e91e3f]"}`}></span>
-                                  <div className="min-w-0 flex-1">
-                                    <p className={`text-[13px] font-bold leading-tight transition-colors ${isActive ? "text-[#e91e3f]" : "text-gray-200 group-hover/item:text-white"}`}>{item.name}</p>
-                                    <p className="text-[11px] text-gray-500 leading-tight mt-0.5 truncate">{item.desc}</p>
-                                  </div>
-                                  <svg className="w-3.5 h-3.5 text-gray-600 shrink-0 opacity-0 -translate-x-1 group-hover/item:opacity-100 group-hover/item:translate-x-0 transition-all" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                                  <span className={`text-sm font-black tracking-tight transition-colors ${isActive ? "text-[#e91e3f]" : "text-white group-hover/item:text-[#ff5c77]"}`}>{item.name}</span>
+                                  <span className="text-[11px] text-gray-500 leading-snug">{item.desc}</span>
+                                  <span className={`mt-1.5 h-px bg-[#e91e3f]/50 transition-all duration-300 ${isActive ? "w-full" : "w-5 group-hover/item:w-full"}`}></span>
                                 </Link>
                               );
                             })}
