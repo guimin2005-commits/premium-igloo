@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // 📌 대진표 렌더러 — 그룹([승자조]/[패자조]/[결승]) + "라운드명:" + "팀A vs 팀B > 승자" 파싱
-//   · 패자부활전(더블 엘리미네이션) 지원 · 가로 스크롤 없이 폭에 맞춰 자동 축소(scale-to-fit)
-type BM = { a: string; b: string; winner: string };
+//   · 패자부활전(더블 엘리미네이션) 지원 · 연결선(브라켓 트리) · #GAME 라벨
+//   · mode="fit": 폭에 맞춰 축소/확대 · mode="contain": 폭·높이 모두 맞춰 중앙 배치(전체화면용)
+type BM = { a: string; b: string; winner: string; _game?: number };
 type BR = { name: string; matches: BM[] };
 type BSection = { key: "W" | "L" | "F" | "S"; label: string; rounds: BR[] };
 
@@ -47,20 +48,59 @@ const SECTION_META: Record<string, { label: string; dot: string; text: string }>
   S: { label: "", dot: "bg-gray-500", text: "text-gray-400" },
 };
 
-const BracketMatchCard = ({ m }: { m: BM }) => (
-  <div className="rounded-lg border border-white/10 bg-black/40 overflow-hidden text-xs">
-    {[m.a, m.b].map((team, tIdx) => {
-      const isWinner = m.winner && team === m.winner;
-      const isLoser = m.winner && team && team !== m.winner;
-      return (
-        <div key={tIdx} className={`px-3 py-2 flex items-center justify-between gap-2 ${tIdx === 0 ? "border-b border-white/5" : ""} ${isWinner ? "bg-[#e91e3f]/10" : ""}`}>
-          <span className={`truncate ${isWinner ? "text-[#e91e3f] font-black" : isLoser ? "text-gray-600 line-through decoration-white/20" : "text-gray-200 font-medium"}`}>{team || "—"}</span>
-          {isWinner && <span className="text-[9px] font-black text-[#e91e3f] shrink-0">WIN</span>}
-        </div>
-      );
-    })}
+const COL_W = 190; // 매치 박스(=라운드 컬럼) 폭
+const CONN_W = 34; // 연결선 컬럼 폭
+const LINE = "rgba(255,255,255,0.18)";
+
+const MatchBox = ({ m, roundName }: { m: BM; roundName?: string }) => (
+  <div className="relative" style={{ width: COL_W }}>
+    <div className="absolute -top-[15px] left-0 right-0 flex items-center gap-1.5 whitespace-nowrap">
+      <span className="text-[9px] font-black text-orange-400 tracking-wider">#GAME {m._game}</span>
+      {roundName && <span className="text-[9px] font-black text-gray-600 tracking-wider truncate">{roundName}</span>}
+    </div>
+    <div className="rounded-md border border-white/10 bg-[#161616] overflow-hidden shadow-sm">
+      {[m.a, m.b].map((team, ti) => {
+        const isWin = !!m.winner && team === m.winner;
+        const isLose = !!m.winner && !!team && team !== m.winner;
+        return (
+          <div key={ti} className={`flex items-stretch ${ti === 0 ? "border-b border-white/10" : ""} ${isWin ? "bg-[#e91e3f]/12" : ""}`}>
+            <div className={`w-6 shrink-0 border-r border-white/10 ${isWin ? "bg-[#e91e3f]/25" : "bg-white/[0.04]"}`}></div>
+            <span className={`flex-1 min-w-0 truncate text-[11px] py-1.5 px-2 ${isWin ? "text-[#e91e3f] font-black" : isLose ? "text-gray-600" : "text-gray-100 font-bold"}`}>{team || "—"}</span>
+            {isWin && <span className="text-[8px] font-black text-[#e91e3f] self-center pr-2 shrink-0">WIN</span>}
+          </div>
+        );
+      })}
+    </div>
   </div>
 );
+
+// 라운드 A(nA) → 라운드 B(nB) 연결선. nA==2·nB이면 페어를 하나로 합치는 엘보, 아니면 직선 스텁으로 안전 폴백
+const Connector = ({ nA, nB }: { nA: number; nB: number }) => {
+  const seg = (style: React.CSSProperties, key: string) => (
+    <div key={key} className="absolute" style={{ background: LINE, ...style }} />
+  );
+  if (nB > 0 && nA === 2 * nB) {
+    return (
+      <div className="flex flex-col shrink-0" style={{ width: CONN_W }}>
+        {Array.from({ length: nB }).map((_, i) => (
+          <div key={i} className="relative flex-1">
+            {seg({ left: 0, width: "50%", top: "25%", height: 2 }, "t")}
+            {seg({ left: 0, width: "50%", top: "75%", height: 2 }, "b")}
+            {seg({ left: "50%", top: "25%", height: "50%", width: 2 }, "v")}
+            {seg({ left: "50%", width: "50%", top: "50%", height: 2 }, "o")}
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col shrink-0" style={{ width: CONN_W }}>
+      {Array.from({ length: Math.max(nA, nB) }).map((_, i) => (
+        <div key={i} className="relative flex-1">{seg({ left: 0, width: "100%", top: "50%", height: 2 }, "s")}</div>
+      ))}
+    </div>
+  );
+};
 
 const BracketSection = ({ sec }: { sec: BSection }) => {
   const meta = SECTION_META[sec.key];
@@ -72,50 +112,71 @@ const BracketSection = ({ sec }: { sec: BSection }) => {
           <span className={`text-[10px] font-black tracking-[0.2em] uppercase ${meta.text}`}>{sec.label || meta.label}</span>
         </div>
       )}
-      <div className="flex gap-3 items-stretch">
-        {sec.rounds.map((round, rIdx) => (
-          <div key={rIdx} className="w-40 shrink-0 flex flex-col">
-            <p className="text-[9px] font-black tracking-[0.15em] text-gray-500 uppercase mb-2 text-center truncate">{round.name}</p>
-            <div className="flex-1 flex flex-col justify-around gap-2.5">
-              {round.matches.map((m, mIdx) => <BracketMatchCard key={mIdx} m={m} />)}
+      <div className="flex items-stretch pt-4">
+        {sec.rounds.map((round, ri) => (
+          <React.Fragment key={ri}>
+            <div className="flex flex-col shrink-0" style={{ width: COL_W }}>
+              {round.matches.map((m, mi) => (
+                <div key={mi} className="flex-1 flex items-center min-h-[64px]">
+                  <MatchBox m={m} roundName={mi === 0 ? round.name : undefined} />
+                </div>
+              ))}
             </div>
-          </div>
+            {ri < sec.rounds.length - 1 && <Connector nA={round.matches.length} nB={sec.rounds[ri + 1].matches.length} />}
+          </React.Fragment>
         ))}
       </div>
     </div>
   );
 };
 
-// 폭에 맞춰 자동 축소/확대 — 가로 스크롤 없이 한 눈에, 남는 공간은 키워서 활용
-//  · maxScale: 여백이 있을 때 확대 허용 배율 상한 (기본 1 = 축소만)
-export const BracketView = ({ text, showHeader = true, maxScale = 1 }: { text: string; showHeader?: boolean; maxScale?: number }) => {
+// mode: "fit" = 폭 기준 축소/확대(인라인) · "contain" = 폭·높이 모두 맞춰 중앙(전체화면)
+export const BracketView = ({ text, showHeader = true, maxScale = 1, mode = "fit" }: { text: string; showHeader?: boolean; maxScale?: number; mode?: "fit" | "contain" }) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ scale: 1, h: 0 });
 
   const sections = parseBracketSections(text);
+  // #GAME 번호 — 전체 대진표에서 순차 부여
+  let gc = 0;
+  sections.forEach((s) => s.rounds.forEach((r) => r.matches.forEach((m) => { m._game = ++gc; })));
 
   useEffect(() => {
     const measure = () => {
       const wrap = wrapRef.current, inner = innerRef.current;
       if (!wrap || !inner) return;
-      const cw = wrap.clientWidth;
-      const iw = inner.offsetWidth;
+      const cw = wrap.clientWidth, iw = inner.offsetWidth, ih = inner.offsetHeight;
       if (!iw) return;
-      // 폭에 맞춰 채우되(확대 포함) maxScale 상한 · 최소 축소는 제한 없음
-      const scale = Math.min(cw / iw, maxScale);
-      setDims({ scale, h: inner.offsetHeight * scale });
+      if (mode === "contain") {
+        const ch = wrap.clientHeight || 1;
+        const scale = Math.min(cw / iw, ch / ih, maxScale);
+        setDims({ scale, h: 0 });
+      } else {
+        const scale = Math.min(cw / iw, maxScale);
+        setDims({ scale, h: ih * scale });
+      }
     };
     measure();
-    // 폰트 지연 로드/반응형 변화에도 재계산되도록 wrapper와 inner 모두 관찰
     const ro = new ResizeObserver(measure);
     if (wrapRef.current) ro.observe(wrapRef.current);
     if (innerRef.current) ro.observe(innerRef.current);
     window.addEventListener("resize", measure);
     return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
-  }, [text, maxScale]);
+  }, [text, maxScale, mode]);
 
   if (!text?.trim() || sections.length === 0) return null;
+
+  const content = sections.map((sec, i) => <BracketSection key={i} sec={sec} />);
+
+  if (mode === "contain") {
+    return (
+      <div ref={wrapRef} className="w-full h-full flex items-center justify-center overflow-hidden">
+        <div ref={innerRef} className="inline-flex flex-col gap-6" style={{ transformOrigin: "center center", transform: `scale(${dims.scale})` }}>
+          {content}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={showHeader ? "mb-8" : ""}>
@@ -126,8 +187,8 @@ export const BracketView = ({ text, showHeader = true, maxScale = 1 }: { text: s
         </div>
       )}
       <div ref={wrapRef} className="w-full overflow-hidden" style={{ height: dims.h ? dims.h : undefined }}>
-        <div ref={innerRef} className="inline-flex flex-col gap-5" style={{ transformOrigin: "top left", transform: `scale(${dims.scale})` }}>
-          {sections.map((sec, i) => <BracketSection key={i} sec={sec} />)}
+        <div ref={innerRef} className="inline-flex flex-col gap-6" style={{ transformOrigin: "top left", transform: `scale(${dims.scale})` }}>
+          {content}
         </div>
       </div>
     </div>

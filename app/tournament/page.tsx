@@ -451,8 +451,8 @@ export default function TournamentPage() {
               닫기
             </button>
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto flex items-center px-4 md:px-8 py-6">
-            <div className="w-full"><BracketView text={selected.tournamentBracket} showHeader={false} maxScale={3} /></div>
+          <div className="flex-1 min-h-0 px-4 md:px-8 py-6">
+            <BracketView text={selected.tournamentBracket} showHeader={false} maxScale={2.4} mode="contain" />
           </div>
           <p className="text-center text-[10px] text-gray-600 pb-4 shrink-0">가로 화면(가로 모드)에서 더 크게 볼 수 있습니다</p>
         </div>
