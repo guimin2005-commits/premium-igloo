@@ -86,8 +86,9 @@ const BracketSection = ({ sec }: { sec: BSection }) => {
   );
 };
 
-// 폭에 맞춰 자동 축소 — 가로 스크롤 없이 한 눈에
-export const BracketView = ({ text, showHeader = true }: { text: string; showHeader?: boolean }) => {
+// 폭에 맞춰 자동 축소/확대 — 가로 스크롤 없이 한 눈에, 남는 공간은 키워서 활용
+//  · maxScale: 여백이 있을 때 확대 허용 배율 상한 (기본 1 = 축소만)
+export const BracketView = ({ text, showHeader = true, maxScale = 1 }: { text: string; showHeader?: boolean; maxScale?: number }) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ scale: 1, h: 0 });
@@ -100,7 +101,9 @@ export const BracketView = ({ text, showHeader = true }: { text: string; showHea
       if (!wrap || !inner) return;
       const cw = wrap.clientWidth;
       const iw = inner.offsetWidth;
-      const scale = iw > cw ? cw / iw : 1;
+      if (!iw) return;
+      // 폭에 맞춰 채우되(확대 포함) maxScale 상한 · 최소 축소는 제한 없음
+      const scale = Math.min(cw / iw, maxScale);
       setDims({ scale, h: inner.offsetHeight * scale });
     };
     measure();
@@ -110,7 +113,7 @@ export const BracketView = ({ text, showHeader = true }: { text: string; showHea
     if (innerRef.current) ro.observe(innerRef.current);
     window.addEventListener("resize", measure);
     return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
-  }, [text]);
+  }, [text, maxScale]);
 
   if (!text?.trim() || sections.length === 0) return null;
 

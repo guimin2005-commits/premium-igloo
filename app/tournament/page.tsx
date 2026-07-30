@@ -169,6 +169,7 @@ export default function TournamentPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("all");
   const [selected, setSelected] = useState<any>(null);
+  const [bracketFull, setBracketFull] = useState(false); // 대진표 전체화면
   const [copyNotification, setCopyNotification] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [popup, setPopup] = useState({ isOpen: false, message: "", isError: false });
@@ -366,7 +367,7 @@ export default function TournamentPage() {
 
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in" onClick={() => setSelected(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-[#121212] border border-white/10 rounded-[2rem] w-full max-w-2xl max-h-[85vh] flex flex-col relative shadow-2xl overflow-hidden">
+          <div onClick={(e) => e.stopPropagation()} className={`bg-[#121212] border border-white/10 rounded-[2rem] w-full max-h-[85vh] flex flex-col relative shadow-2xl overflow-hidden ${selected.tournamentBracket ? "max-w-4xl" : "max-w-2xl"}`}>
             <button onClick={() => setSelected(null)} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-white bg-white/5 rounded-full z-10"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
 
             {selected.bannerUrl && (
@@ -411,7 +412,19 @@ export default function TournamentPage() {
                 <div className="mb-8"><ScheduleTimeline schedule={selected.tournamentSchedule} /></div>
               )}
 
-              {selected.tournamentBracket && <BracketView text={selected.tournamentBracket} />}
+              {selected.tournamentBracket && (
+                <div className="mb-8">
+                  <div className="flex items-center gap-4 mb-4">
+                    <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f] shrink-0">BRACKET</span>
+                    <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+                    <button onClick={() => setBracketFull(true)} className="shrink-0 flex items-center gap-1.5 text-[10px] font-black text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 rounded-full transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M20.25 3.75v4.5m0-4.5h-4.5m4.5 0L15 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15m11.25 5.25v-4.5m0 4.5h-4.5m4.5 0L15 15" /></svg>
+                      크게 보기
+                    </button>
+                  </div>
+                  <BracketView text={selected.tournamentBracket} showHeader={false} maxScale={1.4} />
+                </div>
+              )}
 
               <button
                 disabled={getStatus(selected) !== "모집중"}
@@ -422,6 +435,26 @@ export default function TournamentPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 📌 대진표 전체화면 뷰어 — 화면 전체를 써서 크게 */}
+      {bracketFull && selected?.tournamentBracket && (
+        <div className="fixed inset-0 z-[130] bg-[#0a0a0a] flex flex-col animate-in fade-in duration-200">
+          <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-white/10 shrink-0">
+            <div className="min-w-0">
+              <p className="text-sm font-black text-white truncate">{selected.title}</p>
+              <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase truncate">{selected.tournamentGame || "TOURNAMENT"} · BRACKET</p>
+            </div>
+            <button onClick={() => setBracketFull(false)} className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-lg transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              닫기
+            </button>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto flex items-center px-4 md:px-8 py-6">
+            <div className="w-full"><BracketView text={selected.tournamentBracket} showHeader={false} maxScale={3} /></div>
+          </div>
+          <p className="text-center text-[10px] text-gray-600 pb-4 shrink-0">가로 화면(가로 모드)에서 더 크게 볼 수 있습니다</p>
         </div>
       )}
 
