@@ -220,12 +220,44 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 const isGroupActive = group.items.some((item) => pathname === item.path);
                 const isOpen = openMegaMenu === group.name;
                 return (
-                  <div key={group.name} className="h-full flex items-center group/gnav" onMouseEnter={() => setOpenMegaMenu(group.name)}>
+                  <div key={group.name} className="relative h-full flex items-center group/gnav" onMouseEnter={() => setOpenMegaMenu(group.name)}>
                     <button className={`relative h-full flex items-center px-4 transition-colors outline-none focus:outline-none ${isGroupActive || isOpen ? "text-[#e91e3f]" : "text-gray-400 hover:text-white"}`}>
                       {group.name}
                       {/* 대분류 라인 차오름 이펙트 — 평소엔 숨김, 호버 시 왼쪽부터 차오름 */}
                       <span className={`absolute bottom-4 left-4 right-4 h-px bg-[#e91e3f] origin-left transition-transform duration-500 ${isGroupActive || isOpen ? "scale-x-100" : "scale-x-0 group-hover/gnav:scale-x-100"}`} />
                     </button>
+
+                    {/* 📌 컴팩트 드롭다운 — 콘텐츠 양에 맞춰 세로로 자람 (항목 추가에 유연) */}
+                    {isOpen && (
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3 z-50">
+                        <div className="w-64 bg-[#161616]/98 backdrop-blur-md border border-white/10 rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.85)] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+                          <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/60 to-transparent"></div>
+                          <div className="px-3 pt-3 pb-1.5">
+                            <span className="text-[9px] font-black tracking-[0.3em] text-gray-600 uppercase">{group.desc}</span>
+                          </div>
+                          <div className="p-1.5 pt-0.5">
+                            {group.items.map((item) => {
+                              const isActive = pathname === item.path;
+                              return (
+                                <Link
+                                  key={item.path}
+                                  href={item.path}
+                                  onClick={() => setOpenMegaMenu(null)}
+                                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-colors group/item ${isActive ? "bg-[#e91e3f]/10" : "hover:bg-white/[0.06]"}`}
+                                >
+                                  <span className={`w-1 h-1 rounded-full shrink-0 transition-colors ${isActive ? "bg-[#e91e3f]" : "bg-gray-600 group-hover/item:bg-[#e91e3f]"}`}></span>
+                                  <div className="min-w-0 flex-1">
+                                    <p className={`text-[13px] font-bold leading-tight transition-colors ${isActive ? "text-[#e91e3f]" : "text-gray-200 group-hover/item:text-white"}`}>{item.name}</p>
+                                    <p className="text-[11px] text-gray-500 leading-tight mt-0.5 truncate">{item.desc}</p>
+                                  </div>
+                                  <svg className="w-3.5 h-3.5 text-gray-600 shrink-0 opacity-0 -translate-x-1 group-hover/item:opacity-100 group-hover/item:translate-x-0 transition-all" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -362,43 +394,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </div>
 
         {/* 📌 메가 메뉴 패널 — 대분류 호버 시 큰 박스가 내려옴 */}
-        {openMegaMenu && (() => {
-          const group = categoryGroups.find((g) => g.name === openMegaMenu);
-          if (!group) return null;
-          return (
-            <div className="hidden md:block absolute top-full left-0 right-0 bg-[#161616] border-b border-white/15 shadow-[0_40px_80px_-16px_rgba(0,0,0,0.9)] animate-in fade-in slide-in-from-top-2 duration-200">
-              {/* 상단 크림슨 라인으로 패널 경계 명확화 */}
-              <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/60 to-transparent"></div>
-              <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-4 gap-8">
-                <div className="col-span-1 border-r border-white/10 pr-8">
-                  <div className="flex items-center gap-2.5 mb-3">
-                    <span className="w-6 h-px bg-[#e91e3f]"></span>
-                    <span className="text-[9px] font-black tracking-[0.3em] text-gray-500 uppercase">Category</span>
-                  </div>
-                  <p className="text-xl font-black text-white tracking-tight mb-1.5">{group.name}</p>
-                  <p className="text-xs text-gray-500 leading-relaxed">{group.desc}</p>
-                </div>
-                <div className="col-span-3 grid grid-cols-3 gap-3">
-                  {group.items.map((item) => {
-                    const isActive = pathname === item.path;
-                    return (
-                      <Link
-                        key={item.path}
-                        href={item.path}
-                        onClick={() => setOpenMegaMenu(null)}
-                        className={`group/item p-5 rounded-2xl border transition-all duration-300 ${isActive ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.08]" : "border-white/10 bg-white/[0.04] hover:border-[#e91e3f]/40 hover:bg-white/[0.07]"}`}
-                      >
-                        <p className={`text-sm font-black mb-1.5 transition-colors ${isActive ? "text-[#e91e3f]" : "text-white group-hover/item:text-[#ff5c77]"}`}>{item.name}</p>
-                        <p className="text-xs text-gray-500 leading-relaxed">{item.desc}</p>
-                        <div className={`mt-4 h-px bg-[#e91e3f]/50 transition-all duration-500 ${isActive ? "w-full" : "w-6 group-hover/item:w-full"}`}></div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
       </header>
 
       <main className="flex-1 flex flex-col w-full relative pb-16 md:pb-0">
