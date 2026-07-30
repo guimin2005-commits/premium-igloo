@@ -712,8 +712,8 @@ export default function AdminWritePage() {
                 <span className="text-xs font-bold text-gray-400 mt-4 block">우승팀 / 우승자 (선택 · 명예의 전당 표시)</span>
                 <input type="text" placeholder="예시: 이글루A" value={tournamentWinner} onChange={(e) => setTournamentWinner(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
 
-                <span className="text-xs font-bold text-gray-400 mt-4 block">우승자 디스코드 ID (선택 · 명예의 전당에서 복사 가능)</span>
-                <input type="text" placeholder="예시: 1104242935664492666" value={tournamentWinnerId} onChange={(e) => setTournamentWinnerId(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+                <span className="text-xs font-bold text-gray-400 mt-4 block">우승자 디스코드 ID <span className="text-gray-600 font-medium">(선택 · 팀원 여러 명이면 쉼표(,)로 구분 — 명예의 전당에 각자 프로필로 표시)</span></span>
+                <textarea rows={2} placeholder="예시: 1104242935664492666, 2205..., 3306... (팀원 전원 입력 가능)" value={tournamentWinnerId} onChange={(e) => setTournamentWinnerId(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f] resize-none leading-relaxed" />
               </div>
               )}
               <div className="flex flex-col gap-3 md:col-span-2">

@@ -142,8 +142,8 @@ export default function AdminHonorsPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-2">우승자 디스코드 ID (선택 · 복사 버튼 표시)</label>
-                <input type="text" placeholder="예: 1104242935664492666" value={winnerId} onChange={(e) => setWinnerId(e.target.value)} className={inputClass} />
+                <label className="block text-xs font-bold text-gray-500 mb-2">우승자 디스코드 ID <span className="text-gray-600 font-medium">(선택 · 여러 명은 쉼표로 구분)</span></label>
+                <textarea rows={2} placeholder="예: 1104242935664492666, 2205..." value={winnerId} onChange={(e) => setWinnerId(e.target.value)} className={inputClass + " resize-none leading-relaxed"} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-2">부가 설명 (선택)</label>
