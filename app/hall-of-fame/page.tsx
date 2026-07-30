@@ -105,30 +105,21 @@ export default function HallOfFamePage() {
     return [`${new Date(c.createdAt).getFullYear()}`, null];
   };
 
-  // ── 챔피언 로스터 (팀원 한 명 한 명 표시) ──
-  const Roster = ({ c, featured }: { c: any; featured?: boolean }) => {
+  // ── 팀원 로스터 (한 명 한 명 아바타+이름 칩으로, 컴팩트) ──
+  const Roster = ({ c }: { c: any }) => {
     const ids = parseIds(c.winnerId);
     const ready = ids.filter((id) => profiles[id]);
-    if (ids.length === 0 || ready.length === 0) {
-      return <p className={`font-black text-[#e91e3f] tracking-tight ${featured ? "text-3xl md:text-4xl" : "text-lg md:text-xl"}`}>{c.winner}</p>;
-    }
-    const avatar = featured ? "w-20 h-20 md:w-24 md:h-24" : "w-12 h-12 md:w-14 md:h-14";
+    if (ready.length === 0) return null;
     return (
-      <div className={`flex flex-wrap gap-x-5 gap-y-4 ${featured ? "justify-center" : ""}`}>
+      <div className="flex flex-wrap gap-1.5">
         {ids.map((id) => {
           const p = profiles[id];
           if (!p) return null;
           return (
-            <div key={id} className="flex flex-col items-center gap-2" style={{ width: featured ? 104 : 76 }}>
-              <div className="relative">
-                <div className="absolute -inset-1.5 blur-md rounded-full" style={{ background: `${GOLD}22` }}></div>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.avatarUrl} alt={p.globalName} className={`relative ${avatar} rounded-full bg-gray-800 object-cover ring-2 ring-offset-2 ring-offset-[#0a0a0a]`} style={{ boxShadow: `0 0 0 2px ${GOLD}66 inset` }} />
-              </div>
-              <div className="text-center w-full">
-                <p className={`font-black text-white truncate ${featured ? "text-sm md:text-base" : "text-xs"}`}>{p.globalName}</p>
-                <p className="text-[9px] text-gray-500 font-medium truncate">@{p.username}</p>
-              </div>
+            <div key={id} className="flex items-center gap-1.5 bg-white/[0.04] border border-white/10 rounded-full pl-1 pr-2.5 py-0.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.avatarUrl} alt={p.globalName} className="w-5 h-5 rounded-full bg-gray-800 object-cover" style={{ boxShadow: `0 0 0 1px ${GOLD}99` }} />
+              <span className="text-[11px] font-bold text-gray-200 truncate max-w-[100px]">{p.globalName}</span>
             </div>
           );
         })}
@@ -150,9 +141,6 @@ export default function HallOfFamePage() {
       </div>
     ) : null
   );
-
-  const featured = champions[0];
-  const archive = champions.slice(1);
 
   return (
     <main className="w-full flex-1 flex flex-col relative bg-[#080808]">
@@ -182,9 +170,7 @@ export default function HallOfFamePage() {
               <span className="text-white">명예의 </span>
               <span style={{ color: GOLD, textShadow: `0 0 40px ${GOLD}55` }}>전당</span>
             </h1>
-            <p className="text-gray-400 text-sm md:text-base leading-relaxed max-w-lg mx-auto break-keep">
-              고급 이글루의 역사에 이름을 남긴 챔피언들. 그들이 걸어온 영광의 순간을 이곳에 영원히 기록합니다.
-            </p>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">고급 이글루의 역사를 기록합니다.</p>
             {champions.length > 0 && (
               <div className="inline-flex items-center gap-6 mt-8 px-6 py-3 rounded-full border" style={{ borderColor: `${GOLD}33`, background: `${GOLD}08` }}>
                 <div className="text-center">
@@ -213,86 +199,38 @@ export default function HallOfFamePage() {
             <Link href="/tournament" className="inline-block px-8 py-3.5 text-white text-sm font-bold rounded-full transition-colors" style={{ background: GOLD, color: "#111" }}>진행 중인 대회 보기</Link>
           </div>
         ) : (
-          <>
-            {/* ── 최신 챔피언 헌액 (그랜드 스포트라이트) ── */}
-            {featured && (
-              <Reveal>
-                <div className="relative rounded-[2rem] p-px mb-16 overflow-hidden" style={{ background: `linear-gradient(160deg, ${GOLD}66, rgba(255,255,255,0.06) 40%, transparent)` }}>
-                  <div className="relative rounded-[2rem] bg-gradient-to-b from-[#141210] to-[#0b0b0b] px-6 py-12 md:px-12 md:py-16 text-center overflow-hidden">
-                    <div className="absolute top-[-80px] left-1/2 -translate-x-1/2 w-[400px] h-[240px] rounded-full pointer-events-none" style={{ background: `${GOLD}14`, filter: "blur(90px)" }}></div>
-                    <div className="relative z-10">
-                      <div className="flex items-center justify-center gap-2 mb-6">
-                        <svg viewBox="0 0 24 24" className="w-4 h-4" fill={GOLD}><path d="M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3L12 15l-4.7 2.4.9-5.3L4.3 7.6l5.3-.8z" /></svg>
-                        <span className="text-[10px] font-black tracking-[0.4em] uppercase" style={{ color: GOLD }}>Reigning Champion · 현 챔피언</span>
-                      </div>
-                      <p className="text-[11px] font-black tracking-[0.25em] text-gray-500 uppercase mb-2">{featured.category}</p>
-                      <h2 className="text-2xl md:text-4xl font-black text-white tracking-tight mb-2">{featured.title}</h2>
-                      {featured.dateLabel && <p className="text-xs text-gray-500 mb-8">{featured.dateLabel}</p>}
-
-                      <div className="my-8 flex justify-center"><Roster c={featured} featured /></div>
-
-                      {featured.detail && (
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border mt-2" style={{ borderColor: `${GOLD}33` }}>
-                          <span className="text-xs" style={{ color: GOLD }}>🏆</span>
-                          <span className="text-xs font-bold text-gray-300">{featured.detail}</span>
+          <div className="space-y-4">
+            {champions.map((c, idx) => {
+              const [sy, ey] = getYears(c);
+              const latest = idx === 0;
+              return (
+                <Reveal key={c._id} delay={Math.min(idx, 6) * 60}>
+                  <div className="rounded-2xl border p-5 md:p-6 transition-colors hover:border-white/20" style={{ borderColor: latest ? `${GOLD}44` : "rgba(255,255,255,0.10)", background: latest ? `${GOLD}0d` : "rgba(17,17,17,0.7)" }}>
+                    {/* 헤더 — 연도 · 분류 · (현 챔피언) */}
+                    <div className="flex items-center gap-2.5 mb-3">
+                      <span className="text-lg md:text-xl font-black tracking-tighter" style={{ color: latest ? GOLD : "#8f8256" }}>{ey ? `${sy}–${ey}` : sy}</span>
+                      <span className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase truncate">{c.category}</span>
+                      {latest && <span className="text-[9px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ background: `${GOLD}1f`, color: GOLD }}>현 챔피언</span>}
+                      <span className="ml-auto shrink-0"><AdminBtns c={c} /></span>
+                    </div>
+                    <h3 className="text-base md:text-lg font-black text-white tracking-tight mb-4 break-keep">{c.title}</h3>
+                    {/* 챔피언(팀명) + 팀원 로스터 */}
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 pt-4 border-t border-white/[0.07]">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill={GOLD}><path d="M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3L12 15l-4.7 2.4.9-5.3L4.3 7.6l5.3-.8z" /></svg>
+                          <span className="text-[9px] font-black tracking-[0.25em] uppercase shrink-0" style={{ color: GOLD }}>Champion</span>
+                          <span className="text-sm md:text-base font-black text-white truncate">{c.winner}</span>
                         </div>
-                      )}
-                      <div className="mt-6 flex justify-center"><AdminBtns c={featured} /></div>
+                        <Roster c={c} />
+                      </div>
+                      {c.detail && <p className="text-[11px] text-gray-500 shrink-0 sm:text-right sm:max-w-[45%] break-keep">🏆 {c.detail}</p>}
                     </div>
                   </div>
-                </div>
-              </Reveal>
-            )}
-
-            {/* ── 아카이브 타임라인 (과거를 둘러보다) ── */}
-            {archive.length > 0 && (
-              <>
-                <Reveal>
-                  <div className="flex items-center gap-4 mb-10">
-                    <span className="text-[11px] font-black tracking-[0.35em] uppercase text-gray-500">The Archive · 지난 영광</span>
-                    <div className="h-px flex-1" style={{ background: `linear-gradient(90deg, ${GOLD}44, transparent)` }}></div>
-                  </div>
                 </Reveal>
-
-                <div className="relative">
-                  {/* 타임라인 척추 */}
-                  <div className="absolute left-[7px] md:left-1/2 md:-translate-x-1/2 top-2 bottom-2 w-px" style={{ background: `linear-gradient(180deg, ${GOLD}55, rgba(255,255,255,0.08) 30%, rgba(255,255,255,0.05))` }}></div>
-
-                  <div className="space-y-10 md:space-y-16">
-                    {archive.map((c, idx) => {
-                      const [sy, ey] = getYears(c);
-                      const leftSide = idx % 2 === 1; // 데스크톱 좌우 교차
-                      return (
-                        <Reveal key={c._id} delay={Math.min(idx, 4) * 80}>
-                          <div className={`relative pl-8 md:pl-0 md:grid md:grid-cols-2 md:gap-12 ${leftSide ? "" : ""}`}>
-                            {/* 노드 */}
-                            <div className="absolute left-0 md:left-1/2 md:-translate-x-1/2 top-1.5 w-3.5 h-3.5 rounded-full ring-4 ring-[#080808] z-10" style={{ background: GOLD }}></div>
-
-                            {/* 카드 (좌우 교차 배치) */}
-                            <div className={`${leftSide ? "md:col-start-1 md:text-right md:pr-2" : "md:col-start-2 md:pl-2"}`}>
-                              <div className="rounded-2xl border border-white/10 bg-[#111]/80 hover:border-white/20 transition-colors p-5 md:p-6 group">
-                                <div className={`flex items-center gap-2 mb-2 ${leftSide ? "md:justify-end" : ""}`}>
-                                  <span className="text-lg font-black tracking-tighter" style={{ color: `${GOLD}` }}>{ey ? `${sy}–${ey}` : sy}</span>
-                                  <span className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase">{c.category}</span>
-                                  <span className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity"><AdminBtns c={c} /></span>
-                                </div>
-                                <h3 className="text-base md:text-lg font-black text-white tracking-tight mb-3 group-hover:text-[#ff5c77] transition-colors">{c.title}</h3>
-                                <div className={`flex ${leftSide ? "md:justify-end" : ""}`}><Roster c={c} /></div>
-                                {c.detail && <p className="text-[11px] text-gray-500 mt-3">🏆 {c.detail}</p>}
-                              </div>
-                            </div>
-                          </div>
-                        </Reveal>
-                      );
-                    })}
-                  </div>
-
-                  {/* 타임라인 끝 장식 */}
-                  <div className="absolute left-[1px] md:left-1/2 md:-translate-x-1/2 -bottom-1 w-2.5 h-2.5 rounded-full" style={{ background: `${GOLD}66` }}></div>
-                </div>
-              </>
-            )}
-          </>
+              );
+            })}
+          </div>
         )}
       </div>
 

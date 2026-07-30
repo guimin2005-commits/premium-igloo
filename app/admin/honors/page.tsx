@@ -136,8 +136,8 @@ export default function AdminHonorsPage() {
                 <input type="text" required placeholder="예: LEVEL SEASON 1" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-2">우승자 / 1등 <span className="text-[#e91e3f]">*</span></label>
-                <input type="text" required placeholder="예: elahw.06" value={winner} onChange={(e) => setWinner(e.target.value)} className={inputClass} />
+                <label className="block text-xs font-bold text-gray-500 mb-2">우승팀 / 우승자 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">— 팀명 또는 개인명</span></label>
+                <input type="text" required placeholder="예: 팀 이글루 / elahw.06" value={winner} onChange={(e) => setWinner(e.target.value)} className={inputClass} />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
