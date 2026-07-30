@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Reveal, LuxStyles } from "../components/Lux";
+import { BracketView } from "../components/BracketView";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -84,7 +85,8 @@ const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => vo
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/__(.*?)__/g, "<span class='underline'>$1</span>")
       .replace(/~~(.*?)~~/g, "<span class='line-through'>$1</span>")
-      .replace(/==(.*?)==/g, "<span class='text-[#e91e3f] font-bold'>$1</span>");
+      .replace(/==(.*?)==/g, "<span class='text-[#e91e3f] font-bold'>$1</span>")
+      .replace(/^(\s*)\*[ \t]+/, "$1<span class='text-[#e91e3f]'>·</span> ");
   };
 
   const formatted = parseMarkdownWithTable(text);
@@ -109,64 +111,7 @@ const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => vo
   );
 };
 
-// 📌 대진표 렌더러 — "라운드명:" 줄 + "팀A vs 팀B > 승자" 줄 형식 파싱
-const BracketView = ({ text }: { text: string }) => {
-  if (!text?.trim()) return null;
-
-  const rounds: { name: string; matches: { a: string; b: string; winner: string }[] }[] = [];
-  let current: { name: string; matches: { a: string; b: string; winner: string }[] } | null = null;
-
-  text.split("\n").forEach((raw) => {
-    const line = raw.trim();
-    if (!line) return;
-    if (line.endsWith(":")) {
-      current = { name: line.slice(0, -1).trim(), matches: [] };
-      rounds.push(current);
-      return;
-    }
-    const [matchPart, winnerPart] = line.split(">");
-    const teams = matchPart.split(/vs/i);
-    if (teams.length !== 2) return;
-    if (!current) {
-      current = { name: "대진", matches: [] };
-      rounds.push(current);
-    }
-    current.matches.push({ a: teams[0].trim(), b: teams[1].trim(), winner: (winnerPart || "").trim() });
-  });
-
-  if (rounds.length === 0) return null;
-
-  return (
-    <div className="mb-8">
-      <div className="flex items-baseline gap-4 mb-4">
-        <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">BRACKET</span>
-        <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
-      </div>
-      <div className="flex gap-4 overflow-x-auto pb-2 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-[#2a2a2a] [&::-webkit-scrollbar-thumb]:rounded-full">
-        {rounds.map((round, rIdx) => (
-          <div key={rIdx} className="shrink-0 w-48 flex flex-col">
-            <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-3 text-center">{round.name}</p>
-            <div className="flex-1 flex flex-col justify-around gap-3">
-              {round.matches.map((m, mIdx) => (
-                <div key={mIdx} className="rounded-xl border border-white/10 bg-black/30 overflow-hidden text-xs">
-                  {[m.a, m.b].map((team, tIdx) => {
-                    const isWinner = m.winner && team === m.winner;
-                    return (
-                      <div key={tIdx} className={`px-3.5 py-2.5 flex items-center justify-between gap-2 ${tIdx === 0 ? "border-b border-white/5" : ""} ${isWinner ? "bg-[#e91e3f]/10" : ""}`}>
-                        <span className={`truncate ${isWinner ? "text-[#e91e3f] font-black" : m.winner ? "text-gray-600" : "text-gray-300 font-medium"}`}>{team}</span>
-                        {isWinner && <span className="text-[9px] font-black text-[#e91e3f] shrink-0">WIN</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
+// 📌 대진표 렌더러는 공용 컴포넌트로 분리 (작성 페이지 미리보기와 공유)
 
 // 📌 대회 상태: 예정됨 → 모집중(참가 신청 접수) → 진행중(리그 진행) → 종료됨
 const STATUS_META: Record<string, { badge: string; label: string; dot: string; ring: string }> = {

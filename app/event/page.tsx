@@ -85,7 +85,8 @@ const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => vo
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/__(.*?)__/g, "<span class='underline'>$1</span>")
       .replace(/~~(.*?)~~/g, "<span class='line-through'>$1</span>")
-      .replace(/==(.*?)==/g, "<span class='text-[#e91e3f] font-bold'>$1</span>");
+      .replace(/==(.*?)==/g, "<span class='text-[#e91e3f] font-bold'>$1</span>")
+      .replace(/^(\s*)\*[ \t]+/, "$1<span class='text-[#e91e3f]'>·</span> ");
   };
 
   const formatted = parseMarkdownWithTable(text);
