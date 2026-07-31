@@ -65,9 +65,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   // 📌 카테고리 그룹화: 큰 카테고리 → 세부 카테고리 (메가 메뉴)
   const categoryGroups = [
-    { name: "소식", desc: "고급 이글루의 최신 소식", items: [{ name: "공지사항", path: "/notice", desc: "최신 소식과 주요 안내" }, { name: "이벤트", path: "/event", desc: "다양한 이벤트와 혜택" }] },
-    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "선수 경매", path: "/auction", desc: "실시간 선수 경매 관전 및 참여" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }, { name: "구인", path: "/recruit", desc: "스태프 및 서포터즈 모집" }] },
-    { name: "지원", desc: "도움이 필요하신가요?", items: [{ name: "1:1 문의", path: "/support", desc: "불편 사항 및 문의 접수" }, { name: "FAQ", path: "/faq", desc: "자주 묻는 질문" }] },
+    { name: "소식", desc: "고급 이글루의 최신 소식", tagline: "고급 이글루의 새로운 소식과 이벤트를 가장 먼저 전해드립니다", items: [{ name: "공지사항", path: "/notice", desc: "최신 소식과 주요 안내" }, { name: "이벤트", path: "/event", desc: "다양한 이벤트와 혜택" }] },
+    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", tagline: "레벨 시스템부터 대회·경매까지, 서버의 모든 즐길거리를 한 곳에서", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "선수 경매", path: "/auction", desc: "실시간 선수 경매 관전 및 참여" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }, { name: "구인", path: "/recruit", desc: "스태프 및 서포터즈 모집" }] },
+    { name: "지원", desc: "도움이 필요하신가요?", tagline: "이용 중 궁금한 점이 있다면 언제든지 도와드리겠습니다", items: [{ name: "1:1 문의", path: "/support", desc: "불편 사항 및 문의 접수" }, { name: "FAQ", path: "/faq", desc: "자주 묻는 질문" }] },
   ];
   const [openMegaMenu, setOpenMegaMenu] = useState<string | null>(null);
 
@@ -227,35 +227,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       <span className={`absolute bottom-4 left-4 right-4 h-px bg-[#e91e3f] origin-left transition-transform duration-500 ${isGroupActive || isOpen ? "scale-x-100" : "scale-x-0 group-hover/gnav:scale-x-100"}`} />
                     </button>
 
-                    {/* 📌 PC 드롭다운 — 명시적 폭 + 2열 그리드(항목 늘면 행 추가) */}
-                    {isOpen && (
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3 z-50">
-                        <div className="bg-[#161616] border border-white/10 rounded-2xl shadow-[0_40px_80px_-20px_rgba(0,0,0,0.9)] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200" style={{ width: group.items.length > 1 ? 468 : 248 }}>
-                          <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/70 to-transparent"></div>
-                          <div className="flex items-center gap-2.5 px-5 pt-4 pb-1">
-                            <span className="w-5 h-px bg-[#e91e3f] shrink-0"></span>
-                            <span className="text-[9px] font-black tracking-[0.3em] text-gray-500 uppercase whitespace-nowrap">{group.desc}</span>
-                          </div>
-                          <div className={`p-3 grid gap-1.5 ${group.items.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-                            {group.items.map((item) => {
-                              const isActive = pathname === item.path;
-                              return (
-                                <Link
-                                  key={item.path}
-                                  href={item.path}
-                                  onClick={() => setOpenMegaMenu(null)}
-                                  className={`min-w-0 flex flex-col gap-1 px-4 py-3 rounded-xl border transition-all duration-200 group/item ${isActive ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.08]" : "border-transparent hover:border-white/10 hover:bg-white/[0.05]"}`}
-                                >
-                                  <span className={`text-sm font-black tracking-tight truncate transition-colors ${isActive ? "text-[#e91e3f]" : "text-white group-hover/item:text-[#ff5c77]"}`}>{item.name}</span>
-                                  <span className="text-[11px] text-gray-500 leading-snug truncate">{item.desc}</span>
-                                  <span className={`mt-1.5 h-px bg-[#e91e3f]/50 transition-all duration-300 ${isActive ? "w-full" : "w-5 group-hover/item:w-full"}`}></span>
-                                </Link>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -391,7 +362,46 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           </div>
         </div>
 
-        {/* 📌 메가 메뉴 패널 — 대분류 호버 시 큰 박스가 내려옴 */}
+        {/* 📌 메가 메뉴 — 풀폭 · 좌측 헤딩 + 깔끔한 텍스트 리스트 (프리미엄 톤) */}
+        {openMegaMenu && (() => {
+          const group = categoryGroups.find((g) => g.name === openMegaMenu);
+          if (!group) return null;
+          return (
+            <div className="hidden md:block absolute top-full left-0 right-0 bg-[#0c0c0c]/98 backdrop-blur-md border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)] animate-in fade-in slide-in-from-top-1 duration-200">
+              <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
+              <div className="max-w-7xl mx-auto px-8 py-12 lg:py-14 grid grid-cols-12 gap-10 items-start">
+                {/* 좌: 섹션 헤딩 */}
+                <div className="col-span-12 lg:col-span-5">
+                  <div className="flex items-center gap-2.5 mb-5">
+                    <span className="w-6 h-px bg-[#e91e3f]"></span>
+                    <span className="text-[10px] font-black tracking-[0.35em] text-[#e91e3f] uppercase">{group.name}</span>
+                  </div>
+                  <p className="text-2xl lg:text-[28px] font-black text-white tracking-tight leading-[1.4] break-keep max-w-md">{group.tagline}</p>
+                </div>
+                {/* 우: 텍스트 링크 리스트 */}
+                <div className="col-span-12 lg:col-span-7">
+                  {group.items.map((item) => {
+                    const isActive = pathname === item.path;
+                    return (
+                      <Link
+                        key={item.path}
+                        href={item.path}
+                        onClick={() => setOpenMegaMenu(null)}
+                        className="group/item flex items-center justify-between gap-4 py-4 border-b border-white/[0.08] first:border-t first:border-white/[0.08] transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <p className={`text-base lg:text-lg font-bold tracking-tight transition-colors ${isActive ? "text-[#e91e3f]" : "text-gray-100 group-hover/item:text-[#ff5c77]"}`}>{item.name}</p>
+                          <p className="text-xs text-gray-500 mt-0.5 truncate">{item.desc}</p>
+                        </div>
+                        <svg className="w-4 h-4 text-gray-600 shrink-0 -translate-x-2 opacity-0 group-hover/item:opacity-100 group-hover/item:translate-x-0 group-hover/item:text-[#e91e3f] transition-all duration-300" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </header>
 
       <main className="flex-1 flex flex-col w-full relative pb-16 md:pb-0">
