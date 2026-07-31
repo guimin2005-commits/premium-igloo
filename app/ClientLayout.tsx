@@ -65,9 +65,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   // 📌 카테고리 그룹화: 큰 카테고리 → 세부 카테고리 (메가 메뉴)
   const categoryGroups = [
-    { name: "소식", desc: "고급 이글루의 최신 소식", tagline: "고급 이글루의 새로운 소식과 이벤트를 가장 먼저 전해드립니다", items: [{ name: "공지사항", path: "/notice", desc: "최신 소식과 주요 안내" }, { name: "이벤트", path: "/event", desc: "다양한 이벤트와 혜택" }] },
-    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", tagline: "레벨 시스템부터 대회·경매까지, 서버의 모든 즐길거리를 한 곳에서", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "선수 경매", path: "/auction", desc: "실시간 선수 경매 관전 및 참여" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }, { name: "구인", path: "/recruit", desc: "스태프 및 서포터즈 모집" }] },
-    { name: "지원", desc: "도움이 필요하신가요?", tagline: "이용 중 궁금한 점이 있다면 언제든지 도와드리겠습니다", items: [{ name: "1:1 문의", path: "/support", desc: "불편 사항 및 문의 접수" }, { name: "FAQ", path: "/faq", desc: "자주 묻는 질문" }] },
+    { name: "소식", desc: "고급 이글루의 최신 소식", tagline: "고급 이글루의 소식", items: [{ name: "공지사항", path: "/notice", desc: "최신 소식과 주요 안내" }, { name: "이벤트", path: "/event", desc: "다양한 이벤트와 혜택" }] },
+    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", tagline: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "선수 경매", path: "/auction", desc: "실시간 선수 경매 관전 및 참여" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }, { name: "구인", path: "/recruit", desc: "스태프 및 서포터즈 모집" }] },
+    { name: "지원", desc: "도움이 필요하신가요?", tagline: "무엇을 도와드릴까요", items: [{ name: "1:1 문의", path: "/support", desc: "불편 사항 및 문의 접수" }, { name: "FAQ", path: "/faq", desc: "자주 묻는 질문" }] },
   ];
   const [openMegaMenu, setOpenMegaMenu] = useState<string | null>(null);
 
