@@ -67,7 +67,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const categoryGroups = [
     { name: "소식", desc: "고급 이글루의 최신 소식", tagline: "고급 이글루의 소식", items: [{ name: "공지사항", path: "/notice", desc: "최신 소식과 주요 안내" }, { name: "이벤트", path: "/event", desc: "다양한 이벤트와 혜택" }] },
     { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", tagline: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "선수 경매", path: "/auction", desc: "실시간 선수 경매 관전 및 참여" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }, { name: "구인", path: "/recruit", desc: "스태프 및 서포터즈 모집" }] },
-    { name: "지원", desc: "도움이 필요하신가요?", tagline: "무엇을 도와드릴까요", items: [{ name: "1:1 문의", path: "/support", desc: "불편 사항 및 문의 접수" }, { name: "FAQ", path: "/faq", desc: "자주 묻는 질문" }] },
+    { name: "지원", desc: "도움이 필요하신가요?", tagline: "무엇을 도와드릴까요?", items: [{ name: "1:1 문의", path: "/support", desc: "불편 사항 및 문의 접수" }, { name: "FAQ", path: "/faq", desc: "자주 묻는 질문" }] },
   ];
   const [openMegaMenu, setOpenMegaMenu] = useState<string | null>(null);
 
@@ -369,14 +369,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           return (
             <div className="hidden md:block absolute top-full left-0 right-0 bg-[#0c0c0c]/98 backdrop-blur-md border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)] animate-in fade-in slide-in-from-top-1 duration-200">
               <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
-              <div className="max-w-7xl mx-auto px-8 py-12 lg:py-14 grid grid-cols-12 gap-10 items-start">
+              <div className="max-w-7xl mx-auto px-8 py-8 lg:py-10 grid grid-cols-12 gap-10 items-start">
                 {/* 좌: 섹션 헤딩 */}
                 <div className="col-span-12 lg:col-span-5">
-                  <div className="flex items-center gap-2.5 mb-5">
+                  <div className="flex items-center gap-2.5 mb-4">
                     <span className="w-6 h-px bg-[#e91e3f]"></span>
                     <span className="text-[10px] font-black tracking-[0.35em] text-[#e91e3f] uppercase">{group.name}</span>
                   </div>
-                  <p className="text-2xl lg:text-[28px] font-black text-white tracking-tight leading-[1.4] break-keep max-w-md">{group.tagline}</p>
+                  <p className="text-xl lg:text-2xl font-black text-white tracking-tight leading-snug break-keep max-w-md">{group.tagline}</p>
                 </div>
                 {/* 우: 텍스트 링크 리스트 */}
                 <div className="col-span-12 lg:col-span-7">
@@ -387,11 +387,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         key={item.path}
                         href={item.path}
                         onClick={() => setOpenMegaMenu(null)}
-                        className="group/item flex items-center justify-between gap-4 py-4 border-b border-white/[0.08] first:border-t first:border-white/[0.08] transition-colors"
+                        className="group/item flex items-center justify-between gap-4 py-3 border-b border-white/[0.08] first:border-t first:border-white/[0.08] transition-colors"
                       >
                         <div className="min-w-0">
-                          <p className={`text-base lg:text-lg font-bold tracking-tight transition-colors ${isActive ? "text-[#e91e3f]" : "text-gray-100 group-hover/item:text-[#ff5c77]"}`}>{item.name}</p>
-                          <p className="text-xs text-gray-500 mt-0.5 truncate">{item.desc}</p>
+                          <p className={`text-[15px] lg:text-base font-bold tracking-tight transition-colors ${isActive ? "text-[#e91e3f]" : "text-gray-100 group-hover/item:text-[#ff5c77]"}`}>{item.name}</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5 truncate">{item.desc}</p>
                         </div>
                         <svg className="w-4 h-4 text-gray-600 shrink-0 -translate-x-2 opacity-0 group-hover/item:opacity-100 group-hover/item:translate-x-0 group-hover/item:text-[#e91e3f] transition-all duration-300" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
                       </Link>
