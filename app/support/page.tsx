@@ -266,46 +266,39 @@ export default function SupportPage() {
     <main key={viewMode} className="w-full flex-1 flex flex-col relative">
       <LuxStyles />
 
-      {/* ── HERO ── */}
-      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6">
-        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
-        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
-        <div className="max-w-3xl mx-auto relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+      {/* ── HERO (디자인 강화 · 레드 프레스티지) ── */}
+      <section className="relative w-full pt-20 pb-12 md:pt-28 md:pb-14 px-6 overflow-hidden">
+        <div className="absolute inset-0 lux-grid-bg pointer-events-none opacity-50"></div>
+        <div className="absolute top-[-150px] left-1/2 -translate-x-1/2 w-[680px] h-[340px] rounded-full pointer-events-none bg-[#e91e3f]/[0.08] blur-[130px]"></div>
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
+        <div className="max-w-4xl mx-auto relative z-10 text-center">
           <Reveal>
-            <div className="flex items-center gap-3 mb-5">
-              <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Support Center</span>
+            {/* 엠블럼 */}
+            <div className="flex justify-center mb-6">
+              <div className="w-16 h-16 md:w-[70px] md:h-[70px] rounded-2xl bg-[#e91e3f]/10 border border-[#e91e3f]/25 flex items-center justify-center shadow-[0_0_40px_rgba(233,30,63,0.15)]">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" className="w-8 h-8 text-[#e91e3f]"><path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" /></svg>
+              </div>
             </div>
-            <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-4">
-              <span className="text-white">1:1 </span><span className="lux-shimmer">문의</span>
+            <div className="flex items-center justify-center gap-3 mb-5">
+              <span className="w-10 h-px bg-[#e91e3f]/60"></span>
+              <span className="text-[10px] font-black tracking-[0.5em] uppercase text-[#e91e3f]">Support Center</span>
+              <span className="w-10 h-px bg-[#e91e3f]/60"></span>
+            </div>
+            <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-none mb-5">
+              <span className="text-white">1:1 </span>
+              <span className="text-[#e91e3f]" style={{ textShadow: "0 0 40px rgba(233,30,63,0.4)" }}>문의</span>
             </h1>
-            <p className="text-gray-400 text-sm md:text-base leading-relaxed">이용 중 불편한 사항 또는 궁금하신 사항을 남겨주세요.</p>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">이용 중 불편한 사항이나 궁금하신 점을 남겨주세요.</p>
+            {isAdmin && (
+              <button onClick={() => setViewMode("admin")} className="mt-8 inline-flex items-center gap-2 px-5 py-2.5 bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25 hover:bg-[#e91e3f]/20 text-sm font-bold rounded-full transition-colors">
+                관리자 대시보드 열기
+              </button>
+            )}
           </Reveal>
-          {isAdmin && (
-            <button onClick={() => setViewMode("admin")} className="px-5 py-2.5 bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/20 hover:bg-[#e91e3f]/20 text-sm font-bold rounded-full transition-colors shrink-0 self-start md:self-auto">
-              관리자 대시보드 열기
-            </button>
-          )}
         </div>
       </section>
 
       <div className="w-full max-w-3xl mx-auto px-6 pb-16 flex-1 flex flex-col">
-
-      {/* 안내 스트립 */}
-      <Reveal>
-      <div className="grid grid-cols-3 gap-px bg-white/10 rounded-2xl overflow-hidden border border-white/10 mb-8">
-        {[
-          { l: "평균 응답", v: "24시간 이내" },
-          { l: "답변 방법", v: "사이트 · 이메일" },
-          { l: "접수", v: "연중무휴" },
-        ].map((s, i) => (
-          <div key={i} className="bg-[#0d0d0d] px-3 py-4 text-center">
-            <p className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase mb-1.5">{s.l}</p>
-            <p className="text-xs md:text-sm font-bold text-white break-keep">{s.v}</p>
-          </div>
-        ))}
-      </div>
-      </Reveal>
 
       {/* 폼 카드 */}
       <Reveal>
