@@ -367,7 +367,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           const group = categoryGroups.find((g) => g.name === openMegaMenu);
           if (!group) return null;
           return (
-            <div className="hidden md:block absolute top-full left-0 right-0 bg-[#0c0c0c]/98 backdrop-blur-md border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)] animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="hidden md:block absolute top-full left-0 right-0 bg-[#0c0c0c]/98 backdrop-blur-md border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)] origin-top" style={{ animation: "megaDrop 0.32s cubic-bezier(0.16,1,0.3,1)" }}>
+              <style dangerouslySetInnerHTML={{ __html: `@keyframes megaDrop{0%{opacity:0;transform:translateY(-16px) scaleY(0.94)}60%{opacity:1}100%{opacity:1;transform:translateY(0) scaleY(1)}}` }} />
               <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
               <div className="max-w-7xl mx-auto px-8 py-8 lg:py-10 grid grid-cols-12 gap-10 items-start">
                 {/* 좌: 섹션 헤딩 */}
