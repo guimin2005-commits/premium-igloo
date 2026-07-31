@@ -227,14 +227,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       <span className={`absolute bottom-4 left-4 right-4 h-px bg-[#e91e3f] origin-left transition-transform duration-500 ${isGroupActive || isOpen ? "scale-x-100" : "scale-x-0 group-hover/gnav:scale-x-100"}`} />
                     </button>
 
-                    {/* 📌 PC 드롭다운 — 2열 그리드, 콘텐츠 양에 비례(항목 늘면 행 추가) */}
+                    {/* 📌 PC 드롭다운 — 명시적 폭 + 2열 그리드(항목 늘면 행 추가) */}
                     {isOpen && (
                       <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3 z-50">
-                        <div className="bg-[#161616]/98 backdrop-blur-md border border-white/10 rounded-2xl shadow-[0_40px_80px_-20px_rgba(0,0,0,0.9)] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+                        <div className="bg-[#161616] border border-white/10 rounded-2xl shadow-[0_40px_80px_-20px_rgba(0,0,0,0.9)] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200" style={{ width: group.items.length > 1 ? 468 : 248 }}>
                           <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/70 to-transparent"></div>
                           <div className="flex items-center gap-2.5 px-5 pt-4 pb-1">
-                            <span className="w-5 h-px bg-[#e91e3f]"></span>
-                            <span className="text-[9px] font-black tracking-[0.3em] text-gray-500 uppercase">{group.desc}</span>
+                            <span className="w-5 h-px bg-[#e91e3f] shrink-0"></span>
+                            <span className="text-[9px] font-black tracking-[0.3em] text-gray-500 uppercase whitespace-nowrap">{group.desc}</span>
                           </div>
                           <div className={`p-3 grid gap-1.5 ${group.items.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
                             {group.items.map((item) => {
@@ -244,10 +244,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                                   key={item.path}
                                   href={item.path}
                                   onClick={() => setOpenMegaMenu(null)}
-                                  className={`w-56 flex flex-col gap-1 px-4 py-3 rounded-xl border transition-all duration-200 group/item ${isActive ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.08]" : "border-transparent hover:border-white/10 hover:bg-white/[0.05]"}`}
+                                  className={`min-w-0 flex flex-col gap-1 px-4 py-3 rounded-xl border transition-all duration-200 group/item ${isActive ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.08]" : "border-transparent hover:border-white/10 hover:bg-white/[0.05]"}`}
                                 >
-                                  <span className={`text-sm font-black tracking-tight transition-colors ${isActive ? "text-[#e91e3f]" : "text-white group-hover/item:text-[#ff5c77]"}`}>{item.name}</span>
-                                  <span className="text-[11px] text-gray-500 leading-snug">{item.desc}</span>
+                                  <span className={`text-sm font-black tracking-tight truncate transition-colors ${isActive ? "text-[#e91e3f]" : "text-white group-hover/item:text-[#ff5c77]"}`}>{item.name}</span>
+                                  <span className="text-[11px] text-gray-500 leading-snug truncate">{item.desc}</span>
                                   <span className={`mt-1.5 h-px bg-[#e91e3f]/50 transition-all duration-300 ${isActive ? "w-full" : "w-5 group-hover/item:w-full"}`}></span>
                                 </Link>
                               );
