@@ -291,24 +291,48 @@ export default function SupportPage() {
 
       <div className="w-full max-w-3xl mx-auto px-6 pb-16 flex-1 flex flex-col">
 
-      <div className="flex gap-1.5 mb-10 overflow-x-auto scrollbar-hide">
-        {["일반", "오류", "신고", "환불 및 교환"].map((type) => (
-          <button key={type} type="button" onClick={() => { setMainType(type); setSubType(""); setReportType(""); setProductName(""); setRefundType("환불"); }} className={`px-5 py-2.5 text-xs md:text-sm font-bold rounded-full shrink-0 whitespace-nowrap outline-none focus:outline-none transition-all duration-300 ${
-            mainType === type
-              ? "bg-[#e91e3f] text-white shadow-[0_4px_20px_rgba(233,30,63,0.35)]"
-              : "bg-white/[0.04] text-gray-500 hover:text-white hover:bg-white/[0.08] border border-white/5"
-          }`}>{type}</button>
+      {/* 안내 스트립 */}
+      <Reveal>
+      <div className="grid grid-cols-3 gap-px bg-white/10 rounded-2xl overflow-hidden border border-white/10 mb-8">
+        {[
+          { l: "평균 응답", v: "24시간 이내" },
+          { l: "답변 방법", v: "사이트 · 이메일" },
+          { l: "접수", v: "연중무휴" },
+        ].map((s, i) => (
+          <div key={i} className="bg-[#0d0d0d] px-3 py-4 text-center">
+            <p className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase mb-1.5">{s.l}</p>
+            <p className="text-xs md:text-sm font-bold text-white break-keep">{s.v}</p>
+          </div>
         ))}
       </div>
+      </Reveal>
 
-      <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="flex flex-col gap-10">
-        <div className="flex flex-col gap-8">
+      {/* 폼 카드 */}
+      <Reveal>
+      <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="rounded-2xl border border-white/10 bg-[#111111] overflow-hidden">
+        <div className="flex items-center gap-2.5 px-6 py-4 border-b border-white/8 bg-white/[0.015]">
+          <span className="w-1 h-4 bg-[#e91e3f] rounded-full"></span>
+          <span className="text-sm font-black text-white tracking-tight">문의 작성</span>
+        </div>
+
+        <div className="p-6 md:p-8 space-y-7">
+          {/* 문의 유형 — 세그먼트 */}
+          <div>
+            <label className="block text-[11px] font-bold text-gray-500 tracking-wide mb-2.5">문의 유형 <span className="text-[#e91e3f]">*</span></label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {["일반", "오류", "신고", "환불 및 교환"].map((type) => (
+                <button key={type} type="button" onClick={() => { setMainType(type); setSubType(""); setReportType(""); setProductName(""); setRefundType("환불"); }}
+                  className={`py-2.5 text-xs md:text-sm font-bold rounded-lg border transition-all outline-none ${mainType === type ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-[#0d0d0d] border-white/10 text-gray-400 hover:border-white/25 hover:text-white"}`}>{type}</button>
+              ))}
+            </div>
+          </div>
+
           {mainType === "일반" && (
             <div>
-              <label className="block text-xs font-bold text-gray-500 mb-4 uppercase tracking-wider">문의 분류 <span className="text-[#e91e3f]">*</span></label>
-              <div className="flex flex-wrap gap-3">
+              <label className="block text-[11px] font-bold text-gray-500 tracking-wide mb-2.5">문의 분류 <span className="text-[#e91e3f]">*</span></label>
+              <div className="flex flex-wrap gap-2">
                 {["일반", "이용", "건의/제안", "기타"].map((t) => (
-                  <button type="button" key={t} onClick={() => setSubType(t)} className={`px-6 py-2.5 text-sm font-bold rounded-full border outline-none focus:outline-none transition-all ${subType === t ? "bg-white text-black border-white" : "bg-transparent border-white/10 text-gray-400 hover:border-white/30"}`}>{t}</button>
+                  <button type="button" key={t} onClick={() => setSubType(t)} className={`px-4 py-2 text-xs font-bold rounded-lg border outline-none transition-all ${subType === t ? "bg-white/10 border-white/25 text-white" : "bg-transparent border-white/10 text-gray-500 hover:border-white/25 hover:text-gray-300"}`}>{t}</button>
                 ))}
               </div>
             </div>
@@ -316,27 +340,27 @@ export default function SupportPage() {
 
           {mainType === "오류" && (
             <div>
-              <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">발생 오류 <span className="text-[#e91e3f]">*</span></label>
-              <input type="text" required placeholder="예시: 봇 명령어가 작동하지 않습니다." value={errorDesc} onChange={(e) => setErrorDesc(e.target.value)} className="w-full bg-transparent border-b border-white/10 py-3 text-white focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-700" />
+              <label className="block text-[11px] font-bold text-gray-500 tracking-wide mb-2.5">발생 오류 <span className="text-[#e91e3f]">*</span></label>
+              <input type="text" required placeholder="예: 봇 명령어가 작동하지 않습니다." value={errorDesc} onChange={(e) => setErrorDesc(e.target.value)} className="w-full bg-[#0d0d0d] border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600" />
             </div>
           )}
 
           {mainType === "신고" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">발생 일시 <span className="text-[#e91e3f]">*</span></label>
-                <input type="text" required placeholder="예시 : 20XX-XX-XX 오전 경" value={reportDate} onChange={(e) => setReportDate(e.target.value)} className="w-full bg-transparent border-b border-white/10 py-3 text-white focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-700" />
+                <label className="block text-[11px] font-bold text-gray-500 tracking-wide mb-2.5">발생 일시 <span className="text-[#e91e3f]">*</span></label>
+                <input type="text" required placeholder="예: 20XX-XX-XX 오전 경" value={reportDate} onChange={(e) => setReportDate(e.target.value)} className="w-full bg-[#0d0d0d] border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600" />
               </div>
               <div className="relative">
-                <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">신고 유형 <span className="text-[#e91e3f]">*</span></label>
-                <button type="button" onClick={() => setIsReportDropdownOpen(!isReportDropdownOpen)} className="w-full bg-transparent border-b border-white/10 py-3 text-white focus:outline-none transition-colors flex justify-between items-center text-left hover:border-white/30">
-                  <span className={reportType ? "text-white font-bold" : "text-gray-700"}>{reportType || "선택해주세요"}</span><svg className={`w-4 h-4 text-gray-500 transition-transform ${isReportDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                <label className="block text-[11px] font-bold text-gray-500 tracking-wide mb-2.5">신고 유형 <span className="text-[#e91e3f]">*</span></label>
+                <button type="button" onClick={() => setIsReportDropdownOpen(!isReportDropdownOpen)} className="w-full bg-[#0d0d0d] border border-white/10 rounded-lg px-4 py-3 text-sm outline-none transition-colors flex justify-between items-center text-left hover:border-white/25 focus:border-[#e91e3f]">
+                  <span className={reportType ? "text-white font-bold" : "text-gray-600"}>{reportType || "선택해주세요"}</span><svg className={`w-4 h-4 text-gray-500 transition-transform ${isReportDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                 </button>
                 {isReportDropdownOpen && (
                   <><div className="fixed inset-0 z-40" onClick={() => setIsReportDropdownOpen(false)}></div>
                     <div className="absolute top-[100%] left-0 w-full mt-2 bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                       {["운영정책 위반", "테러", "분쟁", "기타"].map((opt) => (
-                        <button key={opt} type="button" onClick={() => { setReportType(opt); setIsReportDropdownOpen(false); }} className={`w-full text-left px-5 py-3.5 text-sm transition-colors outline-none focus:outline-none relative z-50 ${reportType === opt ? 'bg-[#e91e3f]/10 text-[#e91e3f] font-bold' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}>{opt}</button>
+                        <button key={opt} type="button" onClick={() => { setReportType(opt); setIsReportDropdownOpen(false); }} className={`w-full text-left px-5 py-3 text-sm transition-colors outline-none relative z-50 ${reportType === opt ? 'bg-[#e91e3f]/10 text-[#e91e3f] font-bold' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}>{opt}</button>
                       ))}
                     </div></>
                 )}
@@ -345,16 +369,16 @@ export default function SupportPage() {
           )}
 
           {mainType === "환불 및 교환" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">상품명 <span className="text-[#e91e3f]">*</span></label>
-                <input type="text" required placeholder="예시: 쿠폰, 아이템, 역할 등" value={productName} onChange={(e) => setProductName(e.target.value)} className="w-full bg-transparent border-b border-white/10 py-3 text-white focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-700" />
+                <label className="block text-[11px] font-bold text-gray-500 tracking-wide mb-2.5">상품명 <span className="text-[#e91e3f]">*</span></label>
+                <input type="text" required placeholder="예: 쿠폰, 아이템, 역할 등" value={productName} onChange={(e) => setProductName(e.target.value)} className="w-full bg-[#0d0d0d] border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">유형 <span className="text-[#e91e3f]">*</span></label>
-                <div className="flex gap-4">
+                <label className="block text-[11px] font-bold text-gray-500 tracking-wide mb-2.5">유형 <span className="text-[#e91e3f]">*</span></label>
+                <div className="flex gap-2">
                   {["환불", "교환"].map((type) => (
-                    <button type="button" key={type} onClick={() => setRefundType(type)} className={`px-5 py-2.5 text-sm font-bold rounded-full border transition-all outline-none focus:outline-none ${refundType === type ? "bg-white text-black border-white" : "bg-transparent border-white/10 text-gray-400 hover:border-white/30"}`}>{type}</button>
+                    <button type="button" key={type} onClick={() => setRefundType(type)} className={`flex-1 py-3 text-sm font-bold rounded-lg border transition-all outline-none ${refundType === type ? "bg-white/10 border-white/25 text-white" : "bg-[#0d0d0d] border-white/10 text-gray-500 hover:border-white/25 hover:text-gray-300"}`}>{type}</button>
                   ))}
                 </div>
               </div>
@@ -362,26 +386,25 @@ export default function SupportPage() {
           )}
 
           <div>
-            <label className="block text-xs font-bold text-gray-500 mb-4 uppercase tracking-wider">상세 내용 <span className="text-[#e91e3f]">*</span></label>
-            <textarea required placeholder="상세한 내용을 입력해 주세요." rows={6} value={content} onChange={(e) => setContent(e.target.value)} className="w-full px-5 py-4 bg-white/[0.02] border border-white/10 rounded-xl text-white outline-none resize-none focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-700" />
+            <label className="block text-[11px] font-bold text-gray-500 tracking-wide mb-2.5">상세 내용 <span className="text-[#e91e3f]">*</span></label>
+            <textarea required placeholder="상세한 내용을 입력해 주세요." rows={6} value={content} onChange={(e) => setContent(e.target.value)} className="w-full px-4 py-3.5 bg-[#0d0d0d] border border-white/10 rounded-lg text-sm text-white outline-none resize-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600 leading-relaxed" />
           </div>
-        </div>
 
-        <div className="flex flex-col gap-6 pt-6 border-t border-white/10">
-          <div className="flex flex-col gap-4">
+          <div className="pt-5 border-t border-white/8">
             <label className="flex items-center gap-3 text-sm text-gray-400 cursor-pointer w-max group">
               <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${isEmailChecked ? "bg-[#e91e3f] border-[#e91e3f]" : "border-gray-600 group-hover:border-gray-400"}`}>
                 {isEmailChecked && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
               </div>
               <input type="checkbox" className="hidden" checked={isEmailChecked} onChange={(e) => setIsEmailChecked(e.target.checked)} />
-              답변 알림을 이메일로 받겠습니다. (선택)
+              답변 알림을 이메일로 받겠습니다. <span className="text-gray-600">(선택)</span>
             </label>
-            {isEmailChecked && <input type="email" required placeholder="이메일 주소" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full md:w-1/2 bg-transparent border-b border-white/10 py-3 text-white focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-700" />}
+            {isEmailChecked && <input type="email" required placeholder="이메일 주소" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full sm:w-2/3 mt-3 bg-[#0d0d0d] border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600" />}
           </div>
 
-          <button type="submit" className="w-full py-4 mt-2 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#e91e3f]/20 outline-none focus:outline-none">문의 등록하기</button>
+          <button type="submit" className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-lg transition-all shadow-lg shadow-[#e91e3f]/20 outline-none">문의 등록하기</button>
         </div>
       </form>
+      </Reveal>
 
       {popupConfig.isOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
