@@ -266,26 +266,26 @@ export default function SupportPage() {
     <main key={viewMode} className="w-full flex-1 flex flex-col relative">
       <LuxStyles />
 
-      {/* ── HERO (단정한 톤) ── */}
-      <section className="relative w-full pt-20 pb-12 md:pt-24 md:pb-14 px-6">
-        <div className="absolute inset-0 lux-grid-bg pointer-events-none opacity-30"></div>
-        <div className="max-w-4xl mx-auto relative z-10 text-center">
+      {/* ── HERO (사이트 공통 패턴 · 좌측 정렬) ── */}
+      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6">
+        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
+        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
+        <div className="max-w-3xl mx-auto relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <Reveal>
-            <div className="flex items-center justify-center gap-3 mb-5">
-              <span className="w-8 h-px bg-white/15"></span>
-              <span className="text-[10px] font-black tracking-[0.45em] uppercase text-gray-500">Support Center</span>
-              <span className="w-8 h-px bg-white/15"></span>
+            <div className="flex items-center gap-3 mb-5">
+              <span className="w-8 h-px bg-[#e91e3f]"></span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Support Center</span>
             </div>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
-              <span className="text-white">1:1 </span><span className="text-[#e91e3f]">문의</span>
+            <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-4">
+              <span className="text-white">1:1 </span><span className="lux-shimmer">문의</span>
             </h1>
             <p className="text-gray-400 text-sm md:text-base leading-relaxed">이용 중 불편한 사항이나 궁금하신 점을 남겨주세요.</p>
-            {isAdmin && (
-              <button onClick={() => setViewMode("admin")} className="mt-7 inline-flex items-center gap-2 px-4 py-2 bg-white/[0.04] text-gray-300 border border-white/10 hover:border-white/25 hover:text-white text-xs font-bold rounded-full transition-colors">
-                관리자 대시보드 열기
-              </button>
-            )}
           </Reveal>
+          {isAdmin && (
+            <button onClick={() => setViewMode("admin")} className="px-5 py-2.5 bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/20 hover:bg-[#e91e3f]/20 text-sm font-bold rounded-full transition-colors shrink-0 self-start md:self-auto">
+              관리자 대시보드 열기
+            </button>
+          )}
         </div>
       </section>
 
