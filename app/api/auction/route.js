@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import Auction from "@/models/Auction";
 import AuctionChat from "@/models/AuctionChat";
+import { phase1RoleOf } from "@/lib/auctionGames";
 
 // [목록]
 export async function GET() {
@@ -34,6 +35,8 @@ export async function POST(request) {
     }
 
     const settings = { ...body.settings };
+    const p1Role = phase1RoleOf(settings); // 선경매(1페이즈) 포지션 — 없으면 단일 페이즈
+
     // 📌 팀장 본인도 팀의 한 슬롯을 차지 (playerIdx: -1 = 팀장 자신)
     const leaders = (body.leaders || []).map((l) => ({
       name: l.name,
@@ -44,7 +47,7 @@ export async function POST(request) {
       roster: l.position ? [{ playerIdx: -1, slot: l.position, price: 0, golden: false }] : [],
     }));
 
-    // 페이즈 자동 분류: 탱커 가능(주/부 탱커) & 올포 아님 → 1페이즈
+    // 페이즈 자동 분류: 선경매 포지션(주/부) & 올포 아님 → 1페이즈. 선경매 포지션 없으면 전원 2페이즈(단일)
     const players = (body.players || []).map((p) => ({
       alias: p.alias,
       discordId: p.discordId || "",
@@ -54,14 +57,14 @@ export async function POST(request) {
       mainPos: p.mainPos || "",
       subPos: p.subPos || "",
       isAllPos: !!p.isAllPos,
-      phase: !p.isAllPos && (p.mainPos === "탱커" || p.subPos === "탱커") ? 1 : 2,
+      phase: !p.isAllPos && p1Role && (p.mainPos === p1Role || p.subPos === p1Role) ? 1 : 2,
       status: "대기",
       soldTo: null,
       soldPrice: null,
       scoutedBy: [],
     }));
 
-    const auction = await Auction.create({ title: body.title.trim(), settings, leaders, players });
+    const auction = await Auction.create({ title: body.title.trim(), game: body.game || "오버워치", settings, leaders, players });
     return NextResponse.json({ success: true, data: auction });
   } catch (e) {
     return NextResponse.json({ success: false, message: e.message }, { status: 500 });

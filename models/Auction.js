@@ -37,6 +37,7 @@ const PlayerSchema = new mongoose.Schema({
 
 const AuctionSchema = new mongoose.Schema({
   title: { type: String, required: true },
+  game: { type: String, default: "오버워치" },     // 종목 (오버워치/롤/발로란트/배그/커스텀)
   status: { type: String, default: "준비중" },     // 준비중/진행중/종료
   phase: { type: Number, default: 0 },            // 0 = 시작 전, 1 = 1페이즈, 2 = 2페이즈
   settings: {
@@ -48,6 +49,10 @@ const AuctionSchema = new mongoose.Schema({
     minIncrement: { type: Number, default: 100 },
     timerSeconds: { type: Number, default: 15 },
     scoutSeconds: { type: Number, default: 7 },   // 호명 후 공식 스카우터 타임(초)
+    // 📌 일반화된 역할/슬롯 (게임별). 비어 있으면 아래 legacy 슬롯으로 해석(하위호환)
+    roles: { type: [{ name: String, count: Number }], default: [] },
+    phase1Role: { type: String, default: "" },    // 선경매(1페이즈) 포지션. 빈 값이면 단일 페이즈
+    // legacy (오버워치 전용) — 하위호환용
     slotTank: { type: Number, default: 1 },
     slotDealer: { type: Number, default: 2 },
     slotHealer: { type: Number, default: 2 },

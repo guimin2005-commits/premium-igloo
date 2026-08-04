@@ -4,9 +4,8 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import Auction from "@/models/Auction";
 import AuctionChat from "@/models/AuctionChat";
+import { totalSlots, slotLimitOf, phase1RoleOf, roleNames } from "@/lib/auctionGames";
 
-const totalSlots = (s) => (s.slotTank || 0) + (s.slotDealer || 0) + (s.slotHealer || 0);
-const slotLimitOf = (S, slot) => (slot === "탱커" ? S.slotTank : slot === "딜러" ? S.slotDealer : S.slotHealer);
 const slotCount = (leader, slot) => leader.roster.filter((r) => r.slot === slot).length;
 
 const addLog = (auction, msg) => {
@@ -92,12 +91,13 @@ export async function POST(request, { params }) {
       const player = auction.players[playerIdx];
       if (!leader || !player) return NextResponse.json({ success: false }, { status: 400 });
 
-      if (player.phase === 1 && auction.phase === 1 && leader.position === "탱커") {
-        return NextResponse.json({ success: false, message: "탱커 포지션 리더는 1페이즈 경매에 참가할 수 없습니다." }, { status: 403 });
+      const p1Role = phase1RoleOf(auction.settings); // 선경매 포지션
+      if (p1Role && player.phase === 1 && auction.phase === 1 && leader.position === p1Role) {
+        return NextResponse.json({ success: false, message: `${p1Role} 포지션 리더는 1페이즈 경매에 참가할 수 없습니다.` }, { status: 403 });
       }
-      // 1페이즈에선 탱커 슬롯이 이미 찬 리더 입찰 불가
-      if (auction.phase === 1 && slotCount(leader, "탱커") >= auction.settings.slotTank) {
-        return NextResponse.json({ success: false, message: "탱커 슬롯이 이미 채워져 1페이즈에 입찰할 수 없습니다." }, { status: 403 });
+      // 1페이즈에선 선경매 슬롯이 이미 찬 리더 입찰 불가
+      if (p1Role && auction.phase === 1 && slotCount(leader, p1Role) >= slotLimitOf(auction.settings, p1Role)) {
+        return NextResponse.json({ success: false, message: `${p1Role} 슬롯이 이미 채워져 1페이즈에 입찰할 수 없습니다.` }, { status: 403 });
       }
       const emptySlots = totalSlots(auction.settings) - leader.roster.length;
       if (emptySlots <= 0) {
@@ -209,7 +209,8 @@ export async function POST(request, { params }) {
         }
         addLog(auction, `${phase}페이즈 시작`);
         await auction.save();
-        sysChat(id, phase === 1 ? "1페이즈 경매가 시작됩니다. 탱커 가능 선수들이 경매에 투입됩니다." : "2페이즈 경매가 시작됩니다.");
+        const p1r = phase1RoleOf(auction.settings);
+        sysChat(id, phase === 1 ? `1페이즈 경매가 시작됩니다.${p1r ? ` ${p1r} 가능 선수들이 경매에 투입됩니다.` : ""}` : "2페이즈 경매가 시작됩니다.");
         return NextResponse.json({ success: true });
       }
 
@@ -225,7 +226,8 @@ export async function POST(request, { params }) {
           return NextResponse.json({ success: false, message: "황금카드 초과 배정 정리가 완료되지 않았습니다." }, { status: 409 });
         }
         if (auction.phase === 1 && player.phase !== 1) {
-          return NextResponse.json({ success: false, message: "1페이즈에는 탱커 가능 선수만 호명할 수 있습니다." }, { status: 403 });
+          const p1r = phase1RoleOf(auction.settings);
+          return NextResponse.json({ success: false, message: `1페이즈에는 ${p1r || "선경매"} 가능 선수만 호명할 수 있습니다.` }, { status: 403 });
         }
         if (auction.phase === 0) {
           return NextResponse.json({ success: false, message: "먼저 페이즈를 시작해주세요." }, { status: 403 });
@@ -251,20 +253,21 @@ export async function POST(request, { params }) {
         const player = auction.players[playerIdx];
         const leader = auction.leaders[leaderIdx];
 
-        // 1페이즈: 탱커 슬롯 자동 배정 (리더 선택 없음)
-        if (auction.phase === 1) {
-          if (slotCount(leader, "탱커") >= S.slotTank) {
-            return NextResponse.json({ success: false, message: "해당 팀의 탱커 슬롯이 가득 찼습니다." }, { status: 400 });
+        // 1페이즈: 선경매 포지션 슬롯 자동 배정 (리더 선택 없음)
+        const p1Slot = phase1RoleOf(S);
+        if (auction.phase === 1 && p1Slot) {
+          if (slotCount(leader, p1Slot) >= slotLimitOf(S, p1Slot)) {
+            return NextResponse.json({ success: false, message: `해당 팀의 ${p1Slot} 슬롯이 가득 찼습니다.` }, { status: 400 });
           }
           leader.points -= price;
-          leader.roster.push({ playerIdx, slot: "탱커", price, golden: false });
+          leader.roster.push({ playerIdx, slot: p1Slot, price, golden: false });
           player.status = "낙찰";
           player.soldTo = leaderIdx;
           player.soldPrice = price;
           auction.current = { playerIdx: null, price: 0, leaderIdx: null, endsAt: null, scoutUntil: null, isAllin: false };
-          addLog(auction, `${player.alias} → ${leader.name} [탱커] 낙찰 (${price.toLocaleString()} Point)`);
+          addLog(auction, `${player.alias} → ${leader.name} [${p1Slot}] 낙찰 (${price.toLocaleString()} Point)`);
           await auction.save();
-          sysChat(id, `낙찰. ${player.alias} 선수가 ${leader.name} 팀 [탱커] 슬롯에 배정되었습니다. (${price.toLocaleString()} Point)`);
+          sysChat(id, `낙찰. ${player.alias} 선수가 ${leader.name} 팀 [${p1Slot}] 슬롯에 배정되었습니다. (${price.toLocaleString()} Point)`);
           return NextResponse.json({ success: true });
         }
 
@@ -339,9 +342,10 @@ export async function POST(request, { params }) {
           return NextResponse.json({ success: false, message: "올 포지션 선수는 이동할 수 없습니다." }, { status: 400 });
         }
         if (toSlot === poSlot) return NextResponse.json({ success: false, message: "다른 슬롯을 선택해주세요." }, { status: 400 });
-        // 탱커 슬롯으로의 이동은 금지 (단, 황금카드 초과로 밀려나는 탱커 슬롯 이탈은 허용)
-        if (toSlot === "탱커") {
-          return NextResponse.json({ success: false, message: "탱커 슬롯으로는 이동할 수 없습니다." }, { status: 400 });
+        // 선경매 포지션 슬롯으로의 이동은 금지 (1페이즈 확정 슬롯 보호)
+        const p1Slot2 = phase1RoleOf(S);
+        if (p1Slot2 && toSlot === p1Slot2) {
+          return NextResponse.json({ success: false, message: `${p1Slot2} 슬롯으로는 이동할 수 없습니다.` }, { status: 400 });
         }
         if (slotCount(leader, toSlot) >= slotLimitOf(S, toSlot)) {
           return NextResponse.json({ success: false, message: `${toSlot} 슬롯이 가득 찼습니다.` }, { status: 400 });
@@ -439,7 +443,7 @@ export async function POST(request, { params }) {
       case "host:setLeaderPos": {
         const { leaderIdx, position } = body;
         const leader = auction.leaders[leaderIdx];
-        if (!leader || !["탱커", "딜러", "힐러"].includes(position)) return NextResponse.json({ success: false }, { status: 400 });
+        if (!leader || !roleNames(S).includes(position)) return NextResponse.json({ success: false }, { status: 400 });
 
         const selfIdx = leader.roster.findIndex((r) => r.playerIdx === -1);
         // 대상 슬롯 잔여 확인 (본인 기존 슬롯 제외)
@@ -481,11 +485,7 @@ export async function POST(request, { params }) {
             .sort((a, b) => a.l.points - b.l.points);
           if (candidates.length === 0) break;
           const { l, li } = candidates[0];
-          const slots = [
-            ...(slotCount(l, "탱커") < S.slotTank ? ["탱커"] : []),
-            ...(slotCount(l, "딜러") < S.slotDealer ? ["딜러"] : []),
-            ...(slotCount(l, "힐러") < S.slotHealer ? ["힐러"] : []),
-          ];
+          const slots = roleNames(S).filter((name) => slotCount(l, name) < slotLimitOf(S, name));
           const fit = slots.find((s) => s === p.mainPos) || slots.find((s) => s === p.subPos) || slots[0];
           l.points -= S.basePrice;
           l.roster.push({ playerIdx: i, slot: fit, price: S.basePrice, golden: p.isAllPos });
@@ -515,9 +515,10 @@ export async function POST(request, { params }) {
         if (leader.points < S.posChangeCost) return NextResponse.json({ success: false, message: "보유 Point가 부족합니다." }, { status: 400 });
         const ra = leader.roster[a], rb = leader.roster[b];
         if (!ra || !rb) return NextResponse.json({ success: false }, { status: 400 });
-        // 탱커 ↔ 타 포지션 교환 금지
-        if ((ra.slot === "탱커") !== (rb.slot === "탱커")) {
-          return NextResponse.json({ success: false, message: "탱커 슬롯은 타 포지션과 교환할 수 없습니다." }, { status: 400 });
+        // 선경매 포지션 ↔ 타 포지션 교환 금지 (선경매 확정 슬롯 보호)
+        const p1x = phase1RoleOf(S);
+        if (p1x && (ra.slot === p1x) !== (rb.slot === p1x)) {
+          return NextResponse.json({ success: false, message: `${p1x} 슬롯은 타 포지션과 교환할 수 없습니다.` }, { status: 400 });
         }
         // 같은 포지션끼리는 교환 의미가 없으므로 금지
         if (ra.slot === rb.slot) {

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Reveal, LuxStyles } from "../components/Lux";
+import { GAME_PRESETS, GAME_LIST } from "@/lib/auctionGames";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -42,13 +43,27 @@ export default function AuctionListPage() {
 
   // 생성 폼
   const [title, setTitle] = useState("");
+  const [game, setGame] = useState("오버워치");
+  const [roles, setRoles] = useState<any[]>(GAME_PRESETS["오버워치"].roles.map((r) => ({ ...r })));
+  const [phase1Role, setPhase1Role] = useState<string>(GAME_PRESETS["오버워치"].phase1Role);
   const [settings, setSettings] = useState({
     leaderPoints: 100000, basePrice: 1000, goldenBasePrice: 4000,
     scoutCost: 2000, posChangeCost: 10000, minIncrement: 100, timerSeconds: 15, scoutSeconds: 7,
-    slotTank: 1, slotDealer: 2, slotHealer: 2,
   });
   const [leaders, setLeaders] = useState<any[]>([{ name: "", position: "", discordId: "" }]);
   const [players, setPlayers] = useState<any[]>([{ alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", isAllPos: false }]);
+
+  // 📌 게임 선택 — 프리셋으로 역할/슬롯·선경매 포지션 세팅 + 기존 포지션 초기화
+  const selectGame = (g: string) => {
+    setGame(g);
+    const preset = (GAME_PRESETS as any)[g] || { roles: [], phase1Role: "" };
+    setRoles(preset.roles.length ? preset.roles.map((r: any) => ({ ...r })) : [{ name: "", count: 1 }]);
+    setPhase1Role(preset.phase1Role || "");
+    setLeaders((prev) => prev.map((l) => ({ ...l, position: "" })));
+    setPlayers((prev) => prev.map((p) => ({ ...p, mainPos: "", subPos: "" })));
+  };
+  const roleNamesList = () => roles.map((r) => r.name).filter((n: string) => n.trim());
+  const updateRole = (i: number, key: string, value: any) => setRoles((prev) => prev.map((r, idx) => (idx === i ? { ...r, [key]: value } : r)));
 
   const updateLeader = (i: number, key: string, value: any) =>
     setLeaders((prev) => prev.map((l, idx) => (idx === i ? { ...l, [key]: value } : l)));
@@ -93,8 +108,14 @@ export default function AuctionListPage() {
       subPos: p.isAllPos ? "" : p.subPos,
     }));
 
+    const validRoles = roles.filter((r) => r.name.trim() && Number(r.count) > 0).map((r) => ({ name: r.name.trim(), count: Number(r.count) }));
+
     if (!title.trim() || validLeaders.length < 2 || validPlayers.length < 1) {
       setPopup({ isOpen: true, message: "제목, 리더 2명 이상, 선수 1명 이상이 필요합니다.", isError: true });
+      return;
+    }
+    if (validRoles.length === 0) {
+      setPopup({ isOpen: true, message: "포지션(역할)을 1개 이상 설정해 주세요.", isError: true });
       return;
     }
 
@@ -103,7 +124,7 @@ export default function AuctionListPage() {
       const res = await fetch("/api/auction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, settings, leaders: validLeaders, players: validPlayers }),
+        body: JSON.stringify({ title, game, settings: { ...settings, roles: validRoles, phase1Role }, leaders: validLeaders, players: validPlayers }),
       });
       const d = await res.json();
       if (d.success) {
@@ -172,15 +193,52 @@ export default function AuctionListPage() {
             <div className="rounded-2xl bg-[#111111]/95 p-6 md:p-8 space-y-6">
               <h3 className="text-base font-black text-white flex items-center gap-3"><span className="w-1 h-5 bg-[#e91e3f] rounded-full"></span>경매 개최</h3>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-2">경매 제목 <span className="text-[#e91e3f]">*</span></label>
-                <input type="text" required placeholder="예: 제 1회 종합 e스포츠 대회 선수 경매" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-2">경매 제목 <span className="text-[#e91e3f]">*</span></label>
+                  <input type="text" required placeholder="예: 제 1회 종합 e스포츠 대회 선수 경매" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-2">종목 <span className="text-[#e91e3f]">*</span></label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {GAME_LIST.map((g) => (
+                      <button type="button" key={g} onClick={() => selectGame(g)} className={`px-3 py-2.5 text-[11px] font-bold rounded-lg border transition-all ${game === g ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-[#0d0d0d] border-white/10 text-gray-400 hover:border-white/25 hover:text-white"}`}>{g}</button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
-              {/* 룰 설정 — 전부 개최자가 조정 가능 */}
+              {/* 포지션(역할) & 슬롯 — 게임별 프리셋 + 커스텀 편집 */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-bold text-gray-500">포지션 & 슬롯 <span className="text-gray-600 font-medium">— 팀별 각 포지션 인원 수</span></label>
+                  <button type="button" onClick={() => setRoles([...roles, { name: "", count: 1 }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">+ 포지션</button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {roles.map((r, i) => (
+                    <div key={i} className="flex items-center gap-1.5 bg-[#0d0d0d] border border-white/10 rounded-lg px-2 py-1.5">
+                      <input type="text" placeholder="역할명" value={r.name} onChange={(e) => updateRole(i, "name", e.target.value)} className="w-16 bg-transparent text-xs font-bold text-white outline-none placeholder:text-gray-600 text-center" />
+                      <span className="text-gray-700 text-xs">×</span>
+                      <input type="number" min={1} value={r.count} onChange={(e) => updateRole(i, "count", Number(e.target.value))} className="w-9 bg-transparent text-xs font-bold text-white outline-none text-center" />
+                      {roles.length > 1 && <button type="button" onClick={() => setRoles(roles.filter((_, idx) => idx !== i))} className="text-gray-700 hover:text-red-400 text-sm px-0.5">×</button>}
+                    </div>
+                  ))}
+                </div>
+                {/* 선경매(1페이즈) 포지션 */}
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                  <span className="text-[10px] font-bold text-gray-500">선경매(1페이즈) 포지션</span>
+                  <button type="button" onClick={() => setPhase1Role("")} className={`px-2.5 py-1 text-[10px] font-bold rounded-md border transition-all ${!phase1Role ? "bg-white/10 border-white/25 text-white" : "border-white/10 text-gray-500 hover:border-white/25"}`}>없음(단일)</button>
+                  {roleNamesList().map((n: string) => (
+                    <button type="button" key={n} onClick={() => setPhase1Role(n)} className={`px-2.5 py-1 text-[10px] font-bold rounded-md border transition-all ${phase1Role === n ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "border-white/10 text-gray-500 hover:border-white/25"}`}>{n}</button>
+                  ))}
+                  <span className="text-[9px] text-gray-600 w-full mt-0.5">선경매 포지션은 1페이즈에 먼저 경매됩니다. (오버워치 탱커처럼) · 없음이면 단일 페이즈로 진행</span>
+                </div>
+              </div>
+
+              {/* 룰 설정 (수치) */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-3">경매 룰 설정</label>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {[
                     { k: "leaderPoints", l: "리더 시작 Point" },
                     { k: "basePrice", l: "기본 시작가" },
@@ -190,9 +248,6 @@ export default function AuctionListPage() {
                     { k: "minIncrement", l: "최소 입찰 단위" },
                     { k: "timerSeconds", l: "입찰 타이머(초)" },
                     { k: "scoutSeconds", l: "스카우터 타임(초)" },
-                    { k: "slotTank", l: "탱커 슬롯" },
-                    { k: "slotDealer", l: "딜러 슬롯" },
-                    { k: "slotHealer", l: "힐러 슬롯" },
                   ].map((f) => (
                     <div key={f.k}>
                       <p className="text-[10px] font-bold text-gray-600 mb-1">{f.l}</p>
@@ -219,15 +274,15 @@ export default function AuctionListPage() {
                       </div>
                       <input type="text" placeholder="리더 이름" value={l.name} onChange={(e) => updateLeader(i, "name", e.target.value)} className={`${inputClass} mb-2.5`} />
                       <input type="text" placeholder="디스코드 ID (선택 · 프로필 표시)" value={l.discordId} onChange={(e) => updateLeader(i, "discordId", e.target.value)} className={`${inputClass} mb-2.5`} />
-                      <div className="flex gap-1.5">
-                        {["탱커", "딜러", "힐러"].map((pos) => (
-                          <button type="button" key={pos} onClick={() => updateLeader(i, "position", l.position === pos ? "" : pos)} className={`flex-1 py-2 text-[11px] font-bold rounded-lg border transition-all ${l.position === pos ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos}</button>
+                      <div className="flex flex-wrap gap-1.5">
+                        {roleNamesList().map((pos: string) => (
+                          <button type="button" key={pos} onClick={() => updateLeader(i, "position", l.position === pos ? "" : pos)} className={`flex-1 min-w-[48px] py-2 text-[11px] font-bold rounded-lg border transition-all ${l.position === pos ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos}</button>
                         ))}
                       </div>
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] text-gray-600 mt-2">탱커 포지션 리더은 1페이즈 참가가 자동 차단됩니다. 디스코드 ID를 입력하면 팀 현황판에 프로필이 표시되고, 해당 유저는 접속 시 자동으로 리더 화면이 지정됩니다.</p>
+                <p className="text-[10px] text-gray-600 mt-2">{phase1Role ? `${phase1Role} 포지션 리더는 1페이즈 참가가 자동 차단됩니다. ` : ""}디스코드 ID를 입력하면 팀 현황판에 프로필이 표시되고, 해당 유저는 접속 시 자동으로 리더 화면이 지정됩니다.</p>
               </div>
 
               {/* 선수 카드 목록 */}
@@ -265,20 +320,20 @@ export default function AuctionListPage() {
                       {p.isAllPos ? (
                         <p className="text-[10px] text-[#e91e3f]/80 font-bold">황금카드 — 티어 비공개 · 스카우터 불가 · 시작가 {settings.goldenBasePrice.toLocaleString()}pt · 슬롯 자유 배정</p>
                       ) : (
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-2">
                           <div>
                             <p className="text-[9px] font-bold text-gray-600 mb-1">주 포지션</p>
-                            <div className="flex gap-1">
-                              {["탱커", "딜러", "힐러"].map((pos) => (
-                                <button type="button" key={pos} onClick={() => updatePlayer(i, "mainPos", p.mainPos === pos ? "" : pos)} className={`flex-1 py-1.5 text-[10px] font-bold rounded-md border transition-all ${p.mainPos === pos ? "bg-white text-black border-white" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos[0]}</button>
+                            <div className="flex flex-wrap gap-1">
+                              {roleNamesList().map((pos: string) => (
+                                <button type="button" key={pos} onClick={() => updatePlayer(i, "mainPos", p.mainPos === pos ? "" : pos)} className={`flex-1 min-w-[40px] py-1.5 text-[10px] font-bold rounded-md border transition-all ${p.mainPos === pos ? "bg-white text-black border-white" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos}</button>
                               ))}
                             </div>
                           </div>
                           <div>
                             <p className="text-[9px] font-bold text-gray-600 mb-1">부 포지션</p>
-                            <div className="flex gap-1">
-                              {["탱커", "딜러", "힐러"].map((pos) => (
-                                <button type="button" key={pos} onClick={() => updatePlayer(i, "subPos", p.subPos === pos ? "" : pos)} className={`flex-1 py-1.5 text-[10px] font-bold rounded-md border transition-all ${p.subPos === pos ? "bg-white/60 text-black border-white/60" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos[0]}</button>
+                            <div className="flex flex-wrap gap-1">
+                              {roleNamesList().map((pos: string) => (
+                                <button type="button" key={pos} onClick={() => updatePlayer(i, "subPos", p.subPos === pos ? "" : pos)} className={`flex-1 min-w-[40px] py-1.5 text-[10px] font-bold rounded-md border transition-all ${p.subPos === pos ? "bg-white/60 text-black border-white/60" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos}</button>
                               ))}
                             </div>
                           </div>
@@ -287,7 +342,7 @@ export default function AuctionListPage() {
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] text-gray-600 mt-2">주/부 포지션에 탱커가 포함된 선수는 1페이즈로 자동 분류됩니다.</p>
+                {phase1Role && <p className="text-[10px] text-gray-600 mt-2">주/부 포지션에 {phase1Role}가 포함된 선수는 1페이즈로 자동 분류됩니다.</p>}
               </div>
 
               <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg shadow-[#e91e3f]/20">

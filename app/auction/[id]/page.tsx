@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, use, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { LuxStyles } from "../../components/Lux";
+import { roleNames, totalSlots as totalSlotsFn, slotLimitOf as slotLimitOfFn, phase1RoleOf } from "@/lib/auctionGames";
 
 const ADMIN_USERS = ["elahw.06"];
 const POLL_MS = 1500;
@@ -15,11 +16,15 @@ const MegaphoneIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
   </svg>
 );
 
-const SLOT_COLORS: Record<string, string> = {
-  탱커: "bg-blue-500/15 text-blue-400 border-blue-500/25",
-  딜러: "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/25",
-  힐러: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
-};
+// 📌 포지션 색상 팔레트 — 역할 순서(index)대로 배정. 오버워치는 기존 색(파랑/레드/그린) 유지
+const SLOT_PALETTE = [
+  { badge: "bg-blue-500/15 text-blue-400 border-blue-500/25", text: "text-blue-400" },
+  { badge: "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/25", text: "text-[#e91e3f]" },
+  { badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25", text: "text-emerald-400" },
+  { badge: "bg-amber-500/15 text-amber-400 border-amber-500/25", text: "text-amber-400" },
+  { badge: "bg-purple-500/15 text-purple-400 border-purple-500/25", text: "text-purple-400" },
+  { badge: "bg-cyan-500/15 text-cyan-400 border-cyan-500/25", text: "text-cyan-400" },
+];
 
 export default function AuctionRoomPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -313,7 +318,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const isSpectator = !isAdmin && !isLeaderUser;
 
   const S = auction.settings;
-  const totalSlots = S.slotTank + S.slotDealer + S.slotHealer;
+  const roleList: string[] = roleNames(S);
+  const p1Role: string = phase1RoleOf(S);
+  const totalSlots = totalSlotsFn(S);
+  const roleColor = (name: string) => SLOT_PALETTE[Math.max(0, roleList.indexOf(name)) % SLOT_PALETTE.length];
   const cur = auction.current;
   const curPlayer = cur.playerIdx !== null ? auction.players[cur.playerIdx] : null;
   const curLeader = cur.leaderIdx !== null ? auction.leaders[cur.leaderIdx] : null;
@@ -342,7 +350,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const nextMinBid = cur.leaderIdx === null ? basePrice : cur.price + S.minIncrement;
 
   const slotFilled = (leader: any, slot: string) => leader.roster.filter((r: any) => r.slot === slot).length;
-  const slotLimitOf = (slot: string) => (slot === "탱커" ? S.slotTank : slot === "딜러" ? S.slotDealer : S.slotHealer);
+  const slotLimitOf = (slot: string) => slotLimitOfFn(S, slot);
   // 포지션은 낙찰/프로필 공개 후에도 비공개 — 스카우터 사용자 · 진행자 · 경매 종료 시에만 공개
   const canSeePos = (p: any) =>
     role === "host" || auction.status === "종료" || (myLeaderIdx !== null && p.scoutedBy.includes(myLeaderIdx));
@@ -408,7 +416,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
     return (
       <div className={big ? "grid grid-cols-3 gap-3" : "space-y-1.5"}>
-        {["탱커", "딜러", "힐러"].map((slot) => {
+        {roleList.map((slot) => {
           const limit = slotLimitOf(slot);
           const entries = leader.roster.map((r: any, ri: number) => ({ r, ri })).filter(({ r }: any) => r.slot === slot);
           const emptyCount = Math.max(0, limit - entries.length);
@@ -418,7 +426,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           return (
             <div key={slot} className={big ? "" : "flex flex-col gap-1"}>
               {big && (
-                <p className={`text-[9px] font-black tracking-[0.2em] uppercase mb-1.5 ${slot === "탱커" ? "text-blue-400" : slot === "딜러" ? "text-[#e91e3f]" : "text-emerald-400"}`}>
+                <p className={`text-[9px] font-black tracking-[0.2em] uppercase mb-1.5 ${roleColor(slot).text}`}>
                   {slot} {entries.length}/{limit}
                 </p>
               )}
@@ -437,7 +445,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     >
                       {/* 슬롯 역할 표기 — 컴팩트 모드에서도 항상 표시 */}
                       {!big && (
-                        <span className={`shrink-0 text-[9px] font-black rounded px-1 py-0.5 border ${SLOT_COLORS[slot]}`}>{slot[0]}</span>
+                        <span className={`shrink-0 text-[9px] font-black rounded px-1 py-0.5 border ${roleColor(slot).badge}`}>{slot[0]}</span>
                       )}
                       <span className="text-gray-200 font-bold truncate">
                         {rosterName(leader, r)}
@@ -470,7 +478,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   </button>
                 )}
                 {/* 오버플로우: 이동 대상 슬롯 선택 (탱커 슬롯으로는 이동 불가 → 표시 안 함) */}
-                {overflowing && moveFrom !== null && slot !== po.slot && slot !== "탱커" && entries.length < limit && (
+                {overflowing && moveFrom !== null && slot !== po.slot && (!p1Role || slot !== p1Role) && entries.length < limit && (
                   <button
                     type="button"
                     onClick={async () => { const d = await act({ action: "moveSlot", rosterIdx: moveFrom, toSlot: slot, byLeaderIdx: myLeaderIdx }); if (d.success) setMoveFrom(null); }}
@@ -550,7 +558,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {role === "host" && auction.status === "진행중" && (
             <>
               {auction.phase < 1 && <button onClick={() => act({ action: "host:phase", phase: 1 })} className="text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white px-4 py-1.5 rounded-lg transition-colors">1페이즈 시작</button>}
-              {auction.phase === 1 && <button onClick={() => setConfirmCfg({ title: "2페이즈 시작", message: "1페이즈를 마치고 2페이즈를 시작합니다. 미낙찰 탱커 가능 선수들은 2페이즈로 편입됩니다.", confirmLabel: "시작", onConfirm: () => act({ action: "host:phase", phase: 2 }) })} className="text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white px-4 py-1.5 rounded-lg transition-colors">2페이즈 시작</button>}
+              {auction.phase === 1 && <button onClick={() => setConfirmCfg({ title: "2페이즈 시작", message: `1페이즈를 마치고 2페이즈를 시작합니다. 미낙찰 ${p1Role || "선경매"} 가능 선수들은 2페이즈로 편입됩니다.`, confirmLabel: "시작", onConfirm: () => act({ action: "host:phase", phase: 2 }) })} className="text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white px-4 py-1.5 rounded-lg transition-colors">2페이즈 시작</button>}
               {strategyLeft > 0 ? (
                 <button onClick={() => act({ action: "host:strategy", seconds: 0 })} className="text-xs font-black bg-blue-500/80 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg transition-colors">전략 타임 종료</button>
               ) : (
@@ -616,11 +624,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     </div>
                     {/* 슬롯 요약 칩 — 겹침 방지를 위해 별도 행 */}
                     <div className="flex gap-1 mt-2 pl-[42px]">
-                      {["탱커", "딜러", "힐러"].map((slot) => {
+                      {roleList.map((slot) => {
                         const filled = slotFilled(l, slot);
                         const limit = slotLimitOf(slot);
                         return (
-                          <span key={slot} className={`text-[9px] font-black rounded px-1.5 py-0.5 border ${filled >= limit ? SLOT_COLORS[slot] : "bg-white/[0.03] text-gray-600 border-white/10"}`}>
+                          <span key={slot} className={`text-[9px] font-black rounded px-1.5 py-0.5 border ${filled >= limit ? roleColor(slot).badge : "bg-white/[0.03] text-gray-600 border-white/10"}`}>
                             {slot[0]} {filled}/{limit}
                           </span>
                         );
@@ -817,7 +825,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     {/* 진행자 컨트롤 */}
                     {role === "host" && (
                       <div className="flex gap-2">
-                        <button onClick={() => { if (cur.leaderIdx !== null) setConfirmCfg({ title: "낙찰 확정", message: `${curLeader?.name} — ${cur.price.toLocaleString()} Point 낙찰을 확정합니다.${auction.phase === 1 ? " (1페이즈: 탱커 슬롯 자동 배정)" : " 슬롯은 리더이 배정합니다."}`, confirmLabel: "낙찰", onConfirm: () => act({ action: "host:sold" }) }); }} disabled={cur.leaderIdx === null} className="px-5 py-2.5 text-xs font-black bg-emerald-500/90 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl transition-colors">낙찰</button>
+                        <button onClick={() => { if (cur.leaderIdx !== null) setConfirmCfg({ title: "낙찰 확정", message: `${curLeader?.name} — ${cur.price.toLocaleString()} Point 낙찰을 확정합니다.${auction.phase === 1 ? ` (1페이즈: ${p1Role} 슬롯 자동 배정)` : " 슬롯은 리더이 배정합니다."}`, confirmLabel: "낙찰", onConfirm: () => act({ action: "host:sold" }) }); }} disabled={cur.leaderIdx === null} className="px-5 py-2.5 text-xs font-black bg-emerald-500/90 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl transition-colors">낙찰</button>
                         <button onClick={() => act({ action: "host:pass", playerIdx: cur.playerIdx })} className="px-5 py-2.5 text-xs font-black bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors">유찰</button>
                       </div>
                     )}
@@ -1082,7 +1090,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     <select value={f.v} onChange={(e) => f.set(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white font-bold outline-none focus:border-[#e91e3f] [color-scheme:dark]">
                       <option value="">선택...</option>
                       {/* 탱커 슬롯은 교환 불가 → 목록에서 제외 */}
-                      {leader.roster.map((r: any, ri: number) => r.slot === "탱커" ? null : (
+                      {leader.roster.map((r: any, ri: number) => (p1Role && r.slot === p1Role) ? null : (
                         <option key={ri} value={ri}>[{r.slot}] {rosterName(leader, r)}</option>
                       ))}
                     </select>
@@ -1252,7 +1260,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 ].map((item, i) => (
                   <div key={i} className={`rounded-xl border px-3 py-3 text-center ${item.primary ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : "border-white/10 bg-white/[0.03]"}`}>
                     <p className="text-[8px] font-black tracking-[0.25em] text-gray-500 uppercase mb-1.5">{item.label}</p>
-                    <p className={`text-xl font-black tracking-tight ${item.value === "탱커" ? "text-blue-400" : item.value === "딜러" ? "text-[#e91e3f]" : item.value === "힐러" ? "text-emerald-400" : "text-gray-500"}`}>{item.value}</p>
+                    <p className={`text-xl font-black tracking-tight ${item.value ? roleColor(item.value).text : "text-gray-500"}`}>{item.value}</p>
                   </div>
                 ))}
               </div>
@@ -1295,7 +1303,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <h2 className="text-lg font-black text-white mb-2">{leader.name} — 포지션 {leader.position ? "변경" : "지정"}</h2>
                 <p className="text-xs text-gray-400 mb-6">{leader.position ? `현재 [${leader.position}] — 선택한 포지션 슬롯으로 이동합니다.` : "리더 본인이 차지할 슬롯을 지정합니다."}</p>
                 <div className="grid grid-cols-3 gap-2 mb-6">
-                  {["탱커", "딜러", "힐러"].map((pos) => (
+                  {roleList.map((pos: string) => (
                     <button key={pos} disabled={leader.position === pos} onClick={async () => { const d = await act({ action: "host:setLeaderPos", leaderIdx: posSetTarget, position: pos }); if (d.success) setPosSetTarget(null); }} className={`py-4 rounded-xl text-sm font-black border transition-all ${leader.position === pos ? "border-[#e91e3f]/40 bg-[#e91e3f]/10 text-[#e91e3f] cursor-default" : "border-white/10 bg-white/5 text-white hover:border-[#e91e3f] hover:bg-[#e91e3f]/10"}`}>
                       {pos}{leader.position === pos && <span className="block text-[9px] font-bold text-gray-500 mt-0.5">현재</span>}
                     </button>
