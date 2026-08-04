@@ -92,14 +92,16 @@ export async function POST(request, { params }) {
       if (!leader || !player) return NextResponse.json({ success: false }, { status: 400 });
 
       const p1Role = phase1RoleOf(auction.settings); // 선경매 포지션
+      const invMode = auction.settings.assignMode === "inventory"; // 인벤토리 모드
       if (p1Role && player.phase === 1 && auction.phase === 1 && leader.position === p1Role) {
         return NextResponse.json({ success: false, message: `${p1Role} 포지션 리더는 1페이즈 경매에 참가할 수 없습니다.` }, { status: 403 });
       }
-      // 1페이즈에선 선경매 슬롯이 이미 찬 리더 입찰 불가
-      if (p1Role && auction.phase === 1 && slotCount(leader, p1Role) >= slotLimitOf(auction.settings, p1Role)) {
+      // 1페이즈에선 선경매 슬롯이 이미 찬 리더 입찰 불가 (인벤토리 모드는 배정을 나중에 하므로 총원으로 판정)
+      if (!invMode && p1Role && auction.phase === 1 && slotCount(leader, p1Role) >= slotLimitOf(auction.settings, p1Role)) {
         return NextResponse.json({ success: false, message: `${p1Role} 슬롯이 이미 채워져 1페이즈에 입찰할 수 없습니다.` }, { status: 403 });
       }
-      const emptySlots = totalSlots(auction.settings) - leader.roster.length;
+      // 총원(로스터 + 인벤토리) 기준 잔여 슬롯
+      const emptySlots = totalSlots(auction.settings) - (leader.roster.length + (leader.inventory?.length || 0));
       if (emptySlots <= 0) {
         return NextResponse.json({ success: false, message: "모든 슬롯이 채워져 더 이상 입찰할 수 없습니다." }, { status: 403 });
       }
@@ -253,6 +255,20 @@ export async function POST(request, { params }) {
         const player = auction.players[playerIdx];
         const leader = auction.leaders[leaderIdx];
 
+        // 📌 인벤토리 모드: 슬롯 배정 없이 팀장 인벤토리에 카드로 보관 (나중에 배정)
+        if (S.assignMode === "inventory") {
+          leader.points -= price;
+          leader.inventory.push({ playerIdx, price, golden: !!player.isAllPos });
+          player.status = "낙찰";
+          player.soldTo = leaderIdx;
+          player.soldPrice = price;
+          auction.current = { playerIdx: null, price: 0, leaderIdx: null, endsAt: null, scoutUntil: null, isAllin: false };
+          addLog(auction, `${player.isAllPos ? "올 포지션 선수" : player.alias} → ${leader.name} 인벤토리 (${price.toLocaleString()} Point)`);
+          await auction.save();
+          sysChat(id, `낙찰. ${player.isAllPos ? "올 포지션 선수" : player.alias} 선수가 ${leader.name} 팀 인벤토리에 담겼습니다. (${price.toLocaleString()} Point)`);
+          return NextResponse.json({ success: true });
+        }
+
         // 1페이즈: 선경매 포지션 슬롯 자동 배정 (리더 선택 없음)
         const p1Slot = phase1RoleOf(S);
         if (auction.phase === 1 && p1Slot) {
@@ -277,6 +293,53 @@ export async function POST(request, { params }) {
         addLog(auction, `${player.alias} 낙찰 — ${leader.name} 슬롯 배정 대기`);
         await auction.save();
         sysChat(id, `낙찰. ${player.isAllPos ? "올 포지션 선수" : player.alias} — ${leader.name} 리더가 슬롯을 배정하고 있습니다. (${price.toLocaleString()} Point)`);
+        return NextResponse.json({ success: true });
+      }
+
+      // 인벤토리 모드: 인벤토리 카드를 슬롯에 배정
+      case "assign:place": {
+        const { leaderIdx, invIdx, slot, byLeaderIdx } = body;
+        const leader = auction.leaders[leaderIdx];
+        if (!leader) return NextResponse.json({ success: false }, { status: 400 });
+        if (byLeaderIdx !== null && byLeaderIdx !== undefined && byLeaderIdx !== leaderIdx) {
+          return NextResponse.json({ success: false, message: "본인 팀만 배정할 수 있습니다." }, { status: 403 });
+        }
+        if (!roleNames(S).includes(slot)) return NextResponse.json({ success: false, message: "잘못된 포지션입니다." }, { status: 400 });
+        const card = leader.inventory?.[invIdx];
+        if (!card) return NextResponse.json({ success: false, message: "인벤토리 카드가 없습니다." }, { status: 400 });
+        if (slotCount(leader, slot) >= slotLimitOf(S, slot)) {
+          return NextResponse.json({ success: false, message: `${slot} 슬롯이 가득 찼습니다.` }, { status: 400 });
+        }
+        leader.roster.push({ playerIdx: card.playerIdx, slot, price: card.price, golden: card.golden });
+        leader.inventory.splice(invIdx, 1);
+        addLog(auction, `${auction.players[card.playerIdx]?.alias} → ${leader.name} [${slot}] 배정`);
+        await auction.save();
+        return NextResponse.json({ success: true });
+      }
+
+      // 인벤토리 모드: 배정된 카드를 다시 인벤토리로
+      case "assign:remove": {
+        const { leaderIdx, rosterIdx, byLeaderIdx } = body;
+        const leader = auction.leaders[leaderIdx];
+        if (!leader) return NextResponse.json({ success: false }, { status: 400 });
+        if (byLeaderIdx !== null && byLeaderIdx !== undefined && byLeaderIdx !== leaderIdx) {
+          return NextResponse.json({ success: false, message: "본인 팀만 조정할 수 있습니다." }, { status: 403 });
+        }
+        const entry = leader.roster?.[rosterIdx];
+        if (!entry || entry.playerIdx === -1) return NextResponse.json({ success: false, message: "이동할 수 없는 카드입니다." }, { status: 400 });
+        leader.inventory.push({ playerIdx: entry.playerIdx, price: entry.price, golden: entry.golden });
+        leader.roster.splice(rosterIdx, 1);
+        await auction.save();
+        return NextResponse.json({ success: true });
+      }
+
+      // 개최자: 팀원 배정 시간 부여 (인벤토리 모드)
+      case "host:assignTime": {
+        const { seconds } = body;
+        auction.assignUntil = new Date(Date.now() + (Number(seconds) || 120) * 1000);
+        addLog(auction, `팀원 배정 시간 ${Number(seconds) || 120}초 부여`);
+        await auction.save();
+        sysChat(id, "팀원 배정 시간이 부여되었습니다. 팀장은 인벤토리 선수를 포지션에 배정해주세요.");
         return NextResponse.json({ success: true });
       }
 

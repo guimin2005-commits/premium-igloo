@@ -322,6 +322,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const p1Role: string = phase1RoleOf(S);
   const totalSlots = totalSlotsFn(S);
   const roleColor = (name: string) => SLOT_PALETTE[Math.max(0, roleList.indexOf(name)) % SLOT_PALETTE.length];
+  const invMode = S.assignMode === "inventory"; // 인벤토리 방식
+  const revealFields: string[] = Array.isArray(S.reveal) ? S.reveal : ["mainPos", "subPos"];
   const cur = auction.current;
   const curPlayer = cur.playerIdx !== null ? auction.players[cur.playerIdx] : null;
   const curLeader = cur.leaderIdx !== null ? auction.leaders[cur.leaderIdx] : null;
@@ -352,6 +354,17 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const slotFilled = (leader: any, slot: string) => leader.roster.filter((r: any) => r.slot === slot).length;
   const slotLimitOf = (slot: string) => slotLimitOfFn(S, slot);
   // 포지션은 낙찰/프로필 공개 후에도 비공개 — 스카우터 사용자 · 진행자 · 경매 종료 시에만 공개
+  // 스카우터로 공개되는 정보 문자열 (게임 reveal 설정 기반)
+  const revealInfo = (p: any) => {
+    const parts: string[] = [];
+    if (revealFields.includes("mainPos")) parts.push(`주 ${p.mainPos || "?"}`);
+    if (revealFields.includes("subPos")) parts.push(`부 ${p.subPos || "-"}`);
+    if (revealFields.includes("champions")) {
+      const ch = (p.mostChampions || []).filter(Boolean);
+      if (ch.length) parts.push(`모스트 ${ch.join("·")}`);
+    }
+    return parts.join(" / ");
+  };
   const canSeePos = (p: any) =>
     role === "host" || auction.status === "종료" || (myLeaderIdx !== null && p.scoutedBy.includes(myLeaderIdx));
   // 리더에게 익명 처리: 대기/경매중이 아닌 선수만 정보 공개 (호명 중엔 메인 카드에 표시)
@@ -385,7 +398,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     const d = await act({ action: "scout", leaderIdx: myLeaderIdx, playerIdx: targetIdx });
     if (d.success) {
       sfxScout();
-      setScoutResult({ alias: target.alias, mainPos: target.mainPos, subPos: target.subPos });
+      setScoutResult({ alias: target.alias, mainPos: target.mainPos, subPos: target.subPos, mostChampions: target.mostChampions || [] });
       setTimeout(() => setScoutResult(null), 3200);
       // 📌 즉시 반영 (폴링 지연 동안 버튼 잔존/포인트 미차감/포지션 미표시 방지)
       setAuction((prev: any) => {
@@ -564,7 +577,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               ) : (
                 <button onClick={() => setStrategyModalOpen(true)} className="text-xs font-black bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-lg transition-colors">전략 타임</button>
               )}
-              <button onClick={() => setConfirmCfg({ title: "경매 종료", message: "모든 경매를 종료하시겠습니까?", confirmLabel: "종료", onConfirm: () => act({ action: "host:end" }) })} className="text-xs font-black bg-white/10 hover:bg-red-500/80 text-white px-4 py-1.5 rounded-lg transition-colors">종료</button>
+              {invMode && <button onClick={() => act({ action: "host:assignTime", seconds: 180 })} className="text-xs font-black bg-blue-500/80 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg transition-colors">팀원 배정 시간(3분)</button>}
+              <button onClick={() => setConfirmCfg({ title: "경매 종료", message: invMode ? "경매를 종료합니다. 종료 후에는 인벤토리·포지션 조정이 불가합니다. 계속할까요?" : "모든 경매를 종료하시겠습니까?", confirmLabel: "종료", onConfirm: () => act({ action: "host:end" }) })} className="text-xs font-black bg-white/10 hover:bg-red-500/80 text-white px-4 py-1.5 rounded-lg transition-colors">종료</button>
             </>
           )}
         </div>
@@ -640,6 +654,36 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {isOpen && (
                     <div className="px-3.5 pb-3.5">
                       <SlotBoard leader={l} leaderIdx={li} />
+
+                      {/* 📌 인벤토리 — 낙찰했지만 미배정 카드 (인벤토리 모드) */}
+                      {invMode && (l.inventory?.length || 0) > 0 && (
+                        <div className="mt-2.5 rounded-xl border border-white/10 bg-black/25 p-2.5">
+                          <p className="text-[9px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2">인벤토리 · {l.inventory.length}</p>
+                          <div className="space-y-1.5">
+                            {l.inventory.map((card: any, ci: number) => {
+                              const cp = auction.players[card.playerIdx];
+                              const canManage = auction.status === "진행중" && (role === "host" || myLeaderIdx === li);
+                              return (
+                                <div key={ci} className={`rounded-lg border p-2 ${card.golden ? "border-[#e91e3f]/35 bg-[#e91e3f]/[0.05]" : "border-white/10 bg-[#0d0d0d]"}`}>
+                                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                                    <span className="text-[11px] font-bold text-gray-100 truncate">{card.golden ? "★ 올포지션 선수" : (cp?.revealed && cp?.discordId && profiles[cp.discordId] ? profiles[cp.discordId].globalName : cp?.alias)}</span>
+                                    <span className="text-[10px] font-black text-[#e91e3f] shrink-0 tabular-nums">{card.price.toLocaleString()}</span>
+                                  </div>
+                                  {canManage && (
+                                    <div className="flex flex-wrap gap-1">
+                                      {roleList.map((slot) => {
+                                        const full = slotFilled(l, slot) >= slotLimitOf(slot);
+                                        return <button key={slot} disabled={full} onClick={() => act({ action: "assign:place", leaderIdx: li, invIdx: ci, slot, byLeaderIdx: myLeaderIdx })} className={`flex-1 min-w-[34px] py-1 text-[9px] font-bold rounded border transition-all ${full ? "border-white/5 text-gray-700 cursor-not-allowed" : "border-white/15 text-gray-300 hover:border-[#e91e3f]/50 hover:text-white"}`}>{slot}</button>;
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       {/* 포지션 체인지 — 경매 진행 중 리더 재량 1회 (진행자 대행 가능, 종료 후 불가) */}
                       {auction.status === "진행중" && role === "host" && !l.positionChanged && l.roster.length >= 2 && (
                         <button onClick={() => { setPosSwapTarget({ leaderIdx: li }); setSwapA(""); setSwapB(""); }} className="mt-2.5 w-full text-[10px] font-bold text-gray-500 hover:text-white bg-white/5 py-1.5 rounded-lg transition-colors">포지션 체인지 대행 ({S.posChangeCost.toLocaleString()} Point · 1회)</button>
@@ -736,7 +780,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-300 px-2.5 py-1 rounded-full">최고 {curPlayer.peakTier || "?"}</span>
                           <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-300 px-2.5 py-1 rounded-full">현재 {curPlayer.currentTier || "?"}</span>
                           {canSeePos(curPlayer) && (
-                            <span className="text-[11px] font-bold bg-[#e91e3f]/10 border border-[#e91e3f]/25 text-[#e91e3f] px-2.5 py-1 rounded-full">주 {curPlayer.mainPos || "?"} / 부 {curPlayer.subPos || "-"}</span>
+                            <span className="text-[11px] font-bold bg-[#e91e3f]/10 border border-[#e91e3f]/25 text-[#e91e3f] px-2.5 py-1 rounded-full">{revealInfo(curPlayer)}</span>
                           )}
                         </div>
                       )}
@@ -771,7 +815,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       <div className="flex flex-col items-end gap-2.5">
                         {/* 스카우터 버튼 (호명된 선수 대상, 경매 중에도 사용 가능) */}
                         {myLeaderIdx !== null && !curPlayer.isAllPos && !curPlayer.scoutedBy.includes(myLeaderIdx) && (
-                          <button onClick={() => setConfirmCfg({ title: "스카우터 사용", message: `${S.scoutCost.toLocaleString()} Point를 사용하여 이 선수의 주/부 포지션을 확인합니다.`, confirmLabel: "사용", onConfirm: useScouter })} className="px-4 py-2 text-[11px] font-black bg-white/5 border border-white/15 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 text-gray-200 rounded-xl transition-all">
+                          <button onClick={() => setConfirmCfg({ title: "스카우터 사용", message: `${S.scoutCost.toLocaleString()} Point를 사용하여 이 선수의 ${revealFields.includes("champions") ? "주 포지션·모스트 챔피언" : "주/부 포지션"}을(를) 확인합니다.`, confirmLabel: "사용", onConfirm: useScouter })} className="px-4 py-2 text-[11px] font-black bg-white/5 border border-white/15 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 text-gray-200 rounded-xl transition-all">
                             스카우터 사용 ({S.scoutCost.toLocaleString()} Point)
                           </button>
                         )}
@@ -957,7 +1001,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               ) : (
                                 <div className="mb-2">
                                   <p className="text-[10px] text-gray-500">최고 {p.peakTier || "?"} · 현재 {p.currentTier || "?"}</p>
-                                  {canSeePos(p) && <p className="text-[10px] font-bold text-[#e91e3f] mt-0.5">주 {p.mainPos || "?"}{p.subPos ? ` / 부 ${p.subPos}` : ""}</p>}
+                                  {canSeePos(p) && <p className="text-[10px] font-bold text-[#e91e3f] mt-0.5">{revealInfo(p)}</p>}
                                 </div>
                               )}
                             </>
@@ -1254,15 +1298,21 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <span className="ml-auto text-[10px] font-bold text-gray-500">{scoutResult.alias}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {[
-                  { label: "주 포지션", value: scoutResult.mainPos || "?", primary: true },
-                  { label: "부 포지션", value: scoutResult.subPos || "없음", primary: false },
-                ].map((item, i) => (
-                  <div key={i} className={`rounded-xl border px-3 py-3 text-center ${item.primary ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : "border-white/10 bg-white/[0.03]"}`}>
-                    <p className="text-[8px] font-black tracking-[0.25em] text-gray-500 uppercase mb-1.5">{item.label}</p>
-                    <p className={`text-xl font-black tracking-tight ${item.value ? roleColor(item.value).text : "text-gray-500"}`}>{item.value}</p>
-                  </div>
-                ))}
+                {(() => {
+                  const items: any[] = [];
+                  if (revealFields.includes("mainPos")) items.push({ label: "주 포지션", value: scoutResult.mainPos || "?", primary: true, pos: true });
+                  if (revealFields.includes("subPos")) items.push({ label: "부 포지션", value: scoutResult.subPos || "없음", primary: false, pos: true });
+                  if (revealFields.includes("champions")) {
+                    const champs = (scoutResult.mostChampions || []).filter(Boolean);
+                    items.push({ label: "모스트 챔피언", value: champs.length ? champs.join(" · ") : "없음", primary: false, pos: false, full: true });
+                  }
+                  return items.map((item, i) => (
+                    <div key={i} className={`rounded-xl border px-3 py-3 text-center ${item.full ? "col-span-2" : ""} ${item.primary ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : "border-white/10 bg-white/[0.03]"}`}>
+                      <p className="text-[8px] font-black tracking-[0.25em] text-gray-500 uppercase mb-1.5">{item.label}</p>
+                      <p className={`${item.full ? "text-base" : "text-xl"} font-black tracking-tight ${item.pos && item.value ? roleColor(item.value).text : "text-white"}`}>{item.value}</p>
+                    </div>
+                  ));
+                })()}
               </div>
               <p className="text-[9px] text-gray-600 mt-2.5 text-center">이 정보는 나에게만 공개됩니다</p>
             </div>

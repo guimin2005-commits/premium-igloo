@@ -11,9 +11,18 @@ const LeaderSchema = new mongoose.Schema({
   roster: {
     type: [{
       playerIdx: Number,   // players 배열 인덱스 (-1 = 팀장 본인)
-      slot: String,        // 배정 슬롯: 탱커/딜러/힐러
+      slot: String,        // 배정 슬롯: 탱커/딜러/힐러 등 게임 역할
       price: Number,
       golden: Boolean,     // 황금카드(올포지션) 낙찰 여부
+    }],
+    default: [],
+  },
+  // 📌 인벤토리 모드: 낙찰했지만 아직 슬롯 미배정인 선수 카드(소지)
+  inventory: {
+    type: [{
+      playerIdx: Number,
+      price: Number,
+      golden: Boolean,
     }],
     default: [],
   },
@@ -27,6 +36,7 @@ const PlayerSchema = new mongoose.Schema({
   currentTier: { type: String, default: "" },    // 현재 티어
   mainPos: { type: String, default: "" },        // 주 포지션 (스카우터로만 공개)
   subPos: { type: String, default: "" },         // 부 포지션 (스카우터로만 공개)
+  mostChampions: { type: [String], default: [] }, // 모스트 챔피언(롤 등, 스카우터로만 공개)
   isAllPos: { type: Boolean, default: false },   // 황금카드 (올 포지션)
   phase: { type: Number, default: 2 },           // 1 = 탱커 가능, 2 = 일반(+황금카드)
   status: { type: String, default: "대기" },      // 대기/경매중/배정중/낙찰/유찰
@@ -52,6 +62,8 @@ const AuctionSchema = new mongoose.Schema({
     // 📌 일반화된 역할/슬롯 (게임별). 비어 있으면 아래 legacy 슬롯으로 해석(하위호환)
     roles: { type: [{ name: String, count: Number }], default: [] },
     phase1Role: { type: String, default: "" },    // 선경매(1페이즈) 포지션. 빈 값이면 단일 페이즈
+    assignMode: { type: String, default: "instant" }, // instant(즉시 배정) / inventory(인벤토리 후 배정)
+    reveal: { type: [String], default: ["mainPos", "subPos"] }, // 스카우터 공개 정보 (mainPos/subPos/champions)
     // legacy (오버워치 전용) — 하위호환용
     slotTank: { type: Number, default: 1 },
     slotDealer: { type: Number, default: 2 },
@@ -82,6 +94,7 @@ const AuctionSchema = new mongoose.Schema({
     playerIdx: { type: Number, default: null },   // 메인 화면 프로필 공개 대상
   },
   strategyUntil: { type: Date, default: null },   // 전략 타임 종료 시각
+  assignUntil: { type: Date, default: null },     // 인벤토리 모드: 팀원 배정 시간 종료 시각
   log: { type: [{ t: Date, msg: String }], default: [] },
   createdAt: { type: Date, default: Date.now },
 });

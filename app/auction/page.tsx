@@ -46,12 +46,14 @@ export default function AuctionListPage() {
   const [game, setGame] = useState("오버워치");
   const [roles, setRoles] = useState<any[]>(GAME_PRESETS["오버워치"].roles.map((r) => ({ ...r })));
   const [phase1Role, setPhase1Role] = useState<string>(GAME_PRESETS["오버워치"].phase1Role);
+  const [assignMode, setAssignMode] = useState<string>("instant"); // instant | inventory
+  const [reveal, setReveal] = useState<string[]>((GAME_PRESETS as any)["오버워치"].reveal);
   const [settings, setSettings] = useState({
     leaderPoints: 100000, basePrice: 1000, goldenBasePrice: 4000,
     scoutCost: 2000, posChangeCost: 10000, minIncrement: 100, timerSeconds: 15, scoutSeconds: 7,
   });
   const [leaders, setLeaders] = useState<any[]>([{ name: "", position: "", discordId: "" }]);
-  const [players, setPlayers] = useState<any[]>([{ alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", isAllPos: false }]);
+  const [players, setPlayers] = useState<any[]>([{ alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", mostChampions: ["", "", ""], isAllPos: false }]);
 
   // 📌 게임 선택 — 프리셋으로 역할/슬롯·선경매 포지션 세팅 + 기존 포지션 초기화
   const selectGame = (g: string) => {
@@ -59,8 +61,9 @@ export default function AuctionListPage() {
     const preset = (GAME_PRESETS as any)[g] || { roles: [], phase1Role: "" };
     setRoles(preset.roles.length ? preset.roles.map((r: any) => ({ ...r })) : [{ name: "", count: 1 }]);
     setPhase1Role(preset.phase1Role || "");
+    setReveal(preset.reveal || ["mainPos"]);
     setLeaders((prev) => prev.map((l) => ({ ...l, position: "" })));
-    setPlayers((prev) => prev.map((p) => ({ ...p, mainPos: "", subPos: "" })));
+    setPlayers((prev) => prev.map((p) => ({ ...p, mainPos: "", subPos: "", mostChampions: ["", "", ""] })));
   };
   const roleNamesList = () => roles.map((r) => r.name).filter((n: string) => n.trim());
   const updateRole = (i: number, key: string, value: any) => setRoles((prev) => prev.map((r, idx) => (idx === i ? { ...r, [key]: value } : r)));
@@ -124,7 +127,7 @@ export default function AuctionListPage() {
       const res = await fetch("/api/auction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, game, settings: { ...settings, roles: validRoles, phase1Role }, leaders: validLeaders, players: validPlayers }),
+        body: JSON.stringify({ title, game, settings: { ...settings, roles: validRoles, phase1Role, assignMode, reveal }, leaders: validLeaders, players: validPlayers }),
       });
       const d = await res.json();
       if (d.success) {
@@ -205,6 +208,22 @@ export default function AuctionListPage() {
                       <button type="button" key={g} onClick={() => selectGame(g)} className={`px-3 py-2.5 text-[11px] font-bold rounded-lg border transition-all ${game === g ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-[#0d0d0d] border-white/10 text-gray-400 hover:border-white/25 hover:text-white"}`}>{g}</button>
                     ))}
                   </div>
+                </div>
+              </div>
+
+              {/* 경매 방식 — 즉시 배정 / 인벤토리 */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2">경매 방식 <span className="text-[#e91e3f]">*</span></label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {[
+                    { v: "instant", t: "즉시 배정", d: "낙찰 즉시 포지션 배정 후 다음 선수로" },
+                    { v: "inventory", t: "인벤토리 방식", d: "낙찰 선수를 인벤토리에 보관 → 팀장이 언제든 배정, 종료 시 확정" },
+                  ].map((opt) => (
+                    <button type="button" key={opt.v} onClick={() => setAssignMode(opt.v)} className={`text-left rounded-xl border p-3.5 transition-all ${assignMode === opt.v ? "border-[#e91e3f] bg-[#e91e3f]/[0.08]" : "border-white/10 bg-[#0d0d0d] hover:border-white/25"}`}>
+                      <p className={`text-sm font-black mb-0.5 ${assignMode === opt.v ? "text-[#e91e3f]" : "text-white"}`}>{opt.t}</p>
+                      <p className="text-[11px] text-gray-500 leading-snug break-keep">{opt.d}</p>
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -291,7 +310,7 @@ export default function AuctionListPage() {
                   <label className="text-xs font-bold text-gray-500">선수 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({players.filter(p => p.alias.trim()).length}명)</span></label>
                   <div className="flex gap-2">
                     <button type="button" onClick={rollAllNicks} className="text-[11px] font-black text-gray-400 bg-white/5 border border-white/10 px-3.5 py-1.5 rounded-full hover:text-white hover:border-white/25 transition-colors">전체 랜덤 닉네임</button>
-                    <button type="button" onClick={() => setPlayers([...players, { alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", isAllPos: false }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">선수 추가</button>
+                    <button type="button" onClick={() => setPlayers([...players, { alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", mostChampions: ["", "", ""], isAllPos: false }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">선수 추가</button>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
@@ -329,14 +348,26 @@ export default function AuctionListPage() {
                               ))}
                             </div>
                           </div>
-                          <div>
-                            <p className="text-[9px] font-bold text-gray-600 mb-1">부 포지션</p>
-                            <div className="flex flex-wrap gap-1">
-                              {roleNamesList().map((pos: string) => (
-                                <button type="button" key={pos} onClick={() => updatePlayer(i, "subPos", p.subPos === pos ? "" : pos)} className={`flex-1 min-w-[40px] py-1.5 text-[10px] font-bold rounded-md border transition-all ${p.subPos === pos ? "bg-white/60 text-black border-white/60" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos}</button>
-                              ))}
+                          {reveal.includes("subPos") && (
+                            <div>
+                              <p className="text-[9px] font-bold text-gray-600 mb-1">부 포지션</p>
+                              <div className="flex flex-wrap gap-1">
+                                {roleNamesList().map((pos: string) => (
+                                  <button type="button" key={pos} onClick={() => updatePlayer(i, "subPos", p.subPos === pos ? "" : pos)} className={`flex-1 min-w-[40px] py-1.5 text-[10px] font-bold rounded-md border transition-all ${p.subPos === pos ? "bg-white/60 text-black border-white/60" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos}</button>
+                                ))}
+                              </div>
                             </div>
-                          </div>
+                          )}
+                          {reveal.includes("champions") && (
+                            <div>
+                              <p className="text-[9px] font-bold text-gray-600 mb-1">모스트 챔피언 <span className="text-gray-700">(스카우터 공개)</span></p>
+                              <div className="grid grid-cols-3 gap-1.5">
+                                {[0, 1, 2].map((ci) => (
+                                  <input key={ci} type="text" placeholder={`챔프 ${ci + 1}`} value={(p.mostChampions || ["", "", ""])[ci] || ""} onChange={(e) => { const arr = [...(p.mostChampions || ["", "", ""])]; arr[ci] = e.target.value; updatePlayer(i, "mostChampions", arr); }} className="bg-[#0d0d0d] border border-white/10 rounded-md px-2 py-1.5 text-[11px] text-white outline-none focus:border-[#e91e3f] text-center placeholder:text-gray-600" />
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
