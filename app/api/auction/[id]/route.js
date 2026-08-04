@@ -225,9 +225,9 @@ export async function POST(request, { params }) {
         if (auction.pendingOverflow?.leaderIdx !== null && auction.pendingOverflow?.leaderIdx !== undefined) {
           return NextResponse.json({ success: false, message: "황금카드 초과 배정 정리가 완료되지 않았습니다." }, { status: 409 });
         }
-        if (auction.phase === 1 && player.phase !== 1) {
+        if (auction.phase === 1 && phase1RoleOf(auction.settings) && player.phase !== 1) {
           const p1r = phase1RoleOf(auction.settings);
-          return NextResponse.json({ success: false, message: `1페이즈에는 ${p1r || "선경매"} 가능 선수만 호명할 수 있습니다.` }, { status: 403 });
+          return NextResponse.json({ success: false, message: `1페이즈에는 ${p1r} 가능 선수만 호명할 수 있습니다.` }, { status: 403 });
         }
         if (auction.phase === 0) {
           return NextResponse.json({ success: false, message: "먼저 페이즈를 시작해주세요." }, { status: 403 });
