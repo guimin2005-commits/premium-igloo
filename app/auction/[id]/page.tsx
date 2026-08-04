@@ -1039,7 +1039,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         {/* ═══ 우측: 실시간 채팅 + 로그 ═══ */}
         {/* 모바일: 경매 탭에 채팅이 함께 표시 (스트리밍 스타일 · 컴팩트 높이) */}
         <div className={`${mobileTab === "main" ? "flex" : "hidden"} lg:flex w-full xl:w-[350px] shrink-0 order-3 flex-col gap-5 xl:sticky xl:top-36 xl:self-start xl:max-h-[calc(100vh-11rem)]`}>
-          <div className="rounded-2xl bg-[#111111]/95 border border-white/5 flex flex-col overflow-hidden h-[38vh] max-h-[340px] lg:h-auto lg:max-h-none lg:flex-1 lg:min-h-[380px] xl:min-h-0">
+          <div className="rounded-2xl bg-[#111111]/95 border border-white/5 flex flex-col overflow-hidden h-[38vh] max-h-[340px] lg:h-auto lg:max-h-[calc(100vh-13rem)] lg:flex-1 lg:min-h-[320px] xl:min-h-0">
             <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>
               <span className="text-xs font-black text-white">실시간 채팅</span>
