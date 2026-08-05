@@ -1345,12 +1345,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
                     포지션 지정
                     {swapMode && <span className="text-[#e91e3f] font-black normal-case tracking-normal"> — 교환할 선수 2명을 선택하세요 ({swapPick.length}/2)</span>}
-                    {invOverflow && <span className="text-amber-300 font-black normal-case tracking-normal"> — {moveFrom === null ? `[${po.slot}] 에서 옮길 선수를 선택하세요` : "이동할 포지션을 선택하세요"}</span>}
+                    {invOverflow && <span className="text-amber-300 font-black normal-case tracking-normal"> — [{po.slot}] 에서 내보낼 선수를 선택하세요</span>}
                   </p>
                   {/* 초과 배정 안내 배너 */}
                   {invOverflow && (
                     <div className="mb-2 rounded-lg border border-amber-400/35 bg-amber-400/[0.07] px-3 py-2">
-                      <p className="text-[10px] font-bold text-amber-200 leading-relaxed">올 포지션 선수가 <b>[{po.slot}]</b> 에 초과 배정되었습니다. 기존 선수 한 명을 다른 포지션으로 옮겨야 정리됩니다.</p>
+                      <p className="text-[10px] font-bold text-amber-200 leading-relaxed">올 포지션 선수가 <b>[{po.slot}]</b> 에 초과 배정되었습니다. 기존 선수 <b>한 명을 클릭</b>하면 보유 선수로 돌아가며, 원하는 포지션에 다시 배정할 수 있습니다.</p>
                     </div>
                   )}
                   {/* 2열 그리드 — 한 포지션에 여러 명이 들어가면 셀 안에서 줄바꿈 */}
@@ -1362,7 +1362,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       // 배정 완료 카드(음수 key)는 드롭 불가 · 황금카드는 이미 찬 슬롯에도 배정 가능
                       const dragIsInv = dragCard !== null && dragCard >= 0;
                       const draggingGolden = dragIsInv && !!l.inventory?.[dragCard as number]?.golden;
-                      const dropOk = canManage && !swapMode && dragIsInv && (!full || draggingGolden);
+                      // 초과 정리 중에는 새 배정 불가 (먼저 밀려난 선수를 내보내야 함)
+                      const dropOk = canManage && !swapMode && !invOverflow && dragIsInv && (!full || draggingGolden);
                       return (
                         <div
                           key={slot}
@@ -1379,21 +1380,27 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             ) : entries.map(({ r, ri }: any) => {
                               const picked = swapPick.includes(ri);
                               const selectable = swapMode && canManage;
-                              // 초과 배정 정리: 초과된 슬롯의 비황금 선수를 골라 다른 포지션으로 이동
+                              // 초과 배정 정리: 초과된 슬롯의 비황금 선수를 클릭 → 보유 선수(인벤토리)로 복귀
                               const movable = invOverflow && slot === po.slot && !r.golden && r.playerIdx !== -1;
-                              const moveSel = moveFrom === ri;
                               const canUnassign = role === "host" && auction.status === "진행중" && !swapMode && !invOverflow && r.playerIdx !== -1;
                               return (
                                 <span
                                   key={ri}
-                                  onClick={(e) => {
+                                  title={movable ? "클릭하면 보유 선수로 돌아갑니다" : undefined}
+                                  onClick={async (e) => {
                                     e.stopPropagation();
-                                    if (movable) { setMoveFrom(moveSel ? null : ri); sfxSelect(); return; }
+                                    if (movable) {
+                                      const nm = rosterName(l, r);
+                                      const d = await act({ action: "overflow:toInventory", leaderIdx: li, rosterIdx: ri, byLeaderIdx: myLeaderIdx });
+                                      if (d?.success) { sfxSelect(); showToast(`${nm} 선수가 보유 선수로 돌아왔습니다 — 원하는 포지션에 배정하세요`); }
+                                      else showToast(d?.message || "정리에 실패했습니다");
+                                      return;
+                                    }
                                     if (!selectable) return;
                                     setSwapPick((prev) => prev.includes(ri) ? prev.filter((x) => x !== ri) : prev.length >= 2 ? prev : [...prev, ri]);
                                     sfxSelect();
                                   }}
-                                  className={`inline-flex items-center gap-1 text-[10px] font-bold rounded-full pl-2 ${canUnassign ? "pr-1" : "pr-2"} py-0.5 border transition-all ${picked || moveSel ? "border-[#e91e3f] bg-[#e91e3f]/20 text-white ring-1 ring-[#e91e3f]" : movable ? "border-amber-400/60 bg-amber-400/[0.10] text-amber-100 animate-pulse cursor-pointer" : selectable ? "border-white/20 bg-white/[0.06] text-gray-200 hover:border-[#e91e3f]/50 cursor-pointer" : "border-white/10 bg-white/[0.05] text-gray-200"}`}
+                                  className={`inline-flex items-center gap-1 text-[10px] font-bold rounded-full pl-2 ${canUnassign ? "pr-1" : "pr-2"} py-0.5 border transition-all ${picked ? "border-[#e91e3f] bg-[#e91e3f]/20 text-white ring-1 ring-[#e91e3f]" : movable ? "border-amber-400/60 bg-amber-400/[0.10] text-amber-100 animate-pulse cursor-pointer hover:bg-amber-400/20" : selectable ? "border-white/20 bg-white/[0.06] text-gray-200 hover:border-[#e91e3f]/50 cursor-pointer" : "border-white/10 bg-white/[0.05] text-gray-200"}`}
                                 >
                                   <span className="truncate max-w-[110px]">{rosterName(l, r)}</span>
                                   {r.playerIdx === -1 && <span className="text-[8px] text-gray-500 font-black">리더</span>}
@@ -1416,21 +1423,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                 </span>
                               );
                             })}
-                            {/* 초과 배정 정리: 선택한 선수를 이 슬롯으로 이동 */}
-                            {invOverflow && moveFrom !== null && slot !== po.slot && (!p1Role || slot !== p1Role) && entries.length < limit && (
-                              <button
-                                type="button"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const d = await act({ action: "moveSlot", rosterIdx: moveFrom, toSlot: slot, byLeaderIdx: myLeaderIdx });
-                                  if (d?.success) { sfxAssign(); showToast(`[${slot}] 으로 이동 완료 · 초과 배정이 정리되었습니다`); setMoveFrom(null); }
-                                  else showToast(d?.message || "이동에 실패했습니다");
-                                }}
-                                className="inline-flex items-center rounded-full border border-emerald-500/60 bg-emerald-500/[0.12] px-2.5 py-0.5 text-[9px] font-black text-emerald-300 animate-pulse hover:bg-emerald-500/25 transition-colors"
-                              >
-                                이곳으로 이동
-                              </button>
-                            )}
                           </div>
                           {dropOk && <span className={`shrink-0 mt-1 text-[9px] font-black animate-pulse ${full ? "text-amber-400" : "text-[#e91e3f]"}`}>{full ? "초과 배정" : "배정"}</span>}
                         </div>

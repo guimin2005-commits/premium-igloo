@@ -375,6 +375,35 @@ export async function POST(request, { params }) {
         return NextResponse.json({ success: true });
       }
 
+      // 인벤토리 모드: 황금카드 초과 배정 정리 — 밀려난 선수를 보유 선수(인벤토리)로 되돌림
+      case "overflow:toInventory": {
+        const { leaderIdx, rosterIdx, byLeaderIdx } = body;
+        const leader = auction.leaders[leaderIdx];
+        if (!leader) return NextResponse.json({ success: false }, { status: 400 });
+        if (byLeaderIdx !== null && byLeaderIdx !== undefined && byLeaderIdx !== leaderIdx) {
+          return NextResponse.json({ success: false, message: "본인 팀만 정리할 수 있습니다." }, { status: 403 });
+        }
+        if (auction.pendingOverflow?.leaderIdx !== leaderIdx) {
+          return NextResponse.json({ success: false, message: "정리할 초과 배정이 없습니다." }, { status: 400 });
+        }
+        const entry = leader.roster?.[rosterIdx];
+        if (!entry) return NextResponse.json({ success: false, message: "대상을 찾을 수 없습니다." }, { status: 400 });
+        if (entry.slot !== auction.pendingOverflow.slot) {
+          return NextResponse.json({ success: false, message: "초과된 포지션의 선수만 옮길 수 있습니다." }, { status: 400 });
+        }
+        if (entry.golden) return NextResponse.json({ success: false, message: "올 포지션 선수는 옮길 수 없습니다." }, { status: 400 });
+        if (entry.playerIdx === -1) return NextResponse.json({ success: false, message: "리더 본인 슬롯은 옮길 수 없습니다." }, { status: 400 });
+
+        leader.inventory.push({ playerIdx: entry.playerIdx, price: entry.price, golden: false });
+        leader.roster.splice(rosterIdx, 1);
+        auction.pendingOverflow = { leaderIdx: null, slot: null };
+        const mp = auction.players[entry.playerIdx];
+        addLog(auction, `${mp?.alias} → ${leader.name} 인벤토리로 이동 (초과 배정 정리)`);
+        await auction.save();
+        sysChat(id, `${leader.name} 팀의 ${mp?.alias} 선수가 인벤토리로 돌아갔습니다. 다른 포지션에 다시 배정해주세요.`);
+        return NextResponse.json({ success: true });
+      }
+
       // ⚠️ 리더는 배정을 되돌릴 수 없음 (포지션 체인지 host:posSwap 으로만 조정)
       //    단, 진행자는 오배정 정정을 위해 슬롯 → 인벤토리 회수 가능
       case "host:unassign": {
