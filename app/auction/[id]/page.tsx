@@ -16,6 +16,15 @@ const MegaphoneIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
   </svg>
 );
 
+// 📌 포지션 영문 약자 — 좁은 공간(슬롯 뱃지/요약 칩)에서 사용
+const ROLE_ABBR: Record<string, string> = {
+  탱커: "TNK", 딜러: "DPS", 힐러: "SUP",
+  탑: "TOP", 정글: "JGL", 미드: "MID", 원딜: "ADC", 서폿: "SUP", 서포터: "SUP",
+  타격대: "DUE", 척후대: "INI", 감시자: "SEN", 전략가: "CTR",
+  스쿼드: "SQD",
+};
+const roleAbbr = (name: string) => ROLE_ABBR[name] || (/^[A-Za-z]/.test(name) ? name.slice(0, 3).toUpperCase() : name.slice(0, 2));
+
 // 📌 포지션 색상 팔레트 — 역할 순서(index)대로 배정. 오버워치는 기존 색(파랑/레드/그린) 유지
 const SLOT_PALETTE = [
   { badge: "bg-blue-500/15 text-blue-400 border-blue-500/25", text: "text-blue-400" },
@@ -42,7 +51,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [now, setNow] = useState(Date.now());
   const [soundOn, setSoundOn] = useState(true);
   const [volume, setVolume] = useState(60); // 0~100
-  const [scoutResult, setScoutResult] = useState<any>(null); // 스카우터 결과 연출 오버레이
+  const [notices, setNotices] = useState<any[]>([]); // 📌 내 알림창 (스카우터 결과 등, 나에게만 보임)
+  const noticeSeq = useRef(0);
   const [goldenFx, setGoldenFx] = useState(false);           // 황금카드 등장 애니메이션
   const [nextFx, setNextFx] = useState<string | null>(null); // 다음 매물 전환 배너
   const [mobileTab, setMobileTab] = useState<"main" | "teams">("main"); // 모바일 섹션 전환 (경매+채팅 통합 / 팀 현황)
@@ -84,6 +94,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   }, []);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
+  // 📌 알림창에 항목 추가 (최신순, 최대 30개)
+  const pushNotice = (n: { kind: string; title: string; body?: string; rows?: { l: string; v: string; pos?: boolean }[] }) => {
+    const id = ++noticeSeq.current;
+    setNotices((prev) => [{ ...n, id, at: new Date() }, ...prev].slice(0, 30));
+  };
 
   // ── 사운드 (적당한 볼륨의 신스 톤) ──
   const playTone = useCallback((freq: number, dur = 0.08, baseGain = 0.04, type: OscillatorType = "sine") => {
@@ -410,8 +425,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     const d = await act({ action: "scout", leaderIdx: myLeaderIdx, playerIdx: targetIdx });
     if (d.success) {
       sfxScout();
-      setScoutResult({ alias: target.alias, mainPos: target.mainPos, subPos: target.subPos, mostChampions: target.mostChampions || [] });
-      setTimeout(() => setScoutResult(null), 7000);
+      // 📌 결과는 우측 알림창으로 (화면을 가리는 오버레이 제거)
+      const rows: { l: string; v: string; pos?: boolean }[] = [];
+      if (revealFields.includes("mainPos")) rows.push({ l: "주 포지션", v: target.mainPos || "?", pos: true });
+      if (revealFields.includes("subPos")) rows.push({ l: "부 포지션", v: target.subPos || "없음", pos: true });
+      if (revealFields.includes("champions")) {
+        const champs = (target.mostChampions || []).filter(Boolean);
+        rows.push({ l: "모스트 챔피언", v: champs.length ? champs.join("  ·  ") : "없음" });
+      }
+      pushNotice({ kind: "scout", title: `스카우터 — ${target.alias}`, rows });
+      showToast(`${target.alias} 스카우터 결과가 알림창에 도착했습니다`);
       // 📌 즉시 반영 (폴링 지연 동안 버튼 잔존/포인트 미차감/포지션 미표시 방지)
       setAuction((prev: any) => {
         if (!prev) return prev;
@@ -473,7 +496,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     >
                       {/* 슬롯 역할 표기 — 컴팩트 모드에서도 항상 표시 */}
                       {!big && (
-                        <span className={`shrink-0 text-[9px] font-black rounded px-1 py-0.5 border ${roleColor(slot).badge}`}>{slot[0]}</span>
+                        <span className={`shrink-0 text-[9px] font-black rounded px-1 py-0.5 border ${roleColor(slot).badge}`}>{roleAbbr(slot)}</span>
                       )}
                       <span className="text-gray-200 font-bold truncate">
                         {rosterName(leader, r)}
@@ -661,7 +684,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         const limit = slotLimitOf(slot);
                         return (
                           <span key={slot} className={`text-[9px] font-black rounded px-1.5 py-0.5 border ${filled >= limit ? roleColor(slot).badge : "bg-white/[0.03] text-gray-600 border-white/10"}`}>
-                            {slot[0]} {filled}/{limit}
+                            {roleAbbr(slot)} {filled}/{limit}
                           </span>
                         );
                       })}
@@ -675,7 +698,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                       {/* 📌 인벤토리 — 팝업으로 확인 (팀 패널은 버튼만, 정보량 축소) */}
                       {invMode && (
-                        <button onClick={() => { setInvModal(li); sfxSelect(); }} className="mt-2.5 w-full flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/25 hover:border-[#e91e3f]/40 px-3 py-2 transition-colors group/inv">
+                        <button onClick={() => { setInvModal(li); setDragCard(null); setSwapMode(false); setSwapPick([]); sfxSelect(); }} className="mt-2.5 w-full flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/25 hover:border-[#e91e3f]/40 px-3 py-2 transition-colors group/inv">
                           <span className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 group-hover/inv:text-white transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
                             인벤토리
@@ -921,7 +944,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <div className="flex items-center gap-2.5">
                   {/* 인벤토리 — 카드 보관/배정 (인벤토리 모드) */}
                   {invMode && (
-                    <button onClick={() => { setInvModal(myLeaderIdx); sfxSelect(); }} className={`inline-flex items-center gap-1.5 text-[10px] font-black px-3 py-1.5 rounded-full border transition-all ${(myLeader.inventory?.length || 0) > 0 ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/35 hover:bg-[#e91e3f]/25 animate-pulse" : "bg-white/5 text-gray-400 border-white/10 hover:text-white hover:border-white/25"}`}>
+                    <button onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); sfxSelect(); }} className={`inline-flex items-center gap-1.5 text-[10px] font-black px-3 py-1.5 rounded-full border transition-all ${(myLeader.inventory?.length || 0) > 0 ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/35 hover:bg-[#e91e3f]/25 animate-pulse" : "bg-white/5 text-gray-400 border-white/10 hover:text-white hover:border-white/25"}`}>
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
                       인벤토리 {myLeader.inventory?.length || 0}
                     </button>
@@ -1054,9 +1077,42 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
         {/* ═══ 우측: 실시간 채팅 + 로그 ═══ */}
         {/* 모바일: 경매 탭에 채팅이 함께 표시 (스트리밍 스타일 · 컴팩트 높이) */}
-        <div className={`${mobileTab === "main" ? "flex" : "hidden"} lg:flex w-full xl:w-[350px] shrink-0 order-3 flex-col gap-5 xl:sticky xl:top-36 xl:self-start xl:max-h-[calc(100vh-11rem)]`}>
-          <div className="rounded-2xl bg-[#111111]/95 border border-white/5 flex flex-col overflow-hidden h-[40vh] max-h-[360px] lg:h-[52vh] lg:max-h-none xl:h-[calc(100vh-13rem)]">
-            <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2">
+        <div className={`${mobileTab === "main" ? "flex" : "hidden"} lg:flex w-full xl:w-[350px] shrink-0 order-3 flex-col gap-4 xl:sticky xl:top-36 xl:self-start xl:h-[calc(100vh-11rem)]`}>
+
+          {/* 📌 알림창 — 스카우터 결과 등 나에게만 보이는 알림 */}
+          <div className="rounded-2xl bg-[#111111]/95 border border-white/5 flex flex-col overflow-hidden shrink-0 h-[196px]">
+            <div className="px-4 py-2.5 border-b border-white/5 flex items-center gap-2 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_2s_ease-in-out_infinite]"></span>
+              <span className="text-xs font-black text-white">알림창</span>
+              <span className="text-[9px] font-bold text-gray-600">나에게만 표시</span>
+              {notices.length > 0 && (
+                <button onClick={() => setNotices([])} className="ml-auto text-[9px] font-bold text-gray-600 hover:text-white transition-colors">모두 지우기</button>
+              )}
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+              {notices.length === 0 ? (
+                <p className="text-center text-[11px] text-gray-700 py-8">알림이 없습니다.<br /><span className="text-[10px] text-gray-800">스카우터 결과 등이 이곳에 표시됩니다</span></p>
+              ) : notices.map((n) => (
+                <div key={n.id} className="rounded-xl border border-[#e91e3f]/25 bg-[#e91e3f]/[0.05] px-3 py-2.5 animate-in fade-in slide-in-from-top-1 duration-300">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="text-[8px] font-black tracking-[0.25em] text-[#e91e3f] uppercase">{n.kind === "scout" ? "Scout" : "Notice"}</span>
+                    <span className="ml-auto text-[9px] text-gray-600 tabular-nums">{new Date(n.at).toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit" })}</span>
+                  </div>
+                  <p className="text-[11px] font-black text-white truncate mb-1">{n.title}</p>
+                  {n.body && <p className="text-[10px] text-gray-400 leading-relaxed break-keep">{n.body}</p>}
+                  {n.rows?.map((r: any, ri: number) => (
+                    <div key={ri} className="flex items-baseline gap-2 text-[10px] leading-relaxed">
+                      <span className="text-gray-600 font-bold shrink-0">{r.l}</span>
+                      <span className={`font-black truncate ${r.pos && r.v ? roleColor(r.v).text : "text-gray-200"}`}>{r.v}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-[#111111]/95 border border-white/5 flex flex-col overflow-hidden h-[40vh] max-h-[360px] lg:h-[46vh] xl:h-auto xl:max-h-none xl:flex-1 xl:min-h-0">
+            <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2 shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>
               <span className="text-xs font-black text-white">실시간 채팅</span>
             </div>
@@ -1085,7 +1141,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </form>
           </div>
 
-          <div className="hidden lg:block rounded-2xl bg-[#111111]/95 border border-white/5 p-4 max-h-44 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10">
+          <div className="hidden lg:block shrink-0 rounded-2xl bg-[#111111]/95 border border-white/5 p-4 max-h-40 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10">
             <p className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase mb-2.5">경매 로그</p>
             <div className="space-y-1">
               {[...auction.log].reverse().map((l: any, i: number) => (
@@ -1101,7 +1157,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         const li = invModal;
         const l = auction.leaders[li];
         const mine = role === "host" || myLeaderIdx === li;
-        const canManage = mine && auction.status === "진행중";
+        const canManage = mine && auction.status === "진행중"; // 배정/교환 (본인 팀·진행자만)
+        const canSelect = true; // 카드 선택·정보 열람은 누구나 (타 팀 포함)
         const cardName = (card: any) => {
           const cp = auction.players[card.playerIdx];
           if (cp?.revealed) return cp.discordId && profiles[cp.discordId] ? profiles[cp.discordId].globalName : cp.alias;
@@ -1131,8 +1188,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         };
         return (
           <div className="fixed inset-0 z-[118] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); }}>
-            {/* 고정 높이 — 선수 선택 전/후로 팝업 크기가 변하지 않도록 */}
-            <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-5xl h-[88dvh] sm:h-[76vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+            {/* 콘텐츠 높이 — 정보 카드가 고정 높이라 선택 전/후 크기는 변하지 않음 */}
+            <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-4xl max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
               <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
                 <span className="text-sm font-black text-white truncate">{l.name} 팀 인벤토리</span>
                 <span className="text-[10px] font-black text-[#e91e3f] tabular-nums">{l.inventory?.length || 0}장</span>
@@ -1328,11 +1385,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <div className="order-1 lg:order-2">
                   <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
                     보유 선수 <span className="text-[#e91e3f]">{l.inventory?.length || 0}</span>
+                    {!mine && <span className="text-gray-600 font-bold normal-case tracking-normal"> — 선택해 정보 확인</span>}
                   </p>
                   {(l.inventory?.length || 0) === 0 ? (
                     <p className="text-center text-xs text-gray-600 py-8 border border-dashed border-white/10 rounded-xl">보유 중인 선수가 없습니다.</p>
                   ) : (
-                    <div className="grid grid-cols-3 lg:grid-cols-2 gap-2.5 lg:max-h-[52vh] lg:overflow-y-auto [&::-webkit-scrollbar]:hidden p-1">
+                    <div className="grid grid-cols-3 lg:grid-cols-2 gap-2.5 lg:max-h-[46vh] lg:overflow-y-auto [&::-webkit-scrollbar]:hidden p-1 content-start">
                       {l.inventory.map((card: any, ci: number) => {
                         const picked = dragCard === ci;
                         return (
@@ -1342,8 +1400,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             /* 드래그로 배정에 실패해도 선택은 유지 (좌측 정보가 사라지지 않도록) */
                             onDragStart={() => { draggingRef.current = true; if (dragCard !== ci) { setDragCard(ci); sfxSelect(); } }}
                             onDragEnd={() => { setTimeout(() => { draggingRef.current = false; }, 0); }}
-                            onClick={() => { if (!canManage || swapMode) return; if (draggingRef.current) return; const next = picked ? null : ci; setDragCard(next); if (next !== null) sfxSelect(); }}
-                            className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-colors ${card.golden ? "border-[#e91e3f]/45 bg-gradient-to-b from-[#e91e3f]/[0.14] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35" : ""} ${picked ? "border-[#e91e3f] ring-2 ring-[#e91e3f] shadow-[0_0_20px_rgba(233,30,63,0.35)] bg-[#e91e3f]/[0.10]" : ""}`}
+                            onClick={() => { if (!canSelect || swapMode) return; if (draggingRef.current) return; const next = picked ? null : ci; setDragCard(next); if (next !== null) sfxSelect(); }}
+                            className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-colors ${card.golden ? "border-[#e91e3f]/45 bg-gradient-to-b from-[#e91e3f]/[0.14] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35" : !swapMode ? "cursor-pointer hover:border-white/25" : ""} ${picked ? "border-[#e91e3f] ring-2 ring-[#e91e3f] shadow-[0_0_20px_rgba(233,30,63,0.35)] bg-[#e91e3f]/[0.10]" : ""}`}
                           >
                             <span className={`text-[7px] font-black tracking-[0.2em] uppercase ${card.golden ? "text-[#e91e3f]" : "text-gray-600"}`}>{card.golden ? "Golden" : "Player"}</span>
                             <div className={`w-11 h-11 rounded-full flex items-center justify-center border ${card.golden ? "border-[#e91e3f]/40 bg-[#e91e3f]/10" : "border-white/10 bg-white/[0.04]"}`}>
@@ -1622,42 +1680,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               55%, 100% { transform: translateX(110%); }
             }
           `}} />
-        </div>
-      )}
-
-      {/* 스카우터 결과 — 화면 중앙 리포트 (입찰 UI는 가리지 않도록 상단 배치 · 직접 닫기 가능) */}
-      {scoutResult && (
-        <div className="fixed top-24 md:top-28 left-1/2 -translate-x-1/2 z-[130] px-4 w-full max-w-md animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/60 via-[#e91e3f]/20 to-transparent p-px shadow-[0_20px_60px_rgba(233,30,63,0.45)]">
-            <div className="rounded-2xl bg-[#150a0d]/98 backdrop-blur-md px-6 py-5">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_1.5s_ease-in-out_infinite]"></span>
-                <p className="text-[10px] font-black tracking-[0.35em] text-[#e91e3f] uppercase">Scout Report</p>
-                <span className="ml-auto text-[11px] font-bold text-gray-400">{scoutResult.alias}</span>
-                <button onClick={() => setScoutResult(null)} className="p-1 -mr-1 text-gray-500 hover:text-white rounded-md hover:bg-white/10 transition-colors outline-none">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {(() => {
-                  const items: any[] = [];
-                  if (revealFields.includes("mainPos")) items.push({ label: "주 포지션", value: scoutResult.mainPos || "?", primary: true, pos: true });
-                  if (revealFields.includes("subPos")) items.push({ label: "부 포지션", value: scoutResult.subPos || "없음", primary: false, pos: true });
-                  if (revealFields.includes("champions")) {
-                    const champs = (scoutResult.mostChampions || []).filter(Boolean);
-                    items.push({ label: "모스트 챔피언", value: champs.length ? champs.join("  ·  ") : "없음", primary: false, pos: false, full: true });
-                  }
-                  return items.map((item, i) => (
-                    <div key={i} className={`rounded-xl border px-3 py-3 text-center ${item.full ? "col-span-2" : ""} ${item.primary ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : "border-white/10 bg-white/[0.03]"}`}>
-                      <p className="text-[8px] font-black tracking-[0.25em] text-gray-500 uppercase mb-1.5">{item.label}</p>
-                      <p className={`${item.full ? "text-base" : "text-xl"} font-black tracking-tight ${item.pos && item.value ? roleColor(item.value).text : "text-white"}`}>{item.value}</p>
-                    </div>
-                  ));
-                })()}
-              </div>
-              <p className="text-[10px] text-gray-500 mt-3 text-center">이 정보는 나에게만 공개됩니다</p>
-            </div>
-          </div>
         </div>
       )}
 

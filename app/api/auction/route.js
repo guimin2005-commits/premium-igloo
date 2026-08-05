@@ -1,16 +1,22 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import Auction from "@/models/Auction";
 import AuctionChat from "@/models/AuctionChat";
 import { phase1RoleOf } from "@/lib/auctionGames";
+import { authOptions } from "@/lib/authOptions";
+import { isAdminName } from "@/lib/admins";
 
 // [목록]
 export async function GET() {
   try {
     await connectToDatabase();
-    const auctions = await Auction.find().sort({ createdAt: -1 }).select("title status createdAt leaders players game isTest");
+    // 📌 테스트 방은 관리자에게만 노출
+    const session = await getServerSession(authOptions);
+    const query = isAdminName(session?.user?.name) ? {} : { isTest: { $ne: true } };
+    const auctions = await Auction.find(query).sort({ createdAt: -1 }).select("title status createdAt leaders players game isTest");
     const data = auctions.map((a) => ({
       _id: a._id,
       title: a.title,
