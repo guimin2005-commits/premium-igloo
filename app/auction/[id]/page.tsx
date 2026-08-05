@@ -1137,46 +1137,75 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 </button>
               </div>
 
-              {/* 가로 2단: 좌 보유 선수 / 우 포지션 지정 */}
-              <div className="p-5 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-5 items-start">
-                {/* ── 보유 선수 (세로 카드) ── */}
-                <div>
-                  <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
-                    보유 선수
-                    {canManage && <span className="text-gray-600 font-bold normal-case tracking-normal"> — 카드를 오른쪽 포지션으로 드래그 (또는 선택 후 클릭)</span>}
-                  </p>
-                  {(l.inventory?.length || 0) === 0 ? (
-                    <p className="text-center text-xs text-gray-600 py-8 border border-dashed border-white/10 rounded-xl">보유 중인 선수가 없습니다.</p>
-                  ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
-                      {l.inventory.map((card: any, ci: number) => {
-                        const picked = dragCard === ci;
-                        return (
-                          <div
-                            key={ci}
-                            draggable={canManage}
-                            onDragStart={() => { setDragCard(ci); sfxSelect(); }}
-                            onDragEnd={() => setDragCard(null)}
-                            onClick={() => { if (!canManage) return; const next = picked ? null : ci; setDragCard(next); if (next !== null) { sfxSelect(); showToast(`${cardName(card)} 선택 — 배정할 포지션을 누르세요`); } }}
-                            className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-all ${card.golden ? "border-[#e91e3f]/45 bg-gradient-to-b from-[#e91e3f]/[0.14] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage ? "cursor-grab active:cursor-grabbing hover:border-white/35 hover:-translate-y-0.5" : ""} ${picked ? "ring-2 ring-[#e91e3f] border-[#e91e3f] -translate-y-1 shadow-[0_10px_24px_rgba(233,30,63,0.25)]" : ""}`}
-                          >
-                            <span className={`text-[7px] font-black tracking-[0.2em] uppercase ${card.golden ? "text-[#e91e3f]" : "text-gray-600"}`}>{card.golden ? "Golden" : "Player"}</span>
-                            <div className={`w-11 h-11 rounded-full flex items-center justify-center border ${card.golden ? "border-[#e91e3f]/40 bg-[#e91e3f]/10" : "border-white/10 bg-white/[0.04]"}`}>
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 ${card.golden ? "text-[#e91e3f]" : "text-gray-500"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+              {/* 가로 2단: 좌 선택 선수 정보 + 포지션 지정 / 우 보유 선수 목록 */}
+              <div className="p-5 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-start">
+
+                {/* ══ 좌측 ══ */}
+                <div className="order-2 lg:order-1 space-y-4">
+                  {/* ── 선택한 선수 정보 카드 ── */}
+                  {(() => {
+                    const sel = dragCard !== null ? l.inventory?.[dragCard] : null;
+                    if (!sel) {
+                      return (
+                        <div className="rounded-2xl border border-dashed border-white/12 bg-black/20 px-5 py-8 text-center">
+                          <p className="text-xs text-gray-500 font-bold">오른쪽에서 선수를 선택하세요</p>
+                          <p className="text-[10px] text-gray-700 mt-1">선택한 선수의 정보가 여기에 표시됩니다</p>
+                        </div>
+                      );
+                    }
+                    const sp = auction.players[sel.playerIdx];
+                    const scouted = sp && canSeePos(sp);
+                    return (
+                      <div className={`relative rounded-2xl border overflow-hidden ${sel.golden ? "border-[#e91e3f]/45 bg-gradient-to-br from-[#e91e3f]/[0.12] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-br from-white/[0.06] to-[#0d0d0d]"}`}>
+                        <div className="p-5 flex gap-4">
+                          {/* 세로 카드 미니어처 */}
+                          <div className={`shrink-0 w-[86px] aspect-[3/4.3] rounded-xl border flex flex-col items-center justify-between px-2 py-2.5 ${sel.golden ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.10]" : "border-white/15 bg-white/[0.04]"}`}>
+                            <span className={`text-[7px] font-black tracking-[0.2em] uppercase ${sel.golden ? "text-[#e91e3f]" : "text-gray-600"}`}>{sel.golden ? "Golden" : "Player"}</span>
+                            <div className={`w-11 h-11 rounded-full flex items-center justify-center border ${sel.golden ? "border-[#e91e3f]/40 bg-[#e91e3f]/10" : "border-white/10 bg-white/[0.04]"}`}>
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 ${sel.golden ? "text-[#e91e3f]" : "text-gray-500"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
                             </div>
-                            <div className="w-full text-center">
-                              <p className="text-[10px] font-black text-white truncate leading-tight">{cardName(card)}</p>
-                              <p className="text-[9px] font-black text-[#e91e3f] tabular-nums mt-0.5">{card.price.toLocaleString()}</p>
+                            <p className="text-[9px] font-black text-[#e91e3f] tabular-nums">{sel.price.toLocaleString()}</p>
+                          </div>
+                          {/* 정보 */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="text-base font-black text-white truncate">{cardName(sel)}</p>
+                              {sel.golden && <span className="shrink-0 text-[8px] font-black text-[#e91e3f] border border-[#e91e3f]/35 rounded px-1.5 py-0.5">ALL</span>}
+                            </div>
+                            <p className="text-[11px] font-black text-[#e91e3f] tabular-nums mb-3">{sel.price.toLocaleString()} <span className="text-gray-600 font-bold">Point 낙찰</span></p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                { l: "최고 티어", v: sel.golden ? "비공개" : (sp?.peakTier || "-") },
+                                { l: "현재 티어", v: sel.golden ? "비공개" : (sp?.currentTier || "-") },
+                              ].map((it, ii) => (
+                                <div key={ii} className="rounded-lg border border-white/10 bg-black/25 px-2.5 py-2">
+                                  <p className="text-[8px] font-black tracking-[0.2em] text-gray-600 uppercase mb-0.5">{it.l}</p>
+                                  <p className="text-[11px] font-bold text-gray-200 truncate">{it.v}</p>
+                                </div>
+                              ))}
+                            </div>
+                            {/* 스카우터로 확인한 정보 */}
+                            <div className="mt-2 rounded-lg border border-white/10 bg-black/25 px-2.5 py-2">
+                              <p className="text-[8px] font-black tracking-[0.2em] text-gray-600 uppercase mb-0.5">스카우터 정보</p>
+                              {sel.golden ? (
+                                <p className="text-[11px] font-bold text-gray-600">황금카드 — 스카우터 불가</p>
+                              ) : scouted ? (
+                                <p className="text-[11px] font-bold text-[#e91e3f]">{revealInfo(sp)}</p>
+                              ) : (
+                                <p className="text-[11px] font-bold text-gray-600">미확인 (스카우터 미사용)</p>
+                              )}
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                        </div>
+                        {canManage && !swapMode && (
+                          <p className="px-5 pb-4 -mt-1 text-[10px] text-gray-500">아래 포지션을 클릭하거나, 오른쪽 카드를 드래그해 배정하세요.</p>
+                        )}
+                      </div>
+                    );
+                  })()}
 
-                {/* ── 포지션 지정 (드롭존) ── */}
-                <div>
+                  {/* ── 포지션 지정 (드롭존) ── */}
+                  <div>
                   <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
                     포지션 지정
                     {swapMode && <span className="text-[#e91e3f] font-black normal-case tracking-normal"> — 교환할 선수 2명을 선택하세요 ({swapPick.length}/2)</span>}
@@ -1271,6 +1300,42 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           {swapPick.length === 2 ? `선택한 2명 교환 (${S.posChangeCost.toLocaleString()} Pt)` : `선수 ${2 - swapPick.length}명 더 선택`}
                         </button>
                       )}
+                    </div>
+                  )}
+                  </div>
+                </div>
+
+                {/* ══ 우측: 보유 선수 목록 ══ */}
+                <div className="order-1 lg:order-2">
+                  <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
+                    보유 선수 <span className="text-[#e91e3f]">{l.inventory?.length || 0}</span>
+                  </p>
+                  {(l.inventory?.length || 0) === 0 ? (
+                    <p className="text-center text-xs text-gray-600 py-8 border border-dashed border-white/10 rounded-xl">보유 중인 선수가 없습니다.</p>
+                  ) : (
+                    <div className="grid grid-cols-3 lg:grid-cols-2 gap-2.5 lg:max-h-[52vh] lg:overflow-y-auto [&::-webkit-scrollbar]:hidden lg:pr-0.5">
+                      {l.inventory.map((card: any, ci: number) => {
+                        const picked = dragCard === ci;
+                        return (
+                          <div
+                            key={ci}
+                            draggable={canManage && !swapMode}
+                            onDragStart={() => { setDragCard(ci); sfxSelect(); }}
+                            onDragEnd={() => setDragCard(null)}
+                            onClick={() => { if (!canManage || swapMode) return; const next = picked ? null : ci; setDragCard(next); if (next !== null) sfxSelect(); }}
+                            className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-all ${card.golden ? "border-[#e91e3f]/45 bg-gradient-to-b from-[#e91e3f]/[0.14] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35 hover:-translate-y-0.5" : ""} ${picked ? "ring-2 ring-[#e91e3f] border-[#e91e3f] -translate-y-1 shadow-[0_10px_24px_rgba(233,30,63,0.25)]" : ""}`}
+                          >
+                            <span className={`text-[7px] font-black tracking-[0.2em] uppercase ${card.golden ? "text-[#e91e3f]" : "text-gray-600"}`}>{card.golden ? "Golden" : "Player"}</span>
+                            <div className={`w-11 h-11 rounded-full flex items-center justify-center border ${card.golden ? "border-[#e91e3f]/40 bg-[#e91e3f]/10" : "border-white/10 bg-white/[0.04]"}`}>
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 ${card.golden ? "text-[#e91e3f]" : "text-gray-500"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+                            </div>
+                            <div className="w-full text-center">
+                              <p className="text-[10px] font-black text-white truncate leading-tight">{cardName(card)}</p>
+                              <p className="text-[9px] font-black text-[#e91e3f] tabular-nums mt-0.5">{card.price.toLocaleString()}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
