@@ -966,7 +966,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     {/* 리더: 스카우터 + 입찰 (관전자는 열람만) */}
                     {myLeader && auction.status === "진행중" && (
                       <div className="flex flex-col items-end gap-2.5">
-                        {/* 스카우터 버튼 (호명된 선수 대상, 경매 중에도 사용 가능) */}
+                        {/* 스카우터 — 호명 후 낙찰/유찰 전까지 언제든 사용 가능 (스카우터 타임·입찰 중 모두) */}
+                        {myLeaderIdx !== null && curPlayer.scoutedBy.includes(myLeaderIdx) && (
+                          <span className="px-3 py-1.5 text-[10px] font-black text-gray-500 border border-white/10 bg-white/[0.03] rounded-lg">스카우터 사용함</span>
+                        )}
                         {/* 황금카드는 공개할 모스트가 없으면 스카우터 자체를 제공하지 않음 */}
                         {myLeaderIdx !== null && !curPlayer.scoutedBy.includes(myLeaderIdx) && (!curPlayer.isAllPos || (curPlayer.mostChampions || []).filter(Boolean).length > 0) && (
                           <button onClick={() => setConfirmCfg({ title: "스카우터 사용", message: `${scoutCostOf(curPlayer).toLocaleString()} Point를 사용하여 이 선수의 ${curPlayer.isAllPos ? "모스트 챔피언" : revealFields.includes("champions") ? "주 포지션·모스트 챔피언" : "주/부 포지션"}을(를) 확인합니다.`, confirmLabel: "사용", onConfirm: useScouter })} className={`px-4 py-2 text-[11px] font-black bg-white/5 border rounded-xl transition-all ${curPlayer.isAllPos ? "border-amber-400/40 hover:border-amber-400/70 hover:bg-amber-400/10 text-amber-200" : "border-white/15 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 text-gray-200"}`}>
@@ -975,10 +978,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         )}
 
                         {scoutLeft > 0 ? (
-                          <p className="text-[11px] font-bold text-gray-500">스카우터 타임 종료 후 입찰이 시작됩니다</p>
+                          <p className="text-[11px] font-bold text-gray-500">스카우터 타임 종료 후 입찰이 시작됩니다 · 스카우터는 지금도 사용 가능</p>
                         ) : timeLeft === 0 ? (
-                          <div className="px-5 py-3 rounded-xl border border-white/10 bg-white/[0.03]">
+                          <div className="px-5 py-3 rounded-xl border border-white/10 bg-white/[0.03] text-right">
                             <p className="text-xs font-black text-gray-400">입찰 마감 — 진행자의 처리를 기다리는 중</p>
+                            <p className="text-[10px] font-bold text-gray-600 mt-0.5">낙찰·유찰 전까지 스카우터는 사용할 수 있습니다</p>
                           </div>
                         ) : strategyLeft > 0 ? (
                           <p className="text-[11px] font-bold text-blue-400">전략 타임 중 — 입찰 일시 중지</p>
@@ -1366,8 +1370,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         };
         return (
           <div className="fixed inset-0 z-[118] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); }}>
-            {/* 콘텐츠 높이 — 정보 카드가 고정 높이라 선택 전/후 크기는 변하지 않음 */}
-            <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-4xl max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+            {/* 고정 높이 — 카드가 늘어나도 팝업은 그대로, 카드 영역만 스크롤 */}
+            <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-4xl h-[88dvh] sm:h-[560px] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
               <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
                 <span className="text-sm font-black text-white truncate">{l.name} 팀 인벤토리</span>
                 <span className="text-[10px] font-black text-[#e91e3f] tabular-nums">{l.inventory?.length || 0}장</span>
@@ -1377,11 +1381,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 </button>
               </div>
 
-              {/* 가로 2단: 좌 선택 선수 정보 + 포지션 지정 / 우 보유 선수 목록 */}
-              <div className="p-5 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-start">
+              {/* 가로 2단 — 팝업 크기는 고정, 각 영역 내부만 스크롤 */}
+              <div className="p-5 flex-1 min-h-0 overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-stretch">
 
                 {/* ══ 좌측 ══ */}
-                <div className="order-2 lg:order-1 space-y-4">
+                <div className="order-2 lg:order-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden space-y-4">
                   {/* ── 선택한 선수 정보 카드 ── */}
                   {(() => {
                     const sel = selectedCard;
@@ -1581,8 +1585,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 </div>
 
                 {/* ══ 우측: 보유 선수 목록 ══ */}
-                <div className="order-1 lg:order-2 lg:pl-5 lg:border-l lg:border-white/[0.07]">
-                  <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
+                <div className="order-1 lg:order-2 lg:pl-5 lg:border-l lg:border-white/[0.07] min-h-0 flex flex-col">
+                  <p className="shrink-0 text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
                     보유 선수 <span className="text-[#e91e3f]">{l.inventory?.length || 0}</span>
                     {assignedCards.length > 0 && <span className="text-gray-600"> / 배정 {assignedCards.length}</span>}
                     {!mine && <span className="text-gray-600 font-bold normal-case tracking-normal"> — 선택해 정보 확인</span>}
@@ -1590,7 +1594,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {(l.inventory?.length || 0) === 0 && assignedCards.length === 0 ? (
                     <p className="text-center text-xs text-gray-600 py-8 border border-dashed border-white/10 rounded-xl">보유 중인 선수가 없습니다.</p>
                   ) : (
-                    <div className="lg:max-h-[46vh] lg:overflow-y-auto [&::-webkit-scrollbar]:hidden p-1 space-y-3">
+                    <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full p-1 space-y-3">
                       {/* 미배정 카드 */}
                       <div className="grid grid-cols-3 lg:grid-cols-2 gap-2.5 content-start">
                         {(l.inventory || []).map((card: any, ci: number) => {
