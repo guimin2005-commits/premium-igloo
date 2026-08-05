@@ -1146,17 +1146,23 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {(() => {
                     const sel = dragCard !== null ? l.inventory?.[dragCard] : null;
                     if (!sel) {
+                      // 선택 전에도 동일한 높이를 유지해 레이아웃이 밀리지 않도록
                       return (
-                        <div className="rounded-2xl border border-dashed border-white/12 bg-black/20 px-5 py-8 text-center">
-                          <p className="text-xs text-gray-500 font-bold">오른쪽에서 선수를 선택하세요</p>
-                          <p className="text-[10px] text-gray-700 mt-1">선택한 선수의 정보가 여기에 표시됩니다</p>
+                        <div className="rounded-2xl border border-dashed border-white/12 bg-black/20 p-5 flex gap-4 min-h-[186px]">
+                          <div className="shrink-0 w-[86px] aspect-[3/4.3] rounded-xl border border-dashed border-white/12 bg-white/[0.02] flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-white/10"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+                          </div>
+                          <div className="flex-1 flex flex-col justify-center">
+                            <p className="text-xs text-gray-500 font-bold">오른쪽에서 선수를 선택하세요</p>
+                            <p className="text-[10px] text-gray-700 mt-1">선택한 선수의 정보가 여기에 표시됩니다</p>
+                          </div>
                         </div>
                       );
                     }
                     const sp = auction.players[sel.playerIdx];
                     const scouted = sp && canSeePos(sp);
                     return (
-                      <div className={`relative rounded-2xl border overflow-hidden ${sel.golden ? "border-[#e91e3f]/45 bg-gradient-to-br from-[#e91e3f]/[0.12] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-br from-white/[0.06] to-[#0d0d0d]"}`}>
+                      <div className={`relative rounded-2xl border overflow-hidden min-h-[186px] ${sel.golden ? "border-[#e91e3f]/45 bg-gradient-to-br from-[#e91e3f]/[0.12] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-br from-white/[0.06] to-[#0d0d0d]"}`}>
                         <div className="p-5 flex gap-4">
                           {/* 세로 카드 미니어처 */}
                           <div className={`shrink-0 w-[86px] aspect-[3/4.3] rounded-xl border flex flex-col items-center justify-between px-2 py-2.5 ${sel.golden ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.10]" : "border-white/15 bg-white/[0.04]"}`}>
@@ -1210,7 +1216,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     포지션 지정
                     {swapMode && <span className="text-[#e91e3f] font-black normal-case tracking-normal"> — 교환할 선수 2명을 선택하세요 ({swapPick.length}/2)</span>}
                   </p>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {roleList.map((slot) => {
                       const entries = l.roster.map((r: any, ri: number) => ({ r, ri })).filter(({ r }: any) => r.slot === slot);
                       const limit = slotLimitOf(slot);
@@ -1222,41 +1228,51 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           onDragOver={(e) => { if (dropOk) e.preventDefault(); }}
                           onDrop={(e) => { e.preventDefault(); if (dropOk && dragCard !== null) requestPlace(dragCard, slot); }}
                           onClick={() => { if (dropOk && dragCard !== null) requestPlace(dragCard, slot); }}
-                          className={`rounded-xl border p-3 transition-all ${dropOk ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.06] cursor-pointer" : full ? "border-white/10 bg-white/[0.02]" : "border-dashed border-white/15 bg-black/20"}`}
+                          className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 min-h-[34px] transition-all ${dropOk ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.06] cursor-pointer" : full ? "border-white/10 bg-white/[0.02]" : "border-dashed border-white/15 bg-black/20"}`}
                         >
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <span className={`text-[10px] font-black ${roleColor(slot).text}`}>{slot}</span>
-                            <span className="text-[9px] font-bold text-gray-600 tabular-nums">{entries.length}/{limit}</span>
-                            {dropOk && <span className="ml-auto text-[9px] font-black text-[#e91e3f] animate-pulse">여기에 배정</span>}
+                          <span className={`shrink-0 text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(slot).badge}`}>{slot}</span>
+                          <span className="shrink-0 text-[9px] font-bold text-gray-600 tabular-nums">{entries.length}/{limit}</span>
+                          <div className="flex-1 min-w-0 flex flex-wrap gap-1">
+                            {entries.length === 0 ? (
+                              <span className="text-[10px] text-gray-700">비어 있음</span>
+                            ) : entries.map(({ r, ri }: any) => {
+                              const picked = swapPick.includes(ri);
+                              const selectable = swapMode && canManage;
+                              const canUnassign = role === "host" && auction.status === "진행중" && !swapMode && r.playerIdx !== -1;
+                              return (
+                                <span
+                                  key={ri}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!selectable) return;
+                                    setSwapPick((prev) => prev.includes(ri) ? prev.filter((x) => x !== ri) : prev.length >= 2 ? prev : [...prev, ri]);
+                                    sfxSelect();
+                                  }}
+                                  className={`inline-flex items-center gap-1 text-[10px] font-bold rounded-full pl-2 ${canUnassign ? "pr-1" : "pr-2"} py-0.5 border transition-all ${picked ? "border-[#e91e3f] bg-[#e91e3f]/20 text-white ring-1 ring-[#e91e3f]" : selectable ? "border-white/20 bg-white/[0.06] text-gray-200 hover:border-[#e91e3f]/50 cursor-pointer" : "border-white/10 bg-white/[0.05] text-gray-200"}`}
+                                >
+                                  <span className="truncate max-w-[110px]">{rosterName(l, r)}</span>
+                                  {r.playerIdx === -1 && <span className="text-[8px] text-gray-500 font-black">리더</span>}
+                                  {r.golden && <span className="text-[8px] text-[#e91e3f] font-black">ALL</span>}
+                                  {/* 진행자 전용: 오배정 정정 (인벤토리로 되돌림) */}
+                                  {canUnassign && (
+                                    <button
+                                      type="button"
+                                      title="진행자: 배정 해제 (인벤토리로)"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const nm = rosterName(l, r);
+                                        const d = await act({ action: "host:unassign", leaderIdx: li, rosterIdx: ri });
+                                        if (d?.success) { sfxSelect(); showToast(`${nm} 배정을 해제했습니다 (인벤토리로)`); }
+                                        else showToast(d?.message || "해제에 실패했습니다");
+                                      }}
+                                      className="w-4 h-4 rounded-full bg-white/10 hover:bg-red-500/80 text-gray-400 hover:text-white text-[9px] font-black leading-none transition-colors"
+                                    >×</button>
+                                  )}
+                                </span>
+                              );
+                            })}
                           </div>
-                          {entries.length === 0 ? (
-                            <p className="text-[10px] text-gray-700">비어 있음</p>
-                          ) : (
-                            <div className="flex flex-wrap gap-1.5">
-                              {entries.map(({ r, ri }: any) => {
-                                const picked = swapPick.includes(ri);
-                                const selectable = swapMode && canManage;
-                                return (
-                                  <button
-                                    key={ri}
-                                    type="button"
-                                    disabled={!selectable}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (!selectable) return;
-                                      setSwapPick((prev) => prev.includes(ri) ? prev.filter((x) => x !== ri) : prev.length >= 2 ? prev : [...prev, ri]);
-                                      sfxSelect();
-                                    }}
-                                    className={`inline-flex items-center gap-1.5 text-[10px] font-bold rounded-full px-2.5 py-1 border transition-all ${picked ? "border-[#e91e3f] bg-[#e91e3f]/20 text-white ring-1 ring-[#e91e3f]" : selectable ? "border-white/20 bg-white/[0.06] text-gray-200 hover:border-[#e91e3f]/50 cursor-pointer" : "border-white/10 bg-white/[0.05] text-gray-200 cursor-default"}`}
-                                  >
-                                    {rosterName(l, r)}
-                                    {r.playerIdx === -1 && <span className="text-[8px] text-gray-500 font-black">리더</span>}
-                                    {r.golden && <span className="text-[8px] text-[#e91e3f] font-black">ALL</span>}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
+                          {dropOk && <span className="shrink-0 text-[9px] font-black text-[#e91e3f] animate-pulse">배정</span>}
                         </div>
                       );
                     })}
@@ -1313,7 +1329,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {(l.inventory?.length || 0) === 0 ? (
                     <p className="text-center text-xs text-gray-600 py-8 border border-dashed border-white/10 rounded-xl">보유 중인 선수가 없습니다.</p>
                   ) : (
-                    <div className="grid grid-cols-3 lg:grid-cols-2 gap-2.5 lg:max-h-[52vh] lg:overflow-y-auto [&::-webkit-scrollbar]:hidden lg:pr-0.5">
+                    <div className="grid grid-cols-3 lg:grid-cols-2 gap-2.5 lg:max-h-[52vh] lg:overflow-y-auto [&::-webkit-scrollbar]:hidden p-1">
                       {l.inventory.map((card: any, ci: number) => {
                         const picked = dragCard === ci;
                         return (
@@ -1323,7 +1339,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             onDragStart={() => { setDragCard(ci); sfxSelect(); }}
                             onDragEnd={() => setDragCard(null)}
                             onClick={() => { if (!canManage || swapMode) return; const next = picked ? null : ci; setDragCard(next); if (next !== null) sfxSelect(); }}
-                            className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-all ${card.golden ? "border-[#e91e3f]/45 bg-gradient-to-b from-[#e91e3f]/[0.14] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35 hover:-translate-y-0.5" : ""} ${picked ? "ring-2 ring-[#e91e3f] border-[#e91e3f] -translate-y-1 shadow-[0_10px_24px_rgba(233,30,63,0.25)]" : ""}`}
+                            className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-colors ${card.golden ? "border-[#e91e3f]/45 bg-gradient-to-b from-[#e91e3f]/[0.14] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35" : ""} ${picked ? "border-[#e91e3f] ring-2 ring-[#e91e3f] shadow-[0_0_20px_rgba(233,30,63,0.35)] bg-[#e91e3f]/[0.10]" : ""}`}
                           >
                             <span className={`text-[7px] font-black tracking-[0.2em] uppercase ${card.golden ? "text-[#e91e3f]" : "text-gray-600"}`}>{card.golden ? "Golden" : "Player"}</span>
                             <div className={`w-11 h-11 rounded-full flex items-center justify-center border ${card.golden ? "border-[#e91e3f]/40 bg-[#e91e3f]/10" : "border-white/10 bg-white/[0.04]"}`}>

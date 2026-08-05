@@ -319,8 +319,23 @@ export async function POST(request, { params }) {
         return NextResponse.json({ success: true });
       }
 
-      // ⚠️ 인벤토리 → 슬롯 배정은 되돌릴 수 없음 (회수 액션 없음)
-      //    배정 후 조정은 포지션 체인지(host:posSwap, 팀당 1회)로만 가능
+      // ⚠️ 리더는 배정을 되돌릴 수 없음 (포지션 체인지 host:posSwap 으로만 조정)
+      //    단, 진행자는 오배정 정정을 위해 슬롯 → 인벤토리 회수 가능
+      case "host:unassign": {
+        const { leaderIdx, rosterIdx } = body;
+        const leader = auction.leaders[leaderIdx];
+        if (!leader) return NextResponse.json({ success: false }, { status: 400 });
+        const entry = leader.roster?.[rosterIdx];
+        if (!entry) return NextResponse.json({ success: false, message: "대상을 찾을 수 없습니다." }, { status: 400 });
+        if (entry.playerIdx === -1) return NextResponse.json({ success: false, message: "리더 본인 슬롯은 해제할 수 없습니다." }, { status: 400 });
+        leader.inventory.push({ playerIdx: entry.playerIdx, price: entry.price, golden: entry.golden });
+        leader.roster.splice(rosterIdx, 1);
+        const un = auction.players[entry.playerIdx];
+        addLog(auction, `[진행자] ${un?.isAllPos && !un?.revealed ? "올 포지션 선수" : un?.alias} 포지션 해제 → ${leader.name} 인벤토리`);
+        await auction.save();
+        sysChat(id, `진행자가 ${leader.name} 팀의 [${entry.slot}] 배정을 해제했습니다.`);
+        return NextResponse.json({ success: true });
+      }
 
       // 개최자: 팀원 배정 시간 부여 (인벤토리 모드)
       case "host:assignTime": {
