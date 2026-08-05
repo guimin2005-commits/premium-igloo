@@ -398,7 +398,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   roleRef.current = myLeaderIdx; // 폴링에서 참조 (스카우터 정보 수신용)
   const myLeader = myLeaderIdx !== null ? auction.leaders[myLeaderIdx] : null;
   const timeLeft = cur.endsAt ? Math.max(0, Math.ceil((new Date(cur.endsAt).getTime() - (now + clockSkew.current)) / 1000)) : null;
-  const scoutLeft = cur.scoutUntil ? Math.max(0, Math.ceil((new Date(cur.scoutUntil).getTime() - (now + clockSkew.current)) / 1000)) : 0;
+  // 스카우터 타임 — 황금카드 연출 중에는 아직 시작 전이므로 설정값 그대로 표시
+  const scoutLeftRaw = cur.scoutUntil ? Math.max(0, Math.ceil((new Date(cur.scoutUntil).getTime() - (now + clockSkew.current)) / 1000)) : 0;
+  const scoutLeft = goldenFx ? Math.min(scoutLeftRaw, S.scoutSeconds || 7) : scoutLeftRaw;
   const strategyLeft = auction.strategyUntil ? Math.max(0, Math.ceil((new Date(auction.strategyUntil).getTime() - (now + clockSkew.current)) / 1000)) : 0;
   const assignLeft = auction.assignUntil ? Math.max(0, Math.ceil((new Date(auction.assignUntil).getTime() - (now + clockSkew.current)) / 1000)) : 0;
 

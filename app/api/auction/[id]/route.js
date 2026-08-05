@@ -297,13 +297,15 @@ export async function POST(request, { params }) {
         const base = player.isAllPos ? S.goldenBasePrice : S.basePrice;
         auction.players.forEach((p) => { if (p.status === "경매중") p.status = "대기"; });
         player.status = "경매중";
-        // 스카우터 타임: 올포지션 선수는 스카우터 불가 → 즉시 경매
-        const scoutUntil = player.isAllPos ? null : new Date(Date.now() + (S.scoutSeconds || 7) * 1000);
+        // 스카우터 타임 — 황금카드는 소환 연출(약 4.2초)이 끝난 뒤부터 시간이 흐르도록 보정
+        const GOLDEN_FX_MS = 4200;
+        const scoutSec = S.scoutSeconds || 7;
+        const scoutUntil = new Date(Date.now() + (player.isAllPos ? GOLDEN_FX_MS : 0) + scoutSec * 1000);
         auction.current = { playerIdx, price: base - 1, leaderIdx: null, endsAt: null, scoutUntil, isAllin: false };
         auction.reveal = { playerIdx: null };
         addLog(auction, `${player.isAllPos ? "올 포지션 선수" : player.alias} 호명 (시작가 ${base.toLocaleString()} Point)`);
         await auction.save();
-        sysChat(id, `${player.isAllPos ? "[올 포지션 선수]" : player.alias} 경매가 시작되었습니다. 시작가 ${base.toLocaleString()} Point${scoutUntil ? ` · 스카우터 타임 ${S.scoutSeconds || 7}초` : ""}`);
+        sysChat(id, `${player.isAllPos ? "[올 포지션 선수]" : player.alias} 경매가 시작되었습니다. 시작가 ${base.toLocaleString()} Point · 스카우터 타임 ${scoutSec}초`);
         return NextResponse.json({ success: true });
       }
 
