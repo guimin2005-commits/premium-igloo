@@ -502,8 +502,85 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     const overflowing = hasOverflow && po.leaderIdx === leaderIdx && (role === "host" || myLeaderIdx === leaderIdx);
     const isGoldenAssign = assigning && pendingPlayer?.isAllPos;
 
+    // 🎮 게임 로드아웃 스타일 — 포지션별 슬롯 타일
+    if (big) {
+      return (
+        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))" }}>
+          {roleList.map((slot) => {
+            const limit = slotLimitOf(slot);
+            const entries = leader.roster.map((r: any, ri: number) => ({ r, ri })).filter(({ r }: any) => r.slot === slot);
+            const emptyCount = Math.max(0, limit - entries.length);
+            const canAssignHere = assigning && (entries.length < limit || isGoldenAssign);
+            const isOverflowSlot = overflowing && po.slot === slot;
+            const col = roleColor(slot);
+            return (
+              <div key={slot} className={`rounded-xl border overflow-hidden transition-colors ${isOverflowSlot ? "border-amber-400/50 bg-amber-400/[0.05]" : "border-white/8 bg-black/25"}`}>
+                {/* 슬롯 헤더 */}
+                <div className={`flex items-center justify-between px-2 py-1.5 border-b ${isOverflowSlot ? "border-amber-400/25" : "border-white/[0.07]"} bg-white/[0.02]`}>
+                  <span className={`text-[9px] font-black tracking-wider ${col.text}`}>{slot}</span>
+                  <span className="text-[9px] font-black text-gray-600 tabular-nums">{entries.length}/{limit}</span>
+                </div>
+                {/* 슬롯 타일 */}
+                <div className="p-1.5 space-y-1.5">
+                  {entries.map(({ r, ri }: any) => {
+                    const movable = isOverflowSlot && !r.golden && r.playerIdx !== -1;
+                    const selected = moveFrom === ri;
+                    return (
+                      <button
+                        key={ri}
+                        type="button"
+                        disabled={!movable}
+                        onClick={() => movable && setMoveFrom(selected ? null : ri)}
+                        className={`w-full rounded-lg border px-2 py-2 flex flex-col items-center gap-1 transition-all ${selected ? "border-[#e91e3f] bg-[#e91e3f]/15 ring-1 ring-[#e91e3f]" : movable ? "border-amber-400/60 bg-amber-400/[0.10] animate-pulse cursor-pointer" : r.golden ? "border-amber-400/40 bg-gradient-to-b from-amber-400/[0.12] to-transparent" : "border-white/10 bg-gradient-to-b from-white/[0.06] to-transparent cursor-default"}`}
+                      >
+                        <span className={`w-7 h-7 rounded-full flex items-center justify-center border ${r.golden ? "border-amber-300/50 bg-amber-400/10 text-amber-300" : "border-white/12 bg-white/[0.04] text-gray-500"}`}>
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+                        </span>
+                        <span className="w-full text-[10px] font-black text-gray-100 truncate text-center leading-tight">{rosterName(leader, r)}</span>
+                        <span className="text-[8px] font-bold text-gray-600 tabular-nums">
+                          {r.playerIdx === -1 ? "리더" : r.golden ? "ALL" : `${r.price.toLocaleString()} Pt`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {Array.from({ length: emptyCount }).map((_, ei) => (
+                    <button
+                      key={`e${ei}`}
+                      type="button"
+                      disabled={!canAssignHere}
+                      onClick={() => canAssignHere && act({ action: "assignSlot", slot, byLeaderIdx: myLeaderIdx })}
+                      className={`w-full h-[68px] rounded-lg border border-dashed flex flex-col items-center justify-center gap-1 transition-all ${canAssignHere ? "border-[#e91e3f] bg-[#e91e3f]/[0.08] animate-pulse cursor-pointer hover:bg-[#e91e3f]/20" : "border-white/10"}`}
+                    >
+                      <span className={`text-lg leading-none ${canAssignHere ? "text-[#e91e3f]" : "text-white/12"}`}>+</span>
+                      <span className={`text-[8px] font-black tracking-widest ${canAssignHere ? "text-[#e91e3f]" : "text-white/15"}`}>{canAssignHere ? "배정" : "EMPTY"}</span>
+                    </button>
+                  ))}
+                  {/* 황금카드: 꽉 찬 슬롯에도 배정 */}
+                  {isGoldenAssign && emptyCount === 0 && (
+                    <button type="button" onClick={() => act({ action: "assignSlot", slot, byLeaderIdx: myLeaderIdx })} className="w-full rounded-lg border border-dashed border-amber-400/60 bg-amber-400/[0.08] py-1.5 hover:bg-amber-400/20 transition-all">
+                      <span className="text-[8px] font-black tracking-widest text-amber-300">초과 배정</span>
+                    </button>
+                  )}
+                  {/* 오버플로우 이동 대상 */}
+                  {overflowing && moveFrom !== null && slot !== po.slot && (!p1Role || slot !== p1Role) && entries.length < limit && (
+                    <button
+                      type="button"
+                      onClick={async () => { const d = await act({ action: "moveSlot", rosterIdx: moveFrom, toSlot: slot, byLeaderIdx: myLeaderIdx }); if (d.success) { sfxAssign(); setMoveFrom(null); } }}
+                      className="w-full rounded-lg border border-emerald-500/60 bg-emerald-500/[0.12] py-1.5 hover:bg-emerald-500/25 animate-pulse transition-all"
+                    >
+                      <span className="text-[8px] font-black tracking-widest text-emerald-300">이곳으로</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
     return (
-      <div className={big ? "grid grid-cols-1 sm:grid-cols-2 gap-1.5" : "space-y-1.5"}>
+      <div className="space-y-1.5">
         {roleList.map((slot) => {
           const limit = slotLimitOf(slot);
           const entries = leader.roster.map((r: any, ri: number) => ({ r, ri })).filter(({ r }: any) => r.slot === slot);
@@ -512,14 +589,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           const isOverflowSlot = overflowing && po.slot === slot;
 
           return (
-            <div key={slot} className={big ? `flex items-center gap-2 rounded-lg px-2.5 py-2 min-h-[38px] border ${isOverflowSlot ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.06]" : "border-transparent bg-white/[0.035]"}` : "flex flex-col gap-1"}>
-              {big && (
-                <>
-                  <span className={`shrink-0 text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(slot).badge}`}>{slot}</span>
-                  <span className="shrink-0 text-[9px] font-bold text-gray-600 tabular-nums">{entries.length}/{limit}</span>
-                </>
-              )}
-              <div className={big ? "flex-1 min-w-0 flex flex-wrap items-center gap-1" : "space-y-1"}>
+            <div key={slot} className="flex flex-col gap-1">
+              <div className="space-y-1">
                 {entries.map(({ r, ri }: any) => {
                   // 오버플로우 정리: 초과 슬롯의 비황금 선수 클릭 → 이동 대상 선택
                   const movable = isOverflowSlot && !r.golden;
@@ -530,20 +601,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       type="button"
                       disabled={!movable}
                       onClick={() => movable && setMoveFrom(selected ? null : ri)}
-                      className={big
-                        ? `inline-flex items-center gap-1 text-[10px] font-bold rounded-full px-2.5 py-1 border transition-all ${selected ? "border-[#e91e3f] bg-[#e91e3f]/20 text-white ring-1 ring-[#e91e3f]" : movable ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.08] text-gray-100 animate-pulse cursor-pointer" : r.golden ? "border-amber-400/40 bg-amber-400/[0.08] text-amber-200" : "border-white/10 bg-white/[0.05] text-gray-200 cursor-default"}`
-                        : `w-full flex items-center gap-2 rounded-lg px-2.5 border text-left transition-all py-1.5 text-[11px] ${selected ? "border-[#e91e3f] bg-[#e91e3f]/15" : movable ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06] animate-pulse cursor-pointer" : "border-white/5 bg-black/25 cursor-default"}`}
+                      className={`w-full flex items-center gap-2 rounded-lg px-2.5 border text-left transition-all py-1.5 text-[11px] ${selected ? "border-[#e91e3f] bg-[#e91e3f]/15" : movable ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06] animate-pulse cursor-pointer" : "border-white/5 bg-black/25 cursor-default"}`}
                     >
-                      {/* 슬롯 역할 표기 — 컴팩트 모드에서도 항상 표시 */}
-                      {!big && (
-                        <span className={`shrink-0 text-[9px] font-black rounded px-1 py-0.5 border ${roleColor(slot).badge}`}>{roleAbbr(slot)}</span>
-                      )}
-                      <span className={big ? "truncate max-w-[120px]" : "text-gray-200 font-bold truncate"}>
-                        {rosterName(leader, r)}
-                      </span>
+                      <span className={`shrink-0 text-[9px] font-black rounded px-1 py-0.5 border ${roleColor(slot).badge}`}>{roleAbbr(slot)}</span>
+                      <span className="text-gray-200 font-bold truncate">{rosterName(leader, r)}</span>
                       {r.playerIdx === -1 && <span className="text-[8px] text-gray-500 font-black shrink-0">리더</span>}
-                      {r.golden && <span className={`text-[8px] font-black shrink-0 ${big ? "text-amber-300" : "text-[#e91e3f]"}`}>ALL</span>}
-                      {!big && <span className="ml-auto text-gray-600 tabular-nums text-[10px] shrink-0">{r.playerIdx === -1 ? "" : `${r.price.toLocaleString()} Pt`}</span>}
+                      {r.golden && <span className="text-[8px] font-black shrink-0 text-amber-300">ALL</span>}
+                      <span className="ml-auto text-gray-600 tabular-nums text-[10px] shrink-0">{r.playerIdx === -1 ? "" : `${r.price.toLocaleString()} Pt`}</span>
                     </button>
                   );
                 })}
@@ -553,9 +617,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     type="button"
                     disabled={!canAssignHere}
                     onClick={() => canAssignHere && act({ action: "assignSlot", slot, byLeaderIdx: myLeaderIdx })}
-                    className={big
-                      ? `rounded-full border border-dashed px-2.5 py-1 transition-all ${canAssignHere ? "border-[#e91e3f] bg-[#e91e3f]/[0.08] animate-pulse cursor-pointer hover:bg-[#e91e3f]/20" : "border-white/10"}`
-                      : `w-full rounded-lg border border-dashed flex items-center justify-center transition-all h-[26px] ${canAssignHere ? "border-[#e91e3f] bg-[#e91e3f]/[0.08] animate-pulse cursor-pointer hover:bg-[#e91e3f]/20" : "border-white/5"}`}
+                    className={`w-full rounded-lg border border-dashed flex items-center justify-center transition-all h-[26px] ${canAssignHere ? "border-[#e91e3f] bg-[#e91e3f]/[0.08] animate-pulse cursor-pointer hover:bg-[#e91e3f]/20" : "border-white/5"}`}
                   >
                     <span className={`text-[8px] font-black tracking-widest ${canAssignHere ? "text-[#e91e3f]" : "text-white/15"}`}>{canAssignHere ? "여기에 배정" : "비어 있음"}</span>
                   </button>
@@ -565,9 +627,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   <button
                     type="button"
                     onClick={() => act({ action: "assignSlot", slot, byLeaderIdx: myLeaderIdx })}
-                    className={big
-                      ? "rounded-full border border-dashed border-amber-400/60 bg-amber-400/[0.08] px-2.5 py-1 transition-all hover:bg-amber-400/20"
-                      : "w-full rounded-lg border border-dashed border-amber-400/60 bg-amber-400/[0.06] flex items-center justify-center transition-all hover:bg-amber-400/15 h-[26px]"}
+                    className="w-full rounded-lg border border-dashed border-amber-400/60 bg-amber-400/[0.06] flex items-center justify-center transition-all hover:bg-amber-400/15 h-[26px]"
                   >
                     <span className="text-[8px] font-black tracking-widest text-amber-300">초과 배정</span>
                   </button>
@@ -577,9 +637,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   <button
                     type="button"
                     onClick={async () => { const d = await act({ action: "moveSlot", rosterIdx: moveFrom, toSlot: slot, byLeaderIdx: myLeaderIdx }); if (d.success) setMoveFrom(null); }}
-                    className={big
-                      ? "rounded-full border border-emerald-500/60 bg-emerald-500/[0.10] px-2.5 py-1 transition-all hover:bg-emerald-500/20 animate-pulse"
-                      : "w-full rounded-lg border border-emerald-500/60 bg-emerald-500/[0.08] flex items-center justify-center transition-all hover:bg-emerald-500/20 h-[26px]"}
+                    className="w-full rounded-lg border border-emerald-500/60 bg-emerald-500/[0.08] flex items-center justify-center transition-all hover:bg-emerald-500/20 h-[26px]"
                   >
                     <span className="text-[8px] font-black tracking-widest text-emerald-400">이곳으로 이동</span>
                   </button>
@@ -996,19 +1054,40 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {/* 리더 전용: 내 팀 슬롯 보드 (크게) */}
           {myLeader && (
             <div className={`rounded-2xl border p-5 transition-colors ${isMyPending || isMyOverflow ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.03]" : "border-white/5 bg-[#111111]/95"}`}>
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">My Team Slots</p>
-                <div className="flex items-center gap-2.5">
-                  {/* 인벤토리 — 카드 보관/배정 (인벤토리 모드) */}
-                  {invMode && (
-                    <button onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); sfxSelect(); }} className={`inline-flex items-center gap-1.5 text-[10px] font-black px-3 py-1.5 rounded-full border transition-all ${(myLeader.inventory?.length || 0) > 0 ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/35 hover:bg-[#e91e3f]/25 animate-pulse" : "bg-white/5 text-gray-400 border-white/10 hover:text-white hover:border-white/25"}`}>
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
-                      인벤토리 {myLeader.inventory?.length || 0}
-                    </button>
-                  )}
-                  {myLeader.positionChanged && <span className="text-[9px] font-bold text-gray-600">포지션 체인지 사용됨</span>}
-                  <p className="text-sm font-black text-[#e91e3f] tabular-nums">{myLeader.points.toLocaleString()} <span className="text-[10px] text-gray-500">Point</span></p>
+              {/* 🎮 팀 HUD — 포인트(주요 자원) · 로스터 진행도 · 인벤토리 */}
+              <div className="flex flex-wrap items-stretch gap-2.5 mb-4">
+                {/* POINT — 가장 크게 */}
+                <div className="flex-1 min-w-[150px] rounded-xl border border-[#e91e3f]/25 bg-gradient-to-br from-[#e91e3f]/[0.10] to-transparent px-4 py-2.5">
+                  <p className="text-[9px] font-black tracking-[0.25em] text-[#e91e3f]/80 uppercase">Point</p>
+                  <p className="text-2xl font-black text-white tabular-nums leading-tight">{myLeader.points.toLocaleString()}</p>
                 </div>
+                {/* 로스터 진행도 */}
+                <div className="flex-1 min-w-[150px] rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 flex flex-col justify-center">
+                  <div className="flex items-baseline justify-between mb-1.5">
+                    <p className="text-[9px] font-black tracking-[0.25em] text-gray-500 uppercase">Roster</p>
+                    <p className="text-xs font-black text-gray-200 tabular-nums">{myLeader.roster.length}<span className="text-gray-600">/{totalSlots}</span></p>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] transition-all duration-500" style={{ width: `${Math.min(100, (myLeader.roster.length / Math.max(1, totalSlots)) * 100)}%` }}></div>
+                  </div>
+                </div>
+                {/* 인벤토리 — 큼직한 액션 타일 */}
+                {invMode && (
+                  <button
+                    onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
+                    className={`shrink-0 min-w-[118px] rounded-xl border px-4 py-2.5 text-left transition-all ${(myLeader.inventory?.length || 0) > 0 ? "border-[#e91e3f]/45 bg-[#e91e3f]/[0.12] hover:bg-[#e91e3f]/20 animate-pulse" : "border-white/10 bg-white/[0.03] hover:border-white/25"}`}
+                  >
+                    <p className={`text-[9px] font-black tracking-[0.25em] uppercase ${(myLeader.inventory?.length || 0) > 0 ? "text-[#e91e3f]/90" : "text-gray-500"}`}>Inventory</p>
+                    <span className="flex items-baseline gap-1.5">
+                      <span className={`text-2xl font-black tabular-nums leading-tight ${(myLeader.inventory?.length || 0) > 0 ? "text-[#e91e3f]" : "text-gray-500"}`}>{myLeader.inventory?.length || 0}</span>
+                      <span className="text-[10px] font-bold text-gray-500">보유</span>
+                    </span>
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">My Team Slots</p>
+                {myLeader.positionChanged && <span className="text-[9px] font-bold text-gray-600">· 포지션 체인지 사용됨</span>}
               </div>
               <SlotBoard leader={myLeader} leaderIdx={myLeaderIdx!} big />
             </div>
