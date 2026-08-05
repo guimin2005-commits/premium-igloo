@@ -929,13 +929,30 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         {curPlayer.isAllPos ? <span className="lux-shimmer">올 포지션 선수</span> : curPlayer.alias}
                       </h2>
                       {curPlayer.isAllPos ? (
-                        <p className="text-xs text-gray-400">티어 비공개 · 스카우터는 모스트만 공개 · 슬롯 자유 배정</p>
+                        /* 황금카드도 일반 선수와 동일한 칩 형식으로 통일 (골드 톤) */
+                        <div className="flex flex-wrap gap-2">
+                          <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-400 px-2.5 py-1 rounded-full">티어 비공개</span>
+                          <span className="text-[11px] font-bold bg-amber-400/10 border border-amber-400/30 text-amber-300 px-2.5 py-1 rounded-full">슬롯 자유 배정</span>
+                          {canSeePos(curPlayer) ? (
+                            <span className="text-[11px] font-bold bg-amber-400/10 border border-amber-400/30 text-amber-300 px-2.5 py-1 rounded-full">{revealInfo(curPlayer)}</span>
+                          ) : curPlayer.hasMost ? (
+                            <span className="text-[11px] font-bold bg-amber-400/[0.06] border border-amber-400/20 text-amber-300/70 px-2.5 py-1 rounded-full">
+                              스카우터 {(S.goldenScoutCost ?? 4000).toLocaleString()}pt · 모스트 공개
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-500 px-2.5 py-1 rounded-full">공개 정보 없음</span>
+                          )}
+                        </div>
                       ) : (
                         <div className="flex flex-wrap gap-2">
                           <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-300 px-2.5 py-1 rounded-full">최고 {curPlayer.peakTier || "?"}</span>
                           <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-300 px-2.5 py-1 rounded-full">현재 {curPlayer.currentTier || "?"}</span>
-                          {canSeePos(curPlayer) && (
+                          {canSeePos(curPlayer) ? (
                             <span className="text-[11px] font-bold bg-[#e91e3f]/10 border border-[#e91e3f]/25 text-[#e91e3f] px-2.5 py-1 rounded-full">{revealInfo(curPlayer)}</span>
+                          ) : (
+                            <span className="text-[11px] font-bold bg-[#e91e3f]/[0.06] border border-[#e91e3f]/20 text-[#e91e3f]/70 px-2.5 py-1 rounded-full">
+                              스카우터 {S.scoutCost.toLocaleString()}pt · 포지션 공개
+                            </span>
                           )}
                         </div>
                       )}
