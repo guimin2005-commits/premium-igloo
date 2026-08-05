@@ -39,6 +39,8 @@ export async function GET(request, { params }) {
     // 관리자라도 리더 역할로 관전 중이면(as 지정) 해당 리더 시야로 제한 — 테스트 시 정보 유출 방지
     const isHostViewer = isAdminName(session?.user?.name) && (asParam === null || asParam === "");
     const data = auction.toObject();
+    // 모든 응답에 hasMost(공개할 모스트 보유 여부) 포함 — 진행자·종료 시에도 동일 기준
+    data.players = data.players.map((p) => ({ ...p, hasMost: Array.isArray(p.mostChampions) && p.mostChampions.filter(Boolean).length > 0 }));
     if (!isHostViewer && data.status !== "종료") {
       // 1순위: 디스코드 ID로 본인 확인. 2순위: ID 미등록 리더에 한해 클라이언트가 알린 역할(as) 허용
       let viewerIdx = data.leaders.findIndex((l) => l.discordId && l.discordId === viewerId);
@@ -50,9 +52,11 @@ export async function GET(request, { params }) {
         if (canUseAs) viewerIdx = asIdx;
       }
       data.players = data.players.map((p) => {
+        // 값은 가리되, '공개할 정보가 있는지'만 알려 스카우터 버튼 노출 판단이 가능하도록
+        const hasMost = Array.isArray(p.mostChampions) && p.mostChampions.filter(Boolean).length > 0;
         const scouted = viewerIdx >= 0 && Array.isArray(p.scoutedBy) && p.scoutedBy.includes(viewerIdx);
-        if (scouted) return p;
-        return { ...p, mainPos: "", subPos: "", mostChampions: [] };
+        if (scouted) return { ...p, hasMost };
+        return { ...p, hasMost, mainPos: "", subPos: "", mostChampions: [] };
       });
     }
 

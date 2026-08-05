@@ -971,18 +971,17 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           <span className="px-3 py-1.5 text-[10px] font-black text-gray-500 border border-white/10 bg-white/[0.03] rounded-lg">스카우터 사용함</span>
                         )}
                         {/* 황금카드는 공개할 모스트가 없으면 스카우터 자체를 제공하지 않음 */}
-                        {myLeaderIdx !== null && !curPlayer.scoutedBy.includes(myLeaderIdx) && (!curPlayer.isAllPos || (curPlayer.mostChampions || []).filter(Boolean).length > 0) && (
+                        {myLeaderIdx !== null && !curPlayer.scoutedBy.includes(myLeaderIdx) && (!curPlayer.isAllPos || curPlayer.hasMost) && (
                           <button onClick={() => setConfirmCfg({ title: "스카우터 사용", message: `${scoutCostOf(curPlayer).toLocaleString()} Point를 사용하여 이 선수의 ${curPlayer.isAllPos ? "모스트 챔피언" : revealFields.includes("champions") ? "주 포지션·모스트 챔피언" : "주/부 포지션"}을(를) 확인합니다.`, confirmLabel: "사용", onConfirm: useScouter })} className={`px-4 py-2 text-[11px] font-black bg-white/5 border rounded-xl transition-all ${curPlayer.isAllPos ? "border-amber-400/40 hover:border-amber-400/70 hover:bg-amber-400/10 text-amber-200" : "border-white/15 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 text-gray-200"}`}>
                             스카우터 사용 ({scoutCostOf(curPlayer).toLocaleString()} Point)
                           </button>
                         )}
 
                         {scoutLeft > 0 ? (
-                          <p className="text-[11px] font-bold text-gray-500">스카우터 타임 종료 후 입찰이 시작됩니다 · 스카우터는 지금도 사용 가능</p>
+                          <p className="text-[11px] font-bold text-gray-500">스카우터 타임 종료 후 입찰이 시작됩니다</p>
                         ) : timeLeft === 0 ? (
-                          <div className="px-5 py-3 rounded-xl border border-white/10 bg-white/[0.03] text-right">
+                          <div className="px-5 py-3 rounded-xl border border-white/10 bg-white/[0.03]">
                             <p className="text-xs font-black text-gray-400">입찰 마감 — 진행자의 처리를 기다리는 중</p>
-                            <p className="text-[10px] font-bold text-gray-600 mt-0.5">낙찰·유찰 전까지 스카우터는 사용할 수 있습니다</p>
                           </div>
                         ) : strategyLeft > 0 ? (
                           <p className="text-[11px] font-bold text-blue-400">전략 타임 중 — 입찰 일시 중지</p>
