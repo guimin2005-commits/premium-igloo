@@ -82,6 +82,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const chatIds = useRef<Set<string>>(new Set());
   const chatCooldown = useRef(0);
   const pollBusy = useRef(false);
+  // 폴링에서 현재 역할(리더 인덱스)을 참조 — 스카우터 정보 수신용
+  const roleRef = useRef<number | null>(null);
   const autoRoleDone = useRef(false);
   const prevState = useRef<{ price: number; playerIdx: any; soldCount: number; lastTick: number }>({ price: 0, playerIdx: null, soldCount: 0, lastTick: 0 });
   const audioCtx = useRef<AudioContext | null>(null);
@@ -184,7 +186,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       if (pollBusy.current) return;
       pollBusy.current = true;
       try {
-        const url = `/api/auction/${id}${lastChatAt.current ? `?chatSince=${encodeURIComponent(lastChatAt.current)}` : ""}`;
+        // as=리더인덱스 — 디스코드 ID 미등록 리더가 본인 스카우터 정보를 받기 위한 힌트
+        const qs = new URLSearchParams();
+        if (lastChatAt.current) qs.set("chatSince", lastChatAt.current);
+        if (roleRef.current !== null) qs.set("as", String(roleRef.current));
+        const url = `/api/auction/${id}${qs.toString() ? `?${qs.toString()}` : ""}`;
         const t0 = Date.now();
         const res = await fetch(url, { cache: "no-store" });
         const d = await res.json();
@@ -364,6 +370,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const curPlayer = cur.playerIdx !== null ? auction.players[cur.playerIdx] : null;
   const curLeader = cur.leaderIdx !== null ? auction.leaders[cur.leaderIdx] : null;
   const myLeaderIdx = role === "host" || role === "spec" ? null : Number(role);
+  roleRef.current = myLeaderIdx; // 폴링에서 참조 (스카우터 정보 수신용)
   const myLeader = myLeaderIdx !== null ? auction.leaders[myLeaderIdx] : null;
   const timeLeft = cur.endsAt ? Math.max(0, Math.ceil((new Date(cur.endsAt).getTime() - (now + clockSkew.current)) / 1000)) : null;
   const scoutLeft = cur.scoutUntil ? Math.max(0, Math.ceil((new Date(cur.scoutUntil).getTime() - (now + clockSkew.current)) / 1000)) : 0;

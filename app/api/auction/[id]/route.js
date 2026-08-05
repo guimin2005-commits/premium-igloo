@@ -35,10 +35,20 @@ export async function GET(request, { params }) {
     // 🔒 스카우터 정보는 사용한 리더에게만 — 서버에서 가려서 전송 (진행자/종료 후엔 전체 공개)
     const session = await getServerSession(authOptions);
     const viewerId = session?.user?.id;
-    const isHostViewer = isAdminName(session?.user?.name);
+    const asParam = new URL(request.url).searchParams.get("as");
+    // 관리자라도 리더 역할로 관전 중이면(as 지정) 해당 리더 시야로 제한 — 테스트 시 정보 유출 방지
+    const isHostViewer = isAdminName(session?.user?.name) && (asParam === null || asParam === "");
     const data = auction.toObject();
     if (!isHostViewer && data.status !== "종료") {
-      const viewerIdx = data.leaders.findIndex((l) => l.discordId && l.discordId === viewerId);
+      // 1순위: 디스코드 ID로 본인 확인. 2순위: ID 미등록 리더에 한해 클라이언트가 알린 역할(as) 허용
+      let viewerIdx = data.leaders.findIndex((l) => l.discordId && l.discordId === viewerId);
+      if (viewerIdx < 0 && asParam !== null && asParam !== "") {
+        const asIdx = Number(asParam);
+        // ID 미등록 리더이거나, 관리자가 리더 역할로 관전 중일 때만 허용
+        const canUseAs = Number.isInteger(asIdx) && data.leaders[asIdx] &&
+          (!data.leaders[asIdx].discordId || isAdminName(session?.user?.name));
+        if (canUseAs) viewerIdx = asIdx;
+      }
       data.players = data.players.map((p) => {
         const scouted = viewerIdx >= 0 && Array.isArray(p.scoutedBy) && p.scoutedBy.includes(viewerIdx);
         if (scouted) return p;
@@ -178,7 +188,7 @@ export async function POST(request, { params }) {
         if (leader.points < cost) return NextResponse.json({ success: false, message: "보유 Point가 부족합니다." }, { status: 400 });
         leader.points -= cost;
         player.scoutedBy.push(leaderIdx);
-        addLog(auction, `${leader.name} 스카우터 사용 → ${player.isAllPos ? "올 포지션 선수" : player.alias} (${cost.toLocaleString()} Point)`);
+        // 🔒 스카우터 사용은 공개 로그에 남기지 않음 (누가 누구를 봤는지 노출 방지)
         await auction.save();
         // 🔒 공개 정보는 이 응답으로만 전달 (다른 리더에게는 폴링에서도 가려짐)
         return NextResponse.json({
