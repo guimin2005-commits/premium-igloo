@@ -698,7 +698,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               const isOpen = forceOpen || expandedTeams.has(li);
               const toggle = () => setExpandedTeams((prev) => { const next = new Set(prev); if (next.has(li)) next.delete(li); else next.add(li); return next; });
               return (
-                <div key={li} className={`rounded-2xl border transition-colors ${cur.leaderIdx === li ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.05]" : myLeaderIdx === li ? "border-white/20 bg-[#141414]" : "border-white/5 bg-[#111111]/95"}`}>
+                <div key={li} className={`rounded-2xl border transition-colors ${cur.leaderIdx === li ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.05]" : invMode && (l.inventory?.length || 0) > 0 && myLeaderIdx === li ? "border-[#e91e3f]/35 bg-[#141414]" : myLeaderIdx === li ? "border-white/20 bg-[#141414]" : "border-white/5 bg-[#111111]/95"}`}>
                   {/* 컴팩트 헤더 — 클릭으로 펼침/접힘 */}
                   <button type="button" onClick={toggle} className="w-full text-left p-3.5 outline-none focus:outline-none">
                     <div className="flex items-center gap-2.5">
@@ -713,7 +713,18 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           {l.name}
                           {myLeaderIdx === li && <span className="ml-1.5 text-[8px] font-black tracking-widest text-[#e91e3f]">ME</span>}
                         </p>
-                        <p className="text-xs font-black text-[#e91e3f] tabular-nums">{l.points.toLocaleString()}<span className="text-[9px] text-gray-500 ml-1 font-bold">Point</span></p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs font-black text-[#e91e3f] tabular-nums">{l.points.toLocaleString()}<span className="text-[9px] text-gray-500 ml-1 font-bold">Pt</span></span>
+                          {/* 전체 슬롯 진행도 — 세부 포지션은 펼침 영역에서 확인 */}
+                          <span className="text-[10px] font-bold text-gray-500 tabular-nums">{l.roster.length}/{totalSlots}</span>
+                          {/* 인벤토리 — 접혀 있어도 항상 노출 */}
+                          {invMode && (l.inventory?.length || 0) > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-black text-[#e91e3f] bg-[#e91e3f]/12 border border-[#e91e3f]/30 rounded-full px-1.5 py-0.5">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor" className="w-2.5 h-2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
+                              {l.inventory.length}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {/* 준비 상태 (경매 시작 전) */}
                       {auction.status === "준비중" && (
@@ -722,18 +733,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         </span>
                       )}
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3 h-3 text-gray-600 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                    </div>
-                    {/* 슬롯 요약 칩 — 겹침 방지를 위해 별도 행 */}
-                    <div className="flex gap-1 mt-2 pl-[42px]">
-                      {roleList.map((slot) => {
-                        const filled = slotFilled(l, slot);
-                        const limit = slotLimitOf(slot);
-                        return (
-                          <span key={slot} className={`text-[9px] font-black rounded px-1.5 py-0.5 border ${filled >= limit ? roleColor(slot).badge : "bg-white/[0.03] text-gray-600 border-white/10"}`}>
-                            {roleAbbr(slot)} {filled}/{limit}
-                          </span>
-                        );
-                      })}
                     </div>
                   </button>
 
@@ -744,12 +743,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                       {/* 📌 인벤토리 — 팝업으로 확인 (팀 패널은 버튼만, 정보량 축소) */}
                       {invMode && (
-                        <button onClick={() => { setInvModal(li); setDragCard(null); setSwapMode(false); setSwapPick([]); sfxSelect(); }} className="mt-2.5 w-full flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/25 hover:border-[#e91e3f]/40 px-3 py-2 transition-colors group/inv">
-                          <span className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 group-hover/inv:text-white transition-colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
-                            인벤토리
-                          </span>
-                          <span className={`text-[10px] font-black tabular-nums px-1.5 py-0.5 rounded ${(l.inventory?.length || 0) > 0 ? "bg-[#e91e3f]/15 text-[#e91e3f]" : "bg-white/5 text-gray-600"}`}>{l.inventory?.length || 0}</span>
+                        <button onClick={() => { setInvModal(li); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }} className="mt-2.5 w-full flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-black/25 hover:border-[#e91e3f]/40 px-3 py-2 text-[10px] font-black text-gray-400 hover:text-white transition-colors">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
+                          인벤토리 열기{(l.inventory?.length || 0) > 0 ? ` (${l.inventory.length})` : ""}
                         </button>
                       )}
 
