@@ -1248,24 +1248,25 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       // 외곽 박스 없이 카드 + 헤어라인 정보 (박스 중첩 제거)
                       <div className="flex gap-5 h-[190px]">
                         {/* 세로 카드 — 우측 목록 카드와 동일 규격 */}
-                        <div className={`shrink-0 w-[132px] aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 ${sel.golden ? "border-[#e91e3f]/45 bg-gradient-to-b from-[#e91e3f]/[0.14] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"}`}>
-                          <span className={`text-[7px] font-black tracking-[0.2em] uppercase ${sel.golden ? "text-[#e91e3f]" : "text-gray-600"}`}>{sel.golden ? "Golden" : "Player"}</span>
-                          <div className={`w-11 h-11 rounded-full flex items-center justify-center border ${sel.golden ? "border-[#e91e3f]/40 bg-[#e91e3f]/10" : "border-white/10 bg-white/[0.04]"}`}>
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 ${sel.golden ? "text-[#e91e3f]" : "text-gray-500"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+                        <div className={`relative shrink-0 w-[132px] aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 ${sel.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.18] via-amber-500/[0.06] to-[#0d0d0d] shadow-[0_0_18px_rgba(251,191,36,0.18)]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"}`}>
+                          {sel.golden && <span className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-amber-200/15 to-transparent"></span>}
+                          <span className={`relative text-[7px] font-black tracking-[0.2em] uppercase ${sel.golden ? "text-amber-300" : "text-gray-600"}`}>{sel.golden ? "Golden" : "Player"}</span>
+                          <div className={`relative w-11 h-11 rounded-full flex items-center justify-center border ${sel.golden ? "border-amber-300/50 bg-amber-400/10" : "border-white/10 bg-white/[0.04]"}`}>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 ${sel.golden ? "text-amber-300" : "text-gray-500"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
                           </div>
-                          <div className="w-full text-center">
+                          <div className="relative w-full text-center">
                             <p className="text-[10px] font-black text-white truncate leading-tight">{cardName(sel)}</p>
-                            <p className="text-[9px] font-black text-[#e91e3f] tabular-nums mt-0.5">{sel.price.toLocaleString()}</p>
+                            <p className={`text-[9px] font-black tabular-nums mt-0.5 ${sel.golden ? "text-amber-300" : "text-[#e91e3f]"}`}>{sel.price.toLocaleString()}</p>
                           </div>
                         </div>
                         {/* 정보 — 선(헤어라인)으로만 구분 */}
                         <div className="min-w-0 flex-1 flex flex-col">
                           <div className="flex items-center gap-2">
                             <p className="text-lg font-black text-white truncate tracking-tight">{cardName(sel)}</p>
-                            {sel.golden && <span className="shrink-0 text-[8px] font-black text-[#e91e3f] border border-[#e91e3f]/35 rounded px-1.5 py-0.5">ALL</span>}
+                            {sel.golden && <span className="shrink-0 text-[8px] font-black text-amber-300 border border-amber-400/45 bg-amber-400/10 rounded px-1.5 py-0.5">ALL</span>}
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <p className="text-[11px] font-black text-[#e91e3f] tabular-nums">{sel.price.toLocaleString()} <span className="text-gray-600 font-bold">Point 낙찰</span></p>
+                            <p className={`text-[11px] font-black tabular-nums ${sel.golden ? "text-amber-300" : "text-[#e91e3f]"}`}>{sel.price.toLocaleString()} <span className="text-gray-600 font-bold">Point 낙찰</span></p>
                             {selectedSlot && <span className={`text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(selectedSlot).badge}`}>{selectedSlot} 배정됨</span>}
                           </div>
                           <div className="mt-3 divide-y divide-white/[0.07] border-t border-white/[0.07]">
