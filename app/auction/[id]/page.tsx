@@ -50,6 +50,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [dragCard, setDragCard] = useState<number | null>(null); // 드래그 중인 인벤토리 카드 idx
   const [assignWarn, setAssignWarn] = useState<{ invIdx: number; slot: string; name: string } | null>(null); // 최초 1회 배정 경고
   const warnedRef = useRef(false); // 배정 불가역 경고를 이미 봤는지
+  const draggingRef = useRef(false); // 드래그 직후 클릭으로 선택이 풀리는 것 방지
   const [swapMode, setSwapMode] = useState(false);        // 인벤토리 내 포지션 체인지 모드
   const [swapPick, setSwapPick] = useState<number[]>([]); // 교환할 roster 인덱스 2개
   const [profiles, setProfiles] = useState<Record<string, any>>({});
@@ -372,7 +373,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     if (revealFields.includes("subPos")) parts.push(`부 ${p.subPos || "-"}`);
     if (revealFields.includes("champions")) {
       const ch = (p.mostChampions || []).filter(Boolean);
-      if (ch.length) parts.push(`모스트 ${ch.join("·")}`);
+      if (ch.length) parts.push(`모스트 ${ch.join("  ·  ")}`);
     }
     return parts.join(" / ");
   };
@@ -533,6 +534,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${auction.status === "진행중" ? "bg-emerald-500/15 text-emerald-400" : auction.status === "종료" ? "bg-white/5 text-gray-500" : "bg-blue-500/15 text-blue-400"}`}>{auction.status}</span>
           {auction.phase > 0 && auction.status === "진행중" && (
             <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25">PHASE {auction.phase}</span>
+          )}
+          {auction.isTest && (
+            <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">🧪 테스트 방</span>
           )}
           <h1 className="text-sm md:text-base font-black text-white truncate flex-1">{auction.title}</h1>
 
@@ -1127,7 +1131,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         };
         return (
           <div className="fixed inset-0 z-[118] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); }}>
-            <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-5xl max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+            {/* 고정 높이 — 선수 선택 전/후로 팝업 크기가 변하지 않도록 */}
+            <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-5xl h-[88dvh] sm:h-[76vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
               <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
                 <span className="text-sm font-black text-white truncate">{l.name} 팀 인벤토리</span>
                 <span className="text-[10px] font-black text-[#e91e3f] tabular-nums">{l.inventory?.length || 0}장</span>
@@ -1148,7 +1153,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     if (!sel) {
                       // 선택 전에도 동일한 높이를 유지해 레이아웃이 밀리지 않도록
                       return (
-                        <div className="rounded-2xl border border-dashed border-white/12 bg-black/20 p-5 flex gap-4 min-h-[186px]">
+                        <div className="rounded-2xl border border-dashed border-white/12 bg-black/20 p-5 flex gap-4 h-[188px]">
                           <div className="shrink-0 w-[86px] aspect-[3/4.3] rounded-xl border border-dashed border-white/12 bg-white/[0.02] flex items-center justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-white/10"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
                           </div>
@@ -1162,8 +1167,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     const sp = auction.players[sel.playerIdx];
                     const scouted = sp && canSeePos(sp);
                     return (
-                      <div className={`relative rounded-2xl border overflow-hidden min-h-[186px] ${sel.golden ? "border-[#e91e3f]/45 bg-gradient-to-br from-[#e91e3f]/[0.12] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-br from-white/[0.06] to-[#0d0d0d]"}`}>
-                        <div className="p-5 flex gap-4">
+                      <div className={`relative rounded-2xl border overflow-hidden h-[188px] ${sel.golden ? "border-[#e91e3f]/45 bg-gradient-to-br from-[#e91e3f]/[0.12] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-br from-white/[0.06] to-[#0d0d0d]"}`}>
+                        <div className="p-5 flex gap-4 h-full">
                           {/* 세로 카드 미니어처 */}
                           <div className={`shrink-0 w-[86px] aspect-[3/4.3] rounded-xl border flex flex-col items-center justify-between px-2 py-2.5 ${sel.golden ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.10]" : "border-white/15 bg-white/[0.04]"}`}>
                             <span className={`text-[7px] font-black tracking-[0.2em] uppercase ${sel.golden ? "text-[#e91e3f]" : "text-gray-600"}`}>{sel.golden ? "Golden" : "Player"}</span>
@@ -1203,9 +1208,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             </div>
                           </div>
                         </div>
-                        {canManage && !swapMode && (
-                          <p className="px-5 pb-4 -mt-1 text-[10px] text-gray-500">아래 포지션을 클릭하거나, 오른쪽 카드를 드래그해 배정하세요.</p>
-                        )}
                       </div>
                     );
                   })()}
@@ -1216,7 +1218,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     포지션 지정
                     {swapMode && <span className="text-[#e91e3f] font-black normal-case tracking-normal"> — 교환할 선수 2명을 선택하세요 ({swapPick.length}/2)</span>}
                   </p>
-                  <div className="space-y-1.5">
+                  {/* 2열 그리드 — 한 포지션에 여러 명이 들어가면 셀 안에서 줄바꿈 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 items-start">
                     {roleList.map((slot) => {
                       const entries = l.roster.map((r: any, ri: number) => ({ r, ri })).filter(({ r }: any) => r.slot === slot);
                       const limit = slotLimitOf(slot);
@@ -1228,10 +1231,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           onDragOver={(e) => { if (dropOk) e.preventDefault(); }}
                           onDrop={(e) => { e.preventDefault(); if (dropOk && dragCard !== null) requestPlace(dragCard, slot); }}
                           onClick={() => { if (dropOk && dragCard !== null) requestPlace(dragCard, slot); }}
-                          className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 min-h-[34px] transition-all ${dropOk ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.06] cursor-pointer" : full ? "border-white/10 bg-white/[0.02]" : "border-dashed border-white/15 bg-black/20"}`}
+                          className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 min-h-[36px] transition-all ${dropOk ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.06] cursor-pointer" : full ? "border-white/10 bg-white/[0.02]" : "border-dashed border-white/15 bg-black/20"}`}
                         >
-                          <span className={`shrink-0 text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(slot).badge}`}>{slot}</span>
-                          <span className="shrink-0 text-[9px] font-bold text-gray-600 tabular-nums">{entries.length}/{limit}</span>
+                          <span className={`shrink-0 mt-px text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(slot).badge}`}>{slot}</span>
+                          <span className="shrink-0 mt-1 text-[9px] font-bold text-gray-600 tabular-nums">{entries.length}/{limit}</span>
                           <div className="flex-1 min-w-0 flex flex-wrap gap-1">
                             {entries.length === 0 ? (
                               <span className="text-[10px] text-gray-700">비어 있음</span>
@@ -1272,7 +1275,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               );
                             })}
                           </div>
-                          {dropOk && <span className="shrink-0 text-[9px] font-black text-[#e91e3f] animate-pulse">배정</span>}
+                          {dropOk && <span className="shrink-0 mt-1 text-[9px] font-black text-[#e91e3f] animate-pulse">배정</span>}
                         </div>
                       );
                     })}
@@ -1336,9 +1339,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           <div
                             key={ci}
                             draggable={canManage && !swapMode}
-                            onDragStart={() => { setDragCard(ci); sfxSelect(); }}
-                            onDragEnd={() => setDragCard(null)}
-                            onClick={() => { if (!canManage || swapMode) return; const next = picked ? null : ci; setDragCard(next); if (next !== null) sfxSelect(); }}
+                            /* 드래그로 배정에 실패해도 선택은 유지 (좌측 정보가 사라지지 않도록) */
+                            onDragStart={() => { draggingRef.current = true; if (dragCard !== ci) { setDragCard(ci); sfxSelect(); } }}
+                            onDragEnd={() => { setTimeout(() => { draggingRef.current = false; }, 0); }}
+                            onClick={() => { if (!canManage || swapMode) return; if (draggingRef.current) return; const next = picked ? null : ci; setDragCard(next); if (next !== null) sfxSelect(); }}
                             className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-colors ${card.golden ? "border-[#e91e3f]/45 bg-gradient-to-b from-[#e91e3f]/[0.14] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35" : ""} ${picked ? "border-[#e91e3f] ring-2 ring-[#e91e3f] shadow-[0_0_20px_rgba(233,30,63,0.35)] bg-[#e91e3f]/[0.10]" : ""}`}
                           >
                             <span className={`text-[7px] font-black tracking-[0.2em] uppercase ${card.golden ? "text-[#e91e3f]" : "text-gray-600"}`}>{card.golden ? "Golden" : "Player"}</span>
@@ -1641,7 +1645,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   if (revealFields.includes("subPos")) items.push({ label: "부 포지션", value: scoutResult.subPos || "없음", primary: false, pos: true });
                   if (revealFields.includes("champions")) {
                     const champs = (scoutResult.mostChampions || []).filter(Boolean);
-                    items.push({ label: "모스트 챔피언", value: champs.length ? champs.join(" · ") : "없음", primary: false, pos: false, full: true });
+                    items.push({ label: "모스트 챔피언", value: champs.length ? champs.join("  ·  ") : "없음", primary: false, pos: false, full: true });
                   }
                   return items.map((item, i) => (
                     <div key={i} className={`rounded-xl border px-3 py-3 text-center ${item.full ? "col-span-2" : ""} ${item.primary ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : "border-white/10 bg-white/[0.03]"}`}>

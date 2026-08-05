@@ -47,6 +47,7 @@ export default function AuctionListPage() {
   const [roles, setRoles] = useState<any[]>(GAME_PRESETS["오버워치"].roles.map((r) => ({ ...r })));
   const [phase1Role, setPhase1Role] = useState<string>(GAME_PRESETS["오버워치"].phase1Role);
   const [assignMode, setAssignMode] = useState<string>("instant"); // instant | inventory
+  const [isTest, setIsTest] = useState(false); // 테스트 방
   const [reveal, setReveal] = useState<string[]>((GAME_PRESETS as any)["오버워치"].reveal);
   const [settings, setSettings] = useState({
     leaderPoints: 100000, basePrice: 1000, goldenBasePrice: 4000,
@@ -66,6 +67,45 @@ export default function AuctionListPage() {
     setPlayers((prev) => prev.map((p) => ({ ...p, mainPos: "", subPos: "", mostChampions: ["", "", ""] })));
   };
   const roleNamesList = () => roles.map((r) => r.name).filter((n: string) => n.trim());
+
+  // 📌 테스트 전용 — 폼 전체를 더미 데이터로 한 번에 채움 (관리자만 노출)
+  const fillTestData = () => {
+    const preset = (GAME_PRESETS as any)[game] || GAME_PRESETS["오버워치"];
+    const rolesNow: string[] = (preset.roles?.length ? preset.roles : roles).map((r: any) => r.name).filter(Boolean);
+    const slotsPerTeam = (preset.roles?.length ? preset.roles : roles).reduce((a: number, r: any) => a + (Number(r.count) || 0), 0) || 5;
+    const teamCount = 4;
+    const TIERS = ["브론즈", "실버", "골드", "플래티넘", "다이아", "마스터", "그랜드마스터"];
+    const CHAMPS = ["아트록스", "리신", "아리", "징크스", "쓰레쉬", "야스오", "럭스", "제드", "탐켄치", "케이틀린"];
+    const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+
+    setTitle(`[테스트] ${game} 선수 경매 ${new Date().toLocaleDateString("ko-KR")}`);
+    setIsTest(true);
+
+    setLeaders(Array.from({ length: teamCount }, (_, i) => ({
+      name: `테스트리더${i + 1}`,
+      discordId: "",
+      position: rolesNow[i % rolesNow.length] || "",
+    })));
+
+    // 팀 정원을 채우고도 남도록 여유 있게 생성
+    const total = Math.max(teamCount * slotsPerTeam, 8);
+    const used = new Set<string>();
+    setPlayers(Array.from({ length: total }, (_, i) => {
+      const nick = randomNick(used); used.add(nick);
+      const golden = i > 0 && i % 7 === 0; // 가끔 황금카드
+      return {
+        alias: nick,
+        discordId: "",
+        peakTier: pick(TIERS),
+        currentTier: pick(TIERS),
+        mainPos: golden ? "" : pick(rolesNow),
+        subPos: golden ? "" : pick(rolesNow),
+        mostChampions: [pick(CHAMPS), pick(CHAMPS), pick(CHAMPS)],
+        isAllPos: golden,
+      };
+    }));
+    setPopup({ isOpen: true, message: `테스트 데이터를 입력했습니다.\n리더 ${teamCount}명 · 선수 ${total}명 (테스트 방으로 표시)`, isError: false });
+  };
   const updateRole = (i: number, key: string, value: any) => setRoles((prev) => prev.map((r, idx) => (idx === i ? { ...r, [key]: value } : r)));
 
   const updateLeader = (i: number, key: string, value: any) =>
@@ -127,7 +167,7 @@ export default function AuctionListPage() {
       const res = await fetch("/api/auction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, game, settings: { ...settings, roles: validRoles, phase1Role, assignMode, reveal }, leaders: validLeaders, players: validPlayers }),
+        body: JSON.stringify({ title, game, isTest, settings: { ...settings, roles: validRoles, phase1Role, assignMode, reveal }, leaders: validLeaders, players: validPlayers }),
       });
       const d = await res.json();
       if (d.success) {
@@ -194,7 +234,18 @@ export default function AuctionListPage() {
           <Reveal>
           <form onSubmit={handleCreate} className="relative rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px">
             <div className="rounded-2xl bg-[#111111]/95 p-6 md:p-8 space-y-6">
-              <h3 className="text-base font-black text-white flex items-center gap-3"><span className="w-1 h-5 bg-[#e91e3f] rounded-full"></span>경매 개최</h3>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-base font-black text-white flex items-center gap-3"><span className="w-1 h-5 bg-[#e91e3f] rounded-full"></span>경매 개최</h3>
+                {/* 📌 관리자 테스트 도구 */}
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setIsTest(!isTest)} className={`text-[11px] font-black px-3 py-1.5 rounded-full border transition-all ${isTest ? "bg-amber-500/15 text-amber-400 border-amber-500/35" : "bg-white/5 text-gray-500 border-white/10 hover:text-gray-300"}`}>
+                    {isTest ? "🧪 테스트 방" : "테스트 방 아님"}
+                  </button>
+                  <button type="button" onClick={fillTestData} className="text-[11px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-full hover:bg-amber-500/20 transition-colors">
+                    테스트 데이터 자동 입력
+                  </button>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -459,6 +510,8 @@ export default function AuctionListPage() {
                       <div className="min-w-0 flex-1">
                         <p className={`text-base md:text-lg font-black truncate transition-colors ${isLive ? "text-white" : "text-gray-200"} group-hover:text-[#ff5c77]`}>{a.title}</p>
                         <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                          {a.isTest && <span className="text-[10px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">🧪 테스트</span>}
+                          {a.game && <span className="text-[10px] font-bold text-gray-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">{a.game}</span>}
                           <span className="text-[10px] font-bold text-gray-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">리더 {a.leaderCount}</span>
                           <span className="text-[10px] font-bold text-gray-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">선수 {a.playerCount}</span>
                           <span className="text-[10px] font-bold text-gray-600 px-1">{new Date(a.createdAt).toLocaleDateString("ko-KR", { month: "long", day: "numeric" })}</span>

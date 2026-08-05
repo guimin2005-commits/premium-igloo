@@ -10,11 +10,13 @@ import { phase1RoleOf } from "@/lib/auctionGames";
 export async function GET() {
   try {
     await connectToDatabase();
-    const auctions = await Auction.find().sort({ createdAt: -1 }).select("title status createdAt leaders players");
+    const auctions = await Auction.find().sort({ createdAt: -1 }).select("title status createdAt leaders players game isTest");
     const data = auctions.map((a) => ({
       _id: a._id,
       title: a.title,
       status: a.status,
+      game: a.game,
+      isTest: a.isTest,
       createdAt: a.createdAt,
       leaderCount: a.leaders.length,
       playerCount: a.players.length,
@@ -65,7 +67,7 @@ export async function POST(request) {
       scoutedBy: [],
     }));
 
-    const auction = await Auction.create({ title: body.title.trim(), game: body.game || "오버워치", settings, leaders, players });
+    const auction = await Auction.create({ title: body.title.trim(), game: body.game || "오버워치", isTest: !!body.isTest, settings, leaders, players });
     return NextResponse.json({ success: true, data: auction });
   } catch (e) {
     return NextResponse.json({ success: false, message: e.message }, { status: 500 });
