@@ -54,7 +54,7 @@ export default function AuctionListPage() {
     scoutCost: 2000, posChangeCost: 10000, minIncrement: 100, timerSeconds: 15, scoutSeconds: 7,
   });
   const [leaders, setLeaders] = useState<any[]>([{ name: "", position: "", discordId: "" }]);
-  const [players, setPlayers] = useState<any[]>([{ alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", mostChampions: ["", "", ""], isAllPos: false }]);
+  const [players, setPlayers] = useState<any[]>([{ alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", mostChampions: [""], isAllPos: false }]);
 
   // 📌 게임 선택 — 프리셋으로 역할/슬롯·선경매 포지션 세팅 + 기존 포지션 초기화
   const selectGame = (g: string) => {
@@ -64,7 +64,7 @@ export default function AuctionListPage() {
     setPhase1Role(preset.phase1Role || "");
     setReveal(preset.reveal || ["mainPos"]);
     setLeaders((prev) => prev.map((l) => ({ ...l, position: "" })));
-    setPlayers((prev) => prev.map((p) => ({ ...p, mainPos: "", subPos: "", mostChampions: ["", "", ""] })));
+    setPlayers((prev) => prev.map((p) => ({ ...p, mainPos: "", subPos: "", mostChampions: [""] })));
   };
   const roleNamesList = () => roles.map((r) => r.name).filter((n: string) => n.trim());
 
@@ -100,7 +100,7 @@ export default function AuctionListPage() {
         currentTier: pick(TIERS),
         mainPos: golden ? "" : pick(rolesNow),
         subPos: golden ? "" : pick(rolesNow),
-        mostChampions: [pick(CHAMPS), pick(CHAMPS), pick(CHAMPS)],
+        mostChampions: [pick(CHAMPS)],
         isAllPos: golden,
       };
     }));
@@ -361,7 +361,7 @@ export default function AuctionListPage() {
                   <label className="text-xs font-bold text-gray-500">선수 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({players.filter(p => p.alias.trim()).length}명)</span></label>
                   <div className="flex gap-2">
                     <button type="button" onClick={rollAllNicks} className="text-[11px] font-black text-gray-400 bg-white/5 border border-white/10 px-3.5 py-1.5 rounded-full hover:text-white hover:border-white/25 transition-colors">전체 랜덤 닉네임</button>
-                    <button type="button" onClick={() => setPlayers([...players, { alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", mostChampions: ["", "", ""], isAllPos: false }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">선수 추가</button>
+                    <button type="button" onClick={() => setPlayers([...players, { alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", mostChampions: [""], isAllPos: false }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">선수 추가</button>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
@@ -411,12 +411,8 @@ export default function AuctionListPage() {
                           )}
                           {reveal.includes("champions") && (
                             <div>
-                              <p className="text-[9px] font-bold text-gray-600 mb-1">모스트 챔피언 <span className="text-gray-700">(스카우터 공개)</span></p>
-                              <div className="grid grid-cols-3 gap-1.5">
-                                {[0, 1, 2].map((ci) => (
-                                  <input key={ci} type="text" placeholder={`챔프 ${ci + 1}`} value={(p.mostChampions || ["", "", ""])[ci] || ""} onChange={(e) => { const arr = [...(p.mostChampions || ["", "", ""])]; arr[ci] = e.target.value; updatePlayer(i, "mostChampions", arr); }} className="bg-[#0d0d0d] border border-white/10 rounded-md px-2 py-1.5 text-[11px] text-white outline-none focus:border-[#e91e3f] text-center placeholder:text-gray-600" />
-                                ))}
-                              </div>
+                              <p className="text-[9px] font-bold text-gray-600 mb-1">모스트 챔피언 <span className="text-gray-700">(스카우터 공개 · 1개)</span></p>
+                              <input type="text" placeholder="예: 아트록스" value={(p.mostChampions || [""])[0] || ""} onChange={(e) => updatePlayer(i, "mostChampions", [e.target.value])} className="w-full bg-[#0d0d0d] border border-white/10 rounded-md px-2.5 py-1.5 text-[11px] text-white outline-none focus:border-[#e91e3f] placeholder:text-gray-600" />
                             </div>
                           )}
                         </div>

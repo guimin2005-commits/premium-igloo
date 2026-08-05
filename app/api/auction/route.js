@@ -64,7 +64,7 @@ export async function POST(request) {
       currentTier: p.currentTier || "",
       mainPos: p.mainPos || "",
       subPos: p.subPos || "",
-      mostChampions: Array.isArray(p.mostChampions) ? p.mostChampions.filter((c) => c && c.trim()).slice(0, 3) : [],
+      mostChampions: Array.isArray(p.mostChampions) ? p.mostChampions.filter((c) => c && c.trim()).slice(0, 1) : [],
       isAllPos: !!p.isAllPos,
       phase: !p.isAllPos && p1Role && (p.mainPos === p1Role || p.subPos === p1Role) ? 1 : 2,
       status: "대기",
