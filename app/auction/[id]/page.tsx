@@ -49,6 +49,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [bidInput, setBidInput] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
+  // 📌 서버-클라이언트 시계 차이 보정 (기기 시계가 틀어져도 타이머가 정확하도록)
+  const clockSkew = useRef(0);
+  const serverNow = () => Date.now() + clockSkew.current;
   const [soundOn, setSoundOn] = useState(true);
   const [volume, setVolume] = useState(60); // 0~100
   const [notices, setNotices] = useState<any[]>([]); // 📌 내 알림창 (스카우터 결과 등, 나에게만 보임)
@@ -182,16 +185,23 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       pollBusy.current = true;
       try {
         const url = `/api/auction/${id}${lastChatAt.current ? `?chatSince=${encodeURIComponent(lastChatAt.current)}` : ""}`;
+        const t0 = Date.now();
         const res = await fetch(url, { cache: "no-store" });
         const d = await res.json();
         if (!alive || !d.success) return;
+
+        // 📌 서버 시각 기준으로 시계 차이 보정 (왕복 지연의 절반 보정)
+        if (d.now) {
+          const rtt = Date.now() - t0;
+          clockSkew.current = new Date(d.now).getTime() + rtt / 2 - Date.now();
+        }
 
         // 사운드 트리거 (상태 변화 감지)
         const a = d.auction;
         const soldCount = a.players.filter((p: any) => p.status === "낙찰").length;
         const passCount = a.players.filter((p: any) => p.status === "유찰").length;
         const revealIdx = a.reveal?.playerIdx ?? null;
-        const strategyOn = !!(a.strategyUntil && new Date(a.strategyUntil).getTime() > Date.now());
+        const strategyOn = !!(a.strategyUntil && new Date(a.strategyUntil).getTime() > Date.now() + clockSkew.current);
         const ps: any = prevState.current;
 
         if (ps.playerIdx !== a.current.playerIdx && a.current.playerIdx !== null) {
@@ -245,7 +255,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       setNow(Date.now());
       const endsAt = auction?.current?.endsAt ? new Date(auction.current.endsAt).getTime() : null;
       if (endsAt) {
-        const left = Math.ceil((endsAt - Date.now()) / 1000);
+        const left = Math.ceil((endsAt - (Date.now() + clockSkew.current)) / 1000);
         if (left !== prevState.current.lastTick) {
           const prev = prevState.current.lastTick;
           prevState.current.lastTick = left;
@@ -355,10 +365,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const curLeader = cur.leaderIdx !== null ? auction.leaders[cur.leaderIdx] : null;
   const myLeaderIdx = role === "host" || role === "spec" ? null : Number(role);
   const myLeader = myLeaderIdx !== null ? auction.leaders[myLeaderIdx] : null;
-  const timeLeft = cur.endsAt ? Math.max(0, Math.ceil((new Date(cur.endsAt).getTime() - now) / 1000)) : null;
-  const scoutLeft = cur.scoutUntil ? Math.max(0, Math.ceil((new Date(cur.scoutUntil).getTime() - now) / 1000)) : 0;
-  const strategyLeft = auction.strategyUntil ? Math.max(0, Math.ceil((new Date(auction.strategyUntil).getTime() - now) / 1000)) : 0;
-  const assignLeft = auction.assignUntil ? Math.max(0, Math.ceil((new Date(auction.assignUntil).getTime() - now) / 1000)) : 0;
+  const timeLeft = cur.endsAt ? Math.max(0, Math.ceil((new Date(cur.endsAt).getTime() - (now + clockSkew.current)) / 1000)) : null;
+  const scoutLeft = cur.scoutUntil ? Math.max(0, Math.ceil((new Date(cur.scoutUntil).getTime() - (now + clockSkew.current)) / 1000)) : 0;
+  const strategyLeft = auction.strategyUntil ? Math.max(0, Math.ceil((new Date(auction.strategyUntil).getTime() - (now + clockSkew.current)) / 1000)) : 0;
+  const assignLeft = auction.assignUntil ? Math.max(0, Math.ceil((new Date(auction.assignUntil).getTime() - (now + clockSkew.current)) / 1000)) : 0;
 
   const pa = auction.pendingAssign;
   const hasPending = pa && pa.playerIdx !== null && pa.playerIdx !== undefined;
@@ -405,7 +415,18 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const doBid = async (amount: number) => {
     if (myLeaderIdx === null) { showToast("입찰하려면 상단에서 리더 역할을 선택하세요"); return; }
     if (myLeader && amount > myLeader.points) { showToast(`보유 Point가 부족합니다. (보유 ${myLeader.points.toLocaleString()} Point)`); return; }
-    await act({ action: "bid", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx, amount });
+    const d = await act({ action: "bid", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx, amount });
+    // 📌 폴링(1.5초) 지연 동안 타이머가 짧게 보이는 문제 방지 — 성공 즉시 로컬 반영
+    if (d?.success) {
+      setAuction((prev: any) => {
+        if (!prev || prev.current?.playerIdx === null) return prev;
+        const next = structuredClone(prev);
+        next.current.price = amount;
+        next.current.leaderIdx = myLeaderIdx;
+        next.current.endsAt = new Date(serverNow() + (next.settings.timerSeconds || 15) * 1000).toISOString();
+        return next;
+      });
+    } else if (d?.message) showToast(d.message);
   };
 
   // 직접 입력 입찰: 입찰 단위로 자동 보정 + Enter 지원
@@ -427,15 +448,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     const d = await act({ action: "scout", leaderIdx: myLeaderIdx, playerIdx: targetIdx });
     if (d.success) {
       sfxScout();
-      // 📌 결과는 우측 알림창으로 (화면을 가리는 오버레이 제거)
+      // 📌 공개 정보는 서버 응답에서만 수신 (다른 리더에게는 전송되지 않음)
+      const rv = d.reveal || {};
       const rows: { l: string; v: string; pos?: boolean }[] = [];
-      const champs = (target.mostChampions || []).filter(Boolean);
+      const champs = (rv.mostChampions || []).filter(Boolean);
       if (target.isAllPos) {
         // 황금카드 — 모스트만 공개
         rows.push({ l: "모스트 챔피언", v: champs.length ? champs.join("  ·  ") : "없음" });
       } else {
-        if (revealFields.includes("mainPos")) rows.push({ l: "주 포지션", v: target.mainPos || "?", pos: true });
-        if (revealFields.includes("subPos")) rows.push({ l: "부 포지션", v: target.subPos || "없음", pos: true });
+        if (revealFields.includes("mainPos")) rows.push({ l: "주 포지션", v: rv.mainPos || "?", pos: true });
+        if (revealFields.includes("subPos")) rows.push({ l: "부 포지션", v: rv.subPos || "없음", pos: true });
         if (revealFields.includes("champions")) rows.push({ l: "모스트 챔피언", v: champs.length ? champs.join("  ·  ") : "없음" });
       }
       const tName = target.isAllPos ? "올 포지션 선수" : target.alias;
@@ -447,6 +469,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         const next = structuredClone(prev);
         const p = next.players[targetIdx];
         if (p && !p.scoutedBy.includes(myLeaderIdx)) p.scoutedBy.push(myLeaderIdx);
+        // 서버에서 받은 공개 정보를 내 화면 상태에 반영
+        if (p) { p.mainPos = rv.mainPos || ""; p.subPos = rv.subPos || ""; p.mostChampions = rv.mostChampions || []; }
         const l = next.leaders[myLeaderIdx];
         if (l) l.points = Math.max(0, l.points - (target?.isAllPos ? (next.settings.goldenScoutCost ?? 4000) : next.settings.scoutCost));
         return next;
@@ -481,11 +505,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           const isOverflowSlot = overflowing && po.slot === slot;
 
           return (
-            <div key={slot} className={big ? `flex items-start gap-2 rounded-lg px-2.5 py-2 min-h-[38px] border ${isOverflowSlot ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.06]" : "border-transparent bg-white/[0.035]"}` : "flex flex-col gap-1"}>
+            <div key={slot} className={big ? `flex items-center gap-2 rounded-lg px-2.5 py-2 min-h-[38px] border ${isOverflowSlot ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.06]" : "border-transparent bg-white/[0.035]"}` : "flex flex-col gap-1"}>
               {big && (
                 <>
-                  <span className={`shrink-0 text-[9px] font-black rounded px-1.5 py-0.5 border leading-[16px] ${roleColor(slot).badge}`}>{slot}</span>
-                  <span className="shrink-0 text-[9px] font-bold text-gray-600 tabular-nums leading-[20px]">{entries.length}/{limit}</span>
+                  <span className={`shrink-0 text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(slot).badge}`}>{slot}</span>
+                  <span className="shrink-0 text-[9px] font-bold text-gray-600 tabular-nums">{entries.length}/{limit}</span>
                 </>
               )}
               <div className={big ? "flex-1 min-w-0 flex flex-wrap items-center gap-1" : "space-y-1"}>
@@ -857,7 +881,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     {myLeader && auction.status === "진행중" && (
                       <div className="flex flex-col items-end gap-2.5">
                         {/* 스카우터 버튼 (호명된 선수 대상, 경매 중에도 사용 가능) */}
-                        {myLeaderIdx !== null && !curPlayer.scoutedBy.includes(myLeaderIdx) && (
+                        {/* 황금카드는 공개할 모스트가 없으면 스카우터 자체를 제공하지 않음 */}
+                        {myLeaderIdx !== null && !curPlayer.scoutedBy.includes(myLeaderIdx) && (!curPlayer.isAllPos || (curPlayer.mostChampions || []).filter(Boolean).length > 0) && (
                           <button onClick={() => setConfirmCfg({ title: "스카우터 사용", message: `${scoutCostOf(curPlayer).toLocaleString()} Point를 사용하여 이 선수의 ${curPlayer.isAllPos ? "모스트 챔피언" : revealFields.includes("champions") ? "주 포지션·모스트 챔피언" : "주/부 포지션"}을(를) 확인합니다.`, confirmLabel: "사용", onConfirm: useScouter })} className={`px-4 py-2 text-[11px] font-black bg-white/5 border rounded-xl transition-all ${curPlayer.isAllPos ? "border-amber-400/40 hover:border-amber-400/70 hover:bg-amber-400/10 text-amber-200" : "border-white/15 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 text-gray-200"}`}>
                             스카우터 사용 ({scoutCostOf(curPlayer).toLocaleString()} Point)
                           </button>
@@ -911,7 +936,25 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                     {/* 진행자 컨트롤 */}
                     {role === "host" && (
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* 입찰 시간 조절 — 긴장감 조절용 (남은 시간 즉시 반영) */}
+                        {timeLeft !== null && timeLeft > 0 && (
+                          <div className="flex items-center gap-1 mr-1">
+                            {[-5, -3, +5].map((d) => (
+                              <button
+                                key={d}
+                                onClick={async () => {
+                                  const r = await act({ action: "host:timer", delta: d });
+                                  if (r?.success) { sfxSelect(); showToast(`입찰 시간 ${d > 0 ? "+" : ""}${d}초 · 남은 ${r.left}초`); }
+                                  else showToast(r?.message || "타이머 조절에 실패했습니다");
+                                }}
+                                className={`px-2.5 py-2 text-[11px] font-black rounded-lg border transition-all ${d < 0 ? "border-[#e91e3f]/40 text-[#e91e3f] hover:bg-[#e91e3f]/15" : "border-white/15 text-gray-300 hover:bg-white/10"}`}
+                              >
+                                {d > 0 ? `+${d}` : d}초
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <button onClick={() => { if (cur.leaderIdx !== null) setConfirmCfg({ title: "낙찰 확정", message: `${curLeader?.name} — ${cur.price.toLocaleString()} Point 낙찰을 확정합니다.${auction.phase === 1 && p1Role ? ` (1페이즈: ${p1Role} 슬롯 자동 배정)` : " 슬롯은 리더이 배정합니다."}`, confirmLabel: "낙찰", onConfirm: () => act({ action: "host:sold" }) }); }} disabled={cur.leaderIdx === null} className="px-5 py-2.5 text-xs font-black bg-emerald-500/90 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl transition-colors">낙찰</button>
                         <button onClick={() => act({ action: "host:pass", playerIdx: cur.playerIdx })} className="px-5 py-2.5 text-xs font-black bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors">유찰</button>
                       </div>
@@ -1326,13 +1369,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           onDragOver={(e) => { if (dropOk) e.preventDefault(); }}
                           onDrop={(e) => { e.preventDefault(); if (dropOk && dragCard !== null) requestPlace(dragCard, slot); }}
                           onClick={() => { if (dropOk && dragCard !== null) requestPlace(dragCard, slot); }}
-                          className={`flex items-start gap-2 rounded-lg px-2.5 py-2 min-h-[36px] transition-all border ${dropOk ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.07] cursor-pointer" : "border-transparent bg-white/[0.035]"}`}
+                          className={`flex items-center gap-2 rounded-lg px-2.5 py-2 min-h-[36px] transition-all border ${dropOk ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.07] cursor-pointer" : "border-transparent bg-white/[0.035]"}`}
                         >
-                          <span className={`shrink-0 text-[9px] font-black rounded px-1.5 py-0.5 border leading-[16px] ${roleColor(slot).badge}`}>{slot}</span>
-                          <span className="shrink-0 text-[9px] font-bold text-gray-600 tabular-nums leading-[20px]">{entries.length}/{limit}</span>
-                          <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1 min-h-[20px]">
+                          <span className={`shrink-0 text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(slot).badge}`}>{slot}</span>
+                          <span className="shrink-0 text-[9px] font-bold text-gray-600 tabular-nums">{entries.length}/{limit}</span>
+                          <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1">
                             {entries.length === 0 ? (
-                              <span className="text-[10px] text-gray-700 leading-[20px]">비어 있음</span>
+                              <span className="text-[10px] text-gray-700">비어 있음</span>
                             ) : entries.map(({ r, ri }: any) => {
                               const picked = swapPick.includes(ri);
                               const selectable = swapMode && canManage;

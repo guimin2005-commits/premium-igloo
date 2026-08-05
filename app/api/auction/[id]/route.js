@@ -5,6 +5,9 @@ import { connectToDatabase } from "@/lib/mongodb";
 import Auction from "@/models/Auction";
 import AuctionChat from "@/models/AuctionChat";
 import { totalSlots, slotLimitOf, phase1RoleOf, roleNames } from "@/lib/auctionGames";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/authOptions";
+import { isAdminName } from "@/lib/admins";
 
 const slotCount = (leader, slot) => leader.roster.filter((r) => r.slot === slot).length;
 
@@ -29,7 +32,21 @@ export async function GET(request, { params }) {
     if (chatSince) chatQuery.createdAt = { $gt: new Date(chatSince) };
     const chat = await AuctionChat.find(chatQuery).sort({ createdAt: 1 }).limit(80);
 
-    return NextResponse.json({ success: true, auction, chat, now: new Date().toISOString() });
+    // 🔒 스카우터 정보는 사용한 리더에게만 — 서버에서 가려서 전송 (진행자/종료 후엔 전체 공개)
+    const session = await getServerSession(authOptions);
+    const viewerId = session?.user?.id;
+    const isHostViewer = isAdminName(session?.user?.name);
+    const data = auction.toObject();
+    if (!isHostViewer && data.status !== "종료") {
+      const viewerIdx = data.leaders.findIndex((l) => l.discordId && l.discordId === viewerId);
+      data.players = data.players.map((p) => {
+        const scouted = viewerIdx >= 0 && Array.isArray(p.scoutedBy) && p.scoutedBy.includes(viewerIdx);
+        if (scouted) return p;
+        return { ...p, mainPos: "", subPos: "", mostChampions: [] };
+      });
+    }
+
+    return NextResponse.json({ success: true, auction: data, chat, now: new Date().toISOString() });
   } catch (e) {
     return NextResponse.json({ success: false }, { status: 500 });
   }
@@ -163,7 +180,12 @@ export async function POST(request, { params }) {
         player.scoutedBy.push(leaderIdx);
         addLog(auction, `${leader.name} 스카우터 사용 → ${player.isAllPos ? "올 포지션 선수" : player.alias} (${cost.toLocaleString()} Point)`);
         await auction.save();
-        return NextResponse.json({ success: true });
+        // 🔒 공개 정보는 이 응답으로만 전달 (다른 리더에게는 폴링에서도 가려짐)
+        return NextResponse.json({
+          success: true,
+          cost,
+          reveal: { mainPos: player.mainPos || "", subPos: player.subPos || "", mostChampions: player.mostChampions || [] },
+        });
       }
 
       // 리더: 준비 완료 토글
@@ -217,6 +239,25 @@ export async function POST(request, { params }) {
         const p1r = phase1RoleOf(auction.settings);
         sysChat(id, phase === 1 ? `1페이즈 경매가 시작됩니다.${p1r ? ` ${p1r} 가능 선수들이 경매에 투입됩니다.` : ""}` : "2페이즈 경매가 시작됩니다.");
         return NextResponse.json({ success: true });
+      }
+
+      // 개최자: 진행 중 입찰 타이머 조절 (초 단위 가감 · 남은 시간 즉시 반영)
+      case "host:timer": {
+        const { delta } = body;
+        if (auction.current.playerIdx === null) {
+          return NextResponse.json({ success: false, message: "진행 중인 경매가 없습니다." }, { status: 400 });
+        }
+        if (!auction.current.endsAt) {
+          return NextResponse.json({ success: false, message: "아직 입찰이 없어 타이머가 시작되지 않았습니다." }, { status: 400 });
+        }
+        const base = new Date(auction.current.endsAt).getTime();
+        const next = Math.max(Date.now() + 1000, base + Number(delta || 0) * 1000); // 최소 1초는 남김
+        auction.current.endsAt = new Date(next);
+        const left = Math.ceil((next - Date.now()) / 1000);
+        addLog(auction, `진행자 타이머 조절 (${Number(delta) > 0 ? "+" : ""}${Number(delta)}초 · 남은 ${left}초)`);
+        await auction.save();
+        sysChat(id, `진행자가 입찰 시간을 조절했습니다. 남은 시간 ${left}초`);
+        return NextResponse.json({ success: true, left });
       }
 
       // 개최자: 선수 호명
