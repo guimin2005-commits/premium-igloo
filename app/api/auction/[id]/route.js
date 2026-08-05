@@ -309,12 +309,26 @@ export async function POST(request, { params }) {
         if (!roleNames(S).includes(slot)) return NextResponse.json({ success: false, message: "잘못된 포지션입니다." }, { status: 400 });
         const card = leader.inventory?.[invIdx];
         if (!card) return NextResponse.json({ success: false, message: "인벤토리 카드가 없습니다." }, { status: 400 });
-        if (slotCount(leader, slot) >= slotLimitOf(S, slot)) {
+        if (auction.pendingOverflow?.leaderIdx !== null && auction.pendingOverflow?.leaderIdx !== undefined) {
+          return NextResponse.json({ success: false, message: "초과 배정 정리가 완료되지 않았습니다." }, { status: 409 });
+        }
+        const isFull = slotCount(leader, slot) >= slotLimitOf(S, slot);
+        // 📌 황금카드(올 포지션)는 이미 찬 슬롯에도 배정 가능 → 기존 선수를 다른 슬롯으로 옮겨야 함
+        if (isFull && !card.golden) {
           return NextResponse.json({ success: false, message: `${slot} 슬롯이 가득 찼습니다.` }, { status: 400 });
         }
         leader.roster.push({ playerIdx: card.playerIdx, slot, price: card.price, golden: card.golden });
         leader.inventory.splice(invIdx, 1);
-        addLog(auction, `${auction.players[card.playerIdx]?.alias} → ${leader.name} [${slot}] 배정`);
+        const pl = auction.players[card.playerIdx];
+        const nm = card.golden && !pl?.revealed ? "올 포지션 선수" : pl?.alias;
+        if (isFull && card.golden) {
+          auction.pendingOverflow = { leaderIdx, slot };
+          addLog(auction, `${nm} → ${leader.name} [${slot}] 초과 배정 — 기존 선수 이동 필요`);
+          await auction.save();
+          sysChat(id, `올 포지션 선수가 ${leader.name} 팀 [${slot}] 슬롯에 배정되었습니다. ${leader.name} 리더는 기존 선수 한 명을 다른 슬롯으로 이동해주세요.`);
+          return NextResponse.json({ success: true, overflow: true });
+        }
+        addLog(auction, `${nm} → ${leader.name} [${slot}] 배정`);
         await auction.save();
         return NextResponse.json({ success: true });
       }

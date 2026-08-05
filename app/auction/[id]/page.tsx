@@ -1173,12 +1173,33 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           const d = await act({ action: "assign:place", leaderIdx: li, invIdx, slot, byLeaderIdx: myLeaderIdx });
           if (d?.success) {
             sfxAssign();
-            showToast(`${nm} → [${slot}] 배정 완료 (되돌릴 수 없음)`);
             setDragCard(null);
+            if (d.overflow) {
+              // 황금카드 초과 배정 — 기존 선수를 다른 슬롯으로 옮겨야 함 (팀 현황판에서 처리)
+              setInvModal(null);
+              showToast(`${nm} → [${slot}] 초과 배정 · 기존 선수를 다른 포지션으로 옮겨주세요`);
+            } else {
+              showToast(`${nm} → [${slot}] 배정 완료 (되돌릴 수 없음)`);
+            }
           } else {
             showToast(d?.message || "배정에 실패했습니다");
           }
         };
+        // 📌 배정 완료된 선수 카드 (흑백으로 계속 열람 가능) — key는 인벤토리 인덱스와 겹치지 않게 음수 사용
+        const assignedCards = (l.roster || [])
+          .map((r: any, ri: number) => ({ r, ri }))
+          .filter(({ r }: any) => r.playerIdx !== -1)
+          .map(({ r, ri }: any) => ({
+            key: -1000 - ri,
+            slot: r.slot,
+            card: { playerIdx: r.playerIdx, price: r.price, golden: r.golden },
+          }));
+        // 선택 대상 카드 조회 (인벤토리 + 배정 완료 공용)
+        const selectedCard = dragCard === null ? null
+          : dragCard >= 0 ? (l.inventory?.[dragCard] || null)
+          : (assignedCards.find((a: any) => a.key === dragCard)?.card || null);
+        const selectedSlot = dragCard !== null && dragCard < 0 ? assignedCards.find((a: any) => a.key === dragCard)?.slot : null;
+
         // 최초 1회만 불가역 경고 → 이후 바로 배정
         const requestPlace = (invIdx: number, slot: string) => {
           const card = l.inventory?.[invIdx];
@@ -1206,7 +1227,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <div className="order-2 lg:order-1 space-y-4">
                   {/* ── 선택한 선수 정보 카드 ── */}
                   {(() => {
-                    const sel = dragCard !== null ? l.inventory?.[dragCard] : null;
+                    const sel = selectedCard;
                     if (!sel) {
                       // 선택 전에도 동일한 높이를 유지해 레이아웃이 밀리지 않도록
                       return (
@@ -1243,7 +1264,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             <p className="text-lg font-black text-white truncate tracking-tight">{cardName(sel)}</p>
                             {sel.golden && <span className="shrink-0 text-[8px] font-black text-[#e91e3f] border border-[#e91e3f]/35 rounded px-1.5 py-0.5">ALL</span>}
                           </div>
-                          <p className="text-[11px] font-black text-[#e91e3f] tabular-nums mt-0.5">{sel.price.toLocaleString()} <span className="text-gray-600 font-bold">Point 낙찰</span></p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-[11px] font-black text-[#e91e3f] tabular-nums">{sel.price.toLocaleString()} <span className="text-gray-600 font-bold">Point 낙찰</span></p>
+                            {selectedSlot && <span className={`text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(selectedSlot).badge}`}>{selectedSlot} 배정됨</span>}
+                          </div>
                           <div className="mt-3 divide-y divide-white/[0.07] border-t border-white/[0.07]">
                             {[
                               { l: "최고 티어", v: sel.golden ? "비공개" : (sp?.peakTier || "-"), accent: false },
@@ -1277,7 +1301,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       const entries = l.roster.map((r: any, ri: number) => ({ r, ri })).filter(({ r }: any) => r.slot === slot);
                       const limit = slotLimitOf(slot);
                       const full = entries.length >= limit;
-                      const dropOk = canManage && !swapMode && dragCard !== null && !full;
+                      // 배정 완료 카드(음수 key)는 드롭 불가 · 황금카드는 이미 찬 슬롯에도 배정 가능
+                      const dragIsInv = dragCard !== null && dragCard >= 0;
+                      const draggingGolden = dragIsInv && !!l.inventory?.[dragCard as number]?.golden;
+                      const dropOk = canManage && !swapMode && dragIsInv && (!full || draggingGolden);
                       return (
                         <div
                           key={slot}
@@ -1328,7 +1355,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               );
                             })}
                           </div>
-                          {dropOk && <span className="shrink-0 mt-1 text-[9px] font-black text-[#e91e3f] animate-pulse">배정</span>}
+                          {dropOk && <span className={`shrink-0 mt-1 text-[9px] font-black animate-pulse ${full ? "text-amber-400" : "text-[#e91e3f]"}`}>{full ? "초과 배정" : "배정"}</span>}
                         </div>
                       );
                     })}
@@ -1381,35 +1408,69 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <div className="order-1 lg:order-2 lg:pl-5 lg:border-l lg:border-white/[0.07]">
                   <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
                     보유 선수 <span className="text-[#e91e3f]">{l.inventory?.length || 0}</span>
+                    {assignedCards.length > 0 && <span className="text-gray-600"> / 배정 {assignedCards.length}</span>}
                     {!mine && <span className="text-gray-600 font-bold normal-case tracking-normal"> — 선택해 정보 확인</span>}
                   </p>
-                  {(l.inventory?.length || 0) === 0 ? (
+                  {(l.inventory?.length || 0) === 0 && assignedCards.length === 0 ? (
                     <p className="text-center text-xs text-gray-600 py-8 border border-dashed border-white/10 rounded-xl">보유 중인 선수가 없습니다.</p>
                   ) : (
-                    <div className="grid grid-cols-3 lg:grid-cols-2 gap-2.5 lg:max-h-[46vh] lg:overflow-y-auto [&::-webkit-scrollbar]:hidden p-1 content-start">
-                      {l.inventory.map((card: any, ci: number) => {
-                        const picked = dragCard === ci;
-                        return (
-                          <div
-                            key={ci}
-                            draggable={canManage && !swapMode}
-                            /* 드래그로 배정에 실패해도 선택은 유지 (좌측 정보가 사라지지 않도록) */
-                            onDragStart={() => { draggingRef.current = true; if (dragCard !== ci) { setDragCard(ci); sfxSelect(); } }}
-                            onDragEnd={() => { setTimeout(() => { draggingRef.current = false; }, 0); }}
-                            onClick={() => { if (!canSelect || swapMode) return; if (draggingRef.current) return; const next = picked ? null : ci; setDragCard(next); if (next !== null) sfxSelect(); }}
-                            className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-colors ${card.golden ? "border-[#e91e3f]/45 bg-gradient-to-b from-[#e91e3f]/[0.14] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35" : !swapMode ? "cursor-pointer hover:border-white/25" : ""} ${picked ? "border-[#e91e3f] ring-2 ring-[#e91e3f] shadow-[0_0_20px_rgba(233,30,63,0.35)] bg-[#e91e3f]/[0.10]" : ""}`}
-                          >
-                            <span className={`text-[7px] font-black tracking-[0.2em] uppercase ${card.golden ? "text-[#e91e3f]" : "text-gray-600"}`}>{card.golden ? "Golden" : "Player"}</span>
-                            <div className={`w-11 h-11 rounded-full flex items-center justify-center border ${card.golden ? "border-[#e91e3f]/40 bg-[#e91e3f]/10" : "border-white/10 bg-white/[0.04]"}`}>
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 ${card.golden ? "text-[#e91e3f]" : "text-gray-500"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+                    <div className="lg:max-h-[46vh] lg:overflow-y-auto [&::-webkit-scrollbar]:hidden p-1 space-y-3">
+                      {/* 미배정 카드 */}
+                      <div className="grid grid-cols-3 lg:grid-cols-2 gap-2.5 content-start">
+                        {(l.inventory || []).map((card: any, ci: number) => {
+                          const picked = dragCard === ci;
+                          return (
+                            <div
+                              key={`inv-${ci}`}
+                              draggable={canManage && !swapMode}
+                              /* 드래그로 배정에 실패해도 선택은 유지 (좌측 정보가 사라지지 않도록) */
+                              onDragStart={() => { draggingRef.current = true; if (dragCard !== ci) { setDragCard(ci); sfxSelect(); } }}
+                              onDragEnd={() => { setTimeout(() => { draggingRef.current = false; }, 0); }}
+                              onClick={() => { if (!canSelect || swapMode) return; if (draggingRef.current) return; const next = picked ? null : ci; setDragCard(next); if (next !== null) sfxSelect(); }}
+                              className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-colors ${card.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.18] via-amber-500/[0.06] to-[#0d0d0d] shadow-[0_0_18px_rgba(251,191,36,0.18)]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35" : !swapMode ? "cursor-pointer hover:border-white/25" : ""} ${picked ? (card.golden ? "border-amber-300 ring-2 ring-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.45)]" : "border-[#e91e3f] ring-2 ring-[#e91e3f] shadow-[0_0_20px_rgba(233,30,63,0.35)] bg-[#e91e3f]/[0.10]") : ""}`}
+                            >
+                              {/* 황금카드 광택 */}
+                              {card.golden && <span className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-amber-200/15 to-transparent"></span>}
+                              <span className={`relative text-[7px] font-black tracking-[0.2em] uppercase ${card.golden ? "text-amber-300" : "text-gray-600"}`}>{card.golden ? "Golden" : "Player"}</span>
+                              <div className={`relative w-11 h-11 rounded-full flex items-center justify-center border ${card.golden ? "border-amber-300/50 bg-amber-400/10" : "border-white/10 bg-white/[0.04]"}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 ${card.golden ? "text-amber-300" : "text-gray-500"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+                              </div>
+                              <div className="relative w-full text-center">
+                                <p className="text-[10px] font-black text-white truncate leading-tight">{cardName(card)}</p>
+                                <p className={`text-[9px] font-black tabular-nums mt-0.5 ${card.golden ? "text-amber-300" : "text-[#e91e3f]"}`}>{card.price.toLocaleString()}</p>
+                              </div>
                             </div>
-                            <div className="w-full text-center">
-                              <p className="text-[10px] font-black text-white truncate leading-tight">{cardName(card)}</p>
-                              <p className="text-[9px] font-black text-[#e91e3f] tabular-nums mt-0.5">{card.price.toLocaleString()}</p>
-                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* 배정 완료 카드 — 흑백, 정보 확인만 가능 */}
+                      {assignedCards.length > 0 && (
+                        <div className="pt-3 border-t border-white/[0.07]">
+                          <p className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase mb-2">배정 완료</p>
+                          <div className="grid grid-cols-3 lg:grid-cols-2 gap-2.5 content-start">
+                            {assignedCards.map((ac: any) => {
+                              const picked = dragCard === ac.key;
+                              return (
+                                <div
+                                  key={ac.key}
+                                  onClick={() => { if (!canSelect || swapMode) return; const next = picked ? null : ac.key; setDragCard(next); if (next !== null) sfxSelect(); }}
+                                  className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none grayscale opacity-55 hover:opacity-80 transition-all ${swapMode ? "" : "cursor-pointer"} border-white/10 bg-gradient-to-b from-white/[0.05] to-[#0d0d0d] ${picked ? "opacity-100 grayscale-0 border-white/40 ring-2 ring-white/30" : ""}`}
+                                >
+                                  <span className="text-[7px] font-black tracking-[0.2em] uppercase text-gray-600">{ac.card.golden ? "Golden" : "Player"}</span>
+                                  <div className="w-11 h-11 rounded-full flex items-center justify-center border border-white/10 bg-white/[0.04]">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-gray-500"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+                                  </div>
+                                  <div className="w-full text-center">
+                                    <p className="text-[10px] font-black text-gray-300 truncate leading-tight">{cardName(ac.card)}</p>
+                                    <p className="text-[9px] font-black text-gray-500 tabular-nums mt-0.5">{ac.slot}</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
