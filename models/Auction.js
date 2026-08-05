@@ -56,6 +56,7 @@ const AuctionSchema = new mongoose.Schema({
     basePrice: { type: Number, default: 1000 },
     goldenBasePrice: { type: Number, default: 4000 },
     scoutCost: { type: Number, default: 2000 },
+    goldenScoutCost: { type: Number, default: 4000 }, // 황금카드 스카우터 비용 (모스트만 공개)
     posChangeCost: { type: Number, default: 10000 },
     minIncrement: { type: Number, default: 100 },
     timerSeconds: { type: Number, default: 15 },

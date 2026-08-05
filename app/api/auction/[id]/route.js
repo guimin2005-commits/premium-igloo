@@ -155,12 +155,13 @@ export async function POST(request, { params }) {
         if (auction.current.playerIdx !== playerIdx) {
           return NextResponse.json({ success: false, message: "호명된 선수에게만 스카우터를 사용할 수 있습니다." }, { status: 403 });
         }
-        if (player.isAllPos) return NextResponse.json({ success: false, message: "올 포지션 선수는 스카우터를 사용할 수 없습니다." }, { status: 403 });
         if (player.scoutedBy.includes(leaderIdx)) return NextResponse.json({ success: false, message: "이미 스카우트한 선수입니다." }, { status: 409 });
-        if (leader.points < S.scoutCost) return NextResponse.json({ success: false, message: "보유 Point가 부족합니다." }, { status: 400 });
-        leader.points -= S.scoutCost;
+        // 📌 황금카드(올 포지션)도 스카우터 사용 가능 — 전용 가격, 모스트만 공개
+        const cost = player.isAllPos ? (S.goldenScoutCost ?? 4000) : S.scoutCost;
+        if (leader.points < cost) return NextResponse.json({ success: false, message: "보유 Point가 부족합니다." }, { status: 400 });
+        leader.points -= cost;
         player.scoutedBy.push(leaderIdx);
-        addLog(auction, `${leader.name} 스카우터 사용 → ${player.alias}`);
+        addLog(auction, `${leader.name} 스카우터 사용 → ${player.isAllPos ? "올 포지션 선수" : player.alias} (${cost.toLocaleString()} Point)`);
         await auction.save();
         return NextResponse.json({ success: true });
       }

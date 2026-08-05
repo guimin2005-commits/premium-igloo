@@ -382,16 +382,18 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const slotLimitOf = (slot: string) => slotLimitOfFn(S, slot);
   // 포지션은 낙찰/프로필 공개 후에도 비공개 — 스카우터 사용자 · 진행자 · 경매 종료 시에만 공개
   // 스카우터로 공개되는 정보 문자열 (게임 reveal 설정 기반)
+  //  · 황금카드(올 포지션)는 포지션 개념이 없으므로 모스트만 공개
   const revealInfo = (p: any) => {
+    const ch = (p.mostChampions || []).filter(Boolean);
+    if (p.isAllPos) return ch.length ? `모스트 ${ch.join("  ·  ")}` : "공개 정보 없음";
     const parts: string[] = [];
     if (revealFields.includes("mainPos")) parts.push(`주 ${p.mainPos || "?"}`);
     if (revealFields.includes("subPos")) parts.push(`부 ${p.subPos || "-"}`);
-    if (revealFields.includes("champions")) {
-      const ch = (p.mostChampions || []).filter(Boolean);
-      if (ch.length) parts.push(`모스트 ${ch.join("  ·  ")}`);
-    }
+    if (revealFields.includes("champions") && ch.length) parts.push(`모스트 ${ch.join("  ·  ")}`);
     return parts.join(" / ");
   };
+  // 선수별 스카우터 비용 (황금카드 전용가)
+  const scoutCostOf = (p: any) => (p?.isAllPos ? (S.goldenScoutCost ?? 4000) : S.scoutCost);
   const canSeePos = (p: any) =>
     role === "host" || auction.status === "종료" || (myLeaderIdx !== null && p.scoutedBy.includes(myLeaderIdx));
   // 리더에게 익명 처리: 대기/경매중이 아닌 선수만 정보 공개 (호명 중엔 메인 카드에 표시)
@@ -427,14 +429,18 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       sfxScout();
       // 📌 결과는 우측 알림창으로 (화면을 가리는 오버레이 제거)
       const rows: { l: string; v: string; pos?: boolean }[] = [];
-      if (revealFields.includes("mainPos")) rows.push({ l: "주 포지션", v: target.mainPos || "?", pos: true });
-      if (revealFields.includes("subPos")) rows.push({ l: "부 포지션", v: target.subPos || "없음", pos: true });
-      if (revealFields.includes("champions")) {
-        const champs = (target.mostChampions || []).filter(Boolean);
+      const champs = (target.mostChampions || []).filter(Boolean);
+      if (target.isAllPos) {
+        // 황금카드 — 모스트만 공개
         rows.push({ l: "모스트 챔피언", v: champs.length ? champs.join("  ·  ") : "없음" });
+      } else {
+        if (revealFields.includes("mainPos")) rows.push({ l: "주 포지션", v: target.mainPos || "?", pos: true });
+        if (revealFields.includes("subPos")) rows.push({ l: "부 포지션", v: target.subPos || "없음", pos: true });
+        if (revealFields.includes("champions")) rows.push({ l: "모스트 챔피언", v: champs.length ? champs.join("  ·  ") : "없음" });
       }
-      pushNotice({ kind: "scout", title: `스카우터 — ${target.alias}`, rows });
-      showToast(`${target.alias} 스카우터 결과가 알림창에 도착했습니다`);
+      const tName = target.isAllPos ? "올 포지션 선수" : target.alias;
+      pushNotice({ kind: "scout", title: `스카우터 — ${tName}`, rows });
+      showToast(`${tName} 스카우터 결과가 알림창에 도착했습니다`);
       // 📌 즉시 반영 (폴링 지연 동안 버튼 잔존/포인트 미차감/포지션 미표시 방지)
       setAuction((prev: any) => {
         if (!prev) return prev;
@@ -442,7 +448,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         const p = next.players[targetIdx];
         if (p && !p.scoutedBy.includes(myLeaderIdx)) p.scoutedBy.push(myLeaderIdx);
         const l = next.leaders[myLeaderIdx];
-        if (l) l.points = Math.max(0, l.points - next.settings.scoutCost);
+        if (l) l.points = Math.max(0, l.points - (target?.isAllPos ? (next.settings.goldenScoutCost ?? 4000) : next.settings.scoutCost));
         return next;
       });
     }
@@ -811,7 +817,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         {curPlayer.isAllPos ? <span className="lux-shimmer">올 포지션 선수</span> : curPlayer.alias}
                       </h2>
                       {curPlayer.isAllPos ? (
-                        <p className="text-xs text-gray-400">티어 비공개 · 스카우터 불가 · 슬롯 자유 배정</p>
+                        <p className="text-xs text-gray-400">티어 비공개 · 스카우터는 모스트만 공개 · 슬롯 자유 배정</p>
                       ) : (
                         <div className="flex flex-wrap gap-2">
                           <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-300 px-2.5 py-1 rounded-full">최고 {curPlayer.peakTier || "?"}</span>
@@ -851,9 +857,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     {myLeader && auction.status === "진행중" && (
                       <div className="flex flex-col items-end gap-2.5">
                         {/* 스카우터 버튼 (호명된 선수 대상, 경매 중에도 사용 가능) */}
-                        {myLeaderIdx !== null && !curPlayer.isAllPos && !curPlayer.scoutedBy.includes(myLeaderIdx) && (
-                          <button onClick={() => setConfirmCfg({ title: "스카우터 사용", message: `${S.scoutCost.toLocaleString()} Point를 사용하여 이 선수의 ${revealFields.includes("champions") ? "주 포지션·모스트 챔피언" : "주/부 포지션"}을(를) 확인합니다.`, confirmLabel: "사용", onConfirm: useScouter })} className="px-4 py-2 text-[11px] font-black bg-white/5 border border-white/15 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 text-gray-200 rounded-xl transition-all">
-                            스카우터 사용 ({S.scoutCost.toLocaleString()} Point)
+                        {myLeaderIdx !== null && !curPlayer.scoutedBy.includes(myLeaderIdx) && (
+                          <button onClick={() => setConfirmCfg({ title: "스카우터 사용", message: `${scoutCostOf(curPlayer).toLocaleString()} Point를 사용하여 이 선수의 ${curPlayer.isAllPos ? "모스트 챔피언" : revealFields.includes("champions") ? "주 포지션·모스트 챔피언" : "주/부 포지션"}을(를) 확인합니다.`, confirmLabel: "사용", onConfirm: useScouter })} className={`px-4 py-2 text-[11px] font-black bg-white/5 border rounded-xl transition-all ${curPlayer.isAllPos ? "border-amber-400/40 hover:border-amber-400/70 hover:bg-amber-400/10 text-amber-200" : "border-white/15 hover:border-[#e91e3f]/50 hover:bg-[#e91e3f]/10 text-gray-200"}`}>
+                            스카우터 사용 ({scoutCostOf(curPlayer).toLocaleString()} Point)
                           </button>
                         )}
 
@@ -1276,7 +1282,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               { l: "현재 티어", v: sel.golden ? "비공개" : (sp?.currentTier || "-"), accent: false },
                               {
                                 l: "스카우터",
-                                v: sel.golden ? "황금카드 — 확인 불가" : scouted ? revealInfo(sp) : "미확인",
+                                v: scouted ? revealInfo(sp) : "미확인",
                                 accent: !sel.golden && !!scouted,
                               },
                             ].map((it, ii) => (

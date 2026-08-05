@@ -51,7 +51,7 @@ export default function AuctionListPage() {
   const [reveal, setReveal] = useState<string[]>((GAME_PRESETS as any)["오버워치"].reveal);
   const [settings, setSettings] = useState({
     leaderPoints: 100000, basePrice: 1000, goldenBasePrice: 4000,
-    scoutCost: 2000, posChangeCost: 10000, minIncrement: 100, timerSeconds: 15, scoutSeconds: 7,
+    scoutCost: 2000, goldenScoutCost: 4000, posChangeCost: 10000, minIncrement: 100, timerSeconds: 15, scoutSeconds: 7,
   });
   const [leaders, setLeaders] = useState<any[]>([{ name: "", position: "", discordId: "" }]);
   const [players, setPlayers] = useState<any[]>([{ alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", mostChampions: [""], isAllPos: false }]);
@@ -314,6 +314,7 @@ export default function AuctionListPage() {
                     { k: "basePrice", l: "기본 시작가" },
                     { k: "goldenBasePrice", l: "황금카드 시작가" },
                     { k: "scoutCost", l: "스카우터 비용" },
+                    { k: "goldenScoutCost", l: "황금 스카우터" },
                     { k: "posChangeCost", l: "포지션 체인지" },
                     { k: "minIncrement", l: "최소 입찰 단위" },
                     { k: "timerSeconds", l: "입찰 타이머(초)" },
@@ -388,7 +389,13 @@ export default function AuctionListPage() {
                         <input type="text" placeholder="현재 티어" value={p.currentTier} onChange={(e) => updatePlayer(i, "currentTier", e.target.value)} className={inputClass} />
                       </div>
                       {p.isAllPos ? (
-                        <p className="text-[10px] text-[#e91e3f]/80 font-bold">황금카드 — 티어 비공개 · 스카우터 불가 · 시작가 {settings.goldenBasePrice.toLocaleString()}pt · 슬롯 자유 배정</p>
+                        <div className="space-y-2">
+                          <p className="text-[10px] text-amber-300/90 font-bold">황금카드 — 티어 비공개 · 시작가 {settings.goldenBasePrice.toLocaleString()}pt · 슬롯 자유(이미 찬 곳도 배정) · 스카우터({settings.goldenScoutCost.toLocaleString()}pt)는 모스트만 공개</p>
+                          <div>
+                            <p className="text-[9px] font-bold text-gray-600 mb-1">모스트 챔피언 <span className="text-gray-700">(스카우터 공개 · 1개)</span></p>
+                            <input type="text" placeholder="예: 아트록스" value={(p.mostChampions || [""])[0] || ""} onChange={(e) => updatePlayer(i, "mostChampions", [e.target.value])} className="w-full bg-[#0d0d0d] border border-white/10 rounded-md px-2.5 py-1.5 text-[11px] text-white outline-none focus:border-amber-400/60 placeholder:text-gray-600" />
+                          </div>
+                        </div>
                       ) : (
                         <div className="space-y-2">
                           <div>
