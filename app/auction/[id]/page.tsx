@@ -332,6 +332,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const timeLeft = cur.endsAt ? Math.max(0, Math.ceil((new Date(cur.endsAt).getTime() - now) / 1000)) : null;
   const scoutLeft = cur.scoutUntil ? Math.max(0, Math.ceil((new Date(cur.scoutUntil).getTime() - now) / 1000)) : 0;
   const strategyLeft = auction.strategyUntil ? Math.max(0, Math.ceil((new Date(auction.strategyUntil).getTime() - now) / 1000)) : 0;
+  const assignLeft = auction.assignUntil ? Math.max(0, Math.ceil((new Date(auction.assignUntil).getTime() - now) / 1000)) : 0;
 
   const pa = auction.pendingAssign;
   const hasPending = pa && pa.playerIdx !== null && pa.playerIdx !== undefined;
@@ -732,6 +733,15 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
           )}
 
+          {/* 팀원 배정 시간 배너 (인벤토리 모드) */}
+          {assignLeft > 0 && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] px-5 py-4 flex items-center gap-3">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-[pulseGlow_1.5s_ease-in-out_infinite] shrink-0"></span>
+              <p className="text-xs font-bold text-gray-300 flex-1">팀원 배정 시간 — 팀장은 <b className="text-amber-300">인벤토리</b>의 선수를 포지션에 배정해주세요. 종료 시 확정됩니다.</p>
+              <span className="text-lg font-black text-amber-400 tabular-nums shrink-0">{Math.floor(assignLeft / 60)}:{String(assignLeft % 60).padStart(2, "0")}</span>
+            </div>
+          )}
+
           {/* 슬롯 배정/이동 안내 배너 */}
           {hasPending && !iAmAssigner && (
             <div className="rounded-2xl border border-[#e91e3f]/25 bg-[#e91e3f]/[0.05] px-5 py-4 flex items-center gap-3">
@@ -957,7 +967,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               if (list.length === 0) return null;
               return (
                 <div key={phase} className="mb-4 last:mb-0">
-                  <p className="text-[10px] font-black text-gray-600 mb-2">PHASE {phase}</p>
+                  <p className="text-[10px] font-black text-gray-600 mb-2">{p1Role ? `PHASE ${phase}` : "선수 목록"}</p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2.5">
                     {list.map(({ p, i }: any) => {
                       const hidden = isHiddenFor(p);
@@ -1039,7 +1049,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         {/* ═══ 우측: 실시간 채팅 + 로그 ═══ */}
         {/* 모바일: 경매 탭에 채팅이 함께 표시 (스트리밍 스타일 · 컴팩트 높이) */}
         <div className={`${mobileTab === "main" ? "flex" : "hidden"} lg:flex w-full xl:w-[350px] shrink-0 order-3 flex-col gap-5 xl:sticky xl:top-36 xl:self-start xl:max-h-[calc(100vh-11rem)]`}>
-          <div className="rounded-2xl bg-[#111111]/95 border border-white/5 flex flex-col overflow-hidden h-[38vh] max-h-[340px] lg:h-auto lg:max-h-[calc(100vh-13rem)] lg:flex-1 lg:min-h-[320px] xl:min-h-0">
+          <div className="rounded-2xl bg-[#111111]/95 border border-white/5 flex flex-col overflow-hidden h-[40vh] max-h-[360px] lg:h-[52vh] lg:max-h-none xl:h-[calc(100vh-13rem)]">
             <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>
               <span className="text-xs font-black text-white">실시간 채팅</span>

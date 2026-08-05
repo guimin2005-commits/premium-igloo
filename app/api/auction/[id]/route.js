@@ -170,6 +170,8 @@ export async function POST(request, { params }) {
         const { leaderIdx, ready } = body;
         const leader = auction.leaders[leaderIdx];
         if (!leader) return NextResponse.json({ success: false }, { status: 400 });
+        const wasReady = !!leader.ready;
+        if (wasReady === !!ready) return NextResponse.json({ success: true }); // 상태 변화 없으면 공지·로그 생략(연타 도배 방지)
         leader.ready = !!ready;
         addLog(auction, `${leader.name} ${ready ? "준비 완료" : "준비 해제"}`);
         await auction.save();
