@@ -46,6 +46,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [goldenFx, setGoldenFx] = useState(false);           // 황금카드 등장 애니메이션
   const [nextFx, setNextFx] = useState<string | null>(null); // 다음 매물 전환 배너
   const [mobileTab, setMobileTab] = useState<"main" | "teams">("main"); // 모바일 섹션 전환 (경매+채팅 통합 / 팀 현황)
+  const [invModal, setInvModal] = useState<number | null>(null); // 인벤토리 팝업 대상 리더 idx
+  const [dragCard, setDragCard] = useState<number | null>(null); // 드래그 중인 인벤토리 카드 idx
   const [profiles, setProfiles] = useState<Record<string, any>>({});
   const [confirmCfg, setConfirmCfg] = useState<any>(null); // {title, message, confirmLabel, onConfirm}
   const [strategyModalOpen, setStrategyModalOpen] = useState(false);
@@ -115,6 +117,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   }, [playTone]);
   // 스카우터 결과 (신비로운 차임)
   const sfxScout = useCallback(() => { playTone(880, 0.1, 0.035, "triangle"); setTimeout(() => playTone(1175, 0.14, 0.04, "triangle"), 110); setTimeout(() => playTone(1568, 0.2, 0.035, "triangle"), 240); }, [playTone]);
+  // 인벤토리 → 슬롯 배정 (카드가 '착' 꽂히는 느낌)
+  const sfxAssign = useCallback(() => { playTone(392, 0.06, 0.045, "triangle"); setTimeout(() => playTone(659, 0.09, 0.05, "triangle"), 70); setTimeout(() => playTone(988, 0.14, 0.035), 150); }, [playTone]);
+  // 슬롯 → 인벤토리 회수 (반대로 내려가는 톤)
+  const sfxUnassign = useCallback(() => { playTone(660, 0.07, 0.035, "triangle"); setTimeout(() => playTone(392, 0.12, 0.03, "triangle"), 80); }, [playTone]);
+  // 카드 선택(집기) — 짧은 틱
+  const sfxSelect = useCallback(() => playTone(880, 0.04, 0.025, "triangle"), [playTone]);
   // 황금카드 소환 (시네마틱: 어둠의 드론 → 심장박동 → 상승 텐션 → 공개 임팩트 → 잔광)
   const sfxGolden = useCallback(() => {
     // 낮게 깔리는 드론 (어둠)
@@ -578,7 +586,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               ) : (
                 <button onClick={() => setStrategyModalOpen(true)} className="text-xs font-black bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-lg transition-colors">전략 타임</button>
               )}
-              {invMode && <button onClick={() => act({ action: "host:assignTime", seconds: 180 })} className="text-xs font-black bg-blue-500/80 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg transition-colors">팀원 배정 시간(3분)</button>}
+              {invMode && <button onClick={async () => { const d = await act({ action: "host:assignTime", seconds: 180 }); if (d?.success) { sfxStrategy(); showToast("팀원 배정 시간 3분이 시작되었습니다"); } else showToast(d?.message || "배정 시간 부여에 실패했습니다"); }} className="text-xs font-black bg-blue-500/80 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg transition-colors">팀원 배정 시간(3분)</button>}
               <button onClick={() => setConfirmCfg({ title: "경매 종료", message: invMode ? "경매를 종료합니다. 종료 후에는 인벤토리·포지션 조정이 불가합니다. 계속할까요?" : "모든 경매를 종료하시겠습니까?", confirmLabel: "종료", onConfirm: () => act({ action: "host:end" }) })} className="text-xs font-black bg-white/10 hover:bg-red-500/80 text-white px-4 py-1.5 rounded-lg transition-colors">종료</button>
             </>
           )}
@@ -656,33 +664,15 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     <div className="px-3.5 pb-3.5">
                       <SlotBoard leader={l} leaderIdx={li} />
 
-                      {/* 📌 인벤토리 — 낙찰했지만 미배정 카드 (인벤토리 모드) */}
-                      {invMode && (l.inventory?.length || 0) > 0 && (
-                        <div className="mt-2.5 rounded-xl border border-white/10 bg-black/25 p-2.5">
-                          <p className="text-[9px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2">인벤토리 · {l.inventory.length}</p>
-                          <div className="space-y-1.5">
-                            {l.inventory.map((card: any, ci: number) => {
-                              const cp = auction.players[card.playerIdx];
-                              const canManage = auction.status === "진행중" && (role === "host" || myLeaderIdx === li);
-                              return (
-                                <div key={ci} className={`rounded-lg border p-2 ${card.golden ? "border-[#e91e3f]/35 bg-[#e91e3f]/[0.05]" : "border-white/10 bg-[#0d0d0d]"}`}>
-                                  <div className="flex items-center justify-between gap-2 mb-1.5">
-                                    <span className="text-[11px] font-bold text-gray-100 truncate">{card.golden ? "★ 올포지션 선수" : (cp?.revealed && cp?.discordId && profiles[cp.discordId] ? profiles[cp.discordId].globalName : cp?.alias)}</span>
-                                    <span className="text-[10px] font-black text-[#e91e3f] shrink-0 tabular-nums">{card.price.toLocaleString()}</span>
-                                  </div>
-                                  {canManage && (
-                                    <div className="flex flex-wrap gap-1">
-                                      {roleList.map((slot) => {
-                                        const full = slotFilled(l, slot) >= slotLimitOf(slot);
-                                        return <button key={slot} disabled={full} onClick={() => act({ action: "assign:place", leaderIdx: li, invIdx: ci, slot, byLeaderIdx: myLeaderIdx })} className={`flex-1 min-w-[34px] py-1 text-[9px] font-bold rounded border transition-all ${full ? "border-white/5 text-gray-700 cursor-not-allowed" : "border-white/15 text-gray-300 hover:border-[#e91e3f]/50 hover:text-white"}`}>{slot}</button>;
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
+                      {/* 📌 인벤토리 — 팝업으로 확인 (팀 패널은 버튼만, 정보량 축소) */}
+                      {invMode && (
+                        <button onClick={() => setInvModal(li)} className="mt-2.5 w-full flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/25 hover:border-[#e91e3f]/40 px-3 py-2 transition-colors group/inv">
+                          <span className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 group-hover/inv:text-white transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
+                            인벤토리
+                          </span>
+                          <span className={`text-[10px] font-black tabular-nums px-1.5 py-0.5 rounded ${(l.inventory?.length || 0) > 0 ? "bg-[#e91e3f]/15 text-[#e91e3f]" : "bg-white/5 text-gray-600"}`}>{l.inventory?.length || 0}</span>
+                        </button>
                       )}
 
                       {/* 포지션 체인지 — 경매 진행 중 리더 재량 1회 (진행자 대행 가능, 종료 후 불가) */}
@@ -1089,6 +1079,118 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
       </div>
+
+      {/* 📌 인벤토리 팝업 — 내 팀은 드래그로 배정, 타 팀은 열람 전용 */}
+      {invModal !== null && auction.leaders[invModal] && (() => {
+        const li = invModal;
+        const l = auction.leaders[li];
+        const mine = role === "host" || myLeaderIdx === li;
+        const canManage = mine && auction.status === "진행중";
+        const cardName = (card: any) => {
+          const cp = auction.players[card.playerIdx];
+          if (card.golden) return "★ 올포지션 선수";
+          return cp?.revealed && cp?.discordId && profiles[cp.discordId] ? profiles[cp.discordId].globalName : cp?.alias;
+        };
+        return (
+          <div className="fixed inset-0 z-[118] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); }}>
+            <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-2xl max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
+                <span className="text-sm font-black text-white truncate">{l.name} 팀 인벤토리</span>
+                <span className="text-[10px] font-black text-[#e91e3f] tabular-nums">{l.inventory?.length || 0}장</span>
+                {!mine && <span className="text-[9px] font-bold text-gray-600 border border-white/10 rounded px-1.5 py-0.5">열람 전용</span>}
+                <button onClick={() => { setInvModal(null); setDragCard(null); }} className="ml-auto p-1.5 -mr-1 text-gray-500 hover:text-white rounded-md hover:bg-white/5 transition-colors outline-none">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+
+              <div className="p-5 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden space-y-5">
+                {/* 카드들 */}
+                <div>
+                  <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">보유 카드 {canManage && <span className="text-gray-600 font-bold normal-case tracking-normal">— 카드를 아래 포지션으로 드래그 (또는 카드 선택 후 포지션 클릭)</span>}</p>
+                  {(l.inventory?.length || 0) === 0 ? (
+                    <p className="text-center text-xs text-gray-600 py-6 border border-dashed border-white/10 rounded-xl">보유 중인 카드가 없습니다.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {l.inventory.map((card: any, ci: number) => (
+                        <div
+                          key={ci}
+                          draggable={canManage}
+                          onDragStart={() => { setDragCard(ci); sfxSelect(); }}
+                          onDragEnd={() => setDragCard(null)}
+                          onClick={() => { if (!canManage) return; const next = dragCard === ci ? null : ci; setDragCard(next); if (next !== null) { sfxSelect(); showToast(`${cardName(card)} 선택 — 배정할 포지션을 누르세요`); } }}
+                          className={`rounded-xl border p-3 select-none transition-all ${card.golden ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : "border-white/10 bg-[#0d0d0d]"} ${canManage ? "cursor-grab active:cursor-grabbing hover:border-white/30" : ""} ${dragCard === ci ? "ring-2 ring-[#e91e3f] border-[#e91e3f]" : ""}`}
+                        >
+                          <p className="text-xs font-black text-white truncate mb-1">{cardName(card)}</p>
+                          <p className="text-[10px] font-black text-[#e91e3f] tabular-nums">{card.price.toLocaleString()} <span className="text-gray-600 font-bold">Point</span></p>
+                          {card.golden && <p className="text-[9px] font-bold text-[#e91e3f]/80 mt-1">황금카드 · 슬롯 자유</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 포지션 드롭존 + 현재 배치 */}
+                <div>
+                  <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">포지션 배치</p>
+                  <div className="space-y-2">
+                    {roleList.map((slot) => {
+                      const entries = l.roster.map((r: any, ri: number) => ({ r, ri })).filter(({ r }: any) => r.slot === slot);
+                      const limit = slotLimitOf(slot);
+                      const full = entries.length >= limit;
+                      const dropOk = canManage && dragCard !== null && !full;
+                      const place = async () => {
+                        if (dragCard === null) return;
+                        const nm = cardName(l.inventory[dragCard]);
+                        const d = await act({ action: "assign:place", leaderIdx: li, invIdx: dragCard, slot, byLeaderIdx: myLeaderIdx });
+                        if (d?.success) {
+                          sfxAssign();
+                          showToast(`${nm} → [${slot}] 배정 완료`);
+                          setDragCard(null);
+                        } else {
+                          showToast(d?.message || "배정에 실패했습니다");
+                        }
+                      };
+                      return (
+                        <div
+                          key={slot}
+                          onDragOver={(e) => { if (dropOk) e.preventDefault(); }}
+                          onDrop={(e) => { e.preventDefault(); if (dropOk) place(); }}
+                          onClick={() => { if (dropOk) place(); }}
+                          className={`rounded-xl border p-3 transition-all ${dropOk ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.06] cursor-pointer" : full ? "border-white/10 bg-white/[0.02]" : "border-dashed border-white/15 bg-black/20"}`}
+                        >
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className={`text-[10px] font-black ${roleColor(slot).text}`}>{slot}</span>
+                            <span className="text-[9px] font-bold text-gray-600 tabular-nums">{entries.length}/{limit}</span>
+                            {dropOk && <span className="ml-auto text-[9px] font-black text-[#e91e3f] animate-pulse">여기에 배정</span>}
+                          </div>
+                          {entries.length === 0 ? (
+                            <p className="text-[10px] text-gray-700">비어 있음</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {entries.map(({ r, ri }: any) => {
+                                const rp = r.playerIdx === -1 ? null : auction.players[r.playerIdx];
+                                const nm = r.playerIdx === -1 ? `${l.name} (리더)` : (rp?.revealed && rp?.discordId && profiles[rp.discordId] ? profiles[rp.discordId].globalName : rp?.alias);
+                                return (
+                                  <span key={ri} className="inline-flex items-center gap-1.5 text-[10px] font-bold text-gray-200 bg-white/[0.05] border border-white/10 rounded-full pl-2.5 pr-1.5 py-1">
+                                    {nm}
+                                    {canManage && r.playerIdx !== -1 && (
+                                      <button onClick={async (e) => { e.stopPropagation(); const d = await act({ action: "assign:remove", leaderIdx: li, rosterIdx: ri, byLeaderIdx: myLeaderIdx }); if (d?.success) { sfxUnassign(); showToast(`${nm} 선수를 인벤토리로 회수했습니다`); } else { showToast(d?.message || "회수에 실패했습니다"); } }} title="인벤토리로 회수" className="w-4 h-4 rounded-full bg-white/10 hover:bg-red-500/70 text-gray-400 hover:text-white text-[9px] font-black leading-none transition-colors">×</button>
+                                    )}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 진행자 대행 슬롯 배정 (진행자 화면에서 배정 대기 시 — 좌측 레일 SlotBoard로도 가능) */}
 
