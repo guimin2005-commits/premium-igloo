@@ -319,21 +319,8 @@ export async function POST(request, { params }) {
         return NextResponse.json({ success: true });
       }
 
-      // 인벤토리 모드: 배정된 카드를 다시 인벤토리로
-      case "assign:remove": {
-        const { leaderIdx, rosterIdx, byLeaderIdx } = body;
-        const leader = auction.leaders[leaderIdx];
-        if (!leader) return NextResponse.json({ success: false }, { status: 400 });
-        if (byLeaderIdx !== null && byLeaderIdx !== undefined && byLeaderIdx !== leaderIdx) {
-          return NextResponse.json({ success: false, message: "본인 팀만 조정할 수 있습니다." }, { status: 403 });
-        }
-        const entry = leader.roster?.[rosterIdx];
-        if (!entry || entry.playerIdx === -1) return NextResponse.json({ success: false, message: "이동할 수 없는 카드입니다." }, { status: 400 });
-        leader.inventory.push({ playerIdx: entry.playerIdx, price: entry.price, golden: entry.golden });
-        leader.roster.splice(rosterIdx, 1);
-        await auction.save();
-        return NextResponse.json({ success: true });
-      }
+      // ⚠️ 인벤토리 → 슬롯 배정은 되돌릴 수 없음 (회수 액션 없음)
+      //    배정 후 조정은 포지션 체인지(host:posSwap, 팀당 1회)로만 가능
 
       // 개최자: 팀원 배정 시간 부여 (인벤토리 모드)
       case "host:assignTime": {
