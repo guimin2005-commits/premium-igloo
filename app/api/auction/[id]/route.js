@@ -85,13 +85,14 @@ export async function POST(request, { params }) {
     // ── 채팅 ──
     if (action === "chat") {
       if (!body.message?.trim()) return NextResponse.json({ success: false }, { status: 400 });
-      await AuctionChat.create({
+      // 📌 생성된 메시지를 즉시 돌려줘 보낸 사람 화면에 바로 표시 (폴링 대기 없음)
+      const created = await AuctionChat.create({
         auctionId: id,
         userName: body.userName || "익명",
         avatar: body.avatar || "",
         message: body.message.trim().slice(0, 200),
       });
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true, message: created });
     }
 
     // ── 입찰 (원자적 업데이트로 동시 충돌 방지) ──

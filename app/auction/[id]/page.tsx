@@ -54,8 +54,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const serverNow = () => Date.now() + clockSkew.current;
   const [soundOn, setSoundOn] = useState(true);
   const [volume, setVolume] = useState(60); // 0~100
-  const [notices, setNotices] = useState<any[]>([]); // 📌 내 알림창 (스카우터 결과 등, 나에게만 보임)
+  const [notices, setNotices] = useState<any[]>([]); // 📌 내 알림 로그 (스카우터 결과 등, 역할별로 분리)
   const noticeSeq = useRef(0);
+  const roleKeyRef = useRef("host"); // 알림 로그 저장 키로 쓰는 현재 역할
   const [goldenFx, setGoldenFx] = useState(false);           // 황금카드 등장 애니메이션
   const [nextFx, setNextFx] = useState<string | null>(null); // 다음 매물 전환 배너
   const [mobileTab, setMobileTab] = useState<"main" | "teams">("main"); // 모바일 섹션 전환 (경매+채팅 통합 / 팀 현황)
@@ -99,10 +100,15 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   }, []);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
-  // 📌 알림창에 항목 추가 (최신순, 최대 30개)
+  // 📌 알림 로그 — 역할(리더)별로 분리 저장, 새로고침해도 유지
+  const noticeKey = (r: string) => `auctionNotices:${id}:${r}`;
   const pushNotice = (n: { kind: string; title: string; body?: string; rows?: { l: string; v: string; pos?: boolean }[] }) => {
-    const id = ++noticeSeq.current;
-    setNotices((prev) => [{ ...n, id, at: new Date() }, ...prev].slice(0, 30));
+    const nid = ++noticeSeq.current;
+    setNotices((prev) => {
+      const next = [{ ...n, id: nid, at: new Date().toISOString() }, ...prev].slice(0, 50);
+      try { localStorage.setItem(noticeKey(roleKeyRef.current), JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
 
   // ── 사운드 (적당한 볼륨의 신스 톤) ──
@@ -255,6 +261,15 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     return () => { alive = false; clearInterval(t); };
   }, [id, status, sfxBid, sfxCall, sfxSold, sfxPass, sfxAllin, sfxReveal, sfxStrategy, sfxStart, sfxEnd, sfxPhase, sfxChat, sfxGolden, sfxHammer]);
 
+  // 📌 역할이 바뀌면 해당 역할의 알림 로그로 교체 (다른 리더의 알림이 남지 않도록)
+  useEffect(() => {
+    roleKeyRef.current = role;
+    try {
+      const saved = JSON.parse(localStorage.getItem(`auctionNotices:${id}:${role}`) || "[]");
+      setNotices(Array.isArray(saved) ? saved : []);
+    } catch { setNotices([]); }
+  }, [role, id]);
+
   // 타이머 시계 + 마감 임박 사운드 (5초 경고 → 3·2·1 틱 → 타임업 버저)
   useEffect(() => {
     const t = setInterval(() => {
@@ -340,7 +355,17 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     if (Date.now() - chatCooldown.current < 2000) { showToast("도배 방지: 2초에 한 번만 보낼 수 있어요"); return; }
     chatCooldown.current = Date.now();
     setChatInput("");
-    await act({ action: "chat", message: msg, userName: session?.user?.name, avatar: session?.user?.image || "" });
+    const d = await act({ action: "chat", message: msg, userName: session?.user?.name, avatar: session?.user?.image || "" });
+    // 📌 폴링(1.5초) 대기 없이 즉시 표시 — _id를 등록해 폴링 중복 방지
+    if (d?.success && d.message?._id) {
+      if (!chatIds.current.has(d.message._id)) {
+        chatIds.current.add(d.message._id);
+        setChat((prev) => [...prev, d.message].slice(-150));
+        if (!lastChatAt.current || new Date(d.message.createdAt) > new Date(lastChatAt.current)) {
+          lastChatAt.current = d.message.createdAt;
+        }
+      }
+    } else if (d?.message && typeof d.message === "string") showToast(d.message);
   };
 
   if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
@@ -1213,10 +1238,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           <div className="rounded-2xl bg-[#111111]/95 border border-white/5 flex flex-col overflow-hidden shrink-0 h-[196px]">
             <div className="px-4 py-2.5 border-b border-white/5 flex items-center gap-2 shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_2s_ease-in-out_infinite]"></span>
-              <span className="text-xs font-black text-white">알림창</span>
-              <span className="text-[9px] font-bold text-gray-600">나에게만 표시</span>
+              <span className="text-xs font-black text-white">알림 로그</span>
+              <span className="text-[9px] font-bold text-gray-600">나에게만 · 계속 보관</span>
               {notices.length > 0 && (
-                <button onClick={() => setNotices([])} className="ml-auto text-[9px] font-bold text-gray-600 hover:text-white transition-colors">모두 지우기</button>
+                <button onClick={() => { setNotices([]); try { localStorage.removeItem(noticeKey(roleKeyRef.current)); } catch {} }} className="ml-auto text-[9px] font-bold text-gray-600 hover:text-white transition-colors">모두 지우기</button>
               )}
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
