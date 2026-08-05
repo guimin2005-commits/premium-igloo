@@ -50,6 +50,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [dragCard, setDragCard] = useState<number | null>(null); // 드래그 중인 인벤토리 카드 idx
   const [assignWarn, setAssignWarn] = useState<{ invIdx: number; slot: string; name: string } | null>(null); // 최초 1회 배정 경고
   const warnedRef = useRef(false); // 배정 불가역 경고를 이미 봤는지
+  const [swapMode, setSwapMode] = useState(false);        // 인벤토리 내 포지션 체인지 모드
+  const [swapPick, setSwapPick] = useState<number[]>([]); // 교환할 roster 인덱스 2개
   const [profiles, setProfiles] = useState<Record<string, any>>({});
   const [confirmCfg, setConfirmCfg] = useState<any>(null); // {title, message, confirmLabel, onConfirm}
   const [strategyModalOpen, setStrategyModalOpen] = useState(false);
@@ -408,7 +410,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     if (d.success) {
       sfxScout();
       setScoutResult({ alias: target.alias, mainPos: target.mainPos, subPos: target.subPos, mostChampions: target.mostChampions || [] });
-      setTimeout(() => setScoutResult(null), 3200);
+      setTimeout(() => setScoutResult(null), 7000);
       // 📌 즉시 반영 (폴링 지연 동안 버튼 잔존/포인트 미차감/포지션 미표시 방지)
       setAuction((prev: any) => {
         if (!prev) return prev;
@@ -1124,28 +1126,29 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           doPlace(invIdx, slot);
         };
         return (
-          <div className="fixed inset-0 z-[118] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); }}>
-            <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-2xl max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+          <div className="fixed inset-0 z-[118] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); }}>
+            <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-5xl max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
               <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
                 <span className="text-sm font-black text-white truncate">{l.name} 팀 인벤토리</span>
                 <span className="text-[10px] font-black text-[#e91e3f] tabular-nums">{l.inventory?.length || 0}장</span>
                 {!mine && <span className="text-[9px] font-bold text-gray-600 border border-white/10 rounded px-1.5 py-0.5">열람 전용</span>}
-                <button onClick={() => { setInvModal(null); setDragCard(null); }} className="ml-auto p-1.5 -mr-1 text-gray-500 hover:text-white rounded-md hover:bg-white/5 transition-colors outline-none">
+                <button onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); }} className="ml-auto p-1.5 -mr-1 text-gray-500 hover:text-white rounded-md hover:bg-white/5 transition-colors outline-none">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
 
-              <div className="p-5 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden space-y-5">
-                {/* ── 보유 카드 (세로 카드) ── */}
+              {/* 가로 2단: 좌 보유 선수 / 우 포지션 지정 */}
+              <div className="p-5 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-5 items-start">
+                {/* ── 보유 선수 (세로 카드) ── */}
                 <div>
                   <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
-                    보유 카드
-                    {canManage && <span className="text-gray-600 font-bold normal-case tracking-normal"> — 카드를 아래 포지션으로 드래그 (또는 카드 선택 후 포지션 클릭)</span>}
+                    보유 선수
+                    {canManage && <span className="text-gray-600 font-bold normal-case tracking-normal"> — 카드를 오른쪽 포지션으로 드래그 (또는 선택 후 클릭)</span>}
                   </p>
                   {(l.inventory?.length || 0) === 0 ? (
-                    <p className="text-center text-xs text-gray-600 py-8 border border-dashed border-white/10 rounded-xl">보유 중인 카드가 없습니다.</p>
+                    <p className="text-center text-xs text-gray-600 py-8 border border-dashed border-white/10 rounded-xl">보유 중인 선수가 없습니다.</p>
                   ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
                       {l.inventory.map((card: any, ci: number) => {
                         const picked = dragCard === ci;
                         return (
@@ -1174,13 +1177,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                 {/* ── 포지션 지정 (드롭존) ── */}
                 <div>
-                  <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">포지션 지정</p>
+                  <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
+                    포지션 지정
+                    {swapMode && <span className="text-[#e91e3f] font-black normal-case tracking-normal"> — 교환할 선수 2명을 선택하세요 ({swapPick.length}/2)</span>}
+                  </p>
                   <div className="space-y-2">
                     {roleList.map((slot) => {
                       const entries = l.roster.map((r: any, ri: number) => ({ r, ri })).filter(({ r }: any) => r.slot === slot);
                       const limit = slotLimitOf(slot);
                       const full = entries.length >= limit;
-                      const dropOk = canManage && dragCard !== null && !full;
+                      const dropOk = canManage && !swapMode && dragCard !== null && !full;
                       return (
                         <div
                           key={slot}
@@ -1198,13 +1204,28 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             <p className="text-[10px] text-gray-700">비어 있음</p>
                           ) : (
                             <div className="flex flex-wrap gap-1.5">
-                              {entries.map(({ r, ri }: any) => (
-                                <span key={ri} className="inline-flex items-center gap-1.5 text-[10px] font-bold text-gray-200 bg-white/[0.05] border border-white/10 rounded-full px-2.5 py-1">
-                                  {rosterName(l, r)}
-                                  {r.playerIdx === -1 && <span className="text-[8px] text-gray-500 font-black">리더</span>}
-                                  {r.golden && <span className="text-[8px] text-[#e91e3f] font-black">ALL</span>}
-                                </span>
-                              ))}
+                              {entries.map(({ r, ri }: any) => {
+                                const picked = swapPick.includes(ri);
+                                const selectable = swapMode && canManage;
+                                return (
+                                  <button
+                                    key={ri}
+                                    type="button"
+                                    disabled={!selectable}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (!selectable) return;
+                                      setSwapPick((prev) => prev.includes(ri) ? prev.filter((x) => x !== ri) : prev.length >= 2 ? prev : [...prev, ri]);
+                                      sfxSelect();
+                                    }}
+                                    className={`inline-flex items-center gap-1.5 text-[10px] font-bold rounded-full px-2.5 py-1 border transition-all ${picked ? "border-[#e91e3f] bg-[#e91e3f]/20 text-white ring-1 ring-[#e91e3f]" : selectable ? "border-white/20 bg-white/[0.06] text-gray-200 hover:border-[#e91e3f]/50 cursor-pointer" : "border-white/10 bg-white/[0.05] text-gray-200 cursor-default"}`}
+                                  >
+                                    {rosterName(l, r)}
+                                    {r.playerIdx === -1 && <span className="text-[8px] text-gray-500 font-black">리더</span>}
+                                    {r.golden && <span className="text-[8px] text-[#e91e3f] font-black">ALL</span>}
+                                  </button>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -1212,22 +1233,42 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     })}
                   </div>
 
-                  {/* 포지션 체인지 — 배정 후 유일한 조정 수단 (1회) */}
+                  {/* 포지션 체인지 — 인벤토리 안에서 바로 실행 (배정 후 유일한 조정 수단 · 1회) */}
                   {canManage && (
-                    <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-3.5 py-2.5">
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-black text-gray-300">포지션 체인지</p>
-                        <p className="text-[9px] text-gray-600">배정 후 포지션을 바꾸는 유일한 방법 · 팀당 1회</p>
+                    <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.02] px-3.5 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black text-gray-300">포지션 체인지</p>
+                          <p className="text-[9px] text-gray-600">배정 후 포지션을 바꾸는 유일한 방법 · 팀당 1회 · {S.posChangeCost.toLocaleString()} Pt</p>
+                        </div>
+                        {l.positionChanged ? (
+                          <span className="shrink-0 text-[9px] font-black text-gray-600 border border-white/10 rounded-full px-2.5 py-1">사용됨</span>
+                        ) : swapMode ? (
+                          <button onClick={() => { setSwapMode(false); setSwapPick([]); }} className="shrink-0 text-[10px] font-black text-gray-400 bg-white/5 border border-white/15 hover:text-white px-3 py-1.5 rounded-full transition-colors">취소</button>
+                        ) : (
+                          <button
+                            disabled={l.roster.length < 2}
+                            onClick={() => { if (l.roster.length < 2) { showToast("교환하려면 배정된 선수가 2명 이상이어야 합니다"); return; } setSwapMode(true); setSwapPick([]); setDragCard(null); sfxSelect(); showToast("교환할 선수 2명을 선택하세요"); }}
+                            className="shrink-0 text-[10px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/30 hover:bg-[#e91e3f]/20 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded-full transition-colors"
+                          >
+                            포지션 교환하기
+                          </button>
+                        )}
                       </div>
-                      {l.positionChanged ? (
-                        <span className="shrink-0 text-[9px] font-black text-gray-600 border border-white/10 rounded-full px-2.5 py-1">사용됨</span>
-                      ) : (
+                      {swapMode && (
                         <button
-                          disabled={l.roster.length < 2}
-                          onClick={() => { if (l.roster.length < 2) return; setInvModal(null); setPosSwapTarget({ leaderIdx: li }); setSwapA(""); setSwapB(""); sfxSelect(); }}
-                          className="shrink-0 text-[10px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/30 hover:bg-[#e91e3f]/20 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded-full transition-colors"
+                          disabled={swapPick.length !== 2}
+                          onClick={async () => {
+                            if (swapPick.length !== 2) return;
+                            const [a, b] = swapPick;
+                            const na = rosterName(l, l.roster[a]), nb = rosterName(l, l.roster[b]);
+                            const d = await act({ action: "host:posSwap", leaderIdx: li, a, b, byLeaderIdx: myLeaderIdx });
+                            if (d?.success) { sfxAssign(); showToast(`${na} ↔ ${nb} 포지션 교환 완료`); setSwapMode(false); setSwapPick([]); }
+                            else showToast(d?.message || "포지션 교환에 실패했습니다");
+                          }}
+                          className="mt-2.5 w-full py-2 text-[11px] font-black rounded-lg transition-all bg-[#e91e3f] hover:bg-[#d01634] disabled:bg-white/5 disabled:text-gray-600 text-white"
                         >
-                          {S.posChangeCost.toLocaleString()} Pt로 교환
+                          {swapPick.length === 2 ? `선택한 2명 교환 (${S.posChangeCost.toLocaleString()} Pt)` : `선수 ${2 - swapPick.length}명 더 선택`}
                         </button>
                       )}
                     </div>
@@ -1311,21 +1352,50 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <p className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-3 text-center">Position Change</p>
                 <h2 className="text-lg font-black text-white mb-2 text-center">{leader.name} — 포지션 체인지</h2>
                 <p className="text-xs text-gray-400 mb-6 text-center">교환할 두 선수를 선택하세요. ({S.posChangeCost.toLocaleString()} Point · 팀당 1회)</p>
-                {[{ v: swapA, set: setSwapA, l: "첫 번째 선수" }, { v: swapB, set: setSwapB, l: "두 번째 선수" }].map((f, fi) => (
-                  <div key={fi} className="mb-3">
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1.5">{f.l}</label>
-                    <select value={f.v} onChange={(e) => f.set(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white font-bold outline-none focus:border-[#e91e3f] [color-scheme:dark]">
-                      <option value="">선택...</option>
-                      {/* 탱커 슬롯은 교환 불가 → 목록에서 제외 */}
-                      {leader.roster.map((r: any, ri: number) => (p1Role && r.slot === p1Role) ? null : (
-                        <option key={ri} value={ri}>[{r.slot}] {rosterName(leader, r)}</option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
+                {/* 선수 선택 — 네이티브 select 대신 사이트 톤의 리스트 선택 */}
+                <div className="space-y-1.5 max-h-[46vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
+                  {leader.roster.map((r: any, ri: number) => {
+                    if (p1Role && r.slot === p1Role) return null; // 선경매 포지션은 교환 불가
+                    const sel = swapA === String(ri) ? 1 : swapB === String(ri) ? 2 : 0;
+                    return (
+                      <button
+                        key={ri}
+                        type="button"
+                        onClick={() => {
+                          sfxSelect();
+                          if (sel === 1) setSwapA("");
+                          else if (sel === 2) setSwapB("");
+                          else if (swapA === "") setSwapA(String(ri));
+                          else if (swapB === "") setSwapB(String(ri));
+                          else showToast("이미 2명을 선택했습니다. 선택을 해제한 뒤 다시 고르세요");
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-left transition-all ${sel ? "border-[#e91e3f] bg-[#e91e3f]/10" : "border-white/10 bg-[#0d0d0d] hover:border-white/25"}`}
+                      >
+                        <span className={`shrink-0 text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(r.slot).badge}`}>{r.slot}</span>
+                        <span className="flex-1 min-w-0 truncate text-xs font-bold text-gray-200">
+                          {rosterName(leader, r)}
+                          {r.playerIdx === -1 && <span className="ml-1.5 text-[9px] text-gray-500 font-black">리더</span>}
+                        </span>
+                        <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${sel ? "bg-[#e91e3f] text-white" : "bg-white/5 text-transparent"}`}>{sel || ""}</span>
+                      </button>
+                    );
+                  })}
+                </div>
                 <div className="flex gap-3 mt-6">
-                  <button onClick={() => setPosSwapTarget(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">취소</button>
-                  <button onClick={async () => { if (swapA !== "" && swapB !== "" && swapA !== swapB) { const d = await act({ action: "host:posSwap", leaderIdx: posSwapTarget.leaderIdx, a: Number(swapA), b: Number(swapB), byLeaderIdx: myLeaderIdx }); if (d.success) setPosSwapTarget(null); } else showToast("서로 다른 두 선수를 선택해주세요"); }} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors">교환</button>
+                  <button onClick={() => { setPosSwapTarget(null); setSwapA(""); setSwapB(""); }} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">취소</button>
+                  <button
+                    disabled={swapA === "" || swapB === ""}
+                    onClick={async () => {
+                      if (swapA === "" || swapB === "" || swapA === swapB) { showToast("서로 다른 두 선수를 선택해주세요"); return; }
+                      const na = rosterName(leader, leader.roster[Number(swapA)]), nb = rosterName(leader, leader.roster[Number(swapB)]);
+                      const d = await act({ action: "host:posSwap", leaderIdx: posSwapTarget.leaderIdx, a: Number(swapA), b: Number(swapB), byLeaderIdx: myLeaderIdx });
+                      if (d?.success) { sfxAssign(); showToast(`${na} ↔ ${nb} 포지션 교환 완료`); setPosSwapTarget(null); setSwapA(""); setSwapB(""); }
+                      else showToast(d?.message || "포지션 교환에 실패했습니다");
+                    }}
+                    className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:bg-white/5 disabled:text-gray-600 text-white text-sm font-bold rounded-xl transition-colors"
+                  >
+                    {swapA !== "" && swapB !== "" ? "교환하기" : `${2 - [swapA, swapB].filter((x) => x !== "").length}명 더 선택`}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1470,15 +1540,18 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {/* 스카우터 결과 — 화면을 가리지 않는 플로팅 리포트 (입찰 UI 유지) */}
+      {/* 스카우터 결과 — 화면 중앙 리포트 (입찰 UI는 가리지 않도록 상단 배치 · 직접 닫기 가능) */}
       {scoutResult && (
-        <div className="fixed top-32 right-4 md:right-8 z-[130] pointer-events-none animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/60 via-[#e91e3f]/20 to-transparent p-px shadow-[0_16px_50px_rgba(233,30,63,0.4)]">
-            <div className="rounded-2xl bg-[#150a0d]/98 backdrop-blur-md px-5 py-4 min-w-[240px]">
-              <div className="flex items-center gap-2 mb-3">
+        <div className="fixed top-24 md:top-28 left-1/2 -translate-x-1/2 z-[130] px-4 w-full max-w-md animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/60 via-[#e91e3f]/20 to-transparent p-px shadow-[0_20px_60px_rgba(233,30,63,0.45)]">
+            <div className="rounded-2xl bg-[#150a0d]/98 backdrop-blur-md px-6 py-5">
+              <div className="flex items-center gap-2 mb-4">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_1.5s_ease-in-out_infinite]"></span>
-                <p className="text-[9px] font-black tracking-[0.35em] text-[#e91e3f] uppercase">Scout Report</p>
-                <span className="ml-auto text-[10px] font-bold text-gray-500">{scoutResult.alias}</span>
+                <p className="text-[10px] font-black tracking-[0.35em] text-[#e91e3f] uppercase">Scout Report</p>
+                <span className="ml-auto text-[11px] font-bold text-gray-400">{scoutResult.alias}</span>
+                <button onClick={() => setScoutResult(null)} className="p-1 -mr-1 text-gray-500 hover:text-white rounded-md hover:bg-white/10 transition-colors outline-none">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {(() => {
@@ -1497,7 +1570,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   ));
                 })()}
               </div>
-              <p className="text-[9px] text-gray-600 mt-2.5 text-center">이 정보는 나에게만 공개됩니다</p>
+              <p className="text-[10px] text-gray-500 mt-3 text-center">이 정보는 나에게만 공개됩니다</p>
             </div>
           </div>
         </div>
