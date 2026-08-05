@@ -1210,11 +1210,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     if (!sel) {
                       // 선택 전에도 동일한 높이를 유지해 레이아웃이 밀리지 않도록
                       return (
-                        <div className="rounded-2xl border border-dashed border-white/12 bg-black/20 p-5 flex gap-4 h-[188px]">
-                          <div className="shrink-0 w-[86px] aspect-[3/4.3] rounded-xl border border-dashed border-white/12 bg-white/[0.02] flex items-center justify-center">
+                        <div className="flex gap-5 h-[176px] items-center">
+                          <div className="shrink-0 w-[86px] aspect-[3/4.3] rounded-lg border border-dashed border-white/12 flex items-center justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-white/10"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
                           </div>
-                          <div className="flex-1 flex flex-col justify-center">
+                          <div className="flex-1">
                             <p className="text-xs text-gray-500 font-bold">오른쪽에서 선수를 선택하세요</p>
                             <p className="text-[10px] text-gray-700 mt-1">선택한 선수의 정보가 여기에 표시됩니다</p>
                           </div>
@@ -1224,45 +1224,38 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     const sp = auction.players[sel.playerIdx];
                     const scouted = sp && canSeePos(sp);
                     return (
-                      <div className={`relative rounded-2xl border overflow-hidden h-[188px] ${sel.golden ? "border-[#e91e3f]/45 bg-gradient-to-br from-[#e91e3f]/[0.12] to-[#0d0d0d]" : "border-white/12 bg-gradient-to-br from-white/[0.06] to-[#0d0d0d]"}`}>
-                        <div className="p-5 flex gap-4 h-full">
-                          {/* 세로 카드 미니어처 */}
-                          <div className={`shrink-0 w-[86px] aspect-[3/4.3] rounded-xl border flex flex-col items-center justify-between px-2 py-2.5 ${sel.golden ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.10]" : "border-white/15 bg-white/[0.04]"}`}>
-                            <span className={`text-[7px] font-black tracking-[0.2em] uppercase ${sel.golden ? "text-[#e91e3f]" : "text-gray-600"}`}>{sel.golden ? "Golden" : "Player"}</span>
-                            <div className={`w-11 h-11 rounded-full flex items-center justify-center border ${sel.golden ? "border-[#e91e3f]/40 bg-[#e91e3f]/10" : "border-white/10 bg-white/[0.04]"}`}>
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 ${sel.golden ? "text-[#e91e3f]" : "text-gray-500"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
-                            </div>
-                            <p className="text-[9px] font-black text-[#e91e3f] tabular-nums">{sel.price.toLocaleString()}</p>
+                      // 외곽 박스 없이 카드 + 헤어라인 정보 (박스 중첩 제거)
+                      <div className="flex gap-5 h-[176px]">
+                        {/* 세로 카드 */}
+                        <div className={`shrink-0 w-[86px] h-full rounded-lg border flex flex-col items-center justify-between px-2 py-2.5 ${sel.golden ? "border-[#e91e3f]/50 bg-gradient-to-b from-[#e91e3f]/[0.14] to-transparent" : "border-white/15 bg-gradient-to-b from-white/[0.06] to-transparent"}`}>
+                          <span className={`text-[7px] font-black tracking-[0.2em] uppercase ${sel.golden ? "text-[#e91e3f]" : "text-gray-600"}`}>{sel.golden ? "Golden" : "Player"}</span>
+                          <div className={`w-11 h-11 rounded-full flex items-center justify-center border ${sel.golden ? "border-[#e91e3f]/40 bg-[#e91e3f]/10" : "border-white/10 bg-white/[0.04]"}`}>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 ${sel.golden ? "text-[#e91e3f]" : "text-gray-500"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
                           </div>
-                          {/* 정보 */}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <p className="text-base font-black text-white truncate">{cardName(sel)}</p>
-                              {sel.golden && <span className="shrink-0 text-[8px] font-black text-[#e91e3f] border border-[#e91e3f]/35 rounded px-1.5 py-0.5">ALL</span>}
-                            </div>
-                            <p className="text-[11px] font-black text-[#e91e3f] tabular-nums mb-3">{sel.price.toLocaleString()} <span className="text-gray-600 font-bold">Point 낙찰</span></p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {[
-                                { l: "최고 티어", v: sel.golden ? "비공개" : (sp?.peakTier || "-") },
-                                { l: "현재 티어", v: sel.golden ? "비공개" : (sp?.currentTier || "-") },
-                              ].map((it, ii) => (
-                                <div key={ii} className="rounded-lg border border-white/10 bg-black/25 px-2.5 py-2">
-                                  <p className="text-[8px] font-black tracking-[0.2em] text-gray-600 uppercase mb-0.5">{it.l}</p>
-                                  <p className="text-[11px] font-bold text-gray-200 truncate">{it.v}</p>
-                                </div>
-                              ))}
-                            </div>
-                            {/* 스카우터로 확인한 정보 */}
-                            <div className="mt-2 rounded-lg border border-white/10 bg-black/25 px-2.5 py-2">
-                              <p className="text-[8px] font-black tracking-[0.2em] text-gray-600 uppercase mb-0.5">스카우터 정보</p>
-                              {sel.golden ? (
-                                <p className="text-[11px] font-bold text-gray-600">황금카드 — 스카우터 불가</p>
-                              ) : scouted ? (
-                                <p className="text-[11px] font-bold text-[#e91e3f]">{revealInfo(sp)}</p>
-                              ) : (
-                                <p className="text-[11px] font-bold text-gray-600">미확인 (스카우터 미사용)</p>
-                              )}
-                            </div>
+                          <p className="text-[9px] font-black text-[#e91e3f] tabular-nums">{sel.price.toLocaleString()}</p>
+                        </div>
+                        {/* 정보 — 선(헤어라인)으로만 구분 */}
+                        <div className="min-w-0 flex-1 flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <p className="text-lg font-black text-white truncate tracking-tight">{cardName(sel)}</p>
+                            {sel.golden && <span className="shrink-0 text-[8px] font-black text-[#e91e3f] border border-[#e91e3f]/35 rounded px-1.5 py-0.5">ALL</span>}
+                          </div>
+                          <p className="text-[11px] font-black text-[#e91e3f] tabular-nums mt-0.5">{sel.price.toLocaleString()} <span className="text-gray-600 font-bold">Point 낙찰</span></p>
+                          <div className="mt-3 divide-y divide-white/[0.07] border-t border-white/[0.07]">
+                            {[
+                              { l: "최고 티어", v: sel.golden ? "비공개" : (sp?.peakTier || "-"), accent: false },
+                              { l: "현재 티어", v: sel.golden ? "비공개" : (sp?.currentTier || "-"), accent: false },
+                              {
+                                l: "스카우터",
+                                v: sel.golden ? "황금카드 — 확인 불가" : scouted ? revealInfo(sp) : "미확인",
+                                accent: !sel.golden && !!scouted,
+                              },
+                            ].map((it, ii) => (
+                              <div key={ii} className="flex items-baseline gap-3 py-[7px]">
+                                <span className="w-16 shrink-0 text-[10px] font-bold text-gray-600">{it.l}</span>
+                                <span className={`text-[12px] font-bold truncate ${it.accent ? "text-[#e91e3f]" : it.v === "미확인" || it.v.includes("불가") || it.v === "비공개" ? "text-gray-600" : "text-gray-200"}`}>{it.v}</span>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </div>
@@ -1270,7 +1263,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   })()}
 
                   {/* ── 포지션 지정 (드롭존) ── */}
-                  <div>
+                  <div className="pt-4 border-t border-white/[0.07]">
                   <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
                     포지션 지정
                     {swapMode && <span className="text-[#e91e3f] font-black normal-case tracking-normal"> — 교환할 선수 2명을 선택하세요 ({swapPick.length}/2)</span>}
@@ -1288,7 +1281,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           onDragOver={(e) => { if (dropOk) e.preventDefault(); }}
                           onDrop={(e) => { e.preventDefault(); if (dropOk && dragCard !== null) requestPlace(dragCard, slot); }}
                           onClick={() => { if (dropOk && dragCard !== null) requestPlace(dragCard, slot); }}
-                          className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 min-h-[36px] transition-all ${dropOk ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.06] cursor-pointer" : full ? "border-white/10 bg-white/[0.02]" : "border-dashed border-white/15 bg-black/20"}`}
+                          className={`flex items-start gap-2 rounded-lg px-2.5 py-2 min-h-[36px] transition-all border ${dropOk ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.07] cursor-pointer" : "border-transparent bg-white/[0.035]"}`}
                         >
                           <span className={`shrink-0 mt-px text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(slot).badge}`}>{slot}</span>
                           <span className="shrink-0 mt-1 text-[9px] font-bold text-gray-600 tabular-nums">{entries.length}/{limit}</span>
@@ -1340,7 +1333,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                   {/* 포지션 체인지 — 인벤토리 안에서 바로 실행 (배정 후 유일한 조정 수단 · 1회) */}
                   {canManage && (
-                    <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.02] px-3.5 py-2.5">
+                    <div className="mt-4 pt-3.5 border-t border-white/[0.07]">
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-[10px] font-black text-gray-300">포지션 체인지</p>
@@ -1382,7 +1375,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 </div>
 
                 {/* ══ 우측: 보유 선수 목록 ══ */}
-                <div className="order-1 lg:order-2">
+                <div className="order-1 lg:order-2 lg:pl-5 lg:border-l lg:border-white/[0.07]">
                   <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
                     보유 선수 <span className="text-[#e91e3f]">{l.inventory?.length || 0}</span>
                     {!mine && <span className="text-gray-600 font-bold normal-case tracking-normal"> — 선택해 정보 확인</span>}
