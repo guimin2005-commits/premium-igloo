@@ -28,6 +28,24 @@ const PostSchema = new mongoose.Schema({
   tournamentStatus: { type: String, default: "예정됨" }, // 진행중 / 예정됨 / 종료됨
   tournamentLink: { type: String, default: "" },   // 참가 신청 링크
   tournamentBracket: { type: String, default: "" },// 대진표 텍스트 (라운드명: / A vs B > 승자)
+  // 📌 대회 참가 설문 (구글폼 형식) — 질문/선택지/필수 여부
+  survey: {
+    enabled: { type: Boolean, default: false },
+    title: { type: String, default: "" },
+    desc: { type: String, default: "" },
+    closed: { type: Boolean, default: false },   // 접수 마감
+    questions: {
+      type: [{
+        qid: String,                              // 질문 고유 id
+        type: { type: String, default: "short" }, // short(단답) / long(장문) / single(객관식) / multi(복수선택)
+        label: String,
+        required: { type: Boolean, default: false },
+        options: { type: [String], default: [] }, // 객관식 선택지
+        etc: { type: Boolean, default: false },   // '기타(직접 입력)' 허용
+      }],
+      default: [],
+    },
+  },
   tournamentWinner: { type: String, default: "" }, // 우승팀/우승자 (명예의 전당 표시용)
   tournamentWinnerId: { type: String, default: "" }, // 우승자 디스코드 사용자 ID (복사용)
 

@@ -162,6 +162,31 @@ export default function AdminWritePage() {
   // 📌 대회 글 타입: "모집"(참가 신청) / "대진표"(리그 진행)
   const [tournamentType, setTournamentType] = useState("모집");
 
+  // 📌 참가 설문 (구글폼 형식)
+  type SQ = { qid: string; type: string; label: string; required: boolean; options: string[]; etc: boolean };
+  const [survey, setSurvey] = useState<{ enabled: boolean; title: string; desc: string; closed: boolean; questions: SQ[] }>({
+    enabled: false, title: "", desc: "", closed: false, questions: [],
+  });
+  const Q_TYPES = [
+    { v: "short", l: "단답형" },
+    { v: "long", l: "장문형" },
+    { v: "single", l: "객관식(1개)" },
+    { v: "multi", l: "객관식(복수)" },
+  ];
+  const newQid = () => `q${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const addQuestion = (type = "short") =>
+    setSurvey((s) => ({ ...s, questions: [...s.questions, { qid: newQid(), type, label: "", required: false, options: type === "short" || type === "long" ? [] : ["선택지 1"], etc: false }] }));
+  const updateQuestion = (i: number, patch: Partial<SQ>) =>
+    setSurvey((s) => ({ ...s, questions: s.questions.map((q, idx) => (idx === i ? { ...q, ...patch } : q)) }));
+  const moveQuestion = (i: number, dir: -1 | 1) =>
+    setSurvey((s) => {
+      const j = i + dir;
+      if (j < 0 || j >= s.questions.length) return s;
+      const qs = [...s.questions];
+      [qs[i], qs[j]] = [qs[j], qs[i]];
+      return { ...s, questions: qs };
+    });
+
   // 📌 리그 상세 일정 (팀원 배정, 스크림, 본선 등)
   type SchedulePhase = { label: string; start: string; end: string };
   const [tournamentSchedule, setTournamentSchedule] = useState<SchedulePhase[]>([]);
@@ -180,7 +205,7 @@ export default function AdminWritePage() {
     eventTag, eventStartDate, eventEndDate, isEventAlways,
     recruitSubCategory, recruitRole, recruitStartDate, recruitEndDate, isRecruitAlways, recruitQual, recruitTasks, recruitExtra,
     tournamentGame, tournamentPrize, tournamentStatus, tournamentLink, tournamentBracket: serializeBracket(bracketRounds), tournamentWinner, tournamentWinnerId, tournamentStartDate, tournamentEndDate,
-    tournamentType, tournamentSchedule,
+    tournamentType, tournamentSchedule, survey,
     savedAt: new Date().toISOString(),
   });
 
@@ -207,6 +232,7 @@ export default function AdminWritePage() {
       setTournamentBracket(d.tournamentBracket || ""); setBracketRounds(parseBracket(d.tournamentBracket || "")); setTournamentWinner(d.tournamentWinner || ""); setTournamentWinnerId(d.tournamentWinnerId || "");
       setTournamentStartDate(d.tournamentStartDate || ""); setTournamentEndDate(d.tournamentEndDate || "");
       setTournamentType(d.tournamentType || "모집"); setTournamentSchedule(Array.isArray(d.tournamentSchedule) ? d.tournamentSchedule : []);
+      if (d.survey) setSurvey({ enabled: !!d.survey.enabled, title: d.survey.title || "", desc: d.survey.desc || "", closed: !!d.survey.closed, questions: Array.isArray(d.survey.questions) ? d.survey.questions : [] });
       setHasDraft(false);
       localStorage.removeItem(DRAFT_KEY);
     } catch {}
@@ -271,6 +297,7 @@ export default function AdminWritePage() {
             setTournamentWinner(post.tournamentWinner || "");
             setTournamentWinnerId(post.tournamentWinnerId || "");
             setTournamentType(post.tournamentType || "모집");
+            if (post.survey) setSurvey({ enabled: !!post.survey.enabled, title: post.survey.title || "", desc: post.survey.desc || "", closed: !!post.survey.closed, questions: Array.isArray(post.survey.questions) ? post.survey.questions.map((q: any) => ({ qid: q.qid || newQid(), type: q.type || "short", label: q.label || "", required: !!q.required, options: Array.isArray(q.options) ? q.options : [], etc: !!q.etc })) : [] });
             setTournamentSchedule(Array.isArray(post.tournamentSchedule) ? post.tournamentSchedule.map((p: any) => ({ label: p.label || "", start: p.start || "", end: p.end || "" })) : []);
             if (post.tournamentDate && post.tournamentDate.includes("~")) {
               const [start, end] = post.tournamentDate.split("~").map((s: string) => s.trim());
@@ -409,7 +436,14 @@ export default function AdminWritePage() {
          tournamentType,
          tournamentSchedule: tournamentSchedule.filter((p) => p.label.trim()),
          tournamentBracket: serializeBracket(bracketRounds), tournamentWinner, tournamentWinnerId,
-         tournamentDate: computedTournamentDate
+         tournamentDate: computedTournamentDate,
+         // 📌 참가 설문 — 빈 질문/선택지는 정리해서 저장
+         survey: {
+           ...survey,
+           questions: survey.questions
+             .filter((q) => q.label.trim())
+             .map((q) => ({ ...q, label: q.label.trim(), options: (q.type === "single" || q.type === "multi") ? q.options.map((o) => o.trim()).filter(Boolean) : [] })),
+         },
        })
     };
     try {
@@ -716,6 +750,91 @@ export default function AdminWritePage() {
                 <textarea rows={2} placeholder="예시: 1104242935664492666, 2205..., 3306... (팀원 전원 입력 가능)" value={tournamentWinnerId} onChange={(e) => setTournamentWinnerId(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f] resize-none leading-relaxed" />
               </div>
               )}
+
+              {/* 📌 참가 설문 (구글폼 형식) */}
+              <div className="md:col-span-2">
+                <div className="rounded-2xl border border-white/10 bg-[#161616] overflow-hidden">
+                  <div className="flex flex-wrap items-center gap-3 px-5 py-3.5 border-b border-white/8 bg-white/[0.015]">
+                    <span className="w-1 h-4 bg-[#e91e3f] rounded-full"></span>
+                    <span className="text-sm font-black text-white">참가 설문</span>
+                    <span className="text-[10px] font-bold text-gray-600">질문·선택지·직접 입력 구성</span>
+                    <div className="ml-auto flex items-center gap-2">
+                      {survey.enabled && (
+                        <button type="button" onClick={() => setSurvey({ ...survey, closed: !survey.closed })} className={`text-[11px] font-black px-3 py-1.5 rounded-full border transition-all ${survey.closed ? "bg-white/10 text-gray-300 border-white/20" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"}`}>
+                          {survey.closed ? "접수 마감됨" : "접수 중"}
+                        </button>
+                      )}
+                      <button type="button" onClick={() => setSurvey({ ...survey, enabled: !survey.enabled })} className={`text-[11px] font-black px-3 py-1.5 rounded-full border transition-all ${survey.enabled ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-white/15 text-gray-400 hover:text-white"}`}>
+                        {survey.enabled ? "설문 사용 중" : "설문 사용 안 함"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {survey.enabled && (
+                    <div className="p-5 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input type="text" placeholder="설문 제목 (예: 제1회 대회 참가 신청서)" value={survey.title} onChange={(e) => setSurvey({ ...survey, title: e.target.value })} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+                        <input type="text" placeholder="설명 (선택)" value={survey.desc} onChange={(e) => setSurvey({ ...survey, desc: e.target.value })} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+                      </div>
+
+                      {/* 질문 목록 */}
+                      {survey.questions.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-white/10 py-8 text-center">
+                          <p className="text-xs text-gray-500">아래 버튼으로 질문을 추가하세요.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {survey.questions.map((q, qi) => (
+                            <div key={q.qid} className="rounded-xl border border-white/10 bg-[#0f0f0f] p-4">
+                              <div className="flex flex-wrap items-center gap-2 mb-3">
+                                <span className="text-[10px] font-black text-gray-600 w-5">{qi + 1}</span>
+                                <input type="text" placeholder="질문을 입력하세요" value={q.label} onChange={(e) => updateQuestion(qi, { label: e.target.value })} className="flex-1 min-w-[180px] bg-[#161616] border border-white/10 rounded-lg px-3 py-2 text-sm font-bold text-white outline-none focus:border-[#e91e3f]" />
+                                <select value={q.type} onChange={(e) => { const t = e.target.value; updateQuestion(qi, { type: t, options: (t === "single" || t === "multi") && q.options.length === 0 ? ["선택지 1"] : q.options }); }} className="bg-[#161616] border border-white/10 rounded-lg px-2.5 py-2 text-xs font-bold text-white outline-none focus:border-[#e91e3f] [color-scheme:dark]">
+                                  {Q_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+                                </select>
+                                <button type="button" onClick={() => updateQuestion(qi, { required: !q.required })} className={`text-[10px] font-black px-2.5 py-2 rounded-lg border transition-all ${q.required ? "bg-[#e91e3f]/15 border-[#e91e3f]/40 text-[#e91e3f]" : "border-white/10 text-gray-500 hover:text-gray-300"}`}>필수</button>
+                                <div className="flex gap-1">
+                                  <button type="button" onClick={() => moveQuestion(qi, -1)} className="px-2 py-2 text-[10px] font-black text-gray-500 hover:text-white bg-white/5 rounded-lg">▲</button>
+                                  <button type="button" onClick={() => moveQuestion(qi, 1)} className="px-2 py-2 text-[10px] font-black text-gray-500 hover:text-white bg-white/5 rounded-lg">▼</button>
+                                  <button type="button" onClick={() => setSurvey({ ...survey, questions: survey.questions.filter((_, i) => i !== qi) })} className="px-2 py-2 text-[10px] font-black text-gray-600 hover:text-red-400 bg-white/5 rounded-lg">×</button>
+                                </div>
+                              </div>
+
+                              {(q.type === "single" || q.type === "multi") ? (
+                                <div className="pl-7 space-y-1.5">
+                                  {q.options.map((opt, oi) => (
+                                    <div key={oi} className="flex items-center gap-2">
+                                      <span className={`w-3 h-3 shrink-0 border border-white/25 ${q.type === "single" ? "rounded-full" : "rounded-[3px]"}`}></span>
+                                      <input type="text" value={opt} onChange={(e) => updateQuestion(qi, { options: q.options.map((o, i) => (i === oi ? e.target.value : o)) })} className="flex-1 bg-transparent border-b border-white/10 px-1 py-1 text-xs text-white outline-none focus:border-[#e91e3f]" />
+                                      {q.options.length > 1 && (
+                                        <button type="button" onClick={() => updateQuestion(qi, { options: q.options.filter((_, i) => i !== oi) })} className="text-gray-700 hover:text-red-400 text-xs px-1">×</button>
+                                      )}
+                                    </div>
+                                  ))}
+                                  <div className="flex items-center gap-2 pt-1">
+                                    <button type="button" onClick={() => updateQuestion(qi, { options: [...q.options, `선택지 ${q.options.length + 1}`] })} className="text-[11px] font-bold text-[#e91e3f] hover:underline">+ 선택지 추가</button>
+                                    <button type="button" onClick={() => updateQuestion(qi, { etc: !q.etc })} className={`text-[11px] font-bold ${q.etc ? "text-[#e91e3f]" : "text-gray-600 hover:text-gray-400"}`}>+ 기타(직접 입력) {q.etc ? "사용 중" : ""}</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="pl-7 text-[11px] text-gray-600">{q.type === "short" ? "참가자가 한 줄로 입력합니다." : "참가자가 여러 줄로 입력합니다."}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2">
+                        {Q_TYPES.map((t) => (
+                          <button key={t.v} type="button" onClick={() => addQuestion(t.v)} className="text-[11px] font-black text-gray-300 bg-white/5 border border-white/10 px-3.5 py-2 rounded-full hover:border-[#e91e3f]/40 hover:text-white transition-all">+ {t.l}</button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-gray-600">설문을 사용하면 대회 상세에서 참가자가 바로 신청할 수 있고, 응답은 관리자만 확인할 수 있습니다.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="flex flex-col gap-3 md:col-span-2">
                 <span className="text-xs font-bold text-gray-400">배너 이미지 URL (선택)</span>
                 <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />

@@ -56,7 +56,8 @@ export default function Home() {
         .map((p: any) => ({ type: p.tournamentStatus === "진행중" ? "대회 진행중" : "대회 예정", title: p.title, path: "/tournament", period: p.tournamentDate }));
       // 진행 중인 선수 경매는 최상단 LIVE로 노출
       const liveAuctions = (Array.isArray(au?.data) ? au.data : [])
-        .filter((a: any) => a.status === "진행중")
+        // 테스트 방은 메인 노출 제외 (관리자에게도 표시하지 않음)
+        .filter((a: any) => a.status === "진행중" && !a.isTest)
         .slice(0, 2)
         .map((a: any) => ({ type: "경매 LIVE", title: a.title, path: `/auction/${a._id}`, period: "" }));
       setSchedule([...liveAuctions, ...tournaments, ...events].slice(0, 4));
