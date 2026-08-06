@@ -63,9 +63,10 @@ export async function POST(request) {
       if (dup) return NextResponse.json({ success: false, message: "이미 제출한 설문입니다." }, { status: 409 });
     }
 
-    // 필수 항목 검증 (서버에서도 확인)
+    // 필수 항목 검증 (서버에서도 확인) — 설명(note) 블록은 응답 대상이 아님
+    const askable = post.survey.questions.filter((q) => q.type !== "note");
     const byId = new Map((answers || []).map((a) => [a.qid, a]));
-    for (const q of post.survey.questions) {
+    for (const q of askable) {
       if (!q.required) continue;
       const v = byId.get(q.qid)?.value;
       const empty = v === undefined || v === null || (typeof v === "string" && !v.trim()) || (Array.isArray(v) && v.length === 0);
@@ -77,7 +78,7 @@ export async function POST(request) {
       userId,
       userName: session.user.name || "",
       avatar: session.user.image || "",
-      answers: post.survey.questions.map((q) => ({
+      answers: askable.map((q) => ({
         qid: q.qid,
         label: q.label,
         type: q.type,

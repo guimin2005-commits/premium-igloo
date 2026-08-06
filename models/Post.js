@@ -37,8 +37,9 @@ const PostSchema = new mongoose.Schema({
     questions: {
       type: [{
         qid: String,                              // 질문 고유 id
-        type: { type: String, default: "short" }, // short(단답) / long(장문) / single(객관식) / multi(복수선택)
+        type: { type: String, default: "short" }, // short(단답) / long(장문) / single(객관식) / multi(복수선택) / note(설명만)
         label: String,
+        desc: { type: String, default: "" },      // 문항 부가 설명 (note 타입은 본문)
         required: { type: Boolean, default: false },
         options: { type: [String], default: [] }, // 객관식 선택지
         etc: { type: Boolean, default: false },   // '기타(직접 입력)' 허용

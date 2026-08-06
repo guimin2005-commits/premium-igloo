@@ -262,7 +262,8 @@ export default function TournamentPage() {
 
   const submitSurvey = async () => {
     if (!surveyTarget || surveySubmitting) return;
-    const qs = surveyTarget.survey?.questions || [];
+    // 설명 블록은 응답 대상이 아니므로 제외
+    const qs = (surveyTarget.survey?.questions || []).filter((q: any) => q.type !== "note");
     // 필수 검증
     for (const q of qs) {
       const v = surveyAnswers[q.qid];
@@ -691,7 +692,7 @@ export default function TournamentPage() {
           <div className="esp-cut-md bg-[#0b0b0b] w-full max-h-[92dvh] flex flex-col overflow-hidden">
             {/* 진행 게이지 */}
             {(() => {
-              const qs = surveyTarget.survey?.questions || [];
+              const qs = (surveyTarget.survey?.questions || []).filter((q: any) => q.type !== "note");
               const done = qs.filter((q: any) => {
                 const v = surveyAnswers[q.qid];
                 return Array.isArray(v) ? v.length > 0 : !!(v && String(v).trim());
@@ -720,7 +721,7 @@ export default function TournamentPage() {
                 </button>
               </div>
               <div className="relative flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-4">
-                <span className="text-[10px] font-bold text-gray-500 border-l border-[#00e07b]/40 pl-2 leading-none">문항 {(surveyTarget.survey?.questions || []).length}개</span>
+                <span className="text-[10px] font-bold text-gray-500 border-l border-[#00e07b]/40 pl-2 leading-none">문항 {(surveyTarget.survey?.questions || []).filter((q: any) => q.type !== "note").length}개</span>
                 <span className="text-[10px] font-bold text-gray-500 border-l border-white/15 pl-2 leading-none tabular-nums">현재 {surveyCount}명 신청</span>
                 <span className="text-[10px] font-bold text-red-400/90 border-l border-red-500/40 pl-2 leading-none">* 표시는 필수</span>
               </div>
@@ -761,20 +762,38 @@ export default function TournamentPage() {
                 {(surveyTarget.survey?.questions || []).length === 0 && (
                   <p className="text-sm text-gray-500 text-center py-16">등록된 문항이 없습니다.</p>
                 )}
-                {(surveyTarget.survey?.questions || []).map((q: any, idx: number) => {
+                {(() => { let n = 0; return (surveyTarget.survey?.questions || []).map((q: any) => {
                   const v = surveyAnswers[q.qid];
                   const setV = (val: any) => setSurveyAnswers((p) => ({ ...p, [q.qid]: val }));
                   // 밑줄형 입력 — 박스 대신 선으로
                   const inputCls = "w-full bg-transparent border-b border-white/12 focus:border-[#00e07b] px-0.5 py-2.5 text-base text-white placeholder-gray-600 outline-none transition-colors";
                   const filled = q.type === "multi" ? Array.isArray(v) && v.length > 0 : !!v;
+
+                  // 📌 설명 전용 블록 — 입력칸 없이 안내만
+                  if (q.type === "note") {
+                    return (
+                      <div key={q.qid} className="py-5 border-b border-white/[0.07] last:border-b-0">
+                        <div className="border-l-2 border-[#00e07b]/60 pl-4">
+                          {q.label && <p className="text-sm sm:text-base font-black text-white mb-1.5 break-keep">{q.label}</p>}
+                          {q.desc && <p className="text-[13px] text-gray-400 leading-relaxed whitespace-pre-wrap break-keep">{q.desc}</p>}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  n += 1;
+                  const idx = n - 1;
                   return (
                     <div key={q.qid} className="py-6 border-b border-white/[0.07] last:border-b-0">
                       <div className="flex items-start gap-3 mb-4">
                         <span className={`shrink-0 mt-0.5 text-[11px] font-black esp-mono transition-colors ${filled ? "text-[#00e07b]" : "text-gray-700"}`}>{String(idx + 1).padStart(2, "0")}</span>
-                        <p className="text-sm sm:text-base font-bold text-white leading-snug break-keep">
-                          {q.label}
-                          {q.required && <span className="text-red-400 ml-1">*</span>}
-                        </p>
+                        <div className="min-w-0">
+                          <p className="text-sm sm:text-base font-bold text-white leading-snug break-keep">
+                            {q.label}
+                            {q.required && <span className="text-red-400 ml-1">*</span>}
+                          </p>
+                          {q.desc && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed whitespace-pre-wrap break-keep">{q.desc}</p>}
+                        </div>
                       </div>
 
                       <div className="pl-0 sm:pl-7">
@@ -844,7 +863,7 @@ export default function TournamentPage() {
                       </div>
                     </div>
                   );
-                })}
+                }); })()}
               </div>
             )}
 

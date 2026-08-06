@@ -48,7 +48,8 @@ export default function SurveyStatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, isAdmin, postId]);
 
-  const questions: any[] = post?.survey?.questions || [];
+  // 설명(note) 블록은 응답 대상이 아니라 통계에서 제외
+  const questions: any[] = (post?.survey?.questions || []).filter((q: any) => q.type !== "note");
 
   // ── 집계 ──
   const aggs: Agg[] = useMemo(() => {

@@ -163,7 +163,7 @@ export default function AdminWritePage() {
   const [tournamentType, setTournamentType] = useState("모집");
 
   // 📌 참가 설문 (구글폼 형식)
-  type SQ = { qid: string; type: string; label: string; required: boolean; options: string[]; etc: boolean };
+  type SQ = { qid: string; type: string; label: string; desc: string; required: boolean; options: string[]; etc: boolean };
   const [survey, setSurvey] = useState<{ enabled: boolean; title: string; desc: string; closed: boolean; questions: SQ[] }>({
     enabled: false, title: "", desc: "", closed: false, questions: [],
   });
@@ -172,10 +172,12 @@ export default function AdminWritePage() {
     { v: "long", l: "장문형" },
     { v: "single", l: "객관식(1개)" },
     { v: "multi", l: "객관식(복수)" },
+    { v: "note", l: "설명" },          // 입력 없이 안내 문구만 표시
   ];
+  const isChoiceType = (t: string) => t === "single" || t === "multi";
   const newQid = () => `q${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const addQuestion = (type = "short") =>
-    setSurvey((s) => ({ ...s, questions: [...s.questions, { qid: newQid(), type, label: "", required: false, options: type === "short" || type === "long" ? [] : ["선택지 1"], etc: false }] }));
+    setSurvey((s) => ({ ...s, questions: [...s.questions, { qid: newQid(), type, label: "", desc: "", required: false, options: isChoiceType(type) ? ["선택지 1"] : [], etc: false }] }));
   const updateQuestion = (i: number, patch: Partial<SQ>) =>
     setSurvey((s) => ({ ...s, questions: s.questions.map((q, idx) => (idx === i ? { ...q, ...patch } : q)) }));
   const moveQuestion = (i: number, dir: -1 | 1) =>
@@ -236,15 +238,16 @@ export default function AdminWritePage() {
 
   // 자주 쓰는 문항 빠른 추가
   const QUICK_QS: { l: string; q: Omit<SQ, "qid"> }[] = [
-    { l: "디스코드 닉네임", q: { type: "short", label: "디스코드 닉네임", required: true, options: [], etc: false } },
-    { l: "게임 닉네임", q: { type: "short", label: "게임 내 닉네임 (태그 포함)", required: true, options: [], etc: false } },
-    { l: "티어", q: { type: "single", label: "현재 티어", required: true, options: ["아이언", "브론즈", "실버", "골드", "플래티넘", "에메랄드", "다이아몬드", "마스터 이상"], etc: false } },
-    { l: "주 포지션", q: { type: "single", label: "주 포지션", required: true, options: ["탑", "정글", "미드", "원딜", "서포터"], etc: false } },
-    { l: "부 포지션", q: { type: "single", label: "부 포지션", required: false, options: ["탑", "정글", "미드", "원딜", "서포터", "없음"], etc: false } },
-    { l: "참가 가능 요일", q: { type: "multi", label: "참가 가능 요일", required: true, options: ["월", "화", "수", "목", "금", "토", "일"], etc: false } },
-    { l: "팀명", q: { type: "short", label: "팀명", required: true, options: [], etc: false } },
-    { l: "팀원 명단", q: { type: "long", label: "팀원 전체 명단 (닉네임 줄바꿈으로 구분)", required: true, options: [], etc: false } },
-    { l: "각오 한마디", q: { type: "long", label: "각오 한마디", required: false, options: [], etc: false } },
+    { l: "디스코드 닉네임", q: { type: "short", label: "디스코드 닉네임", desc: "", required: true, options: [], etc: false } },
+    { l: "게임 닉네임", q: { type: "short", label: "게임 내 닉네임 (태그 포함)", desc: "", required: true, options: [], etc: false } },
+    { l: "티어", q: { type: "single", label: "현재 티어", desc: "", required: true, options: ["아이언", "브론즈", "실버", "골드", "플래티넘", "에메랄드", "다이아몬드", "마스터 이상"], etc: false } },
+    { l: "주 포지션", q: { type: "single", label: "주 포지션", desc: "", required: true, options: ["탑", "정글", "미드", "원딜", "서포터"], etc: false } },
+    { l: "부 포지션", q: { type: "single", label: "부 포지션", desc: "", required: false, options: ["탑", "정글", "미드", "원딜", "서포터", "없음"], etc: false } },
+    { l: "참가 가능 요일", q: { type: "multi", label: "참가 가능 요일", desc: "", required: true, options: ["월", "화", "수", "목", "금", "토", "일"], etc: false } },
+    { l: "팀명", q: { type: "short", label: "팀명", desc: "", required: true, options: [], etc: false } },
+    { l: "팀원 명단", q: { type: "long", label: "팀원 전체 명단 (닉네임 줄바꿈으로 구분)", desc: "", required: true, options: [], etc: false } },
+    { l: "각오 한마디", q: { type: "long", label: "각오 한마디", desc: "", required: false, options: [], etc: false } },
+    { l: "참가 안내(설명)", q: { type: "note", label: "참가 전 확인해주세요", desc: "· 신청 후에는 수정이 불가하니 내용을 확인하고 제출해주세요.\n· 대회 일정은 공지사항을 통해 안내됩니다.", required: false, options: [], etc: false } },
   ];
   const addQuickQuestion = (q: Omit<SQ, "qid">) =>
     setSurvey((s) => ({ ...s, questions: [...s.questions, { ...q, qid: newQid(), options: [...q.options] }] }));
@@ -374,7 +377,7 @@ export default function AdminWritePage() {
             setTournamentWinner(post.tournamentWinner || "");
             setTournamentWinnerId(post.tournamentWinnerId || "");
             setTournamentType(post.tournamentType || "모집");
-            if (post.survey) setSurvey({ enabled: !!post.survey.enabled, title: post.survey.title || "", desc: post.survey.desc || "", closed: !!post.survey.closed, questions: Array.isArray(post.survey.questions) ? post.survey.questions.map((q: any) => ({ qid: q.qid || newQid(), type: q.type || "short", label: q.label || "", required: !!q.required, options: Array.isArray(q.options) ? q.options : [], etc: !!q.etc })) : [] });
+            if (post.survey) setSurvey({ enabled: !!post.survey.enabled, title: post.survey.title || "", desc: post.survey.desc || "", closed: !!post.survey.closed, questions: Array.isArray(post.survey.questions) ? post.survey.questions.map((q: any) => ({ qid: q.qid || newQid(), type: q.type || "short", label: q.label || "", desc: q.desc || "", required: !!q.required, options: Array.isArray(q.options) ? q.options : [], etc: !!q.etc })) : [] });
             setTournamentSchedule(Array.isArray(post.tournamentSchedule) ? post.tournamentSchedule.map((p: any) => ({ label: p.label || "", start: p.start || "", end: p.end || "" })) : []);
             if (post.tournamentDate && post.tournamentDate.includes("~")) {
               const [start, end] = post.tournamentDate.split("~").map((s: string) => s.trim());
@@ -518,8 +521,15 @@ export default function AdminWritePage() {
          survey: {
            ...survey,
            questions: survey.questions
-             .filter((q) => q.label.trim())
-             .map((q) => ({ ...q, label: q.label.trim(), options: (q.type === "single" || q.type === "multi") ? q.options.map((o) => o.trim()).filter(Boolean) : [] })),
+             // 설명 블록은 제목이 없어도 본문만 있으면 유지
+             .filter((q) => q.label.trim() || (q.type === "note" && q.desc.trim()))
+             .map((q) => ({
+               ...q,
+               label: q.label.trim(),
+               desc: (q.desc || "").trim(),
+               required: q.type === "note" ? false : q.required,
+               options: isChoiceType(q.type) ? q.options.map((o) => o.trim()).filter(Boolean) : [],
+             })),
          },
        })
     };
@@ -911,16 +921,18 @@ export default function AdminWritePage() {
                                 <span className="text-[10px] font-black text-gray-600 w-5 tabular-nums shrink-0">{String(qi + 1).padStart(2, "0")}</span>
                                 <input
                                   type="text"
-                                  placeholder="질문을 입력하세요"
+                                  placeholder={q.type === "note" ? "설명 제목 (비워둘 수 있음)" : "질문을 입력하세요"}
                                   value={q.label}
                                   onChange={(e) => updateQuestion(qi, { label: e.target.value })}
                                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addQuestion(q.type); } }}
                                   className="flex-1 min-w-[160px] bg-transparent border-b border-white/10 px-1 py-2 text-sm font-bold text-white outline-none focus:border-[#e91e3f] transition-colors"
                                 />
-                                <select value={q.type} onChange={(e) => { const t = e.target.value; updateQuestion(qi, { type: t, options: (t === "single" || t === "multi") && q.options.length === 0 ? ["선택지 1"] : q.options }); }} className="bg-[#161616] border border-white/10 rounded-lg px-2.5 py-2 text-xs font-bold text-white outline-none focus:border-[#e91e3f] [color-scheme:dark] shrink-0">
+                                <select value={q.type} onChange={(e) => { const t = e.target.value; updateQuestion(qi, { type: t, options: isChoiceType(t) && q.options.length === 0 ? ["선택지 1"] : q.options, required: t === "note" ? false : q.required }); }} className="bg-[#161616] border border-white/10 rounded-lg px-2.5 py-2 text-xs font-bold text-white outline-none focus:border-[#e91e3f] [color-scheme:dark] shrink-0">
                                   {Q_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
                                 </select>
-                                <button type="button" onClick={() => updateQuestion(qi, { required: !q.required })} title="필수 응답 여부" className={`text-[10px] font-black px-2.5 py-2 rounded-lg border transition-all shrink-0 ${q.required ? "bg-[#e91e3f]/15 border-[#e91e3f]/40 text-[#e91e3f]" : "border-white/10 text-gray-500 hover:text-gray-300"}`}>필수</button>
+                                {q.type !== "note" && (
+                                  <button type="button" onClick={() => updateQuestion(qi, { required: !q.required })} title="필수 응답 여부" className={`text-[10px] font-black px-2.5 py-2 rounded-lg border transition-all shrink-0 ${q.required ? "bg-[#e91e3f]/15 border-[#e91e3f]/40 text-[#e91e3f]" : "border-white/10 text-gray-500 hover:text-gray-300"}`}>필수</button>
+                                )}
                                 <div className="flex gap-0.5 shrink-0">
                                   <button type="button" onClick={() => moveQuestion(qi, -1)} disabled={qi === 0} title="위로" className="px-2 py-2 text-[10px] font-black text-gray-500 hover:text-white disabled:opacity-25 rounded-lg hover:bg-white/5">▲</button>
                                   <button type="button" onClick={() => moveQuestion(qi, 1)} disabled={qi === survey.questions.length - 1} title="아래로" className="px-2 py-2 text-[10px] font-black text-gray-500 hover:text-white disabled:opacity-25 rounded-lg hover:bg-white/5">▼</button>
@@ -936,7 +948,20 @@ export default function AdminWritePage() {
                                 </div>
                               </div>
 
-                              {isOpen && ((q.type === "single" || q.type === "multi") ? (
+                              {/* 📌 부가 설명 — 모든 문항 공통 (note 타입은 이게 본문) */}
+                              {isOpen && (
+                                <div className="pl-9 pb-3">
+                                  <textarea
+                                    rows={q.type === "note" ? 3 : 1}
+                                    placeholder={q.type === "note" ? "참가자에게 보여줄 안내 문구를 입력하세요 (줄바꿈 가능)" : "부가 설명 (선택) — 질문 아래 회색으로 표시됩니다"}
+                                    value={q.desc}
+                                    onChange={(e) => updateQuestion(qi, { desc: e.target.value })}
+                                    className={`w-full bg-transparent border-b px-1 py-1.5 text-xs outline-none resize-none leading-relaxed transition-colors ${q.type === "note" ? "border-white/15 text-gray-200 focus:border-[#e91e3f]" : "border-white/[0.07] text-gray-400 focus:border-[#e91e3f]"}`}
+                                  />
+                                </div>
+                              )}
+
+                              {isOpen && (isChoiceType(q.type) ? (
                                 <div className="pl-9 pb-4 space-y-1">
                                   {q.options.map((opt, oi) => (
                                     <div
@@ -984,7 +1009,11 @@ export default function AdminWritePage() {
                                   )}
                                 </div>
                               ) : (
-                                <p className="pl-9 pb-4 text-[11px] text-gray-600">{q.type === "short" ? "참가자가 한 줄로 입력합니다." : "참가자가 여러 줄로 입력합니다."}</p>
+                                <p className="pl-9 pb-4 text-[11px] text-gray-600">
+                                  {q.type === "short" ? "참가자가 한 줄로 입력합니다."
+                                    : q.type === "long" ? "참가자가 여러 줄로 입력합니다."
+                                    : "입력칸 없이 안내 문구만 표시됩니다. (응답에 포함되지 않음)"}
+                                </p>
                               ))}
                             </div>
                             );
@@ -1030,19 +1059,31 @@ export default function AdminWritePage() {
                       </div>
                     </div>
                     <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8">
-                      {survey.questions.map((q, idx) => (
+                      {(() => { let n = 0; return survey.questions.map((q) => {
+                        if (q.type !== "note") n += 1;
+                        const no = n;
+                        return (
                         <div key={q.qid} className="py-6 border-b border-white/[0.07] last:border-b-0">
+                          {q.type === "note" ? (
+                            <div className="border-l-2 border-emerald-500/50 pl-4">
+                              {q.label && <p className="text-sm sm:text-base font-black text-white mb-1.5 break-keep">{q.label}</p>}
+                              <p className="text-[13px] text-gray-400 leading-relaxed whitespace-pre-wrap break-keep">{q.desc || <span className="text-gray-600">(설명 미입력)</span>}</p>
+                            </div>
+                          ) : (<>
                           <div className="flex items-start gap-3 mb-4">
-                            <span className="shrink-0 mt-0.5 text-[11px] font-black text-gray-700 tabular-nums">{String(idx + 1).padStart(2, "0")}</span>
-                            <p className="text-sm sm:text-base font-bold text-white leading-snug break-keep">
-                              {q.label || <span className="text-gray-600">(질문 미입력)</span>}
-                              {q.required && <span className="text-red-400 ml-1">*</span>}
-                            </p>
+                            <span className="shrink-0 mt-0.5 text-[11px] font-black text-gray-700 tabular-nums">{String(no).padStart(2, "0")}</span>
+                            <div className="min-w-0">
+                              <p className="text-sm sm:text-base font-bold text-white leading-snug break-keep">
+                                {q.label || <span className="text-gray-600">(질문 미입력)</span>}
+                                {q.required && <span className="text-red-400 ml-1">*</span>}
+                              </p>
+                              {q.desc && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed whitespace-pre-wrap break-keep">{q.desc}</p>}
+                            </div>
                           </div>
                           <div className="sm:pl-7">
                             {q.type === "short" && <div className="border-b border-white/12 py-2.5 text-sm text-gray-600">답변을 입력해주세요</div>}
                             {q.type === "long" && <div className="border-b border-white/12 py-2.5 pb-12 text-sm text-gray-600">답변을 입력해주세요</div>}
-                            {(q.type === "single" || q.type === "multi") && (
+                            {isChoiceType(q.type) && (
                               <div className="border-t border-white/[0.07]">
                                 {q.options.map((opt, oi) => (
                                   <div key={oi} className="flex items-center gap-3 px-1 py-3 border-b border-white/[0.07]">
@@ -1059,8 +1100,10 @@ export default function AdminWritePage() {
                               </div>
                             )}
                           </div>
+                          </>)}
                         </div>
-                      ))}
+                        );
+                      }); })()}
                     </div>
                     <div className="shrink-0 px-5 sm:px-8 py-4 border-t border-white/10 bg-[#0d0d0d]">
                       <button type="button" onClick={() => setSurveyPreview(false)} className="w-full py-3.5 rounded-xl font-black text-sm bg-white/5 hover:bg-white/10 text-gray-300 transition-colors">미리보기 닫기</button>
