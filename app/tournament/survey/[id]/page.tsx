@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import { LuxStyles } from "../../../components/Lux";
+import { EsportsStyles } from "../../../components/Esports";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -135,6 +136,7 @@ export default function SurveyStatsPage() {
     return (
       <main className="flex-1 w-full flex items-center justify-center px-6 py-32">
         <LuxStyles />
+        <EsportsStyles />
         <div className="text-center">
           <p className="text-[10px] font-black tracking-[0.4em] text-gray-600 uppercase mb-4">Restricted</p>
           <h1 className="text-2xl font-black text-white mb-3">열람 권한이 없습니다</h1>
@@ -151,6 +153,7 @@ export default function SurveyStatsPage() {
   return (
     <main className="flex-1 w-full flex flex-col relative">
       <LuxStyles />
+      <EsportsStyles />
 
       {/* ── 헤더 ── */}
       <section className="relative w-full pt-14 pb-8 px-6 border-b border-white/[0.08]">
@@ -163,16 +166,16 @@ export default function SurveyStatsPage() {
           <div className="flex flex-wrap items-end justify-between gap-5">
             <div className="min-w-0">
               <div className="flex items-center gap-3 mb-3">
-                <span className="w-8 h-px bg-emerald-500" />
+                <span className="w-8 h-px bg-[#00e07b]" />
                 <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Survey Result</span>
-                <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${closed ? "bg-white/10 text-gray-400 border border-white/15" : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25"}`}>{closed ? "접수 마감" : "접수 중"}</span>
+                <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${closed ? "bg-white/10 text-gray-400 border border-white/15" : "bg-[#00e07b]/15 text-[#00e07b] border border-[#00e07b]/25"}`}>{closed ? "접수 마감" : "접수 중"}</span>
               </div>
               <h1 className="text-2xl md:text-4xl font-black tracking-tight text-white leading-tight break-keep">{post?.survey?.title || post?.title || "설문 결과"}</h1>
               <p className="text-sm text-gray-500 mt-2">{post?.title}{post?.tournamentGame ? ` · ${post.tournamentGame}` : ""}</p>
             </div>
             <div className="flex gap-2 shrink-0">
-              <button onClick={copyIds} disabled={!total} className="text-[11px] font-black text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 disabled:opacity-40 border border-white/10 px-4 py-2.5 rounded-full transition-colors">참가자 닉네임 복사</button>
-              <button onClick={exportCsv} disabled={!total} className="text-[11px] font-black text-[#0a0a0a] bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 px-4 py-2.5 rounded-full transition-colors">CSV 내려받기</button>
+              <button onClick={copyIds} disabled={!total} className="text-[11px] font-black text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 disabled:opacity-40 border border-white/10 px-4 py-2.5 esp-cut-sm transition-colors">참가자 닉네임 복사</button>
+              <button onClick={exportCsv} disabled={!total} className="text-[11px] font-black text-[#04120b] bg-[#00e07b] hover:bg-[#3dffa6] disabled:opacity-40 px-4 py-2.5 esp-cut-sm transition-colors">CSV 내려받기</button>
             </div>
           </div>
         </div>
@@ -201,7 +204,7 @@ export default function SurveyStatsPage() {
           {[{ id: "stats", label: "문항별 통계" }, { id: "list", label: `개별 응답 (${total})` }].map((t) => (
             <button key={t.id} onClick={() => setTab(t.id as any)} className={`relative py-4 text-sm font-black transition-colors ${tab === t.id ? "text-white" : "text-gray-600 hover:text-gray-400"}`}>
               {t.label}
-              {tab === t.id && <span className="absolute left-0 right-0 bottom-0 h-0.5 bg-emerald-500" />}
+              {tab === t.id && <span className="absolute left-0 right-0 bottom-0 h-0.5 bg-[#00e07b]" />}
             </button>
           ))}
         </div>
@@ -248,7 +251,7 @@ export default function SurveyStatsPage() {
                             <p className="w-32 sm:w-44 shrink-0 text-[13px] font-bold text-gray-300 truncate" title={c.label}>{c.label}</p>
                             <div className="flex-1 h-7 bg-white/[0.03] relative overflow-hidden">
                               <div
-                                className={`h-full transition-all duration-700 ${c.n === max && c.n > 0 ? "bg-emerald-500/70" : "bg-white/15"}`}
+                                className={`h-full transition-all duration-700 ${c.n === max && c.n > 0 ? "bg-[#00e07b]/70" : "bg-white/15"}`}
                                 style={{ width: `${(c.n / max) * 100}%` }}
                               />
                             </div>
@@ -300,7 +303,7 @@ export default function SurveyStatsPage() {
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="닉네임 또는 답변 내용 검색"
-                className="flex-1 bg-transparent border-b border-white/10 focus:border-emerald-500/60 px-1 py-3 text-base text-white placeholder-gray-600 outline-none transition-colors"
+                className="flex-1 bg-transparent border-b border-white/10 focus:border-[#00e07b]/60 px-1 py-3 text-base text-white placeholder-gray-600 outline-none transition-colors"
               />
               <span className="text-xs font-bold text-gray-600 shrink-0 tabular-nums">{filteredRows.length} / {total}</span>
             </div>
@@ -316,7 +319,7 @@ export default function SurveyStatsPage() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {r.avatar ? <img src={r.avatar} alt="" className="w-9 h-9 rounded-full shrink-0" /> : <span className="w-9 h-9 rounded-full bg-white/10 shrink-0" />}
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-black text-white truncate group-hover:text-emerald-400 transition-colors">{r.userName || "알 수 없음"}</span>
+                    <span className="block text-sm font-black text-white truncate group-hover:text-[#00e07b] transition-colors">{r.userName || "알 수 없음"}</span>
                     <span className="block text-xs text-gray-600 truncate mt-0.5">
                       {(r.answers || []).slice(0, 3).map((a: any) => (Array.isArray(a.value) ? a.value.join(", ") : a.value)).filter(Boolean).join(" · ") || "-"}
                     </span>
