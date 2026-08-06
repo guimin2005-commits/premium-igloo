@@ -332,7 +332,7 @@ export default function TournamentPage() {
                 <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9] mb-3">
                   <span className="text-white">TOUR</span><span className="text-[#00e07b]">NAMENT</span>
                 </h1>
-                <p className="text-gray-400 text-sm md:text-base">고급 이글루의 공식 리그가 여기서 열립니다.</p>
+                <p className="text-gray-400 text-sm md:text-base">고급 이글루 e스포츠 룸에서 열리는 모든 리그를 신청하고 확인하는 곳입니다.</p>
               </div>
               {isAdmin && (
                 <button onClick={() => router.push("/write?category=대회")} className="group/btn relative shrink-0 esp-cut-sm bg-[#00e07b] text-[#04120b] font-black text-xs px-6 py-3.5 hover:bg-[#3dffa6] transition-all active:scale-95">
@@ -549,26 +549,35 @@ export default function TournamentPage() {
                 </div>
               )}
 
-              <div className={`grid ${selected.survey?.enabled ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"} border-y border-white/[0.08] mb-8`}>
+              <div className="grid grid-cols-2 sm:grid-cols-3 border-y border-white/[0.08] mb-8">
                 <div className="py-4 pr-4 min-w-0">
                   <p className="text-[9px] font-black esp-mono text-gray-600 mb-1.5">PRIZE</p>
-                  <p className="text-white font-black">{selected.tournamentPrize || "미정"}</p>
+                  <p className="text-white font-black truncate">{selected.tournamentPrize || "미정"}</p>
                 </div>
                 <div className="py-4 px-4 min-w-0 border-l border-white/[0.08]">
                   <p className="text-[9px] font-black esp-mono text-gray-600 mb-1.5">PERIOD</p>
-                  <p className="text-gray-300 font-bold">{selected.tournamentDate || "미정"}</p>
+                  <p className="text-gray-300 font-bold truncate">{selected.tournamentDate || "미정"}</p>
                 </div>
-                {/* 📌 참가 설문이 있는 대회는 '접수 현황'을 함께 표기 */}
-                {selected.survey?.enabled && (
-                  <div className="py-4 sm:px-4 min-w-0 col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-white/[0.08]">
-                    <p className="text-[9px] font-black esp-mono text-gray-600 mb-1.5">ENTRY</p>
-                    <p className="font-black flex items-center gap-2.5">
-                      <span className={selected.survey.closed ? "text-gray-500" : "text-amber-300"}>{selected.survey.closed ? "마감" : "접수 중"}</span>
-                      <span className="w-px h-3.5 bg-white/15" />
-                      <span className="text-gray-300 tabular-nums">{surveyCount}명 신청</span>
-                    </p>
-                  </div>
-                )}
+                {/* 📌 지금 이 대회가 어느 단계인지 — 일정이 있으면 현재/다음 단계, 없으면 진행 방식 */}
+                {(() => {
+                  const sch: any[] = Array.isArray(selected.tournamentSchedule) ? selected.tournamentSchedule : [];
+                  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+                  const now = sch.find((p) => p.start && p.start <= today && (!p.end || p.end >= today));
+                  const next = sch.find((p) => p.start && p.start > today);
+                  const key = now ? "NOW" : next ? "NEXT" : "FORMAT";
+                  const value = now ? now.label : next ? next.label : selected.tournamentType === "대진표" ? "대진표 · 리그전" : "참가 신청제";
+                  const sub = now
+                    ? `${fmtDate(now.start)}${now.end ? ` ~ ${fmtDate(now.end)}` : ""}`
+                    : next ? `${fmtDate(next.start)} 시작`
+                    : sch.length ? "" : `총 ${(selected.survey?.questions || []).length || 0}문항`;
+                  return (
+                    <div className="py-4 sm:px-4 min-w-0 col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-white/[0.08]">
+                      <p className="text-[9px] font-black esp-mono text-gray-600 mb-1.5">{key === "NOW" ? "현재 단계" : key === "NEXT" ? "다음 일정" : "진행 방식"}</p>
+                      <p className={`font-black truncate ${key === "NOW" ? "text-[#00e07b]" : "text-gray-300"}`}>{value}</p>
+                      {sub && <p className="text-[11px] text-gray-600 mt-0.5 tabular-nums">{sub}</p>}
+                    </div>
+                  );
+                })()}
               </div>
 
               {selected.content && (
