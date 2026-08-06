@@ -552,11 +552,23 @@ export default function TournamentPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 border-y border-white/[0.08] mb-8">
                 <div className="py-4 pr-4 min-w-0">
                   <p className="text-[9px] font-black esp-mono text-gray-600 mb-1.5">PRIZE</p>
-                  <p className="text-white font-black truncate">{selected.tournamentPrize || "미정"}</p>
+                  <p className="text-white font-black leading-snug break-keep">{selected.tournamentPrize || "미정"}</p>
                 </div>
                 <div className="py-4 px-4 min-w-0 border-l border-white/[0.08]">
                   <p className="text-[9px] font-black esp-mono text-gray-600 mb-1.5">PERIOD</p>
-                  <p className="text-gray-300 font-bold truncate">{selected.tournamentDate || "미정"}</p>
+                  {/* 좁은 칸에서 잘리지 않도록 시작/종료를 두 줄로 */}
+                  {(() => {
+                    const d = (selected.tournamentDate || "").trim();
+                    const parts = d.split(/\s*~\s*/);
+                    if (!d) return <p className="text-gray-300 font-bold">미정</p>;
+                    if (parts.length < 2) return <p className="text-gray-300 font-bold leading-snug break-keep tabular-nums">{d}</p>;
+                    return (
+                      <p className="font-bold leading-snug tabular-nums">
+                        <span className="block text-gray-300">{parts[0]}</span>
+                        <span className="block text-gray-500">~ {parts[1]}</span>
+                      </p>
+                    );
+                  })()}
                 </div>
                 {/* 📌 지금 이 대회가 어느 단계인지 — 일정이 있으면 현재/다음 단계, 없으면 진행 방식 */}
                 {(() => {
@@ -569,11 +581,11 @@ export default function TournamentPage() {
                   const sub = now
                     ? `${fmtDate(now.start)}${now.end ? ` ~ ${fmtDate(now.end)}` : ""}`
                     : next ? `${fmtDate(next.start)} 시작`
-                    : sch.length ? "" : `총 ${(selected.survey?.questions || []).length || 0}문항`;
+                    : "";
                   return (
                     <div className="py-4 sm:px-4 min-w-0 col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-white/[0.08]">
                       <p className="text-[9px] font-black esp-mono text-gray-600 mb-1.5">{key === "NOW" ? "현재 단계" : key === "NEXT" ? "다음 일정" : "진행 방식"}</p>
-                      <p className={`font-black truncate ${key === "NOW" ? "text-[#00e07b]" : "text-gray-300"}`}>{value}</p>
+                      <p className={`font-black leading-snug break-keep ${key === "NOW" ? "text-[#00e07b]" : "text-gray-300"}`}>{value}</p>
                       {sub && <p className="text-[11px] text-gray-600 mt-0.5 tabular-nums">{sub}</p>}
                     </div>
                   );
