@@ -19,9 +19,14 @@ export async function GET(request) {
     const session = await getServerSession(authOptions);
     const isAdmin = isAdminName(session?.user?.name);
 
-    if (isAdmin && searchParams.get("all") === "1") {
-      const list = await SurveyResponse.find({ postId }).sort({ createdAt: -1 });
-      return NextResponse.json({ success: true, data: list, count: list.length });
+    if (searchParams.get("all") === "1") {
+      // 통계/응답 전체 조회는 관리자 전용
+      if (!isAdmin) return NextResponse.json({ success: false, message: "관리자만 조회할 수 있습니다." }, { status: 403 });
+      const [list, post] = await Promise.all([
+        SurveyResponse.find({ postId }).sort({ createdAt: -1 }),
+        Post.findById(postId).select("title tournamentGame tournamentDate survey"),
+      ]);
+      return NextResponse.json({ success: true, data: list, count: list.length, post });
     }
 
     // 일반 유저: 본인 제출 여부만

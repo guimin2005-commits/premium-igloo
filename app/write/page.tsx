@@ -187,6 +187,83 @@ export default function AdminWritePage() {
       return { ...s, questions: qs };
     });
 
+  // ── 설문 빌더 편의기능 ──
+  const [dragQ, setDragQ] = useState<number | null>(null);        // 끌고 있는 문항
+  const [overQ, setOverQ] = useState<number | null>(null);        // 놓일 위치
+  const [dragOpt, setDragOpt] = useState<{ qi: number; oi: number } | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [surveyPreview, setSurveyPreview] = useState(false);
+
+  const dupQuestion = (i: number) =>
+    setSurvey((s) => {
+      const src = s.questions[i];
+      const copy: SQ = { ...src, qid: newQid(), options: [...src.options], label: src.label ? `${src.label} (복사본)` : "" };
+      const qs = [...s.questions];
+      qs.splice(i + 1, 0, copy);
+      return { ...s, questions: qs };
+    });
+
+  const removeQuestion = (i: number) => setSurvey((s) => ({ ...s, questions: s.questions.filter((_, x) => x !== i) }));
+
+  // 문항 드래그 정렬
+  const dropQuestion = (to: number) =>
+    setSurvey((s) => {
+      if (dragQ === null || dragQ === to) return s;
+      const qs = [...s.questions];
+      const [m] = qs.splice(dragQ, 1);
+      qs.splice(to, 0, m);
+      return { ...s, questions: qs };
+    });
+
+  // 선택지 드래그 정렬
+  const dropOption = (qi: number, to: number) => {
+    if (!dragOpt || dragOpt.qi !== qi || dragOpt.oi === to) return;
+    const opts = [...survey.questions[qi].options];
+    const [m] = opts.splice(dragOpt.oi, 1);
+    opts.splice(to, 0, m);
+    updateQuestion(qi, { options: opts });
+  };
+
+  // 여러 줄 붙여넣기 → 선택지 일괄 생성
+  const pasteOptions = (qi: number, oi: number, text: string) => {
+    const parts = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length < 2) return false;
+    const opts = [...survey.questions[qi].options];
+    opts.splice(oi, 1, ...parts);
+    updateQuestion(qi, { options: opts });
+    return true;
+  };
+
+  // 자주 쓰는 문항 빠른 추가
+  const QUICK_QS: { l: string; q: Omit<SQ, "qid"> }[] = [
+    { l: "디스코드 닉네임", q: { type: "short", label: "디스코드 닉네임", required: true, options: [], etc: false } },
+    { l: "게임 닉네임", q: { type: "short", label: "게임 내 닉네임 (태그 포함)", required: true, options: [], etc: false } },
+    { l: "티어", q: { type: "single", label: "현재 티어", required: true, options: ["아이언", "브론즈", "실버", "골드", "플래티넘", "에메랄드", "다이아몬드", "마스터 이상"], etc: false } },
+    { l: "주 포지션", q: { type: "single", label: "주 포지션", required: true, options: ["탑", "정글", "미드", "원딜", "서포터"], etc: false } },
+    { l: "부 포지션", q: { type: "single", label: "부 포지션", required: false, options: ["탑", "정글", "미드", "원딜", "서포터", "없음"], etc: false } },
+    { l: "참가 가능 요일", q: { type: "multi", label: "참가 가능 요일", required: true, options: ["월", "화", "수", "목", "금", "토", "일"], etc: false } },
+    { l: "팀명", q: { type: "short", label: "팀명", required: true, options: [], etc: false } },
+    { l: "팀원 명단", q: { type: "long", label: "팀원 전체 명단 (닉네임 줄바꿈으로 구분)", required: true, options: [], etc: false } },
+    { l: "각오 한마디", q: { type: "long", label: "각오 한마디", required: false, options: [], etc: false } },
+  ];
+  const addQuickQuestion = (q: Omit<SQ, "qid">) =>
+    setSurvey((s) => ({ ...s, questions: [...s.questions, { ...q, qid: newQid(), options: [...q.options] }] }));
+
+  // 설문 템플릿 (한 번에 구성)
+  const SURVEY_TEMPLATES: { name: string; desc: string; pick: string[] }[] = [
+    { name: "개인전 신청", desc: "닉네임 · 티어 · 포지션 · 요일", pick: ["디스코드 닉네임", "게임 닉네임", "티어", "주 포지션", "부 포지션", "참가 가능 요일"] },
+    { name: "팀전 신청", desc: "팀명 · 팀원 명단 · 요일", pick: ["팀명", "디스코드 닉네임", "팀원 명단", "참가 가능 요일"] },
+    { name: "간단 신청", desc: "닉네임 · 각오", pick: ["디스코드 닉네임", "각오 한마디"] },
+  ];
+  const applyTemplate = (t: { name: string; pick: string[] }) => {
+    if (survey.questions.length && !confirm(`현재 작성한 문항을 모두 지우고\n'${t.name}' 템플릿으로 바꿀까요?`)) return;
+    const qs = t.pick
+      .map((l) => QUICK_QS.find((x) => x.l === l))
+      .filter(Boolean)
+      .map((x) => ({ ...(x as any).q, qid: newQid(), options: [...(x as any).q.options] }));
+    setSurvey((s) => ({ ...s, questions: qs }));
+  };
+
   // 📌 리그 상세 일정 (팀원 배정, 스크림, 본선 등)
   type SchedulePhase = { label: string; start: string; end: string };
   const [tournamentSchedule, setTournamentSchedule] = useState<SchedulePhase[]>([]);
@@ -757,12 +834,19 @@ export default function AdminWritePage() {
                   <div className="flex flex-wrap items-center gap-3 px-5 py-3.5 border-b border-white/8 bg-white/[0.015]">
                     <span className="w-1 h-4 bg-[#e91e3f] rounded-full"></span>
                     <span className="text-sm font-black text-white">참가 설문</span>
-                    <span className="text-[10px] font-bold text-gray-600">질문·선택지·직접 입력 구성</span>
+                    {survey.enabled && survey.questions.length > 0 && (
+                      <span className="text-[10px] font-bold text-gray-500">
+                        문항 {survey.questions.length}개 · 필수 {survey.questions.filter((q) => q.required).length}개
+                      </span>
+                    )}
                     <div className="ml-auto flex items-center gap-2">
                       {survey.enabled && (
-                        <button type="button" onClick={() => setSurvey({ ...survey, closed: !survey.closed })} className={`text-[11px] font-black px-3 py-1.5 rounded-full border transition-all ${survey.closed ? "bg-white/10 text-gray-300 border-white/20" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"}`}>
-                          {survey.closed ? "접수 마감됨" : "접수 중"}
-                        </button>
+                        <>
+                          <button type="button" onClick={() => setSurveyPreview(true)} disabled={!survey.questions.length} className="text-[11px] font-black px-3 py-1.5 rounded-full border border-white/15 text-gray-300 hover:text-white hover:border-white/30 disabled:opacity-40 transition-all">미리보기</button>
+                          <button type="button" onClick={() => setSurvey({ ...survey, closed: !survey.closed })} className={`text-[11px] font-black px-3 py-1.5 rounded-full border transition-all ${survey.closed ? "bg-white/10 text-gray-300 border-white/20" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"}`}>
+                            {survey.closed ? "접수 마감됨" : "접수 중"}
+                          </button>
+                        </>
                       )}
                       <button type="button" onClick={() => setSurvey({ ...survey, enabled: !survey.enabled })} className={`text-[11px] font-black px-3 py-1.5 rounded-full border transition-all ${survey.enabled ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-white/15 text-gray-400 hover:text-white"}`}>
                         {survey.enabled ? "설문 사용 중" : "설문 사용 안 함"}
@@ -771,69 +855,219 @@ export default function AdminWritePage() {
                   </div>
 
                   {survey.enabled && (
-                    <div className="p-5 space-y-4">
+                    <div className="p-5 space-y-5">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <input type="text" placeholder="설문 제목 (예: 제1회 대회 참가 신청서)" value={survey.title} onChange={(e) => setSurvey({ ...survey, title: e.target.value })} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
                         <input type="text" placeholder="설명 (선택)" value={survey.desc} onChange={(e) => setSurvey({ ...survey, desc: e.target.value })} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
                       </div>
 
+                      {/* 템플릿 */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-black tracking-widest text-gray-600 uppercase mr-1">템플릿</span>
+                        {SURVEY_TEMPLATES.map((t) => (
+                          <button key={t.name} type="button" onClick={() => applyTemplate(t)} title={t.desc} className="text-[11px] font-bold text-gray-300 border border-white/10 px-3 py-1.5 rounded-full hover:border-[#e91e3f]/50 hover:text-white transition-all">
+                            {t.name}
+                          </button>
+                        ))}
+                        {survey.questions.length > 0 && (
+                          <>
+                            <span className="w-px h-4 bg-white/10 mx-1" />
+                            <button type="button" onClick={() => setSurvey({ ...survey, questions: survey.questions.map((q) => ({ ...q, required: !survey.questions.every((x) => x.required) })) })} className="text-[11px] font-bold text-gray-400 hover:text-white transition-colors">
+                              {survey.questions.every((q) => q.required) ? "필수 전체 해제" : "전체 필수로"}
+                            </button>
+                            <button type="button" onClick={() => { if (confirm("작성한 문항을 모두 삭제할까요?")) setSurvey({ ...survey, questions: [] }); }} className="text-[11px] font-bold text-gray-600 hover:text-red-400 transition-colors">전체 삭제</button>
+                          </>
+                        )}
+                      </div>
+
                       {/* 질문 목록 */}
                       {survey.questions.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-white/10 py-8 text-center">
-                          <p className="text-xs text-gray-500">아래 버튼으로 질문을 추가하세요.</p>
+                        <div className="rounded-xl border border-dashed border-white/10 py-10 text-center">
+                          <p className="text-xs text-gray-500">위 템플릿을 고르거나, 아래에서 문항을 추가하세요.</p>
                         </div>
                       ) : (
-                        <div className="space-y-3">
-                          {survey.questions.map((q, qi) => (
-                            <div key={q.qid} className="rounded-xl border border-white/10 bg-[#0f0f0f] p-4">
-                              <div className="flex flex-wrap items-center gap-2 mb-3">
-                                <span className="text-[10px] font-black text-gray-600 w-5">{qi + 1}</span>
-                                <input type="text" placeholder="질문을 입력하세요" value={q.label} onChange={(e) => updateQuestion(qi, { label: e.target.value })} className="flex-1 min-w-[180px] bg-[#161616] border border-white/10 rounded-lg px-3 py-2 text-sm font-bold text-white outline-none focus:border-[#e91e3f]" />
-                                <select value={q.type} onChange={(e) => { const t = e.target.value; updateQuestion(qi, { type: t, options: (t === "single" || t === "multi") && q.options.length === 0 ? ["선택지 1"] : q.options }); }} className="bg-[#161616] border border-white/10 rounded-lg px-2.5 py-2 text-xs font-bold text-white outline-none focus:border-[#e91e3f] [color-scheme:dark]">
+                        <div className="border-t border-white/[0.08]">
+                          {survey.questions.map((q, qi) => {
+                            const isOpen = !collapsed[q.qid];
+                            const dupOpts = q.options.filter((o, i) => o.trim() && q.options.findIndex((x) => x.trim() === o.trim()) !== i);
+                            return (
+                            <div
+                              key={q.qid}
+                              onDragOver={(e) => { if (dragQ !== null) { e.preventDefault(); setOverQ(qi); } }}
+                              onDrop={(e) => { if (dragQ !== null) { e.preventDefault(); dropQuestion(qi); setDragQ(null); setOverQ(null); } }}
+                              className={`border-b border-white/[0.08] transition-colors ${dragQ === qi ? "opacity-40" : ""} ${overQ === qi && dragQ !== null && dragQ !== qi ? "bg-[#e91e3f]/[0.06] shadow-[inset_0_2px_0_0_#e91e3f]" : ""}`}
+                            >
+                              <div className="flex flex-wrap items-center gap-2 py-3">
+                                {/* 드래그 핸들 */}
+                                <span
+                                  draggable
+                                  onDragStart={() => setDragQ(qi)}
+                                  onDragEnd={() => { setDragQ(null); setOverQ(null); }}
+                                  title="끌어서 순서 변경"
+                                  className="shrink-0 cursor-grab active:cursor-grabbing px-1.5 py-2 text-gray-700 hover:text-gray-300 select-none leading-none"
+                                >
+                                  <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.3"/><circle cx="11" cy="3" r="1.3"/><circle cx="5" cy="8" r="1.3"/><circle cx="11" cy="8" r="1.3"/><circle cx="5" cy="13" r="1.3"/><circle cx="11" cy="13" r="1.3"/></svg>
+                                </span>
+                                <span className="text-[10px] font-black text-gray-600 w-5 tabular-nums shrink-0">{String(qi + 1).padStart(2, "0")}</span>
+                                <input
+                                  type="text"
+                                  placeholder="질문을 입력하세요"
+                                  value={q.label}
+                                  onChange={(e) => updateQuestion(qi, { label: e.target.value })}
+                                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addQuestion(q.type); } }}
+                                  className="flex-1 min-w-[160px] bg-transparent border-b border-white/10 px-1 py-2 text-sm font-bold text-white outline-none focus:border-[#e91e3f] transition-colors"
+                                />
+                                <select value={q.type} onChange={(e) => { const t = e.target.value; updateQuestion(qi, { type: t, options: (t === "single" || t === "multi") && q.options.length === 0 ? ["선택지 1"] : q.options }); }} className="bg-[#161616] border border-white/10 rounded-lg px-2.5 py-2 text-xs font-bold text-white outline-none focus:border-[#e91e3f] [color-scheme:dark] shrink-0">
                                   {Q_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
                                 </select>
-                                <button type="button" onClick={() => updateQuestion(qi, { required: !q.required })} className={`text-[10px] font-black px-2.5 py-2 rounded-lg border transition-all ${q.required ? "bg-[#e91e3f]/15 border-[#e91e3f]/40 text-[#e91e3f]" : "border-white/10 text-gray-500 hover:text-gray-300"}`}>필수</button>
-                                <div className="flex gap-1">
-                                  <button type="button" onClick={() => moveQuestion(qi, -1)} className="px-2 py-2 text-[10px] font-black text-gray-500 hover:text-white bg-white/5 rounded-lg">▲</button>
-                                  <button type="button" onClick={() => moveQuestion(qi, 1)} className="px-2 py-2 text-[10px] font-black text-gray-500 hover:text-white bg-white/5 rounded-lg">▼</button>
-                                  <button type="button" onClick={() => setSurvey({ ...survey, questions: survey.questions.filter((_, i) => i !== qi) })} className="px-2 py-2 text-[10px] font-black text-gray-600 hover:text-red-400 bg-white/5 rounded-lg">×</button>
+                                <button type="button" onClick={() => updateQuestion(qi, { required: !q.required })} title="필수 응답 여부" className={`text-[10px] font-black px-2.5 py-2 rounded-lg border transition-all shrink-0 ${q.required ? "bg-[#e91e3f]/15 border-[#e91e3f]/40 text-[#e91e3f]" : "border-white/10 text-gray-500 hover:text-gray-300"}`}>필수</button>
+                                <div className="flex gap-0.5 shrink-0">
+                                  <button type="button" onClick={() => moveQuestion(qi, -1)} disabled={qi === 0} title="위로" className="px-2 py-2 text-[10px] font-black text-gray-500 hover:text-white disabled:opacity-25 rounded-lg hover:bg-white/5">▲</button>
+                                  <button type="button" onClick={() => moveQuestion(qi, 1)} disabled={qi === survey.questions.length - 1} title="아래로" className="px-2 py-2 text-[10px] font-black text-gray-500 hover:text-white disabled:opacity-25 rounded-lg hover:bg-white/5">▼</button>
+                                  <button type="button" onClick={() => dupQuestion(qi)} title="문항 복사" className="px-2 py-2 text-gray-500 hover:text-white rounded-lg hover:bg-white/5">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" /></svg>
+                                  </button>
+                                  <button type="button" onClick={() => setCollapsed((c) => ({ ...c, [q.qid]: !c[q.qid] }))} title={isOpen ? "접기" : "펼치기"} className="px-2 py-2 text-gray-500 hover:text-white rounded-lg hover:bg-white/5">
+                                    <svg className={`w-3.5 h-3.5 transition-transform ${isOpen ? "" : "-rotate-90"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                                  </button>
+                                  <button type="button" onClick={() => removeQuestion(qi)} title="문항 삭제" className="px-2 py-2 text-gray-600 hover:text-red-400 rounded-lg hover:bg-white/5">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                  </button>
                                 </div>
                               </div>
 
-                              {(q.type === "single" || q.type === "multi") ? (
-                                <div className="pl-7 space-y-1.5">
+                              {isOpen && ((q.type === "single" || q.type === "multi") ? (
+                                <div className="pl-9 pb-4 space-y-1">
                                   {q.options.map((opt, oi) => (
-                                    <div key={oi} className="flex items-center gap-2">
+                                    <div
+                                      key={oi}
+                                      onDragOver={(e) => { if (dragOpt?.qi === qi) e.preventDefault(); }}
+                                      onDrop={(e) => { if (dragOpt?.qi === qi) { e.preventDefault(); dropOption(qi, oi); setDragOpt(null); } }}
+                                      className={`flex items-center gap-2 group/opt rounded ${dragOpt && dragOpt.qi === qi && dragOpt.oi === oi ? "opacity-40" : ""}`}
+                                    >
+                                      <span
+                                        draggable
+                                        onDragStart={() => setDragOpt({ qi, oi })}
+                                        onDragEnd={() => setDragOpt(null)}
+                                        title="끌어서 순서 변경"
+                                        className="shrink-0 cursor-grab active:cursor-grabbing text-gray-800 group-hover/opt:text-gray-500 leading-none"
+                                      >
+                                        <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/><circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/></svg>
+                                      </span>
                                       <span className={`w-3 h-3 shrink-0 border border-white/25 ${q.type === "single" ? "rounded-full" : "rounded-[3px]"}`}></span>
-                                      <input type="text" value={opt} onChange={(e) => updateQuestion(qi, { options: q.options.map((o, i) => (i === oi ? e.target.value : o)) })} className="flex-1 bg-transparent border-b border-white/10 px-1 py-1 text-xs text-white outline-none focus:border-[#e91e3f]" />
+                                      <input
+                                        type="text"
+                                        value={opt}
+                                        onChange={(e) => updateQuestion(qi, { options: q.options.map((o, i) => (i === oi ? e.target.value : o)) })}
+                                        onPaste={(e) => { const txt = e.clipboardData.getData("text"); if (pasteOptions(qi, oi, txt)) e.preventDefault(); }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") { e.preventDefault(); const opts = [...q.options]; opts.splice(oi + 1, 0, ""); updateQuestion(qi, { options: opts }); }
+                                          if (e.key === "Backspace" && !opt && q.options.length > 1) { e.preventDefault(); updateQuestion(qi, { options: q.options.filter((_, i) => i !== oi) }); }
+                                        }}
+                                        placeholder={`선택지 ${oi + 1}`}
+                                        className="flex-1 bg-transparent border-b border-white/10 px-1 py-1.5 text-xs text-white outline-none focus:border-[#e91e3f] transition-colors"
+                                      />
+                                      <button type="button" onClick={() => { const opts = [...q.options]; opts.splice(oi + 1, 0, opt); updateQuestion(qi, { options: opts }); }} title="선택지 복사" className="opacity-0 group-hover/opt:opacity-100 text-gray-600 hover:text-white text-[11px] px-1 transition-opacity">복사</button>
                                       {q.options.length > 1 && (
-                                        <button type="button" onClick={() => updateQuestion(qi, { options: q.options.filter((_, i) => i !== oi) })} className="text-gray-700 hover:text-red-400 text-xs px-1">×</button>
+                                        <button type="button" onClick={() => updateQuestion(qi, { options: q.options.filter((_, i) => i !== oi) })} title="선택지 삭제" className="text-gray-700 hover:text-red-400 text-xs px-1">×</button>
                                       )}
                                     </div>
                                   ))}
-                                  <div className="flex items-center gap-2 pt-1">
-                                    <button type="button" onClick={() => updateQuestion(qi, { options: [...q.options, `선택지 ${q.options.length + 1}`] })} className="text-[11px] font-bold text-[#e91e3f] hover:underline">+ 선택지 추가</button>
-                                    <button type="button" onClick={() => updateQuestion(qi, { etc: !q.etc })} className={`text-[11px] font-bold ${q.etc ? "text-[#e91e3f]" : "text-gray-600 hover:text-gray-400"}`}>+ 기타(직접 입력) {q.etc ? "사용 중" : ""}</button>
+                                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                                    <button type="button" onClick={() => updateQuestion(qi, { options: [...q.options, ""] })} className="text-[11px] font-bold text-[#e91e3f] hover:underline">+ 선택지 추가</button>
+                                    <button type="button" onClick={() => updateQuestion(qi, { etc: !q.etc })} className={`text-[11px] font-bold ${q.etc ? "text-[#e91e3f]" : "text-gray-600 hover:text-gray-400"}`}>기타(직접 입력) {q.etc ? "사용 중" : "추가"}</button>
+                                    <button type="button" onClick={() => updateQuestion(qi, { options: [...q.options].sort((a, b) => a.localeCompare(b, "ko")) })} className="text-[11px] font-bold text-gray-600 hover:text-gray-300">가나다 정렬</button>
+                                    <span className="text-[10px] text-gray-700">Enter=추가 · 여러 줄 붙여넣기=일괄 등록</span>
                                   </div>
+                                  {dupOpts.length > 0 && (
+                                    <p className="text-[10px] font-bold text-amber-400/90 pt-1">중복된 선택지가 있습니다: {[...new Set(dupOpts)].join(", ")}</p>
+                                  )}
                                 </div>
                               ) : (
-                                <p className="pl-7 text-[11px] text-gray-600">{q.type === "short" ? "참가자가 한 줄로 입력합니다." : "참가자가 여러 줄로 입력합니다."}</p>
-                              )}
+                                <p className="pl-9 pb-4 text-[11px] text-gray-600">{q.type === "short" ? "참가자가 한 줄로 입력합니다." : "참가자가 여러 줄로 입력합니다."}</p>
+                              ))}
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
 
-                      <div className="flex flex-wrap gap-2">
-                        {Q_TYPES.map((t) => (
-                          <button key={t.v} type="button" onClick={() => addQuestion(t.v)} className="text-[11px] font-black text-gray-300 bg-white/5 border border-white/10 px-3.5 py-2 rounded-full hover:border-[#e91e3f]/40 hover:text-white transition-all">+ {t.l}</button>
-                        ))}
+                      {/* 문항 추가 */}
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap gap-2">
+                          {Q_TYPES.map((t) => (
+                            <button key={t.v} type="button" onClick={() => addQuestion(t.v)} className="text-[11px] font-black text-gray-300 bg-white/5 border border-white/10 px-3.5 py-2 rounded-full hover:border-[#e91e3f]/40 hover:text-white transition-all">+ {t.l}</button>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-black tracking-widest text-gray-600 uppercase mr-1">자주 쓰는 문항</span>
+                          {QUICK_QS.map((x) => (
+                            <button key={x.l} type="button" onClick={() => addQuickQuestion(x.q)} className="text-[11px] font-bold text-gray-500 border-b border-white/10 px-1.5 py-1 hover:text-white hover:border-[#e91e3f] transition-all">{x.l}</button>
+                          ))}
+                        </div>
                       </div>
-                      <p className="text-[10px] text-gray-600">설문을 사용하면 대회 상세에서 참가자가 바로 신청할 수 있고, 응답은 관리자만 확인할 수 있습니다.</p>
+
+                      <p className="text-[10px] text-gray-600">설문을 사용하면 대회 상세에서 참가자가 바로 신청할 수 있고, 응답과 통계는 관리자만 확인할 수 있습니다.</p>
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* 📌 설문 미리보기 — 참가자에게 보이는 그대로 */}
+              {surveyPreview && (
+                <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm sm:p-4" onClick={() => setSurveyPreview(false)}>
+                  <div onClick={(e) => e.stopPropagation()} className="bg-[#101010] border border-white/10 w-full max-w-2xl rounded-t-3xl sm:rounded-3xl max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden">
+                    <div className="shrink-0 px-5 sm:px-8 pt-6 pb-5 border-b border-white/10 bg-gradient-to-b from-emerald-500/[0.07] to-transparent">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black tracking-[0.25em] text-emerald-400 mb-1.5">PREVIEW</p>
+                          <h2 className="text-xl sm:text-2xl font-black text-white leading-tight break-keep">{survey.title || `${title || "대회"} 참가 신청서`}</h2>
+                          {survey.desc && <p className="text-xs sm:text-sm text-gray-400 mt-2 leading-relaxed whitespace-pre-wrap">{survey.desc}</p>}
+                        </div>
+                        <button type="button" onClick={() => setSurveyPreview(false)} className="shrink-0 p-2 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8">
+                      {survey.questions.map((q, idx) => (
+                        <div key={q.qid} className="py-6 border-b border-white/[0.07] last:border-b-0">
+                          <div className="flex items-start gap-3 mb-4">
+                            <span className="shrink-0 mt-0.5 text-[11px] font-black text-gray-700 tabular-nums">{String(idx + 1).padStart(2, "0")}</span>
+                            <p className="text-sm sm:text-base font-bold text-white leading-snug break-keep">
+                              {q.label || <span className="text-gray-600">(질문 미입력)</span>}
+                              {q.required && <span className="text-red-400 ml-1">*</span>}
+                            </p>
+                          </div>
+                          <div className="sm:pl-7">
+                            {q.type === "short" && <div className="border-b border-white/12 py-2.5 text-sm text-gray-600">답변을 입력해주세요</div>}
+                            {q.type === "long" && <div className="border-b border-white/12 py-2.5 pb-12 text-sm text-gray-600">답변을 입력해주세요</div>}
+                            {(q.type === "single" || q.type === "multi") && (
+                              <div className="border-t border-white/[0.07]">
+                                {q.options.map((opt, oi) => (
+                                  <div key={oi} className="flex items-center gap-3 px-1 py-3 border-b border-white/[0.07]">
+                                    <span className={`w-4 h-4 border-2 border-gray-600 shrink-0 ${q.type === "multi" ? "rounded-[4px]" : "rounded-full"}`} />
+                                    <span className="text-sm text-gray-300">{opt || `선택지 ${oi + 1}`}</span>
+                                  </div>
+                                ))}
+                                {q.etc && (
+                                  <div className="flex items-center gap-3 px-1 py-3 border-b border-white/[0.07]">
+                                    <span className={`w-4 h-4 border-2 border-gray-600 shrink-0 ${q.type === "multi" ? "rounded-[4px]" : "rounded-full"}`} />
+                                    <span className="text-sm text-gray-300">기타 (직접 입력)</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="shrink-0 px-5 sm:px-8 py-4 border-t border-white/10 bg-[#0d0d0d]">
+                      <button type="button" onClick={() => setSurveyPreview(false)} className="w-full py-3.5 rounded-xl font-black text-sm bg-white/5 hover:bg-white/10 text-gray-300 transition-colors">미리보기 닫기</button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col gap-3 md:col-span-2">
                 <span className="text-xs font-bold text-gray-400">배너 이미지 URL (선택)</span>

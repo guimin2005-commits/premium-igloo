@@ -181,8 +181,6 @@ export default function TournamentPage() {
   const [surveyMine, setSurveyMine] = useState<any>(null);              // 내 기존 응답
   const [surveyCount, setSurveyCount] = useState(0);
   const [surveySubmitting, setSurveySubmitting] = useState(false);
-  const [respTarget, setRespTarget] = useState<any>(null);              // 관리자 응답 조회 대상
-  const [responses, setResponses] = useState<any[] | null>(null);
 
   const fetchTournaments = async () => {
     setIsLoading(true);
@@ -237,14 +235,22 @@ export default function TournamentPage() {
       return;
     }
     // 📌 참가 설문이 있으면 설문 폼을 우선 (외부 링크보다 우선)
-    if (t.survey?.enabled) {
-      if (t.survey.closed) { setPopup({ isOpen: true, message: "설문 접수가 마감되었습니다.", isError: true }); return; }
-      openSurvey(t);
-      return;
-    }
+    // 마감된 설문도 '내 제출 내용 확인'은 가능해야 하므로 모달을 열고 안에서 처리한다
+    if (t.survey?.enabled) { openSurvey(t); return; }
     if (t.tournamentLink) window.open(t.tournamentLink, "_blank", "noopener,noreferrer");
     else setSelected(t);
   };
+
+  // 📌 상세를 열면 설문 접수 현황(인원/내 제출 여부)을 미리 가져온다
+  useEffect(() => {
+    if (!selected?.survey?.enabled) { setSurveyCount(0); setSurveyMine(null); return; }
+    let alive = true;
+    fetch(`/api/survey?postId=${selected._id}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (alive && d?.success) { setSurveyCount(d.count || 0); setSurveyMine(d.mine || null); } })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [selected]);
 
   // ── 참가 설문 ──
   const openSurvey = async (t: any) => {
@@ -305,16 +311,6 @@ export default function TournamentPage() {
     } finally { setSurveySubmitting(false); }
   };
 
-  // 관리자: 응답 목록 열기
-  const openResponses = async (t: any) => {
-    setRespTarget(t);
-    setResponses(null);
-    try {
-      const d = await fetch(`/api/survey?postId=${t._id}&all=1`, { cache: "no-store" }).then((r) => r.json());
-      setResponses(d?.success ? d.data : []);
-    } catch { setResponses([]); }
-  };
-
   return (
     <main className="flex-1 w-full flex flex-col relative">
       <LuxStyles />
@@ -371,26 +367,30 @@ export default function TournamentPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        /* 📌 카드(박스) 대신 헤어라인 그리드 — 셀이 선으로만 구분되는 모던 레이아웃 */
+        <div className="border-t border-white/[0.08] lg:border-l">
+          <div className="grid grid-cols-1 lg:grid-cols-2">
           {filtered.map((t, listIdx) => {
             const st = getStatus(t);
             const meta = STATUS_META[st];
             const isRecruit = t.tournamentType !== "대진표";
             const isLive = st === "모집중" || st === "진행중";
+            const accent = st === "모집중" ? "emerald" : st === "진행중" ? "red" : "gray";
             return (
-              <Reveal key={t._id} delay={Math.min(listIdx, 5) * 80}>
-              <div onClick={() => setSelected(t)} className={`relative rounded-2xl p-px cursor-pointer group h-full transition-all duration-300 ${isLive ? `bg-gradient-to-b from-white/10 ${st === "모집중" ? "hover:from-emerald-500/40" : "hover:from-[#e91e3f]/40"} to-white/[0.02]` : "bg-gradient-to-b from-white/[0.06] to-white/[0.02]"} ${st === "종료됨" ? "opacity-70 hover:opacity-100" : ""}`}>
-              <div className="rounded-2xl bg-[#111111]/97 overflow-hidden h-full flex flex-col group-hover:bg-[#141414] transition-colors duration-300">
-                <div className="w-full h-44 bg-[#181818] relative overflow-hidden shrink-0">
+              <Reveal key={t._id} delay={Math.min(listIdx, 5) * 80} className={`group border-b border-white/[0.08] lg:border-r ${st === "종료됨" ? "opacity-60 hover:opacity-100 transition-opacity" : ""}`}>
+              <div onClick={() => setSelected(t)} className="relative h-full flex flex-col cursor-pointer bg-transparent hover:bg-white/[0.015] transition-colors duration-300">
+                {/* 좌측 상태 라인 */}
+                <span className={`absolute left-0 top-0 bottom-0 w-px transition-colors duration-300 ${st === "모집중" ? "bg-emerald-500/40 group-hover:bg-emerald-400" : st === "진행중" ? "bg-[#e91e3f]/40 group-hover:bg-[#e91e3f]" : "bg-transparent"}`} />
+
+                {/* 배너 밴드 */}
+                <div className="w-full h-40 bg-[#141414] relative overflow-hidden shrink-0 border-b border-white/[0.08]">
                   {t.bannerUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={t.bannerUrl} alt={t.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out opacity-70" />
+                    <img src={t.bannerUrl} alt={t.title} className="w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-[1.03] transition-all duration-700 ease-out" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-800">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-16 h-16"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516" /></svg>
-                    </div>
+                    <div className="absolute inset-0 lux-grid-bg opacity-60" />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#111111] via-[#111111]/30 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0b0b0b] via-[#0b0b0b]/25 to-transparent" />
                   {/* 상태 + 타입 뱃지 */}
                   <div className="absolute top-4 right-4 flex flex-col items-end gap-1.5">
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-black rounded-full ${meta.badge}`}>
@@ -404,51 +404,64 @@ export default function TournamentPage() {
                       <button onClick={(e) => { e.stopPropagation(); router.push(`/write?id=${t._id}`); }} className="text-[10px] font-bold text-white bg-black/60 backdrop-blur px-2 py-1 rounded hover:bg-black/80">수정</button>
                       <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(t._id); }} className="text-[10px] font-bold text-red-400 bg-black/60 backdrop-blur px-2 py-1 rounded hover:bg-black/80">삭제</button>
                       {t.survey?.enabled && (
-                        <button onClick={(e) => { e.stopPropagation(); openResponses(t); }} className="text-[10px] font-bold text-emerald-300 bg-black/60 backdrop-blur px-2 py-1 rounded hover:bg-black/80">응답</button>
+                        <button onClick={(e) => { e.stopPropagation(); router.push(`/tournament/survey/${t._id}`); }} className="text-[10px] font-bold text-emerald-300 bg-black/60 backdrop-blur px-2 py-1 rounded hover:bg-black/80">설문 결과</button>
                       )}
                     </div>
                   )}
-                  <div className="absolute bottom-4 left-5 right-5">
-                    <span className="text-[10px] font-black tracking-widest text-gray-400">{t.tournamentGame}</span>
-                    <h3 className="text-xl font-black text-white leading-tight line-clamp-1 group-hover:text-[#ff5c77] transition-colors">{t.title}</h3>
+                </div>
+
+                {/* 제목 블록 */}
+                <div className="px-5 py-5">
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <span className={`w-4 h-px shrink-0 ${st === "모집중" ? "bg-emerald-400" : st === "진행중" ? "bg-[#e91e3f]" : "bg-gray-600"}`} />
+                    <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase truncate">{t.tournamentGame || "TOURNAMENT"}</span>
+                  </div>
+                  <h3 className="text-xl font-black text-white leading-tight line-clamp-2 break-keep group-hover:text-[#ff5c77] transition-colors">{t.title}</h3>
+                </div>
+
+                {/* 메타 — 박스 없이 세로 헤어라인으로 분할 */}
+                <div className="grid grid-cols-2 border-t border-white/[0.08] divide-x divide-white/[0.08]">
+                  <div className="px-5 py-3.5 min-w-0">
+                    <p className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase mb-1">상금</p>
+                    <p className="text-[13px] font-black text-white truncate">{t.tournamentPrize || "미정"}</p>
+                  </div>
+                  <div className="px-5 py-3.5 min-w-0">
+                    <p className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase mb-1">기간</p>
+                    <p className="text-[13px] font-black text-gray-300 truncate">{t.tournamentDate || "미정"}</p>
                   </div>
                 </div>
 
-                <div className="p-5 flex-1 flex flex-col justify-between">
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    <div className="bg-white/[0.02] px-3.5 py-2.5 rounded-xl border border-white/5">
-                      <p className="text-[9px] font-black tracking-widest text-gray-600 uppercase mb-1">상금</p>
-                      <p className="text-xs font-black text-white truncate">{t.tournamentPrize || "미정"}</p>
-                    </div>
-                    <div className="bg-white/[0.02] px-3.5 py-2.5 rounded-xl border border-white/5">
-                      <p className="text-[9px] font-black tracking-widest text-gray-600 uppercase mb-1">기간</p>
-                      <p className="text-xs font-black text-gray-300 truncate">{t.tournamentDate || "미정"}</p>
-                    </div>
+                {/* 일정 — 알약 태그 대신 세로 라인 마커 */}
+                {Array.isArray(t.tournamentSchedule) && t.tournamentSchedule.length > 0 && (
+                  <div className="px-5 py-3 border-t border-white/[0.08] flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                    {t.tournamentSchedule.slice(0, 4).map((ph: any, i: number) => (
+                      <span key={i} className="text-[10px] font-bold text-gray-500 border-l border-white/15 pl-2 leading-none">{ph.label}</span>
+                    ))}
+                    {t.tournamentSchedule.length > 4 && <span className="text-[10px] font-bold text-gray-700">+{t.tournamentSchedule.length - 4}</span>}
                   </div>
+                )}
 
-                  {/* 상세 일정 미니 프리뷰 */}
-                  {Array.isArray(t.tournamentSchedule) && t.tournamentSchedule.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-4">
-                      {t.tournamentSchedule.slice(0, 4).map((ph: any, i: number) => (
-                        <span key={i} className="text-[9px] font-bold text-gray-500 bg-white/[0.03] border border-white/5 px-2 py-0.5 rounded-full">{ph.label}</span>
-                      ))}
-                      {t.tournamentSchedule.length > 4 && <span className="text-[9px] font-bold text-gray-600 px-1">+{t.tournamentSchedule.length - 4}</span>}
-                    </div>
+                <div className="flex-1" />
+
+                {/* CTA — 셀 하단 전체를 쓰는 라인 바 */}
+                <button
+                  disabled={st !== "모집중"}
+                  onClick={(e) => { e.stopPropagation(); handleApply(t); }}
+                  className={`w-full px-5 py-4 border-t flex items-center justify-between gap-3 text-sm font-black transition-colors ${
+                    st === "모집중" ? "border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/50"
+                    : st === "진행중" ? "border-[#e91e3f]/25 text-[#e91e3f] hover:bg-[#e91e3f]/10"
+                    : "border-white/[0.08] text-gray-600 cursor-not-allowed"}`}
+                >
+                  <span>{st === "모집중" ? (t.survey?.enabled ? (t.survey.closed ? "설문 접수 마감" : "참가 신청서 작성") : "참가 신청하기") : st === "진행중" ? "대진표 확인하기" : st === "예정됨" ? "오픈 예정" : "대회 종료"}</span>
+                  {st !== "예정됨" && st !== "종료됨" && (
+                    <svg className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>
                   )}
-
-                  <button
-                    disabled={st !== "모집중"}
-                    onClick={(e) => { e.stopPropagation(); handleApply(t); }}
-                    className={`w-full py-3 rounded-xl font-black text-sm transition-all ${st === "모집중" ? "bg-emerald-500/90 text-white hover:bg-emerald-500 active:scale-95 shadow-[0_6px_20px_rgba(16,185,129,0.3)]" : st === "진행중" ? "bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25" : "bg-white/5 text-gray-600 cursor-not-allowed"}`}
-                  >
-                    {st === "모집중" ? "참가 신청하기" : st === "진행중" ? "대진표 확인하기" : st === "예정됨" ? "오픈 예정" : "대회 종료"}
-                  </button>
-                </div>
-              </div>
+                </button>
               </div>
               </Reveal>
             );
           })}
+          </div>
         </div>
       )}
 
@@ -477,20 +490,31 @@ export default function TournamentPage() {
                   <button onClick={() => router.push(`/write?id=${selected._id}`)} className="text-xs font-bold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition-colors">수정하기</button>
                   <button onClick={() => setDeleteConfirmId(selected._id)} className="text-xs font-bold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-4 py-2 rounded-lg transition-colors">삭제하기</button>
                   {selected.survey?.enabled && (
-                    <button onClick={() => openResponses(selected)} className="text-xs font-bold text-emerald-300 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 py-2 rounded-lg transition-colors">설문 응답 보기</button>
+                    <button onClick={() => router.push(`/tournament/survey/${selected._id}`)} className="text-xs font-bold text-emerald-300 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 py-2 rounded-lg transition-colors">설문 결과 · 통계</button>
                   )}
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="bg-white/[0.02] p-4 rounded-xl border border-white/5">
-                  <p className="text-xs text-gray-500 font-bold mb-1">보상 및 상금</p>
+              <div className={`grid ${selected.survey?.enabled ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"} border-y border-white/[0.08] mb-8`}>
+                <div className="py-4 pr-4 min-w-0">
+                  <p className="text-[10px] font-black tracking-[0.2em] text-gray-600 uppercase mb-1.5">보상 및 상금</p>
                   <p className="text-white font-black">{selected.tournamentPrize || "미정"}</p>
                 </div>
-                <div className="bg-white/[0.02] p-4 rounded-xl border border-white/5">
-                  <p className="text-xs text-gray-500 font-bold mb-1">전체 대회 기간</p>
+                <div className="py-4 px-4 min-w-0 border-l border-white/[0.08]">
+                  <p className="text-[10px] font-black tracking-[0.2em] text-gray-600 uppercase mb-1.5">전체 대회 기간</p>
                   <p className="text-gray-300 font-bold">{selected.tournamentDate || "미정"}</p>
                 </div>
+                {/* 📌 참가 설문이 있는 대회는 '접수 현황'을 함께 표기 */}
+                {selected.survey?.enabled && (
+                  <div className="py-4 sm:px-4 min-w-0 col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-white/[0.08]">
+                    <p className="text-[10px] font-black tracking-[0.2em] text-gray-600 uppercase mb-1.5">참가 신청 접수</p>
+                    <p className="font-black flex items-center gap-2.5">
+                      <span className={selected.survey.closed ? "text-gray-500" : "text-emerald-400"}>{selected.survey.closed ? "마감" : "접수 중"}</span>
+                      <span className="w-px h-3.5 bg-white/15" />
+                      <span className="text-gray-300">{surveyCount}명 신청</span>
+                    </p>
+                  </div>
+                )}
               </div>
 
               {selected.content && (
@@ -522,7 +546,9 @@ export default function TournamentPage() {
                 className={`w-full py-4 rounded-xl font-bold text-sm transition-all ${getStatus(selected) === "모집중" ? "bg-[#e91e3f] text-white hover:bg-[#d01634] shadow-lg shadow-[#e91e3f]/20" : getStatus(selected) === "진행중" ? "bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25 cursor-default" : "bg-white/5 text-gray-600 cursor-not-allowed"}`}
               >
                 {getStatus(selected) === "모집중"
-                  ? (selected.survey?.enabled ? (selected.survey.closed ? "설문 접수 마감" : "참가 신청서 작성하기") : "참가 신청하기")
+                  ? (selected.survey?.enabled
+                      ? (surveyMine ? "신청 완료 — 제출 내용 확인하기" : selected.survey.closed ? "설문 접수 마감" : "참가 신청서 작성하기")
+                      : "참가 신청하기")
                   : getStatus(selected) === "진행중" ? "리그 진행 중 — 위 대진표를 확인하세요" : getStatus(selected) === "예정됨" ? "오픈 예정" : "대회 종료"}
               </button>
             </div>
@@ -605,7 +631,15 @@ export default function TournamentPage() {
             </div>
 
             {/* 본문 */}
-            {surveyMine ? (
+            {surveyTarget.survey?.closed && !surveyMine ? (
+              <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-16 text-center">
+                <div className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-5">
+                  <svg className="w-6 h-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
+                </div>
+                <h3 className="text-lg font-black text-white mb-2">참가 신청이 마감되었습니다</h3>
+                <p className="text-sm text-gray-500">접수 기간이 종료되어 더 이상 신청서를 받지 않습니다.</p>
+              </div>
+            ) : surveyMine ? (
               <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-10 text-center">
                 <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mx-auto mb-5">
                   <svg className="w-7 h-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
@@ -622,87 +656,91 @@ export default function TournamentPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 py-6 space-y-6">
+              <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8">
                 {(surveyTarget.survey?.questions || []).length === 0 && (
-                  <p className="text-sm text-gray-500 text-center py-10">등록된 문항이 없습니다.</p>
+                  <p className="text-sm text-gray-500 text-center py-16">등록된 문항이 없습니다.</p>
                 )}
                 {(surveyTarget.survey?.questions || []).map((q: any, idx: number) => {
                   const v = surveyAnswers[q.qid];
                   const setV = (val: any) => setSurveyAnswers((p) => ({ ...p, [q.qid]: val }));
-                  const inputCls = "w-full bg-[#181818] border border-white/10 rounded-xl px-4 py-3 text-base text-white placeholder-gray-600 outline-none focus:border-emerald-500/50 transition-colors";
+                  // 밑줄형 입력 — 박스 대신 선으로
+                  const inputCls = "w-full bg-transparent border-b border-white/12 focus:border-emerald-500/70 px-0.5 py-2.5 text-base text-white placeholder-gray-600 outline-none transition-colors";
+                  const filled = q.type === "multi" ? Array.isArray(v) && v.length > 0 : !!v;
                   return (
-                    <div key={q.qid} className="bg-white/[0.02] border border-white/[0.07] rounded-2xl p-4 sm:p-5">
-                      <div className="flex items-start gap-2.5 mb-3.5">
-                        <span className="shrink-0 mt-0.5 w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-black text-gray-400">{idx + 1}</span>
+                    <div key={q.qid} className="py-6 border-b border-white/[0.07] last:border-b-0">
+                      <div className="flex items-start gap-3 mb-4">
+                        <span className={`shrink-0 mt-0.5 text-[11px] font-black tabular-nums transition-colors ${filled ? "text-emerald-400" : "text-gray-700"}`}>{String(idx + 1).padStart(2, "0")}</span>
                         <p className="text-sm sm:text-base font-bold text-white leading-snug break-keep">
                           {q.label}
                           {q.required && <span className="text-red-400 ml-1">*</span>}
                         </p>
                       </div>
 
-                      {q.type === "short" && (
-                        <input value={v || ""} onChange={(e) => setV(e.target.value)} placeholder="답변을 입력해주세요" className={inputCls} />
-                      )}
-                      {q.type === "long" && (
-                        <textarea value={v || ""} onChange={(e) => setV(e.target.value)} placeholder="답변을 입력해주세요" rows={4} className={`${inputCls} resize-none leading-relaxed`} />
-                      )}
-                      {(q.type === "single" || q.type === "multi") && (
-                        <div className="space-y-2">
-                          {(q.options || []).map((opt: string, oi: number) => {
-                            const checked = q.type === "multi" ? Array.isArray(v) && v.includes(opt) : v === opt;
-                            return (
-                              <button
-                                key={oi}
-                                type="button"
-                                onClick={() => {
-                                  if (q.type === "multi") {
-                                    const cur: string[] = Array.isArray(v) ? [...v] : [];
-                                    setV(checked ? cur.filter((x) => x !== opt) : [...cur, opt]);
-                                  } else setV(opt);
-                                }}
-                                className={`w-full flex items-center gap-3 text-left px-4 py-3 rounded-xl border transition-all ${checked ? "bg-emerald-500/10 border-emerald-500/40" : "bg-[#161616] border-white/[0.07] hover:border-white/20"}`}
-                              >
-                                <span className={`shrink-0 w-4 h-4 border-2 flex items-center justify-center ${q.type === "multi" ? "rounded-[5px]" : "rounded-full"} ${checked ? "border-emerald-400 bg-emerald-400" : "border-gray-600"}`}>
-                                  {checked && <svg className="w-2.5 h-2.5 text-[#101010]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
-                                </span>
-                                <span className={`text-sm break-keep ${checked ? "text-white font-bold" : "text-gray-300"}`}>{opt}</span>
-                              </button>
-                            );
-                          })}
-                          {q.etc && (() => {
-                            const etcChecked = q.type === "multi" ? Array.isArray(v) && v.includes("__etc__") : v === "__etc__";
-                            return (
-                              <div className={`rounded-xl border transition-all ${etcChecked ? "bg-emerald-500/10 border-emerald-500/40" : "bg-[#161616] border-white/[0.07]"}`}>
+                      <div className="pl-0 sm:pl-7">
+                        {q.type === "short" && (
+                          <input value={v || ""} onChange={(e) => setV(e.target.value)} placeholder="답변을 입력해주세요" className={inputCls} />
+                        )}
+                        {q.type === "long" && (
+                          <textarea value={v || ""} onChange={(e) => setV(e.target.value)} placeholder="답변을 입력해주세요" rows={4} className={`${inputCls} resize-none leading-relaxed`} />
+                        )}
+                        {(q.type === "single" || q.type === "multi") && (
+                          <div className="border-t border-white/[0.07]">
+                            {(q.options || []).map((opt: string, oi: number) => {
+                              const checked = q.type === "multi" ? Array.isArray(v) && v.includes(opt) : v === opt;
+                              return (
                                 <button
+                                  key={oi}
                                   type="button"
                                   onClick={() => {
                                     if (q.type === "multi") {
                                       const cur: string[] = Array.isArray(v) ? [...v] : [];
-                                      setV(etcChecked ? cur.filter((x) => x !== "__etc__") : [...cur, "__etc__"]);
-                                    } else setV("__etc__");
+                                      setV(checked ? cur.filter((x) => x !== opt) : [...cur, opt]);
+                                    } else setV(opt);
                                   }}
-                                  className="w-full flex items-center gap-3 text-left px-4 py-3"
+                                  className={`w-full flex items-center gap-3 text-left px-1 py-3 border-b border-white/[0.07] transition-colors ${checked ? "bg-emerald-500/[0.07]" : "hover:bg-white/[0.03]"}`}
                                 >
-                                  <span className={`shrink-0 w-4 h-4 border-2 flex items-center justify-center ${q.type === "multi" ? "rounded-[5px]" : "rounded-full"} ${etcChecked ? "border-emerald-400 bg-emerald-400" : "border-gray-600"}`}>
-                                    {etcChecked && <svg className="w-2.5 h-2.5 text-[#101010]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
+                                  <span className={`shrink-0 w-4 h-4 border-2 flex items-center justify-center transition-colors ${q.type === "multi" ? "rounded-[4px]" : "rounded-full"} ${checked ? "border-emerald-400 bg-emerald-400" : "border-gray-600"}`}>
+                                    {checked && <svg className="w-2.5 h-2.5 text-[#101010]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
                                   </span>
-                                  <span className={`text-sm ${etcChecked ? "text-white font-bold" : "text-gray-300"}`}>기타 (직접 입력)</span>
+                                  <span className={`text-sm break-keep ${checked ? "text-white font-bold" : "text-gray-300"}`}>{opt}</span>
                                 </button>
-                                {etcChecked && (
-                                  <div className="px-4 pb-3">
-                                    <input
-                                      value={surveyEtc[q.qid] || ""}
-                                      onChange={(e) => setSurveyEtc((p) => ({ ...p, [q.qid]: e.target.value }))}
-                                      placeholder="직접 입력해주세요"
-                                      className="w-full bg-[#101010] border border-white/10 rounded-lg px-3 py-2.5 text-base text-white placeholder-gray-600 outline-none focus:border-emerald-500/50"
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      )}
+                              );
+                            })}
+                            {q.etc && (() => {
+                              const etcChecked = q.type === "multi" ? Array.isArray(v) && v.includes("__etc__") : v === "__etc__";
+                              return (
+                                <div className={`border-b border-white/[0.07] transition-colors ${etcChecked ? "bg-emerald-500/[0.07]" : ""}`}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (q.type === "multi") {
+                                        const cur: string[] = Array.isArray(v) ? [...v] : [];
+                                        setV(etcChecked ? cur.filter((x) => x !== "__etc__") : [...cur, "__etc__"]);
+                                      } else setV("__etc__");
+                                    }}
+                                    className="w-full flex items-center gap-3 text-left px-1 py-3"
+                                  >
+                                    <span className={`shrink-0 w-4 h-4 border-2 flex items-center justify-center transition-colors ${q.type === "multi" ? "rounded-[4px]" : "rounded-full"} ${etcChecked ? "border-emerald-400 bg-emerald-400" : "border-gray-600"}`}>
+                                      {etcChecked && <svg className="w-2.5 h-2.5 text-[#101010]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
+                                    </span>
+                                    <span className={`text-sm ${etcChecked ? "text-white font-bold" : "text-gray-300"}`}>기타 (직접 입력)</span>
+                                  </button>
+                                  {etcChecked && (
+                                    <div className="pl-8 pr-1 pb-3">
+                                      <input
+                                        value={surveyEtc[q.qid] || ""}
+                                        onChange={(e) => setSurveyEtc((p) => ({ ...p, [q.qid]: e.target.value }))}
+                                        placeholder="직접 입력해주세요"
+                                        className="w-full bg-transparent border-b border-white/15 focus:border-emerald-500/70 px-0.5 py-2 text-base text-white placeholder-gray-600 outline-none transition-colors"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -712,7 +750,7 @@ export default function TournamentPage() {
             {/* 하단 */}
             <div className="shrink-0 px-5 sm:px-8 py-4 border-t border-white/10 bg-[#0d0d0d] flex gap-3">
               <button onClick={() => setSurveyTarget(null)} className="px-6 py-3.5 rounded-xl font-bold text-sm bg-white/5 hover:bg-white/10 text-gray-300 transition-colors">닫기</button>
-              {!surveyMine && (
+              {!surveyMine && !surveyTarget.survey?.closed && (
                 <button
                   onClick={submitSurvey}
                   disabled={surveySubmitting}
@@ -721,61 +759,6 @@ export default function TournamentPage() {
                   {surveySubmitting ? "제출 중…" : "참가 신청서 제출"}
                 </button>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 📌 관리자 — 설문 응답 목록 */}
-      {respTarget && (
-        <div className="fixed inset-0 z-[118] flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setRespTarget(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-[#101010] border border-white/10 w-full max-w-3xl rounded-t-3xl sm:rounded-3xl max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden">
-            <div className="shrink-0 flex items-center justify-between gap-4 px-5 sm:px-7 py-5 border-b border-white/10">
-              <div className="min-w-0">
-                <p className="text-[10px] font-black tracking-[0.25em] text-gray-500 mb-1">SURVEY RESPONSES</p>
-                <h2 className="text-lg font-black text-white truncate">{respTarget.title}</h2>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs font-black text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full">{responses?.length ?? "—"}건</span>
-                <button onClick={() => setRespTarget(null)} className="p-2 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 py-5 space-y-4">
-              {responses === null && <p className="text-sm text-gray-500 text-center py-12">불러오는 중…</p>}
-              {responses !== null && responses.length === 0 && <p className="text-sm text-gray-500 text-center py-12">아직 접수된 응답이 없습니다.</p>}
-              {(responses || []).map((r: any) => (
-                <div key={r._id} className="bg-white/[0.02] border border-white/[0.07] rounded-2xl p-4 sm:p-5">
-                  <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-white/[0.07]">
-                    <div className="flex items-center gap-3 min-w-0">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      {r.avatar ? <img src={r.avatar} alt="" className="w-8 h-8 rounded-full shrink-0" /> : <div className="w-8 h-8 rounded-full bg-white/10 shrink-0" />}
-                      <div className="min-w-0">
-                        <p className="text-sm font-black text-white truncate">{r.userName || "알 수 없음"}</p>
-                        <p className="text-[10px] text-gray-500">{new Date(r.createdAt).toLocaleString("ko-KR")}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        if (!confirm(`${r.userName || "해당 유저"}님의 응답을 삭제하시겠습니까?`)) return;
-                        const d = await fetch(`/api/survey?id=${r._id}`, { method: "DELETE" }).then((x) => x.json());
-                        if (d.success) setResponses((p) => (p || []).filter((x: any) => x._id !== r._id));
-                        else setPopup({ isOpen: true, message: d.message || "삭제에 실패했습니다.", isError: true });
-                      }}
-                      className="shrink-0 text-[10px] font-bold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1.5 rounded-lg transition-colors"
-                    >삭제</button>
-                  </div>
-                  <div className="space-y-3">
-                    {(r.answers || []).map((a: any, i: number) => (
-                      <div key={i} className="grid sm:grid-cols-[180px_1fr] gap-1 sm:gap-4">
-                        <p className="text-[11px] sm:text-xs font-bold text-gray-500 break-keep">{a.label}</p>
-                        <p className="text-sm text-gray-200 whitespace-pre-wrap break-words">{Array.isArray(a.value) ? (a.value.join(", ") || "-") : (a.value || "-")}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </div>
