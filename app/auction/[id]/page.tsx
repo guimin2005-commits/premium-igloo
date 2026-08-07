@@ -1261,13 +1261,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     {/* 리더: 스카우터 + 입찰 (관전자는 열람만) */}
                     {myLeader && auction.status === "진행중" && (
                       <div className="w-full sm:w-auto sm:min-w-[380px]">
-                        {/* ── 스카우터 — 선 하나로 구획된 액션 행 ── */}
-                        {myLeaderIdx !== null && curPlayer.scoutedBy.includes(myLeaderIdx) ? (
-                          <div className="flex items-center gap-2 pb-2 mb-3 border-b border-white/[0.09]">
-                            <span className="auc-label-xs text-gray-600">Scouter</span>
-                            <span className="text-[11px] font-bold text-gray-500">사용함 — 결과는 알림함에</span>
-                          </div>
-                        ) : myLeaderIdx !== null && (!curPlayer.isAllPos || curPlayer.hasMost) ? (
+                        {/* ── 스카우터 — 아직 안 썼을 때만 버튼을 둔다.
+                               쓰고 나면 결과가 위 정보 밴드에 그대로 뜨므로 '사용함' 안내는 군더더기였다 ── */}
+                        {myLeaderIdx !== null && curPlayer.scoutedBy.includes(myLeaderIdx) ? null
+                        : myLeaderIdx !== null && (!curPlayer.isAllPos || curPlayer.hasMost) ? (
                           /* 황금카드는 공개할 모스트가 없으면 스카우터 자체를 제공하지 않음 */
                           <button
                             onClick={() => setConfirmCfg({ title: "스카우터 사용", message: `${scoutCostOf(curPlayer).toLocaleString()} Point를 사용하여 이 선수의 ${curPlayer.isAllPos ? "모스트 챔피언" : revealFields.includes("champions") ? "주 포지션·모스트 챔피언" : "주/부 포지션"}을(를) 확인합니다.`, confirmLabel: "사용", onConfirm: useScouter })}
@@ -2208,7 +2205,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   </div>
                 ))}
               </div>
-              <p className="text-[9px] text-gray-600 mt-2">알림함에 보관됩니다</p>
             </div>
           </div>
           <style dangerouslySetInnerHTML={{__html: `
