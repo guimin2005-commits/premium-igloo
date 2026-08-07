@@ -168,7 +168,40 @@ export const AuctionStyles = () => (
     .auc-head { border-bottom: 1px solid rgba(255,255,255,.09); box-shadow: 0 2px 0 -1px rgba(233,30,63,.35); }
     .auc-stamp { display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border:1px solid currentColor; font-size:10px; font-weight:800; letter-spacing:.18em; text-transform:uppercase; }
 
+    /* ── 무대 배경 ── */
+    /* 일반 매물 — 메인 화면 티켓과 같은 블랙&화이트 패널 */
+    .auc-stage-panel { background: linear-gradient(150deg, #17171a 0%, #101012 55%, #08080a 100%); }
+
+    /* 올 포지션(황금카드) 매물 — 배경 자체가 골드 그라데이션으로 바뀐다 */
+    .auc-stage-golden {
+      background:
+        radial-gradient(ellipse 120% 80% at 50% -10%, rgba(251,191,36,.30) 0%, rgba(180,83,9,.10) 45%, transparent 72%),
+        linear-gradient(150deg, #2a1f07 0%, #1a1305 48%, #0b0803 100%);
+      border-color: rgba(251,191,36,.45) !important;
+      box-shadow: inset 0 0 90px rgba(251,191,36,.10), 0 0 46px -14px rgba(251,191,36,.35);
+    }
+    /* 배경 위를 천천히 훑는 금빛 광택 */
+    .auc-stage-golden::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+      background: linear-gradient(112deg, transparent 34%, rgba(255,240,180,.13) 47%, rgba(255,246,210,.20) 50%, rgba(255,240,180,.13) 53%, transparent 66%);
+      background-size: 260% 100%;
+      animation: aucGoldSweep 5.2s ease-in-out infinite;
+    }
+    @keyframes aucGoldSweep {
+      0%   { background-position: 130% 0; }
+      55%  { background-position: -30% 0; }
+      100% { background-position: -30% 0; }
+    }
+    /* 상단 포인트 라인도 금빛으로 흐른다 */
+    .auc-stage-goldline {
+      background: linear-gradient(90deg, #b45309, #fde047, #fef9c3, #f59e0b, #b45309);
+      background-size: 300% 100%;
+      animation: aucGoldLine 3.2s linear infinite;
+    }
+    @keyframes aucGoldLine { 0% { background-position: 0% 0 } 100% { background-position: 300% 0 } }
+
     @media (prefers-reduced-motion: reduce) {
+      .auc-stage-golden::before, .auc-stage-goldline { animation: none; }
       .auc-in { animation: none; opacity: 1; }
       .auc-ticket-live .auc-half, .auc-ticket-focus .auc-shine { animation: none; }
       .auc-ticket { transition: none; }

@@ -381,10 +381,26 @@ export async function POST(request, { params }) {
         const pl = auction.players[card.playerIdx];
         const nm = card.golden && !pl?.revealed ? "올 포지션 선수" : pl?.alias;
         if (isFull && card.golden) {
+          // 📌 밀려나는 선수는 자동으로 보유 선수(인벤토리)로 되돌린다 — 리더가 원하는 포지션에 다시 배정
+          //   · 후보가 둘 이상이면 누구를 뺄지 서버가 정할 수 없으므로 기존처럼 리더가 직접 고른다
+          const cands = leader.roster
+            .map((r, ri) => ({ r, ri }))
+            .filter(({ r }) => r.slot === slot && !r.golden && r.playerIdx !== -1);
+          if (cands.length === 1) {
+            const { r: out, ri: outIdx } = cands[0];
+            leader.inventory.push({ playerIdx: out.playerIdx, price: out.price, golden: false });
+            leader.roster.splice(outIdx, 1);
+            auction.pendingOverflow = { leaderIdx: null, slot: null };
+            const outName = auction.players[out.playerIdx]?.alias;
+            addLog(auction, `${nm} → ${leader.name} [${slot}] 초과 배정 — ${outName} 자동으로 보유 선수 복귀`);
+            await auction.save();
+            sysChat(id, `올 포지션 선수가 ${leader.name} 팀 [${slot}] 슬롯에 배정되어 ${outName} 선수가 보유 선수로 돌아갔습니다.`);
+            return NextResponse.json({ success: true, autoEjected: outName });
+          }
           auction.pendingOverflow = { leaderIdx, slot };
           addLog(auction, `${nm} → ${leader.name} [${slot}] 초과 배정 — 기존 선수 이동 필요`);
           await auction.save();
-          sysChat(id, `올 포지션 선수가 ${leader.name} 팀 [${slot}] 슬롯에 배정되었습니다. ${leader.name} 리더는 기존 선수 한 명을 다른 슬롯으로 이동해주세요.`);
+          sysChat(id, `올 포지션 선수가 ${leader.name} 팀 [${slot}] 슬롯에 배정되었습니다. ${leader.name} 리더는 내보낼 선수 한 명을 선택해주세요.`);
           return NextResponse.json({ success: true, overflow: true });
         }
         addLog(auction, `${nm} → ${leader.name} [${slot}] 배정`);
@@ -418,6 +434,41 @@ export async function POST(request, { params }) {
         addLog(auction, `${mp?.alias} → ${leader.name} 인벤토리로 이동 (초과 배정 정리)`);
         await auction.save();
         sysChat(id, `${leader.name} 팀의 ${mp?.alias} 선수가 인벤토리로 돌아갔습니다. 다른 포지션에 다시 배정해주세요.`);
+        return NextResponse.json({ success: true });
+      }
+
+      // 📌 초과 배정으로 밀려난 대상이 '리더 본인'인 경우 — 인벤토리로 보낼 수 없으므로 그 자리에서 포지션을 다시 지정
+      case "overflow:leaderPos": {
+        const { leaderIdx, position, byLeaderIdx } = body;
+        const leader = auction.leaders[leaderIdx];
+        if (!leader) return NextResponse.json({ success: false }, { status: 400 });
+        if (byLeaderIdx !== null && byLeaderIdx !== undefined && byLeaderIdx !== leaderIdx) {
+          return NextResponse.json({ success: false, message: "본인 팀만 지정할 수 있습니다." }, { status: 403 });
+        }
+        if (auction.pendingOverflow?.leaderIdx !== leaderIdx) {
+          return NextResponse.json({ success: false, message: "정리할 초과 배정이 없습니다." }, { status: 400 });
+        }
+        if (!roleNames(S).includes(position)) return NextResponse.json({ success: false, message: "잘못된 포지션입니다." }, { status: 400 });
+        const poSlot = auction.pendingOverflow.slot;
+        if (position === poSlot) return NextResponse.json({ success: false, message: "다른 포지션을 선택해주세요." }, { status: 400 });
+        const p1Slot3 = phase1RoleOf(S);
+        if (p1Slot3 && position === p1Slot3) {
+          return NextResponse.json({ success: false, message: `${p1Slot3} 슬롯으로는 이동할 수 없습니다.` }, { status: 400 });
+        }
+        const selfIdx = leader.roster.findIndex((r) => r.playerIdx === -1);
+        if (selfIdx < 0) return NextResponse.json({ success: false, message: "리더 슬롯을 찾을 수 없습니다." }, { status: 400 });
+        if (leader.roster[selfIdx].slot !== poSlot) {
+          return NextResponse.json({ success: false, message: "초과된 포지션에 리더가 없습니다." }, { status: 400 });
+        }
+        if (slotCount(leader, position) >= slotLimitOf(S, position)) {
+          return NextResponse.json({ success: false, message: `${position} 슬롯이 가득 찼습니다.` }, { status: 400 });
+        }
+        leader.roster[selfIdx].slot = position;
+        leader.position = position;
+        auction.pendingOverflow = { leaderIdx: null, slot: null };
+        addLog(auction, `${leader.name} 리더 — 초과 배정으로 본인 포지션 [${poSlot} → ${position}] 재지정`);
+        await auction.save();
+        sysChat(id, `${leader.name} 리더가 본인 포지션을 [${position}]으로 다시 지정했습니다.`);
         return NextResponse.json({ success: true });
       }
 
