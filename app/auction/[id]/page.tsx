@@ -1609,12 +1609,15 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                     <span className="text-[13px] font-black text-amber-100/50 truncate">비공개</span>
                                   </div>
                                   <p className="text-[11px] font-black mt-1.5 pt-1.5 border-t border-amber-400/20 leading-snug break-keep">
+                                    {/* 일반 카드와 같은 규칙 — 비용 안내는 다시 호명될 수 있는 '유찰'일 때만 */}
                                     {canSeePos(p) ? (
                                       <span className="text-amber-100">{revealParts(p).map((r) => r.v).join(" · ")}</span>
-                                    ) : p.hasMost ? (
+                                    ) : !p.hasMost ? (
+                                      <span className="text-amber-200/40">공개 정보 없음</span>
+                                    ) : p.status === "유찰" ? (
                                       <span className="text-amber-200/50">스카우터 {(S.goldenScoutCost ?? 4000).toLocaleString()}pt</span>
                                     ) : (
-                                      <span className="text-amber-200/40">공개 정보 없음</span>
+                                      <span className="text-amber-200/40">스카우터 미사용</span>
                                     )}
                                   </p>
                                 </div>
