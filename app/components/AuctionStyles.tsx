@@ -2,61 +2,53 @@
 
 import React from "react";
 
-/* 📌 경매 전용 디자인 시스템 — 대회(각진 네온 그린 HUD)와 완전히 분리
-   시그니처: 레드 × 블루 듀오톤 · 사선(skew) 슬래브 · 흐르는 티커 · 움직이는 그라디언트
-   단일 색이 아니라 두 색이 섞여 흐르는 것이 이 화면의 정체성 */
+/* 📌 경매 전용 디자인 — '경매' 그 자체에서 출발
+   ① POINT : 판돈이 주인공. 등폭 대형 숫자가 화면의 중심.
+   ② VS    : 팀과 선수가 맞붙는 대치 구도.
+   ③ 낙찰  : 망치가 내려치듯 좌→우로 그어지는 스트라이크.
+   색은 두 개의 역할로만 쓴다 — 레드=경합/낙찰, 블루=포인트. 사선·무지개 없음. */
 export const AuctionStyles = () => (
   <style>{`
-    /* ── 듀오톤 ── */
-    .auc-duo { background-image: linear-gradient(115deg, #e91e3f 0%, #a52a86 48%, #4d7cfe 100%); background-size: 220% 100%; animation: aucFlow 7s ease-in-out infinite; }
-    .auc-duo-soft { background-image: linear-gradient(115deg, rgba(233,30,63,.18) 0%, rgba(165,42,134,.14) 48%, rgba(77,124,254,.18) 100%); background-size: 220% 100%; animation: aucFlow 7s ease-in-out infinite; }
-    .auc-duo-text { background-image: linear-gradient(100deg, #ff4d68 0%, #c04ba6 45%, #6b93ff 100%); background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: aucFlow 6s ease-in-out infinite; }
-    @keyframes aucFlow { 0%,100% { background-position: 0% 50% } 50% { background-position: 100% 50% } }
+    .auc-label { font-size: 10px; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; }
+    .auc-num   { font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 
-    /* ── 사선 슬래브 ── */
-    .auc-skew { transform: skewX(-12deg); }
-    .auc-unskew { transform: skewX(12deg); display: inline-block; }
+    /* ── 낙찰 스트라이크 : 호버 시 망치가 지나가듯 밑줄이 그어진다 ── */
+    .auc-lot { position: relative; transition: background-color .25s ease; }
+    .auc-lot:hover { background-color: rgba(255,255,255,.022); }
+    .auc-lot .auc-strike { position:absolute; left:0; right:0; bottom:-1px; height:2px; background:#e91e3f; transform:scaleX(0); transform-origin:left; transition: transform .45s cubic-bezier(.16,1,.3,1); }
+    .auc-lot:hover .auc-strike { transform: scaleX(1); }
 
-    /* ── 흐르는 티커 ── */
-    .auc-ticker { display: flex; width: max-content; animation: aucTick 30s linear infinite; }
-    .auc-ticker:hover { animation-play-state: paused; }
-    @keyframes aucTick { from { transform: translateX(0) } to { transform: translateX(-50%) } }
-
-    /* ── 행(슬래브) ── */
-    .auc-slab { position: relative; overflow: hidden; transition: background-color .3s ease, transform .3s cubic-bezier(.16,1,.3,1); }
-    .auc-slab:hover { background-color: rgba(255,255,255,.025); transform: translateX(4px); }
-    /* 좌측 듀오톤 척추 — 평소 얇게, 호버 시 확장 */
-    .auc-spine { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; transition: width .3s cubic-bezier(.16,1,.3,1); }
-    .auc-slab:hover .auc-spine { width: 7px; }
-    /* 호버 시 대각선 광택이 스쳐 지나감 */
-    .auc-slab::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 42%, rgba(255,255,255,.06) 50%, transparent 58%); transform: translateX(-130%); }
-    .auc-slab:hover::after { animation: aucSheen .9s ease-out; }
-    @keyframes aucSheen { to { transform: translateX(130%) } }
+    /* ── VS 배지 ── */
+    .auc-vs { position: relative; display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; }
+    .auc-vs::before { content:""; position:absolute; inset:0; border:1px solid rgba(255,255,255,.14); transform: rotate(45deg); transition: transform .5s cubic-bezier(.16,1,.3,1), border-color .3s ease; }
+    .group:hover .auc-vs::before { transform: rotate(135deg); border-color: rgba(233,30,63,.7); }
 
     /* ── LIVE 맥박 ── */
-    .auc-pulse { animation: aucPulse 1.8s ease-in-out infinite; }
-    @keyframes aucPulse { 0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(233,30,63,.45) } 50% { opacity:.85; box-shadow: 0 0 0 7px rgba(233,30,63,0) } }
+    .auc-live { animation: aucLive 1.8s ease-in-out infinite; }
+    @keyframes aucLive { 0%,100% { box-shadow: 0 0 0 0 rgba(233,30,63,.5) } 70% { box-shadow: 0 0 0 8px rgba(233,30,63,0) } }
 
-    /* ── 숫자/라벨 ── */
-    .auc-label { font-size: 10px; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; }
-    .auc-mono { letter-spacing: .2em; font-variant-numeric: tabular-nums; }
-    .auc-num { font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+    /* ── 호가 눈금 : 포인트 수치 아래 얇은 게이지 ── */
+    .auc-gauge { height:2px; background: rgba(255,255,255,.08); overflow:hidden; }
+    .auc-gauge > span { display:block; height:100%; background:#4d7cfe; transform-origin:left; animation: aucFill 1.1s cubic-bezier(.16,1,.3,1) forwards; }
+    @keyframes aucFill { from { transform: scaleX(0) } to { transform: scaleX(1) } }
 
-    /* ── 진입 애니메이션 ── */
-    .auc-in { opacity: 0; animation: aucIn .7s cubic-bezier(.16,1,.3,1) forwards; }
-    @keyframes aucIn { from { opacity:0; transform: translateY(14px) skewX(-2deg) } to { opacity:1; transform:none } }
+    /* ── 진입 ── */
+    .auc-in { opacity:0; animation: aucIn .6s cubic-bezier(.16,1,.3,1) forwards; }
+    @keyframes aucIn { from { opacity:0; transform: translateY(12px) } to { opacity:1; transform:none } }
 
-    /* ── 배경 오라 ── */
-    .auc-aura { position:absolute; border-radius:9999px; filter: blur(120px); animation: aucDrift 14s ease-in-out infinite; }
-    @keyframes aucDrift { 0%,100% { transform: translate(0,0) scale(1) } 50% { transform: translate(40px,-20px) scale(1.12) } }
+    /* ── 숫자 롤업 (헤드라인 포인트 풀) ── */
+    .auc-roll { display:inline-block; animation: aucRoll .9s cubic-bezier(.16,1,.3,1) forwards; }
+    @keyframes aucRoll { from { opacity:0; transform: translateY(.35em) } to { opacity:1; transform:none } }
 
-    /* 패널 머리 — 얇은 이중선 (경매방 공용) */
+    /* 경매방 공용 */
     .auc-head { border-bottom: 1px solid rgba(255,255,255,.09); box-shadow: 0 2px 0 -1px rgba(233,30,63,.35); }
+    .auc-mono { letter-spacing: .2em; font-variant-numeric: tabular-nums; }
     .auc-stamp { display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border:1px solid currentColor; font-size:10px; font-weight:800; letter-spacing:.18em; text-transform:uppercase; }
 
     @media (prefers-reduced-motion: reduce) {
-      .auc-duo, .auc-duo-soft, .auc-duo-text, .auc-ticker, .auc-pulse, .auc-aura, .auc-in { animation: none !important; }
-      .auc-in { opacity: 1; }
+      .auc-in, .auc-roll, .auc-live, .auc-gauge > span { animation: none !important; }
+      .auc-in, .auc-roll { opacity:1; }
+      .auc-gauge > span { transform:none; }
     }
   `}</style>
 );
