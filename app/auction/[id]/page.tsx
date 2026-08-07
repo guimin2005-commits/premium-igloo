@@ -1721,11 +1721,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 (() => {
                   const high = SYS_HIGH.test(m.message || "");
                   return (
-                    <div key={m._id || i} className={`flex items-start gap-2.5 border rounded-lg px-3 py-2 ${high ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.08]" : "border-white/20 bg-white/[0.05]"}`}>
-                      <span className={`shrink-0 w-5 h-5 rounded-md flex items-center justify-center ${high ? "bg-[#e91e3f]/25" : "bg-white/[0.08]"}`}>
+                    /* 확성기는 절대 위치로 왼쪽에 고정(글 길이에 흔들리지 않게), 본문은 블록 안에서 가운데 정렬.
+                       좌우 패딩을 같게 둬야 본문이 실제로 가운데로 온다. */
+                    <div key={m._id || i} className={`relative border rounded-lg pl-9 pr-9 py-2 ${high ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.08]" : "border-white/20 bg-white/[0.05]"}`}>
+                      <span className={`absolute left-2.5 top-2 w-5 h-5 rounded-md flex items-center justify-center ${high ? "bg-[#e91e3f]/25" : "bg-white/[0.08]"}`}>
                         <MegaphoneIcon className={`w-3 h-3 shrink-0 ${high ? "text-[#ff5c77]" : "text-gray-300"}`} />
                       </span>
-                      <p className={`flex-1 min-w-0 text-[11px] font-bold leading-relaxed break-keep ${high ? "text-gray-100" : "text-gray-400"}`}>{m.message}</p>
+                      <p className={`text-center text-[11px] font-bold leading-relaxed break-keep ${high ? "text-gray-100" : "text-gray-400"}`}>{m.message}</p>
                     </div>
                   );
                 })()
@@ -2137,7 +2139,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         <AucModal
           label="Notices"
           title="알림함"
-          desc="스카우터 결과 · 포지션 체인지 · 배정 등 내 활동 기록입니다. 나에게만 보이고 새로고침해도 남습니다."
+          desc="나에게만 보입니다."
           onClose={() => setNoticeOpen(false)}
           wide
           actions={[
@@ -2151,7 +2153,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             {notices.length === 0 ? (
               <p className="py-10 text-center text-[11px] text-gray-700">
                 아직 기록이 없습니다.<br />
-                <span className="text-[10px] text-gray-800">스카우터·포지션 체인지·배정 기록이 이곳에 쌓입니다</span>
+                <span className="text-[10px] text-gray-800">스카우터·포지션 체인지 기록이 쌓입니다</span>
               </p>
             ) : (
               notices.map((n) => (
