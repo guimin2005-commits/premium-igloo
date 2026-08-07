@@ -865,19 +865,25 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         {/* ═══ 중앙: 경매 메인 ═══ */}
         <div className={`${mobileTab === "main" ? "block" : "hidden"} lg:block flex-1 min-w-0 w-full lg:w-auto space-y-4 lg:space-y-5 order-1 lg:order-2`} style={{ minWidth: "min(100%, 400px)" }}>
 
-          {/* 리더: 준비 배너 (경매 시작 전, 눈에 확 띄게) */}
+          {/* 리더: 준비 배너 — 입장권 티켓 형태 (본권 = 안내 / 스텁 = 준비 버튼) */}
           {myLeader && auction.status === "준비중" && (
-            <div className={`relative p-px ${myLeader.ready ? "bg-gradient-to-b from-emerald-500/50 via-emerald-500/15 to-transparent" : "bg-gradient-to-b from-[#e91e3f]/60 via-[#e91e3f]/20 to-transparent"}`}>
-              <div className="bg-[#120a0c] p-6 flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden">
-                {!myLeader.ready && <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/[0.07] blur-[60px] rounded-full pointer-events-none animate-[pulseGlow_2.5s_ease-in-out_infinite]"></div>}
-                <div className="relative z-10 text-center sm:text-left">
-                  <p className="text-[10px] font-black auc-mono uppercase mb-1.5 text-gray-500">Ready Check</p>
-                  <p className="text-lg font-black text-white">{myLeader.ready ? "준비 완료 — 다른 리더를 기다리는 중" : "경매 시작 전, 준비 버튼을 눌러주세요"}</p>
+            <div className={`relative border bg-[#101012] overflow-hidden ${myLeader.ready ? "border-emerald-500/40" : "border-[#e91e3f]/50"}`}>
+              <div className="flex flex-col sm:flex-row sm:items-stretch">
+                {/* 본권 */}
+                <div className="flex-1 p-6 relative overflow-hidden">
+                  {!myLeader.ready && <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#e91e3f]/[0.08] blur-[60px] rounded-full pointer-events-none animate-[pulseGlow_2.5s_ease-in-out_infinite]"></div>}
+                  <p className={`auc-label mb-1.5 ${myLeader.ready ? "text-emerald-400" : "text-[#e91e3f]"}`}>Admit One · Ready Check</p>
+                  <p className="text-lg font-black text-white">{myLeader.ready ? "준비 완료 — 다른 리더를 기다리는 중" : "입장권에 서명해주세요 — 준비 버튼"}</p>
                   <p className="text-[11px] text-gray-500 mt-1">전체 리더 준비 완료 시 진행자가 경매를 시작합니다. ({auction.leaders.filter((l: any) => l.ready).length}/{auction.leaders.length} 준비)</p>
                 </div>
-                <button onClick={() => act({ action: "leader:ready", leaderIdx: myLeaderIdx, ready: !myLeader.ready })} className={`relative z-10 shrink-0 px-10 py-4 rounded-2xl text-base font-black transition-all ${myLeader.ready ? "bg-white/10 hover:bg-white/20 text-gray-300" : "bg-[#e91e3f] hover:bg-[#d01634] text-white shadow-[0_10px_30px_rgba(233,30,63,0.4)] animate-pulse"}`}>
-                  {myLeader.ready ? "준비 해제" : "준비 완료"}
-                </button>
+                {/* 절취선 + 노치 */}
+                <div className="relative shrink-0 sm:w-56 border-t sm:border-t-0 sm:border-l border-dashed border-white/20 flex items-center justify-center p-5">
+                  <span className="hidden sm:block absolute -top-2 -left-2 w-4 h-4 rounded-full bg-[#090909]" />
+                  <span className="hidden sm:block absolute -bottom-2 -left-2 w-4 h-4 rounded-full bg-[#090909]" />
+                  <button onClick={() => act({ action: "leader:ready", leaderIdx: myLeaderIdx, ready: !myLeader.ready })} className={`w-full px-8 py-4 text-base font-black transition-all ${myLeader.ready ? "bg-white/10 hover:bg-white/20 text-gray-300" : "bg-[#e91e3f] hover:bg-[#d01634] text-white shadow-[0_10px_30px_rgba(233,30,63,0.4)] animate-pulse"}`}>
+                    {myLeader.ready ? "준비 해제" : "준비 완료"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1100,14 +1106,20 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   <p className="text-sm font-bold text-gray-200">{revealPlayer.alias} → {auction.leaders[revealPlayer.soldTo]?.name} 팀</p>
                 </div>
               ) : (
-                <div className="relative z-10 h-full flex flex-col items-center justify-center py-12 text-center">
-                  <p className="text-[10px] font-black tracking-[0.35em] text-gray-600 uppercase mb-3">{auction.status === "종료" ? "Finished" : "Standby"}</p>
-                  <p className="text-white font-black text-lg">{auction.status === "종료" ? "경매 종료" : "대기 중"}</p>
+                <div className="relative z-10 h-full flex flex-col items-center justify-center py-10 text-center">
+                  {/* 빈 무대에도 스포트라이트 */}
+                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-[420px] h-[220px] pointer-events-none" style={{ background: "radial-gradient(ellipse 55% 100% at 50% 0%, rgba(255,255,255,0.07), transparent 70%)" }} />
+                  <p className="auc-label text-gray-600 mb-5">{auction.status === "종료" ? "Hammer Down · Finished" : "Lot — · Standby"}</p>
+                  {/* 빈 좌대 — 다음 출품을 기다리는 자리 */}
+                  <div className="w-44 h-20 border border-dashed border-white/15 flex items-center justify-center mb-5">
+                    <p className="auc-label text-gray-700">{auction.status === "종료" ? "Auction Closed" : "Empty Stage"}</p>
+                  </div>
+                  <p className="text-white font-black text-lg">{auction.status === "종료" ? "경매 종료" : "다음 출품을 기다리는 중"}</p>
                   <p className="text-xs text-gray-500 mt-1.5">
                     {auction.status === "종료" ? "모든 경매가 종료되었습니다. 최종 팀 구성을 확인하세요."
                       : hasPending || hasOverflow ? "슬롯 배정을 기다리고 있습니다."
                       : auction.phase === 0 && auction.status === "진행중" ? "진행자가 페이즈를 시작하면 경매가 진행됩니다."
-                      : role === "host" ? "아래 선수 목록에서 호명할 선수를 선택하세요."
+                      : role === "host" ? "아래 카탈로그에서 호명할 선수를 선택하세요."
                       : "진행자가 다음 선수를 호명할 때까지 기다려주세요."}
                   </p>
                 </div>

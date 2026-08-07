@@ -31,6 +31,9 @@ export const AuctionStyles = () => (
       position: absolute; width: var(--tw); height: var(--th);
       --notch: 13px; --split: 70%;
       cursor: pointer;
+      /* ⚠️ 루트에 페이지색 배경 — 노치 구멍·찢긴 틈으로 뒤 티켓이 비쳐 보이는 것을 차단
+         (구멍으로는 페이지 배경색만 보이므로 '뚫린' 연출은 유지된다) */
+      background: #090909;
       transform: translateX(calc(var(--gap) * var(--off))) scale(.86) rotate(calc(var(--off) * 4deg));
       opacity: .45;
       transition: transform .6s cubic-bezier(.16,1,.3,1), opacity .45s ease, filter .45s ease;
