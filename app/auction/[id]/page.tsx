@@ -458,6 +458,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     if (revealFields.includes("champions") && ch.length) parts.push(`모스트 ${ch.join("  ·  ")}`);
     return parts.join(" / ");
   };
+  // 📌 스카우터 공개 정보를 항목별로 — 무대에서 큰 글씨로 나눠 보여주기 위한 구조화 버전
+  const revealParts = (p: any): { l: string; v: string; pos?: boolean }[] => {
+    const ch = (p.mostChampions || []).filter(Boolean);
+    if (p.isAllPos) return [{ l: "모스트", v: ch.length ? ch.join(" · ") : "없음" }];
+    const out: { l: string; v: string; pos?: boolean }[] = [];
+    if (revealFields.includes("mainPos")) out.push({ l: "주 포지션", v: p.mainPos || "?", pos: true });
+    if (revealFields.includes("subPos")) out.push({ l: "부 포지션", v: p.subPos || "-", pos: true });
+    if (revealFields.includes("champions")) out.push({ l: "모스트", v: ch.length ? ch.join(" · ") : "없음" });
+    return out;
+  };
   // 선수별 스카우터 비용 (황금카드 전용가)
   const scoutCostOf = (p: any) => (p?.isAllPos ? (S.goldenScoutCost ?? 4000) : S.scoutCost);
   const canSeePos = (p: any) =>
@@ -1033,34 +1043,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-2">
                         {curPlayer.isAllPos ? <span className="lux-shimmer">올 포지션 선수</span> : curPlayer.alias}
                       </h2>
-                      {curPlayer.isAllPos ? (
-                        /* 황금카드도 일반 선수와 동일한 칩 형식으로 통일 (골드 톤) */
-                        <div className="flex flex-wrap gap-2">
-                          <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-400 px-2.5 py-1 rounded-full">티어 비공개</span>
-                          <span className="text-[11px] font-bold bg-amber-400/10 border border-amber-400/30 text-amber-300 px-2.5 py-1 rounded-full">슬롯 자유 배정</span>
-                          {canSeePos(curPlayer) ? (
-                            <span className="text-[11px] font-bold bg-amber-400/10 border border-amber-400/30 text-amber-300 px-2.5 py-1 rounded-full">{revealInfo(curPlayer)}</span>
-                          ) : curPlayer.hasMost ? (
-                            <span className="text-[11px] font-bold bg-amber-400/[0.06] border border-amber-400/20 text-amber-300/70 px-2.5 py-1 rounded-full">
-                              스카우터 {(S.goldenScoutCost ?? 4000).toLocaleString()}pt · 모스트 공개
-                            </span>
-                          ) : (
-                            <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-500 px-2.5 py-1 rounded-full">공개 정보 없음</span>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-2">
-                          <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-300 px-2.5 py-1 rounded-full">최고 {curPlayer.peakTier || "?"}</span>
-                          <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-300 px-2.5 py-1 rounded-full">현재 {curPlayer.currentTier || "?"}</span>
-                          {canSeePos(curPlayer) ? (
-                            <span className="text-[11px] font-bold bg-white/[0.07] border border-white/25 text-gray-200 px-2.5 py-1 rounded-full">{revealInfo(curPlayer)}</span>
-                          ) : (
-                            <span className="text-[11px] font-bold bg-white/[0.06] border border-white/25 text-gray-400 px-2.5 py-1 rounded-full">
-                              스카우터 {S.scoutCost.toLocaleString()}pt · 포지션 공개
-                            </span>
-                          )}
-                        </div>
-                      )}
                     </div>
 
                     {/* 스카우터 타임 / 입찰 타이머 */}
@@ -1078,8 +1060,59 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     )}
                   </div>
 
+                  {/* ── 매물 핵심 정보 — 티어·스카우터 결과를 이 화면에서 가장 크게 읽히도록 ── */}
+                  {(() => {
+                    const scouted = canSeePos(curPlayer);
+                    const cells: { l: string; v: string; tone?: "gold" | "muted"; posName?: string }[] = [];
+                    if (curPlayer.isAllPos) {
+                      cells.push({ l: "티어", v: "비공개", tone: "muted" });
+                      cells.push({ l: "슬롯", v: "자유 배정", tone: "gold" });
+                    } else {
+                      cells.push({ l: "최고 티어", v: curPlayer.peakTier || "?" });
+                      cells.push({ l: "현재 티어", v: curPlayer.currentTier || "?" });
+                    }
+                    if (scouted) {
+                      revealParts(curPlayer).forEach((r) =>
+                        cells.push({ l: r.l, v: r.v, tone: curPlayer.isAllPos ? "gold" : undefined, posName: r.pos ? r.v : undefined })
+                      );
+                    } else if (!curPlayer.isAllPos || curPlayer.hasMost) {
+                      cells.push({
+                        l: curPlayer.isAllPos ? "모스트" : revealFields.includes("champions") ? "포지션 · 모스트" : "포지션",
+                        v: `스카우터 ${scoutCostOf(curPlayer).toLocaleString()}pt`,
+                        tone: "muted",
+                      });
+                    } else {
+                      cells.push({ l: "공개 정보", v: "없음", tone: "muted" });
+                    }
+                    return (
+                      <div className={`mt-5 flex flex-wrap border-t border-b py-3 ${isGoldenLot ? "border-amber-400/25" : "border-white/12"}`}>
+                        {cells.map((c, ci) => (
+                          <div
+                            key={ci}
+                            className={`min-w-[112px] px-4 first:pl-0 last:pr-0 border-l first:border-l-0 ${isGoldenLot ? "border-amber-400/20" : "border-white/[0.09]"} ${c.l === "모스트" || c.l.includes("모스트") ? "flex-[2]" : "flex-1"}`}
+                          >
+                            <p className={`auc-label-xs mb-1.5 ${isGoldenLot ? "text-amber-300/60" : "text-gray-600"}`}>{c.l}</p>
+                            <p
+                              className={`text-lg md:text-xl font-black tracking-tight leading-tight break-keep ${
+                                c.tone === "muted"
+                                  ? isGoldenLot ? "text-amber-100/45" : "text-gray-600"
+                                  : c.posName
+                                  ? roleColor(c.posName).text
+                                  : c.tone === "gold"
+                                  ? "text-amber-200"
+                                  : "text-white"
+                              }`}
+                            >
+                              {c.v}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
                   {/* 절취선 모티프 — 선수 정보와 호가 영역 분리 */}
-                  <div className="mt-6 mb-5 border-t border-dashed border-white/15" />
+                  <div className="mt-5 mb-5 border-t border-dashed border-white/15" />
                   <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
                       <p className={`auc-label mb-1.5 ${isGoldenLot ? "text-amber-300/70" : "text-gray-500"}`}>{cur.leaderIdx === null ? "시작가 · Opening" : `현재 최고가 · Top Bid${cur.isAllin ? " · 올인" : ""}`}</p>
@@ -1412,11 +1445,21 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                 <p className={`text-sm font-black truncate mb-1 ${p.isAllPos ? "lux-shimmer" : "text-white"}`}>{p.isAllPos ? "올 포지션" : p.alias}</p>
                               )}
                               {p.isAllPos ? (
-                                <p className="text-[10px] text-gray-600 mb-2">티어 비공개</p>
+                                <p className="text-[11px] font-bold text-gray-600 mb-2">티어 비공개</p>
                               ) : (
-                                <div className="mb-2">
-                                  <p className="text-[10px] text-gray-500">최고 {p.peakTier || "?"} · 현재 {p.currentTier || "?"}</p>
-                                  {canSeePos(p) && <p className="text-[10px] font-bold text-gray-200 mt-0.5">{revealInfo(p)}</p>}
+                                /* 티어·스카우터 정보는 이 카드의 핵심 — 라벨은 줄이고 값은 키운다 */
+                                <div className="mb-2 mt-0.5">
+                                  <div className="flex items-baseline gap-2">
+                                    <span className="auc-label-xs text-gray-700 shrink-0">최고</span>
+                                    <span className="text-[13px] font-black text-white truncate">{p.peakTier || "?"}</span>
+                                  </div>
+                                  <div className="flex items-baseline gap-2 mt-0.5">
+                                    <span className="auc-label-xs text-gray-700 shrink-0">현재</span>
+                                    <span className="text-[13px] font-black text-gray-300 truncate">{p.currentTier || "?"}</span>
+                                  </div>
+                                  {canSeePos(p) && (
+                                    <p className="text-[11px] font-black text-gray-200 mt-1.5 pt-1.5 border-t border-white/[0.07] leading-snug break-keep">{revealInfo(p)}</p>
+                                  )}
                                 </div>
                               )}
                             </>
@@ -1654,17 +1697,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           </div>
                           <div className="mt-3 divide-y divide-white/[0.07] border-t border-white/[0.07]">
                             {[
-                              { l: "최고 티어", v: sel.golden ? "비공개" : (sp?.peakTier || "-"), accent: false },
-                              { l: "현재 티어", v: sel.golden ? "비공개" : (sp?.currentTier || "-"), accent: false },
-                              {
-                                l: "스카우터",
-                                v: scouted ? revealInfo(sp) : "미확인",
-                                accent: !sel.golden && !!scouted,
-                              },
+                              { l: "최고 티어", v: sel.golden ? "비공개" : (sp?.peakTier || "-") },
+                              { l: "현재 티어", v: sel.golden ? "비공개" : (sp?.currentTier || "-") },
+                              { l: "스카우터", v: scouted ? revealInfo(sp) : "미확인" },
                             ].map((it, ii) => (
                               <div key={ii} className="flex items-baseline gap-3 py-[7px]">
-                                <span className="w-16 shrink-0 text-[10px] font-bold text-gray-600">{it.l}</span>
-                                <span className={`text-[12px] font-bold truncate ${it.accent ? "text-gray-200" : it.v === "미확인" || it.v.includes("불가") || it.v === "비공개" ? "text-gray-600" : "text-gray-200"}`}>{it.v}</span>
+                                <span className="w-16 shrink-0 auc-label-xs text-gray-600">{it.l}</span>
+                                <span className={`text-[15px] font-black truncate ${it.v === "미확인" || it.v.includes("불가") || it.v === "비공개" ? "text-gray-600" : "text-white"}`}>{it.v}</span>
                               </div>
                             ))}
                           </div>
