@@ -228,7 +228,7 @@ export default function AuctionListPage() {
               <span className="g1">POINT</span>
               <span className="g2">AUCTION</span>
             </div>
-            <h1 className="auc-in relative text-[2.2rem] md:text-[3.6rem] font-black leading-none tracking-[0.22em] pl-[0.22em] text-white">
+            <h1 className="auc-in relative text-[1.9rem] md:text-[3.2rem] font-black leading-none tracking-[0.42em] pl-[0.42em] text-white">
               포인트 경매
             </h1>
           </div>
@@ -237,14 +237,15 @@ export default function AuctionListPage() {
             <p className="text-center py-24 text-sm text-gray-600">불러오는 중…</p>
           ) : recent.length === 0 ? (
             <div className="auc-in flex flex-col items-center py-16">
-              <div className="auc-coin auc-coin-focus" style={{ position: "relative", cursor: "default" }}>
-                <div className="auc-coin-in"><p className="auc-label text-gray-600">Empty</p></div>
+              <div className="auc-ticket auc-ticket-focus" style={{ position: "relative", cursor: "default", transform: "none", opacity: 1 }}>
+                <span className="auc-perf" />
+                <div className="absolute inset-0 flex items-center justify-center"><p className="auc-label text-gray-600">No Ticket</p></div>
               </div>
               <p className="mt-12 text-sm text-gray-500">{isAdmin ? "아래에서 첫 경매를 개최해보세요." : "대회 시즌이 시작되면 이곳에서 경매가 열립니다."}</p>
             </div>
           ) : (
             <>
-              {/* 코인 무대 */}
+              {/* 티켓 무대 — 초대장이 겹쳐 놓인 형태 */}
               <div className="auc-stage auc-in" style={{ animationDelay: "120ms" }}>
                 {recent.map((a, i) => {
                   const off = i - focus;
@@ -256,29 +257,43 @@ export default function AuctionListPage() {
                     <div
                       key={a._id}
                       onClick={() => (isCenter ? router.push(`/auction/${a._id}`) : setFocus(i))}
-                      className={`auc-coin ${isCenter ? "auc-coin-focus" : ""} ${isLive ? "auc-coin-live" : ""} ${isEnd ? "auc-coin-closed" : ""}`}
+                      className={`auc-ticket ${isCenter ? "auc-ticket-focus" : ""} ${isLive && isCenter ? "auc-ticket-live" : ""} ${isEnd ? "auc-ticket-closed" : ""}`}
                       style={{ ["--off" as any]: off, zIndex: 10 - Math.abs(off) }}
                     >
-                      {isEnd && <span className="auc-bar" />}
-                      <div className="auc-coin-in">
-                        {isCenter ? (
-                          <>
-                            <span className={`auc-label mb-3 flex items-center gap-1.5 ${isLive ? "text-white" : "text-gray-500"}`}>
-                              {isLive && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
-                              {isLive ? "Live Now" : isEnd ? "Closed" : "Ready"}
-                            </span>
-                            <p className="text-lg md:text-xl font-black text-white leading-snug break-keep line-clamp-2">
-                              {a.game || "경매"}
-                            </p>
-                            <span className="my-4 w-10 h-px bg-white/20" />
-                            <p className="auc-num text-sm font-bold text-gray-300">
-                              팀 {a.leaderCount} <span className="text-gray-600 text-[10px] mx-1.5">VS</span> 선수 {a.playerCount}
-                            </p>
-                          </>
-                        ) : (
-                          <p className="text-xs font-black text-gray-400 leading-snug break-keep line-clamp-2">{a.game || "경매"}</p>
-                        )}
+                      <span className="auc-shine" />
+                      <span className="auc-perf" />
+
+                      {/* 본권 */}
+                      <div className="absolute left-0 top-0 bottom-0 w-[70%] flex flex-col justify-between p-5 md:p-6">
+                        <div className="flex items-center gap-2">
+                          {isLive && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+                          <span className={`auc-label ${isLive ? "text-white" : "text-gray-500"}`}>
+                            {isLive ? "Live Now" : isEnd ? "Closed" : "Ready"}
+                          </span>
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="auc-label text-gray-600 mb-1.5">Invitation</p>
+                          <p className="text-base md:text-xl font-black text-white leading-snug break-keep truncate">
+                            {a.game || "선수 경매"}
+                          </p>
+                        </div>
+
+                        <p className="auc-num text-[13px] font-bold text-gray-400">
+                          팀 {a.leaderCount} <span className="text-gray-600 text-[10px] mx-1.5">VS</span> 선수 {a.playerCount}
+                        </p>
                       </div>
+
+                      {/* 절취 스텁 */}
+                      <div className="absolute right-0 top-0 bottom-0 w-[30%] flex flex-col items-center justify-center gap-2 px-2">
+                        <p className="auc-label text-gray-500 leading-[1.6] text-center">Admit<br />One</p>
+                        <span className="w-6 h-px bg-white/15" />
+                        <p className="auc-label text-gray-700 auc-num">
+                          {new Date(a.createdAt).toLocaleDateString("ko-KR", { year: "2-digit", month: "2-digit", day: "2-digit" })}
+                        </p>
+                      </div>
+
+                      {isEnd && isCenter && <span className="auc-seal">CLOSED</span>}
                     </div>
                   );
                 })}
