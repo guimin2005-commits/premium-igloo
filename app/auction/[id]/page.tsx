@@ -82,6 +82,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [adjustAmount, setAdjustAmount] = useState("");
   const [posSetTarget, setPosSetTarget] = useState<number | null>(null); // 리더 포지션 지정 모달
 
+  const [miniChat, setMiniChat] = useState(false); // 모바일 우하단 팝업 채팅
+  const [sheet, setSheet] = useState<null | "slots" | "players">(null); // 모바일 하단 시트
   const [chatUnread, setChatUnread] = useState(0); // 모바일에서 채팅 탭에 없을 때 쌓인 새 메시지
   const [bidFlash, setBidFlash] = useState<{ idx: number; n: number } | null>(null); // 입찰한 팀 강조 (좌측 레일)
   const [showSystemChat, setShowSystemChat] = useState(true); // 채팅의 공지 표시 on/off
@@ -92,6 +94,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const revealSeen = useRef<number | null>(null);  // 이미 띄운 공개 대상
   const chatScrolledOnce = useRef(false);          // 첫 채팅 렌더에서 맨 아래로 내렸는지
   const chatBoxRef = useRef<HTMLDivElement>(null);
+  const miniChatBoxRef = useRef<HTMLDivElement>(null);
   const lastChatAt = useRef<string | null>(null);
   const chatIds = useRef<Set<string>>(new Set());
   const chatCooldown = useRef(0);
@@ -488,6 +491,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const strategyLeft = auction.strategyUntil ? Math.max(0, Math.ceil((new Date(auction.strategyUntil).getTime() - (now + clockSkew.current)) / 1000)) : 0;
   const assignLeft = auction.assignUntil ? Math.max(0, Math.ceil((new Date(auction.assignUntil).getTime() - (now + clockSkew.current)) / 1000)) : 0;
 
+  // 📱 모바일 하단 독의 높이 — 미니 채팅 버튼을 그 위에 띄우기 위해 계산
+  const bidBarOn = !!(myLeader && auction.status === "진행중" && curPlayer && scoutLeft === 0 && strategyLeft === 0 && timeLeft !== null && timeLeft > 0);
+  const bottomBarH = 34 + (bidBarOn ? 56 : 0) + (myLeader ? 52 : 0);
+
   const pa = auction.pendingAssign;
   const hasPending = pa && pa.playerIdx !== null && pa.playerIdx !== undefined;
   const pendingPlayer = hasPending ? auction.players[pa.playerIdx] : null;
@@ -860,6 +867,158 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     );
   };
 
+  // 📌 선수 목록 — 데스크톱 본문과 모바일 시트에서 함께 쓰므로 한 번만 만든다
+  const playersSection = (
+      <section>
+        <div className="flex items-center gap-3 pb-2 mb-4 border-b border-white/20">
+          <span className="auc-label text-white">Players</span>
+          <span className="text-[10px] font-bold text-gray-600 tabular-nums">
+            낙찰 {auction.players.filter((p: any) => p.status === "낙찰").length} / 전체 {auction.players.length}
+          </span>
+          {role === "host" && auction.status === "진행중" && auction.players.some((p: any) => p.status === "유찰") && !auction.players.some((p: any) => ["대기", "경매중", "배정중"].includes(p.status)) && (
+            <button onClick={() => setConfirmCfg({ title: "유찰 랜덤 배정", message: "유찰 선수를 빈 슬롯 팀에 기본가로 랜덤 배정합니다. (잔여 Point 최저 팀 우선)", confirmLabel: "배정", onConfirm: () => act({ action: "host:assignPassed" }) })} className="ml-auto text-[10px] font-black text-gray-300 hover:text-white border-b border-white/25 hover:border-white pb-0.5 transition-colors">유찰 랜덤 배정</button>
+          )}
+        </div>
+
+        {[1, 2].map((phase) => {
+          const list = auction.players.map((p: any, i: number) => ({ p, i })).filter(({ p }: any) => p.phase === phase);
+          if (list.length === 0) return null;
+          return (
+            <div key={phase} className="mb-5 last:mb-0">
+              <p className="auc-label-xs text-gray-600 mb-2.5">{p1Role ? `Phase ${phase}` : "All"}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2.5">
+                {list.map(({ p, i }: any) => {
+                  const hidden = isHiddenFor(p);
+                  const prof = p.revealed && p.discordId ? profiles[p.discordId] : null;
+                  const callable = role === "host" && auction.status === "진행중" && (p.status === "대기" || p.status === "유찰") && !(auction.phase === 1 && p1Role && p.phase !== 1) && auction.phase > 0;
+                  return (
+                    /* 📌 골든 카드는 이 목록에서 가장 중요한 매물 — 금박으로 확실히 띄운다 (이전엔 회색이라 비활성처럼 보였다) */
+                    <div key={i} className={`group flex flex-col rounded-xl border p-3.5 transition-colors ${p.isAllPos && !hidden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.13] to-amber-500/[0.02] shadow-[0_0_20px_-6px_rgba(251,191,36,0.4)]" : p.status === "경매중" ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : p.status === "낙찰" ? "border-white/5 bg-black/20" : p.status === "유찰" ? "border-orange-500/20 bg-orange-500/[0.03]" : p.status === "배정중" ? "border-white/25 bg-white/[0.04]" : "border-white/5 bg-black/25 hover:border-white/15"}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-[8px] font-black tracking-[0.2em] uppercase ${p.isAllPos && !hidden ? "text-amber-400" : "text-gray-600"}`}>{p.isAllPos && !hidden ? "Golden" : `P${String(i + 1).padStart(2, "0")}`}</span>
+                        {p.status === "경매중" ? <span className="text-[9px] font-black text-gray-200 animate-pulse">LIVE</span>
+                          : p.status === "배정중" ? <span className="text-[9px] font-black text-gray-200">배정 중</span>
+                          : p.status === "유찰" ? <span className="text-[9px] font-black text-orange-400">유찰</span>
+                          : p.status === "낙찰" ? <span className="text-[9px] font-black text-gray-500">SOLD</span>
+                          : null}
+                      </div>
+
+                      {hidden ? (
+                        /* 리더에겐 익명 — 물음표 표시 */
+                        <div className="flex-1 flex flex-col items-center justify-center py-3">
+                          <span className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-600"><path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>
+                          </span>
+                          <p className="text-[9px] font-bold text-gray-600">비공개</p>
+                        </div>
+                      ) : (
+                        <>
+                          {prof ? (
+                            <div className="flex items-center gap-2 mb-1">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={prof.avatarUrl} alt="" className="w-6 h-6 rounded-full bg-gray-800 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-xs font-black text-white truncate leading-tight">{prof.globalName}</p>
+                                <p className="text-[9px] text-gray-500 truncate">{p.alias}</p>
+                              </div>
+                            </div>
+                          ) : (
+                            /* 그라디언트 텍스트는 작은 글씨에서 뭉개져 회색으로 보인다 → 골든은 단색 금색으로 */
+                            <p className={`text-sm font-black truncate mb-1 ${p.isAllPos ? "text-amber-300" : "text-white"}`}>{p.isAllPos ? "올 포지션" : p.alias}</p>
+                          )}
+                          {p.isAllPos ? (
+                            /* 한 줄만 있으면 카드가 비어 보인다 → 일반 카드와 같은 3단 구성으로 채운다 (모두 실제 정보) */
+                            <div className="mb-2 mt-0.5">
+                              <div className="flex items-baseline gap-1.5">
+                                <span className="auc-cap text-amber-600/70 shrink-0">시작가</span>
+                                <span className="text-[13px] font-black text-amber-200 truncate tabular-nums">{(S.goldenBasePrice ?? 4000).toLocaleString()}</span>
+                              </div>
+                              <div className="flex items-baseline gap-1.5 mt-0.5">
+                                <span className="auc-cap text-amber-600/70 shrink-0">티어</span>
+                                <span className="text-[13px] font-black text-amber-100/50 truncate">비공개</span>
+                              </div>
+                              <p className="text-[11px] font-black mt-1.5 pt-1.5 border-t border-amber-400/20 leading-snug break-keep">
+                                {/* 일반 카드와 같은 규칙 — 비용 안내는 다시 호명될 수 있는 '유찰'일 때만 */}
+                                {canSeePos(p) ? (
+                                  <span className="text-amber-100">{revealParts(p).map((r) => r.v).join(" · ")}</span>
+                                ) : !p.hasMost ? (
+                                  <span className="text-amber-200/40">공개 정보 없음</span>
+                                ) : p.status === "유찰" ? (
+                                  <span className="text-amber-200/50">스카우터 {(S.goldenScoutCost ?? 4000).toLocaleString()}pt</span>
+                                ) : (
+                                  <span className="text-amber-200/40">스카우터 미사용</span>
+                                )}
+                              </p>
+                            </div>
+                          ) : (
+                            /* 낙찰돼도 정보는 남긴다 — 누가 얼마에 어떤 선수를 가져갔는지가 이후 판단의 근거다 */
+                            <div className="mb-2 mt-0.5">
+                              {/* 최고·현재 모두 판단 근거 — 라벨만 초소형으로 두고 값은 같은 무게로 */}
+                              <div className="flex items-baseline gap-1.5">
+                                <span className="auc-cap text-gray-700 shrink-0">최고</span>
+                                <span className="text-[13px] font-black text-white truncate">{p.peakTier || "?"}</span>
+                              </div>
+                              <div className="flex items-baseline gap-1.5 mt-0.5">
+                                <span className="auc-cap text-gray-700 shrink-0">현재</span>
+                                <span className="text-[13px] font-black text-gray-300 truncate">{p.currentTier || "?"}</span>
+                              </div>
+                              {/* 미사용일 때 이 줄을 비우면 카드가 들쭉날쭉해진다 → 항상 채운다.
+                                  유찰은 다시 호명될 수 있어 비용을 안내하고, 그 외에는 '미사용'만 표기 */}
+                              <p className="text-[11px] font-black mt-1.5 pt-1.5 border-t border-white/[0.07] leading-snug break-keep">
+                                {canSeePos(p) ? (
+                                  /* 주 포지션만 흰색 볼드 — 입찰 판단의 핵심이 평평해지지 않도록 */
+                                  revealParts(p).map((r, ri) => (
+                                    <span key={ri}>
+                                      {ri > 0 && <span className="text-gray-700 mx-1">·</span>}
+                                      <span className={ri === 0 ? "text-white" : r.pos ? "text-gray-500" : "text-gray-400"}>{r.v}</span>
+                                    </span>
+                                  ))
+                                ) : p.status === "유찰" ? (
+                                  <span className="text-gray-500">스카우터 {scoutCostOf(p).toLocaleString()}pt</span>
+                                ) : (
+                                  <span className="text-gray-600">스카우터 미사용</span>
+                                )}
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* 상태 문구는 상단 뱃지로 이미 드러나므로 아래에는 '행동/결과'만 남긴다.
+                          아직 팔리지 않아 표시할 게 없으면 선 하나만 그어 카드 바닥을 맞춘다. */}
+                      <div className={`mt-auto border-t border-white/[0.05] ${p.status === "낙찰" || (p.status === "배정중" && role === "host") || callable ? "pt-1.5" : ""}`}>
+                        {p.status === "낙찰" ? (
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[10px] font-bold text-gray-500 truncate flex-1">{auction.leaders[p.soldTo]?.name} · {p.soldPrice?.toLocaleString()} Pt</p>
+                            {role === "host" && p.discordId && !p.revealed && (
+                              <button onClick={() => act({ action: "host:reveal", playerIdx: i })} className="shrink-0 text-[9px] font-black text-gray-200 bg-white/[0.07] border border-white/25 px-2 py-0.5 rounded hover:bg-white/10 transition-colors">공개</button>
+                            )}
+                            {role === "host" && (
+                              <button onClick={() => setConfirmCfg({ title: "낙찰 취소", message: `${p.alias} 선수의 낙찰을 취소합니다.\n${auction.leaders[p.soldTo]?.name} 팀에서 제외되고 ${p.soldPrice?.toLocaleString()} Point가 환불됩니다.`, confirmLabel: "취소 확정", onConfirm: () => act({ action: "host:unsold", playerIdx: i }) })} className="shrink-0 text-[9px] font-black text-orange-400/80 hover:text-orange-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded transition-colors">취소</button>
+                            )}
+                          </div>
+                        ) : p.status === "배정중" && role === "host" ? (
+                          <button onClick={() => setConfirmCfg({ title: "낙찰 취소", message: `${p.alias} 선수의 낙찰(배정 대기)을 취소하고 대기 상태로 되돌립니다.`, confirmLabel: "취소 확정", onConfirm: () => act({ action: "host:unsold", playerIdx: i }) })} className="w-full text-[10px] font-black text-orange-400/80 hover:text-orange-400 bg-white/5 border border-white/10 py-1.5 rounded-lg transition-colors">낙찰 취소</button>
+                        ) : callable ? (
+                          /* 📌 20장이 전부 레드 버튼이면 포인트 컬러가 죽는다 → 데스크톱에선 호버 시에만 드러낸다
+                              (자리는 항상 확보해 레이아웃이 튀지 않게. 터치 기기는 호버가 없으므로 항상 표시) */
+                          <button
+                            onClick={() => act({ action: "host:call", playerIdx: i })}
+                            className="w-full text-[10px] font-black text-white bg-[#e91e3f]/85 hover:bg-[#e91e3f] py-1.5 rounded-lg transition-all md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                          >
+                            호명
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </section>
+  );
   return (
     <main className="w-full flex-1 flex flex-col relative auc">
       <LuxStyles />
@@ -978,7 +1137,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      <div className="w-full max-w-[1720px] mx-auto px-4 md:px-8 pt-4 pb-28 lg:py-6 flex-1 flex flex-wrap gap-5 items-start">
+      <div className="w-full max-w-[1720px] mx-auto px-4 md:px-8 pt-4 pb-40 lg:py-6 flex-1 flex flex-wrap gap-5 items-start">
 
         {/* ═══ 좌측 세로 레일: 팀 현황판 ═══ */}
         <aside className={`${mobileTab === "teams" ? "block" : "hidden"} lg:block w-full lg:w-[280px] shrink-0 order-2 lg:order-1 lg:sticky lg:top-36 lg:max-h-[calc(100vh-11rem)] lg:overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full lg:pr-1`}>
@@ -1396,7 +1555,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             const invCount = myLeader.inventory?.length || 0;
             const needAct = isMyPending || isMyOverflow;
             return (
-              <section className={`transition-colors ${needAct ? "bg-[#e91e3f]/[0.04]" : ""}`}>
+              <section className={`hidden lg:block transition-colors ${needAct ? "bg-[#e91e3f]/[0.04]" : ""}`}>
                 {/* 콘솔 시작을 알리는 굵은 선 */}
                 <span className={`block h-[2px] transition-colors ${needAct ? "bg-[#e91e3f]" : "bg-white/25"}`} />
 
@@ -1542,156 +1701,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             );
           })()}
 
-          {/* ═══ 선수 목록 ═══ */}
-          <section>
-            <div className="flex items-center gap-3 pb-2 mb-4 border-b border-white/20">
-              <span className="auc-label text-white">Players</span>
-              <span className="text-[10px] font-bold text-gray-600 tabular-nums">
-                낙찰 {auction.players.filter((p: any) => p.status === "낙찰").length} / 전체 {auction.players.length}
-              </span>
-              {role === "host" && auction.status === "진행중" && auction.players.some((p: any) => p.status === "유찰") && !auction.players.some((p: any) => ["대기", "경매중", "배정중"].includes(p.status)) && (
-                <button onClick={() => setConfirmCfg({ title: "유찰 랜덤 배정", message: "유찰 선수를 빈 슬롯 팀에 기본가로 랜덤 배정합니다. (잔여 Point 최저 팀 우선)", confirmLabel: "배정", onConfirm: () => act({ action: "host:assignPassed" }) })} className="ml-auto text-[10px] font-black text-gray-300 hover:text-white border-b border-white/25 hover:border-white pb-0.5 transition-colors">유찰 랜덤 배정</button>
-              )}
-            </div>
-
-            {[1, 2].map((phase) => {
-              const list = auction.players.map((p: any, i: number) => ({ p, i })).filter(({ p }: any) => p.phase === phase);
-              if (list.length === 0) return null;
-              return (
-                <div key={phase} className="mb-5 last:mb-0">
-                  <p className="auc-label-xs text-gray-600 mb-2.5">{p1Role ? `Phase ${phase}` : "All"}</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2.5">
-                    {list.map(({ p, i }: any) => {
-                      const hidden = isHiddenFor(p);
-                      const prof = p.revealed && p.discordId ? profiles[p.discordId] : null;
-                      const callable = role === "host" && auction.status === "진행중" && (p.status === "대기" || p.status === "유찰") && !(auction.phase === 1 && p1Role && p.phase !== 1) && auction.phase > 0;
-                      return (
-                        /* 📌 골든 카드는 이 목록에서 가장 중요한 매물 — 금박으로 확실히 띄운다 (이전엔 회색이라 비활성처럼 보였다) */
-                        <div key={i} className={`group flex flex-col rounded-xl border p-3.5 transition-colors ${p.isAllPos && !hidden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.13] to-amber-500/[0.02] shadow-[0_0_20px_-6px_rgba(251,191,36,0.4)]" : p.status === "경매중" ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : p.status === "낙찰" ? "border-white/5 bg-black/20" : p.status === "유찰" ? "border-orange-500/20 bg-orange-500/[0.03]" : p.status === "배정중" ? "border-white/25 bg-white/[0.04]" : "border-white/5 bg-black/25 hover:border-white/15"}`}>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className={`text-[8px] font-black tracking-[0.2em] uppercase ${p.isAllPos && !hidden ? "text-amber-400" : "text-gray-600"}`}>{p.isAllPos && !hidden ? "Golden" : `P${String(i + 1).padStart(2, "0")}`}</span>
-                            {p.status === "경매중" ? <span className="text-[9px] font-black text-gray-200 animate-pulse">LIVE</span>
-                              : p.status === "배정중" ? <span className="text-[9px] font-black text-gray-200">배정 중</span>
-                              : p.status === "유찰" ? <span className="text-[9px] font-black text-orange-400">유찰</span>
-                              : p.status === "낙찰" ? <span className="text-[9px] font-black text-gray-500">SOLD</span>
-                              : null}
-                          </div>
-
-                          {hidden ? (
-                            /* 리더에겐 익명 — 물음표 표시 */
-                            <div className="flex-1 flex flex-col items-center justify-center py-3">
-                              <span className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-600"><path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>
-                              </span>
-                              <p className="text-[9px] font-bold text-gray-600">비공개</p>
-                            </div>
-                          ) : (
-                            <>
-                              {prof ? (
-                                <div className="flex items-center gap-2 mb-1">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={prof.avatarUrl} alt="" className="w-6 h-6 rounded-full bg-gray-800 shrink-0" />
-                                  <div className="min-w-0">
-                                    <p className="text-xs font-black text-white truncate leading-tight">{prof.globalName}</p>
-                                    <p className="text-[9px] text-gray-500 truncate">{p.alias}</p>
-                                  </div>
-                                </div>
-                              ) : (
-                                /* 그라디언트 텍스트는 작은 글씨에서 뭉개져 회색으로 보인다 → 골든은 단색 금색으로 */
-                                <p className={`text-sm font-black truncate mb-1 ${p.isAllPos ? "text-amber-300" : "text-white"}`}>{p.isAllPos ? "올 포지션" : p.alias}</p>
-                              )}
-                              {p.isAllPos ? (
-                                /* 한 줄만 있으면 카드가 비어 보인다 → 일반 카드와 같은 3단 구성으로 채운다 (모두 실제 정보) */
-                                <div className="mb-2 mt-0.5">
-                                  <div className="flex items-baseline gap-1.5">
-                                    <span className="auc-cap text-amber-600/70 shrink-0">시작가</span>
-                                    <span className="text-[13px] font-black text-amber-200 truncate tabular-nums">{(S.goldenBasePrice ?? 4000).toLocaleString()}</span>
-                                  </div>
-                                  <div className="flex items-baseline gap-1.5 mt-0.5">
-                                    <span className="auc-cap text-amber-600/70 shrink-0">티어</span>
-                                    <span className="text-[13px] font-black text-amber-100/50 truncate">비공개</span>
-                                  </div>
-                                  <p className="text-[11px] font-black mt-1.5 pt-1.5 border-t border-amber-400/20 leading-snug break-keep">
-                                    {/* 일반 카드와 같은 규칙 — 비용 안내는 다시 호명될 수 있는 '유찰'일 때만 */}
-                                    {canSeePos(p) ? (
-                                      <span className="text-amber-100">{revealParts(p).map((r) => r.v).join(" · ")}</span>
-                                    ) : !p.hasMost ? (
-                                      <span className="text-amber-200/40">공개 정보 없음</span>
-                                    ) : p.status === "유찰" ? (
-                                      <span className="text-amber-200/50">스카우터 {(S.goldenScoutCost ?? 4000).toLocaleString()}pt</span>
-                                    ) : (
-                                      <span className="text-amber-200/40">스카우터 미사용</span>
-                                    )}
-                                  </p>
-                                </div>
-                              ) : (
-                                /* 낙찰돼도 정보는 남긴다 — 누가 얼마에 어떤 선수를 가져갔는지가 이후 판단의 근거다 */
-                                <div className="mb-2 mt-0.5">
-                                  {/* 최고·현재 모두 판단 근거 — 라벨만 초소형으로 두고 값은 같은 무게로 */}
-                                  <div className="flex items-baseline gap-1.5">
-                                    <span className="auc-cap text-gray-700 shrink-0">최고</span>
-                                    <span className="text-[13px] font-black text-white truncate">{p.peakTier || "?"}</span>
-                                  </div>
-                                  <div className="flex items-baseline gap-1.5 mt-0.5">
-                                    <span className="auc-cap text-gray-700 shrink-0">현재</span>
-                                    <span className="text-[13px] font-black text-gray-300 truncate">{p.currentTier || "?"}</span>
-                                  </div>
-                                  {/* 미사용일 때 이 줄을 비우면 카드가 들쭉날쭉해진다 → 항상 채운다.
-                                      유찰은 다시 호명될 수 있어 비용을 안내하고, 그 외에는 '미사용'만 표기 */}
-                                  <p className="text-[11px] font-black mt-1.5 pt-1.5 border-t border-white/[0.07] leading-snug break-keep">
-                                    {canSeePos(p) ? (
-                                      /* 주 포지션만 흰색 볼드 — 입찰 판단의 핵심이 평평해지지 않도록 */
-                                      revealParts(p).map((r, ri) => (
-                                        <span key={ri}>
-                                          {ri > 0 && <span className="text-gray-700 mx-1">·</span>}
-                                          <span className={ri === 0 ? "text-white" : r.pos ? "text-gray-500" : "text-gray-400"}>{r.v}</span>
-                                        </span>
-                                      ))
-                                    ) : p.status === "유찰" ? (
-                                      <span className="text-gray-500">스카우터 {scoutCostOf(p).toLocaleString()}pt</span>
-                                    ) : (
-                                      <span className="text-gray-600">스카우터 미사용</span>
-                                    )}
-                                  </p>
-                                </div>
-                              )}
-                            </>
-                          )}
-
-                          {/* 상태 문구는 상단 뱃지로 이미 드러나므로 아래에는 '행동/결과'만 남긴다.
-                              아직 팔리지 않아 표시할 게 없으면 선 하나만 그어 카드 바닥을 맞춘다. */}
-                          <div className={`mt-auto border-t border-white/[0.05] ${p.status === "낙찰" || (p.status === "배정중" && role === "host") || callable ? "pt-1.5" : ""}`}>
-                            {p.status === "낙찰" ? (
-                              <div className="flex items-center gap-1.5">
-                                <p className="text-[10px] font-bold text-gray-500 truncate flex-1">{auction.leaders[p.soldTo]?.name} · {p.soldPrice?.toLocaleString()} Pt</p>
-                                {role === "host" && p.discordId && !p.revealed && (
-                                  <button onClick={() => act({ action: "host:reveal", playerIdx: i })} className="shrink-0 text-[9px] font-black text-gray-200 bg-white/[0.07] border border-white/25 px-2 py-0.5 rounded hover:bg-white/10 transition-colors">공개</button>
-                                )}
-                                {role === "host" && (
-                                  <button onClick={() => setConfirmCfg({ title: "낙찰 취소", message: `${p.alias} 선수의 낙찰을 취소합니다.\n${auction.leaders[p.soldTo]?.name} 팀에서 제외되고 ${p.soldPrice?.toLocaleString()} Point가 환불됩니다.`, confirmLabel: "취소 확정", onConfirm: () => act({ action: "host:unsold", playerIdx: i }) })} className="shrink-0 text-[9px] font-black text-orange-400/80 hover:text-orange-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded transition-colors">취소</button>
-                                )}
-                              </div>
-                            ) : p.status === "배정중" && role === "host" ? (
-                              <button onClick={() => setConfirmCfg({ title: "낙찰 취소", message: `${p.alias} 선수의 낙찰(배정 대기)을 취소하고 대기 상태로 되돌립니다.`, confirmLabel: "취소 확정", onConfirm: () => act({ action: "host:unsold", playerIdx: i }) })} className="w-full text-[10px] font-black text-orange-400/80 hover:text-orange-400 bg-white/5 border border-white/10 py-1.5 rounded-lg transition-colors">낙찰 취소</button>
-                            ) : callable ? (
-                              /* 📌 20장이 전부 레드 버튼이면 포인트 컬러가 죽는다 → 데스크톱에선 호버 시에만 드러낸다
-                                  (자리는 항상 확보해 레이아웃이 튀지 않게. 터치 기기는 호버가 없으므로 항상 표시) */
-                              <button
-                                onClick={() => act({ action: "host:call", playerIdx: i })}
-                                className="w-full text-[10px] font-black text-white bg-[#e91e3f]/85 hover:bg-[#e91e3f] py-1.5 rounded-lg transition-all md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-                              >
-                                호명
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </section>
+          {/* 선수 목록 — 모바일에서는 하단 독의 시트로 뺀다 (본문 공간 절약) */}
+          <div className="hidden lg:block">{playersSection}</div>
         </div>
 
         {/* ═══ 우측: 실시간 채팅 + 로그 ═══ */}
@@ -2526,31 +2537,107 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         );
       })()}
 
-      {/* 📱 모바일 고정 입찰 바 — 타이머가 15초인데 입찰 버튼이 스크롤 뒤에 있으면 못 지른다.
-             화면 아래에 붙여 어느 탭에 있든 바로 입찰할 수 있게 한다. (PC 는 무대 안 입찰 UI 사용) */}
-      {myLeader && auction.status === "진행중" && curPlayer && scoutLeft === 0 && strategyLeft === 0 && timeLeft !== null && timeLeft > 0 && (
-        <div
-          className="lg:hidden fixed inset-x-0 bottom-0 z-[95] border-t border-white/15 bg-[#0b0b0c]/97 backdrop-blur-xl"
-          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-        >
-          <div className="flex items-stretch">
-            {/* 남은 시간 */}
+      {/* 📱 모바일 — 우하단 미니 채팅 (유튜브 라이브처럼 말풍선만 떠 있다가 열린다) */}
+      {mobileTab !== "chat" && (
+        <>
+          <button
+            onClick={() => { setMiniChat((v) => !v); setChatUnread(0); sfxSelect(); }}
+            aria-label="채팅 열기"
+            className="lg:hidden fixed right-4 z-[97] w-12 h-12 rounded-full border border-white/25 bg-[#141416]/95 backdrop-blur-xl shadow-[0_10px_30px_-8px_#000] flex items-center justify-center active:scale-95 transition-transform"
+            style={{ bottom: `calc(${bottomBarH}px + 1rem + env(safe-area-inset-bottom))` }}
+          >
+            {miniChat ? (
+              <svg className="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            ) : (
+              <svg className="w-5 h-5 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm3.75 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm3.75 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" /></svg>
+            )}
+            {!miniChat && chatUnread > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#e91e3f] text-[10px] font-black text-white flex items-center justify-center">
+                {chatUnread > 99 ? "99+" : chatUnread}
+              </span>
+            )}
+          </button>
+
+          {/* 말풍선을 누르면 열리는 팝업 채팅 */}
+          {miniChat && (
+            <div
+              className="lg:hidden fixed right-4 left-4 sm:left-auto sm:w-[340px] z-[96] flex flex-col border border-white/15 bg-[#0b0b0c]/97 backdrop-blur-xl shadow-[0_20px_60px_-12px_#000] animate-in fade-in slide-in-from-bottom-2 duration-200"
+              style={{ bottom: `calc(${bottomBarH}px + 4.5rem + env(safe-area-inset-bottom))`, maxHeight: "min(52dvh, 420px)" }}
+            >
+              <span className="absolute inset-x-0 top-0 h-[2px] bg-[#e91e3f]" />
+              <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-white/12 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="auc-label text-gray-300">채팅</span>
+                <button
+                  onClick={() => { const v = !showSystemChat; setShowSystemChat(v); try { localStorage.setItem("auctionShowSystemChat", v ? "1" : "0"); } catch {} sfxSelect(); }}
+                  className={`ml-auto flex items-center gap-1 px-2 py-1 border text-[9px] font-black transition-colors ${showSystemChat ? "border-white/25 text-gray-300" : "border-white/10 text-gray-600"}`}
+                >
+                  <MegaphoneIcon className="w-2.5 h-2.5 shrink-0" />공지 {showSystemChat ? "ON" : "OFF"}
+                </button>
+              </div>
+              <div ref={miniChatBoxRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
+                {chat.filter((m: any) => showSystemChat || !(m.isSystem && m.kind !== "join")).slice(-40).map((m: any, i: number) =>
+                  m.kind === "join" ? (
+                    <p key={m._id || i} className="text-center text-[10px] text-gray-600 py-0.5">{m.message}</p>
+                  ) : m.isSystem ? (
+                    <div key={m._id || i} className={`relative border rounded-lg pl-8 pr-8 py-1.5 ${SYS_HIGH.test(m.message || "") ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.08]" : "border-white/20 bg-white/[0.05]"}`}>
+                      <span className={`absolute left-2 top-1.5 w-4 h-4 rounded flex items-center justify-center ${SYS_HIGH.test(m.message || "") ? "bg-[#e91e3f]/25" : "bg-white/[0.08]"}`}>
+                        <MegaphoneIcon className={`w-2.5 h-2.5 shrink-0 ${SYS_HIGH.test(m.message || "") ? "text-[#ff5c77]" : "text-gray-300"}`} />
+                      </span>
+                      <p className={`text-center text-[10px] font-bold leading-relaxed break-keep ${SYS_HIGH.test(m.message || "") ? "text-gray-100" : "text-gray-400"}`}>{m.message}</p>
+                    </div>
+                  ) : (
+                    <div key={m._id || i} className="flex items-start gap-2">
+                      {m.avatar ? <img src={m.avatar} alt="" className="w-4 h-4 rounded-full shrink-0 mt-0.5" /> : <span className="w-4 h-4 rounded-full bg-white/10 shrink-0 mt-0.5" />}
+                      <p className="text-[11px] leading-relaxed min-w-0"><span className="font-bold text-gray-300">{m.userName}</span> <span className="text-gray-400 break-all">{m.message}</span></p>
+                    </div>
+                  )
+                )}
+              </div>
+              <form onSubmit={sendChat} className="p-2.5 border-t border-white/12 flex gap-2 shrink-0">
+                <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} maxLength={200} placeholder="메시지 입력..." className="flex-1 min-w-0 px-3 py-2 bg-black/40 border border-white/10 text-white text-xs outline-none focus:border-white/40 transition-colors placeholder:text-gray-600" />
+                <button type="submit" className="shrink-0 px-3.5 bg-[#e91e3f] text-white text-xs font-black">전송</button>
+              </form>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* 📱 모바일 하단 독 — 전역 탭을 숨긴 자리를 경매 전용 조작부로 쓴다.
+             위: 팀 슬롯 / 선수 시트 열기 · 가운데: 입찰 · 아래: 내 프로필 + 인벤토리 · 알림함 */}
+      <div
+        className="lg:hidden fixed inset-x-0 bottom-0 z-[95] border-t border-white/15 bg-[#0b0b0c]/97 backdrop-blur-xl"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {/* ── 시트 열기 — 본문에서 자리를 빼고 필요할 때만 올린다 ── */}
+        <div className="flex items-stretch divide-x divide-white/12 border-b border-white/12">
+          {myLeader && (
+            <button onClick={() => { setSheet("slots"); sfxSelect(); }} className="flex-1 py-2 text-[11px] font-black text-gray-300 active:bg-white/[0.06] transition-colors">
+              팀 슬롯 <span className="text-gray-600 tabular-nums">{myLeader.roster.length}/{totalSlots}</span>
+            </button>
+          )}
+          <button onClick={() => { setSheet("players"); sfxSelect(); }} className="flex-1 py-2 text-[11px] font-black text-gray-300 active:bg-white/[0.06] transition-colors">
+            선수 <span className="text-gray-600 tabular-nums">{auction.players.filter((p: any) => p.status === "낙찰").length}/{auction.players.length}</span>
+          </button>
+        </div>
+
+        {/* ── 입찰 (호명 중일 때만) ── */}
+        {bidBarOn && timeLeft !== null && (
+          <div className="flex items-stretch border-b border-white/12">
             <div className={`shrink-0 w-14 flex flex-col items-center justify-center border-r border-white/12 ${timeLeft <= 5 ? "bg-[#e91e3f]/15" : ""}`}>
               <span className={`text-xl font-black tabular-nums leading-none ${timeLeft <= 5 ? "text-[#e91e3f]" : "text-white"}`}>{timeLeft}</span>
               <span className="auc-label-xs text-gray-600 mt-0.5">Sec</span>
             </div>
-            {/* 현재가 */}
             <div className="shrink-0 px-3 flex flex-col justify-center border-r border-white/12">
               <span className="auc-cap text-gray-600 leading-none">현재가</span>
               <span className="text-[13px] font-black text-[#ff5c77] tabular-nums leading-tight mt-1">
                 {(cur.leaderIdx === null ? basePrice : cur.price).toLocaleString()}
               </span>
             </div>
-            {/* 빠른 입찰 */}
             <div className="flex-1 flex items-stretch divide-x divide-white/12 min-w-0">
               {[S.minIncrement, S.minIncrement * 5, S.minIncrement * 10].map((inc) => {
                 const result = cur.leaderIdx === null ? basePrice : cur.price + inc;
-                const affordable = myLeader.points >= result;
+                const affordable = myLeader!.points >= result;
                 return (
                   <button
                     key={inc}
@@ -2563,6 +2650,88 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   </button>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* ── 내 프로필 고정 + 인벤토리 · 알림함 ── */}
+        {myLeader && (() => {
+          const myProf = myLeader.discordId ? profiles[myLeader.discordId] : null;
+          const invCount = myLeader.inventory?.length || 0;
+          return (
+            <div className="flex items-center gap-2.5 px-3 py-2">
+              {myProf ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={myProf.avatarUrl} alt="" className="w-8 h-8 rounded-full bg-gray-800 ring-1 ring-white/20 shrink-0" />
+              ) : (
+                <span className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-[11px] font-black text-gray-300 ring-1 ring-white/15 bg-white/[0.04]">{myLeader.name[0]}</span>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-black text-white truncate leading-tight">{myLeader.name}</p>
+                <p className="flex items-center gap-1.5 text-[9px] font-bold text-gray-600 leading-tight mt-0.5">
+                  {myLeader.position && <span className={roleColor(myLeader.position).text}>{roleAbbr(myLeader.position)}</span>}
+                  <span className="tabular-nums">{myLeader.roster.length}/{totalSlots}</span>
+                </p>
+              </div>
+
+              <div className="shrink-0 text-right">
+                <p className="auc-cap text-gray-600 leading-none">Point</p>
+                <p className="text-[15px] font-black text-white tabular-nums leading-tight mt-0.5">{myLeader.points.toLocaleString()}</p>
+              </div>
+
+              <span className="shrink-0 w-px h-8 bg-white/12" />
+
+              {/* 유동 액션 — 인벤토리 / 알림함 */}
+              {invMode && (
+                <button
+                  onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
+                  aria-label="인벤토리"
+                  className={`relative shrink-0 w-9 h-9 flex items-center justify-center border transition-colors ${invCount > 0 ? "border-[#e91e3f] bg-[#e91e3f]/15 text-[#ff5c77]" : "border-white/20 text-gray-400 active:bg-white/[0.06]"}`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                  </svg>
+                  {invCount > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-[9px] font-black text-white flex items-center justify-center">{invCount}</span>}
+                </button>
+              )}
+              <button
+                onClick={() => { setNoticeOpen(true); setNoticeUnread(0); sfxSelect(); }}
+                aria-label="알림함"
+                className={`relative shrink-0 w-9 h-9 flex items-center justify-center border transition-colors ${noticeUnread > 0 ? "border-[#e91e3f] bg-[#e91e3f]/15 text-[#ff5c77]" : "border-white/20 text-gray-400 active:bg-white/[0.06]"}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                </svg>
+                {noticeUnread > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-[9px] font-black text-white flex items-center justify-center">{noticeUnread}</span>}
+              </button>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* 📱 하단 시트 — 팀 슬롯 / 선수 목록 */}
+      {sheet && (
+        <div className="lg:hidden fixed inset-0 z-[110] flex flex-col justify-end bg-black/80 backdrop-blur-sm animate-in fade-in" onClick={() => setSheet(null)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative border-t border-white/20 bg-[#0d0d0e] flex flex-col animate-in slide-in-from-bottom-4 duration-200"
+            style={{ maxHeight: "86dvh", paddingBottom: "env(safe-area-inset-bottom)" }}
+          >
+            <span className="absolute inset-x-0 top-0 h-[2px] bg-[#e91e3f]" />
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-white/12 shrink-0">
+              <span className="auc-label text-white">{sheet === "slots" ? "Team Slots" : "Players"}</span>
+              <span className="text-[10px] font-bold text-gray-600 tabular-nums">
+                {sheet === "slots"
+                  ? `${myLeader?.roster.length ?? 0}/${totalSlots}`
+                  : `낙찰 ${auction.players.filter((p: any) => p.status === "낙찰").length} / 전체 ${auction.players.length}`}
+              </span>
+              <button onClick={() => setSheet(null)} className="ml-auto p-1.5 -mr-1 text-gray-500 active:text-white">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
+              {sheet === "slots" && myLeader ? <SlotBoard leader={myLeader} leaderIdx={myLeaderIdx!} big /> : null}
+              {sheet === "players" ? playersSection : null}
             </div>
           </div>
         </div>

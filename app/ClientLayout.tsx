@@ -55,6 +55,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const isVerifyPage = pathname === "/verify";
+  // 📌 경매방 안에서는 모바일 하단 탭을 숨긴다.
+  //    입찰·채팅 바가 화면 아래에 붙는데 그 위에 전역 탭까지 있으면 잘못 눌러 방을 나가게 된다.
+  const isAuctionRoom = /^\/auction\/[^/]+$/.test(pathname || "");
   const userSession = session?.user as any;
   const isVerified = userSession?.isVerified;
   const hasScrimRole = userSession?.hasScrimRole;
@@ -427,8 +430,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         )}
       </main>
 
-      {/* 📌 모바일 하단 고정 탭 바 */}
-      {!isVerifyPage && mounted && (
+      {/* 📌 모바일 하단 고정 탭 바 (경매방에서는 오조작 방지를 위해 숨김) */}
+      {!isVerifyPage && !isAuctionRoom && mounted && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/10 grid grid-cols-5">
           {[
             { name: "홈", path: "/", icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" },
