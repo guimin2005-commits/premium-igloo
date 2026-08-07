@@ -82,7 +82,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [posSetTarget, setPosSetTarget] = useState<number | null>(null); // 리더 포지션 지정 모달
 
   const [miniChat, setMiniChat] = useState(false); // 모바일 우하단 팝업 채팅
-  const [sheet, setSheet] = useState<null | "teams" | "players">(null); // 모바일 하단 시트
+  const [sheet, setSheet] = useState<null | "teams">(null); // 모바일 하단 시트 (타 팀)
   const [chatUnread, setChatUnread] = useState(0); // 모바일에서 채팅 탭에 없을 때 쌓인 새 메시지
   const [bidFlash, setBidFlash] = useState<{ idx: number; n: number } | null>(null); // 입찰한 팀 강조 (좌측 레일)
   const [showSystemChat, setShowSystemChat] = useState(true); // 채팅의 공지 표시 on/off
@@ -1722,8 +1722,15 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             );
           })()}
 
-          {/* 선수 목록 — 모바일에서는 하단 독의 시트로 뺀다 (본문 공간 절약) */}
+          {/* 선수 목록 — 데스크톱은 카드 격자, 모바일은 압축 행 */}
           <div className="hidden lg:block">{playersSection}</div>
+          <section className="lg:hidden">
+            <div className="flex items-center gap-3 pb-2 border-b border-white/20">
+              <span className="auc-label text-white">Players</span>
+              <span className="text-[10px] font-bold text-gray-600 tabular-nums">낙찰 {auction.players.filter((p: any) => p.status === "낙찰").length} / 전체 {auction.players.length}</span>
+            </div>
+            {playersMobile}
+          </section>
         </div>
 
         {/* ═══ 우측: 실시간 채팅 + 로그 ═══ */}
@@ -1858,7 +1865,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         return (
           <div className="auc-modal-back z-[118] animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); }}>
             {/* 고정 높이 — 카드가 늘어나도 팝업은 그대로, 카드 영역만 스크롤 */}
-            <div onClick={(e) => e.stopPropagation()} className="auc-modal sm:max-w-4xl h-[88dvh] sm:h-[560px] sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+            <div onClick={(e) => e.stopPropagation()} className="auc-modal sm:max-w-4xl h-[94dvh] sm:h-[560px] sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
               <span className="auc-modal-line bg-white/35" />
               <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/12 shrink-0">
                 <span className="auc-label text-gray-500">Inventory</span>
@@ -1871,7 +1878,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               </div>
 
               {/* 가로 2단 — 팝업 크기는 고정, 각 영역 내부만 스크롤 */}
-              <div className="p-5 flex-1 min-h-0 overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-stretch">
+              <div className="p-3.5 sm:p-5 flex-1 min-h-0 overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-3.5 lg:gap-5 items-stretch">
 
                 {/* ══ 좌측 ══ */}
                 <div className="order-2 lg:order-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden space-y-4">
@@ -1881,8 +1888,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     if (!sel) {
                       // 선택 전에도 동일한 높이를 유지해 레이아웃이 밀리지 않도록
                       return (
-                        <div className="flex gap-5 h-[190px] items-center">
-                          <div className="shrink-0 w-[132px] aspect-[3/4.3] rounded-xl border border-dashed border-white/12 flex items-center justify-center">
+                        <div className="flex gap-4 sm:gap-5 h-[132px] sm:h-[190px] items-center">
+                          <div className="shrink-0 w-[92px] sm:w-[132px] aspect-[3/4.3] rounded-xl border border-dashed border-white/12 flex items-center justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-white/10"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
                           </div>
                           <div className="flex-1">
@@ -1896,9 +1903,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     const scouted = sp && canSeePos(sp);
                     return (
                       // 외곽 박스 없이 카드 + 헤어라인 정보 (박스 중첩 제거)
-                      <div className="flex gap-5 h-[190px]">
+                      <div className="flex gap-4 sm:gap-5 h-[132px] sm:h-[190px]">
                         {/* 세로 카드 — 우측 목록 카드와 동일 규격 */}
-                        <div className={`relative shrink-0 w-[132px] aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 ${sel.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.18] via-amber-500/[0.06] to-[#0d0d0d] shadow-[0_0_18px_rgba(251,191,36,0.18)]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"}`}>
+                        <div className={`relative shrink-0 w-[92px] sm:w-[132px] aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 ${sel.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.18] via-amber-500/[0.06] to-[#0d0d0d] shadow-[0_0_18px_rgba(251,191,36,0.18)]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"}`}>
                           {sel.golden && <span className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-amber-200/15 to-transparent"></span>}
                           <span className={`relative text-[7px] font-black tracking-[0.2em] uppercase ${sel.golden ? "text-amber-300" : "text-gray-600"}`}>{sel.golden ? "Golden" : "Player"}</span>
                           <div className={`relative w-11 h-11 rounded-full flex items-center justify-center border ${sel.golden ? "border-amber-300/50 bg-amber-400/10" : "border-white/10 bg-white/[0.04]"}`}>
@@ -1968,7 +1975,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           onDragOver={(e) => { if (dropOk) e.preventDefault(); }}
                           onDrop={(e) => { e.preventDefault(); if (dropOk && dragCard !== null) requestPlace(dragCard, slot); }}
                           onClick={() => { if (dropOk && dragCard !== null) requestPlace(dragCard, slot); }}
-                          className={`flex items-center gap-2 rounded-lg px-2.5 py-2 min-h-[36px] transition-all border ${dropOk ? "border-white/25 bg-white/[0.06] cursor-pointer" : "border-transparent bg-white/[0.035]"}`}
+                          className={`flex items-center gap-2 rounded-lg px-2.5 py-2.5 sm:py-2 min-h-[44px] sm:min-h-[36px] transition-all border ${dropOk ? "border-white/25 bg-white/[0.06] cursor-pointer" : "border-transparent bg-white/[0.035]"}`}
                         >
                           <span className={`shrink-0 text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(slot).badge}`}>{roleAbbr(slot)}</span>
                           <span className="shrink-0 text-[9px] font-bold text-gray-600 tabular-nums">{entries.length}/{limit}</span>
@@ -2081,9 +2088,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {(l.inventory?.length || 0) === 0 && assignedCards.length === 0 ? (
                     <p className="text-center text-xs text-gray-600 py-8 border border-dashed border-white/10 rounded-xl">보유 중인 선수가 없습니다.</p>
                   ) : (
-                    <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full p-1 space-y-3">
+                    <div className="shrink-0 lg:flex-1 lg:min-h-0 overflow-x-auto overflow-y-hidden lg:overflow-x-hidden lg:overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full p-1 flex gap-2.5 lg:block lg:space-y-3">
                       {/* 미배정 카드 */}
-                      <div className="grid grid-cols-3 lg:grid-cols-2 gap-2.5 content-start">
+                      <div className="flex gap-2.5 lg:grid lg:grid-cols-2 content-start">
                         {(l.inventory || []).map((card: any, ci: number) => {
                           const picked = dragCard === ci;
                           return (
@@ -2094,7 +2101,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               onDragStart={() => { draggingRef.current = true; if (dragCard !== ci) { setDragCard(ci); sfxSelect(); } }}
                               onDragEnd={() => { setTimeout(() => { draggingRef.current = false; }, 0); }}
                               onClick={() => { if (!canSelect || swapMode) return; if (draggingRef.current) return; const next = picked ? null : ci; setDragCard(next); if (next !== null) sfxSelect(); }}
-                              className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-colors ${card.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.18] via-amber-500/[0.06] to-[#0d0d0d] shadow-[0_0_18px_rgba(251,191,36,0.18)]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35" : !swapMode ? "cursor-pointer hover:border-white/25" : ""} ${picked ? (card.golden ? "border-amber-300 ring-2 ring-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.45)]" : "border-[#e91e3f] ring-2 ring-[#e91e3f] shadow-[0_0_18px_rgba(255,255,255,0.12)] bg-white/[0.08]") : ""}`}
+                              className={`relative w-[78px] shrink-0 lg:w-auto aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-colors ${card.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.18] via-amber-500/[0.06] to-[#0d0d0d] shadow-[0_0_18px_rgba(251,191,36,0.18)]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35" : !swapMode ? "cursor-pointer hover:border-white/25" : ""} ${picked ? (card.golden ? "border-amber-300 ring-2 ring-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.45)]" : "border-[#e91e3f] ring-2 ring-[#e91e3f] shadow-[0_0_18px_rgba(255,255,255,0.12)] bg-white/[0.08]") : ""}`}
                             >
                               {/* 황금카드 광택 */}
                               {card.golden && <span className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-amber-200/15 to-transparent"></span>}
@@ -2113,16 +2120,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                       {/* 배정 완료 카드 — 흑백, 정보 확인만 가능 */}
                       {assignedCards.length > 0 && (
-                        <div className="pt-3 border-t border-white/[0.07]">
+                        <div className="shrink-0 pl-2.5 border-l border-white/[0.07] lg:pl-0 lg:border-l-0 lg:pt-3 lg:border-t lg:border-white/[0.07]">
                           <p className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase mb-2">배정 완료</p>
-                          <div className="grid grid-cols-3 lg:grid-cols-2 gap-2.5 content-start">
+                          <div className="flex gap-2.5 lg:grid lg:grid-cols-2 content-start">
                             {assignedCards.map((ac: any) => {
                               const picked = dragCard === ac.key;
                               return (
                                 <div
                                   key={ac.key}
                                   onClick={() => { if (!canSelect || swapMode) return; const next = picked ? null : ac.key; setDragCard(next); if (next !== null) sfxSelect(); }}
-                                  className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none grayscale opacity-55 hover:opacity-80 transition-all ${swapMode ? "" : "cursor-pointer"} border-white/10 bg-gradient-to-b from-white/[0.05] to-[#0d0d0d] ${picked ? "opacity-100 grayscale-0 border-white/40 ring-2 ring-white/30" : ""}`}
+                                  className={`relative w-[78px] shrink-0 lg:w-auto aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none grayscale opacity-55 hover:opacity-80 transition-all ${swapMode ? "" : "cursor-pointer"} border-white/10 bg-gradient-to-b from-white/[0.05] to-[#0d0d0d] ${picked ? "opacity-100 grayscale-0 border-white/40 ring-2 ring-white/30" : ""}`}
                                 >
                                   <span className="text-[7px] font-black tracking-[0.2em] uppercase text-gray-600">{ac.card.golden ? "Golden" : "Player"}</span>
                                   <div className="w-11 h-11 rounded-full flex items-center justify-center border border-white/10 bg-white/[0.04]">
@@ -2616,20 +2623,18 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       )}
 
       {/* 📱 모바일 하단 독 — 전역 탭을 숨긴 자리를 경매 전용 조작부로 쓴다.
-             위: 팀 슬롯 / 선수 시트 열기 · 가운데: 입찰 · 아래: 내 프로필 + 인벤토리 · 알림함 */}
+             위: 타 팀 시트 · 가운데: 입찰 · 아래: 내 프로필 + 인벤토리 · 알림함 */}
       <div
         className="lg:hidden fixed inset-x-0 bottom-0 z-[95] border-t border-white/15 bg-[#0b0b0c]/97 backdrop-blur-xl"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        {/* ── 시트 열기 — 본문에서 자리를 빼고 필요할 때만 올린다 ── */}
+        {/* ── 타 팀 시트 열기 ── */}
         <div className="flex items-stretch divide-x divide-white/12 border-b border-white/12">
           {/* 팀 슬롯은 모바일에서 빼둔다 — 인벤토리에서 배정하므로 중복 */}
           <button onClick={() => { setSheet("teams"); sfxSelect(); }} className="flex-1 py-2 text-[11px] font-black text-gray-300 active:bg-white/[0.06] transition-colors">
             {isThird ? "팀" : "타 팀"} <span className="text-gray-600 tabular-nums">{railLeaders.length}</span>
           </button>
-          <button onClick={() => { setSheet("players"); sfxSelect(); }} className="flex-1 py-2 text-[11px] font-black text-gray-300 active:bg-white/[0.06] transition-colors">
-            선수 <span className="text-gray-600 tabular-nums">{auction.players.filter((p: any) => p.status === "낙찰").length}/{auction.players.length}</span>
-          </button>
+
         </div>
 
         {/* ── 입찰 (호명 중일 때만) ── */}
@@ -2730,11 +2735,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           >
             <span className="absolute inset-x-0 top-0 h-[2px] bg-[#e91e3f]" />
             <div className="flex items-center gap-3 px-4 py-3 border-b border-white/12 shrink-0">
-              <span className="auc-label text-white">{sheet === "teams" ? (isThird ? "Teams" : "Rivals") : "Players"}</span>
+              <span className="auc-label text-white">{isThird ? "Teams" : "Rivals"}</span>
               <span className="text-[10px] font-bold text-gray-600 tabular-nums">
-                {sheet === "teams"
-                  ? `${railLeaders.length}팀`
-                  : `낙찰 ${auction.players.filter((p: any) => p.status === "낙찰").length} / 전체 ${auction.players.length}`}
+                {`${railLeaders.length}팀`}
               </span>
               <button onClick={() => setSheet(null)} className="ml-auto p-1.5 -mr-1 text-gray-500 active:text-white">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -2742,7 +2745,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
               {sheet === "teams" ? teamsSection : null}
-              {sheet === "players" ? playersMobile : null}
             </div>
           </div>
         </div>
