@@ -1460,62 +1460,58 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     </span>
                   </div>
 
-                  {invMode && (
-                    <>
-                      <span className="hidden sm:block w-px h-11 bg-white/12" />
-                      {/* 📌 유일한 '눌러야 하는' 자원 — 주변이 전부 선(線) 정보라 버튼처럼 보이게 테두리를 준다.
-                          보유 카드가 있으면 레드로 물들고 점이 깜빡여 시선을 끈다. */}
+                  {/* 📌 액션 묶음 — 인벤토리·알림함이 각각 독립 박스로 서면 서로 경쟁하고 줄도 어수선해진다.
+                      하나의 테두리 안에 세로 헤어라인으로 나눠 '여기가 눌러야 하는 곳'을 한 덩어리로 보여준다.
+                      읽기 정보(POINT·ROSTER)와는 ml-auto 로 좌우를 갈라둔다. */}
+                  {(() => {
+                    const Cell = ({ on, label, value, unit, title, onClick, children }: any) => (
                       <button
-                        onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
-                        title="인벤토리 열기 — 보유 선수를 포지션에 배정합니다"
-                        className={`group relative flex items-center gap-3 pl-3.5 pr-3 py-2.5 border cursor-pointer transition-all ${
-                          invCount > 0
-                            ? "border-[#e91e3f] bg-[#e91e3f]/[0.10] hover:bg-[#e91e3f]/20"
-                            : "border-white/25 hover:border-white hover:bg-white/[0.06]"
-                        }`}
+                        onClick={onClick}
+                        title={title}
+                        className={`group relative flex items-center gap-2.5 px-3.5 py-2.5 cursor-pointer transition-colors ${on ? "bg-[#e91e3f]/[0.12] hover:bg-[#e91e3f]/25" : "hover:bg-white/[0.06]"}`}
                       >
-                        {invCount > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#e91e3f] animate-[pulseGlow_1.6s_ease-in-out_infinite]" />}
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 shrink-0 ${invCount > 0 ? "text-[#ff5c77]" : "text-gray-500 group-hover:text-white"} transition-colors`}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-                        </svg>
+                        {on && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_1.6s_ease-in-out_infinite]" />}
+                        <span className={`shrink-0 transition-colors ${on ? "text-[#ff5c77]" : "text-gray-500 group-hover:text-white"}`}>{children}</span>
                         <span className="text-left">
-                          <span className={`block auc-label ${invCount > 0 ? "text-[#ff5c77]" : "text-gray-500"}`}>Inventory</span>
-                          <span className={`block text-lg font-black tabular-nums leading-tight transition-colors ${invCount > 0 ? "text-white" : "text-gray-400 group-hover:text-white"}`}>
-                            {invCount}<span className="text-[10px] font-bold text-gray-500 ml-1">장</span>
+                          <span className={`block auc-label ${on ? "text-[#ff5c77]" : "text-gray-500"}`}>{label}</span>
+                          <span className={`block text-lg font-black tabular-nums leading-tight transition-colors ${on ? "text-white" : "text-gray-400 group-hover:text-white"}`}>
+                            {value}<span className="text-[10px] font-bold text-gray-500 ml-1">{unit}</span>
                           </span>
                         </span>
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3.5 h-3.5 shrink-0 transition-transform group-hover:translate-x-0.5 ${invCount > 0 ? "text-[#ff5c77]" : "text-gray-600 group-hover:text-white"}`}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                        </svg>
                       </button>
-
-                    </>
-                  )}
-
-                  {/* 알림함 — 스카우터 결과를 모아 본다 (기존 우측 '알림 로그' 패널 대체).
-                      스카우터는 인벤토리 모드와 무관하므로 invMode 밖에 둔다. */}
-                  <>
-                      <span className="hidden sm:block w-px h-11 bg-white/12" />
-                      <button
-                        onClick={() => { setNoticeOpen(true); setNoticeUnread(0); sfxSelect(); }}
-                        title="알림함 — 스카우터 결과 모아보기"
-                        className={`group relative flex items-center gap-3 pl-3.5 pr-3 py-2.5 border cursor-pointer transition-all ${noticeUnread > 0 ? "border-[#e91e3f] bg-[#e91e3f]/[0.10] hover:bg-[#e91e3f]/20" : "border-white/25 hover:border-white hover:bg-white/[0.06]"}`}
-                      >
-                        {noticeUnread > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#e91e3f] animate-[pulseGlow_1.6s_ease-in-out_infinite]" />}
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 shrink-0 transition-colors ${noticeUnread > 0 ? "text-[#ff5c77]" : "text-gray-500 group-hover:text-white"}`}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-                        </svg>
-                        <span className="text-left">
-                          <span className={`block auc-label ${noticeUnread > 0 ? "text-[#ff5c77]" : "text-gray-500"}`}>알림함</span>
-                          <span className={`block text-lg font-black tabular-nums leading-tight transition-colors ${noticeUnread > 0 ? "text-white" : "text-gray-400 group-hover:text-white"}`}>
-                            {notices.length}<span className="text-[10px] font-bold text-gray-500 ml-1">건</span>
-                          </span>
-                        </span>
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3.5 h-3.5 shrink-0 transition-transform group-hover:translate-x-0.5 ${noticeUnread > 0 ? "text-[#ff5c77]" : "text-gray-600 group-hover:text-white"}`}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                        </svg>
-                      </button>
-                  </>
+                    );
+                    return (
+                      <div className="sm:ml-auto flex items-stretch border border-white/25 divide-x divide-white/15">
+                        {invMode && (
+                          <Cell
+                            on={invCount > 0}
+                            label="Inventory"
+                            value={invCount}
+                            unit="장"
+                            title="인벤토리 열기 — 보유 선수를 포지션에 배정합니다"
+                            onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                            </svg>
+                          </Cell>
+                        )}
+                        {/* 스카우터는 인벤토리 모드와 무관하므로 항상 노출 */}
+                        <Cell
+                          on={noticeUnread > 0}
+                          label="알림함"
+                          value={notices.length}
+                          unit="건"
+                          title="알림함 — 스카우터 결과 모아보기"
+                          onClick={() => { setNoticeOpen(true); setNoticeUnread(0); sfxSelect(); }}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                          </svg>
+                        </Cell>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* 슬롯 보드 */}
