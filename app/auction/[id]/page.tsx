@@ -994,13 +994,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               const flashed = bidFlash?.idx === li;
               const fillPct = Math.min(100, (l.roster.length / Math.max(1, totalSlots)) * 100);
               return (
-                <div
-                  key={li}
-                  /* key 에 갱신 번호를 섞어 같은 팀이 연속 입찰해도 애니메이션이 다시 재생되게 한다 */
-                  className={`relative overflow-hidden transition-colors ${flashed ? "auc-bidflash" : bidding ? "bg-[#e91e3f]/[0.05]" : ""}`}
-                >
-                  {/* 입찰 순간 왼쪽에서 퍼지는 파동 */}
-                  {flashed && <span key={bidFlash!.n} className="auc-bidwave" />}
+                <div key={li} className={`relative transition-colors ${bidding ? "bg-[#e91e3f]/[0.05]" : ""}`}>
+                  {/* 입찰 순간 효과 — 행의 배경과 분리된 오버레이 한 겹.
+                      key 에 갱신 번호를 넣어 같은 팀이 연속 입찰해도 애니메이션이 다시 재생된다 */}
+                  {flashed && <span key={bidFlash!.n} className="auc-bidfx" />}
                   {/* 최고가 입찰 중인 팀 — 왼쪽 레드 세로선 */}
                   <span className={`absolute left-0 inset-y-0 w-[2px] z-10 transition-colors ${bidding ? "bg-[#e91e3f]" : myLeaderIdx === li ? "bg-white/40" : "bg-transparent"}`} />
 

@@ -383,12 +383,31 @@ export const AuctionStyles = () => (
       .auc-gcard, .auc-gcard-holo { animation: none; }
     }
 
-    /* ── 입찰 순간, 좌측 팀 레일에서 해당 팀이 번쩍인다 ── */
-    .auc-bidflash { animation: aucBidFlash 1s cubic-bezier(.2,.8,.3,1); }
-    @keyframes aucBidFlash {
-      0%   { background-color: rgba(233,30,63,.42); box-shadow: inset 3px 0 0 #e91e3f, 0 0 26px -6px rgba(233,30,63,.85); }
-      35%  { background-color: rgba(233,30,63,.16); }
-      100% { background-color: rgba(233,30,63,.05); box-shadow: none; }
+    /* ── 입찰 순간, 좌측 팀 레일에서 해당 팀이 번쩍인다 ──
+       ⚠️ 행 자체의 background 에 애니메이션을 걸면 행이 이미 가진 transition-colors·기본 배경과
+          충돌해 잔상이 남는다. 독립된 오버레이 한 겹으로 처리한다. */
+    .auc-bidfx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+    /* 붉은 섬광 — 행 전체를 덮으면 글자가 묻히므로 왼쪽이 진하고 오른쪽으로 옅어지는 그라디언트 */
+    .auc-bidfx::before {
+      content: ""; position: absolute; inset: 0; opacity: 0;
+      background: linear-gradient(90deg, rgba(233,30,63,.55) 0%, rgba(233,30,63,.16) 45%, transparent 80%);
+      animation: aucBidTint 1s ease-out;
+    }
+    @keyframes aucBidTint {
+      0%   { opacity: 1; }
+      35%  { opacity: .45; }
+      100% { opacity: 0; }
+    }
+    /* 왼쪽 가장자리에서 가로로 퍼지는 파동 */
+    .auc-bidfx::after {
+      content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+      background: linear-gradient(90deg, #e91e3f, rgba(233,30,63,.3));
+      transform-origin: left center; animation: aucBidWave .9s ease-out;
+    }
+    @keyframes aucBidWave {
+      0%   { opacity: 1; transform: scaleX(1); }
+      55%  { opacity: .45; transform: scaleX(42); }
+      100% { opacity: 0; transform: scaleX(75); }
     }
     /* 금액이 튀어오른다 */
     .auc-bidpop { animation: aucBidPop .55s cubic-bezier(.2,1.4,.4,1); }
@@ -397,17 +416,9 @@ export const AuctionStyles = () => (
       28%  { transform: scale(1.28); }
       100% { transform: scale(1); }
     }
-    /* 왼쪽 가장자리에서 퍼지는 파동 */
-    .auc-bidwave { position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
-      background: linear-gradient(90deg, #e91e3f, rgba(233,30,63,.35));
-      transform-origin: left center; animation: aucBidWave .9s ease-out; pointer-events: none; z-index: 5; }
-    @keyframes aucBidWave {
-      0%   { opacity: 1; transform: scaleX(1); }
-      55%  { opacity: .45; transform: scaleX(42); }
-      100% { opacity: 0; transform: scaleX(75); }
-    }
     @media (prefers-reduced-motion: reduce) {
-      .auc-bidflash, .auc-bidpop, .auc-bidwave { animation: none; }
+      .auc-bidfx::before, .auc-bidfx::after, .auc-bidpop { animation: none; }
+      .auc-bidfx { display: none; }
     }
 
     /* ── 경매장 공용 팝업 ── 방 안의 모든 모달이 같은 골격을 쓴다 */
