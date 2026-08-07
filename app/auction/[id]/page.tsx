@@ -180,18 +180,22 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   // 낙찰 선언 — 실제 경매 의사봉 소리 (탁·탁·탁)
   //  나무 타격은 '음정'이 아니라 파열음이므로 노이즈 버스트가 핵심이고,
   //  그 위에 받침대가 울리는 저역 몸통을 얹어 나무 느낌을 만든다.
+  //  ⚠️ 오실레이터(사인·트라이앵글)를 쓰면 '음정'이 생겨 신스 킥처럼 들린다 → 전부 노이즈로만 만든다.
+  //     나무는 배음이 정수비가 아니고 감쇠가 매우 빠르다. 높은 Q 의 밴드패스를
+  //     비정수비 주파수에 여러 개 걸어 공명 모드를 흉내내고, 전부 100ms 안에 끊는다.
   const sfxHammer = useCallback(() => {
     const knock = (t: number, power: number) =>
       setTimeout(() => {
-        playNoise(0.014, 0.30 * power, 3600, 0.7);          // 타격 순간의 딱딱한 어택
-        playNoise(0.055, 0.20 * power, 1500, 1.0);          // 나무 표면이 갈라지는 소리
-        playTone(215, 0.085, 0.10 * power, "triangle");     // 받침대 몸통 울림
-        playTone(104, 0.13, 0.085 * power, "sine");         // 저역 쿵
+        // 경쾌함 = 4ms 짜리 넓은 어택 / 묵직함 = 저역이 70~90ms 까지 남아 있는 것
+        playNoise(0.004, 0.30 * power, 4000, 0.4);  // 봉이 닿는 순간
+        playNoise(0.130, 0.68 * power, 105, 1.0);   // 저역 몸통 — 여기가 무게를 만든다 (충분히 길게)
+        playNoise(0.075, 0.40 * power, 240, 1.8);   // 나무 몸통
+        playNoise(0.018, 0.10 * power, 800, 2.5);   // 존재감만 살짝 (Q 가 높으면 통통 울린다)
       }, t);
-    knock(0, 0.92);
-    knock(195, 0.96);
-    knock(395, 1.12); // 마지막 한 방이 가장 세게 — 낙찰 확정
-  }, [playTone, playNoise]);
+    knock(0, 0.9);
+    knock(165, 0.95);
+    knock(340, 1.15); // 마지막 한 방이 가장 세게 — 낙찰 확정
+  }, [playNoise]);
   // 스카우터 결과 (신비로운 차임)
   const sfxScout = useCallback(() => { playTone(880, 0.1, 0.035, "triangle"); setTimeout(() => playTone(1175, 0.14, 0.04, "triangle"), 110); setTimeout(() => playTone(1568, 0.2, 0.035, "triangle"), 240); }, [playTone]);
   // 인벤토리 → 슬롯 배정 (카드가 '착' 꽂히는 느낌)
