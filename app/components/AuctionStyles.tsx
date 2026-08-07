@@ -316,11 +316,23 @@ export const AuctionStyles = () => (
       background: linear-gradient(180deg, #1c1405 0%, #0d0902 100%); }
     .auc-gcard-plate::before { content: ""; position: absolute; inset-inline: 10px; top: 0; height: 1px;
       background: linear-gradient(90deg, transparent, rgba(251,191,36,.75), transparent); }
-    /* 리플 — 덱에서 튕겨 나온 카드들이 화면을 가로질러 스쳐 간다 */
-    .auc-gdeal-fly { position: absolute; top: 50%; left: 50%; width: 124px; height: 174px; border-radius: 9px;
-      background: linear-gradient(150deg, #1d1506 0%, #0c0802 100%);
-      border: 1px solid rgba(251,191,36,.22); opacity: 0; will-change: transform;
-      animation: aucGcFly 1.15s cubic-bezier(.32,.62,.4,1) forwards; }
+    /* 리플 — 덱에서 튕겨 나온 '일반 카드'들이 화면을 가로질러 스쳐 간다.
+       ⚠️ 특징 없는 사각형이면 그래픽 오류로 보인다 → 뒷면 문양·이중 프레임을 넣어 카드로 읽히게 하고,
+          흑백으로 칠해 금색 본 카드와 한눈에 구분되게 한다. */
+    .auc-gdeal-fly { position: absolute; top: 50%; left: 50%; width: 152px; height: 212px; border-radius: 10px;
+      background:
+        repeating-linear-gradient(45deg, rgba(255,255,255,.05) 0 6px, transparent 6px 12px),
+        linear-gradient(150deg, #1a1b1e 0%, #0e0f11 100%);
+      border: 1px solid rgba(255,255,255,.3);
+      box-shadow: 0 18px 40px -18px #000;
+      opacity: 0; will-change: transform;
+      animation: aucGcFly 1.25s cubic-bezier(.28,.6,.42,1) forwards; }
+    /* 뒷면 이중 프레임 */
+    .auc-gdeal-fly::before { content: ""; position: absolute; inset: 8px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,.16); }
+    /* 뒷면 중앙 마름모 문양 — '카드'라는 신호 */
+    .auc-gdeal-fly::after { content: ""; position: absolute; left: 50%; top: 50%; width: 28px; height: 28px;
+      margin: -14px 0 0 -14px; border: 1px solid rgba(255,255,255,.32); transform: rotate(45deg); }
 
     /* 착지 스냅 — 테이블에 꽂히는 느낌이라 원이 아니라 납작한 타원 */
     .auc-gcard-snap { position: absolute; top: 50%; left: 50%; width: 340px; height: 122px;
@@ -358,10 +370,10 @@ export const AuctionStyles = () => (
       64%,100% { opacity: 0; transform: scale(2.7); }
     }
     @keyframes aucGcFly {
-      0%   { opacity: 0; transform: translate(calc(-50% + 600px), calc(-50% - 50px)) rotate(28deg) scale(.82); filter: blur(2px); }
-      14%  { opacity: .8; }
-      70%  { opacity: .45; }
-      100% { opacity: 0; transform: translate(calc(-50% - 660px), calc(-50% + 70px)) rotate(-165deg) scale(.68); filter: blur(7px); }
+      0%   { opacity: 0; transform: translate(calc(-50% + 580px), calc(-50% - 40px)) rotate(16deg) scale(.96); }
+      12%  { opacity: 1; }
+      72%  { opacity: 1; filter: blur(0); }
+      100% { opacity: 0; transform: translate(calc(-50% - 620px), calc(-50% + 60px)) rotate(-88deg) scale(.9); filter: blur(3px); }
     }
     @media (prefers-reduced-motion: reduce) {
       .auc-gcard, .auc-gcard-holo { animation: none; }

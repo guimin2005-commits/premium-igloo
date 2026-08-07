@@ -1519,9 +1519,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       const prof = p.revealed && p.discordId ? profiles[p.discordId] : null;
                       const callable = role === "host" && auction.status === "진행중" && (p.status === "대기" || p.status === "유찰") && !(auction.phase === 1 && p1Role && p.phase !== 1) && auction.phase > 0;
                       return (
-                        <div key={i} className={`flex flex-col rounded-xl border p-3.5 transition-colors ${p.status === "경매중" ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : p.status === "낙찰" ? "border-white/5 bg-black/20" : p.status === "유찰" ? "border-orange-500/20 bg-orange-500/[0.03]" : p.status === "배정중" ? "border-white/25 bg-white/[0.04]" : "border-white/5 bg-black/25 hover:border-white/15"}`}>
+                        /* 📌 골든 카드는 이 목록에서 가장 중요한 매물 — 금박으로 확실히 띄운다 (이전엔 회색이라 비활성처럼 보였다) */
+                        <div key={i} className={`group flex flex-col rounded-xl border p-3.5 transition-colors ${p.isAllPos && !hidden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.13] to-amber-500/[0.02] shadow-[0_0_20px_-6px_rgba(251,191,36,0.4)]" : p.status === "경매중" ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : p.status === "낙찰" ? "border-white/5 bg-black/20" : p.status === "유찰" ? "border-orange-500/20 bg-orange-500/[0.03]" : p.status === "배정중" ? "border-white/25 bg-white/[0.04]" : "border-white/5 bg-black/25 hover:border-white/15"}`}>
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-[8px] font-black tracking-[0.2em] text-gray-600 uppercase">{p.isAllPos && !hidden ? "Golden" : `P${String(i + 1).padStart(2, "0")}`}</span>
+                            <span className={`text-[8px] font-black tracking-[0.2em] uppercase ${p.isAllPos && !hidden ? "text-amber-400" : "text-gray-600"}`}>{p.isAllPos && !hidden ? "Golden" : `P${String(i + 1).padStart(2, "0")}`}</span>
                             {p.status === "경매중" ? <span className="text-[9px] font-black text-gray-200 animate-pulse">LIVE</span>
                               : p.status === "배정중" ? <span className="text-[9px] font-black text-gray-200">배정 중</span>
                               : p.status === "유찰" ? <span className="text-[9px] font-black text-orange-400">유찰</span>
@@ -1549,23 +1550,26 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                   </div>
                                 </div>
                               ) : (
-                                <p className={`text-sm font-black truncate mb-1 ${p.isAllPos ? "auc-gold-text" : "text-white"}`}>{p.isAllPos ? "올 포지션" : p.alias}</p>
+                                /* 그라디언트 텍스트는 작은 글씨에서 뭉개져 회색으로 보인다 → 골든은 단색 금색으로 */
+                                <p className={`text-sm font-black truncate mb-1 ${p.isAllPos ? "text-amber-300" : "text-white"}`}>{p.isAllPos ? "올 포지션" : p.alias}</p>
                               )}
                               {/* 📌 낙찰된 선수는 이미 끝난 매물 — 티어·스카우터를 반복 노출하지 않는다 (목록 전체의 글자량 감소) */}
                               {p.isAllPos ? (
-                                <p className="text-[11px] font-bold text-gray-600 mb-2">티어 비공개</p>
+                                <p className="text-[11px] font-black text-amber-200/70 mb-2">티어 비공개 · 슬롯 자유</p>
                               ) : p.status === "낙찰" ? null : (
-                                /* 값만 남기고 라벨은 뺀다 — 최고 → 현재 는 화살표로 읽힌다 */
                                 <div className="mb-2 mt-0.5">
-                                  <p className="text-[13px] font-black truncate">
-                                    <span className="text-white">{p.peakTier || "?"}</span>
-                                    <span className="text-gray-700 mx-1">→</span>
-                                    <span className="text-gray-400">{p.currentTier || "?"}</span>
-                                  </p>
+                                  {/* 화살표는 '성장'으로 오독된다 → 현재를 크게, 최고는 위에 작게 */}
+                                  <p className="auc-label-xs text-gray-700 truncate">최고 {p.peakTier || "?"}</p>
+                                  <p className="text-[15px] font-black text-white truncate leading-tight mt-0.5">{p.currentTier || "?"}</p>
                                   {canSeePos(p) && (
-                                    /* 값만 나열 — '주/부/모스트' 라벨은 카드에서 뺀다 */
-                                    <p className="text-[11px] font-black text-gray-200 mt-1.5 pt-1.5 border-t border-white/[0.07] leading-snug break-keep">
-                                      {revealParts(p).map((r) => r.v).join(" · ")}
+                                    /* 주 포지션만 흰색 볼드 — 입찰 판단의 핵심이 평평해지지 않도록 */
+                                    <p className="text-[11px] font-black mt-1.5 pt-1.5 border-t border-white/[0.07] leading-snug break-keep">
+                                      {revealParts(p).map((r, ri) => (
+                                        <span key={ri}>
+                                          {ri > 0 && <span className="text-gray-700 mx-1">·</span>}
+                                          <span className={ri === 0 ? "text-white" : r.pos ? "text-gray-500" : "text-gray-400"}>{r.v}</span>
+                                        </span>
+                                      ))}
                                     </p>
                                   )}
                                 </div>
@@ -1588,7 +1592,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             ) : p.status === "배정중" && role === "host" ? (
                               <button onClick={() => setConfirmCfg({ title: "낙찰 취소", message: `${p.alias} 선수의 낙찰(배정 대기)을 취소하고 대기 상태로 되돌립니다.`, confirmLabel: "취소 확정", onConfirm: () => act({ action: "host:unsold", playerIdx: i }) })} className="w-full text-[10px] font-black text-orange-400/80 hover:text-orange-400 bg-white/5 border border-white/10 py-1.5 rounded-lg transition-colors">낙찰 취소</button>
                             ) : callable ? (
-                              <button onClick={() => act({ action: "host:call", playerIdx: i })} className="w-full text-[10px] font-black text-white bg-[#e91e3f]/85 hover:bg-[#e91e3f] py-1.5 rounded-lg transition-colors">호명</button>
+                              /* 📌 20장이 전부 레드 버튼이면 포인트 컬러가 죽는다 → 데스크톱에선 호버 시에만 드러낸다
+                                  (자리는 항상 확보해 레이아웃이 튀지 않게. 터치 기기는 호버가 없으므로 항상 표시) */
+                              <button
+                                onClick={() => act({ action: "host:call", playerIdx: i })}
+                                className="w-full text-[10px] font-black text-white bg-[#e91e3f]/85 hover:bg-[#e91e3f] py-1.5 rounded-lg transition-all md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                              >
+                                호명
+                              </button>
                             ) : null}
                           </div>
                         </div>
@@ -2194,9 +2205,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {/* 중앙 글로우 */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-yellow-400/20 blur-[100px] rounded-full animate-[gcGlow_4.3s_ease-in-out_forwards]"></div>
 
-          {/* 리플 — 덱에서 튕겨 나온 카드들이 먼저 스쳐 간다 (사운드의 촤르르 구간) */}
-          {[0, 0.12, 0.26, 0.4, 0.55].map((d, i) => (
-            <span key={i} className="auc-gdeal-fly" style={{ animationDelay: `${0.15 + d}s`, marginTop: `${(i - 2) * 26}px` }}></span>
+          {/* 리플 — 덱에서 튕겨 나온 '일반 카드'가 먼저 스쳐 간다 (사운드의 촤르르 구간).
+              장수를 줄이고 간격을 벌려, 스치는 하나하나가 카드로 보이도록 한다. */}
+          {[0, 0.2, 0.42, 0.62].map((d, i) => (
+            <span key={i} className="auc-gdeal-fly" style={{ animationDelay: `${0.12 + d}s`, marginTop: `${(i - 1.5) * 40}px` }}></span>
           ))}
 
           {/* 착지 스냅 — 테이블에 꽂히는 납작한 파문 */}
