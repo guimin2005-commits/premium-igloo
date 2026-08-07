@@ -63,7 +63,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const roleKeyRef = useRef("host"); // 알림 로그 저장 키로 쓰는 현재 역할
   const [goldenFx, setGoldenFx] = useState(false);           // 황금카드 등장 애니메이션
   const [nextFx, setNextFx] = useState<string | null>(null); // 다음 매물 전환 배너
-  const [mobileTab, setMobileTab] = useState<"main" | "teams">("main"); // 모바일 섹션 전환 (경매+채팅 통합 / 팀 현황)
+  const [mobileTab, setMobileTab] = useState<"main" | "teams" | "chat">("main"); // 모바일 섹션 전환 (경매 / 팀 / 채팅)
   const [invModal, setInvModal] = useState<number | null>(null); // 인벤토리 팝업 대상 리더 idx
   const [dragCard, setDragCard] = useState<number | null>(null); // 드래그 중인 인벤토리 카드 idx
   const [assignWarn, setAssignWarn] = useState<{ invIdx: number; slot: string; name: string } | null>(null); // 최초 1회 배정 경고
@@ -82,6 +82,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [adjustAmount, setAdjustAmount] = useState("");
   const [posSetTarget, setPosSetTarget] = useState<number | null>(null); // 리더 포지션 지정 모달
 
+  const [chatUnread, setChatUnread] = useState(0); // 모바일에서 채팅 탭에 없을 때 쌓인 새 메시지
   const [bidFlash, setBidFlash] = useState<{ idx: number; n: number } | null>(null); // 입찰한 팀 강조 (좌측 레일)
   const [showSystemChat, setShowSystemChat] = useState(true); // 채팅의 공지 표시 on/off
   const [noticeOpen, setNoticeOpen] = useState(false);        // 알림함 모달
@@ -286,7 +287,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           const fresh = d.chat.filter((m: any) => !chatIds.current.has(m._id));
           if (fresh.length) {
             fresh.forEach((m: any) => chatIds.current.add(m._id));
-            if (fresh.some((m: any) => !m.isSystem)) sfxChat();
+            if (fresh.some((m: any) => !m.isSystem)) { sfxChat(); setChatUnread((u) => u + fresh.filter((m: any) => !m.isSystem).length); }
             setChat((prev) => [...prev, ...fresh].slice(-150));
             lastChatAt.current = d.chat[d.chat.length - 1].createdAt;
           }
@@ -638,7 +639,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             const isOverflowSlot = overflowing && po.slot === slot;
             const col = roleColor(slot);
             return (
-              <div key={slot} className="flex-1 min-w-[132px] px-3.5 first:pl-0 last:pr-0 py-1 border-l border-white/[0.07] first:border-l-0">
+              <div key={slot} className="flex-1 min-w-[108px] sm:min-w-[132px] px-2.5 sm:px-3.5 first:pl-0 last:pr-0 py-1 border-l border-white/[0.07] first:border-l-0">
                 {/* 포지션 머리글 — 색 밑줄 한 줄 */}
                 <div className={`flex items-baseline justify-between pb-1.5 mb-2 border-b ${isOverflowSlot ? "border-amber-400/60" : "border-white/15"}`}>
                   <span className={`text-[10px] font-black tracking-[0.14em] ${isOverflowSlot ? "text-amber-300" : col.text}`}>{roleAbbr(slot)}</span>
@@ -900,7 +901,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               type="range" min={0} max={100} value={soundOn ? volume : 0}
               onChange={(e) => { const v = Number(e.target.value); setVolume(v); if (v > 0 && !soundOn) setSoundOn(true); }}
               onMouseUp={() => playTone(660, 0.06, 0.04)}
-              className="w-16 h-1 accent-white cursor-pointer"
+              className="hidden sm:block w-16 h-1 accent-white cursor-pointer"
               title={`볼륨 ${volume}%`}
             />
           </div>
@@ -958,18 +959,26 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      {/* 📱 모바일 섹션 전환 탭 — 경매+채팅 통합 (라이브 스트리밍 스타일) */}
-      <div className="lg:hidden sticky top-[6.7rem] z-20 w-full px-4 py-2 bg-[#090909]/92 backdrop-blur-xl border-b border-white/5">
-        <div className="grid grid-cols-2 gap-1.5">
-          {([["main", "경매 · 채팅"], ["teams", isThird ? "팀 현황" : "타 팀 현황"]] as const).map(([key, label]) => (
-            <button key={key} onClick={() => { setMobileTab(key); sfxSelect(); }} className={`py-2 text-xs font-black border-b-2 transition-all ${mobileTab === key ? "border-[#e91e3f] text-white" : "border-white/10 text-gray-600"}`}>
+      {/* 📱 모바일 섹션 전환 탭 — 한 탭에 다 쌓지 않고 셋으로 나눈다 (경매 / 팀 / 채팅) */}
+      <div className="lg:hidden sticky top-[6.7rem] z-20 w-full px-4 bg-[#090909]/92 backdrop-blur-xl border-b border-white/5">
+        <div className="grid grid-cols-3">
+          {([["main", "경매"], ["teams", isThird ? "팀" : "타 팀"], ["chat", "채팅"]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => { setMobileTab(key); if (key === "chat") setChatUnread(0); sfxSelect(); }}
+              className={`relative py-2.5 text-xs font-black border-b-2 transition-all ${mobileTab === key ? "border-[#e91e3f] text-white" : "border-white/10 text-gray-600"}`}
+            >
               {label}
+              {/* 채팅 탭에 있지 않을 때 새 메시지가 오면 점으로 알린다 */}
+              {key === "chat" && mobileTab !== "chat" && chatUnread > 0 && (
+                <span className="absolute top-1.5 right-1/2 translate-x-[26px] w-1.5 h-1.5 rounded-full bg-[#e91e3f]" />
+              )}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="w-full max-w-[1720px] mx-auto px-4 md:px-8 py-4 lg:py-6 flex-1 flex flex-wrap gap-5 items-start">
+      <div className="w-full max-w-[1720px] mx-auto px-4 md:px-8 pt-4 pb-28 lg:py-6 flex-1 flex flex-wrap gap-5 items-start">
 
         {/* ═══ 좌측 세로 레일: 팀 현황판 ═══ */}
         <aside className={`${mobileTab === "teams" ? "block" : "hidden"} lg:block w-full lg:w-[280px] shrink-0 order-2 lg:order-1 lg:sticky lg:top-36 lg:max-h-[calc(100vh-11rem)] lg:overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full lg:pr-1`}>
@@ -1154,7 +1163,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               · 올 포지션 : 배경 자체가 골드 그라데이션으로 전환 (등장 임팩트) */}
           <div className={`relative border overflow-hidden min-h-[230px] transition-colors duration-500 ${isGoldenLot ? "auc-stage-golden" : "auc-stage-panel border-white/15"}`}>
             <span className={`absolute inset-x-0 top-0 h-[2px] z-10 ${isGoldenLot ? "auc-stage-goldline" : curPlayer ? "bg-[#e91e3f]" : "bg-white/20"}`} />
-            <div className="p-6 md:p-8 relative min-h-[230px]">
+            <div className="p-4 sm:p-6 md:p-8 relative min-h-[230px]">
               <div className={`absolute -top-16 -right-16 w-52 h-52 blur-[70px] rounded-full pointer-events-none animate-[pulseGlow_4s_ease-in-out_infinite] ${isGoldenLot ? "bg-amber-300/15" : "bg-white/[0.06]"}`}></div>
 
               {curPlayer ? (
@@ -1164,7 +1173,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       <p className={`auc-label mb-2 ${curPlayer.isAllPos ? "text-amber-300" : "text-gray-500"}`}>
                         {curPlayer.isAllPos ? "Golden Card" : `On the Block · Phase ${curPlayer.phase}`}
                       </p>
-                      <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-2">
+                      <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight mb-2">
                         {curPlayer.isAllPos ? <span className="auc-gold-text">올 포지션 선수</span> : curPlayer.alias}
                       </h2>
                     </div>
@@ -1213,7 +1222,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         {cells.map((c, ci) => (
                           <div
                             key={ci}
-                            className={`min-w-[112px] px-4 first:pl-0 last:pr-0 border-l first:border-l-0 ${isGoldenLot ? "border-amber-400/20" : "border-white/[0.09]"} ${c.l === "모스트" || c.l.includes("모스트") ? "flex-[2]" : "flex-1"}`}
+                            className={`min-w-[88px] sm:min-w-[112px] px-2.5 sm:px-4 first:pl-0 last:pr-0 border-l first:border-l-0 ${isGoldenLot ? "border-amber-400/20" : "border-white/[0.09]"} ${c.l === "모스트" || c.l.includes("모스트") ? "flex-[2]" : "flex-1"}`}
                           >
                             <p className={`auc-cap mb-1.5 ${isGoldenLot ? "text-amber-300/60" : "text-gray-600"}`}>{c.l}</p>
                             <p
@@ -1652,8 +1661,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             </>
                           )}
 
-                          {/* 상태 문구는 상단 뱃지로 이미 드러나므로 아래에는 '행동/결과'만 남긴다 */}
-                          <div className={`mt-auto ${p.status === "낙찰" || (p.status === "배정중" && role === "host") || callable ? "pt-1.5 border-t border-white/[0.05]" : ""}`}>
+                          {/* 상태 문구는 상단 뱃지로 이미 드러나므로 아래에는 '행동/결과'만 남긴다.
+                              아직 팔리지 않아 표시할 게 없으면 선 하나만 그어 카드 바닥을 맞춘다. */}
+                          <div className={`mt-auto border-t border-white/[0.05] ${p.status === "낙찰" || (p.status === "배정중" && role === "host") || callable ? "pt-1.5" : ""}`}>
                             {p.status === "낙찰" ? (
                               <div className="flex items-center gap-1.5">
                                 <p className="text-[10px] font-bold text-gray-500 truncate flex-1">{auction.leaders[p.soldTo]?.name} · {p.soldPrice?.toLocaleString()} Pt</p>
@@ -1690,10 +1700,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         {/* ═══ 우측: 실시간 채팅 + 로그 ═══ */}
         {/* 모바일: 경매 탭에 채팅이 함께 표시 (스트리밍 스타일 · 컴팩트 높이) */}
         {/* 알림 로그 패널은 제거 — 스카우터 결과는 즉시 팝업 + 콘솔의 '알림함'에서 모아 본다 */}
-        <div className={`${mobileTab === "main" ? "flex" : "hidden"} lg:flex w-full xl:w-[350px] shrink-0 order-3 flex-col gap-4 xl:sticky xl:top-36 xl:self-start`}>
+        <div className={`${mobileTab === "chat" ? "flex" : "hidden"} lg:flex w-full xl:w-[350px] shrink-0 order-3 flex-col gap-4 xl:sticky xl:top-36 xl:self-start`}>
 
           {/* 넓은 화면에서만 세로로 끝없이 늘어나 길었다 → xl 에서만 상한을 둔다 (좁은 화면 높이는 종전 그대로) */}
-          <div className="bg-[#0d0d0d] border border-white/[0.07] flex flex-col overflow-hidden h-[40vh] max-h-[360px] lg:h-[46vh] xl:h-[46vh] xl:max-h-[440px]">
+          <div className="bg-[#0d0d0d] border border-white/[0.07] flex flex-col overflow-hidden h-[calc(100dvh-15rem)] max-h-none lg:h-[46vh] lg:max-h-[360px] xl:h-[46vh] xl:max-h-[440px]">
             <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2 shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>
               <span className="auc-label text-gray-200">실시간 채팅</span>
@@ -2519,6 +2529,48 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           </AucModal>
         );
       })()}
+
+      {/* 📱 모바일 고정 입찰 바 — 타이머가 15초인데 입찰 버튼이 스크롤 뒤에 있으면 못 지른다.
+             화면 아래에 붙여 어느 탭에 있든 바로 입찰할 수 있게 한다. (PC 는 무대 안 입찰 UI 사용) */}
+      {myLeader && auction.status === "진행중" && curPlayer && scoutLeft === 0 && strategyLeft === 0 && timeLeft !== null && timeLeft > 0 && (
+        <div
+          className="lg:hidden fixed inset-x-0 bottom-0 z-[95] border-t border-white/15 bg-[#0b0b0c]/97 backdrop-blur-xl"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          <div className="flex items-stretch">
+            {/* 남은 시간 */}
+            <div className={`shrink-0 w-14 flex flex-col items-center justify-center border-r border-white/12 ${timeLeft <= 5 ? "bg-[#e91e3f]/15" : ""}`}>
+              <span className={`text-xl font-black tabular-nums leading-none ${timeLeft <= 5 ? "text-[#e91e3f]" : "text-white"}`}>{timeLeft}</span>
+              <span className="auc-label-xs text-gray-600 mt-0.5">Sec</span>
+            </div>
+            {/* 현재가 */}
+            <div className="shrink-0 px-3 flex flex-col justify-center border-r border-white/12">
+              <span className="auc-cap text-gray-600 leading-none">현재가</span>
+              <span className="text-[13px] font-black text-[#ff5c77] tabular-nums leading-tight mt-1">
+                {(cur.leaderIdx === null ? basePrice : cur.price).toLocaleString()}
+              </span>
+            </div>
+            {/* 빠른 입찰 */}
+            <div className="flex-1 flex items-stretch divide-x divide-white/12 min-w-0">
+              {[S.minIncrement, S.minIncrement * 5, S.minIncrement * 10].map((inc) => {
+                const result = cur.leaderIdx === null ? basePrice : cur.price + inc;
+                const affordable = myLeader.points >= result;
+                return (
+                  <button
+                    key={inc}
+                    onClick={() => doBid(result)}
+                    disabled={!affordable}
+                    className={`flex-1 min-w-0 py-2.5 text-center transition-colors ${affordable ? "active:bg-[#e91e3f]/25" : "opacity-30"}`}
+                  >
+                    <span className="block text-[13px] font-black text-white leading-tight tabular-nums">+{inc.toLocaleString()}</span>
+                    <span className="block text-[9px] font-bold text-gray-500 tabular-nums">{result.toLocaleString()}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className="fixed bottom-20 md:bottom-8 left-1/2 -translate-x-1/2 z-[200] bg-[#1a1a1a] border border-white/15 text-white text-xs font-bold px-5 py-3 rounded-full shadow-2xl animate-in fade-in slide-in-from-bottom-2">
