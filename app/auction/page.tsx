@@ -208,46 +208,83 @@ export default function AuctionListPage() {
       <LuxStyles />
       <AuctionStyles />
 
-      {/* ── 표제부 (경매 원장 헤더) ── */}
-      <section className="relative w-full pt-14 md:pt-20 px-6">
-        <div className="max-w-5xl mx-auto relative z-10">
-          <Reveal>
-            {/* 이중 규칙선 */}
-            <div className="auc-rule-top" />
-            <div className="pt-6 flex flex-wrap items-start justify-between gap-6">
-              <div className="min-w-0">
-                <p className="auc-label text-gray-500 mb-4">Premium Igloo · Player Auction</p>
-                <h1 className="auc-serif text-4xl md:text-6xl leading-[1.05] text-white mb-4">
-                  선수 경매<span className="text-[#e91e3f]">.</span>
-                </h1>
-                <p className="text-gray-400 text-sm leading-relaxed max-w-md">
-                  팀장이 보유 포인트로 선수를 낙찰받는 실시간 경매입니다.<br className="hidden sm:block" />
-                  아래 목록에서 진행 중인 경매장에 입장하세요.
-                </p>
-              </div>
-              {isAdmin && (
-                <button onClick={() => setShowCreate(!showCreate)} className="shrink-0 border border-[#e91e3f] text-[#e91e3f] hover:bg-[#e91e3f] hover:text-white font-bold text-xs px-6 py-3 transition-colors auc-label">
-                  {showCreate ? "닫기" : "경매 개최"}
-                </button>
-              )}
-            </div>
+      {/* ── 헤드라인 ── */}
+      <section className="relative w-full pt-14 md:pt-20 pb-2 px-6 overflow-hidden">
+        <div className="auc-aura w-[520px] h-[300px] -top-40 -left-24 bg-[#e91e3f]/[0.13] pointer-events-none" />
+        <div className="auc-aura w-[520px] h-[300px] -top-24 right-0 bg-[#4d7cfe]/[0.13] pointer-events-none" style={{ animationDelay: "-7s" }} />
 
-            {/* 요약 — 한 줄 원장 */}
-            <div className="mt-8 flex flex-wrap items-center gap-x-7 gap-y-2 py-3.5 border-y border-white/[0.09]">
-              {[
-                { l: "전체", v: auctions.length, c: "text-white" },
-                { l: "진행 중", v: auctions.filter((a: any) => a.status === "진행중").length, c: "text-[#e91e3f]" },
-                { l: "대기", v: auctions.filter((a: any) => a.status === "대기중").length, c: "text-gray-300" },
-                { l: "종료", v: auctions.filter((a: any) => a.status === "종료").length, c: "text-gray-600" },
-              ].map((m) => (
-                <span key={m.l} className="flex items-baseline gap-2">
-                  <span className="auc-label text-gray-600">{m.l}</span>
-                  <span className={`auc-num text-lg font-bold ${m.c}`}>{String(m.v).padStart(2, "0")}</span>
-                </span>
-              ))}
-              <span className="ml-auto auc-label text-gray-700 hidden sm:block">{new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}</span>
+        <div className="max-w-5xl mx-auto relative z-10">
+          {/* 듀오톤 사선 배지 */}
+          <div className="auc-in flex items-center gap-3 mb-6" style={{ animationDelay: "40ms" }}>
+            <span className="auc-skew auc-duo px-3 py-1">
+              <span className="auc-unskew auc-label text-white">Live Auction</span>
+            </span>
+            <span className="h-px flex-1 max-w-[260px] bg-gradient-to-r from-[#e91e3f]/60 via-[#a52a86]/40 to-transparent" />
+          </div>
+
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <div className="min-w-0">
+              <h1 className="auc-in text-5xl md:text-7xl font-black tracking-tighter leading-[0.92] mb-4" style={{ animationDelay: "120ms" }}>
+                <span className="text-white">선수 </span><span className="auc-duo-text">경매</span>
+              </h1>
+              <p className="auc-in text-gray-400 text-sm md:text-base leading-relaxed max-w-lg" style={{ animationDelay: "200ms" }}>
+                팀장이 보유 포인트를 걸고 선수를 낙찰받는 실시간 경매.<br className="hidden sm:block" />
+                호가는 초 단위로 움직이고, 한 번 내려간 망치는 되돌릴 수 없습니다.
+              </p>
             </div>
-          </Reveal>
+            {isAdmin && (
+              <button onClick={() => setShowCreate(!showCreate)} className="auc-in auc-skew shrink-0 auc-duo px-7 py-3.5 transition-transform hover:scale-[1.04] active:scale-95" style={{ animationDelay: "260ms" }}>
+                <span className="auc-unskew auc-label text-white">{showCreate ? "닫기" : "경매 개최"}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ── 라이브 티커 ── */}
+      <section className="auc-in relative w-full mt-8 overflow-hidden border-y border-white/[0.08] bg-black/40" style={{ animationDelay: "320ms" }}>
+        <span className="absolute left-0 inset-y-0 w-1 auc-duo z-10" />
+        {(() => {
+          const live = auctions.filter((a: any) => a.status === "진행중");
+          const ready = auctions.filter((a: any) => a.status === "대기중");
+          const items = live.length
+            ? live.map((a: any) => ({ t: a.title, g: a.game, live: true }))
+            : ready.length
+              ? ready.map((a: any) => ({ t: a.title, g: a.game, live: false }))
+              : [{ t: "현재 열린 경매가 없습니다 — 다음 경매를 기다려주세요", g: "", live: false }];
+          const strip = [...items, ...items, ...items, ...items];
+          return (
+            <div className="py-3 flex">
+              <div className="auc-ticker">
+                {strip.map((it, i) => (
+                  <span key={i} className="flex items-center gap-3 px-7 shrink-0">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${it.live ? "bg-[#e91e3f] auc-pulse" : "bg-[#4d7cfe]/70"}`} />
+                    <span className="auc-label text-gray-600 shrink-0">{it.live ? "Live" : it.g ? "Soon" : "Idle"}</span>
+                    <span className={`text-[13px] font-bold whitespace-nowrap ${it.live ? "text-white" : "text-gray-400"}`}>{it.t}</span>
+                    {it.g && <span className="text-[11px] font-bold text-gray-600 whitespace-nowrap">/ {it.g}</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+      </section>
+
+      {/* ── 요약 지표 ── */}
+      <section className="w-full px-6 pt-10">
+        <div className="max-w-5xl mx-auto auc-in grid grid-cols-2 md:grid-cols-4" style={{ animationDelay: "380ms" }}>
+          {[
+            { l: "전체 경매", v: auctions.length, spine: "bg-white/15", c: "text-white" },
+            { l: "진행 중", v: auctions.filter((a: any) => a.status === "진행중").length, spine: "auc-duo", c: "auc-duo-text" },
+            { l: "대기", v: auctions.filter((a: any) => a.status === "대기중").length, spine: "bg-[#4d7cfe]/60", c: "text-[#8aa8ff]" },
+            { l: "종료", v: auctions.filter((a: any) => a.status === "종료").length, spine: "bg-white/10", c: "text-gray-600" },
+          ].map((m) => (
+            <div key={m.l} className="relative pl-4 py-2">
+              <span className={`absolute left-0 top-1 bottom-1 w-[3px] ${m.spine}`} />
+              <p className="auc-label text-gray-600 mb-1">{m.l}</p>
+              <p className={`text-3xl font-black auc-num ${m.c}`}>{m.v}</p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -497,74 +534,79 @@ export default function AuctionListPage() {
           </div>
           </Reveal>
         ) : (
-          /* 📌 LOT 원장 — 행 단위 목록 (카드 없음) */
-          <div>
-            {/* 표 머리 */}
-            <div className="hidden md:flex items-center gap-5 px-4 pb-2.5 border-b border-white/[0.09]">
-              <span className="auc-label text-gray-700 w-12 shrink-0">Lot</span>
-              <span className="auc-label text-gray-700 flex-1">경매명</span>
-              <span className="auc-label text-gray-700 w-24 shrink-0 text-right">구성</span>
-              <span className="auc-label text-gray-700 w-24 shrink-0 text-right">개최일</span>
-              <span className="auc-label text-gray-700 w-20 shrink-0 text-right">상태</span>
-            </div>
-
+          /* 📌 듀오톤 슬래브 — 좌측 척추가 호버 시 확장되고 광택이 스쳐 지나감 */
+          <div className="border-t border-white/[0.07]">
             {auctions.map((a, idx) => {
               const isLive = a.status === "진행중";
               const isEnd = a.status === "종료";
               return (
-                <Reveal key={a._id} delay={Math.min(idx, 6) * 60}>
-                  <div
-                    onClick={() => router.push(`/auction/${a._id}`)}
-                    className="auc-row group cursor-pointer border-b border-white/[0.07] px-4 py-4 flex flex-wrap md:flex-nowrap items-center gap-x-5 gap-y-2"
-                  >
-                    {/* LOT 번호 */}
-                    <span className={`auc-num w-12 shrink-0 text-lg font-bold ${isLive ? "text-[#e91e3f]" : isEnd ? "text-gray-700" : "text-gray-500"}`}>
-                      {String(auctions.length - idx).padStart(2, "0")}
-                    </span>
+                <div
+                  key={a._id}
+                  onClick={() => router.push(`/auction/${a._id}`)}
+                  className={`auc-slab auc-in group cursor-pointer border-b border-white/[0.07] pl-6 pr-4 py-5 flex flex-wrap md:flex-nowrap items-center gap-x-6 gap-y-3 ${isEnd ? "opacity-60 hover:opacity-100" : ""}`}
+                  style={{ animationDelay: `${420 + Math.min(idx, 8) * 70}ms` }}
+                >
+                  {/* 좌측 듀오톤 척추 */}
+                  <span className={`auc-spine ${isLive ? "auc-duo" : isEnd ? "bg-white/10" : "bg-gradient-to-b from-[#4d7cfe]/70 to-[#4d7cfe]/20"}`} />
 
-                    {/* 경매명 + 종목 */}
-                    <div className="min-w-0 flex-1 order-3 md:order-none w-full md:w-auto">
-                      <p className={`text-[15px] md:text-base font-bold truncate transition-colors ${isEnd ? "text-gray-500" : "text-white"} group-hover:text-[#ff5c77]`}>
-                        {a.title}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                        {a.game && <span className="text-[11px] font-bold text-gray-500">{a.game}</span>}
-                        {a.isTest && <span className="text-[10px] font-bold text-amber-400/90 border border-amber-500/30 px-1.5 leading-[1.5]">테스트</span>}
-                      </div>
-                    </div>
-
-                    {/* 구성 */}
-                    <span className="hidden md:block w-24 shrink-0 text-right auc-num text-xs text-gray-500">
-                      리더 {a.leaderCount} · 선수 {a.playerCount}
-                    </span>
-
-                    {/* 개최일 */}
-                    <span className="hidden md:block w-24 shrink-0 text-right auc-num text-xs text-gray-600">
-                      {new Date(a.createdAt).toLocaleDateString("ko-KR", { year: "2-digit", month: "2-digit", day: "2-digit" })}
-                    </span>
-
-                    {/* 상태 도장 */}
-                    <span className="w-20 shrink-0 md:text-right ml-auto md:ml-0">
-                      {isLive ? (
-                        <span className="auc-stamp text-[#e91e3f] bg-[#e91e3f]/10">
-                          <span className="relative flex w-1.5 h-1.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#e91e3f] opacity-70"></span>
-                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#e91e3f]"></span>
-                          </span>
-                          Live
+                  {/* 경매명 */}
+                  <div className="min-w-0 flex-1 w-full md:w-auto">
+                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                      {a.game && (
+                        <span className="auc-skew bg-white/[0.06] border border-white/10 px-2 py-0.5">
+                          <span className="auc-unskew text-[10px] font-black text-gray-300">{a.game}</span>
                         </span>
-                      ) : isEnd ? (
-                        <span className="auc-stamp text-gray-600">Closed</span>
-                      ) : (
-                        <span className="auc-stamp text-gray-400">Ready</span>
                       )}
-                    </span>
+                      {a.isTest && (
+                        <span className="auc-skew bg-amber-400/10 border border-amber-400/30 px-2 py-0.5">
+                          <span className="auc-unskew text-[10px] font-black text-amber-300">테스트</span>
+                        </span>
+                      )}
+                      <span className="auc-label text-gray-700">{new Date(a.createdAt).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}</span>
+                    </div>
+                    <p className={`text-lg md:text-xl font-black tracking-tight truncate transition-colors ${isEnd ? "text-gray-500" : "text-white"} ${isLive ? "group-hover:text-[#ff4d68]" : "group-hover:text-[#8aa8ff]"}`}>
+                      {a.title}
+                    </p>
+                  </div>
+
+                  {/* 구성 — 큰 숫자 */}
+                  <div className="hidden sm:flex items-end gap-6 shrink-0">
+                    {[{ l: "팀", v: a.leaderCount }, { l: "선수", v: a.playerCount }].map((s) => (
+                      <div key={s.l} className="text-right">
+                        <p className="auc-label text-gray-700 mb-0.5">{s.l}</p>
+                        <p className="auc-num text-2xl font-black text-gray-300 leading-none">{s.v}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 상태 */}
+                  <div className="shrink-0 ml-auto md:ml-0 flex items-center gap-3">
+                    {isLive ? (
+                      <span className="auc-skew auc-duo px-3.5 py-1.5 flex items-center gap-2">
+                        <span className="auc-unskew flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white auc-pulse" />
+                          <span className="auc-label text-white">Live</span>
+                        </span>
+                      </span>
+                    ) : isEnd ? (
+                      <span className="auc-skew border border-white/12 px-3.5 py-1.5">
+                        <span className="auc-unskew auc-label text-gray-600">Closed</span>
+                      </span>
+                    ) : (
+                      <span className="auc-skew border border-[#4d7cfe]/45 px-3.5 py-1.5">
+                        <span className="auc-unskew auc-label text-[#8aa8ff]">Ready</span>
+                      </span>
+                    )}
 
                     {isAdmin && (
-                      <button onClick={(e) => { e.stopPropagation(); setDeleteId(a._id); }} className="shrink-0 auc-label text-gray-700 hover:text-red-400 transition-colors md:opacity-0 md:group-hover:opacity-100">삭제</button>
+                      <button onClick={(e) => { e.stopPropagation(); setDeleteId(a._id); }} className="auc-label text-gray-700 hover:text-red-400 transition-colors md:opacity-0 md:group-hover:opacity-100">삭제</button>
                     )}
+
+                    <svg className="w-5 h-5 text-gray-700 group-hover:text-white group-hover:translate-x-1.5 transition-all duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                    </svg>
                   </div>
-                </Reveal>
+                </div>
               );
             })}
           </div>
