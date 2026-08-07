@@ -17,14 +17,8 @@ const MegaphoneIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
   </svg>
 );
 
-// 📌 포지션 영문 약자 — 좁은 공간(슬롯 뱃지/요약 칩)에서 사용
-const ROLE_ABBR: Record<string, string> = {
-  탱커: "TNK", 딜러: "DPS", 힐러: "SUP",
-  탑: "TOP", 정글: "JGL", 미드: "MID", 원딜: "ADC", 서폿: "SUP", 서포터: "SUP",
-  타격대: "DUE", 척후대: "INI", 감시자: "SEN", 전략가: "CTR",
-  스쿼드: "SQD",
-};
-const roleAbbr = (name: string) => ROLE_ABBR[name] || (/^[A-Za-z]/.test(name) ? name.slice(0, 3).toUpperCase() : name.slice(0, 2));
+// 📌 포지션 표기는 방 전체에서 한글 그대로 통일 (좌측 레일 / 중앙 슬롯 보드 / 모달)
+//   영문 약자(TOP·JGL…)는 같은 화면에 한글 표기와 섞여 혼란을 줘서 제거했다.
 
 // 📌 포지션 색상 팔레트 — 역할 순서(index)대로 배정. 오버워치는 기존 색(파랑/레드/그린) 유지
 const SLOT_PALETTE = [
@@ -183,7 +177,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   // 타임업 버저
   const sfxTimeUp = useCallback(() => { playTone(220, 0.35, 0.05, "sawtooth"); }, [playTone]);
   // 채팅 수신 (아주 미세한 블립)
-  const sfxChat = useCallback(() => playTone(520, 0.04, 0.015), [playTone]);
+  // 채팅 수신 — 기존 값(0.04초·gain 0.015)은 다른 효과음에 묻혀 사실상 들리지 않아 두 음의 짧은 블립으로 교체
+  const sfxChat = useCallback(() => { playTone(660, 0.05, 0.03, "triangle"); setTimeout(() => playTone(880, 0.06, 0.026, "triangle"), 55); }, [playTone]);
+  // 채팅 전송 — 내가 보낸 메시지는 폴링에서 중복 제거되어 수신음이 울리지 않으므로 별도로 짧게
+  const sfxChatSend = useCallback(() => playTone(1046, 0.05, 0.022, "triangle"), [playTone]);
 
   // ── 폴링 (중복 방지: in-flight 가드 + 메시지 _id 중복 제거) ──
   useEffect(() => {
@@ -375,6 +372,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     if (d?.success && d.message?._id) {
       if (!chatIds.current.has(d.message._id)) {
         chatIds.current.add(d.message._id);
+        sfxChatSend();
         setChat((prev) => [...prev, d.message].slice(-150));
         if (!lastChatAt.current || new Date(d.message.createdAt) > new Date(lastChatAt.current)) {
           lastChatAt.current = d.message.createdAt;
@@ -651,7 +649,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
           return (
             <div key={slot} className={`flex items-start gap-2.5 py-1.5 border-b ${isOverflowSlot ? "border-amber-400/40" : "border-white/[0.06]"}`}>
-              <span className={`shrink-0 w-8 pt-px text-[9px] font-black tracking-wider ${isOverflowSlot ? "text-amber-300" : col.text}`}>{roleAbbr(slot)}</span>
+              {/* 포지션 표기는 방 전체에서 한글로 통일 (중앙 슬롯 보드와 동일) */}
+              <span className={`shrink-0 w-[38px] pt-px text-[10px] font-black tracking-tight ${isOverflowSlot ? "text-amber-300" : col.text}`}>{slot}</span>
               <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">
                 {entries.map(({ r, ri }: any) => {
                   const movable = isOverflowSlot && !r.golden;
@@ -699,6 +698,60 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
           );
         })}
+      </div>
+    );
+  };
+
+  // 📌 경매장 공용 팝업 — 방 안의 모든 모달이 같은 골격(상단 라인 · 라벨 · 제목 · 본문 · 분할 액션)을 쓴다
+  const MODAL_TONE: Record<string, { line: string; label: string }> = {
+    default: { line: "bg-white/35", label: "text-gray-500" },
+    danger: { line: "bg-[#e91e3f]", label: "text-[#e91e3f]" },
+    info: { line: "bg-blue-500", label: "text-blue-400" },
+    gold: { line: "auc-stage-goldline", label: "text-amber-300" },
+  };
+  const AucModal = ({
+    label, title, desc, tone = "default", onClose, wide, children, actions,
+  }: {
+    label: string; title: string; desc?: React.ReactNode; tone?: keyof typeof MODAL_TONE;
+    onClose?: () => void; wide?: boolean; children?: React.ReactNode;
+    actions?: { text: string; onClick: () => void; kind?: "primary" | "ghost" | "danger"; disabled?: boolean }[];
+  }) => {
+    const t = MODAL_TONE[tone] || MODAL_TONE.default;
+    return (
+      <div className="auc-modal-back animate-in fade-in" onClick={onClose}>
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className={`auc-modal ${wide ? "sm:max-w-lg" : "sm:max-w-sm"} animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200`}
+        >
+          <span className={`auc-modal-line ${t.line}`} />
+          <div className="px-6 sm:px-7 pt-6 sm:pt-7 pb-6">
+            <div className="flex items-baseline gap-3 mb-3">
+              <span className={`auc-label ${t.label}`}>{label}</span>
+              <span className="h-px flex-1 bg-white/10" />
+            </div>
+            <h2 className="text-lg font-black text-white leading-snug">{title}</h2>
+            {desc && <div className="text-xs text-gray-400 leading-relaxed whitespace-pre-line mt-2.5">{desc}</div>}
+            {children}
+          </div>
+          {actions && actions.length > 0 && (
+            <div className="flex border-t border-white/12">
+              {actions.map((a, ai) => (
+                <button
+                  key={ai}
+                  disabled={a.disabled}
+                  onClick={a.onClick}
+                  className={`flex-1 py-3.5 text-sm font-black transition-colors border-l border-white/12 first:border-l-0 disabled:opacity-35 disabled:cursor-not-allowed ${
+                    a.kind === "primary" ? "bg-[#e91e3f] hover:bg-[#d01634] text-white disabled:bg-white/[0.04] disabled:text-gray-600"
+                    : a.kind === "danger" ? "text-[#ff5c77] hover:bg-[#e91e3f] hover:text-white"
+                    : "text-gray-400 hover:text-white hover:bg-white/[0.06]"
+                  }`}
+                >
+                  {a.text}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -1041,7 +1094,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         {curPlayer.isAllPos ? "Golden Card" : `On the Block · Phase ${curPlayer.phase}`}
                       </p>
                       <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-2">
-                        {curPlayer.isAllPos ? <span className="lux-shimmer">올 포지션 선수</span> : curPlayer.alias}
+                        {curPlayer.isAllPos ? <span className="auc-gold-text">올 포지션 선수</span> : curPlayer.alias}
                       </h2>
                     </div>
 
@@ -1141,10 +1194,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             className={`group w-full flex items-baseline gap-2 pb-2 mb-3 border-b transition-colors ${curPlayer.isAllPos ? "border-amber-400/40 hover:border-amber-300" : "border-white/20 hover:border-white"}`}
                           >
                             <span className={`auc-label-xs ${curPlayer.isAllPos ? "text-amber-300/80" : "text-gray-500"}`}>Scouter</span>
-                            <span className={`text-[12px] font-black transition-colors ${curPlayer.isAllPos ? "text-amber-200" : "text-gray-200 group-hover:text-white"}`}>
-                              {curPlayer.isAllPos ? "모스트 공개" : "포지션 공개"}
-                            </span>
-                            <span className="ml-auto text-[11px] font-black tabular-nums text-gray-400 group-hover:text-white transition-colors">
+                            <span className="ml-auto text-[12px] font-black tabular-nums text-gray-300 group-hover:text-white transition-colors">
                               −{scoutCostOf(curPlayer).toLocaleString()} Pt
                             </span>
                           </button>
@@ -1442,7 +1492,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                   </div>
                                 </div>
                               ) : (
-                                <p className={`text-sm font-black truncate mb-1 ${p.isAllPos ? "lux-shimmer" : "text-white"}`}>{p.isAllPos ? "올 포지션" : p.alias}</p>
+                                <p className={`text-sm font-black truncate mb-1 ${p.isAllPos ? "auc-gold-text" : "text-white"}`}>{p.isAllPos ? "올 포지션" : p.alias}</p>
                               )}
                               {p.isAllPos ? (
                                 <p className="text-[11px] font-bold text-gray-600 mb-2">티어 비공개</p>
@@ -1634,14 +1684,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           doPlace(invIdx, slot);
         };
         return (
-          <div className="fixed inset-0 z-[118] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); }}>
+          <div className="auc-modal-back z-[118] animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); }}>
             {/* 고정 높이 — 카드가 늘어나도 팝업은 그대로, 카드 영역만 스크롤 */}
-            <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-4xl h-[88dvh] sm:h-[560px] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
-              <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
-                <span className="text-sm font-black text-white truncate">{l.name} 팀 인벤토리</span>
-                <span className="text-[10px] font-black text-gray-200 tabular-nums">{l.inventory?.length || 0}장</span>
-                {!mine && <span className="text-[9px] font-bold text-gray-600 border border-white/10 rounded px-1.5 py-0.5">열람 전용</span>}
-                <button onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); }} className="ml-auto p-1.5 -mr-1 text-gray-500 hover:text-white rounded-md hover:bg-white/5 transition-colors outline-none">
+            <div onClick={(e) => e.stopPropagation()} className="auc-modal sm:max-w-4xl h-[88dvh] sm:h-[560px] sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+              <span className="auc-modal-line bg-white/35" />
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/12 shrink-0">
+                <span className="auc-label text-gray-500">Inventory</span>
+                <span className="text-sm font-black text-white truncate">{l.name}</span>
+                <span className="text-[11px] font-black text-gray-400 tabular-nums">{l.inventory?.length || 0}장</span>
+                {!mine && <span className="auc-label-xs text-gray-600 border border-white/12 px-1.5 py-1">열람 전용</span>}
+                <button onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); }} className="ml-auto p-1.5 -mr-1 text-gray-500 hover:text-white hover:bg-white/5 transition-colors outline-none">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
@@ -1921,26 +1973,24 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
             {/* ⚠️ 최초 1회 — 배정 불가역 경고 */}
             {assignWarn && (
-              <div className="fixed inset-0 z-[124] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in" onClick={(e) => e.stopPropagation()}>
-                <div className="rounded-3xl bg-gradient-to-b from-[#e91e3f]/40 to-white/[0.02] p-px w-full max-w-sm">
-                  <div className="rounded-3xl bg-[#121212] p-7 text-center">
-                    <div className="w-14 h-14 mx-auto mb-4 bg-white/[0.07] border border-white/25 flex items-center justify-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-7 h-7 text-gray-200"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
-                    </div>
-                    <p className="text-[10px] font-black auc-mono text-gray-500 uppercase mb-2.5">Warning</p>
-                    <h2 className="text-lg font-black text-white mb-3">배정은 되돌릴 수 없습니다</h2>
-                    <p className="text-xs text-gray-400 leading-relaxed mb-2">
-                      <b className="text-white">{assignWarn.name}</b> 선수를 <b className={roleColor(assignWarn.slot).text}>[{assignWarn.slot}]</b> 에 배정합니다.
-                    </p>
-                    <p className="text-[11px] text-gray-500 leading-relaxed mb-7">한 번 배정한 선수는 인벤토리로 되돌릴 수 없습니다.<br />배정 후 조정은 <b className="text-gray-300">포지션 체인지(팀당 1회)</b>로만 가능합니다.</p>
-                    <div className="flex gap-3">
-                      <button onClick={() => setAssignWarn(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">취소</button>
-                      <button onClick={() => { const w = assignWarn; warnedRef.current = true; setAssignWarn(null); if (w) doPlace(w.invIdx, w.slot); }} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors">배정하기</button>
-                    </div>
-                    <p className="text-[9px] text-gray-700 mt-3">이 안내는 처음 한 번만 표시됩니다.</p>
-                  </div>
-                </div>
-              </div>
+              <AucModal
+                label="Warning"
+                tone="danger"
+                title="배정은 되돌릴 수 없습니다"
+                onClose={() => setAssignWarn(null)}
+                actions={[
+                  { text: "취소", onClick: () => setAssignWarn(null) },
+                  { text: "배정하기", kind: "primary", onClick: () => { const w = assignWarn; warnedRef.current = true; setAssignWarn(null); if (w) doPlace(w.invIdx, w.slot); } },
+                ]}
+              >
+                <p className="text-xs text-gray-400 leading-relaxed mt-2.5">
+                  <b className="text-white">{assignWarn.name}</b> 선수를 <b className={roleColor(assignWarn.slot).text}>[{assignWarn.slot}]</b> 에 배정합니다.
+                </p>
+                <p className="text-[11px] text-gray-500 leading-relaxed mt-3 pt-3 border-t border-white/[0.09]">
+                  한 번 배정한 선수는 인벤토리로 되돌릴 수 없습니다. 배정 후 조정은 <b className="text-gray-300">포지션 체인지(팀당 1회)</b>로만 가능합니다.
+                </p>
+                <p className="text-[9px] text-gray-700 mt-2">이 안내는 처음 한 번만 표시됩니다.</p>
+              </AucModal>
             )}
           </div>
         );
@@ -1948,100 +1998,100 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
       {/* 진행자 대행 슬롯 배정 (진행자 화면에서 배정 대기 시 — 좌측 레일 SlotBoard로도 가능) */}
 
-      {/* 공용 확인 모달 (럭스 디자인) */}
+      {/* 공용 확인 모달 */}
       {confirmCfg && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="relative rounded-3xl bg-gradient-to-b from-white/[0.1] to-white/[0.02] p-px w-full max-w-sm">
-            <div className="rounded-3xl bg-[#121212] p-8 text-center">
-              <p className="text-[10px] font-black auc-mono text-gray-500 uppercase mb-3">Confirm</p>
-              <h2 className="text-lg font-black text-white mb-3">{confirmCfg.title}</h2>
-              <p className="text-xs text-gray-400 leading-relaxed mb-8 whitespace-pre-line">{confirmCfg.message}</p>
-              <div className="flex gap-3">
-                <button onClick={() => setConfirmCfg(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">취소</button>
-                <button onClick={() => { confirmCfg.onConfirm(); setConfirmCfg(null); }} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors shadow-lg shadow-black/40">{confirmCfg.confirmLabel || "확인"}</button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AucModal
+          label="Confirm"
+          tone="danger"
+          title={confirmCfg.title}
+          desc={confirmCfg.message}
+          onClose={() => setConfirmCfg(null)}
+          actions={[
+            { text: "취소", onClick: () => setConfirmCfg(null) },
+            { text: confirmCfg.confirmLabel || "확인", kind: "primary", onClick: () => { confirmCfg.onConfirm(); setConfirmCfg(null); } },
+          ]}
+        />
       )}
 
       {/* 전략 타임 시작 모달 */}
       {strategyModalOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="relative rounded-3xl bg-gradient-to-b from-white/[0.1] to-white/[0.02] p-px w-full max-w-sm">
-            <div className="rounded-3xl bg-[#121212] p-8 text-center">
-              <p className="text-[10px] font-black auc-mono text-blue-400 uppercase mb-3">Strategy Time</p>
-              <h2 className="text-lg font-black text-white mb-3">전략 타임 시작</h2>
-              <p className="text-xs text-gray-400 mb-6">리더과 선정된 팀원들이 전략을 논의하는 시간입니다.<br/>진행 시간을 선택하세요. (진행 중 입찰 중지)</p>
-              <div className="grid grid-cols-3 gap-2 mb-6">
-                {[1, 3, 5].map((min) => (
-                  <button key={min} onClick={() => { act({ action: "host:strategy", seconds: min * 60 }); setStrategyModalOpen(false); }} className="py-3.5 rounded-xl text-sm font-black border border-white/10 bg-white/5 text-white hover:border-blue-400 hover:bg-blue-500/10 transition-all">{min}분</button>
-                ))}
-              </div>
-              <button onClick={() => setStrategyModalOpen(false)} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">취소</button>
-            </div>
+        <AucModal
+          label="Strategy Time"
+          tone="info"
+          title="전략 타임 시작"
+          desc="리더와 선정된 팀원들이 전략을 논의하는 시간입니다. 진행 시간을 선택하세요. (진행 중 입찰 중지)"
+          onClose={() => setStrategyModalOpen(false)}
+          actions={[{ text: "취소", onClick: () => setStrategyModalOpen(false) }]}
+        >
+          <div className="flex mt-5 border-t border-b border-white/12">
+            {[1, 3, 5].map((min) => (
+              <button
+                key={min}
+                onClick={() => { act({ action: "host:strategy", seconds: min * 60 }); setStrategyModalOpen(false); sfxSelect(); }}
+                className="flex-1 py-4 text-base font-black text-white border-l border-white/12 first:border-l-0 hover:bg-blue-500/15 hover:text-blue-300 transition-colors"
+              >
+                {min}<span className="text-[11px] font-bold text-gray-500 ml-0.5">분</span>
+              </button>
+            ))}
           </div>
-        </div>
+        </AucModal>
       )}
 
       {/* 포지션 체인지 모달 */}
       {posSwapTarget && (() => {
         const leader = auction.leaders[posSwapTarget.leaderIdx];
         return (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-            <div className="relative rounded-3xl bg-gradient-to-b from-white/[0.1] to-white/[0.02] p-px w-full max-w-sm">
-              <div className="rounded-3xl bg-[#121212] p-8">
-                <p className="text-[10px] font-black auc-mono text-gray-500 uppercase mb-3 text-center">Position Change</p>
-                <h2 className="text-lg font-black text-white mb-2 text-center">{leader.name} — 포지션 체인지</h2>
-                <p className="text-xs text-gray-400 mb-6 text-center">교환할 두 선수를 선택하세요. ({S.posChangeCost.toLocaleString()} Point · 팀당 1회)</p>
-                {/* 선수 선택 — 네이티브 select 대신 사이트 톤의 리스트 선택 */}
-                <div className="space-y-1.5 max-h-[46vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
-                  {leader.roster.map((r: any, ri: number) => {
-                    if (p1Role && r.slot === p1Role) return null; // 선경매 포지션은 교환 불가
-                    const sel = swapA === String(ri) ? 1 : swapB === String(ri) ? 2 : 0;
-                    return (
-                      <button
-                        key={ri}
-                        type="button"
-                        onClick={() => {
-                          sfxSelect();
-                          if (sel === 1) setSwapA("");
-                          else if (sel === 2) setSwapB("");
-                          else if (swapA === "") setSwapA(String(ri));
-                          else if (swapB === "") setSwapB(String(ri));
-                          else showToast("이미 2명을 선택했습니다. 선택을 해제한 뒤 다시 고르세요");
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-left transition-all ${sel ? "border-[#e91e3f] bg-white/[0.07]" : "border-white/10 bg-[#0d0d0d] hover:border-white/25"}`}
-                      >
-                        <span className={`shrink-0 text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(r.slot).badge}`}>{r.slot}</span>
-                        <span className="flex-1 min-w-0 truncate text-xs font-bold text-gray-200">
-                          {rosterName(leader, r)}
-                          {r.playerIdx === -1 && <span className="ml-1.5 text-[9px] text-gray-500 font-black">리더</span>}
-                        </span>
-                        <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${sel ? "bg-[#e91e3f] text-white" : "bg-white/5 text-transparent"}`}>{sel || ""}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <button onClick={() => { setPosSwapTarget(null); setSwapA(""); setSwapB(""); }} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">취소</button>
+          <AucModal
+            label="Position Change"
+            title={`${leader.name} — 포지션 체인지`}
+            desc={`교환할 두 선수를 선택하세요. (${S.posChangeCost.toLocaleString()} Point · 팀당 1회)`}
+            onClose={() => { setPosSwapTarget(null); setSwapA(""); setSwapB(""); }}
+            actions={[
+              { text: "취소", onClick: () => { setPosSwapTarget(null); setSwapA(""); setSwapB(""); } },
+              {
+                text: swapA !== "" && swapB !== "" ? "교환하기" : `${2 - [swapA, swapB].filter((x) => x !== "").length}명 더 선택`,
+                kind: "primary",
+                disabled: swapA === "" || swapB === "",
+                onClick: async () => {
+                  if (swapA === "" || swapB === "" || swapA === swapB) { showToast("서로 다른 두 선수를 선택해주세요"); return; }
+                  const na = rosterName(leader, leader.roster[Number(swapA)]), nb = rosterName(leader, leader.roster[Number(swapB)]);
+                  const d = await act({ action: "host:posSwap", leaderIdx: posSwapTarget.leaderIdx, a: Number(swapA), b: Number(swapB), byLeaderIdx: myLeaderIdx });
+                  if (d?.success) { sfxAssign(); showToast(`${na} ↔ ${nb} 포지션 교환 완료`); setPosSwapTarget(null); setSwapA(""); setSwapB(""); }
+                  else showToast(d?.message || "포지션 교환에 실패했습니다");
+                },
+              },
+            ]}
+          >
+            {/* 선수 선택 — 선으로만 나뉜 목록 */}
+            <div className="mt-4 border-t border-white/12 max-h-[42vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
+              {leader.roster.map((r: any, ri: number) => {
+                if (p1Role && r.slot === p1Role) return null; // 선경매 포지션은 교환 불가
+                const sel = swapA === String(ri) ? 1 : swapB === String(ri) ? 2 : 0;
+                return (
                   <button
-                    disabled={swapA === "" || swapB === ""}
-                    onClick={async () => {
-                      if (swapA === "" || swapB === "" || swapA === swapB) { showToast("서로 다른 두 선수를 선택해주세요"); return; }
-                      const na = rosterName(leader, leader.roster[Number(swapA)]), nb = rosterName(leader, leader.roster[Number(swapB)]);
-                      const d = await act({ action: "host:posSwap", leaderIdx: posSwapTarget.leaderIdx, a: Number(swapA), b: Number(swapB), byLeaderIdx: myLeaderIdx });
-                      if (d?.success) { sfxAssign(); showToast(`${na} ↔ ${nb} 포지션 교환 완료`); setPosSwapTarget(null); setSwapA(""); setSwapB(""); }
-                      else showToast(d?.message || "포지션 교환에 실패했습니다");
+                    key={ri}
+                    type="button"
+                    onClick={() => {
+                      sfxSelect();
+                      if (sel === 1) setSwapA("");
+                      else if (sel === 2) setSwapB("");
+                      else if (swapA === "") setSwapA(String(ri));
+                      else if (swapB === "") setSwapB(String(ri));
+                      else showToast("이미 2명을 선택했습니다. 선택을 해제한 뒤 다시 고르세요");
                     }}
-                    className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:bg-white/5 disabled:text-gray-600 text-white text-sm font-bold rounded-xl transition-colors"
+                    className={`w-full flex items-center gap-2.5 px-1 py-2.5 border-b border-white/[0.07] text-left transition-colors ${sel ? "bg-[#e91e3f]/10" : "hover:bg-white/[0.04]"}`}
                   >
-                    {swapA !== "" && swapB !== "" ? "교환하기" : `${2 - [swapA, swapB].filter((x) => x !== "").length}명 더 선택`}
+                    <span className={`shrink-0 w-[38px] text-[10px] font-black tracking-tight ${roleColor(r.slot).text}`}>{r.slot}</span>
+                    <span className="flex-1 min-w-0 truncate text-[13px] font-black text-white">
+                      {rosterName(leader, r)}
+                      {r.playerIdx === -1 && <span className="ml-1.5 text-[9px] text-gray-500 font-black">리더</span>}
+                    </span>
+                    <span className={`shrink-0 w-5 h-5 flex items-center justify-center text-[10px] font-black border ${sel ? "border-[#e91e3f] bg-[#e91e3f] text-white" : "border-white/15 text-transparent"}`}>{sel || ""}</span>
                   </button>
-                </div>
-              </div>
+                );
+              })}
             </div>
-          </div>
+          </AucModal>
         );
       })()}
 
@@ -2071,66 +2121,84 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {/* 황금카드 소환 연출 — 중앙에서 실체화 → 플립 공개 → 소멸 */}
+      {/* 황금카드 소환 연출 — 편지봉투가 열리고 그 안에서 골든 카드가 뽑혀 나온다 */}
       {goldenFx && (
-        <div className="fixed inset-0 z-[135] pointer-events-none overflow-hidden" style={{ perspective: "1400px" }}>
-          {/* 배경 딤 + 골드 비네트 (극적으로 어둡게) */}
-          <div className="absolute inset-0 animate-[gcBackdrop_4s_ease-in-out_forwards]" style={{ background: "radial-gradient(ellipse at 50% 50%, rgba(24,17,3,0.88) 0%, rgba(0,0,0,0.96) 100%)" }}></div>
+        <div className="fixed inset-0 z-[135] pointer-events-none overflow-hidden" style={{ perspective: "1600px" }}>
+          {/* 배경 딤 + 골드 비네트 */}
+          <div className="absolute inset-0 animate-[gcBackdrop_4.3s_ease-in-out_forwards]" style={{ background: "radial-gradient(ellipse at 50% 50%, rgba(24,17,3,0.88) 0%, rgba(0,0,0,0.96) 100%)" }}></div>
 
-          {/* 회전하는 광선 */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] h-[560px] animate-[gcRays_4s_linear_forwards]">
+          {/* 봉투가 열린 뒤 퍼지는 광선 */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] h-[560px] animate-[gcRays_4.3s_linear_forwards]">
             {[0, 30, 60, 90, 120, 150].map((deg) => (
-              <span key={deg} className="absolute top-1/2 left-1/2 w-[560px] h-[2px] -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-transparent via-yellow-300/35 to-transparent" style={{ transform: `translate(-50%,-50%) rotate(${deg}deg)` }}></span>
+              <span key={deg} className="absolute top-1/2 left-1/2 w-[560px] h-[2px] -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-transparent via-yellow-300/30 to-transparent" style={{ transform: `translate(-50%,-50%) rotate(${deg}deg)` }}></span>
             ))}
           </div>
 
           {/* 중앙 글로우 */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[380px] h-[380px] bg-yellow-400/20 blur-[90px] rounded-full animate-[gcBackdrop_4s_ease-in-out_forwards]"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[380px] h-[380px] bg-yellow-400/20 blur-[90px] rounded-full animate-[gcGlow_4.3s_ease-in-out_forwards]"></div>
 
-          {/* 카드 — 페이드/블러(외부)와 3D 회전(내부)을 분리해 뒷면이 정상 표시되도록 */}
-          <div className="absolute top-1/2 left-1/2 animate-[gcCardOuter_4s_cubic-bezier(0.25,0.1,0.25,1)_forwards]">
-            <div className="relative w-40 h-56 md:w-48 md:h-72 animate-[gcCardSpin_4s_cubic-bezier(0.25,0.1,0.25,1)_forwards]" style={{ transformStyle: "preserve-3d" }}>
+          {/* ══ 봉투 무대 ══ */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-[gcScene_4.3s_ease-in-out_forwards]" style={{ transformStyle: "preserve-3d" }}>
+            <div className="relative w-[260px] h-[176px] md:w-[300px] md:h-[202px]" style={{ transformStyle: "preserve-3d" }}>
 
-              {/* 앞면 */}
-              <div className="absolute inset-0 rounded-2xl p-[3px] shadow-[0_0_70px_rgba(250,204,21,0.55)]" style={{ backfaceVisibility: "hidden", background: "linear-gradient(135deg, #fef9c3, #f59e0b, #fde047, #b45309, #fde047)", backgroundSize: "400% 400%", animation: "gcShine 1.4s linear infinite" }}>
-                <div className="relative w-full h-full rounded-[13px] overflow-hidden" style={{ background: "radial-gradient(ellipse at 50% 35%, #3a2a08 0%, #1a1305 70%)" }}>
-                  <div className="absolute inset-[8px] rounded-[9px] border border-yellow-400/40"></div>
-                  <div className="absolute inset-[13px] rounded-[7px] border border-yellow-400/15"></div>
-                  <span className="absolute top-3 left-3.5 text-xs text-yellow-400/80">★</span>
-                  <span className="absolute bottom-3 right-3.5 text-xs text-yellow-400/80 rotate-180 inline-block">★</span>
-                  <div className="absolute inset-0" style={{ background: "linear-gradient(115deg, transparent 32%, rgba(255,255,220,0.2) 48%, rgba(255,255,220,0.3) 50%, rgba(255,255,220,0.2) 52%, transparent 68%)", animation: "gcGloss 1.6s ease-in-out infinite" }}></div>
-                  <div className="relative h-full flex flex-col items-center justify-center gap-3">
-                    <span className="text-6xl md:text-7xl" style={{ background: "linear-gradient(180deg, #fef9c3, #f59e0b)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 0 14px rgba(250,204,21,0.55))" }}>★</span>
-                    <div className="w-14 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
-                    <p className="text-[10px] md:text-[11px] font-black tracking-[0.35em] uppercase text-yellow-200/90">Golden Card</p>
-                    <p className="text-lg md:text-xl font-black text-yellow-50 tracking-tight" style={{ textShadow: "0 0 16px rgba(250,204,21,0.55)" }}>올 포지션</p>
-                    <div className="w-14 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
+              {/* 봉투 뒷면 (카드가 이 앞으로 올라온다) */}
+              <div className="absolute inset-0 rounded-[4px]" style={{ background: "linear-gradient(155deg, #241a06 0%, #171104 60%, #0d0902 100%)", border: "1px solid rgba(251,191,36,.35)", boxShadow: "0 30px 70px -20px #000" }}></div>
+
+              {/* ── 골든 카드 : 봉투 안에서 위로 뽑혀 나온다 ── */}
+              <div className="absolute left-1/2 bottom-[14px] w-[132px] h-[186px] md:w-[152px] md:h-[214px] -translate-x-1/2 animate-[gcCard_4.3s_cubic-bezier(0.22,1,0.28,1)_forwards]" style={{ zIndex: 2 }}>
+                <div className="w-full h-full rounded-xl p-[3px] shadow-[0_0_70px_rgba(250,204,21,0.5)]" style={{ background: "linear-gradient(135deg, #fef9c3, #f59e0b, #fde047, #b45309, #fde047)", backgroundSize: "400% 400%", animation: "gcShine 1.4s linear infinite" }}>
+                  <div className="relative w-full h-full rounded-[9px] overflow-hidden" style={{ background: "radial-gradient(ellipse at 50% 35%, #3a2a08 0%, #1a1305 70%)" }}>
+                    <div className="absolute inset-[7px] rounded-[6px] border border-yellow-400/40"></div>
+                    <div className="absolute inset-[11px] rounded-[4px] border border-yellow-400/15"></div>
+                    <span className="absolute top-2.5 left-3 text-[11px] text-yellow-400/80">★</span>
+                    <span className="absolute bottom-2.5 right-3 text-[11px] text-yellow-400/80 rotate-180 inline-block">★</span>
+                    <div className="absolute inset-0" style={{ background: "linear-gradient(115deg, transparent 32%, rgba(255,255,220,0.2) 48%, rgba(255,255,220,0.3) 50%, rgba(255,255,220,0.2) 52%, transparent 68%)", animation: "gcGloss 1.6s ease-in-out infinite" }}></div>
+                    <div className="relative h-full flex flex-col items-center justify-center gap-2.5">
+                      <span className="text-5xl md:text-6xl" style={{ background: "linear-gradient(180deg, #fef9c3, #f59e0b)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 0 14px rgba(250,204,21,0.55))" }}>★</span>
+                      <div className="w-12 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
+                      <p className="text-[9px] md:text-[10px] font-black tracking-[0.3em] uppercase text-yellow-200/90">Golden Card</p>
+                      <p className="text-base md:text-lg font-black text-yellow-50 tracking-tight" style={{ textShadow: "0 0 16px rgba(250,204,21,0.55)" }}>올 포지션</p>
+                      <div className="w-12 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* 뒷면 */}
-              <div className="absolute inset-0 rounded-2xl p-[3px] shadow-[0_0_70px_rgba(250,204,21,0.55)]" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)", background: "linear-gradient(135deg, #b45309, #fde047, #f59e0b, #fde047, #b45309)", backgroundSize: "400% 400%", animation: "gcShine 1.4s linear infinite" }}>
-                <div className="relative w-full h-full rounded-[13px] overflow-hidden flex items-center justify-center" style={{ background: "radial-gradient(ellipse at 50% 50%, #2a1e06 0%, #140e03 75%)" }}>
-                  <div className="absolute inset-[8px] rounded-[9px] border border-yellow-400/30" style={{ backgroundImage: "repeating-linear-gradient(45deg, rgba(250,204,21,0.07) 0 2px, transparent 2px 14px), repeating-linear-gradient(-45deg, rgba(250,204,21,0.07) 0 2px, transparent 2px 14px)" }}></div>
-                  <div className="relative w-20 h-20 rounded-full border-2 border-yellow-400/50 flex items-center justify-center" style={{ background: "radial-gradient(circle, rgba(250,204,21,0.15), transparent 70%)" }}>
-                    <span className="text-3xl text-yellow-400/90" style={{ filter: "drop-shadow(0 0 10px rgba(250,204,21,0.7))" }}>★</span>
-                  </div>
+              {/* ── 봉투 앞주머니 : 카드보다 위에 있어 '안에서 나오는' 착시를 만든다 ── */}
+              <div className="absolute inset-x-0 bottom-0 h-[62%] rounded-b-[4px] overflow-hidden" style={{ zIndex: 3, background: "linear-gradient(170deg, #2c2007 0%, #1c1405 55%, #120c03 100%)", borderLeft: "1px solid rgba(251,191,36,.35)", borderRight: "1px solid rgba(251,191,36,.35)", borderBottom: "1px solid rgba(251,191,36,.35)", boxShadow: "0 -12px 26px -14px rgba(0,0,0,.9)" }}>
+                {/* 주머니 접힘선 */}
+                <span className="absolute inset-x-0 top-0 h-px bg-yellow-400/25"></span>
+                <span className="absolute left-0 top-0 w-1/2 h-full" style={{ background: "linear-gradient(122deg, transparent 62%, rgba(251,191,36,.10) 63%)" }}></span>
+                <span className="absolute right-0 top-0 w-1/2 h-full" style={{ background: "linear-gradient(238deg, transparent 62%, rgba(251,191,36,.10) 63%)" }}></span>
+              </div>
+
+              {/* ── 봉투 뚜껑(플랩) : 위로 젖혀지며 열린다 ── */}
+              <div className="absolute inset-x-0 top-0 h-[52%] origin-top animate-[gcFlap_4.3s_cubic-bezier(0.34,1.2,0.4,1)_forwards]" style={{ zIndex: 4, transformStyle: "preserve-3d" }}>
+                <div className="w-full h-full" style={{ background: "linear-gradient(180deg, #3a2a08 0%, #241a06 100%)", clipPath: "polygon(0 0, 100% 0, 50% 100%)", borderTop: "1px solid rgba(251,191,36,.35)" }}></div>
+                {/* 플랩 가장자리 금선 */}
+                <span className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(251,191,36,.18), transparent 60%)", clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}></span>
+              </div>
+
+              {/* ── 밀랍 봉인 : 갈라지며 터진다 ── */}
+              <div className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 w-11 h-11 md:w-12 md:h-12 animate-[gcSeal_4.3s_ease-in-out_forwards]" style={{ zIndex: 5 }}>
+                <div className="w-full h-full rounded-full flex items-center justify-center" style={{ background: "radial-gradient(circle at 35% 30%, #fde047 0%, #d97706 45%, #92400e 100%)", boxShadow: "0 3px 10px rgba(0,0,0,.6), inset 0 -2px 6px rgba(0,0,0,.35)" }}>
+                  <span className="text-[15px] md:text-[17px] text-amber-900/80 font-black">★</span>
                 </div>
               </div>
+
             </div>
           </div>
 
-          {/* 공개 순간 파티클 버스트 */}
+          {/* 봉인이 터지는 순간 파티클 */}
           {[...Array(10)].map((_, i) => {
             const angle = (i / 10) * 360;
             return (
-              <span key={i} className="absolute top-1/2 left-1/2 text-yellow-300 text-sm" style={{ opacity: 0, animation: `gcSpark 0.9s ease-out ${1.75 + (i % 3) * 0.06}s forwards`, ["--sx" as any]: `${Math.cos((angle * Math.PI) / 180) * 170}px`, ["--sy" as any]: `${Math.sin((angle * Math.PI) / 180) * 170}px` }}>✦</span>
+              <span key={i} className="absolute top-1/2 left-1/2 text-yellow-300 text-sm" style={{ opacity: 0, animation: `gcSpark 0.9s ease-out ${1.35 + (i % 3) * 0.05}s forwards`, ["--sx" as any]: `${Math.cos((angle * Math.PI) / 180) * 150}px`, ["--sy" as any]: `${Math.sin((angle * Math.PI) / 180) * 150}px` }}>✦</span>
             );
           })}
 
-          {/* 타이틀 — 공개 순간 카드 아래에 등장 */}
-          <div className="absolute inset-x-0 top-1/2 flex justify-center animate-[gcTitle_4s_ease-in-out_forwards]" style={{ transform: "translateY(10.5rem)" }}>
+          {/* 타이틀 */}
+          <div className="absolute inset-x-0 top-1/2 flex justify-center animate-[gcTitle_4.3s_ease-in-out_forwards]" style={{ transform: "translateY(11rem)" }}>
             <p className="text-2xl md:text-4xl font-black auc-mono uppercase" style={{ background: "linear-gradient(110deg, #fef9c3 20%, #f59e0b 45%, #fde047 55%, #fef9c3 80%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "gcShine 1.5s linear infinite", filter: "drop-shadow(0 0 20px rgba(250,204,21,0.45))" }}>
               Golden Card
             </p>
@@ -2139,35 +2207,64 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           <style dangerouslySetInnerHTML={{__html: `
             @keyframes gcBackdrop {
               0% { opacity: 0; }
-              12%, 82% { opacity: 1; }
+              10%, 84% { opacity: 1; }
               100% { opacity: 0; }
             }
+            /* 광선·글로우는 봉투가 열린 뒤에만 */
             @keyframes gcRays {
-              0% { opacity: 0; transform: translate(-50%, -50%) rotate(0deg); }
-              15%, 80% { opacity: 1; }
-              100% { opacity: 0; transform: translate(-50%, -50%) rotate(70deg); }
+              0%, 30% { opacity: 0; transform: translate(-50%, -50%) rotate(0deg); }
+              46%, 82% { opacity: 1; }
+              100% { opacity: 0; transform: translate(-50%, -50%) rotate(60deg); }
             }
-            /* 외부: 위치/크기/페이드/블러 (3D 평면화 방지를 위해 회전과 분리) */
-            @keyframes gcCardOuter {
-              0% { transform: translate(-50%, -46%) scale(0.25); opacity: 0; filter: blur(14px); }
-              16% { transform: translate(-50%, -50%) scale(1); opacity: 1; filter: blur(0); }
-              40% { transform: translate(-50%, -51%) scale(1); opacity: 1; filter: blur(0); }
-              54% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; filter: blur(0); }
-              84% { transform: translate(-50%, -50.5%) scale(1.08); opacity: 1; filter: blur(0); }
-              100% { transform: translate(-50%, -50%) scale(1.22); opacity: 0; filter: blur(6px); }
+            @keyframes gcGlow {
+              0%, 26% { opacity: 0; }
+              48%, 82% { opacity: 1; }
+              100% { opacity: 0; }
             }
-            /* 내부: 순수 3D 회전만 담당 */
-            @keyframes gcCardSpin {
-              0%, 40% { transform: rotateY(180deg); }
-              54%, 100% { transform: rotateY(360deg); }
+            /* 봉투 전체 — 등장 → 살짝 당겨졌다가 → 퇴장 */
+            @keyframes gcScene {
+              0%   { transform: translate(-50%, -46%) scale(.72); opacity: 0; filter: blur(10px); }
+              12%  { transform: translate(-50%, -50%) scale(1); opacity: 1; filter: blur(0); }
+              26%  { transform: translate(-50%, -50%) scale(1.02); }
+              30%  { transform: translate(-50%, -50%) scale(.99); }
+              48%  { transform: translate(-50%, -54%) scale(1.03); }
+              84%  { transform: translate(-50%, -54%) scale(1.03); opacity: 1; filter: blur(0); }
+              100% { transform: translate(-50%, -56%) scale(1.12); opacity: 0; filter: blur(6px); }
+            }
+            /* 밀랍 봉인 — 두근 → 갈라짐 */
+            @keyframes gcSeal {
+              0%, 8%   { opacity: 0; transform: translate(-50%, -50%) scale(.4); }
+              14%      { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+              20%      { transform: translate(-50%, -50%) scale(1.12); }
+              24%      { transform: translate(-50%, -50%) scale(1); }
+              29%      { transform: translate(-50%, -50%) scale(1.18); }
+              33%      { opacity: 1; transform: translate(-50%, -50%) scale(1.5) rotate(14deg); }
+              36%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.1) rotate(24deg); }
+            }
+            /* 뚜껑 — 봉인이 터진 뒤 위로 젖혀진다 */
+            @keyframes gcFlap {
+              0%, 33%  { transform: rotateX(0deg); }
+              50%      { transform: rotateX(-168deg); }
+              84%      { transform: rotateX(-172deg); }
+              100%     { transform: rotateX(-172deg); }
+            }
+            /* 카드 — 봉투 안에서 위로 뽑혀 나온다 */
+            @keyframes gcCard {
+              0%, 38%  { transform: translate(-50%, 34px) scale(.94) rotate(0deg); opacity: 0; }
+              41%      { opacity: 1; }
+              62%      { transform: translate(-50%, -104px) scale(1) rotate(-2deg); opacity: 1; }
+              68%      { transform: translate(-50%, -96px) scale(1.04) rotate(1deg); }
+              74%      { transform: translate(-50%, -100px) scale(1.02) rotate(0deg); }
+              84%      { transform: translate(-50%, -100px) scale(1.02) rotate(0deg); opacity: 1; }
+              100%     { transform: translate(-50%, -112px) scale(1.1) rotate(0deg); opacity: 0; }
             }
             @keyframes gcSpark {
               0% { opacity: 1; transform: translate(-50%, -50%) scale(0.4); }
               100% { opacity: 0; transform: translate(calc(-50% + var(--sx)), calc(-50% + var(--sy))) scale(1.3); }
             }
             @keyframes gcTitle {
-              0%, 46% { opacity: 0; letter-spacing: 0.5em; }
-              56%, 84% { opacity: 1; letter-spacing: 0.25em; }
+              0%, 62% { opacity: 0; letter-spacing: 0.5em; }
+              72%, 84% { opacity: 1; letter-spacing: 0.25em; }
               100% { opacity: 0; }
             }
             @keyframes gcShine {
@@ -2178,6 +2275,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               0% { transform: translateX(-110%); }
               55%, 100% { transform: translateX(110%); }
             }
+            @media (prefers-reduced-motion: reduce) {
+              .auc [style*="gcShine"], .auc [style*="gcGloss"] { animation: none !important; }
+            }
           `}} />
         </div>
       )}
@@ -2186,21 +2286,37 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       {adjustTarget !== null && (() => {
         const leader = auction.leaders[adjustTarget];
         return (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-            <div className="relative rounded-3xl bg-gradient-to-b from-white/[0.1] to-white/[0.02] p-px w-full max-w-sm">
-              <div className="rounded-3xl bg-[#121212] p-8 text-center">
-                <p className="text-[10px] font-black auc-mono text-gray-500 uppercase mb-3">Point Adjustment</p>
-                <h2 className="text-lg font-black text-white mb-1">{leader.name} — 포인트 조정</h2>
-                <p className="text-xs text-gray-400 mb-6">현재 보유: <span className="text-white font-black">{leader.points.toLocaleString()} Point</span></p>
-                <input type="number" placeholder="조정할 금액 (예: 5000)" value={adjustAmount} onChange={(e) => setAdjustAmount(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white text-center font-bold outline-none focus:border-white/40 transition-colors mb-3" />
-                <div className="grid grid-cols-2 gap-2 mb-6">
-                  <button onClick={async () => { const v = Math.abs(Number(adjustAmount)); if (!v) return; const d = await act({ action: "host:adjustPoints", leaderIdx: adjustTarget, delta: v }); if (d.success) setAdjustTarget(null); }} className="py-3 rounded-xl text-sm font-black bg-emerald-500/90 hover:bg-emerald-500 text-white transition-colors">+ 추가</button>
-                  <button onClick={async () => { const v = Math.abs(Number(adjustAmount)); if (!v) return; const d = await act({ action: "host:adjustPoints", leaderIdx: adjustTarget, delta: -v }); if (d.success) setAdjustTarget(null); }} className="py-3 rounded-xl text-sm font-black bg-[#e91e3f] hover:bg-[#d01634] text-white transition-colors">− 차감</button>
-                </div>
-                <button onClick={() => setAdjustTarget(null)} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">닫기</button>
-              </div>
+          <AucModal
+            label="Point Adjustment"
+            title={`${leader.name} — 포인트 조정`}
+            onClose={() => setAdjustTarget(null)}
+            actions={[{ text: "닫기", onClick: () => setAdjustTarget(null) }]}
+          >
+            <p className="text-xs text-gray-400 mt-2.5">
+              현재 보유 <span className="text-white font-black tabular-nums">{leader.points.toLocaleString()}</span> Point
+            </p>
+            <input
+              type="number"
+              placeholder="조정할 금액 (예: 5000)"
+              value={adjustAmount}
+              onChange={(e) => setAdjustAmount(e.target.value)}
+              className="w-full mt-4 py-2.5 bg-transparent border-b border-white/20 focus:border-white text-lg text-white text-center font-black tabular-nums outline-none transition-colors placeholder:text-gray-700 placeholder:text-sm placeholder:font-bold"
+            />
+            <div className="flex mt-4 border-t border-b border-white/12">
+              <button
+                onClick={async () => { const v = Math.abs(Number(adjustAmount)); if (!v) { showToast("조정할 금액을 입력해주세요"); return; } const d = await act({ action: "host:adjustPoints", leaderIdx: adjustTarget, delta: v }); if (d.success) { sfxSelect(); showToast(`${leader.name} +${v.toLocaleString()} Point`); setAdjustTarget(null); } }}
+                className="flex-1 py-3.5 text-sm font-black text-emerald-400 hover:bg-emerald-500/15 transition-colors"
+              >
+                + 추가
+              </button>
+              <button
+                onClick={async () => { const v = Math.abs(Number(adjustAmount)); if (!v) { showToast("조정할 금액을 입력해주세요"); return; } const d = await act({ action: "host:adjustPoints", leaderIdx: adjustTarget, delta: -v }); if (d.success) { sfxSelect(); showToast(`${leader.name} −${v.toLocaleString()} Point`); setAdjustTarget(null); } }}
+                className="flex-1 py-3.5 text-sm font-black text-[#ff5c77] border-l border-white/12 hover:bg-[#e91e3f]/20 transition-colors"
+              >
+                − 차감
+              </button>
             </div>
-          </div>
+          </AucModal>
         );
       })()}
 
@@ -2208,23 +2324,27 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       {posSetTarget !== null && (() => {
         const leader = auction.leaders[posSetTarget];
         return (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-            <div className="relative rounded-3xl bg-gradient-to-b from-white/[0.1] to-white/[0.02] p-px w-full max-w-sm">
-              <div className="rounded-3xl bg-[#121212] p-8 text-center">
-                <p className="text-[10px] font-black auc-mono text-gray-500 uppercase mb-3">Leader Position</p>
-                <h2 className="text-lg font-black text-white mb-2">{leader.name} — 포지션 {leader.position ? "변경" : "지정"}</h2>
-                <p className="text-xs text-gray-400 mb-6">{leader.position ? `현재 [${leader.position}] — 선택한 포지션 슬롯으로 이동합니다.` : "리더 본인이 차지할 슬롯을 지정합니다."}</p>
-                <div className="grid grid-cols-3 gap-2 mb-6">
-                  {roleList.map((pos: string) => (
-                    <button key={pos} disabled={leader.position === pos} onClick={async () => { const d = await act({ action: "host:setLeaderPos", leaderIdx: posSetTarget, position: pos }); if (d.success) setPosSetTarget(null); }} className={`py-4 rounded-xl text-sm font-black border transition-all ${leader.position === pos ? "border-white/25 bg-white/[0.07] text-gray-200 cursor-default" : "border-white/10 bg-white/5 text-white hover:border-[#e91e3f] hover:bg-white/10"}`}>
-                      {pos}{leader.position === pos && <span className="block text-[9px] font-bold text-gray-500 mt-0.5">현재</span>}
-                    </button>
-                  ))}
-                </div>
-                <button onClick={() => setPosSetTarget(null)} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">닫기</button>
-              </div>
+          <AucModal
+            label="Leader Position"
+            title={`${leader.name} — 포지션 ${leader.position ? "변경" : "지정"}`}
+            desc={leader.position ? `현재 [${leader.position}] — 선택한 포지션 슬롯으로 이동합니다.` : "리더 본인이 차지할 슬롯을 지정합니다."}
+            onClose={() => setPosSetTarget(null)}
+            actions={[{ text: "닫기", onClick: () => setPosSetTarget(null) }]}
+          >
+            <div className="flex flex-wrap mt-4 border-t border-b border-white/12">
+              {roleList.map((pos: string) => (
+                <button
+                  key={pos}
+                  disabled={leader.position === pos}
+                  onClick={async () => { const d = await act({ action: "host:setLeaderPos", leaderIdx: posSetTarget, position: pos }); if (d.success) { sfxSelect(); showToast(`${leader.name} 리더 포지션 → ${pos}`); setPosSetTarget(null); } }}
+                  className={`flex-1 min-w-[72px] py-3.5 text-sm font-black border-l border-white/12 first:border-l-0 transition-colors ${leader.position === pos ? "bg-white/[0.07] text-gray-400 cursor-default" : `${roleColor(pos).text} hover:bg-white/10`}`}
+                >
+                  {pos}
+                  {leader.position === pos && <span className="block auc-label-xs text-gray-600 mt-1">현재</span>}
+                </button>
+              ))}
             </div>
-          </div>
+          </AucModal>
         );
       })()}
 

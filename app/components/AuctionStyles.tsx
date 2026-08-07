@@ -172,18 +172,18 @@ export const AuctionStyles = () => (
     /* 일반 매물 — 메인 화면 티켓과 같은 블랙&화이트 패널 */
     .auc-stage-panel { background: linear-gradient(150deg, #17171a 0%, #101012 55%, #08080a 100%); }
 
-    /* 올 포지션(황금카드) 매물 — 배경 자체가 골드 그라데이션으로 바뀐다 */
+    /* 올 포지션(황금카드) 매물 — 배경 자체가 골드 그라데이션으로 바뀐다 (강도는 절제) */
     .auc-stage-golden {
       background:
-        radial-gradient(ellipse 120% 80% at 50% -10%, rgba(251,191,36,.30) 0%, rgba(180,83,9,.10) 45%, transparent 72%),
-        linear-gradient(150deg, #2a1f07 0%, #1a1305 48%, #0b0803 100%);
-      border-color: rgba(251,191,36,.45) !important;
-      box-shadow: inset 0 0 90px rgba(251,191,36,.10), 0 0 46px -14px rgba(251,191,36,.35);
+        radial-gradient(ellipse 120% 80% at 50% -10%, rgba(251,191,36,.17) 0%, rgba(180,83,9,.06) 45%, transparent 72%),
+        linear-gradient(150deg, #1f1706 0%, #150f04 48%, #0a0703 100%);
+      border-color: rgba(251,191,36,.32) !important;
+      box-shadow: inset 0 0 90px rgba(251,191,36,.055), 0 0 40px -18px rgba(251,191,36,.25);
     }
     /* 배경 위를 천천히 훑는 금빛 광택 */
     .auc-stage-golden::before {
       content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
-      background: linear-gradient(112deg, transparent 34%, rgba(255,240,180,.13) 47%, rgba(255,246,210,.20) 50%, rgba(255,240,180,.13) 53%, transparent 66%);
+      background: linear-gradient(112deg, transparent 34%, rgba(255,240,180,.07) 47%, rgba(255,246,210,.11) 50%, rgba(255,240,180,.07) 53%, transparent 66%);
       background-size: 260% 100%;
       animation: aucGoldSweep 5.2s ease-in-out infinite;
     }
@@ -199,6 +199,31 @@ export const AuctionStyles = () => (
       animation: aucGoldLine 3.2s linear infinite;
     }
     @keyframes aucGoldLine { 0% { background-position: 0% 0 } 100% { background-position: 300% 0 } }
+
+    /* 올 포지션 매물 이름 — 금빛으로 흐르는 글자 (기본 lux-shimmer 는 레드 계열이라 별도) */
+    .auc-gold-text {
+      background: linear-gradient(110deg, #fef3c7 18%, #f59e0b 38%, #fffbeb 50%, #f59e0b 62%, #fef3c7 82%);
+      background-size: 220% auto;
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; color: transparent;
+      animation: aucGoldText 5s linear infinite;
+      filter: drop-shadow(0 0 14px rgba(251,191,36,.28));
+    }
+    @keyframes aucGoldText { 0% { background-position: 0% center } 100% { background-position: 220% center } }
+
+    /* ── 경매장 공용 팝업 ── 방 안의 모든 모달이 같은 골격을 쓴다 */
+    .auc-modal-back { position: fixed; inset: 0; z-index: 120; display: flex; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.84); backdrop-filter: blur(4px); }
+    @media (min-width: 640px) { .auc-modal-back { align-items: center; padding: 16px; } }
+    .auc-modal {
+      position: relative; width: 100%;
+      background: linear-gradient(160deg, #141416 0%, #0e0e10 60%, #0a0a0b 100%);
+      border: 1px solid rgba(255,255,255,.15);
+      box-shadow: 0 30px 90px -20px #000;
+    }
+    /* 상단 포인트 라인 — 성격에 따라 색만 갈아끼운다 */
+    .auc-modal-line { position: absolute; inset-inline: 0; top: 0; height: 2px; }
+
+    @media (prefers-reduced-motion: reduce) { .auc-gold-text { animation: none; } }
 
     @media (prefers-reduced-motion: reduce) {
       .auc-stage-golden::before, .auc-stage-goldline { animation: none; }
