@@ -559,7 +559,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         type="button"
                         disabled={!movable}
                         onClick={() => movable && setMoveFrom(selected ? null : ri)}
-                        className={`w-full rounded-lg border px-2 py-2 flex flex-col items-center gap-1 transition-all ${selected ? "border-white/70 bg-white/[0.07] ring-1 ring-white/70" : movable ? "border-amber-400/60 bg-amber-400/[0.10] animate-pulse cursor-pointer" : r.golden ? "border-amber-400/40 bg-gradient-to-b from-amber-400/[0.12] to-transparent" : "border-white/10 bg-gradient-to-b from-white/[0.06] to-transparent cursor-default"}`}
+                        className={`w-full rounded-lg border px-2 py-2 flex flex-col items-center gap-1 transition-all ${selected ? "border-[#e91e3f] bg-white/[0.07] ring-1 ring-[#e91e3f]" : movable ? "border-amber-400/60 bg-amber-400/[0.10] animate-pulse cursor-pointer" : r.golden ? "border-amber-400/40 bg-gradient-to-b from-amber-400/[0.12] to-transparent" : "border-white/10 bg-gradient-to-b from-white/[0.06] to-transparent cursor-default"}`}
                       >
                         <span className={`w-7 h-7 rounded-full flex items-center justify-center border ${r.golden ? "border-amber-300/50 bg-amber-400/10 text-amber-300" : "border-white/12 bg-white/[0.04] text-gray-500"}`}>
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
@@ -577,7 +577,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       type="button"
                       disabled={!canAssignHere}
                       onClick={() => canAssignHere && act({ action: "assignSlot", slot, byLeaderIdx: myLeaderIdx })}
-                      className={`w-full h-[68px] rounded-lg border border-dashed flex flex-col items-center justify-center gap-1 transition-all ${canAssignHere ? "border-white/70 bg-white/[0.06] animate-pulse cursor-pointer hover:bg-white/10" : "border-white/10"}`}
+                      className={`w-full h-[68px] rounded-lg border border-dashed flex flex-col items-center justify-center gap-1 transition-all ${canAssignHere ? "border-[#e91e3f] bg-[#e91e3f]/[0.08] animate-pulse cursor-pointer hover:bg-[#e91e3f]/20" : "border-white/10"}`}
                     >
                       <span className={`text-lg leading-none ${canAssignHere ? "text-gray-200" : "text-white/12"}`}>+</span>
                       <span className={`text-[8px] font-black tracking-widest ${canAssignHere ? "text-gray-200" : "text-white/15"}`}>{canAssignHere ? "배정" : "EMPTY"}</span>
@@ -629,7 +629,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       type="button"
                       disabled={!movable}
                       onClick={() => movable && setMoveFrom(selected ? null : ri)}
-                      className={`w-full flex items-center gap-2 rounded-lg px-2.5 border text-left transition-all py-1.5 text-[11px] ${selected ? "border-white/70 bg-white/[0.07]" : movable ? "border-white/25 bg-white/[0.06] animate-pulse cursor-pointer" : "border-white/5 bg-black/25 cursor-default"}`}
+                      className={`w-full flex items-center gap-2 rounded-lg px-2.5 border text-left transition-all py-1.5 text-[11px] ${selected ? "border-[#e91e3f] bg-white/[0.07]" : movable ? "border-white/25 bg-white/[0.06] animate-pulse cursor-pointer" : "border-white/5 bg-black/25 cursor-default"}`}
                     >
                       <span className={`shrink-0 text-[9px] font-black rounded px-1 py-0.5 border ${roleColor(slot).badge}`}>{roleAbbr(slot)}</span>
                       <span className="text-gray-200 font-bold truncate">{rosterName(leader, r)}</span>
@@ -645,7 +645,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     type="button"
                     disabled={!canAssignHere}
                     onClick={() => canAssignHere && act({ action: "assignSlot", slot, byLeaderIdx: myLeaderIdx })}
-                    className={`w-full rounded-lg border border-dashed flex items-center justify-center transition-all h-[26px] ${canAssignHere ? "border-white/70 bg-white/[0.06] animate-pulse cursor-pointer hover:bg-white/10" : "border-white/5"}`}
+                    className={`w-full rounded-lg border border-dashed flex items-center justify-center transition-all h-[26px] ${canAssignHere ? "border-[#e91e3f] bg-[#e91e3f]/[0.08] animate-pulse cursor-pointer hover:bg-[#e91e3f]/20" : "border-white/5"}`}
                   >
                     <span className={`text-[8px] font-black tracking-widest ${canAssignHere ? "text-gray-200" : "text-white/15"}`}>{canAssignHere ? "여기에 배정" : "비어 있음"}</span>
                   </button>
@@ -754,8 +754,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           })()}
           {role === "host" && auction.status === "진행중" && (
             <>
-              {auction.phase < 1 && <button onClick={() => act({ action: "host:phase", phase: 1 })} className="text-xs font-black bg-white hover:bg-gray-200 text-black px-4 py-1.5 transition-colors">1페이즈 시작</button>}
-              {auction.phase === 1 && p1Role && <button onClick={() => setConfirmCfg({ title: "2페이즈 시작", message: `1페이즈를 마치고 2페이즈를 시작합니다. 미낙찰 ${p1Role} 가능 선수들은 2페이즈로 편입됩니다.`, confirmLabel: "시작", onConfirm: () => act({ action: "host:phase", phase: 2 }) })} className="text-xs font-black bg-white hover:bg-gray-200 text-black px-4 py-1.5 transition-colors">2페이즈 시작</button>}
+              {auction.phase < 1 && <button onClick={() => act({ action: "host:phase", phase: 1 })} className="text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white px-4 py-1.5 transition-colors">1페이즈 시작</button>}
+              {auction.phase === 1 && p1Role && <button onClick={() => setConfirmCfg({ title: "2페이즈 시작", message: `1페이즈를 마치고 2페이즈를 시작합니다. 미낙찰 ${p1Role} 가능 선수들은 2페이즈로 편입됩니다.`, confirmLabel: "시작", onConfirm: () => act({ action: "host:phase", phase: 2 }) })} className="text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white px-4 py-1.5 transition-colors">2페이즈 시작</button>}
               {strategyLeft > 0 ? (
                 <button onClick={() => act({ action: "host:strategy", seconds: 0 })} className="text-xs font-black bg-blue-500/80 hover:bg-blue-500 text-white px-4 py-1.5 transition-colors">전략 타임 종료</button>
               ) : (
@@ -772,7 +772,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       <div className="lg:hidden sticky top-[6.7rem] z-20 w-full px-4 py-2 bg-[#090909]/92 backdrop-blur-xl border-b border-white/5">
         <div className="grid grid-cols-2 gap-1.5">
           {([["main", "경매 · 채팅"], ["teams", "팀 현황"]] as const).map(([key, label]) => (
-            <button key={key} onClick={() => setMobileTab(key)} className={`py-2 text-xs font-black transition-all ${mobileTab === key ? "bg-white text-black" : "bg-white/[0.04] text-gray-500 border border-white/5"}`}>
+            <button key={key} onClick={() => setMobileTab(key)} className={`py-2 text-xs font-black transition-all ${mobileTab === key ? "bg-[#e91e3f] text-white" : "bg-white/[0.04] text-gray-500 border border-white/5"}`}>
               {label}
             </button>
           ))}
@@ -784,7 +784,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         {/* ═══ 좌측 세로 레일: 팀 현황판 ═══ */}
         <aside className={`${mobileTab === "teams" ? "block" : "hidden"} lg:block w-full lg:w-[280px] shrink-0 order-2 lg:order-1 lg:sticky lg:top-36 lg:max-h-[calc(100vh-11rem)] lg:overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full lg:pr-1`}>
           <div className="flex items-baseline gap-3 mb-3 px-1">
-            <span className="text-[10px] font-black auc-mono text-gray-500">TEAMS</span>
+            <span className="text-[10px] font-black auc-mono text-[#e91e3f]">TEAMS</span>
             <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
@@ -795,7 +795,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               const isOpen = forceOpen || expandedTeams.has(li);
               const toggle = () => setExpandedTeams((prev) => { const next = new Set(prev); if (next.has(li)) next.delete(li); else next.add(li); return next; });
               return (
-                <div key={li} className={`border transition-colors ${cur.leaderIdx === li ? "border-white/25 bg-white/[0.06]" : invMode && (l.inventory?.length || 0) > 0 && myLeaderIdx === li ? "border-white/25 bg-[#141414]" : myLeaderIdx === li ? "border-white/20 bg-[#141414]" : "border-white/5 bg-[#111111]/95"}`}>
+                <div key={li} className={`border transition-colors ${cur.leaderIdx === li ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.05]" : invMode && (l.inventory?.length || 0) > 0 && myLeaderIdx === li ? "border-white/25 bg-[#141414]" : myLeaderIdx === li ? "border-white/20 bg-[#141414]" : "border-white/5 bg-[#111111]/95"}`}>
                   {/* 컴팩트 헤더 — 클릭으로 펼침/접힘 */}
                   <button type="button" onClick={toggle} className="w-full text-left p-3.5 outline-none focus:outline-none">
                     <div className="flex items-center gap-2.5">
@@ -866,15 +866,15 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
           {/* 리더: 준비 배너 (경매 시작 전, 눈에 확 띄게) */}
           {myLeader && auction.status === "준비중" && (
-            <div className={`relative p-px ${myLeader.ready ? "bg-gradient-to-b from-emerald-500/50 via-emerald-500/15 to-transparent" : "bg-gradient-to-b from-white/40 via-white/10 to-transparent"}`}>
-              <div className="bg-[#0d0d0d] p-6 flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden">
+            <div className={`relative p-px ${myLeader.ready ? "bg-gradient-to-b from-emerald-500/50 via-emerald-500/15 to-transparent" : "bg-gradient-to-b from-[#e91e3f]/60 via-[#e91e3f]/20 to-transparent"}`}>
+              <div className="bg-[#120a0c] p-6 flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden">
                 {!myLeader.ready && <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/[0.07] blur-[60px] rounded-full pointer-events-none animate-[pulseGlow_2.5s_ease-in-out_infinite]"></div>}
                 <div className="relative z-10 text-center sm:text-left">
                   <p className="text-[10px] font-black auc-mono uppercase mb-1.5 text-gray-500">Ready Check</p>
                   <p className="text-lg font-black text-white">{myLeader.ready ? "준비 완료 — 다른 리더를 기다리는 중" : "경매 시작 전, 준비 버튼을 눌러주세요"}</p>
                   <p className="text-[11px] text-gray-500 mt-1">전체 리더 준비 완료 시 진행자가 경매를 시작합니다. ({auction.leaders.filter((l: any) => l.ready).length}/{auction.leaders.length} 준비)</p>
                 </div>
-                <button onClick={() => act({ action: "leader:ready", leaderIdx: myLeaderIdx, ready: !myLeader.ready })} className={`relative z-10 shrink-0 px-10 py-4 rounded-2xl text-base font-black transition-all ${myLeader.ready ? "bg-white/10 hover:bg-white/20 text-gray-300" : "bg-white hover:bg-gray-200 text-black shadow-[0_10px_30px_rgba(255,255,255,0.15)] animate-pulse"}`}>
+                <button onClick={() => act({ action: "leader:ready", leaderIdx: myLeaderIdx, ready: !myLeader.ready })} className={`relative z-10 shrink-0 px-10 py-4 rounded-2xl text-base font-black transition-all ${myLeader.ready ? "bg-white/10 hover:bg-white/20 text-gray-300" : "bg-[#e91e3f] hover:bg-[#d01634] text-white shadow-[0_10px_30px_rgba(233,30,63,0.4)] animate-pulse"}`}>
                   {myLeader.ready ? "준비 해제" : "준비 완료"}
                 </button>
               </div>
@@ -926,8 +926,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           )}
 
           {/* 현재 경매 카드 */}
-          <div className="relative bg-gradient-to-b from-white/40 via-white/10 to-transparent p-px">
-            <div className="bg-[#0d0d0d] p-6 md:p-8 relative overflow-hidden min-h-[230px]">
+          <div className="relative bg-gradient-to-b from-[#e91e3f]/60 via-[#e91e3f]/20 to-transparent p-px">
+            <div className="bg-[#120a0c] p-6 md:p-8 relative overflow-hidden min-h-[230px]">
               <div className="absolute -top-16 -right-16 w-52 h-52 bg-white/[0.07] blur-[70px] rounded-full pointer-events-none animate-[pulseGlow_4s_ease-in-out_infinite]"></div>
 
               {curPlayer ? (
@@ -973,7 +973,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     {/* 스카우터 타임 / 입찰 타이머 */}
                     {scoutLeft > 0 ? (
                       <div className="shrink-0 text-center px-4 py-3 border border-white/25 bg-white/[0.07]">
-                        <p className="text-[8px] font-black auc-mono text-gray-500 uppercase mb-0.5">Scout Time</p>
+                        <p className="text-[8px] font-black auc-mono text-[#e91e3f] uppercase mb-0.5">Scout Time</p>
                         <span className="text-2xl font-black tabular-nums text-white">{scoutLeft}</span>
                         <span className="text-[9px] font-bold text-gray-400 ml-1">초</span>
                       </div>
@@ -1035,7 +1035,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             </div>
                             {/* 직접 입력 + 스테퍼 */}
                             <div className="flex items-center justify-end gap-2">
-                              <div className="flex items-center bg-black/40 border border-white/10 rounded-xl overflow-hidden focus-within:border-white/70 transition-colors">
+                              <div className="flex items-center bg-black/40 border border-white/10 rounded-xl overflow-hidden focus-within:border-[#e91e3f] transition-colors">
                                 <button type="button" onClick={() => setBidInput(String(Math.max(nextMinBid, (Number(bidInput) || nextMinBid) - S.minIncrement)))} className="px-3 py-2.5 text-gray-500 hover:text-white hover:bg-white/5 text-sm font-black transition-colors">−</button>
                                 <input
                                   type="number"
@@ -1047,7 +1047,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                 />
                                 <button type="button" onClick={() => setBidInput(String((Number(bidInput) || (nextMinBid - S.minIncrement)) + S.minIncrement))} className="px-3 py-2.5 text-gray-500 hover:text-white hover:bg-white/5 text-sm font-black transition-colors">+</button>
                               </div>
-                              <button onClick={submitDirectBid} className="px-5 py-2.5 text-xs font-black bg-white hover:bg-gray-200 text-black rounded-xl transition-colors">입찰</button>
+                              <button onClick={submitDirectBid} className="px-5 py-2.5 text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white rounded-xl transition-colors">입찰</button>
                               <button onClick={() => setConfirmCfg({ title: "올인", message: `남은 슬롯 최소 예산을 제외한 전액 ${allinMax.toLocaleString()} Point를 베팅합니다.`, confirmLabel: "올인", onConfirm: () => act({ action: "allin", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx }) })} className="px-4 py-2.5 text-xs font-black bg-gradient-to-r from-orange-600 to-[#e91e3f] hover:brightness-110 text-white rounded-xl transition-all">올인</button>
                             </div>
                             <p className="text-[10px] text-gray-600">Enter 즉시 입찰 · 단위 자동 보정 · 올인 가능 <span className="text-gray-400 font-bold">{allinMax.toLocaleString()} Point</span></p>
@@ -1090,7 +1090,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   <div className="relative mb-4">
                     <div className="absolute -inset-3 bg-white/[0.07] blur-2xl rounded-full pointer-events-none"></div>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={revealProfile.avatarUrl} alt="" className="relative w-24 h-24 rounded-full bg-gray-800 ring-2 ring-white/50 ring-offset-4 ring-offset-[#120a0c]" />
+                    <img src={revealProfile.avatarUrl} alt="" className="relative w-24 h-24 rounded-full bg-gray-800 ring-2 ring-[#e91e3f]/60 ring-offset-4 ring-offset-[#120a0c]" />
                   </div>
                   <p className="text-2xl font-black text-white tracking-tight">{revealProfile.globalName}</p>
                   <p className="text-xs text-gray-500 font-medium mb-2">@{revealProfile.username}</p>
@@ -1119,7 +1119,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               <div className="flex flex-wrap items-stretch gap-2.5 mb-4">
                 {/* POINT — 가장 크게 */}
                 <div className="flex-1 min-w-[150px] rounded-xl border border-white/25 bg-gradient-to-br from-[#e91e3f]/[0.10] to-transparent px-4 py-2.5">
-                  <p className="text-[9px] font-black auc-mono text-gray-400 uppercase">Point</p>
+                  <p className="text-[9px] font-black auc-mono text-[#e91e3f]/80 uppercase">Point</p>
                   <p className="text-2xl font-black text-white tabular-nums leading-tight">{myLeader.points.toLocaleString()}</p>
                 </div>
                 {/* 로스터 진행도 */}
@@ -1129,14 +1129,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     <p className="text-xs font-black text-gray-200 tabular-nums">{myLeader.roster.length}<span className="text-gray-600">/{totalSlots}</span></p>
                   </div>
                   <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-white to-gray-400 transition-all duration-500" style={{ width: `${Math.min(100, (myLeader.roster.length / Math.max(1, totalSlots)) * 100)}%` }}></div>
+                    <div className="h-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] transition-all duration-500" style={{ width: `${Math.min(100, (myLeader.roster.length / Math.max(1, totalSlots)) * 100)}%` }}></div>
                   </div>
                 </div>
                 {/* 인벤토리 — 큼직한 액션 타일 */}
                 {invMode && (
                   <button
                     onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
-                    className={`shrink-0 min-w-[118px] rounded-xl border px-4 py-2.5 text-left transition-all ${(myLeader.inventory?.length || 0) > 0 ? "border-white/25 bg-white/[0.09] hover:bg-white/10 animate-pulse" : "border-white/10 bg-white/[0.03] hover:border-white/25"}`}
+                    className={`shrink-0 min-w-[118px] rounded-xl border px-4 py-2.5 text-left transition-all ${(myLeader.inventory?.length || 0) > 0 ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.10] hover:bg-[#e91e3f]/20 animate-pulse" : "border-white/10 bg-white/[0.03] hover:border-white/25"}`}
                   >
                     <p className={`text-[9px] font-black auc-mono uppercase ${(myLeader.inventory?.length || 0) > 0 ? "text-gray-400" : "text-gray-500"}`}>Inventory</p>
                     <span className="flex items-baseline gap-1.5">
@@ -1160,7 +1160,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             if (unrevealed.length === 0) return null;
             return (
               <div className="border border-white/25 bg-white/[0.05] p-4">
-                <p className="text-[10px] font-black auc-mono text-gray-500 uppercase mb-2.5">프로필 공개 대기 — 공개 여부는 진행자 재량</p>
+                <p className="text-[10px] font-black auc-mono text-[#e91e3f] uppercase mb-2.5">프로필 공개 대기 — 공개 여부는 진행자 재량</p>
                 <div className="flex flex-wrap gap-2">
                   {unrevealed.map(({ p, i }: any) => (
                     <button key={i} onClick={() => act({ action: "host:reveal", playerIdx: i })} className="flex items-center gap-2 text-[11px] font-bold text-gray-200 bg-white/5 border border-white/10 hover:border-white/35 hover:bg-white/10 px-3 py-1.5 rounded-full transition-all">
@@ -1194,7 +1194,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       const prof = p.revealed && p.discordId ? profiles[p.discordId] : null;
                       const callable = role === "host" && auction.status === "진행중" && (p.status === "대기" || p.status === "유찰") && !(auction.phase === 1 && p1Role && p.phase !== 1) && auction.phase > 0;
                       return (
-                        <div key={i} className={`flex flex-col rounded-xl border p-3.5 transition-colors ${p.status === "경매중" ? "border-white/25 bg-white/[0.06]" : p.status === "낙찰" ? "border-white/5 bg-black/20" : p.status === "유찰" ? "border-orange-500/20 bg-orange-500/[0.03]" : p.status === "배정중" ? "border-white/25 bg-white/[0.04]" : "border-white/5 bg-black/25 hover:border-white/15"}`}>
+                        <div key={i} className={`flex flex-col rounded-xl border p-3.5 transition-colors ${p.status === "경매중" ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : p.status === "낙찰" ? "border-white/5 bg-black/20" : p.status === "유찰" ? "border-orange-500/20 bg-orange-500/[0.03]" : p.status === "배정중" ? "border-white/25 bg-white/[0.04]" : "border-white/5 bg-black/25 hover:border-white/15"}`}>
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-[8px] font-black tracking-[0.2em] text-gray-600 uppercase">{p.isAllPos && !hidden ? "Golden" : `P${String(i + 1).padStart(2, "0")}`}</span>
                             {p.status === "경매중" ? <span className="text-[9px] font-black text-gray-200 animate-pulse">LIVE</span>
@@ -1251,7 +1251,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             ) : p.status === "배정중" && role === "host" ? (
                               <button onClick={() => setConfirmCfg({ title: "낙찰 취소", message: `${p.alias} 선수의 낙찰(배정 대기)을 취소하고 대기 상태로 되돌립니다.`, confirmLabel: "취소 확정", onConfirm: () => act({ action: "host:unsold", playerIdx: i }) })} className="w-full text-[10px] font-black text-orange-400/80 hover:text-orange-400 bg-white/5 border border-white/10 py-1.5 rounded-lg transition-colors">낙찰 취소</button>
                             ) : callable ? (
-                              <button onClick={() => act({ action: "host:call", playerIdx: i })} className="w-full text-[10px] font-black text-white bg-white/90 hover:bg-white text-black py-1.5 rounded-lg transition-colors">호명</button>
+                              <button onClick={() => act({ action: "host:call", playerIdx: i })} className="w-full text-[10px] font-black text-white bg-[#e91e3f]/85 hover:bg-[#e91e3f] py-1.5 rounded-lg transition-colors">호명</button>
                             ) : (
                               <p className="text-[10px] text-gray-700">{p.status === "경매중" ? "경매 진행 중" : p.status === "배정중" ? "슬롯 배정 중" : "대기"}</p>
                             )}
@@ -1273,7 +1273,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {/* 📌 알림창 — 스카우터 결과 등 나에게만 보이는 알림 */}
           <div className="bg-[#0d0d0d] border border-white/[0.07] flex flex-col overflow-hidden shrink-0 h-[196px]">
             <div className="px-4 py-2.5 border-b border-white/5 flex items-center gap-2 shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-white/70 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_2s_ease-in-out_infinite]"></span>
               <span className="auc-label text-gray-200">알림 로그</span>
               <span className="text-[9px] font-bold text-gray-600">나에게만 · 계속 보관</span>
               {notices.length > 0 && (
@@ -1284,7 +1284,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               {notices.length === 0 ? (
                 <p className="text-center text-[11px] text-gray-700 py-8">알림이 없습니다.<br /><span className="text-[10px] text-gray-800">스카우터 결과 등이 이곳에 표시됩니다</span></p>
               ) : notices.map((n) => (
-                <div key={n.id} className="rounded-xl border border-white/25 bg-white/[0.06] px-3 py-2.5 animate-in fade-in slide-in-from-top-1 duration-300">
+                <div key={n.id} className="rounded-xl border border-[#e91e3f]/25 bg-[#e91e3f]/[0.05] px-3 py-2.5 animate-in fade-in slide-in-from-top-1 duration-300">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <span className="text-[8px] font-black auc-mono text-gray-500 uppercase">{n.kind === "scout" ? "Scout" : "Notice"}</span>
                     <span className="ml-auto text-[9px] text-gray-600 tabular-nums">{new Date(n.at).toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit" })}</span>
@@ -1328,7 +1328,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
             <form onSubmit={sendChat} className="p-3 border-t border-white/5 flex gap-2">
               <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} maxLength={200} placeholder="메시지 입력..." className="flex-1 px-3.5 py-2.5 bg-black/40 border border-white/10 rounded-xl text-white text-xs outline-none focus:border-white/40 transition-colors placeholder:text-gray-600" />
-              <button type="submit" className="px-4 py-2.5 bg-white hover:bg-gray-200 text-black text-xs font-black rounded-xl transition-colors">전송</button>
+              <button type="submit" className="px-4 py-2.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-xs font-black rounded-xl transition-colors">전송</button>
             </form>
           </div>
 
@@ -1543,7 +1543,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                     setSwapPick((prev) => prev.includes(ri) ? prev.filter((x) => x !== ri) : prev.length >= 2 ? prev : [...prev, ri]);
                                     sfxSelect();
                                   }}
-                                  className={`inline-flex items-center gap-1 text-[10px] font-bold rounded-full pl-2 ${canUnassign ? "pr-1" : "pr-2"} py-0.5 border transition-all ${picked ? "border-white/70 bg-white/[0.07] text-white ring-1 ring-white/70" : movable ? "border-amber-400/60 bg-amber-400/[0.10] text-amber-100 animate-pulse cursor-pointer hover:bg-amber-400/20" : selectable ? "border-white/20 bg-white/[0.06] text-gray-200 hover:border-white/35 cursor-pointer" : "border-white/10 bg-white/[0.05] text-gray-200"}`}
+                                  className={`inline-flex items-center gap-1 text-[10px] font-bold rounded-full pl-2 ${canUnassign ? "pr-1" : "pr-2"} py-0.5 border transition-all ${picked ? "border-[#e91e3f] bg-white/[0.07] text-white ring-1 ring-[#e91e3f]" : movable ? "border-amber-400/60 bg-amber-400/[0.10] text-amber-100 animate-pulse cursor-pointer hover:bg-amber-400/20" : selectable ? "border-white/20 bg-white/[0.06] text-gray-200 hover:border-white/35 cursor-pointer" : "border-white/10 bg-white/[0.05] text-gray-200"}`}
                                 >
                                   <span className="truncate max-w-[110px]">{rosterName(l, r)}</span>
                                   {r.playerIdx === -1 && <span className="text-[8px] text-gray-500 font-black">리더</span>}
@@ -1606,7 +1606,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             if (d?.success) { sfxAssign(); showToast(`${na} ↔ ${nb} 포지션 교환 완료`); setSwapMode(false); setSwapPick([]); }
                             else showToast(d?.message || "포지션 교환에 실패했습니다");
                           }}
-                          className="mt-2.5 w-full py-2 text-[11px] font-black rounded-lg transition-all bg-white hover:bg-gray-200 disabled:bg-white/5 disabled:text-gray-600 text-black"
+                          className="mt-2.5 w-full py-2 text-[11px] font-black rounded-lg transition-all bg-[#e91e3f] hover:bg-[#d01634] disabled:bg-white/5 disabled:text-gray-600 text-white"
                         >
                           {swapPick.length === 2 ? `선택한 2명 교환 (${S.posChangeCost.toLocaleString()} Pt)` : `선수 ${2 - swapPick.length}명 더 선택`}
                         </button>
@@ -1639,7 +1639,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               onDragStart={() => { draggingRef.current = true; if (dragCard !== ci) { setDragCard(ci); sfxSelect(); } }}
                               onDragEnd={() => { setTimeout(() => { draggingRef.current = false; }, 0); }}
                               onClick={() => { if (!canSelect || swapMode) return; if (draggingRef.current) return; const next = picked ? null : ci; setDragCard(next); if (next !== null) sfxSelect(); }}
-                              className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-colors ${card.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.18] via-amber-500/[0.06] to-[#0d0d0d] shadow-[0_0_18px_rgba(251,191,36,0.18)]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35" : !swapMode ? "cursor-pointer hover:border-white/25" : ""} ${picked ? (card.golden ? "border-amber-300 ring-2 ring-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.45)]" : "border-white/70 ring-2 ring-white/70 shadow-[0_0_18px_rgba(255,255,255,0.12)] bg-white/[0.08]") : ""}`}
+                              className={`relative aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-colors ${card.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.18] via-amber-500/[0.06] to-[#0d0d0d] shadow-[0_0_18px_rgba(251,191,36,0.18)]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35" : !swapMode ? "cursor-pointer hover:border-white/25" : ""} ${picked ? (card.golden ? "border-amber-300 ring-2 ring-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.45)]" : "border-[#e91e3f] ring-2 ring-[#e91e3f] shadow-[0_0_18px_rgba(255,255,255,0.12)] bg-white/[0.08]") : ""}`}
                             >
                               {/* 황금카드 광택 */}
                               {card.golden && <span className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-amber-200/15 to-transparent"></span>}
@@ -1705,7 +1705,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     <p className="text-[11px] text-gray-500 leading-relaxed mb-7">한 번 배정한 선수는 인벤토리로 되돌릴 수 없습니다.<br />배정 후 조정은 <b className="text-gray-300">포지션 체인지(팀당 1회)</b>로만 가능합니다.</p>
                     <div className="flex gap-3">
                       <button onClick={() => setAssignWarn(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">취소</button>
-                      <button onClick={() => { const w = assignWarn; warnedRef.current = true; setAssignWarn(null); if (w) doPlace(w.invIdx, w.slot); }} className="flex-1 py-3 bg-white hover:bg-gray-200 text-black text-sm font-bold rounded-xl transition-colors">배정하기</button>
+                      <button onClick={() => { const w = assignWarn; warnedRef.current = true; setAssignWarn(null); if (w) doPlace(w.invIdx, w.slot); }} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors">배정하기</button>
                     </div>
                     <p className="text-[9px] text-gray-700 mt-3">이 안내는 처음 한 번만 표시됩니다.</p>
                   </div>
@@ -1728,7 +1728,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               <p className="text-xs text-gray-400 leading-relaxed mb-8 whitespace-pre-line">{confirmCfg.message}</p>
               <div className="flex gap-3">
                 <button onClick={() => setConfirmCfg(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">취소</button>
-                <button onClick={() => { confirmCfg.onConfirm(); setConfirmCfg(null); }} className="flex-1 py-3 bg-white hover:bg-gray-200 text-black text-sm font-bold rounded-xl transition-colors shadow-lg shadow-black/40">{confirmCfg.confirmLabel || "확인"}</button>
+                <button onClick={() => { confirmCfg.onConfirm(); setConfirmCfg(null); }} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors shadow-lg shadow-black/40">{confirmCfg.confirmLabel || "확인"}</button>
               </div>
             </div>
           </div>
@@ -1781,14 +1781,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           else if (swapB === "") setSwapB(String(ri));
                           else showToast("이미 2명을 선택했습니다. 선택을 해제한 뒤 다시 고르세요");
                         }}
-                        className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-left transition-all ${sel ? "border-white/70 bg-white/[0.07]" : "border-white/10 bg-[#0d0d0d] hover:border-white/25"}`}
+                        className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-left transition-all ${sel ? "border-[#e91e3f] bg-white/[0.07]" : "border-white/10 bg-[#0d0d0d] hover:border-white/25"}`}
                       >
                         <span className={`shrink-0 text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(r.slot).badge}`}>{r.slot}</span>
                         <span className="flex-1 min-w-0 truncate text-xs font-bold text-gray-200">
                           {rosterName(leader, r)}
                           {r.playerIdx === -1 && <span className="ml-1.5 text-[9px] text-gray-500 font-black">리더</span>}
                         </span>
-                        <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${sel ? "bg-white text-black" : "bg-white/5 text-transparent"}`}>{sel || ""}</span>
+                        <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${sel ? "bg-[#e91e3f] text-white" : "bg-white/5 text-transparent"}`}>{sel || ""}</span>
                       </button>
                     );
                   })}
@@ -1804,7 +1804,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       if (d?.success) { sfxAssign(); showToast(`${na} ↔ ${nb} 포지션 교환 완료`); setPosSwapTarget(null); setSwapA(""); setSwapB(""); }
                       else showToast(d?.message || "포지션 교환에 실패했습니다");
                     }}
-                    className="flex-1 py-3 bg-white hover:bg-gray-200 disabled:bg-white/5 disabled:text-gray-600 text-black text-sm font-bold rounded-xl transition-colors"
+                    className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:bg-white/5 disabled:text-gray-600 text-white text-sm font-bold rounded-xl transition-colors"
                   >
                     {swapA !== "" && swapB !== "" ? "교환하기" : `${2 - [swapA, swapB].filter((x) => x !== "").length}명 더 선택`}
                   </button>
@@ -1819,8 +1819,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       {nextFx !== null && (
         <div className="fixed top-32 left-1/2 -translate-x-1/2 z-[125] pointer-events-none">
           <div className="animate-[nextFxIn_2.2s_ease-in-out_forwards]">
-            <div className="relative bg-gradient-to-b from-white/40 via-white/10 to-transparent p-px shadow-[0_16px_50px_rgba(0,0,0,0.6)]">
-              <div className="bg-[#101012] px-7 py-4 flex items-center gap-3.5">
+            <div className="relative bg-gradient-to-b from-[#e91e3f]/60 via-[#e91e3f]/20 to-transparent p-px shadow-[0_16px_50px_rgba(0,0,0,0.6)]">
+              <div className="bg-[#150a0d] px-7 py-4 flex items-center gap-3.5">
                 <span className="w-8 h-8 rounded-xl bg-white/[0.07] flex items-center justify-center shrink-0">
                   <MegaphoneIcon className="w-4 h-4 text-gray-200" />
                 </span>
@@ -1965,7 +1965,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <input type="number" placeholder="조정할 금액 (예: 5000)" value={adjustAmount} onChange={(e) => setAdjustAmount(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white text-center font-bold outline-none focus:border-white/40 transition-colors mb-3" />
                 <div className="grid grid-cols-2 gap-2 mb-6">
                   <button onClick={async () => { const v = Math.abs(Number(adjustAmount)); if (!v) return; const d = await act({ action: "host:adjustPoints", leaderIdx: adjustTarget, delta: v }); if (d.success) setAdjustTarget(null); }} className="py-3 rounded-xl text-sm font-black bg-emerald-500/90 hover:bg-emerald-500 text-white transition-colors">+ 추가</button>
-                  <button onClick={async () => { const v = Math.abs(Number(adjustAmount)); if (!v) return; const d = await act({ action: "host:adjustPoints", leaderIdx: adjustTarget, delta: -v }); if (d.success) setAdjustTarget(null); }} className="py-3 rounded-xl text-sm font-black bg-white hover:bg-gray-200 text-black transition-colors">− 차감</button>
+                  <button onClick={async () => { const v = Math.abs(Number(adjustAmount)); if (!v) return; const d = await act({ action: "host:adjustPoints", leaderIdx: adjustTarget, delta: -v }); if (d.success) setAdjustTarget(null); }} className="py-3 rounded-xl text-sm font-black bg-[#e91e3f] hover:bg-[#d01634] text-white transition-colors">− 차감</button>
                 </div>
                 <button onClick={() => setAdjustTarget(null)} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">닫기</button>
               </div>
@@ -1986,7 +1986,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <p className="text-xs text-gray-400 mb-6">{leader.position ? `현재 [${leader.position}] — 선택한 포지션 슬롯으로 이동합니다.` : "리더 본인이 차지할 슬롯을 지정합니다."}</p>
                 <div className="grid grid-cols-3 gap-2 mb-6">
                   {roleList.map((pos: string) => (
-                    <button key={pos} disabled={leader.position === pos} onClick={async () => { const d = await act({ action: "host:setLeaderPos", leaderIdx: posSetTarget, position: pos }); if (d.success) setPosSetTarget(null); }} className={`py-4 rounded-xl text-sm font-black border transition-all ${leader.position === pos ? "border-white/25 bg-white/[0.07] text-gray-200 cursor-default" : "border-white/10 bg-white/5 text-white hover:border-white/70 hover:bg-white/10"}`}>
+                    <button key={pos} disabled={leader.position === pos} onClick={async () => { const d = await act({ action: "host:setLeaderPos", leaderIdx: posSetTarget, position: pos }); if (d.success) setPosSetTarget(null); }} className={`py-4 rounded-xl text-sm font-black border transition-all ${leader.position === pos ? "border-white/25 bg-white/[0.07] text-gray-200 cursor-default" : "border-white/10 bg-white/5 text-white hover:border-[#e91e3f] hover:bg-white/10"}`}>
                       {pos}{leader.position === pos && <span className="block text-[9px] font-bold text-gray-500 mt-0.5">현재</span>}
                     </button>
                   ))}
