@@ -266,6 +266,81 @@ export const AuctionStyles = () => (
       64%,100%{ opacity: 0; box-shadow: 0 0 0 0 rgba(255,255,255,0); }
     }
 
+    /* ══ 골든 카드 — 홀로그램 포일 ══
+       수집가용 트레이딩 카드 질감. 금박 테두리 + 기요셰(지폐 인그레이빙) 음각 위로
+       무지개 홀로 시트가 흐르고, 카드가 옆면에서 정면으로 회전하며 착지한다. */
+    .auc-gcard-stage { position: absolute; top: 50%; left: 50%; perspective: 1300px; }
+    .auc-gcard-outer { animation: aucGcOuter 4.3s cubic-bezier(.2,.9,.25,1) forwards; }
+    .auc-gcard-spin  { transform-style: preserve-3d; animation: aucGcSpin 4.3s cubic-bezier(.2,.9,.25,1) forwards; }
+
+    .auc-gcard { position: relative; width: 214px; height: 300px; border-radius: 14px; padding: 3px;
+      background: linear-gradient(135deg, #fff7d6, #f59e0b, #fde68a, #b45309, #fde047, #f59e0b);
+      background-size: 300% 300%;
+      animation: aucGcFoil 3s linear infinite;
+      box-shadow: 0 0 62px rgba(250,204,21,.45), 0 30px 60px -20px #000;
+    }
+    @media (max-width: 520px) { .auc-gcard { width: 172px; height: 242px; } }
+
+    .auc-gcard-face { position: relative; width: 100%; height: 100%; border-radius: 11px; overflow: hidden;
+      background: radial-gradient(ellipse at 50% 30%, #3b2b0a 0%, #1b1305 62%, #0d0902 100%); }
+
+    /* 기요셰 음각 — 동심원 + 방사선이 겹쳐 로제트 문양을 만든다 */
+    .auc-gcard-guilloche { position: absolute; inset: 0; opacity: .5; mix-blend-mode: screen;
+      background:
+        repeating-radial-gradient(circle at 50% 40%, transparent 0 4px, rgba(251,191,36,.14) 4px 5px),
+        repeating-conic-gradient(from 0deg at 50% 40%, transparent 0 3deg, rgba(251,191,36,.07) 3deg 6deg);
+    }
+    /* 홀로 시트 — 각도가 바뀔 때마다 색이 흐른다 */
+    .auc-gcard-holo { position: absolute; inset: 0; mix-blend-mode: color-dodge; opacity: .5;
+      background: linear-gradient(115deg, transparent 18%, rgba(255,60,160,.5) 32%, rgba(255,225,60,.5) 42%, rgba(60,255,200,.5) 52%, rgba(80,140,255,.5) 62%, rgba(200,80,255,.45) 72%, transparent 86%);
+      background-size: 280% 100%;
+      animation: aucGcHolo 2.8s ease-in-out infinite;
+    }
+    /* 착지 후 표면을 천천히 지나는 광원 */
+    .auc-gcard-light { position: absolute; inset: -30%; pointer-events: none;
+      background: radial-gradient(circle at 50% 50%, rgba(255,250,220,.34) 0%, transparent 46%);
+      animation: aucGcLight 4.3s ease-in-out forwards; }
+
+    /* 착지 충격파 */
+    .auc-gcard-shock { position: absolute; top: 50%; left: 50%; width: 230px; height: 230px;
+      margin: -115px 0 0 -115px; border-radius: 999px; border: 2px solid rgba(255,244,200,.85);
+      opacity: 0; animation: aucGcShock 4.3s ease-out forwards; }
+
+    @keyframes aucGcFoil { 0% { background-position: 0% 50% } 100% { background-position: 300% 50% } }
+    @keyframes aucGcHolo { 0% { background-position: 120% 0 } 50% { background-position: -20% 0 } 100% { background-position: 120% 0 } }
+    @keyframes aucGcLight {
+      0%, 45% { transform: translate(-42%, -32%); opacity: 0; }
+      56%     { opacity: 1; }
+      86%     { transform: translate(42%, 32%); opacity: .85; }
+      100%    { opacity: 0; }
+    }
+    /* 바깥: 위치·크기·페이드 (3D 평면화를 막기 위해 회전과 분리) */
+    @keyframes aucGcOuter {
+      0%   { transform: translate(-50%, -46%) scale(.34); opacity: 0; filter: blur(11px); }
+      16%  { opacity: 1; filter: blur(2px); }
+      47%  { transform: translate(-50%, -50%) scale(1.07); opacity: 1; filter: blur(0); }
+      54%  { transform: translate(-50%, -50%) scale(1); }
+      86%  { transform: translate(-50%, -50%) scale(1); opacity: 1; filter: blur(0); }
+      100% { transform: translate(-50%, -50%) scale(1.17); opacity: 0; filter: blur(6px); }
+    }
+    /* 안쪽: 순수 3D 회전. 착지 뒤 살짝 흔들려 홀로 색이 한 번 더 돈다 */
+    @keyframes aucGcSpin {
+      0%   { transform: rotateY(88deg) rotateZ(-10deg) rotateX(7deg); }
+      30%  { transform: rotateY(50deg) rotateZ(-4deg) rotateX(3deg); }
+      47%  { transform: rotateY(0deg) rotateZ(0deg) rotateX(0deg); }
+      57%  { transform: rotateY(-9deg) rotateX(2deg); }
+      67%  { transform: rotateY(5deg) rotateX(-1deg); }
+      78%, 100% { transform: rotateY(0deg) rotateX(0deg); }
+    }
+    @keyframes aucGcShock {
+      0%, 44% { opacity: 0; transform: scale(.25); }
+      48%     { opacity: 1; transform: scale(.55); }
+      66%,100%{ opacity: 0; transform: scale(3.2); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .auc-gcard, .auc-gcard-holo { animation: none; }
+    }
+
     /* ── 경매장 공용 팝업 ── 방 안의 모든 모달이 같은 골격을 쓴다 */
     .auc-modal-back { position: fixed; inset: 0; z-index: 120; display: flex; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.84); backdrop-filter: blur(4px); }
     @media (min-width: 640px) { .auc-modal-back { align-items: center; padding: 16px; } }

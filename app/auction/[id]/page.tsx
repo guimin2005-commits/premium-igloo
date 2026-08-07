@@ -2127,67 +2127,56 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {/* 황금카드 소환 연출 — 메인 화면의 초대장 티켓을 금장으로 옮긴 '골든 티켓'이 떠오른다 */}
+      {/* 황금카드 소환 연출 — 홀로그램 포일 카드가 옆면에서 회전하며 정면으로 착지한다 */}
       {goldenFx && (
         <div className="fixed inset-0 z-[135] pointer-events-none overflow-hidden">
           {/* 배경 딤 + 골드 비네트 */}
-          <div className="absolute inset-0 animate-[gcBackdrop_4.3s_ease-in-out_forwards]" style={{ background: "radial-gradient(ellipse at 50% 50%, rgba(24,17,3,0.88) 0%, rgba(0,0,0,0.96) 100%)" }}></div>
+          <div className="absolute inset-0 animate-[gcBackdrop_4.3s_ease-in-out_forwards]" style={{ background: "radial-gradient(ellipse at 50% 50%, rgba(24,17,3,0.9) 0%, rgba(0,0,0,0.97) 100%)" }}></div>
 
-          {/* 티켓이 자리잡은 뒤 퍼지는 광선 */}
+          {/* 착지 후 퍼지는 광선 */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[620px] h-[620px] animate-[gcRays_4.3s_linear_forwards]">
             {[0, 30, 60, 90, 120, 150].map((deg) => (
-              <span key={deg} className="absolute top-1/2 left-1/2 w-[620px] h-[2px] -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-transparent via-yellow-300/28 to-transparent" style={{ transform: `translate(-50%,-50%) rotate(${deg}deg)` }}></span>
+              <span key={deg} className="absolute top-1/2 left-1/2 w-[620px] h-[2px] -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-transparent via-yellow-300/25 to-transparent" style={{ transform: `translate(-50%,-50%) rotate(${deg}deg)` }}></span>
             ))}
           </div>
 
           {/* 중앙 글로우 */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[440px] h-[440px] bg-yellow-400/20 blur-[100px] rounded-full animate-[gcGlow_4.3s_ease-in-out_forwards]"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-yellow-400/20 blur-[100px] rounded-full animate-[gcGlow_4.3s_ease-in-out_forwards]"></div>
 
-          {/* ══ 골든 티켓 ══ */}
-          <div className="absolute top-1/2 left-1/2 auc-gt-scene">
-            <div className="auc-gticket">
-              {/* 본권 */}
-              <div className="auc-half auc-half-l">
-                <span className="auc-shine" />
-                <div className="absolute inset-0 flex flex-col justify-between p-5 md:p-6">
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-300 animate-pulse" />
-                    <span className="auc-label text-yellow-200">Golden Ticket</span>
-                  </div>
+          {/* 착지 충격파 — 두 겹으로 번진다 */}
+          <span className="auc-gcard-shock"></span>
+          <span className="auc-gcard-shock" style={{ animationDelay: "0.09s", borderColor: "rgba(251,191,36,.55)" }}></span>
 
-                  <div className="min-w-0">
-                    <p className="auc-label text-yellow-600/80 mb-1.5">Invitation</p>
-                    <p className="text-xl md:text-3xl font-black leading-snug break-keep auc-gold-text">올 포지션</p>
-                  </div>
+          {/* ══ 홀로그램 포일 카드 ══ */}
+          <div className="auc-gcard-stage">
+            <div className="auc-gcard-outer">
+              <div className="auc-gcard-spin">
+                <div className="auc-gcard">
+                  <div className="auc-gcard-face">
+                    {/* 질감 레이어 */}
+                    <span className="auc-gcard-guilloche"></span>
+                    <span className="auc-gcard-holo"></span>
+                    <span className="auc-gcard-light"></span>
 
-                  {/* 좌석표처럼 — 이 매물의 성격 */}
-                  <div className="flex items-end gap-5">
-                    <div>
-                      <p className="auc-label text-yellow-600/70 mb-1">Slot</p>
-                      <p className="text-sm md:text-base font-black text-yellow-100 leading-none">자유 배정</p>
-                    </div>
-                    <span className="w-px h-7 bg-yellow-400/25 mb-0.5" />
-                    <div>
-                      <p className="auc-label text-yellow-600/70 mb-1">Tier</p>
-                      <p className="text-sm md:text-base font-black text-yellow-100/70 leading-none">비공개</p>
+                    {/* 금선 이중 프레임 */}
+                    <span className="absolute inset-[9px] rounded-[7px] border border-yellow-400/40 pointer-events-none"></span>
+                    <span className="absolute inset-[14px] rounded-[5px] border border-yellow-400/15 pointer-events-none"></span>
+                    {/* 코너 장식 */}
+                    <span className="absolute top-3 left-3.5 text-[11px] text-yellow-300/85">★</span>
+                    <span className="absolute bottom-3 right-3.5 text-[11px] text-yellow-300/85 rotate-180 inline-block">★</span>
+
+                    {/* 본문 */}
+                    <div className="relative h-full flex flex-col items-center justify-center px-4 text-center">
+                      <span className="text-6xl leading-none" style={{ background: "linear-gradient(180deg, #fff7d6, #f59e0b)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 0 16px rgba(250,204,21,0.6))" }}>★</span>
+                      <span className="block w-14 h-px my-3.5 bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></span>
+                      <p className="auc-label text-yellow-200/90">Golden Card</p>
+                      <p className="text-xl md:text-2xl font-black tracking-tight mt-1.5 auc-gold-text">올 포지션</p>
+                      <span className="block w-14 h-px my-3.5 bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></span>
+                      <p className="auc-label-xs text-yellow-500/70">All Position</p>
                     </div>
                   </div>
                 </div>
               </div>
-
-              {/* 절취 스텁 */}
-              <div className="auc-half auc-half-r">
-                <span className="auc-shine" />
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-2">
-                  <p className="auc-label text-yellow-300/90 leading-[1.6] text-center">All<br />Pos</p>
-                  <span className="w-6 h-px bg-yellow-400/35" />
-                  <span className="text-lg text-yellow-300/90" style={{ filter: "drop-shadow(0 0 8px rgba(250,204,21,.6))" }}>★</span>
-                </div>
-              </div>
-
-              {/* 절취선 + 착지 섬광 */}
-              <span className="auc-perf" />
-              <span className="auc-gt-flash" />
             </div>
           </div>
 
@@ -2195,25 +2184,25 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {[...Array(12)].map((_, i) => {
             const angle = (i / 12) * 360;
             return (
-              <span key={i} className="absolute top-1/2 left-1/2 text-yellow-300 text-sm" style={{ opacity: 0, animation: `gcSpark 1s ease-out ${2.05 + (i % 3) * 0.06}s forwards`, ["--sx" as any]: `${Math.cos((angle * Math.PI) / 180) * 210}px`, ["--sy" as any]: `${Math.sin((angle * Math.PI) / 180) * 130}px` }}>✦</span>
+              <span key={i} className="absolute top-1/2 left-1/2 text-yellow-300 text-sm" style={{ opacity: 0, animation: `gcSpark 1s ease-out ${2.05 + (i % 3) * 0.05}s forwards`, ["--sx" as any]: `${Math.cos((angle * Math.PI) / 180) * 190}px`, ["--sy" as any]: `${Math.sin((angle * Math.PI) / 180) * 190}px` }}>✦</span>
             );
           })}
 
           {/* 타이틀 */}
-          <div className="absolute inset-x-0 top-1/2 flex justify-center animate-[gcTitle_4.3s_ease-in-out_forwards]" style={{ transform: "translateY(9.5rem)" }}>
-            <p className="text-2xl md:text-4xl font-black auc-mono uppercase auc-gold-text">Golden Ticket</p>
+          <div className="absolute inset-x-0 top-1/2 flex justify-center animate-[gcTitle_4.3s_ease-in-out_forwards]" style={{ transform: "translateY(11.5rem)" }}>
+            <p className="text-2xl md:text-4xl font-black auc-mono uppercase auc-gold-text">Golden Card</p>
           </div>
 
           <style dangerouslySetInnerHTML={{__html: `
             @keyframes gcBackdrop {
               0% { opacity: 0; }
-              10%, 85% { opacity: 1; }
+              10%, 86% { opacity: 1; }
               100% { opacity: 0; }
             }
             @keyframes gcRays {
-              0%, 40% { opacity: 0; transform: translate(-50%, -50%) rotate(0deg); }
+              0%, 42% { opacity: 0; transform: translate(-50%, -50%) rotate(0deg); }
               54%, 84% { opacity: 1; }
-              100% { opacity: 0; transform: translate(-50%, -50%) rotate(52deg); }
+              100% { opacity: 0; transform: translate(-50%, -50%) rotate(48deg); }
             }
             @keyframes gcGlow {
               0%, 34% { opacity: 0; }
@@ -2225,8 +2214,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               100% { opacity: 0; transform: translate(calc(-50% + var(--sx)), calc(-50% + var(--sy))) scale(1.3); }
             }
             @keyframes gcTitle {
-              0%, 56% { opacity: 0; letter-spacing: 0.5em; }
-              66%, 85% { opacity: 1; letter-spacing: 0.25em; }
+              0%, 58% { opacity: 0; letter-spacing: 0.5em; }
+              70%, 86% { opacity: 1; letter-spacing: 0.25em; }
               100% { opacity: 0; }
             }
           `}} />
