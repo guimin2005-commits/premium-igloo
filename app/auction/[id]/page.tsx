@@ -2121,162 +2121,107 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {/* 황금카드 소환 연출 — 편지봉투가 열리고 그 안에서 골든 카드가 뽑혀 나온다 */}
+      {/* 황금카드 소환 연출 — 메인 화면의 초대장 티켓을 금장으로 옮긴 '골든 티켓'이 떠오른다 */}
       {goldenFx && (
-        <div className="fixed inset-0 z-[135] pointer-events-none overflow-hidden" style={{ perspective: "1600px" }}>
+        <div className="fixed inset-0 z-[135] pointer-events-none overflow-hidden">
           {/* 배경 딤 + 골드 비네트 */}
           <div className="absolute inset-0 animate-[gcBackdrop_4.3s_ease-in-out_forwards]" style={{ background: "radial-gradient(ellipse at 50% 50%, rgba(24,17,3,0.88) 0%, rgba(0,0,0,0.96) 100%)" }}></div>
 
-          {/* 봉투가 열린 뒤 퍼지는 광선 */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] h-[560px] animate-[gcRays_4.3s_linear_forwards]">
+          {/* 티켓이 자리잡은 뒤 퍼지는 광선 */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[620px] h-[620px] animate-[gcRays_4.3s_linear_forwards]">
             {[0, 30, 60, 90, 120, 150].map((deg) => (
-              <span key={deg} className="absolute top-1/2 left-1/2 w-[560px] h-[2px] -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-transparent via-yellow-300/30 to-transparent" style={{ transform: `translate(-50%,-50%) rotate(${deg}deg)` }}></span>
+              <span key={deg} className="absolute top-1/2 left-1/2 w-[620px] h-[2px] -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-transparent via-yellow-300/28 to-transparent" style={{ transform: `translate(-50%,-50%) rotate(${deg}deg)` }}></span>
             ))}
           </div>
 
           {/* 중앙 글로우 */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[380px] h-[380px] bg-yellow-400/20 blur-[90px] rounded-full animate-[gcGlow_4.3s_ease-in-out_forwards]"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[440px] h-[440px] bg-yellow-400/20 blur-[100px] rounded-full animate-[gcGlow_4.3s_ease-in-out_forwards]"></div>
 
-          {/* ══ 봉투 무대 ══ */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-[gcScene_4.3s_ease-in-out_forwards]" style={{ transformStyle: "preserve-3d" }}>
-            <div className="relative w-[260px] h-[176px] md:w-[300px] md:h-[202px]" style={{ transformStyle: "preserve-3d" }}>
+          {/* ══ 골든 티켓 ══ */}
+          <div className="absolute top-1/2 left-1/2 auc-gt-scene">
+            <div className="auc-gticket">
+              {/* 본권 */}
+              <div className="auc-half auc-half-l">
+                <span className="auc-shine" />
+                <div className="absolute inset-0 flex flex-col justify-between p-5 md:p-6">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-300 animate-pulse" />
+                    <span className="auc-label text-yellow-200">Golden Ticket</span>
+                  </div>
 
-              {/* 봉투 뒷면 (카드가 이 앞으로 올라온다) */}
-              <div className="absolute inset-0 rounded-[4px]" style={{ background: "linear-gradient(155deg, #241a06 0%, #171104 60%, #0d0902 100%)", border: "1px solid rgba(251,191,36,.35)", boxShadow: "0 30px 70px -20px #000" }}></div>
+                  <div className="min-w-0">
+                    <p className="auc-label text-yellow-600/80 mb-1.5">Invitation</p>
+                    <p className="text-xl md:text-3xl font-black leading-snug break-keep auc-gold-text">올 포지션</p>
+                  </div>
 
-              {/* ── 골든 카드 : 봉투 안에서 위로 뽑혀 나온다 ── */}
-              <div className="absolute left-1/2 bottom-[14px] w-[132px] h-[186px] md:w-[152px] md:h-[214px] -translate-x-1/2 animate-[gcCard_4.3s_cubic-bezier(0.22,1,0.28,1)_forwards]" style={{ zIndex: 2 }}>
-                <div className="w-full h-full rounded-xl p-[3px] shadow-[0_0_70px_rgba(250,204,21,0.5)]" style={{ background: "linear-gradient(135deg, #fef9c3, #f59e0b, #fde047, #b45309, #fde047)", backgroundSize: "400% 400%", animation: "gcShine 1.4s linear infinite" }}>
-                  <div className="relative w-full h-full rounded-[9px] overflow-hidden" style={{ background: "radial-gradient(ellipse at 50% 35%, #3a2a08 0%, #1a1305 70%)" }}>
-                    <div className="absolute inset-[7px] rounded-[6px] border border-yellow-400/40"></div>
-                    <div className="absolute inset-[11px] rounded-[4px] border border-yellow-400/15"></div>
-                    <span className="absolute top-2.5 left-3 text-[11px] text-yellow-400/80">★</span>
-                    <span className="absolute bottom-2.5 right-3 text-[11px] text-yellow-400/80 rotate-180 inline-block">★</span>
-                    <div className="absolute inset-0" style={{ background: "linear-gradient(115deg, transparent 32%, rgba(255,255,220,0.2) 48%, rgba(255,255,220,0.3) 50%, rgba(255,255,220,0.2) 52%, transparent 68%)", animation: "gcGloss 1.6s ease-in-out infinite" }}></div>
-                    <div className="relative h-full flex flex-col items-center justify-center gap-2.5">
-                      <span className="text-5xl md:text-6xl" style={{ background: "linear-gradient(180deg, #fef9c3, #f59e0b)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 0 14px rgba(250,204,21,0.55))" }}>★</span>
-                      <div className="w-12 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
-                      <p className="text-[9px] md:text-[10px] font-black tracking-[0.3em] uppercase text-yellow-200/90">Golden Card</p>
-                      <p className="text-base md:text-lg font-black text-yellow-50 tracking-tight" style={{ textShadow: "0 0 16px rgba(250,204,21,0.55)" }}>올 포지션</p>
-                      <div className="w-12 h-px bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></div>
+                  {/* 좌석표처럼 — 이 매물의 성격 */}
+                  <div className="flex items-end gap-5">
+                    <div>
+                      <p className="auc-label text-yellow-600/70 mb-1">Slot</p>
+                      <p className="text-sm md:text-base font-black text-yellow-100 leading-none">자유 배정</p>
+                    </div>
+                    <span className="w-px h-7 bg-yellow-400/25 mb-0.5" />
+                    <div>
+                      <p className="auc-label text-yellow-600/70 mb-1">Tier</p>
+                      <p className="text-sm md:text-base font-black text-yellow-100/70 leading-none">비공개</p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* ── 봉투 앞주머니 : 카드보다 위에 있어 '안에서 나오는' 착시를 만든다 ── */}
-              <div className="absolute inset-x-0 bottom-0 h-[62%] rounded-b-[4px] overflow-hidden" style={{ zIndex: 3, background: "linear-gradient(170deg, #2c2007 0%, #1c1405 55%, #120c03 100%)", borderLeft: "1px solid rgba(251,191,36,.35)", borderRight: "1px solid rgba(251,191,36,.35)", borderBottom: "1px solid rgba(251,191,36,.35)", boxShadow: "0 -12px 26px -14px rgba(0,0,0,.9)" }}>
-                {/* 주머니 접힘선 */}
-                <span className="absolute inset-x-0 top-0 h-px bg-yellow-400/25"></span>
-                <span className="absolute left-0 top-0 w-1/2 h-full" style={{ background: "linear-gradient(122deg, transparent 62%, rgba(251,191,36,.10) 63%)" }}></span>
-                <span className="absolute right-0 top-0 w-1/2 h-full" style={{ background: "linear-gradient(238deg, transparent 62%, rgba(251,191,36,.10) 63%)" }}></span>
-              </div>
-
-              {/* ── 봉투 뚜껑(플랩) : 위로 젖혀지며 열린다 ── */}
-              <div className="absolute inset-x-0 top-0 h-[52%] origin-top animate-[gcFlap_4.3s_cubic-bezier(0.34,1.2,0.4,1)_forwards]" style={{ zIndex: 4, transformStyle: "preserve-3d" }}>
-                <div className="w-full h-full" style={{ background: "linear-gradient(180deg, #3a2a08 0%, #241a06 100%)", clipPath: "polygon(0 0, 100% 0, 50% 100%)", borderTop: "1px solid rgba(251,191,36,.35)" }}></div>
-                {/* 플랩 가장자리 금선 */}
-                <span className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(251,191,36,.18), transparent 60%)", clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}></span>
-              </div>
-
-              {/* ── 밀랍 봉인 : 갈라지며 터진다 ── */}
-              <div className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 w-11 h-11 md:w-12 md:h-12 animate-[gcSeal_4.3s_ease-in-out_forwards]" style={{ zIndex: 5 }}>
-                <div className="w-full h-full rounded-full flex items-center justify-center" style={{ background: "radial-gradient(circle at 35% 30%, #fde047 0%, #d97706 45%, #92400e 100%)", boxShadow: "0 3px 10px rgba(0,0,0,.6), inset 0 -2px 6px rgba(0,0,0,.35)" }}>
-                  <span className="text-[15px] md:text-[17px] text-amber-900/80 font-black">★</span>
+              {/* 절취 스텁 */}
+              <div className="auc-half auc-half-r">
+                <span className="auc-shine" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-2">
+                  <p className="auc-label text-yellow-300/90 leading-[1.6] text-center">All<br />Pos</p>
+                  <span className="w-6 h-px bg-yellow-400/35" />
+                  <span className="text-lg text-yellow-300/90" style={{ filter: "drop-shadow(0 0 8px rgba(250,204,21,.6))" }}>★</span>
                 </div>
               </div>
 
+              {/* 절취선 + 착지 섬광 */}
+              <span className="auc-perf" />
+              <span className="auc-gt-flash" />
             </div>
           </div>
 
-          {/* 봉인이 터지는 순간 파티클 */}
-          {[...Array(10)].map((_, i) => {
-            const angle = (i / 10) * 360;
+          {/* 착지 순간 파티클 */}
+          {[...Array(12)].map((_, i) => {
+            const angle = (i / 12) * 360;
             return (
-              <span key={i} className="absolute top-1/2 left-1/2 text-yellow-300 text-sm" style={{ opacity: 0, animation: `gcSpark 0.9s ease-out ${1.35 + (i % 3) * 0.05}s forwards`, ["--sx" as any]: `${Math.cos((angle * Math.PI) / 180) * 150}px`, ["--sy" as any]: `${Math.sin((angle * Math.PI) / 180) * 150}px` }}>✦</span>
+              <span key={i} className="absolute top-1/2 left-1/2 text-yellow-300 text-sm" style={{ opacity: 0, animation: `gcSpark 1s ease-out ${2.05 + (i % 3) * 0.06}s forwards`, ["--sx" as any]: `${Math.cos((angle * Math.PI) / 180) * 210}px`, ["--sy" as any]: `${Math.sin((angle * Math.PI) / 180) * 130}px` }}>✦</span>
             );
           })}
 
           {/* 타이틀 */}
-          <div className="absolute inset-x-0 top-1/2 flex justify-center animate-[gcTitle_4.3s_ease-in-out_forwards]" style={{ transform: "translateY(11rem)" }}>
-            <p className="text-2xl md:text-4xl font-black auc-mono uppercase" style={{ background: "linear-gradient(110deg, #fef9c3 20%, #f59e0b 45%, #fde047 55%, #fef9c3 80%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "gcShine 1.5s linear infinite", filter: "drop-shadow(0 0 20px rgba(250,204,21,0.45))" }}>
-              Golden Card
-            </p>
+          <div className="absolute inset-x-0 top-1/2 flex justify-center animate-[gcTitle_4.3s_ease-in-out_forwards]" style={{ transform: "translateY(9.5rem)" }}>
+            <p className="text-2xl md:text-4xl font-black auc-mono uppercase auc-gold-text">Golden Ticket</p>
           </div>
 
           <style dangerouslySetInnerHTML={{__html: `
             @keyframes gcBackdrop {
               0% { opacity: 0; }
-              10%, 84% { opacity: 1; }
+              10%, 85% { opacity: 1; }
               100% { opacity: 0; }
             }
-            /* 광선·글로우는 봉투가 열린 뒤에만 */
             @keyframes gcRays {
-              0%, 30% { opacity: 0; transform: translate(-50%, -50%) rotate(0deg); }
-              46%, 82% { opacity: 1; }
-              100% { opacity: 0; transform: translate(-50%, -50%) rotate(60deg); }
+              0%, 40% { opacity: 0; transform: translate(-50%, -50%) rotate(0deg); }
+              54%, 84% { opacity: 1; }
+              100% { opacity: 0; transform: translate(-50%, -50%) rotate(52deg); }
             }
             @keyframes gcGlow {
-              0%, 26% { opacity: 0; }
-              48%, 82% { opacity: 1; }
+              0%, 34% { opacity: 0; }
+              54%, 84% { opacity: 1; }
               100% { opacity: 0; }
-            }
-            /* 봉투 전체 — 등장 → 살짝 당겨졌다가 → 퇴장 */
-            @keyframes gcScene {
-              0%   { transform: translate(-50%, -46%) scale(.72); opacity: 0; filter: blur(10px); }
-              12%  { transform: translate(-50%, -50%) scale(1); opacity: 1; filter: blur(0); }
-              26%  { transform: translate(-50%, -50%) scale(1.02); }
-              30%  { transform: translate(-50%, -50%) scale(.99); }
-              48%  { transform: translate(-50%, -54%) scale(1.03); }
-              84%  { transform: translate(-50%, -54%) scale(1.03); opacity: 1; filter: blur(0); }
-              100% { transform: translate(-50%, -56%) scale(1.12); opacity: 0; filter: blur(6px); }
-            }
-            /* 밀랍 봉인 — 두근 → 갈라짐 */
-            @keyframes gcSeal {
-              0%, 8%   { opacity: 0; transform: translate(-50%, -50%) scale(.4); }
-              14%      { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-              20%      { transform: translate(-50%, -50%) scale(1.12); }
-              24%      { transform: translate(-50%, -50%) scale(1); }
-              29%      { transform: translate(-50%, -50%) scale(1.18); }
-              33%      { opacity: 1; transform: translate(-50%, -50%) scale(1.5) rotate(14deg); }
-              36%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.1) rotate(24deg); }
-            }
-            /* 뚜껑 — 봉인이 터진 뒤 위로 젖혀진다 */
-            @keyframes gcFlap {
-              0%, 33%  { transform: rotateX(0deg); }
-              50%      { transform: rotateX(-168deg); }
-              84%      { transform: rotateX(-172deg); }
-              100%     { transform: rotateX(-172deg); }
-            }
-            /* 카드 — 봉투 안에서 위로 뽑혀 나온다 */
-            @keyframes gcCard {
-              0%, 38%  { transform: translate(-50%, 34px) scale(.94) rotate(0deg); opacity: 0; }
-              41%      { opacity: 1; }
-              62%      { transform: translate(-50%, -104px) scale(1) rotate(-2deg); opacity: 1; }
-              68%      { transform: translate(-50%, -96px) scale(1.04) rotate(1deg); }
-              74%      { transform: translate(-50%, -100px) scale(1.02) rotate(0deg); }
-              84%      { transform: translate(-50%, -100px) scale(1.02) rotate(0deg); opacity: 1; }
-              100%     { transform: translate(-50%, -112px) scale(1.1) rotate(0deg); opacity: 0; }
             }
             @keyframes gcSpark {
               0% { opacity: 1; transform: translate(-50%, -50%) scale(0.4); }
               100% { opacity: 0; transform: translate(calc(-50% + var(--sx)), calc(-50% + var(--sy))) scale(1.3); }
             }
             @keyframes gcTitle {
-              0%, 62% { opacity: 0; letter-spacing: 0.5em; }
-              72%, 84% { opacity: 1; letter-spacing: 0.25em; }
+              0%, 56% { opacity: 0; letter-spacing: 0.5em; }
+              66%, 85% { opacity: 1; letter-spacing: 0.25em; }
               100% { opacity: 0; }
-            }
-            @keyframes gcShine {
-              0% { background-position: 0% center; }
-              100% { background-position: 300% center; }
-            }
-            @keyframes gcGloss {
-              0% { transform: translateX(-110%); }
-              55%, 100% { transform: translateX(110%); }
-            }
-            @media (prefers-reduced-motion: reduce) {
-              .auc [style*="gcShine"], .auc [style*="gcGloss"] { animation: none !important; }
             }
           `}} />
         </div>

@@ -211,6 +211,61 @@ export const AuctionStyles = () => (
     }
     @keyframes aucGoldText { 0% { background-position: 0% center } 100% { background-position: 220% center } }
 
+    /* ══ 골든 티켓 ══
+       메인 화면 초대장 티켓(.auc-ticket)과 같은 해부 구조 — 본권 + 스텁, 절취선, 노치 — 를
+       금장으로 다시 칠한 것. 올 포지션 매물 등장 연출에 쓴다. */
+    .auc-gticket {
+      position: relative; --notch: 13px; --split: 70%;
+      width: 460px; height: 210px;
+      background: #090909; /* 노치 구멍으로 뒤가 비치지 않도록 */
+    }
+    @media (max-width: 860px) { .auc-gticket { width: 340px; height: 172px; --notch: 11px; } }
+    @media (max-width: 520px) { .auc-gticket { width: 282px; height: 152px; --notch: 10px; } }
+
+    .auc-gticket .auc-half {
+      background: linear-gradient(150deg, #4d3808 0%, #2b1f05 52%, #150e02 100%);
+      border-color: rgba(251,191,36,.7);
+      box-shadow: 0 26px 70px -22px #000, 0 0 46px -8px rgba(251,191,36,.45);
+    }
+    /* 금박 테두리 이중선 */
+    .auc-gticket .auc-half::after {
+      content: ""; position: absolute; inset: 6px; pointer-events: none;
+      border: 1px solid rgba(251,191,36,.28);
+    }
+    /* 절취선 — .auc-ticket 스코프를 쓰지 않으므로 별도로 둔다 */
+    .auc-gticket .auc-perf {
+      position: absolute; left: var(--split); top: 15px; bottom: 15px; width: 0;
+      border-left: 1px dashed rgba(251,191,36,.55);
+    }
+    /* 광택 — 본권/스텁을 가로질러 이어지도록 폭을 환산 (메인 티켓과 동일 규칙) */
+    .auc-gticket .auc-shine {
+      background: linear-gradient(118deg, transparent 40%, rgba(255,244,196,.34) 50%, transparent 60%);
+      animation: aucShine 2.6s ease-in-out infinite;
+    }
+
+    /* 등장 — 아래에서 떠오르며 자리를 잡고, 임팩트 순간 절취선에서 번쩍 */
+    .auc-gt-scene { animation: aucGtIn 4.3s cubic-bezier(.16,1,.3,1) forwards; }
+    @keyframes aucGtIn {
+      0%   { transform: translate(-50%, -18%) scale(.58) rotate(-7deg); opacity: 0; filter: blur(12px); }
+      18%  { opacity: 1; }
+      44%  { transform: translate(-50%, -52%) scale(1.04) rotate(1.5deg); opacity: 1; filter: blur(0); }
+      50%  { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+      55%  { transform: translate(-50%, -50.5%) scale(1.015) rotate(0deg); }
+      60%, 85% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; filter: blur(0); }
+      100% { transform: translate(-50%, -52%) scale(1.14) rotate(0deg); opacity: 0; filter: blur(7px); }
+    }
+    /* 착지 섬광 — 절취선을 따라 흰 빛이 터진다 */
+    .auc-gt-flash {
+      position: absolute; left: var(--split); top: 0; bottom: 0; width: 2px;
+      transform: translateX(-1px); background: #fff; opacity: 0; pointer-events: none; z-index: 6;
+      animation: aucGtFlash 4.3s ease-out forwards;
+    }
+    @keyframes aucGtFlash {
+      0%, 44% { opacity: 0; box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+      50%     { opacity: 1; box-shadow: 0 0 34px 7px rgba(255,240,190,.7); }
+      64%,100%{ opacity: 0; box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+    }
+
     /* ── 경매장 공용 팝업 ── 방 안의 모든 모달이 같은 골격을 쓴다 */
     .auc-modal-back { position: fixed; inset: 0; z-index: 120; display: flex; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.84); backdrop-filter: blur(4px); }
     @media (min-width: 640px) { .auc-modal-back { align-items: center; padding: 16px; } }
