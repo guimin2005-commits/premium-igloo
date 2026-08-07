@@ -9,6 +9,8 @@ import React from "react";
 export const AuctionStyles = () => (
   <style>{`
     .auc-label { font-size: 10px; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; }
+    /* 보조 라벨 — 경매방 라인 레이아웃에서 캡션으로 사용 (utility 로 font-size 를 덮으면 .auc-label 이 이겨서 별도 클래스로 둔다) */
+    .auc-label-xs { font-size: 8px; font-weight: 900; letter-spacing: .2em; text-transform: uppercase; }
     .auc-num   { font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
     .auc-mono  { letter-spacing: .2em; font-variant-numeric: tabular-nums; }
 
