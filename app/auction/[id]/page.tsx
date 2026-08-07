@@ -1553,14 +1553,20 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                 /* 그라디언트 텍스트는 작은 글씨에서 뭉개져 회색으로 보인다 → 골든은 단색 금색으로 */
                                 <p className={`text-sm font-black truncate mb-1 ${p.isAllPos ? "text-amber-300" : "text-white"}`}>{p.isAllPos ? "올 포지션" : p.alias}</p>
                               )}
-                              {/* 📌 낙찰된 선수는 이미 끝난 매물 — 티어·스카우터를 반복 노출하지 않는다 (목록 전체의 글자량 감소) */}
                               {p.isAllPos ? (
                                 <p className="text-[11px] font-black text-amber-200/70 mb-2">티어 비공개 · 슬롯 자유</p>
-                              ) : p.status === "낙찰" ? null : (
+                              ) : (
+                                /* 낙찰돼도 정보는 남긴다 — 누가 얼마에 어떤 선수를 가져갔는지가 이후 판단의 근거다 */
                                 <div className="mb-2 mt-0.5">
-                                  {/* 화살표는 '성장'으로 오독된다 → 현재를 크게, 최고는 위에 작게 */}
-                                  <p className="auc-label-xs text-gray-700 truncate">최고 {p.peakTier || "?"}</p>
-                                  <p className="text-[15px] font-black text-white truncate leading-tight mt-0.5">{p.currentTier || "?"}</p>
+                                  {/* 최고·현재 모두 판단 근거 — 라벨만 초소형으로 두고 값은 같은 무게로 */}
+                                  <div className="flex items-baseline gap-1.5">
+                                    <span className="auc-label-xs text-gray-700 shrink-0">최고</span>
+                                    <span className="text-[13px] font-black text-white truncate">{p.peakTier || "?"}</span>
+                                  </div>
+                                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                                    <span className="auc-label-xs text-gray-700 shrink-0">현재</span>
+                                    <span className="text-[13px] font-black text-gray-300 truncate">{p.currentTier || "?"}</span>
+                                  </div>
                                   {canSeePos(p) && (
                                     /* 주 포지션만 흰색 볼드 — 입찰 판단의 핵심이 평평해지지 않도록 */
                                     <p className="text-[11px] font-black mt-1.5 pt-1.5 border-t border-white/[0.07] leading-snug break-keep">

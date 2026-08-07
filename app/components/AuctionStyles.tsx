@@ -319,7 +319,7 @@ export const AuctionStyles = () => (
     /* 리플 — 덱에서 튕겨 나온 '일반 카드'들이 화면을 가로질러 스쳐 간다.
        ⚠️ 특징 없는 사각형이면 그래픽 오류로 보인다 → 뒷면 문양·이중 프레임을 넣어 카드로 읽히게 하고,
           흑백으로 칠해 금색 본 카드와 한눈에 구분되게 한다. */
-    .auc-gdeal-fly { position: absolute; top: 50%; left: 50%; width: 152px; height: 212px; border-radius: 10px;
+    .auc-gdeal-fly { position: absolute; top: 50%; left: 50%; width: 194px; height: 272px; border-radius: 12px;
       background:
         repeating-linear-gradient(45deg, rgba(255,255,255,.05) 0 6px, transparent 6px 12px),
         linear-gradient(150deg, #1a1b1e 0%, #0e0f11 100%);
@@ -370,10 +370,11 @@ export const AuctionStyles = () => (
       64%,100% { opacity: 0; transform: scale(2.7); }
     }
     @keyframes aucGcFly {
-      0%   { opacity: 0; transform: translate(calc(-50% + 580px), calc(-50% - 40px)) rotate(16deg) scale(.96); }
+      /* ⚠️ 회전을 크게 주면 지나갈수록 카드가 "눕는" 것처럼 보인다 → 기울기만 살짝 */
+      0%   { opacity: 0; transform: translate(calc(-50% + 600px), calc(-50% - 34px)) rotate(9deg) scale(1); }
       12%  { opacity: 1; }
-      72%  { opacity: 1; filter: blur(0); }
-      100% { opacity: 0; transform: translate(calc(-50% - 620px), calc(-50% + 60px)) rotate(-88deg) scale(.9); filter: blur(3px); }
+      74%  { opacity: 1; filter: blur(0); }
+      100% { opacity: 0; transform: translate(calc(-50% - 640px), calc(-50% + 46px)) rotate(-22deg) scale(.97); filter: blur(3px); }
     }
     @media (prefers-reduced-motion: reduce) {
       .auc-gcard, .auc-gcard-holo { animation: none; }
