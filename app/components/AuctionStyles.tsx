@@ -39,15 +39,17 @@ export const AuctionStyles = () => (
     .auc-ticket:not(.auc-ticket-focus):hover { opacity: .72; }
 
     /* 본권 / 스텁 — 절취선을 기준으로 실제 두 조각이다 (그래야 찢어진다) */
+    /* ⚠️ 이음새 쪽 테두리는 그리지 않는다 — 안 그러면 점선 절취선이 실선에 묻힌다 */
     .auc-half {
       position: absolute; top: 0; bottom: 0; overflow: hidden;
       background: linear-gradient(150deg, #17171a 0%, #101012 55%, #08080a 100%);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.16), 0 22px 60px -26px #000;
-      transition: box-shadow .45s ease;
+      border: 1px solid rgba(255,255,255,.16);
+      box-shadow: 0 22px 60px -26px #000;
+      transition: border-color .45s ease, box-shadow .45s ease, transform .45s cubic-bezier(.16,1,.3,1);
     }
     /* 절취선 위 노치 — 배경색과 무관하게 진짜로 뚫는다 */
     .auc-half-l {
-      left: 0; width: var(--split);
+      left: 0; width: var(--split); border-right: 0;
       -webkit-mask:
         radial-gradient(circle var(--notch) at 100% 0%,   transparent 97%, #000 100%),
         radial-gradient(circle var(--notch) at 100% 100%, transparent 97%, #000 100%);
@@ -58,7 +60,7 @@ export const AuctionStyles = () => (
       mask-composite: intersect;
     }
     .auc-half-r {
-      right: 0; width: calc(100% - var(--split));
+      right: 0; width: calc(100% - var(--split)); border-left: 0;
       -webkit-mask:
         radial-gradient(circle var(--notch) at 0% 0%,   transparent 97%, #000 100%),
         radial-gradient(circle var(--notch) at 0% 100%, transparent 97%, #000 100%);
@@ -85,14 +87,14 @@ export const AuctionStyles = () => (
     @keyframes aucShine { 0% { transform: translateX(-100%) } 42%,100% { transform: translateX(100%) } }
 
     .auc-ticket-focus { transform: translateX(0) scale(1) rotate(0deg); opacity: 1; z-index: 20; }
-    .auc-ticket-focus .auc-half { box-shadow: inset 0 0 0 1px rgba(255,255,255,.30), 0 26px 70px -24px #000; }
-    .auc-ticket-focus:hover .auc-half { box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), 0 26px 80px -20px #000; }
+    .auc-ticket-focus .auc-half { border-color: rgba(255,255,255,.32); box-shadow: 0 26px 70px -24px #000; }
+    .auc-ticket-focus:hover .auc-half { border-color: rgba(255,255,255,.6); box-shadow: 0 26px 80px -20px #000; }
 
-    /* LIVE */
-    .auc-ticket-live .auc-half { animation: aucBeat 2.8s ease-in-out infinite; }
+    /* LIVE — 테두리가 밝아지며 바깥으로 번진다 */
+    .auc-ticket-live .auc-half { border-color: rgba(255,255,255,.8); animation: aucBeat 2.8s ease-in-out infinite; }
     @keyframes aucBeat {
-      0%,100% { box-shadow: inset 0 0 0 2px rgba(255,255,255,.75), 0 0 0 0 rgba(255,255,255,.18), 0 26px 70px -24px #000; }
-      60%     { box-shadow: inset 0 0 0 2px rgba(255,255,255,1),   0 0 0 14px rgba(255,255,255,0), 0 26px 70px -24px #000; }
+      0%,100% { box-shadow: 0 0 0 0 rgba(255,255,255,.20), 0 26px 70px -24px #000; }
+      60%     { box-shadow: 0 0 0 14px rgba(255,255,255,0), 0 26px 70px -24px #000; }
     }
 
     /* ── 입장 : 절취선을 따라 찢고 두 조각이 흩어진다 ── */
@@ -121,10 +123,15 @@ export const AuctionStyles = () => (
       18%  { opacity: 1; box-shadow: 0 0 26px 5px rgba(255,255,255,.55); }
       100% { opacity: 0; box-shadow: 0 0 0 0 rgba(255,255,255,0); }
     }
-    /* CLOSED */
+    /* CLOSED — 이미 찢겨 어긋난 상태로 놓인다 (다시 찢을 게 없으니 바로 입장) */
     .auc-ticket-closed { filter: grayscale(1) brightness(.5); }
     .auc-ticket-closed.auc-ticket-focus { filter: grayscale(1) brightness(.7); opacity: .92; }
-    .auc-ticket-closed .auc-half { animation: none; }
+    .auc-ticket-closed .auc-half { animation: none; border-color: rgba(255,255,255,.13); }
+    .auc-ticket-closed .auc-half-l { transform: translate(-7px, 4px) rotate(-1.4deg); }
+    .auc-ticket-closed .auc-half-r { transform: translate(10px, 7px) rotate(2.4deg); }
+    .auc-ticket-closed:hover .auc-half-l { transform: translate(-11px, 6px) rotate(-2deg); }
+    .auc-ticket-closed:hover .auc-half-r { transform: translate(15px, 10px) rotate(3.4deg); }
+    .auc-ticket-closed .auc-perf { opacity: 0; }
 
     /* 종료 도장 */
     .auc-seal {

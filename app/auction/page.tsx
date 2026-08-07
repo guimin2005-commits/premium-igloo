@@ -155,8 +155,10 @@ export default function AuctionListPage() {
   const past = auctions.slice(5);
 
   // 📌 입장 — 티켓이 절취선을 따라 찢어지고 사라진 뒤 이동한다
-  const enter = (id: string) => {
+  //    종료된 경매는 이미 찢긴 티켓이라 연출 없이 바로 들어간다
+  const enter = (id: string, skipTear = false) => {
     if (tearing) return;
+    if (skipTear) { router.push(`/auction/${id}`); return; }
     setTearing(id);
     setTimeout(() => router.push(`/auction/${id}`), 720);
   };
@@ -267,7 +269,7 @@ export default function AuctionListPage() {
                   return (
                     <div
                       key={a._id}
-                      onClick={() => (isCenter ? enter(a._id) : setFocus(i))}
+                      onClick={() => (isCenter ? enter(a._id, isEnd) : setFocus(i))}
                       className={`auc-ticket ${isCenter ? "auc-ticket-focus" : ""} ${isLive && isCenter ? "auc-ticket-live" : ""} ${isEnd ? "auc-ticket-closed" : ""} ${tearing === a._id ? "auc-ticket-tear" : ""}`}
                       style={{ ["--off" as any]: off, zIndex: tearing === a._id ? 40 : 10 - Math.abs(off) }}
                     >
@@ -336,7 +338,7 @@ export default function AuctionListPage() {
                     </h2>
 
                     <button
-                      onClick={() => enter(a._id)}
+                      onClick={() => enter(a._id, isEnd)}
                       disabled={!!tearing}
                       className={`group mt-8 inline-flex items-center gap-3 px-9 py-4 transition-colors disabled:opacity-60 ${isLive ? "bg-white text-black hover:bg-gray-200" : "border border-white/25 text-gray-300 hover:bg-white hover:text-black"}`}
                     >
