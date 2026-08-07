@@ -41,6 +41,7 @@ export default function AuctionListPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [focus, setFocus] = useState(0); // 📌 무대 중앙에 세울 경매
   const [popup, setPopup] = useState({ isOpen: false, message: "", isError: false });
 
   // 생성 폼
@@ -137,7 +138,13 @@ export default function AuctionListPage() {
   const fetchList = () => {
     fetch("/api/auction", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => setAuctions(Array.isArray(d?.data) ? d.data : []))
+      .then((d) => {
+        const list = Array.isArray(d?.data) ? d.data : [];
+        setAuctions(list);
+        // 진행 중인 경매가 있으면 그걸 중앙에 세운다
+        const liveIdx = list.findIndex((a: any) => a.status === "진행중");
+        setFocus(liveIdx >= 0 ? liveIdx : 0);
+      })
       .finally(() => setIsLoading(false));
   };
   useEffect(() => { fetchList(); }, []);
@@ -208,77 +215,124 @@ export default function AuctionListPage() {
       <LuxStyles />
       <AuctionStyles />
 
-      {/* ══ 호가판 헤드 — 판돈(POINT)이 주인공 ══ */}
-      {(() => {
-        const live = auctions.filter((a: any) => a.status === "진행중");
-        const pool = auctions.reduce((s: number, a: any) => s + (a.pointPool || 0), 0);
-        const players = auctions.reduce((s: number, a: any) => s + (a.playerCount || 0), 0);
-        const sold = auctions.reduce((s: number, a: any) => s + (a.soldCount || 0), 0);
-        return (
-          <section className="relative w-full pt-14 md:pt-20 px-6 border-b border-white/[0.08]">
-            <div className="max-w-5xl mx-auto">
-              {/* 상태 줄 */}
-              <div className="auc-in flex items-center gap-2.5 mb-7">
-                <span className={`w-2 h-2 rounded-full ${live.length ? "bg-[#e91e3f] auc-live" : "bg-gray-700"}`} />
-                <span className="auc-label text-gray-500">{live.length ? `${live.length}개 경매 진행 중` : "진행 중인 경매 없음"}</span>
-              </div>
+      {/* ══ 경매장 — 진행 중인 경매를 중앙 마름모로, 나머지는 옆에 흐릿하게 ══ */}
+      <section className="relative w-full pt-16 md:pt-24 pb-14 px-6 overflow-hidden">
+        <div className="relative z-10 max-w-6xl mx-auto">
+          {/* 제목 — 가운데 '경 매', 뒤에 POINT가 흐릿하게 */}
+          <div className="relative flex flex-col items-center mb-14">
+            <p className="auc-ghost" aria-hidden>POINT</p>
+            <h1 className="auc-in relative text-center text-[3.4rem] md:text-[6rem] font-black leading-none tracking-[0.3em] pl-[0.3em] text-white">
+              경 매
+            </h1>
+            <p className="auc-in relative auc-label text-gray-600 mt-4" style={{ animationDelay: "80ms" }}>
+              Premium Igloo · Player Auction
+            </p>
+          </div>
 
-              <div className="grid lg:grid-cols-[1fr_auto] gap-10 lg:gap-16 items-end pb-10">
-                {/* 좌 : 타이틀 */}
-                <div className="min-w-0">
-                  <h1 className="auc-in text-5xl md:text-[5.5rem] font-black tracking-tighter leading-[0.88] mb-5" style={{ animationDelay: "60ms" }}>
-                    <span className="block text-white">선수</span>
-                    <span className="block text-white">경매<span className="text-[#e91e3f]">.</span></span>
-                  </h1>
-                  <p className="auc-in text-gray-400 text-sm md:text-base leading-relaxed max-w-md" style={{ animationDelay: "140ms" }}>
-                    팀장이 가진 <span className="text-[#4d7cfe] font-bold">Point</span>를 걸고 선수를 사 옵니다.<br className="hidden sm:block" />
-                    더 높게 부른 쪽이 가져가고, 내려간 망치는 되돌릴 수 없습니다.
-                  </p>
-                  {isAdmin && (
-                    <button
-                      onClick={() => setShowCreate(!showCreate)}
-                      className="auc-in mt-7 group inline-flex items-center gap-3 border border-[#e91e3f] px-6 py-3 text-[#e91e3f] hover:bg-[#e91e3f] hover:text-white transition-colors"
-                      style={{ animationDelay: "220ms" }}
-                    >
-                      <span className="auc-label">{showCreate ? "닫기" : "경매 개최"}</span>
-                      <span className="text-base leading-none transition-transform group-hover:translate-x-1">→</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* 우 : 총 판돈 + 대치 지표 */}
-                <div className="auc-in w-full lg:w-[360px] shrink-0" style={{ animationDelay: "300ms" }}>
-                  <p className="auc-label text-gray-600 mb-2">총 판돈 · Total Point</p>
-                  <p className="auc-num text-5xl md:text-6xl font-black text-white leading-none mb-1">
-                    <span className="auc-roll inline-block">{pool.toLocaleString()}</span>
-                    <span className="text-lg font-bold text-[#4d7cfe] ml-2">P</span>
-                  </p>
-                  <div className="auc-gauge mt-3 mb-6"><span /></div>
-
-                  {/* VS 대치 */}
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1 text-right">
-                      <p className="auc-label text-gray-600 mb-1">팀</p>
-                      <p className="auc-num text-3xl font-black text-white leading-none">{auctions.reduce((s: number, a: any) => s + (a.leaderCount || 0), 0)}</p>
-                    </div>
-                    <span className="auc-vs shrink-0">
-                      <span className="text-[10px] font-black text-gray-500 tracking-widest">VS</span>
-                    </span>
-                    <div className="flex-1">
-                      <p className="auc-label text-gray-600 mb-1">선수</p>
-                      <p className="auc-num text-3xl font-black text-white leading-none">{players}</p>
-                    </div>
-                  </div>
-
-                  <p className="auc-label text-gray-700 mt-5 pt-4 border-t border-white/[0.08]">
-                    누적 낙찰 <span className="text-gray-400">{sold}</span>
-                  </p>
-                </div>
-              </div>
+          {/* 마름모 무대 */}
+          {isLoading ? (
+            <p className="text-center py-24 text-sm text-gray-600">불러오는 중…</p>
+          ) : auctions.length === 0 ? (
+            <div className="auc-in flex flex-col items-center py-10">
+              <div className="auc-dia auc-dia-empty"><div className="auc-dia-in"><p className="auc-label text-gray-600">경매 없음</p></div></div>
+              <p className="mt-10 text-sm text-gray-500">{isAdmin ? "아래에서 첫 경매를 개최해보세요." : "대회 시즌이 시작되면 이곳에서 경매가 열립니다."}</p>
             </div>
-          </section>
-        );
-      })()}
+          ) : (
+            <>
+              <div className="auc-stage auc-in" style={{ animationDelay: "160ms" }}>
+                {auctions.map((a, i) => {
+                  const off = i - focus;
+                  if (Math.abs(off) > 2) return null;
+                  const isCenter = off === 0;
+                  const isLive = a.status === "진행중";
+                  const isEnd = a.status === "종료";
+                  return (
+                    <div
+                      key={a._id}
+                      onClick={() => (isCenter ? router.push(`/auction/${a._id}`) : setFocus(i))}
+                      className={`auc-dia ${isCenter ? "auc-dia-focus" : ""} ${isLive && isCenter ? "auc-dia-live" : ""} ${isEnd ? "auc-dia-end" : ""}`}
+                      style={{ ["--off" as any]: off, zIndex: 10 - Math.abs(off) }}
+                    >
+                      <div className="auc-dia-in">
+                        {isCenter ? (
+                          <>
+                            <span className={`auc-label mb-2 ${isLive ? "text-[#e91e3f]" : isEnd ? "text-gray-600" : "text-gray-500"}`}>
+                              {isLive ? "● Live" : isEnd ? "종료" : "개장 대기"}
+                            </span>
+                            <p className="text-base md:text-lg font-black text-white leading-snug line-clamp-2 break-keep px-2">{a.title}</p>
+                            <span className="my-3 w-8 h-px bg-white/20" />
+                            <div className="flex items-center gap-2.5">
+                              <span className="auc-num text-xl font-black text-white">{a.leaderCount}</span>
+                              <span className="text-[9px] font-black text-gray-600 tracking-widest">VS</span>
+                              <span className="auc-num text-xl font-black text-white">{a.playerCount}</span>
+                            </div>
+                            <span className="auc-label text-gray-600 mt-1">팀 · 선수</span>
+                          </>
+                        ) : (
+                          <p className="text-[11px] font-black text-gray-500 line-clamp-2 break-keep px-3 text-center">{a.title}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 중앙 경매 상세 + 진입 */}
+              {(() => {
+                const a: any = auctions[focus];
+                if (!a) return null;
+                const isLive = a.status === "진행중";
+                return (
+                  <div key={a._id} className="auc-in mt-4 flex flex-col items-center text-center">
+                    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-6">
+                      {a.game && <span className="auc-label text-gray-500">{a.game}</span>}
+                      {a.isTest && <span className="auc-label text-amber-400/90">테스트</span>}
+                      <span className="auc-label text-gray-600">
+                        Point <span className="text-white ml-1.5">{(a.pointPool || 0).toLocaleString()}</span>
+                      </span>
+                      <span className="auc-label text-gray-600">
+                        낙찰 <span className="text-white ml-1.5">{a.soldCount || 0}/{a.playerCount}</span>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => router.push(`/auction/${a._id}`)}
+                        className={`group inline-flex items-center gap-3 px-8 py-3.5 border transition-colors ${isLive ? "border-[#e91e3f] text-[#e91e3f] hover:bg-[#e91e3f] hover:text-white" : "border-white/20 text-gray-300 hover:bg-white hover:text-black"}`}
+                      >
+                        <span className="auc-label">{isLive ? "지금 입장" : "경매장 보기"}</span>
+                        <span className="text-base leading-none transition-transform group-hover:translate-x-1">→</span>
+                      </button>
+                      {isAdmin && (
+                        <button onClick={() => setDeleteId(a._id)} className="auc-label text-gray-700 hover:text-red-400 px-3 py-3.5 transition-colors">삭제</button>
+                      )}
+                    </div>
+
+                    {/* 인디케이터 */}
+                    {auctions.length > 1 && (
+                      <div className="flex items-center gap-2 mt-8">
+                        {auctions.map((x, i) => (
+                          <button key={x._id} onClick={() => setFocus(i)} aria-label={`${i + 1}번째 경매`}
+                            className={`transition-all ${i === focus ? "w-5 h-[3px] bg-white" : "w-[3px] h-[3px] bg-white/25 hover:bg-white/50"}`} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          )}
+
+          {isAdmin && (
+            <div className="mt-14 flex justify-center">
+              <button onClick={() => setShowCreate(!showCreate)} className="auc-label text-gray-500 hover:text-white border-b border-white/15 hover:border-white pb-1 transition-colors">
+                {showCreate ? "개최 폼 닫기" : "+ 경매 개최"}
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
 
 
       <div className="w-full max-w-6xl mx-auto px-6 pt-10 pb-16 flex-1 flex flex-col space-y-8">
@@ -492,110 +546,6 @@ export default function AuctionListPage() {
           </Reveal>
         )}
 
-        {/* 목록 */}
-        {isLoading ? (
-          <div className="text-center py-16 text-gray-500">불러오는 중...</div>
-        ) : auctions.length === 0 ? (
-          <Reveal>
-          <div className="border-y border-white/[0.09]">
-            <div className="py-20 px-6 text-center relative">
-              <div className="relative z-10">
-                <div className="w-12 h-12 mx-auto mb-6 border border-[#e91e3f]/35 flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" className="w-6 h-6 text-[#e91e3f]"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                </div>
-                <p className="text-white font-black text-lg mb-2">{isAdmin ? "개최된 경매가 없습니다" : "현재 진행 중인 경매가 없습니다"}</p>
-                <p className="text-sm text-gray-500 leading-relaxed">{isAdmin ? "우측 상단에서 첫 경매를 개최해보세요." : <>대회 시즌이 시작되면 이곳에서 실시간 선수 경매가 열립니다.<br/>공지사항을 통해 일정을 확인해주세요.</>}</p>
-              </div>
-            </div>
-          </div>
-          </Reveal>
-        ) : (
-          /* 📌 출품 목록 — 판돈(Point)과 팀 VS 선수 대치를 앞세운 행 */
-          <div className="border-t border-white/[0.07]">
-            {auctions.map((a, idx) => {
-              const isLive = a.status === "진행중";
-              const isEnd = a.status === "종료";
-              return (
-                <div
-                  key={a._id}
-                  onClick={() => router.push(`/auction/${a._id}`)}
-                  className={`auc-lot auc-in group cursor-pointer border-b border-white/[0.07] px-1 sm:px-3 py-6 ${isEnd ? "opacity-55 hover:opacity-100 transition-opacity" : ""}`}
-                  style={{ animationDelay: `${380 + Math.min(idx, 8) * 60}ms` }}
-                >
-                  {/* 낙찰 스트라이크 */}
-                  <span className="auc-strike" />
-
-                  <div className="flex flex-wrap lg:flex-nowrap items-center gap-x-8 gap-y-4">
-                    {/* 제목 */}
-                    <div className="min-w-0 flex-1 w-full lg:w-auto">
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
-                        {a.game && <span className="auc-label text-gray-500">{a.game}</span>}
-                        {a.isTest && <span className="auc-label text-amber-400/90">· 테스트</span>}
-                        <span className="auc-label text-gray-700">· {new Date(a.createdAt).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}</span>
-                      </div>
-                      <p className={`text-xl md:text-2xl font-black tracking-tight truncate transition-colors ${isEnd ? "text-gray-500" : "text-white group-hover:text-[#ff5c77]"}`}>
-                        {a.title}
-                      </p>
-                    </div>
-
-                    {/* 팀 VS 선수 */}
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="text-right w-14">
-                        <p className="auc-label text-gray-700 mb-1">팀</p>
-                        <p className="auc-num text-2xl font-black text-gray-200 leading-none">{a.leaderCount}</p>
-                      </div>
-                      <span className="auc-vs shrink-0">
-                        <span className="text-[9px] font-black text-gray-600 tracking-widest">VS</span>
-                      </span>
-                      <div className="w-14">
-                        <p className="auc-label text-gray-700 mb-1">선수</p>
-                        <p className="auc-num text-2xl font-black text-gray-200 leading-none">{a.playerCount}</p>
-                      </div>
-                    </div>
-
-                    {/* 판돈 */}
-                    <div className="shrink-0 w-40 sm:border-l border-white/[0.08] sm:pl-6">
-                      <p className="auc-label text-gray-700 mb-1">{isEnd ? "소진 후 잔여" : "남은 판돈"}</p>
-                      <p className="auc-num text-2xl font-black leading-none">
-                        <span className={isEnd ? "text-gray-600" : "text-white"}>{(a.pointPool || 0).toLocaleString()}</span>
-                        <span className="text-xs font-bold text-[#4d7cfe] ml-1.5">P</span>
-                      </p>
-                      {a.playerCount > 0 && (
-                        <p className="auc-label text-gray-700 mt-1.5">낙찰 {a.soldCount || 0} / {a.playerCount}</p>
-                      )}
-                    </div>
-
-                    {/* 상태 + 진입 */}
-                    <div className="shrink-0 ml-auto lg:ml-0 flex items-center gap-4">
-                      {isLive ? (
-                        <span className="inline-flex items-center gap-2 border border-[#e91e3f] bg-[#e91e3f]/10 px-3 py-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] auc-live" />
-                          <span className="auc-label text-[#e91e3f]">Live</span>
-                        </span>
-                      ) : isEnd ? (
-                        <span className="inline-flex items-center border border-white/12 px-3 py-1.5">
-                          <span className="auc-label text-gray-600">낙찰 완료</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center border border-[#4d7cfe]/45 px-3 py-1.5">
-                          <span className="auc-label text-[#8aa8ff]">개장 대기</span>
-                        </span>
-                      )}
-
-                      {isAdmin && (
-                        <button onClick={(e) => { e.stopPropagation(); setDeleteId(a._id); }} className="auc-label text-gray-700 hover:text-red-400 transition-colors lg:opacity-0 lg:group-hover:opacity-100">삭제</button>
-                      )}
-
-                      <svg className="w-5 h-5 text-gray-700 group-hover:text-white group-hover:translate-x-1.5 transition-all duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {deleteId && (
