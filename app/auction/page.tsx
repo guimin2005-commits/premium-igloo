@@ -141,13 +141,17 @@ export default function AuctionListPage() {
       .then((d) => {
         const list = Array.isArray(d?.data) ? d.data : [];
         setAuctions(list);
-        // 진행 중인 경매가 있으면 그걸 중앙에 세운다
-        const liveIdx = list.findIndex((a: any) => a.status === "진행중");
+        // 진행 중인 경매가 있으면 그걸 중앙에 세운다 (최근 5개 안에서)
+        const liveIdx = list.slice(0, 5).findIndex((a: any) => a.status === "진행중");
         setFocus(liveIdx >= 0 ? liveIdx : 0);
       })
       .finally(() => setIsLoading(false));
   };
   useEffect(() => { fetchList(); }, []);
+
+  // 📌 코인 무대는 최근 5개까지, 그 이전 경매는 아래 목록으로
+  const recent = auctions.slice(0, 5);
+  const past = auctions.slice(5);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,20 +219,23 @@ export default function AuctionListPage() {
       <LuxStyles />
       <AuctionStyles />
 
-      {/* ══ 경매장 — 포인트 코인 무대 (블랙 & 화이트) ══ */}
+      {/* ══ 경매장 — 포인트 코인 무대 (최근 5개) ══ */}
       <section className="relative w-full pt-16 md:pt-24 pb-16 px-6 overflow-hidden">
         <div className="relative z-10 max-w-6xl mx-auto">
-          {/* 제목 — 가운데 '경 매', 뒤에 POINT */}
+          {/* 제목 — 가운데 '포인트 경매', 뒤에 POINT / AUCTION */}
           <div className="relative flex flex-col items-center mb-16 md:mb-20">
-            <p className="auc-ghost" aria-hidden>POINT</p>
-            <h1 className="auc-in relative text-[3.2rem] md:text-[5.5rem] font-black leading-none tracking-[0.3em] pl-[0.3em] text-white">
-              경 매
+            <div className="auc-ghost" aria-hidden>
+              <span className="g1">POINT</span>
+              <span className="g2">AUCTION</span>
+            </div>
+            <h1 className="auc-in relative text-[2.2rem] md:text-[3.6rem] font-black leading-none tracking-[0.22em] pl-[0.22em] text-white">
+              포인트 경매
             </h1>
           </div>
 
           {isLoading ? (
             <p className="text-center py-24 text-sm text-gray-600">불러오는 중…</p>
-          ) : auctions.length === 0 ? (
+          ) : recent.length === 0 ? (
             <div className="auc-in flex flex-col items-center py-16">
               <div className="auc-coin auc-coin-focus" style={{ position: "relative", cursor: "default" }}>
                 <div className="auc-coin-in"><p className="auc-label text-gray-600">Empty</p></div>
@@ -239,7 +246,7 @@ export default function AuctionListPage() {
             <>
               {/* 코인 무대 */}
               <div className="auc-stage auc-in" style={{ animationDelay: "120ms" }}>
-                {auctions.map((a, i) => {
+                {recent.map((a, i) => {
                   const off = i - focus;
                   if (Math.abs(off) > 2) return null;
                   const isCenter = off === 0;
@@ -249,26 +256,27 @@ export default function AuctionListPage() {
                     <div
                       key={a._id}
                       onClick={() => (isCenter ? router.push(`/auction/${a._id}`) : setFocus(i))}
-                      className={`auc-coin ${isCenter ? "auc-coin-focus" : ""} ${isLive && isCenter ? "auc-coin-live" : ""} ${isEnd && !isCenter ? "auc-coin-end" : ""}`}
+                      className={`auc-coin ${isCenter ? "auc-coin-focus" : ""} ${isLive ? "auc-coin-live" : ""} ${isEnd ? "auc-coin-closed" : ""}`}
                       style={{ ["--off" as any]: off, zIndex: 10 - Math.abs(off) }}
                     >
+                      {isEnd && <span className="auc-bar" />}
                       <div className="auc-coin-in">
                         {isCenter ? (
                           <>
-                            <span className="auc-label text-gray-500 mb-3">
-                              {isLive ? "Live" : isEnd ? "Closed" : "Ready"}
+                            <span className={`auc-label mb-3 flex items-center gap-1.5 ${isLive ? "text-white" : "text-gray-500"}`}>
+                              {isLive && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+                              {isLive ? "Live Now" : isEnd ? "Closed" : "Ready"}
                             </span>
-                            <p className="auc-num text-4xl md:text-5xl font-black text-white leading-none">
-                              {(a.pointPool || 0).toLocaleString()}
+                            <p className="text-lg md:text-xl font-black text-white leading-snug break-keep line-clamp-2">
+                              {a.game || "경매"}
                             </p>
-                            <span className="auc-label text-gray-500 mt-2">Point</span>
                             <span className="my-4 w-10 h-px bg-white/20" />
                             <p className="auc-num text-sm font-bold text-gray-300">
-                              {a.leaderCount} <span className="text-gray-600 text-[10px] mx-1">VS</span> {a.playerCount}
+                              팀 {a.leaderCount} <span className="text-gray-600 text-[10px] mx-1.5">VS</span> 선수 {a.playerCount}
                             </p>
                           </>
                         ) : (
-                          <p className="auc-num text-lg font-black text-gray-400">{(a.pointPool || 0).toLocaleString()}</p>
+                          <p className="text-xs font-black text-gray-400 leading-snug break-keep line-clamp-2">{a.game || "경매"}</p>
                         )}
                       </div>
                     </div>
@@ -278,12 +286,13 @@ export default function AuctionListPage() {
 
               {/* 중앙 경매 — 제목 + 진입 */}
               {(() => {
-                const a: any = auctions[focus];
+                const a: any = recent[focus];
                 if (!a) return null;
                 const isLive = a.status === "진행중";
+                const isEnd = a.status === "종료";
                 return (
                   <div key={a._id} className="auc-in mt-10 flex flex-col items-center text-center">
-                    <h2 className="text-2xl md:text-4xl font-black text-white leading-snug break-keep max-w-3xl">
+                    <h2 className={`text-2xl md:text-4xl font-black leading-snug break-keep max-w-3xl ${isEnd ? "text-gray-500" : "text-white"}`}>
                       {a.title}
                     </h2>
 
@@ -291,13 +300,13 @@ export default function AuctionListPage() {
                       onClick={() => router.push(`/auction/${a._id}`)}
                       className={`group mt-8 inline-flex items-center gap-3 px-9 py-4 transition-colors ${isLive ? "bg-white text-black hover:bg-gray-200" : "border border-white/25 text-gray-300 hover:bg-white hover:text-black"}`}
                     >
-                      <span className="auc-label">{isLive ? "지금 입장" : "경매장 보기"}</span>
+                      <span className="auc-label">{isLive ? "지금 입장" : isEnd ? "결과 보기" : "경매장 보기"}</span>
                       <span className="text-base leading-none transition-transform group-hover:translate-x-1">→</span>
                     </button>
 
-                    {auctions.length > 1 && (
+                    {recent.length > 1 && (
                       <div className="flex items-center gap-2 mt-10">
-                        {auctions.map((x, i) => (
+                        {recent.map((x, i) => (
                           <button key={x._id} onClick={() => setFocus(i)} aria-label={`${i + 1}번째 경매`}
                             className={`h-[3px] transition-all ${i === focus ? "w-6 bg-white" : "w-[3px] bg-white/25 hover:bg-white/60"}`} />
                         ))}
@@ -322,6 +331,43 @@ export default function AuctionListPage() {
           )}
         </div>
       </section>
+
+      {/* ══ 지난 경매 — 스크롤하면 부드럽게 올라온다 ══ */}
+      {past.length > 0 && (
+        <section className="w-full px-6 pb-4">
+          <div className="max-w-3xl mx-auto">
+            <Reveal>
+              <div className="flex items-center gap-4 mb-2">
+                <span className="auc-label text-gray-600">지난 경매</span>
+                <span className="h-px flex-1 bg-white/10" />
+                <span className="auc-label text-gray-700 auc-num">{past.length}</span>
+              </div>
+            </Reveal>
+            {past.map((a, i) => (
+              <Reveal key={a._id} delay={Math.min(i, 8) * 70}>
+                <div
+                  onClick={() => router.push(`/auction/${a._id}`)}
+                  className="auc-past group cursor-pointer border-b border-white/[0.07] py-5 flex items-center gap-5"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/15 shrink-0 group-hover:bg-white transition-colors" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-bold text-gray-300 truncate group-hover:text-white transition-colors">{a.title}</p>
+                    <p className="auc-label text-gray-700 mt-1.5">
+                      {a.game || "경매"} · 팀 {a.leaderCount} · 선수 {a.playerCount}
+                    </p>
+                  </div>
+                  <span className="auc-label text-gray-700 shrink-0 hidden sm:block auc-num">
+                    {new Date(a.createdAt).toLocaleDateString("ko-KR", { year: "2-digit", month: "2-digit", day: "2-digit" })}
+                  </span>
+                  <svg className="w-4 h-4 text-gray-800 group-hover:text-white group-hover:translate-x-1 transition-all shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                  </svg>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+      )}
 
 
       <div className="w-full max-w-6xl mx-auto px-6 pt-10 pb-16 flex-1 flex flex-col space-y-8">
