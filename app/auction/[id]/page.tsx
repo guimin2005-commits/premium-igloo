@@ -1905,8 +1905,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               { l: "스카우터", v: scouted ? revealInfo(sp) : "미확인" },
                             ].map((it, ii) => (
                               <div key={ii} className="flex items-baseline gap-3 py-[7px]">
-                                <span className="w-16 shrink-0 auc-cap text-gray-600">{it.l}</span>
-                                <span className={`text-[15px] font-black truncate ${it.v === "미확인" || it.v.includes("불가") || it.v === "비공개" ? "text-gray-600" : "text-white"}`}>{it.v}</span>
+                                {/* 크기·두께는 원래대로 (라벨 10px bold / 값 12px bold) */}
+                                <span className="w-16 shrink-0 text-[10px] font-bold text-gray-600">{it.l}</span>
+                                <span className={`text-[12px] font-bold truncate ${it.v === "미확인" || it.v.includes("불가") || it.v === "비공개" ? "text-gray-600" : "text-gray-200"}`}>{it.v}</span>
                               </div>
                             ))}
                           </div>
