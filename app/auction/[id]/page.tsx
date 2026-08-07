@@ -602,7 +602,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         {r.golden && <span className="shrink-0 text-[8px] font-black text-amber-300">ALL</span>}
                       </span>
                       <span className="block text-[9px] font-bold text-gray-600 tabular-nums mt-0.5">
-                        {r.playerIdx === -1 ? "본인" : `${r.price.toLocaleString()} Pt`}
+                        {r.playerIdx === -1 ? "" : `${r.price.toLocaleString()} Pt`}
                       </span>
                     </button>
                   );
@@ -616,7 +616,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     onClick={() => canAssignHere && act({ action: "assignSlot", slot, byLeaderIdx: myLeaderIdx })}
                     className={`w-full text-left border-b border-dashed py-1.5 h-[42px] transition-colors ${canAssignHere ? "border-[#e91e3f] bg-[#e91e3f]/[0.07] animate-pulse cursor-pointer hover:bg-[#e91e3f]/15" : "border-white/[0.09]"}`}
                   >
-                    <span className={`text-[10px] font-black tracking-[0.12em] ${canAssignHere ? "text-[#ff5c77]" : "text-white/15"}`}>{canAssignHere ? "여기에 배정" : "EMPTY"}</span>
+                    <span className={`text-[10px] font-black tracking-[0.12em] ${canAssignHere ? "text-[#ff5c77]" : "text-white/15"}`}>{canAssignHere ? "여기에 배정" : "—"}</span>
                   </button>
                 ))}
 
@@ -1376,10 +1376,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       >
                         <p className={`auc-label ${invCount > 0 ? "text-[#e91e3f]" : "text-gray-600"}`}>Inventory</p>
                         <p className={`text-3xl font-black tabular-nums leading-none mt-1.5 transition-colors ${invCount > 0 ? "text-white" : "text-gray-700"}`}>
-                          {invCount}<span className="text-[11px] font-bold text-gray-600 ml-1.5">보유</span>
+                          {invCount}
                         </p>
                         <span className={`block h-px mt-2 transition-colors ${invCount > 0 ? "bg-[#e91e3f] group-hover:bg-white" : "bg-white/12 group-hover:bg-white/40"}`} />
-                        <span className={`block text-[9px] font-black tracking-wider mt-1 transition-colors ${invCount > 0 ? "text-[#ff5c77] animate-pulse" : "text-gray-700 group-hover:text-gray-400"}`}>열기 →</span>
+                        
                       </button>
                     </>
                   )}
@@ -1388,7 +1388,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 {/* 슬롯 보드 */}
                 <div className="flex items-baseline gap-3 pb-2 mb-3 border-b border-white/20">
                   <span className="auc-label text-white">Team Slots</span>
-                  {myLeader.positionChanged && <span className="text-[10px] font-bold text-gray-600">포지션 체인지 사용됨</span>}
+                  
                   {needAct && <span className="ml-auto auc-label-xs text-[#ff5c77] animate-pulse">Action Required</span>}
                 </div>
                 <SlotBoard leader={myLeader} leaderIdx={myLeaderIdx!} big />
@@ -1500,28 +1500,30 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               ) : (
                                 <p className={`text-sm font-black truncate mb-1 ${p.isAllPos ? "auc-gold-text" : "text-white"}`}>{p.isAllPos ? "올 포지션" : p.alias}</p>
                               )}
+                              {/* 📌 낙찰된 선수는 이미 끝난 매물 — 티어·스카우터를 반복 노출하지 않는다 (목록 전체의 글자량 감소) */}
                               {p.isAllPos ? (
                                 <p className="text-[11px] font-bold text-gray-600 mb-2">티어 비공개</p>
-                              ) : (
-                                /* 티어·스카우터 정보는 이 카드의 핵심 — 라벨은 줄이고 값은 키운다 */
+                              ) : p.status === "낙찰" ? null : (
+                                /* 값만 남기고 라벨은 뺀다 — 최고 → 현재 는 화살표로 읽힌다 */
                                 <div className="mb-2 mt-0.5">
-                                  <div className="flex items-baseline gap-2">
-                                    <span className="auc-label-xs text-gray-700 shrink-0">최고</span>
-                                    <span className="text-[13px] font-black text-white truncate">{p.peakTier || "?"}</span>
-                                  </div>
-                                  <div className="flex items-baseline gap-2 mt-0.5">
-                                    <span className="auc-label-xs text-gray-700 shrink-0">현재</span>
-                                    <span className="text-[13px] font-black text-gray-300 truncate">{p.currentTier || "?"}</span>
-                                  </div>
+                                  <p className="text-[13px] font-black truncate">
+                                    <span className="text-white">{p.peakTier || "?"}</span>
+                                    <span className="text-gray-700 mx-1">→</span>
+                                    <span className="text-gray-400">{p.currentTier || "?"}</span>
+                                  </p>
                                   {canSeePos(p) && (
-                                    <p className="text-[11px] font-black text-gray-200 mt-1.5 pt-1.5 border-t border-white/[0.07] leading-snug break-keep">{revealInfo(p)}</p>
+                                    /* 값만 나열 — '주/부/모스트' 라벨은 카드에서 뺀다 */
+                                    <p className="text-[11px] font-black text-gray-200 mt-1.5 pt-1.5 border-t border-white/[0.07] leading-snug break-keep">
+                                      {revealParts(p).map((r) => r.v).join(" · ")}
+                                    </p>
                                   )}
                                 </div>
                               )}
                             </>
                           )}
 
-                          <div className="mt-auto pt-1.5 border-t border-white/[0.05]">
+                          {/* 상태 문구는 상단 뱃지로 이미 드러나므로 아래에는 '행동/결과'만 남긴다 */}
+                          <div className={`mt-auto ${p.status === "낙찰" || (p.status === "배정중" && role === "host") || callable ? "pt-1.5 border-t border-white/[0.05]" : ""}`}>
                             {p.status === "낙찰" ? (
                               <div className="flex items-center gap-1.5">
                                 <p className="text-[10px] font-bold text-gray-500 truncate flex-1">{auction.leaders[p.soldTo]?.name} · {p.soldPrice?.toLocaleString()} Pt</p>
@@ -1536,9 +1538,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               <button onClick={() => setConfirmCfg({ title: "낙찰 취소", message: `${p.alias} 선수의 낙찰(배정 대기)을 취소하고 대기 상태로 되돌립니다.`, confirmLabel: "취소 확정", onConfirm: () => act({ action: "host:unsold", playerIdx: i }) })} className="w-full text-[10px] font-black text-orange-400/80 hover:text-orange-400 bg-white/5 border border-white/10 py-1.5 rounded-lg transition-colors">낙찰 취소</button>
                             ) : callable ? (
                               <button onClick={() => act({ action: "host:call", playerIdx: i })} className="w-full text-[10px] font-black text-white bg-[#e91e3f]/85 hover:bg-[#e91e3f] py-1.5 rounded-lg transition-colors">호명</button>
-                            ) : (
-                              <p className="text-[10px] text-gray-700">{p.status === "경매중" ? "경매 진행 중" : p.status === "배정중" ? "슬롯 배정 중" : "대기"}</p>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       );
