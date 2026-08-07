@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Reveal, LuxStyles } from "../components/Lux";
-import { EsportsStyles } from "../components/Esports";
+import { AuctionStyles } from "../components/AuctionStyles";
+
 import { GAME_PRESETS, GAME_LIST } from "@/lib/auctionGames";
 
 const ADMIN_USERS = ["elahw.06"];
@@ -199,59 +200,52 @@ export default function AuctionListPage() {
     );
   }
 
-  const inputClass = "w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#4d7cfe] transition-colors placeholder:text-gray-600";
-  const numClass = "w-full bg-[#121212] border border-white/10 rounded-lg px-3 py-2 text-xs text-white text-center outline-none focus:border-[#4d7cfe] transition-colors font-bold";
+  const inputClass = "w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600";
+  const numClass = "w-full bg-[#121212] border border-white/10 rounded-lg px-3 py-2 text-xs text-white text-center outline-none focus:border-[#e91e3f] transition-colors font-bold";
 
   return (
-    <main className="w-full flex-1 flex flex-col relative esp-theme-auction">
+    <main className="w-full flex-1 flex flex-col relative auc">
       <LuxStyles />
-      <EsportsStyles />
+      <AuctionStyles />
 
-      <section className="relative w-full pt-14 pb-0 md:pt-20 px-6 overflow-hidden">
-        <div className="absolute inset-0 esp-mesh pointer-events-none" />
-        <div className="absolute inset-0 esp-scan pointer-events-none opacity-40" />
-        <div className="absolute top-[-160px] left-1/2 -translate-x-1/2 w-[720px] h-[320px] bg-[#4d7cfe]/[0.09] blur-[130px] rounded-full pointer-events-none" />
-        <p className="absolute -top-2 right-4 hidden lg:block text-[110px] font-black tracking-tighter leading-none pointer-events-none select-none text-transparent" style={{ WebkitTextStroke: "1px rgba(77,124,254,0.10)" }}>DRAFT</p>
-
-        <div className="max-w-6xl mx-auto relative z-10">
+      {/* ── 표제부 (경매 원장 헤더) ── */}
+      <section className="relative w-full pt-14 md:pt-20 px-6">
+        <div className="max-w-5xl mx-auto relative z-10">
           <Reveal>
-            <div className="flex items-center gap-3 mb-5">
-              <span className="w-2 h-2 bg-[#4d7cfe] esp-blink" style={{ clipPath: "polygon(50% 0,100% 50%,50% 100%,0 50%)" }} />
-              <span className="text-[10px] font-black esp-mono text-[#4d7cfe] uppercase">Player Draft Auction</span>
-              <span className="h-px flex-1 max-w-[220px] bg-gradient-to-r from-[#4d7cfe]/50 to-transparent" />
-            </div>
-            <div className="flex flex-wrap items-end justify-between gap-6">
-              <div>
-                <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9] mb-3">
-                  <span className="text-white">선수 </span><span className="text-[#4d7cfe]">경매</span>
+            {/* 이중 규칙선 */}
+            <div className="auc-rule-top" />
+            <div className="pt-6 flex flex-wrap items-start justify-between gap-6">
+              <div className="min-w-0">
+                <p className="auc-label text-gray-500 mb-4">Premium Igloo · Player Auction</p>
+                <h1 className="auc-serif text-4xl md:text-6xl leading-[1.05] text-white mb-4">
+                  선수 경매<span className="text-[#e91e3f]">.</span>
                 </h1>
-                <p className="text-gray-400 text-sm md:text-base">팀장이 포인트로 선수를 영입하는 실시간 드래프트 경매입니다.</p>
+                <p className="text-gray-400 text-sm leading-relaxed max-w-md">
+                  팀장이 보유 포인트로 선수를 낙찰받는 실시간 경매입니다.<br className="hidden sm:block" />
+                  아래 목록에서 진행 중인 경매장에 입장하세요.
+                </p>
               </div>
               {isAdmin && (
-                <button onClick={() => setShowCreate(!showCreate)} className="shrink-0 esp-cut-sm bg-[#4d7cfe] hover:bg-[#6b93ff] text-white font-black text-xs px-6 py-3.5 transition-all active:scale-95">
-                  {showCreate ? "닫기" : "+ 경매 개최"}
+                <button onClick={() => setShowCreate(!showCreate)} className="shrink-0 border border-[#e91e3f] text-[#e91e3f] hover:bg-[#e91e3f] hover:text-white font-bold text-xs px-6 py-3 transition-colors auc-label">
+                  {showCreate ? "닫기" : "경매 개최"}
                 </button>
               )}
             </div>
-          </Reveal>
 
-          {/* HUD 지표 스트립 */}
-          <Reveal delay={120}>
-            <div className="mt-8 grid grid-cols-2 md:grid-cols-4 border-t border-[#4d7cfe]/20">
+            {/* 요약 — 한 줄 원장 */}
+            <div className="mt-8 flex flex-wrap items-center gap-x-7 gap-y-2 py-3.5 border-y border-white/[0.09]">
               {[
-                { k: "TOTAL", l: "전체 경매", v: auctions.length, c: "text-white" },
-                { k: "LIVE", l: "진행 중", v: auctions.filter((a: any) => a.status === "진행중").length, c: "text-[#8aa8ff]" },
-                { k: "READY", l: "대기 중", v: auctions.filter((a: any) => a.status === "대기중").length, c: "text-amber-300" },
-                { k: "DONE", l: "종료", v: auctions.filter((a: any) => a.status === "종료").length, c: "text-gray-500" },
-              ].map((m, i) => (
-                <div key={m.k} className={`py-4 md:px-5 ${i > 0 ? "md:border-l border-white/[0.07]" : ""} ${i % 2 === 1 ? "border-l border-white/[0.07] pl-5 md:pl-5" : ""} ${i < 2 ? "border-b md:border-b-0 border-white/[0.07]" : ""}`}>
-                  <p className="text-[9px] font-black esp-mono text-gray-600 mb-1.5">{m.k}</p>
-                  <p className="flex items-baseline gap-1.5">
-                    <span className={`text-2xl md:text-3xl font-black tabular-nums ${m.c}`}>{String(m.v).padStart(2, "0")}</span>
-                    <span className="text-[11px] font-bold text-gray-600">{m.l}</span>
-                  </p>
-                </div>
+                { l: "전체", v: auctions.length, c: "text-white" },
+                { l: "진행 중", v: auctions.filter((a: any) => a.status === "진행중").length, c: "text-[#e91e3f]" },
+                { l: "대기", v: auctions.filter((a: any) => a.status === "대기중").length, c: "text-gray-300" },
+                { l: "종료", v: auctions.filter((a: any) => a.status === "종료").length, c: "text-gray-600" },
+              ].map((m) => (
+                <span key={m.l} className="flex items-baseline gap-2">
+                  <span className="auc-label text-gray-600">{m.l}</span>
+                  <span className={`auc-num text-lg font-bold ${m.c}`}>{String(m.v).padStart(2, "0")}</span>
+                </span>
               ))}
+              <span className="ml-auto auc-label text-gray-700 hidden sm:block">{new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}</span>
             </div>
           </Reveal>
         </div>
@@ -265,7 +259,7 @@ export default function AuctionListPage() {
           <form onSubmit={handleCreate} className="relative rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px">
             <div className="rounded-2xl bg-[#111111]/95 p-6 md:p-8 space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-base font-black text-white flex items-center gap-3"><span className="w-1 h-5 bg-[#4d7cfe] rounded-full"></span>경매 개최</h3>
+                <h3 className="text-base font-black text-white flex items-center gap-3"><span className="w-1 h-5 bg-[#e91e3f] rounded-full"></span>경매 개최</h3>
                 {/* 📌 관리자 테스트 도구 */}
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => setIsTest(!isTest)} className={`text-[11px] font-black px-3 py-1.5 rounded-full border transition-all ${isTest ? "bg-amber-500/15 text-amber-400 border-amber-500/35" : "bg-white/5 text-gray-500 border-white/10 hover:text-gray-300"}`}>
@@ -279,14 +273,14 @@ export default function AuctionListPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-2">경매 제목 <span className="text-[#4d7cfe]">*</span></label>
+                  <label className="block text-xs font-bold text-gray-500 mb-2">경매 제목 <span className="text-[#e91e3f]">*</span></label>
                   <input type="text" required placeholder="예: 제 1회 종합 e스포츠 대회 선수 경매" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-2">종목 <span className="text-[#4d7cfe]">*</span></label>
+                  <label className="block text-xs font-bold text-gray-500 mb-2">종목 <span className="text-[#e91e3f]">*</span></label>
                   <div className="flex flex-wrap gap-1.5">
                     {GAME_LIST.map((g) => (
-                      <button type="button" key={g} onClick={() => selectGame(g)} className={`px-3 py-2.5 text-[11px] font-bold rounded-lg border transition-all ${game === g ? "bg-[#4d7cfe] border-[#4d7cfe] text-white" : "bg-[#0d0d0d] border-white/10 text-gray-400 hover:border-white/25 hover:text-white"}`}>{g}</button>
+                      <button type="button" key={g} onClick={() => selectGame(g)} className={`px-3 py-2.5 text-[11px] font-bold rounded-lg border transition-all ${game === g ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-[#0d0d0d] border-white/10 text-gray-400 hover:border-white/25 hover:text-white"}`}>{g}</button>
                     ))}
                   </div>
                 </div>
@@ -294,14 +288,14 @@ export default function AuctionListPage() {
 
               {/* 경매 방식 — 즉시 배정 / 인벤토리 */}
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-2">경매 방식 <span className="text-[#4d7cfe]">*</span></label>
+                <label className="block text-xs font-bold text-gray-500 mb-2">경매 방식 <span className="text-[#e91e3f]">*</span></label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {[
                     { v: "instant", t: "즉시 배정", d: "낙찰 즉시 포지션 배정 후 다음 선수로" },
                     { v: "inventory", t: "인벤토리 방식", d: "낙찰 선수를 인벤토리에 보관 → 팀장이 언제든 배정, 종료 시 확정" },
                   ].map((opt) => (
-                    <button type="button" key={opt.v} onClick={() => setAssignMode(opt.v)} className={`text-left rounded-xl border p-3.5 transition-all ${assignMode === opt.v ? "border-[#4d7cfe] bg-[#4d7cfe]/[0.08]" : "border-white/10 bg-[#0d0d0d] hover:border-white/25"}`}>
-                      <p className={`text-sm font-black mb-0.5 ${assignMode === opt.v ? "text-[#4d7cfe]" : "text-white"}`}>{opt.t}</p>
+                    <button type="button" key={opt.v} onClick={() => setAssignMode(opt.v)} className={`text-left rounded-xl border p-3.5 transition-all ${assignMode === opt.v ? "border-[#e91e3f] bg-[#e91e3f]/[0.08]" : "border-white/10 bg-[#0d0d0d] hover:border-white/25"}`}>
+                      <p className={`text-sm font-black mb-0.5 ${assignMode === opt.v ? "text-[#e91e3f]" : "text-white"}`}>{opt.t}</p>
                       <p className="text-[11px] text-gray-500 leading-snug break-keep">{opt.d}</p>
                     </button>
                   ))}
@@ -312,7 +306,7 @@ export default function AuctionListPage() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-xs font-bold text-gray-500">포지션 & 슬롯 <span className="text-gray-600 font-medium">— 팀별 각 포지션 인원 수</span></label>
-                  <button type="button" onClick={() => setRoles([...roles, { name: "", count: 1 }])} className="text-[11px] font-black text-[#4d7cfe] bg-[#4d7cfe]/10 border border-[#4d7cfe]/25 px-3 py-1.5 rounded-full hover:bg-[#4d7cfe]/20 transition-colors">+ 포지션</button>
+                  <button type="button" onClick={() => setRoles([...roles, { name: "", count: 1 }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">+ 포지션</button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {roles.map((r, i) => (
@@ -329,7 +323,7 @@ export default function AuctionListPage() {
                   <span className="text-[10px] font-bold text-gray-500">선경매(1페이즈) 포지션</span>
                   <button type="button" onClick={() => setPhase1Role("")} className={`px-2.5 py-1 text-[10px] font-bold rounded-md border transition-all ${!phase1Role ? "bg-white/10 border-white/25 text-white" : "border-white/10 text-gray-500 hover:border-white/25"}`}>없음(단일)</button>
                   {roleNamesList().map((n: string) => (
-                    <button type="button" key={n} onClick={() => setPhase1Role(n)} className={`px-2.5 py-1 text-[10px] font-bold rounded-md border transition-all ${phase1Role === n ? "bg-[#4d7cfe] border-[#4d7cfe] text-white" : "border-white/10 text-gray-500 hover:border-white/25"}`}>{n}</button>
+                    <button type="button" key={n} onClick={() => setPhase1Role(n)} className={`px-2.5 py-1 text-[10px] font-bold rounded-md border transition-all ${phase1Role === n ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "border-white/10 text-gray-500 hover:border-white/25"}`}>{n}</button>
                   ))}
                   <span className="text-[9px] text-gray-600 w-full mt-0.5">선경매 포지션은 1페이즈에 먼저 경매됩니다. (오버워치 탱커처럼) · 없음이면 단일 페이즈로 진행</span>
                 </div>
@@ -361,8 +355,8 @@ export default function AuctionListPage() {
               {/* 리더 카드 목록 */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-bold text-gray-500">리더 명단 <span className="text-[#4d7cfe]">*</span> <span className="text-gray-600 font-medium">({leaders.filter(l => l.name.trim()).length}명)</span></label>
-                  <button type="button" onClick={() => setLeaders([...leaders, { name: "", position: "", discordId: "" }])} className="text-[11px] font-black text-[#4d7cfe] bg-[#4d7cfe]/10 border border-[#4d7cfe]/25 px-3.5 py-1.5 rounded-full hover:bg-[#4d7cfe]/20 transition-colors">리더 추가</button>
+                  <label className="text-xs font-bold text-gray-500">리더 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({leaders.filter(l => l.name.trim()).length}명)</span></label>
+                  <button type="button" onClick={() => setLeaders([...leaders, { name: "", position: "", discordId: "" }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">리더 추가</button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   {leaders.map((l, i) => (
@@ -377,7 +371,7 @@ export default function AuctionListPage() {
                       <input type="text" placeholder="디스코드 ID (선택 · 프로필 표시)" value={l.discordId} onChange={(e) => updateLeader(i, "discordId", e.target.value)} className={`${inputClass} mb-2.5`} />
                       <div className="flex flex-wrap gap-1.5">
                         {roleNamesList().map((pos: string) => (
-                          <button type="button" key={pos} onClick={() => updateLeader(i, "position", l.position === pos ? "" : pos)} className={`flex-1 min-w-[48px] py-2 text-[11px] font-bold rounded-lg border transition-all ${l.position === pos ? "bg-[#4d7cfe] border-[#4d7cfe] text-white" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos}</button>
+                          <button type="button" key={pos} onClick={() => updateLeader(i, "position", l.position === pos ? "" : pos)} className={`flex-1 min-w-[48px] py-2 text-[11px] font-bold rounded-lg border transition-all ${l.position === pos ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-white/10 text-gray-500 hover:border-white/30"}`}>{pos}</button>
                         ))}
                       </div>
                     </div>
@@ -389,19 +383,19 @@ export default function AuctionListPage() {
               {/* 선수 카드 목록 */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-bold text-gray-500">선수 명단 <span className="text-[#4d7cfe]">*</span> <span className="text-gray-600 font-medium">({players.filter(p => p.alias.trim()).length}명)</span></label>
+                  <label className="text-xs font-bold text-gray-500">선수 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({players.filter(p => p.alias.trim()).length}명)</span></label>
                   <div className="flex gap-2">
                     <button type="button" onClick={rollAllNicks} className="text-[11px] font-black text-gray-400 bg-white/5 border border-white/10 px-3.5 py-1.5 rounded-full hover:text-white hover:border-white/25 transition-colors">전체 랜덤 닉네임</button>
-                    <button type="button" onClick={() => setPlayers([...players, { alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", mostChampions: [""], isAllPos: false }])} className="text-[11px] font-black text-[#4d7cfe] bg-[#4d7cfe]/10 border border-[#4d7cfe]/25 px-3.5 py-1.5 rounded-full hover:bg-[#4d7cfe]/20 transition-colors">선수 추가</button>
+                    <button type="button" onClick={() => setPlayers([...players, { alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", mostChampions: [""], isAllPos: false }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">선수 추가</button>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   {players.map((p, i) => (
-                    <div key={i} className={`relative rounded-xl border p-4 transition-colors ${p.isAllPos ? "border-[#4d7cfe]/35 bg-[#4d7cfe]/[0.04]" : "border-white/10 bg-black/25 hover:border-white/20"}`}>
+                    <div key={i} className={`relative rounded-xl border p-4 transition-colors ${p.isAllPos ? "border-[#e91e3f]/35 bg-[#e91e3f]/[0.04]" : "border-white/10 bg-black/25 hover:border-white/20"}`}>
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase">Player {String(i + 1).padStart(2, "0")}</span>
                         <div className="flex items-center gap-2.5">
-                          <button type="button" onClick={() => updatePlayer(i, "isAllPos", !p.isAllPos)} className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${p.isAllPos ? "bg-[#4d7cfe] border-[#4d7cfe] text-white" : "border-white/10 text-gray-600 hover:border-white/30"}`}>올 포지션</button>
+                          <button type="button" onClick={() => updatePlayer(i, "isAllPos", !p.isAllPos)} className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${p.isAllPos ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "border-white/10 text-gray-600 hover:border-white/30"}`}>올 포지션</button>
                           {players.length > 1 && (
                             <button type="button" onClick={() => setPlayers(players.filter((_, idx) => idx !== i))} className="text-[10px] font-bold text-gray-600 hover:text-red-400 transition-colors">제거</button>
                           )}
@@ -409,7 +403,7 @@ export default function AuctionListPage() {
                       </div>
                       <div className="flex gap-1.5 mb-2.5">
                         <input type="text" placeholder="익명 닉네임" value={p.alias} onChange={(e) => updatePlayer(i, "alias", e.target.value)} className={inputClass} />
-                        <button type="button" onClick={() => rollNick(i)} title="랜덤 닉네임" className="shrink-0 px-3.5 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-[#4d7cfe]/40 transition-all">
+                        <button type="button" onClick={() => rollNick(i)} title="랜덤 닉네임" className="shrink-0 px-3.5 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-[#e91e3f]/40 transition-all">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
                         </button>
                       </div>
@@ -449,7 +443,7 @@ export default function AuctionListPage() {
                           {reveal.includes("champions") && (
                             <div>
                               <p className="text-[9px] font-bold text-gray-600 mb-1">모스트 챔피언 <span className="text-gray-700">(스카우터 공개 · 1개)</span></p>
-                              <input type="text" placeholder="예: 아트록스" value={(p.mostChampions || [""])[0] || ""} onChange={(e) => updatePlayer(i, "mostChampions", [e.target.value])} className="w-full bg-[#0d0d0d] border border-white/10 rounded-md px-2.5 py-1.5 text-[11px] text-white outline-none focus:border-[#4d7cfe] placeholder:text-gray-600" />
+                              <input type="text" placeholder="예: 아트록스" value={(p.mostChampions || [""])[0] || ""} onChange={(e) => updatePlayer(i, "mostChampions", [e.target.value])} className="w-full bg-[#0d0d0d] border border-white/10 rounded-md px-2.5 py-1.5 text-[11px] text-white outline-none focus:border-[#e91e3f] placeholder:text-gray-600" />
                             </div>
                           )}
                         </div>
@@ -460,7 +454,7 @@ export default function AuctionListPage() {
                 {phase1Role && <p className="text-[10px] text-gray-600 mt-2">주/부 포지션에 {phase1Role}가 포함된 선수는 1페이즈로 자동 분류됩니다.</p>}
               </div>
 
-              <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-[#4d7cfe] hover:bg-[#3a63d8] disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg shadow-[#4d7cfe]/20">
+              <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg shadow-[#e91e3f]/20">
                 {isSubmitting ? "생성 중..." : "경매장 생성"}
               </button>
             </div>
@@ -477,7 +471,7 @@ export default function AuctionListPage() {
             { no: "03", t: "팀 완성", d: "종료 후 최종 로스터 공개" },
           ].map((s, i) => (
             <div key={i} className="bg-[#0d0d0d] px-3 py-5 md:px-6 md:py-6 text-center group hover:bg-[#121212] transition-colors">
-              <p className="text-[10px] font-black esp-mono text-[#4d7cfe] mb-1.5">{s.no}</p>
+              <p className="text-[10px] font-black auc-mono text-[#e91e3f] mb-1.5">{s.no}</p>
               <p className="text-xs md:text-sm font-black text-white mb-1">{s.t}</p>
               <p className="text-[9px] md:text-[11px] text-gray-500 break-keep">{s.d}</p>
             </div>
@@ -490,12 +484,11 @@ export default function AuctionListPage() {
           <div className="text-center py-16 text-gray-500">불러오는 중...</div>
         ) : auctions.length === 0 ? (
           <Reveal>
-          <div className="esp-frame esp-cut">
-            <div className="esp-cut bg-[#0b0b0b] py-20 px-6 text-center relative overflow-hidden">
-              <div className="absolute inset-0 esp-mesh opacity-70 pointer-events-none" />
+          <div className="border-y border-white/[0.09]">
+            <div className="py-20 px-6 text-center relative">
               <div className="relative z-10">
-                <div className="w-14 h-14 mx-auto mb-6 esp-cut-sm bg-[#4d7cfe]/[0.06] border border-[#4d7cfe]/25 flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" className="w-6 h-6 text-[#4d7cfe]"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <div className="w-12 h-12 mx-auto mb-6 border border-[#e91e3f]/35 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" className="w-6 h-6 text-[#e91e3f]"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </div>
                 <p className="text-white font-black text-lg mb-2">{isAdmin ? "개최된 경매가 없습니다" : "현재 진행 중인 경매가 없습니다"}</p>
                 <p className="text-sm text-gray-500 leading-relaxed">{isAdmin ? "우측 상단에서 첫 경매를 개최해보세요." : <>대회 시즌이 시작되면 이곳에서 실시간 선수 경매가 열립니다.<br/>공지사항을 통해 일정을 확인해주세요.</>}</p>
@@ -504,61 +497,72 @@ export default function AuctionListPage() {
           </div>
           </Reveal>
         ) : (
-          <div className="space-y-3">
+          /* 📌 LOT 원장 — 행 단위 목록 (카드 없음) */
+          <div>
+            {/* 표 머리 */}
+            <div className="hidden md:flex items-center gap-5 px-4 pb-2.5 border-b border-white/[0.09]">
+              <span className="auc-label text-gray-700 w-12 shrink-0">Lot</span>
+              <span className="auc-label text-gray-700 flex-1">경매명</span>
+              <span className="auc-label text-gray-700 w-24 shrink-0 text-right">구성</span>
+              <span className="auc-label text-gray-700 w-24 shrink-0 text-right">개최일</span>
+              <span className="auc-label text-gray-700 w-20 shrink-0 text-right">상태</span>
+            </div>
+
             {auctions.map((a, idx) => {
               const isLive = a.status === "진행중";
+              const isEnd = a.status === "종료";
               return (
-                <Reveal key={a._id} delay={Math.min(idx, 4) * 80} className="group">
-                  <div className="esp-frame esp-cut">
-                    <div onClick={() => router.push(`/auction/${a._id}`)} className="esp-cut esp-sweep relative bg-[#0b0b0b] cursor-pointer overflow-hidden">
-                      {/* 상단 상태 바 */}
-                      <div className="relative h-[3px] bg-white/[0.06]">
-                        <span className={`absolute inset-y-0 left-0 ${isLive ? "w-full bg-[#4d7cfe] esp-blink" : a.status === "종료" ? "w-full bg-gray-700" : "w-1/3 bg-amber-400"}`} />
-                      </div>
+                <Reveal key={a._id} delay={Math.min(idx, 6) * 60}>
+                  <div
+                    onClick={() => router.push(`/auction/${a._id}`)}
+                    className="auc-row group cursor-pointer border-b border-white/[0.07] px-4 py-4 flex flex-wrap md:flex-nowrap items-center gap-x-5 gap-y-2"
+                  >
+                    {/* LOT 번호 */}
+                    <span className={`auc-num w-12 shrink-0 text-lg font-bold ${isLive ? "text-[#e91e3f]" : isEnd ? "text-gray-700" : "text-gray-500"}`}>
+                      {String(auctions.length - idx).padStart(2, "0")}
+                    </span>
 
-                      <div className="p-5 md:p-6 flex items-center gap-4 md:gap-5">
-                        {/* 상태 */}
-                        <div className="shrink-0 flex flex-col items-center gap-1.5 w-16">
-                          {isLive ? (
-                            <>
-                              <span className="relative flex w-3 h-3">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4d7cfe] opacity-60"></span>
-                                <span className="relative inline-flex rounded-full h-3 w-3 bg-[#4d7cfe]"></span>
-                              </span>
-                              <span className="text-[9px] font-black esp-mono text-[#8aa8ff]">LIVE</span>
-                            </>
-                          ) : a.status === "종료" ? (
-                            <>
-                              <span className="w-3 h-3 rounded-full bg-white/15"></span>
-                              <span className="text-[9px] font-black esp-mono text-gray-500">END</span>
-                            </>
-                          ) : (
-                            <>
-                              <span className="w-3 h-3 rounded-full bg-amber-400/80"></span>
-                              <span className="text-[9px] font-black esp-mono text-amber-300">READY</span>
-                            </>
-                          )}
-                        </div>
-
-                        <div className="w-px self-stretch bg-white/[0.07] shrink-0"></div>
-
-                        {/* 정보 */}
-                        <div className="min-w-0 flex-1">
-                          <p className={`text-base md:text-lg font-black truncate transition-colors ${isLive ? "text-white" : "text-gray-200"} group-hover:text-[#8aa8ff]`}>{a.title}</p>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2">
-                            {a.isTest && <span className="text-[10px] font-black text-amber-400 border-l border-amber-500/50 pl-2 leading-none">테스트</span>}
-                            {a.game && <span className="text-[10px] font-bold text-gray-300 border-l border-[#4d7cfe]/40 pl-2 leading-none">{a.game}</span>}
-                            <span className="text-[10px] font-bold text-gray-500 border-l border-white/15 pl-2 leading-none tabular-nums">리더 {a.leaderCount}</span>
-                            <span className="text-[10px] font-bold text-gray-500 border-l border-white/15 pl-2 leading-none tabular-nums">선수 {a.playerCount}</span>
-                            <span className="text-[10px] font-bold text-gray-700 tabular-nums">{new Date(a.createdAt).toLocaleDateString("ko-KR", { month: "long", day: "numeric" })}</span>
-                          </div>
-                        </div>
-
-                        {isLive && <span className="hidden sm:block shrink-0 text-[11px] font-black text-[#8aa8ff] bg-[#4d7cfe]/10 border border-[#4d7cfe]/30 px-3.5 py-1.5 esp-cut-sm">지금 입장하기</span>}
-                        {isAdmin && <button onClick={(e) => { e.stopPropagation(); setDeleteId(a._id); }} className="shrink-0 text-xs font-bold text-red-500/60 hover:text-red-500 bg-white/5 px-3 py-1.5 esp-cut-sm transition-colors opacity-0 group-hover:opacity-100">삭제</button>}
-                        <svg className="w-4 h-4 shrink-0 text-gray-700 group-hover:text-[#4d7cfe] group-hover:translate-x-1 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>
+                    {/* 경매명 + 종목 */}
+                    <div className="min-w-0 flex-1 order-3 md:order-none w-full md:w-auto">
+                      <p className={`text-[15px] md:text-base font-bold truncate transition-colors ${isEnd ? "text-gray-500" : "text-white"} group-hover:text-[#ff5c77]`}>
+                        {a.title}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                        {a.game && <span className="text-[11px] font-bold text-gray-500">{a.game}</span>}
+                        {a.isTest && <span className="text-[10px] font-bold text-amber-400/90 border border-amber-500/30 px-1.5 leading-[1.5]">테스트</span>}
                       </div>
                     </div>
+
+                    {/* 구성 */}
+                    <span className="hidden md:block w-24 shrink-0 text-right auc-num text-xs text-gray-500">
+                      리더 {a.leaderCount} · 선수 {a.playerCount}
+                    </span>
+
+                    {/* 개최일 */}
+                    <span className="hidden md:block w-24 shrink-0 text-right auc-num text-xs text-gray-600">
+                      {new Date(a.createdAt).toLocaleDateString("ko-KR", { year: "2-digit", month: "2-digit", day: "2-digit" })}
+                    </span>
+
+                    {/* 상태 도장 */}
+                    <span className="w-20 shrink-0 md:text-right ml-auto md:ml-0">
+                      {isLive ? (
+                        <span className="auc-stamp text-[#e91e3f] bg-[#e91e3f]/10">
+                          <span className="relative flex w-1.5 h-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#e91e3f] opacity-70"></span>
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#e91e3f]"></span>
+                          </span>
+                          Live
+                        </span>
+                      ) : isEnd ? (
+                        <span className="auc-stamp text-gray-600">Closed</span>
+                      ) : (
+                        <span className="auc-stamp text-gray-400">Ready</span>
+                      )}
+                    </span>
+
+                    {isAdmin && (
+                      <button onClick={(e) => { e.stopPropagation(); setDeleteId(a._id); }} className="shrink-0 auc-label text-gray-700 hover:text-red-400 transition-colors md:opacity-0 md:group-hover:opacity-100">삭제</button>
+                    )}
                   </div>
                 </Reveal>
               );

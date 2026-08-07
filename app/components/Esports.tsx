@@ -10,24 +10,27 @@ export const ESP = "#00e07b";
 
 export const EsportsStyles = () => (
   <style>{`
-    /* 액센트만 다르고 구조 언어(각진 프레임·헤어라인·모노 라벨)는 공유한다
-       대회 = 네온 그린 / 경매 = 드래프트 보드 블루
-       (골드는 황금카드, 에메랄드는 준비완료, 레드는 위험·마감 전용으로 남겨둔다) */
-    :root { --esp-rgb: 0,224,123; }
-    .esp-theme-auction { --esp-rgb: 77,124,254; }
+    /* 구조 언어(각진 프레임·헤어라인·모노 라벨)는 공유하고 색만 갈라진다
+       대회  = 주 네온 그린
+       경매  = 주 레드(사이트 대표색) + 블루를 포인트로 소량 섞음 */
+    :root { --esp-rgb: 0,224,123; --esp-pt-rgb: 0,224,123; }
+    .esp-theme-auction { --esp-rgb: 233,30,63; --esp-pt-rgb: 77,124,254; }
     .esp-accent { color: rgb(var(--esp-rgb)); }
+    .esp-pt { color: rgb(var(--esp-pt-rgb)); }
+    .esp-pt-bd { border-color: rgba(var(--esp-pt-rgb), .45); }
+    .esp-pt-bg { background-color: rgba(var(--esp-pt-rgb), .12); }
     .esp-cut { clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px)); }
     .esp-cut-sm { clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); }
     /* 모달용 — 모바일(바텀시트)에서는 자르지 않고, sm 이상에서만 각을 낸다 */
     .esp-cut-md { clip-path: none; }
     @media (min-width: 640px) { .esp-cut-md { clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px)); } }
-    .esp-frame { padding: 1px; background: linear-gradient(150deg, rgba(255,255,255,.16), rgba(255,255,255,.05) 45%, rgba(0,224,123,.16)); transition: background .35s ease, filter .35s ease; }
-    .group:hover .esp-frame { background: linear-gradient(150deg, rgba(0,224,123,.7), rgba(0,224,123,.2) 50%, rgba(0,224,123,.6)); filter: drop-shadow(0 0 16px rgba(0,224,123,.18)); }
-    .esp-mesh { background-image: linear-gradient(rgba(0,224,123,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,224,123,.05) 1px, transparent 1px); background-size: 42px 42px; }
+    .esp-frame { padding: 1px; background: linear-gradient(150deg, rgba(255,255,255,.16), rgba(255,255,255,.05) 45%, rgba(var(--esp-rgb),.16)); transition: background .35s ease, filter .35s ease; }
+    .group:hover .esp-frame { background: linear-gradient(150deg, rgba(var(--esp-rgb),.7), rgba(var(--esp-rgb),.2) 50%, rgba(var(--esp-rgb),.6)); filter: drop-shadow(0 0 16px rgba(var(--esp-rgb),.18)); }
+    .esp-mesh { background-image: linear-gradient(rgba(var(--esp-rgb),.05) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--esp-rgb),.05) 1px, transparent 1px); background-size: 42px 42px; }
     .esp-scan { background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0px, rgba(255,255,255,.03) 1px, transparent 1px, transparent 3px); }
     .esp-stripe { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.05) 0 6px, transparent 6px 12px); }
     @keyframes espSweep { 0% { transform: translateX(-120%); } 100% { transform: translateX(220%); } }
-    .esp-sweep::after { content:""; position:absolute; inset:0; pointer-events:none; background: linear-gradient(105deg, transparent 40%, rgba(0,224,123,.14) 50%, transparent 60%); transform: translateX(-120%); }
+    .esp-sweep::after { content:""; position:absolute; inset:0; pointer-events:none; background: linear-gradient(105deg, transparent 40%, rgba(var(--esp-rgb),.14) 50%, transparent 60%); transform: translateX(-120%); }
     .group:hover .esp-sweep::after { animation: espSweep 1.1s ease-out; }
     @keyframes espBlink { 0%,100% { opacity:1 } 50% { opacity:.25 } }
     .esp-blink { animation: espBlink 1.4s ease-in-out infinite; }
