@@ -1008,9 +1008,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       <SlotBoard leader={l} leaderIdx={li} />
 
                       {invMode && (
-                        <button onClick={() => { setInvModal(li); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }} className="mt-2.5 w-full flex items-center justify-center gap-1.5 border-b border-white/15 hover:border-white/50 py-1.5 text-[10px] font-black text-gray-400 hover:text-white transition-colors">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
-                          인벤토리 열기{(l.inventory?.length || 0) > 0 ? ` (${l.inventory.length})` : ""}
+                        <button onClick={() => { setInvModal(li); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }} className={`group mt-2.5 w-full flex items-center gap-2 border px-2.5 py-1.5 text-[10px] font-black cursor-pointer transition-all ${(l.inventory?.length || 0) > 0 ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.08] text-[#ff5c77] hover:bg-[#e91e3f]/20" : "border-white/20 text-gray-400 hover:border-white hover:text-white hover:bg-white/[0.06]"}`}>
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
+                          인벤토리 {(l.inventory?.length || 0) > 0 ? `${l.inventory.length}장` : "비어 있음"}
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 ml-auto shrink-0 transition-transform group-hover:translate-x-0.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
                         </button>
                       )}
 
@@ -1392,16 +1393,30 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {invMode && (
                     <>
                       <span className="hidden sm:block w-px h-11 bg-white/12" />
+                      {/* 📌 유일한 '눌러야 하는' 자원 — 주변이 전부 선(線) 정보라 버튼처럼 보이게 테두리를 준다.
+                          보유 카드가 있으면 레드로 물들고 점이 깜빡여 시선을 끈다. */}
                       <button
                         onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
-                        className="group text-left min-w-[96px]"
+                        title="인벤토리 열기 — 보유 선수를 포지션에 배정합니다"
+                        className={`group relative flex items-center gap-3 pl-3.5 pr-3 py-2.5 border cursor-pointer transition-all ${
+                          invCount > 0
+                            ? "border-[#e91e3f] bg-[#e91e3f]/[0.10] hover:bg-[#e91e3f]/20"
+                            : "border-white/25 hover:border-white hover:bg-white/[0.06]"
+                        }`}
                       >
-                        <p className={`auc-label ${invCount > 0 ? "text-[#e91e3f]" : "text-gray-600"}`}>Inventory</p>
-                        <p className={`text-3xl font-black tabular-nums leading-none mt-1.5 transition-colors ${invCount > 0 ? "text-white" : "text-gray-700"}`}>
-                          {invCount}
-                        </p>
-                        <span className={`block h-px mt-2 transition-colors ${invCount > 0 ? "bg-[#e91e3f] group-hover:bg-white" : "bg-white/12 group-hover:bg-white/40"}`} />
-                        
+                        {invCount > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#e91e3f] animate-[pulseGlow_1.6s_ease-in-out_infinite]" />}
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 shrink-0 ${invCount > 0 ? "text-[#ff5c77]" : "text-gray-500 group-hover:text-white"} transition-colors`}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                        </svg>
+                        <span className="text-left">
+                          <span className={`block auc-label ${invCount > 0 ? "text-[#ff5c77]" : "text-gray-500"}`}>Inventory</span>
+                          <span className={`block text-lg font-black tabular-nums leading-tight transition-colors ${invCount > 0 ? "text-white" : "text-gray-400 group-hover:text-white"}`}>
+                            {invCount}<span className="text-[10px] font-bold text-gray-500 ml-1">장</span>
+                          </span>
+                        </span>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3.5 h-3.5 shrink-0 transition-transform group-hover:translate-x-0.5 ${invCount > 0 ? "text-[#ff5c77]" : "text-gray-600 group-hover:text-white"}`}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
                       </button>
                     </>
                   )}
@@ -2175,27 +2190,45 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               <div className="auc-gcard-spin">
                 <div className="auc-gcard">
                   <div className="auc-gcard-face">
-                    {/* 질감 레이어 */}
-                    <span className="auc-gcard-guilloche"></span>
-                    <span className="auc-gcard-holo"></span>
-                    <span className="auc-gcard-light"></span>
-
-                    {/* 금선 이중 프레임 */}
-                    <span className="absolute inset-[9px] rounded-[7px] border border-yellow-400/40 pointer-events-none"></span>
-                    <span className="absolute inset-[14px] rounded-[5px] border border-yellow-400/15 pointer-events-none"></span>
-                    {/* 코너 장식 */}
-                    <span className="absolute top-3 left-3.5 text-[11px] text-yellow-300/85">★</span>
-                    <span className="absolute bottom-3 right-3.5 text-[11px] text-yellow-300/85 rotate-180 inline-block">★</span>
-
-                    {/* 본문 */}
-                    <div className="relative h-full flex flex-col items-center justify-center px-4 text-center">
-                      <span className="text-6xl leading-none" style={{ background: "linear-gradient(180deg, #fff7d6, #f59e0b)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 0 16px rgba(250,204,21,0.6))" }}>★</span>
-                      <span className="block w-14 h-px my-3.5 bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></span>
-                      <p className="auc-label text-yellow-200/90">Golden Card</p>
-                      <p className="text-xl md:text-2xl font-black tracking-tight mt-1.5 auc-gold-text">올 포지션</p>
-                      <span className="block w-14 h-px my-3.5 bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent"></span>
-                      <p className="auc-label-xs text-yellow-500/70">All Position</p>
+                    {/* ── 위: 초상 창 — 정체를 감춘 실루엣 ── */}
+                    <div className="auc-gcard-window">
+                      <span className="auc-gcard-guilloche"></span>
+                      {/* 카드를 가로지르는 거대 워드마크 */}
+                      <span className="auc-gcard-word">ALL</span>
+                      {/* 실루엣 */}
+                      <span className="auc-gcard-figure">
+                        <svg viewBox="0 0 64 58" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                          <circle cx="32" cy="16" r="13" />
+                          <path d="M32 32c14.4 0 26 9.6 26 21.4V58H6v-4.6C6 41.6 17.6 32 32 32z" />
+                        </svg>
+                      </span>
+                      {/* 일련번호 · 등급 */}
+                      <span className="absolute top-2.5 left-3 auc-label-xs text-yellow-500/70">No.007</span>
+                      <span className="absolute top-2.5 right-3 auc-label-xs text-yellow-300/85">Golden</span>
                     </div>
+
+                    {/* ── 아래: 명판 ── */}
+                    <div className="auc-gcard-plate">
+                      <p className="text-[19px] md:text-[22px] font-black tracking-tight leading-none auc-gold-text">올 포지션</p>
+                      <p className="auc-label-xs text-yellow-500/60 mt-1.5">All Position</p>
+
+                      {/* 능력치 — 세로 헤어라인으로 나눈 두 칸 */}
+                      <div className="flex mt-3 pt-2.5 border-t border-yellow-400/25">
+                        <div className="flex-1 pr-3">
+                          <p className="auc-label-xs text-yellow-600/70">Pos</p>
+                          <p className="text-[13px] font-black text-yellow-100 leading-tight mt-1">전 포지션</p>
+                        </div>
+                        <span className="w-px bg-yellow-400/20"></span>
+                        <div className="flex-1 pl-3">
+                          <p className="auc-label-xs text-yellow-600/70">Tier</p>
+                          <p className="text-[13px] font-black text-yellow-100/45 leading-tight mt-1">???</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 표면 광원 + 금선 프레임 (카드 전체에) */}
+                    <span className="auc-gcard-light"></span>
+                    <span className="absolute inset-[7px] rounded-[7px] border border-yellow-400/30 pointer-events-none"></span>
                   </div>
                 </div>
               </div>

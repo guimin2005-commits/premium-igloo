@@ -290,17 +290,32 @@ export const AuctionStyles = () => (
         repeating-radial-gradient(circle at 50% 40%, transparent 0 4px, rgba(251,191,36,.14) 4px 5px),
         repeating-conic-gradient(from 0deg at 50% 40%, transparent 0 3deg, rgba(251,191,36,.07) 3deg 6deg);
     }
-    /* 홀로 시트 — 각도가 바뀔 때마다 색이 흐른다 */
-    .auc-gcard-holo { position: absolute; inset: 0; mix-blend-mode: color-dodge; opacity: .5;
-      background: linear-gradient(115deg, transparent 18%, rgba(255,60,160,.5) 32%, rgba(255,225,60,.5) 42%, rgba(60,255,200,.5) 52%, rgba(80,140,255,.5) 62%, rgba(200,80,255,.45) 72%, transparent 86%);
-      background-size: 280% 100%;
-      animation: aucGcHolo 2.8s ease-in-out infinite;
-    }
     /* 착지 후 표면을 천천히 지나는 광원 */
     .auc-gcard-light { position: absolute; inset: -30%; pointer-events: none;
       background: radial-gradient(circle at 50% 50%, rgba(255,250,220,.34) 0%, transparent 46%);
       animation: aucGcLight 4.3s ease-in-out forwards; }
 
+    /* 초상 창 — 정체를 감춘 실루엣이 앉는 자리 */
+    .auc-gcard-window { position: relative; height: 57%; overflow: hidden;
+      background: radial-gradient(ellipse at 50% 118%, rgba(251,191,36,.30) 0%, rgba(120,53,15,.12) 42%, transparent 72%), linear-gradient(180deg, #0a0702 0%, #150e03 100%); }
+    /* 카드를 가로지르는 거대 워드마크 — 잘려 나갈 만큼 크게 */
+    .auc-gcard-word { position: absolute; left: 50%; top: 46%; transform: translate(-50%,-50%);
+      font-size: 132px; font-weight: 900; letter-spacing: -.06em; line-height: 1; white-space: nowrap;
+      color: transparent; -webkit-text-stroke: 1.5px rgba(251,191,36,.22); user-select: none; }
+    /* 실루엣 — 검게 채우고 아래에서 금빛을 받는다 */
+    .auc-gcard-figure { position: absolute; left: 50%; bottom: -8%; transform: translateX(-50%);
+      width: 74%; color: #05040100; }
+    .auc-gcard-figure svg { width: 100%; height: auto; display: block; fill: #07050f;
+      filter: drop-shadow(0 -2px 0 rgba(251,191,36,.5)) drop-shadow(0 0 18px rgba(251,191,36,.28)); }
+    /* 창 하단 비네트 */
+    .auc-gcard-window::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(180deg, rgba(0,0,0,.55) 0%, transparent 32%, transparent 68%, rgba(0,0,0,.6) 100%); }
+
+    /* 명판 — 이름과 능력치 */
+    .auc-gcard-plate { position: relative; height: 43%; padding: 12px 14px 10px;
+      background: linear-gradient(180deg, #1c1405 0%, #0d0902 100%); }
+    .auc-gcard-plate::before { content: ""; position: absolute; inset-inline: 10px; top: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(251,191,36,.75), transparent); }
     /* 착지 충격파 */
     .auc-gcard-shock { position: absolute; top: 50%; left: 50%; width: 230px; height: 230px;
       margin: -115px 0 0 -115px; border-radius: 999px; border: 2px solid rgba(255,244,200,.85);
