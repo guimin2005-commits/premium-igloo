@@ -81,7 +81,7 @@ export default function AuctionListPage() {
     const CHAMPS = ["아트록스", "리신", "아리", "징크스", "쓰레쉬", "야스오", "럭스", "제드", "탐켄치", "케이틀린"];
     const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
 
-    setTitle(`[테스트] ${game} 선수 경매 ${new Date().toLocaleDateString("ko-KR")}`);
+    setTitle(`[테스트] ${game} 경매 ${new Date().toLocaleDateString("ko-KR")}`);
     setIsTest(true);
 
     setLeaders(Array.from({ length: teamCount }, (_, i) => ({
@@ -205,7 +205,7 @@ export default function AuctionListPage() {
     return (
       <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
         <h2 className="text-2xl font-black text-white mb-4 tracking-tight">로그인 필요</h2>
-        <p className="text-gray-400 mb-8 text-sm">선수 경매를 보시려면 로그인이 필요합니다.</p>
+        <p className="text-gray-400 mb-8 text-sm">경매를 보시려면 로그인이 필요합니다.</p>
         <button onClick={() => signIn("discord")} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#5865F2]/20">Discord 로그인</button>
       </main>
     );
@@ -220,7 +220,7 @@ export default function AuctionListPage() {
       <AuctionStyles />
 
       {/* ══ 경매장 — 포인트 코인 무대 (최근 5개) ══ */}
-      <section className="relative w-full pt-16 md:pt-24 pb-16 px-6 overflow-hidden">
+      <section className="relative w-full pt-24 md:pt-32 pb-16 px-6 overflow-hidden">
         <div className="relative z-10 max-w-6xl mx-auto">
           {/* 제목 — 가운데 '포인트 경매', 뒤에 POINT / AUCTION */}
           <div className="relative flex flex-col items-center mb-16 md:mb-20">
@@ -275,13 +275,22 @@ export default function AuctionListPage() {
                         <div className="min-w-0">
                           <p className="auc-label text-gray-600 mb-1.5">Invitation</p>
                           <p className="text-base md:text-xl font-black text-white leading-snug break-keep truncate">
-                            {a.game || "선수 경매"}
+                            {a.game || "경매"}
                           </p>
                         </div>
 
-                        <p className="auc-num text-[13px] font-bold text-gray-400">
-                          팀 {a.leaderCount} <span className="text-gray-600 text-[10px] mx-1.5">VS</span> 선수 {a.playerCount}
-                        </p>
+                        {/* 티켓 정보란 — 좌석표처럼 */}
+                        <div className="flex items-end gap-5">
+                          <div>
+                            <p className="auc-label text-gray-600 mb-1">Teams</p>
+                            <p className="auc-num text-xl font-black text-white leading-none">{String(a.leaderCount).padStart(2, "0")}</p>
+                          </div>
+                          <span className="w-px h-7 bg-white/12 mb-0.5" />
+                          <div>
+                            <p className="auc-label text-gray-600 mb-1">Players</p>
+                            <p className="auc-num text-xl font-black text-white leading-none">{String(a.playerCount).padStart(2, "0")}</p>
+                          </div>
+                        </div>
                       </div>
 
                       {/* 절취 스텁 */}
@@ -408,7 +417,7 @@ export default function AuctionListPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-2">경매 제목 <span className="text-[#e91e3f]">*</span></label>
-                  <input type="text" required placeholder="예: 제 1회 종합 e스포츠 대회 선수 경매" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
+                  <input type="text" required placeholder="예: 제 1회 종합 e스포츠 대회 경매" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-2">종목 <span className="text-[#e91e3f]">*</span></label>

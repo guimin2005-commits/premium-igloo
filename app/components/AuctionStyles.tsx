@@ -19,8 +19,8 @@ export const AuctionStyles = () => (
       pointer-events: none; user-select: none; white-space: nowrap; line-height: .82;
     }
     .auc-ghost span { font-weight: 900; letter-spacing: -.045em; }
-    .auc-ghost .g1 { font-size: clamp(5rem, 17vw, 14rem); color: rgba(255,255,255,.055); -webkit-text-stroke: 1.5px rgba(255,255,255,.17); }
-    .auc-ghost .g2 { font-size: clamp(3.4rem, 11.5vw, 9.4rem); color: transparent; -webkit-text-stroke: 1px rgba(255,255,255,.10); letter-spacing: .06em; }
+    .auc-ghost .g1 { font-size: clamp(3.6rem, 12vw, 9.5rem); color: rgba(255,255,255,.055); -webkit-text-stroke: 1.5px rgba(255,255,255,.17); }
+    .auc-ghost .g2 { font-size: clamp(2.4rem, 8vw, 6.4rem); color: transparent; -webkit-text-stroke: 1px rgba(255,255,255,.10); letter-spacing: .06em; }
 
     /* ── 티켓 무대 ── */
     .auc-stage { --tw: 460px; --th: 210px; --gap: 210px; position: relative; height: 330px; display: flex; align-items: center; justify-content: center; }
@@ -46,7 +46,8 @@ export const AuctionStyles = () => (
       opacity: .45;
       transition: transform .6s cubic-bezier(.16,1,.3,1), opacity .45s ease, box-shadow .45s ease, filter .45s ease;
     }
-    .auc-ticket:hover { opacity: .72; }
+    /* ⚠️ 중앙 티켓까지 반투명해지면 뒤 티켓이 비쳐 보인다 — 뒤 티켓에만 적용 */
+    .auc-ticket:not(.auc-ticket-focus):hover { opacity: .72; }
 
     /* 절취선 */
     .auc-ticket .auc-perf {
