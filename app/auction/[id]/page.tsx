@@ -379,7 +379,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       </main>
     );
   }
-  if (!auction) return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">경매장 입장 중...</div>;
+  if (!auction) return <div className="min-h-[60vh] flex items-center justify-center text-gray-700 text-xs font-black tracking-[0.3em] uppercase">Admit One</div>;
 
   // 📌 입장 권한: 관리자(진행자) / 등록된 리더 / 그 외 로그인 유저는 관전자로 입장
   const isLeaderUser = !isAdmin && auction.leaders.some((l: any) => l.discordId && l.discordId === myDiscordId);

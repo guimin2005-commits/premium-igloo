@@ -30,32 +30,53 @@ export const AuctionStyles = () => (
     .auc-ticket {
       position: absolute; width: var(--tw); height: var(--th);
       --notch: 13px; --split: 70%;
-      cursor: pointer; overflow: hidden;
-      background: linear-gradient(150deg, #17171a 0%, #101012 55%, #08080a 100%);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.16), 0 22px 60px -26px #000;
-      /* 절취선 위치의 노치 — 배경색과 무관하게 진짜로 뚫는다 */
-      -webkit-mask:
-        radial-gradient(circle var(--notch) at var(--split) 0%,   transparent 97%, #000 100%),
-        radial-gradient(circle var(--notch) at var(--split) 100%, transparent 97%, #000 100%);
-      -webkit-mask-composite: source-in;
-      mask:
-        radial-gradient(circle var(--notch) at var(--split) 0%,   transparent 97%, #000 100%),
-        radial-gradient(circle var(--notch) at var(--split) 100%, transparent 97%, #000 100%);
-      mask-composite: intersect;
+      cursor: pointer;
       transform: translateX(calc(var(--gap) * var(--off))) scale(.86) rotate(calc(var(--off) * 4deg));
       opacity: .45;
-      transition: transform .6s cubic-bezier(.16,1,.3,1), opacity .45s ease, box-shadow .45s ease, filter .45s ease;
+      transition: transform .6s cubic-bezier(.16,1,.3,1), opacity .45s ease, filter .45s ease;
     }
     /* ⚠️ 중앙 티켓까지 반투명해지면 뒤 티켓이 비쳐 보인다 — 뒤 티켓에만 적용 */
     .auc-ticket:not(.auc-ticket-focus):hover { opacity: .72; }
 
+    /* 본권 / 스텁 — 절취선을 기준으로 실제 두 조각이다 (그래야 찢어진다) */
+    .auc-half {
+      position: absolute; top: 0; bottom: 0; overflow: hidden;
+      background: linear-gradient(150deg, #17171a 0%, #101012 55%, #08080a 100%);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.16), 0 22px 60px -26px #000;
+      transition: box-shadow .45s ease;
+    }
+    /* 절취선 위 노치 — 배경색과 무관하게 진짜로 뚫는다 */
+    .auc-half-l {
+      left: 0; width: var(--split);
+      -webkit-mask:
+        radial-gradient(circle var(--notch) at 100% 0%,   transparent 97%, #000 100%),
+        radial-gradient(circle var(--notch) at 100% 100%, transparent 97%, #000 100%);
+      -webkit-mask-composite: source-in;
+      mask:
+        radial-gradient(circle var(--notch) at 100% 0%,   transparent 97%, #000 100%),
+        radial-gradient(circle var(--notch) at 100% 100%, transparent 97%, #000 100%);
+      mask-composite: intersect;
+    }
+    .auc-half-r {
+      right: 0; width: calc(100% - var(--split));
+      -webkit-mask:
+        radial-gradient(circle var(--notch) at 0% 0%,   transparent 97%, #000 100%),
+        radial-gradient(circle var(--notch) at 0% 100%, transparent 97%, #000 100%);
+      -webkit-mask-composite: source-in;
+      mask:
+        radial-gradient(circle var(--notch) at 0% 0%,   transparent 97%, #000 100%),
+        radial-gradient(circle var(--notch) at 0% 100%, transparent 97%, #000 100%);
+      mask-composite: intersect;
+    }
+
     /* 절취선 */
     .auc-ticket .auc-perf {
-      position: absolute; left: var(--split); top: 14px; bottom: 14px; width: 0;
+      position: absolute; left: var(--split); top: 15px; bottom: 15px; width: 0;
       border-left: 1px dashed rgba(255,255,255,.22);
+      transition: opacity .2s ease;
     }
-    /* 광택 — 티켓 안에서만 (overflow:hidden 으로 밖으로 새지 않음) */
-    .auc-ticket .auc-shine {
+    /* 광택 — 조각 안에서만 (overflow:hidden 으로 밖으로 새지 않음) */
+    .auc-shine {
       position: absolute; inset: -20% -40%; pointer-events: none;
       background: linear-gradient(118deg, transparent 42%, rgba(255,255,255,.10) 50%, transparent 58%);
       transform: translateX(-100%);
@@ -63,23 +84,47 @@ export const AuctionStyles = () => (
     .auc-ticket-focus .auc-shine { animation: aucShine 5.5s ease-in-out infinite; }
     @keyframes aucShine { 0% { transform: translateX(-100%) } 42%,100% { transform: translateX(100%) } }
 
-    .auc-ticket-focus {
-      transform: translateX(0) scale(1) rotate(0deg);
-      opacity: 1;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.30), 0 26px 70px -24px #000;
-      z-index: 20;
-    }
-    .auc-ticket-focus:hover { box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), 0 26px 80px -20px #000; }
+    .auc-ticket-focus { transform: translateX(0) scale(1) rotate(0deg); opacity: 1; z-index: 20; }
+    .auc-ticket-focus .auc-half { box-shadow: inset 0 0 0 1px rgba(255,255,255,.30), 0 26px 70px -24px #000; }
+    .auc-ticket-focus:hover .auc-half { box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), 0 26px 80px -20px #000; }
 
     /* LIVE */
-    .auc-ticket-live { box-shadow: inset 0 0 0 2px rgba(255,255,255,.8), 0 26px 70px -24px #000; animation: aucBeat 2.8s ease-in-out infinite; }
+    .auc-ticket-live .auc-half { animation: aucBeat 2.8s ease-in-out infinite; }
     @keyframes aucBeat {
       0%,100% { box-shadow: inset 0 0 0 2px rgba(255,255,255,.75), 0 0 0 0 rgba(255,255,255,.18), 0 26px 70px -24px #000; }
       60%     { box-shadow: inset 0 0 0 2px rgba(255,255,255,1),   0 0 0 14px rgba(255,255,255,0), 0 26px 70px -24px #000; }
     }
+
+    /* ── 입장 : 절취선을 따라 찢고 두 조각이 흩어진다 ── */
+    .auc-ticket-tear { pointer-events: none; }
+    .auc-ticket-tear .auc-perf { opacity: 0; }
+    .auc-ticket-tear .auc-half { animation: none; }
+    .auc-ticket-tear .auc-half-l { animation: aucTearL .72s cubic-bezier(.34,.02,.2,1) forwards; }
+    .auc-ticket-tear .auc-half-r { animation: aucTearR .72s cubic-bezier(.34,.02,.2,1) forwards; }
+    @keyframes aucTearL {
+      0%   { transform: none; opacity: 1; }
+      14%  { transform: translate(-5px, 3px) rotate(-1.2deg); }
+      100% { transform: translate(-160px, 54px) rotate(-13deg); opacity: 0; }
+    }
+    @keyframes aucTearR {
+      0%   { transform: none; opacity: 1; }
+      14%  { transform: translate(5px, -3px) rotate(1.4deg); }
+      100% { transform: translate(170px, 74px) rotate(16deg); opacity: 0; }
+    }
+    /* 찢기는 순간 절취선에서 번쩍 */
+    .auc-ticket-tear::after {
+      content: ""; position: absolute; left: var(--split); top: 0; bottom: 0; width: 2px;
+      background: #fff; transform: translateX(-1px); animation: aucRip .5s ease-out forwards;
+    }
+    @keyframes aucRip {
+      0%   { opacity: 0; box-shadow: 0 0 0 0 rgba(255,255,255,.5); }
+      18%  { opacity: 1; box-shadow: 0 0 26px 5px rgba(255,255,255,.55); }
+      100% { opacity: 0; box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+    }
     /* CLOSED */
     .auc-ticket-closed { filter: grayscale(1) brightness(.5); }
     .auc-ticket-closed.auc-ticket-focus { filter: grayscale(1) brightness(.7); opacity: .92; }
+    .auc-ticket-closed .auc-half { animation: none; }
 
     /* 종료 도장 */
     .auc-seal {
@@ -102,8 +147,10 @@ export const AuctionStyles = () => (
 
     @media (prefers-reduced-motion: reduce) {
       .auc-in { animation: none; opacity: 1; }
-      .auc-ticket-live, .auc-ticket-focus .auc-shine { animation: none; }
+      .auc-ticket-live .auc-half, .auc-ticket-focus .auc-shine { animation: none; }
       .auc-ticket { transition: none; }
+      /* 찢기 연출은 유지하되 짧게 */
+      .auc-ticket-tear .auc-half-l, .auc-ticket-tear .auc-half-r { animation-duration: .3s; }
     }
   `}</style>
 );
