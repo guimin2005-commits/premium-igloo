@@ -10,6 +10,12 @@ export const ESP = "#00e07b";
 
 export const EsportsStyles = () => (
   <style>{`
+    /* 액센트만 다르고 구조 언어(각진 프레임·헤어라인·모노 라벨)는 공유한다
+       대회 = 네온 그린 / 경매 = 드래프트 보드 블루
+       (골드는 황금카드, 에메랄드는 준비완료, 레드는 위험·마감 전용으로 남겨둔다) */
+    :root { --esp-rgb: 0,224,123; }
+    .esp-theme-auction { --esp-rgb: 77,124,254; }
+    .esp-accent { color: rgb(var(--esp-rgb)); }
     .esp-cut { clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px)); }
     .esp-cut-sm { clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); }
     /* 모달용 — 모바일(바텀시트)에서는 자르지 않고, sm 이상에서만 각을 낸다 */
