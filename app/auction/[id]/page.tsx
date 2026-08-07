@@ -799,6 +799,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {/* 컴팩트 헤더 — 클릭으로 펼침/접힘 */}
                   <button type="button" onClick={toggle} className="w-full text-left p-3.5 outline-none focus:outline-none">
                     <div className="flex items-center gap-2.5">
+                      <span className="shrink-0 w-6 text-[10px] font-black auc-mono text-gray-600">{String(li + 1).padStart(2, "0")}</span>
                       {prof ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={prof.avatarUrl} alt="" className="w-8 h-8 rounded-full bg-gray-800 ring-1 ring-white/15 shrink-0" />
@@ -931,74 +932,76 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               <div className="absolute -top-16 -right-16 w-52 h-52 bg-white/[0.07] blur-[70px] rounded-full pointer-events-none animate-[pulseGlow_4s_ease-in-out_infinite]"></div>
 
               {curPlayer ? (
-                <div className="relative z-10">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <p className={`auc-label mb-2 ${curPlayer.isAllPos ? "text-amber-300" : "text-gray-500"}`}>
-                        {curPlayer.isAllPos ? "Golden Card" : `On the Block · Phase ${curPlayer.phase}`}
-                      </p>
-                      <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-2">
-                        {curPlayer.isAllPos ? <span className="lux-shimmer">올 포지션 선수</span> : curPlayer.alias}
-                      </h2>
-                      {curPlayer.isAllPos ? (
-                        /* 황금카드도 일반 선수와 동일한 칩 형식으로 통일 (골드 톤) */
-                        <div className="flex flex-wrap gap-2">
-                          <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-400 px-2.5 py-1 rounded-full">티어 비공개</span>
-                          <span className="text-[11px] font-bold bg-amber-400/10 border border-amber-400/30 text-amber-300 px-2.5 py-1 rounded-full">슬롯 자유 배정</span>
-                          {canSeePos(curPlayer) ? (
-                            <span className="text-[11px] font-bold bg-amber-400/10 border border-amber-400/30 text-amber-300 px-2.5 py-1 rounded-full">{revealInfo(curPlayer)}</span>
-                          ) : curPlayer.hasMost ? (
-                            <span className="text-[11px] font-bold bg-amber-400/[0.06] border border-amber-400/20 text-amber-300/70 px-2.5 py-1 rounded-full">
-                              스카우터 {(S.goldenScoutCost ?? 4000).toLocaleString()}pt · 모스트 공개
-                            </span>
-                          ) : (
-                            <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-500 px-2.5 py-1 rounded-full">공개 정보 없음</span>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-2">
-                          <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-300 px-2.5 py-1 rounded-full">최고 {curPlayer.peakTier || "?"}</span>
-                          <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-300 px-2.5 py-1 rounded-full">현재 {curPlayer.currentTier || "?"}</span>
-                          {canSeePos(curPlayer) ? (
-                            <span className="text-[11px] font-bold bg-white/[0.07] border border-white/25 text-gray-200 px-2.5 py-1 rounded-full">{revealInfo(curPlayer)}</span>
-                          ) : (
-                            <span className="text-[11px] font-bold bg-white/[0.06] border border-white/25 text-gray-400 px-2.5 py-1 rounded-full">
-                              스카우터 {S.scoutCost.toLocaleString()}pt · 포지션 공개
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                <div className="relative z-10 flex flex-col items-center text-center">
+                  {/* 스포트라이트 — 위에서 작품(선수)으로 떨어지는 빛 */}
+                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-[420px] h-[240px] pointer-events-none" style={{ background: "radial-gradient(ellipse 55% 100% at 50% 0%, rgba(255,255,255,0.10), transparent 70%)" }} />
 
-                    {/* 스카우터 타임 / 입찰 타이머 */}
+                  {/* 타이머 — 무대 우상단 고정 */}
+                  <div className="absolute right-0 top-0">
                     {scoutLeft > 0 ? (
-                      <div className="shrink-0 text-center px-4 py-3 border border-white/25 bg-white/[0.07]">
+                      <div className="text-center px-4 py-3 border border-white/25 bg-white/[0.07]">
                         <p className="text-[8px] font-black auc-mono text-[#e91e3f] uppercase mb-0.5">Scout Time</p>
                         <span className="text-2xl font-black tabular-nums text-white">{scoutLeft}</span>
                         <span className="text-[9px] font-bold text-gray-400 ml-1">초</span>
                       </div>
                     ) : timeLeft !== null && (
-                      <div className={`shrink-0 w-16 h-16 border flex flex-col items-center justify-center ${timeLeft <= 5 ? "border-[#e91e3f] bg-[#e91e3f]/10" : "border-white/10 bg-black/30"}`}>
+                      <div className={`w-16 h-16 border flex flex-col items-center justify-center ${timeLeft <= 5 ? "border-[#e91e3f] bg-[#e91e3f]/10" : "border-white/10 bg-black/30"}`}>
                         <span className={`text-2xl font-black tabular-nums ${timeLeft <= 5 ? "text-[#e91e3f]" : "text-white"}`}>{timeLeft}</span>
                         <span className="text-[8px] font-bold text-gray-500 tracking-widest">SEC</span>
                       </div>
                     )}
                   </div>
 
-                  {/* 절취선 모티프 — 선수 정보와 호가 영역 분리 */}
-                  <div className="mt-6 mb-5 border-t border-dashed border-white/15" />
-                  <div className="flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                      <p className="auc-label text-gray-500 mb-1.5">{cur.leaderIdx === null ? "시작가 · Opening" : `현재 최고가 · Top Bid${cur.isAllin ? " · 올인" : ""}`}</p>
-                      <p className="text-4xl md:text-5xl font-black text-[#e91e3f] tracking-tighter tabular-nums">
-                        {(cur.leaderIdx === null ? basePrice : cur.price).toLocaleString()}<span className="text-base text-gray-400 ml-2">Point</span>
-                      </p>
-                      {curLeader && <p className="text-xs font-bold text-white mt-1.5">{curLeader.name}</p>}
+                  {/* LOT 라벨 — 갤러리 출품 번호 */}
+                  <p className={`auc-label mb-3 ${curPlayer.isAllPos ? "text-amber-300" : "text-gray-500"}`}>
+                    {curPlayer.isAllPos ? "Golden Card" : `Lot ${String((cur.playerIdx ?? 0) + 1).padStart(2, "0")} · Phase ${curPlayer.phase}`}
+                  </p>
+                  <h2 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-3">
+                    {curPlayer.isAllPos ? <span className="lux-shimmer">올 포지션 선수</span> : curPlayer.alias}
+                  </h2>
+                  {curPlayer.isAllPos ? (
+                    /* 황금카드도 일반 선수와 동일한 칩 형식으로 통일 (골드 톤) */
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-400 px-2.5 py-1 rounded-full">티어 비공개</span>
+                      <span className="text-[11px] font-bold bg-amber-400/10 border border-amber-400/30 text-amber-300 px-2.5 py-1 rounded-full">슬롯 자유 배정</span>
+                      {canSeePos(curPlayer) ? (
+                        <span className="text-[11px] font-bold bg-amber-400/10 border border-amber-400/30 text-amber-300 px-2.5 py-1 rounded-full">{revealInfo(curPlayer)}</span>
+                      ) : curPlayer.hasMost ? (
+                        <span className="text-[11px] font-bold bg-amber-400/[0.06] border border-amber-400/20 text-amber-300/70 px-2.5 py-1 rounded-full">
+                          스카우터 {(S.goldenScoutCost ?? 4000).toLocaleString()}pt · 모스트 공개
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-500 px-2.5 py-1 rounded-full">공개 정보 없음</span>
+                      )}
                     </div>
+                  ) : (
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-300 px-2.5 py-1 rounded-full">최고 {curPlayer.peakTier || "?"}</span>
+                      <span className="text-[11px] font-bold bg-white/5 border border-white/10 text-gray-300 px-2.5 py-1 rounded-full">현재 {curPlayer.currentTier || "?"}</span>
+                      {canSeePos(curPlayer) ? (
+                        <span className="text-[11px] font-bold bg-white/[0.07] border border-white/25 text-gray-200 px-2.5 py-1 rounded-full">{revealInfo(curPlayer)}</span>
+                      ) : (
+                        <span className="text-[11px] font-bold bg-white/[0.06] border border-white/25 text-gray-400 px-2.5 py-1 rounded-full">
+                          스카우터 {S.scoutCost.toLocaleString()}pt · 포지션 공개
+                        </span>
+                      )}
+                    </div>
+                  )}
 
+                  {/* 절취선 모티프 — 작품과 호가판 분리 */}
+                  <div className="w-full mt-6 mb-5 border-t border-dashed border-white/15" />
+
+                  {/* 호가판 — 중앙 대형 */}
+                  <p className="auc-label text-gray-500 mb-1.5">{cur.leaderIdx === null ? "시작가 · Opening" : `현재 최고가 · Top Bid${cur.isAllin ? " · 올인" : ""}`}</p>
+                  <p className="text-5xl md:text-6xl font-black text-[#e91e3f] tracking-tighter tabular-nums leading-none">
+                    {(cur.leaderIdx === null ? basePrice : cur.price).toLocaleString()}<span className="text-base text-gray-400 ml-2">Point</span>
+                  </p>
+                  {curLeader && <p className="text-xs font-bold text-white mt-2"><span className="text-gray-600 mr-1.5">최고 입찰</span>{curLeader.name}</p>}
+
+                  <div className="w-full mt-6 flex flex-col items-center gap-4">
                     {/* 리더: 스카우터 + 입찰 (관전자는 열람만) */}
                     {myLeader && auction.status === "진행중" && (
-                      <div className="flex flex-col items-end gap-2.5">
+                      <div className="flex flex-col items-center gap-2.5">
                         {/* 스카우터 — 호명 후 낙찰/유찰 전까지 언제든 사용 가능 (스카우터 타임·입찰 중 모두) */}
                         {myLeaderIdx !== null && curPlayer.scoutedBy.includes(myLeaderIdx) && (
                           <span className="px-3 py-1.5 text-[10px] font-black text-gray-500 border border-white/10 bg-white/[0.03] rounded-lg">스카우터 사용함</span>
@@ -1019,9 +1022,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         ) : strategyLeft > 0 ? (
                           <p className="text-[11px] font-bold text-blue-400">전략 타임 중 — 입찰 일시 중지</p>
                         ) : (
-                          <div className="flex flex-col items-end gap-2">
+                          <div className="flex flex-col items-center gap-2">
                             {/* 빠른 입찰 — 결과 금액이 바로 보이는 카드형 버튼 */}
-                            <div className="flex flex-wrap items-stretch justify-end gap-1.5">
+                            <div className="flex flex-wrap items-stretch justify-center gap-1.5">
                               {[S.minIncrement, S.minIncrement * 5, S.minIncrement * 10, S.minIncrement * 50].map((inc) => {
                                 const result = (cur.leaderIdx === null ? basePrice : cur.price + inc);
                                 const affordable = myLeader && result <= myLeader.points;
@@ -1034,7 +1037,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               })}
                             </div>
                             {/* 직접 입력 + 스테퍼 */}
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-center gap-2">
                               <div className="flex items-center bg-black/40 border border-white/10 rounded-xl overflow-hidden focus-within:border-[#e91e3f] transition-colors">
                                 <button type="button" onClick={() => setBidInput(String(Math.max(nextMinBid, (Number(bidInput) || nextMinBid) - S.minIncrement)))} className="px-3 py-2.5 text-gray-500 hover:text-white hover:bg-white/5 text-sm font-black transition-colors">−</button>
                                 <input
@@ -1058,7 +1061,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                     {/* 진행자 컨트롤 */}
                     {role === "host" && (
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-center gap-2">
                         {/* 입찰 시간 조절 — 긴장감 조절용 (남은 시간 즉시 반영) */}
                         {timeLeft !== null && timeLeft > 0 && (
                           <div className="flex items-center gap-1 mr-1">
@@ -1176,7 +1179,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {/* 선수 목록 */}
           <div className="bg-[#0d0d0d] border border-white/[0.07] p-5">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[10px] font-black auc-mono text-gray-500 uppercase">선수 목록</p>
+              <p className="text-[10px] font-black auc-mono text-gray-500 uppercase">Catalogue · 선수 목록</p>
               {role === "host" && auction.status === "진행중" && auction.players.some((p: any) => p.status === "유찰") && !auction.players.some((p: any) => ["대기", "경매중", "배정중"].includes(p.status)) && (
                 <button onClick={() => setConfirmCfg({ title: "유찰 랜덤 배정", message: "유찰 선수를 빈 슬롯 팀에 기본가로 랜덤 배정합니다. (잔여 Point 최저 팀 우선)", confirmLabel: "배정", onConfirm: () => act({ action: "host:assignPassed" }) })} className="text-[10px] font-black bg-white/[0.07] text-gray-200 border border-white/25 px-3 py-1.5 rounded-full hover:bg-white/10 transition-colors">유찰 랜덤 배정</button>
               )}
