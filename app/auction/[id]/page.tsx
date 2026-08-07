@@ -135,6 +135,34 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       osc.stop(ctx.currentTime + dur);
     } catch {}
   }, []);
+  // 📌 노이즈 버스트 — 나무 타격음처럼 '음정 없는' 소리는 오실레이터로 못 만든다.
+  //    화이트 노이즈를 밴드패스로 깎아 타격 순간의 파열음을 만든다.
+  const playNoise = useCallback((dur: number, baseGain: number, freq: number, q = 1) => {
+    if (!soundOnRef.current || volumeRef.current <= 0) return;
+    const gain = baseGain * (volumeRef.current / 60);
+    try {
+      if (!audioCtx.current) audioCtx.current = new AudioContext();
+      const ctx = audioCtx.current;
+      if (ctx.state === "suspended") ctx.resume();
+      const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = freq;
+      bp.Q.value = q;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(gain, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+      src.connect(bp).connect(g).connect(ctx.destination);
+      src.start();
+      src.stop(ctx.currentTime + dur);
+    } catch {}
+  }, []);
+
   const sfxBid = useCallback(() => playTone(760, 0.07, 0.035), [playTone]);
   // 다음 매물 호명 — 리더들이 바로 인지하도록 또렷한 3음 차임
   const sfxCall = useCallback(() => { playTone(523, 0.11, 0.05); setTimeout(() => playTone(659, 0.11, 0.05), 120); setTimeout(() => playTone(988, 0.2, 0.055), 240); }, [playTone]);
@@ -144,13 +172,21 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     setTimeout(() => playTone(1047, 0.22, 0.045), 260);
     setTimeout(() => playTone(1568, 0.12, 0.02, "triangle"), 340);
   }, [playTone]);
-  // 낙찰 선언 (경매봉 두드림 — 탁! 탁!)
+  // 낙찰 선언 — 실제 경매 의사봉 소리 (탁·탁·탁)
+  //  나무 타격은 '음정'이 아니라 파열음이므로 노이즈 버스트가 핵심이고,
+  //  그 위에 받침대가 울리는 저역 몸통을 얹어 나무 느낌을 만든다.
   const sfxHammer = useCallback(() => {
-    playTone(180, 0.09, 0.07, "square");
-    playTone(90, 0.12, 0.06, "sine");
-    setTimeout(() => { playTone(180, 0.09, 0.075, "square"); playTone(90, 0.14, 0.065, "sine"); }, 180);
-    setTimeout(() => playTone(659, 0.25, 0.04), 420);
-  }, [playTone]);
+    const knock = (t: number, power: number) =>
+      setTimeout(() => {
+        playNoise(0.014, 0.30 * power, 3600, 0.7);          // 타격 순간의 딱딱한 어택
+        playNoise(0.055, 0.20 * power, 1500, 1.0);          // 나무 표면이 갈라지는 소리
+        playTone(215, 0.085, 0.10 * power, "triangle");     // 받침대 몸통 울림
+        playTone(104, 0.13, 0.085 * power, "sine");         // 저역 쿵
+      }, t);
+    knock(0, 0.92);
+    knock(195, 0.96);
+    knock(395, 1.12); // 마지막 한 방이 가장 세게 — 낙찰 확정
+  }, [playTone, playNoise]);
   // 스카우터 결과 (신비로운 차임)
   const sfxScout = useCallback(() => { playTone(880, 0.1, 0.035, "triangle"); setTimeout(() => playTone(1175, 0.14, 0.04, "triangle"), 110); setTimeout(() => playTone(1568, 0.2, 0.035, "triangle"), 240); }, [playTone]);
   // 인벤토리 → 슬롯 배정 (카드가 '착' 꽂히는 느낌)
@@ -1554,7 +1590,26 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                 <p className={`text-sm font-black truncate mb-1 ${p.isAllPos ? "text-amber-300" : "text-white"}`}>{p.isAllPos ? "올 포지션" : p.alias}</p>
                               )}
                               {p.isAllPos ? (
-                                <p className="text-[11px] font-black text-amber-200/70 mb-2">티어 비공개 · 슬롯 자유</p>
+                                /* 한 줄만 있으면 카드가 비어 보인다 → 일반 카드와 같은 3단 구성으로 채운다 (모두 실제 정보) */
+                                <div className="mb-2 mt-0.5">
+                                  <div className="flex items-baseline gap-1.5">
+                                    <span className="auc-label-xs text-amber-600/70 shrink-0">시작가</span>
+                                    <span className="text-[13px] font-black text-amber-200 truncate tabular-nums">{(S.goldenBasePrice ?? 4000).toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                                    <span className="auc-label-xs text-amber-600/70 shrink-0">티어</span>
+                                    <span className="text-[13px] font-black text-amber-100/50 truncate">비공개</span>
+                                  </div>
+                                  <p className="text-[11px] font-black mt-1.5 pt-1.5 border-t border-amber-400/20 leading-snug break-keep">
+                                    {canSeePos(p) ? (
+                                      <span className="text-amber-100">{revealParts(p).map((r) => r.v).join(" · ")}</span>
+                                    ) : p.hasMost ? (
+                                      <span className="text-amber-200/50">스카우터 {(S.goldenScoutCost ?? 4000).toLocaleString()}pt</span>
+                                    ) : (
+                                      <span className="text-amber-200/40">공개 정보 없음</span>
+                                    )}
+                                  </p>
+                                </div>
                               ) : (
                                 /* 낙찰돼도 정보는 남긴다 — 누가 얼마에 어떤 선수를 가져갔는지가 이후 판단의 근거다 */
                                 <div className="mb-2 mt-0.5">
