@@ -1664,17 +1664,23 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                     <span className="auc-cap text-gray-700 shrink-0">현재</span>
                                     <span className="text-[13px] font-black text-gray-300 truncate">{p.currentTier || "?"}</span>
                                   </div>
-                                  {canSeePos(p) && (
-                                    /* 주 포지션만 흰색 볼드 — 입찰 판단의 핵심이 평평해지지 않도록 */
-                                    <p className="text-[11px] font-black mt-1.5 pt-1.5 border-t border-white/[0.07] leading-snug break-keep">
-                                      {revealParts(p).map((r, ri) => (
+                                  {/* 미사용일 때 이 줄을 비우면 카드가 들쭉날쭉해진다 → 항상 채운다.
+                                      유찰은 다시 호명될 수 있어 비용을 안내하고, 그 외에는 '미사용'만 표기 */}
+                                  <p className="text-[11px] font-black mt-1.5 pt-1.5 border-t border-white/[0.07] leading-snug break-keep">
+                                    {canSeePos(p) ? (
+                                      /* 주 포지션만 흰색 볼드 — 입찰 판단의 핵심이 평평해지지 않도록 */
+                                      revealParts(p).map((r, ri) => (
                                         <span key={ri}>
                                           {ri > 0 && <span className="text-gray-700 mx-1">·</span>}
                                           <span className={ri === 0 ? "text-white" : r.pos ? "text-gray-500" : "text-gray-400"}>{r.v}</span>
                                         </span>
-                                      ))}
-                                    </p>
-                                  )}
+                                      ))
+                                    ) : p.status === "유찰" ? (
+                                      <span className="text-gray-500">스카우터 {scoutCostOf(p).toLocaleString()}pt</span>
+                                    ) : (
+                                      <span className="text-gray-600">스카우터 미사용</span>
+                                    )}
+                                  </p>
                                 </div>
                               )}
                             </>
