@@ -31,15 +31,15 @@ export const AuctionStyles = () => (
       position: absolute; width: var(--tw); height: var(--th);
       --notch: 13px; --split: 70%;
       cursor: pointer;
-      /* ⚠️ 루트에 페이지색 배경 — 노치 구멍·찢긴 틈으로 뒤 티켓이 비쳐 보이는 것을 차단
+      /* ⚠️ 루트에 페이지색 배경 — 노치 구멍·찢긴 틈으로 뒤 티켓이 비치는 것을 차단
          (구멍으로는 페이지 배경색만 보이므로 '뚫린' 연출은 유지된다) */
       background: #090909;
       transform: translateX(calc(var(--gap) * var(--off))) scale(.86) rotate(calc(var(--off) * 4deg));
-      opacity: .45;
-      transition: transform .6s cubic-bezier(.16,1,.3,1), opacity .45s ease, filter .45s ease;
+      /* ⚠️ opacity 로 흐리게 하면 티켓끼리 서로 비친다 → 불투명한 채로 밝기만 낮춘다 */
+      filter: brightness(.46);
+      transition: transform .6s cubic-bezier(.16,1,.3,1), filter .45s ease;
     }
-    /* ⚠️ 중앙 티켓까지 반투명해지면 뒤 티켓이 비쳐 보인다 — 뒤 티켓에만 적용 */
-    .auc-ticket:not(.auc-ticket-focus):hover { opacity: .72; }
+    .auc-ticket:not(.auc-ticket-focus):hover { filter: brightness(.74); }
 
     /* 본권 / 스텁 — 절취선을 기준으로 실제 두 조각이다 (그래야 찢어진다) */
     /* ⚠️ 이음새 쪽 테두리는 그리지 않는다 — 안 그러면 점선 절취선이 실선에 묻힌다 */
@@ -80,16 +80,20 @@ export const AuctionStyles = () => (
       border-left: 1px dashed rgba(255,255,255,.22);
       transition: opacity .2s ease;
     }
-    /* 광택 — 조각 안에서만 (overflow:hidden 으로 밖으로 새지 않음) */
+    /* 광택 — 두 조각에 각각 두되, 폭·기준점을 '티켓 전체'로 맞춰 절취선을 가로질러 이어지게 한다
+       (조각마다 overflow:hidden 이라 밖으로는 새지 않는다) */
     .auc-shine {
-      position: absolute; inset: -20% -40%; pointer-events: none;
-      background: linear-gradient(118deg, transparent 42%, rgba(255,255,255,.10) 50%, transparent 58%);
+      position: absolute; top: -20%; bottom: -20%; pointer-events: none;
+      background: linear-gradient(118deg, transparent 42%, rgba(255,255,255,.11) 50%, transparent 58%);
       transform: translateX(-100%);
     }
+    /* split 70/30 기준: 두 조각의 광택이 같은 폭·같은 시작점을 갖도록 환산 */
+    .auc-half-l .auc-shine { left: 0;          width: 142.857%; }
+    .auc-half-r .auc-shine { left: -233.333%;  width: 333.333%; }
     .auc-ticket-focus .auc-shine { animation: aucShine 5.5s ease-in-out infinite; }
     @keyframes aucShine { 0% { transform: translateX(-100%) } 42%,100% { transform: translateX(100%) } }
 
-    .auc-ticket-focus { transform: translateX(0) scale(1) rotate(0deg); opacity: 1; z-index: 20; }
+    .auc-ticket-focus { transform: translateX(0) scale(1) rotate(0deg); filter: none; z-index: 20; }
     .auc-ticket-focus .auc-half { border-color: rgba(255,255,255,.32); box-shadow: 0 26px 70px -24px #000; }
     .auc-ticket-focus:hover .auc-half { border-color: rgba(255,255,255,.6); box-shadow: 0 26px 80px -20px #000; }
 
@@ -127,8 +131,9 @@ export const AuctionStyles = () => (
       100% { opacity: 0; box-shadow: 0 0 0 0 rgba(255,255,255,0); }
     }
     /* CLOSED — 이미 찢겨 어긋난 상태로 놓인다 (다시 찢을 게 없으니 바로 입장) */
-    .auc-ticket-closed { filter: grayscale(1) brightness(.5); }
-    .auc-ticket-closed.auc-ticket-focus { filter: grayscale(1) brightness(.7); opacity: .92; }
+    .auc-ticket-closed { filter: grayscale(1) brightness(.32); }
+    .auc-ticket-closed:not(.auc-ticket-focus):hover { filter: grayscale(1) brightness(.55); }
+    .auc-ticket-closed.auc-ticket-focus { filter: grayscale(1) brightness(.72); }
     .auc-ticket-closed .auc-half { animation: none; border-color: rgba(255,255,255,.13); }
     .auc-ticket-closed .auc-half-l { transform: translate(-7px, 4px) rotate(-1.4deg); }
     .auc-ticket-closed .auc-half-r { transform: translate(10px, 7px) rotate(2.4deg); }

@@ -309,6 +309,7 @@ export default function AuctionListPage() {
 
                       {/* 절취 스텁 */}
                       <div className="auc-half auc-half-r">
+                        <span className="auc-shine" />
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-2">
                           <p className="auc-label text-gray-500 leading-[1.6] text-center">Admit<br />One</p>
                           <span className="w-6 h-px bg-white/15" />
