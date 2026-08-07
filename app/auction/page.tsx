@@ -154,12 +154,60 @@ export default function AuctionListPage() {
   const recent = auctions.slice(0, 5);
   const past = auctions.slice(5);
 
+  // 📌 종이가 찢어지는 소리 — 밴드패스를 훑는 노이즈로 '드드득' 결을 만들고 끝에 탁 끊는다.
+  //    (클릭으로 호출되므로 AudioContext 자동재생 정책에 걸리지 않는다)
+  const playTear = () => {
+    try {
+      const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const now = ctx.currentTime;
+      const dur = 0.42;
+      const len = Math.floor(ctx.sampleRate * dur);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      // 균일한 노이즈가 아니라 불규칙하게 끊기는 결 — 종이 섬유가 뜯기는 느낌
+      for (let i = 0; i < len; i++) {
+        const t = i / len;
+        const grain = Math.random() < 0.55 + t * 0.4 ? 1 : 0.25;
+        d[i] = (Math.random() * 2 - 1) * grain;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.Q.value = 1.8;
+      bp.frequency.setValueAtTime(700, now);
+      bp.frequency.exponentialRampToValueAtTime(3400, now + dur * 0.82);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.16, now + 0.05);
+      g.gain.setValueAtTime(0.16, now + dur * 0.72);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      src.connect(bp).connect(g).connect(ctx.destination);
+      src.start(now);
+      src.stop(now + dur);
+      // 마지막으로 완전히 끊기는 '탁'
+      const snap = ctx.createOscillator();
+      const sg = ctx.createGain();
+      snap.type = "triangle";
+      snap.frequency.value = 240;
+      sg.gain.setValueAtTime(0.09, now + dur * 0.8);
+      sg.gain.exponentialRampToValueAtTime(0.0001, now + dur * 0.8 + 0.09);
+      snap.connect(sg).connect(ctx.destination);
+      snap.start(now + dur * 0.8);
+      snap.stop(now + dur * 0.8 + 0.1);
+      setTimeout(() => ctx.close().catch(() => {}), 1200);
+    } catch {}
+  };
+
   // 📌 입장 — 티켓이 절취선을 따라 찢어지고 사라진 뒤 이동한다
   //    종료된 경매는 이미 찢긴 티켓이라 연출 없이 바로 들어간다
   const enter = (id: string, skipTear = false) => {
     if (tearing) return;
     if (skipTear) { router.push(`/auction/${id}`); return; }
     setTearing(id);
+    playTear();
     setTimeout(() => router.push(`/auction/${id}`), 720);
   };
 

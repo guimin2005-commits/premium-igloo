@@ -11,6 +11,9 @@ export const AuctionStyles = () => (
     .auc-label { font-size: 10px; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; }
     /* 보조 라벨 — 경매방 라인 레이아웃에서 캡션으로 사용 (utility 로 font-size 를 덮으면 .auc-label 이 이겨서 별도 클래스로 둔다) */
     .auc-label-xs { font-size: 8px; font-weight: 900; letter-spacing: .2em; text-transform: uppercase; }
+    /* 한글 캡션 — auc-label-xs 의 자간(.2em)·uppercase 는 영문 전용이다.
+       한글에 걸면 '최 고  티 어' 처럼 벌어져 읽기 나쁘므로 자간 없는 별도 클래스를 쓴다. */
+    .auc-cap { font-size: 9px; font-weight: 900; letter-spacing: 0; }
     .auc-num   { font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
     .auc-mono  { letter-spacing: .2em; font-variant-numeric: tabular-nums; }
 

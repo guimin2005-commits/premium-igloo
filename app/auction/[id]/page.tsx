@@ -17,6 +17,9 @@ const MegaphoneIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
   </svg>
 );
 
+// 📌 중요도 높은 시스템 공지 — 채팅에서 레드로 구분한다 (서버 스키마 변경 없이 문구로 판별)
+const SYS_HIGH = /(낙찰|유찰|경매를? ?시작|경매가? ?종료|페이즈|올 포지션|전략 타임)/;
+
 // 📌 포지션 표기 — 방 전체에서 영문 약자로 통일 (좌측 레일 / 중앙 슬롯 보드 / 모달 / 스카우터 결과)
 const ROLE_ABBR: Record<string, string> = {
   탱커: "TNK", 딜러: "DPS", 힐러: "SUP",
@@ -79,6 +82,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [adjustAmount, setAdjustAmount] = useState("");
   const [posSetTarget, setPosSetTarget] = useState<number | null>(null); // 리더 포지션 지정 모달
 
+  const [showSystemChat, setShowSystemChat] = useState(true); // 채팅의 공지 표시 on/off
+  const [noticeOpen, setNoticeOpen] = useState(false);        // 알림함 모달
+  const [noticeUnread, setNoticeUnread] = useState(0);        // 안 읽은 알림 수
+  const [scoutFx, setScoutFx] = useState<any>(null);          // 스카우터 결과 즉시 팝업 (자동 소멸)
   const [revealFx, setRevealFx] = useState(false); // 프로필 공개 연출 표시 중인지 (시간 제한)
   const revealSeen = useRef<number | null>(null);  // 이미 띄운 공개 대상
   const chatScrolledOnce = useRef(false);          // 첫 채팅 렌더에서 맨 아래로 내렸는지
@@ -100,6 +107,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     try {
       const saved = localStorage.getItem("auctionVolume");
       if (saved !== null) setVolume(Math.min(100, Math.max(0, Number(saved))));
+      const sys = localStorage.getItem("auctionShowSystemChat");
+      if (sys !== null) setShowSystemChat(sys === "1");
     } catch {}
   }, []);
 
@@ -111,6 +120,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     const nid = ++noticeSeq.current;
     setNotices((prev) => {
       const next = [{ ...n, id: nid, at: new Date().toISOString() }, ...prev].slice(0, 50);
+      setNoticeUnread((u) => u + 1);
       try { localStorage.setItem(noticeKey(roleKeyRef.current), JSON.stringify(next)); } catch {}
       return next;
     });
@@ -166,12 +176,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const sfxBid = useCallback(() => playTone(760, 0.07, 0.035), [playTone]);
   // 다음 매물 호명 — 리더들이 바로 인지하도록 또렷한 3음 차임
   const sfxCall = useCallback(() => { playTone(523, 0.11, 0.05); setTimeout(() => playTone(659, 0.11, 0.05), 120); setTimeout(() => playTone(988, 0.2, 0.055), 240); }, [playTone]);
-  // 낙찰 축하 (경쾌한 아르페지오 + 반짝임, 과하지 않게)
-  const sfxSold = useCallback(() => {
-    [523, 659, 784].forEach((f, i) => setTimeout(() => playTone(f, 0.1, 0.04), i * 80));
-    setTimeout(() => playTone(1047, 0.22, 0.045), 260);
-    setTimeout(() => playTone(1568, 0.12, 0.02, "triangle"), 340);
-  }, [playTone]);
+  // 낙찰 — 의사봉 하나로 통일. 기존 축하 아르페지오(sfxSold)는 의사봉과 겹쳐 폐기.
   // 낙찰 선언 — 실제 경매 의사봉 소리 (탁·탁·탁)
   //  나무 타격은 '음정'이 아니라 파열음이므로 노이즈 버스트가 핵심이고,
   //  그 위에 받침대가 울리는 저역 몸통을 얹어 나무 느낌을 만든다.
@@ -290,10 +295,19 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         else if (a.current.price > ps.price && a.current.playerIdx === ps.playerIdx) {
           if (a.current.isAllin) sfxAllin(); else sfxBid();
         }
-        // 낙찰 선언(배정 대기 진입) → 망치 소리
+        // 🔨 낙찰 = 의사봉. 낙찰 경로가 두 가지라 한쪽만 보면 소리가 안 난다.
+        //   · instant 모드 : host:sold → pendingAssign(배정 대기) 생성 → 이때가 낙찰 선언
+        //   · inventory 모드 / 1페이즈 자동배정 : pendingAssign 없이 바로 status="낙찰"
+        //   두 경로에서 각각 한 번씩만 울리도록 hammered 로 중복을 막는다.
         const paIdx = a.pendingAssign?.playerIdx ?? null;
-        if (paIdx !== null && paIdx !== (ps.paIdx ?? null)) sfxHammer();
-        if (soldCount > (ps.soldCount || 0)) sfxSold();
+        if (paIdx !== null && paIdx !== (ps.paIdx ?? null)) {
+          sfxHammer();
+          ps.hammered = paIdx; // 뒤이어 soldCount 가 올라도 다시 울리지 않게
+        }
+        if (soldCount > (ps.soldCount || 0)) {
+          if (ps.hammered === null || ps.hammered === undefined) sfxHammer();
+          ps.hammered = null;
+        }
         if (passCount > (ps.passCount || 0)) sfxPass();
         if (revealIdx !== null && revealIdx !== ps.revealIdx) sfxReveal();
         if (strategyOn && !ps.strategyOn) sfxStrategy();
@@ -317,7 +331,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     poll();
     const t = setInterval(poll, POLL_MS);
     return () => { alive = false; clearInterval(t); };
-  }, [id, status, sfxBid, sfxCall, sfxSold, sfxPass, sfxAllin, sfxReveal, sfxStrategy, sfxStart, sfxEnd, sfxPhase, sfxChat, sfxGolden, sfxHammer]);
+  }, [id, status, sfxBid, sfxCall, sfxPass, sfxAllin, sfxReveal, sfxStrategy, sfxStart, sfxEnd, sfxPhase, sfxChat, sfxGolden, sfxHammer]);
 
   // 📌 역할이 바뀌면 해당 역할의 알림 로그로 교체 (다른 리더의 알림이 남지 않도록)
   useEffect(() => {
@@ -605,7 +619,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       }
       const tName = target.isAllPos ? "올 포지션 선수" : target.alias;
       pushNotice({ kind: "scout", title: `스카우터 — ${tName}`, rows });
-      showToast(`${tName} 스카우터 결과가 알림창에 도착했습니다`);
+      // 결과는 즉시 팝업으로 보여주고(자동 소멸), 기록은 알림함에 남는다
+      setScoutFx({ name: tName, rows });
+      setTimeout(() => setScoutFx(null), 5500);
       // 📌 즉시 반영 (폴링 지연 동안 버튼 잔존/포인트 미차감/포지션 미표시 방지)
       setAuction((prev: any) => {
         if (!prev) return prev;
@@ -1223,7 +1239,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             key={ci}
                             className={`min-w-[112px] px-4 first:pl-0 last:pr-0 border-l first:border-l-0 ${isGoldenLot ? "border-amber-400/20" : "border-white/[0.09]"} ${c.l === "모스트" || c.l.includes("모스트") ? "flex-[2]" : "flex-1"}`}
                           >
-                            <p className={`auc-label-xs mb-1.5 ${isGoldenLot ? "text-amber-300/60" : "text-gray-600"}`}>{c.l}</p>
+                            <p className={`auc-cap mb-1.5 ${isGoldenLot ? "text-amber-300/60" : "text-gray-600"}`}>{c.l}</p>
                             <p
                               className={`text-lg md:text-xl font-black tracking-tight leading-tight break-keep ${
                                 c.tone === "muted"
@@ -1264,7 +1280,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         {myLeaderIdx !== null && curPlayer.scoutedBy.includes(myLeaderIdx) ? (
                           <div className="flex items-center gap-2 pb-2 mb-3 border-b border-white/[0.09]">
                             <span className="auc-label-xs text-gray-600">Scouter</span>
-                            <span className="text-[11px] font-bold text-gray-500">사용함 — 결과는 알림 로그에</span>
+                            <span className="text-[11px] font-bold text-gray-500">사용함 — 결과는 알림함에</span>
                           </div>
                         ) : myLeaderIdx !== null && (!curPlayer.isAllPos || curPlayer.hasMost) ? (
                           /* 황금카드는 공개할 모스트가 없으면 스카우터 자체를 제공하지 않음 */
@@ -1468,8 +1484,34 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                         </svg>
                       </button>
+
                     </>
                   )}
+
+                  {/* 알림함 — 스카우터 결과를 모아 본다 (기존 우측 '알림 로그' 패널 대체).
+                      스카우터는 인벤토리 모드와 무관하므로 invMode 밖에 둔다. */}
+                  <>
+                      <span className="hidden sm:block w-px h-11 bg-white/12" />
+                      <button
+                        onClick={() => { setNoticeOpen(true); setNoticeUnread(0); sfxSelect(); }}
+                        title="알림함 — 스카우터 결과 모아보기"
+                        className={`group relative flex items-center gap-3 pl-3.5 pr-3 py-2.5 border cursor-pointer transition-all ${noticeUnread > 0 ? "border-[#e91e3f] bg-[#e91e3f]/[0.10] hover:bg-[#e91e3f]/20" : "border-white/25 hover:border-white hover:bg-white/[0.06]"}`}
+                      >
+                        {noticeUnread > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#e91e3f] animate-[pulseGlow_1.6s_ease-in-out_infinite]" />}
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 shrink-0 transition-colors ${noticeUnread > 0 ? "text-[#ff5c77]" : "text-gray-500 group-hover:text-white"}`}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                        </svg>
+                        <span className="text-left">
+                          <span className={`block auc-label ${noticeUnread > 0 ? "text-[#ff5c77]" : "text-gray-500"}`}>알림함</span>
+                          <span className={`block text-lg font-black tabular-nums leading-tight transition-colors ${noticeUnread > 0 ? "text-white" : "text-gray-400 group-hover:text-white"}`}>
+                            {notices.length}<span className="text-[10px] font-bold text-gray-500 ml-1">건</span>
+                          </span>
+                        </span>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3.5 h-3.5 shrink-0 transition-transform group-hover:translate-x-0.5 ${noticeUnread > 0 ? "text-[#ff5c77]" : "text-gray-600 group-hover:text-white"}`}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
+                      </button>
+                  </>
                 </div>
 
                 {/* 슬롯 보드 */}
@@ -1593,11 +1635,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                 /* 한 줄만 있으면 카드가 비어 보인다 → 일반 카드와 같은 3단 구성으로 채운다 (모두 실제 정보) */
                                 <div className="mb-2 mt-0.5">
                                   <div className="flex items-baseline gap-1.5">
-                                    <span className="auc-label-xs text-amber-600/70 shrink-0">시작가</span>
+                                    <span className="auc-cap text-amber-600/70 shrink-0">시작가</span>
                                     <span className="text-[13px] font-black text-amber-200 truncate tabular-nums">{(S.goldenBasePrice ?? 4000).toLocaleString()}</span>
                                   </div>
                                   <div className="flex items-baseline gap-1.5 mt-0.5">
-                                    <span className="auc-label-xs text-amber-600/70 shrink-0">티어</span>
+                                    <span className="auc-cap text-amber-600/70 shrink-0">티어</span>
                                     <span className="text-[13px] font-black text-amber-100/50 truncate">비공개</span>
                                   </div>
                                   <p className="text-[11px] font-black mt-1.5 pt-1.5 border-t border-amber-400/20 leading-snug break-keep">
@@ -1615,11 +1657,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                 <div className="mb-2 mt-0.5">
                                   {/* 최고·현재 모두 판단 근거 — 라벨만 초소형으로 두고 값은 같은 무게로 */}
                                   <div className="flex items-baseline gap-1.5">
-                                    <span className="auc-label-xs text-gray-700 shrink-0">최고</span>
+                                    <span className="auc-cap text-gray-700 shrink-0">최고</span>
                                     <span className="text-[13px] font-black text-white truncate">{p.peakTier || "?"}</span>
                                   </div>
                                   <div className="flex items-baseline gap-1.5 mt-0.5">
-                                    <span className="auc-label-xs text-gray-700 shrink-0">현재</span>
+                                    <span className="auc-cap text-gray-700 shrink-0">현재</span>
                                     <span className="text-[13px] font-black text-gray-300 truncate">{p.currentTier || "?"}</span>
                                   </div>
                                   {canSeePos(p) && (
@@ -1675,57 +1717,43 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
         {/* ═══ 우측: 실시간 채팅 + 로그 ═══ */}
         {/* 모바일: 경매 탭에 채팅이 함께 표시 (스트리밍 스타일 · 컴팩트 높이) */}
-        <div className={`${mobileTab === "main" ? "flex" : "hidden"} lg:flex w-full xl:w-[350px] shrink-0 order-3 flex-col gap-4 xl:sticky xl:top-36 xl:self-start xl:h-[calc(100vh-11rem)]`}>
+        {/* 알림 로그 패널은 제거 — 스카우터 결과는 즉시 팝업 + 콘솔의 '알림함'에서 모아 본다 */}
+        <div className={`${mobileTab === "main" ? "flex" : "hidden"} lg:flex w-full xl:w-[350px] shrink-0 order-3 flex-col gap-4 xl:sticky xl:top-36 xl:self-start`}>
 
-          {/* 📌 알림창 — 스카우터 결과 등 나에게만 보이는 알림 */}
-          <div className="bg-[#0d0d0d] border border-white/[0.07] flex flex-col overflow-hidden shrink-0 h-[196px]">
-            <div className="px-4 py-2.5 border-b border-white/5 flex items-center gap-2 shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_2s_ease-in-out_infinite]"></span>
-              <span className="auc-label text-gray-200">알림 로그</span>
-              <span className="text-[9px] font-bold text-gray-600">나에게만 · 계속 보관</span>
-              {notices.length > 0 && (
-                <button onClick={() => { setNotices([]); try { localStorage.removeItem(noticeKey(roleKeyRef.current)); } catch {} }} className="ml-auto text-[9px] font-bold text-gray-600 hover:text-white transition-colors">모두 지우기</button>
-              )}
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
-              {notices.length === 0 ? (
-                <p className="text-center text-[11px] text-gray-700 py-8">알림이 없습니다.<br /><span className="text-[10px] text-gray-800">스카우터 결과 등이 이곳에 표시됩니다</span></p>
-              ) : notices.map((n) => (
-                <div key={n.id} className="rounded-xl border border-[#e91e3f]/25 bg-[#e91e3f]/[0.05] px-3 py-2.5 animate-in fade-in slide-in-from-top-1 duration-300">
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    <span className="text-[8px] font-black auc-mono text-gray-500 uppercase">{n.kind === "scout" ? "Scout" : "Notice"}</span>
-                    <span className="ml-auto text-[9px] text-gray-600 tabular-nums">{new Date(n.at).toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit" })}</span>
-                  </div>
-                  <p className="text-[11px] font-black text-white truncate mb-1">{n.title}</p>
-                  {n.body && <p className="text-[10px] text-gray-400 leading-relaxed break-keep">{n.body}</p>}
-                  {n.rows?.map((r: any, ri: number) => (
-                    <div key={ri} className="flex items-baseline gap-2 text-[10px] leading-relaxed">
-                      <span className="text-gray-600 font-bold shrink-0">{r.l}</span>
-                      <span className={`font-black truncate ${r.pos ? roleColor(r.pos).text : "text-gray-200"}`}>{r.v}</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-[#0d0d0d] border border-white/[0.07] flex flex-col overflow-hidden h-[40vh] max-h-[360px] lg:h-[46vh] xl:h-auto xl:max-h-none xl:flex-1 xl:min-h-0">
+          {/* 넓은 화면에서만 세로로 끝없이 늘어나 길었다 → xl 에서만 상한을 둔다 (좁은 화면 높이는 종전 그대로) */}
+          <div className="bg-[#0d0d0d] border border-white/[0.07] flex flex-col overflow-hidden h-[40vh] max-h-[360px] lg:h-[46vh] xl:h-[46vh] xl:max-h-[440px]">
             <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2 shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>
               <span className="auc-label text-gray-200">실시간 채팅</span>
+              {/* 공지만 껐다 켤 수 있게 — 사람 대화만 보고 싶을 때 */}
+              <button
+                onClick={() => { const v = !showSystemChat; setShowSystemChat(v); try { localStorage.setItem("auctionShowSystemChat", v ? "1" : "0"); } catch {} sfxSelect(); showToast(v ? "공지를 표시합니다" : "공지를 숨깁니다"); }}
+                title={showSystemChat ? "공지 숨기기" : "공지 표시"}
+                className={`ml-auto flex items-center gap-1.5 px-2 py-1 border text-[9px] font-black transition-colors ${showSystemChat ? "border-white/25 text-gray-300 hover:border-white hover:text-white" : "border-white/10 text-gray-600 hover:text-gray-300"}`}
+              >
+                <MegaphoneIcon className="w-2.5 h-2.5 shrink-0" />
+                공지 {showSystemChat ? "ON" : "OFF"}
+              </button>
             </div>
             <div ref={chatBoxRef} className="flex-1 overflow-y-auto overscroll-contain p-3 space-y-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
               {chat.length === 0 && <p className="text-center text-[11px] text-gray-700 py-6">아직 메시지가 없습니다.</p>}
-              {chat.map((m, i) => m.kind === "join" ? (
+              {chat.filter((m: any) => showSystemChat || !(m.isSystem && m.kind !== "join")).map((m: any, i: number) => m.kind === "join" ? (
                 /* 입장 알림 — 최소화 표시 */
                 <p key={m._id || i} className="text-center text-[10px] text-gray-600 py-0.5">{m.message}</p>
               ) : m.isSystem ? (
-                <div key={m._id || i} className="flex items-center justify-center gap-2 bg-white/[0.06] border border-white/25 rounded-lg px-3 py-2">
-                  <span className="shrink-0 w-5 h-5 rounded-md bg-white/[0.07] flex items-center justify-center">
-                    <MegaphoneIcon className="w-3 h-3 text-gray-200" />
-                  </span>
-                  <p className="text-[11px] font-bold text-gray-400 leading-relaxed min-w-0 text-center">{m.message}</p>
-                </div>
+                /* 🐛 기존엔 행 전체가 가운데 정렬이라 글 길이에 따라 확성기 위치가 계속 움직였다.
+                      → 좌측 상단에 고정하고 본문은 왼쪽 정렬. 중요 공지는 레드로 구분한다. */
+                (() => {
+                  const high = SYS_HIGH.test(m.message || "");
+                  return (
+                    <div key={m._id || i} className={`flex items-start gap-2.5 border rounded-lg px-3 py-2 ${high ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.08]" : "border-white/20 bg-white/[0.05]"}`}>
+                      <span className={`shrink-0 w-5 h-5 rounded-md flex items-center justify-center ${high ? "bg-[#e91e3f]/25" : "bg-white/[0.08]"}`}>
+                        <MegaphoneIcon className={`w-3 h-3 shrink-0 ${high ? "text-[#ff5c77]" : "text-gray-300"}`} />
+                      </span>
+                      <p className={`flex-1 min-w-0 text-[11px] font-bold leading-relaxed break-keep ${high ? "text-gray-100" : "text-gray-400"}`}>{m.message}</p>
+                    </div>
+                  );
+                })()
               ) : (
                 <div key={m._id || i} className="flex items-start gap-2">
                   {m.avatar ? <img src={m.avatar} alt="" className="w-5 h-5 rounded-full shrink-0 mt-0.5" /> : <span className="w-5 h-5 rounded-full bg-white/10 shrink-0 mt-0.5"></span>}
@@ -1821,7 +1849,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <span className="auc-label text-gray-500">Inventory</span>
                 <span className="text-sm font-black text-white truncate">{l.name}</span>
                 <span className="text-[11px] font-black text-gray-400 tabular-nums">{l.inventory?.length || 0}장</span>
-                {!mine && <span className="auc-label-xs text-gray-600 border border-white/12 px-1.5 py-1">열람 전용</span>}
+                {!mine && <span className="auc-cap text-gray-600 border border-white/12 px-1.5 py-1">열람 전용</span>}
                 <button onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); }} className="ml-auto p-1.5 -mr-1 text-gray-500 hover:text-white hover:bg-white/5 transition-colors outline-none">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
@@ -1883,7 +1911,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               { l: "스카우터", v: scouted ? revealInfo(sp) : "미확인" },
                             ].map((it, ii) => (
                               <div key={ii} className="flex items-baseline gap-3 py-[7px]">
-                                <span className="w-16 shrink-0 auc-label-xs text-gray-600">{it.l}</span>
+                                <span className="w-16 shrink-0 auc-cap text-gray-600">{it.l}</span>
                                 <span className={`text-[15px] font-black truncate ${it.v === "미확인" || it.v.includes("불가") || it.v === "비공개" ? "text-gray-600" : "text-white"}`}>{it.v}</span>
                               </div>
                             ))}
@@ -2126,6 +2154,87 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       })()}
 
       {/* 진행자 대행 슬롯 배정 (진행자 화면에서 배정 대기 시 — 좌측 레일 SlotBoard로도 가능) */}
+
+      {/* 📮 알림함 — 스카우터 결과 모아보기 */}
+      {noticeOpen && (
+        <AucModal
+          label="알림함"
+          title="스카우터 결과"
+          desc="나에게만 보이는 기록입니다. 새로고침해도 남아 있습니다."
+          onClose={() => setNoticeOpen(false)}
+          wide
+          actions={[
+            ...(notices.length > 0
+              ? [{ text: "모두 지우기", onClick: () => { setNotices([]); setNoticeUnread(0); try { localStorage.removeItem(noticeKey(roleKeyRef.current)); } catch {} showToast("알림함을 비웠습니다"); } }]
+              : []),
+            { text: "닫기", kind: "primary" as const, onClick: () => setNoticeOpen(false) },
+          ]}
+        >
+          <div className="mt-4 border-t border-white/12 max-h-[52vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
+            {notices.length === 0 ? (
+              <p className="py-10 text-center text-[11px] text-gray-700">
+                아직 기록이 없습니다.<br />
+                <span className="text-[10px] text-gray-800">스카우터를 사용하면 이곳에 쌓입니다</span>
+              </p>
+            ) : (
+              notices.map((n) => (
+                <div key={n.id} className="py-3 border-b border-white/[0.07]">
+                  <div className="flex items-baseline gap-2 mb-1.5">
+                    <span className="auc-label-xs text-[#ff5c77]">{n.kind === "scout" ? "Scout" : "Notice"}</span>
+                    <span className="text-[12px] font-black text-white truncate">{n.title}</span>
+                    <span className="ml-auto shrink-0 text-[10px] text-gray-600 tabular-nums">
+                      {new Date(n.at).toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                  {n.body && <p className="text-[11px] text-gray-400 leading-relaxed break-keep">{n.body}</p>}
+                  {n.rows?.length > 0 && (
+                    <div className="flex flex-wrap gap-x-5 gap-y-1 mt-1">
+                      {n.rows.map((r: any, ri: number) => (
+                        <span key={ri} className="flex items-baseline gap-1.5">
+                          <span className="auc-cap text-gray-700">{r.l}</span>
+                          <span className={`text-[13px] font-black ${r.pos ? roleColor(r.pos).text : "text-white"}`}>{r.v}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </AucModal>
+      )}
+
+      {/* 🔔 스카우터 결과 즉시 팝업 — 잠깐 떴다 스스로 사라진다 */}
+      {scoutFx && (
+        <div className="fixed top-28 right-4 md:right-8 z-[126] w-[268px] pointer-events-none animate-[scoutIn_5.5s_ease-in-out_forwards]">
+          <div className="relative border border-[#e91e3f]/50 bg-[#140a0d]/95 backdrop-blur-md shadow-[0_20px_50px_-16px_#000]">
+            <span className="absolute inset-x-0 top-0 h-[2px] bg-[#e91e3f]" />
+            <div className="px-4 py-3">
+              <div className="flex items-baseline gap-2 mb-2">
+                <span className="auc-label-xs text-[#ff5c77]">Scout</span>
+                <span className="text-[12px] font-black text-white truncate">{scoutFx.name}</span>
+              </div>
+              <div className="border-t border-white/12 pt-2">
+                {scoutFx.rows?.map((r: any, ri: number) => (
+                  <div key={ri} className="flex items-baseline gap-2 py-[3px]">
+                    <span className="auc-cap text-gray-600 w-14 shrink-0">{r.l}</span>
+                    <span className={`text-[13px] font-black truncate ${r.pos ? roleColor(r.pos).text : "text-white"}`}>{r.v}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[9px] text-gray-600 mt-2">알림함에 보관됩니다</p>
+            </div>
+          </div>
+          <style dangerouslySetInnerHTML={{__html: `
+            @keyframes scoutIn {
+              0%   { opacity: 0; transform: translateX(24px); }
+              6%   { opacity: 1; transform: translateX(0); }
+              88%  { opacity: 1; transform: translateX(0); }
+              100% { opacity: 0; transform: translateX(16px); }
+            }
+          `}} />
+        </div>
+      )}
 
       {/* 공용 확인 모달 */}
       {confirmCfg && (
@@ -2427,7 +2536,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   className={`flex-1 min-w-[72px] py-3.5 text-sm font-black border-l border-white/12 first:border-l-0 transition-colors ${leader.position === pos ? "bg-white/[0.07] text-gray-400 cursor-default" : `${roleColor(pos).text} hover:bg-white/10`}`}
                 >
                   {pos}
-                  {leader.position === pos && <span className="block auc-label-xs text-gray-600 mt-1">현재</span>}
+                  {leader.position === pos && <span className="block auc-cap text-gray-600 mt-1">현재</span>}
                 </button>
               ))}
             </div>
