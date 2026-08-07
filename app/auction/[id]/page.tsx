@@ -17,8 +17,14 @@ const MegaphoneIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
   </svg>
 );
 
-// 📌 포지션 표기는 방 전체에서 한글 그대로 통일 (좌측 레일 / 중앙 슬롯 보드 / 모달)
-//   영문 약자(TOP·JGL…)는 같은 화면에 한글 표기와 섞여 혼란을 줘서 제거했다.
+// 📌 포지션 표기 — 방 전체에서 영문 약자로 통일 (좌측 레일 / 중앙 슬롯 보드 / 모달 / 스카우터 결과)
+const ROLE_ABBR: Record<string, string> = {
+  탱커: "TNK", 딜러: "DPS", 힐러: "SUP",
+  탑: "TOP", 정글: "JGL", 미드: "MID", 원딜: "ADC", 서폿: "SUP", 서포터: "SUP",
+  타격대: "DUE", 척후대: "INI", 감시자: "SEN", 전략가: "CTR",
+  스쿼드: "SQD",
+};
+const roleAbbr = (name: string) => ROLE_ABBR[name] || (/^[A-Za-z]/.test(name) ? name.slice(0, 3).toUpperCase() : name.slice(0, 3));
 
 // 📌 포지션 색상 팔레트 — 역할 순서(index)대로 배정. 오버워치는 기존 색(파랑/레드/그린) 유지
 const SLOT_PALETTE = [
@@ -97,7 +103,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
   // 📌 알림 로그 — 역할(리더)별로 분리 저장, 새로고침해도 유지
   const noticeKey = (r: string) => `auctionNotices:${id}:${r}`;
-  const pushNotice = (n: { kind: string; title: string; body?: string; rows?: { l: string; v: string; pos?: boolean }[] }) => {
+  // rows[].pos 에는 색상 판별용 '한글 포지션명'이 들어간다 (표시값 v 는 영문 약자)
+  const pushNotice = (n: { kind: string; title: string; body?: string; rows?: { l: string; v: string; pos?: string }[] }) => {
     const nid = ++noticeSeq.current;
     setNotices((prev) => {
       const next = [{ ...n, id: nid, at: new Date().toISOString() }, ...prev].slice(0, 50);
@@ -451,18 +458,18 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     const ch = (p.mostChampions || []).filter(Boolean);
     if (p.isAllPos) return ch.length ? `모스트 ${ch.join("  ·  ")}` : "공개 정보 없음";
     const parts: string[] = [];
-    if (revealFields.includes("mainPos")) parts.push(`주 ${p.mainPos || "?"}`);
-    if (revealFields.includes("subPos")) parts.push(`부 ${p.subPos || "-"}`);
+    if (revealFields.includes("mainPos")) parts.push(`주 ${p.mainPos ? roleAbbr(p.mainPos) : "?"}`);
+    if (revealFields.includes("subPos")) parts.push(`부 ${p.subPos ? roleAbbr(p.subPos) : "-"}`);
     if (revealFields.includes("champions") && ch.length) parts.push(`모스트 ${ch.join("  ·  ")}`);
     return parts.join(" / ");
   };
   // 📌 스카우터 공개 정보를 항목별로 — 무대에서 큰 글씨로 나눠 보여주기 위한 구조화 버전
-  const revealParts = (p: any): { l: string; v: string; pos?: boolean }[] => {
+  const revealParts = (p: any): { l: string; v: string; pos?: string }[] => {
     const ch = (p.mostChampions || []).filter(Boolean);
     if (p.isAllPos) return [{ l: "모스트", v: ch.length ? ch.join(" · ") : "없음" }];
-    const out: { l: string; v: string; pos?: boolean }[] = [];
-    if (revealFields.includes("mainPos")) out.push({ l: "주 포지션", v: p.mainPos || "?", pos: true });
-    if (revealFields.includes("subPos")) out.push({ l: "부 포지션", v: p.subPos || "-", pos: true });
+    const out: { l: string; v: string; pos?: string }[] = [];
+    if (revealFields.includes("mainPos")) out.push({ l: "주 포지션", v: p.mainPos ? roleAbbr(p.mainPos) : "?", pos: p.mainPos || "" });
+    if (revealFields.includes("subPos")) out.push({ l: "부 포지션", v: p.subPos ? roleAbbr(p.subPos) : "-", pos: p.subPos || "" });
     if (revealFields.includes("champions")) out.push({ l: "모스트", v: ch.length ? ch.join(" · ") : "없음" });
     return out;
   };
@@ -514,14 +521,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       sfxScout();
       // 📌 공개 정보는 서버 응답에서만 수신 (다른 리더에게는 전송되지 않음)
       const rv = d.reveal || {};
-      const rows: { l: string; v: string; pos?: boolean }[] = [];
+      const rows: { l: string; v: string; pos?: string }[] = [];
       const champs = (rv.mostChampions || []).filter(Boolean);
       if (target.isAllPos) {
         // 황금카드 — 모스트만 공개
         rows.push({ l: "모스트 챔피언", v: champs.length ? champs.join("  ·  ") : "없음" });
       } else {
-        if (revealFields.includes("mainPos")) rows.push({ l: "주 포지션", v: rv.mainPos || "?", pos: true });
-        if (revealFields.includes("subPos")) rows.push({ l: "부 포지션", v: rv.subPos || "없음", pos: true });
+        if (revealFields.includes("mainPos")) rows.push({ l: "주 포지션", v: rv.mainPos ? roleAbbr(rv.mainPos) : "?", pos: rv.mainPos || "" });
+        if (revealFields.includes("subPos")) rows.push({ l: "부 포지션", v: rv.subPos ? roleAbbr(rv.subPos) : "없음", pos: rv.subPos || "" });
         if (revealFields.includes("champions")) rows.push({ l: "모스트 챔피언", v: champs.length ? champs.join("  ·  ") : "없음" });
       }
       const tName = target.isAllPos ? "올 포지션 선수" : target.alias;
@@ -574,7 +581,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               <div key={slot} className="flex-1 min-w-[132px] px-3.5 first:pl-0 last:pr-0 py-1 border-l border-white/[0.07] first:border-l-0">
                 {/* 포지션 머리글 — 색 밑줄 한 줄 */}
                 <div className={`flex items-baseline justify-between pb-1.5 mb-2 border-b ${isOverflowSlot ? "border-amber-400/60" : "border-white/15"}`}>
-                  <span className={`text-[10px] font-black tracking-[0.14em] ${isOverflowSlot ? "text-amber-300" : col.text}`}>{slot}</span>
+                  <span className={`text-[10px] font-black tracking-[0.14em] ${isOverflowSlot ? "text-amber-300" : col.text}`}>{roleAbbr(slot)}</span>
                   <span className="text-[9px] font-black text-gray-600 tabular-nums">{entries.length}<span className="text-gray-700">/{limit}</span></span>
                 </div>
 
@@ -649,8 +656,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
           return (
             <div key={slot} className={`flex items-start gap-2.5 py-1.5 border-b ${isOverflowSlot ? "border-amber-400/40" : "border-white/[0.06]"}`}>
-              {/* 포지션 표기는 방 전체에서 한글로 통일 (중앙 슬롯 보드와 동일) */}
-              <span className={`shrink-0 w-[38px] pt-px text-[10px] font-black tracking-tight ${isOverflowSlot ? "text-amber-300" : col.text}`}>{slot}</span>
+              <span className={`shrink-0 w-9 pt-px text-[10px] font-black tracking-wider ${isOverflowSlot ? "text-amber-300" : col.text}`}>{roleAbbr(slot)}</span>
               <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">
                 {entries.map(({ r, ri }: any) => {
                   const movable = isOverflowSlot && !r.golden;
@@ -784,7 +790,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 }}
                 className={`px-3 py-1.5 text-[11px] font-black border transition-colors ${roleColor(s).text} border-white/20 hover:border-white hover:bg-white/10`}
               >
-                {s}
+                {roleAbbr(s)}
               </button>
             ))}
           </div>
@@ -946,7 +952,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         {bidding && <span className="shrink-0 auc-label-xs text-[#ff5c77]">Top Bid</span>}
                       </p>
                       <p className="flex items-center gap-1.5 mt-0.5 text-[10px] font-bold text-gray-600">
-                        {l.position && <span className={roleColor(l.position).text}>{l.position}</span>}
+                        {l.position && <span className={roleColor(l.position).text}>{roleAbbr(l.position)}</span>}
                         {l.position && <span className="text-gray-800">·</span>}
                         <span className="tabular-nums">{l.roster.length}/{totalSlots} 슬롯</span>
                         {invMode && (l.inventory?.length || 0) > 0 && (
@@ -1126,7 +1132,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     }
                     if (scouted) {
                       revealParts(curPlayer).forEach((r) =>
-                        cells.push({ l: r.l, v: r.v, tone: curPlayer.isAllPos ? "gold" : undefined, posName: r.pos ? r.v : undefined })
+                        cells.push({ l: r.l, v: r.v, tone: curPlayer.isAllPos ? "gold" : undefined, posName: r.pos || undefined })
                       );
                     } else if (!curPlayer.isAllPos || curPlayer.hasMost) {
                       cells.push({
@@ -1336,7 +1342,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     <div className="min-w-0">
                       <p className="auc-label text-gray-600">My Team</p>
                       <p className="text-lg font-black text-white truncate leading-tight">{myLeader.name}</p>
-                      {myLeader.position && <p className={`text-[10px] font-black tracking-wider ${roleColor(myLeader.position).text}`}>{myLeader.position}</p>}
+                      {myLeader.position && <p className={`text-[10px] font-black tracking-wider ${roleColor(myLeader.position).text}`}>{roleAbbr(myLeader.position)}</p>}
                     </div>
                   </div>
 
@@ -1572,7 +1578,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {n.rows?.map((r: any, ri: number) => (
                     <div key={ri} className="flex items-baseline gap-2 text-[10px] leading-relaxed">
                       <span className="text-gray-600 font-bold shrink-0">{r.l}</span>
-                      <span className={`font-black truncate ${r.pos && r.v ? roleColor(r.v).text : "text-gray-200"}`}>{r.v}</span>
+                      <span className={`font-black truncate ${r.pos ? roleColor(r.pos).text : "text-gray-200"}`}>{r.v}</span>
                     </div>
                   ))}
                 </div>
@@ -1745,7 +1751,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
                             <p className={`text-[11px] font-black tabular-nums ${sel.golden ? "text-amber-300" : "text-gray-200"}`}>{sel.price.toLocaleString()} <span className="text-gray-600 font-bold">Point 낙찰</span></p>
-                            {selectedSlot && <span className={`text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(selectedSlot).badge}`}>{selectedSlot} 배정됨</span>}
+                            {selectedSlot && <span className={`text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(selectedSlot).badge}`}>{roleAbbr(selectedSlot)} 배정됨</span>}
                           </div>
                           <div className="mt-3 divide-y divide-white/[0.07] border-t border-white/[0.07]">
                             {[
@@ -1797,7 +1803,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           onClick={() => { if (dropOk && dragCard !== null) requestPlace(dragCard, slot); }}
                           className={`flex items-center gap-2 rounded-lg px-2.5 py-2 min-h-[36px] transition-all border ${dropOk ? "border-white/25 bg-white/[0.06] cursor-pointer" : "border-transparent bg-white/[0.035]"}`}
                         >
-                          <span className={`shrink-0 text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(slot).badge}`}>{slot}</span>
+                          <span className={`shrink-0 text-[9px] font-black rounded px-1.5 py-0.5 border ${roleColor(slot).badge}`}>{roleAbbr(slot)}</span>
                           <span className="shrink-0 text-[9px] font-bold text-gray-600 tabular-nums">{entries.length}/{limit}</span>
                           <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1">
                             {entries.length === 0 ? (
@@ -1984,7 +1990,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 ]}
               >
                 <p className="text-xs text-gray-400 leading-relaxed mt-2.5">
-                  <b className="text-white">{assignWarn.name}</b> 선수를 <b className={roleColor(assignWarn.slot).text}>[{assignWarn.slot}]</b> 에 배정합니다.
+                  <b className="text-white">{assignWarn.name}</b> 선수를 <b className={roleColor(assignWarn.slot).text}>[{roleAbbr(assignWarn.slot)}]</b> 에 배정합니다.
                 </p>
                 <p className="text-[11px] text-gray-500 leading-relaxed mt-3 pt-3 border-t border-white/[0.09]">
                   한 번 배정한 선수는 인벤토리로 되돌릴 수 없습니다. 배정 후 조정은 <b className="text-gray-300">포지션 체인지(팀당 1회)</b>로만 가능합니다.
@@ -2081,7 +2087,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     }}
                     className={`w-full flex items-center gap-2.5 px-1 py-2.5 border-b border-white/[0.07] text-left transition-colors ${sel ? "bg-[#e91e3f]/10" : "hover:bg-white/[0.04]"}`}
                   >
-                    <span className={`shrink-0 w-[38px] text-[10px] font-black tracking-tight ${roleColor(r.slot).text}`}>{r.slot}</span>
+                    <span className={`shrink-0 w-9 text-[10px] font-black tracking-wider ${roleColor(r.slot).text}`}>{roleAbbr(r.slot)}</span>
                     <span className="flex-1 min-w-0 truncate text-[13px] font-black text-white">
                       {rosterName(leader, r)}
                       {r.playerIdx === -1 && <span className="ml-1.5 text-[9px] text-gray-500 font-black">리더</span>}
