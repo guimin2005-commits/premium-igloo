@@ -79,6 +79,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [adjustAmount, setAdjustAmount] = useState("");
   const [posSetTarget, setPosSetTarget] = useState<number | null>(null); // 리더 포지션 지정 모달
 
+  const [revealFx, setRevealFx] = useState(false); // 프로필 공개 연출 표시 중인지 (시간 제한)
+  const revealSeen = useRef<number | null>(null);  // 이미 띄운 공개 대상
+  const chatScrolledOnce = useRef(false);          // 첫 채팅 렌더에서 맨 아래로 내렸는지
   const chatBoxRef = useRef<HTMLDivElement>(null);
   const lastChatAt = useRef<string | null>(null);
   const chatIds = useRef<Set<string>>(new Set());
@@ -309,12 +312,31 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   }, [auction, role]);
 
   // 채팅 자동 스크롤 — 채팅 박스 내부만 스크롤 (페이지 스크롤 강제 이동 방지)
+  //  🐛 입장·새로고침 직후에는 스크롤이 맨 위(0)라 nearBottom 판정이 false → 과거 메시지가 보인 채로 멈췄다.
+  //     첫 렌더에서는 조건 없이 맨 아래로 내린다.
   useEffect(() => {
     const box = chatBoxRef.current;
-    if (!box) return;
+    if (!box || chat.length === 0) return;
+    if (!chatScrolledOnce.current) {
+      chatScrolledOnce.current = true;
+      box.scrollTop = box.scrollHeight;
+      return;
+    }
     const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
     if (nearBottom) box.scrollTop = box.scrollHeight;
   }, [chat.length]);
+
+  // 📌 프로필 공개 화면은 '연출'이므로 잠시만 — 서버의 auction.reveal 은 계속 남아 있어
+  //    그대로 두면 경매가 끝나도 무대에 공개 화면이 박혀 '경매 종료'가 나오지 않는다. (버그)
+  useEffect(() => {
+    const idx = auction?.reveal?.playerIdx;
+    if (idx === null || idx === undefined) { setRevealFx(false); return; }
+    if (revealSeen.current === idx) return; // 이미 보여준 공개는 다시 띄우지 않는다
+    revealSeen.current = idx;
+    setRevealFx(true);
+    const t = setTimeout(() => setRevealFx(false), 9000);
+    return () => clearTimeout(t);
+  }, [auction?.reveal?.playerIdx]);
 
   // 디스코드 프로필 로드 (리더 + 공개된 선수)
   useEffect(() => {
@@ -1290,7 +1312,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     )}
                   </div>
                 </div>
-              ) : revealPlayer && revealProfile ? (
+              ) : revealFx && auction.status !== "종료" && revealPlayer && revealProfile ? (
                 /* 프로필 공개 화면 */
                 <div className="relative z-10 flex flex-col items-center justify-center py-8 text-center">
                   <p className="text-[10px] font-black tracking-[0.35em] text-gray-200 uppercase mb-5">Player Revealed</p>
