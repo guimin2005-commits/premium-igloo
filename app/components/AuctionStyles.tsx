@@ -270,8 +270,8 @@ export const AuctionStyles = () => (
        수집가용 트레이딩 카드 질감. 금박 테두리 + 기요셰(지폐 인그레이빙) 음각 위로
        무지개 홀로 시트가 흐르고, 카드가 옆면에서 정면으로 회전하며 착지한다. */
     .auc-gcard-stage { position: absolute; top: 50%; left: 50%; perspective: 1300px; }
-    .auc-gcard-outer { animation: aucGcOuter 4.3s cubic-bezier(.2,.9,.25,1) forwards; }
-    .auc-gcard-spin  { transform-style: preserve-3d; animation: aucGcSpin 4.3s cubic-bezier(.2,.9,.25,1) forwards; }
+    .auc-gcard-outer { animation: aucGcDeal 4.3s cubic-bezier(.18,.86,.28,1) forwards; }
+    .auc-gcard-spin  { animation: aucGcFlat 4.3s cubic-bezier(.18,.86,.28,1) forwards; }
 
     .auc-gcard { position: relative; width: 214px; height: 300px; border-radius: 14px; padding: 3px;
       background: linear-gradient(135deg, #fff7d6, #f59e0b, #fde68a, #b45309, #fde047, #f59e0b);
@@ -316,13 +316,18 @@ export const AuctionStyles = () => (
       background: linear-gradient(180deg, #1c1405 0%, #0d0902 100%); }
     .auc-gcard-plate::before { content: ""; position: absolute; inset-inline: 10px; top: 0; height: 1px;
       background: linear-gradient(90deg, transparent, rgba(251,191,36,.75), transparent); }
-    /* 착지 충격파 */
-    .auc-gcard-shock { position: absolute; top: 50%; left: 50%; width: 230px; height: 230px;
-      margin: -115px 0 0 -115px; border-radius: 999px; border: 2px solid rgba(255,244,200,.85);
-      opacity: 0; animation: aucGcShock 4.3s ease-out forwards; }
+    /* 리플 — 덱에서 튕겨 나온 카드들이 화면을 가로질러 스쳐 간다 */
+    .auc-gdeal-fly { position: absolute; top: 50%; left: 50%; width: 124px; height: 174px; border-radius: 9px;
+      background: linear-gradient(150deg, #1d1506 0%, #0c0802 100%);
+      border: 1px solid rgba(251,191,36,.22); opacity: 0; will-change: transform;
+      animation: aucGcFly 1.15s cubic-bezier(.32,.62,.4,1) forwards; }
+
+    /* 착지 스냅 — 테이블에 꽂히는 느낌이라 원이 아니라 납작한 타원 */
+    .auc-gcard-snap { position: absolute; top: 50%; left: 50%; width: 340px; height: 122px;
+      margin: -61px 0 0 -170px; border-radius: 999px; border: 2px solid rgba(255,244,200,.8);
+      opacity: 0; animation: aucGcSnap 4.3s ease-out forwards; }
 
     @keyframes aucGcFoil { 0% { background-position: 0% 50% } 100% { background-position: 300% 50% } }
-    @keyframes aucGcHolo { 0% { background-position: 120% 0 } 50% { background-position: -20% 0 } 100% { background-position: 120% 0 } }
     @keyframes aucGcLight {
       0%, 45% { transform: translate(-42%, -32%); opacity: 0; }
       56%     { opacity: 1; }
@@ -330,27 +335,33 @@ export const AuctionStyles = () => (
       100%    { opacity: 0; }
     }
     /* 바깥: 위치·크기·페이드 (3D 평면화를 막기 위해 회전과 분리) */
-    @keyframes aucGcOuter {
-      0%   { transform: translate(-50%, -46%) scale(.34); opacity: 0; filter: blur(11px); }
-      16%  { opacity: 1; filter: blur(2px); }
-      47%  { transform: translate(-50%, -50%) scale(1.07); opacity: 1; filter: blur(0); }
-      54%  { transform: translate(-50%, -50%) scale(1); }
+    @keyframes aucGcDeal {
+      0%   { transform: translate(calc(-50% + 640px), calc(-50% + 200px)) scale(.60); opacity: 0; filter: blur(9px); }
+      24%  { opacity: 0; }
+      31%  { opacity: 1; filter: blur(5px); }
+      47%  { transform: translate(-50%, -50%) scale(1.03); opacity: 1; filter: blur(0); }
+      52%  { transform: translate(-50%, -50%) scale(.985); }
+      58%  { transform: translate(-50%, -50%) scale(1); }
       86%  { transform: translate(-50%, -50%) scale(1); opacity: 1; filter: blur(0); }
-      100% { transform: translate(-50%, -50%) scale(1.17); opacity: 0; filter: blur(6px); }
+      100% { transform: translate(-50%, -54%) scale(1.1); opacity: 0; filter: blur(6px); }
     }
     /* 안쪽: 순수 3D 회전. 착지 뒤 살짝 흔들려 홀로 색이 한 번 더 돈다 */
-    @keyframes aucGcSpin {
-      0%   { transform: rotateY(88deg) rotateZ(-10deg) rotateX(7deg); }
-      30%  { transform: rotateY(50deg) rotateZ(-4deg) rotateX(3deg); }
-      47%  { transform: rotateY(0deg) rotateZ(0deg) rotateX(0deg); }
-      57%  { transform: rotateY(-9deg) rotateX(2deg); }
-      67%  { transform: rotateY(5deg) rotateX(-1deg); }
-      78%, 100% { transform: rotateY(0deg) rotateX(0deg); }
+    @keyframes aucGcFlat {
+      0%       { transform: rotate(-535deg); }
+      47%      { transform: rotate(0deg); }
+      53%      { transform: rotate(2.6deg); }
+      62%,100% { transform: rotate(0deg); }
     }
-    @keyframes aucGcShock {
-      0%, 44% { opacity: 0; transform: scale(.25); }
-      48%     { opacity: 1; transform: scale(.55); }
-      66%,100%{ opacity: 0; transform: scale(3.2); }
+    @keyframes aucGcSnap {
+      0%, 45%  { opacity: 0; transform: scale(.3); }
+      48%      { opacity: 1; transform: scale(.62); }
+      64%,100% { opacity: 0; transform: scale(2.7); }
+    }
+    @keyframes aucGcFly {
+      0%   { opacity: 0; transform: translate(calc(-50% + 600px), calc(-50% - 50px)) rotate(28deg) scale(.82); filter: blur(2px); }
+      14%  { opacity: .8; }
+      70%  { opacity: .45; }
+      100% { opacity: 0; transform: translate(calc(-50% - 660px), calc(-50% + 70px)) rotate(-165deg) scale(.68); filter: blur(7px); }
     }
     @media (prefers-reduced-motion: reduce) {
       .auc-gcard, .auc-gcard-holo { animation: none; }

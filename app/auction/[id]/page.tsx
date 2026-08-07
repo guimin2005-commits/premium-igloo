@@ -157,19 +157,33 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const sfxAssign = useCallback(() => { playTone(392, 0.06, 0.045, "triangle"); setTimeout(() => playTone(659, 0.09, 0.05, "triangle"), 70); setTimeout(() => playTone(988, 0.14, 0.035), 150); }, [playTone]);
   // 카드 선택(집기) — 짧은 틱
   const sfxSelect = useCallback(() => playTone(880, 0.04, 0.025, "triangle"), [playTone]);
-  // 황금카드 소환 (시네마틱: 어둠의 드론 → 심장박동 → 상승 텐션 → 공개 임팩트 → 잔광)
+  // 황금카드 소환 — 딜러가 카드를 뿌리는 소리에 맞춘 구성
+  //  리플(카드 훑기) → 한 장이 날아오는 휘파람 → 테이블에 꽂히는 스냅 → 금속 벨 팡파레 → 잔향
+  //  (이전의 드론·심장박동 계열은 폐기)
   const sfxGolden = useCallback(() => {
-    // 낮게 깔리는 드론 (어둠)
-    playTone(52, 1.6, 0.055, "sawtooth");
-    setTimeout(() => playTone(49, 1.5, 0.065, "sawtooth"), 750);
-    // 심장박동 (점점 빨라짐)
-    [250, 800, 1250, 1600].forEach((t) => setTimeout(() => { playTone(72, 0.12, 0.075, "sine"); setTimeout(() => playTone(58, 0.1, 0.05, "sine"), 95); }, t));
-    // 상승 텐션
-    [440, 494, 554, 622, 698, 784, 880].forEach((f, i) => setTimeout(() => playTone(f, 0.08, 0.018, "triangle"), 1350 + i * 85));
-    // 공개 임팩트 (플립 순간)
-    setTimeout(() => { playTone(98, 0.55, 0.08, "sawtooth"); playTone(523, 0.4, 0.05); playTone(1047, 0.6, 0.05, "triangle"); }, 2050);
-    // 잔광 쉬머
-    [1319, 1568, 2093].forEach((f, i) => setTimeout(() => playTone(f, 0.5, 0.028, "triangle"), 2280 + i * 150));
+    // 1) 리플 — 덱을 촤르르 훑는 소리 (짧은 노이즈성 틱을 촘촘히)
+    for (let i = 0; i < 22; i++) {
+      setTimeout(() => playTone(2600 + Math.random() * 1400, 0.012, 0.016, "square"), 60 + i * 26);
+    }
+    // 2) 두 번째 리플 — 더 빠르고 낮게
+    for (let i = 0; i < 16; i++) {
+      setTimeout(() => playTone(1700 + Math.random() * 900, 0.011, 0.013, "square"), 700 + i * 19);
+    }
+    // 3) 카드 한 장이 공기를 가르며 날아온다 (상승 휘파람)
+    [520, 620, 740, 880, 1050, 1260, 1500].forEach((f, i) =>
+      setTimeout(() => playTone(f, 0.09, 0.02, "triangle"), 1250 + i * 105)
+    );
+    // 4) 착지 스냅 — 테이블에 '탁' 꽂히는 순간 (2.05초, 애니메이션 착지와 일치)
+    setTimeout(() => {
+      playTone(150, 0.07, 0.09, "square");   // 타격
+      playTone(70, 0.20, 0.075, "sine");     // 저역 울림
+      playTone(3200, 0.035, 0.03, "square"); // 종이 스냅
+    }, 2050);
+    // 5) 금속 벨 팡파레 — 스냅 직후 화음이 열린다
+    setTimeout(() => { playTone(523, 0.7, 0.05, "triangle"); playTone(659, 0.7, 0.042, "triangle"); playTone(784, 0.75, 0.038, "triangle"); }, 2130);
+    setTimeout(() => playTone(1047, 0.9, 0.045, "triangle"), 2320);
+    // 6) 잔향 — 높은 배음이 천천히 흩어진다
+    [1568, 2093, 2637].forEach((f, i) => setTimeout(() => playTone(f, 0.7, 0.018, "sine"), 2600 + i * 190));
   }, [playTone]);
   const sfxTick = useCallback(() => playTone(1050, 0.05, 0.03, "square"), [playTone]);
   const sfxPass = useCallback(() => { playTone(440, 0.12, 0.035); setTimeout(() => playTone(330, 0.18, 0.035), 130); }, [playTone]);
@@ -2180,9 +2194,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {/* 중앙 글로우 */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-yellow-400/20 blur-[100px] rounded-full animate-[gcGlow_4.3s_ease-in-out_forwards]"></div>
 
-          {/* 착지 충격파 — 두 겹으로 번진다 */}
-          <span className="auc-gcard-shock"></span>
-          <span className="auc-gcard-shock" style={{ animationDelay: "0.09s", borderColor: "rgba(251,191,36,.55)" }}></span>
+          {/* 리플 — 덱에서 튕겨 나온 카드들이 먼저 스쳐 간다 (사운드의 촤르르 구간) */}
+          {[0, 0.12, 0.26, 0.4, 0.55].map((d, i) => (
+            <span key={i} className="auc-gdeal-fly" style={{ animationDelay: `${0.15 + d}s`, marginTop: `${(i - 2) * 26}px` }}></span>
+          ))}
+
+          {/* 착지 스냅 — 테이블에 꽂히는 납작한 파문 */}
+          <span className="auc-gcard-snap"></span>
+          <span className="auc-gcard-snap" style={{ animationDelay: "0.08s", borderColor: "rgba(251,191,36,.5)" }}></span>
 
           {/* ══ 홀로그램 포일 카드 ══ */}
           <div className="auc-gcard-stage">
@@ -2212,16 +2231,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       <p className="text-[19px] md:text-[22px] font-black tracking-tight leading-none auc-gold-text">올 포지션</p>
                       <p className="auc-label-xs text-yellow-500/60 mt-1.5">All Position</p>
 
-                      {/* 능력치 — 세로 헤어라인으로 나눈 두 칸 */}
+                      {/* 능력치 — 이름과 겹치지 않는 정보만: 시작가와 비공개 티어 */}
                       <div className="flex mt-3 pt-2.5 border-t border-yellow-400/25">
                         <div className="flex-1 pr-3">
-                          <p className="auc-label-xs text-yellow-600/70">Pos</p>
-                          <p className="text-[13px] font-black text-yellow-100 leading-tight mt-1">전 포지션</p>
+                          <p className="auc-label-xs text-yellow-600/70">시작가</p>
+                          <p className="text-[13px] font-black text-yellow-100 leading-tight mt-1 tabular-nums">{(S.goldenBasePrice ?? 4000).toLocaleString()}</p>
                         </div>
                         <span className="w-px bg-yellow-400/20"></span>
                         <div className="flex-1 pl-3">
-                          <p className="auc-label-xs text-yellow-600/70">Tier</p>
-                          <p className="text-[13px] font-black text-yellow-100/45 leading-tight mt-1">???</p>
+                          <p className="auc-label-xs text-yellow-600/70">티어</p>
+                          <p className="text-[13px] font-black text-yellow-100/45 leading-tight mt-1">비공개</p>
                         </div>
                       </div>
                     </div>
