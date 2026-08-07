@@ -2,10 +2,10 @@
 
 import React from "react";
 
-/* 📌 경매 전용 디자인
-   · 무대 : 진행 중인 경매를 큰 마름모로 중앙에, 나머지는 옆에 작고 흐릿하게
-   · 배경 : POINT 워드마크가 크게 깔림
-   · 색   : 무채색 + 레드 하나. (여러 색 섞지 않는다) */
+/* 📌 경매 전용 디자인 — 블랙 & 화이트
+   · 코인 : 포인트를 상징하는 원형 코인. 중앙에 진행 중인 경매, 옆으로 나머지.
+   · 배경 : POINT 워드마크
+   · 색   : 흑백만. (강조는 명도 대비로) */
 export const AuctionStyles = () => (
   <style>{`
     .auc-label { font-size: 10px; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; }
@@ -15,55 +15,64 @@ export const AuctionStyles = () => (
     /* ── 배경 POINT 워드마크 ── */
     .auc-ghost {
       position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      font-size: clamp(9rem, 30vw, 26rem); font-weight: 900; letter-spacing: -.04em;
+      font-size: clamp(7rem, 26vw, 22rem); font-weight: 900; letter-spacing: -.045em;
       line-height: 1; white-space: nowrap; pointer-events: none; user-select: none;
-      color: transparent; -webkit-text-stroke: 1px rgba(255,255,255,.055);
-      opacity: .9;
+      color: rgba(255,255,255,.045);
+      -webkit-text-stroke: 1.5px rgba(255,255,255,.16);
     }
 
-    /* ── 마름모 무대 ── */
+    /* ── 코인 무대 ── */
     .auc-stage {
-      --size: 250px; --gap: 240px;
-      position: relative; height: 420px; display: flex; align-items: center; justify-content: center;
+      --size: 280px; --gap: 260px;
+      position: relative; height: 360px; display: flex; align-items: center; justify-content: center;
     }
-    @media (max-width: 768px) { .auc-stage { --size: 168px; --gap: 152px; height: 300px; } }
+    @media (max-width: 768px) { .auc-stage { --size: 190px; --gap: 150px; height: 250px; } }
 
-    .auc-dia {
-      position: absolute; width: var(--size); height: var(--size);
-      transform: rotate(45deg) translate3d(0,0,0);
-      border: 1px solid rgba(255,255,255,.13);
-      background: rgba(255,255,255,.018);
-      cursor: pointer;
-      transition: transform .6s cubic-bezier(.16,1,.3,1), opacity .5s ease, border-color .4s ease, background-color .4s ease, filter .5s ease;
-      /* --off : -2 ~ 2 (중앙 기준 좌우 위치) */
-      transform: translateX(calc(var(--gap) * var(--off))) rotate(45deg) scale(.52);
-      opacity: .3; filter: blur(1px);
+    .auc-coin {
+      position: absolute; width: var(--size); height: var(--size); border-radius: 9999px;
+      cursor: pointer; overflow: hidden;
+      background:
+        radial-gradient(circle at 32% 26%, rgba(255,255,255,.10), rgba(255,255,255,0) 55%),
+        linear-gradient(160deg, #1a1a1a 0%, #0c0c0c 60%, #050505 100%);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.14);
+      transform: translateX(calc(var(--gap) * var(--off))) scale(.56);
+      opacity: .55;
+      transition: transform .6s cubic-bezier(.16,1,.3,1), opacity .45s ease, box-shadow .45s ease;
     }
-    .auc-dia:hover { opacity: .6; filter: none; }
+    .auc-coin:hover { opacity: .8; }
 
-    .auc-dia-focus {
-      transform: translateX(0) rotate(45deg) scale(1);
-      opacity: 1; filter: none;
-      border-color: rgba(255,255,255,.28);
-      background: rgba(255,255,255,.028);
+    /* 코인 안쪽 테두리(주조선) */
+    .auc-coin::before {
+      content: ""; position: absolute; inset: 9%; border-radius: 9999px;
+      border: 1px solid rgba(255,255,255,.10); pointer-events: none;
     }
-    .auc-dia-focus:hover { border-color: rgba(255,255,255,.5); background: rgba(255,255,255,.05); }
+    /* 광택 */
+    .auc-coin::after {
+      content: ""; position: absolute; inset: 0; border-radius: 9999px; pointer-events: none;
+      background: linear-gradient(120deg, transparent 38%, rgba(255,255,255,.10) 50%, transparent 62%);
+      transform: translateX(-120%);
+    }
+    .auc-coin-focus::after { animation: aucShine 4.5s ease-in-out infinite; }
+    @keyframes aucShine { 0% { transform: translateX(-120%) } 45%,100% { transform: translateX(120%) } }
 
-    /* 진행 중 — 레드 테두리 + 은은한 맥박 */
-    .auc-dia-live { border-color: rgba(233,30,63,.85); animation: aucBeat 2.6s ease-in-out infinite; }
+    .auc-coin-focus {
+      transform: translateX(0) scale(1);
+      opacity: 1;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.30), 0 24px 70px -24px rgba(0,0,0,.9);
+    }
+    .auc-coin-focus:hover { box-shadow: inset 0 0 0 1px rgba(255,255,255,.55), 0 24px 80px -20px rgba(0,0,0,.9); }
+
+    /* 진행 중 — 흰 링이 번지듯 */
+    .auc-coin-live { animation: aucBeat 3s ease-in-out infinite; }
     @keyframes aucBeat {
-      0%,100% { box-shadow: 0 0 0 0 rgba(233,30,63,.30), 0 0 40px -8px rgba(233,30,63,.35) inset; }
-      50%     { box-shadow: 0 0 0 12px rgba(233,30,63,0),  0 0 60px -6px rgba(233,30,63,.5) inset; }
+      0%,100% { box-shadow: inset 0 0 0 1px rgba(255,255,255,.55), 0 0 0 0 rgba(255,255,255,.14); }
+      55%     { box-shadow: inset 0 0 0 1px rgba(255,255,255,.85), 0 0 0 16px rgba(255,255,255,0); }
     }
-    .auc-dia-end { opacity: .18; }
-    .auc-dia-end.auc-dia-focus { opacity: .75; }
-    .auc-dia-empty { position: relative; width: 190px; height: 190px; transform: rotate(45deg) scale(1); opacity: 1; filter: none; cursor: default; }
+    .auc-coin-end { opacity: .3; }
 
-    /* 마름모 내용 — 다시 -45° 돌려 수평으로 */
-    .auc-dia-in {
-      position: absolute; inset: 0; transform: rotate(-45deg);
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 19%; text-align: center;
+    .auc-coin-in {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center; padding: 16%;
     }
 
     /* ── 진입 ── */
@@ -76,8 +85,8 @@ export const AuctionStyles = () => (
 
     @media (prefers-reduced-motion: reduce) {
       .auc-in { animation: none; opacity: 1; }
-      .auc-dia-live { animation: none; }
-      .auc-dia { transition: none; }
+      .auc-coin-live, .auc-coin-focus::after { animation: none; }
+      .auc-coin { transition: none; }
     }
   `}</style>
 );

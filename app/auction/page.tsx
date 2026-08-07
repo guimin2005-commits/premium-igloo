@@ -215,31 +215,30 @@ export default function AuctionListPage() {
       <LuxStyles />
       <AuctionStyles />
 
-      {/* ══ 경매장 — 진행 중인 경매를 중앙 마름모로, 나머지는 옆에 흐릿하게 ══ */}
-      <section className="relative w-full pt-16 md:pt-24 pb-14 px-6 overflow-hidden">
+      {/* ══ 경매장 — 포인트 코인 무대 (블랙 & 화이트) ══ */}
+      <section className="relative w-full pt-16 md:pt-24 pb-16 px-6 overflow-hidden">
         <div className="relative z-10 max-w-6xl mx-auto">
-          {/* 제목 — 가운데 '경 매', 뒤에 POINT가 흐릿하게 */}
-          <div className="relative flex flex-col items-center mb-14">
+          {/* 제목 — 가운데 '경 매', 뒤에 POINT */}
+          <div className="relative flex flex-col items-center mb-16 md:mb-20">
             <p className="auc-ghost" aria-hidden>POINT</p>
-            <h1 className="auc-in relative text-center text-[3.4rem] md:text-[6rem] font-black leading-none tracking-[0.3em] pl-[0.3em] text-white">
+            <h1 className="auc-in relative text-[3.2rem] md:text-[5.5rem] font-black leading-none tracking-[0.3em] pl-[0.3em] text-white">
               경 매
             </h1>
-            <p className="auc-in relative auc-label text-gray-600 mt-4" style={{ animationDelay: "80ms" }}>
-              Premium Igloo · Player Auction
-            </p>
           </div>
 
-          {/* 마름모 무대 */}
           {isLoading ? (
             <p className="text-center py-24 text-sm text-gray-600">불러오는 중…</p>
           ) : auctions.length === 0 ? (
-            <div className="auc-in flex flex-col items-center py-10">
-              <div className="auc-dia auc-dia-empty"><div className="auc-dia-in"><p className="auc-label text-gray-600">경매 없음</p></div></div>
-              <p className="mt-10 text-sm text-gray-500">{isAdmin ? "아래에서 첫 경매를 개최해보세요." : "대회 시즌이 시작되면 이곳에서 경매가 열립니다."}</p>
+            <div className="auc-in flex flex-col items-center py-16">
+              <div className="auc-coin auc-coin-focus" style={{ position: "relative", cursor: "default" }}>
+                <div className="auc-coin-in"><p className="auc-label text-gray-600">Empty</p></div>
+              </div>
+              <p className="mt-12 text-sm text-gray-500">{isAdmin ? "아래에서 첫 경매를 개최해보세요." : "대회 시즌이 시작되면 이곳에서 경매가 열립니다."}</p>
             </div>
           ) : (
             <>
-              <div className="auc-stage auc-in" style={{ animationDelay: "160ms" }}>
+              {/* 코인 무대 */}
+              <div className="auc-stage auc-in" style={{ animationDelay: "120ms" }}>
                 {auctions.map((a, i) => {
                   const off = i - focus;
                   if (Math.abs(off) > 2) return null;
@@ -250,26 +249,26 @@ export default function AuctionListPage() {
                     <div
                       key={a._id}
                       onClick={() => (isCenter ? router.push(`/auction/${a._id}`) : setFocus(i))}
-                      className={`auc-dia ${isCenter ? "auc-dia-focus" : ""} ${isLive && isCenter ? "auc-dia-live" : ""} ${isEnd ? "auc-dia-end" : ""}`}
+                      className={`auc-coin ${isCenter ? "auc-coin-focus" : ""} ${isLive && isCenter ? "auc-coin-live" : ""} ${isEnd && !isCenter ? "auc-coin-end" : ""}`}
                       style={{ ["--off" as any]: off, zIndex: 10 - Math.abs(off) }}
                     >
-                      <div className="auc-dia-in">
+                      <div className="auc-coin-in">
                         {isCenter ? (
                           <>
-                            <span className={`auc-label mb-2 ${isLive ? "text-[#e91e3f]" : isEnd ? "text-gray-600" : "text-gray-500"}`}>
-                              {isLive ? "● Live" : isEnd ? "종료" : "개장 대기"}
+                            <span className="auc-label text-gray-500 mb-3">
+                              {isLive ? "Live" : isEnd ? "Closed" : "Ready"}
                             </span>
-                            <p className="text-base md:text-lg font-black text-white leading-snug line-clamp-2 break-keep px-2">{a.title}</p>
-                            <span className="my-3 w-8 h-px bg-white/20" />
-                            <div className="flex items-center gap-2.5">
-                              <span className="auc-num text-xl font-black text-white">{a.leaderCount}</span>
-                              <span className="text-[9px] font-black text-gray-600 tracking-widest">VS</span>
-                              <span className="auc-num text-xl font-black text-white">{a.playerCount}</span>
-                            </div>
-                            <span className="auc-label text-gray-600 mt-1">팀 · 선수</span>
+                            <p className="auc-num text-4xl md:text-5xl font-black text-white leading-none">
+                              {(a.pointPool || 0).toLocaleString()}
+                            </p>
+                            <span className="auc-label text-gray-500 mt-2">Point</span>
+                            <span className="my-4 w-10 h-px bg-white/20" />
+                            <p className="auc-num text-sm font-bold text-gray-300">
+                              {a.leaderCount} <span className="text-gray-600 text-[10px] mx-1">VS</span> {a.playerCount}
+                            </p>
                           </>
                         ) : (
-                          <p className="text-[11px] font-black text-gray-500 line-clamp-2 break-keep px-3 text-center">{a.title}</p>
+                          <p className="auc-num text-lg font-black text-gray-400">{(a.pointPool || 0).toLocaleString()}</p>
                         )}
                       </div>
                     </div>
@@ -277,45 +276,36 @@ export default function AuctionListPage() {
                 })}
               </div>
 
-              {/* 중앙 경매 상세 + 진입 */}
+              {/* 중앙 경매 — 제목 + 진입 */}
               {(() => {
                 const a: any = auctions[focus];
                 if (!a) return null;
                 const isLive = a.status === "진행중";
                 return (
-                  <div key={a._id} className="auc-in mt-4 flex flex-col items-center text-center">
-                    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-6">
-                      {a.game && <span className="auc-label text-gray-500">{a.game}</span>}
-                      {a.isTest && <span className="auc-label text-amber-400/90">테스트</span>}
-                      <span className="auc-label text-gray-600">
-                        Point <span className="text-white ml-1.5">{(a.pointPool || 0).toLocaleString()}</span>
-                      </span>
-                      <span className="auc-label text-gray-600">
-                        낙찰 <span className="text-white ml-1.5">{a.soldCount || 0}/{a.playerCount}</span>
-                      </span>
-                    </div>
+                  <div key={a._id} className="auc-in mt-10 flex flex-col items-center text-center">
+                    <h2 className="text-2xl md:text-4xl font-black text-white leading-snug break-keep max-w-3xl">
+                      {a.title}
+                    </h2>
 
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => router.push(`/auction/${a._id}`)}
-                        className={`group inline-flex items-center gap-3 px-8 py-3.5 border transition-colors ${isLive ? "border-[#e91e3f] text-[#e91e3f] hover:bg-[#e91e3f] hover:text-white" : "border-white/20 text-gray-300 hover:bg-white hover:text-black"}`}
-                      >
-                        <span className="auc-label">{isLive ? "지금 입장" : "경매장 보기"}</span>
-                        <span className="text-base leading-none transition-transform group-hover:translate-x-1">→</span>
-                      </button>
-                      {isAdmin && (
-                        <button onClick={() => setDeleteId(a._id)} className="auc-label text-gray-700 hover:text-red-400 px-3 py-3.5 transition-colors">삭제</button>
-                      )}
-                    </div>
+                    <button
+                      onClick={() => router.push(`/auction/${a._id}`)}
+                      className={`group mt-8 inline-flex items-center gap-3 px-9 py-4 transition-colors ${isLive ? "bg-white text-black hover:bg-gray-200" : "border border-white/25 text-gray-300 hover:bg-white hover:text-black"}`}
+                    >
+                      <span className="auc-label">{isLive ? "지금 입장" : "경매장 보기"}</span>
+                      <span className="text-base leading-none transition-transform group-hover:translate-x-1">→</span>
+                    </button>
 
-                    {/* 인디케이터 */}
                     {auctions.length > 1 && (
-                      <div className="flex items-center gap-2 mt-8">
+                      <div className="flex items-center gap-2 mt-10">
                         {auctions.map((x, i) => (
                           <button key={x._id} onClick={() => setFocus(i)} aria-label={`${i + 1}번째 경매`}
-                            className={`transition-all ${i === focus ? "w-5 h-[3px] bg-white" : "w-[3px] h-[3px] bg-white/25 hover:bg-white/50"}`} />
+                            className={`h-[3px] transition-all ${i === focus ? "w-6 bg-white" : "w-[3px] bg-white/25 hover:bg-white/60"}`} />
                         ))}
                       </div>
+                    )}
+
+                    {isAdmin && (
+                      <button onClick={() => setDeleteId(a._id)} className="auc-label text-gray-800 hover:text-red-400 mt-6 transition-colors">삭제</button>
                     )}
                   </div>
                 );
@@ -324,7 +314,7 @@ export default function AuctionListPage() {
           )}
 
           {isAdmin && (
-            <div className="mt-14 flex justify-center">
+            <div className="mt-16 flex justify-center">
               <button onClick={() => setShowCreate(!showCreate)} className="auc-label text-gray-500 hover:text-white border-b border-white/15 hover:border-white pb-1 transition-colors">
                 {showCreate ? "개최 폼 닫기" : "+ 경매 개최"}
               </button>
@@ -332,7 +322,6 @@ export default function AuctionListPage() {
           )}
         </div>
       </section>
-
 
 
       <div className="w-full max-w-6xl mx-auto px-6 pt-10 pb-16 flex-1 flex flex-col space-y-8">
