@@ -82,6 +82,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [adjustAmount, setAdjustAmount] = useState("");
   const [posSetTarget, setPosSetTarget] = useState<number | null>(null); // 리더 포지션 지정 모달
 
+  const [bidFlash, setBidFlash] = useState<{ idx: number; n: number } | null>(null); // 입찰한 팀 강조 (좌측 레일)
   const [showSystemChat, setShowSystemChat] = useState(true); // 채팅의 공지 표시 on/off
   const [noticeOpen, setNoticeOpen] = useState(false);        // 알림함 모달
   const [noticeUnread, setNoticeUnread] = useState(0);        // 안 읽은 알림 수
@@ -145,57 +146,22 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       osc.stop(ctx.currentTime + dur);
     } catch {}
   }, []);
-  // 📌 노이즈 버스트 — 나무 타격음처럼 '음정 없는' 소리는 오실레이터로 못 만든다.
-  //    화이트 노이즈를 밴드패스로 깎아 타격 순간의 파열음을 만든다.
-  const playNoise = useCallback((dur: number, baseGain: number, freq: number, q = 1) => {
-    if (!soundOnRef.current || volumeRef.current <= 0) return;
-    const gain = baseGain * (volumeRef.current / 60);
-    try {
-      if (!audioCtx.current) audioCtx.current = new AudioContext();
-      const ctx = audioCtx.current;
-      if (ctx.state === "suspended") ctx.resume();
-      const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
-      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      const bp = ctx.createBiquadFilter();
-      bp.type = "bandpass";
-      bp.frequency.value = freq;
-      bp.Q.value = q;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(gain, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
-      src.connect(bp).connect(g).connect(ctx.destination);
-      src.start();
-      src.stop(ctx.currentTime + dur);
-    } catch {}
-  }, []);
-
   const sfxBid = useCallback(() => playTone(760, 0.07, 0.035), [playTone]);
   // 다음 매물 호명 — 리더들이 바로 인지하도록 또렷한 3음 차임
   const sfxCall = useCallback(() => { playTone(523, 0.11, 0.05); setTimeout(() => playTone(659, 0.11, 0.05), 120); setTimeout(() => playTone(988, 0.2, 0.055), 240); }, [playTone]);
-  // 낙찰 — 의사봉 하나로 통일. 기존 축하 아르페지오(sfxSold)는 의사봉과 겹쳐 폐기.
-  // 낙찰 선언 — 실제 경매 의사봉 소리 (탁·탁·탁)
-  //  나무 타격은 '음정'이 아니라 파열음이므로 노이즈 버스트가 핵심이고,
-  //  그 위에 받침대가 울리는 저역 몸통을 얹어 나무 느낌을 만든다.
-  //  ⚠️ 오실레이터(사인·트라이앵글)를 쓰면 '음정'이 생겨 신스 킥처럼 들린다 → 전부 노이즈로만 만든다.
-  //     나무는 배음이 정수비가 아니고 감쇠가 매우 빠르다. 높은 Q 의 밴드패스를
-  //     비정수비 주파수에 여러 개 걸어 공명 모드를 흉내내고, 전부 100ms 안에 끊는다.
+  // 낙찰 축하 (경쾌한 아르페지오 + 반짝임, 과하지 않게)
+  const sfxSold = useCallback(() => {
+    [523, 659, 784].forEach((f, i) => setTimeout(() => playTone(f, 0.1, 0.04), i * 80));
+    setTimeout(() => playTone(1047, 0.22, 0.045), 260);
+    setTimeout(() => playTone(1568, 0.12, 0.02, "triangle"), 340);
+  }, [playTone]);
+  // 낙찰 선언 (경매봉 두드림 — 탁! 탁!)
   const sfxHammer = useCallback(() => {
-    const knock = (t: number, power: number) =>
-      setTimeout(() => {
-        // 경쾌함 = 4ms 짜리 넓은 어택 / 묵직함 = 저역이 70~90ms 까지 남아 있는 것
-        playNoise(0.004, 0.30 * power, 4000, 0.4);  // 봉이 닿는 순간
-        playNoise(0.130, 0.68 * power, 105, 1.0);   // 저역 몸통 — 여기가 무게를 만든다 (충분히 길게)
-        playNoise(0.075, 0.40 * power, 240, 1.8);   // 나무 몸통
-        playNoise(0.018, 0.10 * power, 800, 2.5);   // 존재감만 살짝 (Q 가 높으면 통통 울린다)
-      }, t);
-    knock(0, 0.9);
-    knock(165, 0.95);
-    knock(340, 1.15); // 마지막 한 방이 가장 세게 — 낙찰 확정
-  }, [playNoise]);
+    playTone(180, 0.09, 0.07, "square");
+    playTone(90, 0.12, 0.06, "sine");
+    setTimeout(() => { playTone(180, 0.09, 0.075, "square"); playTone(90, 0.14, 0.065, "sine"); }, 180);
+    setTimeout(() => playTone(659, 0.25, 0.04), 420);
+  }, [playTone]);
   // 스카우터 결과 (신비로운 차임)
   const sfxScout = useCallback(() => { playTone(880, 0.1, 0.035, "triangle"); setTimeout(() => playTone(1175, 0.14, 0.04, "triangle"), 110); setTimeout(() => playTone(1568, 0.2, 0.035, "triangle"), 240); }, [playTone]);
   // 인벤토리 → 슬롯 배정 (카드가 '착' 꽂히는 느낌)
@@ -298,20 +264,15 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         }
         else if (a.current.price > ps.price && a.current.playerIdx === ps.playerIdx) {
           if (a.current.isAllin) sfxAllin(); else sfxBid();
+          // 📌 누가 질렀는지 좌측 팀 레일에서 즉시 알아보도록 해당 팀을 번쩍인다
+          if (a.current.leaderIdx !== null && a.current.leaderIdx !== undefined) {
+            setBidFlash({ idx: a.current.leaderIdx, n: Date.now() });
+          }
         }
-        // 🔨 낙찰 = 의사봉. 낙찰 경로가 두 가지라 한쪽만 보면 소리가 안 난다.
-        //   · instant 모드 : host:sold → pendingAssign(배정 대기) 생성 → 이때가 낙찰 선언
-        //   · inventory 모드 / 1페이즈 자동배정 : pendingAssign 없이 바로 status="낙찰"
-        //   두 경로에서 각각 한 번씩만 울리도록 hammered 로 중복을 막는다.
+        // 낙찰 선언(배정 대기 진입) → 망치 소리
         const paIdx = a.pendingAssign?.playerIdx ?? null;
-        if (paIdx !== null && paIdx !== (ps.paIdx ?? null)) {
-          sfxHammer();
-          ps.hammered = paIdx; // 뒤이어 soldCount 가 올라도 다시 울리지 않게
-        }
-        if (soldCount > (ps.soldCount || 0)) {
-          if (ps.hammered === null || ps.hammered === undefined) sfxHammer();
-          ps.hammered = null;
-        }
+        if (paIdx !== null && paIdx !== (ps.paIdx ?? null)) sfxHammer();
+        if (soldCount > (ps.soldCount || 0)) sfxSold();
         if (passCount > (ps.passCount || 0)) sfxPass();
         if (revealIdx !== null && revealIdx !== ps.revealIdx) sfxReveal();
         if (strategyOn && !ps.strategyOn) sfxStrategy();
@@ -335,7 +296,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     poll();
     const t = setInterval(poll, POLL_MS);
     return () => { alive = false; clearInterval(t); };
-  }, [id, status, sfxBid, sfxCall, sfxPass, sfxAllin, sfxReveal, sfxStrategy, sfxStart, sfxEnd, sfxPhase, sfxChat, sfxGolden, sfxHammer]);
+  }, [id, status, sfxBid, sfxCall, sfxSold, sfxPass, sfxAllin, sfxReveal, sfxStrategy, sfxStart, sfxEnd, sfxPhase, sfxChat, sfxGolden, sfxHammer]);
 
   // 📌 역할이 바뀌면 해당 역할의 알림 로그로 교체 (다른 리더의 알림이 남지 않도록)
   useEffect(() => {
@@ -393,6 +354,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
     if (nearBottom) box.scrollTop = box.scrollHeight;
   }, [chat.length]);
+
+  // 입찰 강조는 1초 뒤 스스로 꺼진다 (애니메이션 길이와 맞춤)
+  useEffect(() => {
+    if (!bidFlash) return;
+    const t = setTimeout(() => setBidFlash(null), 1000);
+    return () => clearTimeout(t);
+  }, [bidFlash]);
 
   // 📌 프로필 공개 화면은 '연출'이므로 잠시만 — 서버의 auction.reveal 은 계속 남아 있어
   //    그대로 두면 경매가 끝나도 무대에 공개 화면이 박혀 '경매 종료'가 나오지 않는다. (버그)
@@ -1023,11 +991,18 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               const isOpen = forceOpen || expandedTeams.has(li);
               const toggle = () => setExpandedTeams((prev) => { const next = new Set(prev); if (next.has(li)) next.delete(li); else next.add(li); return next; });
               const bidding = cur.leaderIdx === li;
+              const flashed = bidFlash?.idx === li;
               const fillPct = Math.min(100, (l.roster.length / Math.max(1, totalSlots)) * 100);
               return (
-                <div key={li} className={`relative transition-colors ${bidding ? "bg-[#e91e3f]/[0.05]" : ""}`}>
+                <div
+                  key={li}
+                  /* key 에 갱신 번호를 섞어 같은 팀이 연속 입찰해도 애니메이션이 다시 재생되게 한다 */
+                  className={`relative overflow-hidden transition-colors ${flashed ? "auc-bidflash" : bidding ? "bg-[#e91e3f]/[0.05]" : ""}`}
+                >
+                  {/* 입찰 순간 왼쪽에서 퍼지는 파동 */}
+                  {flashed && <span key={bidFlash!.n} className="auc-bidwave" />}
                   {/* 최고가 입찰 중인 팀 — 왼쪽 레드 세로선 */}
-                  <span className={`absolute left-0 inset-y-0 w-[2px] transition-colors ${bidding ? "bg-[#e91e3f]" : myLeaderIdx === li ? "bg-white/40" : "bg-transparent"}`} />
+                  <span className={`absolute left-0 inset-y-0 w-[2px] z-10 transition-colors ${bidding ? "bg-[#e91e3f]" : myLeaderIdx === li ? "bg-white/40" : "bg-transparent"}`} />
 
                   <button type="button" onClick={toggle} className="w-full text-left flex items-center gap-2.5 pl-3.5 pr-2 py-3 outline-none focus:outline-none hover:bg-white/[0.02] transition-colors">
                     {prof ? (
@@ -1057,7 +1032,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     </div>
 
                     <div className="shrink-0 text-right">
-                      <p className="text-[13px] font-black text-white tabular-nums leading-none">{l.points.toLocaleString()}</p>
+                      <p key={flashed ? bidFlash!.n : "p"} className={`text-[13px] font-black tabular-nums leading-none origin-right ${flashed ? "text-[#ff5c77] auc-bidpop" : "text-white"}`}>{l.points.toLocaleString()}</p>
                       <p className="auc-label-xs text-gray-700 mt-1">Point</p>
                     </div>
 
@@ -1463,55 +1438,46 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {/* 📌 액션 묶음 — 인벤토리·알림함이 각각 독립 박스로 서면 서로 경쟁하고 줄도 어수선해진다.
                       하나의 테두리 안에 세로 헤어라인으로 나눠 '여기가 눌러야 하는 곳'을 한 덩어리로 보여준다.
                       읽기 정보(POINT·ROSTER)와는 ml-auto 로 좌우를 갈라둔다. */}
-                  {(() => {
-                    const Cell = ({ on, label, value, unit, title, onClick, children }: any) => (
+                  {/* ⚠️ 이 버튼들을 별도 컴포넌트로 뽑아 렌더 함수 안에서 정의하면 안 된다.
+                      폴링(1.5초)마다 새 컴포넌트 타입이 되어 매번 언마운트/재마운트되고,
+                      그 탓에 호버 상태와 트랜지션이 끊겨 깜빡인다. 그래서 마크업을 그대로 둔다. */}
+                  <div className="sm:ml-auto flex items-stretch border border-white/25 divide-x divide-white/15">
+                    {invMode && (
                       <button
-                        onClick={onClick}
-                        title={title}
-                        className={`group relative flex items-center gap-2.5 px-3.5 py-2.5 cursor-pointer transition-colors ${on ? "bg-[#e91e3f]/[0.12] hover:bg-[#e91e3f]/25" : "hover:bg-white/[0.06]"}`}
+                        onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
+                        title="인벤토리 열기 — 보유 선수를 포지션에 배정합니다"
+                        className={`group relative flex items-center gap-2.5 px-3.5 py-2.5 cursor-pointer transition-colors ${invCount > 0 ? "bg-[#e91e3f]/[0.12] hover:bg-[#e91e3f]/25" : "hover:bg-white/[0.06]"}`}
                       >
-                        {on && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_1.6s_ease-in-out_infinite]" />}
-                        <span className={`shrink-0 transition-colors ${on ? "text-[#ff5c77]" : "text-gray-500 group-hover:text-white"}`}>{children}</span>
+                        {invCount > 0 && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#e91e3f]" />}
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 shrink-0 transition-colors ${invCount > 0 ? "text-[#ff5c77]" : "text-gray-500 group-hover:text-white"}`}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                        </svg>
                         <span className="text-left">
-                          <span className={`block auc-label ${on ? "text-[#ff5c77]" : "text-gray-500"}`}>{label}</span>
-                          <span className={`block text-lg font-black tabular-nums leading-tight transition-colors ${on ? "text-white" : "text-gray-400 group-hover:text-white"}`}>
-                            {value}<span className="text-[10px] font-bold text-gray-500 ml-1">{unit}</span>
+                          <span className={`block auc-label ${invCount > 0 ? "text-[#ff5c77]" : "text-gray-500"}`}>Inventory</span>
+                          <span className={`block text-lg font-black tabular-nums leading-tight transition-colors ${invCount > 0 ? "text-white" : "text-gray-400 group-hover:text-white"}`}>
+                            {invCount}<span className="text-[10px] font-bold text-gray-500 ml-1">장</span>
                           </span>
                         </span>
                       </button>
-                    );
-                    return (
-                      <div className="sm:ml-auto flex items-stretch border border-white/25 divide-x divide-white/15">
-                        {invMode && (
-                          <Cell
-                            on={invCount > 0}
-                            label="Inventory"
-                            value={invCount}
-                            unit="장"
-                            title="인벤토리 열기 — 보유 선수를 포지션에 배정합니다"
-                            onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-                            </svg>
-                          </Cell>
-                        )}
-                        {/* 스카우터는 인벤토리 모드와 무관하므로 항상 노출 */}
-                        <Cell
-                          on={noticeUnread > 0}
-                          label="알림함"
-                          value={notices.length}
-                          unit="건"
-                          title="알림함 — 스카우터 결과 모아보기"
-                          onClick={() => { setNoticeOpen(true); setNoticeUnread(0); sfxSelect(); }}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-                          </svg>
-                        </Cell>
-                      </div>
-                    );
-                  })()}
+                    )}
+                    {/* 스카우터는 인벤토리 모드와 무관하므로 항상 노출 */}
+                    <button
+                      onClick={() => { setNoticeOpen(true); setNoticeUnread(0); sfxSelect(); }}
+                      title="알림함 — 스카우터 결과 모아보기"
+                      className={`group relative flex items-center gap-2.5 px-3.5 py-2.5 cursor-pointer transition-colors ${noticeUnread > 0 ? "bg-[#e91e3f]/[0.12] hover:bg-[#e91e3f]/25" : "hover:bg-white/[0.06]"}`}
+                    >
+                      {noticeUnread > 0 && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#e91e3f]" />}
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 shrink-0 transition-colors ${noticeUnread > 0 ? "text-[#ff5c77]" : "text-gray-500 group-hover:text-white"}`}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                      </svg>
+                      <span className="text-left">
+                        <span className={`block auc-label ${noticeUnread > 0 ? "text-[#ff5c77]" : "text-gray-500"}`}>알림함</span>
+                        <span className={`block text-lg font-black tabular-nums leading-tight transition-colors ${noticeUnread > 0 ? "text-white" : "text-gray-400 group-hover:text-white"}`}>
+                          {notices.length}<span className="text-[10px] font-bold text-gray-500 ml-1">건</span>
+                        </span>
+                      </span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* 슬롯 보드 */}
@@ -1818,6 +1784,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             } else {
               showToast(`${nm} → [${slot}] 배정 완료 (되돌릴 수 없음)`);
             }
+            // 되돌릴 수 없는 조작이라 기록으로 남긴다
+            pushNotice({ kind: "assign", title: `배정 — ${nm}`, rows: [{ l: "포지션", v: roleAbbr(slot), pos: slot }] });
           } else {
             showToast(d?.message || "배정에 실패했습니다");
           }
@@ -2048,7 +2016,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             const [a, b] = swapPick;
                             const na = rosterName(l, l.roster[a]), nb = rosterName(l, l.roster[b]);
                             const d = await act({ action: "host:posSwap", leaderIdx: li, a, b, byLeaderIdx: myLeaderIdx });
-                            if (d?.success) { sfxAssign(); showToast(`${na} ↔ ${nb} 포지션 교환 완료`); setSwapMode(false); setSwapPick([]); }
+                            if (d?.success) { sfxAssign(); showToast(`${na} ↔ ${nb} 포지션 교환 완료`); pushNotice({ kind: "swap", title: "포지션 체인지", rows: [{ l: "교환", v: `${na} ↔ ${nb}` }, { l: "비용", v: `${S.posChangeCost.toLocaleString()} Pt` }] }); setSwapMode(false); setSwapPick([]); }
                             else showToast(d?.message || "포지션 교환에 실패했습니다");
                           }}
                           className="mt-2.5 w-full py-2 text-[11px] font-black rounded-lg transition-all bg-[#e91e3f] hover:bg-[#d01634] disabled:bg-white/5 disabled:text-gray-600 text-white"
@@ -2164,9 +2132,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       {/* 📮 알림함 — 스카우터 결과 모아보기 */}
       {noticeOpen && (
         <AucModal
-          label="알림함"
-          title="스카우터 결과"
-          desc="나에게만 보이는 기록입니다. 새로고침해도 남아 있습니다."
+          label="Notices"
+          title="알림함"
+          desc="스카우터 결과 · 포지션 체인지 · 배정 등 내 활동 기록입니다. 나에게만 보이고 새로고침해도 남습니다."
           onClose={() => setNoticeOpen(false)}
           wide
           actions={[
@@ -2180,13 +2148,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             {notices.length === 0 ? (
               <p className="py-10 text-center text-[11px] text-gray-700">
                 아직 기록이 없습니다.<br />
-                <span className="text-[10px] text-gray-800">스카우터를 사용하면 이곳에 쌓입니다</span>
+                <span className="text-[10px] text-gray-800">스카우터·포지션 체인지·배정 기록이 이곳에 쌓입니다</span>
               </p>
             ) : (
               notices.map((n) => (
                 <div key={n.id} className="py-3 border-b border-white/[0.07]">
                   <div className="flex items-baseline gap-2 mb-1.5">
-                    <span className="auc-label-xs text-[#ff5c77]">{n.kind === "scout" ? "Scout" : "Notice"}</span>
+                    <span className="auc-label-xs text-[#ff5c77]">{n.kind === "scout" ? "Scout" : n.kind === "swap" ? "Change" : n.kind === "assign" ? "Assign" : "Notice"}</span>
                     <span className="text-[12px] font-black text-white truncate">{n.title}</span>
                     <span className="ml-auto shrink-0 text-[10px] text-gray-600 tabular-nums">
                       {new Date(n.at).toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit" })}
@@ -2300,7 +2268,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   if (swapA === "" || swapB === "" || swapA === swapB) { showToast("서로 다른 두 선수를 선택해주세요"); return; }
                   const na = rosterName(leader, leader.roster[Number(swapA)]), nb = rosterName(leader, leader.roster[Number(swapB)]);
                   const d = await act({ action: "host:posSwap", leaderIdx: posSwapTarget.leaderIdx, a: Number(swapA), b: Number(swapB), byLeaderIdx: myLeaderIdx });
-                  if (d?.success) { sfxAssign(); showToast(`${na} ↔ ${nb} 포지션 교환 완료`); setPosSwapTarget(null); setSwapA(""); setSwapB(""); }
+                  if (d?.success) { sfxAssign(); showToast(`${na} ↔ ${nb} 포지션 교환 완료`); pushNotice({ kind: "swap", title: "포지션 체인지", rows: [{ l: "교환", v: `${na} ↔ ${nb}` }, { l: "비용", v: `${S.posChangeCost.toLocaleString()} Pt` }] }); setPosSwapTarget(null); setSwapA(""); setSwapB(""); }
                   else showToast(d?.message || "포지션 교환에 실패했습니다");
                 },
               },
