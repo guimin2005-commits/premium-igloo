@@ -811,7 +811,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           {myLeaderIdx === li && <span className="ml-1.5 text-[8px] font-black tracking-widest text-gray-200">ME</span>}
                         </p>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs font-black text-gray-200 tabular-nums">{l.points.toLocaleString()}<span className="text-[9px] text-gray-500 ml-1 font-bold">Pt</span></span>
+                          <span className="text-xs font-black text-[#ff5c77] tabular-nums">{l.points.toLocaleString()}<span className="text-[9px] text-gray-500 ml-1 font-bold">Pt</span></span>
                           {/* 전체 슬롯 진행도 — 세부 포지션은 펼침 영역에서 확인 */}
                           <span className="text-[10px] font-bold text-gray-500 tabular-nums">{l.roster.length}/{totalSlots}</span>
                           {/* 인벤토리 — 접혀 있어도 항상 노출 */}
@@ -1120,7 +1120,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 {/* POINT — 가장 크게 */}
                 <div className="flex-1 min-w-[150px] rounded-xl border border-white/25 bg-gradient-to-br from-[#e91e3f]/[0.10] to-transparent px-4 py-2.5">
                   <p className="text-[9px] font-black auc-mono text-[#e91e3f]/80 uppercase">Point</p>
-                  <p className="text-2xl font-black text-white tabular-nums leading-tight">{myLeader.points.toLocaleString()}</p>
+                  <p className="text-2xl font-black text-[#ff5c77] tabular-nums leading-tight">{myLeader.points.toLocaleString()}</p>
                 </div>
                 {/* 로스터 진행도 */}
                 <div className="flex-1 min-w-[150px] rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 flex flex-col justify-center">
@@ -1961,7 +1961,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               <div className="rounded-3xl bg-[#121212] p-8 text-center">
                 <p className="text-[10px] font-black auc-mono text-gray-500 uppercase mb-3">Point Adjustment</p>
                 <h2 className="text-lg font-black text-white mb-1">{leader.name} — 포인트 조정</h2>
-                <p className="text-xs text-gray-400 mb-6">현재 보유: <span className="text-gray-200 font-black">{leader.points.toLocaleString()} Point</span></p>
+                <p className="text-xs text-gray-400 mb-6">현재 보유: <span className="text-[#ff5c77] font-black">{leader.points.toLocaleString()} Point</span></p>
                 <input type="number" placeholder="조정할 금액 (예: 5000)" value={adjustAmount} onChange={(e) => setAdjustAmount(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white text-center font-bold outline-none focus:border-white/40 transition-colors mb-3" />
                 <div className="grid grid-cols-2 gap-2 mb-6">
                   <button onClick={async () => { const v = Math.abs(Number(adjustAmount)); if (!v) return; const d = await act({ action: "host:adjustPoints", leaderIdx: adjustTarget, delta: v }); if (d.success) setAdjustTarget(null); }} className="py-3 rounded-xl text-sm font-black bg-emerald-500/90 hover:bg-emerald-500 text-white transition-colors">+ 추가</button>
