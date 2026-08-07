@@ -63,7 +63,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const roleKeyRef = useRef("host"); // 알림 로그 저장 키로 쓰는 현재 역할
   const [goldenFx, setGoldenFx] = useState(false);           // 황금카드 등장 애니메이션
   const [nextFx, setNextFx] = useState<string | null>(null); // 다음 매물 전환 배너
-  const [mobileTab, setMobileTab] = useState<"main" | "teams" | "chat">("main"); // 모바일 섹션 전환 (경매 / 팀 / 채팅)
   const [invModal, setInvModal] = useState<number | null>(null); // 인벤토리 팝업 대상 리더 idx
   const [dragCard, setDragCard] = useState<number | null>(null); // 드래그 중인 인벤토리 카드 idx
   const [assignWarn, setAssignWarn] = useState<{ invIdx: number; slot: string; name: string } | null>(null); // 최초 1회 배정 경고
@@ -83,7 +82,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [posSetTarget, setPosSetTarget] = useState<number | null>(null); // 리더 포지션 지정 모달
 
   const [miniChat, setMiniChat] = useState(false); // 모바일 우하단 팝업 채팅
-  const [sheet, setSheet] = useState<null | "slots" | "players">(null); // 모바일 하단 시트
+  const [sheet, setSheet] = useState<null | "teams" | "players">(null); // 모바일 하단 시트
   const [chatUnread, setChatUnread] = useState(0); // 모바일에서 채팅 탭에 없을 때 쌓인 새 메시지
   const [bidFlash, setBidFlash] = useState<{ idx: number; n: number } | null>(null); // 입찰한 팀 강조 (좌측 레일)
   const [showSystemChat, setShowSystemChat] = useState(true); // 채팅의 공지 표시 on/off
@@ -330,34 +329,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     return () => clearInterval(t);
   }, [auction, sfxTick, sfxWarn, sfxTimeUp]);
 
-  // 📌 모바일 — 내 팀에 배정/정리가 필요해지면 '경매' 탭(내 팀 콘솔이 있는 곳)으로 자동 전환
-  //   리더의 슬롯 보드는 이제 좌측 레일이 아닌 중앙 콘솔에만 있으므로, 팀 현황 탭에 머물러 있으면 놓칠 수 있다
+  // 🐛 미니 채팅을 열면 맨 위(과거 메시지)부터 보이던 문제 — 열릴 때와 새 메시지 도착 시 맨 아래로
   useEffect(() => {
-    if (!auction) return;
-    const mi = role === "host" || role === "spec" ? null : Number(role);
-    if (mi === null) return;
-    const pAssign = auction.pendingAssign;
-    const pOver = auction.pendingOverflow;
-    const needMe =
-      (pAssign?.playerIdx !== null && pAssign?.playerIdx !== undefined && pAssign?.leaderIdx === mi) ||
-      (pOver?.leaderIdx !== null && pOver?.leaderIdx !== undefined && pOver?.leaderIdx === mi);
-    if (needMe) setMobileTab("main");
-  }, [auction, role]);
-
-  // 채팅 자동 스크롤 — 채팅 박스 내부만 스크롤 (페이지 스크롤 강제 이동 방지)
-  //  🐛 입장·새로고침 직후에는 스크롤이 맨 위(0)라 nearBottom 판정이 false → 과거 메시지가 보인 채로 멈췄다.
-  //     첫 렌더에서는 조건 없이 맨 아래로 내린다.
-  useEffect(() => {
-    const box = chatBoxRef.current;
-    if (!box || chat.length === 0) return;
-    if (!chatScrolledOnce.current) {
-      chatScrolledOnce.current = true;
-      box.scrollTop = box.scrollHeight;
-      return;
-    }
-    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
-    if (nearBottom) box.scrollTop = box.scrollHeight;
-  }, [chat.length]);
+    if (!miniChat) return;
+    const box = miniChatBoxRef.current;
+    if (!box) return;
+    box.scrollTop = box.scrollHeight;
+  }, [miniChat, chat.length]);
 
   // 입찰 강조는 1초 뒤 스스로 꺼진다 (애니메이션 길이와 맞춤)
   useEffect(() => {
@@ -867,6 +845,163 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     );
   };
 
+  // 📌 팀 레일 — 데스크톱 좌측과 모바일 시트에서 함께 쓴다
+  const teamsSection = (
+    <>
+      {/* 섹션 머리글 — 굵은 선 한 줄로 구획 */}
+      <div className="flex items-baseline gap-3 mb-1 pb-2 border-b border-white/20">
+        <span className="auc-label text-white">{isThird ? "Teams" : "Rivals"}</span>
+        <span className="text-[10px] font-bold text-gray-600">{isThird ? "전체 팀" : "타 리더"}</span>
+        <span className="ml-auto text-[10px] font-black text-gray-600 tabular-nums">{String(railLeaders.length).padStart(2, "0")}</span>
+      </div>
+
+      {railLeaders.length === 0 && (
+        <p className="py-6 text-center text-[11px] text-gray-700">다른 리더가 없습니다.</p>
+      )}
+      <div className="lg:block sm:grid sm:grid-cols-2 lg:grid-cols-1">
+        {railLeaders.map(({ l, li }) => {
+          const prof = l.discordId ? profiles[l.discordId] : null;
+          // 배정/이동이 필요한 팀은 강제 펼침 (모든 화면 크기에서 동일 정보 노출)
+          const forceOpen = (hasPending && pa.leaderIdx === li && (role === "host" || myLeaderIdx === li)) || (hasOverflow && po.leaderIdx === li && (role === "host" || myLeaderIdx === li));
+          const isOpen = forceOpen || expandedTeams.has(li);
+          const toggle = () => setExpandedTeams((prev) => { const next = new Set(prev); if (next.has(li)) next.delete(li); else next.add(li); return next; });
+          const bidding = cur.leaderIdx === li;
+          const flashed = bidFlash?.idx === li;
+          const fillPct = Math.min(100, (l.roster.length / Math.max(1, totalSlots)) * 100);
+          return (
+            <div key={li} className={`relative transition-colors ${bidding ? "bg-[#e91e3f]/[0.05]" : ""}`}>
+              {/* 입찰 순간 효과 — 행의 배경과 분리된 오버레이 한 겹.
+                  key 에 갱신 번호를 넣어 같은 팀이 연속 입찰해도 애니메이션이 다시 재생된다 */}
+              {flashed && <span key={bidFlash!.n} className="auc-bidfx" />}
+              {/* 최고가 입찰 중인 팀 — 왼쪽 레드 세로선 */}
+              <span className={`absolute left-0 inset-y-0 w-[2px] z-10 transition-colors ${bidding ? "bg-[#e91e3f]" : myLeaderIdx === li ? "bg-white/40" : "bg-transparent"}`} />
+
+              <button type="button" onClick={toggle} className="w-full text-left flex items-center gap-2.5 pl-3.5 pr-2 py-3 outline-none focus:outline-none hover:bg-white/[0.02] transition-colors">
+                {prof ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={prof.avatarUrl} alt="" className={`w-9 h-9 rounded-full bg-gray-800 shrink-0 ring-1 transition-all ${bidding ? "ring-[#e91e3f]" : "ring-white/15"}`} />
+                ) : (
+                  <span className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-[11px] font-black text-gray-400 ring-1 transition-all ${bidding ? "ring-[#e91e3f] bg-[#e91e3f]/10" : "ring-white/12 bg-white/[0.03]"}`}>{l.name[0]}</span>
+                )}
+
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-1.5 leading-tight">
+                    <span className="text-[13px] font-black text-white truncate">{l.name}</span>
+                    {myLeaderIdx === li && <span className="shrink-0 auc-label-xs text-gray-300">Me</span>}
+                    {bidding && <span className="shrink-0 auc-label-xs text-[#ff5c77]">Top Bid</span>}
+                  </p>
+                  <p className="flex items-center gap-1.5 mt-0.5 text-[10px] font-bold text-gray-600">
+                    {l.position && <span className={roleColor(l.position).text}>{roleAbbr(l.position)}</span>}
+                    {l.position && <span className="text-gray-800">·</span>}
+                    <span className="tabular-nums">{l.roster.length}/{totalSlots} 슬롯</span>
+                    {invMode && (l.inventory?.length || 0) > 0 && (
+                      <>
+                        <span className="text-gray-800">·</span>
+                        <span className="text-gray-300 tabular-nums">보유 {l.inventory.length}</span>
+                      </>
+                    )}
+                  </p>
+                </div>
+
+                <div className="shrink-0 text-right">
+                  <p key={flashed ? bidFlash!.n : "p"} className={`text-[13px] font-black tabular-nums leading-none origin-right ${flashed ? "text-[#ff5c77] auc-bidpop" : "text-white"}`}>{l.points.toLocaleString()}</p>
+                  <p className="auc-label-xs text-gray-700 mt-1">Point</p>
+                </div>
+
+                {auction.status === "준비중" && (
+                  <span className={`shrink-0 auc-label-xs ${l.ready ? "text-emerald-400" : "text-gray-600"}`}>{l.ready ? "Ready" : "Wait"}</span>
+                )}
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3 h-3 text-gray-700 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              </button>
+
+              {/* 구분선이 곧 로스터 충원 게이지 */}
+              <div className="relative h-px bg-white/[0.09]">
+                <span className={`absolute inset-y-0 left-0 transition-all duration-500 ${bidding ? "bg-[#e91e3f]" : "bg-white/45"}`} style={{ width: `${fillPct}%` }} />
+              </div>
+
+              {/* 펼침 영역 — 로스터 상세 */}
+              {isOpen && (
+                <div className="pl-3.5 pr-2 pb-3.5 pt-2 bg-white/[0.015]">
+                  <SlotBoard leader={l} leaderIdx={li} />
+
+                  {invMode && (
+                    <button onClick={() => { setInvModal(li); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }} className={`group mt-2.5 w-full flex items-center gap-2 border px-2.5 py-1.5 text-[10px] font-black cursor-pointer transition-all ${(l.inventory?.length || 0) > 0 ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.08] text-[#ff5c77] hover:bg-[#e91e3f]/20" : "border-white/20 text-gray-400 hover:border-white hover:text-white hover:bg-white/[0.06]"}`}>
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
+                      인벤토리 {(l.inventory?.length || 0) > 0 ? `${l.inventory.length}장` : "비어 있음"}
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 ml-auto shrink-0 transition-transform group-hover:translate-x-0.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+                    </button>
+                  )}
+
+                  {/* 진행자 실시간 관리 도구 */}
+                  {role === "host" && (
+                    <div className="mt-2 flex gap-4">
+                      <button onClick={() => { setAdjustTarget(li); setAdjustAmount(""); }} className="flex-1 text-[10px] font-black text-gray-500 hover:text-white border-b border-white/12 hover:border-white/50 py-1.5 transition-colors">포인트 조정</button>
+                      <button onClick={() => setPosSetTarget(li)} className="flex-1 text-[10px] font-black text-gray-500 hover:text-white border-b border-white/12 hover:border-white/50 py-1.5 transition-colors">{l.position ? "포지션 변경" : "포지션 지정"}</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+  // 📌 모바일 선수 목록 — 카드 격자는 세로로 너무 길다. 한 명당 두 줄짜리 행으로 압축한다.
+  const playersMobile = (
+    <div className="border-t border-white/[0.07]">
+      {auction.players.map((p: any, i: number) => {
+        const hidden = isHiddenFor(p);
+        const prof = p.revealed && p.discordId ? profiles[p.discordId] : null;
+        const callable = role === "host" && auction.status === "진행중" && (p.status === "대기" || p.status === "유찰") && !(auction.phase === 1 && p1Role && p.phase !== 1) && auction.phase > 0;
+        const name = hidden ? "비공개" : p.isAllPos ? "올 포지션" : prof ? prof.globalName : p.alias;
+        return (
+          <div
+            key={i}
+            className={`flex items-center gap-2.5 py-2.5 px-1 border-b border-white/[0.07] ${
+              p.status === "경매중" ? "bg-[#e91e3f]/[0.07]" : p.isAllPos && !hidden ? "bg-amber-400/[0.05]" : ""
+            }`}
+          >
+            <span className="shrink-0 w-7 text-[9px] font-black text-gray-700 tabular-nums">{String(i + 1).padStart(2, "0")}</span>
+            <div className="min-w-0 flex-1">
+              <p className={`text-[13px] font-black truncate leading-tight ${hidden ? "text-gray-600" : p.isAllPos ? "text-amber-300" : "text-white"}`}>{name}</p>
+              {!hidden && (
+                <p className="text-[10px] font-bold text-gray-500 truncate leading-tight mt-0.5">
+                  {p.isAllPos ? (
+                    <span className="text-amber-200/60">티어 비공개</span>
+                  ) : (
+                    <>
+                      <span className="text-gray-300">{p.peakTier || "?"}</span>
+                      <span className="text-gray-700 mx-1">·</span>
+                      <span>{p.currentTier || "?"}</span>
+                    </>
+                  )}
+                  {canSeePos(p) && (
+                    <span className="text-gray-200 ml-2">{revealParts(p).map((r: any) => r.v).join(" · ")}</span>
+                  )}
+                </p>
+              )}
+            </div>
+            {p.status === "낙찰" ? (
+              <span className="shrink-0 text-right">
+                <span className="block text-[10px] font-black text-gray-400 truncate max-w-[84px]">{auction.leaders[p.soldTo]?.name}</span>
+                <span className="block text-[10px] font-black text-gray-600 tabular-nums">{p.soldPrice?.toLocaleString()}</span>
+              </span>
+            ) : callable ? (
+              <button onClick={() => act({ action: "host:call", playerIdx: i })} className="shrink-0 px-3 py-1.5 text-[10px] font-black text-white bg-[#e91e3f]/85 active:bg-[#e91e3f]">호명</button>
+            ) : p.status === "경매중" ? (
+              <span className="shrink-0 text-[9px] font-black text-[#ff5c77]">LIVE</span>
+            ) : p.status === "유찰" ? (
+              <span className="shrink-0 text-[9px] font-black text-orange-400">유찰</span>
+            ) : p.status === "배정중" ? (
+              <span className="shrink-0 text-[9px] font-black text-gray-300">배정</span>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+
   // 📌 선수 목록 — 데스크톱 본문과 모바일 시트에서 함께 쓰므로 한 번만 만든다
   const playersSection = (
       <section>
@@ -1118,130 +1253,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      {/* 📱 모바일 섹션 전환 탭 — 한 탭에 다 쌓지 않고 셋으로 나눈다 (경매 / 팀 / 채팅) */}
-      <div className="lg:hidden sticky top-[6.7rem] z-20 w-full px-4 bg-[#090909]/92 backdrop-blur-xl border-b border-white/5">
-        <div className="grid grid-cols-3">
-          {([["main", "경매"], ["teams", isThird ? "팀" : "타 팀"], ["chat", "채팅"]] as const).map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => { setMobileTab(key); if (key === "chat") setChatUnread(0); sfxSelect(); }}
-              className={`relative py-2.5 text-xs font-black border-b-2 transition-all ${mobileTab === key ? "border-[#e91e3f] text-white" : "border-white/10 text-gray-600"}`}
-            >
-              {label}
-              {/* 채팅 탭에 있지 않을 때 새 메시지가 오면 점으로 알린다 */}
-              {key === "chat" && mobileTab !== "chat" && chatUnread > 0 && (
-                <span className="absolute top-1.5 right-1/2 translate-x-[26px] w-1.5 h-1.5 rounded-full bg-[#e91e3f]" />
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
 
       <div className="w-full max-w-[1720px] mx-auto px-4 md:px-8 pt-4 pb-40 lg:py-6 flex-1 flex flex-wrap gap-5 items-start">
 
         {/* ═══ 좌측 세로 레일: 팀 현황판 ═══ */}
-        <aside className={`${mobileTab === "teams" ? "block" : "hidden"} lg:block w-full lg:w-[280px] shrink-0 order-2 lg:order-1 lg:sticky lg:top-36 lg:max-h-[calc(100vh-11rem)] lg:overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full lg:pr-1`}>
-          {/* 섹션 머리글 — 굵은 선 한 줄로 구획 */}
-          <div className="flex items-baseline gap-3 mb-1 pb-2 border-b border-white/20">
-            <span className="auc-label text-white">{isThird ? "Teams" : "Rivals"}</span>
-            <span className="text-[10px] font-bold text-gray-600">{isThird ? "전체 팀" : "타 리더"}</span>
-            <span className="ml-auto text-[10px] font-black text-gray-600 tabular-nums">{String(railLeaders.length).padStart(2, "0")}</span>
-          </div>
-
-          {railLeaders.length === 0 && (
-            <p className="py-6 text-center text-[11px] text-gray-700">다른 리더가 없습니다.</p>
-          )}
-          <div className="lg:block sm:grid sm:grid-cols-2 lg:grid-cols-1">
-            {railLeaders.map(({ l, li }) => {
-              const prof = l.discordId ? profiles[l.discordId] : null;
-              // 배정/이동이 필요한 팀은 강제 펼침 (모든 화면 크기에서 동일 정보 노출)
-              const forceOpen = (hasPending && pa.leaderIdx === li && (role === "host" || myLeaderIdx === li)) || (hasOverflow && po.leaderIdx === li && (role === "host" || myLeaderIdx === li));
-              const isOpen = forceOpen || expandedTeams.has(li);
-              const toggle = () => setExpandedTeams((prev) => { const next = new Set(prev); if (next.has(li)) next.delete(li); else next.add(li); return next; });
-              const bidding = cur.leaderIdx === li;
-              const flashed = bidFlash?.idx === li;
-              const fillPct = Math.min(100, (l.roster.length / Math.max(1, totalSlots)) * 100);
-              return (
-                <div key={li} className={`relative transition-colors ${bidding ? "bg-[#e91e3f]/[0.05]" : ""}`}>
-                  {/* 입찰 순간 효과 — 행의 배경과 분리된 오버레이 한 겹.
-                      key 에 갱신 번호를 넣어 같은 팀이 연속 입찰해도 애니메이션이 다시 재생된다 */}
-                  {flashed && <span key={bidFlash!.n} className="auc-bidfx" />}
-                  {/* 최고가 입찰 중인 팀 — 왼쪽 레드 세로선 */}
-                  <span className={`absolute left-0 inset-y-0 w-[2px] z-10 transition-colors ${bidding ? "bg-[#e91e3f]" : myLeaderIdx === li ? "bg-white/40" : "bg-transparent"}`} />
-
-                  <button type="button" onClick={toggle} className="w-full text-left flex items-center gap-2.5 pl-3.5 pr-2 py-3 outline-none focus:outline-none hover:bg-white/[0.02] transition-colors">
-                    {prof ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={prof.avatarUrl} alt="" className={`w-9 h-9 rounded-full bg-gray-800 shrink-0 ring-1 transition-all ${bidding ? "ring-[#e91e3f]" : "ring-white/15"}`} />
-                    ) : (
-                      <span className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-[11px] font-black text-gray-400 ring-1 transition-all ${bidding ? "ring-[#e91e3f] bg-[#e91e3f]/10" : "ring-white/12 bg-white/[0.03]"}`}>{l.name[0]}</span>
-                    )}
-
-                    <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-1.5 leading-tight">
-                        <span className="text-[13px] font-black text-white truncate">{l.name}</span>
-                        {myLeaderIdx === li && <span className="shrink-0 auc-label-xs text-gray-300">Me</span>}
-                        {bidding && <span className="shrink-0 auc-label-xs text-[#ff5c77]">Top Bid</span>}
-                      </p>
-                      <p className="flex items-center gap-1.5 mt-0.5 text-[10px] font-bold text-gray-600">
-                        {l.position && <span className={roleColor(l.position).text}>{roleAbbr(l.position)}</span>}
-                        {l.position && <span className="text-gray-800">·</span>}
-                        <span className="tabular-nums">{l.roster.length}/{totalSlots} 슬롯</span>
-                        {invMode && (l.inventory?.length || 0) > 0 && (
-                          <>
-                            <span className="text-gray-800">·</span>
-                            <span className="text-gray-300 tabular-nums">보유 {l.inventory.length}</span>
-                          </>
-                        )}
-                      </p>
-                    </div>
-
-                    <div className="shrink-0 text-right">
-                      <p key={flashed ? bidFlash!.n : "p"} className={`text-[13px] font-black tabular-nums leading-none origin-right ${flashed ? "text-[#ff5c77] auc-bidpop" : "text-white"}`}>{l.points.toLocaleString()}</p>
-                      <p className="auc-label-xs text-gray-700 mt-1">Point</p>
-                    </div>
-
-                    {auction.status === "준비중" && (
-                      <span className={`shrink-0 auc-label-xs ${l.ready ? "text-emerald-400" : "text-gray-600"}`}>{l.ready ? "Ready" : "Wait"}</span>
-                    )}
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3 h-3 text-gray-700 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                  </button>
-
-                  {/* 구분선이 곧 로스터 충원 게이지 */}
-                  <div className="relative h-px bg-white/[0.09]">
-                    <span className={`absolute inset-y-0 left-0 transition-all duration-500 ${bidding ? "bg-[#e91e3f]" : "bg-white/45"}`} style={{ width: `${fillPct}%` }} />
-                  </div>
-
-                  {/* 펼침 영역 — 로스터 상세 */}
-                  {isOpen && (
-                    <div className="pl-3.5 pr-2 pb-3.5 pt-2 bg-white/[0.015]">
-                      <SlotBoard leader={l} leaderIdx={li} />
-
-                      {invMode && (
-                        <button onClick={() => { setInvModal(li); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }} className={`group mt-2.5 w-full flex items-center gap-2 border px-2.5 py-1.5 text-[10px] font-black cursor-pointer transition-all ${(l.inventory?.length || 0) > 0 ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.08] text-[#ff5c77] hover:bg-[#e91e3f]/20" : "border-white/20 text-gray-400 hover:border-white hover:text-white hover:bg-white/[0.06]"}`}>
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
-                          인벤토리 {(l.inventory?.length || 0) > 0 ? `${l.inventory.length}장` : "비어 있음"}
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 ml-auto shrink-0 transition-transform group-hover:translate-x-0.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-                        </button>
-                      )}
-
-                      {/* 진행자 실시간 관리 도구 */}
-                      {role === "host" && (
-                        <div className="mt-2 flex gap-4">
-                          <button onClick={() => { setAdjustTarget(li); setAdjustAmount(""); }} className="flex-1 text-[10px] font-black text-gray-500 hover:text-white border-b border-white/12 hover:border-white/50 py-1.5 transition-colors">포인트 조정</button>
-                          <button onClick={() => setPosSetTarget(li)} className="flex-1 text-[10px] font-black text-gray-500 hover:text-white border-b border-white/12 hover:border-white/50 py-1.5 transition-colors">{l.position ? "포지션 변경" : "포지션 지정"}</button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+        <aside className="hidden lg:block w-full lg:w-[280px] shrink-0 order-2 lg:order-1 lg:sticky lg:top-36 lg:max-h-[calc(100vh-11rem)] lg:overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full lg:pr-1">
+          {teamsSection}
         </aside>
 
         {/* ═══ 중앙: 경매 메인 ═══ */}
-        <div className={`${mobileTab === "main" ? "block" : "hidden"} lg:block flex-1 min-w-0 w-full lg:w-auto space-y-4 lg:space-y-5 order-1 lg:order-2`} style={{ minWidth: "min(100%, 400px)" }}>
+        <div className={"flex-1 min-w-0 w-full lg:w-auto space-y-4 lg:space-y-5 order-1 lg:order-2"} style={{ minWidth: "min(100%, 400px)" }}>
 
           {/* 리더: 준비 배너 (경매 시작 전, 눈에 확 띄게) */}
           {myLeader && auction.status === "준비중" && (
@@ -1708,7 +1729,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         {/* ═══ 우측: 실시간 채팅 + 로그 ═══ */}
         {/* 모바일: 경매 탭에 채팅이 함께 표시 (스트리밍 스타일 · 컴팩트 높이) */}
         {/* 알림 로그 패널은 제거 — 스카우터 결과는 즉시 팝업 + 콘솔의 '알림함'에서 모아 본다 */}
-        <div className={`${mobileTab === "chat" ? "flex" : "hidden"} lg:flex w-full xl:w-[350px] shrink-0 order-3 flex-col gap-4 xl:sticky xl:top-36 xl:self-start`}>
+        <div className="hidden lg:flex w-full xl:w-[350px] shrink-0 order-3 flex-col gap-4 xl:sticky xl:top-36 xl:self-start">
 
           {/* 넓은 화면에서만 세로로 끝없이 늘어나 길었다 → xl 에서만 상한을 둔다 (좁은 화면 높이는 종전 그대로) */}
           <div className="bg-[#0d0d0d] border border-white/[0.07] flex flex-col overflow-hidden h-[calc(100dvh-15rem)] max-h-none lg:h-[46vh] lg:max-h-[360px] xl:h-[46vh] xl:max-h-[440px]">
@@ -2539,7 +2560,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       })()}
 
       {/* 📱 모바일 — 우하단 미니 채팅 (유튜브 라이브처럼 말풍선만 떠 있다가 열린다) */}
-      {mobileTab !== "chat" && (
+      {(
         <>
           <button
             onClick={() => { setMiniChat((v) => !v); setChatUnread(0); sfxSelect(); }}
@@ -2562,20 +2583,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {/* 말풍선을 누르면 열리는 팝업 채팅 */}
           {miniChat && (
             <div
-              className="lg:hidden fixed right-4 left-4 sm:left-auto sm:w-[340px] z-[96] flex flex-col border border-white/15 bg-[#0b0b0c]/97 backdrop-blur-xl shadow-[0_20px_60px_-12px_#000] animate-in fade-in slide-in-from-bottom-2 duration-200"
-              style={{ bottom: `calc(${bottomBarH}px + 4.5rem + env(safe-area-inset-bottom))`, maxHeight: "min(52dvh, 420px)" }}
+              /* 머리글 없이 대화만 — 유튜브 라이브 채팅처럼 가볍게 */
+              className="lg:hidden fixed right-4 left-14 sm:left-auto sm:w-[300px] z-[96] flex flex-col border border-white/15 bg-[#0b0b0c]/95 backdrop-blur-xl shadow-[0_20px_60px_-12px_#000] animate-in fade-in slide-in-from-bottom-2 duration-200"
+              style={{ bottom: `calc(${bottomBarH}px + 4.5rem + env(safe-area-inset-bottom))`, maxHeight: "min(38dvh, 300px)" }}
             >
-              <span className="absolute inset-x-0 top-0 h-[2px] bg-[#e91e3f]" />
-              <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-white/12 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                <span className="auc-label text-gray-300">채팅</span>
-                <button
-                  onClick={() => { const v = !showSystemChat; setShowSystemChat(v); try { localStorage.setItem("auctionShowSystemChat", v ? "1" : "0"); } catch {} sfxSelect(); }}
-                  className={`ml-auto flex items-center gap-1 px-2 py-1 border text-[9px] font-black transition-colors ${showSystemChat ? "border-white/25 text-gray-300" : "border-white/10 text-gray-600"}`}
-                >
-                  <MegaphoneIcon className="w-2.5 h-2.5 shrink-0" />공지 {showSystemChat ? "ON" : "OFF"}
-                </button>
-              </div>
               <div ref={miniChatBoxRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
                 {chat.filter((m: any) => showSystemChat || !(m.isSystem && m.kind !== "join")).slice(-40).map((m: any, i: number) =>
                   m.kind === "join" ? (
@@ -2612,11 +2623,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       >
         {/* ── 시트 열기 — 본문에서 자리를 빼고 필요할 때만 올린다 ── */}
         <div className="flex items-stretch divide-x divide-white/12 border-b border-white/12">
-          {myLeader && (
-            <button onClick={() => { setSheet("slots"); sfxSelect(); }} className="flex-1 py-2 text-[11px] font-black text-gray-300 active:bg-white/[0.06] transition-colors">
-              팀 슬롯 <span className="text-gray-600 tabular-nums">{myLeader.roster.length}/{totalSlots}</span>
-            </button>
-          )}
+          {/* 팀 슬롯은 모바일에서 빼둔다 — 인벤토리에서 배정하므로 중복 */}
+          <button onClick={() => { setSheet("teams"); sfxSelect(); }} className="flex-1 py-2 text-[11px] font-black text-gray-300 active:bg-white/[0.06] transition-colors">
+            {isThird ? "팀" : "타 팀"} <span className="text-gray-600 tabular-nums">{railLeaders.length}</span>
+          </button>
           <button onClick={() => { setSheet("players"); sfxSelect(); }} className="flex-1 py-2 text-[11px] font-black text-gray-300 active:bg-white/[0.06] transition-colors">
             선수 <span className="text-gray-600 tabular-nums">{auction.players.filter((p: any) => p.status === "낙찰").length}/{auction.players.length}</span>
           </button>
@@ -2720,19 +2730,19 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           >
             <span className="absolute inset-x-0 top-0 h-[2px] bg-[#e91e3f]" />
             <div className="flex items-center gap-3 px-4 py-3 border-b border-white/12 shrink-0">
-              <span className="auc-label text-white">{sheet === "slots" ? "Team Slots" : "Players"}</span>
+              <span className="auc-label text-white">{sheet === "teams" ? (isThird ? "Teams" : "Rivals") : "Players"}</span>
               <span className="text-[10px] font-bold text-gray-600 tabular-nums">
-                {sheet === "slots"
-                  ? `${myLeader?.roster.length ?? 0}/${totalSlots}`
+                {sheet === "teams"
+                  ? `${railLeaders.length}팀`
                   : `낙찰 ${auction.players.filter((p: any) => p.status === "낙찰").length} / 전체 ${auction.players.length}`}
               </span>
               <button onClick={() => setSheet(null)} className="ml-auto p-1.5 -mr-1 text-gray-500 active:text-white">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
-              {sheet === "slots" && myLeader ? <SlotBoard leader={myLeader} leaderIdx={myLeaderIdx!} big /> : null}
-              {sheet === "players" ? playersSection : null}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
+              {sheet === "teams" ? teamsSection : null}
+              {sheet === "players" ? playersMobile : null}
             </div>
           </div>
         </div>
