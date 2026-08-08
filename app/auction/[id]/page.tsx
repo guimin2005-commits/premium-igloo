@@ -158,6 +158,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
   const [miniChat, setMiniChat] = useState(false); // 모바일 우하단 팝업 채팅
   const [sheet, setSheet] = useState<null | "teams">(null); // 모바일 하단 시트 (타 팀)
+  const [teamView, setTeamView] = useState<number | null>(null); // 모바일 단일 팀 프로필 (리더 idx)
   const [mobPick, setMobPick] = useState<number | null>(null); // 모바일 인벤토리: 배정할 카드
   const [mobBid, setMobBid] = useState(false); // 모바일 직접 입찰 팝업
   // 📱 모바일 섹션 접힘 — 기본값은 '선수 목록만 접힘' (한 화면 정보량을 줄인다)
@@ -633,8 +634,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   //   ⚠️ 인벤토리 초과 시에는 입찰 UI 를 아예 띄우지 않는다 (서버도 403 으로 거부한다)
   const bidBarOn = !!(myLeader && auction.status === "진행중" && curPlayer && scoutLeft === 0 && strategyLeft === 0 && timeLeft !== null && timeLeft > 0 && !invOverCap);
   // 입찰 바가 빠지면 그 자리에 초과 안내 줄이 들어가므로 높이를 같이 센다
-  // 시간 띠 3 + 빠른입찰 52 + 직접/올인 33
-  const bottomBarH = 34 + (bidBarOn ? 88 : 0) + (invOverCap ? 50 : 0) + (myLeader ? 52 : 0);
+  // 슬롯 줄 40 + 프로필 52 (+ 대기 중 인벤토리 경고 50)
+  const bottomBarH = (myLeader ? 92 : 0) + (invOverCap && !curPlayer ? 50 : 0);
 
   const pa = auction.pendingAssign;
   const hasPending = pa && pa.playerIdx !== null && pa.playerIdx !== undefined;
@@ -1057,39 +1058,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           )}
                         </div>
 
-                        {inv.length === 0 ? (
-                          <p className="py-2 text-[10px] font-bold text-gray-700">비어 있음</p>
-                        ) : (
-                          inv.map((c: any, ci: number) => {
-                            const cp = auction.players[c.playerIdx];
-                            const cHidden = cp ? isHiddenFor(cp) : true;
-                            const cProf = cp?.revealed && cp.discordId ? profiles[cp.discordId] : null;
-                            return (
-                              <div key={ci} className={`flex items-center gap-2 py-1.5 border-b border-white/[0.06] ${c.golden ? "text-amber-200" : ""}`}>
-                                <span className={`shrink-0 w-6 h-8 rounded border flex items-center justify-center overflow-hidden ${c.golden ? "border-amber-400/40 bg-amber-400/10" : "border-white/10 bg-white/[0.04]"}`}>
-                                  {cProf ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={cProf.avatarUrl} alt="" className="w-full h-full object-cover" />
-                                  ) : (
-                                    <svg viewBox="0 0 64 58" className={`w-3 h-3 ${c.golden ? "fill-amber-300/60" : "fill-white/20"}`} aria-hidden="true"><circle cx="32" cy="16" r="13" /><path d="M32 32c14.4 0 26 9.6 26 21.4V58H6v-4.6C6 41.6 17.6 32 32 32z" /></svg>
-                                  )}
-                                </span>
-                                <span className="min-w-0 flex-1">
-                                  <span className={`block text-[11px] font-black truncate leading-tight ${c.golden ? "text-amber-200" : cHidden ? "text-gray-500" : "text-white"}`}>
-                                    {cHidden ? "비공개" : cProf ? cProf.globalName : cp?.alias}
-                                  </span>
-                                  {!cHidden && cp && (
-                                    <span className="block text-[9px] font-bold text-gray-600 truncate leading-tight mt-0.5">
-                                      {c.golden ? "올 포지션" : <>{cp.peakTier || "?"}<span className="text-gray-800 mx-1">·</span>{cp.currentTier || "?"}</>}
-                                      {canSeePos(cp) && <span className="text-gray-300 ml-1.5">{revealParts(cp).map((x: any) => x.v).join(" · ")}</span>}
-                                    </span>
-                                  )}
-                                </span>
-                                <span className="shrink-0 text-[10px] font-black text-gray-500 tabular-nums">{c.price?.toLocaleString()}</span>
-                              </div>
-                            );
-                          })
-                        )}
+                        <div className="pt-0.5">{invRows(l)}</div>
                       </div>
                     );
                   })()}
@@ -1109,6 +1078,117 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       </div>
     </>
   );
+  // 📌 보유 선수(인벤토리) 행 — 팀 레일 펼침과 모바일 팀 프로필에서 함께 쓴다
+  const invRows = (l: any) => {
+    const inv = l.inventory || [];
+    if (inv.length === 0) return <p className="py-2 text-[10px] font-bold text-gray-700">비어 있음</p>;
+    return inv.map((c: any, ci: number) => {
+      const cp = auction.players[c.playerIdx];
+      const cHidden = cp ? isHiddenFor(cp) : true;
+      const cProf = cp?.revealed && cp.discordId ? profiles[cp.discordId] : null;
+      return (
+        <div key={ci} className="flex items-center gap-2 py-1.5 border-b border-white/[0.06]">
+          <span className={`shrink-0 w-6 h-8 rounded border flex items-center justify-center overflow-hidden ${c.golden ? "border-amber-400/40 bg-amber-400/10" : "border-white/10 bg-white/[0.04]"}`}>
+            {cProf ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={cProf.avatarUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <svg viewBox="0 0 64 58" className={`w-3 h-3 ${c.golden ? "fill-amber-300/60" : "fill-white/20"}`} aria-hidden="true"><circle cx="32" cy="16" r="13" /><path d="M32 32c14.4 0 26 9.6 26 21.4V58H6v-4.6C6 41.6 17.6 32 32 32z" /></svg>
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className={`block text-[11px] font-black truncate leading-tight ${c.golden ? "text-amber-200" : cHidden ? "text-gray-500" : "text-white"}`}>
+              {cHidden ? "비공개" : cProf ? cProf.globalName : cp?.alias}
+            </span>
+            {!cHidden && cp && (
+              <span className="block text-[9px] font-bold text-gray-600 truncate leading-tight mt-0.5">
+                {c.golden ? "올 포지션" : <>{cp.peakTier || "?"}<span className="text-gray-800 mx-1">·</span>{cp.currentTier || "?"}</>}
+                {canSeePos(cp) && <span className="text-gray-300 ml-1.5">{revealParts(cp).map((x: any) => x.v).join(" · ")}</span>}
+              </span>
+            )}
+          </span>
+          <span className="shrink-0 text-[10px] font-black text-gray-500 tabular-nums">{c.price?.toLocaleString()}</span>
+        </div>
+      );
+    });
+  };
+
+  // 📌 모바일 팀 프로필 — 아코디언 목록이 아니라 '그 팀 한 곳'만 보는 화면.
+  //    위에서부터 리더 프로필 · 포인트 → 배치도 → 보유 카드 순으로 쌓는다.
+  const teamProfile = (li: number) => {
+    const l = auction.leaders[li];
+    if (!l) return null;
+    const prof = l.discordId ? profiles[l.discordId] : null;
+    const bidding = cur.leaderIdx === li;
+    const isMe = myLeaderIdx === li;
+    const canManage = isMe || role === "host";
+    const spent = l.roster.reduce((s: number, r: any) => s + (r.price || 0), 0) + (l.inventory || []).reduce((s: number, c: any) => s + (c.price || 0), 0);
+    return (
+      <div className="pb-1">
+        {/* ── 리더 프로필 ── */}
+        <div className={`relative flex items-center gap-3 px-3 py-3.5 border ${bidding ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.08]" : "border-white/12 bg-white/[0.02]"}`}>
+          <span className={`absolute left-0 inset-y-0 w-[2px] ${bidding ? "bg-[#e91e3f]" : isMe ? "bg-white/45" : "bg-white/15"}`} />
+          {prof ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={prof.avatarUrl} alt="" className={`w-14 h-14 rounded-full bg-gray-800 shrink-0 ring-1 ${bidding ? "ring-[#e91e3f]" : "ring-white/20"}`} />
+          ) : (
+            <span className={`w-14 h-14 rounded-full shrink-0 flex items-center justify-center text-lg font-black text-gray-300 ring-1 ${bidding ? "ring-[#e91e3f] bg-[#e91e3f]/10" : "ring-white/15 bg-white/[0.04]"}`}>{l.name[0]}</span>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="flex items-center gap-1.5 leading-tight">
+              <span className="text-[16px] font-black text-white truncate">{l.name}</span>
+              {isMe && <span className="shrink-0 auc-label-xs text-gray-300">Me</span>}
+              {bidding && <span className="shrink-0 auc-label-xs text-[#ff5c77]">Top Bid</span>}
+            </p>
+            <p className="flex items-center gap-1.5 mt-1.5">
+              {l.position && <span className={`px-1.5 py-0.5 text-[10px] font-black border ${roleColor(l.position).badge}`}>{roleAbbr(l.position)}</span>}
+              <span className="text-[10px] font-bold text-gray-500 tabular-nums">슬롯 {l.roster.length}/{totalSlots}</span>
+              {invMode && <span className="text-[10px] font-bold text-gray-500 tabular-nums">보유 {(l.inventory?.length || 0)}/{invCapOf(l)}</span>}
+            </p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="auc-label-xs text-gray-600">Point</p>
+            <p className={`text-[20px] font-black tabular-nums leading-none mt-1 ${bidding ? "text-[#ff5c77]" : "text-white"}`}>{l.points.toLocaleString()}</p>
+            <p className="text-[9px] font-bold text-gray-700 tabular-nums mt-1">사용 {spent.toLocaleString()}</p>
+          </div>
+        </div>
+
+        {/* ── 배치도 ── */}
+        <div className="flex items-center gap-2 mt-4 pb-1.5 border-b border-white/20">
+          <span className="auc-label text-white">Roster</span>
+          <span className="text-[10px] font-black text-gray-600 tabular-nums">{l.roster.length}/{totalSlots}</span>
+        </div>
+        <div className="pt-2.5">
+          {SlotBoard({ leader: l, leaderIdx: li })}
+        </div>
+
+        {/* ── 보유 카드 ── */}
+        {invMode && (
+          <>
+            <div className="flex items-center gap-2 mt-4 pb-1.5 border-b border-white/20">
+              <span className="auc-label text-white">Inventory</span>
+              <span className={`text-[10px] font-black tabular-nums ${(l.inventory?.length || 0) > invCapOf(l) ? "text-[#ff5c77]" : "text-gray-600"}`}>{l.inventory?.length || 0}/{invCapOf(l)}</span>
+              {canManage && (
+                <button onClick={() => { setTeamView(null); setInvModal(li); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }} className="ml-auto text-[10px] font-black text-gray-500 active:text-white">
+                  관리 ›
+                </button>
+              )}
+            </div>
+            <div className="pt-1">{invRows(l)}</div>
+          </>
+        )}
+
+        {/* ── 진행자 도구 ── */}
+        {role === "host" && (
+          <div className="mt-4 flex gap-3">
+            <button onClick={() => { setTeamView(null); setAdjustTarget(li); setAdjustAmount(""); }} className="flex-1 py-2 text-[11px] font-black text-gray-400 border border-white/15 active:bg-white/[0.08]">포인트 조정</button>
+            <button onClick={() => { setTeamView(null); setPosSetTarget(li); }} className="flex-1 py-2 text-[11px] font-black text-gray-400 border border-white/15 active:bg-white/[0.08]">{l.position ? "포지션 변경" : "포지션 지정"}</button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // 📌 모바일 선수 목록 — 줄글 목록 대신 2열 미니 카드. 인물 실루엣과 상태 띠로 훑어보게 한다.
   const playersMobile = (
     <div className="grid grid-cols-2 gap-1.5 pt-2.5">
@@ -1638,6 +1718,59 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     })()}
                   </div>
 
+                  {/* ── 입찰 조작부 — 데스크톱 무대와 같은 자리(호가 바로 아래)에 둔다 ── */}
+                  {myLeader && auction.status === "진행중" && (
+                    invOverCap ? (
+                      <button
+                        onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
+                        className="mt-3 w-full flex items-center gap-2 px-3 py-2.5 border border-[#e91e3f]/50 bg-[#e91e3f]/[0.12] text-left active:bg-[#e91e3f]/25"
+                      >
+                        <MegaphoneIcon className="w-3.5 h-3.5 shrink-0 text-white" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[11px] font-black text-[#ff5c77] leading-tight">입찰할 수 없습니다 · 인벤토리 {myInvCount}/{myInvCap}</span>
+                          <span className="block text-[10px] font-bold text-gray-400 leading-tight mt-0.5">선수를 배정해 칸을 비우세요 — 눌러서 열기</span>
+                        </span>
+                      </button>
+                    ) : scoutLeft > 0 ? (
+                      <p className="mt-3 py-2.5 border-t border-white/10 text-[11px] font-bold text-gray-500 text-center">스카우터 타임 종료 후 입찰이 시작됩니다</p>
+                    ) : strategyLeft > 0 ? (
+                      <p className="mt-3 py-2.5 border-t border-white/10 text-[11px] font-bold text-blue-400 text-center">전략 타임 중 — 입찰 일시 중지</p>
+                    ) : timeLeft === 0 ? (
+                      <p className="mt-3 py-2.5 border-t border-white/10 text-[11px] font-black text-gray-400 text-center">입찰 마감 — 진행자의 처리를 기다리는 중</p>
+                    ) : bidBarOn ? (
+                      <div className="mt-3 border-y border-white/12">
+                        <div className="flex items-stretch divide-x divide-white/12">
+                          {[S.minIncrement, S.minIncrement * 5, S.minIncrement * 10].map((inc) => {
+                            const result = cur.leaderIdx === null ? basePrice : cur.price + inc;
+                            const affordable = myLeader.points >= result;
+                            return (
+                              <button
+                                key={inc}
+                                onClick={() => doBid(result)}
+                                disabled={!affordable}
+                                className={`flex-1 min-w-0 py-3 text-center transition-colors ${affordable ? "active:bg-[#e91e3f]/30" : "opacity-25"}`}
+                              >
+                                <span className="block text-[17px] font-black text-white leading-none tabular-nums">+{inc.toLocaleString()}</span>
+                                <span className="block text-[9px] font-bold text-gray-500 tabular-nums mt-1">{result.toLocaleString()}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-stretch divide-x divide-white/12 border-t border-white/12">
+                          <button onClick={() => { setBidInput(""); setMobBid(true); sfxSelect(); }} className="flex-1 py-2 text-[11px] font-black text-gray-300 active:bg-white/[0.08]">
+                            직접 입찰
+                          </button>
+                          <button
+                            onClick={() => setConfirmCfg({ title: "올인", message: `남은 슬롯 최소 예산을 제외한 전액 ${allinMax.toLocaleString()} Point를 베팅합니다.`, confirmLabel: "올인", onConfirm: async () => { const d = await act({ action: "allin", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx }); if (d?.success) sfxAllin(); else if (d?.message) showToast(d.message); } })}
+                            className="flex-1 py-2 text-[11px] font-black text-[#ff5c77] active:bg-[#e91e3f]/25"
+                          >
+                            올인 <span className="text-gray-600 tabular-nums">{allinMax.toLocaleString()}</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : null
+                  )}
+
                   {/* 스카우터 — 아직 안 썼을 때만 */}
                   {myLeader && auction.status === "진행중" && myLeaderIdx !== null && !curPlayer.scoutedBy.includes(myLeaderIdx) && (!curPlayer.isAllPos || curPlayer.hasMost) && (
                     <button
@@ -1669,8 +1802,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 return (
                   <button
                     key={li}
-                    // 팀 하나를 누르면 그 팀만 펼친 채 시트가 열린다 — 슬롯·보유 선수가 한 번에 보인다
-                    onClick={() => { setSheet("teams"); setExpandedTeams(new Set([li])); sfxSelect(); }}
+                    // 팀 하나를 누르면 그 팀의 프로필 화면이 열린다 (프로필 → 배치도 → 보유 카드)
+                    onClick={() => { setTeamView(li); sfxSelect(); }}
                     className={`relative shrink-0 w-[74px] px-1.5 py-2 border text-center transition-colors ${bidding ? "border-[#e91e3f] bg-[#e91e3f]/[0.12]" : isMe ? "border-white/35 bg-white/[0.04]" : "border-white/10"}`}
                   >
                     {bidFlash?.idx === li && <span key={bidFlash.n} className="auc-bidfx" />}
@@ -2096,50 +2229,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             );
           })()}
 
-          {/* ═══ 📱 모바일 중단 — 내 팀 슬롯을 '장착 칸'처럼 타일로 보여준다.
-                 (팀별 예산은 무대 아래 아바타 줄이 대신하므로 여기서는 뺐다) ═══ */}
-          {myLeader && (
-            <div className="lg:hidden">
-              <div className="flex items-center gap-2 pb-2 border-b border-white/20">
-                <span className="auc-label text-white">My Slots</span>
-                <span className="text-[10px] font-black text-gray-600 tabular-nums">{myLeader.roster.length}/{totalSlots}</span>
-                
-              </div>
+          {/* 내 팀 슬롯은 하단 독(내 프로필 위)으로 옮겼다 — 항상 보이는 자리가 낫다 */}
 
-              {/* 슬롯 타일 — 채워진 칸은 실루엣+이름, 빈 칸은 점선 */}
-              <div className="flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden pt-2.5 pb-1">
-                {roleList.flatMap((slot) => {
-                  const entries = myLeader.roster.filter((r: any) => r.slot === slot);
-                  const limit = slotLimitOf(slot);
-                  return Array.from({ length: limit }, (_, k) => {
-                    const ent = entries[k];
-                    const rc = roleColor(slot);
-                    return (
-                      <div
-                        key={`${slot}-${k}`}
-                        className={`shrink-0 w-[62px] h-[74px] border flex flex-col items-center justify-center gap-1 ${
-                          ent ? (ent.golden ? "border-amber-400/50 bg-amber-400/[0.08]" : "border-white/20 bg-white/[0.04]") : "border-dashed border-white/12"
-                        }`}
-                      >
-                        <span className={`text-[9px] font-black tracking-wider ${ent ? rc.text : "text-gray-700"}`}>{roleAbbr(slot)}</span>
-                        {ent ? (
-                          <>
-                            <svg viewBox="0 0 64 58" className={`w-5 h-5 shrink-0 ${ent.golden ? "fill-amber-300/80" : "fill-white/45"}`} aria-hidden="true">
-                              <circle cx="32" cy="16" r="13" />
-                              <path d="M32 32c14.4 0 26 9.6 26 21.4V58H6v-4.6C6 41.6 17.6 32 32 32z" />
-                            </svg>
-                            <span className="w-full px-1 text-[9px] font-black text-white truncate text-center leading-tight">{rosterName(myLeader, ent)}</span>
-                          </>
-                        ) : (
-                          <span className="text-[16px] font-black text-gray-800 leading-none">+</span>
-                        )}
-                      </div>
-                    );
-                  });
-                })}
-              </div>
-            </div>
-          )}
 
 
           {/* 선수 목록 — 데스크톱은 카드 격자, 모바일은 접이식 압축 행 (기본 접힘) */}
@@ -3454,18 +3545,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         className="lg:hidden fixed inset-x-0 bottom-0 z-[95] border-t border-white/15 bg-[#0b0b0c]/97 backdrop-blur-xl"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        {/* ── 타 팀 시트 열기 ── */}
-        <div className="flex items-stretch divide-x divide-white/12 border-b border-white/12">
-          {/* 팀 슬롯은 모바일에서 빼둔다 — 인벤토리에서 배정하므로 중복 */}
-          {/* 열자마자 각 팀 로스터가 펼쳐져 있게 한다 — 팀마다 눌러서 여는 수고를 없앤다 */}
-          <button onClick={() => { setSheet("teams"); setExpandedTeams(new Set(railLeaders.map((x) => x.li))); sfxSelect(); }} className="flex-1 py-2 text-[11px] font-black text-gray-300 active:bg-white/[0.06] transition-colors">
-            {isThird ? "팀" : "타 팀"} <span className="text-gray-600 tabular-nums">{railLeaders.length}</span>
-          </button>
-
-        </div>
+        {/* 타 팀 버튼은 뺐다 — 무대 아래 아바타 줄에서 팀을 바로 누르면 프로필이 열린다 */}
 
         {/* ── 인벤토리가 가득 차면 입찰 바 대신 설명을 둔다 (입찰 시도 자체를 없앤다) ── */}
-        {myLeader && invMode && invOverCap && (
+        {myLeader && invMode && invOverCap && !curPlayer && (
           <button
             onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 border-b border-[#e91e3f]/40 bg-[#e91e3f]/[0.12] text-left active:bg-[#e91e3f]/25 transition-colors"
@@ -3481,56 +3564,32 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           </button>
         )}
 
-        {/* ── 입찰 (호명 중일 때만) ── */}
-        {bidBarOn && timeLeft !== null && (() => {
-          // 남은 시간은 무대의 링이 이미 크게 보여준다. 여기서는 줄어드는 띠 하나로만 두고
-          // 남는 폭은 전부 큼직한 입찰 버튼에 쓴다 (엄지로 누르는 조작부).
-          const total = Math.max(1, S.timerSeconds || 15);
-          const pct = Math.max(0, Math.min(100, (timeLeft / total) * 100));
-          const urgent = timeLeft <= 5;
-          return (
-            <div className="border-b border-white/12">
-              <span className="block relative h-[3px] bg-white/[0.07]">
-                <span
-                  className={`absolute inset-y-0 left-0 ${urgent ? "bg-[#e91e3f]" : "bg-white/60"}`}
-                  style={{ width: `${pct}%`, transition: "width .3s linear" }}
-                />
-              </span>
-              <div className="flex items-stretch divide-x divide-white/12">
-                {[S.minIncrement, S.minIncrement * 5, S.minIncrement * 10].map((inc) => {
-                  const result = cur.leaderIdx === null ? basePrice : cur.price + inc;
-                  const affordable = myLeader!.points >= result;
-                  return (
-                    <button
-                      key={inc}
-                      onClick={() => doBid(result)}
-                      disabled={!affordable}
-                      className={`flex-1 min-w-0 py-3 text-center transition-colors ${affordable ? "active:bg-[#e91e3f]/30" : "opacity-25"}`}
-                    >
-                      <span className="block text-[17px] font-black text-white leading-none tabular-nums">+{inc.toLocaleString()}</span>
-                      <span className="block text-[9px] font-bold text-gray-500 tabular-nums mt-1">{result.toLocaleString()}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {/* 직접 입찰 · 올인 — 데스크톱에만 있던 조작을 모바일에도 둔다 */}
-              <div className="flex items-stretch divide-x divide-white/12 border-t border-white/12">
-                <button
-                  onClick={() => { setBidInput(""); setMobBid(true); sfxSelect(); }}
-                  className="flex-1 py-2 text-[11px] font-black text-gray-300 active:bg-white/[0.08] transition-colors"
-                >
-                  직접 입찰
-                </button>
-                <button
-                  onClick={() => setConfirmCfg({ title: "올인", message: `남은 슬롯 최소 예산을 제외한 전액 ${allinMax.toLocaleString()} Point를 베팅합니다.`, confirmLabel: "올인", onConfirm: async () => { const d = await act({ action: "allin", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx }); if (d?.success) sfxAllin(); else if (d?.message) showToast(d.message); } })}
-                  className="flex-1 py-2 text-[11px] font-black text-[#ff5c77] active:bg-[#e91e3f]/25 transition-colors"
-                >
-                  올인 <span className="text-gray-600 tabular-nums">{allinMax.toLocaleString()}</span>
-                </button>
-              </div>
-            </div>
-          );
-        })()}
+        {/* ── 내 슬롯 — 프로필 바로 위에 항상 붙여둔다 (어디가 비었는지 늘 보이게) ── */}
+        {myLeader && (
+          <div className="flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden px-3 py-1.5 border-b border-white/12">
+            {roleList.flatMap((slot) => {
+              const entries = myLeader.roster.filter((r: any) => r.slot === slot);
+              const limit = slotLimitOf(slot);
+              return Array.from({ length: limit }, (_, k) => {
+                const ent = entries[k];
+                const rc = roleColor(slot);
+                return (
+                  <span
+                    key={`${slot}-${k}`}
+                    className={`shrink-0 w-[54px] px-1 py-1 border text-center ${
+                      ent ? (ent.golden ? "border-amber-400/50 bg-amber-400/[0.08]" : "border-white/20 bg-white/[0.05]") : "border-dashed border-white/12"
+                    }`}
+                  >
+                    <span className={`block text-[8px] font-black tracking-wider ${ent ? rc.text : "text-gray-700"}`}>{roleAbbr(slot)}</span>
+                    <span className={`block text-[9px] font-black truncate leading-tight mt-0.5 ${ent ? "text-white" : "text-gray-800"}`}>
+                      {ent ? rosterName(myLeader, ent) : "—"}
+                    </span>
+                  </span>
+                );
+              });
+            })}
+          </div>
+        )}
 
         {/* ── 내 프로필 고정 + 인벤토리 · 알림함 ── */}
         {myLeader && (() => {
@@ -3586,6 +3645,36 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           );
         })()}
       </div>
+
+      {/* 📱 팀 프로필 팝업 — 아바타 줄에서 팀 하나를 누르면 그 팀만 본다.
+             리더 프로필·포인트 → 배치도 → 보유 카드 순 */}
+      {teamView !== null && auction.leaders[teamView] && (
+        <div className="lg:hidden fixed inset-0 z-[112] flex items-center justify-center p-3.5 bg-black/80 backdrop-blur-sm animate-in fade-in" onClick={() => setTeamView(null)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full border border-white/20 bg-[#0d0d0e] shadow-[0_24px_60px_-16px_#000] flex flex-col animate-in zoom-in-95 duration-200"
+            style={{ maxHeight: "86dvh" }}
+          >
+            <span className={`absolute inset-x-0 top-0 h-[2px] ${cur.leaderIdx === teamView ? "bg-[#e91e3f]" : "bg-white/25"}`} />
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-white/12 shrink-0">
+              <span className="auc-label text-white">Team</span>
+              <span className="text-[10px] font-bold text-gray-600 tabular-nums">{teamView + 1}/{auction.leaders.length}</span>
+              <button
+                onClick={() => { setTeamView(null); setSheet("teams"); setExpandedTeams(new Set(railLeaders.map((x) => x.li))); sfxSelect(); }}
+                className="ml-auto text-[10px] font-black text-gray-500 active:text-white"
+              >
+                전체 팀 ›
+              </button>
+              <button onClick={() => setTeamView(null)} className="p-1.5 -mr-1 text-gray-500 active:text-white">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
+              {teamProfile(teamView)}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 📱 타 팀 팝업 — 하단에 꽂지 않고 화면 중앙에 띄운다 */}
       {sheet && (
