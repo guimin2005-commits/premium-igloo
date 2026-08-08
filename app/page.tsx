@@ -105,8 +105,9 @@ export default function Home() {
     <main className="flex-1 w-full relative flex flex-col">
       <LuxStyles />
 
-      {/* ═══ 커튼 컨테이너 — 히어로는 화면에 고정(sticky)되고, 흰 패널이 그 위로 타고 올라온다 ═══ */}
-      <div className="relative">
+      {/* ═══ 커튼 컨테이너 — 히어로는 화면에 고정(sticky)되고, 흰 패널이 그 위로 타고 올라온다.
+             불투명한 배경 + z-10로, 아래에 깔린 CTA(스티키 리빌)가 패널이 끝나기 전엔 안 비치게 한다 ═══ */}
+      <div className="relative z-10 bg-[#090909]">
 
       {/* ═══ SECTION 1 · 히어로 (풀스크린 · 브랜드만) ═══
              sticky로 뷰포트에 핀 고정 — 스크롤하면 히어로는 멈춰 있고 아래 흰 패널이 위로 덮으며 올라온다.
@@ -187,24 +188,23 @@ export default function Home() {
 
         <div className="relative z-10 divide-y divide-black/[0.06]">
 
-        {/* 01 · 서버 현황 — 제목은 고정, 내용만 스크롤 (md 이상) */}
+        {/* 01 · 서버 현황 — 제목 위 · 내용 아래 세로 구성 */}
         {stats && (
         <div className="w-full py-20 md:py-28 px-6">
-          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-[210px_1fr] lg:grid-cols-[250px_1fr] gap-10 md:gap-14">
-            <Reveal className="md:sticky md:top-24 md:self-start">
-              <div className="relative">
-                <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">01</span>
-                <div className="relative flex items-center gap-3 mb-2">
+          <div className="max-w-6xl mx-auto">
+            <Reveal>
+              <div className="relative mb-12">
+                <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">01</span>
+                <div className="relative flex items-baseline gap-4 mb-2">
                   <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
-                  <div className="h-px w-8 bg-black/15"></div>
+                  <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
                 </div>
-                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3 break-keep">살아있는 커뮤니티</h2>
+                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3 break-keep">살아있는 커뮤니티</h2>
                 <p className="relative text-sm text-gray-600 break-keep">고급 이글루는 지금 이 순간에도 움직이고 있습니다.</p>
               </div>
             </Reveal>
 
-            {/* 내용 칸 — 통계 카드(풀폭)와 차트를 세로로 넉넉하게 쌓는다 */}
-            <div className="flex flex-col gap-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 items-center">
               <Reveal delay={100}>
                 <div className="grid grid-cols-3 gap-px bg-black/[0.08] rounded-2xl overflow-hidden border border-black/[0.06] shadow-[0_16px_44px_-28px_rgba(0,0,0,0.3)]">
                   {[
@@ -235,21 +235,20 @@ export default function Home() {
         {schedule.length > 0 && (
         <div className="relative w-full py-20 md:py-28 px-6">
           <div className="absolute top-0 right-[-100px] w-[400px] h-[300px] bg-[#e91e3f]/[0.05] blur-[110px] rounded-full pointer-events-none"></div>
-          <div className="max-w-6xl mx-auto relative z-10 grid grid-cols-1 md:grid-cols-[210px_1fr] lg:grid-cols-[250px_1fr] gap-10 md:gap-14">
-            <Reveal className="md:sticky md:top-24 md:self-start">
-              <div className="relative">
-                <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">02</span>
-                <div className="relative flex items-center gap-3 mb-2">
+          <div className="max-w-6xl mx-auto relative z-10">
+            <Reveal>
+              <div className="relative mb-12">
+                <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">02</span>
+                <div className="relative flex items-baseline gap-4 mb-2">
                   <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
-                  <div className="h-px w-8 bg-black/15"></div>
+                  <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
                 </div>
-                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3 break-keep">지금, 이글루에서는</h2>
+                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3 break-keep">지금, 이글루에서는</h2>
                 <p className="relative text-sm text-gray-600 break-keep">진행 중인 대회와 이벤트를 확인하세요.</p>
               </div>
             </Reveal>
 
-            {/* 세로 1열 — 제목 sticky가 체감되도록 콘텐츠 스크롤 길이를 확보한다 */}
-            <div className="grid grid-cols-1 gap-3.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {schedule.map((item, i) => (
                 <Reveal key={i} delay={i * 100}>
                   <Link href={item.path} className={`flex items-center gap-4 px-6 py-5 rounded-2xl border backdrop-blur-sm transition-all duration-300 group/sch h-full hover:-translate-y-1 ${item.type === "경매 LIVE" ? "bg-emerald-500/[0.06] border-emerald-500/25 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:shadow-[0_20px_50px_-20px_rgba(16,185,129,0.3)]" : "bg-white/75 border-black/[0.05] hover:border-[#e91e3f]/30 hover:bg-white hover:shadow-[0_20px_50px_-20px_rgba(233,30,63,0.22)]"}`}>
@@ -275,30 +274,32 @@ export default function Home() {
         </div>
         )}
 
-        {/* 03 · 핵심 콘텐츠 소개 — 세로 구성 (제목 위 · 콘텐츠 아래 풀폭 벤토) */}
+        {/* 03 · 핵심 콘텐츠 소개 — 제목은 왼쪽에 고정(sticky), 오른쪽엔 긴 세로 스택이 흘러간다 */}
         <div className="w-full py-20 md:py-28 px-6">
-          <div className="max-w-6xl mx-auto">
-            <Reveal>
-              <div className="relative mb-12">
-                <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">03</span>
-                <div className="relative flex items-baseline gap-4 mb-2">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-[210px_1fr] lg:grid-cols-[250px_1fr] gap-10 md:gap-14">
+            <Reveal className="md:sticky md:top-24 md:self-start">
+              <div className="relative">
+                <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">03</span>
+                <div className="relative flex items-center gap-3 mb-2">
                   <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
-                  <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+                  <div className="h-px w-8 bg-black/15"></div>
                 </div>
-                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3 break-keep">이글루에서 즐기는 방법</h2>
+                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3 break-keep">이글루에서 즐기는 방법</h2>
                 <p className="relative text-sm text-gray-600 break-keep">활동하고, 성장하고, 증명하세요.</p>
               </div>
             </Reveal>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Reveal className="md:row-span-2 h-full">
-                <Link href="/level" className="group relative flex flex-col justify-between h-full min-h-[240px] md:min-h-[436px] rounded-3xl bg-[#111111] p-8 overflow-hidden shadow-[0_30px_70px_-30px_rgba(0,0,0,0.55)] hover:shadow-[0_36px_80px_-24px_rgba(233,30,63,0.4)] hover:-translate-y-1.5 transition-all duration-500">
+            {/* 긴 세로 스택 — 카드 하나하나가 큼직해서 제목 고정이 확실히 체감된다 */}
+            <div className="flex flex-col gap-5">
+              <Reveal>
+                <Link href="/level" className="group relative flex flex-col justify-between min-h-[300px] md:min-h-[340px] rounded-3xl bg-[#111111] p-8 md:p-10 overflow-hidden shadow-[0_30px_70px_-30px_rgba(0,0,0,0.55)] hover:shadow-[0_36px_80px_-24px_rgba(233,30,63,0.4)] hover:-translate-y-1.5 transition-all duration-500">
                   <div className="absolute -bottom-16 -right-16 w-64 h-64 bg-[#e91e3f]/20 blur-[90px] rounded-full pointer-events-none group-hover:bg-[#e91e3f]/30 transition-colors duration-500"></div>
                   <div className="absolute inset-0 lux-grid-bg opacity-40 pointer-events-none"></div>
+                  <span aria-hidden className="absolute top-4 right-7 text-[90px] font-black text-white/[0.04] leading-none select-none pointer-events-none">I</span>
                   <div className="relative z-10">
                     <span className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] uppercase">Featured</span>
                     <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight mt-3 mb-4">SYSTEM : LEVEL</h3>
-                    <p className="text-sm text-gray-400 leading-relaxed break-keep max-w-xs">채팅과 음성 활동으로 XP를 쌓아 최대 1,000레벨까지 성장하는 고급 이글루만의 성장 시스템.</p>
+                    <p className="text-sm text-gray-400 leading-relaxed break-keep max-w-sm">채팅과 음성 활동으로 XP를 쌓아 최대 1,000레벨까지 성장하는 고급 이글루만의 성장 시스템.</p>
                   </div>
                   <div className="relative z-10 flex items-end justify-between mt-10">
                     <div>
@@ -310,22 +311,32 @@ export default function Home() {
                 </Link>
               </Reveal>
 
-              <Reveal delay={120} className="h-full">
-                <Link href="/tournament" className="group flex items-center gap-5 h-full rounded-3xl bg-white/80 backdrop-blur-md border border-black/[0.05] p-6 md:p-7 shadow-[0_16px_44px_-24px_rgba(0,0,0,0.18)] hover:shadow-[0_26px_60px_-20px_rgba(233,30,63,0.28)] hover:-translate-y-1 hover:border-[#e91e3f]/25 transition-all duration-400">
-                  <span className="shrink-0 w-12 h-12 rounded-2xl bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center text-xl font-black group-hover:scale-110 group-hover:bg-[#e91e3f] group-hover:text-white transition-all duration-300">II</span>
-                  <div className="min-w-0">
-                    <h3 className="text-base font-black text-[#131313] tracking-tight mb-1 group-hover:text-[#e91e3f] transition-colors">e스포츠 대회</h3>
-                    <p className="text-[13px] text-gray-500 leading-relaxed break-keep">토너먼트에 도전하고 특별한 상금과 명예의 전당에 이름을 남기세요.</p>
+              <Reveal delay={100}>
+                <Link href="/tournament" className="group relative flex flex-col justify-between min-h-[260px] md:min-h-[300px] rounded-3xl bg-white/85 backdrop-blur-md border border-black/[0.05] p-8 md:p-10 overflow-hidden shadow-[0_16px_44px_-24px_rgba(0,0,0,0.18)] hover:shadow-[0_26px_60px_-20px_rgba(233,30,63,0.28)] hover:-translate-y-1.5 hover:border-[#e91e3f]/25 transition-all duration-500">
+                  <span aria-hidden className="absolute top-4 right-7 text-[90px] font-black text-black/[0.04] leading-none select-none pointer-events-none">II</span>
+                  <div className="relative z-10">
+                    <span className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] uppercase">Esports</span>
+                    <h3 className="text-2xl md:text-3xl font-black text-[#131313] tracking-tight mt-3 mb-4 group-hover:text-[#e91e3f] transition-colors">e스포츠 대회</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed break-keep max-w-sm">토너먼트에 도전하고 특별한 상금과 명예의 전당에 이름을 남기세요. 참가 신청부터 대진표, 선수 경매까지.</p>
+                  </div>
+                  <div className="relative z-10 flex items-end justify-between mt-10">
+                    <span className="text-[11px] font-black tracking-[0.2em] text-gray-400 uppercase">Tournament · Hall of Fame</span>
+                    <span className="w-11 h-11 rounded-full bg-black/[0.04] border border-black/[0.06] flex items-center justify-center text-[#131313] group-hover:bg-[#e91e3f] group-hover:border-[#e91e3f] group-hover:text-white group-hover:rotate-45 transition-all duration-300">→</span>
                   </div>
                 </Link>
               </Reveal>
 
-              <Reveal delay={220} className="h-full">
-                <Link href="/booster" className="group flex items-center gap-5 h-full rounded-3xl bg-white/80 backdrop-blur-md border border-black/[0.05] p-6 md:p-7 shadow-[0_16px_44px_-24px_rgba(0,0,0,0.18)] hover:shadow-[0_26px_60px_-20px_rgba(233,30,63,0.28)] hover:-translate-y-1 hover:border-[#e91e3f]/25 transition-all duration-400">
-                  <span className="shrink-0 w-12 h-12 rounded-2xl bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center text-xl font-black group-hover:scale-110 group-hover:bg-[#e91e3f] group-hover:text-white transition-all duration-300">III</span>
-                  <div className="min-w-0">
-                    <h3 className="text-base font-black text-[#131313] tracking-tight mb-1 group-hover:text-[#e91e3f] transition-colors">SERVER BOOSTER</h3>
-                    <p className="text-[13px] text-gray-500 leading-relaxed break-keep">서버를 후원하고 전용 역할과 압도적인 XP 혜택을 받으세요.</p>
+              <Reveal delay={100}>
+                <Link href="/booster" className="group relative flex flex-col justify-between min-h-[260px] md:min-h-[300px] rounded-3xl bg-white/85 backdrop-blur-md border border-black/[0.05] p-8 md:p-10 overflow-hidden shadow-[0_16px_44px_-24px_rgba(0,0,0,0.18)] hover:shadow-[0_26px_60px_-20px_rgba(233,30,63,0.28)] hover:-translate-y-1.5 hover:border-[#e91e3f]/25 transition-all duration-500">
+                  <span aria-hidden className="absolute top-4 right-7 text-[90px] font-black text-black/[0.04] leading-none select-none pointer-events-none">III</span>
+                  <div className="relative z-10">
+                    <span className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] uppercase">Support</span>
+                    <h3 className="text-2xl md:text-3xl font-black text-[#131313] tracking-tight mt-3 mb-4 group-hover:text-[#e91e3f] transition-colors">SERVER BOOSTER</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed break-keep max-w-sm">서버를 후원하고 전용 역할과 압도적인 XP 혜택을 받으세요.</p>
+                  </div>
+                  <div className="relative z-10 flex items-end justify-between mt-10">
+                    <span className="text-[11px] font-black tracking-[0.2em] text-gray-400 uppercase">+2,000 XP · 35% 환급</span>
+                    <span className="w-11 h-11 rounded-full bg-black/[0.04] border border-black/[0.06] flex items-center justify-center text-[#131313] group-hover:bg-[#e91e3f] group-hover:border-[#e91e3f] group-hover:text-white group-hover:rotate-45 transition-all duration-300">→</span>
                   </div>
                 </Link>
               </Reveal>
@@ -387,8 +398,9 @@ export default function Home() {
 
       </div>{/* 커튼 컨테이너 끝 */}
 
-      {/* ═══ SECTION 6 · 마지막 CTA ═══ */}
-      <section className="relative w-full py-24 md:py-32 px-6 border-t border-white/5 overflow-hidden">
+      {/* ═══ SECTION 6 · 마지막 CTA — 역방향 커튼(스티키 리빌):
+             화면 하단에 미리 깔려 있다가, 흰 패널이 위로 걷히면서 밑에서 드러난다 ═══ */}
+      <section className="sticky bottom-0 z-0 w-full py-24 md:py-32 px-6 overflow-hidden">
         <div className="absolute bottom-[-150px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[130px] rounded-full pointer-events-none"></div>
         <div className="max-w-3xl mx-auto text-center relative z-10">
           <Reveal>

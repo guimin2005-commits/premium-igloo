@@ -320,7 +320,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
                 
                 {isProfileOpen && (
-                  <div className="absolute top-[60px] right-0 z-50 w-[272px] rounded-3xl bg-[#111111]/95 backdrop-blur-xl border border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)] p-5 relative overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="absolute top-[60px] right-0 z-50 w-[272px] rounded-3xl bg-[#111111]/95 backdrop-blur-xl border border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)] p-5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 w-48 h-24 bg-[#e91e3f]/[0.1] blur-[44px] rounded-full pointer-events-none"></div>
                     <div className="relative flex items-center gap-4 mb-4 pb-4 border-b border-white/[0.06]">
                       <div className="relative shrink-0">
