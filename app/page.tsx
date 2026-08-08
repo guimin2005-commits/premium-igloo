@@ -143,33 +143,40 @@ export default function Home() {
 
       </section>
 
-      {/* ═══ SECTION 2 · 서버 현황 ═══ */}
-      {stats && (
-        <section className="relative w-full py-20 md:py-28 px-6 border-t border-white/5">
+      {/* ═══ SECTION 2 · 통합 라이트 패널 (01 서버현황 + 02 LIVE&UPCOMING + 03 핵심콘텐츠 + 04 최신소식) ═══
+             스크롤하면 히어로 위로 살짝 겹쳐 올라오는 하나의 라운드 패널 ═══ */}
+      <section className="relative w-full z-10 -mt-16 md:-mt-20 bg-[#f5f3f0] rounded-t-[40px] md:rounded-t-[56px] rounded-b-[40px] md:rounded-b-[56px] shadow-[0_-20px_60px_-30px_rgba(0,0,0,0.5),0_40px_90px_-30px_rgba(0,0,0,0.65)] overflow-hidden">
+        <div className="absolute top-[-80px] right-[-60px] w-[400px] h-[300px] bg-[#e91e3f]/[0.08] blur-[110px] rounded-full pointer-events-none"></div>
+
+        <div className="relative z-10 divide-y divide-black/[0.06]">
+
+        {/* 01 · 서버 현황 */}
+        {stats && (
+        <div className="w-full py-20 md:py-28 px-6">
           <div className="max-w-5xl mx-auto">
             <Reveal>
               <div className="flex items-baseline gap-4 mb-2">
                 <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
-                <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+                <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
               </div>
-              <h2 className="text-2xl md:text-4xl font-black text-white tracking-tight mb-3">살아있는 커뮤니티</h2>
-              <p className="text-sm text-gray-500 mb-12">고급 이글루는 지금 이 순간에도 움직이고 있습니다.</p>
+              <h2 className="text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3">살아있는 커뮤니티</h2>
+              <p className="text-sm text-gray-600 mb-12">고급 이글루는 지금 이 순간에도 움직이고 있습니다.</p>
             </Reveal>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 items-center">
               <Reveal delay={100}>
-                <div className="grid grid-cols-3 gap-px bg-white/10 rounded-2xl overflow-hidden border border-white/10">
+                <div className="grid grid-cols-3 gap-px bg-black/[0.08] rounded-2xl overflow-hidden border border-black/[0.06] shadow-[0_16px_44px_-28px_rgba(0,0,0,0.3)]">
                   {[
                     { n: stats.memberCount, l: "전체 멤버", dot: false },
                     { n: stats.onlineCount, l: "현재 온라인", dot: true },
                     { n: 2023, l: "Since", raw: true },
                   ].map((s: any, i) => (
-                    <div key={i} className="relative bg-[#0d0d0d] px-4 py-8 text-center group hover:bg-[#121212] hover:shadow-[0_16px_44px_-18px_rgba(233,30,63,0.35)] hover:z-10 transition-all duration-300">
-                      <div className="text-2xl md:text-4xl font-black text-white group-hover:text-[#e91e3f] transition-colors tracking-tight flex items-center justify-center gap-2">
-                        {s.dot && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>}
+                    <div key={i} className="relative bg-white px-4 py-8 text-center group hover:bg-white hover:shadow-[0_16px_44px_-18px_rgba(233,30,63,0.3)] hover:z-10 transition-all duration-300">
+                      <div className="text-2xl md:text-4xl font-black text-[#131313] group-hover:text-[#e91e3f] transition-colors tracking-tight flex items-center justify-center gap-2">
+                        {s.dot && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>}
                         {s.raw ? s.n : <CountUp end={s.n} />}
                       </div>
-                      <div className="text-[9px] md:text-[10px] font-bold tracking-[0.25em] text-gray-600 mt-2 uppercase">{s.l}</div>
+                      <div className="text-[9px] md:text-[10px] font-bold tracking-[0.25em] text-gray-500 mt-2 uppercase">{s.l}</div>
                     </div>
                   ))}
                 </div>
@@ -180,28 +187,28 @@ export default function Home() {
               </Reveal>
             </div>
           </div>
-        </section>
-      )}
+        </div>
+        )}
 
-      {/* ═══ SECTION 3 · LIVE & UPCOMING ═══ */}
-      {schedule.length > 0 && (
-        <section className="relative w-full pt-20 md:pt-28 pb-28 md:pb-40 px-6 border-t border-white/5">
-          <div className="absolute top-0 right-[-100px] w-[400px] h-[300px] bg-[#e91e3f]/[0.04] blur-[110px] rounded-full pointer-events-none"></div>
+        {/* 02 · LIVE & UPCOMING */}
+        {schedule.length > 0 && (
+        <div className="relative w-full py-20 md:py-28 px-6 overflow-hidden">
+          <div className="absolute top-0 right-[-100px] w-[400px] h-[300px] bg-[#e91e3f]/[0.05] blur-[110px] rounded-full pointer-events-none"></div>
           <div className="max-w-5xl mx-auto relative z-10">
             <Reveal>
               <div className="flex items-baseline gap-4 mb-2">
                 <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
-                <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+                <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
               </div>
-              <h2 className="text-2xl md:text-4xl font-black text-white tracking-tight mb-3">지금, 이글루에서는</h2>
-              <p className="text-sm text-gray-500 mb-12">진행 중인 대회와 이벤트를 확인하세요.</p>
+              <h2 className="text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3">지금, 이글루에서는</h2>
+              <p className="text-sm text-gray-600 mb-12">진행 중인 대회와 이벤트를 확인하세요.</p>
             </Reveal>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {schedule.map((item, i) => (
                 <Reveal key={i} delay={i * 100}>
-                  <Link href={item.path} className={`flex items-center gap-4 px-6 py-5 rounded-2xl border backdrop-blur-sm transition-all duration-300 group/sch h-full hover:-translate-y-1 ${item.type === "경매 LIVE" ? "bg-emerald-500/[0.05] border-emerald-500/30 hover:border-emerald-400/60 hover:bg-emerald-500/[0.08] hover:shadow-[0_20px_50px_-20px_rgba(16,185,129,0.35)]" : "bg-white/[0.03] border-white/5 hover:border-[#e91e3f]/30 hover:bg-white/[0.05] hover:shadow-[0_20px_50px_-20px_rgba(233,30,63,0.3)]"}`}>
-                    <span className={`shrink-0 text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1.5 ${item.type === "경매 LIVE" ? "bg-emerald-500/15 text-emerald-400" : item.type.includes("진행중") ? "bg-emerald-500/15 text-emerald-400" : item.type.includes("대회") ? "bg-blue-500/15 text-blue-400" : "bg-[#e91e3f]/15 text-[#e91e3f]"}`}>
+                  <Link href={item.path} className={`flex items-center gap-4 px-6 py-5 rounded-2xl border backdrop-blur-sm transition-all duration-300 group/sch h-full hover:-translate-y-1 ${item.type === "경매 LIVE" ? "bg-emerald-500/[0.06] border-emerald-500/25 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:shadow-[0_20px_50px_-20px_rgba(16,185,129,0.3)]" : "bg-white/75 border-black/[0.05] hover:border-[#e91e3f]/30 hover:bg-white hover:shadow-[0_20px_50px_-20px_rgba(233,30,63,0.22)]"}`}>
+                    <span className={`shrink-0 text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1.5 ${item.type === "경매 LIVE" ? "bg-emerald-500/15 text-emerald-600" : item.type.includes("진행중") ? "bg-emerald-500/15 text-emerald-600" : item.type.includes("대회") ? "bg-blue-500/15 text-blue-600" : "bg-[#e91e3f]/15 text-[#e91e3f]"}`}>
                       {item.type === "경매 LIVE" && (
                         <span className="relative flex w-1.5 h-1.5">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70"></span>
@@ -211,24 +218,20 @@ export default function Home() {
                       {item.type}
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-gray-200 group-hover/sch:text-white truncate transition-colors">{item.title}</p>
-                      {item.period && <p className="text-[11px] text-gray-600 mt-0.5">{item.period}</p>}
+                      <p className="text-sm font-bold text-[#131313] truncate transition-colors">{item.title}</p>
+                      {item.period && <p className="text-[11px] text-gray-500 mt-0.5">{item.period}</p>}
                     </div>
-                    <span className="ml-auto shrink-0 text-gray-600 group-hover/sch:text-[#e91e3f] group-hover/sch:translate-x-1 transition-all">→</span>
+                    <span className="ml-auto shrink-0 text-gray-400 group-hover/sch:text-[#e91e3f] group-hover/sch:translate-x-1 transition-all">→</span>
                   </Link>
                 </Reveal>
               ))}
             </div>
           </div>
-        </section>
-      )}
-
-      {/* ═══ SECTION 4 · 이글루 소개 + 최신 소식 (하나로 합친 라이트 패널 — 스크롤 시 떠오르듯 겹쳐짐) ═══ */}
-      <section className="relative w-full z-10 -mt-12 md:-mt-16 bg-[#f5f3f0] rounded-t-[40px] md:rounded-t-[56px] rounded-b-[40px] md:rounded-b-[56px] shadow-[0_-20px_60px_-30px_rgba(0,0,0,0.5),0_40px_90px_-30px_rgba(0,0,0,0.65)] overflow-hidden">
-        <div className="absolute top-[-80px] right-[-60px] w-[400px] h-[300px] bg-[#e91e3f]/[0.08] blur-[110px] rounded-full pointer-events-none"></div>
+        </div>
+        )}
 
         {/* 03 · 핵심 콘텐츠 소개 */}
-        <div className="w-full pt-24 md:pt-32 pb-20 md:pb-28 px-6 relative z-10">
+        <div className="w-full py-20 md:py-28 px-6">
           <div className="max-w-5xl mx-auto">
             <Reveal>
               <div className="flex items-baseline gap-4 mb-2">
@@ -331,6 +334,8 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        </div>
       </section>
 
       {/* ═══ SECTION 6 · 마지막 CTA ═══ */}

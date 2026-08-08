@@ -217,8 +217,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <RouteProgress pathname={pathname} />
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
              헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
-      <div className={`sticky top-0 z-40 transition-[padding] duration-500 ease-out flex-shrink-0 ${isAuctionRoom ? "hidden" : ""} ${scrolled ? "pt-3 px-3 md:px-6" : ""}`}>
-      <header className={`mx-auto transition-all duration-500 ease-out ${scrolled ? "max-w-4xl rounded-full border border-white/10 bg-[#0d0d0d]/92 backdrop-blur-xl shadow-[0_20px_50px_-16px_rgba(0,0,0,0.7)] px-5 md:px-7 h-12" : "bg-[#090909]/80 backdrop-blur-md border-b border-white/10 px-6 h-14"}`} onMouseLeave={() => setOpenMegaMenu(null)}>
+      <div className={`relative sticky top-0 z-40 transition-[padding] duration-500 ease-out flex-shrink-0 ${isAuctionRoom ? "hidden" : ""} ${scrolled ? "pt-3 px-3 md:px-6" : ""}`} onMouseLeave={() => setOpenMegaMenu(null)}>
+      <header className={`mx-auto transition-all duration-500 ease-out ${scrolled ? "max-w-4xl rounded-full border border-white/10 bg-[#0d0d0d]/92 backdrop-blur-xl shadow-[0_20px_50px_-16px_rgba(0,0,0,0.7)] px-5 md:px-7 h-12" : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-14"}`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
           <div className="flex-1 flex items-center z-10">
             {isVerifyPage ? (
@@ -376,49 +376,50 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             )}
           </div>
         </div>
+      </header>
 
-        {/* 📌 메가 메뉴 — 풀폭 · 좌측 헤딩 + 깔끔한 텍스트 리스트 (프리미엄 톤) */}
-        {openMegaMenu && (() => {
-          const group = categoryGroups.find((g) => g.name === openMegaMenu);
-          if (!group) return null;
-          return (
-            <div className="hidden md:block absolute top-full left-0 right-0 bg-[#0c0c0c]/98 backdrop-blur-md border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)] origin-top" style={{ animation: "megaDrop 0.32s cubic-bezier(0.16,1,0.3,1)" }}>
-              <style dangerouslySetInnerHTML={{ __html: `@keyframes megaDrop{0%{opacity:0;transform:translateY(-16px) scaleY(0.94)}60%{opacity:1}100%{opacity:1;transform:translateY(0) scaleY(1)}}` }} />
-              <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
-              <div className="max-w-7xl mx-auto px-8 py-8 lg:py-10 grid grid-cols-12 gap-10 items-start">
-                {/* 좌: 섹션 헤딩 */}
-                <div className="col-span-12 lg:col-span-5">
-                  <div className="flex items-center gap-2.5 mb-4">
-                    <span className="w-6 h-px bg-[#e91e3f]"></span>
-                    <span className="text-[10px] font-black tracking-[0.35em] text-[#e91e3f] uppercase">{group.name}</span>
-                  </div>
-                  <p className="text-xl lg:text-2xl font-black text-white tracking-tight leading-snug break-keep max-w-md">{group.tagline}</p>
+      {/* 📌 메가 메뉴 — 풀폭 · 좌측 헤딩 + 깔끔한 텍스트 리스트 (프리미엄 톤)
+             ※ header(알약 상태에서 좁아짐) 밖, 바깥 래퍼 기준으로 위치시켜 항상 풀폭으로 펼쳐지게 한다 */}
+      {openMegaMenu && (() => {
+        const group = categoryGroups.find((g) => g.name === openMegaMenu);
+        if (!group) return null;
+        return (
+          <div className="hidden md:block absolute top-full left-0 right-0 bg-[#0c0c0c]/98 backdrop-blur-md border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)] origin-top" style={{ animation: "megaDrop 0.32s cubic-bezier(0.16,1,0.3,1)" }}>
+            <style dangerouslySetInnerHTML={{ __html: `@keyframes megaDrop{0%{opacity:0;transform:translateY(-16px) scaleY(0.94)}60%{opacity:1}100%{opacity:1;transform:translateY(0) scaleY(1)}}` }} />
+            <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
+            <div className="max-w-7xl mx-auto px-8 py-8 lg:py-10 grid grid-cols-12 gap-10 items-start">
+              {/* 좌: 섹션 헤딩 */}
+              <div className="col-span-12 lg:col-span-5">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <span className="w-6 h-px bg-[#e91e3f]"></span>
+                  <span className="text-[10px] font-black tracking-[0.35em] text-[#e91e3f] uppercase">{group.name}</span>
                 </div>
-                {/* 우: 텍스트 링크 리스트 */}
-                <div className="col-span-12 lg:col-span-7">
-                  {group.items.map((item) => {
-                    const isActive = pathname === item.path;
-                    return (
-                      <Link
-                        key={item.path}
-                        href={item.path}
-                        onClick={() => setOpenMegaMenu(null)}
-                        className="group/item flex items-center justify-between gap-4 py-3 border-b border-white/[0.08] first:border-t first:border-white/[0.08] transition-colors"
-                      >
-                        <div className="min-w-0">
-                          <p className={`text-[15px] lg:text-base font-bold tracking-tight transition-colors ${isActive ? "text-[#e91e3f]" : "text-gray-100 group-hover/item:text-[#ff5c77]"}`}>{item.name}</p>
-                          <p className="text-[11px] text-gray-500 mt-0.5 truncate">{item.desc}</p>
-                        </div>
-                        <svg className="w-4 h-4 text-gray-600 shrink-0 -translate-x-2 opacity-0 group-hover/item:opacity-100 group-hover/item:translate-x-0 group-hover/item:text-[#e91e3f] transition-all duration-300" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                      </Link>
-                    );
-                  })}
-                </div>
+                <p className="text-xl lg:text-2xl font-black text-white tracking-tight leading-snug break-keep max-w-md">{group.tagline}</p>
+              </div>
+              {/* 우: 텍스트 링크 리스트 */}
+              <div className="col-span-12 lg:col-span-7">
+                {group.items.map((item) => {
+                  const isActive = pathname === item.path;
+                  return (
+                    <Link
+                      key={item.path}
+                      href={item.path}
+                      onClick={() => setOpenMegaMenu(null)}
+                      className="group/item flex items-center justify-between gap-4 py-3 border-b border-white/[0.08] first:border-t first:border-white/[0.08] transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className={`text-[15px] lg:text-base font-bold tracking-tight transition-colors ${isActive ? "text-[#e91e3f]" : "text-gray-100 group-hover/item:text-[#ff5c77]"}`}>{item.name}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5 truncate">{item.desc}</p>
+                      </div>
+                      <svg className="w-4 h-4 text-gray-600 shrink-0 -translate-x-2 opacity-0 group-hover/item:opacity-100 group-hover/item:translate-x-0 group-hover/item:text-[#e91e3f] transition-all duration-300" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                    </Link>
+                  );
+                })}
               </div>
             </div>
-          );
-        })()}
-      </header>
+          </div>
+        );
+      })()}
       </div>
 
       <main className="flex-1 flex flex-col w-full relative pb-16 md:pb-0">
