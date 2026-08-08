@@ -471,6 +471,10 @@ export async function POST(request, { params }) {
         if (S.assignMode !== "inventory") {
           return NextResponse.json({ success: false, message: "인벤토리 방식이 아닙니다." }, { status: 400 });
         }
+        // 인벤토리 플러스는 팀당 1회만 (포지션 체인지와 같은 규칙)
+        if ((leader.invExtra || 0) >= 1) {
+          return NextResponse.json({ success: false, message: "인벤토리 플러스는 팀당 한 번만 사용할 수 있습니다." }, { status: 400 });
+        }
         const cost = S.invPlusCost ?? 5000;
         if (leader.points < cost) {
           return NextResponse.json({ success: false, message: `Point 가 부족합니다. (필요 ${cost.toLocaleString()} Point)` }, { status: 400 });
@@ -478,9 +482,9 @@ export async function POST(request, { params }) {
         leader.points -= cost;
         leader.invExtra = (leader.invExtra || 0) + 1;
         const cap = invCapacityOf(S, leader);
+        // 개인 구매라 전체 공지는 하지 않는다 (로그에만 남김)
         addLog(auction, `${leader.name} 인벤토리 플러스 구매 — 용량 ${cap}칸 (-${cost.toLocaleString()} Point)`);
         await auction.save();
-        sysChat(id, `${leader.name} 팀이 인벤토리 플러스를 구매했습니다. (용량 ${cap}칸)`);
         return NextResponse.json({ success: true, capacity: cap });
       }
 

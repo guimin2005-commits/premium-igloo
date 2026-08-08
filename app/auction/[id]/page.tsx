@@ -18,6 +18,62 @@ const MegaphoneIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
 );
 
 // 📌 중요도 높은 시스템 공지 — 채팅에서 레드로 구분한다 (서버 스키마 변경 없이 문구로 판별)
+// ⚠️ 렌더 함수 안에서 컴포넌트를 정의하면 폴링(1.5초)마다 새 타입이 되어 매번 언마운트/재마운트된다.
+//    호버·트랜지션이 끊겨 깜빡이므로 모듈 스코프에 둔다. (props 만 쓰므로 클로저 의존 없음)
+// 📌 경매장 공용 팝업 — 방 안의 모든 모달이 같은 골격(상단 라인 · 라벨 · 제목 · 본문 · 분할 액션)을 쓴다
+const MODAL_TONE: Record<string, { line: string; label: string }> = {
+  default: { line: "bg-white/35", label: "text-gray-500" },
+  danger: { line: "bg-[#e91e3f]", label: "text-[#e91e3f]" },
+  info: { line: "bg-blue-500", label: "text-blue-400" },
+  gold: { line: "auc-stage-goldline", label: "text-amber-300" },
+};
+const AucModal = ({
+  label, title, desc, tone = "default", onClose, wide, children, actions,
+}: {
+  label: string; title: string; desc?: React.ReactNode; tone?: keyof typeof MODAL_TONE;
+  onClose?: () => void; wide?: boolean; children?: React.ReactNode;
+  actions?: { text: string; onClick: () => void; kind?: "primary" | "ghost" | "danger"; disabled?: boolean }[];
+}) => {
+  const t = MODAL_TONE[tone] || MODAL_TONE.default;
+  return (
+    <div className="auc-modal-back animate-in fade-in" onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`auc-modal ${wide ? "sm:max-w-lg" : "sm:max-w-sm"} animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200`}
+      >
+        <span className={`auc-modal-line ${t.line}`} />
+        <div className="px-6 sm:px-7 pt-6 sm:pt-7 pb-6">
+          <div className="flex items-baseline gap-3 mb-3">
+            <span className={`auc-label ${t.label}`}>{label}</span>
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+          <h2 className="text-lg font-black text-white leading-snug">{title}</h2>
+          {desc && <div className="text-xs text-gray-400 leading-relaxed whitespace-pre-line mt-2.5">{desc}</div>}
+          {children}
+        </div>
+        {actions && actions.length > 0 && (
+          <div className="flex border-t border-white/12">
+            {actions.map((a, ai) => (
+              <button
+                key={ai}
+                disabled={a.disabled}
+                onClick={a.onClick}
+                className={`flex-1 py-3.5 text-sm font-black transition-colors border-l border-white/12 first:border-l-0 disabled:opacity-35 disabled:cursor-not-allowed ${
+                  a.kind === "primary" ? "bg-[#e91e3f] hover:bg-[#d01634] text-white disabled:bg-white/[0.04] disabled:text-gray-600"
+                  : a.kind === "danger" ? "text-[#ff5c77] hover:bg-[#e91e3f] hover:text-white"
+                  : "text-gray-400 hover:text-white hover:bg-white/[0.06]"
+                }`}
+              >
+                {a.text}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const SYS_HIGH = /(낙찰|유찰|경매를? ?시작|경매가? ?종료|페이즈|올 포지션|전략 타임)/;
 
 // 📌 포지션 표기 — 방 전체에서 영문 약자로 통일 (좌측 레일 / 중앙 슬롯 보드 / 모달 / 스카우터 결과)
@@ -338,6 +394,31 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     box.scrollTop = box.scrollHeight;
   }, [miniChat, chat.length]);
 
+  // 📌 인벤토리가 용량을 넘기면 배너로 알리는 정도가 아니라 인벤토리를 강제로 연다.
+  //    (배정 전까지 입찰이 막히므로, 지금 해야 할 일을 화면에 바로 띄운다)
+  //    한 번 열고 나면 닫을 수 있게 하되, 다시 초과 상태가 되면 또 열린다.
+  const invForcedRef = useRef(false);
+  useEffect(() => {
+    if (!auction) return;
+    const S0 = auction.settings;
+    if (S0?.assignMode !== "inventory") return;
+    const mi = role === "host" || role === "spec" ? null : Number(role);
+    if (mi === null) return;
+    const me = auction.leaders?.[mi];
+    if (!me) return;
+    const cap = Math.max(1, (S0.invCapacity ?? 1) + (me.invExtra || 0));
+    const over = (me.inventory?.length || 0) > cap;
+    if (!over) { invForcedRef.current = false; return; }
+    if (invForcedRef.current) return;
+    invForcedRef.current = true;
+    setInvModal(mi);
+    setDragCard(null);
+    setSwapMode(false);
+    setSwapPick([]);
+    setMoveFrom(null);
+    setMobPick(null);
+  }, [auction, role]);
+
   // 입찰 강조는 1초 뒤 스스로 꺼진다 (애니메이션 길이와 맞춤)
   useEffect(() => {
     if (!bidFlash) return;
@@ -473,6 +554,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   // 📌 인벤토리 용량 — 기본 용량 + 인벤토리 플러스로 산 칸. 초과 소지 시 배정 전까지 입찰 불가
   const invPlusCost = S.invPlusCost ?? 5000;
   const invCapOf = (l: any) => Math.max(1, (S.invCapacity ?? 1) + (l?.invExtra || 0));
+  const invPlusUsed = (l: any) => (l?.invExtra || 0) >= 1; // 팀당 1회
   const myInvCap = myLeader ? invCapOf(myLeader) : 1;
   const myInvCount = myLeader?.inventory?.length || 0;
   const invOverCap = !!(myLeader && invMode && myInvCount > myInvCap);
@@ -762,59 +844,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     );
   };
 
-  // 📌 경매장 공용 팝업 — 방 안의 모든 모달이 같은 골격(상단 라인 · 라벨 · 제목 · 본문 · 분할 액션)을 쓴다
-  const MODAL_TONE: Record<string, { line: string; label: string }> = {
-    default: { line: "bg-white/35", label: "text-gray-500" },
-    danger: { line: "bg-[#e91e3f]", label: "text-[#e91e3f]" },
-    info: { line: "bg-blue-500", label: "text-blue-400" },
-    gold: { line: "auc-stage-goldline", label: "text-amber-300" },
-  };
-  const AucModal = ({
-    label, title, desc, tone = "default", onClose, wide, children, actions,
-  }: {
-    label: string; title: string; desc?: React.ReactNode; tone?: keyof typeof MODAL_TONE;
-    onClose?: () => void; wide?: boolean; children?: React.ReactNode;
-    actions?: { text: string; onClick: () => void; kind?: "primary" | "ghost" | "danger"; disabled?: boolean }[];
-  }) => {
-    const t = MODAL_TONE[tone] || MODAL_TONE.default;
-    return (
-      <div className="auc-modal-back animate-in fade-in" onClick={onClose}>
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className={`auc-modal ${wide ? "sm:max-w-lg" : "sm:max-w-sm"} animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200`}
-        >
-          <span className={`auc-modal-line ${t.line}`} />
-          <div className="px-6 sm:px-7 pt-6 sm:pt-7 pb-6">
-            <div className="flex items-baseline gap-3 mb-3">
-              <span className={`auc-label ${t.label}`}>{label}</span>
-              <span className="h-px flex-1 bg-white/10" />
-            </div>
-            <h2 className="text-lg font-black text-white leading-snug">{title}</h2>
-            {desc && <div className="text-xs text-gray-400 leading-relaxed whitespace-pre-line mt-2.5">{desc}</div>}
-            {children}
-          </div>
-          {actions && actions.length > 0 && (
-            <div className="flex border-t border-white/12">
-              {actions.map((a, ai) => (
-                <button
-                  key={ai}
-                  disabled={a.disabled}
-                  onClick={a.onClick}
-                  className={`flex-1 py-3.5 text-sm font-black transition-colors border-l border-white/12 first:border-l-0 disabled:opacity-35 disabled:cursor-not-allowed ${
-                    a.kind === "primary" ? "bg-[#e91e3f] hover:bg-[#d01634] text-white disabled:bg-white/[0.04] disabled:text-gray-600"
-                    : a.kind === "danger" ? "text-[#ff5c77] hover:bg-[#e91e3f] hover:text-white"
-                    : "text-gray-400 hover:text-white hover:bg-white/[0.06]"
-                  }`}
-                >
-                  {a.text}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   // 📌 초과 배정으로 밀려난 대상이 '리더 본인'이면 인벤토리로 보낼 수 없다 →  그 자리에서 바로 포지션 재지정
   const LeaderPosPicker = ({ leaderIdx }: { leaderIdx: number }) => {
@@ -930,7 +959,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               {/* 펼침 영역 — 로스터 상세 */}
               {isOpen && (
                 <div className="pl-3.5 pr-2 pb-3.5 pt-2 bg-white/[0.015]">
-                  <SlotBoard leader={l} leaderIdx={li} />
+                  {SlotBoard({ leader: l, leaderIdx: li })}
 
                   {invMode && (
                     <button onClick={() => { setInvModal(li); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }} className={`group mt-2.5 w-full flex items-center gap-2 border px-2.5 py-1.5 text-[10px] font-black cursor-pointer transition-all ${(l.inventory?.length || 0) > 0 ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.08] text-[#ff5c77] hover:bg-[#e91e3f]/20" : "border-white/20 text-gray-400 hover:border-white hover:text-white hover:bg-white/[0.06]"}`}>
@@ -1301,41 +1330,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
           )}
 
-          {/* 📌 인벤토리 초과 — 배정 전까지 입찰이 막힌다 */}
-          {myLeader && invMode && invOverCap && (
-            <div className="border border-[#e91e3f]/50 bg-[#e91e3f]/[0.08] px-4 py-3 sm:px-5 sm:py-4">
-              <p className="text-xs font-black text-white mb-1">
-                인벤토리가 가득 찼습니다 — 배정 전까지 입찰할 수 없습니다
-              </p>
-              <p className="text-[11px] text-gray-400 leading-relaxed break-keep">
-                보유 <b className="text-[#ff5c77]">{myInvCount}</b> / 용량 <b className="text-white">{myInvCap}</b> ·
-                인벤토리에서 선수를 포지션에 배정하거나, 인벤토리 플러스로 칸을 늘리세요.
-              </p>
-              <div className="flex flex-wrap gap-2 mt-2.5">
-                <button
-                  onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
-                  className="px-3.5 py-2 text-[11px] font-black text-white bg-[#e91e3f] hover:bg-[#d01634] transition-colors"
-                >
-                  인벤토리 열기
-                </button>
-                <button
-                  onClick={() => setConfirmCfg({
-                    title: "인벤토리 플러스",
-                    message: `${invPlusCost.toLocaleString()} Point 를 사용해 인벤토리 용량을 한 칸 늘립니다.\n(현재 ${myInvCap}칸 → ${myInvCap + 1}칸)`,
-                    confirmLabel: "구매",
-                    onConfirm: async () => {
-                      const d = await act({ action: "leader:invPlus", leaderIdx: myLeaderIdx, byLeaderIdx: myLeaderIdx });
-                      if (d?.success) { sfxAssign(); showToast(`인벤토리 용량이 ${d.capacity}칸이 되었습니다`); }
-                      else showToast(d?.message || "구매에 실패했습니다");
-                    },
-                  })}
-                  className="px-3.5 py-2 text-[11px] font-black text-gray-200 border border-white/25 hover:border-white hover:bg-white/[0.06] transition-colors"
-                >
-                  인벤토리 플러스 · {invPlusCost.toLocaleString()} Pt
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* 전략 타임 배너 */}
           {strategyLeft > 0 && (
@@ -1372,7 +1366,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             <div className="border border-orange-500/40 bg-orange-500/[0.06] px-5 py-4">
               <p className="text-xs font-black text-white mb-1">슬롯 초과 — [{po.slot}] 슬롯에서 이동할 선수를 선택한 뒤, 옮길 슬롯을 클릭하세요</p>
               <p className="text-[11px] text-gray-400">깜빡이는 선수를 클릭 → 초록색 &quot;이곳으로 이동&quot; 버튼 클릭</p>
-              <LeaderPosPicker leaderIdx={po.leaderIdx} />
+              {LeaderPosPicker({ leaderIdx: po.leaderIdx })}
             </div>
           )}
           {hasOverflow && !isMyOverflow && role !== "host" && (
@@ -1713,7 +1707,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   
                   {needAct && <span className="ml-auto auc-label-xs text-[#ff5c77] animate-pulse">Action Required</span>}
                 </div>
-                <SlotBoard leader={myLeader} leaderIdx={myLeaderIdx!} big />
+                {SlotBoard({ leader: myLeader, leaderIdx: myLeaderIdx!, big: true })}
                 </div>
               </section>
             );
@@ -1973,15 +1967,31 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             {/* 고정 높이 — 카드가 늘어나도 팝업은 그대로, 카드 영역만 스크롤 */}
             <div onClick={(e) => e.stopPropagation()} className="auc-modal sm:max-w-4xl h-[94dvh] sm:h-[560px] sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
               <span className="auc-modal-line bg-white/35" />
+
+              {/* 📢 인벤토리 초과 공지 — 채팅 공지와 같은 생김새를 그대로 써서 제목 위에 올린다 */}
+              {mine && (l.inventory?.length || 0) > invCapOf(l) && (
+                <div className="shrink-0 px-3.5 pt-3.5">
+                  <div className="relative border rounded-lg pl-9 pr-9 py-2 border-[#e91e3f]/50 bg-[#e91e3f]/[0.08]">
+                    <span className="absolute left-2.5 top-2 w-5 h-5 rounded-md bg-[#e91e3f]/25 flex items-center justify-center">
+                      <MegaphoneIcon className="w-3 h-3 shrink-0 text-[#ff5c77]" />
+                    </span>
+                    <p className="text-center text-[11px] font-bold leading-relaxed break-keep text-gray-100">
+                      인벤토리가 가득 찼습니다 <b className="text-[#ff5c77] tabular-nums">{l.inventory?.length || 0}/{invCapOf(l)}</b> — 선수를 포지션에 배정하기 전까지 입찰할 수 없습니다.
+                      {!invPlusUsed(l) && " 인벤토리 플러스로 칸을 늘릴 수도 있습니다."}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/12 shrink-0">
                 <span className="auc-label text-gray-500">Inventory</span>
                 <span className="text-sm font-black text-white truncate">{l.name}</span>
-                <span className={`text-[11px] font-black tabular-nums ${(l.inventory?.length || 0) > invCapOf(l) ? "text-[#ff5c77]" : "text-gray-400"}`}>{l.inventory?.length || 0}<span className="text-gray-600">/{invCapOf(l)}</span></span>
                 {!mine && <span className="auc-cap text-gray-600 border border-white/12 px-1.5 py-1">열람 전용</span>}
                 <button onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); setMobPick(null); }} className="ml-auto p-1.5 -mr-1 text-gray-500 hover:text-white hover:bg-white/5 transition-colors outline-none">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
+
 
               {/* 가로 2단 — 팝업 크기는 고정, 각 영역 내부만 스크롤 */}
               {/* ══════════ 📱 모바일 전용 인벤토리 ══════════
@@ -2015,7 +2025,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     <p className="text-[10px] font-bold text-amber-200 leading-relaxed">
                       <b>[{po.slot}]</b> 가 초과되었습니다. 아래 목록에서 내보낼 선수를 눌러 보유 선수로 되돌리세요.
                     </p>
-                    <LeaderPosPicker leaderIdx={li} />
+                    {LeaderPosPicker({ leaderIdx: li })}
                   </div>
                 )}
 
@@ -2026,12 +2036,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       보유 선수 <span className={(l.inventory?.length || 0) > invCapOf(l) ? "text-[#ff5c77]" : "text-gray-300"}>{l.inventory?.length || 0}</span>
                       <span className="text-gray-700">/{invCapOf(l)}</span>
                     </p>
-                    {/* 인벤토리 플러스 — 모바일에서도 목록 위에서 바로 */}
-                    {canManage && (
+                    {/* 인벤토리 플러스 — 팀당 1회 */}
+                    {canManage && invPlusUsed(l) ? (
+                      <span className="ml-auto px-2.5 py-1.5 border border-white/12 text-[10px] font-black text-gray-600">플러스 사용됨</span>
+                    ) : canManage ? (
                       <button
                         onClick={() => setConfirmCfg({
                           title: "인벤토리 플러스",
-                          message: `${invPlusCost.toLocaleString()} Point 를 사용해 인벤토리 용량을 한 칸 늘립니다.\n(현재 ${invCapOf(l)}칸 → ${invCapOf(l) + 1}칸)`,
+                          message: `${invPlusCost.toLocaleString()} Point 를 사용해 인벤토리 용량을 한 칸 늘립니다.\n팀당 한 번만 사용할 수 있습니다. (현재 ${invCapOf(l)}칸 → ${invCapOf(l) + 1}칸)`,
                           confirmLabel: "구매",
                           onConfirm: async () => {
                             const d = await act({ action: "leader:invPlus", leaderIdx: li, byLeaderIdx: myLeaderIdx });
@@ -2048,7 +2060,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         <span className="text-[12px] leading-none">＋</span>플러스
                         <span className="tabular-nums text-gray-500">{invPlusCost.toLocaleString()}</span>
                       </button>
-                    )}
+                    ) : null}
                   </div>
 
                   {(l.inventory?.length || 0) === 0 ? (
@@ -2307,7 +2319,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {invOverflow && (
                     <div className="mb-2 rounded-lg border border-amber-400/35 bg-amber-400/[0.07] px-3 py-2">
                       <p className="text-[10px] font-bold text-amber-200 leading-relaxed">올 포지션 선수가 <b>[{po.slot}]</b> 에 초과 배정되었습니다. 내보낼 선수 <b>한 명을 클릭</b>하면 보유 선수로 돌아가며, 원하는 포지션에 다시 배정할 수 있습니다.</p>
-                      <LeaderPosPicker leaderIdx={li} />
+                      {LeaderPosPicker({ leaderIdx: li })}
                     </div>
                   )}
                   {/* 2열 그리드 — 한 포지션에 여러 명이 들어가면 셀 안에서 줄바꿈 */}
@@ -2440,12 +2452,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       {assignedCards.length > 0 && <span className="text-gray-600"> · 배정 {assignedCards.length}</span>}
                       {!mine && <span className="text-gray-600 font-bold normal-case tracking-normal"> — 선택해 정보 확인</span>}
                     </p>
-                    {/* 인벤토리 플러스 — 칸이 모자랄 때 여기서 바로 산다 */}
-                    {canManage && (
+                    {/* 인벤토리 플러스 — 칸이 모자랄 때 여기서 바로 산다 (팀당 1회) */}
+                    {canManage && invPlusUsed(l) ? (
+                      <span className="mt-2 w-full block text-center px-2.5 py-1.5 border border-white/12 text-[10px] font-black text-gray-600">인벤토리 플러스 사용됨</span>
+                    ) : canManage ? (
                       <button
                         onClick={() => setConfirmCfg({
                           title: "인벤토리 플러스",
-                          message: `${invPlusCost.toLocaleString()} Point 를 사용해 인벤토리 용량을 한 칸 늘립니다.\n(현재 ${invCapOf(l)}칸 → ${invCapOf(l) + 1}칸)`,
+                          message: `${invPlusCost.toLocaleString()} Point 를 사용해 인벤토리 용량을 한 칸 늘립니다.\n팀당 한 번만 사용할 수 있습니다. (현재 ${invCapOf(l)}칸 → ${invCapOf(l) + 1}칸)`,
                           confirmLabel: "구매",
                           onConfirm: async () => {
                             const d = await act({ action: "leader:invPlus", leaderIdx: li, byLeaderIdx: myLeaderIdx });
@@ -2463,7 +2477,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         인벤토리 플러스
                         <span className="ml-auto tabular-nums">{invPlusCost.toLocaleString()} Pt</span>
                       </button>
-                    )}
+                    ) : null}
                   </div>
                   {(l.inventory?.length || 0) === 0 && assignedCards.length === 0 ? (
                     <p className="text-center text-xs text-gray-600 py-8 border border-dashed border-white/10 rounded-xl">보유 중인 선수가 없습니다.</p>
