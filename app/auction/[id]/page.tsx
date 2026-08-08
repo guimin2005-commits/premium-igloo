@@ -1378,13 +1378,24 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               <p className="text-[11px] text-gray-400">{pendingPlayer?.isAllPos ? "올 포지션 선수 · 꽉 찬 슬롯에도 배정할 수 있습니다 (배정 후 기존 선수 이동 필요)" : `${pendingPlayer?.alias} · ${pa.price?.toLocaleString()} Point`}</p>
             </div>
           )}
-          {hasOverflow && (isMyOverflow || role === "host") && (
-            <div className="border border-orange-500/40 bg-orange-500/[0.06] px-5 py-4">
-              <p className="text-xs font-black text-white mb-1">슬롯 초과 — [{po.slot}] 슬롯에서 이동할 선수를 선택한 뒤, 옮길 슬롯을 클릭하세요</p>
-              <p className="text-[11px] text-gray-400">깜빡이는 선수를 클릭 → 초록색 &quot;이곳으로 이동&quot; 버튼 클릭</p>
-              {LeaderPosPicker({ leaderIdx: po.leaderIdx })}
-            </div>
-          )}
+          {hasOverflow && (isMyOverflow || role === "host") && (() => {
+            // 내보낼 '선수'가 여럿일 때만 선택 안내가 의미 있다 (한 명이면 서버가 자동 복귀시킨다)
+            const ol = auction.leaders[po.leaderIdx];
+            const ejectable = ol ? ol.roster.filter((r: any) => r.slot === po.slot && !r.golden && r.playerIdx !== -1).length : 0;
+            return (
+              <div className="border border-orange-500/40 bg-orange-500/[0.06] px-5 py-4">
+                {ejectable >= 2 ? (
+                  <>
+                    <p className="text-xs font-black text-white mb-1">슬롯 초과 — [{po.slot}] 정원을 넘겼습니다. 옮길 선수를 선택한 뒤 대상 슬롯을 클릭하세요</p>
+                    <p className="text-[11px] text-gray-400">깜빡이는 선수를 클릭 → 초록색 &quot;이곳으로 이동&quot; 버튼 클릭</p>
+                  </>
+                ) : (
+                  <p className="text-xs font-black text-white">슬롯 초과 — [{po.slot}] 정리가 필요합니다</p>
+                )}
+                {LeaderPosPicker({ leaderIdx: po.leaderIdx })}
+              </div>
+            );
+          })()}
           {hasOverflow && !isMyOverflow && role !== "host" && (
             <div className="border border-orange-500/25 bg-orange-500/[0.04] px-5 py-4 flex items-center gap-3">
               <span className="w-2 h-2 rounded-full bg-orange-400 animate-[pulseGlow_1.5s_ease-in-out_infinite] shrink-0"></span>
@@ -2001,6 +2012,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           }));
         // 📌 황금카드 초과 배정 정리를 인벤토리 안에서 처리
         const invOverflow = hasOverflow && po.leaderIdx === li && canManage;
+        // 📌 자동 복귀가 도입된 뒤 pendingOverflow 가 남는 경우는 둘뿐이다.
+        //    ① 초과된 슬롯의 주인이 리더 본인 → 내보낼 '선수'가 없다 (리더 포지션 재지정으로 해결)
+        //    ② 정원 2 이상 슬롯이 꽉 찬 경우 → 누구를 뺄지 서버가 못 정하므로 리더가 고른다
+        //    ①에서 '내보낼 선수를 클릭' 안내는 틀린 말이라 ②에서만 띄운다.
+        const poEjectable = invOverflow
+          ? l.roster.filter((r: any) => r.slot === po.slot && !r.golden && r.playerIdx !== -1).length
+          : 0;
         // 선택 대상 카드 조회 (인벤토리 + 배정 완료 공용)
         const selectedCard = dragCard === null ? null
           : dragCard >= 0 ? (l.inventory?.[dragCard] || null)
@@ -2076,9 +2094,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 {/* ── 초과 배정 정리 안내 ── */}
                 {invOverflow && (
                   <div className="shrink-0 px-3.5 py-2 border-b border-amber-400/30 bg-amber-400/[0.07]">
-                    <p className="text-[10px] font-bold text-amber-200 leading-relaxed">
-                      <b>[{po.slot}]</b> 가 초과되었습니다. 아래 목록에서 내보낼 선수를 눌러 보유 선수로 되돌리세요.
-                    </p>
+                    {poEjectable >= 2 && (
+                      <p className="text-[10px] font-bold text-amber-200 leading-relaxed">
+                        <b>[{po.slot}]</b> 정원을 넘겼습니다. 아래 목록에서 내보낼 선수를 눌러 보유 선수로 되돌리세요.
+                      </p>
+                    )}
                     {LeaderPosPicker({ leaderIdx: li })}
                   </div>
                 )}
@@ -2367,12 +2387,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
                     포지션 지정
                     {swapMode && <span className="text-gray-200 font-black normal-case tracking-normal"> — 교환할 선수 2명을 선택하세요 ({swapPick.length}/2)</span>}
-                    {invOverflow && <span className="text-amber-300 font-black normal-case tracking-normal"> — [{po.slot}] 에서 내보낼 선수를 선택하세요</span>}
+                    {invOverflow && poEjectable >= 2 && <span className="text-amber-300 font-black normal-case tracking-normal"> — [{po.slot}] 에서 내보낼 선수를 선택하세요</span>}
                   </p>
-                  {/* 초과 배정 안내 배너 */}
+                  {/* 초과 배정 안내 — 내보낼 선수가 실제로 여럿일 때만 '선택' 안내를 띄운다 */}
                   {invOverflow && (
                     <div className="mb-2 rounded-lg border border-amber-400/35 bg-amber-400/[0.07] px-3 py-2">
-                      <p className="text-[10px] font-bold text-amber-200 leading-relaxed">올 포지션 선수가 <b>[{po.slot}]</b> 에 초과 배정되었습니다. 내보낼 선수 <b>한 명을 클릭</b>하면 보유 선수로 돌아가며, 원하는 포지션에 다시 배정할 수 있습니다.</p>
+                      {poEjectable >= 2 && (
+                        <p className="text-[10px] font-bold text-amber-200 leading-relaxed">
+                          <b>[{po.slot}]</b> 정원을 넘겼습니다. 내보낼 선수 <b>한 명을 클릭</b>하면 보유 선수로 돌아가며, 원하는 포지션에 다시 배정할 수 있습니다.
+                        </p>
+                      )}
                       {LeaderPosPicker({ leaderIdx: li })}
                     </div>
                   )}
