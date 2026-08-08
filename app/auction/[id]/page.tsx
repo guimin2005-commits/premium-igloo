@@ -1335,16 +1335,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
           )}
 
-          {/* 관전자 안내 — 시점을 명시 (입찰 불가 · 비공개 정보는 가려짐) */}
-          {isSpec && (
-            <div className="flex items-center gap-3 py-2.5 border-y border-white/12">
-              <span className="w-1.5 h-1.5 rounded-full bg-white/50 shrink-0" />
-              <p className="text-[11px] font-bold text-gray-400 flex-1 break-keep">
-                <span className="text-white font-black">관전자 시점</span> — 경매를 지켜봅니다. 입찰·스카우터는 사용할 수 없으며, 미공개 선수 정보는 가려집니다.
-              </p>
-              <span className="hidden sm:block shrink-0 auc-label-xs text-gray-600">Read Only</span>
-            </div>
-          )}
 
 
           {/* 전략 타임 배너 */}
@@ -1385,10 +1375,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             return (
               <div className="border border-orange-500/40 bg-orange-500/[0.06] px-5 py-4">
                 {ejectable >= 2 ? (
-                  <>
-                    <p className="text-xs font-black text-white mb-1">슬롯 초과 — [{po.slot}] 정원을 넘겼습니다. 옮길 선수를 선택한 뒤 대상 슬롯을 클릭하세요</p>
-                    <p className="text-[11px] text-gray-400">깜빡이는 선수를 클릭 → 초록색 &quot;이곳으로 이동&quot; 버튼 클릭</p>
-                  </>
+                  /* 선택은 팝업에서 하므로 여기선 상태만 알린다 */
+                  <p className="text-xs font-black text-white">슬롯 초과 — [{roleAbbr(po.slot)}] 정원을 넘겼습니다. 내보낼 선수를 선택해주세요</p>
                 ) : (
                   <p className="text-xs font-black text-white">슬롯 초과 — [{po.slot}] 정리가 필요합니다</p>
                 )}
@@ -2650,6 +2638,65 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       })()}
 
       {/* 진행자 대행 슬롯 배정 (진행자 화면에서 배정 대기 시 — 좌측 레일 SlotBoard로도 가능) */}
+
+      {/* 📌 정원 2 이상 슬롯이 초과된 경우 — 서버가 누구를 뺄지 정할 수 없으므로 선택 팝업을 띄운다.
+             (후보가 한 명이면 서버가 자동 복귀시키므로 이 팝업은 뜨지 않는다) */}
+      {hasOverflow && (isMyOverflow || role === "host") && (() => {
+        const ol = auction.leaders[po.leaderIdx];
+        if (!ol) return null;
+        const list = ol.roster
+          .map((r: any, ri: number) => ({ r, ri }))
+          .filter(({ r }: any) => r.slot === po.slot && !r.golden && r.playerIdx !== -1);
+        if (list.length < 2) return null;
+        return (
+          <AucModal
+            label="Overflow"
+            tone="danger"
+            title={`[${roleAbbr(po.slot)}] 정원을 넘겼습니다`}
+            desc={`${ol.name} 팀 · 내보낼 선수를 한 명 선택하세요. 선택한 선수는 보유 선수로 돌아가며, 원하는 포지션에 다시 배정할 수 있습니다.`}
+          >
+            <div className="mt-4 border-t border-white/12">
+              {list.map(({ r, ri }: any) => {
+                const sp = auction.players[r.playerIdx];
+                const scouted = sp && canSeePos(sp);
+                return (
+                  <button
+                    key={ri}
+                    onClick={async () => {
+                      const nm = rosterName(ol, r);
+                      const d = await act({ action: "overflow:toInventory", leaderIdx: po.leaderIdx, rosterIdx: ri, byLeaderIdx: myLeaderIdx });
+                      if (d?.success) {
+                        sfxSelect();
+                        showToast(`${nm} 선수가 보유 선수로 돌아왔습니다 — 원하는 포지션에 배정하세요`);
+                        // 폴링을 기다리지 않고 즉시 반영
+                        patchAuction((a) => {
+                          const L = a.leaders?.[po.leaderIdx];
+                          const ent = L?.roster?.[ri];
+                          if (!L || !ent) return;
+                          L.roster.splice(ri, 1);
+                          L.inventory.push({ playerIdx: ent.playerIdx, price: ent.price, golden: false });
+                          a.pendingOverflow = { leaderIdx: null, slot: null };
+                        });
+                      } else showToast(d?.message || "정리에 실패했습니다");
+                    }}
+                    className="w-full flex items-center gap-3 px-1 py-3 border-b border-white/[0.07] text-left transition-colors hover:bg-white/[0.06] active:bg-white/[0.1]"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-black text-white truncate">{rosterName(ol, r)}</span>
+                      <span className="block text-[10px] font-bold text-gray-500 truncate mt-0.5">
+                        {sp?.peakTier || "?"}<span className="text-gray-700 mx-1">·</span>{sp?.currentTier || "?"}
+                        {scouted && <span className="text-gray-300 ml-2">{revealParts(sp).map((x: any) => x.v).join(" · ")}</span>}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-[11px] font-black text-gray-400 tabular-nums">{r.price?.toLocaleString()}</span>
+                    <span className="shrink-0 text-[10px] font-black text-[#ff5c77]">내보내기 ›</span>
+                  </button>
+                );
+              })}
+            </div>
+          </AucModal>
+        );
+      })()}
 
       {/* 📮 알림함 — 스카우터 결과 모아보기 */}
       {noticeOpen && (
