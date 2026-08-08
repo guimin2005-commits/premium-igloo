@@ -960,6 +960,41 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     );
   };
 
+  // 📌 보유 선수(인벤토리) 행 — 팀 레일 펼침과 모바일 팀 프로필에서 함께 쓴다
+  const invRows = (l: any) => {
+    const inv = l.inventory || [];
+    if (inv.length === 0) return <p className="py-2 text-[10px] font-bold text-gray-700">비어 있음</p>;
+    return inv.map((c: any, ci: number) => {
+      const cp = auction.players[c.playerIdx];
+      const cHidden = cp ? isHiddenFor(cp) : true;
+      const cProf = cp?.revealed && cp.discordId ? profiles[cp.discordId] : null;
+      return (
+        <div key={ci} className="flex items-center gap-2 py-1.5 border-b border-white/[0.06]">
+          <span className={`shrink-0 w-6 h-8 rounded border flex items-center justify-center overflow-hidden ${c.golden ? "border-amber-400/40 bg-amber-400/10" : "border-white/10 bg-white/[0.04]"}`}>
+            {cProf ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={cProf.avatarUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <svg viewBox="0 0 64 58" className={`w-3 h-3 ${c.golden ? "fill-amber-300/60" : "fill-white/20"}`} aria-hidden="true"><circle cx="32" cy="16" r="13" /><path d="M32 32c14.4 0 26 9.6 26 21.4V58H6v-4.6C6 41.6 17.6 32 32 32z" /></svg>
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className={`block text-[11px] font-black truncate leading-tight ${c.golden ? "text-amber-200" : cHidden ? "text-gray-500" : "text-white"}`}>
+              {cHidden ? "비공개" : cProf ? cProf.globalName : cp?.alias}
+            </span>
+            {!cHidden && cp && (
+              <span className="block text-[9px] font-bold text-gray-600 truncate leading-tight mt-0.5">
+                {c.golden ? "올 포지션" : <>{cp.peakTier || "?"}<span className="text-gray-800 mx-1">·</span>{cp.currentTier || "?"}</>}
+                {canSeePos(cp) && <span className="text-gray-300 ml-1.5">{revealParts(cp).map((x: any) => x.v).join(" · ")}</span>}
+              </span>
+            )}
+          </span>
+          <span className="shrink-0 text-[10px] font-black text-gray-500 tabular-nums">{c.price?.toLocaleString()}</span>
+        </div>
+      );
+    });
+  };
+
   // 📌 팀 레일 — 데스크톱 좌측과 모바일 시트에서 함께 쓴다
   const teamsSection = (
     <>
@@ -1077,40 +1112,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       </div>
     </>
   );
-  // 📌 보유 선수(인벤토리) 행 — 팀 레일 펼침과 모바일 팀 프로필에서 함께 쓴다
-  const invRows = (l: any) => {
-    const inv = l.inventory || [];
-    if (inv.length === 0) return <p className="py-2 text-[10px] font-bold text-gray-700">비어 있음</p>;
-    return inv.map((c: any, ci: number) => {
-      const cp = auction.players[c.playerIdx];
-      const cHidden = cp ? isHiddenFor(cp) : true;
-      const cProf = cp?.revealed && cp.discordId ? profiles[cp.discordId] : null;
-      return (
-        <div key={ci} className="flex items-center gap-2 py-1.5 border-b border-white/[0.06]">
-          <span className={`shrink-0 w-6 h-8 rounded border flex items-center justify-center overflow-hidden ${c.golden ? "border-amber-400/40 bg-amber-400/10" : "border-white/10 bg-white/[0.04]"}`}>
-            {cProf ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={cProf.avatarUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <svg viewBox="0 0 64 58" className={`w-3 h-3 ${c.golden ? "fill-amber-300/60" : "fill-white/20"}`} aria-hidden="true"><circle cx="32" cy="16" r="13" /><path d="M32 32c14.4 0 26 9.6 26 21.4V58H6v-4.6C6 41.6 17.6 32 32 32z" /></svg>
-            )}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className={`block text-[11px] font-black truncate leading-tight ${c.golden ? "text-amber-200" : cHidden ? "text-gray-500" : "text-white"}`}>
-              {cHidden ? "비공개" : cProf ? cProf.globalName : cp?.alias}
-            </span>
-            {!cHidden && cp && (
-              <span className="block text-[9px] font-bold text-gray-600 truncate leading-tight mt-0.5">
-                {c.golden ? "올 포지션" : <>{cp.peakTier || "?"}<span className="text-gray-800 mx-1">·</span>{cp.currentTier || "?"}</>}
-                {canSeePos(cp) && <span className="text-gray-300 ml-1.5">{revealParts(cp).map((x: any) => x.v).join(" · ")}</span>}
-              </span>
-            )}
-          </span>
-          <span className="shrink-0 text-[10px] font-black text-gray-500 tabular-nums">{c.price?.toLocaleString()}</span>
-        </div>
-      );
-    });
-  };
 
   // 📌 모바일 팀 프로필 — 아코디언 목록이 아니라 '그 팀 한 곳'만 보는 화면.
   //    위에서부터 리더 프로필 · 포인트 → 배치도 → 보유 카드 순으로 쌓는다.
@@ -1190,7 +1191,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
   // 📌 모바일 선수 목록 — 줄글 목록 대신 2열 미니 카드. 인물 실루엣과 상태 띠로 훑어보게 한다.
   const playersMobile = (
-    <div className="grid grid-cols-2 gap-1.5 pt-2.5">
+    <div className="grid grid-cols-2 gap-1.5 pt-2.5 auto-rows-fr">
       {auction.players.map((p: any, i: number) => {
         const hidden = isHiddenFor(p);
         const prof = p.revealed && p.discordId ? profiles[p.discordId] : null;
@@ -1291,7 +1292,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           return (
             <div key={phase} className="mb-5 last:mb-0">
               <p className="auc-label-xs text-gray-600 mb-2.5">{p1Role ? `Phase ${phase}` : "All"}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2.5 auto-rows-fr">
                 {list.map(({ p, i }: any) => {
                   const hidden = isHiddenFor(p);
                   const prof = p.revealed && p.discordId ? profiles[p.discordId] : null;
