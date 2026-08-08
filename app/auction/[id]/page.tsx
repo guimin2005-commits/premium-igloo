@@ -341,7 +341,20 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         if ((ps.phase ?? 0) < a.phase) sfxPhase();
         prevState.current = { ...ps, price: a.current.price, playerIdx: a.current.playerIdx, soldCount, passCount, revealIdx, strategyOn, status: a.status, phase: a.phase, paIdx };
 
-        setAuction(a);
+        // 🐛 입찰 직후, 입찰 전에 이미 날아가 있던 폴링 응답이 도착하면 방금 반영한 최고가가
+        //    되돌아가 '입찰이 안 먹은' 것처럼 보였다 (그래서 한 번 더 눌러야 했다).
+        //    같은 매물 안에서 호가는 절대 내려가지 않으므로, 더 낮은 값이 오면 현재 값을 지킨다.
+        setAuction((prev: any) => {
+          if (
+            prev && a.current &&
+            prev.current?.playerIdx !== null && prev.current?.playerIdx !== undefined &&
+            prev.current.playerIdx === a.current.playerIdx &&
+            (prev.current.price ?? 0) > (a.current.price ?? 0)
+          ) {
+            return { ...a, current: { ...prev.current } };
+          }
+          return a;
+        });
         if (d.chat?.length) {
           const fresh = d.chat.filter((m: any) => !chatIds.current.has(m._id));
           if (fresh.length) {
@@ -643,6 +656,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         const next = structuredClone(prev);
         next.current.price = amount;
         next.current.leaderIdx = myLeaderIdx;
+        next.current.isAllin = false; // 직전 올인 뒤 일반 입찰이면 '올인' 표기를 지운다
         next.current.endsAt = new Date(serverNow() + (next.settings.timerSeconds || 15) * 1000).toISOString();
         return next;
       });
