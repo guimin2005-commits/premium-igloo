@@ -19,6 +19,24 @@ const MegaphoneIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
 );
 
 // 📌 중요도 높은 시스템 공지 — 채팅에서 레드로 구분한다 (서버 스키마 변경 없이 문구로 판별)
+// 📱 모바일 전용 접이식 섹션 — 정보가 한 화면에 전부 펼쳐져 있으면 밀도가 너무 높다.
+//    ⚠️ 렌더 함수 밖에 둔다 (안에서 정의하면 폴링마다 언마운트/재마운트된다)
+const MobFold = ({ title, sub, open, onToggle, children }: {
+  title: string; sub?: React.ReactNode; open: boolean; onToggle: () => void; children?: React.ReactNode;
+}) => (
+  <section className="lg:hidden">
+    <button onClick={onToggle} className="w-full flex items-center gap-2.5 pb-2 border-b border-white/20 text-left">
+      <span className="auc-label text-white">{title}</span>
+      {sub && <span className="text-[10px] font-bold text-gray-600 tabular-nums">{sub}</span>}
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"
+        className={`ml-auto w-3 h-3 shrink-0 text-gray-600 transition-transform duration-200 ${open ? "rotate-180" : ""}`}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+    </button>
+    {open && children}
+  </section>
+);
+
 // ⚠️ 렌더 함수 안에서 컴포넌트를 정의하면 폴링(1.5초)마다 새 타입이 되어 매번 언마운트/재마운트된다.
 //    호버·트랜지션이 끊겨 깜빡이므로 모듈 스코프에 둔다. (props 만 쓰므로 클로저 의존 없음)
 // 📌 경매장 공용 팝업 — 방 안의 모든 모달이 같은 골격(상단 라인 · 라벨 · 제목 · 본문 · 분할 액션)을 쓴다
@@ -141,6 +159,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [miniChat, setMiniChat] = useState(false); // 모바일 우하단 팝업 채팅
   const [sheet, setSheet] = useState<null | "teams">(null); // 모바일 하단 시트 (타 팀)
   const [mobPick, setMobPick] = useState<number | null>(null); // 모바일 인벤토리: 배정할 카드
+  // 📱 모바일 섹션 접힘 — 기본값은 '선수 목록만 접힘' (한 화면 정보량을 줄인다)
+  const [mobFold, setMobFold] = useState<{ slots: boolean; race: boolean; players: boolean }>({ slots: true, race: true, players: false });
   const [chatUnread, setChatUnread] = useState(0); // 모바일에서 채팅 탭에 없을 때 쌓인 새 메시지
   const [bidFlash, setBidFlash] = useState<{ idx: number; n: number } | null>(null); // 입찰한 팀 강조 (좌측 레일)
   const [showSystemChat, setShowSystemChat] = useState(true); // 채팅의 공지 표시 on/off
@@ -173,8 +193,20 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       if (saved !== null) setVolume(Math.min(100, Math.max(0, Number(saved))));
       const sys = localStorage.getItem("auctionShowSystemChat");
       if (sys !== null) setShowSystemChat(sys === "1");
+      const fold = localStorage.getItem("auctionMobFold");
+      if (fold) setMobFold((prev) => ({ ...prev, ...JSON.parse(fold) }));
     } catch {}
   }, []);
+
+  // 접힘 상태는 기기별로 유지한다
+  const toggleFold = (k: "slots" | "race" | "players") => {
+    setMobFold((prev) => {
+      const next = { ...prev, [k]: !prev[k] };
+      try { localStorage.setItem("auctionMobFold", JSON.stringify(next)); } catch {}
+      return next;
+    });
+    sfxSelect();
+  };
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
   // 📌 알림 로그 — 역할(리더)별로 분리 저장, 새로고침해도 유지
@@ -1826,16 +1858,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
           {/* ═══ 📱 모바일 중단 — 무대(위)와 독(아래) 사이가 비어 정보가 양 끝으로만 몰려 보였다.
                  경매 중 계속 눈으로 좇아야 하는 것(내 슬롯 · 팀별 예산)을 가운데에 채운다. ═══ */}
-          <section className="lg:hidden space-y-4">
+          <div className="lg:hidden space-y-3.5">
 
             {/* 내 팀 슬롯 — 어디가 비었는지 한눈에 (배정은 인벤토리에서) */}
             {myLeader && (
-              <div>
-                <div className="flex items-baseline gap-3 pb-2 border-b border-white/20">
-                  <span className="auc-label text-white">My Slots</span>
-                  <span className="text-[10px] font-bold text-gray-600 tabular-nums">{myLeader.roster.length}/{totalSlots}</span>
-                  {myLeader.positionChanged && <span className="ml-auto text-[9px] font-bold text-gray-700">체인지 사용됨</span>}
-                </div>
+              <MobFold title="My Slots" sub={`${myLeader.roster.length}/${totalSlots}`} open={mobFold.slots} onToggle={() => toggleFold("slots")}>
                 <div className="flex flex-wrap gap-x-4 gap-y-2 pt-2.5">
                   {roleList.map((slot) => {
                     const entries = myLeader.roster.filter((r: any) => r.slot === slot);
@@ -1851,21 +1878,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     );
                   })}
                 </div>
-              </div>
+              </MobFold>
             )}
 
             {/* 팀별 예산 — 누가 얼마 남았는지가 입찰 판단의 핵심 */}
             {auction.leaders.length > 0 && (() => {
               const maxPt = Math.max(1, ...auction.leaders.map((l: any) => l.points));
               return (
-                <div>
-                  <div className="flex items-baseline gap-3 pb-2 border-b border-white/20">
-                    <span className="auc-label text-white">Point Race</span>
-                    <span className="text-[10px] font-bold text-gray-600">남은 예산</span>
-                    <button onClick={() => { setSheet("teams"); setExpandedTeams(new Set(railLeaders.map((x) => x.li))); sfxSelect(); }} className="ml-auto text-[10px] font-black text-gray-500 active:text-white">
-                      자세히 ›
-                    </button>
-                  </div>
+                <MobFold title="Point Race" sub="남은 예산" open={mobFold.race} onToggle={() => toggleFold("race")}>
                   {auction.leaders.map((l: any, li: number) => {
                     const bidding = cur.leaderIdx === li;
                     const isMe = myLeaderIdx === li;
@@ -1881,20 +1901,24 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       </div>
                     );
                   })}
-                </div>
+                  <button onClick={() => { setSheet("teams"); setExpandedTeams(new Set(railLeaders.map((x) => x.li))); sfxSelect(); }} className="w-full py-2 text-[10px] font-black text-gray-500 active:text-white">
+                    팀 상세 보기 ›
+                  </button>
+                </MobFold>
               );
             })()}
-          </section>
+          </div>
 
-          {/* 선수 목록 — 데스크톱은 카드 격자, 모바일은 압축 행 */}
+          {/* 선수 목록 — 데스크톱은 카드 격자, 모바일은 접이식 압축 행 (기본 접힘) */}
           <div className="hidden lg:block">{playersSection}</div>
-          <section className="lg:hidden">
-            <div className="flex items-center gap-3 pb-2 border-b border-white/20">
-              <span className="auc-label text-white">Players</span>
-              <span className="text-[10px] font-bold text-gray-600 tabular-nums">낙찰 {auction.players.filter((p: any) => p.status === "낙찰").length} / 전체 {auction.players.length}</span>
-            </div>
+          <MobFold
+            title="Players"
+            sub={`낙찰 ${auction.players.filter((p: any) => p.status === "낙찰").length} / 전체 ${auction.players.length}`}
+            open={mobFold.players}
+            onToggle={() => toggleFold("players")}
+          >
             {playersMobile}
-          </section>
+          </MobFold>
         </div>
 
         {/* ═══ 우측: 실시간 채팅 + 로그 ═══ */}
