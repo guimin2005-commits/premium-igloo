@@ -2944,10 +2944,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3.5 h-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
                           포지션 체인지
+                          <span className="text-[9px] font-bold text-gray-600">팀당 1회</span>
                           <span className="ml-auto text-[11px] font-black text-white tabular-nums">{S.posChangeCost.toLocaleString()} Pt</span>
                         </button>
                       )}
-                      <p className="mt-1.5 text-[9px] font-bold text-gray-700">배정 후 포지션을 바꾸는 유일한 방법 · 팀당 1회</p>
                       {swapMode && (
                         <button
                           disabled={swapPick.length !== 2}
@@ -3002,6 +3002,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       >
                         <span className="text-[13px] leading-none">＋</span>
                         인벤토리 플러스
+                        <span className="text-[9px] font-bold text-gray-600">팀당 1회</span>
                         <span className="ml-auto text-[11px] font-black text-white tabular-nums">{invPlusCost.toLocaleString()} Pt</span>
                       </button>
                     ) : null}
