@@ -1074,28 +1074,18 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <div className="pl-3.5 pr-2 pb-3.5 pt-2 bg-white/[0.015]">
                   {SlotBoard({ leader: l, leaderIdx: li })}
 
-                  {/* 인벤토리 — 팀을 펼치면 로스터와 함께 내용까지 바로 보인다.
-                         (예전에는 버튼만 있어서 한 번 더 눌러야 확인할 수 있었다) */}
-                  {invMode && (() => {
-                    const inv = l.inventory || [];
-                    const canManage = myLeaderIdx === li || role === "host";
-                    return (
-                      <div className="mt-3">
-                        <div className="flex items-center gap-2 pb-1.5 border-b border-white/15">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 shrink-0 ${inv.length ? "text-[#ff5c77]" : "text-gray-600"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
-                          <span className="auc-cap text-gray-500">보유 선수</span>
-                          <span className={`text-[10px] font-black tabular-nums ${inv.length > invCapOf(l) ? "text-[#ff5c77]" : "text-gray-600"}`}>{inv.length}/{invCapOf(l)}</span>
-                          {canManage && (
-                            <button onClick={() => { setInvModal(li); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }} className="ml-auto text-[10px] font-black text-gray-500 hover:text-white active:text-white transition-colors">
-                              관리 ›
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="pt-0.5">{invRows(l)}</div>
-                      </div>
-                    );
-                  })()}
+                  {/* 인벤토리 — 원래대로 팀마다 여는 버튼을 둔다 (타 팀 것도 볼 수 있어야 한다).
+                         모바일 시트에서만 내용까지 함께 펼친다 */}
+                  {invMode && (
+                    <>
+                      <button onClick={() => { setInvModal(li); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }} className={`group mt-2.5 w-full flex items-center gap-2 border px-2.5 py-1.5 text-[10px] font-black cursor-pointer transition-all ${(l.inventory?.length || 0) > 0 ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.08] text-[#ff5c77] hover:bg-[#e91e3f]/20" : "border-white/20 text-gray-400 hover:border-white hover:text-white hover:bg-white/[0.06]"}`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
+                        인벤토리 {l.inventory?.length || 0}/{invCapOf(l)}
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 ml-auto shrink-0 transition-transform group-hover:translate-x-0.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+                      </button>
+                      {(l.inventory?.length || 0) > 0 && <div className="lg:hidden pt-0.5">{invRows(l)}</div>}
+                    </>
+                  )}
 
                   {/* 진행자 실시간 관리 도구 */}
                   {role === "host" && (
