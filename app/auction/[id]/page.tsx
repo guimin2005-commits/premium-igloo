@@ -1561,8 +1561,25 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   <p className="text-lg font-black text-white">{myLeader.ready ? "준비 완료 — 다른 리더를 기다리는 중" : "경매 시작 전, 준비 버튼을 눌러주세요"}</p>
                   <p className="text-[11px] text-gray-500 mt-1">전체 리더 준비 완료 시 진행자가 경매를 시작합니다. ({auction.leaders.filter((l: any) => l.ready).length}/{auction.leaders.length} 준비)</p>
                 </div>
-                <button onClick={() => act({ action: "leader:ready", leaderIdx: myLeaderIdx, ready: !myLeader.ready })} className={`relative z-10 shrink-0 px-10 py-4 rounded-2xl text-base font-black transition-all ${myLeader.ready ? "bg-white/10 hover:bg-white/20 text-gray-300" : "bg-[#e91e3f] hover:bg-[#d01634] text-white shadow-[0_10px_30px_rgba(233,30,63,0.4)] animate-pulse"}`}>
-                  {myLeader.ready ? "준비 해제" : "준비 완료"}
+                {/* 준비 버튼 — 버튼 전체를 깜빡이는 대신 광택이 한 번 지나가게 하고,
+                       완료 상태는 채워진 블록이 아니라 체크가 붙은 선형 버튼으로 낮춘다 */}
+                <button
+                  onClick={() => act({ action: "leader:ready", leaderIdx: myLeaderIdx, ready: !myLeader.ready })}
+                  className={`group relative z-10 shrink-0 flex items-center justify-center gap-2.5 px-9 py-3.5 rounded-xl text-sm font-black tracking-[0.06em] transition-all active:scale-[0.98] ${
+                    myLeader.ready
+                      ? "border border-white/20 text-gray-300 hover:border-white/45 hover:bg-white/[0.06] hover:text-white"
+                      : "auc-btn-sheen bg-[#e91e3f] text-white shadow-[0_12px_34px_-10px_rgba(233,30,63,0.85)] hover:bg-[#d01634] hover:shadow-[0_14px_38px_-10px_rgba(233,30,63,1)]"
+                  }`}
+                >
+                  <span className="relative z-10 flex items-center gap-2.5">
+                    {/* 완료 상태는 초록 체크로 '지금 상태'를, 글자로 '누르면 할 일'을 말한다 */}
+                    {myLeader.ready ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.8} className="w-4 h-4 shrink-0 text-emerald-400"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                    ) : (
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/90 shrink-0" />
+                    )}
+                    {myLeader.ready ? "준비 해제" : "준비 완료"}
+                  </span>
                 </button>
               </div>
             </div>
@@ -2317,7 +2334,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
             <form onSubmit={sendChat} className="p-3 border-t border-white/5 flex gap-2">
               <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} maxLength={200} placeholder="메시지 입력..." className="flex-1 px-3.5 py-2.5 bg-black/40 border border-white/10 rounded-xl text-white text-xs outline-none focus:border-white/40 transition-colors placeholder:text-gray-600" />
-              <button type="submit" className="px-4 py-2.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-xs font-black rounded-xl transition-colors">전송</button>
+              <button type="submit" disabled={!chatInput.trim()} aria-label="전송" className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-95 ${chatInput.trim() ? "bg-[#e91e3f] text-white hover:bg-[#d01634] shadow-[0_8px_22px_-8px_rgba(233,30,63,0.9)]" : "border border-white/10 bg-white/[0.04] text-gray-700 cursor-not-allowed"}`}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" aria-hidden="true"><path d="M3.4 20.4l17.45-7.48a1 1 0 000-1.84L3.4 3.6a.998.998 0 00-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z"/></svg></button>
             </form>
           </div>
 
@@ -3554,7 +3571,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               </div>
               <form onSubmit={sendChat} className="p-2.5 border-t border-white/[0.08] flex gap-2 shrink-0">
                 <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} maxLength={200} placeholder="메시지 입력..." className="flex-1 min-w-0 px-3.5 py-2 rounded-full bg-white/[0.07] border border-white/12 text-white text-xs outline-none focus:border-white/35 focus:bg-white/[0.1] transition-colors placeholder:text-gray-600" />
-                <button type="submit" className="shrink-0 px-4 rounded-full bg-[#e91e3f] text-white text-xs font-black active:bg-[#d01634] transition-colors">전송</button>
+                <button type="submit" disabled={!chatInput.trim()} aria-label="전송" className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 ${chatInput.trim() ? "bg-[#e91e3f] text-white active:bg-[#d01634] shadow-[0_8px_20px_-8px_rgba(233,30,63,0.9)]" : "border border-white/10 bg-white/[0.05] text-gray-700"}`}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" aria-hidden="true"><path d="M3.4 20.4l17.45-7.48a1 1 0 000-1.84L3.4 3.6a.998.998 0 00-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z"/></svg></button>
               </form>
             </div>
           )}

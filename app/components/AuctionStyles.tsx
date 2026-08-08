@@ -423,6 +423,22 @@ export const AuctionStyles = () => (
       .auc-bidfx { display: none; }
     }
 
+    /* ── 주 행동 버튼 광택 ── 버튼 전체를 깜빡이는 animate-pulse 대신,
+          표면을 한 줄기 빛이 천천히 지나가게 한다. 시선은 끌되 요란하지 않다. */
+    .auc-btn-sheen { position: relative; overflow: hidden; }
+    .auc-btn-sheen::after {
+      content: ""; position: absolute; top: 0; bottom: 0; width: 45%;
+      background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,.32) 50%, transparent 100%);
+      transform: skewX(-18deg);
+      animation: aucBtnSheen 3.4s cubic-bezier(.4,0,.2,1) infinite;
+      pointer-events: none;
+    }
+    @keyframes aucBtnSheen {
+      0%       { left: -60%; }
+      34%,100% { left: 130%; }
+    }
+    @media (prefers-reduced-motion: reduce) { .auc-btn-sheen::after { animation: none; opacity: 0; } }
+
     /* ── 경매장 공용 팝업 ── 방 안의 모든 모달이 같은 골격을 쓴다 */
     /* 모바일에서도 하단에 꽂지 않고 화면 중앙에 띄운다 */
     .auc-modal-back { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; padding: 14px; background: rgba(0,0,0,.84); backdrop-filter: blur(4px); }
