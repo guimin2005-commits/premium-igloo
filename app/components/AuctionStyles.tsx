@@ -423,6 +423,20 @@ export const AuctionStyles = () => (
       .auc-bidfx { display: none; }
     }
 
+    /* ── 인벤토리 팝업: 낮은 화면 대응 ──
+          팝업 높이는 내용에 맞추지만(h-auto), 창이 낮으면 90vh 에서 잘려 스크롤이 생긴다.
+          그럴 때는 선수 카드와 줄 간격을 줄여 스크롤 없이 담는다. */
+    @media (min-width: 1024px) and (max-height: 800px) {
+      .auc-inv-detail { height: 150px; }
+      .auc-inv-card { width: 105px; }
+      .auc-inv-left > * + * { margin-top: 10px; }
+    }
+    @media (min-width: 1024px) and (max-height: 660px) {
+      .auc-inv-detail { height: 122px; }
+      .auc-inv-card { width: 85px; }
+      .auc-inv-left > * + * { margin-top: 8px; }
+    }
+
     /* ── 주 행동 버튼 광택 ── 버튼 전체를 깜빡이는 animate-pulse 대신,
           표면을 한 줄기 빛이 천천히 지나가게 한다. 시선은 끌되 요란하지 않다. */
     .auc-btn-sheen { position: relative; overflow: hidden; }

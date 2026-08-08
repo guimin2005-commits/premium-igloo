@@ -2463,7 +2463,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         return (
           <div className="auc-modal-back z-[118] animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); setMobPick(null); }}>
             {/* 공지는 팝업 '바깥 위' 에 별도로 띄운다 → 세로로 [공지] / [인벤토리] 두 덩어리 */}
-            <div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-4xl flex flex-col max-h-[88dvh] h-[88dvh] sm:h-[560px] sm:max-h-[85vh]">
+            <div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-4xl flex flex-col max-h-[88dvh] h-[88dvh] sm:h-auto sm:max-h-[90vh]">
 
               {/* 📢 인벤토리 초과 공지 — 채팅 공지 생김새 그대로 */}
               {mine && (l.inventory?.length || 0) > invCapOf(l) && (
@@ -2479,7 +2479,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 </div>
               )}
 
-              {/* 고정 높이 — 카드가 늘어나도 팝업은 그대로, 카드 영역만 스크롤 */}
+              {/* 높이는 내용에 맞춘다 — 560px 로 못 박아두니 좌측(선수 정보+포지션 지정+포지션 체인지)이
+                     늘 몇십 px 넘쳐 스크롤이 생겼다. 화면이 아주 낮을 때만 90vh 에서 잘리고 내부가 스크롤된다. */}
               <div className="auc-modal flex-1 min-h-0 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
               <span className="auc-modal-line bg-white/35" />
 
@@ -2761,15 +2762,15 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               <div className="hidden lg:grid p-5 flex-1 min-h-0 overflow-hidden lg:grid-cols-[1fr_300px] gap-5 items-stretch">
 
                 {/* ══ 좌측 ══ */}
-                <div className="order-2 lg:order-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden space-y-4">
+                <div className="auc-inv-left order-2 lg:order-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden space-y-3.5">
                   {/* ── 선택한 선수 정보 카드 ── */}
                   {(() => {
                     const sel = selectedCard;
                     if (!sel) {
                       // 선택 전에도 동일한 높이를 유지해 레이아웃이 밀리지 않도록
                       return (
-                        <div className="flex gap-4 sm:gap-5 h-[132px] sm:h-[190px] items-center">
-                          <div className="shrink-0 w-[92px] sm:w-[132px] aspect-[3/4.3] rounded-xl border border-dashed border-white/12 flex items-center justify-center">
+                        <div className="auc-inv-detail flex gap-4 sm:gap-5 h-[132px] sm:h-[190px] items-center">
+                          <div className="auc-inv-card shrink-0 w-[92px] sm:w-[132px] aspect-[3/4.3] rounded-xl border border-dashed border-white/12 flex items-center justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-white/10"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
                           </div>
                           <div className="flex-1">
@@ -2783,9 +2784,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     const scouted = sp && canSeePos(sp);
                     return (
                       // 외곽 박스 없이 카드 + 헤어라인 정보 (박스 중첩 제거)
-                      <div className="flex gap-4 sm:gap-5 h-[132px] sm:h-[190px]">
+                      <div className="auc-inv-detail flex gap-4 sm:gap-5 h-[132px] sm:h-[190px]">
                         {/* 세로 카드 — 우측 목록 카드와 동일 규격 */}
-                        <div className={`relative shrink-0 w-[92px] sm:w-[132px] aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 ${sel.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.18] via-amber-500/[0.06] to-[#0d0d0d] shadow-[0_0_18px_rgba(251,191,36,0.18)]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"}`}>
+                        <div className={`auc-inv-card relative shrink-0 w-[92px] sm:w-[132px] aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 ${sel.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.18] via-amber-500/[0.06] to-[#0d0d0d] shadow-[0_0_18px_rgba(251,191,36,0.18)]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"}`}>
                           {sel.golden && <span className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-amber-200/15 to-transparent"></span>}
                           <span className={`relative text-[7px] font-black tracking-[0.2em] uppercase ${sel.golden ? "text-amber-300" : "text-gray-600"}`}>{sel.golden ? "Golden" : "Player"}</span>
                           <div className={`relative w-11 h-11 rounded-full flex items-center justify-center border ${sel.golden ? "border-amber-300/50 bg-amber-400/10" : "border-white/10 bg-white/[0.04]"}`}>
@@ -2825,7 +2826,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   })()}
 
                   {/* ── 포지션 지정 (드롭존) ── */}
-                  <div className="pt-4 border-t border-white/[0.07]">
+                  <div className="pt-3.5 border-t border-white/[0.07]">
                   <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
                     포지션 지정
                     {swapMode && <span className="text-gray-200 font-black normal-case tracking-normal"> — 교환할 선수 2명을 선택하세요 ({swapPick.length}/2)</span>}
