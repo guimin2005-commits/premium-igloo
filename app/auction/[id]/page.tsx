@@ -462,6 +462,17 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     else if (!admin && session) { setRole("spec"); autoRoleDone.current = true; } // 미등록 유저 → 관전자
   }, [auction, myDiscordId, session]);
 
+  // 📌 진행자 조작(시간 관련)이 폴링(최대 1.5초)을 기다려 늦게 반영되던 문제 —
+  //    서버가 성공을 돌려주면 같은 값을 로컬에도 즉시 반영한다. (서버 시각 기준 serverNow 사용)
+  const patchAuction = (mutate: (a: any) => void) => {
+    setAuction((prev: any) => {
+      if (!prev) return prev;
+      const next = structuredClone(prev);
+      mutate(next);
+      return next;
+    });
+  };
+
   const act = async (payload: any) => {
     try {
       const res = await fetch(`/api/auction/${id}`, {
@@ -1284,11 +1295,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               {auction.phase < 1 && <button onClick={() => act({ action: "host:phase", phase: 1 })} className="text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white px-4 py-1.5 transition-colors">1페이즈 시작</button>}
               {auction.phase === 1 && p1Role && <button onClick={() => setConfirmCfg({ title: "2페이즈 시작", message: `1페이즈를 마치고 2페이즈를 시작합니다. 미낙찰 ${p1Role} 가능 선수들은 2페이즈로 편입됩니다.`, confirmLabel: "시작", onConfirm: () => act({ action: "host:phase", phase: 2 }) })} className="text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white px-4 py-1.5 transition-colors">2페이즈 시작</button>}
               {strategyLeft > 0 ? (
-                <button onClick={() => act({ action: "host:strategy", seconds: 0 })} className="text-xs font-black bg-blue-500/80 hover:bg-blue-500 text-white px-4 py-1.5 transition-colors">전략 타임 종료</button>
+                <button onClick={async () => { const d = await act({ action: "host:strategy", seconds: 0 }); if (d?.success) patchAuction((a) => { a.strategyUntil = null; }); }} className="text-xs font-black bg-blue-500/80 hover:bg-blue-500 text-white px-4 py-1.5 transition-colors">전략 타임 종료</button>
               ) : (
                 <button onClick={() => setStrategyModalOpen(true)} className="text-xs font-black bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 transition-colors">전략 타임</button>
               )}
-              {invMode && <button onClick={async () => { const d = await act({ action: "host:assignTime", seconds: 180 }); if (d?.success) { sfxStrategy(); showToast("팀원 배정 시간 3분이 시작되었습니다"); } else showToast(d?.message || "배정 시간 부여에 실패했습니다"); }} className="text-xs font-black bg-blue-500/80 hover:bg-blue-500 text-white px-4 py-1.5 transition-colors">팀원 배정 시간(3분)</button>}
+              {invMode && <button onClick={async () => { const d = await act({ action: "host:assignTime", seconds: 180 }); if (d?.success) { sfxStrategy(); patchAuction((a) => { a.assignUntil = new Date(serverNow() + 180 * 1000).toISOString(); }); showToast("팀원 배정 시간 3분이 시작되었습니다"); } else showToast(d?.message || "배정 시간 부여에 실패했습니다"); }} className="text-xs font-black bg-blue-500/80 hover:bg-blue-500 text-white px-4 py-1.5 transition-colors">팀원 배정 시간(3분)</button>}
               <button onClick={() => setConfirmCfg({ title: "경매 종료", message: invMode ? "경매를 종료합니다. 종료 후에는 인벤토리·포지션 조정이 불가합니다. 계속할까요?" : "모든 경매를 종료하시겠습니까?", confirmLabel: "종료", onConfirm: () => act({ action: "host:end" }) })} className="text-xs font-black bg-white/10 hover:bg-red-500/80 text-white px-4 py-1.5 transition-colors">종료</button>
             </>
           )}
@@ -1583,7 +1594,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                 key={d}
                                 onClick={async () => {
                                   const r = await act({ action: "host:timer", delta: d });
-                                  if (r?.success) { sfxSelect(); showToast(`입찰 시간 ${d > 0 ? "+" : ""}${d}초 · 남은 ${r.left}초`); }
+                                  if (r?.success) {
+                                    sfxSelect();
+                                    // 서버가 알려준 남은 초를 그대로 로컬 타이머에 즉시 반영
+                                    patchAuction((a) => { a.current.endsAt = new Date(serverNow() + r.left * 1000).toISOString(); });
+                                    showToast(`입찰 시간 ${d > 0 ? "+" : ""}${d}초 · 남은 ${r.left}초`);
+                                  }
                                   else showToast(r?.message || "타이머 조절에 실패했습니다");
                                 }}
                                 className={`px-2.5 py-2 text-[11px] font-black rounded-lg border transition-all ${d < 0 ? "border-white/25 text-gray-200 hover:bg-white/10" : "border-white/15 text-gray-300 hover:bg-white/10"}`}
@@ -2720,7 +2736,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             {[1, 3, 5].map((min) => (
               <button
                 key={min}
-                onClick={() => { act({ action: "host:strategy", seconds: min * 60 }); setStrategyModalOpen(false); sfxSelect(); }}
+                onClick={async () => {
+                  setStrategyModalOpen(false);
+                  sfxSelect();
+                  const d = await act({ action: "host:strategy", seconds: min * 60 });
+                  // 폴링을 기다리지 않고 즉시 카운트다운이 돌게 한다
+                  if (d?.success) patchAuction((a) => { a.strategyUntil = new Date(serverNow() + min * 60 * 1000).toISOString(); });
+                }}
                 className="flex-1 py-4 text-base font-black text-white border-l border-white/12 first:border-l-0 hover:bg-blue-500/15 hover:text-blue-300 transition-colors"
               >
                 {min}<span className="text-[11px] font-bold text-gray-500 ml-0.5">분</span>
