@@ -1,7 +1,10 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Reveal, CountUp, LuxStyles } from "./components/Lux";
+
+// 📌 라이트 패널이 스크롤에 맞춰 히어로 위로 떠오르는 정도(px)
+const PANEL_RISE_PX = 170;
 
 // 📌 24시간 온라인 활동 그래프 (섹션용 와이드 버전)
 const ActivityChart = ({ history }: { history: { ts: string; online: number }[] }) => {
@@ -42,6 +45,24 @@ export default function Home() {
   const [stats, setStats] = useState<{ memberCount: number; onlineCount: number; history: any[] } | null>(null);
   const [schedule, setSchedule] = useState<any[]>([]);
   const [notices, setNotices] = useState<any[]>([]);
+
+  // 📌 히어로를 스크롤하는 동안 진행률(0~1)을 추적 — 라이트 패널이 그 비율만큼 위로 떠오른다
+  const heroRef = useRef<HTMLElement>(null);
+  const [heroProgress, setHeroProgress] = useState(0);
+  useEffect(() => {
+    const onScroll = () => {
+      const h = heroRef.current?.offsetHeight || 0;
+      if (!h) return;
+      setHeroProgress(Math.min(Math.max(window.scrollY / h, 0), 1));
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, []);
 
   useEffect(() => {
     fetch("/api/stats")
@@ -86,8 +107,10 @@ export default function Home() {
     <main className="flex-1 w-full relative flex flex-col">
       <LuxStyles />
 
-      {/* ═══ SECTION 1 · 히어로 (풀스크린 · 브랜드만) ═══ */}
-      <section className="relative w-full min-h-[calc(100vh-4rem)] flex flex-col overflow-hidden">
+      {/* ═══ SECTION 1 · 히어로 (풀스크린 · 브랜드만) ═══
+             하단에 PANEL_RISE_PX만큼 여백을 더 둬서, 아래 패널이 transform으로 떠올라도
+             다음 섹션과의 사이에 빈 틈이 생기지 않도록 미리 공간을 확보해둔다 ═══ */}
+      <section ref={heroRef} className="relative w-full min-h-[calc(100vh-4rem)] flex flex-col overflow-hidden" style={{ paddingBottom: PANEL_RISE_PX }}>
         <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
         <div className="absolute top-[-150px] left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#e91e3f]/[0.08] blur-[130px] rounded-full pointer-events-none"></div>
 
@@ -144,8 +167,11 @@ export default function Home() {
       </section>
 
       {/* ═══ SECTION 2 · 통합 라이트 패널 (01 서버현황 + 02 LIVE&UPCOMING + 03 핵심콘텐츠 + 04 최신소식) ═══
-             스크롤하면 히어로 위로 살짝 겹쳐 올라오는 하나의 라운드 패널 ═══ */}
-      <section className="relative w-full z-10 -mt-16 md:-mt-20 bg-[#f5f3f0] rounded-t-[40px] md:rounded-t-[56px] rounded-b-[40px] md:rounded-b-[56px] shadow-[0_-20px_60px_-30px_rgba(0,0,0,0.5),0_40px_90px_-30px_rgba(0,0,0,0.65)] overflow-hidden">
+             히어로를 스크롤하는 동안 실시간으로 heroProgress만큼 위로 떠올라 겹쳐진다 (JS 스크롤 연동, 정적 마진 아님) ═══ */}
+      <section
+        className="relative w-full z-10 bg-[#f5f3f0] rounded-t-[40px] md:rounded-t-[56px] rounded-b-[40px] md:rounded-b-[56px] shadow-[0_-20px_60px_-30px_rgba(0,0,0,0.5),0_40px_90px_-30px_rgba(0,0,0,0.65)] overflow-hidden"
+        style={{ transform: `translateY(-${heroProgress * PANEL_RISE_PX}px)`, willChange: "transform" }}
+      >
         <div className="absolute top-[-80px] right-[-60px] w-[400px] h-[300px] bg-[#e91e3f]/[0.08] blur-[110px] rounded-full pointer-events-none"></div>
 
         <div className="relative z-10 divide-y divide-black/[0.06]">
