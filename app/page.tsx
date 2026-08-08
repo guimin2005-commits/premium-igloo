@@ -275,17 +275,17 @@ export default function Home() {
         </div>
         )}
 
-        {/* 03 · 핵심 콘텐츠 소개 — 제목은 고정, 내용만 스크롤 (md 이상) */}
+        {/* 03 · 핵심 콘텐츠 소개 — 세로 구성 (제목 위 · 콘텐츠 아래 풀폭 벤토) */}
         <div className="w-full py-20 md:py-28 px-6">
-          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-[210px_1fr] lg:grid-cols-[250px_1fr] gap-10 md:gap-14">
-            <Reveal className="md:sticky md:top-24 md:self-start">
-              <div className="relative">
-                <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">03</span>
-                <div className="relative flex items-center gap-3 mb-2">
+          <div className="max-w-6xl mx-auto">
+            <Reveal>
+              <div className="relative mb-12">
+                <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">03</span>
+                <div className="relative flex items-baseline gap-4 mb-2">
                   <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
-                  <div className="h-px w-8 bg-black/15"></div>
+                  <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
                 </div>
-                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3 break-keep">이글루에서 즐기는 방법</h2>
+                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3 break-keep">이글루에서 즐기는 방법</h2>
                 <p className="relative text-sm text-gray-600 break-keep">활동하고, 성장하고, 증명하세요.</p>
               </div>
             </Reveal>

@@ -218,7 +218,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
              헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
       <div className={`sticky top-0 z-40 transition-[padding] duration-500 ease-out flex-shrink-0 ${isAuctionRoom ? "hidden" : ""} ${scrolled ? "pt-3 px-3 md:px-6" : ""}`} onMouseLeave={() => setOpenMegaMenu(null)}>
-      <header className={`mx-auto transition-all duration-500 ease-out ${scrolled ? "max-w-3xl rounded-full border border-white/20 bg-[#1c1c1c]/95 backdrop-blur-xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85),0_0_44px_-10px_rgba(233,30,63,0.3),inset_0_1px_0_rgba(255,255,255,0.06)] px-5 md:px-6 h-12" : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-14"}`}>
+      <header className={`mx-auto transition-all duration-500 ease-out ${scrolled ? "max-w-3xl rounded-full border border-white/[0.06] bg-[#0b0b0b]/70 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)] px-5 md:px-6 h-12" : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-14"}`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
           <div className="flex-1 flex items-center z-10">
             {isVerifyPage ? (
@@ -263,15 +263,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
 
                 {isNotifOpen && (
-                  <div className="absolute top-[52px] right-0 z-50 w-[300px] rounded-3xl p-px bg-gradient-to-b from-white/[0.14] to-white/[0.04] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9),0_0_44px_-16px_rgba(233,30,63,0.22)] animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="rounded-[calc(1.5rem-1px)] bg-[#111111]/95 backdrop-blur-xl overflow-hidden">
+                  <div className="absolute top-[52px] right-0 z-50 w-[300px] rounded-3xl bg-[#111111]/95 backdrop-blur-xl border border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="px-5 pt-4 pb-3.5 border-b border-white/[0.06] flex items-center justify-between relative overflow-hidden">
                       <div className="absolute top-[-30px] right-[-20px] w-32 h-16 bg-[#e91e3f]/[0.12] blur-[36px] rounded-full pointer-events-none"></div>
                       <div className="relative flex items-center gap-2.5">
                         <span className="w-4 h-px bg-[#e91e3f]"></span>
                         <span className="text-sm font-black text-white tracking-tight">알림</span>
                       </div>
-                      <span className="relative text-[10px] font-bold text-gray-500">운영팀 알림 · 문의 답변</span>
+                      <Link href="/profile?tab=notice" onClick={() => setIsNotifOpen(false)} className="relative text-[11px] font-black text-gray-500 hover:text-[#e91e3f] transition-colors">전체 보기</Link>
                     </div>
                     {notifications.length === 0 && adminNotifs.length === 0 ? (
                       <div className="px-5 py-8 text-center text-xs text-gray-500">아직 알림이 없습니다.</div>
@@ -301,11 +300,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         ))}
                       </div>
                     )}
-                    <Link href="/profile?tab=notice" onClick={() => setIsNotifOpen(false)} className="group/all flex items-center justify-center gap-1.5 px-5 py-3.5 text-xs font-black text-[#e91e3f] hover:bg-[#e91e3f]/[0.07] transition-colors border-t border-white/[0.06]">
-                      알림함에서 전체 보기
-                      <span className="group-hover/all:translate-x-0.5 transition-transform">→</span>
-                    </Link>
-                  </div>
                   </div>
                 )}
               </div>
@@ -326,8 +320,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
                 
                 {isProfileOpen && (
-                  <div className="absolute top-[60px] right-0 z-50 w-[272px] rounded-3xl p-px bg-gradient-to-b from-white/[0.14] to-white/[0.04] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9),0_0_44px_-16px_rgba(233,30,63,0.22)] animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="rounded-[calc(1.5rem-1px)] bg-[#111111]/95 backdrop-blur-xl p-5 relative overflow-hidden">
+                  <div className="absolute top-[60px] right-0 z-50 w-[272px] rounded-3xl bg-[#111111]/95 backdrop-blur-xl border border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)] p-5 relative overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 w-48 h-24 bg-[#e91e3f]/[0.1] blur-[44px] rounded-full pointer-events-none"></div>
                     <div className="relative flex items-center gap-4 mb-4 pb-4 border-b border-white/[0.06]">
                       <div className="relative shrink-0">
@@ -358,23 +351,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     </div>
                     <div className="relative flex flex-col gap-0.5">
                       {!isVerifyPage && (
-                        <Link href="/profile" onClick={() => setIsProfileOpen(false)} className="group/mi w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] text-gray-300 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors font-bold">
-                          내 정보
-                          <span className="text-gray-700 group-hover/mi:text-gray-400 group-hover/mi:translate-x-0.5 transition-all">→</span>
-                        </Link>
+                        <Link href="/profile" onClick={() => setIsProfileOpen(false)} className="w-full block px-3.5 py-2.5 text-[13px] text-gray-300 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors font-bold">내 정보</Link>
                       )}
                       {!isVerifyPage && isVerified && (
-                        <Link href="/invite" onClick={() => setIsProfileOpen(false)} className="group/mi w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] text-gray-300 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors font-bold">
-                          친구 초대 이벤트
-                          <span className="text-gray-700 group-hover/mi:text-gray-400 group-hover/mi:translate-x-0.5 transition-all">→</span>
-                        </Link>
+                        <Link href="/invite" onClick={() => setIsProfileOpen(false)} className="w-full block px-3.5 py-2.5 text-[13px] text-gray-300 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors font-bold">친구 초대 이벤트</Link>
                       )}
                       {/* 미인증 유저는 코드 등록 버튼 숨김 */}
                       {isVerified && (
-                        <button onClick={() => { setIsProfileOpen(false); setIsCodeModalOpen(true); }} className="group/mi w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] text-gray-300 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors outline-none font-bold text-left">
-                          코드 등록
-                          <span className="text-gray-700 group-hover/mi:text-gray-400 group-hover/mi:translate-x-0.5 transition-all">→</span>
-                        </button>
+                        <button onClick={() => { setIsProfileOpen(false); setIsCodeModalOpen(true); }} className="w-full text-left px-3.5 py-2.5 text-[13px] text-gray-300 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors outline-none font-bold">코드 등록</button>
                       )}
                       {isAdmin && (
                         <Link href="/admin" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-xl transition-colors font-bold">
@@ -385,7 +369,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       <div className="h-px bg-white/[0.06] my-1.5 mx-1"></div>
                       <button onClick={() => { setIsProfileOpen(false); signOut(); }} className="w-full text-left px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-xl transition-colors outline-none focus:outline-none font-black">로그아웃</button>
                     </div>
-                  </div>
                   </div>
                 )}
               </div>
@@ -408,9 +391,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       {openMegaMenu && (() => {
         const group = categoryGroups.find((g) => g.name === openMegaMenu);
         if (!group) return null;
+        // 바깥 div는 위치 잡기 + 알약 모드에선 pt-2 투명 다리(마우스가 알약→메뉴로 건너갈 때 호버가 안 끊기게)
         return (
-          <div className={`hidden md:block absolute top-full bg-[#0c0c0c]/98 backdrop-blur-md origin-top ${scrolled ? "left-1/2 -translate-x-1/2 mt-2 w-[min(100%-24px,48rem)] rounded-3xl border border-white/10 overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]" : "left-0 right-0 border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)]"}`} style={{ animation: "megaDrop 0.32s cubic-bezier(0.16,1,0.3,1)" }}>
+          <div className={`hidden md:block absolute top-full ${scrolled ? "left-1/2 -translate-x-1/2 pt-2 w-[min(100%-24px,48rem)]" : "left-0 right-0"}`} style={{ animation: "megaDrop 0.32s cubic-bezier(0.16,1,0.3,1)" }}>
             <style dangerouslySetInnerHTML={{ __html: `@keyframes megaDrop{0%{opacity:0;transform:translateY(-16px) scaleY(0.94)}60%{opacity:1}100%{opacity:1;transform:translateY(0) scaleY(1)}}` }} />
+            <div className={`bg-[#0c0c0c]/98 backdrop-blur-md origin-top ${scrolled ? "rounded-3xl border border-white/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]" : "border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)]"}`}>
             <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
             <div className={`mx-auto grid grid-cols-12 gap-10 items-start ${scrolled ? "px-8 py-7" : "max-w-7xl px-8 py-8 lg:py-10"}`}>
               {/* 좌: 섹션 헤딩 */}
@@ -441,6 +426,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   );
                 })}
               </div>
+            </div>
             </div>
           </div>
         );
