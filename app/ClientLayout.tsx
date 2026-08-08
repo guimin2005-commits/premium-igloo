@@ -218,13 +218,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
              헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
       <div className={`sticky top-0 z-40 transition-[padding] duration-500 ease-out flex-shrink-0 ${isAuctionRoom ? "hidden" : ""} ${scrolled ? "pt-3 px-3 md:px-6" : ""}`} onMouseLeave={() => setOpenMegaMenu(null)}>
-      <header className={`mx-auto transition-all duration-500 ease-out ${scrolled ? "max-w-4xl rounded-full border border-white/20 bg-[#1c1c1c]/95 backdrop-blur-xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85),0_0_44px_-10px_rgba(233,30,63,0.3),inset_0_1px_0_rgba(255,255,255,0.06)] px-5 md:px-7 h-12" : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-14"}`}>
+      <header className={`mx-auto transition-all duration-500 ease-out ${scrolled ? "max-w-3xl rounded-full border border-white/20 bg-[#1c1c1c]/95 backdrop-blur-xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85),0_0_44px_-10px_rgba(233,30,63,0.3),inset_0_1px_0_rgba(255,255,255,0.06)] px-5 md:px-6 h-12" : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-14"}`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
           <div className="flex-1 flex items-center z-10">
             {isVerifyPage ? (
-              <span className="text-xl font-black tracking-widest text-white cursor-default select-none">고급 이글루</span>
+              <span className="text-[17px] font-bold tracking-[0.18em] text-white cursor-default select-none">고급 이글루</span>
             ) : (
-              <Link href="/" className="text-xl font-black tracking-widest text-white hover:text-gray-300 transition-colors">고급 이글루</Link>
+              <Link href="/" className="text-[17px] font-bold tracking-[0.18em] text-white hover:text-gray-300 transition-colors">고급 이글루</Link>
             )}
           </div>
           
@@ -366,7 +366,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               </div>
               </>
             ) : (
-              <button onClick={() => setIsLoginModalOpen(true)} className="flex items-center gap-2 px-4 md:px-5 py-2 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-xl transition-colors shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">로그인</button>
+              <button onClick={() => setIsLoginModalOpen(true)} className="flex items-center px-4 py-1.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-[13px] font-bold rounded-full transition-colors outline-none focus:outline-none">로그인</button>
             )}
 
             {!isVerifyPage && mounted && (
