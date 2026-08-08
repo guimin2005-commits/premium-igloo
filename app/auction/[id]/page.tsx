@@ -2021,7 +2021,35 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                 {/* ── 보유 선수 목록 (한 명당 한 줄, 정보 그대로 읽힌다) ── */}
                 <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
-                  <p className="px-3.5 pt-3 pb-1.5 auc-label text-gray-500">보유 선수 <span className={(l.inventory?.length || 0) > invCapOf(l) ? "text-[#ff5c77]" : "text-gray-300"}>{l.inventory?.length || 0}</span><span className="text-gray-700">/{invCapOf(l)}</span></p>
+                  <div className="flex items-center gap-2 px-3.5 pt-3 pb-1.5">
+                    <p className="auc-label text-gray-500">
+                      보유 선수 <span className={(l.inventory?.length || 0) > invCapOf(l) ? "text-[#ff5c77]" : "text-gray-300"}>{l.inventory?.length || 0}</span>
+                      <span className="text-gray-700">/{invCapOf(l)}</span>
+                    </p>
+                    {/* 인벤토리 플러스 — 모바일에서도 목록 위에서 바로 */}
+                    {canManage && (
+                      <button
+                        onClick={() => setConfirmCfg({
+                          title: "인벤토리 플러스",
+                          message: `${invPlusCost.toLocaleString()} Point 를 사용해 인벤토리 용량을 한 칸 늘립니다.\n(현재 ${invCapOf(l)}칸 → ${invCapOf(l) + 1}칸)`,
+                          confirmLabel: "구매",
+                          onConfirm: async () => {
+                            const d = await act({ action: "leader:invPlus", leaderIdx: li, byLeaderIdx: myLeaderIdx });
+                            if (d?.success) { sfxAssign(); showToast(`인벤토리 용량이 ${d.capacity}칸이 되었습니다`); }
+                            else showToast(d?.message || "구매에 실패했습니다");
+                          },
+                        })}
+                        className={`ml-auto flex items-center gap-1.5 px-2.5 py-1.5 border text-[10px] font-black transition-colors ${
+                          (l.inventory?.length || 0) > invCapOf(l)
+                            ? "border-[#e91e3f] bg-[#e91e3f]/[0.12] text-[#ff5c77]"
+                            : "border-white/20 text-gray-400 active:bg-white/[0.06]"
+                        }`}
+                      >
+                        <span className="text-[12px] leading-none">＋</span>플러스
+                        <span className="tabular-nums text-gray-500">{invPlusCost.toLocaleString()}</span>
+                      </button>
+                    )}
+                  </div>
 
                   {(l.inventory?.length || 0) === 0 ? (
                     <p className="px-3.5 py-8 text-center text-[11px] text-gray-700">보유 중인 선수가 없습니다.</p>
@@ -2404,11 +2432,39 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                 {/* ══ 우측: 보유 선수 목록 ══ */}
                 <div className="order-1 lg:order-2 lg:pl-5 lg:border-l lg:border-white/[0.07] min-h-0 flex flex-col">
-                  <p className="shrink-0 text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-2.5">
-                    보유 선수 <span className="text-gray-200">{l.inventory?.length || 0}</span>
-                    {assignedCards.length > 0 && <span className="text-gray-600"> / 배정 {assignedCards.length}</span>}
-                    {!mine && <span className="text-gray-600 font-bold normal-case tracking-normal"> — 선택해 정보 확인</span>}
-                  </p>
+                  <div className="shrink-0 mb-2.5">
+                    <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase">
+                      보유 선수{" "}
+                      <span className={(l.inventory?.length || 0) > invCapOf(l) ? "text-[#ff5c77]" : "text-gray-200"}>{l.inventory?.length || 0}</span>
+                      <span className="text-gray-700">/{invCapOf(l)}</span>
+                      {assignedCards.length > 0 && <span className="text-gray-600"> · 배정 {assignedCards.length}</span>}
+                      {!mine && <span className="text-gray-600 font-bold normal-case tracking-normal"> — 선택해 정보 확인</span>}
+                    </p>
+                    {/* 인벤토리 플러스 — 칸이 모자랄 때 여기서 바로 산다 */}
+                    {canManage && (
+                      <button
+                        onClick={() => setConfirmCfg({
+                          title: "인벤토리 플러스",
+                          message: `${invPlusCost.toLocaleString()} Point 를 사용해 인벤토리 용량을 한 칸 늘립니다.\n(현재 ${invCapOf(l)}칸 → ${invCapOf(l) + 1}칸)`,
+                          confirmLabel: "구매",
+                          onConfirm: async () => {
+                            const d = await act({ action: "leader:invPlus", leaderIdx: li, byLeaderIdx: myLeaderIdx });
+                            if (d?.success) { sfxAssign(); showToast(`인벤토리 용량이 ${d.capacity}칸이 되었습니다`); }
+                            else showToast(d?.message || "구매에 실패했습니다");
+                          },
+                        })}
+                        className={`mt-2 w-full flex items-center gap-2 px-2.5 py-1.5 border text-[10px] font-black transition-colors ${
+                          (l.inventory?.length || 0) > invCapOf(l)
+                            ? "border-[#e91e3f] bg-[#e91e3f]/[0.12] text-[#ff5c77] hover:bg-[#e91e3f]/25"
+                            : "border-white/20 text-gray-400 hover:border-white hover:text-white hover:bg-white/[0.06]"
+                        }`}
+                      >
+                        <span className="text-[13px] leading-none">＋</span>
+                        인벤토리 플러스
+                        <span className="ml-auto tabular-nums">{invPlusCost.toLocaleString()} Pt</span>
+                      </button>
+                    )}
+                  </div>
                   {(l.inventory?.length || 0) === 0 && assignedCards.length === 0 ? (
                     <p className="text-center text-xs text-gray-600 py-8 border border-dashed border-white/10 rounded-xl">보유 중인 선수가 없습니다.</p>
                   ) : (
