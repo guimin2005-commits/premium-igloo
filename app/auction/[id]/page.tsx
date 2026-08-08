@@ -1723,6 +1723,68 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             );
           })()}
 
+          {/* ═══ 📱 모바일 중단 — 무대(위)와 독(아래) 사이가 비어 정보가 양 끝으로만 몰려 보였다.
+                 경매 중 계속 눈으로 좇아야 하는 것(내 슬롯 · 팀별 예산)을 가운데에 채운다. ═══ */}
+          <section className="lg:hidden space-y-4">
+
+            {/* 내 팀 슬롯 — 어디가 비었는지 한눈에 (배정은 인벤토리에서) */}
+            {myLeader && (
+              <div>
+                <div className="flex items-baseline gap-3 pb-2 border-b border-white/20">
+                  <span className="auc-label text-white">My Slots</span>
+                  <span className="text-[10px] font-bold text-gray-600 tabular-nums">{myLeader.roster.length}/{totalSlots}</span>
+                  {myLeader.positionChanged && <span className="ml-auto text-[9px] font-bold text-gray-700">체인지 사용됨</span>}
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-2 pt-2.5">
+                  {roleList.map((slot) => {
+                    const entries = myLeader.roster.filter((r: any) => r.slot === slot);
+                    const limit = slotLimitOf(slot);
+                    return (
+                      <span key={slot} className="flex items-baseline gap-1.5 min-w-0">
+                        <span className={`text-[10px] font-black shrink-0 ${roleColor(slot).text}`}>{roleAbbr(slot)}</span>
+                        <span className={`text-[12px] font-black truncate ${entries.length ? "text-white" : "text-gray-700"}`}>
+                          {entries.length ? entries.map((r: any) => rosterName(myLeader, r)).join(", ") : "—"}
+                        </span>
+                        {limit > 1 && <span className="text-[9px] font-black text-gray-700 tabular-nums shrink-0">{entries.length}/{limit}</span>}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 팀별 예산 — 누가 얼마 남았는지가 입찰 판단의 핵심 */}
+            {auction.leaders.length > 0 && (() => {
+              const maxPt = Math.max(1, ...auction.leaders.map((l: any) => l.points));
+              return (
+                <div>
+                  <div className="flex items-baseline gap-3 pb-2 border-b border-white/20">
+                    <span className="auc-label text-white">Point Race</span>
+                    <span className="text-[10px] font-bold text-gray-600">남은 예산</span>
+                    <button onClick={() => { setSheet("teams"); sfxSelect(); }} className="ml-auto text-[10px] font-black text-gray-500 active:text-white">
+                      자세히 ›
+                    </button>
+                  </div>
+                  {auction.leaders.map((l: any, li: number) => {
+                    const bidding = cur.leaderIdx === li;
+                    const isMe = myLeaderIdx === li;
+                    return (
+                      <div key={li} className={`relative flex items-center gap-2.5 py-2 border-b border-white/[0.06] ${bidding ? "bg-[#e91e3f]/[0.06]" : ""}`}>
+                        {bidFlash?.idx === li && <span key={bidFlash.n} className="auc-bidfx" />}
+                        <span className={`shrink-0 w-16 truncate text-[11px] font-black ${isMe ? "text-white" : "text-gray-300"}`}>{l.name}</span>
+                        <span className="flex-1 min-w-0 relative h-[2px] bg-white/[0.08]">
+                          <span className={`absolute inset-y-0 left-0 transition-all duration-500 ${bidding ? "bg-[#e91e3f]" : isMe ? "bg-white/70" : "bg-white/35"}`} style={{ width: `${(l.points / maxPt) * 100}%` }} />
+                        </span>
+                        <span className={`shrink-0 w-[58px] text-right text-[11px] font-black tabular-nums ${bidding ? "text-[#ff5c77]" : "text-gray-300"}`}>{l.points.toLocaleString()}</span>
+                        <span className="shrink-0 w-7 text-right text-[9px] font-bold text-gray-600 tabular-nums">{l.roster.length}/{totalSlots}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </section>
+
           {/* 선수 목록 — 데스크톱은 카드 격자, 모바일은 압축 행 */}
           <div className="hidden lg:block">{playersSection}</div>
           <section className="lg:hidden">
@@ -1925,32 +1987,46 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       const cp = auction.players[card.playerIdx];
                       const scouted = cp && canSeePos(cp);
                       return (
-                        <div key={`m-inv-${ci}`} className={`px-3.5 py-3 border-b border-white/[0.07] ${card.golden ? "bg-amber-400/[0.05]" : ""}`}>
-                          <div className="flex items-baseline gap-2">
-                            <span className={`text-[14px] font-black truncate ${card.golden ? "text-amber-300" : "text-white"}`}>{cardName(card)}</span>
-                            {card.golden && <span className="shrink-0 text-[8px] font-black text-amber-300 border border-amber-400/45 px-1">ALL</span>}
-                            <span className="ml-auto shrink-0 text-[12px] font-black text-gray-300 tabular-nums">{card.price.toLocaleString()}</span>
-                          </div>
-                          <p className="text-[11px] font-bold text-gray-500 mt-1 truncate">
-                            {card.golden ? (
-                              <span className="text-amber-200/60">티어 비공개</span>
-                            ) : (
-                              <>
-                                <span className="text-gray-300">{cp?.peakTier || "?"}</span>
-                                <span className="text-gray-700 mx-1">·</span>
-                                <span>{cp?.currentTier || "?"}</span>
-                              </>
+                        /* 순수 리스트는 밋밋하다 → 왼쪽에 작은 카드를 세워 '카드를 쥐고 있다'는 감각을 남긴다 */
+                        <div key={`m-inv-${ci}`} className={`flex gap-3 px-3.5 py-3 border-b border-white/[0.07] ${card.golden ? "bg-amber-400/[0.05]" : ""}`}>
+                          <span className={`relative shrink-0 w-[58px] aspect-[3/4.2] rounded-lg border overflow-hidden flex flex-col items-center justify-center gap-1.5 ${card.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.20] via-amber-500/[0.06] to-[#0d0d0d] shadow-[0_0_14px_-4px_rgba(251,191,36,0.5)]" : "border-white/12 bg-gradient-to-b from-white/[0.07] to-[#0d0d0d]"}`}>
+                            {card.golden && <span className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-amber-200/15 to-transparent" />}
+                            <span className={`relative w-7 h-7 rounded-full flex items-center justify-center border ${card.golden ? "border-amber-300/50 bg-amber-400/10" : "border-white/12 bg-white/[0.04]"}`}>
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" className={`w-3.5 h-3.5 ${card.golden ? "text-amber-300" : "text-gray-500"}`}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                              </svg>
+                            </span>
+                            <span className={`relative text-[9px] font-black tabular-nums ${card.golden ? "text-amber-300" : "text-gray-300"}`}>{card.price.toLocaleString()}</span>
+                          </span>
+
+                          <div className="min-w-0 flex-1 flex flex-col">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className={`text-[14px] font-black truncate ${card.golden ? "text-amber-300" : "text-white"}`}>{cardName(card)}</span>
+                              {card.golden && <span className="shrink-0 text-[8px] font-black text-amber-300 border border-amber-400/45 px-1">ALL</span>}
+                            </div>
+                            <p className="text-[11px] font-bold text-gray-500 mt-1 leading-snug break-keep">
+                              {card.golden ? (
+                                <span className="text-amber-200/60">티어 비공개</span>
+                              ) : (
+                                <>
+                                  <span className="text-gray-300">{cp?.peakTier || "?"}</span>
+                                  <span className="text-gray-700 mx-1">·</span>
+                                  <span>{cp?.currentTier || "?"}</span>
+                                </>
+                              )}
+                              {scouted && <span className="block text-gray-200 mt-0.5">{revealParts(cp).map((r: any) => r.v).join(" · ")}</span>}
+                            </p>
+                            {canManage && !swapMode && !invOverflow && (
+                              <div className="mt-auto pt-2.5">
+                                <button
+                                  onClick={() => { setMobPick(ci); sfxSelect(); }}
+                                  className="w-full py-2 text-[12px] font-black text-white bg-[#e91e3f] active:bg-[#d01634] transition-colors"
+                                >
+                                  배정하기
+                                </button>
+                              </div>
                             )}
-                            {scouted && <span className="text-gray-200 ml-2">{revealParts(cp).map((r: any) => r.v).join(" · ")}</span>}
-                          </p>
-                          {canManage && !swapMode && !invOverflow && (
-                            <button
-                              onClick={() => { setMobPick(ci); sfxSelect(); }}
-                              className="mt-2.5 w-full py-2.5 text-[12px] font-black text-white bg-[#e91e3f] active:bg-[#d01634] transition-colors"
-                            >
-                              배정하기
-                            </button>
-                          )}
+                          </div>
                         </div>
                       );
                     })
