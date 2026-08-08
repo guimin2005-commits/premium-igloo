@@ -161,6 +161,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [teamView, setTeamView] = useState<number | null>(null); // 모바일 단일 팀 프로필 (리더 idx)
   const [mobPick, setMobPick] = useState<number | null>(null); // 모바일 인벤토리: 배정할 카드
   const [mobBid, setMobBid] = useState(false); // 모바일 직접 입찰 팝업
+  const [slotsOpen, setSlotsOpen] = useState(false); // 모바일 좌하단 내 팀 포지션 펼침
   // 📱 모바일 섹션 접힘 — 기본값은 '선수 목록만 접힘' (한 화면 정보량을 줄인다)
   const [mobFold, setMobFold] = useState<{ slots: boolean; race: boolean; players: boolean }>({ slots: true, race: true, players: false });
   const [chatUnread, setChatUnread] = useState(0); // 모바일에서 채팅 탭에 없을 때 쌓인 새 메시지
@@ -195,6 +196,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       if (saved !== null) setVolume(Math.min(100, Math.max(0, Number(saved))));
       const sys = localStorage.getItem("auctionShowSystemChat");
       if (sys !== null) setShowSystemChat(sys === "1");
+      if (localStorage.getItem("auctionSlotsOpen") === "1") setSlotsOpen(true);
       const fold = localStorage.getItem("auctionMobFold");
       if (fold) setMobFold((prev) => ({ ...prev, ...JSON.parse(fold) }));
     } catch {}
@@ -646,7 +648,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   //   ⚠️ 인벤토리 초과 시에는 입찰 UI 를 아예 띄우지 않는다 (서버도 403 으로 거부한다)
   // 입찰 바가 빠지면 그 자리에 초과 안내 줄이 들어가므로 높이를 같이 센다
   // 슬롯 줄 40 + 프로필 52 (+ 대기 중 인벤토리 경고 50)
-  const bottomBarH = (myLeader ? 102 : 0) + (invOverCap && !curPlayer ? 50 : 0);
+  const bottomBarH = (myLeader ? 62 : 0) + (invOverCap && !curPlayer ? 58 : 0);
 
   const pa = auction.pendingAssign;
   const hasPending = pa && pa.playerIdx !== null && pa.playerIdx !== undefined;
@@ -3554,6 +3556,62 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         );
       })()}
 
+      {/* 📱 모바일 — 좌하단 내 팀 포지션. 미니 채팅과 같은 방식으로, 동그란 버튼에서
+             옆으로 펼쳤다 접는다. 늘 펼쳐두면 독이 두꺼워져 무대가 밀린다. */}
+      {myLeader && (
+        <div
+          className="lg:hidden fixed left-4 z-[97] flex items-center gap-2 max-w-[calc(100vw-5.75rem)]"
+          style={{ bottom: `calc(${bottomBarH}px + 1rem + env(safe-area-inset-bottom))` }}
+        >
+          <button
+            onClick={() => { const v = !slotsOpen; setSlotsOpen(v); try { localStorage.setItem("auctionSlotsOpen", v ? "1" : "0"); } catch {} sfxSelect(); }}
+            aria-label="내 팀 포지션"
+            className={`auc-press relative shrink-0 w-12 h-12 rounded-full border backdrop-blur-2xl ring-1 ring-inset ring-white/[0.07] shadow-[0_12px_34px_-10px_#000] flex items-center justify-center transition-colors ${
+              slotsOpen ? "border-white/35 bg-white/[0.12]" : "border-white/20 bg-white/[0.07]"
+            }`}
+          >
+            {slotsOpen ? (
+              <svg className="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            ) : (
+              <svg className="w-5 h-5 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 8.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 018.25 20.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+              </svg>
+            )}
+            {!slotsOpen && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#0b0b0c] border border-white/25 text-[9px] font-black text-gray-200 flex items-center justify-center tabular-nums">
+                {myLeader.roster.length}
+              </span>
+            )}
+          </button>
+
+          {slotsOpen && (
+            <div className="min-w-0 flex items-center gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden px-2 py-1.5 rounded-full border border-white/15 bg-[#0b0b0c]/70 backdrop-blur-2xl ring-1 ring-inset ring-white/[0.07] shadow-[0_14px_36px_-12px_#000] animate-in fade-in slide-in-from-left-3 duration-200">
+              {roleList.flatMap((slot) => {
+                const entries = myLeader.roster.filter((r: any) => r.slot === slot);
+                const limit = slotLimitOf(slot);
+                return Array.from({ length: limit }, (_, k) => {
+                  const ent = entries[k];
+                  const rc = roleColor(slot);
+                  return (
+                    <span
+                      key={`${slot}-${k}`}
+                      className={`${ent ? "auc-pop" : ""} shrink-0 w-[52px] px-1 py-1 rounded-lg border text-center ${
+                        ent ? (ent.golden ? "border-amber-400/50 bg-amber-400/[0.10]" : "border-white/20 bg-white/[0.06]") : "border-dashed border-white/12"
+                      }`}
+                    >
+                      <span className={`block text-[8px] font-black tracking-wider ${ent ? rc.text : "text-gray-700"}`}>{roleAbbr(slot)}</span>
+                      <span className={`block text-[9px] font-black truncate leading-tight mt-0.5 ${ent ? "text-white" : "text-gray-800"}`}>
+                        {ent ? rosterName(myLeader, ent) : "—"}
+                      </span>
+                    </span>
+                  );
+                });
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 📱 모바일 — 우하단 미니 채팅 (유튜브 라이브처럼 말풍선만 떠 있다가 열린다) */}
       {(
         <>
@@ -3613,19 +3671,18 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       {/* 📱 모바일 하단 독 — 전역 탭을 숨긴 자리를 경매 전용 조작부로 쓴다.
              위: 타 팀 시트 · 가운데: 입찰 · 아래: 내 프로필 + 인벤토리 · 알림함 */}
       <div
-        /* 독이 본문과 같은 평면처럼 보여 경계가 없었다 → 위쪽으로 그림자와 페이드를 깔고
-           배경 투명도를 낮춰 blur 가 실제로 보이게 한다 (본문이 독 아래로 스며들어 사라진다) */
-        className="lg:hidden fixed inset-x-0 bottom-0 z-[95] border-t border-white/20 bg-[#0b0b0c]/82 backdrop-blur-2xl ring-1 ring-inset ring-white/[0.06] shadow-[0_-18px_44px_-12px_rgba(0,0,0,0.95)]"
+        /* 독 자체는 배경 없이 투명 — 알약 바만 유리처럼 떠 있게 한다.
+           바깥 판이 사라졌으므로 클릭은 알약 쪽에서만 받는다 */
+        className="lg:hidden fixed inset-x-0 bottom-0 z-[95] pointer-events-none"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <span className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-[#0b0b0c]/85 to-transparent" />
         {/* 타 팀 버튼은 뺐다 — 무대 아래 아바타 줄에서 팀을 바로 누르면 프로필이 열린다 */}
 
         {/* ── 인벤토리가 가득 차면 입찰 바 대신 설명을 둔다 (입찰 시도 자체를 없앤다) ── */}
         {myLeader && invMode && invOverCap && !curPlayer && (
           <button
             onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 border-b border-[#e91e3f]/40 bg-[#e91e3f]/[0.12] text-left active:bg-[#e91e3f]/25 transition-colors"
+            className="pointer-events-auto mx-3 mb-2 w-[calc(100%-1.5rem)] flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border border-[#e91e3f]/50 bg-[#e91e3f]/[0.18] backdrop-blur-2xl ring-1 ring-inset ring-white/[0.06] shadow-[0_14px_34px_-12px_#000] text-left active:bg-[#e91e3f]/30 transition-colors"
           >
             <MegaphoneIcon className="w-3.5 h-3.5 shrink-0 text-white" />
             <span className="min-w-0 flex-1">
@@ -3638,32 +3695,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           </button>
         )}
 
-        {/* ── 내 슬롯 — 프로필 바로 위에 항상 붙여둔다 (어디가 비었는지 늘 보이게) ── */}
-        {myLeader && (
-          <div className="flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden px-3 py-1.5 border-b border-white/12">
-            {roleList.flatMap((slot) => {
-              const entries = myLeader.roster.filter((r: any) => r.slot === slot);
-              const limit = slotLimitOf(slot);
-              return Array.from({ length: limit }, (_, k) => {
-                const ent = entries[k];
-                const rc = roleColor(slot);
-                return (
-                  <span
-                    key={`${slot}-${k}`}
-                    className={`${ent ? "auc-pop" : ""} flex-1 basis-0 min-w-[54px] px-1 py-1 border text-center ${
-                      ent ? (ent.golden ? "border-amber-400/50 bg-amber-400/[0.08]" : "border-white/20 bg-white/[0.05]") : "border-dashed border-white/12"
-                    }`}
-                  >
-                    <span className={`block text-[8px] font-black tracking-wider ${ent ? rc.text : "text-gray-700"}`}>{roleAbbr(slot)}</span>
-                    <span className={`block text-[9px] font-black truncate leading-tight mt-0.5 ${ent ? "text-white" : "text-gray-800"}`}>
-                      {ent ? rosterName(myLeader, ent) : "—"}
-                    </span>
-                  </span>
-                );
-              });
-            })}
-          </div>
-        )}
+        {/* 내 슬롯은 독에서 빼내 좌하단 동그란 버튼에서 옆으로 펼치도록 옮겼다 */}
 
         {/* ── 내 프로필 고정 + 인벤토리 · 알림함 ── */}
         {myLeader && (() => {
@@ -3671,12 +3703,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           const invCount = myLeader.inventory?.length || 0;
           return (
             /* 알약 바 — 프로필 사진은 바보다 크게 잡아 위아래로 살짝 튀어나오게 한다 (게임 HUD 느낌) */
-            <div className="mx-3 my-2 flex items-center gap-2.5 pl-1.5 pr-2 py-1.5 rounded-full border border-white/12 bg-white/[0.05] ring-1 ring-inset ring-white/[0.05]">
+            <div className="pointer-events-auto mx-3 my-2 flex items-center gap-2.5 pl-1.5 pr-2 py-1.5 rounded-full border border-white/15 bg-[#0b0b0c]/70 backdrop-blur-2xl ring-1 ring-inset ring-white/[0.07] shadow-[0_14px_36px_-12px_#000]">
               {myProf ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={myProf.avatarUrl} alt="" className="w-14 h-14 -my-3.5 rounded-full bg-gray-800 ring-2 ring-[#0b0b0c] shadow-[0_10px_22px_-8px_#000] shrink-0" />
               ) : (
-                <span className="w-14 h-14 -my-3.5 rounded-full shrink-0 flex items-center justify-center text-[17px] font-black text-gray-200 ring-2 ring-[#0b0b0c] bg-white/[0.07] shadow-[0_10px_22px_-8px_#000]">{myLeader.name[0]}</span>
+                <span className="w-14 h-14 -my-3.5 rounded-full shrink-0 flex items-center justify-center text-[17px] font-black text-white ring-2 ring-[#0b0b0c] bg-[#26262b] shadow-[0_10px_22px_-8px_#000]">{myLeader.name[0]}</span>
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] font-black text-white truncate leading-tight">{myLeader.name}</p>
