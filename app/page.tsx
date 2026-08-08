@@ -114,6 +114,14 @@ export default function Home() {
         <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
         <div className="absolute top-[-150px] left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#e91e3f]/[0.08] blur-[130px] rounded-full pointer-events-none"></div>
 
+        {/* 📌 세로 텍스트 — 가로 줄글만 있는 단조로움을 깨는 에디토리얼 스파인 */}
+        <div className="hidden lg:block absolute left-8 top-1/2 -translate-y-1/2 pointer-events-none select-none">
+          <span className="text-[10px] font-black tracking-[0.5em] text-gray-700 uppercase [writing-mode:vertical-rl]">Premium Igloo · Since 2023</span>
+        </div>
+        <div className="hidden lg:block absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none select-none">
+          <span className="text-[10px] font-black tracking-[0.5em] text-gray-700 uppercase [writing-mode:vertical-rl] rotate-180">활동이 곧 자산이 되는 곳</span>
+        </div>
+
         <div className="flex-1 w-full max-w-7xl mx-auto px-6 flex items-center relative z-10">
           <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-16 items-center">
             {/* 로고 */}
@@ -181,11 +189,14 @@ export default function Home() {
         <div className="w-full py-20 md:py-28 px-6">
           <div className="max-w-5xl mx-auto">
             <Reveal>
-              <div className="flex items-baseline gap-4 mb-2">
-                <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
-                <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+              <div className="relative">
+                <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">01</span>
+                <div className="relative flex items-baseline gap-4 mb-2">
+                  <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+                </div>
+                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3">살아있는 커뮤니티</h2>
               </div>
-              <h2 className="text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3">살아있는 커뮤니티</h2>
               <p className="text-sm text-gray-600 mb-12">고급 이글루는 지금 이 순간에도 움직이고 있습니다.</p>
             </Reveal>
 
@@ -222,11 +233,14 @@ export default function Home() {
           <div className="absolute top-0 right-[-100px] w-[400px] h-[300px] bg-[#e91e3f]/[0.05] blur-[110px] rounded-full pointer-events-none"></div>
           <div className="max-w-5xl mx-auto relative z-10">
             <Reveal>
-              <div className="flex items-baseline gap-4 mb-2">
-                <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
-                <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+              <div className="relative">
+                <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">02</span>
+                <div className="relative flex items-baseline gap-4 mb-2">
+                  <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+                </div>
+                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3">지금, 이글루에서는</h2>
               </div>
-              <h2 className="text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3">지금, 이글루에서는</h2>
               <p className="text-sm text-gray-600 mb-12">진행 중인 대회와 이벤트를 확인하세요.</p>
             </Reveal>
 
@@ -260,11 +274,14 @@ export default function Home() {
         <div className="w-full py-20 md:py-28 px-6">
           <div className="max-w-5xl mx-auto">
             <Reveal>
-              <div className="flex items-baseline gap-4 mb-2">
-                <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
-                <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+              <div className="relative">
+                <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">03</span>
+                <div className="relative flex items-baseline gap-4 mb-2">
+                  <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+                </div>
+                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3">이글루에서 즐기는 방법</h2>
               </div>
-              <h2 className="text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3">이글루에서 즐기는 방법</h2>
               <p className="text-sm text-gray-600 mb-12">활동하고, 성장하고, 증명하세요.</p>
             </Reveal>
 
@@ -313,18 +330,19 @@ export default function Home() {
 
         {/* 04 · 최신 소식 */}
         {notices.length > 0 && (
-          <div className="w-full py-20 md:py-28 px-6 border-t border-black/[0.06] relative z-10">
+          <div className="w-full py-20 md:py-28 px-6 relative z-10">
             <div className="max-w-5xl mx-auto">
               <Reveal>
-                <div className="flex items-end justify-between gap-6 mb-12">
-                  <div>
+                <div className="relative flex items-end justify-between gap-6 mb-12">
+                  <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">04</span>
+                  <div className="relative">
                     <div className="flex items-baseline gap-4 mb-2">
                       <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">04</span>
                       <div className="h-px w-16 bg-black/15"></div>
                     </div>
                     <h2 className="text-2xl md:text-4xl font-black text-[#131313] tracking-tight">최신 소식</h2>
                   </div>
-                  <Link href="/notice" className="shrink-0 text-xs font-bold text-gray-600 hover:text-[#e91e3f] transition-colors flex items-center gap-1 group/more">
+                  <Link href="/notice" className="relative shrink-0 text-xs font-bold text-gray-600 hover:text-[#e91e3f] transition-colors flex items-center gap-1 group/more">
                     전체 보기 <span className="group-hover/more:translate-x-1 transition-transform">→</span>
                   </Link>
                 </div>
