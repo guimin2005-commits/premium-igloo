@@ -282,9 +282,9 @@ export const AuctionStyles = () => (
       animation: aucGcFoil 3s linear infinite;
       box-shadow: 0 0 62px rgba(250,204,21,.45), 0 30px 60px -20px #000;
     }
-    @media (max-width: 520px) { .auc-gcard { width: 172px; height: 242px; } }
 
     .auc-gcard-face { position: relative; width: 100%; height: 100%; border-radius: 11px; overflow: hidden;
+      display: flex; flex-direction: column;
       background: radial-gradient(ellipse at 50% 30%, #3b2b0a 0%, #1b1305 62%, #0d0902 100%); }
 
     /* 기요셰 음각 — 동심원 + 방사선이 겹쳐 로제트 문양을 만든다 */
@@ -299,7 +299,9 @@ export const AuctionStyles = () => (
       animation: aucGcLight 4.3s ease-in-out forwards; }
 
     /* 초상 창 — 정체를 감춘 실루엣이 앉는 자리 */
-    .auc-gcard-window { position: relative; height: 57%; overflow: hidden;
+    /* ⚠️ 창/명판을 57%·43% 로 고정하면 좁은 화면에서 명판 글이 카드 밖으로 잘린다.
+       명판은 내용만큼만 차지하고 남는 높이를 창이 가져가게 한다. */
+    .auc-gcard-window { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden;
       background: radial-gradient(ellipse at 50% 118%, rgba(251,191,36,.30) 0%, rgba(120,53,15,.12) 42%, transparent 72%), linear-gradient(180deg, #0a0702 0%, #150e03 100%); }
     /* 카드를 가로지르는 거대 워드마크 — 잘려 나갈 만큼 크게 */
     .auc-gcard-word { position: absolute; left: 50%; top: 46%; transform: translate(-50%,-50%);
@@ -315,7 +317,7 @@ export const AuctionStyles = () => (
       background: linear-gradient(180deg, rgba(0,0,0,.55) 0%, transparent 32%, transparent 68%, rgba(0,0,0,.6) 100%); }
 
     /* 명판 — 이름과 능력치 */
-    .auc-gcard-plate { position: relative; height: 43%; padding: 12px 14px 10px;
+    .auc-gcard-plate { position: relative; flex: 0 0 auto; padding: 12px 14px 10px;
       background: linear-gradient(180deg, #1c1405 0%, #0d0902 100%); }
     .auc-gcard-plate::before { content: ""; position: absolute; inset-inline: 10px; top: 0; height: 1px;
       background: linear-gradient(90deg, transparent, rgba(251,191,36,.75), transparent); }

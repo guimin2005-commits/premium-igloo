@@ -3358,7 +3358,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                     {/* ── 아래: 명판 ── */}
                     <div className="auc-gcard-plate">
-                      <p className="text-[19px] md:text-[22px] font-black tracking-tight leading-none auc-gold-text">올 포지션</p>
+                      <p className="text-[21px] font-black tracking-tight leading-none auc-gold-text">올 포지션</p>
                       <p className="auc-label-xs text-yellow-500/60 mt-1.5">All Position</p>
 
                       {/* 능력치 — 이름과 겹치지 않는 정보만: 시작가와 비공개 티어 */}
@@ -3498,7 +3498,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           <button
             onClick={() => { setMiniChat((v) => !v); setChatUnread(0); sfxSelect(); }}
             aria-label="채팅 열기"
-            className="lg:hidden fixed right-4 z-[97] w-12 h-12 rounded-full border border-white/25 bg-[#141416]/95 backdrop-blur-xl shadow-[0_10px_30px_-8px_#000] flex items-center justify-center active:scale-95 transition-transform"
+            className="lg:hidden fixed right-4 z-[97] w-12 h-12 rounded-full border border-white/20 bg-white/[0.07] backdrop-blur-2xl ring-1 ring-inset ring-white/[0.07] shadow-[0_12px_34px_-10px_#000] flex items-center justify-center active:scale-95 transition-transform"
             style={{ bottom: `calc(${bottomBarH}px + 1rem + env(safe-area-inset-bottom))` }}
           >
             {miniChat ? (
@@ -3517,7 +3517,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {miniChat && (
             <div
               /* 머리글 없이 대화만 — 유튜브 라이브 채팅처럼 가볍게 */
-              className="lg:hidden fixed right-4 left-14 sm:left-auto sm:w-[300px] z-[96] flex flex-col border border-white/15 bg-[#0b0b0c]/95 backdrop-blur-xl shadow-[0_20px_60px_-12px_#000] animate-in fade-in slide-in-from-bottom-2 duration-200"
+              className="lg:hidden fixed right-4 left-14 sm:left-auto sm:w-[300px] z-[96] flex flex-col overflow-hidden rounded-[20px] border border-white/12 bg-[#0b0b0c]/70 backdrop-blur-2xl ring-1 ring-inset ring-white/[0.06] shadow-[0_24px_70px_-14px_#000] animate-in fade-in slide-in-from-bottom-2 duration-200"
               style={{ bottom: `calc(${bottomBarH}px + 4.5rem + env(safe-area-inset-bottom))`, maxHeight: "min(38dvh, 300px)" }}
             >
               <div ref={miniChatBoxRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
@@ -3525,7 +3525,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   m.kind === "join" ? (
                     <p key={m._id || i} className="text-center text-[10px] text-gray-600 py-0.5">{m.message}</p>
                   ) : m.isSystem ? (
-                    <div key={m._id || i} className={`relative border rounded-lg pl-8 pr-8 py-1.5 ${SYS_HIGH.test(m.message || "") ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.08]" : "border-white/20 bg-white/[0.05]"}`}>
+                    <div key={m._id || i} className={`relative border rounded-2xl pl-8 pr-8 py-1.5 ${SYS_HIGH.test(m.message || "") ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.08]" : "border-white/20 bg-white/[0.05]"}`}>
                       <span className={`absolute left-2 top-1.5 w-4 h-4 rounded flex items-center justify-center ${SYS_HIGH.test(m.message || "") ? "bg-[#e91e3f]/25" : "bg-white/[0.08]"}`}>
                         <MegaphoneIcon className={`w-2.5 h-2.5 shrink-0 ${SYS_HIGH.test(m.message || "") ? "text-[#ff5c77]" : "text-gray-300"}`} />
                       </span>
@@ -3539,9 +3539,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   )
                 )}
               </div>
-              <form onSubmit={sendChat} className="p-2.5 border-t border-white/12 flex gap-2 shrink-0">
-                <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} maxLength={200} placeholder="메시지 입력..." className="flex-1 min-w-0 px-3 py-2 bg-black/40 border border-white/10 text-white text-xs outline-none focus:border-white/40 transition-colors placeholder:text-gray-600" />
-                <button type="submit" className="shrink-0 px-3.5 bg-[#e91e3f] text-white text-xs font-black">전송</button>
+              <form onSubmit={sendChat} className="p-2.5 border-t border-white/[0.08] flex gap-2 shrink-0">
+                <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} maxLength={200} placeholder="메시지 입력..." className="flex-1 min-w-0 px-3.5 py-2 rounded-full bg-white/[0.07] border border-white/12 text-white text-xs outline-none focus:border-white/35 focus:bg-white/[0.1] transition-colors placeholder:text-gray-600" />
+                <button type="submit" className="shrink-0 px-4 rounded-full bg-[#e91e3f] text-white text-xs font-black active:bg-[#d01634] transition-colors">전송</button>
               </form>
             </div>
           )}
