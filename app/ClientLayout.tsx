@@ -206,7 +206,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   return (
     <div className="flex flex-col min-h-screen bg-[#090909]">
       <RouteProgress pathname={pathname} />
-      <header className="sticky top-0 z-40 bg-[#090909]/80 backdrop-blur-md border-b border-white/10 px-6 h-16 flex-shrink-0" onMouseLeave={() => setOpenMegaMenu(null)}>
+      {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
+             헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
+      <header className={`sticky top-0 z-40 bg-[#090909]/80 backdrop-blur-md border-b border-white/10 px-6 h-16 flex-shrink-0 ${isAuctionRoom ? "hidden md:block" : ""}`} onMouseLeave={() => setOpenMegaMenu(null)}>
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
           <div className="flex-1 flex items-center z-10">
             {isVerifyPage ? (

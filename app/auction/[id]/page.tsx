@@ -1241,15 +1241,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       <AuctionStyles />
 
       {/* 상단 바 — 1단: 정체(제목·상태) / 2단 오른쪽: 조작(볼륨·역할·진행) */}
-      <div className="sticky top-16 z-30 w-full px-4 md:px-6 py-2.5 bg-[#090909]/92 backdrop-blur-xl border-b border-white/[0.07]">
+      <div className="sticky top-0 md:top-16 z-30 w-full px-3 md:px-6 py-2 md:py-2.5 bg-[#090909]/92 backdrop-blur-xl border-b border-white/[0.07]">
         {/* 상태 라인 — LIVE만 레드 포인트 */}
         <span className={`absolute inset-x-0 top-0 h-px ${auction.status === "진행중" ? "bg-[#e91e3f]" : auction.status === "종료" ? "bg-white/10" : "bg-amber-400/60"}`} />
-        <div className="max-w-[1720px] mx-auto flex flex-wrap items-center gap-x-4 gap-y-2">
+        {/* 모바일에서는 줄바꿈 대신 한 줄로 흐르게 — 여러 줄로 쌓이면 헤더만 두꺼워진다 */}
+        <div className="max-w-[1720px] mx-auto flex items-center gap-x-3 md:gap-x-4 gap-y-2 md:flex-wrap overflow-x-auto md:overflow-visible [&::-webkit-scrollbar]:hidden">
           {/* 정체 */}
           <button onClick={() => router.push("/auction")} title="목록으로" className="shrink-0 text-gray-500 hover:text-white transition-colors">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>
           </button>
-          <div className="min-w-0 flex-1 flex items-center gap-3">
+          <div className="min-w-0 flex-1 shrink md:shrink-0 flex items-center gap-3">
             <div className="min-w-0">
               <h1 className="text-sm md:text-base font-black text-white truncate leading-tight">{auction.title}</h1>
               <div className="flex items-center gap-2.5 mt-0.5">
@@ -1264,7 +1265,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           </div>
 
           {/* 사운드 볼륨 컨트롤 */}
-          <div className="flex items-center gap-2 px-3 py-1.5 border border-white/10 bg-white/[0.03]">
+          <div className="shrink-0 flex items-center gap-2 px-2.5 md:px-3 py-1.5 border border-white/10 bg-white/[0.03]">
             <button onClick={() => setSoundOn(!soundOn)} title={soundOn ? "음소거" : "소리 켜기"} className="outline-none focus:outline-none">
               {soundOn && volume > 0 ? (
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-gray-300"><path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" /></svg>
@@ -1335,7 +1336,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       </div>
 
 
-      <div className="w-full max-w-[1720px] mx-auto px-4 md:px-8 pt-4 pb-40 lg:py-6 flex-1 flex flex-wrap gap-5 items-start">
+      <div className="w-full max-w-[1720px] mx-auto px-3 md:px-8 pt-3 pb-36 lg:py-6 flex-1 flex flex-wrap gap-3.5 lg:gap-5 items-start">
 
         {/* ═══ 좌측 세로 레일: 팀 현황판 ═══ */}
         <aside className="hidden lg:block w-full lg:w-[280px] shrink-0 order-2 lg:order-1 lg:sticky lg:top-36 lg:max-h-[calc(100vh-11rem)] lg:overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full lg:pr-1">
@@ -1343,7 +1344,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         </aside>
 
         {/* ═══ 중앙: 경매 메인 ═══ */}
-        <div className={"flex-1 min-w-0 w-full lg:w-auto space-y-4 lg:space-y-5 order-1 lg:order-2"} style={{ minWidth: "min(100%, 400px)" }}>
+        <div className={"flex-1 min-w-0 w-full lg:w-auto space-y-3.5 lg:space-y-5 order-1 lg:order-2"} style={{ minWidth: "min(100%, 400px)" }}>
 
           {/* 리더: 준비 배너 (경매 시작 전, 눈에 확 띄게) */}
           {myLeader && auction.status === "준비중" && (
@@ -1422,9 +1423,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {/* ═══ 무대 — 현재 매물 ═══
               · 일반 매물 : 메인 화면과 같은 블랙&화이트 패널 + 상단 레드 라인
               · 올 포지션 : 배경 자체가 골드 그라데이션으로 전환 (등장 임팩트) */}
-          <div className={`relative border overflow-hidden min-h-[230px] transition-colors duration-500 ${isGoldenLot ? "auc-stage-golden" : "auc-stage-panel border-white/15"}`}>
+          <div className={`relative border overflow-hidden sm:min-h-[230px] transition-colors duration-500 ${isGoldenLot ? "auc-stage-golden" : "auc-stage-panel border-white/15"}`}>
             <span className={`absolute inset-x-0 top-0 h-[2px] z-10 ${isGoldenLot ? "auc-stage-goldline" : curPlayer ? "bg-[#e91e3f]" : "bg-white/20"}`} />
-            <div className="p-4 sm:p-6 md:p-8 relative min-h-[230px]">
+            <div className="p-4 sm:p-6 md:p-8 relative sm:min-h-[230px]">
               <div className={`absolute -top-16 -right-16 w-52 h-52 blur-[70px] rounded-full pointer-events-none animate-[pulseGlow_4s_ease-in-out_infinite] ${isGoldenLot ? "bg-amber-300/15" : "bg-white/[0.06]"}`}></div>
 
               {curPlayer ? (
