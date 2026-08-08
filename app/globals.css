@@ -13,18 +13,21 @@
 }
 
 /* 📌 확대·스와이프 시 사이트 영역을 이탈하지 않도록 고정
-   (overflow-x: clip은 hidden과 달리 스크롤 컨테이너를 만들지 않아 휠 스크롤에 영향 없음) */
+   (overflow-x: clip은 hidden과 달리 스크롤 컨테이너를 만들지 않아 휠 스크롤에 영향 없음)
+   ⚠️ body에는 overflow를 절대 주지 않는다 — body에 overflow가 걸리면 body가 스크롤 컨테이너로
+   승격되는데 실제 스크롤은 뷰포트(html)에서 일어나므로, body 하위의 모든 position: sticky
+   (전역 헤더·각 페이지 서브 탭바)가 기준을 잃고 죽어버린다. 가로 이탈 방지는 html만으로 충분. */
 html {
   background-color: #090909;
   overflow-x: clip;
   overscroll-behavior-x: none;
+  scrollbar-gutter: stable; /* 스크롤바 유무에 따른 화면 밀림 방지 (body overflow-y-scroll 대체) */
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
-  overflow-x: clip;
   overscroll-behavior-x: none;
 }
 

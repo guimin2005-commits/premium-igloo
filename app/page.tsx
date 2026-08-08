@@ -188,7 +188,7 @@ export default function Home() {
         {/* 01 · 서버 현황 — 제목은 고정, 내용만 스크롤 (md 이상) */}
         {stats && (
         <div className="w-full py-20 md:py-28 px-6">
-          <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-[200px_1fr] lg:grid-cols-[240px_1fr] gap-6 md:gap-10">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-[210px_1fr] lg:grid-cols-[250px_1fr] gap-10 md:gap-14">
             <Reveal className="md:sticky md:top-24 md:self-start">
               <div className="relative">
                 <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">01</span>
@@ -196,12 +196,13 @@ export default function Home() {
                   <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
                   <div className="h-px w-8 bg-black/15"></div>
                 </div>
-                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3">살아있는 커뮤니티</h2>
-                <p className="relative text-sm text-gray-600">고급 이글루는 지금 이 순간에도 움직이고 있습니다.</p>
+                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3 break-keep">살아있는 커뮤니티</h2>
+                <p className="relative text-sm text-gray-600 break-keep">고급 이글루는 지금 이 순간에도 움직이고 있습니다.</p>
               </div>
             </Reveal>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 items-center">
+            {/* 내용 칸 — 통계 카드(풀폭)와 차트를 세로로 넉넉하게 쌓는다 */}
+            <div className="flex flex-col gap-10">
               <Reveal delay={100}>
                 <div className="grid grid-cols-3 gap-px bg-black/[0.08] rounded-2xl overflow-hidden border border-black/[0.06] shadow-[0_16px_44px_-28px_rgba(0,0,0,0.3)]">
                   {[
@@ -209,12 +210,12 @@ export default function Home() {
                     { n: stats.onlineCount, l: "현재 온라인", dot: true },
                     { n: 2023, l: "Since", raw: true },
                   ].map((s: any, i) => (
-                    <div key={i} className="relative bg-white px-4 py-8 text-center group hover:bg-white hover:shadow-[0_16px_44px_-18px_rgba(233,30,63,0.3)] hover:z-10 transition-all duration-300">
-                      <div className="text-2xl md:text-4xl font-black text-[#131313] group-hover:text-[#e91e3f] transition-colors tracking-tight flex items-center justify-center gap-2">
+                    <div key={i} className="relative bg-white px-4 py-9 text-center group hover:bg-white hover:shadow-[0_16px_44px_-18px_rgba(233,30,63,0.3)] hover:z-10 transition-all duration-300">
+                      <div className="text-3xl md:text-4xl font-black text-[#131313] group-hover:text-[#e91e3f] transition-colors tracking-tight flex items-center justify-center gap-2">
                         {s.dot && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>}
                         {s.raw ? s.n : <CountUp end={s.n} />}
                       </div>
-                      <div className="text-[9px] md:text-[10px] font-bold tracking-[0.25em] text-gray-500 mt-2 uppercase">{s.l}</div>
+                      <div className="text-[9px] md:text-[10px] font-bold tracking-[0.25em] text-gray-500 mt-2.5 uppercase">{s.l}</div>
                     </div>
                   ))}
                 </div>
@@ -232,7 +233,7 @@ export default function Home() {
         {schedule.length > 0 && (
         <div className="relative w-full py-20 md:py-28 px-6">
           <div className="absolute top-0 right-[-100px] w-[400px] h-[300px] bg-[#e91e3f]/[0.05] blur-[110px] rounded-full pointer-events-none"></div>
-          <div className="max-w-5xl mx-auto relative z-10 grid grid-cols-1 md:grid-cols-[200px_1fr] lg:grid-cols-[240px_1fr] gap-6 md:gap-10">
+          <div className="max-w-6xl mx-auto relative z-10 grid grid-cols-1 md:grid-cols-[210px_1fr] lg:grid-cols-[250px_1fr] gap-10 md:gap-14">
             <Reveal className="md:sticky md:top-24 md:self-start">
               <div className="relative">
                 <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">02</span>
@@ -240,8 +241,8 @@ export default function Home() {
                   <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
                   <div className="h-px w-8 bg-black/15"></div>
                 </div>
-                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3">지금, 이글루에서는</h2>
-                <p className="relative text-sm text-gray-600">진행 중인 대회와 이벤트를 확인하세요.</p>
+                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3 break-keep">지금, 이글루에서는</h2>
+                <p className="relative text-sm text-gray-600 break-keep">진행 중인 대회와 이벤트를 확인하세요.</p>
               </div>
             </Reveal>
 
@@ -273,7 +274,7 @@ export default function Home() {
 
         {/* 03 · 핵심 콘텐츠 소개 — 제목은 고정, 내용만 스크롤 (md 이상) */}
         <div className="w-full py-20 md:py-28 px-6">
-          <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-[200px_1fr] lg:grid-cols-[240px_1fr] gap-6 md:gap-10">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-[210px_1fr] lg:grid-cols-[250px_1fr] gap-10 md:gap-14">
             <Reveal className="md:sticky md:top-24 md:self-start">
               <div className="relative">
                 <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">03</span>
@@ -281,8 +282,8 @@ export default function Home() {
                   <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
                   <div className="h-px w-8 bg-black/15"></div>
                 </div>
-                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3">이글루에서 즐기는 방법</h2>
-                <p className="relative text-sm text-gray-600">활동하고, 성장하고, 증명하세요.</p>
+                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3 break-keep">이글루에서 즐기는 방법</h2>
+                <p className="relative text-sm text-gray-600 break-keep">활동하고, 성장하고, 증명하세요.</p>
               </div>
             </Reveal>
 
@@ -332,7 +333,7 @@ export default function Home() {
         {/* 04 · 최신 소식 — 제목은 고정, 내용만 스크롤 (md 이상) */}
         {notices.length > 0 && (
           <div className="w-full py-20 md:py-28 px-6 relative z-10">
-            <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-[200px_1fr] lg:grid-cols-[240px_1fr] gap-6 md:gap-10">
+            <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-[210px_1fr] lg:grid-cols-[250px_1fr] gap-10 md:gap-14">
               <Reveal className="md:sticky md:top-24 md:self-start">
                 <div className="relative">
                   <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">04</span>
@@ -340,7 +341,7 @@ export default function Home() {
                     <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">04</span>
                     <div className="h-px w-8 bg-black/15"></div>
                   </div>
-                  <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3">최신 소식</h2>
+                  <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3 break-keep">최신 소식</h2>
                   <Link href="/notice" className="relative inline-flex items-center gap-1 text-xs font-bold text-gray-600 hover:text-[#e91e3f] transition-colors group/more">
                     전체 보기 <span className="group-hover/more:translate-x-1 transition-transform">→</span>
                   </Link>

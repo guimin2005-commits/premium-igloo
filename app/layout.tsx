@@ -35,9 +35,10 @@ export default function RootLayout({
   return (
     // 두 번째 코드의 핵심: html 태그에 suppressHydrationWarning을 추가하여 hydration 경고 방지 (next-themes 등 사용 시 필수)
     <html lang="ko" suppressHydrationWarning>
-      <body 
-        // 첫 번째 코드의 핵심: 화면 밀림 방지를 위한 overflow-y-scroll 속성 및 전체 디자인 테마 적용
-        className={`min-h-screen flex flex-col overflow-y-scroll bg-[#090909] text-white font-sans antialiased selection:bg-[#e91e3f] selection:text-white ${inter.className}`}
+      <body
+        // 화면 밀림 방지는 html의 scrollbar-gutter: stable로 처리 (globals.css).
+        // body에 overflow를 주면 사이트 전역 sticky가 죽으므로 여기엔 절대 넣지 않는다.
+        className={`min-h-screen flex flex-col bg-[#090909] text-white font-sans antialiased selection:bg-[#e91e3f] selection:text-white ${inter.className}`}
       >
         <Providers>
           <Suspense fallback={null}>
