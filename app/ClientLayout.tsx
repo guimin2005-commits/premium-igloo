@@ -222,24 +222,24 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
           <div className="flex-1 flex items-center z-10">
             {isVerifyPage ? (
-              <span className="text-[17px] font-bold tracking-[0.18em] text-white cursor-default select-none">고급 이글루</span>
+              <span className={`font-bold text-white cursor-default select-none transition-all duration-500 ${scrolled ? "text-[15px] tracking-[0.12em]" : "text-[17px] tracking-[0.18em]"}`}>고급 이글루</span>
             ) : (
-              <Link href="/" className="text-[17px] font-bold tracking-[0.18em] text-white hover:text-gray-300 transition-colors">고급 이글루</Link>
+              <Link href="/" className={`font-bold text-white hover:text-gray-300 transition-all duration-500 ${scrolled ? "text-[15px] tracking-[0.12em]" : "text-[17px] tracking-[0.18em]"}`}>고급 이글루</Link>
             )}
           </div>
           
           {/* 비로그인(게스트) 또는 인증 유저에게만 카테고리 노출 (로그인 후 미인증 유저는 숨김 → /verify로 유도) */}
           {!isVerifyPage && (status !== "authenticated" || isVerified) && (
-            <nav className="hidden md:flex items-center justify-center gap-2 text-sm font-bold absolute left-1/2 transform -translate-x-1/2 h-full z-50">
+            <nav className={`hidden md:flex items-center justify-center font-bold absolute left-1/2 transform -translate-x-1/2 h-full z-50 transition-all duration-500 ${scrolled ? "gap-0.5 text-[13px]" : "gap-2 text-sm"}`}>
               {categoryGroups.map((group) => {
                 const isGroupActive = group.items.some((item) => pathname === item.path);
                 const isOpen = openMegaMenu === group.name;
                 return (
                   <div key={group.name} className="relative h-full flex items-center group/gnav" onMouseEnter={() => setOpenMegaMenu(group.name)}>
-                    <button className={`relative h-full flex items-center px-4 transition-colors outline-none focus:outline-none ${isGroupActive || isOpen ? "text-[#e91e3f]" : "text-gray-400 hover:text-white"}`}>
+                    <button className={`relative h-full flex items-center transition-all duration-500 outline-none focus:outline-none ${scrolled ? "px-3" : "px-4"} ${isGroupActive || isOpen ? "text-[#e91e3f]" : "text-gray-400 hover:text-white"}`}>
                       {group.name}
-                      {/* 대분류 라인 차오름 이펙트 — 평소엔 숨김, 호버 시 왼쪽부터 차오름 */}
-                      <span className={`absolute bottom-4 left-4 right-4 h-px bg-[#e91e3f] origin-left transition-transform duration-500 ${isGroupActive || isOpen ? "scale-x-100" : "scale-x-0 group-hover/gnav:scale-x-100"}`} />
+                      {/* 대분류 라인 차오름 이펙트 — 평소엔 숨김, 호버 시 왼쪽부터 차오름. 알약 모드에선 라인 위치도 함께 올라온다 */}
+                      <span className={`absolute h-px bg-[#e91e3f] origin-left transition-all duration-500 ${scrolled ? "bottom-2.5 left-3 right-3" : "bottom-4 left-4 right-4"} ${isGroupActive || isOpen ? "scale-x-100" : "scale-x-0 group-hover/gnav:scale-x-100"}`} />
                     </button>
 
                   </div>
@@ -255,18 +255,23 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               <>
               {/* 📌 알림 센터 종 아이콘 */}
               <div className="relative flex items-center" ref={notifRef}>
-                <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) markNotifsSeen(); }} aria-label="알림" className="relative p-2 text-gray-400 hover:text-white transition-colors outline-none focus:outline-none">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+                <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) markNotifsSeen(); }} aria-label="알림" className={`relative text-gray-400 hover:text-white transition-all duration-500 outline-none focus:outline-none ${scrolled ? "p-1.5" : "p-2"}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className={`transition-all duration-500 ${scrolled ? "w-[18px] h-[18px]" : "w-5 h-5"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
                   {unseenCount > 0 && (
                     <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#e91e3f] shadow-[0_0_6px_rgba(233,30,63,0.8)]"></span>
                   )}
                 </button>
 
                 {isNotifOpen && (
-                  <div className="absolute top-[52px] right-0 z-50 w-72 bg-[#1e1e1e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="px-5 py-3.5 border-b border-white/5 flex items-center justify-between">
-                      <span className="text-sm font-black text-white">알림</span>
-                      <span className="text-[10px] font-bold text-gray-500">운영팀 알림 · 문의 답변</span>
+                  <div className="absolute top-[52px] right-0 z-50 w-[300px] rounded-3xl p-px bg-gradient-to-b from-white/[0.14] to-white/[0.04] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9),0_0_44px_-16px_rgba(233,30,63,0.22)] animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="rounded-[calc(1.5rem-1px)] bg-[#111111]/95 backdrop-blur-xl overflow-hidden">
+                    <div className="px-5 pt-4 pb-3.5 border-b border-white/[0.06] flex items-center justify-between relative overflow-hidden">
+                      <div className="absolute top-[-30px] right-[-20px] w-32 h-16 bg-[#e91e3f]/[0.12] blur-[36px] rounded-full pointer-events-none"></div>
+                      <div className="relative flex items-center gap-2.5">
+                        <span className="w-4 h-px bg-[#e91e3f]"></span>
+                        <span className="text-sm font-black text-white tracking-tight">알림</span>
+                      </div>
+                      <span className="relative text-[10px] font-bold text-gray-500">운영팀 알림 · 문의 답변</span>
                     </div>
                     {notifications.length === 0 && adminNotifs.length === 0 ? (
                       <div className="px-5 py-8 text-center text-xs text-gray-500">아직 알림이 없습니다.</div>
@@ -296,16 +301,20 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         ))}
                       </div>
                     )}
-                    <Link href="/profile?tab=notice" onClick={() => setIsNotifOpen(false)} className="block px-5 py-3 text-center text-xs font-bold text-[#e91e3f] hover:bg-[#e91e3f]/5 transition-colors border-t border-white/5">알림함에서 전체 보기</Link>
+                    <Link href="/profile?tab=notice" onClick={() => setIsNotifOpen(false)} className="group/all flex items-center justify-center gap-1.5 px-5 py-3.5 text-xs font-black text-[#e91e3f] hover:bg-[#e91e3f]/[0.07] transition-colors border-t border-white/[0.06]">
+                      알림함에서 전체 보기
+                      <span className="group-hover/all:translate-x-0.5 transition-transform">→</span>
+                    </Link>
+                  </div>
                   </div>
                 )}
               </div>
 
               <div className="relative flex items-center h-full" ref={profileDropdownRef}>
-                <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="hidden md:flex items-center gap-2 p-1.5 rounded-xl hover:bg-white/5 transition-colors outline-none focus:outline-none">
-                  <img src={session.user?.image || ""} alt="Profile" className={`w-8 h-8 rounded-full bg-gray-700 transition-all ${isBooster ? 'ring-2 ring-[#e91e3f]/60 ring-offset-2 ring-offset-[#090909]' : ''}`} />
+                <button onClick={() => setIsProfileOpen(!isProfileOpen)} className={`hidden md:flex items-center gap-2 rounded-full hover:bg-white/5 transition-all duration-500 outline-none focus:outline-none ${scrolled ? "p-1" : "p-1.5"}`}>
+                  <img src={session.user?.image || ""} alt="Profile" className={`rounded-full bg-gray-700 transition-all duration-500 ${scrolled ? "w-7 h-7" : "w-8 h-8"} ${isBooster ? 'ring-2 ring-[#e91e3f]/60 ring-offset-2 ring-offset-[#090909]' : ''}`} />
                   <div className="flex items-center gap-2 ml-1">
-                    <span className="text-sm font-bold text-white">{session.user?.name}</span>
+                    <span className={`font-bold text-white transition-all duration-500 ${scrolled ? "text-[13px]" : "text-sm"}`}>{session.user?.name}</span>
                     {isVerified && hasScrimRole ? (
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-green-400"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>
                     ) : isVerified ? (
@@ -317,9 +326,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
                 
                 {isProfileOpen && (
-                  <div className="absolute top-[60px] right-0 z-50 w-64 bg-[#1e1e1e] border border-white/10 rounded-2xl shadow-2xl p-5 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="flex items-center gap-4 mb-4 pb-4 border-b border-white/5 relative">
-                      <img src={session.user?.image || ""} alt="Profile" className={`w-12 h-12 rounded-full bg-gray-700 ${isBooster ? 'ring-2 ring-[#e91e3f]/60 ring-offset-2 ring-offset-[#1e1e1e]' : ''}`} />
+                  <div className="absolute top-[60px] right-0 z-50 w-[272px] rounded-3xl p-px bg-gradient-to-b from-white/[0.14] to-white/[0.04] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9),0_0_44px_-16px_rgba(233,30,63,0.22)] animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="rounded-[calc(1.5rem-1px)] bg-[#111111]/95 backdrop-blur-xl p-5 relative overflow-hidden">
+                    <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 w-48 h-24 bg-[#e91e3f]/[0.1] blur-[44px] rounded-full pointer-events-none"></div>
+                    <div className="relative flex items-center gap-4 mb-4 pb-4 border-b border-white/[0.06]">
+                      <div className="relative shrink-0">
+                        {isBooster && <div className="absolute -inset-1.5 bg-[#e91e3f]/20 blur-lg rounded-full pointer-events-none"></div>}
+                        <img src={session.user?.image || ""} alt="Profile" className={`relative w-12 h-12 rounded-full bg-gray-700 ${isBooster ? 'ring-2 ring-[#e91e3f]/60 ring-offset-2 ring-offset-[#111111]' : ''}`} />
+                      </div>
                       <div>
                         <div className="font-bold text-white text-base flex items-center gap-2">{session.user?.name}</div>
                         <div className="mt-1.5 flex items-center">
@@ -342,25 +356,36 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         </div>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2">
+                    <div className="relative flex flex-col gap-0.5">
                       {!isVerifyPage && (
-                        <Link href="/profile" onClick={() => setIsProfileOpen(false)} className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors font-medium">내 정보</Link>
+                        <Link href="/profile" onClick={() => setIsProfileOpen(false)} className="group/mi w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] text-gray-300 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors font-bold">
+                          내 정보
+                          <span className="text-gray-700 group-hover/mi:text-gray-400 group-hover/mi:translate-x-0.5 transition-all">→</span>
+                        </Link>
                       )}
                       {!isVerifyPage && isVerified && (
-                        <Link href="/invite" onClick={() => setIsProfileOpen(false)} className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors font-medium">친구 초대 이벤트</Link>
-                      )}
-                      {isAdmin && (
-                        <Link href="/admin" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-2 text-left px-3 py-2 text-sm text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-lg transition-colors font-bold">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" /></svg>
-                          관리자 페이지
+                        <Link href="/invite" onClick={() => setIsProfileOpen(false)} className="group/mi w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] text-gray-300 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors font-bold">
+                          친구 초대 이벤트
+                          <span className="text-gray-700 group-hover/mi:text-gray-400 group-hover/mi:translate-x-0.5 transition-all">→</span>
                         </Link>
                       )}
                       {/* 미인증 유저는 코드 등록 버튼 숨김 */}
                       {isVerified && (
-                        <button onClick={() => { setIsProfileOpen(false); setIsCodeModalOpen(true); }} className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors outline-none font-medium">코드 등록</button>
+                        <button onClick={() => { setIsProfileOpen(false); setIsCodeModalOpen(true); }} className="group/mi w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] text-gray-300 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors outline-none font-bold text-left">
+                          코드 등록
+                          <span className="text-gray-700 group-hover/mi:text-gray-400 group-hover/mi:translate-x-0.5 transition-all">→</span>
+                        </button>
                       )}
-                      <button onClick={() => { setIsProfileOpen(false); signOut(); }} className="w-full text-left px-3 py-2 text-sm text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-lg transition-colors outline-none focus:outline-none font-bold">로그아웃</button>
+                      {isAdmin && (
+                        <Link href="/admin" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-xl transition-colors font-bold">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" /></svg>
+                          관리자 페이지
+                        </Link>
+                      )}
+                      <div className="h-px bg-white/[0.06] my-1.5 mx-1"></div>
+                      <button onClick={() => { setIsProfileOpen(false); signOut(); }} className="w-full text-left px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-xl transition-colors outline-none focus:outline-none font-black">로그아웃</button>
                     </div>
+                  </div>
                   </div>
                 )}
               </div>
@@ -384,10 +409,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         const group = categoryGroups.find((g) => g.name === openMegaMenu);
         if (!group) return null;
         return (
-          <div className="hidden md:block absolute top-full left-0 right-0 bg-[#0c0c0c]/98 backdrop-blur-md border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)] origin-top" style={{ animation: "megaDrop 0.32s cubic-bezier(0.16,1,0.3,1)" }}>
+          <div className={`hidden md:block absolute top-full bg-[#0c0c0c]/98 backdrop-blur-md origin-top ${scrolled ? "left-1/2 -translate-x-1/2 mt-2 w-[min(100%-24px,48rem)] rounded-3xl border border-white/10 overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]" : "left-0 right-0 border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)]"}`} style={{ animation: "megaDrop 0.32s cubic-bezier(0.16,1,0.3,1)" }}>
             <style dangerouslySetInnerHTML={{ __html: `@keyframes megaDrop{0%{opacity:0;transform:translateY(-16px) scaleY(0.94)}60%{opacity:1}100%{opacity:1;transform:translateY(0) scaleY(1)}}` }} />
             <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
-            <div className="max-w-7xl mx-auto px-8 py-8 lg:py-10 grid grid-cols-12 gap-10 items-start">
+            <div className={`mx-auto grid grid-cols-12 gap-10 items-start ${scrolled ? "px-8 py-7" : "max-w-7xl px-8 py-8 lg:py-10"}`}>
               {/* 좌: 섹션 헤딩 */}
               <div className="col-span-12 lg:col-span-5">
                 <div className="flex items-center gap-2.5 mb-4">

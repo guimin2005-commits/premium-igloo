@@ -3,8 +3,6 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Reveal, CountUp, LuxStyles } from "./components/Lux";
 
-// 📌 라이트 패널이 스크롤에 맞춰 히어로 위로 떠오르는 정도(px)
-const PANEL_RISE_PX = 170;
 
 // 📌 24시간 온라인 활동 그래프 (섹션용 와이드 버전)
 const ActivityChart = ({ history }: { history: { ts: string; online: number }[] }) => {
@@ -107,10 +105,13 @@ export default function Home() {
     <main className="flex-1 w-full relative flex flex-col">
       <LuxStyles />
 
+      {/* ═══ 커튼 컨테이너 — 히어로는 화면에 고정(sticky)되고, 흰 패널이 그 위로 타고 올라온다 ═══ */}
+      <div className="relative">
+
       {/* ═══ SECTION 1 · 히어로 (풀스크린 · 브랜드만) ═══
-             하단에 PANEL_RISE_PX만큼 여백을 더 둬서, 아래 패널이 transform으로 떠올라도
-             다음 섹션과의 사이에 빈 틈이 생기지 않도록 미리 공간을 확보해둔다 ═══ */}
-      <section ref={heroRef} className="relative w-full min-h-[calc(100vh-4rem)] flex flex-col overflow-hidden" style={{ paddingBottom: PANEL_RISE_PX }}>
+             sticky로 뷰포트에 핀 고정 — 스크롤하면 히어로는 멈춰 있고 아래 흰 패널이 위로 덮으며 올라온다.
+             heroProgress에 따라 내용물이 서서히 어두워지고 살짝 작아져 깊이감을 더한다 ═══ */}
+      <section ref={heroRef} className="sticky top-0 w-full h-[calc(100vh-3.5rem)] flex flex-col overflow-hidden">
         <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
         <div className="absolute top-[-150px] left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#e91e3f]/[0.08] blur-[130px] rounded-full pointer-events-none"></div>
 
@@ -122,7 +123,10 @@ export default function Home() {
           <span className="text-[10px] font-black tracking-[0.5em] text-gray-700 uppercase [writing-mode:vertical-rl] rotate-180">활동이 곧 자산이 되는 곳</span>
         </div>
 
-        <div className="flex-1 w-full max-w-7xl mx-auto px-6 flex items-center relative z-10">
+        <div
+          className="flex-1 w-full max-w-7xl mx-auto px-6 flex items-center relative z-10"
+          style={{ opacity: 1 - heroProgress * 0.65, transform: `scale(${1 - heroProgress * 0.05})`, willChange: "opacity, transform" }}
+        >
           <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-16 items-center">
             {/* 로고 */}
             <Reveal className="flex justify-center md:justify-end">
@@ -175,11 +179,9 @@ export default function Home() {
       </section>
 
       {/* ═══ SECTION 2 · 통합 라이트 패널 (01 서버현황 + 02 LIVE&UPCOMING + 03 핵심콘텐츠 + 04 최신소식) ═══
-             히어로를 스크롤하는 동안 실시간으로 heroProgress만큼 위로 떠올라 겹쳐진다 (JS 스크롤 연동, 정적 마진 아님) ═══ */}
-      <section
-        className="relative w-full z-10 bg-[#f5f3f0] rounded-t-[40px] md:rounded-t-[56px] rounded-b-[40px] md:rounded-b-[56px] shadow-[0_-20px_60px_-30px_rgba(0,0,0,0.5),0_40px_90px_-30px_rgba(0,0,0,0.65)] [clip-path:inset(0_round_40px)] md:[clip-path:inset(0_round_56px)]"
-        style={{ transform: `translateY(-${heroProgress * PANEL_RISE_PX}px)`, willChange: "transform" }}
-      >
+             -mt로 고정된 히어로 하단을 처음부터 살짝 덮고 시작 — 스크롤하면 멈춰 있는 히어로 위로
+             흰 배경이 실제로 "올라오는" 커튼 효과가 난다 ═══ */}
+      <section className="relative w-full z-10 -mt-[18vh] bg-[#f5f3f0] rounded-t-[40px] md:rounded-t-[56px] rounded-b-[40px] md:rounded-b-[56px] shadow-[0_-24px_70px_-24px_rgba(0,0,0,0.6),0_40px_90px_-30px_rgba(0,0,0,0.65)] [clip-path:inset(0_round_40px)] md:[clip-path:inset(0_round_56px)]">
         {/* ※ overflow-hidden 대신 clip-path 사용 — overflow-hidden은 하위 sticky 제목의 위치 고정을 깨버린다 */}
         <div className="absolute top-[-80px] right-[-60px] w-[400px] h-[300px] bg-[#e91e3f]/[0.08] blur-[110px] rounded-full pointer-events-none"></div>
 
@@ -246,7 +248,8 @@ export default function Home() {
               </div>
             </Reveal>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 세로 1열 — 제목 sticky가 체감되도록 콘텐츠 스크롤 길이를 확보한다 */}
+            <div className="grid grid-cols-1 gap-3.5">
               {schedule.map((item, i) => (
                 <Reveal key={i} delay={i * 100}>
                   <Link href={item.path} className={`flex items-center gap-4 px-6 py-5 rounded-2xl border backdrop-blur-sm transition-all duration-300 group/sch h-full hover:-translate-y-1 ${item.type === "경매 LIVE" ? "bg-emerald-500/[0.06] border-emerald-500/25 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:shadow-[0_20px_50px_-20px_rgba(16,185,129,0.3)]" : "bg-white/75 border-black/[0.05] hover:border-[#e91e3f]/30 hover:bg-white hover:shadow-[0_20px_50px_-20px_rgba(233,30,63,0.22)]"}`}>
@@ -381,6 +384,8 @@ export default function Home() {
 
         </div>
       </section>
+
+      </div>{/* 커튼 컨테이너 끝 */}
 
       {/* ═══ SECTION 6 · 마지막 CTA ═══ */}
       <section className="relative w-full py-24 md:py-32 px-6 border-t border-white/5 overflow-hidden">
