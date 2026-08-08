@@ -8,7 +8,8 @@ import { AuctionStyles } from "../../components/AuctionStyles";
 import { roleNames, totalSlots as totalSlotsFn, slotLimitOf as slotLimitOfFn, phase1RoleOf } from "@/lib/auctionGames";
 
 const ADMIN_USERS = ["elahw.06"];
-const POLL_MS = 1500;
+const POLL_MS = 1500;      // 평상시
+const POLL_FAST_MS = 600;  // 매물이 호명돼 입찰이 오가는 동안
 
 // 확성기 SVG
 const MegaphoneIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
@@ -155,6 +156,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const chatIds = useRef<Set<string>>(new Set());
   const chatCooldown = useRef(0);
   const pollBusy = useRef(false);
+  const pollTimer = useRef<any>(null);
+  const pollDelay = useRef(POLL_MS);
   // 폴링에서 현재 역할(리더 인덱스)을 참조 — 스카우터 정보 수신용
   const roleRef = useRef<number | null>(null);
   const autoRoleDone = useRef(false);
@@ -323,7 +326,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           }
         }
         else if (a.current.price > ps.price && a.current.playerIdx === ps.playerIdx) {
-          if (a.current.isAllin) sfxAllin(); else sfxBid();
+          // 내 입찰은 누른 즉시 소리를 냈으므로 여기서 또 울리지 않는다 (두 번 나는 것 방지)
+          if (a.current.leaderIdx === null || a.current.leaderIdx !== roleRef.current) {
+            if (a.current.isAllin) sfxAllin(); else sfxBid();
+          }
           // 📌 누가 질렀는지 좌측 팀 레일에서 즉시 알아보도록 해당 팀을 번쩍인다
           if (a.current.leaderIdx !== null && a.current.leaderIdx !== undefined) {
             setBidFlash({ idx: a.current.leaderIdx, n: Date.now() });
@@ -340,6 +346,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         if (ps.status === "진행중" && a.status === "종료") sfxEnd();
         if ((ps.phase ?? 0) < a.phase) sfxPhase();
         prevState.current = { ...ps, price: a.current.price, playerIdx: a.current.playerIdx, soldCount, passCount, revealIdx, strategyOn, status: a.status, phase: a.phase, paIdx };
+
+        // 📌 매물이 올라와 입찰이 오가는 동안엔 빠르게, 그 외에는 평상시 주기로.
+        //    (관전자·타 리더 화면에서 호가와 효과음이 뒤늦게 따라오던 문제 완화)
+        pollDelay.current = a.status === "진행중" && a.current.playerIdx !== null ? POLL_FAST_MS : POLL_MS;
 
         // 🐛 입찰 직후, 입찰 전에 이미 날아가 있던 폴링 응답이 도착하면 방금 반영한 최고가가
         //    되돌아가 '입찰이 안 먹은' 것처럼 보였다 (그래서 한 번 더 눌러야 했다).
@@ -364,11 +374,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             lastChatAt.current = d.chat[d.chat.length - 1].createdAt;
           }
         }
-      } catch {} finally { pollBusy.current = false; }
+      } catch {} finally {
+        pollBusy.current = false;
+        // 다음 폴링을 스스로 예약 — 응답이 늦어도 겹치지 않고, 진행 중일 때만 빠르게 돈다
+        if (alive) pollTimer.current = setTimeout(poll, pollDelay.current);
+      }
     };
     poll();
-    const t = setInterval(poll, POLL_MS);
-    return () => { alive = false; clearInterval(t); };
+    return () => { alive = false; if (pollTimer.current) clearTimeout(pollTimer.current); };
   }, [id, status, sfxBid, sfxCall, sfxSold, sfxPass, sfxAllin, sfxReveal, sfxStrategy, sfxStart, sfxEnd, sfxPhase, sfxChat, sfxGolden, sfxHammer]);
 
   // 📌 역할이 바뀌면 해당 역할의 알림 로그로 교체 (다른 리더의 알림이 남지 않도록)
@@ -649,8 +662,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     if (invOverCap) { showToast(`인벤토리가 가득 찼습니다 (${myInvCount}/${myInvCap}) — 선수를 배정한 뒤 입찰할 수 있습니다`); return; }
     if (myLeader && amount > myLeader.points) { showToast(`보유 Point가 부족합니다. (보유 ${myLeader.points.toLocaleString()} Point)`); return; }
     const d = await act({ action: "bid", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx, amount });
-    // 📌 폴링(1.5초) 지연 동안 타이머가 짧게 보이는 문제 방지 — 성공 즉시 로컬 반영
+    // 📌 폴링 지연 동안 타이머가 짧게 보이는 문제 방지 — 성공 즉시 로컬 반영
     if (d?.success) {
+      sfxBid(); // 누른 즉시 소리 (폴링을 기다리면 연속 입찰 때 소리가 밀리거나 한 번만 난다)
       setAuction((prev: any) => {
         if (!prev || prev.current?.playerIdx === null) return prev;
         const next = structuredClone(prev);
@@ -1582,7 +1596,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               </div>
                               <button onClick={submitDirectBid} className="shrink-0 ml-2.5 px-6 text-xs font-black bg-[#e91e3f] hover:bg-[#d01634] text-white transition-colors">입찰</button>
                               <button
-                                onClick={() => setConfirmCfg({ title: "올인", message: `남은 슬롯 최소 예산을 제외한 전액 ${allinMax.toLocaleString()} Point를 베팅합니다.`, confirmLabel: "올인", onConfirm: () => act({ action: "allin", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx }) })}
+                                onClick={() => setConfirmCfg({ title: "올인", message: `남은 슬롯 최소 예산을 제외한 전액 ${allinMax.toLocaleString()} Point를 베팅합니다.`, confirmLabel: "올인", onConfirm: async () => { const d = await act({ action: "allin", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx }); if (d?.success) sfxAllin(); else if (d?.message) showToast(d.message); } })}
                                 className="shrink-0 ml-1.5 px-4 text-xs font-black text-[#ff5c77] border border-[#e91e3f]/50 hover:bg-[#e91e3f] hover:text-white hover:border-[#e91e3f] transition-colors"
                               >
                                 올인
