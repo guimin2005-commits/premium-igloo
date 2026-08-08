@@ -2017,12 +2017,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               {scouted && <span className="block text-gray-200 mt-0.5">{revealParts(cp).map((r: any) => r.v).join(" · ")}</span>}
                             </p>
                             {canManage && !swapMode && !invOverflow && (
-                              <div className="mt-auto pt-2.5">
+                              <div className="mt-auto pt-2 flex">
                                 <button
                                   onClick={() => { setMobPick(ci); sfxSelect(); }}
-                                  className="w-full py-2 text-[12px] font-black text-white bg-[#e91e3f] active:bg-[#d01634] transition-colors"
+                                  className="ml-auto px-3.5 py-1.5 text-[11px] font-black text-[#ff5c77] border border-[#e91e3f]/60 active:bg-[#e91e3f] active:text-white transition-colors"
                                 >
-                                  배정하기
+                                  배정 ›
                                 </button>
                               </div>
                             )}
@@ -2118,16 +2118,17 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               {mobPick !== null && l.inventory?.[mobPick] && (() => {
                 const card = l.inventory[mobPick];
                 return (
-                  <div className="lg:hidden absolute inset-0 z-10 flex flex-col justify-end bg-black/75 animate-in fade-in" onClick={() => setMobPick(null)}>
-                    <div onClick={(e) => e.stopPropagation()} className="border-t border-white/20 bg-[#0e0e10] animate-in slide-in-from-bottom-4 duration-200" style={{ maxHeight: "82%" }}>
-                      <div className="flex items-baseline gap-2 px-4 py-3 border-b border-white/12">
+                  /* 하단에 붙이면 선택지가 화면 아래에 뭉친다 → 가운데에 띄워 세로로 펼친다 */
+                  <div className="lg:hidden absolute inset-0 z-10 flex items-center justify-center p-4 bg-black/80 animate-in fade-in" onClick={() => setMobPick(null)}>
+                    <div onClick={(e) => e.stopPropagation()} className="w-full flex flex-col border border-white/20 bg-[#0e0e10] shadow-[0_24px_60px_-16px_#000] animate-in zoom-in-95 duration-200" style={{ maxHeight: "100%" }}>
+                      <div className="flex items-baseline gap-2 px-4 py-3 border-b border-white/12 shrink-0">
                         <span className="auc-label text-gray-500">배정</span>
                         <span className={`text-[13px] font-black truncate ${card.golden ? "text-amber-300" : "text-white"}`}>{cardName(card)}</span>
                         <button onClick={() => setMobPick(null)} className="ml-auto p-1 -mr-1 text-gray-500">
                           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                       </div>
-                      <div className="overflow-y-auto" style={{ maxHeight: "calc(82vh - 110px)" }}>
+                      <div className="flex-1 min-h-0 overflow-y-auto">
                         {roleList.map((slot) => {
                           const entries = l.roster.filter((r: any) => r.slot === slot);
                           const limit = slotLimitOf(slot);
