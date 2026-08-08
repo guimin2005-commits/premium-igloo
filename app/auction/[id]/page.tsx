@@ -1332,18 +1332,40 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                       <div className="flex flex-col flex-1 px-3.5 pt-2.5 pb-3">
                       {hidden ? (
-                        <p className="flex-1 flex items-center justify-center py-2 text-[10px] font-bold text-gray-600">비공개</p>
+                        /* 📌 비공개도 공개된 카드와 '같은 골격'으로 그린다. 값만 가릴 뿐 줄 수가 같아야
+                              한 명이 공개될 때마다 카드 높이가 달라지지 않는다. */
+                        <>
+                          <div className="mb-1 min-w-0">
+                            <p className="text-sm font-black text-gray-600 truncate leading-tight">비공개</p>
+                            <p className="text-[9px] text-gray-700 truncate leading-tight mt-0.5">&nbsp;</p>
+                          </div>
+                          <div className="mb-2 mt-0.5">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="auc-cap text-gray-800 shrink-0">최고</span>
+                              <span className="text-[13px] font-black text-gray-700 truncate">?</span>
+                            </div>
+                            <div className="flex items-baseline gap-1.5 mt-0.5">
+                              <span className="auc-cap text-gray-800 shrink-0">현재</span>
+                              <span className="text-[13px] font-black text-gray-700 truncate">?</span>
+                            </div>
+                            <p className="text-[11px] font-black mt-1.5 pt-1.5 border-t border-white/[0.05] leading-snug text-gray-700">호명 전 비공개</p>
+                          </div>
+                        </>
                       ) : (
                         <>
                           {prof ? (
                             /* 아바타는 위 초상 밴드에 이미 크게 있으므로 여기선 이름만 */
                             <div className="mb-1 min-w-0">
                               <p className="text-sm font-black text-white truncate leading-tight">{prof.globalName}</p>
-                              <p className="text-[9px] text-gray-500 truncate">{p.alias}</p>
+                              <p className="text-[9px] text-gray-500 truncate leading-tight mt-0.5">{p.alias}</p>
                             </div>
                           ) : (
-                            /* 그라디언트 텍스트는 작은 글씨에서 뭉개져 회색으로 보인다 → 골든은 단색 금색으로 */
-                            <p className={`text-sm font-black truncate mb-1 ${p.isAllPos ? "text-amber-300" : "text-white"}`}>{p.isAllPos ? "올 포지션" : p.alias}</p>
+                            /* 그라디언트 텍스트는 작은 글씨에서 뭉개져 회색으로 보인다 → 골든은 단색 금색으로.
+                               둘째 줄은 비워두더라도 자리를 잡아 공개 카드끼리도 높이가 같게 한다 */
+                            <div className="mb-1 min-w-0">
+                              <p className={`text-sm font-black truncate leading-tight ${p.isAllPos ? "text-amber-300" : "text-white"}`}>{p.isAllPos ? "올 포지션" : p.alias}</p>
+                              <p className="text-[9px] text-gray-500 truncate leading-tight mt-0.5">&nbsp;</p>
+                            </div>
                           )}
                           {p.isAllPos ? (
                             /* 한 줄만 있으면 카드가 비어 보인다 → 일반 카드와 같은 3단 구성으로 채운다 (모두 실제 정보) */
@@ -1405,7 +1427,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                       {/* 상태 문구는 상단 뱃지로 이미 드러나므로 아래에는 '행동/결과'만 남긴다.
                           아직 팔리지 않아 표시할 게 없으면 선 하나만 그어 카드 바닥을 맞춘다. */}
-                      <div className={`mt-auto border-t border-white/[0.05] ${p.status === "낙찰" || (p.status === "배정중" && role === "host") || callable ? "pt-1.5" : ""}`}>
+                      {/* 아직 팔리지 않았으면 선만 긋되, 낙찰 줄이 들어갈 높이는 미리 잡아둔다 —
+                          한 명이 낙찰될 때마다 카드 전체가 커지지 않도록 */}
+                      <div className="mt-auto border-t border-white/[0.05] pt-1.5 min-h-[22px]">
                         {p.status === "낙찰" ? (
                           <div className="flex items-center gap-1.5">
                             <p className="text-[10px] font-bold text-gray-500 truncate flex-1">{auction.leaders[p.soldTo]?.name} · {p.soldPrice?.toLocaleString()} Pt</p>
