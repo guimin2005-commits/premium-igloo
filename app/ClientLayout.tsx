@@ -37,6 +37,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [isGuestInquiryOpen, setIsGuestInquiryOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // 📌 스크롤 시 상단바를 알약형 독 바로 전환
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
   
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
   const [voucherCode, setVoucherCode] = useState("");
@@ -208,7 +217,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <RouteProgress pathname={pathname} />
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
              헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
-      <header className={`sticky top-0 z-40 bg-[#090909]/80 backdrop-blur-md border-b border-white/10 px-6 h-16 flex-shrink-0 ${isAuctionRoom ? "hidden" : ""}`} onMouseLeave={() => setOpenMegaMenu(null)}>
+      <div className={`sticky top-0 z-40 transition-[padding] duration-500 ease-out flex-shrink-0 ${isAuctionRoom ? "hidden" : ""} ${scrolled ? "pt-3 px-3 md:px-6" : ""}`}>
+      <header className={`mx-auto transition-all duration-500 ease-out ${scrolled ? "max-w-4xl rounded-full border border-white/10 bg-[#0d0d0d]/92 backdrop-blur-xl shadow-[0_20px_50px_-16px_rgba(0,0,0,0.7)] px-5 md:px-7 h-12" : "bg-[#090909]/80 backdrop-blur-md border-b border-white/10 px-6 h-14"}`} onMouseLeave={() => setOpenMegaMenu(null)}>
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
           <div className="flex-1 flex items-center z-10">
             {isVerifyPage ? (
@@ -409,6 +419,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           );
         })()}
       </header>
+      </div>
 
       <main className="flex-1 flex flex-col w-full relative pb-16 md:pb-0">
         {isMaintenance && mounted && !isAdmin && status !== "loading" ? (

@@ -377,7 +377,7 @@ export default function TournamentPage() {
       </section>
 
       {/* ── 탭 (앵귤러 세그먼트 · 스티키) ── */}
-      <div className="sticky top-16 z-30 w-full px-6 bg-[#090909]/90 backdrop-blur-xl border-b border-white/[0.07] mt-8">
+      <div className="sticky top-14 z-30 w-full px-6 bg-[#090909]/90 backdrop-blur-xl border-b border-white/[0.07] mt-8">
         <div className="max-w-6xl mx-auto flex gap-1 overflow-x-auto whitespace-nowrap py-2.5">
           {[{ id: "all", label: "전체", code: "ALL" }, { id: "모집중", label: "참가 접수", code: "OPEN" }, { id: "진행중", label: "리그 진행", code: "LIVE" }, { id: "예정됨", label: "예정", code: "SOON" }, { id: "종료됨", label: "종료", code: "END" }].map((tab) => {
             const on = activeFilter === tab.id;
