@@ -446,13 +446,25 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     return () => clearInterval(t);
   }, [auction, sfxTick, sfxWarn, sfxTimeUp]);
 
-  // 🐛 미니 채팅을 열면 맨 위(과거 메시지)부터 보이던 문제 — 열릴 때와 새 메시지 도착 시 맨 아래로
+  // 🐛 새로고침·입장 시 채팅이 맨 위(과거 메시지)에서 시작하던 문제.
+  //    데스크톱 채팅에는 자동 스크롤이 아예 없었고, 미니 채팅만 처리돼 있었다.
+  //    · 처음 메시지가 채워질 때는 무조건 맨 아래로 (레이아웃이 잡힌 뒤 실행하려고 rAF 두 번)
+  //    · 그 뒤로는 바닥 근처에 있을 때만 따라간다 — 위로 올려 읽는 중이면 끌어내리지 않는다
   useEffect(() => {
-    if (!miniChat) return;
-    const box = miniChatBoxRef.current;
-    if (!box) return;
-    box.scrollTop = box.scrollHeight;
-  }, [miniChat, chat.length]);
+    if (chat.length === 0) return;
+    const boxes = [chatBoxRef.current, miniChatBoxRef.current].filter(Boolean) as HTMLDivElement[];
+    boxes.forEach((box) => {
+      if (box.clientHeight === 0) return; // 반응형으로 감춰진 쪽은 건너뛴다
+      // 최초 여부는 요소마다 따로 본다 — 미니 채팅은 열 때마다 새로 마운트되므로
+      // 이 표시가 없으면 '열면 맨 아래' 동작이 되살아나지 않는다
+      const first = box.dataset.chatInit !== "1";
+      const nearEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+      if (!first && !nearEnd) return;
+      box.dataset.chatInit = "1";
+      const jump = () => { box.scrollTop = box.scrollHeight; };
+      requestAnimationFrame(() => { jump(); requestAnimationFrame(jump); });
+    });
+  }, [chat.length, miniChat]);
 
   // 📌 인벤토리가 용량을 넘기면 배너로 알리는 정도가 아니라 인벤토리를 강제로 연다.
   //    (배정 전까지 입찰이 막히므로, 지금 해야 할 일을 화면에 바로 띄운다)
@@ -1266,7 +1278,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             <span className="text-center shrink-0">
               <span className="block text-[15px] font-black tracking-[0.34em] text-white leading-none">PLAYERS</span>
               <span className="block text-[10px] font-bold text-gray-600 tabular-nums mt-1.5">
-                낙찰 {auction.players.filter((p: any) => p.status === "낙찰").length} / 전체 {auction.players.length}
+                낙찰 {auction.players.filter((p: any) => p.status === "낙찰").length}
+                <span className="text-gray-800 mx-1.5">·</span>
+                유찰 {auction.players.filter((p: any) => p.status === "유찰").length}
+                <span className="text-gray-800 mx-1.5">/</span>
+                전체 {auction.players.length}
               </span>
             </span>
             <span className="h-px flex-1 bg-white/15" />
@@ -1429,7 +1445,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       <AuctionStyles />
 
       {/* 상단 바 — 1단: 정체(제목·상태) / 2단 오른쪽: 조작(볼륨·역할·진행) */}
-      <div className="sticky top-0 md:top-16 z-30 w-full px-3 md:px-6 py-2 md:py-2.5 bg-[#090909]/92 backdrop-blur-xl border-b border-white/[0.07]">
+      <div className="sticky top-0 z-30 w-full px-3 md:px-6 py-2 md:py-2.5 bg-[#090909]/92 backdrop-blur-xl border-b border-white/[0.07]">
         {/* 상태 라인 — LIVE만 레드 포인트 */}
         <span className={`absolute inset-x-0 top-0 h-px ${auction.status === "진행중" ? "bg-[#e91e3f]" : auction.status === "종료" ? "bg-white/10" : "bg-amber-400/60"}`} />
         {/* 모바일에서는 줄바꿈 대신 한 줄로 흐르게 — 여러 줄로 쌓이면 헤더만 두꺼워진다 */}
@@ -2017,9 +2033,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                 올인
                               </button>
                             </div>
-                            <p className={`text-[10px] mt-2 text-right ${isGoldenLot ? "text-amber-100/50" : "text-gray-600"}`}>
-                              Enter 즉시 입찰 · 단위 자동 보정 · 올인 <span className={`font-bold tabular-nums ${isGoldenLot ? "text-amber-100/80" : "text-gray-300"}`}>{allinMax.toLocaleString()}</span> Pt
-                            </p>
                           </>
                         )}
                       </div>
@@ -2246,7 +2259,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           <div className="hidden lg:block">{playersSection}</div>
           <MobFold
             title="Players"
-            sub={`낙찰 ${auction.players.filter((p: any) => p.status === "낙찰").length} / 전체 ${auction.players.length}`}
+            sub={`낙찰 ${auction.players.filter((p: any) => p.status === "낙찰").length} · 유찰 ${auction.players.filter((p: any) => p.status === "유찰").length} / 전체 ${auction.players.length}`}
             open={mobFold.players}
             onToggle={() => toggleFold("players")}
           >
