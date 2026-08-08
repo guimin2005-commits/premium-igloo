@@ -177,27 +177,28 @@ export default function Home() {
       {/* ═══ SECTION 2 · 통합 라이트 패널 (01 서버현황 + 02 LIVE&UPCOMING + 03 핵심콘텐츠 + 04 최신소식) ═══
              히어로를 스크롤하는 동안 실시간으로 heroProgress만큼 위로 떠올라 겹쳐진다 (JS 스크롤 연동, 정적 마진 아님) ═══ */}
       <section
-        className="relative w-full z-10 bg-[#f5f3f0] rounded-t-[40px] md:rounded-t-[56px] rounded-b-[40px] md:rounded-b-[56px] shadow-[0_-20px_60px_-30px_rgba(0,0,0,0.5),0_40px_90px_-30px_rgba(0,0,0,0.65)] overflow-hidden"
+        className="relative w-full z-10 bg-[#f5f3f0] rounded-t-[40px] md:rounded-t-[56px] rounded-b-[40px] md:rounded-b-[56px] shadow-[0_-20px_60px_-30px_rgba(0,0,0,0.5),0_40px_90px_-30px_rgba(0,0,0,0.65)] [clip-path:inset(0_round_40px)] md:[clip-path:inset(0_round_56px)]"
         style={{ transform: `translateY(-${heroProgress * PANEL_RISE_PX}px)`, willChange: "transform" }}
       >
+        {/* ※ overflow-hidden 대신 clip-path 사용 — overflow-hidden은 하위 sticky 제목의 위치 고정을 깨버린다 */}
         <div className="absolute top-[-80px] right-[-60px] w-[400px] h-[300px] bg-[#e91e3f]/[0.08] blur-[110px] rounded-full pointer-events-none"></div>
 
         <div className="relative z-10 divide-y divide-black/[0.06]">
 
-        {/* 01 · 서버 현황 */}
+        {/* 01 · 서버 현황 — 제목은 고정, 내용만 스크롤 (md 이상) */}
         {stats && (
         <div className="w-full py-20 md:py-28 px-6">
-          <div className="max-w-5xl mx-auto">
-            <Reveal>
+          <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-[200px_1fr] lg:grid-cols-[240px_1fr] gap-6 md:gap-10">
+            <Reveal className="md:sticky md:top-24 md:self-start">
               <div className="relative">
-                <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">01</span>
-                <div className="relative flex items-baseline gap-4 mb-2">
+                <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">01</span>
+                <div className="relative flex items-center gap-3 mb-2">
                   <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
-                  <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+                  <div className="h-px w-8 bg-black/15"></div>
                 </div>
-                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3">살아있는 커뮤니티</h2>
+                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3">살아있는 커뮤니티</h2>
+                <p className="relative text-sm text-gray-600">고급 이글루는 지금 이 순간에도 움직이고 있습니다.</p>
               </div>
-              <p className="text-sm text-gray-600 mb-12">고급 이글루는 지금 이 순간에도 움직이고 있습니다.</p>
             </Reveal>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 items-center">
@@ -227,21 +228,21 @@ export default function Home() {
         </div>
         )}
 
-        {/* 02 · LIVE & UPCOMING */}
+        {/* 02 · LIVE & UPCOMING — 제목은 고정, 내용만 스크롤 (md 이상) */}
         {schedule.length > 0 && (
-        <div className="relative w-full py-20 md:py-28 px-6 overflow-hidden">
+        <div className="relative w-full py-20 md:py-28 px-6">
           <div className="absolute top-0 right-[-100px] w-[400px] h-[300px] bg-[#e91e3f]/[0.05] blur-[110px] rounded-full pointer-events-none"></div>
-          <div className="max-w-5xl mx-auto relative z-10">
-            <Reveal>
+          <div className="max-w-5xl mx-auto relative z-10 grid grid-cols-1 md:grid-cols-[200px_1fr] lg:grid-cols-[240px_1fr] gap-6 md:gap-10">
+            <Reveal className="md:sticky md:top-24 md:self-start">
               <div className="relative">
-                <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">02</span>
-                <div className="relative flex items-baseline gap-4 mb-2">
+                <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">02</span>
+                <div className="relative flex items-center gap-3 mb-2">
                   <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
-                  <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+                  <div className="h-px w-8 bg-black/15"></div>
                 </div>
-                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3">지금, 이글루에서는</h2>
+                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3">지금, 이글루에서는</h2>
+                <p className="relative text-sm text-gray-600">진행 중인 대회와 이벤트를 확인하세요.</p>
               </div>
-              <p className="text-sm text-gray-600 mb-12">진행 중인 대회와 이벤트를 확인하세요.</p>
             </Reveal>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -270,19 +271,19 @@ export default function Home() {
         </div>
         )}
 
-        {/* 03 · 핵심 콘텐츠 소개 */}
+        {/* 03 · 핵심 콘텐츠 소개 — 제목은 고정, 내용만 스크롤 (md 이상) */}
         <div className="w-full py-20 md:py-28 px-6">
-          <div className="max-w-5xl mx-auto">
-            <Reveal>
+          <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-[200px_1fr] lg:grid-cols-[240px_1fr] gap-6 md:gap-10">
+            <Reveal className="md:sticky md:top-24 md:self-start">
               <div className="relative">
-                <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">03</span>
-                <div className="relative flex items-baseline gap-4 mb-2">
+                <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">03</span>
+                <div className="relative flex items-center gap-3 mb-2">
                   <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
-                  <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+                  <div className="h-px w-8 bg-black/15"></div>
                 </div>
-                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3">이글루에서 즐기는 방법</h2>
+                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3">이글루에서 즐기는 방법</h2>
+                <p className="relative text-sm text-gray-600">활동하고, 성장하고, 증명하세요.</p>
               </div>
-              <p className="text-sm text-gray-600 mb-12">활동하고, 성장하고, 증명하세요.</p>
             </Reveal>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -328,21 +329,19 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 04 · 최신 소식 */}
+        {/* 04 · 최신 소식 — 제목은 고정, 내용만 스크롤 (md 이상) */}
         {notices.length > 0 && (
           <div className="w-full py-20 md:py-28 px-6 relative z-10">
-            <div className="max-w-5xl mx-auto">
-              <Reveal>
-                <div className="relative flex items-end justify-between gap-6 mb-12">
-                  <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">04</span>
-                  <div className="relative">
-                    <div className="flex items-baseline gap-4 mb-2">
-                      <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">04</span>
-                      <div className="h-px w-16 bg-black/15"></div>
-                    </div>
-                    <h2 className="text-2xl md:text-4xl font-black text-[#131313] tracking-tight">최신 소식</h2>
+            <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-[200px_1fr] lg:grid-cols-[240px_1fr] gap-6 md:gap-10">
+              <Reveal className="md:sticky md:top-24 md:self-start">
+                <div className="relative">
+                  <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">04</span>
+                  <div className="relative flex items-center gap-3 mb-2">
+                    <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">04</span>
+                    <div className="h-px w-8 bg-black/15"></div>
                   </div>
-                  <Link href="/notice" className="relative shrink-0 text-xs font-bold text-gray-600 hover:text-[#e91e3f] transition-colors flex items-center gap-1 group/more">
+                  <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3">최신 소식</h2>
+                  <Link href="/notice" className="relative inline-flex items-center gap-1 text-xs font-bold text-gray-600 hover:text-[#e91e3f] transition-colors group/more">
                     전체 보기 <span className="group-hover/more:translate-x-1 transition-transform">→</span>
                   </Link>
                 </div>
