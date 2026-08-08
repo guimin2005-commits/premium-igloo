@@ -1964,24 +1964,26 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         };
         return (
           <div className="auc-modal-back z-[118] animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); setMobPick(null); }}>
-            {/* 고정 높이 — 카드가 늘어나도 팝업은 그대로, 카드 영역만 스크롤 */}
-            <div onClick={(e) => e.stopPropagation()} className="auc-modal sm:max-w-4xl h-[94dvh] sm:h-[560px] sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
-              <span className="auc-modal-line bg-white/35" />
+            {/* 공지는 팝업 '바깥 위' 에 별도로 띄운다 → 세로로 [공지] / [인벤토리] 두 덩어리 */}
+            <div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-4xl flex flex-col h-[94dvh] sm:h-[560px] sm:max-h-[85vh]">
 
-              {/* 📢 인벤토리 초과 공지 — 채팅 공지와 같은 생김새를 그대로 써서 제목 위에 올린다 */}
+              {/* 📢 인벤토리 초과 공지 — 채팅 공지 생김새 그대로 */}
               {mine && (l.inventory?.length || 0) > invCapOf(l) && (
-                <div className="shrink-0 px-3.5 pt-3.5">
-                  <div className="relative border rounded-lg pl-9 pr-9 py-2 border-[#e91e3f]/50 bg-[#e91e3f]/[0.08]">
-                    <span className="absolute left-2.5 top-2 w-5 h-5 rounded-md bg-[#e91e3f]/25 flex items-center justify-center">
-                      <MegaphoneIcon className="w-3 h-3 shrink-0 text-[#ff5c77]" />
-                    </span>
-                    <p className="text-center text-[11px] font-bold leading-relaxed break-keep text-gray-100">
-                      인벤토리가 가득 찼습니다 <b className="text-[#ff5c77] tabular-nums">{l.inventory?.length || 0}/{invCapOf(l)}</b> — 선수를 포지션에 배정하기 전까지 입찰할 수 없습니다.
-                      {!invPlusUsed(l) && " 인벤토리 플러스로 칸을 늘릴 수도 있습니다."}
-                    </p>
-                  </div>
+                <div className="shrink-0 relative border rounded-lg pl-9 pr-9 py-2 mb-2.5 border-[#e91e3f]/50 bg-[#e91e3f]/[0.12] backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2 duration-200">
+                  {/* 확성기 — 배경 없이 아이콘만, 세로 중앙 */}
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                    <MegaphoneIcon className="w-3.5 h-3.5 shrink-0 text-white" />
+                  </span>
+                  <p className="text-center text-[11px] font-bold leading-relaxed break-keep text-gray-100">
+                    인벤토리가 가득 찼습니다 <b className="text-[#ff5c77] tabular-nums">{l.inventory?.length || 0}/{invCapOf(l)}</b> — 선수를 포지션에 배정하기 전까지 입찰할 수 없습니다.
+                    {!invPlusUsed(l) && " 인벤토리 플러스로 칸을 늘릴 수도 있습니다."}
+                  </p>
                 </div>
               )}
+
+              {/* 고정 높이 — 카드가 늘어나도 팝업은 그대로, 카드 영역만 스크롤 */}
+              <div className="auc-modal flex-1 min-h-0 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+              <span className="auc-modal-line bg-white/35" />
 
               <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/12 shrink-0">
                 <span className="auc-label text-gray-500">Inventory</span>
@@ -2542,6 +2544,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     </div>
                   )}
                 </div>
+              </div>
               </div>
             </div>
 
