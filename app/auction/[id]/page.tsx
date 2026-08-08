@@ -40,7 +40,7 @@ const AucModal = ({
     <div className="auc-modal-back animate-in fade-in" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`auc-modal ${wide ? "sm:max-w-lg" : "sm:max-w-sm"} animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200`}
+        className={`auc-modal ${wide ? "sm:max-w-lg" : "sm:max-w-sm"} max-h-[88dvh] overflow-y-auto animate-in zoom-in-95 duration-200`}
       >
         <span className={`auc-modal-line ${t.line}`} />
         <div className="px-6 sm:px-7 pt-6 sm:pt-7 pb-6">
@@ -1861,7 +1861,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   <div className="flex items-baseline gap-3 pb-2 border-b border-white/20">
                     <span className="auc-label text-white">Point Race</span>
                     <span className="text-[10px] font-bold text-gray-600">남은 예산</span>
-                    <button onClick={() => { setSheet("teams"); sfxSelect(); }} className="ml-auto text-[10px] font-black text-gray-500 active:text-white">
+                    <button onClick={() => { setSheet("teams"); setExpandedTeams(new Set(railLeaders.map((x) => x.li))); sfxSelect(); }} className="ml-auto text-[10px] font-black text-gray-500 active:text-white">
                       자세히 ›
                     </button>
                   </div>
@@ -2051,7 +2051,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         return (
           <div className="auc-modal-back z-[118] animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); setMobPick(null); }}>
             {/* 공지는 팝업 '바깥 위' 에 별도로 띄운다 → 세로로 [공지] / [인벤토리] 두 덩어리 */}
-            <div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-4xl flex flex-col h-[94dvh] sm:h-[560px] sm:max-h-[85vh]">
+            <div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-4xl flex flex-col max-h-[88dvh] h-[88dvh] sm:h-[560px] sm:max-h-[85vh]">
 
               {/* 📢 인벤토리 초과 공지 — 채팅 공지 생김새 그대로 */}
               {mine && (l.inventory?.length || 0) > invCapOf(l) && (
@@ -2068,7 +2068,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               )}
 
               {/* 고정 높이 — 카드가 늘어나도 팝업은 그대로, 카드 영역만 스크롤 */}
-              <div className="auc-modal flex-1 min-h-0 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+              <div className="auc-modal flex-1 min-h-0 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
               <span className="auc-modal-line bg-white/35" />
 
               <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/12 shrink-0">
@@ -2213,15 +2213,29 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         const sp = auction.players[ac.card.playerIdx];
                         const scouted = sp && canSeePos(sp);
                         return (
-                          <div key={ac.key} className="px-3.5 py-2.5 border-b border-white/[0.05] opacity-60">
+                          /* 배정을 마쳤어도 정보는 계속 볼 수 있어야 한다 (티어·스카우터 결과 포함) */
+                          <div key={ac.key} className="px-3.5 py-2.5 border-b border-white/[0.05]">
                             <div className="flex items-baseline gap-2">
-                              <span className={`shrink-0 text-[9px] font-black ${roleColor(ac.slot).text}`}>{roleAbbr(ac.slot)}</span>
-                              <span className="text-[13px] font-black text-gray-300 truncate">{cardName(ac.card)}</span>
-                              <span className="ml-auto shrink-0 text-[11px] font-black text-gray-600 tabular-nums">{ac.card.price.toLocaleString()}</span>
+                              <span className={`shrink-0 text-[10px] font-black ${roleColor(ac.slot).text}`}>{roleAbbr(ac.slot)}</span>
+                              <span className={`text-[13px] font-black truncate ${ac.card.golden ? "text-amber-300/80" : "text-gray-200"}`}>{cardName(ac.card)}</span>
+                              <span className="ml-auto shrink-0 text-[11px] font-black text-gray-500 tabular-nums">{ac.card.price.toLocaleString()}</span>
                             </div>
-                            {scouted && !ac.card.golden && (
-                              <p className="text-[10px] font-bold text-gray-600 mt-0.5 truncate">{revealParts(sp).map((r: any) => r.v).join(" · ")}</p>
-                            )}
+                            <p className="text-[10px] font-bold text-gray-500 mt-1 truncate">
+                              {ac.card.golden ? (
+                                <span className="text-amber-200/50">티어 비공개</span>
+                              ) : (
+                                <>
+                                  <span className="text-gray-400">{sp?.peakTier || "?"}</span>
+                                  <span className="text-gray-700 mx-1">·</span>
+                                  <span>{sp?.currentTier || "?"}</span>
+                                </>
+                              )}
+                              {scouted ? (
+                                <span className="text-gray-300 ml-2">{revealParts(sp).map((r: any) => r.v).join(" · ")}</span>
+                              ) : (
+                                <span className="text-gray-700 ml-2">스카우터 미사용</span>
+                              )}
+                            </p>
                           </div>
                         );
                       })}
@@ -3185,7 +3199,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         {/* ── 타 팀 시트 열기 ── */}
         <div className="flex items-stretch divide-x divide-white/12 border-b border-white/12">
           {/* 팀 슬롯은 모바일에서 빼둔다 — 인벤토리에서 배정하므로 중복 */}
-          <button onClick={() => { setSheet("teams"); sfxSelect(); }} className="flex-1 py-2 text-[11px] font-black text-gray-300 active:bg-white/[0.06] transition-colors">
+          {/* 열자마자 각 팀 로스터가 펼쳐져 있게 한다 — 팀마다 눌러서 여는 수고를 없앤다 */}
+          <button onClick={() => { setSheet("teams"); setExpandedTeams(new Set(railLeaders.map((x) => x.li))); sfxSelect(); }} className="flex-1 py-2 text-[11px] font-black text-gray-300 active:bg-white/[0.06] transition-colors">
             {isThird ? "팀" : "타 팀"} <span className="text-gray-600 tabular-nums">{railLeaders.length}</span>
           </button>
 
@@ -3296,13 +3311,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         })()}
       </div>
 
-      {/* 📱 하단 시트 — 팀 슬롯 / 선수 목록 */}
+      {/* 📱 타 팀 팝업 — 하단에 꽂지 않고 화면 중앙에 띄운다 */}
       {sheet && (
-        <div className="lg:hidden fixed inset-0 z-[110] flex flex-col justify-end bg-black/80 backdrop-blur-sm animate-in fade-in" onClick={() => setSheet(null)}>
+        <div className="lg:hidden fixed inset-0 z-[110] flex items-center justify-center p-3.5 bg-black/80 backdrop-blur-sm animate-in fade-in" onClick={() => setSheet(null)}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative border-t border-white/20 bg-[#0d0d0e] flex flex-col animate-in slide-in-from-bottom-4 duration-200"
-            style={{ maxHeight: "86dvh", paddingBottom: "env(safe-area-inset-bottom)" }}
+            className="relative w-full border border-white/20 bg-[#0d0d0e] shadow-[0_24px_60px_-16px_#000] flex flex-col animate-in zoom-in-95 duration-200"
+            style={{ maxHeight: "86dvh" }}
           >
             <span className="absolute inset-x-0 top-0 h-[2px] bg-[#e91e3f]" />
             <div className="flex items-center gap-3 px-4 py-3 border-b border-white/12 shrink-0">

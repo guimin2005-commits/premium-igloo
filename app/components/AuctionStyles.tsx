@@ -422,8 +422,9 @@ export const AuctionStyles = () => (
     }
 
     /* ── 경매장 공용 팝업 ── 방 안의 모든 모달이 같은 골격을 쓴다 */
-    .auc-modal-back { position: fixed; inset: 0; z-index: 120; display: flex; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.84); backdrop-filter: blur(4px); }
-    @media (min-width: 640px) { .auc-modal-back { align-items: center; padding: 16px; } }
+    /* 모바일에서도 하단에 꽂지 않고 화면 중앙에 띄운다 */
+    .auc-modal-back { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; padding: 14px; background: rgba(0,0,0,.84); backdrop-filter: blur(4px); }
+    @media (min-width: 640px) { .auc-modal-back { padding: 16px; } }
     .auc-modal {
       position: relative; width: 100%;
       background: linear-gradient(160deg, #141416 0%, #0e0e10 60%, #0a0a0b 100%);
