@@ -560,8 +560,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const invOverCap = !!(myLeader && invMode && myInvCount > myInvCap);
 
   // 📱 모바일 하단 독의 높이 — 미니 채팅 버튼을 그 위에 띄우기 위해 계산
-  const bidBarOn = !!(myLeader && auction.status === "진행중" && curPlayer && scoutLeft === 0 && strategyLeft === 0 && timeLeft !== null && timeLeft > 0);
-  const bottomBarH = 34 + (bidBarOn ? 56 : 0) + (myLeader ? 52 : 0);
+  //   ⚠️ 인벤토리 초과 시에는 입찰 UI 를 아예 띄우지 않는다 (서버도 403 으로 거부한다)
+  const bidBarOn = !!(myLeader && auction.status === "진행중" && curPlayer && scoutLeft === 0 && strategyLeft === 0 && timeLeft !== null && timeLeft > 0 && !invOverCap);
+  // 입찰 바가 빠지면 그 자리에 초과 안내 줄이 들어가므로 높이를 같이 센다
+  const bottomBarH = 34 + (bidBarOn ? 56 : 0) + (invOverCap ? 50 : 0) + (myLeader ? 52 : 0);
 
   const pa = auction.pendingAssign;
   const hasPending = pa && pa.playerIdx !== null && pa.playerIdx !== undefined;
@@ -619,6 +621,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
   const doBid = async (amount: number) => {
     if (myLeaderIdx === null) { showToast("입찰하려면 상단에서 리더 역할을 선택하세요"); return; }
+    // ⚠️ 인벤토리 초과 중에는 어떤 경로로도 입찰이 나가지 않게 한다 (서버 403 과 이중 방어)
+    if (invOverCap) { showToast(`인벤토리가 가득 찼습니다 (${myInvCount}/${myInvCap}) — 선수를 배정한 뒤 입찰할 수 있습니다`); return; }
     if (myLeader && amount > myLeader.points) { showToast(`보유 Point가 부족합니다. (보유 ${myLeader.points.toLocaleString()} Point)`); return; }
     const d = await act({ action: "bid", leaderIdx: myLeaderIdx, playerIdx: cur.playerIdx, amount });
     // 📌 폴링(1.5초) 지연 동안 타이머가 짧게 보이는 문제 방지 — 성공 즉시 로컬 반영
@@ -636,6 +640,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
   // 직접 입력 입찰: 입찰 단위로 자동 보정 + Enter 지원
   const submitDirectBid = () => {
+    if (invOverCap) { showToast(`인벤토리가 가득 찼습니다 (${myInvCount}/${myInvCap}) — 선수를 배정한 뒤 입찰할 수 있습니다`); return; }
     const raw = Number(bidInput);
     if (!raw) return;
     const snapped = Math.floor(raw / S.minIncrement) * S.minIncrement; // 입찰 단위로 내림 보정
@@ -1495,7 +1500,22 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           </button>
                         ) : null}
 
-                        {scoutLeft > 0 ? (
+                        {/* ⚠️ 인벤토리가 가득 찬 동안에는 입찰 칸을 아예 두지 않는다 — 시도 자체가 불가능해야 한다 */}
+                        {invOverCap ? (
+                          <div className="border-t border-[#e91e3f]/40 pt-3">
+                            <p className="text-[12px] font-black text-[#ff5c77]">입찰할 수 없습니다</p>
+                            <p className="text-[11px] text-gray-400 leading-relaxed break-keep mt-1">
+                              인벤토리가 가득 찼습니다 <b className="text-white tabular-nums">{myInvCount}/{myInvCap}</b>.
+                              보유 중인 선수를 포지션에 배정해 칸을 비우면 입찰 칸이 다시 나타납니다.
+                            </p>
+                            <button
+                              onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
+                              className="mt-2.5 px-4 py-2 text-[11px] font-black text-white bg-[#e91e3f] hover:bg-[#d01634] transition-colors"
+                            >
+                              인벤토리 열기
+                            </button>
+                          </div>
+                        ) : scoutLeft > 0 ? (
                           <p className="text-[11px] font-bold text-gray-500 text-right">스카우터 타임 종료 후 입찰이 시작됩니다</p>
                         ) : timeLeft === 0 ? (
                           <p className="text-xs font-black text-gray-400 text-right border-t border-white/10 pt-2.5">입찰 마감 — 진행자의 처리를 기다리는 중</p>
@@ -1934,6 +1954,22 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             }
             // 되돌릴 수 없는 조작이라 기록으로 남긴다
             pushNotice({ kind: "assign", title: `배정 — ${nm}`, rows: [{ l: "포지션", v: roleAbbr(slot), pos: slot }] });
+
+            // 📌 폴링(1.5초)을 기다리지 않고 즉시 반영 — 칸이 비면 입찰 칸이 바로 다시 떠야 한다.
+            //    자동 복귀(autoEjected)는 한 장 나가고 한 장 들어와 보유 수가 그대로이므로 건드리지 않는다.
+            if (!d.autoEjected) {
+              setAuction((prev: any) => {
+                if (!prev) return prev;
+                const next = structuredClone(prev);
+                const L = next.leaders?.[li];
+                const c = L?.inventory?.[invIdx];
+                if (!L || !c) return prev; // 이미 폴링으로 반영됐다면 그대로 둔다
+                L.inventory.splice(invIdx, 1);
+                L.roster.push({ playerIdx: c.playerIdx, slot, price: c.price, golden: c.golden });
+                if (d.overflow) next.pendingOverflow = { leaderIdx: li, slot };
+                return next;
+              });
+            }
           } else {
             showToast(d?.message || "배정에 실패했습니다");
           }
@@ -3033,6 +3069,23 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           </button>
 
         </div>
+
+        {/* ── 인벤토리가 가득 차면 입찰 바 대신 설명을 둔다 (입찰 시도 자체를 없앤다) ── */}
+        {myLeader && invMode && invOverCap && (
+          <button
+            onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 border-b border-[#e91e3f]/40 bg-[#e91e3f]/[0.12] text-left active:bg-[#e91e3f]/25 transition-colors"
+          >
+            <MegaphoneIcon className="w-3.5 h-3.5 shrink-0 text-white" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-black text-[#ff5c77] leading-tight">입찰할 수 없습니다 · 인벤토리 {myInvCount}/{myInvCap}</span>
+              <span className="block text-[10px] font-bold text-gray-400 leading-tight mt-0.5">선수를 배정해 칸을 비우세요 — 눌러서 인벤토리 열기</span>
+            </span>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5 shrink-0 text-[#ff5c77]">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
+          </button>
+        )}
 
         {/* ── 입찰 (호명 중일 때만) ── */}
         {bidBarOn && timeLeft !== null && (
