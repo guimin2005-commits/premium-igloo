@@ -56,6 +56,7 @@ export default function AuctionListPage() {
   const [settings, setSettings] = useState({
     leaderPoints: 100000, basePrice: 1000, goldenBasePrice: 4000,
     scoutCost: 2000, goldenScoutCost: 4000, posChangeCost: 10000, minIncrement: 100, timerSeconds: 15, scoutSeconds: 7,
+    invCapacity: 1, invPlusCost: 5000,
   });
   const [leaders, setLeaders] = useState<any[]>([{ name: "", position: "", discordId: "" }]);
   const [players, setPlayers] = useState<any[]>([{ alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", mostChampions: [""], isAllPos: false }]);
@@ -553,6 +554,8 @@ export default function AuctionListPage() {
                     { k: "minIncrement", l: "최소 입찰 단위" },
                     { k: "timerSeconds", l: "입찰 타이머(초)" },
                     { k: "scoutSeconds", l: "스카우터 타임(초)" },
+                    { k: "invCapacity", l: "인벤토리 용량(칸)" },
+                    { k: "invPlusCost", l: "인벤토리 플러스" },
                   ].map((f) => (
                     <div key={f.k}>
                       <p className="text-[10px] font-bold text-gray-600 mb-1">{f.l}</p>

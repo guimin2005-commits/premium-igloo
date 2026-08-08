@@ -470,6 +470,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const strategyLeft = auction.strategyUntil ? Math.max(0, Math.ceil((new Date(auction.strategyUntil).getTime() - (now + clockSkew.current)) / 1000)) : 0;
   const assignLeft = auction.assignUntil ? Math.max(0, Math.ceil((new Date(auction.assignUntil).getTime() - (now + clockSkew.current)) / 1000)) : 0;
 
+  // 📌 인벤토리 용량 — 기본 용량 + 인벤토리 플러스로 산 칸. 초과 소지 시 배정 전까지 입찰 불가
+  const invPlusCost = S.invPlusCost ?? 5000;
+  const invCapOf = (l: any) => Math.max(1, (S.invCapacity ?? 1) + (l?.invExtra || 0));
+  const myInvCap = myLeader ? invCapOf(myLeader) : 1;
+  const myInvCount = myLeader?.inventory?.length || 0;
+  const invOverCap = !!(myLeader && invMode && myInvCount > myInvCap);
+
   // 📱 모바일 하단 독의 높이 — 미니 채팅 버튼을 그 위에 띄우기 위해 계산
   const bidBarOn = !!(myLeader && auction.status === "진행중" && curPlayer && scoutLeft === 0 && strategyLeft === 0 && timeLeft !== null && timeLeft > 0);
   const bottomBarH = 34 + (bidBarOn ? 56 : 0) + (myLeader ? 52 : 0);
@@ -928,7 +935,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {invMode && (
                     <button onClick={() => { setInvModal(li); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }} className={`group mt-2.5 w-full flex items-center gap-2 border px-2.5 py-1.5 text-[10px] font-black cursor-pointer transition-all ${(l.inventory?.length || 0) > 0 ? "border-[#e91e3f]/60 bg-[#e91e3f]/[0.08] text-[#ff5c77] hover:bg-[#e91e3f]/20" : "border-white/20 text-gray-400 hover:border-white hover:text-white hover:bg-white/[0.06]"}`}>
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
-                      인벤토리 {(l.inventory?.length || 0) > 0 ? `${l.inventory.length}장` : "비어 있음"}
+                      인벤토리 {l.inventory?.length || 0}/{invCapOf(l)}
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 ml-auto shrink-0 transition-transform group-hover:translate-x-0.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
                     </button>
                   )}
@@ -1294,6 +1301,42 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
           )}
 
+          {/* 📌 인벤토리 초과 — 배정 전까지 입찰이 막힌다 */}
+          {myLeader && invMode && invOverCap && (
+            <div className="border border-[#e91e3f]/50 bg-[#e91e3f]/[0.08] px-4 py-3 sm:px-5 sm:py-4">
+              <p className="text-xs font-black text-white mb-1">
+                인벤토리가 가득 찼습니다 — 배정 전까지 입찰할 수 없습니다
+              </p>
+              <p className="text-[11px] text-gray-400 leading-relaxed break-keep">
+                보유 <b className="text-[#ff5c77]">{myInvCount}</b> / 용량 <b className="text-white">{myInvCap}</b> ·
+                인벤토리에서 선수를 포지션에 배정하거나, 인벤토리 플러스로 칸을 늘리세요.
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2.5">
+                <button
+                  onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
+                  className="px-3.5 py-2 text-[11px] font-black text-white bg-[#e91e3f] hover:bg-[#d01634] transition-colors"
+                >
+                  인벤토리 열기
+                </button>
+                <button
+                  onClick={() => setConfirmCfg({
+                    title: "인벤토리 플러스",
+                    message: `${invPlusCost.toLocaleString()} Point 를 사용해 인벤토리 용량을 한 칸 늘립니다.\n(현재 ${myInvCap}칸 → ${myInvCap + 1}칸)`,
+                    confirmLabel: "구매",
+                    onConfirm: async () => {
+                      const d = await act({ action: "leader:invPlus", leaderIdx: myLeaderIdx, byLeaderIdx: myLeaderIdx });
+                      if (d?.success) { sfxAssign(); showToast(`인벤토리 용량이 ${d.capacity}칸이 되었습니다`); }
+                      else showToast(d?.message || "구매에 실패했습니다");
+                    },
+                  })}
+                  className="px-3.5 py-2 text-[11px] font-black text-gray-200 border border-white/25 hover:border-white hover:bg-white/[0.06] transition-colors"
+                >
+                  인벤토리 플러스 · {invPlusCost.toLocaleString()} Pt
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* 전략 타임 배너 */}
           {strategyLeft > 0 && (
             <div className="border border-blue-500/30 bg-blue-500/[0.06] px-5 py-4 flex items-center gap-3">
@@ -1639,7 +1682,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         <span className="text-left">
                           <span className={`block auc-label ${invCount > 0 ? "text-[#ff5c77]" : "text-gray-500"}`}>Inventory</span>
                           <span className={`block text-lg font-black tabular-nums leading-tight transition-colors ${invCount > 0 ? "text-white" : "text-gray-400 group-hover:text-white"}`}>
-                            {invCount}<span className="text-[10px] font-bold text-gray-500 ml-1">장</span>
+                            {invCount}<span className="text-[10px] font-bold text-gray-500 ml-1">/{myInvCap}</span>
                           </span>
                         </span>
                       </button>
@@ -1933,7 +1976,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/12 shrink-0">
                 <span className="auc-label text-gray-500">Inventory</span>
                 <span className="text-sm font-black text-white truncate">{l.name}</span>
-                <span className="text-[11px] font-black text-gray-400 tabular-nums">{l.inventory?.length || 0}장</span>
+                <span className={`text-[11px] font-black tabular-nums ${(l.inventory?.length || 0) > invCapOf(l) ? "text-[#ff5c77]" : "text-gray-400"}`}>{l.inventory?.length || 0}<span className="text-gray-600">/{invCapOf(l)}</span></span>
                 {!mine && <span className="auc-cap text-gray-600 border border-white/12 px-1.5 py-1">열람 전용</span>}
                 <button onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); setMobPick(null); }} className="ml-auto p-1.5 -mr-1 text-gray-500 hover:text-white hover:bg-white/5 transition-colors outline-none">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -1978,7 +2021,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                 {/* ── 보유 선수 목록 (한 명당 한 줄, 정보 그대로 읽힌다) ── */}
                 <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
-                  <p className="px-3.5 pt-3 pb-1.5 auc-label text-gray-500">보유 선수 {l.inventory?.length || 0}</p>
+                  <p className="px-3.5 pt-3 pb-1.5 auc-label text-gray-500">보유 선수 <span className={(l.inventory?.length || 0) > invCapOf(l) ? "text-[#ff5c77]" : "text-gray-300"}>{l.inventory?.length || 0}</span><span className="text-gray-700">/{invCapOf(l)}</span></p>
 
                   {(l.inventory?.length || 0) === 0 ? (
                     <p className="px-3.5 py-8 text-center text-[11px] text-gray-700">보유 중인 선수가 없습니다.</p>
@@ -2983,7 +3026,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <button
                   onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
                   aria-label="인벤토리"
-                  className={`relative shrink-0 w-9 h-9 flex items-center justify-center border transition-colors ${invCount > 0 ? "border-[#e91e3f] bg-[#e91e3f]/15 text-[#ff5c77]" : "border-white/20 text-gray-400 active:bg-white/[0.06]"}`}
+                  className={`relative shrink-0 w-9 h-9 flex items-center justify-center border transition-colors ${invOverCap ? "border-[#e91e3f] bg-[#e91e3f]/25 text-[#ff5c77] animate-pulse" : invCount > 0 ? "border-[#e91e3f] bg-[#e91e3f]/15 text-[#ff5c77]" : "border-white/20 text-gray-400 active:bg-white/[0.06]"}`}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />

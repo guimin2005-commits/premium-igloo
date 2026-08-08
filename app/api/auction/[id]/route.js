@@ -11,6 +11,11 @@ import { isAdminName } from "@/lib/admins";
 
 const slotCount = (leader, slot) => leader.roster.filter((r) => r.slot === slot).length;
 
+// 📌 인벤토리 용량 = 기본 용량 + '인벤토리 플러스'로 산 추가 칸
+//    용량을 넘겨 소지하면 배정으로 줄이기 전까지 다음 입찰을 막는다.
+const invCapacityOf = (S, leader) => Math.max(1, (S?.invCapacity ?? 1) + (leader?.invExtra || 0));
+const invOver = (S, leader) => (leader?.inventory?.length || 0) > invCapacityOf(S, leader);
+
 const addLog = (auction, msg) => {
   auction.log.push({ t: new Date(), msg });
   if (auction.log.length > 100) auction.log = auction.log.slice(-100);
@@ -106,6 +111,17 @@ export async function POST(request, { params }) {
       if (!auction || auction.status !== "진행중") return NextResponse.json({ success: false, message: "진행 중인 경매가 아닙니다." }, { status: 400 });
       if (auction.current.playerIdx !== playerIdx) return NextResponse.json({ success: false, message: "경매 대상이 변경되었습니다." }, { status: 409 });
 
+      // 📌 인벤토리 초과 소지 중에는 입찰 불가 — 먼저 배정해 칸을 비워야 한다
+      {
+        const S0 = auction.settings;
+        const me = auction.leaders[leaderIdx];
+        if (me && S0.assignMode === "inventory" && invOver(S0, me)) {
+          return NextResponse.json({
+            success: false,
+            message: `인벤토리가 가득 찼습니다. (${me.inventory.length}/${invCapacityOf(S0, me)}) 선수를 배정해 칸을 비운 뒤 입찰할 수 있습니다.`,
+          }, { status: 403 });
+        }
+      }
       // 전략 타임 중 입찰 불가
       if (auction.strategyUntil && Date.now() < new Date(auction.strategyUntil).getTime()) {
         return NextResponse.json({ success: false, message: "전략 타임 중에는 입찰할 수 없습니다." }, { status: 403 });
@@ -325,8 +341,12 @@ export async function POST(request, { params }) {
           player.soldPrice = price;
           auction.current = { playerIdx: null, price: 0, leaderIdx: null, endsAt: null, scoutUntil: null, isAllin: false };
           addLog(auction, `${player.isAllPos ? "올 포지션 선수" : player.alias} → ${leader.name} 인벤토리 (${price.toLocaleString()} Point)`);
+          // ⚠️ 로그는 save 전에 쌓아야 저장된다
+          const over = invOver(S, leader);
+          if (over) addLog(auction, `${leader.name} 인벤토리 초과 (${leader.inventory.length}/${invCapacityOf(S, leader)}) — 배정 전까지 입찰 불가`);
           await auction.save();
           sysChat(id, `낙찰. ${player.isAllPos ? "올 포지션 선수" : player.alias} 선수가 ${leader.name} 팀 인벤토리에 담겼습니다. (${price.toLocaleString()} Point)`);
+          if (over) sysChat(id, `${leader.name} 팀의 인벤토리가 가득 찼습니다. (${leader.inventory.length}/${invCapacityOf(S, leader)}) 선수를 배정해야 다음 입찰이 가능합니다.`);
           return NextResponse.json({ success: true });
         }
 
@@ -435,6 +455,33 @@ export async function POST(request, { params }) {
         await auction.save();
         sysChat(id, `${leader.name} 팀의 ${mp?.alias} 선수가 인벤토리로 돌아갔습니다. 다른 포지션에 다시 배정해주세요.`);
         return NextResponse.json({ success: true });
+      }
+
+      // 📌 인벤토리 플러스 — 용량을 한 칸 늘린다
+      case "leader:invPlus": {
+        const { leaderIdx, byLeaderIdx } = body;
+        const leader = auction.leaders[leaderIdx];
+        if (!leader) return NextResponse.json({ success: false }, { status: 400 });
+        if (byLeaderIdx !== null && byLeaderIdx !== undefined && byLeaderIdx !== leaderIdx) {
+          return NextResponse.json({ success: false, message: "본인 팀만 구매할 수 있습니다." }, { status: 403 });
+        }
+        if (auction.status !== "진행중") {
+          return NextResponse.json({ success: false, message: "진행 중인 경매가 아닙니다." }, { status: 400 });
+        }
+        if (S.assignMode !== "inventory") {
+          return NextResponse.json({ success: false, message: "인벤토리 방식이 아닙니다." }, { status: 400 });
+        }
+        const cost = S.invPlusCost ?? 5000;
+        if (leader.points < cost) {
+          return NextResponse.json({ success: false, message: `Point 가 부족합니다. (필요 ${cost.toLocaleString()} Point)` }, { status: 400 });
+        }
+        leader.points -= cost;
+        leader.invExtra = (leader.invExtra || 0) + 1;
+        const cap = invCapacityOf(S, leader);
+        addLog(auction, `${leader.name} 인벤토리 플러스 구매 — 용량 ${cap}칸 (-${cost.toLocaleString()} Point)`);
+        await auction.save();
+        sysChat(id, `${leader.name} 팀이 인벤토리 플러스를 구매했습니다. (용량 ${cap}칸)`);
+        return NextResponse.json({ success: true, capacity: cap });
       }
 
       // 📌 초과 배정으로 밀려난 대상이 '리더 본인'인 경우 — 인벤토리로 보낼 수 없으므로 그 자리에서 포지션을 다시 지정
