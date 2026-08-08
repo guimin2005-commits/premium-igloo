@@ -83,6 +83,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
   const [miniChat, setMiniChat] = useState(false); // 모바일 우하단 팝업 채팅
   const [sheet, setSheet] = useState<null | "teams">(null); // 모바일 하단 시트 (타 팀)
+  const [mobPick, setMobPick] = useState<number | null>(null); // 모바일 인벤토리: 배정할 카드
   const [chatUnread, setChatUnread] = useState(0); // 모바일에서 채팅 탭에 없을 때 쌓인 새 메시지
   const [bidFlash, setBidFlash] = useState<{ idx: number; n: number } | null>(null); // 입찰한 팀 강조 (좌측 레일)
   const [showSystemChat, setShowSystemChat] = useState(true); // 채팅의 공지 표시 on/off
@@ -1863,7 +1864,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           doPlace(invIdx, slot);
         };
         return (
-          <div className="auc-modal-back z-[118] animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); }}>
+          <div className="auc-modal-back z-[118] animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); setMobPick(null); }}>
             {/* 고정 높이 — 카드가 늘어나도 팝업은 그대로, 카드 영역만 스크롤 */}
             <div onClick={(e) => e.stopPropagation()} className="auc-modal sm:max-w-4xl h-[94dvh] sm:h-[560px] sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
               <span className="auc-modal-line bg-white/35" />
@@ -1872,13 +1873,216 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 <span className="text-sm font-black text-white truncate">{l.name}</span>
                 <span className="text-[11px] font-black text-gray-400 tabular-nums">{l.inventory?.length || 0}장</span>
                 {!mine && <span className="auc-cap text-gray-600 border border-white/12 px-1.5 py-1">열람 전용</span>}
-                <button onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); }} className="ml-auto p-1.5 -mr-1 text-gray-500 hover:text-white hover:bg-white/5 transition-colors outline-none">
+                <button onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); setMobPick(null); }} className="ml-auto p-1.5 -mr-1 text-gray-500 hover:text-white hover:bg-white/5 transition-colors outline-none">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
 
               {/* 가로 2단 — 팝업 크기는 고정, 각 영역 내부만 스크롤 */}
-              <div className="p-3.5 sm:p-5 flex-1 min-h-0 overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-3.5 lg:gap-5 items-stretch">
+              {/* ══════════ 📱 모바일 전용 인벤토리 ══════════
+                  PC의 2단(카드 격자 ↔ 포지션 드롭존) 구조는 모바일에 맞지 않는다.
+                  드래그가 안 되고, 작은 카드에서 정보를 읽을 수도 없다.
+                  → '보유 선수 목록' → '배정하기' → '포지션 선택' 3단계 흐름으로 다시 짠다. */}
+              <div className="lg:hidden flex-1 min-h-0 flex flex-col">
+
+                {/* ── 현재 로스터 (읽기 전용 요약) ── */}
+                <div className="shrink-0 px-3.5 py-2.5 border-b border-white/[0.07] bg-white/[0.015]">
+                  <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                    {roleList.map((slot) => {
+                      const entries = l.roster.filter((r: any) => r.slot === slot);
+                      const limit = slotLimitOf(slot);
+                      return (
+                        <span key={slot} className="flex items-baseline gap-1.5 min-w-0">
+                          <span className={`text-[9px] font-black shrink-0 ${roleColor(slot).text}`}>{roleAbbr(slot)}</span>
+                          <span className={`text-[11px] font-bold truncate ${entries.length ? "text-gray-200" : "text-gray-700"}`}>
+                            {entries.length ? entries.map((r: any) => rosterName(l, r)).join(", ") : `—`}
+                          </span>
+                          <span className="text-[9px] font-black text-gray-700 tabular-nums shrink-0">{entries.length}/{limit}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* ── 초과 배정 정리 안내 ── */}
+                {invOverflow && (
+                  <div className="shrink-0 px-3.5 py-2 border-b border-amber-400/30 bg-amber-400/[0.07]">
+                    <p className="text-[10px] font-bold text-amber-200 leading-relaxed">
+                      <b>[{po.slot}]</b> 가 초과되었습니다. 아래 목록에서 내보낼 선수를 눌러 보유 선수로 되돌리세요.
+                    </p>
+                    <LeaderPosPicker leaderIdx={li} />
+                  </div>
+                )}
+
+                {/* ── 보유 선수 목록 (한 명당 한 줄, 정보 그대로 읽힌다) ── */}
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
+                  <p className="px-3.5 pt-3 pb-1.5 auc-label text-gray-500">보유 선수 {l.inventory?.length || 0}</p>
+
+                  {(l.inventory?.length || 0) === 0 ? (
+                    <p className="px-3.5 py-8 text-center text-[11px] text-gray-700">보유 중인 선수가 없습니다.</p>
+                  ) : (
+                    (l.inventory || []).map((card: any, ci: number) => {
+                      const cp = auction.players[card.playerIdx];
+                      const scouted = cp && canSeePos(cp);
+                      return (
+                        <div key={`m-inv-${ci}`} className={`px-3.5 py-3 border-b border-white/[0.07] ${card.golden ? "bg-amber-400/[0.05]" : ""}`}>
+                          <div className="flex items-baseline gap-2">
+                            <span className={`text-[14px] font-black truncate ${card.golden ? "text-amber-300" : "text-white"}`}>{cardName(card)}</span>
+                            {card.golden && <span className="shrink-0 text-[8px] font-black text-amber-300 border border-amber-400/45 px-1">ALL</span>}
+                            <span className="ml-auto shrink-0 text-[12px] font-black text-gray-300 tabular-nums">{card.price.toLocaleString()}</span>
+                          </div>
+                          <p className="text-[11px] font-bold text-gray-500 mt-1 truncate">
+                            {card.golden ? (
+                              <span className="text-amber-200/60">티어 비공개</span>
+                            ) : (
+                              <>
+                                <span className="text-gray-300">{cp?.peakTier || "?"}</span>
+                                <span className="text-gray-700 mx-1">·</span>
+                                <span>{cp?.currentTier || "?"}</span>
+                              </>
+                            )}
+                            {scouted && <span className="text-gray-200 ml-2">{revealParts(cp).map((r: any) => r.v).join(" · ")}</span>}
+                          </p>
+                          {canManage && !swapMode && !invOverflow && (
+                            <button
+                              onClick={() => { setMobPick(ci); sfxSelect(); }}
+                              className="mt-2.5 w-full py-2.5 text-[12px] font-black text-white bg-[#e91e3f] active:bg-[#d01634] transition-colors"
+                            >
+                              배정하기
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+
+                  {/* ── 배정 완료 (읽기 전용) ── */}
+                  {assignedCards.length > 0 && (
+                    <>
+                      <p className="px-3.5 pt-4 pb-1.5 auc-label text-gray-600">배정 완료 {assignedCards.length}</p>
+                      {assignedCards.map((ac: any) => {
+                        const sp = auction.players[ac.card.playerIdx];
+                        const scouted = sp && canSeePos(sp);
+                        return (
+                          <div key={ac.key} className="px-3.5 py-2.5 border-b border-white/[0.05] opacity-60">
+                            <div className="flex items-baseline gap-2">
+                              <span className={`shrink-0 text-[9px] font-black ${roleColor(ac.slot).text}`}>{roleAbbr(ac.slot)}</span>
+                              <span className="text-[13px] font-black text-gray-300 truncate">{cardName(ac.card)}</span>
+                              <span className="ml-auto shrink-0 text-[11px] font-black text-gray-600 tabular-nums">{ac.card.price.toLocaleString()}</span>
+                            </div>
+                            {scouted && !ac.card.golden && (
+                              <p className="text-[10px] font-bold text-gray-600 mt-0.5 truncate">{revealParts(sp).map((r: any) => r.v).join(" · ")}</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+
+                {/* ── 포지션 체인지 ── */}
+                {canManage && (
+                  <div className="shrink-0 px-3.5 py-2.5 border-t border-white/12 flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-black text-gray-300">포지션 체인지</p>
+                      <p className="text-[9px] text-gray-600">팀당 1회 · {S.posChangeCost.toLocaleString()} Pt</p>
+                    </div>
+                    {l.positionChanged ? (
+                      <span className="shrink-0 text-[10px] font-black text-gray-600 border border-white/12 px-2.5 py-1.5">사용됨</span>
+                    ) : swapMode ? (
+                      <button onClick={() => { setSwapMode(false); setSwapPick([]); }} className="shrink-0 text-[11px] font-black text-gray-300 border border-white/20 px-3 py-1.5">취소</button>
+                    ) : (
+                      <button
+                        onClick={() => { if (l.roster.length < 2) { showToast("배정된 선수가 2명 이상이어야 합니다"); return; } setSwapMode(true); setSwapPick([]); sfxSelect(); showToast("교환할 선수 2명을 선택하세요"); }}
+                        className="shrink-0 text-[11px] font-black text-gray-200 border border-white/25 px-3 py-1.5 active:bg-white/10"
+                      >
+                        교환
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* ── 교환 모드: 배정된 선수 중 2명 선택 ── */}
+                {swapMode && canManage && (
+                  <div className="shrink-0 max-h-[38dvh] overflow-y-auto border-t border-white/12">
+                    {l.roster.map((r: any, ri: number) => {
+                      if (p1Role && r.slot === p1Role) return null;
+                      const picked = swapPick.includes(ri);
+                      return (
+                        <button
+                          key={ri}
+                          onClick={() => { setSwapPick((prev) => prev.includes(ri) ? prev.filter((x) => x !== ri) : prev.length >= 2 ? prev : [...prev, ri]); sfxSelect(); }}
+                          className={`w-full flex items-center gap-2.5 px-3.5 py-3 border-b border-white/[0.07] text-left ${picked ? "bg-[#e91e3f]/15" : ""}`}
+                        >
+                          <span className={`shrink-0 w-9 text-[10px] font-black ${roleColor(r.slot).text}`}>{roleAbbr(r.slot)}</span>
+                          <span className="flex-1 min-w-0 truncate text-[13px] font-black text-white">{rosterName(l, r)}</span>
+                          <span className={`shrink-0 w-5 h-5 flex items-center justify-center text-[10px] font-black border ${picked ? "border-[#e91e3f] bg-[#e91e3f] text-white" : "border-white/15 text-transparent"}`}>{picked ? "✓" : ""}</span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      disabled={swapPick.length !== 2}
+                      onClick={async () => {
+                        if (swapPick.length !== 2) return;
+                        const [a, b] = swapPick;
+                        const na = rosterName(l, l.roster[a]), nb = rosterName(l, l.roster[b]);
+                        const d = await act({ action: "host:posSwap", leaderIdx: li, a, b, byLeaderIdx: myLeaderIdx });
+                        if (d?.success) { sfxAssign(); showToast(`${na} ↔ ${nb} 교환 완료`); pushNotice({ kind: "swap", title: "포지션 체인지", rows: [{ l: "교환", v: `${na} ↔ ${nb}` }] }); setSwapMode(false); setSwapPick([]); }
+                        else showToast(d?.message || "교환에 실패했습니다");
+                      }}
+                      className="w-full py-3 text-[12px] font-black text-white bg-[#e91e3f] disabled:bg-white/5 disabled:text-gray-600"
+                    >
+                      {swapPick.length === 2 ? "선택한 2명 교환" : `${2 - swapPick.length}명 더 선택`}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 📱 포지션 선택 시트 — '배정하기' 를 누르면 올라온다 */}
+              {mobPick !== null && l.inventory?.[mobPick] && (() => {
+                const card = l.inventory[mobPick];
+                return (
+                  <div className="lg:hidden absolute inset-0 z-10 flex flex-col justify-end bg-black/75 animate-in fade-in" onClick={() => setMobPick(null)}>
+                    <div onClick={(e) => e.stopPropagation()} className="border-t border-white/20 bg-[#0e0e10] animate-in slide-in-from-bottom-4 duration-200" style={{ maxHeight: "82%" }}>
+                      <div className="flex items-baseline gap-2 px-4 py-3 border-b border-white/12">
+                        <span className="auc-label text-gray-500">배정</span>
+                        <span className={`text-[13px] font-black truncate ${card.golden ? "text-amber-300" : "text-white"}`}>{cardName(card)}</span>
+                        <button onClick={() => setMobPick(null)} className="ml-auto p-1 -mr-1 text-gray-500">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                      <div className="overflow-y-auto" style={{ maxHeight: "calc(82vh - 110px)" }}>
+                        {roleList.map((slot) => {
+                          const entries = l.roster.filter((r: any) => r.slot === slot);
+                          const limit = slotLimitOf(slot);
+                          const full = entries.length >= limit;
+                          const canHere = !full || !!card.golden; // 황금카드는 꽉 찬 슬롯에도
+                          return (
+                            <button
+                              key={slot}
+                              disabled={!canHere}
+                              onClick={() => { const idx = mobPick; setMobPick(null); requestPlace(idx, slot); }}
+                              className={`w-full flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.07] text-left transition-colors ${canHere ? "active:bg-white/[0.08]" : "opacity-35"}`}
+                            >
+                              <span className={`shrink-0 w-10 text-[12px] font-black ${roleColor(slot).text}`}>{roleAbbr(slot)}</span>
+                              <span className="flex-1 min-w-0 text-[11px] font-bold text-gray-400 truncate">
+                                {entries.length ? entries.map((r: any) => rosterName(l, r)).join(", ") : "비어 있음"}
+                              </span>
+                              <span className="shrink-0 text-[10px] font-black text-gray-600 tabular-nums">{entries.length}/{limit}</span>
+                              <span className={`shrink-0 text-[10px] font-black ${!canHere ? "text-gray-700" : full ? "text-amber-300" : "text-[#ff5c77]"}`}>
+                                {!canHere ? "가득참" : full ? "초과 배정" : "배정"}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ══ PC 전용: 좌우 2단 ══ */}
+              <div className="hidden lg:grid p-5 flex-1 min-h-0 overflow-hidden lg:grid-cols-[1fr_300px] gap-5 items-stretch">
 
                 {/* ══ 좌측 ══ */}
                 <div className="order-2 lg:order-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden space-y-4">
