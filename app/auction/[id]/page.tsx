@@ -161,7 +161,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [teamView, setTeamView] = useState<number | null>(null); // 모바일 단일 팀 프로필 (리더 idx)
   const [mobPick, setMobPick] = useState<number | null>(null); // 모바일 인벤토리: 배정할 카드
   const [mobBid, setMobBid] = useState(false); // 모바일 직접 입찰 팝업
-  const [slotsOpen, setSlotsOpen] = useState(false); // 모바일 좌하단 내 팀 포지션 펼침
+  const [slotsOpen, setSlotsOpen] = useState(false); // 모바일 프로필 알약에서 위로 열리는 내 슬롯 서랍
   // 📱 모바일 섹션 접힘 — 기본값은 '선수 목록만 접힘' (한 화면 정보량을 줄인다)
   const [mobFold, setMobFold] = useState<{ slots: boolean; race: boolean; players: boolean }>({ slots: true, race: true, players: false });
   const [chatUnread, setChatUnread] = useState(0); // 모바일에서 채팅 탭에 없을 때 쌓인 새 메시지
@@ -648,7 +648,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   //   ⚠️ 인벤토리 초과 시에는 입찰 UI 를 아예 띄우지 않는다 (서버도 403 으로 거부한다)
   // 입찰 바가 빠지면 그 자리에 초과 안내 줄이 들어가므로 높이를 같이 센다
   // 슬롯 줄 40 + 프로필 52 (+ 대기 중 인벤토리 경고 50)
-  const bottomBarH = (myLeader ? 62 : 0) + (invOverCap && !curPlayer ? 58 : 0);
+  const bottomBarH = (myLeader ? 62 : 0) + (myLeader && slotsOpen ? 54 : 0) + (invOverCap && !curPlayer ? 58 : 0);
 
   const pa = auction.pendingAssign;
   const hasPending = pa && pa.playerIdx !== null && pa.playerIdx !== undefined;
@@ -3556,62 +3556,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         );
       })()}
 
-      {/* 📱 모바일 — 좌하단 내 팀 포지션. 미니 채팅과 같은 방식으로, 동그란 버튼에서
-             옆으로 펼쳤다 접는다. 늘 펼쳐두면 독이 두꺼워져 무대가 밀린다. */}
-      {myLeader && (
-        <div
-          className="lg:hidden fixed left-4 z-[97] flex items-center gap-2 max-w-[calc(100vw-5.75rem)]"
-          style={{ bottom: `calc(${bottomBarH}px + 1rem + env(safe-area-inset-bottom))` }}
-        >
-          <button
-            onClick={() => { const v = !slotsOpen; setSlotsOpen(v); try { localStorage.setItem("auctionSlotsOpen", v ? "1" : "0"); } catch {} sfxSelect(); }}
-            aria-label="내 팀 포지션"
-            className={`auc-press relative shrink-0 w-12 h-12 rounded-full border backdrop-blur-2xl ring-1 ring-inset ring-white/[0.07] shadow-[0_12px_34px_-10px_#000] flex items-center justify-center transition-colors ${
-              slotsOpen ? "border-white/35 bg-white/[0.12]" : "border-white/20 bg-white/[0.07]"
-            }`}
-          >
-            {slotsOpen ? (
-              <svg className="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-            ) : (
-              <svg className="w-5 h-5 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 8.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 018.25 20.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-              </svg>
-            )}
-            {!slotsOpen && (
-              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#0b0b0c] border border-white/25 text-[9px] font-black text-gray-200 flex items-center justify-center tabular-nums">
-                {myLeader.roster.length}
-              </span>
-            )}
-          </button>
-
-          {slotsOpen && (
-            <div className="min-w-0 flex items-center gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden px-2 py-1.5 rounded-full border border-white/15 bg-[#0b0b0c]/70 backdrop-blur-2xl ring-1 ring-inset ring-white/[0.07] shadow-[0_14px_36px_-12px_#000] animate-in fade-in slide-in-from-left-3 duration-200">
-              {roleList.flatMap((slot) => {
-                const entries = myLeader.roster.filter((r: any) => r.slot === slot);
-                const limit = slotLimitOf(slot);
-                return Array.from({ length: limit }, (_, k) => {
-                  const ent = entries[k];
-                  const rc = roleColor(slot);
-                  return (
-                    <span
-                      key={`${slot}-${k}`}
-                      className={`${ent ? "auc-pop" : ""} shrink-0 w-[52px] px-1 py-1 rounded-lg border text-center ${
-                        ent ? (ent.golden ? "border-amber-400/50 bg-amber-400/[0.10]" : "border-white/20 bg-white/[0.06]") : "border-dashed border-white/12"
-                      }`}
-                    >
-                      <span className={`block text-[8px] font-black tracking-wider ${ent ? rc.text : "text-gray-700"}`}>{roleAbbr(slot)}</span>
-                      <span className={`block text-[9px] font-black truncate leading-tight mt-0.5 ${ent ? "text-white" : "text-gray-800"}`}>
-                        {ent ? rosterName(myLeader, ent) : "—"}
-                      </span>
-                    </span>
-                  );
-                });
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* 📱 모바일 — 우하단 미니 채팅 (유튜브 라이브처럼 말풍선만 떠 있다가 열린다) */}
       {(
         <>
@@ -3695,7 +3639,33 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           </button>
         )}
 
-        {/* 내 슬롯은 독에서 빼내 좌하단 동그란 버튼에서 옆으로 펼치도록 옮겼다 */}
+        {/* ── 내 슬롯 서랍 — 별개의 부유 버튼이 아니라 프로필 알약에서 위로 열린다.
+               (알약 안의 n/총 을 누르면 열림) ── */}
+        {myLeader && slotsOpen && (
+          <div className="pointer-events-auto mx-3 mb-1.5 flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden px-2 py-1.5 rounded-2xl border border-white/15 bg-[#0b0b0c]/70 backdrop-blur-2xl ring-1 ring-inset ring-white/[0.07] shadow-[0_14px_36px_-12px_#000] animate-in fade-in slide-in-from-bottom-2 duration-200">
+            {roleList.flatMap((slot) => {
+              const entries = myLeader.roster.filter((r: any) => r.slot === slot);
+              const limit = slotLimitOf(slot);
+              return Array.from({ length: limit }, (_, k) => {
+                const ent = entries[k];
+                const rc = roleColor(slot);
+                return (
+                  <span
+                    key={`${slot}-${k}`}
+                    className={`${ent ? "auc-pop" : ""} flex-1 basis-0 min-w-[52px] px-1 py-1 rounded-lg border text-center ${
+                      ent ? (ent.golden ? "border-amber-400/50 bg-amber-400/[0.10]" : "border-white/20 bg-white/[0.06]") : "border-dashed border-white/12"
+                    }`}
+                  >
+                    <span className={`block text-[8px] font-black tracking-wider ${ent ? rc.text : "text-gray-700"}`}>{roleAbbr(slot)}</span>
+                    <span className={`block text-[9px] font-black truncate leading-tight mt-0.5 ${ent ? "text-white" : "text-gray-800"}`}>
+                      {ent ? rosterName(myLeader, ent) : "—"}
+                    </span>
+                  </span>
+                );
+              });
+            })}
+          </div>
+        )}
 
         {/* ── 내 프로필 고정 + 인벤토리 · 알림함 ── */}
         {myLeader && (() => {
@@ -3710,13 +3680,22 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               ) : (
                 <span className="w-14 h-14 -my-3.5 rounded-full shrink-0 flex items-center justify-center text-[17px] font-black text-white ring-2 ring-[#0b0b0c] bg-[#26262b] shadow-[0_10px_22px_-8px_#000]">{myLeader.name[0]}</span>
               )}
-              <div className="min-w-0 flex-1">
+              {/* 이름 아래 슬롯 수가 곧 서랍 손잡이 — 누르면 위로 슬롯이 열린다 */}
+              <button
+                onClick={() => { const v = !slotsOpen; setSlotsOpen(v); try { localStorage.setItem("auctionSlotsOpen", v ? "1" : "0"); } catch {} sfxSelect(); }}
+                className="min-w-0 flex-1 text-left"
+                aria-expanded={slotsOpen}
+                aria-label="내 팀 포지션"
+              >
                 <p className="text-[12px] font-black text-white truncate leading-tight">{myLeader.name}</p>
-                <p className="flex items-center gap-1.5 text-[9px] font-bold text-gray-600 leading-tight mt-0.5">
+                <span className="flex items-center gap-1.5 text-[9px] font-bold text-gray-600 leading-tight mt-0.5">
                   {myLeader.position && <span className={roleColor(myLeader.position).text}>{roleAbbr(myLeader.position)}</span>}
-                  <span className="tabular-nums">{myLeader.roster.length}/{totalSlots}</span>
-                </p>
-              </div>
+                  <span className={`tabular-nums ${slotsOpen ? "text-gray-300" : ""}`}>{myLeader.roster.length}/{totalSlots}</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className={`w-2.5 h-2.5 shrink-0 transition-transform duration-200 ${slotsOpen ? "rotate-180 text-gray-300" : "text-gray-700"}`}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+                  </svg>
+                </span>
+              </button>
 
               <div className="shrink-0 text-right pr-0.5">
                 <p className="auc-cap text-gray-600 leading-none">Point</p>
