@@ -646,7 +646,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   //   ⚠️ 인벤토리 초과 시에는 입찰 UI 를 아예 띄우지 않는다 (서버도 403 으로 거부한다)
   // 입찰 바가 빠지면 그 자리에 초과 안내 줄이 들어가므로 높이를 같이 센다
   // 슬롯 줄 40 + 프로필 52 (+ 대기 중 인벤토리 경고 50)
-  const bottomBarH = (myLeader ? 92 : 0) + (invOverCap && !curPlayer ? 50 : 0);
+  const bottomBarH = (myLeader ? 102 : 0) + (invOverCap && !curPlayer ? 50 : 0);
 
   const pa = auction.pendingAssign;
   const hasPending = pa && pa.playerIdx !== null && pa.playerIdx !== undefined;
@@ -3670,12 +3670,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           const myProf = myLeader.discordId ? profiles[myLeader.discordId] : null;
           const invCount = myLeader.inventory?.length || 0;
           return (
-            <div className="flex items-center gap-2.5 px-3 py-2">
+            /* 알약 바 — 프로필 사진은 바보다 크게 잡아 위아래로 살짝 튀어나오게 한다 (게임 HUD 느낌) */
+            <div className="mx-3 my-2 flex items-center gap-2.5 pl-1.5 pr-2 py-1.5 rounded-full border border-white/12 bg-white/[0.05] ring-1 ring-inset ring-white/[0.05]">
               {myProf ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={myProf.avatarUrl} alt="" className="w-8 h-8 rounded-full bg-gray-800 ring-1 ring-white/20 shrink-0" />
+                <img src={myProf.avatarUrl} alt="" className="w-14 h-14 -my-3.5 rounded-full bg-gray-800 ring-2 ring-[#0b0b0c] shadow-[0_10px_22px_-8px_#000] shrink-0" />
               ) : (
-                <span className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-[11px] font-black text-gray-300 ring-1 ring-white/15 bg-white/[0.04]">{myLeader.name[0]}</span>
+                <span className="w-14 h-14 -my-3.5 rounded-full shrink-0 flex items-center justify-center text-[17px] font-black text-gray-200 ring-2 ring-[#0b0b0c] bg-white/[0.07] shadow-[0_10px_22px_-8px_#000]">{myLeader.name[0]}</span>
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] font-black text-white truncate leading-tight">{myLeader.name}</p>
@@ -3685,19 +3686,17 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 </p>
               </div>
 
-              <div className="shrink-0 text-right">
+              <div className="shrink-0 text-right pr-0.5">
                 <p className="auc-cap text-gray-600 leading-none">Point</p>
                 <p className="text-[15px] font-black text-white tabular-nums leading-tight mt-0.5">{myLeader.points.toLocaleString()}</p>
               </div>
-
-              <span className="shrink-0 w-px h-8 bg-white/12" />
 
               {/* 유동 액션 — 인벤토리 / 알림함 */}
               {invMode && (
                 <button
                   onClick={() => { setInvModal(myLeaderIdx); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); sfxSelect(); }}
                   aria-label="인벤토리"
-                  className={`relative shrink-0 w-9 h-9 flex items-center justify-center border transition-colors ${invOverCap ? "border-[#e91e3f] bg-[#e91e3f]/25 text-[#ff5c77] animate-pulse" : invCount > 0 ? "border-[#e91e3f] bg-[#e91e3f]/15 text-[#ff5c77]" : "border-white/20 text-gray-400 active:bg-white/[0.06]"}`}
+                  className={`auc-press relative shrink-0 w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${invOverCap ? "border-[#e91e3f] bg-[#e91e3f]/25 text-[#ff5c77] animate-pulse" : invCount > 0 ? "border-[#e91e3f] bg-[#e91e3f]/15 text-[#ff5c77]" : "border-white/20 text-gray-400 active:bg-white/[0.06]"}`}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
@@ -3708,7 +3707,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               <button
                 onClick={() => { setNoticeOpen(true); setNoticeUnread(0); sfxSelect(); }}
                 aria-label="알림함"
-                className={`relative shrink-0 w-9 h-9 flex items-center justify-center border transition-colors ${noticeUnread > 0 ? "border-[#e91e3f] bg-[#e91e3f]/15 text-[#ff5c77]" : "border-white/20 text-gray-400 active:bg-white/[0.06]"}`}
+                className={`auc-press relative shrink-0 w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${noticeUnread > 0 ? "border-[#e91e3f] bg-[#e91e3f]/15 text-[#ff5c77]" : "border-white/20 text-gray-400 active:bg-white/[0.06]"}`}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
