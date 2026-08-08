@@ -632,7 +632,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
   // 📱 모바일 하단 독의 높이 — 미니 채팅 버튼을 그 위에 띄우기 위해 계산
   //   ⚠️ 인벤토리 초과 시에는 입찰 UI 를 아예 띄우지 않는다 (서버도 403 으로 거부한다)
-  const bidBarOn = !!(myLeader && auction.status === "진행중" && curPlayer && scoutLeft === 0 && strategyLeft === 0 && timeLeft !== null && timeLeft > 0 && !invOverCap);
   // 입찰 바가 빠지면 그 자리에 초과 안내 줄이 들어가므로 높이를 같이 센다
   // 슬롯 줄 40 + 프로필 52 (+ 대기 중 인벤토리 경고 50)
   const bottomBarH = (myLeader ? 92 : 0) + (invOverCap && !curPlayer ? 50 : 0);
@@ -1268,13 +1267,21 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   // 📌 선수 목록 — 데스크톱 본문과 모바일 시트에서 함께 쓰므로 한 번만 만든다
   const playersSection = (
       <section>
-        <div className="flex items-center gap-3 pb-2 mb-4 border-b border-white/20">
-          <span className="auc-label text-white">Players</span>
-          <span className="text-[10px] font-bold text-gray-600 tabular-nums">
-            낙찰 {auction.players.filter((p: any) => p.status === "낙찰").length} / 전체 {auction.players.length}
-          </span>
+        {/* 구획 머리글 — 무대와 선수 목록의 경계가 흐릿했다. 제목을 가운데로 옮기고
+               좌우로 선을 뻗어 한 구획이 여기서 시작한다는 걸 분명히 한다. */}
+        <div className="relative mb-5">
+          <div className="flex items-center gap-4">
+            <span className="h-px flex-1 bg-white/15" />
+            <span className="text-center shrink-0">
+              <span className="block text-[15px] font-black tracking-[0.34em] text-white leading-none">PLAYERS</span>
+              <span className="block text-[10px] font-bold text-gray-600 tabular-nums mt-1.5">
+                낙찰 {auction.players.filter((p: any) => p.status === "낙찰").length} / 전체 {auction.players.length}
+              </span>
+            </span>
+            <span className="h-px flex-1 bg-white/15" />
+          </div>
           {role === "host" && auction.status === "진행중" && auction.players.some((p: any) => p.status === "유찰") && !auction.players.some((p: any) => ["대기", "경매중", "배정중"].includes(p.status)) && (
-            <button onClick={() => setConfirmCfg({ title: "유찰 랜덤 배정", message: "유찰 선수를 빈 슬롯 팀에 기본가로 랜덤 배정합니다. (잔여 Point 최저 팀 우선)", confirmLabel: "배정", onConfirm: () => act({ action: "host:assignPassed" }) })} className="ml-auto text-[10px] font-black text-gray-300 hover:text-white border-b border-white/25 hover:border-white pb-0.5 transition-colors">유찰 랜덤 배정</button>
+            <button onClick={() => setConfirmCfg({ title: "유찰 랜덤 배정", message: "유찰 선수를 빈 슬롯 팀에 기본가로 랜덤 배정합니다. (잔여 Point 최저 팀 우선)", confirmLabel: "배정", onConfirm: () => act({ action: "host:assignPassed" }) })} className="absolute right-0 top-0 text-[10px] font-black text-gray-300 hover:text-white border-b border-white/25 hover:border-white pb-0.5 transition-colors">유찰 랜덤 배정</button>
           )}
         </div>
 
@@ -1291,34 +1298,41 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   const callable = role === "host" && auction.status === "진행중" && (p.status === "대기" || p.status === "유찰") && !(auction.phase === 1 && p1Role && p.phase !== 1) && auction.phase > 0;
                   return (
                     /* 📌 골든 카드는 이 목록에서 가장 중요한 매물 — 금박으로 확실히 띄운다 (이전엔 회색이라 비활성처럼 보였다) */
-                    <div key={i} className={`group flex flex-col rounded-xl border p-3.5 transition-colors ${p.isAllPos && !hidden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.13] to-amber-500/[0.02] shadow-[0_0_20px_-6px_rgba(251,191,36,0.4)]" : p.status === "경매중" ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : p.status === "낙찰" ? "border-white/5 bg-black/20" : p.status === "유찰" ? "border-orange-500/20 bg-orange-500/[0.03]" : p.status === "배정중" ? "border-white/25 bg-white/[0.04]" : "border-white/5 bg-black/25 hover:border-white/15"}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`text-[8px] font-black tracking-[0.2em] uppercase ${p.isAllPos && !hidden ? "text-amber-400" : "text-gray-600"}`}>{p.isAllPos && !hidden ? "Golden" : `P${String(i + 1).padStart(2, "0")}`}</span>
-                        {p.status === "경매중" ? <span className="text-[9px] font-black text-gray-200 animate-pulse">LIVE</span>
-                          : p.status === "배정중" ? <span className="text-[9px] font-black text-gray-200">배정 중</span>
-                          : p.status === "유찰" ? <span className="text-[9px] font-black text-orange-400">유찰</span>
-                          : p.status === "낙찰" ? <span className="text-[9px] font-black text-gray-500">SOLD</span>
-                          : null}
+                    <div key={i} className={`group flex flex-col rounded-xl border overflow-hidden transition-colors ${p.isAllPos && !hidden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.13] to-amber-500/[0.02] shadow-[0_0_20px_-6px_rgba(251,191,36,0.4)]" : p.status === "경매중" ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : p.status === "낙찰" ? "border-white/5 bg-black/20" : p.status === "유찰" ? "border-orange-500/20 bg-orange-500/[0.03]" : p.status === "배정중" ? "border-white/25 bg-white/[0.04]" : "border-white/5 bg-black/25 hover:border-white/15"}`}>
+                      {/* 📌 초상 밴드 — 정보 상자가 아니라 '선수 카드'로 읽히게 하는 부분.
+                             공개된 선수는 실제 아바타, 아니면 실루엣(비공개는 물음표) */}
+                      <div className={`relative aspect-[5/3] flex items-center justify-center border-b ${p.isAllPos && !hidden ? "border-amber-400/25 bg-gradient-to-b from-amber-400/25 via-amber-500/[0.06] to-transparent" : p.status === "경매중" ? "border-[#e91e3f]/25 bg-gradient-to-b from-[#e91e3f]/20 to-transparent" : "border-white/[0.07] bg-gradient-to-b from-white/[0.07] to-transparent"}`}>
+                        {hidden ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-9 h-9 text-gray-700"><path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>
+                        ) : prof ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={prof.avatarUrl} alt="" className={`w-[52px] h-[52px] rounded-full bg-gray-800 ring-2 ${p.isAllPos ? "ring-amber-400/60" : "ring-white/20"}`} />
+                        ) : (
+                          <svg viewBox="0 0 64 58" className={`w-11 h-11 ${p.isAllPos ? "fill-amber-300/60" : "fill-white/20"}`} aria-hidden="true">
+                            <circle cx="32" cy="16" r="13" />
+                            <path d="M32 32c14.4 0 26 9.6 26 21.4V58H6v-4.6C6 41.6 17.6 32 32 32z" />
+                          </svg>
+                        )}
+                        <span className={`absolute top-2 left-2.5 text-[8px] font-black tracking-[0.2em] uppercase ${p.isAllPos && !hidden ? "text-amber-400" : "text-gray-600"}`}>{p.isAllPos && !hidden ? "Golden" : `P${String(i + 1).padStart(2, "0")}`}</span>
+                        <span className="absolute top-2 right-2.5">
+                          {p.status === "경매중" ? <span className="text-[9px] font-black text-gray-200 animate-pulse">LIVE</span>
+                            : p.status === "배정중" ? <span className="text-[9px] font-black text-gray-200">배정 중</span>
+                            : p.status === "유찰" ? <span className="text-[9px] font-black text-orange-400">유찰</span>
+                            : p.status === "낙찰" ? <span className="text-[9px] font-black text-gray-500">SOLD</span>
+                            : null}
+                        </span>
                       </div>
 
+                      <div className="flex flex-col flex-1 px-3.5 pt-2.5 pb-3">
                       {hidden ? (
-                        /* 리더에겐 익명 — 물음표 표시 */
-                        <div className="flex-1 flex flex-col items-center justify-center py-3">
-                          <span className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-1.5">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-600"><path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>
-                          </span>
-                          <p className="text-[9px] font-bold text-gray-600">비공개</p>
-                        </div>
+                        <p className="flex-1 flex items-center justify-center py-2 text-[10px] font-bold text-gray-600">비공개</p>
                       ) : (
                         <>
                           {prof ? (
-                            <div className="flex items-center gap-2 mb-1">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={prof.avatarUrl} alt="" className="w-6 h-6 rounded-full bg-gray-800 shrink-0" />
-                              <div className="min-w-0">
-                                <p className="text-xs font-black text-white truncate leading-tight">{prof.globalName}</p>
-                                <p className="text-[9px] text-gray-500 truncate">{p.alias}</p>
-                              </div>
+                            /* 아바타는 위 초상 밴드에 이미 크게 있으므로 여기선 이름만 */
+                            <div className="mb-1 min-w-0">
+                              <p className="text-sm font-black text-white truncate leading-tight">{prof.globalName}</p>
+                              <p className="text-[9px] text-gray-500 truncate">{p.alias}</p>
                             </div>
                           ) : (
                             /* 그라디언트 텍스트는 작은 글씨에서 뭉개져 회색으로 보인다 → 골든은 단색 금색으로 */
@@ -1407,6 +1421,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             호명
                           </button>
                         ) : null}
+                      </div>
                       </div>
                     </div>
                   );
@@ -1737,7 +1752,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       <p className="mt-3 py-2.5 border-t border-white/10 text-[11px] font-bold text-blue-400 text-center">전략 타임 중 — 입찰 일시 중지</p>
                     ) : timeLeft === 0 ? (
                       <p className="mt-3 py-2.5 border-t border-white/10 text-[11px] font-black text-gray-400 text-center">입찰 마감 — 진행자의 처리를 기다리는 중</p>
-                    ) : bidBarOn ? (
+                    ) : (
+                      // ⚠️ bidBarOn 으로 한 번 더 거르지 않는다. bidBarOn 은 timeLeft !== null 을 요구하는데
+                      //    cur.endsAt 이 아직 없는 구간(호명 직후 등)에서는 timeLeft 가 null 이라
+                      //    입찰 칸이 통째로 사라졌다. 데스크톱과 같이 마지막 분기에서 항상 그린다.
                       <div className="mt-3 border-y border-white/12">
                         <div className="flex items-stretch divide-x divide-white/12">
                           {[S.minIncrement, S.minIncrement * 5, S.minIncrement * 10].map((inc) => {
@@ -1768,7 +1786,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           </button>
                         </div>
                       </div>
-                    ) : null
+                    )
                   )}
 
                   {/* 스카우터 — 아직 안 썼을 때만 */}
@@ -1804,7 +1822,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     key={li}
                     // 팀 하나를 누르면 그 팀의 프로필 화면이 열린다 (프로필 → 배치도 → 보유 카드)
                     onClick={() => { setTeamView(li); sfxSelect(); }}
-                    className={`relative shrink-0 w-[74px] px-1.5 py-2 border text-center transition-colors ${bidding ? "border-[#e91e3f] bg-[#e91e3f]/[0.12]" : isMe ? "border-white/35 bg-white/[0.04]" : "border-white/10"}`}
+                    className={`relative flex-1 basis-0 min-w-[74px] px-1.5 py-2 border text-center transition-colors ${bidding ? "border-[#e91e3f] bg-[#e91e3f]/[0.12]" : isMe ? "border-white/35 bg-white/[0.04]" : "border-white/10"}`}
                   >
                     {bidFlash?.idx === li && <span key={bidFlash.n} className="auc-bidfx" />}
                     {prof ? (
@@ -2941,7 +2959,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   ) : (
                     <div className="shrink-0 lg:flex-1 lg:min-h-0 overflow-x-auto overflow-y-hidden lg:overflow-x-hidden lg:overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full p-1 flex gap-2.5 lg:block lg:space-y-3">
                       {/* 미배정 카드 */}
-                      <div className="flex gap-2.5 lg:grid lg:grid-cols-2 content-start">
+                      <div className="flex gap-2.5 w-fit mx-auto lg:w-auto lg:mx-0 lg:grid lg:grid-cols-2 content-start">
                         {(l.inventory || []).map((card: any, ci: number) => {
                           const picked = dragCard === ci;
                           return (
@@ -3576,7 +3594,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 return (
                   <span
                     key={`${slot}-${k}`}
-                    className={`shrink-0 w-[54px] px-1 py-1 border text-center ${
+                    className={`flex-1 basis-0 min-w-[54px] px-1 py-1 border text-center ${
                       ent ? (ent.golden ? "border-amber-400/50 bg-amber-400/[0.08]" : "border-white/20 bg-white/[0.05]") : "border-dashed border-white/12"
                     }`}
                   >
@@ -3659,13 +3677,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             <div className="flex items-center gap-3 px-4 py-3 border-b border-white/12 shrink-0">
               <span className="auc-label text-white">Team</span>
               <span className="text-[10px] font-bold text-gray-600 tabular-nums">{teamView + 1}/{auction.leaders.length}</span>
-              <button
-                onClick={() => { setTeamView(null); setSheet("teams"); setExpandedTeams(new Set(railLeaders.map((x) => x.li))); sfxSelect(); }}
-                className="ml-auto text-[10px] font-black text-gray-500 active:text-white"
-              >
-                전체 팀 ›
-              </button>
-              <button onClick={() => setTeamView(null)} className="p-1.5 -mr-1 text-gray-500 active:text-white">
+              <button onClick={() => setTeamView(null)} className="ml-auto p-1.5 -mr-1 text-gray-500 active:text-white">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -3702,7 +3714,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       )}
 
       {/* 📱 모바일 직접 입찰 — 데스크톱 무대의 입력창을 팝업으로 옮겼다 */}
-      {mobBid && bidBarOn && (
+      {mobBid && myLeader && auction.status === "진행중" && curPlayer && !invOverCap && (
         <AucModal
           label="Direct Bid"
           title="직접 입찰"
