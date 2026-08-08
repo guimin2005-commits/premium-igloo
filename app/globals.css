@@ -14,9 +14,10 @@
 
 /* 📌 확대·스와이프 시 사이트 영역을 이탈하지 않도록 고정
    (overflow-x: clip은 hidden과 달리 스크롤 컨테이너를 만들지 않아 휠 스크롤에 영향 없음)
-   ⚠️ body에는 overflow를 절대 주지 않는다 — body에 overflow가 걸리면 body가 스크롤 컨테이너로
-   승격되는데 실제 스크롤은 뷰포트(html)에서 일어나므로, body 하위의 모든 position: sticky
-   (전역 헤더·각 페이지 서브 탭바)가 기준을 잃고 죽어버린다. 가로 이탈 방지는 html만으로 충분. */
+   ⚠️ body에 overflow-y / overflow: hidden|auto|scroll 은 절대 주지 않는다 — body가 스크롤
+   컨테이너로 승격되는데 실제 스크롤은 뷰포트(html)에서 일어나므로, body 하위의 모든
+   position: sticky (전역 헤더·각 페이지 서브 탭바)가 기준을 잃고 죽어버린다.
+   ✅ 단, x축만의 `overflow-x: clip` 은 예외 — 스크롤 컨테이너를 만들지 않아 sticky에 무해하다. */
 html {
   background-color: #090909;
   overflow-x: clip;
@@ -29,6 +30,15 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   overscroll-behavior-x: none;
+  /* 📌 모바일 가로 스크롤·빈 공간 버그의 근본 차단.
+     html의 overflow-x: clip은 뷰포트로 전파되어 "스크롤"만 막을 뿐, 문서의 레이아웃 오버플로우
+     자체는 남는다. 그러면 모바일 크롬은 초기 컨테이닝 블록(ICB)을 넘친 폭(예: 360 → 480px)까지
+     늘려버리고, 그 결과 `fixed left-0 right-0` 하단 탭바가 480px로 그려져 마지막 탭이 화면 밖으로
+     밀리고 옆으로 스와이프하면 빈 공간이 드러난다.
+     각 페이지 장식용 glow(`left-1/2 -translate-x-1/2 w-[600px]` 등)가 그 오버플로우의 원인인데,
+     페이지마다 흩어져 있으므로 body에서 한 번에 잘라낸다.
+     hidden이 아니라 clip이어야 한다 — clip은 스크롤 컨테이너를 만들지 않아 전역 sticky가 살아있다. */
+  overflow-x: clip;
 }
 
 /* 사이트 통일 스크롤바 디자인 (세로/가로 공통) */
