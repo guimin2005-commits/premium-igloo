@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Reveal, LuxStyles } from "../components/Lux";
@@ -177,6 +177,8 @@ export default function TournamentPage() {
   const [surveyMine, setSurveyMine] = useState<any>(null);              // 내 기존 응답
   const [surveyCount, setSurveyCount] = useState(0);
   const [surveySubmitting, setSurveySubmitting] = useState(false);
+  const [invalidQid, setInvalidQid] = useState<string | null>(null);        // 검증 실패 시 흔들림 표시할 문항
+  const qidRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const fetchTournaments = async () => {
     setIsLoading(true);
@@ -254,10 +256,18 @@ export default function TournamentPage() {
     setSurveyAnswers({});
     setSurveyEtc({});
     setSurveyMine(null);
+    setInvalidQid(null);
     try {
       const d = await fetch(`/api/survey?postId=${t._id}`, { cache: "no-store" }).then((r) => r.json());
       if (d?.success) { setSurveyMine(d.mine || null); setSurveyCount(d.count || 0); }
     } catch {}
+  };
+
+  // 📌 필수 문항 미작성 시 — 해당 문항으로 스크롤 + 흔들림으로 즉시 위치를 알려준다
+  const flagInvalidQuestion = (qid: string) => {
+    setInvalidQid(qid);
+    qidRefs.current[qid]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => setInvalidQid((cur) => (cur === qid ? null : cur)), 650);
   };
 
   const submitSurvey = async () => {
@@ -272,8 +282,9 @@ export default function TournamentPage() {
       // '기타'만 고른 뒤 직접 입력을 비워두면 미작성으로 간주
       if (!empty && v === "__etc__" && !etcText) empty = true;
       if (!empty && Array.isArray(v) && v.filter((x: string) => x !== "__etc__").length === 0 && !etcText) empty = true;
-      if (q.required && empty) { setPopup({ isOpen: true, message: `필수 항목입니다.\n${q.label}`, isError: true }); return; }
+      if (q.required && empty) { flagInvalidQuestion(q.qid); setPopup({ isOpen: true, message: `필수 항목입니다.\n${q.label}`, isError: true }); return; }
       if (!q.required && v === "__etc__" && !etcText) {
+        flagInvalidQuestion(q.qid);
         setPopup({ isOpen: true, message: `'기타'를 선택하셨습니다.\n직접 입력란을 작성해주세요.\n\n${q.label}`, isError: true }); return;
       }
     }
@@ -784,9 +795,14 @@ export default function TournamentPage() {
                   n += 1;
                   const idx = n - 1;
                   return (
-                    <div key={q.qid} className="py-6 border-b border-white/[0.07] last:border-b-0">
+                    <div
+                      key={q.qid}
+                      ref={(el) => { qidRefs.current[q.qid] = el; }}
+                      className={`py-6 border-b border-white/[0.07] last:border-b-0 transition-[box-shadow] duration-300 ${invalidQid === q.qid ? "esp-shake" : ""}`}
+                      style={invalidQid === q.qid ? { boxShadow: "inset 3px 0 0 0 #ff3b5c" } : undefined}
+                    >
                       <div className="flex items-start gap-3 mb-4">
-                        <span className={`shrink-0 mt-0.5 text-[11px] font-black esp-mono transition-colors ${filled ? "text-[#00e07b]" : "text-gray-700"}`}>{String(idx + 1).padStart(2, "0")}</span>
+                        <span className={`shrink-0 mt-0.5 text-[11px] font-black esp-mono transition-colors ${filled ? "text-[#00e07b]" : invalidQid === q.qid ? "text-[#ff3b5c]" : "text-gray-700"}`}>{String(idx + 1).padStart(2, "0")}</span>
                         <div className="min-w-0">
                           <p className="text-sm sm:text-base font-bold text-white leading-snug break-keep">
                             {q.label}
@@ -817,9 +833,9 @@ export default function TournamentPage() {
                                       setV(checked ? cur.filter((x) => x !== opt) : [...cur, opt]);
                                     } else setV(opt);
                                   }}
-                                  className={`w-full flex items-center gap-3 text-left px-1 py-3 border-b border-white/[0.07] transition-colors ${checked ? "bg-[#00e07b]/[0.09]" : "hover:bg-white/[0.03]"}`}
+                                  className={`w-full flex items-center gap-3 text-left px-1 py-3 border-b border-white/[0.07] transition-colors active:scale-[0.99] ${checked ? "bg-[#00e07b]/[0.09]" : "hover:bg-white/[0.03]"}`}
                                 >
-                                  <span className={`shrink-0 w-4 h-4 border-2 flex items-center justify-center transition-colors ${q.type === "multi" ? "rounded-[4px]" : "rounded-full"} ${checked ? "border-[#00e07b] bg-[#00e07b]" : "border-gray-600"}`}>
+                                  <span key={checked ? "on" : "off"} className={`shrink-0 w-4 h-4 border-2 flex items-center justify-center transition-colors ${checked ? "esp-pop" : ""} ${q.type === "multi" ? "rounded-[4px]" : "rounded-full"} ${checked ? "border-[#00e07b] bg-[#00e07b]" : "border-gray-600"}`}>
                                     {checked && <svg className="w-2.5 h-2.5 text-[#101010]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
                                   </span>
                                   <span className={`text-sm break-keep ${checked ? "text-white font-bold" : "text-gray-300"}`}>{opt}</span>
@@ -838,9 +854,9 @@ export default function TournamentPage() {
                                         setV(etcChecked ? cur.filter((x) => x !== "__etc__") : [...cur, "__etc__"]);
                                       } else setV("__etc__");
                                     }}
-                                    className="w-full flex items-center gap-3 text-left px-1 py-3"
+                                    className="w-full flex items-center gap-3 text-left px-1 py-3 active:scale-[0.99] transition-transform"
                                   >
-                                    <span className={`shrink-0 w-4 h-4 border-2 flex items-center justify-center transition-colors ${q.type === "multi" ? "rounded-[4px]" : "rounded-full"} ${etcChecked ? "border-[#00e07b] bg-[#00e07b]" : "border-gray-600"}`}>
+                                    <span key={etcChecked ? "on" : "off"} className={`shrink-0 w-4 h-4 border-2 flex items-center justify-center transition-colors ${etcChecked ? "esp-pop" : ""} ${q.type === "multi" ? "rounded-[4px]" : "rounded-full"} ${etcChecked ? "border-[#00e07b] bg-[#00e07b]" : "border-gray-600"}`}>
                                       {etcChecked && <svg className="w-2.5 h-2.5 text-[#101010]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
                                     </span>
                                     <span className={`text-sm ${etcChecked ? "text-white font-bold" : "text-gray-300"}`}>기타 (직접 입력)</span>

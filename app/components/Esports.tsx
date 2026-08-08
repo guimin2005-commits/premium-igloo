@@ -35,6 +35,11 @@ export const EsportsStyles = () => (
     @keyframes espBlink { 0%,100% { opacity:1 } 50% { opacity:.25 } }
     .esp-blink { animation: espBlink 1.4s ease-in-out infinite; }
     .esp-mono { font-variant-numeric: tabular-nums; letter-spacing: .18em; }
+    /* 📌 선택/입력 피드백 — 설문·폼 등에서 클릭 시 즉각 반응을 준다 */
+    @keyframes espPop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+    .esp-pop { animation: espPop .32s cubic-bezier(0.34,1.56,0.64,1); }
+    @keyframes espShake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
+    .esp-shake { animation: espShake .4s ease-in-out; }
   `}</style>
 );
 
