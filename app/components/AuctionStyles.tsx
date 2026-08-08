@@ -423,6 +423,34 @@ export const AuctionStyles = () => (
       .auc-bidfx { display: none; }
     }
 
+    /* ══ 소소한 동작들 ══
+       원칙: 마운트 때 한 번만 재생되는 것과 입력에 반응하는 것만 둔다.
+       폴링(0.6~1.5s)마다 다시 재생되면 화면이 떨리므로, 상시 반복 애니메이션은 만들지 않는다. */
+
+    /* 등장 — 목록 항목이 아래에서 살짝 떠오른다 */
+    .auc-in { animation: aucIn .4s cubic-bezier(.16,1,.3,1) both; }
+    @keyframes aucIn { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+
+    /* 호버 부양 — 마우스가 있는 기기에서만 */
+    .auc-lift { transition: transform .22s cubic-bezier(.16,1,.3,1), box-shadow .22s ease, border-color .2s ease; }
+    @media (hover: hover) and (pointer: fine) {
+      .auc-lift:hover { transform: translateY(-3px); box-shadow: 0 16px 32px -16px rgba(0,0,0,.95); }
+    }
+
+    /* 눌림 — 손가락/마우스에 반응이 있다는 신호 */
+    .auc-press { transition: transform .13s ease; }
+    .auc-press:active { transform: scale(.97); }
+
+    /* 슬롯이 채워지는 순간 */
+    .auc-pop { animation: aucPop .5s cubic-bezier(.2,1.5,.4,1); }
+    @keyframes aucPop { 0% { transform: scale(.86); } 55% { transform: scale(1.06); } 100% { transform: scale(1); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .auc-in, .auc-pop { animation: none; }
+      .auc-lift, .auc-press { transition: none; }
+      .auc-lift:hover, .auc-press:active { transform: none; }
+    }
+
     /* ── 인벤토리 팝업: 낮은 화면 대응 ──
           팝업 높이는 내용에 맞추지만(h-auto), 창이 낮으면 90vh 에서 잘려 스크롤이 생긴다.
           그럴 때는 선수 카드와 줄 간격을 줄여 스크롤 없이 담는다. */

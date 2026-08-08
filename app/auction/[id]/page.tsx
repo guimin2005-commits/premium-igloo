@@ -1031,7 +1031,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           const flashed = bidFlash?.idx === li;
           const fillPct = Math.min(100, (l.roster.length / Math.max(1, totalSlots)) * 100);
           return (
-            <div key={li} className={`relative transition-colors ${bidding ? "bg-[#e91e3f]/[0.05]" : ""}`}>
+            <div key={li} style={{ animationDelay: `${Math.min(li, 8) * 45}ms` }} className={`auc-in relative transition-colors ${bidding ? "bg-[#e91e3f]/[0.05]" : ""}`}>
               {/* 입찰 순간 효과 — 행의 배경과 분리된 오버레이 한 겹.
                   key 에 갱신 번호를 넣어 같은 팀이 연속 입찰해도 애니메이션이 다시 재생된다 */}
               {flashed && <span key={bidFlash!.n} className="auc-bidfx" />}
@@ -1205,7 +1205,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         return (
           <div
             key={i}
-            className={`relative border p-2 ${
+            style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }}
+            className={`auc-in relative border p-2 ${
               live ? "border-[#e91e3f] bg-[#e91e3f]/[0.10]" : gold ? "border-amber-400/35 bg-amber-400/[0.05]" : sold ? "border-white/[0.07] opacity-70" : "border-white/12"
             }`}
           >
@@ -1299,13 +1300,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             <div key={phase} className="mb-5 last:mb-0">
               <p className="auc-label-xs text-gray-600 mb-2.5">{p1Role ? `Phase ${phase}` : "All"}</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2.5 auto-rows-fr">
-                {list.map(({ p, i }: any) => {
+                {list.map(({ p, i }: any, ii: number) => {
                   const hidden = isHiddenFor(p);
                   const prof = p.revealed && p.discordId ? profiles[p.discordId] : null;
                   const callable = role === "host" && auction.status === "진행중" && (p.status === "대기" || p.status === "유찰") && !(auction.phase === 1 && p1Role && p.phase !== 1) && auction.phase > 0;
                   return (
                     /* 📌 골든 카드는 이 목록에서 가장 중요한 매물 — 금박으로 확실히 띄운다 (이전엔 회색이라 비활성처럼 보였다) */
-                    <div key={i} className={`group flex flex-col rounded-xl border overflow-hidden transition-colors ${p.isAllPos && !hidden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.13] to-amber-500/[0.02] shadow-[0_0_20px_-6px_rgba(251,191,36,0.4)]" : p.status === "경매중" ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : p.status === "낙찰" ? "border-white/5 bg-black/20" : p.status === "유찰" ? "border-orange-500/20 bg-orange-500/[0.03]" : p.status === "배정중" ? "border-white/25 bg-white/[0.04]" : "border-white/5 bg-black/25 hover:border-white/15"}`}>
+                    <div key={i} style={{ animationDelay: `${Math.min(ii, 14) * 24}ms` }} className={`auc-in auc-lift group flex flex-col rounded-xl border overflow-hidden transition-colors ${p.isAllPos && !hidden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.13] to-amber-500/[0.02] shadow-[0_0_20px_-6px_rgba(251,191,36,0.4)]" : p.status === "경매중" ? "border-[#e91e3f]/40 bg-[#e91e3f]/[0.06]" : p.status === "낙찰" ? "border-white/5 bg-black/20" : p.status === "유찰" ? "border-orange-500/20 bg-orange-500/[0.03]" : p.status === "배정중" ? "border-white/25 bg-white/[0.04]" : "border-white/5 bg-black/25 hover:border-white/15"}`}>
                       {/* 📌 초상 밴드 — 정보 상자가 아니라 '선수 카드'로 읽히게 하는 부분.
                              공개된 선수는 실제 아바타, 아니면 실루엣(비공개는 물음표) */}
                       <div className={`relative aspect-[5/3] flex items-center justify-center border-b ${p.isAllPos && !hidden ? "border-amber-400/25 bg-gradient-to-b from-amber-400/25 via-amber-500/[0.06] to-transparent" : p.status === "경매중" ? "border-[#e91e3f]/25 bg-gradient-to-b from-[#e91e3f]/20 to-transparent" : "border-white/[0.07] bg-gradient-to-b from-white/[0.07] to-transparent"}`}>
@@ -1589,7 +1590,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                        완료 상태는 채워진 블록이 아니라 체크가 붙은 선형 버튼으로 낮춘다 */}
                 <button
                   onClick={() => act({ action: "leader:ready", leaderIdx: myLeaderIdx, ready: !myLeader.ready })}
-                  className={`group relative z-10 shrink-0 flex items-center justify-center gap-2.5 px-9 py-3.5 rounded-xl text-sm font-black tracking-[0.06em] transition-all active:scale-[0.98] ${
+                  className={`auc-press group relative z-10 shrink-0 flex items-center justify-center gap-2.5 px-9 py-3.5 rounded-xl text-sm font-black tracking-[0.06em] transition-all ${
                     myLeader.ready
                       ? "border border-white/20 text-gray-300 hover:border-white/45 hover:bg-white/[0.06] hover:text-white"
                       : "auc-btn-sheen bg-[#e91e3f] text-white shadow-[0_12px_34px_-10px_rgba(233,30,63,0.85)] hover:bg-[#d01634] hover:shadow-[0_14px_38px_-10px_rgba(233,30,63,1)]"
@@ -1814,7 +1815,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                 key={inc}
                                 onClick={() => doBid(result)}
                                 disabled={!affordable}
-                                className={`flex-1 min-w-0 py-3 text-center transition-colors ${affordable ? "active:bg-[#e91e3f]/30" : "opacity-25"}`}
+                                className={`auc-press flex-1 min-w-0 py-3 text-center transition-colors ${affordable ? "active:bg-[#e91e3f]/30" : "opacity-25"}`}
                               >
                                 <span className="block text-[17px] font-black text-white leading-none tabular-nums">+{inc.toLocaleString()}</span>
                                 <span className="block text-[9px] font-bold text-gray-500 tabular-nums mt-1">{result.toLocaleString()}</span>
@@ -1870,7 +1871,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     key={li}
                     // 팀 하나를 누르면 그 팀의 프로필 화면이 열린다 (프로필 → 배치도 → 보유 카드)
                     onClick={() => { setTeamView(li); sfxSelect(); }}
-                    className={`relative flex-1 basis-0 min-w-[74px] px-1.5 py-2 border text-center transition-colors ${bidding ? "border-[#e91e3f] bg-[#e91e3f]/[0.12]" : isMe ? "border-white/35 bg-white/[0.04]" : "border-white/10"}`}
+                    className={`auc-in auc-press relative flex-1 basis-0 min-w-[74px] px-1.5 py-2 border text-center transition-colors ${bidding ? "border-[#e91e3f] bg-[#e91e3f]/[0.12]" : isMe ? "border-white/35 bg-white/[0.04]" : "border-white/10"}`}
                   >
                     {bidFlash?.idx === li && <span key={bidFlash.n} className="auc-bidfx" />}
                     {prof ? (
@@ -2043,7 +2044,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                     key={inc}
                                     onClick={() => doBid(result)}
                                     disabled={!affordable}
-                                    className={`group flex-1 py-2.5 px-1 text-center border-l border-white/[0.09] first:border-l-0 transition-colors ${affordable ? "hover:bg-[#e91e3f]/10" : "opacity-30 cursor-not-allowed"}`}
+                                    className={`auc-press group flex-1 py-2.5 px-1 text-center border-l border-white/[0.09] first:border-l-0 transition-colors ${affordable ? "hover:bg-[#e91e3f]/10" : "opacity-30 cursor-not-allowed"}`}
                                   >
                                     <span className={`block text-[13px] font-black leading-tight tabular-nums transition-colors ${affordable ? "text-white group-hover:text-[#ff5c77]" : "text-gray-500"}`}>+{inc.toLocaleString()}</span>
                                     <span className={`block text-[9px] font-bold tabular-nums mt-0.5 ${isGoldenLot ? "text-amber-200/60" : "text-gray-600"}`}>{result.toLocaleString()}</span>
@@ -2358,7 +2359,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
             <form onSubmit={sendChat} className="p-3 border-t border-white/5 flex gap-2">
               <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} maxLength={200} placeholder="메시지 입력..." className="flex-1 px-3.5 py-2.5 bg-black/40 border border-white/10 rounded-xl text-white text-xs outline-none focus:border-white/40 transition-colors placeholder:text-gray-600" />
-              <button type="submit" disabled={!chatInput.trim()} aria-label="전송" className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-95 ${chatInput.trim() ? "bg-[#e91e3f] text-white hover:bg-[#d01634] shadow-[0_8px_22px_-8px_rgba(233,30,63,0.9)]" : "border border-white/10 bg-white/[0.04] text-gray-700 cursor-not-allowed"}`}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" aria-hidden="true"><path d="M3.4 20.4l17.45-7.48a1 1 0 000-1.84L3.4 3.6a.998.998 0 00-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z"/></svg></button>
+              <button type="submit" disabled={!chatInput.trim()} aria-label="전송" className={`auc-press shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all ${chatInput.trim() ? "bg-[#e91e3f] text-white hover:bg-[#d01634] shadow-[0_8px_22px_-8px_rgba(233,30,63,0.9)]" : "border border-white/10 bg-white/[0.04] text-gray-700 cursor-not-allowed"}`}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" aria-hidden="true"><path d="M3.4 20.4l17.45-7.48a1 1 0 000-1.84L3.4 3.6a.998.998 0 00-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z"/></svg></button>
             </form>
           </div>
 
@@ -2541,7 +2542,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     </p>
                     {/* 인벤토리 플러스 — 팀당 1회 */}
                     {canManage && invPlusUsed(l) ? (
-                      <span className="ml-auto px-2.5 py-1.5 border border-white/12 text-[10px] font-black text-gray-600">플러스 사용됨</span>
+                      <span className="ml-auto px-2.5 py-1.5 rounded-lg border border-white/12 text-[10px] font-black text-gray-600">플러스 사용됨</span>
                     ) : canManage ? (
                       <button
                         onClick={() => setConfirmCfg({
@@ -2554,14 +2555,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             else showToast(d?.message || "구매에 실패했습니다");
                           },
                         })}
-                        className={`ml-auto flex items-center gap-1.5 px-2.5 py-1.5 border text-[10px] font-black transition-colors ${
+                        className={`ml-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-black transition-colors ${
                           (l.inventory?.length || 0) > invCapOf(l)
                             ? "border-[#e91e3f] bg-[#e91e3f]/[0.12] text-[#ff5c77]"
                             : "border-white/20 text-gray-400 active:bg-white/[0.06]"
                         }`}
                       >
                         <span className="text-[12px] leading-none">＋</span>플러스
-                        <span className="tabular-nums text-gray-500">{invPlusCost.toLocaleString()}</span>
+                        <span className="tabular-nums text-white">{invPlusCost.toLocaleString()}</span>
                       </button>
                     ) : null}
                   </div>
@@ -2661,16 +2662,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   <div className="shrink-0 px-3.5 py-2.5 border-t border-white/12 flex items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-[11px] font-black text-gray-300">포지션 체인지</p>
-                      <p className="text-[9px] text-gray-600">팀당 1회 · {S.posChangeCost.toLocaleString()} Pt</p>
+                      <p className="text-[9px] font-bold text-gray-700">팀당 1회 <span className="text-white tabular-nums">{S.posChangeCost.toLocaleString()} Pt</span></p>
                     </div>
                     {l.positionChanged ? (
-                      <span className="shrink-0 text-[10px] font-black text-gray-600 border border-white/12 px-2.5 py-1.5">사용됨</span>
+                      <span className="shrink-0 text-[10px] font-black text-gray-600 rounded-lg border border-white/12 px-2.5 py-1.5">사용됨</span>
                     ) : swapMode ? (
-                      <button onClick={() => { setSwapMode(false); setSwapPick([]); }} className="shrink-0 text-[11px] font-black text-gray-300 border border-white/20 px-3 py-1.5">취소</button>
+                      <button onClick={() => { setSwapMode(false); setSwapPick([]); }} className="shrink-0 text-[11px] font-black text-gray-300 rounded-lg border border-white/20 px-3 py-1.5">취소</button>
                     ) : (
                       <button
                         onClick={() => { if (l.roster.length < 2) { showToast("배정된 선수가 2명 이상이어야 합니다"); return; } setSwapMode(true); setSwapPick([]); sfxSelect(); showToast("교환할 선수 2명을 선택하세요"); }}
-                        className="shrink-0 text-[11px] font-black text-gray-200 border border-white/25 px-3 py-1.5 active:bg-white/10"
+                        className="shrink-0 text-[11px] font-black text-gray-200 rounded-lg border border-white/25 px-3 py-1.5 active:bg-white/10"
                       >
                         교환
                       </button>
@@ -2923,25 +2924,30 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {/* 포지션 체인지 — 인벤토리 안에서 바로 실행 (배정 후 유일한 조정 수단 · 1회) */}
                   {canManage && (
                     <div className="mt-4 pt-3.5 border-t border-white/[0.07]">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-black text-gray-300">포지션 체인지</p>
-                          <p className="text-[9px] text-gray-600">배정 후 포지션을 바꾸는 유일한 방법 · 팀당 1회 · {S.posChangeCost.toLocaleString()} Pt</p>
-                        </div>
-                        {l.positionChanged ? (
-                          <span className="shrink-0 text-[9px] font-black text-gray-600 border border-white/10 rounded-full px-2.5 py-1">사용됨</span>
-                        ) : swapMode ? (
-                          <button onClick={() => { setSwapMode(false); setSwapPick([]); }} className="shrink-0 text-[10px] font-black text-gray-400 bg-white/5 border border-white/15 hover:text-white px-3 py-1.5 rounded-full transition-colors">취소</button>
-                        ) : (
-                          <button
-                            disabled={l.roster.length < 2}
-                            onClick={() => { if (l.roster.length < 2) { showToast("교환하려면 배정된 선수가 2명 이상이어야 합니다"); return; } setSwapMode(true); setSwapPick([]); setDragCard(null); sfxSelect(); showToast("교환할 선수 2명을 선택하세요"); }}
-                            className="shrink-0 text-[10px] font-black text-gray-200 bg-white/[0.07] border border-white/25 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded-full transition-colors"
-                          >
-                            포지션 교환하기
-                          </button>
-                        )}
-                      </div>
+                      {/* 인벤토리 플러스와 같은 골격 — 둘 다 '팀당 1회 유료 액션'이므로
+                             한쪽만 알약, 한쪽만 각지면 따로 노는 기능처럼 보인다.
+                             가격은 문장 속에 묻지 않고 오른쪽에 흰 글씨로 세운다. */}
+                      {l.positionChanged ? (
+                        <span className="w-full block text-center px-2.5 py-2 rounded-lg border border-white/12 text-[10px] font-black text-gray-600">포지션 체인지 사용됨</span>
+                      ) : swapMode ? (
+                        <button
+                          onClick={() => { setSwapMode(false); setSwapPick([]); }}
+                          className="w-full flex items-center justify-center gap-2 px-2.5 py-2 rounded-lg border border-white/25 bg-white/[0.06] text-[10px] font-black text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+                        >
+                          교환 취소
+                        </button>
+                      ) : (
+                        <button
+                          disabled={l.roster.length < 2}
+                          onClick={() => { if (l.roster.length < 2) { showToast("교환하려면 배정된 선수가 2명 이상이어야 합니다"); return; } setSwapMode(true); setSwapPick([]); setDragCard(null); sfxSelect(); showToast("교환할 선수 2명을 선택하세요"); }}
+                          className="auc-press w-full flex items-center gap-2 px-2.5 py-2 rounded-lg border border-white/20 text-[10px] font-black text-gray-300 hover:border-white hover:text-white hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3.5 h-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
+                          포지션 체인지
+                          <span className="ml-auto text-[11px] font-black text-white tabular-nums">{S.posChangeCost.toLocaleString()} Pt</span>
+                        </button>
+                      )}
+                      <p className="mt-1.5 text-[9px] font-bold text-gray-700">배정 후 포지션을 바꾸는 유일한 방법 · 팀당 1회</p>
                       {swapMode && (
                         <button
                           disabled={swapPick.length !== 2}
@@ -2975,7 +2981,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     </p>
                     {/* 인벤토리 플러스 — 칸이 모자랄 때 여기서 바로 산다 (팀당 1회) */}
                     {canManage && invPlusUsed(l) ? (
-                      <span className="mt-2 w-full block text-center px-2.5 py-1.5 border border-white/12 text-[10px] font-black text-gray-600">인벤토리 플러스 사용됨</span>
+                      <span className="mt-2 w-full block text-center px-2.5 py-2 rounded-lg border border-white/12 text-[10px] font-black text-gray-600">인벤토리 플러스 사용됨</span>
                     ) : canManage ? (
                       <button
                         onClick={() => setConfirmCfg({
@@ -2988,7 +2994,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             else showToast(d?.message || "구매에 실패했습니다");
                           },
                         })}
-                        className={`mt-2 w-full flex items-center gap-2 px-2.5 py-1.5 border text-[10px] font-black transition-colors ${
+                        className={`auc-press mt-2 w-full flex items-center gap-2 px-2.5 py-2 rounded-lg border text-[10px] font-black transition-colors ${
                           (l.inventory?.length || 0) > invCapOf(l)
                             ? "border-[#e91e3f] bg-[#e91e3f]/[0.12] text-[#ff5c77] hover:bg-[#e91e3f]/25"
                             : "border-white/20 text-gray-400 hover:border-white hover:text-white hover:bg-white/[0.06]"
@@ -2996,7 +3002,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       >
                         <span className="text-[13px] leading-none">＋</span>
                         인벤토리 플러스
-                        <span className="ml-auto tabular-nums">{invPlusCost.toLocaleString()} Pt</span>
+                        <span className="ml-auto text-[11px] font-black text-white tabular-nums">{invPlusCost.toLocaleString()} Pt</span>
                       </button>
                     ) : null}
                   </div>
@@ -3016,7 +3022,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               onDragStart={() => { draggingRef.current = true; if (dragCard !== ci) { setDragCard(ci); sfxSelect(); } }}
                               onDragEnd={() => { setTimeout(() => { draggingRef.current = false; }, 0); }}
                               onClick={() => { if (!canSelect || swapMode) return; if (draggingRef.current) return; const next = picked ? null : ci; setDragCard(next); if (next !== null) sfxSelect(); }}
-                              className={`relative w-[78px] shrink-0 lg:w-auto aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-colors ${card.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.18] via-amber-500/[0.06] to-[#0d0d0d] shadow-[0_0_18px_rgba(251,191,36,0.18)]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35" : !swapMode ? "cursor-pointer hover:border-white/25" : ""} ${picked ? (card.golden ? "border-amber-300 ring-2 ring-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.45)]" : "border-[#e91e3f] ring-2 ring-[#e91e3f] shadow-[0_0_18px_rgba(255,255,255,0.12)] bg-white/[0.08]") : ""}`}
+                              className={`auc-in auc-lift relative w-[78px] shrink-0 lg:w-auto aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none transition-colors ${card.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.18] via-amber-500/[0.06] to-[#0d0d0d] shadow-[0_0_18px_rgba(251,191,36,0.18)]" : "border-white/12 bg-gradient-to-b from-white/[0.06] to-[#0d0d0d]"} ${canManage && !swapMode ? "cursor-grab active:cursor-grabbing hover:border-white/35" : !swapMode ? "cursor-pointer hover:border-white/25" : ""} ${picked ? (card.golden ? "border-amber-300 ring-2 ring-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.45)]" : "border-[#e91e3f] ring-2 ring-[#e91e3f] shadow-[0_0_18px_rgba(255,255,255,0.12)] bg-white/[0.08]") : ""}`}
                             >
                               {/* 황금카드 광택 */}
                               {card.golden && <span className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-amber-200/15 to-transparent"></span>}
@@ -3596,7 +3602,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               </div>
               <form onSubmit={sendChat} className="p-2.5 border-t border-white/[0.08] flex gap-2 shrink-0">
                 <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} maxLength={200} placeholder="메시지 입력..." className="flex-1 min-w-0 px-3.5 py-2 rounded-full bg-white/[0.07] border border-white/12 text-white text-xs outline-none focus:border-white/35 focus:bg-white/[0.1] transition-colors placeholder:text-gray-600" />
-                <button type="submit" disabled={!chatInput.trim()} aria-label="전송" className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 ${chatInput.trim() ? "bg-[#e91e3f] text-white active:bg-[#d01634] shadow-[0_8px_20px_-8px_rgba(233,30,63,0.9)]" : "border border-white/10 bg-white/[0.05] text-gray-700"}`}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" aria-hidden="true"><path d="M3.4 20.4l17.45-7.48a1 1 0 000-1.84L3.4 3.6a.998.998 0 00-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z"/></svg></button>
+                <button type="submit" disabled={!chatInput.trim()} aria-label="전송" className={`auc-press shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all ${chatInput.trim() ? "bg-[#e91e3f] text-white active:bg-[#d01634] shadow-[0_8px_20px_-8px_rgba(233,30,63,0.9)]" : "border border-white/10 bg-white/[0.05] text-gray-700"}`}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" aria-hidden="true"><path d="M3.4 20.4l17.45-7.48a1 1 0 000-1.84L3.4 3.6a.998.998 0 00-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z"/></svg></button>
               </form>
             </div>
           )}
@@ -3606,9 +3612,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       {/* 📱 모바일 하단 독 — 전역 탭을 숨긴 자리를 경매 전용 조작부로 쓴다.
              위: 타 팀 시트 · 가운데: 입찰 · 아래: 내 프로필 + 인벤토리 · 알림함 */}
       <div
-        className="lg:hidden fixed inset-x-0 bottom-0 z-[95] border-t border-white/15 bg-[#0b0b0c]/97 backdrop-blur-xl"
+        /* 독이 본문과 같은 평면처럼 보여 경계가 없었다 → 위쪽으로 그림자와 페이드를 깔고
+           배경 투명도를 낮춰 blur 가 실제로 보이게 한다 (본문이 독 아래로 스며들어 사라진다) */
+        className="lg:hidden fixed inset-x-0 bottom-0 z-[95] border-t border-white/20 bg-[#0b0b0c]/82 backdrop-blur-2xl ring-1 ring-inset ring-white/[0.06] shadow-[0_-18px_44px_-12px_rgba(0,0,0,0.95)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
+        <span className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-[#0b0b0c]/85 to-transparent" />
         {/* 타 팀 버튼은 뺐다 — 무대 아래 아바타 줄에서 팀을 바로 누르면 프로필이 열린다 */}
 
         {/* ── 인벤토리가 가득 차면 입찰 바 대신 설명을 둔다 (입찰 시도 자체를 없앤다) ── */}
@@ -3640,7 +3649,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 return (
                   <span
                     key={`${slot}-${k}`}
-                    className={`flex-1 basis-0 min-w-[54px] px-1 py-1 border text-center ${
+                    className={`${ent ? "auc-pop" : ""} flex-1 basis-0 min-w-[54px] px-1 py-1 border text-center ${
                       ent ? (ent.golden ? "border-amber-400/50 bg-amber-400/[0.08]" : "border-white/20 bg-white/[0.05]") : "border-dashed border-white/12"
                     }`}
                   >
@@ -3793,10 +3802,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
              모바일은 좌우 여백만 남긴 고정 폭, 데스크톱은 고정 360px. */}
       {toast && (
         <div
-          className="fixed inset-x-3 lg:inset-x-auto lg:left-1/2 lg:-translate-x-1/2 lg:w-[360px] bottom-[var(--toast-b)] lg:bottom-8 z-[200] flex items-center min-h-[46px] px-4 py-2.5 bg-[#141416] border border-white/15 text-white text-[12px] font-bold leading-snug shadow-[0_20px_50px_-16px_#000] animate-in fade-in slide-in-from-bottom-2"
+          className="fixed inset-x-3 lg:inset-x-auto lg:left-1/2 lg:-translate-x-1/2 lg:w-[360px] bottom-[var(--toast-b)] lg:bottom-8 z-[200] flex items-center gap-2.5 min-h-[46px] px-4 py-2.5 rounded-2xl bg-[#141416]/92 backdrop-blur-xl border border-white/15 ring-1 ring-inset ring-white/[0.05] text-white text-[12px] font-bold leading-snug shadow-[0_20px_50px_-16px_#000] animate-in fade-in slide-in-from-bottom-2"
           style={{ "--toast-b": `calc(${bottomBarH + 12}px + env(safe-area-inset-bottom))` } as React.CSSProperties}
         >
-          <span className="w-[2px] self-stretch bg-[#e91e3f] shrink-0 -my-2.5 mr-3" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] shrink-0" />
           <span className="min-w-0 line-clamp-2">{toast}</span>
         </div>
       )}
