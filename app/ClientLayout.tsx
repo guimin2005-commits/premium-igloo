@@ -182,10 +182,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     setIsMenuClosing(false);
   }, [pathname]);
 
-  // 📌 모바일 메뉴 열림 시 배경 스크롤 잠금 (메뉴가 비정상적으로 늘어나는 버그 방지)
+  // 📌 모바일 메뉴 열림 시 배경 스크롤 잠금.
+  //    ⚠️ body가 아니라 html(뷰포트)에 걸어야 한다 — body에 overflow를 주면 body가 스크롤
+  //    컨테이너로 승격되어 전역 sticky(알약 헤더 등)가 기준을 잃고 화면에서 사라진다.
   useEffect(() => {
-    document.body.style.overflow = isMobileMenuOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    document.documentElement.style.overflowY = isMobileMenuOpen ? "hidden" : "";
+    return () => { document.documentElement.style.overflowY = ""; };
   }, [isMobileMenuOpen]);
 
   // 📌 모바일 메뉴 — Esc로 닫기 (좁은 창의 PC 브라우저에서도 열리므로)
@@ -612,7 +614,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         }
         const showCategories = !isVerifyPage && (status !== "authenticated" || isVerified);
         const itemCls = (active: boolean, accent?: boolean) =>
-          `w-full flex items-center rounded-lg px-3 py-3 mb-0.5 text-left text-sm font-bold outline-none transition-colors ${
+          `w-full flex items-center rounded-xl px-3 py-3 mb-0.5 text-left text-sm font-bold outline-none transition-colors ${
             active ? "bg-[#e91e3f]/10 text-[#e91e3f]" : accent ? "text-[#e91e3f] active:bg-white/[0.05]" : "text-gray-300 active:bg-white/[0.05] active:text-white"
           }`;
 
@@ -626,29 +628,36 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           `}} />
 
           <div
-            className="absolute inset-0 bg-black/70"
+            className="absolute inset-0 bg-black/55 backdrop-blur-[6px]"
             style={{ animation: isMenuClosing ? "mmFadeOut 0.24s ease-in forwards" : "mmFadeIn 0.26s ease-out" }}
             onClick={closeMobileMenu}
           />
 
           <div
-            className="absolute right-0 top-0 bottom-0 w-[80%] max-w-xs bg-[#121212] border-l border-white/10 rounded-l-3xl shadow-2xl flex flex-col overflow-hidden"
+            className="absolute right-0 top-0 bottom-0 w-[82%] max-w-xs bg-[#0d0d0d]/90 backdrop-blur-2xl border-l border-white/[0.07] rounded-l-[28px] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden"
             style={{ animation: isMenuClosing ? "mmSlideOut 0.26s cubic-bezier(0.4,0,1,1) forwards" : "mmSlideIn 0.32s cubic-bezier(0.22,1,0.36,1)" }}
           >
+            {/* 상단 크림슨 글로우 */}
+            <div className="absolute top-[-60px] right-[-30px] w-56 h-32 bg-[#e91e3f]/[0.1] blur-[60px] rounded-full pointer-events-none"></div>
+
             {/* ── 헤더 ── */}
-            <div className="shrink-0 flex items-center justify-between px-5 h-16 border-b border-white/10">
-              <span className="text-base font-black tracking-tight text-white">메뉴</span>
-              <button onClick={closeMobileMenu} aria-label="메뉴 닫기" className="p-2 -mr-2 text-gray-400 hover:text-white transition-colors outline-none">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            <div className="relative shrink-0 flex items-center justify-between px-5 h-16 border-b border-white/[0.07]">
+              <div className="flex items-center gap-2.5">
+                <span className="w-4 h-px bg-[#e91e3f]"></span>
+                <span className="text-[15px] font-bold tracking-[0.15em] text-white">고급 이글루</span>
+              </div>
+              <button onClick={closeMobileMenu} aria-label="메뉴 닫기" className="p-2 -mr-1 text-gray-400 active:text-white bg-white/[0.05] rounded-full transition-colors outline-none">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[18px] h-[18px]"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
             {/* ── 스크롤 영역 ── */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 [&::-webkit-scrollbar]:hidden">
+            <div className="relative flex-1 overflow-y-auto overscroll-contain px-4 py-4 [&::-webkit-scrollbar]:hidden">
               {status === "authenticated" && session && (
-                <div className="flex items-center gap-3 p-3 mb-4 bg-white/[0.03] rounded-xl">
-                  <img src={session.user?.image || ""} alt="Profile" className={`w-10 h-10 rounded-full bg-gray-700 ${isBooster ? "ring-2 ring-[#e91e3f]/60 ring-offset-2 ring-offset-[#121212]" : ""}`} />
-                  <div className="min-w-0">
+                <div className="relative flex items-center gap-3.5 p-3.5 mb-5 bg-white/[0.04] border border-white/[0.06] rounded-2xl overflow-hidden">
+                  {isBooster && <div className="absolute top-[-30px] left-[-20px] w-32 h-20 bg-[#e91e3f]/[0.14] blur-[36px] rounded-full pointer-events-none"></div>}
+                  <img src={session.user?.image || ""} alt="Profile" className={`relative w-11 h-11 rounded-full bg-gray-700 ${isBooster ? "ring-2 ring-[#e91e3f]/60 ring-offset-2 ring-offset-[#0d0d0d]" : ""}`} />
+                  <div className="relative min-w-0">
                     <p className="font-bold text-white text-sm truncate">{session.user?.name}</p>
                     <span className={`inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-[10px] font-bold ${isVerified && hasScrimRole ? "bg-green-500/10 text-green-400" : isVerified ? "bg-yellow-500/10 text-yellow-400" : "bg-red-500/10 text-red-400"}`}>{isVerified && hasScrimRole ? "인증" : isVerified ? "일부 인증" : "미인증"}</span>
                   </div>
@@ -656,19 +665,29 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               )}
 
               {showCategories && categoryGroups.map((group, gIdx) => (
-                <div key={group.name} className={gIdx > 0 ? "mt-5" : ""}>
-                  <p className="text-[11px] font-bold text-gray-600 tracking-wide px-3 mb-1">{group.name}</p>
-                  {group.items.map((item) => (
-                    <Link key={item.path} href={item.path} onClick={closeMobileMenu} className={itemCls(pathname === item.path)}>
-                      {item.name}
-                    </Link>
-                  ))}
+                <div key={group.name} className={gIdx > 0 ? "mt-6" : ""}>
+                  <div className="flex items-center gap-2 px-3 mb-1.5">
+                    <span className="w-3 h-px bg-[#e91e3f]/70"></span>
+                    <p className="text-[11px] font-black text-gray-500 tracking-[0.14em]">{group.name}</p>
+                  </div>
+                  {group.items.map((item) => {
+                    const active = pathname === item.path;
+                    return (
+                      <Link key={item.path} href={item.path} onClick={closeMobileMenu} className={itemCls(active)}>
+                        {item.name}
+                        {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#e91e3f] shadow-[0_0_8px_rgba(233,30,63,0.8)]"></span>}
+                      </Link>
+                    );
+                  })}
                 </div>
               ))}
 
               {accountItems.length > 0 && (
-                <div className="mt-5">
-                  <p className="text-[11px] font-bold text-gray-600 tracking-wide px-3 mb-1">계정</p>
+                <div className="mt-6">
+                  <div className="flex items-center gap-2 px-3 mb-1.5">
+                    <span className="w-3 h-px bg-[#e91e3f]/70"></span>
+                    <p className="text-[11px] font-black text-gray-500 tracking-[0.14em]">계정</p>
+                  </div>
                   {accountItems.map((item) =>
                     item.path ? (
                       <Link key={item.name} href={item.path} onClick={closeMobileMenu} className={itemCls(pathname === item.path, item.accent)}>{item.name}</Link>
@@ -681,11 +700,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             </div>
 
             {/* ── 푸터 ── */}
-            <div className="shrink-0 border-t border-white/10 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="relative shrink-0 border-t border-white/[0.07] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               {status === "authenticated" && session ? (
-                <button onClick={() => { closeMobileMenu(); signOut(); }} className="w-full text-left px-3 py-3 rounded-lg text-sm font-bold text-[#e91e3f] active:bg-[#e91e3f]/10 transition-colors outline-none">로그아웃</button>
+                <button onClick={() => { closeMobileMenu(); signOut(); }} className="w-full text-left px-3 py-3 rounded-xl text-sm font-black text-[#e91e3f] active:bg-[#e91e3f]/10 transition-colors outline-none">로그아웃</button>
               ) : (
-                <button onClick={() => { closeMobileMenu(); signIn("discord", { callbackUrl: "/" }); }} className="w-full py-3 rounded-xl bg-[#5865F2] active:bg-[#4752C4] text-white text-sm font-bold transition-colors outline-none">Discord 로그인</button>
+                <button onClick={() => { closeMobileMenu(); signIn("discord", { callbackUrl: "/" }); }} className="w-full py-3 rounded-full bg-[#5865F2] active:bg-[#4752C4] text-white text-sm font-bold transition-colors outline-none">Discord 로그인</button>
               )}
 
               <div className="flex items-center gap-4 px-3 pt-3">
