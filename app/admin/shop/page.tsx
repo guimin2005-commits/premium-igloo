@@ -9,7 +9,9 @@ const ADMIN_USERS = ["elahw.06"];
 
 const TAB_META: Record<string, { title: string; desc: string }> = {
   items: { title: "상품 관리", desc: "ARCTIC에 노출할 상품을 등록·수정합니다. 역할 상품은 구매 시 봇이 자동 지급합니다." },
-  orders: { title: "구매 내역", desc: "구매 건을 확인하고 실물 상품 발송·취소를 처리합니다." },
+  banners: { title: "이미지 배너", desc: "상점 최상단에 노출할 프로모션 배너를 등록합니다. 여러 개면 5초마다 자동 전환됩니다." },
+  coupons: { title: "쿠폰 관리", desc: "주문서에서 사용할 할인 쿠폰을 발급합니다." },
+  orders: { title: "구매 내역", desc: "구매 건을 확인하고 기프트카드 발송·취소를 처리합니다." },
 };
 
 const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "완료", cancelled: "취소" };
@@ -50,12 +52,46 @@ export default function AdminShopPage() {
       fetch("/api/shop/items?all=1", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/discord-roles", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/shop/orders", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-    ]).then(([it, roles, ord]) => {
+      fetch("/api/shop/banners?all=1", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/shop/coupons", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+    ]).then(([it, roles, ord, ban, cou]) => {
       setItems(Array.isArray(it?.data) ? it.data : []);
       setGuildRoles(Array.isArray(roles?.data) ? roles.data : []);
       setOrders(Array.isArray(ord?.data) ? ord.data : []);
+      setBanners(Array.isArray(ban?.data) ? ban.data : []);
+      setCoupons(Array.isArray(cou?.data) ? cou.data : []);
     }).finally(() => setIsLoading(false));
   }, []);
+
+  // ── 이미지 배너 ──────────────────────────────
+  const EMPTY_BANNER = { id: "", imageUrl: "", title: "", subtitle: "", link: "", sortOrder: "", active: true };
+  const [banners, setBanners] = useState<any[]>([]);
+  const [bannerForm, setBannerForm] = useState<any>(EMPTY_BANNER);
+
+  const saveBanner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const res = await fetch("/api/shop/banners", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bannerForm),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    if (res?.ok && d?.success) { setBannerForm(EMPTY_BANNER); fetchAll(); notify("저장되었습니다."); }
+    else notify(d?.message || "저장에 실패했습니다.", true);
+  };
+
+  // ── 쿠폰 ────────────────────────────────────
+  const EMPTY_COUPON = { id: "", code: "", name: "", type: "percent", value: "", maxDiscount: "", minTotal: "", maxUses: "", perUserLimit: "1", active: true, expiresAt: "" };
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [couponForm, setCouponForm] = useState<any>(EMPTY_COUPON);
+
+  const saveCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const res = await fetch("/api/shop/coupons", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(couponForm),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    if (res?.ok && d?.success) { setCouponForm(EMPTY_COUPON); fetchAll(); notify("저장되었습니다."); }
+    else notify(d?.message || "저장에 실패했습니다.", true);
+  };
 
   useEffect(() => { if (isAdmin) fetchAll(); }, [isAdmin, fetchAll]);
 

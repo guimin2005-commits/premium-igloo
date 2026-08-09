@@ -41,6 +41,16 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "수령 정보를 입력해주세요." }, { status: 400 });
     }
 
+    // 📌 모든 상품은 1인 1개 — 이미 구매(대기·완료)한 건이 있으면 재구매 불가
+    const owned = await Purchase.findOne({
+      userId,
+      itemId: String(item._id),
+      status: { $in: ["pending", "completed"] },
+    }).lean();
+    if (owned) {
+      return NextResponse.json({ success: false, message: "이미 구매한 상품입니다. 상품은 1인 1개만 구매할 수 있습니다." }, { status: 409 });
+    }
+
     // 1) 재고 선점 — 무제한(-1)이 아니면 남은 수량이 있을 때만 차감
     if (item.stock >= 0) {
       const claimed = await ShopItem.updateOne(

@@ -51,6 +51,8 @@ const NAV_GROUPS: NavGroup[] = [
         href: "/admin/shop",
         children: [
           { title: "상품 관리", href: "/admin/shop?tab=items" },
+          { title: "이미지 배너", href: "/admin/shop?tab=banners" },
+          { title: "쿠폰 관리", href: "/admin/shop?tab=coupons" },
           { title: "구매 내역", href: "/admin/shop?tab=orders" },
         ],
       },

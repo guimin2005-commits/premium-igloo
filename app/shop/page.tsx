@@ -43,6 +43,7 @@ export default function ShopPage() {
   const [items, setItems] = useState<any[]>([]);
   const [myXp, setMyXp] = useState<number | null>(null);
   const [myLevel, setMyLevel] = useState(0);
+  const [myProgress, setMyProgress] = useState<{ current: number; required: number; needToNext: number } | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -71,6 +72,7 @@ export default function ShopPage() {
   const [pastBanner, setPastBanner] = useState(false);
   useEffect(() => {
     const onScroll = () => setPastBanner(window.scrollY > 40);
+    // (카드가 지나간 뒤 유틸바를 띄우는 기준)
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -102,18 +104,26 @@ export default function ShopPage() {
     try { localStorage.setItem("iglooShopCart", JSON.stringify(cart)); } catch {}
   }, [cart]);
 
+  // 📌 상품은 1인 1개 — 이미 구매한 상품은 다시 담거나 살 수 없다
+  const ownedItemIds = useMemo(
+    () => new Set(orders.filter((o) => o.status !== "cancelled").map((o) => o.itemId)),
+    [orders]
+  );
+
   const addToCart = (item: any) => {
     if (!isLoggedIn) return signIn("discord");
-    setCart((prev) => {
-      const found = prev.find((c) => c.itemId === item._id);
-      // 한정 수량 상품은 재고를 넘겨 담지 않는다
-      const max = item.stock < 0 ? 99 : item.stock;
-      if (found) {
-        if (found.qty >= max) return prev;
-        return prev.map((c) => (c.itemId === item._id ? { ...c, qty: c.qty + 1 } : c));
-      }
-      return [...prev, { itemId: item._id, qty: 1 }];
-    });
+    if (ownedItemIds.has(item._id)) {
+      setCartToast("이미 구매한 상품입니다");
+      setTimeout(() => setCartToast(""), 1800);
+      return;
+    }
+    // 이미 담겨 있으면 그대로 (1인 1개)
+    if (cart.some((c) => c.itemId === item._id)) {
+      setCartToast("이미 장바구니에 있습니다");
+      setTimeout(() => setCartToast(""), 1800);
+      return;
+    }
+    setCart((prev) => [...prev, { itemId: item._id, qty: 1 }]);
     setCartToast(`${item.name} 담김`);
     setTimeout(() => setCartToast(""), 1800);
   };
@@ -149,11 +159,23 @@ export default function ShopPage() {
     setTimeout(() => setCartToast(""), 1600);
   };
 
-  // 인기 상품 — 판매량 상위 (판매 이력이 있는 판매 중 상품만)
-  const popular = useMemo(
-    () => items.filter((i) => i.active && (i.soldCount || 0) > 0).sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0)).slice(0, 8),
-    [items]
-  );
+  // 📌 상단 이미지 배너 — 관리자가 등록, 5초마다 자동 전환
+  const [banners, setBanners] = useState<any[]>([]);
+  const [bannerIdx, setBannerIdx] = useState(0);
+
+  useEffect(() => {
+    if (status === "loading") return;
+    fetch(`/api/shop/banners${isAdmin ? "?all=1" : ""}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setBanners(Array.isArray(d?.data) ? d.data : []))
+      .catch(() => {});
+  }, [status, isAdmin]);
+
+  useEffect(() => {
+    if (banners.length < 2) return;
+    const t = setInterval(() => setBannerIdx((i) => (i + 1) % banners.length), 5000);
+    return () => clearInterval(t);
+  }, [banners.length]);
 
   // 관리자 — 상점 안에서 바로 상품 추가·수정
   const EMPTY_ITEM = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", roleName: "", price: "", discountPct: "", stock: "", sortOrder: "", active: true };
@@ -216,7 +238,7 @@ export default function ShopPage() {
     if (!isLoggedIn) return;
     fetch("/api/xp/me", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => { if (d?.success) { setMyXp(d.data.xp); setMyLevel(d.data.level); } })
+      .then((d) => { if (d?.success) { setMyXp(d.data.xp); setMyLevel(d.data.level); setMyProgress(d.data.levelProgress || null); } })
       .catch(() => {});
     fetch("/api/shop/purchase", { cache: "no-store" })
       .then((r) => r.json())
@@ -332,6 +354,124 @@ export default function ShopPage() {
 
   return (
     <div className="w-full flex-1 bg-[#f5f3f0] text-[#131313] min-h-screen">
+      {/* ── ARCTIC 전용 헤더 ── */}
+      <header className={`sticky top-0 z-[95] w-full border-b transition-all duration-300 ${
+        pastBanner
+          ? "bg-white/94 backdrop-blur-xl border-[#e2e0dc] shadow-[0_6px_20px_-10px_rgba(0,0,0,0.14)]"
+          : "bg-[#f5f3f0]/92 backdrop-blur-md border-[#e2e0dc]"
+      }`}>
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center gap-6">
+          {/* 브랜드 — 고급 이글루의 ARCTIC */}
+          <div className="flex items-center gap-3 min-w-0 shrink-0">
+            <Link href="/" className="text-[10px] font-bold tracking-[0.18em] text-[#8a8a8a] hover:text-[#131313] transition-colors hidden lg:block">
+              고급 이글루
+            </Link>
+            <span className="w-px h-4 bg-[#d6d3ce] hidden lg:block"></span>
+            <Link href="/shop" className="text-[17px] font-black tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
+              ARCTIC
+            </Link>
+          </div>
+
+          {/* 카테고리 내비 */}
+          <nav className="hidden md:flex items-center gap-1 min-w-0">
+            {TYPES.map((t) => {
+              const on = typeFilter === t.v && !wishOnly;
+              return (
+                <button key={t.v} onClick={() => { setTypeFilter(t.v); setWishOnly(false); }}
+                  className={`relative px-3 py-2 text-[13px] font-bold transition-colors ${on ? "text-[#131313]" : "text-[#8a8a8a] hover:text-[#131313]"}`}>
+                  {t.l}
+                  <span className={`absolute bottom-1 left-3 right-3 h-px bg-[#e91e3f] origin-left transition-transform duration-300 ${on ? "scale-x-100" : "scale-x-0"}`} />
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* 우측 도구 */}
+          <div className="flex items-center gap-1 ml-auto shrink-0">
+            {/* 검색 — 아이콘에서 펼쳐짐 */}
+            <div className={`group relative h-9 rounded-full border transition-[width,border-color] duration-500 ease-out overflow-hidden
+              w-9 hover:w-56 focus-within:w-56 bg-white border-[#e2e0dc] hover:border-[#a3a3a3] focus-within:border-[#e91e3f]
+              ${query ? "w-56" : ""}`}>
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a3a3a3] group-focus-within:text-[#e91e3f] transition-colors pointer-events-none z-10"
+                fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+              <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="상품 검색"
+                className="absolute inset-0 w-full h-full bg-transparent pl-8 pr-3 text-[13px] text-[#131313] outline-none placeholder:text-[#a3a3a3]
+                  opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-300" />
+            </div>
+
+            {isLoggedIn ? (
+              <>
+                {/* 보유 XP */}
+                <div className="hidden sm:flex items-baseline gap-1.5 px-3 py-2 ml-1 rounded-full bg-white border border-[#e2e0dc]">
+                  <span className="text-[13px] font-black text-[#131313] tabular-nums">{myXp == null ? "—" : myXp.toLocaleString()}</span>
+                  <span className="text-[9px] font-black tracking-[0.15em] text-[#e91e3f]">XP</span>
+                </div>
+
+                {/* 찜 */}
+                <button onClick={() => { setWishOnly(true); document.getElementById("shop-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                  aria-label="찜한 상품"
+                  className="relative p-2 rounded-full text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] transition-colors">
+                  <svg className={`w-[18px] h-[18px] ${wish.length > 0 ? "text-[#e91e3f]" : ""}`} fill={wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                  </svg>
+                </button>
+
+                {/* 구매 내역 */}
+                <button onClick={() => setShowOrders(true)} aria-label="구매 내역"
+                  className="relative p-2 rounded-full text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] transition-colors">
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+                  </svg>
+                  {pendingOrders > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
+                </button>
+
+                {/* 장바구니 */}
+                <button onClick={() => setShowCart(true)}
+                  className="flex items-center gap-2 pl-3 pr-4 py-2 ml-1 rounded-full bg-[#131313] hover:bg-black text-white transition-colors">
+                  <span className="relative">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                    </svg>
+                    {cartCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center">{cartCount}</span>
+                    )}
+                  </span>
+                  <span className="text-[12px] font-bold tabular-nums hidden sm:inline">{cartTotal.toLocaleString()}</span>
+                </button>
+
+                {/* 프로필 — 클릭 시 내 정보로 이동 */}
+                <Link href="/profile" className="ml-1 shrink-0" aria-label="내 정보">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={session?.user?.image || ""} alt="" className="w-8 h-8 rounded-full bg-[#e2e0dc] ring-1 ring-[#e2e0dc] hover:ring-[#131313] transition-all" />
+                </Link>
+              </>
+            ) : (
+              <button onClick={() => signIn("discord")}
+                className="px-4 py-2 ml-1 rounded-full bg-[#5865F2] hover:bg-[#4752C4] text-white text-[12px] font-bold transition-colors shrink-0">
+                디스코드 로그인
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 모바일 카테고리 */}
+        <div className="md:hidden border-t border-[#ececea] flex gap-1 overflow-x-auto px-4 py-2 [&::-webkit-scrollbar]:hidden">
+          {TYPES.map((t) => {
+            const on = typeFilter === t.v && !wishOnly;
+            return (
+              <button key={t.v} onClick={() => { setTypeFilter(t.v); setWishOnly(false); }}
+                className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-bold border transition-colors ${
+                  on ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#4b4b4b] border-[#e2e0dc]"
+                }`}>
+                {t.l}
+              </button>
+            );
+          })}
+        </div>
+      </header>
+
       {/* 공개 전 관리자 미리보기 배너 */}
       {!shopPublic && isAdmin && (
         <div className="w-full bg-[#e91e3f] text-white text-center py-2 px-6 text-[11px] font-bold tracking-wide">
@@ -374,95 +514,132 @@ export default function ShopPage() {
             )}
           </div>
 
+          {/* ── 내 XP 카드 ── */}
+          {isLoggedIn && (
+            <div className="mt-12 mx-auto w-full max-w-md">
+              <div className="relative rounded-[22px] p-px bg-gradient-to-b from-white via-[#e6e3de] to-[#dcd8d1] shadow-[0_18px_50px_-18px_rgba(0,0,0,0.28)]">
+                <div className="relative rounded-[21px] bg-gradient-to-b from-white to-[#fbfaf8] px-7 py-6 overflow-hidden">
+                  {/* 상단 크림슨 헤어라인 + 은은한 글로우 */}
+                  <div className="absolute top-0 left-7 right-7 h-px bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
+                  <div className="absolute -top-16 -right-10 w-48 h-32 bg-[#e91e3f]/[0.05] blur-[50px] rounded-full pointer-events-none"></div>
+
+                  <div className="relative flex items-start justify-between gap-4 mb-5">
+                    <div className="min-w-0">
+                      <div className="text-[9px] font-black tracking-[0.32em] text-[#a3a3a3] uppercase mb-2">Balance</div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-[38px] leading-none font-black tracking-tighter text-[#131313] tabular-nums">
+                          {myXp == null ? "—" : myXp.toLocaleString()}
+                        </span>
+                        <span className="text-[11px] font-black tracking-[0.2em] text-[#e91e3f]">XP</span>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="text-[9px] font-black tracking-[0.32em] text-[#a3a3a3] uppercase mb-2">Level</div>
+                      <div className="text-[22px] leading-none font-black tracking-tight text-[#131313] tabular-nums">{myLevel}</div>
+                    </div>
+                  </div>
+
+                  {/* 다음 레벨까지 진행률 */}
+                  {myProgress && myProgress.required > 0 && (
+                    <div className="relative mb-5">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] font-bold text-[#8a8a8a]">다음 레벨까지</span>
+                        <span className="text-[10px] font-bold text-[#4b4b4b] tabular-nums">{myProgress.needToNext.toLocaleString()} XP</span>
+                      </div>
+                      <div className="h-1 rounded-full bg-[#eceae6] overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] transition-[width] duration-700 ease-out"
+                          style={{ width: `${Math.min(100, Math.round((myProgress.current / myProgress.required) * 100))}%` }}></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 빠른 이동 */}
+                  <div className="relative flex items-center gap-2 pt-4 border-t border-[#ececea]">
+                    <button onClick={() => { setWishOnly(true); document.getElementById("shop-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] transition-colors">
+                      <svg className={`w-3.5 h-3.5 ${wish.length > 0 ? "text-[#e91e3f]" : ""}`} fill={wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                      </svg>
+                      찜{wish.length > 0 ? ` ${wish.length}` : ""}
+                    </button>
+                    <span className="w-px h-4 bg-[#ececea]"></span>
+                    <button onClick={() => setShowOrders(true)}
+                      className="flex-1 py-2.5 rounded-xl text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] transition-colors">
+                      구매 내역{orders.length > 0 ? ` ${orders.length}` : ""}
+                    </button>
+                    <span className="w-px h-4 bg-[#ececea]"></span>
+                    <button onClick={() => setShowCart(true)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] transition-colors">
+                      장바구니{cartCount > 0 ? ` ${cartCount}` : ""}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
-      {/* ── 인기 상품 배너 ── */}
-      {popular.length > 0 && (
+      {/* ── 이미지 배너 (관리자 등록) ── */}
+      {banners.length > 0 && (
         <section className="max-w-6xl mx-auto px-6 pt-10">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2.5">
-              <span className="w-6 h-px bg-[#e91e3f]"></span>
-              <h2 className="text-sm font-black tracking-tight text-[#131313]">지금 인기 있는 상품</h2>
+          <div className="relative rounded-2xl overflow-hidden border border-[#e2e0dc] bg-[#eceae6] shadow-[0_10px_30px_-14px_rgba(0,0,0,0.25)]">
+            <div className="relative aspect-[3/1] sm:aspect-[4/1]">
+              {banners.map((b, i) => {
+                const inner = (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={b.imageUrl} alt={b.title || ""} className="absolute inset-0 w-full h-full object-cover" />
+                    {(b.title || b.subtitle) && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-8 sm:px-12">
+                        {b.title && <h2 className="text-xl sm:text-3xl font-black tracking-tight text-white mb-1 break-keep">{b.title}</h2>}
+                        {b.subtitle && <p className="text-[12px] sm:text-sm text-white/85 break-keep">{b.subtitle}</p>}
+                      </div>
+                    )}
+                  </>
+                );
+                return (
+                  <div key={b._id}
+                    className={`absolute inset-0 transition-opacity duration-700 ${i === bannerIdx ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+                    {b.link ? <Link href={b.link} className="block w-full h-full relative">{inner}</Link> : inner}
+                  </div>
+                );
+              })}
             </div>
-            <span className="text-[11px] font-bold text-[#8a8a8a]">판매량 기준</span>
-          </div>
 
-          <div className="flex gap-4 overflow-x-auto pb-2 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:bg-[#d6d3ce] [&::-webkit-scrollbar-thumb]:rounded-full">
-            {popular.map((it, i) => {
-              const sp = salePrice(it);
-              const discounted = sp < it.price;
-              return (
-                <button key={it._id} onClick={() => openBuy(it)}
-                  className="group relative shrink-0 w-[280px] text-left rounded-2xl overflow-hidden border border-[#e2e0dc] bg-white hover:shadow-[0_10px_28px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 transition-all duration-300">
-                  <div className="relative h-32 bg-[#eceae6] overflow-hidden">
-                    {it.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={it.imageUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[#c4c4c4]">
-                        <svg className="w-9 h-9" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
-                        </svg>
-                      </div>
-                    )}
-                    <span className="absolute top-3 left-3 w-6 h-6 rounded-full bg-[#131313] text-white text-[11px] font-black flex items-center justify-center">{i + 1}</span>
-                    {discounted && (
-                      <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-[#e91e3f] text-white text-[10px] font-black">{it.discountPct}% OFF</span>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <h3 className="text-sm font-black text-[#131313] truncate mb-1">{it.name}</h3>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-base font-black text-[#131313] tabular-nums">{sp.toLocaleString()}</span>
-                        {discounted && <span className="text-[11px] text-[#a3a3a3] line-through tabular-nums">{it.price.toLocaleString()}</span>}
-                      </div>
-                      <span className="text-[10px] font-bold text-[#8a8a8a]">{it.soldCount}개 판매</span>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
+            {/* 인디케이터 */}
+            {banners.length > 1 && (
+              <div className="absolute bottom-4 right-5 flex gap-1.5 z-10">
+                {banners.map((b, i) => (
+                  <button key={b._id} onClick={() => setBannerIdx(i)} aria-label={`배너 ${i + 1}`}
+                    className={`h-1.5 rounded-full transition-all duration-300 ${i === bannerIdx ? "w-6 bg-white" : "w-1.5 bg-white/50 hover:bg-white/80"}`}></button>
+                ))}
+              </div>
+            )}
+
+            {/* 관리자 — 배너 관리 진입 */}
+            {isAdmin && (
+              <Link href="/admin/shop?tab=banners"
+                className="absolute top-4 right-4 px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#131313] border border-[#e2e0dc] hover:bg-white shadow-sm transition-colors">
+                배너 관리
+              </Link>
+            )}
           </div>
         </section>
       )}
+
 
       {/* ── 검색 · 필터 ── */}
       <section className="max-w-6xl mx-auto px-6 pt-8">
         {/* 📌 아이콘 상태로 접혀 있다가 호버·포커스·입력 시 펼쳐지는 검색창
                (모바일은 터치라 호버가 없으므로 항상 펼친 상태) */}
-        <div className="mb-5 flex flex-wrap items-center gap-2">
-          {/* 카테고리 — 검색창과 같은 줄 */}
-          {TYPES.map((t) => (
-            <button key={t.v} onClick={() => setTypeFilter(t.v)} className={`${chip(typeFilter === t.v)} h-10`}>{t.l}</button>
-          ))}
-
-          <div
-            className={`group relative h-10 ml-auto rounded-full bg-white border border-[#e2e0dc] transition-[width,border-color] duration-500 ease-out overflow-hidden
-              w-full md:w-10 md:hover:w-72 md:focus-within:w-72 hover:border-[#a3a3a3] focus-within:border-[#e91e3f]
-              ${query ? "md:w-72" : ""}`}
-          >
-            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#a3a3a3] group-focus-within:text-[#e91e3f] transition-colors pointer-events-none z-10"
-              fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-            </svg>
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="상품명, 설명, 역할로 검색"
-              className="absolute inset-0 w-full h-full bg-transparent pl-9 pr-9 text-[13px] text-[#131313] outline-none placeholder:text-[#a3a3a3]
-                opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity duration-300"
-            />
-            {query && (
-              <button onClick={() => setQuery("")} aria-label="검색어 지우기"
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[#a3a3a3] hover:text-[#131313] transition-colors z-10">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            )}
+        {/* 검색어 표시 (검색은 헤더에서) */}
+        {query && (
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-[12px] text-[#8a8a8a]">&ldquo;<span className="font-bold text-[#131313]">{query}</span>&rdquo; 검색 결과</span>
+            <button onClick={() => setQuery("")} className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">검색 해제</button>
           </div>
-        </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2 mb-3">
           {PRICE_RANGES.map((r) => (
@@ -495,11 +672,20 @@ export default function ShopPage() {
       <section className="max-w-6xl mx-auto px-6 py-10 pb-24">
         <div id="shop-list" className="scroll-mt-24"></div>
 
-        {/* 찜만 보기 상태 표시 */}
+        {/* 찜만 보기 — 해제 버튼을 눈에 띄게 */}
         {wishOnly && (
-          <div className="flex items-center justify-between gap-3 mb-5 px-4 py-3 rounded-xl bg-[#e91e3f]/[0.06] border border-[#e91e3f]/20">
-            <span className="text-[12px] font-bold text-[#e91e3f]">찜한 상품만 보는 중 ({wish.length})</span>
-            <button onClick={() => setWishOnly(false)} className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">전체 보기</button>
+          <div className="flex items-center justify-between gap-4 mb-6 px-5 py-4 rounded-2xl bg-white border border-[#e2e0dc] shadow-[0_2px_10px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <svg className="w-4 h-4 text-[#e91e3f] shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+              </svg>
+              <span className="text-[13px] font-black text-[#131313]">찜한 상품 {wish.length}</span>
+            </div>
+            <button onClick={() => setWishOnly(false)}
+              className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#131313] hover:bg-black text-white text-[12px] font-bold transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              전체 상품 보기
+            </button>
           </div>
         )}
 
@@ -515,6 +701,8 @@ export default function ShopPage() {
             {visible.map((it) => {
               const soldOut = it.stock === 0;
               const affordable = canAfford(salePrice(it));
+              const owned = ownedItemIds.has(it._id);
+              const inCart = cart.some((c) => c.itemId === it._id);
               return (
                 <div key={it._id} className="group bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
                   {/* 이미지 */}
@@ -575,10 +763,13 @@ export default function ShopPage() {
                       <p className="text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep">{it.description}</p>
                     )}
 
-                    <div className="flex items-center gap-2 mb-4 text-[11px] font-bold text-[#8a8a8a]">
-                      {it.stock < 0 ? <span>재고 무제한</span> : <span>남은 수량 {it.stock}개</span>}
-                      {it.soldCount > 0 && <><span className="text-[#e2e0dc]">·</span><span>{it.soldCount}개 판매</span></>}
-                    </div>
+                    {/* 재고는 얼마 안 남았을 때만 알린다 (무제한·넉넉할 땐 표시 안 함) */}
+                    {it.stock >= 0 && it.stock <= 5 && it.stock > 0 && (
+                      <div className="flex items-center gap-1.5 mb-4">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-pulse"></span>
+                        <span className="text-[11px] font-bold text-[#e91e3f]">한정 수량 · {it.stock}개 남음</span>
+                      </div>
+                    )}
 
                     <div className="mt-auto">
                       <div className="mb-3">
@@ -593,11 +784,13 @@ export default function ShopPage() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => addToCart(it)}
-                          disabled={soldOut}
+                          disabled={soldOut || owned}
                           aria-label="장바구니 담기"
                           className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center transition-all ${
-                            soldOut
+                            soldOut || owned
                               ? "bg-[#eceae6] text-[#c4c4c4] cursor-not-allowed"
+                              : inCart
+                              ? "bg-[#131313] text-white"
                               : "bg-white text-[#131313] border border-[#e2e0dc] hover:border-[#131313]"
                           }`}
                         >
@@ -607,16 +800,18 @@ export default function ShopPage() {
                         </button>
                         <button
                           onClick={() => openBuy(it)}
-                          disabled={soldOut}
+                          disabled={soldOut || owned}
                           className={`flex-1 px-5 py-2.5 rounded-full text-[12px] font-bold transition-all ${
-                            soldOut
+                            owned
+                              ? "bg-[#eceae6] text-[#8a8a8a] cursor-not-allowed"
+                              : soldOut
                               ? "bg-[#e2e0dc] text-[#a3a3a3] cursor-not-allowed"
                               : isLoggedIn && !affordable
                               ? "bg-[#eceae6] text-[#8a8a8a] hover:bg-[#e2e0dc]"
                               : "bg-[#e91e3f] text-[#ffffff] hover:bg-[#d01634] shadow-[0_4px_12px_rgba(233,30,63,0.25)]"
                           }`}
                         >
-                          {soldOut ? "품절" : !isLoggedIn ? "로그인" : affordable ? "바로 구매" : "XP 부족"}
+                          {owned ? "보유 중" : soldOut ? "품절" : !isLoggedIn ? "로그인" : affordable ? "바로 구매" : "XP 부족"}
                         </button>
                       </div>
                     </div>
@@ -628,159 +823,6 @@ export default function ShopPage() {
         )}
       </section>
 
-      {/* ── ARCTIC 전용 헤더 ── */}
-      <header className={`sticky top-0 z-[95] w-full border-b transition-all duration-300 ${
-        pastBanner ? "bg-white/92 backdrop-blur-xl border-[#e2e0dc] shadow-[0_6px_20px_-10px_rgba(0,0,0,0.14)]" : "bg-[#f5f3f0]/90 backdrop-blur-md border-[#e2e0dc]"
-      }`}>
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
-          {/* 브랜드 — 고급 이글루의 ARCTIC */}
-          <Link href="/" className="group flex items-center gap-3 min-w-0 shrink-0">
-            <span className="text-[10px] font-bold tracking-[0.18em] text-[#8a8a8a] group-hover:text-[#131313] transition-colors hidden sm:block">고급 이글루</span>
-            <span className="w-px h-4 bg-[#d6d3ce] hidden sm:block"></span>
-            <span className="text-[17px] font-black tracking-[0.2em] text-[#131313]">ARCTIC</span>
-          </Link>
-
-          {/* 우 — 프로필·알림 */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {isLoggedIn && session?.user && (
-              <>
-                {/* 알림 */}
-                <div className="relative" ref={notifRef}>
-                  <button onClick={() => setShowNotif(!showNotif)} aria-label="알림"
-                    className="relative p-2 rounded-full text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] transition-colors">
-                    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-                    </svg>
-                    {pendingOrders > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
-                  </button>
-                  {showNotif && (
-                    <div className="absolute top-[46px] right-0 w-[290px] rounded-2xl bg-white border border-[#e2e0dc] shadow-[0_24px_50px_-16px_rgba(0,0,0,0.28)] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                      <div className="px-5 py-3.5 border-b border-[#ececea] flex items-center gap-2.5">
-                        <span className="w-4 h-px bg-[#e91e3f]"></span>
-                        <span className="text-sm font-black text-[#131313]">주문 알림</span>
-                      </div>
-                      {orders.length === 0 ? (
-                        <p className="px-5 py-8 text-center text-xs text-[#8a8a8a]">아직 주문 내역이 없습니다.</p>
-                      ) : (
-                        <div className="max-h-64 overflow-y-auto divide-y divide-[#ececea]">
-                          {orders.slice(0, 6).map((o) => (
-                            <button key={o._id} onClick={() => { setShowNotif(false); setShowOrders(true); }}
-                              className="w-full text-left px-5 py-3 hover:bg-[#f5f3f0] transition-colors">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
-                                  o.status === "completed" ? "bg-[#e8f3e6] text-[#3f7a35]"
-                                  : o.status === "cancelled" ? "bg-[#fdeaea] text-[#c62828]"
-                                  : "bg-[#fdf3e3] text-[#a8763a]"}`}>
-                                  {STATUS_LABEL[o.status]}
-                                </span>
-                                <span className="text-[10px] text-[#a3a3a3]">{new Date(o.createdAt).toLocaleDateString("ko-KR")}</span>
-                              </div>
-                              <p className="text-xs font-bold text-[#131313] truncate">{o.itemName}</p>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 프로필 */}
-                <div className="relative" ref={profileRef}>
-                  <button onClick={() => setShowProfile(!showProfile)}
-                    className="flex items-center gap-2 p-1 pr-2.5 rounded-full hover:bg-black/[0.05] transition-colors">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={session.user.image || ""} alt="" className="w-7 h-7 rounded-full bg-[#e2e0dc]" />
-                    <span className="hidden sm:block text-[13px] font-bold text-[#131313] max-w-[100px] truncate">{session.user.name}</span>
-                  </button>
-                  {showProfile && (
-                    <div className="absolute top-[46px] right-0 w-[248px] rounded-2xl bg-white border border-[#e2e0dc] shadow-[0_24px_50px_-16px_rgba(0,0,0,0.28)] p-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                      <div className="flex items-center gap-3 pb-3 mb-2 border-b border-[#ececea]">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={session.user.image || ""} alt="" className="w-11 h-11 rounded-full bg-[#e2e0dc]" />
-                        <div className="min-w-0">
-                          <div className="text-sm font-black text-[#131313] truncate">{session.user.name}</div>
-                          <div className="text-[11px] font-bold text-[#8a8a8a]">Lv.{myLevel} · {(myXp ?? 0).toLocaleString()} XP</div>
-                        </div>
-                      </div>
-                      <button onClick={() => { setShowProfile(false); setShowOrders(true); }}
-                        className="w-full text-left px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
-                        구매 내역
-                      </button>
-                      <Link href="/profile" onClick={() => setShowProfile(false)}
-                        className="block px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
-                        내 정보
-                      </Link>
-                      <Link href="/level" onClick={() => setShowProfile(false)}
-                        className="block px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
-                        SYSTEM : LEVEL
-                      </Link>
-                      <div className="h-px bg-[#ececea] my-1.5"></div>
-                      <Link href="/" onClick={() => setShowProfile(false)}
-                        className="block px-3 py-2.5 text-[13px] font-bold text-[#e91e3f] hover:bg-[#e91e3f]/[0.07] rounded-xl transition-colors">
-                        고급 이글루로 돌아가기
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* ── 유틸리티 바 — 보유 XP · 찜 · 구매내역 · 장바구니 ── */}
-      <div className={`sticky top-16 z-[90] w-full border-b transition-shadow duration-300 ${
-        pastBanner ? "bg-white/92 backdrop-blur-xl border-[#e2e0dc] shadow-[0_6px_20px_-10px_rgba(0,0,0,0.18)]" : "bg-[#f5f3f0]/85 backdrop-blur-md border-transparent"
-      }`}>
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between gap-4">
-          {!isLoggedIn ? (
-            <>
-              <span className="text-[12px] font-bold text-[#5a5a5a]">로그인하면 보유 XP로 바로 구매할 수 있어요</span>
-              <button onClick={() => signIn("discord")} className="px-4 py-2 rounded-full bg-[#5865F2] hover:bg-[#4752C4] text-white text-[12px] font-bold transition-colors shrink-0">
-                디스코드 로그인
-              </button>
-            </>
-          ) : (
-            <>
-              {/* 좌 — 보유 XP */}
-              <div className="flex items-baseline gap-2 min-w-0">
-                <span className="text-[10px] font-black tracking-[0.2em] text-[#8a8a8a] uppercase shrink-0">My XP</span>
-                <span className="text-lg font-black text-[#131313] tabular-nums">{myXp == null ? "—" : myXp.toLocaleString()}</span>
-                <span className="text-[11px] font-bold text-[#8a8a8a] shrink-0">Lv.{myLevel}</span>
-              </div>
-
-              {/* 우 — 찜 · 구매내역 · 장바구니 */}
-              <div className="flex items-center gap-1 shrink-0">
-                <button onClick={() => { setWishOnly(true); document.getElementById("shop-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-full hover:bg-black/[0.05] transition-colors">
-                  <svg className={`w-4 h-4 ${wish.length > 0 ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`} fill={wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                  </svg>
-                  <span className="hidden sm:inline text-[12px] font-bold text-[#4b4b4b]">찜{wish.length > 0 ? ` ${wish.length}` : ""}</span>
-                </button>
-
-                <button onClick={() => setShowOrders(true)}
-                  className="hidden sm:block px-3 py-2 rounded-full text-[12px] font-bold text-[#4b4b4b] hover:bg-black/[0.05] transition-colors">
-                  구매 내역{orders.length > 0 ? ` ${orders.length}` : ""}
-                </button>
-
-                <button onClick={() => setShowCart(true)}
-                  className="flex items-center gap-2.5 pl-3.5 pr-4 py-2 ml-1 rounded-full bg-[#131313] hover:bg-black text-white transition-colors">
-                  <span className="relative">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
-                    </svg>
-                    {cartCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center">{cartCount}</span>
-                    )}
-                  </span>
-                  <span className="text-[12px] font-bold tabular-nums">{cartTotal.toLocaleString()}</span>
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
 
       {/* 담김 토스트 — 상단 중앙 */}
       {cartToast && (
@@ -1075,7 +1117,7 @@ export default function ShopPage() {
                     <h3 className="text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep">{editForm.name || "상품명을 입력하세요"}</h3>
                     {editForm.description && <p className="text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep">{editForm.description}</p>}
                     <div className="flex items-center gap-2 mb-4 text-[11px] font-bold text-[#8a8a8a]">
-                      <span>{editForm.stock === "" ? "재고 무제한" : `남은 수량 ${editForm.stock}개`}</span>
+                      <span>{Number(editForm.stock) > 0 && Number(editForm.stock) <= 5 ? `한정 수량 · ${editForm.stock}개 남음` : " "}</span>
                     </div>
                     <div className="mt-auto flex items-end justify-between gap-3">
                       <div>

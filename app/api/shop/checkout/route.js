@@ -48,6 +48,21 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "수령 정보를 입력해주세요." }, { status: 400 });
     }
 
+    // 📌 모든 상품은 1인 1개 — 수량 초과·기보유 모두 차단
+    for (const d of docs) {
+      if (wanted.get(String(d._id)) > 1) {
+        return NextResponse.json({ success: false, message: `"${d.name}"은(는) 1인 1개만 구매할 수 있습니다.` }, { status: 400 });
+      }
+    }
+    const owned = await Purchase.find({
+      userId,
+      itemId: { $in: docs.map((d) => String(d._id)) },
+      status: { $in: ["pending", "completed"] },
+    }, { itemName: 1 }).lean();
+    if (owned.length > 0) {
+      return NextResponse.json({ success: false, message: `이미 구매한 상품이 있습니다: ${owned[0].itemName}` }, { status: 409 });
+    }
+
     const subtotal = docs.reduce((sum, d) => sum + salePrice(d) * wanted.get(String(d._id)), 0);
 
     // 쿠폰 검증 (사용 처리는 결제 확정 후)
