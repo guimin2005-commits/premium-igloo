@@ -70,7 +70,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const isVerifyPage = pathname === "/verify";
-  // 📌 IGLOO SHOP은 라이트 테마 — 헤더/푸터도 밝은 톤으로 전환한다
+  // 📌 ARCTIC은 라이트 테마 — 헤더/푸터도 밝은 톤으로 전환한다
   const isLightPage = pathname === "/shop" || pathname?.startsWith("/shop/");
   // 📌 경매방 안에서는 모바일 하단 탭을 숨긴다.
   //    입찰·채팅 바가 화면 아래에 붙는데 그 위에 전역 탭까지 있으면 잘못 눌러 방을 나가게 된다.
@@ -93,7 +93,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // 📌 카테고리 그룹화: 큰 카테고리 → 세부 카테고리 (메가 메뉴)
   const categoryGroups = [
     { name: "소식", desc: "고급 이글루의 최신 소식", tagline: "고급 이글루의 소식", items: [{ name: "공지사항", path: "/notice", desc: "최신 소식과 주요 안내" }, { name: "이벤트", path: "/event", desc: "다양한 이벤트와 혜택" }, { name: "구인", path: "/recruit", desc: "스태프 및 서포터즈 모집" }] },
-    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", tagline: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "IGLOO SHOP", path: "/shop", desc: "XP로 역할과 혜택을 구매" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "경매", path: "/auction", desc: "실시간 포인트 경매 관전 및 참여" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }] },
+    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", tagline: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "ARCTIC", path: "/shop", desc: "XP로 역할과 혜택을 구매" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "경매", path: "/auction", desc: "실시간 포인트 경매 관전 및 참여" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }] },
     { name: "지원", desc: "도움이 필요하신가요?", tagline: "무엇을 도와드릴까요?", items: [{ name: "1:1 문의", path: "/support", desc: "불편 사항 및 문의 접수" }, { name: "FAQ", path: "/faq", desc: "자주 묻는 질문" }] },
   ];
   const [openMegaMenu, setOpenMegaMenu] = useState<string | null>(null);
@@ -261,7 +261,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <RouteProgress pathname={pathname} />
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
              헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
-      <div className={`sticky top-0 z-40 transition-[padding] duration-500 ease-out flex-shrink-0 ${isAuctionRoom ? "hidden" : ""} ${scrolled ? "pt-3 px-3 md:px-6" : ""}`} onMouseLeave={() => setOpenMegaMenu(null)}>
+      <div className={`sticky top-0 z-40 transition-[padding] duration-500 ease-out flex-shrink-0 ${isAuctionRoom || isLightPage ? "hidden" : ""} ${scrolled ? "pt-3 px-3 md:px-6" : ""}`} onMouseLeave={() => setOpenMegaMenu(null)}>
       <header className={`mx-auto transition-[max-width,border-radius,padding,height] duration-500 ease-out ${
         scrolled
           ? isLightPage
@@ -486,7 +486,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       </div>
 
       {/* pb-24 — 떠 있는 알약 독(12px 여백 + 약 58px 높이)에 콘텐츠 끝이 가리지 않게 */}
-      <main className="flex-1 flex flex-col w-full relative pb-24 md:pb-0">
+      <main className={`flex-1 flex flex-col w-full relative ${isLightPage ? "" : "pb-24 md:pb-0"}`}>
         {isMaintenance && mounted && !isAdmin && status !== "loading" ? (
           /* 📌 점검 모드 화면 (관리자는 정상 이용 가능) */
           <div className="flex-1 flex items-center justify-center px-6 py-32 relative overflow-hidden">
@@ -518,7 +518,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
              스크롤 시 상단 헤더가 변하는 알약과 같은 톤(bg #0b0b0b/75 + backdrop-blur-2xl + 얇은 흰 테두리).
              ※ bottom은 홈 인디케이터/제스처 바를 피하도록 safe-area와 12px 중 큰 값.
              (경매방에서는 오조작 방지를 위해 숨김) */}
-      {!isVerifyPage && !isAuctionRoom && mounted && (
+      {!isVerifyPage && !isAuctionRoom && !isLightPage && mounted && (
         <nav className={`md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border backdrop-blur-2xl grid grid-cols-5 ${isLightPage ? "border-black/[0.07] bg-white/85 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.22)]" : "border-white/[0.07] bg-[#0b0b0b]/75 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85)]"}`}>
           {[
             { name: "홈", path: "/", icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" },
@@ -539,7 +539,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </nav>
       )}
 
-      <footer className={`w-full mt-auto flex-shrink-0 hidden md:block relative overflow-hidden ${isLightPage ? "border-t border-black/[0.06] bg-[#f5f3f0]" : "border-t border-white/5 bg-[#090909]"}`}>
+      <footer className={`w-full mt-auto flex-shrink-0 ${isLightPage ? "hidden" : "hidden md:block"} relative overflow-hidden ${isLightPage ? "border-t border-black/[0.06] bg-[#f5f3f0]" : "border-t border-white/5 bg-[#090909]"}`}>
         <div className="absolute bottom-[-80px] left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-[#e91e3f]/[0.04] blur-[90px] rounded-full pointer-events-none"></div>
         <div className="max-w-7xl mx-auto px-6 py-10 relative z-10">
           <div className="flex items-center justify-between mb-6">

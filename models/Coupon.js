@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-// 📌 IGLOO SHOP 쿠폰 — 결제 시 코드 입력으로 할인 적용
+// 📌 ARCTIC 쿠폰 — 결제 시 코드 입력으로 할인 적용
 //    type "percent": 비율 할인 (maxDiscount로 상한 지정 가능)
 //    type "flat"   : 정액 XP 할인
 const CouponSchema = new mongoose.Schema({

@@ -1,5 +1,5 @@
 // ── 자동 지급 큐 (30초 주기) ──────────────────
-//  · IGLOO SHOP 역할 상품 구매 → 역할 자동 지급
+//  · ARCTIC 역할 상품 구매 → 역할 자동 지급
 //  · XP 지급 대기열(코드·초대 보상 등) → XP 자동 지급
 //  · 코드 역할 지급 요청 → 역할 자동 지급
 import { Purchase, Payout, CodeGrant, UserXp } from "../db.js";
@@ -25,7 +25,7 @@ async function processPurchases(guild) {
         await p.save();
         continue;
       }
-      if (p.roleId) await member.roles.add(p.roleId, `IGLOO SHOP 구매: ${p.itemName}`);
+      if (p.roleId) await member.roles.add(p.roleId, `ARCTIC 구매: ${p.itemName}`);
 
       p.status = "completed";
       p.processedAt = new Date();

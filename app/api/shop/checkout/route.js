@@ -22,7 +22,7 @@ export async function POST(request) {
     }
 
     await connectToDatabase();
-    const { canView } = await getShopAccess();
+    const { canView, isAdmin } = await getShopAccess();
     if (!canView) {
       return NextResponse.json({ success: false, message: "아직 공개되지 않은 상점입니다." }, { status: 403 });
     }
@@ -79,11 +79,13 @@ export async function POST(request) {
     }
 
     // 2) 총액 차감 — 잔액이 충분할 때만 매치
+    //    📌 관리자는 잔액 검사를 건너뛴다 (상점 동작 확인용 테스트 구매)
     const paid = await UserXp.updateOne(
-      { userId, xp: { $gte: total } },
-      { $inc: { xp: -total }, $set: { updatedAt: new Date() } }
+      isAdmin ? { userId } : { userId, xp: { $gte: total } },
+      { $inc: { xp: -total }, $set: { updatedAt: new Date() } },
+      isAdmin ? { upsert: true } : {}
     );
-    if (!paid.modifiedCount) {
+    if (!paid.modifiedCount && !paid.upsertedCount) {
       for (const c of claimed) {
         await ShopItem.updateOne({ _id: c.id }, c.limited ? { $inc: { stock: c.qty, soldCount: -c.qty } } : { $inc: { soldCount: -c.qty } });
       }

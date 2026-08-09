@@ -84,7 +84,7 @@ const XpLogSchema = new mongoose.Schema({
 });
 export const XpLog = mongoose.models.XpLog || mongoose.model("XpLog", XpLogSchema);
 
-// IGLOO SHOP 구매 — 역할 상품은 봇이 pending 건을 보고 자동 지급
+// ARCTIC 구매 — 역할 상품은 봇이 pending 건을 보고 자동 지급
 const PurchaseSchema = new mongoose.Schema({
   userId: { type: String, required: true, index: true },
   userName: { type: String, default: "" },

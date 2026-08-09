@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { getShopAccess } from "@/lib/shopAccess";
+import { salePrice } from "@/lib/shopPricing";
 import ShopItem from "@/models/ShopItem";
 import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
@@ -22,7 +23,7 @@ export async function POST(request) {
     await connectToDatabase();
 
     // 공개 전에는 관리자만 구매 가능 (테스트용)
-    const { canView } = await getShopAccess();
+    const { canView, isAdmin } = await getShopAccess();
     if (!canView) {
       return NextResponse.json({ success: false, message: "아직 공개되지 않은 상점입니다." }, { status: 403 });
     }
@@ -54,11 +55,14 @@ export async function POST(request) {
     }
 
     // 2) XP 차감 — 잔액이 충분할 때만 매치되는 원자적 갱신 (중복 구매·마이너스 방지)
+    //    📌 관리자는 잔액 검사를 건너뛴다 (상점 동작 확인용 테스트 구매)
+    const price = salePrice(item);
     const paid = await UserXp.updateOne(
-      { userId, xp: { $gte: item.price } },
-      { $inc: { xp: -item.price }, $set: { updatedAt: new Date() } }
+      isAdmin ? { userId } : { userId, xp: { $gte: price } },
+      { $inc: { xp: -price }, $set: { updatedAt: new Date() } },
+      isAdmin ? { upsert: true } : {}
     );
-    if (!paid.modifiedCount) {
+    if (!paid.modifiedCount && !paid.upsertedCount) {
       // 결제 실패 → 선점한 재고 원복
       const rollback = item.stock >= 0
         ? { $inc: { stock: 1, soldCount: -1 } }
@@ -75,7 +79,7 @@ export async function POST(request) {
       itemName: item.name,
       itemType: item.type,
       roleId: item.roleId || "",
-      price: item.price,
+      price,
       contact: item.type === "physical" ? contact.trim() : "",
       status: "pending",
     });

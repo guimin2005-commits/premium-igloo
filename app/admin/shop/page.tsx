@@ -8,7 +8,7 @@ import { Reveal, LuxStyles } from "../../components/Lux";
 const ADMIN_USERS = ["elahw.06"];
 
 const TAB_META: Record<string, { title: string; desc: string }> = {
-  items: { title: "상품 관리", desc: "IGLOO SHOP에 노출할 상품을 등록·수정합니다. 역할 상품은 구매 시 봇이 자동 지급합니다." },
+  items: { title: "상품 관리", desc: "ARCTIC에 노출할 상품을 등록·수정합니다. 역할 상품은 구매 시 봇이 자동 지급합니다." },
   orders: { title: "구매 내역", desc: "구매 건을 확인하고 실물 상품 발송·취소를 처리합니다." },
 };
 

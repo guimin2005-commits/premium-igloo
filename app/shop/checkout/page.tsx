@@ -4,12 +4,16 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { salePrice } from "@/lib/shopPricing";
+
+const ADMIN_USERS = ["elahw.06"];
 
 // 📌 주문서 — 장바구니 내용을 확인하고 약관 동의 후 결제
 export default function CheckoutPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const isLoggedIn = status === "authenticated";
+  const isAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
 
   const [cart, setCart] = useState<{ itemId: string; qty: number }[]>([]);
   const [items, setItems] = useState<any[]>([]);
@@ -21,6 +25,12 @@ export default function CheckoutPage() {
   const [agreeFinal, setAgreeFinal] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  // 쿠폰
+  const [couponInput, setCouponInput] = useState("");
+  const [coupon, setCoupon] = useState<any>(null);
+  const [couponMsg, setCouponMsg] = useState("");
+  const [isCheckingCoupon, setIsCheckingCoupon] = useState(false);
 
   useEffect(() => {
     try {
@@ -44,10 +54,42 @@ export default function CheckoutPage() {
     () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item),
     [cart, items]
   );
-  const total = rows.reduce((n, r) => n + r.item.price * r.qty, 0);
+  const subtotal = rows.reduce((n, r) => n + salePrice(r.item) * r.qty, 0);
+  const listTotal = rows.reduce((n, r) => n + r.item.price * r.qty, 0);
+  const itemDiscount = listTotal - subtotal;
+  const couponDiscount = coupon?.discount || 0;
+  const total = Math.max(0, subtotal - couponDiscount);
   const count = rows.reduce((n, r) => n + r.qty, 0);
   const needsContact = rows.some((r) => r.item.type === "physical");
-  const enoughXp = myXp != null && myXp >= total;
+  const enoughXp = isAdmin || (myXp != null && myXp >= total);
+
+  // 쿠폰 적용 — 서버에서 유효성·할인액을 확인
+  const applyCoupon = async () => {
+    const code = couponInput.trim().toUpperCase();
+    if (!code || isCheckingCoupon) return;
+    setIsCheckingCoupon(true);
+    setCouponMsg("");
+    try {
+      const res = await fetch("/api/shop/coupons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ validate: true, code, total: subtotal }),
+      });
+      const d = await res.json();
+      if (res.ok && d.success) {
+        setCoupon(d.data);
+        setCouponMsg("");
+      } else {
+        setCoupon(null);
+        setCouponMsg(d.message || "사용할 수 없는 쿠폰입니다.");
+      }
+    } catch {
+      setCoupon(null);
+      setCouponMsg("쿠폰 확인 중 오류가 발생했습니다.");
+    } finally {
+      setIsCheckingCoupon(false);
+    }
+  };
   const canPay = rows.length > 0 && enoughXp && agreeTerms && agreeFinal && (!needsContact || contact.trim().length > 0) && !isPaying;
 
   const pay = async () => {
@@ -57,7 +99,7 @@ export default function CheckoutPage() {
       const res = await fetch("/api/shop/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: cart, contact }),
+        body: JSON.stringify({ items: cart, contact, couponCode: coupon?.code || "" }),
       });
       const d = await res.json();
       setResult({ ok: !!d.success, message: d.message || (d.success ? "결제가 완료되었습니다." : "결제에 실패했습니다.") });
@@ -169,7 +211,12 @@ export default function CheckoutPage() {
                         {r.item.type === "role" ? "역할 · 자동 지급" : "기프트카드"} · 수량 {r.qty}
                       </p>
                     </div>
-                    <span className="text-sm font-black tabular-nums shrink-0">{(r.item.price * r.qty).toLocaleString()}</span>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-black tabular-nums">{(salePrice(r.item) * r.qty).toLocaleString()}</div>
+                      {salePrice(r.item) < r.item.price && (
+                        <div className="text-[10px] text-[#a3a3a3] line-through tabular-nums">{(r.item.price * r.qty).toLocaleString()}</div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -217,8 +264,43 @@ export default function CheckoutPage() {
             <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6 lg:sticky lg:top-24">
               <h2 className="text-sm font-black text-[#131313] mb-5">결제 정보</h2>
 
+              {/* 쿠폰 */}
+              <div className="mb-5">
+                <label className="block text-[11px] font-bold text-[#4b4b4b] mb-2">쿠폰</label>
+                {coupon ? (
+                  <div className="flex items-center justify-between gap-2 px-4 py-3 rounded-xl bg-[#e91e3f]/[0.07] border border-[#e91e3f]/25">
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-black text-[#e91e3f] truncate">{coupon.name || coupon.code}</div>
+                      <div className="text-[10px] font-bold text-[#8a8a8a]">
+                        {coupon.type === "percent" ? `${coupon.value}% 할인` : `${coupon.value.toLocaleString()} XP 할인`}
+                      </div>
+                    </div>
+                    <button onClick={() => { setCoupon(null); setCouponInput(""); }} className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] shrink-0">해제</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") applyCoupon(); }}
+                      placeholder="쿠폰 코드"
+                      className="flex-1 min-w-0 bg-white border border-[#e2e0dc] rounded-lg px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
+                    <button onClick={applyCoupon} disabled={isCheckingCoupon || !couponInput.trim()}
+                      className="px-4 py-2.5 rounded-lg bg-[#131313] text-white text-[12px] font-bold hover:bg-black disabled:opacity-40 transition-colors shrink-0">
+                      {isCheckingCoupon ? "확인" : "적용"}
+                    </button>
+                  </div>
+                )}
+                {couponMsg && <p className="mt-2 text-[11px] font-bold text-[#c62828]">{couponMsg}</p>}
+              </div>
+
               <div className="space-y-2.5 text-[13px] mb-4">
                 <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 수</span><span className="font-bold tabular-nums">{count}개</span></div>
+                <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 금액</span><span className="font-bold tabular-nums">{listTotal.toLocaleString()}</span></div>
+                {itemDiscount > 0 && (
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 할인</span><span className="font-bold text-[#e91e3f] tabular-nums">-{itemDiscount.toLocaleString()}</span></div>
+                )}
+                {couponDiscount > 0 && (
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">쿠폰 할인</span><span className="font-bold text-[#e91e3f] tabular-nums">-{couponDiscount.toLocaleString()}</span></div>
+                )}
                 <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold tabular-nums">{(myXp ?? 0).toLocaleString()}</span></div>
                 <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 XP</span><span className="font-bold text-[#c62828] tabular-nums">-{total.toLocaleString()}</span></div>
               </div>

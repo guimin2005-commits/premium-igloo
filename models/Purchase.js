@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-// 📌 IGLOO SHOP 구매 내역
+// 📌 ARCTIC 구매 내역
 //    role     : pending → (봇이 역할 지급) → completed
 //    physical : pending → (관리자 발송 처리) → completed
 const PurchaseSchema = new mongoose.Schema({

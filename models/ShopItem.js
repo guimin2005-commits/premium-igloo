@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-// 📌 IGLOO SHOP 상품 — 레벨 대시보드(상품 관리)에서 등록, /shop 에서 판매
+// 📌 ARCTIC 상품 — 레벨 대시보드(상품 관리)에서 등록, /shop 에서 판매
 //    type "role"   : 구매 즉시 봇이 역할 자동 지급
 //    type "physical": 구매 후 관리자가 확인·발송 (실물/기프티콘 등)
 const ShopItemSchema = new mongoose.Schema({
