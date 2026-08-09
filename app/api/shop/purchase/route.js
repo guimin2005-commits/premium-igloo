@@ -67,12 +67,13 @@ export async function POST(request) {
     // 2) XP 차감 — 잔액이 충분할 때만 매치되는 원자적 갱신 (중복 구매·마이너스 방지)
     //    📌 관리자는 잔액 검사를 건너뛴다 (상점 동작 확인용 테스트 구매)
     const price = salePrice(item);
+    const charged = isAdmin ? 0 : price;  // 관리자는 XP 소모 없이 테스트 구매
     const paid = await UserXp.updateOne(
       isAdmin ? { userId } : { userId, xp: { $gte: price } },
-      { $inc: { xp: -price }, $set: { updatedAt: new Date() } },
+      { $inc: { xp: -charged }, $set: { updatedAt: new Date() } },
       isAdmin ? { upsert: true } : {}
     );
-    if (!paid.modifiedCount && !paid.upsertedCount) {
+    if (!paid.matchedCount && !paid.upsertedCount) {
       // 결제 실패 → 선점한 재고 원복
       const rollback = item.stock >= 0
         ? { $inc: { stock: 1, soldCount: -1 } }
@@ -98,7 +99,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      message: item.type === "role"
+      message: item.type !== "physical"
         ? "구매가 완료되었습니다. 잠시 후 역할이 자동으로 지급됩니다."
         : "구매가 완료되었습니다. 운영진 확인 후 발송해 드립니다.",
       data: { purchaseId: purchase._id, remainXp: remain?.xp ?? 0 },

@@ -15,7 +15,7 @@ async function fetchMember(guild, userId) {
 
 // ── 역할 상품 구매 처리 ──────────────────────
 async function processPurchases(guild) {
-  const rows = await Purchase.find({ status: "pending", itemType: "role" }).limit(25);
+  const rows = await Purchase.find({ status: "pending", itemType: { $in: ["role", "perk"] } }).limit(25);
 
   for (const p of rows) {
     try {

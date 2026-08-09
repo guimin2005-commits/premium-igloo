@@ -49,9 +49,10 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "가격을 입력해주세요." }, { status: 400 });
     }
     const discountPct = Math.max(0, Math.min(100, Math.floor(Number(b.discountPct) || 0)));
-    const type = b.type === "physical" ? "physical" : "role";
-    if (type === "role" && !b.roleId?.trim()) {
-      return NextResponse.json({ success: false, message: "역할 상품은 지급할 역할을 선택해야 합니다." }, { status: 400 });
+    const type = ["physical", "perk", "role"].includes(b.type) ? b.type : "role";
+    const grantsRole = type === "role" || type === "perk";
+    if (grantsRole && !b.roleId?.trim()) {
+      return NextResponse.json({ success: false, message: "역할·권한 상품은 지급할 역할을 선택해야 합니다." }, { status: 400 });
     }
 
     const payload = {
@@ -59,8 +60,8 @@ export async function POST(request) {
       description: (b.description || "").trim(),
       imageUrl: (b.imageUrl || "").trim(),
       type,
-      roleId: type === "role" ? b.roleId.trim() : "",
-      roleName: type === "role" ? (b.roleName || "").trim() : "",
+      roleId: grantsRole ? b.roleId.trim() : "",
+      roleName: grantsRole ? (b.roleName || "").trim() : "",
       price,
       discountPct,
       // 빈 값이면 무제한(-1)

@@ -20,9 +20,17 @@ const SORTS = [
 
 const TYPES = [
   { v: "all", l: "전체" },
-  { v: "role", l: "역할 · 권한" },
+  { v: "role", l: "역할" },
+  { v: "perk", l: "권한" },
   { v: "physical", l: "기프트카드" },
 ];
+
+// 상품 유형 배지 (역할·권한은 자동 지급, 기프트카드는 운영진 발송)
+const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
+  role: { label: "역할 · 자동 지급", cls: "bg-[#e91e3f] text-white" },
+  perk: { label: "권한 · 자동 지급", cls: "bg-[#2f6fb0] text-white" },
+  physical: { label: "기프트카드", cls: "bg-[#131313] text-white" },
+};
 
 const PRICE_RANGES = [
   { v: "all", l: "전체", min: 0, max: Infinity },
@@ -65,7 +73,6 @@ export default function ShopPage() {
 
   // 📌 장바구니 — 로컬에 보관해 새로고침해도 유지 ([{ itemId, qty }])
   const [cart, setCart] = useState<{ itemId: string; qty: number }[]>([]);
-  const [showCart, setShowCart] = useState(false);
   const [cartToast, setCartToast] = useState("");
 
   // 스크롤하면 헤더·유틸바에 그림자를 넣어 떠 있는 느낌을 준다
@@ -94,15 +101,19 @@ export default function ShopPage() {
     return () => document.removeEventListener("mousedown", onDown);
   }, []);
 
+  // 저장된 장바구니를 먼저 읽고, 그 뒤부터만 저장한다 (첫 렌더에 빈 배열로 덮어쓰지 않게)
+  const [cartLoaded, setCartLoaded] = useState(false);
   useEffect(() => {
     try {
       const raw = localStorage.getItem("iglooShopCart");
       if (raw) setCart(JSON.parse(raw));
     } catch {}
+    setCartLoaded(true);
   }, []);
   useEffect(() => {
+    if (!cartLoaded) return;
     try { localStorage.setItem("iglooShopCart", JSON.stringify(cart)); } catch {}
-  }, [cart]);
+  }, [cart, cartLoaded]);
 
   // 📌 상품은 1인 1개 — 이미 구매한 상품은 다시 담거나 살 수 없다
   const ownedItemIds = useMemo(
@@ -354,13 +365,15 @@ export default function ShopPage() {
 
   return (
     <div className="w-full flex-1 bg-[#f5f3f0] text-[#131313] min-h-screen">
-      {/* ── ARCTIC 전용 헤더 ── */}
-      <header className={`sticky top-0 z-[95] w-full border-b transition-all duration-300 ${
+      {/* ── ARCTIC 전용 헤더 — 스크롤하면 알약 독으로 좁아진다 ── */}
+      <div className={`sticky top-0 z-[95] w-full transition-[padding] duration-500 ease-out ${pastBanner ? "pt-3 px-3 md:px-6" : ""}`}>
+      {/* max-width를 고정값끼리 오가게 해야 알약 전환이 부드럽게 애니메이션된다 */}
+      <header className={`mx-auto transition-all duration-500 ease-out ${
         pastBanner
-          ? "bg-white/94 backdrop-blur-xl border-[#e2e0dc] shadow-[0_6px_20px_-10px_rgba(0,0,0,0.14)]"
-          : "bg-[#f5f3f0]/92 backdrop-blur-md border-[#e2e0dc]"
+          ? "max-w-5xl rounded-full border border-[#e2e0dc] bg-white/85 backdrop-blur-2xl shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)]"
+          : "max-w-[1600px] rounded-none border-x-transparent border-t-transparent border-b border-b-[#e2e0dc] bg-[#f5f3f0]/92 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)]"
       }`}>
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center gap-6">
+        <div className={`mx-auto flex items-center gap-6 transition-all duration-500 ease-out ${pastBanner ? "max-w-5xl px-5 h-14" : "max-w-6xl px-6 h-16"}`}>
           {/* 브랜드 — 고급 이글루의 ARCTIC */}
           <div className="flex items-center gap-3 min-w-0 shrink-0">
             <Link href="/" className="text-[10px] font-bold tracking-[0.18em] text-[#8a8a8a] hover:text-[#131313] transition-colors hidden lg:block">
@@ -409,11 +422,18 @@ export default function ShopPage() {
                   <span className="text-[9px] font-black tracking-[0.15em] text-[#e91e3f]">XP</span>
                 </div>
 
-                {/* 찜 */}
-                <button onClick={() => { setWishOnly(true); document.getElementById("shop-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
-                  aria-label="찜한 상품"
-                  className="relative p-2 rounded-full text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] transition-colors">
-                  <svg className={`w-[18px] h-[18px] ${wish.length > 0 ? "text-[#e91e3f]" : ""}`} fill={wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
+                {/* 찜 — 누르면 찜 목록만, 한 번 더 누르면 전체로 */}
+                <button
+                  onClick={() => {
+                    const next = !wishOnly;
+                    setWishOnly(next);
+                    if (next) document.getElementById("shop-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  aria-label="찜한 상품 보기"
+                  aria-pressed={wishOnly}
+                  className={`relative p-2 rounded-full transition-colors ${wishOnly ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
+                  <svg className={`w-[18px] h-[18px] transition-all duration-300 ${wishOnly ? "text-[#e91e3f] scale-110" : wish.length > 0 ? "text-[#e91e3f]" : ""}`}
+                    fill={wishOnly || wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
                   </svg>
                 </button>
@@ -428,7 +448,7 @@ export default function ShopPage() {
                 </button>
 
                 {/* 장바구니 */}
-                <button onClick={() => setShowCart(true)}
+                <Link href="/shop/cart"
                   className="flex items-center gap-2 pl-3 pr-4 py-2 ml-1 rounded-full bg-[#131313] hover:bg-black text-white transition-colors">
                   <span className="relative">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -439,13 +459,50 @@ export default function ShopPage() {
                     )}
                   </span>
                   <span className="text-[12px] font-bold tabular-nums hidden sm:inline">{cartTotal.toLocaleString()}</span>
-                </button>
-
-                {/* 프로필 — 클릭 시 내 정보로 이동 */}
-                <Link href="/profile" className="ml-1 shrink-0" aria-label="내 정보">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={session?.user?.image || ""} alt="" className="w-8 h-8 rounded-full bg-[#e2e0dc] ring-1 ring-[#e2e0dc] hover:ring-[#131313] transition-all" />
                 </Link>
+
+                {/* 프로필 — 클릭 시 메뉴 */}
+                <div className="relative ml-1 shrink-0" ref={profileRef}>
+                  <button onClick={() => setShowProfile(!showProfile)} aria-label="내 메뉴" aria-expanded={showProfile}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={session?.user?.image || ""} alt=""
+                      className={`w-8 h-8 rounded-full bg-[#e2e0dc] ring-1 transition-all ${showProfile ? "ring-[#131313]" : "ring-[#e2e0dc] hover:ring-[#a3a3a3]"}`} />
+                  </button>
+                  {showProfile && (
+                    <div className="absolute top-[46px] right-0 w-[250px] rounded-2xl bg-white border border-[#e2e0dc] shadow-[0_24px_50px_-16px_rgba(0,0,0,0.28)] p-4 z-50"
+                      style={{ animation: "menuDrop 0.28s cubic-bezier(0.16,1,0.3,1)" }}>
+                      <div className="flex items-center gap-3 pb-3 mb-2 border-b border-[#ececea]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={session?.user?.image || ""} alt="" className="w-11 h-11 rounded-full bg-[#e2e0dc]" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-black text-[#131313] truncate">{session?.user?.name}</div>
+                          <div className="text-[11px] font-bold text-[#8a8a8a]">Lv.{myLevel} · {(myXp ?? 0).toLocaleString()} XP</div>
+                        </div>
+                      </div>
+                      <button onClick={() => { setShowProfile(false); setShowOrders(true); }}
+                        className="w-full text-left px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
+                        구매 내역{orders.length > 0 ? ` ${orders.length}` : ""}
+                      </button>
+                      <button onClick={() => { setShowProfile(false); setWishOnly(true); document.getElementById("shop-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                        className="w-full text-left px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
+                        찜한 상품{wish.length > 0 ? ` ${wish.length}` : ""}
+                      </button>
+                      <Link href="/profile" onClick={() => setShowProfile(false)}
+                        className="block px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
+                        내 정보
+                      </Link>
+                      <Link href="/level" onClick={() => setShowProfile(false)}
+                        className="block px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
+                        SYSTEM : LEVEL
+                      </Link>
+                      <div className="h-px bg-[#ececea] my-1.5"></div>
+                      <Link href="/" onClick={() => setShowProfile(false)}
+                        className="block px-3 py-2.5 text-[13px] font-bold text-[#e91e3f] hover:bg-[#e91e3f]/[0.07] rounded-xl transition-colors">
+                        고급 이글루로 돌아가기
+                      </Link>
+                    </div>
+                  )}
+                </div>
               </>
             ) : (
               <button onClick={() => signIn("discord")}
@@ -456,21 +513,8 @@ export default function ShopPage() {
           </div>
         </div>
 
-        {/* 모바일 카테고리 */}
-        <div className="md:hidden border-t border-[#ececea] flex gap-1 overflow-x-auto px-4 py-2 [&::-webkit-scrollbar]:hidden">
-          {TYPES.map((t) => {
-            const on = typeFilter === t.v && !wishOnly;
-            return (
-              <button key={t.v} onClick={() => { setTypeFilter(t.v); setWishOnly(false); }}
-                className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-bold border transition-colors ${
-                  on ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#4b4b4b] border-[#e2e0dc]"
-                }`}>
-                {t.l}
-              </button>
-            );
-          })}
-        </div>
       </header>
+      </div>
 
       {/* 공개 전 관리자 미리보기 배너 */}
       {!shopPublic && isAdmin && (
@@ -568,10 +612,10 @@ export default function ShopPage() {
                       구매 내역{orders.length > 0 ? ` ${orders.length}` : ""}
                     </button>
                     <span className="w-px h-4 bg-[#ececea]"></span>
-                    <button onClick={() => setShowCart(true)}
+                    <Link href="/shop/cart"
                       className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] transition-colors">
                       장바구니{cartCount > 0 ? ` ${cartCount}` : ""}
-                    </button>
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -669,7 +713,7 @@ export default function ShopPage() {
       </section>
 
       {/* ── 상품 목록 ── */}
-      <section className="max-w-6xl mx-auto px-6 py-10 pb-24">
+      <section className="max-w-6xl mx-auto px-6 py-10 pb-32 md:pb-24">
         <div id="shop-list" className="scroll-mt-24"></div>
 
         {/* 찜만 보기 — 해제 버튼을 눈에 띄게 */}
@@ -717,8 +761,8 @@ export default function ShopPage() {
                         </svg>
                       </div>
                     )}
-                    <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide ${it.type === "role" ? "bg-[#e91e3f] text-[#ffffff]" : "bg-[#131313] text-white"}`}>
-                      {it.type === "role" ? "역할 · 자동 지급" : "기프트카드"}
+                    <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide ${TYPE_BADGE[it.type]?.cls || "bg-[#131313] text-white"}`}>
+                      {TYPE_BADGE[it.type]?.label || "상품"}
                     </span>
                     {salePrice(it) < it.price && (
                       <span className="absolute top-3 right-14 px-2.5 py-1 rounded-full text-[10px] font-black bg-[#e91e3f] text-white">{it.discountPct}% OFF</span>
@@ -824,93 +868,68 @@ export default function ShopPage() {
       </section>
 
 
-      {/* 담김 토스트 — 상단 중앙 */}
+      {/* ── 모바일 하단 탭바 — 카테고리·찜·장바구니 ── */}
+      <nav className="md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[92] p-1.5 rounded-full border border-[#e2e0dc] bg-white/90 backdrop-blur-2xl shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)] grid grid-cols-5">
+        {TYPES.map((t) => {
+          const on = typeFilter === t.v && !wishOnly;
+          return (
+            <button key={t.v}
+              onClick={() => { setTypeFilter(t.v); setWishOnly(false); document.getElementById("shop-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+              className={`flex flex-col items-center justify-center py-1.5 rounded-full transition-all active:scale-95 ${
+                on ? "text-[#e91e3f] bg-[#e91e3f]/[0.1]" : "text-[#8a8a8a] active:text-[#131313]"
+              }`}>
+              <span className="text-[10px] font-bold whitespace-nowrap">{t.l}</span>
+            </button>
+          );
+        })}
+
+        <Link href="/shop/cart"
+          className="relative flex flex-col items-center justify-center py-1.5 rounded-full text-[#131313] transition-all active:scale-95">
+          <svg className="w-4 h-4 mb-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+          </svg>
+          <span className="text-[10px] font-bold">장바구니</span>
+          {cartCount > 0 && (
+            <span className="absolute top-0.5 right-1/2 translate-x-4 min-w-[15px] h-[15px] px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center">{cartCount}</span>
+          )}
+        </Link>
+      </nav>
+
+      {/* 토스트 — 상단 중앙에서 튀어나오듯 등장 */}
       {cartToast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[150] px-5 py-3 bg-[#131313] text-white rounded-full shadow-[0_12px_32px_rgba(0,0,0,0.28)] text-[12px] font-bold animate-in fade-in slide-in-from-top-2">
-          🛒 {cartToast}
-        </div>
-      )}
-
-      {/* ── 장바구니 팝업 (화면 중앙) ── */}
-      {showCart && (
-        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowCart(false)}>
-          <div className="w-full max-w-lg max-h-[82vh] bg-white rounded-3xl border border-[#e2e0dc] flex flex-col shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] overflow-hidden animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-5 border-b border-[#ececea] flex items-center justify-between shrink-0">
-              <h2 className="text-base font-black text-[#131313]">장바구니 <span className="text-[#e91e3f]">{cartCount}</span></h2>
-              <button onClick={() => setShowCart(false)} className="p-1.5 text-[#8a8a8a] hover:text-[#131313] transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto">
-              {cartRows.length === 0 ? (
-                <div className="py-24 text-center px-6">
-                  <p className="text-sm font-bold text-[#4b4b4b] mb-1">장바구니가 비어 있습니다.</p>
-                  <p className="text-xs text-[#8a8a8a]">마음에 드는 상품을 담아보세요.</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-[#ececea]">
-                  {cartRows.map((r) => {
-                    const max = r.item.stock < 0 ? 99 : r.item.stock;
-                    return (
-                      <div key={r.itemId} className="p-5 flex gap-4">
-                        <div className="w-16 h-16 rounded-xl bg-[#eceae6] overflow-hidden shrink-0">
-                          {r.item.imageUrl && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className="text-sm font-bold text-[#131313] truncate">{r.item.name}</h3>
-                            <button onClick={() => removeFromCart(r.itemId)} className="p-1 text-[#a3a3a3] hover:text-[#c62828] transition-colors shrink-0">
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                          </div>
-                          <p className="text-[10px] font-bold text-[#8a8a8a] mb-2.5">{r.item.type === "role" ? "역할 · 자동 지급" : "기프트카드"}</p>
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center border border-[#e2e0dc] rounded-full">
-                              <button onClick={() => setQty(r.itemId, r.qty - 1)} className="w-8 h-8 flex items-center justify-center text-[#4b4b4b] hover:text-[#131313]">−</button>
-                              <span className="w-8 text-center text-[13px] font-bold tabular-nums">{r.qty}</span>
-                              <button onClick={() => setQty(r.itemId, Math.min(max, r.qty + 1))} disabled={r.qty >= max}
-                                className="w-8 h-8 flex items-center justify-center text-[#4b4b4b] hover:text-[#131313] disabled:text-[#d6d3ce]">+</button>
-                            </div>
-                            <span className="text-sm font-black text-[#131313] tabular-nums">{(salePrice(r.item) * r.qty).toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {cartRows.length > 0 && (
-              <div className="border-t border-[#ececea] p-6 shrink-0">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[12px] text-[#5a5a5a]">보유 XP</span>
-                  <span className="text-[12px] font-bold text-[#131313] tabular-nums">{(myXp ?? 0).toLocaleString()}</span>
-                </div>
-                <div className="flex items-baseline justify-between mb-5">
-                  <span className="text-sm font-bold text-[#131313]">총 결제 XP</span>
-                  <span className={`text-xl font-black tabular-nums ${cartTotal > (myXp ?? 0) ? "text-[#c62828]" : "text-[#131313]"}`}>{cartTotal.toLocaleString()}</span>
-                </div>
-                <Link
-                  href="/shop/checkout"
-                  onClick={(e) => { if (cartTotal > (myXp ?? 0)) e.preventDefault(); else setShowCart(false); }}
-                  className={`block w-full py-4 text-center font-bold rounded-xl transition-colors ${
-                    cartTotal > (myXp ?? 0)
-                      ? "bg-[#eceae6] text-[#a3a3a3] cursor-not-allowed"
-                      : "bg-[#e91e3f] text-white hover:bg-[#d01634]"
-                  }`}
-                >
-                  {cartTotal > (myXp ?? 0) ? "XP가 부족합니다" : "주문서 작성"}
-                </Link>
-              </div>
-            )}
+        <div key={cartToast} className="fixed top-20 left-1/2 z-[150] pointer-events-none" style={{ animation: "toastPop 0.42s cubic-bezier(0.16,1,0.3,1)" }}>
+          <div className="-translate-x-1/2 flex items-center gap-2.5 px-5 py-3 bg-[#131313] text-white rounded-full shadow-[0_14px_36px_rgba(0,0,0,0.32)]">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+            </svg>
+            <span className="text-[12px] font-bold whitespace-nowrap">{cartToast}</span>
           </div>
         </div>
       )}
+
+      {/* 상점 전용 마이크로 애니메이션 */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes toastPop {
+          0%   { opacity: 0; transform: translateY(-14px) scale(0.92); }
+          55%  { opacity: 1; transform: translateY(2px) scale(1.02); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes cartBump {
+          0%, 100% { transform: scale(1); }
+          40%      { transform: scale(1.18); }
+        }
+        .cart-bump { animation: cartBump 0.36s cubic-bezier(0.16,1,0.3,1); }
+        @keyframes wishPop {
+          0%   { transform: scale(1); }
+          45%  { transform: scale(1.35); }
+          100% { transform: scale(1); }
+        }
+        .wish-pop { animation: wishPop 0.34s cubic-bezier(0.16,1,0.3,1); }
+        @keyframes menuDrop {
+          0%   { opacity: 0; transform: translateY(-8px) scale(0.96); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}} />
 
       {/* ── 구매 모달 ── */}
       {buyTarget && (
@@ -939,8 +958,8 @@ export default function ShopPage() {
                     )}
                   </div>
                   <div className="min-w-0">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black mb-1.5 ${buyTarget.type === "role" ? "bg-[#e91e3f] text-[#ffffff]" : "bg-[#131313] text-white"}`}>
-                      {buyTarget.type === "role" ? "역할 · 자동 지급" : "기프트카드"}
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black mb-1.5 ${TYPE_BADGE[buyTarget.type]?.cls || "bg-[#131313] text-white"}`}>
+                      {TYPE_BADGE[buyTarget.type]?.label || "상품"}
                     </span>
                     <h2 className="text-base font-black text-[#131313] truncate">{buyTarget.name}</h2>
                     <p className="text-sm font-black text-[#e91e3f] tabular-nums mt-0.5">{salePrice(buyTarget).toLocaleString()} XP</p>
@@ -966,7 +985,7 @@ export default function ShopPage() {
                   </div>
 
                   <p className="text-[11px] text-[#8a8a8a] leading-relaxed mb-5 break-keep">
-                    {buyTarget.type === "role"
+                    {buyTarget.type !== "physical"
                       ? "구매 즉시 XP가 차감되며, 봇이 30초 이내에 역할을 지급합니다."
                       : "구매 즉시 XP가 차감되며, 운영진 확인 후 순차적으로 발송됩니다."}
                     {" "}구매 후에는 직접 취소할 수 없습니다.
@@ -1009,7 +1028,7 @@ export default function ShopPage() {
                 <div>
                   <label className="block text-xs font-bold text-[#4b4b4b] mb-2">상품 유형 <span className="text-[#c62828]">*</span></label>
                   <div className="flex gap-2">
-                    {[{ v: "role", l: "역할 · 자동 지급" }, { v: "physical", l: "기프트카드" }].map((o) => (
+                    {[{ v: "role", l: "역할" }, { v: "perk", l: "권한" }, { v: "physical", l: "기프트카드" }].map((o) => (
                       <button key={o.v} type="button" onClick={() => setEditForm({ ...editForm, type: o.v })}
                         className={`flex-1 py-2.5 rounded-lg text-[12px] font-bold border transition-colors ${editForm.type === o.v ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#4b4b4b] border-[#e2e0dc] hover:border-[#a3a3a3]"}`}>
                         {o.l}
@@ -1018,7 +1037,7 @@ export default function ShopPage() {
                   </div>
                 </div>
 
-                {editForm.type === "role" && (
+                {(editForm.type === "role" || editForm.type === "perk") && (
                   <div>
                     <label className="block text-xs font-bold text-[#4b4b4b] mb-2">지급할 역할 <span className="text-[#c62828]">*</span></label>
                     <Dropdown
@@ -1101,8 +1120,8 @@ export default function ShopPage() {
                         </svg>
                       </div>
                     )}
-                    <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide ${editForm.type === "role" ? "bg-[#e91e3f] text-white" : "bg-[#131313] text-white"}`}>
-                      {editForm.type === "role" ? "역할 · 자동 지급" : "기프트카드"}
+                    <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide ${TYPE_BADGE[editForm.type]?.cls || "bg-[#131313] text-white"}`}>
+                      {TYPE_BADGE[editForm.type]?.label || "상품"}
                     </span>
                     {!editForm.active && (
                       <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#e2e0dc]">숨김</span>

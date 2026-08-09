@@ -34,13 +34,13 @@ export default function AdminShopPage() {
   const [guildRoles, setGuildRoles] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [popup, setPopup] = useState({ isOpen: false, message: "", isError: false });
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: "item" | "banner" | "coupon"; id: string } | null>(null);
   const [orderFilter, setOrderFilter] = useState("");
   const [noteTarget, setNoteTarget] = useState<any>(null);
   const [noteText, setNoteText] = useState("");
   const [showPreview, setShowPreview] = useState(false);
 
-  const emptyForm = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", price: "", stock: "", sortOrder: "", active: true };
+  const emptyForm = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", price: "", discountPct: "", stock: "", sortOrder: "", active: true };
   const [form, setForm] = useState(emptyForm);
   const [isRoleOpen, setIsRoleOpen] = useState(false);
   const selectedRole = guildRoles.find((r) => r.id === form.roleId);
@@ -103,7 +103,7 @@ export default function AdminShopPage() {
     if (!it) return;
     setForm({
       id: it._id, name: it.name, description: it.description || "", imageUrl: it.imageUrl || "",
-      type: it.type, roleId: it.roleId || "", price: String(it.price),
+      type: it.type, roleId: it.roleId || "", price: String(it.price), discountPct: it.discountPct ? String(it.discountPct) : "",
       stock: it.stock < 0 ? "" : String(it.stock), sortOrder: String(it.sortOrder || 0), active: it.active,
     });
   }, [editId, items]);
@@ -120,10 +120,11 @@ export default function AdminShopPage() {
   };
 
   const executeDelete = async () => {
-    if (!deleteId) return;
-    const res = await fetch(`/api/shop/items?id=${deleteId}`, { method: "DELETE" }).catch(() => null);
+    if (!deleteTarget) return;
+    const api = { item: "/api/shop/items", banner: "/api/shop/banners", coupon: "/api/shop/coupons" }[deleteTarget.kind];
+    const res = await fetch(`${api}?id=${deleteTarget.id}`, { method: "DELETE" }).catch(() => null);
     if (res?.ok) fetchAll();
-    setDeleteId(null);
+    setDeleteTarget(null);
   };
 
   const processOrder = async (id: string, newStatus: "completed" | "cancelled", note = "") => {
@@ -217,7 +218,7 @@ export default function AdminShopPage() {
                   <div>
                     <label className={labelClass}>상품 유형 <span className="text-[#e91e3f]">*</span></label>
                     <div className="flex gap-2">
-                      {[{ v: "role", l: "역할 · 자동 지급" }, { v: "physical", l: "기프트카드" }].map((o) => (
+                      {[{ v: "role", l: "역할" }, { v: "perk", l: "권한" }, { v: "physical", l: "기프트카드" }].map((o) => (
                         <button key={o.v} type="button" onClick={() => setForm({ ...form, type: o.v })}
                           className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-colors ${form.type === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-gray-300 border-white/10 hover:text-white"}`}>
                           {o.l}
@@ -241,7 +242,7 @@ export default function AdminShopPage() {
                 </div>
 
                 {/* 역할 상품일 때만 역할 선택 — 드롭다운이 아래 요소를 덮도록 열릴 때 z를 올린다 */}
-                {form.type === "role" && (
+                {(form.type === "role" || form.type === "perk") && (
                   <div className={`mb-4 relative ${isRoleOpen ? "z-50" : ""}`}>
                     <label className={labelClass}>지급할 역할 <span className="text-[#e91e3f]">*</span></label>
                     <button type="button" onClick={() => setIsRoleOpen(!isRoleOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
@@ -272,8 +273,15 @@ export default function AdminShopPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <div>
-                    <label className={labelClass}>가격 (XP) <span className="text-[#e91e3f]">*</span></label>
+                    <label className={labelClass}>정가 (XP) <span className="text-[#e91e3f]">*</span></label>
                     <input type="number" min={1} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="예: 500000" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>할인율 (%)</label>
+                    <input type="number" min={0} max={100} value={form.discountPct} onChange={(e) => setForm({ ...form, discountPct: e.target.value })} placeholder="0" className={inputClass} />
+                    {Number(form.discountPct) > 0 && Number(form.price) > 0 && (
+                      <p className="text-[10px] font-bold text-[#e91e3f] mt-1.5">판매가 {Math.max(0, Math.floor((Number(form.price) * (100 - Math.min(100, Number(form.discountPct)))) / 100)).toLocaleString()} XP</p>
+                    )}
                   </div>
                   <div>
                     <label className={labelClass}>재고</label>
@@ -325,17 +333,17 @@ export default function AdminShopPage() {
                           <span className="text-sm font-bold text-white truncate">{it.name}</span>
                           {!it.active && <span className="text-[10px] font-bold text-gray-400 border border-white/15 px-1.5 rounded shrink-0">숨김</span>}
                         </div>
-                        <span className="text-[10px] font-bold text-gray-400">{it.type === "role" ? `역할 · ${it.roleName || it.roleId}` : "기프트카드"}</span>
+                        <span className="text-[10px] font-bold text-gray-400">{it.type === "physical" ? "기프트카드" : `${it.type === "perk" ? "권한" : "역할"} · ${it.roleName || it.roleId}`}</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
-                        <span className="text-[11px] font-bold text-[#e91e3f] tabular-nums">{it.price.toLocaleString()} XP</span>
+                        <span className="text-[11px] font-bold text-[#e91e3f] tabular-nums">{Math.max(0, Math.floor((it.price * (100 - (it.discountPct || 0))) / 100)).toLocaleString()} XP{it.discountPct > 0 ? ` (-${it.discountPct}%)` : ""}</span>
                         <span className="text-[11px] font-bold text-gray-400">{it.stock < 0 ? "재고 무제한" : `재고 ${it.stock}`}</span>
                         <span className="text-[11px] text-gray-400">{it.soldCount || 0}개 판매</span>
                         <span className="text-[11px] text-gray-400">추천 {it.sortOrder || 0}</span>
                       </div>
                       <div className="flex gap-4 shrink-0">
-                        <button onClick={() => { setForm({ id: it._id, name: it.name, description: it.description || "", imageUrl: it.imageUrl || "", type: it.type, roleId: it.roleId || "", price: String(it.price), stock: it.stock < 0 ? "" : String(it.stock), sortOrder: String(it.sortOrder || 0), active: it.active }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-400 hover:text-white transition-colors">수정</button>
-                        <button onClick={() => setDeleteId(it._id)} className="text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">삭제</button>
+                        <button onClick={() => { setForm({ id: it._id, name: it.name, description: it.description || "", imageUrl: it.imageUrl || "", type: it.type, roleId: it.roleId || "", price: String(it.price), discountPct: it.discountPct ? String(it.discountPct) : "", stock: it.stock < 0 ? "" : String(it.stock), sortOrder: String(it.sortOrder || 0), active: it.active }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-400 hover:text-white transition-colors">수정</button>
+                        <button onClick={() => setDeleteTarget({ kind: "item", id: it._id })} className="text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">삭제</button>
                       </div>
                     </div>
                   ))}
@@ -347,6 +355,258 @@ export default function AdminShopPage() {
         )}
 
         {/* ═══ 구매 내역 ═══ */}
+        {/* ═══ 이미지 배너 ═══ */}
+        {tab === "banners" && (
+          <>
+            <Reveal>
+            <section>
+              <SectionHead no="01" title={bannerForm.id ? "배너 수정" : "배너 등록"} />
+              <form onSubmit={saveBanner}>
+                <div className="mb-4">
+                  <label className={labelClass}>배너 이미지 URL <span className="text-[#e91e3f]">*</span></label>
+                  <input type="text" value={bannerForm.imageUrl} onChange={(e) => setBannerForm({ ...bannerForm, imageUrl: e.target.value })}
+                    placeholder="https://..." className={inputClass} />
+                  <p className={fieldNote}>가로가 긴 이미지(권장 비율 4:1)가 잘 어울립니다</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className={labelClass}>제목 (선택)</label>
+                    <input type="text" value={bannerForm.title} onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })}
+                      placeholder="예: 시즌 한정 기프트카드" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>부제 (선택)</label>
+                    <input type="text" value={bannerForm.subtitle} onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
+                      placeholder="예: 한정 수량 소진 시 조기 마감" className={inputClass} />
+                  </div>
+                </div>
+                <p className={`${fieldNote} -mt-2 mb-4`}>제목·부제를 넣으면 이미지 위에 어두운 그라데이션과 함께 표시됩니다</p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className={labelClass}>클릭 시 이동 (선택)</label>
+                    <input type="text" value={bannerForm.link} onChange={(e) => setBannerForm({ ...bannerForm, link: e.target.value })}
+                      placeholder="/shop 또는 /event" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>노출 순서</label>
+                    <input type="number" value={bannerForm.sortOrder} onChange={(e) => setBannerForm({ ...bannerForm, sortOrder: e.target.value })}
+                      placeholder="0" className={inputClass} />
+                    <p className={fieldNote}>작을수록 먼저 노출</p>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <button type="button" onClick={() => setBannerForm({ ...bannerForm, active: !bannerForm.active })}
+                    className={`${inputClass} md:max-w-xs flex items-center justify-between text-left ${bannerForm.active ? "border-[#e91e3f]/40" : ""}`}>
+                    <span className={bannerForm.active ? "text-[#e91e3f] font-bold" : "text-gray-400"}>{bannerForm.active ? "노출 중" : "숨김"}</span>
+                    <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${bannerForm.active ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${bannerForm.active ? "left-[18px]" : "left-0.5"}`}></span>
+                    </span>
+                  </button>
+                </div>
+
+                {/* 미리보기 */}
+                {bannerForm.imageUrl && (
+                  <div className="mb-6">
+                    <div className="text-[10px] font-black tracking-[0.25em] text-gray-400 uppercase mb-2">Preview</div>
+                    <div className="relative rounded-2xl overflow-hidden border border-white/10 aspect-[4/1] bg-[#161616]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={bannerForm.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                      {(bannerForm.title || bannerForm.subtitle) && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-8">
+                          {bannerForm.title && <h3 className="text-xl font-black tracking-tight text-white mb-1">{bannerForm.title}</h3>}
+                          {bannerForm.subtitle && <p className="text-[12px] text-white/85">{bannerForm.subtitle}</p>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button type="submit" className={primaryBtn}>{bannerForm.id ? "수정 저장" : "배너 등록"}</button>
+                  {bannerForm.id && <button type="button" onClick={() => setBannerForm(EMPTY_BANNER)} className="px-6 py-3.5 text-sm font-bold text-gray-300 hover:text-white transition-colors">취소</button>}
+                </div>
+              </form>
+            </section>
+            </Reveal>
+
+            <Reveal>
+            <section>
+              <SectionHead no="02" title={`등록된 배너 (${banners.length})`} />
+              {isLoading ? <div className="py-10 text-center text-gray-400 text-sm">불러오는 중...</div>
+                : banners.length === 0 ? <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">등록된 배너가 없습니다.</div>
+                : (
+                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                  {banners.map((b) => (
+                    <div key={b._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                      <div className="w-28 h-14 rounded-lg bg-white/5 overflow-hidden shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={b.imageUrl} alt="" className="w-full h-full object-cover" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-white truncate">{b.title || "(제목 없음)"}</span>
+                          {!b.active && <span className="text-[10px] font-bold text-gray-400 border border-white/15 px-1.5 rounded shrink-0">숨김</span>}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                          {b.subtitle && <span className="text-[11px] text-gray-400 truncate">{b.subtitle}</span>}
+                          {b.link && <span className="text-[11px] font-bold text-gray-400">→ {b.link}</span>}
+                          <span className="text-[11px] text-gray-400">순서 {b.sortOrder || 0}</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-4 shrink-0">
+                        <button onClick={() => { setBannerForm({ id: b._id, imageUrl: b.imageUrl, title: b.title || "", subtitle: b.subtitle || "", link: b.link || "", sortOrder: String(b.sortOrder || 0), active: b.active }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-400 hover:text-white transition-colors">수정</button>
+                        <button onClick={() => setDeleteTarget({ kind: "banner", id: b._id })} className="text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">삭제</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+            </Reveal>
+          </>
+        )}
+
+        {/* ═══ 쿠폰 관리 ═══ */}
+        {tab === "coupons" && (
+          <>
+            <Reveal>
+            <section>
+              <SectionHead no="01" title={couponForm.id ? "쿠폰 수정" : "쿠폰 발급"} />
+              <form onSubmit={saveCoupon}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className={labelClass}>쿠폰 코드 <span className="text-[#e91e3f]">*</span></label>
+                    <input type="text" value={couponForm.code} onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                      placeholder="예: WELCOME10" className={`${inputClass} uppercase`} />
+                    <p className={fieldNote}>유저가 주문서에서 입력하는 코드 (대문자로 저장)</p>
+                  </div>
+                  <div>
+                    <label className={labelClass}>쿠폰 이름</label>
+                    <input type="text" value={couponForm.name} onChange={(e) => setCouponForm({ ...couponForm, name: e.target.value })}
+                      placeholder="예: 신규 가입 축하 쿠폰" className={inputClass} />
+                    <p className={fieldNote}>주문서에 표시될 이름</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className={labelClass}>할인 방식 <span className="text-[#e91e3f]">*</span></label>
+                    <div className="flex gap-2">
+                      {[{ v: "percent", l: "정률 (%)" }, { v: "flat", l: "정액 (XP)" }].map((o) => (
+                        <button key={o.v} type="button" onClick={() => setCouponForm({ ...couponForm, type: o.v })}
+                          className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-colors ${couponForm.type === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-gray-300 border-white/10 hover:text-white"}`}>
+                          {o.l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>할인 값 <span className="text-[#e91e3f]">*</span></label>
+                    <input type="number" min={1} max={couponForm.type === "percent" ? 100 : undefined}
+                      value={couponForm.value} onChange={(e) => setCouponForm({ ...couponForm, value: e.target.value })}
+                      placeholder={couponForm.type === "percent" ? "10" : "50000"} className={inputClass} />
+                    <p className={fieldNote}>{couponForm.type === "percent" ? "주문 금액의 %" : "차감할 XP"}</p>
+                  </div>
+                  <div>
+                    <label className={labelClass}>최대 할인액</label>
+                    <input type="number" min={0} value={couponForm.maxDiscount} disabled={couponForm.type !== "percent"}
+                      onChange={(e) => setCouponForm({ ...couponForm, maxDiscount: e.target.value })}
+                      placeholder="0 = 제한 없음" className={`${inputClass} disabled:opacity-40`} />
+                    <p className={fieldNote}>정률일 때만 상한 적용</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div>
+                    <label className={labelClass}>최소 주문 금액</label>
+                    <input type="number" min={0} value={couponForm.minTotal} onChange={(e) => setCouponForm({ ...couponForm, minTotal: e.target.value })}
+                      placeholder="0" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>전체 사용 한도</label>
+                    <input type="number" min={0} value={couponForm.maxUses} onChange={(e) => setCouponForm({ ...couponForm, maxUses: e.target.value })}
+                      placeholder="0 = 무제한" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>1인당 사용 횟수</label>
+                    <input type="number" min={0} value={couponForm.perUserLimit} onChange={(e) => setCouponForm({ ...couponForm, perUserLimit: e.target.value })}
+                      placeholder="1" className={inputClass} />
+                    <p className={fieldNote}>0 = 무제한</p>
+                  </div>
+                  <div>
+                    <label className={labelClass}>만료 일시</label>
+                    <input type="datetime-local" value={couponForm.expiresAt} onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
+                      className={`${inputClass} [color-scheme:dark]`} />
+                    <p className={fieldNote}>비우면 무기한</p>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <button type="button" onClick={() => setCouponForm({ ...couponForm, active: !couponForm.active })}
+                    className={`${inputClass} md:max-w-xs flex items-center justify-between text-left ${couponForm.active ? "border-[#e91e3f]/40" : ""}`}>
+                    <span className={couponForm.active ? "text-[#e91e3f] font-bold" : "text-gray-400"}>{couponForm.active ? "사용 가능" : "사용 중지"}</span>
+                    <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${couponForm.active ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${couponForm.active ? "left-[18px]" : "left-0.5"}`}></span>
+                    </span>
+                  </button>
+                </div>
+
+                <div className="flex gap-3">
+                  <button type="submit" className={primaryBtn}>{couponForm.id ? "수정 저장" : "쿠폰 발급"}</button>
+                  {couponForm.id && <button type="button" onClick={() => setCouponForm(EMPTY_COUPON)} className="px-6 py-3.5 text-sm font-bold text-gray-300 hover:text-white transition-colors">취소</button>}
+                </div>
+              </form>
+            </section>
+            </Reveal>
+
+            <Reveal>
+            <section>
+              <SectionHead no="02" title={`발급된 쿠폰 (${coupons.length})`} />
+              {isLoading ? <div className="py-10 text-center text-gray-400 text-sm">불러오는 중...</div>
+                : coupons.length === 0 ? <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">발급된 쿠폰이 없습니다.</div>
+                : (
+                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                  {coupons.map((c) => {
+                    const expired = c.expiresAt && new Date(c.expiresAt) < new Date();
+                    const exhausted = c.maxUses > 0 && c.usedCount >= c.maxUses;
+                    const state = !c.active ? "중지" : expired ? "만료" : exhausted ? "소진" : "사용 가능";
+                    return (
+                      <div key={c._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                        <div className="flex items-center gap-2.5 md:w-56 shrink-0 min-w-0">
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${
+                            state === "사용 가능" ? "bg-[#e91e3f] text-white" : "bg-white/10 text-gray-300"}`}>{state}</span>
+                          <div className="min-w-0">
+                            <div className="text-sm font-black text-white tracking-wide truncate">{c.code}</div>
+                            {c.name && <div className="text-[10px] text-gray-400 truncate">{c.name}</div>}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1 min-w-0">
+                          <span className="text-[11px] font-bold text-[#e91e3f]">
+                            {c.type === "percent" ? `${c.value}% 할인` : `${c.value.toLocaleString()} XP 할인`}
+                            {c.type === "percent" && c.maxDiscount > 0 && ` (최대 ${c.maxDiscount.toLocaleString()})`}
+                          </span>
+                          {c.minTotal > 0 && <span className="text-[11px] text-gray-400">{c.minTotal.toLocaleString()} XP 이상</span>}
+                          <span className="text-[11px] text-gray-400">사용 {c.usedCount || 0}{c.maxUses > 0 ? ` / ${c.maxUses}` : ""}</span>
+                          <span className="text-[11px] text-gray-400">1인 {c.perUserLimit === 0 ? "무제한" : `${c.perUserLimit}회`}</span>
+                          {c.expiresAt && <span className="text-[11px] text-gray-400">~ {fmtDateTime(c.expiresAt)}</span>}
+                        </div>
+                        <div className="flex gap-4 shrink-0">
+                          <button onClick={() => { setCouponForm({ id: c._id, code: c.code, name: c.name || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: c.expiresAt ? new Date(new Date(c.expiresAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-400 hover:text-white transition-colors">수정</button>
+                          <button onClick={() => setDeleteTarget({ kind: "coupon", id: c._id })} className="text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">삭제</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+            </Reveal>
+          </>
+        )}
+
         {tab === "orders" && (
           <Reveal>
           <section>
@@ -375,7 +635,7 @@ export default function AdminShopPage() {
                       </span>
                       <div className="min-w-0 md:w-44 shrink-0">
                         <div className="text-sm font-bold text-white truncate">{o.itemName}</div>
-                        <div className="text-[10px] font-bold text-gray-400">{o.itemType === "role" ? "역할" : "실물"} · {o.userName}</div>
+                        <div className="text-[10px] font-bold text-gray-400">{o.itemType === "physical" ? "기프트카드" : o.itemType === "perk" ? "권한" : "역할"} · {o.userName}</div>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
                         <span className="text-[11px] font-bold text-[#e91e3f] tabular-nums">{o.price.toLocaleString()} XP</span>
@@ -409,13 +669,13 @@ export default function AdminShopPage() {
         )}
       </div>
 
-      {deleteId && (
+      {deleteTarget && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4">
           <div className="bg-[#121212] border border-red-500/30 rounded-3xl w-full max-w-sm p-8 text-center">
-            <h2 className="text-xl font-bold text-white mb-3">상품 삭제</h2>
-            <p className="text-sm text-gray-400 mb-8">이 상품을 삭제하시겠습니까?<br/>기존 구매 내역은 그대로 유지됩니다.</p>
+            <h2 className="text-xl font-bold text-white mb-3">삭제 확인</h2>
+            <p className="text-sm text-gray-400 mb-8">{deleteTarget.kind === "item" ? <>이 상품을 삭제하시겠습니까?<br/>기존 구매 내역은 그대로 유지됩니다.</> : deleteTarget.kind === "banner" ? <>이 배너를 삭제하시겠습니까?</> : <>이 쿠폰을 삭제하시겠습니까?<br/>이미 사용된 내역에는 영향이 없습니다.</>}</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteId(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button>
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button>
               <button onClick={executeDelete} className="flex-1 py-3 bg-red-500/80 text-white rounded-xl">삭제</button>
             </div>
           </div>
@@ -465,8 +725,8 @@ export default function AdminShopPage() {
                       </svg>
                     </div>
                   )}
-                  <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide ${form.type === "role" ? "bg-[#e91e3f] text-white" : "bg-[#131313] text-white"}`}>
-                    {form.type === "role" ? "역할 · 자동 지급" : "기프트카드"}
+                  <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide ${form.type === "role" ? "bg-[#e91e3f] text-white" : form.type === "perk" ? "bg-[#2f6fb0] text-white" : "bg-[#131313] text-white"}`}>
+                    {form.type === "physical" ? "기프트카드" : form.type === "perk" ? "권한 · 자동 지급" : "역할 · 자동 지급"}
                   </span>
                   {form.stock === "0" && (
                     <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
