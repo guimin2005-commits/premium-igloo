@@ -35,7 +35,7 @@ export default function OrdersPage() {
       fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
     ]).then(([ord, me]) => {
       setOrders(Array.isArray(ord?.data) ? ord.data : []);
-      if (me?.success) setMyXp(me.data.xp);
+      if (me?.success) setMyXp(me.data.balance ?? me.data.xp);
     }).finally(() => setIsLoading(false));
   }, [status]);
 

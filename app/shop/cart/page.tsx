@@ -43,7 +43,7 @@ export default function CartPage() {
       fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
     ]).then(([it, me]) => {
       setItems(Array.isArray(it?.data) ? it.data : []);
-      if (me?.success) setMyXp(me.data.xp);
+      if (me?.success) setMyXp(me.data.balance ?? me.data.xp);
     }).finally(() => setIsLoading(false));
   }, [status, isAdmin]);
 
@@ -51,10 +51,27 @@ export default function CartPage() {
     () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item),
     [cart, items]
   );
-  const listTotal = rows.reduce((n, r) => n + r.item.price * r.qty, 0);
-  const total = rows.reduce((n, r) => n + salePrice(r.item) * r.qty, 0);
+
+  // 📌 결제할 상품만 골라서 진행 — 기본은 전체 선택
+  const [selected, setSelected] = useState<string[]>([]);
+  useEffect(() => { setSelected(rows.map((r) => r.itemId)); }, [rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const picked = rows.filter((r) => selected.includes(r.itemId));
+  const allChecked = rows.length > 0 && picked.length === rows.length;
+  const toggleOne = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggleAll = () => setSelected(allChecked ? [] : rows.map((r) => r.itemId));
+
+  const listTotal = picked.reduce((n, r) => n + r.item.price * r.qty, 0);
+  const total = picked.reduce((n, r) => n + salePrice(r.item) * r.qty, 0);
   const discount = listTotal - total;
   const enoughXp = isAdmin || (myXp != null && myXp >= total);
+  const canCheckout = picked.length > 0 && enoughXp;
+
+  // 선택한 항목만 결제로 넘긴다 (나머지는 장바구니에 남는다)
+  const goCheckout = () => {
+    try { localStorage.setItem("iglooShopCheckout", JSON.stringify(picked.map((r) => ({ itemId: r.itemId, qty: r.qty })))); } catch {}
+  };
 
   const removeItem = (itemId: string) => setCart((prev) => prev.filter((c) => c.itemId !== itemId));
   const clearCart = () => setCart([]);
@@ -117,12 +134,35 @@ export default function CartPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* 좌 — 담은 상품 */}
             <div className="lg:col-span-2">
+              {/* 전체 선택 */}
+              <div className="flex items-center justify-between px-5 py-3 mb-3 bg-white rounded-xl border border-[#e2e0dc]">
+                <button onClick={toggleAll} className="flex items-center gap-2.5 text-[12px] font-bold text-[#131313]">
+                  <span className={`w-[18px] h-[18px] rounded-md border flex items-center justify-center transition-colors ${
+                    allChecked ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#d6d3ce]"
+                  }`}>
+                    {allChecked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                  </span>
+                  전체 선택 <span className="text-[#8a8a8a] font-medium">({picked.length}/{rows.length})</span>
+                </button>
+                {picked.length > 0 && picked.length < rows.length && (
+                  <span className="text-[11px] font-bold text-[#e91e3f]">선택한 {picked.length}개만 결제됩니다</span>
+                )}
+              </div>
+
               <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden divide-y divide-[#ececea]">
                 {rows.map((r) => {
                   const sp = salePrice(r.item);
+                  const on = selected.includes(r.itemId);
                   const discounted = sp < r.item.price;
                   return (
-                    <div key={r.itemId} className="p-5 flex gap-4 items-center">
+                    <div key={r.itemId} className={`p-5 flex gap-4 items-center transition-colors ${on ? "" : "bg-[#fafaf9]"}`}>
+                      <button onClick={() => toggleOne(r.itemId)} aria-label="선택" className="shrink-0">
+                        <span className={`w-[18px] h-[18px] rounded-md border flex items-center justify-center transition-colors ${
+                          on ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#d6d3ce]"
+                        }`}>
+                          {on && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                        </span>
+                      </button>
                       <Link href="/shop" className="w-20 h-20 rounded-xl bg-[#eceae6] overflow-hidden shrink-0">
                         {r.item.imageUrl && (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -159,31 +199,31 @@ export default function CartPage() {
                 <h2 className="text-sm font-black text-[#131313] mb-5">주문 요약</h2>
 
                 <div className="space-y-2.5 text-[13px] mb-4">
-                  <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 수</span><span className="font-bold tabular-nums">{rows.length}개</span></div>
-                  <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 금액</span><span className="font-bold tabular-nums">{listTotal.toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">선택한 상품</span><span className="font-bold tabular-nums">{picked.length}개</span></div>
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 금액</span><span className="font-bold tabular-nums">{listTotal.toLocaleString()} XP</span></div>
                   {discount > 0 && (
-                    <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 할인</span><span className="font-bold text-[#e91e3f] tabular-nums">-{discount.toLocaleString()}</span></div>
+                    <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 할인</span><span className="font-bold text-[#e91e3f] tabular-nums">-{discount.toLocaleString()} XP</span></div>
                   )}
-                  <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold tabular-nums">{(myXp ?? 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold tabular-nums">{(myXp ?? 0).toLocaleString()} XP</span></div>
                 </div>
 
                 <div className="h-px bg-[#ececea] mb-4"></div>
 
                 <div className="flex items-baseline justify-between mb-6">
                   <span className="text-sm font-bold text-[#131313]">예상 결제 XP</span>
-                  <span className={`text-xl font-black tabular-nums ${enoughXp ? "text-[#131313]" : "text-[#c62828]"}`}>{total.toLocaleString()}</span>
+                  <span className={`text-xl font-black tabular-nums ${enoughXp ? "text-[#131313]" : "text-[#c62828]"}`}>{total.toLocaleString()} XP</span>
                 </div>
 
                 <Link href="/shop/checkout"
-                  onClick={(e) => { if (!enoughXp) e.preventDefault(); }}
+                  onClick={(e) => { if (!canCheckout) { e.preventDefault(); return; } goCheckout(); }}
                   className={`block w-full py-4 text-center font-bold rounded-xl transition-colors ${
-                    enoughXp ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#eceae6] text-[#a3a3a3] cursor-not-allowed"
+                    canCheckout ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#eceae6] text-[#a3a3a3] cursor-not-allowed"
                   }`}>
-                  {enoughXp ? "주문서 작성" : "XP가 부족합니다"}
+                  {picked.length === 0 ? "상품을 선택해주세요" : !enoughXp ? "XP가 부족합니다" : "결제하러 가기"}
                 </Link>
 
                 <p className="mt-4 text-[10px] text-[#a3a3a3] leading-relaxed break-keep">
-                  쿠폰은 다음 단계인 주문서에서 적용할 수 있습니다.
+                  쿠폰은 다음 단계인 결제 화면에서 적용할 수 있습니다.
                 </p>
               </div>
             </div>

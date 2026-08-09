@@ -18,7 +18,10 @@ export async function GET() {
     await connectToDatabase();
     const doc = await UserXp.findOne({ userId: session.user.id }).lean();
 
+    // xp = 누적 획득(레벨 기준), balance = 상점에서 쓸 수 있는 잔액
     const xp = doc?.xp || 0;
+    const spentXp = doc?.spentXp || 0;
+    const balance = Math.max(0, xp - spentXp);
     const level = doc?.level || 0;
     const [above, total] = await Promise.all([
       UserXp.countDocuments({ xp: { $gt: xp } }),
@@ -32,6 +35,8 @@ export async function GET() {
       success: true,
       data: {
         xp,
+        spentXp,
+        balance,
         level,
         rank: above + 1,
         total,

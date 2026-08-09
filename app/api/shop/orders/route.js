@@ -57,9 +57,9 @@ export async function PATCH(request) {
       return NextResponse.json({ success: false, message: "이미 처리된 구매입니다." }, { status: 409 });
     }
 
-    // 취소 시 XP 환불 + 재고 복구
+    // 취소 시 XP 환불 + 재고 복구 — 사용액(spentXp)을 되돌린다
     if (status === "cancelled") {
-      await UserXp.updateOne({ userId: purchase.userId }, { $inc: { xp: purchase.price } });
+      await UserXp.updateOne({ userId: purchase.userId }, { $inc: { spentXp: -purchase.price } });
       await ShopItem.updateOne(
         { _id: purchase.itemId, stock: { $gte: 0 } },
         { $inc: { stock: 1, soldCount: -1 } }

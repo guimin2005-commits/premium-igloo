@@ -9,7 +9,7 @@ import ArcticHeader from "../ArcticHeader";
 
 const ADMIN_USERS = ["elahw.06"];
 
-// 📌 주문서 — 장바구니 내용을 확인하고 약관 동의 후 결제
+// 📌 결제 — 장바구니에서 고른 상품을 확인하고 약관 동의 후 결제
 export default function CheckoutPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -36,9 +36,11 @@ export default function CheckoutPage() {
   const [wallet, setWallet] = useState<any[]>([]);
   const [showCouponPicker, setShowCouponPicker] = useState(false);
 
+  // 장바구니에서 고른 항목이 있으면 그것만, 없으면 장바구니 전체를 결제 대상으로
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("iglooShopCart");
+      const picked = localStorage.getItem("iglooShopCheckout");
+      const raw = picked || localStorage.getItem("iglooShopCart");
       if (raw) setCart(JSON.parse(raw));
     } catch {}
   }, []);
@@ -50,7 +52,7 @@ export default function CheckoutPage() {
       fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
     ]).then(([it, me]) => {
       setItems(Array.isArray(it?.data) ? it.data : []);
-      if (me?.success) setMyXp(me.data.xp);
+      if (me?.success) setMyXp(me.data.balance ?? me.data.xp);
     }).finally(() => setIsLoading(false));
   }, [status]);
 
@@ -132,8 +134,13 @@ export default function CheckoutPage() {
       const d = await res.json();
       setResult({ ok: !!d.success, message: d.message || (d.success ? "결제가 완료되었습니다." : "결제에 실패했습니다.") });
       if (d.success) {
+        try {
+          const paidIds = new Set(cart.map((c) => c.itemId));
+          const all: { itemId: string; qty: number }[] = JSON.parse(localStorage.getItem("iglooShopCart") || "[]");
+          localStorage.setItem("iglooShopCart", JSON.stringify(all.filter((c) => !paidIds.has(c.itemId))));
+          localStorage.removeItem("iglooShopCheckout");
+        } catch {}
         setCart([]);
-        try { localStorage.removeItem("iglooShopCart"); } catch {}
         if (typeof d.data?.remainXp === "number") setMyXp(d.data.remainXp);
       }
     } catch {
@@ -152,7 +159,7 @@ export default function CheckoutPage() {
       <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen flex items-center justify-center px-6">
         <div className="text-center">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
-          <p className="text-sm text-[#4b4b4b] mb-7">주문서를 작성하려면 로그인해주세요.</p>
+          <p className="text-sm text-[#4b4b4b] mb-7">결제하려면 로그인해주세요.</p>
           <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
         </div>
       </div>
@@ -215,7 +222,7 @@ export default function CheckoutPage() {
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
           계속 쇼핑하기
         </Link>
-        <h1 className="text-3xl md:text-4xl font-black tracking-tighter mb-10">주문서</h1>
+        <h1 className="text-3xl md:text-4xl font-black tracking-tighter mb-10">결제</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* 좌 — 주문 상품 · 수령 정보 · 약관 */}
