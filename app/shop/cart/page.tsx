@@ -8,7 +8,7 @@ import ArcticHeader from "../ArcticHeader";
 
 const ADMIN_USERS = ["elahw.06"];
 
-const TYPE_LABEL: Record<string, string> = { role: "역할 · 자동 지급", perk: "권한 · 자동 지급", physical: "기프트카드" };
+const TYPE_LABEL: Record<string, string> = { role: "역할", perk: "권한", physical: "기프트카드" };
 const TYPE_CLS: Record<string, string> = { role: "bg-[#e91e3f] text-white", perk: "bg-[#2f6fb0] text-white", physical: "bg-[#131313] text-white" };
 
 // 📌 장바구니 페이지 — 담은 상품 확인·삭제 후 주문서로 이동

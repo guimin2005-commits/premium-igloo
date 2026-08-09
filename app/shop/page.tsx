@@ -27,8 +27,8 @@ const TYPES = [
 
 // 상품 유형 배지 (역할·권한은 자동 지급, 기프트카드는 운영진 발송)
 const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
-  role: { label: "역할 · 자동 지급", cls: "bg-[#e91e3f] text-white" },
-  perk: { label: "권한 · 자동 지급", cls: "bg-[#2f6fb0] text-white" },
+  role: { label: "역할", cls: "bg-[#e91e3f] text-white" },
+  perk: { label: "권한", cls: "bg-[#2f6fb0] text-white" },
   physical: { label: "기프트카드", cls: "bg-[#131313] text-white" },
 };
 

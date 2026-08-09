@@ -776,7 +776,7 @@ export default function AdminShopPage() {
                     </div>
                   )}
                   <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide ${form.type === "role" ? "bg-[#e91e3f] text-white" : form.type === "perk" ? "bg-[#2f6fb0] text-white" : "bg-[#131313] text-white"}`}>
-                    {form.type === "physical" ? "기프트카드" : form.type === "perk" ? "권한 · 자동 지급" : "역할 · 자동 지급"}
+                    {form.type === "physical" ? "기프트카드" : form.type === "perk" ? "권한" : "역할"}
                   </span>
                   {form.stock === "0" && (
                     <div className="absolute inset-0 bg-black/55 flex items-center justify-center">

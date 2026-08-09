@@ -244,7 +244,7 @@ export default function CheckoutPage() {
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-bold text-[#131313] truncate">{r.item.name}</h3>
                       <p className="text-[10px] font-bold text-[#8a8a8a] mt-0.5">
-                        {r.item.type === "role" ? "역할 · 자동 지급" : "기프트카드"} · 수량 {r.qty}
+                        {r.item.type === "physical" ? "기프트카드" : r.item.type === "perk" ? "권한" : "역할"} · 수량 {r.qty}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
