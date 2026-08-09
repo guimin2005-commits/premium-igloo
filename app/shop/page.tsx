@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import Dropdown from "../components/Dropdown";
-import ArcticLogo from "./ArcticLogo";
 import { salePrice } from "@/lib/shopPricing";
 
 const ADMIN_USERS = ["elahw.06"];
@@ -383,8 +382,8 @@ export default function ShopPage() {
               고급 이글루
             </Link>
             <span className="w-px h-4 bg-[#d6d3ce] hidden lg:block"></span>
-            <Link href="/shop" className="text-[#131313] hover:text-[#e91e3f] transition-colors">
-              <ArcticLogo size={26} />
+            <Link href="/shop" className="text-[17px] font-black tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
+              ARCTIC
             </Link>
           </div>
 
@@ -850,7 +849,7 @@ export default function ShopPage() {
                               : "bg-[#e91e3f] text-[#ffffff] hover:bg-[#d01634] shadow-[0_4px_12px_rgba(233,30,63,0.25)]"
                           }`}
                         >
-                          {owned ? "보유 중" : soldOut ? "품절" : !isLoggedIn ? "로그인" : affordable ? "바로 구매" : "XP 부족"}
+                          {owned ? "보유 중" : soldOut ? "품절" : !isLoggedIn ? "로그인" : affordable ? "구매" : "XP 부족"}
                         </button>
                       </div>
                     </div>

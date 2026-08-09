@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import ArcticLogo from "./ArcticLogo";
 
 // 📌 ARCTIC 공용 헤더 브랜드 — 고급 이글루 / ARCTIC 계층을 드러낸다
 //    "고급 이글루" → 본 사이트 메인, "ARCTIC" → 상점 메인
@@ -13,8 +12,8 @@ export function ArcticBrand() {
         고급 이글루
       </Link>
       <span className="w-px h-4 bg-[#d6d3ce] hidden sm:block"></span>
-      <Link href="/shop" className="text-[#131313] hover:text-[#e91e3f] transition-colors">
-        <ArcticLogo size={26} />
+      <Link href="/shop" className="text-[17px] font-black tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
+        ARCTIC
       </Link>
     </div>
   );
