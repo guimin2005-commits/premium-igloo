@@ -285,17 +285,23 @@ export default function Home() {
         {/* 03 · 핵심 콘텐츠 소개 — 제목은 왼쪽에 고정(sticky), 오른쪽엔 긴 세로 스택이 흘러간다 */}
         <div className="w-full py-20 md:py-28 px-6">
           <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-[210px_1fr] lg:grid-cols-[250px_1fr] gap-10 md:gap-14">
-            <Reveal className="md:sticky md:top-24 md:self-start">
-              <div className="relative">
-                <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">03</span>
-                <div className="relative flex items-center gap-3 mb-2">
-                  <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
-                  <div className="h-px w-8 bg-black/15"></div>
-                </div>
-                <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3 break-keep">이글루에서 즐기는 방법</h2>
-                <p className="relative text-sm text-gray-600 break-keep">활동하고, 성장하고, 증명하세요.</p>
+            {/* 제목 칸 — sticky 범위를 마지막 카드 하나만큼(300px) 줄여서,
+                   스크롤이 섹션 끝에 다다르면 고정이 풀리고 콘텐츠와 함께 자연스럽게 올라간다 */}
+            <div className="relative">
+              <div className="md:absolute md:inset-x-0 md:top-0 md:bottom-[300px]">
+                <Reveal className="md:sticky md:top-24">
+                  <div className="relative">
+                    <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">03</span>
+                    <div className="relative flex items-center gap-3 mb-2">
+                      <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
+                      <div className="h-px w-8 bg-black/15"></div>
+                    </div>
+                    <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3 break-keep">이글루에서 즐기는 방법</h2>
+                    <p className="relative text-sm text-gray-600 break-keep">활동하고, 성장하고, 증명하세요.</p>
+                  </div>
+                </Reveal>
               </div>
-            </Reveal>
+            </div>
 
             {/* 긴 세로 스택 — 카드 하나하나가 큼직해서 제목 고정이 확실히 체감된다 */}
             <div className="flex flex-col gap-5">
@@ -352,19 +358,21 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 04 · 최신 소식 — 제목은 고정, 내용만 스크롤 (md 이상) */}
+        {/* 04 · 최신 소식 — 제목 위 · 내용 아래 세로 구성 */}
         {notices.length > 0 && (
           <div className="w-full py-20 md:py-28 px-6 relative z-10">
-            <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-[210px_1fr] lg:grid-cols-[250px_1fr] gap-10 md:gap-14">
-              <Reveal className="md:sticky md:top-24 md:self-start">
-                <div className="relative">
-                  <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">04</span>
-                  <div className="relative flex items-center gap-3 mb-2">
-                    <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">04</span>
-                    <div className="h-px w-8 bg-black/15"></div>
+            <div className="max-w-6xl mx-auto">
+              <Reveal>
+                <div className="relative mb-12 flex items-end justify-between gap-6">
+                  <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">04</span>
+                  <div className="relative min-w-0 flex-1">
+                    <div className="flex items-baseline gap-4 mb-2">
+                      <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">04</span>
+                      <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+                    </div>
+                    <h2 className="text-2xl md:text-4xl font-black text-[#131313] tracking-tight break-keep">최신 소식</h2>
                   </div>
-                  <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3 break-keep">최신 소식</h2>
-                  <Link href="/notice" className="relative inline-flex items-center gap-1 text-xs font-bold text-gray-600 hover:text-[#e91e3f] transition-colors group/more">
+                  <Link href="/notice" className="relative shrink-0 inline-flex items-center gap-1 text-xs font-bold text-gray-600 hover:text-[#e91e3f] transition-colors group/more mb-1">
                     전체 보기 <span className="group-hover/more:translate-x-1 transition-transform">→</span>
                   </Link>
                 </div>
