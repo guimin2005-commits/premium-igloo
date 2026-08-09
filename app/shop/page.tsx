@@ -308,11 +308,23 @@ export default function ShopPage() {
     return sorted;
   }, [items, typeFilter, priceFilter, inStockOnly, affordableOnly, wishOnly, wish, query, sort, myXp]);
 
-  const openBuy = (item: any) => {
-    if (!isLoggedIn) return signIn("discord");
+  // 📌 이미 장바구니에 있는 상품을 '구매'로 누르면, 낱개 구매인지
+  //    장바구니와 함께 결제할지 먼저 물어본다 (모르고 따로 사는 걸 막는다)
+  const [cartConflict, setCartConflict] = useState<any>(null);
+
+  const startBuy = (item: any) => {
     setContact("");
     setResult(null);
     setBuyTarget(item);
+  };
+
+  const openBuy = (item: any) => {
+    if (!isLoggedIn) return signIn("discord");
+    if (cart.some((c) => c.itemId === item._id)) {
+      setCartConflict(item);
+      return;
+    }
+    startBuy(item);
   };
 
   const confirmBuy = async () => {
@@ -835,6 +847,45 @@ export default function ShopPage() {
                   장바구니{cartCount > 0 ? ` ${cartCount}` : ""}
                 </Link>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 장바구니에 이미 담긴 상품을 '구매'로 눌렀을 때 ── */}
+      {cartConflict && (
+        <div className="fixed inset-0 z-[145] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setCartConflict(null)}>
+          <div className="relative bg-white rounded-3xl w-full max-w-sm p-7 border border-[#e2e0dc] shadow-2xl"
+            style={{ animation: "menuDrop 0.26s cubic-bezier(0.16,1,0.3,1)" }} onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setCartConflict(null)} aria-label="닫기"
+              className="absolute top-4 right-4 p-1.5 rounded-full text-[#a3a3a3] hover:text-[#131313] hover:bg-[#f5f3f0] transition-colors">
+              <svg className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="w-12 h-12 rounded-full bg-[#f5f3f0] flex items-center justify-center mb-4 text-[#131313]">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+              </svg>
+            </div>
+
+            <h2 className="text-base font-black text-[#131313] mb-1.5">이미 장바구니에 있는 상품입니다</h2>
+            <p className="text-[13px] text-[#5a5a5a] leading-relaxed mb-6 break-keep">
+              <span className="font-bold text-[#131313]">{cartConflict.name}</span> 은(는) 장바구니에 담겨 있어요.
+              지금 이 상품만 결제할지, 장바구니에 담은 다른 상품과 함께 결제할지 골라주세요.
+            </p>
+
+            <div className="space-y-2">
+              <Link href="/shop/cart"
+                className="block w-full py-3.5 text-center bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-colors">
+                장바구니에서 함께 결제 ({cartCount})
+              </Link>
+              <button
+                onClick={() => { const it = cartConflict; setCartConflict(null); removeFromCart(it._id); startBuy(it); }}
+                className="w-full py-3.5 bg-[#eceae6] hover:bg-[#e2e0dc] text-[#4b4b4b] font-bold rounded-xl transition-colors">
+                이 상품만 지금 구매
+              </button>
             </div>
           </div>
         </div>
