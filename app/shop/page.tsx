@@ -412,6 +412,18 @@ export default function ShopPage() {
             <Link href="/shop" className="text-[17px] font-black tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
               ARCTIC
             </Link>
+
+            {/* 비공개 상태 — 관리자에게만 작은 점으로 알린다 */}
+            {!shopPublic && isAdmin && (
+              <Link href="/admin/bot?tab=settings" title="비공개 상태입니다 · 눌러서 공개 전환"
+                className="group/dot relative flex items-center shrink-0">
+                <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>
+                <span className="absolute left-0 w-2 h-2 rounded-full bg-[#e91e3f] animate-ping opacity-60"></span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 rounded-md bg-[#131313] text-white text-[10px] font-bold opacity-0 group-hover/dot:opacity-100 transition-opacity pointer-events-none">
+                  비공개
+                </span>
+              </Link>
+            )}
           </div>
 
           {/* 카테고리 내비 */}
@@ -525,13 +537,6 @@ export default function ShopPage() {
       </header>
       </div>
 
-      {/* 공개 전 관리자 미리보기 배너 */}
-      {!shopPublic && isAdmin && (
-        <div className="w-full bg-[#e91e3f] text-white text-center py-2 px-6 text-[11px] font-bold tracking-wide">
-          비공개 상태입니다 · 관리자만 볼 수 있습니다 ·{" "}
-          <Link href="/admin/bot?tab=settings" className="underline underline-offset-2">기본 정책에서 공개 전환</Link>
-        </div>
-      )}
       {/* ── 상단 배너 ── */}
       <section className="w-full bg-gradient-to-b from-[#eceae6] to-[#f5f3f0] border-b border-[#e2e0dc]">
         <div className="max-w-6xl mx-auto px-6 pt-14 pb-10">
