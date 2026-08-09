@@ -1,0 +1,257 @@
+"use client";
+
+import React, { useState, useEffect, useMemo } from "react";
+import { useSession, signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+// 📌 주문서 — 장바구니 내용을 확인하고 약관 동의 후 결제
+export default function CheckoutPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const isLoggedIn = status === "authenticated";
+
+  const [cart, setCart] = useState<{ itemId: string; qty: number }[]>([]);
+  const [items, setItems] = useState<any[]>([]);
+  const [myXp, setMyXp] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [contact, setContact] = useState("");
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreeFinal, setAgreeFinal] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("iglooShopCart");
+      if (raw) setCart(JSON.parse(raw));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (status === "loading") return;
+    Promise.all([
+      fetch("/api/shop/items", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+    ]).then(([it, me]) => {
+      setItems(Array.isArray(it?.data) ? it.data : []);
+      if (me?.success) setMyXp(me.data.xp);
+    }).finally(() => setIsLoading(false));
+  }, [status]);
+
+  const rows = useMemo(
+    () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item),
+    [cart, items]
+  );
+  const total = rows.reduce((n, r) => n + r.item.price * r.qty, 0);
+  const count = rows.reduce((n, r) => n + r.qty, 0);
+  const needsContact = rows.some((r) => r.item.type === "physical");
+  const enoughXp = myXp != null && myXp >= total;
+  const canPay = rows.length > 0 && enoughXp && agreeTerms && agreeFinal && (!needsContact || contact.trim().length > 0) && !isPaying;
+
+  const pay = async () => {
+    if (!canPay) return;
+    setIsPaying(true);
+    try {
+      const res = await fetch("/api/shop/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: cart, contact }),
+      });
+      const d = await res.json();
+      setResult({ ok: !!d.success, message: d.message || (d.success ? "결제가 완료되었습니다." : "결제에 실패했습니다.") });
+      if (d.success) {
+        setCart([]);
+        try { localStorage.removeItem("iglooShopCart"); } catch {}
+        if (typeof d.data?.remainXp === "number") setMyXp(d.data.remainXp);
+      }
+    } catch {
+      setResult({ ok: false, message: "서버와 통신 중 오류가 발생했습니다." });
+    } finally {
+      setIsPaying(false);
+    }
+  };
+
+  if (status === "loading" || isLoading) {
+    return <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen flex items-center justify-center text-sm text-[#8a8a8a]">불러오는 중...</div>;
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen flex items-center justify-center px-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
+          <p className="text-sm text-[#4b4b4b] mb-7">주문서를 작성하려면 로그인해주세요.</p>
+          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
+        </div>
+      </div>
+    );
+  }
+
+  // 결제 완료·실패 화면
+  if (result) {
+    return (
+      <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen flex items-center justify-center px-6 py-20">
+        <div className="w-full max-w-md bg-white rounded-3xl border border-[#e2e0dc] p-10 text-center shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+          <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-6 ${result.ok ? "bg-[#e8f3e6] text-[#3f7a35]" : "bg-[#fdeaea] text-[#c62828]"}`}>
+            {result.ok ? (
+              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+            ) : (
+              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            )}
+          </div>
+          <h1 className="text-xl font-black text-[#131313] mb-2">{result.ok ? "주문이 완료되었습니다" : "결제 실패"}</h1>
+          <p className="text-sm text-[#4b4b4b] leading-relaxed mb-8 break-keep">{result.message}</p>
+          {result.ok && myXp != null && (
+            <div className="bg-[#f5f3f0] rounded-xl px-5 py-3 mb-8 flex items-center justify-between text-[13px]">
+              <span className="text-[#5a5a5a]">남은 XP</span>
+              <span className="font-black text-[#131313] tabular-nums">{myXp.toLocaleString()}</span>
+            </div>
+          )}
+          <div className="flex gap-3">
+            <Link href="/shop" className="flex-1 py-3.5 bg-[#eceae6] text-[#4b4b4b] font-bold rounded-xl hover:bg-[#e2e0dc] transition-colors">상점으로</Link>
+            {!result.ok && (
+              <button onClick={() => setResult(null)} className="flex-1 py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl hover:bg-[#d01634] transition-colors">다시 시도</button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen flex items-center justify-center px-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-black text-[#131313] mb-3">장바구니가 비어 있습니다</h1>
+          <p className="text-sm text-[#4b4b4b] mb-7">상점에서 마음에 드는 상품을 담아보세요.</p>
+          <Link href="/shop" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">상점으로 가기</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const checkbox = (checked: boolean) =>
+    `w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+      checked ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#d6d3ce]"
+    }`;
+
+  return (
+    <div className="w-full flex-1 bg-[#f5f3f0] text-[#131313] min-h-screen">
+      <section className="max-w-5xl mx-auto px-6 pt-14 pb-20">
+        <Link href="/shop" className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] mb-5 transition-colors">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+          계속 쇼핑하기
+        </Link>
+        <h1 className="text-3xl md:text-4xl font-black tracking-tighter mb-10">주문서</h1>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* 좌 — 주문 상품 · 수령 정보 · 약관 */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* 주문 상품 */}
+            <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+              <div className="px-6 py-4 border-b border-[#ececea]">
+                <h2 className="text-sm font-black text-[#131313]">주문 상품 <span className="text-[#e91e3f]">{count}</span></h2>
+              </div>
+              <div className="divide-y divide-[#ececea]">
+                {rows.map((r) => (
+                  <div key={r.itemId} className="px-6 py-4 flex gap-4 items-center">
+                    <div className="w-14 h-14 rounded-xl bg-[#eceae6] overflow-hidden shrink-0">
+                      {r.item.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-bold text-[#131313] truncate">{r.item.name}</h3>
+                      <p className="text-[10px] font-bold text-[#8a8a8a] mt-0.5">
+                        {r.item.type === "role" ? "역할 · 자동 지급" : "기프트카드"} · 수량 {r.qty}
+                      </p>
+                    </div>
+                    <span className="text-sm font-black tabular-nums shrink-0">{(r.item.price * r.qty).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 수령 정보 */}
+            {needsContact && (
+              <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6">
+                <h2 className="text-sm font-black text-[#131313] mb-1">수령 정보 <span className="text-[#c62828]">*</span></h2>
+                <p className="text-[11px] text-[#8a8a8a] mb-4">기프트카드가 포함되어 있습니다. 받으실 연락처를 입력해주세요.</p>
+                <textarea rows={3} value={contact} onChange={(e) => setContact(e.target.value)}
+                  placeholder="휴대폰 번호 또는 기프티콘 받을 정보를 입력해주세요."
+                  className="w-full bg-white border border-[#e2e0dc] rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] resize-none placeholder:text-[#a3a3a3]" />
+                <p className="text-[10px] text-[#a3a3a3] mt-2">운영진만 확인하며, 발송 목적으로만 사용됩니다.</p>
+              </div>
+            )}
+
+            {/* 약관 동의 */}
+            <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6">
+              <h2 className="text-sm font-black text-[#131313] mb-4">약관 동의</h2>
+
+              <button type="button" onClick={() => setAgreeTerms(!agreeTerms)} className="w-full flex items-start gap-3 text-left mb-3">
+                <span className={checkbox(agreeTerms)}>
+                  {agreeTerms && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                </span>
+                <span className="text-[13px] text-[#4b4b4b] leading-relaxed">
+                  <span className="font-bold text-[#131313]">[필수]</span> 이용약관 및 개인정보 처리방침에 동의합니다.{" "}
+                  <Link href="/policy" target="_blank" className="text-[#e91e3f] underline underline-offset-2" onClick={(e) => e.stopPropagation()}>내용 보기</Link>
+                </span>
+              </button>
+
+              <button type="button" onClick={() => setAgreeFinal(!agreeFinal)} className="w-full flex items-start gap-3 text-left">
+                <span className={checkbox(agreeFinal)}>
+                  {agreeFinal && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                </span>
+                <span className="text-[13px] text-[#4b4b4b] leading-relaxed">
+                  <span className="font-bold text-[#131313]">[필수]</span> 결제 후에는 직접 취소할 수 없으며, XP는 즉시 차감됨을 확인했습니다.
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* 우 — 결제 요약 */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6 lg:sticky lg:top-24">
+              <h2 className="text-sm font-black text-[#131313] mb-5">결제 정보</h2>
+
+              <div className="space-y-2.5 text-[13px] mb-4">
+                <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 수</span><span className="font-bold tabular-nums">{count}개</span></div>
+                <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold tabular-nums">{(myXp ?? 0).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 XP</span><span className="font-bold text-[#c62828] tabular-nums">-{total.toLocaleString()}</span></div>
+              </div>
+
+              <div className="h-px bg-[#ececea] mb-4"></div>
+
+              <div className="flex items-baseline justify-between mb-6">
+                <span className="text-sm font-bold text-[#131313]">결제 후 잔액</span>
+                <span className={`text-xl font-black tabular-nums ${enoughXp ? "text-[#131313]" : "text-[#c62828]"}`}>
+                  {Math.max(0, (myXp ?? 0) - total).toLocaleString()}
+                </span>
+              </div>
+
+              <button onClick={pay} disabled={!canPay}
+                className={`w-full py-4 font-bold rounded-xl transition-colors ${
+                  canPay ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#eceae6] text-[#a3a3a3] cursor-not-allowed"
+                }`}>
+                {isPaying ? "결제 중..." : !enoughXp ? "XP가 부족합니다" : `${total.toLocaleString()} XP 결제하기`}
+              </button>
+
+              {!canPay && enoughXp && !isPaying && (
+                <p className="mt-3 text-center text-[11px] text-[#8a8a8a]">
+                  {needsContact && !contact.trim() ? "수령 정보를 입력해주세요" : "필수 약관에 동의해주세요"}
+                </p>
+              )}
+
+              <p className="mt-4 text-[10px] text-[#a3a3a3] leading-relaxed break-keep">
+                역할 상품은 결제 후 30초 이내에 봇이 자동 지급합니다. 기프트카드는 운영진 확인 후 순차 발송됩니다.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

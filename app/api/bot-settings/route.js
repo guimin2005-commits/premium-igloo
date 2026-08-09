@@ -57,6 +57,7 @@ export async function POST(request) {
         muteReducePct: num(b.muteReducePct, 90, { min: 0, max: 100 }),
         muteTarget: ["both", "any"].includes(b.muteTarget) ? b.muteTarget : "both",
         resetOnLeave: !!b.resetOnLeave,
+        shopPublic: !!b.shopPublic,
         levelupChannelId: (b.levelupChannelId || "").trim(),
         levelupMessage: (b.levelupMessage || "").trim() || "🎉 {user} 님이 **Lv.{level}** 에 도달했습니다!",
         roleGrantChannelId: (b.roleGrantChannelId || "").trim(),

@@ -17,6 +17,9 @@ const BotSettingSchema = new mongoose.Schema({
 
   resetOnLeave: { type: Boolean, default: false }, // 서버 퇴장 시 XP 초기화
 
+  // IGLOO SHOP 공개 여부 — false면 관리자만 접근 가능 (준비 중 상태)
+  shopPublic: { type: Boolean, default: false },
+
   levelupChannelId: { type: String, default: "" }, // 레벨업 알림 채널 (비우면 알림 끔)
   levelupMessage: { type: String, default: "🎉 {user} 님이 **Lv.{level}** 에 도달했습니다!" },
 

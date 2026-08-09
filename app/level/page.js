@@ -590,7 +590,7 @@ export default function LevelPage() {
                 {[
                   { no: "I", t: "XP 획득 및 한계 돌파", d: "채팅과 음성 활동으로 끊임없이 성장하세요. 상한선은 1,000레벨입니다." },
                   { no: "II", t: "전용 역할 부여", d: "특정 레벨 도달 시 전용 역할과 색상, 프리미엄 권한이 부여됩니다." },
-                  { no: "III", t: "XP SHOP 혜택", d: "축적한 XP로 시즌 상품과 특별 권한을 구매할 수 있습니다." },
+                  { no: "III", t: "IGLOO SHOP 혜택", d: "축적한 XP로 시즌 상품과 특별 권한을 구매할 수 있습니다." },
                 ].map((f, i) => (
                   <div key={i} className={`group py-7 md:px-7 first:md:pl-0 last:md:pr-0 ${i > 0 ? "border-t md:border-t-0 border-white/[0.08]" : ""}`}>
                     <div className="text-2xl font-black text-white/[0.08] mb-5 group-hover:text-[#e91e3f]/30 transition-colors duration-500 select-none">{f.no}</div>
@@ -608,7 +608,7 @@ export default function LevelPage() {
                   { c: "/레벨", d: "다음 레벨 도달까지 필요 XP 확인" },
                   { c: "/랭크", d: "XP, 레벨, 서버 내 순위 확인" },
                   { c: "/출석체크", d: `출석체크를 통한 ${P.attendXp.toLocaleString()} XP 지급` },
-                  { c: "/경험치샵", d: "XP SHOP 상점으로 이동" },
+                  { c: "/경험치샵", d: "IGLOO SHOP 상점으로 이동" },
                 ].map((item, i) => (
                   <div key={i} className="flex items-center justify-between px-1 py-[18px] group hover:bg-white/[0.02] transition-colors">
                     <span className="text-[#e91e3f] font-mono font-bold text-sm tracking-tight">{item.c}</span>
@@ -673,7 +673,7 @@ export default function LevelPage() {
               <div className="space-y-5">
                 {[
                   { t: "XP 획득 제한", d: "잠수 음성 채널 이용 시 XP 획득이 전면 제한되며, 마이크/헤드셋 음소거 시 XP 획득량이 90% 감소됩니다." },
-                  { t: "상점 이용 주의", d: "XP SHOP 상품은 보유 XP 소모 방식입니다. 구매로 인해 레벨이 하락할 수 있습니다." },
+                  { t: "상점 이용 주의", d: "IGLOO SHOP 상품은 보유 XP 소모 방식입니다. 구매로 인해 레벨이 하락할 수 있습니다." },
                 ].map((item, i) => (
                   <div key={i} className="border-l-2 border-[#e91e3f]/50 pl-5 py-0.5">
                     <strong className="text-white text-sm font-bold block mb-1.5">{item.t}</strong>

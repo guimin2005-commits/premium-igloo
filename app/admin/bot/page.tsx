@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Reveal, LuxStyles } from "../../components/Lux";
+import Dropdown from "../../components/Dropdown";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -337,13 +338,14 @@ export default function AdminBotPage() {
               <div className="space-y-4">
                 <div>
                   <label className={labelClass}>알림 채널</label>
-                  <select value={settings.levelupChannelId} onChange={(e) => setSettings({ ...settings, levelupChannelId: e.target.value })}
-                    className={`${inputClass} [&>option]:bg-[#161616]`}>
-                    <option value="">알림 끄기</option>
-                    {guildChannels.filter((c) => c.type === "text").map((c) => (
-                      <option key={c.id} value={c.id}>#{c.name}</option>
-                    ))}
-                  </select>
+                  <Dropdown
+                    value={settings.levelupChannelId || ""}
+                    onChange={(v) => setSettings({ ...settings, levelupChannelId: v })}
+                    options={[
+                      { value: "", label: "알림 끄기" },
+                      ...guildChannels.filter((c) => c.type === "text").map((c) => ({ value: c.id, label: `# ${c.name}` })),
+                    ]}
+                  />
                   <p className={fieldNote}>레벨업 시 메시지를 보낼 채널</p>
                 </div>
                 <div>
@@ -370,13 +372,14 @@ export default function AdminBotPage() {
               <div className={`space-y-4 ${settings.roleGrantEnabled === false ? "opacity-40 pointer-events-none" : ""}`}>
                 <div>
                   <label className={labelClass}>알림 채널</label>
-                  <select value={settings.roleGrantChannelId || ""} onChange={(e) => setSettings({ ...settings, roleGrantChannelId: e.target.value })}
-                    className={`${inputClass} [&>option]:bg-[#161616]`}>
-                    <option value="">레벨업 알림 채널과 동일</option>
-                    {guildChannels.filter((c) => c.type === "text").map((c) => (
-                      <option key={c.id} value={c.id}>#{c.name}</option>
-                    ))}
-                  </select>
+                  <Dropdown
+                    value={settings.roleGrantChannelId || ""}
+                    onChange={(v) => setSettings({ ...settings, roleGrantChannelId: v })}
+                    options={[
+                      { value: "", label: "레벨업 알림 채널과 동일" },
+                      ...guildChannels.filter((c) => c.type === "text").map((c) => ({ value: c.id, label: `# ${c.name}` })),
+                    ]}
+                  />
                   <p className={fieldNote}>레벨 보상 역할이 지급됐을 때 메시지를 보낼 채널</p>
                 </div>
                 <div>

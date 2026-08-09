@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
+import { getShopAccess } from "@/lib/shopAccess";
 import ShopItem from "@/models/ShopItem";
 
 const requireAdmin = async () => {
@@ -12,14 +13,17 @@ const requireAdmin = async () => {
   return isAdminName(session?.user?.name);
 };
 
-// ── [조회] 상품 목록 — 일반 유저는 판매 중인 상품만 ──
+// ── [조회] 상품 목록 — 공개 전에는 관리자만, 일반 유저는 판매 중인 상품만 ──
 export async function GET(request) {
   try {
     await connectToDatabase();
-    const admin = await requireAdmin();
-    const all = new URL(request.url).searchParams.get("all") === "1";
+    const { isAdmin, canView } = await getShopAccess();
+    if (!canView) {
+      return NextResponse.json({ success: false, error: "준비 중입니다.", data: [] }, { status: 403 });
+    }
 
-    const filter = admin && all ? {} : { active: true };
+    const all = new URL(request.url).searchParams.get("all") === "1";
+    const filter = isAdmin && all ? {} : { active: true };
     const items = await ShopItem.find(filter).sort({ sortOrder: 1, createdAt: -1 }).lean();
 
     return NextResponse.json({ success: true, data: items });
@@ -44,6 +48,7 @@ export async function POST(request) {
     if (price <= 0) {
       return NextResponse.json({ success: false, message: "가격을 입력해주세요." }, { status: 400 });
     }
+    const discountPct = Math.max(0, Math.min(100, Math.floor(Number(b.discountPct) || 0)));
     const type = b.type === "physical" ? "physical" : "role";
     if (type === "role" && !b.roleId?.trim()) {
       return NextResponse.json({ success: false, message: "역할 상품은 지급할 역할을 선택해야 합니다." }, { status: 400 });
@@ -57,6 +62,7 @@ export async function POST(request) {
       roleId: type === "role" ? b.roleId.trim() : "",
       roleName: type === "role" ? (b.roleName || "").trim() : "",
       price,
+      discountPct,
       // 빈 값이면 무제한(-1)
       stock: b.stock === "" || b.stock == null ? -1 : Math.max(-1, Math.floor(Number(b.stock))),
       active: b.active !== false,

@@ -47,7 +47,7 @@ const NAV_GROUPS: NavGroup[] = [
         ],
       },
       {
-        title: "XP SHOP 관리",
+        title: "IGLOO SHOP 관리",
         href: "/admin/shop",
         children: [
           { title: "상품 관리", href: "/admin/shop?tab=items" },

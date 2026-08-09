@@ -70,6 +70,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const isVerifyPage = pathname === "/verify";
+  // 📌 IGLOO SHOP은 라이트 테마 — 헤더/푸터도 밝은 톤으로 전환한다
+  const isLightPage = pathname === "/shop" || pathname?.startsWith("/shop/");
   // 📌 경매방 안에서는 모바일 하단 탭을 숨긴다.
   //    입찰·채팅 바가 화면 아래에 붙는데 그 위에 전역 탭까지 있으면 잘못 눌러 방을 나가게 된다.
   const isAuctionRoom = /^\/auction\/[^/]+$/.test(pathname || "");
@@ -91,7 +93,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // 📌 카테고리 그룹화: 큰 카테고리 → 세부 카테고리 (메가 메뉴)
   const categoryGroups = [
     { name: "소식", desc: "고급 이글루의 최신 소식", tagline: "고급 이글루의 소식", items: [{ name: "공지사항", path: "/notice", desc: "최신 소식과 주요 안내" }, { name: "이벤트", path: "/event", desc: "다양한 이벤트와 혜택" }, { name: "구인", path: "/recruit", desc: "스태프 및 서포터즈 모집" }] },
-    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", tagline: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "XP SHOP", path: "/shop", desc: "XP로 역할과 혜택을 구매" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "경매", path: "/auction", desc: "실시간 포인트 경매 관전 및 참여" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }] },
+    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", tagline: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "IGLOO SHOP", path: "/shop", desc: "XP로 역할과 혜택을 구매" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "경매", path: "/auction", desc: "실시간 포인트 경매 관전 및 참여" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }] },
     { name: "지원", desc: "도움이 필요하신가요?", tagline: "무엇을 도와드릴까요?", items: [{ name: "1:1 문의", path: "/support", desc: "불편 사항 및 문의 접수" }, { name: "FAQ", path: "/faq", desc: "자주 묻는 질문" }] },
   ];
   const [openMegaMenu, setOpenMegaMenu] = useState<string | null>(null);
@@ -255,18 +257,26 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#090909]">
+    <div className={`flex flex-col min-h-screen ${isLightPage ? "bg-[#f5f3f0]" : "bg-[#090909]"}`}>
       <RouteProgress pathname={pathname} />
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
              헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
       <div className={`sticky top-0 z-40 transition-[padding] duration-500 ease-out flex-shrink-0 ${isAuctionRoom ? "hidden" : ""} ${scrolled ? "pt-3 px-3 md:px-6" : ""}`} onMouseLeave={() => setOpenMegaMenu(null)}>
-      <header className={`mx-auto transition-all duration-500 ease-out ${scrolled ? "max-w-3xl rounded-full border border-white/[0.06] bg-[#0b0b0b]/70 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)] px-5 md:px-6 h-12" : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-14"}`}>
+      <header className={`mx-auto transition-[max-width,border-radius,padding,height] duration-500 ease-out ${
+        scrolled
+          ? isLightPage
+            ? "max-w-3xl rounded-full border border-black/[0.06] bg-white/80 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] px-5 md:px-6 h-12"
+            : "max-w-3xl rounded-full border border-white/[0.06] bg-[#0b0b0b]/70 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)] px-5 md:px-6 h-12"
+          : isLightPage
+            ? "max-w-[1600px] border border-x-transparent border-t-transparent border-b-black/[0.08] bg-[#f5f3f0]/85 backdrop-blur-md px-6 h-14"
+            : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-14"
+      }`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
           <div className="flex-1 flex items-center z-10">
             {isVerifyPage ? (
-              <span className={`font-bold text-white cursor-default select-none transition-all duration-500 ${scrolled ? "text-[15px] tracking-[0.12em]" : "text-[17px] tracking-[0.18em]"}`}>고급 이글루</span>
+              <span className={`font-bold cursor-default select-none transition-[font-size,letter-spacing] duration-500 ease-out ${isLightPage ? "text-[#131313]" : "text-white"} ${scrolled ? "text-[15px] tracking-[0.12em]" : "text-[17px] tracking-[0.18em]"}`}>고급 이글루</span>
             ) : (
-              <Link href="/" className={`font-bold text-white hover:text-gray-300 transition-all duration-500 ${scrolled ? "text-[15px] tracking-[0.12em]" : "text-[17px] tracking-[0.18em]"}`}>고급 이글루</Link>
+              <Link href="/" className={`font-bold transition-[font-size,letter-spacing] duration-500 ease-out ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-gray-300"} ${scrolled ? "text-[15px] tracking-[0.12em]" : "text-[17px] tracking-[0.18em]"}`}>고급 이글루</Link>
             )}
           </div>
           
@@ -278,7 +288,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 const isOpen = openMegaMenu === group.name;
                 return (
                   <div key={group.name} className="relative h-full flex items-center group/gnav" onMouseEnter={() => setOpenMegaMenu(group.name)}>
-                    <button className={`relative h-full flex items-center transition-all duration-500 outline-none focus:outline-none ${scrolled ? "px-3" : "px-4"} ${isGroupActive || isOpen ? "text-[#e91e3f]" : "text-gray-400 hover:text-white"}`}>
+                    <button className={`relative h-full flex items-center transition-all duration-500 ease-out outline-none focus:outline-none ${scrolled ? "px-3" : "px-4"} ${isGroupActive || isOpen ? "text-[#e91e3f]" : isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white"}`}>
                       {group.name}
                       {/* 대분류 라인 차오름 이펙트 — 평소엔 숨김, 호버 시 왼쪽부터 차오름. 알약 모드에선 라인 위치도 함께 올라온다 */}
                       <span className={`absolute h-px bg-[#e91e3f] origin-left transition-all duration-500 ${scrolled ? "bottom-2.5 left-3 right-3" : "bottom-4 left-4 right-4"} ${isGroupActive || isOpen ? "scale-x-100" : "scale-x-0 group-hover/gnav:scale-x-100"}`} />
@@ -297,7 +307,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               <>
               {/* 📌 알림 센터 종 아이콘 */}
               <div className="relative flex items-center" ref={notifRef}>
-                <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) markNotifsSeen(); }} aria-label="알림" className={`relative text-gray-400 hover:text-white transition-all duration-500 outline-none focus:outline-none ${scrolled ? "p-1.5" : "p-2"}`}>
+                <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) markNotifsSeen(); }} aria-label="알림" className={`relative transition-[padding] duration-500 ease-out outline-none focus:outline-none ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white"} ${scrolled ? "p-1.5" : "p-2"}`}>
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className={`transition-all duration-500 ${scrolled ? "w-[18px] h-[18px]" : "w-5 h-5"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
                   {unseenCount > 0 && (
                     <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#e91e3f] shadow-[0_0_6px_rgba(233,30,63,0.8)]"></span>
@@ -305,39 +315,39 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
 
                 {isNotifOpen && (
-                  <div className="absolute top-[52px] right-0 z-50 w-[300px] rounded-3xl bg-[#111111]/95 backdrop-blur-xl border border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="px-5 pt-4 pb-3.5 border-b border-white/[0.06] flex items-center justify-between relative overflow-hidden">
+                  <div className={`absolute top-[52px] right-0 z-50 w-[300px] rounded-3xl backdrop-blur-xl border overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 ${isLightPage ? "bg-white/97 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/95 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
+                    <div className={`px-5 pt-4 pb-3.5 border-b flex items-center justify-between relative overflow-hidden ${isLightPage ? "border-black/[0.06]" : "border-white/[0.06]"}`}>
                       <div className="absolute top-[-30px] right-[-20px] w-32 h-16 bg-[#e91e3f]/[0.12] blur-[36px] rounded-full pointer-events-none"></div>
                       <div className="relative flex items-center gap-2.5">
                         <span className="w-4 h-px bg-[#e91e3f]"></span>
-                        <span className="text-sm font-black text-white tracking-tight">알림</span>
+                        <span className={`text-sm font-black tracking-tight ${isLightPage ? "text-[#131313]" : "text-white"}`}>알림</span>
                       </div>
-                      <Link href="/profile?tab=notice" onClick={() => setIsNotifOpen(false)} className="relative text-[11px] font-black text-gray-500 hover:text-[#e91e3f] transition-colors">전체 보기</Link>
+                      <Link href="/profile?tab=notice" onClick={() => setIsNotifOpen(false)} className={`relative text-[11px] font-black hover:text-[#e91e3f] transition-colors ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>전체 보기</Link>
                     </div>
                     {notifications.length === 0 && adminNotifs.length === 0 ? (
-                      <div className="px-5 py-8 text-center text-xs text-gray-500">아직 알림이 없습니다.</div>
+                      <div className={`px-5 py-8 text-center text-xs ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>아직 알림이 없습니다.</div>
                     ) : (
-                      <div className="max-h-72 overflow-y-auto [&::-webkit-scrollbar]:hidden divide-y divide-white/[0.04]">
+                      <div className={`max-h-72 overflow-y-auto [&::-webkit-scrollbar]:hidden divide-y ${isLightPage ? "divide-black/[0.05]" : "divide-white/[0.04]"}`}>
                         {adminNotifs.slice(0, 5).map((n) => {
                           const warn = n.type === "경고" || n.type === "제재";
                           return (
-                            <Link key={n._id} href="/profile?tab=notice" onClick={() => setIsNotifOpen(false)} className="block px-5 py-3.5 hover:bg-white/[0.03] transition-colors">
+                            <Link key={n._id} href="/profile?tab=notice" onClick={() => setIsNotifOpen(false)} className={`block px-5 py-3.5 transition-colors ${isLightPage ? "hover:bg-black/[0.03]" : "hover:bg-white/[0.03]"}`}>
                               <div className="flex items-center gap-2 mb-1">
                                 <span className={`text-[9px] font-black tracking-wider px-1.5 py-0.5 rounded border ${warn ? "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25" : "bg-sky-500/10 text-sky-400 border-sky-500/20"}`}>{n.type || "안내"}</span>
                                 {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>}
                                 <span className="ml-auto text-[10px] text-gray-600">운영팀</span>
                               </div>
-                              <p className="text-xs font-bold text-gray-200 line-clamp-1">{n.title}</p>
+                              <p className={`text-xs font-bold line-clamp-1 ${isLightPage ? "text-[#131313]" : "text-gray-200"}`}>{n.title}</p>
                             </Link>
                           );
                         })}
                         {notifications.slice(0, 5).map((n) => (
-                          <Link key={n._id} href="/profile" onClick={() => setIsNotifOpen(false)} className="block px-5 py-3.5 hover:bg-white/[0.03] transition-colors">
+                          <Link key={n._id} href="/profile" onClick={() => setIsNotifOpen(false)} className={`block px-5 py-3.5 transition-colors ${isLightPage ? "hover:bg-black/[0.03]" : "hover:bg-white/[0.03]"}`}>
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-[9px] font-black tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded">답변 완료</span>
                               <span className="text-[10px] text-gray-600">{n.mainType || "문의"}</span>
                             </div>
-                            <p className="text-xs font-bold text-gray-300 line-clamp-1">{n.title || n.content?.slice(0, 40) || "문의 내역"}</p>
+                            <p className={`text-xs font-bold line-clamp-1 ${isLightPage ? "text-[#4b4b4b]" : "text-gray-300"}`}>{n.title || n.content?.slice(0, 40) || "문의 내역"}</p>
                           </Link>
                         ))}
                       </div>
@@ -350,7 +360,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 <button onClick={() => setIsProfileOpen(!isProfileOpen)} className={`hidden md:flex items-center gap-2 rounded-full hover:bg-white/5 transition-all duration-500 outline-none focus:outline-none ${scrolled ? "p-1" : "p-1.5"}`}>
                   <img src={session.user?.image || ""} alt="Profile" className={`rounded-full bg-gray-700 transition-all duration-500 ${scrolled ? "w-7 h-7" : "w-8 h-8"} ${isBooster ? 'ring-2 ring-[#e91e3f]/60 ring-offset-2 ring-offset-[#090909]' : ''}`} />
                   <div className="flex items-center gap-2 ml-1">
-                    <span className={`font-bold text-white transition-all duration-500 ${scrolled ? "text-[13px]" : "text-sm"}`}>{session.user?.name}</span>
+                    <span className={`font-bold transition-[font-size,letter-spacing] duration-500 ease-out ${isLightPage ? "text-[#131313]" : "text-white"} ${scrolled ? "text-[13px]" : "text-sm"}`}>{session.user?.name}</span>
                     {isVerified && hasScrimRole ? (
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-green-400"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>
                     ) : isVerified ? (
@@ -362,15 +372,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
                 
                 {isProfileOpen && (
-                  <div className="absolute top-[60px] right-0 z-50 w-[272px] rounded-3xl bg-[#111111]/95 backdrop-blur-xl border border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)] p-5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className={`absolute top-[60px] right-0 z-50 w-[272px] rounded-3xl backdrop-blur-xl border p-5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 ${isLightPage ? "bg-white/97 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/95 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
                     <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 w-48 h-24 bg-[#e91e3f]/[0.1] blur-[44px] rounded-full pointer-events-none"></div>
-                    <div className="relative flex items-center gap-4 mb-4 pb-4 border-b border-white/[0.06]">
+                    <div className={`relative flex items-center gap-4 mb-4 pb-4 border-b ${isLightPage ? "border-black/[0.06]" : "border-white/[0.06]"}`}>
                       <div className="relative shrink-0">
                         {isBooster && <div className="absolute -inset-1.5 bg-[#e91e3f]/20 blur-lg rounded-full pointer-events-none"></div>}
                         <img src={session.user?.image || ""} alt="Profile" className={`relative w-12 h-12 rounded-full bg-gray-700 ${isBooster ? 'ring-2 ring-[#e91e3f]/60 ring-offset-2 ring-offset-[#111111]' : ''}`} />
                       </div>
                       <div>
-                        <div className="font-bold text-white text-base flex items-center gap-2">{session.user?.name}</div>
+                        <div className={`font-bold text-base flex items-center gap-2 ${isLightPage ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</div>
                         <div className="mt-1.5 flex items-center">
                           {isVerified && hasScrimRole ? (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20">
@@ -393,14 +403,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     </div>
                     <div className="relative flex flex-col gap-0.5">
                       {!isVerifyPage && (
-                        <Link href="/profile" onClick={() => setIsProfileOpen(false)} className="w-full block px-3.5 py-2.5 text-[13px] text-gray-300 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors font-bold">내 정보</Link>
+                        <Link href="/profile" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] rounded-xl transition-colors font-bold ${isLightPage ? "text-[#4b4b4b] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>내 정보</Link>
                       )}
                       {!isVerifyPage && isVerified && (
-                        <Link href="/invite" onClick={() => setIsProfileOpen(false)} className="w-full block px-3.5 py-2.5 text-[13px] text-gray-300 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors font-bold">친구 초대 이벤트</Link>
+                        <Link href="/invite" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] rounded-xl transition-colors font-bold ${isLightPage ? "text-[#4b4b4b] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>친구 초대 이벤트</Link>
                       )}
                       {/* 미인증 유저는 코드 등록 버튼 숨김 */}
                       {isVerified && (
-                        <button onClick={() => { setIsProfileOpen(false); setIsCodeModalOpen(true); }} className="w-full text-left px-3.5 py-2.5 text-[13px] text-gray-300 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors outline-none font-bold">코드 등록</button>
+                        <button onClick={() => { setIsProfileOpen(false); setIsCodeModalOpen(true); }} className={`w-full text-left px-3.5 py-2.5 text-[13px] rounded-xl transition-colors outline-none font-bold ${isLightPage ? "text-[#4b4b4b] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>코드 등록</button>
                       )}
                       {isAdmin && (
                         <Link href="/admin" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-xl transition-colors font-bold">
@@ -408,7 +418,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                           관리자 페이지
                         </Link>
                       )}
-                      <div className="h-px bg-white/[0.06] my-1.5 mx-1"></div>
+                      <div className={`h-px my-1.5 mx-1 ${isLightPage ? "bg-black/[0.07]" : "bg-white/[0.06]"}`}></div>
                       <button onClick={() => { setIsProfileOpen(false); signOut(); }} className="w-full text-left px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-xl transition-colors outline-none focus:outline-none font-black">로그아웃</button>
                     </div>
                   </div>
@@ -420,7 +430,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             )}
 
             {!isVerifyPage && mounted && (
-              <button onClick={() => { setIsMenuClosing(false); setIsMobileMenuOpen(true); }} aria-label="메뉴 열기" className="pc-hidden md:hidden p-2 -mr-1 text-gray-300 hover:text-white transition-colors outline-none">
+              <button onClick={() => { setIsMenuClosing(false); setIsMobileMenuOpen(true); }} aria-label="메뉴 열기" className={`pc-hidden md:hidden p-2 -mr-1 outline-none ${isLightPage ? "text-[#4b4b4b] hover:text-[#131313]" : "text-gray-300 hover:text-white"}`}>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
               </button>
             )}
@@ -437,7 +447,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         return (
           <div className={`hidden md:block absolute top-full ${scrolled ? "left-1/2 -translate-x-1/2 pt-2 w-[min(100%-24px,48rem)]" : "left-0 right-0"}`} style={{ animation: "megaDrop 0.32s cubic-bezier(0.16,1,0.3,1)" }}>
             <style dangerouslySetInnerHTML={{ __html: `@keyframes megaDrop{0%{opacity:0;transform:translateY(-16px) scaleY(0.94)}60%{opacity:1}100%{opacity:1;transform:translateY(0) scaleY(1)}}` }} />
-            <div className={`bg-[#0c0c0c]/98 backdrop-blur-md origin-top ${scrolled ? "rounded-3xl border border-white/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]" : "border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)]"}`}>
+            <div className={`backdrop-blur-md origin-top ${isLightPage ? "bg-[#f5f3f0]/98" : "bg-[#0c0c0c]/98"} ${scrolled ? (isLightPage ? "rounded-3xl border border-black/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.25)]" : "rounded-3xl border border-white/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]") : (isLightPage ? "border-b border-black/[0.08] shadow-[0_40px_80px_-24px_rgba(0,0,0,0.2)]" : "border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)]")}`}>
             <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
             <div className={`mx-auto grid grid-cols-12 gap-10 items-start ${scrolled ? "px-8 py-7" : "max-w-7xl px-8 py-8 lg:py-10"}`}>
               {/* 좌: 섹션 헤딩 */}
@@ -446,7 +456,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   <span className="w-6 h-px bg-[#e91e3f]"></span>
                   <span className="text-[10px] font-black tracking-[0.35em] text-[#e91e3f] uppercase">{group.name}</span>
                 </div>
-                <p className="text-xl lg:text-2xl font-black text-white tracking-tight leading-snug break-keep max-w-md">{group.tagline}</p>
+                <p className={`text-xl lg:text-2xl font-black tracking-tight leading-snug break-keep max-w-md ${isLightPage ? "text-[#131313]" : "text-white"}`}>{group.tagline}</p>
               </div>
               {/* 우: 텍스트 링크 리스트 */}
               <div className="col-span-12 lg:col-span-7">
@@ -457,13 +467,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       key={item.path}
                       href={item.path}
                       onClick={() => setOpenMegaMenu(null)}
-                      className="group/item flex items-center justify-between gap-4 py-3 border-b border-white/[0.08] first:border-t first:border-white/[0.08] transition-colors"
+                      className={`group/item flex items-center justify-between gap-4 py-3 transition-colors ${isLightPage ? "border-b border-black/[0.08] first:border-t first:border-black/[0.08]" : "border-b border-white/[0.08] first:border-t first:border-white/[0.08]"}`}
                     >
                       <div className="min-w-0">
-                        <p className={`text-[15px] lg:text-base font-bold tracking-tight transition-colors ${isActive ? "text-[#e91e3f]" : "text-gray-100 group-hover/item:text-[#ff5c77]"}`}>{item.name}</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5 truncate">{item.desc}</p>
+                        <p className={`text-[15px] lg:text-base font-bold tracking-tight transition-colors ${isActive ? "text-[#e91e3f]" : isLightPage ? "text-[#131313] group-hover/item:text-[#e91e3f]" : "text-gray-100 group-hover/item:text-[#ff5c77]"}`}>{item.name}</p>
+                        <p className={`text-[11px] mt-0.5 truncate ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>{item.desc}</p>
                       </div>
-                      <svg className="w-4 h-4 text-gray-600 shrink-0 -translate-x-2 opacity-0 group-hover/item:opacity-100 group-hover/item:translate-x-0 group-hover/item:text-[#e91e3f] transition-all duration-300" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                      <svg className={`w-4 h-4 shrink-0 -translate-x-2 opacity-0 group-hover/item:opacity-100 group-hover/item:translate-x-0 group-hover/item:text-[#e91e3f] transition-all duration-300 ${isLightPage ? "text-[#a3a3a3]" : "text-gray-600"}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
                     </Link>
                   );
                 })}
@@ -509,7 +519,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
              ※ bottom은 홈 인디케이터/제스처 바를 피하도록 safe-area와 12px 중 큰 값.
              (경매방에서는 오조작 방지를 위해 숨김) */}
       {!isVerifyPage && !isAuctionRoom && mounted && (
-        <nav className="md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border border-white/[0.07] bg-[#0b0b0b]/75 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85)] grid grid-cols-5">
+        <nav className={`md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border backdrop-blur-2xl grid grid-cols-5 ${isLightPage ? "border-black/[0.07] bg-white/85 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.22)]" : "border-white/[0.07] bg-[#0b0b0b]/75 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85)]"}`}>
           {[
             { name: "홈", path: "/", icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" },
             { name: "공지", path: "/notice", icon: "M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73" },
@@ -520,7 +530,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             const isActive = pathname === tab.path;
             return (
               // flex-col에서는 gap이 먹지 않으므로 아이콘 아래 여백은 mb로 준다
-              <Link key={tab.path} href={tab.path} className={`flex flex-col items-center justify-center py-1.5 rounded-full transition-all active:scale-95 ${isActive ? "text-[#e91e3f] bg-[#e91e3f]/[0.1]" : "text-gray-500 active:text-white"}`}>
+              <Link key={tab.path} href={tab.path} className={`flex flex-col items-center justify-center py-1.5 rounded-full transition-all active:scale-95 ${isActive ? "text-[#e91e3f] bg-[#e91e3f]/[0.1]" : isLightPage ? "text-[#8a8a8a] active:text-[#131313]" : "text-gray-500 active:text-white"}`}>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={isActive ? 2 : 1.6} stroke="currentColor" className="w-5 h-5 mb-0.5"><path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} /></svg>
                 <span className="text-[10px] font-bold">{tab.name}</span>
               </Link>
@@ -529,25 +539,25 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </nav>
       )}
 
-      <footer className="w-full border-t border-white/5 bg-[#090909] mt-auto flex-shrink-0 hidden md:block relative overflow-hidden">
+      <footer className={`w-full mt-auto flex-shrink-0 hidden md:block relative overflow-hidden ${isLightPage ? "border-t border-black/[0.06] bg-[#f5f3f0]" : "border-t border-white/5 bg-[#090909]"}`}>
         <div className="absolute bottom-[-80px] left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-[#e91e3f]/[0.04] blur-[90px] rounded-full pointer-events-none"></div>
         <div className="max-w-7xl mx-auto px-6 py-10 relative z-10">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <div className="text-base font-black tracking-widest text-white mb-1">고급 이글루</div>
+              <div className={`text-base font-black tracking-widest mb-1 ${isLightPage ? "text-[#131313]" : "text-white"}`}>고급 이글루</div>
               <div className="text-[9px] font-bold tracking-[0.35em] text-gray-600 uppercase mb-1.5">Premium Igloo Community</div>
               <div className="text-[11px] font-bold text-gray-500">활동이 곧 자산이 되는 곳.</div>
             </div>
             <div className="flex items-center gap-6">
-              <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">Discord</a>
-              <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">Kakao Talk</a>
-              <Link href="/faq" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">FAQ</Link>
-              <Link href="/policy" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">이용약관</Link>
-              <Link href="/policy?tab=privacy" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">개인정보처리방침</Link>
+              <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>Discord</a>
+              <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>Kakao Talk</a>
+              <Link href="/faq" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>FAQ</Link>
+              <Link href="/policy" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>이용약관</Link>
+              <Link href="/policy?tab=privacy" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>개인정보처리방침</Link>
             </div>
           </div>
-          <div className="h-px w-full bg-gradient-to-r from-white/10 via-white/5 to-transparent mb-6"></div>
-          <p className="text-[11px] text-gray-700 font-medium tracking-wide leading-relaxed">
+          <div className={`h-px w-full mb-6 ${isLightPage ? "bg-gradient-to-r from-black/10 via-black/5 to-transparent" : "bg-gradient-to-r from-white/10 via-white/5 to-transparent"}`}></div>
+          <p className={`text-[11px] font-medium tracking-wide leading-relaxed ${isLightPage ? "text-[#a3a3a3]" : "text-gray-700"}`}>
             © 2026 Premium Igloo. All rights reserved. Unauthorized reproduction or redistribution is strictly prohibited.
           </p>
         </div>

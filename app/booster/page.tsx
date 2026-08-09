@@ -43,8 +43,8 @@ export default function BoosterPage() {
             {[
               { t: "전용 역할 및 뱃지 지급", d: "@SERVER BOOSTER 고유 역할 부여 및 차별화된 프로필 전용 특수 배지 자동 장착", note: "" },
               { t: "사용자 관리 권한 제공", d: "서버 내 일부 사용자 관리 부가 기능 상시 이용 가능", note: "" },
-              { t: "권한 제한 채널 이용", d: "별도의 권한 구매 없이 제한된 채널 이용 가능!", note: "* 권한이 없을 경우, XP SHOP에서 관련 권한 상품을 구매해야 합니다." },
-              { t: "슬로우 모드 제한 해제", d: "채팅 대기 시간 제한 없이 연속 채팅 가능!", note: "* 권한이 없을 경우, XP SHOP에서 관련 권한 상품을 구매해야 합니다." },
+              { t: "권한 제한 채널 이용", d: "별도의 권한 구매 없이 제한된 채널 이용 가능!", note: "* 권한이 없을 경우, IGLOO SHOP에서 관련 권한 상품을 구매해야 합니다." },
+              { t: "슬로우 모드 제한 해제", d: "채팅 대기 시간 제한 없이 연속 채팅 가능!", note: "* 권한이 없을 경우, IGLOO SHOP에서 관련 권한 상품을 구매해야 합니다." },
             ].map((item, idx) => (
               <div key={idx} className="py-5 flex flex-col md:flex-row md:items-baseline gap-1.5 md:gap-8 group">
                 <p className="font-bold text-white text-sm md:w-52 shrink-0 group-hover:text-[#ff5c77] transition-colors">{item.t}</p>

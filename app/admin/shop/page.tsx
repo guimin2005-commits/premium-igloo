@@ -8,7 +8,7 @@ import { Reveal, LuxStyles } from "../../components/Lux";
 const ADMIN_USERS = ["elahw.06"];
 
 const TAB_META: Record<string, { title: string; desc: string }> = {
-  items: { title: "상품 관리", desc: "XP SHOP에 노출할 상품을 등록·수정합니다. 역할 상품은 구매 시 봇이 자동 지급합니다." },
+  items: { title: "상품 관리", desc: "IGLOO SHOP에 노출할 상품을 등록·수정합니다. 역할 상품은 구매 시 봇이 자동 지급합니다." },
   orders: { title: "구매 내역", desc: "구매 건을 확인하고 실물 상품 발송·취소를 처리합니다." },
 };
 
@@ -36,6 +36,7 @@ export default function AdminShopPage() {
   const [orderFilter, setOrderFilter] = useState("");
   const [noteTarget, setNoteTarget] = useState<any>(null);
   const [noteText, setNoteText] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
 
   const emptyForm = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", price: "", stock: "", sortOrder: "", active: true };
   const [form, setForm] = useState(emptyForm);
@@ -57,6 +58,19 @@ export default function AdminShopPage() {
   }, []);
 
   useEffect(() => { if (isAdmin) fetchAll(); }, [isAdmin, fetchAll]);
+
+  // 📌 상점 카드의 '수정' 링크(?edit=<id>)로 들어오면 해당 상품을 폼에 채워 둔다
+  const editId = searchParams.get("edit");
+  useEffect(() => {
+    if (!editId || items.length === 0) return;
+    const it = items.find((x) => x._id === editId);
+    if (!it) return;
+    setForm({
+      id: it._id, name: it.name, description: it.description || "", imageUrl: it.imageUrl || "",
+      type: it.type, roleId: it.roleId || "", price: String(it.price),
+      stock: it.stock < 0 ? "" : String(it.stock), sortOrder: String(it.sortOrder || 0), active: it.active,
+    });
+  }, [editId, items]);
 
   const saveItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,7 +162,16 @@ export default function AdminShopPage() {
           <>
             <Reveal>
             <section>
-              <SectionHead no="01" title={form.id ? "상품 수정" : "상품 등록"} />
+              <SectionHead no="01" title={form.id ? "상품 수정" : "상품 등록"} right={
+                <button type="button" onClick={() => setShowPreview(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[11px] font-bold text-gray-200 border border-white/20 hover:border-white/40 hover:text-white transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  카드 미리보기
+                </button>
+              } />
               <form onSubmit={saveItem}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
@@ -158,7 +181,7 @@ export default function AdminShopPage() {
                   <div>
                     <label className={labelClass}>상품 유형 <span className="text-[#e91e3f]">*</span></label>
                     <div className="flex gap-2">
-                      {[{ v: "role", l: "역할 · 자동 지급" }, { v: "physical", l: "실물 혜택" }].map((o) => (
+                      {[{ v: "role", l: "역할 · 자동 지급" }, { v: "physical", l: "기프트카드" }].map((o) => (
                         <button key={o.v} type="button" onClick={() => setForm({ ...form, type: o.v })}
                           className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-colors ${form.type === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-gray-300 border-white/10 hover:text-white"}`}>
                           {o.l}
@@ -266,7 +289,7 @@ export default function AdminShopPage() {
                           <span className="text-sm font-bold text-white truncate">{it.name}</span>
                           {!it.active && <span className="text-[10px] font-bold text-gray-400 border border-white/15 px-1.5 rounded shrink-0">숨김</span>}
                         </div>
-                        <span className="text-[10px] font-bold text-gray-400">{it.type === "role" ? `역할 · ${it.roleName || it.roleId}` : "실물 혜택"}</span>
+                        <span className="text-[10px] font-bold text-gray-400">{it.type === "role" ? `역할 · ${it.roleName || it.roleId}` : "기프트카드"}</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
                         <span className="text-[11px] font-bold text-[#e91e3f] tabular-nums">{it.price.toLocaleString()} XP</span>
@@ -377,6 +400,68 @@ export default function AdminShopPage() {
               <button onClick={() => setNoteTarget(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">닫기</button>
               <button onClick={() => processOrder(noteTarget._id, "completed", noteText)} className="flex-1 py-3 bg-[#e91e3f] text-white rounded-xl font-bold">완료 처리</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📌 카드 미리보기 — 상점(라이트 톤)에서 실제로 어떻게 보이는지 그대로 렌더 */}
+      {showPreview && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowPreview(false)}>
+          <div className="w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-black tracking-[0.3em] text-gray-300 uppercase">Shop Preview</span>
+              <button onClick={() => setShowPreview(false)} className="p-1.5 text-gray-300 hover:text-white transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            {/* 상점 배경 위에 실제 카드 마크업 그대로 */}
+            <div className="bg-[#f5f3f0] rounded-2xl p-5">
+              <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col">
+                <div className="relative aspect-[4/3] bg-[#eceae6] overflow-hidden">
+                  {form.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={form.imageUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[#c4c4c4]">
+                      <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
+                      </svg>
+                    </div>
+                  )}
+                  <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide ${form.type === "role" ? "bg-[#e91e3f] text-white" : "bg-[#131313] text-white"}`}>
+                    {form.type === "role" ? "역할 · 자동 지급" : "기프트카드"}
+                  </span>
+                  {form.stock === "0" && (
+                    <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
+                      <span className="text-sm font-black text-white tracking-wider">SOLD OUT</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-5 flex flex-col flex-1">
+                  <h3 className="text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep">{form.name || "상품명을 입력하세요"}</h3>
+                  {form.description && <p className="text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep">{form.description}</p>}
+
+                  <div className="flex items-center gap-2 mb-4 text-[11px] font-bold text-[#8a8a8a]">
+                    <span>{form.stock === "" ? "재고 무제한" : `남은 수량 ${form.stock}개`}</span>
+                  </div>
+
+                  <div className="mt-auto flex items-end justify-between gap-3">
+                    <div>
+                      <div className="text-xl font-black text-[#131313] tracking-tight tabular-nums">{(Number(form.price) || 0).toLocaleString()}</div>
+                      <div className="text-[10px] font-bold text-[#8a8a8a] tracking-wider">XP</div>
+                    </div>
+                    <span className="px-5 py-2.5 rounded-full text-[12px] font-bold bg-[#e91e3f] text-white shadow-[0_4px_12px_rgba(233,30,63,0.25)]">구매하기</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-3 text-center text-[11px] text-gray-300">
+              {form.active ? "판매 중 — 상점에 노출됩니다" : "숨김 — 상점에 노출되지 않습니다"}
+              {form.type === "role" && !form.roleId && <span className="block mt-1 text-[#e91e3f]">지급할 역할을 선택해야 저장할 수 있습니다</span>}
+            </p>
           </div>
         </div>
       )}

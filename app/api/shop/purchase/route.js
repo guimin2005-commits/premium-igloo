@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
+import { getShopAccess } from "@/lib/shopAccess";
 import ShopItem from "@/models/ShopItem";
 import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
@@ -19,6 +20,13 @@ export async function POST(request) {
     }
 
     await connectToDatabase();
+
+    // 공개 전에는 관리자만 구매 가능 (테스트용)
+    const { canView } = await getShopAccess();
+    if (!canView) {
+      return NextResponse.json({ success: false, message: "아직 공개되지 않은 상점입니다." }, { status: 403 });
+    }
+
     const { itemId, contact } = await request.json();
     if (!itemId) {
       return NextResponse.json({ success: false, message: "상품이 지정되지 않았습니다." }, { status: 400 });
