@@ -1,19 +1,19 @@
 // ═══════════════════════════════════════════════════════
 // 고급 이글루 레벨링 봇 v2
-//  · 채팅 XP (200 XP / 쿨타임 1분)
-//  · 음성 XP (5분마다 3,000 / 내전 채널 3,500 + 레벨 구간 보너스)
-//    - 음소거 시 90% 감소, 잠수(AFK) 채널 제외
-//  · /출석체크 (7,000 XP, 1일 1회, KST 기준)
-//  · /레벨 /랭크 조회 · 레벨업 알림 · 보상 역할 자동 지급
-//  사이트와 동일한 MongoDB 사용 → 웹 XP SHOP·랭킹과 실시간 연동
+//  · 채팅 / 음성 / 출석 XP — 지급량·쿨타임·주기 모두 대시보드에서 설정
+//  · 역할·채널·기간제 부스트, 음소거 정책, 퇴장 시 초기화
+//  · /출석체크 /레벨 /랭크 · 레벨업 알림 · 보상 역할 자동 지급 · XP 로그
+//  사이트와 동일한 MongoDB 사용 → 웹 레벨 대시보드·랭킹과 실시간 연동
 // ═══════════════════════════════════════════════════════
 import { Client, GatewayIntentBits, Events } from "discord.js";
 import { config } from "./config.js";
 import { connectDb, disconnectDb } from "./db.js";
 import { refreshRoleConfigs, startRoleConfigLoop } from "./roleConfigs.js";
 import { refreshChannelConfigs, startChannelConfigLoop } from "./channelConfigs.js";
+import { refreshBotSettings, startBotSettingLoop } from "./botSettings.js";
 import { registerChatXp } from "./features/chatXp.js";
 import { startVoiceXpLoop } from "./features/voiceXp.js";
+import { registerLeaveReset } from "./features/leaveReset.js";
 import { registerCommandDefinitions, registerCommandHandlers } from "./commands.js";
 
 const client = new Client({
@@ -26,6 +26,7 @@ const client = new Client({
 });
 
 registerChatXp(client);
+registerLeaveReset(client);
 registerCommandHandlers(client);
 
 client.once(Events.ClientReady, async (c) => {
@@ -34,13 +35,13 @@ client.once(Events.ClientReady, async (c) => {
   await registerCommandDefinitions(c);
   console.log("✅ 슬래시 커맨드 등록 완료");
 
-  await Promise.all([refreshRoleConfigs(), refreshChannelConfigs()]);
+  await Promise.all([refreshRoleConfigs(), refreshChannelConfigs(), refreshBotSettings()]);
   startRoleConfigLoop();
   startChannelConfigLoop();
-  console.log("✅ 역할·채널 설정 로드 완료 (1분 주기 갱신)");
+  startBotSettingLoop();
+  console.log("✅ 설정 로드 완료 — 역할·채널·기본 정책 (1분 주기 갱신)");
 
   startVoiceXpLoop(c);
-  console.log("✅ 음성 XP 루프 시작 (5분 주기)");
 });
 
 // ── 부팅 ──────────────────────────────────

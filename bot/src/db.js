@@ -36,6 +36,48 @@ const ChannelConfigSchema = new mongoose.Schema({
 });
 export const ChannelConfig = mongoose.models.ChannelConfig || mongoose.model("ChannelConfig", ChannelConfigSchema);
 
+// 대시보드에서 관리하는 XP 기본 정책 (단일 문서 key:"main")
+const BotSettingSchema = new mongoose.Schema({
+  key: { type: String, required: true, unique: true, default: "main" },
+  chatXp: { type: Number, default: 200 },
+  chatCooldownSec: { type: Number, default: 60 },
+  voiceXp: { type: Number, default: 3000 },
+  voiceIntervalSec: { type: Number, default: 300 },
+  attendXp: { type: Number, default: 7000 },
+  muteMode: { type: String, default: "reduce" },  // "off" | "reduce" | "block"
+  muteReducePct: { type: Number, default: 90 },
+  muteTarget: { type: String, default: "both" },  // "both" | "any"
+  resetOnLeave: { type: Boolean, default: false },
+  levelupChannelId: { type: String, default: "" },
+  levelupMessage: { type: String, default: "🎉 {user} 님이 **Lv.{level}** 에 도달했습니다!" },
+  updatedAt: { type: Date, default: Date.now },
+});
+export const BotSetting = mongoose.models.BotSetting || mongoose.model("BotSetting", BotSettingSchema);
+
+// 기간제 XP 부스트 (대상 역할 비면 전체)
+const XpBoostSchema = new mongoose.Schema({
+  name: { type: String, default: "" },
+  targetRoleId: { type: String, default: "" },
+  targetRoleName: { type: String, default: "" },
+  boostXp: { type: Number, default: 0 },
+  startAt: { type: Date, required: true },
+  endAt: { type: Date, required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+export const XpBoost = mongoose.models.XpBoost || mongoose.model("XpBoost", XpBoostSchema);
+
+// XP 지급 로그 (60일 TTL — 월간 랭킹 집계에도 사용)
+const XpLogSchema = new mongoose.Schema({
+  userId: { type: String, index: true },
+  displayName: { type: String, default: "" },
+  amount: { type: Number, default: 0 },
+  reason: { type: String, default: "" },   // "chat" | "voice" | "attend"
+  channelId: { type: String, default: "" },
+  channelName: { type: String, default: "" },
+  createdAt: { type: Date, default: Date.now, index: { expires: 60 * 60 * 24 * 60 } },
+});
+export const XpLog = mongoose.models.XpLog || mongoose.model("XpLog", XpLogSchema);
+
 export const connectDb = (uri) => mongoose.connect(uri);
 export const disconnectDb = () => mongoose.disconnect();
 

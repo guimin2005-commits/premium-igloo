@@ -4,8 +4,14 @@ import { useState, useEffect, useRef, FormEvent } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import AdminNav from "./admin/AdminNav";
 
 const ADMIN_USERS = ["elahw.06"];
+
+// 📌 관리자 패널(좌측)을 띄울 경로 — /admin 하위 + 관리자만 쓰는 외부 페이지들
+const ADMIN_SURFACE_PATHS = ["/write", "/code", "/payouts"];
+// ?admin=1 일 때만 관리자 화면이 되는 페이지
+const ADMIN_QUERY_PATHS = ["/support", "/recruit"];
 
 // 📌 페이지 전환 시 상단 크림슨 프로그레스 바
 function RouteProgress({ pathname }: { pathname: string }) {
@@ -72,6 +78,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const hasScrimRole = userSession?.hasScrimRole;
   const isBooster = userSession?.isBooster || false;
   const isAdmin = status === "authenticated" && userSession?.name && ADMIN_USERS.includes(userSession.name);
+
+  // 📌 관리자 패널 표시 여부 — 관리자 전용 화면에서만 좌측 패널을 붙인다
+  const isAdminSurface =
+    isAdmin &&
+    (pathname?.startsWith("/admin") ||
+      ADMIN_SURFACE_PATHS.includes(pathname || "") ||
+      (ADMIN_QUERY_PATHS.includes(pathname || "") && searchParams.get("admin") === "1"));
 
   const [isCodeSubmitting, setIsCodeSubmitting] = useState(false);
 
@@ -479,6 +492,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               <p className="text-sm text-gray-400 leading-relaxed mb-8">현재 사이트 점검이 진행 중입니다.<br />잠시 후 다시 방문해 주세요.</p>
               <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="inline-block px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드에서 소식 받기</a>
             </div>
+          </div>
+        ) : isAdminSurface ? (
+          /* 📌 관리자 화면 — 좌측 패널(데스크톱) / 상단 칩 바(모바일) + 콘텐츠 */
+          <div className="w-full flex-1 flex flex-col lg:flex-row">
+            <AdminNav />
+            <div className="flex-1 min-w-0 flex flex-col">{children}</div>
           </div>
         ) : (
           children

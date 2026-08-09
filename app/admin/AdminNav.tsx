@@ -38,8 +38,12 @@ const NAV_GROUPS: NavGroup[] = [
         title: "레벨 대시보드",
         href: "/admin/bot",
         children: [
+          { title: "기본 정책", href: "/admin/bot?tab=settings" },
           { title: "역할 설정", href: "/admin/bot?tab=roles" },
-          { title: "채널·카테고리 정책", href: "/admin/bot?tab=channels" },
+          { title: "채널·카테고리", href: "/admin/bot?tab=channels" },
+          { title: "기간제 부스트", href: "/admin/bot?tab=boosts" },
+          { title: "리더보드", href: "/admin/bot?tab=leaderboard" },
+          { title: "XP 로그", href: "/admin/bot?tab=logs" },
         ],
       },
       { title: "XP 지급 대기열", href: "/payouts" },
@@ -55,13 +59,19 @@ export default function AdminNav() {
 
   if (!isAdmin) return null;
 
-  // 관리자 영역 내 경로만 활성 표시 (외부 페이지는 패널이 없으므로 무의미)
+  // 경로 + 구분용 쿼리(tab/category)까지 일치해야 활성
   const isActive = (href: string) => {
     const [path, query] = href.split("?");
-    if (!path.startsWith("/admin") || pathname !== path) return false;
-    const wantTab = new URLSearchParams(query || "").get("tab");
-    if (wantTab == null) return true;
-    return (searchParams.get("tab") || "roles") === wantTab;
+    if (pathname !== path) return false;
+
+    const want = new URLSearchParams(query || "");
+    const wantTab = want.get("tab");
+    if (wantTab != null) return (searchParams.get("tab") || "settings") === wantTab;
+
+    const wantCategory = want.get("category");
+    if (wantCategory != null) return searchParams.get("category") === wantCategory;
+
+    return true;
   };
 
   const linkClass = (active: boolean, child = false) =>

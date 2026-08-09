@@ -1,8 +1,9 @@
-// ── 음성 XP (5분 주기 지급) ──────────────────
+// ── 음성 XP (설정된 주기마다 지급) ──────────────────
 import { UserXp } from "../db.js";
 import { getVoiceBracketBonus } from "../leveling.js";
 import { getBuffXp } from "../roleConfigs.js";
 import { getChannelPolicy } from "../channelConfigs.js";
+import { getSettings, getActiveBoostXp, getMuteMultiplier } from "../botSettings.js";
 import { grantXp } from "../xp.js";
 import { config, policy } from "../config.js";
 
@@ -11,6 +12,7 @@ async function voiceXpTick(client) {
     const guild = client.guilds.cache.get(config.guildId);
     if (!guild) return;
 
+    const s = getSettings();
     const afkChannelId = guild.afkChannelId;
 
     for (const [, voiceState] of guild.voiceStates.cache) {
@@ -23,22 +25,44 @@ async function voiceXpTick(client) {
       const channelPolicy = getChannelPolicy(channel);
       if (channelPolicy.excluded) continue;
 
-      const base = config.scrimChannelIds.has(channel.id) ? policy.scrimBaseXp : policy.voiceBaseXp;
+      // 음소거 정책 — block이면 지급 자체를 건너뜀
+      const muteMultiplier = getMuteMultiplier(voiceState);
+      if (muteMultiplier === 0) continue;
+
+      // 내전 채널은 env 설정이 있을 때만 별도 기본값 사용
+      const base = config.scrimChannelIds.has(channel.id) ? policy.scrimBaseXp : s.voiceXp;
       const doc = await UserXp.findOne({ userId: member.id }, { level: 1 }).lean();
-      let amount = base + getVoiceBracketBonus(doc?.level || 0) + getBuffXp(member) + channelPolicy.boostXp;
 
-      // 마이크 & 헤드셋 모두 음소거 시 90% 감소
-      if (voiceState.selfMute && voiceState.selfDeaf) {
-        amount = Math.floor(amount * policy.mutedMultiplier);
-      }
+      const amount = Math.floor(
+        (base + getVoiceBracketBonus(doc?.level || 0) + getBuffXp(member) + channelPolicy.boostXp + getActiveBoostXp(member)) *
+          muteMultiplier
+      );
 
-      await grantXp(member, amount);
+      await grantXp(member, amount, {
+        reason: "voice",
+        channelId: channel.id,
+        channelName: channel.name || "",
+      });
     }
   } catch (e) {
     console.error("음성 XP 오류:", e.message);
   }
 }
 
+// 설정된 주기로 루프를 돌리고, 주기가 바뀌면 타이머를 다시 건다
 export function startVoiceXpLoop(client) {
-  setInterval(() => voiceXpTick(client), policy.voiceIntervalMs);
+  let timer = null;
+  let currentSec = 0;
+
+  const ensureTimer = () => {
+    const sec = getSettings().voiceIntervalSec || 300;
+    if (sec === currentSec) return;
+    currentSec = sec;
+    if (timer) clearInterval(timer);
+    timer = setInterval(() => voiceXpTick(client), sec * 1000);
+    console.log(`🔊 음성 XP 주기: ${sec}초`);
+  };
+
+  ensureTimer();
+  setInterval(ensureTimer, 60 * 1000); // 대시보드에서 주기를 바꾸면 1분 내 반영
 }

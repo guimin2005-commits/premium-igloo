@@ -3,11 +3,12 @@ import { Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, MessageFlags }
 import { UserXp, isDuplicateKeyError } from "./db.js";
 import { getCumulativeXpByLevel, kstToday } from "./leveling.js";
 import { getAttendBuffXp } from "./roleConfigs.js";
+import { getSettings } from "./botSettings.js";
 import { grantXp, EMBED_COLOR, EMBED_FOOTER } from "./xp.js";
 import { config, policy } from "./config.js";
 
 const definitions = [
-  new SlashCommandBuilder().setName("출석체크").setDescription(`일일 출석체크로 ${policy.attendXp.toLocaleString()} XP를 받습니다.`),
+  new SlashCommandBuilder().setName("출석체크").setDescription("일일 출석체크로 XP를 받습니다."),
   new SlashCommandBuilder().setName("레벨").setDescription("다음 레벨까지 필요한 XP를 확인합니다."),
   new SlashCommandBuilder().setName("랭크").setDescription("내 XP, 레벨, 서버 내 순위를 확인합니다."),
 ].map((c) => c.toJSON());
@@ -37,13 +38,13 @@ async function handleAttend(interaction) {
     throw e;
   }
 
-  let amount = policy.attendXp;
+  let amount = getSettings().attendXp;
   if (config.attendBoostRoleId && interaction.member.roles.cache.has(config.attendBoostRoleId)) {
     amount += policy.attendBoostXp;
   }
   amount += getAttendBuffXp(interaction.member);
 
-  const updated = await grantXp(interaction.member, amount);
+  const updated = await grantXp(interaction.member, amount, { reason: "attend" });
 
   const embed = new EmbedBuilder()
     .setColor(EMBED_COLOR)
