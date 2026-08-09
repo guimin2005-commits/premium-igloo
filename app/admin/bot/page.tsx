@@ -198,7 +198,7 @@ export default function AdminBotPage() {
               <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Admin · Level Dashboard</span>
             </div>
             <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-4">
-              <span className="text-white">레벨 </span><span className="lux-shimmer">대시보드</span>
+              <span className="text-white">레벨 </span><span className="text-[#e91e3f]">대시보드</span>
             </h1>
             <p className="text-gray-400 text-sm md:text-base leading-relaxed">
               {tab === "roles"

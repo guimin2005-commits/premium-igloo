@@ -102,7 +102,7 @@ export default function AdminHonorsPage() {
               <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Admin · Hall of Fame</span>
             </div>
             <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-4">
-              <span className="text-white">명예의 전당 </span><span className="lux-shimmer">관리</span>
+              <span className="text-white">명예의 전당 </span><span className="text-[#e91e3f]">관리</span>
             </h1>
             <p className="text-gray-400 text-sm md:text-base leading-relaxed">LEVEL 시즌 1등, 이벤트 우승 등 대회 외 기록을 직접 등재합니다. (대회 우승은 대회 글의 &lsquo;우승팀&rsquo; 필드로 자동 등재)</p>
           </Reveal>
