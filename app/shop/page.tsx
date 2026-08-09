@@ -88,20 +88,14 @@ export default function ShopPage() {
 
   // ARCTIC 헤더 — 알림·프로필 드롭다운
   const [showNotif, setShowNotif] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [showMobileProfile, setShowMobileProfile] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
-  const profileRef = useRef<HTMLDivElement>(null);
-  const mobileProfileRef = useRef<HTMLDivElement>(null);
   const pendingOrders = orders.filter((o) => o.status === "pending").length;
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setShowNotif(false);
-      if (profileRef.current && !profileRef.current.contains(e.target as Node)) setShowProfile(false);
-      if (mobileProfileRef.current && !mobileProfileRef.current.contains(e.target as Node)) setShowMobileProfile(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
@@ -457,48 +451,15 @@ export default function ShopPage() {
 
             {isLoggedIn ? (
               <>
-                {/* 프로필 — 클릭 시 메뉴 */}
-                <div className="relative ml-1 shrink-0 hidden md:block" ref={profileRef}>
-                  <button onClick={() => setShowProfile(!showProfile)} aria-label="내 메뉴" aria-expanded={showProfile} className="flex items-center justify-center">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={session?.user?.image || ""} alt=""
-                      className={`w-8 h-8 rounded-full bg-[#e2e0dc] ring-1 transition-all ${showProfile ? "ring-[#131313]" : "ring-[#e2e0dc] hover:ring-[#a3a3a3]"}`} />
-                  </button>
-                  {showProfile && (
-                    <div className="absolute top-[46px] right-0 w-[250px] rounded-2xl bg-white border border-[#e2e0dc] shadow-[0_24px_50px_-16px_rgba(0,0,0,0.28)] p-4 z-50"
-                      style={{ animation: "menuDrop 0.28s cubic-bezier(0.16,1,0.3,1)" }}>
-                      <div className="flex items-center gap-3 pb-3 mb-2 border-b border-[#ececea]">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={session?.user?.image || ""} alt="" className="w-11 h-11 rounded-full bg-[#e2e0dc]" />
-                        <div className="min-w-0">
-                          <div className="text-sm font-black text-[#131313] truncate">{session?.user?.name}</div>
-                          <div className="text-[11px] font-bold text-[#8a8a8a]">Lv.{myLevel} · {(myXp ?? 0).toLocaleString()} XP</div>
-                        </div>
-                      </div>
-                      <Link href="/shop/orders" onClick={() => setShowProfile(false)}
-                        className="block px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
-                        구매 내역{orders.length > 0 ? ` ${orders.length}` : ""}
-                      </Link>
-                      <button onClick={() => { setShowProfile(false); setShowWishList(true); }}
-                        className="w-full text-left px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
-                        찜한 상품{wish.length > 0 ? ` ${wish.length}` : ""}
-                      </button>
-                      <Link href="/shop/me" onClick={() => setShowProfile(false)}
-                        className="block px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
-                        내 정보
-                      </Link>
-                      <Link href="/level" onClick={() => setShowProfile(false)}
-                        className="block px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
-                        SYSTEM : LEVEL
-                      </Link>
-                      <div className="h-px bg-[#ececea] my-1.5"></div>
-                      <Link href="/" onClick={() => setShowProfile(false)}
-                        className="block px-3 py-2.5 text-[13px] font-bold text-[#e91e3f] hover:bg-[#e91e3f]/[0.07] rounded-xl transition-colors">
-                        고급 이글루로 돌아가기
-                      </Link>
-                    </div>
+                {/* 프로필 — 내 정보 페이지로 */}
+                <Link href="/shop/me" aria-label="내 정보" className="relative ml-1 shrink-0 hidden md:flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={session?.user?.image || ""} alt=""
+                    className="w-8 h-8 rounded-full bg-[#e2e0dc] ring-1 ring-[#e2e0dc] hover:ring-[#131313] transition-all" />
+                  {pendingOrders > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#e91e3f] ring-2 ring-white"></span>
                   )}
-                </div>
+                </Link>
 
                 {/* 찜 — 찜한 상품 목록 열기 */}
                 <button
@@ -1085,69 +1046,23 @@ export default function ShopPage() {
           )}
         </Link>
 
-        {/* 5. 프로필 */}
-        <div className="relative flex items-center justify-center" ref={mobileProfileRef}>
-          <button onClick={() => setShowMobileProfile(!showMobileProfile)} aria-label="내 메뉴"
+        {/* 5. 프로필 — 내 정보 페이지로 */}
+        {isLoggedIn ? (
+          <Link href="/shop/me" aria-label="내 정보"
             className="relative flex items-center justify-center py-2 transition-all active:scale-95">
-            {isLoggedIn ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={session?.user?.image || ""} alt=""
-                className={`w-[22px] h-[22px] rounded-full bg-[#e2e0dc] ring-1 transition-all ${showMobileProfile ? "ring-[#131313]" : "ring-transparent"}`} />
-            ) : (
-              <svg className="w-[19px] h-[19px] text-[#8a8a8a]" fill="none" viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-              </svg>
-            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={session?.user?.image || ""} alt=""
+              className="w-[22px] h-[22px] rounded-full bg-[#e2e0dc] ring-1 ring-transparent" />
             {pendingOrders > 0 && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#e91e3f] ring-2 ring-white"></span>}
+          </Link>
+        ) : (
+          <button onClick={() => signIn("discord")} aria-label="로그인"
+            className="flex items-center justify-center py-2 text-[#8a8a8a] active:text-[#131313] transition-all active:scale-95">
+            <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            </svg>
           </button>
-
-          {showMobileProfile && (
-            <div className="absolute bottom-[52px] right-0 w-[230px] rounded-2xl bg-white border border-[#e2e0dc] shadow-[0_-16px_40px_-14px_rgba(0,0,0,0.28)] p-3"
-              style={{ animation: "menuDrop 0.28s cubic-bezier(0.16,1,0.3,1)" }}>
-              {isLoggedIn ? (
-                <>
-                  {/* 보유 XP — 모바일은 우측 카드가 없어 여기서 보여준다 */}
-                  <div className="px-3 py-2.5 mb-2 rounded-xl bg-[#f5f3f0]">
-                    <div className="text-[12px] font-black text-[#131313] truncate mb-1.5">{session?.user?.name}</div>
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-[17px] font-black text-[#131313] tabular-nums leading-none">
-                        {(myXp ?? 0).toLocaleString()}<span className="text-[10px] font-bold text-[#e91e3f] ml-1">XP</span>
-                      </span>
-                      <span className="text-[11px] font-bold text-[#8a8a8a]">Lv.{myLevel}</span>
-                    </div>
-                    {myProgress && myProgress.required > 0 && (
-                      <div className="mt-2">
-                        <div className="h-1 rounded-full bg-[#e2e0dc] overflow-hidden">
-                          <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77]"
-                            style={{ width: `${Math.min(100, Math.round((myProgress.current / myProgress.required) * 100))}%` }}></div>
-                        </div>
-                        <p className="mt-1 text-[10px] font-bold text-[#8a8a8a]">
-                          다음 레벨까지 {myProgress.needToNext.toLocaleString()} XP
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <Link href="/shop/orders" onClick={() => setShowMobileProfile(false)}
-                    className="flex items-center justify-between px-2 py-2 text-[13px] font-bold text-[#4b4b4b] hover:bg-[#f5f3f0] rounded-lg transition-colors">
-                    구매 내역
-                    {pendingOrders > 0 && <span className="px-1.5 py-0.5 rounded-full bg-[#e91e3f] text-white text-[9px] font-black">{pendingOrders}</span>}
-                  </Link>
-                  <Link href="/shop/me" onClick={() => setShowMobileProfile(false)}
-                    className="block px-2 py-2 text-[13px] font-bold text-[#4b4b4b] hover:bg-[#f5f3f0] rounded-lg transition-colors">내 정보</Link>
-                  <Link href="/level" onClick={() => setShowMobileProfile(false)}
-                    className="block px-2 py-2 text-[13px] font-bold text-[#4b4b4b] hover:bg-[#f5f3f0] rounded-lg transition-colors">SYSTEM : LEVEL</Link>
-                  <div className="h-px bg-[#ececea] my-1.5"></div>
-                  <Link href="/" onClick={() => setShowMobileProfile(false)}
-                    className="block px-2 py-2 text-[13px] font-bold text-[#e91e3f] hover:bg-[#e91e3f]/[0.07] rounded-lg transition-colors">고급 이글루로</Link>
-                </>
-              ) : (
-                <button onClick={() => signIn("discord")}
-                  className="w-full py-2.5 rounded-lg bg-[#5865F2] text-white text-[12px] font-bold">디스코드 로그인</button>
-              )}
-            </div>
-          )}
-        </div>
+        )}
       </nav>
 
       {/* ── 모바일 검색 시트 ── */}

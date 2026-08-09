@@ -70,6 +70,28 @@ export default function ShopMePage() {
 
   const removeWish = (id: string) => setWish((prev) => prev.filter((x) => x !== id));
 
+  // 장바구니 — 로컬 보관분을 최신 상품 정보와 합쳐 보여준다
+  const [cart, setCart] = useState<{ itemId: string; qty: number }[]>([]);
+  const [cartLoaded, setCartLoaded] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("iglooShopCart");
+      if (raw) setCart(JSON.parse(raw));
+    } catch {}
+    setCartLoaded(true);
+  }, []);
+  useEffect(() => {
+    if (!cartLoaded) return;
+    try { localStorage.setItem("iglooShopCart", JSON.stringify(cart)); } catch {}
+  }, [cart, cartLoaded]);
+
+  const cartRows = useMemo(
+    () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item),
+    [cart, items]
+  );
+  const cartTotal = cartRows.reduce((n, r) => n + salePrice(r.item) * r.qty, 0);
+  const removeFromCart = (id: string) => setCart((prev) => prev.filter((c) => c.itemId !== id));
+
   // 쿠폰 코드 등록 — 내 지갑에 담는다
   const [codeInput, setCodeInput] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
@@ -210,30 +232,98 @@ export default function ShopMePage() {
           <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
             <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
               <h2 className="text-sm font-black text-[#131313]">주문 내역 {orders.length > 0 && <span className="text-[#e91e3f]">{orders.length}</span>}</h2>
-              {orders.length > 5 && (
-                <Link href="/shop/orders" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">전체 보기</Link>
+              {orders.length > 0 && (
+                <Link href="/shop/orders" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">자세히 보기</Link>
               )}
             </div>
             {orders.length === 0 ? (
-              <p className="px-5 py-12 text-center text-xs text-[#8a8a8a]">아직 구매한 상품이 없습니다.</p>
+              <p className="px-5 py-12 text-center text-xs text-[#8a8a8a] break-keep">아직 구매한 상품이 없습니다.</p>
             ) : (
               <div className="divide-y divide-[#ececea] max-h-[320px] overflow-y-auto">
                 {orders.slice(0, 8).map((o) => {
                   const meta = STATUS_META[o.status] || STATUS_META.pending;
                   return (
-                    <div key={o._id} className="px-5 py-3.5 flex items-center gap-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black shrink-0 ${meta.cls}`}>{meta.label}</span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-bold text-[#131313] truncate">{o.itemName}</p>
-                        <p className="text-[10px] text-[#a3a3a3]">{TYPE_LABEL[o.itemType] || "상품"} · {fmtDate(o.createdAt)}</p>
+                    <div key={o._id} className="px-5 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black shrink-0 ${meta.cls}`}>{meta.label}</span>
+                        <div className="min-w-0 flex-1">
+                          <Link href={`/shop/item/${o.itemId}`}
+                            className="block text-[13px] font-bold text-[#131313] truncate hover:text-[#e91e3f] transition-colors">
+                            {o.itemName}
+                          </Link>
+                          <p className="text-[10px] text-[#a3a3a3]">{TYPE_LABEL[o.itemType] || "상품"} · {fmtDate(o.createdAt)}</p>
+                        </div>
+                        <span className={`text-[12px] font-black tabular-nums shrink-0 ${o.status === "cancelled" ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>
+                          -{(o.price || 0).toLocaleString()} XP
+                        </span>
                       </div>
-                      <span className={`text-[12px] font-black tabular-nums shrink-0 ${o.status === "cancelled" ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>
-                        -{(o.price || 0).toLocaleString()}
-                      </span>
+
+                      {/* 처리 상황 */}
+                      {o.contact && (
+                        <p className="mt-2 text-[10px] text-[#8a8a8a] truncate break-keep">수령 정보 · {o.contact}</p>
+                      )}
+                      {o.adminNote && (
+                        <p className="mt-1.5 text-[10px] text-[#3f7a35] bg-[#e8f3e6] rounded px-2 py-1 break-keep">운영진 메모 · {o.adminNote}</p>
+                      )}
+                      {o.error && (
+                        <p className="mt-1.5 text-[10px] text-[#c62828] bg-[#fdeaea] rounded px-2 py-1 break-keep">지급 실패 · {o.error}</p>
+                      )}
                     </div>
                   );
                 })}
               </div>
+            )}
+          </div>
+
+          {/* 장바구니 */}
+          <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
+              <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
+                <svg className="w-3.5 h-3.5 text-[#131313]" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                </svg>
+                장바구니 {cartRows.length > 0 && <span className="text-[#e91e3f]">{cartRows.length}</span>}
+              </h2>
+              {cartRows.length > 0 && (
+                <Link href="/shop/cart" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">자세히 보기</Link>
+              )}
+            </div>
+            {cartRows.length === 0 ? (
+              <p className="px-5 py-12 text-center text-xs text-[#8a8a8a] break-keep">장바구니가 비어 있습니다.</p>
+            ) : (
+              <>
+                <div className="divide-y divide-[#ececea] max-h-[260px] overflow-y-auto">
+                  {cartRows.map((r) => (
+                    <div key={r.itemId} className="px-5 py-3.5 flex items-center gap-3">
+                      <Link href={`/shop/item/${r.item._id}`} className="w-11 h-11 rounded-lg bg-[#eceae6] overflow-hidden shrink-0">
+                        {r.item.imageUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
+                        )}
+                      </Link>
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/shop/item/${r.item._id}`}
+                          className="block text-[13px] font-bold text-[#131313] truncate hover:text-[#e91e3f] transition-colors">
+                          {r.item.name}
+                        </Link>
+                        <p className="text-[11px] font-black text-[#131313] tabular-nums">{salePrice(r.item).toLocaleString()} XP</p>
+                      </div>
+                      <button onClick={() => removeFromCart(r.itemId)}
+                        className="px-3 py-1 text-[10px] font-bold text-[#a3a3a3] hover:text-[#c62828] transition-colors shrink-0">삭제</button>
+                    </div>
+                  ))}
+                </div>
+                <div className="px-5 py-4 border-t border-[#ececea] flex items-center justify-between gap-3">
+                  <div className="text-[12px]">
+                    <span className="text-[#5a5a5a]">합계 </span>
+                    <span className="font-black text-[#131313] tabular-nums">{cartTotal.toLocaleString()} XP</span>
+                  </div>
+                  <Link href="/shop/cart"
+                    className="px-5 py-2.5 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[12px] font-bold transition-colors shrink-0">
+                    결제하러 가기
+                  </Link>
+                </div>
+              </>
             )}
           </div>
 
