@@ -523,7 +523,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">Discord</a>
               <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">Kakao Talk</a>
               <Link href="/faq" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">FAQ</Link>
-              <Link href="/policy" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">이용약관 및 개인정보처리방침</Link>
+              <Link href="/policy" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">이용약관</Link>
+              <Link href="/policy?tab=privacy" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">개인정보처리방침</Link>
             </div>
           </div>
           <div className="h-px w-full bg-gradient-to-r from-white/10 via-white/5 to-transparent mb-6"></div>
@@ -712,7 +713,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 active:text-white transition-colors font-medium">Kakao Talk</a>
               </div>
 
-              <Link href="/policy" onClick={closeMobileMenu} className="block px-3 pt-3 pb-1 text-[11px] text-gray-600 active:text-gray-400 transition-colors">이용약관 및 개인정보처리방침</Link>
+              <div className="flex items-center gap-3 px-3 pt-3 pb-1">
+                <Link href="/policy" onClick={closeMobileMenu} className="text-[11px] text-gray-600 active:text-gray-400 transition-colors">이용약관</Link>
+                <span className="w-px h-2.5 bg-white/10"></span>
+                <Link href="/policy?tab=privacy" onClick={closeMobileMenu} className="text-[11px] text-gray-600 active:text-gray-400 transition-colors">개인정보처리방침</Link>
+              </div>
             </div>
           </div>
         </div>

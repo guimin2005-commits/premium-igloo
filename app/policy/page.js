@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Reveal, LuxStyles } from "../components/Lux";
 
 const Article = ({ title, children }) => (
@@ -46,8 +47,13 @@ const Addendum = ({ date }) => (
   </Reveal>
 );
 
-export default function PolicyPage() {
-  const [tab, setTab] = useState("terms");
+// 📌 푸터의 '이용약관' / '개인정보처리방침' 분리 링크가 ?tab= 으로 원하는 탭에 바로 진입한다
+const VALID_TABS = ["terms", "privacy", "tournament", "scrim"];
+
+function PolicyContent() {
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const [tab, setTab] = useState(VALID_TABS.includes(initialTab) ? initialTab : "terms");
 
   return (
     <main className="w-full flex-1 flex flex-col relative">
@@ -249,5 +255,14 @@ export default function PolicyPage() {
       )}
       </div>
     </main>
+  );
+}
+
+// useSearchParams는 정적 렌더링에서 Suspense 경계가 필요하다
+export default function PolicyPage() {
+  return (
+    <Suspense fallback={null}>
+      <PolicyContent />
+    </Suspense>
   );
 }
