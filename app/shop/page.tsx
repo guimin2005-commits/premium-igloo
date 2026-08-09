@@ -371,7 +371,8 @@ export default function ShopPage() {
   if (!shopPublic && !isAdmin) {
     return (
       <div className="w-full flex-1 bg-[#f5f3f0] text-[#131313] min-h-screen flex items-center justify-center px-6">
-        <div className="text-center max-w-sm">
+        {/* break-keep을 주지 않으면 한국어가 단어 중간에서 잘려 내려간다 */}
+        <div className="text-center max-w-md break-keep">
           <div className="flex items-center justify-center gap-3 mb-5">
             <span className="w-8 h-px bg-[#e91e3f]"></span>
             <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Coming Soon</span>
@@ -379,7 +380,9 @@ export default function ShopPage() {
           </div>
           <h1 className="text-3xl font-black tracking-tighter mb-3">ARCTIC 준비 중</h1>
           <p className="text-sm text-[#4b4b4b] leading-relaxed mb-8">
-            쌓아온 XP로 역할과 혜택을 교환할 수 있는 상점을 준비하고 있습니다.<br />오픈 소식은 공지사항으로 안내드릴게요.
+            쌓아온 XP로 역할과 혜택을 교환할 수 있는 상점을 준비하고 있습니다.
+            <br />
+            오픈 소식은 공지사항으로 안내드릴게요.
           </p>
           <Link href="/level" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
             SYSTEM : LEVEL 보러가기
@@ -533,7 +536,7 @@ export default function ShopPage() {
       <section className="w-full bg-gradient-to-b from-[#eceae6] to-[#f5f3f0] border-b border-[#e2e0dc]">
         <div className="max-w-6xl mx-auto px-6 pt-14 pb-10">
           {/* 중앙 — 타이틀 */}
-          <div className="text-center">
+          <div className="text-center break-keep">
             <div className="flex items-center justify-center gap-3 mb-4">
               <span className="w-8 h-px bg-[#8a8a8a]"></span>
               <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Premium Igloo SHOP</span>
@@ -724,7 +727,7 @@ export default function ShopPage() {
         {isLoading ? (
           <div className="py-24 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
         ) : visible.length === 0 ? (
-          <div className="py-24 text-center">
+          <div className="py-24 text-center break-keep">
             <p className="text-sm font-bold text-[#4b4b4b] mb-1">조건에 맞는 상품이 없습니다.</p>
             <p className="text-xs text-[#8a8a8a]">필터를 조정하거나 다른 검색어를 입력해보세요.</p>
           </div>
@@ -977,7 +980,7 @@ export default function ShopPage() {
 
             <div className="overflow-y-auto">
               {wishRows.length === 0 ? (
-                <div className="py-16 text-center px-6">
+                <div className="py-16 text-center px-6 break-keep">
                   <p className="text-sm font-bold text-[#131313] mb-1.5">찜한 상품이 없습니다</p>
                   <p className="text-xs text-[#8a8a8a]">상품 카드의 하트를 눌러 담아보세요.</p>
                 </div>

@@ -89,7 +89,7 @@ export default function CartPage() {
     return (
       <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen">
         <ArcticHeader />
-        <div className="py-32 text-center px-6">
+        <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">장바구니를 보려면 로그인해주세요.</p>
           <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
@@ -115,7 +115,7 @@ export default function CartPage() {
         </div>
 
         {rows.length === 0 ? (
-          <div className="py-24 text-center bg-white rounded-2xl border border-[#e2e0dc]">
+          <div className="py-24 text-center break-keep bg-white rounded-2xl border border-[#e2e0dc]">
             <div className="w-14 h-14 mx-auto rounded-full bg-[#f5f3f0] flex items-center justify-center mb-5 text-[#c4c4c4]">
               <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />

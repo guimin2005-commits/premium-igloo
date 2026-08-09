@@ -64,7 +64,7 @@ export default function OrdersPage() {
     return (
       <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen">
         <ArcticHeader />
-        <div className="py-32 text-center px-6">
+        <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">구매 내역을 보려면 로그인해주세요.</p>
           <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
@@ -111,7 +111,7 @@ export default function OrdersPage() {
         )}
 
         {shown.length === 0 ? (
-          <div className="py-24 text-center bg-white rounded-2xl border border-[#e2e0dc]">
+          <div className="py-24 text-center break-keep bg-white rounded-2xl border border-[#e2e0dc]">
             <p className="text-sm font-bold text-[#131313] mb-1.5">
               {orders.length === 0 ? "아직 구매한 상품이 없습니다" : "해당 상태의 주문이 없습니다"}
             </p>

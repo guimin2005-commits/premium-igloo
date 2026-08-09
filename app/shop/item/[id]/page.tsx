@@ -86,7 +86,7 @@ export default function ItemDetailPage() {
     return (
       <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen">
         <ArcticHeader />
-        <div className="py-32 text-center px-6">
+        <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">상품을 찾을 수 없습니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">삭제되었거나 판매가 종료된 상품일 수 있어요.</p>
           <Link href="/shop" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">

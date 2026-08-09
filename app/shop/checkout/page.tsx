@@ -157,7 +157,7 @@ export default function CheckoutPage() {
   if (!isLoggedIn) {
     return (
       <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen flex items-center justify-center px-6">
-        <div className="text-center">
+        <div className="text-center break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">결제하려면 로그인해주세요.</p>
           <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
@@ -200,7 +200,7 @@ export default function CheckoutPage() {
   if (rows.length === 0) {
     return (
       <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen flex items-center justify-center px-6">
-        <div className="text-center">
+        <div className="text-center break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">장바구니가 비어 있습니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">상점에서 마음에 드는 상품을 담아보세요.</p>
           <Link href="/shop" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">상점으로 가기</Link>

@@ -140,7 +140,7 @@ export default function ShopMePage() {
     return (
       <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen">
         <ArcticHeader />
-        <div className="py-32 text-center px-6">
+        <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">내 정보를 보려면 로그인해주세요.</p>
           <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
@@ -197,7 +197,7 @@ export default function ShopMePage() {
               { n: pendingCount, l: "처리 대기", accent: pendingCount > 0 },
               { n: totalSpent, l: "사용한 XP" },
             ].map((s, i) => (
-              <div key={i} className="text-center">
+              <div key={i} className="text-center break-keep">
                 <div className={`text-lg font-black tabular-nums ${s.accent ? "text-[#e91e3f]" : "text-[#131313]"}`}>{s.n.toLocaleString()}</div>
                 <div className="text-[10px] font-bold tracking-[0.12em] text-[#8a8a8a] mt-0.5 uppercase">{s.l}</div>
               </div>
