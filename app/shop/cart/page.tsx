@@ -112,9 +112,6 @@ export default function CartPage() {
           <h1 className="text-3xl md:text-4xl font-black tracking-tighter">
             장바구니 {rows.length > 0 && <span className="text-[#e91e3f]">{rows.length}</span>}
           </h1>
-          {rows.length > 0 && (
-            <button onClick={clearCart} className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#c62828] transition-colors">전체 비우기</button>
-          )}
         </div>
 
         {rows.length === 0 ? (
@@ -144,9 +141,16 @@ export default function CartPage() {
                   </span>
                   전체 선택 <span className="text-[#8a8a8a] font-medium">({picked.length}/{rows.length})</span>
                 </button>
-                {picked.length > 0 && picked.length < rows.length && (
-                  <span className="text-[11px] font-bold text-[#e91e3f]">선택한 {picked.length}개만 결제됩니다</span>
-                )}
+                <div className="flex items-center gap-3">
+                  {picked.length > 0 && picked.length < rows.length && (
+                    <span className="hidden sm:inline text-[11px] font-bold text-[#e91e3f]">선택한 {picked.length}개만 결제</span>
+                  )}
+                  {picked.length > 0 && picked.length < rows.length && (
+                    <button onClick={() => setCart((prev) => prev.filter((c) => !selected.includes(c.itemId)))}
+                      className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#c62828] transition-colors">선택 삭제</button>
+                  )}
+                  <button onClick={clearCart} className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#c62828] transition-colors">전체 비우기</button>
+                </div>
               </div>
 
               <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden divide-y divide-[#ececea]">

@@ -134,9 +134,10 @@ export default function ShopPage() {
       setTimeout(() => setCartToast(""), 1800);
       return;
     }
-    // 이미 담겨 있으면 그대로 (1인 1개)
+    // 이미 담겨 있으면 다시 눌러 뺀다 (상품은 1인 1개라 수량 개념이 없다)
     if (cart.some((c) => c.itemId === item._id)) {
-      setCartToast("이미 장바구니에 있습니다");
+      setCart((prev) => prev.filter((c) => c.itemId !== item._id));
+      setCartToast(`${item.name} 뺐습니다`);
       setTimeout(() => setCartToast(""), 1800);
       return;
     }
@@ -738,9 +739,11 @@ export default function ShopPage() {
                 <div key={it._id} className="group bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
                   {/* 이미지 */}
                   <div className="relative aspect-[4/3] bg-[#eceae6] overflow-hidden">
+                    {/* 상세로 가는 오버레이 — 위에 얹힌 버튼(z-10)은 그대로 눌린다 */}
+                    <Link href={`/shop/item/${it._id}`} aria-label={`${it.name} 상세보기`} className="absolute inset-0 z-[1]"></Link>
                     {it.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={it.imageUrl} alt={it.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <img src={it.imageUrl} alt={it.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[#c4c4c4]">
                         <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor">
@@ -767,7 +770,7 @@ export default function ShopPage() {
                       </svg>
                     </button>
                     {soldOut && (
-                      <div className="absolute inset-0 bg-[#131313]/55 flex items-center justify-center">
+                      <div className="absolute inset-0 z-[2] bg-[#131313]/55 flex items-center justify-center pointer-events-none">
                         <span className="text-sm font-black text-white tracking-wider">SOLD OUT</span>
                       </div>
                     )}
@@ -789,7 +792,9 @@ export default function ShopPage() {
 
                   {/* 정보 */}
                   <div className="p-3.5 sm:p-5 flex flex-col flex-1">
-                    <h3 className="text-[13px] sm:text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep line-clamp-2">{it.name}</h3>
+                    <Link href={`/shop/item/${it._id}`} className="block">
+                      <h3 className="text-[13px] sm:text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep line-clamp-2 hover:text-[#e91e3f] transition-colors">{it.name}</h3>
+                    </Link>
                     {it.description && (
                       <p className="hidden sm:block text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep">{it.description}</p>
                     )}
@@ -815,7 +820,8 @@ export default function ShopPage() {
                         <button
                           onClick={() => addToCart(it)}
                           disabled={soldOut || owned}
-                          aria-label="장바구니 담기"
+                          aria-label={inCart ? "장바구니에서 빼기" : "장바구니 담기"}
+                          title={inCart ? "다시 누르면 장바구니에서 빠집니다" : "장바구니에 담기"}
                           className={`w-8 h-8 sm:w-11 sm:h-11 shrink-0 rounded-full flex items-center justify-center transition-all ${
                             soldOut || owned
                               ? "bg-[#eceae6] text-[#c4c4c4] cursor-not-allowed"
