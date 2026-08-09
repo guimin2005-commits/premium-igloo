@@ -146,9 +146,20 @@ export default function HallOfFamePage() {
             </div>
             <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-none mb-5">
               <span className="text-white">명예의 </span>
-              <span style={{ color: GOLD, textShadow: `0 0 40px ${GOLD}55` }}>전당</span>
+              {/* 금속판에 새긴 듯한 메탈릭 골드 그라디언트 */}
+              <span style={{
+                background: "linear-gradient(180deg, #f7e7a0 0%, #d4af37 48%, #8f6f1c 100%)",
+                WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+                filter: `drop-shadow(0 0 28px ${GOLD}40)`,
+              }}>전당</span>
             </h1>
             <p className="text-gray-400 text-sm md:text-base leading-relaxed">고급 이글루의 역사를 기록합니다.</p>
+            {/* 정적 오너먼트 — 격식 있는 마침표 */}
+            <div className="flex items-center justify-center gap-3 mt-8">
+              <span className="h-px w-20" style={{ background: `linear-gradient(90deg, transparent, ${GOLD}59)` }}></span>
+              <span className="text-[9px]" style={{ color: `${GOLD}b3` }}>✦</span>
+              <span className="h-px w-20" style={{ background: `linear-gradient(270deg, transparent, ${GOLD}59)` }}></span>
+            </div>
           </Reveal>
         </div>
       </section>
@@ -164,58 +175,110 @@ export default function HallOfFamePage() {
             <Link href="/tournament" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">진행 중인 대회 보기</Link>
           </div>
         ) : (
-          <div className="border-t border-white/10">
-            {champions.map((c, idx) => {
-              const [sy, ey] = getYears(c);
-              const latest = idx === 0;
+          <div>
+            {/* ── 최신 우승 — 골드 명판(plaque)으로 격상 ── */}
+            {(() => {
+              const c = champions[0];
+              const [sy] = getYears(c);
               const members = parseIds(c.winnerId).map((id) => profiles[id]).filter(Boolean);
               return (
-                <Reveal key={c._id} delay={Math.min(idx, 6) * 50}>
-                  <div className="py-9 md:py-11 border-b border-white/10 flex flex-col md:flex-row md:gap-12 group">
-                    {/* 연도 */}
-                    <div className="md:w-32 shrink-0 mb-4 md:mb-0 flex items-baseline gap-2 md:block">
-                      <span className="text-4xl md:text-5xl font-black tracking-tighter text-white/[0.16] group-hover:text-white/25 transition-colors tabular-nums leading-none">{sy}</span>
-                      {ey && <span className="text-base md:text-lg font-black tracking-tighter text-white/[0.12] md:block">–{ey}</span>}
-                    </div>
+                <Reveal>
+                  <div className="relative p-px rounded-3xl mb-14" style={{ background: `linear-gradient(160deg, ${GOLD}66, ${GOLD}14 45%, ${GOLD}4d)` }}>
+                    <div className="relative rounded-3xl px-7 py-9 md:px-12 md:py-12 overflow-hidden" style={{ background: "#0b0a06" }}>
+                      <div className="absolute -top-24 right-[-70px] w-80 h-52 rounded-full pointer-events-none" style={{ background: `${GOLD}12`, filter: "blur(80px)" }}></div>
+                      <span aria-hidden className="absolute -top-3 right-6 text-[120px] md:text-[160px] font-black leading-none select-none pointer-events-none tabular-nums" style={{ color: `${GOLD}0f` }}>{sy}</span>
+                      <div className="relative">
+                        <div className="flex items-center gap-3 mb-7 min-w-0">
+                          <span className="text-[9px] shrink-0" style={{ color: GOLD }}>✦</span>
+                          <span className="text-[10px] font-black tracking-[0.4em] uppercase shrink-0" style={{ color: GOLD }}>Latest Champion</span>
+                          <span className="text-[10px] font-black tracking-[0.28em] text-gray-600 uppercase truncate">{c.category}</span>
+                          <span className="ml-auto shrink-0"><AdminBtns c={c} /></span>
+                        </div>
 
-                    {/* 본문 */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2.5 mb-4">
-                        <span className="text-[10px] font-black tracking-[0.28em] text-gray-500 uppercase truncate">{c.category}</span>
-                        {latest && <span className="text-[10px] font-black tracking-[0.2em] text-[#e91e3f] uppercase shrink-0">· 최신</span>}
-                        <span className="ml-auto shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><AdminBtns c={c} /></span>
-                      </div>
+                        <div className="flex items-center gap-5 mb-4 flex-wrap">
+                          {members.length > 0 && (
+                            <div className="flex -space-x-3.5 shrink-0">
+                              {members.map((p, i) => (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img key={i} src={p.avatarUrl} alt={p.globalName} title={p.globalName} className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-gray-800 object-cover ring-2" style={{ ["--tw-ring-color" as any]: `${GOLD}4d` }} />
+                              ))}
+                            </div>
+                          )}
+                          <h3 className="text-4xl md:text-6xl font-black text-white tracking-tight leading-none break-keep" style={{ textShadow: `0 0 44px ${GOLD}33` }}>{c.winner}</h3>
+                        </div>
 
-                      {/* 우승자 — 크게 (누구인지 확실히) */}
-                      <div className="flex items-center gap-4 mb-3">
                         {members.length > 0 && (
-                          <div className="flex -space-x-3 shrink-0">
-                            {members.map((p, i) => (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img key={i} src={p.avatarUrl} alt={p.globalName} title={p.globalName} className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gray-800 object-cover ring-2 ring-[#080808]" />
-                            ))}
-                          </div>
+                          <p className="text-sm md:text-base text-gray-400 font-medium mb-2.5 break-keep">
+                            {members.map((p) => p.globalName).join("  ·  ")}
+                          </p>
                         )}
-                        <h3 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-none break-keep">{c.winner}</h3>
-                      </div>
 
-                      {/* 팀원 이름 (읽기 쉬운 크기) */}
-                      {members.length > 0 && (
-                        <p className="text-sm md:text-base text-gray-400 font-medium mb-2 break-keep">
-                          {members.map((p) => p.globalName).join("  ·  ")}
+                        <p className="text-sm text-gray-500 break-keep">
+                          {c.title}
+                          {c.detail && <span className="text-gray-600"> — {c.detail}</span>}
+                          {c.dateLabel && <span className="text-gray-700"> · {c.dateLabel}</span>}
                         </p>
-                      )}
-
-                      {/* 기록명 + 상세 */}
-                      <p className="text-sm text-gray-500 break-keep">
-                        {c.title}
-                        {c.detail && <span className="text-gray-600"> — {c.detail}</span>}
-                      </p>
+                      </div>
                     </div>
                   </div>
                 </Reveal>
               );
-            })}
+            })()}
+
+            {/* ── 역대 기록 — 골드 헤어라인 연대기 ── */}
+            {champions.length > 1 && (
+            <div className="border-t" style={{ borderColor: `${GOLD}26` }}>
+              {champions.slice(1).map((c, idx) => {
+                const [sy, ey] = getYears(c);
+                const members = parseIds(c.winnerId).map((id) => profiles[id]).filter(Boolean);
+                return (
+                  <Reveal key={c._id} delay={Math.min(idx, 6) * 50}>
+                    <div className="py-9 md:py-11 border-b flex flex-col md:flex-row md:gap-12 group" style={{ borderColor: `${GOLD}1a` }}>
+                      {/* 연도 — 골드 잉크로 */}
+                      <div className="md:w-32 shrink-0 mb-4 md:mb-0 flex items-baseline gap-2 md:block">
+                        <span className="text-4xl md:text-5xl font-black tracking-tighter transition-colors tabular-nums leading-none" style={{ color: `${GOLD}30` }}>{sy}</span>
+                        {ey && <span className="text-base md:text-lg font-black tracking-tighter md:block" style={{ color: `${GOLD}21` }}>–{ey}</span>}
+                      </div>
+
+                      {/* 본문 */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2.5 mb-4">
+                          <span className="text-[10px] font-black tracking-[0.28em] text-gray-500 uppercase truncate">{c.category}</span>
+                          <span className="ml-auto shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><AdminBtns c={c} /></span>
+                        </div>
+
+                        {/* 우승자 — 크게 (누구인지 확실히) */}
+                        <div className="flex items-center gap-4 mb-3">
+                          {members.length > 0 && (
+                            <div className="flex -space-x-3 shrink-0">
+                              {members.map((p, i) => (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img key={i} src={p.avatarUrl} alt={p.globalName} title={p.globalName} className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gray-800 object-cover ring-2 ring-[#080808]" />
+                              ))}
+                            </div>
+                          )}
+                          <h3 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-none break-keep">{c.winner}</h3>
+                        </div>
+
+                        {/* 팀원 이름 (읽기 쉬운 크기) */}
+                        {members.length > 0 && (
+                          <p className="text-sm md:text-base text-gray-400 font-medium mb-2 break-keep">
+                            {members.map((p) => p.globalName).join("  ·  ")}
+                          </p>
+                        )}
+
+                        {/* 기록명 + 상세 */}
+                        <p className="text-sm text-gray-500 break-keep">
+                          {c.title}
+                          {c.detail && <span className="text-gray-600"> — {c.detail}</span>}
+                        </p>
+                      </div>
+                    </div>
+                  </Reveal>
+                );
+              })}
+            </div>
+            )}
           </div>
         )}
       </div>
