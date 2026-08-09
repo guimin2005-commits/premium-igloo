@@ -1,0 +1,367 @@
+"use client";
+
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useSession, signIn } from "next-auth/react";
+import Link from "next/link";
+import { salePrice } from "@/lib/shopPricing";
+import ArcticHeader from "../ArcticHeader";
+
+const STATUS_META: Record<string, { label: string; cls: string }> = {
+  pending: { label: "처리 대기", cls: "bg-[#fdf3e3] text-[#a8763a]" },
+  completed: { label: "완료", cls: "bg-[#e8f3e6] text-[#3f7a35]" },
+  cancelled: { label: "취소", cls: "bg-[#fdeaea] text-[#c62828]" },
+};
+const TYPE_LABEL: Record<string, string> = { role: "역할", perk: "권한", physical: "기프트카드" };
+
+const fmtDate = (v: string | Date) => {
+  const d = new Date(v);
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+};
+
+// 📌 ARCTIC 마이페이지 — 내 XP·주문·찜·쿠폰·문의를 한 화면에서
+export default function ShopMePage() {
+  const { data: session, status } = useSession();
+  const isLoggedIn = status === "authenticated";
+
+  const [me, setMe] = useState<any>(null);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [items, setItems] = useState<any[]>([]);
+  const [wallet, setWallet] = useState<any[]>([]);
+  const [wish, setWish] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // 문의
+  const [inquiryOpen, setInquiryOpen] = useState(false);
+  const [inquiryText, setInquiryText] = useState("");
+  const [inquiryTitle, setInquiryTitle] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [inquiryMsg, setInquiryMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("iglooShopWish");
+      if (raw) setWish(JSON.parse(raw));
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem("iglooShopWish", JSON.stringify(wish)); } catch {}
+  }, [wish]);
+
+  const load = useCallback(() => {
+    if (status === "loading") return;
+    Promise.all([
+      fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+      fetch("/api/shop/purchase", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/shop/items", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/shop/my-coupons", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+    ]).then(([m, ord, it, cou]) => {
+      if (m?.success) setMe(m.data);
+      setOrders(Array.isArray(ord?.data) ? ord.data : []);
+      setItems(Array.isArray(it?.data) ? it.data : []);
+      setWallet(Array.isArray(cou?.data) ? cou.data : []);
+    }).finally(() => setIsLoading(false));
+  }, [status]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const wishRows = useMemo(() => items.filter((i) => wish.includes(i._id)), [items, wish]);
+  const pendingCount = orders.filter((o) => o.status === "pending").length;
+  const totalSpent = orders.filter((o) => o.status !== "cancelled").reduce((n, o) => n + (o.price || 0), 0);
+
+  const removeWish = (id: string) => setWish((prev) => prev.filter((x) => x !== id));
+
+  // 쿠폰 코드 등록 — 내 지갑에 담는다
+  const [codeInput, setCodeInput] = useState("");
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [codeMsg, setCodeMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const registerCode = async () => {
+    const code = codeInput.trim().toUpperCase();
+    if (!code || isRegistering) return;
+    setIsRegistering(true);
+    setCodeMsg(null);
+    try {
+      const res = await fetch("/api/shop/my-coupons", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }),
+      });
+      const d = await res.json();
+      if (res.ok && d.success) {
+        setCodeMsg({ ok: true, text: d.message || "쿠폰을 받았습니다." });
+        setCodeInput("");
+        load();
+      } else {
+        setCodeMsg({ ok: false, text: d.message || "사용할 수 없는 코드입니다." });
+      }
+    } catch {
+      setCodeMsg({ ok: false, text: "서버와 통신 중 오류가 발생했습니다." });
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
+  const sendInquiry = async () => {
+    if (!inquiryText.trim() || isSending) return;
+    setIsSending(true);
+    setInquiryMsg(null);
+    try {
+      const res = await fetch("/api/inquiry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user: session?.user?.name || "",
+          mainType: "ARCTIC 문의",
+          title: inquiryTitle.trim() || "ARCTIC 상점 문의",
+          content: inquiryText.trim(),
+        }),
+      });
+      if (res.ok) {
+        setInquiryMsg({ ok: true, text: "문의가 접수되었습니다. 답변은 내 정보에서 확인할 수 있어요." });
+        setInquiryText(""); setInquiryTitle("");
+      } else {
+        setInquiryMsg({ ok: false, text: "접수에 실패했습니다. 잠시 후 다시 시도해주세요." });
+      }
+    } catch {
+      setInquiryMsg({ ok: false, text: "서버와 통신 중 오류가 발생했습니다." });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  if (status === "loading" || isLoading) {
+    return (
+      <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen">
+        <ArcticHeader />
+        <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen">
+        <ArcticHeader />
+        <div className="py-32 text-center px-6">
+          <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
+          <p className="text-sm text-[#4b4b4b] mb-7">내 정보를 보려면 로그인해주세요.</p>
+          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
+        </div>
+      </div>
+    );
+  }
+
+  const progress = me?.levelProgress;
+
+  return (
+    <div className="w-full flex-1 bg-[#f5f3f0] text-[#131313] min-h-screen">
+      <ArcticHeader />
+
+      <section className="max-w-5xl mx-auto px-6 pt-10 pb-32 md:pb-24">
+        <Link href="/shop" className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] mb-5 transition-colors">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+          계속 쇼핑하기
+        </Link>
+
+        {/* 프로필 + XP */}
+        <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6 mb-6">
+          <div className="flex items-center gap-4 mb-5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={session?.user?.image || ""} alt="" className="w-14 h-14 rounded-full bg-[#e2e0dc] shrink-0" />
+            <div className="min-w-0">
+              <h1 className="text-lg font-black text-[#131313] truncate">{session?.user?.name}</h1>
+              <p className="text-[12px] font-bold text-[#8a8a8a]">Lv.{me?.level ?? 0} · 서버 #{me?.rank ?? "—"}</p>
+            </div>
+            <div className="ml-auto text-right shrink-0">
+              <div className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase mb-1">Balance</div>
+              <div className="text-2xl font-black tracking-tight tabular-nums text-[#131313]">
+                {(me?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-[#e91e3f] ml-1">XP</span>
+              </div>
+            </div>
+          </div>
+
+          {progress?.required > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-[#8a8a8a]">다음 레벨까지</span>
+                <span className="text-[11px] font-bold text-[#4b4b4b] tabular-nums">{progress.needToNext.toLocaleString()} XP</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-[#eceae6] overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] transition-[width] duration-700"
+                  style={{ width: `${Math.min(100, Math.round((progress.current / progress.required) * 100))}%` }}></div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 mt-6 pt-5 border-t border-[#ececea] divide-x divide-[#ececea]">
+            {[
+              { n: orders.length, l: "전체 주문" },
+              { n: pendingCount, l: "처리 대기", accent: pendingCount > 0 },
+              { n: totalSpent, l: "사용한 XP" },
+            ].map((s, i) => (
+              <div key={i} className="text-center">
+                <div className={`text-lg font-black tabular-nums ${s.accent ? "text-[#e91e3f]" : "text-[#131313]"}`}>{s.n.toLocaleString()}</div>
+                <div className="text-[10px] font-bold tracking-[0.12em] text-[#8a8a8a] mt-0.5 uppercase">{s.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* 주문 내역 */}
+          <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
+              <h2 className="text-sm font-black text-[#131313]">주문 내역 {orders.length > 0 && <span className="text-[#e91e3f]">{orders.length}</span>}</h2>
+              {orders.length > 5 && (
+                <Link href="/shop/orders" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">전체 보기</Link>
+              )}
+            </div>
+            {orders.length === 0 ? (
+              <p className="px-5 py-12 text-center text-xs text-[#8a8a8a]">아직 구매한 상품이 없습니다.</p>
+            ) : (
+              <div className="divide-y divide-[#ececea] max-h-[320px] overflow-y-auto">
+                {orders.slice(0, 8).map((o) => {
+                  const meta = STATUS_META[o.status] || STATUS_META.pending;
+                  return (
+                    <div key={o._id} className="px-5 py-3.5 flex items-center gap-3">
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black shrink-0 ${meta.cls}`}>{meta.label}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-bold text-[#131313] truncate">{o.itemName}</p>
+                        <p className="text-[10px] text-[#a3a3a3]">{TYPE_LABEL[o.itemType] || "상품"} · {fmtDate(o.createdAt)}</p>
+                      </div>
+                      <span className={`text-[12px] font-black tabular-nums shrink-0 ${o.status === "cancelled" ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>
+                        -{(o.price || 0).toLocaleString()}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 찜 목록 */}
+          <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#ececea]">
+              <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
+                <svg className="w-3.5 h-3.5 text-[#e91e3f]" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                </svg>
+                찜한 상품 {wishRows.length > 0 && <span className="text-[#e91e3f]">{wishRows.length}</span>}
+              </h2>
+            </div>
+            {wishRows.length === 0 ? (
+              <p className="px-5 py-12 text-center text-xs text-[#8a8a8a]">찜한 상품이 없습니다.</p>
+            ) : (
+              <div className="divide-y divide-[#ececea] max-h-[320px] overflow-y-auto">
+                {wishRows.map((it) => (
+                  <div key={it._id} className="px-5 py-3.5 flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-lg bg-[#eceae6] overflow-hidden shrink-0">
+                      {it.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={it.imageUrl} alt="" className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-bold text-[#131313] truncate">{it.name}</p>
+                      <p className="text-[11px] font-black text-[#131313] tabular-nums">{salePrice(it).toLocaleString()} XP</p>
+                    </div>
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <Link href="/shop" className="px-3 py-1.5 rounded-full text-[10px] font-bold bg-[#e91e3f] text-white hover:bg-[#d01634] transition-colors text-center">보러가기</Link>
+                      <button onClick={() => removeWish(it._id)} className="px-3 py-1 text-[10px] font-bold text-[#a3a3a3] hover:text-[#c62828] transition-colors">해제</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 보유 쿠폰 */}
+          <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#ececea]">
+              <h2 className="text-sm font-black text-[#131313]">보유 쿠폰 {wallet.length > 0 && <span className="text-[#e91e3f]">{wallet.length}</span>}</h2>
+            </div>
+
+            {/* 쿠폰 코드 등록 */}
+            <div className="px-5 pt-4 pb-3 border-b border-[#ececea]">
+              <div className="flex gap-2">
+                <input type="text" value={codeInput} onChange={(e) => setCodeInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") registerCode(); }}
+                  placeholder="쿠폰 코드 입력"
+                  className="flex-1 min-w-0 bg-white border border-[#e2e0dc] rounded-lg px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
+                <button onClick={registerCode} disabled={!codeInput.trim() || isRegistering}
+                  className="px-4 py-2.5 rounded-lg bg-[#131313] hover:bg-black text-white text-[12px] font-bold disabled:opacity-40 transition-colors shrink-0">
+                  {isRegistering ? "확인" : "등록"}
+                </button>
+              </div>
+              {codeMsg && (
+                <p className={`mt-2 text-[11px] font-bold ${codeMsg.ok ? "text-[#3f7a35]" : "text-[#c62828]"}`}>{codeMsg.text}</p>
+              )}
+            </div>
+
+            {wallet.length === 0 ? (
+              <p className="px-5 py-12 text-center text-xs text-[#8a8a8a]">보유한 쿠폰이 없습니다.</p>
+            ) : (
+              <div className="divide-y divide-[#ececea] max-h-[280px] overflow-y-auto">
+                {wallet.map((w) => (
+                  <div key={w.id} className="px-5 py-3.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-bold text-[#131313] truncate">{w.name}</p>
+                      <p className="text-[10px] text-[#8a8a8a]">
+                        {w.type === "percent" ? `${w.value}% 할인` : `${w.value.toLocaleString()} XP 할인`}
+                        {w.minTotal > 0 && ` · ${w.minTotal.toLocaleString()} XP 이상`}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-black tracking-wider text-[#a3a3a3] shrink-0">{w.code}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 문의 */}
+          <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
+              <h2 className="text-sm font-black text-[#131313]">문의하기</h2>
+              <Link href="/profile?tab=inquiry" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">내 문의 보기</Link>
+            </div>
+            <div className="p-5">
+              {inquiryMsg ? (
+                <div className="text-center py-6">
+                  <div className={`w-11 h-11 mx-auto rounded-full flex items-center justify-center mb-3 ${inquiryMsg.ok ? "bg-[#e8f3e6] text-[#3f7a35]" : "bg-[#fdeaea] text-[#c62828]"}`}>
+                    {inquiryMsg.ok
+                      ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>}
+                  </div>
+                  <p className="text-[13px] text-[#4b4b4b] leading-relaxed mb-5 break-keep">{inquiryMsg.text}</p>
+                  <button onClick={() => setInquiryMsg(null)} className="px-6 py-2.5 bg-[#eceae6] hover:bg-[#e2e0dc] text-[#4b4b4b] text-[12px] font-bold rounded-full transition-colors">
+                    다시 문의하기
+                  </button>
+                </div>
+              ) : !inquiryOpen ? (
+                <button onClick={() => setInquiryOpen(true)}
+                  className="w-full py-3.5 rounded-xl border border-dashed border-[#d6d3ce] text-[13px] font-bold text-[#8a8a8a] hover:text-[#131313] hover:border-[#a3a3a3] transition-colors">
+                  상품·지급 관련해 물어볼 게 있나요?
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <input type="text" value={inquiryTitle} onChange={(e) => setInquiryTitle(e.target.value)}
+                    placeholder="제목 (선택)"
+                    className="w-full bg-white border border-[#e2e0dc] rounded-lg px-4 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
+                  <textarea rows={4} value={inquiryText} onChange={(e) => setInquiryText(e.target.value)}
+                    placeholder="예: 역할 상품을 샀는데 아직 지급되지 않았어요."
+                    className="w-full bg-white border border-[#e2e0dc] rounded-lg px-4 py-3 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] resize-none placeholder:text-[#a3a3a3]" />
+                  <div className="flex gap-2">
+                    <button onClick={() => { setInquiryOpen(false); setInquiryText(""); setInquiryTitle(""); }}
+                      className="px-5 py-3 bg-[#eceae6] hover:bg-[#e2e0dc] text-[#4b4b4b] text-[13px] font-bold rounded-xl transition-colors">취소</button>
+                    <button onClick={sendInquiry} disabled={!inquiryText.trim() || isSending}
+                      className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 text-white text-[13px] font-bold rounded-xl transition-colors">
+                      {isSending ? "접수 중..." : "문의 보내기"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

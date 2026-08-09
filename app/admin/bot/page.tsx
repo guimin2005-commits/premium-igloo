@@ -330,6 +330,20 @@ export default function AdminBotPage() {
                   </button>
                   <p className={fieldNote}>⚠️ 켜면 나간 유저의 XP 기록이 삭제되어 복구할 수 없습니다</p>
                 </div>
+
+                <div>
+                  <label className={labelClass}>ARCTIC 상점 공개</label>
+                  <button type="button" onClick={() => setSettings({ ...settings, shopPublic: !settings.shopPublic })}
+                    className={`${inputClass} flex items-center justify-between text-left ${settings.shopPublic ? "border-[#e91e3f]/50" : ""}`}>
+                    <span className={settings.shopPublic ? "text-[#e91e3f] font-bold" : "text-gray-400"}>{settings.shopPublic ? "공개 중" : "비공개 (관리자만)"}</span>
+                    <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${settings.shopPublic ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${settings.shopPublic ? "left-[18px]" : "left-0.5"}`}></span>
+                    </span>
+                  </button>
+                  <p className={fieldNote}>
+                    비공개면 일반 유저에게 &lsquo;준비 중&rsquo; 화면이 보이고 관리자만 상점을 이용할 수 있습니다
+                  </p>
+                </div>
               </div>
             </section>
 

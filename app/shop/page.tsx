@@ -32,12 +32,14 @@ const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
   physical: { label: "기프트카드", cls: "bg-[#131313] text-white" },
 };
 
+// 상품가는 천만·오천만 단위까지 올라간다
 const PRICE_RANGES = [
   { v: "all", l: "전체", min: 0, max: Infinity },
-  { v: "u100k", l: "10만 XP 미만", min: 0, max: 100000 },
-  { v: "100k-500k", l: "10만 ~ 50만", min: 100000, max: 500000 },
-  { v: "500k-1m", l: "50만 ~ 100만", min: 500000, max: 1000000 },
-  { v: "o1m", l: "100만 XP 이상", min: 1000000, max: Infinity },
+  { v: "u1m", l: "100만 미만", min: 0, max: 1_000_000 },
+  { v: "1m-5m", l: "100만 ~ 500만", min: 1_000_000, max: 5_000_000 },
+  { v: "5m-10m", l: "500만 ~ 1000만", min: 5_000_000, max: 10_000_000 },
+  { v: "10m-30m", l: "1000만 ~ 3000만", min: 10_000_000, max: 30_000_000 },
+  { v: "o30m", l: "3000만 이상", min: 30_000_000, max: Infinity },
 ];
 
 const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "지급 완료", cancelled: "취소됨" };
@@ -89,6 +91,7 @@ export default function ShopPage() {
   const [showProfile, setShowProfile] = useState(false);
   const [showMobileProfile, setShowMobileProfile] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const mobileProfileRef = useRef<HTMLDivElement>(null);
@@ -351,6 +354,9 @@ export default function ShopPage() {
   };
 
   // 관리자는 잔액과 무관하게 구매 가능 (테스트 구매)
+  // 적용 중인 필터 개수 (모바일 필터 버튼 배지용)
+  const activeFilterCount = (priceFilter !== "all" ? 1 : 0) + (inStockOnly ? 1 : 0) + (affordableOnly ? 1 : 0);
+
   const canAfford = (p: number) => isAdmin || (myXp != null && myXp >= p);
   const chip = (active: boolean) =>
     `px-3.5 py-1.5 rounded-full text-[12px] font-bold border transition-colors ${
@@ -461,7 +467,7 @@ export default function ShopPage() {
                         className="w-full text-left px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
                         찜한 상품{wish.length > 0 ? ` ${wish.length}` : ""}
                       </button>
-                      <Link href="/profile" onClick={() => setShowProfile(false)}
+                      <Link href="/shop/me" onClick={() => setShowProfile(false)}
                         className="block px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
                         내 정보
                       </Link>
@@ -529,7 +535,7 @@ export default function ShopPage() {
           <div className="text-center">
             <div className="flex items-center justify-center gap-3 mb-4">
               <span className="w-8 h-px bg-[#8a8a8a]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Premium Igloo</span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Premium Igloo SHOP</span>
               <span className="w-8 h-px bg-[#8a8a8a]"></span>
             </div>
             <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-[#131313] mb-4">ARCTIC</h1>
@@ -621,34 +627,89 @@ export default function ShopPage() {
         {/* 카테고리 — 모바일 전용 (데스크톱은 헤더 내비로) */}
         <div className="md:hidden flex gap-2 overflow-x-auto pb-1 mb-3 [&::-webkit-scrollbar]:hidden">
           {TYPES.map((t) => (
-            <button key={t.v} onClick={() => { setTypeFilter(t.v); setWishOnly(false); }}
-              className={`${chip(typeFilter === t.v && !wishOnly)} shrink-0`}>{t.l}</button>
+            <button key={t.v} onClick={() => setTypeFilter(t.v)}
+              className={`${chip(typeFilter === t.v)} shrink-0`}>{t.l}</button>
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          {PRICE_RANGES.map((r) => (
-            <button key={r.v} onClick={() => setPriceFilter(r.v)} className={chip(priceFilter === r.v)}>{r.l}</button>
-          ))}
-        </div>
+        {/* 📌 모바일은 필터 칩이 너무 많아지므로 접어 두고, 필요할 때만 편다 */}
+        <div className="md:hidden flex items-center justify-between gap-3 pb-4 border-b border-[#e2e0dc]">
+          <button onClick={() => setShowFilters(!showFilters)}
+            className={`inline-flex items-center gap-1.5 px-4 h-9 rounded-full border text-[12px] font-bold transition-colors ${
+              activeFilterCount > 0 ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#4b4b4b] border-[#e2e0dc]"
+            }`}>
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
+            </svg>
+            필터{activeFilterCount > 0 ? ` ${activeFilterCount}` : ""}
+          </button>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-6 border-b border-[#e2e0dc]">
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => setInStockOnly(!inStockOnly)} className={chip(inStockOnly)}>재고 있는 상품만</button>
-            {isLoggedIn && (
-              <button onClick={() => setAffordableOnly(!affordableOnly)} className={chip(affordableOnly)}>구매 가능한 상품만</button>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-bold text-[#8a8a8a]">{visible.length}개</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[11px] font-bold text-[#8a8a8a] shrink-0">{visible.length}개</span>
             <Dropdown
               theme="light"
               value={sort}
               onChange={setSort}
               options={SORTS.map((s) => ({ value: s.v, label: s.l }))}
-              className="w-36"
-              buttonClassName="!rounded-full !py-2 !text-[12px] !font-bold"
+              className="w-[116px]"
+              buttonClassName="!rounded-full !py-1.5 !px-3 !text-[12px] !font-bold"
             />
+          </div>
+        </div>
+
+        {/* 모바일 — 펼친 필터 */}
+        {showFilters && (
+          <div className="md:hidden pt-4 pb-5 border-b border-[#e2e0dc] space-y-4" style={{ animation: "menuDrop 0.24s cubic-bezier(0.16,1,0.3,1)" }}>
+            <div>
+              <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mb-2">가격대</p>
+              <div className="flex flex-wrap gap-2">
+                {PRICE_RANGES.map((r) => (
+                  <button key={r.v} onClick={() => setPriceFilter(r.v)} className={chip(priceFilter === r.v)}>{r.l}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mb-2">조건</p>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => setInStockOnly(!inStockOnly)} className={chip(inStockOnly)}>재고 있는 상품만</button>
+                {isLoggedIn && (
+                  <button onClick={() => setAffordableOnly(!affordableOnly)} className={chip(affordableOnly)}>구매 가능한 상품만</button>
+                )}
+              </div>
+            </div>
+            {activeFilterCount > 0 && (
+              <button onClick={() => { setPriceFilter("all"); setInStockOnly(false); setAffordableOnly(false); }}
+                className="text-[11px] font-bold text-[#e91e3f]">필터 초기화</button>
+            )}
+          </div>
+        )}
+
+        {/* 데스크톱 — 필터를 그대로 펼쳐 둔다 */}
+        <div className="hidden md:block">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            {PRICE_RANGES.map((r) => (
+              <button key={r.v} onClick={() => setPriceFilter(r.v)} className={chip(priceFilter === r.v)}>{r.l}</button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-6 border-b border-[#e2e0dc]">
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={() => setInStockOnly(!inStockOnly)} className={chip(inStockOnly)}>재고 있는 상품만</button>
+              {isLoggedIn && (
+                <button onClick={() => setAffordableOnly(!affordableOnly)} className={chip(affordableOnly)}>구매 가능한 상품만</button>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-bold text-[#8a8a8a]">{visible.length}개</span>
+              <Dropdown
+                theme="light"
+                value={sort}
+                onChange={setSort}
+                options={SORTS.map((s) => ({ value: s.v, label: s.l }))}
+                className="w-36"
+                buttonClassName="!rounded-full !py-2 !text-[12px] !font-bold"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -750,12 +811,12 @@ export default function ShopPage() {
                           <span className="text-[12px] text-[#a3a3a3] line-through tabular-nums">{it.price.toLocaleString()} XP</span>
                         )}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1.5 sm:gap-2">
                         <button
                           onClick={() => addToCart(it)}
                           disabled={soldOut || owned}
                           aria-label="장바구니 담기"
-                          className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center transition-all ${
+                          className={`w-8 h-8 sm:w-11 sm:h-11 shrink-0 rounded-full flex items-center justify-center transition-all ${
                             soldOut || owned
                               ? "bg-[#eceae6] text-[#c4c4c4] cursor-not-allowed"
                               : inCart
@@ -763,14 +824,14 @@ export default function ShopPage() {
                               : "bg-white text-[#131313] border border-[#e2e0dc] hover:border-[#131313]"
                           }`}
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                          <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
                           </svg>
                         </button>
                         <button
                           onClick={() => openBuy(it)}
                           disabled={soldOut || owned}
-                          className={`flex-1 px-3 sm:px-5 py-2.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all ${
+                          className={`flex-1 min-w-0 px-2 sm:px-5 h-8 sm:h-11 rounded-full text-[11px] sm:text-[12px] font-bold transition-all ${
                             owned
                               ? "bg-[#eceae6] text-[#8a8a8a] cursor-not-allowed"
                               : soldOut
@@ -1056,7 +1117,7 @@ export default function ShopPage() {
                     구매 내역
                     {pendingOrders > 0 && <span className="px-1.5 py-0.5 rounded-full bg-[#e91e3f] text-white text-[9px] font-black">{pendingOrders}</span>}
                   </Link>
-                  <Link href="/profile" onClick={() => setShowMobileProfile(false)}
+                  <Link href="/shop/me" onClick={() => setShowMobileProfile(false)}
                     className="block px-2 py-2 text-[13px] font-bold text-[#4b4b4b] hover:bg-[#f5f3f0] rounded-lg transition-colors">내 정보</Link>
                   <Link href="/level" onClick={() => setShowMobileProfile(false)}
                     className="block px-2 py-2 text-[13px] font-bold text-[#4b4b4b] hover:bg-[#f5f3f0] rounded-lg transition-colors">SYSTEM : LEVEL</Link>
