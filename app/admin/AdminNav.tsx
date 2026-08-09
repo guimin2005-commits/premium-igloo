@@ -76,17 +76,17 @@ export default function AdminNav() {
 
   const linkClass = (active: boolean, child = false) =>
     `relative flex items-center gap-2.5 px-3 py-2 rounded-lg font-bold transition-colors ${child ? "text-[12px] ml-4" : "text-[13px]"} ${
-      active ? "text-white bg-white/[0.06]" : "text-gray-500 hover:text-white hover:bg-white/[0.03]"
+      active ? "text-white bg-[#e91e3f]/[0.12]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"
     }`;
 
   return (
     <>
       {/* ── 데스크톱: 좌측 사이드 패널 ── */}
-      <aside className="hidden lg:block w-60 shrink-0 border-r border-white/[0.06]">
+      <aside className="hidden lg:block w-60 shrink-0 border-r border-white/10 bg-[#0e0e0e]">
         <nav className="sticky top-24 px-6 py-10 space-y-8">
           {NAV_GROUPS.map((group) => (
             <div key={group.label}>
-              <div className="text-[9px] font-black tracking-[0.3em] text-gray-600 uppercase mb-3">{group.label}</div>
+              <div className="text-[10px] font-black tracking-[0.28em] text-[#e91e3f] uppercase mb-3">{group.label}</div>
               <div className="space-y-0.5">
                 {group.items.map((item) => {
                   const parentActive = isActive(item.href) && !item.children?.some((c) => isActive(c.href));
@@ -99,7 +99,7 @@ export default function AdminNav() {
                         <span className="truncate">{item.title}</span>
                       </Link>
                       {item.children && (
-                        <div className="mt-0.5 space-y-0.5 border-l border-white/[0.06] ml-3">
+                        <div className="mt-0.5 space-y-0.5 border-l border-white/15 ml-3">
                           {item.children.map((child) => {
                             const active = isActive(child.href);
                             return (
@@ -121,7 +121,7 @@ export default function AdminNav() {
       </aside>
 
       {/* ── 모바일: 상단 가로 스크롤 칩 바 (하위 카테고리는 펼쳐서 표시) ── */}
-      <div className="lg:hidden w-full border-b border-white/[0.06] bg-[#0a0a0a]/80 backdrop-blur-sm">
+      <div className="lg:hidden w-full border-b border-white/10 bg-[#0e0e0e]">
         <div className="flex gap-2 overflow-x-auto px-4 py-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {NAV_GROUPS.flatMap((g) => g.items).flatMap((item) =>
             item.children
@@ -135,8 +135,8 @@ export default function AdminNav() {
                 href={item.href}
                 className={`shrink-0 px-3.5 py-1.5 rounded-full text-[11px] font-bold border transition-colors ${
                   active
-                    ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/30"
-                    : "text-gray-400 border-white/10 hover:text-white hover:border-white/25"
+                    ? "bg-[#e91e3f] text-white border-[#e91e3f]"
+                    : "text-gray-200 border-white/20 hover:text-white hover:border-white/40"
                 }`}
               >
                 {item.title}

@@ -50,6 +50,9 @@ const BotSettingSchema = new mongoose.Schema({
   resetOnLeave: { type: Boolean, default: false },
   levelupChannelId: { type: String, default: "" },
   levelupMessage: { type: String, default: "🎉 {user} 님이 **Lv.{level}** 에 도달했습니다!" },
+  roleGrantChannelId: { type: String, default: "" },
+  roleGrantMessage: { type: String, default: "🎖 {user} 님에게 **{role}** 역할이 지급되었습니다! (Lv.{level})" },
+  roleGrantEnabled: { type: Boolean, default: true },
   updatedAt: { type: Date, default: Date.now },
 });
 export const BotSetting = mongoose.models.BotSetting || mongoose.model("BotSetting", BotSettingSchema);
@@ -59,6 +62,9 @@ const XpBoostSchema = new mongoose.Schema({
   name: { type: String, default: "" },
   targetRoleId: { type: String, default: "" },
   targetRoleName: { type: String, default: "" },
+  targetChannelId: { type: String, default: "" },
+  targetChannelName: { type: String, default: "" },
+  targetChannelType: { type: String, default: "" },
   boostXp: { type: Number, default: 0 },
   startAt: { type: Date, required: true },
   endAt: { type: Date, required: true },

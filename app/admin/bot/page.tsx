@@ -154,10 +154,12 @@ export default function AdminBotPage() {
     else notify("저장에 실패했습니다.", true);
   };
 
-  const emptyBoost = { id: "", name: "", targetRoleId: "", boostXp: "", startAt: "", endAt: "" };
+  const emptyBoost = { id: "", name: "", targetRoleId: "", targetChannelId: "", boostXp: "", startAt: "", endAt: "" };
   const [boostForm, setBoostForm] = useState(emptyBoost);
   const [isBoostRoleOpen, setIsBoostRoleOpen] = useState(false);
+  const [isBoostChannelOpen, setIsBoostChannelOpen] = useState(false);
   const boostRole = guildRoles.find((r) => r.id === boostForm.targetRoleId);
+  const boostChannel = guildChannels.find((c) => c.id === boostForm.targetChannelId);
 
   const saveBoost = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,7 +167,10 @@ export default function AdminBotPage() {
     const res = await fetch("/api/xp-boost", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...boostForm, targetRoleName: boostRole?.name || "",
+        ...boostForm,
+        targetRoleName: boostRole?.name || "",
+        targetChannelName: boostChannel?.name || "",
+        targetChannelType: boostChannel?.type || "",
         boostXp: Number(boostForm.boostXp) || 0,
         startAt: new Date(boostForm.startAt), endAt: new Date(boostForm.endAt),
       }),
@@ -194,8 +199,8 @@ export default function AdminBotPage() {
     );
   }
 
-  const inputClass = "w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600";
-  const fieldNote = "text-[10px] text-gray-600 mt-1.5";
+  const inputClass = "w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-500";
+  const fieldNote = "text-[10px] text-gray-400 mt-1.5";
   const labelClass = "block text-xs font-bold text-gray-500 mb-2";
   const primaryBtn = "w-full md:w-auto md:px-10 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all";
 
@@ -317,7 +322,7 @@ export default function AdminBotPage() {
                   <label className={labelClass}>서버 퇴장 시 XP 초기화</label>
                   <button type="button" onClick={() => setSettings({ ...settings, resetOnLeave: !settings.resetOnLeave })}
                     className={`${inputClass} flex items-center justify-between text-left ${settings.resetOnLeave ? "border-[#e91e3f]/50" : ""}`}>
-                    <span className={settings.resetOnLeave ? "text-[#e91e3f] font-bold" : "text-gray-600"}>{settings.resetOnLeave ? "초기화함" : "유지함 (기본)"}</span>
+                    <span className={settings.resetOnLeave ? "text-[#e91e3f] font-bold" : "text-gray-400"}>{settings.resetOnLeave ? "초기화함" : "유지함 (기본)"}</span>
                     <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${settings.resetOnLeave ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
                       <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${settings.resetOnLeave ? "left-[18px]" : "left-0.5"}`}></span>
                     </span>
@@ -346,7 +351,40 @@ export default function AdminBotPage() {
                   <textarea rows={2} value={settings.levelupMessage} onChange={(e) => setSettings({ ...settings, levelupMessage: e.target.value })}
                     className={`${inputClass} resize-none`} />
                   <p className={fieldNote}>
-                    <span className="text-gray-400">{"{user}"}</span> 멘션 · <span className="text-gray-400">{"{level}"}</span> 도달 레벨 · <span className="text-gray-400">{"{xp}"}</span> 누적 XP · 디스코드 마크다운(**굵게**) 사용 가능
+                    <span className="text-gray-200">{"{user}"}</span> 멘션 · <span className="text-gray-200">{"{level}"}</span> 도달 레벨 · <span className="text-gray-200">{"{xp}"}</span> 누적 XP · 디스코드 마크다운(**굵게**) 사용 가능
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <SectionHead no="04" title="역할 지급 알림" right={
+                <button type="button" onClick={() => setSettings({ ...settings, roleGrantEnabled: settings.roleGrantEnabled === false })}
+                  className={`flex items-center gap-2.5 text-[11px] font-bold transition-colors ${settings.roleGrantEnabled !== false ? "text-[#e91e3f]" : "text-gray-400"}`}>
+                  {settings.roleGrantEnabled !== false ? "사용 중" : "사용 안 함"}
+                  <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${settings.roleGrantEnabled !== false ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${settings.roleGrantEnabled !== false ? "left-[18px]" : "left-0.5"}`}></span>
+                  </span>
+                </button>
+              } />
+              <div className={`space-y-4 ${settings.roleGrantEnabled === false ? "opacity-40 pointer-events-none" : ""}`}>
+                <div>
+                  <label className={labelClass}>알림 채널</label>
+                  <select value={settings.roleGrantChannelId || ""} onChange={(e) => setSettings({ ...settings, roleGrantChannelId: e.target.value })}
+                    className={`${inputClass} [&>option]:bg-[#161616]`}>
+                    <option value="">레벨업 알림 채널과 동일</option>
+                    {guildChannels.filter((c) => c.type === "text").map((c) => (
+                      <option key={c.id} value={c.id}>#{c.name}</option>
+                    ))}
+                  </select>
+                  <p className={fieldNote}>레벨 보상 역할이 지급됐을 때 메시지를 보낼 채널</p>
+                </div>
+                <div>
+                  <label className={labelClass}>알림 문구</label>
+                  <textarea rows={2} value={settings.roleGrantMessage || ""} onChange={(e) => setSettings({ ...settings, roleGrantMessage: e.target.value })}
+                    className={`${inputClass} resize-none`} />
+                  <p className={fieldNote}>
+                    <span className="text-gray-200">{"{user}"}</span> 멘션 · <span className="text-gray-200">{"{role}"}</span> 지급된 역할명 · <span className="text-gray-200">{"{level}"}</span> 도달 레벨
                   </p>
                 </div>
               </div>
@@ -372,7 +410,7 @@ export default function AdminBotPage() {
                         <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: selectedRole.color }}></span>
                         <span className="font-bold">{selectedRole.name}</span>
                       </span>
-                    ) : <span className="text-gray-600">역할을 선택하세요</span>}
+                    ) : <span className="text-gray-400">역할을 선택하세요</span>}
                     <span className="text-[10px] text-gray-500">▼</span>
                   </button>
                   {isRoleDropdownOpen && (
@@ -417,7 +455,7 @@ export default function AdminBotPage() {
             <section>
               <SectionHead no="02" title={`설정된 역할 (${configs.length})`} />
               {isLoading ? <div className="py-10 text-center text-gray-500 text-sm">불러오는 중...</div>
-                : configs.length === 0 ? <div className="py-10 text-gray-600 text-sm border-y border-white/[0.06]">설정된 역할이 없습니다.</div>
+                : configs.length === 0 ? <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">설정된 역할이 없습니다.</div>
                 : (
                 <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
                   {configs.map((c) => {
@@ -432,7 +470,7 @@ export default function AdminBotPage() {
                           {c.rewardLevel != null && <span className="text-[11px] font-bold text-[#e91e3f]">Lv.{c.rewardLevel} 도달 시 지급</span>}
                           {c.buffXp > 0 && <span className="text-[11px] font-bold text-gray-400">채팅/음성 +{c.buffXp.toLocaleString()}</span>}
                           {c.attendBuffXp > 0 && <span className="text-[11px] font-bold text-gray-400">출석 +{c.attendBuffXp.toLocaleString()}</span>}
-                          {c.rewardLevel == null && !c.buffXp && !c.attendBuffXp && <span className="text-[11px] text-gray-600">효과 없음</span>}
+                          {c.rewardLevel == null && !c.buffXp && !c.attendBuffXp && <span className="text-[11px] text-gray-400">효과 없음</span>}
                         </div>
                         <div className="flex gap-4 shrink-0">
                           <button onClick={() => { setRoleForm({ roleId: c.roleId, rewardLevel: c.rewardLevel == null ? "" : String(c.rewardLevel), buffXp: c.buffXp ? String(c.buffXp) : "", attendBuffXp: c.attendBuffXp ? String(c.attendBuffXp) : "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-500 hover:text-white transition-colors">수정</button>
@@ -462,9 +500,9 @@ export default function AdminBotPage() {
                       <span className="flex items-center gap-2.5 min-w-0">
                         <span className="text-gray-500 shrink-0">{CHANNEL_TYPE_ICON[selectedChannel.type]}</span>
                         <span className="font-bold truncate">{selectedChannel.name}</span>
-                        <span className="text-[10px] text-gray-600 shrink-0">{CHANNEL_TYPE_LABEL[selectedChannel.type]}</span>
+                        <span className="text-[10px] text-gray-400 shrink-0">{CHANNEL_TYPE_LABEL[selectedChannel.type]}</span>
                       </span>
-                    ) : <span className="text-gray-600">채널 또는 카테고리를 선택하세요</span>}
+                    ) : <span className="text-gray-400">채널 또는 카테고리를 선택하세요</span>}
                     <span className="text-[10px] text-gray-500">▼</span>
                   </button>
                   {isChannelDropdownOpen && (
@@ -493,7 +531,7 @@ export default function AdminBotPage() {
                   <div>
                     <label className={labelClass}>XP 지급 제외</label>
                     <button type="button" onClick={() => setChForm({ ...chForm, excluded: !chForm.excluded })} className={`${inputClass} flex items-center justify-between text-left ${chForm.excluded ? "border-[#e91e3f]/50" : ""}`}>
-                      <span className={chForm.excluded ? "text-[#e91e3f] font-bold" : "text-gray-600"}>{chForm.excluded ? "지급 안 함" : "지급함 (기본)"}</span>
+                      <span className={chForm.excluded ? "text-[#e91e3f] font-bold" : "text-gray-400"}>{chForm.excluded ? "지급 안 함" : "지급함 (기본)"}</span>
                       <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${chForm.excluded ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
                         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${chForm.excluded ? "left-[18px]" : "left-0.5"}`}></span>
                       </span>
@@ -510,7 +548,7 @@ export default function AdminBotPage() {
             <section>
               <SectionHead no="02" title={`설정된 채널 (${channelConfigs.length})`} />
               {isLoading ? <div className="py-10 text-center text-gray-500 text-sm">불러오는 중...</div>
-                : channelConfigs.length === 0 ? <div className="py-10 text-gray-600 text-sm border-y border-white/[0.06]">설정된 채널이 없습니다.</div>
+                : channelConfigs.length === 0 ? <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">설정된 채널이 없습니다.</div>
                 : (
                 <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
                   {channelConfigs.map((c) => {
@@ -524,7 +562,7 @@ export default function AdminBotPage() {
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
                           {c.excluded ? <span className="text-[11px] font-bold text-red-400">XP 지급 제외</span>
                             : c.boostXp > 0 ? <span className="text-[11px] font-bold text-[#e91e3f]">+{c.boostXp.toLocaleString()} XP</span>
-                            : <span className="text-[11px] text-gray-600">효과 없음</span>}
+                            : <span className="text-[11px] text-gray-400">효과 없음</span>}
                           {c.channelType === "category" && <span className="text-[11px] font-bold text-gray-500">하위 채널 전체</span>}
                         </div>
                         <div className="flex gap-4 shrink-0">
@@ -582,6 +620,35 @@ export default function AdminBotPage() {
                     )}
                     <p className={fieldNote}>역할을 고르면 해당 역할 보유자에게만 적용</p>
                   </div>
+                  <div className="relative">
+                    <label className={labelClass}>대상 채널 · 카테고리</label>
+                    <button type="button" onClick={() => setIsBoostChannelOpen(!isBoostChannelOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
+                      {boostChannel ? (
+                        <span className="flex items-center gap-2.5 min-w-0">
+                          <span className="text-gray-400 shrink-0">{CHANNEL_TYPE_ICON[boostChannel.type]}</span>
+                          <span className="font-bold truncate">{boostChannel.name}</span>
+                        </span>
+                      ) : <span className="text-gray-300 font-bold">모든 채널</span>}
+                      <span className="text-[10px] text-gray-400">▼</span>
+                    </button>
+                    {isBoostChannelOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setIsBoostChannelOpen(false)}></div>
+                        <div className="absolute top-full left-0 w-full mt-1.5 bg-[#161616] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#2a2a2a]">
+                          <button type="button" onClick={() => { setBoostForm({ ...boostForm, targetChannelId: "" }); setIsBoostChannelOpen(false); }}
+                            className={`w-full text-left px-4 py-3 text-sm font-bold transition-colors ${!boostForm.targetChannelId ? "bg-[#e91e3f]/15 text-[#e91e3f]" : "text-gray-300 hover:bg-white/5"}`}>모든 채널</button>
+                          {guildChannels.map((c) => (
+                            <button key={c.id} type="button" onClick={() => { setBoostForm({ ...boostForm, targetChannelId: c.id }); setIsBoostChannelOpen(false); }}
+                              className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors ${c.type === "category" ? "bg-white/[0.03]" : ""} ${boostForm.targetChannelId === c.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : c.type === "category" ? "text-gray-300 font-bold" : "text-gray-300 hover:bg-white/5"}`}>
+                              <span className={`shrink-0 text-xs ${c.parentId ? "ml-4" : ""}`}>{CHANNEL_TYPE_ICON[c.type]}</span>
+                              <span className="truncate">{c.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    <p className={fieldNote}>카테고리 선택 시 하위 채널 전체에 적용 · 역할과 함께 지정하면 둘 다 만족해야 발동</p>
+                  </div>
                   <div>
                     <label className={labelClass}>추가 XP <span className="text-[#e91e3f]">*</span></label>
                     <input type="number" min={1} placeholder="예: 1000" value={boostForm.boostXp} onChange={(e) => setBoostForm({ ...boostForm, boostXp: e.target.value })} className={inputClass} />
@@ -610,7 +677,7 @@ export default function AdminBotPage() {
             <section>
               <SectionHead no="02" title={`등록된 부스트 (${boosts.length})`} />
               {isLoading ? <div className="py-10 text-center text-gray-500 text-sm">불러오는 중...</div>
-                : boosts.length === 0 ? <div className="py-10 text-gray-600 text-sm border-y border-white/[0.06]">등록된 부스트가 없습니다.</div>
+                : boosts.length === 0 ? <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">등록된 부스트가 없습니다.</div>
                 : (
                 <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
                   {boosts.map((b) => {
@@ -621,16 +688,17 @@ export default function AdminBotPage() {
                     return (
                       <div key={b._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                         <div className="flex items-center gap-2.5 md:w-52 shrink-0 min-w-0">
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${state === "진행 중" ? "bg-[#e91e3f] text-white" : state === "예정" ? "bg-white/10 text-gray-300" : "bg-transparent text-gray-600 border border-white/10"}`}>{state}</span>
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${state === "진행 중" ? "bg-[#e91e3f] text-white" : state === "예정" ? "bg-white/10 text-gray-300" : "bg-transparent text-gray-400 border border-white/10"}`}>{state}</span>
                           <span className="text-sm font-bold text-white truncate">{b.name}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1 min-w-0">
                           <span className="text-[11px] font-bold text-[#e91e3f]">+{(b.boostXp || 0).toLocaleString()} XP</span>
-                          <span className="text-[11px] font-bold text-gray-400">{b.targetRoleName || "서버 전체"}</span>
+                          <span className="text-[11px] font-bold text-gray-400">{b.targetRoleName || "전체 유저"}</span>
+                          <span className="text-[11px] font-bold text-gray-400">{b.targetChannelName ? `${CHANNEL_TYPE_ICON[b.targetChannelType] || "#"} ${b.targetChannelName}` : "모든 채널"}</span>
                           <span className="text-[11px] text-gray-500">{fmtDateTime(b.startAt)} ~ {fmtDateTime(b.endAt)}</span>
                         </div>
                         <div className="flex gap-4 shrink-0">
-                          <button onClick={() => { setBoostForm({ id: b._id, name: b.name, targetRoleId: b.targetRoleId || "", boostXp: String(b.boostXp), startAt: toLocalInput(b.startAt), endAt: toLocalInput(b.endAt) }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-500 hover:text-white transition-colors">수정</button>
+                          <button onClick={() => { setBoostForm({ id: b._id, name: b.name, targetRoleId: b.targetRoleId || "", targetChannelId: b.targetChannelId || "", boostXp: String(b.boostXp), startAt: toLocalInput(b.startAt), endAt: toLocalInput(b.endAt) }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-500 hover:text-white transition-colors">수정</button>
                           <button onClick={() => setDeleteConfirm({ kind: "boost", id: b._id })} className="text-xs font-bold text-red-500/60 hover:text-red-500 transition-colors">삭제</button>
                         </div>
                       </div>
@@ -658,15 +726,15 @@ export default function AdminBotPage() {
               </div>
             } />
             {lbPeriod === "month" && (
-              <p className="text-[11px] text-gray-600 mb-4">월간 랭킹은 봇의 지급 로그를 기준으로 집계됩니다. 로그가 쌓이기 시작한 시점 이후 활동만 반영됩니다.</p>
+              <p className="text-[11px] text-gray-400 mb-4">월간 랭킹은 봇의 지급 로그를 기준으로 집계됩니다. 로그가 쌓이기 시작한 시점 이후 활동만 반영됩니다.</p>
             )}
             {leaderboard.length === 0 ? (
-              <div className="py-10 text-gray-600 text-sm border-y border-white/[0.06]">표시할 기록이 없습니다.</div>
+              <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">표시할 기록이 없습니다.</div>
             ) : (
               <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
                 {leaderboard.map((u) => (
                   <div key={u.userId} className="py-3 flex items-center gap-4">
-                    <span className={`w-8 text-sm font-black shrink-0 ${u.rank <= 3 ? "text-[#e91e3f]" : "text-gray-600"}`}>{u.rank}</span>
+                    <span className={`w-8 text-sm font-black shrink-0 ${u.rank <= 3 ? "text-[#e91e3f]" : "text-gray-400"}`}>{u.rank}</span>
                     <span className="text-sm font-bold text-white flex-1 truncate">{u.name}</span>
                     <span className="text-[11px] font-bold text-gray-500 shrink-0">Lv.{u.level}</span>
                     <span className="text-sm font-black text-gray-200 shrink-0 tabular-nums">{u.xp.toLocaleString()}</span>
@@ -697,16 +765,16 @@ export default function AdminBotPage() {
             </div>
 
             {logs.length === 0 ? (
-              <div className="py-10 text-gray-600 text-sm border-y border-white/[0.06]">지급 내역이 없습니다. 봇이 XP를 지급하면 여기에 기록됩니다.</div>
+              <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">지급 내역이 없습니다. 봇이 XP를 지급하면 여기에 기록됩니다.</div>
             ) : (
               <>
                 <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
                   {logs.map((l) => (
                     <div key={l._id} className="py-3 flex items-center gap-3 md:gap-4">
-                      <span className="text-[10px] text-gray-600 shrink-0 w-24 md:w-32 tabular-nums">{fmtDateTime(l.createdAt)}</span>
+                      <span className="text-[10px] text-gray-400 shrink-0 w-24 md:w-32 tabular-nums">{fmtDateTime(l.createdAt)}</span>
                       <span className="text-[10px] font-bold text-gray-400 shrink-0 w-8">{REASON_LABEL[l.reason] || "-"}</span>
                       <span className="text-sm font-bold text-white flex-1 truncate">{l.displayName || l.userId}</span>
-                      {l.channelName && <span className="text-[10px] text-gray-600 shrink-0 hidden md:block truncate max-w-[140px]">#{l.channelName}</span>}
+                      {l.channelName && <span className="text-[10px] text-gray-400 shrink-0 hidden md:block truncate max-w-[140px]">#{l.channelName}</span>}
                       <span className="text-sm font-black text-[#e91e3f] shrink-0 tabular-nums">+{(l.amount || 0).toLocaleString()}</span>
                     </div>
                   ))}
@@ -715,7 +783,7 @@ export default function AdminBotPage() {
                 <div className="flex items-center justify-between mt-6">
                   <button disabled={logPage === 0} onClick={() => setLogPage((p) => Math.max(0, p - 1))}
                     className="px-5 py-2.5 text-xs font-bold text-gray-400 border border-white/10 rounded-lg disabled:opacity-30 hover:text-white transition-colors">이전</button>
-                  <span className="text-[11px] font-bold text-gray-600">{logPage + 1} / {Math.max(1, Math.ceil(logTotal / 50))}</span>
+                  <span className="text-[11px] font-bold text-gray-400">{logPage + 1} / {Math.max(1, Math.ceil(logTotal / 50))}</span>
                   <button disabled={(logPage + 1) * 50 >= logTotal} onClick={() => setLogPage((p) => p + 1)}
                     className="px-5 py-2.5 text-xs font-bold text-gray-400 border border-white/10 rounded-lg disabled:opacity-30 hover:text-white transition-colors">다음</button>
                 </div>

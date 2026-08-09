@@ -85,7 +85,7 @@ export default function AdminHonorsPage() {
     );
   }
 
-  const inputClass = "w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600";
+  const inputClass = "w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-500";
 
   return (
     <main className="w-full flex-1 flex flex-col relative">
@@ -136,13 +136,13 @@ export default function AdminHonorsPage() {
                 <input type="text" required placeholder="예: LEVEL SEASON 1" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-2">우승팀 / 우승자 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">— 팀명 또는 개인명</span></label>
+                <label className="block text-xs font-bold text-gray-500 mb-2">우승팀 / 우승자 <span className="text-[#e91e3f]">*</span> <span className="text-gray-400 font-medium">— 팀명 또는 개인명</span></label>
                 <input type="text" required placeholder="예: 팀 이글루 / elahw.06" value={winner} onChange={(e) => setWinner(e.target.value)} className={inputClass} />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-2">우승자 디스코드 ID <span className="text-gray-600 font-medium">(선택 · 여러 명은 쉼표로 구분)</span></label>
+                <label className="block text-xs font-bold text-gray-500 mb-2">우승자 디스코드 ID <span className="text-gray-400 font-medium">(선택 · 여러 명은 쉼표로 구분)</span></label>
                 <textarea rows={2} placeholder="예: 1104242935664492666, 2205..." value={winnerId} onChange={(e) => setWinnerId(e.target.value)} className={inputClass + " resize-none leading-relaxed"} />
               </div>
               <div>
@@ -168,7 +168,7 @@ export default function AdminHonorsPage() {
           {isLoading ? (
             <div className="text-center py-10 text-gray-500 text-sm">불러오는 중...</div>
           ) : honors.length === 0 ? (
-            <div className="text-center py-10 text-gray-600 text-sm bg-white/[0.02] rounded-2xl border border-white/5">등재된 기록이 없습니다.</div>
+            <div className="text-center py-10 text-gray-400 text-sm bg-white/[0.02] rounded-2xl border border-white/5">등재된 기록이 없습니다.</div>
           ) : (
             <div className="divide-y divide-white/[0.06]">
               {honors.map((h) => (

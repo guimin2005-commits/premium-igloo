@@ -20,6 +20,11 @@ const BotSettingSchema = new mongoose.Schema({
   levelupChannelId: { type: String, default: "" }, // 레벨업 알림 채널 (비우면 알림 끔)
   levelupMessage: { type: String, default: "🎉 {user} 님이 **Lv.{level}** 에 도달했습니다!" },
 
+  // 레벨 보상 역할 지급 알림 (채널 비우면 레벨업 채널 사용, 그마저 없으면 알림 끔)
+  roleGrantChannelId: { type: String, default: "" },
+  roleGrantMessage: { type: String, default: "🎖 {user} 님에게 **{role}** 역할이 지급되었습니다! (Lv.{level})" },
+  roleGrantEnabled: { type: Boolean, default: true },
+
   updatedAt: { type: Date, default: Date.now },
 });
 

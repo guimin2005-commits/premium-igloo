@@ -38,7 +38,7 @@ export function registerChatXp(client) {
       }
 
       const amount =
-        s.chatXp + getBuffXp(message.member) + channelPolicy.boostXp + getActiveBoostXp(message.member);
+        s.chatXp + getBuffXp(message.member) + channelPolicy.boostXp + getActiveBoostXp(message.member, message.channel);
 
       await grantXp(message.member, amount, {
         reason: "chat",

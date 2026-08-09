@@ -258,6 +258,33 @@ const SEASON = {
 export default function LevelPage() {
   const [activeMainTab, setActiveMainTab] = useState("intro");
 
+  // 📌 현재 XP 정책 — 레벨 대시보드에서 값을 바꾸면 이 페이지 수치도 즉시 따라간다
+  const [policy, setPolicy] = useState(null);
+  useEffect(() => {
+    const load = () => fetch("/api/xp/policy", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (d?.success) setPolicy(d.data); })
+      .catch(() => {});
+    load();
+    // 대시보드에서 저장한 값이 열려 있는 화면에도 반영되도록 주기 갱신
+    const t = setInterval(load, 30 * 1000);
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => { clearInterval(t); window.removeEventListener("focus", onFocus); };
+  }, []);
+
+  // 정책값 헬퍼 (로드 전에는 기존 기본값 사용)
+  const P = {
+    chatXp: policy?.chatXp ?? 200,
+    chatCooldownSec: policy?.chatCooldownSec ?? 60,
+    voiceXp: policy?.voiceXp ?? 3000,
+    voiceIntervalSec: policy?.voiceIntervalSec ?? 300,
+    attendXp: policy?.attendXp ?? 7000,
+  };
+  const P_voiceMin = Math.max(1, Math.round(P.voiceIntervalSec / 60));
+  const P_chatCooldownLabel = P.chatCooldownSec >= 60 ? `${Math.round(P.chatCooldownSec / 60)}분` : `${P.chatCooldownSec}초`;
+  const P_scrimXp = P.voiceXp + 500; // 내전 채널은 기본 음성 + 500
+
   // 시즌 D-Day (KST 기준)
   const seasonDday = useMemo(() => {
     const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
@@ -351,10 +378,10 @@ export default function LevelPage() {
     let checkInterval = 1;
 
     if (simChannel === "chat") {
-      channelBaseXp = 200; levelBonusXp = 0; checkInterval = 1;
+      channelBaseXp = P.chatXp; levelBonusXp = 0; checkInterval = Math.max(1, Math.round(P.chatCooldownSec / 60));
     } else {
-      checkInterval = 5;
-      channelBaseXp = simChannel === "voice" ? 3000 : 3500;
+      checkInterval = P_voiceMin;
+      channelBaseXp = simChannel === "voice" ? P.voiceXp : P_scrimXp;
       if (level >= 700) levelBonusXp = 1000;
       else if (level >= 649) levelBonusXp = 1000;
       else if (level >= 600) levelBonusXp = 1000;
@@ -385,8 +412,8 @@ export default function LevelPage() {
     if (penMother) penguinAdd += 550;
 
     const buffTotalXp = (b1Add + b2Add + evAdd + penguinAdd) * channelCycles;
-    const attendanceBaseTotal = attendanceCount * 7000;
-    const attendanceBoostTotal = simAttendBoost ? attendanceCount * 7000 : 0;
+    const attendanceBaseTotal = attendanceCount * P.attendXp;
+    const attendanceBoostTotal = simAttendBoost ? attendanceCount * P.attendXp : 0;
 
     const finalGrandTotal = channelTotalXp + buffTotalXp + attendanceBaseTotal + attendanceBoostTotal;
     const currentCumulativeXp = getCumulativeXpByLevel(level);
@@ -413,10 +440,10 @@ export default function LevelPage() {
     if (!targetLv || targetLv <= currentLv || dailyMin <= 0) return null;
 
     const neededXp = getCumulativeXpByLevel(targetLv) - getCumulativeXpByLevel(currentLv);
-    const checkInterval = simChannel === "chat" ? 1 : 5;
+    const checkInterval = simChannel === "chat" ? Math.max(1, Math.round(P.chatCooldownSec / 60)) : P_voiceMin;
     const perCycle = simResult.channelBaseXp + simResult.levelBonusXp + simResult.b1Add + simResult.b2Add + simResult.evAdd + simResult.penguinAdd;
     const cyclesPerDay = Math.floor(dailyMin / checkInterval);
-    const attendDaily = 7000 + (simAttendBoost ? 7000 : 0); // 하루 1회 출석 가정
+    const attendDaily = P.attendXp + (simAttendBoost ? P.attendXp : 0); // 하루 1회 출석 가정
     const dailyXp = perCycle * cyclesPerDay + attendDaily;
     if (dailyXp <= 0) return null;
 
@@ -508,8 +535,8 @@ export default function LevelPage() {
             <div className="grid grid-cols-3 mt-10 border-y border-white/[0.08] divide-x divide-white/[0.08]">
               {[
                 { n: 1000, l: "MAX LEVEL" },
-                { n: 7000, l: "출석 1회 XP" },
-                { n: 3500, l: "내전 채널 XP" },
+                { n: P.attendXp, l: "출석 1회 XP" },
+                { n: P_scrimXp, l: "내전 채널 XP" },
               ].map((stat, i) => (
                 <div key={i} className="py-6 md:py-8 text-center group">
                   <div className="text-2xl md:text-4xl font-black text-white group-hover:text-[#e91e3f] transition-colors tracking-tight tabular-nums">
@@ -580,7 +607,7 @@ export default function LevelPage() {
                 {[
                   { c: "/레벨", d: "다음 레벨 도달까지 필요 XP 확인" },
                   { c: "/랭크", d: "XP, 레벨, 서버 내 순위 확인" },
-                  { c: "/출석체크", d: "출석체크를 통한 7,000 XP 지급" },
+                  { c: "/출석체크", d: `출석체크를 통한 ${P.attendXp.toLocaleString()} XP 지급` },
                   { c: "/경험치샵", d: "XP SHOP 상점으로 이동" },
                 ].map((item, i) => (
                   <div key={i} className="flex items-center justify-between px-1 py-[18px] group hover:bg-white/[0.02] transition-colors">
@@ -665,9 +692,9 @@ export default function LevelPage() {
               <SectionHeader no="01" title="기본 XP 획득량" desc="채널 활동별 기본 지급량 및 쿨타임 기준" />
               <div className="grid grid-cols-1 md:grid-cols-3 border-y border-white/[0.08] md:divide-x divide-white/[0.08]">
                 {[
-                  { t: "채팅 채널", x: "200", c: "쿨타임 1분", d: "채팅 입력 시 XP를 획득하며, 오남용 방지를 위해 쿨타임 1분이 적용됩니다." },
-                  { t: "음성 채널", x: "3,000", c: "쿨타임 5분", d: "음성 채널에서 최소 5분 동안 접속 지속 시 XP가 지급됩니다." },
-                  { t: "내전 음성 채널", x: "3,500", c: "쿨타임 5분", d: "음성 채널과 동일하게 적용되며, 보너스 500 XP가 추가 지급됩니다." },
+                  { t: "채팅 채널", x: P.chatXp.toLocaleString(), c: `쿨타임 ${P_chatCooldownLabel}`, d: `채팅 입력 시 XP를 획득하며, 오남용 방지를 위해 쿨타임 ${P_chatCooldownLabel}이 적용됩니다.` },
+                  { t: "음성 채널", x: P.voiceXp.toLocaleString(), c: `쿨타임 ${P_voiceMin}분`, d: `음성 채널에서 최소 ${P_voiceMin}분 동안 접속 지속 시 XP가 지급됩니다.` },
+                  { t: "내전 음성 채널", x: P_scrimXp.toLocaleString(), c: `쿨타임 ${P_voiceMin}분`, d: "음성 채널과 동일하게 적용되며, 보너스 500 XP가 추가 지급됩니다." },
                 ].map((item, i) => (
                   <div key={i} className={`group py-7 md:px-7 first:md:pl-0 last:md:pr-0 ${i > 0 ? "border-t md:border-t-0 border-white/[0.08]" : ""}`}>
                     <div className="flex items-center justify-between mb-5">
@@ -751,16 +778,16 @@ export default function LevelPage() {
                     <div className="flex justify-between items-center pb-5 border-b border-white/5">
                       <div>
                         <div className="text-sm font-bold text-white mb-1">기본 출석 체크</div>
-                        <div className="text-xs text-gray-500">출석 체크 시, 1회당 7,000 XP가 지급됩니다.</div>
+                        <div className="text-xs text-gray-500">출석 체크 시, 1회당 {P.attendXp.toLocaleString()} XP가 지급됩니다.</div>
                       </div>
-                      <span className="text-[#e91e3f] font-black text-lg tracking-tight shrink-0">+7,000</span>
+                      <span className="text-[#e91e3f] font-black text-lg tracking-tight shrink-0">+{P.attendXp.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center pt-5">
                       <div>
                         <div className="text-sm font-bold text-white mb-1">[XP] 출석 Boost</div>
                         <div className="text-xs text-gray-500">상품 보유 시 출석 기본 XP에 추가로 획득합니다.</div>
                       </div>
-                      <span className="text-[#e91e3f] font-black text-lg tracking-tight shrink-0">+7,000</span>
+                      <span className="text-[#e91e3f] font-black text-lg tracking-tight shrink-0">+{P.attendXp.toLocaleString()}</span>
                     </div>
                   </LuxCard>
                 </div>

@@ -34,7 +34,7 @@ async function voiceXpTick(client) {
       const doc = await UserXp.findOne({ userId: member.id }, { level: 1 }).lean();
 
       const amount = Math.floor(
-        (base + getVoiceBracketBonus(doc?.level || 0) + getBuffXp(member) + channelPolicy.boostXp + getActiveBoostXp(member)) *
+        (base + getVoiceBracketBonus(doc?.level || 0) + getBuffXp(member) + channelPolicy.boostXp + getActiveBoostXp(member, channel)) *
           muteMultiplier
       );
 

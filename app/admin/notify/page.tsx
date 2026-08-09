@@ -143,7 +143,7 @@ export default function AdminNotifyPage() {
     );
   }
 
-  const inputClass = "w-full bg-[#0d0d0d] border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600";
+  const inputClass = "w-full bg-[#0d0d0d] border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-500";
   const labelClass = "block text-[11px] font-bold text-gray-500 tracking-wide mb-2 uppercase";
 
   const ToolBtn = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
@@ -179,7 +179,7 @@ export default function AdminNotifyPage() {
               <span className="w-1 h-4 bg-[#e91e3f] rounded-full"></span>
               <span className="text-sm font-black text-white tracking-tight">통지서 작성</span>
             </div>
-            <span className="text-[10px] font-bold text-gray-600 tracking-wide">발신 · 고급 이글루 운영팀</span>
+            <span className="text-[10px] font-bold text-gray-400 tracking-wide">발신 · 고급 이글루 운영팀</span>
           </div>
 
           <div className="p-6 md:p-8 space-y-6">
@@ -188,7 +188,7 @@ export default function AdminNotifyPage() {
               <div>
                 <label className={labelClass}>수신자 (디스코드 사용자명) <span className="text-[#e91e3f]">*</span></label>
                 <input type="text" required placeholder="예: elahw.06" value={recipient} onChange={(e) => setRecipient(e.target.value)} className={inputClass} />
-                <p className="text-[10px] text-gray-600 mt-1.5 leading-relaxed">표시 이름·별명이 아닌 <span className="text-gray-400">고유 사용자명(핸들)</span>을 정확히 입력하세요.</p>
+                <p className="text-[10px] text-gray-400 mt-1.5 leading-relaxed">표시 이름·별명이 아닌 <span className="text-gray-400">고유 사용자명(핸들)</span>을 정확히 입력하세요.</p>
               </div>
               <div>
                 <label className={labelClass}>통지 유형 <span className="text-[#e91e3f]">*</span></label>
@@ -204,7 +204,7 @@ export default function AdminNotifyPage() {
             <div>
               <label className={labelClass}>제목 <span className="text-[#e91e3f]">*</span></label>
               <input type="text" required placeholder="예: 커뮤니티 이용 규칙 위반에 대한 경고 통지" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
-              <p className="text-[10px] text-gray-600 mt-1.5">제목은 디스코드 DM 알림에도 표시됩니다.</p>
+              <p className="text-[10px] text-gray-400 mt-1.5">제목은 디스코드 DM 알림에도 표시됩니다.</p>
             </div>
 
             {/* 본문 + 서식 툴바 */}
@@ -219,9 +219,9 @@ export default function AdminNotifyPage() {
                   <span className="w-px h-4 bg-white/10 mx-1"></span>
                   <ToolBtn onClick={() => insertTable(2, 2)}><span className="text-sm font-bold">⊞</span> 표</ToolBtn>
                 </div>
-                <textarea ref={textareaRef} required rows={7} placeholder="회원에게 전달할 통지 내용을 작성하세요. 위 버튼으로 굵게·밑줄·강조 등 서식을 넣을 수 있습니다. (본문은 사이트 알림함에서 표시됩니다)" value={content} onChange={(e) => setContent(e.target.value)} className="w-full bg-[#0d0d0d] px-4 py-3.5 text-sm text-white outline-none resize-none leading-relaxed placeholder:text-gray-600 [&::-webkit-scrollbar]:hidden" />
+                <textarea ref={textareaRef} required rows={7} placeholder="회원에게 전달할 통지 내용을 작성하세요. 위 버튼으로 굵게·밑줄·강조 등 서식을 넣을 수 있습니다. (본문은 사이트 알림함에서 표시됩니다)" value={content} onChange={(e) => setContent(e.target.value)} className="w-full bg-[#0d0d0d] px-4 py-3.5 text-sm text-white outline-none resize-none leading-relaxed placeholder:text-gray-500 [&::-webkit-scrollbar]:hidden" />
               </div>
-              <p className="text-[10px] text-gray-600 mt-1.5">서식: <code className="text-gray-500">**굵게**</code> · <code className="text-gray-500">__밑줄__</code> · <code className="text-gray-500">~~취소선~~</code> · <code className="text-gray-500">==강조==</code></p>
+              <p className="text-[10px] text-gray-400 mt-1.5">서식: <code className="text-gray-500">**굵게**</code> · <code className="text-gray-500">__밑줄__</code> · <code className="text-gray-500">~~취소선~~</code> · <code className="text-gray-500">==강조==</code></p>
             </div>
 
             {/* 미리보기 */}
@@ -231,11 +231,11 @@ export default function AdminNotifyPage() {
                 <div className={`rounded-lg border p-5 ${type === "경고" || type === "제재" ? "border-[#e91e3f]/20 bg-[#e91e3f]/[0.03]" : "border-white/10 bg-white/[0.02]"}`}>
                   <div className="flex items-center gap-2 mb-2">
                     <span className={`text-[10px] font-black tracking-wider border px-2 py-0.5 rounded-full ${TYPE_STYLES[type].badge}`}>{type}</span>
-                    <span className="ml-auto text-[11px] text-gray-600">운영팀 · 방금</span>
+                    <span className="ml-auto text-[11px] text-gray-400">운영팀 · 방금</span>
                   </div>
-                  <h4 className="text-sm md:text-base font-bold text-white break-keep mb-2">{title || <span className="text-gray-600">제목 미입력</span>}</h4>
+                  <h4 className="text-sm md:text-base font-bold text-white break-keep mb-2">{title || <span className="text-gray-400">제목 미입력</span>}</h4>
                   <div className="text-sm text-gray-300">
-                    {content.trim() ? <RenderFormattedText text={content} /> : <span className="text-gray-600 text-sm">본문 미입력</span>}
+                    {content.trim() ? <RenderFormattedText text={content} /> : <span className="text-gray-400 text-sm">본문 미입력</span>}
                   </div>
                 </div>
               </div>
@@ -254,12 +254,12 @@ export default function AdminNotifyPage() {
           <div className="flex items-baseline gap-4 mb-4">
             <span className="text-[11px] font-black tracking-[0.3em] text-gray-500 uppercase">발송 이력</span>
             <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent"></div>
-            <span className="text-[11px] font-bold text-gray-600">{sent.length}건</span>
+            <span className="text-[11px] font-bold text-gray-400">{sent.length}건</span>
           </div>
           {isLoading ? (
             <div className="text-center py-10 text-gray-500 text-sm">불러오는 중...</div>
           ) : sent.length === 0 ? (
-            <div className="text-center py-10 text-gray-600 text-sm bg-white/[0.02] rounded-xl border border-white/5">발송한 통지가 없습니다.</div>
+            <div className="text-center py-10 text-gray-400 text-sm bg-white/[0.02] rounded-xl border border-white/5">발송한 통지가 없습니다.</div>
           ) : (
             <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
               {sent.map((n) => {
@@ -272,9 +272,9 @@ export default function AdminNotifyPage() {
                       <p className="text-xs text-gray-500 truncate mt-0.5">{n.content}</p>
                       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1.5 text-[10px] font-bold">
                         <span className="text-gray-400">→ {n.recipientName}</span>
-                        <span className={n.dmSent ? "text-emerald-400/80" : "text-gray-600"}>{n.dmSent ? "DM 발송됨" : "DM 미발송"}</span>
-                        <span className={n.read ? "text-sky-400/80" : "text-gray-600"}>{n.read ? "읽음" : "안 읽음"}</span>
-                        <span className="text-gray-600">{new Date(n.createdAt).toLocaleString("ko-KR")}</span>
+                        <span className={n.dmSent ? "text-emerald-400/80" : "text-gray-400"}>{n.dmSent ? "DM 발송됨" : "DM 미발송"}</span>
+                        <span className={n.read ? "text-sky-400/80" : "text-gray-400"}>{n.read ? "읽음" : "안 읽음"}</span>
+                        <span className="text-gray-400">{new Date(n.createdAt).toLocaleString("ko-KR")}</span>
                       </div>
                     </div>
                     <button onClick={() => setDeleteConfirmId(n._id)} className="shrink-0 text-xs font-bold text-red-500/60 hover:text-red-500 bg-white/5 px-3 py-1.5 rounded-lg transition-colors">삭제</button>

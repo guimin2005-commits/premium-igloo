@@ -189,7 +189,7 @@ export default function AdminHubPage() {
           title="핵심 지표"
           right={
             <div className="flex items-center gap-2.5">
-              <span className={`text-[10px] font-black tracking-wider ${maintenance ? "text-[#e91e3f]" : "text-gray-600"}`}>{maintenance ? "🔧 점검 중" : "점검 모드"}</span>
+              <span className={`text-[10px] font-black tracking-wider ${maintenance ? "text-[#e91e3f]" : "text-gray-400"}`}>{maintenance ? "🔧 점검 중" : "점검 모드"}</span>
               <button onClick={toggleMaintenance} disabled={maintenanceLoading} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors ${maintenance ? "bg-[#e91e3f]" : "bg-white/10"}`}>
                 <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform duration-200 ${maintenance ? "translate-x-5" : ""}`}></div>
               </button>
@@ -209,7 +209,7 @@ export default function AdminHubPage() {
                 {s.dot && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>}
                 {s.n.toLocaleString()}
               </div>
-              <div className="text-[9px] md:text-[10px] font-bold tracking-[0.2em] text-gray-600 mt-1.5 uppercase">{s.l}</div>
+              <div className="text-[9px] md:text-[10px] font-bold tracking-[0.2em] text-gray-400 mt-1.5 uppercase">{s.l}</div>
             </div>
           ))}
         </div>
@@ -219,7 +219,7 @@ export default function AdminHubPage() {
           <div className="border-b border-white/[0.06] py-6">
             <div className="flex items-center justify-between mb-5">
               <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">Discord 서버 현황</span>
-              <span className="text-[10px] font-bold text-gray-600">개설 D+{discordStats.ageDays.toLocaleString()}일</span>
+              <span className="text-[10px] font-bold text-gray-400">개설 D+{discordStats.ageDays.toLocaleString()}일</span>
             </div>
             <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
               {[
@@ -232,7 +232,7 @@ export default function AdminHubPage() {
               ].map((s: any, i: number) => (
                 <div key={i} className="text-center">
                   <div className={`text-xl md:text-2xl font-black tracking-tight ${s.accent ? "text-[#e91e3f]" : "text-white"}`}>{s.n.toLocaleString()}</div>
-                  <div className="text-[9px] font-bold tracking-[0.15em] text-gray-600 mt-1 uppercase">{s.l}</div>
+                  <div className="text-[9px] font-bold tracking-[0.15em] text-gray-400 mt-1 uppercase">{s.l}</div>
                   {s.sub && <div className="text-[9px] font-bold text-[#e91e3f]/70 mt-0.5">{s.sub}</div>}
                 </div>
               ))}
@@ -252,13 +252,13 @@ export default function AdminHubPage() {
           <div className="border-b border-white/[0.06] pb-6 mb-6 overflow-x-auto">
             <div className="flex items-center justify-between mb-5 min-w-[560px]">
               <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">활동 골든타임 (최근 7일 · 평균 온라인)</span>
-              <span className="text-[10px] font-bold text-gray-600">피크 {Math.round(heatmap.max)}명</span>
+              <span className="text-[10px] font-bold text-gray-400">피크 {Math.round(heatmap.max)}명</span>
             </div>
             <div className="min-w-[560px]">
               <div className="grid gap-[3px]" style={{ gridTemplateColumns: "28px repeat(24, 1fr)" }}>
                 <div></div>
                 {Array.from({ length: 24 }, (_, h) => (
-                  <div key={h} className="text-center text-[8px] font-bold text-gray-600">{h % 3 === 0 ? h : ""}</div>
+                  <div key={h} className="text-center text-[8px] font-bold text-gray-400">{h % 3 === 0 ? h : ""}</div>
                 ))}
                 {["일", "월", "화", "수", "목", "금", "토"].map((dayName, d) => (
                   <React.Fragment key={d}>
@@ -274,7 +274,7 @@ export default function AdminHubPage() {
                   </React.Fragment>
                 ))}
               </div>
-              <p className="text-[9px] text-gray-600 mt-3">색이 진할수록 온라인 인원이 많은 시간대 · 데이터가 쌓일수록 정확해집니다</p>
+              <p className="text-[9px] text-gray-400 mt-3">색이 진할수록 온라인 인원이 많은 시간대 · 데이터가 쌓일수록 정확해집니다</p>
             </div>
           </div>
         )}
@@ -303,7 +303,7 @@ export default function AdminHubPage() {
                 <polygon points={`0,${h} ${pts} ${w},${h}`} fill="url(#memberFill)" />
                 <polyline points={pts} fill="none" stroke="#e91e3f" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
               </svg>
-              <div className="flex justify-between text-[9px] font-bold text-gray-600 mt-2">
+              <div className="flex justify-between text-[9px] font-bold text-gray-400 mt-2">
                 <span>{memberDaily[0].date.slice(5).replace("-", "/")} · {vals[0].toLocaleString()}명</span>
                 <span>{memberDaily[memberDaily.length - 1].date.slice(5).replace("-", "/")} · {vals[vals.length - 1].toLocaleString()}명</span>
               </div>
@@ -316,7 +316,7 @@ export default function AdminHubPage() {
           <div>
             <div className="flex items-center justify-between mb-5">
               <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">최근 7일 문의</span>
-              <span className="text-[10px] font-bold text-gray-600">총 {stats.weeklyInquiries}건</span>
+              <span className="text-[10px] font-bold text-gray-400">총 {stats.weeklyInquiries}건</span>
             </div>
             <div className="flex items-end justify-between gap-2 h-24">
               {stats.inquiryDaily.map((d, i) => {
@@ -328,7 +328,7 @@ export default function AdminHubPage() {
                       className={`w-full rounded-t-md transition-all ${d.count > 0 ? "bg-gradient-to-t from-[#e91e3f]/60 to-[#e91e3f]" : "bg-white/5"}`}
                       style={{ height: d.count > 0 ? `${Math.max((d.count / max) * 100, 12)}%` : "4px" }}
                     ></div>
-                    <span className="text-[8px] font-bold text-gray-600">{d.label}</span>
+                    <span className="text-[8px] font-bold text-gray-400">{d.label}</span>
                   </div>
                 );
               })}

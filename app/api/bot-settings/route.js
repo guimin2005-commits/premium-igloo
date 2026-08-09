@@ -59,6 +59,9 @@ export async function POST(request) {
         resetOnLeave: !!b.resetOnLeave,
         levelupChannelId: (b.levelupChannelId || "").trim(),
         levelupMessage: (b.levelupMessage || "").trim() || "🎉 {user} 님이 **Lv.{level}** 에 도달했습니다!",
+        roleGrantChannelId: (b.roleGrantChannelId || "").trim(),
+        roleGrantMessage: (b.roleGrantMessage || "").trim() || "🎖 {user} 님에게 **{role}** 역할이 지급되었습니다! (Lv.{level})",
+        roleGrantEnabled: b.roleGrantEnabled !== false,
         updatedAt: new Date(),
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
