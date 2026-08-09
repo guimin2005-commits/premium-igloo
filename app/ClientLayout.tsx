@@ -169,6 +169,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => { document.body.style.overflow = ""; };
   }, [isMobileMenuOpen]);
 
+  // 📌 모바일 메뉴 — Esc로 닫기 (좁은 창의 PC 브라우저에서도 열리므로)
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setIsMobileMenuOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isMobileMenuOpen]);
+
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
       if (isVerified === false && !isVerifyPage) router.push("/verify");
@@ -433,7 +441,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       })()}
       </div>
 
-      <main className="flex-1 flex flex-col w-full relative pb-16 md:pb-0">
+      {/* pb-24 — 떠 있는 알약 독(12px 여백 + 약 58px 높이)에 콘텐츠 끝이 가리지 않게 */}
+      <main className="flex-1 flex flex-col w-full relative pb-24 md:pb-0">
         {isMaintenance && mounted && !isAdmin && status !== "loading" ? (
           /* 📌 점검 모드 화면 (관리자는 정상 이용 가능) */
           <div className="flex-1 flex items-center justify-center px-6 py-32 relative overflow-hidden">
@@ -455,9 +464,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         )}
       </main>
 
-      {/* 📌 모바일 하단 고정 탭 바 (경매방에서는 오조작 방지를 위해 숨김) */}
+      {/* 📌 모바일 하단 독 바 — 화면에 붙은 사각 바 대신 떠 있는 알약 독.
+             스크롤 시 상단 헤더가 변하는 알약과 같은 톤(bg #0b0b0b/75 + backdrop-blur-2xl + 얇은 흰 테두리).
+             ※ bottom은 홈 인디케이터/제스처 바를 피하도록 safe-area와 12px 중 큰 값.
+             (경매방에서는 오조작 방지를 위해 숨김) */}
       {!isVerifyPage && !isAuctionRoom && mounted && (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/10 grid grid-cols-5">
+        <nav className="md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border border-white/[0.07] bg-[#0b0b0b]/75 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85)] grid grid-cols-5">
           {[
             { name: "홈", path: "/", icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" },
             { name: "공지", path: "/notice", icon: "M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73" },
@@ -467,8 +479,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           ].map((tab) => {
             const isActive = pathname === tab.path;
             return (
-              <Link key={tab.path} href={tab.path} className={`flex flex-col items-center justify-center gap-1 py-2.5 transition-colors ${isActive ? "text-[#e91e3f]" : "text-gray-500 active:text-white"}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={isActive ? 2 : 1.6} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} /></svg>
+              // flex-col에서는 gap이 먹지 않으므로 아이콘 아래 여백은 mb로 준다
+              <Link key={tab.path} href={tab.path} className={`flex flex-col items-center justify-center py-1.5 rounded-full transition-all active:scale-95 ${isActive ? "text-[#e91e3f] bg-[#e91e3f]/[0.1]" : "text-gray-500 active:text-white"}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={isActive ? 2 : 1.6} stroke="currentColor" className="w-5 h-5 mb-0.5"><path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} /></svg>
                 <span className="text-[10px] font-bold">{tab.name}</span>
               </Link>
             );
@@ -566,75 +579,168 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </div>
       )}
 
-      {/* 모바일 슬라이드 메뉴 (항상 최상위 + DOM 최하단 배치로 클릭/스택 보장) */}
-      {isMobileMenuOpen && (
+      {/* 📌 모바일 슬라이드 메뉴 — 사이트 디자인 언어(다크 럭셔리 에디토리얼)에 맞춘 드로어.
+             크림슨 eyebrow + 설명줄 + 활성 표시 바 + 순차 등장 애니메이션.
+             항상 최상위 + DOM 최하단 배치로 클릭/스택 보장 */}
+      {isMobileMenuOpen && (() => {
+        const closeMenu = () => setIsMobileMenuOpen(false);
+        // 계정 영역 — 링크/버튼이 섞여 있어 한 배열로 모아 같은 스타일로 렌더한다
+        const accountItems: { name: string; desc: string; path?: string; onClick?: () => void; accent?: boolean }[] = [];
+        if (status === "authenticated" && session) {
+          if (!isVerifyPage) accountItems.push({ name: "내 정보", desc: "활동 기록과 보유 포인트", path: "/profile" });
+          if (!isVerifyPage && isVerified) accountItems.push({ name: "친구 초대 이벤트", desc: "초대하고 보상 받기", path: "/invite" });
+          if (isVerified) accountItems.push({ name: "코드 등록", desc: "상품·혜택 코드 입력", onClick: () => { closeMenu(); setIsCodeModalOpen(true); } });
+          if (isAdmin) accountItems.push({ name: "관리자 페이지", desc: "운영 도구", path: "/admin", accent: true });
+        }
+        const showCategories = !isVerifyPage && (status !== "authenticated" || isVerified);
+        // 순차 등장 딜레이 — 그룹을 넘어가며 계속 누적된다
+        let step = 0;
+        const delay = () => `${70 + step++ * 32}ms`;
+
+        return (
         <div className="md:hidden fixed inset-0 z-[200]">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
-          <div className="absolute right-0 top-0 bottom-0 w-[80%] max-w-xs bg-[#121212] border-l border-white/10 shadow-2xl flex flex-col overflow-y-auto overscroll-contain">
-            <div className="flex items-center justify-between px-6 h-16 border-b border-white/10 shrink-0">
-              <span className="text-lg font-black tracking-widest text-white">메뉴</span>
-              <button onClick={() => setIsMobileMenuOpen(false)} aria-label="메뉴 닫기" className="p-2 -mr-2 text-gray-400 hover:text-white transition-colors outline-none">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          <style dangerouslySetInnerHTML={{ __html: `
+            @keyframes mmFade{from{opacity:0}to{opacity:1}}
+            @keyframes mmPanel{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:translateX(0)}}
+            @keyframes mmItem{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
+          `}} />
+
+          <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" style={{ animation: "mmFade 0.28s ease-out" }} onClick={closeMenu} />
+
+          <div
+            className="absolute right-0 top-0 bottom-0 w-[88%] max-w-[350px] bg-[#0b0b0b] shadow-[-30px_0_70px_-20px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden"
+            style={{ animation: "mmPanel 0.42s cubic-bezier(0.16,1,0.3,1)" }}
+          >
+            {/* 좌측 크림슨 헤어라인 + 상단 글로우 */}
+            <div className="absolute left-0 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-[#e91e3f]/45 to-transparent pointer-events-none"></div>
+            <div className="absolute top-[-70px] right-[-40px] w-56 h-40 bg-[#e91e3f]/[0.13] blur-[70px] rounded-full pointer-events-none"></div>
+
+            {/* ── 헤더 ── */}
+            <div className="relative shrink-0 px-6 pt-6 pb-5 flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-2.5 mb-2">
+                  <span className="w-5 h-px bg-[#e91e3f]"></span>
+                  <span className="text-[9px] font-black tracking-[0.4em] text-gray-500 uppercase">Premium Igloo</span>
+                </div>
+                <p className="text-xl font-black tracking-tight text-white">고급 이글루</p>
+              </div>
+              <button
+                onClick={closeMenu}
+                aria-label="메뉴 닫기"
+                className="shrink-0 w-9 h-9 -mr-1 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/[0.08] active:scale-90 transition-all outline-none"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
-            <div className="flex-1 flex flex-col p-5 gap-1">
+            {/* ── 스크롤 영역 ── */}
+            <div className="relative flex-1 overflow-y-auto overscroll-contain px-5 pb-5 [&::-webkit-scrollbar]:hidden">
               {status === "authenticated" && session && (
-                <div className="flex items-center gap-3 p-3 mb-3 bg-white/[0.03] rounded-2xl">
-                  <img src={session.user?.image || ""} alt="Profile" className={`w-11 h-11 rounded-full bg-gray-700 ${isBooster ? 'ring-2 ring-[#e91e3f]/60 ring-offset-2 ring-offset-[#121212]' : ''}`} />
-                  <div className="min-w-0">
-                    <p className="font-bold text-white text-sm truncate">{session.user?.name}</p>
-                    <span className={`inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-[10px] font-bold ${isVerified && hasScrimRole ? 'bg-green-500/10 text-green-400' : isVerified ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'}`}>{isVerified && hasScrimRole ? "인증" : isVerified ? "일부 인증" : "미인증"}</span>
+                <div className="relative mb-6 rounded-2xl bg-white/[0.03] border border-white/[0.06] p-4 overflow-hidden" style={{ animation: `mmItem 0.4s cubic-bezier(0.16,1,0.3,1) both`, animationDelay: delay() }}>
+                  <div className="absolute top-[-34px] right-[-22px] w-28 h-16 bg-[#e91e3f]/[0.14] blur-[38px] rounded-full pointer-events-none"></div>
+                  <div className="relative flex items-center gap-3.5">
+                    <div className="relative shrink-0">
+                      {isBooster && <div className="absolute -inset-1.5 bg-[#e91e3f]/20 blur-lg rounded-full pointer-events-none"></div>}
+                      <img src={session.user?.image || ""} alt="Profile" className={`relative w-11 h-11 rounded-full bg-gray-700 ${isBooster ? "ring-2 ring-[#e91e3f]/60 ring-offset-2 ring-offset-[#0b0b0b]" : ""}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-white text-sm truncate">{session.user?.name}</p>
+                      <span className={`inline-flex items-center px-2 py-0.5 mt-1.5 rounded-full text-[10px] font-bold ${isVerified && hasScrimRole ? "bg-green-500/10 text-green-400 border border-green-500/20" : isVerified ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}>{isVerified && hasScrimRole ? "인증" : isVerified ? "일부 인증" : "미인증"}</span>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {!isVerifyPage && (status !== "authenticated" || isVerified) && (
-                <>
-                  {categoryGroups.map((group, gIdx) => (
-                    <div key={group.name} className={gIdx > 0 ? "mt-4" : ""}>
-                      <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wider px-3 mb-1">{group.name}</p>
-                      {group.items.map((item) => {
-                        const isActive = pathname === item.path;
-                        return (
-                          <Link key={item.path} href={item.path} onClick={() => setIsMobileMenuOpen(false)} className={`block px-3 py-3 rounded-xl text-sm font-bold transition-colors ${isActive ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-gray-300 hover:bg-white/5 hover:text-white"}`}>{item.name}</Link>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </>
+              {showCategories && categoryGroups.map((group, gIdx) => (
+                <div key={group.name} className={gIdx > 0 ? "mt-7" : ""}>
+                  <div className="flex items-center gap-2.5 mb-2.5 px-1">
+                    <span className="w-4 h-px bg-[#e91e3f]"></span>
+                    {/* 한글 카테고리명이라 영문용 넓은 자간(0.35em) 대신 절반만 준다 */}
+                    <span className="text-[10px] font-black tracking-[0.18em] text-[#e91e3f]">{group.name}</span>
+                    <span className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent"></span>
+                  </div>
+                  {group.items.map((item) => {
+                    const isActive = pathname === item.path;
+                    return (
+                      <Link
+                        key={item.path}
+                        href={item.path}
+                        onClick={closeMenu}
+                        style={{ animation: `mmItem 0.4s cubic-bezier(0.16,1,0.3,1) both`, animationDelay: delay() }}
+                        className={`group/mm relative flex items-center gap-3 rounded-xl pl-4 pr-3 py-2.5 mb-1 transition-colors ${isActive ? "bg-[#e91e3f]/[0.09]" : "active:bg-white/[0.05]"}`}
+                      >
+                        {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full bg-[#e91e3f]"></span>}
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-[15px] font-bold tracking-tight truncate ${isActive ? "text-[#e91e3f]" : "text-gray-100"}`}>{item.name}</p>
+                          <p className="text-[11px] text-gray-500 truncate mt-0.5">{item.desc}</p>
+                        </div>
+                        <span className={`shrink-0 text-sm transition-transform group-active/mm:translate-x-1 ${isActive ? "text-[#e91e3f]" : "text-gray-600"}`}>→</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+
+              {accountItems.length > 0 && (
+                <div className="mt-7">
+                  <div className="flex items-center gap-2.5 mb-2.5 px-1">
+                    <span className="w-4 h-px bg-[#e91e3f]"></span>
+                    <span className="text-[10px] font-black tracking-[0.18em] text-[#e91e3f]">계정</span>
+                    <span className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent"></span>
+                  </div>
+                  {accountItems.map((item) => {
+                    const isActive = !!item.path && pathname === item.path;
+                    const inner = (
+                      <>
+                        {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full bg-[#e91e3f]"></span>}
+                        <div className="min-w-0 flex-1 text-left">
+                          <p className={`text-[15px] font-bold tracking-tight truncate ${isActive || item.accent ? "text-[#e91e3f]" : "text-gray-100"}`}>{item.name}</p>
+                          <p className="text-[11px] text-gray-500 truncate mt-0.5">{item.desc}</p>
+                        </div>
+                        <span className={`shrink-0 text-sm transition-transform group-active/mm:translate-x-1 ${isActive || item.accent ? "text-[#e91e3f]" : "text-gray-600"}`}>→</span>
+                      </>
+                    );
+                    const cls = `group/mm relative w-full flex items-center gap-3 rounded-xl pl-4 pr-3 py-2.5 mb-1 outline-none transition-colors ${isActive ? "bg-[#e91e3f]/[0.09]" : "active:bg-white/[0.05]"}`;
+                    const style = { animation: `mmItem 0.4s cubic-bezier(0.16,1,0.3,1) both`, animationDelay: delay() };
+                    return item.path ? (
+                      <Link key={item.name} href={item.path} onClick={closeMenu} style={style} className={cls}>{inner}</Link>
+                    ) : (
+                      <button key={item.name} onClick={item.onClick} style={style} className={cls}>{inner}</button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── 푸터 ── */}
+            <div className="relative shrink-0 border-t border-white/[0.07] bg-[#0b0b0b] px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              {status === "authenticated" && session ? (
+                <button
+                  onClick={() => { closeMenu(); signOut(); }}
+                  className="w-full py-3 rounded-2xl bg-[#e91e3f]/[0.08] border border-[#e91e3f]/25 text-[#e91e3f] text-sm font-black tracking-tight active:bg-[#e91e3f]/[0.16] transition-colors outline-none"
+                >
+                  로그아웃
+                </button>
+              ) : (
+                <button
+                  onClick={() => { closeMenu(); signIn("discord", { callbackUrl: "/" }); }}
+                  className="w-full py-3.5 rounded-2xl bg-[#5865F2] active:bg-[#4752C4] text-white text-sm font-black tracking-tight shadow-[0_10px_30px_-10px_rgba(88,101,242,0.6)] transition-colors outline-none"
+                >
+                  Discord 로그인
+                </button>
               )}
 
-              <div className="mt-auto pt-4 border-t border-white/10 flex flex-col gap-1">
-                {status === "authenticated" && session ? (
-                  <>
-                    {!isVerifyPage && (
-                      <Link href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="px-3 py-3 rounded-xl text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors">내 정보</Link>
-                    )}
-                    {!isVerifyPage && isVerified && (
-                      <Link href="/invite" onClick={() => setIsMobileMenuOpen(false)} className="px-3 py-3 rounded-xl text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors">친구 초대 이벤트</Link>
-                    )}
-                    {isAdmin && (
-                      <Link href="/admin" onClick={() => setIsMobileMenuOpen(false)} className="px-3 py-3 rounded-xl text-sm font-bold text-[#e91e3f] hover:bg-[#e91e3f]/10 transition-colors">관리자 페이지</Link>
-                    )}
-                    {isVerified && (
-                      <button onClick={() => { setIsMobileMenuOpen(false); setIsCodeModalOpen(true); }} className="text-left px-3 py-3 rounded-xl text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors outline-none">코드 등록</button>
-                    )}
-                    <button onClick={() => { setIsMobileMenuOpen(false); signOut(); }} className="text-left px-3 py-3 rounded-xl text-sm font-bold text-[#e91e3f] hover:bg-[#e91e3f]/10 transition-colors outline-none">로그아웃</button>
-                  </>
-                ) : (
-                  <button onClick={() => { setIsMobileMenuOpen(false); signIn("discord", { callbackUrl: "/" }); }} className="w-full py-3 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-xl transition-colors outline-none">Discord 로그인</button>
-                )}
-                <div className="flex items-center gap-4 px-3 pt-3">
-                  <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">Discord</a>
-                  <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-white transition-colors font-medium">Kakao Talk</a>
-                </div>
-                <Link href="/policy" onClick={() => setIsMobileMenuOpen(false)} className="px-3 py-3 text-xs text-gray-500 hover:text-white transition-colors">이용약관 및 개인정보처리방침</Link>
+              <div className="flex items-center gap-2 mt-3">
+                <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="flex-1 text-center py-2 rounded-full bg-white/[0.04] border border-white/[0.07] text-[11px] font-bold text-gray-400 active:text-white transition-colors">Discord</a>
+                <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className="flex-1 text-center py-2 rounded-full bg-white/[0.04] border border-white/[0.07] text-[11px] font-bold text-gray-400 active:text-white transition-colors">Kakao Talk</a>
               </div>
+
+              <Link href="/policy" onClick={closeMenu} className="block mt-3 text-center text-[10px] text-gray-600 active:text-gray-400 transition-colors">이용약관 및 개인정보처리방침</Link>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
