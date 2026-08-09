@@ -130,19 +130,19 @@ export default function ShopPage() {
   const addToCart = (item: any) => {
     if (!isLoggedIn) return signIn("discord");
     if (ownedItemIds.has(item._id)) {
-      setCartToast("이미 구매한 상품입니다");
+      setCartToast("이미 구매하신 상품입니다");
       setTimeout(() => setCartToast(""), 1800);
       return;
     }
     // 이미 담겨 있으면 다시 눌러 뺀다 (상품은 1인 1개라 수량 개념이 없다)
     if (cart.some((c) => c.itemId === item._id)) {
       setCart((prev) => prev.filter((c) => c.itemId !== item._id));
-      setCartToast(`${item.name} 뺐습니다`);
+      setCartToast(`${item.name} 상품을 장바구니에서 삭제했습니다`);
       setTimeout(() => setCartToast(""), 1800);
       return;
     }
     setCart((prev) => [...prev, { itemId: item._id, qty: 1 }]);
-    setCartToast(`${item.name} 담김`);
+    setCartToast(`${item.name} 상품을 장바구니에 담았습니다`);
     setTimeout(() => setCartToast(""), 1800);
   };
 
@@ -177,7 +177,7 @@ export default function ShopPage() {
 
   const toggleWish = (item: any) => {
     setWish((prev) => (prev.includes(item._id) ? prev.filter((x) => x !== item._id) : [...prev, item._id]));
-    setCartToast(wish.includes(item._id) ? `${item.name} 찜 해제` : `${item.name} 찜 완료`);
+    setCartToast(wish.includes(item._id) ? `${item.name} 상품의 찜을 해제했습니다` : `${item.name} 상품을 찜했습니다`);
     setTimeout(() => setCartToast(""), 1600);
   };
 
@@ -820,8 +820,8 @@ export default function ShopPage() {
                         <button
                           onClick={() => addToCart(it)}
                           disabled={soldOut || owned}
-                          aria-label={inCart ? "장바구니에서 빼기" : "장바구니 담기"}
-                          title={inCart ? "다시 누르면 장바구니에서 빠집니다" : "장바구니에 담기"}
+                          aria-label={inCart ? "장바구니에서 삭제" : "장바구니에 담기"}
+                          title={inCart ? "다시 누르면 장바구니에서 삭제됩니다" : "장바구니에 담기"}
                           className={`w-8 h-8 sm:w-11 sm:h-11 shrink-0 rounded-full flex items-center justify-center transition-all ${
                             soldOut || owned
                               ? "bg-[#eceae6] text-[#c4c4c4] cursor-not-allowed"

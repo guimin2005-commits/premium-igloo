@@ -106,13 +106,13 @@ export default function ItemDetailPage() {
   const affordable = myXp != null && myXp >= sp;
   const badge = TYPE_BADGE[item.type] || TYPE_BADGE.physical;
 
-  // 담기 ↔ 빼기 토글
+  // 담기 ↔ 삭제 토글
   const toggleCart = () => {
     if (!isLoggedIn) return signIn("discord");
-    if (owned) return flash("이미 구매한 상품입니다");
+    if (owned) return flash("이미 구매하신 상품입니다");
     if (inCart) {
       saveCart(cart.filter((c) => c.itemId !== item._id));
-      flash("장바구니에서 뺐습니다");
+      flash("장바구니에서 삭제했습니다");
       return;
     }
     saveCart([...cart, { itemId: item._id, qty: 1 }]);
@@ -121,7 +121,7 @@ export default function ItemDetailPage() {
 
   const toggleWish = () => {
     saveWish(wished ? wish.filter((x) => x !== item._id) : [...wish, item._id]);
-    flash(wished ? "찜을 해제했습니다" : "찜했습니다");
+    flash(wished ? "찜을 해제했습니다" : "찜 목록에 추가했습니다");
   };
 
   const openBuy = () => {
@@ -259,7 +259,7 @@ export default function ItemDetailPage() {
                     ? "bg-[#131313] text-white hover:bg-[#333]"
                     : "bg-white text-[#131313] border border-[#e2e0dc] hover:border-[#131313]"
                 }`}>
-                {inCart ? "빼기" : "장바구니"}
+                {inCart ? "장바구니에서 삭제" : "장바구니에 담기"}
               </button>
 
               <button onClick={openBuy} disabled={soldOut || owned}
