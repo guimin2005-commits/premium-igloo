@@ -425,7 +425,8 @@ export default function LevelPage() {
   }, [simLevel, goalLevel, goalDailyTime, simChannel, simResult, simAttendBoost]);
 
   return (
-    <main className="w-full flex-1 flex flex-col relative overflow-hidden">
+    // ⚠️ main에 overflow-hidden 금지 — 하위 sticky(탭바)가 죽는다. 글로우 가로 넘침은 body의 overflow-x: clip이 전역 처리
+    <main className="w-full flex-1 flex flex-col relative">
       <ScrollProgress />
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
@@ -522,27 +523,32 @@ export default function LevelPage() {
         </div>
       </section>
 
-      {/* ── TAB NAV (스티키 세그먼트) ─────── */}
-      <div className="sticky top-16 z-30 w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
-        <div className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto custom-scrollbar">
+      {/* ── TAB NAV — 섹션 넘버링과 호응하는 에디토리얼 인덱스 탭 ─────── */}
+      <div className="sticky top-14 z-30 w-full px-6 bg-[#090909]/85 backdrop-blur-xl border-b border-white/[0.08]">
+        <div className="max-w-5xl mx-auto flex gap-7 md:gap-10 overflow-x-auto custom-scrollbar">
           {[
             { id: "intro", name: "시스템 소개" },
             { id: "policy", name: "XP 획득 및 혜택" },
             { id: "table", name: "XP 테이블" },
             { id: "sim", name: "XP 시뮬레이터" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveMainTab(tab.id)}
-              className={`px-5 py-2.5 text-xs md:text-sm font-bold rounded-full shrink-0 outline-none focus:outline-none transition-all duration-300 ${
-                activeMainTab === tab.id
-                  ? "bg-[#e91e3f] text-white shadow-[0_4px_20px_rgba(233,30,63,0.35)]"
-                  : "bg-white/[0.04] text-gray-500 hover:text-white hover:bg-white/[0.08] border border-white/5"
-              }`}
-            >
-              {tab.name}
-            </button>
-          ))}
+          ].map((tab, i) => {
+            const active = activeMainTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveMainTab(tab.id)}
+                className={`group relative py-4 flex items-baseline gap-2 text-[13px] md:text-sm font-black shrink-0 outline-none focus:outline-none transition-colors duration-300 ${
+                  active ? "text-white" : "text-gray-600 hover:text-gray-300"
+                }`}
+              >
+                <span className={`text-[10px] font-black tabular-nums transition-colors duration-300 ${active ? "text-[#e91e3f]" : "text-gray-700 group-hover:text-gray-500"}`}>
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                {tab.name}
+                <span className={`absolute left-0 right-0 bottom-0 h-[2px] bg-[#e91e3f] origin-left transition-transform duration-300 ${active ? "scale-x-100 shadow-[0_0_10px_rgba(233,30,63,0.6)]" : "scale-x-0"}`} />
+              </button>
+            );
+          })}
         </div>
       </div>
 
