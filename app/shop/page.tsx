@@ -88,6 +88,7 @@ export default function ShopPage() {
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showMobileProfile, setShowMobileProfile] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const mobileProfileRef = useRef<HTMLDivElement>(null);
@@ -255,7 +256,7 @@ export default function ShopPage() {
     if (!isLoggedIn) return;
     fetch("/api/xp/me", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => { if (d?.success) { setMyXp(d.data.balance ?? d.data.xp); setMyLevel(d.data.level); setMyProgress(d.data.levelProgress || null); } })
+      .then((d) => { if (d?.success) { setMyXp(d.data.xp); setMyLevel(d.data.level); setMyProgress(d.data.levelProgress || null); } })
       .catch(() => {});
     fetch("/api/shop/purchase", { cache: "no-store" })
       .then((r) => r.json())
@@ -520,9 +521,6 @@ export default function ShopPage() {
               <span className="w-8 h-px bg-[#8a8a8a]"></span>
             </div>
             <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-[#131313] mb-4">ARCTIC</h1>
-            <p className="text-sm md:text-base text-[#4b4b4b] leading-relaxed break-keep max-w-lg mx-auto">
-              쌓아온 XP로 역할과 혜택을 만나보세요.<br className="hidden sm:block" /> 역할 상품은 구매 즉시 자동 지급됩니다.
-            </p>
 
             {/* 관리자에게만 보이는 상품 관리 진입점 */}
             {isAdmin && (
@@ -657,7 +655,7 @@ export default function ShopPage() {
             <p className="text-xs text-[#8a8a8a]">필터를 조정하거나 다른 검색어를 입력해보세요.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 lg:gap-6">
             {visible.map((it) => {
               const soldOut = it.stock === 0;
               const affordable = canAfford(salePrice(it));
@@ -677,7 +675,7 @@ export default function ShopPage() {
                         </svg>
                       </div>
                     )}
-                    <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide ${TYPE_BADGE[it.type]?.cls || "bg-[#131313] text-white"}`}>
+                    <span className={`absolute top-2 left-2 sm:top-3 sm:left-3 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black tracking-wide ${TYPE_BADGE[it.type]?.cls || "bg-[#131313] text-white"}`}>
                       {TYPE_BADGE[it.type]?.label || "상품"}
                     </span>
                     {salePrice(it) < it.price && (
@@ -717,10 +715,10 @@ export default function ShopPage() {
                   </div>
 
                   {/* 정보 */}
-                  <div className="p-5 flex flex-col flex-1">
-                    <h3 className="text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep">{it.name}</h3>
+                  <div className="p-3.5 sm:p-5 flex flex-col flex-1">
+                    <h3 className="text-[13px] sm:text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep line-clamp-2">{it.name}</h3>
                     {it.description && (
-                      <p className="text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep">{it.description}</p>
+                      <p className="hidden sm:block text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep">{it.description}</p>
                     )}
 
                     {/* 재고는 얼마 안 남았을 때만 알린다 (무제한·넉넉할 땐 표시 안 함) */}
@@ -733,8 +731,8 @@ export default function ShopPage() {
 
                     <div className="mt-auto">
                       <div className="mb-3 flex items-baseline gap-2 flex-wrap">
-                        <span className="text-xl font-black text-[#131313] tracking-tight tabular-nums">
-                          {salePrice(it).toLocaleString()}<span className="text-[12px] font-bold text-[#8a8a8a] ml-1">XP</span>
+                        <span className="text-[15px] sm:text-xl font-black text-[#131313] tracking-tight tabular-nums">
+                          {salePrice(it).toLocaleString()}<span className="text-[11px] sm:text-[12px] font-bold text-[#8a8a8a] ml-1">XP</span>
                         </span>
                         {salePrice(it) < it.price && (
                           <span className="text-[12px] text-[#a3a3a3] line-through tabular-nums">{it.price.toLocaleString()} XP</span>
@@ -760,7 +758,7 @@ export default function ShopPage() {
                         <button
                           onClick={() => openBuy(it)}
                           disabled={soldOut || owned}
-                          className={`flex-1 px-5 py-2.5 rounded-full text-[12px] font-bold transition-all ${
+                          className={`flex-1 px-3 sm:px-5 py-2.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all ${
                             owned
                               ? "bg-[#eceae6] text-[#8a8a8a] cursor-not-allowed"
                               : soldOut
@@ -917,21 +915,20 @@ export default function ShopPage() {
         </div>
       )}
 
-      {/* ── 모바일 하단 탭바 — 앱 내비게이션 ── */}
+      {/* ── 모바일 하단 탭바 — 홈 · 찜 · 검색 · 장바구니 · 프로필 ── */}
       <nav className="md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[92] p-1.5 rounded-full border border-[#e2e0dc] bg-white/90 backdrop-blur-2xl shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)] grid grid-cols-5">
-        {/* 상점 홈 */}
-        <button onClick={() => { setWishOnly(false); setTypeFilter("all"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-          className={`flex flex-col items-center justify-center py-1.5 rounded-full transition-all active:scale-95 ${
-            !wishOnly ? "text-[#e91e3f] bg-[#e91e3f]/[0.1]" : "text-[#8a8a8a] active:text-[#131313]"
-          }`}>
+        {/* 1. 홈 */}
+        <button onClick={() => { setTypeFilter("all"); setQuery(""); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          aria-label="상점 홈"
+          className="flex items-center justify-center py-2 rounded-full text-[#8a8a8a] active:text-[#131313] transition-all active:scale-95">
           <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
           </svg>
         </button>
 
-        {/* 찜 */}
-        <button onClick={() => setShowWishList(true)}
-          className={`relative flex flex-col items-center justify-center py-1.5 rounded-full transition-all active:scale-95 ${
+        {/* 2. 찜 */}
+        <button onClick={() => setShowWishList(true)} aria-label="찜한 상품"
+          className={`relative flex items-center justify-center py-2 rounded-full transition-all active:scale-95 ${
             wish.length > 0 ? "text-[#e91e3f]" : "text-[#8a8a8a] active:text-[#131313]"
           }`}>
           <svg className="w-[19px] h-[19px]" fill={wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
@@ -939,30 +936,31 @@ export default function ShopPage() {
           </svg>
         </button>
 
-        {/* 장바구니 */}
-        <Link href="/shop/cart"
-          className="relative flex flex-col items-center justify-center py-1.5 rounded-full text-[#8a8a8a] active:text-[#131313] transition-all active:scale-95">
+        {/* 3. 검색 */}
+        <button onClick={() => setShowMobileSearch(true)} aria-label="상품 검색"
+          className={`relative flex items-center justify-center py-2 rounded-full transition-all active:scale-95 ${
+            query ? "text-[#e91e3f]" : "text-[#8a8a8a] active:text-[#131313]"
+          }`}>
+          <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          </svg>
+        </button>
+
+        {/* 4. 장바구니 */}
+        <Link href="/shop/cart" aria-label="장바구니"
+          className="relative flex items-center justify-center py-2 rounded-full text-[#8a8a8a] active:text-[#131313] transition-all active:scale-95">
           <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
           </svg>
           {cartCount > 0 && (
-            <span className="absolute top-0.5 right-1/2 translate-x-4 min-w-[15px] h-[15px] px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center">{cartCount}</span>
+            <span className="absolute top-0.5 right-1/2 translate-x-3.5 min-w-[15px] h-[15px] px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center">{cartCount}</span>
           )}
         </Link>
 
-        {/* 구매 내역 */}
-        <Link href="/shop/orders"
-          className="relative flex flex-col items-center justify-center py-1.5 rounded-full text-[#8a8a8a] active:text-[#131313] transition-all active:scale-95">
-          <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
-          </svg>
-          {pendingOrders > 0 && <span className="absolute top-1 right-1/2 translate-x-4 w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
-        </Link>
-
-        {/* 내 프로필 */}
+        {/* 5. 프로필 */}
         <div className="relative flex items-center justify-center" ref={mobileProfileRef}>
           <button onClick={() => setShowMobileProfile(!showMobileProfile)} aria-label="내 메뉴"
-            className="flex items-center justify-center py-1.5 transition-all active:scale-95">
+            className="relative flex items-center justify-center py-2 transition-all active:scale-95">
             {isLoggedIn ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={session?.user?.image || ""} alt=""
@@ -972,17 +970,41 @@ export default function ShopPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
               </svg>
             )}
+            {pendingOrders > 0 && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#e91e3f] ring-2 ring-white"></span>}
           </button>
 
           {showMobileProfile && (
-            <div className="absolute bottom-[52px] right-0 w-[220px] rounded-2xl bg-white border border-[#e2e0dc] shadow-[0_-16px_40px_-14px_rgba(0,0,0,0.28)] p-3"
+            <div className="absolute bottom-[52px] right-0 w-[230px] rounded-2xl bg-white border border-[#e2e0dc] shadow-[0_-16px_40px_-14px_rgba(0,0,0,0.28)] p-3"
               style={{ animation: "menuDrop 0.28s cubic-bezier(0.16,1,0.3,1)" }}>
               {isLoggedIn ? (
                 <>
-                  <div className="px-2 pb-2.5 mb-1.5 border-b border-[#ececea]">
-                    <div className="text-[13px] font-black text-[#131313] truncate">{session?.user?.name}</div>
-                    <div className="text-[11px] font-bold text-[#8a8a8a]">Lv.{myLevel} · {(myXp ?? 0).toLocaleString()} XP</div>
+                  {/* 보유 XP — 모바일은 우측 카드가 없어 여기서 보여준다 */}
+                  <div className="px-3 py-2.5 mb-2 rounded-xl bg-[#f5f3f0]">
+                    <div className="text-[12px] font-black text-[#131313] truncate mb-1.5">{session?.user?.name}</div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-[17px] font-black text-[#131313] tabular-nums leading-none">
+                        {(myXp ?? 0).toLocaleString()}<span className="text-[10px] font-bold text-[#e91e3f] ml-1">XP</span>
+                      </span>
+                      <span className="text-[11px] font-bold text-[#8a8a8a]">Lv.{myLevel}</span>
+                    </div>
+                    {myProgress && myProgress.required > 0 && (
+                      <div className="mt-2">
+                        <div className="h-1 rounded-full bg-[#e2e0dc] overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77]"
+                            style={{ width: `${Math.min(100, Math.round((myProgress.current / myProgress.required) * 100))}%` }}></div>
+                        </div>
+                        <p className="mt-1 text-[10px] font-bold text-[#8a8a8a]">
+                          다음 레벨까지 {myProgress.needToNext.toLocaleString()} XP
+                        </p>
+                      </div>
+                    )}
                   </div>
+
+                  <Link href="/shop/orders" onClick={() => setShowMobileProfile(false)}
+                    className="flex items-center justify-between px-2 py-2 text-[13px] font-bold text-[#4b4b4b] hover:bg-[#f5f3f0] rounded-lg transition-colors">
+                    구매 내역
+                    {pendingOrders > 0 && <span className="px-1.5 py-0.5 rounded-full bg-[#e91e3f] text-white text-[9px] font-black">{pendingOrders}</span>}
+                  </Link>
                   <Link href="/profile" onClick={() => setShowMobileProfile(false)}
                     className="block px-2 py-2 text-[13px] font-bold text-[#4b4b4b] hover:bg-[#f5f3f0] rounded-lg transition-colors">내 정보</Link>
                   <Link href="/level" onClick={() => setShowMobileProfile(false)}
@@ -999,6 +1021,30 @@ export default function ShopPage() {
           )}
         </div>
       </nav>
+
+      {/* ── 모바일 검색 시트 ── */}
+      {showMobileSearch && (
+        <div className="md:hidden fixed inset-0 z-[145] bg-black/40 backdrop-blur-sm" onClick={() => setShowMobileSearch(false)}>
+          <div className="bg-white px-5 pt-5 pb-6 rounded-b-3xl shadow-lg" onClick={(e) => e.stopPropagation()}
+            style={{ animation: "menuDrop 0.26s cubic-bezier(0.16,1,0.3,1)" }}>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a3a3a3] pointer-events-none" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+                <input autoFocus type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") setShowMobileSearch(false); }}
+                  placeholder="상품명, 설명, 역할로 검색"
+                  className="w-full bg-[#f5f3f0] rounded-full pl-9 pr-4 py-3 text-[14px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
+              </div>
+              <button onClick={() => setShowMobileSearch(false)} className="px-4 py-3 text-[13px] font-bold text-[#131313]">닫기</button>
+            </div>
+            {query && (
+              <button onClick={() => setQuery("")} className="mt-3 text-[12px] font-bold text-[#e91e3f]">검색어 지우기</button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 토스트 — 상단 중앙에서 튀어나오듯 등장 */}
       {cartToast && (

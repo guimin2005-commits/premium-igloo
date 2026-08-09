@@ -6,6 +6,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { getShopAccess } from "@/lib/shopAccess";
 import { salePrice } from "@/lib/shopPricing";
+import { getLevelByXp } from "@/lib/leveling";
 import ShopItem from "@/models/ShopItem";
 import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
@@ -64,17 +65,14 @@ export async function POST(request) {
       await ShopItem.updateOne({ _id: item._id }, { $inc: { soldCount: 1 } });
     }
 
-    // 2) XP 차감 — 누적 획득(xp)은 건드리지 않고 사용액(spentXp)만 늘린다.
-    //    레벨은 xp 기준이라 상점에서 써도 레벨이 내려가지 않는다.
-    //    잔액(xp - spentXp)이 충분할 때만 매치되는 원자적 갱신 (중복 구매·마이너스 방지)
+    // 2) XP 차감 — XP는 화폐이므로 쓰면 레벨도 함께 내려간다.
+    //    잔액이 충분할 때만 매치되는 원자적 갱신 (중복 구매·마이너스 방지)
     //    📌 관리자는 잔액 검사를 건너뛰고 소모도 하지 않는다 (테스트 구매)
     const price = salePrice(item);
     const charged = isAdmin ? 0 : price;
     const paid = await UserXp.updateOne(
-      isAdmin
-        ? { userId }
-        : { userId, $expr: { $gte: [{ $subtract: ["$xp", { $ifNull: ["$spentXp", 0] }] }, price] } },
-      { $inc: { spentXp: charged }, $set: { updatedAt: new Date() } },
+      isAdmin ? { userId } : { userId, xp: { $gte: price } },
+      { $inc: { xp: -charged }, $set: { updatedAt: new Date() } },
       isAdmin ? { upsert: true } : {}
     );
     if (!paid.matchedCount && !paid.upsertedCount) {
@@ -99,8 +97,11 @@ export async function POST(request) {
       status: "pending",
     });
 
-    const doc = await UserXp.findOne({ userId }, { xp: 1, spentXp: 1 }).lean();
-    const remain = { xp: (doc?.xp ?? 0) - (doc?.spentXp ?? 0) };
+    // 차감된 XP에 맞춰 레벨을 다시 계산 (레벨이 내려갈 수 있다)
+    const doc = await UserXp.findOne({ userId }, { xp: 1 }).lean();
+    const newLevel = getLevelByXp(doc?.xp ?? 0);
+    await UserXp.updateOne({ userId }, { $set: { level: newLevel } });
+    const remain = { xp: doc?.xp ?? 0, level: newLevel };
 
     return NextResponse.json({
       success: true,

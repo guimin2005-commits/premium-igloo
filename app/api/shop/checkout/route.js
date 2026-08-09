@@ -11,6 +11,7 @@ import UserXp from "@/models/UserXp";
 import Coupon from "@/models/Coupon";
 import UserCoupon from "@/models/UserCoupon";
 import { salePrice, couponDiscount, couponError } from "@/lib/shopPricing";
+import { getLevelByXp } from "@/lib/leveling";
 
 // ── [결제] 장바구니 일괄 구매 ──
 //    items: [{ itemId, qty }] · 재고 선점 → 총액 차감 → 실패 시 전부 원복
@@ -96,13 +97,11 @@ export async function POST(request) {
 
     // 2) 총액 차감 — 잔액이 충분할 때만 매치
     //    📌 관리자는 잔액 검사를 건너뛴다 (상점 동작 확인용 테스트 구매)
-    //    누적 획득(xp)은 그대로 두고 사용액(spentXp)만 늘려 레벨이 내려가지 않게 한다
+    //    XP는 화폐이므로 쓰면 레벨도 함께 내려간다
     const charged = isAdmin ? 0 : total;  // 관리자는 XP 소모 없이 테스트 구매
     const paid = await UserXp.updateOne(
-      isAdmin
-        ? { userId }
-        : { userId, $expr: { $gte: [{ $subtract: ["$xp", { $ifNull: ["$spentXp", 0] }] }, total] } },
-      { $inc: { spentXp: charged }, $set: { updatedAt: new Date() } },
+      isAdmin ? { userId } : { userId, xp: { $gte: total } },
+      { $inc: { xp: -charged }, $set: { updatedAt: new Date() } },
       isAdmin ? { upsert: true } : {}
     );
     if (!paid.matchedCount && !paid.upsertedCount) {
@@ -141,8 +140,11 @@ export async function POST(request) {
       );
     }
 
-    const balDoc = await UserXp.findOne({ userId }, { xp: 1, spentXp: 1 }).lean();
-    const remain = { xp: (balDoc?.xp ?? 0) - (balDoc?.spentXp ?? 0) };
+    // 차감된 XP에 맞춰 레벨을 다시 계산 (레벨이 내려갈 수 있다)
+    const balDoc = await UserXp.findOne({ userId }, { xp: 1 }).lean();
+    const newLevel = getLevelByXp(balDoc?.xp ?? 0);
+    await UserXp.updateOne({ userId }, { $set: { level: newLevel } });
+    const remain = { xp: balDoc?.xp ?? 0, level: newLevel };
     const hasRole = docs.some((d) => d.type === "role" || d.type === "perk");
 
     return NextResponse.json({

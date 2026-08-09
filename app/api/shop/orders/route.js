@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
+import { getLevelByXp } from "@/lib/leveling";
 import ShopItem from "@/models/ShopItem";
 
 const requireAdmin = async () => {
@@ -57,9 +58,11 @@ export async function PATCH(request) {
       return NextResponse.json({ success: false, message: "이미 처리된 구매입니다." }, { status: 409 });
     }
 
-    // 취소 시 XP 환불 + 재고 복구 — 사용액(spentXp)을 되돌린다
+    // 취소 시 XP 환불 + 재고 복구 (환불로 레벨이 다시 올라갈 수 있다)
     if (status === "cancelled") {
-      await UserXp.updateOne({ userId: purchase.userId }, { $inc: { spentXp: -purchase.price } });
+      await UserXp.updateOne({ userId: purchase.userId }, { $inc: { xp: purchase.price } });
+      const refunded = await UserXp.findOne({ userId: purchase.userId }, { xp: 1 }).lean();
+      await UserXp.updateOne({ userId: purchase.userId }, { $set: { level: getLevelByXp(refunded?.xp ?? 0) } });
       await ShopItem.updateOne(
         { _id: purchase.itemId, stock: { $gte: 0 } },
         { $inc: { stock: 1, soldCount: -1 } }

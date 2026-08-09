@@ -43,7 +43,7 @@ export default function CartPage() {
       fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
     ]).then(([it, me]) => {
       setItems(Array.isArray(it?.data) ? it.data : []);
-      if (me?.success) setMyXp(me.data.balance ?? me.data.xp);
+      if (me?.success) setMyXp(me.data.xp);
     }).finally(() => setIsLoading(false));
   }, [status, isAdmin]);
 

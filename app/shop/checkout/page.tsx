@@ -52,7 +52,7 @@ export default function CheckoutPage() {
       fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
     ]).then(([it, me]) => {
       setItems(Array.isArray(it?.data) ? it.data : []);
-      if (me?.success) setMyXp(me.data.balance ?? me.data.xp);
+      if (me?.success) setMyXp(me.data.xp);
     }).finally(() => setIsLoading(false));
   }, [status]);
 
@@ -302,15 +302,7 @@ export default function CheckoutPage() {
 
               {/* 쿠폰 — 보유 쿠폰에서 고르거나 코드 입력 (선택) */}
               <div className="mb-5">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-[11px] font-bold text-[#4b4b4b]">쿠폰 <span className="text-[#a3a3a3] font-medium">(선택)</span></label>
-                  {wallet.length > 0 && !coupon && (
-                    <button onClick={() => setShowCouponPicker(!showCouponPicker)}
-                      className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">
-                      보유 쿠폰 {wallet.filter((w) => w.usable).length}장
-                    </button>
-                  )}
-                </div>
+                <label className="block text-[11px] font-bold text-[#4b4b4b] mb-2">쿠폰 <span className="text-[#a3a3a3] font-medium">(선택)</span></label>
 
                 {coupon ? (
                   <div className="flex items-center justify-between gap-2 px-4 py-3 rounded-xl bg-[#e91e3f]/[0.07] border border-[#e91e3f]/25">
@@ -324,8 +316,37 @@ export default function CheckoutPage() {
                   </div>
                 ) : (
                   <>
+                    {/* 보유 쿠폰 — 항상 보이는 진입 버튼 */}
+                    <button
+                      onClick={() => setShowCouponPicker(!showCouponPicker)}
+                      disabled={wallet.length === 0}
+                      className={`w-full flex items-center justify-between gap-2 px-4 py-3 mb-2 rounded-xl border text-left transition-colors ${
+                        wallet.length === 0
+                          ? "border-[#e2e0dc] bg-[#fafaf9] cursor-not-allowed"
+                          : "border-[#e2e0dc] bg-white hover:border-[#a3a3a3]"
+                      }`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-[12px] font-bold text-[#131313]">
+                          보유 쿠폰에서 선택
+                          {wallet.length > 0 && (
+                            <span className="ml-1.5 text-[#e91e3f]">{wallet.filter((w) => w.usable).length}장</span>
+                          )}
+                        </span>
+                        <span className="block text-[10px] text-[#8a8a8a] mt-0.5">
+                          {wallet.length === 0 ? "보유한 쿠폰이 없습니다" : "받아둔 쿠폰을 골라 적용합니다"}
+                        </span>
+                      </span>
+                      {wallet.length > 0 && (
+                        <svg className={`w-3.5 h-3.5 text-[#a3a3a3] shrink-0 transition-transform ${showCouponPicker ? "rotate-180" : ""}`}
+                          fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                        </svg>
+                      )}
+                    </button>
+
                     {/* 보유 쿠폰 목록 */}
-                    {showCouponPicker && (
+                    {showCouponPicker && wallet.length > 0 && (
                       <div className="mb-2 rounded-xl border border-[#e2e0dc] overflow-hidden divide-y divide-[#ececea] max-h-56 overflow-y-auto">
                         {wallet.length === 0 ? (
                           <p className="px-4 py-5 text-center text-[11px] text-[#8a8a8a]">보유한 쿠폰이 없습니다.</p>
@@ -347,6 +368,11 @@ export default function CheckoutPage() {
                     )}
 
                     {/* 코드 직접 입력 */}
+                    <div className="flex items-center gap-2 my-2">
+                      <span className="flex-1 h-px bg-[#ececea]"></span>
+                      <span className="text-[10px] font-bold text-[#a3a3a3]">또는 코드 입력</span>
+                      <span className="flex-1 h-px bg-[#ececea]"></span>
+                    </div>
                     <div className="flex gap-2">
                       <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") applyCoupon(); }}

@@ -5,8 +5,7 @@ const UserXpSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true, index: true },
   username: { type: String, default: "" },
   displayName: { type: String, default: "" },
-  xp: { type: Number, default: 0 },        // 누적 획득 XP — 레벨 산정 기준 (상점 구매로 줄지 않는다)
-  spentXp: { type: Number, default: 0 },   // 상점에서 사용한 XP (잔액 = xp - spentXp)
+  xp: { type: Number, default: 0 },
   level: { type: Number, default: 0 },
   lastChatXpAt: { type: Date, default: null },
   lastAttendDate: { type: String, default: "" }, // "2026-07-05" (KST)
