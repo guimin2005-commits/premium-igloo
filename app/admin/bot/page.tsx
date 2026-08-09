@@ -402,7 +402,7 @@ export default function AdminBotPage() {
             <section>
               <SectionHead no="01" title="역할 추가 / 수정" />
               <form onSubmit={saveRole}>
-                <div className="mb-4 relative">
+                <div className={`mb-4 relative ${isRoleDropdownOpen ? "z-50" : ""}`}>
                   <label className={labelClass}>디스코드 역할 <span className="text-[#e91e3f]">*</span></label>
                   <button type="button" onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
                     {selectedRole ? (
@@ -493,7 +493,7 @@ export default function AdminBotPage() {
             <section>
               <SectionHead no="01" title="채널 정책 추가 / 수정" />
               <form onSubmit={saveChannel}>
-                <div className="mb-4 relative">
+                <div className={`mb-4 relative ${isChannelDropdownOpen ? "z-50" : ""}`}>
                   <label className={labelClass}>디스코드 채널 · 카테고리 <span className="text-[#e91e3f]">*</span></label>
                   <button type="button" onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
                     {selectedChannel ? (
@@ -591,7 +591,7 @@ export default function AdminBotPage() {
                     <label className={labelClass}>부스트 이름</label>
                     <input type="text" placeholder="예: 주말 2배 이벤트" value={boostForm.name} onChange={(e) => setBoostForm({ ...boostForm, name: e.target.value })} className={inputClass} />
                   </div>
-                  <div className="relative">
+                  <div className={`relative ${isBoostRoleOpen ? "z-50" : ""}`}>
                     <label className={labelClass}>대상</label>
                     <button type="button" onClick={() => setIsBoostRoleOpen(!isBoostRoleOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
                       {boostRole ? (
@@ -620,7 +620,7 @@ export default function AdminBotPage() {
                     )}
                     <p className={fieldNote}>역할을 고르면 해당 역할 보유자에게만 적용</p>
                   </div>
-                  <div className="relative">
+                  <div className={`relative ${isBoostChannelOpen ? "z-50" : ""}`}>
                     <label className={labelClass}>대상 채널 · 카테고리</label>
                     <button type="button" onClick={() => setIsBoostChannelOpen(!isBoostChannelOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
                       {boostChannel ? (

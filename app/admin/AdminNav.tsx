@@ -46,7 +46,14 @@ const NAV_GROUPS: NavGroup[] = [
           { title: "XP 로그", href: "/admin/bot?tab=logs" },
         ],
       },
-      { title: "XP 지급 대기열", href: "/payouts" },
+      {
+        title: "XP SHOP 관리",
+        href: "/admin/shop",
+        children: [
+          { title: "상품 관리", href: "/admin/shop?tab=items" },
+          { title: "구매 내역", href: "/admin/shop?tab=orders" },
+        ],
+      },
     ],
   },
 ];
@@ -66,7 +73,10 @@ export default function AdminNav() {
 
     const want = new URLSearchParams(query || "");
     const wantTab = want.get("tab");
-    if (wantTab != null) return (searchParams.get("tab") || "settings") === wantTab;
+    if (wantTab != null) {
+      const defaultTab = path === "/admin/shop" ? "items" : "settings";
+      return (searchParams.get("tab") || defaultTab) === wantTab;
+    }
 
     const wantCategory = want.get("category");
     if (wantCategory != null) return searchParams.get("category") === wantCategory;

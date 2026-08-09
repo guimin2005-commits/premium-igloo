@@ -84,6 +84,51 @@ const XpLogSchema = new mongoose.Schema({
 });
 export const XpLog = mongoose.models.XpLog || mongoose.model("XpLog", XpLogSchema);
 
+// XP SHOP 구매 — 역할 상품은 봇이 pending 건을 보고 자동 지급
+const PurchaseSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
+  userName: { type: String, default: "" },
+  itemId: { type: String, required: true },
+  itemName: { type: String, default: "" },
+  itemType: { type: String, default: "role" },
+  roleId: { type: String, default: "" },
+  price: { type: Number, default: 0 },
+  status: { type: String, default: "pending", index: true },
+  contact: { type: String, default: "" },
+  adminNote: { type: String, default: "" },
+  error: { type: String, default: "" },
+  createdAt: { type: Date, default: Date.now },
+  processedAt: { type: Date },
+});
+export const Purchase = mongoose.models.Purchase || mongoose.model("Purchase", PurchaseSchema);
+
+// XP 지급 대기열 — 코드·초대 보상 등이 쌓이면 봇이 자동 지급
+const PayoutSchema = new mongoose.Schema({
+  userName: { type: String, required: true },
+  userId: { type: String, default: "" },
+  amount: { type: Number, required: true },
+  reason: { type: String, default: "" },
+  source: { type: String, default: "etc" },   // referral | code | manual | shop | etc
+  status: { type: String, default: "pending" }, // pending | paid | failed
+  error: { type: String, default: "" },
+  createdAt: { type: Date, default: Date.now },
+  paidAt: { type: Date },
+});
+export const Payout = mongoose.models.Payout || mongoose.model("Payout", PayoutSchema);
+
+// 코드 사용 시 지급할 역할 — 봇이 처리 (코드 자체는 사이트에서 검증)
+const CodeGrantSchema = new mongoose.Schema({
+  userId: { type: String, required: true },
+  userName: { type: String, default: "" },
+  roleId: { type: String, default: "" },
+  code: { type: String, default: "" },
+  status: { type: String, default: "pending", index: true },
+  error: { type: String, default: "" },
+  createdAt: { type: Date, default: Date.now },
+  processedAt: { type: Date },
+});
+export const CodeGrant = mongoose.models.CodeGrant || mongoose.model("CodeGrant", CodeGrantSchema);
+
 export const connectDb = (uri) => mongoose.connect(uri);
 export const disconnectDb = () => mongoose.disconnect();
 

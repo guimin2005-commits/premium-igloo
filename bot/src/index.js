@@ -14,6 +14,7 @@ import { refreshBotSettings, startBotSettingLoop } from "./botSettings.js";
 import { registerChatXp } from "./features/chatXp.js";
 import { startVoiceXpLoop } from "./features/voiceXp.js";
 import { registerLeaveReset } from "./features/leaveReset.js";
+import { startGrantQueue } from "./features/grantQueue.js";
 import { registerCommandDefinitions, registerCommandHandlers } from "./commands.js";
 
 const client = new Client({
@@ -42,6 +43,7 @@ client.once(Events.ClientReady, async (c) => {
   console.log("✅ 설정 로드 완료 — 역할·채널·기본 정책 (1분 주기 갱신)");
 
   startVoiceXpLoop(c);
+  startGrantQueue(c);
 });
 
 // ── 부팅 ──────────────────────────────────

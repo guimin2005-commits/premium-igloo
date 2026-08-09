@@ -3,7 +3,8 @@ import mongoose from "mongoose";
 const CodeSchema = new mongoose.Schema({
   code: { type: String, required: true, unique: true, uppercase: true, trim: true }, // 코드 값 (대문자 통일)
   reward: { type: String, required: true }, // 사용 시 안내되는 보상 설명
-  roleId: { type: String, default: "" },    // (선택) 지급할 디스코드 역할 ID
+  roleId: { type: String, default: "" },    // (선택) 지급할 디스코드 역할 ID — 봇이 자동 지급
+  xpAmount: { type: Number, default: 0 },   // (선택) 지급할 XP — 봇이 자동 지급
   requiredRoleId: { type: String, default: "" },   // (선택) 이 역할 소지자만 사용 가능
   requiredRoleName: { type: String, default: "" }, // 표시용 역할 이름
   maxUses: { type: Number, default: 1 },     // 최대 사용 횟수 (0 = 무제한)

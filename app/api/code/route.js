@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import Code from "@/models/Code";
+import CodeGrant from "@/models/CodeGrant";
+import Payout from "@/models/Payout";
 
 // [조회] 관리자용 전체 코드 목록
 export async function GET() {
@@ -34,6 +36,7 @@ export async function POST(request) {
         requiredRoleId: requiredRoleId || "",
         requiredRoleName: requiredRoleName || "",
         maxUses: maxUses === undefined || maxUses === null ? 1 : Number(maxUses),
+        xpAmount: Math.max(0, Math.floor(Number(body.xpAmount) || 0)),
         expiresAt: expiresAt || undefined,
       }, { new: true });
 
@@ -89,16 +92,23 @@ export async function POST(request) {
       }
     }
 
-    // (선택) 디스코드 역할 지급
+    // 📌 역할·XP 지급은 봇이 처리한다 — 대기열에 넣으면 30초 내 자동 지급
     if (found.roleId && userId) {
-      const GUILD_ID = process.env.DISCORD_GUILD_ID;
-      const TOKEN = process.env.DISCORD_BOT_TOKEN;
-      if (GUILD_ID && TOKEN) {
-        await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${userId}/roles/${found.roleId}`, {
-          method: "PUT",
-          headers: { "Authorization": `Bot ${TOKEN}`, "Content-Length": "0" },
-        }).catch(() => {});
-      }
+      await CodeGrant.create({
+        userId,
+        userName: userName || "",
+        roleId: found.roleId,
+        code: normalized,
+      }).catch(() => {});
+    }
+    if (found.xpAmount > 0 && userId) {
+      await Payout.create({
+        userName: userName || "",
+        userId,
+        amount: found.xpAmount,
+        reason: `코드 사용: ${normalized}`,
+        source: "code",
+      }).catch(() => {});
     }
 
     found.usedBy.push(userName || "익명");
@@ -114,7 +124,7 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     await connectToDatabase();
-    const { code, reward, roleId, requiredRoleId, requiredRoleName, maxUses, expiresAt } = await request.json();
+    const { code, reward, roleId, requiredRoleId, requiredRoleName, maxUses, expiresAt, xpAmount } = await request.json();
 
     if (!code || !code.trim() || !reward || !reward.trim()) {
       return NextResponse.json({ success: false, error: "코드와 보상 설명은 필수입니다." }, { status: 400 });
@@ -127,6 +137,7 @@ export async function PUT(request) {
       requiredRoleId: requiredRoleId || "",
       requiredRoleName: requiredRoleName || "",
       maxUses: maxUses === undefined || maxUses === null ? 1 : Number(maxUses),
+      xpAmount: Math.max(0, Math.floor(Number(xpAmount) || 0)),
       expiresAt: expiresAt || undefined,
     });
 
