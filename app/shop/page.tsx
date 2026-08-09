@@ -762,9 +762,6 @@ export default function ShopPage() {
                     <span className={`absolute top-2 left-2 sm:top-3 sm:left-3 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black tracking-wide ${TYPE_BADGE[it.type]?.cls || "bg-[#131313] text-white"}`}>
                       {TYPE_BADGE[it.type]?.label || "상품"}
                     </span>
-                    {salePrice(it) < it.price && (
-                      <span className="absolute top-3 right-14 px-2.5 py-1 rounded-full text-[10px] font-black bg-[#e91e3f] text-white">{it.discountPct}% OFF</span>
-                    )}
                     {!it.active && (
                       <span className="absolute top-11 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#e2e0dc]">숨김</span>
                     )}
@@ -816,12 +813,17 @@ export default function ShopPage() {
                     )}
 
                     <div className="mt-auto">
-                      <div className="mb-3 flex items-baseline gap-2 flex-wrap">
-                        <span className="text-[15px] sm:text-xl font-black text-[#131313] tracking-tight tabular-nums">
-                          {salePrice(it).toLocaleString()}<span className="text-[11px] sm:text-[12px] font-bold text-[#8a8a8a] ml-1">XP</span>
-                        </span>
+                      <div className="mb-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {salePrice(it) < it.price && (
+                            <span className="px-1.5 py-[3px] rounded bg-[#e91e3f] text-white text-[10px] font-black leading-none shrink-0">{it.discountPct}%</span>
+                          )}
+                          <span className="text-[15px] sm:text-xl font-black text-[#131313] tracking-tight tabular-nums leading-none">
+                            {salePrice(it).toLocaleString()}<span className="text-[11px] sm:text-[12px] font-bold text-[#8a8a8a] ml-1">XP</span>
+                          </span>
+                        </div>
                         {salePrice(it) < it.price && (
-                          <span className="text-[12px] text-[#a3a3a3] line-through tabular-nums">{it.price.toLocaleString()} XP</span>
+                          <span className="block text-[11px] text-[#a3a3a3] line-through tabular-nums">{it.price.toLocaleString()} XP</span>
                         )}
                       </div>
                       <div className="flex gap-1.5 sm:gap-2">

@@ -25,6 +25,7 @@ export default function ItemDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [myXp, setMyXp] = useState<number | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
+  const [allItems, setAllItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [cart, setCart] = useState<{ itemId: string; qty: number }[]>([]);
@@ -61,11 +62,13 @@ export default function ItemDetailPage() {
       fetch(`/api/shop/items/${id}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       fetch("/api/shop/purchase", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-    ]).then(([it, me, ord]) => {
+      fetch("/api/shop/items", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+    ]).then(([it, me, ord, all]) => {
       if (it?.success) setItem(it.data);
       else setNotFound(true);
       if (me?.success) setMyXp(me.data.xp);
       setOrders(Array.isArray(ord?.data) ? ord.data : []);
+      setAllItems(Array.isArray(all?.data) ? all.data : []);
     }).finally(() => setIsLoading(false));
   }, [status, id]);
 
@@ -105,6 +108,13 @@ export default function ItemDetailPage() {
   const wished = wish.includes(item._id);
   const affordable = myXp != null && myXp >= sp;
   const badge = TYPE_BADGE[item.type] || TYPE_BADGE.physical;
+
+  // 관련 상품 — 같은 유형을 먼저, 부족하면 나머지로 채운다 (현재 상품·품절 제외)
+  const others = allItems.filter((x) => x._id !== item._id && x.active && x.stock !== 0);
+  const related = [
+    ...others.filter((x) => x.type === item.type),
+    ...others.filter((x) => x.type !== item.type),
+  ].slice(0, 8);
 
   // 담기 ↔ 삭제 토글
   const toggleCart = () => {
@@ -178,9 +188,6 @@ export default function ItemDetailPage() {
                 </svg>
               </div>
             )}
-            {discounted && (
-              <span className="absolute top-4 left-4 px-3 py-1 rounded-full bg-[#e91e3f] text-white text-[11px] font-black">{item.discountPct}% OFF</span>
-            )}
             {soldOut && (
               <div className="absolute inset-0 bg-[#131313]/55 flex items-center justify-center">
                 <span className="text-lg font-black text-white tracking-wider">SOLD OUT</span>
@@ -194,12 +201,17 @@ export default function ItemDetailPage() {
 
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-[#131313] mb-3 break-keep">{item.name}</h1>
 
-            <div className="flex items-baseline gap-3 mb-6">
-              <span className="text-3xl font-black tracking-tight tabular-nums text-[#131313]">
-                {sp.toLocaleString()}<span className="text-sm font-bold text-[#8a8a8a] ml-1.5">XP</span>
-              </span>
+            <div className="mb-6">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {discounted && (
+                  <span className="px-2 py-1 rounded-md bg-[#e91e3f] text-white text-[12px] font-black leading-none shrink-0">{item.discountPct}% OFF</span>
+                )}
+                <span className="text-3xl font-black tracking-tight tabular-nums leading-none text-[#131313]">
+                  {sp.toLocaleString()}<span className="text-sm font-bold text-[#8a8a8a] ml-1.5">XP</span>
+                </span>
+              </div>
               {discounted && (
-                <span className="text-[15px] text-[#a3a3a3] line-through tabular-nums">{item.price.toLocaleString()} XP</span>
+                <span className="block mt-1 text-[14px] text-[#a3a3a3] line-through tabular-nums">{item.price.toLocaleString()} XP</span>
               )}
             </div>
 
@@ -275,6 +287,60 @@ export default function ItemDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* ── 다른 상품 ── */}
+        {related.length > 0 && (
+          <div className="mt-16 pt-10 border-t border-[#e2e0dc]">
+            <div className="flex items-baseline justify-between gap-4 mb-5">
+              <h2 className="text-base font-black text-[#131313] tracking-tight">다른 상품도 둘러보세요</h2>
+              <Link href="/shop" className="text-[12px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors shrink-0">
+                전체 보기
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+              {related.map((r) => {
+                const rp = salePrice(r);
+                const rDiscounted = rp < r.price;
+                const rBadge = TYPE_BADGE[r.type] || TYPE_BADGE.physical;
+                return (
+                  <Link key={r._id} href={`/shop/item/${r._id}`}
+                    className="group bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
+                    <div className="relative aspect-[4/3] bg-[#eceae6] overflow-hidden">
+                      {r.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={r.imageUrl} alt={r.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[#c4c4c4]">
+                          <svg className="w-9 h-9" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
+                          </svg>
+                        </div>
+                      )}
+                      <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-black ${rBadge.cls}`}>{rBadge.label}</span>
+                    </div>
+                    <div className="p-3.5 flex flex-col flex-1">
+                      <h3 className="text-[13px] font-black text-[#131313] tracking-tight mb-1.5 break-keep line-clamp-2 group-hover:text-[#e91e3f] transition-colors">{r.name}</h3>
+                      <div className="mt-auto">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {rDiscounted && (
+                            <span className="px-1.5 py-[3px] rounded bg-[#e91e3f] text-white text-[10px] font-black leading-none shrink-0">{r.discountPct}%</span>
+                          )}
+                          <span className="text-[15px] font-black text-[#131313] tabular-nums leading-none">
+                            {rp.toLocaleString()}<span className="text-[11px] font-bold text-[#8a8a8a] ml-1">XP</span>
+                          </span>
+                        </div>
+                        {rDiscounted && (
+                          <span className="block text-[11px] text-[#a3a3a3] line-through tabular-nums">{r.price.toLocaleString()} XP</span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* 토스트 */}
