@@ -112,7 +112,7 @@ export default function Home() {
       {/* ═══ SECTION 1 · 히어로 (풀스크린 · 브랜드만) ═══
              sticky로 뷰포트에 핀 고정 — 스크롤하면 히어로는 멈춰 있고 아래 흰 패널이 위로 덮으며 올라온다.
              heroProgress에 따라 내용물이 서서히 어두워지고 살짝 작아져 깊이감을 더한다 ═══ */}
-      <section ref={heroRef} className="sticky top-0 w-full h-[calc(100vh-3.5rem)] flex flex-col overflow-hidden">
+      <section ref={heroRef} className="sticky top-0 w-full h-[calc(100svh-3.5rem)] flex flex-col overflow-hidden">
         <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
         <div className="absolute top-[-150px] left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#e91e3f]/[0.08] blur-[130px] rounded-full pointer-events-none"></div>
 
@@ -124,11 +124,15 @@ export default function Home() {
           <span className="text-[10px] font-black tracking-[0.5em] text-gray-700 uppercase [writing-mode:vertical-rl] rotate-180">활동이 곧 자산이 되는 곳</span>
         </div>
 
+        {/* 📌 pb-[18svh] — 아래 흰 패널이 -mt-[18svh]로 히어로를 덮고 시작하므로, 그만큼 콘텐츠 박스를
+               줄여 CTA 버튼("서버 바로가기"/"이용 가이드")이 커튼에 잘리지 않게 한다.
+               높이 단위도 vh가 아니라 svh — 모바일은 100vh가 URL바 숨김 기준(큰 뷰포트)이라
+               vh로 잡으면 URL바가 떠 있는 초기 상태에서 히어로 하단이 화면 밖으로 밀린다. */}
         <div
-          className="flex-1 w-full max-w-7xl mx-auto px-6 flex items-center relative z-10"
+          className="flex-1 w-full max-w-7xl mx-auto px-6 pb-[18svh] flex items-center relative z-10"
           style={{ opacity: 1 - heroProgress * 0.65, transform: `scale(${1 - heroProgress * 0.05})`, willChange: "opacity, transform" }}
         >
-          <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-16 items-center">
+          <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center">
             {/* 로고 */}
             <Reveal className="flex justify-center md:justify-end">
               <div className="relative">
@@ -136,7 +140,7 @@ export default function Home() {
                 <img
                   src="/logo.png"
                   alt="고급 이글루"
-                  className="relative w-56 h-56 md:w-80 md:h-80 lg:w-96 lg:h-96 object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
+                  className="relative w-[min(14rem,22svh)] h-[min(14rem,22svh)] md:w-80 md:h-80 lg:w-96 lg:h-96 object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
                 />
               </div>
             </Reveal>
@@ -144,30 +148,32 @@ export default function Home() {
             {/* 브랜드 텍스트 — 이것만! */}
             <div className="flex flex-col justify-center items-center md:items-start text-center md:text-left">
               <Reveal>
-                <div className="flex items-center gap-3 mb-6 justify-center md:justify-start">
+                <div className="flex items-center gap-3 mb-4 md:mb-6 justify-center md:justify-start">
                   <span className="w-8 h-px bg-[#e91e3f]"></span>
                   <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Since 2023 · Community</span>
                 </div>
                 <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter text-white mb-3 leading-none">고급 이글루</h1>
-                <p className="text-base md:text-lg font-light tracking-[0.45em] text-transparent bg-clip-text bg-gradient-to-r from-gray-400 to-gray-600 mb-5 pl-1 uppercase">Premium Igloo</p>
-                <p className="text-sm md:text-base font-bold text-gray-300 mb-10">
+                <p className="text-base md:text-lg font-light tracking-[0.45em] text-transparent bg-clip-text bg-gradient-to-r from-gray-400 to-gray-600 mb-4 md:mb-5 pl-1 uppercase">Premium Igloo</p>
+                <p className="text-sm md:text-base font-bold text-gray-300 mb-7 md:mb-10">
                   <span className="lux-shimmer">활동이 곧 자산이 되는 곳.</span>
                 </p>
               </Reveal>
 
               <Reveal delay={150}>
-                <div className="flex flex-wrap justify-center md:justify-start gap-4">
+                {/* 📌 좁은 폰(320px)에서 두 버튼이 두 줄로 접히며 커튼 밖으로 밀리던 문제 —
+                       모바일에서는 알약을 한 단계 작게 잡아 항상 한 줄에 들어가게 한다 */}
+                <div className="flex flex-wrap justify-center md:justify-start gap-3 md:gap-4">
                   <a
                     href="https://discord.gg/V2uW2nUczU"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-8 py-4 bg-[#e91e3f] text-white rounded-full font-bold text-base md:text-lg hover:bg-[#d01634] transition-all shadow-[0_10px_36px_rgba(233,30,63,0.35)] hover:shadow-[0_14px_44px_rgba(233,30,63,0.5)] hover:-translate-y-0.5 outline-none focus:outline-none"
+                    className="px-6 py-3.5 md:px-8 md:py-4 bg-[#e91e3f] text-white rounded-full font-bold text-sm md:text-lg hover:bg-[#d01634] transition-all shadow-[0_10px_36px_rgba(233,30,63,0.35)] hover:shadow-[0_14px_44px_rgba(233,30,63,0.5)] hover:-translate-y-0.5 outline-none focus:outline-none"
                   >
                     서버 바로가기
                   </a>
                   <Link
                     href="/faq"
-                    className="px-8 py-4 bg-white/[0.03] border border-white/10 text-white rounded-full font-bold text-base md:text-lg hover:bg-white/[0.07] hover:border-white/25 transition-all outline-none focus:outline-none"
+                    className="px-6 py-3.5 md:px-8 md:py-4 bg-white/[0.03] border border-white/10 text-white rounded-full font-bold text-sm md:text-lg hover:bg-white/[0.07] hover:border-white/25 transition-all outline-none focus:outline-none"
                   >
                     이용 가이드
                   </Link>
@@ -182,7 +188,7 @@ export default function Home() {
       {/* ═══ SECTION 2 · 통합 라이트 패널 (01 서버현황 + 02 LIVE&UPCOMING + 03 핵심콘텐츠 + 04 최신소식) ═══
              -mt로 고정된 히어로 하단을 처음부터 살짝 덮고 시작 — 스크롤하면 멈춰 있는 히어로 위로
              흰 배경이 실제로 "올라오는" 커튼 효과가 난다 ═══ */}
-      <section className="relative w-full z-10 -mt-[18vh] overflow-x-clip bg-[#f5f3f0] rounded-t-[40px] md:rounded-t-[56px] rounded-b-[40px] md:rounded-b-[56px] shadow-[0_-24px_70px_-24px_rgba(0,0,0,0.6),0_40px_90px_-30px_rgba(0,0,0,0.65)] [clip-path:inset(0_round_40px)] md:[clip-path:inset(0_round_56px)]">
+      <section className="relative w-full z-10 -mt-[18svh] overflow-x-clip bg-[#f5f3f0] rounded-t-[40px] md:rounded-t-[56px] rounded-b-[40px] md:rounded-b-[56px] shadow-[0_-24px_70px_-24px_rgba(0,0,0,0.6),0_40px_90px_-30px_rgba(0,0,0,0.65)] [clip-path:inset(0_round_40px)] md:[clip-path:inset(0_round_56px)]">
         {/* ※ overflow-hidden 대신 clip-path 사용 — overflow-hidden은 하위 sticky 제목의 위치 고정을 깨버린다.
                overflow-x-clip은 스크롤 컨테이너를 만들지 않아 sticky에 영향 없이, 장식용 glow(우측 음수 offset)가
                문서 가로 스크롤을 만드는 것만 막는다 (clip-path는 렌더링만 자르고 레이아웃 오버플로우는 못 막음) */}
