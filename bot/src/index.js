@@ -11,6 +11,7 @@ import { Client, GatewayIntentBits, Events } from "discord.js";
 import { config } from "./config.js";
 import { connectDb, disconnectDb } from "./db.js";
 import { refreshRoleConfigs, startRoleConfigLoop } from "./roleConfigs.js";
+import { refreshChannelConfigs, startChannelConfigLoop } from "./channelConfigs.js";
 import { registerChatXp } from "./features/chatXp.js";
 import { startVoiceXpLoop } from "./features/voiceXp.js";
 import { registerCommandDefinitions, registerCommandHandlers } from "./commands.js";
@@ -33,9 +34,10 @@ client.once(Events.ClientReady, async (c) => {
   await registerCommandDefinitions(c);
   console.log("✅ 슬래시 커맨드 등록 완료");
 
-  await refreshRoleConfigs();
+  await Promise.all([refreshRoleConfigs(), refreshChannelConfigs()]);
   startRoleConfigLoop();
-  console.log("✅ 역할 설정 로드 완료 (1분 주기 갱신)");
+  startChannelConfigLoop();
+  console.log("✅ 역할·채널 설정 로드 완료 (1분 주기 갱신)");
 
   startVoiceXpLoop(c);
   console.log("✅ 음성 XP 루프 시작 (5분 주기)");

@@ -2,6 +2,7 @@
 import { Events } from "discord.js";
 import { UserXp, isDuplicateKeyError } from "../db.js";
 import { getBuffXp } from "../roleConfigs.js";
+import { getChannelPolicy } from "../channelConfigs.js";
 import { grantXp } from "../xp.js";
 import { config, policy } from "../config.js";
 
@@ -9,6 +10,10 @@ export function registerChatXp(client) {
   client.on(Events.MessageCreate, async (message) => {
     try {
       if (message.author.bot || !message.member || message.guild?.id !== config.guildId) return;
+
+      // 채널/카테고리 정책 (지급 제외 채널이면 쿨타임도 소모하지 않음)
+      const channelPolicy = getChannelPolicy(message.channel);
+      if (channelPolicy.excluded) return;
 
       // 쿨타임이 지난 경우에만 매치되는 조건부 갱신 — 조회·저장 사이의
       // 경쟁 상태(연속 메시지 중복 지급)가 원천적으로 불가능
@@ -29,7 +34,7 @@ export function registerChatXp(client) {
         throw e;
       }
 
-      await grantXp(message.member, policy.chatXp + getBuffXp(message.member));
+      await grantXp(message.member, policy.chatXp + getBuffXp(message.member) + channelPolicy.boostXp);
     } catch (e) {
       console.error("채팅 XP 오류:", e.message);
     }

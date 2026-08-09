@@ -25,6 +25,17 @@ const RoleConfigSchema = new mongoose.Schema({
 });
 export const RoleConfig = mongoose.models.RoleConfig || mongoose.model("RoleConfig", RoleConfigSchema);
 
+// 레벨 대시보드에서 관리하는 채널/카테고리별 XP 정책
+const ChannelConfigSchema = new mongoose.Schema({
+  channelId: { type: String, required: true, unique: true },
+  channelName: { type: String, default: "" },
+  channelType: { type: String, default: "text" }, // "text" | "voice" | "category"
+  boostXp: { type: Number, default: 0 },          // 이 채널에서 XP 지급 1회당 추가
+  excluded: { type: Boolean, default: false },    // true면 이 채널에서 XP 지급 안 함
+  createdAt: { type: Date, default: Date.now },
+});
+export const ChannelConfig = mongoose.models.ChannelConfig || mongoose.model("ChannelConfig", ChannelConfigSchema);
+
 export const connectDb = (uri) => mongoose.connect(uri);
 export const disconnectDb = () => mongoose.disconnect();
 
