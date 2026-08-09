@@ -9,6 +9,7 @@ import ShopItem from "@/models/ShopItem";
 import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
 import Coupon from "@/models/Coupon";
+import UserCoupon from "@/models/UserCoupon";
 import { salePrice, couponDiscount, couponError } from "@/lib/shopPricing";
 
 // ── [결제] 장바구니 일괄 구매 ──
@@ -128,9 +129,13 @@ export async function POST(request) {
     }
     await Purchase.insertMany(rows);
 
-    // 쿠폰 사용 처리 (결제가 확정된 뒤에만)
+    // 쿠폰 사용 처리 (결제가 확정된 뒤에만) — 지갑에 있으면 그 건도 사용 처리
     if (coupon) {
       await Coupon.updateOne({ _id: coupon._id }, { $inc: { usedCount: 1 }, $push: { usedBy: userId } });
+      await UserCoupon.updateOne(
+        { userId, couponId: String(coupon._id), status: "unused" },
+        { $set: { status: "used", usedAt: new Date() } }
+      );
     }
 
     const remain = await UserXp.findOne({ userId }, { xp: 1 }).lean();

@@ -27,11 +27,14 @@ export default function CheckoutPage() {
   const [isPaying, setIsPaying] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
 
-  // 쿠폰
+  // 쿠폰 — 보유 쿠폰에서 고르거나 코드를 입력 (둘 다 선택 사항)
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState<any>(null);
   const [couponMsg, setCouponMsg] = useState("");
+  const [couponMsgOk, setCouponMsgOk] = useState(false);
   const [isCheckingCoupon, setIsCheckingCoupon] = useState(false);
+  const [wallet, setWallet] = useState<any[]>([]);
+  const [showCouponPicker, setShowCouponPicker] = useState(false);
 
   useEffect(() => {
     try {
@@ -64,12 +67,24 @@ export default function CheckoutPage() {
   const needsContact = rows.some((r) => r.item.type === "physical");
   const enoughXp = isAdmin || (myXp != null && myXp >= total);
 
-  // 쿠폰 적용 — 서버에서 유효성·할인액을 확인
+  // 보유 쿠폰 목록 — 주문 금액이 바뀌면 할인액도 다시 계산해 받는다
+  const loadWallet = React.useCallback(() => {
+    if (status !== "authenticated") return;
+    fetch(`/api/shop/my-coupons?total=${subtotal}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setWallet(Array.isArray(d?.data) ? d.data : []))
+      .catch(() => {});
+  }, [status, subtotal]);
+
+  useEffect(() => { loadWallet(); }, [loadWallet]);
+
+  // 코드로 적용 — 지갑에 없으면 담고, 곧바로 적용까지
   const applyCoupon = async () => {
     const code = couponInput.trim().toUpperCase();
     if (!code || isCheckingCoupon) return;
     setIsCheckingCoupon(true);
     setCouponMsg("");
+    setCouponMsgOk(false);
     try {
       const res = await fetch("/api/shop/coupons", {
         method: "POST",
@@ -79,7 +94,11 @@ export default function CheckoutPage() {
       const d = await res.json();
       if (res.ok && d.success) {
         setCoupon(d.data);
-        setCouponMsg("");
+        setCouponInput("");
+        // 지갑에도 담아둔다 (이미 있으면 서버가 조용히 넘어감)
+        fetch("/api/shop/my-coupons", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }),
+        }).then(() => loadWallet()).catch(() => {});
       } else {
         setCoupon(null);
         setCouponMsg(d.message || "사용할 수 없는 쿠폰입니다.");
@@ -90,6 +109,14 @@ export default function CheckoutPage() {
     } finally {
       setIsCheckingCoupon(false);
     }
+  };
+
+  // 보유 쿠폰에서 선택
+  const pickCoupon = (w: any) => {
+    if (!w.usable) return;
+    setCoupon({ code: w.code, name: w.name, type: w.type, value: w.value, discount: w.discount });
+    setCouponMsg("");
+    setShowCouponPicker(false);
   };
   const canPay = rows.length > 0 && enoughXp && agreeTerms && agreeFinal && (!needsContact || contact.trim().length > 0) && !isPaying;
 
@@ -216,9 +243,9 @@ export default function CheckoutPage() {
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-sm font-black tabular-nums">{(salePrice(r.item) * r.qty).toLocaleString()}</div>
+                      <div className="text-sm font-black tabular-nums">{(salePrice(r.item) * r.qty).toLocaleString()} XP</div>
                       {salePrice(r.item) < r.item.price && (
-                        <div className="text-[10px] text-[#a3a3a3] line-through tabular-nums">{(r.item.price * r.qty).toLocaleString()}</div>
+                        <div className="text-[10px] text-[#a3a3a3] line-through tabular-nums">{(r.item.price * r.qty).toLocaleString()} XP</div>
                       )}
                     </div>
                   </div>
@@ -268,9 +295,18 @@ export default function CheckoutPage() {
             <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6 lg:sticky lg:top-24">
               <h2 className="text-sm font-black text-[#131313] mb-5">결제 정보</h2>
 
-              {/* 쿠폰 */}
+              {/* 쿠폰 — 보유 쿠폰에서 고르거나 코드 입력 (선택) */}
               <div className="mb-5">
-                <label className="block text-[11px] font-bold text-[#4b4b4b] mb-2">쿠폰</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-[11px] font-bold text-[#4b4b4b]">쿠폰 <span className="text-[#a3a3a3] font-medium">(선택)</span></label>
+                  {wallet.length > 0 && !coupon && (
+                    <button onClick={() => setShowCouponPicker(!showCouponPicker)}
+                      className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">
+                      보유 쿠폰 {wallet.filter((w) => w.usable).length}장
+                    </button>
+                  )}
+                </div>
+
                 {coupon ? (
                   <div className="flex items-center justify-between gap-2 px-4 py-3 rounded-xl bg-[#e91e3f]/[0.07] border border-[#e91e3f]/25">
                     <div className="min-w-0">
@@ -282,18 +318,43 @@ export default function CheckoutPage() {
                     <button onClick={() => { setCoupon(null); setCouponInput(""); }} className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] shrink-0">해제</button>
                   </div>
                 ) : (
-                  <div className="flex gap-2">
-                    <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") applyCoupon(); }}
-                      placeholder="쿠폰 코드"
-                      className="flex-1 min-w-0 bg-white border border-[#e2e0dc] rounded-lg px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
-                    <button onClick={applyCoupon} disabled={isCheckingCoupon || !couponInput.trim()}
-                      className="px-4 py-2.5 rounded-lg bg-[#131313] text-white text-[12px] font-bold hover:bg-black disabled:opacity-40 transition-colors shrink-0">
-                      {isCheckingCoupon ? "확인" : "적용"}
-                    </button>
-                  </div>
+                  <>
+                    {/* 보유 쿠폰 목록 */}
+                    {showCouponPicker && (
+                      <div className="mb-2 rounded-xl border border-[#e2e0dc] overflow-hidden divide-y divide-[#ececea] max-h-56 overflow-y-auto">
+                        {wallet.length === 0 ? (
+                          <p className="px-4 py-5 text-center text-[11px] text-[#8a8a8a]">보유한 쿠폰이 없습니다.</p>
+                        ) : wallet.map((w) => (
+                          <button key={w.id} onClick={() => pickCoupon(w)} disabled={!w.usable}
+                            className={`w-full text-left px-4 py-3 transition-colors ${w.usable ? "hover:bg-[#f5f3f0]" : "opacity-50 cursor-not-allowed"}`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[12px] font-bold text-[#131313] truncate">{w.name}</span>
+                              {w.usable && <span className="text-[12px] font-black text-[#e91e3f] tabular-nums shrink-0">-{w.discount.toLocaleString()}</span>}
+                            </div>
+                            <div className="text-[10px] text-[#8a8a8a] mt-0.5">
+                              {w.usable
+                                ? w.type === "percent" ? `${w.value}% 할인` : `${w.value.toLocaleString()} XP 할인`
+                                : w.reason}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 코드 직접 입력 */}
+                    <div className="flex gap-2">
+                      <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") applyCoupon(); }}
+                        placeholder="쿠폰 코드 입력"
+                        className="flex-1 min-w-0 bg-white border border-[#e2e0dc] rounded-lg px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
+                      <button onClick={applyCoupon} disabled={isCheckingCoupon || !couponInput.trim()}
+                        className="px-4 py-2.5 rounded-lg bg-[#131313] text-white text-[12px] font-bold hover:bg-black disabled:opacity-40 transition-colors shrink-0">
+                        {isCheckingCoupon ? "확인" : "적용"}
+                      </button>
+                    </div>
+                  </>
                 )}
-                {couponMsg && <p className="mt-2 text-[11px] font-bold text-[#c62828]">{couponMsg}</p>}
+                {couponMsg && <p className={`mt-2 text-[11px] font-bold ${couponMsgOk ? "text-[#3f7a35]" : "text-[#c62828]"}`}>{couponMsg}</p>}
               </div>
 
               <div className="space-y-2.5 text-[13px] mb-4">

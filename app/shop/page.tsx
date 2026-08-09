@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import Dropdown from "../components/Dropdown";
+import ArcticLogo from "./ArcticLogo";
 import { salePrice } from "@/lib/shopPricing";
 
 const ADMIN_USERS = ["elahw.06"];
@@ -68,7 +69,6 @@ export default function ShopPage() {
   const [contact, setContact] = useState("");
   const [isBuying, setIsBuying] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [showOrders, setShowOrders] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
   // 📌 장바구니 — 로컬에 보관해 새로고침해도 유지 ([{ itemId, qty }])
@@ -88,14 +88,17 @@ export default function ShopPage() {
   // ARCTIC 헤더 — 알림·프로필 드롭다운
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showMobileProfile, setShowMobileProfile] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const mobileProfileRef = useRef<HTMLDivElement>(null);
   const pendingOrders = orders.filter((o) => o.status === "pending").length;
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setShowNotif(false);
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) setShowProfile(false);
+      if (mobileProfileRef.current && !mobileProfileRef.current.contains(e.target as Node)) setShowMobileProfile(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
@@ -380,8 +383,8 @@ export default function ShopPage() {
               고급 이글루
             </Link>
             <span className="w-px h-4 bg-[#d6d3ce] hidden lg:block"></span>
-            <Link href="/shop" className="text-[17px] font-black tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
-              ARCTIC
+            <Link href="/shop" className="text-[#131313] hover:text-[#e91e3f] transition-colors">
+              <ArcticLogo size={26} />
             </Link>
           </div>
 
@@ -422,47 +425,8 @@ export default function ShopPage() {
                   <span className="text-[9px] font-black tracking-[0.15em] text-[#e91e3f]">XP</span>
                 </div>
 
-                {/* 찜 — 누르면 찜 목록만, 한 번 더 누르면 전체로 */}
-                <button
-                  onClick={() => {
-                    const next = !wishOnly;
-                    setWishOnly(next);
-                    if (next) document.getElementById("shop-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }}
-                  aria-label="찜한 상품 보기"
-                  aria-pressed={wishOnly}
-                  className={`relative p-2 rounded-full transition-colors ${wishOnly ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
-                  <svg className={`w-[18px] h-[18px] transition-all duration-300 ${wishOnly ? "text-[#e91e3f] scale-110" : wish.length > 0 ? "text-[#e91e3f]" : ""}`}
-                    fill={wishOnly || wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                  </svg>
-                </button>
-
-                {/* 구매 내역 */}
-                <button onClick={() => setShowOrders(true)} aria-label="구매 내역"
-                  className="relative p-2 rounded-full text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] transition-colors">
-                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
-                  </svg>
-                  {pendingOrders > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
-                </button>
-
-                {/* 장바구니 */}
-                <Link href="/shop/cart"
-                  className="flex items-center gap-2 pl-3 pr-4 py-2 ml-1 rounded-full bg-[#131313] hover:bg-black text-white transition-colors">
-                  <span className="relative">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
-                    </svg>
-                    {cartCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center">{cartCount}</span>
-                    )}
-                  </span>
-                  <span className="text-[12px] font-bold tabular-nums hidden sm:inline">{cartTotal.toLocaleString()}</span>
-                </Link>
-
                 {/* 프로필 — 클릭 시 메뉴 */}
-                <div className="relative ml-1 shrink-0" ref={profileRef}>
+                <div className="relative ml-1 shrink-0 hidden md:block" ref={profileRef}>
                   <button onClick={() => setShowProfile(!showProfile)} aria-label="내 메뉴" aria-expanded={showProfile}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={session?.user?.image || ""} alt=""
@@ -479,10 +443,10 @@ export default function ShopPage() {
                           <div className="text-[11px] font-bold text-[#8a8a8a]">Lv.{myLevel} · {(myXp ?? 0).toLocaleString()} XP</div>
                         </div>
                       </div>
-                      <button onClick={() => { setShowProfile(false); setShowOrders(true); }}
-                        className="w-full text-left px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
+                      <Link href="/shop/orders" onClick={() => setShowProfile(false)}
+                        className="block px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
                         구매 내역{orders.length > 0 ? ` ${orders.length}` : ""}
-                      </button>
+                      </Link>
                       <button onClick={() => { setShowProfile(false); setWishOnly(true); document.getElementById("shop-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
                         className="w-full text-left px-3 py-2.5 text-[13px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] rounded-xl transition-colors">
                         찜한 상품{wish.length > 0 ? ` ${wish.length}` : ""}
@@ -503,6 +467,36 @@ export default function ShopPage() {
                     </div>
                   )}
                 </div>
+
+                {/* 찜 — 누르면 찜 목록만, 한 번 더 누르면 전체로 */}
+                <button
+                  onClick={() => {
+                    const next = !wishOnly;
+                    setWishOnly(next);
+                    if (next) document.getElementById("shop-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  aria-label="찜한 상품 보기"
+                  aria-pressed={wishOnly}
+                  className={`relative hidden md:block p-2 rounded-full transition-colors ${wishOnly ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
+                  <svg className={`w-[18px] h-[18px] transition-all duration-300 ${wishOnly ? "text-[#e91e3f] scale-110" : wish.length > 0 ? "text-[#e91e3f]" : ""}`}
+                    fill={wishOnly || wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                  </svg>
+                </button>
+
+                {/* 장바구니 */}
+                <Link href="/shop/cart"
+                  className="hidden md:flex items-center gap-2 pl-3 pr-4 py-2 ml-1 rounded-full bg-[#131313] hover:bg-black text-white transition-colors">
+                  <span className="relative">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                    </svg>
+                    {cartCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center">{cartCount}</span>
+                    )}
+                  </span>
+                  <span className="text-[12px] font-bold tabular-nums hidden sm:inline">{cartTotal.toLocaleString()}</span>
+                </Link>
               </>
             ) : (
               <button onClick={() => signIn("discord")}
@@ -574,7 +568,7 @@ export default function ShopPage() {
                         <span className="text-[38px] leading-none font-black tracking-tighter text-[#131313] tabular-nums">
                           {myXp == null ? "—" : myXp.toLocaleString()}
                         </span>
-                        <span className="text-[11px] font-black tracking-[0.2em] text-[#e91e3f]">XP</span>
+                        <span className="text-[13px] font-black tracking-[0.15em] text-[#e91e3f]">XP</span>
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
@@ -607,10 +601,10 @@ export default function ShopPage() {
                       찜{wish.length > 0 ? ` ${wish.length}` : ""}
                     </button>
                     <span className="w-px h-4 bg-[#ececea]"></span>
-                    <button onClick={() => setShowOrders(true)}
-                      className="flex-1 py-2.5 rounded-xl text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] transition-colors">
+                    <Link href="/shop/orders"
+                      className="flex-1 py-2.5 text-center rounded-xl text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] transition-colors">
                       구매 내역{orders.length > 0 ? ` ${orders.length}` : ""}
-                    </button>
+                    </Link>
                     <span className="w-px h-4 bg-[#ececea]"></span>
                     <Link href="/shop/cart"
                       className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f5f3f0] transition-colors">
@@ -684,6 +678,14 @@ export default function ShopPage() {
             <button onClick={() => setQuery("")} className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">검색 해제</button>
           </div>
         )}
+
+        {/* 카테고리 — 모바일 전용 (데스크톱은 헤더 내비로) */}
+        <div className="md:hidden flex gap-2 overflow-x-auto pb-1 mb-3 [&::-webkit-scrollbar]:hidden">
+          {TYPES.map((t) => (
+            <button key={t.v} onClick={() => { setTypeFilter(t.v); setWishOnly(false); }}
+              className={`${chip(typeFilter === t.v && !wishOnly)} shrink-0`}>{t.l}</button>
+          ))}
+        </div>
 
         <div className="flex flex-wrap items-center gap-2 mb-3">
           {PRICE_RANGES.map((r) => (
@@ -816,14 +818,13 @@ export default function ShopPage() {
                     )}
 
                     <div className="mt-auto">
-                      <div className="mb-3">
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-xl font-black text-[#131313] tracking-tight tabular-nums">{salePrice(it).toLocaleString()}</span>
-                          {salePrice(it) < it.price && (
-                            <span className="text-[12px] text-[#a3a3a3] line-through tabular-nums">{it.price.toLocaleString()}</span>
-                          )}
-                        </div>
-                        <div className="text-[10px] font-bold text-[#8a8a8a] tracking-wider">XP</div>
+                      <div className="mb-3 flex items-baseline gap-2 flex-wrap">
+                        <span className="text-xl font-black text-[#131313] tracking-tight tabular-nums">
+                          {salePrice(it).toLocaleString()}<span className="text-[12px] font-bold text-[#8a8a8a] ml-1">XP</span>
+                        </span>
+                        {salePrice(it) < it.price && (
+                          <span className="text-[12px] text-[#a3a3a3] line-through tabular-nums">{it.price.toLocaleString()} XP</span>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <button
@@ -868,31 +869,87 @@ export default function ShopPage() {
       </section>
 
 
-      {/* ── 모바일 하단 탭바 — 카테고리·찜·장바구니 ── */}
+      {/* ── 모바일 하단 탭바 — 앱 내비게이션 ── */}
       <nav className="md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[92] p-1.5 rounded-full border border-[#e2e0dc] bg-white/90 backdrop-blur-2xl shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)] grid grid-cols-5">
-        {TYPES.map((t) => {
-          const on = typeFilter === t.v && !wishOnly;
-          return (
-            <button key={t.v}
-              onClick={() => { setTypeFilter(t.v); setWishOnly(false); document.getElementById("shop-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
-              className={`flex flex-col items-center justify-center py-1.5 rounded-full transition-all active:scale-95 ${
-                on ? "text-[#e91e3f] bg-[#e91e3f]/[0.1]" : "text-[#8a8a8a] active:text-[#131313]"
-              }`}>
-              <span className="text-[10px] font-bold whitespace-nowrap">{t.l}</span>
-            </button>
-          );
-        })}
+        {/* 상점 홈 */}
+        <button onClick={() => { setWishOnly(false); setTypeFilter("all"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          className={`flex flex-col items-center justify-center py-1.5 rounded-full transition-all active:scale-95 ${
+            !wishOnly ? "text-[#e91e3f] bg-[#e91e3f]/[0.1]" : "text-[#8a8a8a] active:text-[#131313]"
+          }`}>
+          <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
+          </svg>
+        </button>
 
+        {/* 찜 */}
+        <button onClick={() => { setWishOnly(true); document.getElementById("shop-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+          className={`relative flex flex-col items-center justify-center py-1.5 rounded-full transition-all active:scale-95 ${
+            wishOnly ? "text-[#e91e3f] bg-[#e91e3f]/[0.1]" : "text-[#8a8a8a] active:text-[#131313]"
+          }`}>
+          <svg className="w-[19px] h-[19px]" fill={wishOnly || wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+          </svg>
+        </button>
+
+        {/* 장바구니 */}
         <Link href="/shop/cart"
-          className="relative flex flex-col items-center justify-center py-1.5 rounded-full text-[#131313] transition-all active:scale-95">
-          <svg className="w-4 h-4 mb-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+          className="relative flex flex-col items-center justify-center py-1.5 rounded-full text-[#8a8a8a] active:text-[#131313] transition-all active:scale-95">
+          <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
           </svg>
-          <span className="text-[10px] font-bold">장바구니</span>
           {cartCount > 0 && (
             <span className="absolute top-0.5 right-1/2 translate-x-4 min-w-[15px] h-[15px] px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center">{cartCount}</span>
           )}
         </Link>
+
+        {/* 구매 내역 */}
+        <Link href="/shop/orders"
+          className="relative flex flex-col items-center justify-center py-1.5 rounded-full text-[#8a8a8a] active:text-[#131313] transition-all active:scale-95">
+          <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+          </svg>
+          {pendingOrders > 0 && <span className="absolute top-1 right-1/2 translate-x-4 w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
+        </Link>
+
+        {/* 내 프로필 */}
+        <div className="relative flex items-center justify-center" ref={mobileProfileRef}>
+          <button onClick={() => setShowMobileProfile(!showMobileProfile)} aria-label="내 메뉴"
+            className="flex items-center justify-center py-1.5 transition-all active:scale-95">
+            {isLoggedIn ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={session?.user?.image || ""} alt=""
+                className={`w-[22px] h-[22px] rounded-full bg-[#e2e0dc] ring-1 transition-all ${showMobileProfile ? "ring-[#131313]" : "ring-transparent"}`} />
+            ) : (
+              <svg className="w-[19px] h-[19px] text-[#8a8a8a]" fill="none" viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+              </svg>
+            )}
+          </button>
+
+          {showMobileProfile && (
+            <div className="absolute bottom-[52px] right-0 w-[220px] rounded-2xl bg-white border border-[#e2e0dc] shadow-[0_-16px_40px_-14px_rgba(0,0,0,0.28)] p-3"
+              style={{ animation: "menuDrop 0.28s cubic-bezier(0.16,1,0.3,1)" }}>
+              {isLoggedIn ? (
+                <>
+                  <div className="px-2 pb-2.5 mb-1.5 border-b border-[#ececea]">
+                    <div className="text-[13px] font-black text-[#131313] truncate">{session?.user?.name}</div>
+                    <div className="text-[11px] font-bold text-[#8a8a8a]">Lv.{myLevel} · {(myXp ?? 0).toLocaleString()} XP</div>
+                  </div>
+                  <Link href="/profile" onClick={() => setShowMobileProfile(false)}
+                    className="block px-2 py-2 text-[13px] font-bold text-[#4b4b4b] hover:bg-[#f5f3f0] rounded-lg transition-colors">내 정보</Link>
+                  <Link href="/level" onClick={() => setShowMobileProfile(false)}
+                    className="block px-2 py-2 text-[13px] font-bold text-[#4b4b4b] hover:bg-[#f5f3f0] rounded-lg transition-colors">SYSTEM : LEVEL</Link>
+                  <div className="h-px bg-[#ececea] my-1.5"></div>
+                  <Link href="/" onClick={() => setShowMobileProfile(false)}
+                    className="block px-2 py-2 text-[13px] font-bold text-[#e91e3f] hover:bg-[#e91e3f]/[0.07] rounded-lg transition-colors">고급 이글루로</Link>
+                </>
+              ) : (
+                <button onClick={() => signIn("discord")}
+                  className="w-full py-2.5 rounded-lg bg-[#5865F2] text-white text-[12px] font-bold">디스코드 로그인</button>
+              )}
+            </div>
+          )}
+        </div>
       </nav>
 
       {/* 토스트 — 상단 중앙에서 튀어나오듯 등장 */}
@@ -1178,46 +1235,6 @@ export default function ShopPage() {
         </div>
       )}
 
-      {/* ── 구매 내역 ── */}
-      {showOrders && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setShowOrders(false)}>
-          <div className="bg-[#ffffff] rounded-3xl w-full max-w-lg max-h-[80vh] overflow-hidden shadow-2xl border border-[#e2e0dc] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-5 border-b border-[#ececea] flex items-center justify-between">
-              <h2 className="text-base font-black text-[#131313]">구매 내역</h2>
-              <button onClick={() => setShowOrders(false)} className="p-1.5 text-[#8a8a8a] hover:text-[#131313] transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <div className="overflow-y-auto">
-              {orders.length === 0 ? (
-                <p className="px-6 py-14 text-center text-sm text-[#8a8a8a]">아직 구매한 상품이 없습니다.</p>
-              ) : (
-                <div className="divide-y divide-[#ececea]">
-                  {orders.map((o) => (
-                    <div key={o._id} className="px-6 py-4">
-                      <div className="flex items-start justify-between gap-3 mb-1">
-                        <span className="text-sm font-bold text-[#131313]">{o.itemName}</span>
-                        <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black ${
-                          o.status === "completed" ? "bg-[#e8f3e6] text-[#3f7a35]"
-                          : o.status === "cancelled" ? "bg-[#fdeaea] text-[#c62828]"
-                          : "bg-[#fdf3e3] text-[#a8763a]"}`}>
-                          {STATUS_LABEL[o.status] || o.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-[#8a8a8a]">
-                        <span className="tabular-nums">-{o.price.toLocaleString()} XP</span>
-                        <span>·</span>
-                        <span>{new Date(o.createdAt).toLocaleDateString("ko-KR")}</span>
-                      </div>
-                      {o.adminNote && <p className="mt-1.5 text-[11px] text-[#5a5a5a]">운영진 메모: {o.adminNote}</p>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

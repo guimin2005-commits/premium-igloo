@@ -83,6 +83,24 @@ export default function AdminShopPage() {
   const [coupons, setCoupons] = useState<any[]>([]);
   const [couponForm, setCouponForm] = useState<any>(EMPTY_COUPON);
 
+  // 쿠폰을 유저 지갑에 지급
+  const [issueTarget, setIssueTarget] = useState<any>(null);
+  const [issueInput, setIssueInput] = useState("");
+  const [isIssuing, setIsIssuing] = useState(false);
+
+  const issueCoupon = async (target: string) => {
+    if (!issueTarget || isIssuing) return;
+    setIsIssuing(true);
+    const res = await fetch("/api/shop/coupons/issue", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ couponId: issueTarget._id, target }),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    if (res?.ok && d?.success) { notify(d.message || "지급했습니다."); setIssueTarget(null); setIssueInput(""); }
+    else notify(d?.message || "지급에 실패했습니다.", true);
+    setIsIssuing(false);
+  };
+
   const saveCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await fetch("/api/shop/coupons", {
@@ -594,6 +612,7 @@ export default function AdminShopPage() {
                           {c.expiresAt && <span className="text-[11px] text-gray-400">~ {fmtDateTime(c.expiresAt)}</span>}
                         </div>
                         <div className="flex gap-4 shrink-0">
+                          <button onClick={() => { setIssueTarget(c); setIssueInput(""); }} className="text-xs font-bold text-emerald-400/80 hover:text-emerald-400 transition-colors">지급</button>
                           <button onClick={() => { setCouponForm({ id: c._id, code: c.code, name: c.name || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: c.expiresAt ? new Date(new Date(c.expiresAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-400 hover:text-white transition-colors">수정</button>
                           <button onClick={() => setDeleteTarget({ kind: "coupon", id: c._id })} className="text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">삭제</button>
                         </div>
@@ -678,6 +697,37 @@ export default function AdminShopPage() {
               <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button>
               <button onClick={executeDelete} className="flex-1 py-3 bg-red-500/80 text-white rounded-xl">삭제</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {issueTarget && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4">
+          <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8">
+            <h2 className="text-lg font-bold text-white mb-2">쿠폰 지급</h2>
+            <p className="text-xs text-gray-400 mb-5">
+              <span className="font-black text-white tracking-wide">{issueTarget.code}</span>
+              {issueTarget.name ? ` · ${issueTarget.name}` : ""}
+            </p>
+
+            <label className="block text-xs font-bold text-gray-400 mb-2">지급 대상</label>
+            <input type="text" value={issueInput} onChange={(e) => setIssueInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && issueInput.trim()) issueCoupon(issueInput.trim()); }}
+              placeholder="디스코드 닉네임 또는 유저 ID"
+              className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] mb-3 placeholder:text-gray-500" />
+            <p className="text-[10px] text-gray-400 mb-6">XP 기록이 있는 유저만 검색됩니다. 이미 보유 중이면 건너뜁니다.</p>
+
+            <div className="flex gap-3 mb-3">
+              <button onClick={() => setIssueTarget(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">닫기</button>
+              <button onClick={() => issueCoupon(issueInput.trim())} disabled={!issueInput.trim() || isIssuing}
+                className="flex-1 py-3 bg-[#e91e3f] disabled:opacity-40 text-white rounded-xl font-bold">
+                {isIssuing ? "지급 중..." : "지급"}
+              </button>
+            </div>
+            <button onClick={() => issueCoupon("all")} disabled={isIssuing}
+              className="w-full py-3 border border-white/15 text-gray-300 hover:text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-40">
+              전체 유저에게 지급
+            </button>
           </div>
         </div>
       )}

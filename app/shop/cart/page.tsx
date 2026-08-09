@@ -141,8 +141,8 @@ export default function CartPage() {
                         )}
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="text-base font-black text-[#131313] tabular-nums">{sp.toLocaleString()}</div>
-                        {discounted && <div className="text-[11px] text-[#a3a3a3] line-through tabular-nums">{r.item.price.toLocaleString()}</div>}
+                        <div className="text-base font-black text-[#131313] tabular-nums">{sp.toLocaleString()} XP</div>
+                        {discounted && <div className="text-[11px] text-[#a3a3a3] line-through tabular-nums">{r.item.price.toLocaleString()} XP</div>}
                         <button onClick={() => removeItem(r.itemId)}
                           className="mt-2 text-[11px] font-bold text-[#a3a3a3] hover:text-[#c62828] transition-colors">
                           삭제
