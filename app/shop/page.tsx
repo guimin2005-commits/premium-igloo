@@ -419,12 +419,6 @@ export default function ShopPage() {
 
             {isLoggedIn ? (
               <>
-                {/* 보유 XP */}
-                <div className="hidden sm:flex items-baseline gap-1.5 px-3 py-2 ml-1 rounded-full bg-white border border-[#e2e0dc]">
-                  <span className="text-[13px] font-black text-[#131313] tabular-nums">{myXp == null ? "—" : myXp.toLocaleString()}</span>
-                  <span className="text-[9px] font-black tracking-[0.15em] text-[#e91e3f]">XP</span>
-                </div>
-
                 {/* 프로필 — 클릭 시 메뉴 */}
                 <div className="relative ml-1 shrink-0 hidden md:block" ref={profileRef}>
                   <button onClick={() => setShowProfile(!showProfile)} aria-label="내 메뉴" aria-expanded={showProfile}>

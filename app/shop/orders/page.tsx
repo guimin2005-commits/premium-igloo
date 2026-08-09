@@ -75,9 +75,7 @@ export default function OrdersPage() {
 
   return (
     <div className="w-full flex-1 bg-[#f5f3f0] text-[#131313] min-h-screen">
-      <ArcticHeader right={
-        <span className="text-[11px] font-bold text-[#8a8a8a]">보유 <span className="text-[#131313] tabular-nums">{(myXp ?? 0).toLocaleString()}</span> XP</span>
-      } />
+      <ArcticHeader />
 
       <section className="max-w-4xl mx-auto px-6 pt-10 pb-24">
         <Link href="/shop" className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] mb-5 transition-colors">

@@ -1,29 +1,60 @@
 "use client";
 
-// 📌 ARCTIC 로고 — 빙산/눈결정 모티프의 마름모 마크 + 워드마크
-//    고급 이글루(얼음)의 상점이라는 정체성을 크림슨 액센트로 잇는다
-export function ArcticMark({ size = 26 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className="shrink-0" aria-hidden>
-      {/* 바깥 마름모 — 얼음 결정 */}
-      <path d="M16 2.5 29.5 16 16 29.5 2.5 16 16 2.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-      {/* 안쪽 빙산 실루엣 */}
-      <path d="M16 9.5 22.5 20H9.5L16 9.5Z" fill="currentColor" fillOpacity="0.14" />
-      <path d="M16 9.5 22.5 20H9.5L16 9.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-      {/* 수면 라인 */}
-      <path d="M7 23h18" stroke="#e91e3f" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
+// 📌 ARCTIC 워드마크 — 글자 자체가 로고
+//    · 넓은 자간으로 얼음처럼 차갑고 정제된 인상
+//    · 'I'를 크림슨 빙주(氷柱)로 대체해 고급 이글루의 포인트 컬러를 각인
+//    · 위아래 헤어라인이 수평선처럼 글자를 감싼다
+export default function ArcticLogo({
+  size = 26,
+  className = "",
+  showRule = true,
+}: {
+  size?: number;
+  className?: string;
+  showRule?: boolean;
+}) {
+  // size는 글자 높이(px) 기준 — 나머지는 비율로 따라간다
+  const letter = { fontSize: size, lineHeight: 1 };
+  const shard = { width: Math.max(2, size * 0.1), height: size * 0.78 };
 
-// 브랜드 전체 (마크 + ARCTIC 워드마크)
-export default function ArcticLogo({ size = 26, className = "" }: { size?: number; className?: string }) {
   return (
-    <span className={`inline-flex items-center gap-2 ${className}`}>
-      <ArcticMark size={size} />
-      <span className="font-black tracking-[0.22em] leading-none" style={{ fontSize: size * 0.62 }}>
-        ARCTIC
+    <span
+      className={`inline-flex flex-col items-center select-none ${className}`}
+      aria-label="ARCTIC"
+      role="img"
+    >
+      {showRule && (
+        <span
+          className="block bg-current opacity-20"
+          style={{ height: 1, width: "100%", marginBottom: size * 0.16 }}
+        />
+      )}
+
+      <span className="inline-flex items-center font-black" style={{ letterSpacing: size * 0.18 }}>
+        <span style={letter}>ARCT</span>
+
+        {/* 'I' 자리 — 크림슨 빙주 */}
+        <span
+          className="inline-block bg-[#e91e3f] shrink-0"
+          style={{
+            ...shard,
+            marginLeft: size * 0.1,
+            marginRight: size * 0.26,
+            // 아래로 갈수록 좁아지는 고드름 실루엣
+            clipPath: "polygon(0 0, 100% 0, 72% 100%, 28% 100%)",
+          }}
+          aria-hidden
+        />
+
+        <span style={letter}>C</span>
       </span>
+
+      {showRule && (
+        <span
+          className="block bg-current opacity-20"
+          style={{ height: 1, width: "100%", marginTop: size * 0.16 }}
+        />
+      )}
     </span>
   );
 }
