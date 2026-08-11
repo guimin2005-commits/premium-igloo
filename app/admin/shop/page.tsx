@@ -101,6 +101,18 @@ export default function AdminShopPage() {
     setIsIssuing(false);
   };
 
+  // 예전 '코드'를 보상형 쿠폰으로 옮긴다 (여러 번 눌러도 중복되지 않는다)
+  const [isMigrating, setIsMigrating] = useState(false);
+  const migrateCodes = async () => {
+    if (isMigrating) return;
+    setIsMigrating(true);
+    const res = await fetch("/api/shop/coupons/migrate", { method: "POST" }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    if (res?.ok && d?.success) { notify(d.message || "이전했습니다."); fetchAll(); }
+    else notify(d?.message || "이전에 실패했습니다.", true);
+    setIsMigrating(false);
+  };
+
   const saveCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await fetch("/api/shop/coupons", {
@@ -492,7 +504,12 @@ export default function AdminShopPage() {
           <>
             <Reveal>
             <section>
-              <SectionHead no="01" title={couponForm.id ? "쿠폰 수정" : "쿠폰 발급"} />
+              <SectionHead no="01" title={couponForm.id ? "쿠폰 수정" : "쿠폰 발급"} right={
+                <button type="button" onClick={migrateCodes} disabled={isMigrating}
+                  className="px-4 py-2 rounded-lg border border-white/15 text-gray-300 hover:text-white text-[12px] font-bold transition-colors disabled:opacity-40 whitespace-nowrap">
+                  {isMigrating ? "이전 중..." : "예전 코드 가져오기"}
+                </button>
+              } />
               <form onSubmit={saveCoupon}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>

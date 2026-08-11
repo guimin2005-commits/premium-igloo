@@ -38,7 +38,46 @@ export async function POST(request) {
     if (!ok) return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
 
     await connectToDatabase();
-    const { target, amount, reason } = await request.json();
+    const { target, amount, reason, mode } = await request.json();
+
+    // ── [초기화] 보유 XP와 레벨을 0으로 되돌린다 ──
+    //    큐를 거치지 않고 즉시 반영한다 (누적값을 지우는 작업이라 증감으로는 표현할 수 없다)
+    if (mode === "reset") {
+      const filter = target === "all"
+        ? {}
+        : { $or: [{ userId: (target || "").trim() }, { username: (target || "").trim() }, { displayName: (target || "").trim() }] };
+
+      if (target !== "all" && !(target || "").trim()) {
+        return NextResponse.json({ success: false, message: "초기화할 대상을 입력해주세요." }, { status: 400 });
+      }
+
+      const rows = await UserXp.find(filter, { userId: 1, username: 1, displayName: 1, xp: 1 }).lean();
+      if (rows.length === 0) {
+        return NextResponse.json({ success: false, message: "해당 유저를 찾을 수 없습니다." }, { status: 404 });
+      }
+
+      await UserXp.updateMany(filter, { $set: { xp: 0, level: 0, updatedAt: new Date() } });
+
+      // 감사 기록 — 이미 반영했으므로 봇 큐가 다시 집지 않도록 paid로 남긴다
+      const who = session?.user?.name || "admin";
+      await Payout.insertMany(
+        rows.map((r) => ({
+          userName: r.displayName || r.username || "",
+          userId: r.userId,
+          amount: -(r.xp || 0),
+          reason: (reason || "").trim() || `관리자 초기화 (${who})`,
+          source: "manual",
+          status: "paid",
+          paidAt: new Date(),
+        }))
+      );
+
+      return NextResponse.json({
+        success: true,
+        message: `${rows.length}명의 XP·레벨을 0으로 초기화했습니다. 이미 지급된 역할은 그대로 남습니다.`,
+        data: { count: rows.length },
+      });
+    }
 
     const value = Math.trunc(Number(amount) || 0);
     if (!value) {

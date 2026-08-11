@@ -17,7 +17,7 @@ const TAB_META: Record<string, { title: string; desc: string }> = {
   roles: { title: "역할 설정", desc: "레벨 보상 역할과 역할별 Boost 효과를 관리합니다." },
   channels: { title: "채널 · 카테고리", desc: "채널별 XP Boost와 지급 제외를 관리합니다." },
   boosts: { title: "기간제 부스트", desc: "대상·XP·기간을 지정한 한시적 부스트를 운영합니다." },
-  grant: { title: "XP 수동 지급", desc: "특정 유저나 전원에게 XP를 직접 지급하거나 회수합니다. 봇이 30초 이내에 반영합니다." },
+  grant: { title: "XP 수동 지급", desc: "특정 유저나 전원에게 XP를 지급·제거하거나, 보유 XP를 초기화합니다." },
   leaderboard: { title: "리더보드", desc: "누적·월간 XP 랭킹을 확인합니다." },
   logs: { title: "XP 로그", desc: "봇이 지급한 XP 내역을 조회합니다. (최근 60일 보관)" },
 };
@@ -132,27 +132,29 @@ export default function AdminBotPage() {
 
   useEffect(() => { if (isAdmin && tab === "grant") loadGrantLogs(); }, [isAdmin, tab, loadGrantLogs]);
 
-  const runGrant = async (target: string) => {
+  // amount를 넘기면 그 값으로, 넘기지 않으면 입력값 그대로 보낸다 (제거는 음수로 뒤집는다)
+  const runGrant = async (target: string, override?: { amount?: number; mode?: "reset" }) => {
     if (isGranting) return;
     setIsGranting(true);
     try {
       const res = await fetch("/api/xp/grant", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...grantForm, target }),
+        body: JSON.stringify({ ...grantForm, target, ...override }),
       });
       const d = await res.json();
       if (res.ok && d.success) {
-        notify(d.message || "지급했습니다.");
+        notify(d.message || "처리했습니다.");
         setGrantForm({ target: "", amount: "", reason: "" });
         loadGrantLogs();
       } else {
-        notify(d.message || "지급에 실패했습니다.", true);
+        notify(d.message || "처리에 실패했습니다.", true);
       }
     } catch {
       notify("서버와 통신 중 오류가 발생했습니다.", true);
     } finally {
       setIsGranting(false);
       setConfirmAll(false);
+      setConfirmReset(null);
     }
   };
 
@@ -161,6 +163,17 @@ export default function AdminBotPage() {
     if (!grantForm.target.trim()) return notify("지급 대상을 입력해주세요.", true);
     runGrant(grantForm.target.trim());
   };
+
+  // 제거 — 입력한 XP만큼 회수한다 (보유량을 넘으면 보유량까지만)
+  const submitRemove = () => {
+    const amount = Math.abs(Math.trunc(Number(grantForm.amount) || 0));
+    if (!grantForm.target.trim()) return notify("제거할 대상을 입력해주세요.", true);
+    if (!amount) return notify("제거할 XP를 입력해주세요.", true);
+    runGrant(grantForm.target.trim(), { amount: -amount });
+  };
+
+  // 초기화 — 보유 XP·레벨을 0으로 되돌린다
+  const [confirmReset, setConfirmReset] = useState<string | null>(null);
 
   const [roleForm, setRoleForm] = useState({ roleId: "", rewardLevel: "", buffXp: "", attendBuffXp: "" });
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
@@ -818,6 +831,10 @@ export default function AdminBotPage() {
                   <button type="submit" disabled={isGranting} className={primaryBtn}>
                     {isGranting ? "처리 중..." : "지급"}
                   </button>
+                  <button type="button" onClick={submitRemove} disabled={isGranting || !grantForm.amount}
+                    className="px-6 py-3.5 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] text-amber-400 hover:bg-amber-500/[0.12] text-sm font-bold transition-colors disabled:opacity-40">
+                    XP 제거
+                  </button>
                   <button type="button" onClick={() => setConfirmAll(true)} disabled={isGranting || !grantForm.amount}
                     className="px-6 py-3.5 rounded-lg border border-white/15 text-gray-300 hover:text-white text-sm font-bold transition-colors disabled:opacity-40">
                     전체 유저에게 지급
@@ -829,7 +846,28 @@ export default function AdminBotPage() {
 
             <Reveal>
             <section>
-              <SectionHead no="02" title={`최근 수동 지급 (${grantLogs.length})`} />
+              <SectionHead no="02" title="XP 초기화" />
+              <p className="text-xs text-gray-400 leading-relaxed break-keep mb-5">
+                보유 XP와 레벨을 0으로 되돌립니다. 이미 지급된 레벨 역할은 자동으로 회수되지 않으니, 필요하면 디스코드에서 직접 정리해 주세요.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <button type="button" disabled={isGranting || !grantForm.target.trim()}
+                  onClick={() => setConfirmReset(grantForm.target.trim())}
+                  className="px-6 py-3.5 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] text-amber-400 hover:bg-amber-500/[0.12] text-sm font-bold transition-colors disabled:opacity-40">
+                  위 대상 초기화
+                </button>
+                <button type="button" disabled={isGranting} onClick={() => setConfirmReset("all")}
+                  className="px-6 py-3.5 rounded-lg border border-red-500/30 bg-red-500/[0.06] text-red-400 hover:bg-red-500/[0.12] text-sm font-bold transition-colors disabled:opacity-40">
+                  전체 유저 초기화
+                </button>
+              </div>
+              <p className={fieldNote}>대상은 위 &lsquo;XP 지급 · 회수&rsquo;의 대상 칸을 그대로 사용합니다</p>
+            </section>
+            </Reveal>
+
+            <Reveal>
+            <section>
+              <SectionHead no="03" title={`최근 수동 지급 (${grantLogs.length})`} />
               {grantLogs.length === 0 ? (
                 <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">수동 지급 이력이 없습니다.</div>
               ) : (
@@ -991,6 +1029,30 @@ export default function AdminBotPage() {
               <button onClick={() => runGrant("all")} disabled={isGranting}
                 className="flex-1 py-3 bg-[#e91e3f] disabled:opacity-40 text-white rounded-xl font-bold">
                 {isGranting ? "처리 중..." : "전체 지급"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📌 초기화는 되돌릴 수 없어 한 번 더 확인한다 */}
+      {confirmReset !== null && (
+        <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/80 p-4">
+          <div className="bg-[#121212] border border-red-500/30 rounded-3xl w-full max-w-sm p-8">
+            <h2 className="text-lg font-bold text-white mb-3">
+              {confirmReset === "all" ? "전체 유저 XP 초기화" : "XP 초기화"}
+            </h2>
+            <p className="text-sm text-gray-400 leading-relaxed mb-2 break-keep">
+              {confirmReset === "all"
+                ? <>XP 기록이 있는 <strong className="text-white">모든 유저</strong>의 보유 XP와 레벨이 <strong className="text-red-400">0</strong>이 됩니다.</>
+                : <><strong className="text-white">{confirmReset}</strong> 님의 보유 XP와 레벨이 <strong className="text-red-400">0</strong>이 됩니다.</>}
+            </p>
+            <p className="text-xs text-gray-400 mb-8 break-keep">되돌릴 수 없으며, 이미 지급된 레벨 역할은 그대로 남습니다.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmReset(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button>
+              <button onClick={() => runGrant(confirmReset, { mode: "reset" })} disabled={isGranting}
+                className="flex-1 py-3 bg-red-500 hover:bg-red-600 disabled:opacity-40 text-white rounded-xl font-bold">
+                {isGranting ? "처리 중..." : "초기화"}
               </button>
             </div>
           </div>

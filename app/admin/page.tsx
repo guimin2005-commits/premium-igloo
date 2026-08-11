@@ -43,15 +43,15 @@ export default function AdminHubPage() {
     Promise.all([
       fetch("/api/inquiry", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
       fetch("/api/user/applies?admin=true", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
-      fetch("/api/code", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/shop/coupons", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
       fetch("/api/payout", { cache: "no-store" }).then(r => r.json()).catch(() => ({ pendingCount: 0 })),
       fetch("/api/posts?all=1", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
       fetch("/api/honors", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
       fetch("/api/stats", { cache: "no-store" }).then(r => r.json()).catch(() => ({})),
-    ]).then(([inq, app, code, payout, posts, honors, discord]) => {
+    ]).then(([inq, app, coupon, payout, posts, honors, discord]) => {
       const inquiries = Array.isArray(inq?.data) ? inq.data : [];
       const applies = Array.isArray(app?.data) ? app.data : [];
-      const codes = Array.isArray(code?.data) ? code.data : [];
+      const codes = Array.isArray(coupon?.data) ? coupon.data : [];
       const allPosts = Array.isArray(posts?.data) ? posts.data : [];
       const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
@@ -75,7 +75,7 @@ export default function AdminHubPage() {
         pending: inquiries.filter((i: any) => i.status === "접수 중").length,
         applies: applies.length,
         codes: codes.length,
-        codeUses: codes.reduce((sum: number, c: any) => sum + (c.usedBy?.length || 0), 0),
+        codeUses: codes.reduce((sum: number, c: any) => sum + (c.usedCount ?? c.usedBy?.length ?? 0), 0),
         honors: Array.isArray(honors?.data) ? honors.data.length : 0,
         payoutPending: payout?.pendingCount || 0,
         weeklyInquiries: inquiries.filter((i: any) => new Date(i.createdAt).getTime() > weekAgo).length,
@@ -343,7 +343,7 @@ export default function AdminHubPage() {
                 { l: "게시글", v: `공지 ${stats.postCounts.공지사항} · 이벤트 ${stats.postCounts.이벤트} · 대회 ${stats.postCounts.대회} · 구인 ${stats.postCounts.구인}` },
                 { l: "문의", v: `전체 ${stats.inquiries}건 · 이번 주 ${stats.weeklyInquiries}건` },
                 { l: "구인 지원", v: `전체 ${stats.applies}건 · 이번 주 ${stats.weeklyApplies}건` },
-                { l: "코드", v: `발급 ${stats.codes}개 · 누적 사용 ${stats.codeUses}회` },
+                { l: "쿠폰", v: `발급 ${stats.codes}개 · 누적 사용 ${stats.codeUses}회` },
                 { l: "명예의 전당", v: `수동 기록 ${stats.honors}건` },
               ].map((row, i) => (
                 <div key={i} className="flex items-baseline justify-between gap-4 py-2 border-b border-white/[0.05] last:border-0">
