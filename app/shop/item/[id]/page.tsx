@@ -7,6 +7,7 @@ import Link from "next/link";
 import { salePrice } from "@/lib/shopPricing";
 import ArcticHeader from "../../ArcticHeader";
 import ArcticDock from "../../ArcticDock";
+import ArcticFooter from "../../ArcticFooter";
 
 const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
   role: { label: "역할", cls: "bg-[#e91e3f] text-white" },
@@ -408,6 +409,7 @@ export default function ItemDetailPage() {
           </div>
         </div>
       )}
+      <ArcticFooter />
       <ArcticDock />
     </div>
   );

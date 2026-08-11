@@ -6,6 +6,7 @@ import Link from "next/link";
 import { salePrice } from "@/lib/shopPricing";
 import ArcticHeader from "../ArcticHeader";
 import ArcticDock from "../ArcticDock";
+import ArcticFooter from "../ArcticFooter";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -235,6 +236,7 @@ export default function CartPage() {
           </div>
         )}
       </section>
+      <ArcticFooter />
       <ArcticDock />
     </div>
   );

@@ -5,6 +5,7 @@ import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import Dropdown from "../components/Dropdown";
 import { salePrice } from "@/lib/shopPricing";
+import ArcticFooter from "./ArcticFooter";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -747,12 +748,22 @@ export default function ShopPage() {
           </div>
         )}
 
-        {/* 카테고리 — 모바일 전용 (데스크톱은 헤더 내비로) */}
-        <div className="md:hidden flex gap-2 overflow-x-auto pb-1 mb-3 [&::-webkit-scrollbar]:hidden">
-          {TYPES.map((t) => (
-            <button key={t.v} onClick={() => setTypeFilter(t.v)}
-              className={`${chip(typeFilter === t.v)} shrink-0`}>{t.l}</button>
-          ))}
+        {/* 카테고리 — 헤더 아래에 붙어 따라오고, 스크롤하면 함께 좁아진다 */}
+        <div
+          style={{ top: pastBanner ? 68 : 64 }}
+          className={`sticky z-[80] -mx-6 px-6 mb-5 bg-[#f5f3f0]/92 backdrop-blur-md border-b border-[#e2e0dc] transition-[top,padding] duration-500 ease-out ${pastBanner ? "py-0" : "py-1"}`}>
+          <div className="flex items-center gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+            {TYPES.map((t) => {
+              const on = typeFilter === t.v;
+              return (
+                <button key={t.v} onClick={() => setTypeFilter(t.v)}
+                  className={`relative shrink-0 px-4 text-[13px] font-bold transition-[padding,color,font-size] duration-500 ease-out ${pastBanner ? "py-2 text-[12px]" : "py-3 text-[13px]"} ${on ? "text-[#131313]" : "text-[#8a8a8a] hover:text-[#131313]"}`}>
+                  {t.l}
+                  <span className={`absolute bottom-0 left-3 right-3 h-[2px] bg-[#e91e3f] origin-left transition-transform duration-300 ${on ? "scale-x-100" : "scale-x-0"}`} />
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* 📌 모바일은 필터 칩이 너무 많아지므로 접어 두고, 필요할 때만 편다 */}
@@ -1602,6 +1613,7 @@ export default function ShopPage() {
         </div>
       )}
 
+      <ArcticFooter />
     </div>
   );
 }

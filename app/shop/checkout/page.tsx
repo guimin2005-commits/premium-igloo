@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { salePrice } from "@/lib/shopPricing";
 import ArcticHeader from "../ArcticHeader";
+import ArcticFooter from "../ArcticFooter";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -455,6 +456,7 @@ export default function CheckoutPage() {
           </div>
         </div>
       </section>
+      <ArcticFooter />
     </div>
   );
 }
