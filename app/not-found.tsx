@@ -18,18 +18,15 @@ export default function NotFound() {
             <span className="text-white/[0.06]">4</span>
           </p>
 
-          <p className="text-5xl mb-6 -mt-4">🐧</p>
-
-          <div className="flex items-center justify-center gap-3 mb-4">
+          <div className="flex items-center justify-center gap-3 mt-8 mb-4">
             <span className="w-8 h-px bg-[#e91e3f]"></span>
             <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Page Not Found</span>
             <span className="w-8 h-px bg-[#e91e3f]"></span>
           </div>
 
-          <h1 className="text-xl md:text-2xl font-black text-white tracking-tight mb-3">펭귄이 길을 잃었어요</h1>
-          <p className="text-sm text-gray-500 leading-relaxed mb-10">
-            요청하신 페이지가 삭제되었거나, 주소가 잘못 입력되었습니다.<br />
-            빙판 위 미끄러지듯 홈으로 돌아가 볼까요?
+          <h1 className="text-xl md:text-2xl font-black text-white tracking-tight mb-3">길을 잃었어요</h1>
+          <p className="text-sm text-gray-500 leading-relaxed mb-10 break-keep">
+            요청하신 페이지가 삭제되었거나, 주소가 잘못 입력되었습니다.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
