@@ -25,27 +25,20 @@ export default function BoosterBenefitPage() {
           </div>
         )}
 
-        <div className="space-y-16 bg-white rounded-2xl border border-[#e2e0dc] p-6 md:p-8">
-            {/* 인트로 — 플랫 에디토리얼 + 임팩트 타이포 */}
-            <Reveal>
-            <div className="relative pt-2 overflow-hidden">
-              <div className="absolute -top-8 -right-4 text-[120px] md:text-[160px] font-black text-[#131313]/[0.025] leading-none select-none pointer-events-none tracking-tighter">BOOST</div>
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="w-8 h-px bg-[#e91e3f]"></span>
-                  <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Server Booster Program</span>
-                </div>
-                <h3 className="text-3xl md:text-5xl font-black tracking-tighter mb-4 leading-none">
-                  <span className="text-[#131313]">SERVER </span><span className="lux-shimmer">BOOSTER</span>
-                </h3>
-                <p className="text-sm md:text-base text-[#5a5a5a] leading-relaxed max-w-xl">서버의 환경 개선을 위한 직접적인 후원 시스템입니다.<br className="hidden md:block" />본 서버의 성장을 지원해 주시는 유저분들께 깊은 감사를 드립니다.</p>
+        <div className="space-y-6">
+            {/* 머리말 — 내 정보와 같은 톤 */}
+            <div className="mb-1">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="w-8 h-px bg-[#e91e3f]"></span>
+                <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Server Booster</span>
               </div>
+              <h1 className="text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-2">서버 부스터 혜택</h1>
+              <p className="text-sm text-[#5a5a5a] break-keep leading-relaxed">서버 환경 개선을 위한 후원 제도입니다. 부스트를 시작하면 아래 혜택이 자동으로 지급됩니다.</p>
             </div>
-            </Reveal>
 
             {/* 01. 전용 기능 권한 — 헤어라인 리스트 */}
             <Reveal>
-            <div>
+            <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6 md:p-7">
               <div className="flex items-baseline gap-4 mb-2">
                 <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
                 <div className="h-px flex-1 bg-gradient-to-r from-[#dedbd6] to-transparent"></div>
@@ -72,7 +65,7 @@ export default function BoosterBenefitPage() {
 
             {/* 02. XP 혜택 — 헤어라인 리스트 */}
             <Reveal>
-            <div>
+            <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6 md:p-7">
               <div className="flex items-baseline gap-4 mb-2">
                 <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
                 <div className="h-px flex-1 bg-gradient-to-r from-[#dedbd6] to-transparent"></div>
@@ -105,7 +98,7 @@ export default function BoosterBenefitPage() {
 
             {/* 03. RANK — 플랫 테이블 */}
             <Reveal>
-            <div>
+            <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6 md:p-7">
               <div className="flex items-baseline gap-4 mb-2">
                 <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
                 <div className="h-px flex-1 bg-gradient-to-r from-[#dedbd6] to-transparent"></div>
@@ -142,7 +135,7 @@ export default function BoosterBenefitPage() {
             </Reveal>
 
             <Reveal>
-            <div className="pt-6 border-t border-[#e2e0dc] text-center">
+            <div className="bg-white rounded-2xl border border-[#e2e0dc] px-6 py-5 text-center">
               <p className="text-sm text-[#4b4b4b] font-bold">📢 디스코드 서버 부스트 진행 시 시스템이 자동으로 감지하여 모든 혜택을 즉시 지급합니다!</p>
             </div>
             </Reveal>
