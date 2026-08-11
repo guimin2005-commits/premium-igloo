@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { salePrice } from "@/lib/shopPricing";
 import ArcticHeader from "../../ArcticHeader";
+import ArcticDock from "../../ArcticDock";
 
 const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
   role: { label: "역할", cls: "bg-[#e91e3f] text-white" },
@@ -407,6 +408,7 @@ export default function ItemDetailPage() {
           </div>
         </div>
       )}
+      <ArcticDock />
     </div>
   );
 }

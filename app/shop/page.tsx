@@ -455,14 +455,14 @@ export default function ShopPage() {
           ? "max-w-5xl rounded-full border border-[#e2e0dc] bg-white/85 backdrop-blur-2xl shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)]"
           : "max-w-[1600px] rounded-none border-x-transparent border-t-transparent border-b border-b-[#e2e0dc] bg-[#f5f3f0]/92 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)]"
       }`}>
-        <div className={`mx-auto flex items-center gap-6 transition-all duration-500 ease-out ${pastBanner ? "max-w-5xl px-5 h-14" : "max-w-6xl px-6 h-16"}`}>
-          {/* 브랜드 — 고급 이글루의 ARCTIC (좁은 화면에선 위아래로 쌓는다) */}
-          <div className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-3 min-w-0 shrink-0 leading-none">
-            <Link href="/" className="text-[9px] lg:text-[10px] font-bold tracking-[0.18em] text-[#8a8a8a] hover:text-[#131313] transition-colors">
+        <div className={`mx-auto flex items-center gap-3 md:gap-6 transition-all duration-500 ease-out ${pastBanner ? "max-w-5xl px-4 md:px-5 h-14" : "max-w-6xl px-4 md:px-6 h-16"}`}>
+          {/* 브랜드 — 고급 이글루의 ARCTIC (좁은 화면에서도 가로로) */}
+          <div className="flex flex-row items-center gap-2 lg:gap-3 min-w-0 leading-none">
+            <Link href="/" className="text-[9px] lg:text-[10px] font-bold tracking-[0.18em] text-[#8a8a8a] hover:text-[#131313] transition-colors whitespace-nowrap">
               고급 이글루
             </Link>
-            <span className="w-px h-4 bg-[#d6d3ce] hidden lg:block"></span>
-            <Link href="/shop" className="text-[16px] lg:text-[17px] font-black tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors mt-0.5 lg:mt-0">
+            <span className="w-px h-3.5 lg:h-4 bg-[#d6d3ce]"></span>
+            <Link href="/shop" className="text-[15px] lg:text-[17px] font-black tracking-[0.16em] lg:tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
               ARCTIC
             </Link>
 
@@ -496,7 +496,7 @@ export default function ShopPage() {
           {/* 우측 도구 */}
           <div className="flex items-center gap-1.5 ml-auto shrink-0">
             {/* 검색 — 늘 펼쳐진 상태로 둔다 */}
-            <div className="relative h-9 w-44 lg:w-56 shrink-0 rounded-full border bg-white border-[#e2e0dc] focus-within:border-[#e91e3f] transition-colors overflow-hidden">
+            <div className="hidden md:block relative h-9 w-44 lg:w-56 shrink-0 rounded-full border bg-white border-[#e2e0dc] focus-within:border-[#e91e3f] transition-colors overflow-hidden">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#a3a3a3] pointer-events-none"
                 fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
@@ -513,19 +513,16 @@ export default function ShopPage() {
 
             {isLoggedIn ? (
               <>
-                {/* 프로필 — 내 정보 페이지로 */}
-                <Link href="/shop/me" aria-label="내 정보" className="relative shrink-0 hidden md:flex items-center justify-center w-9 h-9">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={session?.user?.image || ""} alt=""
-                    className="w-[30px] h-[30px] rounded-full bg-[#e2e0dc] ring-1 ring-[#e2e0dc] hover:ring-[#131313] transition-all" />
-                  {pendingOrders > 0 && (
-                    <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[#e91e3f] ring-2 ring-[#f5f3f0]"></span>
-                  )}
-                </Link>
+
+                {/* 보유 XP — 모바일에서는 우측 카드가 없으므로 헤더에 둔다 */}
+                <span className="md:hidden inline-flex items-center h-9 px-2.5 rounded-full border border-[#e2e0dc] bg-white text-[11px] font-black text-[#131313] tabular-nums shrink-0">
+                  {(myXp ?? 0).toLocaleString()}
+                  <span className="ml-1 text-[10px] font-black text-[#e91e3f]">XP</span>
+                </span>
 
                 {/* 쿠폰함 */}
                 <button onClick={() => setShowCoupons(true)} aria-label="쿠폰함" title="쿠폰함"
-                  className={`relative hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showCoupons ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
+                  className={`relative flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showCoupons ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
                   <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
                   </svg>
@@ -554,6 +551,16 @@ export default function ShopPage() {
                     )}
                   </span>
                   <span className="text-[12px] font-bold tabular-nums hidden sm:inline">{cartTotal.toLocaleString()}</span>
+                </Link>
+
+                {/* 프로필 — 내 정보 페이지로 */}
+                <Link href="/shop/me" aria-label="내 정보" className="relative shrink-0 hidden md:flex items-center justify-center w-9 h-9">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={session?.user?.image || ""} alt=""
+                    className="w-[30px] h-[30px] rounded-full bg-[#e2e0dc] ring-1 ring-[#e2e0dc] hover:ring-[#131313] transition-all" />
+                  {pendingOrders > 0 && (
+                    <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[#e91e3f] ring-2 ring-[#f5f3f0]"></span>
+                  )}
                 </Link>
               </>
             ) : (

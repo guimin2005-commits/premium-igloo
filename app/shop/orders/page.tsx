@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import ArcticHeader from "../ArcticHeader";
+import ArcticDock from "../ArcticDock";
 
 const STATUS_META: Record<string, { label: string; cls: string; desc: string }> = {
   pending: { label: "처리 대기", cls: "bg-[#fdf3e3] text-[#a8763a]", desc: "지급·발송을 준비하고 있습니다" },
@@ -170,6 +171,7 @@ export default function OrdersPage() {
           </div>
         )}
       </section>
+      <ArcticDock />
     </div>
   );
 }

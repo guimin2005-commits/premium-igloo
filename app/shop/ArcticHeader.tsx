@@ -7,12 +7,12 @@ import { useState, useEffect } from "react";
 //    "고급 이글루" → 본 사이트 메인, "ARCTIC" → 상점 메인
 export function ArcticBrand() {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-0 sm:gap-3 min-w-0 shrink-0 leading-none">
-      <Link href="/" className="text-[9px] sm:text-[10px] font-bold tracking-[0.18em] text-[#8a8a8a] hover:text-[#131313] transition-colors">
+    <div className="flex flex-row items-center gap-2 sm:gap-3 min-w-0 shrink-0 leading-none">
+      <Link href="/" className="text-[9px] sm:text-[10px] font-bold tracking-[0.18em] text-[#8a8a8a] hover:text-[#131313] transition-colors whitespace-nowrap">
         고급 이글루
       </Link>
-      <span className="w-px h-4 bg-[#d6d3ce] hidden sm:block"></span>
-      <Link href="/shop" className="text-[16px] sm:text-[17px] font-black tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors mt-0.5 sm:mt-0">
+      <span className="w-px h-3.5 sm:h-4 bg-[#d6d3ce]"></span>
+      <Link href="/shop" className="text-[15px] sm:text-[17px] font-black tracking-[0.16em] sm:tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
         ARCTIC
       </Link>
     </div>

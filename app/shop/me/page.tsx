@@ -5,6 +5,7 @@ import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import { salePrice } from "@/lib/shopPricing";
 import ArcticHeader from "../ArcticHeader";
+import ArcticDock from "../ArcticDock";
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   pending: { label: "처리 대기", cls: "bg-[#fdf3e3] text-[#a8763a]" },
@@ -394,6 +395,7 @@ export default function ShopMePage() {
           </div>
         </div>
       </section>
+      <ArcticDock />
     </div>
   );
 }
