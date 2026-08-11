@@ -848,7 +848,7 @@ export default function AdminBotPage() {
             <section>
               <SectionHead no="02" title="XP 초기화" />
               <p className="text-xs text-gray-400 leading-relaxed break-keep mb-5">
-                보유 XP와 레벨을 0으로 되돌립니다. 이미 지급된 레벨 역할은 자동으로 회수되지 않으니, 필요하면 디스코드에서 직접 정리해 주세요.
+                보유 XP와 레벨을 0으로 되돌립니다. 레벨 보상 역할은 봇이 30초 이내에 함께 회수합니다. (ARCTIC에서 구매한 역할은 회수하지 않습니다)
               </p>
               <div className="flex flex-wrap gap-3">
                 <button type="button" disabled={isGranting || !grantForm.target.trim()}
@@ -1047,7 +1047,7 @@ export default function AdminBotPage() {
                 ? <>XP 기록이 있는 <strong className="text-white">모든 유저</strong>의 보유 XP와 레벨이 <strong className="text-red-400">0</strong>이 됩니다.</>
                 : <><strong className="text-white">{confirmReset}</strong> 님의 보유 XP와 레벨이 <strong className="text-red-400">0</strong>이 됩니다.</>}
             </p>
-            <p className="text-xs text-gray-400 mb-8 break-keep">되돌릴 수 없으며, 이미 지급된 레벨 역할은 그대로 남습니다.</p>
+            <p className="text-xs text-gray-400 mb-8 break-keep">되돌릴 수 없으며, 레벨 보상 역할도 함께 회수됩니다.</p>
             <div className="flex gap-3">
               <button onClick={() => setConfirmReset(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button>
               <button onClick={() => runGrant(confirmReset, { mode: "reset" })} disabled={isGranting}

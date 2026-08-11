@@ -56,7 +56,7 @@ export async function POST(request) {
         return NextResponse.json({ success: false, message: "해당 유저를 찾을 수 없습니다." }, { status: 404 });
       }
 
-      await UserXp.updateMany(filter, { $set: { xp: 0, level: 0, updatedAt: new Date() } });
+      await UserXp.updateMany(filter, { $set: { xp: 0, level: 0, needsRoleSync: true, updatedAt: new Date() } });
 
       // 감사 기록 — 이미 반영했으므로 봇 큐가 다시 집지 않도록 paid로 남긴다
       const who = session?.user?.name || "admin";
@@ -74,7 +74,7 @@ export async function POST(request) {
 
       return NextResponse.json({
         success: true,
-        message: `${rows.length}명의 XP·레벨을 0으로 초기화했습니다. 이미 지급된 역할은 그대로 남습니다.`,
+        message: `${rows.length}명의 XP·레벨을 0으로 초기화했습니다. 봇이 30초 이내에 레벨 보상 역할도 회수합니다.`,
         data: { count: rows.length },
       });
     }

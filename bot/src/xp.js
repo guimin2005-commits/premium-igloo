@@ -45,6 +45,27 @@ async function grantRewardRoles(member, level) {
   }
 }
 
+// 지금 레벨보다 높은 보상 역할을 회수한다
+//    ARCTIC 구매로 XP를 쓰거나 관리자가 초기화해서 레벨이 내려간 경우에 쓰인다
+export async function revokeRewardRoles(member, level) {
+  for (const cfg of getRoleConfigs()) {
+    if (cfg.rewardLevel != null && level < cfg.rewardLevel && member.roles.cache.has(cfg.roleId)) {
+      try {
+        await member.roles.remove(cfg.roleId, `레벨 ${cfg.rewardLevel} 미만으로 하락`);
+        console.log(`🧹 ${member.displayName} → ${cfg.roleName || cfg.roleId} 회수 (Lv.${level})`);
+      } catch (e) {
+        console.error(`역할 회수 실패 (${cfg.roleName || cfg.roleId}):`, e.message);
+      }
+    }
+  }
+}
+
+// 보상 역할을 현재 레벨에 맞춘다 — 모자란 건 주고, 넘치는 건 거둔다
+export async function syncRewardRoles(member, level) {
+  await grantRewardRoles(member, level);
+  await revokeRewardRoles(member, level);
+}
+
 // 대시보드에서 지정한 채널·문구로 레벨업 알림 ({user}, {level}, {xp} 치환)
 function announceLevelUp(member, newLevel, totalXp) {
   const s = getSettings();
@@ -89,6 +110,9 @@ export async function grantXp(member, amount, meta = {}) {
     if (newLevel > oldLevel) {
       grantRewardRoles(member, newLevel).catch(() => {});
       announceLevelUp(member, newLevel, doc.xp);
+    } else {
+      // 회수(음수 지급)로 레벨이 내려가면 그만큼 보상 역할도 거둔다
+      revokeRewardRoles(member, newLevel).catch(() => {});
     }
   }
   return doc;

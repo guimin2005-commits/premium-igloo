@@ -143,7 +143,8 @@ export async function POST(request) {
     // 차감된 XP에 맞춰 레벨을 다시 계산 (레벨이 내려갈 수 있다)
     const balDoc = await UserXp.findOne({ userId }, { xp: 1 }).lean();
     const newLevel = getLevelByXp(balDoc?.xp ?? 0);
-    await UserXp.updateOne({ userId }, { $set: { level: newLevel } });
+    // 레벨이 내려갔을 수 있으니 봇이 보상 역할을 다시 맞추도록 표시한다
+    await UserXp.updateOne({ userId }, { $set: { level: newLevel, needsRoleSync: true } });
     const remain = { xp: balDoc?.xp ?? 0, level: newLevel };
     const hasRole = docs.some((d) => d.type === "role" || d.type === "perk");
 

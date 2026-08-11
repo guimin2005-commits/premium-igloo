@@ -2,7 +2,9 @@
 //  · ARCTIC 역할 상품 구매 → 역할 자동 지급
 //  · XP 지급 대기열(코드·초대 보상 등) → XP 자동 지급
 //  · 코드 역할 지급 요청 → 역할 자동 지급
+//  · 사이트에서 XP가 바뀐 유저 → 레벨 보상 역할 재동기화(지급·회수)
 import { Purchase, Payout, CodeGrant, UserXp } from "../db.js";
+import { syncRewardRoles } from "../xp.js";
 import { getLevelByXp } from "../leveling.js";
 import { config } from "../config.js";
 
@@ -64,7 +66,12 @@ async function processPayouts(guild) {
         { $inc: { xp: p.amount }, $set: { updatedAt: new Date() } },
         { upsert: true, new: true }
       );
-      await UserXp.updateOne({ userId }, { $set: { level: getLevelByXp(doc.xp) } });
+      const newLevel = getLevelByXp(doc.xp);
+      await UserXp.updateOne({ userId }, { $set: { level: newLevel } });
+
+      // 지급·회수로 레벨이 달라졌을 수 있으니 보상 역할을 현재 레벨에 맞춘다
+      const member = await fetchMember(guild, userId);
+      if (member) await syncRewardRoles(member, newLevel).catch(() => {});
 
       p.status = "paid";
       p.paidAt = new Date();
@@ -106,6 +113,24 @@ async function processCodeGrants(guild) {
   }
 }
 
+// ── 레벨 역할 재동기화 ────────────────────────
+//    사이트에서 XP를 깎거나(ARCTIC 구매) 초기화하면 needsRoleSync가 세워진다.
+//    봇만 디스코드 역할을 만질 수 있으므로 이곳에서 현재 레벨에 맞춰 지급·회수한다.
+async function processRoleSyncs(guild) {
+  const rows = await UserXp.find({ needsRoleSync: true }, { userId: 1, level: 1, displayName: 1 }).limit(50).lean();
+
+  for (const r of rows) {
+    try {
+      const member = await fetchMember(guild, r.userId);
+      if (member) await syncRewardRoles(member, r.level || 0);
+      // 서버에 없는 유저는 다시 들어올 때 레벨업 흐름에서 처리되므로 표시만 내린다
+      await UserXp.updateOne({ userId: r.userId }, { $set: { needsRoleSync: false } });
+    } catch (e) {
+      console.error(`🧩 역할 동기화 실패 (${r.displayName || r.userId}):`, e.message);
+    }
+  }
+}
+
 async function tick(client) {
   try {
     const guild = client.guilds.cache.get(config.guildId);
@@ -113,6 +138,7 @@ async function tick(client) {
     await processPurchases(guild);
     await processPayouts(guild);
     await processCodeGrants(guild);
+    await processRoleSyncs(guild);
   } catch (e) {
     console.error("자동 지급 큐 오류:", e.message);
   }

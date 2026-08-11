@@ -11,6 +11,8 @@ const UserXpSchema = new mongoose.Schema({
   lastChatXpAt: { type: Date, default: null },
   lastAttendDate: { type: String, default: "" }, // "2026-07-05" (KST)
   attendCount: { type: Number, default: 0 },
+  // 사이트에서 XP·레벨을 바꿨을 때 봇이 레벨 역할을 다시 맞추도록 세우는 표시
+  needsRoleSync: { type: Boolean, default: false },
   updatedAt: { type: Date, default: Date.now },
 });
 
