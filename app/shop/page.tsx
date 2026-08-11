@@ -60,6 +60,9 @@ export default function ShopPage() {
   // 필터·정렬·검색
   const [sort, setSort] = useState("recommended");
   const [typeFilter, setTypeFilter] = useState("all");
+  // 📌 홈(브랜드·배너·추천) / 상품(전체 목록) 두 화면으로 나눈다
+  const [view, setView] = useState<"home" | "products">("home");
+  const goProducts = (t = "all") => { setView("products"); setTypeFilter(t); setWishOnly(false); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const [priceFilter, setPriceFilter] = useState("all");
   const [inStockOnly, setInStockOnly] = useState(false);
   const [affordableOnly, setAffordableOnly] = useState(false);
@@ -156,6 +159,48 @@ export default function ShopPage() {
   const [wish, setWish] = useState<string[]>([]);
   const [wishOnly, setWishOnly] = useState(false);
   const [showWishList, setShowWishList] = useState(false);
+
+  // 📌 쿠폰함 — 코드 등록과 보유 쿠폰을 한 창에서 (ARCTIC 전용, 라이트 톤)
+  const [showCoupons, setShowCoupons] = useState(false);
+  const [myCoupons, setMyCoupons] = useState<any[]>([]);
+  const [isLoadingCoupons, setIsLoadingCoupons] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [isRegisteringCoupon, setIsRegisteringCoupon] = useState(false);
+  const [couponMsg, setCouponMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const loadMyCoupons = () => {
+    setIsLoadingCoupons(true);
+    fetch("/api/shop/my-coupons", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setMyCoupons(Array.isArray(d?.data) ? d.data : []))
+      .catch(() => setMyCoupons([]))
+      .finally(() => setIsLoadingCoupons(false));
+  };
+  useEffect(() => { if (showCoupons) loadMyCoupons(); }, [showCoupons]);
+
+  const registerCoupon = async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code || isRegisteringCoupon) return;
+    setIsRegisteringCoupon(true);
+    setCouponMsg(null);
+    try {
+      const res = await fetch("/api/shop/my-coupons", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }),
+      });
+      const d = await res.json();
+      if (res.ok && d.success) {
+        setCouponMsg({ ok: true, text: d.message || "쿠폰을 받았습니다." });
+        setCouponCode("");
+        loadMyCoupons();
+      } else {
+        setCouponMsg({ ok: false, text: d.message || "사용할 수 없는 쿠폰입니다." });
+      }
+    } catch {
+      setCouponMsg({ ok: false, text: "서버와 통신 중 오류가 발생했습니다." });
+    } finally {
+      setIsRegisteringCoupon(false);
+    }
+  };
   useEffect(() => {
     try {
       const raw = localStorage.getItem("iglooShopWish");
@@ -306,6 +351,12 @@ export default function ShopPage() {
     return sorted;
   }, [items, typeFilter, priceFilter, inStockOnly, affordableOnly, wishOnly, wish, query, sort, myXp]);
 
+  // 홈에 세울 추천 상품 — 관리자가 매긴 추천 순서 상위 8개
+  const recommended = useMemo(
+    () => [...items].sort((a, b) => (b.sortOrder ?? 0) - (a.sortOrder ?? 0) || (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())).slice(0, 8),
+    [items]
+  );
+
   // 📌 이미 장바구니에 있는 상품을 '구매'로 누르면, 낱개 구매인지
   //    장바구니와 함께 결제할지 먼저 물어본다 (모르고 따로 사는 걸 막는다)
   const [cartConflict, setCartConflict] = useState<any>(null);
@@ -422,12 +473,12 @@ export default function ShopPage() {
 
           {/* 카테고리 내비 */}
           <nav className="hidden md:flex items-center gap-1 min-w-0">
-            {TYPES.map((t) => {
-              const on = typeFilter === t.v && !wishOnly;
+            {[{ v: "home", l: "홈" }, { v: "products", l: "상품" }].map((m) => {
+              const on = view === m.v;
               return (
-                <button key={t.v} onClick={() => { setTypeFilter(t.v); setWishOnly(false); }}
+                <button key={m.v} onClick={() => (m.v === "home" ? setView("home") : goProducts(typeFilter))}
                   className={`relative px-3 py-2 text-[13px] font-bold transition-colors ${on ? "text-[#131313]" : "text-[#8a8a8a] hover:text-[#131313]"}`}>
-                  {t.l}
+                  {m.l}
                   <span className={`absolute bottom-1 left-3 right-3 h-px bg-[#e91e3f] origin-left transition-transform duration-300 ${on ? "scale-x-100" : "scale-x-0"}`} />
                 </button>
               );
@@ -435,13 +486,13 @@ export default function ShopPage() {
           </nav>
 
           {/* 우측 도구 */}
-          <div className="flex items-center gap-1 ml-auto shrink-0 self-center">
+          <div className="flex items-center gap-1.5 ml-auto shrink-0">
             {/* 검색 — 아이콘에서 펼쳐짐 */}
             <div className={`group relative h-9 rounded-full border transition-[width,border-color] duration-500 ease-out overflow-hidden
               w-9 hover:w-56 focus-within:w-56 bg-white border-[#e2e0dc] hover:border-[#a3a3a3] focus-within:border-[#e91e3f]
               ${query ? "w-56" : ""}`}>
               <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a3a3a3] group-focus-within:text-[#e91e3f] transition-colors pointer-events-none z-10"
-                fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
               </svg>
               <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="상품 검색"
@@ -452,31 +503,39 @@ export default function ShopPage() {
             {isLoggedIn ? (
               <>
                 {/* 프로필 — 내 정보 페이지로 */}
-                <Link href="/shop/me" aria-label="내 정보" className="relative ml-1 shrink-0 hidden md:flex items-center justify-center">
+                <Link href="/shop/me" aria-label="내 정보" className="relative shrink-0 hidden md:flex items-center justify-center w-9 h-9">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={session?.user?.image || ""} alt=""
-                    className="w-8 h-8 rounded-full bg-[#e2e0dc] ring-1 ring-[#e2e0dc] hover:ring-[#131313] transition-all" />
+                    className="w-[30px] h-[30px] rounded-full bg-[#e2e0dc] ring-1 ring-[#e2e0dc] hover:ring-[#131313] transition-all" />
                   {pendingOrders > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#e91e3f] ring-2 ring-white"></span>
+                    <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[#e91e3f] ring-2 ring-[#f5f3f0]"></span>
                   )}
                 </Link>
+
+                {/* 쿠폰함 */}
+                <button onClick={() => setShowCoupons(true)} aria-label="쿠폰함" title="쿠폰함"
+                  className={`relative hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showCoupons ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                  </svg>
+                </button>
 
                 {/* 찜 — 찜한 상품 목록 열기 */}
                 <button
                   onClick={() => setShowWishList(true)}
                   aria-label="찜한 상품 보기"
-                  className={`relative hidden md:block p-2 rounded-full transition-colors ${showWishList ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
+                  className={`relative hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showWishList ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
                   <svg className={`w-[18px] h-[18px] transition-all duration-300 ${wish.length > 0 ? "text-[#e91e3f]" : ""}`}
-                    fill={wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
+                    fill={wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
                   </svg>
                 </button>
 
                 {/* 장바구니 */}
                 <Link href="/shop/cart"
-                  className="hidden md:flex items-center gap-2 pl-3 pr-4 py-2 ml-1 rounded-full bg-[#131313] hover:bg-black text-white transition-colors">
+                  className="hidden md:flex items-center justify-center gap-2 h-9 pl-3.5 pr-4 rounded-full bg-[#131313] hover:bg-black text-white transition-colors">
                   <span className="relative">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
                     </svg>
                     {cartCount > 0 && (
@@ -488,7 +547,7 @@ export default function ShopPage() {
               </>
             ) : (
               <button onClick={() => signIn("discord")}
-                className="px-4 py-2 ml-1 rounded-full bg-[#5865F2] hover:bg-[#4752C4] text-white text-[12px] font-bold transition-colors shrink-0">
+                className="h-9 px-4 rounded-full bg-[#5865F2] hover:bg-[#4752C4] text-white text-[12px] font-bold transition-colors shrink-0">
                 디스코드 로그인
               </button>
             )}
@@ -498,7 +557,8 @@ export default function ShopPage() {
       </header>
       </div>
 
-      {/* ── 상단 배너 ── */}
+      {/* ── 홈 · 브랜드 ── */}
+      {view === "home" && (<>
       <section className="w-full bg-gradient-to-b from-[#eceae6] to-[#f5f3f0] border-b border-[#e2e0dc]">
         <div className="max-w-6xl mx-auto px-6 pt-14 pb-10">
           {/* 중앙 — 타이틀 */}
@@ -581,8 +641,55 @@ export default function ShopPage() {
         </section>
       )}
 
+      {/* ── 홈 · 추천 상품 ── */}
+      <section className="max-w-6xl mx-auto px-6 pt-14">
+        <div className="flex items-end justify-between gap-4 mb-6">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="w-6 h-px bg-[#e91e3f]"></span>
+              <span className="text-[10px] font-black tracking-[0.35em] text-[#8a8a8a] uppercase">Recommended</span>
+            </div>
+            <h2 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">추천 상품</h2>
+          </div>
+          <button onClick={() => goProducts("all")} className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors shrink-0">더 보기</button>
+        </div>
 
-      {/* ── 검색 · 필터 ── */}
+        {isLoading ? (
+          <div className="py-16 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
+        ) : recommended.length === 0 ? (
+          <div className="py-16 text-center text-sm text-[#8a8a8a]">등록된 상품이 없습니다.</div>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+            {recommended.map((it) => (
+              <Link key={it._id} href={`/shop/item/${it._id}`}
+                className="group bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden hover:border-[#a3a3a3] transition-colors">
+                <div className="aspect-square bg-[#eceae6] overflow-hidden">
+                  {it.imageUrl && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={it.imageUrl} alt="" className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
+                  )}
+                </div>
+                <div className="p-4">
+                  <p className="text-[10px] font-black tracking-[0.15em] text-[#a3a3a3] uppercase mb-1">{TYPES.find((t) => t.v === it.type)?.l || "상품"}</p>
+                  <p className="text-[13px] font-bold text-[#131313] truncate mb-1.5">{it.name}</p>
+                  <p className="text-[14px] font-black text-[#131313] tabular-nums">{salePrice(it).toLocaleString()} XP</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        <button onClick={() => goProducts("all")}
+          className="mt-10 w-full py-4 rounded-2xl border border-[#e2e0dc] bg-white hover:border-[#131313] text-[13px] font-bold text-[#131313] transition-colors">
+          전체 상품 보기
+        </button>
+      </section>
+      </>)}
+
+
+
+      {/* ── 상품 · 검색 · 필터 ── */}
+      {view === "products" && (<>
       <section className="max-w-6xl mx-auto px-6 pt-8">
         {/* 📌 아이콘 상태로 접혀 있다가 호버·포커스·입력 시 펼쳐지는 검색창
                (모바일은 터치라 호버가 없으므로 항상 펼친 상태) */}
@@ -829,6 +936,7 @@ export default function ShopPage() {
           </div>
         )}
       </section>
+      </>)}
 
 
       {/* ── 우측 하단 고정 XP 카드 (PC) ── */}
@@ -1004,10 +1112,82 @@ export default function ShopPage() {
         </div>
       )}
 
+      {/* ── 쿠폰함 (ARCTIC) ── */}
+      {showCoupons && (
+        <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center bg-[#131313]/45 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setShowCoupons(false)}>
+          <div onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-[#e2e0dc] rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[88dvh] sm:max-h-[80vh] overflow-hidden shadow-[0_30px_70px_-18px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200">
+            <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-[#ececea]">
+              <div className="flex items-center gap-2.5">
+                <svg className="w-[18px] h-[18px] text-[#e91e3f]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                </svg>
+                <h2 className="text-base font-black text-[#131313] tracking-tight">쿠폰함</h2>
+              </div>
+              <button onClick={() => setShowCoupons(false)} aria-label="닫기"
+                className="p-1.5 -mr-1.5 text-[#8a8a8a] hover:text-[#131313] rounded-md hover:bg-black/[0.05] transition-colors outline-none">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <div className="shrink-0 px-6 pt-5 pb-4 border-b border-[#ececea]">
+              <div className="flex gap-2">
+                <input type="text" value={couponCode} onChange={(e) => setCouponCode(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") registerCoupon(); }}
+                  placeholder="쿠폰 코드 입력"
+                  className="flex-1 min-w-0 bg-white border border-[#e2e0dc] rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
+                <button onClick={registerCoupon} disabled={!couponCode.trim() || isRegisteringCoupon}
+                  className="px-5 py-3 rounded-xl bg-[#131313] hover:bg-black disabled:opacity-40 text-white text-[13px] font-bold transition-colors shrink-0">
+                  {isRegisteringCoupon ? "확인" : "등록"}
+                </button>
+              </div>
+              {couponMsg && (
+                <p className={`mt-2.5 text-[12px] font-bold break-keep ${couponMsg.ok ? "text-[#3f7a35]" : "text-[#c62828]"}`}>{couponMsg.text}</p>
+              )}
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+              <div className="px-6 pt-4 pb-2 flex items-center justify-between">
+                <span className="text-[11px] font-black tracking-[0.2em] text-[#8a8a8a] uppercase">My Coupons</span>
+                {myCoupons.length > 0 && <span className="text-[11px] font-black text-[#e91e3f]">{myCoupons.length}장</span>}
+              </div>
+              {isLoadingCoupons ? (
+                <p className="px-6 py-10 text-center text-xs text-[#8a8a8a]">불러오는 중...</p>
+              ) : myCoupons.length === 0 ? (
+                <p className="px-6 py-10 text-center text-xs text-[#8a8a8a] break-keep">보유한 쿠폰이 없습니다.</p>
+              ) : (
+                <div className="divide-y divide-[#ececea]">
+                  {myCoupons.map((c) => (
+                    <div key={c.id} className="px-6 py-3.5 flex items-center gap-3">
+                      <span className="w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
+                        <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                        </svg>
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-bold text-[#131313] truncate">{c.name}</p>
+                        <p className="text-[11px] text-[#8a8a8a] break-keep">
+                          {c.type === "percent" ? `${c.value}% 할인` : `${(c.value || 0).toLocaleString()} XP 할인`}
+                          {c.minTotal > 0 && ` · ${c.minTotal.toLocaleString()} XP 이상`}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="shrink-0 px-6 py-3 border-t border-[#ececea]">
+              <p className="text-[11px] text-[#a3a3a3] text-center break-keep">할인 쿠폰은 결제 화면에서 사용할 수 있습니다.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── 모바일 하단 탭바 — 홈 · 찜 · 검색 · 장바구니 · 프로필 ── */}
       <nav className="md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[92] p-1.5 rounded-full border border-[#e2e0dc] bg-white/90 backdrop-blur-2xl shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)] grid grid-cols-5">
         {/* 1. 홈 */}
-        <button onClick={() => { setTypeFilter("all"); setQuery(""); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+        <button onClick={() => { setView("home"); setQuery(""); window.scrollTo({ top: 0, behavior: "smooth" }); }}
           aria-label="상점 홈"
           className="flex items-center justify-center py-2 rounded-full text-[#8a8a8a] active:text-[#131313] transition-all active:scale-95">
           <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">

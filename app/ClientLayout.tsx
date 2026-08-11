@@ -660,39 +660,39 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       {isCodeModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setIsCodeModalOpen(false)}>
           <div onClick={(e) => e.stopPropagation()}
-            className="bg-[#121212] border border-white/10 rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[88dvh] sm:max-h-[80vh] overflow-hidden shadow-2xl relative flex flex-col animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200">
+            className={`rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[88dvh] sm:max-h-[80vh] overflow-hidden shadow-2xl relative flex flex-col animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200 border ${isLightPage ? "bg-white border-[#e2e0dc]" : "bg-[#121212] border-white/10"}`}>
             {/* 머리 */}
-            <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-white/[0.07]">
+            <div className={`shrink-0 flex items-center justify-between px-6 py-4 border-b ${isLightPage ? "border-[#ececea]" : "border-white/[0.07]"}`}>
               <div className="flex items-center gap-2.5">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[18px] h-[18px] text-[#e91e3f]">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
                 </svg>
-                <h2 className="text-base font-black text-white tracking-tight">쿠폰함</h2>
+                <h2 className={`text-base font-black tracking-tight ${isLightPage ? "text-[#131313]" : "text-white"}`}>쿠폰함</h2>
               </div>
-              <button onClick={() => setIsCodeModalOpen(false)} aria-label="닫기" className="p-1.5 -mr-1.5 text-gray-400 hover:text-white rounded-md hover:bg-white/[0.06] transition-colors outline-none">
+              <button onClick={() => setIsCodeModalOpen(false)} aria-label="닫기" className={`p-1.5 -mr-1.5 rounded-md transition-colors outline-none ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-400 hover:text-white hover:bg-white/[0.06]"}`}>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
             {/* 코드 등록 */}
-            <div className="shrink-0 px-6 pt-5 pb-4 border-b border-white/[0.07]">
+            <div className={`shrink-0 px-6 pt-5 pb-4 border-b ${isLightPage ? "border-[#ececea]" : "border-white/[0.07]"}`}>
               <form onSubmit={handleCodeSubmit} className="flex gap-2">
                 <input type="text" required placeholder="쿠폰 코드 입력" value={voucherCode} onChange={(e) => setVoucherCode(e.target.value)}
-                  className="flex-1 min-w-0 px-4 py-3 bg-white/[0.03] border border-white/10 rounded-xl text-white text-sm outline-none focus:border-[#e91e3f] transition-colors uppercase placeholder:normal-case placeholder:text-gray-600" />
+                  className={`flex-1 min-w-0 px-4 py-3 rounded-xl text-sm outline-none focus:border-[#e91e3f] transition-colors uppercase placeholder:normal-case border ${isLightPage ? "bg-white border-[#e2e0dc] text-[#131313] placeholder:text-[#a3a3a3]" : "bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600"}`} />
                 <button type="submit" disabled={isCodeSubmitting}
                   className="px-5 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-[13px] font-bold rounded-xl transition-colors outline-none shrink-0">
                   {isCodeSubmitting ? "확인" : "등록"}
                 </button>
               </form>
               {codeResult.isOpen && (
-                <p className={`mt-2.5 text-[12px] font-bold break-keep ${codeResult.isError ? "text-red-400" : "text-emerald-400"}`}>{codeResult.message}</p>
+                <p className={`mt-2.5 text-[12px] font-bold break-keep ${codeResult.isError ? (isLightPage ? "text-[#c62828]" : "text-red-400") : (isLightPage ? "text-[#3f7a35]" : "text-emerald-400")}`}>{codeResult.message}</p>
               )}
             </div>
 
             {/* 보유 쿠폰 */}
             <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden">
               <div className="px-6 pt-4 pb-2 flex items-center justify-between">
-                <span className="text-[11px] font-black tracking-[0.2em] text-gray-500 uppercase">My Coupons</span>
+                <span className={`text-[11px] font-black tracking-[0.2em] uppercase ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>My Coupons</span>
                 {myCoupons.length > 0 && <span className="text-[11px] font-black text-[#e91e3f]">{myCoupons.length}장</span>}
               </div>
               {isLoadingCoupons ? (
@@ -700,7 +700,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               ) : myCoupons.length === 0 ? (
                 <p className="px-6 py-10 text-center text-xs text-gray-500 break-keep">보유한 쿠폰이 없습니다.</p>
               ) : (
-                <div className="divide-y divide-white/[0.05]">
+                <div className={`divide-y ${isLightPage ? "divide-[#ececea]" : "divide-white/[0.05]"}`}>
                   {myCoupons.map((c) => (
                     <div key={c.id} className="px-6 py-3.5 flex items-center gap-3">
                       <span className="w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
@@ -709,8 +709,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         </svg>
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-bold text-white truncate">{c.name}</p>
-                        <p className="text-[11px] text-gray-500 break-keep">
+                        <p className={`text-[13px] font-bold truncate ${isLightPage ? "text-[#131313]" : "text-white"}`}>{c.name}</p>
+                        <p className={`text-[11px] break-keep ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>
                           {c.type === "percent" ? `${c.value}% 할인` : `${(c.value || 0).toLocaleString()} XP 할인`}
                           {c.minTotal > 0 && ` · ${c.minTotal.toLocaleString()} XP 이상`}
                         </p>
@@ -722,8 +722,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             </div>
 
             {isAdmin && (
-              <div className="shrink-0 px-6 py-3 border-t border-white/[0.07]">
-                <Link href="/admin/shop?tab=coupons" onClick={() => setIsCodeModalOpen(false)} className="block text-center text-[12px] text-gray-500 hover:text-white transition-colors font-bold">쿠폰 관리 (관리자) →</Link>
+              <div className={`shrink-0 px-6 py-3 border-t ${isLightPage ? "border-[#ececea]" : "border-white/[0.07]"}`}>
+                <Link href="/admin/shop?tab=coupons" onClick={() => setIsCodeModalOpen(false)} className={`block text-center text-[12px] font-bold transition-colors ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>쿠폰 관리 (관리자) →</Link>
               </div>
             )}
           </div>
