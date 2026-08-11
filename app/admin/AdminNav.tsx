@@ -23,6 +23,7 @@ const NAV_GROUPS: NavGroup[] = [
       { title: "이벤트 작성", href: "/write?category=이벤트" },
       { title: "대회 등록", href: "/write?category=대회" },
       { title: "구인글 작성", href: "/write?category=구인" },
+      { title: "경매 개최", href: "/auction?admin=1" },
     ],
   },
   {
@@ -32,7 +33,7 @@ const NAV_GROUPS: NavGroup[] = [
       { title: "구인 지원자 관리", href: "/recruit?admin=1" },
       { title: "유저 알림 발송", href: "/admin/notify" },
       { title: "명예의 전당 관리", href: "/admin/honors" },
-      { title: "경매", href: "/auction" },
+      { title: "경매 목록", href: "/auction" },
       {
         title: "레벨 대시보드",
         href: "/admin/bot",

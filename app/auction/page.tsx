@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Reveal, LuxStyles } from "../components/Lux";
 import { AuctionStyles } from "../components/AuctionStyles";
 
@@ -34,6 +35,9 @@ const randomNick = (used: Set<string>) => {
 export default function AuctionListPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // 📌 ?admin=1 — 관리자 패널에서 들어온 '경매 개최' 화면 (콘텐츠 작성과 같은 방식)
+  const adminMode = searchParams.get("admin") === "1";
   const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
 
   const [auctions, setAuctions] = useState<any[]>([]);
@@ -150,6 +154,9 @@ export default function AuctionListPage() {
       .finally(() => setIsLoading(false));
   };
   useEffect(() => { fetchList(); }, []);
+
+  // 관리자 패널로 들어오면 개최 폼을 바로 펼친다
+  useEffect(() => { if (adminMode) setShowCreate(true); }, [adminMode]);
 
   // 📌 티켓 무대는 최근 5개까지, 그 이전 경매는 아래 목록으로
   const recent = auctions.slice(0, 5);
@@ -278,7 +285,22 @@ export default function AuctionListPage() {
       <LuxStyles />
       <AuctionStyles />
 
+      {/* 📌 관리자 개최 화면 머리말 — 콘텐츠 작성과 같은 톤 */}
+      {adminMode && isAdmin && (
+        <section className="w-full px-6 pt-10 pb-2">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="w-8 h-px bg-[#e91e3f]"></span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Create Auction</span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-2">경매 개최</h1>
+            <p className="text-sm text-gray-400 break-keep">경매장을 만들고 팀·포지션·포인트 규칙을 설정합니다.</p>
+          </div>
+        </section>
+      )}
+
       {/* ══ 경매장 — 포인트 코인 무대 (최근 5개) ══ */}
+      {!(adminMode && isAdmin) && (
       <section className="relative w-full pt-24 md:pt-32 pb-16 px-6 overflow-hidden">
         <div className="relative z-10 max-w-6xl mx-auto">
           {/* 제목 — 가운데 '포인트 경매', 뒤에 POINT / AUCTION */}
@@ -416,16 +438,17 @@ export default function AuctionListPage() {
 
           {isAdmin && (
             <div className="mt-16 flex justify-center">
-              <button onClick={() => setShowCreate(!showCreate)} className="auc-label text-gray-500 hover:text-white border-b border-white/15 hover:border-white pb-1 transition-colors">
-                {showCreate ? "개최 폼 닫기" : "+ 경매 개최"}
-              </button>
+              <Link href="/auction?admin=1" className="auc-label text-gray-500 hover:text-white border-b border-white/15 hover:border-white pb-1 transition-colors">
+                + 경매 개최
+              </Link>
             </div>
           )}
         </div>
       </section>
+      )}
 
       {/* ══ 지난 경매 — 스크롤하면 부드럽게 올라온다 ══ */}
-      {past.length > 0 && (
+      {!(adminMode && isAdmin) && past.length > 0 && (
         <section className="w-full px-6 pb-4">
           <div className="max-w-3xl mx-auto">
             <Reveal>

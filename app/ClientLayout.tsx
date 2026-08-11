@@ -11,7 +11,7 @@ const ADMIN_USERS = ["elahw.06"];
 // 📌 관리자 패널(좌측)을 띄울 경로 — /admin 하위 + 관리자만 쓰는 외부 페이지들
 const ADMIN_SURFACE_PATHS = ["/write"];
 // ?admin=1 일 때만 관리자 화면이 되는 페이지
-const ADMIN_QUERY_PATHS = ["/support", "/recruit"];
+const ADMIN_QUERY_PATHS = ["/support", "/recruit", "/auction"];
 
 // 📌 페이지 전환 시 상단 크림슨 프로그레스 바
 function RouteProgress({ pathname }: { pathname: string }) {
@@ -501,6 +501,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         );
       })()}
       </div>
+
+      {/* 📌 메가 메뉴가 열리면 뒤쪽 화면을 흐린다 — 헤더(z-40)보다 아래, 본문보다 위
+             마우스 이동으로 열고 닫으므로 pointer-events-none으로 호버를 방해하지 않게 한다 */}
+      {openMegaMenu && (
+        <div className={`hidden md:block fixed inset-0 z-30 pointer-events-none backdrop-blur-sm animate-in fade-in duration-300 ${isLightPage ? "bg-[#f5f3f0]/40" : "bg-[#090909]/50"}`}></div>
+      )}
 
       {/* pb-24 — 떠 있는 알약 독(12px 여백 + 약 58px 높이)에 콘텐츠 끝이 가리지 않게 */}
       <main className={`flex-1 flex flex-col w-full relative ${isShopPage ? "" : "pb-24 md:pb-0"}`}>
