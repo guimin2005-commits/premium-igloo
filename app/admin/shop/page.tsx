@@ -10,7 +10,7 @@ const ADMIN_USERS = ["elahw.06"];
 const TAB_META: Record<string, { title: string; desc: string }> = {
   items: { title: "상품 관리", desc: "ARCTIC에 노출할 상품을 등록·수정합니다. 역할 상품은 구매 시 봇이 자동 지급합니다." },
   banners: { title: "이미지 배너", desc: "상점 최상단에 노출할 프로모션 배너를 등록합니다. 여러 개면 5초마다 자동 전환됩니다." },
-  coupons: { title: "쿠폰 관리", desc: "주문서에서 사용할 할인 쿠폰을 발급합니다." },
+  coupons: { title: "쿠폰 관리", desc: "보상형(역할·XP 지급)과 할인형(결제 할인) 쿠폰을 한 곳에서 발급합니다." },
   orders: { title: "구매 내역", desc: "구매 건을 확인하고 기프트카드 발송·취소를 처리합니다." },
 };
 
@@ -79,7 +79,7 @@ export default function AdminShopPage() {
   };
 
   // ── 쿠폰 ────────────────────────────────────
-  const EMPTY_COUPON = { id: "", code: "", name: "", type: "percent", value: "", maxDiscount: "", minTotal: "", maxUses: "", perUserLimit: "1", active: true, expiresAt: "" };
+  const EMPTY_COUPON = { id: "", code: "", name: "", kind: "discount", reward: "", rewardRoleId: "", rewardRoleName: "", rewardXp: "", requiredRoleId: "", requiredRoleName: "", type: "percent", value: "", maxDiscount: "", minTotal: "", maxUses: "", perUserLimit: "1", active: true, expiresAt: "" };
   const [coupons, setCoupons] = useState<any[]>([]);
   const [couponForm, setCouponForm] = useState<any>(EMPTY_COUPON);
 
@@ -509,7 +509,68 @@ export default function AdminShopPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                {/* 쿠폰 종류 — 보상형(역할·XP 지급) / 할인형(결제 할인) */}
+                <div className="mb-4">
+                  <label className={labelClass}>쿠폰 종류 <span className="text-[#e91e3f]">*</span></label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {[
+                      { v: "discount", l: "할인형", d: "ARCTIC 결제 시 금액 할인" },
+                      { v: "reward", l: "보상형", d: "입력 즉시 역할·XP 지급" },
+                    ].map((o) => (
+                      <button key={o.v} type="button" onClick={() => setCouponForm({ ...couponForm, kind: o.v })}
+                        className={`py-3 px-4 rounded-lg text-left border transition-colors ${
+                          (couponForm.kind || "discount") === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-gray-300 border-white/10 hover:text-white"
+                        }`}>
+                        <span className="block text-xs font-bold">{o.l}</span>
+                        <span className="block text-[10px] text-gray-400 mt-0.5">{o.d}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ── 보상형 설정 ── */}
+                {couponForm.kind === "reward" && (
+                  <div className="mb-4 space-y-4 p-4 rounded-lg border border-white/10">
+                    <div>
+                      <label className={labelClass}>안내 문구</label>
+                      <input type="text" value={couponForm.reward || ""} onChange={(e) => setCouponForm({ ...couponForm, reward: e.target.value })}
+                        placeholder="예: 시즌 참가 보상이 지급되었습니다" className={inputClass} />
+                      <p className={fieldNote}>유저가 쿠폰을 쓴 직후 보게 될 문구</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className={labelClass}>지급할 역할</label>
+                        <select value={couponForm.rewardRoleId || ""}
+                          onChange={(e) => setCouponForm({ ...couponForm, rewardRoleId: e.target.value, rewardRoleName: guildRoles.find((r) => r.id === e.target.value)?.name || "" })}
+                          className={`${inputClass} [&>option]:bg-[#161616]`}>
+                          <option value="">지급 안 함</option>
+                          {guildRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelClass}>지급할 XP</label>
+                        <input type="number" min={0} value={couponForm.rewardXp || ""} onChange={(e) => setCouponForm({ ...couponForm, rewardXp: e.target.value })}
+                          placeholder="0" className={inputClass} />
+                        <p className={fieldNote}>역할·XP 중 하나는 지정해야 합니다</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>사용 조건 역할</label>
+                      <select value={couponForm.requiredRoleId || ""}
+                        onChange={(e) => setCouponForm({ ...couponForm, requiredRoleId: e.target.value, requiredRoleName: guildRoles.find((r) => r.id === e.target.value)?.name || "" })}
+                        className={`${inputClass} [&>option]:bg-[#161616]`}>
+                        <option value="">제한 없음</option>
+                        {guildRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                      </select>
+                      <p className={fieldNote}>지정하면 해당 역할 보유자만 사용할 수 있습니다</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── 할인형 설정 ── */}
+                <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 ${couponForm.kind === "reward" ? "hidden" : ""}`}>
                   <div>
                     <label className={labelClass}>할인 방식 <span className="text-[#e91e3f]">*</span></label>
                     <div className="flex gap-2">
@@ -538,7 +599,7 @@ export default function AdminShopPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                  <div>
+                  <div className={couponForm.kind === "reward" ? "hidden" : ""}>
                     <label className={labelClass}>최소 주문 금액</label>
                     <input type="number" min={0} value={couponForm.minTotal} onChange={(e) => setCouponForm({ ...couponForm, minTotal: e.target.value })}
                       placeholder="0" className={inputClass} />
@@ -602,18 +663,36 @@ export default function AdminShopPage() {
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1 min-w-0">
-                          <span className="text-[11px] font-bold text-[#e91e3f]">
-                            {c.type === "percent" ? `${c.value}% 할인` : `${c.value.toLocaleString()} XP 할인`}
-                            {c.type === "percent" && c.maxDiscount > 0 && ` (최대 ${c.maxDiscount.toLocaleString()})`}
+                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded shrink-0 ${
+                            c.kind === "reward" ? "bg-[#2f6fb0]/20 text-[#7fb2e5]" : "bg-white/10 text-gray-300"}`}>
+                            {c.kind === "reward" ? "보상형" : "할인형"}
                           </span>
-                          {c.minTotal > 0 && <span className="text-[11px] text-gray-400">{c.minTotal.toLocaleString()} XP 이상</span>}
+
+                          {c.kind === "reward" ? (
+                            <span className="text-[11px] font-bold text-[#e91e3f]">
+                              {[c.rewardRoleName && `역할 ${c.rewardRoleName}`, c.rewardXp > 0 && `${c.rewardXp.toLocaleString()} XP`]
+                                .filter(Boolean).join(" · ") || "지급 없음"}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-bold text-[#e91e3f]">
+                              {c.type === "percent" ? `${c.value}% 할인` : `${c.value.toLocaleString()} XP 할인`}
+                              {c.type === "percent" && c.maxDiscount > 0 && ` (최대 ${c.maxDiscount.toLocaleString()})`}
+                            </span>
+                          )}
+
+                          {c.kind === "reward" && c.requiredRoleName && (
+                            <span className="text-[11px] text-gray-400">{c.requiredRoleName} 전용</span>
+                          )}
+                          {c.kind !== "reward" && c.minTotal > 0 && <span className="text-[11px] text-gray-400">{c.minTotal.toLocaleString()} XP 이상</span>}
                           <span className="text-[11px] text-gray-400">사용 {c.usedCount || 0}{c.maxUses > 0 ? ` / ${c.maxUses}` : ""}</span>
                           <span className="text-[11px] text-gray-400">1인 {c.perUserLimit === 0 ? "무제한" : `${c.perUserLimit}회`}</span>
                           {c.expiresAt && <span className="text-[11px] text-gray-400">~ {fmtDateTime(c.expiresAt)}</span>}
                         </div>
                         <div className="flex gap-4 shrink-0">
-                          <button onClick={() => { setIssueTarget(c); setIssueInput(""); }} className="text-xs font-bold text-emerald-400/80 hover:text-emerald-400 transition-colors">지급</button>
-                          <button onClick={() => { setCouponForm({ id: c._id, code: c.code, name: c.name || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: c.expiresAt ? new Date(new Date(c.expiresAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-400 hover:text-white transition-colors">수정</button>
+                          {c.kind !== "reward" && (
+                            <button onClick={() => { setIssueTarget(c); setIssueInput(""); }} className="text-xs font-bold text-emerald-400/80 hover:text-emerald-400 transition-colors">지급</button>
+                          )}
+                          <button onClick={() => { setCouponForm({ id: c._id, code: c.code, name: c.name || "", kind: c.kind || "discount", reward: c.reward || "", rewardRoleId: c.rewardRoleId || "", rewardRoleName: c.rewardRoleName || "", rewardXp: c.rewardXp ? String(c.rewardXp) : "", requiredRoleId: c.requiredRoleId || "", requiredRoleName: c.requiredRoleName || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: c.expiresAt ? new Date(new Date(c.expiresAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-400 hover:text-white transition-colors">수정</button>
                           <button onClick={() => setDeleteTarget({ kind: "coupon", id: c._id })} className="text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">삭제</button>
                         </div>
                       </div>

@@ -59,22 +59,41 @@ export async function POST(request) {
     if (!b.code?.trim()) {
       return NextResponse.json({ success: false, message: "쿠폰 코드를 입력해주세요." }, { status: 400 });
     }
+
+    const kind = b.kind === "reward" ? "reward" : "discount";
     const value = Math.max(0, Math.floor(Number(b.value) || 0));
-    if (value <= 0) {
-      return NextResponse.json({ success: false, message: "할인 값을 입력해주세요." }, { status: 400 });
-    }
-    const type = b.type === "flat" ? "flat" : "percent";
-    if (type === "percent" && value > 100) {
-      return NextResponse.json({ success: false, message: "할인율은 100%를 넘을 수 없습니다." }, { status: 400 });
+    const rewardXp = Math.max(0, Math.floor(Number(b.rewardXp) || 0));
+
+    if (kind === "discount") {
+      if (value <= 0) {
+        return NextResponse.json({ success: false, message: "할인 값을 입력해주세요." }, { status: 400 });
+      }
+      if (b.type !== "flat" && value > 100) {
+        return NextResponse.json({ success: false, message: "할인율은 100%를 넘을 수 없습니다." }, { status: 400 });
+      }
+    } else if (!b.rewardRoleId?.trim() && rewardXp <= 0) {
+      return NextResponse.json({ success: false, message: "지급할 역할이나 XP 중 하나는 지정해야 합니다." }, { status: 400 });
     }
 
     const payload = {
       code: b.code.trim().toUpperCase(),
       name: (b.name || "").trim(),
-      type,
-      value,
+      kind,
+
+      // 보상형
+      reward: kind === "reward" ? (b.reward || "").trim() : "",
+      rewardRoleId: kind === "reward" ? (b.rewardRoleId || "").trim() : "",
+      rewardRoleName: kind === "reward" ? (b.rewardRoleName || "").trim() : "",
+      rewardXp: kind === "reward" ? rewardXp : 0,
+      requiredRoleId: kind === "reward" ? (b.requiredRoleId || "").trim() : "",
+      requiredRoleName: kind === "reward" ? (b.requiredRoleName || "").trim() : "",
+
+      // 할인형
+      type: b.type === "flat" ? "flat" : "percent",
+      value: kind === "discount" ? value : 0,
       maxDiscount: Math.max(0, Math.floor(Number(b.maxDiscount) || 0)),
       minTotal: Math.max(0, Math.floor(Number(b.minTotal) || 0)),
+
       maxUses: Math.max(0, Math.floor(Number(b.maxUses) || 0)),
       perUserLimit: Math.max(0, Math.floor(Number(b.perUserLimit) ?? 1)),
       active: b.active !== false,

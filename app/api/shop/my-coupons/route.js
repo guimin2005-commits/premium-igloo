@@ -7,6 +7,23 @@ import { authOptions } from "@/lib/authOptions";
 import { couponDiscount, couponError } from "@/lib/shopPricing";
 import Coupon from "@/models/Coupon";
 import UserCoupon from "@/models/UserCoupon";
+import CodeGrant from "@/models/CodeGrant";
+import Payout from "@/models/Payout";
+
+// 디스코드에서 역할 보유 여부 확인 (보상형 쿠폰의 사용 조건)
+async function hasRole(userId, roleId) {
+  try {
+    const res = await fetch(
+      `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${userId}`,
+      { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
+    );
+    if (!res.ok) return false;
+    const member = await res.json();
+    return Array.isArray(member.roles) && member.roles.includes(roleId);
+  } catch {
+    return false;
+  }
+}
 
 // ── [조회] 내 쿠폰 지갑 ──
 //    total 쿼리를 주면 주문 금액 기준으로 할인액·사용 가능 여부를 함께 계산해준다
@@ -22,7 +39,8 @@ export async function GET(request) {
     const wallet = await UserCoupon.find({ userId, status: "unused" }).sort({ issuedAt: -1 }).lean();
     if (wallet.length === 0) return NextResponse.json({ success: true, data: [] });
 
-    const coupons = await Coupon.find({ _id: { $in: wallet.map((w) => w.couponId) } }).lean();
+    // 지갑에는 할인형만 남는다 (보상형은 입력 즉시 소비됨)
+    const coupons = await Coupon.find({ _id: { $in: wallet.map((w) => w.couponId) }, kind: { $ne: "reward" } }).lean();
     const byId = new Map(coupons.map((c) => [String(c._id), c]));
 
     const data = wallet
@@ -88,6 +106,40 @@ export async function POST(request) {
       }
     }
 
+    // ── 보상형: 역할·XP를 바로 지급하고 사용 처리 (지갑에 남기지 않는다) ──
+    if (coupon.kind === "reward") {
+      if (coupon.requiredRoleId) {
+        const allowed = await hasRole(userId, coupon.requiredRoleId);
+        if (!allowed) {
+          const label = coupon.requiredRoleName ? `[${coupon.requiredRoleName}] ` : "";
+          return NextResponse.json({ success: false, message: `${label}역할 보유자만 사용할 수 있습니다.` }, { status: 403 });
+        }
+      }
+
+      if (coupon.rewardRoleId) {
+        await CodeGrant.create({
+          userId, userName: session.user.name || "",
+          roleId: coupon.rewardRoleId, code: coupon.code,
+        }).catch(() => {});
+      }
+      if (coupon.rewardXp > 0) {
+        await Payout.create({
+          userName: session.user.name || "", userId,
+          amount: coupon.rewardXp,
+          reason: `쿠폰 사용: ${coupon.code}`,
+          source: "code",
+        }).catch(() => {});
+      }
+
+      await Coupon.updateOne({ _id: coupon._id }, { $inc: { usedCount: 1 }, $push: { usedBy: userId } });
+
+      return NextResponse.json({
+        success: true,
+        message: coupon.reward || "보상이 지급됩니다. 잠시 후 반영돼요.",
+      });
+    }
+
+    // ── 할인형: 지갑에 담아 결제 때 사용 ──
     const dup = await UserCoupon.findOne({ userId, couponId: String(coupon._id), status: "unused" }).lean();
     if (dup) {
       return NextResponse.json({ success: false, message: "이미 보유 중인 쿠폰입니다." }, { status: 409 });
@@ -101,7 +153,7 @@ export async function POST(request) {
       source: "code",
     });
 
-    return NextResponse.json({ success: true, message: `"${coupon.name || coupon.code}" 쿠폰을 받았습니다.` });
+    return NextResponse.json({ success: true, message: `"${coupon.name || "할인 쿠폰"}"을 받았습니다.` });
   } catch (e) {
     return NextResponse.json({ success: false, message: "쿠폰 등록 중 오류가 발생했습니다." }, { status: 500 });
   }
