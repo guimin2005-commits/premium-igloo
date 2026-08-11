@@ -105,6 +105,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }, []);
   
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+  const [myCoupons, setMyCoupons] = useState<any[]>([]); // 쿠폰함에 보여줄 보유 쿠폰
+  const [isLoadingCoupons, setIsLoadingCoupons] = useState(false);
   const [voucherCode, setVoucherCode] = useState("");
   const [codeResult, setCodeResult] = useState<{isOpen: boolean, message: string, isError: boolean}>({isOpen: false, message: "", isError: false});
 
@@ -300,6 +302,19 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     else { alert("오류가 발생했습니다."); }
   };
 
+  // 쿠폰함을 열면 보유 쿠폰을 불러온다
+  const loadMyCoupons = () => {
+    setIsLoadingCoupons(true);
+    fetch("/api/shop/my-coupons", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setMyCoupons(Array.isArray(d?.data) ? d.data : []))
+      .catch(() => setMyCoupons([]))
+      .finally(() => setIsLoadingCoupons(false));
+  };
+  useEffect(() => {
+    if (isCodeModalOpen && status === "authenticated") loadMyCoupons();
+  }, [isCodeModalOpen, status]);
+
   const handleCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!voucherCode.trim() || isCodeSubmitting) return;
@@ -317,6 +332,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       const data = await res.json();
       if (res.ok && data.success) {
         setCodeResult({ isOpen: true, message: data.message || "쿠폰이 정상적으로 등록되었습니다.", isError: false });
+        setVoucherCode("");
+        loadMyCoupons();
       } else {
         setCodeResult({ isOpen: true, message: data.message || "사용할 수 없는 쿠폰입니다.", isError: true });
       }
@@ -377,6 +394,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                <div className="w-20 h-8"></div>
             ) : status === "authenticated" && session ? (
               <>
+              {/* 📌 쿠폰 등록 — 알림 옆에 두어 어디서든 바로 쓸 수 있게 (미인증 유저는 숨김) */}
+              {isVerified && (
+                <button onClick={() => setIsCodeModalOpen(true)} aria-label="쿠폰함" title="쿠폰함"
+                  className={`relative transition-[padding,color] duration-500 ease-out outline-none focus:outline-none ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white"} ${scrolled ? "p-1.5" : "p-2"}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className={`transition-all duration-500 ${scrolled ? "w-[18px] h-[18px]" : "w-5 h-5"}`}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                  </svg>
+                </button>
+              )}
+
               {/* 📌 알림 센터 종 아이콘 */}
               <div className="relative flex items-center" ref={notifRef}>
                 <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) markNotifsSeen(); }} aria-label="알림" className={`relative transition-[padding,color] duration-500 ease-out outline-none focus:outline-none ${isNotifOpen ? "text-[#e91e3f]" : isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white"} ${scrolled ? "p-1.5" : "p-2"}`}>
@@ -475,7 +502,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       )}
                       {/* 미인증 유저는 쿠폰 등록 버튼 숨김 */}
                       {isVerified && (
-                        <button onClick={() => { setIsProfileOpen(false); setIsCodeModalOpen(true); }} className={`w-full text-left px-3.5 py-2.5 text-[13px] rounded-xl transition-colors outline-none font-bold ${isLightPage ? "text-[#4b4b4b] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>쿠폰 등록</button>
+                        <button onClick={() => { setIsProfileOpen(false); setIsCodeModalOpen(true); }} className={`w-full text-left px-3.5 py-2.5 text-[13px] rounded-xl transition-colors outline-none font-bold ${isLightPage ? "text-[#4b4b4b] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>쿠폰함</button>
                       )}
                       {isAdmin && (
                         <Link href="/admin" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-xl transition-colors font-bold">
@@ -629,36 +656,75 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </div>
       </footer>
 
+      {/* 📌 쿠폰함 — 코드 등록과 보유 쿠폰을 한 창에서 */}
       {isCodeModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl ring-1 ring-white/5 w-full max-w-sm overflow-hidden shadow-2xl relative p-8">
-            <button onClick={() => setIsCodeModalOpen(false)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/20 rounded-full transition-colors outline-none">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-            <h2 className="text-xl font-bold text-white mb-2">쿠폰 등록</h2>
-            <p className="text-xs text-gray-400 mb-6 leading-relaxed">보상 또는 할인 쿠폰 코드를 입력해주세요.</p>
-            
-            {codeResult.isOpen ? (
-              <div className="text-center py-4">
-                <div className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center mb-4 ${codeResult.isError ? "bg-red-500/10 text-red-500" : "bg-emerald-500/10 text-emerald-400"}`}>
-                  {codeResult.isError ? (
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                  ) : (
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                  )}
-                </div>
-                <p className="text-xs font-bold text-gray-500 mb-1.5">{codeResult.isError ? "등록 실패" : "등록 완료"}</p>
-                <p className="text-sm font-bold text-white mb-6 leading-relaxed whitespace-pre-line">{codeResult.message}</p>
-                <button onClick={() => setCodeResult({isOpen: false, message: "", isError: false})} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">다시 입력</button>
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setIsCodeModalOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()}
+            className="bg-[#121212] border border-white/10 rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[88dvh] sm:max-h-[80vh] overflow-hidden shadow-2xl relative flex flex-col animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200">
+            {/* 머리 */}
+            <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-white/[0.07]">
+              <div className="flex items-center gap-2.5">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[18px] h-[18px] text-[#e91e3f]">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                </svg>
+                <h2 className="text-base font-black text-white tracking-tight">쿠폰함</h2>
               </div>
-            ) : (
-              <form onSubmit={handleCodeSubmit} className="flex flex-col gap-4">
-                <input type="text" required placeholder="쿠폰 코드를 입력하세요" value={voucherCode} onChange={(e) => setVoucherCode(e.target.value)} className="w-full px-4 py-3 bg-[#121212] border border-white/10 rounded-xl text-white text-sm outline-none focus:border-[#e91e3f] transition-colors uppercase placeholder:normal-case" />
-                <button type="submit" disabled={isCodeSubmitting} className="w-full py-3 mt-2 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-[#e91e3f]/20 outline-none">{isCodeSubmitting ? "확인 중..." : "등록하기"}</button>
-                {isAdmin && (
-                  <Link href="/admin/shop?tab=coupons" onClick={() => setIsCodeModalOpen(false)} className="text-center text-xs text-gray-500 hover:text-white transition-colors font-medium">쿠폰 관리 (관리자) →</Link>
-                )}
+              <button onClick={() => setIsCodeModalOpen(false)} aria-label="닫기" className="p-1.5 -mr-1.5 text-gray-400 hover:text-white rounded-md hover:bg-white/[0.06] transition-colors outline-none">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            {/* 코드 등록 */}
+            <div className="shrink-0 px-6 pt-5 pb-4 border-b border-white/[0.07]">
+              <form onSubmit={handleCodeSubmit} className="flex gap-2">
+                <input type="text" required placeholder="쿠폰 코드 입력" value={voucherCode} onChange={(e) => setVoucherCode(e.target.value)}
+                  className="flex-1 min-w-0 px-4 py-3 bg-white/[0.03] border border-white/10 rounded-xl text-white text-sm outline-none focus:border-[#e91e3f] transition-colors uppercase placeholder:normal-case placeholder:text-gray-600" />
+                <button type="submit" disabled={isCodeSubmitting}
+                  className="px-5 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-[13px] font-bold rounded-xl transition-colors outline-none shrink-0">
+                  {isCodeSubmitting ? "확인" : "등록"}
+                </button>
               </form>
+              {codeResult.isOpen && (
+                <p className={`mt-2.5 text-[12px] font-bold break-keep ${codeResult.isError ? "text-red-400" : "text-emerald-400"}`}>{codeResult.message}</p>
+              )}
+            </div>
+
+            {/* 보유 쿠폰 */}
+            <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+              <div className="px-6 pt-4 pb-2 flex items-center justify-between">
+                <span className="text-[11px] font-black tracking-[0.2em] text-gray-500 uppercase">My Coupons</span>
+                {myCoupons.length > 0 && <span className="text-[11px] font-black text-[#e91e3f]">{myCoupons.length}장</span>}
+              </div>
+              {isLoadingCoupons ? (
+                <p className="px-6 py-10 text-center text-xs text-gray-500">불러오는 중...</p>
+              ) : myCoupons.length === 0 ? (
+                <p className="px-6 py-10 text-center text-xs text-gray-500 break-keep">보유한 쿠폰이 없습니다.</p>
+              ) : (
+                <div className="divide-y divide-white/[0.05]">
+                  {myCoupons.map((c) => (
+                    <div key={c.id} className="px-6 py-3.5 flex items-center gap-3">
+                      <span className="w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
+                        <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                        </svg>
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-bold text-white truncate">{c.name}</p>
+                        <p className="text-[11px] text-gray-500 break-keep">
+                          {c.type === "percent" ? `${c.value}% 할인` : `${(c.value || 0).toLocaleString()} XP 할인`}
+                          {c.minTotal > 0 && ` · ${c.minTotal.toLocaleString()} XP 이상`}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {isAdmin && (
+              <div className="shrink-0 px-6 py-3 border-t border-white/[0.07]">
+                <Link href="/admin/shop?tab=coupons" onClick={() => setIsCodeModalOpen(false)} className="block text-center text-[12px] text-gray-500 hover:text-white transition-colors font-bold">쿠폰 관리 (관리자) →</Link>
+              </div>
             )}
           </div>
         </div>
@@ -705,7 +771,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         if (status === "authenticated" && session) {
           if (!isVerifyPage) accountItems.push({ name: "내 정보", path: "/profile" });
           if (!isVerifyPage && isVerified) accountItems.push({ name: "친구 초대 이벤트", path: "/invite" });
-          if (isVerified) accountItems.push({ name: "쿠폰 등록", onClick: () => { closeMobileMenu(); setIsCodeModalOpen(true); } });
+          if (isVerified) accountItems.push({ name: "쿠폰함", onClick: () => { closeMobileMenu(); setIsCodeModalOpen(true); } });
           if (isAdmin) accountItems.push({ name: "관리자 페이지", path: "/admin", accent: true });
         }
         const showCategories = !isVerifyPage && (status !== "authenticated" || isVerified);

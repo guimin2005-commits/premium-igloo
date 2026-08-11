@@ -17,6 +17,16 @@ const TYPE_META = [
 
 const ORDER_TYPE_LABEL: Record<string, string> = { role: "역할", perk: "권한", physical: "기프트카드" };
 
+// 참조 서식의 라벨-좌측 행 — 라벨은 왼쪽 고정 폭, 입력은 오른쪽
+const FormRow = ({ label, required, align = "center", children }: { label: string; required?: boolean; align?: "center" | "start"; children: React.ReactNode }) => (
+  <div className={`flex flex-col sm:flex-row gap-1.5 sm:gap-6 py-4 border-b border-white/[0.06] ${align === "start" ? "sm:items-start" : "sm:items-center"}`}>
+    <p className={`text-[13px] font-bold text-gray-300 sm:w-28 shrink-0 ${align === "start" ? "sm:pt-2.5" : ""}`}>
+      {label}{required && <span className="text-[#e91e3f] ml-0.5">*</span>}
+    </p>
+    <div className="min-w-0 flex-1">{children}</div>
+  </div>
+);
+
 const labelClass = "block text-[11px] font-bold text-gray-500 tracking-wide mb-2.5";
 const inputClass =
   "w-full bg-white/[0.02] border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600";
@@ -45,7 +55,9 @@ export default function SupportPage() {
   const [reportType, setReportType] = useState("");
   const [productName, setProductName] = useState("");
   const [refundType, setRefundType] = useState("환불");
+  const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [notifyDiscord, setNotifyDiscord] = useState(true); // 답변 시 디스코드 DM 수신 동의
   const [isEmailChecked, setIsEmailChecked] = useState(false);
   const [email, setEmail] = useState("");
 
@@ -132,12 +144,16 @@ export default function SupportPage() {
       setPopupConfig({ isOpen: true, message: "상품명과 유형을 선택해주세요.", isError: true });
       return;
     }
+    if (!title.trim()) {
+      setPopupConfig({ isOpen: true, message: "제목을 입력해주세요.", isError: true });
+      return;
+    }
     if (!content.trim()) {
       setPopupConfig({ isOpen: true, message: "상세 내용을 입력해주세요.", isError: true });
       return;
     }
 
-    const inquiryData = { user: session?.user?.name, mainType, subType, errorDesc, reportDate, reportType, productName, refundType, content, email: "미제공" };
+    const inquiryData = { user: session?.user?.name, userId: (session?.user as any)?.id || "", mainType, subType, errorDesc, reportDate, reportType, productName, refundType, title, content, notifyDiscord, email: "미제공" };
     try {
       const res = await fetch("/api/inquiry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(inquiryData) });
       if (res.ok) setIsSubmitted(true);
@@ -293,8 +309,12 @@ export default function SupportPage() {
       <main className="w-full max-w-2xl mx-auto px-6 py-24 flex-1 flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-500">
         <div className="w-20 h-20 bg-[#e91e3f]/10 border border-[#e91e3f]/20 rounded-full flex items-center justify-center mx-auto mb-8"><svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-[#e91e3f]" fill="none" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg></div>
         <h2 className="text-3xl font-black text-white mb-4 tracking-tight">문의 접수 완료</h2>
-        <p className="text-gray-400 text-sm mb-10 leading-relaxed text-center">소중한 의견을 보내주셔서 감사합니다.<br />관리자 확인 후 빠른 시일 내에 답변해 드리겠습니다.</p>
-        <button onClick={() => { setIsSubmitted(false); setMainType(""); setSubType(""); setErrorDesc(""); setReportDate(""); setReportType(""); setProductName(""); setRefundType("환불"); setContent(""); setEmail(""); setIsEmailChecked(false); }} className="px-10 py-4 bg-white hover:bg-gray-200 text-black font-bold rounded-xl transition-all shadow-lg shadow-white/10 outline-none focus:outline-none">새 문의 작성하기</button>
+        <p className="text-gray-400 text-sm mb-3 leading-relaxed text-center break-keep">소중한 의견을 보내주셔서 감사합니다.<br />관리자 확인 후 빠른 시일 내에 답변해 드리겠습니다.</p>
+        <p className="text-[12px] text-gray-500 mb-10 text-center break-keep">{notifyDiscord ? "답변이 등록되면 디스코드 DM으로 알려드립니다." : "답변은 내 정보 › 1:1 문의 내역에서 확인할 수 있습니다."}</p>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <button onClick={() => { setIsSubmitted(false); setMainType(""); setSubType(""); setErrorDesc(""); setReportDate(""); setReportType(""); setProductName(""); setRefundType("환불"); setTitle(""); setContent(""); }} className="px-8 py-3.5 bg-white hover:bg-gray-200 text-black text-sm font-bold rounded-lg transition-colors outline-none">새 문의 작성하기</button>
+          <Link href="/profile?tab=inquiry" className="px-8 py-3.5 text-sm font-bold text-gray-400 hover:text-white transition-colors">내 문의 내역 보기</Link>
+        </div>
       </main>
     );
   }
@@ -303,171 +323,188 @@ export default function SupportPage() {
     <main key={viewMode} className="w-full flex-1 flex flex-col relative">
       <LuxStyles />
 
-      {/* ── 머리말 — 가운데 정렬, 장식 없이 단정하게 ── */}
-      <section className="w-full pt-16 pb-10 md:pt-20 md:pb-12 px-6">
-        <div className="max-w-2xl mx-auto flex flex-col items-center text-center gap-4">
-          <Reveal className="flex flex-col items-center">
-            <div className="flex items-center gap-3 mb-5">
-              <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Support Center</span>
-              <span className="w-8 h-px bg-[#e91e3f]"></span>
+      <div className="w-full max-w-5xl mx-auto px-6 pt-14 md:pt-20 pb-20">
+        <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
+          className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-10 lg:gap-14 items-start">
+
+          {/* ═══ 왼쪽 · 문의 입력 ═══ */}
+          <div>
+            <div className="flex items-baseline justify-between border-b-2 border-white/85 pb-3 mb-1">
+              <h1 className="text-xl md:text-2xl font-black text-white tracking-tight">문의 입력</h1>
+              <span className="text-[11px] font-bold text-[#e91e3f]">* 필수 입력</span>
             </div>
-            <h1 className="text-3xl md:text-4xl font-black tracking-tight leading-none text-white mb-3">1:1 문의</h1>
-            <p className="text-gray-400 text-sm md:text-base leading-relaxed">이용 중 불편한 사항이나 궁금하신 점을 남겨주세요.</p>
-          </Reveal>
-          {isAdmin && (
-            <button onClick={() => setViewMode("admin")} className="px-5 py-2.5 bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/20 hover:bg-[#e91e3f]/20 text-sm font-bold rounded-full transition-colors shrink-0">
-              관리자 대시보드 열기
-            </button>
-          )}
-        </div>
-      </section>
 
-      <div className="w-full max-w-2xl mx-auto px-6 pb-20 flex-1 flex flex-col">
+            <FormRow label="작성자">
+              <p className="text-sm text-gray-300 py-2.5">{session.user?.name}</p>
+            </FormRow>
 
-      {/* 📌 문의 작성 — 카드 대신 헤어라인으로 구획을 나눈 사무적 서식 */}
-      <Reveal>
-      <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-12">
-        {/* 01 · 문의 유형 */}
-        <section>
-          <SectionHead no="01" title="문의 유형" desc="가장 가까운 유형을 골라주세요. 유형에 따라 필요한 항목이 달라집니다." />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-            {TYPE_META.map((t) => {
-              const active = mainType === t.key;
-              return (
-                <button key={t.key} type="button"
-                  onClick={() => { setMainType(t.key); setSubType(""); setReportType(""); setProductName(""); setRefundType("환불"); }}
-                  className={`text-left px-4 py-3.5 rounded-xl border transition-all outline-none break-keep ${active ? "border-[#e91e3f] bg-[#e91e3f]/[0.08]" : "border-white/10 bg-white/[0.015] hover:border-white/25"}`}>
-                  <span className={`block text-[13px] font-black tracking-tight ${active ? "text-[#e91e3f]" : "text-white"}`}>{t.key}</span>
-                  <span className="block text-[11px] text-gray-500 mt-0.5 leading-snug">{t.desc}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* 유형을 고르면 높이까지 함께 열린다 */}
-        <div className="grid transition-[grid-template-rows,opacity] duration-500 ease-out" style={{ gridTemplateRows: mainType ? "1fr" : "0fr", opacity: mainType ? 1 : 0 }}>
-          <div className="overflow-hidden min-h-0">
-          <div key={mainType} className="space-y-12 pt-12 animate-in fade-in duration-500">
-        {/* 02 · 유형별 상세 */}
-        <section>
-          <SectionHead no="02" title="상세 정보" desc={mainType === "일반" ? "어떤 쪽 이야기인지 알려주세요." : "확인에 필요한 정보를 적어주세요."} />
-
-          <div key={mainType} className="animate-in fade-in slide-in-from-top-2 duration-300">
-
-          {mainType === "일반" && (
-            <div>
-              <label className={labelClass}>문의 분류 <span className="text-[#e91e3f]">*</span></label>
-              <div className="flex flex-wrap gap-2">
-                {["일반", "이용", "건의/제안", "기타"].map((t) => (
-                  <button type="button" key={t} onClick={() => setSubType(t)} className={`px-4 py-2 text-xs font-bold rounded-full border outline-none transition-all ${subType === t ? "bg-white/10 border-white/25 text-white" : "bg-transparent border-white/10 text-gray-500 hover:border-white/25 hover:text-gray-300"}`}>{t}</button>
-                ))}
+            <FormRow label="문의 유형" required>
+              <div className="flex flex-wrap gap-x-6 gap-y-2 py-1.5">
+                {TYPE_META.map((t) => {
+                  const active = mainType === t.key;
+                  return (
+                    <button key={t.key} type="button"
+                      onClick={() => { setMainType(t.key); setSubType(""); setReportType(""); setProductName(""); setRefundType("환불"); }}
+                      className="flex items-center gap-2 py-1 outline-none group">
+                      <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${active ? "border-[#e91e3f]" : "border-white/25 group-hover:border-white/50"}`}>
+                        {active && <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
+                      </span>
+                      <span className={`text-[13px] font-bold ${active ? "text-[#e91e3f]" : "text-gray-300"}`}>{t.key}</span>
+                    </button>
+                  );
+                })}
               </div>
-            </div>
-          )}
+              {mainType && <p className="text-[11px] text-gray-500 pb-1">{TYPE_META.find((t) => t.key === mainType)?.desc}</p>}
+            </FormRow>
 
-          {mainType === "오류" && (
-            <div>
-              <label className={labelClass}>발생 오류 <span className="text-[#e91e3f]">*</span></label>
-              <input type="text" required placeholder="예: 봇 명령어가 작동하지 않습니다." value={errorDesc} onChange={(e) => setErrorDesc(e.target.value)} className={inputClass} />
-            </div>
-          )}
+            {/* 유형을 고르면 높이까지 함께 열린다 */}
+            <div className="grid transition-[grid-template-rows,opacity] duration-500 ease-out"
+              style={{ gridTemplateRows: mainType ? "1fr" : "0fr", opacity: mainType ? 1 : 0 }}>
+              <div className="overflow-hidden min-h-0">
+                <div key={mainType} className="animate-in fade-in duration-500">
 
-          {mainType === "신고" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <label className={labelClass}>발생 일시 <span className="text-[#e91e3f]">*</span></label>
-                <input type="text" required placeholder="예: 20XX-XX-XX 오전 경" value={reportDate} onChange={(e) => setReportDate(e.target.value)} className={inputClass} />
-              </div>
-              <div className="relative">
-                <label className={labelClass}>신고 유형 <span className="text-[#e91e3f]">*</span></label>
-                <button type="button" onClick={() => setIsReportDropdownOpen(!isReportDropdownOpen)} className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-4 py-3 text-sm outline-none transition-colors flex justify-between items-center text-left hover:border-white/25 focus:border-[#e91e3f]">
-                  <span className={reportType ? "text-white font-bold" : "text-gray-600"}>{reportType || "선택해주세요"}</span><svg className={`w-4 h-4 text-gray-500 transition-transform ${isReportDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                </button>
-                {isReportDropdownOpen && (
-                  <><div className="fixed inset-0 z-40" onClick={() => setIsReportDropdownOpen(false)}></div>
-                    <div className="absolute top-[100%] left-0 w-full mt-2 bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                      {["운영정책 위반", "테러", "분쟁", "기타"].map((opt) => (
-                        <button key={opt} type="button" onClick={() => { setReportType(opt); setIsReportDropdownOpen(false); }} className={`w-full text-left px-5 py-3 text-sm transition-colors outline-none relative z-50 ${reportType === opt ? 'bg-[#e91e3f]/10 text-[#e91e3f] font-bold' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}>{opt}</button>
-                      ))}
-                    </div></>
-                )}
-              </div>
-            </div>
-          )}
-
-          {mainType === "환불 및 교환" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="md:col-span-2">
-                <label className={labelClass}>구매한 상품 <span className="text-[#e91e3f]">*</span></label>
-                {/* ARCTIC 구매 내역에서 바로 고른다 — 없으면 직접 입력 */}
-                {orders.length > 0 ? (
-                  <div className="rounded-xl border border-white/10 divide-y divide-white/[0.06] overflow-hidden max-h-56 overflow-y-auto">
-                    {orders.map((o) => {
-                      const label = `${o.itemName} (${new Date(o.createdAt).toLocaleDateString("ko-KR")})`;
-                      const picked = productName === label;
-                      return (
-                        <button key={o._id} type="button" onClick={() => setProductName(label)}
-                          className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${picked ? "bg-[#e91e3f]/[0.08]" : "hover:bg-white/[0.03]"}`}>
-                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${picked ? "border-[#e91e3f]" : "border-white/25"}`}>
-                            {picked && <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className={`block text-[13px] font-bold truncate ${picked ? "text-[#e91e3f]" : "text-white"}`}>{o.itemName}</span>
-                            <span className="block text-[11px] text-gray-500">
-                              {ORDER_TYPE_LABEL[o.itemType] || "상품"} · {new Date(o.createdAt).toLocaleDateString("ko-KR")} · {(o.price || 0).toLocaleString()} XP
+                  {mainType === "일반" && (
+                    <FormRow label="문의 분류" required>
+                      <div className="flex flex-wrap gap-x-6 gap-y-2 py-1.5">
+                        {["일반", "이용", "건의/제안", "기타"].map((t) => (
+                          <button type="button" key={t} onClick={() => setSubType(t)} className="flex items-center gap-2 py-1 outline-none group">
+                            <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${subType === t ? "border-[#e91e3f]" : "border-white/25 group-hover:border-white/50"}`}>
+                              {subType === t && <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
                             </span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <input type="text" required placeholder="예: 쿠폰, 아이템, 역할 등" value={productName} onChange={(e) => setProductName(e.target.value)} className={inputClass} />
-                )}
-                {orders.length > 0 && (
-                  <p className="text-[11px] text-gray-500 mt-2 break-keep">
-                    목록에 없다면 <button type="button" onClick={() => setOrders([])} className="text-[#e91e3f] font-bold hover:underline">직접 입력</button>할 수 있습니다.
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className={labelClass}>유형 <span className="text-[#e91e3f]">*</span></label>
-                <div className="flex gap-2">
-                  {["환불", "교환"].map((type) => (
-                    <button type="button" key={type} onClick={() => setRefundType(type)} className={`flex-1 py-3 text-sm font-bold rounded-lg border transition-all outline-none ${refundType === type ? "bg-white/10 border-white/25 text-white" : "bg-white/[0.02] border-white/10 text-gray-500 hover:border-white/25 hover:text-gray-300"}`}>{type}</button>
-                  ))}
+                            <span className={`text-[13px] font-bold ${subType === t ? "text-[#e91e3f]" : "text-gray-300"}`}>{t}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </FormRow>
+                  )}
+
+                  {mainType === "오류" && (
+                    <FormRow label="발생 오류" required>
+                      <input type="text" placeholder="예: 봇 명령어가 작동하지 않습니다." value={errorDesc} onChange={(e) => setErrorDesc(e.target.value)} className={inputClass} />
+                    </FormRow>
+                  )}
+
+                  {mainType === "신고" && (
+                    <>
+                      <FormRow label="발생 일시" required>
+                        <input type="text" placeholder="예: 2026-08-12 오전 경" value={reportDate} onChange={(e) => setReportDate(e.target.value)} className={inputClass} />
+                      </FormRow>
+                      <FormRow label="신고 유형" required>
+                        <div className="flex flex-wrap gap-x-6 gap-y-2 py-1.5">
+                          {["운영정책 위반", "테러", "분쟁", "기타"].map((opt) => (
+                            <button type="button" key={opt} onClick={() => setReportType(opt)} className="flex items-center gap-2 py-1 outline-none group">
+                              <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${reportType === opt ? "border-[#e91e3f]" : "border-white/25 group-hover:border-white/50"}`}>
+                                {reportType === opt && <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
+                              </span>
+                              <span className={`text-[13px] font-bold ${reportType === opt ? "text-[#e91e3f]" : "text-gray-300"}`}>{opt}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </FormRow>
+                    </>
+                  )}
+
+                  {mainType === "환불 및 교환" && (
+                    <>
+                      <FormRow label="구매한 상품" required>
+                        {orders.length > 0 ? (
+                          <>
+                            <div className="rounded-lg border border-white/10 divide-y divide-white/[0.06] overflow-hidden max-h-52 overflow-y-auto">
+                              {orders.map((o) => {
+                                const label = `${o.itemName} (${new Date(o.createdAt).toLocaleDateString("ko-KR")})`;
+                                const picked = productName === label;
+                                return (
+                                  <button key={o._id} type="button" onClick={() => setProductName(label)}
+                                    className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors outline-none ${picked ? "bg-[#e91e3f]/[0.08]" : "hover:bg-white/[0.03]"}`}>
+                                    <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${picked ? "border-[#e91e3f]" : "border-white/25"}`}>
+                                      {picked && <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className={`block text-[13px] font-bold truncate ${picked ? "text-[#e91e3f]" : "text-white"}`}>{o.itemName}</span>
+                                      <span className="block text-[11px] text-gray-500">
+                                        {ORDER_TYPE_LABEL[o.itemType] || "상품"} · {new Date(o.createdAt).toLocaleDateString("ko-KR")} · {(o.price || 0).toLocaleString()} XP
+                                      </span>
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[11px] text-gray-500 mt-2 break-keep">
+                              목록에 없다면 <button type="button" onClick={() => setOrders([])} className="text-[#e91e3f] font-bold hover:underline">직접 입력</button>할 수 있습니다.
+                            </p>
+                          </>
+                        ) : (
+                          <input type="text" placeholder="예: 쿠폰, 아이템, 역할 등" value={productName} onChange={(e) => setProductName(e.target.value)} className={inputClass} />
+                        )}
+                      </FormRow>
+                      <FormRow label="처리 유형" required>
+                        <div className="flex gap-x-6 py-1.5">
+                          {["환불", "교환"].map((type) => (
+                            <button type="button" key={type} onClick={() => setRefundType(type)} className="flex items-center gap-2 py-1 outline-none group">
+                              <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${refundType === type ? "border-[#e91e3f]" : "border-white/25 group-hover:border-white/50"}`}>
+                                {refundType === type && <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
+                              </span>
+                              <span className={`text-[13px] font-bold ${refundType === type ? "text-[#e91e3f]" : "text-gray-300"}`}>{type}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </FormRow>
+                    </>
+                  )}
+
+                  <FormRow label="제목" required>
+                    <input type="text" maxLength={100} placeholder="제목을 입력해 주세요. (최대 100자)" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
+                  </FormRow>
+
+                  <FormRow label="문의 내용" required align="start">
+                    <div className="relative">
+                      <textarea rows={10} placeholder="언제, 어디서, 무슨 일이 있었는지 적어주세요." value={content} onChange={(e) => setContent(e.target.value)}
+                        className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none resize-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600 leading-relaxed" />
+                      <span className="absolute bottom-3 right-4 text-[11px] font-bold text-gray-600 tabular-nums">{content.length.toLocaleString()}자</span>
+                    </div>
+                  </FormRow>
                 </div>
               </div>
             </div>
-          )}
           </div>
-        </section>
 
-        {/* 03 · 상세 내용 */}
-        <section>
-          <SectionHead no="03" title="상세 내용" desc="언제·어디서·무슨 일이 있었는지 적어주시면 확인이 빨라집니다." />
-          <div className="relative">
-            <textarea required placeholder="상세한 내용을 입력해 주세요." rows={7} value={content} onChange={(e) => setContent(e.target.value)}
-              className="w-full px-4 py-3.5 bg-white/[0.02] border border-white/10 rounded-xl text-sm text-white outline-none resize-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600 leading-relaxed" />
-            <span className={`absolute bottom-3 right-4 text-[11px] font-bold tabular-nums ${content.length > 0 ? "text-gray-500" : "text-gray-700"}`}>{content.length.toLocaleString()}자</span>
-          </div>
-        </section>
+          {/* ═══ 오른쪽 · 답변 알림 · 접수 ═══ */}
+          <aside className="lg:sticky lg:top-24">
+            <div className="border-b-2 border-white/85 pb-3 mb-4">
+              <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">답변 알림</h2>
+            </div>
 
-        <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center gap-3">
-          <button type="submit" className="w-full sm:w-auto sm:flex-1 py-3.5 px-8 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-full transition-all shadow-[0_10px_36px_rgba(233,30,63,0.3)] hover:-translate-y-0.5 outline-none">
-            문의 등록하기
-          </button>
-          <Link href="/profile?tab=inquiry" className="w-full sm:w-auto text-center py-3.5 px-6 text-[13px] font-bold text-gray-400 hover:text-white transition-colors">
-            내 문의 내역 보기
-          </Link>
-        </div>
-        </div>
-          </div>
-        </div>
-      </form>
-      </Reveal>
+            <button type="button" onClick={() => setNotifyDiscord(!notifyDiscord)}
+              className="w-full flex items-center gap-3 py-3 text-left outline-none group">
+              <span className={`w-[18px] h-[18px] rounded border flex items-center justify-center shrink-0 transition-colors ${notifyDiscord ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "border-white/25 text-transparent group-hover:border-white/50"}`}>
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[13px] font-bold text-white">디스코드 알림</span>
+                <span className="block text-[11px] text-gray-500 break-keep">답변이 등록되면 봇이 DM으로 알려드립니다.</span>
+              </span>
+            </button>
+            <p className="text-[11px] text-gray-600 break-keep leading-relaxed mb-8">
+              DM을 받지 않도록 설정한 경우에는 전달되지 않습니다. 답변은 언제든 내 정보 › 1:1 문의 내역에서 확인할 수 있습니다.
+            </p>
+
+            <button type="submit"
+              className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-lg transition-colors outline-none">
+              문의하기
+            </button>
+            <Link href="/profile?tab=inquiry" className="mt-3 w-full block text-center py-2.5 text-[12px] font-bold text-gray-400 hover:text-white transition-colors">
+              내 문의 내역 보기
+            </Link>
+
+            {isAdmin && (
+              <button type="button" onClick={() => setViewMode("admin")}
+                className="mt-6 w-full py-2.5 rounded-lg border border-[#e91e3f]/20 bg-[#e91e3f]/10 text-[#e91e3f] text-[12px] font-bold hover:bg-[#e91e3f]/20 transition-colors">
+                관리자 대시보드 열기
+              </button>
+            )}
+          </aside>
+        </form>
+      </div>
 
       {popupConfig.isOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
@@ -485,7 +522,6 @@ export default function SupportPage() {
           </div>
         </div>
       )}
-      </div>
     </main>
   );
 }

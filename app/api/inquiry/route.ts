@@ -28,12 +28,16 @@ export async function POST(request: Request) {
     await connectToDatabase();
     const data = await request.json();
     
-    // UI 구조에 맞게 제목 자동 생성
-    const generatedTitle = data.mainType === "오류 문의" ? data.errorDesc : (data.mainType === "신고 문의" ? `[${data.reportType}] 신고 접수` : `[${data.subType}] 일반 문의`);
+    // 제목은 유저가 적은 걸 쓰고, 비어 있으면 유형으로 만들어 준다
+    const generatedTitle =
+      data.mainType === "오류" ? data.errorDesc
+      : data.mainType === "신고" ? `[${data.reportType}] 신고 접수`
+      : data.mainType === "환불 및 교환" ? `[${data.refundType}] ${data.productName}`
+      : `[${data.subType}] 일반 문의`;
 
     const newInquiry = await Inquiry.create({
       ...data,
-      title: generatedTitle,
+      title: (data.title || "").trim() || generatedTitle,
       status: "접수 중"
     });
 
@@ -64,6 +68,41 @@ export async function POST(request: Request) {
   }
 }
 
+// 📌 답변 알림 — 유저에게 디스코드 DM으로 보낸다 (동의한 문의에만)
+async function sendAnswerDm(inquiry: any) {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  if (!token || !inquiry?.userId || inquiry.notifyDiscord === false) return;
+
+  try {
+    // 1) 유저와의 개인 대화방을 연다
+    const dmRes = await fetch("https://discord.com/api/v10/users/@me/channels", {
+      method: "POST",
+      headers: { Authorization: `Bot ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient_id: inquiry.userId }),
+    });
+    if (!dmRes.ok) return;
+    const dm = await dmRes.json();
+    if (!dm?.id) return;
+
+    // 2) 답변 내용을 보낸다 (DM이 막혀 있으면 디스코드가 거절하므로 조용히 넘어간다)
+    await fetch(`https://discord.com/api/v10/channels/${dm.id}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bot ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        embeds: [{
+          title: "1:1 문의 답변이 도착했습니다",
+          description: `**${inquiry.title || "문의"}**\n\n${String(inquiry.answer || "").slice(0, 1500)}`,
+          color: 15286591,
+          footer: { text: "고급 이글루 · 내 정보에서도 확인할 수 있습니다" },
+          timestamp: new Date().toISOString(),
+        }],
+      }),
+    });
+  } catch {
+    // 알림 실패가 답변 저장을 막지 않도록 한다
+  }
+}
+
 // [답변] 관리자 답변 달기 및 상태 업데이트
 export async function PUT(request: Request) {
   try {
@@ -74,6 +113,7 @@ export async function PUT(request: Request) {
       { answer: answer, status: "답변 완료", answeredAt: new Date() },
       { new: true }
     );
+    await sendAnswerDm(updatedInquiry);
     return NextResponse.json({ success: true, data: updatedInquiry });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

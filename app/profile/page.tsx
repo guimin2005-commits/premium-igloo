@@ -353,6 +353,29 @@ export default function MyInfoPage() {
               ))}
             </div>
           )}
+
+          {/* 📌 쿠폰 등록 — 아래까지 내려가지 않아도 바로 쓸 수 있게 프로필 카드 안에 둔다 */}
+          <div className="mt-5 pt-5 border-t border-[#ececea]">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-4 h-4 text-[#e91e3f]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+              </svg>
+              <span className="text-[12px] font-black text-[#131313]">쿠폰 등록</span>
+            </div>
+            <div className="flex gap-2">
+              <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") registerCoupon(); }}
+                placeholder="쿠폰 코드 입력"
+                className="flex-1 min-w-0 bg-white border border-[#e2e0dc] rounded-lg px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
+              <button onClick={registerCoupon} disabled={!couponInput.trim() || isRegisteringCoupon}
+                className="px-4 py-2.5 rounded-lg bg-[#131313] hover:bg-black text-white text-[12px] font-bold disabled:opacity-40 transition-colors shrink-0">
+                {isRegisteringCoupon ? "확인" : "등록"}
+              </button>
+            </div>
+            {couponMsg && (
+              <p className={`mt-2 text-[11px] font-bold break-keep ${couponMsg.ok ? "text-[#3f7a35]" : "text-[#c62828]"}`}>{couponMsg.text}</p>
+            )}
+          </div>
         </div>
       </section>
 
@@ -646,23 +669,6 @@ export default function MyInfoPage() {
               <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
                 <div className="px-5 py-4 border-b border-[#ececea]">
                   <h2 className="text-sm font-black text-[#131313]">보유 쿠폰 {shopWallet.length > 0 && <span className="text-[#e91e3f]">{shopWallet.length}</span>}</h2>
-                </div>
-
-                {/* 쿠폰 코드 등록 — 보상형 코드도 이곳에서 사용한다 */}
-                <div className="px-5 pt-4 pb-3 border-b border-[#ececea]">
-                  <div className="flex gap-2">
-                    <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") registerCoupon(); }}
-                      placeholder="쿠폰 코드 입력"
-                      className="flex-1 min-w-0 bg-white border border-[#e2e0dc] rounded-lg px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
-                    <button onClick={registerCoupon} disabled={!couponInput.trim() || isRegisteringCoupon}
-                      className="px-4 py-2.5 rounded-lg bg-[#131313] hover:bg-black text-white text-[12px] font-bold disabled:opacity-40 transition-colors shrink-0">
-                      {isRegisteringCoupon ? "확인" : "등록"}
-                    </button>
-                  </div>
-                  {couponMsg && (
-                    <p className={`mt-2 text-[11px] font-bold break-keep ${couponMsg.ok ? "text-[#3f7a35]" : "text-[#c62828]"}`}>{couponMsg.text}</p>
-                  )}
                 </div>
 
                 {shopWallet.length === 0 ? (
