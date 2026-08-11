@@ -113,19 +113,19 @@ export default function CheckoutPage() {
     }
   };
 
-  // 적용 해제
-  const clearCoupon = () => {
-    setCoupon(null);
-    setCouponInput("");
-    setCouponMsg("");
-  };
+  // 보유 쿠폰에서 선택 — 고른 뒤 '적용'을 눌러야 반영된다 (한 장만 사용 가능)
+  const [pendingCouponId, setPendingCouponId] = useState<string | null>(null);
 
-  // 보유 쿠폰에서 선택
   const pickCoupon = (w: any) => {
     if (!w.usable) return;
     setCoupon({ code: w.code, name: w.name, type: w.type, value: w.value, discount: w.discount });
     setCouponMsg("");
     setShowCouponPicker(false);
+  };
+
+  const applyPendingCoupon = () => {
+    const w = wallet.find((x: any) => x.id === pendingCouponId);
+    if (w) pickCoupon(w);
   };
   const canPay = rows.length > 0 && enoughXp && agreeTerms && agreeFinal && (!needsContact || contact.trim().length > 0) && !isPaying;
 
@@ -325,7 +325,7 @@ export default function CheckoutPage() {
                   <>
                     {/* 보유 쿠폰 — 항상 보이는 진입 버튼 */}
                     <button
-                      onClick={() => setShowCouponPicker(!showCouponPicker)}
+                      onClick={() => { if (!showCouponPicker) setPendingCouponId(wallet.find((w: any) => w.code === coupon?.code)?.id ?? null); setShowCouponPicker(!showCouponPicker); }}
                       disabled={wallet.length === 0}
                       className={`w-full flex items-center justify-between gap-2 px-4 py-3 mb-2 rounded-xl border text-left transition-colors ${
                         wallet.length === 0
@@ -352,46 +352,43 @@ export default function CheckoutPage() {
                       )}
                     </button>
 
-                    {/* 보유 쿠폰 목록 */}
+                    {/* 보유 쿠폰 목록 — 하나만 고른 뒤 '적용'을 눌러야 반영된다 */}
                     {showCouponPicker && wallet.length > 0 && (
-                      <div className="mb-2 rounded-xl border border-[#e2e0dc] overflow-hidden divide-y divide-[#ececea] max-h-56 overflow-y-auto">
-                        {wallet.length === 0 ? (
-                          <p className="px-4 py-5 text-center text-[11px] text-[#8a8a8a]">보유한 쿠폰이 없습니다.</p>
-                        ) : wallet.map((w) => {
-                          // 지금 적용 중인 쿠폰은 체크로 표시한다 (한 번 더 누르면 해제)
-                          const picked = coupon?.code === w.code;
-                          return (
-                          <button key={w.id} onClick={() => (picked ? clearCoupon() : pickCoupon(w))} disabled={!w.usable}
-                            className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${picked ? "bg-[#e91e3f]/[0.06]" : w.usable ? "hover:bg-[#f5f3f0]" : "opacity-50 cursor-not-allowed"}`}>
-                            {/* 선택 표시 — 고르면 체크로 바뀐다 */}
-                            <span className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-colors ${picked ? "bg-[#e91e3f] border-[#e91e3f] text-white" : w.usable ? "border-[#d6d3ce] text-transparent" : "border-[#ececea] text-transparent"}`}>
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                              </svg>
-                            </span>
+                      <div className="mb-2 rounded-xl border border-[#e2e0dc] overflow-hidden">
+                        <div className="divide-y divide-[#ececea] max-h-56 overflow-y-auto">
+                          {wallet.map((w) => {
+                            const picked = pendingCouponId === w.id;
+                            return (
+                              <button key={w.id} onClick={() => w.usable && setPendingCouponId(w.id)} disabled={!w.usable}
+                                className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${picked ? "bg-[#e91e3f]/[0.06]" : w.usable ? "hover:bg-[#f5f3f0]" : "opacity-50 cursor-not-allowed"}`}>
+                                {/* 선택 표시 — 하나만 고를 수 있다 */}
+                                <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${picked ? "border-[#e91e3f]" : "border-[#d6d3ce]"}`}>
+                                  {picked && <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
+                                </span>
 
-                            {/* 쿠폰 아이콘 */}
-                            <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${w.usable ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "bg-[#eceae6] text-[#a3a3a3]"}`}>
-                              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
-                              </svg>
-                            </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className={`text-[12px] font-bold truncate ${picked ? "text-[#e91e3f]" : "text-[#131313]"}`}>{w.name}</span>
+                                    {w.usable && <span className="text-[12px] font-black text-[#e91e3f] tabular-nums shrink-0">-{w.discount.toLocaleString()}</span>}
+                                  </div>
+                                  <div className="text-[10px] text-[#8a8a8a] mt-0.5 break-keep">
+                                    {w.usable
+                                      ? w.type === "percent" ? `${w.value}% 할인` : `${w.value.toLocaleString()} XP 할인`
+                                      : w.reason}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
 
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className={`text-[12px] font-bold truncate ${picked ? "text-[#e91e3f]" : "text-[#131313]"}`}>{w.name}</span>
-                                {w.usable && <span className="text-[12px] font-black text-[#e91e3f] tabular-nums shrink-0">-{w.discount.toLocaleString()}</span>}
-                              </div>
-                              <div className="text-[10px] text-[#8a8a8a] mt-0.5 break-keep">
-                                {picked ? "적용 중 · 다시 누르면 해제됩니다"
-                                  : w.usable
-                                    ? w.type === "percent" ? `${w.value}% 할인` : `${w.value.toLocaleString()} XP 할인`
-                                    : w.reason}
-                              </div>
-                            </div>
+                        <div className="px-4 py-3 border-t border-[#ececea] bg-[#faf9f7] flex items-center justify-between gap-3">
+                          <span className="text-[10px] text-[#8a8a8a] break-keep">쿠폰은 한 장만 사용할 수 있습니다.</span>
+                          <button onClick={applyPendingCoupon} disabled={!pendingCouponId}
+                            className="px-4 py-2 rounded-full bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 disabled:cursor-not-allowed text-white text-[12px] font-bold transition-colors shrink-0">
+                            적용
                           </button>
-                          );
-                        })}
+                        </div>
                       </div>
                     )}
 

@@ -442,10 +442,10 @@ export default function ShopMePage() {
                     className="w-full py-3.5 rounded-xl border border-dashed border-[#d6d3ce] text-[13px] font-bold text-[#8a8a8a] hover:text-[#131313] hover:border-[#a3a3a3] transition-colors">
                     상품·지급 관련해 물어볼 게 있나요?
                   </button>
-                  {/* 지난 문의는 내 정보의 1:1 문의 구역에서 이어서 본다 */}
-                  <Link href="/profile?tab=inquiry"
+                  {/* 신고·환불 등 자세한 문의는 1:1 문의에서 */}
+                  <Link href="/support"
                     className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">
-                    내 1:1 문의 내역 보기
+                    1:1 문의로 이동
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
                   </Link>
                 </div>

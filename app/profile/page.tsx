@@ -151,7 +151,8 @@ export default function MyInfoPage() {
   // 📌 예전 탭 링크(/profile?tab=inquiry)로 들어와도 해당 구역까지 내려준다
   useEffect(() => {
     const tabParam = searchParams.get("tab");
-    if (!tabParam) return;
+    // 지정한 구역이 없으면 맨 위에서 시작한다 (이전 페이지의 스크롤 위치가 남지 않도록)
+    if (!tabParam) { window.scrollTo(0, 0); return; }
     if (tabParam === "booster") { router.replace("/profile/booster"); return; }
     const t = setTimeout(() => {
       document.getElementById("sec-" + tabParam)?.scrollIntoView({ behavior: "smooth", block: "start" });

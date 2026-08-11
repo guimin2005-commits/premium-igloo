@@ -15,6 +15,8 @@ const TYPE_META = [
   { key: "환불 및 교환", desc: "구매한 상품 관련" },
 ];
 
+const ORDER_TYPE_LABEL: Record<string, string> = { role: "역할", perk: "권한", physical: "기프트카드" };
+
 const labelClass = "block text-[11px] font-bold text-gray-500 tracking-wide mb-2.5";
 const inputClass =
   "w-full bg-white/[0.02] border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600";
@@ -47,6 +49,7 @@ export default function SupportPage() {
   const [isEmailChecked, setIsEmailChecked] = useState(false);
   const [email, setEmail] = useState("");
 
+  const [orders, setOrders] = useState<any[]>([]); // ARCTIC 구매 내역 (환불·교환 문의에서 고른다)
   const [isReportDropdownOpen, setIsReportDropdownOpen] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [allInquiries, setAllInquiries] = useState<any[]>([]);
@@ -73,6 +76,15 @@ export default function SupportPage() {
       setViewMode("admin");
     }
   }, [isAdmin]);
+
+  // 환불·교환 문의에서 고를 수 있도록 내 ARCTIC 구매 내역을 읽어둔다
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    fetch("/api/shop/purchase", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setOrders(Array.isArray(d?.data) ? d.data.filter((o: any) => o.status !== "cancelled") : []))
+      .catch(() => {});
+  }, [status]);
 
   const executeDelete = async () => {
     if(!deleteConfirmId) return;
@@ -341,6 +353,8 @@ export default function SupportPage() {
         <section>
           <SectionHead no="02" title="상세 정보" desc={mainType === "일반" ? "어떤 쪽 이야기인지 알려주세요." : "확인에 필요한 정보를 적어주세요."} />
 
+          <div key={mainType} className="animate-in fade-in slide-in-from-top-2 duration-300">
+
           {mainType === "일반" && (
             <div>
               <label className={labelClass}>문의 분류 <span className="text-[#e91e3f]">*</span></label>
@@ -384,9 +398,38 @@ export default function SupportPage() {
 
           {mainType === "환불 및 교환" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <label className={labelClass}>상품명 <span className="text-[#e91e3f]">*</span></label>
-                <input type="text" required placeholder="예: 쿠폰, 아이템, 역할 등" value={productName} onChange={(e) => setProductName(e.target.value)} className={inputClass} />
+              <div className="md:col-span-2">
+                <label className={labelClass}>구매한 상품 <span className="text-[#e91e3f]">*</span></label>
+                {/* ARCTIC 구매 내역에서 바로 고른다 — 없으면 직접 입력 */}
+                {orders.length > 0 ? (
+                  <div className="rounded-xl border border-white/10 divide-y divide-white/[0.06] overflow-hidden max-h-56 overflow-y-auto">
+                    {orders.map((o) => {
+                      const label = `${o.itemName} (${new Date(o.createdAt).toLocaleDateString("ko-KR")})`;
+                      const picked = productName === label;
+                      return (
+                        <button key={o._id} type="button" onClick={() => setProductName(label)}
+                          className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${picked ? "bg-[#e91e3f]/[0.08]" : "hover:bg-white/[0.03]"}`}>
+                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${picked ? "border-[#e91e3f]" : "border-white/25"}`}>
+                            {picked && <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className={`block text-[13px] font-bold truncate ${picked ? "text-[#e91e3f]" : "text-white"}`}>{o.itemName}</span>
+                            <span className="block text-[11px] text-gray-500">
+                              {ORDER_TYPE_LABEL[o.itemType] || "상품"} · {new Date(o.createdAt).toLocaleDateString("ko-KR")} · {(o.price || 0).toLocaleString()} XP
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <input type="text" required placeholder="예: 쿠폰, 아이템, 역할 등" value={productName} onChange={(e) => setProductName(e.target.value)} className={inputClass} />
+                )}
+                {orders.length > 0 && (
+                  <p className="text-[11px] text-gray-500 mt-2 break-keep">
+                    목록에 없다면 <button type="button" onClick={() => setOrders([])} className="text-[#e91e3f] font-bold hover:underline">직접 입력</button>할 수 있습니다.
+                  </p>
+                )}
               </div>
               <div>
                 <label className={labelClass}>유형 <span className="text-[#e91e3f]">*</span></label>
@@ -398,6 +441,7 @@ export default function SupportPage() {
               </div>
             </div>
           )}
+          </div>
         </section>
 
         {/* 03 · 상세 내용 */}
@@ -410,9 +454,8 @@ export default function SupportPage() {
           </div>
         </section>
 
-        {/* 04 · 답변 받을 방법 */}
-        <section>
-          <SectionHead no="04" title="답변 안내" desc="답변은 내 정보 › 1:1 문의 내역에 도착합니다. 이메일로도 받으시려면 아래를 켜주세요." />
+        {/* 이메일 알림은 선택 사항이라 구획 없이 한 줄로 둔다 */}
+        <div>
           <label className="flex items-center gap-3 text-sm text-gray-400 cursor-pointer w-max group">
             <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${isEmailChecked ? "bg-[#e91e3f] border-[#e91e3f]" : "border-gray-600 group-hover:border-gray-400"}`}>
               {isEmailChecked && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
@@ -421,7 +464,7 @@ export default function SupportPage() {
             답변 알림을 이메일로 받겠습니다. <span className="text-gray-600">(선택)</span>
           </label>
           {isEmailChecked && <input type="email" required placeholder="이메일 주소" value={email} onChange={(e) => setEmail(e.target.value)} className={`${inputClass} w-full sm:w-2/3 mt-3`} />}
-        </section>
+        </div>
 
         <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center gap-3">
           <button type="submit" className="w-full sm:w-auto sm:flex-1 py-3.5 px-8 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-full transition-all shadow-[0_10px_36px_rgba(233,30,63,0.3)] hover:-translate-y-0.5 outline-none">
