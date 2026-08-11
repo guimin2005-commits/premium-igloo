@@ -17,6 +17,7 @@ const TAB_META: Record<string, { title: string; desc: string }> = {
   roles: { title: "역할 설정", desc: "레벨 보상 역할과 역할별 Boost 효과를 관리합니다." },
   channels: { title: "채널 · 카테고리", desc: "채널별 XP Boost와 지급 제외를 관리합니다." },
   boosts: { title: "기간제 부스트", desc: "대상·XP·기간을 지정한 한시적 부스트를 운영합니다." },
+  grant: { title: "XP 수동 지급", desc: "특정 유저나 전원에게 XP를 직접 지급하거나 회수합니다. 봇이 30초 이내에 반영합니다." },
   leaderboard: { title: "리더보드", desc: "누적·월간 XP 랭킹을 확인합니다." },
   logs: { title: "XP 로그", desc: "봇이 지급한 XP 내역을 조회합니다. (최근 60일 보관)" },
 };
@@ -114,6 +115,51 @@ export default function AdminBotPage() {
     }).catch(() => null);
     if (res?.ok) { const d = await res.json(); setSettings(d.data); saved(); }
     else notify("저장에 실패했습니다.", true);
+  };
+
+  // ── XP 수동 지급 ─────────────────────────────
+  const [grantForm, setGrantForm] = useState({ target: "", amount: "", reason: "" });
+  const [grantLogs, setGrantLogs] = useState<any[]>([]);
+  const [isGranting, setIsGranting] = useState(false);
+  const [confirmAll, setConfirmAll] = useState(false);
+
+  const loadGrantLogs = useCallback(() => {
+    fetch("/api/xp/grant", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setGrantLogs(Array.isArray(d?.data) ? d.data : []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => { if (isAdmin && tab === "grant") loadGrantLogs(); }, [isAdmin, tab, loadGrantLogs]);
+
+  const runGrant = async (target: string) => {
+    if (isGranting) return;
+    setIsGranting(true);
+    try {
+      const res = await fetch("/api/xp/grant", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...grantForm, target }),
+      });
+      const d = await res.json();
+      if (res.ok && d.success) {
+        notify(d.message || "지급했습니다.");
+        setGrantForm({ target: "", amount: "", reason: "" });
+        loadGrantLogs();
+      } else {
+        notify(d.message || "지급에 실패했습니다.", true);
+      }
+    } catch {
+      notify("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setIsGranting(false);
+      setConfirmAll(false);
+    }
+  };
+
+  const submitGrant = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!grantForm.target.trim()) return notify("지급 대상을 입력해주세요.", true);
+    runGrant(grantForm.target.trim());
   };
 
   const [roleForm, setRoleForm] = useState({ roleId: "", rewardLevel: "", buffXp: "", attendBuffXp: "" });
@@ -729,6 +775,97 @@ export default function AdminBotPage() {
         )}
 
         {/* ═══ 리더보드 ═══ */}
+        {/* ═══ XP 수동 지급 ═══ */}
+        {tab === "grant" && (
+          <>
+            <Reveal>
+            <section>
+              <SectionHead no="01" title="XP 지급 · 회수" />
+              <form onSubmit={submitGrant}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className={labelClass}>대상 <span className="text-[#e91e3f]">*</span></label>
+                    <input type="text" value={grantForm.target} onChange={(e) => setGrantForm({ ...grantForm, target: e.target.value })}
+                      placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
+                    <p className={fieldNote}>XP 기록이 있는 유저만 검색됩니다</p>
+                  </div>
+                  <div>
+                    <label className={labelClass}>지급 XP <span className="text-[#e91e3f]">*</span></label>
+                    <input type="number" value={grantForm.amount} onChange={(e) => setGrantForm({ ...grantForm, amount: e.target.value })}
+                      placeholder="예: 50000 (회수는 -50000)" className={inputClass} />
+                    <p className={fieldNote}>음수를 넣으면 회수됩니다 (보유량을 넘지 않게 잘립니다)</p>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <label className={labelClass}>사유</label>
+                  <input type="text" value={grantForm.reason} onChange={(e) => setGrantForm({ ...grantForm, reason: e.target.value })}
+                    placeholder="예: 이벤트 우승 보상" className={inputClass} />
+                  <p className={fieldNote}>비우면 &lsquo;관리자 지급&rsquo;으로 기록됩니다</p>
+                </div>
+
+                {Number(grantForm.amount) !== 0 && grantForm.amount !== "" && (
+                  <div className={`mb-6 px-4 py-3 rounded-lg border text-[12px] font-bold ${
+                    Number(grantForm.amount) > 0 ? "border-[#e91e3f]/30 bg-[#e91e3f]/[0.06] text-[#e91e3f]" : "border-amber-500/30 bg-amber-500/[0.06] text-amber-400"
+                  }`}>
+                    {Number(grantForm.amount) > 0
+                      ? `${Number(grantForm.amount).toLocaleString()} XP 지급 — 레벨이 올라갈 수 있습니다`
+                      : `${Math.abs(Number(grantForm.amount)).toLocaleString()} XP 회수 — 레벨이 내려갈 수 있습니다`}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-3">
+                  <button type="submit" disabled={isGranting} className={primaryBtn}>
+                    {isGranting ? "처리 중..." : "지급"}
+                  </button>
+                  <button type="button" onClick={() => setConfirmAll(true)} disabled={isGranting || !grantForm.amount}
+                    className="px-6 py-3.5 rounded-lg border border-white/15 text-gray-300 hover:text-white text-sm font-bold transition-colors disabled:opacity-40">
+                    전체 유저에게 지급
+                  </button>
+                </div>
+              </form>
+            </section>
+            </Reveal>
+
+            <Reveal>
+            <section>
+              <SectionHead no="02" title={`최근 수동 지급 (${grantLogs.length})`} />
+              {grantLogs.length === 0 ? (
+                <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">수동 지급 이력이 없습니다.</div>
+              ) : (
+                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                  {grantLogs.map((g) => (
+                    <div key={g._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 w-fit ${
+                        g.status === "paid" ? "bg-emerald-500/15 text-emerald-400"
+                        : g.status === "failed" ? "bg-red-500/15 text-red-400"
+                        : "bg-[#e91e3f] text-white"}`}>
+                        {g.status === "paid" ? "완료" : g.status === "failed" ? "실패" : "대기"}
+                      </span>
+                      <div className="min-w-0 md:w-44 shrink-0">
+                        <div className="text-sm font-bold text-white truncate">{g.userName || g.userId}</div>
+                        <div className="text-[10px] text-gray-400">{fmtDateTime(g.createdAt)}</div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1 min-w-0">
+                        <span className={`text-[13px] font-black tabular-nums ${g.amount >= 0 ? "text-[#e91e3f]" : "text-amber-400"}`}>
+                          {g.amount >= 0 ? "+" : ""}{g.amount.toLocaleString()} XP
+                        </span>
+                        {g.reason && <span className="text-[11px] text-gray-400 truncate">{g.reason}</span>}
+                        {g.error && <span className="text-[11px] font-bold text-red-400">{g.error}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="mt-6 text-xs text-gray-400 leading-relaxed break-keep">
+                💡 지급은 봇의 자동 지급 큐에 쌓여 30초 이내에 반영되며, 반영 시 레벨도 함께 다시 계산됩니다.
+                봇이 꺼져 있으면 &lsquo;대기&rsquo; 상태로 남아 있다가 켜질 때 처리됩니다.
+              </p>
+            </section>
+            </Reveal>
+          </>
+        )}
+
         {tab === "leaderboard" && (
           <Reveal>
           <section>
@@ -831,6 +968,30 @@ export default function AdminBotPage() {
             <div className="flex gap-3">
               <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button>
               <button onClick={executeDelete} className="flex-1 py-3 bg-red-500/80 text-white rounded-xl">삭제</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 전체 유저 지급 — 되돌리기 어려우므로 한 번 더 확인 */}
+      {confirmAll && (
+        <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/80 p-4">
+          <div className="bg-[#121212] border border-[#e91e3f]/30 rounded-3xl w-full max-w-sm p-8">
+            <h2 className="text-lg font-bold text-white mb-3">전체 유저에게 지급</h2>
+            <p className="text-sm text-gray-400 leading-relaxed mb-2 break-keep">
+              XP 기록이 있는 <strong className="text-white">모든 유저</strong>에게{" "}
+              <strong className={Number(grantForm.amount) >= 0 ? "text-[#e91e3f]" : "text-amber-400"}>
+                {Number(grantForm.amount) >= 0 ? "+" : ""}{Number(grantForm.amount).toLocaleString()} XP
+              </strong>
+              를 반영합니다.
+            </p>
+            <p className="text-xs text-gray-400 mb-8 break-keep">되돌리려면 반대 부호로 다시 지급해야 합니다.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmAll(false)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button>
+              <button onClick={() => runGrant("all")} disabled={isGranting}
+                className="flex-1 py-3 bg-[#e91e3f] disabled:opacity-40 text-white rounded-xl font-bold">
+                {isGranting ? "처리 중..." : "전체 지급"}
+              </button>
             </div>
           </div>
         </div>

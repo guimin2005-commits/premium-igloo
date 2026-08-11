@@ -265,11 +265,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <header className={`mx-auto transition-[max-width,border-radius,padding,height] duration-500 ease-out ${
         scrolled
           ? isLightPage
-            ? "max-w-3xl rounded-full border border-black/[0.06] bg-white/80 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] px-5 md:px-6 h-12"
-            : "max-w-3xl rounded-full border border-white/[0.06] bg-[#0b0b0b]/70 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)] px-5 md:px-6 h-12"
+            ? "max-w-3xl rounded-full border border-black/[0.06] bg-white/80 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] px-5 md:px-6 h-14"
+            : "max-w-3xl rounded-full border border-white/[0.06] bg-[#0b0b0b]/70 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)] px-5 md:px-6 h-14"
           : isLightPage
-            ? "max-w-[1600px] border border-x-transparent border-t-transparent border-b-black/[0.08] bg-[#f5f3f0]/85 backdrop-blur-md px-6 h-14"
-            : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-14"
+            ? "max-w-[1600px] border border-x-transparent border-t-transparent border-b-black/[0.08] bg-[#f5f3f0]/85 backdrop-blur-md px-6 h-16"
+            : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-16"
       }`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
           <div className="flex-1 flex items-center z-10">

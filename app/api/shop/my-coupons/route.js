@@ -33,7 +33,8 @@ export async function GET(request) {
         return {
           id: String(w._id),
           code: c.code,
-          name: c.name || c.code,
+          // 이름이 없으면 코드 대신 일반 명칭 (코드는 화면에 노출하지 않는다)
+          name: c.name || (c.type === "percent" ? `${c.value}% 할인 쿠폰` : `${c.value.toLocaleString()} XP 할인 쿠폰`),
           type: c.type,
           value: c.value,
           maxDiscount: c.maxDiscount,

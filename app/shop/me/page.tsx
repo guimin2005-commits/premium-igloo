@@ -391,15 +391,20 @@ export default function ShopMePage() {
             ) : (
               <div className="divide-y divide-[#ececea] max-h-[280px] overflow-y-auto">
                 {wallet.map((w) => (
-                  <div key={w.id} className="px-5 py-3.5 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
+                  <div key={w.id} className="px-5 py-3.5 flex items-center gap-3">
+                    {/* 쿠폰 아이콘 */}
+                    <span className="w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
+                      <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                      </svg>
+                    </span>
+                    <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-bold text-[#131313] truncate">{w.name}</p>
-                      <p className="text-[10px] text-[#8a8a8a]">
+                      <p className="text-[10px] text-[#8a8a8a] break-keep">
                         {w.type === "percent" ? `${w.value}% 할인` : `${w.value.toLocaleString()} XP 할인`}
                         {w.minTotal > 0 && ` · ${w.minTotal.toLocaleString()} XP 이상`}
                       </p>
                     </div>
-                    <span className="text-[10px] font-black tracking-wider text-[#a3a3a3] shrink-0">{w.code}</span>
                   </div>
                 ))}
               </div>
