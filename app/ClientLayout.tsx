@@ -6,6 +6,7 @@ import { signIn, signOut, useSession } from "next-auth/react";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import AdminNav from "./admin/AdminNav";
+import ScrollLock from "./components/ScrollLock";
 import { verifyBadge } from "@/lib/verifyBadge";
 
 // 📌 헤더에서 내려오는 카드(알림·내 프로필)
@@ -347,6 +348,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className={`flex flex-col min-h-screen ${isLightPage ? "bg-[#f5f3f0]" : "bg-[#090909]"}`}>
+      <ScrollLock />
       <RouteProgress pathname={pathname} />
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
              헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
