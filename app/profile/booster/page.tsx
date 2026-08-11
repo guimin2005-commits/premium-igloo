@@ -43,7 +43,7 @@ export default function BoosterBenefitPage() {
 
         {isBooster && (
           <div className="mb-6 rounded-2xl border border-[#e2e0dc] bg-white px-5 py-4 flex items-center gap-3 break-keep">
-            <span className="inline-flex items-center gap-1 text-[10px] font-black bg-[#e91e3f] text-white px-2 py-0.5 rounded shrink-0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5"><path d="M4.5 15.75l7.5-7.5 7.5 7.5" /><path d="M4.5 19.5l7.5-7.5 7.5 7.5" /></svg>BOOSTER</span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-black bg-[#e91e3f] text-white px-2 py-0.5 rounded shrink-0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5"><path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>BOOSTER</span>
             <p className="text-[13px] font-bold text-[#4b4b4b]">부스터 혜택이 적용 중입니다. 아래 혜택이 자동으로 지급됩니다.</p>
           </div>
         )}

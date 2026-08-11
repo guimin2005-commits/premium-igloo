@@ -332,7 +332,7 @@ export default function MyInfoPage() {
               </span>
               {isServerBooster && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 text-[#ff41cf] border border-[#ff41cf]/30">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5"><path d="M4.5 15.75l7.5-7.5 7.5 7.5" /><path d="M4.5 19.5l7.5-7.5 7.5 7.5" /></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>
                   SERVER BOOSTER
                 </span>
               )}
@@ -515,7 +515,7 @@ export default function MyInfoPage() {
             className="group block bg-white rounded-2xl border border-[#e2e0dc] px-6 py-6 hover:border-[#a3a3a3] transition-colors">
             <div className="flex items-center gap-4">
               <span className="w-11 h-11 rounded-xl bg-[#ff41cf]/10 text-[#ff41cf] flex items-center justify-center shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M4.5 15.75l7.5-7.5 7.5 7.5" /><path d="M4.5 19.5l7.5-7.5 7.5 7.5" /></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>
               </span>
               <div className="min-w-0 flex-1 break-keep">
                 <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
