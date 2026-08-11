@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Reveal, LuxStyles, ScrollProgress } from "../components/Lux";
+import { Reveal, LuxStyles } from "../components/Lux";
 import { RenderFormattedText } from "../components/FormattedText";
 import Link from "next/link";
 import { ADMIN_USERS } from "@/lib/admins";
@@ -21,21 +21,28 @@ const stripMd = (t: string) =>
 // 통지 유형별 색상
 const NOTI_TYPE_STYLES: Record<string, string> = {
   경고: "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25",
-  제재: "bg-orange-500/10 text-orange-400 border-orange-500/25",
-  안내: "bg-sky-500/10 text-sky-400 border-sky-500/25",
-  축하: "bg-emerald-500/10 text-emerald-400 border-emerald-500/25",
-  일반: "bg-white/5 text-gray-300 border-white/15",
+  제재: "bg-[#fdf1e3] text-[#a8763a] border-[#f0dcc0]",
+  안내: "bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]",
+  축하: "bg-[#e8f3e6] text-[#3f7a35] border-[#cfe5cb]",
+  일반: "bg-[#f5f3f0] text-[#4b4b4b] border-[#e2e0dc]",
 };
+
+// ARCTIC 주문 상태 표기
+const ORDER_STATUS: Record<string, { label: string; cls: string }> = {
+  pending: { label: "처리 대기", cls: "bg-[#fdf3e3] text-[#a8763a]" },
+  completed: { label: "완료", cls: "bg-[#e8f3e6] text-[#3f7a35]" },
+  cancelled: { label: "취소", cls: "bg-[#fdeaea] text-[#c62828]" },
+};
+const ITEM_TYPE_LABEL: Record<string, string> = { role: "역할", perk: "권한", physical: "기프트카드" };
 
 export default function MyInfoPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState("inquiry");
 
   // ── ARCTIC 연동 ──────────────────────────────
-  //    공개 전에는 관리자만 볼 수 있으므로, 탭 자체를 숨긴다
+  //    공개 전에는 관리자만 볼 수 있으므로, 구역 자체를 숨긴다
   const [shopPublic, setShopPublic] = useState(false);
   const [shopOrders, setShopOrders] = useState<any[]>([]);
   const [shopWallet, setShopWallet] = useState<any[]>([]);
@@ -52,6 +59,22 @@ export default function MyInfoPage() {
   const shopCartRows = shopCart
     .map((c) => ({ ...c, item: shopItems.find((i) => i._id === c.itemId) }))
     .filter((r): r is { itemId: string; qty: number; item: any } => !!r.item);
+  const shopCartTotal = shopCartRows.reduce((n, r) => n + salePrice(r.item) * r.qty, 0);
+  const shopSpent = shopOrders.filter((o) => o.status !== "cancelled").reduce((n, o) => n + (o.price || 0), 0);
+
+  // 찜·장바구니는 브라우저에 보관하므로 화면과 저장소를 함께 갱신한다
+  const removeShopWish = (id: string) =>
+    setShopWish((prev) => {
+      const next = prev.filter((x) => x !== id);
+      try { localStorage.setItem("iglooShopWish", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  const removeShopCart = (id: string) =>
+    setShopCart((prev) => {
+      const next = prev.filter((c) => c.itemId !== id);
+      try { localStorage.setItem("iglooShopCart", JSON.stringify(next)); } catch {}
+      return next;
+    });
 
   // 쿠폰 코드 등록
   const [couponInput, setCouponInput] = useState("");
@@ -102,26 +125,40 @@ export default function MyInfoPage() {
     } catch {}
   }, []);
 
+  // 내 XP·레벨은 ARCTIC과 무관한 기본 정보라 항상 읽는다
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    fetch("/api/xp/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((me) => { if (me?.success) setShopMe(me.data); })
+      .catch(() => {});
+  }, [status]);
+
+  // ARCTIC 데이터는 볼 수 있는 사람에게만 요청한다
   useEffect(() => {
     if (status !== "authenticated" || !canSeeShop) return;
     Promise.all([
       fetch("/api/shop/purchase", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/shop/my-coupons", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/shop/items", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
-    ]).then(([ord, cou, it, me]) => {
+    ]).then(([ord, cou, it]) => {
       setShopOrders(Array.isArray(ord?.data) ? ord.data : []);
       setShopWallet(Array.isArray(cou?.data) ? cou.data : []);
       setShopItems(Array.isArray(it?.data) ? it.data : []);
-      if (me?.success) setShopMe(me.data);
     });
   }, [status, canSeeShop]);
 
-  // 📌 URL 쿼리로 탭 직접 진입 지원 (/profile?tab=booster)
+  // 📌 예전 탭 링크(/profile?tab=inquiry)로 들어와도 해당 구역까지 내려준다
   useEffect(() => {
     const tabParam = searchParams.get("tab");
-    if (tabParam) setActiveTab(tabParam);
-  }, [searchParams]);
+    if (!tabParam) return;
+    if (tabParam === "booster") { router.replace("/profile/booster"); return; }
+    const t = setTimeout(() => {
+      document.getElementById("sec-" + tabParam)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchParams, router]);
+
   const [inquiryFilter, setInquiryFilter] = useState("all");
   const [recruitFilter, setRecruitFilter] = useState("all");
   const [fetchedInquiries, setFetchedInquiries] = useState<any[]>([]);
@@ -179,9 +216,8 @@ export default function MyInfoPage() {
   };
   useEffect(() => { loadNotifications(); }, [status, session]);
 
-  // 📌 알림함 탭 진입 시 안 읽은 알림을 읽음 처리
+  // 📌 내 정보에 들어오면 안 읽은 알림을 읽음 처리 (알림함이 이 페이지에 펼쳐져 있다)
   useEffect(() => {
-    if (activeTab !== "notice") return;
     if (status !== "authenticated" || !session?.user?.name) return;
     if (!notifications.some((n) => !n.read)) return;
     const uid = (session.user as any)?.id;
@@ -192,7 +228,7 @@ export default function MyInfoPage() {
     })
       .then(() => setNotifications((prev) => prev.map((n) => ({ ...n, read: true }))))
       .catch(() => {});
-  }, [activeTab, notifications, status, session]);
+  }, [notifications, status, session]);
 
   const executeCancelApply = async () => {
     if (!cancelConfirmId) return;
@@ -211,12 +247,12 @@ export default function MyInfoPage() {
     }
   };
 
-  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
+  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-[#8a8a8a]">로딩 중...</div>;
   if (status === "unauthenticated") {
     return (
-      <main className="w-full max-w-md mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center animate-in fade-in duration-500">
-        <h2 className="text-2xl font-black text-white mb-4 tracking-tight">로그인 필요</h2>
-        <p className="text-gray-400 mb-8 text-sm">내 정보를 확인하시려면 로그인이 필요합니다.</p>
+      <main className="w-full bg-[#f5f3f0] text-[#131313] flex-1 flex flex-col justify-center items-center px-6 py-40 text-center animate-in fade-in duration-500 break-keep">
+        <h2 className="text-2xl font-black text-[#131313] mb-4 tracking-tight">로그인 필요</h2>
+        <p className="text-[#5a5a5a] mb-8 text-sm">내 정보를 확인하시려면 로그인이 필요합니다.</p>
         <button onClick={() => signIn("discord", { callbackUrl: "/profile" })} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">
           Discord 로그인
         </button>
@@ -237,43 +273,69 @@ export default function MyInfoPage() {
   });
 
   return (
-    <main className="w-full flex-1 flex flex-col relative">
+    <main className="w-full flex-1 flex flex-col relative bg-[#f5f3f0] text-[#131313]">
       <LuxStyles />
-      <ScrollProgress />
 
-      {/* ── PROFILE HERO ── */}
-      <section className="relative w-full pt-16 pb-10 md:pt-20 md:pb-12 px-6">
-        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
-        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
-        <div className="max-w-4xl mx-auto relative z-10">
-          <Reveal>
-            <div className="flex items-center gap-3 mb-6">
-              <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">My Account</span>
+      {/* ── 프로필 카드 (ARCTIC 마이페이지와 같은 구성) ── */}
+      <section className="w-full max-w-4xl mx-auto px-6 pt-10 pb-2">
+        <div className="flex items-center gap-3 mb-5">
+          <span className="w-8 h-px bg-[#e91e3f]"></span>
+          <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">My Account</span>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6">
+          <div className="flex items-center gap-4 md:gap-5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={session?.user?.image || ""} alt="" className={`w-16 h-16 md:w-[72px] md:h-[72px] rounded-full bg-[#e2e0dc] shrink-0 ${isBooster ? "ring-2 ring-[#e91e3f]/50 ring-offset-2 ring-offset-white" : ""}`} />
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight truncate flex items-center gap-2">
+                {session?.user?.name}
+                {isBooster && <span className="text-[10px] bg-[#e91e3f] text-white px-2 py-0.5 rounded shrink-0">BOOSTER</span>}
+              </h1>
+              <p className="text-[12px] font-bold text-[#8a8a8a] mt-0.5">Lv.{shopMe?.level ?? 0} · 서버 #{shopMe?.rank ?? "—"}</p>
             </div>
-            <div className="flex items-center gap-5 md:gap-6">
-              <div className="relative shrink-0">
-                {isBooster && <div className="absolute -inset-2 bg-[#e91e3f]/15 blur-xl rounded-full pointer-events-none"></div>}
-                <img src={session?.user?.image || ""} alt="Profile" className={`relative w-20 h-20 md:w-24 md:h-24 rounded-full bg-gray-800 border border-white/10 shadow-xl ${isBooster ? 'ring-2 ring-[#e91e3f]/60 ring-offset-4 ring-offset-[#090909]' : ''}`} />
+            <div className="ml-auto text-right shrink-0 hidden sm:block">
+              <div className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase mb-1">Balance</div>
+              <div className="text-2xl font-black tracking-tight tabular-nums text-[#131313] leading-none">
+                {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-[#e91e3f] ml-1">XP</span>
               </div>
-          <div>
-            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-2 flex items-center gap-2.5">
-              {session?.user?.name}
-              {isBooster && <span className="text-[10px] bg-[#e91e3f]/20 text-[#e91e3f] px-2 py-0.5 rounded border border-[#e91e3f]/30">BOOSTER</span>}
-            </h1>
-            <div className="flex items-center gap-2 flex-wrap">
+            </div>
+          </div>
+
+          {/* 모바일 보유 XP */}
+          <div className="sm:hidden mt-4 flex items-baseline justify-between">
+            <span className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase">Balance</span>
+            <span className="text-xl font-black tracking-tight tabular-nums text-[#131313] leading-none">
+              {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-[#e91e3f] ml-1">XP</span>
+            </span>
+          </div>
+
+          {shopMe?.levelProgress?.required > 0 && (
+            <div className="mt-5">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-[#8a8a8a]">다음 레벨까지</span>
+                <span className="text-[11px] font-bold text-[#4b4b4b] tabular-nums">{shopMe.levelProgress.needToNext.toLocaleString()} XP</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-[#eceae6] overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] transition-[width] duration-700"
+                  style={{ width: `${Math.min(100, Math.round((shopMe.levelProgress.current / shopMe.levelProgress.required) * 100))}%` }}></div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-5 pt-5 border-t border-[#ececea] flex items-center gap-2 flex-wrap">
               {isVerified && hasScrimRole ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-[#e8f3e6] text-[#3f7a35] border border-[#cfe5cb]">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>
                   인증
                 </span>
               ) : isVerified ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-[#fdf3e3] text-[#a8763a] border border-[#f0dcc0]">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" /></svg>
                   일부 인증
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-[#fdeaea] text-[#c62828] border border-[#f5cdcd]">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-1.72 6.97a.75.75 0 10-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 101.06 1.06L12 13.06l1.72 1.72a.75.75 0 101.06-1.06L13.06 12l1.72-1.72a.75.75 0 10-1.06-1.06L12 10.94l-1.72-1.72z" clipRule="evenodd" /></svg>
                   미인증
                 </span>
@@ -284,18 +346,31 @@ export default function MyInfoPage() {
                   SERVER BOOSTER
                 </span>
               )}
-            </div>
           </div>
+
+          {/* ARCTIC 요약 — 볼 수 있는 사람에게만 */}
+          {canSeeShop && (
+            <div className="grid grid-cols-3 mt-5 pt-5 border-t border-[#ececea] divide-x divide-[#ececea]">
+              {[
+                { n: shopOrders.length, l: "전체 주문" },
+                { n: shopPendingCount, l: "처리 대기", accent: shopPendingCount > 0 },
+                { n: shopSpent, l: "사용한 XP" },
+              ].map((s, i) => (
+                <div key={i} className="text-center break-keep">
+                  <div className={`text-lg font-black tabular-nums ${s.accent ? "text-[#e91e3f]" : "text-[#131313]"}`}>{s.n.toLocaleString()}</div>
+                  <div className="text-[10px] font-bold tracking-[0.12em] text-[#8a8a8a] mt-0.5 uppercase">{s.l}</div>
+                </div>
+              ))}
             </div>
-          </Reveal>
+          )}
         </div>
       </section>
 
-      <div className="w-full max-w-4xl mx-auto px-6 pb-16 flex-1 flex flex-col border-t border-white/5 pt-10">
+      <div className="w-full max-w-4xl mx-auto px-6 pt-8 pb-16 flex-1 flex flex-col">
 
       {/* 내전 채널 이용 권한 획득 - 고정형 배너 */}
       {isVerified && !hasScrimRole && (
-        <div className="relative w-full mb-12 rounded-xl border border-white/10 bg-[#161616] flex items-center justify-between gap-4 px-5 py-4">
+        <div className="relative w-full mb-12 rounded-xl border border-[#e2e0dc] bg-white flex items-center justify-between gap-4 px-5 py-4">
           <div className="flex items-center gap-3 min-w-0">
             <span className="hidden sm:flex shrink-0 items-center justify-center w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f]">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-[18px] h-[18px]">
@@ -303,8 +378,8 @@ export default function MyInfoPage() {
               </svg>
             </span>
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-white mb-0.5 break-keep">내전 채널 이용 권한 획득</h3>
-              <p className="text-xs text-gray-500 leading-relaxed break-keep">운영 정책에 동의하고 내전 채널 입장 권한을 획득해 주세요.</p>
+              <h3 className="text-sm font-bold text-[#131313] mb-0.5 break-keep">내전 채널 이용 권한 획득</h3>
+              <p className="text-xs text-[#8a8a8a] leading-relaxed break-keep">운영 정책에 동의하고 내전 채널 입장 권한을 획득해 주세요.</p>
             </div>
           </div>
           <button
@@ -316,102 +391,105 @@ export default function MyInfoPage() {
         </div>
       )}
 
-      <div className="flex gap-8 border-b border-white/10 mb-8 overflow-x-auto scrollbar-hide">
-        {/* 📌 ARCTIC 탭은 공개 전에는 관리자에게만 (비공개 상점이 노출되면 안 된다) */}
-        {["notice", "inquiry", "recruit", "booster", ...(canSeeShop ? ["arctic"] : [])].map((tab) => {
-          const unread = tab === "notice" ? notifications.filter((n) => !n.read).length : tab === "arctic" ? shopPendingCount : 0;
-          const label = tab === "notice" ? "알림함" : tab === "inquiry" ? "1:1 문의 내역" : tab === "recruit" ? "구인 지원 목록" : tab === "booster" ? "서버 부스터 혜택" : "ARCTIC";
-          return (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-4 text-sm md:text-base font-bold whitespace-nowrap transition-colors relative outline-none flex items-center gap-1.5 ${activeTab === tab ? "text-[#e91e3f]" : "text-gray-400 hover:text-white"}`}>
-              {label}
-              {unread > 0 && <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-black rounded-full bg-[#e91e3f] text-white">{unread}</span>}
-              {activeTab === tab && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#e91e3f]" />}
-            </button>
-          );
-        })}
-      </div>
-
-      <div>
-        {activeTab === "notice" && (
-          <div className="animate-in fade-in duration-300">
+      {/* 📌 탭도 바로가기 바도 없이, 카드로 나란히 펼친다 */}
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* ═══ 알림함 ═══ */}
+        <section id="sec-notice" className="scroll-mt-32">
+          <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
+              <h2 className="text-sm font-black text-[#131313]">
+                알림함 {notifications.length > 0 && <span className="text-[#e91e3f]">{notifications.length}</span>}
+              </h2>
+            </div>
             {isDataLoading && notifications.length === 0 ? (
-              <p className="text-gray-600 text-sm py-12 text-center">데이터 로딩 중...</p>
+              <p className="text-[#a3a3a3] text-sm py-12 text-center">데이터 로딩 중...</p>
             ) : notifications.length === 0 ? (
-              <div className="text-center py-20 border border-dashed border-white/8 rounded-xl">
-                <p className="text-gray-500 text-sm mb-1">받은 통지가 없습니다.</p>
-                <p className="text-xs text-gray-700">운영팀이 보낸 경고·안내 등이 이곳에 도착합니다.</p>
+              <div className="text-center py-14 px-5 break-keep">
+                <p className="text-[#8a8a8a] text-sm mb-1">받은 통지가 없습니다.</p>
+                <p className="text-xs text-[#a3a3a3]">운영팀이 보낸 경고·안내 등이 이곳에 도착합니다.</p>
               </div>
             ) : (
-              <div className="border-y border-white/[0.07] divide-y divide-white/[0.07]">
+              <div className="divide-y divide-[#ececea] max-h-[420px] overflow-y-auto">
                 {notifications.map((n) => {
                   const badge = NOTI_TYPE_STYLES[n.type] || NOTI_TYPE_STYLES["일반"];
                   return (
-                    <button key={n._id} onClick={() => setSelectedNotif(n)} className="w-full text-left py-4 px-1 flex items-center gap-3.5 hover:bg-white/[0.02] transition-colors group outline-none">
+                    <button key={n._id} onClick={() => setSelectedNotif(n)} className="w-full text-left py-3.5 px-5 flex items-center gap-3.5 hover:bg-[#faf9f7] transition-colors group outline-none">
                       <span className={`shrink-0 text-[10px] font-black tracking-wider border px-2 py-1 rounded ${badge}`}>{n.type}</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] shrink-0 shadow-[0_0_6px_rgba(233,30,63,0.8)]"></span>}
-                          <h4 className={`text-sm font-bold truncate ${n.read ? "text-gray-200" : "text-white"}`}>{n.title}</h4>
+                          <h4 className={`text-sm font-bold truncate ${n.read ? "text-[#131313]" : "text-[#131313]"}`}>{n.title}</h4>
                         </div>
-                        <p className="text-xs text-gray-500 truncate mt-0.5">{stripMd(n.content)}</p>
+                        <p className="text-xs text-[#8a8a8a] truncate mt-0.5">{stripMd(n.content)}</p>
                       </div>
-                      <span className="text-[11px] text-gray-600 shrink-0 hidden sm:block tabular-nums">{n.createdAt ? new Date(n.createdAt).toLocaleDateString("ko-KR") : ""}</span>
-                      <svg className="w-4 h-4 text-gray-700 group-hover:text-gray-400 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                      <span className="text-[11px] text-[#a3a3a3] shrink-0 hidden sm:block tabular-nums">{n.createdAt ? new Date(n.createdAt).toLocaleDateString("ko-KR") : ""}</span>
+                      <svg className="w-4 h-4 text-[#a3a3a3] group-hover:text-[#5a5a5a] shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                     </button>
                   );
                 })}
               </div>
             )}
           </div>
-        )}
+        </section>
 
-        {activeTab === "inquiry" && (
-          <div className="space-y-5 animate-in fade-in duration-300">
-            <div className="flex gap-1.5">
-              {[{ label: "전체", key: "all" }, { label: "접수 중", key: "pending" }, { label: "답변 완료", key: "completed" }].map(f => (
-                <button key={f.key} onClick={() => setInquiryFilter(f.key)} className={`px-3.5 py-1.5 rounded-md text-xs font-bold border transition-colors ${inquiryFilter === f.key ? "bg-white/10 text-white border-white/20" : "bg-transparent border-white/8 text-gray-500 hover:border-white/20 hover:text-gray-300"}`}>{f.label}</button>
-              ))}
-            </div>
-            {isDataLoading ? <p className="text-gray-600 text-sm py-12 text-center">데이터 로딩 중...</p> : filteredInquiries.length === 0 ? (
-              <div className="text-center py-20 border border-dashed border-white/8 rounded-xl">
-                <p className="text-gray-500 text-sm">등록된 문의 내역이 없습니다.</p>
+        {/* ═══ 1:1 문의 내역 ═══ */}
+        <section id="sec-inquiry" className="scroll-mt-32">
+          <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between gap-3 flex-wrap">
+              <h2 className="text-sm font-black text-[#131313]">
+                1:1 문의 내역 {fetchedInquiries.length > 0 && <span className="text-[#e91e3f]">{fetchedInquiries.length}</span>}
+              </h2>
+              <div className="flex gap-1.5">
+                {[{ label: "전체", key: "all" }, { label: "접수 중", key: "pending" }, { label: "답변 완료", key: "completed" }].map(f => (
+                  <button key={f.key} onClick={() => setInquiryFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${inquiryFilter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-white border-[#e2e0dc] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
+                ))}
               </div>
+            </div>
+            {isDataLoading ? <p className="text-[#a3a3a3] text-sm py-12 text-center">데이터 로딩 중...</p> : filteredInquiries.length === 0 ? (
+              <p className="px-5 py-14 text-center text-sm text-[#8a8a8a] break-keep">등록된 문의 내역이 없습니다.</p>
             ) : (
-              <div className="border-y border-white/[0.07] divide-y divide-white/[0.07]">
+              <div className="divide-y divide-[#ececea] max-h-[420px] overflow-y-auto">
                 {filteredInquiries.map(inq => (
-                  <button key={inq.id} onClick={() => setSelectedInquiry(inq)} className="w-full text-left py-4 px-1 flex items-center gap-3.5 hover:bg-white/[0.02] transition-colors group outline-none">
-                    <span className={`shrink-0 text-[10px] font-black tracking-wider border px-2 py-1 rounded ${inq.status === '접수 중' ? 'bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25' : 'bg-sky-500/10 text-sky-400 border-sky-500/25'}`}>{inq.status}</span>
+                  <button key={inq.id} onClick={() => setSelectedInquiry(inq)} className="w-full text-left py-3.5 px-5 flex items-center gap-3.5 hover:bg-[#faf9f7] transition-colors group outline-none">
+                    <span className={`shrink-0 text-[10px] font-black tracking-wider border px-2 py-1 rounded ${inq.status === '접수 중' ? 'bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25' : 'bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]'}`}>{inq.status}</span>
                     <div className="min-w-0 flex-1">
-                      <h4 className="text-sm font-bold text-white truncate"><span className="text-gray-500 font-medium mr-1.5">[{inq.type}]</span>{inq.title}</h4>
-                      <p className="text-xs text-gray-600 mt-0.5 tabular-nums">{inq.date}</p>
+                      <h4 className="text-sm font-bold text-[#131313] truncate"><span className="text-[#8a8a8a] font-medium mr-1.5">[{inq.type}]</span>{inq.title}</h4>
+                      <p className="text-xs text-[#a3a3a3] mt-0.5 tabular-nums">{inq.date}</p>
                     </div>
-                    <svg className="w-4 h-4 text-gray-700 group-hover:text-gray-400 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                    <svg className="w-4 h-4 text-[#a3a3a3] group-hover:text-[#5a5a5a] shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                   </button>
                 ))}
               </div>
             )}
           </div>
-        )}
-        
-        {activeTab === "recruit" && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="flex gap-2 mb-4">
-              {[{ label: "전체", key: "all" }, { label: "심사 중", key: "심사 중" }, { label: "합격", key: "합격" }, { label: "불합격", key: "불합격" }].map(f => (
-                <button key={f.key} onClick={() => setRecruitFilter(f.key)} className={`px-3.5 py-1.5 rounded-md text-xs font-bold border transition-colors ${recruitFilter === f.key ? "bg-white/10 text-white border-white/20" : "bg-transparent border-white/8 text-gray-500 hover:border-white/20 hover:text-gray-300"}`}>{f.label}</button>
-              ))}
+        </section>
+
+        {/* ═══ 구인 지원 목록 ═══ */}
+        <section id="sec-recruit" className="scroll-mt-32">
+          <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between gap-3 flex-wrap">
+              <h2 className="text-sm font-black text-[#131313]">
+                구인 지원 목록 {fetchedRecruits.length > 0 && <span className="text-[#e91e3f]">{fetchedRecruits.length}</span>}
+              </h2>
+              <div className="flex gap-1.5 flex-wrap">
+                {[{ label: "전체", key: "all" }, { label: "심사 중", key: "심사 중" }, { label: "합격", key: "합격" }, { label: "불합격", key: "불합격" }].map(f => (
+                  <button key={f.key} onClick={() => setRecruitFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${recruitFilter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-white border-[#e2e0dc] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
+                ))}
+              </div>
             </div>
-            <div className="border-t border-white/5 divide-y divide-white/5">
-              {isDataLoading ? <p className="text-gray-600 text-sm py-12 text-center">데이터 로딩 중...</p> : filteredRecruits.length === 0 ? <p className="text-gray-600 text-sm py-12 text-center">해당 카테고리의 지원 내역이 없습니다.</p> : (
+            <div className="divide-y divide-[#ececea] max-h-[420px] overflow-y-auto">
+              {isDataLoading ? <p className="text-[#a3a3a3] text-sm py-12 text-center">데이터 로딩 중...</p> : filteredRecruits.length === 0 ? <p className="text-[#8a8a8a] text-sm py-14 text-center break-keep">해당 조건의 지원 내역이 없습니다.</p> : (
                 filteredRecruits.map(rec => (
-                  <div key={rec.id} className="py-5 px-1 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/[0.01] transition-colors">
+                  <div key={rec.id} className="py-4 px-5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-[#faf9f7] transition-colors">
                     <div>
-                      <h4 className="text-base font-bold text-white mb-1">{rec.title}</h4>
-                      <p className="text-xs text-gray-500">분야: <span className="text-gray-300 font-medium">{rec.role}</span> | 일자: {rec.date}</p>
+                      <h4 className="text-base font-bold text-[#131313] mb-1">{rec.title}</h4>
+                      <p className="text-xs text-[#8a8a8a]">분야: <span className="text-[#4b4b4b] font-medium">{rec.role}</span> | 일자: {rec.date}</p>
                     </div>
                     <div className="flex gap-3 items-center">
-                      <span className={`text-xs font-bold px-3 py-1 rounded-full border ${rec.status === '합격' ? 'bg-green-500/10 text-green-400 border-green-500/20' : rec.status === '취소' || rec.status === '취소/반려' || rec.status === '불합격' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{rec.status}</span>
+                      <span className={`text-xs font-bold px-3 py-1 rounded-full border ${rec.status === '합격' ? 'bg-[#e8f3e6] text-[#3f7a35] border-[#cfe5cb]' : rec.status === '취소' || rec.status === '취소/반려' || rec.status === '불합격' ? 'bg-[#fdeaea] text-[#c62828] border-[#f5cdcd]' : 'bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]'}`}>{rec.status}</span>
                       {rec.status === "심사 중" && (
-                        <button onClick={() => setCancelConfirmId(rec.id)} className="text-xs font-bold px-3 py-1 bg-[#2a2a2a] text-white hover:bg-[#e91e3f] rounded-full transition-colors outline-none focus:outline-none">지원 취소</button>
+                        <button onClick={() => setCancelConfirmId(rec.id)} className="text-xs font-bold px-3 py-1 bg-[#eceae6] text-[#4b4b4b] hover:bg-[#e91e3f] hover:text-white rounded-full transition-colors outline-none focus:outline-none">지원 취소</button>
                       )}
                     </div>
                   </div>
@@ -419,374 +497,244 @@ export default function MyInfoPage() {
               )}
             </div>
           </div>
-        )}
+        </section>
 
-        {activeTab === "booster" && (
-          <div className="space-y-16 animate-in fade-in duration-300">
-            {/* 인트로 — 플랫 에디토리얼 + 임팩트 타이포 */}
-            <Reveal>
-            <div className="relative pt-2 overflow-hidden">
-              <div className="absolute -top-8 -right-4 text-[120px] md:text-[160px] font-black text-white/[0.025] leading-none select-none pointer-events-none tracking-tighter">BOOST</div>
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="w-8 h-px bg-[#e91e3f]"></span>
-                  <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Server Booster Program</span>
+        {/* ═══ 서버 부스터 혜택 — 분량이 커서 전용 페이지로 분리 ═══ */}
+        <section id="sec-booster" className="scroll-mt-32">
+          <Link href="/profile/booster"
+            className="group block bg-white rounded-2xl border border-[#e2e0dc] px-6 py-6 hover:border-[#a3a3a3] transition-colors">
+            <div className="flex items-center gap-4">
+              <span className="w-11 h-11 rounded-xl bg-[#ff41cf]/10 text-[#ff41cf] flex items-center justify-center shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M8.684 2.687C8.886 1.148 10.379.5 11.77.5h.46c1.39 0 2.884.648 3.086 2.187l.272 1.95h3.6c1.39 0 2.643 1.253 2.643 2.643v.31c0 .844-.224 1.668-.648 2.392l-1.276 2.037a3.5 3.5 0 01-.921 1.023V19.5a2.5 2.5 0 01-2.5 2.5h-8a2.5 2.5 0 01-2.5-2.5V10.979a3.5 3.5 0 01-.921-1.023L2.204 7.92A3.5 3.5 0 011.556 5.527v-.31C1.556 3.822 2.809 2.57 4.199 2.57h3.6l.272-1.95zM9.5 16a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm6 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" /></svg>
+              </span>
+              <div className="min-w-0 flex-1 break-keep">
+                <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
+                  서버 부스터 혜택
+                  {isServerBooster && <span className="text-[10px] bg-[#e91e3f] text-white px-2 py-0.5 rounded">적용 중</span>}
+                </h2>
+                <p className="text-xs text-[#8a8a8a] mt-1">전용 역할·XP 보너스·누적 개월 혜택을 확인해 주세요.</p>
+              </div>
+              <svg className="w-4 h-4 text-[#a3a3a3] group-hover:text-[#e91e3f] shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+            </div>
+          </Link>
+        </section>
+        </div>
+
+        {/* ═══ ARCTIC — 공개 전에는 관리자만 볼 수 있다 ═══ */}
+        {canSeeShop && (
+          <section id="sec-arctic" className="scroll-mt-32 space-y-6">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                <span className="w-8 h-px bg-[#e91e3f]"></span>
+                <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">ARCTIC</span>
+                {!shopPublic && (
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-[#e91e3f]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>비공개
+                  </span>
+                )}
+              </div>
+              <Link href="/shop" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">ARCTIC 둘러보기</Link>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 주문 내역 */}
+              <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+                <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
+                  <h2 className="text-sm font-black text-[#131313]">주문 내역 {shopOrders.length > 0 && <span className="text-[#e91e3f]">{shopOrders.length}</span>}</h2>
+                  {shopOrders.length > 0 && (
+                    <Link href="/shop/orders" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">자세히 보기</Link>
+                  )}
                 </div>
-                <h3 className="text-3xl md:text-5xl font-black tracking-tighter mb-4 leading-none">
-                  <span className="text-white">SERVER </span><span className="lux-shimmer">BOOSTER</span>
-                </h3>
-                <p className="text-sm md:text-base text-gray-400 leading-relaxed max-w-xl">서버의 환경 개선을 위한 직접적인 후원 시스템입니다.<br className="hidden md:block" />본 서버의 성장을 지원해 주시는 유저분들께 깊은 감사를 드립니다.</p>
-              </div>
-            </div>
-            </Reveal>
-
-            {/* 01. 전용 기능 권한 — 헤어라인 리스트 */}
-            <Reveal>
-            <div>
-              <div className="flex items-baseline gap-4 mb-2">
-                <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
-                <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
-              </div>
-              <h4 className="text-xl md:text-2xl font-black text-white tracking-tight mb-2">SERVER 전용 기능 권한</h4>
-              <div className="divide-y divide-white/[0.06]">
-                {[
-                  { t: "전용 역할 및 뱃지 지급", d: "@SERVER BOOSTER 고유 역할 부여 및 차별화된 프로필 전용 특수 배지 자동 장착", note: "" },
-                  { t: "사용자 관리 권한 제공", d: "서버 내 일부 사용자 관리 부가 기능 상시 이용 가능", note: "" },
-                  { t: "권한 제한 채널 이용", d: "별도의 권한 구매 없이 제한된 채널 이용 가능!", note: "* 권한이 없을 경우, ARCTIC에서 관련 권한 상품을 구매해야 합니다." },
-                  { t: "슬로우 모드 제한 해제", d: "채팅 대기 시간 제한 없이 연속 채팅 가능!", note: "* 권한이 없을 경우, ARCTIC에서 관련 권한 상품을 구매해야 합니다." },
-                ].map((item, idx) => (
-                  <div key={idx} className="py-5 flex flex-col md:flex-row md:items-baseline gap-1.5 md:gap-8 group">
-                    <p className="font-bold text-white text-sm md:w-52 shrink-0 group-hover:text-[#ff5c77] transition-colors">{item.t}</p>
-                    <div className="min-w-0">
-                      <p className="text-xs md:text-[13px] text-gray-500 leading-relaxed">{item.d}</p>
-                      {item.note && <p className="text-[10px] text-gray-600 mt-1">{item.note}</p>}
-                    </div>
+                {shopOrders.length === 0 ? (
+                  <p className="px-5 py-12 text-center text-xs text-[#8a8a8a] break-keep">아직 구매한 상품이 없습니다.</p>
+                ) : (
+                  <div className="divide-y divide-[#ececea] max-h-[320px] overflow-y-auto">
+                    {shopOrders.slice(0, 8).map((o) => {
+                      const meta = ORDER_STATUS[o.status] || ORDER_STATUS.pending;
+                      return (
+                        <div key={o._id} className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black shrink-0 ${meta.cls}`}>{meta.label}</span>
+                            <div className="min-w-0 flex-1">
+                              <Link href={`/shop/item/${o.itemId}`} className="block text-[13px] font-bold text-[#131313] truncate hover:text-[#e91e3f] transition-colors">{o.itemName}</Link>
+                              <p className="text-[10px] text-[#a3a3a3]">
+                                {ITEM_TYPE_LABEL[o.itemType] || "상품"} · {o.createdAt ? new Date(o.createdAt).toLocaleDateString("ko-KR") : ""}
+                              </p>
+                            </div>
+                            <span className={`text-[12px] font-black tabular-nums shrink-0 ${o.status === "cancelled" ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>
+                              -{(o.price || 0).toLocaleString()} XP
+                            </span>
+                          </div>
+                          {o.adminNote && <p className="mt-1.5 text-[10px] text-[#3f7a35] bg-[#e8f3e6] rounded px-2 py-1 break-keep">운영진 메모 · {o.adminNote}</p>}
+                          {o.error && <p className="mt-1.5 text-[10px] text-[#c62828] bg-[#fdeaea] rounded px-2 py-1 break-keep">지급 실패 · {o.error}</p>}
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
-            </div>
-            </Reveal>
-
-            {/* 02. XP 혜택 — 헤어라인 리스트 */}
-            <Reveal>
-            <div>
-              <div className="flex items-baseline gap-4 mb-2">
-                <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
-                <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
-              </div>
-              <h4 className="text-xl md:text-2xl font-black text-white tracking-tight mb-2">XP BOOSTER 경험치 혜택</h4>
-              <div className="divide-y divide-white/[0.06]">
-                {[
-                  { k: "WELCOME", t: "부스팅 시작 보너스 보상 지급!", big: "100,000", unit: "XP 즉시 지급", sub: "추가 부스팅: 개당 50,000 XP 추가 지급!" },
-                  { k: "PASSIVE", t: "경험치 획득 조건 충족 시 상시 추가!", big: "+2,000", unit: "XP 상시 지급", sub: "" },
-                  { k: "SHOP", t: "경험치샵 이용 전용 정산 혜택!", big: "35%", unit: "XP 환급", sub: "경험치샵 사용 금액 기준" },
-                  { k: "DAILY", t: "일일 출석체크 추가 보상!", big: "10,000", unit: "XP 보너스", sub: "일일 출석체크 시 추가 지급" },
-                ].map((row, idx) => (
-                  <div key={idx} className="py-6 flex flex-col md:flex-row md:justify-between md:items-center gap-3 md:gap-4 group">
-                    <div className="min-w-0 md:flex md:items-baseline md:gap-8">
-                      <p className="font-black text-white text-sm tracking-[0.2em] md:w-52 shrink-0 group-hover:text-[#ff5c77] transition-colors">{row.k}</p>
-                      <p className="text-xs text-gray-500 mt-0.5 md:mt-0">{row.t}</p>
-                    </div>
-                    <div className="md:text-right shrink-0">
-                      <p className="leading-none">
-                        <span className="text-2xl md:text-3xl font-black text-[#e91e3f] tracking-tighter">{row.big}</span>
-                        <span className="text-[11px] font-bold text-gray-400 ml-2">{row.unit}</span>
-                      </p>
-                      {row.sub && <p className="text-[11px] text-gray-600 mt-1.5">{row.sub}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            </Reveal>
-
-            {/* 03. RANK — 플랫 테이블 */}
-            <Reveal>
-            <div>
-              <div className="flex items-baseline gap-4 mb-2">
-                <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
-                <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
-              </div>
-              <h4 className="text-xl md:text-2xl font-black text-white tracking-tight mb-2">누적 유지 개월별 추가 혜택 (RANK)</h4>
-              <div className="divide-y divide-white/[0.06]">
-                {[{ r: "RANK 01", m: "1개월", x: "100,000" }, { r: "RANK 02", m: "3개월", x: "300,000" }, { r: "RANK 03", m: "6개월", x: "600,000" }, { r: "RANK 04", m: "9개월", x: "900,000" }, { r: "RANK 06", m: "15개월", x: "1,500,000" }, { r: "RANK 07", m: "18개월", x: "1,800,000" }, { r: "RANK 08", m: "21개월", x: "2,100,000" }, { r: "RANK 09", m: "24개월", x: "2,400,000" }].map((item, idx) => (
-                  <div key={idx} className="py-4 grid grid-cols-3 items-center text-sm group hover:bg-white/[0.015] transition-colors">
-                    <p className="text-[10px] font-black tracking-[0.2em] text-gray-600 uppercase group-hover:text-[#e91e3f] transition-colors">{item.r}</p>
-                    <p className="font-bold text-white text-center">{item.m}</p>
-                    <p className="text-right"><span className="text-base md:text-lg font-black text-[#e91e3f] tracking-tight">{item.x}</span><span className="text-[10px] font-bold text-gray-500 ml-1.5">XP</span></p>
-                  </div>
-                ))}
-              </div>
-
-              {/* 스페셜 블록 — 좌측 크림슨 라인만 남긴 플랫 구성 */}
-              <div className="mt-10 space-y-10">
-                {[
-                  { rank: "RANK 05 SPECIAL BLOCK", title: "🏆 12개월 연속 달성", items: [<>누적 보너스 <span className="text-white font-bold">1,200,000 XP</span> 즉시 수령</>, <><strong>@BOOSTER RANK 05</strong> 역할 추가 지급</>, <>상시 고정 버프 <strong>+2,000 XP</strong> 추가 영구 결합</>, <>일일 출석 시 <span className="text-white font-bold">2,000 XP</span> 영구 가산 누적 지급</>] },
-                  { rank: "RANK 10 SPECIAL BLOCK", title: "👑 24개월 연속 달성", items: [<>누적 보너스 <span className="text-white font-bold">2,400,000 XP</span> 즉시 수령</>, <><strong>@BOOSTER RANK 10</strong> 특수 역할 추가 지급</>, <>상시 고정 버프 <strong>+4,000 XP</strong> 추가 영구 결합</>, <>일일 출석 시 <span className="text-white font-bold">5,000 XP</span> 영구 가산 누적 지급</>] },
-                ].map((block, idx) => (
-                  <div key={idx} className="border-l-2 border-[#e91e3f] pl-5 md:pl-7">
-                    <p className="text-[9px] font-black tracking-[0.25em] text-[#e91e3f] mb-1.5 uppercase">{block.rank}</p>
-                    <p className="text-lg font-black text-white mb-3">{block.title}</p>
-                    <div className="text-xs md:text-[13px] text-gray-400 space-y-1.5">
-                      {block.items.map((it, i) => (
-                        <p key={i} className="flex gap-2.5"><span className="text-[#e91e3f] shrink-0">—</span><span>{it}</span></p>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            </Reveal>
-
-            <Reveal>
-            <div className="pt-6 border-t border-white/10 text-center">
-              <p className="text-sm text-gray-300 font-bold">📢 디스코드 서버 부스트 진행 시 시스템이 자동으로 감지하여 모든 혜택을 즉시 지급합니다!</p>
-            </div>
-            </Reveal>
-          </div>
-        )}
-
-        {/* ═══ ARCTIC — 공개 전에는 관리자만 ═══ */}
-        {activeTab === "arctic" && canSeeShop && (
-          <div className="space-y-10">
-            {/* 보유 XP */}
-            <Reveal>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div>
-                  <div className="text-[9px] font-black tracking-[0.3em] text-gray-500 uppercase mb-2">Balance</div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-[34px] leading-none font-black tracking-tighter text-white tabular-nums">
-                      {(shopMe?.xp ?? 0).toLocaleString()}
-                    </span>
-                    <span className="text-[12px] font-black tracking-[0.15em] text-[#e91e3f]">XP</span>
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-[9px] font-black tracking-[0.3em] text-gray-500 uppercase mb-2">Level</div>
-                  <div className="text-[22px] leading-none font-black text-white tabular-nums">{shopMe?.level ?? 0}</div>
-                </div>
-              </div>
-
-              {shopMe?.levelProgress?.required > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold text-gray-400">다음 레벨까지</span>
-                    <span className="text-[10px] font-bold text-gray-300 tabular-nums">
-                      {shopMe.levelProgress.needToNext.toLocaleString()} XP
-                    </span>
-                  </div>
-                  <div className="h-1 rounded-full bg-white/10 overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] transition-[width] duration-700"
-                      style={{ width: `${Math.min(100, Math.round((shopMe.levelProgress.current / shopMe.levelProgress.required) * 100))}%` }}></div>
-                  </div>
-                </div>
-              )}
-
-              <Link href="/shop"
-                className="mt-5 w-full inline-flex items-center justify-center py-3 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">
-                ARCTIC 둘러보기
-              </Link>
-              {!shopPublic && (
-                <p className="mt-3 text-[11px] font-bold text-[#e91e3f] text-center">비공개 상태입니다 · 관리자만 볼 수 있습니다</p>
-              )}
-            </div>
-            </Reveal>
-
-            {/* 주문 내역 */}
-            <Reveal>
-            <div>
-              <div className="flex items-baseline gap-4 mb-2">
-                <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
-                <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
-              </div>
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-lg md:text-xl font-black text-white tracking-tight">
-                  주문 내역 {shopOrders.length > 0 && <span className="text-[#e91e3f]">{shopOrders.length}</span>}
-                </h4>
-                {shopOrders.length > 0 && (
-                  <Link href="/shop/orders" className="text-[11px] font-bold text-[#e91e3f] hover:text-white transition-colors">자세히 보기</Link>
                 )}
               </div>
 
-              {shopOrders.length === 0 ? (
-                <p className="py-10 text-center text-xs text-gray-500 border-y border-white/[0.06] break-keep">아직 구매한 상품이 없습니다.</p>
-              ) : (
-                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
-                  {shopOrders.slice(0, 6).map((o) => (
-                    <div key={o._id} className="py-4 flex items-center gap-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black shrink-0 ${
-                        o.status === "completed" ? "bg-emerald-500/15 text-emerald-400"
-                        : o.status === "cancelled" ? "bg-red-500/15 text-red-400"
-                        : "bg-[#e91e3f] text-white"}`}>
-                        {o.status === "completed" ? "완료" : o.status === "cancelled" ? "취소" : "처리 대기"}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-bold text-white truncate">{o.itemName}</p>
-                        <p className="text-[10px] text-gray-500">
-                          {o.itemType === "physical" ? "기프트카드" : o.itemType === "perk" ? "권한" : "역할"} ·{" "}
-                          {new Date(o.createdAt).toLocaleDateString("ko-KR")}
-                        </p>
-                      </div>
-                      <span className={`text-[12px] font-black tabular-nums shrink-0 ${o.status === "cancelled" ? "text-gray-500 line-through" : "text-white"}`}>
-                        -{(o.price || 0).toLocaleString()} XP
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            </Reveal>
-
-            {/* 장바구니 · 찜 */}
-            <Reveal>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div>
-                <div className="flex items-baseline gap-4 mb-2">
-                  <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
-                  <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
-                </div>
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-lg font-black text-white tracking-tight">
+              {/* 장바구니 */}
+              <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+                <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
+                  <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
+                    <svg className="w-3.5 h-3.5 text-[#131313]" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                    </svg>
                     장바구니 {shopCartRows.length > 0 && <span className="text-[#e91e3f]">{shopCartRows.length}</span>}
-                  </h4>
+                  </h2>
                   {shopCartRows.length > 0 && (
-                    <Link href="/shop/cart" className="text-[11px] font-bold text-[#e91e3f] hover:text-white transition-colors">결제하러 가기</Link>
+                    <Link href="/shop/cart" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">자세히 보기</Link>
                   )}
                 </div>
                 {shopCartRows.length === 0 ? (
-                  <p className="py-8 text-center text-xs text-gray-500 border-y border-white/[0.06] break-keep">장바구니가 비어 있습니다.</p>
+                  <p className="px-5 py-12 text-center text-xs text-[#8a8a8a] break-keep">장바구니가 비어 있습니다.</p>
                 ) : (
-                  <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
-                    {shopCartRows.map((r) => (
-                      <Link key={r.itemId} href={`/shop/item/${r.item._id}`} className="py-3 flex items-center gap-3 group">
-                        <div className="w-10 h-10 rounded-lg bg-white/5 overflow-hidden shrink-0">
-                          {r.item.imageUrl && (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
-                          )}
+                  <>
+                    <div className="divide-y divide-[#ececea] max-h-[260px] overflow-y-auto">
+                      {shopCartRows.map((r) => (
+                        <div key={r.itemId} className="px-5 py-3.5 flex items-center gap-3">
+                          <Link href={`/shop/item/${r.item._id}`} className="w-11 h-11 rounded-lg bg-[#eceae6] overflow-hidden shrink-0">
+                            {r.item.imageUrl && (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
+                            )}
+                          </Link>
+                          <div className="min-w-0 flex-1">
+                            <Link href={`/shop/item/${r.item._id}`} className="block text-[13px] font-bold text-[#131313] truncate hover:text-[#e91e3f] transition-colors">{r.item.name}</Link>
+                            <p className="text-[11px] font-black text-[#131313] tabular-nums">{salePrice(r.item).toLocaleString()} XP</p>
+                          </div>
+                          <button onClick={() => removeShopCart(r.itemId)} className="px-3 py-1 text-[10px] font-bold text-[#a3a3a3] hover:text-[#c62828] transition-colors shrink-0">삭제</button>
                         </div>
-                        <span className="flex-1 min-w-0 text-[13px] font-bold text-gray-200 truncate group-hover:text-white transition-colors">{r.item.name}</span>
-                        <span className="text-[12px] font-black text-white tabular-nums shrink-0">{salePrice(r.item).toLocaleString()} XP</span>
-                      </Link>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                    <div className="px-5 py-4 border-t border-[#ececea] flex items-center justify-between gap-3">
+                      <div className="text-[12px]">
+                        <span className="text-[#5a5a5a]">합계 </span>
+                        <span className="font-black text-[#131313] tabular-nums">{shopCartTotal.toLocaleString()} XP</span>
+                      </div>
+                      <Link href="/shop/cart" className="px-5 py-2.5 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[12px] font-bold transition-colors shrink-0">결제하러 가기</Link>
+                    </div>
+                  </>
                 )}
               </div>
 
-              <div>
-                <div className="flex items-baseline gap-4 mb-2">
-                  <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
-                  <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+              {/* 찜한 상품 */}
+              <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+                <div className="px-5 py-4 border-b border-[#ececea]">
+                  <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
+                    <svg className="w-3.5 h-3.5 text-[#e91e3f]" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                    </svg>
+                    찜한 상품 {shopWishRows.length > 0 && <span className="text-[#e91e3f]">{shopWishRows.length}</span>}
+                  </h2>
                 </div>
-                <h4 className="text-lg font-black text-white tracking-tight mb-4">
-                  찜한 상품 {shopWishRows.length > 0 && <span className="text-[#e91e3f]">{shopWishRows.length}</span>}
-                </h4>
                 {shopWishRows.length === 0 ? (
-                  <p className="py-8 text-center text-xs text-gray-500 border-y border-white/[0.06] break-keep">찜한 상품이 없습니다.</p>
+                  <p className="px-5 py-12 text-center text-xs text-[#8a8a8a]">찜한 상품이 없습니다.</p>
                 ) : (
-                  <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                  <div className="divide-y divide-[#ececea] max-h-[320px] overflow-y-auto">
                     {shopWishRows.map((it) => (
-                      <Link key={it._id} href={`/shop/item/${it._id}`} className="py-3 flex items-center gap-3 group">
-                        <div className="w-10 h-10 rounded-lg bg-white/5 overflow-hidden shrink-0">
+                      <div key={it._id} className="px-5 py-3.5 flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-lg bg-[#eceae6] overflow-hidden shrink-0">
                           {it.imageUrl && (
                             /* eslint-disable-next-line @next/next/no-img-element */
                             <img src={it.imageUrl} alt="" className="w-full h-full object-cover" />
                           )}
                         </div>
-                        <span className="flex-1 min-w-0 text-[13px] font-bold text-gray-200 truncate group-hover:text-white transition-colors">{it.name}</span>
-                        <span className="text-[12px] font-black text-white tabular-nums shrink-0">{salePrice(it).toLocaleString()} XP</span>
-                      </Link>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-bold text-[#131313] truncate">{it.name}</p>
+                          <p className="text-[11px] font-black text-[#131313] tabular-nums">{salePrice(it).toLocaleString()} XP</p>
+                        </div>
+                        <div className="flex flex-col gap-1 shrink-0">
+                          <Link href={`/shop/item/${it._id}`} className="px-3 py-1.5 rounded-full text-[10px] font-bold bg-[#e91e3f] text-white hover:bg-[#d01634] transition-colors text-center">보러가기</Link>
+                          <button onClick={() => removeShopWish(it._id)} className="px-3 py-1 text-[10px] font-bold text-[#a3a3a3] hover:text-[#c62828] transition-colors">해제</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 보유 쿠폰 */}
+              <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+                <div className="px-5 py-4 border-b border-[#ececea]">
+                  <h2 className="text-sm font-black text-[#131313]">보유 쿠폰 {shopWallet.length > 0 && <span className="text-[#e91e3f]">{shopWallet.length}</span>}</h2>
+                </div>
+
+                {/* 쿠폰 코드 등록 — 보상형 코드도 이곳에서 사용한다 */}
+                <div className="px-5 pt-4 pb-3 border-b border-[#ececea]">
+                  <div className="flex gap-2">
+                    <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") registerCoupon(); }}
+                      placeholder="쿠폰 코드 입력"
+                      className="flex-1 min-w-0 bg-white border border-[#e2e0dc] rounded-lg px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
+                    <button onClick={registerCoupon} disabled={!couponInput.trim() || isRegisteringCoupon}
+                      className="px-4 py-2.5 rounded-lg bg-[#131313] hover:bg-black text-white text-[12px] font-bold disabled:opacity-40 transition-colors shrink-0">
+                      {isRegisteringCoupon ? "확인" : "등록"}
+                    </button>
+                  </div>
+                  {couponMsg && (
+                    <p className={`mt-2 text-[11px] font-bold break-keep ${couponMsg.ok ? "text-[#3f7a35]" : "text-[#c62828]"}`}>{couponMsg.text}</p>
+                  )}
+                </div>
+
+                {shopWallet.length === 0 ? (
+                  <p className="px-5 py-12 text-center text-xs text-[#8a8a8a]">보유한 쿠폰이 없습니다.</p>
+                ) : (
+                  <div className="divide-y divide-[#ececea] max-h-[280px] overflow-y-auto">
+                    {shopWallet.map((w) => (
+                      <div key={w.id} className="px-5 py-3.5 flex items-center gap-3">
+                        <span className="w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
+                          <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                          </svg>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-bold text-[#131313] truncate">{w.name}</p>
+                          <p className="text-[10px] text-[#8a8a8a] break-keep">
+                            {w.type === "percent" ? `${w.value}% 할인` : `${w.value.toLocaleString()} XP 할인`}
+                            {w.minTotal > 0 && ` · ${w.minTotal.toLocaleString()} XP 이상`}
+                          </p>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
             </div>
-            </Reveal>
-
-            {/* 보유 쿠폰 */}
-            <Reveal>
-            <div>
-              <div className="flex items-baseline gap-4 mb-2">
-                <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">04</span>
-                <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
-              </div>
-              <h4 className="text-lg md:text-xl font-black text-white tracking-tight mb-4">
-                보유 쿠폰 {shopWallet.length > 0 && <span className="text-[#e91e3f]">{shopWallet.length}</span>}
-              </h4>
-
-              {/* 쿠폰 코드 등록 */}
-              <div className="flex gap-2 mb-4">
-                <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") registerCoupon(); }}
-                  placeholder="쿠폰 코드 입력"
-                  className="flex-1 min-w-0 bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-gray-500" />
-                <button onClick={registerCoupon} disabled={!couponInput.trim() || isRegisteringCoupon}
-                  className="px-5 py-3 rounded-lg bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 text-white text-[13px] font-bold transition-colors shrink-0">
-                  {isRegisteringCoupon ? "확인" : "등록"}
-                </button>
-              </div>
-              {couponMsg && (
-                <p className={`mb-4 text-[11px] font-bold ${couponMsg.ok ? "text-emerald-400" : "text-red-400"}`}>{couponMsg.text}</p>
-              )}
-
-              {shopWallet.length === 0 ? (
-                <p className="py-10 text-center text-xs text-gray-500 border-y border-white/[0.06] break-keep">보유한 쿠폰이 없습니다.</p>
-              ) : (
-                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
-                  {shopWallet.map((w) => (
-                    <div key={w.id} className="py-4 flex items-center gap-3">
-                      <span className="w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
-                        <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
-                        </svg>
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-bold text-white truncate">{w.name}</p>
-                        <p className="text-[10px] text-gray-500 break-keep">
-                          {w.type === "percent" ? `${w.value}% 할인` : `${w.value.toLocaleString()} XP 할인`}
-                          {w.minTotal > 0 && ` · ${w.minTotal.toLocaleString()} XP 이상`}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            </Reveal>
-          </div>
+          </section>
         )}
       </div>
 
       {/* 📌 통지 상세 모달 (사무적 통지서) */}
       {selectedNotif && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setSelectedNotif(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
-              <span className="text-[10px] font-black tracking-[0.3em] text-gray-500 uppercase">Official Notice · 운영팀 통지</span>
-              <button onClick={() => setSelectedNotif(null)} className="p-1.5 -mr-1.5 text-gray-500 hover:text-white rounded-md hover:bg-white/5 transition-colors outline-none">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#131313]/45 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setSelectedNotif(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#e2e0dc] rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-[#ececea] bg-[#faf9f7] shrink-0">
+              <span className="text-[10px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase">Official Notice · 운영팀 통지</span>
+              <button onClick={() => setSelectedNotif(null)} className="p-1.5 -mr-1.5 text-[#8a8a8a] hover:text-[#131313] rounded-md hover:bg-[#f5f3f0] transition-colors outline-none">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
             <div className="p-6 md:p-7 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden">
               <div className="flex items-center gap-2 mb-4">
                 <span className={`text-[10px] font-black tracking-wider border px-2 py-1 rounded ${NOTI_TYPE_STYLES[selectedNotif.type] || NOTI_TYPE_STYLES["일반"]}`}>{selectedNotif.type}</span>
-                <span className="ml-auto text-[11px] text-gray-600 tabular-nums">{selectedNotif.createdAt ? new Date(selectedNotif.createdAt).toLocaleString("ko-KR") : ""}</span>
+                <span className="ml-auto text-[11px] text-[#a3a3a3] tabular-nums">{selectedNotif.createdAt ? new Date(selectedNotif.createdAt).toLocaleString("ko-KR") : ""}</span>
               </div>
-              <h3 className="text-lg md:text-xl font-bold text-white break-keep leading-snug mb-5">{selectedNotif.title}</h3>
+              <h3 className="text-lg md:text-xl font-bold text-[#131313] break-keep leading-snug mb-5">{selectedNotif.title}</h3>
 
-              <div className="rounded-lg border border-white/8 bg-white/[0.02] divide-y divide-white/[0.06] mb-6">
+              <div className="rounded-lg border border-[#ececea] bg-white divide-y divide-[#ececea] mb-6">
                 <div className="flex items-center justify-between px-4 py-2.5 text-xs">
-                  <span className="text-gray-500 font-bold">수신</span>
-                  <span className="text-gray-300 font-bold">{session?.user?.name}</span>
+                  <span className="text-[#8a8a8a] font-bold">수신</span>
+                  <span className="text-[#4b4b4b] font-bold">{session?.user?.name}</span>
                 </div>
                 <div className="flex items-center justify-between px-4 py-2.5 text-xs">
-                  <span className="text-gray-500 font-bold">발신</span>
-                  <span className="text-gray-300 font-bold">고급 이글루 운영팀{selectedNotif.sentBy ? ` (${selectedNotif.sentBy})` : ""}</span>
+                  <span className="text-[#8a8a8a] font-bold">발신</span>
+                  <span className="text-[#4b4b4b] font-bold">고급 이글루 운영팀{selectedNotif.sentBy ? ` (${selectedNotif.sentBy})` : ""}</span>
                 </div>
               </div>
 
-              <div className="text-sm text-gray-300 leading-relaxed break-keep">
+              <div className="text-sm text-[#4b4b4b] leading-relaxed break-keep">
                 <RenderFormattedText text={selectedNotif.content} />
               </div>
             </div>
@@ -796,37 +744,37 @@ export default function MyInfoPage() {
 
       {/* 📌 문의 상세 모달 (사무적) */}
       {selectedInquiry && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setSelectedInquiry(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full max-w-2xl max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
-              <span className="text-[10px] font-black tracking-[0.3em] text-gray-500 uppercase">1:1 문의 내역</span>
-              <button onClick={() => setSelectedInquiry(null)} className="p-1.5 -mr-1.5 text-gray-500 hover:text-white rounded-md hover:bg-white/5 transition-colors outline-none">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#131313]/45 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setSelectedInquiry(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#e2e0dc] rounded-t-2xl sm:rounded-2xl w-full max-w-2xl max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-[#ececea] bg-[#faf9f7] shrink-0">
+              <span className="text-[10px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase">1:1 문의 내역</span>
+              <button onClick={() => setSelectedInquiry(null)} className="p-1.5 -mr-1.5 text-[#8a8a8a] hover:text-[#131313] rounded-md hover:bg-[#f5f3f0] transition-colors outline-none">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
             <div className="p-6 md:p-7 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden">
               <div className="flex items-center gap-2 mb-3">
-                <span className={`text-[10px] font-black tracking-wider border px-2 py-1 rounded ${selectedInquiry.status === '접수 중' ? 'bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25' : 'bg-sky-500/10 text-sky-400 border-sky-500/25'}`}>{selectedInquiry.status}</span>
-                <span className="text-[11px] text-gray-600 font-medium">[{selectedInquiry.type}]</span>
+                <span className={`text-[10px] font-black tracking-wider border px-2 py-1 rounded ${selectedInquiry.status === '접수 중' ? 'bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25' : 'bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]'}`}>{selectedInquiry.status}</span>
+                <span className="text-[11px] text-[#a3a3a3] font-medium">[{selectedInquiry.type}]</span>
               </div>
-              <h3 className="text-lg md:text-xl font-bold text-white break-keep leading-snug mb-5">{selectedInquiry.title}</h3>
+              <h3 className="text-lg md:text-xl font-bold text-[#131313] break-keep leading-snug mb-5">{selectedInquiry.title}</h3>
 
-              <div className="rounded-lg border border-white/8 bg-white/[0.02] divide-y divide-white/[0.06] mb-6">
+              <div className="rounded-lg border border-[#ececea] bg-white divide-y divide-[#ececea] mb-6">
                 <div className="flex items-center justify-between px-4 py-2.5 text-xs">
-                  <span className="text-gray-500 font-bold">접수일시</span>
-                  <span className="text-gray-300 font-bold tabular-nums">{selectedInquiry.createdAt ? new Date(selectedInquiry.createdAt).toLocaleString("ko-KR") : selectedInquiry.date}</span>
+                  <span className="text-[#8a8a8a] font-bold">접수일시</span>
+                  <span className="text-[#4b4b4b] font-bold tabular-nums">{selectedInquiry.createdAt ? new Date(selectedInquiry.createdAt).toLocaleString("ko-KR") : selectedInquiry.date}</span>
                 </div>
                 {selectedInquiry.status === '답변 완료' && (
                   <div className="flex items-center justify-between px-4 py-2.5 text-xs">
                     <span className="text-[#e91e3f] font-bold">답변일시</span>
-                    <span className="text-gray-300 font-bold tabular-nums">{selectedInquiry.answeredAt ? new Date(selectedInquiry.answeredAt).toLocaleString("ko-KR") : selectedInquiry.updatedAt ? new Date(selectedInquiry.updatedAt).toLocaleString("ko-KR") : "처리 완료"}</span>
+                    <span className="text-[#4b4b4b] font-bold tabular-nums">{selectedInquiry.answeredAt ? new Date(selectedInquiry.answeredAt).toLocaleString("ko-KR") : selectedInquiry.updatedAt ? new Date(selectedInquiry.updatedAt).toLocaleString("ko-KR") : "처리 완료"}</span>
                   </div>
                 )}
               </div>
 
-              <p className="text-[11px] font-black tracking-wide text-gray-500 uppercase mb-2">문의 내용</p>
-              <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap break-keep">
+              <p className="text-[11px] font-black tracking-wide text-[#8a8a8a] uppercase mb-2">문의 내용</p>
+              <div className="text-sm text-[#4b4b4b] leading-relaxed whitespace-pre-wrap break-keep">
                 {selectedInquiry.content}
               </div>
 
@@ -835,7 +783,7 @@ export default function MyInfoPage() {
                   <span className="text-[11px] font-black text-[#e91e3f] tracking-wide uppercase mb-2.5 flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>운영팀 답변
                   </span>
-                  <p className="text-sm text-gray-300 leading-relaxed break-keep whitespace-pre-wrap">{selectedInquiry.answer}</p>
+                  <p className="text-sm text-[#4b4b4b] leading-relaxed break-keep whitespace-pre-wrap">{selectedInquiry.answer}</p>
                 </div>
               )}
             </div>
@@ -844,13 +792,13 @@ export default function MyInfoPage() {
       )}
 
       {cancelConfirmId && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-[#1e1e1e] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
-            <h2 className="text-xl font-bold text-white mb-3">지원 취소 확인</h2>
-            <p className="text-sm text-gray-400 mb-8 leading-relaxed">정말로 지원을 취소하시겠습니까?<br/>취소 후에는 다시 지원해야 합니다.</p>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-[#131313]/45 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white border border-[#e2e0dc] rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
+            <h2 className="text-xl font-bold text-[#131313] mb-3">지원 취소 확인</h2>
+            <p className="text-sm text-[#5a5a5a] mb-8 leading-relaxed">정말로 지원을 취소하시겠습니까?<br/>취소 후에는 다시 지원해야 합니다.</p>
             <div className="flex gap-3">
-              <button onClick={() => setCancelConfirmId(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">닫기</button>
-              <button onClick={executeCancelApply} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20">취소하기</button>
+              <button onClick={() => setCancelConfirmId(null)} className="flex-1 py-3 bg-[#eceae6] hover:bg-[#e2e0dc] text-[#131313] font-bold rounded-xl transition-colors">닫기</button>
+              <button onClick={executeCancelApply} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-[#131313] font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20">취소하기</button>
             </div>
           </div>
         </div>

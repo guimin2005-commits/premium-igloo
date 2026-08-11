@@ -71,7 +71,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   const isVerifyPage = pathname === "/verify";
   // 📌 ARCTIC은 라이트 테마 — 헤더/푸터도 밝은 톤으로 전환한다
-  const isLightPage = pathname === "/shop" || pathname?.startsWith("/shop/");
+  const isShopPage = pathname === "/shop" || pathname?.startsWith("/shop/"); // ARCTIC은 자체 헤더를 쓰므로 전역 크롬을 숨긴다
+  const isLightPage = isShopPage || pathname === "/profile" || pathname?.startsWith("/profile/");   // 라이트 톤만 따라가는 페이지
   // 📌 경매방 안에서는 모바일 하단 탭을 숨긴다.
   //    입찰·채팅 바가 화면 아래에 붙는데 그 위에 전역 탭까지 있으면 잘못 눌러 방을 나가게 된다.
   const isAuctionRoom = /^\/auction\/[^/]+$/.test(pathname || "");
@@ -277,7 +278,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <RouteProgress pathname={pathname} />
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
              헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
-      <div className={`sticky top-0 z-40 transition-[padding] duration-500 ease-out flex-shrink-0 ${isAuctionRoom || isLightPage ? "hidden" : ""} ${scrolled ? "pt-3 px-3 md:px-6" : ""}`} onMouseLeave={() => setOpenMegaMenu(null)}>
+      <div className={`sticky top-0 z-40 transition-[padding] duration-500 ease-out flex-shrink-0 ${isAuctionRoom || isShopPage ? "hidden" : ""} ${scrolled ? "pt-3 px-3 md:px-6" : ""}`} onMouseLeave={() => setOpenMegaMenu(null)}>
       <header className={`mx-auto transition-[max-width,border-radius,padding,height] duration-500 ease-out ${
         scrolled
           ? isLightPage
@@ -502,7 +503,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       </div>
 
       {/* pb-24 — 떠 있는 알약 독(12px 여백 + 약 58px 높이)에 콘텐츠 끝이 가리지 않게 */}
-      <main className={`flex-1 flex flex-col w-full relative ${isLightPage ? "" : "pb-24 md:pb-0"}`}>
+      <main className={`flex-1 flex flex-col w-full relative ${isShopPage ? "" : "pb-24 md:pb-0"}`}>
         {isMaintenance && mounted && !isAdmin && status !== "loading" ? (
           /* 📌 점검 모드 화면 (관리자는 정상 이용 가능) */
           <div className="flex-1 flex items-center justify-center px-6 py-32 relative overflow-hidden">
@@ -534,7 +535,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
              스크롤 시 상단 헤더가 변하는 알약과 같은 톤(bg #0b0b0b/75 + backdrop-blur-2xl + 얇은 흰 테두리).
              ※ bottom은 홈 인디케이터/제스처 바를 피하도록 safe-area와 12px 중 큰 값.
              (경매방에서는 오조작 방지를 위해 숨김) */}
-      {!isVerifyPage && !isAuctionRoom && !isLightPage && mounted && (
+      {!isVerifyPage && !isAuctionRoom && !isShopPage && mounted && (
         <nav className={`md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border backdrop-blur-2xl grid grid-cols-5 ${isLightPage ? "border-black/[0.07] bg-white/85 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.22)]" : "border-white/[0.07] bg-[#0b0b0b]/75 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85)]"}`}>
           {[
             { name: "홈", path: "/", icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" },
@@ -555,7 +556,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </nav>
       )}
 
-      <footer className={`w-full mt-auto flex-shrink-0 ${isLightPage ? "hidden" : "hidden md:block"} relative overflow-hidden ${isLightPage ? "border-t border-black/[0.06] bg-[#f5f3f0]" : "border-t border-white/5 bg-[#090909]"}`}>
+      <footer className={`w-full mt-auto flex-shrink-0 ${isShopPage ? "hidden" : "hidden md:block"} relative overflow-hidden ${isLightPage ? "border-t border-black/[0.06] bg-[#f5f3f0]" : "border-t border-white/5 bg-[#090909]"}`}>
         <div className="absolute bottom-[-80px] left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-[#e91e3f]/[0.04] blur-[90px] rounded-full pointer-events-none"></div>
         <div className="max-w-7xl mx-auto px-6 py-10 relative z-10">
           <div className="flex items-center justify-between mb-6">
