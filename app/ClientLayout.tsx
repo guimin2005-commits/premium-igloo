@@ -332,7 +332,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
 
                 {isNotifOpen && (
-                  <div className={`absolute top-[52px] right-0 z-50 w-[300px] rounded-3xl backdrop-blur-xl border overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 ${isLightPage ? "bg-white/97 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/95 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
+                  <div className={`absolute top-[52px] right-0 z-50 w-[300px] rounded-3xl backdrop-blur-2xl border overflow-hidden animate-in fade-in duration-200 ${isLightPage ? "bg-white/70 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/70 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
                     <div className={`px-5 pt-4 pb-3.5 border-b flex items-center justify-between relative overflow-hidden ${isLightPage ? "border-black/[0.06]" : "border-white/[0.06]"}`}>
                       <div className="absolute top-[-30px] right-[-20px] w-32 h-16 bg-[#e91e3f]/[0.12] blur-[36px] rounded-full pointer-events-none"></div>
                       <div className="relative flex items-center gap-2.5">
@@ -389,7 +389,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
                 
                 {isProfileOpen && (
-                  <div className={`absolute top-[60px] right-0 z-50 w-[272px] rounded-3xl backdrop-blur-xl border p-5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 ${isLightPage ? "bg-white/97 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/95 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
+                  <div className={`absolute top-[60px] right-0 z-50 w-[272px] rounded-3xl backdrop-blur-2xl border p-5 overflow-hidden animate-in fade-in duration-200 ${isLightPage ? "bg-white/70 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/70 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
                     <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 w-48 h-24 bg-[#e91e3f]/[0.1] blur-[44px] rounded-full pointer-events-none"></div>
                     <div className={`relative flex items-center gap-4 mb-4 pb-4 border-b ${isLightPage ? "border-black/[0.06]" : "border-white/[0.06]"}`}>
                       <div className="relative shrink-0">
@@ -462,11 +462,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         if (!group) return null;
         // 바깥 div는 위치 잡기 + 알약 모드에선 pt-2 투명 다리(마우스가 알약→메뉴로 건너갈 때 호버가 안 끊기게)
         return (
-          <div className={`hidden md:block absolute top-full ${scrolled ? "left-1/2 -translate-x-1/2 pt-2 w-[min(100%-24px,48rem)]" : "left-0 right-0"}`} style={{ animation: "megaDrop 0.32s cubic-bezier(0.16,1,0.3,1)" }}>
-            <style dangerouslySetInnerHTML={{ __html: `@keyframes megaDrop{0%{opacity:0;transform:translateY(-16px) scaleY(0.94)}60%{opacity:1}100%{opacity:1;transform:translateY(0) scaleY(1)}}` }} />
+          <div className={`hidden md:block absolute top-full ${scrolled ? "left-1/2 -translate-x-1/2 pt-2 w-[min(100%-24px,48rem)]" : "left-0 right-0"}`} style={{ animation: "megaFade 0.18s ease-out" }}>
+            <style dangerouslySetInnerHTML={{ __html: `@keyframes megaFade{from{opacity:0}to{opacity:1}}@keyframes megaDrop{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:translateY(0)}}` }} />
             <div className={`backdrop-blur-2xl origin-top ${isLightPage ? "bg-[#f5f3f0]/75" : "bg-[#0c0c0c]/70"} ${scrolled ? (isLightPage ? "rounded-3xl border border-black/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.25)]" : "rounded-3xl border border-white/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]") : (isLightPage ? "border-b border-black/[0.08] shadow-[0_40px_80px_-24px_rgba(0,0,0,0.2)]" : "border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)]")}`}>
             <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
-            <div className={`mx-auto grid grid-cols-12 gap-10 items-start ${scrolled ? "px-8 py-7" : "max-w-7xl px-8 py-8 lg:py-10"}`}>
+            <div className={`mx-auto grid grid-cols-12 gap-10 items-start ${scrolled ? "px-8 py-7" : "max-w-7xl px-8 py-8 lg:py-10"}`} style={{ animation: "megaDrop 0.3s cubic-bezier(0.16,1,0.3,1)" }}>
               {/* 좌: 섹션 헤딩 */}
               <div className="col-span-12 lg:col-span-5">
                 <div className="flex items-center gap-2.5 mb-4">
