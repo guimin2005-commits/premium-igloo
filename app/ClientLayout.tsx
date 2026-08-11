@@ -328,18 +328,18 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   return (
-    <div className={`flex flex-col min-h-screen transition-colors duration-500 ease-out ${isLightPage ? "bg-[#f5f3f0]" : "bg-[#090909]"}`}>
+    <div className={`flex flex-col min-h-screen ${isLightPage ? "bg-[#f5f3f0]" : "bg-[#090909]"}`}>
       <RouteProgress pathname={pathname} />
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
              헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
       <div className={`sticky top-0 z-40 transition-[padding] duration-500 ease-out flex-shrink-0 ${isAuctionRoom || isShopPage ? "hidden" : ""} ${scrolled ? "pt-3 px-3 md:px-6" : ""}`} onMouseLeave={() => setOpenMegaMenu(null)}>
-      <header className={`mx-auto transition-[max-width,border-radius,padding,height,background-color,border-color,box-shadow] duration-500 ease-out ${
+      <header className={`mx-auto transition-[max-width,border-radius,padding,height] duration-500 ease-out ${
         scrolled
           ? isLightPage
             ? "max-w-3xl rounded-full border border-black/[0.06] bg-white/80 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] px-5 md:px-6 h-14"
             : "max-w-3xl rounded-full border border-white/[0.06] bg-[#0b0b0b]/70 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)] px-5 md:px-6 h-14"
           : isLightPage
-            ? "max-w-[1600px] border border-x-transparent border-t-transparent border-b-black/[0.08] bg-[#f5f3f0]/85 backdrop-blur-md px-6 h-16"
+            ? "max-w-[1600px] bg-[#f5f3f0]/85 backdrop-blur-md px-6 h-16"
             : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-16"
       }`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">

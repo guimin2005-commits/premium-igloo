@@ -30,12 +30,6 @@ export default function ShopMePage() {
   const [wish, setWish] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 문의
-  const [inquiryOpen, setInquiryOpen] = useState(false);
-  const [inquiryText, setInquiryText] = useState("");
-  const [inquiryTitle, setInquiryTitle] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [inquiryMsg, setInquiryMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     try {
@@ -118,34 +112,6 @@ export default function ShopMePage() {
       setCodeMsg({ ok: false, text: "서버와 통신 중 오류가 발생했습니다." });
     } finally {
       setIsRegistering(false);
-    }
-  };
-
-  const sendInquiry = async () => {
-    if (!inquiryText.trim() || isSending) return;
-    setIsSending(true);
-    setInquiryMsg(null);
-    try {
-      const res = await fetch("/api/inquiry", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user: session?.user?.name || "",
-          mainType: "ARCTIC 문의",
-          title: inquiryTitle.trim() || "ARCTIC 상점 문의",
-          content: inquiryText.trim(),
-        }),
-      });
-      if (res.ok) {
-        setInquiryMsg({ ok: true, text: "문의가 접수되었습니다. 답변은 내 정보에서 확인할 수 있어요." });
-        setInquiryText(""); setInquiryTitle("");
-      } else {
-        setInquiryMsg({ ok: false, text: "접수에 실패했습니다. 잠시 후 다시 시도해주세요." });
-      }
-    } catch {
-      setInquiryMsg({ ok: false, text: "서버와 통신 중 오류가 발생했습니다." });
-    } finally {
-      setIsSending(false);
     }
   };
 
@@ -411,62 +377,19 @@ export default function ShopMePage() {
             )}
           </div>
 
-          {/* 문의 */}
+          {/* 문의 — 접수는 1:1 문의에서만 받는다 */}
           <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
             <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
-              <h2 className="text-sm font-black text-[#131313]">문의하기</h2>
+              <h2 className="text-sm font-black text-[#131313]">문의</h2>
               <Link href="/profile?tab=inquiry" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">내 문의 보기</Link>
             </div>
             <div className="p-5">
-              {inquiryMsg ? (
-                <div className="text-center py-6">
-                  <div className={`w-11 h-11 mx-auto rounded-full flex items-center justify-center mb-3 ${inquiryMsg.ok ? "bg-[#e8f3e6] text-[#3f7a35]" : "bg-[#fdeaea] text-[#c62828]"}`}>
-                    {inquiryMsg.ok
-                      ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                      : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>}
-                  </div>
-                  <p className="text-[13px] text-[#4b4b4b] leading-relaxed mb-5 break-keep">{inquiryMsg.text}</p>
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    <Link href="/profile?tab=inquiry"
-                      className="px-6 py-2.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-[12px] font-bold rounded-full transition-colors">
-                      문의 내역 보기
-                    </Link>
-                    <button onClick={() => setInquiryMsg(null)} className="px-6 py-2.5 bg-[#eceae6] hover:bg-[#e2e0dc] text-[#4b4b4b] text-[12px] font-bold rounded-full transition-colors">
-                      다시 문의하기
-                    </button>
-                  </div>
-                </div>
-              ) : !inquiryOpen ? (
-                <div className="space-y-2.5">
-                  <button onClick={() => setInquiryOpen(true)}
-                    className="w-full py-3.5 rounded-xl border border-dashed border-[#d6d3ce] text-[13px] font-bold text-[#8a8a8a] hover:text-[#131313] hover:border-[#a3a3a3] transition-colors">
-                    상품·지급 관련해 물어볼 게 있나요?
-                  </button>
-                  {/* 신고·환불 등 자세한 문의는 1:1 문의에서 */}
-                  <Link href="/support"
-                    className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">
-                    1:1 문의로 이동
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-                  </Link>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <input type="text" value={inquiryTitle} onChange={(e) => setInquiryTitle(e.target.value)}
-                    placeholder="제목 (선택)"
-                    className="w-full bg-white border border-[#e2e0dc] rounded-lg px-4 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
-                  <textarea rows={4} value={inquiryText} onChange={(e) => setInquiryText(e.target.value)}
-                    placeholder="예: 역할 상품을 샀는데 아직 지급되지 않았어요."
-                    className="w-full bg-white border border-[#e2e0dc] rounded-lg px-4 py-3 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] resize-none placeholder:text-[#a3a3a3]" />
-                  <div className="flex gap-2">
-                    <button onClick={() => { setInquiryOpen(false); setInquiryText(""); setInquiryTitle(""); }}
-                      className="px-5 py-3 bg-[#eceae6] hover:bg-[#e2e0dc] text-[#4b4b4b] text-[13px] font-bold rounded-xl transition-colors">취소</button>
-                    <button onClick={sendInquiry} disabled={!inquiryText.trim() || isSending}
-                      className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 text-white text-[13px] font-bold rounded-xl transition-colors">
-                      {isSending ? "접수 중..." : "문의 보내기"}
-                    </button>
-                  </div>
-                </div>
-              )}
+              <p className="text-[12px] text-[#8a8a8a] mb-4 break-keep">상품·지급 관련 문의는 1:1 문의로 접수해 주세요.</p>
+              <Link href="/support"
+                className="w-full flex items-center justify-center gap-1.5 py-3.5 rounded-xl bg-[#131313] hover:bg-black text-white text-[13px] font-bold transition-colors">
+                1:1 문의로 이동
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+              </Link>
             </div>
           </div>
         </div>
