@@ -40,7 +40,7 @@ export default function ArcticDock() {
             className={`flex items-center justify-center py-2 rounded-full transition-all active:scale-95 ${
               active ? "text-[#e91e3f] bg-[#e91e3f]/[0.08]" : "text-[#8a8a8a] active:text-[#131313]"
             }`}>
-            <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" strokeWidth={active ? 2 : 1.8} stroke="currentColor">
+            <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" strokeWidth={active ? 2 : 1.6} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d={it.icon} />
             </svg>
           </Link>
