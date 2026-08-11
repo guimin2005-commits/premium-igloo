@@ -42,6 +42,7 @@ const fmtDate = (s: string) => {
 export default function Home() {
   const [stats, setStats] = useState<{ memberCount: number; onlineCount: number; history: any[] } | null>(null);
   const [schedule, setSchedule] = useState<any[]>([]);
+  const [scheduleLoaded, setScheduleLoaded] = useState(false); // 로딩 중엔 자리를 잡아둔다
   const [notices, setNotices] = useState<any[]>([]);
 
   // 📌 히어로를 스크롤하는 동안 진행률(0~1)을 추적 — 라이트 패널이 그 비율만큼 위로 떠오른다
@@ -88,6 +89,7 @@ export default function Home() {
         .slice(0, 2)
         .map((a: any) => ({ type: "경매 LIVE", title: a.title, path: `/auction/${a._id}`, period: "" }));
       setSchedule([...liveAuctions, ...tournaments, ...events].slice(0, 4));
+      setScheduleLoaded(true);
 
       const noticeList = (Array.isArray(no?.data) ? no.data : [])
         .slice()
@@ -186,7 +188,7 @@ export default function Home() {
         <div className="relative z-10 divide-y divide-black/[0.06]">
 
         {/* 01 · 서버 현황 — 제목 위 · 내용 아래 세로 구성 */}
-        {stats && (
+        {/* 📌 데이터를 기다리며 통째로 비워두면 뒤늦게 툭 튀어나온다 — 틀은 먼저 그리고 숫자만 채운다 */}
         <div className="w-full py-20 md:py-28 px-6">
           <div className="max-w-6xl mx-auto">
             <Reveal>
@@ -205,14 +207,14 @@ export default function Home() {
               <Reveal delay={100}>
                 <div className="grid grid-cols-3 gap-px bg-black/[0.08] rounded-2xl overflow-hidden border border-black/[0.06] shadow-[0_16px_44px_-28px_rgba(0,0,0,0.3)]">
                   {[
-                    { n: stats.memberCount, l: "전체 멤버", dot: false },
-                    { n: stats.onlineCount, l: "현재 온라인", dot: true },
+                    { n: stats?.memberCount, l: "전체 멤버", dot: false },
+                    { n: stats?.onlineCount, l: "현재 온라인", dot: true },
                     { n: 2023, l: "Since", raw: true },
                   ].map((s: any, i) => (
                     <div key={i} className="relative bg-white px-4 py-9 text-center group hover:bg-white hover:shadow-[0_16px_44px_-18px_rgba(233,30,63,0.3)] hover:z-10 transition-all duration-300">
                       <div className="text-3xl md:text-4xl font-black text-[#131313] group-hover:text-[#e91e3f] transition-colors tracking-tight flex items-center justify-center gap-2">
                         {s.dot && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>}
-                        {s.raw ? s.n : <CountUp end={s.n} />}
+                        {s.raw ? s.n : s.n == null ? <span className="text-gray-300">—</span> : <CountUp end={s.n} />}
                       </div>
                       <div className="text-[9px] md:text-[10px] font-bold tracking-[0.25em] text-gray-500 mt-2.5 uppercase">{s.l}</div>
                     </div>
@@ -221,15 +223,14 @@ export default function Home() {
               </Reveal>
 
               <Reveal delay={200}>
-                <ActivityChart history={stats.history} />
+                {stats ? <ActivityChart history={stats.history} /> : <div className="h-[220px] rounded-2xl bg-black/[0.03] border border-black/[0.05]"></div>}
               </Reveal>
             </div>
           </div>
         </div>
-        )}
 
         {/* 02 · LIVE & UPCOMING — 제목은 고정, 내용만 스크롤 (md 이상) */}
-        {schedule.length > 0 && (
+        {(!scheduleLoaded || schedule.length > 0) && (
         <div className="relative w-full py-20 md:py-28 px-6">
           <div className="absolute top-0 right-[-100px] w-[400px] h-[300px] bg-[#e91e3f]/[0.05] blur-[110px] rounded-full pointer-events-none"></div>
           <div className="max-w-6xl mx-auto relative z-10">
@@ -246,6 +247,11 @@ export default function Home() {
             </Reveal>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 불러오는 동안 자리만 잡아둔다 — 나중에 툭 튀어나오지 않게 */}
+              {!scheduleLoaded &&
+                [0, 1].map((i) => (
+                  <div key={`sk-${i}`} className="h-[74px] rounded-2xl border border-black/[0.05] bg-white/60"></div>
+                ))}
               {schedule.map((item, i) => (
                 <Reveal key={i} delay={i * 100}>
                   <Link href={item.path} className={`flex items-center gap-4 px-6 py-5 rounded-2xl border backdrop-blur-sm transition-all duration-300 group/sch h-full hover:-translate-y-1 ${item.type === "경매 LIVE" ? "bg-emerald-500/[0.06] border-emerald-500/25 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:shadow-[0_20px_50px_-20px_rgba(16,185,129,0.3)]" : "bg-white/75 border-black/[0.05] hover:border-[#e91e3f]/30 hover:bg-white hover:shadow-[0_20px_50px_-20px_rgba(233,30,63,0.22)]"}`}>

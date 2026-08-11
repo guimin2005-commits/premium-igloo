@@ -19,7 +19,8 @@ export const Reveal = ({ children, delay = 0, className = "" }) => {
           observer.unobserve(el);
         }
       },
-      { threshold: 0.12 }
+      // 화면에 닿기 조금 전부터 나타나게 — 큰 블록이 뒤늦게 뜨는 걸 막는다
+      { threshold: 0, rootMargin: "0px 0px 15% 0px" }
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -32,7 +33,7 @@ export const Reveal = ({ children, delay = 0, className = "" }) => {
       style={{
         opacity: visible ? 1 : 0,
         transform: visible ? "translateY(0)" : "translateY(32px)",
-        transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+        transition: `opacity 0.55s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.55s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
       }}
     >
       {children}
