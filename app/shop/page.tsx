@@ -351,11 +351,19 @@ export default function ShopPage() {
     return sorted;
   }, [items, typeFilter, priceFilter, inStockOnly, affordableOnly, wishOnly, wish, query, sort, myXp]);
 
+  // 홈 아래에 세울 전체 상품 미리보기 — 추천과 겹치지 않게 뒤에서 네 개
+  // (상품이 적으면 겹칠 수 있으므로 부족할 때는 앞에서 채운다)
+
   // 홈에 세울 추천 상품 — 관리자가 매긴 추천 순서 상위 8개
   const recommended = useMemo(
     () => [...items].sort((a, b) => (b.sortOrder ?? 0) - (a.sortOrder ?? 0) || (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())).slice(0, 8),
     [items]
   );
+
+  const preview = useMemo(() => {
+    const rest = items.filter((i) => !recommended.some((r) => r._id === i._id));
+    return (rest.length >= 4 ? rest : items).slice(0, 4);
+  }, [items, recommended]);
 
   // 📌 이미 장바구니에 있는 상품을 '구매'로 누르면, 낱개 구매인지
   //    장바구니와 함께 결제할지 먼저 물어본다 (모르고 따로 사는 걸 막는다)
@@ -487,17 +495,20 @@ export default function ShopPage() {
 
           {/* 우측 도구 */}
           <div className="flex items-center gap-1.5 ml-auto shrink-0">
-            {/* 검색 — 아이콘에서 펼쳐짐 */}
-            <div className={`group relative h-9 rounded-full border transition-[width,border-color] duration-500 ease-out overflow-hidden
-              w-9 hover:w-56 focus-within:w-56 bg-white border-[#e2e0dc] hover:border-[#a3a3a3] focus-within:border-[#e91e3f]
-              ${query ? "w-56" : ""}`}>
-              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a3a3a3] group-focus-within:text-[#e91e3f] transition-colors pointer-events-none z-10"
+            {/* 검색 — 늘 펼쳐진 상태로 둔다 */}
+            <div className="relative h-9 w-44 lg:w-56 shrink-0 rounded-full border bg-white border-[#e2e0dc] focus-within:border-[#e91e3f] transition-colors overflow-hidden">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#a3a3a3] pointer-events-none"
                 fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
               </svg>
               <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="상품 검색"
-                className="absolute inset-0 w-full h-full bg-transparent pl-8 pr-3 text-[13px] text-[#131313] outline-none placeholder:text-[#a3a3a3]
-                  opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-300" />
+                className="absolute inset-0 w-full h-full bg-transparent pl-9 pr-8 text-[13px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
+              {query && (
+                <button onClick={() => setQuery("")} aria-label="검색어 지우기"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[#a3a3a3] hover:text-[#131313] transition-colors outline-none">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              )}
             </div>
 
             {isLoggedIn ? (
@@ -676,6 +687,34 @@ export default function ShopPage() {
                 </div>
               </Link>
             ))}
+          </div>
+        )}
+
+        {/* 전체 상품 맛보기 — 네 개만 세워두고 아래에서 전체로 넘어간다 */}
+        {!isLoading && preview.length > 0 && (
+          <div className="mt-14">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="w-6 h-px bg-[#131313]"></span>
+              <h2 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">전체 상품</h2>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+              {preview.map((it) => (
+                <Link key={it._id} href={`/shop/item/${it._id}`}
+                  className="group bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden hover:border-[#a3a3a3] transition-colors">
+                  <div className="aspect-square bg-[#eceae6] overflow-hidden">
+                    {it.imageUrl && (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={it.imageUrl} alt="" className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <p className="text-[10px] font-black tracking-[0.15em] text-[#a3a3a3] uppercase mb-1">{TYPES.find((t) => t.v === it.type)?.l || "상품"}</p>
+                    <p className="text-[13px] font-bold text-[#131313] truncate mb-1.5">{it.name}</p>
+                    <p className="text-[14px] font-black text-[#131313] tabular-nums">{salePrice(it).toLocaleString()} XP</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
 
