@@ -464,7 +464,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         return (
           <div className={`hidden md:block absolute top-full ${scrolled ? "left-1/2 -translate-x-1/2 pt-2 w-[min(100%-24px,48rem)]" : "left-0 right-0"}`} style={{ animation: "megaDrop 0.32s cubic-bezier(0.16,1,0.3,1)" }}>
             <style dangerouslySetInnerHTML={{ __html: `@keyframes megaDrop{0%{opacity:0;transform:translateY(-16px) scaleY(0.94)}60%{opacity:1}100%{opacity:1;transform:translateY(0) scaleY(1)}}` }} />
-            <div className={`backdrop-blur-md origin-top ${isLightPage ? "bg-[#f5f3f0]/98" : "bg-[#0c0c0c]/98"} ${scrolled ? (isLightPage ? "rounded-3xl border border-black/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.25)]" : "rounded-3xl border border-white/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]") : (isLightPage ? "border-b border-black/[0.08] shadow-[0_40px_80px_-24px_rgba(0,0,0,0.2)]" : "border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)]")}`}>
+            <div className={`backdrop-blur-2xl origin-top ${isLightPage ? "bg-[#f5f3f0]/75" : "bg-[#0c0c0c]/70"} ${scrolled ? (isLightPage ? "rounded-3xl border border-black/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.25)]" : "rounded-3xl border border-white/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]") : (isLightPage ? "border-b border-black/[0.08] shadow-[0_40px_80px_-24px_rgba(0,0,0,0.2)]" : "border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)]")}`}>
             <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
             <div className={`mx-auto grid grid-cols-12 gap-10 items-start ${scrolled ? "px-8 py-7" : "max-w-7xl px-8 py-8 lg:py-10"}`}>
               {/* 좌: 섹션 헤딩 */}
@@ -502,11 +502,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       })()}
       </div>
 
-      {/* 📌 메가 메뉴가 열리면 뒤쪽 화면을 흐린다 — 헤더(z-40)보다 아래, 본문보다 위
-             마우스 이동으로 열고 닫으므로 pointer-events-none으로 호버를 방해하지 않게 한다 */}
-      {openMegaMenu && (
-        <div className={`hidden md:block fixed inset-0 z-30 pointer-events-none backdrop-blur-sm animate-in fade-in duration-300 ${isLightPage ? "bg-[#f5f3f0]/40" : "bg-[#090909]/50"}`}></div>
-      )}
 
       {/* pb-24 — 떠 있는 알약 독(12px 여백 + 약 58px 높이)에 콘텐츠 끝이 가리지 않게 */}
       <main className={`flex-1 flex flex-col w-full relative ${isShopPage ? "" : "pb-24 md:pb-0"}`}>
