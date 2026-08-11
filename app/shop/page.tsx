@@ -397,13 +397,13 @@ export default function ShopPage() {
           : "max-w-[1600px] rounded-none border-x-transparent border-t-transparent border-b border-b-[#e2e0dc] bg-[#f5f3f0]/92 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)]"
       }`}>
         <div className={`mx-auto flex items-center gap-6 transition-all duration-500 ease-out ${pastBanner ? "max-w-5xl px-5 h-14" : "max-w-6xl px-6 h-16"}`}>
-          {/* 브랜드 — 고급 이글루의 ARCTIC */}
-          <div className="flex items-center gap-3 min-w-0 shrink-0">
-            <Link href="/" className="text-[10px] font-bold tracking-[0.18em] text-[#8a8a8a] hover:text-[#131313] transition-colors hidden lg:block">
+          {/* 브랜드 — 고급 이글루의 ARCTIC (좁은 화면에선 위아래로 쌓는다) */}
+          <div className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-3 min-w-0 shrink-0 leading-none">
+            <Link href="/" className="text-[9px] lg:text-[10px] font-bold tracking-[0.18em] text-[#8a8a8a] hover:text-[#131313] transition-colors">
               고급 이글루
             </Link>
             <span className="w-px h-4 bg-[#d6d3ce] hidden lg:block"></span>
-            <Link href="/shop" className="text-[17px] font-black tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
+            <Link href="/shop" className="text-[16px] lg:text-[17px] font-black tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors mt-0.5 lg:mt-0">
               ARCTIC
             </Link>
 
