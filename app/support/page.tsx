@@ -346,9 +346,10 @@ export default function SupportPage() {
           </div>
         </section>
 
-        {/* 유형을 고르면 아래가 펼쳐진다 */}
-        {mainType && (
-        <div key={mainType} className="space-y-12 animate-in fade-in slide-in-from-top-4 duration-500">
+        {/* 유형을 고르면 높이까지 함께 열린다 */}
+        <div className="grid transition-[grid-template-rows,opacity] duration-500 ease-out" style={{ gridTemplateRows: mainType ? "1fr" : "0fr", opacity: mainType ? 1 : 0 }}>
+          <div className="overflow-hidden min-h-0">
+          <div key={mainType} className="space-y-12 pt-12 animate-in fade-in duration-500">
         {/* 02 · 유형별 상세 */}
         <section>
           <SectionHead no="02" title="상세 정보" desc={mainType === "일반" ? "어떤 쪽 이야기인지 알려주세요." : "확인에 필요한 정보를 적어주세요."} />
@@ -463,7 +464,8 @@ export default function SupportPage() {
           </Link>
         </div>
         </div>
-        )}
+          </div>
+        </div>
       </form>
       </Reveal>
 
