@@ -5,6 +5,9 @@ import { useSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Reveal, LuxStyles, ScrollProgress } from "../components/Lux";
 import { RenderFormattedText } from "../components/FormattedText";
+import Link from "next/link";
+import { ADMIN_USERS } from "@/lib/admins";
+import { salePrice } from "@/lib/shopPricing";
 
 // 미리보기(접힘)용 마크다운 기호 제거
 const stripMd = (t: string) =>
@@ -30,6 +33,89 @@ export default function MyInfoPage() {
 
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("inquiry");
+
+  // ── ARCTIC 연동 ──────────────────────────────
+  //    공개 전에는 관리자만 볼 수 있으므로, 탭 자체를 숨긴다
+  const [shopPublic, setShopPublic] = useState(false);
+  const [shopOrders, setShopOrders] = useState<any[]>([]);
+  const [shopWallet, setShopWallet] = useState<any[]>([]);
+  const [shopItems, setShopItems] = useState<any[]>([]);
+  const [shopMe, setShopMe] = useState<any>(null);
+  const [shopWish, setShopWish] = useState<string[]>([]);
+  const [shopCart, setShopCart] = useState<{ itemId: string; qty: number }[]>([]);
+
+  const isShopAdmin = status === "authenticated" && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const canSeeShop = shopPublic || isShopAdmin;
+  const shopPendingCount = shopOrders.filter((o) => o.status === "pending").length;
+
+  const shopWishRows = shopItems.filter((i) => shopWish.includes(i._id));
+  const shopCartRows = shopCart
+    .map((c) => ({ ...c, item: shopItems.find((i) => i._id === c.itemId) }))
+    .filter((r): r is { itemId: string; qty: number; item: any } => !!r.item);
+
+  // 쿠폰 코드 등록
+  const [couponInput, setCouponInput] = useState("");
+  const [isRegisteringCoupon, setIsRegisteringCoupon] = useState(false);
+  const [couponMsg, setCouponMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const registerCoupon = async () => {
+    const code = couponInput.trim().toUpperCase();
+    if (!code || isRegisteringCoupon) return;
+    setIsRegisteringCoupon(true);
+    setCouponMsg(null);
+    try {
+      const res = await fetch("/api/shop/my-coupons", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }),
+      });
+      const d = await res.json();
+      if (res.ok && d.success) {
+        setCouponMsg({ ok: true, text: d.message || "쿠폰을 받았습니다." });
+        setCouponInput("");
+        // 지갑·XP를 다시 읽어 반영
+        Promise.all([
+          fetch("/api/shop/my-coupons", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+          fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+        ]).then(([cou, me]) => {
+          setShopWallet(Array.isArray(cou?.data) ? cou.data : []);
+          if (me?.success) setShopMe(me.data);
+        });
+      } else {
+        setCouponMsg({ ok: false, text: d.message || "사용할 수 없는 코드입니다." });
+      }
+    } catch {
+      setCouponMsg({ ok: false, text: "서버와 통신 중 오류가 발생했습니다." });
+    } finally {
+      setIsRegisteringCoupon(false);
+    }
+  };
+
+  useEffect(() => {
+    fetch("/api/xp/policy", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setShopPublic(!!d?.data?.shopPublic))
+      .catch(() => {});
+    try {
+      const w = localStorage.getItem("iglooShopWish");
+      if (w) setShopWish(JSON.parse(w));
+      const c = localStorage.getItem("iglooShopCart");
+      if (c) setShopCart(JSON.parse(c));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (status !== "authenticated" || !canSeeShop) return;
+    Promise.all([
+      fetch("/api/shop/purchase", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/shop/my-coupons", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/shop/items", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+    ]).then(([ord, cou, it, me]) => {
+      setShopOrders(Array.isArray(ord?.data) ? ord.data : []);
+      setShopWallet(Array.isArray(cou?.data) ? cou.data : []);
+      setShopItems(Array.isArray(it?.data) ? it.data : []);
+      if (me?.success) setShopMe(me.data);
+    });
+  }, [status, canSeeShop]);
 
   // 📌 URL 쿼리로 탭 직접 진입 지원 (/profile?tab=booster)
   useEffect(() => {
@@ -231,9 +317,10 @@ export default function MyInfoPage() {
       )}
 
       <div className="flex gap-8 border-b border-white/10 mb-8 overflow-x-auto scrollbar-hide">
-        {["notice", "inquiry", "recruit", "booster"].map((tab) => {
-          const unread = tab === "notice" ? notifications.filter((n) => !n.read).length : 0;
-          const label = tab === "notice" ? "알림함" : tab === "inquiry" ? "1:1 문의 내역" : tab === "recruit" ? "구인 지원 목록" : "서버 부스터 혜택";
+        {/* 📌 ARCTIC 탭은 공개 전에는 관리자에게만 (비공개 상점이 노출되면 안 된다) */}
+        {["notice", "inquiry", "recruit", "booster", ...(canSeeShop ? ["arctic"] : [])].map((tab) => {
+          const unread = tab === "notice" ? notifications.filter((n) => !n.read).length : tab === "arctic" ? shopPendingCount : 0;
+          const label = tab === "notice" ? "알림함" : tab === "inquiry" ? "1:1 문의 내역" : tab === "recruit" ? "구인 지원 목록" : tab === "booster" ? "서버 부스터 혜택" : "ARCTIC";
           return (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-4 text-sm md:text-base font-bold whitespace-nowrap transition-colors relative outline-none flex items-center gap-1.5 ${activeTab === tab ? "text-[#e91e3f]" : "text-gray-400 hover:text-white"}`}>
               {label}
@@ -454,6 +541,217 @@ export default function MyInfoPage() {
             <Reveal>
             <div className="pt-6 border-t border-white/10 text-center">
               <p className="text-sm text-gray-300 font-bold">📢 디스코드 서버 부스트 진행 시 시스템이 자동으로 감지하여 모든 혜택을 즉시 지급합니다!</p>
+            </div>
+            </Reveal>
+          </div>
+        )}
+
+        {/* ═══ ARCTIC — 공개 전에는 관리자만 ═══ */}
+        {activeTab === "arctic" && canSeeShop && (
+          <div className="space-y-10">
+            {/* 보유 XP */}
+            <Reveal>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div>
+                  <div className="text-[9px] font-black tracking-[0.3em] text-gray-500 uppercase mb-2">Balance</div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[34px] leading-none font-black tracking-tighter text-white tabular-nums">
+                      {(shopMe?.xp ?? 0).toLocaleString()}
+                    </span>
+                    <span className="text-[12px] font-black tracking-[0.15em] text-[#e91e3f]">XP</span>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-[9px] font-black tracking-[0.3em] text-gray-500 uppercase mb-2">Level</div>
+                  <div className="text-[22px] leading-none font-black text-white tabular-nums">{shopMe?.level ?? 0}</div>
+                </div>
+              </div>
+
+              {shopMe?.levelProgress?.required > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold text-gray-400">다음 레벨까지</span>
+                    <span className="text-[10px] font-bold text-gray-300 tabular-nums">
+                      {shopMe.levelProgress.needToNext.toLocaleString()} XP
+                    </span>
+                  </div>
+                  <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] transition-[width] duration-700"
+                      style={{ width: `${Math.min(100, Math.round((shopMe.levelProgress.current / shopMe.levelProgress.required) * 100))}%` }}></div>
+                  </div>
+                </div>
+              )}
+
+              <Link href="/shop"
+                className="mt-5 w-full inline-flex items-center justify-center py-3 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">
+                ARCTIC 둘러보기
+              </Link>
+              {!shopPublic && (
+                <p className="mt-3 text-[11px] font-bold text-[#e91e3f] text-center">비공개 상태입니다 · 관리자만 볼 수 있습니다</p>
+              )}
+            </div>
+            </Reveal>
+
+            {/* 주문 내역 */}
+            <Reveal>
+            <div>
+              <div className="flex items-baseline gap-4 mb-2">
+                <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
+                <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+              </div>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-lg md:text-xl font-black text-white tracking-tight">
+                  주문 내역 {shopOrders.length > 0 && <span className="text-[#e91e3f]">{shopOrders.length}</span>}
+                </h4>
+                {shopOrders.length > 0 && (
+                  <Link href="/shop/orders" className="text-[11px] font-bold text-[#e91e3f] hover:text-white transition-colors">자세히 보기</Link>
+                )}
+              </div>
+
+              {shopOrders.length === 0 ? (
+                <p className="py-10 text-center text-xs text-gray-500 border-y border-white/[0.06] break-keep">아직 구매한 상품이 없습니다.</p>
+              ) : (
+                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                  {shopOrders.slice(0, 6).map((o) => (
+                    <div key={o._id} className="py-4 flex items-center gap-3">
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black shrink-0 ${
+                        o.status === "completed" ? "bg-emerald-500/15 text-emerald-400"
+                        : o.status === "cancelled" ? "bg-red-500/15 text-red-400"
+                        : "bg-[#e91e3f] text-white"}`}>
+                        {o.status === "completed" ? "완료" : o.status === "cancelled" ? "취소" : "처리 대기"}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-bold text-white truncate">{o.itemName}</p>
+                        <p className="text-[10px] text-gray-500">
+                          {o.itemType === "physical" ? "기프트카드" : o.itemType === "perk" ? "권한" : "역할"} ·{" "}
+                          {new Date(o.createdAt).toLocaleDateString("ko-KR")}
+                        </p>
+                      </div>
+                      <span className={`text-[12px] font-black tabular-nums shrink-0 ${o.status === "cancelled" ? "text-gray-500 line-through" : "text-white"}`}>
+                        -{(o.price || 0).toLocaleString()} XP
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            </Reveal>
+
+            {/* 장바구니 · 찜 */}
+            <Reveal>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div>
+                <div className="flex items-baseline gap-4 mb-2">
+                  <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+                </div>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-black text-white tracking-tight">
+                    장바구니 {shopCartRows.length > 0 && <span className="text-[#e91e3f]">{shopCartRows.length}</span>}
+                  </h4>
+                  {shopCartRows.length > 0 && (
+                    <Link href="/shop/cart" className="text-[11px] font-bold text-[#e91e3f] hover:text-white transition-colors">결제하러 가기</Link>
+                  )}
+                </div>
+                {shopCartRows.length === 0 ? (
+                  <p className="py-8 text-center text-xs text-gray-500 border-y border-white/[0.06] break-keep">장바구니가 비어 있습니다.</p>
+                ) : (
+                  <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                    {shopCartRows.map((r) => (
+                      <Link key={r.itemId} href={`/shop/item/${r.item._id}`} className="py-3 flex items-center gap-3 group">
+                        <div className="w-10 h-10 rounded-lg bg-white/5 overflow-hidden shrink-0">
+                          {r.item.imageUrl && (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
+                          )}
+                        </div>
+                        <span className="flex-1 min-w-0 text-[13px] font-bold text-gray-200 truncate group-hover:text-white transition-colors">{r.item.name}</span>
+                        <span className="text-[12px] font-black text-white tabular-nums shrink-0">{salePrice(r.item).toLocaleString()} XP</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-baseline gap-4 mb-2">
+                  <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+                </div>
+                <h4 className="text-lg font-black text-white tracking-tight mb-4">
+                  찜한 상품 {shopWishRows.length > 0 && <span className="text-[#e91e3f]">{shopWishRows.length}</span>}
+                </h4>
+                {shopWishRows.length === 0 ? (
+                  <p className="py-8 text-center text-xs text-gray-500 border-y border-white/[0.06] break-keep">찜한 상품이 없습니다.</p>
+                ) : (
+                  <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                    {shopWishRows.map((it) => (
+                      <Link key={it._id} href={`/shop/item/${it._id}`} className="py-3 flex items-center gap-3 group">
+                        <div className="w-10 h-10 rounded-lg bg-white/5 overflow-hidden shrink-0">
+                          {it.imageUrl && (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img src={it.imageUrl} alt="" className="w-full h-full object-cover" />
+                          )}
+                        </div>
+                        <span className="flex-1 min-w-0 text-[13px] font-bold text-gray-200 truncate group-hover:text-white transition-colors">{it.name}</span>
+                        <span className="text-[12px] font-black text-white tabular-nums shrink-0">{salePrice(it).toLocaleString()} XP</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            </Reveal>
+
+            {/* 보유 쿠폰 */}
+            <Reveal>
+            <div>
+              <div className="flex items-baseline gap-4 mb-2">
+                <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">04</span>
+                <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+              </div>
+              <h4 className="text-lg md:text-xl font-black text-white tracking-tight mb-4">
+                보유 쿠폰 {shopWallet.length > 0 && <span className="text-[#e91e3f]">{shopWallet.length}</span>}
+              </h4>
+
+              {/* 쿠폰 코드 등록 */}
+              <div className="flex gap-2 mb-4">
+                <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") registerCoupon(); }}
+                  placeholder="쿠폰 코드 입력"
+                  className="flex-1 min-w-0 bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-gray-500" />
+                <button onClick={registerCoupon} disabled={!couponInput.trim() || isRegisteringCoupon}
+                  className="px-5 py-3 rounded-lg bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 text-white text-[13px] font-bold transition-colors shrink-0">
+                  {isRegisteringCoupon ? "확인" : "등록"}
+                </button>
+              </div>
+              {couponMsg && (
+                <p className={`mb-4 text-[11px] font-bold ${couponMsg.ok ? "text-emerald-400" : "text-red-400"}`}>{couponMsg.text}</p>
+              )}
+
+              {shopWallet.length === 0 ? (
+                <p className="py-10 text-center text-xs text-gray-500 border-y border-white/[0.06] break-keep">보유한 쿠폰이 없습니다.</p>
+              ) : (
+                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                  {shopWallet.map((w) => (
+                    <div key={w.id} className="py-4 flex items-center gap-3">
+                      <span className="w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
+                        <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                        </svg>
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-bold text-white truncate">{w.name}</p>
+                        <p className="text-[10px] text-gray-500 break-keep">
+                          {w.type === "percent" ? `${w.value}% 할인` : `${w.value.toLocaleString()} XP 할인`}
+                          {w.minTotal > 0 && ` · ${w.minTotal.toLocaleString()} XP 이상`}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             </Reveal>
           </div>
