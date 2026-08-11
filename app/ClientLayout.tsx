@@ -529,10 +529,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           ].map((tab) => {
             const isActive = pathname === tab.path;
             return (
-              // flex-col에서는 gap이 먹지 않으므로 아이콘 아래 여백은 mb로 준다
-              <Link key={tab.path} href={tab.path} className={`flex flex-col items-center justify-center py-1.5 rounded-full transition-all active:scale-95 ${isActive ? "text-[#e91e3f] bg-[#e91e3f]/[0.1]" : isLightPage ? "text-[#8a8a8a] active:text-[#131313]" : "text-gray-500 active:text-white"}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={isActive ? 2 : 1.6} stroke="currentColor" className="w-5 h-5 mb-0.5"><path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} /></svg>
-                <span className="text-[10px] font-bold">{tab.name}</span>
+              // 라벨 없이 아이콘만 (ARCTIC 하단바와 동일한 형태)
+              <Link key={tab.path} href={tab.path} aria-label={tab.name} title={tab.name}
+                className={`flex items-center justify-center py-2 rounded-full transition-all active:scale-95 ${isActive ? "text-[#e91e3f] bg-[#e91e3f]/[0.1]" : isLightPage ? "text-[#8a8a8a] active:text-[#131313]" : "text-gray-500 active:text-white"}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={isActive ? 2 : 1.6} stroke="currentColor" className="w-[19px] h-[19px]"><path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} /></svg>
               </Link>
             );
           })}
