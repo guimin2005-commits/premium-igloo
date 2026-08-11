@@ -23,22 +23,25 @@ export function ArcticBrand() {
 export default function ArcticHeader({ right }: { right?: React.ReactNode }) {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
+    const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // 📌 상점 메인과 같은 방식 — 스크롤하면 알약 형태로 좁아진다
   return (
-    <header className={`sticky top-0 z-[95] w-full border-b transition-all duration-300 ${
-      scrolled
-        ? "bg-white/92 backdrop-blur-xl border-[#e2e0dc] shadow-[0_6px_20px_-10px_rgba(0,0,0,0.14)]"
-        : "bg-[#f5f3f0]/90 backdrop-blur-md border-[#e2e0dc]"
-    }`}>
-      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
-        <ArcticBrand />
-        <div className="flex items-center gap-1.5 shrink-0">{right}</div>
-      </div>
-    </header>
+    <div className={`sticky top-0 z-[95] w-full transition-[padding] duration-500 ease-out ${scrolled ? "pt-3 px-3 md:px-6" : ""}`}>
+      <header className={`mx-auto transition-all duration-500 ease-out ${
+        scrolled
+          ? "max-w-5xl rounded-full border border-[#e2e0dc] bg-white/85 backdrop-blur-2xl shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)]"
+          : "max-w-[1600px] rounded-none border-x-transparent border-t-transparent border-b border-b-[#e2e0dc] bg-[#f5f3f0]/92 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)]"
+      }`}>
+        <div className={`mx-auto flex items-center justify-between gap-3 md:gap-4 transition-all duration-500 ease-out ${scrolled ? "max-w-5xl px-4 md:px-5 h-14" : "max-w-6xl px-4 md:px-6 h-16"}`}>
+          <ArcticBrand />
+          <div className="flex items-center gap-1.5 shrink-0">{right}</div>
+        </div>
+      </header>
+    </div>
   );
 }
