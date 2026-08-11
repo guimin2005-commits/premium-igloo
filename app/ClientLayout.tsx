@@ -1,10 +1,51 @@
 "use client";
 
-import { useState, useEffect, useRef, FormEvent } from "react";
+import { useState, useEffect, useRef, FormEvent, RefObject, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import AdminNav from "./admin/AdminNav";
+
+// 📌 헤더에서 내려오는 카드(알림·내 프로필)
+//    헤더 자체가 backdrop-blur를 갖고 있어, 그 안에 두면 카드가 뒤 배경을 읽지 못해 블러가 걸리지 않는다.
+//    (backdrop-filter를 가진 조상은 backdrop root가 되어 자손은 그 안쪽만 샘플링한다)
+//    그래서 body로 띄우고, 버튼 위치를 따라가게 한다.
+function HeaderPopover({
+  anchorRef, panelRef, className, children, offset = 10,
+}: {
+  anchorRef: RefObject<HTMLElement | null>;
+  panelRef: RefObject<HTMLDivElement | null>;
+  className: string;
+  children: ReactNode;
+  offset?: number;
+}) {
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+
+  useEffect(() => {
+    const update = () => {
+      const el = anchorRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setPos({ top: r.bottom + offset, right: Math.max(12, window.innerWidth - r.right) });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, { passive: true });
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update);
+    };
+  }, [anchorRef, offset]);
+
+  if (!pos) return null;
+  return createPortal(
+    <div ref={panelRef} style={{ position: "fixed", top: pos.top, right: pos.right, zIndex: 45 }} className={className}>
+      {children}
+    </div>,
+    document.body
+  );
+}
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -68,6 +109,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const router = useRouter();
   
   const profileDropdownRef = useRef<HTMLDivElement>(null);
+  const profilePanelRef = useRef<HTMLDivElement>(null);
 
   const isVerifyPage = pathname === "/verify";
   // 📌 ARCTIC은 라이트 테마 — 헤더/푸터도 밝은 톤으로 전환한다
@@ -130,6 +172,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [seenNotifIds, setSeenNotifIds] = useState<Set<string>>(new Set());
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const notifPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -162,7 +205,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(event.target as Node)) setIsNotifOpen(false);
+      const t = event.target as Node;
+      if (notifRef.current?.contains(t) || notifPanelRef.current?.contains(t)) return;
+      setIsNotifOpen(false);
     };
     if (isNotifOpen) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -180,9 +225,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
-        setIsProfileOpen(false);
-      }
+      const t = event.target as Node;
+      if (profileDropdownRef.current?.contains(t) || profilePanelRef.current?.contains(t)) return;
+      setIsProfileOpen(false);
     };
     if (isProfileOpen) { document.addEventListener("mousedown", handleClickOutside); }
     return () => { document.removeEventListener("mousedown", handleClickOutside); };
@@ -274,7 +319,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   return (
-    <div className={`flex flex-col min-h-screen ${isLightPage ? "bg-[#f5f3f0]" : "bg-[#090909]"}`}>
+    <div className={`flex flex-col min-h-screen transition-colors duration-500 ease-out ${isLightPage ? "bg-[#f5f3f0]" : "bg-[#090909]"}`}>
       <RouteProgress pathname={pathname} />
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
              헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
@@ -332,7 +377,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
 
                 {isNotifOpen && (
-                  <div className={`absolute top-[52px] right-0 z-50 w-[300px] rounded-3xl backdrop-blur-2xl border overflow-hidden animate-in fade-in duration-200 ${isLightPage ? "bg-white/70 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/70 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
+                  <HeaderPopover anchorRef={notifRef} panelRef={notifPanelRef} className={`w-[300px] rounded-3xl backdrop-blur-2xl border overflow-hidden animate-in fade-in duration-200 ${isLightPage ? "bg-white/75 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/75 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
                     <div className={`px-5 pt-4 pb-3.5 border-b flex items-center justify-between relative overflow-hidden ${isLightPage ? "border-black/[0.06]" : "border-white/[0.06]"}`}>
                       <div className="absolute top-[-30px] right-[-20px] w-32 h-16 bg-[#e91e3f]/[0.12] blur-[36px] rounded-full pointer-events-none"></div>
                       <div className="relative flex items-center gap-2.5">
@@ -369,7 +414,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         ))}
                       </div>
                     )}
-                  </div>
+                  </HeaderPopover>
                 )}
               </div>
 
@@ -389,7 +434,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
                 
                 {isProfileOpen && (
-                  <div className={`absolute top-[60px] right-0 z-50 w-[272px] rounded-3xl backdrop-blur-2xl border p-5 overflow-hidden animate-in fade-in duration-200 ${isLightPage ? "bg-white/70 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/70 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
+                  <HeaderPopover anchorRef={profileDropdownRef} panelRef={profilePanelRef} className={`w-[272px] rounded-3xl backdrop-blur-2xl border p-5 overflow-hidden animate-in fade-in duration-200 ${isLightPage ? "bg-white/75 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/75 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
                     <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 w-48 h-24 bg-[#e91e3f]/[0.1] blur-[44px] rounded-full pointer-events-none"></div>
                     <div className={`relative flex items-center gap-4 mb-4 pb-4 border-b ${isLightPage ? "border-black/[0.06]" : "border-white/[0.06]"}`}>
                       <div className="relative shrink-0">
@@ -438,7 +483,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       <div className={`h-px my-1.5 mx-1 ${isLightPage ? "bg-black/[0.07]" : "bg-white/[0.06]"}`}></div>
                       <button onClick={() => { setIsProfileOpen(false); signOut(); }} className="w-full text-left px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-xl transition-colors outline-none focus:outline-none font-black">로그아웃</button>
                     </div>
-                  </div>
+                  </HeaderPopover>
                 )}
               </div>
               </>
@@ -663,7 +708,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         const showCategories = !isVerifyPage && (status !== "authenticated" || isVerified);
         const itemCls = (active: boolean, accent?: boolean) =>
           `w-full flex items-center rounded-xl px-3 py-3 mb-0.5 text-left text-sm font-bold outline-none transition-colors ${
-            active ? "bg-[#e91e3f]/10 text-[#e91e3f]" : accent ? "text-[#e91e3f] active:bg-white/[0.05]" : "text-gray-300 active:bg-white/[0.05] active:text-white"
+            active ? "bg-[#e91e3f]/10 text-[#e91e3f]"
+              : accent ? "text-[#e91e3f] " + (isLightPage ? "active:bg-black/[0.05]" : "active:bg-white/[0.05]")
+              : isLightPage ? "text-[#4b4b4b] active:bg-black/[0.05] active:text-[#131313]" : "text-gray-300 active:bg-white/[0.05] active:text-white"
           }`;
 
         return (
@@ -682,19 +729,19 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           />
 
           <div
-            className="absolute right-0 top-0 bottom-0 w-[82%] max-w-xs bg-[#0d0d0d]/90 backdrop-blur-2xl border-l border-white/[0.07] rounded-l-[28px] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden"
+            className={`absolute right-0 top-0 bottom-0 w-[82%] max-w-xs backdrop-blur-2xl border-l rounded-l-[28px] flex flex-col overflow-hidden ${isLightPage ? "bg-[#f5f3f0]/92 border-black/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.25)]" : "bg-[#0d0d0d]/90 border-white/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.8)]"}`}
             style={{ animation: isMenuClosing ? "mmSlideOut 0.26s cubic-bezier(0.4,0,1,1) forwards" : "mmSlideIn 0.32s cubic-bezier(0.22,1,0.36,1)" }}
           >
             {/* 상단 크림슨 글로우 */}
             <div className="absolute top-[-60px] right-[-30px] w-56 h-32 bg-[#e91e3f]/[0.1] blur-[60px] rounded-full pointer-events-none"></div>
 
             {/* ── 헤더 ── */}
-            <div className="relative shrink-0 flex items-center justify-between px-5 h-16 border-b border-white/[0.07]">
+            <div className={`relative shrink-0 flex items-center justify-between px-5 h-16 border-b ${isLightPage ? "border-black/[0.07]" : "border-white/[0.07]"}`}>
               <div className="flex items-center gap-2.5">
                 <span className="w-4 h-px bg-[#e91e3f]"></span>
-                <span className="text-[15px] font-bold tracking-[0.15em] text-white">고급 이글루</span>
+                <span className={`text-[15px] font-bold tracking-[0.15em] ${isLightPage ? "text-[#131313]" : "text-white"}`}>고급 이글루</span>
               </div>
-              <button onClick={closeMobileMenu} aria-label="메뉴 닫기" className="p-2 -mr-1 text-gray-400 active:text-white bg-white/[0.05] rounded-full transition-colors outline-none">
+              <button onClick={closeMobileMenu} aria-label="메뉴 닫기" className={`p-2 -mr-1 rounded-full transition-colors outline-none ${isLightPage ? "text-[#8a8a8a] active:text-[#131313] bg-black/[0.05]" : "text-gray-400 active:text-white bg-white/[0.05]"}`}>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[18px] h-[18px]"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -702,21 +749,32 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             {/* ── 스크롤 영역 ── */}
             <div className="relative flex-1 overflow-y-auto overscroll-contain px-4 py-4 [&::-webkit-scrollbar]:hidden">
               {status === "authenticated" && session && (
-                <div className="relative flex items-center gap-3.5 p-3.5 mb-5 bg-white/[0.04] border border-white/[0.06] rounded-2xl overflow-hidden">
+                /* 눌러서 내 정보로 — 부스터 역할이 있으면 인증 배지 옆에 표시한다 */
+                <Link href="/profile" onClick={closeMobileMenu}
+                  className={`relative flex items-center gap-3.5 p-3.5 mb-5 border rounded-2xl overflow-hidden transition-colors ${isLightPage ? "bg-black/[0.03] border-black/[0.06] active:bg-black/[0.06]" : "bg-white/[0.04] border-white/[0.06] active:bg-white/[0.07]"}`}>
                   {isBooster && <div className="absolute top-[-30px] left-[-20px] w-32 h-20 bg-[#e91e3f]/[0.14] blur-[36px] rounded-full pointer-events-none"></div>}
-                  <img src={session.user?.image || ""} alt="Profile" className={`relative w-11 h-11 rounded-full bg-gray-700 ${isBooster ? "ring-2 ring-[#e91e3f]/60 ring-offset-2 ring-offset-[#0d0d0d]" : ""}`} />
-                  <div className="relative min-w-0">
-                    <p className="font-bold text-white text-sm truncate">{session.user?.name}</p>
-                    <span className={`inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-[10px] font-bold ${isVerified && hasScrimRole ? "bg-green-500/10 text-green-400" : isVerified ? "bg-yellow-500/10 text-yellow-400" : "bg-red-500/10 text-red-400"}`}>{isVerified && hasScrimRole ? "인증" : isVerified ? "일부 인증" : "미인증"}</span>
+                  <img src={session.user?.image || ""} alt="Profile" className={`relative w-11 h-11 rounded-full ${isLightPage ? "bg-[#e2e0dc]" : "bg-gray-700"} ${isBooster ? `ring-2 ring-[#e91e3f]/60 ring-offset-2 ${isLightPage ? "ring-offset-[#f5f3f0]" : "ring-offset-[#0d0d0d]"}` : ""}`} />
+                  <div className="relative min-w-0 flex-1">
+                    <p className={`font-bold text-sm truncate ${isLightPage ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</p>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${isVerified && hasScrimRole ? "bg-green-500/10 text-green-400" : isVerified ? "bg-yellow-500/10 text-yellow-400" : "bg-red-500/10 text-red-400"}`}>{isVerified && hasScrimRole ? "인증" : isVerified ? "일부 인증" : "미인증"}</span>
+                      {isBooster && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 text-[#ff41cf]">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5"><path d="M4.5 15.75l7.5-7.5 7.5 7.5" /><path d="M4.5 19.5l7.5-7.5 7.5 7.5" /></svg>
+                          BOOSTER
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
+                  <svg className={`w-4 h-4 shrink-0 ${isLightPage ? "text-[#a3a3a3]" : "text-gray-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                </Link>
               )}
 
               {showCategories && categoryGroups.map((group, gIdx) => (
                 <div key={group.name} className={gIdx > 0 ? "mt-6" : ""}>
                   <div className="flex items-center gap-2 px-3 mb-1.5">
                     <span className="w-3 h-px bg-[#e91e3f]/70"></span>
-                    <p className="text-[11px] font-black text-gray-500 tracking-[0.14em]">{group.name}</p>
+                    <p className={`text-[11px] font-black tracking-[0.14em] ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>{group.name}</p>
                   </div>
                   {group.items.map((item) => {
                     const active = pathname === item.path;
@@ -734,7 +792,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 <div className="mt-6">
                   <div className="flex items-center gap-2 px-3 mb-1.5">
                     <span className="w-3 h-px bg-[#e91e3f]/70"></span>
-                    <p className="text-[11px] font-black text-gray-500 tracking-[0.14em]">계정</p>
+                    <p className={`text-[11px] font-black tracking-[0.14em] ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>계정</p>
                   </div>
                   {accountItems.map((item) =>
                     item.path ? (
@@ -748,7 +806,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             </div>
 
             {/* ── 푸터 ── */}
-            <div className="relative shrink-0 border-t border-white/[0.07] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className={`relative shrink-0 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${isLightPage ? "border-black/[0.07]" : "border-white/[0.07]"}`}>
               {status === "authenticated" && session ? (
                 <button onClick={() => { closeMobileMenu(); signOut(); }} className="w-full text-left px-3 py-3 rounded-xl text-sm font-black text-[#e91e3f] active:bg-[#e91e3f]/10 transition-colors outline-none">로그아웃</button>
               ) : (

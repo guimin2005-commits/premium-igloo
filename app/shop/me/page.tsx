@@ -426,15 +426,29 @@ export default function ShopMePage() {
                       : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>}
                   </div>
                   <p className="text-[13px] text-[#4b4b4b] leading-relaxed mb-5 break-keep">{inquiryMsg.text}</p>
-                  <button onClick={() => setInquiryMsg(null)} className="px-6 py-2.5 bg-[#eceae6] hover:bg-[#e2e0dc] text-[#4b4b4b] text-[12px] font-bold rounded-full transition-colors">
-                    다시 문의하기
-                  </button>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <Link href="/profile?tab=inquiry"
+                      className="px-6 py-2.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-[12px] font-bold rounded-full transition-colors">
+                      문의 내역 보기
+                    </Link>
+                    <button onClick={() => setInquiryMsg(null)} className="px-6 py-2.5 bg-[#eceae6] hover:bg-[#e2e0dc] text-[#4b4b4b] text-[12px] font-bold rounded-full transition-colors">
+                      다시 문의하기
+                    </button>
+                  </div>
                 </div>
               ) : !inquiryOpen ? (
-                <button onClick={() => setInquiryOpen(true)}
-                  className="w-full py-3.5 rounded-xl border border-dashed border-[#d6d3ce] text-[13px] font-bold text-[#8a8a8a] hover:text-[#131313] hover:border-[#a3a3a3] transition-colors">
-                  상품·지급 관련해 물어볼 게 있나요?
-                </button>
+                <div className="space-y-2.5">
+                  <button onClick={() => setInquiryOpen(true)}
+                    className="w-full py-3.5 rounded-xl border border-dashed border-[#d6d3ce] text-[13px] font-bold text-[#8a8a8a] hover:text-[#131313] hover:border-[#a3a3a3] transition-colors">
+                    상품·지급 관련해 물어볼 게 있나요?
+                  </button>
+                  {/* 지난 문의는 내 정보의 1:1 문의 구역에서 이어서 본다 */}
+                  <Link href="/profile?tab=inquiry"
+                    className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">
+                    내 1:1 문의 내역 보기
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+                  </Link>
+                </div>
               ) : (
                 <div className="space-y-3">
                   <input type="text" value={inquiryTitle} onChange={(e) => setInquiryTitle(e.target.value)}

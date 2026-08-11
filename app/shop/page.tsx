@@ -1015,14 +1015,17 @@ export default function ShopPage() {
           </svg>
         </button>
 
-        {/* 2. 찜 */}
+        {/* 2. 찜 — 하트는 '찜 목록을 보는 중'일 때만 채운다. 담긴 개수는 장바구니처럼 배지로 */}
         <button onClick={() => setShowWishList(true)} aria-label="찜한 상품"
           className={`relative flex items-center justify-center py-2 rounded-full transition-all active:scale-95 ${
-            wish.length > 0 ? "text-[#e91e3f]" : "text-[#8a8a8a] active:text-[#131313]"
+            showWishList ? "text-[#e91e3f]" : "text-[#8a8a8a] active:text-[#131313]"
           }`}>
-          <svg className="w-[19px] h-[19px]" fill={wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
+          <svg className="w-[19px] h-[19px]" fill={showWishList ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.9} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
           </svg>
+          {wish.length > 0 && (
+            <span className="absolute top-0.5 right-1/2 translate-x-3.5 min-w-[15px] h-[15px] px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center">{wish.length}</span>
+          )}
         </button>
 
         {/* 3. 검색 */}

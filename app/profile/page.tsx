@@ -250,7 +250,7 @@ export default function MyInfoPage() {
   if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-[#8a8a8a]">로딩 중...</div>;
   if (status === "unauthenticated") {
     return (
-      <main className="w-full bg-[#f5f3f0] text-[#131313] flex-1 flex flex-col justify-center items-center px-6 py-40 text-center animate-in fade-in duration-500 break-keep">
+      <main className="w-full text-[#131313] flex-1 flex flex-col justify-center items-center px-6 py-40 text-center animate-in fade-in duration-500 break-keep">
         <h2 className="text-2xl font-black text-[#131313] mb-4 tracking-tight">로그인 필요</h2>
         <p className="text-[#5a5a5a] mb-8 text-sm">내 정보를 확인하시려면 로그인이 필요합니다.</p>
         <button onClick={() => signIn("discord", { callbackUrl: "/profile" })} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">
@@ -273,7 +273,7 @@ export default function MyInfoPage() {
   });
 
   return (
-    <main className="w-full flex-1 flex flex-col relative bg-[#f5f3f0] text-[#131313]">
+    <main className="w-full flex-1 flex flex-col relative text-[#131313] animate-in fade-in duration-500">
       <LuxStyles />
 
       {/* ── 프로필 카드 (ARCTIC 마이페이지와 같은 구성) ── */}
@@ -342,7 +342,7 @@ export default function MyInfoPage() {
               )}
               {isServerBooster && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 text-[#ff41cf] border border-[#ff41cf]/30">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M8.684 2.687C8.886 1.148 10.379.5 11.77.5h.46c1.39 0 2.884.648 3.086 2.187l.272 1.95h3.6c1.39 0 2.643 1.253 2.643 2.643v.31c0 .844-.224 1.668-.648 2.392l-1.276 2.037a3.5 3.5 0 01-.921 1.023V19.5a2.5 2.5 0 01-2.5 2.5h-8a2.5 2.5 0 01-2.5-2.5V10.979a3.5 3.5 0 01-.921-1.023L2.204 7.92A3.5 3.5 0 011.556 5.527v-.31C1.556 3.822 2.809 2.57 4.199 2.57h3.6l.272-1.95zM9.5 16a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm6 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" /></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5"><path d="M4.5 15.75l7.5-7.5 7.5 7.5" /><path d="M4.5 19.5l7.5-7.5 7.5 7.5" /></svg>
                   SERVER BOOSTER
                 </span>
               )}
@@ -406,7 +406,7 @@ export default function MyInfoPage() {
               <p className="text-[#a3a3a3] text-sm py-12 text-center">데이터 로딩 중...</p>
             ) : notifications.length === 0 ? (
               <div className="text-center py-14 px-5 break-keep">
-                <p className="text-[#8a8a8a] text-sm mb-1">받은 통지가 없습니다.</p>
+                <p className="text-[#8a8a8a] text-sm mb-1">받은 알림이 없습니다.</p>
                 <p className="text-xs text-[#a3a3a3]">운영팀이 보낸 경고·안내 등이 이곳에 도착합니다.</p>
               </div>
             ) : (
@@ -505,7 +505,7 @@ export default function MyInfoPage() {
             className="group block bg-white rounded-2xl border border-[#e2e0dc] px-6 py-6 hover:border-[#a3a3a3] transition-colors">
             <div className="flex items-center gap-4">
               <span className="w-11 h-11 rounded-xl bg-[#ff41cf]/10 text-[#ff41cf] flex items-center justify-center shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M8.684 2.687C8.886 1.148 10.379.5 11.77.5h.46c1.39 0 2.884.648 3.086 2.187l.272 1.95h3.6c1.39 0 2.643 1.253 2.643 2.643v.31c0 .844-.224 1.668-.648 2.392l-1.276 2.037a3.5 3.5 0 01-.921 1.023V19.5a2.5 2.5 0 01-2.5 2.5h-8a2.5 2.5 0 01-2.5-2.5V10.979a3.5 3.5 0 01-.921-1.023L2.204 7.92A3.5 3.5 0 011.556 5.527v-.31C1.556 3.822 2.809 2.57 4.199 2.57h3.6l.272-1.95zM9.5 16a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm6 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" /></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M4.5 15.75l7.5-7.5 7.5 7.5" /><path d="M4.5 19.5l7.5-7.5 7.5 7.5" /></svg>
               </span>
               <div className="min-w-0 flex-1 break-keep">
                 <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">

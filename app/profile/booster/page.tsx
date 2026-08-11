@@ -10,7 +10,7 @@ export default function BoosterBenefitPage() {
   const isBooster = (session?.user as any)?.isBooster || false;
 
   return (
-    <main className="w-full flex-1 flex flex-col bg-[#f5f3f0] text-[#131313]">
+    <main className="w-full flex-1 flex flex-col text-[#131313] animate-in fade-in duration-500">
       <LuxStyles />
       <section className="w-full max-w-4xl mx-auto px-6 pt-10 pb-20">
         <Link href="/profile" className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] mb-6 transition-colors">
