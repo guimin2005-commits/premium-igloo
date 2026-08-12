@@ -200,7 +200,7 @@ export default function SurveyStatsPage() {
       </section>
 
       {/* ── 탭 ── */}
-      <div className="w-full px-6 static md:sticky md:top-14 z-20 bg-[#090909]/85 backdrop-blur-xl border-b border-white/[0.08]">
+      <div className="w-full px-6 bg-[#090909]/85 backdrop-blur-xl border-b border-white/[0.08]">
         <div className="max-w-6xl mx-auto flex gap-6">
           {[{ id: "stats", label: "문항별 통계" }, { id: "list", label: `개별 응답 (${total})` }].map((t) => (
             <button key={t.id} onClick={() => setTab(t.id as any)} className={`relative py-4 text-sm font-black transition-colors ${tab === t.id ? "text-white" : "text-gray-600 hover:text-gray-400"}`}>

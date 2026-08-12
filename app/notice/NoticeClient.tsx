@@ -272,7 +272,7 @@ export default function NoticeClient() {
       </section>
 
       {/* ── 탭 (알약 스타일) ── */}
-      <div className="static md:sticky md:top-14 z-30 w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
+      <div className="w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
         <div className="max-w-5xl mx-auto flex items-center gap-3">
           <div className="flex gap-1.5 overflow-x-auto whitespace-nowrap flex-1 min-w-0">
             {[{ id: "all", label: "전체 공지" }, { id: "important", label: "중요 공지" }, { id: "update", label: "업데이트" }].map((tab) => (
