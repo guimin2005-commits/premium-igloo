@@ -215,7 +215,7 @@ export default function EventPage() {
       </section>
 
       {/* ── 탭 (알약 스타일 · 스티키) ── */}
-      <div className="sticky top-14 z-30 w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
+      <div className="static md:sticky md:top-14 z-30 w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
         <div className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto whitespace-nowrap">
           {[
             { id: "ongoing", label: "진행 중인 이벤트" },
