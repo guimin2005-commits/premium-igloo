@@ -551,7 +551,7 @@ export default function LevelPage() {
       </section>
 
       {/* ── TAB NAV — 섹션 넘버링과 호응하는 에디토리얼 인덱스 탭 ─────── */}
-      <div className="sticky top-14 z-30 w-full px-6 bg-[#090909]/85 backdrop-blur-xl border-b border-white/[0.08]">
+      <div className="w-full px-6 bg-[#090909]/85 backdrop-blur-xl border-b border-white/[0.08]">
         <div className="max-w-5xl mx-auto flex gap-7 md:gap-10 overflow-x-auto custom-scrollbar">
           {[
             { id: "intro", name: "시스템 소개" },
