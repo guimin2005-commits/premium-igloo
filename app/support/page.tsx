@@ -208,7 +208,7 @@ export default function SupportPage() {
         )}
 
         {selectedAdminInquiry && (
-          <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm md:p-4 animate-in fade-in" onClick={() => setSelectedAdminInquiry(null)}>
+          <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm md:p-4 overlay-in" onClick={() => setSelectedAdminInquiry(null)}>
             <div onClick={(e) => e.stopPropagation()} className="bg-[#111111] border border-white/10 rounded-t-2xl md:rounded-2xl w-full max-w-5xl max-h-[92dvh] md:max-h-none md:h-[88vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200">
               {/* 문서 헤더 바 */}
               <div className="flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3.5 border-b border-white/8 bg-white/[0.015] shrink-0">
@@ -285,7 +285,7 @@ export default function SupportPage() {
         )}
 
         {popupConfig.isOpen && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
             <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl flex flex-col items-center">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 ${popupConfig.isError ? "bg-red-500/10 text-red-500" : "bg-[#e91e3f]/10 text-[#e91e3f]"}`}>
                 {popupConfig.isError ? (
@@ -507,7 +507,7 @@ export default function SupportPage() {
       </div>
 
       {popupConfig.isOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
           <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl flex flex-col items-center">
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 ${popupConfig.isError ? "bg-red-500/10 text-red-500" : "bg-[#e91e3f]/10 text-[#e91e3f]"}`}>
               {popupConfig.isError ? (

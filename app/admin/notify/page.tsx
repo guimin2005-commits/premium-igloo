@@ -301,7 +301,7 @@ export default function AdminNotifyPage() {
       )}
 
       {popup.isOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
           <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-md p-8 text-center shadow-2xl">
             <h2 className="text-xl font-bold text-white mb-3">{popup.isError ? "오류" : "발송 완료"}</h2>
             <p className="text-sm text-gray-400 mb-8 leading-relaxed break-keep">{popup.message}</p>

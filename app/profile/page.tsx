@@ -701,7 +701,7 @@ export default function MyInfoPage() {
 
       {/* 📌 통지 상세 모달 (사무적 통지서) */}
       {selectedNotif && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#131313]/45 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setSelectedNotif(null)}>
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#131313]/45 backdrop-blur-sm sm:p-4 overlay-in" onClick={() => setSelectedNotif(null)}>
           <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#e2e0dc] rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
             <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-[#ececea] bg-[#faf9f7] shrink-0">
               <span className="text-[10px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase">Official Notice · 운영팀 통지</span>
@@ -737,7 +737,7 @@ export default function MyInfoPage() {
 
       {/* 📌 문의 상세 모달 (사무적) */}
       {selectedInquiry && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#131313]/45 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setSelectedInquiry(null)}>
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#131313]/45 backdrop-blur-sm sm:p-4 overlay-in" onClick={() => setSelectedInquiry(null)}>
           <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#e2e0dc] rounded-t-2xl sm:rounded-2xl w-full max-w-2xl max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
             <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-[#ececea] bg-[#faf9f7] shrink-0">
               <span className="text-[10px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase">1:1 문의 내역</span>
@@ -785,7 +785,7 @@ export default function MyInfoPage() {
       )}
 
       {cancelConfirmId && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-[#131313]/45 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-[#131313]/45 backdrop-blur-sm p-4 overlay-in">
           <div className="bg-white border border-[#e2e0dc] rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
             <h2 className="text-xl font-bold text-[#131313] mb-3">지원 취소 확인</h2>
             <p className="text-sm text-[#5a5a5a] mb-8 leading-relaxed">정말로 지원을 취소하시겠습니까?<br/>취소 후에는 다시 지원해야 합니다.</p>

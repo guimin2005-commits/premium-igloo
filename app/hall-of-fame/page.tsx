@@ -245,7 +245,7 @@ export default function HallOfFamePage() {
 
       {/* 📌 관리자 — 수동 기록 수정 모달 */}
       {editTarget && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
           <form onSubmit={executeEdit} className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl w-full max-w-md p-8 shadow-2xl max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
             <h2 className="text-xl font-bold text-white mb-6">기록 수정</h2>
             <div className="space-y-4">

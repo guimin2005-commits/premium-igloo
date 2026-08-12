@@ -341,7 +341,7 @@ export default function NoticeClient() {
       )}
 
       {selectedNotice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
           <div className="bg-[#121212] border border-white/10 rounded-[2rem] w-full max-w-2xl h-[80vh] flex flex-col relative shadow-2xl overflow-hidden [&::-webkit-scrollbar]:hidden">
             <div className="absolute top-6 right-6 flex gap-2 z-10">
               {isAdmin && (

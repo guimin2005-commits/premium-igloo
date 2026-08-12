@@ -416,7 +416,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
 
                 {isNotifOpen && (
-                  <HeaderPopover anchorRef={notifRef} panelRef={notifPanelRef} className={`w-auto sm:w-[300px] rounded-3xl backdrop-blur-2xl border overflow-hidden animate-in fade-in duration-200 ${isLightPage ? "bg-white/75 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/75 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
+                  <HeaderPopover anchorRef={notifRef} panelRef={notifPanelRef} className={`w-auto sm:w-[300px] rounded-3xl backdrop-blur-2xl border overflow-hidden overlay-in ${isLightPage ? "bg-white/75 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/75 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
                     <div className={`px-5 pt-4 pb-3.5 border-b flex items-center justify-between relative overflow-hidden ${isLightPage ? "border-black/[0.06]" : "border-white/[0.06]"}`}>
                       <div className="absolute top-[-30px] right-[-20px] w-32 h-16 bg-[#e91e3f]/[0.12] blur-[36px] rounded-full pointer-events-none"></div>
                       <div className="relative flex items-center gap-2.5">
@@ -473,7 +473,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
                 
                 {isProfileOpen && (
-                  <HeaderPopover anchorRef={profileDropdownRef} panelRef={profilePanelRef} className={`w-auto sm:w-[272px] rounded-3xl backdrop-blur-2xl border p-5 overflow-hidden animate-in fade-in duration-200 ${isLightPage ? "bg-white/75 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/75 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
+                  <HeaderPopover anchorRef={profileDropdownRef} panelRef={profilePanelRef} className={`w-auto sm:w-[272px] rounded-3xl backdrop-blur-2xl border p-5 overflow-hidden overlay-in ${isLightPage ? "bg-white/75 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/75 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
                     <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 w-48 h-24 bg-[#e91e3f]/[0.1] blur-[44px] rounded-full pointer-events-none"></div>
                     <div className={`relative flex items-center gap-4 mb-4 pb-4 border-b ${isLightPage ? "border-black/[0.06]" : "border-white/[0.06]"}`}>
                       <div className="relative shrink-0">
@@ -536,7 +536,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         // 바깥 div는 위치 잡기 + 알약 모드에선 pt-2 투명 다리(마우스가 알약→메뉴로 건너갈 때 호버가 안 끊기게)
         // 📌 기준을 항상 가운데로 두고 폭만 바꾼다 — 알약↔전체폭 전환 때 메뉴가 튀지 않고 헤더와 같이 움직인다
         return (
-          <div className={`hidden md:block absolute top-full left-1/2 -translate-x-1/2 transition-[width,padding] duration-500 ease-out ${scrolled ? "pt-2 w-[min(100%-24px,48rem)]" : "pt-0 w-full"}`} style={{ animation: "megaReveal 0.34s cubic-bezier(0.16,1,0.3,1)" }}>
+          <div className={`hidden md:block absolute top-full left-1/2 -translate-x-1/2 w-full transition-[max-width,padding] duration-500 ease-out ${scrolled ? "pt-2 px-3 md:px-6 max-w-3xl" : "pt-0 max-w-[1600px]"}`} style={{ animation: "megaReveal 0.34s cubic-bezier(0.16,1,0.3,1)" }}>
             <style dangerouslySetInnerHTML={{ __html: `@keyframes megaReveal{from{opacity:0;clip-path:inset(0 0 100% 0)}to{opacity:1;clip-path:inset(0 0 0 0)}}@keyframes megaDrop{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}` }} />
             <div className={`backdrop-blur-2xl origin-top transition-[border-radius,border-color,box-shadow,background-color] duration-500 ease-out ${isLightPage ? "bg-[#f5f3f0]/75" : "bg-[#0c0c0c]/70"} ${scrolled ? (isLightPage ? "rounded-3xl border border-black/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.25)]" : "rounded-3xl border border-white/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]") : (isLightPage ? "border-b border-black/[0.08] shadow-[0_40px_80px_-24px_rgba(0,0,0,0.2)]" : "border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)]")}`}>
             <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
@@ -659,7 +659,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
       {/* 📌 쿠폰함 — 코드 등록과 보유 쿠폰을 한 창에서 */}
       {isCodeModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setIsCodeModalOpen(false)}>
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 overlay-in" onClick={() => setIsCodeModalOpen(false)}>
           <div onClick={(e) => e.stopPropagation()}
             className={`rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[88dvh] sm:max-h-[80vh] overflow-hidden shadow-2xl relative flex flex-col animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200 border ${isLightPage ? "bg-white border-[#e2e0dc]" : "bg-[#121212] border-white/10"}`}>
             {/* 머리 */}

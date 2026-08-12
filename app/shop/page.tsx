@@ -1170,7 +1170,7 @@ export default function ShopPage() {
 
       {/* ── 쿠폰함 (ARCTIC) ── */}
       {showCoupons && (
-        <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center bg-[#131313]/45 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setShowCoupons(false)}>
+        <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center bg-[#131313]/45 backdrop-blur-sm sm:p-4 overlay-in" onClick={() => setShowCoupons(false)}>
           <div onClick={(e) => e.stopPropagation()}
             className="bg-white border border-[#e2e0dc] rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[88dvh] sm:max-h-[80vh] overflow-hidden shadow-[0_30px_70px_-18px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200">
             <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-[#ececea]">

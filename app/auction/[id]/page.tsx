@@ -2470,7 +2470,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
               {/* 📢 인벤토리 초과 공지 — 채팅 공지 생김새 그대로 */}
               {mine && (l.inventory?.length || 0) > invCapOf(l) && (
-                <div className="shrink-0 relative border rounded-lg pl-9 pr-9 py-2 mb-2.5 border-[#e91e3f]/50 bg-[#e91e3f]/[0.12] backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2 duration-200">
+                <div className="shrink-0 relative border rounded-lg pl-9 pr-9 py-2 mb-2.5 border-[#e91e3f]/50 bg-[#e91e3f]/[0.12] backdrop-blur-sm overlay-in">
                   {/* 확성기 — 배경 없이 아이콘만, 세로 중앙 */}
                   <span className="absolute left-2.5 top-1/2 -translate-y-1/2 flex items-center justify-center">
                     <MegaphoneIcon className="w-3.5 h-3.5 shrink-0 text-white" />
@@ -3581,7 +3581,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           {miniChat && (
             <div
               /* 머리글 없이 대화만 — 유튜브 라이브 채팅처럼 가볍게 */
-              className="lg:hidden fixed right-4 left-14 sm:left-auto sm:w-[300px] z-[96] flex flex-col overflow-hidden rounded-[20px] border border-white/12 bg-[#0b0b0c]/70 backdrop-blur-2xl ring-1 ring-inset ring-white/[0.06] shadow-[0_24px_70px_-14px_#000] animate-in fade-in slide-in-from-bottom-2 duration-200"
+              className="lg:hidden fixed right-4 left-14 sm:left-auto sm:w-[300px] z-[96] flex flex-col overflow-hidden rounded-[20px] border border-white/12 bg-[#0b0b0c]/70 backdrop-blur-2xl ring-1 ring-inset ring-white/[0.06] shadow-[0_24px_70px_-14px_#000] overlay-in"
               style={{ bottom: `calc(${bottomBarH}px + 4.5rem + env(safe-area-inset-bottom))`, maxHeight: "min(38dvh, 300px)" }}
             >
               <div ref={miniChatBoxRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/15">
@@ -3642,7 +3642,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         {/* ── 내 슬롯 서랍 — 별개의 부유 버튼이 아니라 프로필 알약에서 위로 열린다.
                (알약 안의 n/총 을 누르면 열림) ── */}
         {myLeader && slotsOpen && (
-          <div className="pointer-events-auto mx-3 mb-1.5 flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden px-2 py-1.5 rounded-2xl border border-white/15 bg-[#0b0b0c]/70 backdrop-blur-2xl ring-1 ring-inset ring-white/[0.07] shadow-[0_14px_36px_-12px_#000] animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="pointer-events-auto mx-3 mb-1.5 flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden px-2 py-1.5 rounded-2xl border border-white/15 bg-[#0b0b0c]/70 backdrop-blur-2xl ring-1 ring-inset ring-white/[0.07] shadow-[0_14px_36px_-12px_#000] overlay-in">
             {roleList.flatMap((slot) => {
               const entries = myLeader.roster.filter((r: any) => r.slot === slot);
               const limit = slotLimitOf(slot);
@@ -3733,7 +3733,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       {/* 📱 팀 프로필 팝업 — 아바타 줄에서 팀 하나를 누르면 그 팀만 본다.
              리더 프로필·포인트 → 배치도 → 보유 카드 순 */}
       {teamView !== null && auction.leaders[teamView] && (
-        <div className="lg:hidden fixed inset-0 z-[112] flex items-center justify-center p-3.5 bg-black/80 backdrop-blur-sm animate-in fade-in" onClick={() => setTeamView(null)}>
+        <div className="lg:hidden fixed inset-0 z-[112] flex items-center justify-center p-3.5 bg-black/80 backdrop-blur-sm overlay-in" onClick={() => setTeamView(null)}>
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full border border-white/20 bg-[#0d0d0e] shadow-[0_24px_60px_-16px_#000] flex flex-col animate-in zoom-in-95 duration-200"
@@ -3756,7 +3756,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
       {/* 📱 타 팀 팝업 — 하단에 꽂지 않고 화면 중앙에 띄운다 */}
       {sheet && (
-        <div className="lg:hidden fixed inset-0 z-[110] flex items-center justify-center p-3.5 bg-black/80 backdrop-blur-sm animate-in fade-in" onClick={() => setSheet(null)}>
+        <div className="lg:hidden fixed inset-0 z-[110] flex items-center justify-center p-3.5 bg-black/80 backdrop-blur-sm overlay-in" onClick={() => setSheet(null)}>
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full border border-white/20 bg-[#0d0d0e] shadow-[0_24px_60px_-16px_#000] flex flex-col animate-in zoom-in-95 duration-200"
@@ -3813,7 +3813,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
              모바일은 좌우 여백만 남긴 고정 폭, 데스크톱은 고정 360px. */}
       {toast && (
         <div
-          className="fixed inset-x-3 lg:inset-x-auto lg:left-1/2 lg:-translate-x-1/2 lg:w-[360px] bottom-[var(--toast-b)] lg:bottom-8 z-[200] flex items-center gap-2.5 min-h-[46px] px-4 py-2.5 rounded-2xl bg-[#141416]/92 backdrop-blur-xl border border-white/15 ring-1 ring-inset ring-white/[0.05] text-white text-[12px] font-bold leading-snug shadow-[0_20px_50px_-16px_#000] animate-in fade-in slide-in-from-bottom-2"
+          className="fixed inset-x-3 lg:inset-x-auto lg:left-1/2 lg:-translate-x-1/2 lg:w-[360px] bottom-[var(--toast-b)] lg:bottom-8 z-[200] flex items-center gap-2.5 min-h-[46px] px-4 py-2.5 rounded-2xl bg-[#141416]/92 backdrop-blur-xl border border-white/15 ring-1 ring-inset ring-white/[0.05] text-white text-[12px] font-bold leading-snug shadow-[0_20px_50px_-16px_#000] overlay-in"
           style={{ "--toast-b": `calc(${bottomBarH + 12}px + env(safe-area-inset-bottom))` } as React.CSSProperties}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] shrink-0" />

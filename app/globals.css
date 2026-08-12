@@ -83,3 +83,15 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* 📌 블러가 걸린 오버레이 전용 등장 효과
+   tailwindcss-animate의 animate-in은 투명도만 쓰더라도 transform을 함께 적용하는데,
+   transform이 걸린 요소는 브라우저가 backdrop-filter를 애니메이션이 끝난 뒤에야 반영한다.
+   그래서 블러 오버레이는 transform 없이 투명도만 바꾸는 이 효과를 쓴다. */
+@keyframes overlayFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.overlay-in {
+  animation: overlayFade 0.2s ease-out;
+}

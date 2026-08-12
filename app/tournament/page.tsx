@@ -525,7 +525,7 @@ export default function TournamentPage() {
       )}
 
       {selected && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setSelected(null)}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm sm:p-4 overlay-in" onClick={() => setSelected(null)}>
           <div onClick={(e) => e.stopPropagation()} className={`esp-frame esp-cut-md w-full ${selected.tournamentBracket ? "max-w-4xl" : "max-w-2xl"}`}>
           <div className={`esp-cut-md bg-[#0b0b0b] w-full max-h-[92dvh] sm:max-h-[85vh] flex flex-col relative overflow-hidden`}>
             {/* 상단 상태 바 */}
@@ -679,7 +679,7 @@ export default function TournamentPage() {
       )}
 
       {isLoginReqModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
           <div className="esp-cut border border-white/10 bg-[#0b0b0b] w-full max-w-sm p-8 text-center shadow-2xl relative">
             <div className="w-16 h-16 bg-[#5865F2]/10 esp-cut-sm flex items-center justify-center mb-6 mx-auto">
               <svg className="w-8 h-8 text-[#5865F2]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -698,7 +698,7 @@ export default function TournamentPage() {
 
       {/* 📌 참가 설문 작성 폼 */}
       {surveyTarget && (
-        <div className="fixed inset-0 z-[115] flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm sm:p-4 animate-in fade-in" onClick={() => setSurveyTarget(null)}>
+        <div className="fixed inset-0 z-[115] flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm sm:p-4 overlay-in" onClick={() => setSurveyTarget(null)}>
           <div onClick={(e) => e.stopPropagation()} className="esp-frame esp-cut-md w-full max-w-2xl">
           <div className="esp-cut-md bg-[#0b0b0b] w-full max-h-[92dvh] flex flex-col overflow-hidden">
             {/* 진행 게이지 */}
@@ -903,7 +903,7 @@ export default function TournamentPage() {
       )}
 
       {popup.isOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
           <div className={`esp-cut border bg-[#0b0b0b] w-full max-w-sm p-8 text-center shadow-2xl ${popup.isError ? "border-red-500/30" : "border-[#00e07b]/30"}`}>
             <p className={`text-[10px] font-black esp-mono mb-2 ${popup.isError ? "text-red-400" : "text-[#00e07b]"}`}>{popup.isError ? "ERROR" : "COMPLETE"}</p>
             <h2 className="text-xl font-black text-white mb-3">{popup.isError ? "오류" : "완료"}</h2>
