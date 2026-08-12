@@ -535,11 +535,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         if (!group) return null;
         // 바깥 div는 위치 잡기 + 알약 모드에선 pt-2 투명 다리(마우스가 알약→메뉴로 건너갈 때 호버가 안 끊기게)
         return (
-          <div className={`hidden md:block absolute top-full ${scrolled ? "left-1/2 -translate-x-1/2 pt-2 w-[min(100%-24px,48rem)]" : "left-0 right-0"}`} style={{ animation: "megaFade 0.18s ease-out" }}>
-            <style dangerouslySetInnerHTML={{ __html: `@keyframes megaFade{from{opacity:0}to{opacity:1}}@keyframes megaDrop{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:translateY(0)}}` }} />
+          <div className={`hidden md:block absolute top-full ${scrolled ? "left-1/2 -translate-x-1/2 pt-2 w-[min(100%-24px,48rem)]" : "left-0 right-0"}`} style={{ animation: "megaReveal 0.34s cubic-bezier(0.16,1,0.3,1)" }}>
+            <style dangerouslySetInnerHTML={{ __html: `@keyframes megaReveal{from{opacity:0;clip-path:inset(0 0 100% 0)}to{opacity:1;clip-path:inset(0 0 0 0)}}@keyframes megaDrop{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}` }} />
             <div className={`backdrop-blur-2xl origin-top ${isLightPage ? "bg-[#f5f3f0]/75" : "bg-[#0c0c0c]/70"} ${scrolled ? (isLightPage ? "rounded-3xl border border-black/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.25)]" : "rounded-3xl border border-white/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]") : (isLightPage ? "border-b border-black/[0.08] shadow-[0_40px_80px_-24px_rgba(0,0,0,0.2)]" : "border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)]")}`}>
             <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
-            <div className={`mx-auto grid grid-cols-12 gap-10 items-start ${scrolled ? "px-8 py-7" : "max-w-7xl px-8 py-8 lg:py-10"}`} style={{ animation: "megaDrop 0.3s cubic-bezier(0.16,1,0.3,1)" }}>
+            <div className={`mx-auto grid grid-cols-12 gap-10 items-start ${scrolled ? "px-8 py-7" : "max-w-7xl px-8 py-8 lg:py-10"}`} style={{ animation: "megaDrop 0.42s cubic-bezier(0.16,1,0.3,1) 0.06s both" }}>
               {/* 좌: 섹션 헤딩 */}
               <div className="col-span-12 lg:col-span-5">
                 <div className="flex items-center gap-2.5 mb-4">
@@ -557,8 +557,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       key={item.path}
                       href={item.path}
                       onClick={() => setOpenMegaMenu(null)}
-                      className={`group/item flex items-center justify-between gap-4 py-3 transition-colors ${isLightPage ? "border-b border-black/[0.08] first:border-t first:border-black/[0.08]" : "border-b border-white/[0.08] first:border-t first:border-white/[0.08]"}`}
+                      className={`group/item relative flex items-center justify-between gap-4 py-3 transition-colors ${isLightPage ? "border-b border-black/[0.08] first:border-t first:border-black/[0.08]" : "border-b border-white/[0.08] first:border-t first:border-white/[0.08]"}`}
                     >
+                      {/* 상단 내비(소식·콘텐츠·지원)와 같은 밑줄 애니메이션 */}
+                      <span className={`absolute bottom-[-1px] left-0 right-0 h-px bg-[#e91e3f] origin-left transition-transform duration-300 ${isActive ? "scale-x-100" : "scale-x-0 group-hover/item:scale-x-100"}`} />
                       <div className="min-w-0">
                         <p className={`text-[15px] lg:text-base font-bold tracking-tight transition-colors ${isActive ? "text-[#e91e3f]" : isLightPage ? "text-[#131313] group-hover/item:text-[#e91e3f]" : "text-gray-100 group-hover/item:text-[#ff5c77]"}`}>{item.name}</p>
                         <p className={`text-[11px] mt-0.5 truncate ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>{item.desc}</p>
