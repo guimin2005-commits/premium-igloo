@@ -88,10 +88,8 @@ input[type="number"] {
    tailwindcss-animate의 animate-in은 투명도만 쓰더라도 transform을 함께 적용하는데,
    transform이 걸린 요소는 브라우저가 backdrop-filter를 애니메이션이 끝난 뒤에야 반영한다.
    그래서 블러 오버레이는 transform 없이 투명도만 바꾸는 이 효과를 쓴다. */
-@keyframes overlayFade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+/* 투명도를 0에서 올리면 그 동안 블러도 옅게 깔려 "늦게 걸리는" 것처럼 보인다.
+   그래서 배경막은 페이드 없이 곧바로 흐려지게 두고, 등장 연출은 안쪽 패널이 맡는다. */
 .overlay-in {
-  animation: overlayFade 0.2s ease-out;
+  animation: none;
 }
