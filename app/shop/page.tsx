@@ -751,7 +751,7 @@ export default function ShopPage() {
         {/* 카테고리 — 헤더 아래에 붙어 따라오고, 스크롤하면 함께 좁아진다 */}
         <div
           style={{ top: pastBanner ? 68 : 64 }}
-          className={`md:sticky z-[80] -mx-6 px-6 mb-5 bg-[#f5f3f0]/92 backdrop-blur-md border-b border-[#e2e0dc] transition-[top,padding] duration-500 ease-out ${pastBanner ? "py-0" : "py-1"}`}>
+          className={`static md:sticky z-[80] -mx-6 px-6 mb-5 bg-[#f5f3f0]/92 backdrop-blur-md border-b border-[#e2e0dc] transition-[top,padding] duration-500 ease-out ${pastBanner ? "py-0" : "py-1"}`}>
           <div className="flex items-center gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden">
             {TYPES.map((t) => {
               const on = typeFilter === t.v;
