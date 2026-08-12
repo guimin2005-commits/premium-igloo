@@ -449,7 +449,7 @@ export default function ShopPage() {
   return (
     <div className="w-full flex-1 bg-[#f5f3f0] text-[#131313] min-h-screen">
       {/* ── ARCTIC 전용 헤더 — 스크롤하면 알약 독으로 좁아진다 ── */}
-      <div className={`sticky top-0 z-[95] w-full transition-[padding] duration-500 ease-out ${pastBanner ? "pt-3 px-3 md:px-6" : ""}`}>
+      <div className={`relative md:sticky md:top-0 z-[95] w-full transition-[padding] duration-500 ease-out ${pastBanner ? "pt-3 px-3 md:px-6" : ""}`}>
       {/* max-width를 고정값끼리 오가게 해야 알약 전환이 부드럽게 애니메이션된다 */}
       <header className={`mx-auto transition-all duration-500 ease-out ${
         pastBanner

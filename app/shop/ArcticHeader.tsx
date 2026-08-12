@@ -31,7 +31,7 @@ export default function ArcticHeader({ right }: { right?: React.ReactNode }) {
 
   // 📌 상점 메인과 같은 방식 — 스크롤하면 알약 형태로 좁아진다
   return (
-    <div className={`sticky top-0 z-[95] w-full transition-[padding] duration-500 ease-out ${scrolled ? "pt-3 px-3 md:px-6" : ""}`}>
+    <div className={`relative md:sticky md:top-0 z-[95] w-full transition-[padding] duration-500 ease-out ${scrolled ? "pt-3 px-3 md:px-6" : ""}`}>
       <header className={`mx-auto transition-all duration-500 ease-out ${
         scrolled
           ? "max-w-5xl rounded-full border border-[#e2e0dc] bg-white/85 backdrop-blur-2xl shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)]"
