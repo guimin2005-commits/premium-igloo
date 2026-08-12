@@ -534,8 +534,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         const group = categoryGroups.find((g) => g.name === openMegaMenu);
         if (!group) return null;
         // 바깥 div는 위치 잡기 + 알약 모드에선 pt-2 투명 다리(마우스가 알약→메뉴로 건너갈 때 호버가 안 끊기게)
+        // 📌 기준을 항상 가운데로 두고 폭만 바꾼다 — 알약↔전체폭 전환 때 메뉴가 튀지 않고 헤더와 같이 움직인다
         return (
-          <div className={`hidden md:block absolute top-full ${scrolled ? "left-1/2 -translate-x-1/2 pt-2 w-[min(100%-24px,48rem)]" : "left-0 right-0"}`} style={{ animation: "megaReveal 0.34s cubic-bezier(0.16,1,0.3,1)" }}>
+          <div className={`hidden md:block absolute top-full left-1/2 -translate-x-1/2 transition-[width,padding] duration-500 ease-out ${scrolled ? "pt-2 w-[min(100%-24px,48rem)]" : "pt-0 w-full"}`} style={{ animation: "megaReveal 0.34s cubic-bezier(0.16,1,0.3,1)" }}>
             <style dangerouslySetInnerHTML={{ __html: `@keyframes megaReveal{from{opacity:0;clip-path:inset(0 0 100% 0)}to{opacity:1;clip-path:inset(0 0 0 0)}}@keyframes megaDrop{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}` }} />
             <div className={`backdrop-blur-2xl origin-top ${isLightPage ? "bg-[#f5f3f0]/75" : "bg-[#0c0c0c]/70"} ${scrolled ? (isLightPage ? "rounded-3xl border border-black/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.25)]" : "rounded-3xl border border-white/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]") : (isLightPage ? "border-b border-black/[0.08] shadow-[0_40px_80px_-24px_rgba(0,0,0,0.2)]" : "border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)]")}`}>
             <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
