@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useSession, signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BracketView } from "../components/BracketView";
 
 const ADMIN_USERS = ["elahw.06"];
@@ -39,18 +39,6 @@ const CustomCheckbox = ({ checked, onChange, label }: { checked: boolean, onChan
     <span className={`text-sm font-bold select-none transition-colors ${checked ? 'text-white' : 'text-gray-400 group-hover:text-gray-300'}`}>{label}</span>
   </div>
 )
-
-// 📌 구획 머리말 — 관리자 화면 공통 서식(번호 + 헤어라인)
-const SectionHead = ({ no, title, desc }: { no: string; title: string; desc?: string }) => (
-  <div className="mb-1">
-    <div className="flex items-baseline gap-4 mb-2">
-      <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">{no}</span>
-      <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
-    </div>
-    <h2 className="text-lg md:text-xl font-black text-white tracking-tight">{title}</h2>
-    {desc && <p className="text-xs text-gray-500 mt-1 break-keep leading-relaxed">{desc}</p>}
-  </div>
-);
 
 export default function AdminWritePage() {
   const { data: session, status } = useSession();
@@ -334,7 +322,6 @@ export default function AdminWritePage() {
     try { localStorage.removeItem(DRAFT_KEY); } catch {}
     setHasDraft(false);
   };
-
   useEffect(() => {
     // 수정 모드가 아닐 때만 보류 글 안내
     try {
@@ -343,10 +330,12 @@ export default function AdminWritePage() {
     } catch {}
   }, []);
 
+
   const categories = ["공지사항", "이벤트", "구인", "대회"];
 
+  const searchParams = useSearchParams();
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(searchParams.toString());
     const id = params.get("id");
     const categoryParam = params.get("category");
     if (!id && categoryParam && categories.includes(categoryParam)) {
@@ -415,7 +404,7 @@ export default function AdminWritePage() {
         }
       });
     }
-  }, []);
+  }, [searchParams]);
 
   const insertWrap = (symbol: string, placeholder = "텍스트") => {
     const textarea = textareaRef.current;
@@ -553,7 +542,7 @@ export default function AdminWritePage() {
     finally { setIsSubmitting(false); }
   };
 
-  const textareaClass = "w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-4 text-sm text-white focus:border-[#e91e3f] focus:outline-none resize-none leading-relaxed [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]";
+  const textareaClass = "w-full bg-transparent border-0 px-0 py-2 text-[15px] text-gray-100 focus:outline-none resize-none leading-[1.9] placeholder:text-neutral-700 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]";
 
   return (
     <main className="w-full max-w-4xl mx-auto px-6 py-12 flex-1 flex flex-col relative">
@@ -569,8 +558,7 @@ export default function AdminWritePage() {
           </h1>
         </div>
 
-        <section className="flex flex-col gap-2">
-          <SectionHead no="01" title="제목" />
+        <section className="flex flex-col gap-2 border-b border-white/10 pb-5">
           {/* 보류된 글 이어서 작성 안내 */}
           {hasDraft && (
             <div className="mb-4 border-y border-[#e91e3f]/25 bg-[#e91e3f]/[0.05] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -601,7 +589,7 @@ export default function AdminWritePage() {
         </section>
 
         <section className="flex flex-col gap-6">
-          <SectionHead no="02" title="기본 설정" />
+          <p className="text-[11px] font-bold text-gray-500 tracking-wide">설정</p>
           
           {category === "공지사항" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1152,7 +1140,7 @@ export default function AdminWritePage() {
         </section>
 
         <section className="flex flex-col gap-4">
-          <SectionHead no="03" title="상세 내용" />
+          <p className="text-[11px] font-bold text-gray-500 tracking-wide">본문</p>
 
           {(category === "공지사항" || category === "이벤트" || category === "대회") && (
             <>
