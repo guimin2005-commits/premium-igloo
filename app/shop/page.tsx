@@ -660,6 +660,18 @@ export default function ShopPage() {
         </section>
       )}
 
+      {/* ── 홈 · 카테고리 (모바일) — 데스크톱은 헤더 내비로 이동 ── */}
+      <section className="md:hidden max-w-6xl mx-auto px-6 pt-8">
+        <div className="flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+          {TYPES.map((t) => (
+            <button key={t.v} onClick={() => goProducts(t.v)}
+              className="shrink-0 px-4 h-9 rounded-full border border-[#e2e0dc] bg-white text-[12px] font-bold text-[#4b4b4b] active:bg-[#eceae6] transition-colors">
+              {t.l}
+            </button>
+          ))}
+        </div>
+      </section>
+
       {/* ── 홈 · 추천 상품 ── */}
       <section className="max-w-6xl mx-auto px-6 pt-14">
         <div className="flex items-end justify-between gap-4 mb-6">
