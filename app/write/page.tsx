@@ -40,6 +40,18 @@ const CustomCheckbox = ({ checked, onChange, label }: { checked: boolean, onChan
   </div>
 )
 
+// 📌 구획 머리말 — 관리자 화면 공통 서식(번호 + 헤어라인)
+const SectionHead = ({ no, title, desc }: { no: string; title: string; desc?: string }) => (
+  <div className="mb-1">
+    <div className="flex items-baseline gap-4 mb-2">
+      <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">{no}</span>
+      <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+    </div>
+    <h2 className="text-lg md:text-xl font-black text-white tracking-tight">{title}</h2>
+    {desc && <p className="text-xs text-gray-500 mt-1 break-keep leading-relaxed">{desc}</p>}
+  </div>
+);
+
 export default function AdminWritePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -553,11 +565,11 @@ export default function AdminWritePage() {
           ))}
         </div>
 
-        <div className="flex flex-col gap-2 border-b border-white/10 pb-4 focus-within:border-[#e91e3f] transition-colors">
-          <span className="text-xs font-bold text-[#e91e3f] tracking-wider uppercase">{category} TITLE</span>
-          {/* 보류된 글 이어서 작성 배너 */}
+        <section className="flex flex-col gap-2">
+          <SectionHead no="01" title="제목" />
+          {/* 보류된 글 이어서 작성 안내 */}
           {hasDraft && (
-            <div className="mb-6 rounded-2xl border border-[#e91e3f]/25 bg-[#e91e3f]/[0.05] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="mb-4 border-y border-[#e91e3f]/25 bg-[#e91e3f]/[0.05] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-black text-white">보류된 글이 있습니다</p>
                 <p className="text-xs text-gray-400 mt-0.5">이전에 작성하다 보류한 글을 이어서 작성할 수 있습니다.</p>
@@ -582,10 +594,10 @@ export default function AdminWritePage() {
               </>
             )}
           </div>
-        </div>
+        </section>
 
-        <div className="bg-[#121212] border border-white/5 rounded-2xl p-6 flex flex-col gap-6">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 border-b border-white/5 pb-4">기본 설정</h3>
+        <section className="flex flex-col gap-6">
+          <SectionHead no="02" title="기본 설정" />
           
           {category === "공지사항" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -680,7 +692,7 @@ export default function AdminWritePage() {
                     { v: "대진표", t: "대진표 / 리그", d: "본선 대진·경기 진행" },
                   ].map((opt) => (
                     <button key={opt.v} type="button" onClick={() => { setTournamentType(opt.v); if (opt.v === "모집" && tournamentStatus === "진행중") setTournamentStatus("모집중"); if (opt.v === "대진표" && tournamentStatus === "모집중") setTournamentStatus("진행중"); }}
-                      className={`text-left rounded-2xl border p-4 transition-all ${tournamentType === opt.v ? "border-[#e91e3f] bg-[#e91e3f]/[0.08]" : "border-white/10 bg-[#161616] hover:border-white/25"}`}>
+                      className={`text-left rounded-xl border p-4 transition-all ${tournamentType === opt.v ? "border-[#e91e3f] bg-[#e91e3f]/[0.08]" : "border-white/10 bg-[#161616] hover:border-white/25"}`}>
                       <p className={`text-sm font-black mb-0.5 ${tournamentType === opt.v ? "text-[#e91e3f]" : "text-white"}`}>{opt.t}</p>
                       <p className="text-[11px] text-gray-500">{opt.d}</p>
                     </button>
@@ -840,8 +852,8 @@ export default function AdminWritePage() {
 
               {/* 📌 참가 설문 (구글폼 형식) */}
               <div className="md:col-span-2">
-                <div className="rounded-2xl border border-white/10 bg-[#161616] overflow-hidden">
-                  <div className="flex flex-wrap items-center gap-3 px-5 py-3.5 border-b border-white/8 bg-white/[0.015]">
+                <div className="border-y border-white/10">
+                  <div className="flex flex-wrap items-center gap-3 py-3.5 border-b border-white/[0.06]">
                     <span className="w-1 h-4 bg-[#e91e3f] rounded-full"></span>
                     <span className="text-sm font-black text-white">참가 설문</span>
                     {survey.enabled && survey.questions.length > 0 && (
@@ -1133,10 +1145,10 @@ export default function AdminWritePage() {
               </div>
             </div>
           )}
-        </div>
+        </section>
 
-        <div className="bg-[#121212] border border-white/5 rounded-2xl p-6 flex flex-col gap-4">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 border-b border-white/5 pb-4">상세 내용</h3>
+        <section className="flex flex-col gap-4">
+          <SectionHead no="03" title="상세 내용" />
 
           {(category === "공지사항" || category === "이벤트" || category === "대회") && (
             <>
@@ -1162,7 +1174,7 @@ export default function AdminWritePage() {
               <div className="flex flex-col gap-2"><span className="text-xs font-bold text-gray-400">우대 사항 및 추가 안내 (선택)</span><textarea rows={3} placeholder="우대 사항 또는 혜택 등을 자유롭게 입력하세요." value={recruitExtra} onChange={(e) => setRecruitExtra(e.target.value)} className={textareaClass} /></div>
             </div>
           )}
-        </div>
+        </section>
 
         <div className="flex items-center justify-between pt-6 border-t border-white/5">
           <button type="button" onClick={() => router.back()} className="text-sm font-bold text-gray-600 hover:text-white transition-colors">취소</button>

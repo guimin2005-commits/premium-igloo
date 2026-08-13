@@ -11,6 +11,20 @@ import { GAME_PRESETS, GAME_LIST } from "@/lib/auctionGames";
 
 const ADMIN_USERS = ["elahw.06"];
 
+// 📌 구획 머리말 — 관리자 작성 화면 공통 서식(번호 + 헤어라인)
+const SectionHead = ({ no, title, right }: { no: string; title: string; right?: React.ReactNode }) => (
+  <div className="mb-3">
+    <div className="flex items-baseline gap-4 mb-2">
+      <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">{no}</span>
+      <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+    </div>
+    <div className="flex items-center justify-between gap-4">
+      <h3 className="text-base md:text-lg font-black text-white tracking-tight">{title}</h3>
+      {right}
+    </div>
+  </div>
+);
+
 // 📌 아무 의미 없는 랜덤 익명 닉네임 생성기
 const NICK_ADJ = [
   "무지개", "눅눅한", "바삭한", "졸린", "신난", "수줍은", "당당한", "미지근한", "얼어붙은", "말랑한",
@@ -521,10 +535,10 @@ export default function AuctionListPage() {
         {/* 생성 폼 */}
         {showCreate && (
           <Reveal>
-          <form onSubmit={handleCreate} className="relative rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px">
-            <div className="rounded-2xl bg-[#111111]/95 p-6 md:p-8 space-y-6">
+          <form onSubmit={handleCreate} className="relative">
+            <div className="space-y-8">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-base font-black text-white flex items-center gap-3"><span className="w-1 h-5 bg-[#e91e3f] rounded-full"></span>경매 개최</h3>
+                <h3 className="text-lg md:text-xl font-black text-white tracking-tight">경매 개최</h3>
                 {/* 📌 관리자 테스트 도구 */}
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => setIsTest(!isTest)} className={`text-[11px] font-black px-3 py-1.5 rounded-full border transition-all ${isTest ? "bg-amber-500/15 text-amber-400 border-amber-500/35" : "bg-white/5 text-gray-500 border-white/10 hover:text-gray-300"}`}>
@@ -539,6 +553,7 @@ export default function AuctionListPage() {
                 </div>
               </div>
 
+              <SectionHead no="01" title="기본 정보" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-2">경매 제목 <span className="text-[#e91e3f]">*</span></label>
@@ -599,7 +614,7 @@ export default function AuctionListPage() {
 
               {/* 룰 설정 (수치) */}
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-3">경매 룰 설정</label>
+                <SectionHead no="02" title="경매 룰 설정" />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {[
                     { k: "leaderPoints", l: "리더 시작 Point" },
@@ -624,8 +639,12 @@ export default function AuctionListPage() {
 
               {/* 리더 카드 목록 */}
               <div>
+                <div className="flex items-baseline gap-4 mb-2">
+                  <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+                </div>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-bold text-gray-500">리더 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({leaders.filter(l => l.name.trim()).length}명)</span></label>
+                  <label className="text-base md:text-lg font-black text-white tracking-tight">리더 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({leaders.filter(l => l.name.trim()).length}명)</span></label>
                   <button type="button" onClick={() => setLeaders([...leaders, { name: "", position: "", discordId: "" }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">리더 추가</button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
@@ -652,8 +671,12 @@ export default function AuctionListPage() {
 
               {/* 선수 카드 목록 */}
               <div>
+                <div className="flex items-baseline gap-4 mb-2">
+                  <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">04</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+                </div>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-bold text-gray-500">선수 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({players.filter(p => p.alias.trim()).length}명)</span></label>
+                  <label className="text-base md:text-lg font-black text-white tracking-tight">선수 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({players.filter(p => p.alias.trim()).length}명)</span></label>
                   <div className="flex gap-2">
                     <button type="button" onClick={rollAllNicks} className="text-[11px] font-black text-gray-400 bg-white/5 border border-white/10 px-3.5 py-1.5 rounded-full hover:text-white hover:border-white/25 transition-colors">전체 랜덤 닉네임</button>
                     <button type="button" onClick={() => setPlayers([...players, { alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", mostChampions: [""], isAllPos: false }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">선수 추가</button>
