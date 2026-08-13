@@ -260,7 +260,7 @@ export async function POST(request, { params }) {
         else leader.roster.push({ playerIdx: -1, slot: position, price: 0, golden: false });
         addLog(auction, `${leader.name} 리더 포지션 선택 → ${position}`);
         await auction.save();
-        sysChat(id, `${leader.name} 리더가 본인 포지션을 [${position}]으로 선택했습니다.`);
+        sysChat(id, `${leader.name} 리더가 포지션을 [${position}]으로 선택했습니다.`);
         return NextResponse.json({ success: true });
       }
 
@@ -293,7 +293,7 @@ export async function POST(request, { params }) {
         const noPos = auction.leaders.filter((l) => !l.position).map((l) => l.name);
         await auction.save();
         sysChat(id, "경매가 시작되었습니다.");
-        if (noPos.length > 0) sysChat(id, `${noPos.join(", ")} 리더는 화면에 뜬 창에서 본인 포지션을 선택해 주세요.`);
+        if (noPos.length > 0) sysChat(id, `${noPos.join(", ")} 리더는 화면에 뜬 창에서 포지션을 선택해 주세요.`);
         return NextResponse.json({ success: true, noPos });
       }
 

@@ -149,8 +149,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [confirmCfg, setConfirmCfg] = useState<any>(null); // {title, message, confirmLabel, onConfirm}
   const [strategyModalOpen, setStrategyModalOpen] = useState(false);
   const [posSwapTarget, setPosSwapTarget] = useState<any>(null); // {leaderIdx} 포지션 체인지 모달
-  const [posPickOpen, setPosPickOpen] = useState(false);        // 리더 본인 포지션 선택 창 (개최 때 미지정 시)
-  const posPickShown = useRef(false);                            // 시작 직후 한 번만 자동으로 띄운다
   const [titleEdit, setTitleEdit] = useState<string | null>(null); // 진행자: 제목 수정 중인 값
   const [swapA, setSwapA] = useState(""); const [swapB, setSwapB] = useState("");
   const [moveFrom, setMoveFrom] = useState<number | null>(null); // 오버플로우: 이동할 선수 rosterIdx
@@ -576,17 +574,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     } catch {}
     act({ action: "enter", userName: session.user.name });
   }, [auction ? id : null, status]); // eslint-disable-line
-
-  // 📌 개최 때 포지션을 비워 둔 리더는, 경매가 시작되면 본인이 직접 고르게 한다
-  useEffect(() => {
-    if (!auction || auction.status !== "진행중") { posPickShown.current = false; return; }
-    const li = role === "host" || role === "spec" ? null : Number(role);
-    const me = li !== null ? auction.leaders?.[li] : null;
-    if (!me || me.position) { posPickShown.current = false; return; }
-    if (posPickShown.current) return; // 닫은 뒤 폴링마다 다시 뜨지 않게 — 배너로 남긴다
-    posPickShown.current = true;
-    setPosPickOpen(true);
-  }, [auction?.status, role, auction?.leaders?.length]); // eslint-disable-line
 
   const sendChat = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1636,21 +1623,6 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           )}
 
 
-
-          {/* 리더: 포지션 미선택 배너 — 창을 닫아도 여기서 다시 열 수 있다 */}
-          {myLeader && auction.status === "진행중" && !myLeader.position && !posPickOpen && (
-            <button
-              onClick={() => setPosPickOpen(true)}
-              className="w-full border border-[#e91e3f]/40 bg-[#e91e3f]/[0.07] hover:bg-[#e91e3f]/[0.13] px-5 py-4 flex items-center justify-between gap-4 text-left transition-colors"
-            >
-              <div className="min-w-0">
-                <p className="auc-label text-[#ff5c77] mb-1">Position Pick</p>
-                <p className="text-sm font-black text-white">본인 포지션을 아직 고르지 않았습니다</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">포지션을 정해야 팀 슬롯 한 칸이 채워집니다.</p>
-              </div>
-              <span className="shrink-0 text-[11px] font-black text-white bg-[#e91e3f] px-4 py-2">고르기</span>
-            </button>
-          )}
 
           {/* 전략 타임 배너 */}
           {strategyLeft > 0 && (
@@ -3295,16 +3267,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         />
       )}
 
-      {/* 리더: 본인 포지션 선택 창 — 개최 때 비워 둔 리더에게 시작 시 뜬다 */}
-      {posPickOpen && myLeader && myLeaderIdx !== null && !myLeader.position && (
+      {/* 리더: 포지션 선택 창 — 개최 때 비워 뒀다면 시작과 함께 뜨고, 고르기 전엔 닫히지 않는다 */}
+      {myLeader && myLeaderIdx !== null && !myLeader.position && auction.status === "진행중" && (
         <AucModal
           label="Position Pick"
           tone="danger"
           wide
-          title="본인 포지션을 선택하세요"
-          desc={`경매가 시작되었습니다. ${myLeader.name} 리더가 직접 뛸 포지션을 고르면 팀 슬롯 한 칸이 채워집니다.${p1Role ? `\n${p1Role}를 고르면 1페이즈에는 입찰할 수 없습니다.` : ""}`}
-          onClose={() => setPosPickOpen(false)}
-          actions={[{ text: "나중에 고르기", onClick: () => setPosPickOpen(false) }]}
+          title="포지션을 선택하세요"
+          desc={`자신의 포지션을 고르면 슬롯 한 칸이 채워집니다.${p1Role ? `\n${p1Role}를 고르면 1페이즈에는 입찰할 수 없습니다.` : ""}`}
         >
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-5">
             {roleList.map((r) => {
@@ -3321,8 +3291,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     const d = await act({ action: "leader:setPos", leaderIdx: myLeaderIdx, position: r });
                     if (d?.success) {
                       sfxSelect();
-                      setPosPickOpen(false);
-                      // 폴링을 기다리지 않고 즉시 슬롯 보드에 반영
+                      // 폴링을 기다리지 않고 즉시 슬롯 보드에 반영 (반영되면 이 창도 사라진다)
                       patchAuction((a) => {
                         const l = a.leaders[myLeaderIdx];
                         l.position = r;
@@ -3330,7 +3299,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         if (si >= 0) l.roster[si].slot = r;
                         else l.roster.push({ playerIdx: -1, slot: r, price: 0, golden: false });
                       });
-                      showToast(`본인 포지션을 ${r}(으)로 선택했습니다`);
+                      showToast(`포지션을 ${r}(으)로 선택했습니다`);
                     } else showToast(d?.message || "포지션 선택에 실패했습니다");
                   }}
                   className={`px-3 py-4 border flex flex-col items-center gap-1.5 transition-colors ${
