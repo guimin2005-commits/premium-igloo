@@ -559,10 +559,14 @@ export default function AdminWritePage() {
     <main className="w-full max-w-4xl mx-auto px-6 py-12 flex-1 flex flex-col relative">
       <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="flex flex-col gap-8">
         
-        <div className="flex gap-8 border-b border-white/10">
-          {categories.map((cat) => (
-            <button key={cat} type="button" disabled={!!editId} onClick={() => setCategory(cat)} className={`pb-4 text-sm font-bold transition-all border-b-2 outline-none ${category === cat ? "border-[#e91e3f] text-white" : "border-transparent text-gray-500 hover:text-gray-300 disabled:opacity-30"}`}>{cat}</button>
-          ))}
+        <div className="pb-2">
+          <div className="flex items-center gap-3 mb-2">
+            <span className="w-8 h-px bg-[#e91e3f]"></span>
+            <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">{editId ? "Edit" : "New"}</span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
+            {category}{category === "대회" ? " 등록" : " 작성"}
+          </h1>
         </div>
 
         <section className="flex flex-col gap-2">
