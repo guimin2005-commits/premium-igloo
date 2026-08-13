@@ -16,7 +16,7 @@ const CustomSelect = ({ value, options, onChange }: { value: string, options: {v
   }, []);
   return (
     <div className="relative w-full" ref={selectRef}>
-      <div onClick={() => setIsOpen(!isOpen)} className={`bg-[#1a1a1a] border ${isOpen ? 'border-[#e91e3f]' : 'border-white/5'} text-white text-sm rounded-xl px-5 py-3 cursor-pointer flex items-center justify-between gap-4 transition-colors`}>
+      <div onClick={() => setIsOpen(!isOpen)} className={`bg-transparent border-0 border-b ${isOpen ? 'border-[#e91e3f]' : 'border-white/12'} text-white text-sm rounded-none px-0 py-2.5 cursor-pointer flex items-center justify-between gap-4 transition-colors`}>
         <span className="font-bold">{options.find(o => o.value === value)?.label}</span>
         <svg className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
       </div>
@@ -578,7 +578,7 @@ export default function AdminWritePage() {
           {/* 📌 예약 발행 */}
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <span className="text-xs font-bold text-gray-500">예약 발행 (선택)</span>
-            <input type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} className="bg-[#1a1a1a] border border-white/5 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-[#e91e3f] [color-scheme:dark]" />
+            <input type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} className="bg-transparent border-0 border-b border-white/12 rounded-none px-4 py-2 text-xs text-white focus:outline-none focus:border-[#e91e3f] [color-scheme:dark]" />
             {publishAt && (
               <>
                 <span className="text-[10px] font-bold text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/20 px-2.5 py-1 rounded-full">해당 시각부터 공개됩니다</span>
@@ -602,7 +602,7 @@ export default function AdminWritePage() {
               </div>
               <div className="flex flex-col gap-3 md:col-span-2">
                 <span className="text-xs font-bold text-gray-400">상단 배너 URL (선택)</span>
-                <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+                <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
               </div>
             </div>
           )}
@@ -615,19 +615,19 @@ export default function AdminWritePage() {
               </div>
               <div className="flex flex-col gap-3">
                 <span className="text-xs font-bold text-gray-400">배너 이미지 URL</span>
-                <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+                <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
               </div>
               <div className="flex flex-col gap-3 md:col-span-2">
                 <span className="text-xs font-bold text-gray-400">이벤트 기간 <span className="text-[#e91e3f]">*</span></span>
-                <div className="flex flex-wrap items-center gap-3 w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-4 py-2.5 focus-within:border-[#e91e3f] transition-colors">
-                  <div className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-lg px-3 py-1.5 flex-1 min-w-[140px]">
+                <div className="flex flex-wrap items-center gap-3 w-full bg-transparent border-0 border-b border-white/12 rounded-none px-4 py-2.5 focus-within:border-[#e91e3f] transition-colors">
+                  <div className="flex items-center gap-2 bg-transparent border-b border-white/10 px-3 py-1.5 flex-1 min-w-[140px]">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-gray-400 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
                     <input type="date" value={eventStartDate} onChange={(e) => setEventStartDate(e.target.value)} required className="bg-transparent text-sm text-white font-medium focus:outline-none cursor-pointer [color-scheme:dark] w-full" />
                   </div>
                   {!isEventAlways && (
                     <>
                       <span className="text-gray-600 font-bold shrink-0">~</span>
-                      <div className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-lg px-3 py-1.5 flex-1 min-w-[140px]">
+                      <div className="flex items-center gap-2 bg-transparent border-b border-white/10 px-3 py-1.5 flex-1 min-w-[140px]">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-gray-400 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
                         <input type="date" value={eventEndDate} onChange={(e) => setEventEndDate(e.target.value)} className="bg-transparent text-sm text-white font-medium focus:outline-none cursor-pointer [color-scheme:dark] w-full" />
                       </div>
@@ -652,15 +652,15 @@ export default function AdminWritePage() {
               </div>
               <div className="flex flex-col gap-3 md:col-span-2">
                 <span className="text-xs font-bold text-gray-400">모집 기간 <span className="text-[#e91e3f]">*</span></span>
-                <div className="flex flex-wrap items-center gap-3 w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-4 py-2.5 focus-within:border-[#e91e3f] transition-colors">
-                  <div className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-lg px-3 py-1.5 flex-1 min-w-[140px]">
+                <div className="flex flex-wrap items-center gap-3 w-full bg-transparent border-0 border-b border-white/12 rounded-none px-4 py-2.5 focus-within:border-[#e91e3f] transition-colors">
+                  <div className="flex items-center gap-2 bg-transparent border-b border-white/10 px-3 py-1.5 flex-1 min-w-[140px]">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-gray-400 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
                     <input type="date" value={recruitStartDate} onChange={(e) => setRecruitStartDate(e.target.value)} required className="bg-transparent text-sm text-white font-medium focus:outline-none cursor-pointer [color-scheme:dark] w-full" />
                   </div>
                   {!isRecruitAlways && (
                     <>
                       <span className="text-gray-600 font-bold shrink-0">~</span>
-                      <div className="flex items-center bg-white/[0.03] border border-white/5 rounded-lg px-3 py-1.5 flex-1 min-w-[140px]">
+                      <div className="flex items-center bg-transparent border-b border-white/10 px-3 py-1.5 flex-1 min-w-[140px]">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-gray-400 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
                         <input type="date" value={recruitEndDate} onChange={(e) => setRecruitEndDate(e.target.value)} className="bg-transparent text-sm text-white font-medium focus:outline-none cursor-pointer [color-scheme:dark] w-full" />
                       </div>
@@ -706,7 +706,7 @@ export default function AdminWritePage() {
               </div>
               <div className="flex flex-col gap-3">
                 <span className="text-xs font-bold text-gray-400">참가 신청 링크 {tournamentType === "모집" ? <span className="text-[#e91e3f]">(권장)</span> : "(선택)"}</span>
-                <input type="text" placeholder="https://..." value={tournamentLink} onChange={(e) => setTournamentLink(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+                <input type="text" placeholder="https://..." value={tournamentLink} onChange={(e) => setTournamentLink(e.target.value)} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
               </div>
 
               {/* 📌 리그 상세 일정 (양쪽 타입 공통) */}
@@ -721,7 +721,7 @@ export default function AdminWritePage() {
                   </div>
                 </div>
                 {tournamentSchedule.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-white/10 bg-[#161616] py-6 text-center">
+                  <div className="border-y border-dashed border-white/10 py-6 text-center">
                     <p className="text-xs text-gray-500">위 버튼으로 대회 단계별 일정을 추가하세요. (예: 팀원 배정 → 스크림 → 본선 → 결승)</p>
                   </div>
                 ) : (
@@ -835,10 +835,10 @@ export default function AdminWritePage() {
                 </div>
 
                 <span className="text-xs font-bold text-gray-400 mt-4 block">우승팀 / 우승자 (선택 · 명예의 전당 표시)</span>
-                <input type="text" placeholder="예시: 이글루A" value={tournamentWinner} onChange={(e) => setTournamentWinner(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+                <input type="text" placeholder="예시: 이글루A" value={tournamentWinner} onChange={(e) => setTournamentWinner(e.target.value)} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
 
                 <span className="text-xs font-bold text-gray-400 mt-4 block">우승자 디스코드 ID <span className="text-gray-600 font-medium">(선택 · 팀원 여러 명이면 쉼표(,)로 구분 — 명예의 전당에 각자 프로필로 표시)</span></span>
-                <textarea rows={2} placeholder="예시: 1104242935664492666, 2205..., 3306... (팀원 전원 입력 가능)" value={tournamentWinnerId} onChange={(e) => setTournamentWinnerId(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f] resize-none leading-relaxed" />
+                <textarea rows={2} placeholder="예시: 1104242935664492666, 2205..., 3306... (팀원 전원 입력 가능)" value={tournamentWinnerId} onChange={(e) => setTournamentWinnerId(e.target.value)} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f] resize-none leading-relaxed" />
               </div>
               )}
 
@@ -871,8 +871,8 @@ export default function AdminWritePage() {
                   {survey.enabled && (
                     <div className="p-5 space-y-5">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <input type="text" placeholder="설문 제목 (예: 제1회 대회 참가 신청서)" value={survey.title} onChange={(e) => setSurvey({ ...survey, title: e.target.value })} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
-                        <input type="text" placeholder="설명 (선택)" value={survey.desc} onChange={(e) => setSurvey({ ...survey, desc: e.target.value })} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+                        <input type="text" placeholder="설문 제목 (예: 제1회 대회 참가 신청서)" value={survey.title} onChange={(e) => setSurvey({ ...survey, title: e.target.value })} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+                        <input type="text" placeholder="설명 (선택)" value={survey.desc} onChange={(e) => setSurvey({ ...survey, desc: e.target.value })} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
                       </div>
 
                       {/* 템플릿 */}
@@ -1118,17 +1118,17 @@ export default function AdminWritePage() {
 
               <div className="flex flex-col gap-3 md:col-span-2">
                 <span className="text-xs font-bold text-gray-400">배너 이미지 URL (선택)</span>
-                <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+                <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
               </div>
               <div className="flex flex-col gap-3 md:col-span-2">
                 <span className="text-xs font-bold text-gray-400">전체 대회 기간 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">— 카드에 표시되는 대표 기간</span></span>
-                <div className="flex flex-wrap items-center gap-3 w-full bg-[#1a1a1a] border border-white/5 rounded-xl px-4 py-2.5 focus-within:border-[#e91e3f] transition-colors">
-                  <div className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-lg px-3 py-1.5 flex-1 min-w-[140px]">
+                <div className="flex flex-wrap items-center gap-3 w-full bg-transparent border-0 border-b border-white/12 rounded-none px-4 py-2.5 focus-within:border-[#e91e3f] transition-colors">
+                  <div className="flex items-center gap-2 bg-transparent border-b border-white/10 px-3 py-1.5 flex-1 min-w-[140px]">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-gray-400 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
                     <input type="date" value={tournamentStartDate} onChange={(e) => setTournamentStartDate(e.target.value)} required className="bg-transparent text-sm text-white font-medium focus:outline-none cursor-pointer [color-scheme:dark] w-full" />
                   </div>
                   <span className="text-gray-600 font-bold shrink-0">~</span>
-                  <div className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-lg px-3 py-1.5 flex-1 min-w-[140px]">
+                  <div className="flex items-center gap-2 bg-transparent border-b border-white/10 px-3 py-1.5 flex-1 min-w-[140px]">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-gray-400 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
                     <input type="date" value={tournamentEndDate} onChange={(e) => setTournamentEndDate(e.target.value)} className="bg-transparent text-sm text-white font-medium focus:outline-none cursor-pointer [color-scheme:dark] w-full" />
                   </div>
@@ -1144,7 +1144,7 @@ export default function AdminWritePage() {
 
           {(category === "공지사항" || category === "이벤트" || category === "대회") && (
             <>
-              <div className="flex flex-wrap gap-1 bg-[#1a1a1a] border border-white/5 p-1.5 rounded-xl">
+              <div className="flex flex-wrap gap-1 border-b border-white/10 pb-2">
                 <button type="button" onClick={() => insertWrap("**")} className="p-2 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all flex items-center gap-1"><span className="font-extrabold text-base">B</span> 굵게</button>
                 <div className="w-px h-6 bg-white/10 self-center" />
                 <button type="button" onClick={() => insertWrap("__")} className="p-2 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all flex items-center gap-1"><span className="underline text-base font-medium">U</span> 밑줄</button>

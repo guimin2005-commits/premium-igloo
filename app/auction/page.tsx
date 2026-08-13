@@ -316,8 +316,8 @@ export default function AuctionListPage() {
     );
   }
 
-  const inputClass = "w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600";
-  const numClass = "w-full bg-[#121212] border border-white/10 rounded-lg px-3 py-2 text-xs text-white text-center outline-none focus:border-[#e91e3f] transition-colors font-bold";
+  const inputClass = "w-full bg-transparent border-0 border-b border-white/12 rounded-none px-0 py-2.5 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600";
+  const numClass = "w-full bg-transparent border-0 border-b border-white/12 rounded-none px-0 py-2 text-xs text-white text-center outline-none focus:border-[#e91e3f] transition-colors font-bold";
 
   return (
     <main className="w-full flex-1 flex flex-col relative auc">
@@ -593,7 +593,7 @@ export default function AuctionListPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {roles.map((r, i) => (
-                    <div key={i} className="flex items-center gap-1.5 bg-[#0d0d0d] border border-white/10 rounded-lg px-2 py-1.5">
+                    <div key={i} className="flex items-center gap-1.5 bg-transparent border-b border-white/10 px-2 py-1.5">
                       <input type="text" placeholder="역할명" value={r.name} onChange={(e) => updateRole(i, "name", e.target.value)} className="w-16 bg-transparent text-xs font-bold text-white outline-none placeholder:text-gray-600 text-center" />
                       <span className="text-gray-700 text-xs">×</span>
                       <input type="number" min={1} value={r.count} onChange={(e) => updateRole(i, "count", Number(e.target.value))} className="w-9 bg-transparent text-xs font-bold text-white outline-none text-center" />
@@ -649,7 +649,7 @@ export default function AuctionListPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   {leaders.map((l, i) => (
-                    <div key={i} className="relative rounded-xl border border-white/10 bg-black/25 p-4 hover:border-white/20 transition-colors">
+                    <div key={i} className="relative border-b border-white/10 py-4 hover:border-white/20 transition-colors">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase">Leader {String(i + 1).padStart(2, "0")}</span>
                         {leaders.length > 1 && (
@@ -684,7 +684,7 @@ export default function AuctionListPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   {players.map((p, i) => (
-                    <div key={i} className={`relative rounded-xl border p-4 transition-colors ${p.isAllPos ? "border-[#e91e3f]/35 bg-[#e91e3f]/[0.04]" : "border-white/10 bg-black/25 hover:border-white/20"}`}>
+                    <div key={i} className={`relative border-b py-4 transition-colors ${p.isAllPos ? "border-[#e91e3f]/35" : "border-white/10 hover:border-white/25"}`}>
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase">Player {String(i + 1).padStart(2, "0")}</span>
                         <div className="flex items-center gap-2.5">
