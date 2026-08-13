@@ -154,7 +154,7 @@ export default function MyInfoPage() {
     const tabParam = searchParams.get("tab");
     // 지정한 구역이 없으면 맨 위에서 시작한다 (이전 페이지의 스크롤 위치가 남지 않도록)
     if (!tabParam) { window.scrollTo(0, 0); return; }
-    if (tabParam === "booster") { router.replace("/profile/booster"); return; }
+    if (tabParam === "booster") { router.replace("/booster"); return; }
     const t = setTimeout(() => {
       document.getElementById("sec-" + tabParam)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 400);
@@ -511,7 +511,7 @@ export default function MyInfoPage() {
 
         {/* ═══ 서버 부스터 혜택 — 분량이 커서 전용 페이지로 분리 ═══ */}
         <section id="sec-booster" className="scroll-mt-32">
-          <Link href="/profile/booster"
+          <Link href="/booster"
             className="group block bg-white rounded-2xl border border-[#e2e0dc] px-6 py-6 hover:border-[#a3a3a3] transition-colors">
             <div className="flex items-center gap-4">
               <span className="w-11 h-11 rounded-xl bg-[#ff41cf]/10 text-[#ff41cf] flex items-center justify-center shrink-0">
