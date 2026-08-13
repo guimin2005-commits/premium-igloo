@@ -536,7 +536,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         // 바깥 div는 위치 잡기 + 알약 모드에선 pt-2 투명 다리(마우스가 알약→메뉴로 건너갈 때 호버가 안 끊기게)
         // 📌 기준을 항상 가운데로 두고 폭만 바꾼다 — 알약↔전체폭 전환 때 메뉴가 튀지 않고 헤더와 같이 움직인다
         return (
-          <div className={`hidden md:block absolute top-full ${scrolled ? "left-1/2 -translate-x-1/2 pt-2 w-[min(100%-24px,48rem)]" : "left-0 right-0"}`}>
+          <div className={`hidden md:block absolute top-full left-0 right-0 mx-auto w-full transition-[max-width,padding] duration-500 ease-out ${scrolled ? "pt-2 max-w-3xl" : "pt-0 max-w-[1600px]"}`}>
             <style dangerouslySetInnerHTML={{ __html: `@keyframes megaDrop{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}` }} />
             <div className={`backdrop-blur-2xl origin-top transition-[border-radius,border-color,background-color] duration-500 ease-out ${isLightPage ? "bg-white/90" : "bg-[#0c0c0c]/90"} ${scrolled ? (isLightPage ? "rounded-3xl border border-black/[0.07] overflow-hidden shadow-[0_24px_48px_-24px_rgba(0,0,0,0.18)]" : "rounded-3xl border border-white/[0.07] overflow-hidden shadow-[0_24px_48px_-24px_rgba(0,0,0,0.55)]") : (isLightPage ? "border-b border-black/[0.08] shadow-[0_24px_48px_-24px_rgba(0,0,0,0.18)]" : "border-b border-white/10 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.55)]")}`}>
             <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
