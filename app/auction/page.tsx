@@ -56,6 +56,7 @@ export default function AuctionListPage() {
   const [phase1Role, setPhase1Role] = useState<string>(GAME_PRESETS["오버워치"].phase1Role);
   const [assignMode, setAssignMode] = useState<string>("instant"); // instant | inventory
   const [isTest, setIsTest] = useState(false); // 테스트 방
+  const [isPrivate, setIsPrivate] = useState(false); // 비공개 방 — 목록에 뜨지 않는다
   const [reveal, setReveal] = useState<string[]>((GAME_PRESETS as any)["오버워치"].reveal);
   const [settings, setSettings] = useState({
     leaderPoints: 100000, basePrice: 1000, goldenBasePrice: 4000,
@@ -139,6 +140,30 @@ export default function AuctionListPage() {
         return { ...p, alias: nick };
       });
     });
+  };
+
+  // 공개 ↔ 비공개 전환 (관리자 전용)
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const togglePrivate = async (id: string, next: boolean) => {
+    if (togglingId) return;
+    setTogglingId(id);
+    try {
+      const res = await fetch("/api/auction", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, isPrivate: next }),
+      });
+      const d = await res.json();
+      if (res.ok && d.success) {
+        setAuctions((prev) => prev.map((a) => (a._id === id ? { ...a, isPrivate: next } : a)));
+        setPopup({ isOpen: true, message: d.message || "전환했습니다.", isError: false });
+      } else {
+        setPopup({ isOpen: true, message: d.message || "전환에 실패했습니다.", isError: true });
+      }
+    } catch {
+      setPopup({ isOpen: true, message: "서버와 통신 중 오류가 발생했습니다.", isError: true });
+    } finally {
+      setTogglingId(null);
+    }
   };
 
   const fetchList = () => {
@@ -246,7 +271,7 @@ export default function AuctionListPage() {
       const res = await fetch("/api/auction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, game, isTest, settings: { ...settings, roles: validRoles, phase1Role, assignMode, reveal }, leaders: validLeaders, players: validPlayers }),
+        body: JSON.stringify({ title, game, isTest, isPrivate, settings: { ...settings, roles: validRoles, phase1Role, assignMode, reveal }, leaders: validLeaders, players: validPlayers }),
       });
       const d = await res.json();
       if (d.success) {
@@ -428,7 +453,13 @@ export default function AuctionListPage() {
                     )}
 
                     {isAdmin && (
-                      <button onClick={() => setDeleteId(a._id)} className="auc-label text-gray-800 hover:text-red-400 mt-6 transition-colors">삭제</button>
+                      <div className="mt-6 flex items-center justify-center gap-4">
+                        <button onClick={() => togglePrivate(a._id, !a.isPrivate)} disabled={togglingId === a._id}
+                          className={`auc-label transition-colors disabled:opacity-40 ${a.isPrivate ? "text-[#e91e3f] hover:text-white" : "text-gray-800 hover:text-white"}`}>
+                          {a.isPrivate ? "비공개 · 공개로 전환" : "공개 · 비공개로 전환"}
+                        </button>
+                        <button onClick={() => setDeleteId(a._id)} className="auc-label text-gray-800 hover:text-red-400 transition-colors">삭제</button>
+                      </div>
                     )}
                   </div>
                 );
@@ -498,6 +529,9 @@ export default function AuctionListPage() {
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => setIsTest(!isTest)} className={`text-[11px] font-black px-3 py-1.5 rounded-full border transition-all ${isTest ? "bg-amber-500/15 text-amber-400 border-amber-500/35" : "bg-white/5 text-gray-500 border-white/10 hover:text-gray-300"}`}>
                     {isTest ? "🧪 테스트 방" : "테스트 방 아님"}
+                  </button>
+                  <button type="button" onClick={() => setIsPrivate(!isPrivate)} className={`text-[11px] font-black px-3 py-1.5 rounded-full border transition-all ${isPrivate ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/35" : "bg-white/5 text-gray-500 border-white/10 hover:text-gray-300"}`}>
+                    {isPrivate ? "비공개" : "공개"}
                   </button>
                   <button type="button" onClick={fillTestData} className="text-[11px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-full hover:bg-amber-500/20 transition-colors">
                     테스트 데이터 자동 입력

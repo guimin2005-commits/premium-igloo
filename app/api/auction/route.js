@@ -15,14 +15,16 @@ export async function GET() {
     await connectToDatabase();
     // 📌 테스트 방은 관리자에게만 노출
     const session = await getServerSession(authOptions);
-    const query = isAdminName(session?.user?.name) ? {} : { isTest: { $ne: true } };
-    const auctions = await Auction.find(query).sort({ createdAt: -1 }).select("title status createdAt leaders players game isTest settings");
+    // 테스트 방과 비공개 방은 관리자에게만 목록에 보인다
+    const query = isAdminName(session?.user?.name) ? {} : { isTest: { $ne: true }, isPrivate: { $ne: true } };
+    const auctions = await Auction.find(query).sort({ createdAt: -1 }).select("title status createdAt leaders players game isTest isPrivate settings");
     const data = auctions.map((a) => ({
       _id: a._id,
       title: a.title,
       status: a.status,
       game: a.game,
       isTest: a.isTest,
+      isPrivate: a.isPrivate,
       createdAt: a.createdAt,
       leaderCount: a.leaders.length,
       playerCount: a.players.length,
@@ -76,10 +78,34 @@ export async function POST(request) {
       scoutedBy: [],
     }));
 
-    const auction = await Auction.create({ title: body.title.trim(), game: body.game || "오버워치", isTest: !!body.isTest, settings, leaders, players });
+    const auction = await Auction.create({ title: body.title.trim(), game: body.game || "오버워치", isTest: !!body.isTest, isPrivate: !!body.isPrivate, settings, leaders, players });
     return NextResponse.json({ success: true, data: auction });
   } catch (e) {
     return NextResponse.json({ success: false, message: e.message }, { status: 500 });
+  }
+}
+
+// [전환] 공개 ↔ 비공개 (관리자만)
+export async function PATCH(request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!isAdminName(session?.user?.name)) {
+      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
+    }
+    await connectToDatabase();
+    const { id, isPrivate } = await request.json();
+    if (!id) return NextResponse.json({ success: false, message: "대상이 없습니다." }, { status: 400 });
+
+    const auction = await Auction.findByIdAndUpdate(id, { isPrivate: !!isPrivate }, { new: true, select: "isPrivate" });
+    if (!auction) return NextResponse.json({ success: false, message: "경매를 찾을 수 없습니다." }, { status: 404 });
+
+    return NextResponse.json({
+      success: true,
+      message: auction.isPrivate ? "비공개로 전환했습니다." : "공개로 전환했습니다.",
+      data: { isPrivate: auction.isPrivate },
+    });
+  } catch (e) {
+    return NextResponse.json({ success: false, message: "전환 중 오류가 발생했습니다." }, { status: 500 });
   }
 }
 

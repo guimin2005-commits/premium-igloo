@@ -50,6 +50,7 @@ const AuctionSchema = new mongoose.Schema({
   title: { type: String, required: true },
   game: { type: String, default: "오버워치" },     // 종목 (오버워치/롤/발로란트/배그/커스텀)
   isTest: { type: Boolean, default: false },      // 테스트 방 (관리자 전용 · 목록/화면에 표기)
+  isPrivate: { type: Boolean, default: false },   // 비공개 방 (목록에 뜨지 않는다 · 링크로만 입장)
   status: { type: String, default: "준비중" },     // 준비중/진행중/종료
   phase: { type: Number, default: 0 },            // 0 = 시작 전, 1 = 1페이즈, 2 = 2페이즈
   settings: {
