@@ -456,6 +456,137 @@ export default function ShopPage() {
     );
   }
 
+
+  // 📌 상품 카드 하나 — 홈(추천·전체 미리보기)과 상품 화면이 같은 카드를 쓴다
+  //    (홈 카드에만 찜·장바구니·구매가 없어서 반쪽짜리였다)
+  const ProductCard = ({ it }: { it: any }) => {
+    const soldOut = it.stock === 0;
+    const affordable = canAfford(salePrice(it));
+    const owned = ownedItemIds.has(it._id);
+    const inCart = cart.some((c) => c.itemId === it._id);
+    return (
+            <div className="group bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
+              {/* 이미지 */}
+              <div className="relative aspect-[4/3] bg-[#eceae6] overflow-hidden">
+                {/* 상세로 가는 오버레이 — 위에 얹힌 버튼(z-10)은 그대로 눌린다 */}
+                <Link href={`/shop/item/${it._id}`} aria-label={`${it.name} 상세보기`} className="absolute inset-0 z-[1]"></Link>
+                {it.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={it.imageUrl} alt={it.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-[#c4c4c4]">
+                    <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
+                    </svg>
+                  </div>
+                )}
+                <span className={`absolute top-2 left-2 sm:top-3 sm:left-3 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black tracking-wide ${TYPE_BADGE[it.type]?.cls || "bg-[#131313] text-white"}`}>
+                  {TYPE_BADGE[it.type]?.label || "상품"}
+                </span>
+                {!it.active && (
+                  <span className="absolute top-11 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#e2e0dc]">숨김</span>
+                )}
+
+                {/* 찜 */}
+                <button onClick={() => toggleWish(it)} aria-label="찜하기"
+                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white border border-[#e2e0dc] flex items-center justify-center shadow-sm transition-colors z-10">
+                  <svg className={`w-4 h-4 transition-colors ${wish.includes(it._id) ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}
+                    fill={wish.includes(it._id) ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                  </svg>
+                </button>
+                {soldOut && (
+                  <div className="absolute inset-0 z-[2] bg-[#131313]/55 flex items-center justify-center pointer-events-none">
+                    <span className="text-sm font-black text-white tracking-wider">SOLD OUT</span>
+                  </div>
+                )}
+
+                {/* 관리자 — 카드에서 바로 수정·삭제 */}
+                {isAdmin && (
+                  <div className="absolute bottom-3 right-3 flex gap-1.5 z-10">
+                    <button onClick={() => openEdit(it)}
+                      className="px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#131313] border border-[#e2e0dc] hover:bg-white shadow-sm transition-colors">
+                      수정
+                    </button>
+                    <button onClick={() => setDeleteTarget(it)}
+                      className="px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#c62828] border border-[#e2e0dc] hover:bg-white shadow-sm transition-colors">
+                      삭제
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 정보 */}
+              <div className="p-3.5 sm:p-5 flex flex-col flex-1">
+                <Link href={`/shop/item/${it._id}`} className="block">
+                  <h3 className="text-[13px] sm:text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep line-clamp-2 hover:text-[#e91e3f] transition-colors">{it.name}</h3>
+                </Link>
+                {it.description && (
+                  <p className="hidden sm:block text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep">{it.description}</p>
+                )}
+
+                {/* 재고는 얼마 안 남았을 때만 알린다 (무제한·넉넉할 땐 표시 안 함) */}
+                {it.stock >= 0 && it.stock <= 5 && it.stock > 0 && (
+                  <div className="flex items-center gap-1.5 mb-4">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-pulse"></span>
+                    <span className="text-[11px] font-bold text-[#e91e3f]">한정 수량 · {it.stock}개 남음</span>
+                  </div>
+                )}
+
+                <div className="mt-auto">
+                  <div className="mb-3">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {salePrice(it) < it.price && (
+                        <span className="px-1.5 py-[3px] rounded bg-[#e91e3f] text-white text-[10px] font-black leading-none shrink-0">{it.discountPct}%</span>
+                      )}
+                      <span className="text-[15px] sm:text-xl font-black text-[#131313] tracking-tight tabular-nums leading-none">
+                        {salePrice(it).toLocaleString()}<span className="text-[11px] sm:text-[12px] font-bold text-[#8a8a8a] ml-1">XP</span>
+                      </span>
+                    </div>
+                    {salePrice(it) < it.price && (
+                      <span className="block text-[11px] text-[#a3a3a3] line-through tabular-nums">{it.price.toLocaleString()} XP</span>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5 sm:gap-2">
+                    <button
+                      onClick={() => addToCart(it)}
+                      disabled={soldOut || owned}
+                      aria-label={inCart ? "장바구니에서 삭제" : "장바구니에 담기"}
+                      title={inCart ? "다시 누르면 장바구니에서 삭제됩니다" : "장바구니에 담기"}
+                      className={`w-8 h-8 sm:w-11 sm:h-11 shrink-0 rounded-full flex items-center justify-center transition-all ${
+                        soldOut || owned
+                          ? "bg-[#eceae6] text-[#c4c4c4] cursor-not-allowed"
+                          : inCart
+                          ? "bg-[#131313] text-white"
+                          : "bg-white text-[#131313] border border-[#e2e0dc] hover:border-[#131313]"
+                      }`}
+                    >
+                      <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => openBuy(it)}
+                      disabled={soldOut || owned}
+                      className={`flex-1 min-w-0 px-2 sm:px-5 h-8 sm:h-11 rounded-full text-[11px] sm:text-[12px] font-bold transition-all ${
+                        owned
+                          ? "bg-[#eceae6] text-[#8a8a8a] cursor-not-allowed"
+                          : soldOut
+                          ? "bg-[#e2e0dc] text-[#a3a3a3] cursor-not-allowed"
+                          : isLoggedIn && !affordable
+                          ? "bg-[#eceae6] text-[#8a8a8a] hover:bg-[#e2e0dc]"
+                          : "bg-[#e91e3f] text-[#ffffff] hover:bg-[#d01634] shadow-[0_4px_12px_rgba(233,30,63,0.25)]"
+                      }`}
+                    >
+                      {owned ? "보유 중" : soldOut ? "품절" : !isLoggedIn ? "로그인" : affordable ? "구매" : "XP 부족"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+    );
+  };
+
   return (
     <div className="w-full flex-1 bg-[#f5f3f0] text-[#131313] min-h-screen">
       {/* ── ARCTIC 전용 헤더 — 스크롤하면 알약 독으로 좁아진다 ── */}
@@ -701,22 +832,7 @@ export default function ShopPage() {
           <div className="py-16 text-center text-sm text-[#8a8a8a]">등록된 상품이 없습니다.</div>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-            {recommended.map((it) => (
-              <Link key={it._id} href={`/shop/item/${it._id}`}
-                className="group bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden hover:border-[#a3a3a3] transition-colors">
-                <div className="aspect-square bg-[#eceae6] overflow-hidden">
-                  {it.imageUrl && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={it.imageUrl} alt="" className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
-                  )}
-                </div>
-                <div className="p-4">
-                  <p className="text-[10px] font-black tracking-[0.15em] text-[#a3a3a3] uppercase mb-1">{TYPES.find((t) => t.v === it.type)?.l || "상품"}</p>
-                  <p className="text-[13px] font-bold text-[#131313] truncate mb-1.5">{it.name}</p>
-                  <p className="text-[14px] font-black text-[#131313] tabular-nums">{salePrice(it).toLocaleString()} XP</p>
-                </div>
-              </Link>
-            ))}
+            {recommended.map((it) => <ProductCard key={it._id} it={it} />)}
           </div>
         )}
 
@@ -728,22 +844,7 @@ export default function ShopPage() {
               <h2 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">전체 상품</h2>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-              {preview.map((it) => (
-                <Link key={it._id} href={`/shop/item/${it._id}`}
-                  className="group bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden hover:border-[#a3a3a3] transition-colors">
-                  <div className="aspect-square bg-[#eceae6] overflow-hidden">
-                    {it.imageUrl && (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={it.imageUrl} alt="" className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <p className="text-[10px] font-black tracking-[0.15em] text-[#a3a3a3] uppercase mb-1">{TYPES.find((t) => t.v === it.type)?.l || "상품"}</p>
-                    <p className="text-[13px] font-bold text-[#131313] truncate mb-1.5">{it.name}</p>
-                    <p className="text-[14px] font-black text-[#131313] tabular-nums">{salePrice(it).toLocaleString()} XP</p>
-                  </div>
-                </Link>
-              ))}
+              {preview.map((it) => <ProductCard key={it._id} it={it} />)}
             </div>
           </div>
         )}
@@ -884,133 +985,7 @@ export default function ShopPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 lg:gap-6">
-            {visible.map((it) => {
-              const soldOut = it.stock === 0;
-              const affordable = canAfford(salePrice(it));
-              const owned = ownedItemIds.has(it._id);
-              const inCart = cart.some((c) => c.itemId === it._id);
-              return (
-                <div key={it._id} className="group bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
-                  {/* 이미지 */}
-                  <div className="relative aspect-[4/3] bg-[#eceae6] overflow-hidden">
-                    {/* 상세로 가는 오버레이 — 위에 얹힌 버튼(z-10)은 그대로 눌린다 */}
-                    <Link href={`/shop/item/${it._id}`} aria-label={`${it.name} 상세보기`} className="absolute inset-0 z-[1]"></Link>
-                    {it.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={it.imageUrl} alt={it.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[#c4c4c4]">
-                        <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
-                        </svg>
-                      </div>
-                    )}
-                    <span className={`absolute top-2 left-2 sm:top-3 sm:left-3 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black tracking-wide ${TYPE_BADGE[it.type]?.cls || "bg-[#131313] text-white"}`}>
-                      {TYPE_BADGE[it.type]?.label || "상품"}
-                    </span>
-                    {!it.active && (
-                      <span className="absolute top-11 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#e2e0dc]">숨김</span>
-                    )}
-
-                    {/* 찜 */}
-                    <button onClick={() => toggleWish(it)} aria-label="찜하기"
-                      className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white border border-[#e2e0dc] flex items-center justify-center shadow-sm transition-colors z-10">
-                      <svg className={`w-4 h-4 transition-colors ${wish.includes(it._id) ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}
-                        fill={wish.includes(it._id) ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                      </svg>
-                    </button>
-                    {soldOut && (
-                      <div className="absolute inset-0 z-[2] bg-[#131313]/55 flex items-center justify-center pointer-events-none">
-                        <span className="text-sm font-black text-white tracking-wider">SOLD OUT</span>
-                      </div>
-                    )}
-
-                    {/* 관리자 — 카드에서 바로 수정·삭제 */}
-                    {isAdmin && (
-                      <div className="absolute bottom-3 right-3 flex gap-1.5 z-10">
-                        <button onClick={() => openEdit(it)}
-                          className="px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#131313] border border-[#e2e0dc] hover:bg-white shadow-sm transition-colors">
-                          수정
-                        </button>
-                        <button onClick={() => setDeleteTarget(it)}
-                          className="px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#c62828] border border-[#e2e0dc] hover:bg-white shadow-sm transition-colors">
-                          삭제
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 정보 */}
-                  <div className="p-3.5 sm:p-5 flex flex-col flex-1">
-                    <Link href={`/shop/item/${it._id}`} className="block">
-                      <h3 className="text-[13px] sm:text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep line-clamp-2 hover:text-[#e91e3f] transition-colors">{it.name}</h3>
-                    </Link>
-                    {it.description && (
-                      <p className="hidden sm:block text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep">{it.description}</p>
-                    )}
-
-                    {/* 재고는 얼마 안 남았을 때만 알린다 (무제한·넉넉할 땐 표시 안 함) */}
-                    {it.stock >= 0 && it.stock <= 5 && it.stock > 0 && (
-                      <div className="flex items-center gap-1.5 mb-4">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-pulse"></span>
-                        <span className="text-[11px] font-bold text-[#e91e3f]">한정 수량 · {it.stock}개 남음</span>
-                      </div>
-                    )}
-
-                    <div className="mt-auto">
-                      <div className="mb-3">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {salePrice(it) < it.price && (
-                            <span className="px-1.5 py-[3px] rounded bg-[#e91e3f] text-white text-[10px] font-black leading-none shrink-0">{it.discountPct}%</span>
-                          )}
-                          <span className="text-[15px] sm:text-xl font-black text-[#131313] tracking-tight tabular-nums leading-none">
-                            {salePrice(it).toLocaleString()}<span className="text-[11px] sm:text-[12px] font-bold text-[#8a8a8a] ml-1">XP</span>
-                          </span>
-                        </div>
-                        {salePrice(it) < it.price && (
-                          <span className="block text-[11px] text-[#a3a3a3] line-through tabular-nums">{it.price.toLocaleString()} XP</span>
-                        )}
-                      </div>
-                      <div className="flex gap-1.5 sm:gap-2">
-                        <button
-                          onClick={() => addToCart(it)}
-                          disabled={soldOut || owned}
-                          aria-label={inCart ? "장바구니에서 삭제" : "장바구니에 담기"}
-                          title={inCart ? "다시 누르면 장바구니에서 삭제됩니다" : "장바구니에 담기"}
-                          className={`w-8 h-8 sm:w-11 sm:h-11 shrink-0 rounded-full flex items-center justify-center transition-all ${
-                            soldOut || owned
-                              ? "bg-[#eceae6] text-[#c4c4c4] cursor-not-allowed"
-                              : inCart
-                              ? "bg-[#131313] text-white"
-                              : "bg-white text-[#131313] border border-[#e2e0dc] hover:border-[#131313]"
-                          }`}
-                        >
-                          <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => openBuy(it)}
-                          disabled={soldOut || owned}
-                          className={`flex-1 min-w-0 px-2 sm:px-5 h-8 sm:h-11 rounded-full text-[11px] sm:text-[12px] font-bold transition-all ${
-                            owned
-                              ? "bg-[#eceae6] text-[#8a8a8a] cursor-not-allowed"
-                              : soldOut
-                              ? "bg-[#e2e0dc] text-[#a3a3a3] cursor-not-allowed"
-                              : isLoggedIn && !affordable
-                              ? "bg-[#eceae6] text-[#8a8a8a] hover:bg-[#e2e0dc]"
-                              : "bg-[#e91e3f] text-[#ffffff] hover:bg-[#d01634] shadow-[0_4px_12px_rgba(233,30,63,0.25)]"
-                          }`}
-                        >
-                          {owned ? "보유 중" : soldOut ? "품절" : !isLoggedIn ? "로그인" : affordable ? "구매" : "XP 부족"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {visible.map((it) => <ProductCard key={it._id} it={it} />)}
           </div>
         )}
       </section>

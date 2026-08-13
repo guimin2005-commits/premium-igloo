@@ -67,6 +67,18 @@ export default function AdminShopPage() {
   const EMPTY_BANNER = { id: "", imageUrl: "", title: "", subtitle: "", link: "", sortOrder: "", active: true };
   const [banners, setBanners] = useState<any[]>([]);
   const [bannerForm, setBannerForm] = useState<any>(EMPTY_BANNER);
+  // 📌 넣은 이미지의 실제 크기를 읽어 권장 크기와 견줘 준다 (등록하고 나서야 잘린 걸 아는 일을 막는다)
+  const [bannerSize, setBannerSize] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    const url = (bannerForm.imageUrl || "").trim();
+    if (!url) { setBannerSize(null); return; }
+    let alive = true;
+    const img = new Image();
+    img.onload = () => { if (alive) setBannerSize({ w: img.naturalWidth, h: img.naturalHeight }); };
+    img.onerror = () => { if (alive) setBannerSize(null); };
+    img.src = url;
+    return () => { alive = false; };
+  }, [bannerForm.imageUrl]);
 
   const saveBanner = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -396,7 +408,24 @@ export default function AdminShopPage() {
                   <label className={labelClass}>배너 이미지 URL <span className="text-[#e91e3f]">*</span></label>
                   <input type="text" value={bannerForm.imageUrl} onChange={(e) => setBannerForm({ ...bannerForm, imageUrl: e.target.value })}
                     placeholder="https://..." className={inputClass} />
-                  <p className={fieldNote}>가로가 긴 이미지(권장 비율 4:1)가 잘 어울립니다</p>
+                  <p className={fieldNote}>
+                    권장 크기 <span className="text-gray-200 font-bold tabular-nums">2400 × 600 px</span> (4:1) · 최소 1200 × 300 px · JPG/PNG/WebP
+                  </p>
+                  <p className={fieldNote}>
+                    모바일에서는 3:1로 잘려 보입니다 — 글자·로고는 가운데 <span className="text-gray-200 font-bold">가로 75%</span> 안에 두세요.
+                  </p>
+                  {bannerSize && (() => {
+                    const ratio = bannerSize.w / bannerSize.h;
+                    const tooSmall = bannerSize.w < 1200;
+                    const offRatio = ratio < 3.4 || ratio > 4.6;
+                    const ok = !tooSmall && !offRatio;
+                    return (
+                      <p className={`text-[10px] mt-1.5 font-bold ${ok ? "text-emerald-400" : "text-amber-400"}`}>
+                        현재 이미지 <span className="tabular-nums">{bannerSize.w} × {bannerSize.h} px</span> ({ratio.toFixed(2)}:1)
+                        {ok ? " · 적당합니다" : tooSmall ? " · 가로가 1200px보다 작아 흐리게 보일 수 있습니다" : " · 4:1에서 벗어나 위아래가 잘립니다"}
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">

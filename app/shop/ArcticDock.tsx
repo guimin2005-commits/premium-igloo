@@ -71,7 +71,8 @@ export default function ArcticDock({
         }`;
         const icon = (
           <>
-            <svg className="w-[19px] h-[19px]" fill={active && (it.key === "wish" || it.key === "home") ? "currentColor" : "none"}
+            {/* 채워도 모양이 남는 건 하트뿐 — 집 아이콘은 윤곽선이라 채우면 덩어리로 뭉갠다 */}
+            <svg className="w-[19px] h-[19px]" fill={active && it.key === "wish" ? "currentColor" : "none"}
               viewBox="0 0 24 24" strokeWidth={active ? 2 : 1.6} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d={it.icon} />
             </svg>
