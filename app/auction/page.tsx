@@ -31,12 +31,24 @@ const NICK_ADJ = [
   "시큼한", "달콤한", "매콤한", "심심한", "화려한", "투명한", "반짝이는", "느긋한", "재빠른", "엉뚱한",
   "고요한", "우렁찬", "조그만", "커다란", "삐딱한", "동그란", "네모난", "푹신한", "딱딱한", "촉촉한",
   "건조한", "뜨끈한", "서늘한", "몽롱한", "또렷한", "낡은", "새것같은", "빈티지", "미래형", "전설의",
+  // 유쾌한 쪽 — 상태·표정이 눈에 그려지는 말들
+  "춤추는", "노래하는", "굴러다니는", "숨어있는", "배고픈", "방금깨어난", "당황한", "의욕넘치는", "과몰입한", "야근하는",
+  "칼퇴한", "지각한", "삐진", "능청맞은", "허둥대는", "빙글빙글", "폭주하는", "은퇴한", "복귀한", "수상한",
+  "정체불명", "무적의", "최후의", "초심자", "베테랑", "떠돌이", "출근중인", "낭만적인", "천진한", "무심한",
+  "각성한", "잠수탄", "우쭐한", "겸손한", "질주하는", "구르는", "떠오르는", "장엄한", "소박한", "전설속의",
+  "만렙", "1렙", "자칭프로", "월요일의", "금요일의", "산책하는", "낮잠자는", "야망있는", "느릿느릿", "번개같은",
 ];
 const NICK_NOUN = [
   "머그컵", "감자칩", "슬리퍼", "선인장", "고등어", "우산", "베개", "양말", "타코야키", "붕어빵",
   "책갈피", "리모컨", "화분", "물티슈", "계란찜", "주전자", "목도리", "냄비뚜껑", "젤리", "식빵",
   "돌멩이", "구름", "만두", "김밥", "라디오", "스탬프", "지우개", "테이프", "빨대", "단추",
   "쿠션", "달력", "옷걸이", "삼각김밥", "가습기", "멀티탭", "귤껍질", "아이스크림", "종이비행기", "고무장갑",
+  // 이글루 감성 + 웃긴 물건·먹거리
+  "펭귄", "눈사람", "빙하", "고드름", "털장갑", "핫팩", "전기장판", "온수매트", "군고구마", "호빵",
+  "탕후루", "마라탕", "떡볶이", "곱창", "컵라면", "치즈볼", "군만두", "약과", "누룽지", "찐빵",
+  "슬라임", "훌라후프", "탬버린", "리코더", "요요", "팽이", "딱지", "구슬", "제기", "복권",
+  "출석도장", "택배상자", "뽁뽁이", "포스트잇", "형광펜", "충전기", "이어폰", "마우스패드", "선풍기", "청소기",
+  "댕댕이", "고양이발", "햄스터", "해달", "물개", "부엉이", "두더지", "달팽이", "개구리", "문어",
 ];
 const randomNick = (used: Set<string>) => {
   for (let i = 0; i < 80; i++) {
@@ -232,6 +244,31 @@ export default function AuctionListPage() {
       setPopup({ isOpen: true, message: "서버와 통신 중 오류가 발생했습니다.", isError: true });
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  // 경매 제목 수정 (관리자 전용)
+  const [renameTarget, setRenameTarget] = useState<any>(null); // { id, title }
+  const [isRenaming, setIsRenaming] = useState(false);
+  const renameAuction = async () => {
+    const t = (renameTarget?.title || "").trim();
+    if (!t || isRenaming) return;
+    setIsRenaming(true);
+    try {
+      const res = await fetch("/api/auction", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: renameTarget.id, title: t }),
+      });
+      const d = await res.json();
+      if (res.ok && d.success) {
+        setAuctions((prev) => prev.map((a) => (a._id === renameTarget.id ? { ...a, title: t } : a)));
+        setRenameTarget(null);
+        setPopup({ isOpen: true, message: "제목을 변경했습니다.", isError: false });
+      } else setPopup({ isOpen: true, message: d.message || "제목 변경에 실패했습니다.", isError: true });
+    } catch {
+      setPopup({ isOpen: true, message: "서버와 통신 중 오류가 발생했습니다.", isError: true });
+    } finally {
+      setIsRenaming(false);
     }
   };
 
@@ -527,6 +564,7 @@ export default function AuctionListPage() {
                           className={`auc-label transition-colors disabled:opacity-40 ${a.isPrivate ? "text-[#e91e3f] hover:text-white" : "text-gray-800 hover:text-white"}`}>
                           {a.isPrivate ? "비공개 · 공개로 전환" : "공개 · 비공개로 전환"}
                         </button>
+                        <button onClick={() => setRenameTarget({ id: a._id, title: a.title })} className="auc-label text-gray-800 hover:text-white transition-colors">제목 수정</button>
                         <button onClick={() => setDeleteId(a._id)} className="auc-label text-gray-800 hover:text-red-400 transition-colors">삭제</button>
                       </div>
                     )}
@@ -813,6 +851,33 @@ export default function AuctionListPage() {
         )}
 
       </div>
+
+      {/* 경매 제목 수정 */}
+      {renameTarget && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4" onClick={() => setRenameTarget(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-[#121212] border border-white/12 rounded-3xl w-full max-w-sm p-8">
+            <h2 className="text-lg font-black text-white mb-1.5">경매 제목 수정</h2>
+            <p className="text-[11px] text-gray-500 mb-6">경매 목록과 경매장 상단에 표시되는 이름입니다.</p>
+            <input
+              value={renameTarget.title}
+              autoFocus
+              maxLength={60}
+              onChange={(e) => setRenameTarget({ ...renameTarget, title: e.target.value.slice(0, 60) })}
+              onKeyDown={(e) => { if (e.key === "Enter") renameAuction(); }}
+              placeholder="경매 제목"
+              className="w-full bg-transparent border-0 border-b border-white/20 focus:border-white/60 px-0 py-2.5 text-base font-black text-white outline-none transition-colors placeholder:text-gray-700 placeholder:font-bold"
+            />
+            <p className="auc-label text-gray-700 mt-2 text-right">{renameTarget.title.length}/60</p>
+            <div className="flex gap-3 mt-7">
+              <button onClick={() => setRenameTarget(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">취소</button>
+              <button onClick={renameAuction} disabled={!renameTarget.title.trim() || isRenaming}
+                className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 text-white text-sm font-bold rounded-xl transition-colors">
+                {isRenaming ? "저장 중" : "저장"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteId && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4">

@@ -93,8 +93,17 @@ export async function PATCH(request) {
       return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
     }
     await connectToDatabase();
-    const { id, isPrivate } = await request.json();
+    const { id, isPrivate, title } = await request.json();
     if (!id) return NextResponse.json({ success: false, message: "대상이 없습니다." }, { status: 400 });
+
+    // 제목 수정 — 넘어온 항목만 바꾼다 (공개 전환과 같은 창구를 쓴다)
+    if (title !== undefined) {
+      const t = String(title).trim().slice(0, 60);
+      if (!t) return NextResponse.json({ success: false, message: "제목을 입력해 주세요." }, { status: 400 });
+      const renamed = await Auction.findByIdAndUpdate(id, { title: t }, { new: true, select: "title" });
+      if (!renamed) return NextResponse.json({ success: false, message: "경매를 찾을 수 없습니다." }, { status: 404 });
+      return NextResponse.json({ success: true, message: "제목을 변경했습니다.", data: { title: renamed.title } });
+    }
 
     const auction = await Auction.findByIdAndUpdate(id, { isPrivate: !!isPrivate }, { new: true, select: "isPrivate" });
     if (!auction) return NextResponse.json({ success: false, message: "경매를 찾을 수 없습니다." }, { status: 404 });

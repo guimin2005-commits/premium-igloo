@@ -149,6 +149,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [confirmCfg, setConfirmCfg] = useState<any>(null); // {title, message, confirmLabel, onConfirm}
   const [strategyModalOpen, setStrategyModalOpen] = useState(false);
   const [posSwapTarget, setPosSwapTarget] = useState<any>(null); // {leaderIdx} 포지션 체인지 모달
+  const [posPickOpen, setPosPickOpen] = useState(false);        // 리더 본인 포지션 선택 창 (개최 때 미지정 시)
+  const posPickShown = useRef(false);                            // 시작 직후 한 번만 자동으로 띄운다
+  const [titleEdit, setTitleEdit] = useState<string | null>(null); // 진행자: 제목 수정 중인 값
   const [swapA, setSwapA] = useState(""); const [swapB, setSwapB] = useState("");
   const [moveFrom, setMoveFrom] = useState<number | null>(null); // 오버플로우: 이동할 선수 rosterIdx
   const [expandedTeams, setExpandedTeams] = useState<Set<number>>(new Set()); // 팀 레일 펼침 상태
@@ -573,6 +576,17 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     } catch {}
     act({ action: "enter", userName: session.user.name });
   }, [auction ? id : null, status]); // eslint-disable-line
+
+  // 📌 개최 때 포지션을 비워 둔 리더는, 경매가 시작되면 본인이 직접 고르게 한다
+  useEffect(() => {
+    if (!auction || auction.status !== "진행중") { posPickShown.current = false; return; }
+    const li = role === "host" || role === "spec" ? null : Number(role);
+    const me = li !== null ? auction.leaders?.[li] : null;
+    if (!me || me.position) { posPickShown.current = false; return; }
+    if (posPickShown.current) return; // 닫은 뒤 폴링마다 다시 뜨지 않게 — 배너로 남긴다
+    posPickShown.current = true;
+    setPosPickOpen(true);
+  }, [auction?.status, role, auction?.leaders?.length]); // eslint-disable-line
 
   const sendChat = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1483,7 +1497,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           </button>
           <div className="min-w-0 flex-1 shrink md:shrink-0 flex items-center gap-3">
             <div className="min-w-0">
-              <h1 className="text-sm md:text-base font-black text-white truncate leading-tight">{auction.title}</h1>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h1 className="text-sm md:text-base font-black text-white truncate leading-tight">{auction.title}</h1>
+                {isAdmin && (
+                  <button onClick={() => setTitleEdit(auction.title)} title="제목 수정" className="shrink-0 text-gray-600 hover:text-white transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg>
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-2.5 mt-0.5">
                 <span className={`auc-label flex items-center gap-1.5 ${auction.status === "진행중" ? "text-[#e91e3f]" : auction.status === "종료" ? "text-gray-600" : "text-amber-300"}`}>
                   {auction.status === "진행중" && <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-pulse" />}
@@ -1542,6 +1563,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             return (
               <button onClick={async () => {
                 const d = await act({ action: "host:start" });
+                // 포지션을 비워 둔 리더가 있으면, 각자 화면의 선택 창으로 넘어갔음을 알린다
+                if (d?.success && d.noPos?.length) showToast(`${d.noPos.join(", ")} 리더가 포지션 선택 창에서 직접 고릅니다`);
                 if (!d.success && d.notReady) {
                   setConfirmCfg({ title: "강제 시작", message: `${d.message}\n\n그래도 경매를 시작하시겠습니까?`, confirmLabel: "강제 시작", onConfirm: () => act({ action: "host:start", force: true }) });
                 }
@@ -1613,6 +1636,21 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           )}
 
 
+
+          {/* 리더: 포지션 미선택 배너 — 창을 닫아도 여기서 다시 열 수 있다 */}
+          {myLeader && auction.status === "진행중" && !myLeader.position && !posPickOpen && (
+            <button
+              onClick={() => setPosPickOpen(true)}
+              className="w-full border border-[#e91e3f]/40 bg-[#e91e3f]/[0.07] hover:bg-[#e91e3f]/[0.13] px-5 py-4 flex items-center justify-between gap-4 text-left transition-colors"
+            >
+              <div className="min-w-0">
+                <p className="auc-label text-[#ff5c77] mb-1">Position Pick</p>
+                <p className="text-sm font-black text-white">본인 포지션을 아직 고르지 않았습니다</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">포지션을 정해야 팀 슬롯 한 칸이 채워집니다.</p>
+              </div>
+              <span className="shrink-0 text-[11px] font-black text-white bg-[#e91e3f] px-4 py-2">고르기</span>
+            </button>
+          )}
 
           {/* 전략 타임 배너 */}
           {strategyLeft > 0 && (
@@ -3255,6 +3293,95 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             { text: confirmCfg.confirmLabel || "확인", kind: "primary", onClick: () => { confirmCfg.onConfirm(); setConfirmCfg(null); } },
           ]}
         />
+      )}
+
+      {/* 리더: 본인 포지션 선택 창 — 개최 때 비워 둔 리더에게 시작 시 뜬다 */}
+      {posPickOpen && myLeader && myLeaderIdx !== null && !myLeader.position && (
+        <AucModal
+          label="Position Pick"
+          tone="danger"
+          wide
+          title="본인 포지션을 선택하세요"
+          desc={`경매가 시작되었습니다. ${myLeader.name} 리더가 직접 뛸 포지션을 고르면 팀 슬롯 한 칸이 채워집니다.${p1Role ? `\n${p1Role}를 고르면 1페이즈에는 입찰할 수 없습니다.` : ""}`}
+          onClose={() => setPosPickOpen(false)}
+          actions={[{ text: "나중에 고르기", onClick: () => setPosPickOpen(false) }]}
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-5">
+            {roleList.map((r) => {
+              // 본인 자리를 뺀 나머지가 이미 다 찼으면 그 포지션은 고를 수 없다
+              const taken = myLeader.roster.filter((x: any) => x.slot === r && x.playerIdx !== -1).length;
+              const limit = slotLimitOf(r);
+              const full = taken >= limit;
+              const c = roleColor(r);
+              return (
+                <button
+                  key={r}
+                  disabled={full}
+                  onClick={async () => {
+                    const d = await act({ action: "leader:setPos", leaderIdx: myLeaderIdx, position: r });
+                    if (d?.success) {
+                      sfxSelect();
+                      setPosPickOpen(false);
+                      // 폴링을 기다리지 않고 즉시 슬롯 보드에 반영
+                      patchAuction((a) => {
+                        const l = a.leaders[myLeaderIdx];
+                        l.position = r;
+                        const si = l.roster.findIndex((x: any) => x.playerIdx === -1);
+                        if (si >= 0) l.roster[si].slot = r;
+                        else l.roster.push({ playerIdx: -1, slot: r, price: 0, golden: false });
+                      });
+                      showToast(`본인 포지션을 ${r}(으)로 선택했습니다`);
+                    } else showToast(d?.message || "포지션 선택에 실패했습니다");
+                  }}
+                  className={`px-3 py-4 border flex flex-col items-center gap-1.5 transition-colors ${
+                    full ? "border-white/[0.07] bg-white/[0.02] opacity-40 cursor-not-allowed" : "border-white/12 bg-white/[0.03] hover:bg-white/[0.08] hover:border-white/30"
+                  }`}
+                >
+                  <span className={`auc-label ${c.text}`}>{roleAbbr(r)}</span>
+                  <span className="text-sm font-black text-white">{r}</span>
+                  <span className="text-[10px] text-gray-500">{full ? "가득 참" : `${limit - taken}칸 남음`}</span>
+                </button>
+              );
+            })}
+          </div>
+        </AucModal>
+      )}
+
+      {/* 진행자: 경매 제목 수정 */}
+      {titleEdit !== null && (
+        <AucModal
+          label="Edit Title"
+          title="경매 제목 수정"
+          desc="경매 목록과 경매장 상단에 표시되는 이름입니다."
+          onClose={() => setTitleEdit(null)}
+          actions={[
+            { text: "취소", onClick: () => setTitleEdit(null) },
+            {
+              text: "저장",
+              kind: "primary",
+              disabled: !titleEdit.trim(),
+              onClick: async () => {
+                const t = titleEdit.trim();
+                const d = await act({ action: "host:title", title: t });
+                if (d?.success) {
+                  patchAuction((a) => { a.title = t; });
+                  showToast("경매 제목을 변경했습니다");
+                  setTitleEdit(null);
+                } else showToast(d?.message || "제목 변경에 실패했습니다");
+              },
+            },
+          ]}
+        >
+          <input
+            value={titleEdit}
+            autoFocus
+            maxLength={60}
+            onChange={(e) => setTitleEdit(e.target.value.slice(0, 60))}
+            placeholder="경매 제목"
+            className="w-full mt-5 bg-transparent border-0 border-b border-white/20 focus:border-white/60 px-0 py-2.5 text-base font-black text-white outline-none transition-colors placeholder:text-gray-700 placeholder:font-bold"
+          />
+          <p className="auc-mono text-[10px] text-gray-600 mt-2 text-right">{titleEdit.length}/60</p>
+        </AucModal>
       )}
 
       {/* 전략 타임 시작 모달 */}

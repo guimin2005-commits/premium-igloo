@@ -233,6 +233,55 @@ export async function POST(request, { params }) {
         return NextResponse.json({ success: true });
       }
 
+      // 리더: 본인 포지션 직접 선택 — 개최 때 비워 둔 리더가 시작 시점에 고른다
+      case "leader:setPos": {
+        const { leaderIdx, position } = body;
+        const leader = auction.leaders[leaderIdx];
+        if (!leader || !roleNames(S).includes(position)) return NextResponse.json({ success: false }, { status: 400 });
+
+        // 남의 리더 자리를 대신 고르지 못하게 — ID가 등록된 리더는 본인(또는 진행자)만
+        const session = await getServerSession(authOptions);
+        if (leader.discordId && leader.discordId !== session?.user?.id && !isAdminName(session?.user?.name)) {
+          return NextResponse.json({ success: false, message: "본인 리더만 선택할 수 있습니다." }, { status: 403 });
+        }
+        // 이미 정해진 포지션을 리더가 스스로 바꾸는 건 막는다 (변경은 진행자 권한)
+        if (leader.position) {
+          return NextResponse.json({ success: false, message: "이미 포지션이 정해져 있습니다. 변경은 진행자에게 요청해 주세요." }, { status: 409 });
+        }
+
+        const selfIdx = leader.roster.findIndex((r) => r.playerIdx === -1);
+        const occupied = leader.roster.filter((r, i) => r.slot === position && i !== selfIdx).length;
+        if (occupied >= slotLimitOf(S, position)) {
+          return NextResponse.json({ success: false, message: `${position} 슬롯이 이미 가득 찼습니다.` }, { status: 400 });
+        }
+
+        leader.position = position;
+        if (selfIdx >= 0) leader.roster[selfIdx].slot = position;
+        else leader.roster.push({ playerIdx: -1, slot: position, price: 0, golden: false });
+        addLog(auction, `${leader.name} 리더 포지션 선택 → ${position}`);
+        await auction.save();
+        sysChat(id, `${leader.name} 리더가 본인 포지션을 [${position}]으로 선택했습니다.`);
+        return NextResponse.json({ success: true });
+      }
+
+      // 개최자: 경매 제목 수정
+      case "host:title": {
+        const session = await getServerSession(authOptions);
+        if (!isAdminName(session?.user?.name)) {
+          return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        }
+        const title = String(body.title || "").trim().slice(0, 60);
+        if (!title) return NextResponse.json({ success: false, message: "제목을 입력해 주세요." }, { status: 400 });
+        if (title === auction.title) return NextResponse.json({ success: true, title });
+
+        const before = auction.title;
+        auction.title = title;
+        addLog(auction, `제목 변경: ${before} → ${title}`);
+        await auction.save();
+        sysChat(id, `경매 제목이 [${title}]으로 변경되었습니다.`);
+        return NextResponse.json({ success: true, title });
+      }
+
       case "host:start": {
         const notReady = auction.leaders.filter((l) => !l.ready);
         if (notReady.length > 0 && !body.force) {
@@ -240,9 +289,12 @@ export async function POST(request, { params }) {
         }
         auction.status = "진행중";
         addLog(auction, "경매 시작");
+        // 개최 때 포지션을 비워 둔 리더는 각자 화면에서 직접 고르게 한다
+        const noPos = auction.leaders.filter((l) => !l.position).map((l) => l.name);
         await auction.save();
         sysChat(id, "경매가 시작되었습니다.");
-        return NextResponse.json({ success: true });
+        if (noPos.length > 0) sysChat(id, `${noPos.join(", ")} 리더는 화면에 뜬 창에서 본인 포지션을 선택해 주세요.`);
+        return NextResponse.json({ success: true, noPos });
       }
 
       case "host:end":
