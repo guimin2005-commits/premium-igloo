@@ -382,7 +382,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     <button className={`relative h-full flex items-center transition-all duration-500 ease-out outline-none focus:outline-none ${scrolled ? "px-3" : "px-4"} ${isGroupActive || isOpen ? "text-[#e91e3f]" : isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white"}`}>
                       {group.name}
                       {/* 대분류 라인 차오름 이펙트 — 평소엔 숨김, 호버 시 왼쪽부터 차오름. 알약 모드에선 라인 위치도 함께 올라온다 */}
-                      <span className={`absolute h-px bg-[#e91e3f] origin-left transition-all duration-500 ${scrolled ? "bottom-2.5 left-3 right-3" : "bottom-4 left-4 right-4"} ${isGroupActive || isOpen ? "scale-x-100" : "scale-x-0 group-hover/gnav:scale-x-100"}`} />
+                      <span style={{ transitionProperty: "transform, bottom, left, right", transitionDuration: "0.3s, 0.5s, 0.5s, 0.5s", transitionTimingFunction: "cubic-bezier(0.16,1,0.3,1)" }} className={`absolute h-px bg-[#e91e3f] origin-left ${scrolled ? "bottom-2.5 left-3 right-3" : "bottom-4 left-4 right-4"} ${isGroupActive || isOpen ? "scale-x-100" : "scale-x-0 group-hover/gnav:scale-x-100"}`} />
                     </button>
 
                   </div>
@@ -536,8 +536,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         // 바깥 div는 위치 잡기 + 알약 모드에선 pt-2 투명 다리(마우스가 알약→메뉴로 건너갈 때 호버가 안 끊기게)
         // 📌 기준을 항상 가운데로 두고 폭만 바꾼다 — 알약↔전체폭 전환 때 메뉴가 튀지 않고 헤더와 같이 움직인다
         return (
-          <div className={`hidden md:block absolute top-full ${scrolled ? "left-1/2 -translate-x-1/2 pt-2 w-[min(100%-24px,48rem)]" : "left-0 right-0"}`} style={{ animation: "megaReveal 0.34s cubic-bezier(0.16,1,0.3,1)" }}>
-            <style dangerouslySetInnerHTML={{ __html: `@keyframes megaReveal{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0 0 0 0)}}@keyframes megaDrop{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}` }} />
+          <div className={`hidden md:block absolute top-full ${scrolled ? "left-1/2 -translate-x-1/2 pt-2 w-[min(100%-24px,48rem)]" : "left-0 right-0"}`}>
+            <style dangerouslySetInnerHTML={{ __html: `@keyframes megaDrop{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}` }} />
             <div className={`backdrop-blur-2xl origin-top transition-[border-radius,border-color,box-shadow,background-color] duration-500 ease-out ${isLightPage ? "bg-white/90" : "bg-[#0c0c0c]/90"} ${scrolled ? (isLightPage ? "rounded-3xl border border-black/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.25)]" : "rounded-3xl border border-white/[0.07] overflow-hidden shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]") : (isLightPage ? "border-b border-black/[0.08] shadow-[0_40px_80px_-24px_rgba(0,0,0,0.2)]" : "border-b border-white/10 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.9)]")}`}>
             <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
             <div className={`mx-auto grid grid-cols-12 gap-10 items-start transition-[max-width,padding] duration-500 ease-out ${scrolled ? "max-w-3xl px-8 py-7" : "max-w-7xl px-8 py-8 lg:py-10"}`} style={{ animation: "megaDrop 0.42s cubic-bezier(0.16,1,0.3,1) 0.06s both" }}>
