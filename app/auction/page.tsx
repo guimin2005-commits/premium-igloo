@@ -156,6 +156,25 @@ export default function AuctionListPage() {
     });
   };
 
+  // 📌 선수 카드를 리더로 올린다 — 설문으로 한꺼번에 불러온 뒤 팀장을 골라낼 때 쓴다
+  const promoteToLeader = (i: number) => {
+    const p = players[i];
+    if (!p?.alias?.trim()) {
+      setPopup({ isOpen: true, message: "닉네임이 있어야 리더로 올릴 수 있습니다.", isError: true });
+      return;
+    }
+    // 포지션은 이 경매의 역할과 맞을 때만 가져간다
+    const pos = roleNamesList().includes(p.mainPos) ? p.mainPos : "";
+    setLeaders((prev) => {
+      const empty = prev.findIndex((l) => !l.name.trim());
+      const next = { name: p.alias.trim(), discordId: p.discordId || "", position: pos };
+      // 비어 있는 리더 칸이 있으면 그 자리를 채운다
+      return empty >= 0 ? prev.map((l, idx) => (idx === empty ? next : l)) : [...prev, next];
+    });
+    setPlayers((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : [{ alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", mostChampions: [""], isAllPos: false }]));
+    setPopup({ isOpen: true, message: `${p.alias}님을 리더로 올렸습니다.${pos ? ` (${pos})` : ""}`, isError: false });
+  };
+
   // 📌 대회 참가 설문 → 선수 명단 자동 채우기 (관리자 전용)
   const [showSurveyPicker, setShowSurveyPicker] = useState(false);
   const [surveyPosts, setSurveyPosts] = useState<any[]>([]);
@@ -725,6 +744,7 @@ export default function AuctionListPage() {
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase">Player {String(i + 1).padStart(2, "0")}</span>
                         <div className="flex items-center gap-2.5">
+                          <button type="button" onClick={() => promoteToLeader(i)} title="이 선수를 리더로" className="text-[10px] font-black px-2.5 py-1 rounded-full border border-white/15 text-gray-400 hover:text-white hover:border-white/35 transition-colors">리더로</button>
                           <button type="button" onClick={() => updatePlayer(i, "isAllPos", !p.isAllPos)} className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${p.isAllPos ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "border-white/10 text-gray-600 hover:border-white/30"}`}>올 포지션</button>
                           {players.length > 1 && (
                             <button type="button" onClick={() => setPlayers(players.filter((_, idx) => idx !== i))} className="text-[10px] font-bold text-gray-600 hover:text-red-400 transition-colors">제거</button>
