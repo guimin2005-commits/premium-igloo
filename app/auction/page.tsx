@@ -156,6 +156,42 @@ export default function AuctionListPage() {
     });
   };
 
+  // 📌 대회 참가 설문 → 선수 명단 자동 채우기 (관리자 전용)
+  const [showSurveyPicker, setShowSurveyPicker] = useState(false);
+  const [surveyPosts, setSurveyPosts] = useState<any[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const openSurveyPicker = async () => {
+    setShowSurveyPicker(true);
+    try {
+      const d = await (await fetch("/api/auction/import-survey", { cache: "no-store" })).json();
+      setSurveyPosts(Array.isArray(d?.data) ? d.data : []);
+    } catch { setSurveyPosts([]); }
+  };
+
+  const importSurvey = async (postId: string) => {
+    if (isImporting) return;
+    setIsImporting(true);
+    try {
+      const qs = new URLSearchParams({ postId, roles: roleNamesList().join(",") });
+      const d = await (await fetch(`/api/auction/import-survey?${qs}`, { cache: "no-store" })).json();
+      const list = Array.isArray(d?.data) ? d.data : [];
+      if (list.length === 0) {
+        setPopup({ isOpen: true, message: "불러올 응답이 없습니다.", isError: true });
+      } else {
+        setPlayers(list);
+        setShowSurveyPicker(false);
+        const skipped = d?.meta?.skipped || 0;
+        setPopup({ isOpen: true, message: `선수 ${list.length}명을 불러왔습니다.${skipped ? `
+닉네임을 찾지 못한 ${skipped}명은 제외했습니다.` : ""}`, isError: false });
+      }
+    } catch {
+      setPopup({ isOpen: true, message: "설문을 불러오지 못했습니다.", isError: true });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   // 공개 ↔ 비공개 전환 (관리자 전용)
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const togglePrivate = async (id: string, next: boolean) => {
@@ -649,7 +685,7 @@ export default function AuctionListPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   {leaders.map((l, i) => (
-                    <div key={i} className="relative border-b border-white/10 py-4 hover:border-white/20 transition-colors">
+                    <div key={i} className="relative rounded-xl border border-white/10 bg-white/[0.02] p-4 hover:border-white/20 transition-colors">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase">Leader {String(i + 1).padStart(2, "0")}</span>
                         {leaders.length > 1 && (
@@ -678,13 +714,14 @@ export default function AuctionListPage() {
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-base md:text-lg font-black text-white tracking-tight">선수 명단 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">({players.filter(p => p.alias.trim()).length}명)</span></label>
                   <div className="flex gap-2">
+                    <button type="button" onClick={openSurveyPicker} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">설문에서 불러오기</button>
                     <button type="button" onClick={rollAllNicks} className="text-[11px] font-black text-gray-400 bg-white/5 border border-white/10 px-3.5 py-1.5 rounded-full hover:text-white hover:border-white/25 transition-colors">전체 랜덤 닉네임</button>
                     <button type="button" onClick={() => setPlayers([...players, { alias: "", discordId: "", peakTier: "", currentTier: "", mainPos: "", subPos: "", mostChampions: [""], isAllPos: false }])} className="text-[11px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">선수 추가</button>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   {players.map((p, i) => (
-                    <div key={i} className={`relative border-b py-4 transition-colors ${p.isAllPos ? "border-[#e91e3f]/35" : "border-white/10 hover:border-white/25"}`}>
+                    <div key={i} className={`relative rounded-xl border p-4 transition-colors ${p.isAllPos ? "border-[#e91e3f]/35 bg-[#e91e3f]/[0.04]" : "border-white/10 bg-white/[0.02] hover:border-white/25"}`}>
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase">Player {String(i + 1).padStart(2, "0")}</span>
                         <div className="flex items-center gap-2.5">
@@ -770,6 +807,47 @@ export default function AuctionListPage() {
         </div>
       )}
 
+      {/* ── 설문에서 선수 불러오기 ── */}
+      {showSurveyPicker && (
+        <div className="fixed inset-0 z-[115] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 overlay-in" onClick={() => setShowSurveyPicker(false)}>
+          <div onClick={(e) => e.stopPropagation()}
+            className="bg-[#121212] border border-white/10 rounded-t-3xl sm:rounded-3xl w-full max-w-lg max-h-[85dvh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="shrink-0 px-6 py-4 border-b border-white/[0.07]">
+              <h2 className="text-base font-black text-white tracking-tight">설문에서 선수 불러오기</h2>
+              <p className="text-[11px] text-gray-500 mt-1 break-keep">
+                참가 설문을 받은 대회를 고르면 응답을 선수 카드로 옮깁니다. 닉네임·티어·포지션·모스트는 질문 문구를 보고 자동으로 맞춥니다.
+              </p>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden divide-y divide-white/[0.06]">
+              {surveyPosts.length === 0 ? (
+                <p className="px-6 py-12 text-center text-xs text-gray-500 break-keep">참가 설문을 받은 대회가 없습니다.</p>
+              ) : (
+                surveyPosts.map((p) => (
+                  <button key={p._id} type="button" disabled={isImporting || p.responses === 0}
+                    onClick={() => importSurvey(p._id)}
+                    className={`w-full text-left px-6 py-4 flex items-center gap-3 transition-colors ${p.responses === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-white/[0.03]"}`}>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-bold text-white truncate">{p.title}</p>
+                      <p className="text-[11px] text-gray-500">
+                        {new Date(p.createdAt).toLocaleDateString("ko-KR")} · 응답 {p.responses}건
+                      </p>
+                    </div>
+                    <span className="text-[11px] font-black text-[#e91e3f] shrink-0">
+                      {isImporting ? "불러오는 중" : "불러오기"}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="shrink-0 px-6 py-3 border-t border-white/[0.07] flex justify-end">
+              <button type="button" onClick={() => setShowSurveyPicker(false)}
+                className="px-5 py-2 rounded-full bg-[#2a2a2a] hover:bg-[#333] text-white text-[12px] font-bold transition-colors">닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
       {popup.isOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
           <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
