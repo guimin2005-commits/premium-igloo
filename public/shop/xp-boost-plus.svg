@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900" role="img" aria-label="XP Boost+">
+  <defs>
+    <linearGradient id="ice" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#12161f"/>
+      <stop offset="55%" stop-color="#0d1017"/>
+      <stop offset="100%" stop-color="#080a0e"/>
+    </linearGradient>
+    <linearGradient id="shardA" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#ff5c77"/>
+      <stop offset="100%" stop-color="#e91e3f"/>
+    </linearGradient>
+    <linearGradient id="shardB" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#e91e3f" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#e91e3f" stop-opacity="0.28"/>
+    </linearGradient>
+    <linearGradient id="shardC" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#e91e3f" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#e91e3f" stop-opacity="0.08"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.46" r="0.5">
+      <stop offset="0%" stop-color="#e91e3f" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="#e91e3f" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M60 0H0V60" fill="none" stroke="#ffffff" stroke-opacity="0.035" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="900" fill="url(#ice)"/>
+  <rect width="1200" height="900" fill="url(#grid)"/>
+  <ellipse cx="600" cy="415" rx="470" ry="360" fill="url(#glow)"/>
+  <rect x="0" y="0" width="1200" height="4" fill="#e91e3f"/>
+
+  <g transform="translate(600 400)">
+    <path d="M0 -250 L172 -60 L86 -60 L86 -6 L-86 -6 L-86 -60 L-172 -60 Z" fill="url(#shardA)"/>
+    <path d="M0 -122 L120 6 L60 6 L60 58 L-60 58 L-60 6 L-120 6 Z" fill="url(#shardB)" transform="translate(0 122)"/>
+    <path d="M0 -86 L88 10 L44 10 L44 54 L-44 54 L-44 10 L-88 10 Z" fill="url(#shardC)" transform="translate(0 258)"/>
+  </g>
+
+  <g transform="translate(600 710)" text-anchor="middle" font-family="Pretendard, 'Segoe UI', Arial, sans-serif">
+    <text y="0" fill="#ffffff" font-size="104" font-weight="900" letter-spacing="4">XP BOOST</text>
+    <text x="292" y="-46" fill="#e91e3f" font-size="72" font-weight="900">+</text>
+    <text y="58" fill="#8b8f98" font-size="30" font-weight="700" letter-spacing="14">PREMIUM IGLOO</text>
+  </g>
+</svg>

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900" role="img" aria-label="XP Boost+">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#eceae6"/>
+    </linearGradient>
+    <linearGradient id="lShardA" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#ff5c77"/>
+      <stop offset="100%" stop-color="#e91e3f"/>
+    </linearGradient>
+    <linearGradient id="lShardB" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#e91e3f" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#e91e3f" stop-opacity="0.22"/>
+    </linearGradient>
+    <linearGradient id="lShardC" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#131313" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#131313" stop-opacity="0.05"/>
+    </linearGradient>
+    <pattern id="lgrid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M60 0H0V60" fill="none" stroke="#131313" stroke-opacity="0.045" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="900" fill="url(#paper)"/>
+  <rect width="1200" height="900" fill="url(#lgrid)"/>
+  <rect x="0" y="0" width="1200" height="4" fill="#e91e3f"/>
+
+  <g transform="translate(600 400)">
+    <path d="M0 -250 L172 -60 L86 -60 L86 -6 L-86 -6 L-86 -60 L-172 -60 Z" fill="url(#lShardA)"/>
+    <path d="M0 -122 L120 6 L60 6 L60 58 L-60 58 L-60 6 L-120 6 Z" fill="url(#lShardB)" transform="translate(0 122)"/>
+    <path d="M0 -86 L88 10 L44 10 L44 54 L-44 54 L-44 10 L-88 10 Z" fill="url(#lShardC)" transform="translate(0 258)"/>
+  </g>
+
+  <g transform="translate(600 710)" text-anchor="middle" font-family="Pretendard, 'Segoe UI', Arial, sans-serif">
+    <text y="0" fill="#131313" font-size="104" font-weight="900" letter-spacing="4">XP BOOST</text>
+    <text x="292" y="-46" fill="#e91e3f" font-size="72" font-weight="900">+</text>
+    <text y="58" fill="#8a8a8a" font-size="30" font-weight="700" letter-spacing="14">PREMIUM IGLOO</text>
+  </g>
+</svg>
