@@ -219,6 +219,35 @@ export async function POST(request, { params }) {
         });
       }
 
+      // 리더: 이미 낙찰받은 선수에게 뒤늦게 스카우터를 쓴다.
+      // 경매 중에 안 본 대가로 값이 더 비싸다. 내가 가진 선수(인벤토리·로스터)에게만 가능.
+      case "scout:owned": {
+        const { leaderIdx, playerIdx } = body;
+        const leader = auction.leaders[leaderIdx];
+        const player = auction.players[playerIdx];
+        if (!leader || !player) return NextResponse.json({ success: false }, { status: 400 });
+        const owns =
+          (leader.inventory || []).some((c) => c.playerIdx === playerIdx) ||
+          (leader.roster || []).some((r) => r.playerIdx === playerIdx);
+        if (!owns) return NextResponse.json({ success: false, message: "보유한 선수에게만 사용할 수 있습니다." }, { status: 403 });
+        if (player.scoutedBy.includes(leaderIdx)) return NextResponse.json({ success: false, message: "이미 스카우트한 선수입니다." }, { status: 409 });
+        // 황금카드는 공개할 모스트가 없으면 볼 것이 없다
+        if (player.isAllPos && !player.hasMost) {
+          return NextResponse.json({ success: false, message: "공개할 정보가 없는 선수입니다." }, { status: 400 });
+        }
+        const cost = S.ownedScoutCost ?? 2900;
+        if (leader.points < cost) return NextResponse.json({ success: false, message: "보유 Point가 부족합니다." }, { status: 400 });
+        leader.points -= cost;
+        player.scoutedBy.push(leaderIdx);
+        // 🔒 경매 중 스카우터와 마찬가지로 공개 로그·공지에 남기지 않는다
+        await auction.save();
+        return NextResponse.json({
+          success: true,
+          cost,
+          reveal: { mainPos: player.mainPos || "", subPos: player.subPos || "", mostChampions: player.mostChampions || [] },
+        });
+      }
+
       // 리더: 준비 완료 토글
       case "leader:ready": {
         const { leaderIdx, ready } = body;

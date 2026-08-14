@@ -59,6 +59,7 @@ const AuctionSchema = new mongoose.Schema({
     goldenBasePrice: { type: Number, default: 4000 },
     scoutCost: { type: Number, default: 2000 },
     goldenScoutCost: { type: Number, default: 4000 }, // 황금카드 스카우터 비용 (모스트만 공개)
+    ownedScoutCost: { type: Number, default: 2900 },  // 낙찰 후 뒤늦게 쓰는 스카우터 — 경매 중보다 비싸다
     posChangeCost: { type: Number, default: 10000 },
     invCapacity: { type: Number, default: 1 },    // 인벤토리 기본 용량(칸). 초과 소지 시 배정 전까지 입찰 불가
     invPlusCost: { type: Number, default: 5000 }, // 인벤토리 플러스 — 용량 +1칸 구매 비용

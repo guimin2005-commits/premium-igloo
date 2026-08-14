@@ -639,6 +639,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
   // 📌 인벤토리 용량 — 기본 용량 + 인벤토리 플러스로 산 칸. 초과 소지 시 배정 전까지 입찰 불가
   const invPlusCost = S.invPlusCost ?? 5000;
+  const ownedScoutCost = S.ownedScoutCost ?? 2900; // 낙찰 후 뒤늦게 쓰는 스카우터
   const invCapOf = (l: any) => Math.max(1, (S.invCapacity ?? 1) + (l?.invExtra || 0));
   const invPlusUsed = (l: any) => (l?.invExtra || 0) >= 1; // 팀당 1회
   const myInvCap = myLeader ? invCapOf(myLeader) : 1;
@@ -739,11 +740,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   };
 
   // 스카우터 사용 → 성공 시 게임식 결과 연출
-  const useScouter = async () => {
-    if (myLeaderIdx === null || cur.playerIdx === null) return;
-    const targetIdx = cur.playerIdx;
+  // 스카우터 실행 — 경매 중(scout)과 낙찰 후(scout:owned)가 결과 처리는 같다.
+  //  차감 금액은 서버가 응답한 cost 를 그대로 쓴다 (규칙이 한 곳에만 있게).
+  const runScouter = async (targetIdx: number, owned = false) => {
+    if (myLeaderIdx === null || targetIdx === null || targetIdx === undefined) return;
     const target = auction.players[targetIdx];
-    const d = await act({ action: "scout", leaderIdx: myLeaderIdx, playerIdx: targetIdx });
+    if (!target) return;
+    const d = await act({ action: owned ? "scout:owned" : "scout", leaderIdx: myLeaderIdx, playerIdx: targetIdx });
     if (d.success) {
       sfxScout();
       // 📌 공개 정보는 서버 응답에서만 수신 (다른 리더에게는 전송되지 않음)
@@ -772,11 +775,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         // 서버에서 받은 공개 정보를 내 화면 상태에 반영
         if (p) { p.mainPos = rv.mainPos || ""; p.subPos = rv.subPos || ""; p.mostChampions = rv.mostChampions || []; }
         const l = next.leaders[myLeaderIdx];
-        if (l) l.points = Math.max(0, l.points - (target?.isAllPos ? (next.settings.goldenScoutCost ?? 4000) : next.settings.scoutCost));
+        if (l) l.points = Math.max(0, l.points - (d.cost ?? 0));
         return next;
       });
-    }
+    } else if (d?.message) showToast(d.message);
   };
+
+  const useScouter = () => runScouter(cur.playerIdx as number, false);
 
   // 로스터 이름 — 프로필이 공개된 선수는 실제 디스코드 이름으로 동기화
   //  · 황금카드(올포지션)는 공개 전까지 정체를 숨김 (인벤토리 표기와 일치)
@@ -2616,10 +2621,25 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               {scouted && <span className="block text-gray-200 mt-0.5">{revealParts(cp).map((r: any) => r.v).join(" · ")}</span>}
                             </p>
                             {canManage && !swapMode && !invOverflow && (
-                              <div className="mt-auto pt-2 flex">
+                              <div className="mt-auto pt-2 flex items-center gap-2">
+                                {/* 경매 중에 안 봤다면 지금이라도 (값은 더 비싸다) */}
+                                {!scouted && mine && cp && (!cp.isAllPos || cp.hasMost) && (
+                                  <button
+                                    onClick={() => setConfirmCfg({
+                                      title: "스카우터 (낙찰 후)",
+                                      message: `${ownedScoutCost.toLocaleString()} Point를 사용해 ${cardName(card)} 선수의 ${card.golden ? "모스트 챔피언" : revealFields.includes("champions") ? "주 포지션·모스트 챔피언" : "주/부 포지션"}을(를) 확인합니다.\n경매 중 스카우터(${scoutCostOf(cp).toLocaleString()} Point)보다 비쌉니다.`,
+                                      confirmLabel: "사용",
+                                      onConfirm: () => runScouter(card.playerIdx, true),
+                                    })}
+                                    className="auc-press flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-white/25 text-[10px] font-black text-gray-300 active:bg-white/[0.08] transition-colors"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3 h-3 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+                                    <span className="text-white tabular-nums">{ownedScoutCost.toLocaleString()}</span>
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => { setMobPick(ci); sfxSelect(); }}
-                                  className="ml-auto px-3.5 py-1.5 text-[11px] font-black text-[#ff5c77] border border-[#e91e3f]/60 active:bg-[#e91e3f] active:text-white transition-colors"
+                                  className="auc-press ml-auto px-3.5 py-1.5 rounded-lg text-[11px] font-black text-[#ff5c77] border border-[#e91e3f]/60 active:bg-[#e91e3f] active:text-white transition-colors"
                                 >
                                   배정 ›
                                 </button>
@@ -2830,6 +2850,22 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                 {/* 크기·두께는 원래대로 (라벨 10px bold / 값 12px bold) */}
                                 <span className="w-16 shrink-0 text-[10px] font-bold text-gray-600">{it.l}</span>
                                 <span className={`text-[12px] font-bold truncate ${it.v === "미확인" || it.v.includes("불가") || it.v === "비공개" ? "text-gray-600" : "text-gray-200"}`}>{it.v}</span>
+                                {/* 경매 중에 안 봤다면 지금이라도 볼 수 있다 — 대신 값이 더 비싸다 */}
+                                {it.l === "스카우터" && !scouted && mine && sp && (!sp.isAllPos || sp.hasMost) && (
+                                  <button
+                                    onClick={() => setConfirmCfg({
+                                      title: "스카우터 (낙찰 후)",
+                                      message: `${ownedScoutCost.toLocaleString()} Point를 사용해 ${cardName(sel)} 선수의 ${sel.golden ? "모스트 챔피언" : revealFields.includes("champions") ? "주 포지션·모스트 챔피언" : "주/부 포지션"}을(를) 확인합니다.\n경매 중 스카우터(${scoutCostOf(sp).toLocaleString()} Point)보다 비쌉니다.`,
+                                      confirmLabel: "사용",
+                                      onConfirm: () => runScouter(sel.playerIdx, true),
+                                    })}
+                                    className="auc-press ml-auto shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-white/25 text-[10px] font-black text-gray-300 hover:border-white hover:text-white hover:bg-white/[0.06] transition-colors"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3 h-3 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+                                    확인
+                                    <span className="text-white tabular-nums">{ownedScoutCost.toLocaleString()}</span>
+                                  </button>
+                                )}
                               </div>
                             ))}
                           </div>
