@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { salePrice } from "@/lib/shopPricing";
+import { salePrice, durationLabel } from "@/lib/shopPricing";
 import ArcticHeader from "../ArcticHeader";
 import ArcticFooter from "../ArcticFooter";
 import ArcticDock from "../ArcticDock";
@@ -18,7 +18,7 @@ export default function CheckoutPage() {
   const isLoggedIn = status === "authenticated";
   const isAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
 
-  const [cart, setCart] = useState<{ itemId: string; qty: number }[]>([]);
+  const [cart, setCart] = useState<{ itemId: string; qty: number; days?: number }[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [myXp, setMyXp] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -62,8 +62,8 @@ export default function CheckoutPage() {
     () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item),
     [cart, items]
   );
-  const subtotal = rows.reduce((n, r) => n + salePrice(r.item) * r.qty, 0);
-  const listTotal = rows.reduce((n, r) => n + r.item.price * r.qty, 0);
+  const subtotal = rows.reduce((n, r) => n + salePrice(r.item, r.days) * r.qty, 0);
+  const listTotal = rows.reduce((n, r) => n + ((r.days ?? 0) > 0 ? (r.item.durations?.find((d: any) => d.days === r.days)?.price ?? r.item.price) : r.item.price) * r.qty, 0);
   const itemDiscount = listTotal - subtotal;
   const couponDiscount = coupon?.discount || 0;
   const total = Math.max(0, subtotal - couponDiscount);
@@ -259,7 +259,10 @@ export default function CheckoutPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-bold text-[#131313] truncate">{r.item.name}</h3>
+                      <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">
+                        {r.item.name}
+                        {(r.days ?? 0) > 0 && <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#131313] text-white text-[10px] font-black">{durationLabel(r.days)}</span>}
+                      </h3>
                       <p className="text-[10px] font-bold text-[#8a8a8a] mt-0.5">
                         {r.item.type === "physical" ? "기프트카드" : r.item.type === "perk" ? "권한" : "역할"} · 수량 {r.qty}
                       </p>

@@ -11,7 +11,13 @@ const ShopItemSchema = new mongoose.Schema({
   type: { type: String, default: "role" },       // "role" | "perk" | "physical"
   roleId: { type: String, default: "" },         // role·perk 일 때 지급할 역할
   roleName: { type: String, default: "" },       // 표시용
-  price: { type: Number, required: true },       // 정가 (소모 XP)
+  price: { type: Number, required: true },       // 정가 (소모 XP) — 기간제면 표시·정렬용 기준가
+  // 📌 기간제 역할 — 정해진 기간만 보유하고 지나면 봇이 회수한다.
+  //    비어 있으면 한 번 사면 계속 갖는 영구 상품 (기존 동작 그대로).
+  durations: {
+    type: [{ days: Number, price: Number }],
+    default: [],
+  },
   discountPct: { type: Number, default: 0 },     // 할인율 % (0이면 할인 없음)
   stock: { type: Number, default: -1 },          // -1 = 무제한
   soldCount: { type: Number, default: 0 },

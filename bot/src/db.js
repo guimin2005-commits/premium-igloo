@@ -95,6 +95,10 @@ const PurchaseSchema = new mongoose.Schema({
   itemType: { type: String, default: "role" },
   roleId: { type: String, default: "" },
   price: { type: Number, default: 0 },
+  // 기간제 역할 — days가 0이면 영구. 지나면 이 봇이 회수하고 status를 expired로 바꾼다
+  days: { type: Number, default: 0 },
+  expiresAt: { type: Date, default: null, index: true },
+  revokedAt: { type: Date, default: null },
   status: { type: String, default: "pending", index: true },
   contact: { type: String, default: "" },
   adminNote: { type: String, default: "" },

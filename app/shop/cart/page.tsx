@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
-import { salePrice } from "@/lib/shopPricing";
+import { salePrice, durationLabel } from "@/lib/shopPricing";
 import ArcticHeader from "../ArcticHeader";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
@@ -19,7 +19,7 @@ export default function CartPage() {
   const isLoggedIn = status === "authenticated";
   const isAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
 
-  const [cart, setCart] = useState<{ itemId: string; qty: number }[]>([]);
+  const [cart, setCart] = useState<{ itemId: string; qty: number; days?: number }[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [myXp, setMyXp] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,15 +64,15 @@ export default function CartPage() {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const toggleAll = () => setSelected(allChecked ? [] : rows.map((r) => r.itemId));
 
-  const listTotal = picked.reduce((n, r) => n + r.item.price * r.qty, 0);
-  const total = picked.reduce((n, r) => n + salePrice(r.item) * r.qty, 0);
+  const listTotal = picked.reduce((n, r) => n + ((r.days ?? 0) > 0 ? (r.item.durations?.find((d: any) => d.days === r.days)?.price ?? r.item.price) : r.item.price) * r.qty, 0);
+  const total = picked.reduce((n, r) => n + salePrice(r.item, r.days) * r.qty, 0);
   const discount = listTotal - total;
   const enoughXp = isAdmin || (myXp != null && myXp >= total);
   const canCheckout = picked.length > 0 && enoughXp;
 
   // 선택한 항목만 결제로 넘긴다 (나머지는 장바구니에 남는다)
   const goCheckout = () => {
-    try { localStorage.setItem("iglooShopCheckout", JSON.stringify(picked.map((r) => ({ itemId: r.itemId, qty: r.qty })))); } catch {}
+    try { localStorage.setItem("iglooShopCheckout", JSON.stringify(picked.map((r) => ({ itemId: r.itemId, qty: r.qty, days: r.days || 0 })))); } catch {}
   };
 
   const removeItem = (itemId: string) => setCart((prev) => prev.filter((c) => c.itemId !== itemId));
@@ -157,7 +157,7 @@ export default function CartPage() {
 
               <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden divide-y divide-[#ececea]">
                 {rows.map((r) => {
-                  const sp = salePrice(r.item);
+                  const sp = salePrice(r.item, r.days);
                   const on = selected.includes(r.itemId);
                   const discounted = sp < r.item.price;
                   return (
@@ -179,7 +179,10 @@ export default function CartPage() {
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black mb-1.5 ${TYPE_CLS[r.item.type] || TYPE_CLS.physical}`}>
                           {TYPE_LABEL[r.item.type] || "상품"}
                         </span>
-                        <h3 className="text-sm font-bold text-[#131313] truncate">{r.item.name}</h3>
+                        <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">
+                        {r.item.name}
+                        {(r.days ?? 0) > 0 && <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#131313] text-white text-[10px] font-black">{durationLabel(r.days)}</span>}
+                      </h3>
                         {r.item.description && (
                           <p className="text-[11px] text-[#8a8a8a] truncate mt-0.5">{r.item.description}</p>
                         )}

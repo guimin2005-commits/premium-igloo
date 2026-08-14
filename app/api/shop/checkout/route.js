@@ -10,7 +10,7 @@ import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
 import Coupon from "@/models/Coupon";
 import UserCoupon from "@/models/UserCoupon";
-import { salePrice, couponDiscount, couponError } from "@/lib/shopPricing";
+import { salePrice, couponDiscount, couponError, isTimed, durationPrice } from "@/lib/shopPricing";
 import { getLevelByXp } from "@/lib/leveling";
 
 // ── [결제] 장바구니 일괄 구매 ──
@@ -34,15 +34,30 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "장바구니가 비어 있습니다." }, { status: 400 });
     }
 
-    // 요청한 상품을 한 번에 조회하고 수량을 정규화
+    // 요청한 상품을 한 번에 조회하고 수량을 정규화 (기간제는 고른 기간까지 함께 본다)
     const wanted = new Map();
+    const pickedDays = new Map();
     for (const row of items) {
       const qty = Math.max(1, Math.min(99, Math.floor(Number(row.qty) || 1)));
-      wanted.set(String(row.itemId), (wanted.get(String(row.itemId)) || 0) + qty);
+      const id = String(row.itemId);
+      wanted.set(id, (wanted.get(id) || 0) + qty);
+      if (row.days != null) pickedDays.set(id, Math.floor(Number(row.days) || 0));
     }
     const docs = await ShopItem.find({ _id: { $in: [...wanted.keys()] }, active: true });
     if (docs.length !== wanted.size) {
       return NextResponse.json({ success: false, message: "판매 중이 아닌 상품이 포함되어 있습니다." }, { status: 409 });
+    }
+
+    // 📌 기간제 상품은 파는 기간 중 하나를 반드시 골라야 한다
+    const daysOf = new Map();
+    for (const d of docs) {
+      const id = String(d._id);
+      if (!isTimed(d)) { daysOf.set(id, 0); continue; }
+      const days = pickedDays.get(id);
+      if (!days || durationPrice(d, days) == null) {
+        return NextResponse.json({ success: false, message: `"${d.name}"의 이용 기간을 골라주세요.` }, { status: 400 });
+      }
+      daysOf.set(id, days);
     }
 
     const needsContact = docs.some((d) => d.type === "physical");
@@ -56,16 +71,23 @@ export async function POST(request) {
         return NextResponse.json({ success: false, message: `"${d.name}"은(는) 1인 1개만 구매할 수 있습니다.` }, { status: 400 });
       }
     }
+    // 📌 기간제는 기간이 끝나면 다시 살 수 있어야 하므로, 아직 살아 있는 건만 막는다
     const owned = await Purchase.find({
       userId,
       itemId: { $in: docs.map((d) => String(d._id)) },
       status: { $in: ["pending", "completed"] },
-    }, { itemName: 1 }).lean();
+      $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+    }, { itemName: 1, expiresAt: 1 }).lean();
     if (owned.length > 0) {
-      return NextResponse.json({ success: false, message: `이미 구매한 상품이 있습니다: ${owned[0].itemName}` }, { status: 409 });
+      return NextResponse.json({
+        success: false,
+        message: owned[0].expiresAt
+          ? `"${owned[0].itemName}"은(는) 아직 이용 기간이 남아 있습니다.`
+          : `이미 구매한 상품이 있습니다: ${owned[0].itemName}`,
+      }, { status: 409 });
     }
 
-    const subtotal = docs.reduce((sum, d) => sum + salePrice(d) * wanted.get(String(d._id)), 0);
+    const subtotal = docs.reduce((sum, d) => sum + salePrice(d, daysOf.get(String(d._id))) * wanted.get(String(d._id)), 0);
 
     // 쿠폰 검증 (사용 처리는 결제 확정 후)
     let coupon = null;
@@ -115,6 +137,7 @@ export async function POST(request) {
     const rows = [];
     for (const d of docs) {
       const qty = wanted.get(String(d._id));
+      const days = daysOf.get(String(d._id)) || 0;
       for (let i = 0; i < qty; i++) {
         rows.push({
           userId,
@@ -123,7 +146,10 @@ export async function POST(request) {
           itemName: d.name,
           itemType: d.type,
           roleId: d.roleId || "",
-          price: salePrice(d),
+          price: salePrice(d, days),
+          days,
+          // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다
+          expiresAt: days > 0 ? new Date(Date.now() + days * 86400000) : null,
           contact: d.type === "physical" ? contact.trim() : "",
           status: "pending",
         });

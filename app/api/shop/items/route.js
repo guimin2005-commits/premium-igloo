@@ -55,7 +55,17 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "역할·권한 상품은 지급할 역할을 선택해야 합니다." }, { status: 400 });
     }
 
+    // 📌 기간제 역할 — 기간(일)과 값이 모두 있는 것만 판매 목록에 올린다.
+    //    기프트카드는 기간 개념이 없으므로 무시한다.
+    const durations = grantsRole && Array.isArray(b.durations)
+      ? b.durations
+          .map((d) => ({ days: Math.floor(Number(d?.days) || 0), price: Math.max(0, Math.floor(Number(d?.price) || 0)) }))
+          .filter((d) => d.days > 0 && d.price > 0)
+          .sort((x, y) => x.days - y.days)
+      : [];
+
     const payload = {
+      durations,
       name: b.name.trim(),
       description: (b.description || "").trim(),
       imageUrl: (b.imageUrl || "").trim(),

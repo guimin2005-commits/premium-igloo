@@ -33,7 +33,13 @@ async function processPurchases(guild) {
       p.processedAt = new Date();
       p.error = "";
       await p.save();
-      console.log(`🛒 역할 지급 완료: ${p.userName} ← ${p.itemName}`);
+      console.log(`🛒 역할 지급 완료: ${p.userName} ← ${p.itemName}${p.days > 0 ? ` (${p.days}일)` : ""}`);
+
+      // 기간제는 언제까지인지 본인에게 알려 준다 (DM이 막혀 있으면 조용히 넘어간다)
+      if (p.days > 0 && p.expiresAt) {
+        const until = new Date(p.expiresAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
+        member.send(`🎫 **${p.itemName}** 역할이 지급되었습니다.\n이용 기간 ${p.days}일 — ${until}까지 유지되며, 기간이 끝나면 자동으로 회수됩니다.`).catch(() => {});
+      }
     } catch (e) {
       p.error = e.message;
       await p.save();
@@ -131,11 +137,52 @@ async function processRoleSyncs(guild) {
   }
 }
 
+// ── 기간제 역할 회수 ──────────────────────────
+//    산 기간이 지난 구매 건을 찾아 역할을 거둬들인다.
+//    같은 역할을 다른 경로(다른 상품·코드 등)로 아직 갖고 있으면 남겨 둔다.
+async function processExpiries(guild) {
+  const rows = await Purchase.find({
+    status: "completed",
+    itemType: { $in: ["role", "perk"] },
+    expiresAt: { $ne: null, $lte: new Date() },
+  }).limit(50);
+
+  for (const p of rows) {
+    try {
+      const member = await fetchMember(guild, p.userId);
+      if (member && p.roleId) {
+        // 같은 역할을 주는, 아직 살아 있는 다른 구매가 있으면 회수하지 않는다
+        const alive = await Purchase.findOne({
+          userId: p.userId,
+          roleId: p.roleId,
+          status: "completed",
+          _id: { $ne: p._id },
+          $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+        }).lean();
+        if (!alive) {
+          await member.roles.remove(p.roleId, `ARCTIC 기간 만료: ${p.itemName}`);
+          member.send(`⌛ **${p.itemName}** 이용 기간(${p.days}일)이 끝나 역할이 회수되었습니다.\nARCTIC에서 다시 구매하면 계속 이용할 수 있습니다.`).catch(() => {});
+        }
+      }
+
+      p.status = "expired";
+      p.revokedAt = new Date();
+      await p.save();
+      console.log(`⌛ 기간제 역할 회수: ${p.userName} → ${p.itemName} (${p.days}일)`);
+    } catch (e) {
+      p.error = e.message;
+      await p.save();
+      console.error(`⌛ 기간제 역할 회수 실패 (${p.userName} / ${p.itemName}):`, e.message);
+    }
+  }
+}
+
 async function tick(client) {
   try {
     const guild = client.guilds.cache.get(config.guildId);
     if (!guild) return;
     await processPurchases(guild);
+    await processExpiries(guild);
     await processPayouts(guild);
     await processCodeGrants(guild);
     await processRoleSyncs(guild);

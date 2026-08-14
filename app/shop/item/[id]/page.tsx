@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { salePrice } from "@/lib/shopPricing";
+import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
 import ArcticHeader from "../../ArcticHeader";
 import ArcticDock from "../../ArcticDock";
 import ArcticFooter from "../../ArcticFooter";
@@ -30,7 +30,8 @@ export default function ItemDetailPage() {
   const [allItems, setAllItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [cart, setCart] = useState<{ itemId: string; qty: number }[]>([]);
+  const [cart, setCart] = useState<{ itemId: string; qty: number; days?: number }[]>([]);
+  const [pickedDays, setPickedDays] = useState(0); // 기간제 상품에서 고른 기간
   const [wish, setWish] = useState<string[]>([]);
   const [toast, setToast] = useState("");
 
@@ -49,7 +50,7 @@ export default function ItemDetailPage() {
     } catch {}
   }, []);
 
-  const saveCart = (next: { itemId: string; qty: number }[]) => {
+  const saveCart = (next: { itemId: string; qty: number; days?: number }[]) => {
     setCart(next);
     try { localStorage.setItem("iglooShopCart", JSON.stringify(next)); } catch {}
   };
@@ -102,9 +103,12 @@ export default function ItemDetailPage() {
     );
   }
 
-  const sp = salePrice(item);
-  const discounted = sp < item.price;
-  const owned = orders.some((o) => o.itemId === item._id && o.status !== "cancelled");
+  const timed = isTimed(item);
+  const days = timed ? (pickedDays || durationOptions(item)[0]?.days || 0) : 0;
+  const sp = salePrice(item, days);
+  const listPrice = timed ? (durationOptions(item).find((o: any) => o.days === days)?.price ?? item.price) : item.price;
+  const discounted = sp < listPrice;
+  const owned = orders.some((o) => o.itemId === item._id && ["pending", "completed"].includes(o.status) && (!o.expiresAt || new Date(o.expiresAt) > new Date()));
   const inCart = cart.some((c) => c.itemId === item._id);
   const soldOut = item.stock === 0;
   const wished = wish.includes(item._id);
@@ -127,7 +131,7 @@ export default function ItemDetailPage() {
       flash("장바구니에서 삭제했습니다");
       return;
     }
-    saveCart([...cart, { itemId: item._id, qty: 1 }]);
+    saveCart([...cart, { itemId: item._id, qty: 1, days }]);
     flash("장바구니에 담았습니다");
   };
 
@@ -150,7 +154,7 @@ export default function ItemDetailPage() {
       const res = await fetch("/api/shop/purchase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: item._id, contact }),
+        body: JSON.stringify({ itemId: item._id, contact, days }),
       });
       const d = await res.json();
       setResult({ ok: !!d.success, message: d.message || (d.success ? "구매가 완료되었습니다." : "구매에 실패했습니다.") });
@@ -211,11 +215,36 @@ export default function ItemDetailPage() {
                 <span className="text-3xl font-black tracking-tight tabular-nums leading-none text-[#131313]">
                   {sp.toLocaleString()}<span className="text-sm font-bold text-[#8a8a8a] ml-1.5">XP</span>
                 </span>
+                {timed && <span className="text-[13px] font-bold text-[#8a8a8a]">/ {durationLabel(days)}</span>}
               </div>
               {discounted && (
-                <span className="block mt-1 text-[14px] text-[#a3a3a3] line-through tabular-nums">{item.price.toLocaleString()} XP</span>
+                <span className="block mt-1 text-[14px] text-[#a3a3a3] line-through tabular-nums">{listPrice.toLocaleString()} XP</span>
               )}
             </div>
+
+            {/* 📌 기간제 역할 — 기간을 고르면 값이 바뀐다 */}
+            {timed && (
+              <div className="mb-6">
+                <p className="text-xs font-bold text-[#4b4b4b] mb-2">이용 기간</p>
+                <div className="flex gap-2">
+                  {durationOptions(item).map((o: any) => {
+                    const on = o.days === days;
+                    return (
+                      <button key={o.days} type="button" onClick={() => setPickedDays(o.days)}
+                        className={`flex-1 py-3 rounded-xl border text-[13px] font-bold transition-colors ${
+                          on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#e2e0dc] hover:border-[#131313]"
+                        }`}>
+                        {durationLabel(o.days)}
+                        <span className={`block text-[12px] font-bold tabular-nums mt-0.5 ${on ? "text-white/70" : "text-[#a3a3a3]"}`}>
+                          {salePrice(item, o.days).toLocaleString()} XP
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-[#8a8a8a] mt-2">기간이 끝나면 역할이 자동으로 회수되며, 그 뒤 다시 구매할 수 있습니다.</p>
+              </div>
+            )}
 
             {item.description && (
               <p className="text-[14px] text-[#4b4b4b] leading-relaxed mb-6 whitespace-pre-wrap break-keep">{item.description}</p>

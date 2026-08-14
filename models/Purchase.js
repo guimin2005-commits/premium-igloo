@@ -11,7 +11,12 @@ const PurchaseSchema = new mongoose.Schema({
   itemType: { type: String, default: "role" }, // "role" | "physical"
   roleId: { type: String, default: "" },
   price: { type: Number, default: 0 },
-  status: { type: String, default: "pending", index: true }, // pending | completed | cancelled
+  // 📌 기간제 역할 — days가 0이면 영구. 지급 시각 기준으로 expiresAt을 세우고,
+  //    기간이 지나면 봇이 역할을 회수하며 status를 expired로 바꾼다.
+  days: { type: Number, default: 0 },
+  expiresAt: { type: Date, default: null, index: true },
+  revokedAt: { type: Date, default: null },
+  status: { type: String, default: "pending", index: true }, // pending | completed | expired | cancelled
   contact: { type: String, default: "" },   // 실물 상품 수령 정보 (구매자 입력)
   adminNote: { type: String, default: "" }, // 운송장 번호 등
   error: { type: String, default: "" },     // 역할 지급 실패 사유

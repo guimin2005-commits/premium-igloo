@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import Dropdown from "../components/Dropdown";
-import { salePrice } from "@/lib/shopPricing";
+import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
 import ArcticFooter from "./ArcticFooter";
 import ArcticDock from "./ArcticDock";
 import { useSearchParams } from "next/navigation";
@@ -79,7 +79,7 @@ export default function ShopPage() {
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
   // 📌 장바구니 — 로컬에 보관해 새로고침해도 유지 ([{ itemId, qty }])
-  const [cart, setCart] = useState<{ itemId: string; qty: number }[]>([]);
+  const [cart, setCart] = useState<{ itemId: string; qty: number; days?: number }[]>([]);
   const [cartToast, setCartToast] = useState("");
 
   // 스크롤하면 헤더·유틸바에 그림자를 넣어 떠 있는 느낌을 준다
@@ -127,6 +127,10 @@ export default function ShopPage() {
     [orders]
   );
 
+  // 📌 기간제 상품에서 고른 기간 (상품별). 안 고르면 가장 짧은 기간이 기본.
+  const [pickDays, setPickDays] = useState<Record<string, number>>({});
+  const daysFor = (item: any) => (isTimed(item) ? (pickDays[item._id] ?? durationOptions(item)[0]?.days ?? 0) : 0);
+
   const addToCart = (item: any) => {
     if (!isLoggedIn) return signIn("discord");
     if (ownedItemIds.has(item._id)) {
@@ -141,8 +145,9 @@ export default function ShopPage() {
       setTimeout(() => setCartToast(""), 1800);
       return;
     }
-    setCart((prev) => [...prev, { itemId: item._id, qty: 1 }]);
-    setCartToast(`${item.name} 상품을 장바구니에 담았습니다`);
+    const days = daysFor(item);
+    setCart((prev) => [...prev, { itemId: item._id, qty: 1, days }]);
+    setCartToast(`${item.name}${days > 0 ? ` (${durationLabel(days)})` : ""} 상품을 장바구니에 담았습니다`);
     setTimeout(() => setCartToast(""), 1800);
   };
 
@@ -156,7 +161,7 @@ export default function ShopPage() {
     [cart, items]
   );
   const cartCount = cartRows.reduce((n, r) => n + r.qty, 0);
-  const cartTotal = cartRows.reduce((n, r) => n + salePrice(r.item) * r.qty, 0);
+  const cartTotal = cartRows.reduce((n, r) => n + salePrice(r.item, r.days) * r.qty, 0);
 
   // 📌 찜 — 로컬에 보관 (상품 id 목록)
   const [wish, setWish] = useState<string[]>([]);
@@ -388,6 +393,8 @@ export default function ShopPage() {
 
   const openBuy = (item: any) => {
     if (!isLoggedIn) return signIn("discord");
+    // 고른 기간을 그대로 들고 모달로 넘어간다
+    item = isTimed(item) ? { ...item, _days: daysFor(item) } : item;
     if (cart.some((c) => c.itemId === item._id)) {
       setCartConflict(item);
       return;
@@ -402,7 +409,7 @@ export default function ShopPage() {
       const res = await fetch("/api/shop/purchase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: buyTarget._id, contact }),
+        body: JSON.stringify({ itemId: buyTarget._id, contact, days: buyTarget._days || 0 }),
       });
       const d = await res.json();
       setResult({ ok: !!d.success, message: d.message || (d.success ? "구매가 완료되었습니다." : "구매에 실패했습니다.") });
@@ -459,13 +466,16 @@ export default function ShopPage() {
 
   // 📌 상품 카드 하나 — 홈(추천·전체 미리보기)과 상품 화면이 같은 카드를 쓴다
   //    (홈 카드에만 찜·장바구니·구매가 없어서 반쪽짜리였다)
-  const ProductCard = ({ it }: { it: any }) => {
+  const renderCard = (it: any) => {
     const soldOut = it.stock === 0;
-    const affordable = canAfford(salePrice(it));
+    const timed = isTimed(it);
+    const days = daysFor(it);
+    const price = salePrice(it, days);
+    const affordable = canAfford(price);
     const owned = ownedItemIds.has(it._id);
     const inCart = cart.some((c) => c.itemId === it._id);
     return (
-            <div className="group bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
+            <div key={it._id} className="group bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
               {/* 이미지 */}
               <div className="relative aspect-[4/3] bg-[#eceae6] overflow-hidden">
                 {/* 상세로 가는 오버레이 — 위에 얹힌 버튼(z-10)은 그대로 눌린다 */}
@@ -534,17 +544,37 @@ export default function ShopPage() {
                 )}
 
                 <div className="mt-auto">
+                  {/* 📌 기간제 — 기간을 고르면 값이 바로 바뀐다 */}
+                  {timed && (
+                    <div className="flex items-center gap-1.5 mb-2.5">
+                      {durationOptions(it).map((o: any) => {
+                        const on = o.days === days;
+                        return (
+                          <button key={o.days} type="button"
+                            onClick={() => setPickDays((prev) => ({ ...prev, [it._id]: o.days }))}
+                            className={`px-2.5 h-7 rounded-full text-[11px] font-bold border transition-colors ${
+                              on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#8a8a8a] border-[#e2e0dc] hover:border-[#131313] hover:text-[#131313]"
+                            }`}>
+                            {durationLabel(o.days)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div className="mb-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {salePrice(it) < it.price && (
+                      {it.discountPct > 0 && (
                         <span className="px-1.5 py-[3px] rounded bg-[#e91e3f] text-white text-[10px] font-black leading-none shrink-0">{it.discountPct}%</span>
                       )}
                       <span className="text-[15px] sm:text-xl font-black text-[#131313] tracking-tight tabular-nums leading-none">
-                        {salePrice(it).toLocaleString()}<span className="text-[11px] sm:text-[12px] font-bold text-[#8a8a8a] ml-1">XP</span>
+                        {price.toLocaleString()}<span className="text-[11px] sm:text-[12px] font-bold text-[#8a8a8a] ml-1">XP</span>
                       </span>
+                      {timed && <span className="text-[11px] font-bold text-[#8a8a8a]">/ {durationLabel(days)}</span>}
                     </div>
-                    {salePrice(it) < it.price && (
-                      <span className="block text-[11px] text-[#a3a3a3] line-through tabular-nums">{it.price.toLocaleString()} XP</span>
+                    {it.discountPct > 0 && (
+                      <span className="block text-[11px] text-[#a3a3a3] line-through tabular-nums">
+                        {(timed ? durationOptions(it).find((o: any) => o.days === days)?.price ?? it.price : it.price).toLocaleString()} XP
+                      </span>
                     )}
                   </div>
                   <div className="flex gap-1.5 sm:gap-2">
@@ -832,7 +862,7 @@ export default function ShopPage() {
           <div className="py-16 text-center text-sm text-[#8a8a8a]">등록된 상품이 없습니다.</div>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-            {recommended.map((it) => <ProductCard key={it._id} it={it} />)}
+            {recommended.map((it) => renderCard(it))}
           </div>
         )}
 
@@ -844,7 +874,7 @@ export default function ShopPage() {
               <h2 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">전체 상품</h2>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-              {preview.map((it) => <ProductCard key={it._id} it={it} />)}
+              {preview.map((it) => renderCard(it))}
             </div>
           </div>
         )}
@@ -985,7 +1015,7 @@ export default function ShopPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 lg:gap-6">
-            {visible.map((it) => <ProductCard key={it._id} it={it} />)}
+            {visible.map((it) => renderCard(it))}
           </div>
         )}
       </section>
@@ -1342,7 +1372,10 @@ export default function ShopPage() {
                       {TYPE_BADGE[buyTarget.type]?.label || "상품"}
                     </span>
                     <h2 className="text-base font-black text-[#131313] truncate">{buyTarget.name}</h2>
-                    <p className="text-sm font-black text-[#e91e3f] tabular-nums mt-0.5">{salePrice(buyTarget).toLocaleString()} XP</p>
+                    <p className="text-sm font-black text-[#e91e3f] tabular-nums mt-0.5">
+                      {salePrice(buyTarget, buyTarget._days).toLocaleString()} XP
+                      {buyTarget._days > 0 && <span className="text-[11px] font-bold text-[#8a8a8a] ml-1.5">/ {durationLabel(buyTarget._days)}</span>}
+                    </p>
                   </div>
                 </div>
 
@@ -1357,25 +1390,44 @@ export default function ShopPage() {
                     </div>
                   )}
 
+                  {buyTarget._days > 0 && (
+                    <div className="mb-5">
+                      <label className="block text-xs font-bold text-[#4b4b4b] mb-2">이용 기간</label>
+                      <div className="flex gap-2">
+                        {durationOptions(buyTarget).map((o) => {
+                          const on = o.days === buyTarget._days;
+                          return (
+                            <button key={o.days} type="button" onClick={() => { setPickDays((prev) => ({ ...prev, [buyTarget._id]: o.days })); setBuyTarget({ ...buyTarget, _days: o.days }); }}
+                              className={`flex-1 py-2.5 rounded-xl text-[12px] font-bold border transition-colors ${on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#e2e0dc] hover:border-[#131313]"}`}>
+                              {durationLabel(o.days)}
+                              <span className={`block text-[11px] font-bold tabular-nums mt-0.5 ${on ? "text-white/70" : "text-[#a3a3a3]"}`}>{salePrice(buyTarget, o.days).toLocaleString()} XP</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] text-[#8a8a8a] mt-1.5">기간이 끝나면 역할이 자동으로 회수됩니다.</p>
+                    </div>
+                  )}
+
                   <div className="bg-[#f5f3f0] rounded-xl px-4 py-3 mb-5 text-[12px] space-y-1.5">
                     <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold text-[#131313] tabular-nums">{(myXp ?? 0).toLocaleString()}</span></div>
-                    <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 XP</span><span className="font-bold text-[#c62828] tabular-nums">-{salePrice(buyTarget).toLocaleString()}</span></div>
+                    <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 XP</span><span className="font-bold text-[#c62828] tabular-nums">-{salePrice(buyTarget, buyTarget._days).toLocaleString()}</span></div>
                     <div className="h-px bg-[#e2e0dc]"></div>
-                    <div className="flex justify-between"><span className="text-[#5a5a5a]">구매 후 잔액</span><span className="font-black text-[#131313] tabular-nums">{Math.max(0, (myXp ?? 0) - salePrice(buyTarget)).toLocaleString()}</span></div>
+                    <div className="flex justify-between"><span className="text-[#5a5a5a]">구매 후 잔액</span><span className="font-black text-[#131313] tabular-nums">{Math.max(0, (myXp ?? 0) - salePrice(buyTarget, buyTarget._days)).toLocaleString()}</span></div>
                   </div>
 
                   <p className="text-[11px] text-[#8a8a8a] leading-relaxed mb-5 break-keep">
                     {buyTarget.type !== "physical"
-                      ? "구매 즉시 XP가 차감되며, 봇이 30초 이내에 역할을 지급합니다."
+                      ? (buyTarget._days > 0 ? `구매 즉시 XP가 차감되며, 봇이 30초 이내에 역할을 지급합니다. ${durationLabel(buyTarget._days)} 뒤 자동으로 회수됩니다.` : "구매 즉시 XP가 차감되며, 봇이 30초 이내에 역할을 지급합니다.")
                       : "구매 즉시 XP가 차감되며, 운영진 확인 후 순차적으로 발송됩니다."}
                     {" "}구매 후에는 직접 취소할 수 없습니다.
                   </p>
 
                   <div className="flex gap-3">
                     <button onClick={() => setBuyTarget(null)} className="flex-1 py-3.5 bg-[#eceae6] text-[#4b4b4b] font-bold rounded-xl hover:bg-[#e2e0dc] transition-colors">취소</button>
-                    <button onClick={confirmBuy} disabled={isBuying || !canAfford(salePrice(buyTarget))}
+                    <button onClick={confirmBuy} disabled={isBuying || !canAfford(salePrice(buyTarget, buyTarget._days))}
                       className="flex-1 py-3.5 bg-[#e91e3f] text-[#ffffff] font-bold rounded-xl hover:bg-[#d01634] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                      {isBuying ? "처리 중..." : canAfford(salePrice(buyTarget)) ? "구매 확정" : "XP 부족"}
+                      {isBuying ? "처리 중..." : canAfford(salePrice(buyTarget, buyTarget._days)) ? "구매 확정" : "XP 부족"}
                     </button>
                   </div>
                 </div>

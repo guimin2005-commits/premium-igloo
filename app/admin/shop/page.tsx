@@ -40,7 +40,7 @@ export default function AdminShopPage() {
   const [noteText, setNoteText] = useState("");
   const [showPreview, setShowPreview] = useState(false);
 
-  const emptyForm = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", price: "", discountPct: "", stock: "", sortOrder: "", active: true };
+  const emptyForm = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", price: "", discountPct: "", stock: "", sortOrder: "", active: true, timed: false, price7: "", price30: "" };
   const [form, setForm] = useState(emptyForm);
   const [isRoleOpen, setIsRoleOpen] = useState(false);
   const selectedRole = guildRoles.find((r) => r.id === form.roleId);
@@ -147,14 +147,26 @@ export default function AdminShopPage() {
       id: it._id, name: it.name, description: it.description || "", imageUrl: it.imageUrl || "",
       type: it.type, roleId: it.roleId || "", price: String(it.price), discountPct: it.discountPct ? String(it.discountPct) : "",
       stock: it.stock < 0 ? "" : String(it.stock), sortOrder: String(it.sortOrder || 0), active: it.active,
+      timed: Array.isArray(it.durations) && it.durations.length > 0,
+      price7: String(it.durations?.find((d: any) => d.days === 7)?.price ?? ""),
+      price30: String(it.durations?.find((d: any) => d.days === 30)?.price ?? ""),
     });
   }, [editId, items]);
+
+  // 📌 기간제 역할 — 켠 기간(값이 들어 있는 칸)만 판매 목록에 올린다
+  const buildDurations = () => {
+    if (!form.timed) return [];
+    return [
+      { days: 7, price: Math.max(0, Math.floor(Number(form.price7) || 0)) },
+      { days: 30, price: Math.max(0, Math.floor(Number(form.price30) || 0)) },
+    ].filter((d) => d.price > 0);
+  };
 
   const saveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await fetch("/api/shop/items", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, roleName: selectedRole?.name || "" }),
+      body: JSON.stringify({ ...form, roleName: selectedRole?.name || "", durations: buildDurations() }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
     if (res?.ok && d?.success) { setForm(emptyForm); fetchAll(); notify("저장되었습니다."); }
@@ -337,6 +349,54 @@ export default function AdminShopPage() {
                   </div>
                 </div>
 
+                {/* 📌 기간제 역할 — 역할·권한 상품만 (기프트카드는 기간 개념이 없다) */}
+                {form.type !== "physical" && (
+                  <div className="mb-6 border-t border-white/[0.06] pt-5">
+                    <button type="button" onClick={() => setForm({ ...form, timed: !form.timed })}
+                      className={`${inputClass} md:max-w-xs flex items-center justify-between text-left ${form.timed ? "border-[#e91e3f]/40" : ""}`}>
+                      <span className={form.timed ? "text-[#e91e3f] font-bold" : "text-gray-400"}>{form.timed ? "기간제 역할" : "영구 보유"}</span>
+                      <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${form.timed ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
+                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${form.timed ? "left-[18px]" : "left-0.5"}`}></span>
+                      </span>
+                    </button>
+                    <p className={fieldNote}>
+                      {form.timed
+                        ? "고른 기간이 지나면 봇이 역할을 자동으로 회수합니다. 기간이 끝난 뒤에는 다시 구매할 수 있습니다."
+                        : "한 번 사면 계속 보유합니다."}
+                    </p>
+
+                    {/* 기간이 열릴 때 높이까지 함께 펼친다 */}
+                    <div className="grid transition-[grid-template-rows,opacity] duration-500 ease-out" style={{ gridTemplateRows: form.timed ? "1fr" : "0fr", opacity: form.timed ? 1 : 0 }}>
+                      <div className="overflow-hidden">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                          {([{ k: "price7", d: 7 }, { k: "price30", d: 30 }] as const).map(({ k, d }) => {
+                            const raw = Number((form as any)[k]) || 0;
+                            const pct = Math.min(100, Math.max(0, Number(form.discountPct) || 0));
+                            return (
+                              <div key={k}>
+                                <label className={labelClass}>{d}일 가격 (XP)</label>
+                                <input type="number" min={0} value={(form as any)[k]}
+                                  onChange={(e) => setForm({ ...form, [k]: e.target.value })}
+                                  placeholder={d === 7 ? "예: 30000" : "예: 100000"} className={inputClass} />
+                                <p className={fieldNote}>
+                                  {raw > 0
+                                    ? pct > 0
+                                      ? `판매가 ${Math.max(0, Math.floor((raw * (100 - pct)) / 100)).toLocaleString()} XP (${pct}% 할인)`
+                                      : `판매가 ${raw.toLocaleString()} XP`
+                                    : "비우면 이 기간은 팔지 않습니다"}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {form.timed && buildDurations().length === 0 && (
+                          <p className="text-[10px] font-bold text-amber-400 mt-3">기간 가격을 하나 이상 넣어야 기간제로 저장됩니다.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="mb-6">
                   <label className={labelClass}>판매 상태</label>
                   <button type="button" onClick={() => setForm({ ...form, active: !form.active })} className={`${inputClass} md:max-w-xs flex items-center justify-between text-left ${form.active ? "border-[#e91e3f]/40" : ""}`}>
@@ -384,7 +444,11 @@ export default function AdminShopPage() {
                         <span className="text-[11px] text-gray-400">추천 {it.sortOrder || 0}</span>
                       </div>
                       <div className="flex gap-4 shrink-0">
-                        <button onClick={() => { setForm({ id: it._id, name: it.name, description: it.description || "", imageUrl: it.imageUrl || "", type: it.type, roleId: it.roleId || "", price: String(it.price), discountPct: it.discountPct ? String(it.discountPct) : "", stock: it.stock < 0 ? "" : String(it.stock), sortOrder: String(it.sortOrder || 0), active: it.active }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-400 hover:text-white transition-colors">수정</button>
+                        <button onClick={() => { setForm({ id: it._id, name: it.name, description: it.description || "", imageUrl: it.imageUrl || "", type: it.type, roleId: it.roleId || "", price: String(it.price), discountPct: it.discountPct ? String(it.discountPct) : "", stock: it.stock < 0 ? "" : String(it.stock), sortOrder: String(it.sortOrder || 0), active: it.active,
+                          timed: Array.isArray(it.durations) && it.durations.length > 0,
+                          price7: String(it.durations?.find((d: any) => d.days === 7)?.price ?? ""),
+                          price30: String(it.durations?.find((d: any) => d.days === 30)?.price ?? ""),
+                        }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-400 hover:text-white transition-colors">수정</button>
                         <button onClick={() => setDeleteTarget({ kind: "item", id: it._id })} className="text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">삭제</button>
                       </div>
                     </div>

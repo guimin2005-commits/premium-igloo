@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { getShopAccess } from "@/lib/shopAccess";
-import { salePrice } from "@/lib/shopPricing";
+import { salePrice, isTimed, durationPrice } from "@/lib/shopPricing";
 import { getLevelByXp } from "@/lib/leveling";
 import ShopItem from "@/models/ShopItem";
 import Purchase from "@/models/Purchase";
@@ -29,7 +29,7 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "아직 공개되지 않은 상점입니다." }, { status: 403 });
     }
 
-    const { itemId, contact } = await request.json();
+    const { itemId, contact, days: rawDays } = await request.json();
     if (!itemId) {
       return NextResponse.json({ success: false, message: "상품이 지정되지 않았습니다." }, { status: 400 });
     }
@@ -42,14 +42,25 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "수령 정보를 입력해주세요." }, { status: 400 });
     }
 
+    // 📌 기간제 상품은 파는 기간 중 하나를 반드시 골라야 한다
+    const days = isTimed(item) ? Math.floor(Number(rawDays) || 0) : 0;
+    if (isTimed(item) && (!days || durationPrice(item, days) == null)) {
+      return NextResponse.json({ success: false, message: "이용 기간을 골라주세요." }, { status: 400 });
+    }
+
     // 📌 모든 상품은 1인 1개 — 이미 구매(대기·완료)한 건이 있으면 재구매 불가
+    // 기간제는 기간이 끝나면 다시 살 수 있어야 하므로, 아직 살아 있는 건만 막는다
     const owned = await Purchase.findOne({
       userId,
       itemId: String(item._id),
       status: { $in: ["pending", "completed"] },
+      $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
     }).lean();
     if (owned) {
-      return NextResponse.json({ success: false, message: "이미 구매한 상품입니다. 상품은 1인 1개만 구매할 수 있습니다." }, { status: 409 });
+      return NextResponse.json({
+        success: false,
+        message: owned.expiresAt ? "아직 이용 기간이 남아 있습니다. 기간이 끝난 뒤 다시 구매할 수 있습니다." : "이미 구매한 상품입니다. 상품은 1인 1개만 구매할 수 있습니다.",
+      }, { status: 409 });
     }
 
     // 1) 재고 선점 — 무제한(-1)이 아니면 남은 수량이 있을 때만 차감
@@ -68,7 +79,7 @@ export async function POST(request) {
     // 2) XP 차감 — XP는 화폐이므로 쓰면 레벨도 함께 내려간다.
     //    잔액이 충분할 때만 매치되는 원자적 갱신 (중복 구매·마이너스 방지)
     //    📌 관리자는 잔액 검사를 건너뛰고 소모도 하지 않는다 (테스트 구매)
-    const price = salePrice(item);
+    const price = salePrice(item, days);
     const charged = isAdmin ? 0 : price;
     const paid = await UserXp.updateOne(
       isAdmin ? { userId } : { userId, xp: { $gte: price } },
@@ -93,6 +104,9 @@ export async function POST(request) {
       itemType: item.type,
       roleId: item.roleId || "",
       price,
+      days,
+      // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다
+      expiresAt: days > 0 ? new Date(Date.now() + days * 86400000) : null,
       contact: item.type === "physical" ? contact.trim() : "",
       status: "pending",
     });
@@ -107,7 +121,7 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       message: item.type !== "physical"
-        ? "구매가 완료되었습니다. 잠시 후 역할이 자동으로 지급됩니다."
+        ? (days > 0 ? `구매가 완료되었습니다. ${days}일 동안 역할이 유지되며, 잠시 후 자동으로 지급됩니다.` : "구매가 완료되었습니다. 잠시 후 역할이 자동으로 지급됩니다.")
         : "구매가 완료되었습니다. 운영진 확인 후 발송해 드립니다.",
       data: { purchaseId: purchase._id, remainXp: remain?.xp ?? 0 },
     });

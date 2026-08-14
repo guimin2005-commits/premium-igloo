@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
-import { salePrice } from "@/lib/shopPricing";
+import { salePrice, durationLabel, remainLabel } from "@/lib/shopPricing";
 import ArcticHeader from "../ArcticHeader";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
@@ -12,6 +12,7 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   pending: { label: "처리 대기", cls: "bg-[#fdf3e3] text-[#a8763a]" },
   completed: { label: "완료", cls: "bg-[#e8f3e6] text-[#3f7a35]" },
   cancelled: { label: "취소", cls: "bg-[#fdeaea] text-[#c62828]" },
+  expired: { label: "기간 만료", cls: "bg-[#efedea] text-[#8a8a8a]" },
 };
 const TYPE_LABEL: Record<string, string> = { role: "역할", perk: "권한", physical: "기프트카드" };
 
@@ -219,7 +220,15 @@ export default function ShopMePage() {
                             className="block text-[13px] font-bold text-[#131313] truncate hover:text-[#e91e3f] transition-colors">
                             {o.itemName}
                           </Link>
-                          <p className="text-[10px] text-[#a3a3a3]">{TYPE_LABEL[o.itemType] || "상품"} · {fmtDate(o.createdAt)}</p>
+                          <p className="text-[10px] text-[#a3a3a3]">
+                            {TYPE_LABEL[o.itemType] || "상품"} · {fmtDate(o.createdAt)}
+                            {o.days > 0 && <span className="text-[#5a5a5a] font-bold"> · {durationLabel(o.days)}권</span>}
+                          </p>
+                          {o.days > 0 && o.expiresAt && o.status !== "cancelled" && (
+                            <p className={`text-[10px] font-bold mt-0.5 ${o.status === "expired" || new Date(o.expiresAt) <= new Date() ? "text-[#a3a3a3]" : "text-[#e91e3f]"}`}>
+                              {remainLabel(o.expiresAt)}{o.status !== "expired" && new Date(o.expiresAt) > new Date() ? ` · ${fmtDate(o.expiresAt)}까지` : ""}
+                            </p>
+                          )}
                         </div>
                         <span className={`text-[12px] font-black tabular-nums shrink-0 ${o.status === "cancelled" ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>
                           -{(o.price || 0).toLocaleString()} XP
