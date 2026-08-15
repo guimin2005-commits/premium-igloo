@@ -848,6 +848,38 @@ export async function POST(request, { params }) {
         return NextResponse.json({ success: true });
       }
 
+      // 개최자: 인벤토리에 있는 카드를 직접 회수 (환불 + 선수 대기 복귀)
+      //  낙찰 취소와 결과는 같지만, PLAYERS 를 찾지 않고 인벤토리에서 바로 지울 수 있다.
+      case "host:invRemove": {
+        const session = await getServerSession(authOptions);
+        if (!isAdminName(session?.user?.name)) {
+          return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        }
+        const { leaderIdx, invIdx } = body;
+        const leader = auction.leaders[leaderIdx];
+        const card = leader?.inventory?.[invIdx];
+        if (!leader || !card) return NextResponse.json({ success: false, message: "대상을 찾을 수 없습니다." }, { status: 400 });
+        if (card.playerIdx === -1) {
+          return NextResponse.json({ success: false, message: "팀장 카드는 회수할 수 없습니다. 포지션 지정으로 처리하세요." }, { status: 400 });
+        }
+        leader.points += card.price || 0; // 환불
+        leader.inventory.splice(invIdx, 1);
+        const rp = auction.players[card.playerIdx];
+        if (rp) {
+          rp.status = "대기";
+          rp.soldTo = null;
+          rp.soldPrice = null;
+          rp.revealed = false;
+        }
+        if (auction.reveal?.playerIdx === card.playerIdx) auction.reveal = { playerIdx: null };
+        if (auction.pendingOverflow?.leaderIdx === leaderIdx) auction.pendingOverflow = { leaderIdx: null, slot: null };
+        const rn = card.golden && !rp?.revealed ? "올 포지션 선수" : rp?.alias;
+        addLog(auction, `[진행자] ${rn} 카드 회수 — ${leader.name} (${(card.price || 0).toLocaleString()} Point 환불)`);
+        await auction.save();
+        sysChat(id, `운영진이 ${leader.name} 팀의 ${rn} 카드를 회수했습니다. (포인트 환불 완료)`);
+        return NextResponse.json({ success: true });
+      }
+
       // 개최자: 리더 포지션 지정/변경 (본인 슬롯 배치)
       // 진행자는 준비중·진행중 어느 때나 리더 포지션을 고칠 수 있다 (1회 제한 없음).
       // "올 포지션" 으로 두면 슬롯을 비우고 팀장 카드 상태가 된다.

@@ -2707,6 +2707,24 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                     <span className="text-white tabular-nums">{ownedScoutCostOf(cp).toLocaleString()}</span>
                                   </button>
                                 )}
+                                {/* 진행자: 인벤토리 카드 직접 회수 (환불 + 선수 대기 복귀) */}
+                                {role === "host" && (
+                                  <button
+                                    onClick={() => setConfirmCfg({
+                                      title: "카드 회수",
+                                      message: `${cardName(card)} 카드를 ${l.name} 팀에서 회수합니다.\n${(card.price || 0).toLocaleString()} Point가 환불되고 선수는 대기 상태로 돌아갑니다.`,
+                                      confirmLabel: "회수",
+                                      onConfirm: async () => {
+                                        const d = await act({ action: "host:invRemove", leaderIdx: li, invIdx: ci });
+                                        if (d?.success) { sfxSelect(); showToast(`${cardName(card)} 카드를 회수했습니다`); patchAuction((a) => { const L = a.leaders?.[li]; if (!L) return; L.points += card.price || 0; L.inventory.splice(ci, 1); }); }
+                                        else showToast(d?.message || "회수에 실패했습니다");
+                                      },
+                                    })}
+                                    className="auc-press px-2.5 py-1.5 rounded-lg text-[10px] font-black text-orange-400 border border-orange-400/40 active:bg-orange-400/15 transition-colors"
+                                  >
+                                    회수
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => { setMobPick(ci); sfxSelect(); }}
                                   className="auc-press ml-auto px-3.5 py-1.5 rounded-lg text-[11px] font-black text-[#ff5c77] border border-[#e91e3f]/60 active:bg-[#e91e3f] active:text-white transition-colors"
@@ -2939,6 +2957,26 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                               </div>
                             ))}
                           </div>
+                          {/* 진행자: 인벤토리 카드 직접 회수 (환불 + 선수 대기 복귀) */}
+                          {role === "host" && dragCard !== null && dragCard >= 0 && (
+                            <button
+                              onClick={() => setConfirmCfg({
+                                title: "카드 회수",
+                                message: `${cardName(sel)} 카드를 ${l.name} 팀에서 회수합니다.\n${(sel.price || 0).toLocaleString()} Point가 환불되고 선수는 대기 상태로 돌아갑니다.`,
+                                confirmLabel: "회수",
+                                onConfirm: async () => {
+                                  const ci = dragCard;
+                                  const d = await act({ action: "host:invRemove", leaderIdx: li, invIdx: ci });
+                                  if (d?.success) { sfxSelect(); setDragCard(null); showToast(`${cardName(sel)} 카드를 회수했습니다`); patchAuction((a) => { const L = a.leaders?.[li]; if (!L) return; L.points += sel.price || 0; L.inventory.splice(ci, 1); }); }
+                                  else showToast(d?.message || "회수에 실패했습니다");
+                                },
+                              })}
+                              className="auc-press mt-3 w-full flex items-center justify-center gap-2 px-2.5 py-2 rounded-lg border border-orange-400/40 text-[10px] font-black text-orange-400 hover:border-orange-400 hover:bg-orange-400/[0.10] transition-colors"
+                            >
+                              카드 회수
+                              <span className="text-[9px] font-bold text-gray-500">진행자 · 환불 후 대기 복귀</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
