@@ -818,10 +818,23 @@ export async function POST(request, { params }) {
         if (player.status !== "낙찰") return NextResponse.json({ success: false, message: "낙찰된 선수만 취소할 수 있습니다." }, { status: 400 });
         const leader = auction.leaders[player.soldTo];
         if (leader) {
+          // ⚠️ 인벤토리 모드에서는 낙찰 카드가 슬롯이 아니라 인벤토리에 들어간다.
+          //    roster 만 뒤지면 카드가 인벤토리에 그대로 남고 환불도 되지 않는다.
           const ri = leader.roster.findIndex((r) => r.playerIdx === playerIdx);
+          const ci = (leader.inventory || []).findIndex((c) => c.playerIdx === playerIdx);
           if (ri >= 0) {
             leader.points += leader.roster[ri].price || 0; // 환불
             leader.roster.splice(ri, 1);
+          } else if (ci >= 0) {
+            leader.points += leader.inventory[ci].price || 0;
+            leader.inventory.splice(ci, 1);
+          } else {
+            // 어느 쪽에서도 못 찾으면 낙찰가로 환불 (상태가 어긋나도 포인트는 돌려준다)
+            leader.points += player.soldPrice || 0;
+          }
+          // 이 선수를 옮기려고 잡아둔 초과 배정 상태가 있으면 함께 푼다
+          if (auction.pendingOverflow?.leaderIdx === player.soldTo) {
+            auction.pendingOverflow = { leaderIdx: null, slot: null };
           }
         }
         player.status = "대기";
