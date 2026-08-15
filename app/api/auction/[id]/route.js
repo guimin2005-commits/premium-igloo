@@ -267,12 +267,14 @@ export async function POST(request, { params }) {
 
       // 리더: 본인 포지션 직접 선택.
       //  · 최초 선택은 자유, 이후 변경은 팀당 단 한 번
-      //  · "올 포지션" 을 고르면 슬롯을 차지하지 않고 팀장 카드로 남아 나중에 어느 자리든 들어갈 수 있다
+      //  · "올 포지션" 은 진행자만 지정할 수 있다 (host:setLeaderPos)
       case "leader:setPos": {
         const { leaderIdx, position } = body;
         const leader = auction.leaders[leaderIdx];
-        const isAll = position === ALLPOS;
-        if (!leader || !(isAll || roleNames(S).includes(position))) return NextResponse.json({ success: false }, { status: 400 });
+        if (position === ALLPOS) {
+          return NextResponse.json({ success: false, message: "올 포지션은 진행자만 지정할 수 있습니다." }, { status: 403 });
+        }
+        if (!leader || !roleNames(S).includes(position)) return NextResponse.json({ success: false }, { status: 400 });
 
         // 남의 리더 자리를 대신 고르지 못하게 — ID가 등록된 리더는 본인(또는 진행자)만
         const session = await getServerSession(authOptions);
@@ -291,20 +293,42 @@ export async function POST(request, { params }) {
           return NextResponse.json({ success: false, message: "포지션 변경은 한 번만 가능합니다. 추가 변경은 진행자에게 요청해 주세요." }, { status: 409 });
         }
 
+        // 📌 올 포지션 팀장 카드는 황금카드와 동일하게 동작한다 — 이미 찬 슬롯에도 들어가고,
+        //    밀려나는 기존 선수는 보유 선수(인벤토리)로 돌아간다.
+        const fromAll = before === ALLPOS;
         const selfIdx = leader.roster.findIndex((r) => r.playerIdx === -1);
-        if (isAll) {
-          // 슬롯을 비우고 팀장 카드 상태로 — 인벤토리 용량은 차지하지 않는다(가상 카드)
-          if (selfIdx >= 0) leader.roster.splice(selfIdx, 1);
-        } else {
-          const occupied = leader.roster.filter((r, i) => r.slot === position && i !== selfIdx).length;
-          if (occupied >= slotLimitOf(S, position)) {
-            return NextResponse.json({ success: false, message: `${position} 슬롯이 이미 가득 찼습니다.` }, { status: 400 });
-          }
-          if (selfIdx >= 0) leader.roster[selfIdx].slot = position;
-          else leader.roster.push({ playerIdx: -1, slot: position, price: 0, golden: false });
+        const occupied = leader.roster.filter((r, i) => r.slot === position && i !== selfIdx).length;
+        const isFull = occupied >= slotLimitOf(S, position);
+        if (isFull && !fromAll) {
+          return NextResponse.json({ success: false, message: `${position} 슬롯이 이미 가득 찼습니다.` }, { status: 400 });
         }
+        if (selfIdx >= 0) { leader.roster[selfIdx].slot = position; leader.roster[selfIdx].golden = fromAll; }
+        else leader.roster.push({ playerIdx: -1, slot: position, price: 0, golden: fromAll });
         leader.position = position;
         if (isChange) leader.selfPosChanged = true;
+
+        if (isFull && fromAll) {
+          const cands = leader.roster
+            .map((r, ri) => ({ r, ri }))
+            .filter(({ r }) => r.slot === position && !r.golden && r.playerIdx !== -1);
+          if (cands.length === 1) {
+            const { r: out, ri: outIdx } = cands[0];
+            leader.inventory.push({ playerIdx: out.playerIdx, price: out.price, golden: false });
+            leader.roster.splice(outIdx, 1);
+            auction.pendingOverflow = { leaderIdx: null, slot: null };
+            const outName = auction.players[out.playerIdx]?.alias;
+            addLog(auction, `${leader.name} 팀장(올 포지션) → [${position}] 초과 배정 — ${outName} 자동으로 보유 선수 복귀`);
+            await auction.save();
+            sysChat(id, `${leader.name} 팀장이 [${position}] 슬롯에 들어가 ${outName} 선수가 보유 선수로 돌아갔습니다.`);
+            return NextResponse.json({ success: true, autoEjected: outName });
+          }
+          auction.pendingOverflow = { leaderIdx, slot: position };
+          addLog(auction, `${leader.name} 팀장(올 포지션) → [${position}] 초과 배정 — 기존 선수 이동 필요`);
+          await auction.save();
+          sysChat(id, `${leader.name} 팀장이 [${position}] 슬롯에 배정되었습니다. ${leader.name} 리더는 내보낼 선수 한 명을 선택해주세요.`);
+          return NextResponse.json({ success: true, overflow: true });
+        }
+
         addLog(auction, isChange ? `${leader.name} 리더 포지션 변경 [${before} → ${position}] (1회 소진)` : `${leader.name} 리더 포지션 선택 → ${position}`);
         await auction.save();
         sysChat(id, isChange

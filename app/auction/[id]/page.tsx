@@ -2418,9 +2418,22 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           if (invIdx === LEADER_CARD) {
             const d0 = await act({ action: "leader:setPos", leaderIdx: li, position: slot });
             if (d0?.success) {
-              sfxAssign(); setDragCard(null); setMobPick(null);
-              showToast(`팀장 포지션을 [${roleAbbr(slot)}] 로 지정했습니다`);
-              patchAuction((a) => { const L = a.leaders?.[li]; if (!L) return; L.position = slot; const si = L.roster.findIndex((r: any) => r.playerIdx === -1); if (si >= 0) L.roster[si].slot = slot; else L.roster.push({ playerIdx: -1, slot, price: 0, golden: false }); });
+              const wasAll = l.position === ALL_POS;
+              sfxAssign(); setDragCard(null); setMobPick(null); setMoveFrom(null);
+              showToast(
+                d0.autoEjected ? `팀장 → [${roleAbbr(slot)}] · ${d0.autoEjected} 선수가 보유 선수로 돌아왔습니다`
+                : d0.overflow ? `팀장 → [${roleAbbr(slot)}] 초과 배정 · 내보낼 선수를 선택해주세요`
+                : `팀장 포지션을 [${roleAbbr(slot)}] 로 지정했습니다`
+              );
+              patchAuction((a) => {
+                const L = a.leaders?.[li];
+                if (!L) return;
+                L.position = slot;
+                const si = L.roster.findIndex((r: any) => r.playerIdx === -1);
+                if (si >= 0) { L.roster[si].slot = slot; L.roster[si].golden = wasAll; }
+                else L.roster.push({ playerIdx: -1, slot, price: 0, golden: wasAll });
+                if (d0.overflow) a.pendingOverflow = { leaderIdx: li, slot };
+              });
             } else showToast(d0?.message || "포지션 지정에 실패했습니다");
             return;
           }
@@ -3406,28 +3419,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               );
             })}
           </div>
-          {/* 올 포지션 — 슬롯을 비우고 팀장 카드 상태로 돌아간다 (인벤토리 칸 미차지) */}
-          <button
-            disabled={myLeader.position === ALL_POS}
-            onClick={async () => {
-              const d = await act({ action: "leader:setPos", leaderIdx: myLeaderIdx, position: ALL_POS });
-              if (d?.success) {
-                sfxSelect(); setSelfPosOpen(false);
-                patchAuction((a) => {
-                  const l = a.leaders[myLeaderIdx];
-                  if (l.position && l.position !== ALL_POS) l.selfPosChanged = true;
-                  l.position = ALL_POS;
-                  const si = l.roster.findIndex((x: any) => x.playerIdx === -1);
-                  if (si >= 0) l.roster.splice(si, 1);
-                });
-                showToast("올 포지션 — 팀장 카드로 돌아왔습니다");
-              } else showToast(d?.message || "변경에 실패했습니다");
-            }}
-            className="auc-press mt-2.5 w-full flex items-center gap-2 px-3 py-3 rounded-lg border border-amber-400/40 text-[12px] font-black text-amber-300 hover:border-amber-400/70 hover:bg-amber-400/[0.08] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            올 포지션
-            <span className="text-[9px] font-bold text-amber-600/80">슬롯을 비우고 팀장 카드로 — 인벤토리 칸 미차지</span>
-          </button>
+          {/* 올 포지션은 진행자만 지정할 수 있다 — 리더에게는 선택지로 두지 않는다 */}
+          {myLeader.position === ALL_POS && (
+            <p className="mt-3 text-[10px] font-bold text-amber-300/70 leading-relaxed">
+              지금은 <b className="text-amber-300">올 포지션</b>(팀장 카드) 상태입니다. 다시 올 포지션으로 두려면 진행자에게 요청하세요.
+            </p>
+          )}
         </AucModal>
       )}
 
