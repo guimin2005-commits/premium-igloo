@@ -2505,6 +2505,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
         // 최초 1회만 불가역 경고 → 이후 바로 배정
         const requestPlace = (invIdx: number, slot: string) => {
+          // 팀장 카드는 되돌릴 수 있는 조작(진행자가 언제든 수정)이라 경고 없이 바로 배정
+          if (invIdx === LEADER_CARD) { if (leaderCard) doPlace(invIdx, slot); return; }
           const card = l.inventory?.[invIdx];
           if (!card) return;
           if (!warnedRef.current) { setAssignWarn({ invIdx, slot, name: cardName(card) }); return; }
@@ -2616,8 +2618,44 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     ) : null}
                   </div>
 
+                  {/* 📌 팀장 카드 — 인벤토리 칸은 차지하지 않는다. 눌러서 원하는 포지션에 배정 */}
+                  {leaderCard && (
+                    <div className={`flex gap-3 px-3.5 py-3 border-b border-white/[0.07] ${leaderCard.golden ? "bg-amber-400/[0.05]" : ""}`}>
+                      <span className={`relative shrink-0 w-[58px] aspect-[3/4.2] rounded-lg border overflow-hidden flex flex-col items-center justify-center gap-1.5 ${leaderCard.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.20] to-[#0d0d0d]" : "border-white/25 bg-gradient-to-b from-white/[0.10] to-[#0d0d0d]"}`}>
+                        <span className={`relative w-7 h-7 rounded-full overflow-hidden flex items-center justify-center border ${leaderCard.golden ? "border-amber-300/50 bg-amber-400/10" : "border-white/20 bg-white/[0.06]"}`}>
+                          {l.discordId && profiles[l.discordId] ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={profiles[l.discordId].avatarUrl} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-[11px] font-black text-white">{l.name[0]}</span>
+                          )}
+                        </span>
+                        <span className={`relative text-[8px] font-black tracking-wider ${leaderCard.golden ? "text-amber-300" : "text-gray-400"}`}>LEADER</span>
+                      </span>
+                      <div className="min-w-0 flex-1 flex flex-col">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className={`text-[14px] font-black truncate ${leaderCard.golden ? "text-amber-300" : "text-white"}`}>{l.name} <span className="text-gray-500">(팀장)</span></span>
+                          {leaderCard.golden && <span className="shrink-0 text-[8px] font-black text-amber-300 border border-amber-400/45 px-1">ALL</span>}
+                        </div>
+                        <p className="text-[11px] font-bold text-gray-500 mt-1 leading-snug break-keep">
+                          {leaderCard.golden ? "올 포지션 — 꽉 찬 자리에도 들어갈 수 있습니다" : "포지션 미정 — 인벤토리 칸을 차지하지 않습니다"}
+                        </p>
+                        {canManage && !swapMode && !invOverflow && (
+                          <div className="mt-auto pt-2 flex">
+                            <button
+                              onClick={() => { setMobPick(LEADER_CARD); sfxSelect(); }}
+                              className={`auc-press ml-auto px-3.5 py-1.5 rounded-lg text-[11px] font-black border transition-colors ${leaderCard.golden ? "text-amber-300 border-amber-400/60 active:bg-amber-400/20" : "text-gray-200 border-white/30 active:bg-white/10"}`}
+                            >
+                              배정 ›
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {(l.inventory?.length || 0) === 0 ? (
-                    <p className="px-3.5 py-8 text-center text-[11px] text-gray-700">보유 중인 선수가 없습니다.</p>
+                    !leaderCard && <p className="px-3.5 py-8 text-center text-[11px] text-gray-700">보유 중인 선수가 없습니다.</p>
                   ) : (
                     (l.inventory || []).map((card: any, ci: number) => {
                       const cp = auction.players[card.playerIdx];
@@ -2780,8 +2818,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               </div>
 
               {/* 📱 포지션 선택 시트 — '배정하기' 를 누르면 올라온다 */}
-              {mobPick !== null && l.inventory?.[mobPick] && (() => {
-                const card = l.inventory[mobPick];
+              {mobPick !== null && (mobPick === LEADER_CARD ? !!leaderCard : !!l.inventory?.[mobPick]) && (() => {
+                const card = mobPick === LEADER_CARD ? leaderCard! : l.inventory[mobPick];
                 return (
                   /* 하단에 붙이면 선택지가 화면 아래에 뭉친다 → 가운데에 띄워 세로로 펼친다 */
                   <div className="lg:hidden absolute inset-0 z-10 flex items-center justify-center p-4 bg-black/80 animate-in fade-in" onClick={() => setMobPick(null)}>
