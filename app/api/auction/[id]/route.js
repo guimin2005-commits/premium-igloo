@@ -13,6 +13,8 @@ const slotCount = (leader, slot) => leader.roster.filter((r) => r.slot === slot)
 
 // 📌 인벤토리 용량 = 기본 용량 + '인벤토리 플러스'로 산 추가 칸
 //    용량을 넘겨 소지하면 배정으로 줄이기 전까지 다음 입찰을 막는다.
+// 리더 본인 포지션의 특수값 — 슬롯에 못 박히지 않고 '팀장 카드' 상태로 남는다
+const ALLPOS = "올 포지션";
 const invCapacityOf = (S, leader) => Math.max(1, (S?.invCapacity ?? 1) + (leader?.invExtra || 0));
 const invOver = (S, leader) => (leader?.inventory?.length || 0) > invCapacityOf(S, leader);
 
@@ -235,7 +237,8 @@ export async function POST(request, { params }) {
         if (player.isAllPos && !player.hasMost) {
           return NextResponse.json({ success: false, message: "공개할 정보가 없는 선수입니다." }, { status: 400 });
         }
-        const cost = S.ownedScoutCost ?? 2900;
+        // 황금카드는 경매 중과 마찬가지로 전용 가격
+        const cost = player.isAllPos ? (S.ownedGoldenScoutCost ?? 4900) : (S.ownedScoutCost ?? 2900);
         if (leader.points < cost) return NextResponse.json({ success: false, message: "보유 Point가 부족합니다." }, { status: 400 });
         leader.points -= cost;
         player.scoutedBy.push(leaderIdx);
@@ -262,34 +265,51 @@ export async function POST(request, { params }) {
         return NextResponse.json({ success: true });
       }
 
-      // 리더: 본인 포지션 직접 선택 — 개최 때 비워 둔 리더가 시작 시점에 고른다
+      // 리더: 본인 포지션 직접 선택.
+      //  · 최초 선택은 자유, 이후 변경은 팀당 단 한 번
+      //  · "올 포지션" 을 고르면 슬롯을 차지하지 않고 팀장 카드로 남아 나중에 어느 자리든 들어갈 수 있다
       case "leader:setPos": {
         const { leaderIdx, position } = body;
         const leader = auction.leaders[leaderIdx];
-        if (!leader || !roleNames(S).includes(position)) return NextResponse.json({ success: false }, { status: 400 });
+        const isAll = position === ALLPOS;
+        if (!leader || !(isAll || roleNames(S).includes(position))) return NextResponse.json({ success: false }, { status: 400 });
 
         // 남의 리더 자리를 대신 고르지 못하게 — ID가 등록된 리더는 본인(또는 진행자)만
         const session = await getServerSession(authOptions);
         if (leader.discordId && leader.discordId !== session?.user?.id && !isAdminName(session?.user?.name)) {
           return NextResponse.json({ success: false, message: "본인 리더만 선택할 수 있습니다." }, { status: 403 });
         }
-        // 이미 정해진 포지션을 리더가 스스로 바꾸는 건 막는다 (변경은 진행자 권한)
-        if (leader.position) {
-          return NextResponse.json({ success: false, message: "이미 포지션이 정해져 있습니다. 변경은 진행자에게 요청해 주세요." }, { status: 409 });
+        // 📌 최초 선택은 자유, 그 뒤 변경은 팀당 단 한 번.
+        //    "올 포지션" 은 아직 자리를 정하지 않은 상태에 가까우므로, 거기서 실제 슬롯으로
+        //    들어가는 것은 변경으로 세지 않는다. (진행자는 이 제한을 받지 않는다)
+        const before = leader.position;
+        const isChange = !!before && before !== ALLPOS;
+        if (before === position) {
+          return NextResponse.json({ success: false, message: "이미 해당 포지션입니다." }, { status: 400 });
+        }
+        if (isChange && leader.selfPosChanged) {
+          return NextResponse.json({ success: false, message: "포지션 변경은 한 번만 가능합니다. 추가 변경은 진행자에게 요청해 주세요." }, { status: 409 });
         }
 
         const selfIdx = leader.roster.findIndex((r) => r.playerIdx === -1);
-        const occupied = leader.roster.filter((r, i) => r.slot === position && i !== selfIdx).length;
-        if (occupied >= slotLimitOf(S, position)) {
-          return NextResponse.json({ success: false, message: `${position} 슬롯이 이미 가득 찼습니다.` }, { status: 400 });
+        if (isAll) {
+          // 슬롯을 비우고 팀장 카드 상태로 — 인벤토리 용량은 차지하지 않는다(가상 카드)
+          if (selfIdx >= 0) leader.roster.splice(selfIdx, 1);
+        } else {
+          const occupied = leader.roster.filter((r, i) => r.slot === position && i !== selfIdx).length;
+          if (occupied >= slotLimitOf(S, position)) {
+            return NextResponse.json({ success: false, message: `${position} 슬롯이 이미 가득 찼습니다.` }, { status: 400 });
+          }
+          if (selfIdx >= 0) leader.roster[selfIdx].slot = position;
+          else leader.roster.push({ playerIdx: -1, slot: position, price: 0, golden: false });
         }
-
         leader.position = position;
-        if (selfIdx >= 0) leader.roster[selfIdx].slot = position;
-        else leader.roster.push({ playerIdx: -1, slot: position, price: 0, golden: false });
-        addLog(auction, `${leader.name} 리더 포지션 선택 → ${position}`);
+        if (isChange) leader.selfPosChanged = true;
+        addLog(auction, isChange ? `${leader.name} 리더 포지션 변경 [${before} → ${position}] (1회 소진)` : `${leader.name} 리더 포지션 선택 → ${position}`);
         await auction.save();
-        sysChat(id, `${leader.name} 리더가 포지션을 [${position}]으로 선택했습니다.`);
+        sysChat(id, isChange
+          ? `${leader.name} 리더가 포지션을 [${before}] 에서 [${position}] 으로 변경했습니다.`
+          : `${leader.name} 리더가 포지션을 [${position}]으로 선택했습니다.`);
         return NextResponse.json({ success: true });
       }
 
@@ -792,21 +812,27 @@ export async function POST(request, { params }) {
       }
 
       // 개최자: 리더 포지션 지정/변경 (본인 슬롯 배치)
+      // 진행자는 준비중·진행중 어느 때나 리더 포지션을 고칠 수 있다 (1회 제한 없음).
+      // "올 포지션" 으로 두면 슬롯을 비우고 팀장 카드 상태가 된다.
       case "host:setLeaderPos": {
         const { leaderIdx, position } = body;
         const leader = auction.leaders[leaderIdx];
-        if (!leader || !roleNames(S).includes(position)) return NextResponse.json({ success: false }, { status: 400 });
+        const hIsAll = position === ALLPOS;
+        if (!leader || !(hIsAll || roleNames(S).includes(position))) return NextResponse.json({ success: false }, { status: 400 });
 
         const selfIdx = leader.roster.findIndex((r) => r.playerIdx === -1);
-        // 대상 슬롯 잔여 확인 (본인 기존 슬롯 제외)
-        const occupied = leader.roster.filter((r, i) => r.slot === position && i !== selfIdx).length;
-        if (occupied >= slotLimitOf(S, position)) {
-          return NextResponse.json({ success: false, message: `${position} 슬롯이 이미 가득 찼습니다.` }, { status: 400 });
+        if (hIsAll) {
+          if (selfIdx >= 0) leader.roster.splice(selfIdx, 1);
+        } else {
+          // 대상 슬롯 잔여 확인 (본인 기존 슬롯 제외)
+          const occupied = leader.roster.filter((r, i) => r.slot === position && i !== selfIdx).length;
+          if (occupied >= slotLimitOf(S, position)) {
+            return NextResponse.json({ success: false, message: `${position} 슬롯이 이미 가득 찼습니다.` }, { status: 400 });
+          }
+          if (selfIdx >= 0) leader.roster[selfIdx].slot = position;
+          else leader.roster.push({ playerIdx: -1, slot: position, price: 0, golden: false });
         }
-
         leader.position = position;
-        if (selfIdx >= 0) leader.roster[selfIdx].slot = position;
-        else leader.roster.push({ playerIdx: -1, slot: position, price: 0, golden: false });
         addLog(auction, `${leader.name} 리더 포지션 → ${position}`);
         await auction.save();
         sysChat(id, `운영진이 ${leader.name} 리더의 포지션을 [${position}]으로 지정했습니다.`);

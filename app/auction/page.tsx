@@ -98,7 +98,7 @@ export default function AuctionListPage() {
   const [reveal, setReveal] = useState<string[]>((GAME_PRESETS as any)["오버워치"].reveal);
   const [settings, setSettings] = useState({
     leaderPoints: 100000, basePrice: 1000, goldenBasePrice: 4000,
-    scoutCost: 2000, goldenScoutCost: 4000, ownedScoutCost: 2900, posChangeCost: 10000, minIncrement: 100, timerSeconds: 15, scoutSeconds: 7,
+    scoutCost: 2000, goldenScoutCost: 4000, ownedScoutCost: 2900, ownedGoldenScoutCost: 4900, posChangeCost: 10000, minIncrement: 100, timerSeconds: 15, scoutSeconds: 7,
     invCapacity: 1, invPlusCost: 5000,
   });
   const [leaders, setLeaders] = useState<any[]>([{ name: "", position: "", discordId: "" }]);
@@ -728,6 +728,7 @@ export default function AuctionListPage() {
                     { k: "scoutCost", l: "스카우터 비용" },
                     { k: "goldenScoutCost", l: "황금 스카우터" },
                     { k: "ownedScoutCost", l: "낙찰 후 스카우터" },
+                    { k: "ownedGoldenScoutCost", l: "낙찰 후 황금" },
                     { k: "posChangeCost", l: "포지션 체인지" },
                     { k: "minIncrement", l: "최소 입찰 단위" },
                     { k: "timerSeconds", l: "입찰 타이머(초)" },

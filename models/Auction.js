@@ -8,6 +8,7 @@ const LeaderSchema = new mongoose.Schema({
   points: { type: Number, default: 100000 },
   ready: { type: Boolean, default: false },           // 리더 준비 완료 여부 (전원 준비 시 시작 가능)
   positionChanged: { type: Boolean, default: false }, // 포지션 체인지 1회 사용 여부 (경매 진행 중 사용, 종료 후 불가)
+  selfPosChanged: { type: Boolean, default: false },   // 리더 본인 포지션 재지정 1회 사용 여부
   invExtra: { type: Number, default: 0 },             // 인벤토리 플러스로 늘린 추가 칸 수
   roster: {
     type: [{
@@ -60,6 +61,7 @@ const AuctionSchema = new mongoose.Schema({
     scoutCost: { type: Number, default: 2000 },
     goldenScoutCost: { type: Number, default: 4000 }, // 황금카드 스카우터 비용 (모스트만 공개)
     ownedScoutCost: { type: Number, default: 2900 },  // 낙찰 후 뒤늦게 쓰는 스카우터 — 경매 중보다 비싸다
+    ownedGoldenScoutCost: { type: Number, default: 4900 }, // 낙찰 후 스카우터 — 황금카드(올 포지션)
     posChangeCost: { type: Number, default: 10000 },
     invCapacity: { type: Number, default: 1 },    // 인벤토리 기본 용량(칸). 초과 소지 시 배정 전까지 입찰 불가
     invPlusCost: { type: Number, default: 5000 }, // 인벤토리 플러스 — 용량 +1칸 구매 비용

@@ -156,6 +156,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const [adjustTarget, setAdjustTarget] = useState<number | null>(null); // 포인트 조정 모달 (leaderIdx)
   const [adjustAmount, setAdjustAmount] = useState("");
   const [posSetTarget, setPosSetTarget] = useState<number | null>(null); // 리더 포지션 지정 모달
+  const [selfPosOpen, setSelfPosOpen] = useState(false); // 리더 본인 포지션 변경 모달 (팀당 1회)
 
   const [miniChat, setMiniChat] = useState(false); // 모바일 우하단 팝업 채팅
   const [sheet, setSheet] = useState<null | "teams">(null); // 모바일 하단 시트 (타 팀)
@@ -638,8 +639,10 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const assignLeft = auction.assignUntil ? Math.max(0, Math.ceil((new Date(auction.assignUntil).getTime() - (now + clockSkew.current)) / 1000)) : 0;
 
   // 📌 인벤토리 용량 — 기본 용량 + 인벤토리 플러스로 산 칸. 초과 소지 시 배정 전까지 입찰 불가
+  const ALL_POS = "올 포지션"; // 리더 포지션 특수값 — 슬롯 미차지, 팀장 카드로 남는다
   const invPlusCost = S.invPlusCost ?? 5000;
-  const ownedScoutCost = S.ownedScoutCost ?? 2900; // 낙찰 후 뒤늦게 쓰는 스카우터
+  // 낙찰 후 뒤늦게 쓰는 스카우터 — 황금카드(올 포지션)는 전용 가격
+  const ownedScoutCostOf = (pl: any) => (pl?.isAllPos ? (S.ownedGoldenScoutCost ?? 4900) : (S.ownedScoutCost ?? 2900));
   const invCapOf = (l: any) => Math.max(1, (S.invCapacity ?? 1) + (l?.invExtra || 0));
   const invPlusUsed = (l: any) => (l?.invExtra || 0) >= 1; // 팀당 1회
   const myInvCap = myLeader ? invCapOf(myLeader) : 1;
@@ -2398,7 +2401,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         const mine = role === "host" || myLeaderIdx === li;
         const canManage = mine && auction.status === "진행중"; // 배정/교환 (본인 팀·진행자만)
         const canSelect = true; // 카드 선택·정보 열람은 누구나 (타 팀 포함)
+        // 📌 팀장 카드 — 포지션이 아직 없는 리더는 슬롯에 못 박히지 않고 인벤토리 안의 카드로 존재한다.
+        //    실제 인벤토리 항목이 아니므로 용량(칸)을 차지하지 않는다. 선택 값은 -1 로 구분한다.
+        const LEADER_CARD = -1;
+        const leaderCard = (!l.position || l.position === ALL_POS) ? { playerIdx: -1, price: 0, golden: l.position === ALL_POS } : null;
         const cardName = (card: any) => {
+          if (card?.playerIdx === -1) return `${l.name} (팀장)`;
           const cp = auction.players[card.playerIdx];
           if (cp?.revealed) return cp.discordId && profiles[cp.discordId] ? profiles[cp.discordId].globalName : cp.alias;
           if (card.golden) return "올 포지션 선수";
@@ -2406,6 +2414,16 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         };
         // 배정 실행 (되돌릴 수 없음)
         const doPlace = async (invIdx: number, slot: string) => {
+          // 팀장 카드는 인벤토리 항목이 아니라 리더 본인의 포지션 지정이다
+          if (invIdx === LEADER_CARD) {
+            const d0 = await act({ action: "leader:setPos", leaderIdx: li, position: slot });
+            if (d0?.success) {
+              sfxAssign(); setDragCard(null); setMobPick(null);
+              showToast(`팀장 포지션을 [${roleAbbr(slot)}] 로 지정했습니다`);
+              patchAuction((a) => { const L = a.leaders?.[li]; if (!L) return; L.position = slot; const si = L.roster.findIndex((r: any) => r.playerIdx === -1); if (si >= 0) L.roster[si].slot = slot; else L.roster.push({ playerIdx: -1, slot, price: 0, golden: false }); });
+            } else showToast(d0?.message || "포지션 지정에 실패했습니다");
+            return;
+          }
           const card = l.inventory?.[invIdx];
           if (!card) return;
           const nm = cardName(card);
@@ -2468,6 +2486,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         // 선택 대상 카드 조회 (인벤토리 + 배정 완료 공용)
         const selectedCard = dragCard === null ? null
           : dragCard >= 0 ? (l.inventory?.[dragCard] || null)
+          : dragCard === LEADER_CARD ? leaderCard
           : (assignedCards.find((a: any) => a.key === dragCard)?.card || null);
         const selectedSlot = dragCard !== null && dragCard < 0 ? assignedCards.find((a: any) => a.key === dragCard)?.slot : null;
 
@@ -2627,14 +2646,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                   <button
                                     onClick={() => setConfirmCfg({
                                       title: "스카우터 (낙찰 후)",
-                                      message: `${ownedScoutCost.toLocaleString()} Point를 사용해 ${cardName(card)} 선수의 ${card.golden ? "모스트 챔피언" : revealFields.includes("champions") ? "주 포지션·모스트 챔피언" : "주/부 포지션"}을(를) 확인합니다.\n경매 중 스카우터(${scoutCostOf(cp).toLocaleString()} Point)보다 비쌉니다.`,
+                                      message: `${ownedScoutCostOf(cp).toLocaleString()} Point를 사용해 ${cardName(card)} 선수의 ${card.golden ? "모스트 챔피언" : revealFields.includes("champions") ? "주 포지션·모스트 챔피언" : "주/부 포지션"}을(를) 확인합니다.\n경매 중 스카우터(${scoutCostOf(cp).toLocaleString()} Point)보다 비쌉니다.`,
                                       confirmLabel: "사용",
                                       onConfirm: () => runScouter(card.playerIdx, true),
                                     })}
                                     className="auc-press flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-white/25 text-[10px] font-black text-gray-300 active:bg-white/[0.08] transition-colors"
                                   >
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3 h-3 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-                                    <span className="text-white tabular-nums">{ownedScoutCost.toLocaleString()}</span>
+                                    <span className="text-white tabular-nums">{ownedScoutCostOf(cp).toLocaleString()}</span>
                                   </button>
                                 )}
                                 <button
@@ -2855,7 +2874,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                   <button
                                     onClick={() => setConfirmCfg({
                                       title: "스카우터 (낙찰 후)",
-                                      message: `${ownedScoutCost.toLocaleString()} Point를 사용해 ${cardName(sel)} 선수의 ${sel.golden ? "모스트 챔피언" : revealFields.includes("champions") ? "주 포지션·모스트 챔피언" : "주/부 포지션"}을(를) 확인합니다.\n경매 중 스카우터(${scoutCostOf(sp).toLocaleString()} Point)보다 비쌉니다.`,
+                                      message: `${ownedScoutCostOf(sp).toLocaleString()} Point를 사용해 ${cardName(sel)} 선수의 ${sel.golden ? "모스트 챔피언" : revealFields.includes("champions") ? "주 포지션·모스트 챔피언" : "주/부 포지션"}을(를) 확인합니다.\n경매 중 스카우터(${scoutCostOf(sp).toLocaleString()} Point)보다 비쌉니다.`,
                                       confirmLabel: "사용",
                                       onConfirm: () => runScouter(sel.playerIdx, true),
                                     })}
@@ -2863,7 +2882,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                                   >
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3 h-3 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
                                     확인
-                                    <span className="text-white tabular-nums">{ownedScoutCost.toLocaleString()}</span>
+                                    <span className="text-white tabular-nums">{ownedScoutCostOf(sp).toLocaleString()}</span>
                                   </button>
                                 )}
                               </div>
@@ -2996,6 +3015,19 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           <span className="ml-auto text-[11px] font-black text-white tabular-nums">{S.posChangeCost.toLocaleString()} Pt</span>
                         </button>
                       )}
+                      {/* 내 포지션 변경 — 팀당 1회 (진행자는 제한 없이 언제든 고칠 수 있다) */}
+                      {myLeaderIdx === li && (
+                        <button
+                          disabled={!!l.selfPosChanged}
+                          onClick={() => { setInvModal(null); setSelfPosOpen(true); sfxSelect(); }}
+                          className="auc-press mt-2 w-full flex items-center gap-2 px-2.5 py-2 rounded-lg border border-white/20 text-[10px] font-black text-gray-300 hover:border-white hover:text-white hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3.5 h-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+                          내 포지션 변경
+                          <span className="text-[9px] font-bold text-gray-600">팀당 1회</span>
+                          <span className="ml-auto text-[10px] font-black text-white">{l.selfPosChanged ? "사용됨" : (l.position || "미지정")}</span>
+                        </button>
+                      )}
                       {swapMode && (
                         <button
                           disabled={swapPick.length !== 2}
@@ -3055,12 +3087,35 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       </button>
                     ) : null}
                   </div>
-                  {(l.inventory?.length || 0) === 0 && assignedCards.length === 0 ? (
+                  {(l.inventory?.length || 0) === 0 && assignedCards.length === 0 && !leaderCard ? (
                     <p className="text-center text-xs text-gray-600 py-8 border border-dashed border-white/10 rounded-xl">보유 중인 선수가 없습니다.</p>
                   ) : (
                     <div className="shrink-0 lg:flex-1 lg:min-h-0 overflow-x-auto overflow-y-hidden lg:overflow-x-hidden lg:overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full p-1 flex gap-2.5 lg:block lg:space-y-3">
                       {/* 미배정 카드 */}
                       <div className="flex gap-2.5 w-fit mx-auto lg:w-auto lg:mx-0 lg:grid lg:grid-cols-2 content-start">
+                        {/* 📌 팀장 카드 — 슬롯에 못 박히지 않은 리더. 인벤토리 칸은 차지하지 않는다 */}
+                        {leaderCard && (
+                          <div
+                            onClick={() => { if (!canSelect || swapMode) return; setDragCard(dragCard === LEADER_CARD ? null : LEADER_CARD); sfxSelect(); }}
+                            className={`auc-in auc-lift relative w-[78px] shrink-0 lg:w-auto aspect-[3/4.3] rounded-xl border overflow-hidden flex flex-col items-center justify-between px-2 py-2.5 select-none cursor-pointer transition-colors ${
+                              leaderCard.golden ? "border-amber-400/60 bg-gradient-to-b from-amber-400/[0.18] via-amber-500/[0.06] to-[#0d0d0d]" : "border-white/25 bg-gradient-to-b from-white/[0.10] to-[#0d0d0d]"
+                            } ${dragCard === LEADER_CARD ? (leaderCard.golden ? "border-amber-300 ring-2 ring-amber-300" : "border-white ring-2 ring-white/60") : ""}`}
+                          >
+                            <span className={`relative text-[7px] font-black tracking-[0.2em] uppercase ${leaderCard.golden ? "text-amber-300" : "text-gray-400"}`}>Leader</span>
+                            <div className={`relative w-11 h-11 rounded-full overflow-hidden flex items-center justify-center border ${leaderCard.golden ? "border-amber-300/50 bg-amber-400/10" : "border-white/20 bg-white/[0.06]"}`}>
+                              {l.discordId && profiles[l.discordId] ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={profiles[l.discordId].avatarUrl} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-[13px] font-black text-white">{l.name[0]}</span>
+                              )}
+                            </div>
+                            <div className="relative w-full text-center">
+                              <p className="text-[10px] font-black text-white truncate leading-tight">{l.name}</p>
+                              <p className={`text-[8px] font-black mt-0.5 ${leaderCard.golden ? "text-amber-300" : "text-gray-500"}`}>{leaderCard.golden ? "올 포지션" : "포지션 미정"}</p>
+                            </div>
+                          </div>
+                        )}
                         {(l.inventory || []).map((card: any, ci: number) => {
                           const picked = dragCard === ci;
                           return (
@@ -3303,52 +3358,76 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
         />
       )}
 
-      {/* 리더: 포지션 선택 창 — 개최 때 비워 뒀다면 시작과 함께 뜨고, 고르기 전엔 닫히지 않는다 */}
-      {myLeader && myLeaderIdx !== null && !myLeader.position && auction.status === "진행중" && (
+      {/* 경매 시작 시 강제로 뜨던 포지션 선택 팝업은 없앴다 —
+         이제 팀장은 인벤토리의 팀장 카드로 존재하고, 원할 때 배정하면 된다 */}
+
+
+      {/* 리더: 포지션 변경 — 확정한 뒤에도 팀당 한 번은 바꿀 수 있다 */}
+      {selfPosOpen && myLeader && myLeaderIdx !== null && (
         <AucModal
-          label="Position Pick"
-          tone="danger"
-          wide
-          title="포지션을 선택하세요"
-          desc={`자신의 포지션을 고르면 슬롯 한 칸이 채워집니다.${p1Role ? `\n${p1Role}를 고르면 1페이즈에는 입찰할 수 없습니다.` : ""}`}
+          label="Change Position"
+          title="내 포지션 변경"
+          desc={`현재 [${myLeader.position || "미지정"}] — 팀당 한 번만 바꿀 수 있습니다.\n추가 변경이 필요하면 진행자에게 요청하세요.`}
+          onClose={() => setSelfPosOpen(false)}
+          actions={[{ text: "닫기", onClick: () => setSelfPosOpen(false) }]}
         >
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-5">
             {roleList.map((r) => {
-              // 본인 자리를 뺀 나머지가 이미 다 찼으면 그 포지션은 고를 수 없다
               const taken = myLeader.roster.filter((x: any) => x.slot === r && x.playerIdx !== -1).length;
-              const limit = slotLimitOf(r);
-              const full = taken >= limit;
+              const full = taken >= slotLimitOf(r);
+              const now = myLeader.position === r;
               const c = roleColor(r);
               return (
                 <button
                   key={r}
-                  disabled={full}
+                  disabled={full || now}
                   onClick={async () => {
                     const d = await act({ action: "leader:setPos", leaderIdx: myLeaderIdx, position: r });
                     if (d?.success) {
-                      sfxSelect();
-                      // 폴링을 기다리지 않고 즉시 슬롯 보드에 반영 (반영되면 이 창도 사라진다)
+                      sfxSelect(); setSelfPosOpen(false);
                       patchAuction((a) => {
                         const l = a.leaders[myLeaderIdx];
-                        l.position = r;
+                        l.position = r; l.selfPosChanged = true;
                         const si = l.roster.findIndex((x: any) => x.playerIdx === -1);
                         if (si >= 0) l.roster[si].slot = r;
                         else l.roster.push({ playerIdx: -1, slot: r, price: 0, golden: false });
                       });
-                      showToast(`포지션을 ${r}(으)로 선택했습니다`);
-                    } else showToast(d?.message || "포지션 선택에 실패했습니다");
+                      showToast(`포지션을 ${r}(으)로 변경했습니다 — 변경 1회 소진`);
+                    } else showToast(d?.message || "변경에 실패했습니다");
                   }}
-                  className={`px-3 py-4 border flex flex-col items-center gap-1.5 transition-colors ${
-                    full ? "border-white/[0.07] bg-white/[0.02] opacity-40 cursor-not-allowed" : "border-white/12 bg-white/[0.03] hover:bg-white/[0.08] hover:border-white/30"
+                  className={`auc-press px-3 py-4 rounded-lg border flex flex-col items-center gap-1.5 transition-colors ${
+                    now ? "border-white/30 bg-white/[0.07] cursor-default" : full ? "border-white/[0.07] bg-white/[0.02] opacity-40 cursor-not-allowed" : "border-white/12 bg-white/[0.03] hover:bg-white/[0.08] hover:border-white/30"
                   }`}
                 >
                   <span className={`auc-label ${c.text}`}>{roleAbbr(r)}</span>
                   <span className="text-sm font-black text-white">{r}</span>
-                  <span className="text-[10px] text-gray-500">{full ? "가득 참" : `${limit - taken}칸 남음`}</span>
+                  <span className="text-[10px] text-gray-500">{now ? "현재" : full ? "가득 참" : "선택 가능"}</span>
                 </button>
               );
             })}
           </div>
+          {/* 올 포지션 — 슬롯을 비우고 팀장 카드 상태로 돌아간다 (인벤토리 칸 미차지) */}
+          <button
+            disabled={myLeader.position === ALL_POS}
+            onClick={async () => {
+              const d = await act({ action: "leader:setPos", leaderIdx: myLeaderIdx, position: ALL_POS });
+              if (d?.success) {
+                sfxSelect(); setSelfPosOpen(false);
+                patchAuction((a) => {
+                  const l = a.leaders[myLeaderIdx];
+                  if (l.position && l.position !== ALL_POS) l.selfPosChanged = true;
+                  l.position = ALL_POS;
+                  const si = l.roster.findIndex((x: any) => x.playerIdx === -1);
+                  if (si >= 0) l.roster.splice(si, 1);
+                });
+                showToast("올 포지션 — 팀장 카드로 돌아왔습니다");
+              } else showToast(d?.message || "변경에 실패했습니다");
+            }}
+            className="auc-press mt-2.5 w-full flex items-center gap-2 px-3 py-3 rounded-lg border border-amber-400/40 text-[12px] font-black text-amber-300 hover:border-amber-400/70 hover:bg-amber-400/[0.08] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            올 포지션
+            <span className="text-[9px] font-bold text-amber-600/80">슬롯을 비우고 팀장 카드로 — 인벤토리 칸 미차지</span>
+          </button>
         </AucModal>
       )}
 
@@ -3684,6 +3763,18 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 </button>
               ))}
             </div>
+            {/* 올 포지션 — 슬롯을 비우고 팀장 카드로 남긴다 (나중에 어느 자리든 들어갈 수 있다) */}
+            <button
+              disabled={leader.position === ALL_POS}
+              onClick={async () => { const d = await act({ action: "host:setLeaderPos", leaderIdx: posSetTarget, position: ALL_POS }); if (d.success) { sfxSelect(); showToast(`${leader.name} 리더 → 올 포지션 (팀장 카드)`); setPosSetTarget(null); } else showToast(d?.message || "지정에 실패했습니다"); }}
+              className={`mt-3 w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border text-[11px] font-black transition-colors ${
+                leader.position === ALL_POS ? "border-amber-400/60 bg-amber-400/[0.10] text-amber-200 cursor-default" : "border-amber-400/35 text-amber-300/90 hover:border-amber-400/70 hover:bg-amber-400/[0.08]"
+              }`}
+            >
+              올 포지션
+              <span className="text-[9px] font-bold text-amber-600/80">슬롯 미차지 · 팀장 카드</span>
+              {leader.position === ALL_POS && <span className="ml-auto auc-cap text-amber-500/80">현재</span>}
+            </button>
           </AucModal>
         );
       })()}
