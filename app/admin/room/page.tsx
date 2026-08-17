@@ -376,17 +376,22 @@ function NoticeView({ data, busy, post, setToast }: { data: any; busy: boolean; 
 
   const at = () => { const d = new Date(day); d.setHours(Math.floor(min / 60), min % 60, 0, 0); return d; };
 
+  // 지난 날짜로도 적을 수 있어야 한다 — 뒤늦게 올리는 공지의 표기 일자를 맞추려면 필요하다
+  const BACK = 30, FWD = 30;
   const Strip = ({ sel, onPick }: { sel: Date; onPick: (d: Date) => void }) => (
     <div className="flex gap-1.5 overflow-x-auto no-bar pb-1">
-      {Array.from({ length: 21 }, (_, i) => {
-        const d = midnight(Date.now() + DAY * (i - 3));
+      {Array.from({ length: BACK + FWD + 1 }, (_, i) => {
+        const off = i - BACK;
+        const d = midnight(Date.now() + DAY * off);
         const on = d.getTime() === sel.getTime();
+        const past = off < 0;
         return (
           <button key={i} type="button" onClick={() => onPick(d)} aria-pressed={on}
+            ref={(el) => { if (el && on) el.scrollIntoView({ block: "nearest", inline: "center" }); }}
             className="esp-cut-sm shrink-0 min-w-[54px] px-1 py-2 border text-center transition-colors"
             style={on ? { borderColor: G2, background: `${G2}1a` } : { borderColor: "rgba(255,255,255,.08)", background: "rgba(255,255,255,.02)" }}>
-            <span className="block text-[12px] font-black tabular-nums" style={{ color: on ? G2 : "#cbd5e1" }}>{dL(d)}</span>
-            <span className="block text-[9px] font-black esp-mono text-gray-600 mt-0.5">{i === 3 ? "TODAY" : WD[d.getDay()]}</span>
+            <span className="block text-[12px] font-black tabular-nums" style={{ color: on ? G2 : past ? "#6b7280" : "#cbd5e1" }}>{dL(d)}</span>
+            <span className="block text-[9px] font-black esp-mono text-gray-600 mt-0.5">{off === 0 ? "TODAY" : WD[d.getDay()]}</span>
           </button>
         );
       })}
@@ -415,17 +420,23 @@ function NoticeView({ data, busy, post, setToast }: { data: any; busy: boolean; 
               return (
                 <div key={n._id} className="esp-cut border bg-white/[0.02]"
                   style={{ borderColor: n.important ? "rgba(251,113,133,.4)" : "rgba(255,255,255,.08)" }}>
-                  <div className="px-4 pt-3.5 pb-3">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      {n.pinned && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black" style={{ background: G2, color: "#04120b" }}>고정</span>}
-                      {n.important && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black bg-rose-500/20 text-rose-300">중요</span>}
-                      {scheduled && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black bg-amber-400/15 text-amber-300">예약</span>}
-                      <span className="ml-auto text-[10px] font-black esp-mono text-gray-600 tabular-nums">
-                        {dF(pub)} {pad(pub.getHours())}:{pad(pub.getMinutes())}
-                      </span>
+                  <div className="px-4 pt-3.5 pb-3 flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      {(n.pinned || n.important || scheduled) && (
+                        <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                          {n.pinned && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black" style={{ background: G2, color: "#04120b" }}>고정</span>}
+                          {n.important && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black bg-rose-500/20 text-rose-300">중요</span>}
+                          {scheduled && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black bg-amber-400/15 text-amber-300">예약</span>}
+                        </div>
+                      )}
+                      <p className="text-[14px] font-black text-white break-keep">{n.title}</p>
+                      {n.body && <p className="mt-2 text-[12px] font-medium text-gray-400 leading-relaxed whitespace-pre-line break-keep">{n.body}</p>}
                     </div>
-                    <p className="text-[14px] font-black text-white break-keep">{n.title}</p>
-                    {n.body && <p className="mt-2 text-[12px] font-medium text-gray-400 leading-relaxed whitespace-pre-line break-keep">{n.body}</p>}
+                    {/* 날짜는 제목과 같은 줄 오른쪽 — 배지가 없을 때 빈 줄이 생기지 않도록 */}
+                    <span className="shrink-0 text-right pt-0.5">
+                      <span className="block text-[10px] font-black esp-mono text-gray-500 tabular-nums">{dF(pub)}</span>
+                      <span className="block text-[10px] font-black esp-mono text-gray-700 tabular-nums mt-0.5">{pad(pub.getHours())}:{pad(pub.getMinutes())}</span>
+                    </span>
                   </div>
                   <div className="flex border-t border-white/[0.07]">
                     <button disabled={busy}
@@ -476,12 +487,24 @@ function NoticeView({ data, busy, post, setToast }: { data: any; busy: boolean; 
           <div>
             <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">공개 날짜</span>
             <Strip sel={day} onPick={setDay} />
-            <div className="flex items-center gap-2 mt-2.5">
-              <div className="esp-cut-sm inline-flex items-stretch border border-white/10 bg-white/[0.03]">
-                <button type="button" onClick={() => setMin((v) => (v + 1440 - 30) % 1440)} className="w-9 text-[16px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors">−</button>
-                <span className="min-w-[74px] px-2 py-2 text-center text-[13px] font-black tabular-nums border-x border-white/10">{pad(Math.floor(min / 60))}:{pad(min % 60)}</span>
-                <button type="button" onClick={() => setMin((v) => (v + 30) % 1440)} className="w-9 text-[16px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors">+</button>
-              </div>
+            {/* 시와 분을 나눠 돌린다 — 30분 단위 하나로는 원하는 시각에 못 맞춘다 */}
+            <div className="flex flex-wrap items-center gap-2 mt-2.5">
+              {([["시", 60, 24], ["분", 5, 60]] as const).map(([label, unit, mod]) => (
+                <div key={label} className="esp-cut-sm inline-flex items-stretch border border-white/10 bg-white/[0.03]">
+                  <button type="button" aria-label={`${label} 줄이기`}
+                    onClick={() => setMin((v) => (unit === 60 ? (v + 1440 - 60) % 1440 : Math.floor(v / 60) * 60 + ((v % 60) + 60 - 5) % 60))}
+                    className="w-8 text-[15px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors">−</button>
+                  <span className="min-w-[56px] px-2 py-2 text-center border-x border-white/10">
+                    <span className="block text-[13px] font-black tabular-nums">{unit === 60 ? pad(Math.floor(min / 60)) : pad(min % 60)}</span>
+                    <span className="block text-[9px] font-bold text-gray-600">{label}</span>
+                  </span>
+                  <button type="button" aria-label={`${label} 늘리기`}
+                    onClick={() => setMin((v) => (unit === 60 ? (v + 60) % 1440 : Math.floor(v / 60) * 60 + ((v % 60) + 5) % 60))}
+                    className="w-8 text-[15px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors">+</button>
+                </div>
+              ))}
+              <button type="button" onClick={() => { setDay(midnight(Date.now())); const d = new Date(); setMin(d.getHours() * 60 + Math.floor(d.getMinutes() / 5) * 5); }}
+                className="esp-cut-sm px-3 py-2 text-[10px] font-black bg-white/[0.05] text-gray-400 hover:text-white transition-colors">지금</button>
               <span className="text-[10px] font-bold text-gray-600 leading-tight">
                 {at().getTime() > Date.now() ? <span className="text-amber-300">이 시각부터 공개</span> : "바로 공개"}
               </span>

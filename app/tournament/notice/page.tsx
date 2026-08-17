@@ -12,6 +12,8 @@ import { EsportsStyles } from "../../components/Esports";
 const G = "#00e07b";
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
 const pad = (n: number) => String(n).padStart(2, "0");
+const dOnly = (d: Date) => `${String(d.getFullYear()).slice(2)}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}(${WD[d.getDay()]})`;
+const tOnly = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const fmt = (d: Date) => `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}(${WD[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 export default function TournamentNoticeListPage() {
@@ -53,9 +55,7 @@ export default function TournamentNoticeListPage() {
             )}
           </div>
           <h1 className="text-[28px] md:text-[36px] font-black tracking-tighter leading-none">대회 공지</h1>
-          <p className="mt-3 text-[12px] font-bold text-gray-500">
-            대회 진행에 관한 운영 공지입니다. 서버 전체 <Link href="/notice" className="text-gray-300 underline underline-offset-2 hover:text-white">소식</Link>과는 별개입니다.
-          </p>
+          <p className="mt-3 text-[12px] font-bold text-gray-500">대회 진행에 관한 운영 공지입니다.</p>
         </div>
       </section>
 
@@ -72,18 +72,24 @@ export default function TournamentNoticeListPage() {
                 const scheduled = pub.getTime() > Date.now();
                 return (
                   <Link key={n._id} href={`/tournament/notice/${n._id}`}
-                    className="esp-cut block border bg-white/[0.02] hover:bg-white/[0.05] transition-colors px-5 py-4"
+                    className="esp-cut flex items-start gap-4 border bg-white/[0.02] hover:bg-white/[0.05] transition-colors px-5 py-4"
                     style={{ borderColor: n.important ? "rgba(251,113,133,.35)" : "rgba(255,255,255,.08)" }}>
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      {n.pinned && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black" style={{ background: G, color: "#04120b" }}>고정</span>}
-                      {n.important && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black bg-rose-500/20 text-rose-300">중요</span>}
-                      {scheduled && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black bg-amber-400/15 text-amber-300">예약 · 관리자만 보임</span>}
-                      <span className="ml-auto text-[10px] font-black esp-mono text-gray-600 tabular-nums">{fmt(pub)}</span>
-                    </div>
-                    <p className="text-[15px] md:text-[16px] font-black text-white break-keep leading-snug">{n.title}</p>
-                    {n.body && (
-                      <p className="mt-2 text-[12px] font-medium text-gray-500 line-clamp-2 break-keep">{n.body}</p>
-                    )}
+                    <span className="min-w-0 flex-1">
+                      {(n.pinned || n.important || scheduled) && (
+                        <span className="flex items-center gap-1.5 mb-2 flex-wrap">
+                          {n.pinned && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black" style={{ background: G, color: "#04120b" }}>고정</span>}
+                          {n.important && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black bg-rose-500/20 text-rose-300">중요</span>}
+                          {scheduled && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black bg-amber-400/15 text-amber-300">예약 · 관리자만 보임</span>}
+                        </span>
+                      )}
+                      <span className="block text-[15px] md:text-[16px] font-black text-white break-keep leading-snug">{n.title}</span>
+                      {n.body && <span className="block mt-2 text-[12px] font-medium text-gray-500 line-clamp-2 break-keep">{n.body}</span>}
+                    </span>
+                    {/* 날짜는 제목과 같은 줄의 오른쪽 — 따로 한 줄을 쓰면 빈 줄이 생긴다 */}
+                    <span className="shrink-0 text-right pt-0.5">
+                      <span className="block text-[10px] font-black esp-mono text-gray-500 tabular-nums">{dOnly(pub)}</span>
+                      <span className="block text-[10px] font-black esp-mono text-gray-700 tabular-nums mt-0.5">{tOnly(pub)}</span>
+                    </span>
                   </Link>
                 );
               })}
