@@ -868,6 +868,22 @@ function SeasonForm({ season, busy, onSave, tournaments }: { season: any; busy: 
             <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G2 }}>Period</span>
             <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
           </div>
+          {/* 연동 대회에 팀 배정일·대회 당일이 있으면 그 사이(연습 주간)로 한 번에 맞춘다 */}
+          {(() => {
+            const t = tournaments.find((x: any) => String(x._id) === tid);
+            if (!t?.tournamentTeamDay || !t?.tournamentEventDay) return null;
+            const from = new Date(t.tournamentTeamDay); from.setDate(from.getDate() + 1);
+            const to = new Date(t.tournamentEventDay); to.setDate(to.getDate() - 1);
+            const days = Math.round((midnight(to).getTime() - midnight(from).getTime()) / DAY) + 1;
+            if (days < 1) return null;
+            return (
+              <button type="button" onClick={() => { setStart(midnight(from)); setDays(days); }}
+                className="esp-cut-sm w-full mb-3 px-3 py-2.5 text-[11px] font-black border transition-colors"
+                style={{ borderColor: G2 + "55", color: G2 }}>
+                연습 주간으로 맞추기 — {dF(from)} ~ {dF(to)} ({days}일)
+              </button>
+            );
+          })()}
           <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">시작 날짜</span>
           <Strip sel={start} onPick={setStart} />
           <div className="flex flex-wrap gap-4 mt-4">

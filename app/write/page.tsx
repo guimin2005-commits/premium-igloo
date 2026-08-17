@@ -1,4 +1,5 @@
 "use client";
+import { PHASES, phaseOf } from "@/lib/tournamentPhase";
 import { useState, useEffect, useRef } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -160,7 +161,10 @@ export default function AdminWritePage() {
   const [tournamentEndDate, setTournamentEndDate] = useState("");
 
   // 📌 대회 글 타입: "모집"(참가 신청) / "대진표"(리그 진행)
-  const [tournamentType, setTournamentType] = useState("모집");
+  const [tournamentType, setTournamentType] = useState("모집"); // 옛 글 호환용 — 새 글은 phase 를 쓴다
+  const [tournamentPhase, setTournamentPhase] = useState("접수");
+  const [tournamentTeamDay, setTournamentTeamDay] = useState("");
+  const [tournamentEventDay, setTournamentEventDay] = useState("");
 
   // 📌 참가 설문 (구글폼 형식)
   type SQ = { qid: string; type: string; label: string; desc: string; required: boolean; options: string[]; etc: boolean };
@@ -285,7 +289,7 @@ export default function AdminWritePage() {
     eventTag, eventStartDate, eventEndDate, isEventAlways,
     recruitSubCategory, recruitRole, recruitStartDate, recruitEndDate, isRecruitAlways, recruitQual, recruitTasks, recruitExtra,
     tournamentGame, tournamentPrize, tournamentStatus, tournamentLink, tournamentBracket: serializeBracket(bracketRounds), tournamentWinner, tournamentWinnerId, tournamentStartDate, tournamentEndDate,
-    tournamentType, tournamentSchedule, survey,
+    tournamentType, tournamentPhase, tournamentTeamDay, tournamentEventDay, tournamentSchedule, survey,
     savedAt: new Date().toISOString(),
   });
 
@@ -311,7 +315,10 @@ export default function AdminWritePage() {
       setTournamentGame(d.tournamentGame || ""); setTournamentPrize(d.tournamentPrize || ""); setTournamentStatus(d.tournamentStatus || "예정됨"); setTournamentLink(d.tournamentLink || "");
       setTournamentBracket(d.tournamentBracket || ""); setBracketRounds(parseBracket(d.tournamentBracket || "")); setTournamentWinner(d.tournamentWinner || ""); setTournamentWinnerId(d.tournamentWinnerId || "");
       setTournamentStartDate(d.tournamentStartDate || ""); setTournamentEndDate(d.tournamentEndDate || "");
-      setTournamentType(d.tournamentType || "모집"); setTournamentSchedule(Array.isArray(d.tournamentSchedule) ? d.tournamentSchedule : []);
+      setTournamentType(d.tournamentType || "모집");
+      setTournamentPhase(phaseOf(d));
+      setTournamentTeamDay(d.tournamentTeamDay || ""); setTournamentEventDay(d.tournamentEventDay || "");
+      setTournamentSchedule(Array.isArray(d.tournamentSchedule) ? d.tournamentSchedule : []);
       if (d.survey) setSurvey({ enabled: !!d.survey.enabled, title: d.survey.title || "", desc: d.survey.desc || "", closed: !!d.survey.closed, questions: Array.isArray(d.survey.questions) ? d.survey.questions : [] });
       setHasDraft(false);
       localStorage.removeItem(DRAFT_KEY);
@@ -378,6 +385,8 @@ export default function AdminWritePage() {
             setTournamentWinner(post.tournamentWinner || "");
             setTournamentWinnerId(post.tournamentWinnerId || "");
             setTournamentType(post.tournamentType || "모집");
+            setTournamentPhase(phaseOf(post));
+            setTournamentTeamDay(post.tournamentTeamDay || ""); setTournamentEventDay(post.tournamentEventDay || "");
             if (post.survey) setSurvey({ enabled: !!post.survey.enabled, title: post.survey.title || "", desc: post.survey.desc || "", closed: !!post.survey.closed, questions: Array.isArray(post.survey.questions) ? post.survey.questions.map((q: any) => ({ qid: q.qid || newQid(), type: q.type || "short", label: q.label || "", desc: q.desc || "", required: !!q.required, options: Array.isArray(q.options) ? q.options : [], etc: !!q.etc })) : [] });
             setTournamentSchedule(Array.isArray(post.tournamentSchedule) ? post.tournamentSchedule.map((p: any) => ({ label: p.label || "", start: p.start || "", end: p.end || "" })) : []);
             if (post.tournamentDate && post.tournamentDate.includes("~")) {
@@ -514,7 +523,7 @@ export default function AdminWritePage() {
        }),
       ...(category === "대회" && {
          content, bannerUrl, tournamentGame, tournamentPrize, tournamentStatus, tournamentLink,
-         tournamentType,
+         tournamentType, tournamentPhase, tournamentTeamDay, tournamentEventDay,
          tournamentSchedule: tournamentSchedule.filter((p) => p.label.trim()),
          tournamentBracket: serializeBracket(bracketRounds), tournamentWinner, tournamentWinnerId,
          tournamentDate: computedTournamentDate,
@@ -675,21 +684,44 @@ export default function AdminWritePage() {
 
           {category === "대회" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* 📌 글 타입 선택 — 참가 신청 vs 대진표 */}
+              {/* 📌 대회 단계 — 글 하나가 접수부터 종료까지 따라간다.
+                     타입(모집/대진표)으로 글을 쪼개던 구조를 대체한다. */}
               <div className="md:col-span-2 flex flex-col gap-3">
-                <span className="text-xs font-bold text-gray-400">대회 글 타입 <span className="text-[#e91e3f]">*</span></span>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { v: "모집", t: "참가 신청", d: "참가팀 모집·신청 접수" },
-                    { v: "대진표", t: "대진표 / 리그", d: "본선 대진·경기 진행" },
-                  ].map((opt) => (
-                    <button key={opt.v} type="button" onClick={() => { setTournamentType(opt.v); if (opt.v === "모집" && tournamentStatus === "진행중") setTournamentStatus("모집중"); if (opt.v === "대진표" && tournamentStatus === "모집중") setTournamentStatus("진행중"); }}
-                      className={`text-left rounded-xl border p-4 transition-all ${tournamentType === opt.v ? "border-[#e91e3f] bg-[#e91e3f]/[0.08]" : "border-white/10 bg-[#161616] hover:border-white/25"}`}>
-                      <p className={`text-sm font-black mb-0.5 ${tournamentType === opt.v ? "text-[#e91e3f]" : "text-white"}`}>{opt.t}</p>
-                      <p className="text-[11px] text-gray-500">{opt.d}</p>
-                    </button>
-                  ))}
+                <span className="text-xs font-bold text-gray-400">대회 단계 <span className="text-[#e91e3f]">*</span>
+                  <span className="ml-2 text-gray-600 font-medium">— 이 단계에 따라 대회 화면이 달라집니다</span></span>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  {PHASES.map((ph) => {
+                    const on = tournamentPhase === ph.id;
+                    return (
+                      <button key={ph.id} type="button" onClick={() => setTournamentPhase(ph.id)}
+                        className={`text-left rounded-xl border p-3 transition-all ${on ? "border-[#e91e3f] bg-[#e91e3f]/[0.08]" : "border-white/10 bg-[#161616] hover:border-white/25"}`}>
+                        <p className={`text-[9px] font-black tracking-[0.14em] mb-1 ${on ? "text-[#e91e3f]" : "text-gray-600"}`}>{ph.code}</p>
+                        <p className={`text-[13px] font-black mb-0.5 ${on ? "text-white" : "text-gray-300"}`}>{ph.label}</p>
+                        <p className="text-[10px] text-gray-500 leading-tight break-keep">{ph.desc}</p>
+                      </button>
+                    );
+                  })}
                 </div>
+              </div>
+
+              {/* 📌 두 날짜만 있으면 단계가 자동으로 흘러간다 (토: 팀 배정 → 일주일 연습 → 일: 대회 당일) */}
+              <div className="flex flex-col gap-3">
+                <span className="text-xs font-bold text-gray-400">팀 배정일 <span className="text-gray-600 font-medium">— 경매하는 날</span></span>
+                <input type="date" value={tournamentTeamDay} onChange={(e) => setTournamentTeamDay(e.target.value)}
+                  className="w-full bg-[#121212] border border-white/10 rounded-xl px-5 py-3 text-sm text-white focus:border-[#e91e3f] focus:outline-none [color-scheme:dark]" />
+              </div>
+              <div className="flex flex-col gap-3">
+                <span className="text-xs font-bold text-gray-400">대회 당일 <span className="text-gray-600 font-medium">— 8강~결승을 하루에</span></span>
+                <input type="date" value={tournamentEventDay} onChange={(e) => setTournamentEventDay(e.target.value)}
+                  className="w-full bg-[#121212] border border-white/10 rounded-xl px-5 py-3 text-sm text-white focus:border-[#e91e3f] focus:outline-none [color-scheme:dark]" />
+              </div>
+              <div className="md:col-span-2 -mt-2">
+                {tournamentTeamDay && tournamentEventDay && (
+                  <p className="text-[11px] text-gray-500">
+                    연습 주간은 <b className="text-gray-300">{tournamentTeamDay}</b> 다음날부터 <b className="text-gray-300">{tournamentEventDay}</b> 전날까지로 잡힙니다.
+                    <span className="text-gray-600"> 스크림 캘린더 기간도 여기에 맞춥니다.</span>
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-col gap-3">
@@ -705,7 +737,7 @@ export default function AdminWritePage() {
                 <CustomSelect value={tournamentStatus} onChange={setTournamentStatus} options={[{value:"예정됨", label:"예정됨"}, {value:"모집중", label:"모집중 (참가 신청 접수)"}, {value:"진행중", label:"진행중 (리그 진행)"}, {value:"종료됨", label:"종료됨"}]} />
               </div>
               <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-gray-400">참가 신청 링크 {tournamentType === "모집" ? <span className="text-[#e91e3f]">(권장)</span> : "(선택)"}</span>
+                <span className="text-xs font-bold text-gray-400">참가 신청 링크 {tournamentPhase === "접수" ? <span className="text-[#e91e3f]">(권장)</span> : "(선택)"}</span>
                 <input type="text" placeholder="https://..." value={tournamentLink} onChange={(e) => setTournamentLink(e.target.value)} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
               </div>
 
@@ -742,7 +774,7 @@ export default function AdminWritePage() {
               </div>
 
               {/* 📌 대진표 — '대진표' 타입일 때만 표시 */}
-              {tournamentType === "대진표" && (
+              {(tournamentPhase === "당일" || tournamentPhase === "종료") && (
               <div className="md:col-span-2 flex flex-col gap-3">
                 <div className="mt-1 space-y-4">
                   {/* 자동 생성기 */}

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Reveal, LuxStyles } from "../components/Lux";
 import { BracketView } from "../components/BracketView";
 import { EsportsStyles, STATUS_META } from "../components/Esports";
+import { PHASES, phaseOf, phaseMeta, phaseShows } from "@/lib/tournamentPhase";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -484,7 +485,8 @@ export default function TournamentPage() {
           {filtered.map((t, listIdx) => {
             const st = getStatus(t);
             const meta = STATUS_META[st];
-            const isRecruit = t.tournamentType !== "대진표";
+            const ph = phaseOf(t);
+            const isRecruit = phaseShows(ph).survey; // 접수 단계면 신청 카드로 보인다
             const isLive = st === "모집중" || st === "진행중";
             return (
               <Reveal key={t._id} delay={Math.min(listIdx, 5) * 70} className={`group h-full ${st === "종료됨" ? "opacity-65 hover:opacity-100 transition-opacity" : ""}`}>
@@ -622,6 +624,48 @@ export default function TournamentPage() {
                 </div>
               )}
 
+              {/* 📌 대회 진행 띠 — 접수부터 종료까지 지금 어디인지 한 줄로 */}
+              {(() => {
+                const cur = phaseOf(selected);
+                const idx = PHASES.findIndex((p) => p.id === cur);
+                return (
+                  <div className="flex gap-1 mb-6">
+                    {PHASES.map((p, i) => {
+                      const done = i < idx, on = i === idx;
+                      return (
+                        <div key={p.id} className="flex-1 min-w-0">
+                          <div className="h-1" style={{ background: on ? "#00e07b" : done ? "rgba(0,224,123,.35)" : "rgba(255,255,255,.08)" }} />
+                          <p className={`mt-2 text-[9px] font-black esp-mono truncate ${on ? "text-[#00e07b]" : done ? "text-gray-500" : "text-gray-700"}`}>{p.code}</p>
+                          <p className={`text-[10px] font-bold truncate ${on ? "text-white" : "text-gray-600"}`}>{p.label}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* 단계에 따라 다른 안내를 띄운다 — 지금 참가자가 할 일 */}
+              {(() => {
+                const cur = phaseOf(selected);
+                const show = phaseShows(cur);
+                if (show.scrim) return (
+                  <div className="esp-cut border border-[#00e07b]/30 bg-[#00e07b]/[0.06] px-5 py-4 mb-6 flex items-center gap-3">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[9px] font-black esp-mono text-[#00e07b] mb-1">PRACTICE WEEK</span>
+                      <span className="block text-[13px] font-black text-white">연습 주간입니다 — 팀 룸에서 스크림 일정을 잡으세요</span>
+                    </span>
+                    <button onClick={() => router.push("/tournament")} className="shrink-0 esp-cut-sm px-4 py-2.5 text-[11px] font-black bg-[#00e07b] text-[#04120b]">팀 룸</button>
+                  </div>
+                );
+                if (cur === "팀배정") return (
+                  <div className="esp-cut border border-white/12 bg-white/[0.03] px-5 py-4 mb-6">
+                    <span className="block text-[9px] font-black esp-mono text-gray-500 mb-1">DRAFT DAY</span>
+                    <span className="block text-[13px] font-black text-white">오늘 경매로 팀을 나눕니다</span>
+                  </div>
+                );
+                return null;
+              })()}
+
               <div className="grid grid-cols-2 sm:grid-cols-3 border-y border-white/[0.08] mb-8">
                 <div className="py-4 pr-4 min-w-0">
                   <p className="text-[9px] font-black esp-mono text-gray-600 mb-1.5">PRIZE</p>
@@ -650,7 +694,8 @@ export default function TournamentPage() {
                   const now = sch.find((p) => p.start && p.start <= today && (!p.end || p.end >= today));
                   const next = sch.find((p) => p.start && p.start > today);
                   const key = now ? "NOW" : next ? "NEXT" : "FORMAT";
-                  const value = now ? now.label : next ? next.label : selected.tournamentType === "대진표" ? "대진표 · 리그전" : "참가 신청제";
+                  const pm = phaseMeta(phaseOf(selected));
+                  const value = now ? now.label : next ? next.label : pm ? pm.label : "참가 신청제";
                   const sub = now
                     ? `${fmtDate(now.start)}${now.end ? ` ~ ${fmtDate(now.end)}` : ""}`
                     : next ? `${fmtDate(next.start)} 시작`
