@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSession, signIn } from "next-auth/react";
 import { EsportsStyles } from "../../components/Esports";
 import DmPreview from "../../components/DmPreview";
+import { DEFAULTS, LIMITS } from "@/lib/nudgeMessage";
 
 /* 📌 대회 룸 운영 (관리자 전용)
    실제 화면은 각 팀의 룸(/tournament/team/[id])이고, 여기서는 팀을 만들고 어디로 들어갈지 고른다.
@@ -379,7 +380,8 @@ export default function AdminScrimPage() {
         {tab === "time" && season && (
           <SeasonForm season={season} busy={busy} tournaments={tournaments} sampleTeam={data?.teams?.[0]?.name}
             onSave={async (pl) => { const r = await post({ action: "season:update", ...pl }); if (r) setToast("룸 설정을 저장했습니다 — 모든 팀에 적용됩니다"); }}
-            onTest={async (msg) => { const r = await post({ action: "nudge:test", teamId: data?.teams?.[0]?._id || "", message: msg }); if (r) setToast("내 디스코드 DM 으로 보냈습니다"); }} />
+            onSaveNudge={async (n) => { const r = await post({ action: "season:update", nudge: n }); if (r) { setToast("재촉 DM 문구를 저장했습니다"); } }}
+            onTest={async (n) => { const r = await post({ action: "nudge:test", teamId: data?.teams?.[0]?._id || "", ...n }); if (r) setToast("내 디스코드 DM 으로 보냈습니다"); }} />
         )}
       </div>
 
@@ -806,7 +808,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
 
 
 /* ── 통합 시간 조정 — 전 팀 공통. 네이티브 select/date 는 쓰지 않는다 ── */
-function SeasonForm({ season, busy, onSave, onTest, tournaments, sampleTeam }: { season: any; busy: boolean; onSave: (p: any) => void; onTest: (msg: string) => void; tournaments: any[]; sampleTeam?: string }) {
+function SeasonForm({ season, busy, onSave, onSaveNudge, onTest, tournaments, sampleTeam }: { season: any; busy: boolean; onSave: (p: any) => void; onSaveNudge: (n: any) => void; onTest: (n: any) => void; tournaments: any[]; sampleTeam?: string }) {
   const G2 = "#00e07b";
   const [start, setStart] = useState(() => midnight(season.startAt));
   const [days, setDays] = useState(season.days);
@@ -818,7 +820,18 @@ function SeasonForm({ season, busy, onSave, onTest, tournaments, sampleTeam }: {
   const [title, setTitle] = useState(season.title || "");
   const [tid, setTid] = useState(season.tournamentId || "");
   const [notice, setNotice] = useState(season.notice || "");
-  const [nudgeMsg, setNudgeMsg] = useState(season.nudge?.message || "");
+  const [nudge, setNudge] = useState({
+    title: season.nudge?.title || "",
+    message: season.nudge?.message || "",
+    footer: season.nudge?.footer || "",
+    cta: season.nudge?.cta || "",
+  });
+  const setN = (k: string, v: string) => setNudge((o) => ({ ...o, [k]: v }));
+  const nudgeDirty =
+    nudge.title !== (season.nudge?.title || "") ||
+    nudge.message !== (season.nudge?.message || "") ||
+    nudge.footer !== (season.nudge?.footer || "") ||
+    nudge.cta !== (season.nudge?.cta || "");
 
   // 미리보기는 지금 화면의 마감 시각을 그대로 쓴다 (저장 전에도 바뀐 게 보이도록)
   const previewDue = (() => { const d = new Date(dueDay); d.setHours(Math.floor(dueMin / 60), dueMin % 60, 0, 0); return d; })();
@@ -966,22 +979,57 @@ function SeasonForm({ season, busy, onSave, onTest, tournaments, sampleTeam }: {
             <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G2 }}>Nudge</span>
             <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
           </div>
-          <p className="text-[11px] font-bold text-gray-600 leading-relaxed mb-3">
+          <p className="text-[11px] font-bold text-gray-600 leading-relaxed mb-4">
             팀 탭의 <b className="text-gray-300">DM 보내기</b> 버튼을 누를 때만 나갑니다. 저절로 보내지지 않습니다.
+            빈 칸은 기본 문구로 돌아갑니다.
           </p>
-          <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">앞부분 문구 (비우면 기본 문구)</span>
-          <textarea value={nudgeMsg} onChange={(e) => setNudgeMsg(e.target.value)} rows={3} maxLength={300}
-            placeholder="예) 스크림 캘린더 아직 안 채우셨습니다. 오늘 안으로 부탁드립니다."
-            className="esp-cut-sm w-full bg-black/40 border border-white/10 px-3 py-2.5 text-[13px] font-bold text-white outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700 resize-none" />
+
+          <div className="space-y-4">
+            <div>
+              <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">제목</span>
+              <input value={nudge.title} onChange={(e) => setN("title", e.target.value)} maxLength={LIMITS.title}
+                placeholder={DEFAULTS.title}
+                className="esp-cut-sm w-full bg-black/40 border border-white/10 px-3 py-2.5 text-[13px] font-bold text-white outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700" />
+            </div>
+            <div>
+              <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">내용</span>
+              <textarea value={nudge.message} onChange={(e) => setN("message", e.target.value)} rows={4} maxLength={LIMITS.body}
+                placeholder={DEFAULTS.body}
+                className="esp-cut-sm w-full bg-black/40 border border-white/10 px-3 py-2.5 text-[13px] font-bold text-white outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700 resize-none leading-relaxed" />
+              <span className="block text-right text-[10px] font-black esp-mono text-gray-700 mt-1 tabular-nums">{nudge.message.length}/{LIMITS.body}</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">아래 작은 글씨</span>
+                <input value={nudge.footer} onChange={(e) => setN("footer", e.target.value)} maxLength={LIMITS.footer}
+                  placeholder={DEFAULTS.footer}
+                  className="esp-cut-sm w-full bg-black/40 border border-white/10 px-3 py-2.5 text-[13px] font-bold text-white outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700" />
+              </div>
+              <div>
+                <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">버튼 문구</span>
+                <input value={nudge.cta} onChange={(e) => setN("cta", e.target.value)} maxLength={LIMITS.cta}
+                  placeholder={DEFAULTS.cta}
+                  className="esp-cut-sm w-full bg-black/40 border border-white/10 px-3 py-2.5 text-[13px] font-bold text-white outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700" />
+              </div>
+            </div>
+          </div>
 
           {/* 📌 실제로 나갈 DM 그대로 — 마감·링크는 문구를 직접 써도 항상 붙는다 */}
           <span className="block text-[10px] font-black esp-mono text-gray-600 mt-5 mb-2">이렇게 갑니다</span>
-          <DmPreview teamName={sampleTeam || "우리 팀"} dueAt={previewDue} custom={nudgeMsg} />
-          <button type="button" disabled={busy} onClick={() => onTest(nudgeMsg)}
-            className="mt-3 w-full esp-cut-sm py-2.5 text-[11px] font-black border transition-colors disabled:opacity-40"
-            style={{ borderColor: "rgba(255,255,255,.12)", background: "rgba(255,255,255,.03)", color: "#cbd5e1" }}>
-            나에게 먼저 보내보기
-          </button>
+          <DmPreview teamName={sampleTeam || "우리 팀"} dueAt={previewDue} copy={nudge} />
+          <div className="flex gap-2 mt-3">
+            <button type="button" disabled={busy} onClick={() => onTest(nudge)}
+              className="flex-1 esp-cut-sm py-2.5 text-[11px] font-black border transition-colors disabled:opacity-40"
+              style={{ borderColor: "rgba(255,255,255,.12)", background: "rgba(255,255,255,.03)", color: "#cbd5e1" }}>
+              나에게 먼저 보내보기
+            </button>
+            {/* 문구만 따로 저장한다 — 기간·시간대를 건드리다 만 상태여도 안전하게 */}
+            <button type="button" disabled={busy || !nudgeDirty} onClick={() => onSaveNudge(nudge)}
+              className="flex-1 esp-cut-sm py-2.5 text-[11px] font-black transition-all active:scale-[.98] disabled:opacity-35"
+              style={{ background: G2, color: "#04120b" }}>
+              {nudgeDirty ? "문구 저장" : "저장됨"}
+            </button>
+          </div>
           <p className="mt-2 text-[11px] font-bold text-gray-600 leading-relaxed">
             저장하지 않은 문구도 그대로 시험해 볼 수 있습니다. 팀 이름과 링크는 받는 사람의 팀에 맞춰 각각 바뀝니다.
           </p>
@@ -1008,7 +1056,7 @@ function SeasonForm({ season, busy, onSave, onTest, tournaments, sampleTeam }: {
             onSave({
               title, tournamentId: tid, notice, startAt: start.toISOString(), days,
               fromHour: from, toHour: to, stepMin: step, dueAt: due.toISOString(),
-              nudge: { message: nudgeMsg },
+              nudge,
             });
           }}
           className="w-full mt-4 esp-cut-sm py-3.5 text-[12px] font-black transition-all active:scale-[.98] disabled:opacity-40"

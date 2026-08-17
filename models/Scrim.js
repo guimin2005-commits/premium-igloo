@@ -19,9 +19,13 @@ const ScrimSeasonSchema = new mongoose.Schema({
   stepMin: { type: Number, default: 60 },        // 칸 단위(분): 60 또는 30
   dueAt: { type: Date, required: true },         // 응답 마감
   active: { type: Boolean, default: true },      // 현재 운영 중인 시즌 (하나만 true)
-  // 📌 미제출자 DM 재촉 — 자동으로 돌리지 않고 사람이 눌러서 보낸다
+  /* 📌 미제출자 DM 재촉 — 자동으로 돌리지 않고 사람이 눌러서 보낸다.
+     네 칸 모두 비우면 기본 문구로 돌아간다 (lib/nudgeMessage.js) */
   nudge: {
-    message: { type: String, default: "" },      // 앞부분 문구. 비면 기본 문구
+    title: { type: String, default: "" },        // 임베드 제목
+    message: { type: String, default: "" },      // 임베드 본문
+    footer: { type: String, default: "" },       // 임베드 아래 작은 글씨
+    cta: { type: String, default: "" },          // 링크 버튼 문구
   },
   createdAt: { type: Date, default: Date.now },
 });
@@ -100,7 +104,11 @@ const ScrimNudgeSchema = new mongoose.Schema({
   userId: { type: String, required: true, index: true }, // 디스코드 ID
   userName: { type: String, default: "" },
   kind: { type: String, default: "manual" },             // manual(사람이 누름) | test(시험 발송)
-  message: { type: String, default: "" },                // 임베드 본문. 비면 봇이 기본 문구를 쓴다
+  // 보낼 때의 문구를 그대로 굳혀 둔다 — 나중에 설정을 바꿔도 이미 보낸 건 안 흔들린다
+  title: { type: String, default: "" },
+  message: { type: String, default: "" },
+  footer: { type: String, default: "" },
+  cta: { type: String, default: "" },
   url: { type: String, default: "" },                    // 팀 룸 바로가기 (임베드 버튼)
   dueAt: { type: Date, default: null },                  // 보낼 때의 마감 시각 (임베드에 표시)
   status: { type: String, default: "pending", index: true }, // pending | sent | failed

@@ -142,10 +142,8 @@ export const CodeGrant = mongoose.models.CodeGrant || mongoose.model("CodeGrant"
 const loose = { strict: false, versionKey: false };
 
 export const ScrimSeason = mongoose.models.ScrimSeason || mongoose.model("ScrimSeason", new mongoose.Schema({
+  // 봇은 시즌 문구를 직접 읽지 않는다 — 보낼 문구는 사이트가 ScrimNudge 에 굳혀서 넣는다
   title: String, startAt: Date, days: Number, dueAt: Date, active: Boolean,
-  nudge: {
-    enabled: Boolean, everyHours: Number, quietFrom: Number, quietTo: Number, message: String,
-  },
 }, loose));
 
 export const ScrimTeam = mongoose.models.ScrimTeam || mongoose.model("ScrimTeam", new mongoose.Schema({
@@ -162,7 +160,7 @@ export const ScrimNudge = mongoose.models.ScrimNudge || mongoose.model("ScrimNud
   seasonId: { type: String, index: true },
   teamId: String, teamName: String,
   userId: { type: String, index: true }, userName: String,
-  kind: String, message: String, url: String, dueAt: Date,
+  kind: String, title: String, message: String, footer: String, cta: String, url: String, dueAt: Date,
   status: { type: String, index: true }, error: String, byName: String,
   createdAt: { type: Date, default: Date.now, index: true },
   sentAt: Date,

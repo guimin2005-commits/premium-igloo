@@ -4,7 +4,7 @@
 //  DM 이 막혀 있으면 실패로 남긴다 (운영 화면에서 사유가 보인다).
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { ScrimNudge } from "../db.js";
-import { NUDGE_COLOR, NUDGE_AUTHOR, NUDGE_TITLE, NUDGE_FOOTER, NUDGE_CTA, nudgeBody } from "../nudgeMessage.js";
+import { NUDGE_COLOR, NUDGE_AUTHOR, nudgeTitle, nudgeBody, nudgeFooter, nudgeCta } from "../nudgeMessage.js";
 
 const TICK_MS = 20 * 1000;
 
@@ -16,9 +16,9 @@ const buildDm = (n) => {
   const embed = new EmbedBuilder()
     .setColor(NUDGE_COLOR)
     .setAuthor({ name: NUDGE_AUTHOR })
-    .setTitle(NUDGE_TITLE)
+    .setTitle(nudgeTitle(n.title))
     .setDescription(nudgeBody(n.message))
-    .setFooter({ text: NUDGE_FOOTER });
+    .setFooter({ text: nudgeFooter(n.footer) });
 
   const fields = [{ name: "팀", value: n.teamName || "—", inline: true }];
   if (n.dueAt) fields.push({ name: "마감", value: `${ts(n.dueAt, "f")}\n${ts(n.dueAt, "R")}`, inline: true });
@@ -29,7 +29,7 @@ const buildDm = (n) => {
   if (/^https?:\/\//.test(n.url || "")) {
     payload.components = [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setLabel(NUDGE_CTA).setStyle(ButtonStyle.Link).setURL(n.url)
+        new ButtonBuilder().setLabel(nudgeCta(n.cta)).setStyle(ButtonStyle.Link).setURL(n.url)
       ),
     ];
   }

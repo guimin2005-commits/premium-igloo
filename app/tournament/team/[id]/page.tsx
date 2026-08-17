@@ -754,7 +754,7 @@ export default function TeamRoom() {
               ))}
             </div>
 
-            <DmPreview teamName={team.name} dueAt={season.dueAt} custom={(season as any).nudge?.message} />
+            <DmPreview teamName={team.name} dueAt={season.dueAt} copy={(season as any).nudge} />
 
             <div className="flex gap-2 mt-5">
               <button onClick={() => setNudgeOpen(false)}

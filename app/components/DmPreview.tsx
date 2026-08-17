@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { NUDGE_AUTHOR, NUDGE_TITLE, NUDGE_FOOTER, NUDGE_CTA, nudgeBody, fmtKst, untilLabel } from "@/lib/nudgeMessage";
+import { NUDGE_AUTHOR, nudgeTitle, nudgeBody, nudgeFooter, nudgeCta, fmtKst, untilLabel } from "@/lib/nudgeMessage";
 
 /* 📌 재촉 DM 미리보기 — 디스코드 임베드가 실제로 어떻게 보이는지 그린다.
    봇이 만드는 임베드와 같은 문구 파일(lib/nudgeMessage)을 쓴다.
@@ -9,7 +9,9 @@ import { NUDGE_AUTHOR, NUDGE_TITLE, NUDGE_FOOTER, NUDGE_CTA, nudgeBody, fmtKst, 
 
 const G = "#00e07b";
 
-export default function DmPreview({ teamName, dueAt, custom }: { teamName: string; dueAt?: string | Date | null; custom?: string }) {
+type Copy = { title?: string; message?: string; footer?: string; cta?: string };
+
+export default function DmPreview({ teamName, dueAt, copy }: { teamName: string; dueAt?: string | Date | null; copy?: Copy }) {
   return (
     <div className="esp-cut border border-white/[0.08] bg-[#0b0d0c] p-4">
       {/* 보낸 사람 줄 */}
@@ -25,8 +27,8 @@ export default function DmPreview({ teamName, dueAt, custom }: { teamName: strin
         <span className="w-1 shrink-0" style={{ background: G }} />
         <div className="min-w-0 flex-1 px-3.5 py-3">
           <p className="text-[11px] font-bold text-gray-400 mb-1.5">{NUDGE_AUTHOR}</p>
-          <p className="text-[14px] font-black mb-1.5" style={{ color: "#00a8fc" }}>{NUDGE_TITLE}</p>
-          <p className="text-[12.5px] leading-[1.6] text-gray-300 whitespace-pre-wrap break-words">{nudgeBody(custom)}</p>
+          <p className="text-[14px] font-black mb-1.5" style={{ color: "#00a8fc" }}>{nudgeTitle(copy?.title)}</p>
+          <p className="text-[12.5px] leading-[1.6] text-gray-300 whitespace-pre-wrap break-words">{nudgeBody(copy?.message)}</p>
 
           <div className="flex flex-wrap gap-x-10 gap-y-3 mt-3">
             <span className="block">
@@ -42,14 +44,14 @@ export default function DmPreview({ teamName, dueAt, custom }: { teamName: strin
             )}
           </div>
 
-          <p className="text-[10.5px] font-bold text-gray-500 mt-3">{NUDGE_FOOTER}</p>
+          <p className="text-[10.5px] font-bold text-gray-500 mt-3">{nudgeFooter(copy?.footer)}</p>
         </div>
       </div>
 
       {/* 링크 버튼 — 주소를 본문에 넣지 않으니 지저분한 링크 미리보기도 안 붙는다 */}
       <div className="mt-2">
         <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[3px] bg-[#4e5058] text-[12px] font-bold text-white">
-          {NUDGE_CTA}
+          {nudgeCta(copy?.cta)}
           <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
           </svg>

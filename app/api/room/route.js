@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import { ScrimSeason, ScrimTeam, ScrimAvailability, ScrimFixture, ScrimNotice, ScrimNudge } from "@/models/Scrim";
 import Auction from "@/models/Auction";
-import { nudgeBody } from "@/lib/nudgeMessage";
+import { nudgeTitle, nudgeBody, nudgeFooter, nudgeCta, LIMITS } from "@/lib/nudgeMessage";
 
 /* 📌 대회 룸 API
    조율 기간·시간대는 시즌 하나로 통합 관리한다 (팀마다 다르면 교집합을 계산할 수 없다).
@@ -131,7 +131,16 @@ export async function POST(request) {
         season.toHour = to;
         season.stepMin = Number(body.stepMin) === 30 ? 30 : 60;
         if (body.dueAt) season.dueAt = new Date(body.dueAt);
-        if (body.nudge) season.nudge = { message: String(body.nudge.message || "").slice(0, 300) };
+        if (body.nudge) {
+          // 빈 칸은 빈 채로 저장한다 — 읽을 때 기본 문구로 되돌아간다
+          const cut = (v, n) => String(v ?? "").slice(0, n);
+          season.nudge = {
+            title: cut(body.nudge.title, LIMITS.title),
+            message: cut(body.nudge.message, LIMITS.body),
+            footer: cut(body.nudge.footer, LIMITS.footer),
+            cta: cut(body.nudge.cta, LIMITS.cta),
+          };
+        }
         await season.save();
         return NextResponse.json({ success: true });
       }
@@ -196,7 +205,11 @@ export async function POST(request) {
         await ScrimNudge.create({
           seasonId: sid, teamId: t ? String(t._id) : "", teamName,
           userId: uid, userName: session?.user?.name || "", kind: "test", url, dueAt: season.dueAt,
-          message: nudgeBody(body.message !== undefined ? String(body.message).slice(0, 300) : season.nudge?.message),
+          // 저장하지 않은 문구도 시험할 수 있게, 화면이 보낸 값이 있으면 그걸 쓴다
+          title: nudgeTitle(body.title ?? season.nudge?.title),
+          message: nudgeBody(body.message ?? season.nudge?.message),
+          footer: nudgeFooter(body.footer ?? season.nudge?.footer),
+          cta: nudgeCta(body.cta ?? season.nudge?.cta),
           byName: session?.user?.name || "",
         });
         return NextResponse.json({ success: true });
@@ -238,8 +251,11 @@ export async function POST(request) {
             await ScrimNudge.create({
               seasonId: sid, teamId: tid, teamName: t.name,
               userId: m.discordId, userName: m.name, kind: "manual", url, dueAt: season.dueAt,
-              // 본문을 여기서 확정해 저장한다 — 미리보기와 실제가 어긋나지 않게
+              // 문구를 여기서 확정해 저장한다 — 미리보기와 실제가 어긋나지 않게
+              title: nudgeTitle(season.nudge?.title),
               message: nudgeBody(season.nudge?.message),
+              footer: nudgeFooter(season.nudge?.footer),
+              cta: nudgeCta(season.nudge?.cta),
               byName: session?.user?.name || "",
             });
             queued++;
