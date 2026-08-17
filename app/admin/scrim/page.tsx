@@ -17,7 +17,7 @@ const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.ge
 const sKey = (d: Date, m: number) => `${ymd(d)}|${m}`;
 const dL = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
 const dF = (d: Date) => `${dL(d)}(${WD[d.getDay()]})`;
-const hourLabel = (h: number) => (h >= 24 ? `${h - 24}시` : h === 0 ? "자정" : `${h}시`);
+const hourLabel = (h: number) => `${pad(h % 24)}:00`;
 const midnight = (d: Date | number | string) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 
 const PALETTE = ["#7dd3fc", "#a5b4fc", "#fcd34d", "#f0abfc", "#6ee7b7", "#fca5a5", "#c4b5fd", "#fdba74"];
@@ -39,6 +39,10 @@ export default function AdminScrimPage() {
   const [eName, setEName] = useState("");
   const [eTag, setETag] = useState("");
   const [eColor, setEColor] = useState(PALETTE[0]);
+  const [roster, setRoster] = useState<string | null>(null); // 로스터 편집 중인 팀
+  const [mName, setMName] = useState("");
+  const [mPos, setMPos] = useState("");
+  const [mId, setMId] = useState("");
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2400); return () => clearTimeout(t); }, [toast]);
 
@@ -195,10 +199,70 @@ export default function AdminScrimPage() {
                             수정
                           </button>
                           <button disabled={busy}
+                            onClick={() => setRoster(roster === t._id ? null : t._id)}
+                            className="flex-1 py-2 text-[10px] font-black text-gray-400 border-l border-white/[0.07] hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-40">
+                            로스터
+                          </button>
+                          <button disabled={busy}
                             onClick={async () => { if (!confirm(`${t.name} 팀을 삭제할까요? 응답과 경기 기록도 함께 지워집니다.`)) return; const r = await post({ action: "team:delete", teamId: t._id }); if (r) setToast("팀을 삭제했습니다"); }}
                             className="flex-1 py-2 text-[10px] font-black text-rose-400/70 border-l border-white/[0.07] hover:bg-rose-500/10 hover:text-rose-300 transition-colors disabled:opacity-40">
                             삭제
                           </button>
+                        </div>
+                      )}
+
+                      {roster === t._id && (
+                        <div className="p-4 border-t border-white/[0.07]">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-[10px] font-black esp-mono text-gray-500">ROSTER {t.members.length}</span>
+                            <button disabled={busy}
+                              onClick={async () => { const r = await post({ action: "team:syncNames", teamId: t._id }); if (r) setToast(r.changed ? `${r.changed}명의 이름을 디스코드 닉네임으로 맞췄습니다` : "바꿀 이름이 없습니다"); }}
+                              className="ml-auto esp-cut-sm px-2.5 py-1 text-[10px] font-black bg-white/[0.05] text-gray-400 hover:text-white transition-colors disabled:opacity-40">
+                              디스코드 이름으로 동기화
+                            </button>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            {t.members.length === 0 && <p className="text-[11px] font-bold text-gray-700 py-2">로스터가 비어 있습니다.</p>}
+                            {t.members.map((m: any, mi: number) => (
+                              <div key={mi} className="flex flex-wrap items-center gap-1.5">
+                                <input defaultValue={m.name} maxLength={30}
+                                  onBlur={async (e) => { const v = e.target.value.trim(); if (!v || v === m.name) return; const r = await post({ action: "team:updateMember", teamId: t._id, idx: mi, name: v }); if (r) setToast("이름을 바꿨습니다"); }}
+                                  className="esp-cut-sm flex-1 min-w-[110px] bg-black/40 border border-white/10 px-2.5 py-1.5 text-[12px] font-bold text-white outline-none focus:border-[#00e07b] transition-colors" />
+                                <input defaultValue={m.pos} maxLength={6} placeholder="포지션"
+                                  onBlur={async (e) => { const v = e.target.value.trim(); if (v === (m.pos || "")) return; await post({ action: "team:updateMember", teamId: t._id, idx: mi, pos: v }); }}
+                                  className="esp-cut-sm w-[72px] bg-black/40 border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-gray-300 outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700" />
+                                <input defaultValue={m.discordId} maxLength={21} placeholder="디스코드 ID"
+                                  onBlur={async (e) => { const v = e.target.value.trim(); if (v === (m.discordId || "")) return; const r = await post({ action: "team:updateMember", teamId: t._id, idx: mi, discordId: v }); if (r) setToast("디스코드 ID를 바꿨습니다"); }}
+                                  className="esp-cut-sm w-[132px] bg-black/40 border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-gray-400 tabular-nums outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700" />
+                                <button disabled={busy}
+                                  onClick={async () => { await post({ action: "team:updateMember", teamId: t._id, idx: mi, leader: !m.leader }); }}
+                                  className="esp-cut-sm px-2 py-1.5 text-[10px] font-black transition-colors disabled:opacity-40"
+                                  style={m.leader ? { background: G, color: "#04120b" } : { background: "rgba(255,255,255,.05)", color: "#6b7280" }}>
+                                  팀장
+                                </button>
+                                <button disabled={busy}
+                                  onClick={async () => { if (!confirm(`${m.name} 님을 로스터에서 뺄까요?`)) return; const r = await post({ action: "team:removeMember", teamId: t._id, idx: mi }); if (r) setToast("팀원을 뺐습니다"); }}
+                                  className="px-1.5 text-[13px] font-black text-rose-400/70 hover:text-rose-300 disabled:opacity-40">×</button>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-white/[0.07]">
+                            <input value={mName} onChange={(e) => setMName(e.target.value)} maxLength={30} placeholder="이름"
+                              className="esp-cut-sm flex-1 min-w-[110px] bg-black/40 border border-white/10 px-2.5 py-1.5 text-[12px] font-bold text-white outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700" />
+                            <input value={mPos} onChange={(e) => setMPos(e.target.value)} maxLength={6} placeholder="포지션"
+                              className="esp-cut-sm w-[72px] bg-black/40 border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-gray-300 outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700" />
+                            <input value={mId} onChange={(e) => setMId(e.target.value)} maxLength={21} placeholder="디스코드 ID"
+                              className="esp-cut-sm w-[132px] bg-black/40 border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-gray-400 tabular-nums outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700" />
+                            <button disabled={busy || !mName.trim()}
+                              onClick={async () => { const r = await post({ action: "team:addMember", teamId: t._id, name: mName, pos: mPos, discordId: mId }); if (r) { setToast("팀원을 추가했습니다"); setMName(""); setMPos(""); setMId(""); } }}
+                              className="esp-cut-sm px-3 py-1.5 text-[11px] font-black disabled:opacity-35" style={{ background: G, color: "#04120b" }}>추가</button>
+                          </div>
+
+                          <p className="mt-3 text-[10px] font-bold text-gray-600 leading-relaxed">
+                            이름은 입력 후 다른 곳을 누르면 저장됩니다. 디스코드 ID 를 바꾸면 그 사람이 낸 일정 응답은 초기화됩니다.
+                          </p>
                         </div>
                       )}
                     </div>
@@ -310,8 +374,8 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
     return o;
   }, [season]);
 
-  const sL = (m: number) => (season?.stepMin === 60 ? String(Math.floor(m / 60) % 24) : `${Math.floor(m / 60) % 24}:${pad(m % 60)}`);
-  const sF = (m: number) => { const h = Math.floor(m / 60), hh = h % 24, mm = m % 60; return `${hh === 0 ? "자정" : hh + "시"}${mm ? " " + mm + "분" : ""}${h >= 24 ? "(익일)" : ""}`; };
+  const sL = (m: number) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
+  const sF = (m: number) => { const h = Math.floor(m / 60), hh = h % 24, mm = m % 60; return `${pad(hh)}:${pad(mm)}${h >= 24 ? " (익일)" : ""}`; };
   const readyOf = (t: any) => t.members.length > 0 && t.members.filter((m: any) => m.discordId && t.avail.some((x: any) => x.userId === m.discordId)).length >= t.members.length;
   const cntAt = (t: any, d: Date, s: number) => t.avail.filter((x: any) => x.slots.includes(sKey(d, s))).length;
 
@@ -580,7 +644,7 @@ function SeasonForm({ season, busy, onSave }: { season: any; busy: boolean; onSa
           </div>
           <div className="flex flex-wrap gap-4">
             <Step label="시작 시각" value={hourLabel(from)} minus={() => setFrom((v: number) => Math.max(0, v - 1))} plus={() => setFrom((v: number) => Math.min(to - 1, v + 1))} mOff={from <= 0} pOff={from >= to - 1} />
-            <Step label="종료 시각" value={hourLabel(to)} sub={to > 24 ? "익일" : undefined} minus={() => setTo((v: number) => Math.max(from + 1, v - 1))} plus={() => setTo((v: number) => Math.min(30, v + 1))} mOff={to <= from + 1} pOff={to >= 30} />
+            <Step label="종료 시각" value={hourLabel(to)} sub={to >= 24 ? "익일" : undefined} minus={() => setTo((v: number) => Math.max(from + 1, v - 1))} plus={() => setTo((v: number) => Math.min(30, v + 1))} mOff={to <= from + 1} pOff={to >= 30} />
           </div>
         </div>
 

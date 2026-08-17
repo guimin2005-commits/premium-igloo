@@ -18,7 +18,7 @@ const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.ge
 const sKey = (d: Date, m: number) => `${ymd(d)}|${m}`;
 const dL = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
 const dF = (d: Date) => `${dL(d)}(${WD[d.getDay()]})`;
-const hourLabel = (h: number) => (h >= 24 ? `${h - 24}시` : h === 0 ? "자정" : `${h}시`);
+const hourLabel = (h: number) => `${pad(h % 24)}:00`;
 const midnight = (d: Date | number | string) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 
 type Member = { discordId: string; name: string; pos: string; leader?: boolean };
@@ -74,8 +74,8 @@ export default function TeamRoom() {
     for (let m = season.fromHour * 60; m < season.toHour * 60; m += season.stepMin) o.push(m);
     return o;
   }, [season]);
-  const sL = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60; return season?.stepMin === 60 ? `${h}` : `${h}:${pad(mm)}`; };
-  const sF = (m: number) => { const h = Math.floor(m / 60), hh = h % 24, mm = m % 60; return `${hh === 0 ? "자정" : `${hh}시`}${mm ? ` ${mm}분` : ""}${h >= 24 ? "(익일)" : ""}`; };
+  const sL = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60; return `${pad(h)}:${pad(mm)}`; };
+  const sF = (m: number) => { const h = Math.floor(m / 60), hh = h % 24, mm = m % 60; return `${pad(hh)}:${pad(mm)}${h >= 24 ? " (익일)" : ""}`; };
 
   /* ── 집계 ── */
   const submitted = useMemo(() => new Set((team?.avail || []).map((a) => a.userId)), [team]);

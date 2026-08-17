@@ -26,6 +26,21 @@ const ensureSeason = async () => {
   return ScrimSeason.create({ title: "스크림 리그", startAt: start, days: 7, fromHour: 19, toHour: 24, stepMin: 60, dueAt: due });
 };
 
+// 📌 디스코드 표시 이름 — 경매 예명이 아니라 실제 닉네임으로 저장한다.
+//    이미 프로필이 공개된 뒤이므로 가릴 이유가 없다. 실패하면 넘어온 이름을 그대로 쓴다.
+const discordName = async (id, fallback) => {
+  if (!id || !/^\d{15,21}$/.test(id) || !process.env.DISCORD_BOT_TOKEN) return fallback;
+  try {
+    const r = await fetch(`https://discord.com/api/v10/users/${id}`, {
+      headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` },
+      next: { revalidate: 3600 },
+    });
+    if (!r.ok) return fallback;
+    const u = await r.json();
+    return u.global_name || u.username || fallback;
+  } catch { return fallback; }
+};
+
 const requireAdmin = async () => {
   const session = await getServerSession(authOptions);
   return { session, ok: isAdminName(session?.user?.name) };
@@ -151,6 +166,48 @@ export async function POST(request) {
         return NextResponse.json({ success: true });
       }
 
+      // 팀원 정보 수정 — 이름·포지션·디스코드 ID·리더 여부
+      case "team:updateMember": {
+        const { ok } = await requireAdmin();
+        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const t = await ScrimTeam.findById(body.teamId);
+        if (!t) return NextResponse.json({ success: false, message: "팀을 찾을 수 없습니다." }, { status: 404 });
+        const m = t.members[body.idx];
+        if (!m) return NextResponse.json({ success: false, message: "대상을 찾을 수 없습니다." }, { status: 400 });
+        if (body.discordId !== undefined) {
+          const nid = String(body.discordId).trim();
+          if (nid && t.members.some((x, i) => i !== body.idx && x.discordId === nid)) {
+            return NextResponse.json({ success: false, message: "같은 디스코드 ID가 이미 팀에 있습니다." }, { status: 409 });
+          }
+          // ID 가 바뀌면 그 사람이 낸 응답은 더 이상 이 자리와 연결되지 않는다
+          if (m.discordId && m.discordId !== nid) {
+            await ScrimAvailability.deleteOne({ seasonId: sid, teamId: String(t._id), userId: m.discordId });
+          }
+          m.discordId = nid;
+        }
+        if (body.name !== undefined) m.name = String(body.name).trim().slice(0, 30) || m.name;
+        if (body.pos !== undefined) m.pos = String(body.pos).slice(0, 6);
+        if (body.leader !== undefined) m.leader = !!body.leader;
+        await t.save();
+        return NextResponse.json({ success: true });
+      }
+
+      // 디스코드 닉네임으로 팀 전체 이름을 다시 맞춘다 (경매 예명이 남아 있을 때)
+      case "team:syncNames": {
+        const { ok } = await requireAdmin();
+        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const t = await ScrimTeam.findById(body.teamId);
+        if (!t) return NextResponse.json({ success: false, message: "팀을 찾을 수 없습니다." }, { status: 404 });
+        let changed = 0;
+        for (const m of t.members) {
+          if (!m.discordId) continue;
+          const nm = await discordName(m.discordId, m.name);
+          if (nm && nm !== m.name) { m.name = nm; changed++; }
+        }
+        await t.save();
+        return NextResponse.json({ success: true, changed });
+      }
+
       case "team:removeMember": {
         const { ok } = await requireAdmin();
         if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
@@ -175,13 +232,23 @@ export async function POST(request) {
         for (const [i, l] of (a.leaders || []).entries()) {
           const exists = await ScrimTeam.findOne({ seasonId: sid, auctionId: String(a._id), name: l.name });
           if (exists) continue;
-          const members = [{ discordId: l.discordId || "", name: l.name, pos: l.position || "", leader: true }];
-          (l.roster || []).forEach((r) => {
-            if (r.playerIdx === -1) return; // 리더 본인은 위에서 넣었다
+          // ⚠️ 경매 예명(alias)이 아니라 디스코드 닉네임으로 넣는다.
+          //    낙찰과 함께 프로필이 공개된 뒤라 가릴 이유가 없고, 예명으로는 누군지 알 수 없다.
+          const members = [{
+            discordId: l.discordId || "",
+            name: await discordName(l.discordId, l.name),
+            pos: l.position || "", leader: true,
+          }];
+          for (const r of l.roster || []) {
+            if (r.playerIdx === -1) continue; // 리더 본인은 위에서 넣었다
             const p = a.players?.[r.playerIdx];
-            if (!p) return;
-            members.push({ discordId: p.discordId || "", name: p.alias || "", pos: r.slot || "" });
-          });
+            if (!p) continue;
+            members.push({
+              discordId: p.discordId || "",
+              name: await discordName(p.discordId, p.alias || ""),
+              pos: r.slot || "",
+            });
+          }
           await ScrimTeam.create({
             seasonId: sid, name: l.name, tag: l.name.slice(0, 3).toUpperCase(),
             color: palette[i % palette.length], auctionId: String(a._id), members,
