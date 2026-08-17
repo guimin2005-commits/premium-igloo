@@ -153,7 +153,7 @@ export default function AdminScrimPage() {
                 <p className="mt-2 text-[11px] text-gray-700">오른쪽에서 팀을 만들거나 경매 결과를 가져오세요</p>
               </div>
             ) : (
-              <div className="grid gap-2.5 sm:grid-cols-2">
+              <div className="grid gap-2.5 sm:grid-cols-2 items-start">
                 {teams.map((t) => {
                   const sent = t.members.filter((m: any) => m.discordId && t.avail.some((a: any) => a.userId === m.discordId)).length;
                   const ready = t.members.length > 0 && sent >= t.members.length;

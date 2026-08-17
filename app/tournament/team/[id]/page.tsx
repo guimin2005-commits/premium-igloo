@@ -37,6 +37,7 @@ export default function TeamRoom() {
   const [view, setView] = useState<"room" | "board">("room");
   const [mine, setMine] = useState<Set<string>>(new Set());
   const [dirty, setDirty] = useState(false);
+  const [none, setNone] = useState(false); // 이번 기간 전체 불가
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -60,6 +61,7 @@ export default function TeamRoom() {
     if (!team || !data) return;
     const found = team.avail.find((a) => a.userId === data.me);
     setMine(new Set(found?.slots || []));
+    setNone(!!found && (found.slots?.length || 0) === 0); // 응답은 냈는데 칸이 0이면 전체 불가
     setDirty(false);
   }, [team, data]);
 
@@ -409,6 +411,9 @@ export default function TeamRoom() {
                   <div className="grid grid-cols-2 xl:grid-cols-1 gap-x-4 xl:gap-x-0 xl:divide-y xl:divide-white/[0.06]">
                     {team.members.map((m, i) => {
                       const ok = !!m.discordId && submitted.has(m.discordId);
+                      // 응답은 냈는데 고른 칸이 하나도 없으면 '전체 불가'다 — 미제출과 구분해서 보여준다
+                      const av = team.avail.find((a) => a.userId === m.discordId);
+                      const isNone = ok && ((m.discordId === data?.me ? (none ? 0 : mine.size) : av?.slots.length) || 0) === 0;
                       return (
                         <div key={i} className="flex items-center gap-3 py-2.5">
                           <span className="esp-cut-sm w-8 h-8 grid place-items-center text-[11px] font-black shrink-0"
@@ -419,7 +424,7 @@ export default function TeamRoom() {
                             </span>
                             <span className="block text-[10px] font-bold text-gray-600 mt-0.5">{m.pos || "포지션 미정"}</span>
                           </span>
-                          <span className={`shrink-0 text-[9px] font-black esp-mono ${ok ? "" : "text-gray-700"}`} style={ok ? { color: G } : undefined}>{ok ? "SENT" : "WAIT"}</span>
+                          <span className={`shrink-0 text-[9px] font-black esp-mono ${isNone ? "text-rose-400" : ok ? "" : "text-gray-700"}`} style={ok && !isNone ? { color: G } : undefined}>{isNone ? "NONE" : ok ? "SENT" : "WAIT"}</span>
                           {isAdmin && ok && (
                             <button disabled={busy} onClick={async () => { const r = await post({ action: "avail:reset", teamId: id, userId: m.discordId }); if (r) setToast(`${m.name} 응답을 초기화했습니다`); }}
                               className="shrink-0 text-[9px] font-black text-rose-400/70 hover:text-rose-300 disabled:opacity-40">초기화</button>
@@ -450,16 +455,41 @@ export default function TeamRoom() {
                     </span>
                   ))}
                 </div>
-                <Grid value={(d, s) => ({ n: usAt(d, s), cap: size || 1, me: mine.has(sKey(d, s)), full: usAt(d, s) === size && size > 0 })} />
+                <div className={none ? "opacity-30 pointer-events-none" : ""}>
+                  <Grid value={(d, s) => ({ n: usAt(d, s), cap: size || 1, me: mine.has(sKey(d, s)), full: usAt(d, s) === size && size > 0 })} />
+                </div>
 
-                <div className="mt-6 pt-4 border-t border-white/[0.08] flex items-center gap-4">
-                  <span className="flex-1 text-[11px] font-bold text-gray-500">
-                    {mine.size ? <><b className="text-white tabular-nums">{mine.size}칸</b> 선택함{dirty && <span className="text-amber-300"> · 저장 안 됨</span>}</> : "가능한 시간을 표시해주세요"}
+                {/* 되는 시간이 하나도 없는 사람도 '답을 낸' 상태가 되어야 팀이 기다리지 않는다 */}
+                <button
+                  onClick={() => { const v = !none; setNone(v); if (v) setMine(new Set()); setDirty(true); }}
+                  aria-pressed={none}
+                  className="mt-4 esp-cut-sm w-full flex items-center gap-2.5 px-4 py-3 border text-left transition-colors"
+                  style={none
+                    ? { borderColor: "rgba(251,113,133,.5)", background: "rgba(251,113,133,.10)" }
+                    : { borderColor: "rgba(255,255,255,.09)", background: "rgba(255,255,255,.02)" }}
+                >
+                  <span className="w-4 h-4 shrink-0 grid place-items-center border"
+                    style={none ? { borderColor: "#fb7185", background: "#fb7185" } : { borderColor: "rgba(255,255,255,.2)" }}>
+                    {none && <span className="text-[10px] font-black text-[#1a0508] leading-none">✓</span>}
                   </span>
-                  <button disabled={busy || mine.size === 0 || (!inTeam && !isAdmin)}
-                    onClick={async () => { const r = await post({ action: "avail:submit", teamId: id, slots: [...mine] }); if (r) { setDirty(false); setToast(meSubmitted ? "일정을 다시 제출했습니다" : "제출했습니다"); } }}
+                  <span className="min-w-0">
+                    <span className="block text-[12px] font-black" style={{ color: none ? "#fb7185" : "#d2d2d5" }}>이번 기간 전체 불가</span>
+                    <span className="block text-[10px] font-bold text-gray-600 mt-0.5">되는 시간이 하나도 없습니다 — 이대로 제출하면 응답 완료로 잡힙니다</span>
+                  </span>
+                </button>
+
+                <div className="mt-4 pt-4 border-t border-white/[0.08] flex items-center gap-4">
+                  <span className="flex-1 text-[11px] font-bold text-gray-500">
+                    {none
+                      ? <span className="text-rose-400">전체 불가로 제출합니다</span>
+                      : mine.size
+                        ? <><b className="text-white tabular-nums">{mine.size}칸</b> 선택함{dirty && <span className="text-amber-300"> · 저장 안 됨</span>}</>
+                        : "가능한 시간을 표시해주세요"}
+                  </span>
+                  <button disabled={busy || (!none && mine.size === 0) || (!inTeam && !isAdmin)}
+                    onClick={async () => { const r = await post({ action: "avail:submit", teamId: id, slots: none ? [] : [...mine] }); if (r) { setDirty(false); setToast(none ? "전체 불가로 제출했습니다" : meSubmitted ? "일정을 다시 제출했습니다" : "제출했습니다"); } }}
                     className="shrink-0 esp-cut-sm px-7 py-3 text-[12px] font-black transition-all active:scale-[.97] disabled:opacity-35"
-                    style={{ background: G, color: "#04120b" }}>
+                    style={none ? { background: "#fb7185", color: "#1a0508" } : { background: G, color: "#04120b" }}>
                     {meSubmitted ? "다시 제출" : "제출"}
                   </button>
                 </div>
