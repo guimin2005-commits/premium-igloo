@@ -73,7 +73,14 @@ export default function TeamRoom() {
   useEffect(() => {
     if (!team || !data) return;
     const found = team.avail.find((a) => a.userId === data.me);
-    setMine(new Set(found?.slots || []));
+    // 예전에 골라둔 칸 중 이미 지나간 건 버린다 — 안 보이는 칸이 "N칸 선택함" 숫자만 부풀린다
+    setMine(new Set((found?.slots || []).filter((k) => {
+      const [ds, ms] = k.split("|");
+      const t = new Date(`${ds}T00:00:00`);
+      if (isNaN(t.getTime())) return true;
+      t.setMinutes(Number(ms) || 0);
+      return t.getTime() > Date.now();
+    })));
     setNone(!!found && (found.slots?.length || 0) === 0); // 응답은 냈는데 칸이 0이면 전체 불가
     setDirty(false);
   }, [team, data]);
@@ -94,6 +101,13 @@ export default function TeamRoom() {
     for (let m = season.fromHour * 60; m < season.toHour * 60; m += season.stepMin) o.push(m);
     return o;
   }, [season]);
+  /* 오늘 줄에서 이미 지나간 시간대는 고를 수 없다 — 날짜만 걸러도 오늘 오전이 남는다.
+     (setMinutes 는 1440 이 넘어가면 알아서 다음 날로 넘어가므로 '익일' 슬롯도 맞는다) */
+  const isPast = useCallback((d: Date, s: number) => {
+    const t = new Date(d); t.setHours(0, 0, 0, 0); t.setMinutes(s);
+    return t.getTime() <= Date.now();
+  }, []);
+
   const sL = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60; return `${pad(h)}:${pad(mm)}`; };
   const sF = (m: number) => { const h = Math.floor(m / 60), hh = h % 24, mm = m % 60; return `${pad(hh)}:${pad(mm)}`; };
 
@@ -115,9 +129,9 @@ export default function TeamRoom() {
 
   const usRanked = useMemo(() => {
     const o: { d: Date; s: number; n: number }[] = [];
-    DAYS.forEach((d) => SLOTS.forEach((s) => o.push({ d, s, n: usAt(d, s) })));
+    DAYS.forEach((d) => SLOTS.forEach((s) => { if (!isPast(d, s)) o.push({ d, s, n: usAt(d, s) }); }));
     return o.sort((a, b) => b.n - a.n);
-  }, [DAYS, SLOTS, usAt]);
+  }, [DAYS, SLOTS, usAt, isPast]);
   const usTop = usRanked[0];
 
 
@@ -207,8 +221,10 @@ export default function TeamRoom() {
   };
 
   const toggleDay = (d: Date) => {
-    const on = SLOTS.every((s) => mine.has(sKey(d, s)));
-    setMine((p) => { const n = new Set(p); SLOTS.forEach((s) => (on ? n.delete(sKey(d, s)) : n.add(sKey(d, s)))); return n; });
+    const live = SLOTS.filter((s) => !isPast(d, s));
+    if (!live.length) return;
+    const on = live.every((s) => mine.has(sKey(d, s)));
+    setMine((p) => { const n = new Set(p); live.forEach((s) => (on ? n.delete(sKey(d, s)) : n.add(sKey(d, s)))); return n; });
     setDirty(true);
   };
 
@@ -284,9 +300,15 @@ export default function TeamRoom() {
               {SLOTS.map((s) => {
                 const v = value(d, s);
                 const a = v.cap ? v.n / v.cap : 0;
+                const past = isPast(d, s);
                 return (
                   <td key={s} className="p-0">
-                    {readOnly ? (
+                    {past ? (
+                      // 이미 지나간 시간 — 고를 수 없다는 걸 빈칸이 아니라 ✕ 로 분명히 한다
+                      <span className={`${cell} grid place-items-center cursor-not-allowed`}
+                        title="이미 지난 시간입니다"
+                        style={{ background: "rgba(255,255,255,.015)", borderColor: "rgba(255,255,255,.05)", color: "#3a3a3f" }}>✕</span>
+                    ) : readOnly ? (
                       <span className={`${cell} grid place-items-center`}
                         style={{ background: v.n ? `${C}${Math.round((0.12 + a * 0.55) * 255).toString(16).padStart(2, "0")}` : "rgba(255,255,255,.02)",
                           borderColor: v.full ? G : "rgba(255,255,255,.07)", boxShadow: v.full ? `inset 0 0 0 1px ${G}` : undefined,

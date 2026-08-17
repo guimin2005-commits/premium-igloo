@@ -15,6 +15,8 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const dOnly = (d: Date) => `${String(d.getFullYear()).slice(2)}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}(${WD[d.getDay()]})`;
 const tOnly = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const fmt = (d: Date) => `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}(${WD[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+// 목록의 미리보기 — 줄바꿈·서식 기호를 지우고 한 줄 분량만 남긴다
+const preview = (s: string) => (s || "").replace(/[#*_>`~-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 48);
 
 export default function TournamentNoticeListPage() {
   const router = useRouter();
@@ -85,7 +87,9 @@ export default function TournamentNoticeListPage() {
                         </span>
                       )}
                       <span className="block text-[15px] md:text-[16px] font-black text-white break-keep leading-snug">{n.title}</span>
-                      {n.body && <span className="block mt-2 text-[12px] font-medium text-gray-500 line-clamp-1 break-keep">{n.body}</span>}
+                      {/* ⚠️ block + line-clamp 는 둘 다 display 를 건드려 서로를 지운다.
+                          미리보기는 한 줄이면 충분하니 truncate 로 확실하게 자른다. */}
+                      {n.body && <span className="block mt-1.5 text-[12px] font-medium text-gray-500 truncate">{preview(n.body)}</span>}
                     </span>
                     {/* 날짜는 제목과 같은 줄의 오른쪽 — 따로 한 줄을 쓰면 빈 줄이 생긴다 */}
                     <span className="shrink-0 text-right pt-0.5">

@@ -25,7 +25,6 @@ export default function TournamentDetailPage() {
 
   const [post, setPost] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [full, setFull] = useState(false);
   const [myTeam, setMyTeam] = useState<any>(null);
 
   useEffect(() => {
@@ -126,12 +125,26 @@ export default function TournamentDetailPage() {
 
           <div className="min-w-0 space-y-9">
             {/* 대진표 — 페이지 폭을 그대로 쓴다 */}
+            {show.bracket && !post.tournamentBracket && (
+              <section className="esp-cut border border-dashed border-white/10 px-6 py-12 text-center">
+                <p className="text-[13px] font-black text-gray-400">대진표가 아직 없습니다</p>
+                <p className="mt-2 text-[11px] text-gray-600">운영진이 대진을 편성하면 여기에 올라옵니다</p>
+              </section>
+            )}
+            {!show.bracket && (
+              <section className="esp-cut border border-dashed border-white/10 px-6 py-12 text-center">
+                <p className="text-[9px] font-black esp-mono text-gray-600 mb-2">BRACKET</p>
+                <p className="text-[13px] font-black text-gray-400">대진은 대회 당일에 공개됩니다</p>
+                <p className="mt-2 text-[11px] text-gray-600">
+                  {post.tournamentEventDay ? `${fmtDate(post.tournamentEventDay)} 예정` : "날짜가 정해지면 알려드립니다"}
+                </p>
+              </section>
+            )}
             {show.bracket && post.tournamentBracket && (
               <section>
                 <div className="flex items-center gap-4 mb-4">
                   <span className="text-[10px] font-black esp-mono shrink-0" style={{ color: G }}>BRACKET</span>
                   <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/30 to-transparent" />
-                  <button onClick={() => setFull(true)} className="shrink-0 esp-cut-sm px-3 py-1.5 text-[10px] font-black bg-white/[0.05] text-gray-300 hover:text-white transition-colors">전체화면</button>
                 </div>
                 <div className="esp-cut border border-white/[0.08] bg-white/[0.015] p-4">
                   <BracketView text={post.tournamentBracket} showHeader={false} maxScale={1.6} />
@@ -139,6 +152,11 @@ export default function TournamentDetailPage() {
               </section>
             )}
 
+            {!post.content && (
+              <section className="esp-cut border border-dashed border-white/10 px-6 py-10 text-center">
+                <p className="text-[12px] font-bold text-gray-500">대회 소개가 아직 등록되지 않았습니다</p>
+              </section>
+            )}
             {post.content && (
               <section>
                 <div className="flex items-center gap-4 mb-4">
@@ -206,21 +224,6 @@ export default function TournamentDetailPage() {
         </div>
       </div>
 
-      {/* 전체화면 대진표 */}
-      {full && post.tournamentBracket && (
-        <div className="fixed inset-0 z-[130] bg-[#0a0a0a] flex flex-col animate-in fade-in duration-200">
-          <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-white/10 shrink-0">
-            <div className="min-w-0">
-              <p className="text-sm font-black text-white truncate">{post.title}</p>
-              <p className="text-[10px] font-black esp-mono text-gray-500 uppercase truncate">{post.tournamentGame || "TOURNAMENT"} · BRACKET</p>
-            </div>
-            <button onClick={() => setFull(false)} className="shrink-0 esp-cut-sm px-4 py-2 text-[11px] font-black bg-white/[0.06] text-gray-300 hover:text-white transition-colors">닫기</button>
-          </div>
-          <div className="flex-1 min-h-0 p-4">
-            <BracketView text={post.tournamentBracket} showHeader={false} maxScale={2.4} mode="contain" />
-          </div>
-        </div>
-      )}
     </main>
   );
 }
