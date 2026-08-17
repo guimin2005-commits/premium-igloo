@@ -491,7 +491,7 @@ export default function TournamentPage() {
             return (
               <Reveal key={t._id} delay={Math.min(listIdx, 5) * 70} className={`group h-full ${st === "종료됨" ? "opacity-65 hover:opacity-100 transition-opacity" : ""}`}>
               <div className="esp-frame esp-cut h-full">
-              <div onClick={() => setSelected(t)} className="esp-cut esp-sweep relative bg-[#0b0b0b] h-full flex flex-col cursor-pointer overflow-hidden">
+              <div onClick={() => router.push(`/tournament/${t._id}`)} className="esp-cut esp-sweep relative bg-[#0b0b0b] h-full flex flex-col cursor-pointer overflow-hidden">
                 {/* 상단 상태 바 */}
                 <div className="relative h-[3px] shrink-0 bg-white/[0.06]">
                   <span className={`absolute inset-y-0 left-0 ${meta.bar} ${st === "모집중" ? "w-2/3" : st === "진행중" ? "w-full esp-blink" : st === "예정됨" ? "w-1/4" : "w-full opacity-30"}`} />
