@@ -448,7 +448,7 @@ export default function MyInfoPage() {
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2 mb-1.5">
                   <span className="w-1.5 h-1.5 esp-blink" style={{ background: "#00e07b", clipPath: "polygon(50% 0,100% 50%,50% 100%,0 50%)" }} />
-                  <span className="text-[9px] font-black esp-mono uppercase text-[#00e07b]">{myTeam ? "My Team Room" : "Scrim Operations"}</span>
+                  <span className="text-[9px] font-black esp-mono uppercase text-[#00e07b]">{myTeam ? "Team Room" : "Scrim Operations"}</span>
                 </span>
                 <span className="block text-white font-black text-lg md:text-xl leading-tight truncate">
                   {myTeam ? myTeam.name : "스크림 운영 콘솔"}

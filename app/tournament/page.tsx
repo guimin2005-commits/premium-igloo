@@ -418,7 +418,7 @@ export default function TournamentPage() {
                   {myTeam.tag || myTeam.name.slice(0, 3)}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[9px] font-black esp-mono text-[#00e07b] mb-1.5">MY TEAM ROOM</span>
+                  <span className="block text-[9px] font-black esp-mono text-[#00e07b] mb-1.5">TEAM ROOM</span>
                   <span className="block text-white font-black text-lg md:text-xl leading-tight truncate">{myTeam.name}</span>
                   <span className="block text-[11px] md:text-xs font-bold text-gray-400 mt-1.5">
                     {myTeam.submitted >= myTeam.members.length
