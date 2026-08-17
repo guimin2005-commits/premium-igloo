@@ -30,7 +30,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       title,
       description,
       openGraph: {
-        title, description, siteName: "고급 이글루", type: "article",
+        // siteName 은 넣지 않는다 — 프리뷰 맨 위에 사이트 이름 줄이 하나 더 붙는다
+        title, description, type: "article",
         ...(image ? { images: [{ url: image, alt: p.title }] } : {}),
       },
       twitter: image

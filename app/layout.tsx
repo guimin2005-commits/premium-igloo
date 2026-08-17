@@ -7,15 +7,19 @@ import ClientLayout from "./ClientLayout"; // 방금 분리한 UI 파일을 불�
 
 const inter = Inter({ subsets: ["latin"] });
 
+// 링크를 붙였을 때 사람들이 읽는 한 줄
+const TAGLINE = "나의 활동이 곧 나의 자산이 되는 곳";
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.premiumigloo.com"),
   title: "고급 이글루",
-  description: "고급 이글루 공식 사이트",
+  description: TAGLINE,
   openGraph: {
     title: "고급 이글루",
-    description: "고급 이글루 공식 사이트",
+    description: TAGLINE,
     url: "https://www.premiumigloo.com",
-    siteName: "고급 이글루",
+    // ⚠️ siteName 은 넣지 않는다 — 디스코드 링크 프리뷰 맨 위에 사이트 이름이 한 줄 더 붙어
+    //    제목과 똑같은 글자가 두 번 보인다.
     type: "website",
     images: [{ url: "/logo.png", width: 500, height: 500, alt: "고급 이글루" }],
   },
@@ -24,7 +28,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary",
     title: "고급 이글루",
-    description: "고급 이글루 공식 사이트",
+    description: TAGLINE,
     images: ["/logo.png"],
   },
   icons: {

@@ -26,7 +26,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     return {
       title,
       description,
-      openGraph: { title, description, siteName: "고급 이글루", type: "website" },
+      // siteName 은 넣지 않는다 — 프리뷰 맨 위에 사이트 이름 줄이 하나 더 붙는다
+      openGraph: { title, description, type: "website" },
       // 큰 그림 카드는 팀 룸에 어울리지 않는다 — 작은 썸네일로
       twitter: { card: "summary", title, description },
     };
