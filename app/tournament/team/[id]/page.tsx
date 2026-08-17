@@ -78,11 +78,16 @@ export default function TeamRoom() {
     setDirty(false);
   }, [team, data]);
 
+  // 지난 날짜는 뺀다 — 이미 지나간 칸을 고를 이유가 없고, 격자만 넓어진다
   const DAYS = useMemo(() => {
     if (!season) return [];
     const s = midnight(season.startAt);
-    return Array.from({ length: season.days }, (_, i) => { const d = new Date(s); d.setDate(d.getDate() + i); return d; });
+    const today = midnight(Date.now()).getTime();
+    return Array.from({ length: season.days }, (_, i) => { const d = new Date(s); d.setDate(d.getDate() + i); return d; })
+      .filter((d) => d.getTime() >= today);
   }, [season]);
+  // 조율 기간이 통째로 지났는지 (격자가 비면 안내를 대신 띄운다)
+  const periodOver = !!season && DAYS.length === 0;
   const SLOTS = useMemo(() => {
     if (!season) return [];
     const o: number[] = [];
@@ -613,6 +618,13 @@ export default function TeamRoom() {
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px] items-start">
               <div className="min-w-0">
                 <Bar k="My Availability" right={<span className="text-[10px] font-black esp-mono text-gray-600">{doneCount}/{size} 제출</span>} />
+                {periodOver && (
+                  <div className="esp-cut border border-dashed border-white/10 px-6 py-12 text-center">
+                    <p className="text-[13px] font-black text-gray-400">조율 기간이 끝났습니다</p>
+                    <p className="mt-2 text-[11px] text-gray-600">운영진이 기간을 다시 열면 여기에 다시 표시됩니다</p>
+                  </div>
+                )}
+                {!periodOver && (<>
                 <p className="text-[13px] font-black text-white mb-2.5">
                   가능한 시간을 눌러주세요
                 </p>
@@ -662,6 +674,7 @@ export default function TeamRoom() {
                     {meSubmitted ? "다시 제출" : "제출"}
                   </button>
                 </div>
+                </>)}
               </div>
 
               <aside className="xl:sticky xl:top-20">
