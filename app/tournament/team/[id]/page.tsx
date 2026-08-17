@@ -488,8 +488,7 @@ export default function TeamRoom() {
                     {none && <span className="text-[10px] font-black text-[#1a0508] leading-none">✓</span>}
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-[12px] font-black" style={{ color: none ? "#fb7185" : "#d2d2d5" }}>이번 기간 전체 불가</span>
-                    <span className="block text-[10px] font-bold text-gray-600 mt-0.5">되는 시간이 하나도 없습니다 — 이대로 제출하면 응답 완료로 잡힙니다</span>
+                    <span className="block text-[12px] font-black" style={{ color: none ? "#fb7185" : "#d2d2d5" }}>해당 기간 전체 불가</span>
                   </span>
                 </button>
 
