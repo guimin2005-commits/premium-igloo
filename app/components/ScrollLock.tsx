@@ -47,8 +47,13 @@ export default function ScrollLock() {
 
     // 화면을 덮고 있고, 실제로 보이며, 클릭을 받는 오버레이만 인정한다.
     // z-40짜리 드롭다운 닫기용 투명막까지 잠그면 답답하므로 모달 층(z-50 이상)만 본다.
+    // ⚠️ data-scroll-lock-skip 오버레이는 제외한다 — 여기서 쓰는 body position:fixed 기법은
+    //    sticky의 기준(스크롤포트)을 없애버려서, 화면을 완전히 덮지 않는 오버레이(예: 폭 82%인
+    //    모바일 슬라이드 메뉴)에서는 옆에 노출된 sticky 헤더가 문서 원위치로 밀려나 사라진다.
+    //    그런 오버레이는 자체적으로 html에 스크롤 잠금을 건다(sticky 유지).
     const hasOverlay = () =>
       Array.from(document.querySelectorAll(SELECTOR)).some((el) => {
+        if (el.hasAttribute("data-scroll-lock-skip")) return false;
         const cs = getComputedStyle(el);
         const z = parseInt(cs.zIndex || "0", 10);
         return (

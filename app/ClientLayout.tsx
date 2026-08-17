@@ -783,8 +783,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               : isLightPage ? "text-[#4b4b4b] active:bg-black/[0.05] active:text-[#131313]" : "text-gray-300 active:bg-white/[0.05] active:text-white"
           }`;
 
+        // data-scroll-lock-skip: 전역 ScrollLock의 body position:fixed 잠금을 건너뛴다.
+        // 이 메뉴는 폭 82%라 옆에 헤더가 보이는데, body를 고정하면 sticky 헤더가 사라진다.
+        // 대신 위 useEffect에서 html에 스크롤 잠금을 걸어 sticky를 살린다.
         return (
-        <div className="md:hidden fixed inset-0 z-[200]">
+        <div className="md:hidden fixed inset-0 z-[200]" data-scroll-lock-skip="">
           <style dangerouslySetInnerHTML={{ __html: `
             @keyframes mmFadeIn{from{opacity:0}to{opacity:1}}
             @keyframes mmFadeOut{from{opacity:1}to{opacity:0}}
