@@ -136,7 +136,7 @@ export default function AdminNav() {
 
       {/* ── 모바일: 상단 가로 스크롤 칩 바 (하위 카테고리는 펼쳐서 표시) ── */}
       <div className="lg:hidden w-full border-b border-white/10 bg-[#0e0e0e]">
-        <div className="flex flex-wrap gap-2 px-4 py-3">
+        <div className="flex gap-2 overflow-x-auto no-bar px-4 py-3">
           {NAV_GROUPS.flatMap((g) => g.items).flatMap((item) =>
             item.children
               ? item.children.map((c) => ({ title: `${item.title} · ${c.title}`, href: c.href }))

@@ -435,14 +435,14 @@ export default function TournamentPage() {
 
       {/* ── 탭 (앵귤러 세그먼트 · 스티키) ── */}
       <div className="w-full px-6 bg-[#090909]/90 backdrop-blur-xl border-b border-white/[0.07] mt-8">
-        <div className="max-w-6xl mx-auto flex flex-wrap gap-1 py-2.5">
+        <div className="max-w-6xl mx-auto flex gap-1 overflow-x-auto whitespace-nowrap no-bar py-2.5">
           {[{ id: "all", label: "전체", code: "ALL" }, { id: "모집중", label: "참가 접수", code: "OPEN" }, { id: "진행중", label: "리그 진행", code: "LIVE" }, { id: "예정됨", label: "예정", code: "SOON" }, { id: "종료됨", label: "종료", code: "END" }].map((tab) => {
             const on = activeFilter === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveFilter(tab.id)}
-                className={`esp-cut-sm px-3 md:px-5 py-2 md:py-2.5 text-[11px] md:text-sm font-black shrink-0 outline-none transition-all duration-200 flex items-center gap-2 ${
+                className={`esp-cut-sm px-4 md:px-5 py-2.5 text-xs md:text-sm font-black shrink-0 outline-none transition-all duration-200 flex items-center gap-2 ${
                   on ? "bg-[#00e07b] text-[#04120b]" : "bg-white/[0.03] text-gray-500 hover:text-white hover:bg-white/[0.07]"
                 }`}
               >

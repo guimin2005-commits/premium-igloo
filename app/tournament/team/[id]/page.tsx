@@ -75,7 +75,7 @@ export default function TeamRoom() {
     return o;
   }, [season]);
   const sL = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60; return `${pad(h)}:${pad(mm)}`; };
-  const sF = (m: number) => { const h = Math.floor(m / 60), hh = h % 24, mm = m % 60; return `${pad(hh)}:${pad(mm)}${h >= 24 ? " (익일)" : ""}`; };
+  const sF = (m: number) => { const h = Math.floor(m / 60), hh = h % 24, mm = m % 60; return `${pad(hh)}:${pad(mm)}`; };
 
   /* ── 집계 ── */
   const submitted = useMemo(() => new Set((team?.avail || []).map((a) => a.userId)), [team]);
@@ -174,14 +174,14 @@ export default function TeamRoom() {
     </div>
   );
   // 폭 고정 대신 표 안에서 균등 분배 — 좁은 화면에서도 가로 스크롤이 생기지 않는다
-  const cell = "w-full h-[30px] lg:h-[36px] border text-[10px] lg:text-[11px] font-black tabular-nums transition-transform active:scale-[.92]";
+  const cell = "w-[44px] h-[34px] lg:w-[54px] lg:h-[38px] border text-[11px] font-black tabular-nums transition-transform active:scale-[.92]";
 
   const Grid = ({ readOnly, value }: { readOnly?: boolean; value: (d: Date, s: number) => { n: number; cap: number; me?: boolean; full?: boolean } }) => (
-    <div>
-      <table className="w-full table-fixed" style={{ borderCollapse: "separate", borderSpacing: 2 }}>
+    <div className="overflow-x-auto no-bar -mx-1 px-1">
+      <table style={{ borderCollapse: "separate", borderSpacing: 2 }}>
         <thead>
           <tr>
-            <th className="w-[38px] lg:w-[46px]" />
+            <th className="w-px" />
             {SLOTS.map((s) => (
               <th key={s} className="pb-1 text-[9px] font-black esp-mono text-gray-600 tabular-nums">
                 <span className="hidden sm:inline">{sL(s)}</span>
@@ -288,7 +288,7 @@ export default function TeamRoom() {
 
       {/* ══ 탭 ══ */}
       <div className="w-full px-5 md:px-8 bg-[#090909]/90 backdrop-blur-xl border-b border-white/[0.07] mt-7 sticky top-0 z-20">
-        <div className="max-w-[1240px] mx-auto flex flex-wrap gap-1 py-2.5">
+        <div className="max-w-[1240px] mx-auto flex gap-1 overflow-x-auto whitespace-nowrap no-bar py-2.5">
           {tabs.map(([k, label, code]) => {
             const on = view === k;
             return (

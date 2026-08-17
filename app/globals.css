@@ -93,3 +93,8 @@ input[type="number"] {
 .overlay-in {
   animation: none;
 }
+
+/* 📌 가로 스크롤은 유지하되 스크롤 바만 감춘다.
+   바가 보이면 지저분하고, 없다고 스크롤이 안 되는 것도 아니다. */
+.no-bar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-bar::-webkit-scrollbar { display: none; }

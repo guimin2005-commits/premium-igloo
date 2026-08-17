@@ -249,7 +249,7 @@ export default function AdminHubPage() {
 
         {/* 요일×시간대 온라인 히트맵 */}
         {heatmap.hasData && (
-          <div className="border-b border-white/[0.06] pb-6 mb-6 overflow-x-auto">
+          <div className="border-b border-white/[0.06] pb-6 mb-6 overflow-x-auto no-bar">
             <div className="flex items-center justify-between mb-5 min-w-[560px]">
               <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">활동 골든타임 (최근 7일 · 평균 온라인)</span>
               <span className="text-[10px] font-bold text-gray-400">피크 {Math.round(heatmap.max)}명</span>
