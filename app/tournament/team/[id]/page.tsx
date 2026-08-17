@@ -148,6 +148,27 @@ export default function TeamRoom() {
     setMine((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
     setDirty(true);
   };
+  // 드래그 칠하기 — 시작한 칸의 반대 상태로 끌고 간다 (한 번에 켜기/지우기)
+  const dragRef = React.useRef<null | boolean>(null);
+  const canDrag = typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  useEffect(() => {
+    if (!canDrag) return;
+    const up = () => { dragRef.current = null; };
+    window.addEventListener("pointerup", up);
+    return () => window.removeEventListener("pointerup", up);
+  }, [canDrag]);
+
+  const paint = (d: Date, sm: number, on: boolean) => {
+    const k = sKey(d, sm);
+    setMine((p) => {
+      if (on === p.has(k)) return p;   // 이미 그 상태면 건드리지 않는다
+      const n = new Set(p);
+      on ? n.add(k) : n.delete(k);
+      return n;
+    });
+    setDirty(true);
+  };
+
   const toggleDay = (d: Date) => {
     const on = SLOTS.every((s) => mine.has(sKey(d, s)));
     setMine((p) => { const n = new Set(p); SLOTS.forEach((s) => (on ? n.delete(sKey(d, s)) : n.add(sKey(d, s)))); return n; });
@@ -198,7 +219,7 @@ export default function TeamRoom() {
     </div>
   );
   // 폭 고정 대신 표 안에서 균등 분배 — 좁은 화면에서도 가로 스크롤이 생기지 않는다
-  const cell = "w-[44px] h-[34px] lg:w-[54px] lg:h-[38px] border text-[11px] font-black tabular-nums transition-transform active:scale-[.92]";
+  const cell = "w-[44px] h-[34px] lg:w-[54px] lg:h-[38px] border text-[11px] font-black tabular-nums select-none transition-colors";
 
   const Grid = ({ readOnly, value }: { readOnly?: boolean; value: (d: Date, s: number) => { n: number; cap: number; me?: boolean; full?: boolean } }) => (
     <div className="overflow-x-auto no-bar -mx-1 px-1">
@@ -229,12 +250,21 @@ export default function TeamRoom() {
                 return (
                   <td key={s} className="p-0">
                     {readOnly ? (
-                      <span className={`${cell} grid place-items-center active:scale-100`}
+                      <span className={`${cell} grid place-items-center`}
                         style={{ background: v.n ? `${C}${Math.round((0.12 + a * 0.55) * 255).toString(16).padStart(2, "0")}` : "rgba(255,255,255,.02)",
                           borderColor: v.full ? G : "rgba(255,255,255,.07)", boxShadow: v.full ? `inset 0 0 0 1px ${G}` : undefined,
                           color: v.n ? "#e6f7ee" : "#3f3f46" }}>{v.n || ""}</span>
                     ) : (
-                      <button type="button" onClick={() => toggle(d, s)} aria-pressed={!!v.me}
+                      <button type="button" aria-pressed={!!v.me}
+                        onClick={() => { if (!canDrag) toggle(d, s); }}
+                        onPointerDown={(e) => {
+                          if (!canDrag) return;
+                          e.preventDefault();
+                          const on = !v.me;
+                          dragRef.current = on;
+                          paint(d, s, on);
+                        }}
+                        onPointerEnter={() => { if (canDrag && dragRef.current !== null) paint(d, s, dragRef.current); }}
                         aria-label={`${dF(d)} ${sF(s)} · ${v.n}명 가능${v.me ? " · 내가 선택함" : ""}`}
                         className={cell}
                         style={{ background: v.n ? `${C}${Math.round((0.12 + a * 0.55) * 255).toString(16).padStart(2, "0")}` : "rgba(255,255,255,.02)",
