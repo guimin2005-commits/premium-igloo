@@ -10,6 +10,12 @@ if (missing.length > 0) {
 
 const csv = (v) => new Set((v || "").split(",").map((s) => s.trim()).filter(Boolean));
 
+/* 📌 재촉 DM 전용 모드
+   레벨링·상점 처리는 켜지 않고 캘린더 재촉 DM 만 보낸다.
+   `npm run start:nudge` 로 켠다 — 다른 곳에서 봇이 돌고 있어도 XP 가 두 번 지급되지 않는다. */
+export const nudgeOnly =
+  process.argv.includes("--nudge-only") || process.env.BOT_ONLY === "nudge";
+
 export const config = {
   token: process.env.DISCORD_BOT_TOKEN,
   guildId: process.env.DISCORD_GUILD_ID,

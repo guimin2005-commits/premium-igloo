@@ -6,7 +6,7 @@
 //  사이트와 동일한 MongoDB 사용 → 웹 레벨 대시보드·랭킹과 실시간 연동
 // ═══════════════════════════════════════════════════════
 import { Client, GatewayIntentBits, Events } from "discord.js";
-import { config } from "./config.js";
+import { config, nudgeOnly } from "./config.js";
 import { connectDb, disconnectDb } from "./db.js";
 import { refreshRoleConfigs, startRoleConfigLoop } from "./roleConfigs.js";
 import { refreshChannelConfigs, startChannelConfigLoop } from "./channelConfigs.js";
@@ -27,12 +27,21 @@ const client = new Client({
   ],
 });
 
-registerChatXp(client);
-registerLeaveReset(client);
-registerCommandHandlers(client);
+// 재촉 DM 전용 모드에서는 XP·역할을 건드리는 것을 아예 붙이지 않는다
+if (!nudgeOnly) {
+  registerChatXp(client);
+  registerLeaveReset(client);
+  registerCommandHandlers(client);
+}
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`✅ 봇 로그인: ${c.user.tag}`);
+
+  if (nudgeOnly) {
+    console.log("⚙️  재촉 DM 전용 모드 — 레벨링·출석·상점 지급은 켜지 않습니다");
+    startScrimNudge(c);
+    return;
+  }
 
   await registerCommandDefinitions(c);
   console.log("✅ 슬래시 커맨드 등록 완료");

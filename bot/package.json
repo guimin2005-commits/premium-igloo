@@ -5,7 +5,8 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "start:nudge": "node src/index.js --nudge-only"
   },
   "dependencies": {
     "discord.js": "^14.16.3",
