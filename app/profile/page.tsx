@@ -173,7 +173,7 @@ export default function MyInfoPage() {
 
   // 📌 관리자 알림함
   const [notifications, setNotifications] = useState<any[]>([]);
-  // 📌 스크림 팀 룸 — 로스터에서 내 디스코드 ID 를 찾아 바로가기를 띄운다
+  // 📌 대회 팀 룸 — 로스터에서 내 디스코드 ID 를 찾아 바로가기를 띄운다
   const [myTeam, setMyTeam] = useState<any>(null);
   const [scrimAdmin, setScrimAdmin] = useState(false);
   const [selectedNotif, setSelectedNotif] = useState<any | null>(null);
@@ -224,7 +224,7 @@ export default function MyInfoPage() {
 
   useEffect(() => {
     if (status !== "authenticated") return;
-    fetch("/api/scrim", { cache: "no-store" })
+    fetch("/api/room", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         if (!d?.success) return;
@@ -423,12 +423,12 @@ export default function MyInfoPage() {
         </div>
       )}
 
-      {/* ═══ 스크림 팀 룸 — 화이트 계정 화면에서 이 줄만 대회 UI 로 튄다 ═══ */}
+      {/* ═══ 대회 팀 룸 — 화이트 계정 화면에서 이 줄만 대회 UI 로 튄다 ═══ */}
       {(myTeam || scrimAdmin) && (
         <div className="mb-6">
           <EsportsStyles />
           <button
-            onClick={() => router.push(myTeam ? `/tournament/team/${myTeam._id}` : "/admin/scrim")}
+            onClick={() => router.push(myTeam ? `/tournament/team/${myTeam._id}` : "/admin/room")}
             className="esp-cut relative w-full text-left overflow-hidden bg-[#0b0d0c] hover:bg-[#0e120f] transition-colors"
             style={{ border: "1px solid rgba(0,224,123,.28)" }}
           >
@@ -448,10 +448,10 @@ export default function MyInfoPage() {
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2 mb-1.5">
                   <span className="w-1.5 h-1.5 esp-blink" style={{ background: "#00e07b", clipPath: "polygon(50% 0,100% 50%,50% 100%,0 50%)" }} />
-                  <span className="text-[9px] font-black esp-mono uppercase text-[#00e07b]">{myTeam ? "Team Room" : "Scrim Operations"}</span>
+                  <span className="text-[9px] font-black esp-mono uppercase text-[#00e07b]">{myTeam ? "Team Room" : "Room Operations"}</span>
                 </span>
                 <span className="block text-white font-black text-lg md:text-xl leading-tight truncate">
-                  {myTeam ? myTeam.name : "스크림 운영 콘솔"}
+                  {myTeam ? myTeam.name : "대회 룸 운영"}
                 </span>
                 <span className="block text-[11px] md:text-xs font-bold text-gray-400 mt-1.5 break-keep">
                   {myTeam
@@ -460,7 +460,7 @@ export default function MyInfoPage() {
                             ? "팀 전원이 일정을 냈습니다 — 스크림 매칭 대기"
                             : `내 일정은 제출했습니다 · ${myTeam.members.length - myTeam.sent}명 남음`)
                         : "아직 내 일정을 내지 않았습니다 — 계획판에서 가능한 시간을 알려주세요")
-                    : "팀 등록 · 스크림 매칭 · 통합 시간 조정"}
+                    : "팀 등록 · 대회 공지 · 스크림 매칭"}
                 </span>
               </span>
               {myTeam && (

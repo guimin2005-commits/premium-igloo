@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSession, signIn } from "next-auth/react";
 import { EsportsStyles } from "../../components/Esports";
 
-/* 📌 스크림 운영 — 팀 등록 (관리자 전용)
+/* 📌 대회 룸 운영 (관리자 전용)
    실제 화면은 각 팀의 룸(/tournament/team/[id])이고, 여기서는 팀을 만들고 어디로 들어갈지 고른다.
    매칭과 통합 시간은 여러 팀에 걸친 일이라 한 팀의 룸이 아니라 여기(운영 콘솔)에 둔다. */
 
@@ -39,6 +39,7 @@ export default function AdminScrimPage() {
   const [eName, setEName] = useState("");
   const [eTag, setETag] = useState("");
   const [eColor, setEColor] = useState(PALETTE[0]);
+  const [eIntro, setEIntro] = useState("");
   const [roster, setRoster] = useState<string | null>(null); // 로스터 편집 중인 팀
   const [mName, setMName] = useState("");
   const [mPos, setMPos] = useState("");
@@ -49,7 +50,7 @@ export default function AdminScrimPage() {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch("/api/scrim", { cache: "no-store" });
+      const r = await fetch("/api/room", { cache: "no-store" });
       const d = await r.json();
       if (d?.success) setData(d);
     } catch { /* 실패는 아래 빈 목록으로 드러난다 */ }
@@ -69,7 +70,7 @@ export default function AdminScrimPage() {
   const post = async (payload: any) => {
     setBusy(true);
     try {
-      const r = await fetch("/api/scrim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const r = await fetch("/api/room", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const d = await r.json();
       if (!d?.success) { setToast(d?.message || "처리하지 못했습니다"); return null; }
       await load();
@@ -104,10 +105,10 @@ export default function AdminScrimPage() {
           <div className="relative">
             <div className="flex items-center gap-3 mb-4">
               <span className="w-2 h-2 esp-blink" style={{ background: G, clipPath: "polygon(50% 0,100% 50%,50% 100%,0 50%)" }} />
-              <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G }}>{season?.title || "스크림 리그"}</span>
+              <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G }}>{season?.title || "대회 룸"}</span>
               <span className="h-px flex-1 max-w-[200px] bg-gradient-to-r from-[#00e07b]/40 to-transparent" />
             </div>
-            <h1 className="text-[28px] md:text-[34px] font-black tracking-tighter leading-none">스크림 운영</h1>
+            <h1 className="text-[28px] md:text-[34px] font-black tracking-tighter leading-none">대회 룸 운영</h1>
 
             <div className="mt-6 grid grid-cols-3 border-t" style={{ borderColor: `${G}33` }}>
               {[
@@ -189,9 +190,11 @@ export default function AdminScrimPage() {
                                 style={{ background: `${c}2e`, border: `1px solid ${eColor === c ? c : "rgba(255,255,255,.1)"}`, boxShadow: eColor === c ? `inset 0 0 0 2px ${c}` : undefined }} />
                             ))}
                           </div>
+                          <textarea value={eIntro} onChange={(e) => setEIntro(e.target.value)} maxLength={300} rows={2} placeholder="팀 소개 (룸 상단에 보입니다)"
+                            className="esp-cut-sm w-full bg-black/40 border border-white/10 px-3 py-2 text-[11px] font-medium text-gray-200 outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700 resize-y" />
                           <div className="flex gap-2 pt-1">
                             <button disabled={busy || !eName.trim()}
-                              onClick={async () => { const r = await post({ action: "team:update", teamId: t._id, name: eName, tag: eTag, color: eColor }); if (r) { setToast("팀 정보를 바꿨습니다"); setEdit(null); } }}
+                              onClick={async () => { const r = await post({ action: "team:update", teamId: t._id, name: eName, tag: eTag, color: eColor, intro: eIntro }); if (r) { setToast("팀 정보를 바꿨습니다"); setEdit(null); } }}
                               className="flex-1 esp-cut-sm py-2 text-[11px] font-black disabled:opacity-35" style={{ background: G, color: "#04120b" }}>저장</button>
                             <button onClick={() => setEdit(null)} className="px-4 esp-cut-sm py-2 text-[11px] font-black bg-white/[0.05] text-gray-400 hover:text-white transition-colors">취소</button>
                           </div>
@@ -199,7 +202,7 @@ export default function AdminScrimPage() {
                       ) : (
                         <div className="flex border-t border-white/[0.07]">
                           <button disabled={busy}
-                            onClick={() => { setEdit(t._id); setEName(t.name); setETag(t.tag || ""); setEColor(t.color); }}
+                            onClick={() => { setEdit(t._id); setEName(t.name); setETag(t.tag || ""); setEColor(t.color); setEIntro(t.intro || ""); }}
                             className="flex-1 py-2 text-[10px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-40">
                             수정
                           </button>
@@ -532,6 +535,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
   const season = data?.season;
   const [a, setA] = useState<string | null>(null);
   const [b, setB] = useState<string | null>(null);
+  const [kind, setKind] = useState<"scrim" | "official">("scrim");
 
   const DAYS = useMemo(() => {
     if (!season) return [];
@@ -677,16 +681,23 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                     style={{ background: TB.color + "1c", border: "1px solid " + TB.color + "55", color: TB.color }}>{TB.tag || "TM"}</span>
                 </div>
               </div>
+              <div className="flex border-t border-white/[0.07]">
+                {([["scrim", "스크림"], ["official", "공식전"]] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setKind(k)} aria-pressed={kind === k}
+                    className="flex-1 py-2.5 text-[11px] font-black border-l border-white/[0.07] first:border-l-0 transition-colors"
+                    style={kind === k ? { background: "rgba(0,224,123,.14)", color: G2 } : { color: "#8b8b93" }}>{l}</button>
+                ))}
+              </div>
               <button disabled={busy || !top?.min}
                 onClick={async () => {
                   if (!top?.min) return;
                   const at = new Date(top.d); at.setHours(Math.floor(top.s / 60), top.s % 60, 0, 0);
-                  const r = await post({ action: "fixture:create", teamAId: TA._id, teamBId: TB._id, at: at.toISOString(), usCount: top.ca, themCount: top.cb });
+                  const r = await post({ action: "fixture:create", teamAId: TA._id, teamBId: TB._id, kind, at: at.toISOString(), usCount: top.ca, themCount: top.cb });
                   if (r) setToast(dF(top.d) + " " + sF(top.s) + " · " + TA.name + " vs " + TB.name + " 확정");
                 }}
                 className="w-full py-3.5 text-[12px] font-black border-t border-white/[0.07] transition-colors disabled:opacity-35"
                 style={{ background: G2, color: "#04120b" }}>
-                이 시각으로 스크림 확정
+                이 시각으로 {kind === "official" ? "공식전" : "스크림"} 확정
               </button>
             </div>
           </>

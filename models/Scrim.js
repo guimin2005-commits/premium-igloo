@@ -1,6 +1,9 @@
 import mongoose from "mongoose";
 
-/* 📌 스크림 리그
+/* 📌 대회 룸 (구 스크림 리그)
+   ⚠️ 컬렉션 이름(Scrim*)은 그대로 둔다 — 바꾸면 이미 쌓인 문서와 끊긴다.
+   화면과 경로는 '대회 룸'으로 부르고, 저장소 이름만 과거를 유지한다.
+  
    시즌(통합 시간 설정) → 팀 → 팀원 응답 → 확정 경기
    조율 기간·시간대는 팀마다 따로 두지 않고 시즌 하나로 통합해 관리한다.
    그래야 팀 간 교집합을 같은 격자 위에서 계산할 수 있다. */
@@ -34,6 +37,7 @@ const ScrimTeamSchema = new mongoose.Schema({
     }],
     default: [],
   },
+  intro: { type: String, default: "" },        // 팀 소개 — 룸 상단에 한 문단
   wins: { type: Number, default: 0 },
   losses: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
@@ -54,6 +58,7 @@ const ScrimFixtureSchema = new mongoose.Schema({
   seasonId: { type: String, required: true, index: true },
   teamAId: { type: String, required: true },
   teamBId: { type: String, required: true },
+  kind: { type: String, default: "scrim" },      // scrim(연습) / official(공식)
   at: { type: Date, required: true },            // 경기 시각
   usCount: { type: Number, default: 0 },         // 확정 시점의 양 팀 가능 인원 (기록용)
   themCount: { type: Number, default: 0 },

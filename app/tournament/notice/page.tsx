@@ -20,7 +20,7 @@ export default function TournamentNoticeListPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/scrim", { cache: "no-store" })
+    fetch("/api/room", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => { if (d?.success) setData(d); })
       .catch(() => {})
@@ -49,7 +49,7 @@ export default function TournamentNoticeListPage() {
             <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G }}>{season?.title || "대회 룸"}</span>
             <span className="h-px flex-1 max-w-[200px] bg-gradient-to-r from-[#00e07b]/40 to-transparent" />
             {isAdmin && (
-              <button onClick={() => router.push("/admin/scrim")} className="text-[10px] font-black esp-mono text-gray-600 hover:text-white transition-colors">공지 관리 →</button>
+              <button onClick={() => router.push("/admin/room")} className="text-[10px] font-black esp-mono text-gray-600 hover:text-white transition-colors">공지 관리 →</button>
             )}
           </div>
           <h1 className="text-[28px] md:text-[36px] font-black tracking-tighter leading-none">대회 공지</h1>

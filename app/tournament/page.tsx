@@ -184,7 +184,7 @@ export default function TournamentPage() {
   const [myTeam, setMyTeam] = useState<any>(null);
   useEffect(() => {
     if (status !== "authenticated") { setMyTeam(null); return; }
-    fetch("/api/scrim", { cache: "no-store" })
+    fetch("/api/room", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         if (!d?.success) return;
@@ -398,13 +398,13 @@ export default function TournamentPage() {
                  선수는 팀 id를 알 수 없으므로 시스템이 찾아서 띄워준다. */}
           {!myTeam && isAdmin && (
             <Reveal delay={180}>
-              <button onClick={() => router.push("/admin/scrim")}
+              <button onClick={() => router.push("/admin/room")}
                 className="mt-8 w-full text-left esp-cut-sm border border-white/[0.09] bg-white/[0.02] hover:bg-white/[0.05] transition-colors p-5 flex items-center gap-4">
                 <span className="grid place-items-center shrink-0 w-12 h-12 esp-cut-sm text-[#00e07b] text-xl font-black" style={{ background: "rgba(0,224,123,.10)", border: "1px solid rgba(0,224,123,.35)" }}>⚙</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[9px] font-black esp-mono text-[#00e07b] mb-1.5">SCRIM OPERATIONS</span>
-                  <span className="block text-white font-black text-base leading-tight">스크림 운영 콘솔</span>
-                  <span className="block text-[11px] font-bold text-gray-500 mt-1.5">팀 등록 · 스크림 매칭 · 통합 시간 조정. 소속 팀이 없어도 모든 팀 룸에 들어갈 수 있습니다.</span>
+                  <span className="block text-[9px] font-black esp-mono text-[#00e07b] mb-1.5">ROOM OPERATIONS</span>
+                  <span className="block text-white font-black text-base leading-tight">대회 룸 운영</span>
+                  <span className="block text-[11px] font-bold text-gray-500 mt-1.5">팀 등록 · 대회 공지 · 스크림 매칭 · 기간 설정. 소속 팀이 없어도 모든 팀 룸에 들어갈 수 있습니다.</span>
                 </span>
                 <span className="shrink-0 text-gray-600 text-2xl">›</span>
               </button>

@@ -21,7 +21,7 @@ export default function TournamentNoticeDetailPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    fetch("/api/scrim", { cache: "no-store" })
+    fetch("/api/room", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => { if (d?.success) setData(d); })
       .catch(() => {})

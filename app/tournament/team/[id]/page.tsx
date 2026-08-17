@@ -22,9 +22,9 @@ const hourLabel = (h: number) => `${pad(h % 24)}:00`;
 const midnight = (d: Date | number | string) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 
 type Member = { discordId: string; name: string; pos: string; leader?: boolean };
-type Team = { _id: string; name: string; tag: string; color: string; wins: number; losses: number; members: Member[]; avail: { userId: string; userName: string; slots: string[] }[] };
+type Team = { _id: string; name: string; tag: string; color: string; wins: number; losses: number; intro?: string; members: Member[]; avail: { userId: string; userName: string; slots: string[] }[] };
 type Season = { _id: string; title: string; tournamentId?: string; notice?: string; startAt: string; days: number; fromHour: number; toHour: number; stepMin: number; dueAt: string };
-type Fixture = { _id: string; teamAId: string; teamBId: string; at: string; winnerId: string; scoreA: number; scoreB: number };
+type Fixture = { _id: string; teamAId: string; teamBId: string; kind?: string; at: string; winnerId: string; scoreA: number; scoreB: number };
 type Notice = { _id: string; title: string; body: string; pinned: boolean; important: boolean; publishAt: string };
 
 export default function TeamRoom() {
@@ -41,18 +41,29 @@ export default function TeamRoom() {
   const [none, setNone] = useState(false); // 이번 기간 전체 불가
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [tour, setTour] = useState<any>(null); // 연동된 대회 글
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2400); return () => clearTimeout(t); }, [toast]);
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch("/api/scrim", { cache: "no-store" });
+      const r = await fetch("/api/room", { cache: "no-store" });
       const d = await r.json();
       if (d?.success) setData(d);
     } catch { /* 네트워크 오류는 아래 빈 화면으로 드러난다 */ }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { if (signedIn) load(); else setLoading(status !== "unauthenticated"); }, [signedIn, status, load]);
+
+  // 대회가 연동돼 있으면 그 글에서 현재 단계를 읽어 온다
+  const tid = data?.season?.tournamentId;
+  useEffect(() => {
+    if (!tid) { setTour(null); return; }
+    fetch(`/api/posts/${tid}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (d?.success) setTour(d.data); })
+      .catch(() => {});
+  }, [tid]);
 
   const team = useMemo(() => data?.teams.find((t) => t._id === id) || null, [data, id]);
   const season = data?.season;
@@ -109,12 +120,21 @@ export default function TeamRoom() {
   const played = myFixtures.filter((f) => f.winnerId);
   const teamById = (tid: string) => data?.teams.find((t) => t._id === tid);
   const notices: Notice[] = data?.notices || [];
+  // 대회 일정에서 오늘이 속한 단계 (없으면 다음 단계)
+  const stage = (() => {
+    const sch: any[] = Array.isArray(tour?.tournamentSchedule) ? tour.tournamentSchedule : [];
+    const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+    const now = sch.find((x) => x.start && x.start <= today && (!x.end || x.end >= today));
+    if (now) return { label: now.label, when: "진행 중" };
+    const next = sch.find((x) => x.start && x.start > today);
+    return next ? { label: next.label, when: "예정" } : null;
+  })();
 
   /* ── 동작 ── */
   const post = async (payload: any) => {
     setBusy(true);
     try {
-      const r = await fetch("/api/scrim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const r = await fetch("/api/room", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const d = await r.json();
       if (!d?.success) { setToast(d?.message || "처리하지 못했습니다"); return null; }
       await load();
@@ -252,7 +272,7 @@ export default function TeamRoom() {
             )}
             <span className="h-px flex-1 max-w-[200px] bg-gradient-to-r from-[#00e07b]/40 to-transparent" />
             {isAdmin && (
-              <button onClick={() => router.push("/admin/scrim")}
+              <button onClick={() => router.push("/admin/room")}
                 className="esp-cut-sm px-3 py-2 text-[10px] font-black bg-white/[0.05] text-gray-400 hover:text-white transition-colors">
                 운영 콘솔 →
               </button>
@@ -265,6 +285,7 @@ export default function TeamRoom() {
               <Emblem tag={team.tag} color={C} size={58} />
               <div className="min-w-0">
                 <h1 className="text-[30px] md:text-[38px] font-black tracking-tighter leading-none truncate">{team.name}</h1>
+                {team.intro && <p className="mt-2 text-[12px] font-medium text-gray-400 break-keep leading-relaxed max-w-[420px]">{team.intro}</p>}
                 <p className="mt-2 text-[11px] font-bold text-gray-500">
                   {team.members.length}인 로스터
                   {inTeam && <span style={{ color: C }}> · 내 팀</span>}
@@ -277,7 +298,7 @@ export default function TeamRoom() {
               {[
                 { k: "RECORD", l: "전적", v: `${team.wins}-${team.losses}`, c: "text-white" },
                 { k: "PLAN", l: "일정 제출", v: `${doneCount}/${size}`, c: usReady ? "text-[#00e07b]" : "text-amber-300" },
-                { k: "NEXT", l: "다음 경기", v: upcoming[0] ? dL(new Date(upcoming[0].at)) : "—", c: "text-white" },
+                { k: "STAGE", l: stage ? stage.when : "대회 단계", v: stage ? stage.label : "—", c: stage?.when === "진행 중" ? "text-[#00e07b]" : "text-white" },
                 { k: "DUE", l: "응답 마감", v: dDay >= 0 ? `D-${dDay}` : "마감", c: dDay <= 1 ? "text-[#ff6b83]" : "text-gray-300" },
               ].map((m, i) => (
                 <div key={m.k} className={`py-3.5 md:px-5 ${i > 0 ? "md:border-l border-white/[0.07]" : ""} ${i % 2 === 1 ? "border-l border-white/[0.07] pl-4 md:pl-5" : ""} ${i < 2 ? "border-b md:border-b-0 border-white/[0.07]" : ""}`}>
@@ -351,6 +372,10 @@ export default function TeamRoom() {
                         <div className="px-5 py-2.5 flex items-center gap-2 border-b border-white/[0.07]">
                           <span className="w-1.5 h-1.5" style={{ background: G }} />
                           <span className="text-[10px] font-black esp-mono text-gray-400">{dF(at)} {pad(at.getHours())}:{pad(at.getMinutes())}</span>
+                          <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black"
+                            style={f.kind === "official" ? { background: G, color: "#04120b" } : { background: "rgba(255,255,255,.08)", color: "#9ca3af" }}>
+                            {f.kind === "official" ? "공식전" : "스크림"}
+                          </span>
                           <span className="ml-auto text-[9px] font-black esp-mono" style={{ color: G }}>CONFIRMED</span>
                         </div>
                         {/* 가로 배치 — 좌 팀 · 중앙 VS · 우 팀 */}
@@ -393,7 +418,10 @@ export default function TeamRoom() {
                         <div key={f._id} className="flex items-center gap-3 py-3 border-b border-white/[0.06]">
                           <span className="w-[92px] shrink-0 text-[11px] font-bold esp-mono text-gray-500">{dF(at)}</span>
                           <Emblem tag={opp?.tag || "?"} color={opp?.color || "#888"} size={26} />
-                          <span className="flex-1 min-w-0 text-[12px] font-black text-gray-300 truncate">vs {opp?.name || "?"}</span>
+                          <span className="flex-1 min-w-0 text-[12px] font-black text-gray-300 truncate">
+                            vs {opp?.name || "?"}
+                            <span className="ml-2 text-[9px] font-black esp-mono text-gray-700">{f.kind === "official" ? "공식" : "스크림"}</span>
+                          </span>
                           <span className={`shrink-0 esp-cut-sm px-2.5 py-1 text-[10px] font-black ${f.winnerId === "draw" ? "bg-white/[0.07] text-gray-400" : win ? "text-[#04120b]" : "bg-rose-500/15 text-rose-300"}`}
                             style={f.winnerId !== "draw" && win ? { background: G } : undefined}>
                             {f.winnerId === "draw" ? "무" : win ? "승" : "패"}

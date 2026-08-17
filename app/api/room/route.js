@@ -6,7 +6,7 @@ import { isAdminName } from "@/lib/admins";
 import { ScrimSeason, ScrimTeam, ScrimAvailability, ScrimFixture, ScrimNotice } from "@/models/Scrim";
 import Auction from "@/models/Auction";
 
-/* 📌 스크림 리그 API
+/* 📌 대회 룸 API
    조율 기간·시간대는 시즌 하나로 통합 관리한다 (팀마다 다르면 교집합을 계산할 수 없다).
    운영 동작은 전부 관리자 세션으로 서버에서 검증한다 — 화면의 '운영 화면' 스위치는 표시용일 뿐이다. */
 
@@ -181,6 +181,7 @@ export async function POST(request) {
         if (body.color !== undefined && /^#[0-9a-f]{6}$/i.test(body.color)) t.color = body.color;
         if (body.wins !== undefined) t.wins = clamp(body.wins, 0, 999, t.wins);
         if (body.losses !== undefined) t.losses = clamp(body.losses, 0, 999, t.losses);
+        if (body.intro !== undefined) t.intro = String(body.intro).slice(0, 300);
         await t.save();
         return NextResponse.json({ success: true });
       }
@@ -339,6 +340,7 @@ export async function POST(request) {
         if (!body.at) return NextResponse.json({ success: false, message: "경기 시각이 필요합니다." }, { status: 400 });
         await ScrimFixture.create({
           seasonId: sid, teamAId: body.teamAId, teamBId: body.teamBId, at: new Date(body.at),
+          kind: body.kind === "official" ? "official" : "scrim",
           usCount: Number(body.usCount) || 0, themCount: Number(body.themCount) || 0,
           createdBy: session?.user?.name || "",
         });
