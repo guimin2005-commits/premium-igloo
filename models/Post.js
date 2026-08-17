@@ -17,7 +17,14 @@ const PostSchema = new mongoose.Schema({
   eventPeriod: { type: String, default: "" },
 
   // 📌 대회 전용 데이터 항목
-  tournamentType: { type: String, default: "모집" }, // 글 타입: "모집"(참가 신청) / "대진표"(리그 진행)
+  // ⚠️ tournamentType 은 남겨두되 새 글에서는 쓰지 않는다 — 대회 하나를 글 두 개로 쪼개던 원인.
+  //    값이 없으면 아래 phase 를 이 값에서 유추한다 (모집→접수, 대진표→진행).
+  tournamentType: { type: String, default: "모집" },
+  // 📌 대회는 글 하나가 단계를 따라 진행된다: 접수 → 팀배정 → 연습 → 당일 → 종료
+  tournamentPhase: { type: String, default: "" },
+  tournamentTeamDay: { type: String, default: "" },  // 팀 배정일 (경매하는 날)
+  tournamentEventDay: { type: String, default: "" }, // 대회 당일 (8강~결승을 하루에)
+  tournamentAuctionId: { type: String, default: "" },// 팀을 만든 경매
   tournamentSchedule: {
     type: [{ label: String, start: String, end: String }], // 리그 상세 일정 (팀원 배정, 스크림, 본선 등)
     default: [],
