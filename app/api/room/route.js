@@ -11,7 +11,15 @@ import { buildNudgeMessage } from "@/lib/nudgeMessage";
    조율 기간·시간대는 시즌 하나로 통합 관리한다 (팀마다 다르면 교집합을 계산할 수 없다).
    운영 동작은 전부 관리자 세션으로 서버에서 검증한다 — 화면의 '운영 화면' 스위치는 표시용일 뿐이다. */
 
-const midnight = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+/* ⚠️ 서버에서 setHours(0,0,0,0) 로 자정을 만들면 안 된다.
+   배포 서버(Vercel)는 UTC 라 한국 기준 자정이 아니라 UTC 자정이 나오고,
+   그러면 관리자가 고른 시작 날짜가 하루 앞으로 밀린다. 한국 자정을 직접 계산한다. */
+const KST = 9 * 3600e3;
+const midnight = (d) => {
+  const x = new Date(new Date(d).getTime() + KST);
+  x.setUTCHours(0, 0, 0, 0);
+  return new Date(x.getTime() - KST);
+};
 const clamp = (v, lo, hi, dflt) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : dflt;
