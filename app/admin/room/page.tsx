@@ -359,6 +359,7 @@ export default function AdminScrimPage() {
                   {(data.nudges || []).slice(0, 20).map((n: any) => (
                     <div key={n._id} className="flex items-center gap-2 py-1.5 text-[11px] font-bold">
                       <span className="min-w-0 flex-1 truncate text-gray-300">{n.userName || n.userId}</span>
+                      {n.kind === "test" && <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded bg-white/[0.07] text-gray-400">시험</span>}
                       <span className="shrink-0 text-[10px] text-gray-600 truncate max-w-[90px]">{n.teamName}</span>
                       <span className={`shrink-0 text-[9px] font-black esp-mono ${n.status === "sent" ? "text-[#00e07b]" : n.status === "failed" ? "text-rose-400" : "text-amber-300"}`}
                         title={n.error || ""}>
@@ -376,7 +377,9 @@ export default function AdminScrimPage() {
         {tab === "match" && <MatchView data={data} busy={busy} post={post} setToast={setToast} />}
         {tab === "notice" && <NoticeView data={data} busy={busy} post={post} setToast={setToast} />}
         {tab === "time" && season && (
-          <SeasonForm season={season} busy={busy} tournaments={tournaments} sampleTeam={data?.teams?.[0]?.name} onSave={async (pl) => { const r = await post({ action: "season:update", ...pl }); if (r) setToast("룸 설정을 저장했습니다 — 모든 팀에 적용됩니다"); }} />
+          <SeasonForm season={season} busy={busy} tournaments={tournaments} sampleTeam={data?.teams?.[0]?.name}
+            onSave={async (pl) => { const r = await post({ action: "season:update", ...pl }); if (r) setToast("룸 설정을 저장했습니다 — 모든 팀에 적용됩니다"); }}
+            onTest={async (msg) => { const r = await post({ action: "nudge:test", teamId: data?.teams?.[0]?._id || "", message: msg }); if (r) setToast("내 디스코드 DM 으로 보냈습니다"); }} />
         )}
       </div>
 
@@ -811,7 +814,7 @@ const discordMd = (s: string) =>
       : <React.Fragment key={i}>{p}</React.Fragment>
   );
 
-function SeasonForm({ season, busy, onSave, tournaments, sampleTeam }: { season: any; busy: boolean; onSave: (p: any) => void; tournaments: any[]; sampleTeam?: string }) {
+function SeasonForm({ season, busy, onSave, onTest, tournaments, sampleTeam }: { season: any; busy: boolean; onSave: (p: any) => void; onTest: (msg: string) => void; tournaments: any[]; sampleTeam?: string }) {
   const G2 = "#00e07b";
   const [start, setStart] = useState(() => midnight(season.startAt));
   const [days, setDays] = useState(season.days);
@@ -1001,8 +1004,13 @@ function SeasonForm({ season, busy, onSave, tournaments, sampleTeam }: { season:
               {discordMd(nudgePreview)}
             </p>
           </div>
+          <button type="button" disabled={busy} onClick={() => onTest(nudgeMsg)}
+            className="mt-3 w-full esp-cut-sm py-2.5 text-[11px] font-black border transition-colors disabled:opacity-40"
+            style={{ borderColor: "rgba(255,255,255,.12)", background: "rgba(255,255,255,.03)", color: "#cbd5e1" }}>
+            나에게 먼저 보내보기
+          </button>
           <p className="mt-2 text-[11px] font-bold text-gray-600 leading-relaxed">
-            팀 이름과 링크는 받는 사람의 팀에 맞춰 각각 바뀝니다. DM 이 막혀 있으면 실패로 남고 다시 보내지지 않습니다.
+            저장하지 않은 문구도 그대로 시험해 볼 수 있습니다. 팀 이름과 링크는 받는 사람의 팀에 맞춰 각각 바뀝니다.
           </p>
         </div>
       </div>

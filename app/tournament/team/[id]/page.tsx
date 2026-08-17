@@ -789,6 +789,13 @@ export default function TeamRoom() {
                 {waiting.length}명에게 보내기
               </button>
             </div>
+            <button disabled={busy} onClick={async () => {
+              const r = await post({ action: "nudge:test", teamId: id });
+              if (r) setToast("내 디스코드 DM 으로 보냈습니다");
+            }}
+              className="w-full mt-2 esp-cut-sm py-2.5 text-[11px] font-black border border-white/12 bg-white/[0.03] text-gray-400 hover:text-white transition-colors disabled:opacity-40">
+              나에게 먼저 보내보기
+            </button>
             <p className="mt-3 text-[10px] font-bold text-gray-600 leading-relaxed">
               DM 이 막혀 있는 사람에게는 가지 않습니다. 같은 사람에게는 30분에 한 번만 보낼 수 있습니다.
             </p>

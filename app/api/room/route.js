@@ -173,6 +173,38 @@ export async function POST(request) {
         return NextResponse.json({ success: true });
       }
 
+      /* 📌 나에게 먼저 보내보기 — 실제로 어떻게 도착하는지 본인 DM 으로 확인한다.
+         저장하기 전 문구도 시험할 수 있게, 화면이 보낸 문구를 그대로 쓴다. */
+      case "nudge:test": {
+        const session = await getServerSession(authOptions);
+        const uid = session?.user?.id;
+        if (!uid) return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
+        const admin = isAdminName(session?.user?.name);
+        const t = body.teamId ? await ScrimTeam.findById(body.teamId) : null;
+        const leader = t ? t.members.some((m) => m.discordId === uid && m.leader) : false;
+        if (!admin && !leader) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+
+        // 시험 발송은 1분에 한 번 — 버튼을 연타해도 DM 이 쌓이지 않게
+        const just = await ScrimNudge.findOne({
+          seasonId: sid, userId: uid, kind: "test", createdAt: { $gte: new Date(Date.now() - 60e3) },
+        }).lean();
+        if (just) return NextResponse.json({ success: false, message: "방금 보냈습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
+
+        const origin = new URL(request.url).origin;
+        const teamName = t?.name || String(body.teamName || "").slice(0, 30) || "우리 팀";
+        const url = t ? `${origin}/tournament/team/${String(t._id)}` : `${origin}/tournament`;
+        await ScrimNudge.create({
+          seasonId: sid, teamId: t ? String(t._id) : "", teamName,
+          userId: uid, userName: session?.user?.name || "", kind: "test", url,
+          message: buildNudgeMessage({
+            teamName, url, dueAt: season.dueAt,
+            custom: body.message !== undefined ? String(body.message).slice(0, 300) : season.nudge?.message,
+          }),
+          byName: session?.user?.name || "",
+        });
+        return NextResponse.json({ success: true });
+      }
+
       /* ── 미제출자 DM 재촉 ──────────────────────────────
          사이트는 DM 을 못 보낸다. 보낼 것만 쌓아두고 봇이 가져간다.
          팀장은 자기 팀만, 관리자는 전체를 찌를 수 있다. */
