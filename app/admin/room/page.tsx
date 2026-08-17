@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useSession, signIn } from "next-auth/react";
 import { EsportsStyles } from "../../components/Esports";
+import { buildNudgeMessage } from "@/lib/nudgeMessage";
 
 /* 📌 대회 룸 운영 (관리자 전용)
    실제 화면은 각 팀의 룸(/tournament/team/[id])이고, 여기서는 팀을 만들고 어디로 들어갈지 고른다.
@@ -340,6 +341,34 @@ export default function AdminScrimPage() {
                 </div>
               </div>
             </section>
+
+            {/* 📌 미제출자 재촉 — 전체 팀을 한 번에 찌른다 */}
+            <section className="mt-8">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G }}>Nudge</span>
+                <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
+              </div>
+              <button disabled={busy}
+                onClick={async () => { const r = await post({ action: "nudge:send", teamId: "all" }); if (r) setToast(r.queued ? `${r.queued}명에게 DM 을 보냅니다${r.skipped ? ` (${r.skipped}명은 최근 발송)` : ""}` : "지금 보낼 대상이 없습니다"); }}
+                className="esp-cut-sm w-full py-3 text-[12px] font-black border transition-all active:scale-[.99] disabled:opacity-40"
+                style={{ borderColor: `${G}55`, background: `${G}14`, color: G }}>
+                전체 팀 미제출자에게 DM 보내기
+              </button>
+              {(data?.nudges || []).length > 0 && (
+                <div className="mt-3 esp-cut border border-white/[0.08] bg-white/[0.02] p-3 max-h-[220px] overflow-y-auto no-bar">
+                  {(data.nudges || []).slice(0, 20).map((n: any) => (
+                    <div key={n._id} className="flex items-center gap-2 py-1.5 text-[11px] font-bold">
+                      <span className="min-w-0 flex-1 truncate text-gray-300">{n.userName || n.userId}</span>
+                      <span className="shrink-0 text-[10px] text-gray-600 truncate max-w-[90px]">{n.teamName}</span>
+                      <span className={`shrink-0 text-[9px] font-black esp-mono ${n.status === "sent" ? "text-[#00e07b]" : n.status === "failed" ? "text-rose-400" : "text-amber-300"}`}
+                        title={n.error || ""}>
+                        {n.status === "sent" ? "보냄" : n.status === "failed" ? "실패" : "대기"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </aside>
         </div>
         )}
@@ -347,7 +376,7 @@ export default function AdminScrimPage() {
         {tab === "match" && <MatchView data={data} busy={busy} post={post} setToast={setToast} />}
         {tab === "notice" && <NoticeView data={data} busy={busy} post={post} setToast={setToast} />}
         {tab === "time" && season && (
-          <SeasonForm season={season} busy={busy} tournaments={tournaments} onSave={async (pl) => { const r = await post({ action: "season:update", ...pl }); if (r) setToast("룸 설정을 저장했습니다 — 모든 팀에 적용됩니다"); }} />
+          <SeasonForm season={season} busy={busy} tournaments={tournaments} sampleTeam={data?.teams?.[0]?.name} onSave={async (pl) => { const r = await post({ action: "season:update", ...pl }); if (r) setToast("룸 설정을 저장했습니다 — 모든 팀에 적용됩니다"); }} />
         )}
       </div>
 
@@ -774,7 +803,15 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
 
 
 /* ── 통합 시간 조정 — 전 팀 공통. 네이티브 select/date 는 쓰지 않는다 ── */
-function SeasonForm({ season, busy, onSave, tournaments }: { season: any; busy: boolean; onSave: (p: any) => void; tournaments: any[] }) {
+/* 디스코드가 **굵게** 를 어떻게 보여주는지까지 흉내낸다 — 미리보기가 실제와 달라 보이면 미리보기가 아니다 */
+const discordMd = (s: string) =>
+  s.split(/(\*\*[^*]+\*\*)/g).map((p, i) =>
+    p.startsWith("**") && p.endsWith("**")
+      ? <b key={i} className="font-black text-white">{p.slice(2, -2)}</b>
+      : <React.Fragment key={i}>{p}</React.Fragment>
+  );
+
+function SeasonForm({ season, busy, onSave, tournaments, sampleTeam }: { season: any; busy: boolean; onSave: (p: any) => void; tournaments: any[]; sampleTeam?: string }) {
   const G2 = "#00e07b";
   const [start, setStart] = useState(() => midnight(season.startAt));
   const [days, setDays] = useState(season.days);
@@ -786,6 +823,19 @@ function SeasonForm({ season, busy, onSave, tournaments }: { season: any; busy: 
   const [title, setTitle] = useState(season.title || "");
   const [tid, setTid] = useState(season.tournamentId || "");
   const [notice, setNotice] = useState(season.notice || "");
+  const [nudgeMsg, setNudgeMsg] = useState(season.nudge?.message || "");
+
+  // 미리보기는 지금 화면의 마감 시각을 그대로 쓴다 (저장 전에도 바뀐 게 보이도록)
+  const nudgePreview = (() => {
+    const due = new Date(dueDay); due.setHours(Math.floor(dueMin / 60), dueMin % 60, 0, 0);
+    const origin = typeof window === "undefined" ? "" : window.location.origin;
+    return buildNudgeMessage({
+      teamName: sampleTeam || "우리 팀",
+      url: `${origin}/tournament/team/…`,
+      dueAt: due,
+      custom: nudgeMsg,
+    });
+  })();
 
   const end = (() => { const e = new Date(start); e.setDate(e.getDate() + days - 1); return e; })();
   const cells = days * Math.max(0, Math.ceil(((to - from) * 60) / step));
@@ -923,6 +973,38 @@ function SeasonForm({ season, busy, onSave, tournaments }: { season: any; busy: 
               minus={() => setDueMin((v: number) => (v + 1440 - 30) % 1440)} plus={() => setDueMin((v: number) => (v + 30) % 1440)} />
           </div>
         </div>
+
+        {/* 📌 자동 재촉 — 봇이 미제출자에게 개인 DM 을 보낸다 */}
+        <div>
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G2 }}>Nudge</span>
+            <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
+          </div>
+          <p className="text-[11px] font-bold text-gray-600 leading-relaxed mb-3">
+            팀 탭의 <b className="text-gray-300">DM 보내기</b> 버튼을 누를 때만 나갑니다. 저절로 보내지지 않습니다.
+          </p>
+          <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">앞부분 문구 (비우면 기본 문구)</span>
+          <textarea value={nudgeMsg} onChange={(e) => setNudgeMsg(e.target.value)} rows={3} maxLength={300}
+            placeholder="예) 스크림 캘린더 아직 안 채우셨습니다. 오늘 안으로 부탁드립니다."
+            className="esp-cut-sm w-full bg-black/40 border border-white/10 px-3 py-2.5 text-[13px] font-bold text-white outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700 resize-none" />
+
+          {/* 📌 실제로 나갈 DM 그대로 — 마감·링크는 문구를 직접 써도 항상 붙는다 */}
+          <span className="block text-[10px] font-black esp-mono text-gray-600 mt-5 mb-2">이렇게 갑니다</span>
+          <div className="esp-cut border border-white/[0.08] bg-[#0b0d0c] p-4">
+            <div className="flex items-center gap-2 pb-3 mb-3 border-b border-white/[0.06]">
+              <span className="w-6 h-6 shrink-0 rounded-full grid place-items-center text-[10px] font-black" style={{ background: `${G2}22`, color: G2 }}>봇</span>
+              <span className="text-[11px] font-black text-gray-300">고급 펭귄</span>
+              <span className="text-[9px] font-black esp-mono px-1.5 py-0.5 rounded bg-[#5865F2]/25 text-[#a5b0ff]">APP</span>
+              <span className="ml-auto text-[10px] font-bold text-gray-700">개인 DM</span>
+            </div>
+            <p className="text-[12.5px] leading-[1.75] text-gray-300 whitespace-pre-wrap break-words">
+              {discordMd(nudgePreview)}
+            </p>
+          </div>
+          <p className="mt-2 text-[11px] font-bold text-gray-600 leading-relaxed">
+            팀 이름과 링크는 받는 사람의 팀에 맞춰 각각 바뀝니다. DM 이 막혀 있으면 실패로 남고 다시 보내지지 않습니다.
+          </p>
+        </div>
       </div>
 
       <aside className="xl:sticky xl:top-20">
@@ -942,7 +1024,11 @@ function SeasonForm({ season, busy, onSave, tournaments }: { season: any; busy: 
         <button disabled={busy}
           onClick={() => {
             const due = new Date(dueDay); due.setHours(Math.floor(dueMin / 60), dueMin % 60, 0, 0);
-            onSave({ title, tournamentId: tid, notice, startAt: start.toISOString(), days, fromHour: from, toHour: to, stepMin: step, dueAt: due.toISOString() });
+            onSave({
+              title, tournamentId: tid, notice, startAt: start.toISOString(), days,
+              fromHour: from, toHour: to, stepMin: step, dueAt: due.toISOString(),
+              nudge: { message: nudgeMsg },
+            });
           }}
           className="w-full mt-4 esp-cut-sm py-3.5 text-[12px] font-black transition-all active:scale-[.98] disabled:opacity-40"
           style={{ background: G2, color: "#04120b" }}>

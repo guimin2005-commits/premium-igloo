@@ -135,6 +135,39 @@ const CodeGrantSchema = new mongoose.Schema({
 });
 export const CodeGrant = mongoose.models.CodeGrant || mongoose.model("CodeGrant", CodeGrantSchema);
 
+/* ── 대회 룸 (사이트와 공유) ──────────────────
+   ⚠️ 컬렉션 이름은 사이트의 models/Scrim.js 와 반드시 같아야 한다.
+   봇은 캘린더를 읽어 미제출자를 찾고, 쌓인 DM 대기열을 보낸다.
+   스키마는 필요한 필드만 느슨하게 잡는다 (strict:false) — 사이트가 필드를 늘려도 안 깨지게. */
+const loose = { strict: false, versionKey: false };
+
+export const ScrimSeason = mongoose.models.ScrimSeason || mongoose.model("ScrimSeason", new mongoose.Schema({
+  title: String, startAt: Date, days: Number, dueAt: Date, active: Boolean,
+  nudge: {
+    enabled: Boolean, everyHours: Number, quietFrom: Number, quietTo: Number, message: String,
+  },
+}, loose));
+
+export const ScrimTeam = mongoose.models.ScrimTeam || mongoose.model("ScrimTeam", new mongoose.Schema({
+  seasonId: { type: String, index: true },
+  name: String,
+  members: [{ discordId: String, name: String, pos: String, leader: Boolean }],
+}, loose));
+
+export const ScrimAvailability = mongoose.models.ScrimAvailability || mongoose.model("ScrimAvailability", new mongoose.Schema({
+  seasonId: { type: String, index: true }, teamId: String, userId: String, slots: [String],
+}, loose));
+
+export const ScrimNudge = mongoose.models.ScrimNudge || mongoose.model("ScrimNudge", new mongoose.Schema({
+  seasonId: { type: String, index: true },
+  teamId: String, teamName: String,
+  userId: { type: String, index: true }, userName: String,
+  kind: String, message: String, url: String,
+  status: { type: String, index: true }, error: String, byName: String,
+  createdAt: { type: Date, default: Date.now, index: true },
+  sentAt: Date,
+}, loose));
+
 export const connectDb = (uri) => mongoose.connect(uri);
 export const disconnectDb = () => mongoose.disconnect();
 

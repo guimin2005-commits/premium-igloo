@@ -3,8 +3,9 @@ import { getServerSession } from "next-auth";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
-import { ScrimSeason, ScrimTeam, ScrimAvailability, ScrimFixture, ScrimNotice } from "@/models/Scrim";
+import { ScrimSeason, ScrimTeam, ScrimAvailability, ScrimFixture, ScrimNotice, ScrimNudge } from "@/models/Scrim";
 import Auction from "@/models/Auction";
+import { buildNudgeMessage } from "@/lib/nudgeMessage";
 
 /* 📌 대회 룸 API
    조율 기간·시간대는 시즌 하나로 통합 관리한다 (팀마다 다르면 교집합을 계산할 수 없다).
@@ -55,6 +56,11 @@ export async function GET() {
     const sid = String(season._id);
 
     const admin = isAdminName(session?.user?.name);
+    // 재촉 이력은 운영용이라 관리자에게만 (실패 사유까지 보여야 대처가 된다)
+    const nudges = admin
+      ? (await ScrimNudge.find({ seasonId: sid }).sort({ createdAt: -1 }).limit(60).lean()).map((n) => ({ ...n, _id: String(n._id) }))
+      : [];
+
     const [teams, avails, fixtures, notices] = await Promise.all([
       ScrimTeam.find({ seasonId: sid }).sort({ createdAt: 1 }).lean(),
       ScrimAvailability.find({ seasonId: sid }).lean(),
@@ -85,6 +91,7 @@ export async function GET() {
       teams: out,
       fixtures: fixtures.map((f) => ({ ...f, _id: String(f._id) })),
       notices: notices.map((n) => ({ ...n, _id: String(n._id) })),
+      nudges,
     });
   } catch (e) {
     return NextResponse.json({ success: false, message: "불러오지 못했습니다." }, { status: 500 });
@@ -116,6 +123,7 @@ export async function POST(request) {
         season.toHour = to;
         season.stepMin = Number(body.stepMin) === 30 ? 30 : 60;
         if (body.dueAt) season.dueAt = new Date(body.dueAt);
+        if (body.nudge) season.nudge = { message: String(body.nudge.message || "").slice(0, 300) };
         await season.save();
         return NextResponse.json({ success: true });
       }
@@ -155,6 +163,52 @@ export async function POST(request) {
         if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
         await ScrimNotice.findByIdAndDelete(body.noticeId);
         return NextResponse.json({ success: true });
+      }
+
+      /* ── 미제출자 DM 재촉 ──────────────────────────────
+         사이트는 DM 을 못 보낸다. 보낼 것만 쌓아두고 봇이 가져간다.
+         팀장은 자기 팀만, 관리자는 전체를 찌를 수 있다. */
+      case "nudge:send": {
+        const session = await getServerSession(authOptions);
+        const uid = session?.user?.id;
+        if (!uid) return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
+        const admin = isAdminName(session?.user?.name);
+
+        const teams = body.teamId === "all"
+          ? (admin ? await ScrimTeam.find({ seasonId: sid }) : [])
+          : [await ScrimTeam.findById(body.teamId)].filter(Boolean);
+        if (!teams.length) return NextResponse.json({ success: false, message: "대상 팀이 없습니다." }, { status: 404 });
+        if (!admin && !teams.every((t) => t.members.some((m) => m.discordId === uid && m.leader))) {
+          return NextResponse.json({ success: false, message: "팀장만 보낼 수 있습니다." }, { status: 403 });
+        }
+
+        const origin = new URL(request.url).origin;
+        // 같은 사람을 연달아 찌르지 않는다 — 30분 안에 보낸 게 있으면 건너뛴다
+        const recentAfter = new Date(Date.now() - 30 * 60e3);
+        let queued = 0, skipped = 0;
+
+        for (const t of teams) {
+          const tid = String(t._id);
+          const done = new Set((await ScrimAvailability.find({ seasonId: sid, teamId: tid }, { userId: 1 }).lean()).map((a) => a.userId));
+          for (const m of t.members) {
+            if (!m.discordId || done.has(m.discordId)) continue;
+            const recent = await ScrimNudge.findOne({
+              seasonId: sid, userId: m.discordId,
+              $or: [{ status: "pending" }, { createdAt: { $gte: recentAfter } }],
+            }).lean();
+            if (recent) { skipped++; continue; }
+            const url = `${origin}/tournament/team/${tid}`;
+            await ScrimNudge.create({
+              seasonId: sid, teamId: tid, teamName: t.name,
+              userId: m.discordId, userName: m.name, kind: "manual", url,
+              // 보낼 문구를 여기서 완성해 저장한다 — 미리보기와 실제가 어긋나지 않게
+              message: buildNudgeMessage({ teamName: t.name, url, dueAt: season.dueAt, custom: season.nudge?.message }),
+              byName: session?.user?.name || "",
+            });
+            queued++;
+          }
+        }
+        return NextResponse.json({ success: true, queued, skipped });
       }
 
       /* ── 팀 ── */

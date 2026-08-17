@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession, signIn } from "next-auth/react";
 import { EsportsStyles } from "../../../components/Esports";
 import { parseBracketSections } from "../../../components/BracketView";
+import { buildNudgeMessage } from "@/lib/nudgeMessage";
 
 /* 📌 팀 룸 — 대회에 소속된 팀이 머무는 공간
    디자인은 새로 만들지 않고 /tournament 의 e스포츠 언어를 그대로 상속한다.
@@ -42,6 +43,7 @@ export default function TeamRoom() {
   const [none, setNone] = useState(false); // 이번 기간 전체 불가
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [nudgeOpen, setNudgeOpen] = useState(false);
   const [tour, setTour] = useState<any>(null); // 연동된 대회 글
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2400); return () => clearTimeout(t); }, [toast]);
@@ -251,6 +253,16 @@ export default function TeamRoom() {
 
   const isAdmin = !!data?.isAdmin;
   const inTeam = team.members.some((m) => m.discordId && m.discordId === data?.me);
+  const iAmLeader = team.members.some((m) => m.discordId && m.discordId === data?.me && m.leader);
+  // 아직 안 낸 사람 — 디스코드 ID 가 없으면 DM 을 보낼 수 없으니 대상에서 뺀다
+  const waiting = team.members.filter((m) => m.discordId && !submitted.has(m.discordId));
+  // 서버가 보낼 문구와 같은 함수로 만든다 — 미리보기가 실제와 달라지면 미리보기가 아니다
+  const nudgeText = buildNudgeMessage({
+    teamName: team.name,
+    url: typeof window === "undefined" ? "" : `${window.location.origin}/tournament/team/${id}`,
+    dueAt: season.dueAt,
+    custom: (season as any).nudge?.message,
+  });
   const C = team.color || G;
   const due = new Date(season.dueAt);
   const dueLabel = `${dF(due)} ${pad(due.getHours())}:${pad(due.getMinutes())}`;
@@ -630,6 +642,15 @@ export default function TeamRoom() {
                       );
                     })}
                   </div>
+
+                  {/* 📌 미제출자 재촉 — 봇이 개인 DM 으로 찌른다. 팀장·관리자만 */}
+                  {(iAmLeader || isAdmin) && waiting.length > 0 && (
+                    <button disabled={busy} onClick={() => setNudgeOpen(true)}
+                      className="mt-4 w-full esp-cut-sm py-3 text-[12px] font-black border transition-all active:scale-[.99] disabled:opacity-40"
+                      style={{ borderColor: `${C}55`, background: `${C}14`, color: C }}>
+                      미제출 {waiting.length}명 DM 으로 재촉하기
+                    </button>
+                  )}
                 </section>
               </aside>
             </div>
@@ -724,6 +745,56 @@ export default function TeamRoom() {
 
         </div>
       </div>
+
+      {/* 📌 재촉 DM 미리보기 — 누구에게 무엇이 가는지 보고 나서 보낸다 */}
+      {nudgeOpen && (
+        <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-black/75 p-0 sm:p-5" onClick={() => setNudgeOpen(false)}>
+          <div className="esp-cut w-full sm:max-w-[440px] max-h-[88dvh] overflow-y-auto no-bar border border-white/10 bg-[#0b0d0c] p-6" onClick={(e) => e.stopPropagation()}>
+            <p className="text-[10px] font-black esp-mono text-gray-600 mb-1">NUDGE</p>
+            <h3 className="text-[17px] font-black tracking-tight mb-4">이 내용으로 개인 DM 을 보냅니다</h3>
+
+            <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">받는 사람 {waiting.length}명</span>
+            <div className="flex flex-wrap gap-1.5 mb-5">
+              {waiting.map((m, i) => (
+                <span key={i} className="esp-cut-sm px-2.5 py-1 text-[11px] font-black border"
+                  style={{ borderColor: `${C}44`, background: `${C}12`, color: C }}>{m.name}</span>
+              ))}
+            </div>
+
+            <div className="esp-cut border border-white/[0.08] bg-[#101211] p-4">
+              <div className="flex items-center gap-2 pb-3 mb-3 border-b border-white/[0.06]">
+                <span className="w-6 h-6 shrink-0 rounded-full grid place-items-center text-[10px] font-black" style={{ background: `${G}22`, color: G }}>봇</span>
+                <span className="text-[11px] font-black text-gray-300">고급 펭귄</span>
+                <span className="text-[9px] font-black esp-mono px-1.5 py-0.5 rounded bg-[#5865F2]/25 text-[#a5b0ff]">APP</span>
+              </div>
+              <p className="text-[12.5px] leading-[1.75] text-gray-300 whitespace-pre-wrap break-words">
+                {nudgeText.split(/(\*\*[^*]+\*\*)/g).map((p, i) =>
+                  p.startsWith("**") && p.endsWith("**")
+                    ? <b key={i} className="font-black text-white">{p.slice(2, -2)}</b>
+                    : <React.Fragment key={i}>{p}</React.Fragment>
+                )}
+              </p>
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setNudgeOpen(false)}
+                className="flex-1 esp-cut-sm py-3 text-[12px] font-black bg-white/[0.05] text-gray-400 hover:text-white transition-colors">취소</button>
+              <button disabled={busy} onClick={async () => {
+                const r = await post({ action: "nudge:send", teamId: id });
+                setNudgeOpen(false);
+                if (r) setToast(r.queued ? `${r.queued}명에게 DM 을 보냅니다` : "방금 보낸 사람뿐이라 건너뛰었습니다");
+              }}
+                className="flex-[1.4] esp-cut-sm py-3 text-[12px] font-black transition-all active:scale-[.98] disabled:opacity-40"
+                style={{ background: G, color: "#04120b" }}>
+                {waiting.length}명에게 보내기
+              </button>
+            </div>
+            <p className="mt-3 text-[10px] font-bold text-gray-600 leading-relaxed">
+              DM 이 막혀 있는 사람에게는 가지 않습니다. 같은 사람에게는 30분에 한 번만 보낼 수 있습니다.
+            </p>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className="fixed left-4 right-4 bottom-6 lg:left-auto lg:right-8 z-[60] max-w-[400px] mx-auto lg:mx-0 esp-cut-sm flex items-center gap-3 min-h-[46px] px-5 py-3 border border-white/10 bg-[#0d0f0e]/96 backdrop-blur-xl text-[12px] font-bold text-gray-200">

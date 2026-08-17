@@ -19,6 +19,10 @@ const ScrimSeasonSchema = new mongoose.Schema({
   stepMin: { type: Number, default: 60 },        // 칸 단위(분): 60 또는 30
   dueAt: { type: Date, required: true },         // 응답 마감
   active: { type: Boolean, default: true },      // 현재 운영 중인 시즌 (하나만 true)
+  // 📌 미제출자 DM 재촉 — 자동으로 돌리지 않고 사람이 눌러서 보낸다
+  nudge: {
+    message: { type: String, default: "" },      // 앞부분 문구. 비면 기본 문구
+  },
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -86,7 +90,27 @@ const ScrimNoticeSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+/* 📌 DM 재촉 대기열
+   사이트는 디스코드로 DM 을 못 보낸다. 보낼 것을 여기 쌓아두면 봇이 가져가 보낸다.
+   (상점 역할 지급이 Purchase 를 통해 도는 것과 같은 방식) */
+const ScrimNudgeSchema = new mongoose.Schema({
+  seasonId: { type: String, required: true, index: true },
+  teamId: { type: String, default: "" },
+  teamName: { type: String, default: "" },
+  userId: { type: String, required: true, index: true }, // 디스코드 ID
+  userName: { type: String, default: "" },
+  kind: { type: String, default: "manual" },             // manual(사람이 누름) | auto(자동)
+  message: { type: String, default: "" },                // 비면 봇이 기본 문구를 만든다
+  url: { type: String, default: "" },                    // 팀 룸 바로가기
+  status: { type: String, default: "pending", index: true }, // pending | sent | failed
+  error: { type: String, default: "" },
+  byName: { type: String, default: "" },                 // 수동일 때 누른 사람
+  createdAt: { type: Date, default: Date.now, index: true },
+  sentAt: { type: Date, default: null },
+});
+
 export const ScrimSeason = mongoose.models.ScrimSeason || mongoose.model("ScrimSeason", ScrimSeasonSchema);
+export const ScrimNudge = mongoose.models.ScrimNudge || mongoose.model("ScrimNudge", ScrimNudgeSchema);
 export const ScrimTeam = mongoose.models.ScrimTeam || mongoose.model("ScrimTeam", ScrimTeamSchema);
 export const ScrimAvailability = mongoose.models.ScrimAvailability || mongoose.model("ScrimAvailability", ScrimAvailabilitySchema);
 export const ScrimFixture = mongoose.models.ScrimFixture || mongoose.model("ScrimFixture", ScrimFixtureSchema);

@@ -15,6 +15,7 @@ import { registerChatXp } from "./features/chatXp.js";
 import { startVoiceXpLoop } from "./features/voiceXp.js";
 import { registerLeaveReset } from "./features/leaveReset.js";
 import { startGrantQueue } from "./features/grantQueue.js";
+import { startScrimNudge } from "./features/scrimNudge.js";
 import { registerCommandDefinitions, registerCommandHandlers } from "./commands.js";
 
 const client = new Client({
@@ -44,6 +45,7 @@ client.once(Events.ClientReady, async (c) => {
 
   startVoiceXpLoop(c);
   startGrantQueue(c);
+  startScrimNudge(c);
 });
 
 // ── 부팅 ──────────────────────────────────
