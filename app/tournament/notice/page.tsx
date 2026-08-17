@@ -46,12 +46,14 @@ export default function TournamentNoticeListPage() {
           style={{ WebkitTextStroke: `1px ${G}1f` }}>NOTICE</p>
 
         <div className="max-w-[900px] mx-auto relative z-10">
+          {/* 들어오면 나갈 길이 있어야 한다 — 대회로 돌아가는 링크 */}
           <div className="flex items-center gap-3 mb-4">
+            <Link href="/tournament" className="text-[10px] font-black esp-mono text-gray-500 hover:text-white transition-colors shrink-0">← 대회</Link>
             <span className="w-2 h-2 esp-blink" style={{ background: G, clipPath: "polygon(50% 0,100% 50%,50% 100%,0 50%)" }} />
-            <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G }}>{season?.title || "대회 룸"}</span>
-            <span className="h-px flex-1 max-w-[200px] bg-gradient-to-r from-[#00e07b]/40 to-transparent" />
+            <span className="text-[10px] font-black esp-mono uppercase truncate" style={{ color: G }}>{season?.title || "대회 룸"}</span>
+            <span className="h-px flex-1 min-w-0 max-w-[200px] bg-gradient-to-r from-[#00e07b]/40 to-transparent" />
             {isAdmin && (
-              <button onClick={() => router.push("/admin/room")} className="text-[10px] font-black esp-mono text-gray-600 hover:text-white transition-colors">공지 관리 →</button>
+              <button onClick={() => router.push("/admin/room")} className="text-[10px] font-black esp-mono text-gray-600 hover:text-white transition-colors shrink-0">공지 관리 →</button>
             )}
           </div>
           <h1 className="text-[28px] md:text-[36px] font-black tracking-tighter leading-none">대회 공지</h1>
@@ -83,7 +85,7 @@ export default function TournamentNoticeListPage() {
                         </span>
                       )}
                       <span className="block text-[15px] md:text-[16px] font-black text-white break-keep leading-snug">{n.title}</span>
-                      {n.body && <span className="block mt-2 text-[12px] font-medium text-gray-500 line-clamp-2 break-keep">{n.body}</span>}
+                      {n.body && <span className="block mt-2 text-[12px] font-medium text-gray-500 line-clamp-1 break-keep">{n.body}</span>}
                     </span>
                     {/* 날짜는 제목과 같은 줄의 오른쪽 — 따로 한 줄을 쓰면 빈 줄이 생긴다 */}
                     <span className="shrink-0 text-right pt-0.5">

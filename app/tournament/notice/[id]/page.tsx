@@ -73,7 +73,6 @@ export default function TournamentNoticeDetailPage() {
 
           <div className="flex items-center gap-3 mt-5 pb-5 border-b border-white/[0.08]">
             <span className="text-[11px] font-black esp-mono text-gray-500 tabular-nums">{fmt(pub)}</span>
-            {n.authorName && <span className="text-[11px] font-bold text-gray-600">{n.authorName}</span>}
             <button
               onClick={() => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 1600); }}
               className="ml-auto esp-cut-sm px-3 py-1.5 text-[10px] font-black bg-white/[0.05] text-gray-400 hover:text-white transition-colors">

@@ -331,7 +331,7 @@ export default function NoticeClient() {
                   {isNewNotice(notice) && <span className="shrink-0 text-[8px] font-black tracking-widest bg-[#e91e3f] text-white px-1.5 py-0.5 rounded animate-[pulseGlow_2.5s_ease-in-out_infinite]">N</span>}
                   <span className="truncate">{notice.title}</span>
                 </h3>
-                <p className="text-gray-500 text-sm leading-relaxed line-clamp-2">{stripMarkdown(notice.content)}</p>
+                <p className="text-gray-500 text-sm leading-relaxed line-clamp-1">{stripMarkdown(notice.content)}</p>
               </div>
               </div>
               </Reveal>
