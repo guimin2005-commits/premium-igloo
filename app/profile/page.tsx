@@ -9,6 +9,7 @@ import Link from "next/link";
 import { ADMIN_USERS } from "@/lib/admins";
 import { salePrice } from "@/lib/shopPricing";
 import { verifyBadge } from "@/lib/verifyBadge";
+import { EsportsStyles } from "../components/Esports";
 
 // 미리보기(접힘)용 마크다운 기호 제거
 const stripMd = (t: string) =>
@@ -172,6 +173,9 @@ export default function MyInfoPage() {
 
   // 📌 관리자 알림함
   const [notifications, setNotifications] = useState<any[]>([]);
+  // 📌 스크림 팀 룸 — 로스터에서 내 디스코드 ID 를 찾아 바로가기를 띄운다
+  const [myTeam, setMyTeam] = useState<any>(null);
+  const [scrimAdmin, setScrimAdmin] = useState(false);
   const [selectedNotif, setSelectedNotif] = useState<any | null>(null);
 
   const userSession = session?.user as any;
@@ -217,6 +221,21 @@ export default function MyInfoPage() {
       .catch(() => {});
   };
   useEffect(() => { loadNotifications(); }, [status, session]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    fetch("/api/scrim", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d?.success) return;
+        setScrimAdmin(!!d.isAdmin);
+        const t = (d.teams || []).find((x: any) => (x.members || []).some((m: any) => m.discordId && m.discordId === d.me));
+        if (!t) return;
+        const ids = new Set((t.avail || []).map((a: any) => a.userId));
+        setMyTeam({ ...t, sent: (t.members || []).filter((m: any) => ids.has(m.discordId)).length, mySent: ids.has(d.me) });
+      })
+      .catch(() => {});
+  }, [status]);
 
   // 📌 내 정보에 들어오면 안 읽은 알림을 읽음 처리 (알림함이 이 페이지에 펼쳐져 있다)
   useEffect(() => {
@@ -404,6 +423,59 @@ export default function MyInfoPage() {
         </div>
       )}
 
+      {/* ═══ 스크림 팀 룸 — 화이트 계정 화면에서 이 줄만 대회 UI 로 튄다 ═══ */}
+      {(myTeam || scrimAdmin) && (
+        <div className="mb-6">
+          <EsportsStyles />
+          <button
+            onClick={() => router.push(myTeam ? `/tournament/team/${myTeam._id}` : "/admin/scrim")}
+            className="esp-cut relative w-full text-left overflow-hidden bg-[#0b0d0c] hover:bg-[#0e120f] transition-colors"
+            style={{ border: "1px solid rgba(0,224,123,.28)" }}
+          >
+            <span className="absolute inset-0 esp-mesh pointer-events-none" />
+            <span className="absolute inset-0 esp-scan pointer-events-none opacity-40" />
+            {myTeam && (
+              <span aria-hidden className="absolute -top-3 right-5 hidden md:block text-[76px] font-black tracking-tighter leading-none pointer-events-none select-none text-transparent"
+                style={{ WebkitTextStroke: `1px ${myTeam.color}2e` }}>{myTeam.tag || "TEAM"}</span>
+            )}
+            <span className="relative flex items-center gap-4 md:gap-5 px-5 md:px-7 py-5">
+              <span className="esp-cut-sm grid place-items-center shrink-0 w-12 h-12 md:w-14 md:h-14 text-[13px] md:text-[15px] font-black tracking-tight"
+                style={myTeam
+                  ? { background: `${myTeam.color}1c`, border: `1px solid ${myTeam.color}55`, color: myTeam.color }
+                  : { background: "rgba(0,224,123,.10)", border: "1px solid rgba(0,224,123,.35)", color: "#00e07b" }}>
+                {myTeam ? (myTeam.tag || "TM") : "OPS"}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2 mb-1.5">
+                  <span className="w-1.5 h-1.5 esp-blink" style={{ background: "#00e07b", clipPath: "polygon(50% 0,100% 50%,50% 100%,0 50%)" }} />
+                  <span className="text-[9px] font-black esp-mono uppercase text-[#00e07b]">{myTeam ? "My Team Room" : "Scrim Operations"}</span>
+                </span>
+                <span className="block text-white font-black text-lg md:text-xl leading-tight truncate">
+                  {myTeam ? myTeam.name : "스크림 운영 콘솔"}
+                </span>
+                <span className="block text-[11px] md:text-xs font-bold text-gray-400 mt-1.5 break-keep">
+                  {myTeam
+                    ? (myTeam.mySent
+                        ? (myTeam.sent >= myTeam.members.length
+                            ? "팀 전원이 일정을 냈습니다 — 스크림 매칭 대기"
+                            : `내 일정은 제출했습니다 · ${myTeam.members.length - myTeam.sent}명 남음`)
+                        : "아직 내 일정을 내지 않았습니다 — 계획판에서 가능한 시간을 알려주세요")
+                    : "팀 등록 · 스크림 매칭 · 통합 시간 조정"}
+                </span>
+              </span>
+              {myTeam && (
+                <span className="hidden sm:block shrink-0 text-right">
+                  <span className="block text-[9px] font-black esp-mono text-gray-600 mb-1">PLAN</span>
+                  <span className="block text-xl font-black tabular-nums" style={{ color: myTeam.sent >= myTeam.members.length ? "#00e07b" : "#fcd34d" }}>
+                    {myTeam.sent}/{myTeam.members.length}
+                  </span>
+                </span>
+              )}
+              <span className="shrink-0 text-[#00e07b] text-2xl">›</span>
+            </span>
+          </button>
+        </div>
+      )}
       {/* 📌 탭도 바로가기 바도 없이, 카드로 나란히 펼친다 */}
       <div className="space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
