@@ -19,6 +19,14 @@ export const metadata: Metadata = {
     type: "website",
     images: [{ url: "/logo.png", width: 500, height: 500, alt: "고급 이글루" }],
   },
+  /* 📌 링크 프리뷰 기본값 — 이걸 안 주면 디스코드가 정사각 로고를 큼직하게 띄운다.
+     summary 는 오른쪽 작은 썸네일이라 제목·설명이 먼저 읽힌다. */
+  twitter: {
+    card: "summary",
+    title: "고급 이글루",
+    description: "고급 이글루 공식 사이트",
+    images: ["/logo.png"],
+  },
   icons: {
     icon: [
       { url: "/favicon.png", sizes: "any", type: "image/png" },

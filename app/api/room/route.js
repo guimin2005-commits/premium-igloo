@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import { ScrimSeason, ScrimTeam, ScrimAvailability, ScrimFixture, ScrimNotice, ScrimNudge } from "@/models/Scrim";
 import Auction from "@/models/Auction";
-import { buildNudgeMessage } from "@/lib/nudgeMessage";
+import { nudgeBody } from "@/lib/nudgeMessage";
 
 /* 📌 대회 룸 API
    조율 기간·시간대는 시즌 하나로 통합 관리한다 (팀마다 다르면 교집합을 계산할 수 없다).
@@ -195,11 +195,8 @@ export async function POST(request) {
         const url = t ? `${origin}/tournament/team/${String(t._id)}` : `${origin}/tournament`;
         await ScrimNudge.create({
           seasonId: sid, teamId: t ? String(t._id) : "", teamName,
-          userId: uid, userName: session?.user?.name || "", kind: "test", url,
-          message: buildNudgeMessage({
-            teamName, url, dueAt: season.dueAt,
-            custom: body.message !== undefined ? String(body.message).slice(0, 300) : season.nudge?.message,
-          }),
+          userId: uid, userName: session?.user?.name || "", kind: "test", url, dueAt: season.dueAt,
+          message: nudgeBody(body.message !== undefined ? String(body.message).slice(0, 300) : season.nudge?.message),
           byName: session?.user?.name || "",
         });
         return NextResponse.json({ success: true });
@@ -240,9 +237,9 @@ export async function POST(request) {
             const url = `${origin}/tournament/team/${tid}`;
             await ScrimNudge.create({
               seasonId: sid, teamId: tid, teamName: t.name,
-              userId: m.discordId, userName: m.name, kind: "manual", url,
-              // 보낼 문구를 여기서 완성해 저장한다 — 미리보기와 실제가 어긋나지 않게
-              message: buildNudgeMessage({ teamName: t.name, url, dueAt: season.dueAt, custom: season.nudge?.message }),
+              userId: m.discordId, userName: m.name, kind: "manual", url, dueAt: season.dueAt,
+              // 본문을 여기서 확정해 저장한다 — 미리보기와 실제가 어긋나지 않게
+              message: nudgeBody(season.nudge?.message),
               byName: session?.user?.name || "",
             });
             queued++;

@@ -162,7 +162,7 @@ export const ScrimNudge = mongoose.models.ScrimNudge || mongoose.model("ScrimNud
   seasonId: { type: String, index: true },
   teamId: String, teamName: String,
   userId: { type: String, index: true }, userName: String,
-  kind: String, message: String, url: String,
+  kind: String, message: String, url: String, dueAt: Date,
   status: { type: String, index: true }, error: String, byName: String,
   createdAt: { type: Date, default: Date.now, index: true },
   sentAt: Date,

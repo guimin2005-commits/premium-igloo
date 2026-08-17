@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession, signIn } from "next-auth/react";
 import { EsportsStyles } from "../../../components/Esports";
 import { parseBracketSections } from "../../../components/BracketView";
-import { buildNudgeMessage } from "@/lib/nudgeMessage";
+import DmPreview from "../../../components/DmPreview";
 
 /* 📌 팀 룸 — 대회에 소속된 팀이 머무는 공간
    디자인은 새로 만들지 않고 /tournament 의 e스포츠 언어를 그대로 상속한다.
@@ -256,13 +256,6 @@ export default function TeamRoom() {
   const iAmLeader = team.members.some((m) => m.discordId && m.discordId === data?.me && m.leader);
   // 아직 안 낸 사람 — 디스코드 ID 가 없으면 DM 을 보낼 수 없으니 대상에서 뺀다
   const waiting = team.members.filter((m) => m.discordId && !submitted.has(m.discordId));
-  // 서버가 보낼 문구와 같은 함수로 만든다 — 미리보기가 실제와 달라지면 미리보기가 아니다
-  const nudgeText = buildNudgeMessage({
-    teamName: team.name,
-    url: typeof window === "undefined" ? "" : `${window.location.origin}/tournament/team/${id}`,
-    dueAt: season.dueAt,
-    custom: (season as any).nudge?.message,
-  });
   const C = team.color || G;
   const due = new Date(season.dueAt);
   const dueLabel = `${dF(due)} ${pad(due.getHours())}:${pad(due.getMinutes())}`;
@@ -761,20 +754,7 @@ export default function TeamRoom() {
               ))}
             </div>
 
-            <div className="esp-cut border border-white/[0.08] bg-[#101211] p-4">
-              <div className="flex items-center gap-2 pb-3 mb-3 border-b border-white/[0.06]">
-                <span className="w-6 h-6 shrink-0 rounded-full grid place-items-center text-[10px] font-black" style={{ background: `${G}22`, color: G }}>봇</span>
-                <span className="text-[11px] font-black text-gray-300">고급 펭귄</span>
-                <span className="text-[9px] font-black esp-mono px-1.5 py-0.5 rounded bg-[#5865F2]/25 text-[#a5b0ff]">APP</span>
-              </div>
-              <p className="text-[12.5px] leading-[1.75] text-gray-300 whitespace-pre-wrap break-words">
-                {nudgeText.split(/(\*\*[^*]+\*\*)/g).map((p, i) =>
-                  p.startsWith("**") && p.endsWith("**")
-                    ? <b key={i} className="font-black text-white">{p.slice(2, -2)}</b>
-                    : <React.Fragment key={i}>{p}</React.Fragment>
-                )}
-              </p>
-            </div>
+            <DmPreview teamName={team.name} dueAt={season.dueAt} custom={(season as any).nudge?.message} />
 
             <div className="flex gap-2 mt-5">
               <button onClick={() => setNudgeOpen(false)}

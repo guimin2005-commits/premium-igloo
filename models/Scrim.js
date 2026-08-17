@@ -99,9 +99,10 @@ const ScrimNudgeSchema = new mongoose.Schema({
   teamName: { type: String, default: "" },
   userId: { type: String, required: true, index: true }, // 디스코드 ID
   userName: { type: String, default: "" },
-  kind: { type: String, default: "manual" },             // manual(사람이 누름) | auto(자동)
-  message: { type: String, default: "" },                // 비면 봇이 기본 문구를 만든다
-  url: { type: String, default: "" },                    // 팀 룸 바로가기
+  kind: { type: String, default: "manual" },             // manual(사람이 누름) | test(시험 발송)
+  message: { type: String, default: "" },                // 임베드 본문. 비면 봇이 기본 문구를 쓴다
+  url: { type: String, default: "" },                    // 팀 룸 바로가기 (임베드 버튼)
+  dueAt: { type: Date, default: null },                  // 보낼 때의 마감 시각 (임베드에 표시)
   status: { type: String, default: "pending", index: true }, // pending | sent | failed
   error: { type: String, default: "" },
   byName: { type: String, default: "" },                 // 수동일 때 누른 사람

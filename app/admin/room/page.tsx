@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useSession, signIn } from "next-auth/react";
 import { EsportsStyles } from "../../components/Esports";
-import { buildNudgeMessage } from "@/lib/nudgeMessage";
+import DmPreview from "../../components/DmPreview";
 
 /* 📌 대회 룸 운영 (관리자 전용)
    실제 화면은 각 팀의 룸(/tournament/team/[id])이고, 여기서는 팀을 만들고 어디로 들어갈지 고른다.
@@ -806,14 +806,6 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
 
 
 /* ── 통합 시간 조정 — 전 팀 공통. 네이티브 select/date 는 쓰지 않는다 ── */
-/* 디스코드가 **굵게** 를 어떻게 보여주는지까지 흉내낸다 — 미리보기가 실제와 달라 보이면 미리보기가 아니다 */
-const discordMd = (s: string) =>
-  s.split(/(\*\*[^*]+\*\*)/g).map((p, i) =>
-    p.startsWith("**") && p.endsWith("**")
-      ? <b key={i} className="font-black text-white">{p.slice(2, -2)}</b>
-      : <React.Fragment key={i}>{p}</React.Fragment>
-  );
-
 function SeasonForm({ season, busy, onSave, onTest, tournaments, sampleTeam }: { season: any; busy: boolean; onSave: (p: any) => void; onTest: (msg: string) => void; tournaments: any[]; sampleTeam?: string }) {
   const G2 = "#00e07b";
   const [start, setStart] = useState(() => midnight(season.startAt));
@@ -829,16 +821,7 @@ function SeasonForm({ season, busy, onSave, onTest, tournaments, sampleTeam }: {
   const [nudgeMsg, setNudgeMsg] = useState(season.nudge?.message || "");
 
   // 미리보기는 지금 화면의 마감 시각을 그대로 쓴다 (저장 전에도 바뀐 게 보이도록)
-  const nudgePreview = (() => {
-    const due = new Date(dueDay); due.setHours(Math.floor(dueMin / 60), dueMin % 60, 0, 0);
-    const origin = typeof window === "undefined" ? "" : window.location.origin;
-    return buildNudgeMessage({
-      teamName: sampleTeam || "우리 팀",
-      url: `${origin}/tournament/team/…`,
-      dueAt: due,
-      custom: nudgeMsg,
-    });
-  })();
+  const previewDue = (() => { const d = new Date(dueDay); d.setHours(Math.floor(dueMin / 60), dueMin % 60, 0, 0); return d; })();
 
   const end = (() => { const e = new Date(start); e.setDate(e.getDate() + days - 1); return e; })();
   const cells = days * Math.max(0, Math.ceil(((to - from) * 60) / step));
@@ -993,17 +976,7 @@ function SeasonForm({ season, busy, onSave, onTest, tournaments, sampleTeam }: {
 
           {/* 📌 실제로 나갈 DM 그대로 — 마감·링크는 문구를 직접 써도 항상 붙는다 */}
           <span className="block text-[10px] font-black esp-mono text-gray-600 mt-5 mb-2">이렇게 갑니다</span>
-          <div className="esp-cut border border-white/[0.08] bg-[#0b0d0c] p-4">
-            <div className="flex items-center gap-2 pb-3 mb-3 border-b border-white/[0.06]">
-              <span className="w-6 h-6 shrink-0 rounded-full grid place-items-center text-[10px] font-black" style={{ background: `${G2}22`, color: G2 }}>봇</span>
-              <span className="text-[11px] font-black text-gray-300">고급 펭귄</span>
-              <span className="text-[9px] font-black esp-mono px-1.5 py-0.5 rounded bg-[#5865F2]/25 text-[#a5b0ff]">APP</span>
-              <span className="ml-auto text-[10px] font-bold text-gray-700">개인 DM</span>
-            </div>
-            <p className="text-[12.5px] leading-[1.75] text-gray-300 whitespace-pre-wrap break-words">
-              {discordMd(nudgePreview)}
-            </p>
-          </div>
+          <DmPreview teamName={sampleTeam || "우리 팀"} dueAt={previewDue} custom={nudgeMsg} />
           <button type="button" disabled={busy} onClick={() => onTest(nudgeMsg)}
             className="mt-3 w-full esp-cut-sm py-2.5 text-[11px] font-black border transition-colors disabled:opacity-40"
             style={{ borderColor: "rgba(255,255,255,.12)", background: "rgba(255,255,255,.03)", color: "#cbd5e1" }}>
