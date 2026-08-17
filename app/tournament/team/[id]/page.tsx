@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession, signIn } from "next-auth/react";
 import { EsportsStyles } from "../../../components/Esports";
+import { parseBracketSections } from "../../../components/BracketView";
 
 /* 📌 팀 룸 — 대회에 소속된 팀이 머무는 공간
    디자인은 새로 만들지 않고 /tournament 의 e스포츠 언어를 그대로 상속한다.
@@ -120,6 +121,37 @@ export default function TeamRoom() {
   const played = myFixtures.filter((f) => f.winnerId);
   const teamById = (tid: string) => data?.teams.find((t) => t._id === tid);
   const notices: Notice[] = data?.notices || [];
+
+  /* 대진표는 대회 글에 텍스트로 저장된다. 파서를 그대로 쓰고 우리 팀 이름이 든 경기만 뽑는다.
+     이름으로 맞추므로 팀명을 바꾸면 대진표 표기도 함께 고쳐야 한다. */
+  const ourPath = useMemo(() => {
+    const text = tour?.tournamentBracket || "";
+    if (!text || !team) return [];
+    const norm = (v: string) => (v || "").trim().toLowerCase();
+    const me = norm(team.name);
+    const out: { section: string; round: string; opp: string; result: "win" | "lose" | "pending" }[] = [];
+    try {
+      parseBracketSections(text).forEach((sec: any) => {
+        sec.rounds.forEach((r: any) => {
+          r.matches.forEach((m: any) => {
+            const a = norm(m.a), b = norm(m.b);
+            if (a !== me && b !== me) return;
+            const opp = a === me ? m.b : m.a;
+            const w = norm(m.winner);
+            out.push({
+              section: sec.label || "", round: r.name || "",
+              opp: (opp || "미정").trim(),
+              result: !w ? "pending" : w === me ? "win" : "lose",
+            });
+          });
+        });
+      });
+    } catch { /* 대진표 형식이 어긋나면 조용히 비운다 */ }
+    return out;
+  }, [tour, team]);
+
+  // 아직 안 치른 대진 = 다음 공식 경기 (대진표에는 시각이 없어 일시는 미정으로 둔다)
+  const nextBracket = ourPath.find((x) => x.result === "pending");
   // 대회 일정에서 오늘이 속한 단계 (없으면 다음 단계)
   const stage = (() => {
     const sch: any[] = Array.isArray(tour?.tournamentSchedule) ? tour.tournamentSchedule : [];
@@ -387,7 +419,15 @@ export default function TeamRoom() {
                   <Bar k="Next Match" right={<span className="text-[10px] font-black esp-mono text-gray-600">{upcoming.length}건 예정</span>} />
                   {upcoming.length === 0 ? (
                     <div className="esp-cut border border-white/[0.08] bg-white/[0.02] px-6 py-10 text-center">
-                      <p className="text-[13px] font-black text-gray-400">예정된 스크림이 없습니다</p>
+                      {nextBracket ? (
+                        <>
+                          <span className="esp-cut-sm inline-block px-2 py-0.5 text-[9px] font-black mb-3" style={{ background: G, color: "#04120b" }}>공식전</span>
+                          <p className="text-[15px] font-black text-white">{nextBracket.round} · vs {nextBracket.opp}</p>
+                          <p className="mt-2 text-[11px] font-bold text-gray-600">대진표에 잡힌 경기입니다 — 일시는 운영진이 정합니다</p>
+                        </>
+                      ) : (
+                        <p className="text-[13px] font-black text-gray-400">예정된 경기가 없습니다</p>
+                      )}
                       {!meSubmitted && (
                         <button onClick={() => setView("board")} className="mt-5 esp-cut-sm px-5 py-3 text-[11px] font-black" style={{ background: G, color: "#04120b" }}>
                           내 일정 내러 가기
@@ -436,6 +476,31 @@ export default function TeamRoom() {
                   })}
                 </section>
 
+                {/* 우리 대진 — 대회 대진표에서 우리 팀이 낀 경기만 추려 보여준다 */}
+                {ourPath.length > 0 && (
+                  <section>
+                    <Bar k="Our Bracket" right={
+                      <button onClick={() => router.push("/tournament")} className="text-[10px] font-black esp-mono text-gray-600 hover:text-white transition-colors">전체 대진 →</button>
+                    } />
+                    <div className="divide-y divide-white/[0.06]">
+                      {ourPath.map((m, i) => (
+                        <div key={i} className="flex items-center gap-3 py-3">
+                          <span className="shrink-0 w-[92px] min-w-0">
+                            <span className="block text-[11px] font-black text-gray-300 truncate">{m.round || "라운드"}</span>
+                            {m.section && <span className="block text-[9px] font-black esp-mono text-gray-700 truncate mt-0.5">{m.section}</span>}
+                          </span>
+                          <span className="flex-1 min-w-0 text-[12px] font-black text-gray-300 truncate">vs {m.opp}</span>
+                          <span className="shrink-0 esp-cut-sm px-2.5 py-1 text-[10px] font-black"
+                            style={m.result === "win" ? { background: G, color: "#04120b" }
+                              : m.result === "lose" ? { background: "rgba(251,113,133,.18)", color: "#fda4af" }
+                              : { background: "rgba(255,255,255,.06)", color: "#8b8b93" }}>
+                            {m.result === "win" ? "승" : m.result === "lose" ? "패" : "예정"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
                 <section>
                   <Bar k="Results" right={<span className="text-[10px] font-black esp-mono text-gray-600">{team.wins}승 {team.losses}패</span>} />
                   {played.length === 0
