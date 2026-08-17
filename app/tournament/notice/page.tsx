@@ -15,8 +15,12 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const dOnly = (d: Date) => `${String(d.getFullYear()).slice(2)}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}(${WD[d.getDay()]})`;
 const tOnly = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const fmt = (d: Date) => `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}(${WD[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-// 목록의 미리보기 — 줄바꿈·서식 기호를 지우고 한 줄 분량만 남긴다
-const preview = (s: string) => (s || "").replace(/[#*_>`~-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 48);
+/* 목록의 미리보기 — 줄바꿈·서식 기호를 지우고 한 줄 분량만 남긴다.
+   글자 수로 자르면 CSS 말줄임이 안 걸려 문장이 뚝 끊긴다. 잘랐으면 …을 직접 붙인다. */
+const preview = (s: string) => {
+  const one = (s || "").replace(/[#*_>`~-]/g, " ").replace(/\s+/g, " ").trim();
+  return one.length > 48 ? `${one.slice(0, 48).trimEnd()}…` : one;
+};
 
 export default function TournamentNoticeListPage() {
   const router = useRouter();
