@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 import { connectToDatabase } from "@/lib/mongodb";
+import { authOptions } from "@/lib/authOptions";
+import { isAdminName } from "@/lib/admins";
 import Post from "@/models/Post";
 
 // 📌 1. 수정할 때 기존 데이터를 입력창에 불러오는 기능
@@ -12,6 +15,14 @@ export async function GET(request, { params }) {
 
     const post = await Post.findById(id);
     if (!post) return NextResponse.json({ error: "존재하지 않는 글입니다." }, { status: 404 });
+
+    // 📌 가린 글은 링크를 알아도 열리지 않는다 — 관리자만 통과
+    if (post.hidden) {
+      const session = await getServerSession(authOptions);
+      if (!isAdminName(session?.user?.name)) {
+        return NextResponse.json({ error: "존재하지 않는 글입니다." }, { status: 404 });
+      }
+    }
     return NextResponse.json({ success: true, data: post }, { status: 200 });
   } catch (error) {
     console.error("수정 데이터 로드 에러:", error);

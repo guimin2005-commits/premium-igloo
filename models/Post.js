@@ -63,6 +63,8 @@ const PostSchema = new mongoose.Schema({
   recruitQual: { type: String, default: "" },
   recruitExtra: { type: String, default: "" },
   publishAt: { type: Date, default: null }, // 📌 예약 발행 시각 (null이면 즉시 공개)
+  // 📌 글 가리기 — 지우지 않고 목록·상세에서 감춘다. 관리자에게만 보인다.
+  hidden: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
 

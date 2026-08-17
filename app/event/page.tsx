@@ -138,14 +138,14 @@ export default function EventPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [popupConfig, setPopupConfig] = useState({ isOpen: false, message: "", isError: false });
 
-  const fetchEvents = async () => {
+  const fetchEvents = async (admin = false) => {
     try {
-      const res = await fetch("/api/posts?category=이벤트");
+      const res = await fetch(`/api/posts?category=이벤트${admin ? "&all=1" : ""}`, { cache: "no-store" });
       if (res.ok) setPosts((await res.json()).data);
     } catch { console.error("로드 에러"); } finally { setIsLoading(false); }
   };
 
-  useEffect(() => { fetchEvents(); }, []);
+  useEffect(() => { if (status !== "loading") fetchEvents(!!isAdmin); }, [status, isAdmin]);
 
   const executeDelete = async () => {
     if (!deleteConfirmId) return;
@@ -288,7 +288,10 @@ export default function EventPage() {
                         <span className="text-xs font-medium">{event.eventPeriod || "날짜 미정"}</span>
                       </div>
                     </div>
-                    <h3 className="text-lg font-bold mb-2 text-white group-hover:text-[#ff5c77] transition-colors">{event.title}</h3>
+                    <h3 className="text-lg font-bold mb-2 text-white group-hover:text-[#ff5c77] transition-colors flex items-center gap-2">
+                      {isAdmin && event.hidden && <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 border border-amber-400/30">숨김</span>}
+                      <span className="min-w-0">{event.title}</span>
+                    </h3>
                     <p className="text-sm text-gray-500 line-clamp-2">{stripMarkdown(event.content)}</p>
                   </div>
                 </div>

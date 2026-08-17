@@ -621,7 +621,7 @@ export default function TeamRoom() {
                             </span>
                             <span className="block text-[10px] font-bold text-gray-600 mt-0.5">{m.pos || "포지션 미정"}</span>
                           </span>
-                          <span className={`shrink-0 text-[9px] font-black esp-mono ${isNone ? "text-rose-400" : ok ? "" : "text-gray-700"}`} style={ok && !isNone ? { color: G } : undefined}>{isNone ? "NONE" : ok ? "SENT" : "WAIT"}</span>
+                          <span className={`shrink-0 text-[9px] font-black esp-mono ${isNone ? "text-rose-400" : ok ? "" : "text-gray-700"}`} style={ok && !isNone ? { color: G } : undefined}>{isNone ? "전체 불가" : ok ? "제출함" : "미제출"}</span>
                           {isAdmin && ok && (
                             <button disabled={busy} onClick={async () => { const r = await post({ action: "avail:reset", teamId: id, userId: m.discordId }); if (r) setToast(`${m.name} 응답을 초기화했습니다`); }}
                               className="shrink-0 text-[9px] font-black text-rose-400/70 hover:text-rose-300 disabled:opacity-40">초기화</button>

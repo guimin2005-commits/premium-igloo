@@ -197,15 +197,15 @@ export default function TournamentPage() {
       .catch(() => {});
   }, [status]);
 
-  const fetchTournaments = async () => {
+  const fetchTournaments = async (admin = false) => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/posts?category=대회", { cache: "no-store" });
+      const res = await fetch(`/api/posts?category=대회${admin ? "&all=1" : ""}`, { cache: "no-store" });
       if (res.ok) setTournaments((await res.json()).data || []);
     } catch { console.error("대회 로드 실패"); } finally { setIsLoading(false); }
   };
 
-  useEffect(() => { fetchTournaments(); }, []);
+  useEffect(() => { if (status !== "loading") fetchTournaments(!!isAdmin); }, [status, isAdmin]);
 
   const executeDelete = async () => {
     if (!deleteConfirmId) return;
@@ -536,6 +536,7 @@ export default function TournamentPage() {
                   <div className="flex items-center gap-2.5 mb-2">
                     <span className="w-3 h-3 shrink-0 border border-[#00e07b]/60" style={{ clipPath: "polygon(0 0,100% 0,100% 35%,35% 35%,35% 100%,0 100%)" }} />
                     <span className="text-[10px] font-black esp-mono text-gray-500 uppercase truncate">{t.tournamentGame || "TOURNAMENT"}</span>
+                    {isAdmin && t.hidden && <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 border border-amber-400/30">숨김</span>}
                     <span className={`ml-auto text-[9px] font-black esp-mono shrink-0 ${meta.text}`}>{meta.code}</span>
                   </div>
                   <h3 className="text-xl font-black text-white leading-tight line-clamp-2 break-keep group-hover:text-[#00e07b] transition-colors">{t.title}</h3>

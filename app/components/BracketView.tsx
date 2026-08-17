@@ -53,11 +53,11 @@ const CONN_W = 36;     // 라운드 사이 연결선 폭
 const MERGE_W = 92;    // 조 → 결승 합류선이 지나갈 폭
 const LINE = "rgba(255,255,255,0.14)";
 
-const SECTION_META: Record<string, { label: string; color: string; sub: string }> = {
-  W: { label: "승자조", color: G, sub: "지면 패자조로 내려갑니다" },
-  L: { label: "패자조", color: A, sub: "한 번 더 지면 탈락입니다" },
-  F: { label: "결승", color: "#ffffff", sub: "승자조 1위 vs 패자조 1위" },
-  S: { label: "", color: "#9ca3af", sub: "" },
+const SECTION_META: Record<string, { label: string; color: string }> = {
+  W: { label: "승자조", color: G },
+  L: { label: "패자조", color: A },
+  F: { label: "결승", color: "#ffffff" },
+  S: { label: "", color: "#9ca3af" },
 };
 
 /* 매치 한 칸 — 두 팀이 위아래로 붙고, 이긴 쪽이 살아난다.
@@ -141,7 +141,6 @@ const Branch = ({ sec, anchor, anchorRef, finalSlots }: {
         <div className="flex items-baseline gap-2">
           <span className="w-1.5 h-1.5 shrink-0" style={{ background: meta.color, clipPath: "polygon(50% 0,100% 50%,50% 100%,0 50%)" }} />
           <span className="text-[11px] font-black esp-mono uppercase" style={{ color: meta.color }}>{sec.label || meta.label}</span>
-          {meta.sub && <span className="text-[10px] font-bold text-gray-600 truncate">{meta.sub}</span>}
         </div>
       )}
 

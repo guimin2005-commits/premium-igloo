@@ -56,6 +56,7 @@ export default function AdminWritePage() {
   const [noticeTag, setNoticeTag] = useState("일반");
   const [isPinned, setIsPinned] = useState(false);
   const [publishAt, setPublishAt] = useState(""); // 📌 예약 발행 (비우면 즉시 공개)
+  const [hidden, setHidden] = useState(false);    // 📌 글 가리기 (지우지 않고 감추기)
   const [eventTag, setEventTag] = useState("NONE");
   const [bannerUrl, setBannerUrl] = useState("");
   const [eventStartDate, setEventStartDate] = useState("");
@@ -285,7 +286,7 @@ export default function AdminWritePage() {
   const DRAFT_KEY = "writeDraft";
 
   const collectDraft = () => ({
-    category, title, content, publishAt, noticeTag, isPinned, bannerUrl,
+    category, title, content, publishAt, hidden, noticeTag, isPinned, bannerUrl,
     eventTag, eventStartDate, eventEndDate, isEventAlways,
     recruitSubCategory, recruitRole, recruitStartDate, recruitEndDate, isRecruitAlways, recruitQual, recruitTasks, recruitExtra,
     tournamentGame, tournamentPrize, tournamentStatus: statusFromPhase(tournamentPhase), tournamentLink, tournamentBracket: serializeBracket(bracketRounds), tournamentWinner, tournamentWinnerId, tournamentStartDate, tournamentEndDate,
@@ -307,7 +308,7 @@ export default function AdminWritePage() {
     try {
       const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
       if (!d) return;
-      setCategory(d.category || "공지사항"); setTitle(d.title || ""); setContent(d.content || ""); setPublishAt(d.publishAt || "");
+      setCategory(d.category || "공지사항"); setTitle(d.title || ""); setContent(d.content || ""); setPublishAt(d.publishAt || ""); setHidden(!!d.hidden);
       setNoticeTag(d.noticeTag || "일반"); setIsPinned(!!d.isPinned); setBannerUrl(d.bannerUrl || "");
       setEventTag(d.eventTag || "NONE"); setEventStartDate(d.eventStartDate || ""); setEventEndDate(d.eventEndDate || ""); setIsEventAlways(!!d.isEventAlways);
       setRecruitSubCategory(d.recruitSubCategory || "staff"); setRecruitRole(d.recruitRole || ""); setRecruitStartDate(d.recruitStartDate || ""); setRecruitEndDate(d.recruitEndDate || "");
@@ -402,6 +403,7 @@ export default function AdminWritePage() {
             setBannerUrl(post.bannerUrl || "");
             setNoticeTag(post.noticeTag || (post.isImportant ? "중요" : "일반"));
             setIsPinned(post.isPinned || false);
+            setHidden(!!post.hidden);
             
             if (post.eventPeriod && post.eventPeriod.includes("~")) {
               const [start, end] = post.eventPeriod.split("~").map((s: string) => s.trim());
@@ -520,6 +522,7 @@ export default function AdminWritePage() {
     const postData = {
       author: session.user?.name || "관리자", category, title,
       publishAt: publishAt ? new Date(publishAt).toISOString() : null,
+      hidden,
       ...(category === "공지사항" && { content, noticeTag, isPinned, bannerUrl }),
       ...(category === "이벤트" && { content, eventTag, bannerUrl, eventPeriod: computedEventPeriod }),
       ...(category === "구인" && {
@@ -599,7 +602,15 @@ export default function AdminWritePage() {
                 <button type="button" onClick={() => setPublishAt("")} className="text-[10px] font-bold text-gray-500 hover:text-white underline underline-offset-2">해제</button>
               </>
             )}
+            {/* 📌 글 가리기 — 삭제와 달리 되돌릴 수 있다 */}
+            <button type="button" onClick={() => setHidden((v) => !v)}
+              className={`ml-auto text-[11px] font-black px-3 py-1.5 rounded-full border transition-colors ${hidden ? "text-amber-300 border-amber-400/40 bg-amber-400/10" : "text-gray-500 border-white/12 hover:text-white"}`}>
+              {hidden ? "숨김 상태 · 눌러서 공개" : "글 가리기"}
+            </button>
           </div>
+          {hidden && (
+            <p className="mt-2 text-[11px] font-bold text-amber-300/80">이 글은 목록과 링크에서 감춰집니다. 관리자만 볼 수 있습니다.</p>
+          )}
         </section>
 
         <section className="flex flex-col gap-6">

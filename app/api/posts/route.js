@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 import { connectToDatabase } from "@/lib/mongodb";
+import { authOptions } from "@/lib/authOptions";
+import { isAdminName } from "@/lib/admins";
 import Post from "@/models/Post";
 
 // 📌 1. 창고에서 글 불러오기 (진열대용)
@@ -15,9 +18,16 @@ export async function GET(request) {
       query.category = category;
     }
 
-    // 📌 예약 발행: 공개 시각이 미래인 글은 목록에서 제외 (?all=1 은 관리자용 전체 조회)
-    if (searchParams.get("all") !== "1") {
+    /* 📌 예약 발행분·가린 글은 목록에서 제외한다.
+       ?all=1 로 전부 보는 건 관리자만 — 화면에서 안 부르는 것만으로는 막은 게 아니다. */
+    let wantAll = searchParams.get("all") === "1";
+    if (wantAll) {
+      const session = await getServerSession(authOptions);
+      if (!isAdminName(session?.user?.name)) wantAll = false;
+    }
+    if (!wantAll) {
       query.$or = [{ publishAt: null }, { publishAt: { $lte: new Date() } }];
+      query.hidden = { $ne: true }; // 가린 글은 목록에서 뺀다
     }
 
     const posts = await Post.find(query).sort({ createdAt: -1 });

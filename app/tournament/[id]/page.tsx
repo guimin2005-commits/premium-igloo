@@ -97,6 +97,9 @@ export default function TournamentDetailPage() {
             )}
           </div>
 
+          {isAdmin && post.hidden && (
+            <div className="mb-3 esp-cut-sm inline-block px-3 py-1.5 text-[11px] font-black bg-amber-400/12 text-amber-300 border border-amber-400/30">숨김 상태 — 관리자에게만 보입니다</div>
+          )}
           <div className="flex flex-wrap items-center gap-2.5 mb-3">
             <span className={`px-2.5 py-1 text-[11px] font-black esp-cut-sm ${meta.badge}`}>{meta.label}</span>
             {post.tournamentDate && <span className="text-[11px] font-bold text-gray-400 tabular-nums">{fmtDate(post.tournamentDate)}</span>}
