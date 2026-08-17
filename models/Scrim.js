@@ -66,7 +66,23 @@ const ScrimFixtureSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+
+/* 📌 대회 공지 — 사이트 소식(Notice)과는 다른 개념이다.
+   소식은 서버 전체에 알리는 글이고, 이건 이 대회에 참가한 팀만 보는 운영 공지다.
+   공개 날짜를 따로 두어 미리 써두고 그날부터 뜨게 할 수 있다. */
+const ScrimNoticeSchema = new mongoose.Schema({
+  seasonId: { type: String, required: true, index: true },
+  title: { type: String, required: true },
+  body: { type: String, default: "" },
+  pinned: { type: Boolean, default: false },    // 룸 상단 고정
+  important: { type: Boolean, default: false }, // 중요 표시(붉게)
+  publishAt: { type: Date, default: Date.now }, // 이 시각부터 팀에 보인다
+  authorName: { type: String, default: "" },
+  createdAt: { type: Date, default: Date.now },
+});
+
 export const ScrimSeason = mongoose.models.ScrimSeason || mongoose.model("ScrimSeason", ScrimSeasonSchema);
 export const ScrimTeam = mongoose.models.ScrimTeam || mongoose.model("ScrimTeam", ScrimTeamSchema);
 export const ScrimAvailability = mongoose.models.ScrimAvailability || mongoose.model("ScrimAvailability", ScrimAvailabilitySchema);
 export const ScrimFixture = mongoose.models.ScrimFixture || mongoose.model("ScrimFixture", ScrimFixtureSchema);
+export const ScrimNotice = mongoose.models.ScrimNotice || mongoose.model("ScrimNotice", ScrimNoticeSchema);

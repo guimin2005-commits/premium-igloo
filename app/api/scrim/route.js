@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
-import { ScrimSeason, ScrimTeam, ScrimAvailability, ScrimFixture } from "@/models/Scrim";
+import { ScrimSeason, ScrimTeam, ScrimAvailability, ScrimFixture, ScrimNotice } from "@/models/Scrim";
 import Auction from "@/models/Auction";
 
 /* 📌 스크림 리그 API
@@ -54,10 +54,14 @@ export async function GET() {
     const season = await ensureSeason();
     const sid = String(season._id);
 
-    const [teams, avails, fixtures] = await Promise.all([
+    const admin = isAdminName(session?.user?.name);
+    const [teams, avails, fixtures, notices] = await Promise.all([
       ScrimTeam.find({ seasonId: sid }).sort({ createdAt: 1 }).lean(),
       ScrimAvailability.find({ seasonId: sid }).lean(),
       ScrimFixture.find({ seasonId: sid }).sort({ at: 1 }).lean(),
+      // 예약 공지는 공개 시각 전까지 관리자에게만 보인다
+      ScrimNotice.find(admin ? { seasonId: sid } : { seasonId: sid, publishAt: { $lte: new Date() } })
+        .sort({ pinned: -1, publishAt: -1 }).lean(),
     ]);
 
     // 팀별 응답을 붙여준다 — 일정 조율은 서로 보여야 하는 정보라 팀 안에서는 가리지 않는다
@@ -76,10 +80,11 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       me,
-      isAdmin: isAdminName(session?.user?.name),
+      isAdmin: admin,
       season: { ...season.toObject(), _id: sid },
       teams: out,
       fixtures: fixtures.map((f) => ({ ...f, _id: String(f._id) })),
+      notices: notices.map((n) => ({ ...n, _id: String(n._id) })),
     });
   } catch (e) {
     return NextResponse.json({ success: false, message: "불러오지 못했습니다." }, { status: 500 });
@@ -112,6 +117,43 @@ export async function POST(request) {
         season.stepMin = Number(body.stepMin) === 30 ? 30 : 60;
         if (body.dueAt) season.dueAt = new Date(body.dueAt);
         await season.save();
+        return NextResponse.json({ success: true });
+      }
+
+      /* ── 대회 공지 (관리자) — 소식(Notice)과 달리 이 대회 참가자만 본다 ── */
+      case "notice:create": {
+        const { ok, session } = await requireAdmin();
+        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const title = String(body.title || "").trim();
+        if (!title) return NextResponse.json({ success: false, message: "제목을 입력해 주세요." }, { status: 400 });
+        await ScrimNotice.create({
+          seasonId: sid, title: title.slice(0, 80),
+          body: String(body.body || "").slice(0, 2000),
+          pinned: !!body.pinned, important: !!body.important,
+          publishAt: body.publishAt ? new Date(body.publishAt) : new Date(),
+          authorName: session?.user?.name || "",
+        });
+        return NextResponse.json({ success: true });
+      }
+
+      case "notice:update": {
+        const { ok } = await requireAdmin();
+        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const n = await ScrimNotice.findById(body.noticeId);
+        if (!n) return NextResponse.json({ success: false, message: "공지를 찾을 수 없습니다." }, { status: 404 });
+        if (body.title !== undefined) n.title = String(body.title).trim().slice(0, 80) || n.title;
+        if (body.body !== undefined) n.body = String(body.body).slice(0, 2000);
+        if (body.pinned !== undefined) n.pinned = !!body.pinned;
+        if (body.important !== undefined) n.important = !!body.important;
+        if (body.publishAt) n.publishAt = new Date(body.publishAt);
+        await n.save();
+        return NextResponse.json({ success: true });
+      }
+
+      case "notice:delete": {
+        const { ok } = await requireAdmin();
+        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        await ScrimNotice.findByIdAndDelete(body.noticeId);
         return NextResponse.json({ success: true });
       }
 

@@ -34,7 +34,7 @@ export default function AdminScrimPage() {
   const [tag, setTag] = useState("");
   const [color, setColor] = useState(PALETTE[0]);
   const [auctions, setAuctions] = useState<any[]>([]);
-  const [tab, setTab] = useState<"teams" | "match" | "time">("teams");
+  const [tab, setTab] = useState<"teams" | "match" | "notice" | "time">("teams");
   const [edit, setEdit] = useState<string | null>(null); // 수정 중인 팀
   const [eName, setEName] = useState("");
   const [eTag, setETag] = useState("");
@@ -129,7 +129,7 @@ export default function AdminScrimPage() {
 
         {/* 탭 — 매칭·통합 시간은 여러 팀에 걸친 일이라 룸이 아니라 여기에 둔다 */}
         <div className="flex flex-wrap gap-1 mb-7">
-          {([["teams", "팀", "TEAMS"], ["match", "스크림 매칭", "MATCH"], ["time", "룸 설정", "SETUP"]] as const).map(([k, label, code]) => {
+          {([["teams", "팀", "TEAMS"], ["match", "스크림 매칭", "MATCH"], ["notice", "대회 공지", "NOTICE"], ["time", "룸 설정", "SETUP"]] as const).map(([k, label, code]) => {
             const on = tab === k;
             return (
               <button key={k} onClick={() => setTab(k)}
@@ -342,6 +342,7 @@ export default function AdminScrimPage() {
         )}
 
         {tab === "match" && <MatchView data={data} busy={busy} post={post} setToast={setToast} />}
+        {tab === "notice" && <NoticeView data={data} busy={busy} post={post} setToast={setToast} />}
         {tab === "time" && season && (
           <SeasonForm season={season} busy={busy} tournaments={tournaments} onSave={async (pl) => { const r = await post({ action: "season:update", ...pl }); if (r) setToast("룸 설정을 저장했습니다 — 모든 팀에 적용됩니다"); }} />
         )}
@@ -354,6 +355,171 @@ export default function AdminScrimPage() {
         </div>
       )}
     </main>
+  );
+}
+
+/* ── 대회 공지 — 소식(Notice)과는 다르다. 이 대회에 참가한 팀만 보는 운영 공지이고,
+      공개 날짜를 따로 잡아 미리 써둔 뒤 그날부터 뜨게 할 수 있다. ── */
+function NoticeView({ data, busy, post, setToast }: { data: any; busy: boolean; post: (p: any) => Promise<any>; setToast: (m: string) => void }) {
+  const G2 = "#00e07b";
+  const notices: any[] = data?.notices || [];
+  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
+  const [pinned, setPinned] = useState(false);
+  const [important, setImportant] = useState(false);
+  const [day, setDay] = useState(() => midnight(Date.now()));
+  const [min, setMin] = useState(() => { const d = new Date(); return d.getHours() * 60; });
+  const [editing, setEditing] = useState<string | null>(null);
+
+  const at = () => { const d = new Date(day); d.setHours(Math.floor(min / 60), min % 60, 0, 0); return d; };
+
+  const Strip = ({ sel, onPick }: { sel: Date; onPick: (d: Date) => void }) => (
+    <div className="flex gap-1.5 overflow-x-auto no-bar pb-1">
+      {Array.from({ length: 21 }, (_, i) => {
+        const d = midnight(Date.now() + DAY * (i - 3));
+        const on = d.getTime() === sel.getTime();
+        return (
+          <button key={i} type="button" onClick={() => onPick(d)} aria-pressed={on}
+            className="esp-cut-sm shrink-0 min-w-[54px] px-1 py-2 border text-center transition-colors"
+            style={on ? { borderColor: G2, background: `${G2}1a` } : { borderColor: "rgba(255,255,255,.08)", background: "rgba(255,255,255,.02)" }}>
+            <span className="block text-[12px] font-black tabular-nums" style={{ color: on ? G2 : "#cbd5e1" }}>{dL(d)}</span>
+            <span className="block text-[9px] font-black esp-mono text-gray-600 mt-0.5">{i === 3 ? "TODAY" : WD[d.getDay()]}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_340px] items-start">
+      <section className="min-w-0">
+        <div className="flex items-center gap-3 mb-3">
+          <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G2 }}>Notices</span>
+          <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
+          <span className="text-[10px] font-black esp-mono text-gray-600">{notices.length}건</span>
+        </div>
+
+        {notices.length === 0 ? (
+          <div className="esp-cut border border-dashed border-white/10 px-6 py-14 text-center">
+            <p className="text-[12px] font-bold text-gray-500">아직 대회 공지가 없습니다</p>
+            <p className="mt-2 text-[11px] text-gray-700">오른쪽에서 작성하세요 — 사이트 소식과는 별개입니다</p>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {notices.map((n: any) => {
+              const pub = new Date(n.publishAt);
+              const scheduled = pub.getTime() > Date.now();
+              return (
+                <div key={n._id} className="esp-cut border bg-white/[0.02]"
+                  style={{ borderColor: n.important ? "rgba(251,113,133,.4)" : "rgba(255,255,255,.08)" }}>
+                  <div className="px-4 pt-3.5 pb-3">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      {n.pinned && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black" style={{ background: G2, color: "#04120b" }}>고정</span>}
+                      {n.important && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black bg-rose-500/20 text-rose-300">중요</span>}
+                      {scheduled && <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black bg-amber-400/15 text-amber-300">예약</span>}
+                      <span className="ml-auto text-[10px] font-black esp-mono text-gray-600 tabular-nums">
+                        {dF(pub)} {pad(pub.getHours())}:{pad(pub.getMinutes())}
+                      </span>
+                    </div>
+                    <p className="text-[14px] font-black text-white break-keep">{n.title}</p>
+                    {n.body && <p className="mt-2 text-[12px] font-medium text-gray-400 leading-relaxed whitespace-pre-line break-keep">{n.body}</p>}
+                  </div>
+                  <div className="flex border-t border-white/[0.07]">
+                    <button disabled={busy}
+                      onClick={async () => { const r = await post({ action: "notice:update", noticeId: n._id, pinned: !n.pinned }); if (r) setToast(n.pinned ? "고정을 풀었습니다" : "상단에 고정했습니다"); }}
+                      className="flex-1 py-2 text-[10px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-40">
+                      {n.pinned ? "고정 해제" : "고정"}
+                    </button>
+                    <button disabled={busy}
+                      onClick={async () => { const r = await post({ action: "notice:update", noticeId: n._id, important: !n.important }); if (r) setToast("표시를 바꿨습니다"); }}
+                      className="flex-1 py-2 text-[10px] font-black text-gray-400 border-l border-white/[0.07] hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-40">
+                      {n.important ? "중요 해제" : "중요"}
+                    </button>
+                    <button disabled={busy}
+                      onClick={() => { setEditing(n._id); setTitle(n.title); setText(n.body || ""); setPinned(n.pinned); setImportant(n.important); setDay(midnight(n.publishAt)); const d = new Date(n.publishAt); setMin(d.getHours() * 60 + d.getMinutes()); }}
+                      className="flex-1 py-2 text-[10px] font-black text-gray-400 border-l border-white/[0.07] hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-40">
+                      수정
+                    </button>
+                    <button disabled={busy}
+                      onClick={async () => { if (!confirm("이 공지를 삭제할까요?")) return; const r = await post({ action: "notice:delete", noticeId: n._id }); if (r) setToast("공지를 삭제했습니다"); }}
+                      className="flex-1 py-2 text-[10px] font-black text-rose-400/70 border-l border-white/[0.07] hover:bg-rose-500/10 hover:text-rose-300 transition-colors disabled:opacity-40">
+                      삭제
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <aside className="lg:sticky lg:top-5">
+        <div className="flex items-center gap-3 mb-3">
+          <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G2 }}>{editing ? "Edit" : "New Notice"}</span>
+          <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
+        </div>
+        <div className="esp-cut border border-white/[0.08] bg-white/[0.02] p-4 space-y-3">
+          <div>
+            <span className="block text-[10px] font-black esp-mono text-gray-600 mb-1.5">제목</span>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} placeholder="예) 1주차 일정 안내"
+              className="esp-cut-sm w-full bg-black/40 border border-white/10 px-3 py-2.5 text-[13px] font-bold text-white outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700" />
+          </div>
+          <div>
+            <span className="block text-[10px] font-black esp-mono text-gray-600 mb-1.5">내용</span>
+            <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={2000} rows={5} placeholder="줄바꿈 그대로 표시됩니다"
+              className="esp-cut-sm w-full bg-black/40 border border-white/10 px-3 py-2.5 text-[12px] font-medium text-gray-200 outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700 resize-y" />
+          </div>
+
+          <div>
+            <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">공개 날짜</span>
+            <Strip sel={day} onPick={setDay} />
+            <div className="flex items-center gap-2 mt-2.5">
+              <div className="esp-cut-sm inline-flex items-stretch border border-white/10 bg-white/[0.03]">
+                <button type="button" onClick={() => setMin((v) => (v + 1440 - 30) % 1440)} className="w-9 text-[16px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors">−</button>
+                <span className="min-w-[74px] px-2 py-2 text-center text-[13px] font-black tabular-nums border-x border-white/10">{pad(Math.floor(min / 60))}:{pad(min % 60)}</span>
+                <button type="button" onClick={() => setMin((v) => (v + 30) % 1440)} className="w-9 text-[16px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors">+</button>
+              </div>
+              <span className="text-[10px] font-bold text-gray-600 leading-tight">
+                {at().getTime() > Date.now() ? <span className="text-amber-300">이 시각부터 공개</span> : "바로 공개"}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            {[[pinned, setPinned, "상단 고정"], [important, setImportant, "중요"]].map(([v, set, label]: any, i) => (
+              <button key={i} type="button" onClick={() => set(!v)} aria-pressed={v}
+                className="esp-cut-sm flex-1 py-2 text-[11px] font-black transition-colors"
+                style={v ? { background: G2, color: "#04120b" } : { background: "rgba(255,255,255,.05)", color: "#8b8b93" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button disabled={busy || !title.trim()}
+              onClick={async () => {
+                const payload = { title, body: text, pinned, important, publishAt: at().toISOString() };
+                const r = editing
+                  ? await post({ action: "notice:update", noticeId: editing, ...payload })
+                  : await post({ action: "notice:create", ...payload });
+                if (r) { setToast(editing ? "공지를 수정했습니다" : "공지를 등록했습니다"); setEditing(null); setTitle(""); setText(""); setPinned(false); setImportant(false); }
+              }}
+              className="flex-1 esp-cut-sm py-3 text-[12px] font-black disabled:opacity-35" style={{ background: G2, color: "#04120b" }}>
+              {editing ? "수정 저장" : "공지 등록"}
+            </button>
+            {editing && (
+              <button onClick={() => { setEditing(null); setTitle(""); setText(""); setPinned(false); setImportant(false); }}
+                className="px-4 esp-cut-sm py-3 text-[12px] font-black bg-white/[0.05] text-gray-400 hover:text-white transition-colors">취소</button>
+            )}
+          </div>
+
+          <p className="text-[10px] font-bold text-gray-600 leading-relaxed">
+            사이트 <b className="text-gray-400">소식</b> 공지와는 별개입니다. 이 공지는 대회 룸에 들어온 팀만 봅니다.
+            공개 날짜를 앞으로 잡으면 그 전까지는 관리자에게만 보입니다.
+          </p>
+        </div>
+      </aside>
+    </div>
   );
 }
 

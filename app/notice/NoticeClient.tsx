@@ -185,7 +185,7 @@ export default function NoticeClient() {
     const noticeId = searchParams.get("id");
     if (noticeId && notices.length > 0) {
       const notice = notices.find(n => n._id === noticeId);
-      if (notice) setSelectedNotice(notice);
+      if (notice) router.replace(`/notice/${notice._id}`);
     }
   }, [notices, searchParams]);
 
@@ -304,7 +304,7 @@ export default function NoticeClient() {
             const tagMeta = getNoticeTagMeta(notice);
             return (
               <Reveal key={notice._id} delay={Math.min(listIdx, 5) * 70}>
-              <div onClick={() => { markAsRead(notice._id); setSelectedNotice(notice); }} className="relative rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px cursor-pointer group hover:from-[#e91e3f]/40 hover:to-white/[0.02] transition-all duration-300">
+              <div onClick={() => { markAsRead(notice._id); router.push(`/notice/${notice._id}`); }} className="relative rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px cursor-pointer group hover:from-[#e91e3f]/40 hover:to-white/[0.02] transition-all duration-300">
               <div className="rounded-2xl bg-[#111111]/95 p-4 md:p-6 group-hover:bg-[#141414] transition-colors duration-300">
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex items-center gap-2 min-h-[24px] shrink-0">
