@@ -288,7 +288,7 @@ export default function AdminWritePage() {
     category, title, content, publishAt, noticeTag, isPinned, bannerUrl,
     eventTag, eventStartDate, eventEndDate, isEventAlways,
     recruitSubCategory, recruitRole, recruitStartDate, recruitEndDate, isRecruitAlways, recruitQual, recruitTasks, recruitExtra,
-    tournamentGame, tournamentPrize, tournamentStatus, tournamentLink, tournamentBracket: serializeBracket(bracketRounds), tournamentWinner, tournamentWinnerId, tournamentStartDate, tournamentEndDate,
+    tournamentGame, tournamentPrize, tournamentStatus: statusFromPhase(tournamentPhase), tournamentLink, tournamentBracket: serializeBracket(bracketRounds), tournamentWinner, tournamentWinnerId, tournamentStartDate, tournamentEndDate,
     tournamentType, tournamentPhase, tournamentTeamDay, tournamentEventDay, tournamentSchedule, survey,
     savedAt: new Date().toISOString(),
   });
@@ -485,7 +485,7 @@ export default function AdminWritePage() {
     if (!title.trim()) return false;
     if (category === "구인") return recruitRole.trim() && recruitTasks.trim() && recruitQual.trim() && recruitStartDate;
     if (category === "이벤트") return eventStartDate && content.trim();
-    if (category === "대회") return tournamentGame.trim() && tournamentPrize.trim() && tournamentStartDate;
+    if (category === "대회") return tournamentGame.trim() && tournamentPrize.trim() && tournamentEventDay;
     return content.trim();
   };
 
@@ -493,6 +493,14 @@ export default function AdminWritePage() {
     const t = line.trim();
     return t === "" ? "" : (/^[ \-*]/.test(t) ? t : "• " + t);
   }).filter(line => line !== "").join("\n");
+
+  /* 단계 하나에서 상태·기간을 끌어낸다 — 같은 걸 여러 칸에서 받으면 반드시 어긋난다 */
+  const statusFromPhase = (ph: string) => (ph === "접수" ? "모집중" : ph === "종료" ? "종료됨" : "진행중");
+  const dateFromDays = (a: string, b: string) => {
+    const f = (v: string) => (v || "").replace(/-/g, ".");
+    if (a && b) return `${f(a)} ~ ${f(b)}`;
+    return f(a || b);
+  };
 
   const handleSubmit = async () => {
     if (!isFormValid()) return;
@@ -507,11 +515,8 @@ export default function AdminWritePage() {
       const formattedStart = recruitStartDate.replace(/-/g, ".");
       computedRecruitPeriod = isRecruitAlways ? `${formattedStart} ~ 상시` : (recruitEndDate ? `${formattedStart} ~ ${recruitEndDate.replace(/-/g, ".")}` : `${formattedStart} ~ 상시`);
     }
-    let computedTournamentDate = "";
-    if (category === "대회" && tournamentStartDate) {
-      const formattedStart = tournamentStartDate.replace(/-/g, ".");
-      computedTournamentDate = tournamentEndDate ? `${formattedStart} ~ ${tournamentEndDate.replace(/-/g, ".")}` : formattedStart;
-    }
+    // 대표 기간은 팀 배정일 ~ 대회 당일에서 만든다 (따로 묻지 않는다)
+    const computedTournamentDate = category === "대회" ? dateFromDays(tournamentTeamDay, tournamentEventDay) : "";
     const postData = {
       author: session.user?.name || "관리자", category, title,
       publishAt: publishAt ? new Date(publishAt).toISOString() : null,
@@ -733,44 +738,8 @@ export default function AdminWritePage() {
                 <input type="text" placeholder="예: 총 상금 1,000,000원" value={tournamentPrize} onChange={(e) => setTournamentPrize(e.target.value)} className="w-full bg-[#121212] border border-white/10 rounded-xl px-5 py-3 text-sm text-white focus:border-[#e91e3f] focus:outline-none" />
               </div>
               <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-gray-400">진행 상태</span>
-                <CustomSelect value={tournamentStatus} onChange={setTournamentStatus} options={[{value:"예정됨", label:"예정됨"}, {value:"모집중", label:"모집중 (참가 신청 접수)"}, {value:"진행중", label:"진행중 (리그 진행)"}, {value:"종료됨", label:"종료됨"}]} />
-              </div>
-              <div className="flex flex-col gap-3">
                 <span className="text-xs font-bold text-gray-400">참가 신청 링크 {tournamentPhase === "접수" ? <span className="text-[#e91e3f]">(권장)</span> : "(선택)"}</span>
                 <input type="text" placeholder="https://..." value={tournamentLink} onChange={(e) => setTournamentLink(e.target.value)} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
-              </div>
-
-              {/* 📌 리그 상세 일정 (양쪽 타입 공통) */}
-              <div className="md:col-span-2 flex flex-col gap-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-gray-400">리그 상세 일정 (선택) <span className="text-gray-600 font-medium">— 팀원 배정, 스크림, 본선 등 단계별 기간</span></span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {PHASE_PRESETS.map((p) => (
-                      <button key={p} type="button" onClick={() => addPhase(p)} className="text-[10px] font-black text-gray-400 bg-white/5 border border-white/10 px-2.5 py-1.5 rounded-full hover:text-white hover:border-[#e91e3f]/40 transition-all">+ {p}</button>
-                    ))}
-                    <button type="button" onClick={() => addPhase()} className="text-[10px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-2.5 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-colors">+ 직접 입력</button>
-                  </div>
-                </div>
-                {tournamentSchedule.length === 0 ? (
-                  <div className="border-y border-dashed border-white/10 py-6 text-center">
-                    <p className="text-xs text-gray-500">위 버튼으로 대회 단계별 일정을 추가하세요. (예: 팀원 배정 → 스크림 → 본선 → 결승)</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {tournamentSchedule.map((ph, i) => (
-                      <div key={i} className="flex flex-wrap items-center gap-2 bg-[#161616] border border-white/10 rounded-xl p-3">
-                        <span className="text-[9px] font-black text-gray-600 w-5 text-center shrink-0">{i + 1}</span>
-                        <input type="text" placeholder="단계명 (예: 본선 경기)" value={ph.label} onChange={(e) => updatePhase(i, { label: e.target.value })} className="flex-1 min-w-[120px] bg-[#0f0f0f] border border-white/10 rounded-lg px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-[#e91e3f]" />
-                        <input type="date" value={ph.start} onChange={(e) => updatePhase(i, { start: e.target.value })} className="bg-[#0f0f0f] border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#e91e3f] [color-scheme:dark]" />
-                        <span className="text-[10px] text-gray-600 font-bold shrink-0">~</span>
-                        <input type="date" value={ph.end} onChange={(e) => updatePhase(i, { end: e.target.value })} className="bg-[#0f0f0f] border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#e91e3f] [color-scheme:dark]" />
-                        <button type="button" onClick={() => setTournamentSchedule(tournamentSchedule.filter((_, j) => j !== i))} className="shrink-0 text-gray-700 hover:text-red-400 text-sm font-black px-1 transition-colors">×</button>
-                      </div>
-                    ))}
-                    <p className="text-[10px] text-gray-600">종료일을 비우면 단일 날짜로 표시됩니다.</p>
-                  </div>
-                )}
               </div>
 
               {/* 📌 대진표 — '대진표' 타입일 때만 표시 */}
@@ -1151,21 +1120,6 @@ export default function AdminWritePage() {
               <div className="flex flex-col gap-3 md:col-span-2">
                 <span className="text-xs font-bold text-gray-400">배너 이미지 URL (선택)</span>
                 <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
-              </div>
-              <div className="flex flex-col gap-3 md:col-span-2">
-                <span className="text-xs font-bold text-gray-400">전체 대회 기간 <span className="text-[#e91e3f]">*</span> <span className="text-gray-600 font-medium">— 카드에 표시되는 대표 기간</span></span>
-                <div className="flex flex-wrap items-center gap-3 w-full bg-transparent border-0 border-b border-white/12 rounded-none px-4 py-2.5 focus-within:border-[#e91e3f] transition-colors">
-                  <div className="flex items-center gap-2 bg-transparent border-b border-white/10 px-3 py-1.5 flex-1 min-w-[140px]">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-gray-400 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                    <input type="date" value={tournamentStartDate} onChange={(e) => setTournamentStartDate(e.target.value)} required className="bg-transparent text-sm text-white font-medium focus:outline-none cursor-pointer [color-scheme:dark] w-full" />
-                  </div>
-                  <span className="text-gray-600 font-bold shrink-0">~</span>
-                  <div className="flex items-center gap-2 bg-transparent border-b border-white/10 px-3 py-1.5 flex-1 min-w-[140px]">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-gray-400 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                    <input type="date" value={tournamentEndDate} onChange={(e) => setTournamentEndDate(e.target.value)} className="bg-transparent text-sm text-white font-medium focus:outline-none cursor-pointer [color-scheme:dark] w-full" />
-                  </div>
-                  <span className="text-[10px] text-gray-600 w-full sm:w-auto">단일 일정은 종료일 비워두세요</span>
-                </div>
               </div>
             </div>
           )}
