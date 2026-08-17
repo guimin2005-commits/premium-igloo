@@ -241,9 +241,9 @@ export default function RecruitPage() {
 
       {/* ── 탭 (알약 스타일 · 스티키) ── */}
       <div className="w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
-        <div className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto whitespace-nowrap">
+        <div className="max-w-5xl mx-auto flex flex-wrap gap-1.5">
           {[{ id: "all", label: "전체보기" }, { id: "staff", label: "스태프 모집" }, { id: "sup", label: "서포터즈 모집" }, { id: "ended", label: "마감" }].map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-5 py-2.5 text-xs md:text-sm font-bold rounded-full shrink-0 outline-none focus:outline-none transition-all duration-300 ${
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-3.5 md:px-5 py-2 md:py-2.5 text-[11px] md:text-sm font-bold rounded-full shrink-0 outline-none focus:outline-none transition-all duration-300 ${
               activeTab === tab.id
                 ? "bg-[#e91e3f] text-white shadow-[0_4px_20px_rgba(233,30,63,0.35)]"
                 : "bg-white/[0.04] text-gray-500 hover:text-white hover:bg-white/[0.08] border border-white/5"

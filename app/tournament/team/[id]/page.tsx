@@ -34,11 +34,9 @@ export default function TeamRoom() {
 
   const [data, setData] = useState<{ me: string; isAdmin: boolean; season: Season; teams: Team[]; fixtures: Fixture[] } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [adminMode, setAdminMode] = useState(false);
-  const [view, setView] = useState<"room" | "board" | "match" | "cfg">("room");
+  const [view, setView] = useState<"room" | "board">("room");
   const [mine, setMine] = useState<Set<string>>(new Set());
   const [dirty, setDirty] = useState(false);
-  const [pick, setPick] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -102,21 +100,6 @@ export default function TeamRoom() {
   }, [DAYS, SLOTS, usAt]);
   const usTop = usRanked[0];
 
-  const oppTeams = useMemo(() => (data?.teams || []).filter((t) => t._id !== id), [data, id]);
-  const oppReady = (t: Team) => t.members.length > 0 && t.members.filter((m) => m.discordId && t.avail.some((a) => a.userId === m.discordId)).length >= t.members.length;
-  const themAt = (t: Team, d: Date, s: number) => t.avail.filter((a) => a.slots.includes(sKey(d, s))).length;
-
-  const mRanked = useMemo(() => {
-    const t = oppTeams.find((x) => x._id === pick);
-    if (!t) return [];
-    const o: { d: Date; s: number; us: number; them: number; min: number }[] = [];
-    DAYS.forEach((d) => SLOTS.forEach((s) => {
-      const us = usAt(d, s), them = themAt(t, d, s);
-      o.push({ d, s, us, them, min: Math.min(us, them) });
-    }));
-    return o.sort((a, b) => b.min - a.min || b.us + b.them - (a.us + a.them));
-  }, [pick, oppTeams, DAYS, SLOTS, usAt]);
-  const mTop = mRanked[0];
 
   const myFixtures = useMemo(() => (data?.fixtures || []).filter((f) => f.teamAId === id || f.teamBId === id), [data, id]);
   const upcoming = myFixtures.filter((f) => new Date(f.at).getTime() > Date.now() - 2 * 3600e3 && !f.winnerId);
@@ -174,9 +157,7 @@ export default function TeamRoom() {
   const due = new Date(season.dueAt);
   const dueLabel = `${dF(due)} ${pad(due.getHours())}:${pad(due.getMinutes())}`;
   const dDay = Math.ceil((midnight(due).getTime() - midnight(Date.now()).getTime()) / DAY);
-  const tabs = adminMode
-    ? ([["room", "팀 룸", "ROOM"], ["board", "일정 계획판", "PLAN"], ["match", "스크림 매칭", "MATCH"], ["cfg", "통합 시간", "TIME"]] as const)
-    : ([["room", "팀 룸", "ROOM"], ["board", "일정 계획판", "PLAN"]] as const);
+  const tabs = [["room", "팀 룸", "ROOM"], ["board", "일정 계획판", "PLAN"]] as const;
 
   /* ── 조각 ── */
   const Emblem = ({ tag, color, size: sz = 46 }: { tag: string; color: string; size?: number }) => (
@@ -258,14 +239,9 @@ export default function TeamRoom() {
             <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G }}>{season.title}</span>
             <span className="h-px flex-1 max-w-[200px] bg-gradient-to-r from-[#00e07b]/40 to-transparent" />
             {isAdmin && (
-              <button onClick={() => { const v = !adminMode; setAdminMode(v); if (!v && (view === "match" || view === "cfg")) setView("room"); }}
-                aria-pressed={adminMode}
-                className="esp-cut-sm flex items-center gap-2 px-3 py-2 text-[10px] font-black transition-colors"
-                style={adminMode ? { background: G, color: "#04120b" } : { background: "rgba(255,255,255,.05)", color: "#8b8b93" }}>
-                <span className="relative w-6 h-3.5" style={{ background: adminMode ? "rgba(4,18,11,.35)" : "rgba(255,255,255,.16)" }}>
-                  <span className="absolute top-0.5 w-2.5 h-2.5 bg-white transition-[left] duration-200" style={{ left: adminMode ? 13 : 2 }} />
-                </span>
-                운영 화면
+              <button onClick={() => router.push("/admin/scrim")}
+                className="esp-cut-sm px-3 py-2 text-[10px] font-black bg-white/[0.05] text-gray-400 hover:text-white transition-colors">
+                운영 콘솔 →
               </button>
             )}
           </div>
@@ -306,7 +282,7 @@ export default function TeamRoom() {
 
       {/* ══ 탭 ══ */}
       <div className="w-full px-5 md:px-8 bg-[#090909]/90 backdrop-blur-xl border-b border-white/[0.07] mt-7 sticky top-0 z-20">
-        <div className="max-w-[1240px] mx-auto flex gap-1 overflow-x-auto whitespace-nowrap py-2.5">
+        <div className="max-w-[1240px] mx-auto flex flex-wrap gap-1 py-2.5">
           {tabs.map(([k, label, code]) => {
             const on = view === k;
             return (
@@ -365,7 +341,7 @@ export default function TeamRoom() {
                             <Emblem tag={opp?.tag || "?"} color={opp?.color || "#888"} size={42} />
                           </div>
                         </div>
-                        {isAdmin && adminMode && (
+                        {isAdmin && (
                           <div className="flex border-t border-white/[0.07]">
                             {[["우리 승", id], ["상대 승", f.teamAId === id ? f.teamBId : f.teamAId], ["무승부", "draw"]].map(([l, w]) => (
                               <button key={l as string} disabled={busy}
@@ -439,7 +415,7 @@ export default function TeamRoom() {
                             <span className="block text-[10px] font-bold text-gray-600 mt-0.5">{m.pos || "포지션 미정"}</span>
                           </span>
                           <span className={`shrink-0 text-[9px] font-black esp-mono ${ok ? "" : "text-gray-700"}`} style={ok ? { color: G } : undefined}>{ok ? "SENT" : "WAIT"}</span>
-                          {isAdmin && adminMode && ok && (
+                          {isAdmin && ok && (
                             <button disabled={busy} onClick={async () => { const r = await post({ action: "avail:reset", teamId: id, userId: m.discordId }); if (r) setToast(`${m.name} 응답을 초기화했습니다`); }}
                               className="shrink-0 text-[9px] font-black text-rose-400/70 hover:text-rose-300 disabled:opacity-40">초기화</button>
                           )}
@@ -498,103 +474,6 @@ export default function TeamRoom() {
             </div>
           )}
 
-          {/* ══ 스크림 매칭 (운영) ══ */}
-          {view === "match" && isAdmin && adminMode && (
-            <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)] items-start">
-              <aside className="xl:sticky xl:top-20">
-                <Bar k="Opponents" />
-                <div className="space-y-2">
-                  {oppTeams.length === 0 && <p className="text-[11px] font-bold text-gray-700 py-4">등록된 다른 팀이 없습니다.</p>}
-                  {oppTeams.map((t) => {
-                    const ready = oppReady(t);
-                    const on = pick === t._id;
-                    const cnt = t.members.filter((m) => m.discordId && t.avail.some((a) => a.userId === m.discordId)).length;
-                    return (
-                      <button key={t._id} disabled={!ready} onClick={() => setPick(on ? null : t._id)} aria-pressed={on}
-                        className={`esp-cut-sm w-full flex items-center gap-3 p-3 text-left border transition-colors ${!ready ? "opacity-40 cursor-not-allowed" : "hover:bg-white/[0.05]"}`}
-                        style={on ? { borderColor: t.color, background: `${t.color}14` } : { borderColor: "rgba(255,255,255,.08)", background: "rgba(255,255,255,.02)" }}>
-                        <Emblem tag={t.tag} color={t.color} size={34} />
-                        <span className="min-w-0 flex-1">
-                          <b className="block text-[12px] font-black truncate">{t.name}</b>
-                          <span className="block text-[10px] font-black esp-mono mt-0.5" style={{ color: ready ? G : "#5c5c63" }}>
-                            {ready ? "READY" : `${cnt}/${t.members.length}`}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {!usReady && (
-                  <p className="mt-4 esp-cut-sm border border-dashed border-white/10 p-3.5 text-[11px] font-bold text-gray-500 leading-relaxed">
-                    우리 팀이 <b className="text-amber-300">{size - doneCount}명</b> 미제출입니다. 전원이 내야 매칭할 수 있습니다.
-                  </p>
-                )}
-              </aside>
-
-              <div className="min-w-0">
-                {pick && usReady ? (() => {
-                  const t = oppTeams.find((x) => x._id === pick)!;
-                  const cap = Math.min(size, t.members.length);
-                  return (
-                    <>
-                      <Bar k="Overlap" right={<span className="text-[10px] font-black esp-mono text-gray-600">우리 {size} · {t.name} {t.members.length}</span>} />
-                      <p className="text-[11px] font-bold text-gray-600 mb-4">숫자는 <b className="text-gray-300">더 적은 쪽 팀</b>의 가능 인원입니다. 양 팀 전원 가능한 칸에 초록 테두리가 붙습니다.</p>
-                      <Grid readOnly value={(d, s) => {
-                        const us = usAt(d, s), them = themAt(t, d, s);
-                        return { n: Math.min(us, them), cap, full: us === size && them === t.members.length && Math.min(us, them) > 0 };
-                      }} />
-
-                      <div className="esp-cut border border-white/[0.08] bg-white/[0.02] mt-6">
-                        <div className="px-5 py-2.5 border-b border-white/[0.07] flex items-center gap-2">
-                          <span className="text-[10px] font-black esp-mono text-gray-500">RECOMMENDED</span>
-                          <span className="ml-auto text-[12px] font-black tabular-nums" style={{ color: G }}>
-                            {mTop?.min ? `${dF(mTop.d)} ${sF(mTop.s)}` : "겹치는 시간 없음"}
-                          </span>
-                        </div>
-                        <div className="px-5 py-5 flex items-center gap-4">
-                          <div className="flex-1 flex items-center gap-3 min-w-0">
-                            <Emblem tag={team.tag} color={C} size={38} />
-                            <span className="min-w-0">
-                              <span className="block text-[12px] font-black truncate">{team.name}</span>
-                              <span className="block text-[10px] font-black esp-mono text-gray-600">{mTop ? `${mTop.us}/${size}` : "—"}</span>
-                            </span>
-                          </div>
-                          <span className="text-[13px] font-black esp-mono text-gray-700">VS</span>
-                          <div className="flex-1 flex items-center justify-end gap-3 min-w-0">
-                            <span className="min-w-0 text-right">
-                              <span className="block text-[12px] font-black truncate">{t.name}</span>
-                              <span className="block text-[10px] font-black esp-mono text-gray-600">{mTop ? `${mTop.them}/${t.members.length}` : "—"}</span>
-                            </span>
-                            <Emblem tag={t.tag} color={t.color} size={38} />
-                          </div>
-                        </div>
-                        <button disabled={busy || !mTop?.min}
-                          onClick={async () => {
-                            if (!mTop?.min) return;
-                            const at = new Date(mTop.d); at.setHours(Math.floor(mTop.s / 60), mTop.s % 60, 0, 0);
-                            const r = await post({ action: "fixture:create", teamAId: id, teamBId: t._id, at: at.toISOString(), usCount: mTop.us, themCount: mTop.them });
-                            if (r) setToast(`${dF(mTop.d)} ${sF(mTop.s)} · ${t.name} 전 확정`);
-                          }}
-                          className="w-full py-3.5 text-[12px] font-black border-t border-white/[0.07] transition-colors disabled:opacity-35"
-                          style={{ background: G, color: "#04120b" }}>
-                          이 시각으로 스크림 확정
-                        </button>
-                      </div>
-                    </>
-                  );
-                })() : (
-                  <div className="esp-cut border border-dashed border-white/10 px-6 py-16 text-center">
-                    <p className="text-[12px] font-bold text-gray-500">왼쪽에서 상대 팀을 고르면 겹치는 시간이 나옵니다</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ══ 통합 시간 (운영) ══ */}
-          {view === "cfg" && isAdmin && adminMode && (
-            <SeasonForm season={season} busy={busy} onSave={async (p) => { const r = await post({ action: "season:update", ...p }); if (r) setToast("통합 시간을 바꿨습니다 — 모든 팀에 적용됩니다"); }} />
-          )}
         </div>
       </div>
 
@@ -605,129 +484,5 @@ export default function TeamRoom() {
         </div>
       )}
     </main>
-  );
-}
-
-/* ── 통합 시간 조정 — 전 팀 공통. 네이티브 select/date 는 쓰지 않는다 ── */
-function SeasonForm({ season, busy, onSave }: { season: Season; busy: boolean; onSave: (p: any) => void }) {
-  const G2 = "#00e07b";
-  const [start, setStart] = useState(() => midnight(season.startAt));
-  const [days, setDays] = useState(season.days);
-  const [from, setFrom] = useState(season.fromHour);
-  const [to, setTo] = useState(season.toHour);
-  const [step, setStep] = useState(season.stepMin);
-  const [dueDay, setDueDay] = useState(() => midnight(season.dueAt));
-  const [dueMin, setDueMin] = useState(() => { const d = new Date(season.dueAt); return d.getHours() * 60 + d.getMinutes(); });
-
-  const end = (() => { const e = new Date(start); e.setDate(e.getDate() + days - 1); return e; })();
-  const cells = days * Math.max(0, Math.ceil(((to - from) * 60) / step));
-
-  const Step = ({ label, value, sub, minus, plus, mOff, pOff }: any) => (
-    <div>
-      <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">{label}</span>
-      <div className="esp-cut-sm inline-flex items-stretch border border-white/10 bg-white/[0.03]">
-        <button type="button" onClick={minus} disabled={mOff} className="w-9 text-[16px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white disabled:text-gray-700 disabled:hover:bg-transparent transition-colors">−</button>
-        <span className="min-w-[92px] px-2 py-2.5 text-center border-x border-white/10">
-          <span className="block text-[13px] font-black tabular-nums">{value}</span>
-          {sub && <span className="block text-[9px] font-bold text-gray-600 mt-0.5">{sub}</span>}
-        </span>
-        <button type="button" onClick={plus} disabled={pOff} className="w-9 text-[16px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white disabled:text-gray-700 disabled:hover:bg-transparent transition-colors">+</button>
-      </div>
-    </div>
-  );
-  const Strip = ({ sel, onPick }: { sel: Date; onPick: (d: Date) => void }) => (
-    <div className="flex gap-1.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
-      {Array.from({ length: 21 }, (_, i) => {
-        const d = midnight(Date.now() + DAY * i);
-        const on = d.getTime() === sel.getTime();
-        return (
-          <button key={i} type="button" onClick={() => onPick(d)} aria-pressed={on}
-            className="esp-cut-sm shrink-0 min-w-[52px] px-1 py-2 border text-center transition-colors"
-            style={on ? { borderColor: G2, background: `${G2}1a` } : { borderColor: "rgba(255,255,255,.08)", background: "rgba(255,255,255,.02)" }}>
-            <span className="block text-[12px] font-black tabular-nums" style={{ color: on ? G2 : "#cbd5e1" }}>{dL(d)}</span>
-            <span className="block text-[9px] font-black esp-mono text-gray-600 mt-0.5">{i === 0 ? "TODAY" : WD[d.getDay()]}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-
-  return (
-    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px] items-start">
-      <div className="min-w-0 space-y-6">
-        <div>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G2 }}>Period</span>
-            <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
-          </div>
-          <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">시작 날짜</span>
-          <Strip sel={start} onPick={setStart} />
-          <div className="flex flex-wrap gap-4 mt-4">
-            <Step label="기간" value={`${days}일`} sub={`~ ${dF(end)}`} minus={() => setDays((v) => Math.max(1, v - 1))} plus={() => setDays((v) => Math.min(21, v + 1))} mOff={days <= 1} pOff={days >= 21} />
-            <div>
-              <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">단위</span>
-              <div className="esp-cut-sm inline-flex border border-white/10 bg-white/[0.03]">
-                {[60, 30].map((v) => (
-                  <button key={v} onClick={() => setStep(v)} aria-pressed={step === v}
-                    className="px-4 py-2.5 text-[12px] font-black border-l border-white/10 first:border-l-0 transition-colors"
-                    style={step === v ? { background: `${G2}1f`, color: G2 } : { color: "#8b8b93" }}>{v === 60 ? "1시간" : "30분"}</button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G2 }}>Hours</span>
-            <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
-          </div>
-          <div className="flex flex-wrap gap-4">
-            <Step label="시작 시각" value={hourLabel(from)} minus={() => setFrom((v) => Math.max(0, v - 1))} plus={() => setFrom((v) => Math.min(to - 1, v + 1))} mOff={from <= 0} pOff={from >= to - 1} />
-            <Step label="종료 시각" value={hourLabel(to)} sub={to > 24 ? "익일" : undefined} minus={() => setTo((v) => Math.max(from + 1, v - 1))} plus={() => setTo((v) => Math.min(30, v + 1))} mOff={to <= from + 1} pOff={to >= 30} />
-          </div>
-        </div>
-
-        <div>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G2 }}>Deadline</span>
-            <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
-          </div>
-          <Strip sel={dueDay} onPick={setDueDay} />
-          <div className="mt-4">
-            <Step label="마감 시각" value={`${pad(Math.floor(dueMin / 60))}:${pad(dueMin % 60)}`}
-              minus={() => setDueMin((v) => (v + 1440 - 30) % 1440)} plus={() => setDueMin((v) => (v + 30) % 1440)} />
-          </div>
-        </div>
-      </div>
-
-      <aside className="xl:sticky xl:top-20">
-        <div className="flex items-center gap-3 mb-3">
-          <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G2 }}>Summary</span>
-          <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
-        </div>
-        <div className="esp-cut border border-white/[0.08] bg-white/[0.02] p-5 text-[12px] font-bold text-gray-400 leading-relaxed">
-          <b className="text-white tabular-nums">{dF(start)}</b> 부터 <b className="text-white tabular-nums">{days}일</b>간<br />
-          매일 <b className="text-white">{hourLabel(from)}~{hourLabel(to)}</b> · <b className="text-white">{step === 60 ? "1시간" : "30분"}</b> 단위<br />
-          한 사람이 볼 칸 <b className="text-white tabular-nums">{cells}칸</b>
-          {cells > 90 && <span className="text-amber-300"> — 많으면 응답률이 떨어집니다</span>}
-        </div>
-        <p className="mt-3 text-[11px] font-bold text-gray-600 leading-relaxed">
-          이 설정은 <b className="text-gray-300">모든 팀에 함께</b> 적용됩니다. 팀마다 다르면 팀 간 겹치는 시간을 계산할 수 없습니다.
-        </p>
-        <button disabled={busy}
-          onClick={() => {
-            const due = new Date(dueDay); due.setHours(Math.floor(dueMin / 60), dueMin % 60, 0, 0);
-            onSave({ startAt: start.toISOString(), days, fromHour: from, toHour: to, stepMin: step, dueAt: due.toISOString() });
-          }}
-          className="w-full mt-4 esp-cut-sm py-3.5 text-[12px] font-black transition-all active:scale-[.98] disabled:opacity-40"
-          style={{ background: G2, color: "#04120b" }}>
-          전체 팀에 적용
-        </button>
-        <p className="mt-3 text-[10px] font-bold text-rose-400/70 leading-relaxed">
-          기간이나 시간대를 줄이면 그 바깥의 기존 응답은 계산에서 빠집니다.
-        </p>
-      </aside>
-    </div>
   );
 }
