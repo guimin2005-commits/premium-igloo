@@ -76,10 +76,7 @@ function PolicyContent() {
       <section className="w-full pt-14 pb-8 md:pt-20 md:pb-10 px-6 border-b border-white/[0.09]">
         <div className="max-w-3xl mx-auto">
           <p className="text-[10px] font-bold tracking-[0.35em] text-gray-500 uppercase mb-4">Official Document</p>
-          <h1 className="text-2xl md:text-4xl font-bold text-white tracking-tight leading-tight mb-3">약관 및 운영 정책</h1>
-          <p className="text-gray-400 text-[13.5px] md:text-sm leading-[1.8] max-w-2xl">
-            고급 이글루 서버 이용에 관한 권리와 의무, 개인정보의 수집·처리 방법, 대회 및 내전 참여 규정을 정한 공식 문서입니다.
-          </p>
+          <h1 className="text-2xl md:text-4xl font-bold text-white tracking-tight leading-tight">약관 및 운영 정책</h1>
         </div>
       </section>
 

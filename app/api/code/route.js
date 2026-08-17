@@ -2,13 +2,17 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
+import { denyIfNotAdmin, requireUser } from "@/lib/apiAuth";
 import Code from "@/models/Code";
 import CodeGrant from "@/models/CodeGrant";
 import Payout from "@/models/Payout";
 
 // [조회] 관리자용 전체 코드 목록
+// ⚠️ 미사용 코드 문자열이 그대로 담기므로 반드시 관리자만 볼 수 있어야 한다
 export async function GET() {
   try {
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const codes = await Code.find().sort({ createdAt: -1 });
     return NextResponse.json({ success: true, data: codes });
@@ -22,10 +26,12 @@ export async function POST(request) {
   try {
     await connectToDatabase();
     const body = await request.json();
-    const { id, reward, roleId, requiredRoleId, requiredRoleName, maxUses, expiresAt, code, userId, userName } = body;
+    const { id, reward, roleId, requiredRoleId, requiredRoleName, maxUses, expiresAt, code } = body;
 
     // 관리자: 코드 수정
     if (id) {
+      const deny = await denyIfNotAdmin();
+      if (deny) return deny;
       if (!reward || !reward.trim()) {
         return NextResponse.json({ success: false, error: "보상 설명은 필수입니다." }, { status: 400 });
       }
@@ -48,6 +54,13 @@ export async function POST(request) {
     }
 
     // 유저: 코드 사용
+    // ⚠️ 사용자 신원은 요청 본문이 아니라 세션에서 가져온다 —
+    //    body의 userId를 믿으면 남의 계정으로 보상·XP를 몰아줄 수 있다.
+    const auth = await requireUser();
+    if (auth.deny) return auth.deny;
+    const userName = auth.name;
+    const userId = auth.userId;
+
     if (!code || !code.trim()) {
       return NextResponse.json({ success: false, message: "코드를 입력해 주세요." }, { status: 400 });
     }
@@ -123,6 +136,8 @@ export async function POST(request) {
 // [발급] 관리자용 코드 생성
 export async function PUT(request) {
   try {
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const { code, reward, roleId, requiredRoleId, requiredRoleName, maxUses, expiresAt, xpAmount } = await request.json();
 
@@ -153,6 +168,8 @@ export async function PUT(request) {
 // [삭제] 관리자용 코드 삭제
 export async function DELETE(request) {
   try {
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");

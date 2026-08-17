@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "../../lib/mongodb";
+import { requireUser } from "@/lib/apiAuth";
 import Apply from "../../models/Apply";
 
 export async function POST(req) {
   try {
+    // ⚠️ 지원자 식별은 세션 기준 — body의 discordTag를 믿으면 타인 명의로 지원서를 넣을 수 있다
+    const auth = await requireUser();
+    if (auth.deny) return auth.deny;
+
     const data = await req.json();
     const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
 
     await connectToDatabase();
     await Apply.create({
-      discordTag: data.discordTag || " ",
+      discordTag: auth.name,
       position: data.position || " ",
       age: data.age ? Number(data.age) : 0,
       intro: data.intro || " ",
@@ -26,7 +31,7 @@ export async function POST(req) {
             color: 15275839,
             fields: [
               { name: "지원 분야", value: data.position || " ", inline: true },
-              { name: "디스코드 태그", value: data.discordTag || " ", inline: true },
+              { name: "디스코드 태그", value: auth.name, inline: true },
               { name: "나이", value: data.age ? data.age + "세" : " ", inline: true },
               { name: "자기소개", value: data.intro || " " },
               { name: "경험 (선택)", value: data.experience || "없음" }

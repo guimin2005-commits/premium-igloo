@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import Honor from "@/models/Honor";
+
+// GET은 명예의 전당(공개 페이지)이 읽으므로 열어 두고, 기록 변경은 관리자만 허용한다.
 
 export async function GET() {
   try {
@@ -14,6 +17,8 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const body = await request.json();
     if (!body.title?.trim() || !body.winner?.trim()) {
@@ -28,6 +33,8 @@ export async function POST(request) {
 
 export async function PUT(request) {
   try {
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const body = await request.json();
     if (!body.id) return NextResponse.json({ success: false }, { status: 400 });
@@ -41,6 +48,8 @@ export async function PUT(request) {
 
 export async function DELETE(request) {
   try {
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return NextResponse.json({ success: false }, { status: 400 });

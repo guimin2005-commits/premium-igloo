@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import Setting from "@/models/Setting";
 
 export async function GET() {
@@ -14,8 +15,11 @@ export async function GET() {
   }
 }
 
+// 점검 모드 토글 — 사이트 전체를 잠그는 동작이므로 관리자만
 export async function POST(request) {
   try {
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const { maintenance } = await request.json();
     await Setting.findOneAndUpdate(

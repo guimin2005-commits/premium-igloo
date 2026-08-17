@@ -2,20 +2,29 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
+import { denyIfNotAdmin, requireSelfOrAdmin } from "@/lib/apiAuth";
 import Inquiry from "../../models/Inquiry"; // (아까 해결하신 경로)
 
+// 1:1 문의는 사적인 내용(연락처·환불 정보 등)을 담으므로 열람 권한을 엄격히 나눈다.
 export async function GET(request: Request) {
   try {
-    await connectToDatabase();
     const { searchParams } = new URL(request.url);
     const user = searchParams.get("user");
 
-    let inquiries;
     if (user) {
-      inquiries = await Inquiry.find({ user: user }).sort({ createdAt: -1 });
+      // 본인 문의 내역 — 남의 것은 볼 수 없다
+      const auth = await requireSelfOrAdmin(user);
+      if (auth.deny) return auth.deny;
     } else {
-      inquiries = await Inquiry.find().sort({ createdAt: -1 });
+      // 파라미터가 없으면 전체 목록이므로 관리자만
+      const deny = await denyIfNotAdmin();
+      if (deny) return deny;
     }
+
+    await connectToDatabase();
+    const inquiries = user
+      ? await Inquiry.find({ user }).sort({ createdAt: -1 })
+      : await Inquiry.find().sort({ createdAt: -1 });
     return NextResponse.json({ success: true, data: inquiries });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -106,6 +115,9 @@ async function sendAnswerDm(inquiry: any) {
 // [답변] 관리자 답변 달기 및 상태 업데이트
 export async function PUT(request: Request) {
   try {
+    // ⚠️ 답변은 유저에게 디스코드 DM으로 발송되므로, 사칭 답변을 막기 위해 관리자만 허용한다
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const { id, answer } = await request.json();
     const updatedInquiry = await Inquiry.findByIdAndUpdate(
@@ -123,6 +135,8 @@ export async function PUT(request: Request) {
 // [삭제] 관리자 문의 삭제
 export async function DELETE(request: Request) {
   try {
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
+import { requireUser, requireSelfOrAdmin } from "@/lib/apiAuth";
 import Referral from "@/models/Referral";
 import Payout from "@/models/Payout";
 
@@ -39,13 +40,16 @@ async function getOrCreate(userName, userId) {
 // [조회] 내 초대 코드 / 누적 초대 수 / 코드 사용 여부
 export async function GET(request) {
   try {
-    await connectToDatabase();
     const { searchParams } = new URL(request.url);
     const user = searchParams.get("user");
-    const userId = searchParams.get("userId");
     if (!user) return NextResponse.json({ success: false, error: "유저 정보가 없습니다." }, { status: 400 });
 
-    const doc = await getOrCreate(user, userId);
+    // 남의 초대 내역을 들여다보지 못하게 본인(또는 관리자)만 허용
+    const auth = await requireSelfOrAdmin(user);
+    if (auth.deny) return auth.deny;
+
+    await connectToDatabase();
+    const doc = await getOrCreate(user, auth.isAdmin ? searchParams.get("userId") : auth.userId);
     return NextResponse.json({
       success: true,
       data: { code: doc.code, invites: doc.invitees.length, invitees: doc.invitees, hasUsed: !!doc.referredBy },
@@ -58,9 +62,16 @@ export async function GET(request) {
 // [사용] 친구의 초대 코드 입력
 export async function POST(request) {
   try {
+    // ⚠️ 신원을 세션에서 가져온다 — body의 userName을 믿으면 가짜 닉네임으로
+    //    초대 보상(10,000 XP)과 마일스톤 보너스를 무한히 파밍할 수 있다.
+    const auth = await requireUser();
+    if (auth.deny) return auth.deny;
+    const userName = auth.name;
+    const userId = auth.userId;
+
     await connectToDatabase();
-    const { code, userId, userName } = await request.json();
-    if (!code || !code.trim() || !userName) {
+    const { code } = await request.json();
+    if (!code || !code.trim()) {
       return NextResponse.json({ success: false, message: "코드를 입력해 주세요." }, { status: 400 });
     }
 

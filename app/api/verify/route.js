@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/apiAuth";
 
 export async function POST(request) {
   try {
-    const { userId, acceptScrim } = await request.json();
+    // ⚠️ 인증 역할 지급 대상은 반드시 로그인한 본인이어야 한다.
+    //    body의 userId를 믿으면 누구나 임의 계정에 서버 인증·내전 역할을 붙일 수 있다.
+    const auth = await requireUser();
+    if (auth.deny) return auth.deny;
+
+    const { acceptScrim } = await request.json();
+    const userId = auth.userId;
     const GUILD_ID = process.env.DISCORD_GUILD_ID;
     const AUTH_ROLE = process.env.DISCORD_AUTH_ROLE_ID;
     const UNAUTH_ROLE = process.env.DISCORD_UNAUTH_ROLE_ID;

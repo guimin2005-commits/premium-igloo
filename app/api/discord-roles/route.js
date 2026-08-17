@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/apiAuth";
 
-// 📌 서버의 디스코드 역할 목록 (관리자 대시보드 드롭다운용, 10분 캐시)
+// 📌 서버의 디스코드 역할 목록 (관리자 대시보드 + ARCTIC 역할 상품 표시용, 10분 캐시)
+//    ARCTIC(상점)에서도 쓰므로 관리자 한정은 아니지만, 비로그인 노출은 막는다.
 export async function GET() {
   try {
+    const auth = await requireUser();
+    if (auth.deny) return auth.deny;
     const res = await fetch(
       `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/roles`,
       {
