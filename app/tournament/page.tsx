@@ -354,6 +354,10 @@ export default function TournamentPage() {
               <span className="w-2 h-2 bg-[#00e07b] esp-blink" style={{ clipPath: "polygon(50% 0,100% 50%,50% 100%,0 50%)" }} />
               <span className="text-[10px] font-black esp-mono text-[#00e07b] uppercase">E-Sports League Hub</span>
               <span className="h-px flex-1 max-w-[220px] bg-gradient-to-r from-[#00e07b]/50 to-transparent" />
+              <button onClick={() => router.push("/tournament/notice")}
+                className="esp-cut-sm px-3 py-1.5 text-[10px] font-black bg-white/[0.04] text-gray-400 hover:text-white hover:bg-white/[0.09] transition-colors">
+                대회 공지
+              </button>
             </div>
             <div className="flex flex-wrap items-end justify-between gap-6">
               <div>

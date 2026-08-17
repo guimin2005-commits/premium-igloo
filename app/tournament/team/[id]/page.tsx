@@ -25,6 +25,7 @@ type Member = { discordId: string; name: string; pos: string; leader?: boolean }
 type Team = { _id: string; name: string; tag: string; color: string; wins: number; losses: number; members: Member[]; avail: { userId: string; userName: string; slots: string[] }[] };
 type Season = { _id: string; title: string; tournamentId?: string; notice?: string; startAt: string; days: number; fromHour: number; toHour: number; stepMin: number; dueAt: string };
 type Fixture = { _id: string; teamAId: string; teamBId: string; at: string; winnerId: string; scoreA: number; scoreB: number };
+type Notice = { _id: string; title: string; body: string; pinned: boolean; important: boolean; publishAt: string };
 
 export default function TeamRoom() {
   const { id } = useParams<{ id: string }>();
@@ -32,7 +33,7 @@ export default function TeamRoom() {
   const { data: session, status } = useSession();
   const signedIn = status === "authenticated";
 
-  const [data, setData] = useState<{ me: string; isAdmin: boolean; season: Season; teams: Team[]; fixtures: Fixture[] } | null>(null);
+  const [data, setData] = useState<{ me: string; isAdmin: boolean; season: Season; teams: Team[]; fixtures: Fixture[]; notices: Notice[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"room" | "board">("room");
   const [mine, setMine] = useState<Set<string>>(new Set());
@@ -107,6 +108,7 @@ export default function TeamRoom() {
   const upcoming = myFixtures.filter((f) => new Date(f.at).getTime() > Date.now() - 2 * 3600e3 && !f.winnerId);
   const played = myFixtures.filter((f) => f.winnerId);
   const teamById = (tid: string) => data?.teams.find((t) => t._id === tid);
+  const notices: Notice[] = data?.notices || [];
 
   /* ── 동작 ── */
   const post = async (payload: any) => {
@@ -404,6 +406,36 @@ export default function TeamRoom() {
 
               {/* 우 — 붙박이 사이드 */}
               <aside className="space-y-6 xl:sticky xl:top-20">
+                {/* 대회 공지 — 글 하나가 곧 한 페이지라 여기서는 최근 몇 건만 보여주고 넘긴다 */}
+                <section>
+                  <Bar k="Notice" right={
+                    <button onClick={() => router.push("/tournament/notice")}
+                      className="text-[10px] font-black esp-mono text-gray-600 hover:text-white transition-colors">전체 →</button>
+                  } />
+                  {notices.length === 0 ? (
+                    <p className="py-4 text-[11px] font-bold text-gray-700">등록된 공지가 없습니다.</p>
+                  ) : (
+                    <div className="divide-y divide-white/[0.06]">
+                      {notices.slice(0, 4).map((n) => {
+                        const pub = new Date(n.publishAt);
+                        const scheduled = pub.getTime() > Date.now();
+                        return (
+                          <button key={n._id} onClick={() => router.push(`/tournament/notice/${n._id}`)}
+                            className="w-full text-left py-2.5 group">
+                            <span className="flex items-center gap-1.5 mb-1">
+                              {n.pinned && <span className="text-[9px] font-black esp-mono" style={{ color: G }}>고정</span>}
+                              {n.important && <span className="text-[9px] font-black esp-mono text-rose-400">중요</span>}
+                              {scheduled && <span className="text-[9px] font-black esp-mono text-amber-300">예약</span>}
+                              <span className="ml-auto text-[9px] font-black esp-mono text-gray-700 tabular-nums">{dL(pub)}</span>
+                            </span>
+                            <span className="block text-[12px] font-black text-gray-300 group-hover:text-white transition-colors truncate">{n.title}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+
                 <section>
                   <Bar k="Schedule" />
                   <button onClick={() => setView("board")} className="w-full text-left esp-cut border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] transition-colors p-5">
