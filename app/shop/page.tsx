@@ -833,7 +833,7 @@ export default function ShopPage() {
 
       {/* ── 홈 · 카테고리 (모바일) — 상품 화면과 같은 탭 모양 ── */}
       <section className="md:hidden max-w-6xl mx-auto px-6 pt-8">
-        <div className="flex items-center gap-1 overflow-x-auto border-b border-[#e2e0dc] [&::-webkit-scrollbar]:hidden">
+        <div className="flex flex-wrap items-center gap-1 border-b border-[#e2e0dc]">
           {TYPES.map((t) => (
             <button key={t.v} onClick={() => goProducts(t.v)}
               className="relative shrink-0 px-4 py-3 text-[13px] font-bold text-[#8a8a8a] active:text-[#131313] transition-colors">
@@ -904,7 +904,7 @@ export default function ShopPage() {
         {/* 카테고리 — 헤더 아래에 붙어 따라오고, 스크롤하면 함께 좁아진다 */}
         <div
           className="-mx-6 px-6 mb-5 border-b border-[#e2e0dc]">
-          <div className="flex items-center gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+          <div className="flex flex-wrap items-center gap-1">
             {TYPES.map((t) => {
               const on = typeFilter === t.v;
               return (

@@ -552,7 +552,7 @@ export default function LevelPage() {
 
       {/* ── TAB NAV — 섹션 넘버링과 호응하는 에디토리얼 인덱스 탭 ─────── */}
       <div className="w-full px-6 bg-[#090909]/85 backdrop-blur-xl border-b border-white/[0.08]">
-        <div className="max-w-5xl mx-auto flex gap-7 md:gap-10 overflow-x-auto custom-scrollbar">
+        <div className="max-w-5xl mx-auto flex flex-wrap gap-x-6 gap-y-2 md:gap-x-10">
           {[
             { id: "intro", name: "시스템 소개" },
             { id: "policy", name: "XP 획득 및 혜택" },

@@ -173,15 +173,21 @@ export default function TeamRoom() {
       {right}
     </div>
   );
-  const cell = "w-[38px] h-[30px] lg:w-[46px] lg:h-[34px] border text-[11px] font-black tabular-nums transition-transform active:scale-[.92]";
+  // 폭 고정 대신 표 안에서 균등 분배 — 좁은 화면에서도 가로 스크롤이 생기지 않는다
+  const cell = "w-full h-[30px] lg:h-[36px] border text-[10px] lg:text-[11px] font-black tabular-nums transition-transform active:scale-[.92]";
 
   const Grid = ({ readOnly, value }: { readOnly?: boolean; value: (d: Date, s: number) => { n: number; cap: number; me?: boolean; full?: boolean } }) => (
-    <div className="overflow-x-auto -mx-1 px-1">
-      <table style={{ borderCollapse: "separate", borderSpacing: 2 }}>
+    <div>
+      <table className="w-full table-fixed" style={{ borderCollapse: "separate", borderSpacing: 2 }}>
         <thead>
           <tr>
-            <th className="w-px" />
-            {SLOTS.map((s) => <th key={s} className="pb-1 text-[9px] font-black esp-mono text-gray-600">{sL(s)}</th>)}
+            <th className="w-[38px] lg:w-[46px]" />
+            {SLOTS.map((s) => (
+              <th key={s} className="pb-1 text-[9px] font-black esp-mono text-gray-600 tabular-nums">
+                <span className="hidden sm:inline">{sL(s)}</span>
+                <span className="sm:hidden">{sL(s).slice(0, 2)}</span>
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -401,7 +407,7 @@ export default function TeamRoom() {
 
                 <section>
                   <Bar k="Roster" right={<span className="text-[10px] font-black esp-mono text-gray-600">{size}</span>} />
-                  <div className="divide-y divide-white/[0.06]">
+                  <div className="grid grid-cols-2 xl:grid-cols-1 gap-x-4 xl:gap-x-0 xl:divide-y xl:divide-white/[0.06]">
                     {team.members.map((m, i) => {
                       const ok = !!m.discordId && submitted.has(m.discordId);
                       return (
@@ -433,9 +439,18 @@ export default function TeamRoom() {
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px] items-start">
               <div className="min-w-0">
                 <Bar k="My Availability" right={<span className="text-[10px] font-black esp-mono text-gray-600">{doneCount}/{size} 제출</span>} />
-                <p className="text-[12px] font-bold text-gray-300 mb-4">
-                  가능한 시간을 눌러주세요. <span className="font-medium text-gray-600">다시 누르면 해제됩니다. 날짜를 누르면 하루 전체가 켜집니다.</span>
+                <p className="text-[13px] font-black text-white mb-2.5">
+                  가능한 시간을 눌러주세요
                 </p>
+                {/* 한 문장에 다 밀어넣지 않고 조각으로 나눈다 — 좁은 화면에서도 2열로 유지 */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mb-4">
+                  {[["누르기", "가능으로 표시"], ["다시 누르기", "해제"], ["날짜 누르기", "하루 전체"], ["제출 뒤", "언제든 수정"]].map(([k, v]) => (
+                    <span key={k} className="flex items-baseline gap-2 text-[11px] min-w-0">
+                      <b className="font-black text-gray-300 shrink-0">{k}</b>
+                      <span className="font-medium text-gray-600 truncate">{v}</span>
+                    </span>
+                  ))}
+                </div>
                 <Grid value={(d, s) => ({ n: usAt(d, s), cap: size || 1, me: mine.has(sKey(d, s)), full: usAt(d, s) === size && size > 0 })} />
 
                 <div className="mt-6 pt-4 border-t border-white/[0.08] flex items-center gap-4">

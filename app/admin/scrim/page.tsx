@@ -442,8 +442,8 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
             </div>
             <p className="text-[11px] font-bold text-gray-600 mb-4">숫자는 <b className="text-gray-300">더 적은 쪽 팀</b>의 가능 인원입니다. 양 팀 전원 가능한 칸에 초록 테두리가 붙습니다.</p>
 
-            <div className="overflow-x-auto -mx-1 px-1">
-              <table style={{ borderCollapse: "separate", borderSpacing: 2 }}>
+            <div>
+              <table className="w-full table-fixed" style={{ borderCollapse: "separate", borderSpacing: 2 }}>
                 <thead>
                   <tr>
                     <th className="w-px" />
@@ -464,7 +464,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                         return (
                           <td key={s} className="p-0">
                             <span title={TA.name + " " + ca + " · " + TB.name + " " + cb}
-                              className="w-[38px] h-[30px] lg:w-[46px] lg:h-[34px] border text-[11px] font-black tabular-nums grid place-items-center"
+                              className="w-full h-[30px] lg:h-[36px] border text-[10px] lg:text-[11px] font-black tabular-nums grid place-items-center"
                               style={{
                                 background: mn ? "rgba(0,224,123," + (0.10 + (mn / cap) * 0.55).toFixed(3) + ")" : "rgba(255,255,255,.02)",
                                 borderColor: full ? G2 : "rgba(255,255,255,.07)",
@@ -596,13 +596,13 @@ function SeasonForm({ season, busy, onSave }: { season: any; busy: boolean; onSa
     </div>
   );
   const Strip = ({ sel, onPick }: { sel: Date; onPick: (d: Date) => void }) => (
-    <div className="flex gap-1.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
+    <div className="grid grid-cols-7 gap-1.5">
       {Array.from({ length: 21 }, (_, i) => {
         const d = midnight(Date.now() + DAY * i);
         const on = d.getTime() === sel.getTime();
         return (
           <button key={i} type="button" onClick={() => onPick(d)} aria-pressed={on}
-            className="esp-cut-sm shrink-0 min-w-[52px] px-1 py-2 border text-center transition-colors"
+            className="esp-cut-sm px-0.5 py-2 border text-center transition-colors"
             style={on ? { borderColor: G2, background: `${G2}1a` } : { borderColor: "rgba(255,255,255,.08)", background: "rgba(255,255,255,.02)" }}>
             <span className="block text-[12px] font-black tabular-nums" style={{ color: on ? G2 : "#cbd5e1" }}>{dL(d)}</span>
             <span className="block text-[9px] font-black esp-mono text-gray-600 mt-0.5">{i === 0 ? "TODAY" : WD[d.getDay()]}</span>
