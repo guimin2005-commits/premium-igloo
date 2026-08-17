@@ -23,7 +23,7 @@ const midnight = (d: Date | number | string) => { const x = new Date(d); x.setHo
 
 type Member = { discordId: string; name: string; pos: string; leader?: boolean };
 type Team = { _id: string; name: string; tag: string; color: string; wins: number; losses: number; members: Member[]; avail: { userId: string; userName: string; slots: string[] }[] };
-type Season = { _id: string; title: string; startAt: string; days: number; fromHour: number; toHour: number; stepMin: number; dueAt: string };
+type Season = { _id: string; title: string; tournamentId?: string; notice?: string; startAt: string; days: number; fromHour: number; toHour: number; stepMin: number; dueAt: string };
 type Fixture = { _id: string; teamAId: string; teamBId: string; at: string; winnerId: string; scoreA: number; scoreB: number };
 
 export default function TeamRoom() {
@@ -245,6 +245,9 @@ export default function TeamRoom() {
           <div className="flex items-center gap-3 mb-5">
             <span className="w-2 h-2 esp-blink" style={{ background: G, clipPath: "polygon(50% 0,100% 50%,50% 100%,0 50%)" }} />
             <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G }}>{season.title}</span>
+            {season.tournamentId && (
+              <button onClick={() => router.push("/tournament")} className="text-[10px] font-black esp-mono text-gray-600 hover:text-white transition-colors">대회 보기 →</button>
+            )}
             <span className="h-px flex-1 max-w-[200px] bg-gradient-to-r from-[#00e07b]/40 to-transparent" />
             {isAdmin && (
               <button onClick={() => router.push("/admin/scrim")}
@@ -287,6 +290,18 @@ export default function TeamRoom() {
           </div>
         </div>
       </section>
+
+      {/* 운영 공지 — 관리자가 룸 설정에서 적어두면 여기에 한 줄로 뜬다 */}
+      {season.notice && (
+        <div className="w-full px-5 md:px-8 mt-6">
+          <div className="max-w-[1240px] mx-auto esp-cut-sm flex items-center gap-3 px-4 py-3 border"
+            style={{ borderColor: `${G}3d`, background: `${G}0d` }}>
+            <span className="w-1.5 h-1.5 shrink-0 esp-blink" style={{ background: G }} />
+            <span className="text-[9px] font-black esp-mono shrink-0" style={{ color: G }}>NOTICE</span>
+            <span className="min-w-0 text-[12px] font-bold text-gray-200 break-keep">{season.notice}</span>
+          </div>
+        </div>
+      )}
 
       {/* ══ 탭 ══ */}
       <div className="w-full px-5 md:px-8 bg-[#090909]/90 backdrop-blur-xl border-b border-white/[0.07] mt-7 sticky top-0 z-20">

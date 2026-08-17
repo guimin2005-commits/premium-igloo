@@ -6,7 +6,9 @@ import mongoose from "mongoose";
    그래야 팀 간 교집합을 같은 격자 위에서 계산할 수 있다. */
 
 const ScrimSeasonSchema = new mongoose.Schema({
-  title: { type: String, default: "스크림 리그" },
+  title: { type: String, default: "대회 룸" },
+  tournamentId: { type: String, default: "" },  // 연동한 대회 글 id (겹치는 대회가 없으므로 하나만 활성)
+  notice: { type: String, default: "" },        // 룸 상단에 띄우는 운영 공지
   startAt: { type: Date, required: true },       // 조율 시작 날짜 (자정 기준)
   days: { type: Number, default: 7 },            // 조율 기간(일)
   fromHour: { type: Number, default: 19 },       // 하루 시작 시각

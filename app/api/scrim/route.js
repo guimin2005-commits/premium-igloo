@@ -23,7 +23,7 @@ const ensureSeason = async () => {
   const start = midnight(Date.now() + 864e5);
   const due = midnight(Date.now() + 864e5);
   due.setHours(23, 59, 0, 0);
-  return ScrimSeason.create({ title: "스크림 리그", startAt: start, days: 7, fromHour: 19, toHour: 24, stepMin: 60, dueAt: due });
+  return ScrimSeason.create({ title: "대회 룸", startAt: start, days: 7, fromHour: 19, toHour: 24, stepMin: 60, dueAt: due });
 };
 
 // 📌 디스코드 표시 이름 — 경매 예명이 아니라 실제 닉네임으로 저장한다.
@@ -103,6 +103,8 @@ export async function POST(request) {
         const to = clamp(body.toHour, 1, 30, season.toHour);
         if (to <= from) return NextResponse.json({ success: false, message: "종료 시각은 시작 시각보다 뒤여야 합니다." }, { status: 400 });
         if (body.title !== undefined) season.title = String(body.title).slice(0, 40);
+        if (body.tournamentId !== undefined) season.tournamentId = String(body.tournamentId).slice(0, 40);
+        if (body.notice !== undefined) season.notice = String(body.notice).slice(0, 200);
         if (body.startAt) season.startAt = midnight(body.startAt);
         season.days = clamp(body.days, 1, 21, season.days);
         season.fromHour = from;

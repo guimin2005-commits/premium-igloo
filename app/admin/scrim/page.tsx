@@ -43,6 +43,7 @@ export default function AdminScrimPage() {
   const [mName, setMName] = useState("");
   const [mPos, setMPos] = useState("");
   const [mId, setMId] = useState("");
+  const [tournaments, setTournaments] = useState<any[]>([]);
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2400); return () => clearTimeout(t); }, [toast]);
 
@@ -55,6 +56,10 @@ export default function AdminScrimPage() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    fetch("/api/posts?category=대회", { cache: "no-store" }).then((r) => r.json())
+      .then((d) => setTournaments(Array.isArray(d?.data) ? d.data : [])).catch(() => {});
+  }, []);
   useEffect(() => {
     fetch("/api/auction", { cache: "no-store" }).then((r) => r.json())
       .then((d) => setAuctions(Array.isArray(d?.data) ? d.data : Array.isArray(d?.auctions) ? d.auctions : []))
@@ -124,7 +129,7 @@ export default function AdminScrimPage() {
 
         {/* 탭 — 매칭·통합 시간은 여러 팀에 걸친 일이라 룸이 아니라 여기에 둔다 */}
         <div className="flex flex-wrap gap-1 mb-7">
-          {([["teams", "팀", "TEAMS"], ["match", "스크림 매칭", "MATCH"], ["time", "통합 시간", "TIME"]] as const).map(([k, label, code]) => {
+          {([["teams", "팀", "TEAMS"], ["match", "스크림 매칭", "MATCH"], ["time", "룸 설정", "SETUP"]] as const).map(([k, label, code]) => {
             const on = tab === k;
             return (
               <button key={k} onClick={() => setTab(k)}
@@ -338,7 +343,7 @@ export default function AdminScrimPage() {
 
         {tab === "match" && <MatchView data={data} busy={busy} post={post} setToast={setToast} />}
         {tab === "time" && season && (
-          <SeasonForm season={season} busy={busy} onSave={async (pl) => { const r = await post({ action: "season:update", ...pl }); if (r) setToast("통합 시간을 바꿨습니다 — 모든 팀에 적용됩니다"); }} />
+          <SeasonForm season={season} busy={busy} tournaments={tournaments} onSave={async (pl) => { const r = await post({ action: "season:update", ...pl }); if (r) setToast("룸 설정을 저장했습니다 — 모든 팀에 적용됩니다"); }} />
         )}
       </div>
 
@@ -569,7 +574,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
 
 
 /* ── 통합 시간 조정 — 전 팀 공통. 네이티브 select/date 는 쓰지 않는다 ── */
-function SeasonForm({ season, busy, onSave }: { season: any; busy: boolean; onSave: (p: any) => void }) {
+function SeasonForm({ season, busy, onSave, tournaments }: { season: any; busy: boolean; onSave: (p: any) => void; tournaments: any[] }) {
   const G2 = "#00e07b";
   const [start, setStart] = useState(() => midnight(season.startAt));
   const [days, setDays] = useState(season.days);
@@ -578,6 +583,9 @@ function SeasonForm({ season, busy, onSave }: { season: any; busy: boolean; onSa
   const [step, setStep] = useState(season.stepMin);
   const [dueDay, setDueDay] = useState(() => midnight(season.dueAt));
   const [dueMin, setDueMin] = useState(() => { const d = new Date(season.dueAt); return d.getHours() * 60 + d.getMinutes(); });
+  const [title, setTitle] = useState(season.title || "");
+  const [tid, setTid] = useState(season.tournamentId || "");
+  const [notice, setNotice] = useState(season.notice || "");
 
   const end = (() => { const e = new Date(start); e.setDate(e.getDate() + days - 1); return e; })();
   const cells = days * Math.max(0, Math.ceil(((to - from) * 60) / step));
@@ -615,6 +623,46 @@ function SeasonForm({ season, busy, onSave }: { season: any; busy: boolean; onSa
   return (
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px] items-start">
       <div className="min-w-0 space-y-6">
+        {/* 이 룸이 어느 대회의 룸인지 — 대회는 서로 겹치지 않으므로 하나만 가리킨다 */}
+        <div>
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G2 }}>Tournament</span>
+            <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
+          </div>
+          <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">룸 이름</span>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={40} placeholder="예) 2026 여름 리그"
+            className="esp-cut-sm w-full bg-black/40 border border-white/10 px-3 py-2.5 text-[13px] font-bold text-white outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700" />
+
+          <span className="block text-[10px] font-black esp-mono text-gray-600 mt-4 mb-2">연동할 대회</span>
+          <div className="space-y-1.5 max-h-[220px] overflow-y-auto no-bar">
+            <button type="button" onClick={() => setTid("")} aria-pressed={!tid}
+              className="esp-cut-sm w-full flex items-center gap-2 px-3 py-2.5 border text-left transition-colors"
+              style={!tid ? { borderColor: G2, background: `${G2}14` } : { borderColor: "rgba(255,255,255,.08)", background: "rgba(255,255,255,.02)" }}>
+              <span className="text-[12px] font-black text-gray-300">연동 안 함</span>
+              <span className="ml-auto text-[10px] font-bold text-gray-600">대회 없이 룸만 운영</span>
+            </button>
+            {tournaments.map((t: any) => {
+              const on = tid === String(t._id);
+              return (
+                <button key={t._id} type="button" onClick={() => setTid(String(t._id))} aria-pressed={on}
+                  className="esp-cut-sm w-full flex items-center gap-2 px-3 py-2.5 border text-left transition-colors"
+                  style={on ? { borderColor: G2, background: `${G2}14` } : { borderColor: "rgba(255,255,255,.08)", background: "rgba(255,255,255,.02)" }}>
+                  <span className="min-w-0 flex-1">
+                    <b className="block text-[12px] font-black truncate">{t.title}</b>
+                    <span className="block text-[10px] font-bold text-gray-600 mt-0.5 truncate">{t.tournamentDate || "일정 미정"}</span>
+                  </span>
+                  {on && <span className="shrink-0 text-[10px] font-black" style={{ color: G2 }}>연동됨</span>}
+                </button>
+              );
+            })}
+            {tournaments.length === 0 && <p className="text-[11px] font-bold text-gray-700 py-3">등록된 대회가 없습니다.</p>}
+          </div>
+
+          <span className="block text-[10px] font-black esp-mono text-gray-600 mt-4 mb-2">룸 공지 (선택)</span>
+          <input value={notice} onChange={(e) => setNotice(e.target.value)} maxLength={200} placeholder="룸 상단에 한 줄로 뜹니다"
+            className="esp-cut-sm w-full bg-black/40 border border-white/10 px-3 py-2.5 text-[12px] font-bold text-white outline-none focus:border-[#00e07b] transition-colors placeholder:text-gray-700" />
+        </div>
+
         <div>
           <div className="flex items-center gap-3 mb-3">
             <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G2 }}>Period</span>
@@ -678,11 +726,11 @@ function SeasonForm({ season, busy, onSave }: { season: any; busy: boolean; onSa
         <button disabled={busy}
           onClick={() => {
             const due = new Date(dueDay); due.setHours(Math.floor(dueMin / 60), dueMin % 60, 0, 0);
-            onSave({ startAt: start.toISOString(), days, fromHour: from, toHour: to, stepMin: step, dueAt: due.toISOString() });
+            onSave({ title, tournamentId: tid, notice, startAt: start.toISOString(), days, fromHour: from, toHour: to, stepMin: step, dueAt: due.toISOString() });
           }}
           className="w-full mt-4 esp-cut-sm py-3.5 text-[12px] font-black transition-all active:scale-[.98] disabled:opacity-40"
           style={{ background: G2, color: "#04120b" }}>
-          전체 팀에 적용
+          룸 설정 저장
         </button>
         <p className="mt-3 text-[10px] font-bold text-rose-400/70 leading-relaxed">
           기간이나 시간대를 줄이면 그 바깥의 기존 응답은 계산에서 빠집니다.
