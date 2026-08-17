@@ -318,7 +318,6 @@ export default function TeamRoom() {
                   {upcoming.length === 0 ? (
                     <div className="esp-cut border border-white/[0.08] bg-white/[0.02] px-6 py-10 text-center">
                       <p className="text-[13px] font-black text-gray-400">예정된 스크림이 없습니다</p>
-                      <p className="mt-2 text-[11px] text-gray-600">팀 일정이 모이면 운영진이 상대 팀과 맞춰줍니다</p>
                       {!meSubmitted && (
                         <button onClick={() => setView("board")} className="mt-5 esp-cut-sm px-5 py-3 text-[11px] font-black" style={{ background: G, color: "#04120b" }}>
                           내 일정 내러 가기
