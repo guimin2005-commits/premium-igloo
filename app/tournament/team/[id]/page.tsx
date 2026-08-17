@@ -29,6 +29,115 @@ type Season = { _id: string; title: string; tournamentId?: string; notice?: stri
 type Fixture = { _id: string; teamAId: string; teamBId: string; kind?: string; at: string; winnerId: string; scoreA: number; scoreB: number };
 type Notice = { _id: string; title: string; body: string; pinned: boolean; important: boolean; publishAt: string };
 
+const sL = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60; return `${pad(h)}:${pad(mm)}`; };
+const sF = (m: number) => { const h = Math.floor(m / 60), hh = h % 24, mm = m % 60; return `${pad(hh)}:${pad(mm)}`; };
+
+/* ⚠️ 아래 조각들은 반드시 컴포넌트 바깥에 둔다.
+   컴포넌트 함수 안에서 정의하면 렌더할 때마다 새로운 컴포넌트 종류가 되어
+   React 가 표를 통째로 버리고 다시 만든다. 칸 하나만 눌러도 격자가 리마운트되면서
+   자리가 튀어 보인다. */
+
+const Emblem = ({ tag, color, size: sz = 46 }: { tag: string; color: string; size?: number }) => (
+  <span className="esp-cut-sm grid place-items-center shrink-0 font-black tracking-tight"
+    style={{ width: sz, height: sz, background: `${color}1c`, border: `1px solid ${color}55`, color, fontSize: sz * 0.3 }}>
+    {tag || "TM"}
+  </span>
+);
+
+const Bar = ({ k, right }: { k: string; right?: React.ReactNode }) => (
+  <div className="flex items-center gap-3 mb-3">
+    <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G }}>{k}</span>
+    <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
+    {right}
+  </div>
+);
+
+/* 칸은 grid 로 잡는다. button 을 기본값(inline-block)으로 두면 글자 기준선 아래에
+   5px 쯤 빈 자리가 생겨 줄 높이가 칸 높이보다 커지고 간격이 어긋나 보인다. */
+const cell = "grid place-items-center w-[44px] h-[34px] lg:w-[54px] lg:h-[38px] border text-[11px] font-black tabular-nums select-none transition-colors";
+
+const density = (color: string, a: number) => `${color}${Math.round((0.12 + a * 0.55) * 255).toString(16).padStart(2, "0")}`;
+
+type CellValue = { n: number; cap: number; me?: boolean; full?: boolean };
+
+const Grid = ({ slots, days, color, isPast, value, readOnly, onToggle, onToggleDay, onPaint, canDrag, dragRef }: {
+  slots: number[];
+  days: Date[];
+  color: string;
+  isPast: (d: Date, s: number) => boolean;
+  value: (d: Date, s: number) => CellValue;
+  readOnly?: boolean;
+  onToggle?: (d: Date, s: number) => void;
+  onToggleDay?: (d: Date) => void;
+  onPaint?: (d: Date, s: number, on: boolean) => void;
+  canDrag?: boolean;
+  dragRef?: React.MutableRefObject<null | boolean>;
+}) => (
+  <div className="overflow-x-auto no-bar -mx-1 px-1">
+    <table style={{ borderCollapse: "separate", borderSpacing: 2 }}>
+      <thead>
+        <tr>
+          <th className="w-px" />
+          {slots.map((s) => (
+            <th key={s} className="pb-1 text-[9px] font-black esp-mono text-gray-600 tabular-nums">
+              <span className="hidden sm:inline">{sL(s)}</span>
+              <span className="sm:hidden">{sL(s).slice(0, 2)}</span>
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {days.map((d) => (
+          <tr key={d.getTime()}>
+            <th onClick={readOnly ? undefined : () => onToggleDay?.(d)} tabIndex={readOnly ? -1 : 0}
+              onKeyDown={(e) => { if (!readOnly && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onToggleDay?.(d); } }}
+              className={`text-left pr-2 whitespace-nowrap ${readOnly ? "" : "cursor-pointer group"}`}>
+              <span className="block text-[11px] font-black tabular-nums text-gray-300 group-hover:text-white">{dL(d)}</span>
+              <span className={`block text-[9px] font-black ${d.getDay() === 6 ? "text-sky-400/70" : d.getDay() === 0 ? "text-rose-400/70" : "text-gray-600"}`}>{WD[d.getDay()]}</span>
+            </th>
+            {slots.map((s) => {
+              const v = value(d, s);
+              const a = v.cap ? v.n / v.cap : 0;
+              const past = isPast(d, s);
+              return (
+                <td key={s} className="p-0 align-top">
+                  {past ? (
+                    // 이미 지나간 시간 — 고를 수 없다는 걸 빈칸이 아니라 ✕ 로 분명히 한다
+                    <span className={`${cell} cursor-not-allowed`} title="이미 지난 시간입니다"
+                      style={{ background: "rgba(255,255,255,.015)", borderColor: "rgba(255,255,255,.05)", color: "#3a3a3f" }}>✕</span>
+                  ) : readOnly ? (
+                    <span className={cell}
+                      style={{ background: v.n ? density(color, a) : "rgba(255,255,255,.02)",
+                        borderColor: v.full ? G : "rgba(255,255,255,.07)", boxShadow: v.full ? `inset 0 0 0 1px ${G}` : undefined,
+                        color: v.n ? "#e6f7ee" : "#3f3f46" }}>{v.n || ""}</span>
+                  ) : (
+                    <button type="button" aria-pressed={!!v.me}
+                      onClick={() => { if (!canDrag) onToggle?.(d, s); }}
+                      onPointerDown={(e) => {
+                        if (!canDrag || !dragRef) return;
+                        e.preventDefault();
+                        const on = !v.me;
+                        dragRef.current = on;
+                        onPaint?.(d, s, on);
+                      }}
+                      onPointerEnter={() => { if (canDrag && dragRef && dragRef.current !== null) onPaint?.(d, s, dragRef.current); }}
+                      aria-label={`${dF(d)} ${sF(s)} · ${v.n}명 가능${v.me ? " · 내가 선택함" : ""}`}
+                      className={cell}
+                      style={{ background: v.n ? density(color, a) : "rgba(255,255,255,.02)",
+                        borderColor: v.me ? "#fff" : v.full ? G : "rgba(255,255,255,.07)",
+                        boxShadow: v.me ? "inset 0 0 0 1px #fff" : v.full ? `inset 0 0 0 1px ${G}` : undefined,
+                        color: v.n ? "#e6f7ee" : "#3f3f46" }}>{v.n || ""}</button>
+                  )}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
 export default function TeamRoom() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -110,8 +219,6 @@ export default function TeamRoom() {
     return t.getTime() <= Date.now();
   }, []);
 
-  const sL = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60; return `${pad(h)}:${pad(mm)}`; };
-  const sF = (m: number) => { const h = Math.floor(m / 60), hh = h % 24, mm = m % 60; return `${pad(hh)}:${pad(mm)}`; };
 
   /* ── 집계 ── */
   const submitted = useMemo(() => new Set((team?.avail || []).map((a) => a.userId)), [team]);
@@ -261,90 +368,6 @@ export default function TeamRoom() {
   const dueLabel = `${dF(due)} ${pad(due.getHours())}:${pad(due.getMinutes())}`;
   const dDay = Math.ceil((midnight(due).getTime() - midnight(Date.now()).getTime()) / DAY);
   const tabs = [["room", "팀 룸", "ROOM"], ["board", "스크림 캘린더", "CALENDAR"]] as const;
-
-  /* ── 조각 ── */
-  const Emblem = ({ tag, color, size: sz = 46 }: { tag: string; color: string; size?: number }) => (
-    <span className="esp-cut-sm grid place-items-center shrink-0 font-black tracking-tight"
-      style={{ width: sz, height: sz, background: `${color}1c`, border: `1px solid ${color}55`, color, fontSize: sz * 0.3 }}>
-      {tag || "TM"}
-    </span>
-  );
-  const Bar = ({ k, right }: { k: string; right?: React.ReactNode }) => (
-    <div className="flex items-center gap-3 mb-3">
-      <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G }}>{k}</span>
-      <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
-      {right}
-    </div>
-  );
-  // 폭 고정 대신 표 안에서 균등 분배 — 좁은 화면에서도 가로 스크롤이 생기지 않는다
-  const cell = "w-[44px] h-[34px] lg:w-[54px] lg:h-[38px] border text-[11px] font-black tabular-nums select-none transition-colors";
-
-  const Grid = ({ readOnly, value }: { readOnly?: boolean; value: (d: Date, s: number) => { n: number; cap: number; me?: boolean; full?: boolean } }) => (
-    <div className="overflow-x-auto no-bar -mx-1 px-1">
-      <table style={{ borderCollapse: "separate", borderSpacing: 2 }}>
-        <thead>
-          <tr>
-            <th className="w-px" />
-            {SLOTS.map((s) => (
-              <th key={s} className="pb-1 text-[9px] font-black esp-mono text-gray-600 tabular-nums">
-                <span className="hidden sm:inline">{sL(s)}</span>
-                <span className="sm:hidden">{sL(s).slice(0, 2)}</span>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {DAYS.map((d) => (
-            <tr key={d.getTime()}>
-              <th onClick={readOnly ? undefined : () => toggleDay(d)} tabIndex={readOnly ? -1 : 0}
-                onKeyDown={(e) => { if (!readOnly && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleDay(d); } }}
-                className={`text-left pr-2 whitespace-nowrap ${readOnly ? "" : "cursor-pointer group"}`}>
-                <span className="block text-[11px] font-black tabular-nums text-gray-300 group-hover:text-white">{dL(d)}</span>
-                <span className={`block text-[9px] font-black ${d.getDay() === 6 ? "text-sky-400/70" : d.getDay() === 0 ? "text-rose-400/70" : "text-gray-600"}`}>{WD[d.getDay()]}</span>
-              </th>
-              {SLOTS.map((s) => {
-                const v = value(d, s);
-                const a = v.cap ? v.n / v.cap : 0;
-                const past = isPast(d, s);
-                return (
-                  <td key={s} className="p-0">
-                    {past ? (
-                      // 이미 지나간 시간 — 고를 수 없다는 걸 빈칸이 아니라 ✕ 로 분명히 한다
-                      <span className={`${cell} grid place-items-center cursor-not-allowed`}
-                        title="이미 지난 시간입니다"
-                        style={{ background: "rgba(255,255,255,.015)", borderColor: "rgba(255,255,255,.05)", color: "#3a3a3f" }}>✕</span>
-                    ) : readOnly ? (
-                      <span className={`${cell} grid place-items-center`}
-                        style={{ background: v.n ? `${C}${Math.round((0.12 + a * 0.55) * 255).toString(16).padStart(2, "0")}` : "rgba(255,255,255,.02)",
-                          borderColor: v.full ? G : "rgba(255,255,255,.07)", boxShadow: v.full ? `inset 0 0 0 1px ${G}` : undefined,
-                          color: v.n ? "#e6f7ee" : "#3f3f46" }}>{v.n || ""}</span>
-                    ) : (
-                      <button type="button" aria-pressed={!!v.me}
-                        onClick={() => { if (!canDrag) toggle(d, s); }}
-                        onPointerDown={(e) => {
-                          if (!canDrag) return;
-                          e.preventDefault();
-                          const on = !v.me;
-                          dragRef.current = on;
-                          paint(d, s, on);
-                        }}
-                        onPointerEnter={() => { if (canDrag && dragRef.current !== null) paint(d, s, dragRef.current); }}
-                        aria-label={`${dF(d)} ${sF(s)} · ${v.n}명 가능${v.me ? " · 내가 선택함" : ""}`}
-                        className={cell}
-                        style={{ background: v.n ? `${C}${Math.round((0.12 + a * 0.55) * 255).toString(16).padStart(2, "0")}` : "rgba(255,255,255,.02)",
-                          borderColor: v.me ? "#fff" : v.full ? G : "rgba(255,255,255,.07)",
-                          boxShadow: v.me ? "inset 0 0 0 1px #fff" : v.full ? `inset 0 0 0 1px ${G}` : undefined,
-                          color: v.n ? "#e6f7ee" : "#3f3f46" }}>{v.n || ""}</button>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 
   return (
     <main className="flex-1 w-full flex flex-col relative">
@@ -674,7 +697,10 @@ export default function TeamRoom() {
                   ))}
                 </div>
                 <div className={none ? "opacity-30 pointer-events-none" : ""}>
-                  <Grid value={(d, s) => ({ n: usAt(d, s), cap: size || 1, me: mine.has(sKey(d, s)), full: usAt(d, s) === size && size > 0 })} />
+                  <Grid
+                    slots={SLOTS} days={DAYS} color={C} isPast={isPast}
+                    onToggle={toggle} onToggleDay={toggleDay} onPaint={paint} canDrag={canDrag} dragRef={dragRef}
+                    value={(d, s) => ({ n: usAt(d, s), cap: size || 1, me: mine.has(sKey(d, s)), full: usAt(d, s) === size && size > 0 })} />
                 </div>
 
                 {/* 되는 시간이 하나도 없는 사람도 '답을 낸' 상태가 되어야 팀이 기다리지 않는다 */}
