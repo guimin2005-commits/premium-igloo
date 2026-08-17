@@ -180,6 +180,22 @@ export default function TournamentPage() {
   const [invalidQid, setInvalidQid] = useState<string | null>(null);        // 검증 실패 시 흔들림 표시할 문항
   const qidRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // 📌 내 팀 룸 — 스크림 로스터에서 내 디스코드 ID 를 찾아 입구를 띄운다
+  const [myTeam, setMyTeam] = useState<any>(null);
+  useEffect(() => {
+    if (status !== "authenticated") { setMyTeam(null); return; }
+    fetch("/api/scrim", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d?.success) return;
+        const mine = (d.teams || []).find((t: any) => (t.members || []).some((m: any) => m.discordId && m.discordId === d.me));
+        if (!mine) return;
+        const ids = new Set((mine.avail || []).map((a: any) => a.userId));
+        setMyTeam({ ...mine, submitted: (mine.members || []).filter((m: any) => ids.has(m.discordId)).length });
+      })
+      .catch(() => {});
+  }, [status]);
+
   const fetchTournaments = async () => {
     setIsLoading(true);
     try {
@@ -373,6 +389,32 @@ export default function TournamentPage() {
               ))}
             </div>
           </Reveal>
+
+          {/* 📌 내 팀 룸 — 로스터에 내 디스코드 ID가 있으면 바로 들어가는 입구.
+                 선수는 팀 id를 알 수 없으므로 시스템이 찾아서 띄워준다. */}
+          {myTeam && (
+            <Reveal delay={180}>
+              <button
+                onClick={() => router.push(`/tournament/team/${myTeam._id}`)}
+                className="mt-8 w-full text-left esp-cut-sm border border-[#00e07b]/30 bg-[#00e07b]/[0.06] hover:bg-[#00e07b]/[0.11] transition-colors p-5 md:p-6 flex items-center gap-4 md:gap-5"
+              >
+                <span className="grid place-items-center shrink-0 w-12 h-12 md:w-14 md:h-14 rounded-2xl text-sm md:text-base font-black tracking-tight"
+                  style={{ background: `linear-gradient(150deg, ${myTeam.color}2e, ${myTeam.color}0a)`, border: `1px solid ${myTeam.color}55`, color: myTeam.color }}>
+                  {myTeam.tag || myTeam.name.slice(0, 3)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[9px] font-black esp-mono text-[#00e07b] mb-1.5">MY TEAM ROOM</span>
+                  <span className="block text-white font-black text-lg md:text-xl leading-tight truncate">{myTeam.name}</span>
+                  <span className="block text-[11px] md:text-xs font-bold text-gray-400 mt-1.5">
+                    {myTeam.submitted >= myTeam.members.length
+                      ? "팀 전원이 일정을 냈습니다 — 스크림 매칭 대기"
+                      : <>일정 계획판에서 가능한 시간을 알려주세요 · <span className="text-amber-300 tabular-nums">{myTeam.members.length - myTeam.submitted}명</span> 미제출</>}
+                  </span>
+                </span>
+                <span className="shrink-0 text-[#00e07b] text-2xl">›</span>
+              </button>
+            </Reveal>
+          )}
         </div>
       </section>
 
