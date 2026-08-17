@@ -427,7 +427,7 @@ export default function TournamentPage() {
                   <span className="block text-[11px] md:text-xs font-bold text-gray-400 mt-1.5">
                     {myTeam.submitted >= myTeam.members.length
                       ? "팀 전원이 일정을 냈습니다 — 스크림 매칭 대기"
-                      : <>일정 계획판에서 가능한 시간을 알려주세요 · <span className="text-amber-300 tabular-nums">{myTeam.members.length - myTeam.submitted}명</span> 미제출</>}
+                      : <>스크림 캘린더에서 가능한 시간을 알려주세요 · <span className="text-amber-300 tabular-nums">{myTeam.members.length - myTeam.submitted}명</span> 미제출</>}
                   </span>
                 </span>
                 <span className="shrink-0 text-[#00e07b] text-2xl">›</span>

@@ -181,7 +181,7 @@ export default function TeamRoom() {
   const due = new Date(season.dueAt);
   const dueLabel = `${dF(due)} ${pad(due.getHours())}:${pad(due.getMinutes())}`;
   const dDay = Math.ceil((midnight(due).getTime() - midnight(Date.now()).getTime()) / DAY);
-  const tabs = [["room", "팀 룸", "ROOM"], ["board", "일정 계획판", "PLAN"]] as const;
+  const tabs = [["room", "팀 룸", "ROOM"], ["board", "스크림 캘린더", "CALENDAR"]] as const;
 
   /* ── 조각 ── */
   const Emblem = ({ tag, color, size: sz = 46 }: { tag: string; color: string; size?: number }) => (
@@ -467,7 +467,7 @@ export default function TeamRoom() {
                 <section>
                   <Bar k="Schedule" />
                   <button onClick={() => setView("board")} className="w-full text-left esp-cut border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] transition-colors p-5">
-                    <p className="text-[13px] font-black">일정 계획판</p>
+                    <p className="text-[13px] font-black">스크림 캘린더</p>
                     <p className="mt-2 text-[11px] font-bold text-gray-500 leading-relaxed">
                       {meSubmitted
                         ? usReady
@@ -513,7 +513,7 @@ export default function TeamRoom() {
             </div>
           )}
 
-          {/* ══ 일정 계획판 ══ */}
+          {/* ══ 스크림 캘린더 ══ */}
           {view === "board" && (
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px] items-start">
               <div className="min-w-0">
