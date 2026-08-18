@@ -21,6 +21,11 @@ const dL = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
 const dF = (d: Date) => `${dL(d)}(${WD[d.getDay()]})`;
 const hourLabel = (h: number) => `${pad(h % 24)}:00`;
 const midnight = (d: Date | number | string) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+/* ⚠️ 칸의 '분' 은 1440 을 넘을 수 있다 (종료 시각이 24시를 넘는 경우 = 익일).
+   기준 날짜만 그대로 찍으면 25:00 칸이 화면엔 "8/18 01:00", 저장은 8/19 01:00 이 되어
+   표기와 실제가 하루 어긋난다. 실제 시각은 반드시 이 함수로 만든다. */
+const atOf = (d: Date, m: number) => new Date(midnight(d).getTime() + m * 60000);
+const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 const PALETTE = ["#7dd3fc", "#a5b4fc", "#fcd34d", "#f0abfc", "#6ee7b7", "#fca5a5", "#c4b5fd", "#fdba74"];
 
@@ -637,6 +642,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
   const top = ranked[0];
   /* 실제로 확정할 시각 — 직접 고른 값이 우선, 없으면 가장 많이 겹치는 칸 */
   const chosen = pickDay && pickMin !== null ? { d: pickDay, s: pickMin } : (top?.min ? { d: top.d, s: top.s } : null);
+  const chosenAt = chosen ? atOf(chosen.d, chosen.s) : null;   // 화면과 저장이 함께 쓰는 실제 시각
   const chosenCa = chosen && TA ? cntAt(TA, chosen.d, chosen.s) : 0;
   const chosenCb = chosen && TB ? cntAt(TB, chosen.d, chosen.s) : 0;
 
@@ -737,7 +743,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
               <div className="px-5 py-2.5 border-b border-white/[0.07] flex items-center gap-2">
                 <span className="text-[10px] font-black esp-mono text-gray-500">RECOMMENDED</span>
                 <span className="ml-auto text-[12px] font-black tabular-nums" style={{ color: chosen ? G2 : "#6b7280" }}>
-                  {chosen ? dF(chosen.d) + " " + sF(chosen.s) : "시각을 정해주세요"}
+                  {chosenAt ? dF(chosenAt) + " " + hhmm(chosenAt) : "시각을 정해주세요"}
                 </span>
               </div>
               <div className="px-5 py-5 flex items-center gap-4">
@@ -772,10 +778,14 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                 </div>
                 <div className="flex gap-1.5 overflow-x-auto no-bar pb-1">
                   {Array.from({ length: 21 }, (_, i) => midnight(Date.now() + DAY * i)).map((d, i) => {
-                    const on = !!chosen && ymd(chosen.d) === ymd(d);
+                    const on = !!chosenAt && ymd(chosenAt) === ymd(d);
                     return (
                       <button key={i} type="button"
-                        onClick={() => { setPickDay(d); setPickMin(pickMin ?? chosen?.s ?? (season ? season.fromHour * 60 : 1200)); }}
+                        onClick={() => {
+                          // 날짜를 직접 고르면 '기준일 + 25:00' 같은 표기를 그 날짜의 실제 시각으로 정리한다
+                          const mod = chosenAt ? chosenAt.getHours() * 60 + chosenAt.getMinutes() : (season ? (season.fromHour * 60) % 1440 : 1200);
+                          setPickDay(d); setPickMin(mod);
+                        }}
                         aria-pressed={on}
                         className="esp-cut-sm shrink-0 min-w-[52px] px-1 py-2 border text-center transition-colors"
                         style={on ? { borderColor: G2, background: G2 + "1a" } : { borderColor: "rgba(255,255,255,.08)", background: "rgba(255,255,255,.02)" }}>
@@ -789,13 +799,13 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                   <span className="text-[10px] font-black esp-mono text-gray-600 shrink-0">시각</span>
                   <div className="esp-cut-sm inline-flex items-stretch border border-white/10 bg-white/[0.03]">
                     <button type="button" disabled={!chosen}
-                      onClick={() => setPickMin(((chosen?.s ?? 0) + 1440 - 30) % 1440)}
+                      onClick={() => { if (!chosen) return; setPickDay(chosen.d); setPickMin(Math.max(0, chosen.s - 30)); }}
                       className="w-9 text-[16px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white disabled:text-gray-700 transition-colors">−</button>
                     <span className="min-w-[86px] px-2 py-2 text-center border-x border-white/10 text-[13px] font-black tabular-nums">
-                      {chosen ? sF(chosen.s) : "--:--"}
+                      {chosenAt ? hhmm(chosenAt) : "--:--"}
                     </span>
                     <button type="button" disabled={!chosen}
-                      onClick={() => setPickMin(((chosen?.s ?? 0) + 30) % 1440)}
+                      onClick={() => { if (!chosen) return; setPickDay(chosen.d); setPickMin(Math.min(2879, chosen.s + 30)); }}
                       className="w-9 text-[16px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white disabled:text-gray-700 transition-colors">+</button>
                   </div>
                   {chosen && (
@@ -813,12 +823,11 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                     style={kind === k ? { background: "rgba(0,224,123,.14)", color: G2 } : { color: "#8b8b93" }}>{l}</button>
                 ))}
               </div>
-              <button disabled={busy || !chosen}
+              <button disabled={busy || !chosenAt}
                 onClick={async () => {
-                  if (!chosen) return;
-                  const at = new Date(chosen.d); at.setHours(Math.floor(chosen.s / 60), chosen.s % 60, 0, 0);
-                  const r = await post({ action: "fixture:create", teamAId: TA._id, teamBId: TB._id, kind, at: at.toISOString(), usCount: chosenCa, themCount: chosenCb });
-                  if (r) setToast(dF(chosen.d) + " " + sF(chosen.s) + " · " + TA.name + " vs " + TB.name + " 확정");
+                  if (!chosenAt) return;
+                  const r = await post({ action: "fixture:create", teamAId: TA._id, teamBId: TB._id, kind, at: chosenAt.toISOString(), usCount: chosenCa, themCount: chosenCb });
+                  if (r) setToast(dF(chosenAt) + " " + hhmm(chosenAt) + " · " + TA.name + " vs " + TB.name + " 확정");
                 }}
                 className="w-full py-3.5 text-[12px] font-black border-t border-white/[0.07] transition-colors disabled:opacity-35"
                 style={{ background: G2, color: "#04120b" }}>
