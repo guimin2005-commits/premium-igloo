@@ -626,7 +626,8 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
   const [b, setB] = useState<string | null>(null);
   const [kind, setKind] = useState<"scrim" | "official">("scrim");
   // 📌 몇 대 몇 — 스코어를 적고 있는 경기와 그 값
-  const [mercs, setMercs] = useState(0);   // 확정할 때 정하는 용병 수 (팀당)
+  const [mercA, setMercA] = useState(0);   // 확정할 때 정하는 용병 수 — 팀 A
+  const [mercB, setMercB] = useState(0);   // 팀 B
   const [scoreFx, setScoreFx] = useState<string | null>(null);
   const [scoreA, setScoreA] = useState("0");
   const [scoreB, setScoreB] = useState("0");
@@ -857,18 +858,23 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 px-4 py-3 border-t border-white/[0.07]">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 border-t border-white/[0.07]">
                 <span className="text-[10px] font-black esp-mono text-gray-600 shrink-0">용병</span>
-                <div className="esp-cut-sm inline-flex items-stretch border border-white/10 bg-white/[0.03]">
-                  <button type="button" onClick={() => setMercs((n) => Math.max(0, n - 1))}
-                    className="w-8 text-[15px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors">−</button>
-                  <span className="min-w-[62px] px-2 py-1.5 text-center border-x border-white/10 text-[12px] font-black tabular-nums">
-                    {mercs > 0 ? mercs + "명" : "없음"}
+                {([[TA?.name, mercA, setMercA], [TB?.name, mercB, setMercB]] as const).map(([nm, val, set], i) => (
+                  <span key={i} className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-gray-500 max-w-[86px] truncate">{nm || (i === 0 ? "팀 A" : "팀 B")}</span>
+                    <span className="esp-cut-sm inline-flex items-stretch border border-white/10 bg-white/[0.03]">
+                      <button type="button" onClick={() => set((n: number) => Math.max(0, n - 1))}
+                        className="w-7 text-[14px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors">−</button>
+                      <span className="min-w-[50px] px-1.5 py-1.5 text-center border-x border-white/10 text-[12px] font-black tabular-nums">
+                        {val > 0 ? val + "명" : "없음"}
+                      </span>
+                      <button type="button" onClick={() => set((n: number) => Math.min(10, n + 1))}
+                        className="w-7 text-[14px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors">+</button>
+                    </span>
                   </span>
-                  <button type="button" onClick={() => setMercs((n) => Math.min(10, n + 1))}
-                    className="w-8 text-[15px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors">+</button>
-                </div>
-                <span className="text-[10px] font-bold text-gray-600 min-w-0 truncate">팀당 데려올 수 있는 인원입니다</span>
+                ))}
+                <span className="text-[10px] font-bold text-gray-600 min-w-0 truncate">팀마다 데려오는 인원을 따로 정합니다</span>
               </div>
 
               <div className="flex border-t border-white/[0.07]">
@@ -881,7 +887,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
               <button disabled={busy || !chosenAt}
                 onClick={async () => {
                   if (!chosenAt) return;
-                  const r = await post({ action: "fixture:create", teamAId: TA._id, teamBId: TB._id, kind, at: chosenAt.toISOString(), usCount: chosenCa, themCount: chosenCb, mercs });
+                  const r = await post({ action: "fixture:create", teamAId: TA._id, teamBId: TB._id, kind, at: chosenAt.toISOString(), usCount: chosenCa, themCount: chosenCb, mercsA: mercA, mercsB: mercB });
                   if (r) setToast((nightOf ? dF(nightOf) + " 밤 " : "") + dF(chosenAt) + " " + hhmm(chosenAt) + " · " + TA.name + " vs " + TB.name + " 확정");
                 }}
                 className="w-full py-3.5 text-[12px] font-black border-t border-white/[0.07] transition-colors disabled:opacity-35"
@@ -963,17 +969,24 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                     className="esp-cut-sm px-2.5 py-1 text-[10px] font-black border border-white/15 text-gray-300 hover:text-white hover:border-white/35 transition-colors disabled:opacity-40">몇 대 몇</button>
                 </span>
               )}
-              <span className="shrink-0 esp-cut-sm inline-flex items-stretch border border-white/10 bg-white/[0.03]" title="용병 인원 (팀당)">
-                <button type="button" disabled={busy}
-                  onClick={async () => { await post({ action: "fixture:mercs", fixtureId: f._id, mercs: Math.max(0, (f.mercs || 0) - 1) }); }}
-                  className="w-7 text-[13px] font-black text-gray-500 hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-40">−</button>
-                <span className="min-w-[58px] px-1.5 py-1 text-center border-x border-white/10 text-[10px] font-black tabular-nums text-gray-300">
-                  용병 {f.mercs || 0}
-                </span>
-                <button type="button" disabled={busy}
-                  onClick={async () => { await post({ action: "fixture:mercs", fixtureId: f._id, mercs: Math.min(10, (f.mercs || 0) + 1) }); }}
-                  className="w-7 text-[13px] font-black text-gray-500 hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-40">+</button>
-              </span>
+              {/* 용병 — 팀마다 따로. 옛 공통 값(mercs)이 남아 있으면 그 값으로 보여준다 */}
+              {([["A", A, f.mercsA ?? 0], ["B", B, f.mercsB ?? 0]] as const).map(([side, T, raw]) => {
+                const val = raw || f.mercs || 0;
+                const key = side === "A" ? "mercsA" : "mercsB";
+                return (
+                  <span key={side} className="shrink-0 esp-cut-sm inline-flex items-stretch border border-white/10 bg-white/[0.03]" title={(T?.name || "") + " 용병"}>
+                    <button type="button" disabled={busy}
+                      onClick={async () => { await post({ action: "fixture:mercs", fixtureId: f._id, [key]: Math.max(0, val - 1) }); }}
+                      className="w-6 text-[13px] font-black text-gray-500 hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-40">−</button>
+                    <span className="min-w-[62px] px-1.5 py-1 text-center border-x border-white/10 text-[10px] font-black tabular-nums text-gray-300">
+                      <b className="font-black text-gray-500 mr-1">{T?.tag || side}</b>{val}
+                    </span>
+                    <button type="button" disabled={busy}
+                      onClick={async () => { await post({ action: "fixture:mercs", fixtureId: f._id, [key]: Math.min(10, val + 1) }); }}
+                      className="w-6 text-[13px] font-black text-gray-500 hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-40">+</button>
+                  </span>
+                );
+              })}
               <button disabled={busy} onClick={() => { setNotifyFx(f); setNotifyAt(null); }}
                 className="shrink-0 esp-cut-sm px-2.5 py-1 text-[10px] font-black border transition-colors disabled:opacity-40"
                 style={{ borderColor: "rgba(56,189,248,.4)", background: "rgba(56,189,248,.12)", color: "#7dd3fc" }}>알림</button>

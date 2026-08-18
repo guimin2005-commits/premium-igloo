@@ -77,7 +77,10 @@ const ScrimFixtureSchema = new mongoose.Schema({
   at: { type: Date, required: true },            // 경기 시각
   usCount: { type: Number, default: 0 },         // 확정 시점의 양 팀 가능 인원 (기록용)
   themCount: { type: Number, default: 0 },
-  // 📌 이 경기에 쓸 수 있는 용병 수 (팀당). 0이면 용병 없이 치른다.
+  /* 📌 이 경기에 데려오는 용병 수 — 팀마다 다르므로 따로 센다. 0이면 용병 없이 치른다.
+     mercs 는 양 팀 공통으로 두던 옛 값 (남아 있으면 양쪽 값으로 읽는다). */
+  mercsA: { type: Number, default: 0 },
+  mercsB: { type: Number, default: 0 },
   mercs: { type: Number, default: 0 },
   // 결과 — winnerId 가 비어 있으면 아직 안 치른 경기, "draw" 면 무승부
   winnerId: { type: String, default: "" },
