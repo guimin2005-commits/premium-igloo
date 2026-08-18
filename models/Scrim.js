@@ -124,6 +124,8 @@ const ScrimNudgeSchema = new mongoose.Schema({
   cta: { type: String, default: "" },
   url: { type: String, default: "" },                    // 팀 룸 바로가기 (임베드 버튼)
   dueAt: { type: Date, default: null },                  // 보낼 때의 마감 시각 (임베드에 표시)
+  // 📌 예약 발송 — 비어 있으면 바로, 시각이 있으면 그때가 지나야 봇이 가져간다
+  sendAt: { type: Date, default: null, index: true },
   status: { type: String, default: "pending", index: true }, // pending | sent | failed
   error: { type: String, default: "" },
   byName: { type: String, default: "" },                 // 수동일 때 누른 사람

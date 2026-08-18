@@ -180,7 +180,7 @@ export default function AuctionListPage() {
     });
   };
 
-  // 📌 선수 카드를 리더로 올린다 — 설문으로 한꺼번에 불러온 뒤 팀장을 골라낼 때 쓴다
+  // 📌 선수 카드를 리더로 올린다 — 설문으로 한꺼번에 불러온 뒤 리더을 골라낼 때 쓴다
   const promoteToLeader = (i: number) => {
     const p = players[i];
     if (!p?.alias?.trim()) {
@@ -680,7 +680,7 @@ export default function AuctionListPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {[
                     { v: "instant", t: "즉시 배정", d: "낙찰 즉시 포지션 배정 후 다음 선수로" },
-                    { v: "inventory", t: "인벤토리 방식", d: "낙찰 선수를 인벤토리에 보관 → 팀장이 언제든 배정, 종료 시 확정" },
+                    { v: "inventory", t: "인벤토리 방식", d: "낙찰 선수를 인벤토리에 보관 → 리더이 언제든 배정, 종료 시 확정" },
                   ].map((opt) => (
                     <button type="button" key={opt.v} onClick={() => setAssignMode(opt.v)} className={`text-left rounded-xl border p-3.5 transition-all ${assignMode === opt.v ? "border-[#e91e3f] bg-[#e91e3f]/[0.08]" : "border-white/10 bg-[#0d0d0d] hover:border-white/25"}`}>
                       <p className={`text-sm font-black mb-0.5 ${assignMode === opt.v ? "text-[#e91e3f]" : "text-white"}`}>{opt.t}</p>

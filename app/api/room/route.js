@@ -53,6 +53,17 @@ const discordName = async (id, fallback) => {
   } catch { return fallback; }
 };
 
+/* 📌 예약 발송 시각 — 지나간 시각이나 30일 넘게 먼 시각은 받지 않는다(즉시 발송).
+   지나간 시각을 그대로 넣으면 봇이 곧바로 보내버려 '예약했다' 는 기대와 어긋난다. */
+const sendAtOf = (v) => {
+  if (!v) return null;
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return null;
+  const ms = d.getTime() - Date.now();
+  if (ms <= 60e3 || ms > 30 * 864e5) return null;
+  return d;
+};
+
 const requireAdmin = async () => {
   const session = await getServerSession(authOptions);
   return { session, ok: isAdminName(session?.user?.name) };
@@ -245,6 +256,7 @@ export async function POST(request) {
           cta: fixtureCta(season.fixtureMsg?.cta),
         };
 
+        const sendAt = sendAtOf(body.sendAt);
         let queued = 0, skipped = 0;
         for (const [own, opp] of [[A, B], [B, A]]) {
           const tid = String(own._id);
@@ -255,7 +267,7 @@ export async function POST(request) {
               seasonId: sid, type: "fixture", kind: "manual", fixtureId: fid,
               teamId: tid, teamName: own.name, oppName: opp.name,
               userId: m.discordId, userName: m.name,
-              matchKind: f.kind, at: f.at,
+              matchKind: f.kind, at: f.at, sendAt,
               url: `${origin}/tournament/team/${tid}`,
               ...copy,
               byName: session?.user?.name || "",
@@ -263,7 +275,7 @@ export async function POST(request) {
             queued++;
           }
         }
-        return NextResponse.json({ success: true, queued, skipped });
+        return NextResponse.json({ success: true, queued, skipped, sendAt });
       }
 
       // 경기 알림을 본인에게 먼저 보내보기
@@ -301,7 +313,7 @@ export async function POST(request) {
 
       /* ── 미제출자 DM 재촉 ──────────────────────────────
          사이트는 DM 을 못 보낸다. 보낼 것만 쌓아두고 봇이 가져간다.
-         팀장은 자기 팀만, 관리자는 전체를 찌를 수 있다. */
+         리더은 자기 팀만, 관리자는 전체를 찌를 수 있다. */
       case "nudge:send": {
         const session = await getServerSession(authOptions);
         const uid = session?.user?.id;
@@ -313,10 +325,11 @@ export async function POST(request) {
           : [await ScrimTeam.findById(body.teamId)].filter(Boolean);
         if (!teams.length) return NextResponse.json({ success: false, message: "대상 팀이 없습니다." }, { status: 404 });
         if (!admin && !teams.every((t) => t.members.some((m) => m.discordId === uid && m.leader))) {
-          return NextResponse.json({ success: false, message: "팀장만 보낼 수 있습니다." }, { status: 403 });
+          return NextResponse.json({ success: false, message: "리더만 보낼 수 있습니다." }, { status: 403 });
         }
 
         const origin = new URL(request.url).origin;
+        const sendAt = sendAtOf(body.sendAt);
         // 같은 사람을 연달아 찌르지 않는다 — 30분 안에 보낸 게 있으면 건너뛴다
         const recentAfter = new Date(Date.now() - 30 * 60e3);
         let queued = 0, skipped = 0;
@@ -334,7 +347,7 @@ export async function POST(request) {
             const url = `${origin}/tournament/team/${tid}`;
             await ScrimNudge.create({
               seasonId: sid, teamId: tid, teamName: t.name,
-              userId: m.discordId, userName: m.name, kind: "manual", url, dueAt: season.dueAt,
+              userId: m.discordId, userName: m.name, kind: "manual", url, dueAt: season.dueAt, sendAt,
               // 문구를 여기서 확정해 저장한다 — 미리보기와 실제가 어긋나지 않게
               title: nudgeTitle(season.nudge?.title),
               message: nudgeBody(season.nudge?.message),
@@ -345,7 +358,7 @@ export async function POST(request) {
             queued++;
           }
         }
-        return NextResponse.json({ success: true, queued, skipped });
+        return NextResponse.json({ success: true, queued, skipped, sendAt });
       }
 
       /* ── 팀 ── */
@@ -596,6 +609,18 @@ export async function POST(request) {
         }
         await ScrimFixture.findByIdAndDelete(body.fixtureId);
         return NextResponse.json({ success: true });
+      }
+
+      /* 아직 안 나간 예약을 취소한다 — 취소할 수 없는 예약은 함정이다 */
+      case "nudge:cancel": {
+        const { ok } = await requireAdmin();
+        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const q = { seasonId: sid, status: "pending" };
+        if (body.fixtureId) q.fixtureId = String(body.fixtureId);
+        else if (body.nudgeId) q._id = body.nudgeId;
+        else return NextResponse.json({ success: false, message: "취소할 대상이 없습니다." }, { status: 400 });
+        const r = await ScrimNudge.deleteMany(q);
+        return NextResponse.json({ success: true, canceled: r.deletedCount || 0 });
       }
 
       default:

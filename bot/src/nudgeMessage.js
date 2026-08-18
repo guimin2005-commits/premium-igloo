@@ -35,7 +35,7 @@ export const FIXTURE_COLOR = 0x38bdf8;
 export const FIXTURE_DEFAULTS = {
   title: "경기 일정이 잡혔습니다",
   body: "아래 시각에 경기가 있습니다.\n시간 맞춰 준비해 주세요.",
-  footer: "어려우면 팀장에게 미리 알려주세요",
+  footer: "어려우면 리더에게 미리 알려주세요",
   cta: "팀 룸 열기",
 };
 export const fixtureTitle = (v) => pick(v, FIXTURE_DEFAULTS.title, LIMITS.title);

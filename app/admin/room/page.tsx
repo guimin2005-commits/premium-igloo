@@ -254,7 +254,7 @@ export default function AdminScrimPage() {
                                   onClick={async () => { await post({ action: "team:updateMember", teamId: t._id, idx: mi, leader: !m.leader }); }}
                                   className="esp-cut-sm px-2 py-1.5 text-[10px] font-black transition-colors disabled:opacity-40"
                                   style={m.leader ? { background: G, color: "#04120b" } : { background: "rgba(255,255,255,.05)", color: "#6b7280" }}>
-                                  팀장
+                                  리더
                                 </button>
                                 <button disabled={busy}
                                   onClick={async () => { if (!confirm(`${m.name} 님을 로스터에서 뺄까요?`)) return; const r = await post({ action: "team:removeMember", teamId: t._id, idx: mi }); if (r) setToast("팀원을 뺐습니다"); }}
@@ -362,17 +362,31 @@ export default function AdminScrimPage() {
               </button>
               {(data?.nudges || []).length > 0 && (
                 <div className="mt-3 esp-cut border border-white/[0.08] bg-white/[0.02] p-3 max-h-[220px] overflow-y-auto no-bar">
-                  {(data.nudges || []).slice(0, 20).map((n: any) => (
+                  {(data.nudges || []).slice(0, 20).map((n: any) => {
+                    // 아직 안 나간 예약은 시각을 보여주고 취소할 수 있어야 한다
+                    const waiting = n.status === "pending" && n.sendAt && new Date(n.sendAt).getTime() > Date.now();
+                    const when = waiting ? new Date(n.sendAt) : null;
+                    return (
                     <div key={n._id} className="flex items-center gap-2 py-1.5 text-[11px] font-bold">
                       <span className="min-w-0 flex-1 truncate text-gray-300">{n.userName || n.userId}</span>
                       {n.kind === "test" && <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded bg-white/[0.07] text-gray-400">시험</span>}
-                      <span className="shrink-0 text-[10px] text-gray-600 truncate max-w-[90px]">{n.teamName}</span>
-                      <span className={`shrink-0 text-[9px] font-black esp-mono ${n.status === "sent" ? "text-[#00e07b]" : n.status === "failed" ? "text-rose-400" : "text-amber-300"}`}
+                      {n.type === "fixture" && <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded bg-sky-400/15 text-sky-300">일정</span>}
+                      <span className="shrink-0 text-[10px] text-gray-600 truncate max-w-[80px]">{n.teamName}</span>
+                      {when && (
+                        <span className="shrink-0 text-[10px] font-black esp-mono text-sky-300 tabular-nums">{dL(when)} {pad(when.getHours())}:{pad(when.getMinutes())}</span>
+                      )}
+                      <span className={`shrink-0 text-[9px] font-black esp-mono ${n.status === "sent" ? "text-[#00e07b]" : n.status === "failed" ? "text-rose-400" : waiting ? "text-sky-300" : "text-amber-300"}`}
                         title={n.error || ""}>
-                        {n.status === "sent" ? "보냄" : n.status === "failed" ? "실패" : "대기"}
+                        {n.status === "sent" ? "보냄" : n.status === "failed" ? "실패" : waiting ? "예약" : "대기"}
                       </span>
+                      {n.status === "pending" && (
+                        <button disabled={busy}
+                          onClick={async () => { const r = await post({ action: "nudge:cancel", nudgeId: n._id }); if (r) setToast("예약을 취소했습니다"); }}
+                          className="shrink-0 text-[9px] font-black text-rose-400/70 hover:text-rose-300 disabled:opacity-40">취소</button>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -604,6 +618,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
   const [pickMin, setPickMin] = useState<number | null>(null);
   // 일정 알림을 보내기 전에 무엇이 누구에게 가는지 보여주는 창
   const [notifyFx, setNotifyFx] = useState<any>(null);
+  const [notifyAt, setNotifyAt] = useState<Date | null>(null);   // 예약 시각 (null = 지금)
 
   const DAYS = useMemo(() => {
     if (!season) return [];
@@ -880,7 +895,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                   ))}
                 </span>
               )}
-              <button disabled={busy} onClick={() => setNotifyFx(f)}
+              <button disabled={busy} onClick={() => { setNotifyFx(f); setNotifyAt(null); }}
                 className="shrink-0 esp-cut-sm px-2.5 py-1 text-[10px] font-black border transition-colors disabled:opacity-40"
                 style={{ borderColor: "rgba(56,189,248,.4)", background: "rgba(56,189,248,.12)", color: "#7dd3fc" }}>알림</button>
               <button disabled={busy}
@@ -913,17 +928,20 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                 at={notifyFx.at} matchKind={notifyFx.kind} copy={season?.fixtureMsg} />
               <p className="mt-2 text-[11px] font-bold text-gray-600">받는 사람마다 '우리 팀' 과 '상대' 가 각자 기준으로 바뀝니다.</p>
 
+              <SendWhen value={notifyAt} onChange={setNotifyAt} anchor={new Date(notifyFx.at)} />
+
               <div className="flex gap-2 mt-5">
                 <button onClick={() => setNotifyFx(null)}
                   className="flex-1 esp-cut-sm py-3 text-[12px] font-black bg-white/[0.05] text-gray-400 hover:text-white transition-colors">취소</button>
                 <button disabled={busy} onClick={async () => {
-                  const r = await post({ action: "fixture:notify", fixtureId: notifyFx._id });
+                  const r = await post({ action: "fixture:notify", fixtureId: notifyFx._id, sendAt: notifyAt?.toISOString() });
+                  const when = notifyAt ? `${dF(notifyAt)} ${pad(notifyAt.getHours())}:${pad(notifyAt.getMinutes())} 에 ` : "";
                   setNotifyFx(null);
-                  if (r) setToast(r.queued ? `${r.queued}명에게 DM 을 보냅니다${r.skipped ? ` (${r.skipped}명은 이미 받음)` : ""}` : "이미 모두 받았습니다");
+                  if (r) setToast(r.queued ? `${when}${r.queued}명에게 DM 을 보냅니다${r.skipped ? ` (${r.skipped}명은 이미 받음)` : ""}` : "이미 모두 받았습니다");
                 }}
                   className="flex-[1.4] esp-cut-sm py-3 text-[12px] font-black transition-all active:scale-[.98] disabled:opacity-40"
                   style={{ background: "#38bdf8", color: "#04121a" }}>
-                  {targets.length}명에게 보내기
+                  {notifyAt ? `${targets.length}명 예약` : `${targets.length}명에게 보내기`}
                 </button>
               </div>
               <button disabled={busy} onClick={async () => {
@@ -944,6 +962,56 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
   );
 }
 
+
+/* 📌 언제 보낼지 — 지금 / 정해둔 시각.
+   보내는 순간을 사람이 정하는 구조라, 예약도 같은 화면에서 고를 수 있어야 한다.
+   기준 시각(경기 시각 등)이 있으면 "N시간 전" 을 바로 고를 수 있게 해 준다. */
+function SendWhen({ value, onChange, anchor }: { value: Date | null; onChange: (d: Date | null) => void; anchor?: Date | null }) {
+  const G2 = "#00e07b";
+  const now = Date.now();
+  const presets: { label: string; at: Date | null }[] = [{ label: "지금 보내기", at: null }];
+  [1, 3].forEach((h) => presets.push({ label: `${h}시간 뒤`, at: new Date(now + h * 3600e3) }));
+  if (anchor) {
+    [24, 3].forEach((h) => {
+      const at = new Date(anchor.getTime() - h * 3600e3);
+      if (at.getTime() - now > 60e3) presets.push({ label: `경기 ${h}시간 전`, at });
+    });
+  }
+  const same = (a: Date | null, b: Date | null) =>
+    (!a && !b) || (!!a && !!b && Math.abs(a.getTime() - b.getTime()) < 60e3);
+
+  return (
+    <div className="mt-4">
+      <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">언제 보낼까요</span>
+      <div className="flex flex-wrap gap-1.5">
+        {presets.map((x) => {
+          const on = same(value, x.at);
+          return (
+            <button key={x.label} type="button" onClick={() => onChange(x.at)}
+              className="esp-cut-sm px-2.5 py-1.5 text-[11px] font-black border transition-colors"
+              style={on ? { borderColor: G2, background: G2 + "16", color: G2 } : { borderColor: "rgba(255,255,255,.10)", background: "rgba(255,255,255,.02)", color: "#c7c7cc" }}>
+              {x.label}
+            </button>
+          );
+        })}
+      </div>
+      {value && (
+        <div className="flex items-center gap-2 mt-2.5">
+          <div className="esp-cut-sm inline-flex items-stretch border border-white/10 bg-white/[0.03]">
+            <button type="button" onClick={() => onChange(new Date(Math.max(now + 61e3, value.getTime() - 1800e3)))}
+              className="w-8 text-[15px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors">−</button>
+            <span className="px-3 py-1.5 text-center border-x border-white/10 text-[12px] font-black tabular-nums">
+              {dF(value)} {pad(value.getHours())}:{pad(value.getMinutes())}
+            </span>
+            <button type="button" onClick={() => onChange(new Date(value.getTime() + 1800e3))}
+              className="w-8 text-[15px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white transition-colors">+</button>
+          </div>
+          <span className="text-[10px] font-bold text-gray-600">30분 단위로 조절</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ── 통합 시간 조정 — 전 팀 공통. 네이티브 select/date 는 쓰지 않는다 ── */
 function SeasonForm({ season, busy, onSave, onSaveNudge, onTest, tournaments, sampleTeam }: { season: any; busy: boolean; onSave: (p: any) => void; onSaveNudge: (n: any) => void; onTest: (n: any) => void; tournaments: any[]; sampleTeam?: string }) {

@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 // 📌 선수 경매 시스템
 const LeaderSchema = new mongoose.Schema({
-  name: { type: String, required: true },        // 팀장(리더) 이름
+  name: { type: String, required: true },        // 리더 이름
   discordId: { type: String, default: "" },      // 디스코드 ID (프로필 표시 + 자동 역할 매칭)
   position: { type: String, default: "" },       // 리더 본인 슬롯: 탱커/딜러/힐러 (탱커면 1페이즈 참가 불가)
   points: { type: Number, default: 100000 },
@@ -12,7 +12,7 @@ const LeaderSchema = new mongoose.Schema({
   invExtra: { type: Number, default: 0 },             // 인벤토리 플러스로 늘린 추가 칸 수
   roster: {
     type: [{
-      playerIdx: Number,   // players 배열 인덱스 (-1 = 팀장 본인)
+      playerIdx: Number,   // players 배열 인덱스 (-1 = 리더 본인)
       slot: String,        // 배정 슬롯: 탱커/딜러/힐러 등 게임 역할
       price: Number,
       golden: Boolean,     // 황금카드(올포지션) 낙찰 여부
@@ -88,7 +88,7 @@ const AuctionSchema = new mongoose.Schema({
     scoutUntil: { type: Date, default: null },    // 스카우터 타임 종료 시각 (이 전엔 입찰 불가)
     isAllin: { type: Boolean, default: false },
   },
-  // 낙찰 후 팀장의 슬롯 배정 대기 상태
+  // 낙찰 후 리더의 슬롯 배정 대기 상태
   pendingAssign: {
     playerIdx: { type: Number, default: null },
     leaderIdx: { type: Number, default: null },

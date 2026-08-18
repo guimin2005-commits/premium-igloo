@@ -689,7 +689,7 @@ export default function TeamRoom() {
                     })}
                   </div>
 
-                  {/* 📌 미제출자 재촉 — 봇이 개인 DM 으로 찌른다. 팀장·관리자만 */}
+                  {/* 📌 미제출자 재촉 — 봇이 개인 DM 으로 찌른다. 리더·관리자만 */}
                   {(iAmLeader || isAdmin) && waiting.length > 0 && (
                     <button disabled={busy} onClick={() => setNudgeOpen(true)}
                       className="mt-4 w-full esp-cut-sm py-3 text-[12px] font-black border transition-all active:scale-[.99] disabled:opacity-40"

@@ -13,7 +13,7 @@ const slotCount = (leader, slot) => leader.roster.filter((r) => r.slot === slot)
 
 // 📌 인벤토리 용량 = 기본 용량 + '인벤토리 플러스'로 산 추가 칸
 //    용량을 넘겨 소지하면 배정으로 줄이기 전까지 다음 입찰을 막는다.
-// 리더 본인 포지션의 특수값 — 슬롯에 못 박히지 않고 '팀장 카드' 상태로 남는다
+// 리더 본인 포지션의 특수값 — 슬롯에 못 박히지 않고 '리더 카드' 상태로 남는다
 const ALLPOS = "올 포지션";
 const invCapacityOf = (S, leader) => Math.max(1, (S?.invCapacity ?? 1) + (leader?.invExtra || 0));
 const invOver = (S, leader) => (leader?.inventory?.length || 0) > invCapacityOf(S, leader);
@@ -293,7 +293,7 @@ export async function POST(request, { params }) {
           return NextResponse.json({ success: false, message: "포지션 변경은 한 번만 가능합니다. 추가 변경은 진행자에게 요청해 주세요." }, { status: 409 });
         }
 
-        // 📌 올 포지션 팀장 카드는 황금카드와 동일하게 동작한다 — 이미 찬 슬롯에도 들어가고,
+        // 📌 올 포지션 리더 카드는 황금카드와 동일하게 동작한다 — 이미 찬 슬롯에도 들어가고,
         //    밀려나는 기존 선수는 보유 선수(인벤토리)로 돌아간다.
         const fromAll = before === ALLPOS;
         const selfIdx = leader.roster.findIndex((r) => r.playerIdx === -1);
@@ -317,15 +317,15 @@ export async function POST(request, { params }) {
             leader.roster.splice(outIdx, 1);
             auction.pendingOverflow = { leaderIdx: null, slot: null };
             const outName = auction.players[out.playerIdx]?.alias;
-            addLog(auction, `${leader.name} 팀장(올 포지션) → [${position}] 초과 배정 — ${outName} 자동으로 보유 선수 복귀`);
+            addLog(auction, `${leader.name} 리더(올 포지션) → [${position}] 초과 배정 — ${outName} 자동으로 보유 선수 복귀`);
             await auction.save();
-            sysChat(id, `${leader.name} 팀장이 [${position}] 슬롯에 들어가 ${outName} 선수가 보유 선수로 돌아갔습니다.`);
+            sysChat(id, `${leader.name} 리더이 [${position}] 슬롯에 들어가 ${outName} 선수가 보유 선수로 돌아갔습니다.`);
             return NextResponse.json({ success: true, autoEjected: outName });
           }
           auction.pendingOverflow = { leaderIdx, slot: position };
-          addLog(auction, `${leader.name} 팀장(올 포지션) → [${position}] 초과 배정 — 기존 선수 이동 필요`);
+          addLog(auction, `${leader.name} 리더(올 포지션) → [${position}] 초과 배정 — 기존 선수 이동 필요`);
           await auction.save();
-          sysChat(id, `${leader.name} 팀장이 [${position}] 슬롯에 배정되었습니다. ${leader.name} 리더는 내보낼 선수 한 명을 선택해주세요.`);
+          sysChat(id, `${leader.name} 리더이 [${position}] 슬롯에 배정되었습니다. ${leader.name} 리더는 내보낼 선수 한 명을 선택해주세요.`);
           return NextResponse.json({ success: true, overflow: true });
         }
 
@@ -457,7 +457,7 @@ export async function POST(request, { params }) {
         const player = auction.players[playerIdx];
         const leader = auction.leaders[leaderIdx];
 
-        // 📌 인벤토리 모드: 슬롯 배정 없이 팀장 인벤토리에 카드로 보관 (나중에 배정)
+        // 📌 인벤토리 모드: 슬롯 배정 없이 리더 인벤토리에 카드로 보관 (나중에 배정)
         if (S.assignMode === "inventory") {
           leader.points -= price;
           leader.inventory.push({ playerIdx, price, golden: !!player.isAllPos });
@@ -672,7 +672,7 @@ export async function POST(request, { params }) {
         auction.assignUntil = new Date(Date.now() + (Number(seconds) || 120) * 1000);
         addLog(auction, `팀원 배정 시간 ${Number(seconds) || 120}초 부여`);
         await auction.save();
-        sysChat(id, "팀원 배정 시간이 부여되었습니다. 팀장은 인벤토리 선수를 포지션에 배정해주세요.");
+        sysChat(id, "팀원 배정 시간이 부여되었습니다. 리더은 인벤토리 선수를 포지션에 배정해주세요.");
         return NextResponse.json({ success: true });
       }
 
@@ -860,7 +860,7 @@ export async function POST(request, { params }) {
         const card = leader?.inventory?.[invIdx];
         if (!leader || !card) return NextResponse.json({ success: false, message: "대상을 찾을 수 없습니다." }, { status: 400 });
         if (card.playerIdx === -1) {
-          return NextResponse.json({ success: false, message: "팀장 카드는 회수할 수 없습니다. 포지션 지정으로 처리하세요." }, { status: 400 });
+          return NextResponse.json({ success: false, message: "리더 카드는 회수할 수 없습니다. 포지션 지정으로 처리하세요." }, { status: 400 });
         }
         leader.points += card.price || 0; // 환불
         leader.inventory.splice(invIdx, 1);
@@ -882,7 +882,7 @@ export async function POST(request, { params }) {
 
       // 개최자: 리더 포지션 지정/변경 (본인 슬롯 배치)
       // 진행자는 준비중·진행중 어느 때나 리더 포지션을 고칠 수 있다 (1회 제한 없음).
-      // "올 포지션" 으로 두면 슬롯을 비우고 팀장 카드 상태가 된다.
+      // "올 포지션" 으로 두면 슬롯을 비우고 리더 카드 상태가 된다.
       case "host:setLeaderPos": {
         const { leaderIdx, position } = body;
         const leader = auction.leaders[leaderIdx];

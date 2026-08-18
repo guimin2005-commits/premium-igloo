@@ -60,7 +60,11 @@ const buildDm = (n) => {
 };
 
 async function tick(client) {
-  const rows = await ScrimNudge.find({ status: "pending" }).sort({ createdAt: 1 }).limit(20);
+  // 예약된 건은 그 시각이 지나야 가져간다
+  const rows = await ScrimNudge.find({
+    status: "pending",
+    $or: [{ sendAt: null }, { sendAt: { $exists: false } }, { sendAt: { $lte: new Date() } }],
+  }).sort({ createdAt: 1 }).limit(20);
   if (!rows.length) return;
 
   for (const n of rows) {

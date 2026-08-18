@@ -50,7 +50,7 @@ export async function POST(request) {
     const settings = { ...body.settings };
     const p1Role = phase1RoleOf(settings); // 선경매(1페이즈) 포지션 — 없으면 단일 페이즈
 
-    // 📌 팀장 본인도 팀의 한 슬롯을 차지 (playerIdx: -1 = 팀장 자신)
+    // 📌 리더 본인도 팀의 한 슬롯을 차지 (playerIdx: -1 = 리더 자신)
     const leaders = (body.leaders || []).map((l) => ({
       name: l.name,
       discordId: l.discordId || "",
