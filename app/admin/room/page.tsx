@@ -915,11 +915,22 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
           const B = teams.find((t) => t._id === f.teamBId);
           const at = new Date(f.at);
           return (
-            <div key={f._id} className="flex flex-wrap items-center gap-3 py-3 border-b border-white/[0.06]">
-              <span className="w-[142px] shrink-0 text-[11px] font-bold esp-mono text-gray-400">{atLabel(at)}</span>
-              <span className="flex-1 min-w-0 text-[12px] font-black text-gray-300 truncate">
-                {A?.name || "?"} <span className="text-gray-700 mx-1.5">vs</span> {B?.name || "?"}
-              </span>
+            <div key={f._id} className="py-3.5 border-b border-white/[0.06] space-y-2.5">
+              {/* 1줄 — 누가 누구랑, 언제 */}
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="shrink-0 text-[11px] font-bold esp-mono text-gray-400">{atLabel(at)}</span>
+                <span className="esp-cut-sm shrink-0 px-1.5 py-0.5 text-[9px] font-black esp-mono"
+                  style={{ background: (A?.color || "#888") + "1c", border: "1px solid " + (A?.color || "#888") + "55", color: A?.color || "#888" }}>{A?.tag || "A"}</span>
+                <span className="text-[12px] font-black text-gray-200 truncate">{A?.name || "?"}</span>
+                <span className="shrink-0 text-[10px] font-black esp-mono text-gray-700">VS</span>
+                <span className="esp-cut-sm shrink-0 px-1.5 py-0.5 text-[9px] font-black esp-mono"
+                  style={{ background: (B?.color || "#888") + "1c", border: "1px solid " + (B?.color || "#888") + "55", color: B?.color || "#888" }}>{B?.tag || "B"}</span>
+                <span className="text-[12px] font-black text-gray-200 truncate">{B?.name || "?"}</span>
+                <span className="text-[9px] font-black esp-mono text-gray-700 shrink-0">{f.kind === "official" ? "공식" : "스크림"}</span>
+              </div>
+
+              {/* 2줄 — 결과·용병·알림 */}
+              <div className="flex flex-wrap items-center gap-2">
               {f.winnerId ? (
                 <span className="flex items-center gap-2 shrink-0">
                   {/* 스코어를 기록했으면 몇 대 몇인지 함께 보여준다 */}
@@ -993,6 +1004,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
               <button disabled={busy}
                 onClick={async () => { const r = await post({ action: "fixture:delete", fixtureId: f._id }); if (r) setToast("경기를 삭제했습니다"); }}
                 className="shrink-0 text-[10px] font-black text-rose-400/70 hover:text-rose-300 disabled:opacity-40">삭제</button>
+              </div>
             </div>
           );
         })}
