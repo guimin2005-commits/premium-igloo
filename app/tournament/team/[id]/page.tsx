@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession, signIn } from "next-auth/react";
 import { EsportsStyles } from "../../../components/Esports";
 import { parseBracketSections } from "../../../components/BracketView";
+import { bracketVisible } from "@/lib/tournamentPhase";
 import DmPreview from "../../../components/DmPreview";
 
 /* 📌 팀 룸 — 대회에 소속된 팀이 머무는 공간
@@ -253,7 +254,8 @@ export default function TeamRoom() {
   /* 대진표는 대회 글에 텍스트로 저장된다. 파서를 그대로 쓰고 우리 팀 이름이 든 경기만 뽑는다.
      이름으로 맞추므로 팀명을 바꾸면 대진표 표기도 함께 고쳐야 한다. */
   const ourPath = useMemo(() => {
-    const text = tour?.tournamentBracket || "";
+    // 대진표가 아직 비공개면 팀 룸에서도 우리 대진을 보여주지 않는다
+    const text = bracketVisible(tour) ? tour?.tournamentBracket || "" : "";
     if (!text || !team) return [];
     const norm = (v: string) => (v || "").trim().toLowerCase();
     const me = norm(team.name);

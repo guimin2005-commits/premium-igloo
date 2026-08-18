@@ -35,6 +35,9 @@ const PostSchema = new mongoose.Schema({
   tournamentStatus: { type: String, default: "예정됨" }, // 진행중 / 예정됨 / 종료됨
   tournamentLink: { type: String, default: "" },   // 참가 신청 링크
   tournamentBracket: { type: String, default: "" },// 대진표 텍스트 (라운드명: / A vs B > 승자)
+  // 📌 대진표 공개 여부 — 연습 주간에 미리 짜두고 당일에 공개하는 흐름을 위해 둔다.
+  //    대회 당일·종료 단계에서는 이 값과 무관하게 항상 공개된다 (lib/tournamentPhase.js).
+  tournamentBracketPublic: { type: Boolean, default: false },
   // 📌 대회 참가 설문 (구글폼 형식) — 질문/선택지/필수 여부
   survey: {
     enabled: { type: Boolean, default: false },

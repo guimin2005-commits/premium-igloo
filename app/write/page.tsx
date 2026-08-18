@@ -78,6 +78,7 @@ export default function AdminWritePage() {
   const [tournamentStatus, setTournamentStatus] = useState("예정됨");
   const [tournamentLink, setTournamentLink] = useState("");
   const [tournamentBracket, setTournamentBracket] = useState("");
+  const [bracketPublic, setBracketPublic] = useState(false); // 대진표를 지금 공개할지
 
   // 📌 대진표 비주얼 빌더 — 라운드/매치 단위 편집 + 승자조/패자조/결승 그룹(패자부활전)
   type BracketMatch = { a: string; b: string; winner: string };
@@ -289,7 +290,7 @@ export default function AdminWritePage() {
     category, title, content, publishAt, hidden, noticeTag, isPinned, bannerUrl,
     eventTag, eventStartDate, eventEndDate, isEventAlways,
     recruitSubCategory, recruitRole, recruitStartDate, recruitEndDate, isRecruitAlways, recruitQual, recruitTasks, recruitExtra,
-    tournamentGame, tournamentPrize, tournamentStatus: statusFromPhase(tournamentPhase), tournamentLink, tournamentBracket: serializeBracket(bracketRounds), tournamentWinner, tournamentWinnerId, tournamentStartDate, tournamentEndDate,
+    tournamentGame, tournamentPrize, tournamentStatus: statusFromPhase(tournamentPhase), tournamentLink, tournamentBracket: serializeBracket(bracketRounds), tournamentBracketPublic: bracketPublic, tournamentWinner, tournamentWinnerId, tournamentStartDate, tournamentEndDate,
     tournamentType, tournamentPhase, tournamentTeamDay, tournamentEventDay, tournamentSchedule, survey,
     savedAt: new Date().toISOString(),
   });
@@ -314,7 +315,7 @@ export default function AdminWritePage() {
       setRecruitSubCategory(d.recruitSubCategory || "staff"); setRecruitRole(d.recruitRole || ""); setRecruitStartDate(d.recruitStartDate || ""); setRecruitEndDate(d.recruitEndDate || "");
       setIsRecruitAlways(!!d.isRecruitAlways); setRecruitQual(d.recruitQual || ""); setRecruitTasks(d.recruitTasks || ""); setRecruitExtra(d.recruitExtra || "");
       setTournamentGame(d.tournamentGame || ""); setTournamentPrize(d.tournamentPrize || ""); setTournamentStatus(d.tournamentStatus || "예정됨"); setTournamentLink(d.tournamentLink || "");
-      setTournamentBracket(d.tournamentBracket || ""); setBracketRounds(parseBracket(d.tournamentBracket || "")); setTournamentWinner(d.tournamentWinner || ""); setTournamentWinnerId(d.tournamentWinnerId || "");
+      setTournamentBracket(d.tournamentBracket || ""); setBracketRounds(parseBracket(d.tournamentBracket || "")); setBracketPublic(!!d.tournamentBracketPublic); setTournamentWinner(d.tournamentWinner || ""); setTournamentWinnerId(d.tournamentWinnerId || "");
       setTournamentStartDate(d.tournamentStartDate || ""); setTournamentEndDate(d.tournamentEndDate || "");
       setTournamentType(d.tournamentType || "모집");
       setTournamentPhase(phaseOf(d));
@@ -383,6 +384,7 @@ export default function AdminWritePage() {
             setTournamentLink(post.tournamentLink || "");
             setTournamentBracket(post.tournamentBracket || "");
             setBracketRounds(parseBracket(post.tournamentBracket || ""));
+            setBracketPublic(!!post.tournamentBracketPublic);
             setTournamentWinner(post.tournamentWinner || "");
             setTournamentWinnerId(post.tournamentWinnerId || "");
             setTournamentType(post.tournamentType || "모집");
@@ -533,7 +535,7 @@ export default function AdminWritePage() {
          content, bannerUrl, tournamentGame, tournamentPrize, tournamentStatus, tournamentLink,
          tournamentType, tournamentPhase, tournamentTeamDay, tournamentEventDay,
          tournamentSchedule: tournamentSchedule.filter((p) => p.label.trim()),
-         tournamentBracket: serializeBracket(bracketRounds), tournamentWinner, tournamentWinnerId,
+         tournamentBracket: serializeBracket(bracketRounds), tournamentBracketPublic: bracketPublic, tournamentWinner, tournamentWinnerId,
          tournamentDate: computedTournamentDate,
          // 📌 참가 설문 — 빈 질문/선택지는 정리해서 저장
          survey: {
@@ -753,8 +755,8 @@ export default function AdminWritePage() {
                 <input type="text" placeholder="https://..." value={tournamentLink} onChange={(e) => setTournamentLink(e.target.value)} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
               </div>
 
-              {/* 📌 대진표 — '대진표' 타입일 때만 표시 */}
-              {(tournamentPhase === "당일" || tournamentPhase === "종료") && (
+              {/* 📌 대진표 — 단계와 무관하게 언제든 짤 수 있다.
+                     연습 주간에 미리 만들어 두고 공개는 따로 정한다. */}
               <div className="md:col-span-2 flex flex-col gap-3">
                 <div className="mt-1 space-y-4">
                   {/* 자동 생성기 */}
@@ -844,6 +846,33 @@ export default function AdminWritePage() {
                       <BracketView text={serializeBracket(bracketRounds)} showHeader={false} />
                     </div>
                   )}
+
+                  {/* 📌 공개 여부 — 짜는 것과 보여주는 것을 나눈다.
+                         대회 당일부터는 숨길 이유가 없으므로 잠그고 항상 공개로 둔다. */}
+                  {bracketRounds.length > 0 && (() => {
+                    const forced = tournamentPhase === "당일" || tournamentPhase === "종료";
+                    const on = forced || bracketPublic;
+                    return (
+                      <button type="button" disabled={forced} onClick={() => setBracketPublic((v) => !v)}
+                        className={`w-full flex items-center gap-3 rounded-xl border p-4 text-left transition-all ${forced ? "border-white/10 bg-[#141414] cursor-default" : on ? "border-[#e91e3f] bg-[#e91e3f]/[0.08]" : "border-white/10 bg-[#161616] hover:border-white/25"}`}>
+                        <span className={`w-9 h-5 rounded-full shrink-0 relative transition-colors ${on ? "bg-[#e91e3f]" : "bg-white/15"}`}>
+                          <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-[13px] font-black text-white">
+                            {on ? "대진표를 참가자에게 공개" : "대진표를 아직 숨김"}
+                          </span>
+                          <span className="block text-[11px] text-gray-500 mt-0.5 break-keep">
+                            {forced
+                              ? "대회 당일부터는 항상 공개됩니다."
+                              : on
+                                ? "지금 대회 페이지에 대진표가 보입니다."
+                                : "짜두기만 하고 보여주지 않습니다. 관리자에게는 계속 보입니다."}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })()}
                 </div>
 
                 <span className="text-xs font-bold text-gray-400 mt-4 block">우승팀 / 우승자 (선택 · 명예의 전당 표시)</span>
@@ -852,7 +881,6 @@ export default function AdminWritePage() {
                 <span className="text-xs font-bold text-gray-400 mt-4 block">우승자 디스코드 ID <span className="text-gray-600 font-medium">(선택 · 팀원 여러 명이면 쉼표(,)로 구분 — 명예의 전당에 각자 프로필로 표시)</span></span>
                 <textarea rows={2} placeholder="예시: 1104242935664492666, 2205..., 3306... (팀원 전원 입력 가능)" value={tournamentWinnerId} onChange={(e) => setTournamentWinnerId(e.target.value)} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f] resize-none leading-relaxed" />
               </div>
-              )}
 
               {/* 📌 참가 설문 (구글폼 형식) */}
               <div className="md:col-span-2">

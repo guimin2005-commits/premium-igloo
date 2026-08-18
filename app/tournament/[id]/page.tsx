@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { RenderFormattedText } from "../../components/FormattedText";
 import { BracketView } from "../../components/BracketView";
 import { EsportsStyles, STATUS_META } from "../../components/Esports";
-import { PHASES, phaseOf, phaseMeta, phaseShows } from "@/lib/tournamentPhase";
+import { PHASES, phaseOf, phaseMeta, phaseShows, bracketVisible } from "@/lib/tournamentPhase";
 import { ADMIN_USERS } from "@/lib/admins";
 
 /* 📌 대회 상세 — 팝업이 아니라 페이지.
@@ -62,6 +62,10 @@ export default function TournamentDetailPage() {
   const cur = phaseOf(post);
   const idx = PHASES.findIndex((p) => p.id === cur);
   const show = phaseShows(cur);
+  /* 대진표는 연습 주간에 미리 짜둘 수 있다. 공개는 관리자가 따로 켠다.
+     관리자에게는 숨긴 상태에서도 보여야 편성 결과를 확인할 수 있다. */
+  const bracketOpen = bracketVisible(post);
+  const showBracket = bracketOpen || (isAdmin && !!post.tournamentBracket);
   const st = post.tournamentStatus && STATUS_META[post.tournamentStatus] ? post.tournamentStatus : "예정됨";
   const meta = STATUS_META[st];
 
@@ -128,13 +132,14 @@ export default function TournamentDetailPage() {
 
           <div className="min-w-0 space-y-9">
             {/* 대진표 — 페이지 폭을 그대로 쓴다 */}
-            {show.bracket && !post.tournamentBracket && (
+            {/* 셋 중 하나만 뜬다: 대진표 · 아직 편성 안 됨 · 아직 공개 전 */}
+            {!showBracket && show.bracket && (
               <section className="esp-cut border border-dashed border-white/10 px-6 py-12 text-center">
                 <p className="text-[13px] font-black text-gray-400">대진표가 아직 없습니다</p>
                 <p className="mt-2 text-[11px] text-gray-600">운영진이 대진을 편성하면 여기에 올라옵니다</p>
               </section>
             )}
-            {!show.bracket && (
+            {!showBracket && !show.bracket && (
               <section className="esp-cut border border-dashed border-white/10 px-6 py-12 text-center">
                 <p className="text-[9px] font-black esp-mono text-gray-600 mb-2">BRACKET</p>
                 <p className="text-[13px] font-black text-gray-400">대진은 대회 당일에 공개됩니다</p>
@@ -143,10 +148,13 @@ export default function TournamentDetailPage() {
                 </p>
               </section>
             )}
-            {show.bracket && post.tournamentBracket && (
+            {showBracket && (
               <section>
                 <div className="flex items-center gap-4 mb-4">
                   <span className="text-[10px] font-black esp-mono shrink-0" style={{ color: G }}>BRACKET</span>
+                  {!bracketOpen && (
+                    <span className="shrink-0 esp-cut-sm px-2 py-1 text-[10px] font-black bg-amber-400/15 text-amber-300 border border-amber-400/30">비공개 — 관리자에게만 보임</span>
+                  )}
                   <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/30 to-transparent" />
                 </div>
                 <div className="esp-cut border border-white/[0.08] bg-white/[0.015] p-4">
