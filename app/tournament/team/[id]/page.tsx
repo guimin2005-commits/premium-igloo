@@ -22,13 +22,14 @@ const sKey = (d: Date, m: number) => `${ymd(d)}|${m}`;
 const dL = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
 const dF = (d: Date) => `${dL(d)}(${WD[d.getDay()]})`;
 
-// 📌 경기 시각 표기 — 자정~새벽은 전날 '밤 24:00' 으로 적는다 (조율 격자와 같은 기준)
+// 📌 경기 시각 표기 — 자정을 넘긴 경기는 '어느 날 밤' 인지만 앞에 붙인다 (시각은 실제 시계 그대로)
 const NIGHT_UNTIL = 6;
 const atLabel = (d: Date) => {
   const h = d.getHours();
+  // 자정을 넘긴 경기는 '어느 날 밤' 인지만 앞에 붙이고, 시각은 실제 시계 그대로 적는다
   if (h < NIGHT_UNTIL) {
     const prev = new Date(d.getTime() - 86400000);
-    return `${dF(prev)} 밤 ${pad(h + 24)}:${pad(d.getMinutes())}`;
+    return `${dF(prev)} 밤 ${pad(h)}:${pad(d.getMinutes())}`;
   }
   return `${dF(d)} ${pad(h)}:${pad(d.getMinutes())}`;
 };
