@@ -593,6 +593,10 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
   const [a, setA] = useState<string | null>(null);
   const [b, setB] = useState<string | null>(null);
   const [kind, setKind] = useState<"scrim" | "official">("scrim");
+  /* 📌 경기 시각 — 기본은 가장 많이 겹치는 칸이지만, 운영진이 직접 정할 수 있어야 한다.
+     겹치는 사람이 적어도 그 시간에 하기로 했으면 그게 맞는 시각이다. */
+  const [pickDay, setPickDay] = useState<Date | null>(null);
+  const [pickMin, setPickMin] = useState<number | null>(null);
 
   const DAYS = useMemo(() => {
     if (!season) return [];
@@ -613,6 +617,13 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
 
   const TA = teams.find((t) => t._id === a);
   const TB = teams.find((t) => t._id === b);
+  const pickTeam = (side: "a" | "b", id: string | null) => {
+    // 상대가 바뀌면 겹치는 시간도 달라진다 — 직접 고른 시각은 초기화한다
+    setPickDay(null); setPickMin(null);
+    (side === "a" ? setA : setB)(id);
+  };
+
+  /* 실제로 확정할 시각. 직접 고른 값이 우선이고, 없으면 가장 많이 겹치는 칸을 쓴다. */
 
   const ranked = useMemo(() => {
     if (!TA || !TB) return [];
@@ -624,6 +635,10 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
     return o.sort((x, y) => y.min - x.min || y.ca + y.cb - (x.ca + x.cb));
   }, [TA, TB, DAYS, SLOTS]);
   const top = ranked[0];
+  /* 실제로 확정할 시각 — 직접 고른 값이 우선, 없으면 가장 많이 겹치는 칸 */
+  const chosen = pickDay && pickMin !== null ? { d: pickDay, s: pickMin } : (top?.min ? { d: top.d, s: top.s } : null);
+  const chosenCa = chosen && TA ? cntAt(TA, chosen.d, chosen.s) : 0;
+  const chosenCb = chosen && TB ? cntAt(TB, chosen.d, chosen.s) : 0;
 
   const Pick = ({ label, sel, onPick, exclude }: { label: string; sel: string | null; onPick: (id: string) => void; exclude: string | null }) => (
     <div>
@@ -659,8 +674,8 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
           <span className="text-[10px] font-black esp-mono uppercase" style={{ color: G2 }}>Match Up</span>
           <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
         </div>
-        <Pick label="팀 A" sel={a} onPick={(id) => setA(a === id ? null : id)} exclude={b} />
-        <Pick label="팀 B" sel={b} onPick={(id) => setB(b === id ? null : id)} exclude={a} />
+        <Pick label="팀 A" sel={a} onPick={(id) => pickTeam("a", a === id ? null : id)} exclude={b} />
+        <Pick label="팀 B" sel={b} onPick={(id) => pickTeam("b", b === id ? null : id)} exclude={a} />
         <p className="text-[10px] font-bold text-gray-600 leading-relaxed">조율이 끝난 팀만 고를 수 있습니다.</p>
       </aside>
 
@@ -672,7 +687,10 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
               <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
               <span className="text-[10px] font-black esp-mono text-gray-600">{TA.name} {TA.members.length} · {TB.name} {TB.members.length}</span>
             </div>
-            <p className="text-[11px] font-bold text-gray-600 mb-4">숫자는 <b className="text-gray-300">더 적은 쪽 팀</b>의 가능 인원입니다. 양 팀 전원 가능한 칸에 초록 테두리가 붙습니다.</p>
+            <p className="text-[11px] font-bold text-gray-600 mb-4">
+              숫자는 <b className="text-gray-300">더 적은 쪽 팀</b>의 가능 인원입니다. 양 팀 전원 가능한 칸에 초록 테두리가 붙습니다.
+              <b className="text-gray-300"> 칸을 누르면 그 시각으로 잡습니다.</b>
+            </p>
 
             <div className="overflow-x-auto no-bar -mx-1 px-1">
               <table style={{ borderCollapse: "separate", borderSpacing: 2 }}>
@@ -693,16 +711,19 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                         const ca = cntAt(TA, d, s), cb = cntAt(TB, d, s), mn = Math.min(ca, cb);
                         const cap = Math.max(1, Math.min(TA.members.length, TB.members.length));
                         const full = ca === TA.members.length && cb === TB.members.length && mn > 0;
+                        const picked = !!chosen && sKey(chosen.d, chosen.s) === sKey(d, s);
                         return (
                           <td key={s} className="p-0">
-                            <span title={TA.name + " " + ca + " · " + TB.name + " " + cb}
-                              className="w-[44px] h-[34px] lg:w-[54px] lg:h-[38px] border text-[11px] font-black tabular-nums grid place-items-center"
+                            <button type="button" title={TA.name + " " + ca + " · " + TB.name + " " + cb}
+                              onClick={() => { setPickDay(d); setPickMin(s); }}
+                              aria-pressed={picked}
+                              className="w-[44px] h-[34px] lg:w-[54px] lg:h-[38px] border text-[11px] font-black tabular-nums grid place-items-center transition-colors"
                               style={{
                                 background: mn ? "rgba(0,224,123," + (0.10 + (mn / cap) * 0.55).toFixed(3) + ")" : "rgba(255,255,255,.02)",
-                                borderColor: full ? G2 : "rgba(255,255,255,.07)",
-                                boxShadow: full ? "inset 0 0 0 1px " + G2 : undefined,
+                                borderColor: picked ? "#fff" : full ? G2 : "rgba(255,255,255,.07)",
+                                boxShadow: picked ? "inset 0 0 0 2px #fff" : full ? "inset 0 0 0 1px " + G2 : undefined,
                                 color: mn ? "#e6f7ee" : "#3f3f46",
-                              }}>{mn || ""}</span>
+                              }}>{mn || ""}</button>
                           </td>
                         );
                       })}
@@ -715,8 +736,8 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
             <div className="esp-cut border border-white/[0.08] bg-white/[0.02] mt-6">
               <div className="px-5 py-2.5 border-b border-white/[0.07] flex items-center gap-2">
                 <span className="text-[10px] font-black esp-mono text-gray-500">RECOMMENDED</span>
-                <span className="ml-auto text-[12px] font-black tabular-nums" style={{ color: G2 }}>
-                  {top?.min ? dF(top.d) + " " + sF(top.s) : "겹치는 시간 없음"}
+                <span className="ml-auto text-[12px] font-black tabular-nums" style={{ color: chosen ? G2 : "#6b7280" }}>
+                  {chosen ? dF(chosen.d) + " " + sF(chosen.s) : "시각을 정해주세요"}
                 </span>
               </div>
               <div className="px-5 py-5 flex items-center gap-4">
@@ -725,19 +746,66 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                     style={{ background: TA.color + "1c", border: "1px solid " + TA.color + "55", color: TA.color }}>{TA.tag || "TM"}</span>
                   <span className="min-w-0">
                     <span className="block text-[12px] font-black truncate">{TA.name}</span>
-                    <span className="block text-[10px] font-black esp-mono text-gray-600">{top ? top.ca + "/" + TA.members.length : "—"}</span>
+                    <span className="block text-[10px] font-black esp-mono text-gray-600">{chosen ? chosenCa + "/" + TA.members.length : "—"}</span>
                   </span>
                 </div>
                 <span className="text-[13px] font-black esp-mono text-gray-700">VS</span>
                 <div className="flex-1 flex items-center justify-end gap-3 min-w-0">
                   <span className="min-w-0 text-right">
                     <span className="block text-[12px] font-black truncate">{TB.name}</span>
-                    <span className="block text-[10px] font-black esp-mono text-gray-600">{top ? top.cb + "/" + TB.members.length : "—"}</span>
+                    <span className="block text-[10px] font-black esp-mono text-gray-600">{chosen ? chosenCb + "/" + TB.members.length : "—"}</span>
                   </span>
                   <span className="esp-cut-sm grid place-items-center shrink-0 w-10 h-10 text-[12px] font-black"
                     style={{ background: TB.color + "1c", border: "1px solid " + TB.color + "55", color: TB.color }}>{TB.tag || "TM"}</span>
                 </div>
               </div>
+              {/* 📌 시각 직접 정하기 — 격자에 없는 날짜·시간도 잡을 수 있어야 한다 */}
+              <div className="px-5 py-4 border-t border-white/[0.07] space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black esp-mono text-gray-600">경기 시각</span>
+                  {pickDay && (
+                    <button onClick={() => { setPickDay(null); setPickMin(null); }}
+                      className="ml-auto text-[10px] font-bold text-gray-600 hover:text-white underline underline-offset-2 transition-colors">
+                      가장 겹치는 시각으로
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-1.5 overflow-x-auto no-bar pb-1">
+                  {Array.from({ length: 21 }, (_, i) => midnight(Date.now() + DAY * i)).map((d, i) => {
+                    const on = !!chosen && ymd(chosen.d) === ymd(d);
+                    return (
+                      <button key={i} type="button"
+                        onClick={() => { setPickDay(d); setPickMin(pickMin ?? chosen?.s ?? (season ? season.fromHour * 60 : 1200)); }}
+                        aria-pressed={on}
+                        className="esp-cut-sm shrink-0 min-w-[52px] px-1 py-2 border text-center transition-colors"
+                        style={on ? { borderColor: G2, background: G2 + "1a" } : { borderColor: "rgba(255,255,255,.08)", background: "rgba(255,255,255,.02)" }}>
+                        <span className="block text-[12px] font-black tabular-nums" style={{ color: on ? G2 : "#cbd5e1" }}>{dL(d)}</span>
+                        <span className="block text-[9px] font-black esp-mono text-gray-600 mt-0.5">{i === 0 ? "TODAY" : WD[d.getDay()]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black esp-mono text-gray-600 shrink-0">시각</span>
+                  <div className="esp-cut-sm inline-flex items-stretch border border-white/10 bg-white/[0.03]">
+                    <button type="button" disabled={!chosen}
+                      onClick={() => setPickMin(((chosen?.s ?? 0) + 1440 - 30) % 1440)}
+                      className="w-9 text-[16px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white disabled:text-gray-700 transition-colors">−</button>
+                    <span className="min-w-[86px] px-2 py-2 text-center border-x border-white/10 text-[13px] font-black tabular-nums">
+                      {chosen ? sF(chosen.s) : "--:--"}
+                    </span>
+                    <button type="button" disabled={!chosen}
+                      onClick={() => setPickMin(((chosen?.s ?? 0) + 30) % 1440)}
+                      className="w-9 text-[16px] font-black text-gray-400 hover:bg-white/[0.06] hover:text-white disabled:text-gray-700 transition-colors">+</button>
+                  </div>
+                  {chosen && (
+                    <span className="text-[10px] font-bold text-gray-600 min-w-0 truncate">
+                      {chosenCa + chosenCb > 0 ? `양 팀 ${chosenCa} · ${chosenCb}명 가능` : "이 시각은 아무도 표시하지 않았습니다"}
+                    </span>
+                  )}
+                </div>
+              </div>
+
               <div className="flex border-t border-white/[0.07]">
                 {([["scrim", "스크림"], ["official", "공식전"]] as const).map(([k, l]) => (
                   <button key={k} onClick={() => setKind(k)} aria-pressed={kind === k}
@@ -745,12 +813,12 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                     style={kind === k ? { background: "rgba(0,224,123,.14)", color: G2 } : { color: "#8b8b93" }}>{l}</button>
                 ))}
               </div>
-              <button disabled={busy || !top?.min}
+              <button disabled={busy || !chosen}
                 onClick={async () => {
-                  if (!top?.min) return;
-                  const at = new Date(top.d); at.setHours(Math.floor(top.s / 60), top.s % 60, 0, 0);
-                  const r = await post({ action: "fixture:create", teamAId: TA._id, teamBId: TB._id, kind, at: at.toISOString(), usCount: top.ca, themCount: top.cb });
-                  if (r) setToast(dF(top.d) + " " + sF(top.s) + " · " + TA.name + " vs " + TB.name + " 확정");
+                  if (!chosen) return;
+                  const at = new Date(chosen.d); at.setHours(Math.floor(chosen.s / 60), chosen.s % 60, 0, 0);
+                  const r = await post({ action: "fixture:create", teamAId: TA._id, teamBId: TB._id, kind, at: at.toISOString(), usCount: chosenCa, themCount: chosenCb });
+                  if (r) setToast(dF(chosen.d) + " " + sF(chosen.s) + " · " + TA.name + " vs " + TB.name + " 확정");
                 }}
                 className="w-full py-3.5 text-[12px] font-black border-t border-white/[0.07] transition-colors disabled:opacity-35"
                 style={{ background: G2, color: "#04120b" }}>
