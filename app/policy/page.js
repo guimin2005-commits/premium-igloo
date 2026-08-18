@@ -55,12 +55,12 @@ const Addendum = ({ date }) => (
 
 // 📌 푸터의 '이용약관' / '개인정보처리방침' 분리 링크가 ?tab= 으로 원하는 탭에 바로 진입한다
 const DOCS = [
-  { id: "terms", label: "서버 이용약관", note: "운영정책", date: "2023. 01. 22." },
-  { id: "privacy", label: "개인정보처리방침", note: "", date: "2023. 01. 22." },
-  { id: "level", label: "SYSTEM : LEVEL 운영 규정", note: "XP·레벨", date: "2026. 08. 17." },
-  { id: "arctic", label: "ARCTIC 이용약관", note: "XP 상점", date: "2026. 08. 17." },
-  { id: "tournament", label: "e스포츠 대회 규정", note: "", date: "2026. 06. 23." },
-  { id: "scrim", label: "내전 규정", note: "", date: "2026. 04. 16." },
+  { id: "terms", label: "서버 이용약관", short: "이용약관", note: "운영정책", date: "2023. 01. 22." },
+  { id: "privacy", label: "개인정보처리방침", short: "개인정보", note: "", date: "2023. 01. 22." },
+  { id: "level", label: "SYSTEM : LEVEL 운영 규정", short: "레벨", note: "XP·레벨", date: "2026. 08. 17." },
+  { id: "arctic", label: "ARCTIC 이용약관", short: "ARCTIC", note: "XP 상점", date: "2026. 08. 17." },
+  { id: "tournament", label: "e스포츠 대회 규정", short: "대회", note: "", date: "2026. 06. 23." },
+  { id: "scrim", label: "내전 규정", short: "내전", note: "", date: "2026. 04. 16." },
 ];
 const VALID_TABS = DOCS.map((d) => d.id);
 
@@ -84,18 +84,22 @@ function PolicyContent() {
 
       {/* ── 문서 목차 — 색 채움 없이 밑줄로만 현재 문서를 표시 ── */}
       <div className="w-full px-6 border-b border-white/[0.09]">
-        <div className="max-w-3xl mx-auto flex gap-6 md:gap-8 overflow-x-auto whitespace-nowrap no-bar">
+        {/* ⚠️ 가로 스크롤로 두면 좁은 화면에서 뒤쪽 탭이 글자 중간에 잘린다.
+            줄을 바꿔 전부 보이게 하고, 모바일에서는 짧은 이름을 쓴다
+            (전체 이름은 바로 아래 서지 정보에 그대로 나온다). */}
+        <div className="max-w-3xl mx-auto flex flex-wrap gap-x-4 sm:gap-x-5 md:gap-x-6">
           {DOCS.map((d) => {
             const active = tab === d.id;
             return (
               <button
                 key={d.id}
                 onClick={() => setTab(d.id)}
-                className={`relative py-4 text-[13px] md:text-sm font-bold shrink-0 outline-none focus:outline-none transition-colors ${
+                className={`relative py-3.5 sm:py-4 text-[13px] md:text-sm font-bold shrink-0 whitespace-nowrap outline-none focus:outline-none transition-colors ${
                   active ? "text-white" : "text-gray-500 hover:text-gray-300"
                 }`}
               >
-                {d.label}
+                <span className="sm:hidden">{d.short || d.label}</span>
+                <span className="hidden sm:inline">{d.label}</span>
                 {active && <span className="absolute left-0 right-0 bottom-0 h-[2px] bg-white/70" />}
               </button>
             );
@@ -139,6 +143,8 @@ function PolicyContent() {
               { term: "홍보 및 상업적 활동", desc: "운영진의 사전 승인 없이 타 디스코드 서버 링크, 제품 및 서비스를 홍보하거나 금전 거래를 유도하는 행위" },
               { term: "계정 도용 및 사칭", desc: "타 멤버, 유명인, 인플루언서, 일반인 또는 운영진의 닉네임, 프로필, 역할을 사칭하여 활동하는 행위" },
               { term: "친목질 및 파벌 조성", desc: "특정 멤버들 간의 과도한 사적 친목으로 신규 멤버에게 소외감을 주거나, 서버 내 여론을 조장하여 분란을 일으키는 행위" },
+              { term: "음성 채널 방해", desc: "타인의 발언을 지속적으로 끊거나 가로막는 행위, 주변 소음이 심한 상태로 상시 마이크를 열어두어 대화를 방해하는 행위" },
+              { term: "분쟁 유발 주제", desc: "정치, 종교, 인종 등 사회적으로 민감하여 분쟁을 유발할 수 있는 주제를 다루거나 이를 근거로 타인을 비하하는 행위" },
             ]} />
           </Article>
 
