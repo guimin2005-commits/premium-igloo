@@ -112,7 +112,8 @@ export default function AdminScrimPage() {
 
   const teams: any[] = data?.teams || [];
   const season = data?.season;
-  const fixtures: any[] = data?.fixtures || [];
+  // 최근 경기가 맨 위로 — 결과를 적은 경기가 목록 아래로 밀려 헷갈리지 않게
+  const fixtures: any[] = (data?.fixtures || []).slice().sort((a: any, b: any) => new Date(b.at).getTime() - new Date(a.at).getTime());
   const readyCount = teams.filter((t) => t.members.length > 0 && t.members.filter((m: any) => m.discordId && t.avail.some((a: any) => a.userId === m.discordId)).length >= t.members.length).length;
 
   return (
@@ -620,7 +621,8 @@ function NoticeView({ data, busy, post, setToast }: { data: any; busy: boolean; 
 function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; post: (p: any) => Promise<any>; setToast: (m: string) => void }) {
   const G2 = "#00e07b";
   const teams: any[] = data?.teams || [];
-  const fixtures: any[] = data?.fixtures || [];
+  // 기록이 쌓이는 순서 — 최근 경기가 맨 위
+  const fixtures: any[] = (data?.fixtures || []).slice().sort((a: any, b: any) => new Date(b.at).getTime() - new Date(a.at).getTime());
   const season = data?.season;
   const [a, setA] = useState<string | null>(null);
   const [b, setB] = useState<string | null>(null);

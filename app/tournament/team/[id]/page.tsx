@@ -292,7 +292,8 @@ export default function TeamRoom() {
 
   const myFixtures = useMemo(() => (data?.fixtures || []).filter((f) => f.teamAId === id || f.teamBId === id), [data, id]);
   const upcoming = myFixtures.filter((f) => new Date(f.at).getTime() > Date.now() - 2 * 3600e3 && !f.winnerId);
-  const played = myFixtures.filter((f) => f.winnerId);
+  // 기록은 쌓이는 순서로 — 최근 경기가 맨 위 (다음 경기는 가까운 순 그대로 둔다)
+  const played = myFixtures.filter((f) => f.winnerId).slice().sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
   const teamById = (tid: string) => data?.teams.find((t) => t._id === tid);
   const notices: Notice[] = data?.notices || [];
 
