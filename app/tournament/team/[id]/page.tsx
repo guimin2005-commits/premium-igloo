@@ -642,9 +642,10 @@ export default function TeamRoom() {
                       return (
                         <div key={f._id} className="flex items-center gap-3 py-3 border-b border-white/[0.06]">
                           <span className="w-[132px] shrink-0 text-[11px] font-bold esp-mono text-gray-500">{atLabel(at)}</span>
+                          <span className="shrink-0 text-[10px] font-black esp-mono text-gray-700">vs</span>
                           <Emblem tag={opp?.tag || "?"} color={opp?.color || "#888"} size={26} />
                           <span className="flex-1 min-w-0 text-[12px] font-black text-gray-300 truncate">
-                            vs {opp?.name || "?"}
+                            {opp?.name || "?"}
                             <span className="ml-2 text-[9px] font-black esp-mono text-gray-700">{f.kind === "official" ? "공식" : "스크림"}</span>
                           </span>
                           {(f.scoreA > 0 || f.scoreB > 0) && (
