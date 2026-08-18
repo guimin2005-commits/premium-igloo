@@ -643,6 +643,9 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
   /* 실제로 확정할 시각 — 직접 고른 값이 우선, 없으면 가장 많이 겹치는 칸 */
   const chosen = pickDay && pickMin !== null ? { d: pickDay, s: pickMin } : (top?.min ? { d: top.d, s: top.s } : null);
   const chosenAt = chosen ? atOf(chosen.d, chosen.s) : null;   // 화면과 저장이 함께 쓰는 실제 시각
+  /* 자정을 넘긴 칸은 날짜가 하루 뒤로 찍힌다. 실제 시각은 그게 맞지만
+     팀 입장에선 "어느 날 밤" 인지가 더 익숙하다 — 그 경우에만 덧붙인다. */
+  const nightOf = chosen && chosenAt && ymd(chosenAt) !== ymd(chosen.d) ? chosen.d : null;
   const chosenCa = chosen && TA ? cntAt(TA, chosen.d, chosen.s) : 0;
   const chosenCb = chosen && TB ? cntAt(TB, chosen.d, chosen.s) : 0;
 
@@ -742,8 +745,11 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
             <div className="esp-cut border border-white/[0.08] bg-white/[0.02] mt-6">
               <div className="px-5 py-2.5 border-b border-white/[0.07] flex items-center gap-2">
                 <span className="text-[10px] font-black esp-mono text-gray-500">RECOMMENDED</span>
-                <span className="ml-auto text-[12px] font-black tabular-nums" style={{ color: chosen ? G2 : "#6b7280" }}>
-                  {chosenAt ? dF(chosenAt) + " " + hhmm(chosenAt) : "시각을 정해주세요"}
+                <span className="ml-auto flex items-baseline gap-2 min-w-0">
+                  {nightOf && <span className="shrink-0 text-[10px] font-bold text-gray-500">{dF(nightOf)} 밤</span>}
+                  <span className="text-[12px] font-black tabular-nums" style={{ color: chosenAt ? G2 : "#6b7280" }}>
+                    {chosenAt ? dF(chosenAt) + " " + hhmm(chosenAt) : "시각을 정해주세요"}
+                  </span>
                 </span>
               </div>
               <div className="px-5 py-5 flex items-center gap-4">
@@ -827,7 +833,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                 onClick={async () => {
                   if (!chosenAt) return;
                   const r = await post({ action: "fixture:create", teamAId: TA._id, teamBId: TB._id, kind, at: chosenAt.toISOString(), usCount: chosenCa, themCount: chosenCb });
-                  if (r) setToast(dF(chosenAt) + " " + hhmm(chosenAt) + " · " + TA.name + " vs " + TB.name + " 확정");
+                  if (r) setToast((nightOf ? dF(nightOf) + " 밤 " : "") + dF(chosenAt) + " " + hhmm(chosenAt) + " · " + TA.name + " vs " + TB.name + " 확정");
                 }}
                 className="w-full py-3.5 text-[12px] font-black border-t border-white/[0.07] transition-colors disabled:opacity-35"
                 style={{ background: G2, color: "#04120b" }}>
