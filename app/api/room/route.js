@@ -415,16 +415,30 @@ export async function POST(request) {
         const session = await getServerSession(authOptions);
         const uid = session?.user?.id;
         if (!uid) return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
+        const admin = isAdminName(session?.user?.name);
         const t = await ScrimTeam.findById(body.teamId);
         if (!t) return NextResponse.json({ success: false, message: "팀을 찾을 수 없습니다." }, { status: 404 });
         const mine = t.members.some((m) => m.discordId === uid);
-        if (!mine && !isAdminName(session?.user?.name)) {
+        if (!mine && !admin) {
           return NextResponse.json({ success: false, message: "이 팀의 팀원만 제출할 수 있습니다." }, { status: 403 });
         }
+
+        /* 📌 관리자는 팀원 대신 응답을 넣어줄 수 있다 (디스코드로 대신 받은 일정 등).
+           남의 일정을 건드리는 일이라 관리자 세션으로 서버에서 확인한다. */
+        let target = uid;
+        let targetName = session?.user?.name || "";
+        if (body.userId && body.userId !== uid) {
+          if (!admin) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+          const m = t.members.find((x) => x.discordId === String(body.userId));
+          if (!m) return NextResponse.json({ success: false, message: "이 팀의 팀원이 아닙니다." }, { status: 400 });
+          target = String(body.userId);
+          targetName = m.name || "";
+        }
+
         const slots = Array.isArray(body.slots) ? body.slots.filter((s) => typeof s === "string").slice(0, 1000) : [];
         await ScrimAvailability.findOneAndUpdate(
-          { seasonId: sid, teamId: String(t._id), userId: uid },
-          { $set: { slots, userName: session?.user?.name || "", updatedAt: new Date() } },
+          { seasonId: sid, teamId: String(t._id), userId: target },
+          { $set: { slots, userName: targetName, updatedAt: new Date() } },
           { upsert: true }
         );
         return NextResponse.json({ success: true });

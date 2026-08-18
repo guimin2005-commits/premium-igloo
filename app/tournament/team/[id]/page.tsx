@@ -61,7 +61,7 @@ const density = (color: string, a: number) => `${color}${Math.round((0.12 + a * 
 
 type CellValue = { n: number; cap: number; me?: boolean; full?: boolean };
 
-const Grid = ({ slots, days, color, isPast, value, readOnly, onToggle, onToggleDay, onPaint, canDrag, dragRef }: {
+const Grid = ({ slots, days, color, isPast, value, readOnly, onToggle, onToggleDay, onPaint, canDrag, dragRef, onInspect, marked }: {
   slots: number[];
   days: Date[];
   color: string;
@@ -73,6 +73,9 @@ const Grid = ({ slots, days, color, isPast, value, readOnly, onToggle, onToggleD
   onPaint?: (d: Date, s: number, on: boolean) => void;
   canDrag?: boolean;
   dragRef?: React.MutableRefObject<null | boolean>;
+  /* 관리자 '명단 보기' — 이게 있으면 칸을 눌러도 켜고 끄지 않고 누가 골랐는지만 펼친다 */
+  onInspect?: (d: Date, s: number) => void;
+  marked?: (d: Date, s: number) => boolean;
 }) => (
   <div className="overflow-x-auto no-bar -mx-1 px-1">
     <table style={{ borderCollapse: "separate", borderSpacing: 2 }}>
@@ -90,8 +93,8 @@ const Grid = ({ slots, days, color, isPast, value, readOnly, onToggle, onToggleD
       <tbody>
         {days.map((d) => (
           <tr key={d.getTime()}>
-            <th onClick={readOnly ? undefined : () => onToggleDay?.(d)} tabIndex={readOnly ? -1 : 0}
-              onKeyDown={(e) => { if (!readOnly && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onToggleDay?.(d); } }}
+            <th onClick={readOnly || onInspect ? undefined : () => onToggleDay?.(d)} tabIndex={readOnly || onInspect ? -1 : 0}
+              onKeyDown={(e) => { if (!readOnly && !onInspect && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onToggleDay?.(d); } }}
               className={`text-left pr-2 whitespace-nowrap ${readOnly ? "" : "cursor-pointer group"}`}>
               <span className="block text-[11px] font-black tabular-nums text-gray-300 group-hover:text-white">{dL(d)}</span>
               <span className={`block text-[9px] font-black ${d.getDay() === 6 ? "text-sky-400/70" : d.getDay() === 0 ? "text-rose-400/70" : "text-gray-600"}`}>{WD[d.getDay()]}</span>
@@ -113,20 +116,20 @@ const Grid = ({ slots, days, color, isPast, value, readOnly, onToggle, onToggleD
                         color: v.n ? "#e6f7ee" : "#3f3f46" }}>{v.n || ""}</span>
                   ) : (
                     <button type="button" aria-pressed={!!v.me}
-                      onClick={() => { if (!canDrag) onToggle?.(d, s); }}
+                      onClick={() => { if (onInspect) onInspect(d, s); else if (!canDrag) onToggle?.(d, s); }}
                       onPointerDown={(e) => {
-                        if (!canDrag || !dragRef) return;
+                        if (onInspect || !canDrag || !dragRef) return;
                         e.preventDefault();
                         const on = !v.me;
                         dragRef.current = on;
                         onPaint?.(d, s, on);
                       }}
-                      onPointerEnter={() => { if (canDrag && dragRef && dragRef.current !== null) onPaint?.(d, s, dragRef.current); }}
-                      aria-label={`${dF(d)} ${sF(s)} · ${v.n}명 가능${v.me ? " · 내가 선택함" : ""}`}
+                      onPointerEnter={() => { if (!onInspect && canDrag && dragRef && dragRef.current !== null) onPaint?.(d, s, dragRef.current); }}
+                      aria-label={`${dF(d)} ${sF(s)} · ${v.n}명 가능${v.me ? " · 선택함" : ""}`}
                       className={cell}
                       style={{ background: v.n ? density(color, a) : "rgba(255,255,255,.02)",
-                        borderColor: v.me ? "#fff" : v.full ? G : "rgba(255,255,255,.07)",
-                        boxShadow: v.me ? "inset 0 0 0 1px #fff" : v.full ? `inset 0 0 0 1px ${G}` : undefined,
+                        borderColor: marked?.(d, s) ? "#fbbf24" : v.me ? "#fff" : v.full ? G : "rgba(255,255,255,.07)",
+                        boxShadow: marked?.(d, s) ? "inset 0 0 0 2px #fbbf24" : v.me ? "inset 0 0 0 1px #fff" : v.full ? `inset 0 0 0 1px ${G}` : undefined,
                         color: v.n ? "#e6f7ee" : "#3f3f46" }}>{v.n || ""}</button>
                   )}
                 </td>
@@ -154,6 +157,11 @@ export default function TeamRoom() {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [nudgeOpen, setNudgeOpen] = useState(false);
+  /* 📌 관리자 전용 — 누구의 일정을 편집할지, 그리고 칸별 명단 보기.
+     팀원이 디스코드로만 알려온 일정을 운영진이 대신 넣어줄 수 있어야 한다. */
+  const [editUser, setEditUser] = useState("");            // "" = 나
+  const [inspectMode, setInspectMode] = useState(false);
+  const [inspect, setInspect] = useState<{ d: Date; s: number } | null>(null);
   const [tour, setTour] = useState<any>(null); // 연동된 대회 글
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2400); return () => clearTimeout(t); }, [toast]);
@@ -180,11 +188,13 @@ export default function TeamRoom() {
 
   const team = useMemo(() => data?.teams.find((t) => t._id === id) || null, [data, id]);
   const season = data?.season;
+  // 지금 편집 중인 사람 — 보통은 나, 관리자가 대상을 고르면 그 사람
+  const targetId = editUser || data?.me || "";
 
   // 내가 이미 낸 응답을 편집 상태로 옮긴다
   useEffect(() => {
     if (!team || !data) return;
-    const found = team.avail.find((a) => a.userId === data.me);
+    const found = team.avail.find((a) => a.userId === targetId);
     // 예전에 골라둔 칸 중 이미 지나간 건 버린다 — 안 보이는 칸이 "N칸 선택함" 숫자만 부풀린다
     setMine(new Set((found?.slots || []).filter((k) => {
       const [ds, ms] = k.split("|");
@@ -195,7 +205,7 @@ export default function TeamRoom() {
     })));
     setNone(!!found && (found.slots?.length || 0) === 0); // 응답은 냈는데 칸이 0이면 전체 불가
     setDirty(false);
-  }, [team, data]);
+  }, [team, data, targetId]);
 
   // 지난 날짜는 뺀다 — 이미 지나간 칸을 고를 이유가 없고, 격자만 넓어진다
   const DAYS = useMemo(() => {
@@ -224,6 +234,8 @@ export default function TeamRoom() {
   /* ── 집계 ── */
   const submitted = useMemo(() => new Set((team?.avail || []).map((a) => a.userId)), [team]);
   const meSubmitted = !!data && submitted.has(data.me);
+  const targetSubmitted = !!targetId && submitted.has(targetId);
+  const targetName = team?.members.find((m) => m.discordId === targetId)?.name || "";
   const doneCount = useMemo(() => (team?.members || []).filter((m) => m.discordId && submitted.has(m.discordId)).length, [team, submitted]);
   const size = team?.members.length || 0;
   const usReady = size > 0 && doneCount >= size;
@@ -232,10 +244,10 @@ export default function TeamRoom() {
   const usAt = useCallback((d: Date, s: number) => {
     if (!team || !data) return 0;
     const k = sKey(d, s);
-    let n = team.avail.filter((a) => a.userId !== data.me && a.slots.includes(k)).length;
+    let n = team.avail.filter((a) => a.userId !== targetId && a.slots.includes(k)).length;
     if (mine.has(k)) n += 1;
     return n;
-  }, [team, data, mine]);
+  }, [team, data, mine, targetId]);
 
   const usRanked = useMemo(() => {
     const o: { d: Date; s: number; n: number }[] = [];
@@ -244,6 +256,22 @@ export default function TeamRoom() {
   }, [DAYS, SLOTS, usAt, isPast]);
   const usTop = usRanked[0];
 
+
+  /* 고른 칸 하나에 대해 누가 되고 누가 안 되는지. 편집 중인 사람은 저장 전 상태를 쓴다. */
+  const inspectInfo = useMemo(() => {
+    if (!inspect || !team) return null;
+    const k = sKey(inspect.d, inspect.s);
+    const yes: string[] = [], no: string[] = [], wait: string[] = [];
+    team.members.forEach((m) => {
+      const nm = m.name || "이름 없음";
+      if (!m.discordId) { wait.push(nm); return; }
+      if (m.discordId === targetId) { (mine.has(k) ? yes : no).push(nm); return; }
+      const a = team.avail.find((x) => x.userId === m.discordId);
+      if (!a) { wait.push(nm); return; }
+      (a.slots.includes(k) ? yes : no).push(nm);
+    });
+    return { label: `${dF(inspect.d)} ${sF(inspect.s)}`, yes, no, wait };
+  }, [inspect, team, mine, targetId]);
 
   const myFixtures = useMemo(() => (data?.fixtures || []).filter((f) => f.teamAId === id || f.teamBId === id), [data, id]);
   const upcoming = myFixtures.filter((f) => new Date(f.at).getTime() > Date.now() - 2 * 3600e3 && !f.winnerId);
@@ -640,7 +668,7 @@ export default function TeamRoom() {
                       const ok = !!m.discordId && submitted.has(m.discordId);
                       // 응답은 냈는데 고른 칸이 하나도 없으면 '전체 불가'다 — 미제출과 구분해서 보여준다
                       const av = team.avail.find((a) => a.userId === m.discordId);
-                      const isNone = ok && ((m.discordId === data?.me ? (none ? 0 : mine.size) : av?.slots.length) || 0) === 0;
+                      const isNone = ok && ((m.discordId === targetId ? (none ? 0 : mine.size) : av?.slots.length) || 0) === 0;
                       return (
                         <div key={i} className="flex items-center gap-3 py-2.5">
                           <span className="esp-cut-sm w-8 h-8 grid place-items-center text-[11px] font-black shrink-0"
@@ -678,7 +706,7 @@ export default function TeamRoom() {
           {view === "board" && (
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px] items-start">
               <div className="min-w-0">
-                <Bar k="My Availability" right={<span className="text-[10px] font-black esp-mono text-gray-600">{doneCount}/{size} 제출</span>} />
+                <Bar k={editUser ? "Editing" : "My Availability"} right={<span className="text-[10px] font-black esp-mono text-gray-600">{doneCount}/{size} 제출</span>} />
                 {periodOver && (
                   <div className="esp-cut border border-dashed border-white/10 px-6 py-12 text-center">
                     <p className="text-[13px] font-black text-gray-400">조율 기간이 끝났습니다</p>
@@ -698,12 +726,81 @@ export default function TeamRoom() {
                     </span>
                   ))}
                 </div>
+                {/* 📌 관리자 전용 — 대신 넣어주기 · 칸별 명단 */}
+                {isAdmin && (
+                  <div className="esp-cut border border-amber-400/25 bg-amber-400/[0.05] p-3.5 mb-4">
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <span className="text-[9px] font-black esp-mono text-amber-300">ADMIN</span>
+                      <span className="h-px flex-1 bg-amber-400/20" />
+                      <button onClick={() => { setInspectMode((v) => !v); setInspect(null); }} aria-pressed={inspectMode}
+                        className="shrink-0 esp-cut-sm px-2.5 py-1 text-[10px] font-black border transition-colors"
+                        style={inspectMode
+                          ? { borderColor: "#fbbf24", background: "rgba(251,191,36,.18)", color: "#fcd34d" }
+                          : { borderColor: "rgba(255,255,255,.12)", background: "rgba(255,255,255,.03)", color: "#9ca3af" }}>
+                        {inspectMode ? "명단 보기 켜짐" : "칸별 명단 보기"}
+                      </button>
+                    </div>
+                    <span className="block text-[10px] font-black esp-mono text-gray-500 mb-2">누구 일정을 넣는 중</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[{ discordId: "", name: "나" }, ...team.members.filter((m) => m.discordId)].map((m, i) => {
+                        const on = editUser === m.discordId;
+                        const done = m.discordId ? submitted.has(m.discordId) : meSubmitted;
+                        return (
+                          <button key={i} disabled={dirty} onClick={() => { setEditUser(m.discordId); setInspect(null); }}
+                            title={dirty ? "저장하지 않은 변경이 있습니다" : ""}
+                            className="esp-cut-sm px-2.5 py-1.5 text-[11px] font-black border transition-colors disabled:opacity-40"
+                            style={on
+                              ? { borderColor: "#fbbf24", background: "rgba(251,191,36,.16)", color: "#fcd34d" }
+                              : { borderColor: "rgba(255,255,255,.10)", background: "rgba(255,255,255,.02)", color: "#c7c7cc" }}>
+                            {m.name}
+                            <span className="ml-1.5 text-[9px] font-black" style={{ color: done ? G : "#6b7280" }}>{done ? "제출" : "미제출"}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {editUser && (
+                      <p className="mt-2.5 text-[11px] font-bold text-amber-300/90 break-keep">
+                        지금 칠하는 칸은 <b className="text-amber-200">{targetName}</b> 님의 일정으로 저장됩니다.
+                      </p>
+                    )}
+                    {dirty && (
+                      <p className="mt-2 text-[11px] font-bold text-gray-500">저장하지 않은 변경이 있어 대상을 바꿀 수 없습니다. 먼저 제출하거나 새로고침하세요.</p>
+                    )}
+                  </div>
+                )}
+
                 <div className={none ? "opacity-30 pointer-events-none" : ""}>
                   <Grid
                     slots={SLOTS} days={DAYS} color={C} isPast={isPast}
                     onToggle={toggle} onToggleDay={toggleDay} onPaint={paint} canDrag={canDrag} dragRef={dragRef}
+                    onInspect={inspectMode ? (d, s) => setInspect({ d, s }) : undefined}
+                    marked={inspect ? (d, s) => sKey(d, s) === sKey(inspect.d, inspect.s) : undefined}
                     value={(d, s) => ({ n: usAt(d, s), cap: size || 1, me: mine.has(sKey(d, s)), full: usAt(d, s) === size && size > 0 })} />
                 </div>
+
+                {/* 고른 칸의 명단 */}
+                {isAdmin && inspectMode && (
+                  <div className="esp-cut border border-white/[0.09] bg-white/[0.02] p-4 mt-4">
+                    {!inspectInfo ? (
+                      <p className="text-[12px] font-bold text-gray-500">칸을 누르면 그 시간에 누가 되는지 보여줍니다.</p>
+                    ) : (
+                      <>
+                        <div className="flex items-baseline gap-2 mb-3">
+                          <b className="text-[14px] font-black tabular-nums">{inspectInfo.label}</b>
+                          <span className="text-[11px] font-black esp-mono" style={{ color: G }}>{inspectInfo.yes.length}/{size}</span>
+                        </div>
+                        {[["가능", inspectInfo.yes, G], ["불가", inspectInfo.no, "#fb7185"], ["미제출", inspectInfo.wait, "#6b7280"]].map(([k, list, col]: any) => (
+                          list.length > 0 && (
+                            <div key={k} className="flex items-baseline gap-3 py-1.5">
+                              <span className="shrink-0 w-11 text-[10px] font-black esp-mono" style={{ color: col }}>{k}</span>
+                              <span className="min-w-0 text-[12px] font-bold text-gray-300 break-keep">{list.join(", ")}</span>
+                            </div>
+                          )
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {/* 되는 시간이 하나도 없는 사람도 '답을 낸' 상태가 되어야 팀이 기다리지 않는다 */}
                 <button
@@ -732,10 +829,16 @@ export default function TeamRoom() {
                         : "가능한 시간을 표시해주세요"}
                   </span>
                   <button disabled={busy || (!none && mine.size === 0) || (!inTeam && !isAdmin)}
-                    onClick={async () => { const r = await post({ action: "avail:submit", teamId: id, slots: none ? [] : [...mine] }); if (r) { setDirty(false); setToast(none ? "전체 불가로 제출했습니다" : meSubmitted ? "일정을 다시 제출했습니다" : "제출했습니다"); } }}
+                    onClick={async () => {
+                      const r = await post({ action: "avail:submit", teamId: id, userId: editUser || undefined, slots: none ? [] : [...mine] });
+                      if (!r) return;
+                      setDirty(false);
+                      const who = editUser ? `${targetName} 님 일정을 ` : "";
+                      setToast(none ? `${who}전체 불가로 제출했습니다` : targetSubmitted ? `${who}다시 제출했습니다` : `${who}제출했습니다`);
+                    }}
                     className="shrink-0 esp-cut-sm px-7 py-3 text-[12px] font-black transition-all active:scale-[.97] disabled:opacity-35"
                     style={none ? { background: "#fb7185", color: "#1a0508" } : { background: G, color: "#04120b" }}>
-                    {meSubmitted ? "다시 제출" : "제출"}
+                    {editUser ? (targetSubmitted ? `${targetName} 다시 제출` : `${targetName} 제출`) : targetSubmitted ? "다시 제출" : "제출"}
                   </button>
                 </div>
                 </>)}
@@ -747,7 +850,7 @@ export default function TeamRoom() {
                   <p className="text-[18px] font-black tracking-tight tabular-nums">{usTop?.n ? `${dF(usTop.d)} ${sF(usTop.s)}` : "—"}</p>
                   <p className="mt-2 text-[11px] font-bold text-gray-400">
                     {usTop?.n ? (() => {
-                      const miss = team.members.filter((m) => m.discordId && submitted.has(m.discordId) && !(m.discordId === data?.me ? mine.has(sKey(usTop.d, usTop.s)) : team.avail.find((a) => a.userId === m.discordId)?.slots.includes(sKey(usTop.d, usTop.s)))).map((m) => m.name);
+                      const miss = team.members.filter((m) => m.discordId && submitted.has(m.discordId) && !(m.discordId === targetId ? mine.has(sKey(usTop.d, usTop.s)) : team.avail.find((a) => a.userId === m.discordId)?.slots.includes(sKey(usTop.d, usTop.s)))).map((m) => m.name);
                       return <><b className="text-white">{usTop.n}/{size}명</b> 가능{miss.length ? ` · 빠지는 사람 ${miss.join(", ")}` : ""}</>;
                     })() : "아직 겹치는 시간이 없습니다"}
                   </p>
