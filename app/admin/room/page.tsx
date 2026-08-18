@@ -602,6 +602,8 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
      겹치는 사람이 적어도 그 시간에 하기로 했으면 그게 맞는 시각이다. */
   const [pickDay, setPickDay] = useState<Date | null>(null);
   const [pickMin, setPickMin] = useState<number | null>(null);
+  // 일정 알림을 보내기 전에 무엇이 누구에게 가는지 보여주는 창
+  const [notifyFx, setNotifyFx] = useState<any>(null);
 
   const DAYS = useMemo(() => {
     if (!season) return [];
@@ -878,6 +880,9 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                   ))}
                 </span>
               )}
+              <button disabled={busy} onClick={() => setNotifyFx(f)}
+                className="shrink-0 esp-cut-sm px-2.5 py-1 text-[10px] font-black border transition-colors disabled:opacity-40"
+                style={{ borderColor: "rgba(56,189,248,.4)", background: "rgba(56,189,248,.12)", color: "#7dd3fc" }}>알림</button>
               <button disabled={busy}
                 onClick={async () => { const r = await post({ action: "fixture:delete", fixtureId: f._id }); if (r) setToast("경기를 삭제했습니다"); }}
                 className="shrink-0 text-[10px] font-black text-rose-400/70 hover:text-rose-300 disabled:opacity-40">삭제</button>
@@ -885,6 +890,56 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
           );
         })}
       </div>
+
+      {/* 📌 일정 알림 — 누구에게 무엇이 가는지 보고 나서 보낸다 */}
+      {notifyFx && (() => {
+        const A = teams.find((t) => t._id === notifyFx.teamAId);
+        const B = teams.find((t) => t._id === notifyFx.teamBId);
+        const targets = [...(A?.members || []), ...(B?.members || [])].filter((m: any) => m.discordId);
+        return (
+          <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-black/75 p-0 sm:p-5" onClick={() => setNotifyFx(null)}>
+            <div className="esp-cut w-full sm:max-w-[460px] max-h-[88dvh] overflow-y-auto no-bar border border-white/10 bg-[#0b0d0c] p-6" onClick={(e) => e.stopPropagation()}>
+              <p className="text-[10px] font-black esp-mono text-gray-600 mb-1">FIXTURE NOTICE</p>
+              <h3 className="text-[17px] font-black tracking-tight mb-4">이 내용으로 양 팀에 DM 을 보냅니다</h3>
+
+              <span className="block text-[10px] font-black esp-mono text-gray-600 mb-2">받는 사람 {targets.length}명</span>
+              <div className="flex flex-wrap gap-1.5 mb-5">
+                {targets.map((m: any, i: number) => (
+                  <span key={i} className="esp-cut-sm px-2.5 py-1 text-[11px] font-black border border-white/10 bg-white/[0.03] text-gray-300">{m.name}</span>
+                ))}
+              </div>
+
+              <DmPreview variant="fixture" teamName={A?.name || "우리 팀"} oppName={B?.name || "상대"}
+                at={notifyFx.at} matchKind={notifyFx.kind} copy={season?.fixtureMsg} />
+              <p className="mt-2 text-[11px] font-bold text-gray-600">받는 사람마다 '우리 팀' 과 '상대' 가 각자 기준으로 바뀝니다.</p>
+
+              <div className="flex gap-2 mt-5">
+                <button onClick={() => setNotifyFx(null)}
+                  className="flex-1 esp-cut-sm py-3 text-[12px] font-black bg-white/[0.05] text-gray-400 hover:text-white transition-colors">취소</button>
+                <button disabled={busy} onClick={async () => {
+                  const r = await post({ action: "fixture:notify", fixtureId: notifyFx._id });
+                  setNotifyFx(null);
+                  if (r) setToast(r.queued ? `${r.queued}명에게 DM 을 보냅니다${r.skipped ? ` (${r.skipped}명은 이미 받음)` : ""}` : "이미 모두 받았습니다");
+                }}
+                  className="flex-[1.4] esp-cut-sm py-3 text-[12px] font-black transition-all active:scale-[.98] disabled:opacity-40"
+                  style={{ background: "#38bdf8", color: "#04121a" }}>
+                  {targets.length}명에게 보내기
+                </button>
+              </div>
+              <button disabled={busy} onClick={async () => {
+                const r = await post({ action: "fixture:notifyTest", fixtureId: notifyFx._id });
+                if (r) setToast("내 디스코드 DM 으로 보냈습니다");
+              }}
+                className="w-full mt-2 esp-cut-sm py-2.5 text-[11px] font-black border border-white/12 bg-white/[0.03] text-gray-400 hover:text-white transition-colors disabled:opacity-40">
+                나에게 먼저 보내보기
+              </button>
+              <p className="mt-3 text-[10px] font-bold text-gray-600 leading-relaxed">
+                이미 이 경기 알림을 받은 사람은 건너뜁니다. DM 이 막혀 있으면 실패로 남습니다.
+              </p>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

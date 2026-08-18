@@ -5,7 +5,10 @@ import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import { ScrimSeason, ScrimTeam, ScrimAvailability, ScrimFixture, ScrimNotice, ScrimNudge } from "@/models/Scrim";
 import Auction from "@/models/Auction";
-import { nudgeTitle, nudgeBody, nudgeFooter, nudgeCta, LIMITS } from "@/lib/nudgeMessage";
+import {
+  nudgeTitle, nudgeBody, nudgeFooter, nudgeCta,
+  fixtureTitle, fixtureBody, fixtureFooter, fixtureCta, LIMITS,
+} from "@/lib/nudgeMessage";
 
 /* 📌 대회 룸 API
    조율 기간·시간대는 시즌 하나로 통합 관리한다 (팀마다 다르면 교집합을 계산할 수 없다).
@@ -210,6 +213,87 @@ export async function POST(request) {
           message: nudgeBody(body.message ?? season.nudge?.message),
           footer: nudgeFooter(body.footer ?? season.nudge?.footer),
           cta: nudgeCta(body.cta ?? season.nudge?.cta),
+          byName: session?.user?.name || "",
+        });
+        return NextResponse.json({ success: true });
+      }
+
+      /* ── 확정된 경기 일정 알림 ────────────────────────
+         양 팀 전원에게 각자 기준(우리 팀 / 상대)으로 DM 을 보낸다.
+         재촉과 같은 대기열을 타고, 봇이 임베드 모양만 다르게 만든다. */
+      case "fixture:notify": {
+        const { ok, session } = await requireAdmin();
+        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+
+        const f = await ScrimFixture.findById(body.fixtureId);
+        if (!f) return NextResponse.json({ success: false, message: "경기를 찾을 수 없습니다." }, { status: 404 });
+        const [A, B] = await Promise.all([ScrimTeam.findById(f.teamAId), ScrimTeam.findById(f.teamBId)]);
+        if (!A || !B) return NextResponse.json({ success: false, message: "팀을 찾을 수 없습니다." }, { status: 404 });
+
+        const origin = new URL(request.url).origin;
+        const fid = String(f._id);
+        // 같은 경기를 두 번 보내지 않는다 (실패한 건은 다시 시도할 수 있게 남겨 둔다)
+        const already = new Set(
+          (await ScrimNudge.find({ seasonId: sid, type: "fixture", fixtureId: fid, status: { $ne: "failed" } }, { userId: 1 }).lean())
+            .map((n) => n.userId)
+        );
+
+        const copy = {
+          title: fixtureTitle(season.fixtureMsg?.title),
+          message: fixtureBody(season.fixtureMsg?.message),
+          footer: fixtureFooter(season.fixtureMsg?.footer),
+          cta: fixtureCta(season.fixtureMsg?.cta),
+        };
+
+        let queued = 0, skipped = 0;
+        for (const [own, opp] of [[A, B], [B, A]]) {
+          const tid = String(own._id);
+          for (const m of own.members) {
+            if (!m.discordId) continue;
+            if (already.has(m.discordId)) { skipped++; continue; }
+            await ScrimNudge.create({
+              seasonId: sid, type: "fixture", kind: "manual", fixtureId: fid,
+              teamId: tid, teamName: own.name, oppName: opp.name,
+              userId: m.discordId, userName: m.name,
+              matchKind: f.kind, at: f.at,
+              url: `${origin}/tournament/team/${tid}`,
+              ...copy,
+              byName: session?.user?.name || "",
+            });
+            queued++;
+          }
+        }
+        return NextResponse.json({ success: true, queued, skipped });
+      }
+
+      // 경기 알림을 본인에게 먼저 보내보기
+      case "fixture:notifyTest": {
+        const { ok, session } = await requireAdmin();
+        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const uid = session?.user?.id;
+        if (!uid) return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
+
+        const f = await ScrimFixture.findById(body.fixtureId);
+        if (!f) return NextResponse.json({ success: false, message: "경기를 찾을 수 없습니다." }, { status: 404 });
+        const [A, B] = await Promise.all([ScrimTeam.findById(f.teamAId), ScrimTeam.findById(f.teamBId)]);
+        if (!A || !B) return NextResponse.json({ success: false, message: "팀을 찾을 수 없습니다." }, { status: 404 });
+
+        const just = await ScrimNudge.findOne({
+          seasonId: sid, userId: uid, kind: "test", createdAt: { $gte: new Date(Date.now() - 60e3) },
+        }).lean();
+        if (just) return NextResponse.json({ success: false, message: "방금 보냈습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
+
+        const origin = new URL(request.url).origin;
+        await ScrimNudge.create({
+          seasonId: sid, type: "fixture", kind: "test", fixtureId: String(f._id),
+          teamId: String(A._id), teamName: A.name, oppName: B.name,
+          userId: uid, userName: session?.user?.name || "",
+          matchKind: f.kind, at: f.at,
+          url: `${origin}/tournament/team/${String(A._id)}`,
+          title: fixtureTitle(season.fixtureMsg?.title),
+          message: fixtureBody(season.fixtureMsg?.message),
+          footer: fixtureFooter(season.fixtureMsg?.footer),
+          cta: fixtureCta(season.fixtureMsg?.cta),
           byName: session?.user?.name || "",
         });
         return NextResponse.json({ success: true });

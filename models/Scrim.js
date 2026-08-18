@@ -27,6 +27,13 @@ const ScrimSeasonSchema = new mongoose.Schema({
     footer: { type: String, default: "" },       // 임베드 아래 작은 글씨
     cta: { type: String, default: "" },          // 링크 버튼 문구
   },
+  // 경기 일정 알림 문구 — 비면 기본 문구 (lib/nudgeMessage.js 의 FIXTURE_DEFAULTS)
+  fixtureMsg: {
+    title: { type: String, default: "" },
+    message: { type: String, default: "" },
+    footer: { type: String, default: "" },
+    cta: { type: String, default: "" },
+  },
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -104,6 +111,12 @@ const ScrimNudgeSchema = new mongoose.Schema({
   userId: { type: String, required: true, index: true }, // 디스코드 ID
   userName: { type: String, default: "" },
   kind: { type: String, default: "manual" },             // manual(사람이 누름) | test(시험 발송)
+  // 무엇을 알리는 DM 인가 — nudge(캘린더 재촉) | fixture(확정된 경기)
+  type: { type: String, default: "nudge" },
+  fixtureId: { type: String, default: "" },              // 같은 경기를 두 번 알리지 않도록
+  oppName: { type: String, default: "" },                // 상대 팀
+  matchKind: { type: String, default: "" },              // scrim | official
+  at: { type: Date, default: null },                     // 경기 시각
   // 보낼 때의 문구를 그대로 굳혀 둔다 — 나중에 설정을 바꿔도 이미 보낸 건 안 흔들린다
   title: { type: String, default: "" },
   message: { type: String, default: "" },

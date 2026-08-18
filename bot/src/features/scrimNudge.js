@@ -1,27 +1,47 @@
-// ── 스크림 캘린더 미제출자 DM 재촉 ──────────────
-//  사이트에서 "재촉" 을 누르면 ScrimNudge 에 pending 이 쌓인다 → 여기서 개인 DM 으로 보낸다.
-//  ⚠️ 자동으로 찌르지 않는다. 보내는 시점은 사람이 정한다.
+// ── 대회 룸 DM 대기열 ─────────────────────────
+//  사이트에서 버튼을 누르면 ScrimNudge 에 pending 이 쌓인다 → 여기서 개인 DM 으로 보낸다.
+//  두 종류를 같은 큐로 나른다:
+//    nudge   — 스크림 캘린더 미제출 재촉
+//    fixture — 확정된 경기 일정 알림
+//  ⚠️ 자동으로 보내지 않는다. 보내는 시점은 사람이 정한다.
 //  DM 이 막혀 있으면 실패로 남긴다 (운영 화면에서 사유가 보인다).
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { ScrimNudge } from "../db.js";
-import { NUDGE_COLOR, NUDGE_AUTHOR, nudgeTitle, nudgeBody, nudgeFooter, nudgeCta } from "../nudgeMessage.js";
+import {
+  NUDGE_COLOR, NUDGE_AUTHOR, nudgeTitle, nudgeBody, nudgeFooter, nudgeCta,
+  FIXTURE_COLOR, fixtureTitle, fixtureBody, fixtureFooter, fixtureCta,
+} from "../nudgeMessage.js";
 
 const TICK_MS = 20 * 1000;
 
-/* 마감은 디스코드 타임스탬프로 넣는다 — 받는 사람 시간대에 맞춰 알아서 표시되고
+/* 시각은 디스코드 타임스탬프로 넣는다 — 받는 사람 시간대에 맞춰 알아서 표시되고
    "3일 후" 같은 상대 시간도 디스코드가 계속 갱신해 준다. */
 const ts = (d, style) => `<t:${Math.floor(new Date(d).getTime() / 1000)}:${style}>`;
 
 const buildDm = (n) => {
-  const embed = new EmbedBuilder()
-    .setColor(NUDGE_COLOR)
-    .setAuthor({ name: NUDGE_AUTHOR })
-    .setTitle(nudgeTitle(n.title))
-    .setDescription(nudgeBody(n.message))
-    .setFooter({ text: nudgeFooter(n.footer) });
+  const isFixture = n.type === "fixture";
 
-  const fields = [{ name: "팀", value: n.teamName || "—", inline: true }];
-  if (n.dueAt) fields.push({ name: "마감", value: `${ts(n.dueAt, "f")}\n${ts(n.dueAt, "R")}`, inline: true });
+  const embed = new EmbedBuilder()
+    .setColor(isFixture ? FIXTURE_COLOR : NUDGE_COLOR)
+    .setAuthor({ name: NUDGE_AUTHOR })
+    .setTitle(isFixture ? fixtureTitle(n.title) : nudgeTitle(n.title))
+    .setDescription(isFixture ? fixtureBody(n.message) : nudgeBody(n.message))
+    .setFooter({ text: isFixture ? fixtureFooter(n.footer) : nudgeFooter(n.footer) });
+
+  const fields = [];
+  if (isFixture) {
+    fields.push({ name: "우리 팀", value: n.teamName || "—", inline: true });
+    fields.push({ name: "상대", value: n.oppName || "—", inline: true });
+    if (n.at) {
+      fields.push({
+        name: n.matchKind === "official" ? "공식전" : "스크림",
+        value: `${ts(n.at, "F")}\n${ts(n.at, "R")}`,
+      });
+    }
+  } else {
+    fields.push({ name: "팀", value: n.teamName || "—", inline: true });
+    if (n.dueAt) fields.push({ name: "마감", value: `${ts(n.dueAt, "f")}\n${ts(n.dueAt, "R")}`, inline: true });
+  }
   embed.addFields(fields);
 
   const payload = { embeds: [embed] };
@@ -29,7 +49,10 @@ const buildDm = (n) => {
   if (/^https?:\/\//.test(n.url || "")) {
     payload.components = [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setLabel(nudgeCta(n.cta)).setStyle(ButtonStyle.Link).setURL(n.url)
+        new ButtonBuilder()
+          .setLabel(isFixture ? fixtureCta(n.cta) : nudgeCta(n.cta))
+          .setStyle(ButtonStyle.Link)
+          .setURL(n.url)
       ),
     ];
   }
@@ -54,20 +77,20 @@ async function tick(client) {
       n.sentAt = new Date();
       n.error = "";
       await n.save();
-      console.log(`📮 캘린더 재촉 DM: ${n.userName || n.userId} (${n.teamName})`);
+      console.log(`📮 ${n.type === "fixture" ? "경기 일정" : "캘린더 재촉"} DM: ${n.userName || n.userId} (${n.teamName})`);
     } catch (e) {
       n.status = "failed";
       // 50007 = Cannot send messages to this user (DM 차단)
       n.error = e?.code === 50007 ? "DM 이 막혀 있어 보내지 못했습니다." : e.message;
       await n.save();
-      console.error(`📮 재촉 DM 실패 (${n.userName || n.userId}):`, n.error);
+      console.error(`📮 DM 실패 (${n.userName || n.userId}):`, n.error);
     }
   }
 }
 
 export function startScrimNudge(client) {
-  const run = async () => { try { await tick(client); } catch (e) { console.error("재촉 DM 오류:", e.message); } };
+  const run = async () => { try { await tick(client); } catch (e) { console.error("DM 대기열 오류:", e.message); } };
   run();
   setInterval(run, TICK_MS);
-  console.log("✅ 캘린더 재촉 대기열 시작 (20초 주기 — 사람이 누를 때만 쌓인다)");
+  console.log("✅ 대회 룸 DM 대기열 시작 (20초 주기 — 사람이 누를 때만 쌓인다)");
 }
