@@ -239,12 +239,22 @@ export default function ShopPage() {
   // 📌 상단 이미지 배너 — 관리자가 등록, 5초마다 자동 전환
   const [banners, setBanners] = useState<any[]>([]);
   const [bannerIdx, setBannerIdx] = useState(0);
+  /* 📌 배너 틀 비율 — 이미지가 실제로 가진 비율에 맞춘다.
+     틀을 3/1(모바일)·4/1(PC) 로 고정해 두면 object-cover 가 남는 쪽을 잘라내
+     같은 배너가 기기마다 다르게 보인다(모바일에서 좌우가 잘렸다).
+     여러 장이면 가장 넓은 비율에 맞춰 어느 것도 좌우가 잘리지 않게 한다. */
+  const [bannerRatio, setBannerRatio] = useState(4);
+  const fitRatio = (img: HTMLImageElement) => {
+    const r = img.naturalWidth / img.naturalHeight;
+    if (!Number.isFinite(r) || r <= 0) return;
+    setBannerRatio((prev) => Math.min(8, Math.max(2.5, Math.max(prev, r))));
+  };
 
   useEffect(() => {
     if (status === "loading") return;
     fetch(`/api/shop/banners${isAdmin ? "?all=1" : ""}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => setBanners(Array.isArray(d?.data) ? d.data : []))
+      .then((d) => { setBannerRatio(4); setBanners(Array.isArray(d?.data) ? d.data : []); })
       .catch(() => {});
   }, [status, isAdmin]);
 
@@ -787,16 +797,17 @@ export default function ShopPage() {
       {banners.length > 0 && (
         <section className="max-w-6xl mx-auto px-6 pt-10">
           <div className="relative rounded-2xl overflow-hidden border border-[#e2e0dc] bg-[#eceae6] shadow-[0_10px_30px_-14px_rgba(0,0,0,0.25)]">
-            <div className="relative aspect-[3/1] sm:aspect-[4/1]">
+            <div className="relative" style={{ aspectRatio: String(bannerRatio) }}>
               {banners.map((b, i) => {
                 const inner = (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={b.imageUrl} alt={b.title || ""} className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={b.imageUrl} alt={b.title || ""} onLoad={(e) => fitRatio(e.currentTarget)}
+                      className="absolute inset-0 w-full h-full object-cover" />
                     {(b.title || b.subtitle) && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-8 sm:px-12">
-                        {b.title && <h2 className="text-xl sm:text-3xl font-black tracking-tight text-white mb-1 break-keep">{b.title}</h2>}
-                        {b.subtitle && <p className="text-[12px] sm:text-sm text-white/85 break-keep">{b.subtitle}</p>}
+                      <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-5 sm:px-10 md:px-12">
+                        {b.title && <h2 className="text-base sm:text-2xl md:text-3xl font-black tracking-tight text-white mb-0.5 sm:mb-1 break-keep line-clamp-2">{b.title}</h2>}
+                        {b.subtitle && <p className="text-[11px] sm:text-sm text-white/85 break-keep line-clamp-1 sm:line-clamp-2">{b.subtitle}</p>}
                       </div>
                     )}
                   </>
