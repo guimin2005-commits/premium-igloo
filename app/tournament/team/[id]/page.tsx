@@ -39,7 +39,7 @@ const midnight = (d: Date | number | string) => { const x = new Date(d); x.setHo
 type Member = { discordId: string; name: string; pos: string; leader?: boolean };
 type Team = { _id: string; name: string; tag: string; color: string; wins: number; losses: number; intro?: string; members: Member[]; avail: { userId: string; userName: string; slots: string[] }[] };
 type Season = { _id: string; title: string; tournamentId?: string; notice?: string; startAt: string; days: number; fromHour: number; toHour: number; stepMin: number; dueAt: string };
-type Fixture = { _id: string; teamAId: string; teamBId: string; kind?: string; at: string; winnerId: string; scoreA: number; scoreB: number };
+type Fixture = { _id: string; teamAId: string; teamBId: string; kind?: string; at: string; winnerId: string; scoreA: number; scoreB: number; mercs?: number };
 type Notice = { _id: string; title: string; body: string; pinned: boolean; important: boolean; publishAt: string };
 
 const sL = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60; return `${pad(h)}:${pad(mm)}`; };
@@ -547,6 +547,11 @@ export default function TeamRoom() {
                             style={f.kind === "official" ? { background: G, color: "#04120b" } : { background: "rgba(255,255,255,.08)", color: "#9ca3af" }}>
                             {f.kind === "official" ? "공식전" : "스크림"}
                           </span>
+                          {(f.mercs || 0) > 0 && (
+                            <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black" style={{ background: "rgba(56,189,248,.14)", color: "#7dd3fc" }}>
+                              용병 {f.mercs}명
+                            </span>
+                          )}
                           <span className="ml-auto text-[9px] font-black esp-mono" style={{ color: G }}>CONFIRMED</span>
                         </div>
                         {/* 가로 배치 — 좌 팀 · 중앙 VS · 우 팀 */}
@@ -647,6 +652,7 @@ export default function TeamRoom() {
                           <span className="flex-1 min-w-0 text-[12px] font-black text-gray-300 truncate">
                             {opp?.name || "?"}
                             <span className="ml-2 text-[9px] font-black esp-mono text-gray-700">{f.kind === "official" ? "공식" : "스크림"}</span>
+                            {(f.mercs || 0) > 0 && <span className="ml-1.5 text-[9px] font-black esp-mono text-sky-300/70">용병 {f.mercs}</span>}
                           </span>
                           {(f.scoreA > 0 || f.scoreB > 0) && (
                             <span className="shrink-0 esp-cut-sm px-2.5 py-1 text-[11px] font-black tabular-nums bg-white/[0.06] text-gray-200 mr-1.5">

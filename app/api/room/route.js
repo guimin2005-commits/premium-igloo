@@ -560,9 +560,21 @@ export async function POST(request) {
           seasonId: sid, teamAId: body.teamAId, teamBId: body.teamBId, at: new Date(body.at),
           kind: body.kind === "official" ? "official" : "scrim",
           usCount: Number(body.usCount) || 0, themCount: Number(body.themCount) || 0,
+          mercs: clamp(body.mercs, 0, 10, 0),
           createdBy: session?.user?.name || "",
         });
         return NextResponse.json({ success: true });
+      }
+
+      // 용병 인원 — 팀당 몇 명까지 데려올 수 있는지 (경기마다 다르다)
+      case "fixture:mercs": {
+        const { ok } = await requireAdmin();
+        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const f = await ScrimFixture.findById(body.fixtureId);
+        if (!f) return NextResponse.json({ success: false, message: "경기를 찾을 수 없습니다." }, { status: 404 });
+        f.mercs = clamp(body.mercs, 0, 10, 0);
+        await f.save();
+        return NextResponse.json({ success: true, mercs: f.mercs });
       }
 
       // 결과 입력 — 승패는 여기서만 움직인다 (팀 전적을 손으로 고치다 어긋나지 않게)
