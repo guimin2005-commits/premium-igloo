@@ -21,6 +21,18 @@ const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.ge
 const sKey = (d: Date, m: number) => `${ymd(d)}|${m}`;
 const dL = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
 const dF = (d: Date) => `${dL(d)}(${WD[d.getDay()]})`;
+
+// 📌 경기 시각 표기 — 자정~새벽은 전날 '밤 24:00' 으로 적는다 (조율 격자와 같은 기준)
+const NIGHT_UNTIL = 6;
+const atLabel = (d: Date) => {
+  const h = d.getHours();
+  if (h < NIGHT_UNTIL) {
+    const prev = new Date(d.getTime() - 86400000);
+    return `${dF(prev)} 밤 ${pad(h + 24)}:${pad(d.getMinutes())}`;
+  }
+  return `${dF(d)} ${pad(h)}:${pad(d.getMinutes())}`;
+};
+
 const hourLabel = (h: number) => `${pad(h % 24)}:00`;
 const midnight = (d: Date | number | string) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 
@@ -155,6 +167,10 @@ export default function TeamRoom() {
   const [dirty, setDirty] = useState(false);
   const [none, setNone] = useState(false); // 이번 기간 전체 불가
   const [busy, setBusy] = useState(false);
+  // 📌 몇 대 몇 — 스코어를 적고 있는 경기와 그 값 (우리 기준으로 적는다)
+  const [scoreFx, setScoreFx] = useState<string | null>(null);
+  const [scoreA, setScoreA] = useState("0");
+  const [scoreB, setScoreB] = useState("0");
   const [toast, setToast] = useState<string | null>(null);
   const [nudgeOpen, setNudgeOpen] = useState(false);
   /* 📌 관리자 전용 — 누구의 일정을 편집할지, 그리고 칸별 명단 보기.
@@ -526,7 +542,7 @@ export default function TeamRoom() {
                       <div key={f._id} className="esp-cut border border-white/[0.08] bg-white/[0.02] mb-2.5">
                         <div className="px-5 py-2.5 flex items-center gap-2 border-b border-white/[0.07]">
                           <span className="w-1.5 h-1.5" style={{ background: G }} />
-                          <span className="text-[10px] font-black esp-mono text-gray-400">{dF(at)} {pad(at.getHours())}:{pad(at.getMinutes())}</span>
+                          <span className="text-[10px] font-black esp-mono text-gray-400">{atLabel(at)}</span>
                           <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black"
                             style={f.kind === "official" ? { background: G, color: "#04120b" } : { background: "rgba(255,255,255,.08)", color: "#9ca3af" }}>
                             {f.kind === "official" ? "공식전" : "스크림"}
@@ -545,6 +561,32 @@ export default function TeamRoom() {
                             <Emblem tag={opp?.tag || "?"} color={opp?.color || "#888"} size={42} />
                           </div>
                         </div>
+                        {isAdmin && scoreFx === f._id && (
+                          <div className="flex items-center justify-center gap-2 px-5 py-3 border-t border-white/[0.07]">
+                            <span className="text-[10px] font-black esp-mono text-gray-600">{team.tag || "US"}</span>
+                            <input type="number" min={0} max={99} value={scoreA} onChange={(e) => setScoreA(e.target.value)}
+                              className="esp-cut-sm w-14 px-2 py-1.5 text-center text-[13px] font-black tabular-nums bg-white/[0.05] border border-white/10 text-white outline-none focus:border-white/35" />
+                            <span className="text-[12px] font-black text-gray-600">:</span>
+                            <input type="number" min={0} max={99} value={scoreB} onChange={(e) => setScoreB(e.target.value)}
+                              className="esp-cut-sm w-14 px-2 py-1.5 text-center text-[13px] font-black tabular-nums bg-white/[0.05] border border-white/10 text-white outline-none focus:border-white/35" />
+                            <span className="text-[10px] font-black esp-mono text-gray-600">{opp?.tag || "THEM"}</span>
+                            <button disabled={busy}
+                              onClick={async () => {
+                                const us = Math.max(0, Math.min(99, Math.floor(Number(scoreA) || 0)));
+                                const them = Math.max(0, Math.min(99, Math.floor(Number(scoreB) || 0)));
+                                const oppId = f.teamAId === id ? f.teamBId : f.teamAId;
+                                // 저장은 A·B 기준, 화면은 우리 기준 — 여기서 맞바꿔 넣는다
+                                const sa = f.teamAId === id ? us : them;
+                                const sb = f.teamAId === id ? them : us;
+                                const winnerId = us === them ? "draw" : us > them ? id : oppId;
+                                const r = await post({ action: "fixture:result", fixtureId: f._id, winnerId, scoreA: sa, scoreB: sb });
+                                if (r) { setScoreFx(null); setToast(us + " : " + them + " 로 기록했습니다"); }
+                              }}
+                              className="esp-cut-sm px-3 py-1.5 text-[11px] font-black transition-colors disabled:opacity-40"
+                              style={{ background: G, color: "#04120b" }}>기록</button>
+                            <button onClick={() => setScoreFx(null)} className="text-[11px] font-black text-gray-600 hover:text-gray-300 transition-colors">취소</button>
+                          </div>
+                        )}
                         {isAdmin && (
                           <div className="flex border-t border-white/[0.07]">
                             {[["우리 승", id], ["상대 승", f.teamAId === id ? f.teamBId : f.teamAId], ["무승부", "draw"]].map(([l, w]) => (
@@ -552,6 +594,9 @@ export default function TeamRoom() {
                                 onClick={async () => { const r = await post({ action: "fixture:result", fixtureId: f._id, winnerId: w }); if (r) setToast(`결과를 기록했습니다 — ${l}`); }}
                                 className="flex-1 py-3 text-[11px] font-black text-gray-400 border-l border-white/[0.07] first:border-l-0 hover:bg-white/[0.05] hover:text-white transition-colors disabled:opacity-40">{l as string}</button>
                             ))}
+                            <button disabled={busy}
+                              onClick={() => { const mine = f.teamAId === id; setScoreFx(f._id); setScoreA(String((mine ? f.scoreA : f.scoreB) || 0)); setScoreB(String((mine ? f.scoreB : f.scoreA) || 0)); }}
+                              className="flex-1 py-3 text-[11px] font-black text-gray-300 border-l border-white/[0.07] hover:bg-white/[0.05] hover:text-white transition-colors disabled:opacity-40">몇 대 몇</button>
                             <button disabled={busy} onClick={async () => { const r = await post({ action: "fixture:delete", fixtureId: f._id }); if (r) setToast("경기를 취소했습니다"); }}
                               className="px-4 py-3 text-[11px] font-black text-rose-400/80 border-l border-white/[0.07] hover:bg-rose-500/10 transition-colors disabled:opacity-40">취소</button>
                           </div>
@@ -596,12 +641,17 @@ export default function TeamRoom() {
                       const win = f.winnerId === id;
                       return (
                         <div key={f._id} className="flex items-center gap-3 py-3 border-b border-white/[0.06]">
-                          <span className="w-[92px] shrink-0 text-[11px] font-bold esp-mono text-gray-500">{dF(at)}</span>
+                          <span className="w-[132px] shrink-0 text-[11px] font-bold esp-mono text-gray-500">{atLabel(at)}</span>
                           <Emblem tag={opp?.tag || "?"} color={opp?.color || "#888"} size={26} />
                           <span className="flex-1 min-w-0 text-[12px] font-black text-gray-300 truncate">
                             vs {opp?.name || "?"}
                             <span className="ml-2 text-[9px] font-black esp-mono text-gray-700">{f.kind === "official" ? "공식" : "스크림"}</span>
                           </span>
+                          {(f.scoreA > 0 || f.scoreB > 0) && (
+                            <span className="shrink-0 esp-cut-sm px-2.5 py-1 text-[11px] font-black tabular-nums bg-white/[0.06] text-gray-200 mr-1.5">
+                              {f.teamAId === id ? f.scoreA : f.scoreB} <span className="text-gray-600 mx-0.5">:</span> {f.teamAId === id ? f.scoreB : f.scoreA}
+                            </span>
+                          )}
                           <span className={`shrink-0 esp-cut-sm px-2.5 py-1 text-[10px] font-black ${f.winnerId === "draw" ? "bg-white/[0.07] text-gray-400" : win ? "text-[#04120b]" : "bg-rose-500/15 text-rose-300"}`}
                             style={f.winnerId !== "draw" && win ? { background: G } : undefined}>
                             {f.winnerId === "draw" ? "무" : win ? "승" : "패"}

@@ -27,6 +27,18 @@ const midnight = (d: Date | number | string) => { const x = new Date(d); x.setHo
 const atOf = (d: Date, m: number) => new Date(midnight(d).getTime() + m * 60000);
 const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
+// 📌 경기 시각 표기 — 자정~새벽은 전날 '밤 24:00' 으로 적는다 (조율 격자와 같은 기준)
+const NIGHT_UNTIL = 6;
+const atLabel = (d: Date) => {
+  const h = d.getHours();
+  if (h < NIGHT_UNTIL) {
+    const prev = new Date(d.getTime() - 86400000);
+    return `${dF(prev)} 밤 ${pad(h + 24)}:${pad(d.getMinutes())}`;
+  }
+  return `${dF(d)} ${pad(h)}:${pad(d.getMinutes())}`;
+};
+
+
 const PALETTE = ["#7dd3fc", "#a5b4fc", "#fcd34d", "#f0abfc", "#6ee7b7", "#fca5a5", "#c4b5fd", "#fdba74"];
 
 export default function AdminScrimPage() {
@@ -612,6 +624,10 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
   const [a, setA] = useState<string | null>(null);
   const [b, setB] = useState<string | null>(null);
   const [kind, setKind] = useState<"scrim" | "official">("scrim");
+  // 📌 몇 대 몇 — 스코어를 적고 있는 경기와 그 값
+  const [scoreFx, setScoreFx] = useState<string | null>(null);
+  const [scoreA, setScoreA] = useState("0");
+  const [scoreB, setScoreB] = useState("0");
   /* 📌 경기 시각 — 기본은 가장 많이 겹치는 칸이지만, 운영진이 직접 정할 수 있어야 한다.
      겹치는 사람이 적어도 그 시간에 하기로 했으면 그게 맞는 시각이다. */
   const [pickDay, setPickDay] = useState<Date | null>(null);
@@ -878,13 +894,46 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
           const at = new Date(f.at);
           return (
             <div key={f._id} className="flex flex-wrap items-center gap-3 py-3 border-b border-white/[0.06]">
-              <span className="w-[112px] shrink-0 text-[11px] font-bold esp-mono text-gray-400">{dF(at)} {pad(at.getHours())}:{pad(at.getMinutes())}</span>
+              <span className="w-[142px] shrink-0 text-[11px] font-bold esp-mono text-gray-400">{atLabel(at)}</span>
               <span className="flex-1 min-w-0 text-[12px] font-black text-gray-300 truncate">
                 {A?.name || "?"} <span className="text-gray-700 mx-1.5">vs</span> {B?.name || "?"}
               </span>
               {f.winnerId ? (
-                <span className="shrink-0 esp-cut-sm px-2.5 py-1 text-[10px] font-black" style={{ background: G2, color: "#04120b" }}>
-                  {f.winnerId === "draw" ? "무승부" : (f.winnerId === f.teamAId ? A?.name : B?.name) + " 승"}
+                <span className="flex items-center gap-2 shrink-0">
+                  {/* 스코어를 기록했으면 몇 대 몇인지 함께 보여준다 */}
+                  {(f.scoreA > 0 || f.scoreB > 0) && (
+                    <span className="esp-cut-sm px-2.5 py-1 text-[11px] font-black tabular-nums bg-white/[0.06] text-gray-200">
+                      {f.scoreA} <span className="text-gray-600 mx-0.5">:</span> {f.scoreB}
+                    </span>
+                  )}
+                  <span className="esp-cut-sm px-2.5 py-1 text-[10px] font-black" style={{ background: G2, color: "#04120b" }}>
+                    {f.winnerId === "draw" ? "무승부" : (f.winnerId === f.teamAId ? A?.name : B?.name) + " 승"}
+                  </span>
+                  <button disabled={busy}
+                    onClick={async () => { const r = await post({ action: "fixture:result", fixtureId: f._id, winnerId: "", scoreA: 0, scoreB: 0 }); if (r) { setScoreFx(null); setToast("결과를 지웠습니다"); } }}
+                    className="text-[10px] font-black text-gray-600 hover:text-gray-300 transition-colors disabled:opacity-40">다시</button>
+                </span>
+              ) : scoreFx === f._id ? (
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] font-black esp-mono text-gray-600">{A?.tag || "A"}</span>
+                  <input type="number" min={0} max={99} value={scoreA} onChange={(e) => setScoreA(e.target.value)}
+                    className="esp-cut-sm w-12 px-2 py-1 text-center text-[12px] font-black tabular-nums bg-white/[0.05] border border-white/10 text-white outline-none focus:border-white/35" />
+                  <span className="text-[11px] font-black text-gray-600">:</span>
+                  <input type="number" min={0} max={99} value={scoreB} onChange={(e) => setScoreB(e.target.value)}
+                    className="esp-cut-sm w-12 px-2 py-1 text-center text-[12px] font-black tabular-nums bg-white/[0.05] border border-white/10 text-white outline-none focus:border-white/35" />
+                  <span className="text-[10px] font-black esp-mono text-gray-600">{B?.tag || "B"}</span>
+                  <button disabled={busy}
+                    onClick={async () => {
+                      const sa = Math.max(0, Math.min(99, Math.floor(Number(scoreA) || 0)));
+                      const sb = Math.max(0, Math.min(99, Math.floor(Number(scoreB) || 0)));
+                      // 승패는 숫자에서 갈린다 — 같으면 무승부
+                      const winnerId = sa === sb ? "draw" : sa > sb ? f.teamAId : f.teamBId;
+                      const r = await post({ action: "fixture:result", fixtureId: f._id, winnerId, scoreA: sa, scoreB: sb });
+                      if (r) { setScoreFx(null); setToast(sa + " : " + sb + " 로 기록했습니다"); }
+                    }}
+                    className="esp-cut-sm px-2.5 py-1 text-[10px] font-black transition-colors disabled:opacity-40"
+                    style={{ background: G2, color: "#04120b" }}>기록</button>
+                  <button onClick={() => setScoreFx(null)} className="text-[10px] font-black text-gray-600 hover:text-gray-300 transition-colors">취소</button>
                 </span>
               ) : (
                 <span className="flex gap-1 shrink-0">
@@ -893,6 +942,9 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                       onClick={async () => { const r = await post({ action: "fixture:result", fixtureId: f._id, winnerId: w }); if (r) setToast("결과를 기록했습니다"); }}
                       className="esp-cut-sm px-2.5 py-1 text-[10px] font-black bg-white/[0.05] text-gray-400 hover:text-white hover:bg-white/[0.1] transition-colors disabled:opacity-40">{l as string}</button>
                   ))}
+                  <button disabled={busy}
+                    onClick={() => { setScoreFx(f._id); setScoreA(String(f.scoreA || 0)); setScoreB(String(f.scoreB || 0)); }}
+                    className="esp-cut-sm px-2.5 py-1 text-[10px] font-black border border-white/15 text-gray-300 hover:text-white hover:border-white/35 transition-colors disabled:opacity-40">몇 대 몇</button>
                 </span>
               )}
               <button disabled={busy} onClick={() => { setNotifyFx(f); setNotifyAt(null); }}
