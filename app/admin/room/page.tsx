@@ -628,6 +628,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
   // 📌 몇 대 몇 — 스코어를 적고 있는 경기와 그 값
   const [mercA, setMercA] = useState(0);   // 확정할 때 정하는 용병 수 — 팀 A
   const [mercB, setMercB] = useState(0);   // 팀 B
+  const [openFx, setOpenFx] = useState<string | null>(null);  // 설정을 펼친 경기
   const [scoreFx, setScoreFx] = useState<string | null>(null);
   const [scoreA, setScoreA] = useState("0");
   const [scoreB, setScoreB] = useState("0");
@@ -658,6 +659,40 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
 
   const TA = teams.find((t) => t._id === a);
   const TB = teams.find((t) => t._id === b);
+
+  /* 📌 이미 잡힌 경기와 부딪히는 칸
+     지금 고른 두 팀 중 한 팀이라도 그 시각에 다른 경기가 잡혀 있으면 그 칸은 쓸 수 없다.
+     (A·B 경기가 있는데 B·C 를 잡으려는 경우 — B 가 이미 그 시각에 뛰기 때문)
+     고른 두 팀과 무관한 경기(C·D)는 여기서 따지지 않는다. */
+  const busySlots = useMemo(() => {
+    const map = new Map<string, { name: string; opp: string }[]>();
+    if (!TA || !TB || !season) return map;
+    const step = season.stepMin || 60;
+    const mine = new Set([String(TA._id), String(TB._id)]);
+    for (const f of fixtures) {
+      const inA = mine.has(String(f.teamAId));
+      const inB = mine.has(String(f.teamBId));
+      if (!inA && !inB) continue;                       // 두 팀과 상관없는 경기는 넘어간다
+      const t = new Date(f.at).getTime();
+      for (const d of DAYS) {
+        for (const sm of SLOTS) {
+          const cell = atOf(d, sm).getTime();
+          if (t < cell || t >= cell + step * 60000) continue;
+          const key = sKey(d, sm);
+          const busy = map.get(key) || [];
+          const add = (idSelf: string, idOpp: string) => {
+            const self = teams.find((x) => String(x._id) === String(idSelf));
+            const opp = teams.find((x) => String(x._id) === String(idOpp));
+            if (self && mine.has(String(self._id))) busy.push({ name: self.name, opp: opp?.name || "?" });
+          };
+          add(f.teamAId, f.teamBId);
+          add(f.teamBId, f.teamAId);
+          map.set(key, busy);
+        }
+      }
+    }
+    return map;
+  }, [fixtures, TA, TB, DAYS, SLOTS, season, teams]);
   const pickTeam = (side: "a" | "b", id: string | null) => {
     // 상대가 바뀌면 겹치는 시간도 달라진다 — 직접 고른 시각은 초기화한다
     setPickDay(null); setPickMin(null);
@@ -735,6 +770,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
             <p className="text-[11px] font-bold text-gray-600 mb-4">
               숫자는 <b className="text-gray-300">더 적은 쪽 팀</b>의 가능 인원입니다. 양 팀 전원 가능한 칸에 초록 테두리가 붙습니다.
               <b className="text-gray-300"> 칸을 누르면 그 시각으로 잡습니다.</b>
+              <b className="text-[#ff8fa3]"> 붉은 칸은 고른 팀 중 한 팀이 이미 그 시각에 경기가 있는 칸입니다.</b>
             </p>
 
             <div className="overflow-x-auto no-bar -mx-1 px-1">
@@ -757,17 +793,23 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                         const cap = Math.max(1, Math.min(TA.members.length, TB.members.length));
                         const full = ca === TA.members.length && cb === TB.members.length && mn > 0;
                         const picked = !!chosen && sKey(chosen.d, chosen.s) === sKey(d, s);
+                        const busy = busySlots.get(sKey(d, s));   // 이 칸에 이미 잡힌 경기
                         return (
                           <td key={s} className="p-0">
-                            <button type="button" title={TA.name + " " + ca + " · " + TB.name + " " + cb}
+                            <button type="button"
+                              title={busy
+                                ? busy.map((x) => x.name + " — " + x.opp + " 경기 있음").join(" / ")
+                                : TA.name + " " + ca + " · " + TB.name + " " + cb}
                               onClick={() => { setPickDay(d); setPickMin(s); }}
                               aria-pressed={picked}
                               className="w-[44px] h-[34px] lg:w-[54px] lg:h-[38px] border text-[11px] font-black tabular-nums grid place-items-center transition-colors"
                               style={{
-                                background: mn ? "rgba(0,224,123," + (0.10 + (mn / cap) * 0.55).toFixed(3) + ")" : "rgba(255,255,255,.02)",
-                                borderColor: picked ? "#fff" : full ? G2 : "rgba(255,255,255,.07)",
-                                boxShadow: picked ? "inset 0 0 0 2px #fff" : full ? "inset 0 0 0 1px " + G2 : undefined,
-                                color: mn ? "#e6f7ee" : "#3f3f46",
+                                background: busy
+                                  ? "rgba(233,30,63,.20)"
+                                  : mn ? "rgba(0,224,123," + (0.10 + (mn / cap) * 0.55).toFixed(3) + ")" : "rgba(255,255,255,.02)",
+                                borderColor: picked ? "#fff" : busy ? "#e91e3f" : full ? G2 : "rgba(255,255,255,.07)",
+                                boxShadow: picked ? "inset 0 0 0 2px #fff" : busy ? "inset 0 0 0 1px #e91e3f" : full ? "inset 0 0 0 1px " + G2 : undefined,
+                                color: busy ? "#ff8fa3" : mn ? "#e6f7ee" : "#3f3f46",
                               }}>{mn || ""}</button>
                           </td>
                         );
@@ -915,9 +957,10 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
           const B = teams.find((t) => t._id === f.teamBId);
           const at = new Date(f.at);
           return (
-            <div key={f._id} className="py-3.5 border-b border-white/[0.06] space-y-2.5">
-              {/* 1줄 — 누가 누구랑, 언제 */}
-              <div className="flex items-center gap-3 min-w-0">
+            <div key={f._id} className="border-b border-white/[0.06]">
+              {/* 머리줄 — 언제, 누가 누구랑, 한눈 요약. 누르면 설정이 펼쳐진다 */}
+              <button type="button" onClick={() => { setOpenFx(openFx === f._id ? null : f._id); setScoreFx(null); }}
+                className="w-full flex items-center gap-3 min-w-0 py-3.5 text-left hover:bg-white/[0.02] transition-colors">
                 <span className="shrink-0 text-[11px] font-bold esp-mono text-gray-400">{atLabel(at)}</span>
                 <span className="esp-cut-sm shrink-0 px-1.5 py-0.5 text-[9px] font-black esp-mono"
                   style={{ background: (A?.color || "#888") + "1c", border: "1px solid " + (A?.color || "#888") + "55", color: A?.color || "#888" }}>{A?.tag || "A"}</span>
@@ -927,10 +970,35 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                   style={{ background: (B?.color || "#888") + "1c", border: "1px solid " + (B?.color || "#888") + "55", color: B?.color || "#888" }}>{B?.tag || "B"}</span>
                 <span className="text-[12px] font-black text-gray-200 truncate">{B?.name || "?"}</span>
                 <span className="text-[9px] font-black esp-mono text-gray-700 shrink-0">{f.kind === "official" ? "공식" : "스크림"}</span>
-              </div>
 
-              {/* 2줄 — 결과·용병·알림 */}
-              <div className="flex flex-wrap items-center gap-2">
+                <span className="ml-auto flex items-center gap-2 shrink-0">
+                  {/* 요약 — 결과와 용병만 짧게 */}
+                  {f.winnerId ? (
+                    <span className="flex items-center gap-1.5">
+                      {(f.scoreA > 0 || f.scoreB > 0) && (
+                        <span className="esp-cut-sm px-2 py-0.5 text-[10px] font-black tabular-nums bg-white/[0.06] text-gray-200">{f.scoreA} : {f.scoreB}</span>
+                      )}
+                      <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black" style={{ background: G2, color: "#04120b" }}>
+                        {f.winnerId === "draw" ? "무승부" : (f.winnerId === f.teamAId ? A?.tag || "A" : B?.tag || "B") + " 승"}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-[9px] font-black esp-mono text-gray-700">미기록</span>
+                  )}
+                  {(() => {
+                    const ma = (f.mercsA ?? 0) || f.mercs || 0;
+                    const mb = (f.mercsB ?? 0) || f.mercs || 0;
+                    return ma + mb > 0 ? (
+                      <span className="esp-cut-sm px-2 py-0.5 text-[9px] font-black" style={{ background: "rgba(56,189,248,.14)", color: "#7dd3fc" }}>용병 {ma}·{mb}</span>
+                    ) : null;
+                  })()}
+                  <span className={"text-[10px] font-black text-gray-600 transition-transform " + (openFx === f._id ? "rotate-180" : "")}>▾</span>
+                </span>
+              </button>
+
+              {/* 설정 — 눌렀을 때만 (버튼이 늘 깔려 있으면 무엇이 중요한지 안 보인다) */}
+              {openFx === f._id && (
+              <div className="flex flex-wrap items-center gap-2 pb-3.5">
               {f.winnerId ? (
                 <span className="flex items-center gap-2 shrink-0">
                   {/* 스코어를 기록했으면 몇 대 몇인지 함께 보여준다 */}
@@ -1005,6 +1073,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                 onClick={async () => { const r = await post({ action: "fixture:delete", fixtureId: f._id }); if (r) setToast("경기를 삭제했습니다"); }}
                 className="shrink-0 text-[10px] font-black text-rose-400/70 hover:text-rose-300 disabled:opacity-40">삭제</button>
               </div>
+              )}
             </div>
           );
         })}
