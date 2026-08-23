@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BracketView } from "../components/BracketView";
+import { DiscordIdInput } from "../components/DiscordIds";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -878,8 +879,10 @@ export default function AdminWritePage() {
                 <span className="text-xs font-bold text-gray-400 mt-4 block">우승팀 / 우승자 (선택 · 명예의 전당 표시)</span>
                 <input type="text" placeholder="예시: 이글루A" value={tournamentWinner} onChange={(e) => setTournamentWinner(e.target.value)} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
 
-                <span className="text-xs font-bold text-gray-400 mt-4 block">우승자 디스코드 ID <span className="text-gray-600 font-medium">(선택 · 팀원 여러 명이면 쉼표(,)로 구분 — 명예의 전당에 각자 프로필로 표시)</span></span>
-                <textarea rows={2} placeholder="예시: 1104242935664492666, 2205..., 3306... (팀원 전원 입력 가능)" value={tournamentWinnerId} onChange={(e) => setTournamentWinnerId(e.target.value)} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f] resize-none leading-relaxed" />
+                {/* 팀원은 한 명씩 칩으로 담는다 — 쉼표로 나열하면 오타를 알아채기 어렵다 */}
+                <div className="mt-4">
+                  <DiscordIdInput value={tournamentWinnerId} onChange={setTournamentWinnerId} label="우승 팀원 명단 (명예의 전당에 각자 프로필로 표시)" />
+                </div>
               </div>
 
               {/* 📌 참가 설문 (구글폼 형식) */}
