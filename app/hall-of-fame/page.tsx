@@ -10,8 +10,8 @@ import { HONOR_GROUPS, GROUP_LABEL_EN, groupOf, rankLabelOf } from "@/lib/honors
 
 const GOLD = "#d4af37";
 
-/* 📌 명예의 전당 — 모든 기록을 같은 격의 카드로 세운다.
-   (최신 기록만 크게 그리던 예전 방식은 목록이 들쭉날쭉해 보여서, 강조는 마우스를 올린 카드로 옮겼다) */
+/* 📌 명예의 전당 — 가로 연대기 배치. 모든 기록을 같은 크기로 세운다.
+   (최신 기록만 크게 그리던 예전 방식은 목록이 들쭉날쭉해 보여서, 강조는 마우스를 올린 줄로 옮겼다) */
 
 export default function HallOfFamePage() {
   const { data: session, status } = useSession();
@@ -173,57 +173,66 @@ export default function HallOfFamePage() {
             <Link href="/tournament" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">진행 중인 대회 보기</Link>
           </div>
         ) : (
-          /* key에 필터를 걸어, 분류를 바꿀 때마다 카드가 다시 차례로 올라오게 한다 */
-          <div key={filter} className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          /* ── 연대기 — 카드 없이 골드 헤어라인만. 모든 줄이 같은 크기이고, 강조는 마우스를 올린 줄에만 ──
+             key에 필터를 걸어, 분류를 바꿀 때마다 줄이 다시 차례로 올라오게 한다 */
+          <div key={filter} className="border-t" style={{ borderColor: `${GOLD}26` }}>
             {visible.map((c, idx) => {
               const [sy, ey] = getYears(c);
               const members = parseIds(c.winnerId).map((id) => profiles[id]).filter((p) => p && !p.failed);
               return (
-                <article key={c._id} className="hof-card hof-rise" style={{ animationDelay: `${Math.min(idx, 8) * 70}ms` }}>
-                  {/* 연도 워터마크 */}
-                  <span aria-hidden className="hof-year absolute -top-3 right-2 text-[92px] md:text-[112px] font-black leading-none select-none pointer-events-none tabular-nums">{sy}</span>
+                <div
+                  key={c._id}
+                  className="hof-row hof-rise relative border-b flex flex-col md:flex-row md:gap-12 py-9 md:py-11"
+                  style={{ animationDelay: `${Math.min(idx, 8) * 70}ms` }}
+                >
+                  {/* 마우스를 올린 줄에만 떠오르는 초대형 연도 워터마크 */}
+                  <span aria-hidden className="hof-year absolute top-2 right-0 text-[110px] md:text-[170px] font-black leading-none select-none pointer-events-none tabular-nums">{sy}</span>
 
-                  <div className="relative p-6 md:p-7">
+                  {/* 연도 — 골드 잉크 */}
+                  <div className="relative md:w-32 shrink-0 mb-4 md:mb-0 flex items-baseline gap-2 md:block">
+                    <span className="hof-yearink font-black tracking-tighter tabular-nums leading-none text-4xl md:text-5xl">{sy}</span>
+                    {ey && <span className="text-base md:text-lg font-black tracking-tighter md:block" style={{ color: `${GOLD}21` }}>–{ey}</span>}
+                  </div>
+
+                  {/* 본문 */}
+                  <div className="relative flex-1 min-w-0">
                     {/* 수식어 + 분류 */}
-                    <div className="flex items-center gap-2 mb-5 min-w-0">
+                    <div className="flex items-center gap-2.5 mb-4 min-w-0">
                       <span className="inline-flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-full border text-[10px] font-black tracking-[0.22em] uppercase" style={{ borderColor: `${GOLD}40`, color: GOLD, background: `${GOLD}0f` }}>
                         <span className="hof-star">✦</span>{rankLabelOf(c)}
                       </span>
-                      <span className="text-[10px] font-black tracking-[0.24em] text-gray-500 uppercase truncate">{c.category}</span>
+                      <span className="text-[10px] font-black tracking-[0.28em] text-gray-500 uppercase truncate">{c.category}</span>
                       {c._id === latestId && (
                         <span className="ml-auto shrink-0 text-[9px] font-black tracking-[0.24em] uppercase px-2 py-1 rounded-full border border-white/12 text-gray-400">Latest</span>
                       )}
                     </div>
 
-                    {/* 우승자 — 모든 카드 같은 크기 */}
+                    {/* 우승자 — 모든 줄이 같은 크기 */}
                     <div className="flex items-center flex-wrap gap-4 mb-3">
                       {members.length > 0 && (
                         <div className="flex -space-x-3 shrink-0">
                           {members.map((p, i) => (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img key={i} src={p.avatarUrl} alt={p.globalName} title={p.globalName} className="hof-avatar w-12 h-12 md:w-14 md:h-14 rounded-full bg-gray-800 object-cover ring-2 ring-[#0e0e0e]" />
+                            <img key={i} src={p.avatarUrl} alt={p.globalName} title={p.globalName} className="hof-avatar w-12 h-12 md:w-14 md:h-14 rounded-full bg-gray-800 object-cover ring-2 ring-[#080808]" />
                           ))}
                         </div>
                       )}
-                      <h3 className="hof-name font-black text-white tracking-tight leading-none break-keep text-3xl md:text-4xl min-w-0">{c.winner}</h3>
+                      <h3 className="hof-name font-black text-white tracking-tight leading-none break-keep text-3xl md:text-5xl min-w-0">{c.winner}</h3>
                     </div>
 
+                    {/* 팀원 이름 */}
                     {members.length > 0 && (
-                      <p className="text-sm text-gray-400 font-medium mb-2 break-keep">{members.map((p) => p.globalName).join("  ·  ")}</p>
+                      <p className="text-sm md:text-base text-gray-400 font-medium mb-2 break-keep">{members.map((p) => p.globalName).join("  ·  ")}</p>
                     )}
 
+                    {/* 기록명 + 상세 */}
                     <p className="text-sm text-gray-500 break-keep">
                       {c.title}
                       {c.detail && <span className="text-gray-600"> — {c.detail}</span>}
+                      {c.dateLabel && <span className="text-gray-700"> · {c.dateLabel}</span>}
                     </p>
-
-                    {/* 기간 */}
-                    <div className="flex items-center gap-2 mt-4 pt-4 border-t" style={{ borderColor: `${GOLD}14` }}>
-                      <span className="text-[11px] font-black tabular-nums tracking-wider" style={{ color: `${GOLD}99` }}>{sy}{ey ? `–${ey}` : ""}</span>
-                      {c.dateLabel && <span className="text-[11px] text-gray-600 truncate">· {c.dateLabel}</span>}
-                    </div>
                   </div>
-                </article>
+                </div>
               );
             })}
           </div>
@@ -233,7 +242,7 @@ export default function HallOfFamePage() {
   );
 }
 
-// 📌 명예의 전당 전용 모션 — 카드 등장 · 골드 스윕 · 반짝임
+// 📌 명예의 전당 전용 모션 — 줄 등장 · 골드 스윕 · 반짝임
 const HofStyles = () => (
   <style dangerouslySetInnerHTML={{ __html: `
     @keyframes hofRise { from { opacity: 0; transform: translateY(26px) scale(0.985); } to { opacity: 1; transform: none; } }
@@ -259,41 +268,42 @@ const HofStyles = () => (
       filter: drop-shadow(0 0 28px #d4af3740);
     }
 
-    /* ── 카드 — 강조는 마우스를 올린 곳에만 ── */
-    .hof-card {
-      position: relative; overflow: hidden; border-radius: 18px;
-      border: 1px solid rgba(212,175,55,0.16);
-      background: linear-gradient(158deg, rgba(255,255,255,0.05), rgba(255,255,255,0.012));
-      transition: transform 0.45s cubic-bezier(0.16,1,0.3,1), border-color 0.45s ease, box-shadow 0.45s ease;
+    /* ── 연대기 줄 — 크기는 전부 같고, 강조는 마우스를 올린 줄에만 ── */
+    /* 줄 경계선 색은 여기서 준다 — 인라인 style로 주면 hover 규칙이 이기지 못한다 */
+    .hof-row { position: relative; overflow: hidden; border-color: rgba(212,175,55,0.10); transition: background 0.45s ease, border-color 0.45s ease; }
+    /* 왼쪽 골드 표식이 위아래로 그어진다 */
+    .hof-row::before {
+      content: ""; position: absolute; left: 0; top: 14%; bottom: 14%; width: 2px; pointer-events: none;
+      background: linear-gradient(180deg, transparent, rgba(212,175,55,0.9), transparent);
+      transform: scaleY(0); transform-origin: center; transition: transform 0.55s cubic-bezier(0.16,1,0.3,1);
     }
-    .hof-card:hover {
-      transform: translateY(-6px);
-      border-color: rgba(212,175,55,0.46);
-      box-shadow: 0 26px 60px -30px rgba(212,175,55,0.55);
-    }
-    .hof-card:active { transform: translateY(-2px); }
-    /* 상단 골드 헤어라인이 좌우로 그어진다 */
-    .hof-card::before {
-      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; pointer-events: none;
-      background: linear-gradient(90deg, transparent, rgba(212,175,55,0.85), transparent);
-      transform: scaleX(0); transform-origin: center; transition: transform 0.6s cubic-bezier(0.16,1,0.3,1);
-    }
-    .hof-card:hover::before { transform: scaleX(1); }
     /* 금박이 스치는 스윕 */
-    .hof-card::after {
-      content: ""; position: absolute; inset: -20% -60%; pointer-events: none;
-      background: linear-gradient(115deg, transparent 42%, rgba(255,240,190,0.13) 50%, transparent 58%);
-      transform: translateX(-60%); opacity: 0; transition: opacity 0.2s ease;
+    .hof-row::after {
+      content: ""; position: absolute; inset: -30% -50%; pointer-events: none;
+      background: linear-gradient(115deg, transparent 44%, rgba(255,240,190,0.10) 50%, transparent 56%);
+      transform: translateX(-55%); opacity: 0; transition: opacity 0.2s ease;
     }
-    .hof-card:hover::after { opacity: 1; animation: hofSweep 1.1s cubic-bezier(0.16,1,0.3,1); }
-    @keyframes hofSweep { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
+    @keyframes hofSweep { from { transform: translateX(-55%); } to { transform: translateX(55%); } }
 
-    .hof-year { color: rgba(212,175,55,0.07); transition: color 0.45s ease, transform 0.6s cubic-bezier(0.16,1,0.3,1); }
-    .hof-card:hover .hof-year { color: rgba(212,175,55,0.15); transform: translateY(-3px); }
-    .hof-name { transition: text-shadow 0.45s ease; }
-    .hof-card:hover .hof-name { text-shadow: 0 0 40px rgba(212,175,55,0.33); }
+    .hof-row > * { transition: transform 0.5s cubic-bezier(0.16,1,0.3,1); }
+    .hof-year { color: rgba(212,175,55,0); transition: color 0.5s ease; }
+    .hof-yearink { color: rgba(212,175,55,0.30); transition: color 0.45s ease; }
+    .hof-name { transition: transform 0.45s cubic-bezier(0.16,1,0.3,1), text-shadow 0.45s ease; transform-origin: left center; }
     .hof-avatar { transition: transform 0.45s cubic-bezier(0.16,1,0.3,1), box-shadow 0.45s ease; }
-    .hof-card:hover .hof-avatar { transform: translateY(-2px); box-shadow: 0 0 0 2px rgba(212,175,55,0.35); }
+
+    /* 손가락으로 쓰는 화면에서는 hover가 눌린 채로 남으므로 마우스가 있는 기기에만 건다 */
+    @media (hover: hover) {
+      .hof-row:hover { background: linear-gradient(90deg, rgba(212,175,55,0.075), rgba(212,175,55,0.02) 45%, transparent 82%); border-color: rgba(212,175,55,0.34); }
+      .hof-row:hover::before { transform: scaleY(1); }
+      .hof-row:hover::after { opacity: 1; animation: hofSweep 1.15s cubic-bezier(0.16,1,0.3,1); }
+      .hof-row:hover > * { transform: translateX(10px); }
+      .hof-row:hover .hof-year { color: rgba(212,175,55,0.085); }
+      .hof-row:hover .hof-yearink { color: rgba(212,175,55,0.8); }
+      .hof-row:hover .hof-name { transform: scale(1.035); text-shadow: 0 0 44px rgba(212,175,55,0.35); }
+      .hof-row:hover .hof-avatar { transform: translateY(-2px); box-shadow: 0 0 0 2px rgba(212,175,55,0.35); }
+    }
+    /* 터치 화면에서는 누르는 순간만 살짝 반응한다 */
+    .hof-row:active { background: linear-gradient(90deg, rgba(212,175,55,0.06), transparent 70%); }
 
     /* ── 분류 칩 ── */
     .hof-chip { border-width: 1px; border-style: solid; background: transparent; transition: color 0.25s ease, border-color 0.25s ease, background 0.25s ease, transform 0.25s ease; }
@@ -302,7 +312,7 @@ const HofStyles = () => (
 
     @media (prefers-reduced-motion: reduce) {
       .hof-rise, .hof-float, .hof-halo, .hof-breathe, .hof-dust, .hof-star, .hof-gold-text { animation: none !important; }
-      .hof-card, .hof-card:hover { transform: none; }
+      .hof-row:hover > *, .hof-row:hover .hof-name { transform: none; }
     }
   `}} />
 );
