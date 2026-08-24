@@ -122,13 +122,19 @@ const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => vo
 const stripMarkdown = (text: string) => {
   if (!text) return "";
   let result = text
+    // 이미지는 미리보기에 담을 게 없으므로 통째로 뺀다 (주소가 그대로 보이던 문제)
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    // 링크는 주소를 버리고 글자만 남긴다
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\{([^}]+)\}/g, "$1")
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/__(.*?)__/g, "$1")
     .replace(/~~(.*?)~~/g, "$1")
     .replace(/==(.*?)==/g, "$1");
   // 마크다운 표 제거
   result = result.replace(/^\|[\s\S]*?\n(?:\|[\s\S]*?\n)*(?:\|.*?\|)?$/gm, "");
-  return result.trim();
+  // 미리보기는 한 줄로 흐르므로 남은 줄바꿈·공백을 하나로 모은다
+  return result.replace(/\s+/g, " ").trim();
 };
 
 export default function EventPage() {
@@ -300,7 +306,9 @@ export default function EventPage() {
                       {isAdmin && event.hidden && <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 border border-amber-400/30">숨김</span>}
                       <span className="min-w-0">{event.title}</span>
                     </h3>
-                    <p className="text-sm text-gray-500 line-clamp-2">{stripMarkdown(event.content)}</p>
+                    {stripMarkdown(event.content) && (
+                      <p className="text-sm text-gray-500 line-clamp-2">{stripMarkdown(event.content)}</p>
+                    )}
                   </div>
                 </div>
               </div>

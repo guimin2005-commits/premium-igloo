@@ -122,13 +122,19 @@ const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => vo
 const stripMarkdown = (text: string) => {
   if (!text) return "";
   let result = text
+    // 이미지는 미리보기에 담을 게 없으므로 통째로 뺀다 (주소가 그대로 보이던 문제)
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    // 링크는 주소를 버리고 글자만 남긴다
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\{([^}]+)\}/g, "$1")
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/__(.*?)__/g, "$1")
     .replace(/~~(.*?)~~/g, "$1")
     .replace(/==(.*?)==/g, "$1");
   // 마크다운 표 제거
   result = result.replace(/^\|[\s\S]*?\n(?:\|[\s\S]*?\n)*(?:\|.*?\|)?$/gm, "");
-  return result.trim();
+  // 미리보기는 한 줄로 흐르므로 남은 줄바꿈·공백을 하나로 모은다
+  return result.replace(/\s+/g, " ").trim();
 };
 
 // 공지 중요 여부 판별 (구버전 '필독'/isImportant 호환)
@@ -340,7 +346,9 @@ export default function NoticeClient() {
                   {isAdmin && notice.hidden && <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 border border-amber-400/30">숨김</span>}
                   <span className="truncate">{notice.title}</span>
                 </h3>
-                <p className="text-gray-500 text-sm leading-relaxed line-clamp-1">{stripMarkdown(notice.content)}</p>
+                {stripMarkdown(notice.content) && (
+                  <p className="text-gray-500 text-sm leading-relaxed line-clamp-1">{stripMarkdown(notice.content)}</p>
+                )}
               </div>
               </div>
               </Reveal>
