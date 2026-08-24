@@ -60,6 +60,10 @@ export default function AdminWritePage() {
   const [hidden, setHidden] = useState(false);    // 📌 글 가리기 (지우지 않고 감추기)
   const [eventTag, setEventTag] = useState("NONE");
   const [bannerUrl, setBannerUrl] = useState("");
+  // 본문 이미지 넣기 창
+  const [imageOpen, setImageOpen] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageCap, setImageCap] = useState("");
   const [eventStartDate, setEventStartDate] = useState("");
   const [eventEndDate, setEventEndDate] = useState("");
   const [isEventAlways, setIsEventAlways] = useState(false);
@@ -434,6 +438,26 @@ export default function AdminWritePage() {
     setTimeout(() => {
       textarea.focus({ preventScroll: true });
       textarea.setSelectionRange(start + symbol.length, start + symbol.length + inner.length);
+      window.scrollTo({ top: scrollY });
+    }, 0);
+  };
+
+  // 📌 본문 이미지 — 주소와 설명을 받아 커서 자리에 ![설명](주소) 로 넣는다
+  const insertImage = (url: string, caption: string) => {
+    const textarea = textareaRef.current;
+    const src = url.trim();
+    if (!textarea || !src) return;
+    const scrollY = window.scrollY;
+    const start = textarea.selectionStart;
+    const cur = textarea.value;
+    const md = `![${caption.trim()}](${src})`;
+    const before = cur.substring(0, start);
+    const after = cur.substring(start);
+    // 이미지는 한 줄을 통째로 차지해야 크게 나온다
+    const next = before + (before && !before.endsWith("\n") ? "\n" : "") + md + (after && !after.startsWith("\n") ? "\n" : "") + after;
+    setContent(next);
+    setTimeout(() => {
+      textarea.focus({ preventScroll: true });
       window.scrollTo({ top: scrollY });
     }, 0);
   };
@@ -1182,7 +1206,10 @@ export default function AdminWritePage() {
                 <button type="button" onClick={() => insertWrap("==")} className="p-2 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all flex items-center gap-1"><span className="text-base font-extrabold text-[#e91e3f]">A</span> 강조</button>
                 <div className="w-px h-6 bg-white/10 self-center" />
                 <button type="button" onClick={() => insertTable(2, 2)} className="p-2 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all flex items-center gap-1"><span className="text-base font-bold">⊞</span> 표</button>
+                <div className="w-px h-6 bg-white/10 self-center" />
+                <button type="button" onClick={() => setImageOpen(true)} className="p-2 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all flex items-center gap-1"><span className="text-base font-bold">🖼</span> 이미지</button>
               </div>
+              <p className="-mt-2 text-[11px] text-gray-600">본문에 넣은 이미지는 글 너비에 맞춰 크게 나옵니다.</p>
               <textarea ref={textareaRef} placeholder="내용을 입력하세요..." value={content} onChange={(e) => setContent(e.target.value)} className={`min-h-[400px] ${textareaClass}`} />
             </>
           )}
@@ -1204,6 +1231,37 @@ export default function AdminWritePage() {
           <button type="submit" disabled={isSubmitting || !isFormValid()} className={`px-8 py-3.5 rounded-xl text-sm font-bold transition-all ${isSubmitting || !isFormValid() ? "bg-white/5 text-gray-600 cursor-not-allowed" : "bg-white text-black hover:bg-gray-200"}`}>{isSubmitting ? "처리 중..." : editId ? "수정하기" : "등록하기"}</button>
         </div>
       </form>
+
+      {/* 본문 이미지 넣기 — 주소를 넣으면 미리 보여주고, 넣으면 글 너비에 맞춰 크게 들어간다 */}
+      {imageOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in" onClick={() => setImageOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-md p-8">
+            <h2 className="text-lg font-black text-white mb-1.5">본문에 이미지 넣기</h2>
+            <p className="text-[11px] text-gray-500 mb-6">감사 편지처럼 글 안에서 크게 보여줄 이미지입니다. 상단 배너와는 별개입니다.</p>
+
+            <label className="block text-xs font-bold text-gray-400 mb-2">이미지 주소 <span className="text-[#e91e3f]">*</span></label>
+            <input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} autoFocus placeholder="https://..."
+              className="w-full bg-transparent border-0 border-b border-white/20 focus:border-white/60 px-0 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-gray-700" />
+
+            <label className="block text-xs font-bold text-gray-400 mt-5 mb-2">설명 (선택)</label>
+            <input type="text" value={imageCap} onChange={(e) => setImageCap(e.target.value)} placeholder="이미지 아래 작게 들어갑니다"
+              className="w-full bg-transparent border-0 border-b border-white/20 focus:border-white/60 px-0 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-gray-700" />
+
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {/^https?:\/\/\S+$/i.test(imageUrl.trim()) && (
+              <img src={imageUrl.trim()} alt="" className="mt-5 w-full h-auto max-h-56 object-contain rounded-xl border border-white/10 bg-black/30" />
+            )}
+
+            <div className="flex gap-3 mt-7">
+              <button type="button" onClick={() => setImageOpen(false)}
+                className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors">취소</button>
+              <button type="button" disabled={!/^https?:\/\/\S+$/i.test(imageUrl.trim())}
+                onClick={() => { insertImage(imageUrl, imageCap); setImageOpen(false); setImageUrl(""); setImageCap(""); }}
+                className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 text-white text-sm font-bold rounded-xl transition-colors">넣기</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {popupConfig.isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
