@@ -864,8 +864,7 @@ export default function LevelPage() {
           <div className="min-w-0 flex gap-2 overflow-x-auto no-bar">
           {[
             { id: "my", name: "내 대시보드" },
-            { id: "intro", name: "시스템 소개" },
-            { id: "policy", name: "XP 획득 가이드" },
+            { id: "intro", name: "시스템 안내" },
             { id: "table", name: "XP 테이블" },
             { id: "sim", name: "시뮬레이터" },
           ].map((tab) => {
@@ -1490,144 +1489,6 @@ export default function LevelPage() {
             </Reveal>
 
 
-            {/* 📌 일일 퀘스트 & 음성 티어 — 새로 들어온 두 시스템 */}
-            <Reveal>
-              <SectionHeader
-                en="Daily"
-                title="일일 퀘스트"
-                desc="달성하면 내 대시보드에서 직접 보상을 받습니다."
-                right={<Link href="/level" onClick={() => setActiveMainTab("my")} className="shrink-0 text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">내 대시보드 →</Link>}
-              />
-              <div className="grid grid-cols-1 md:grid-cols-3 border-y border-black/[0.08] md:divide-x divide-black/[0.08]">
-                {[
-                  { n: "01", t: "활동하면 자동 집계", d: "채팅·음성 활동이 그대로 퀘스트 진행도가 됩니다. 별도 명령어를 칠 필요가 없습니다." },
-                  { n: "02", t: `출석 = 음성 ${P.attendVoiceMin}분`, d: `하루 동안 음성 채널에 ${P.attendVoiceMin}분 이상 머무르면 출석 보상 ${P.attendXp.toLocaleString()} XP를 받을 수 있습니다.` },
-                  { n: "03", t: "직접 수령", d: "달성한 보상은 대시보드에서 눌러서 받습니다. 받은 XP는 잠시 뒤 반영됩니다." },
-                ].map((f, i) => (
-                  <div key={i} className={`group py-7 md:px-7 first:md:pl-0 last:md:pr-0 ${i > 0 ? "border-t md:border-t-0 border-black/[0.08]" : ""}`}>
-                    <div className="text-2xl font-black text-[#131313]/[0.08] mb-5 group-hover:text-[#e91e3f]/30 transition-colors duration-500 select-none tabular-nums">{f.n}</div>
-                    <div className="text-[#131313] font-bold text-base mb-2.5 tracking-tight break-keep">{f.t}</div>
-                    <div className="text-[#8a8a8a] text-[13px] leading-relaxed break-keep">{f.d}</div>
-                  </div>
-                ))}
-              </div>
-            </Reveal>
-
-            <Reveal>
-              <SectionHeader
-                en="Tier"
-                title="등급"
-desc="레벨이 오르면 등급이 오르고, 음성 채널에서 받는 XP에 등급별 금액이 더해집니다."
-              />
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {VOICE_TIERS.map((t, i) => (
-                  <div
-                    key={t.key}
-                    className="rounded-xl border px-4 py-4 transition-colors hover:bg-black/[0.02]"
-                    style={{ borderColor: `${t.c}44` }}
-                  >
-                    <div className="flex items-center gap-2.5 mb-2.5">
-                      <TierEmblem tier={t} size={20} />
-                      <span className="text-sm font-black truncate" style={{ color: t.c }}>{t.name}</span>
-                    </div>
-                    <p className="text-[10px] font-black tracking-[0.15em] text-[#a3a3a3] uppercase tabular-nums">{tierRangeLabel(i)}</p>
-                    <p className={`text-[13px] font-black tabular-nums mt-1.5 ${t.bonus > 0 ? "text-[#131313]" : "text-[#c4c4c4]"}`}>
-                      {t.bonus > 0 ? `+${t.bonus.toLocaleString()}` : "—"}<span className="text-[10px] font-bold text-[#a3a3a3] ml-1">추가 XP</span>
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[11px] text-[#a3a3a3] mt-3.5 break-keep">
-음성 5분당 기본 {P.voiceXp.toLocaleString()} XP 위에 등급별로 더해지는 금액입니다 — 채팅 XP에는 적용되지 않습니다.
-              </p>
-            </Reveal>
-
-            <Reveal>
-              <SectionHeader en="Commands" title="기본 명령어" />
-              <div className="border-t border-black/[0.08] divide-y divide-black/[0.06]">
-                {[
-                  { c: "/레벨", d: "다음 레벨 도달까지 필요 XP 확인" },
-                  { c: "/랭크", d: "XP, 레벨, 서버 내 순위 확인" },
-
-                  { c: "/경험치샵", d: "ARCTIC 상점으로 이동" },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center justify-between px-1 py-[18px] group hover:bg-black/[0.02] transition-colors">
-                    <span className="text-[#e91e3f] font-mono font-bold text-sm tracking-tight">{item.c}</span>
-                    <span className="text-[#8a8a8a] text-xs md:text-sm text-right">{item.d}</span>
-                  </div>
-                ))}
-              </div>
-            </Reveal>
-
-            {/* 📌 시즌 안내 */}
-            <Reveal>
-              <SectionHeader en="Season" title={`시즌 안내 — SEASON ${SEASON.number} '${SEASON.name}'`} desc={`레벨 시스템은 시즌제로 운영됩니다 · 현재 시즌 기간 ${SEASON.start.replace(/-/g, ".")} ~ ${SEASON.end.replace(/-/g, ".")}`} />
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* 시즌 한정 상품 */}
-                <LuxCard className="p-7">
-                  <div className="flex items-center gap-2.5 mb-6">
-                    <span className="text-[10px] font-black tracking-[0.2em] text-[#e91e3f] uppercase">Season Limited</span>
-                    <span className="text-sm font-bold text-[#131313]">시즌 한정 상품</span>
-                  </div>
-                  <p className="text-xs text-[#8a8a8a] mb-5 leading-relaxed">실물 기프트카드로 구성된 시즌 한정 라인업입니다. 한정 수량 소진 시 조기 마감됩니다.</p>
-                  <div className="space-y-2">
-                    {[
-                      { name: "올리브영 기프트카드", value: "3만원권", stock: 1 },
-                      { name: "배달의민족 기프트카드", value: "3만원권", stock: 1 },
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-center justify-between bg-black/[0.03] border border-black/5 rounded-xl px-4 py-3.5 hover:border-[#e91e3f]/25 transition-colors">
-                        <div>
-                          <p className="text-sm font-bold text-[#131313]">{item.name}</p>
-                          <p className="text-[11px] text-[#8a8a8a] mt-0.5">{item.value} · 실물 상품</p>
-                        </div>
-                        <span className="shrink-0 text-[10px] font-black bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25 px-2.5 py-1 rounded-full">한정 {item.stock}개</span>
-                      </div>
-                    ))}
-                  </div>
-                </LuxCard>
-
-                {/* 시즌 종료 보상 — RANKER */}
-                <div className="relative rounded-2xl overflow-hidden bg-[#131313] shadow-[0_26px_60px_-32px_rgba(0,0,0,0.5)]">
-                  <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
-                  <div aria-hidden className="absolute -top-16 -right-14 w-56 h-56 bg-[#e91e3f]/[0.18] blur-[90px] rounded-full pointer-events-none"></div>
-                  <div className="relative z-10 p-7">
-                    <div className="flex items-center gap-2.5 mb-6">
-                      <span className="text-[10px] font-black tracking-[0.25em] text-[#ff5c77] uppercase">Season Finale</span>
-                      <span className="text-sm font-bold text-white/70">시즌 종료 보상</span>
-                    </div>
-                    <p className="text-3xl font-black text-white tracking-tight mb-2">TOP 3 <span className="text-[#ff5c77]">RANKER</span></p>
-                    <p className="text-xs text-white/50 leading-relaxed mb-6">시즌 종료 시 최종 레벨 상위 3인은 RANKER로 선정됩니다.</p>
-                    <div className="space-y-2.5 text-xs text-white/60">
-                      <p className="flex gap-2.5"><span className="text-[#ff5c77] shrink-0">—</span><span><strong className="text-white">@RANKER</strong> 전용 역할 지급</span></p>
-                      <p className="flex gap-2.5"><span className="text-[#ff5c77] shrink-0">—</span><span>다음 시즌 특전 <strong className="text-white">[XP] Boost+</strong> 제공</span></p>
-                      <p className="flex gap-2.5"><span className="text-[#ff5c77] shrink-0">—</span><span>명예의 전당 영구 등재</span></p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Reveal>
-
-            <Reveal>
-              <SectionHeader en="Notice" title="이용 시 주의사항" />
-              <div className="space-y-5">
-                {[
-                  { t: "XP 획득 제한", d: "잠수 음성 채널 이용 시 XP 획득이 전면 제한되며, 마이크/헤드셋 음소거 시 XP 획득량이 90% 감소됩니다." },
-                  { t: "상점 이용 주의", d: "ARCTIC 상품은 보유 XP 소모 방식입니다. 구매로 인해 레벨이 하락할 수 있습니다." },
-                ].map((item, i) => (
-                  <div key={i} className="border-l-2 border-[#e91e3f]/50 pl-5 py-0.5">
-                    <strong className="text-[#131313] text-sm font-bold block mb-1.5">{item.t}</strong>
-                    <p className="text-[#8a8a8a] text-[13px] leading-relaxed break-keep">{item.d}</p>
-                  </div>
-                ))}
-              </div>
-            </Reveal>
-          </div>
-        )}
-
-        {/* ══ TAB : POLICY ═════════════════ */}
-        {activeMainTab === "policy" && (
-          <div className="space-y-16">
             <Reveal>
               <SectionHeader en="Base" title="기본 XP 획득량" />
               <div className="grid grid-cols-1 md:grid-cols-3 border-y border-black/[0.08] md:divide-x divide-black/[0.08]">
@@ -1734,47 +1595,177 @@ desc="레벨이 오르면 등급이 오르고, 음성 채널에서 받는 XP에 
               </div>
             </Reveal>
 
+            {/* 📌 일일 퀘스트 & 음성 티어 — 새로 들어온 두 시스템 */}
             <Reveal>
-              <SectionHeader en="Tier" title="등급별 지급량" />
+              <SectionHeader
+                en="Daily"
+                title="일일 퀘스트"
+                desc="달성하면 내 대시보드에서 직접 보상을 받습니다."
+                right={<Link href="/level" onClick={() => setActiveMainTab("my")} className="shrink-0 text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">내 대시보드 →</Link>}
+              />
+              <div className="grid grid-cols-1 md:grid-cols-3 border-y border-black/[0.08] md:divide-x divide-black/[0.08]">
+                {[
+                  { n: "01", t: "활동하면 자동 집계", d: "채팅·음성 활동이 그대로 퀘스트 진행도가 됩니다. 별도 명령어를 칠 필요가 없습니다." },
+                  { n: "02", t: `출석 = 음성 ${P.attendVoiceMin}분`, d: `하루 동안 음성 채널에 ${P.attendVoiceMin}분 이상 머무르면 출석 보상 ${P.attendXp.toLocaleString()} XP를 받을 수 있습니다.` },
+                  { n: "03", t: "직접 수령", d: "달성한 보상은 대시보드에서 눌러서 받습니다. 받은 XP는 잠시 뒤 반영됩니다." },
+                ].map((f, i) => (
+                  <div key={i} className={`group py-7 md:px-7 first:md:pl-0 last:md:pr-0 ${i > 0 ? "border-t md:border-t-0 border-black/[0.08]" : ""}`}>
+                    <div className="text-2xl font-black text-[#131313]/[0.08] mb-5 group-hover:text-[#e91e3f]/30 transition-colors duration-500 select-none tabular-nums">{f.n}</div>
+                    <div className="text-[#131313] font-bold text-base mb-2.5 tracking-tight break-keep">{f.t}</div>
+                    <div className="text-[#8a8a8a] text-[13px] leading-relaxed break-keep">{f.d}</div>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
 
-              {/* 📌 계단 차트 — 표 15줄 대신 '성장의 계단'을 그대로 시각화 */}
-              <TierStairs base={P.voiceXp} />
+            <Reveal>
+              <SectionHeader
+                en="Tier"
+                title="등급"
+                desc="레벨이 오르면 등급이 오르고, 음성 채널에서 받는 XP에 등급별 금액이 더해집니다."
+              />
 
-              {/* 정확한 수치가 필요한 사람을 위한 콤팩트 표 (플랫) */}
-              <div className="mt-10 border-t border-black/[0.08]">
+              {/* 등급 카드 */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                {VOICE_TIERS.map((t, i) => (
+                  <div
+                    key={t.key}
+                    className="rounded-xl border px-4 py-4 transition-colors hover:bg-black/[0.02]"
+                    style={{ borderColor: `${t.c}44` }}
+                  >
+                    <div className="flex items-center gap-2.5 mb-2.5">
+                      <TierEmblem tier={t} size={20} />
+                      <span className="text-sm font-black truncate" style={{ color: t.c }}>{t.name}</span>
+                    </div>
+                    <p className="text-[10px] font-black tracking-[0.15em] text-[#a3a3a3] uppercase tabular-nums">{tierRangeLabel(i)}</p>
+                    <p className={`text-[13px] font-black tabular-nums mt-1.5 ${t.bonus > 0 ? "text-[#131313]" : "text-[#c4c4c4]"}`}>
+                      {t.bonus > 0 ? `+${t.bonus.toLocaleString()}` : "—"}<span className="text-[10px] font-bold text-[#a3a3a3] ml-1">추가 XP</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-[#a3a3a3] mt-3.5 break-keep">
+                음성 5분당 기본 {P.voiceXp.toLocaleString()} XP 위에 등급별로 더해지는 금액입니다 — 채팅 XP에는 적용되지 않습니다.
+              </p>
+
+              {/* 계단 차트 — 등급이 오를수록 쌓이는 지급량 */}
+              <div className="mt-12">
+                <TierStairs base={P.voiceXp} />
+              </div>
+
+              {/* 정확한 수치가 필요한 사람을 위한 표 — VOICE_TIERS 를 그대로 읽는다 */}
+              <div className="mt-12 border-t border-black/[0.08]">
                 <div className="grid grid-cols-3 px-1 py-3.5 border-b border-black/[0.08] text-[10px] font-black tracking-[0.15em] text-[#8a8a8a] uppercase">
-                  <div>진입 조건 레벨</div><div className="text-center">구간 추가 XP</div><div className="text-right">변동량</div>
+                  <div>등급 · 구간</div><div className="text-center">음성 추가 XP</div><div className="text-right">직전 등급 대비</div>
                 </div>
                 <div className="divide-y divide-black/[0.04]">
-                  {[
-                    { l: "0 ~ 49 Lv", x: "+3,000", d: "기본값", c: "text-[#a3a3a3]" },
-                    { l: "50 ~ 99 Lv", x: "+3,150", d: "▲ 150", c: "text-[#e91e3f]" },
-                    { l: "100 ~ 149 Lv", x: "+3,250", d: "▲ 100", c: "text-[#e91e3f]" },
-                    { l: "150 ~ 199 Lv", x: "+3,350", d: "▲ 100", c: "text-[#e91e3f]" },
-                    { l: "200 ~ 249 Lv", x: "+3,500", d: "▲ 150", c: "text-[#e91e3f]" },
-                    { l: "250 ~ 299 Lv", x: "+3,600", d: "▲ 100", c: "text-[#e91e3f]" },
-                    { l: "300 ~ 349 Lv", x: "+3,700", d: "▲ 100", c: "text-[#e91e3f]" },
-                    { l: "350 ~ 399 Lv", x: "+3,800", d: "▲ 100", c: "text-[#e91e3f]" },
-                    { l: "400 ~ 449 Lv", x: "+4,000", d: "▲ 200", c: "text-[#e91e3f]" },
-                    { l: "450 ~ 499 Lv", x: "+4,200", d: "▲ 200", c: "text-[#e91e3f]" },
-                    { l: "500 ~ 549 Lv", x: "+4,400", d: "▲ 200", c: "text-[#e91e3f]" },
-                    { l: "550 ~ 599 Lv", x: "+4,600", d: "▲ 200", c: "text-[#e91e3f]" },
-                    { l: "600 ~ 649 Lv", x: "+4,800", d: "▲ 200", c: "text-[#e91e3f]" },
-                    { l: "649 ~ 699 Lv", x: "+5,000", d: "▲ 200", c: "text-[#e91e3f]" },
-                    { l: "700 Lv 이상 최고 등급", x: "+6,000", d: "▲ 1,000", c: "text-[#e91e3f]" },
-                  ].map((row, i) => (
-                    <div key={i} className="grid grid-cols-3 px-1 py-3 text-xs items-center hover:bg-black/[0.02] transition-colors group">
-                      <div className="text-[#4b4b4b] text-left font-medium">{row.l}</div>
-                      <div className="text-[#131313] font-bold text-center group-hover:text-[#e91e3f] transition-colors tabular-nums">{row.x} <span className="text-[#a3a3a3] font-medium">XP</span></div>
-                      <div className={`font-bold text-right ${row.c}`}>{row.d}</div>
-                    </div>
-                  ))}
+                  {VOICE_TIERS.map((t, i) => {
+                    const prev = i > 0 ? VOICE_TIERS[i - 1].bonus : null;
+                    const diff = prev === null ? null : t.bonus - prev;
+                    return (
+                      <div key={t.key} className="grid grid-cols-3 px-1 py-3 text-xs items-center hover:bg-black/[0.02] transition-colors">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <TierEmblem tier={t} size={16} />
+                          <span className="font-bold truncate" style={{ color: t.c }}>{t.name}</span>
+                          <span className="text-[#a3a3a3] tabular-nums truncate">{tierRangeLabel(i)}</span>
+                        </div>
+                        <div className="text-center font-bold tabular-nums text-[#131313]">
+                          {t.bonus > 0 ? `+${t.bonus.toLocaleString()}` : <span className="text-[#c4c4c4]">—</span>}
+                        </div>
+                        <div className="text-right font-bold tabular-nums">
+                          {diff === null ? <span className="text-[#a3a3a3]">기본</span> : <span className="text-[#e91e3f]">▲ {diff.toLocaleString()}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+              </div>
+            </Reveal>
+
+            <Reveal>
+              <SectionHeader en="Commands" title="기본 명령어" />
+              <div className="border-t border-black/[0.08] divide-y divide-black/[0.06]">
+                {[
+                  { c: "/레벨", d: "다음 레벨 도달까지 필요 XP 확인" },
+                  { c: "/랭크", d: "XP, 레벨, 서버 내 순위 확인" },
+
+                  { c: "/경험치샵", d: "ARCTIC 상점으로 이동" },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center justify-between px-1 py-[18px] group hover:bg-black/[0.02] transition-colors">
+                    <span className="text-[#e91e3f] font-mono font-bold text-sm tracking-tight">{item.c}</span>
+                    <span className="text-[#8a8a8a] text-xs md:text-sm text-right">{item.d}</span>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+
+            {/* 📌 시즌 안내 */}
+            <Reveal>
+              <SectionHeader en="Season" title={`시즌 안내 — SEASON ${SEASON.number} '${SEASON.name}'`} desc={`레벨 시스템은 시즌제로 운영됩니다 · 현재 시즌 기간 ${SEASON.start.replace(/-/g, ".")} ~ ${SEASON.end.replace(/-/g, ".")}`} />
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* 시즌 한정 상품 */}
+                <LuxCard className="p-7">
+                  <div className="flex items-center gap-2.5 mb-6">
+                    <span className="text-[10px] font-black tracking-[0.2em] text-[#e91e3f] uppercase">Season Limited</span>
+                    <span className="text-sm font-bold text-[#131313]">시즌 한정 상품</span>
+                  </div>
+                  <p className="text-xs text-[#8a8a8a] mb-5 leading-relaxed">실물 기프트카드로 구성된 시즌 한정 라인업입니다. 한정 수량 소진 시 조기 마감됩니다.</p>
+                  <div className="space-y-2">
+                    {[
+                      { name: "올리브영 기프트카드", value: "3만원권", stock: 1 },
+                      { name: "배달의민족 기프트카드", value: "3만원권", stock: 1 },
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-center justify-between bg-black/[0.03] border border-black/5 rounded-xl px-4 py-3.5 hover:border-[#e91e3f]/25 transition-colors">
+                        <div>
+                          <p className="text-sm font-bold text-[#131313]">{item.name}</p>
+                          <p className="text-[11px] text-[#8a8a8a] mt-0.5">{item.value} · 실물 상품</p>
+                        </div>
+                        <span className="shrink-0 text-[10px] font-black bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25 px-2.5 py-1 rounded-full">한정 {item.stock}개</span>
+                      </div>
+                    ))}
+                  </div>
+                </LuxCard>
+
+                {/* 시즌 종료 보상 — RANKER */}
+                <div className="relative rounded-2xl overflow-hidden bg-[#131313] shadow-[0_26px_60px_-32px_rgba(0,0,0,0.5)]">
+                  <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
+                  <div aria-hidden className="absolute -top-16 -right-14 w-56 h-56 bg-[#e91e3f]/[0.18] blur-[90px] rounded-full pointer-events-none"></div>
+                  <div className="relative z-10 p-7">
+                    <div className="flex items-center gap-2.5 mb-6">
+                      <span className="text-[10px] font-black tracking-[0.25em] text-[#ff5c77] uppercase">Season Finale</span>
+                      <span className="text-sm font-bold text-white/70">시즌 종료 보상</span>
+                    </div>
+                    <p className="text-3xl font-black text-white tracking-tight mb-2">TOP 3 <span className="text-[#ff5c77]">RANKER</span></p>
+                    <p className="text-xs text-white/50 leading-relaxed mb-6">시즌 종료 시 최종 레벨 상위 3인은 RANKER로 선정됩니다.</p>
+                    <div className="space-y-2.5 text-xs text-white/60">
+                      <p className="flex gap-2.5"><span className="text-[#ff5c77] shrink-0">—</span><span><strong className="text-white">@RANKER</strong> 전용 역할 지급</span></p>
+                      <p className="flex gap-2.5"><span className="text-[#ff5c77] shrink-0">—</span><span>다음 시즌 특전 <strong className="text-white">[XP] Boost+</strong> 제공</span></p>
+                      <p className="flex gap-2.5"><span className="text-[#ff5c77] shrink-0">—</span><span>명예의 전당 영구 등재</span></p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+
+            <Reveal>
+              <SectionHeader en="Notice" title="이용 시 주의사항" />
+              <div className="space-y-5">
+                {[
+                  { t: "XP 획득 제한", d: "잠수 음성 채널 이용 시 XP 획득이 전면 제한되며, 마이크/헤드셋 음소거 시 XP 획득량이 90% 감소됩니다." },
+                  { t: "상점 이용 주의", d: "ARCTIC 상품은 보유 XP 소모 방식입니다. 구매로 인해 레벨이 하락할 수 있습니다." },
+                ].map((item, i) => (
+                  <div key={i} className="border-l-2 border-[#e91e3f]/50 pl-5 py-0.5">
+                    <strong className="text-[#131313] text-sm font-bold block mb-1.5">{item.t}</strong>
+                    <p className="text-[#8a8a8a] text-[13px] leading-relaxed break-keep">{item.d}</p>
+                  </div>
+                ))}
               </div>
             </Reveal>
           </div>
         )}
 
+        {/* ══ TAB : POLICY ═════════════════ */}
         {/* ══ TAB : TABLE ══════════════════ */}
         {activeMainTab === "table" && (
           <Reveal>
