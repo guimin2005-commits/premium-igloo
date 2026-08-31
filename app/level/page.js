@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { signIn, useSession } from "next-auth/react";
 import { ScrollProgress } from "../components/Lux";
 
 const getCumulativeXpByLevel = (lvl) => {
@@ -113,9 +114,48 @@ const LuxCard = ({ children, className = "", glow = false }) => (
   </div>
 );
 
+// 📌 대시보드 공용 헬퍼 — 효과음(경매 페이지 playTone 패턴)·상대시간·KST 오늘 날짜
+const playTone = (freq = 880, dur = 0.12, type = "sine", vol = 0.04) => {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!playTone.ctx) playTone.ctx = new Ctx();
+    const ctx = playTone.ctx;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start();
+    o.stop(ctx.currentTime + dur);
+  } catch {}
+};
+const sfxXp = () => { playTone(880, 0.1); setTimeout(() => playTone(1174.66, 0.14), 90); };
+const sfxLevelUp = () => { [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => setTimeout(() => playTone(f, 0.16, "triangle", 0.05), i * 110)); };
+
+const fmtRel = (s) => {
+  const diff = Date.now() - new Date(s).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "방금 전";
+  if (m < 60) return `${m}분 전`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}시간 전`;
+  return `${Math.floor(h / 24)}일 전`;
+};
+const kstTodayStr = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+const REASON_META = {
+  chat: { label: "채팅", cls: "text-sky-400 border-sky-400/25 bg-sky-400/10" },
+  voice: { label: "음성", cls: "text-emerald-400 border-emerald-400/25 bg-emerald-400/10" },
+  attend: { label: "출석", cls: "text-[#e91e3f] border-[#e91e3f]/25 bg-[#e91e3f]/10" },
+};
+
 // 📌 레벨 성장 곡선 — 이 페이지의 시그니처. Lv 1~1000 누적 XP를 곡선으로 그리고,
 //    마우스/터치를 따라 임의 레벨의 누적·필요 XP를 실시간으로 읽어준다.
-const LevelCurve = () => {
+//    myLevel이 있으면(로그인) 곡선 위에 'YOU' 마커로 내 위치를 표시한다.
+const LevelCurve = ({ myLevel = null }) => {
   const boxRef = useRef(null);
   const [probe, setProbe] = useState(null); // { lv }
   const W = 800, H = 300, PB = 34, PT = 14;
@@ -132,9 +172,11 @@ const LevelCurve = () => {
   }, []);
 
   const milestones = [100, 250, 500, 750, 1000];
-  const lv = probe?.lv ?? 1000;
+  const hasMe = typeof myLevel === "number" && myLevel > 0;
+  const lv = probe?.lv ?? (hasMe ? myLevel : 1000);
   const cum = getCumulativeXpByLevel(lv);
   const req = lv <= 1 ? 0 : cum - getCumulativeXpByLevel(lv - 1);
+  const modeLabel = probe ? "탐색 중" : hasMe ? "내 위치" : "MAX";
 
   const onMove = (e) => {
     const rect = boxRef.current?.getBoundingClientRect();
@@ -152,7 +194,7 @@ const LevelCurve = () => {
           <p className="text-[10px] font-black tracking-[0.3em] text-gray-600 uppercase mb-1.5">Growth Curve · Lv 1 → 1,000</p>
           <p className="text-3xl md:text-4xl font-black text-white tracking-tight tabular-nums">
             Lv {lv.toLocaleString()}
-            <span className={`ml-2 text-xs font-bold align-middle ${probe ? "text-[#e91e3f]" : "text-gray-600"}`}>{probe ? "탐색 중" : "MAX"}</span>
+            <span className={`ml-2 text-xs font-bold align-middle ${probe ? "text-[#e91e3f]" : hasMe ? "text-white" : "text-gray-600"}`}>{modeLabel}</span>
           </p>
         </div>
         <div className="flex gap-8 text-right">
@@ -195,6 +237,18 @@ const LevelCurve = () => {
               <text x={X(m)} y={H - PB + 20} textAnchor={m === 1000 ? "end" : "middle"} fill="rgba(255,255,255,0.35)" fontSize="11" fontWeight="800">{m}</text>
             </g>
           ))}
+          {/* 내 위치(YOU) 마커 — 로그인 시 실데이터 연동 */}
+          {hasMe && (
+            <g>
+              <line x1={X(myLevel)} x2={X(myLevel)} y1={Y(getCumulativeXpByLevel(myLevel))} y2={H - PB} stroke="rgba(255,255,255,0.25)" strokeWidth="1" strokeDasharray="2 4" />
+              <circle cx={X(myLevel)} cy={Y(getCumulativeXpByLevel(myLevel))} r="5" fill="#ffffff" stroke="#e91e3f" strokeWidth="2.5" style={{ filter: "drop-shadow(0 0 10px rgba(255,255,255,0.8))" }} />
+              <text
+                x={Math.min(Math.max(X(myLevel), 30), W - 30)}
+                y={Math.max(Y(getCumulativeXpByLevel(myLevel)) - 14, 12)}
+                textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="900" letterSpacing="1"
+              >YOU</text>
+            </g>
+          )}
           {/* 프로브(탐색) 라인 */}
           {probe && (
             <g>
@@ -256,7 +310,84 @@ const SEASON = {
 };
 
 export default function LevelPage() {
-  const [activeMainTab, setActiveMainTab] = useState("intro");
+  // 리뉴얼: 정적 안내 대신 '내 대시보드'가 첫 화면
+  const [activeMainTab, setActiveMainTab] = useState("my");
+  const { data: session, status: authStatus } = useSession();
+
+  // 하이드레이션 불일치 방지 — 서버/클라이언트 첫 페인트는 항상 스켈레톤으로 통일하고,
+  // 마운트 후에만 세션 상태에 따라 CTA/대시보드를 가른다
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const authReady = mounted && authStatus !== "loading";
+
+  // ── 내 대시보드: 실시간 데이터 (30초 폴링 + 창 포커스 시 갱신) ──
+  const [me, setMe] = useState(null);          // /api/xp/me
+  const [myLogs, setMyLogs] = useState(null);  // /api/xp/my-logs
+  const [meLoaded, setMeLoaded] = useState(false);
+  const [lastSync, setLastSync] = useState(null);
+  const prevXpRef = useRef(null);              // XP 증가·레벨업 감지용
+
+  // 토스트 — XP 획득/레벨업/동기화 피드백
+  const [toasts, setToasts] = useState([]);
+  const toastIdRef = useRef(0);
+  const pushToast = useCallback((msg, accent = false) => {
+    const id = ++toastIdRef.current;
+    setToasts((p) => [...p.slice(-3), { id, msg, accent }]);
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 4000);
+  }, []);
+
+  const loadMe = useCallback(async () => {
+    try {
+      const [meRes, logRes] = await Promise.all([
+        fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/xp/my-logs", { cache: "no-store" }).then((r) => r.json()),
+      ]);
+      if (meRes?.success) {
+        const d = meRes.data;
+        const prev = prevXpRef.current;
+        if (prev && d.xp > prev.xp) { pushToast(`+${(d.xp - prev.xp).toLocaleString()} XP 획득`); sfxXp(); }
+        if (prev && d.level > prev.level) { pushToast(`레벨 업! Lv.${prev.level} → Lv.${d.level}`, true); sfxLevelUp(); }
+        prevXpRef.current = d;
+        setMe(d);
+        setLastSync(new Date());
+      }
+      if (logRes?.success) setMyLogs(logRes.data);
+    } catch {}
+    setMeLoaded(true);
+  }, [pushToast]);
+
+  useEffect(() => {
+    if (authStatus === "loading") return;
+    if (!session?.user) { setMe(null); setMyLogs(null); prevXpRef.current = null; setMeLoaded(true); return; }
+    loadMe();
+    const t = setInterval(loadMe, 30 * 1000);
+    const onFocus = () => loadMe();
+    window.addEventListener("focus", onFocus);
+    return () => { clearInterval(t); window.removeEventListener("focus", onFocus); };
+  }, [session?.user?.id, authStatus, loadMe]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── 리더보드 (공개 데이터, 60초 갱신) ──
+  const [lb, setLb] = useState({ all: null, month: null });
+  const [lbTab, setLbTab] = useState("all");
+  useEffect(() => {
+    const load = () => {
+      ["all", "month"].forEach((period) =>
+        fetch(`/api/xp/leaderboard?period=${period}&limit=10`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((d) => { if (d?.success) setLb((p) => ({ ...p, [period]: d })); })
+          .catch(() => {})
+      );
+    };
+    load();
+    const t = setInterval(load, 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // 대시보드 파생값
+  const prog = me?.levelProgress || { current: 0, required: 1, needToNext: 0 };
+  const progPct = Math.min(100, Math.floor((prog.current / Math.max(1, prog.required)) * 100));
+  const rankPct = me?.total ? Math.max(1, Math.ceil((me.rank / me.total) * 100)) : null;
+  const attendedToday = !!me && me.lastAttendDate === kstTodayStr();
 
   // 📌 현재 XP 정책 — 레벨 대시보드에서 값을 바꾸면 이 페이지 수치도 즉시 따라간다
   const [policy, setPolicy] = useState(null);
@@ -471,6 +602,14 @@ export default function LevelPage() {
           0% { background-position: -200% center; }
           100% { background-position: 200% center; }
         }
+        @keyframes toastIn {
+          from { opacity: 0; transform: translateY(12px) scale(0.97); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes barSheen {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(320%); }
+        }
         .lux-shimmer {
           background: linear-gradient(110deg, #ffffff 20%, #e91e3f 40%, #ff7a92 50%, #e91e3f 60%, #ffffff 80%);
           background-size: 200% auto;
@@ -526,7 +665,7 @@ export default function LevelPage() {
           {/* 📌 시그니처 — 레벨 성장 곡선. 박스 대신 곡선 하나가 이 페이지의 얼굴이 된다 */}
           <Reveal delay={200}>
             <div className="mt-14 border-t border-white/[0.08] pt-10">
-              <LevelCurve />
+              <LevelCurve myLevel={session?.user ? me?.level ?? null : null} />
             </div>
           </Reveal>
 
@@ -554,6 +693,7 @@ export default function LevelPage() {
       <div className="w-full px-6 bg-[#090909]/85 backdrop-blur-xl border-b border-white/[0.08]">
         <div className="max-w-5xl mx-auto flex gap-7 md:gap-10 overflow-x-auto no-bar">
           {[
+            { id: "my", name: "내 대시보드" },
             { id: "intro", name: "시스템 소개" },
             { id: "policy", name: "XP 획득 및 혜택" },
             { id: "table", name: "XP 테이블" },
@@ -580,6 +720,239 @@ export default function LevelPage() {
       </div>
 
       <div className="w-full max-w-5xl mx-auto px-6 py-14 flex-1">
+
+        {/* ══ TAB : MY DASHBOARD — 실시간 데이터 연동 ══ */}
+        {activeMainTab === "my" && (
+          <div className="space-y-12">
+
+            {/* 비로그인 — 로그인 CTA */}
+            {authReady && !session?.user && (
+              <Reveal>
+                <div className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/50 via-[#e91e3f]/15 to-transparent p-px">
+                  <div className="rounded-2xl bg-[#120a0c] px-7 py-12 md:py-16 text-center relative overflow-hidden">
+                    <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-80 h-80 bg-[#e91e3f]/10 blur-[90px] rounded-full pointer-events-none"></div>
+                    <div className="relative z-10">
+                      <p className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-4">My Dashboard</p>
+                      <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-3">내 레벨, 실시간으로 확인하세요</h3>
+                      <p className="text-gray-500 text-[13px] md:text-sm leading-relaxed mb-8 break-keep">디스코드 로그인 시 현재 레벨·XP·서버 순위·출석 현황이<br className="hidden md:block" /> 이 화면에 실시간으로 동기화됩니다.</p>
+                      <button onClick={() => signIn("discord", { callbackUrl: "/level" })} className="inline-flex items-center gap-3 px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">Discord 로그인</button>
+                    </div>
+                  </div>
+                </div>
+              </Reveal>
+            )}
+
+            {/* 로딩 스켈레톤 */}
+            {(!authReady || (session?.user && !meLoaded)) && (
+              <div>
+                <div className="h-44 rounded-2xl bg-white/[0.04] animate-pulse mb-4"></div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/[0.06] border border-white/[0.06] rounded-2xl overflow-hidden mb-4">
+                  {[0, 1, 2, 3].map((i) => <div key={i} className="h-24 bg-[#0d0d0d] animate-pulse"></div>)}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="h-48 rounded-2xl bg-white/[0.04] animate-pulse"></div>
+                  <div className="h-48 rounded-2xl bg-white/[0.04] animate-pulse"></div>
+                </div>
+              </div>
+            )}
+
+            {/* 로그인 + 데이터 로드 완료 */}
+            {authReady && session?.user && meLoaded && me && (
+              <div>
+                {/* 동기화 상태 줄 */}
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-2.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                    </span>
+                    <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">Live Sync</span>
+                    {lastSync && <span className="text-[10px] text-gray-600 font-bold tabular-nums">마지막 갱신 {lastSync.toLocaleTimeString("ko-KR")}</span>}
+                  </div>
+                  <button onClick={() => loadMe().then(() => pushToast("동기화 완료"))} className="px-3.5 py-1.5 rounded-full border border-white/10 text-[11px] font-bold text-gray-500 hover:text-white hover:border-white/30 transition-all outline-none focus:outline-none">지금 갱신</button>
+                </div>
+
+                {/* 레벨 히어로 카드 */}
+                <div className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/60 via-[#e91e3f]/20 to-transparent p-px shadow-[0_24px_70px_-20px_rgba(233,30,63,0.4)]">
+                  <div className="rounded-2xl bg-[#120a0c] p-7 md:p-9 relative overflow-hidden">
+                    <div className="absolute -top-16 -right-16 w-48 h-48 bg-[#e91e3f]/15 blur-[70px] rounded-full pointer-events-none animate-[pulseGlow_4s_ease-in-out_infinite]"></div>
+                    <div className="relative z-10">
+                      <div className="flex flex-wrap items-end justify-between gap-6">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase mb-2 truncate">My Level · {session.user.name}</p>
+                          <p className="text-5xl md:text-6xl font-black tracking-tighter text-white">Lv <span className="lux-shimmer">{me.level}</span></p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase mb-1.5">누적 XP</p>
+                          <p className="text-2xl md:text-3xl font-black text-white tabular-nums tracking-tight"><CountUp end={me.xp} /></p>
+                        </div>
+                      </div>
+                      <div className="mt-8">
+                        <div className="flex justify-between items-baseline mb-2">
+                          <span className="text-[11px] text-gray-500 font-bold">Lv {me.level} <span className="text-gray-700 mx-1">→</span> Lv {me.level + 1}</span>
+                          <span className="text-sm text-white font-black tabular-nums">{progPct}%</span>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-white/[0.07] overflow-hidden relative">
+                          <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff7a92] shadow-[0_0_12px_rgba(233,30,63,0.6)] transition-[width] duration-700 relative overflow-hidden" style={{ width: `${progPct}%` }}>
+                            <div className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent" style={{ animation: "barSheen 2.8s ease-in-out infinite" }}></div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between mt-2.5">
+                          <span className="text-[11px] text-gray-600 font-bold tabular-nums">{prog.current.toLocaleString()} / {prog.required.toLocaleString()} XP</span>
+                          <span className="text-[11px] text-gray-500 font-bold">다음 레벨까지 <b className="text-[#e91e3f]">{prog.needToNext.toLocaleString()} XP</b></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 스탯 타일 4 — 순위/백분위/오늘/이번 달 */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/[0.08] border border-white/[0.08] rounded-2xl overflow-hidden mt-4">
+                  {[
+                    { l: "Server Rank", v: `#${me.rank.toLocaleString()}`, s: `전체 ${me.total.toLocaleString()}명 중` },
+                    { l: "Percentile", v: rankPct ? `상위 ${rankPct}%` : "—", s: "누적 XP 기준" },
+                    { l: "Today", v: `+${(myLogs?.today?.total ?? 0).toLocaleString()}`, s: "오늘 획득 XP", accent: true },
+                    { l: "This Month", v: `+${(myLogs?.month?.total ?? 0).toLocaleString()}`, s: "이번 달 획득 XP" },
+                  ].map((t, i) => (
+                    <div key={i} className="bg-[#0d0d0d] px-4 py-6 text-center">
+                      <p className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase mb-2.5">{t.l}</p>
+                      <p className={`text-xl md:text-2xl font-black tabular-nums tracking-tight ${t.accent ? "text-[#e91e3f]" : "text-white"}`}>{t.v}</p>
+                      <p className="text-[10px] text-gray-600 font-bold mt-1.5">{t.s}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 출석 + 최근 활동 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 items-start">
+                  <LuxCard className="p-6 md:p-7">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[10px] font-black tracking-[0.2em] text-[#e91e3f] uppercase">Daily Check-in</span>
+                        <span className="text-sm font-bold text-white">출석 현황</span>
+                      </div>
+                      <span className={`shrink-0 text-[10px] font-black px-2.5 py-1 rounded-full border ${attendedToday ? "text-emerald-400 border-emerald-400/30 bg-emerald-400/10" : "text-[#e91e3f] border-[#e91e3f]/30 bg-[#e91e3f]/10"}`}>
+                        {attendedToday ? "오늘 출석 완료" : "오늘 출석 전"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-px bg-white/10 rounded-xl overflow-hidden border border-white/10 mb-5">
+                      <div className="bg-[#0d0d0d] px-4 py-5 text-center">
+                        <span className="block text-[10px] font-bold tracking-[0.2em] text-gray-600 uppercase mb-2">누적 출석</span>
+                        <span className="text-lg md:text-xl font-black text-white tabular-nums">{(me.attendCount || 0).toLocaleString()}<span className="text-xs text-gray-600 ml-1">회</span></span>
+                      </div>
+                      <div className="bg-[#0d0d0d] px-4 py-5 text-center">
+                        <span className="block text-[10px] font-bold tracking-[0.2em] text-gray-600 uppercase mb-2">마지막 출석</span>
+                        <span className="text-lg md:text-xl font-black text-white tabular-nums">{me.lastAttendDate ? me.lastAttendDate.replace(/-/g, ".") : "—"}</span>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-gray-500 leading-relaxed break-keep">디스코드에서 <span className="text-[#e91e3f] font-mono font-bold">/출석체크</span> 입력 시 <b className="text-white">+{P.attendXp.toLocaleString()} XP</b>가 즉시 지급되고, 이 화면에 실시간 반영됩니다.</p>
+                  </LuxCard>
+
+                  <LuxCard className="p-6 md:p-7">
+                    <div className="flex items-center gap-2.5 mb-4">
+                      <span className="text-[10px] font-black tracking-[0.2em] text-gray-400 uppercase">Recent Activity</span>
+                      <span className="text-sm font-bold text-white">최근 획득 내역</span>
+                    </div>
+                    {myLogs?.logs?.length ? (
+                      <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                        <div className="divide-y divide-white/[0.05]">
+                          {myLogs.logs.map((l, i) => (
+                            <div key={i} className="flex items-center justify-between py-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <span className={`shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full border ${REASON_META[l.reason]?.cls || "text-gray-400 border-white/10 bg-white/5"}`}>{REASON_META[l.reason]?.label || l.reason || "기타"}</span>
+                                <span className="text-[11px] text-gray-500 truncate">{l.channelName || (l.reason === "attend" ? "출석 체크" : "—")}</span>
+                              </div>
+                              <div className="shrink-0 text-right ml-3 whitespace-nowrap">
+                                <span className="text-xs font-black text-white tabular-nums">+{(l.amount || 0).toLocaleString()}</span>
+                                <span className="text-[10px] text-gray-600 font-bold ml-2">{fmtRel(l.createdAt)}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-gray-600 py-10 text-center leading-relaxed">최근 60일 내 획득 내역이 없습니다.<br />디스코드에서 채팅·음성 활동을 시작해 보세요.</p>
+                    )}
+                  </LuxCard>
+                </div>
+              </div>
+            )}
+
+            {/* 로그인했지만 조회 실패 */}
+            {authReady && session?.user && meLoaded && !me && (
+              <LuxCard className="p-8 text-center">
+                <p className="text-sm text-gray-400 mb-5">데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
+                <button onClick={() => loadMe()} className="px-6 py-2.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-xs font-bold rounded-full transition-colors outline-none focus:outline-none">다시 시도</button>
+              </LuxCard>
+            )}
+
+            {/* 서버 리더보드 — 공개 데이터 */}
+            <Reveal>
+              <div className="flex items-center justify-between mb-6">
+                <div className="min-w-0">
+                  <div className="flex items-baseline gap-4 mb-2">
+                    <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">RANKING</span>
+                    <div className="h-px w-16 bg-gradient-to-r from-white/15 to-transparent"></div>
+                  </div>
+                  <h3 className="text-xl font-black text-white tracking-tight">서버 리더보드 <span className="text-xs font-bold text-gray-600 ml-1">TOP 10</span></h3>
+                </div>
+                <div className="flex rounded-full border border-white/10 overflow-hidden shrink-0">
+                  {[{ k: "all", n: "누적" }, { k: "month", n: "이번 달" }].map((t) => (
+                    <button key={t.k} onClick={() => setLbTab(t.k)} className={`px-4 py-2 text-[11px] font-black transition-colors outline-none focus:outline-none ${lbTab === t.k ? "bg-[#e91e3f] text-white" : "text-gray-500 hover:text-white"}`}>{t.n}</button>
+                  ))}
+                </div>
+              </div>
+
+              <LuxCard className="overflow-hidden">
+                {!lb[lbTab] ? (
+                  <div className="py-14 text-center text-[11px] text-gray-600">리더보드를 불러오는 중…</div>
+                ) : !lb[lbTab].data?.length ? (
+                  <div className="py-14 text-center text-[11px] text-gray-600">아직 집계된 기록이 없습니다.</div>
+                ) : (
+                  <div className="divide-y divide-white/[0.05]">
+                    {lb[lbTab].data.map((r) => {
+                      const mine = !!session?.user?.id && r.userId === session.user.id;
+                      return (
+                        <div key={r.userId} className={`flex items-center justify-between px-5 py-3.5 transition-colors ${mine ? "bg-[#e91e3f]/[0.08]" : "hover:bg-white/[0.02]"}`}>
+                          <div className="flex items-center gap-4 min-w-0">
+                            <span className={`w-7 shrink-0 text-center text-sm font-black tabular-nums ${r.rank === 1 ? "text-[#e91e3f]" : r.rank <= 3 ? "text-white" : "text-gray-600"}`}>{r.rank}</span>
+                            <span className={`text-[13px] font-bold truncate ${mine ? "text-[#e91e3f]" : "text-gray-300"}`}>
+                              {r.name}
+                              {mine && <span className="ml-2 text-[9px] font-black text-white bg-[#e91e3f] px-1.5 py-0.5 rounded-full align-middle">ME</span>}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 md:gap-4 shrink-0 ml-3">
+                            <span className="text-[10px] font-black text-gray-500 bg-white/[0.05] border border-white/10 px-2 py-0.5 rounded-full">Lv {r.level}</span>
+                            <span className="text-xs font-black text-white tabular-nums w-20 md:w-24 text-right">{r.xp.toLocaleString()} <span className="text-gray-600 font-bold">XP</span></span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {/* 내 순위가 TOP 10 밖이면 하단에 내 행 표시 (누적 탭) */}
+                    {lbTab === "all" && me && me.rank > 10 && (
+                      <>
+                        <div className="py-1.5 text-center text-gray-700 text-[10px] font-black tracking-[0.3em]">···</div>
+                        <div className="flex items-center justify-between px-5 py-3.5 bg-[#e91e3f]/[0.08]">
+                          <div className="flex items-center gap-4 min-w-0">
+                            <span className="w-7 shrink-0 text-center text-sm font-black tabular-nums text-[#e91e3f]">{me.rank}</span>
+                            <span className="text-[13px] font-bold truncate text-[#e91e3f]">
+                              {session.user.name}
+                              <span className="ml-2 text-[9px] font-black text-white bg-[#e91e3f] px-1.5 py-0.5 rounded-full align-middle">ME</span>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 md:gap-4 shrink-0 ml-3">
+                            <span className="text-[10px] font-black text-gray-500 bg-white/[0.05] border border-white/10 px-2 py-0.5 rounded-full">Lv {me.level}</span>
+                            <span className="text-xs font-black text-white tabular-nums w-20 md:w-24 text-right">{me.xp.toLocaleString()} <span className="text-gray-600 font-bold">XP</span></span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </LuxCard>
+              {lbTab === "month" && <p className="text-[10px] text-gray-700 mt-2.5">이번 달 지급 로그 합산 기준 · 매월 1일(KST) 초기화</p>}
+            </Reveal>
+          </div>
+        )}
 
         {/* ══ TAB : INTRO ══════════════════ */}
         {activeMainTab === "intro" && (
@@ -1105,6 +1478,19 @@ export default function LevelPage() {
             </div>
           </Reveal>
         )}
+      </div>
+
+      {/* 토스트 — XP 획득/레벨업/동기화 피드백 (모바일 하단바 위로 띄움) */}
+      <div className="fixed bottom-24 md:bottom-8 right-4 md:right-6 z-[200] pointer-events-none">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            style={{ animation: "toastIn 0.35s cubic-bezier(0.16,1,0.3,1)" }}
+            className={`mt-2 px-5 py-3 rounded-2xl border text-xs font-bold shadow-2xl backdrop-blur-md text-right ${t.accent ? "bg-[#e91e3f] border-[#e91e3f] text-white shadow-[0_10px_30px_rgba(233,30,63,0.45)]" : "bg-[#161616]/95 border-white/10 text-white"}`}
+          >
+            {t.msg}
+          </div>
+        ))}
       </div>
     </main>
   );
