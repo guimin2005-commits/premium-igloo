@@ -11,6 +11,7 @@ import {
 import { SEASON, getSeasonProgress } from "@/lib/season";
 import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel } from "@/lib/voiceTiers";
 import { getCumulativeXpByLevel, getLevelByXp } from "@/lib/leveling";
+import TierEmblem from "../components/TierEmblem";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
 const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
@@ -320,7 +321,7 @@ const TierModal = ({ open, onClose, level, baseXp }) => {
             </button>
           </div>
           <p className="text-[12px] text-white/45 leading-relaxed mt-3 break-keep">
-            레벨이 오르면 등급이 함께 올라가고, 음성 채널 5분당 받는 XP가 늘어납니다.
+            레벨이 오르면 등급이 올라가고, <b className="text-white/75">음성 채널에서 받는 XP에 아래 금액이 더해집니다.</b>{" "}
             등급은 10단계이며 최고 등급은 이글루입니다.
           </p>
         </div>
@@ -344,10 +345,14 @@ const TierModal = ({ open, onClose, level, baseXp }) => {
                 )}
                 <span
                   aria-hidden
-                  className="shrink-0 w-9 h-9 rounded-xl rotate-45 flex items-center justify-center"
-                  style={{ backgroundColor: `${t.c}1f`, border: `1.5px solid ${cur ? t.c : t.c + "55"}` }}
+                  className="shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center transition-transform"
+                  style={{
+                    backgroundColor: cur ? `${t.c}22` : "rgba(255,255,255,0.04)",
+                    border: `1px solid ${cur ? t.c + "88" : "rgba(255,255,255,0.08)"}`,
+                    boxShadow: cur ? `0 0 22px -6px ${t.c}` : "none",
+                  }}
                 >
-                  <span className="-rotate-45 text-[11px] font-black tabular-nums" style={{ color: t.c }}>{i + 1}</span>
+                  <TierEmblem tier={t} size={24} />
                 </span>
 
                 <div className="min-w-0 flex-1">
@@ -365,8 +370,10 @@ const TierModal = ({ open, onClose, level, baseXp }) => {
                 </div>
 
                 <div className="shrink-0 text-right">
-                  <p className="text-[15px] font-black text-white tabular-nums leading-none">+{(baseXp + t.bonus).toLocaleString()}</p>
-                  <p className="text-[10px] font-bold text-white/35 mt-1">XP / 5분</p>
+                  <p className="text-[15px] font-black tabular-nums leading-none" style={{ color: t.bonus > 0 ? "#ffffff" : "rgba(255,255,255,0.3)" }}>
+                    {t.bonus > 0 ? `+${t.bonus.toLocaleString()}` : "—"}
+                  </p>
+                  <p className="text-[10px] font-bold text-white/35 mt-1">추가 XP</p>
                 </div>
               </div>
             );
@@ -376,8 +383,8 @@ const TierModal = ({ open, onClose, level, baseXp }) => {
         {/* 푸터 */}
         <div className="relative z-10 shrink-0 px-6 sm:px-8 py-4 border-t border-white/[0.08] bg-white/[0.02]">
           <p className="text-[11px] text-white/35 leading-relaxed break-keep">
-            표시 금액은 현재 기본 음성 XP({baseXp.toLocaleString()})에 등급 보너스를 더한 값입니다.
-            역할·채널 부스트가 있으면 더 받습니다.
+            음성 5분당 기본 {baseXp.toLocaleString()} XP 위에 더해지는 금액입니다 — 채팅 XP에는 적용되지 않습니다.
+            역할·채널 부스트가 있으면 여기에 더 붙습니다.
           </p>
         </div>
       </div>
@@ -1035,7 +1042,7 @@ export default function LevelPage() {
                           className="group inline-flex items-center gap-2 h-8 pl-2.5 pr-3 rounded-full border transition-colors mb-3.5 outline-none focus:outline-none"
                           style={{ borderColor: `${tierCur.c}66`, backgroundColor: `${tierCur.c}1f` }}
                         >
-                          <span aria-hidden className="w-2 h-2 rotate-45 shrink-0" style={{ backgroundColor: tierCur.c }}></span>
+                          <TierEmblem tier={tierCur} size={16} />
                           <span className="text-[12px] font-black tracking-tight" style={{ color: tierCur.c }}>{tierCur.name}</span>
                           <span className="text-[10px] font-bold text-white/35 group-hover:text-white/70 transition-colors">등급 안내</span>
                         </button>
@@ -1360,12 +1367,14 @@ export default function LevelPage() {
                       <div className="flex items-center gap-3.5 mb-4">
                         <span
                           aria-hidden
-                          className="shrink-0 w-11 h-11 rounded-xl flex items-center justify-center rotate-45"
-                          style={{ backgroundColor: `${tierCur.c}1f`, border: `2px solid ${tierCur.c}` }}
+                          className="shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center"
+                          style={{
+                            backgroundColor: `${tierCur.c}18`,
+                            border: `1px solid ${tierCur.c}55`,
+                            boxShadow: `0 8px 24px -12px ${tierCur.c}`,
+                          }}
                         >
-                          <span className="-rotate-45 text-[13px] font-black" style={{ color: tierCur.c }}>
-                            {tierIdx + 1}
-                          </span>
+                          <TierEmblem tier={tierCur} size={26} />
                         </span>
                         <div className="min-w-0">
                           <p className="text-2xl font-black tracking-tight leading-none" style={{ color: tierCur.c }}>{tierCur.name}</p>
@@ -1374,8 +1383,10 @@ export default function LevelPage() {
                           </p>
                         </div>
                         <div className="ml-auto text-right shrink-0">
-                          <p className="text-xl font-black text-[#131313] tabular-nums leading-none">+{tierCurXp.toLocaleString()}</p>
-                          <p className="text-[10px] font-bold text-[#a3a3a3] mt-1">XP / 5분</p>
+                          <p className={`text-xl font-black tabular-nums leading-none ${tierCur.bonus > 0 ? "text-[#131313]" : "text-[#c4c4c4]"}`}>
+                            {tierCur.bonus > 0 ? `+${tierCur.bonus.toLocaleString()}` : "—"}
+                          </p>
+                          <p className="text-[10px] font-bold text-[#a3a3a3] mt-1">음성 추가 XP</p>
                         </div>
                       </div>
 
@@ -1383,14 +1394,14 @@ export default function LevelPage() {
                         total={VOICE_TIERS.length}
                         currentIndex={tierIdx}
                         colors={TIER_COLORS}
-                        titles={VOICE_TIERS.map((t) => `${t.name} · ${tierRangeLabel(VOICE_TIERS.indexOf(t))} — +${(P.voiceXp + t.bonus).toLocaleString()} XP`)}
+                        titles={VOICE_TIERS.map((t) => `${t.name} · ${tierRangeLabel(VOICE_TIERS.indexOf(t))} — 음성 추가 +${t.bonus.toLocaleString()} XP`)}
                       />
 
                       {tierNext && tierNextBound !== null && (
                         <div className="flex items-center gap-2 mt-4 pt-4 border-t border-black/[0.08]">
                           <span className="shrink-0 text-[11px] font-black" style={{ color: tierNext.c }}>▲ {tierNext.name}</span>
                           <span className="text-[11px] font-bold text-[#8a8a8a] break-keep">
-                            Lv.{tierNextBound} 도달 시 <b className="text-[#131313] tabular-nums">+{tierNextXp.toLocaleString()}</b>
+                            Lv.{tierNextBound} 도달 시 음성 추가 <b className="text-[#131313] tabular-nums">+{tierNext.bonus.toLocaleString()}</b>
                           </span>
                           <span className="ml-auto shrink-0 text-[11px] font-bold text-[#a3a3a3] tabular-nums">
                             {Math.max(0, tierNextBound - me.level)}레벨 남음
@@ -1508,7 +1519,7 @@ export default function LevelPage() {
               <SectionHeader
                 en="Tier"
                 title="등급"
-                desc="레벨이 오르면 등급이 함께 오르고, 음성 채널 5분당 받는 XP가 늘어납니다. 10단계이며 최고 등급은 이글루입니다."
+desc="레벨이 오르면 등급이 오르고, 음성 채널에서 받는 XP에 등급별 금액이 더해집니다. 10단계이며 최고 등급은 이글루입니다."
               />
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {VOICE_TIERS.map((t, i) => (
@@ -1517,19 +1528,19 @@ export default function LevelPage() {
                     className="rounded-xl border px-4 py-4 transition-colors hover:bg-black/[0.02]"
                     style={{ borderColor: `${t.c}44` }}
                   >
-                    <div className="flex items-center gap-2 mb-2.5">
-                      <span aria-hidden className="w-2 h-2 rotate-45 shrink-0" style={{ backgroundColor: t.c }}></span>
+                    <div className="flex items-center gap-2.5 mb-2.5">
+                      <TierEmblem tier={t} size={20} />
                       <span className="text-sm font-black truncate" style={{ color: t.c }}>{t.name}</span>
                     </div>
                     <p className="text-[10px] font-black tracking-[0.15em] text-[#a3a3a3] uppercase tabular-nums">{tierRangeLabel(i)}</p>
-                    <p className="text-[13px] font-black text-[#131313] tabular-nums mt-1.5">
-                      +{(P.voiceXp + t.bonus).toLocaleString()}<span className="text-[10px] font-bold text-[#a3a3a3] ml-1">XP / 5분</span>
+                    <p className={`text-[13px] font-black tabular-nums mt-1.5 ${t.bonus > 0 ? "text-[#131313]" : "text-[#c4c4c4]"}`}>
+                      {t.bonus > 0 ? `+${t.bonus.toLocaleString()}` : "—"}<span className="text-[10px] font-bold text-[#a3a3a3] ml-1">추가 XP</span>
                     </p>
                   </div>
                 ))}
               </div>
               <p className="text-[11px] text-[#a3a3a3] mt-3.5 break-keep">
-                표시 금액은 현재 기본 음성 XP({P.voiceXp.toLocaleString()})에 티어 보너스를 더한 값입니다. 역할·채널 부스트가 있으면 더 받습니다.
+음성 5분당 기본 {P.voiceXp.toLocaleString()} XP 위에 등급별로 더해지는 금액입니다 — 채팅 XP에는 적용되지 않습니다.
               </p>
             </Reveal>
 
