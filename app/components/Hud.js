@@ -1,7 +1,7 @@
 "use client";
 
 // 📌 게임형 HUD 공용 프리미티브 — 메인 홈(/)과 SYSTEM:LEVEL 대시보드가 공유하는 디자인 시스템.
-//    다크 럭셔리(#090909 + #e91e3f) 위에 절제된 게임 HUD 요소(브래킷 패널·게이지·라이브 인디케이터)를 얹는다.
+//    다크 럭셔리(#f5f3f0 + #e91e3f) 위에 절제된 게임 HUD 요소(브래킷 패널·게이지·라이브 인디케이터)를 얹는다.
 //    ⚠️ Tailwind v4 빌드 특성: flex-col + gap 미적용(간격은 space-y/마진), 임의 grid-template 값 금지(표준 grid-cols-N만).
 
 import React, { useState, useEffect, useRef } from "react";
@@ -13,7 +13,7 @@ export const ACCENT = "#e91e3f";
 /** @type {import("react").FC<any>} */
 export const HudPanel = ({ children, className = "", accent = false, corners = true, glow = false }) => (
   <div
-    className={`relative rounded-lg border bg-[#0c0c0c]/92 ${accent ? "border-[#e91e3f]/35" : "border-white/[0.09]"} ${
+    className={`relative rounded-lg border bg-[#ffffff]/92 ${accent ? "border-[#e91e3f]/35" : "border-black/[0.09]"} ${
       glow ? "shadow-[0_20px_60px_-24px_rgba(233,30,63,0.45)]" : ""
     } ${className}`}
   >
@@ -38,8 +38,8 @@ export const HudLabel = ({ text, live = false, accent = false, right, className 
     ) : (
       <span className={`w-1 h-1 rotate-45 shrink-0 ${accent ? "bg-[#e91e3f]" : "bg-gray-600"}`}></span>
     )}
-    <span className={`text-[10px] font-black tracking-[0.25em] uppercase whitespace-nowrap ${accent ? "text-[#e91e3f]" : "text-gray-500"}`}>{text}</span>
-    <span className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent"></span>
+    <span className={`text-[10px] font-black tracking-[0.25em] uppercase whitespace-nowrap ${accent ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>{text}</span>
+    <span className="h-px flex-1 bg-black/[0.08]"></span>
     {right}
   </div>
 );
@@ -55,24 +55,17 @@ export const LiveDot = ({ color = "bg-emerald-400" }) => (
 
 // ── 레이디얼 게이지 — 캐릭터 XP 링 (중앙에 children 배치) ─────
 /** @type {import("react").FC<any>} */
-export const RingGauge = ({ pct = 0, size = 148, stroke = 7, children, trackClass = "rgba(255,255,255,0.07)" }) => {
+export const RingGauge = ({ pct = 0, size = 148, stroke = 7, children, trackClass = "rgba(0,0,0,0.07)" }) => {
   const R = (120 - stroke) / 2 - 2;
   const C = 2 * Math.PI * R;
   const off = C * (1 - Math.min(100, Math.max(0, pct)) / 100);
-  const gid = useRef(`rg${Math.round(R * stroke)}`).current;
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
-        <defs>
-          <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={ACCENT} />
-            <stop offset="100%" stopColor="#ff7a92" />
-          </linearGradient>
-        </defs>
         <circle cx="60" cy="60" r={R} fill="none" stroke={trackClass} strokeWidth={stroke} />
         <circle
           cx="60" cy="60" r={R} fill="none"
-          stroke={`url(#${gid})`} strokeWidth={stroke} strokeLinecap="round"
+          stroke={ACCENT} strokeWidth={stroke} strokeLinecap="round"
           strokeDasharray={C} strokeDashoffset={off}
           style={{ transition: "stroke-dashoffset 0.9s cubic-bezier(0.16,1,0.3,1)", filter: "drop-shadow(0 0 6px rgba(233,30,63,0.55))" }}
         />
@@ -87,18 +80,17 @@ export const RingGauge = ({ pct = 0, size = 148, stroke = 7, children, trackClas
 export const SegBar = ({ pct = 0, segments = 10, h = "h-2.5", sheen = false }) => {
   const step = 100 / segments;
   return (
-    <div className={`relative ${h} rounded-[3px] bg-white/[0.06] overflow-hidden`}>
+    <div className={`relative ${h} rounded-[3px] bg-black/[0.06] overflow-hidden`}>
       <div
-        className="h-full rounded-[3px] bg-gradient-to-r from-[#e91e3f] to-[#ff7a92] shadow-[0_0_12px_rgba(233,30,63,0.55)] relative overflow-hidden"
+        className="h-full rounded-[3px] bg-[#e91e3f] relative overflow-hidden"
         style={{ width: `${Math.min(100, Math.max(0, pct))}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}
       >
-        {sheen && <div className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent" style={{ animation: "hudSheen 2.8s ease-in-out infinite" }}></div>}
       </div>
       {/* 세그먼트 눈금 오버레이 */}
       <div
         aria-hidden
         className="absolute inset-0 pointer-events-none"
-        style={{ backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent calc(${step}% - 1px), rgba(9,9,9,0.9) calc(${step}% - 1px), rgba(9,9,9,0.9) ${step}%)` }}
+        style={{ backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent calc(${step}% - 1px), rgba(245,243,240,1) calc(${step}% - 1px), rgba(245,243,240,1) ${step}%)` }}
       ></div>
     </div>
   );
@@ -107,10 +99,10 @@ export const SegBar = ({ pct = 0, segments = 10, h = "h-2.5", sheen = false }) =
 // ── 스탯 타일 — 라벨/값/보조값 ───────────────────────────────
 /** @type {import("react").FC<any>} */
 export const HudStat = ({ label, value, sub, accent = false, className = "" }) => (
-  <div className={`bg-[#0d0d0d] px-3 py-4 md:px-4 md:py-5 text-center ${className}`}>
-    <p className="text-[9px] font-black tracking-[0.22em] text-gray-600 uppercase mb-2 whitespace-nowrap">{label}</p>
-    <p className={`text-lg md:text-2xl font-black tabular-nums tracking-tight leading-none ${accent ? "text-[#e91e3f]" : "text-white"}`}>{value}</p>
-    {sub && <p className="text-[10px] text-gray-600 font-bold mt-1.5 whitespace-nowrap">{sub}</p>}
+  <div className={`bg-[#ffffff] px-3 py-4 md:px-4 md:py-5 text-center ${className}`}>
+    <p className="text-[9px] font-black tracking-[0.22em] text-[#a3a3a3] uppercase mb-2 whitespace-nowrap">{label}</p>
+    <p className={`text-lg md:text-2xl font-black tabular-nums tracking-tight leading-none ${accent ? "text-[#e91e3f]" : "text-[#131313]"}`}>{value}</p>
+    {sub && <p className="text-[10px] text-[#a3a3a3] font-bold mt-1.5 whitespace-nowrap">{sub}</p>}
   </div>
 );
 
@@ -145,7 +137,7 @@ export const HudCount = ({ end, duration = 1200, suffix = "" }) => {
 // ── 상태 캡슐 — LIVE / UPCOMING / OPEN / COMPLETE / PINNED / D-n / YOU 어휘 전용 ──
 /** @type {import("react").FC<any>} */
 export const StatusChip = ({ children, accent = false, dot = false, dotColor, className = "" }) => (
-  <span className={`inline-flex items-center gap-1.5 h-5 px-2 rounded-full border text-[10px] font-black tracking-[0.15em] uppercase tabular-nums whitespace-nowrap ${accent ? "border-[#e91e3f]/40 text-[#e91e3f]" : "border-white/15 text-white/60"} ${className}`}>
+  <span className={`inline-flex items-center gap-1.5 h-5 px-2 rounded-full border text-[10px] font-black tracking-[0.15em] uppercase tabular-nums whitespace-nowrap ${accent ? "border-[#e91e3f]/40 text-[#e91e3f]" : "border-black/15 text-[#131313]/60"} ${className}`}>
     {dot && <LiveDot color={dotColor || (accent ? "bg-[#e91e3f]" : "bg-emerald-400")} />}
     {children}
   </span>
@@ -165,7 +157,7 @@ export const HudSection = ({ label, live = false, accent = false, right, childre
 export const TickRuler = ({ className = "" }) => (
   <div aria-hidden className={`flex justify-between mb-1 ${className}`}>
     {Array.from({ length: 11 }, (_, i) => (
-      <span key={i} className={`w-px ${i % 5 === 0 ? "h-1.5 bg-white/30" : "h-1 bg-white/15"}`}></span>
+      <span key={i} className={`w-px ${i % 5 === 0 ? "h-1.5 bg-black/30" : "h-1 bg-black/15"}`}></span>
     ))}
   </div>
 );
@@ -179,7 +171,7 @@ export const SegLadder = ({ total, currentIndex, titles = [] }) => (
         <div
           key={i}
           title={titles[i] || ""}
-          className={`relative flex-1 h-2 rounded-[1px] ${i < currentIndex ? "bg-white/25" : i === currentIndex ? "bg-[#e91e3f] animate-pulse" : "bg-white/[0.08]"}`}
+          className={`relative flex-1 h-2 rounded-[1px] ${i < currentIndex ? "bg-black/25" : i === currentIndex ? "bg-[#e91e3f] animate-pulse" : "bg-black/[0.08]"}`}
         >
           {i === currentIndex && <span className="absolute -top-2 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rotate-45 bg-[#e91e3f]"></span>}
         </div>
@@ -192,7 +184,7 @@ export const SegLadder = ({ total, currentIndex, titles = [] }) => (
 /** @type {import("react").FC<any>} */
 export const Sparkline = ({ history = [], h = 96 }) => {
   if (!history || history.length < 2) {
-    return <div className="h-24 flex items-center justify-center text-[11px] font-bold text-gray-700 tracking-wide">NO DATA</div>;
+    return <div className="h-24 flex items-center justify-center text-[11px] font-bold text-[#c4c4c4] tracking-wide">NO DATA</div>;
   }
   const W = 300, H = 80;
   const vals = history.map((p) => p.online);
@@ -203,22 +195,15 @@ export const Sparkline = ({ history = [], h = 96 }) => {
   const last = pts[pts.length - 1];
   return (
     <div>
-      <div className="flex justify-between text-[9px] font-bold text-gray-600 tabular-nums mb-1">
+      <div className="flex justify-between text-[9px] font-bold text-[#a3a3a3] tabular-nums mb-1">
         <span>PEAK {max.toLocaleString()}</span>
         <span>LOW {min.toLocaleString()}</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: h }} preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="hudSparkFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={ACCENT} stopOpacity="0.16" />
-            <stop offset="100%" stopColor={ACCENT} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <polygon points={`0,${H} ${line} ${W},${H}`} fill="url(#hudSparkFill)" />
         <polyline points={line} fill="none" stroke={ACCENT} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
         <circle cx={last[0]} cy={last[1]} r="3" fill={ACCENT} />
       </svg>
-      <div className="flex justify-between text-[9px] font-bold text-gray-600 mt-1">
+      <div className="flex justify-between text-[9px] font-bold text-[#a3a3a3] mt-1">
         <span>-24H</span>
         <span className="text-[#e91e3f]">NOW</span>
       </div>
@@ -233,18 +218,18 @@ export const RankRows = ({ rows = [], myId, me, myName = "" }) => {
   const topXp = rows[0]?.xp || 0;
   const inList = !!myId && rows.some((r) => r.userId === myId);
   const Row = ({ rank, name, level, xp, mine }) => (
-    <div className={`relative border-b border-white/[0.06] ${mine ? "bg-white/[0.05]" : ""}`}>
+    <div className={`relative border-b border-black/[0.06] ${mine ? "bg-black/[0.05]" : ""}`}>
       {mine && <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#e91e3f]"></span>}
       <div className="flex items-center h-10 pl-2 pr-1 gap-3">
-        <span className={`w-7 shrink-0 text-right text-sm font-black tabular-nums ${rank === 1 ? "text-[#e91e3f]" : rank <= 3 ? "text-white/90" : "text-gray-600"}`}>{String(rank).padStart(2, "0")}</span>
-        <span className={`min-w-0 flex-1 truncate text-[13px] font-bold ${mine ? "text-white" : "text-gray-300"}`}>
+        <span className={`w-7 shrink-0 text-right text-sm font-black tabular-nums ${rank === 1 ? "text-[#e91e3f]" : rank <= 3 ? "text-[#131313]/90" : "text-[#a3a3a3]"}`}>{String(rank).padStart(2, "0")}</span>
+        <span className={`min-w-0 flex-1 truncate text-[13px] font-bold ${mine ? "text-[#131313]" : "text-[#4b4b4b]"}`}>
           {name}
           {mine && <StatusChip accent className="ml-2 align-middle">YOU</StatusChip>}
         </span>
-        <span className="shrink-0 text-[10px] font-bold text-gray-600 tabular-nums">LV {level}</span>
-        <span className="shrink-0 w-20 md:w-24 text-right text-xs font-black text-white tabular-nums">{(xp || 0).toLocaleString()}</span>
+        <span className="shrink-0 text-[10px] font-bold text-[#a3a3a3] tabular-nums">LV {level}</span>
+        <span className="shrink-0 w-20 md:w-24 text-right text-xs font-black text-[#131313] tabular-nums">{(xp || 0).toLocaleString()}</span>
       </div>
-      {topXp > 0 && <div aria-hidden className="h-px bg-white/10" style={{ width: `${Math.max(2, ((xp || 0) / topXp) * 100)}%` }}></div>}
+      {topXp > 0 && <div aria-hidden className="h-px bg-black/10" style={{ width: `${Math.max(2, ((xp || 0) / topXp) * 100)}%` }}></div>}
     </div>
   );
   return (
@@ -252,7 +237,7 @@ export const RankRows = ({ rows = [], myId, me, myName = "" }) => {
       {rows.map((r) => <Row key={r.userId} rank={r.rank} name={r.name} level={r.level} xp={r.xp} mine={!!myId && r.userId === myId} />)}
       {myId && !inList && me && (
         <>
-          <div className="py-1 text-center text-gray-700 text-[10px] font-black tracking-[0.3em]">···</div>
+          <div className="py-1 text-center text-[#c4c4c4] text-[10px] font-black tracking-[0.3em]">···</div>
           <Row rank={me.rank} name={myName} level={me.level} xp={me.xp} mine />
         </>
       )}
@@ -263,7 +248,7 @@ export const RankRows = ({ rows = [], myId, me, myName = "" }) => {
 // ── 빈 슬롯 — 0건 상태를 게임의 빈 퀘스트 슬롯 문법으로 ──
 /** @type {import("react").FC<any>} */
 export const EmptySlot = ({ children, className = "" }) => (
-  <div className={`border border-dashed border-white/10 rounded-lg h-[72px] flex items-center justify-center text-center text-[11px] font-bold text-gray-700 tracking-wide px-4 ${className}`}>
+  <div className={`border border-dashed border-black/10 rounded-lg h-[72px] flex items-center justify-center text-center text-[11px] font-bold text-[#c4c4c4] tracking-wide px-4 ${className}`}>
     {children}
   </div>
 );
@@ -273,7 +258,7 @@ export const EmptySlot = ({ children, className = "" }) => (
 export const HudStyles = () => (
   <style dangerouslySetInnerHTML={{ __html: `
     .hud-c { position: absolute; width: 9px; height: 9px; pointer-events: none; z-index: 1;
-             border: 0 solid rgba(255,255,255,0.28); }
+             border: 0 solid rgba(0,0,0,0.28); }
     .hud-c-accent { border-color: rgba(233,30,63,0.75); }
     .hud-c-tl { top: -1px; left: -1px; border-top-width: 2px; border-left-width: 2px; border-top-left-radius: 3px; }
     .hud-c-tr { top: -1px; right: -1px; border-top-width: 2px; border-right-width: 2px; border-top-right-radius: 3px; }
@@ -290,20 +275,20 @@ export const HudStyles = () => (
     @keyframes hudPulse { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }
     @keyframes hudToastIn { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
     .hud-shimmer {
-      background: linear-gradient(110deg, #ffffff 20%, #e91e3f 40%, #ff7a92 50%, #e91e3f 60%, #ffffff 80%);
+      background: linear-gradient(110deg, #131313 20%, #e91e3f 40%, #ff7a92 50%, #e91e3f 60%, #131313 80%);
       background-size: 200% auto;
       -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
       animation: hudShimmer 6s linear infinite;
     }
     @keyframes hudShimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
     .hud-grid-bg {
-      background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-image: linear-gradient(rgba(0,0,0,0.025) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(0,0,0,0.025) 1px, transparent 1px);
       background-size: 44px 44px;
       mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 100%);
       -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 100%);
     }
     /* 미세 스캔라인 — 패널 배경 질감 (아주 옅게) */
-    .hud-scan { background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.014) 0 1px, transparent 1px 3px); }
+    .hud-scan { background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.014) 0 1px, transparent 1px 3px); }
   ` }} />
 );

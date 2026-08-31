@@ -127,7 +127,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const isVerifyPage = pathname === "/verify";
   // 📌 ARCTIC은 라이트 테마 — 헤더/푸터도 밝은 톤으로 전환한다
   const isShopPage = pathname === "/shop" || pathname?.startsWith("/shop/"); // ARCTIC은 자체 헤더를 쓰므로 전역 크롬을 숨긴다
-  const isLightPage = isShopPage || pathname === "/profile" || pathname?.startsWith("/profile/");   // 라이트 톤만 따라가는 페이지
+  const isLightPage = isShopPage || pathname === "/profile" || pathname?.startsWith("/profile/") || pathname === "/level" || pathname?.startsWith("/level/");   // 라이트 톤만 따라가는 페이지 (SYSTEM:LEVEL은 ARCTIC 테마)
   // 📌 경매방 안에서는 모바일 하단 탭을 숨긴다.
   //    입찰·채팅 바가 화면 아래에 붙는데 그 위에 전역 탭까지 있으면 잘못 눌러 방을 나가게 된다.
   const isAuctionRoom = /^\/auction\/[^/]+$/.test(pathname || "");
