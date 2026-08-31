@@ -468,14 +468,16 @@ export default function LevelPage() {
   const [quests, setQuests] = useState(null);
   const [questPeriod, setQuestPeriod] = useState("daily");
   const [tierOpen, setTierOpen] = useState(false);   // 등급 안내 모달
+  const [myItems, setMyItems] = useState(null);      // 보유 아이템 (디스코드 역할 대조)
   const [claiming, setClaiming] = useState("");
 
   const loadMe = useCallback(async () => {
     try {
-      const [meRes, logRes, qRes] = await Promise.all([
+      const [meRes, logRes, qRes, itemRes] = await Promise.all([
         fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/xp/my-logs", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/xp/quests", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+        fetch("/api/shop/my-items", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       ]);
       if (meRes?.success) {
         const d = meRes.data;
@@ -488,6 +490,7 @@ export default function LevelPage() {
       }
       if (logRes?.success) setMyLogs(logRes.data);
       if (qRes?.success) setQuests(qRes.data);
+      if (itemRes?.success) setMyItems(itemRes.data);
     } catch {}
     setMeLoaded(true);
   }, [pushToast]);
@@ -519,7 +522,7 @@ export default function LevelPage() {
 
   useEffect(() => {
     if (authStatus === "loading") return;
-    if (!session?.user) { setMe(null); setMyLogs(null); setQuests(null); prevXpRef.current = null; setMeLoaded(true); return; }
+    if (!session?.user) { setMe(null); setMyLogs(null); setQuests(null); setMyItems(null); prevXpRef.current = null; setMeLoaded(true); return; }
     loadMe();
     const t = setInterval(loadMe, 30 * 1000);
     const onFocus = () => loadMe();
@@ -1345,6 +1348,70 @@ export default function LevelPage() {
                       </section>
                     )}
 
+                    {/* 보유 아이템 — 디스코드 역할을 실제로 들고 있는지 대조해서 보여준다 */}
+                    <section>
+                      <div className="flex items-end justify-between mb-5">
+                        <div>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Inventory</span>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">보유 아이템</h3>
+                        </div>
+                        {canSeeShop && (
+                          <Link href="/shop" className="shrink-0 text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">
+                            상점 →
+                          </Link>
+                        )}
+                      </div>
+
+                      {!myItems ? (
+                        <div className="py-8 text-center text-[11px] font-bold text-[#c4c4c4]">불러오는 중…</div>
+                      ) : myItems.items.length === 0 ? (
+                        <EmptySlot>보유한 아이템이 없습니다</EmptySlot>
+                      ) : (
+                        <div className="border-t border-black/[0.08]">
+                          {myItems.items.map((it, i) => {
+                            const pending = it.status === "pending";
+                            const dday =
+                              it.expiresAt && it.status === "completed"
+                                ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000))
+                                : null;
+                            return (
+                              <div key={i} className="flex items-center gap-3 min-h-[52px] py-2.5 border-b border-black/[0.05]">
+                                <span
+                                  aria-hidden
+                                  className={`shrink-0 w-1.5 h-1.5 rounded-full ${pending ? "bg-[#c4c4c4]" : it.source === "level" ? "bg-[#e91e3f]" : "bg-emerald-600"}`}
+                                ></span>
+                                <div className="min-w-0 flex-1">
+                                  <p className={`text-[13px] font-bold truncate ${pending ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{it.name}</p>
+                                  <p className="text-[10px] font-bold text-[#a3a3a3] mt-0.5">
+                                    {pending
+                                      ? "지급 대기 중"
+                                      : it.source === "level"
+                                      ? `레벨 보상 · Lv.${it.rewardLevel}`
+                                      : it.source === "grant"
+                                      ? "지급된 역할"
+                                      : it.kind === "physical"
+                                      ? "실물 상품"
+                                      : it.days > 0
+                                      ? `${it.days}일 이용권`
+                                      : "영구 보유"}
+                                  </p>
+                                </div>
+                                {dday !== null && (
+                                  <span className={`shrink-0 text-[10px] font-black tabular-nums ${dday <= 3 ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>
+                                    D-{dday}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {myItems && !myItems.synced && (
+                        <p className="text-[10px] text-[#c4c4c4] mt-3 break-keep">디스코드 역할을 확인하지 못해 구매 기록 기준으로 표시하고 있습니다.</p>
+                      )}
+                    </section>
+
                     {/* 음성 티어 */}
                     <section>
                       <div className="flex items-end justify-between mb-5">
@@ -1703,49 +1770,22 @@ export default function LevelPage() {
             <Reveal>
               <SectionHeader en="Season" title={`시즌 안내 — SEASON ${SEASON.number} '${SEASON.name}'`} desc={`레벨 시스템은 시즌제로 운영됩니다 · 현재 시즌 기간 ${SEASON.start.replace(/-/g, ".")} ~ ${SEASON.end.replace(/-/g, ".")}`} />
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* 시즌 한정 상품 */}
-                <LuxCard className="p-7">
-                  <div className="flex items-center gap-2.5 mb-6">
-                    <span className="text-[10px] font-black tracking-[0.2em] text-[#e91e3f] uppercase">Season Limited</span>
-                    <span className="text-sm font-bold text-[#131313]">시즌 한정 상품</span>
+              <div className="grid grid-cols-1 md:grid-cols-3 border-y border-black/[0.08] md:divide-x divide-black/[0.08]">
+                {[
+                  { n: "01", t: "시즌 단위 운영", d: "레벨과 XP는 시즌 단위로 운영됩니다. 시즌이 끝나면 그 시즌의 최종 순위로 보상이 정산됩니다." },
+                  { n: "02", t: "시즌 한정 상품", d: "시즌마다 ARCTIC 상점에 한정 상품이 올라옵니다. 수량이 정해져 있어 소진되면 마감되고, 구성은 시즌마다 달라집니다." },
+                  { n: "03", t: "시즌 종료 보상", d: "시즌 종료 시 상위 랭커에게 전용 역할과 다음 시즌 특전이 주어지며, 명예의 전당에 남습니다." },
+                ].map((f, i) => (
+                  <div key={i} className={`group py-7 md:px-7 first:md:pl-0 last:md:pr-0 ${i > 0 ? "border-t md:border-t-0 border-black/[0.08]" : ""}`}>
+                    <div className="text-2xl font-black text-[#131313]/[0.08] mb-5 group-hover:text-[#e91e3f]/30 transition-colors duration-500 select-none tabular-nums">{f.n}</div>
+                    <div className="text-[#131313] font-bold text-base mb-2.5 tracking-tight break-keep">{f.t}</div>
+                    <div className="text-[#8a8a8a] text-[13px] leading-relaxed break-keep">{f.d}</div>
                   </div>
-                  <p className="text-xs text-[#8a8a8a] mb-5 leading-relaxed">실물 기프트카드로 구성된 시즌 한정 라인업입니다. 한정 수량 소진 시 조기 마감됩니다.</p>
-                  <div className="space-y-2">
-                    {[
-                      { name: "올리브영 기프트카드", value: "3만원권", stock: 1 },
-                      { name: "배달의민족 기프트카드", value: "3만원권", stock: 1 },
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-center justify-between bg-black/[0.03] border border-black/5 rounded-xl px-4 py-3.5 hover:border-[#e91e3f]/25 transition-colors">
-                        <div>
-                          <p className="text-sm font-bold text-[#131313]">{item.name}</p>
-                          <p className="text-[11px] text-[#8a8a8a] mt-0.5">{item.value} · 실물 상품</p>
-                        </div>
-                        <span className="shrink-0 text-[10px] font-black bg-[#e91e3f]/10 text-[#e91e3f] border border-[#e91e3f]/25 px-2.5 py-1 rounded-full">한정 {item.stock}개</span>
-                      </div>
-                    ))}
-                  </div>
-                </LuxCard>
-
-                {/* 시즌 종료 보상 — RANKER */}
-                <div className="relative rounded-2xl overflow-hidden bg-[#131313] shadow-[0_26px_60px_-32px_rgba(0,0,0,0.5)]">
-                  <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
-                  <div aria-hidden className="absolute -top-16 -right-14 w-56 h-56 bg-[#e91e3f]/[0.18] blur-[90px] rounded-full pointer-events-none"></div>
-                  <div className="relative z-10 p-7">
-                    <div className="flex items-center gap-2.5 mb-6">
-                      <span className="text-[10px] font-black tracking-[0.25em] text-[#ff5c77] uppercase">Season Finale</span>
-                      <span className="text-sm font-bold text-white/70">시즌 종료 보상</span>
-                    </div>
-                    <p className="text-3xl font-black text-white tracking-tight mb-2">TOP 3 <span className="text-[#ff5c77]">RANKER</span></p>
-                    <p className="text-xs text-white/50 leading-relaxed mb-6">시즌 종료 시 최종 레벨 상위 3인은 RANKER로 선정됩니다.</p>
-                    <div className="space-y-2.5 text-xs text-white/60">
-                      <p className="flex gap-2.5"><span className="text-[#ff5c77] shrink-0">—</span><span><strong className="text-white">@RANKER</strong> 전용 역할 지급</span></p>
-                      <p className="flex gap-2.5"><span className="text-[#ff5c77] shrink-0">—</span><span>다음 시즌 특전 <strong className="text-white">[XP] Boost+</strong> 제공</span></p>
-                      <p className="flex gap-2.5"><span className="text-[#ff5c77] shrink-0">—</span><span>명예의 전당 영구 등재</span></p>
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
+              <p className="text-[11px] text-[#a3a3a3] mt-3.5 break-keep">
+                이번 시즌의 실제 상품 구성과 재고는 ARCTIC 상점에서 확인할 수 있습니다.
+              </p>
             </Reveal>
 
             <Reveal>
