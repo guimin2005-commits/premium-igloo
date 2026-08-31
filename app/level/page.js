@@ -120,12 +120,14 @@ const SectionHeader = ({ en, title, desc, right }) => (
   </div>
 );
 
-// 📌 그라디언트 보더 카드 (고급 글래스 스타일)
+// 📌 카드 — 아이보리 배경 위에서 흐려지지 않도록 또렷한 헤어라인 + 얕은 그림자
 const LuxCard = ({ children, className = "", glow = false }) => (
-  <div className={`relative rounded-2xl bg-gradient-to-b from-black/[0.08] to-black/[0.02] p-px ${glow ? "shadow-[0_20px_60px_-20px_rgba(233,30,63,0.25)]" : ""}`}>
-    <div className={`rounded-2xl bg-[#ffffff]/95 backdrop-blur-sm h-full ${className}`}>
-      {children}
-    </div>
+  <div
+    className={`rounded-2xl bg-white border border-black/[0.09] ${
+      glow ? "shadow-[0_24px_60px_-34px_rgba(0,0,0,0.45)]" : "shadow-[0_2px_10px_-6px_rgba(0,0,0,0.15)]"
+    } ${className}`}
+  >
+    {children}
   </div>
 );
 
@@ -1396,21 +1398,20 @@ export default function LevelPage() {
                 </LuxCard>
 
                 {/* 시즌 종료 보상 — RANKER */}
-                <div className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/50 via-[#e91e3f]/15 to-transparent p-px">
-                  <div className="rounded-2xl bg-[#ffffff] p-7 h-full relative overflow-hidden">
-                    <div className="absolute -top-12 -right-12 w-40 h-40 bg-[#e91e3f]/12 blur-[60px] rounded-full pointer-events-none animate-[pulseGlow_4s_ease-in-out_infinite]"></div>
-                    <div className="relative z-10">
-                      <div className="flex items-center gap-2.5 mb-6">
-                        <span className="text-[10px] font-black tracking-[0.2em] text-[#e91e3f] uppercase">Season Finale</span>
-                        <span className="text-sm font-bold text-[#131313]">시즌 종료 보상</span>
-                      </div>
-                      <p className="text-2xl font-black text-[#131313] tracking-tight mb-1.5">TOP 3 <span className="lux-shimmer">RANKER</span></p>
-                      <p className="text-xs text-[#5a5a5a] leading-relaxed mb-5">시즌 종료 시 최종 레벨 상위 3인은 RANKER로 선정됩니다.</p>
-                      <div className="space-y-2 text-xs text-[#5a5a5a]">
-                        <p className="flex gap-2.5"><span className="text-[#e91e3f] shrink-0">—</span><span><strong className="text-[#131313]">@RANKER</strong> 전용 역할 지급</span></p>
-                        <p className="flex gap-2.5"><span className="text-[#e91e3f] shrink-0">—</span><span>다음 시즌 특전 <strong className="text-[#131313]">[XP] Boost+</strong> 제공</span></p>
-                        <p className="flex gap-2.5"><span className="text-[#e91e3f] shrink-0">—</span><span>명예의 전당 영구 등재</span></p>
-                      </div>
+                <div className="relative rounded-2xl overflow-hidden bg-[#131313] shadow-[0_26px_60px_-32px_rgba(0,0,0,0.5)]">
+                  <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
+                  <div aria-hidden className="absolute -top-16 -right-14 w-56 h-56 bg-[#e91e3f]/[0.18] blur-[90px] rounded-full pointer-events-none"></div>
+                  <div className="relative z-10 p-7">
+                    <div className="flex items-center gap-2.5 mb-6">
+                      <span className="text-[10px] font-black tracking-[0.25em] text-[#ff5c77] uppercase">Season Finale</span>
+                      <span className="text-sm font-bold text-white/70">시즌 종료 보상</span>
+                    </div>
+                    <p className="text-3xl font-black text-white tracking-tight mb-2">TOP 3 <span className="text-[#ff5c77]">RANKER</span></p>
+                    <p className="text-xs text-white/50 leading-relaxed mb-6">시즌 종료 시 최종 레벨 상위 3인은 RANKER로 선정됩니다.</p>
+                    <div className="space-y-2.5 text-xs text-white/60">
+                      <p className="flex gap-2.5"><span className="text-[#ff5c77] shrink-0">—</span><span><strong className="text-white">@RANKER</strong> 전용 역할 지급</span></p>
+                      <p className="flex gap-2.5"><span className="text-[#ff5c77] shrink-0">—</span><span>다음 시즌 특전 <strong className="text-white">[XP] Boost+</strong> 제공</span></p>
+                      <p className="flex gap-2.5"><span className="text-[#ff5c77] shrink-0">—</span><span>명예의 전당 영구 등재</span></p>
                     </div>
                   </div>
                 </div>
@@ -1607,14 +1608,14 @@ export default function LevelPage() {
                     검색
                   </button>
                 </div>
-                <div className="flex-1 grid grid-cols-2 gap-px bg-black/10 rounded-xl overflow-hidden border border-black/10">
-                  <div className="bg-[#ffffff] px-4 py-5 text-center">
-                    <span className="block text-[10px] font-bold tracking-[0.2em] text-[#a3a3a3] uppercase mb-2">누적 XP</span>
-                    <span className="text-base md:text-xl font-black text-[#e91e3f] tracking-tight">{searchResult.cumXp ? `${searchResult.cumXp.toLocaleString()}` : "—"}</span>
+                <div className="flex-1 grid grid-cols-2 rounded-xl overflow-hidden bg-[#131313] divide-x divide-white/10">
+                  <div className="px-4 py-5 text-center">
+                    <span className="block text-[10px] font-black tracking-[0.2em] text-white/35 uppercase mb-2">누적 XP</span>
+                    <span className="text-lg md:text-2xl font-black text-white tabular-nums tracking-tight">{searchResult.cumXp ? searchResult.cumXp.toLocaleString() : "—"}</span>
                   </div>
-                  <div className="bg-[#ffffff] px-4 py-5 text-center">
-                    <span className="block text-[10px] font-bold tracking-[0.2em] text-[#a3a3a3] uppercase mb-2">레벨업 필요 XP</span>
-                    <span className="text-base md:text-xl font-black text-[#131313] tracking-tight">{searchResult.reqXp !== null ? `${searchResult.reqXp.toLocaleString()}` : "—"}</span>
+                  <div className="px-4 py-5 text-center">
+                    <span className="block text-[10px] font-black tracking-[0.2em] text-white/35 uppercase mb-2">레벨업 필요 XP</span>
+                    <span className="text-lg md:text-2xl font-black text-[#ff5c77] tabular-nums tracking-tight">{searchResult.reqXp !== null ? searchResult.reqXp.toLocaleString() : "—"}</span>
                   </div>
                 </div>
               </div>
@@ -1780,21 +1781,22 @@ export default function LevelPage() {
 
               {/* ── 우: 결과 ── */}
               <div className="md:sticky md:top-36 space-y-4">
-                <div className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/60 via-[#e91e3f]/20 to-transparent p-px shadow-[0_24px_70px_-20px_rgba(233,30,63,0.4)]">
-                  <div className="rounded-2xl bg-[#eef3f8] p-7 relative overflow-hidden">
-                    <div className="absolute -top-16 -right-16 w-48 h-48 bg-[#e91e3f]/15 blur-[70px] rounded-full pointer-events-none animate-[pulseGlow_4s_ease-in-out_infinite]"></div>
-                    <div className="relative z-10">
-                      <div className="text-[10px] font-black tracking-[0.25em] text-[#e91e3f]/80 uppercase mb-5">Projection Result</div>
-                      <div className="flex items-end justify-between mb-1.5">
-                        <span className="text-xs text-[#5a5a5a] font-medium pb-1.5">예상 최종 누적</span>
-                        <span className="text-3xl md:text-4xl font-black text-[#131313] tracking-tighter">{simResult.projectedTotalXp.toLocaleString()}<span className="text-sm text-[#e91e3f] ml-1.5 font-bold">XP</span></span>
-                      </div>
-                      <div className="flex items-center justify-between mt-5 pt-5 border-t border-black/10">
-                        <span className="text-xs text-[#5a5a5a] font-medium">도달 예상 레벨</span>
-                        <span className="bg-[#e91e3f] text-white px-4 py-1.5 rounded-full text-sm font-black shadow-[0_4px_16px_rgba(233,30,63,0.4)]">Lv. {simResult.finalLevel}</span>
-                      </div>
-                      <div className="text-right text-[11px] text-[#8a8a8a] mt-3">예상 추가 획득 + {simResult.finalGrandTotal.toLocaleString()} XP</div>
+                <div className="relative rounded-2xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-34px_rgba(0,0,0,0.55)]">
+                  <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
+                  <div aria-hidden className="absolute -top-20 -right-16 w-72 h-72 bg-[#e91e3f]/[0.18] blur-[100px] rounded-full pointer-events-none"></div>
+                  <div className="relative z-10 p-7">
+                    <p className="text-[10px] font-black tracking-[0.3em] text-white/35 uppercase mb-6">Projection Result</p>
+                    <p className="text-[11px] font-bold text-white/50 mb-2">예상 최종 누적</p>
+                    <p className="text-4xl md:text-5xl font-black text-white tabular-nums tracking-tighter leading-none">
+                      {simResult.projectedTotalXp.toLocaleString()}<span className="text-sm text-[#ff5c77] ml-2 font-bold">XP</span>
+                    </p>
+                    <div className="flex items-end justify-between mt-7 pt-6 border-t border-white/10">
+                      <span className="text-[11px] font-bold text-white/50">도달 예상 레벨</span>
+                      <span className="text-3xl font-black text-white tabular-nums leading-none" style={{ textShadow: "0 0 40px rgba(233,30,63,0.55)" }}>
+                        <span className="text-[11px] font-black text-white/40 align-middle mr-1.5">LV</span>{simResult.finalLevel}
+                      </span>
                     </div>
+                    <p className="text-right text-[11px] font-bold text-white/40 mt-3 tabular-nums">예상 추가 획득 +{simResult.finalGrandTotal.toLocaleString()} XP</p>
                   </div>
                 </div>
 
