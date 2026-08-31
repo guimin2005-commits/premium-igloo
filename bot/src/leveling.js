@@ -3,11 +3,11 @@
 //      · 2900L  선형   — 1~10레벨. 첫 채팅 한 번이면 Lv1→Lv2, 초반이 쭉쭉 오른다
 //      · 1100L² 2차    — 중반의 뼈대
 //      · L³/20  3차    — 500레벨 밑에선 존재감이 없다가 후반에 폭발하는 빙벽
-//    Lv1 = 0 (시작 레벨) · Lv10 6,800 · Lv100 614,300 · Lv1000 105,144,800
+//    Lv1 = 0 (시작 레벨) · Lv10 6,818 · Lv100 639,300 · Lv1000 130,144,800
 //    레벨 1개당 소요: Lv100 0.35시간 → Lv500 2.6시간 → Lv1000 7.2시간
 //    ⚠️ 사이트 lib/leveling.js 와 반드시 같은 값이어야 한다 (봇은 별도 배포라 import 불가)
 export const getCumulativeXpByLevel = (lvl) =>
-  lvl <= 0 ? 0 : Math.floor((lvl ** 3 + 1100 * lvl ** 2 + 2900 * lvl) / 20) - 200;
+  lvl <= 0 ? 0 : Math.floor((3 * lvl ** 3 + 2200 * lvl ** 2 + 5800 * lvl) / 40) - 200;
 
 export const getLevelByXp = (xp) => {
   if (xp <= 0) return 1; // Lv1이 시작점 — 0 XP도 Lv1

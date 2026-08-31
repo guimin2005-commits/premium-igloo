@@ -267,7 +267,6 @@ const LevelCurve = ({ myLevel = null }) => {
           <line x1="0" x2={W} y1={H - PB} y2={H - PB} stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
         </svg>
       </div>
-      <p className="text-[10px] text-[#c4c4c4] mt-2">곡선 위에 마우스를 올리거나 터치하면 해당 레벨의 XP를 확인할 수 있습니다.</p>
     </div>
   );
 };
@@ -321,8 +320,7 @@ const TierModal = ({ open, onClose, level, baseXp }) => {
             </button>
           </div>
           <p className="text-[12px] text-white/45 leading-relaxed mt-3 break-keep">
-            레벨이 오르면 등급이 올라가고, <b className="text-white/75">음성 채널에서 받는 XP에 아래 금액이 더해집니다.</b>{" "}
-            등급은 10단계이며 최고 등급은 이글루입니다.
+            레벨이 오르면 등급이 올라가고, <b className="text-white/75">음성 채널에서 받는 XP에 아래 금액이 더해집니다.</b>
           </p>
         </div>
 
@@ -431,7 +429,7 @@ const TierStairs = ({ base = 3000 }) => {
         ))}
       </div>
       <p className="text-[10px] text-[#c4c4c4] mt-3.5 break-keep">
-        레벨이 오르면 등급이 올라가고, 음성 채널 5분당 지급량이 함께 늘어납니다 · 700 레벨부터는 최고 티어 이글루
+        음성 5분당 기본 지급량 위에 등급별로 더해지는 금액
       </p>
     </div>
   );
@@ -1475,7 +1473,7 @@ export default function LevelPage() {
         {activeMainTab === "intro" && (
           <div className="space-y-16">
             <Reveal>
-              <SectionHeader en="Pillars" title="성장의 3가지 축" desc="고급 이글루 레벨 시스템을 구성하는 핵심 가치" />
+              <SectionHeader en="Pillars" title="성장의 3가지 축" />
               <div className="grid grid-cols-1 md:grid-cols-3 border-y border-black/[0.08] md:divide-x divide-black/[0.08]">
                 {[
                   { no: "I", t: "XP 획득 및 한계 돌파", d: "채팅과 음성 활동으로 끊임없이 성장하세요. 상한선은 1,000레벨입니다." },
@@ -1497,7 +1495,7 @@ export default function LevelPage() {
               <SectionHeader
                 en="Daily"
                 title="일일 퀘스트"
-                desc="매일 자정(KST)에 초기화되는 하루치 목표입니다. 달성하면 내 대시보드에서 직접 보상을 받습니다."
+                desc="달성하면 내 대시보드에서 직접 보상을 받습니다."
                 right={<Link href="/level" onClick={() => setActiveMainTab("my")} className="shrink-0 text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">내 대시보드 →</Link>}
               />
               <div className="grid grid-cols-1 md:grid-cols-3 border-y border-black/[0.08] md:divide-x divide-black/[0.08]">
@@ -1519,7 +1517,7 @@ export default function LevelPage() {
               <SectionHeader
                 en="Tier"
                 title="등급"
-desc="레벨이 오르면 등급이 오르고, 음성 채널에서 받는 XP에 등급별 금액이 더해집니다. 10단계이며 최고 등급은 이글루입니다."
+desc="레벨이 오르면 등급이 오르고, 음성 채널에서 받는 XP에 등급별 금액이 더해집니다."
               />
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {VOICE_TIERS.map((t, i) => (
@@ -1545,7 +1543,7 @@ desc="레벨이 오르면 등급이 오르고, 음성 채널에서 받는 XP에 
             </Reveal>
 
             <Reveal>
-              <SectionHeader en="Commands" title="기본 명령어" desc="디스코드 서버 내에서 사용 가능한 슬래시 커맨드" />
+              <SectionHeader en="Commands" title="기본 명령어" />
               <div className="border-t border-black/[0.08] divide-y divide-black/[0.06]">
                 {[
                   { c: "/레벨", d: "다음 레벨 도달까지 필요 XP 확인" },
@@ -1631,7 +1629,7 @@ desc="레벨이 오르면 등급이 오르고, 음성 채널에서 받는 XP에 
         {activeMainTab === "policy" && (
           <div className="space-y-16">
             <Reveal>
-              <SectionHeader en="Base" title="기본 XP 획득량" desc="채널 활동별 기본 지급량 및 쿨타임 기준" />
+              <SectionHeader en="Base" title="기본 XP 획득량" />
               <div className="grid grid-cols-1 md:grid-cols-3 border-y border-black/[0.08] md:divide-x divide-black/[0.08]">
                 {[
                   { t: "채팅 채널", x: P.chatXp.toLocaleString(), c: `쿨타임 ${P_chatCooldownLabel}`, d: `채팅 입력 시 XP를 획득하며, 오남용 방지를 위해 쿨타임 ${P_chatCooldownLabel}이 적용됩니다.` },
@@ -1654,7 +1652,7 @@ desc="레벨이 오르면 등급이 오르고, 음성 채널에서 받는 XP에 
             </Reveal>
 
             <Reveal>
-              <SectionHeader en="Bonus" title="추가 XP & 출석 보상" desc="아이템 및 시즌 상품 보유 시 추가 획득량" />
+              <SectionHeader en="Bonus" title="추가 XP & 출석 보상" />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
                 <LuxCard className="p-7">
@@ -1737,7 +1735,7 @@ desc="레벨이 오르면 등급이 오르고, 음성 채널에서 받는 XP에 
             </Reveal>
 
             <Reveal>
-              <SectionHeader en="Tier" title="등급별 지급량" desc="음성/내전 채널 이용 시 레벨 구간에 따른 추가 XP — 레벨이 오를수록 계단처럼 쌓입니다" />
+              <SectionHeader en="Tier" title="등급별 지급량" />
 
               {/* 📌 계단 차트 — 표 15줄 대신 '성장의 계단'을 그대로 시각화 */}
               <TierStairs base={P.voiceXp} />
@@ -1780,7 +1778,7 @@ desc="레벨이 오르면 등급이 오르고, 음성 채널에서 받는 XP에 
         {/* ══ TAB : TABLE ══════════════════ */}
         {activeMainTab === "table" && (
           <Reveal>
-            <SectionHeader en="Table" title="XP 테이블" desc="레벨별 필요 및 누적 XP를 검색하세요 (1~1000)" />
+            <SectionHeader en="Table" title="XP 테이블" />
 
             <LuxCard className="p-6 md:p-8 mb-6" glow>
               <div className="flex flex-col lg:flex-row gap-6 items-stretch lg:items-center">
@@ -1815,11 +1813,11 @@ desc="레벨이 오르면 등급이 오르고, 음성 채널에서 받는 XP에 
 
             {/* 성장 곡선 — 표의 숫자를 한눈에 보는 그림 */}
             <div className="mb-10">
-              <SectionHeader en="Curve" title="성장 곡선" desc="Lv 1 → 1,000 누적 XP 곡선 · 곡선 위를 짚으면 해당 레벨의 XP를 읽어줍니다" />
+              <SectionHeader en="Curve" title="성장 곡선" />
               <LevelCurve myLevel={me?.level || null} />
             </div>
 
-            <SectionHeader en="Full Table" title="전체 레벨 표" desc="레벨별 필요 XP와 누적 XP" />
+            <SectionHeader en="Full Table" title="전체 레벨 표" />
             <LuxCard className="overflow-hidden">
               <div className="max-h-[520px] overflow-y-auto custom-scrollbar">
                 <table className="w-full text-center text-xs">
@@ -1852,7 +1850,7 @@ desc="레벨이 오르면 등급이 오르고, 음성 채널에서 받는 XP에 
         {/* ══ TAB : SIMULATOR ══════════════ */}
         {activeMainTab === "sim" && (
           <Reveal>
-            <SectionHeader en="Simulator" title="XP 시뮬레이터" desc="조건을 설정하면 예상 획득 XP와 도달 레벨을 실시간으로 계산합니다" />
+            <SectionHeader en="Simulator" title="XP 시뮬레이터" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
 
               {/* ── 좌: 조건 설정 ── */}

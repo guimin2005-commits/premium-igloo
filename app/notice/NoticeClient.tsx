@@ -272,7 +272,6 @@ export default function NoticeClient() {
             <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
               <span className="text-white">공지</span><span className="lux-shimmer">사항</span>
             </h1>
-            <p className="text-gray-400 text-sm md:text-base leading-relaxed">고급 이글루의 최신 소식과 주요 안내를 확인하세요.</p>
           </Reveal>
           {isAdmin && (
             <button

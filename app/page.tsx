@@ -241,8 +241,7 @@ export default function Home() {
                   <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
                   <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
                 </div>
-                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3 break-keep">지금, 이글루에서는</h2>
-                <p className="relative text-sm text-gray-600 break-keep">진행 중인 대회와 이벤트를 확인하세요.</p>
+                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight break-keep">지금, 이글루에서는</h2>
               </div>
             </Reveal>
 
