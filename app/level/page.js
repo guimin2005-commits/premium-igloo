@@ -710,13 +710,14 @@ export default function LevelPage() {
       {/* ── 공통 헤더 — 모든 탭 동일 프레임 ── */}
       <div className="relative w-full px-5 md:px-8 pt-10 md:pt-12 pb-6">
         <div aria-hidden className="absolute -top-16 left-1/2 -translate-x-1/2 w-[560px] h-[280px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
-        <div className="relative max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-y-3">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="relative max-w-7xl mx-auto">
+          <div className="flex flex-col items-center text-center">
             <h1 className="text-2xl md:text-3xl font-black tracking-tighter leading-none">
               <span className="text-[#131313]">SYSTEM</span>
               <span className="text-[#e91e3f] mx-1.5">:</span>
               <span className="lux-shimmer">LEVEL</span>
             </h1>
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-3.5">
             <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e91e3f]/10 border border-[#e91e3f]/30">
               <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_2.5s_ease-in-out_infinite]"></span>
               <span className="text-[10px] font-black text-[#e91e3f] tracking-wide">SEASON {SEASON.number} · {SEASON.name}</span>
@@ -724,9 +725,10 @@ export default function LevelPage() {
             {!seasonDday.ended && seasonDday.days >= 0 && (
               <span className="text-[11px] font-black text-[#131313] bg-black/5 border border-black/10 px-2.5 py-1 rounded-full">종료까지 D-{seasonDday.days}</span>
             )}
+            </div>
           </div>
           {authReady && session?.user && (
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center md:justify-end gap-2.5 mt-5 md:mt-0 md:absolute md:top-0 md:right-0">
               <LiveDot />
               <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase">실시간 동기화</span>
               {lastSync && <span className="hidden md:inline text-[10px] font-bold text-[#a3a3a3] tabular-nums">{lastSync.toLocaleTimeString("ko-KR", { hour12: false })}</span>}
@@ -738,7 +740,7 @@ export default function LevelPage() {
 
       {/* ── TAB NAV — ARCTIC 알약 탭 ─────── */}
       <div className="w-full px-5 md:px-8 pb-2">
-        <div className="max-w-7xl mx-auto flex gap-2 overflow-x-auto no-bar">
+        <div className="max-w-7xl mx-auto flex gap-2 overflow-x-auto no-bar sm:justify-center">
           {[
             { id: "my", name: "내 대시보드" },
             { id: "intro", name: "시스템 소개" },
@@ -942,118 +944,31 @@ export default function LevelPage() {
                   </div>
                 </div>
 
+
+                {/* ARCTIC STORE — 배너 바로 아래 전체 폭 진입 동선 */}
+                {canSeeShop && (
+                  <Link
+                    href="/shop"
+                    className="group relative flex items-center gap-3 mt-6 px-5 h-14 rounded-2xl border transition-colors hover:brightness-[0.98]"
+                    style={{ borderColor: "rgba(90,150,200,0.5)", background: "#e7ecef" }}
+                  >
+                    <LiveDot color="bg-[#3f83b8]" />
+                    <span className="text-sm font-black tracking-tight shrink-0" style={{ color: ICE }}>ARCTIC STORE</span>
+                    <span className="hidden sm:inline text-[11px] font-bold text-[#8a8a8a] truncate">쌓은 XP로 역할과 혜택을 구매하세요</span>
+                    <span
+                      className="ml-auto shrink-0 w-8 h-8 rounded-full border flex items-center justify-center text-[13px] transition-transform group-hover:translate-x-0.5"
+                      style={{ borderColor: "rgba(90,150,200,0.45)", color: ICE }}
+                    >
+                      →
+                    </span>
+                  </Link>
+                )}
+
                 {/* 본문 — 8:4 비대칭 2열 */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-12 mt-12">
 
                   {/* 메인 열 */}
                   <div className="lg:col-span-8 min-w-0 space-y-14">
-                    {/* 일일 퀘스트 — 출석(봇 지급) + 관리자가 정의한 퀘스트(원클릭 수령) */}
-                    <section>
-                      <div className="flex items-end justify-between mb-5">
-                        <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Daily</span>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">일일 퀘스트</h3>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-lg font-black text-[#131313] tabular-nums leading-none">
-                            {questDone}<span className="text-[#c4c4c4]"> / {questTotal}</span>
-                          </p>
-                          <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mt-1">Complete</p>
-                        </div>
-                      </div>
-
-                      {/* 전체 달성률 */}
-                      <div className="h-1.5 rounded-full bg-black/[0.06] overflow-hidden mb-1.5">
-                        <div className="h-full rounded-full bg-[#e91e3f] transition-[width] duration-700" style={{ width: `${questPct}%` }}></div>
-                      </div>
-                      <p className="text-[10px] font-bold text-[#a3a3a3] mb-5">
-                        {questClaimable > 0
-                          ? <span className="text-[#e91e3f]">받을 수 있는 보상 {questClaimable}개</span>
-                          : questDone === questTotal ? "오늘 퀘스트를 모두 마쳤습니다" : "매일 자정(KST)에 초기화됩니다"}
-                      </p>
-
-                      {/* 퀘스트 목록 — 첫 항목은 내장 출석(음성 N분) */}
-                      {questRows.map((q) => {
-                        const pct = Math.min(100, Math.round((q.current / Math.max(1, q.target)) * 100));
-                        const unit = q.metric === "xp" ? " XP" : q.metric === "minute" ? "분" : "회";
-                        return (
-                          <div
-                            key={q.id}
-                            className={`rounded-2xl border p-4 mb-2.5 transition-all ${
-                              q.claimable
-                                ? "border-[#e91e3f]/45 bg-[#e91e3f]/[0.06] shadow-[0_10px_30px_-18px_rgba(233,30,63,0.6)]"
-                                : q.claimed || q.done
-                                ? "border-black/[0.08] bg-black/[0.02]"
-                                : "border-black/[0.08]"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className={`text-sm font-bold ${q.claimed ? "text-[#8a8a8a]" : "text-[#131313]"}`}>{q.name}</p>
-                                {q.desc && <p className="text-[11px] text-[#a3a3a3] mt-0.5 break-keep">{q.desc}</p>}
-                                {q.builtin && !q.done && (
-                                  <p className="text-[11px] font-bold text-[#8a8a8a] mt-1 tabular-nums">
-                                    오늘 음성 {quests?.voiceMin ?? 0}분 · {Math.max(0, q.target - q.current)}분 남음
-                                  </p>
-                                )}
-                              </div>
-                              {q.rewardXp > 0 && (
-                                <p className={`shrink-0 text-sm font-black tabular-nums ${q.claimed ? "text-[#c4c4c4]" : "text-[#e91e3f]"}`}>
-                                  +{q.rewardXp.toLocaleString()}<span className="text-[10px] ml-0.5">XP</span>
-                                </p>
-                              )}
-                            </div>
-
-                            {/* 진행 게이지 */}
-                            <div className="flex items-center gap-3 mt-3">
-                              <div className="flex-1 h-1.5 rounded-full bg-black/[0.07] overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full transition-[width] duration-700 ${q.done ? "bg-emerald-600" : "bg-[#131313]/45"}`}
-                                  style={{ width: `${pct}%` }}
-                                ></div>
-                              </div>
-                              <span className="shrink-0 text-[10px] font-black text-[#a3a3a3] tabular-nums">
-                                {q.current.toLocaleString()} / {q.target.toLocaleString()}{unit}
-                              </span>
-                            </div>
-
-                            {/* 상태 · 수령 */}
-                            {q.claimable ? (
-                              <button
-                                onClick={() => claimQuest(q)}
-                                disabled={claiming === q.id}
-                                className="w-full sm:w-auto sm:ml-auto sm:block sm:px-7 mt-3 py-2.5 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[13px] font-bold transition-colors outline-none focus:outline-none"
-                              >
-                                {claiming === q.id ? "수령 중…" : `보상 ${q.rewardXp.toLocaleString()} XP 받기`}
-                              </button>
-                            ) : q.claimed ? (
-                              <p className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-black text-emerald-700">
-                                <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                                보상 수령 완료
-                              </p>
-                            ) : q.done ? (
-                              <p className="mt-2.5 text-[11px] font-black text-emerald-700">달성</p>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-
-                      {/* 관리자가 아직 퀘스트를 등록하지 않은 상태 */}
-                      {quests && questRows.length <= 1 && (
-                        <EmptySlot>추가 퀘스트가 없습니다 — 출석 보상만 진행됩니다</EmptySlot>
-                      )}
-
-                      {/* 지급 안내 — 보상은 봇 대기열을 거치므로 즉시가 아닐 수 있다 */}
-                      {questRows.some((q) => q.claimed) && (
-                        <p className="text-[10px] text-[#c4c4c4] mt-3 break-keep">수령한 보상은 잠시 뒤 XP에 반영됩니다.</p>
-                      )}
-
-                      <div className="flex items-center justify-between border-t border-black/[0.08] mt-5 pt-4">
-                        <span className="text-[11px] font-bold text-[#8a8a8a]">누적 출석 <b className="text-[#131313] tabular-nums">{(me.attendCount || 0).toLocaleString()}일</b></span>
-                        <span className="text-[11px] font-bold text-[#8a8a8a]">마지막 <b className="text-[#131313] tabular-nums">{me.lastAttendDate ? me.lastAttendDate.replace(/-/g, ".") : "—"}</b></span>
-                      </div>
-                    </section>
-
                     {/* 획득 현황 */}
                     <section>
                       <div className="flex items-end justify-between mb-6">
@@ -1126,22 +1041,131 @@ export default function LevelPage() {
 
                   {/* 사이드 열 */}
                   <div className="lg:col-span-4 min-w-0 space-y-14 mt-14 lg:mt-0">
-                    {/* ARCTIC 상점 바로가기 — 레벨 ↔ 상점 동선 (아이스 틴트 전용색) */}
-                    {canSeeShop && (
-                      <section>
-                        <Link href="/shop" className="group relative block rounded-xl border p-5 overflow-hidden transition-transform hover:-translate-y-0.5" style={{ borderColor: "rgba(90,150,200,0.45)", background: "rgba(160,200,235,0.16)" }}>
-                          <div aria-hidden className="absolute -top-10 -right-10 w-36 h-36 rounded-full blur-[50px] pointer-events-none" style={{ background: "rgba(160,200,235,0.28)" }}></div>
-                          <div className="relative z-10 flex items-center justify-between">
-                            <div className="min-w-0">
-                              <p className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] uppercase mb-2" style={{ color: ICE }}><LiveDot color="bg-[#3f83b8]" />Arctic Store</p>
-                              <p className="text-lg font-black text-[#131313] tracking-tight">ARCTIC <span style={{ color: ICE }}>상점</span></p>
-                              <p className="text-[11px] font-bold text-[#8a8a8a] mt-1 break-keep">쌓은 XP로 역할과 혜택을 구매하세요</p>
+                    {/* 일일 퀘스트 — 출석(봇 지급) + 관리자가 정의한 퀘스트(원클릭 수령) */}
+                    <section>
+                      <div className="flex items-end justify-between mb-5">
+                        <div>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Daily</span>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">일일 퀘스트</h3>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-lg font-black text-[#131313] tabular-nums leading-none">
+                            {questDone}<span className="text-[#c4c4c4]"> / {questTotal}</span>
+                          </p>
+                          <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mt-1">Complete</p>
+                        </div>
+                      </div>
+
+                      {/* 전체 달성률 */}
+                      <div className="h-1.5 rounded-full bg-black/[0.06] overflow-hidden mb-1.5">
+                        <div className="h-full rounded-full bg-[#e91e3f] transition-[width] duration-700" style={{ width: `${questPct}%` }}></div>
+                      </div>
+                      <p className="text-[10px] font-bold text-[#a3a3a3] mb-5">
+                        {questClaimable > 0
+                          ? <span className="text-[#e91e3f]">받을 수 있는 보상 {questClaimable}개</span>
+                          : questDone === questTotal ? "오늘 퀘스트를 모두 마쳤습니다" : "매일 자정(KST)에 초기화됩니다"}
+                      </p>
+
+                      {/* 퀘스트 목록 — 첫 항목은 내장 출석(음성 N분) */}
+                      {questRows.map((q) => {
+                        const pct = Math.min(100, Math.round((q.current / Math.max(1, q.target)) * 100));
+                        const unit = q.metric === "xp" ? " XP" : q.metric === "minute" ? "분" : "회";
+                        return (
+                          <div
+                            key={q.id}
+                            className={`rounded-xl border px-4 py-3 mb-2 transition-all ${
+                              q.claimable
+                                ? "border-[#e91e3f]/45 bg-[#e91e3f]/[0.06]"
+                                : q.claimed
+                                ? "border-black/[0.07] bg-black/[0.02]"
+                                : "border-black/[0.08]"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              {/* 상태 점 */}
+                              <span
+                                aria-hidden
+                                className={`shrink-0 w-1.5 h-1.5 rounded-full ${q.done ? "bg-emerald-600" : "bg-black/20"}`}
+                              ></span>
+
+                              {/* 이름 (+ 넓은 화면에서만 설명 병기) */}
+                              <p className={`min-w-0 flex-1 truncate text-[13px] font-bold ${q.claimed ? "text-[#8a8a8a]" : "text-[#131313]"}`}>
+                                {q.name}
+                                {q.desc && <span className="hidden lg:inline text-[11px] font-medium text-[#a3a3a3] ml-2">{q.desc}</span>}
+                              </p>
+
+                              {/* 진행 게이지 — 좁은 화면에서는 아래 줄로 */}
+                              <div className="hidden sm:flex items-center gap-2 shrink-0 w-44">
+                                <div className="flex-1 h-1.5 rounded-full bg-black/[0.07] overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-[width] duration-700 ${q.done ? "bg-emerald-600" : "bg-[#131313]/45"}`}
+                                    style={{ width: `${pct}%` }}
+                                  ></div>
+                                </div>
+                                <span className="shrink-0 w-16 text-right text-[10px] font-black text-[#a3a3a3] tabular-nums">
+                                  {q.current.toLocaleString()}/{q.target.toLocaleString()}{unit}
+                                </span>
+                              </div>
+
+                              {/* 보상 */}
+                              {q.rewardXp > 0 && (
+                                <p className={`shrink-0 w-[74px] text-right text-[13px] font-black tabular-nums ${q.claimed ? "text-[#c4c4c4]" : "text-[#e91e3f]"}`}>
+                                  +{q.rewardXp.toLocaleString()}
+                                </p>
+                              )}
+
+                              {/* 상태 · 수령 */}
+                              <div className="shrink-0 w-[68px] text-right">
+                                {q.claimable ? (
+                                  <button
+                                    onClick={() => claimQuest(q)}
+                                    disabled={claiming === q.id}
+                                    className="px-3.5 py-1.5 rounded-lg bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[12px] font-bold transition-colors outline-none focus:outline-none"
+                                  >
+                                    {claiming === q.id ? "…" : "받기"}
+                                  </button>
+                                ) : q.claimed ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700">
+                                    <svg viewBox="0 0 20 20" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3"><path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                    완료
+                                  </span>
+                                ) : q.done ? (
+                                  <span className="text-[11px] font-black text-emerald-700">달성</span>
+                                ) : null}
+                              </div>
                             </div>
-                            <span className="shrink-0 w-9 h-9 rounded-full border flex items-center justify-center transition-transform group-hover:translate-x-0.5" style={{ borderColor: "rgba(90,150,200,0.55)", color: ICE }}>→</span>
+
+                            {/* 좁은 화면 전용 진행 게이지 */}
+                            <div className="sm:hidden flex items-center gap-2 mt-2.5">
+                              <div className="flex-1 h-1.5 rounded-full bg-black/[0.07] overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-[width] duration-700 ${q.done ? "bg-emerald-600" : "bg-[#131313]/45"}`}
+                                  style={{ width: `${pct}%` }}
+                                ></div>
+                              </div>
+                              <span className="shrink-0 text-[10px] font-black text-[#a3a3a3] tabular-nums">
+                                {q.current.toLocaleString()}/{q.target.toLocaleString()}{unit}
+                              </span>
+                            </div>
                           </div>
-                        </Link>
-                      </section>
-                    )}
+                        );
+                      })}
+
+                      {/* 관리자가 아직 퀘스트를 등록하지 않은 상태 */}
+                      {quests && questRows.length <= 1 && (
+                        <EmptySlot>추가 퀘스트가 없습니다 — 출석 보상만 진행됩니다</EmptySlot>
+                      )}
+
+                      {/* 지급 안내 — 보상은 봇 대기열을 거치므로 즉시가 아닐 수 있다 */}
+                      {questRows.some((q) => q.claimed) && (
+                        <p className="text-[10px] text-[#c4c4c4] mt-3 break-keep">수령한 보상은 잠시 뒤 XP에 반영됩니다.</p>
+                      )}
+
+                      <div className="flex items-center justify-between border-t border-black/[0.08] mt-5 pt-4">
+                        <span className="text-[11px] font-bold text-[#8a8a8a]">누적 출석 <b className="text-[#131313] tabular-nums">{(me.attendCount || 0).toLocaleString()}일</b></span>
+                        <span className="text-[11px] font-bold text-[#8a8a8a]">마지막 <b className="text-[#131313] tabular-nums">{me.lastAttendDate ? me.lastAttendDate.replace(/-/g, ".") : "—"}</b></span>
+                      </div>
+                    </section>
 
                     {/* 진행 중 이벤트 */}
                     {events.length > 0 && (
