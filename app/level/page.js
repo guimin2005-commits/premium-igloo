@@ -3,6 +3,13 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { ScrollProgress } from "../components/Lux";
+import {
+  HudPanel, HudSection, HudStyles, LiveDot, RingGauge, SegBar,
+  StatusChip, SegLadder, TickRuler, RankRows, EmptySlot,
+} from "../components/Hud";
+import { SEASON, getSeasonProgress } from "@/lib/season";
+
+const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
 
 const getCumulativeXpByLevel = (lvl) => {
   if (lvl <= 0) return 0;
@@ -146,11 +153,12 @@ const fmtRel = (s) => {
 };
 const kstTodayStr = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-const REASON_META = {
-  chat: { label: "채팅", cls: "text-sky-400 border-sky-400/25 bg-sky-400/10" },
-  voice: { label: "음성", cls: "text-emerald-400 border-emerald-400/25 bg-emerald-400/10" },
-  attend: { label: "출석", cls: "text-[#e91e3f] border-[#e91e3f]/25 bg-[#e91e3f]/10" },
-};
+// XP 사유 서브팔레트 — 채팅 모노/음성 아이스/출석 레드 (그 외 유채색 금지)
+const REASON_COLORS = { chat: "#a8adb8", voice: "#6fa8c4", attend: "#e91e3f" };
+const REASON_LABELS = { chat: "채팅", voice: "음성", attend: "출석" };
+
+// 음성 XP 구간 경계 — TIER_STEPS와 1:1 (15구간)
+const TIER_BOUNDS = [0, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 649, 700];
 
 // 📌 레벨 성장 곡선 — 이 페이지의 시그니처. Lv 1~1000 누적 XP를 곡선으로 그리고,
 //    마우스/터치를 따라 임의 레벨의 누적·필요 XP를 실시간으로 읽어준다.
@@ -301,13 +309,7 @@ const TierStairs = () => {
   );
 };
 
-// 📌 시즌 설정 — 시즌 교체 시 여기만 수정
-const SEASON = {
-  number: 1,
-  name: "UP!",
-  start: "2026-05-01",
-  end: "2026-09-30",
-};
+// 📌 시즌 설정은 lib/season.js 공용 상수 사용 (홈 티커와 단일 소스)
 
 export default function LevelPage() {
   // 리뉴얼: 정적 안내 대신 '내 대시보드'가 첫 화면
@@ -388,6 +390,17 @@ export default function LevelPage() {
   const progPct = Math.min(100, Math.floor((prog.current / Math.max(1, prog.required)) * 100));
   const rankPct = me?.total ? Math.max(1, Math.ceil((me.rank / me.total) * 100)) : null;
   const attendedToday = !!me && me.lastAttendDate === kstTodayStr();
+  const todayTotal = myLogs?.today?.total ?? 0;
+  const seasonPct = getSeasonProgress();
+
+  // 음성 티어 — 현재 구간 인덱스와 다음 승급 정보
+  const tierIdx = TIER_BOUNDS.reduce((acc, b, i) => ((me?.level ?? 0) >= b ? i : acc), 0);
+  const tierCur = TIER_STEPS[tierIdx];
+  const tierNext = TIER_STEPS[tierIdx + 1] || null;
+  const tierNextBound = TIER_BOUNDS[tierIdx + 1] ?? null;
+
+  // 킬피드 확장 토글 — 내부 스크롤 대신 6건 + 전체 보기 (이중 스크롤 회피)
+  const [feedOpen, setFeedOpen] = useState(false);
 
   // 📌 현재 XP 정책 — 레벨 대시보드에서 값을 바꾸면 이 페이지 수치도 즉시 따라간다
   const [policy, setPolicy] = useState(null);
@@ -586,6 +599,7 @@ export default function LevelPage() {
     // ⚠️ main에 overflow-hidden 금지 — 하위 sticky(탭바)가 죽는다. 글로우 가로 넘침은 body의 overflow-x: clip이 전역 처리
     <main className="w-full flex-1 flex flex-col relative">
       <ScrollProgress />
+      <HudStyles />
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -627,7 +641,8 @@ export default function LevelPage() {
         }
       `}} />
 
-      {/* ── HERO ───────────────────────────── */}
+      {/* ── HERO — 문서형 탭에서만. '내 대시보드'는 자체 HUD 헤더를 쓴다 ── */}
+      {activeMainTab !== "my" && (
       <section className="relative w-full pt-20 pb-14 md:pt-28 md:pb-20 px-6">
         <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
         <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
@@ -688,10 +703,11 @@ export default function LevelPage() {
           </Reveal>
         </div>
       </section>
+      )}
 
       {/* ── TAB NAV — 섹션 넘버링과 호응하는 에디토리얼 인덱스 탭 ─────── */}
       <div className="w-full px-6 bg-[#090909]/85 backdrop-blur-xl border-b border-white/[0.08]">
-        <div className="max-w-5xl mx-auto flex gap-7 md:gap-10 overflow-x-auto no-bar">
+        <div className={`${activeMainTab === "my" ? "max-w-7xl" : "max-w-5xl"} mx-auto flex gap-7 md:gap-10 overflow-x-auto no-bar`}>
           {[
             { id: "my", name: "내 대시보드" },
             { id: "intro", name: "시스템 소개" },
@@ -719,244 +735,354 @@ export default function LevelPage() {
         </div>
       </div>
 
-      <div className="w-full max-w-5xl mx-auto px-6 py-14 flex-1">
+      {/* 대시보드 탭은 좌우 공간을 쓰는 와이드 HUD(7xl), 문서형 탭은 기존 에디토리얼 폭 유지 */}
+      <div className={activeMainTab === "my" ? "w-full max-w-7xl mx-auto px-5 md:px-8 py-6 md:py-10 flex-1" : "w-full max-w-5xl mx-auto px-6 py-14 flex-1"}>
 
-        {/* ══ TAB : MY DASHBOARD — 실시간 데이터 연동 ══ */}
+        {/* ══ TAB : MY DASHBOARD — OBSERVER OVERLAY (선수 1인칭 시점) ══
+               박스 카드 대신 헤어라인·타이포 직결 배치. 박스는 킬피드 1곳만.
+               시머 예산: LV 수치 1곳 · 레드는 신호(LIVE/나/게이지) 전용 ══ */}
         {activeMainTab === "my" && (
-          <div className="space-y-12">
-
-            {/* 비로그인 — 로그인 CTA */}
-            {authReady && !session?.user && (
-              <Reveal>
-                <div className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/50 via-[#e91e3f]/15 to-transparent p-px">
-                  <div className="rounded-2xl bg-[#120a0c] px-7 py-12 md:py-16 text-center relative overflow-hidden">
-                    <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-80 h-80 bg-[#e91e3f]/10 blur-[90px] rounded-full pointer-events-none"></div>
-                    <div className="relative z-10">
-                      <p className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-4">My Dashboard</p>
-                      <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-3">내 레벨, 실시간으로 확인하세요</h3>
-                      <p className="text-gray-500 text-[13px] md:text-sm leading-relaxed mb-8 break-keep">디스코드 로그인 시 현재 레벨·XP·서버 순위·출석 현황이<br className="hidden md:block" /> 이 화면에 실시간으로 동기화됩니다.</p>
-                      <button onClick={() => signIn("discord", { callbackUrl: "/level" })} className="inline-flex items-center gap-3 px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">Discord 로그인</button>
-                      {/* 로컬 개발 전용 — DEV_LOGIN=1 환경에서만 의미 있는 확인용 로그인 (배포 번들에서는 제거됨) */}
-                      {process.env.NODE_ENV === "development" && (
-                        <div className="mt-4">
-                          <button onClick={() => signIn("devlogin", { callbackUrl: "/level" })} className="text-[11px] font-bold text-gray-600 hover:text-white underline underline-offset-4 transition-colors outline-none focus:outline-none">로컬 확인용 로그인 (dev)</button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+          <div>
+            {/* ── 밴드 0 · 상태 바 ── */}
+            <div className="flex flex-wrap items-center justify-between gap-y-2.5 border-b border-white/[0.08] pb-3.5">
+              <div className="flex items-center gap-3">
+                <span aria-hidden className="w-1.5 h-1.5 rotate-45 bg-[#e91e3f] shrink-0"></span>
+                <span className="text-[10px] font-black tracking-[0.3em] text-gray-400 uppercase">Season {SEASON.number} · <span className="text-white/80">{SEASON.name}</span></span>
+                <span className="hidden md:inline text-[10px] font-bold text-gray-600 tabular-nums">{SEASON.start.replace(/-/g, ".")} ~ {SEASON.end.replace(/-/g, ".")}</span>
+                {!seasonDday.ended && seasonDday.days >= 0 && <StatusChip accent>D-{seasonDday.days}</StatusChip>}
+              </div>
+              {authReady && session?.user && (
+                <div className="flex items-center gap-2.5">
+                  <LiveDot />
+                  <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">Sync 30s</span>
+                  {lastSync && <span className="hidden md:inline text-[10px] font-bold text-gray-600 tabular-nums">{lastSync.toLocaleTimeString("ko-KR", { hour12: false })}</span>}
+                  <button onClick={() => loadMe().then(() => pushToast("동기화 완료"))} className="text-[10px] font-black tracking-[0.15em] uppercase text-gray-600 hover:text-white transition-colors outline-none focus:outline-none">갱신</button>
                 </div>
-              </Reveal>
-            )}
+              )}
+            </div>
 
-            {/* 로딩 스켈레톤 */}
+            {/* ── 로딩 스켈레톤 ── */}
             {(!authReady || (session?.user && !meLoaded)) && (
-              <div>
-                <div className="h-44 rounded-2xl bg-white/[0.04] animate-pulse mb-4"></div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/[0.06] border border-white/[0.06] rounded-2xl overflow-hidden mb-4">
-                  {[0, 1, 2, 3].map((i) => <div key={i} className="h-24 bg-[#0d0d0d] animate-pulse"></div>)}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="h-48 rounded-2xl bg-white/[0.04] animate-pulse"></div>
-                  <div className="h-48 rounded-2xl bg-white/[0.04] animate-pulse"></div>
+              <div className="pt-8">
+                <div className="h-20 border-b border-white/[0.06] mb-8 animate-pulse bg-white/[0.02] rounded"></div>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  <div className="lg:col-span-3 h-72 animate-pulse bg-white/[0.03] rounded"></div>
+                  <div className="lg:col-span-6 h-72 animate-pulse bg-white/[0.03] rounded"></div>
+                  <div className="lg:col-span-3 h-72 animate-pulse bg-white/[0.03] rounded"></div>
                 </div>
               </div>
             )}
 
-            {/* 로그인 + 데이터 로드 완료 */}
+            {/* ── 비로그인 · SPECTATOR MODE 락 스크린 (가짜 수치 금지 — 전부 —) ── */}
+            {authReady && !session?.user && (
+              <div className="pt-8">
+                <div className="relative">
+                  <div aria-hidden className="opacity-40 pointer-events-none select-none">
+                    {/* 플레이어 스코어바 셸 */}
+                    <div className="grid grid-cols-2 md:grid-cols-12 items-center gap-y-4 border-b border-white/[0.08] pb-6">
+                      <div className="col-span-2 md:col-span-5 flex items-center gap-4">
+                        <div className="relative w-14 h-14 rounded-lg bg-white/[0.05] flex items-center justify-center">
+                          <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5" /></svg>
+                          <span className="hud-c hud-c-tl"></span><span className="hud-c hud-c-tr"></span><span className="hud-c hud-c-bl"></span><span className="hud-c hud-c-br"></span>
+                        </div>
+                        <p className="text-xl font-black text-gray-700">— — —</p>
+                      </div>
+                      <div className="md:col-span-4 grid grid-cols-3 text-center">
+                        {["Level", "Rank", "Top"].map((l) => (
+                          <div key={l}><p className="text-[9px] font-black tracking-[0.25em] text-gray-700 uppercase mb-1.5">{l}</p><p className="text-2xl font-black text-gray-700 tabular-nums">—</p></div>
+                        ))}
+                      </div>
+                      <div className="hidden md:flex md:col-span-3 justify-end"><StatusChip>— XP</StatusChip></div>
+                    </div>
+                    {/* 3열 축약 셸 */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 lg:divide-x lg:divide-white/[0.06] pt-8 pb-4">
+                      <div className="lg:col-span-3 lg:pr-7">
+                        <div className="flex justify-center mb-4"><RingGauge pct={0} size={140}><p className="text-2xl font-black text-gray-700">—</p></RingGauge></div>
+                        <TickRuler /><SegBar pct={0} segments={10} />
+                      </div>
+                      <div className="lg:col-span-6 lg:px-7 mt-8 lg:mt-0">
+                        <div className="h-2.5 rounded-[3px] bg-white/[0.05] mb-6"></div>
+                        <div className="h-2.5 rounded-[3px] bg-white/[0.05] mb-6"></div>
+                        <div className="h-28 border border-dashed border-white/10 rounded-lg"></div>
+                      </div>
+                      <div className="lg:col-span-3 lg:pl-7 mt-8 lg:mt-0">
+                        {[0, 1, 2].map((i) => <div key={i} className="flex items-center h-10 gap-3 border-b border-white/[0.05]"><span className="w-1.5 h-1.5 rounded-full bg-white/15"></span><span className="text-xs font-black text-gray-700">+ —</span><span className="flex-1 text-[11px] text-gray-800">———</span></div>)}
+                      </div>
+                    </div>
+                  </div>
+                  {/* 락 카드 — 화면 유일의 솔리드 레드 버튼 */}
+                  <div className="absolute inset-0 z-10 flex items-center justify-center px-4">
+                    <HudPanel accent glow className="w-full max-w-sm bg-[#0c0c0c] px-7 py-9 md:px-9 text-center">
+                      <svg viewBox="0 0 24 24" className="w-6 h-6 mx-auto mb-4" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
+                      <p className="text-[10px] font-black tracking-[0.3em] text-gray-500 uppercase mb-2.5">Spectator Mode — Overlay Locked</p>
+                      <p className="text-sm font-bold text-white mb-1.5">나의 오버레이가 잠겨 있습니다</p>
+                      <p className="text-[11px] text-gray-500 leading-relaxed mb-7 break-keep">로그인하면 레벨·순위·획득 로그가<br />실시간 오버레이로 활성화됩니다.</p>
+                      <button onClick={() => signIn("discord", { callbackUrl: "/level" })} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-xs font-black tracking-[0.2em] uppercase rounded-lg transition-colors shadow-[0_10px_30px_rgba(233,30,63,0.35)] outline-none focus:outline-none">Discord로 로그인</button>
+                      {process.env.NODE_ENV === "development" && (
+                        <button onClick={() => signIn("devlogin", { callbackUrl: "/level" })} className="mt-3.5 text-[11px] font-bold text-gray-600 hover:text-white underline underline-offset-4 transition-colors outline-none focus:outline-none">로컬 확인용 로그인 (dev)</button>
+                      )}
+                    </HudPanel>
+                  </div>
+                </div>
+
+                {/* 공개 섹션 — 관전자에게도 실데이터 (리더보드가 후킹) */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 lg:divide-x lg:divide-white/[0.06] mt-12">
+                  <div className="lg:col-span-6 lg:pr-8 min-w-0">
+                    <HudSection label="01 · Trajectory" right={<span className="text-[11px] font-bold text-gray-600">Lv 1 → 1,000 성장 곡선</span>}>
+                      <LevelCurve />
+                    </HudSection>
+                  </div>
+                  <div className="lg:col-span-6 lg:pl-8 mt-10 lg:mt-0 min-w-0">
+                    <HudSection
+                      label="02 · Standings"
+                      right={
+                        <span className="flex items-center gap-3">
+                          {["all", "month"].map((k) => (
+                            <button key={k} onClick={() => setLbTab(k)} className={`text-[10px] font-black tracking-[0.15em] uppercase transition-colors outline-none focus:outline-none pb-0.5 ${lbTab === k ? "text-white border-b-2 border-[#e91e3f]" : "text-gray-600 hover:text-gray-400"}`}>{k === "all" ? "누적" : "이번 달"}</button>
+                          ))}
+                        </span>
+                      }
+                    >
+                      {!lb[lbTab] ? (
+                        <div className="py-10 text-center text-[11px] font-bold text-gray-700">불러오는 중…</div>
+                      ) : !lb[lbTab].data?.length ? (
+                        <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
+                      ) : (
+                        <RankRows rows={lb[lbTab].data} />
+                      )}
+                    </HudSection>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── 로그인 · 활성 오버레이 ── */}
             {authReady && session?.user && meLoaded && me && (
               <div>
-                {/* 동기화 상태 줄 */}
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-2.5">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
-                    </span>
-                    <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">Live Sync</span>
-                    {lastSync && <span className="text-[10px] text-gray-600 font-bold tabular-nums">마지막 갱신 {lastSync.toLocaleTimeString("ko-KR")}</span>}
+                {/* 밴드 1 · 플레이어 스코어바 */}
+                <div className="grid grid-cols-2 md:grid-cols-12 items-center gap-y-5 border-b border-white/[0.08] py-6 md:py-7">
+                  <div className="col-span-2 md:col-span-5 flex items-center gap-4 min-w-0">
+                    <div className="relative shrink-0 w-14 h-14 md:w-16 md:h-16">
+                      {session.user.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={session.user.image} alt="" className="w-full h-full rounded-lg object-cover" />
+                      ) : (
+                        <span className="w-full h-full rounded-lg bg-white/[0.06] flex items-center justify-center text-xl font-black text-white/50">{(session.user.name || "?").slice(0, 1)}</span>
+                      )}
+                      <span aria-hidden className="hud-c hud-c-tl hud-c-accent"></span>
+                      <span aria-hidden className="hud-c hud-c-tr hud-c-accent"></span>
+                      <span aria-hidden className="hud-c hud-c-bl hud-c-accent"></span>
+                      <span aria-hidden className="hud-c hud-c-br hud-c-accent"></span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xl md:text-2xl font-black text-white truncate tracking-tight leading-none">{session.user.name}</p>
+                      <p className="text-[10px] font-black tracking-[0.25em] text-gray-600 uppercase mt-2">Player Overlay · Season {SEASON.number}</p>
+                    </div>
                   </div>
-                  <button onClick={() => loadMe().then(() => pushToast("동기화 완료"))} className="px-3.5 py-1.5 rounded-full border border-white/10 text-[11px] font-bold text-gray-500 hover:text-white hover:border-white/30 transition-all outline-none focus:outline-none">지금 갱신</button>
+                  <div className="col-span-2 md:col-span-4 grid grid-cols-3 md:divide-x md:divide-white/[0.08]">
+                    <div className="text-center">
+                      <p className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase mb-1.5">Level</p>
+                      <p className="text-3xl md:text-4xl font-black tabular-nums tracking-tight leading-none"><span className="lux-shimmer">{me.level}</span></p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase mb-1.5">Rank</p>
+                      <p className="text-xl md:text-2xl font-black text-white tabular-nums leading-none pt-1.5">#{me.rank.toLocaleString()}<span className="text-[10px] text-gray-600 font-bold"> /{me.total.toLocaleString()}</span></p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase mb-1.5">Top</p>
+                      <p className="text-xl md:text-2xl font-black text-[#e91e3f] tabular-nums leading-none pt-1.5">{rankPct}%</p>
+                    </div>
+                  </div>
+                  <div className="col-span-2 md:col-span-3 flex md:justify-end">
+                    <StatusChip accent={todayTotal > 0} dot={todayTotal > 0} dotColor="bg-[#e91e3f]">Today +{todayTotal.toLocaleString()} XP</StatusChip>
+                  </div>
                 </div>
 
-                {/* 레벨 히어로 카드 */}
-                <div className="relative rounded-2xl bg-gradient-to-b from-[#e91e3f]/60 via-[#e91e3f]/20 to-transparent p-px shadow-[0_24px_70px_-20px_rgba(233,30,63,0.4)]">
-                  <div className="rounded-2xl bg-[#120a0c] p-7 md:p-9 relative overflow-hidden">
-                    <div className="absolute -top-16 -right-16 w-48 h-48 bg-[#e91e3f]/15 blur-[70px] rounded-full pointer-events-none animate-[pulseGlow_4s_ease-in-out_infinite]"></div>
-                    <div className="relative z-10">
-                      <div className="flex flex-wrap items-end justify-between gap-6">
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase mb-2 truncate">My Level · {session.user.name}</p>
-                          <p className="text-5xl md:text-6xl font-black tracking-tighter text-white">Lv <span className="lux-shimmer">{me.level}</span></p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase mb-1.5">누적 XP</p>
-                          <p className="text-2xl md:text-3xl font-black text-white tabular-nums tracking-tight"><CountUp end={me.xp} /></p>
-                        </div>
-                      </div>
-                      <div className="mt-8">
-                        <div className="flex justify-between items-baseline mb-2">
-                          <span className="text-[11px] text-gray-500 font-bold">Lv {me.level} <span className="text-gray-700 mx-1">→</span> Lv {me.level + 1}</span>
-                          <span className="text-sm text-white font-black tabular-nums">{progPct}%</span>
-                        </div>
-                        <div className="h-2.5 rounded-full bg-white/[0.07] overflow-hidden relative">
-                          <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff7a92] shadow-[0_0_12px_rgba(233,30,63,0.6)] transition-[width] duration-700 relative overflow-hidden" style={{ width: `${progPct}%` }}>
-                            <div className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent" style={{ animation: "barSheen 2.8s ease-in-out infinite" }}></div>
+                {/* 밴드 2 · 3열 본체 — 좌 계기 / 중앙 전장 / 우 퀘스트·피드 */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 lg:divide-x lg:divide-white/[0.06] pt-9">
+
+                  {/* 좌 레일 — 내 상태 계기 */}
+                  <div className="order-1 lg:col-span-3 lg:pr-7 space-y-10 min-w-0">
+                    <HudSection label="01 · Progress" right={<span className="text-[11px] font-bold text-gray-600">레벨 진행</span>}>
+                      <div className="flex justify-center mb-6">
+                        <RingGauge pct={progPct} size={160}>
+                          <div className="text-center">
+                            <p className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase mb-1">Level</p>
+                            <p className="text-3xl font-black text-white tabular-nums leading-none">{me.level}</p>
+                            <p className="text-[11px] font-black text-[#e91e3f] tabular-nums mt-1.5">{progPct}%</p>
                           </div>
-                        </div>
-                        <div className="flex justify-between mt-2.5">
-                          <span className="text-[11px] text-gray-600 font-bold tabular-nums">{prog.current.toLocaleString()} / {prog.required.toLocaleString()} XP</span>
-                          <span className="text-[11px] text-gray-500 font-bold">다음 레벨까지 <b className="text-[#e91e3f]">{prog.needToNext.toLocaleString()} XP</b></span>
-                        </div>
+                        </RingGauge>
                       </div>
-                    </div>
+                      <div className="flex justify-between text-[10px] font-bold text-gray-600 tabular-nums mb-2">
+                        <span>{prog.current.toLocaleString()}</span>
+                        <span>{prog.required.toLocaleString()} XP</span>
+                      </div>
+                      <TickRuler />
+                      <SegBar pct={progPct} segments={10} sheen />
+                      <p className="text-[11px] font-bold text-gray-500 mt-3 text-right">다음 레벨까지 <b className="text-[#e91e3f] tabular-nums">{prog.needToNext.toLocaleString()} XP</b></p>
+                    </HudSection>
+
+                    <HudSection label="02 · Voice Tier" right={<span className="text-[11px] font-bold text-gray-600">음성 5분당</span>}>
+                      <div className="flex items-end justify-between mb-1.5">
+                        <p className="text-3xl font-black text-white tabular-nums leading-none">+{tierCur.xp.toLocaleString()}</p>
+                        {tierNext ? (
+                          <span className="text-[10px] font-bold text-gray-600 tabular-nums">NEXT +{tierNext.xp.toLocaleString()}</span>
+                        ) : (
+                          <StatusChip accent>Max Tier</StatusChip>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-bold text-gray-600 tabular-nums mb-2">현재 구간 Lv.{TIER_BOUNDS[tierIdx]}{tierNextBound !== null ? ` – ${tierNextBound - 1}` : "+"}</p>
+                      <SegLadder total={TIER_STEPS.length} currentIndex={tierIdx} titles={TIER_STEPS.map((t) => `Lv.${t.lv} — +${t.xp.toLocaleString()} XP`)} />
+                      {tierNext && tierNextBound !== null && (
+                        <p className="text-[11px] font-bold text-gray-500 mt-3.5 break-keep">
+                          <span className="text-[#e91e3f]">▲</span> Lv.{tierNextBound} 도달 시 +{tierNext.xp.toLocaleString()}
+                          <span className="text-gray-600 tabular-nums ml-2">{Math.max(0, tierNextBound - me.level)} LEVELS TO GO</span>
+                        </p>
+                      )}
+                    </HudSection>
+
+                    <HudSection label="03 · Season">
+                      <div className="flex items-end justify-between mb-3">
+                        <p className="text-sm font-black text-white tracking-tight">SEASON {SEASON.number} <span className="text-gray-500">&apos;{SEASON.name}&apos;</span></p>
+                        {!seasonDday.ended && seasonDday.days >= 0 && <p className="text-2xl font-black text-[#e91e3f] tabular-nums leading-none">D-{seasonDday.days}</p>}
+                      </div>
+                      <TickRuler />
+                      {/* 시즌 경과율 — 모노크롬 fill (레드는 신호 전용) */}
+                      <div className="h-1.5 rounded-[3px] bg-white/[0.06] overflow-hidden">
+                        <div className="h-full bg-white/25" style={{ width: `${seasonPct}%` }}></div>
+                      </div>
+                      <p className="text-[10px] font-bold text-gray-600 tabular-nums mt-2">{SEASON.start.replace(/-/g, ".")} ~ {SEASON.end.replace(/-/g, ".")} · 경과 {seasonPct}%</p>
+                    </HudSection>
                   </div>
-                </div>
 
-                {/* 스탯 타일 4 — 순위/백분위/오늘/이번 달 */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/[0.08] border border-white/[0.08] rounded-2xl overflow-hidden mt-4">
-                  {[
-                    { l: "Server Rank", v: `#${me.rank.toLocaleString()}`, s: `전체 ${me.total.toLocaleString()}명 중` },
-                    { l: "Percentile", v: rankPct ? `상위 ${rankPct}%` : "—", s: "누적 XP 기준" },
-                    { l: "Today", v: `+${(myLogs?.today?.total ?? 0).toLocaleString()}`, s: "오늘 획득 XP", accent: true },
-                    { l: "This Month", v: `+${(myLogs?.month?.total ?? 0).toLocaleString()}`, s: "이번 달 획득 XP" },
-                  ].map((t, i) => (
-                    <div key={i} className="bg-[#0d0d0d] px-4 py-6 text-center">
-                      <p className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase mb-2.5">{t.l}</p>
-                      <p className={`text-xl md:text-2xl font-black tabular-nums tracking-tight ${t.accent ? "text-[#e91e3f]" : "text-white"}`}>{t.v}</p>
-                      <p className="text-[10px] text-gray-600 font-bold mt-1.5">{t.s}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 출석 + 최근 활동 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 items-start">
-                  <LuxCard className="p-6 md:p-7">
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-[10px] font-black tracking-[0.2em] text-[#e91e3f] uppercase">Daily Check-in</span>
-                        <span className="text-sm font-bold text-white">출석 현황</span>
-                      </div>
-                      <span className={`shrink-0 text-[10px] font-black px-2.5 py-1 rounded-full border ${attendedToday ? "text-emerald-400 border-emerald-400/30 bg-emerald-400/10" : "text-[#e91e3f] border-[#e91e3f]/30 bg-[#e91e3f]/10"}`}>
-                        {attendedToday ? "오늘 출석 완료" : "오늘 출석 전"}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-px bg-white/10 rounded-xl overflow-hidden border border-white/10 mb-5">
-                      <div className="bg-[#0d0d0d] px-4 py-5 text-center">
-                        <span className="block text-[10px] font-bold tracking-[0.2em] text-gray-600 uppercase mb-2">누적 출석</span>
-                        <span className="text-lg md:text-xl font-black text-white tabular-nums">{(me.attendCount || 0).toLocaleString()}<span className="text-xs text-gray-600 ml-1">회</span></span>
-                      </div>
-                      <div className="bg-[#0d0d0d] px-4 py-5 text-center">
-                        <span className="block text-[10px] font-bold tracking-[0.2em] text-gray-600 uppercase mb-2">마지막 출석</span>
-                        <span className="text-lg md:text-xl font-black text-white tabular-nums">{me.lastAttendDate ? me.lastAttendDate.replace(/-/g, ".") : "—"}</span>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-gray-500 leading-relaxed break-keep">디스코드에서 <span className="text-[#e91e3f] font-mono font-bold">/출석체크</span> 입력 시 <b className="text-white">+{P.attendXp.toLocaleString()} XP</b>가 즉시 지급되고, 이 화면에 실시간 반영됩니다.</p>
-                  </LuxCard>
-
-                  <LuxCard className="p-6 md:p-7">
-                    <div className="flex items-center gap-2.5 mb-4">
-                      <span className="text-[10px] font-black tracking-[0.2em] text-gray-400 uppercase">Recent Activity</span>
-                      <span className="text-sm font-bold text-white">최근 획득 내역</span>
-                    </div>
-                    {myLogs?.logs?.length ? (
-                      <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                        <div className="divide-y divide-white/[0.05]">
-                          {myLogs.logs.map((l, i) => (
-                            <div key={i} className="flex items-center justify-between py-3">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <span className={`shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full border ${REASON_META[l.reason]?.cls || "text-gray-400 border-white/10 bg-white/5"}`}>{REASON_META[l.reason]?.label || l.reason || "기타"}</span>
-                                <span className="text-[11px] text-gray-500 truncate">{l.channelName || (l.reason === "attend" ? "출석 체크" : "—")}</span>
+                  {/* 중앙 스테이지 — 전장 정보 */}
+                  <div className="order-3 lg:order-2 lg:col-span-6 lg:px-7 mt-10 lg:mt-0 space-y-10 min-w-0">
+                    <HudSection label="04 · Acquisition" live accent right={<span className="text-[11px] font-bold text-gray-600">채팅 · 음성 · 출석</span>}>
+                      <div className="space-y-6">
+                        {[
+                          { key: "today", label: "Today", data: myLogs?.today },
+                          { key: "month", label: "This Month", data: myLogs?.month },
+                        ].map(({ key, label, data }) => {
+                          const total = data?.total ?? 0;
+                          return (
+                            <div key={key}>
+                              <div className="flex items-baseline justify-between mb-2">
+                                <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">{label}</span>
+                                <span className="text-xl font-black text-white tabular-nums">+{total.toLocaleString()} <span className="text-[10px] font-bold text-gray-600">XP</span></span>
                               </div>
-                              <div className="shrink-0 text-right ml-3 whitespace-nowrap">
-                                <span className="text-xs font-black text-white tabular-nums">+{(l.amount || 0).toLocaleString()}</span>
-                                <span className="text-[10px] text-gray-600 font-bold ml-2">{fmtRel(l.createdAt)}</span>
-                              </div>
+                              {total > 0 ? (
+                                <>
+                                  <div className="flex h-2.5 rounded-[3px] overflow-hidden bg-white/[0.05]">
+                                    {["chat", "voice", "attend"].map((r) => (
+                                      <div key={r} style={{ width: `${((data?.[r] || 0) / total) * 100}%`, background: REASON_COLORS[r] }}></div>
+                                    ))}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+                                    {["chat", "voice", "attend"].map((r) => (
+                                      <span key={r} className="inline-flex items-center gap-1.5 text-[10px] font-bold text-gray-500 tabular-nums">
+                                        <span className="w-2 h-2 rounded-[2px]" style={{ background: REASON_COLORS[r] }}></span>
+                                        {REASON_LABELS[r]} {(data?.[r] || 0).toLocaleString()}
+                                        <span className="text-gray-700">{Math.round(((data?.[r] || 0) / total) * 100)}%</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                </>
+                              ) : (
+                                <EmptySlot className="h-[52px]">NO INTAKE — 활동하면 채워집니다</EmptySlot>
+                              )}
                             </div>
+                          );
+                        })}
+                      </div>
+                    </HudSection>
+
+                    <HudSection label="05 · Trajectory" right={<span className="text-[11px] font-bold text-gray-600">Lv 1 → 1,000 성장 곡선</span>}>
+                      <LevelCurve myLevel={me.level} />
+                    </HudSection>
+
+                    <HudSection
+                      label="06 · Standings"
+                      right={
+                        <span className="flex items-center gap-3">
+                          {["all", "month"].map((k) => (
+                            <button key={k} onClick={() => setLbTab(k)} className={`text-[10px] font-black tracking-[0.15em] uppercase transition-colors outline-none focus:outline-none pb-0.5 ${lbTab === k ? "text-white border-b-2 border-[#e91e3f]" : "text-gray-600 hover:text-gray-400"}`}>{k === "all" ? "누적" : "이번 달"}</button>
                           ))}
+                        </span>
+                      }
+                    >
+                      {!lb[lbTab] ? (
+                        <div className="py-10 text-center text-[11px] font-bold text-gray-700">불러오는 중…</div>
+                      ) : !lb[lbTab].data?.length ? (
+                        <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
+                      ) : (
+                        <RankRows rows={lb[lbTab].data} myId={session.user.id} me={lbTab === "all" ? me : null} myName={session.user.name} />
+                      )}
+                      {lbTab === "month" && <p className="text-[10px] text-gray-700 mt-2.5">이번 달 지급 로그 합산 기준 · 매월 1일(KST) 초기화</p>}
+                    </HudSection>
+                  </div>
+
+                  {/* 우 레일 — 퀘스트·피드 */}
+                  <div className="order-2 lg:order-3 lg:col-span-3 lg:pl-7 mt-10 lg:mt-0 space-y-10 min-w-0">
+                    <HudSection label="07 · Daily" right={attendedToday ? <StatusChip dot>Complete</StatusChip> : <StatusChip accent>Open</StatusChip>}>
+                      <div className={attendedToday ? "opacity-50" : ""}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-sm font-bold text-white">매일 출석 체크</p>
+                          <p className="text-[11px] font-black text-[#e91e3f] tabular-nums shrink-0">+{P.attendXp.toLocaleString()} XP</p>
+                        </div>
+                        <p className="text-[11px] text-gray-500 leading-relaxed mb-4 break-keep">디스코드에서 아래 명령을 입력하면 즉시 지급되고, 이 화면에 실시간 반영됩니다.</p>
+                        <div className="flex items-center gap-3">
+                          <code className="px-3 py-1.5 rounded bg-white/[0.05] border border-white/10 text-[12px] font-mono font-bold text-white/80">/출석체크</code>
+                          <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-gray-600 hover:text-white transition-colors">디스코드에서 받기 ↗</a>
                         </div>
                       </div>
-                    ) : (
-                      <p className="text-[11px] text-gray-600 py-10 text-center leading-relaxed">최근 60일 내 획득 내역이 없습니다.<br />디스코드에서 채팅·음성 활동을 시작해 보세요.</p>
-                    )}
-                  </LuxCard>
+                      <div className="grid grid-cols-2 divide-x divide-white/[0.08] border-t border-white/[0.08] mt-5 pt-4">
+                        <div className="text-center">
+                          <p className="text-[9px] font-black tracking-[0.22em] text-gray-600 uppercase mb-1.5">누적 출석</p>
+                          <p className="text-base font-black text-white tabular-nums">{(me.attendCount || 0).toLocaleString()}<span className="text-[10px] text-gray-600 font-bold ml-0.5">일</span></p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[9px] font-black tracking-[0.22em] text-gray-600 uppercase mb-1.5">마지막 출석</p>
+                          <p className="text-base font-black text-white tabular-nums">{me.lastAttendDate ? me.lastAttendDate.replace(/-/g, ".") : "—"}</p>
+                        </div>
+                      </div>
+                    </HudSection>
+
+                    <HudSection label="08 · Killfeed" live accent right={<span className="text-[11px] font-bold text-gray-600 tabular-nums">{myLogs?.logs?.length || 0}건</span>}>
+                      {/* 화면 유일의 박스 — 피드는 담을 그릇이 필요하다 */}
+                      <HudPanel accent className="px-4 py-1.5">
+                        {myLogs?.logs?.length ? (
+                          <>
+                            {(feedOpen ? myLogs.logs : myLogs.logs.slice(0, 6)).map((l, i) => (
+                              <div key={`${l.createdAt}-${i}`} className="flex items-center h-10 gap-3 border-b border-white/[0.05] last:border-0">
+                                <span aria-hidden className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: REASON_COLORS[l.reason] || "#6b7280" }}></span>
+                                <span className="shrink-0 w-14 text-xs font-black text-[#e91e3f] tabular-nums">+{(l.amount || 0).toLocaleString()}</span>
+                                <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-gray-400">{l.channelName || (l.reason === "attend" ? "출석 체크" : REASON_LABELS[l.reason] || "—")}</span>
+                                <span className="shrink-0 text-[10px] font-bold text-gray-600 tabular-nums">{fmtRel(l.createdAt)}</span>
+                              </div>
+                            ))}
+                          </>
+                        ) : (
+                          <p className="py-8 text-center text-[11px] font-bold text-gray-700 leading-relaxed">기록 없음 — 첫 활동을 시작하세요</p>
+                        )}
+                      </HudPanel>
+                      {(myLogs?.logs?.length || 0) > 6 && (
+                        <button onClick={() => setFeedOpen((v) => !v)} className="block w-full text-center text-[11px] font-bold text-gray-600 hover:text-white transition-colors mt-3 outline-none focus:outline-none">
+                          {feedOpen ? "접기 ↑" : `전체 ${myLogs.logs.length}건 보기 ↓`}
+                        </button>
+                      )}
+                    </HudSection>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* 로그인했지만 조회 실패 */}
+            {/* ── 로그인했지만 조회 실패 ── */}
             {authReady && session?.user && meLoaded && !me && (
-              <LuxCard className="p-8 text-center">
+              <div className="py-16 text-center">
                 <p className="text-sm text-gray-400 mb-5">데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
-                <button onClick={() => loadMe()} className="px-6 py-2.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-xs font-bold rounded-full transition-colors outline-none focus:outline-none">다시 시도</button>
-              </LuxCard>
-            )}
-
-            {/* 서버 리더보드 — 공개 데이터 */}
-            <Reveal>
-              <div className="flex items-center justify-between mb-6">
-                <div className="min-w-0">
-                  <div className="flex items-baseline gap-4 mb-2">
-                    <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">RANKING</span>
-                    <div className="h-px w-16 bg-gradient-to-r from-white/15 to-transparent"></div>
-                  </div>
-                  <h3 className="text-xl font-black text-white tracking-tight">서버 리더보드 <span className="text-xs font-bold text-gray-600 ml-1">TOP 10</span></h3>
-                </div>
-                <div className="flex rounded-full border border-white/10 overflow-hidden shrink-0">
-                  {[{ k: "all", n: "누적" }, { k: "month", n: "이번 달" }].map((t) => (
-                    <button key={t.k} onClick={() => setLbTab(t.k)} className={`px-4 py-2 text-[11px] font-black transition-colors outline-none focus:outline-none ${lbTab === t.k ? "bg-[#e91e3f] text-white" : "text-gray-500 hover:text-white"}`}>{t.n}</button>
-                  ))}
-                </div>
+                <button onClick={() => loadMe()} className="px-6 py-2.5 border border-[#e91e3f]/40 text-[#e91e3f] hover:bg-[#e91e3f] hover:text-white text-xs font-black tracking-[0.15em] uppercase rounded-lg transition-colors outline-none focus:outline-none">다시 시도</button>
               </div>
-
-              <LuxCard className="overflow-hidden">
-                {!lb[lbTab] ? (
-                  <div className="py-14 text-center text-[11px] text-gray-600">리더보드를 불러오는 중…</div>
-                ) : !lb[lbTab].data?.length ? (
-                  <div className="py-14 text-center text-[11px] text-gray-600">아직 집계된 기록이 없습니다.</div>
-                ) : (
-                  <div className="divide-y divide-white/[0.05]">
-                    {lb[lbTab].data.map((r) => {
-                      const mine = !!session?.user?.id && r.userId === session.user.id;
-                      return (
-                        <div key={r.userId} className={`flex items-center justify-between px-5 py-3.5 transition-colors ${mine ? "bg-[#e91e3f]/[0.08]" : "hover:bg-white/[0.02]"}`}>
-                          <div className="flex items-center gap-4 min-w-0">
-                            <span className={`w-7 shrink-0 text-center text-sm font-black tabular-nums ${r.rank === 1 ? "text-[#e91e3f]" : r.rank <= 3 ? "text-white" : "text-gray-600"}`}>{r.rank}</span>
-                            <span className={`text-[13px] font-bold truncate ${mine ? "text-[#e91e3f]" : "text-gray-300"}`}>
-                              {r.name}
-                              {mine && <span className="ml-2 text-[9px] font-black text-white bg-[#e91e3f] px-1.5 py-0.5 rounded-full align-middle">ME</span>}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 md:gap-4 shrink-0 ml-3">
-                            <span className="text-[10px] font-black text-gray-500 bg-white/[0.05] border border-white/10 px-2 py-0.5 rounded-full">Lv {r.level}</span>
-                            <span className="text-xs font-black text-white tabular-nums w-20 md:w-24 text-right">{r.xp.toLocaleString()} <span className="text-gray-600 font-bold">XP</span></span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {/* 내 순위가 TOP 10 밖이면 하단에 내 행 표시 (누적 탭) */}
-                    {lbTab === "all" && me && me.rank > 10 && (
-                      <>
-                        <div className="py-1.5 text-center text-gray-700 text-[10px] font-black tracking-[0.3em]">···</div>
-                        <div className="flex items-center justify-between px-5 py-3.5 bg-[#e91e3f]/[0.08]">
-                          <div className="flex items-center gap-4 min-w-0">
-                            <span className="w-7 shrink-0 text-center text-sm font-black tabular-nums text-[#e91e3f]">{me.rank}</span>
-                            <span className="text-[13px] font-bold truncate text-[#e91e3f]">
-                              {session.user.name}
-                              <span className="ml-2 text-[9px] font-black text-white bg-[#e91e3f] px-1.5 py-0.5 rounded-full align-middle">ME</span>
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 md:gap-4 shrink-0 ml-3">
-                            <span className="text-[10px] font-black text-gray-500 bg-white/[0.05] border border-white/10 px-2 py-0.5 rounded-full">Lv {me.level}</span>
-                            <span className="text-xs font-black text-white tabular-nums w-20 md:w-24 text-right">{me.xp.toLocaleString()} <span className="text-gray-600 font-bold">XP</span></span>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </LuxCard>
-              {lbTab === "month" && <p className="text-[10px] text-gray-700 mt-2.5">이번 달 지급 로그 합산 기준 · 매월 1일(KST) 초기화</p>}
-            </Reveal>
+            )}
           </div>
         )}
 
