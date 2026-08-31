@@ -164,18 +164,37 @@ export const TickRuler = ({ className = "" }) => (
 
 // ── 세그먼트 래더 — 이산 티어 표시 (지난/현재/미래) ──
 /** @type {import("react").FC<any>} */
-export const SegLadder = ({ total, currentIndex, titles = [] }) => (
+export const SegLadder = ({ total, currentIndex, titles = [], colors }) => (
   <div className="pt-2.5">
     <div className="flex gap-1">
-      {Array.from({ length: total }, (_, i) => (
-        <div
-          key={i}
-          title={titles[i] || ""}
-          className={`relative flex-1 h-2 rounded-[1px] ${i < currentIndex ? "bg-black/25" : i === currentIndex ? "bg-[#e91e3f] animate-pulse" : "bg-black/[0.08]"}`}
-        >
-          {i === currentIndex && <span className="absolute -top-2 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rotate-45 bg-[#e91e3f]"></span>}
-        </div>
-      ))}
+      {Array.from({ length: total }, (_, i) => {
+        const c = colors?.[i];
+        // 지난 티어는 자기 색을 옅게, 현재 티어는 제 색 그대로, 앞으로 올 티어는 무채색
+        const style = c
+          ? i < currentIndex
+            ? { backgroundColor: c, opacity: 0.32 }
+            : i === currentIndex
+            ? { backgroundColor: c }
+            : undefined
+          : undefined;
+        return (
+          <div
+            key={i}
+            title={titles[i] || ""}
+            style={style}
+            className={`relative flex-1 h-2 rounded-[1px] ${
+              style ? "" : i < currentIndex ? "bg-black/25" : i === currentIndex ? "bg-[#e91e3f]" : "bg-black/[0.08]"
+            } ${!c && i > currentIndex ? "" : ""} ${c && i > currentIndex ? "bg-black/[0.08]" : ""}`}
+          >
+            {i === currentIndex && (
+              <span
+                className="absolute -top-2 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rotate-45"
+                style={{ backgroundColor: c || "#e91e3f" }}
+              ></span>
+            )}
+          </div>
+        );
+      })}
     </div>
   </div>
 );

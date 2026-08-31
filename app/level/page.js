@@ -9,6 +9,7 @@ import {
   StatusChip, SegLadder, TickRuler, RankRows, EmptySlot,
 } from "../components/Hud";
 import { SEASON, getSeasonProgress } from "@/lib/season";
+import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel } from "@/lib/voiceTiers";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
 const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
@@ -159,8 +160,7 @@ const kstTodayStr = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString(
 const REASON_COLORS = { chat: "#a8adb8", voice: "#6fa8c4", attend: "#e91e3f" };
 const REASON_LABELS = { chat: "채팅", voice: "음성", attend: "출석" };
 
-// 음성 XP 구간 경계 — TIER_STEPS와 1:1 (15구간)
-const TIER_BOUNDS = [0, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 649, 700];
+// 음성 티어 경계·이름·색은 lib/voiceTiers.js 단일 소스 (봇 지급표와 1:1)
 
 // 📌 레벨 성장 곡선 — 이 페이지의 시그니처. Lv 1~1000 누적 XP를 곡선으로 그리고,
 //    마우스/터치를 따라 임의 레벨의 누적·필요 XP를 실시간으로 읽어준다.
@@ -276,37 +276,47 @@ const LevelCurve = ({ myLevel = null }) => {
 };
 
 // 📌 레벨 구간별 음성 XP 계단 차트 — 표 대신 '레벨이 오를수록 쌓이는 계단'을 그대로 보여준다
-const TIER_STEPS = [
-  { lv: "0", xp: 3000 }, { lv: "50", xp: 3150 }, { lv: "100", xp: 3250 }, { lv: "150", xp: 3350 },
-  { lv: "200", xp: 3500 }, { lv: "250", xp: 3600 }, { lv: "300", xp: 3700 }, { lv: "350", xp: 3800 },
-  { lv: "400", xp: 4000 }, { lv: "450", xp: 4200 }, { lv: "500", xp: 4400 }, { lv: "550", xp: 4600 },
-  { lv: "600", xp: 4800 }, { lv: "649", xp: 5000 }, { lv: "700+", xp: 6000 },
-];
-const TierStairs = () => {
-  const min = 2700, max = 6000;
+// 📌 음성 티어 계단 — 티어별 이름·색과 5분당 지급량을 함께 보여 준다
+const TierStairs = ({ base = 3000 }) => {
+  const vals = VOICE_TIERS.map((t) => base + t.bonus);
+  const min = Math.min(...vals) - 400;
+  const max = Math.max(...vals);
   return (
     <div>
-      <div className="flex items-end gap-[3px] md:gap-1.5 h-44 md:h-52">
-        {TIER_STEPS.map((t, i) => {
-          const hRatio = (t.xp - min) / (max - min);
-          const top = i === TIER_STEPS.length - 1;
+      <div className="flex items-end gap-1.5 md:gap-2 h-48 md:h-56">
+        {VOICE_TIERS.map((t, i) => {
+          const xp = base + t.bonus;
+          const hRatio = (xp - min) / (max - min);
+          const top = i === VOICE_TIERS.length - 1;
           return (
-            <div key={t.lv} className="group relative flex-1 flex flex-col items-center justify-end h-full">
-              <span className={`hidden md:block text-[9px] font-black mb-1.5 tabular-nums transition-colors ${top ? "text-[#e91e3f]" : "text-[#a3a3a3] group-hover:text-[#131313]"}`}>{(t.xp / 1000).toFixed(t.xp % 1000 ? 2 : 0).replace(/\.?0+$/, "")}k</span>
+            <div key={t.key} className="group relative flex-1 flex flex-col items-center justify-end h-full">
+              <span className="text-[9px] md:text-[11px] font-black mb-1.5 tabular-nums text-[#8a8a8a] group-hover:text-[#131313] transition-colors">
+                {(xp / 1000).toFixed(xp % 1000 ? 2 : 0).replace(/\.?0+$/, "")}k
+              </span>
               <div
-                className={`w-full rounded-t-[4px] transition-all duration-300 ${top ? "bg-gradient-to-t from-[#e91e3f]/60 to-[#e91e3f] shadow-[0_0_18px_rgba(233,30,63,0.4)]" : "bg-gradient-to-t from-black/[0.07] to-black/[0.16] group-hover:from-[#e91e3f]/30 group-hover:to-[#e91e3f]/70"}`}
-                style={{ height: `${8 + hRatio * 88}%` }}
+                className="w-full rounded-t-[5px] transition-all duration-300 group-hover:brightness-110"
+                style={{
+                  height: `${10 + hRatio * 86}%`,
+                  backgroundColor: t.c,
+                  opacity: top ? 1 : 0.85,
+                  boxShadow: top ? `0 0 18px ${t.c}55` : "none",
+                }}
               />
             </div>
           );
         })}
       </div>
-      <div className="flex gap-[3px] md:gap-1.5 border-t border-black/10 pt-2 mt-0.5">
-        {TIER_STEPS.map((t) => (
-          <span key={t.lv} className="flex-1 text-center text-[8px] md:text-[10px] font-bold text-[#a3a3a3] tabular-nums">{t.lv}</span>
+      <div className="flex gap-1.5 md:gap-2 border-t border-black/10 pt-2.5 mt-0.5">
+        {VOICE_TIERS.map((t) => (
+          <div key={t.key} className="flex-1 text-center min-w-0">
+            <p className="text-[9px] md:text-[11px] font-black truncate" style={{ color: t.c }}>{t.name}</p>
+            <p className="text-[8px] md:text-[10px] font-bold text-[#a3a3a3] tabular-nums mt-0.5">{t.min}+</p>
+          </div>
         ))}
       </div>
-      <p className="text-[10px] text-[#c4c4c4] mt-3">진입 레벨 구간별 음성 채널 5분당 지급 XP · 700 레벨 이상은 최고 구간(+6,000)</p>
+      <p className="text-[10px] text-[#c4c4c4] mt-3.5 break-keep">
+        레벨이 오르면 음성 티어가 올라가고, 음성 채널 5분당 지급량이 함께 늘어납니다 · 700 레벨부터는 최고 티어 이글루
+      </p>
     </div>
   );
 };
@@ -426,11 +436,11 @@ export default function LevelPage() {
   const todayTotal = myLogs?.today?.total ?? 0;
   const seasonPct = getSeasonProgress();
 
-  // 음성 티어 — 현재 구간 인덱스와 다음 승급 정보
-  const tierIdx = TIER_BOUNDS.reduce((acc, b, i) => ((me?.level ?? 0) >= b ? i : acc), 0);
-  const tierCur = TIER_STEPS[tierIdx];
-  const tierNext = TIER_STEPS[tierIdx + 1] || null;
-  const tierNextBound = TIER_BOUNDS[tierIdx + 1] ?? null;
+  // 음성 티어 — 현재 티어와 다음 승급 정보 (lib/voiceTiers 단일 소스)
+  const tierIdx = getTierIndex(me?.level ?? 0);
+  const tierCur = VOICE_TIERS[tierIdx];
+  const tierNext = VOICE_TIERS[tierIdx + 1] || null;
+  const tierNextBound = tierNext ? tierNext.min : null;
 
   // 일일 퀘스트 요약 — 출석(봇이 지급)도 한 칸으로 세어 전체 달성률을 만든다
   const questRows = quests?.quests || [];
@@ -476,6 +486,10 @@ export default function LevelPage() {
     attendXp: policy?.attendXp ?? 7000,
   };
   const P_voiceMin = Math.max(1, Math.round(P.voiceIntervalSec / 60));
+
+  // 티어 지급량은 관리자가 정한 기본 음성 XP 위에 얹힌다 (P 정의 이후여야 한다)
+  const tierCurXp = P.voiceXp + tierCur.bonus;
+  const tierNextXp = tierNext ? P.voiceXp + tierNext.bonus : null;
 
   // ARCTIC 상점 동선 — 공개 전에는 관리자에게만 노출 (policy.shopPublic)
   const canSeeShop = !!policy?.shopPublic || isAdminName(session?.user?.name);
@@ -579,21 +593,8 @@ export default function LevelPage() {
     } else {
       checkInterval = P_voiceMin;
       channelBaseXp = simChannel === "voice" ? P.voiceXp : P_scrimXp;
-      if (level >= 700) levelBonusXp = 1000;
-      else if (level >= 649) levelBonusXp = 1000;
-      else if (level >= 600) levelBonusXp = 1000;
-      else if (level >= 550) levelBonusXp = 1000;
-      else if (level >= 500) levelBonusXp = 1000;
-      else if (level >= 450) levelBonusXp = 700;
-      else if (level >= 400) levelBonusXp = 600;
-      else if (level >= 350) levelBonusXp = 500;
-      else if (level >= 300) levelBonusXp = 400;
-      else if (level >= 250) levelBonusXp = 350;
-      else if (level >= 200) levelBonusXp = 300;
-      else if (level >= 150) levelBonusXp = 250;
-      else if (level >= 100) levelBonusXp = 200;
-      else if (level >= 50) levelBonusXp = 150;
-      else levelBonusXp = 0;
+      // 봇의 지급표와 같은 값을 쓴다 (lib/voiceTiers 단일 소스)
+      levelBonusXp = getVoiceBonus(level);
     }
 
     const channelCycles = Math.floor(time / checkInterval);
@@ -927,11 +928,14 @@ export default function LevelPage() {
                         { l: "누적 XP", v: (me.xp || 0).toLocaleString(), s: "TOTAL" },
                         { l: "오늘 획득", v: `+${todayTotal.toLocaleString()}`, s: "TODAY", hot: todayTotal > 0 },
                         { l: "누적 출석", v: `${(me.attendCount || 0).toLocaleString()}일`, s: "STREAK" },
-                        { l: "음성 티어", v: `+${tierCur.xp.toLocaleString()}`, s: "PER 5MIN" },
+                        { l: `${tierCur.name} · +${tierCurXp.toLocaleString()}`, v: tierCur.en, s: "VOICE TIER", tint: tierCur.c },
                       ].map((st, i) => (
                         <div key={i} className={`px-0 md:px-6 ${i < 2 ? "pb-5 md:pb-0" : ""} ${i % 2 === 1 ? "text-right md:text-left" : ""} ${i === 0 ? "md:pl-0" : ""}`}>
                           <p className="text-[9px] font-black tracking-[0.28em] text-white/30 uppercase mb-2">{st.s}</p>
-                          <p className={`text-xl md:text-2xl font-black tabular-nums tracking-tight leading-none ${st.hot ? "text-[#ff5c77]" : "text-white"}`}>{st.v}</p>
+                          <p
+                            className={`text-xl md:text-2xl font-black tabular-nums tracking-tight leading-none ${st.hot ? "text-[#ff5c77]" : "text-white"}`}
+                            style={st.tint ? { color: st.tint } : undefined}
+                          >{st.v}</p>
                           <p className="text-[10px] font-bold text-white/40 mt-1.5">{st.l}</p>
                         </div>
                       ))}
@@ -1178,19 +1182,49 @@ export default function LevelPage() {
                           <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Tier</span>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">음성 티어</h3>
                         </div>
-                        {!tierNext && <StatusChip accent>최고 구간</StatusChip>}
+                        {!tierNext && <StatusChip accent>최고 티어</StatusChip>}
                       </div>
-                      <div className="flex items-end justify-between mb-1.5">
-                        <p className="text-4xl font-black text-[#131313] tabular-nums leading-none tracking-tight">+{tierCur.xp.toLocaleString()}<span className="text-[11px] font-bold text-[#a3a3a3] ml-1.5">XP / 5분</span></p>
-                        {tierNext && <span className="text-[11px] font-bold text-[#a3a3a3] tabular-nums">다음 +{tierNext.xp.toLocaleString()}</span>}
+
+                      {/* 현재 티어 — 이름을 앞세운 배지 */}
+                      <div className="flex items-center gap-3.5 mb-4">
+                        <span
+                          aria-hidden
+                          className="shrink-0 w-11 h-11 rounded-xl flex items-center justify-center rotate-45"
+                          style={{ backgroundColor: `${tierCur.c}1f`, border: `2px solid ${tierCur.c}` }}
+                        >
+                          <span className="-rotate-45 text-[13px] font-black" style={{ color: tierCur.c }}>
+                            {tierIdx + 1}
+                          </span>
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-2xl font-black tracking-tight leading-none" style={{ color: tierCur.c }}>{tierCur.name}</p>
+                          <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mt-1.5 tabular-nums">
+                            {tierCur.en} · {tierRangeLabel(tierIdx)}
+                          </p>
+                        </div>
+                        <div className="ml-auto text-right shrink-0">
+                          <p className="text-xl font-black text-[#131313] tabular-nums leading-none">+{tierCurXp.toLocaleString()}</p>
+                          <p className="text-[10px] font-bold text-[#a3a3a3] mt-1">XP / 5분</p>
+                        </div>
                       </div>
-                      <p className="text-[11px] font-bold text-[#a3a3a3] tabular-nums mb-2.5">현재 구간 Lv.{TIER_BOUNDS[tierIdx]}{tierNextBound !== null ? ` – ${tierNextBound - 1}` : " 이상"}</p>
-                      <SegLadder total={TIER_STEPS.length} currentIndex={tierIdx} titles={TIER_STEPS.map((t) => `Lv.${t.lv} — +${t.xp.toLocaleString()} XP`)} />
+
+                      <SegLadder
+                        total={VOICE_TIERS.length}
+                        currentIndex={tierIdx}
+                        colors={TIER_COLORS}
+                        titles={VOICE_TIERS.map((t) => `${t.name} · ${tierRangeLabel(VOICE_TIERS.indexOf(t))} — +${(P.voiceXp + t.bonus).toLocaleString()} XP`)}
+                      />
+
                       {tierNext && tierNextBound !== null && (
-                        <p className="text-[11px] font-bold text-[#8a8a8a] mt-4 break-keep">
-                          <span className="text-[#e91e3f]">▲</span> Lv.{tierNextBound} 도달 시 <b className="text-[#131313] tabular-nums">+{tierNext.xp.toLocaleString()}</b>
-                          <span className="text-[#a3a3a3] tabular-nums ml-2">({Math.max(0, tierNextBound - me.level)}레벨 남음)</span>
-                        </p>
+                        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-black/[0.08]">
+                          <span className="shrink-0 text-[11px] font-black" style={{ color: tierNext.c }}>▲ {tierNext.name}</span>
+                          <span className="text-[11px] font-bold text-[#8a8a8a] break-keep">
+                            Lv.{tierNextBound} 도달 시 <b className="text-[#131313] tabular-nums">+{tierNextXp.toLocaleString()}</b>
+                          </span>
+                          <span className="ml-auto shrink-0 text-[11px] font-bold text-[#a3a3a3] tabular-nums">
+                            {Math.max(0, tierNextBound - me.level)}레벨 남음
+                          </span>
+                        </div>
                       )}
                     </section>
 
@@ -1472,7 +1506,7 @@ export default function LevelPage() {
               <SectionHeader no="03" title="레벨 구간별 추가 기준" desc="음성/내전 채널 이용 시 레벨 구간에 따른 추가 XP — 레벨이 오를수록 계단처럼 쌓입니다" />
 
               {/* 📌 계단 차트 — 표 15줄 대신 '성장의 계단'을 그대로 시각화 */}
-              <TierStairs />
+              <TierStairs base={P.voiceXp} />
 
               {/* 정확한 수치가 필요한 사람을 위한 콤팩트 표 (플랫) */}
               <div className="mt-10 border-t border-black/[0.08]">
