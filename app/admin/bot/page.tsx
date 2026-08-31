@@ -15,6 +15,45 @@ const CHANNEL_TYPE_ICON: Record<string, string> = { text: "#", voice: "🔊", ca
 const REASON_LABEL: Record<string, string> = { chat: "채팅", voice: "음성", attend: "출석" };
 const PERIOD_LABEL: Record<string, string> = { daily: "일일", weekly: "주간", monthly: "월간" };
 // 📌 주기별 무작위 노출 개수 — 등록된 퀘스트 중 매 주기마다 이 개수만큼 뽑아 보여준다 (0이면 전부)
+// 📌 탭 안의 세부 탭 — 설정이 세로로 길게 늘어지지 않도록 한 번에 한 묶음만 보여준다.
+//    첫 항목이 기본값이고, 주소의 ?sec= 로 바로 들어올 수 있다.
+const SUB_TABS: Record<string, { id: string; label: string }[]> = {
+  settings: [
+    { id: "xp", label: "지급량 · 주기" },
+    { id: "mute", label: "음소거 · 퇴장" },
+    { id: "levelup", label: "레벨업 알림" },
+    { id: "rolegrant", label: "역할 지급 알림" },
+  ],
+  roles: [
+    { id: "tier", label: "티어 일괄 연결" },
+    { id: "form", label: "역할 추가 · 수정" },
+    { id: "list", label: "설정된 역할" },
+  ],
+  channels: [
+    { id: "form", label: "채널 추가 · 수정" },
+    { id: "list", label: "설정된 채널" },
+  ],
+  boosts: [
+    { id: "form", label: "부스트 추가 · 수정" },
+    { id: "list", label: "등록된 부스트" },
+  ],
+  quests: [
+    { id: "pick", label: "노출 방식" },
+    { id: "form", label: "퀘스트 추가 · 수정" },
+    { id: "list", label: "등록된 퀘스트" },
+  ],
+  inventory: [
+    { id: "form", label: "역할 등록" },
+    { id: "list", label: "등록된 역할" },
+    { id: "auto", label: "자동으로 잡히는 역할" },
+  ],
+  grant: [
+    { id: "grant", label: "XP 지급 · 회수" },
+    { id: "reset", label: "XP 초기화" },
+    { id: "logs", label: "최근 수동 지급" },
+  ],
+};
+
 const QUEST_PICK_FIELDS = [
   { period: "daily", key: "questPickDaily", every: "매일 자정" },
   { period: "weekly", key: "questPickWeekly", every: "매주 월요일" },
@@ -74,6 +113,11 @@ export default function AdminBotPage() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") || "settings";
   const tab = TAB_META[tabParam] ? tabParam : "settings";
+
+  // 세부 탭 — 없는 값이 들어오면 첫 항목으로 떨어진다
+  const subList = SUB_TABS[tab] || [];
+  const secParam = searchParams.get("sec") || "";
+  const sub = subList.some((x) => x.id === secParam) ? secParam : subList[0]?.id || "";
 
   const [popup, setPopup] = useState({ isOpen: false, message: "", isError: false });
   const [deleteConfirm, setDeleteConfirm] = useState<{ kind: "role" | "channel" | "boost" | "quest" | "inventory"; id: string } | null>(null);
@@ -470,6 +514,29 @@ export default function AdminBotPage() {
             );
           })}
         </div>
+
+        {/* 세부 탭 — 한 카테고리 안을 다시 나눠 한 화면에 한 묶음만 둔다 */}
+        {subList.length > 1 && (
+          <div className="max-w-6xl mx-auto mt-3 flex items-center gap-1.5 overflow-x-auto no-bar">
+            {subList.map((x) => {
+              const on = sub === x.id;
+              return (
+                <Link
+                  key={x.id}
+                  href={`/admin/bot?tab=${tab}&sec=${x.id}`}
+                  scroll={false}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-bold transition-all ${
+                    on
+                      ? "bg-white text-[#131313] ring-1 ring-black/10 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.3)]"
+                      : "text-[#a3a3a3] hover:text-[#131313]"
+                  }`}
+                >
+                  {x.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="w-full max-w-6xl mx-auto px-6 pb-16 flex-1 flex flex-col space-y-14">
@@ -478,6 +545,7 @@ export default function AdminBotPage() {
         {tab === "settings" && settings && (
           <Reveal>
           <form onSubmit={saveSettings} className="space-y-14">
+            {sub === "xp" && (
             <section>
               <SectionHead no="01" title="지급량 · 주기" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -513,7 +581,9 @@ export default function AdminBotPage() {
                 </div>
               </div>
             </section>
+            )}
 
+            {sub === "mute" && (
             <section>
               <SectionHead no="02" title="음소거 · 퇴장 처리" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -581,7 +651,9 @@ export default function AdminBotPage() {
                 </div>
               </div>
             </section>
+            )}
 
+            {sub === "levelup" && (
             <section>
               <SectionHead no="03" title="레벨업 알림" />
               <div className="space-y-4">
@@ -607,7 +679,9 @@ export default function AdminBotPage() {
                 </div>
               </div>
             </section>
+            )}
 
+            {sub === "rolegrant" && (
             <section>
               <SectionHead no="04" title="역할 지급 알림" right={
                 <button type="button" onClick={() => setSettings({ ...settings, roleGrantEnabled: settings.roleGrantEnabled === false })}
@@ -641,6 +715,7 @@ export default function AdminBotPage() {
                 </div>
               </div>
             </section>
+            )}
 
             {/* 스크롤 끝까지 내려가지 않아도 저장할 수 있게 하단에 고정 */}
             <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#f5f3f0]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
@@ -654,6 +729,7 @@ export default function AdminBotPage() {
         {/* ═══ 역할 설정 ═══ */}
         {tab === "roles" && (
           <>
+            {sub === "tier" && (
             <Reveal>
               <section className="mb-16">
                 <SectionHead no="01" title="음성 티어 역할 일괄 연결" />
@@ -698,7 +774,9 @@ export default function AdminBotPage() {
                 </div>
               </section>
             </Reveal>
+            )}
 
+            {sub === "form" && (
             <Reveal>
             <section>
               <SectionHead no="02" title="역할 추가 / 수정" />
@@ -755,10 +833,12 @@ export default function AdminBotPage() {
               </form>
             </section>
             </Reveal>
+            )}
 
+            {sub === "list" && (
             <Reveal>
             <section>
-              <SectionHead no="02" title={`설정된 역할 (${configs.length})`} />
+              <SectionHead no="03" title={`설정된 역할 (${configs.length})`} />
               {isLoading ? <div className="py-10 text-center text-[#8a8a8a] text-sm">불러오는 중...</div>
                 : configs.length === 0 ? <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">설정된 역할이 없습니다.</div>
                 : (
@@ -788,12 +868,14 @@ export default function AdminBotPage() {
               )}
             </section>
             </Reveal>
+            )}
           </>
         )}
 
         {/* ═══ 채널 / 카테고리 ═══ */}
         {tab === "channels" && (
           <>
+            {sub === "form" && (
             <Reveal>
             <section>
               <SectionHead no="01" title="채널 정책 추가 / 수정" />
@@ -852,7 +934,9 @@ export default function AdminBotPage() {
               </form>
             </section>
             </Reveal>
+            )}
 
+            {sub === "list" && (
             <Reveal>
             <section>
               <SectionHead no="02" title={`설정된 채널 (${channelConfigs.length})`} />
@@ -885,12 +969,14 @@ export default function AdminBotPage() {
               )}
             </section>
             </Reveal>
+            )}
           </>
         )}
 
         {/* ═══ 기간제 부스트 ═══ */}
         {tab === "boosts" && (
           <>
+            {sub === "form" && (
             <Reveal>
             <section>
               <SectionHead no="01" title="부스트 추가 / 수정" />
@@ -981,7 +1067,9 @@ export default function AdminBotPage() {
               </form>
             </section>
             </Reveal>
+            )}
 
+            {sub === "list" && (
             <Reveal>
             <section>
               <SectionHead no="02" title={`등록된 부스트 (${boosts.length})`} />
@@ -1017,6 +1105,7 @@ export default function AdminBotPage() {
               )}
             </section>
             </Reveal>
+            )}
           </>
         )}
 
@@ -1024,6 +1113,7 @@ export default function AdminBotPage() {
         {/* ═══ XP 수동 지급 ═══ */}
         {tab === "inventory" && (
           <>
+            {sub === "form" && (
             <Reveal>
               <section className="mb-16">
                 <SectionHead no="01" title={invForm.id ? "인벤토리 역할 수정" : "인벤토리 역할 등록"} />
@@ -1137,7 +1227,9 @@ export default function AdminBotPage() {
                 </div>
               </section>
             </Reveal>
+            )}
 
+            {sub === "list" && (
             <Reveal>
               <section>
                 <SectionHead no="02" title={`등록된 인벤토리 역할 (${invRoles.length})`} />
@@ -1184,7 +1276,9 @@ export default function AdminBotPage() {
                 )}
               </section>
             </Reveal>
+            )}
 
+            {sub === "auto" && (
             <Reveal>
               <section className="mt-16">
                 <SectionHead no="03" title={`자동으로 잡히는 역할 (${autoRoles.length})`} />
@@ -1244,11 +1338,13 @@ export default function AdminBotPage() {
                 )}
               </section>
             </Reveal>
+            )}
           </>
         )}
 
         {tab === "quests" && (
           <>
+            {sub === "pick" && (
             <Reveal>
               <section className="mb-16">
                 <SectionHead no="01" title="주기별 노출 방식" />
@@ -1290,7 +1386,9 @@ export default function AdminBotPage() {
                 </div>
               </section>
             </Reveal>
+            )}
 
+            {sub === "form" && (
             <Reveal>
               <section className="mb-16">
                 <SectionHead no="02" title={questForm.id ? "퀘스트 수정" : "퀘스트 추가"} />
@@ -1471,7 +1569,9 @@ export default function AdminBotPage() {
                 </div>
               </section>
             </Reveal>
+            )}
 
+            {sub === "list" && (
             <Reveal>
               <section>
                 <SectionHead no="03" title={`등록된 퀘스트 (${quests.length})`} />
@@ -1552,11 +1652,13 @@ export default function AdminBotPage() {
                 )}
               </section>
             </Reveal>
+            )}
           </>
         )}
 
         {tab === "grant" && (
           <>
+            {sub === "grant" && (
             <Reveal>
             <section>
               <SectionHead no="01" title="XP 지급 · 회수" />
@@ -1609,7 +1711,9 @@ export default function AdminBotPage() {
               </form>
             </section>
             </Reveal>
+            )}
 
+            {sub === "reset" && (
             <Reveal>
             <section>
               <SectionHead no="02" title="XP 초기화" />
@@ -1630,7 +1734,9 @@ export default function AdminBotPage() {
               <p className={fieldNote}>대상은 위 &lsquo;XP 지급 · 회수&rsquo;의 대상 칸을 그대로 사용합니다</p>
             </section>
             </Reveal>
+            )}
 
+            {sub === "logs" && (
             <Reveal>
             <section>
               <SectionHead no="03" title={`최근 수동 지급 (${grantLogs.length})`} />
@@ -1667,6 +1773,7 @@ export default function AdminBotPage() {
               </p>
             </section>
             </Reveal>
+            )}
           </>
         )}
 
