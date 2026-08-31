@@ -1153,98 +1153,104 @@ export default function LevelPage() {
                           : "매일 자정(KST)에 초기화됩니다"}
                       </p>
 
-                      {/* 퀘스트 목록 — 첫 항목은 내장 출석(음성 N분) */}
+                      {/* 퀘스트 로그 — 카드 하나가 곧 하나의 임무 */}
                       {questRows.map((q) => {
                         const pct = Math.min(100, Math.round((q.current / Math.max(1, q.target)) * 100));
                         const unit = q.metric === "xp" ? " XP" : q.metric === "minute" ? "분" : "회";
+                        const done = q.done;
                         return (
                           <div
                             key={q.id}
-                            className={`relative overflow-hidden rounded-xl border px-4 py-3 mb-2 transition-all ${
+                            className={`relative overflow-hidden rounded-2xl border mb-3 transition-all ${
                               q.claimable
-                                ? "border-[#e91e3f]/45 bg-[#e91e3f]/[0.06]"
+                                ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.05] shadow-[0_14px_36px_-22px_rgba(233,30,63,0.75)]"
                                 : q.claimed
                                 ? "border-black/[0.07] bg-black/[0.02]"
-                                : "border-black/[0.08]"
+                                : "border-black/[0.09] bg-white"
                             }`}
                           >
-                            {/* 진행도를 행 배경으로 — 숫자를 읽기 전에 먼저 느껴진다 */}
-                            {!q.claimed && !q.claimable && pct > 0 && (
+                            {/* 수령 가능하면 좌측에 붉은 레일 */}
+                            {q.claimable && <span aria-hidden className="absolute left-0 top-0 bottom-0 w-1 bg-[#e91e3f]"></span>}
+
+                            <div className="relative flex items-center gap-4 px-4 sm:px-5 py-4">
+                              {/* 임무 인장 — 달성하면 채워진다 */}
                               <span
                                 aria-hidden
-                                className="absolute inset-y-0 left-0 bg-black/[0.035] transition-[width] duration-700 pointer-events-none"
-                                style={{ width: `${pct}%` }}
-                              ></span>
-                            )}
-                            <div className="relative flex items-center gap-3">
-                              {/* 상태 점 */}
-                              <span
-                                aria-hidden
-                                className={`shrink-0 w-1.5 h-1.5 rounded-full ${q.done ? "bg-emerald-600" : "bg-black/20"}`}
-                              ></span>
+                                className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
+                                  q.claimed
+                                    ? "bg-emerald-600/10"
+                                    : done
+                                    ? "bg-emerald-600"
+                                    : "bg-black/[0.05]"
+                                }`}
+                              >
+                                {q.claimed ? (
+                                  <svg viewBox="0 0 20 20" className="w-5 h-5 text-emerald-700" fill="none" stroke="currentColor" strokeWidth="3">
+                                    <path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                ) : done ? (
+                                  <svg viewBox="0 0 20 20" className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth="3">
+                                    <path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                ) : (
+                                  <span className="text-[13px] font-black text-[#a3a3a3] tabular-nums">{pct}%</span>
+                                )}
+                              </span>
 
-                              {/* 이름 (+ 넓은 화면에서만 설명 병기) */}
-                              <p className={`min-w-0 flex-1 truncate text-[13px] font-bold ${q.claimed ? "text-[#8a8a8a]" : "text-[#131313]"}`}>
-                                {q.name}
-                                {q.desc && <span className="hidden lg:inline text-[11px] font-medium text-[#a3a3a3] ml-2">{q.desc}</span>}
-                              </p>
-
-                              {/* 진행 게이지 — 좁은 화면에서는 아래 줄로 */}
-                              <div className="hidden sm:flex items-center gap-2 shrink-0 w-44">
-                                <div className="flex-1 h-1.5 rounded-full bg-black/[0.07] overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full transition-[width] duration-700 ${q.done ? "bg-emerald-600" : "bg-[#131313]/45"}`}
-                                    style={{ width: `${pct}%` }}
-                                  ></div>
+                              {/* 임무 내용 */}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className={`text-[14px] font-black tracking-tight ${q.claimed ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{q.name}</p>
+                                  {q.rewardXp > 0 && (
+                                    <span
+                                      className={`inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-black tabular-nums ${
+                                        q.claimed ? "bg-black/[0.05] text-[#c4c4c4]" : "bg-[#e91e3f]/10 text-[#e91e3f]"
+                                      }`}
+                                    >
+                                      <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                                      +{q.rewardXp.toLocaleString()} XP
+                                    </span>
+                                  )}
                                 </div>
-                                <span className="shrink-0 w-16 text-right text-[10px] font-black text-[#a3a3a3] tabular-nums">
-                                  {q.current.toLocaleString()}/{q.target.toLocaleString()}{unit}
-                                </span>
+                                {q.desc && <p className="text-[11px] text-[#a3a3a3] mt-1 truncate">{q.desc}</p>}
+
+                                {/* 진행 게이지 */}
+                                <div className="flex items-center gap-2.5 mt-2.5">
+                                  <div className="flex-1 h-2 rounded-full bg-black/[0.07] overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full transition-[width] duration-700 ${done ? "bg-emerald-600" : "bg-[#131313]/50"}`}
+                                      style={{ width: `${pct}%` }}
+                                    ></div>
+                                  </div>
+                                  <span className="shrink-0 text-[10px] font-black text-[#8a8a8a] tabular-nums">
+                                    {q.current.toLocaleString()}/{q.target.toLocaleString()}{unit}
+                                  </span>
+                                </div>
                               </div>
 
-                              {/* 보상 */}
-                              {q.rewardXp > 0 && (
-                                <p className={`shrink-0 w-[74px] text-right text-[13px] font-black tabular-nums ${q.claimed ? "text-[#c4c4c4]" : "text-[#e91e3f]"}`}>
-                                  +{q.rewardXp.toLocaleString()}
-                                </p>
-                              )}
-
-                              {/* 상태 · 수령 */}
-                              <div className="shrink-0 w-[68px] text-right">
+                              {/* 수령 */}
+                              <div className="shrink-0">
                                 {q.claimable ? (
                                   <button
                                     onClick={() => claimQuest(q)}
                                     disabled={claiming === q.id}
-                                    className="px-3.5 py-1.5 rounded-lg bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[12px] font-bold transition-colors outline-none focus:outline-none"
+                                    className="px-4 sm:px-5 py-2.5 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[12px] font-black transition-colors outline-none focus:outline-none shadow-[0_8px_20px_-10px_rgba(233,30,63,0.9)]"
                                   >
                                     {claiming === q.id ? "…" : "받기"}
                                   </button>
                                 ) : q.claimed ? (
-                                  <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700">
-                                    <svg viewBox="0 0 20 20" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3"><path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                                    완료
-                                  </span>
-                                ) : q.done ? (
+                                  <span className="text-[11px] font-black text-emerald-700">완료</span>
+                                ) : done ? (
                                   <span className="text-[11px] font-black text-emerald-700">달성</span>
-                                ) : null}
+                                ) : (
+                                  <span className="text-[11px] font-bold text-[#c4c4c4]">진행 중</span>
+                                )}
                               </div>
-                            </div>
-
-                            {/* 좁은 화면 전용 진행 게이지 */}
-                            <div className="sm:hidden flex items-center gap-2 mt-2.5">
-                              <div className="flex-1 h-1.5 rounded-full bg-black/[0.07] overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full transition-[width] duration-700 ${q.done ? "bg-emerald-600" : "bg-[#131313]/45"}`}
-                                  style={{ width: `${pct}%` }}
-                                ></div>
-                              </div>
-                              <span className="shrink-0 text-[10px] font-black text-[#a3a3a3] tabular-nums">
-                                {q.current.toLocaleString()}/{q.target.toLocaleString()}{unit}
-                              </span>
                             </div>
                           </div>
                         );
                       })}
+
 
                       {/* 관리자가 아직 퀘스트를 등록하지 않은 상태 */}
                       {quests && questRows.length <= (questPeriod === "daily" ? 1 : 0) && (
@@ -1356,77 +1362,112 @@ export default function LevelPage() {
                       </section>
                     )}
 
-                    {/* 보유 아이템 — 디스코드 역할을 실제로 들고 있는지 대조해서 보여준다 */}
+                    {/* ═══ 인벤토리 — 게임 슬롯 그리드 ═══ */}
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
                           <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Inventory</span>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">보유 아이템</h3>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">
+                            인벤토리
+                            <span className="text-sm font-black text-[#a3a3a3] ml-2 tabular-nums">{myItems ? myItems.items.length : 0}</span>
+                          </h3>
                         </div>
                         {canSeeShop && (
-                          <Link href="/shop" className="shrink-0 text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">
-                            상점 →
+                          <Link href="/shop" className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#131313] text-white text-[11px] font-bold hover:bg-[#2a2a2a] transition-colors">
+                            상점 <span>→</span>
                           </Link>
                         )}
                       </div>
 
                       {!myItems ? (
-                        <div className="py-8 text-center text-[11px] font-bold text-[#c4c4c4]">불러오는 중…</div>
-                      ) : myItems.items.length === 0 ? (
-                        <EmptySlot>보유한 아이템이 없습니다</EmptySlot>
-                      ) : (
-                        <div className="border-t border-black/[0.08]">
-                          {myItems.items.map((it, i) => {
-                            const pending = it.status === "pending";
-                            const dday =
-                              it.expiresAt && it.status === "completed"
-                                ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000))
-                                : null;
-                            return (
-                              <div
-                                key={i}
-                                className="relative flex items-center gap-3 min-h-[56px] pl-3.5 pr-1 py-2.5 border-b border-black/[0.05] hover:bg-black/[0.02] transition-colors"
-                              >
-                                {/* 출처를 색 레일로 — 레벨 보상 레드 / 상점 잉크 / 대기 회색 */}
-                                <span
-                                  aria-hidden
-                                  className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full"
-                                  style={{
-                                    backgroundColor:
-                                      it.status === "missing" ? "#c4c4c4" : pending ? "#d6d3ce" : it.source === "level" ? "#e91e3f" : "#131313",
-                                  }}
-                                ></span>
-                                <div className="min-w-0 flex-1">
-                                  <p className={`text-[13px] font-bold truncate ${pending || it.status === "missing" ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{it.name}</p>
-                                  <p className="text-[10px] font-bold text-[#a3a3a3] mt-0.5">
-                                    {it.status === "missing"
-                                      ? "역할이 확인되지 않음"
-                                      : pending
-                                      ? "지급 대기 중"
-                                      : it.source === "level"
-                                      ? `레벨 보상 · Lv.${it.rewardLevel}`
-                                      : it.source === "grant"
-                                      ? "지급된 역할"
-                                      : it.kind === "physical"
-                                      ? "실물 상품"
-                                      : it.days > 0
-                                      ? `${it.days}일 이용권`
-                                      : "영구 보유"}
-                                  </p>
-                                </div>
-                                {dday !== null ? (
-                                  <span className={`shrink-0 text-[10px] font-black tabular-nums px-2 py-1 rounded-full ${dday <= 3 ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "bg-black/[0.05] text-[#8a8a8a]"}`}>
-                                    D-{dday}
-                                  </span>
-                                ) : (
-                                  <span className="shrink-0 text-[9px] font-black tracking-[0.12em] uppercase px-2 py-1 rounded-full bg-black/[0.05] text-[#a3a3a3]">
-                                    {it.kind === "physical" ? "Goods" : "Role"}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
+                        <div className="grid grid-cols-3 gap-2">
+                          {[0, 1, 2, 3, 4, 5].map((i) => (
+                            <div key={i} className="aspect-square rounded-xl bg-black/[0.04] animate-pulse"></div>
+                          ))}
                         </div>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-3 gap-2">
+                            {myItems.items.map((it, i) => {
+                              const dead = it.status === "pending" || it.status === "missing";
+                              const accent =
+                                it.color ||
+                                (it.source === "level" ? "#e91e3f" : it.source === "inventory" ? "#3f83b8" : "#131313");
+                              const dday =
+                                it.expiresAt && it.status === "completed"
+                                  ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000))
+                                  : null;
+                              return (
+                                <div
+                                  key={i}
+                                  title={`${it.name}${it.description ? " · " + it.description : ""}`}
+                                  className="group relative aspect-square rounded-xl overflow-hidden flex flex-col items-center justify-center px-2 transition-transform hover:-translate-y-0.5"
+                                  style={{
+                                    background: dead ? "rgba(0,0,0,0.02)" : `linear-gradient(150deg, ${accent}1a, ${accent}06)`,
+                                    border: `1px solid ${dead ? "rgba(0,0,0,0.08)" : accent + "44"}`,
+                                    boxShadow: dead ? "none" : `0 8px 20px -14px ${accent}`,
+                                  }}
+                                >
+                                  {/* 슬롯 모서리 — 게임 인벤토리 특유의 브래킷 */}
+                                  <span aria-hidden className="absolute top-1 left-1 w-2 h-2 border-t border-l rounded-tl" style={{ borderColor: dead ? "rgba(0,0,0,0.12)" : accent + "77" }}></span>
+                                  <span aria-hidden className="absolute bottom-1 right-1 w-2 h-2 border-b border-r rounded-br" style={{ borderColor: dead ? "rgba(0,0,0,0.12)" : accent + "77" }}></span>
+
+                                  {/* 아이콘 */}
+                                  <span
+                                    aria-hidden
+                                    className="w-9 h-9 rounded-lg flex items-center justify-center mb-1.5 shrink-0"
+                                    style={{ backgroundColor: dead ? "rgba(0,0,0,0.04)" : "#ffffff", boxShadow: dead ? "none" : `0 4px 12px -6px ${accent}` }}
+                                  >
+                                    {it.kind === "physical" ? (
+                                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke={dead ? "#c4c4c4" : accent} strokeWidth="1.8">
+                                        <path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5Z" strokeLinejoin="round" />
+                                        <path d="M3 8.5 12 13l9-4.5M12 13v7" strokeLinejoin="round" />
+                                      </svg>
+                                    ) : (
+                                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill={dead ? "#c4c4c4" : accent}>
+                                        <path d="M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z" opacity="0.9" />
+                                      </svg>
+                                    )}
+                                  </span>
+
+                                  <p className={`w-full text-[10px] font-black text-center leading-tight line-clamp-2 ${dead ? "text-[#a3a3a3]" : "text-[#131313]"}`}>
+                                    {it.name}
+                                  </p>
+
+                                  {/* 상태 배지 */}
+                                  {dday !== null && (
+                                    <span className={`absolute top-1.5 right-1.5 text-[9px] font-black tabular-nums px-1.5 py-0.5 rounded-md ${dday <= 3 ? "bg-[#e91e3f] text-white" : "bg-black/10 text-[#5a5a5a]"}`}>
+                                      D-{dday}
+                                    </span>
+                                  )}
+                                  {it.status === "pending" && (
+                                    <span className="absolute top-1.5 right-1.5 text-[9px] font-black px-1.5 py-0.5 rounded-md bg-black/10 text-[#8a8a8a]">대기</span>
+                                  )}
+                                  {it.status === "missing" && (
+                                    <span className="absolute top-1.5 right-1.5 text-[9px] font-black px-1.5 py-0.5 rounded-md bg-black/10 text-[#8a8a8a]">확인 필요</span>
+                                  )}
+                                  {it.source === "level" && it.status === "completed" && (
+                                    <span className="absolute bottom-1.5 left-1.5 text-[8px] font-black tabular-nums text-[#e91e3f]">Lv.{it.rewardLevel}</span>
+                                  )}
+                                </div>
+                              );
+                            })}
+
+                            {/* 빈 슬롯 — 그리드를 채워 인벤토리처럼 보이게 */}
+                            {Array.from({ length: Math.max(0, 6 - myItems.items.length) }, (_, i) => (
+                              <div
+                                key={`empty-${i}`}
+                                className="aspect-square rounded-xl border border-dashed border-black/[0.09] flex items-center justify-center"
+                              >
+                                <span aria-hidden className="w-4 h-4 rounded-md border border-dashed border-black/[0.12]"></span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {myItems.items.length === 0 && (
+                            <p className="text-[11px] font-bold text-[#a3a3a3] mt-3.5 text-center">아직 보유한 아이템이 없습니다</p>
+                          )}
+                        </>
                       )}
 
                       {myItems && !myItems.synced && (
@@ -1434,70 +1475,90 @@ export default function LevelPage() {
                       )}
                     </section>
 
-                    {/* 음성 티어 */}
+                    {/* ═══ 등급 — 랭크 플라크 ═══ */}
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Tier</span>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Rank</span>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">등급</h3>
                         </div>
                         <button
                           onClick={() => setTierOpen(true)}
-                          className="shrink-0 text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors border border-black/10 hover:border-black/25 rounded-full px-3 py-1 outline-none focus:outline-none"
+                          className="shrink-0 h-8 px-3 rounded-lg bg-black/[0.05] hover:bg-black/[0.09] text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
                         >
                           등급 안내
                         </button>
                       </div>
 
-                      {/* 현재 등급 — 등급색을 입힌 카드가 사이드 열의 앵커가 된다 */}
+                      {/* 랭크 플라크 — 엠블럼을 가운데 세우고 등급색으로 감싼다 */}
                       <div
-                        className="relative rounded-2xl overflow-hidden px-4 py-4 mb-4 flex items-center gap-3.5"
+                        className="relative rounded-2xl overflow-hidden px-5 pt-7 pb-6 text-center"
                         style={{
-                          background: `linear-gradient(135deg, ${tierCur.c}1c, ${tierCur.c}08)`,
+                          background: `radial-gradient(120% 90% at 50% 0%, ${tierCur.c}26, ${tierCur.c}08 60%, transparent)`,
                           border: `1px solid ${tierCur.c}3d`,
                         }}
                       >
                         <div
                           aria-hidden
-                          className="absolute -top-10 -right-8 w-32 h-32 rounded-full blur-[46px] pointer-events-none"
-                          style={{ background: `${tierCur.c}40` }}
+                          className="absolute -top-16 left-1/2 -translate-x-1/2 w-52 h-52 rounded-full blur-[54px] pointer-events-none"
+                          style={{ background: `${tierCur.c}3a` }}
                         ></div>
-                        <span
-                          aria-hidden
-                          className="relative z-10 shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center bg-white"
-                          style={{ boxShadow: `0 8px 22px -10px ${tierCur.c}` }}
-                        >
-                          <TierEmblem tier={tierCur} size={26} />
-                        </span>
-                        <div className="relative z-10 min-w-0">
-                          <p className="text-2xl font-black tracking-tight leading-none" style={{ color: tierCur.c }}>{tierCur.name}</p>
-                          <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mt-1.5 tabular-nums">
-                            {tierCur.en} · {tierRangeLabel(tierIdx)}
-                          </p>
+
+                        {/* 엠블럼 */}
+                        <div className="relative z-10 flex justify-center mb-4">
+                          <span
+                            className="w-[74px] h-[74px] rounded-2xl bg-white flex items-center justify-center"
+                            style={{ boxShadow: `0 14px 34px -14px ${tierCur.c}, inset 0 0 0 1px ${tierCur.c}33` }}
+                          >
+                            <TierEmblem tier={tierCur} size={42} />
+                          </span>
                         </div>
-                        <div className="relative z-10 ml-auto text-right shrink-0">
-                          <p className={`text-xl font-black tabular-nums leading-none ${tierCur.bonus > 0 ? "text-[#131313]" : "text-[#c4c4c4]"}`}>
+
+                        {/* 등급명 */}
+                        <p className="relative z-10 text-3xl font-black tracking-tight leading-none" style={{ color: tierCur.c }}>
+                          {tierCur.name}
+                        </p>
+                        <p className="relative z-10 text-[10px] font-black tracking-[0.28em] text-[#a3a3a3] uppercase mt-2 tabular-nums">
+                          {tierCur.en} · {tierRangeLabel(tierIdx)}
+                        </p>
+
+                        {/* 등급 진행 핍 — 10칸 중 현재 위치 */}
+                        <div className="relative z-10 flex justify-center gap-1 mt-5">
+                          {VOICE_TIERS.map((t, i) => (
+                            <span
+                              key={t.key}
+                              title={t.name}
+                              className="h-1.5 rounded-full transition-all"
+                              style={{
+                                width: i === tierIdx ? 22 : 10,
+                                backgroundColor: i < tierIdx ? tierCur.c + "55" : i === tierIdx ? tierCur.c : "rgba(0,0,0,0.10)",
+                              }}
+                            ></span>
+                          ))}
+                        </div>
+
+                        {/* 음성 추가 XP */}
+                        <div className="relative z-10 mt-5 pt-4 border-t" style={{ borderColor: `${tierCur.c}26` }}>
+                          <p className={`text-2xl font-black tabular-nums leading-none ${tierCur.bonus > 0 ? "text-[#131313]" : "text-[#c4c4c4]"}`}>
                             {tierCur.bonus > 0 ? `+${tierCur.bonus.toLocaleString()}` : "—"}
                           </p>
-                          <p className="text-[10px] font-bold text-[#a3a3a3] mt-1">음성 추가 XP</p>
+                          <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mt-1.5">음성 추가 XP</p>
                         </div>
                       </div>
 
-                      <SegLadder
-                        total={VOICE_TIERS.length}
-                        currentIndex={tierIdx}
-                        colors={TIER_COLORS}
-                        titles={VOICE_TIERS.map((t) => `${t.name} · ${tierRangeLabel(VOICE_TIERS.indexOf(t))} — 음성 추가 +${t.bonus.toLocaleString()} XP`)}
-                      />
-
+                      {/* 다음 등급 */}
                       {tierNext && tierNextBound !== null && (
-                        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-black/[0.08]">
-                          <span className="shrink-0 text-[11px] font-black" style={{ color: tierNext.c }}>▲ {tierNext.name}</span>
-                          <span className="text-[11px] font-bold text-[#8a8a8a] break-keep">
-                            Lv.{tierNextBound} 도달 시 음성 추가 <b className="text-[#131313] tabular-nums">+{tierNext.bonus.toLocaleString()}</b>
-                          </span>
-                          <span className="ml-auto shrink-0 text-[11px] font-bold text-[#a3a3a3] tabular-nums">
-                            {Math.max(0, tierNextBound - me.level)}레벨 남음
+                        <div className="flex items-center gap-3 mt-4 px-4 py-3 rounded-xl bg-black/[0.03]">
+                          <TierEmblem tier={tierNext} size={22} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[12px] font-black truncate" style={{ color: tierNext.c }}>다음 · {tierNext.name}</p>
+                            <p className="text-[10px] font-bold text-[#a3a3a3] tabular-nums mt-0.5">
+                              Lv.{tierNextBound} 도달 시 음성 추가 +{tierNext.bonus.toLocaleString()}
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-[11px] font-black text-[#131313] tabular-nums">
+                            {Math.max(0, tierNextBound - me.level)}
+                            <span className="text-[9px] font-bold text-[#a3a3a3] ml-0.5">레벨</span>
                           </span>
                         </div>
                       )}
