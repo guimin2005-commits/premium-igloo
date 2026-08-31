@@ -8,6 +8,22 @@ import { DiscordIdInput } from "../components/DiscordIds";
 
 const ADMIN_USERS = ["elahw.06"];
 
+// 개인정보 수집·이용 안내 기본 문구 (관리자가 "기본 문구 넣기"로 채운 뒤 자유롭게 수정)
+const DEFAULT_PRIVACY_TITLE = "[중요] 개인정보 수집 및 이용 안내";
+const DEFAULT_PRIVACY_BODY = [
+  "• 본 설문을 통해 수집된 개인정보는 상금/상품 발송 및 본인 확인 이외의 목적으로 사용되지 않습니다.",
+  "• 수집된 개인정보는 상금/상품 발송 완료 후 7일 이내 즉시 안전하게 파기됩니다.",
+  "",
+  "[개인정보 수집 및 이용 목적 안내]",
+  "1. 수집 목적: 대회 참가자 본인 확인, 대진표 작성, 상금 및 상품 발송",
+  "2. 수집 항목: 실명, 디스코드 닉네임, 연락처, 게임 닉네임, 계좌번호",
+  "3. 보유 및 이용 기간: 대회 종료 및 상금 지급 완료 후 7일 이내 즉시 파기",
+  "",
+  "귀하는 개인정보 수집에 동의하지 않을 권리가 있으나, 미동의 시 대회 참가 및 상금 수령이 제한됩니다.",
+].join("\n");
+const DEFAULT_PRIVACY_CONFIRM = "본 상금 및 상품 수령을 위한 개인정보 수집 및 이용 안내, 유의사항을 충분히 숙지하였으며 이에 동의합니다.";
+const EMPTY_PRIVACY = { enabled: false, title: "", body: "", confirmLabel: "" };
+
 const CustomSelect = ({ value, options, onChange }: { value: string, options: {value: string, label: string}[], onChange: (val: string) => void }) => {
   const [isOpen, setIsOpen] = useState(false);
   const selectRef = useRef<HTMLDivElement>(null);
@@ -175,9 +191,17 @@ export default function AdminWritePage() {
 
   // 📌 참가 설문 (구글폼 형식)
   type SQ = { qid: string; type: string; label: string; desc: string; required: boolean; options: string[]; etc: boolean };
-  const [survey, setSurvey] = useState<{ enabled: boolean; title: string; desc: string; closed: boolean; questions: SQ[] }>({
-    enabled: false, title: "", desc: "", closed: false, questions: [],
+  type SPrivacy = { enabled: boolean; title: string; body: string; confirmLabel: string };
+  const [survey, setSurvey] = useState<{ enabled: boolean; title: string; desc: string; closed: boolean; questions: SQ[]; privacy: SPrivacy }>({
+    enabled: false, title: "", desc: "", closed: false, questions: [], privacy: { ...EMPTY_PRIVACY },
   });
+  const readPrivacy = (v: any): SPrivacy => ({
+    enabled: !!v?.enabled,
+    title: v?.title || "",
+    body: v?.body || "",
+    confirmLabel: v?.confirmLabel || "",
+  });
+  const setPrivacy = (patch: Partial<SPrivacy>) => setSurvey((s) => ({ ...s, privacy: { ...s.privacy, ...patch } }));
   const Q_TYPES = [
     { v: "short", l: "단답형" },
     { v: "long", l: "장문형" },
@@ -326,7 +350,7 @@ export default function AdminWritePage() {
       setTournamentPhase(phaseOf(d));
       setTournamentTeamDay(d.tournamentTeamDay || ""); setTournamentEventDay(d.tournamentEventDay || "");
       setTournamentSchedule(Array.isArray(d.tournamentSchedule) ? d.tournamentSchedule : []);
-      if (d.survey) setSurvey({ enabled: !!d.survey.enabled, title: d.survey.title || "", desc: d.survey.desc || "", closed: !!d.survey.closed, questions: Array.isArray(d.survey.questions) ? d.survey.questions : [] });
+      if (d.survey) setSurvey({ enabled: !!d.survey.enabled, title: d.survey.title || "", desc: d.survey.desc || "", closed: !!d.survey.closed, questions: Array.isArray(d.survey.questions) ? d.survey.questions : [], privacy: readPrivacy(d.survey.privacy) });
       setHasDraft(false);
       localStorage.removeItem(DRAFT_KEY);
     } catch {}
@@ -395,7 +419,7 @@ export default function AdminWritePage() {
             setTournamentType(post.tournamentType || "모집");
             setTournamentPhase(phaseOf(post));
             setTournamentTeamDay(post.tournamentTeamDay || ""); setTournamentEventDay(post.tournamentEventDay || "");
-            if (post.survey) setSurvey({ enabled: !!post.survey.enabled, title: post.survey.title || "", desc: post.survey.desc || "", closed: !!post.survey.closed, questions: Array.isArray(post.survey.questions) ? post.survey.questions.map((q: any) => ({ qid: q.qid || newQid(), type: q.type || "short", label: q.label || "", desc: q.desc || "", required: !!q.required, options: Array.isArray(q.options) ? q.options : [], etc: !!q.etc })) : [] });
+            if (post.survey) setSurvey({ enabled: !!post.survey.enabled, title: post.survey.title || "", desc: post.survey.desc || "", closed: !!post.survey.closed, questions: Array.isArray(post.survey.questions) ? post.survey.questions.map((q: any) => ({ qid: q.qid || newQid(), type: q.type || "short", label: q.label || "", desc: q.desc || "", required: !!q.required, options: Array.isArray(q.options) ? q.options : [], etc: !!q.etc })) : [], privacy: readPrivacy(post.survey.privacy) });
             setTournamentSchedule(Array.isArray(post.tournamentSchedule) ? post.tournamentSchedule.map((p: any) => ({ label: p.label || "", start: p.start || "", end: p.end || "" })) : []);
             if (post.tournamentDate && post.tournamentDate.includes("~")) {
               const [start, end] = post.tournamentDate.split("~").map((s: string) => s.trim());
@@ -565,6 +589,15 @@ export default function AdminWritePage() {
          // 📌 참가 설문 — 빈 질문/선택지는 정리해서 저장
          survey: {
            ...survey,
+           // 안내를 끈 경우 문구도 함께 비워 저장한다 (꺼진 채 옛 문구가 남지 않게)
+           privacy: survey.privacy.enabled
+             ? {
+                 enabled: true,
+                 title: survey.privacy.title.trim() || DEFAULT_PRIVACY_TITLE,
+                 body: survey.privacy.body.trim(),
+                 confirmLabel: survey.privacy.confirmLabel.trim() || DEFAULT_PRIVACY_CONFIRM,
+               }
+             : { ...EMPTY_PRIVACY },
            questions: survey.questions
              // 설명 블록은 제목이 없어도 본문만 있으면 유지
              .filter((q) => q.label.trim() || (q.type === "note" && q.desc.trim()))
@@ -940,6 +973,83 @@ export default function AdminWritePage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <input type="text" placeholder="설문 제목 (예: 제1회 대회 참가 신청서)" value={survey.title} onChange={(e) => setSurvey({ ...survey, title: e.target.value })} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
                         <input type="text" placeholder="설명 (선택)" value={survey.desc} onChange={(e) => setSurvey({ ...survey, desc: e.target.value })} className="w-full bg-transparent border-0 border-b border-white/12 rounded-none px-5 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f]" />
+                      </div>
+
+                      {/* 개인정보 수집·이용 안내 — 참가자가 제출 전 반드시 동의해야 한다 */}
+                      <div className="rounded-xl border border-white/10 overflow-hidden">
+                        <div className="flex items-center justify-between gap-3 px-5 py-4 bg-white/[0.02]">
+                          <div className="min-w-0">
+                            <p className="text-sm font-black text-white">개인정보 수집 · 이용 안내</p>
+                            <p className="text-[11px] text-gray-500 mt-1 break-keep">
+                              계좌번호·실명 등을 받는 대회라면 반드시 켜세요. 참가자는 동의해야만 제출할 수 있고, 동의한 문구가 응답에 함께 기록됩니다.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const on = !survey.privacy.enabled;
+                              // 처음 켤 때는 기본 문구를 미리 채워 준다
+                              if (on && !survey.privacy.body.trim()) {
+                                setPrivacy({ enabled: true, title: DEFAULT_PRIVACY_TITLE, body: DEFAULT_PRIVACY_BODY, confirmLabel: DEFAULT_PRIVACY_CONFIRM });
+                              } else {
+                                setPrivacy({ enabled: on });
+                              }
+                            }}
+                            className={`shrink-0 px-4 py-2 rounded-full text-[11px] font-black transition-all ${
+                              survey.privacy.enabled ? "bg-[#e91e3f] text-white" : "border border-white/15 text-gray-400 hover:text-white hover:border-white/35"
+                            }`}
+                          >
+                            {survey.privacy.enabled ? "사용 중" : "사용 안 함"}
+                          </button>
+                        </div>
+
+                        {survey.privacy.enabled && (
+                          <div className="p-5 space-y-4 border-t border-white/[0.07]">
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-500 mb-2">안내 제목</label>
+                              <input
+                                type="text"
+                                value={survey.privacy.title}
+                                onChange={(e) => setPrivacy({ title: e.target.value })}
+                                placeholder={DEFAULT_PRIVACY_TITLE}
+                                className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600"
+                              />
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <label className="block text-[11px] font-bold text-gray-500">안내 본문</label>
+                                <button
+                                  type="button"
+                                  onClick={() => setPrivacy({ title: DEFAULT_PRIVACY_TITLE, body: DEFAULT_PRIVACY_BODY, confirmLabel: DEFAULT_PRIVACY_CONFIRM })}
+                                  className="text-[11px] font-bold text-gray-400 border border-white/10 px-3 py-1 rounded-full hover:border-[#e91e3f]/50 hover:text-white transition-all"
+                                >
+                                  기본 문구 넣기
+                                </button>
+                              </div>
+                              <textarea
+                                value={survey.privacy.body}
+                                onChange={(e) => setPrivacy({ body: e.target.value })}
+                                rows={12}
+                                placeholder="수집 목적 · 수집 항목 · 보유 기간을 적어 주세요."
+                                className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-[13px] leading-relaxed text-white focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600 resize-y"
+                              />
+                              <p className="text-[10px] text-gray-500 mt-1.5">줄바꿈은 그대로 보입니다. 대회마다 수집 항목이 다르면 그에 맞게 고쳐 주세요.</p>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-500 mb-2">동의 체크 문구</label>
+                              <input
+                                type="text"
+                                value={survey.privacy.confirmLabel}
+                                onChange={(e) => setPrivacy({ confirmLabel: e.target.value })}
+                                placeholder={DEFAULT_PRIVACY_CONFIRM}
+                                className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600"
+                              />
+                              <p className="text-[10px] text-gray-500 mt-1.5">참가자가 체크할 문장입니다. 체크하지 않으면 제출 버튼이 잠깁니다.</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* 템플릿 */}

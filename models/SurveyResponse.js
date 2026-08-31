@@ -17,6 +17,12 @@ const SurveyResponseSchema = new mongoose.Schema({
   userName: { type: String, default: "" },                 // 디스코드 닉네임
   avatar: { type: String, default: "" },
   answers: { type: [AnswerSchema], default: [] },
+  // 📌 개인정보 수집·이용 동의 기록 — 무엇에 동의했는지(snapshot)까지 남겨야 근거가 된다
+  privacyConsent: {
+    agreed: { type: Boolean, default: false },
+    at: { type: Date, default: null },
+    snapshot: { type: String, default: "" },   // 동의 시점의 안내문 원문
+  },
   createdAt: { type: Date, default: Date.now },
 });
 

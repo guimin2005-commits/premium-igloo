@@ -94,12 +94,16 @@ export default function SurveyStatsPage() {
 
   // ── CSV 내보내기 ──
   const exportCsv = () => {
-    const head = ["번호", "닉네임", "디스코드 ID", "제출시각", ...questions.map((x) => x.label)];
+    const hasPrivacy = !!post?.survey?.privacy?.enabled;
+    const head = ["번호", "닉네임", "디스코드 ID", "제출시각", ...(hasPrivacy ? ["개인정보 동의", "동의 시각"] : []), ...questions.map((x) => x.label)];
     const esc = (s: any) => `"${String(s ?? "").replace(/"/g, '""')}"`;
     const lines = [head.map(esc).join(",")];
     rows.slice().reverse().forEach((r, i) => {
       const cells = [
         i + 1, r.userName || "", r.userId || "", new Date(r.createdAt).toLocaleString("ko-KR"),
+        ...(hasPrivacy
+          ? [r.privacyConsent?.agreed ? "동의" : "미동의", r.privacyConsent?.at ? new Date(r.privacyConsent.at).toLocaleString("ko-KR") : ""]
+          : []),
         ...questions.map((qq) => {
           const a = (r.answers || []).find((x: any) => x.qid === qq.qid);
           const v = a?.value;
@@ -351,6 +355,22 @@ export default function SurveyStatsPage() {
               </button>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
+              {post?.survey?.privacy?.enabled && (
+                <details className="mb-4 rounded-xl border border-white/[0.1] overflow-hidden">
+                  <summary className="flex items-center gap-2 px-4 py-3 cursor-pointer select-none bg-white/[0.03]">
+                    <span className={`inline-flex items-center gap-1.5 text-[11px] font-black ${detail.privacyConsent?.agreed ? "text-[#00e07b]" : "text-red-400"}`}>
+                      {detail.privacyConsent?.agreed ? "개인정보 수집 동의함" : "개인정보 미동의"}
+                    </span>
+                    {detail.privacyConsent?.at && (
+                      <span className="text-[11px] text-gray-500 tabular-nums">{new Date(detail.privacyConsent.at).toLocaleString("ko-KR")}</span>
+                    )}
+                    <span className="ml-auto text-[11px] text-gray-600">동의한 안내문 보기</span>
+                  </summary>
+                  <p className="px-4 py-3 text-[12px] text-gray-400 leading-relaxed whitespace-pre-wrap break-keep border-t border-white/[0.07]">
+                    {detail.privacyConsent?.snapshot || "기록된 안내문이 없습니다."}
+                  </p>
+                </details>
+              )}
               {(detail.answers || []).map((a: any, i: number) => (
                 <div key={i} className="py-3.5 border-b border-white/[0.07] last:border-0">
                   <p className="text-[11px] font-black tracking-wider text-gray-600 mb-1.5">{a.label}</p>

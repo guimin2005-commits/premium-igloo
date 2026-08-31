@@ -187,6 +187,8 @@ export default function TournamentPage() {
   const [surveyCount, setSurveyCount] = useState(0);
   const [surveySubmitting, setSurveySubmitting] = useState(false);
   const [invalidQid, setInvalidQid] = useState<string | null>(null);        // 검증 실패 시 흔들림 표시할 문항
+  const [privacyAgreed, setPrivacyAgreed] = useState(false);                // 개인정보 수집·이용 동의
+  const [privacyInvalid, setPrivacyInvalid] = useState(false);              // 미동의 상태로 제출 시도
   const qidRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // 📌 내 팀 룸 — 스크림 로스터에서 내 디스코드 ID 를 찾아 입구를 띄운다
@@ -282,6 +284,8 @@ export default function TournamentPage() {
     setSurveyEtc({});
     setSurveyMine(null);
     setInvalidQid(null);
+    setPrivacyAgreed(false);
+    setPrivacyInvalid(false);
     try {
       const d = await fetch(`/api/survey?postId=${t._id}`, { cache: "no-store" }).then((r) => r.json());
       if (d?.success) { setSurveyMine(d.mine || null); setSurveyCount(d.count || 0); }
@@ -313,6 +317,14 @@ export default function TournamentPage() {
         setPopup({ isOpen: true, message: `'기타'를 선택하셨습니다.\n직접 입력란을 작성해주세요.\n\n${q.label}`, isError: true }); return;
       }
     }
+    // 개인정보 수집·이용 동의 (켜져 있을 때만)
+    if (surveyTarget.survey?.privacy?.enabled && !privacyAgreed) {
+      setPrivacyInvalid(true);
+      qidRefs.current["__privacy__"]?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => setPrivacyInvalid(false), 650);
+      setPopup({ isOpen: true, message: "개인정보 수집 및 이용에 동의해야\n참가 신청할 수 있습니다.", isError: true });
+      return;
+    }
     setSurveySubmitting(true);
     try {
       const answers = qs.map((q: any) => {
@@ -330,7 +342,7 @@ export default function TournamentPage() {
       const res = await fetch("/api/survey", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ postId: surveyTarget._id, answers }),
+        body: JSON.stringify({ postId: surveyTarget._id, answers, privacyAgreed }),
       });
       const d = await res.json();
       if (d.success) {
@@ -971,6 +983,54 @@ export default function TournamentPage() {
                     </div>
                   );
                 }); })()}
+                {/* 개인정보 수집·이용 안내 — 동의해야 제출할 수 있다 */}
+                {surveyTarget.survey?.privacy?.enabled && (
+                  <div
+                    ref={(el) => { qidRefs.current["__privacy__"] = el; }}
+                    className={`mt-6 rounded-xl border overflow-hidden transition-shadow ${
+                      privacyInvalid ? "border-[#ff4d6d] shadow-[inset_0_0_0_1px_rgba(255,77,109,0.5)] esp-shake" : "border-white/[0.12]"
+                    }`}
+                  >
+                    <div className="px-5 py-4 bg-white/[0.03] border-b border-white/[0.08]">
+                      <p className="text-sm font-black text-white break-keep">
+                        {surveyTarget.survey.privacy.title || "개인정보 수집 및 이용 안내"}
+                        <span className="text-[#ff4d6d] ml-1.5">*</span>
+                      </p>
+                    </div>
+
+                    {surveyTarget.survey.privacy.body && (
+                      <div className="px-5 py-4 max-h-64 overflow-y-auto">
+                        <p className="text-[13px] text-gray-300 leading-relaxed whitespace-pre-wrap break-keep">
+                          {surveyTarget.survey.privacy.body}
+                        </p>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => { setPrivacyAgreed((v) => !v); setPrivacyInvalid(false); }}
+                      className={`w-full flex items-start gap-3 text-left px-5 py-4 border-t transition-colors ${
+                        privacyAgreed ? "border-[#00e07b]/30 bg-[#00e07b]/[0.07]" : "border-white/[0.08] hover:bg-white/[0.02]"
+                      }`}
+                    >
+                      <span
+                        className={`shrink-0 mt-0.5 w-5 h-5 rounded flex items-center justify-center border-2 transition-colors ${
+                          privacyAgreed ? "bg-[#00e07b] border-[#00e07b]" : "border-white/25"
+                        }`}
+                      >
+                        {privacyAgreed && (
+                          <svg viewBox="0 0 20 20" className="w-3.5 h-3.5 text-[#04120b]" fill="none" stroke="currentColor" strokeWidth="3.5">
+                            <path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className={`text-[13px] font-bold leading-relaxed break-keep ${privacyAgreed ? "text-white" : "text-gray-300"}`}>
+                        {surveyTarget.survey.privacy.confirmLabel || "개인정보 수집 및 이용에 동의합니다."}
+                      </span>
+                    </button>
+                  </div>
+                )}
+
               </div>
             )}
 
@@ -980,7 +1040,7 @@ export default function TournamentPage() {
               {!surveyMine && !surveyTarget.survey?.closed && (
                 <button
                   onClick={submitSurvey}
-                  disabled={surveySubmitting}
+                  disabled={surveySubmitting || (!!surveyTarget.survey?.privacy?.enabled && !privacyAgreed)}
                   className="flex-1 py-3.5 esp-cut-sm font-black text-sm bg-[#00e07b] hover:bg-[#3dffa6] disabled:opacity-50 disabled:cursor-not-allowed text-[#04120b] transition-colors active:scale-[0.99] flex items-center justify-center gap-2"
                 >
                   {surveySubmitting ? "제출 중…" : "참가 신청서 제출"}

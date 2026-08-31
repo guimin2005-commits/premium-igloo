@@ -44,6 +44,14 @@ const PostSchema = new mongoose.Schema({
     title: { type: String, default: "" },
     desc: { type: String, default: "" },
     closed: { type: Boolean, default: false },   // 접수 마감
+    // 📌 개인정보 수집·이용 안내 + 동의 — 관리자가 대회마다 직접 작성한다.
+    //    enabled면 설문 제출 전 반드시 동의해야 하며, 동의 내용은 응답에 그대로 보존된다.
+    privacy: {
+      enabled: { type: Boolean, default: false },
+      title: { type: String, default: "" },
+      body: { type: String, default: "" },          // 안내 본문 (줄바꿈 그대로 표시)
+      confirmLabel: { type: String, default: "" },  // 체크박스 옆 동의 문구
+    },
     questions: {
       type: [{
         qid: String,                              // 질문 고유 id

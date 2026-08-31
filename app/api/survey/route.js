@@ -46,7 +46,7 @@ export async function POST(request) {
     const session = await getServerSession(authOptions);
     if (!session?.user) return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
 
-    const { postId, answers } = await request.json();
+    const { postId, answers, privacyAgreed } = await request.json();
     if (!postId) return NextResponse.json({ success: false, message: "postId가 필요합니다." }, { status: 400 });
 
     const post = await Post.findById(postId);
@@ -73,6 +73,13 @@ export async function POST(request) {
       if (empty) return NextResponse.json({ success: false, message: `필수 항목을 입력해주세요: ${q.label}` }, { status: 400 });
     }
 
+    // 📌 개인정보 수집·이용 동의 — 켜져 있으면 동의 없이는 접수하지 않는다 (서버에서도 확인)
+    const privacy = post.survey.privacy;
+    const needConsent = !!privacy?.enabled;
+    if (needConsent && privacyAgreed !== true) {
+      return NextResponse.json({ success: false, message: "개인정보 수집 및 이용에 동의해야 참가 신청할 수 있습니다." }, { status: 400 });
+    }
+
     const saved = await SurveyResponse.create({
       postId,
       userId,
@@ -84,6 +91,14 @@ export async function POST(request) {
         type: q.type,
         value: byId.get(q.qid)?.value ?? (q.type === "multi" ? [] : ""),
       })),
+      privacyConsent: needConsent
+        ? {
+            agreed: true,
+            at: new Date(),
+            // 나중에 안내문이 수정돼도 "이 사람이 동의한 내용"은 그대로 남는다
+            snapshot: [privacy.title, privacy.body, privacy.confirmLabel].filter(Boolean).join("\n\n"),
+          }
+        : { agreed: false, at: null, snapshot: "" },
     });
 
     return NextResponse.json({ success: true, data: saved });
