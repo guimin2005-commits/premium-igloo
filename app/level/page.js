@@ -104,14 +104,19 @@ const CountUp = ({ end, duration = 1400, suffix = "" }) => {
 };
 
 // 📌 섹션 헤더 (에디토리얼 넘버링 스타일)
-const SectionHeader = ({ no, title, desc }) => (
+// 📌 문서형 탭 섹션 헤더 — 대시보드 섹션과 같은 문법을 쓴다 (탭을 옮겨도 같은 화면으로 읽히게)
+const SectionHeader = ({ en, title, desc, right }) => (
   <div className="mb-8">
-    <div className="flex items-baseline gap-4 mb-2">
-      <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">{no}</span>
-      <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+    <div className="flex items-end justify-between gap-4">
+      <div className="min-w-0">
+        <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5">
+          <span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>{en}
+        </span>
+        <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight break-keep">{title}</h3>
+      </div>
+      {right}
     </div>
-    <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">{title}</h3>
-    {desc && <p className="text-xs text-[#8a8a8a] mt-2 leading-relaxed">{desc}</p>}
+    {desc && <p className="text-xs text-[#8a8a8a] mt-2.5 leading-relaxed break-keep">{desc}</p>}
   </div>
 );
 
@@ -161,6 +166,119 @@ const REASON_COLORS = { chat: "#a8adb8", voice: "#6fa8c4", attend: "#e91e3f" };
 const REASON_LABELS = { chat: "채팅", voice: "음성", attend: "출석" };
 
 // 음성 티어 경계·이름·색은 lib/voiceTiers.js 단일 소스 (봇 지급표와 1:1)
+
+// 📌 레벨 성장 곡선 — 이 페이지의 시그니처. Lv 1~1000 누적 XP를 곡선으로 그리고,
+//    마우스/터치를 따라 임의 레벨의 누적·필요 XP를 실시간으로 읽어준다.
+//    myLevel이 있으면(로그인) 곡선 위에 'YOU' 마커로 내 위치를 표시한다.
+const LevelCurve = ({ myLevel = null }) => {
+  const boxRef = useRef(null);
+  const [probe, setProbe] = useState(null); // { lv }
+  const W = 800, H = 300, PB = 34, PT = 14;
+  const maxXp = getCumulativeXpByLevel(1000);
+  const X = (lv) => (lv / 1000) * W;
+  const Y = (xp) => H - PB - (xp / maxXp) * (H - PB - PT);
+
+  const path = useMemo(() => {
+    let d = "";
+    for (let lv = 1; lv <= 1000; lv += 5) d += `${d ? "L" : "M"}${X(lv).toFixed(1)},${Y(getCumulativeXpByLevel(lv)).toFixed(1)}`;
+    d += `L${X(1000).toFixed(1)},${Y(maxXp).toFixed(1)}`;
+    return d;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const milestones = [100, 250, 500, 750, 1000];
+  const hasMe = typeof myLevel === "number" && myLevel > 0;
+  const lv = probe?.lv ?? (hasMe ? myLevel : 1000);
+  const cum = getCumulativeXpByLevel(lv);
+  const req = lv <= 1 ? 0 : cum - getCumulativeXpByLevel(lv - 1);
+  const modeLabel = probe ? "탐색 중" : hasMe ? "내 위치" : "MAX";
+
+  const onMove = (e) => {
+    const rect = boxRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const ratio = Math.min(Math.max((cx - rect.left) / rect.width, 0), 1);
+    setProbe({ lv: Math.max(1, Math.round(ratio * 1000)) });
+  };
+
+  return (
+    <div>
+      {/* 판독값 — 곡선 위 어느 지점이든 짚으면 갱신 */}
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-5">
+        <div>
+          <p className="text-[10px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase mb-1.5">Growth Curve · Lv 1 → 1,000</p>
+          <p className="text-3xl md:text-4xl font-black text-[#131313] tracking-tight tabular-nums">
+            Lv {lv.toLocaleString()}
+            <span className={`ml-2 text-xs font-bold align-middle ${probe ? "text-[#e91e3f]" : hasMe ? "text-[#131313]" : "text-[#a3a3a3]"}`}>{modeLabel}</span>
+          </p>
+        </div>
+        <div className="flex gap-8 text-right">
+          <div>
+            <p className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase mb-1">누적 XP</p>
+            <p className="text-base md:text-lg font-black text-[#e91e3f] tabular-nums">{cum.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase mb-1">이 레벨 필요 XP</p>
+            <p className="text-base md:text-lg font-black text-[#131313] tabular-nums">{req.toLocaleString()}</p>
+          </div>
+        </div>
+      </div>
+
+      <div
+        ref={boxRef}
+        className="relative cursor-crosshair select-none touch-none"
+        onMouseMove={onMove}
+        onTouchStart={onMove}
+        onTouchMove={onMove}
+        onMouseLeave={() => setProbe(null)}
+      >
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-52 md:h-72 overflow-visible" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="lvFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#e91e3f" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="#e91e3f" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {/* 가로 눈금 */}
+          {[0.25, 0.5, 0.75].map((r) => (
+            <line key={r} x1="0" x2={W} y1={PT + (H - PB - PT) * r} y2={PT + (H - PB - PT) * r} stroke="rgba(0,0,0,0.05)" strokeWidth="1" />
+          ))}
+          <polygon points={`0,${H - PB} ${path.replace(/[ML]/g, " ").trim()} ${W},${H - PB}`} fill="url(#lvFill)" />
+          <path d={path} fill="none" stroke="#e91e3f" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 8px rgba(233,30,63,0.5))" }} />
+          {/* 마일스톤 */}
+          {milestones.map((m) => (
+            <g key={m}>
+              <circle cx={X(m)} cy={Y(getCumulativeXpByLevel(m))} r="3.5" fill="#f5f3f0" stroke="#e91e3f" strokeWidth="2" />
+              <text x={X(m)} y={H - PB + 20} textAnchor={m === 1000 ? "end" : "middle"} fill="rgba(0,0,0,0.35)" fontSize="11" fontWeight="800">{m}</text>
+            </g>
+          ))}
+          {/* 내 위치(YOU) 마커 — 로그인 시 실데이터 연동 */}
+          {hasMe && (
+            <g>
+              <line x1={X(myLevel)} x2={X(myLevel)} y1={Y(getCumulativeXpByLevel(myLevel))} y2={H - PB} stroke="rgba(0,0,0,0.25)" strokeWidth="1" strokeDasharray="2 4" />
+              <circle cx={X(myLevel)} cy={Y(getCumulativeXpByLevel(myLevel))} r="5" fill="#ffffff" stroke="#e91e3f" strokeWidth="2.5" style={{ filter: "drop-shadow(0 0 8px rgba(233,30,63,0.35))" }} />
+              <text
+                x={Math.min(Math.max(X(myLevel), 30), W - 30)}
+                y={Math.max(Y(getCumulativeXpByLevel(myLevel)) - 14, 12)}
+                textAnchor="middle" fill="#e91e3f" stroke="#f5f3f0" strokeWidth="3" paintOrder="stroke" fontSize="11" fontWeight="900" letterSpacing="1"
+              >YOU</text>
+            </g>
+          )}
+          {/* 프로브(탐색) 라인 */}
+          {probe && (
+            <g>
+              <line x1={X(lv)} x2={X(lv)} y1={PT} y2={H - PB} stroke="rgba(233,30,63,0.4)" strokeWidth="1" strokeDasharray="3 4" />
+              <circle cx={X(lv)} cy={Y(cum)} r="5" fill="#e91e3f" style={{ filter: "drop-shadow(0 0 10px rgba(233,30,63,0.9))" }} />
+            </g>
+          )}
+          {/* 바닥 축 */}
+          <line x1="0" x2={W} y1={H - PB} y2={H - PB} stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
+        </svg>
+      </div>
+      <p className="text-[10px] text-[#c4c4c4] mt-2">곡선 위에 마우스를 올리거나 터치하면 해당 레벨의 XP를 확인할 수 있습니다.</p>
+    </div>
+  );
+};
 
 // 📌 음성 티어 계단 — 표 대신 '티어가 오를수록 쌓이는 계단'으로 지급량을 보여준다
 const TierStairs = ({ base = 3000 }) => {
@@ -643,7 +761,7 @@ export default function LevelPage() {
       </div>
 
       {/* 대시보드 탭은 좌우 공간을 쓰는 와이드 HUD(7xl), 문서형 탭은 기존 에디토리얼 폭 유지 */}
-      <div className={activeMainTab === "my" ? "w-full max-w-7xl mx-auto px-5 md:px-8 py-6 md:py-10 flex-1" : "w-full max-w-5xl mx-auto px-6 py-14 flex-1"}>
+      <div className={`w-full max-w-7xl mx-auto px-5 md:px-8 flex-1 ${activeMainTab === "my" ? "py-6 md:py-10" : "py-10 md:py-14"}`}>
 
         {/* ══ TAB : MY DASHBOARD — 게임 프로필 화면 ══
                앵커는 플레이어 배너(레벨 링 + 대형 레벨 + 와이드 XP 게이지) 하나.
@@ -1163,7 +1281,7 @@ export default function LevelPage() {
         {activeMainTab === "intro" && (
           <div className="space-y-16">
             <Reveal>
-              <SectionHeader no="01" title="성장의 3가지 축" desc="고급 이글루 레벨 시스템을 구성하는 핵심 가치" />
+              <SectionHeader en="Pillars" title="성장의 3가지 축" desc="고급 이글루 레벨 시스템을 구성하는 핵심 가치" />
               <div className="grid grid-cols-1 md:grid-cols-3 border-y border-black/[0.08] md:divide-x divide-black/[0.08]">
                 {[
                   { no: "I", t: "XP 획득 및 한계 돌파", d: "채팅과 음성 활동으로 끊임없이 성장하세요. 상한선은 1,000레벨입니다." },
@@ -1179,13 +1297,66 @@ export default function LevelPage() {
               </div>
             </Reveal>
 
+
+            {/* 📌 일일 퀘스트 & 음성 티어 — 새로 들어온 두 시스템 */}
             <Reveal>
-              <SectionHeader no="02" title="기본 명령어" desc="디스코드 서버 내에서 사용 가능한 슬래시 커맨드" />
+              <SectionHeader
+                en="Daily"
+                title="일일 퀘스트"
+                desc="매일 자정(KST)에 초기화되는 하루치 목표입니다. 달성하면 내 대시보드에서 직접 보상을 받습니다."
+                right={<Link href="/level" onClick={() => setActiveMainTab("my")} className="shrink-0 text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">내 대시보드 →</Link>}
+              />
+              <div className="grid grid-cols-1 md:grid-cols-3 border-y border-black/[0.08] md:divide-x divide-black/[0.08]">
+                {[
+                  { n: "01", t: "활동하면 자동 집계", d: "채팅·음성 활동이 그대로 퀘스트 진행도가 됩니다. 별도 명령어를 칠 필요가 없습니다." },
+                  { n: "02", t: `출석 = 음성 ${P.attendVoiceMin}분`, d: `하루 동안 음성 채널에 ${P.attendVoiceMin}분 이상 머무르면 출석 보상 ${P.attendXp.toLocaleString()} XP를 받을 수 있습니다.` },
+                  { n: "03", t: "직접 수령", d: "달성한 보상은 대시보드에서 눌러서 받습니다. 받은 XP는 잠시 뒤 반영됩니다." },
+                ].map((f, i) => (
+                  <div key={i} className={`group py-7 md:px-7 first:md:pl-0 last:md:pr-0 ${i > 0 ? "border-t md:border-t-0 border-black/[0.08]" : ""}`}>
+                    <div className="text-2xl font-black text-[#131313]/[0.08] mb-5 group-hover:text-[#e91e3f]/30 transition-colors duration-500 select-none tabular-nums">{f.n}</div>
+                    <div className="text-[#131313] font-bold text-base mb-2.5 tracking-tight break-keep">{f.t}</div>
+                    <div className="text-[#8a8a8a] text-[13px] leading-relaxed break-keep">{f.d}</div>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+
+            <Reveal>
+              <SectionHeader
+                en="Tier"
+                title="음성 티어"
+                desc="레벨이 오르면 음성 티어가 함께 오르고, 음성 채널 5분당 받는 XP가 늘어납니다. 8단계이며 최고 티어는 이글루입니다."
+              />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {VOICE_TIERS.map((t, i) => (
+                  <div
+                    key={t.key}
+                    className="rounded-xl border px-4 py-4 transition-colors hover:bg-black/[0.02]"
+                    style={{ borderColor: `${t.c}44` }}
+                  >
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <span aria-hidden className="w-2 h-2 rotate-45 shrink-0" style={{ backgroundColor: t.c }}></span>
+                      <span className="text-sm font-black truncate" style={{ color: t.c }}>{t.name}</span>
+                    </div>
+                    <p className="text-[10px] font-black tracking-[0.15em] text-[#a3a3a3] uppercase tabular-nums">{tierRangeLabel(i)}</p>
+                    <p className="text-[13px] font-black text-[#131313] tabular-nums mt-1.5">
+                      +{(P.voiceXp + t.bonus).toLocaleString()}<span className="text-[10px] font-bold text-[#a3a3a3] ml-1">XP / 5분</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-[#a3a3a3] mt-3.5 break-keep">
+                표시 금액은 현재 기본 음성 XP({P.voiceXp.toLocaleString()})에 티어 보너스를 더한 값입니다. 역할·채널 부스트가 있으면 더 받습니다.
+              </p>
+            </Reveal>
+
+            <Reveal>
+              <SectionHeader en="Commands" title="기본 명령어" desc="디스코드 서버 내에서 사용 가능한 슬래시 커맨드" />
               <div className="border-t border-black/[0.08] divide-y divide-black/[0.06]">
                 {[
                   { c: "/레벨", d: "다음 레벨 도달까지 필요 XP 확인" },
                   { c: "/랭크", d: "XP, 레벨, 서버 내 순위 확인" },
-                  { c: "/출석체크", d: `출석체크를 통한 ${P.attendXp.toLocaleString()} XP 지급` },
+
                   { c: "/경험치샵", d: "ARCTIC 상점으로 이동" },
                 ].map((item, i) => (
                   <div key={i} className="flex items-center justify-between px-1 py-[18px] group hover:bg-black/[0.02] transition-colors">
@@ -1198,7 +1369,7 @@ export default function LevelPage() {
 
             {/* 📌 시즌 안내 */}
             <Reveal>
-              <SectionHeader no="03" title={`시즌 안내 — SEASON ${SEASON.number} '${SEASON.name}'`} desc={`레벨 시스템은 시즌제로 운영됩니다 · 현재 시즌 기간 ${SEASON.start.replace(/-/g, ".")} ~ ${SEASON.end.replace(/-/g, ".")}`} />
+              <SectionHeader en="Season" title={`시즌 안내 — SEASON ${SEASON.number} '${SEASON.name}'`} desc={`레벨 시스템은 시즌제로 운영됩니다 · 현재 시즌 기간 ${SEASON.start.replace(/-/g, ".")} ~ ${SEASON.end.replace(/-/g, ".")}`} />
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* 시즌 한정 상품 */}
@@ -1247,7 +1418,7 @@ export default function LevelPage() {
             </Reveal>
 
             <Reveal>
-              <SectionHeader no="04" title="이용 시 주의사항" />
+              <SectionHeader en="Notice" title="이용 시 주의사항" />
               <div className="space-y-5">
                 {[
                   { t: "XP 획득 제한", d: "잠수 음성 채널 이용 시 XP 획득이 전면 제한되며, 마이크/헤드셋 음소거 시 XP 획득량이 90% 감소됩니다." },
@@ -1267,7 +1438,7 @@ export default function LevelPage() {
         {activeMainTab === "policy" && (
           <div className="space-y-16">
             <Reveal>
-              <SectionHeader no="01" title="기본 XP 획득량" desc="채널 활동별 기본 지급량 및 쿨타임 기준" />
+              <SectionHeader en="Base" title="기본 XP 획득량" desc="채널 활동별 기본 지급량 및 쿨타임 기준" />
               <div className="grid grid-cols-1 md:grid-cols-3 border-y border-black/[0.08] md:divide-x divide-black/[0.08]">
                 {[
                   { t: "채팅 채널", x: P.chatXp.toLocaleString(), c: `쿨타임 ${P_chatCooldownLabel}`, d: `채팅 입력 시 XP를 획득하며, 오남용 방지를 위해 쿨타임 ${P_chatCooldownLabel}이 적용됩니다.` },
@@ -1290,7 +1461,7 @@ export default function LevelPage() {
             </Reveal>
 
             <Reveal>
-              <SectionHeader no="02" title="추가 XP & 출석 보상" desc="아이템 및 시즌 상품 보유 시 추가 획득량" />
+              <SectionHeader en="Bonus" title="추가 XP & 출석 보상" desc="아이템 및 시즌 상품 보유 시 추가 획득량" />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
                 <LuxCard className="p-7">
@@ -1351,21 +1522,21 @@ export default function LevelPage() {
                   <LuxCard className="p-7">
                     <div className="flex items-center gap-2.5 mb-7">
                       <span className="text-[10px] font-black tracking-[0.2em] text-[#5a5a5a] uppercase">Daily</span>
-                      <span className="text-sm font-bold text-[#131313]">출석 보상 시스템</span>
+                      <span className="text-sm font-bold text-[#131313]">일일 출석 보상</span>
                     </div>
                     <div className="flex justify-between items-center pb-5 border-b border-black/5">
-                      <div>
-                        <div className="text-sm font-bold text-[#131313] mb-1">기본 출석 체크</div>
-                        <div className="text-xs text-[#8a8a8a]">출석 체크 시, 1회당 {P.attendXp.toLocaleString()} XP가 지급됩니다.</div>
+                      <div className="pr-4">
+                        <div className="text-sm font-bold text-[#131313] mb-1">음성 {P.attendVoiceMin}분 접속</div>
+                        <div className="text-xs text-[#8a8a8a] break-keep">하루 동안 음성 채널에 {P.attendVoiceMin}분 이상 머무르면 달성됩니다. 별도 명령어 없이 자동으로 집계됩니다.</div>
                       </div>
                       <span className="text-[#e91e3f] font-black text-lg tracking-tight shrink-0">+{P.attendXp.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center pt-5">
-                      <div>
-                        <div className="text-sm font-bold text-[#131313] mb-1">[XP] 출석 Boost</div>
-                        <div className="text-xs text-[#8a8a8a]">상품 보유 시 출석 기본 XP에 추가로 획득합니다.</div>
+                      <div className="pr-4">
+                        <div className="text-sm font-bold text-[#131313] mb-1">보상 수령</div>
+                        <div className="text-xs text-[#8a8a8a] break-keep">달성 후 내 대시보드의 일일 퀘스트에서 직접 받습니다. 하루 한 번, 자정(KST)에 초기화됩니다.</div>
                       </div>
-                      <span className="text-[#e91e3f] font-black text-lg tracking-tight shrink-0">+{P.attendXp.toLocaleString()}</span>
+                      <span className="shrink-0 text-[11px] font-black text-[#8a8a8a] border border-black/12 rounded-full px-3 py-1">1일 1회</span>
                     </div>
                   </LuxCard>
                 </div>
@@ -1373,7 +1544,7 @@ export default function LevelPage() {
             </Reveal>
 
             <Reveal>
-              <SectionHeader no="03" title="레벨 구간별 추가 기준" desc="음성/내전 채널 이용 시 레벨 구간에 따른 추가 XP — 레벨이 오를수록 계단처럼 쌓입니다" />
+              <SectionHeader en="Tier" title="음성 티어별 지급량" desc="음성/내전 채널 이용 시 레벨 구간에 따른 추가 XP — 레벨이 오를수록 계단처럼 쌓입니다" />
 
               {/* 📌 계단 차트 — 표 15줄 대신 '성장의 계단'을 그대로 시각화 */}
               <TierStairs base={P.voiceXp} />
@@ -1416,7 +1587,7 @@ export default function LevelPage() {
         {/* ══ TAB : TABLE ══════════════════ */}
         {activeMainTab === "table" && (
           <Reveal>
-            <SectionHeader no="01" title="XP 테이블" desc="레벨별 필요 및 누적 XP를 검색하세요 (1~1000)" />
+            <SectionHeader en="Table" title="XP 테이블" desc="레벨별 필요 및 누적 XP를 검색하세요 (1~1000)" />
 
             <LuxCard className="p-6 md:p-8 mb-6" glow>
               <div className="flex flex-col lg:flex-row gap-6 items-stretch lg:items-center">
@@ -1449,6 +1620,13 @@ export default function LevelPage() {
               </div>
             </LuxCard>
 
+            {/* 성장 곡선 — 표의 숫자를 한눈에 보는 그림 */}
+            <div className="mb-10">
+              <SectionHeader en="Curve" title="성장 곡선" desc="Lv 1 → 1,000 누적 XP 곡선 · 곡선 위를 짚으면 해당 레벨의 XP를 읽어줍니다" />
+              <LevelCurve myLevel={me?.level || null} />
+            </div>
+
+            <SectionHeader en="Full Table" title="전체 레벨 표" desc="레벨별 필요 XP와 누적 XP" />
             <LuxCard className="overflow-hidden">
               <div className="max-h-[520px] overflow-y-auto custom-scrollbar">
                 <table className="w-full text-center text-xs">
@@ -1481,7 +1659,7 @@ export default function LevelPage() {
         {/* ══ TAB : SIMULATOR ══════════════ */}
         {activeMainTab === "sim" && (
           <Reveal>
-            <SectionHeader no="01" title="XP 시뮬레이터" desc="조건을 설정하면 예상 획득 XP와 도달 레벨을 실시간으로 계산합니다" />
+            <SectionHeader en="Simulator" title="XP 시뮬레이터" desc="조건을 설정하면 예상 획득 XP와 도달 레벨을 실시간으로 계산합니다" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
 
               {/* ── 좌: 조건 설정 ── */}
