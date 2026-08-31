@@ -255,7 +255,7 @@ const LevelCurve = ({ myLevel = null }) => {
               <text
                 x={Math.min(Math.max(X(myLevel), 30), W - 30)}
                 y={Math.max(Y(getCumulativeXpByLevel(myLevel)) - 14, 12)}
-                textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="900" letterSpacing="1"
+                textAnchor="middle" fill="#e91e3f" stroke="#f5f3f0" strokeWidth="3" paintOrder="stroke" fontSize="11" fontWeight="900" letterSpacing="1"
               >YOU</text>
             </g>
           )}
@@ -646,6 +646,13 @@ export default function LevelPage() {
           -webkit-text-fill-color: transparent;
           animation: shimmer 6s linear infinite;
         }
+        .lux-grid-bg-dark {
+          background-image: linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+                            linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+          background-size: 46px 46px;
+          -webkit-mask-image: radial-gradient(ellipse 90% 70% at 30% 0%, black 30%, transparent 100%);
+          mask-image: radial-gradient(ellipse 90% 70% at 30% 0%, black 30%, transparent 100%);
+        }
         .lux-grid-bg {
           background-image: linear-gradient(rgba(0,0,0,0.025) 1px, transparent 1px),
                             linear-gradient(90deg, rgba(0,0,0,0.025) 1px, transparent 1px);
@@ -734,21 +741,36 @@ export default function LevelPage() {
               <div>
                 <div className="relative">
                   <div aria-hidden className="opacity-40 pointer-events-none select-none">
-                    {/* 플레이어 배너 셸 — 수치는 전부 — */}
-                    <div className="relative rounded-2xl overflow-hidden border border-black/[0.08] bg-black/[0.025] p-6 md:p-9">
-                      <div className="flex items-center gap-5">
-                        <RingGauge pct={0} size={104} stroke={6}>
-                          <span className="w-[72px] h-[72px] rounded-full bg-black/[0.05] flex items-center justify-center">
-                            <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="rgba(0,0,0,0.15)" strokeWidth="1.5"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5" /></svg>
+                    {/* 플레이어 배너 셸 — 수치는 전부 — (가짜 수치 금지) */}
+                    <div className="relative rounded-3xl overflow-hidden bg-[#131313] p-6 md:p-10">
+                      <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
+                      <div className="relative z-10 flex items-center gap-5 md:gap-7">
+                        <RingGauge pct={0} size={112} stroke={6} trackClass="rgba(255,255,255,0.12)">
+                          <span className="w-[78px] h-[78px] rounded-full bg-white/[0.07] flex items-center justify-center">
+                            <svg viewBox="0 0 24 24" className="w-9 h-9" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5" /></svg>
                           </span>
                         </RingGauge>
                         <div>
-                          <p className="text-2xl font-black text-[#c4c4c4]">— — —</p>
-                          <div className="flex gap-2 mt-3"><StatusChip>Rank —</StatusChip><StatusChip>Top —%</StatusChip></div>
+                          <p className="text-[10px] font-black tracking-[0.35em] text-white/20 uppercase mb-2">Player</p>
+                          <p className="text-2xl md:text-4xl font-black text-white/15 leading-none">— — —</p>
+                          <div className="flex gap-2 mt-3.5">
+                            <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/12 text-[10px] font-black tracking-[0.12em] uppercase text-white/25">Rank —</span>
+                            <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/12 text-[10px] font-black tracking-[0.12em] uppercase text-white/25">Top —%</span>
+                          </div>
                         </div>
-                        <p className="ml-auto text-6xl md:text-7xl font-black text-[#d6d3ce] tabular-nums leading-none">—</p>
+                        <p className="ml-auto text-7xl md:text-8xl font-black text-white/[0.08] tabular-nums leading-[0.85]">—</p>
                       </div>
-                      <div className="mt-8"><TickRuler /><SegBar pct={0} segments={20} h="h-3" /></div>
+                      <div className="relative z-10 mt-9">
+                        <SegBar pct={0} segments={20} h="h-3.5" track="bg-white/10" tick="rgba(19,19,19,0.92)" />
+                      </div>
+                      <div className="relative z-10 grid grid-cols-2 md:grid-cols-4 border-t border-white/10 mt-8 pt-6 md:divide-x md:divide-white/10">
+                        {["TOTAL", "TODAY", "STREAK", "PER 5MIN"].map((s, i) => (
+                          <div key={i} className={`px-0 md:px-6 ${i < 2 ? "pb-5 md:pb-0" : ""} ${i === 0 ? "md:pl-0" : ""}`}>
+                            <p className="text-[9px] font-black tracking-[0.28em] text-white/20 uppercase mb-2">{s}</p>
+                            <p className="text-xl md:text-2xl font-black text-white/15 tabular-nums leading-none">—</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                   {/* 락 카드 */}
@@ -770,16 +792,16 @@ export default function LevelPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-12 mt-14">
                   <div className="lg:col-span-7 min-w-0">
                     <div className="mb-5">
-                      <span className="block text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1">Curve</span>
-                      <h3 className="text-base md:text-lg font-black text-[#131313] tracking-tight">성장 곡선</h3>
+                      <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Curve</span>
+                      <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">성장 곡선</h3>
                     </div>
                     <LevelCurve />
                   </div>
                   <div className="lg:col-span-5 mt-12 lg:mt-0 min-w-0">
                     <div className="flex items-end justify-between mb-5">
                       <div>
-                        <span className="block text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1">Ranking</span>
-                        <h3 className="text-base md:text-lg font-black text-[#131313] tracking-tight">서버 랭킹</h3>
+                        <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Ranking</span>
+                        <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹</h3>
                       </div>
                       <span className="flex items-center gap-3">
                         {["all", "month"].map((k) => (
@@ -802,49 +824,79 @@ export default function LevelPage() {
             {/* ── 로그인 · 내 프로필 ── */}
             {authReady && session?.user && meLoaded && me && (
               <div>
-                {/* 플레이어 배너 — 이 화면의 앵커 (볼륨 예산 1곳) */}
-                <div className="relative rounded-2xl overflow-hidden border border-black/[0.08] bg-black/[0.025]">
-                  <div aria-hidden className="absolute inset-0 hud-grid-bg opacity-60 pointer-events-none"></div>
-                  <div aria-hidden className="absolute -top-24 -right-16 w-96 h-96 bg-[#e91e3f]/[0.1] blur-[110px] rounded-full pointer-events-none"></div>
-                  <div className="relative z-10 p-6 md:p-9">
+                {/* 플레이어 배너 — 아이보리 위 잉크 카드. 이 화면의 유일한 볼륨 앵커 */}
+                <div className="relative rounded-3xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]">
+                  <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
+                  <div aria-hidden className="absolute -top-28 -right-20 w-[420px] h-[420px] bg-[#e91e3f]/[0.18] blur-[120px] rounded-full pointer-events-none"></div>
+                  <span aria-hidden className="absolute top-5 right-8 text-[120px] md:text-[150px] font-black text-white/[0.03] leading-none select-none pointer-events-none tracking-tighter tabular-nums">{me.level}</span>
+
+                  <div className="relative z-10 p-6 md:p-10">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-                      <div className="flex items-center gap-5 md:gap-6 min-w-0">
+                      <div className="flex items-center gap-5 md:gap-7 min-w-0">
                         {/* 아바타를 감싼 레벨 진행 링 */}
-                        <RingGauge pct={progPct} size={104} stroke={6}>
+                        <RingGauge pct={progPct} size={112} stroke={6} trackClass="rgba(255,255,255,0.12)">
                           {session.user.image ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={session.user.image} alt="" className="w-[72px] h-[72px] rounded-full object-cover" />
+                            <img src={session.user.image} alt="" className="w-[78px] h-[78px] rounded-full object-cover" />
                           ) : (
-                            <span className="w-[72px] h-[72px] rounded-full bg-black/[0.06] flex items-center justify-center text-2xl font-black text-[#131313]/50">{(session.user.name || "?").slice(0, 1)}</span>
+                            <span className="w-[78px] h-[78px] rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60">{(session.user.name || "?").slice(0, 1)}</span>
                           )}
                         </RingGauge>
                         <div className="min-w-0">
-                          <p className="text-2xl md:text-3xl font-black text-[#131313] truncate tracking-tight">{session.user.name}</p>
-                          <div className="flex flex-wrap items-center gap-2 mt-3">
-                            <StatusChip>Rank #{me.rank.toLocaleString()} / {me.total.toLocaleString()}</StatusChip>
-                            <StatusChip accent>Top {rankPct}%</StatusChip>
-                            <StatusChip accent={todayTotal > 0} dot={todayTotal > 0} dotColor="bg-[#e91e3f]">오늘 +{todayTotal.toLocaleString()} XP</StatusChip>
+                          <p className="text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-2">Player</p>
+                          <p className="text-2xl md:text-4xl font-black text-white truncate tracking-tight leading-none">{session.user.name}</p>
+                          <div className="flex flex-wrap items-center gap-2 mt-3.5">
+                            <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/20 text-[10px] font-black tracking-[0.12em] uppercase text-white/70 tabular-nums">
+                              Rank #{me.rank.toLocaleString()}<span className="text-white/35 ml-1">/ {me.total.toLocaleString()}</span>
+                            </span>
+                            <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-[#e91e3f] text-[10px] font-black tracking-[0.12em] uppercase text-white tabular-nums">Top {rankPct}%</span>
+                            {todayTotal > 0 && (
+                              <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-[#e91e3f]/55 text-[10px] font-black tracking-[0.12em] uppercase text-[#ff5c77] tabular-nums">
+                                <LiveDot color="bg-[#ff5c77]" />오늘 +{todayTotal.toLocaleString()} XP
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
-                      <div className="mt-7 md:mt-0 md:text-right shrink-0 md:pl-8">
-                        <p className="text-[10px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase mb-1.5">Current Level</p>
-                        <p className="text-6xl md:text-7xl font-black text-[#131313] tabular-nums tracking-tighter leading-none" style={{ textShadow: "0 0 44px rgba(233,30,63,0.5)" }}>{me.level}</p>
+
+                      <div className="mt-8 md:mt-0 md:text-right shrink-0 md:pl-10">
+                        <p className="text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-1">Level</p>
+                        <p className="text-7xl md:text-8xl font-black text-white tabular-nums tracking-tighter leading-[0.85]" style={{ textShadow: "0 0 50px rgba(233,30,63,0.55)" }}>{me.level}</p>
                       </div>
                     </div>
 
                     {/* 와이드 XP 게이지 */}
-                    <div className="mt-8 md:mt-9">
-                      <div className="flex justify-between items-baseline mb-2">
-                        <span className="text-[11px] font-bold text-[#5a5a5a]">Lv {me.level} <span className="text-[#a3a3a3] mx-1">→</span> Lv {me.level + 1}</span>
-                        <span className="text-sm font-black text-[#131313] tabular-nums">{progPct}%</span>
+                    <div className="mt-9 md:mt-11">
+                      <div className="flex justify-between items-baseline mb-2.5">
+                        <span className="text-[11px] font-bold text-white/55">Lv {me.level} <span className="text-white/25 mx-1.5">→</span> Lv {me.level + 1}</span>
+                        <span className="text-base font-black text-white tabular-nums">{progPct}<span className="text-[11px] text-white/40 ml-0.5">%</span></span>
                       </div>
-                      <TickRuler />
-                      <SegBar pct={progPct} segments={20} h="h-3" />
+                      <div aria-hidden className="flex justify-between mb-1">
+                        {Array.from({ length: 21 }, (_, i) => (
+                          <span key={i} className={`w-px ${i % 5 === 0 ? "h-2 bg-white/30" : "h-1 bg-white/12"}`}></span>
+                        ))}
+                      </div>
+                      <SegBar pct={progPct} segments={20} h="h-3.5" track="bg-white/10" tick="rgba(19,19,19,0.92)" />
                       <div className="flex justify-between mt-2.5">
-                        <span className="text-[11px] font-bold text-[#a3a3a3] tabular-nums">{prog.current.toLocaleString()} / {prog.required.toLocaleString()} XP</span>
-                        <span className="text-[11px] font-bold text-[#8a8a8a]">다음 레벨까지 <b className="text-[#e91e3f] tabular-nums">{prog.needToNext.toLocaleString()} XP</b></span>
+                        <span className="text-[11px] font-bold text-white/40 tabular-nums">{prog.current.toLocaleString()} / {prog.required.toLocaleString()} XP</span>
+                        <span className="text-[11px] font-bold text-white/50">다음 레벨까지 <b className="text-[#ff5c77] tabular-nums">{prog.needToNext.toLocaleString()} XP</b></span>
                       </div>
+                    </div>
+
+                    {/* 배너 하단 스탯 스트립 — 세로 구분선으로 계기판 느낌 */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 border-t border-white/10 mt-8 pt-6 md:divide-x md:divide-white/10">
+                      {[
+                        { l: "누적 XP", v: (me.xp || 0).toLocaleString(), s: "TOTAL" },
+                        { l: "오늘 획득", v: `+${todayTotal.toLocaleString()}`, s: "TODAY", hot: todayTotal > 0 },
+                        { l: "누적 출석", v: `${(me.attendCount || 0).toLocaleString()}일`, s: "STREAK" },
+                        { l: "음성 티어", v: `+${tierCur.xp.toLocaleString()}`, s: "PER 5MIN" },
+                      ].map((st, i) => (
+                        <div key={i} className={`px-0 md:px-6 ${i < 2 ? "pb-5 md:pb-0" : ""} ${i % 2 === 1 ? "text-right md:text-left" : ""} ${i === 0 ? "md:pl-0" : ""}`}>
+                          <p className="text-[9px] font-black tracking-[0.28em] text-white/30 uppercase mb-2">{st.s}</p>
+                          <p className={`text-xl md:text-2xl font-black tabular-nums tracking-tight leading-none ${st.hot ? "text-[#ff5c77]" : "text-white"}`}>{st.v}</p>
+                          <p className="text-[10px] font-bold text-white/40 mt-1.5">{st.l}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -858,8 +910,8 @@ export default function LevelPage() {
                     <section>
                       <div className="flex items-end justify-between mb-6">
                         <div>
-                          <span className="block text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1">Intake</span>
-                          <h3 className="text-base md:text-lg font-black text-[#131313] tracking-tight">획득 현황</h3>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Intake</span>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">획득 현황</h3>
                         </div>
                         <span className="text-[11px] font-bold text-[#a3a3a3]">채팅 · 음성 · 출석</span>
                       </div>
@@ -873,11 +925,11 @@ export default function LevelPage() {
                             <div key={key}>
                               <div className="flex items-baseline justify-between mb-3">
                                 <span className="text-[12px] font-bold text-[#5a5a5a]">{label}</span>
-                                <span className="text-2xl md:text-3xl font-black text-[#131313] tabular-nums tracking-tight">+{total.toLocaleString()}<span className="text-[11px] font-bold text-[#a3a3a3] ml-1">XP</span></span>
+                                <span className="text-3xl md:text-4xl font-black text-[#131313] tabular-nums tracking-tight">+{total.toLocaleString()}<span className="text-[11px] font-bold text-[#a3a3a3] ml-1">XP</span></span>
                               </div>
                               {total > 0 ? (
                                 <>
-                                  <div className="flex h-2.5 rounded-full overflow-hidden bg-black/[0.05]">
+                                  <div className="flex h-3 rounded-full overflow-hidden bg-black/[0.05]">
                                     {["chat", "voice", "attend"].map((r) => (
                                       <div key={r} style={{ width: `${((data?.[r] || 0) / total) * 100}%`, background: REASON_COLORS[r] }}></div>
                                     ))}
@@ -903,8 +955,8 @@ export default function LevelPage() {
                     {/* 성장 곡선 */}
                     <section>
                       <div className="mb-5">
-                        <span className="block text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1">Curve</span>
-                        <h3 className="text-base md:text-lg font-black text-[#131313] tracking-tight">성장 곡선</h3>
+                        <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Curve</span>
+                        <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">성장 곡선</h3>
                       </div>
                       <LevelCurve myLevel={me.level} />
                     </section>
@@ -913,8 +965,8 @@ export default function LevelPage() {
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
-                          <span className="block text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1">Ranking</span>
-                          <h3 className="text-base md:text-lg font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1">TOP 10</span></h3>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Ranking</span>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1">TOP 10</span></h3>
                         </div>
                         <span className="flex items-center gap-3">
                           {["all", "month"].map((k) => (
@@ -939,12 +991,12 @@ export default function LevelPage() {
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
-                          <span className="block text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1">Daily</span>
-                          <h3 className="text-base md:text-lg font-black text-[#131313] tracking-tight">출석 퀘스트</h3>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Daily</span>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">출석 퀘스트</h3>
                         </div>
                         {attendedToday ? <StatusChip dot>오늘 완료</StatusChip> : <StatusChip accent>진행 가능</StatusChip>}
                       </div>
-                      <div className={`transition-opacity ${attendedToday ? "opacity-55" : ""}`}>
+                      <div className={`rounded-2xl border p-5 transition-all ${attendedToday ? "border-black/[0.08] bg-black/[0.02] opacity-70" : "border-[#e91e3f]/25 bg-[#e91e3f]/[0.05]"}`}>
                         <div className="flex items-center justify-between mb-2">
                           <p className="text-sm font-bold text-[#131313]">매일 출석 체크</p>
                           <p className="text-lg font-black text-[#e91e3f] tabular-nums shrink-0">+{P.attendXp.toLocaleString()} <span className="text-[10px] font-bold">XP</span></p>
@@ -983,8 +1035,8 @@ export default function LevelPage() {
                       <section>
                         <div className="flex items-end justify-between mb-4">
                           <div>
-                            <span className="block text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1">Event</span>
-                            <h3 className="text-base md:text-lg font-black text-[#131313] tracking-tight">진행 중 이벤트</h3>
+                            <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Event</span>
+                            <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">진행 중 이벤트</h3>
                           </div>
                           <Link href="/event" className="text-[11px] font-bold text-[#a3a3a3] hover:text-[#e91e3f] transition-colors">전체 →</Link>
                         </div>
@@ -1004,13 +1056,13 @@ export default function LevelPage() {
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
-                          <span className="block text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1">Tier</span>
-                          <h3 className="text-base md:text-lg font-black text-[#131313] tracking-tight">음성 티어</h3>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Tier</span>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">음성 티어</h3>
                         </div>
                         {!tierNext && <StatusChip accent>최고 구간</StatusChip>}
                       </div>
                       <div className="flex items-end justify-between mb-1.5">
-                        <p className="text-3xl font-black text-[#131313] tabular-nums leading-none">+{tierCur.xp.toLocaleString()}<span className="text-[11px] font-bold text-[#a3a3a3] ml-1.5">XP / 5분</span></p>
+                        <p className="text-4xl font-black text-[#131313] tabular-nums leading-none tracking-tight">+{tierCur.xp.toLocaleString()}<span className="text-[11px] font-bold text-[#a3a3a3] ml-1.5">XP / 5분</span></p>
                         {tierNext && <span className="text-[11px] font-bold text-[#a3a3a3] tabular-nums">다음 +{tierNext.xp.toLocaleString()}</span>}
                       </div>
                       <p className="text-[11px] font-bold text-[#a3a3a3] tabular-nums mb-2.5">현재 구간 Lv.{TIER_BOUNDS[tierIdx]}{tierNextBound !== null ? ` – ${tierNextBound - 1}` : " 이상"}</p>
@@ -1027,8 +1079,8 @@ export default function LevelPage() {
                     <section>
                       <div className="flex items-end justify-between mb-4">
                         <div>
-                          <span className="block text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1">Feed</span>
-                          <h3 className="text-base md:text-lg font-black text-[#131313] tracking-tight">획득 피드</h3>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Feed</span>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">획득 피드</h3>
                         </div>
                         <span className="flex items-center gap-1.5"><LiveDot /><span className="text-[10px] font-bold text-[#a3a3a3] tabular-nums">{myLogs?.logs?.length || 0}건</span></span>
                       </div>
@@ -1059,8 +1111,8 @@ export default function LevelPage() {
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
-                          <span className="block text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1">Season</span>
-                          <h3 className="text-base md:text-lg font-black text-[#131313] tracking-tight">시즌 진행</h3>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Season</span>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">시즌 진행</h3>
                         </div>
                         {!seasonDday.ended && seasonDday.days >= 0 && <span className="text-xl font-black text-[#e91e3f] tabular-nums leading-none">D-{seasonDday.days}</span>}
                       </div>
@@ -1202,7 +1254,7 @@ export default function LevelPage() {
                   <div key={i} className={`group py-7 md:px-7 first:md:pl-0 last:md:pr-0 ${i > 0 ? "border-t md:border-t-0 border-black/[0.08]" : ""}`}>
                     <div className="flex items-center justify-between mb-5">
                       <span className="text-xs font-bold text-[#5a5a5a] tracking-wide">{item.t}</span>
-                      <span className="text-[10px] font-bold text-emerald-400/80">{item.c}</span>
+                      <span className="text-[10px] font-black text-emerald-700">{item.c}</span>
                     </div>
                     <div className="mb-4">
                       <span className="text-4xl font-black text-[#131313] tracking-tighter group-hover:text-[#e91e3f] transition-colors duration-300 tabular-nums">+{item.x}</span>

@@ -46,7 +46,7 @@ export const HudLabel = ({ text, live = false, accent = false, right, className 
 
 // ── 라이브 인디케이터 (핑 도트) ──────────────────────────────
 /** @type {import("react").FC<any>} */
-export const LiveDot = ({ color = "bg-emerald-400" }) => (
+export const LiveDot = ({ color = "bg-emerald-600" }) => (
   <span className="relative flex h-1.5 w-1.5 shrink-0">
     <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-60 ${color}`}></span>
     <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${color}`}></span>
@@ -77,12 +77,12 @@ export const RingGauge = ({ pct = 0, size = 148, stroke = 7, children, trackClas
 
 // ── 세그먼트 게이지 바 — 칸이 나뉜 게임식 XP 바 ───────────────
 /** @type {import("react").FC<any>} */
-export const SegBar = ({ pct = 0, segments = 10, h = "h-2.5", sheen = false }) => {
+export const SegBar = ({ pct = 0, segments = 10, h = "h-2.5", sheen = false, track = "bg-black/[0.06]", tick = "rgba(245,243,240,1)" }) => {
   const step = 100 / segments;
   return (
-    <div className={`relative ${h} rounded-[3px] bg-black/[0.06] overflow-hidden`}>
+    <div className={`relative ${h} rounded-full ${track} overflow-hidden`}>
       <div
-        className="h-full rounded-[3px] bg-[#e91e3f] relative overflow-hidden"
+        className="h-full rounded-full bg-[#e91e3f] relative overflow-hidden"
         style={{ width: `${Math.min(100, Math.max(0, pct))}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}
       >
       </div>
@@ -90,7 +90,7 @@ export const SegBar = ({ pct = 0, segments = 10, h = "h-2.5", sheen = false }) =
       <div
         aria-hidden
         className="absolute inset-0 pointer-events-none"
-        style={{ backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent calc(${step}% - 1px), rgba(245,243,240,1) calc(${step}% - 1px), rgba(245,243,240,1) ${step}%)` }}
+        style={{ backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent calc(${step}% - 1px), ${tick} calc(${step}% - 1px), ${tick} ${step}%)` }}
       ></div>
     </div>
   );
@@ -138,7 +138,7 @@ export const HudCount = ({ end, duration = 1200, suffix = "" }) => {
 /** @type {import("react").FC<any>} */
 export const StatusChip = ({ children, accent = false, dot = false, dotColor, className = "" }) => (
   <span className={`inline-flex items-center gap-1.5 h-5 px-2 rounded-full border text-[10px] font-black tracking-[0.15em] uppercase tabular-nums whitespace-nowrap ${accent ? "border-[#e91e3f]/40 text-[#e91e3f]" : "border-black/15 text-[#131313]/60"} ${className}`}>
-    {dot && <LiveDot color={dotColor || (accent ? "bg-[#e91e3f]" : "bg-emerald-400")} />}
+    {dot && <LiveDot color={dotColor || (accent ? "bg-[#e91e3f]" : "bg-emerald-600")} />}
     {children}
   </span>
 );
@@ -211,33 +211,59 @@ export const Sparkline = ({ history = [], h = 96 }) => {
   );
 };
 
-// ── 리더보드 행 — 홈 TOP5·레벨 TOP10 공용 (아바타 없음: 순위 숫자가 아이덴티티) ──
-//    행 하단 1px 상대치 바(1위 XP 대비)로 격차를 데이터로 시각화
+// ── 리더보드 행 — 홈·레벨 공용. 상위 3인은 포디움 대우(뱃지·굵기·크기) ──
 /** @type {import("react").FC<any>} */
 export const RankRows = ({ rows = [], myId, me, myName = "" }) => {
   const topXp = rows[0]?.xp || 0;
   const inList = !!myId && rows.some((r) => r.userId === myId);
-  const Row = ({ rank, name, level, xp, mine }) => (
-    <div className={`relative border-b border-black/[0.06] ${mine ? "bg-black/[0.05]" : ""}`}>
-      {mine && <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#e91e3f]"></span>}
-      <div className="flex items-center h-10 pl-2 pr-1 gap-3">
-        <span className={`w-7 shrink-0 text-right text-sm font-black tabular-nums ${rank === 1 ? "text-[#e91e3f]" : rank <= 3 ? "text-[#131313]/90" : "text-[#a3a3a3]"}`}>{String(rank).padStart(2, "0")}</span>
-        <span className={`min-w-0 flex-1 truncate text-[13px] font-bold ${mine ? "text-[#131313]" : "text-[#4b4b4b]"}`}>
-          {name}
-          {mine && <StatusChip accent className="ml-2 align-middle">YOU</StatusChip>}
-        </span>
-        <span className="shrink-0 text-[10px] font-bold text-[#a3a3a3] tabular-nums">LV {level}</span>
-        <span className="shrink-0 w-20 md:w-24 text-right text-xs font-black text-[#131313] tabular-nums">{(xp || 0).toLocaleString()}</span>
+
+  const Row = ({ rank, name, level, xp, mine }) => {
+    const podium = rank <= 3;
+    return (
+      <div className={`relative border-b border-black/[0.07] transition-colors ${mine ? "bg-[#e91e3f]/[0.05]" : "hover:bg-black/[0.02]"}`}>
+        {mine && <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#e91e3f]"></span>}
+        <div className={`flex items-center gap-3.5 pl-3 pr-1 ${podium ? "h-14" : "h-11"}`}>
+          {/* 순위 뱃지 — 1위는 채움, 2·3위는 테두리, 나머지는 숫자만 */}
+          <span
+            className={`shrink-0 flex items-center justify-center tabular-nums font-black ${
+              rank === 1
+                ? "w-8 h-8 rounded-lg bg-[#e91e3f] text-white text-sm shadow-[0_6px_16px_-6px_rgba(233,30,63,0.7)]"
+                : podium
+                ? "w-8 h-8 rounded-lg border-[1.5px] border-[#131313] text-[#131313] text-sm"
+                : "w-8 text-right text-[13px] text-[#c4c4c4]"
+            }`}
+          >
+            {rank}
+          </span>
+          <span className={`min-w-0 flex-1 truncate ${podium ? "text-[15px] font-black text-[#131313]" : "text-[13px] font-bold text-[#4b4b4b]"}`}>
+            {name}
+            {mine && <span className="inline-flex items-center h-5 px-2 ml-2 rounded-full bg-[#e91e3f] text-[9px] font-black tracking-[0.12em] uppercase text-white align-middle">You</span>}
+          </span>
+          <span className="shrink-0 text-[10px] font-black text-[#a3a3a3] tabular-nums uppercase tracking-wider">Lv {level}</span>
+          <span className={`shrink-0 w-20 md:w-24 text-right tabular-nums font-black ${podium ? "text-sm text-[#131313]" : "text-xs text-[#5a5a5a]"}`}>
+            {(xp || 0).toLocaleString()}
+          </span>
+        </div>
+        {/* 1위 대비 상대치 바 — 순위 간 격차를 데이터로 */}
+        {topXp > 0 && (
+          <div
+            aria-hidden
+            className={`h-[2px] ${rank === 1 ? "bg-[#e91e3f]" : podium ? "bg-[#131313]/35" : "bg-[#131313]/12"}`}
+            style={{ width: `${Math.max(2, ((xp || 0) / topXp) * 100)}%` }}
+          ></div>
+        )}
       </div>
-      {topXp > 0 && <div aria-hidden className="h-px bg-black/10" style={{ width: `${Math.max(2, ((xp || 0) / topXp) * 100)}%` }}></div>}
-    </div>
-  );
+    );
+  };
+
   return (
-    <div>
-      {rows.map((r) => <Row key={r.userId} rank={r.rank} name={r.name} level={r.level} xp={r.xp} mine={!!myId && r.userId === myId} />)}
+    <div className="border-t border-black/[0.07]">
+      {rows.map((r) => (
+        <Row key={r.userId} rank={r.rank} name={r.name} level={r.level} xp={r.xp} mine={!!myId && r.userId === myId} />
+      ))}
       {myId && !inList && me && (
         <>
-          <div className="py-1 text-center text-[#c4c4c4] text-[10px] font-black tracking-[0.3em]">···</div>
+          <div className="py-1.5 text-center text-[#c4c4c4] text-[10px] font-black tracking-[0.4em]">···</div>
           <Row rank={me.rank} name={myName} level={me.level} xp={me.xp} mine />
         </>
       )}
