@@ -14,7 +14,20 @@ const CHANNEL_TYPE_LABEL: Record<string, string> = { text: "텍스트", voice: "
 const CHANNEL_TYPE_ICON: Record<string, string> = { text: "#", voice: "🔊", category: "📁" };
 const REASON_LABEL: Record<string, string> = { chat: "채팅", voice: "음성", attend: "출석" };
 const PERIOD_LABEL: Record<string, string> = { daily: "일일", weekly: "주간", monthly: "월간" };
+// 📌 주기별 무작위 노출 개수 — 등록된 퀘스트 중 매 주기마다 이 개수만큼 뽑아 보여준다 (0이면 전부)
+const QUEST_PICK_FIELDS = [
+  { period: "daily", key: "questPickDaily", every: "매일 자정" },
+  { period: "weekly", key: "questPickWeekly", every: "매주 월요일" },
+  { period: "monthly", key: "questPickMonthly", every: "매월 1일" },
+];
 const INV_CATEGORY: Record<string, string> = { perk: "특전", title: "칭호", notify: "알림", etc: "기타" };
+// 📌 인벤토리에 자동으로 잡히는 역할의 출처 — 상품·레벨 보상·역할 설정
+const ORIGIN_LABEL: Record<string, string> = { shop: "상점", level: "레벨", buff: "역할" };
+const ORIGIN_STYLE: Record<string, string> = {
+  shop: "border-[#131313]/20 text-[#131313] bg-black/[0.04]",
+  level: "border-[#e91e3f]/30 text-[#e91e3f] bg-[#e91e3f]/[0.06]",
+  buff: "border-[#3f83b8]/30 text-[#3f83b8] bg-[#3f83b8]/[0.06]",
+};
 
 // 페이지 안에서 바로 옮겨다니기 위한 탭 — 좌측 내비를 거치지 않아도 된다
 const TAB_ORDER: { id: string; short: string }[] = [
@@ -86,6 +99,7 @@ export default function AdminBotPage() {
 
   const [quests, setQuests] = useState<any[]>([]);
   const [invRoles, setInvRoles] = useState<any[]>([]);
+  const [shopItems, setShopItems] = useState<any[]>([]);
   const emptyInv = { id: "", roleId: "", label: "", category: "perk", description: "", sortOrder: 0, visible: true };
   const [invForm, setInvForm] = useState<any>(emptyInv);
   const emptyQuest = { id: "", name: "", desc: "", period: "daily", reason: "chat", metric: "count", target: 1, rewardXp: 0, enabled: true, order: 0 };
@@ -102,7 +116,8 @@ export default function AdminBotPage() {
       fetch("/api/xp-boost", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/daily-quest", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/inventory-role", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-    ]).then(([cfg, roles, chCfg, channels, st, bst, qst, inv]) => {
+      fetch("/api/shop/items?all=1", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+    ]).then(([cfg, roles, chCfg, channels, st, bst, qst, inv, shop]) => {
       setConfigs(Array.isArray(cfg?.data) ? cfg.data : []);
       setGuildRoles(Array.isArray(roles?.data) ? roles.data : []);
       setChannelConfigs(Array.isArray(chCfg?.data) ? chCfg.data : []);
@@ -111,6 +126,7 @@ export default function AdminBotPage() {
       setBoosts(Array.isArray(bst?.data) ? bst.data : []);
       setQuests(Array.isArray(qst?.data) ? qst.data : []);
       setInvRoles(Array.isArray(inv?.data) ? inv.data : []);
+      setShopItems(Array.isArray(shop?.data) ? shop.data : []);
     }).finally(() => setIsLoading(false));
   }, []);
 
@@ -138,13 +154,23 @@ export default function AdminBotPage() {
   }, [isAdmin, tab, logPage, logReason, logQuery]);
 
   // ── 저장 핸들러 ─────────────────────────────
-  const saveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const postSettings = async () => {
     const res = await fetch("/api/bot-settings", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings),
     }).catch(() => null);
     if (res?.ok) { const d = await res.json(); setSettings(d.data); saved(); }
     else notify("저장에 실패했습니다.", true);
+  };
+
+  const saveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await postSettings();
+  };
+
+  // 퀘스트 탭에서도 같은 문서를 저장한다 (설정은 단일 문서라 전체를 함께 보낸다)
+  const savePicks = async () => {
+    if (!settings) { notify("설정을 아직 불러오지 못했습니다.", true); return; }
+    await postSettings();
   };
 
   // ── XP 수동 지급 ─────────────────────────────
@@ -354,6 +380,37 @@ export default function AdminBotPage() {
 
   const inputClass = "w-full bg-transparent border border-black/10 rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#8a8a8a]";
   const fieldNote = "text-[10px] text-[#5a5a5a] mt-1.5";
+  // 📌 등록하지 않아도 인벤토리에 잡히는 역할 — /api/shop/my-items 가 상품·역할 설정 역할을 그대로 인정하기 때문
+  const invRoleIds = new Set(invRoles.map((r: any) => r.roleId));
+  const roleNameOf = (id: string) => guildRoles.find((g: any) => g.id === id)?.name || "";
+  const autoRoles = [
+    ...shopItems
+      .filter((i: any) => i.roleId)
+      .map((i: any) => ({
+        key: "shop-" + i._id,
+        roleId: i.roleId,
+        origin: "shop",
+        name: i.name,
+        roleName: roleNameOf(i.roleId) || i.roleName || "",
+        note: i.type === "perk" ? "권한 상품" : "역할 상품",
+        muted: i.active === false,
+      })),
+    ...configs.map((c: any) => ({
+      key: "cfg-" + c._id,
+      roleId: c.roleId,
+      origin: c.rewardLevel != null ? "level" : "buff",
+      name: roleNameOf(c.roleId) || c.roleName || "역할",
+      roleName: roleNameOf(c.roleId) || c.roleName || "",
+      note:
+        c.rewardLevel != null
+          ? "Lv." + c.rewardLevel + " 도달 시 자동 지급" + (c.exclusive ? " · 등급 역할" : "")
+          : c.buffXp > 0 || c.attendBuffXp > 0
+          ? "역할 버프 설정"
+          : "역할 설정에 등록됨",
+      muted: false,
+    })),
+  ].map((r: any) => ({ ...r, overridden: invRoleIds.has(r.roleId), exists: !!roleNameOf(r.roleId) }));
+
   const labelClass = "block text-xs font-bold text-[#8a8a8a] mb-2";
   const primaryBtn = "w-full md:w-auto md:px-10 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all";
 
@@ -974,7 +1031,7 @@ export default function AdminBotPage() {
                   <p className="text-xs text-[#5a5a5a] leading-relaxed break-keep">
                     디스코드 역할을 <b className="text-[#131313]">보유 아이템</b>으로 등록합니다. 등록한 역할을 가진 멤버는
                     자기 대시보드의 인벤토리에서 그 역할을 보게 됩니다.
-                    상점 상품이나 레벨 보상으로 주는 역할은 이미 자동으로 잡히므로, 여기에는
+                    상점 상품이나 레벨 보상으로 주는 역할은 <b className="text-[#131313]">아래 03 목록</b>처럼 이미 자동으로 잡히므로, 여기에는
                     <b className="text-[#131313]"> 디스코드에서만 주던 역할</b>(칭호·알림 구독·특전 권한 등)을 넣으면 됩니다.
                   </p>
                 </div>
@@ -1127,6 +1184,66 @@ export default function AdminBotPage() {
                 )}
               </section>
             </Reveal>
+
+            <Reveal>
+              <section className="mt-16">
+                <SectionHead no="03" title={`자동으로 잡히는 역할 (${autoRoles.length})`} />
+                <div className="p-5 md:p-6 rounded-xl border border-black/10 bg-black/[0.02] mb-6">
+                  <p className="text-xs text-[#5a5a5a] leading-relaxed break-keep">
+                    아래 역할은 <b className="text-[#131313]">따로 등록하지 않아도</b> 인벤토리에 표시됩니다. 상품이나 역할 설정에
+                    이미 걸려 있기 때문입니다. 표시 이름·분류·설명을 따로 주고 싶을 때만 위에서 같은 역할을 등록하면 되고,
+                    등록한 설정이 우선 적용됩니다.
+                  </p>
+                </div>
+
+                {autoRoles.length === 0 ? (
+                  <p className="py-14 text-center text-sm text-[#8a8a8a]">자동으로 잡히는 역할이 없습니다.</p>
+                ) : (
+                  <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
+                    {autoRoles.map((r: any) => (
+                      <div key={r.key} className="py-4 flex items-center gap-4">
+                        <span className={`shrink-0 w-[52px] text-center text-[10px] font-black rounded-full px-2 py-1 border ${ORIGIN_STYLE[r.origin]}`}>
+                          {ORIGIN_LABEL[r.origin]}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={`text-sm font-bold ${r.muted || r.overridden ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{r.name}</p>
+                            {r.muted && (
+                              <span className="text-[10px] font-black text-[#a3a3a3] border border-black/10 rounded-full px-2 py-0.5">판매 중지</span>
+                            )}
+                            {r.overridden && (
+                              <span className="text-[10px] font-black text-[#8a8a8a] border border-black/10 rounded-full px-2 py-0.5">위에 등록됨 · 그 설정 적용</span>
+                            )}
+                            {!r.exists && (
+                              <span className="text-[10px] font-black text-[#e91e3f] border border-[#e91e3f]/30 rounded-full px-2 py-0.5">역할 없음</span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#8a8a8a] mt-1">
+                            {r.roleName || "디스코드에서 삭제된 역할일 수 있습니다"}
+                            {r.note ? ` · ${r.note}` : ""}
+                          </p>
+                        </div>
+                        <div className="shrink-0">
+                          {r.overridden ? (
+                            <span className="text-[11px] font-bold text-[#c4c4c4]">—</span>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setInvForm({ ...emptyInv, roleId: r.roleId, label: r.name });
+                                window.scrollTo({ top: 0, behavior: "smooth" });
+                              }}
+                              className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
+                            >
+                              표시 설정
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </Reveal>
           </>
         )}
 
@@ -1134,7 +1251,49 @@ export default function AdminBotPage() {
           <>
             <Reveal>
               <section className="mb-16">
-                <SectionHead no="01" title={questForm.id ? "퀘스트 수정" : "퀘스트 추가"} />
+                <SectionHead no="01" title="주기별 노출 방식" />
+                <div className="p-5 md:p-6 rounded-xl border border-black/10 bg-black/[0.02] mb-6">
+                  <p className="text-xs text-[#5a5a5a] leading-relaxed break-keep">
+                    등록된 퀘스트를 <b className="text-[#131313]">매 주기마다 무작위로 뽑아</b> 보여줍니다. 0으로 두면 뽑지 않고
+                    활성 퀘스트를 전부 보여줍니다. 뽑기는 날짜(주·월)로 고정되므로 같은 날에는 모든 유저가 같은 퀘스트를 보고,
+                    새로고침해도 바뀌지 않습니다. 뽑히지 않은 퀘스트는 보상도 받을 수 없습니다.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6">
+                  {QUEST_PICK_FIELDS.map((f) => {
+                    const total = quests.filter((q: any) => (q.period || "daily") === f.period && q.enabled).length;
+                    const pick = Number(settings?.[f.key] ?? 0);
+                    return (
+                      <div key={f.key}>
+                        <label className={labelClass}>{PERIOD_LABEL[f.period]} 노출 개수</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={20}
+                          value={settings?.[f.key] ?? 0}
+                          onChange={(e) => setSettings({ ...settings, [f.key]: e.target.value })}
+                          className={inputClass}
+                        />
+                        <p className={fieldNote}>
+                          {pick > 0
+                            ? `활성 ${total}개 중 ${Math.min(pick, total)}개를 ${f.every}마다 새로 뽑습니다`
+                            : `활성 ${total}개를 전부 보여줍니다`}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-8">
+                  <button type="button" onClick={savePicks} className={primaryBtn}>노출 방식 저장</button>
+                </div>
+              </section>
+            </Reveal>
+
+            <Reveal>
+              <section className="mb-16">
+                <SectionHead no="02" title={questForm.id ? "퀘스트 수정" : "퀘스트 추가"} />
 
                 <div className="p-5 md:p-6 rounded-xl border border-black/10 bg-black/[0.02] mb-6">
                   <p className="text-xs text-[#5a5a5a] leading-relaxed break-keep">
@@ -1315,48 +1474,81 @@ export default function AdminBotPage() {
 
             <Reveal>
               <section>
-                <SectionHead no="02" title={`등록된 퀘스트 (${quests.length})`} />
+                <SectionHead no="03" title={`등록된 퀘스트 (${quests.length})`} />
                 {quests.length === 0 ? (
                   <p className="py-14 text-center text-sm text-[#8a8a8a]">아직 등록된 퀘스트가 없습니다. 위에서 추가해 주세요.</p>
                 ) : (
-                  <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
-                    {quests.map((q: any) => (
-                      <div key={q._id} className="py-4 flex items-center gap-4">
-                        <span className="shrink-0 w-8 text-center text-xs font-black text-[#a3a3a3] tabular-nums">{q.order}</span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className={`text-sm font-bold ${q.enabled ? "text-[#131313]" : "text-[#8a8a8a] line-through"}`}>{q.name}</p>
-                            <span className="text-[10px] font-black text-[#e91e3f] border border-[#e91e3f]/30 rounded-full px-2 py-0.5">{PERIOD_LABEL[q.period || "daily"]}</span>
-                            {!q.enabled && <span className="text-[10px] font-black text-[#8a8a8a] border border-black/10 rounded-full px-2 py-0.5">비활성</span>}
+                <div className="space-y-12">
+                  {QUEST_PICK_FIELDS.map((f) => {
+                    const rows = quests.filter((q: any) => (q.period || "daily") === f.period);
+                    const on = rows.filter((q: any) => q.enabled).length;
+                    const pick = Number(settings?.[f.key] ?? 0);
+                    return (
+                      <div key={f.period}>
+                        <div className="flex items-end justify-between gap-3 mb-3 pb-2.5 border-b border-black/10">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-[10px] font-black text-[#e91e3f] border border-[#e91e3f]/30 rounded-full px-2 py-0.5">
+                              {PERIOD_LABEL[f.period]}
+                            </span>
+                            <span className="text-sm font-black text-[#131313]">{PERIOD_LABEL[f.period]} 퀘스트</span>
+                            <span className="text-[11px] font-black text-[#a3a3a3] tabular-nums">{rows.length}</span>
                           </div>
-                          <p className="text-[11px] text-[#8a8a8a] mt-1 tabular-nums">
-                            {(REASON_LABEL[q.reason] || "전체")} {q.metric === "xp" ? "XP" : "횟수"} {q.target.toLocaleString()} 달성
-                            {q.desc ? ` · ${q.desc}` : ""}
+                          <span className="text-[11px] font-bold text-[#8a8a8a] text-right break-keep">
+                            {rows.length === 0
+                              ? f.every + " 초기화"
+                              : pick > 0
+                              ? `${f.every}마다 활성 ${on}개 중 ${Math.min(pick, on)}개 무작위`
+                              : `활성 ${on}개 전부 노출 · ${f.every} 초기화`}
+                          </span>
+                        </div>
+
+                        {rows.length === 0 ? (
+                          <p className="py-8 text-center text-[12px] text-[#c4c4c4]">
+                            등록된 {PERIOD_LABEL[f.period]} 퀘스트가 없습니다.
                           </p>
-                        </div>
-                        <span className="shrink-0 text-sm font-black text-[#e91e3f] tabular-nums">
-                          {q.rewardXp > 0 ? `+${q.rewardXp.toLocaleString()} XP` : <span className="text-[#a3a3a3]">보상 없음</span>}
-                        </span>
-                        <div className="shrink-0 flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              setQuestForm({ id: q._id, name: q.name, desc: q.desc || "", period: q.period || "daily", reason: q.reason, metric: q.metric, target: q.target, rewardXp: q.rewardXp, enabled: q.enabled, order: q.order });
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
-                            className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
-                          >
-                            수정
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirm({ kind: "quest", id: q._id })}
-                            className="text-[11px] font-bold text-[#a3a3a3] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
-                          >
-                            삭제
-                          </button>
-                        </div>
+                        ) : (
+                          <div className="divide-y divide-black/[0.06]">
+                            {rows.map((q: any) => (
+                              <div key={q._id} className="py-4 flex items-center gap-4">
+                                <span className="shrink-0 w-8 text-center text-xs font-black text-[#a3a3a3] tabular-nums">{q.order}</span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className={`text-sm font-bold ${q.enabled ? "text-[#131313]" : "text-[#8a8a8a] line-through"}`}>{q.name}</p>
+                                    {!q.enabled && <span className="text-[10px] font-black text-[#8a8a8a] border border-black/10 rounded-full px-2 py-0.5">비활성</span>}
+                                  </div>
+                                  <p className="text-[11px] text-[#8a8a8a] mt-1 tabular-nums">
+                                    {(REASON_LABEL[q.reason] || "전체")} {q.metric === "xp" ? "XP" : "횟수"} {q.target.toLocaleString()} 달성
+                                    {q.desc ? ` · ${q.desc}` : ""}
+                                  </p>
+                                </div>
+                                <span className="shrink-0 text-sm font-black text-[#e91e3f] tabular-nums">
+                                  {q.rewardXp > 0 ? `+${q.rewardXp.toLocaleString()} XP` : <span className="text-[#a3a3a3]">보상 없음</span>}
+                                </span>
+                                <div className="shrink-0 flex items-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setQuestForm({ id: q._id, name: q.name, desc: q.desc || "", period: q.period || "daily", reason: q.reason, metric: q.metric, target: q.target, rewardXp: q.rewardXp, enabled: q.enabled, order: q.order });
+                                      window.scrollTo({ top: 0, behavior: "smooth" });
+                                    }}
+                                    className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
+                                  >
+                                    수정
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteConfirm({ kind: "quest", id: q._id })}
+                                    className="text-[11px] font-bold text-[#a3a3a3] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
+                </div>
                 )}
               </section>
             </Reveal>

@@ -51,6 +51,10 @@ const BotSettingSchema = new mongoose.Schema({
   muteReducePct: { type: Number, default: 90 },
   muteTarget: { type: String, default: "both" },  // "both" | "any"
   resetOnLeave: { type: Boolean, default: false },
+  // 사이트 전용 — 주기별 퀘스트 무작위 노출 개수 (봇은 쓰지 않지만 스키마를 맞춰 둔다)
+  questPickDaily: { type: Number, default: 0 },
+  questPickWeekly: { type: Number, default: 0 },
+  questPickMonthly: { type: Number, default: 0 },
   levelupChannelId: { type: String, default: "" },
   levelupMessage: { type: String, default: "🎉 {user} 님이 **Lv.{level}** 에 도달했습니다!" },
   roleGrantChannelId: { type: String, default: "" },

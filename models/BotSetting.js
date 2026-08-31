@@ -18,6 +18,13 @@ const BotSettingSchema = new mongoose.Schema({
 
   resetOnLeave: { type: Boolean, default: false }, // 서버 퇴장 시 XP 초기화
 
+  // 📌 주기별 노출 개수 — 등록된 퀘스트 중 매 주기마다 이 개수만큼 무작위로 뽑아 보여준다.
+  //    0이면 뽑지 않고 전부 보여준다. 뽑기는 주기 키(날짜/주/월)로 고정되므로
+  //    같은 주기 안에서는 모든 유저가 같은 세트를 보고, 새로고침해도 바뀌지 않는다.
+  questPickDaily: { type: Number, default: 0 },
+  questPickWeekly: { type: Number, default: 0 },
+  questPickMonthly: { type: Number, default: 0 },
+
   // ARCTIC 공개 여부 — false면 관리자만 접근 가능 (준비 중 상태)
   shopPublic: { type: Boolean, default: false },
 

@@ -565,6 +565,9 @@ export default function LevelPage() {
   // 퀘스트 — 주기(일일/주간/월간)별로 나눠 본다
   const questAll = quests?.quests || [];
   const questRows = questAll.filter((q) => (q.period || "daily") === questPeriod);
+  // 주기마다 무작위로 뽑아 내보내는 경우 — 안내 문구를 "교체"로 바꾼다
+  const questPool = quests?.pool?.[questPeriod] || null;
+  const questRotates = !!(questPool && questPool.pick > 0 && questPool.total > questPool.shown);
   const questDone = questRows.filter((q) => q.claimed || q.done).length;
   const questTotal = questRows.length;
   const questPct = Math.round((questDone / Math.max(1, questTotal)) * 100);
@@ -1148,10 +1151,10 @@ export default function LevelPage() {
                           : questTotal > 0 && questDone === questTotal
                           ? "이 주기의 퀘스트를 모두 마쳤습니다"
                           : questPeriod === "monthly"
-                          ? "매월 1일(KST)에 초기화됩니다"
+                          ? questRotates ? "매월 1일(KST)에 새 퀘스트로 교체됩니다" : "매월 1일(KST)에 초기화됩니다"
                           : questPeriod === "weekly"
-                          ? "매주 월요일(KST)에 초기화됩니다"
-                          : "매일 자정(KST)에 초기화됩니다"}
+                          ? questRotates ? "매주 월요일(KST)에 새 퀘스트로 교체됩니다" : "매주 월요일(KST)에 초기화됩니다"
+                          : questRotates ? "매일 자정(KST)에 새 퀘스트로 교체됩니다" : "매일 자정(KST)에 초기화됩니다"}
                       </p>
 
                       {/* 퀘스트 로그 — 카드 하나가 곧 하나의 임무 */}
