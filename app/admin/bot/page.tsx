@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Reveal, LuxStyles } from "../../components/Lux";
 import Dropdown from "../../components/Dropdown";
@@ -14,6 +15,19 @@ const CHANNEL_TYPE_ICON: Record<string, string> = { text: "#", voice: "🔊", ca
 const REASON_LABEL: Record<string, string> = { chat: "채팅", voice: "음성", attend: "출석" };
 const PERIOD_LABEL: Record<string, string> = { daily: "일일", weekly: "주간", monthly: "월간" };
 const INV_CATEGORY: Record<string, string> = { perk: "특전", title: "칭호", notify: "알림", etc: "기타" };
+
+// 페이지 안에서 바로 옮겨다니기 위한 탭 — 좌측 내비를 거치지 않아도 된다
+const TAB_ORDER: { id: string; short: string }[] = [
+  { id: "settings", short: "기본 정책" },
+  { id: "roles", short: "역할" },
+  { id: "channels", short: "채널" },
+  { id: "boosts", short: "부스트" },
+  { id: "quests", short: "퀘스트" },
+  { id: "inventory", short: "인벤토리" },
+  { id: "grant", short: "XP 지급" },
+  { id: "leaderboard", short: "리더보드" },
+  { id: "logs", short: "로그" },
+];
 
 const TAB_META: Record<string, { title: string; desc: string }> = {
   settings: { title: "기본 정책", desc: "지급량·쿨타임·음소거·퇴장 처리 등 봇의 기본 XP 규칙을 설정합니다." },
@@ -367,20 +381,41 @@ export default function AdminBotPage() {
         <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
         <div className="max-w-4xl mx-auto relative z-10">
           <Reveal>
-            <div className="flex items-center gap-3 mb-5">
+            <div className="flex items-center gap-3 mb-3">
               <span className="w-8 h-px bg-[#e91e3f]"></span>
               <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Admin · Level Dashboard</span>
             </div>
-            <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-4">
+            <h1 className="text-2xl md:text-3xl font-black tracking-tighter leading-none mb-2.5">
               <span className="text-[#131313]">{meta.title.split(" ")[0]} </span>
               <span className="text-[#e91e3f]">{meta.title.split(" ").slice(1).join(" ") || "설정"}</span>
             </h1>
-            <p className="text-[#5a5a5a] text-sm md:text-base leading-relaxed">{meta.desc}</p>
+            <p className="text-[#5a5a5a] text-[13px] leading-relaxed break-keep">{meta.desc}</p>
           </Reveal>
         </div>
       </section>
 
-      <div className="w-full max-w-4xl mx-auto px-6 pb-16 flex-1 flex flex-col space-y-14">
+      {/* ── 페이지 안 탭 — 좌측 내비를 오가지 않고 바로 전환 ── */}
+      <div className="w-full px-6 pb-8">
+        <div className="max-w-6xl mx-auto flex gap-2 overflow-x-auto no-bar">
+          {TAB_ORDER.map((t) => {
+            const active = tab === t.id;
+            return (
+              <Link
+                key={t.id}
+                href={`/admin/bot?tab=${t.id}`}
+                scroll={false}
+                className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-bold transition-colors ${
+                  active ? "bg-[#131313] text-white" : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"
+                }`}
+              >
+                {t.short}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="w-full max-w-6xl mx-auto px-6 pb-16 flex-1 flex flex-col space-y-14">
 
         {/* ═══ 기본 정책 ═══ */}
         {tab === "settings" && settings && (
@@ -550,7 +585,11 @@ export default function AdminBotPage() {
               </div>
             </section>
 
-            <button type="submit" className={primaryBtn}>저장</button>
+            {/* 스크롤 끝까지 내려가지 않아도 저장할 수 있게 하단에 고정 */}
+            <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#f5f3f0]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
+              <span className="text-[11px] font-bold text-[#8a8a8a]">봇에는 1분 이내 자동 반영됩니다.</span>
+              <button type="submit" className="px-10 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-lg transition-all shrink-0">저장</button>
+            </div>
           </form>
           </Reveal>
         )}
@@ -651,7 +690,11 @@ export default function AdminBotPage() {
                     <p className={fieldNote}>출석체크 시 추가 지급</p>
                   </div>
                 </div>
-                <button type="submit" className={primaryBtn}>저장</button>
+                {/* 스크롤 끝까지 내려가지 않아도 저장할 수 있게 하단에 고정 */}
+            <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#f5f3f0]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
+              <span className="text-[11px] font-bold text-[#8a8a8a]">봇에는 1분 이내 자동 반영됩니다.</span>
+              <button type="submit" className="px-10 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-lg transition-all shrink-0">저장</button>
+            </div>
               </form>
             </section>
             </Reveal>
@@ -744,7 +787,11 @@ export default function AdminBotPage() {
                     <p className={fieldNote}>봇 명령어 채널 등에 사용</p>
                   </div>
                 </div>
-                <button type="submit" className={primaryBtn}>저장</button>
+                {/* 스크롤 끝까지 내려가지 않아도 저장할 수 있게 하단에 고정 */}
+            <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#f5f3f0]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
+              <span className="text-[11px] font-bold text-[#8a8a8a]">봇에는 1분 이내 자동 반영됩니다.</span>
+              <button type="submit" className="px-10 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-lg transition-all shrink-0">저장</button>
+            </div>
               </form>
             </section>
             </Reveal>
