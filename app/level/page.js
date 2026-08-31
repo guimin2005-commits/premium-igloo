@@ -736,6 +736,12 @@ export default function LevelPage() {
                       <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-3">내 레벨, 실시간으로 확인하세요</h3>
                       <p className="text-gray-500 text-[13px] md:text-sm leading-relaxed mb-8 break-keep">디스코드 로그인 시 현재 레벨·XP·서버 순위·출석 현황이<br className="hidden md:block" /> 이 화면에 실시간으로 동기화됩니다.</p>
                       <button onClick={() => signIn("discord", { callbackUrl: "/level" })} className="inline-flex items-center gap-3 px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">Discord 로그인</button>
+                      {/* 로컬 개발 전용 — DEV_LOGIN=1 환경에서만 의미 있는 확인용 로그인 (배포 번들에서는 제거됨) */}
+                      {process.env.NODE_ENV === "development" && (
+                        <div className="mt-4">
+                          <button onClick={() => signIn("devlogin", { callbackUrl: "/level" })} className="text-[11px] font-bold text-gray-600 hover:text-white underline underline-offset-4 transition-colors outline-none focus:outline-none">로컬 확인용 로그인 (dev)</button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
