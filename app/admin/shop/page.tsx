@@ -192,30 +192,30 @@ export default function AdminShopPage() {
     setNoteTarget(null); setNoteText("");
   };
 
-  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
+  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-[#8a8a8a]">로딩 중...</div>;
   if (!isAdmin) {
     return (
       <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-xl font-black text-white mb-2">권한 없음</h2>
-        <p className="text-gray-400 text-sm mb-4">관리자 권한이 필요합니다.</p>
+        <h2 className="text-xl font-black text-[#131313] mb-2">권한 없음</h2>
+        <p className="text-[#5a5a5a] text-sm mb-4">관리자 권한이 필요합니다.</p>
         <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
       </main>
     );
   }
 
-  const inputClass = "w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-500";
-  const labelClass = "block text-xs font-bold text-gray-400 mb-2";
-  const fieldNote = "text-[10px] text-gray-400 mt-1.5";
+  const inputClass = "w-full bg-transparent border border-black/10 rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#8a8a8a]";
+  const labelClass = "block text-xs font-bold text-[#5a5a5a] mb-2";
+  const fieldNote = "text-[10px] text-[#5a5a5a] mt-1.5";
   const primaryBtn = "w-full md:w-auto md:px-10 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all";
 
   const SectionHead = ({ no, title, right }: { no: string; title: string; right?: React.ReactNode }) => (
     <div className="mb-6">
       <div className="flex items-baseline gap-4 mb-2">
         <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">{no}</span>
-        <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+        <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
       </div>
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-lg md:text-xl font-black text-white tracking-tight">{title}</h2>
+        <h2 className="text-lg md:text-xl font-black text-[#131313] tracking-tight">{title}</h2>
         {right}
       </div>
     </div>
@@ -235,13 +235,13 @@ export default function AdminShopPage() {
           <Reveal>
             <div className="flex items-center gap-3 mb-5">
               <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-gray-400 uppercase">Admin · XP Shop</span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-[#5a5a5a] uppercase">Admin · XP Shop</span>
             </div>
             <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-4">
-              <span className="text-white">{meta.title.split(" ")[0]} </span>
+              <span className="text-[#131313]">{meta.title.split(" ")[0]} </span>
               <span className="text-[#e91e3f]">{meta.title.split(" ").slice(1).join(" ")}</span>
             </h1>
-            <p className="text-gray-400 text-sm md:text-base leading-relaxed">{meta.desc}</p>
+            <p className="text-[#5a5a5a] text-sm md:text-base leading-relaxed">{meta.desc}</p>
           </Reveal>
         </div>
       </section>
@@ -255,7 +255,7 @@ export default function AdminShopPage() {
             <section>
               <SectionHead no="01" title={form.id ? "상품 수정" : "상품 등록"} right={
                 <button type="button" onClick={() => setShowPreview(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[11px] font-bold text-gray-200 border border-white/20 hover:border-white/40 hover:text-white transition-colors">
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[11px] font-bold text-[#3a3a3a] border border-black/20 hover:border-black/40 hover:text-[#131313] transition-colors">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -274,7 +274,7 @@ export default function AdminShopPage() {
                     <div className="flex gap-2">
                       {[{ v: "role", l: "역할" }, { v: "perk", l: "권한" }, { v: "physical", l: "기프트카드" }].map((o) => (
                         <button key={o.v} type="button" onClick={() => setForm({ ...form, type: o.v })}
-                          className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-colors ${form.type === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-gray-300 border-white/10 hover:text-white"}`}>
+                          className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-colors ${form.type === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-[#4b4b4b] border-black/10 hover:text-[#131313]"}`}>
                           {o.l}
                         </button>
                       ))}
@@ -305,16 +305,16 @@ export default function AdminShopPage() {
                           <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: selectedRole.color }}></span>
                           <span className="font-bold">{selectedRole.name}</span>
                         </span>
-                      ) : <span className="text-gray-500">역할을 선택하세요</span>}
-                      <span className="text-[10px] text-gray-400">▼</span>
+                      ) : <span className="text-[#8a8a8a]">역할을 선택하세요</span>}
+                      <span className="text-[10px] text-[#5a5a5a]">▼</span>
                     </button>
                     {isRoleOpen && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setIsRoleOpen(false)}></div>
-                        <div className="absolute top-full left-0 w-full mt-1.5 bg-[#161616] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#2a2a2a]">
+                        <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e6e3de]">
                           {guildRoles.map((r) => (
                             <button key={r.id} type="button" onClick={() => { setForm({ ...form, roleId: r.id }); setIsRoleOpen(false); }}
-                              className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 transition-colors ${form.roleId === r.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : "text-gray-300 hover:bg-white/5"}`}>
+                              className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 transition-colors ${form.roleId === r.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : "text-[#4b4b4b] hover:bg-black/5"}`}>
                               <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: r.color }}></span>
                               {r.name}
                             </button>
@@ -351,12 +351,12 @@ export default function AdminShopPage() {
 
                 {/* 📌 기간제 역할 — 역할·권한 상품만 (기프트카드는 기간 개념이 없다) */}
                 {form.type !== "physical" && (
-                  <div className="mb-6 border-t border-white/[0.06] pt-5">
+                  <div className="mb-6 border-t border-black/[0.06] pt-5">
                     <button type="button" onClick={() => setForm({ ...form, timed: !form.timed })}
                       className={`${inputClass} md:max-w-xs flex items-center justify-between text-left ${form.timed ? "border-[#e91e3f]/40" : ""}`}>
-                      <span className={form.timed ? "text-[#e91e3f] font-bold" : "text-gray-400"}>{form.timed ? "기간제 역할" : "영구 보유"}</span>
-                      <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${form.timed ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
-                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${form.timed ? "left-[18px]" : "left-0.5"}`}></span>
+                      <span className={form.timed ? "text-[#e91e3f] font-bold" : "text-[#5a5a5a]"}>{form.timed ? "기간제 역할" : "영구 보유"}</span>
+                      <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${form.timed ? "bg-[#e91e3f]" : "bg-[#e6e3de]"}`}>
+                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-all ${form.timed ? "left-[18px]" : "left-0.5"}`}></span>
                       </span>
                     </button>
                     <p className={fieldNote}>
@@ -390,7 +390,7 @@ export default function AdminShopPage() {
                           })}
                         </div>
                         {form.timed && buildDurations().length === 0 && (
-                          <p className="text-[10px] font-bold text-amber-400 mt-3">기간 가격을 하나 이상 넣어야 기간제로 저장됩니다.</p>
+                          <p className="text-[10px] font-bold text-amber-700 mt-3">기간 가격을 하나 이상 넣어야 기간제로 저장됩니다.</p>
                         )}
                       </div>
                     </div>
@@ -400,16 +400,16 @@ export default function AdminShopPage() {
                 <div className="mb-6">
                   <label className={labelClass}>판매 상태</label>
                   <button type="button" onClick={() => setForm({ ...form, active: !form.active })} className={`${inputClass} md:max-w-xs flex items-center justify-between text-left ${form.active ? "border-[#e91e3f]/40" : ""}`}>
-                    <span className={form.active ? "text-[#e91e3f] font-bold" : "text-gray-400"}>{form.active ? "판매 중" : "숨김"}</span>
-                    <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${form.active ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
-                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${form.active ? "left-[18px]" : "left-0.5"}`}></span>
+                    <span className={form.active ? "text-[#e91e3f] font-bold" : "text-[#5a5a5a]"}>{form.active ? "판매 중" : "숨김"}</span>
+                    <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${form.active ? "bg-[#e91e3f]" : "bg-[#e6e3de]"}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-all ${form.active ? "left-[18px]" : "left-0.5"}`}></span>
                     </span>
                   </button>
                 </div>
 
                 <div className="flex gap-3">
                   <button type="submit" className={primaryBtn}>{form.id ? "수정 저장" : "상품 등록"}</button>
-                  {form.id && <button type="button" onClick={() => setForm(emptyForm)} className="px-6 py-3.5 text-sm font-bold text-gray-300 hover:text-white transition-colors">취소</button>}
+                  {form.id && <button type="button" onClick={() => setForm(emptyForm)} className="px-6 py-3.5 text-sm font-bold text-[#4b4b4b] hover:text-[#131313] transition-colors">취소</button>}
                 </div>
               </form>
             </section>
@@ -418,13 +418,13 @@ export default function AdminShopPage() {
             <Reveal>
             <section>
               <SectionHead no="02" title={`등록된 상품 (${items.length})`} />
-              {isLoading ? <div className="py-10 text-center text-gray-400 text-sm">불러오는 중...</div>
-                : items.length === 0 ? <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">등록된 상품이 없습니다.</div>
+              {isLoading ? <div className="py-10 text-center text-[#5a5a5a] text-sm">불러오는 중...</div>
+                : items.length === 0 ? <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">등록된 상품이 없습니다.</div>
                 : (
-                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
                   {items.map((it) => (
                     <div key={it._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                      <div className="w-12 h-12 rounded-lg bg-white/5 overflow-hidden shrink-0">
+                      <div className="w-12 h-12 rounded-lg bg-black/5 overflow-hidden shrink-0">
                         {it.imageUrl && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={it.imageUrl} alt="" className="w-full h-full object-cover" />
@@ -432,24 +432,24 @@ export default function AdminShopPage() {
                       </div>
                       <div className="min-w-0 md:w-48 shrink-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-white truncate">{it.name}</span>
-                          {!it.active && <span className="text-[10px] font-bold text-gray-400 border border-white/15 px-1.5 rounded shrink-0">숨김</span>}
+                          <span className="text-sm font-bold text-[#131313] truncate">{it.name}</span>
+                          {!it.active && <span className="text-[10px] font-bold text-[#5a5a5a] border border-black/15 px-1.5 rounded shrink-0">숨김</span>}
                         </div>
-                        <span className="text-[10px] font-bold text-gray-400">{it.type === "physical" ? "기프트카드" : `${it.type === "perk" ? "권한" : "역할"} · ${it.roleName || it.roleId}`}</span>
+                        <span className="text-[10px] font-bold text-[#5a5a5a]">{it.type === "physical" ? "기프트카드" : `${it.type === "perk" ? "권한" : "역할"} · ${it.roleName || it.roleId}`}</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
                         <span className="text-[11px] font-bold text-[#e91e3f] tabular-nums">{Math.max(0, Math.floor((it.price * (100 - (it.discountPct || 0))) / 100)).toLocaleString()} XP{it.discountPct > 0 ? ` (-${it.discountPct}%)` : ""}</span>
-                        <span className="text-[11px] font-bold text-gray-400">{it.stock < 0 ? "재고 무제한" : `재고 ${it.stock}`}</span>
-                        <span className="text-[11px] text-gray-400">{it.soldCount || 0}개 판매</span>
-                        <span className="text-[11px] text-gray-400">추천 {it.sortOrder || 0}</span>
+                        <span className="text-[11px] font-bold text-[#5a5a5a]">{it.stock < 0 ? "재고 무제한" : `재고 ${it.stock}`}</span>
+                        <span className="text-[11px] text-[#5a5a5a]">{it.soldCount || 0}개 판매</span>
+                        <span className="text-[11px] text-[#5a5a5a]">추천 {it.sortOrder || 0}</span>
                       </div>
                       <div className="flex gap-4 shrink-0">
                         <button onClick={() => { setForm({ id: it._id, name: it.name, description: it.description || "", imageUrl: it.imageUrl || "", type: it.type, roleId: it.roleId || "", price: String(it.price), discountPct: it.discountPct ? String(it.discountPct) : "", stock: it.stock < 0 ? "" : String(it.stock), sortOrder: String(it.sortOrder || 0), active: it.active,
                           timed: Array.isArray(it.durations) && it.durations.length > 0,
                           price7: String(it.durations?.find((d: any) => d.days === 7)?.price ?? ""),
                           price30: String(it.durations?.find((d: any) => d.days === 30)?.price ?? ""),
-                        }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-400 hover:text-white transition-colors">수정</button>
-                        <button onClick={() => setDeleteTarget({ kind: "item", id: it._id })} className="text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">삭제</button>
+                        }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">수정</button>
+                        <button onClick={() => setDeleteTarget({ kind: "item", id: it._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">삭제</button>
                       </div>
                     </div>
                   ))}
@@ -473,10 +473,10 @@ export default function AdminShopPage() {
                   <input type="text" value={bannerForm.imageUrl} onChange={(e) => setBannerForm({ ...bannerForm, imageUrl: e.target.value })}
                     placeholder="https://..." className={inputClass} />
                   <p className={fieldNote}>
-                    권장 크기 <span className="text-gray-200 font-bold tabular-nums">2400 × 600 px</span> (4:1) · 최소 1200 × 300 px · JPG/PNG/WebP
+                    권장 크기 <span className="text-[#3a3a3a] font-bold tabular-nums">2400 × 600 px</span> (4:1) · 최소 1200 × 300 px · JPG/PNG/WebP
                   </p>
                   <p className={fieldNote}>
-                    모바일에서는 3:1로 잘려 보입니다 — 글자·로고는 가운데 <span className="text-gray-200 font-bold">가로 75%</span> 안에 두세요.
+                    모바일에서는 3:1로 잘려 보입니다 — 글자·로고는 가운데 <span className="text-[#3a3a3a] font-bold">가로 75%</span> 안에 두세요.
                   </p>
                   {bannerSize && (() => {
                     const ratio = bannerSize.w / bannerSize.h;
@@ -484,7 +484,7 @@ export default function AdminShopPage() {
                     const offRatio = ratio < 3.4 || ratio > 4.6;
                     const ok = !tooSmall && !offRatio;
                     return (
-                      <p className={`text-[10px] mt-1.5 font-bold ${ok ? "text-emerald-400" : "text-amber-400"}`}>
+                      <p className={`text-[10px] mt-1.5 font-bold ${ok ? "text-emerald-700" : "text-amber-700"}`}>
                         현재 이미지 <span className="tabular-nums">{bannerSize.w} × {bannerSize.h} px</span> ({ratio.toFixed(2)}:1)
                         {ok ? " · 적당합니다" : tooSmall ? " · 가로가 1200px보다 작아 흐리게 보일 수 있습니다" : " · 4:1에서 벗어나 위아래가 잘립니다"}
                       </p>
@@ -523,9 +523,9 @@ export default function AdminShopPage() {
                 <div className="mb-6">
                   <button type="button" onClick={() => setBannerForm({ ...bannerForm, active: !bannerForm.active })}
                     className={`${inputClass} md:max-w-xs flex items-center justify-between text-left ${bannerForm.active ? "border-[#e91e3f]/40" : ""}`}>
-                    <span className={bannerForm.active ? "text-[#e91e3f] font-bold" : "text-gray-400"}>{bannerForm.active ? "노출 중" : "숨김"}</span>
-                    <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${bannerForm.active ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
-                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${bannerForm.active ? "left-[18px]" : "left-0.5"}`}></span>
+                    <span className={bannerForm.active ? "text-[#e91e3f] font-bold" : "text-[#5a5a5a]"}>{bannerForm.active ? "노출 중" : "숨김"}</span>
+                    <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${bannerForm.active ? "bg-[#e91e3f]" : "bg-[#e6e3de]"}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-all ${bannerForm.active ? "left-[18px]" : "left-0.5"}`}></span>
                     </span>
                   </button>
                 </div>
@@ -533,14 +533,14 @@ export default function AdminShopPage() {
                 {/* 미리보기 */}
                 {bannerForm.imageUrl && (
                   <div className="mb-6">
-                    <div className="text-[10px] font-black tracking-[0.25em] text-gray-400 uppercase mb-2">Preview</div>
-                    <div className="relative rounded-2xl overflow-hidden border border-white/10 aspect-[4/1] bg-[#161616]">
+                    <div className="text-[10px] font-black tracking-[0.25em] text-[#5a5a5a] uppercase mb-2">Preview</div>
+                    <div className="relative rounded-2xl overflow-hidden border border-black/10 aspect-[4/1] bg-[#ffffff]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={bannerForm.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
                       {(bannerForm.title || bannerForm.subtitle) && (
                         <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-8">
-                          {bannerForm.title && <h3 className="text-xl font-black tracking-tight text-white mb-1">{bannerForm.title}</h3>}
-                          {bannerForm.subtitle && <p className="text-[12px] text-white/85">{bannerForm.subtitle}</p>}
+                          {bannerForm.title && <h3 className="text-xl font-black tracking-tight text-[#131313] mb-1">{bannerForm.title}</h3>}
+                          {bannerForm.subtitle && <p className="text-[12px] text-[#131313]/85">{bannerForm.subtitle}</p>}
                         </div>
                       )}
                     </div>
@@ -549,7 +549,7 @@ export default function AdminShopPage() {
 
                 <div className="flex gap-3">
                   <button type="submit" className={primaryBtn}>{bannerForm.id ? "수정 저장" : "배너 등록"}</button>
-                  {bannerForm.id && <button type="button" onClick={() => setBannerForm(EMPTY_BANNER)} className="px-6 py-3.5 text-sm font-bold text-gray-300 hover:text-white transition-colors">취소</button>}
+                  {bannerForm.id && <button type="button" onClick={() => setBannerForm(EMPTY_BANNER)} className="px-6 py-3.5 text-sm font-bold text-[#4b4b4b] hover:text-[#131313] transition-colors">취소</button>}
                 </div>
               </form>
             </section>
@@ -558,30 +558,30 @@ export default function AdminShopPage() {
             <Reveal>
             <section>
               <SectionHead no="02" title={`등록된 배너 (${banners.length})`} />
-              {isLoading ? <div className="py-10 text-center text-gray-400 text-sm">불러오는 중...</div>
-                : banners.length === 0 ? <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">등록된 배너가 없습니다.</div>
+              {isLoading ? <div className="py-10 text-center text-[#5a5a5a] text-sm">불러오는 중...</div>
+                : banners.length === 0 ? <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">등록된 배너가 없습니다.</div>
                 : (
-                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
                   {banners.map((b) => (
                     <div key={b._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                      <div className="w-28 h-14 rounded-lg bg-white/5 overflow-hidden shrink-0">
+                      <div className="w-28 h-14 rounded-lg bg-black/5 overflow-hidden shrink-0">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={b.imageUrl} alt="" className="w-full h-full object-cover" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-white truncate">{b.title || "(제목 없음)"}</span>
-                          {!b.active && <span className="text-[10px] font-bold text-gray-400 border border-white/15 px-1.5 rounded shrink-0">숨김</span>}
+                          <span className="text-sm font-bold text-[#131313] truncate">{b.title || "(제목 없음)"}</span>
+                          {!b.active && <span className="text-[10px] font-bold text-[#5a5a5a] border border-black/15 px-1.5 rounded shrink-0">숨김</span>}
                         </div>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
-                          {b.subtitle && <span className="text-[11px] text-gray-400 truncate">{b.subtitle}</span>}
-                          {b.link && <span className="text-[11px] font-bold text-gray-400">→ {b.link}</span>}
-                          <span className="text-[11px] text-gray-400">순서 {b.sortOrder || 0}</span>
+                          {b.subtitle && <span className="text-[11px] text-[#5a5a5a] truncate">{b.subtitle}</span>}
+                          {b.link && <span className="text-[11px] font-bold text-[#5a5a5a]">→ {b.link}</span>}
+                          <span className="text-[11px] text-[#5a5a5a]">순서 {b.sortOrder || 0}</span>
                         </div>
                       </div>
                       <div className="flex gap-4 shrink-0">
-                        <button onClick={() => { setBannerForm({ id: b._id, imageUrl: b.imageUrl, title: b.title || "", subtitle: b.subtitle || "", link: b.link || "", sortOrder: String(b.sortOrder || 0), active: b.active }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-400 hover:text-white transition-colors">수정</button>
-                        <button onClick={() => setDeleteTarget({ kind: "banner", id: b._id })} className="text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">삭제</button>
+                        <button onClick={() => { setBannerForm({ id: b._id, imageUrl: b.imageUrl, title: b.title || "", subtitle: b.subtitle || "", link: b.link || "", sortOrder: String(b.sortOrder || 0), active: b.active }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">수정</button>
+                        <button onClick={() => setDeleteTarget({ kind: "banner", id: b._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">삭제</button>
                       </div>
                     </div>
                   ))}
@@ -599,7 +599,7 @@ export default function AdminShopPage() {
             <section>
               <SectionHead no="01" title={couponForm.id ? "쿠폰 수정" : "쿠폰 발급"} right={
                 <button type="button" onClick={migrateCodes} disabled={isMigrating}
-                  className="px-4 py-2 rounded-lg border border-white/15 text-gray-300 hover:text-white text-[12px] font-bold transition-colors disabled:opacity-40 whitespace-nowrap">
+                  className="px-4 py-2 rounded-lg border border-black/15 text-[#4b4b4b] hover:text-[#131313] text-[12px] font-bold transition-colors disabled:opacity-40 whitespace-nowrap">
                   {isMigrating ? "이전 중..." : "예전 코드 가져오기"}
                 </button>
               } />
@@ -629,10 +629,10 @@ export default function AdminShopPage() {
                     ].map((o) => (
                       <button key={o.v} type="button" onClick={() => setCouponForm({ ...couponForm, kind: o.v })}
                         className={`py-3 px-4 rounded-lg text-left border transition-colors ${
-                          (couponForm.kind || "discount") === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-gray-300 border-white/10 hover:text-white"
+                          (couponForm.kind || "discount") === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-[#4b4b4b] border-black/10 hover:text-[#131313]"
                         }`}>
                         <span className="block text-xs font-bold">{o.l}</span>
-                        <span className="block text-[10px] text-gray-400 mt-0.5">{o.d}</span>
+                        <span className="block text-[10px] text-[#5a5a5a] mt-0.5">{o.d}</span>
                       </button>
                     ))}
                   </div>
@@ -640,7 +640,7 @@ export default function AdminShopPage() {
 
                 {/* ── 보상형 설정 ── */}
                 {couponForm.kind === "reward" && (
-                  <div className="mb-4 space-y-4 p-4 rounded-lg border border-white/10">
+                  <div className="mb-4 space-y-4 p-4 rounded-lg border border-black/10">
                     <div>
                       <label className={labelClass}>안내 문구</label>
                       <input type="text" value={couponForm.reward || ""} onChange={(e) => setCouponForm({ ...couponForm, reward: e.target.value })}
@@ -653,7 +653,7 @@ export default function AdminShopPage() {
                         <label className={labelClass}>지급할 역할</label>
                         <select value={couponForm.rewardRoleId || ""}
                           onChange={(e) => setCouponForm({ ...couponForm, rewardRoleId: e.target.value, rewardRoleName: guildRoles.find((r) => r.id === e.target.value)?.name || "" })}
-                          className={`${inputClass} [&>option]:bg-[#161616]`}>
+                          className={`${inputClass} [&>option]:bg-[#ffffff]`}>
                           <option value="">지급 안 함</option>
                           {guildRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                         </select>
@@ -670,7 +670,7 @@ export default function AdminShopPage() {
                       <label className={labelClass}>사용 조건 역할</label>
                       <select value={couponForm.requiredRoleId || ""}
                         onChange={(e) => setCouponForm({ ...couponForm, requiredRoleId: e.target.value, requiredRoleName: guildRoles.find((r) => r.id === e.target.value)?.name || "" })}
-                        className={`${inputClass} [&>option]:bg-[#161616]`}>
+                        className={`${inputClass} [&>option]:bg-[#ffffff]`}>
                         <option value="">제한 없음</option>
                         {guildRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                       </select>
@@ -686,7 +686,7 @@ export default function AdminShopPage() {
                     <div className="flex gap-2">
                       {[{ v: "percent", l: "정률 (%)" }, { v: "flat", l: "정액 (XP)" }].map((o) => (
                         <button key={o.v} type="button" onClick={() => setCouponForm({ ...couponForm, type: o.v })}
-                          className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-colors ${couponForm.type === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-gray-300 border-white/10 hover:text-white"}`}>
+                          className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-colors ${couponForm.type === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-[#4b4b4b] border-black/10 hover:text-[#131313]"}`}>
                           {o.l}
                         </button>
                       ))}
@@ -728,7 +728,7 @@ export default function AdminShopPage() {
                   <div>
                     <label className={labelClass}>만료 일시</label>
                     <input type="datetime-local" value={couponForm.expiresAt} onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
-                      className={`${inputClass} [color-scheme:dark]`} />
+                      className={`${inputClass}`} />
                     <p className={fieldNote}>비우면 무기한</p>
                   </div>
                 </div>
@@ -736,16 +736,16 @@ export default function AdminShopPage() {
                 <div className="mb-6">
                   <button type="button" onClick={() => setCouponForm({ ...couponForm, active: !couponForm.active })}
                     className={`${inputClass} md:max-w-xs flex items-center justify-between text-left ${couponForm.active ? "border-[#e91e3f]/40" : ""}`}>
-                    <span className={couponForm.active ? "text-[#e91e3f] font-bold" : "text-gray-400"}>{couponForm.active ? "사용 가능" : "사용 중지"}</span>
-                    <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${couponForm.active ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
-                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${couponForm.active ? "left-[18px]" : "left-0.5"}`}></span>
+                    <span className={couponForm.active ? "text-[#e91e3f] font-bold" : "text-[#5a5a5a]"}>{couponForm.active ? "사용 가능" : "사용 중지"}</span>
+                    <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${couponForm.active ? "bg-[#e91e3f]" : "bg-[#e6e3de]"}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-all ${couponForm.active ? "left-[18px]" : "left-0.5"}`}></span>
                     </span>
                   </button>
                 </div>
 
                 <div className="flex gap-3">
                   <button type="submit" className={primaryBtn}>{couponForm.id ? "수정 저장" : "쿠폰 발급"}</button>
-                  {couponForm.id && <button type="button" onClick={() => setCouponForm(EMPTY_COUPON)} className="px-6 py-3.5 text-sm font-bold text-gray-300 hover:text-white transition-colors">취소</button>}
+                  {couponForm.id && <button type="button" onClick={() => setCouponForm(EMPTY_COUPON)} className="px-6 py-3.5 text-sm font-bold text-[#4b4b4b] hover:text-[#131313] transition-colors">취소</button>}
                 </div>
               </form>
             </section>
@@ -754,10 +754,10 @@ export default function AdminShopPage() {
             <Reveal>
             <section>
               <SectionHead no="02" title={`발급된 쿠폰 (${coupons.length})`} />
-              {isLoading ? <div className="py-10 text-center text-gray-400 text-sm">불러오는 중...</div>
-                : coupons.length === 0 ? <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">발급된 쿠폰이 없습니다.</div>
+              {isLoading ? <div className="py-10 text-center text-[#5a5a5a] text-sm">불러오는 중...</div>
+                : coupons.length === 0 ? <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">발급된 쿠폰이 없습니다.</div>
                 : (
-                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
                   {coupons.map((c) => {
                     const expired = c.expiresAt && new Date(c.expiresAt) < new Date();
                     const exhausted = c.maxUses > 0 && c.usedCount >= c.maxUses;
@@ -766,15 +766,15 @@ export default function AdminShopPage() {
                       <div key={c._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                         <div className="flex items-center gap-2.5 md:w-56 shrink-0 min-w-0">
                           <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${
-                            state === "사용 가능" ? "bg-[#e91e3f] text-white" : "bg-white/10 text-gray-300"}`}>{state}</span>
+                            state === "사용 가능" ? "bg-[#e91e3f] text-white" : "bg-black/10 text-[#4b4b4b]"}`}>{state}</span>
                           <div className="min-w-0">
-                            <div className="text-sm font-black text-white tracking-wide truncate">{c.code}</div>
-                            {c.name && <div className="text-[10px] text-gray-400 truncate">{c.name}</div>}
+                            <div className="text-sm font-black text-[#131313] tracking-wide truncate">{c.code}</div>
+                            {c.name && <div className="text-[10px] text-[#5a5a5a] truncate">{c.name}</div>}
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1 min-w-0">
                           <span className={`text-[10px] font-black px-1.5 py-0.5 rounded shrink-0 ${
-                            c.kind === "reward" ? "bg-[#2f6fb0]/20 text-[#7fb2e5]" : "bg-white/10 text-gray-300"}`}>
+                            c.kind === "reward" ? "bg-[#2f6fb0]/15 text-[#2f6fb0]" : "bg-black/10 text-[#4b4b4b]"}`}>
                             {c.kind === "reward" ? "보상형" : "할인형"}
                           </span>
 
@@ -791,19 +791,19 @@ export default function AdminShopPage() {
                           )}
 
                           {c.kind === "reward" && c.requiredRoleName && (
-                            <span className="text-[11px] text-gray-400">{c.requiredRoleName} 전용</span>
+                            <span className="text-[11px] text-[#5a5a5a]">{c.requiredRoleName} 전용</span>
                           )}
-                          {c.kind !== "reward" && c.minTotal > 0 && <span className="text-[11px] text-gray-400">{c.minTotal.toLocaleString()} XP 이상</span>}
-                          <span className="text-[11px] text-gray-400">사용 {c.usedCount || 0}{c.maxUses > 0 ? ` / ${c.maxUses}` : ""}</span>
-                          <span className="text-[11px] text-gray-400">1인 {c.perUserLimit === 0 ? "무제한" : `${c.perUserLimit}회`}</span>
-                          {c.expiresAt && <span className="text-[11px] text-gray-400">~ {fmtDateTime(c.expiresAt)}</span>}
+                          {c.kind !== "reward" && c.minTotal > 0 && <span className="text-[11px] text-[#5a5a5a]">{c.minTotal.toLocaleString()} XP 이상</span>}
+                          <span className="text-[11px] text-[#5a5a5a]">사용 {c.usedCount || 0}{c.maxUses > 0 ? ` / ${c.maxUses}` : ""}</span>
+                          <span className="text-[11px] text-[#5a5a5a]">1인 {c.perUserLimit === 0 ? "무제한" : `${c.perUserLimit}회`}</span>
+                          {c.expiresAt && <span className="text-[11px] text-[#5a5a5a]">~ {fmtDateTime(c.expiresAt)}</span>}
                         </div>
                         <div className="flex gap-4 shrink-0">
                           {c.kind !== "reward" && (
-                            <button onClick={() => { setIssueTarget(c); setIssueInput(""); }} className="text-xs font-bold text-emerald-400/80 hover:text-emerald-400 transition-colors">지급</button>
+                            <button onClick={() => { setIssueTarget(c); setIssueInput(""); }} className="text-xs font-bold text-emerald-700/80 hover:text-emerald-700 transition-colors">지급</button>
                           )}
-                          <button onClick={() => { setCouponForm({ id: c._id, code: c.code, name: c.name || "", kind: c.kind || "discount", reward: c.reward || "", rewardRoleId: c.rewardRoleId || "", rewardRoleName: c.rewardRoleName || "", rewardXp: c.rewardXp ? String(c.rewardXp) : "", requiredRoleId: c.requiredRoleId || "", requiredRoleName: c.requiredRoleName || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: c.expiresAt ? new Date(new Date(c.expiresAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-400 hover:text-white transition-colors">수정</button>
-                          <button onClick={() => setDeleteTarget({ kind: "coupon", id: c._id })} className="text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">삭제</button>
+                          <button onClick={() => { setCouponForm({ id: c._id, code: c.code, name: c.name || "", kind: c.kind || "discount", reward: c.reward || "", rewardRoleId: c.rewardRoleId || "", rewardRoleName: c.rewardRoleName || "", rewardXp: c.rewardXp ? String(c.rewardXp) : "", requiredRoleId: c.requiredRoleId || "", requiredRoleName: c.requiredRoleName || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: c.expiresAt ? new Date(new Date(c.expiresAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">수정</button>
+                          <button onClick={() => setDeleteTarget({ kind: "coupon", id: c._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">삭제</button>
                         </div>
                       </div>
                     );
@@ -822,54 +822,54 @@ export default function AdminShopPage() {
               <div className="flex gap-2">
                 {[{ v: "", l: "전체" }, { v: "pending", l: `대기 ${pendingCount}` }, { v: "completed", l: "완료" }, { v: "cancelled", l: "취소" }].map((o) => (
                   <button key={o.v} onClick={() => setOrderFilter(o.v)}
-                    className={`px-3.5 py-1.5 rounded-full text-[11px] font-bold border transition-colors ${orderFilter === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-gray-300 border-white/10 hover:text-white"}`}>
+                    className={`px-3.5 py-1.5 rounded-full text-[11px] font-bold border transition-colors ${orderFilter === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-[#4b4b4b] border-black/10 hover:text-[#131313]"}`}>
                     {o.l}
                   </button>
                 ))}
               </div>
             } />
-            {isLoading ? <div className="py-10 text-center text-gray-400 text-sm">불러오는 중...</div>
-              : shownOrders.length === 0 ? <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">구매 내역이 없습니다.</div>
+            {isLoading ? <div className="py-10 text-center text-[#5a5a5a] text-sm">불러오는 중...</div>
+              : shownOrders.length === 0 ? <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">구매 내역이 없습니다.</div>
               : (
-              <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+              <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
                 {shownOrders.map((o) => (
                   <div key={o._id} className="py-4">
                     <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                       <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 w-fit ${
-                        o.status === "completed" ? "bg-emerald-500/15 text-emerald-400"
-                        : o.status === "cancelled" ? "bg-red-500/15 text-red-400"
+                        o.status === "completed" ? "bg-emerald-500/15 text-emerald-700"
+                        : o.status === "cancelled" ? "bg-red-500/15 text-red-600"
                         : "bg-[#e91e3f] text-white"}`}>
                         {STATUS_LABEL[o.status]}
                       </span>
                       <div className="min-w-0 md:w-44 shrink-0">
-                        <div className="text-sm font-bold text-white truncate">{o.itemName}</div>
-                        <div className="text-[10px] font-bold text-gray-400">{o.itemType === "physical" ? "기프트카드" : o.itemType === "perk" ? "권한" : "역할"} · {o.userName}</div>
+                        <div className="text-sm font-bold text-[#131313] truncate">{o.itemName}</div>
+                        <div className="text-[10px] font-bold text-[#5a5a5a]">{o.itemType === "physical" ? "기프트카드" : o.itemType === "perk" ? "권한" : "역할"} · {o.userName}</div>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
                         <span className="text-[11px] font-bold text-[#e91e3f] tabular-nums">{o.price.toLocaleString()} XP</span>
-                        <span className="text-[11px] text-gray-400">{fmtDateTime(o.createdAt)}</span>
-                        {o.error && <span className="text-[11px] font-bold text-red-400">지급 실패: {o.error}</span>}
+                        <span className="text-[11px] text-[#5a5a5a]">{fmtDateTime(o.createdAt)}</span>
+                        {o.error && <span className="text-[11px] font-bold text-red-600">지급 실패: {o.error}</span>}
                       </div>
                       {o.status === "pending" && (
                         <div className="flex gap-4 shrink-0">
                           {o.itemType === "physical" && (
-                            <button onClick={() => { setNoteTarget(o); setNoteText(""); }} className="text-xs font-bold text-emerald-400/80 hover:text-emerald-400 transition-colors">발송 처리</button>
+                            <button onClick={() => { setNoteTarget(o); setNoteText(""); }} className="text-xs font-bold text-emerald-700/80 hover:text-emerald-700 transition-colors">발송 처리</button>
                           )}
-                          <button onClick={() => processOrder(o._id, "cancelled")} className="text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">취소·환불</button>
+                          <button onClick={() => processOrder(o._id, "cancelled")} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">취소·환불</button>
                         </div>
                       )}
                     </div>
                     {o.contact && (
-                      <div className="mt-2 md:ml-[4.5rem] text-[11px] text-gray-300 bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2 whitespace-pre-wrap break-words">
-                        <span className="font-bold text-gray-400">수령 정보 · </span>{o.contact}
+                      <div className="mt-2 md:ml-[4.5rem] text-[11px] text-[#4b4b4b] bg-black/[0.03] border border-black/[0.06] rounded-lg px-3 py-2 whitespace-pre-wrap break-words">
+                        <span className="font-bold text-[#5a5a5a]">수령 정보 · </span>{o.contact}
                       </div>
                     )}
-                    {o.adminNote && <div className="mt-1.5 md:ml-[4.5rem] text-[11px] text-gray-400">메모: {o.adminNote}</div>}
+                    {o.adminNote && <div className="mt-1.5 md:ml-[4.5rem] text-[11px] text-[#5a5a5a]">메모: {o.adminNote}</div>}
                   </div>
                 ))}
               </div>
             )}
-            <p className="mt-6 text-xs text-gray-400 leading-relaxed">
+            <p className="mt-6 text-xs text-[#5a5a5a] leading-relaxed">
               💡 역할 상품은 봇이 30초 주기로 자동 지급하며 완료 시 상태가 바뀝니다. 실물 상품만 여기서 발송 처리하세요. 취소하면 XP가 환불되고 재고가 복구됩니다.
             </p>
           </section>
@@ -878,43 +878,43 @@ export default function AdminShopPage() {
       </div>
 
       {deleteTarget && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4">
-          <div className="bg-[#121212] border border-red-500/30 rounded-3xl w-full max-w-sm p-8 text-center">
-            <h2 className="text-xl font-bold text-white mb-3">삭제 확인</h2>
-            <p className="text-sm text-gray-400 mb-8">{deleteTarget.kind === "item" ? <>이 상품을 삭제하시겠습니까?<br/>기존 구매 내역은 그대로 유지됩니다.</> : deleteTarget.kind === "banner" ? <>이 배너를 삭제하시겠습니까?</> : <>이 쿠폰을 삭제하시겠습니까?<br/>이미 사용된 내역에는 영향이 없습니다.</>}</p>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-[#ffffff] border border-[#e91e3f]/25 rounded-3xl w-full max-w-sm p-8 text-center">
+            <h2 className="text-xl font-bold text-[#131313] mb-3">삭제 확인</h2>
+            <p className="text-sm text-[#5a5a5a] mb-8">{deleteTarget.kind === "item" ? <>이 상품을 삭제하시겠습니까?<br/>기존 구매 내역은 그대로 유지됩니다.</> : deleteTarget.kind === "banner" ? <>이 배너를 삭제하시겠습니까?</> : <>이 쿠폰을 삭제하시겠습니까?<br/>이미 사용된 내역에는 영향이 없습니다.</>}</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button>
-              <button onClick={executeDelete} className="flex-1 py-3 bg-red-500/80 text-white rounded-xl">삭제</button>
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 bg-[#e6e3de] text-[#131313] rounded-xl">취소</button>
+              <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white rounded-xl">삭제</button>
             </div>
           </div>
         </div>
       )}
 
       {issueTarget && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4">
-          <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8">
-            <h2 className="text-lg font-bold text-white mb-2">쿠폰 지급</h2>
-            <p className="text-xs text-gray-400 mb-5">
-              <span className="font-black text-white tracking-wide">{issueTarget.code}</span>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-sm p-8">
+            <h2 className="text-lg font-bold text-[#131313] mb-2">쿠폰 지급</h2>
+            <p className="text-xs text-[#5a5a5a] mb-5">
+              <span className="font-black text-[#131313] tracking-wide">{issueTarget.code}</span>
               {issueTarget.name ? ` · ${issueTarget.name}` : ""}
             </p>
 
-            <label className="block text-xs font-bold text-gray-400 mb-2">지급 대상</label>
+            <label className="block text-xs font-bold text-[#5a5a5a] mb-2">지급 대상</label>
             <input type="text" value={issueInput} onChange={(e) => setIssueInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && issueInput.trim()) issueCoupon(issueInput.trim()); }}
               placeholder="디스코드 닉네임 또는 유저 ID"
-              className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] mb-3 placeholder:text-gray-500" />
-            <p className="text-[10px] text-gray-400 mb-6">XP 기록이 있는 유저만 검색됩니다. 이미 보유 중이면 건너뜁니다.</p>
+              className="w-full bg-transparent border border-black/10 rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] mb-3 placeholder:text-[#8a8a8a]" />
+            <p className="text-[10px] text-[#5a5a5a] mb-6">XP 기록이 있는 유저만 검색됩니다. 이미 보유 중이면 건너뜁니다.</p>
 
             <div className="flex gap-3 mb-3">
-              <button onClick={() => setIssueTarget(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">닫기</button>
+              <button onClick={() => setIssueTarget(null)} className="flex-1 py-3 bg-[#e6e3de] text-[#131313] rounded-xl">닫기</button>
               <button onClick={() => issueCoupon(issueInput.trim())} disabled={!issueInput.trim() || isIssuing}
                 className="flex-1 py-3 bg-[#e91e3f] disabled:opacity-40 text-white rounded-xl font-bold">
                 {isIssuing ? "지급 중..." : "지급"}
               </button>
             </div>
             <button onClick={() => issueCoupon("all")} disabled={isIssuing}
-              className="w-full py-3 border border-white/15 text-gray-300 hover:text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-40">
+              className="w-full py-3 border border-black/15 text-[#4b4b4b] hover:text-[#131313] rounded-xl text-xs font-bold transition-colors disabled:opacity-40">
               전체 유저에게 지급
             </button>
           </div>
@@ -922,17 +922,17 @@ export default function AdminShopPage() {
       )}
 
       {noteTarget && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4">
-          <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8">
-            <h2 className="text-lg font-bold text-white mb-2">발송 처리</h2>
-            <p className="text-xs text-gray-400 mb-5">{noteTarget.userName} · {noteTarget.itemName}</p>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-sm p-8">
+            <h2 className="text-lg font-bold text-[#131313] mb-2">발송 처리</h2>
+            <p className="text-xs text-[#5a5a5a] mb-5">{noteTarget.userName} · {noteTarget.itemName}</p>
             {noteTarget.contact && (
-              <div className="text-[11px] text-gray-300 bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2 mb-4 whitespace-pre-wrap">{noteTarget.contact}</div>
+              <div className="text-[11px] text-[#4b4b4b] bg-black/[0.03] border border-black/[0.06] rounded-lg px-3 py-2 mb-4 whitespace-pre-wrap">{noteTarget.contact}</div>
             )}
             <input type="text" value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="운송장 번호 등 메모 (선택)"
-              className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] mb-6 placeholder:text-gray-500" />
+              className="w-full bg-transparent border border-black/10 rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] mb-6 placeholder:text-[#8a8a8a]" />
             <div className="flex gap-3">
-              <button onClick={() => setNoteTarget(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">닫기</button>
+              <button onClick={() => setNoteTarget(null)} className="flex-1 py-3 bg-[#e6e3de] text-[#131313] rounded-xl">닫기</button>
               <button onClick={() => processOrder(noteTarget._id, "completed", noteText)} className="flex-1 py-3 bg-[#e91e3f] text-white rounded-xl font-bold">완료 처리</button>
             </div>
           </div>
@@ -941,11 +941,11 @@ export default function AdminShopPage() {
 
       {/* 📌 카드 미리보기 — 상점(라이트 톤)에서 실제로 어떻게 보이는지 그대로 렌더 */}
       {showPreview && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowPreview(false)}>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowPreview(false)}>
           <div className="w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-black tracking-[0.3em] text-gray-300 uppercase">Shop Preview</span>
-              <button onClick={() => setShowPreview(false)} className="p-1.5 text-gray-300 hover:text-white transition-colors">
+              <span className="text-[10px] font-black tracking-[0.3em] text-[#4b4b4b] uppercase">Shop Preview</span>
+              <button onClick={() => setShowPreview(false)} className="p-1.5 text-[#4b4b4b] hover:text-[#131313] transition-colors">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -968,8 +968,8 @@ export default function AdminShopPage() {
                     {form.type === "physical" ? "기프트카드" : form.type === "perk" ? "권한" : "역할"}
                   </span>
                   {form.stock === "0" && (
-                    <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
-                      <span className="text-sm font-black text-white tracking-wider">SOLD OUT</span>
+                    <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
+                      <span className="text-sm font-black text-[#131313] tracking-wider">SOLD OUT</span>
                     </div>
                   )}
                 </div>
@@ -993,7 +993,7 @@ export default function AdminShopPage() {
               </div>
             </div>
 
-            <p className="mt-3 text-center text-[11px] text-gray-300">
+            <p className="mt-3 text-center text-[11px] text-[#4b4b4b]">
               {form.active ? "판매 중 — 상점에 노출됩니다" : "숨김 — 상점에 노출되지 않습니다"}
               {form.type === "role" && !form.roleId && <span className="block mt-1 text-[#e91e3f]">지급할 역할을 선택해야 저장할 수 있습니다</span>}
             </p>
@@ -1002,11 +1002,11 @@ export default function AdminShopPage() {
       )}
 
       {popup.isOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
-          <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
-            <h2 className="text-xl font-bold text-white mb-3">{popup.isError ? "오류" : "완료"}</h2>
-            <p className="text-sm text-gray-400 mb-8">{popup.message}</p>
-            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">확인</button>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
+          <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
+            <h2 className="text-xl font-bold text-[#131313] mb-3">{popup.isError ? "오류" : "완료"}</h2>
+            <p className="text-sm text-[#5a5a5a] mb-8">{popup.message}</p>
+            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#e6e3de] hover:bg-[#d6d3ce] text-[#131313] font-bold rounded-xl transition-colors">확인</button>
           </div>
         </div>
       )}

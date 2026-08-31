@@ -175,12 +175,12 @@ export default function AdminHonorsPage() {
   );
   const missingWinner = tournaments.filter((t) => !t.winner.trim()).length;
 
-  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
+  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-[#8a8a8a]">로딩 중...</div>;
   if (!isAdmin) {
     return (
       <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-xl font-black text-white mb-2">권한 없음</h2>
-        <p className="text-gray-400 text-sm mb-4">관리자 권한이 필요합니다.</p>
+        <h2 className="text-xl font-black text-[#131313] mb-2">권한 없음</h2>
+        <p className="text-[#5a5a5a] text-sm mb-4">관리자 권한이 필요합니다.</p>
         <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
       </main>
     );
@@ -193,9 +193,9 @@ export default function AdminHonorsPage() {
       <span className="inline-flex -space-x-2 align-middle shrink-0">
         {list.slice(0, 5).map((p, i) => (
           // eslint-disable-next-line @next/next/no-img-element
-          <img key={i} src={p.avatarUrl} alt={p.globalName} title={p.globalName} className="w-6 h-6 rounded-full bg-gray-800 object-cover ring-2 ring-[#0e0e0e]" />
+          <img key={i} src={p.avatarUrl} alt={p.globalName} title={p.globalName} className="w-6 h-6 rounded-full bg-gray-800 object-cover ring-2 ring-[#efece7]" />
         ))}
-        {list.length > 5 && <span className="w-6 h-6 rounded-full bg-white/10 ring-2 ring-[#0e0e0e] grid place-items-center text-[9px] font-bold text-gray-300">+{list.length - 5}</span>}
+        {list.length > 5 && <span className="w-6 h-6 rounded-full bg-black/10 ring-2 ring-[#efece7] grid place-items-center text-[9px] font-bold text-[#4b4b4b]">+{list.length - 5}</span>}
       </span>
     );
   };
@@ -212,16 +212,16 @@ export default function AdminHonorsPage() {
           <Reveal>
             <div className="flex items-center gap-3 mb-5">
               <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Admin · Hall of Fame</span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Admin · Hall of Fame</span>
             </div>
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-3">
-                  <span className="text-white">명예의 전당 </span><span className="text-[#e91e3f]">관리</span>
+                  <span className="text-[#131313]">명예의 전당 </span><span className="text-[#e91e3f]">관리</span>
                 </h1>
-                <p className="text-gray-400 text-sm leading-relaxed">기록 등재·수정·삭제를 이곳에서 처리합니다. 대회 우승은 대회 글의 우승팀 정보를 그대로 가져옵니다.</p>
+                <p className="text-[#5a5a5a] text-sm leading-relaxed">기록 등재·수정·삭제를 이곳에서 처리합니다. 대회 우승은 대회 글의 우승팀 정보를 그대로 가져옵니다.</p>
               </div>
-              <Link href="/hall-of-fame" className="shrink-0 text-[11px] font-bold text-gray-400 hover:text-white border border-white/12 hover:border-white/30 px-3.5 py-2 rounded-full transition-colors">공개 페이지 보기 ↗</Link>
+              <Link href="/hall-of-fame" className="shrink-0 text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] border border-black/12 hover:border-black/30 px-3.5 py-2 rounded-full transition-colors">공개 페이지 보기 ↗</Link>
             </div>
           </Reveal>
         </div>
@@ -237,9 +237,9 @@ export default function AdminHonorsPage() {
               { label: "대회 우승", value: tournaments.filter((t) => t.winner.trim()).length },
               { label: "우승자 미기재", value: missingWinner, warn: missingWinner > 0 },
             ].map((s) => (
-              <div key={s.label} className="rounded-2xl border border-white/[0.07] bg-white/[0.02] px-4 py-3.5">
-                <p className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase mb-1.5">{s.label}</p>
-                <p className={`text-2xl font-black tabular-nums ${s.warn ? "text-[#e91e3f]" : "text-white"}`}>{s.value}</p>
+              <div key={s.label} className="rounded-2xl border border-black/[0.07] bg-black/[0.02] px-4 py-3.5">
+                <p className="text-[10px] font-black tracking-[0.2em] text-[#8a8a8a] uppercase mb-1.5">{s.label}</p>
+                <p className={`text-2xl font-black tabular-nums ${s.warn ? "text-[#e91e3f]" : "text-[#131313]"}`}>{s.value}</p>
               </div>
             ))}
           </div>
@@ -247,7 +247,7 @@ export default function AdminHonorsPage() {
 
         {/* ── 탭 + 도구 막대 ── */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
-          <div className="inline-flex p-1 rounded-full bg-white/[0.04] border border-white/[0.07] self-start">
+          <div className="inline-flex p-1 rounded-full bg-black/[0.04] border border-black/[0.07] self-start">
             {([
               { key: "manual", label: "수동 기록", count: honors.length },
               { key: "tournament", label: "대회 우승", count: tournaments.length },
@@ -255,7 +255,7 @@ export default function AdminHonorsPage() {
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${tab === t.key ? "bg-[#e91e3f] text-white" : "text-gray-400 hover:text-white"}`}
+                className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${tab === t.key ? "bg-[#e91e3f] text-white" : "text-[#5a5a5a] hover:text-[#131313]"}`}
               >
                 {t.label} <span className="tabular-nums opacity-70">{t.count}</span>
               </button>
@@ -268,7 +268,7 @@ export default function AdminHonorsPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="제목·우승자 검색"
-              className="flex-1 md:w-56 bg-[#121212] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600"
+              className="flex-1 md:w-56 bg-[#ffffff] border border-black/10 rounded-xl px-4 py-2.5 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
             />
             {tab === "manual" && (
               <button
@@ -283,27 +283,27 @@ export default function AdminHonorsPage() {
 
         {/* ── 목록 ── */}
         {isLoading ? (
-          <div className="text-center py-16 text-gray-500 text-sm">불러오는 중...</div>
+          <div className="text-center py-16 text-[#8a8a8a] text-sm">불러오는 중...</div>
         ) : tab === "manual" ? (
           manualRows.length === 0 ? (
             <EmptyBox text={query.trim() ? "검색 결과가 없습니다." : "등재된 수동 기록이 없습니다."} />
           ) : (
-            <div className="rounded-2xl border border-white/[0.07] overflow-hidden divide-y divide-white/[0.06]">
+            <div className="rounded-2xl border border-black/[0.07] overflow-hidden divide-y divide-black/[0.06]">
               {manualRows.map((h) => (
-                <div key={h._id} className="flex flex-col md:flex-row md:items-center gap-3 px-4 md:px-5 py-4 hover:bg-white/[0.02] transition-colors">
-                  <span className="shrink-0 self-start text-[9px] font-black tracking-wider bg-white/5 text-gray-300 border border-white/10 px-2.5 py-1 rounded-full">{h.category}</span>
+                <div key={h._id} className="flex flex-col md:flex-row md:items-center gap-3 px-4 md:px-5 py-4 hover:bg-black/[0.02] transition-colors">
+                  <span className="shrink-0 self-start text-[9px] font-black tracking-wider bg-black/5 text-[#4b4b4b] border border-black/10 px-2.5 py-1 rounded-full">{h.category}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
                       <Members ids={h.winnerId} />
-                      <p className="text-sm font-bold text-white truncate">{h.winner}</p>
+                      <p className="text-sm font-bold text-[#131313] truncate">{h.winner}</p>
                     </div>
-                    <p className="text-xs text-gray-500 truncate mt-1">
+                    <p className="text-xs text-[#8a8a8a] truncate mt-1">
                       {h.title}{h.detail ? ` · ${h.detail}` : ""}{h.dateLabel ? ` · ${h.dateLabel}` : ""}
                     </p>
                   </div>
                   <div className="flex gap-2 shrink-0">
-                    <button onClick={() => setForm({ mode: "edit", data: { ...h } })} className="text-xs font-bold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 rounded-lg transition-colors">수정</button>
-                    <button onClick={() => setDeleteTarget(h)} className="text-xs font-bold text-red-500/70 hover:text-red-500 bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 rounded-lg transition-colors">삭제</button>
+                    <button onClick={() => setForm({ mode: "edit", data: { ...h } })} className="text-xs font-bold text-[#4b4b4b] hover:text-[#131313] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 rounded-lg transition-colors">수정</button>
+                    <button onClick={() => setDeleteTarget(h)} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 rounded-lg transition-colors">삭제</button>
                   </div>
                 </div>
               ))}
@@ -312,31 +312,31 @@ export default function AdminHonorsPage() {
         ) : tournamentRows.length === 0 ? (
           <EmptyBox text={query.trim() ? "검색 결과가 없습니다." : "종료된 대회가 없습니다."} />
         ) : (
-          <div className="rounded-2xl border border-white/[0.07] overflow-hidden divide-y divide-white/[0.06]">
+          <div className="rounded-2xl border border-black/[0.07] overflow-hidden divide-y divide-black/[0.06]">
             {tournamentRows.map((t) => (
-              <div key={t._id} className="flex flex-col md:flex-row md:items-center gap-3 px-4 md:px-5 py-4 hover:bg-white/[0.02] transition-colors">
-                <span className="shrink-0 self-start text-[9px] font-black tracking-wider bg-white/5 text-gray-300 border border-white/10 px-2.5 py-1 rounded-full truncate max-w-[10rem]">{t.game || "대회"}</span>
+              <div key={t._id} className="flex flex-col md:flex-row md:items-center gap-3 px-4 md:px-5 py-4 hover:bg-black/[0.02] transition-colors">
+                <span className="shrink-0 self-start text-[9px] font-black tracking-wider bg-black/5 text-[#4b4b4b] border border-black/10 px-2.5 py-1 rounded-full truncate max-w-[10rem]">{t.game || "대회"}</span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 min-w-0">
                     <Members ids={t.winnerId} />
                     {t.winner.trim() ? (
-                      <p className="text-sm font-bold text-white truncate">{t.winner}</p>
+                      <p className="text-sm font-bold text-[#131313] truncate">{t.winner}</p>
                     ) : (
                       <p className="text-sm font-bold text-[#e91e3f]">우승자 미기재</p>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 truncate mt-1">{t.title}{t.dateLabel ? ` · ${t.dateLabel}` : ""}</p>
+                  <p className="text-xs text-[#8a8a8a] truncate mt-1">{t.title}{t.dateLabel ? ` · ${t.dateLabel}` : ""}</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <button onClick={() => setWinnerEdit({ ...t })} className="text-xs font-bold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 rounded-lg transition-colors">우승 정보 수정</button>
-                  <Link href={`/write?id=${t._id}`} className="text-xs font-bold text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 rounded-lg transition-colors">대회 글 ↗</Link>
+                  <button onClick={() => setWinnerEdit({ ...t })} className="text-xs font-bold text-[#4b4b4b] hover:text-[#131313] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 rounded-lg transition-colors">우승 정보 수정</button>
+                  <Link href={`/write?id=${t._id}`} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 rounded-lg transition-colors">대회 글 ↗</Link>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        <p className="text-[11px] text-gray-600 mt-4 leading-relaxed">
+        <p className="text-[11px] text-[#a3a3a3] mt-4 leading-relaxed">
           {tab === "manual"
             ? "수동 기록은 SYSTEM : LEVEL 시즌 1등, 이벤트 우승 등 대회 외 기록을 위한 항목입니다."
             : "대회 우승은 대회 글에 저장된 값이라 이곳에서 우승팀·우승자만 고쳐도 공개 페이지에 그대로 반영됩니다."}
@@ -345,23 +345,23 @@ export default function AdminHonorsPage() {
 
       {/* 📌 등재 / 수정 모달 */}
       {form && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
-          <form onSubmit={submitForm} className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl w-full max-w-lg p-7 md:p-8 shadow-2xl max-h-[88vh] overflow-y-auto no-bar">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
+          <form onSubmit={submitForm} className="bg-gradient-to-b from-[#1c1c1c] to-[#ffffff] border border-black/10 rounded-3xl w-full max-w-lg p-7 md:p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] max-h-[88vh] overflow-y-auto no-bar">
             <div className="flex items-center gap-3 mb-6">
               <span className="w-1 h-5 bg-[#e91e3f] rounded-full"></span>
-              <h2 className="text-lg font-black text-white">{form.mode === "create" ? "새 기록 등재" : "기록 수정"}</h2>
+              <h2 className="text-lg font-black text-[#131313]">{form.mode === "create" ? "새 기록 등재" : "기록 수정"}</h2>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-2">분류 <span className="text-[#e91e3f]">*</span></label>
+                <label className="block text-xs font-bold text-[#8a8a8a] mb-2">분류 <span className="text-[#e91e3f]">*</span></label>
                 <div className="flex flex-wrap gap-2">
                   {HONOR_CATEGORIES.map((c) => (
                     <button
                       type="button"
                       key={c}
                       onClick={() => setForm({ ...form, data: { ...form.data, category: c } })}
-                      className={`px-3.5 py-1.5 text-xs font-bold rounded-full border transition-all ${form.data.category === c ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-white/10 text-gray-400 hover:border-white/30"}`}
+                      className={`px-3.5 py-1.5 text-xs font-bold rounded-full border transition-all ${form.data.category === c ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-black/10 text-[#5a5a5a] hover:border-black/30"}`}
                     >
                       {c}
                     </button>
@@ -376,9 +376,9 @@ export default function AdminHonorsPage() {
                 { label: "부가 설명", key: "detail", required: false, placeholder: "예: 최종 레벨 512 달성 · 보상 문화상품권 5만원" },
               ].map((f) => (
                 <div key={f.key}>
-                  <label className="block text-xs font-bold text-gray-500 mb-2">
+                  <label className="block text-xs font-bold text-[#8a8a8a] mb-2">
                     {f.label}
-                    {f.required ? <span className="text-[#e91e3f]"> *</span> : <span className="text-gray-600 font-medium"> (선택)</span>}
+                    {f.required ? <span className="text-[#e91e3f]"> *</span> : <span className="text-[#a3a3a3] font-medium"> (선택)</span>}
                   </label>
                   <input
                     type="text"
@@ -386,7 +386,7 @@ export default function AdminHonorsPage() {
                     placeholder={f.placeholder}
                     value={form.data[f.key] || ""}
                     onChange={(e) => setForm({ ...form, data: { ...form.data, [f.key]: e.target.value } })}
-                    className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600"
+                    className="w-full bg-[#ffffff] border border-black/10 rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
                   />
                 </div>
               ))}
@@ -399,7 +399,7 @@ export default function AdminHonorsPage() {
             </div>
 
             <div className="flex gap-3 mt-8">
-              <button type="button" onClick={() => setForm(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">취소</button>
+              <button type="button" onClick={() => setForm(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d6d3ce] text-[#131313] font-bold rounded-xl transition-colors">취소</button>
               <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20">
                 {isSaving ? "저장 중..." : form.mode === "create" ? "등재" : "저장"}
               </button>
@@ -410,24 +410,24 @@ export default function AdminHonorsPage() {
 
       {/* 📌 대회 우승 정보 수정 모달 */}
       {winnerEdit && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
-          <form onSubmit={submitWinner} className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl w-full max-w-lg p-7 md:p-8 shadow-2xl max-h-[88vh] overflow-y-auto no-bar">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
+          <form onSubmit={submitWinner} className="bg-gradient-to-b from-[#1c1c1c] to-[#ffffff] border border-black/10 rounded-3xl w-full max-w-lg p-7 md:p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] max-h-[88vh] overflow-y-auto no-bar">
             <div className="flex items-center gap-3 mb-2">
               <span className="w-1 h-5 bg-[#e91e3f] rounded-full"></span>
-              <h2 className="text-lg font-black text-white">대회 우승 정보 수정</h2>
+              <h2 className="text-lg font-black text-[#131313]">대회 우승 정보 수정</h2>
             </div>
-            <p className="text-xs text-gray-500 mb-6 pl-4 truncate">{winnerEdit.title}</p>
+            <p className="text-xs text-[#8a8a8a] mb-6 pl-4 truncate">{winnerEdit.title}</p>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-2">우승팀 / 우승자 <span className="text-[#e91e3f]">*</span></label>
+                <label className="block text-xs font-bold text-[#8a8a8a] mb-2">우승팀 / 우승자 <span className="text-[#e91e3f]">*</span></label>
                 <input
                   type="text"
                   required
                   placeholder="예: 이글루A"
                   value={winnerEdit.winner}
                   onChange={(e) => setWinnerEdit({ ...winnerEdit, winner: e.target.value })}
-                  className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-600"
+                  className="w-full bg-[#ffffff] border border-black/10 rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
                 />
               </div>
               <DiscordIdInput
@@ -438,7 +438,7 @@ export default function AdminHonorsPage() {
             </div>
 
             <div className="flex gap-3 mt-8">
-              <button type="button" onClick={() => setWinnerEdit(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">취소</button>
+              <button type="button" onClick={() => setWinnerEdit(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d6d3ce] text-[#131313] font-bold rounded-xl transition-colors">취소</button>
               <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20">{isSaving ? "저장 중..." : "저장"}</button>
             </div>
           </form>
@@ -447,13 +447,13 @@ export default function AdminHonorsPage() {
 
       {/* 📌 삭제 확인 */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4">
-          <div className="bg-[#121212] border border-red-500/30 rounded-3xl w-full max-w-sm p-8 text-center">
-            <h2 className="text-xl font-bold text-white mb-3">삭제 확인</h2>
-            <p className="text-sm text-gray-400 mb-8"><span className="text-white font-bold">{deleteTarget.title}</span> 기록을<br />명예의 전당에서 삭제하시겠습니까?</p>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-[#ffffff] border border-[#e91e3f]/25 rounded-3xl w-full max-w-sm p-8 text-center">
+            <h2 className="text-xl font-bold text-[#131313] mb-3">삭제 확인</h2>
+            <p className="text-sm text-[#5a5a5a] mb-8"><span className="text-[#131313] font-bold">{deleteTarget.title}</span> 기록을<br />명예의 전당에서 삭제하시겠습니까?</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white rounded-xl transition-colors">취소</button>
-              <button onClick={executeDelete} className="flex-1 py-3 bg-red-500/80 hover:bg-red-500 text-white rounded-xl transition-colors">삭제</button>
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d6d3ce] text-[#131313] rounded-xl transition-colors">취소</button>
+              <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white rounded-xl transition-colors">삭제</button>
             </div>
           </div>
         </div>
@@ -461,10 +461,10 @@ export default function AdminHonorsPage() {
 
       {/* 📌 결과 토스트 */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[130] px-5 py-3 rounded-full border shadow-2xl text-sm font-bold backdrop-blur-sm"
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[130] px-5 py-3 rounded-full border shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] text-sm font-bold backdrop-blur-sm"
           style={toast.error
             ? { background: "rgba(40,12,16,0.95)", borderColor: "rgba(233,30,63,0.45)", color: "#ffb3c0" }
-            : { background: "rgba(14,14,14,0.95)", borderColor: "rgba(255,255,255,0.14)", color: "#ffffff" }}>
+            : { background: "rgba(14,14,14,0.95)", borderColor: "rgba(0,0,0,0.14)", color: "#ffffff" }}>
           {toast.error ? "⚠ " : "✓ "}{toast.msg}
         </div>
       )}
@@ -473,5 +473,5 @@ export default function AdminHonorsPage() {
 }
 
 const EmptyBox = ({ text }: { text: string }) => (
-  <div className="text-center py-14 text-gray-400 text-sm bg-white/[0.02] rounded-2xl border border-white/[0.06]">{text}</div>
+  <div className="text-center py-14 text-[#5a5a5a] text-sm bg-black/[0.02] rounded-2xl border border-black/[0.06]">{text}</div>
 );

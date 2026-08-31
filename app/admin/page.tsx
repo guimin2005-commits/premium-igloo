@@ -133,12 +133,12 @@ export default function AdminHubPage() {
     return Array.from(byDay.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([date, members]) => ({ date, members }));
   })();
 
-  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
+  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-[#8a8a8a]">로딩 중...</div>;
   if (!isAdmin) {
     return (
       <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-xl font-black text-white mb-2">권한 없음</h2>
-        <p className="text-gray-400 text-sm mb-4">관리자 권한이 필요합니다.</p>
+        <h2 className="text-xl font-black text-[#131313] mb-2">권한 없음</h2>
+        <p className="text-[#5a5a5a] text-sm mb-4">관리자 권한이 필요합니다.</p>
         <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
       </main>
     );
@@ -149,10 +149,10 @@ export default function AdminHubPage() {
     <div className="mb-6">
       <div className="flex items-baseline gap-4 mb-2">
         <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">{no}</span>
-        <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+        <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
       </div>
       <div className="flex items-center justify-between">
-        <h2 className="text-lg md:text-xl font-black text-white tracking-tight">{title}</h2>
+        <h2 className="text-lg md:text-xl font-black text-[#131313] tracking-tight">{title}</h2>
         {right}
       </div>
     </div>
@@ -169,12 +169,12 @@ export default function AdminHubPage() {
           <Reveal>
             <div className="flex items-center gap-3 mb-5">
               <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Admin Console</span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Admin Console</span>
             </div>
             <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-4">
-              <span className="text-white">관리자 </span><span className="text-[#e91e3f]">대시보드</span>
+              <span className="text-[#131313]">관리자 </span><span className="text-[#e91e3f]">대시보드</span>
             </h1>
-            <p className="text-gray-400 text-sm md:text-base leading-relaxed">서버·사이트 현황 요약 — 작업은 왼쪽 패널에서 이동합니다</p>
+            <p className="text-[#5a5a5a] text-sm md:text-base leading-relaxed">서버·사이트 현황 요약 — 작업은 왼쪽 패널에서 이동합니다</p>
           </Reveal>
         </div>
       </section>
@@ -189,15 +189,15 @@ export default function AdminHubPage() {
           title="핵심 지표"
           right={
             <div className="flex items-center gap-2.5">
-              <span className={`text-[10px] font-black tracking-wider ${maintenance ? "text-[#e91e3f]" : "text-gray-400"}`}>{maintenance ? "🔧 점검 중" : "점검 모드"}</span>
-              <button onClick={toggleMaintenance} disabled={maintenanceLoading} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors ${maintenance ? "bg-[#e91e3f]" : "bg-white/10"}`}>
-                <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform duration-200 ${maintenance ? "translate-x-5" : ""}`}></div>
+              <span className={`text-[10px] font-black tracking-wider ${maintenance ? "text-[#e91e3f]" : "text-[#5a5a5a]"}`}>{maintenance ? "🔧 점검 중" : "점검 모드"}</span>
+              <button onClick={toggleMaintenance} disabled={maintenanceLoading} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors ${maintenance ? "bg-[#e91e3f]" : "bg-black/10"}`}>
+                <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-transform duration-200 ${maintenance ? "translate-x-5" : ""}`}></div>
               </button>
             </div>
           }
         />
 
-        <div className="grid grid-cols-2 md:grid-cols-4 border-y border-white/10 divide-x divide-white/[0.06]">
+        <div className="grid grid-cols-2 md:grid-cols-4 border-y border-black/10 divide-x divide-black/[0.06]">
           {[
             { n: stats.memberCount, l: "전체 멤버", accent: false },
             { n: stats.onlineCount, l: "현재 온라인", accent: false, dot: true },
@@ -205,21 +205,21 @@ export default function AdminHubPage() {
             { n: stats.payoutPending, l: "지급 대기", accent: stats.payoutPending > 0 },
           ].map((s, i) => (
             <div key={i} className="px-4 py-7 text-center">
-              <div className={`text-2xl md:text-3xl font-black tracking-tight flex items-center justify-center gap-2 ${s.accent ? "text-[#e91e3f]" : "text-white"}`}>
-                {s.dot && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>}
+              <div className={`text-2xl md:text-3xl font-black tracking-tight flex items-center justify-center gap-2 ${s.accent ? "text-[#e91e3f]" : "text-[#131313]"}`}>
+                {s.dot && <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>}
                 {s.n.toLocaleString()}
               </div>
-              <div className="text-[9px] md:text-[10px] font-bold tracking-[0.2em] text-gray-400 mt-1.5 uppercase">{s.l}</div>
+              <div className="text-[9px] md:text-[10px] font-bold tracking-[0.2em] text-[#5a5a5a] mt-1.5 uppercase">{s.l}</div>
             </div>
           ))}
         </div>
 
         {/* 디스코드 서버 현황 — 플랫 행 */}
         {discordStats && (
-          <div className="border-b border-white/[0.06] py-6">
+          <div className="border-b border-black/[0.06] py-6">
             <div className="flex items-center justify-between mb-5">
-              <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">Discord 서버 현황</span>
-              <span className="text-[10px] font-bold text-gray-400">개설 D+{discordStats.ageDays.toLocaleString()}일</span>
+              <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase">Discord 서버 현황</span>
+              <span className="text-[10px] font-bold text-[#5a5a5a]">개설 D+{discordStats.ageDays.toLocaleString()}일</span>
             </div>
             <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
               {[
@@ -231,9 +231,9 @@ export default function AdminHubPage() {
                 { n: discordStats.emojiCount + discordStats.stickerCount, l: "이모지·스티커" },
               ].map((s: any, i: number) => (
                 <div key={i} className="text-center">
-                  <div className={`text-xl md:text-2xl font-black tracking-tight ${s.accent ? "text-[#e91e3f]" : "text-white"}`}>{s.n.toLocaleString()}</div>
-                  <div className="text-[9px] font-bold tracking-[0.15em] text-gray-400 mt-1 uppercase">{s.l}</div>
-                  {s.sub && <div className="text-[9px] font-bold text-[#e91e3f]/70 mt-0.5">{s.sub}</div>}
+                  <div className={`text-xl md:text-2xl font-black tracking-tight ${s.accent ? "text-[#e91e3f]" : "text-[#131313]"}`}>{s.n.toLocaleString()}</div>
+                  <div className="text-[9px] font-bold tracking-[0.15em] text-[#5a5a5a] mt-1 uppercase">{s.l}</div>
+                  {s.sub && <div className="text-[9px] font-bold text-[#c01734] mt-0.5">{s.sub}</div>}
                 </div>
               ))}
             </div>
@@ -249,32 +249,32 @@ export default function AdminHubPage() {
 
         {/* 요일×시간대 온라인 히트맵 */}
         {heatmap.hasData && (
-          <div className="border-b border-white/[0.06] pb-6 mb-6 overflow-x-auto no-bar">
+          <div className="border-b border-black/[0.06] pb-6 mb-6 overflow-x-auto no-bar">
             <div className="flex items-center justify-between mb-5 min-w-[560px]">
-              <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">활동 골든타임 (최근 7일 · 평균 온라인)</span>
-              <span className="text-[10px] font-bold text-gray-400">피크 {Math.round(heatmap.max)}명</span>
+              <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase">활동 골든타임 (최근 7일 · 평균 온라인)</span>
+              <span className="text-[10px] font-bold text-[#5a5a5a]">피크 {Math.round(heatmap.max)}명</span>
             </div>
             <div className="min-w-[560px]">
               <div className="grid gap-[3px]" style={{ gridTemplateColumns: "28px repeat(24, 1fr)" }}>
                 <div></div>
                 {Array.from({ length: 24 }, (_, h) => (
-                  <div key={h} className="text-center text-[8px] font-bold text-gray-400">{h % 3 === 0 ? h : ""}</div>
+                  <div key={h} className="text-center text-[8px] font-bold text-[#5a5a5a]">{h % 3 === 0 ? h : ""}</div>
                 ))}
                 {["일", "월", "화", "수", "목", "금", "토"].map((dayName, d) => (
                   <React.Fragment key={d}>
-                    <div className="text-[9px] font-bold text-gray-500 flex items-center">{dayName}</div>
+                    <div className="text-[9px] font-bold text-[#8a8a8a] flex items-center">{dayName}</div>
                     {heatmap.avg[d].map((v, h) => (
                       <div
                         key={h}
                         title={v >= 0 ? `${dayName} ${h}시 · 평균 ${Math.round(v)}명` : "데이터 없음"}
                         className="aspect-square rounded-[3px]"
-                        style={{ backgroundColor: v < 0 ? "rgba(255,255,255,0.03)" : `rgba(233,30,63,${0.08 + (v / heatmap.max) * 0.85})` }}
+                        style={{ backgroundColor: v < 0 ? "rgba(0,0,0,0.03)" : `rgba(233,30,63,${0.08 + (v / heatmap.max) * 0.85})` }}
                       ></div>
                     ))}
                   </React.Fragment>
                 ))}
               </div>
-              <p className="text-[9px] text-gray-400 mt-3">색이 진할수록 온라인 인원이 많은 시간대 · 데이터가 쌓일수록 정확해집니다</p>
+              <p className="text-[9px] text-[#5a5a5a] mt-3">색이 진할수록 온라인 인원이 많은 시간대 · 데이터가 쌓일수록 정확해집니다</p>
             </div>
           </div>
         )}
@@ -288,10 +288,10 @@ export default function AdminHubPage() {
           const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - 6 - ((v - min) / range) * (h - 12)}`).join(" ");
           const delta = vals[vals.length - 1] - vals[0];
           return (
-            <div className="border-b border-white/[0.06] pb-6 mb-6">
+            <div className="border-b border-black/[0.06] pb-6 mb-6">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">멤버 증감 (최근 {memberDaily.length}일)</span>
-                <span className={`text-[11px] font-black ${delta >= 0 ? "text-emerald-400" : "text-[#e91e3f]"}`}>{delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toLocaleString()}명</span>
+                <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase">멤버 증감 (최근 {memberDaily.length}일)</span>
+                <span className={`text-[11px] font-black ${delta >= 0 ? "text-emerald-700" : "text-[#e91e3f]"}`}>{delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toLocaleString()}명</span>
               </div>
               <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-20 overflow-visible">
                 <defs>
@@ -303,7 +303,7 @@ export default function AdminHubPage() {
                 <polygon points={`0,${h} ${pts} ${w},${h}`} fill="url(#memberFill)" />
                 <polyline points={pts} fill="none" stroke="#e91e3f" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
               </svg>
-              <div className="flex justify-between text-[9px] font-bold text-gray-400 mt-2">
+              <div className="flex justify-between text-[9px] font-bold text-[#5a5a5a] mt-2">
                 <span>{memberDaily[0].date.slice(5).replace("-", "/")} · {vals[0].toLocaleString()}명</span>
                 <span>{memberDaily[memberDaily.length - 1].date.slice(5).replace("-", "/")} · {vals[vals.length - 1].toLocaleString()}명</span>
               </div>
@@ -315,8 +315,8 @@ export default function AdminHubPage() {
           {/* 최근 7일 문의 추이 바 차트 */}
           <div>
             <div className="flex items-center justify-between mb-5">
-              <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase">최근 7일 문의</span>
-              <span className="text-[10px] font-bold text-gray-400">총 {stats.weeklyInquiries}건</span>
+              <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase">최근 7일 문의</span>
+              <span className="text-[10px] font-bold text-[#5a5a5a]">총 {stats.weeklyInquiries}건</span>
             </div>
             <div className="flex items-end justify-between gap-2 h-24">
               {stats.inquiryDaily.map((d, i) => {
@@ -325,10 +325,10 @@ export default function AdminHubPage() {
                   <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
                     {d.count > 0 && <span className="text-[9px] font-black text-[#e91e3f]">{d.count}</span>}
                     <div
-                      className={`w-full rounded-t-md transition-all ${d.count > 0 ? "bg-gradient-to-t from-[#e91e3f]/60 to-[#e91e3f]" : "bg-white/5"}`}
+                      className={`w-full rounded-t-md transition-all ${d.count > 0 ? "bg-gradient-to-t from-[#e91e3f]/60 to-[#e91e3f]" : "bg-black/5"}`}
                       style={{ height: d.count > 0 ? `${Math.max((d.count / max) * 100, 12)}%` : "4px" }}
                     ></div>
-                    <span className="text-[8px] font-bold text-gray-400">{d.label}</span>
+                    <span className="text-[8px] font-bold text-[#5a5a5a]">{d.label}</span>
                   </div>
                 );
               })}
@@ -337,7 +337,7 @@ export default function AdminHubPage() {
 
           {/* 콘텐츠/활동 현황 — 표 형식 */}
           <div>
-            <span className="text-[10px] font-black tracking-[0.25em] text-gray-500 uppercase block mb-5">콘텐츠 & 활동 현황</span>
+            <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase block mb-5">콘텐츠 & 활동 현황</span>
             <div>
               {[
                 { l: "게시글", v: `공지 ${stats.postCounts.공지사항} · 이벤트 ${stats.postCounts.이벤트} · 대회 ${stats.postCounts.대회} · 구인 ${stats.postCounts.구인}` },
@@ -346,9 +346,9 @@ export default function AdminHubPage() {
                 { l: "쿠폰", v: `발급 ${stats.codes}개 · 누적 사용 ${stats.codeUses}회` },
                 { l: "명예의 전당", v: `수동 기록 ${stats.honors}건` },
               ].map((row, i) => (
-                <div key={i} className="flex items-baseline justify-between gap-4 py-2 border-b border-white/[0.05] last:border-0">
-                  <span className="text-[11px] font-bold text-gray-500 shrink-0">{row.l}</span>
-                  <span className="text-[11px] font-bold text-gray-300 text-right">{row.v}</span>
+                <div key={i} className="flex items-baseline justify-between gap-4 py-2 border-b border-black/[0.05] last:border-0">
+                  <span className="text-[11px] font-bold text-[#8a8a8a] shrink-0">{row.l}</span>
+                  <span className="text-[11px] font-bold text-[#4b4b4b] text-right">{row.v}</span>
                 </div>
               ))}
             </div>

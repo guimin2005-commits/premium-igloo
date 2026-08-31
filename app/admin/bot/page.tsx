@@ -308,30 +308,30 @@ export default function AdminBotPage() {
     setDeleteConfirm(null);
   };
 
-  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
+  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-[#8a8a8a]">로딩 중...</div>;
   if (!isAdmin) {
     return (
       <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-xl font-black text-white mb-2">권한 없음</h2>
-        <p className="text-gray-400 text-sm mb-4">관리자 권한이 필요합니다.</p>
+        <h2 className="text-xl font-black text-[#131313] mb-2">권한 없음</h2>
+        <p className="text-[#5a5a5a] text-sm mb-4">관리자 권한이 필요합니다.</p>
         <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
       </main>
     );
   }
 
-  const inputClass = "w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#e91e3f] transition-colors placeholder:text-gray-500";
-  const fieldNote = "text-[10px] text-gray-400 mt-1.5";
-  const labelClass = "block text-xs font-bold text-gray-500 mb-2";
+  const inputClass = "w-full bg-transparent border border-black/10 rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#8a8a8a]";
+  const fieldNote = "text-[10px] text-[#5a5a5a] mt-1.5";
+  const labelClass = "block text-xs font-bold text-[#8a8a8a] mb-2";
   const primaryBtn = "w-full md:w-auto md:px-10 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all";
 
   const SectionHead = ({ no, title, right }: { no: string; title: string; right?: React.ReactNode }) => (
     <div className="mb-6">
       <div className="flex items-baseline gap-4 mb-2">
         <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">{no}</span>
-        <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+        <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
       </div>
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-lg md:text-xl font-black text-white tracking-tight">{title}</h2>
+        <h2 className="text-lg md:text-xl font-black text-[#131313] tracking-tight">{title}</h2>
         {right}
       </div>
     </div>
@@ -350,13 +350,13 @@ export default function AdminBotPage() {
           <Reveal>
             <div className="flex items-center gap-3 mb-5">
               <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Admin · Level Dashboard</span>
+              <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Admin · Level Dashboard</span>
             </div>
             <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-4">
-              <span className="text-white">{meta.title.split(" ")[0]} </span>
+              <span className="text-[#131313]">{meta.title.split(" ")[0]} </span>
               <span className="text-[#e91e3f]">{meta.title.split(" ").slice(1).join(" ") || "설정"}</span>
             </h1>
-            <p className="text-gray-400 text-sm md:text-base leading-relaxed">{meta.desc}</p>
+            <p className="text-[#5a5a5a] text-sm md:text-base leading-relaxed">{meta.desc}</p>
           </Reveal>
         </div>
       </section>
@@ -415,7 +415,7 @@ export default function AdminBotPage() {
                       { v: "block", l: "차단" },
                     ].map((o) => (
                       <button key={o.v} type="button" onClick={() => setSettings({ ...settings, muteMode: o.v })}
-                        className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-colors ${settings.muteMode === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-gray-400 border-white/10 hover:text-white"}`}>
+                        className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-colors ${settings.muteMode === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-[#5a5a5a] border-black/10 hover:text-[#131313]"}`}>
                         {o.l}
                       </button>
                     ))}
@@ -436,7 +436,7 @@ export default function AdminBotPage() {
                       { v: "any", l: "하나라도 음소거" },
                     ].map((o) => (
                       <button key={o.v} type="button" onClick={() => setSettings({ ...settings, muteTarget: o.v })}
-                        className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-colors ${settings.muteTarget === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-gray-400 border-white/10 hover:text-white"}`}>
+                        className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-colors ${settings.muteTarget === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-[#5a5a5a] border-black/10 hover:text-[#131313]"}`}>
                         {o.l}
                       </button>
                     ))}
@@ -447,9 +447,9 @@ export default function AdminBotPage() {
                   <label className={labelClass}>서버 퇴장 시 XP 초기화</label>
                   <button type="button" onClick={() => setSettings({ ...settings, resetOnLeave: !settings.resetOnLeave })}
                     className={`${inputClass} flex items-center justify-between text-left ${settings.resetOnLeave ? "border-[#e91e3f]/50" : ""}`}>
-                    <span className={settings.resetOnLeave ? "text-[#e91e3f] font-bold" : "text-gray-400"}>{settings.resetOnLeave ? "초기화함" : "유지함 (기본)"}</span>
-                    <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${settings.resetOnLeave ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
-                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${settings.resetOnLeave ? "left-[18px]" : "left-0.5"}`}></span>
+                    <span className={settings.resetOnLeave ? "text-[#e91e3f] font-bold" : "text-[#5a5a5a]"}>{settings.resetOnLeave ? "초기화함" : "유지함 (기본)"}</span>
+                    <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${settings.resetOnLeave ? "bg-[#e91e3f]" : "bg-[#e6e3de]"}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-all ${settings.resetOnLeave ? "left-[18px]" : "left-0.5"}`}></span>
                     </span>
                   </button>
                   <p className={fieldNote}>⚠️ 켜면 나간 유저의 XP 기록이 삭제되어 복구할 수 없습니다</p>
@@ -459,9 +459,9 @@ export default function AdminBotPage() {
                   <label className={labelClass}>ARCTIC 상점 공개</label>
                   <button type="button" onClick={() => setSettings({ ...settings, shopPublic: !settings.shopPublic })}
                     className={`${inputClass} flex items-center justify-between text-left ${settings.shopPublic ? "border-[#e91e3f]/50" : ""}`}>
-                    <span className={settings.shopPublic ? "text-[#e91e3f] font-bold" : "text-gray-400"}>{settings.shopPublic ? "공개 중" : "비공개 (관리자만)"}</span>
-                    <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${settings.shopPublic ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
-                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${settings.shopPublic ? "left-[18px]" : "left-0.5"}`}></span>
+                    <span className={settings.shopPublic ? "text-[#e91e3f] font-bold" : "text-[#5a5a5a]"}>{settings.shopPublic ? "공개 중" : "비공개 (관리자만)"}</span>
+                    <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${settings.shopPublic ? "bg-[#e91e3f]" : "bg-[#e6e3de]"}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-all ${settings.shopPublic ? "left-[18px]" : "left-0.5"}`}></span>
                     </span>
                   </button>
                   <p className={fieldNote}>
@@ -491,7 +491,7 @@ export default function AdminBotPage() {
                   <textarea rows={2} value={settings.levelupMessage} onChange={(e) => setSettings({ ...settings, levelupMessage: e.target.value })}
                     className={`${inputClass} resize-none`} />
                   <p className={fieldNote}>
-                    <span className="text-gray-200">{"{user}"}</span> 멘션 · <span className="text-gray-200">{"{level}"}</span> 도달 레벨 · <span className="text-gray-200">{"{xp}"}</span> 누적 XP · 디스코드 마크다운(**굵게**) 사용 가능
+                    <span className="text-[#3a3a3a]">{"{user}"}</span> 멘션 · <span className="text-[#3a3a3a]">{"{level}"}</span> 도달 레벨 · <span className="text-[#3a3a3a]">{"{xp}"}</span> 누적 XP · 디스코드 마크다운(**굵게**) 사용 가능
                   </p>
                 </div>
               </div>
@@ -500,10 +500,10 @@ export default function AdminBotPage() {
             <section>
               <SectionHead no="04" title="역할 지급 알림" right={
                 <button type="button" onClick={() => setSettings({ ...settings, roleGrantEnabled: settings.roleGrantEnabled === false })}
-                  className={`flex items-center gap-2.5 text-[11px] font-bold transition-colors ${settings.roleGrantEnabled !== false ? "text-[#e91e3f]" : "text-gray-400"}`}>
+                  className={`flex items-center gap-2.5 text-[11px] font-bold transition-colors ${settings.roleGrantEnabled !== false ? "text-[#e91e3f]" : "text-[#5a5a5a]"}`}>
                   {settings.roleGrantEnabled !== false ? "사용 중" : "사용 안 함"}
-                  <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${settings.roleGrantEnabled !== false ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
-                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${settings.roleGrantEnabled !== false ? "left-[18px]" : "left-0.5"}`}></span>
+                  <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${settings.roleGrantEnabled !== false ? "bg-[#e91e3f]" : "bg-[#e6e3de]"}`}>
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-all ${settings.roleGrantEnabled !== false ? "left-[18px]" : "left-0.5"}`}></span>
                   </span>
                 </button>
               } />
@@ -525,7 +525,7 @@ export default function AdminBotPage() {
                   <textarea rows={2} value={settings.roleGrantMessage || ""} onChange={(e) => setSettings({ ...settings, roleGrantMessage: e.target.value })}
                     className={`${inputClass} resize-none`} />
                   <p className={fieldNote}>
-                    <span className="text-gray-200">{"{user}"}</span> 멘션 · <span className="text-gray-200">{"{role}"}</span> 지급된 역할명 · <span className="text-gray-200">{"{level}"}</span> 도달 레벨
+                    <span className="text-[#3a3a3a]">{"{user}"}</span> 멘션 · <span className="text-[#3a3a3a]">{"{role}"}</span> 지급된 역할명 · <span className="text-[#3a3a3a]">{"{level}"}</span> 도달 레벨
                   </p>
                 </div>
               </div>
@@ -542,11 +542,11 @@ export default function AdminBotPage() {
             <Reveal>
               <section className="mb-16">
                 <SectionHead no="01" title="음성 티어 역할 일괄 연결" />
-                <div className="p-5 md:p-6 rounded-xl border border-white/10 bg-white/[0.02] mb-6">
-                  <p className="text-xs text-gray-400 leading-relaxed break-keep">
+                <div className="p-5 md:p-6 rounded-xl border border-black/10 bg-black/[0.02] mb-6">
+                  <p className="text-xs text-[#5a5a5a] leading-relaxed break-keep">
                     디스코드에서 만든 역할을 8개 티어에 연결합니다. 지급 레벨은 자동으로 채워지고,
-                    <b className="text-white"> 배타 모드</b>로 저장되어 승급하면 아래 티어 역할이 자동 회수됩니다.
-                    역할에 <b className="text-white">&ldquo;따로 표시(hoist)&rdquo;</b>를 켜두면 멤버 목록 오른쪽이 티어별로 묶입니다.
+                    <b className="text-[#131313]"> 배타 모드</b>로 저장되어 승급하면 아래 티어 역할이 자동 회수됩니다.
+                    역할에 <b className="text-[#131313]">&ldquo;따로 표시(hoist)&rdquo;</b>를 켜두면 멤버 목록 오른쪽이 티어별로 묶입니다.
                   </p>
                 </div>
 
@@ -555,15 +555,15 @@ export default function AdminBotPage() {
                     <div key={t.key} className="flex items-center gap-3 py-2">
                       <span aria-hidden className="shrink-0 w-2.5 h-2.5 rotate-45" style={{ backgroundColor: t.c }}></span>
                       <span className="shrink-0 w-24 text-sm font-bold" style={{ color: t.c }}>{t.name}</span>
-                      <span className="shrink-0 w-16 text-[11px] font-black text-gray-500 tabular-nums">Lv.{t.min}+</span>
+                      <span className="shrink-0 w-16 text-[11px] font-black text-[#8a8a8a] tabular-nums">Lv.{t.min}+</span>
                       <select
                         value={tierMap[t.key] || ""}
                         onChange={(e) => setTierMap({ ...tierMap, [t.key]: e.target.value })}
-                        className="flex-1 min-w-0 bg-transparent border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white outline-none focus:border-[#e91e3f] transition-colors"
+                        className="flex-1 min-w-0 bg-transparent border border-black/10 rounded-lg px-3 py-2.5 text-xs text-[#131313] outline-none focus:border-[#e91e3f] transition-colors"
                       >
-                        <option value="" className="bg-[#141414]">— 역할 선택 —</option>
+                        <option value="" className="bg-[#ffffff]">— 역할 선택 —</option>
                         {guildRoles.map((r: any) => (
-                          <option key={r.id} value={r.id} className="bg-[#141414]">{r.name}</option>
+                          <option key={r.id} value={r.id} className="bg-[#ffffff]">{r.name}</option>
                         ))}
                       </select>
                     </div>
@@ -576,7 +576,7 @@ export default function AdminBotPage() {
                   </button>
                   <button
                     onClick={() => setTierMap({})}
-                    className="px-6 py-3.5 border border-white/10 text-gray-400 hover:text-white hover:border-white/30 text-sm font-bold rounded-lg transition-all outline-none focus:outline-none"
+                    className="px-6 py-3.5 border border-black/10 text-[#5a5a5a] hover:text-[#131313] hover:border-black/30 text-sm font-bold rounded-lg transition-all outline-none focus:outline-none"
                   >
                     선택 초기화
                   </button>
@@ -596,16 +596,16 @@ export default function AdminBotPage() {
                         <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: selectedRole.color }}></span>
                         <span className="font-bold">{selectedRole.name}</span>
                       </span>
-                    ) : <span className="text-gray-400">역할을 선택하세요</span>}
-                    <span className="text-[10px] text-gray-500">▼</span>
+                    ) : <span className="text-[#5a5a5a]">역할을 선택하세요</span>}
+                    <span className="text-[10px] text-[#8a8a8a]">▼</span>
                   </button>
                   {isRoleDropdownOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setIsRoleDropdownOpen(false)}></div>
-                      <div className="absolute top-full left-0 w-full mt-1.5 bg-[#161616] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#2a2a2a]">
+                      <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e6e3de]">
                         {guildRoles.map((r) => (
                           <button key={r.id} type="button" onClick={() => { setRoleForm({ ...roleForm, roleId: r.id }); setIsRoleDropdownOpen(false); }}
-                            className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 transition-colors ${roleForm.roleId === r.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : "text-gray-300 hover:bg-white/5"}`}>
+                            className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 transition-colors ${roleForm.roleId === r.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : "text-[#4b4b4b] hover:bg-black/5"}`}>
                             <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: r.color }}></span>
                             {r.name}
                           </button>
@@ -640,27 +640,27 @@ export default function AdminBotPage() {
             <Reveal>
             <section>
               <SectionHead no="02" title={`설정된 역할 (${configs.length})`} />
-              {isLoading ? <div className="py-10 text-center text-gray-500 text-sm">불러오는 중...</div>
-                : configs.length === 0 ? <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">설정된 역할이 없습니다.</div>
+              {isLoading ? <div className="py-10 text-center text-[#8a8a8a] text-sm">불러오는 중...</div>
+                : configs.length === 0 ? <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">설정된 역할이 없습니다.</div>
                 : (
-                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
                   {configs.map((c) => {
                     const role = guildRoles.find((r) => r.id === c.roleId);
                     return (
                       <div key={c._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                         <div className="flex items-center gap-2.5 md:w-48 shrink-0 min-w-0">
                           <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: role?.color || "#99aab5" }}></span>
-                          <span className="text-sm font-bold text-white truncate">{c.roleName || role?.name || c.roleId}</span>
+                          <span className="text-sm font-bold text-[#131313] truncate">{c.roleName || role?.name || c.roleId}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
                           {c.rewardLevel != null && <span className="text-[11px] font-bold text-[#e91e3f]">Lv.{c.rewardLevel} 도달 시 지급</span>}
-                          {c.buffXp > 0 && <span className="text-[11px] font-bold text-gray-400">채팅/음성 +{c.buffXp.toLocaleString()}</span>}
-                          {c.attendBuffXp > 0 && <span className="text-[11px] font-bold text-gray-400">출석 +{c.attendBuffXp.toLocaleString()}</span>}
-                          {c.rewardLevel == null && !c.buffXp && !c.attendBuffXp && <span className="text-[11px] text-gray-400">효과 없음</span>}
+                          {c.buffXp > 0 && <span className="text-[11px] font-bold text-[#5a5a5a]">채팅/음성 +{c.buffXp.toLocaleString()}</span>}
+                          {c.attendBuffXp > 0 && <span className="text-[11px] font-bold text-[#5a5a5a]">출석 +{c.attendBuffXp.toLocaleString()}</span>}
+                          {c.rewardLevel == null && !c.buffXp && !c.attendBuffXp && <span className="text-[11px] text-[#5a5a5a]">효과 없음</span>}
                         </div>
                         <div className="flex gap-4 shrink-0">
-                          <button onClick={() => { setRoleForm({ roleId: c.roleId, rewardLevel: c.rewardLevel == null ? "" : String(c.rewardLevel), buffXp: c.buffXp ? String(c.buffXp) : "", attendBuffXp: c.attendBuffXp ? String(c.attendBuffXp) : "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-500 hover:text-white transition-colors">수정</button>
-                          <button onClick={() => setDeleteConfirm({ kind: "role", id: c._id })} className="text-xs font-bold text-red-500/60 hover:text-red-500 transition-colors">삭제</button>
+                          <button onClick={() => { setRoleForm({ roleId: c.roleId, rewardLevel: c.rewardLevel == null ? "" : String(c.rewardLevel), buffXp: c.buffXp ? String(c.buffXp) : "", attendBuffXp: c.attendBuffXp ? String(c.attendBuffXp) : "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">수정</button>
+                          <button onClick={() => setDeleteConfirm({ kind: "role", id: c._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">삭제</button>
                         </div>
                       </div>
                     );
@@ -684,20 +684,20 @@ export default function AdminBotPage() {
                   <button type="button" onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
                     {selectedChannel ? (
                       <span className="flex items-center gap-2.5 min-w-0">
-                        <span className="text-gray-500 shrink-0">{CHANNEL_TYPE_ICON[selectedChannel.type]}</span>
+                        <span className="text-[#8a8a8a] shrink-0">{CHANNEL_TYPE_ICON[selectedChannel.type]}</span>
                         <span className="font-bold truncate">{selectedChannel.name}</span>
-                        <span className="text-[10px] text-gray-400 shrink-0">{CHANNEL_TYPE_LABEL[selectedChannel.type]}</span>
+                        <span className="text-[10px] text-[#5a5a5a] shrink-0">{CHANNEL_TYPE_LABEL[selectedChannel.type]}</span>
                       </span>
-                    ) : <span className="text-gray-400">채널 또는 카테고리를 선택하세요</span>}
-                    <span className="text-[10px] text-gray-500">▼</span>
+                    ) : <span className="text-[#5a5a5a]">채널 또는 카테고리를 선택하세요</span>}
+                    <span className="text-[10px] text-[#8a8a8a]">▼</span>
                   </button>
                   {isChannelDropdownOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setIsChannelDropdownOpen(false)}></div>
-                      <div className="absolute top-full left-0 w-full mt-1.5 bg-[#161616] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#2a2a2a]">
+                      <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e6e3de]">
                         {guildChannels.map((c) => (
                           <button key={c.id} type="button" onClick={() => { setChForm({ ...chForm, channelId: c.id }); setIsChannelDropdownOpen(false); }}
-                            className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors ${c.type === "category" ? "bg-white/[0.03]" : ""} ${chForm.channelId === c.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : c.type === "category" ? "text-gray-400 font-bold" : "text-gray-300 hover:bg-white/5"}`}>
+                            className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors ${c.type === "category" ? "bg-black/[0.03]" : ""} ${chForm.channelId === c.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : c.type === "category" ? "text-[#5a5a5a] font-bold" : "text-[#4b4b4b] hover:bg-black/5"}`}>
                             <span className={`shrink-0 text-xs ${c.parentId ? "ml-4" : ""}`}>{CHANNEL_TYPE_ICON[c.type]}</span>
                             <span className="truncate">{c.name}</span>
                           </button>
@@ -717,9 +717,9 @@ export default function AdminBotPage() {
                   <div>
                     <label className={labelClass}>XP 지급 제외</label>
                     <button type="button" onClick={() => setChForm({ ...chForm, excluded: !chForm.excluded })} className={`${inputClass} flex items-center justify-between text-left ${chForm.excluded ? "border-[#e91e3f]/50" : ""}`}>
-                      <span className={chForm.excluded ? "text-[#e91e3f] font-bold" : "text-gray-400"}>{chForm.excluded ? "지급 안 함" : "지급함 (기본)"}</span>
-                      <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${chForm.excluded ? "bg-[#e91e3f]" : "bg-[#2a2a2a]"}`}>
-                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${chForm.excluded ? "left-[18px]" : "left-0.5"}`}></span>
+                      <span className={chForm.excluded ? "text-[#e91e3f] font-bold" : "text-[#5a5a5a]"}>{chForm.excluded ? "지급 안 함" : "지급함 (기본)"}</span>
+                      <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${chForm.excluded ? "bg-[#e91e3f]" : "bg-[#e6e3de]"}`}>
+                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-all ${chForm.excluded ? "left-[18px]" : "left-0.5"}`}></span>
                       </span>
                     </button>
                     <p className={fieldNote}>봇 명령어 채널 등에 사용</p>
@@ -733,27 +733,27 @@ export default function AdminBotPage() {
             <Reveal>
             <section>
               <SectionHead no="02" title={`설정된 채널 (${channelConfigs.length})`} />
-              {isLoading ? <div className="py-10 text-center text-gray-500 text-sm">불러오는 중...</div>
-                : channelConfigs.length === 0 ? <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">설정된 채널이 없습니다.</div>
+              {isLoading ? <div className="py-10 text-center text-[#8a8a8a] text-sm">불러오는 중...</div>
+                : channelConfigs.length === 0 ? <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">설정된 채널이 없습니다.</div>
                 : (
-                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
                   {channelConfigs.map((c) => {
                     const live = guildChannels.find((g) => g.id === c.channelId);
                     return (
                       <div key={c._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                         <div className="flex items-center gap-2.5 md:w-56 shrink-0 min-w-0">
-                          <span className="text-gray-500 text-xs shrink-0">{CHANNEL_TYPE_ICON[c.channelType] || "#"}</span>
-                          <span className="text-sm font-bold text-white truncate">{live?.name || c.channelName || c.channelId}</span>
+                          <span className="text-[#8a8a8a] text-xs shrink-0">{CHANNEL_TYPE_ICON[c.channelType] || "#"}</span>
+                          <span className="text-sm font-bold text-[#131313] truncate">{live?.name || c.channelName || c.channelId}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
-                          {c.excluded ? <span className="text-[11px] font-bold text-red-400">XP 지급 제외</span>
+                          {c.excluded ? <span className="text-[11px] font-bold text-red-600">XP 지급 제외</span>
                             : c.boostXp > 0 ? <span className="text-[11px] font-bold text-[#e91e3f]">+{c.boostXp.toLocaleString()} XP</span>
-                            : <span className="text-[11px] text-gray-400">효과 없음</span>}
-                          {c.channelType === "category" && <span className="text-[11px] font-bold text-gray-500">하위 채널 전체</span>}
+                            : <span className="text-[11px] text-[#5a5a5a]">효과 없음</span>}
+                          {c.channelType === "category" && <span className="text-[11px] font-bold text-[#8a8a8a]">하위 채널 전체</span>}
                         </div>
                         <div className="flex gap-4 shrink-0">
-                          <button onClick={() => { setChForm({ channelId: c.channelId, boostXp: c.boostXp ? String(c.boostXp) : "", excluded: !!c.excluded }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-500 hover:text-white transition-colors">수정</button>
-                          <button onClick={() => setDeleteConfirm({ kind: "channel", id: c._id })} className="text-xs font-bold text-red-500/60 hover:text-red-500 transition-colors">삭제</button>
+                          <button onClick={() => { setChForm({ channelId: c.channelId, boostXp: c.boostXp ? String(c.boostXp) : "", excluded: !!c.excluded }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">수정</button>
+                          <button onClick={() => setDeleteConfirm({ kind: "channel", id: c._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">삭제</button>
                         </div>
                       </div>
                     );
@@ -785,18 +785,18 @@ export default function AdminBotPage() {
                           <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: boostRole.color }}></span>
                           <span className="font-bold">{boostRole.name}</span>
                         </span>
-                      ) : <span className="text-gray-300 font-bold">서버 전체</span>}
-                      <span className="text-[10px] text-gray-500">▼</span>
+                      ) : <span className="text-[#4b4b4b] font-bold">서버 전체</span>}
+                      <span className="text-[10px] text-[#8a8a8a]">▼</span>
                     </button>
                     {isBoostRoleOpen && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setIsBoostRoleOpen(false)}></div>
-                        <div className="absolute top-full left-0 w-full mt-1.5 bg-[#161616] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#2a2a2a]">
+                        <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e6e3de]">
                           <button type="button" onClick={() => { setBoostForm({ ...boostForm, targetRoleId: "" }); setIsBoostRoleOpen(false); }}
-                            className={`w-full text-left px-4 py-3 text-sm font-bold transition-colors ${!boostForm.targetRoleId ? "bg-[#e91e3f]/15 text-[#e91e3f]" : "text-gray-300 hover:bg-white/5"}`}>서버 전체</button>
+                            className={`w-full text-left px-4 py-3 text-sm font-bold transition-colors ${!boostForm.targetRoleId ? "bg-[#e91e3f]/15 text-[#e91e3f]" : "text-[#4b4b4b] hover:bg-black/5"}`}>서버 전체</button>
                           {guildRoles.map((r) => (
                             <button key={r.id} type="button" onClick={() => { setBoostForm({ ...boostForm, targetRoleId: r.id }); setIsBoostRoleOpen(false); }}
-                              className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 transition-colors ${boostForm.targetRoleId === r.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : "text-gray-300 hover:bg-white/5"}`}>
+                              className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 transition-colors ${boostForm.targetRoleId === r.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : "text-[#4b4b4b] hover:bg-black/5"}`}>
                               <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: r.color }}></span>
                               {r.name}
                             </button>
@@ -811,21 +811,21 @@ export default function AdminBotPage() {
                     <button type="button" onClick={() => setIsBoostChannelOpen(!isBoostChannelOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
                       {boostChannel ? (
                         <span className="flex items-center gap-2.5 min-w-0">
-                          <span className="text-gray-400 shrink-0">{CHANNEL_TYPE_ICON[boostChannel.type]}</span>
+                          <span className="text-[#5a5a5a] shrink-0">{CHANNEL_TYPE_ICON[boostChannel.type]}</span>
                           <span className="font-bold truncate">{boostChannel.name}</span>
                         </span>
-                      ) : <span className="text-gray-300 font-bold">모든 채널</span>}
-                      <span className="text-[10px] text-gray-400">▼</span>
+                      ) : <span className="text-[#4b4b4b] font-bold">모든 채널</span>}
+                      <span className="text-[10px] text-[#5a5a5a]">▼</span>
                     </button>
                     {isBoostChannelOpen && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setIsBoostChannelOpen(false)}></div>
-                        <div className="absolute top-full left-0 w-full mt-1.5 bg-[#161616] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#2a2a2a]">
+                        <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e6e3de]">
                           <button type="button" onClick={() => { setBoostForm({ ...boostForm, targetChannelId: "" }); setIsBoostChannelOpen(false); }}
-                            className={`w-full text-left px-4 py-3 text-sm font-bold transition-colors ${!boostForm.targetChannelId ? "bg-[#e91e3f]/15 text-[#e91e3f]" : "text-gray-300 hover:bg-white/5"}`}>모든 채널</button>
+                            className={`w-full text-left px-4 py-3 text-sm font-bold transition-colors ${!boostForm.targetChannelId ? "bg-[#e91e3f]/15 text-[#e91e3f]" : "text-[#4b4b4b] hover:bg-black/5"}`}>모든 채널</button>
                           {guildChannels.map((c) => (
                             <button key={c.id} type="button" onClick={() => { setBoostForm({ ...boostForm, targetChannelId: c.id }); setIsBoostChannelOpen(false); }}
-                              className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors ${c.type === "category" ? "bg-white/[0.03]" : ""} ${boostForm.targetChannelId === c.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : c.type === "category" ? "text-gray-300 font-bold" : "text-gray-300 hover:bg-white/5"}`}>
+                              className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors ${c.type === "category" ? "bg-black/[0.03]" : ""} ${boostForm.targetChannelId === c.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : c.type === "category" ? "text-[#4b4b4b] font-bold" : "text-[#4b4b4b] hover:bg-black/5"}`}>
                               <span className={`shrink-0 text-xs ${c.parentId ? "ml-4" : ""}`}>{CHANNEL_TYPE_ICON[c.type]}</span>
                               <span className="truncate">{c.name}</span>
                             </button>
@@ -843,17 +843,17 @@ export default function AdminBotPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className={labelClass}>시작 <span className="text-[#e91e3f]">*</span></label>
-                      <input type="datetime-local" value={boostForm.startAt} onChange={(e) => setBoostForm({ ...boostForm, startAt: e.target.value })} className={`${inputClass} [color-scheme:dark]`} />
+                      <input type="datetime-local" value={boostForm.startAt} onChange={(e) => setBoostForm({ ...boostForm, startAt: e.target.value })} className={`${inputClass}`} />
                     </div>
                     <div>
                       <label className={labelClass}>종료 <span className="text-[#e91e3f]">*</span></label>
-                      <input type="datetime-local" value={boostForm.endAt} onChange={(e) => setBoostForm({ ...boostForm, endAt: e.target.value })} className={`${inputClass} [color-scheme:dark]`} />
+                      <input type="datetime-local" value={boostForm.endAt} onChange={(e) => setBoostForm({ ...boostForm, endAt: e.target.value })} className={`${inputClass}`} />
                     </div>
                   </div>
                 </div>
                 <div className="flex gap-3">
                   <button type="submit" className={primaryBtn}>{boostForm.id ? "수정 저장" : "부스트 등록"}</button>
-                  {boostForm.id && <button type="button" onClick={() => setBoostForm(emptyBoost)} className="px-6 py-3.5 text-sm font-bold text-gray-400 hover:text-white transition-colors">취소</button>}
+                  {boostForm.id && <button type="button" onClick={() => setBoostForm(emptyBoost)} className="px-6 py-3.5 text-sm font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">취소</button>}
                 </div>
               </form>
             </section>
@@ -862,10 +862,10 @@ export default function AdminBotPage() {
             <Reveal>
             <section>
               <SectionHead no="02" title={`등록된 부스트 (${boosts.length})`} />
-              {isLoading ? <div className="py-10 text-center text-gray-500 text-sm">불러오는 중...</div>
-                : boosts.length === 0 ? <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">등록된 부스트가 없습니다.</div>
+              {isLoading ? <div className="py-10 text-center text-[#8a8a8a] text-sm">불러오는 중...</div>
+                : boosts.length === 0 ? <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">등록된 부스트가 없습니다.</div>
                 : (
-                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
                   {boosts.map((b) => {
                     const now = Date.now();
                     const start = new Date(b.startAt).getTime();
@@ -874,18 +874,18 @@ export default function AdminBotPage() {
                     return (
                       <div key={b._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                         <div className="flex items-center gap-2.5 md:w-52 shrink-0 min-w-0">
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${state === "진행 중" ? "bg-[#e91e3f] text-white" : state === "예정" ? "bg-white/10 text-gray-300" : "bg-transparent text-gray-400 border border-white/10"}`}>{state}</span>
-                          <span className="text-sm font-bold text-white truncate">{b.name}</span>
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${state === "진행 중" ? "bg-[#e91e3f] text-white" : state === "예정" ? "bg-black/10 text-[#4b4b4b]" : "bg-transparent text-[#5a5a5a] border border-black/10"}`}>{state}</span>
+                          <span className="text-sm font-bold text-[#131313] truncate">{b.name}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1 min-w-0">
                           <span className="text-[11px] font-bold text-[#e91e3f]">+{(b.boostXp || 0).toLocaleString()} XP</span>
-                          <span className="text-[11px] font-bold text-gray-400">{b.targetRoleName || "전체 유저"}</span>
-                          <span className="text-[11px] font-bold text-gray-400">{b.targetChannelName ? `${CHANNEL_TYPE_ICON[b.targetChannelType] || "#"} ${b.targetChannelName}` : "모든 채널"}</span>
-                          <span className="text-[11px] text-gray-500">{fmtDateTime(b.startAt)} ~ {fmtDateTime(b.endAt)}</span>
+                          <span className="text-[11px] font-bold text-[#5a5a5a]">{b.targetRoleName || "전체 유저"}</span>
+                          <span className="text-[11px] font-bold text-[#5a5a5a]">{b.targetChannelName ? `${CHANNEL_TYPE_ICON[b.targetChannelType] || "#"} ${b.targetChannelName}` : "모든 채널"}</span>
+                          <span className="text-[11px] text-[#8a8a8a]">{fmtDateTime(b.startAt)} ~ {fmtDateTime(b.endAt)}</span>
                         </div>
                         <div className="flex gap-4 shrink-0">
-                          <button onClick={() => { setBoostForm({ id: b._id, name: b.name, targetRoleId: b.targetRoleId || "", targetChannelId: b.targetChannelId || "", boostXp: String(b.boostXp), startAt: toLocalInput(b.startAt), endAt: toLocalInput(b.endAt) }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-gray-500 hover:text-white transition-colors">수정</button>
-                          <button onClick={() => setDeleteConfirm({ kind: "boost", id: b._id })} className="text-xs font-bold text-red-500/60 hover:text-red-500 transition-colors">삭제</button>
+                          <button onClick={() => { setBoostForm({ id: b._id, name: b.name, targetRoleId: b.targetRoleId || "", targetChannelId: b.targetChannelId || "", boostXp: String(b.boostXp), startAt: toLocalInput(b.startAt), endAt: toLocalInput(b.endAt) }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">수정</button>
+                          <button onClick={() => setDeleteConfirm({ kind: "boost", id: b._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">삭제</button>
                         </div>
                       </div>
                     );
@@ -905,13 +905,13 @@ export default function AdminBotPage() {
               <section className="mb-16">
                 <SectionHead no="01" title={questForm.id ? "퀘스트 수정" : "퀘스트 추가"} />
 
-                <div className="p-5 md:p-6 rounded-xl border border-white/10 bg-white/[0.02] mb-6">
-                  <p className="text-xs text-gray-400 leading-relaxed break-keep">
-                    진행도는 <b className="text-white">봇이 기록한 오늘(KST)의 XP 지급 로그</b>로 자동 판정됩니다. 따라서 봇이 지급하는 활동(채팅·음성·출석)만 조건으로 쓸 수 있습니다.
-                    보상은 유저가 <b className="text-white">직접 &lsquo;받기&rsquo;를 눌러야</b> 지급되며, 하루 한 번만 받을 수 있습니다. 매일 자정(KST)에 초기화됩니다.
+                <div className="p-5 md:p-6 rounded-xl border border-black/10 bg-black/[0.02] mb-6">
+                  <p className="text-xs text-[#5a5a5a] leading-relaxed break-keep">
+                    진행도는 <b className="text-[#131313]">봇이 기록한 오늘(KST)의 XP 지급 로그</b>로 자동 판정됩니다. 따라서 봇이 지급하는 활동(채팅·음성·출석)만 조건으로 쓸 수 있습니다.
+                    보상은 유저가 <b className="text-[#131313]">직접 &lsquo;받기&rsquo;를 눌러야</b> 지급되며, 하루 한 번만 받을 수 있습니다. 매일 자정(KST)에 초기화됩니다.
                   </p>
-                  <p className="text-xs text-gray-400 leading-relaxed break-keep mt-2">
-                    출석 퀘스트(음성 N분 접속)는 기본 제공되므로 여기에 만들 필요가 없습니다 — 기준 시간과 보상은 <b className="text-white">기본 정책</b> 탭에서 조정하세요.
+                  <p className="text-xs text-[#5a5a5a] leading-relaxed break-keep mt-2">
+                    출석 퀘스트(음성 N분 접속)는 기본 제공되므로 여기에 만들 필요가 없습니다 — 기준 시간과 보상은 <b className="text-[#131313]">기본 정책</b> 탭에서 조정하세요.
                   </p>
                 </div>
 
@@ -954,7 +954,7 @@ export default function AdminBotPage() {
                           className={`py-3 rounded-lg text-xs font-bold border transition-all outline-none focus:outline-none ${
                             questForm.period === o.v
                               ? "bg-[#e91e3f] border-[#e91e3f] text-white"
-                              : "bg-transparent border-white/10 text-gray-400 hover:border-white/30 hover:text-white"
+                              : "bg-transparent border-black/10 text-[#5a5a5a] hover:border-black/30 hover:text-[#131313]"
                           }`}
                         >
                           {o.l}
@@ -981,7 +981,7 @@ export default function AdminBotPage() {
                           className={`py-2.5 rounded-lg text-xs font-bold border transition-all outline-none focus:outline-none ${
                             questForm.reason === o.v
                               ? "bg-[#e91e3f] border-[#e91e3f] text-white"
-                              : "bg-transparent border-white/10 text-gray-400 hover:border-white/30 hover:text-white"
+                              : "bg-transparent border-black/10 text-[#5a5a5a] hover:border-black/30 hover:text-[#131313]"
                           }`}
                         >
                           {o.l}
@@ -1005,7 +1005,7 @@ export default function AdminBotPage() {
                           className={`py-2.5 rounded-lg text-xs font-bold border transition-all outline-none focus:outline-none ${
                             questForm.metric === o.v
                               ? "bg-[#e91e3f] border-[#e91e3f] text-white"
-                              : "bg-transparent border-white/10 text-gray-400 hover:border-white/30 hover:text-white"
+                              : "bg-transparent border-black/10 text-[#5a5a5a] hover:border-black/30 hover:text-[#131313]"
                           }`}
                         >
                           {o.l}
@@ -1060,7 +1060,7 @@ export default function AdminBotPage() {
                       className={`w-full py-3.5 rounded-lg text-sm font-bold border transition-all outline-none focus:outline-none ${
                         questForm.enabled
                           ? "bg-[#e91e3f] border-[#e91e3f] text-white"
-                          : "bg-transparent border-white/10 text-gray-400 hover:border-white/30"
+                          : "bg-transparent border-black/10 text-[#5a5a5a] hover:border-black/30"
                       }`}
                     >
                       {questForm.enabled ? "활성화됨 — 유저에게 표시" : "비활성 — 숨김"}
@@ -1073,7 +1073,7 @@ export default function AdminBotPage() {
                   {questForm.id && (
                     <button
                       onClick={() => setQuestForm(emptyQuest)}
-                      className="px-6 py-3.5 border border-white/10 text-gray-400 hover:text-white hover:border-white/30 text-sm font-bold rounded-lg transition-all outline-none focus:outline-none"
+                      className="px-6 py-3.5 border border-black/10 text-[#5a5a5a] hover:text-[#131313] hover:border-black/30 text-sm font-bold rounded-lg transition-all outline-none focus:outline-none"
                     >
                       취소
                     </button>
@@ -1086,25 +1086,25 @@ export default function AdminBotPage() {
               <section>
                 <SectionHead no="02" title={`등록된 퀘스트 (${quests.length})`} />
                 {quests.length === 0 ? (
-                  <p className="py-14 text-center text-sm text-gray-500">아직 등록된 퀘스트가 없습니다. 위에서 추가해 주세요.</p>
+                  <p className="py-14 text-center text-sm text-[#8a8a8a]">아직 등록된 퀘스트가 없습니다. 위에서 추가해 주세요.</p>
                 ) : (
-                  <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                  <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
                     {quests.map((q: any) => (
                       <div key={q._id} className="py-4 flex items-center gap-4">
-                        <span className="shrink-0 w-8 text-center text-xs font-black text-gray-600 tabular-nums">{q.order}</span>
+                        <span className="shrink-0 w-8 text-center text-xs font-black text-[#a3a3a3] tabular-nums">{q.order}</span>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className={`text-sm font-bold ${q.enabled ? "text-white" : "text-gray-500 line-through"}`}>{q.name}</p>
+                            <p className={`text-sm font-bold ${q.enabled ? "text-[#131313]" : "text-[#8a8a8a] line-through"}`}>{q.name}</p>
                             <span className="text-[10px] font-black text-[#e91e3f] border border-[#e91e3f]/30 rounded-full px-2 py-0.5">{PERIOD_LABEL[q.period || "daily"]}</span>
-                            {!q.enabled && <span className="text-[10px] font-black text-gray-500 border border-white/10 rounded-full px-2 py-0.5">비활성</span>}
+                            {!q.enabled && <span className="text-[10px] font-black text-[#8a8a8a] border border-black/10 rounded-full px-2 py-0.5">비활성</span>}
                           </div>
-                          <p className="text-[11px] text-gray-500 mt-1 tabular-nums">
+                          <p className="text-[11px] text-[#8a8a8a] mt-1 tabular-nums">
                             {(REASON_LABEL[q.reason] || "전체")} {q.metric === "xp" ? "XP" : "횟수"} {q.target.toLocaleString()} 달성
                             {q.desc ? ` · ${q.desc}` : ""}
                           </p>
                         </div>
                         <span className="shrink-0 text-sm font-black text-[#e91e3f] tabular-nums">
-                          {q.rewardXp > 0 ? `+${q.rewardXp.toLocaleString()} XP` : <span className="text-gray-600">보상 없음</span>}
+                          {q.rewardXp > 0 ? `+${q.rewardXp.toLocaleString()} XP` : <span className="text-[#a3a3a3]">보상 없음</span>}
                         </span>
                         <div className="shrink-0 flex items-center gap-2">
                           <button
@@ -1112,13 +1112,13 @@ export default function AdminBotPage() {
                               setQuestForm({ id: q._id, name: q.name, desc: q.desc || "", period: q.period || "daily", reason: q.reason, metric: q.metric, target: q.target, rewardXp: q.rewardXp, enabled: q.enabled, order: q.order });
                               window.scrollTo({ top: 0, behavior: "smooth" });
                             }}
-                            className="text-[11px] font-bold text-gray-400 hover:text-white transition-colors outline-none focus:outline-none"
+                            className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
                           >
                             수정
                           </button>
                           <button
                             onClick={() => setDeleteConfirm({ kind: "quest", id: q._id })}
-                            className="text-[11px] font-bold text-gray-600 hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
+                            className="text-[11px] font-bold text-[#a3a3a3] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
                           >
                             삭제
                           </button>
@@ -1162,7 +1162,7 @@ export default function AdminBotPage() {
 
                 {Number(grantForm.amount) !== 0 && grantForm.amount !== "" && (
                   <div className={`mb-6 px-4 py-3 rounded-lg border text-[12px] font-bold ${
-                    Number(grantForm.amount) > 0 ? "border-[#e91e3f]/30 bg-[#e91e3f]/[0.06] text-[#e91e3f]" : "border-amber-500/30 bg-amber-500/[0.06] text-amber-400"
+                    Number(grantForm.amount) > 0 ? "border-[#e91e3f]/30 bg-[#e91e3f]/[0.06] text-[#e91e3f]" : "border-amber-500/30 bg-amber-500/[0.06] text-amber-700"
                   }`}>
                     {Number(grantForm.amount) > 0
                       ? `${Number(grantForm.amount).toLocaleString()} XP 지급 — 레벨이 올라갈 수 있습니다`
@@ -1175,11 +1175,11 @@ export default function AdminBotPage() {
                     {isGranting ? "처리 중..." : "지급"}
                   </button>
                   <button type="button" onClick={submitRemove} disabled={isGranting || !grantForm.amount}
-                    className="px-6 py-3.5 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] text-amber-400 hover:bg-amber-500/[0.12] text-sm font-bold transition-colors disabled:opacity-40">
+                    className="px-6 py-3.5 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] text-amber-700 hover:bg-amber-500/[0.12] text-sm font-bold transition-colors disabled:opacity-40">
                     XP 제거
                   </button>
                   <button type="button" onClick={() => setConfirmAll(true)} disabled={isGranting || !grantForm.amount}
-                    className="px-6 py-3.5 rounded-lg border border-white/15 text-gray-300 hover:text-white text-sm font-bold transition-colors disabled:opacity-40">
+                    className="px-6 py-3.5 rounded-lg border border-black/15 text-[#4b4b4b] hover:text-[#131313] text-sm font-bold transition-colors disabled:opacity-40">
                     전체 유저에게 지급
                   </button>
                 </div>
@@ -1190,17 +1190,17 @@ export default function AdminBotPage() {
             <Reveal>
             <section>
               <SectionHead no="02" title="XP 초기화" />
-              <p className="text-xs text-gray-400 leading-relaxed break-keep mb-5">
+              <p className="text-xs text-[#5a5a5a] leading-relaxed break-keep mb-5">
                 보유 XP와 레벨을 0으로 되돌립니다. 레벨 보상 역할은 봇이 30초 이내에 함께 회수합니다. (ARCTIC에서 구매한 역할은 회수하지 않습니다)
               </p>
               <div className="flex flex-wrap gap-3">
                 <button type="button" disabled={isGranting || !grantForm.target.trim()}
                   onClick={() => setConfirmReset(grantForm.target.trim())}
-                  className="px-6 py-3.5 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] text-amber-400 hover:bg-amber-500/[0.12] text-sm font-bold transition-colors disabled:opacity-40">
+                  className="px-6 py-3.5 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] text-amber-700 hover:bg-amber-500/[0.12] text-sm font-bold transition-colors disabled:opacity-40">
                   위 대상 초기화
                 </button>
                 <button type="button" disabled={isGranting} onClick={() => setConfirmReset("all")}
-                  className="px-6 py-3.5 rounded-lg border border-red-500/30 bg-red-500/[0.06] text-red-400 hover:bg-red-500/[0.12] text-sm font-bold transition-colors disabled:opacity-40">
+                  className="px-6 py-3.5 rounded-lg border border-[#e91e3f]/25 bg-red-500/[0.06] text-red-600 hover:bg-red-500/[0.12] text-sm font-bold transition-colors disabled:opacity-40">
                   전체 유저 초기화
                 </button>
               </div>
@@ -1212,33 +1212,33 @@ export default function AdminBotPage() {
             <section>
               <SectionHead no="03" title={`최근 수동 지급 (${grantLogs.length})`} />
               {grantLogs.length === 0 ? (
-                <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">수동 지급 이력이 없습니다.</div>
+                <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">수동 지급 이력이 없습니다.</div>
               ) : (
-                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
                   {grantLogs.map((g) => (
                     <div key={g._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                       <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 w-fit ${
-                        g.status === "paid" ? "bg-emerald-500/15 text-emerald-400"
-                        : g.status === "failed" ? "bg-red-500/15 text-red-400"
+                        g.status === "paid" ? "bg-emerald-500/15 text-emerald-700"
+                        : g.status === "failed" ? "bg-red-500/15 text-red-600"
                         : "bg-[#e91e3f] text-white"}`}>
                         {g.status === "paid" ? "완료" : g.status === "failed" ? "실패" : "대기"}
                       </span>
                       <div className="min-w-0 md:w-44 shrink-0">
-                        <div className="text-sm font-bold text-white truncate">{g.userName || g.userId}</div>
-                        <div className="text-[10px] text-gray-400">{fmtDateTime(g.createdAt)}</div>
+                        <div className="text-sm font-bold text-[#131313] truncate">{g.userName || g.userId}</div>
+                        <div className="text-[10px] text-[#5a5a5a]">{fmtDateTime(g.createdAt)}</div>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1 min-w-0">
-                        <span className={`text-[13px] font-black tabular-nums ${g.amount >= 0 ? "text-[#e91e3f]" : "text-amber-400"}`}>
+                        <span className={`text-[13px] font-black tabular-nums ${g.amount >= 0 ? "text-[#e91e3f]" : "text-amber-700"}`}>
                           {g.amount >= 0 ? "+" : ""}{g.amount.toLocaleString()} XP
                         </span>
-                        {g.reason && <span className="text-[11px] text-gray-400 truncate">{g.reason}</span>}
-                        {g.error && <span className="text-[11px] font-bold text-red-400">{g.error}</span>}
+                        {g.reason && <span className="text-[11px] text-[#5a5a5a] truncate">{g.reason}</span>}
+                        {g.error && <span className="text-[11px] font-bold text-red-600">{g.error}</span>}
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-              <p className="mt-6 text-xs text-gray-400 leading-relaxed break-keep">
+              <p className="mt-6 text-xs text-[#5a5a5a] leading-relaxed break-keep">
                 💡 지급은 봇의 자동 지급 큐에 쌓여 30초 이내에 반영되며, 반영 시 레벨도 함께 다시 계산됩니다.
                 봇이 꺼져 있으면 &lsquo;대기&rsquo; 상태로 남아 있다가 켜질 때 처리됩니다.
               </p>
@@ -1254,25 +1254,25 @@ export default function AdminBotPage() {
               <div className="flex gap-2">
                 {[{ v: "all", l: "누적" }, { v: "month", l: "이번 달" }].map((o) => (
                   <button key={o.v} onClick={() => setLbPeriod(o.v as any)}
-                    className={`px-4 py-1.5 rounded-full text-[11px] font-bold border transition-colors ${lbPeriod === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/30" : "text-gray-400 border-white/10 hover:text-white"}`}>
+                    className={`px-4 py-1.5 rounded-full text-[11px] font-bold border transition-colors ${lbPeriod === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/30" : "text-[#5a5a5a] border-black/10 hover:text-[#131313]"}`}>
                     {o.l}
                   </button>
                 ))}
               </div>
             } />
             {lbPeriod === "month" && (
-              <p className="text-[11px] text-gray-400 mb-4">월간 랭킹은 봇의 지급 로그를 기준으로 집계됩니다. 로그가 쌓이기 시작한 시점 이후 활동만 반영됩니다.</p>
+              <p className="text-[11px] text-[#5a5a5a] mb-4">월간 랭킹은 봇의 지급 로그를 기준으로 집계됩니다. 로그가 쌓이기 시작한 시점 이후 활동만 반영됩니다.</p>
             )}
             {leaderboard.length === 0 ? (
-              <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">표시할 기록이 없습니다.</div>
+              <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">표시할 기록이 없습니다.</div>
             ) : (
-              <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+              <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
                 {leaderboard.map((u) => (
                   <div key={u.userId} className="py-3 flex items-center gap-4">
-                    <span className={`w-8 text-sm font-black shrink-0 ${u.rank <= 3 ? "text-[#e91e3f]" : "text-gray-400"}`}>{u.rank}</span>
-                    <span className="text-sm font-bold text-white flex-1 truncate">{u.name}</span>
-                    <span className="text-[11px] font-bold text-gray-500 shrink-0">Lv.{u.level}</span>
-                    <span className="text-sm font-black text-gray-200 shrink-0 tabular-nums">{u.xp.toLocaleString()}</span>
+                    <span className={`w-8 text-sm font-black shrink-0 ${u.rank <= 3 ? "text-[#e91e3f]" : "text-[#5a5a5a]"}`}>{u.rank}</span>
+                    <span className="text-sm font-bold text-[#131313] flex-1 truncate">{u.name}</span>
+                    <span className="text-[11px] font-bold text-[#8a8a8a] shrink-0">Lv.{u.level}</span>
+                    <span className="text-sm font-black text-[#3a3a3a] shrink-0 tabular-nums">{u.xp.toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -1292,7 +1292,7 @@ export default function AdminBotPage() {
               <div className="flex gap-2">
                 {[{ v: "", l: "전체" }, { v: "chat", l: "채팅" }, { v: "voice", l: "음성" }, { v: "attend", l: "출석" }].map((o) => (
                   <button key={o.v} onClick={() => { setLogReason(o.v); setLogPage(0); }}
-                    className={`px-4 py-2 rounded-lg text-[11px] font-bold border transition-colors ${logReason === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-gray-400 border-white/10 hover:text-white"}`}>
+                    className={`px-4 py-2 rounded-lg text-[11px] font-bold border transition-colors ${logReason === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-[#5a5a5a] border-black/10 hover:text-[#131313]"}`}>
                     {o.l}
                   </button>
                 ))}
@@ -1300,16 +1300,16 @@ export default function AdminBotPage() {
             </div>
 
             {logs.length === 0 ? (
-              <div className="py-10 text-gray-400 text-sm border-y border-white/[0.06]">지급 내역이 없습니다. 봇이 XP를 지급하면 여기에 기록됩니다.</div>
+              <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">지급 내역이 없습니다. 봇이 XP를 지급하면 여기에 기록됩니다.</div>
             ) : (
               <>
-                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
                   {logs.map((l) => (
                     <div key={l._id} className="py-3 flex items-center gap-3 md:gap-4">
-                      <span className="text-[10px] text-gray-400 shrink-0 w-24 md:w-32 tabular-nums">{fmtDateTime(l.createdAt)}</span>
-                      <span className="text-[10px] font-bold text-gray-400 shrink-0 w-8">{REASON_LABEL[l.reason] || "-"}</span>
-                      <span className="text-sm font-bold text-white flex-1 truncate">{l.displayName || l.userId}</span>
-                      {l.channelName && <span className="text-[10px] text-gray-400 shrink-0 hidden md:block truncate max-w-[140px]">#{l.channelName}</span>}
+                      <span className="text-[10px] text-[#5a5a5a] shrink-0 w-24 md:w-32 tabular-nums">{fmtDateTime(l.createdAt)}</span>
+                      <span className="text-[10px] font-bold text-[#5a5a5a] shrink-0 w-8">{REASON_LABEL[l.reason] || "-"}</span>
+                      <span className="text-sm font-bold text-[#131313] flex-1 truncate">{l.displayName || l.userId}</span>
+                      {l.channelName && <span className="text-[10px] text-[#5a5a5a] shrink-0 hidden md:block truncate max-w-[140px]">#{l.channelName}</span>}
                       <span className="text-sm font-black text-[#e91e3f] shrink-0 tabular-nums">+{(l.amount || 0).toLocaleString()}</span>
                     </div>
                   ))}
@@ -1317,10 +1317,10 @@ export default function AdminBotPage() {
 
                 <div className="flex items-center justify-between mt-6">
                   <button disabled={logPage === 0} onClick={() => setLogPage((p) => Math.max(0, p - 1))}
-                    className="px-5 py-2.5 text-xs font-bold text-gray-400 border border-white/10 rounded-lg disabled:opacity-30 hover:text-white transition-colors">이전</button>
-                  <span className="text-[11px] font-bold text-gray-400">{logPage + 1} / {Math.max(1, Math.ceil(logTotal / 50))}</span>
+                    className="px-5 py-2.5 text-xs font-bold text-[#5a5a5a] border border-black/10 rounded-lg disabled:opacity-30 hover:text-[#131313] transition-colors">이전</button>
+                  <span className="text-[11px] font-bold text-[#5a5a5a]">{logPage + 1} / {Math.max(1, Math.ceil(logTotal / 50))}</span>
                   <button disabled={(logPage + 1) * 50 >= logTotal} onClick={() => setLogPage((p) => p + 1)}
-                    className="px-5 py-2.5 text-xs font-bold text-gray-400 border border-white/10 rounded-lg disabled:opacity-30 hover:text-white transition-colors">다음</button>
+                    className="px-5 py-2.5 text-xs font-bold text-[#5a5a5a] border border-black/10 rounded-lg disabled:opacity-30 hover:text-[#131313] transition-colors">다음</button>
                 </div>
               </>
             )}
@@ -1330,25 +1330,25 @@ export default function AdminBotPage() {
 
         {/* 안내 각주 */}
         <Reveal>
-        <div className="border-t border-white/[0.06] pt-5 text-xs text-gray-500 leading-relaxed">
-          💡 <strong className="text-gray-300">작동 방식:</strong> 봇이 1분마다 설정을 다시 읽습니다. 최종 지급량 = 기본 XP + 역할 Boost + 채널 Boost + 기간제 부스트 (음소거 시 설정된 배율 적용).<br/>
-          ⚠️ 역할 자동 지급이 작동하려면 봇에게 <strong className="text-gray-300">역할 관리 권한</strong>이 있고, 봇의 역할이 지급 대상 역할보다 <strong className="text-gray-300">위에</strong> 있어야 합니다.
+        <div className="border-t border-black/[0.06] pt-5 text-xs text-[#8a8a8a] leading-relaxed">
+          💡 <strong className="text-[#4b4b4b]">작동 방식:</strong> 봇이 1분마다 설정을 다시 읽습니다. 최종 지급량 = 기본 XP + 역할 Boost + 채널 Boost + 기간제 부스트 (음소거 시 설정된 배율 적용).<br/>
+          ⚠️ 역할 자동 지급이 작동하려면 봇에게 <strong className="text-[#4b4b4b]">역할 관리 권한</strong>이 있고, 봇의 역할이 지급 대상 역할보다 <strong className="text-[#4b4b4b]">위에</strong> 있어야 합니다.
         </div>
         </Reveal>
       </div>
 
       {deleteConfirm && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4">
-          <div className="bg-[#121212] border border-red-500/30 rounded-3xl w-full max-w-sm p-8 text-center">
-            <h2 className="text-xl font-bold text-white mb-3">삭제 확인</h2>
-            <p className="text-sm text-gray-400 mb-8">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-[#ffffff] border border-[#e91e3f]/25 rounded-3xl w-full max-w-sm p-8 text-center">
+            <h2 className="text-xl font-bold text-[#131313] mb-3">삭제 확인</h2>
+            <p className="text-sm text-[#5a5a5a] mb-8">
               {deleteConfirm.kind === "role" ? <>해당 역할 설정을 삭제하시겠습니까?<br/>이미 지급된 역할은 회수되지 않습니다.</>
                 : deleteConfirm.kind === "channel" ? <>해당 채널 설정을 삭제하시겠습니까?<br/>삭제 후 기본 XP 정책으로 돌아갑니다.</>
                 : <>해당 부스트를 삭제하시겠습니까?<br/>진행 중이라면 즉시 중단됩니다.</>}
             </p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button>
-              <button onClick={executeDelete} className="flex-1 py-3 bg-red-500/80 text-white rounded-xl">삭제</button>
+              <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 bg-[#e6e3de] text-[#131313] rounded-xl">취소</button>
+              <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white rounded-xl">삭제</button>
             </div>
           </div>
         </div>
@@ -1356,19 +1356,19 @@ export default function AdminBotPage() {
 
       {/* 전체 유저 지급 — 되돌리기 어려우므로 한 번 더 확인 */}
       {confirmAll && (
-        <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/80 p-4">
-          <div className="bg-[#121212] border border-[#e91e3f]/30 rounded-3xl w-full max-w-sm p-8">
-            <h2 className="text-lg font-bold text-white mb-3">전체 유저에게 지급</h2>
-            <p className="text-sm text-gray-400 leading-relaxed mb-2 break-keep">
-              XP 기록이 있는 <strong className="text-white">모든 유저</strong>에게{" "}
-              <strong className={Number(grantForm.amount) >= 0 ? "text-[#e91e3f]" : "text-amber-400"}>
+        <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-[#ffffff] border border-[#e91e3f]/30 rounded-3xl w-full max-w-sm p-8">
+            <h2 className="text-lg font-bold text-[#131313] mb-3">전체 유저에게 지급</h2>
+            <p className="text-sm text-[#5a5a5a] leading-relaxed mb-2 break-keep">
+              XP 기록이 있는 <strong className="text-[#131313]">모든 유저</strong>에게{" "}
+              <strong className={Number(grantForm.amount) >= 0 ? "text-[#e91e3f]" : "text-amber-700"}>
                 {Number(grantForm.amount) >= 0 ? "+" : ""}{Number(grantForm.amount).toLocaleString()} XP
               </strong>
               를 반영합니다.
             </p>
-            <p className="text-xs text-gray-400 mb-8 break-keep">되돌리려면 반대 부호로 다시 지급해야 합니다.</p>
+            <p className="text-xs text-[#5a5a5a] mb-8 break-keep">되돌리려면 반대 부호로 다시 지급해야 합니다.</p>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmAll(false)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button>
+              <button onClick={() => setConfirmAll(false)} className="flex-1 py-3 bg-[#e6e3de] text-[#131313] rounded-xl">취소</button>
               <button onClick={() => runGrant("all")} disabled={isGranting}
                 className="flex-1 py-3 bg-[#e91e3f] disabled:opacity-40 text-white rounded-xl font-bold">
                 {isGranting ? "처리 중..." : "전체 지급"}
@@ -1380,19 +1380,19 @@ export default function AdminBotPage() {
 
       {/* 📌 초기화는 되돌릴 수 없어 한 번 더 확인한다 */}
       {confirmReset !== null && (
-        <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/80 p-4">
-          <div className="bg-[#121212] border border-red-500/30 rounded-3xl w-full max-w-sm p-8">
-            <h2 className="text-lg font-bold text-white mb-3">
+        <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-[#ffffff] border border-[#e91e3f]/25 rounded-3xl w-full max-w-sm p-8">
+            <h2 className="text-lg font-bold text-[#131313] mb-3">
               {confirmReset === "all" ? "전체 유저 XP 초기화" : "XP 초기화"}
             </h2>
-            <p className="text-sm text-gray-400 leading-relaxed mb-2 break-keep">
+            <p className="text-sm text-[#5a5a5a] leading-relaxed mb-2 break-keep">
               {confirmReset === "all"
-                ? <>XP 기록이 있는 <strong className="text-white">모든 유저</strong>의 보유 XP와 레벨이 <strong className="text-red-400">0</strong>이 됩니다.</>
-                : <><strong className="text-white">{confirmReset}</strong> 님의 보유 XP와 레벨이 <strong className="text-red-400">0</strong>이 됩니다.</>}
+                ? <>XP 기록이 있는 <strong className="text-[#131313]">모든 유저</strong>의 보유 XP와 레벨이 <strong className="text-red-600">0</strong>이 됩니다.</>
+                : <><strong className="text-[#131313]">{confirmReset}</strong> 님의 보유 XP와 레벨이 <strong className="text-red-600">0</strong>이 됩니다.</>}
             </p>
-            <p className="text-xs text-gray-400 mb-8 break-keep">되돌릴 수 없으며, 레벨 보상 역할도 함께 회수됩니다.</p>
+            <p className="text-xs text-[#5a5a5a] mb-8 break-keep">되돌릴 수 없으며, 레벨 보상 역할도 함께 회수됩니다.</p>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmReset(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button>
+              <button onClick={() => setConfirmReset(null)} className="flex-1 py-3 bg-[#e6e3de] text-[#131313] rounded-xl">취소</button>
               <button onClick={() => runGrant(confirmReset, { mode: "reset" })} disabled={isGranting}
                 className="flex-1 py-3 bg-red-500 hover:bg-red-600 disabled:opacity-40 text-white rounded-xl font-bold">
                 {isGranting ? "처리 중..." : "초기화"}
@@ -1403,11 +1403,11 @@ export default function AdminBotPage() {
       )}
 
       {popup.isOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
-          <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
-            <h2 className="text-xl font-bold text-white mb-3">{popup.isError ? "오류" : "완료"}</h2>
-            <p className="text-sm text-gray-400 mb-8">{popup.message}</p>
-            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">확인</button>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
+          <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
+            <h2 className="text-xl font-bold text-[#131313] mb-3">{popup.isError ? "오류" : "완료"}</h2>
+            <p className="text-sm text-[#5a5a5a] mb-8">{popup.message}</p>
+            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#e6e3de] hover:bg-[#d6d3ce] text-[#131313] font-bold rounded-xl transition-colors">확인</button>
           </div>
         </div>
       )}

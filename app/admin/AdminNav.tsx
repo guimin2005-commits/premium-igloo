@@ -89,19 +89,28 @@ export default function AdminNav() {
     return true;
   };
 
+  // 📌 대회 룸은 경기 중 화면이라 다크를 유지한다 — 좌측 패널도 함께 어둡게
+  const isDark = pathname?.startsWith("/admin/room");
+
   const linkClass = (active: boolean, child = false) =>
     `relative flex items-center gap-2.5 px-3 py-2 rounded-lg font-bold transition-colors ${child ? "text-[12px] ml-4" : "text-[13px]"} ${
-      active ? "text-white bg-[#e91e3f]/[0.12]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"
+      active
+        ? isDark
+          ? "text-white bg-[#e91e3f]/25"
+          : "text-[#e91e3f] bg-[#e91e3f]/[0.12]"
+        : isDark
+        ? "text-gray-400 hover:text-white hover:bg-white/[0.06]"
+        : "text-[#4b4b4b] hover:text-[#131313] hover:bg-black/[0.06]"
     }`;
 
   return (
     <>
       {/* ── 데스크톱: 좌측 사이드 패널 ── */}
-      <aside className="hidden lg:block w-60 shrink-0 border-r border-white/10 bg-[#0e0e0e]">
+      <aside className={`hidden lg:block w-60 shrink-0 border-r ${isDark ? "border-white/10 bg-[#0e0e0e]" : "border-black/10 bg-[#efece7]"}`}>
         <nav className="sticky top-24 px-6 py-10 space-y-8">
           {NAV_GROUPS.map((group) => (
             <div key={group.label}>
-              <div className="text-[10px] font-black tracking-[0.28em] text-[#e91e3f] uppercase mb-3">{group.label}</div>
+              <div className={`text-[10px] font-black tracking-[0.28em] uppercase mb-3 ${isDark ? "text-[#ff5c77]" : "text-[#e91e3f]"}`}>{group.label}</div>
               <div className="space-y-0.5">
                 {group.items.map((item) => {
                   const parentActive = isActive(item.href) && !item.children?.some((c) => isActive(c.href));
@@ -114,7 +123,7 @@ export default function AdminNav() {
                         <span className="truncate">{item.title}</span>
                       </Link>
                       {item.children && (
-                        <div className="mt-0.5 space-y-0.5 border-l border-white/15 ml-3">
+                        <div className={`mt-0.5 space-y-0.5 border-l ml-3 ${isDark ? "border-white/15" : "border-black/15"}`}>
                           {item.children.map((child) => {
                             const active = isActive(child.href);
                             return (
@@ -136,7 +145,7 @@ export default function AdminNav() {
       </aside>
 
       {/* ── 모바일: 상단 가로 스크롤 칩 바 (하위 카테고리는 펼쳐서 표시) ── */}
-      <div className="lg:hidden w-full border-b border-white/10 bg-[#0e0e0e]">
+      <div className={`lg:hidden w-full border-b ${isDark ? "border-white/10 bg-[#0e0e0e]" : "border-black/10 bg-[#efece7]"}`}>
         <div className="flex gap-2 overflow-x-auto no-bar px-4 py-3">
           {NAV_GROUPS.flatMap((g) => g.items).flatMap((item) =>
             item.children
@@ -151,7 +160,9 @@ export default function AdminNav() {
                 className={`shrink-0 px-3.5 py-1.5 rounded-full text-[11px] font-bold border transition-colors ${
                   active
                     ? "bg-[#e91e3f] text-white border-[#e91e3f]"
-                    : "text-gray-200 border-white/20 hover:text-white hover:border-white/40"
+                    : isDark
+                    ? "text-gray-300 border-white/20 hover:text-white hover:border-white/40"
+                    : "text-[#3a3a3a] border-black/20 hover:text-[#131313] hover:border-black/40"
                 }`}
               >
                 {item.title}
