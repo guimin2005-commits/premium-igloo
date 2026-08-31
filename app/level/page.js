@@ -1160,7 +1160,7 @@ export default function LevelPage() {
                         return (
                           <div
                             key={q.id}
-                            className={`rounded-xl border px-4 py-3 mb-2 transition-all ${
+                            className={`relative overflow-hidden rounded-xl border px-4 py-3 mb-2 transition-all ${
                               q.claimable
                                 ? "border-[#e91e3f]/45 bg-[#e91e3f]/[0.06]"
                                 : q.claimed
@@ -1168,7 +1168,15 @@ export default function LevelPage() {
                                 : "border-black/[0.08]"
                             }`}
                           >
-                            <div className="flex items-center gap-3">
+                            {/* 진행도를 행 배경으로 — 숫자를 읽기 전에 먼저 느껴진다 */}
+                            {!q.claimed && !q.claimable && pct > 0 && (
+                              <span
+                                aria-hidden
+                                className="absolute inset-y-0 left-0 bg-black/[0.035] transition-[width] duration-700 pointer-events-none"
+                                style={{ width: `${pct}%` }}
+                              ></span>
+                            )}
+                            <div className="relative flex items-center gap-3">
                               {/* 상태 점 */}
                               <span
                                 aria-hidden
@@ -1375,15 +1383,25 @@ export default function LevelPage() {
                                 ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000))
                                 : null;
                             return (
-                              <div key={i} className="flex items-center gap-3 min-h-[52px] py-2.5 border-b border-black/[0.05]">
+                              <div
+                                key={i}
+                                className="relative flex items-center gap-3 min-h-[56px] pl-3.5 pr-1 py-2.5 border-b border-black/[0.05] hover:bg-black/[0.02] transition-colors"
+                              >
+                                {/* 출처를 색 레일로 — 레벨 보상 레드 / 상점 잉크 / 대기 회색 */}
                                 <span
                                   aria-hidden
-                                  className={`shrink-0 w-1.5 h-1.5 rounded-full ${pending ? "bg-[#c4c4c4]" : it.source === "level" ? "bg-[#e91e3f]" : "bg-emerald-600"}`}
+                                  className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full"
+                                  style={{
+                                    backgroundColor:
+                                      it.status === "missing" ? "#c4c4c4" : pending ? "#d6d3ce" : it.source === "level" ? "#e91e3f" : "#131313",
+                                  }}
                                 ></span>
                                 <div className="min-w-0 flex-1">
-                                  <p className={`text-[13px] font-bold truncate ${pending ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{it.name}</p>
+                                  <p className={`text-[13px] font-bold truncate ${pending || it.status === "missing" ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{it.name}</p>
                                   <p className="text-[10px] font-bold text-[#a3a3a3] mt-0.5">
-                                    {pending
+                                    {it.status === "missing"
+                                      ? "역할이 확인되지 않음"
+                                      : pending
                                       ? "지급 대기 중"
                                       : it.source === "level"
                                       ? `레벨 보상 · Lv.${it.rewardLevel}`
@@ -1396,9 +1414,13 @@ export default function LevelPage() {
                                       : "영구 보유"}
                                   </p>
                                 </div>
-                                {dday !== null && (
-                                  <span className={`shrink-0 text-[10px] font-black tabular-nums ${dday <= 3 ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>
+                                {dday !== null ? (
+                                  <span className={`shrink-0 text-[10px] font-black tabular-nums px-2 py-1 rounded-full ${dday <= 3 ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "bg-black/[0.05] text-[#8a8a8a]"}`}>
                                     D-{dday}
+                                  </span>
+                                ) : (
+                                  <span className="shrink-0 text-[9px] font-black tracking-[0.12em] uppercase px-2 py-1 rounded-full bg-black/[0.05] text-[#a3a3a3]">
+                                    {it.kind === "physical" ? "Goods" : "Role"}
                                   </span>
                                 )}
                               </div>
@@ -1427,26 +1449,33 @@ export default function LevelPage() {
                         </button>
                       </div>
 
-                      {/* 현재 티어 — 이름을 앞세운 배지 */}
-                      <div className="flex items-center gap-3.5 mb-4">
+                      {/* 현재 등급 — 등급색을 입힌 카드가 사이드 열의 앵커가 된다 */}
+                      <div
+                        className="relative rounded-2xl overflow-hidden px-4 py-4 mb-4 flex items-center gap-3.5"
+                        style={{
+                          background: `linear-gradient(135deg, ${tierCur.c}1c, ${tierCur.c}08)`,
+                          border: `1px solid ${tierCur.c}3d`,
+                        }}
+                      >
+                        <div
+                          aria-hidden
+                          className="absolute -top-10 -right-8 w-32 h-32 rounded-full blur-[46px] pointer-events-none"
+                          style={{ background: `${tierCur.c}40` }}
+                        ></div>
                         <span
                           aria-hidden
-                          className="shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center"
-                          style={{
-                            backgroundColor: `${tierCur.c}18`,
-                            border: `1px solid ${tierCur.c}55`,
-                            boxShadow: `0 8px 24px -12px ${tierCur.c}`,
-                          }}
+                          className="relative z-10 shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center bg-white"
+                          style={{ boxShadow: `0 8px 22px -10px ${tierCur.c}` }}
                         >
                           <TierEmblem tier={tierCur} size={26} />
                         </span>
-                        <div className="min-w-0">
+                        <div className="relative z-10 min-w-0">
                           <p className="text-2xl font-black tracking-tight leading-none" style={{ color: tierCur.c }}>{tierCur.name}</p>
                           <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mt-1.5 tabular-nums">
                             {tierCur.en} · {tierRangeLabel(tierIdx)}
                           </p>
                         </div>
-                        <div className="ml-auto text-right shrink-0">
+                        <div className="relative z-10 ml-auto text-right shrink-0">
                           <p className={`text-xl font-black tabular-nums leading-none ${tierCur.bonus > 0 ? "text-[#131313]" : "text-[#c4c4c4]"}`}>
                             {tierCur.bonus > 0 ? `+${tierCur.bonus.toLocaleString()}` : "—"}
                           </p>

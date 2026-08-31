@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/authOptions";
 import Purchase from "@/models/Purchase";
 import ShopItem from "@/models/ShopItem";
 import RoleConfig from "@/models/RoleConfig";
+import InventoryRole from "@/models/InventoryRole";
 
 // 📌 내 보유 아이템 — 구매 내역이 아니라 "지금 실제로 들고 있는 것"을 보여준다.
 //    디스코드에서 멤버의 현재 역할을 읽어와 상품·보상 역할과 대조하므로,
@@ -52,10 +53,11 @@ export async function GET() {
     await connectToDatabase();
     const userId = session.user.id;
 
-    const [purchases, items, roleConfigs, discordRoles] = await Promise.all([
+    const [purchases, items, roleConfigs, invRoles, discordRoles] = await Promise.all([
       Purchase.find({ userId }).sort({ createdAt: -1 }).lean(),
       ShopItem.find({}, { name: 1, type: 1, roleId: 1, imageUrl: 1, description: 1 }).lean(),
       RoleConfig.find({}, { roleId: 1, roleName: 1, rewardLevel: 1, exclusive: 1 }).lean(),
+      InventoryRole.find({ visible: true }).sort({ sortOrder: 1 }).lean(),
       fetchDiscordRoles(session.user.id),
     ]);
 
@@ -70,20 +72,27 @@ export async function GET() {
       if (p.status === "cancelled") continue;
       const item = items.find((i) => String(i._id) === p.itemId);
       const isRole = p.itemType === "role" || p.itemType === "perk";
+      let status = p.status; // pending | completed | expired
 
-      // 역할 상품인데 디스코드에 없으면 이미 만료·회수된 것으로 본다
       if (isRole && p.roleId) {
         seenRoles.add(p.roleId);
-        const stillHas = held === null ? p.status === "completed" : held.has(p.roleId);
-        if (!stillHas && p.status !== "pending") continue;
+        const expired = p.expiresAt && new Date(p.expiresAt).getTime() < Date.now();
+
+        // 기간이 지난 기간제는 정상 만료 — 목록에서 뺀다
+        if (expired || p.status === "expired") continue;
+
+        // 아직 유효한데 디스코드에 역할이 없다 = 지급 실패·수동 회수 같은 이상 상태.
+        // 산 물건을 조용히 지우면 안 되므로 '역할 없음'으로 드러낸다.
+        if (held !== null && p.status === "completed" && !held.has(p.roleId)) {
+          status = "missing";
+        }
       }
-      if (!isRole && p.status === "cancelled") continue;
 
       owned.push({
         kind: isRole ? "role" : "physical",
         name: p.itemName || item?.name || "상품",
         imageUrl: item?.imageUrl || "",
-        status: p.status,                       // pending | completed | expired
+        status,
         days: p.days || 0,
         expiresAt: p.expiresAt || null,
         acquiredAt: p.processedAt || p.createdAt,
@@ -97,17 +106,22 @@ export async function GET() {
         if (seenRoles.has(roleId)) continue;
         const item = itemByRole.get(roleId);
         const cfg = roleConfigs.find((r) => r.roleId === roleId);
-        if (!item && !cfg) continue; // 사이트가 관리하지 않는 역할은 보여주지 않는다
+        const inv = invRoles.find((r) => r.roleId === roleId);
+        // 사이트가 관리하는 역할만 보여준다 (상품·레벨 보상·인벤토리 등록)
+        if (!item && !cfg && !inv) continue;
         owned.push({
           kind: "role",
-          name: item?.name || cfg?.roleName || "역할",
+          name: inv?.label || item?.name || inv?.roleName || cfg?.roleName || "역할",
           imageUrl: item?.imageUrl || "",
           status: "completed",
           days: 0,
           expiresAt: null,
           acquiredAt: null,
-          source: cfg?.rewardLevel != null ? "level" : "grant",
+          source: inv ? "inventory" : cfg?.rewardLevel != null ? "level" : "grant",
           rewardLevel: cfg?.rewardLevel ?? null,
+          category: inv?.category || null,
+          description: inv?.description || "",
+          color: inv?.color || "",
         });
       }
     }

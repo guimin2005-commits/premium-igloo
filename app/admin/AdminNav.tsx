@@ -44,6 +44,7 @@ const NAV_GROUPS: NavGroup[] = [
           { title: "채널·카테고리", href: "/admin/bot?tab=channels" },
           { title: "기간제 부스트", href: "/admin/bot?tab=boosts" },
           { title: "퀘스트", href: "/admin/bot?tab=quests" },
+          { title: "인벤토리 역할", href: "/admin/bot?tab=inventory" },
           { title: "XP 수동 지급", href: "/admin/bot?tab=grant" },
           { title: "리더보드", href: "/admin/bot?tab=leaderboard" },
           { title: "XP 로그", href: "/admin/bot?tab=logs" },

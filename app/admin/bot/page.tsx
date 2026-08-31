@@ -13,12 +13,14 @@ const CHANNEL_TYPE_LABEL: Record<string, string> = { text: "텍스트", voice: "
 const CHANNEL_TYPE_ICON: Record<string, string> = { text: "#", voice: "🔊", category: "📁" };
 const REASON_LABEL: Record<string, string> = { chat: "채팅", voice: "음성", attend: "출석" };
 const PERIOD_LABEL: Record<string, string> = { daily: "일일", weekly: "주간", monthly: "월간" };
+const INV_CATEGORY: Record<string, string> = { perk: "특전", title: "칭호", notify: "알림", etc: "기타" };
 
 const TAB_META: Record<string, { title: string; desc: string }> = {
   settings: { title: "기본 정책", desc: "지급량·쿨타임·음소거·퇴장 처리 등 봇의 기본 XP 규칙을 설정합니다." },
   roles: { title: "역할 설정", desc: "레벨 보상 역할과 역할별 Boost 효과를 관리합니다." },
   channels: { title: "채널 · 카테고리", desc: "채널별 XP Boost와 지급 제외를 관리합니다." },
   boosts: { title: "기간제 부스트", desc: "대상·XP·기간을 지정한 한시적 부스트를 운영합니다." },
+  inventory: { title: "인벤토리 역할", desc: "디스코드 역할을 보유 아이템으로 등록합니다. 등록된 역할을 가진 멤버의 대시보드 인벤토리에 표시됩니다." },
   quests: { title: "퀘스트", desc: "일일·주간·월간 퀘스트를 관리합니다. 진행도는 봇의 XP 지급 로그로 자동 판정되며, 주기마다 초기화됩니다." },
   grant: { title: "XP 수동 지급", desc: "특정 유저나 전원에게 XP를 지급·제거하거나, 보유 XP를 초기화합니다." },
   leaderboard: { title: "리더보드", desc: "누적·월간 XP 랭킹을 확인합니다." },
@@ -47,7 +49,7 @@ export default function AdminBotPage() {
   const tab = TAB_META[tabParam] ? tabParam : "settings";
 
   const [popup, setPopup] = useState({ isOpen: false, message: "", isError: false });
-  const [deleteConfirm, setDeleteConfirm] = useState<{ kind: "role" | "channel" | "boost" | "quest"; id: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ kind: "role" | "channel" | "boost" | "quest" | "inventory"; id: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // 공통 데이터
@@ -69,6 +71,9 @@ export default function AdminBotPage() {
   const saved = () => notify("저장되었습니다. 봇에는 1분 이내 자동 반영됩니다.");
 
   const [quests, setQuests] = useState<any[]>([]);
+  const [invRoles, setInvRoles] = useState<any[]>([]);
+  const emptyInv = { id: "", roleId: "", label: "", category: "perk", description: "", sortOrder: 0, visible: true };
+  const [invForm, setInvForm] = useState<any>(emptyInv);
   const emptyQuest = { id: "", name: "", desc: "", period: "daily", reason: "chat", metric: "count", target: 1, rewardXp: 0, enabled: true, order: 0 };
   const [questForm, setQuestForm] = useState<any>(emptyQuest);
 
@@ -82,7 +87,8 @@ export default function AdminBotPage() {
       fetch("/api/bot-settings", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: null })),
       fetch("/api/xp-boost", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/daily-quest", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-    ]).then(([cfg, roles, chCfg, channels, st, bst, qst]) => {
+      fetch("/api/inventory-role", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+    ]).then(([cfg, roles, chCfg, channels, st, bst, qst, inv]) => {
       setConfigs(Array.isArray(cfg?.data) ? cfg.data : []);
       setGuildRoles(Array.isArray(roles?.data) ? roles.data : []);
       setChannelConfigs(Array.isArray(chCfg?.data) ? chCfg.data : []);
@@ -90,6 +96,7 @@ export default function AdminBotPage() {
       if (st?.data) setSettings(st.data);
       setBoosts(Array.isArray(bst?.data) ? bst.data : []);
       setQuests(Array.isArray(qst?.data) ? qst.data : []);
+      setInvRoles(Array.isArray(inv?.data) ? inv.data : []);
     }).finally(() => setIsLoading(false));
   }, []);
 
@@ -284,6 +291,18 @@ export default function AdminBotPage() {
     else notify(d?.message || "저장에 실패했습니다.", true);
   };
 
+  // ── 인벤토리 역할 ───────────────────────────
+  const saveInvRole = async () => {
+    if (!invForm.roleId) return notify("역할을 선택해 주세요.", true);
+    const res = await fetch("/api/inventory-role", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...invForm, roleName: guildRoles.find((r: any) => r.id === invForm.roleId)?.name || "" }),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    if (d?.success) { setInvForm(emptyInv); fetchCore(); notify("저장되었습니다. 유저 인벤토리에 바로 반영됩니다."); }
+    else notify(d?.error || "저장에 실패했습니다.", true);
+  };
+
   // ── 일일 퀘스트 ─────────────────────────────
   const saveQuest = async () => {
     if (!questForm.name.trim()) return notify("퀘스트 이름을 입력해 주세요.", true);
@@ -302,7 +321,7 @@ export default function AdminBotPage() {
 
   const executeDelete = async () => {
     if (!deleteConfirm) return;
-    const api = { role: "/api/role-config", channel: "/api/channel-config", boost: "/api/xp-boost", quest: "/api/daily-quest" }[deleteConfirm.kind];
+    const api = { role: "/api/role-config", channel: "/api/channel-config", boost: "/api/xp-boost", quest: "/api/daily-quest", inventory: "/api/inventory-role" }[deleteConfirm.kind];
     const res = await fetch(`${api}?id=${deleteConfirm.id}`, { method: "DELETE" }).catch(() => null);
     if (res?.ok) fetchCore();
     setDeleteConfirm(null);
@@ -899,6 +918,171 @@ export default function AdminBotPage() {
 
         {/* ═══ 리더보드 ═══ */}
         {/* ═══ XP 수동 지급 ═══ */}
+        {tab === "inventory" && (
+          <>
+            <Reveal>
+              <section className="mb-16">
+                <SectionHead no="01" title={invForm.id ? "인벤토리 역할 수정" : "인벤토리 역할 등록"} />
+                <div className="p-5 md:p-6 rounded-xl border border-black/10 bg-black/[0.02] mb-6">
+                  <p className="text-xs text-[#5a5a5a] leading-relaxed break-keep">
+                    디스코드 역할을 <b className="text-[#131313]">보유 아이템</b>으로 등록합니다. 등록한 역할을 가진 멤버는
+                    자기 대시보드의 인벤토리에서 그 역할을 보게 됩니다.
+                    상점 상품이나 레벨 보상으로 주는 역할은 이미 자동으로 잡히므로, 여기에는
+                    <b className="text-[#131313]"> 디스코드에서만 주던 역할</b>(칭호·알림 구독·특전 권한 등)을 넣으면 됩니다.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+                  <div className="md:col-span-2">
+                    <label className={labelClass}>디스코드 역할 <span className="text-[#e91e3f]">*</span></label>
+                    <select
+                      value={invForm.roleId}
+                      onChange={(e) => setInvForm({ ...invForm, roleId: e.target.value })}
+                      className={inputClass}
+                    >
+                      <option value="">— 역할 선택 —</option>
+                      {guildRoles.map((r: any) => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>인벤토리 표시 이름</label>
+                    <input
+                      value={invForm.label}
+                      onChange={(e) => setInvForm({ ...invForm, label: e.target.value })}
+                      placeholder="비우면 디스코드 역할 이름 그대로"
+                      maxLength={40}
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>분류</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { v: "perk", l: "특전" },
+                        { v: "title", l: "칭호" },
+                        { v: "notify", l: "알림" },
+                        { v: "etc", l: "기타" },
+                      ].map((o) => (
+                        <button
+                          key={o.v}
+                          type="button"
+                          onClick={() => setInvForm({ ...invForm, category: o.v })}
+                          className={`py-2.5 rounded-lg text-xs font-bold border transition-all outline-none focus:outline-none ${
+                            invForm.category === o.v
+                              ? "bg-[#e91e3f] border-[#e91e3f] text-white"
+                              : "bg-transparent border-black/10 text-[#5a5a5a] hover:border-black/30 hover:text-[#131313]"
+                          }`}
+                        >
+                          {o.l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className={labelClass}>설명 (선택)</label>
+                    <input
+                      value={invForm.description}
+                      onChange={(e) => setInvForm({ ...invForm, description: e.target.value })}
+                      placeholder="예: 상품 소식 알림을 받습니다"
+                      maxLength={120}
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>표시 순서</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={invForm.sortOrder}
+                      onChange={(e) => setInvForm({ ...invForm, sortOrder: e.target.value })}
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={() => setInvForm({ ...invForm, visible: !invForm.visible })}
+                      className={`w-full py-3.5 rounded-lg text-sm font-bold border transition-all outline-none focus:outline-none ${
+                        invForm.visible
+                          ? "bg-[#e91e3f] border-[#e91e3f] text-white"
+                          : "bg-transparent border-black/10 text-[#5a5a5a] hover:border-black/30"
+                      }`}
+                    >
+                      {invForm.visible ? "표시함" : "숨김"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 mt-8">
+                  <button onClick={saveInvRole} className={primaryBtn}>{invForm.id ? "수정 저장" : "등록"}</button>
+                  {invForm.id && (
+                    <button
+                      onClick={() => setInvForm(emptyInv)}
+                      className="px-6 py-3.5 border border-black/10 text-[#5a5a5a] hover:text-[#131313] hover:border-black/30 text-sm font-bold rounded-lg transition-all outline-none focus:outline-none"
+                    >
+                      취소
+                    </button>
+                  )}
+                </div>
+              </section>
+            </Reveal>
+
+            <Reveal>
+              <section>
+                <SectionHead no="02" title={`등록된 인벤토리 역할 (${invRoles.length})`} />
+                {invRoles.length === 0 ? (
+                  <p className="py-14 text-center text-sm text-[#8a8a8a]">아직 등록된 역할이 없습니다.</p>
+                ) : (
+                  <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
+                    {invRoles.map((r: any) => (
+                      <div key={r._id} className="py-4 flex items-center gap-4">
+                        <span className="shrink-0 w-8 text-center text-xs font-black text-[#a3a3a3] tabular-nums">{r.sortOrder}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={`text-sm font-bold ${r.visible ? "text-[#131313]" : "text-[#a3a3a3] line-through"}`}>{r.label || r.roleName}</p>
+                            <span className="text-[10px] font-black text-[#e91e3f] border border-[#e91e3f]/30 rounded-full px-2 py-0.5">
+                              {INV_CATEGORY[r.category] || "기타"}
+                            </span>
+                            {!r.visible && <span className="text-[10px] font-black text-[#a3a3a3] border border-black/10 rounded-full px-2 py-0.5">숨김</span>}
+                          </div>
+                          <p className="text-[11px] text-[#8a8a8a] mt-1">
+                            {r.roleName}
+                            {r.description ? ` · ${r.description}` : ""}
+                          </p>
+                        </div>
+                        <div className="shrink-0 flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setInvForm({ id: r._id, roleId: r.roleId, label: r.label || "", category: r.category || "perk", description: r.description || "", sortOrder: r.sortOrder ?? 0, visible: r.visible !== false });
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
+                          >
+                            수정
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirm({ kind: "inventory", id: r._id })}
+                            className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </Reveal>
+          </>
+        )}
+
         {tab === "quests" && (
           <>
             <Reveal>
