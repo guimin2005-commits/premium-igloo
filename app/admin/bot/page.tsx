@@ -5,6 +5,7 @@ import { useSession, signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Reveal, LuxStyles } from "../../components/Lux";
 import Dropdown from "../../components/Dropdown";
+import { VOICE_TIERS } from "@/lib/voiceTiers";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -183,9 +184,43 @@ export default function AdminBotPage() {
   // 초기화 — 보유 XP·레벨을 0으로 되돌린다
   const [confirmReset, setConfirmReset] = useState<string | null>(null);
 
-  const [roleForm, setRoleForm] = useState({ roleId: "", rewardLevel: "", buffXp: "", attendBuffXp: "" });
+  const [roleForm, setRoleForm] = useState<any>({ roleId: "", rewardLevel: "", buffXp: "", attendBuffXp: "", exclusive: false });
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
   const selectedRole = guildRoles.find((r) => r.id === roleForm.roleId);
+
+  // ── 음성 티어 역할 일괄 등록 ──────────────────
+  const [tierMap, setTierMap] = useState<Record<string, string>>({});
+  const [tierSaving, setTierSaving] = useState(false);
+
+  const saveTierRoles = async () => {
+    const picked = VOICE_TIERS.filter((t: any) => tierMap[t.key]);
+    if (!picked.length) return notify("연결할 역할을 하나 이상 선택해 주세요.", true);
+    // 같은 역할을 두 티어에 붙이면 지급·회수가 서로 싸운다
+    const ids = picked.map((t: any) => tierMap[t.key]);
+    if (new Set(ids).size !== ids.length) return notify("같은 역할을 여러 티어에 연결할 수 없습니다.", true);
+
+    setTierSaving(true);
+    let ok = 0;
+    for (const t of picked as any[]) {
+      const roleId = tierMap[t.key];
+      const res = await fetch("/api/role-config", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roleId,
+          roleName: guildRoles.find((r: any) => r.id === roleId)?.name || t.name,
+          rewardLevel: t.min,
+          buffXp: 0,
+          attendBuffXp: 0,
+          exclusive: true, // 티어 사다리 — 최상위 하나만 유지된다
+        }),
+      }).catch(() => null);
+      if (res?.ok) ok++;
+    }
+    setTierSaving(false);
+    fetchCore();
+    if (ok === picked.length) notify(`티어 역할 ${ok}개를 연결했습니다. 봇에는 1분 이내 반영됩니다.`);
+    else notify(`${ok}/${picked.length}개만 저장되었습니다.`, true);
+  };
 
   const saveRole = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,9 +231,10 @@ export default function AdminBotPage() {
         roleId: roleForm.roleId, roleName: selectedRole?.name || "",
         rewardLevel: roleForm.rewardLevel === "" ? null : Number(roleForm.rewardLevel),
         buffXp: Number(roleForm.buffXp) || 0, attendBuffXp: Number(roleForm.attendBuffXp) || 0,
+        exclusive: !!roleForm.exclusive,
       }),
     }).catch(() => null);
-    if (res?.ok) { setRoleForm({ roleId: "", rewardLevel: "", buffXp: "", attendBuffXp: "" }); fetchCore(); saved(); }
+    if (res?.ok) { setRoleForm({ roleId: "", rewardLevel: "", buffXp: "", attendBuffXp: "", exclusive: false }); fetchCore(); saved(); }
     else notify("저장에 실패했습니다.", true);
   };
 
@@ -504,8 +540,53 @@ export default function AdminBotPage() {
         {tab === "roles" && (
           <>
             <Reveal>
+              <section className="mb-16">
+                <SectionHead no="01" title="음성 티어 역할 일괄 연결" />
+                <div className="p-5 md:p-6 rounded-xl border border-white/10 bg-white/[0.02] mb-6">
+                  <p className="text-xs text-gray-400 leading-relaxed break-keep">
+                    디스코드에서 만든 역할을 8개 티어에 연결합니다. 지급 레벨은 자동으로 채워지고,
+                    <b className="text-white"> 배타 모드</b>로 저장되어 승급하면 아래 티어 역할이 자동 회수됩니다.
+                    역할에 <b className="text-white">&ldquo;따로 표시(hoist)&rdquo;</b>를 켜두면 멤버 목록 오른쪽이 티어별로 묶입니다.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {(VOICE_TIERS as any[]).map((t) => (
+                    <div key={t.key} className="flex items-center gap-3 py-2">
+                      <span aria-hidden className="shrink-0 w-2.5 h-2.5 rotate-45" style={{ backgroundColor: t.c }}></span>
+                      <span className="shrink-0 w-24 text-sm font-bold" style={{ color: t.c }}>{t.name}</span>
+                      <span className="shrink-0 w-16 text-[11px] font-black text-gray-500 tabular-nums">Lv.{t.min}+</span>
+                      <select
+                        value={tierMap[t.key] || ""}
+                        onChange={(e) => setTierMap({ ...tierMap, [t.key]: e.target.value })}
+                        className="flex-1 min-w-0 bg-transparent border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white outline-none focus:border-[#e91e3f] transition-colors"
+                      >
+                        <option value="" className="bg-[#141414]">— 역할 선택 —</option>
+                        {guildRoles.map((r: any) => (
+                          <option key={r.id} value={r.id} className="bg-[#141414]">{r.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-3 mt-7">
+                  <button onClick={saveTierRoles} disabled={tierSaving} className={primaryBtn}>
+                    {tierSaving ? "연결 중…" : "티어 역할 연결"}
+                  </button>
+                  <button
+                    onClick={() => setTierMap({})}
+                    className="px-6 py-3.5 border border-white/10 text-gray-400 hover:text-white hover:border-white/30 text-sm font-bold rounded-lg transition-all outline-none focus:outline-none"
+                  >
+                    선택 초기화
+                  </button>
+                </div>
+              </section>
+            </Reveal>
+
+            <Reveal>
             <section>
-              <SectionHead no="01" title="역할 추가 / 수정" />
+              <SectionHead no="02" title="역할 추가 / 수정" />
               <form onSubmit={saveRole}>
                 <div className={`mb-4 relative ${isRoleDropdownOpen ? "z-50" : ""}`}>
                   <label className={labelClass}>디스코드 역할 <span className="text-[#e91e3f]">*</span></label>

@@ -19,11 +19,26 @@ function sendNotice(guild, channelId, text) {
   channel.send({ embeds: [embed] }).catch(() => {});
 }
 
+// 배타 역할(티어) 중 지금 레벨에서 유지해야 할 최상위 하나를 고른다.
+//    없으면 null — 아직 어떤 티어에도 도달하지 못한 경우다.
+function topExclusive(level) {
+  let best = null;
+  for (const cfg of getRoleConfigs()) {
+    if (!cfg.exclusive || cfg.rewardLevel == null) continue;
+    if (level >= cfg.rewardLevel && (best === null || cfg.rewardLevel > best.rewardLevel)) best = cfg;
+  }
+  return best;
+}
+
 // 도달한 레벨 이하의 보상 역할 중 미보유분 지급 + 알림
+//    배타 역할은 최상위 하나만 지급한다 (하위 티어는 아래 revoke가 거둬간다)
 async function grantRewardRoles(member, level) {
   const s = getSettings();
+  const top = topExclusive(level);
 
   for (const cfg of getRoleConfigs()) {
+    // 배타 역할인데 최상위가 아니면 지급하지 않는다
+    if (cfg.exclusive && (!top || cfg.roleId !== top.roleId)) continue;
     if (cfg.rewardLevel != null && level >= cfg.rewardLevel && !member.roles.cache.has(cfg.roleId)) {
       try {
         await member.roles.add(cfg.roleId, `레벨 ${cfg.rewardLevel} 도달 보상`);
@@ -45,13 +60,19 @@ async function grantRewardRoles(member, level) {
   }
 }
 
-// 지금 레벨보다 높은 보상 역할을 회수한다
-//    ARCTIC 구매로 XP를 쓰거나 관리자가 초기화해서 레벨이 내려간 경우에 쓰인다
+// 들고 있으면 안 되는 보상 역할을 회수한다
+//    ① 레벨이 내려가 지급 기준에 못 미치는 역할 (ARCTIC 구매·관리자 초기화 등)
+//    ② 배타 역할(티어) 중 최상위가 아닌 하위 티어 — 승급하면 아래 티어는 떨어져 나간다
 export async function revokeRewardRoles(member, level) {
+  const top = topExclusive(level);
+
   for (const cfg of getRoleConfigs()) {
-    if (cfg.rewardLevel != null && level < cfg.rewardLevel && member.roles.cache.has(cfg.roleId)) {
+    if (cfg.rewardLevel == null || !member.roles.cache.has(cfg.roleId)) continue;
+    const belowThreshold = level < cfg.rewardLevel;
+    const staleTier = cfg.exclusive && (!top || cfg.roleId !== top.roleId);
+    if (belowThreshold || staleTier) {
       try {
-        await member.roles.remove(cfg.roleId, `레벨 ${cfg.rewardLevel} 미만으로 하락`);
+        await member.roles.remove(cfg.roleId, staleTier ? `상위 티어 승급 (Lv.${level})` : `레벨 ${cfg.rewardLevel} 미만으로 하락`);
         console.log(`🧹 ${member.displayName} → ${cfg.roleName || cfg.roleId} 회수 (Lv.${level})`);
       } catch (e) {
         console.error(`역할 회수 실패 (${cfg.roleName || cfg.roleId}):`, e.message);

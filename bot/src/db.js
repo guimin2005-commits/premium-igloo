@@ -21,6 +21,7 @@ const RoleConfigSchema = new mongoose.Schema({
   roleId: { type: String, required: true, unique: true },
   roleName: { type: String, default: "" },
   rewardLevel: { type: Number, default: null }, // 이 레벨 도달 시 자동 지급
+  exclusive: { type: Boolean, default: false },  // 티어 사다리 — 최상위 하나만 유지
   buffXp: { type: Number, default: 0 },         // 채팅/음성 1회당 추가 XP
   attendBuffXp: { type: Number, default: 0 },   // 출석 1회당 추가 XP
   createdAt: { type: Date, default: Date.now },

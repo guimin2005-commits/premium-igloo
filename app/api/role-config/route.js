@@ -43,6 +43,7 @@ export async function POST(request) {
         rewardLevel: body.rewardLevel === "" || body.rewardLevel == null ? null : Number(body.rewardLevel),
         buffXp: Number(body.buffXp) || 0,
         attendBuffXp: Number(body.attendBuffXp) || 0,
+        exclusive: !!body.exclusive,
       },
       { upsert: true, new: true }
     );
