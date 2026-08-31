@@ -271,6 +271,120 @@ const LevelCurve = ({ myLevel = null }) => {
   );
 };
 
+// 📌 등급 안내 모달 — 잉크 패널 위에 등급 사다리를 세운다.
+//    현재 등급은 좌측 레일과 은은한 글로우로 표시하고, 나머지는 조용히 둔다.
+const TierModal = ({ open, onClose, level, baseXp }) => {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [open, onClose]);
+
+  if (!open) return null;
+  const curIdx = getTierIndex(level || 0);
+
+  return (
+    <div
+      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
+      style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full sm:max-w-lg max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-[#131313] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
+        style={{ animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
+      >
+        <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
+        <div
+          aria-hidden
+          className="absolute -top-24 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none"
+          style={{ background: `${VOICE_TIERS[curIdx].c}30` }}
+        ></div>
+
+        {/* 헤더 */}
+        <div className="relative z-10 shrink-0 px-6 sm:px-8 pt-7 pb-5 border-b border-white/[0.08]">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[9px] font-black tracking-[0.35em] text-white/35 uppercase mb-2">Rank Ladder</p>
+              <h3 className="text-2xl font-black text-white tracking-tight">등급 안내</h3>
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="닫기"
+              className="shrink-0 w-9 h-9 rounded-full border border-white/12 text-white/50 hover:text-white hover:border-white/30 transition-colors flex items-center justify-center outline-none focus:outline-none"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" /></svg>
+            </button>
+          </div>
+          <p className="text-[12px] text-white/45 leading-relaxed mt-3 break-keep">
+            레벨이 오르면 등급이 함께 올라가고, 음성 채널 5분당 받는 XP가 늘어납니다.
+            등급은 10단계이며 최고 등급은 이글루입니다.
+          </p>
+        </div>
+
+        {/* 등급 사다리 */}
+        <div className="relative z-10 flex-1 min-h-0 overflow-y-auto px-6 sm:px-8 py-5">
+          {VOICE_TIERS.map((t, i) => {
+            const cur = i === curIdx;
+            const passed = i < curIdx;
+            return (
+              <div
+                key={t.key}
+                className={`relative flex items-center gap-4 py-3.5 border-b border-white/[0.06] last:border-0 transition-opacity ${passed ? "opacity-45" : ""}`}
+              >
+                {cur && (
+                  <span
+                    aria-hidden
+                    className="absolute -left-6 sm:-left-8 top-0 bottom-0 w-[3px]"
+                    style={{ backgroundColor: t.c }}
+                  ></span>
+                )}
+                <span
+                  aria-hidden
+                  className="shrink-0 w-9 h-9 rounded-xl rotate-45 flex items-center justify-center"
+                  style={{ backgroundColor: `${t.c}1f`, border: `1.5px solid ${cur ? t.c : t.c + "55"}` }}
+                >
+                  <span className="-rotate-45 text-[11px] font-black tabular-nums" style={{ color: t.c }}>{i + 1}</span>
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2">
+                    <span className="text-[15px] font-black tracking-tight" style={{ color: t.c }}>{t.name}</span>
+                    {cur && (
+                      <span className="inline-flex items-center h-5 px-2 rounded-full text-[9px] font-black tracking-[0.12em] uppercase text-white" style={{ backgroundColor: t.c }}>
+                        현재
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[10px] font-black tracking-[0.16em] text-white/35 uppercase tabular-nums mt-1">
+                    {t.en} · {tierRangeLabel(i)}
+                  </p>
+                </div>
+
+                <div className="shrink-0 text-right">
+                  <p className="text-[15px] font-black text-white tabular-nums leading-none">+{(baseXp + t.bonus).toLocaleString()}</p>
+                  <p className="text-[10px] font-bold text-white/35 mt-1">XP / 5분</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 푸터 */}
+        <div className="relative z-10 shrink-0 px-6 sm:px-8 py-4 border-t border-white/[0.08] bg-white/[0.02]">
+          <p className="text-[11px] text-white/35 leading-relaxed break-keep">
+            표시 금액은 현재 기본 음성 XP({baseXp.toLocaleString()})에 등급 보너스를 더한 값입니다.
+            역할·채널 부스트가 있으면 더 받습니다.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // 📌 음성 티어 계단 — 표 대신 '티어가 오를수록 쌓이는 계단'으로 지급량을 보여준다
 const TierStairs = ({ base = 3000 }) => {
   const vals = VOICE_TIERS.map((t) => base + t.bonus);
@@ -310,7 +424,7 @@ const TierStairs = ({ base = 3000 }) => {
         ))}
       </div>
       <p className="text-[10px] text-[#c4c4c4] mt-3.5 break-keep">
-        레벨이 오르면 음성 티어가 올라가고, 음성 채널 5분당 지급량이 함께 늘어납니다 · 700 레벨부터는 최고 티어 이글루
+        레벨이 오르면 등급이 올라가고, 음성 채널 5분당 지급량이 함께 늘어납니다 · 700 레벨부터는 최고 티어 이글루
       </p>
     </div>
   );
@@ -348,6 +462,7 @@ export default function LevelPage() {
   // 퀘스트 — 30초 폴링에 함께 실려 진행도가 실시간으로 찬다
   const [quests, setQuests] = useState(null);
   const [questPeriod, setQuestPeriod] = useState("daily");
+  const [tierOpen, setTierOpen] = useState(false);   // 등급 안내 모달
   const [claiming, setClaiming] = useState("");
 
   const loadMe = useCallback(async () => {
@@ -685,6 +800,10 @@ export default function LevelPage() {
           -webkit-text-fill-color: transparent;
           animation: shimmer 6s linear infinite;
         }
+        @keyframes tierIn {
+          from { opacity: 0; transform: translateY(16px) scale(0.985); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
         .lux-grid-bg-dark {
           background-image: linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
                             linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
@@ -700,6 +819,8 @@ export default function LevelPage() {
           -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 100%);
         }
       `}} />
+
+      <TierModal open={tierOpen} onClose={() => setTierOpen(false)} level={me?.level || 0} baseXp={P.voiceXp} />
 
       {/* ── 공통 헤더 — 모든 탭 동일 프레임 ── */}
       <div className="relative w-full px-5 md:px-8 pt-10 md:pt-12 pb-6">
@@ -908,6 +1029,16 @@ export default function LevelPage() {
                       </div>
 
                       <div className="mt-8 md:mt-0 md:text-right shrink-0 md:pl-10">
+                        {/* 등급 — 레벨과 함께 이 화면의 주인공. 누르면 등급 사다리를 편다 */}
+                        <button
+                          onClick={() => setTierOpen(true)}
+                          className="group inline-flex items-center gap-2 h-8 pl-2.5 pr-3 rounded-full border transition-colors mb-3.5 outline-none focus:outline-none"
+                          style={{ borderColor: `${tierCur.c}66`, backgroundColor: `${tierCur.c}1f` }}
+                        >
+                          <span aria-hidden className="w-2 h-2 rotate-45 shrink-0" style={{ backgroundColor: tierCur.c }}></span>
+                          <span className="text-[12px] font-black tracking-tight" style={{ color: tierCur.c }}>{tierCur.name}</span>
+                          <span className="text-[10px] font-bold text-white/35 group-hover:text-white/70 transition-colors">등급 안내</span>
+                        </button>
                         <p className="text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-1">Level</p>
                         <p className="text-7xl md:text-8xl font-black text-white tabular-nums tracking-tighter leading-[0.85]" style={{ textShadow: "0 0 50px rgba(233,30,63,0.55)" }}>{me.level}</p>
                       </div>
@@ -932,14 +1063,13 @@ export default function LevelPage() {
                     </div>
 
                     {/* 배너 하단 스탯 스트립 — 세로 구분선으로 계기판 느낌 */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 border-t border-white/10 mt-8 pt-6 md:divide-x md:divide-white/10">
+                    <div className="grid grid-cols-2 md:grid-cols-3 border-t border-white/10 mt-8 pt-6 md:divide-x md:divide-white/10">
                       {[
                         { l: "누적 XP", v: (me.xp || 0).toLocaleString(), s: "TOTAL" },
                         { l: "오늘 획득", v: `+${todayTotal.toLocaleString()}`, s: "TODAY", hot: todayTotal > 0 },
                         { l: "누적 출석", v: `${(me.attendCount || 0).toLocaleString()}일`, s: "STREAK" },
-                        { l: `${tierCur.name} · +${tierCurXp.toLocaleString()}`, v: tierCur.en, s: "VOICE TIER", tint: tierCur.c },
                       ].map((st, i) => (
-                        <div key={i} className={`px-0 md:px-6 ${i < 2 ? "pb-5 md:pb-0" : ""} ${i % 2 === 1 ? "text-right md:text-left" : ""} ${i === 0 ? "md:pl-0" : ""}`}>
+                        <div key={i} className={`px-0 md:px-6 ${i === 0 ? "md:pl-0" : ""} ${i === 2 ? "col-span-2 md:col-span-1 pt-5 md:pt-0 border-t md:border-t-0 border-white/10" : ""}`}>
                           <p className="text-[9px] font-black tracking-[0.28em] text-white/30 uppercase mb-2">{st.s}</p>
                           <p
                             className={`text-xl md:text-2xl font-black tabular-nums tracking-tight leading-none ${st.hot ? "text-[#ff5c77]" : "text-white"}`}
@@ -1216,9 +1346,14 @@ export default function LevelPage() {
                       <div className="flex items-end justify-between mb-5">
                         <div>
                           <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Tier</span>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">음성 티어</h3>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">등급</h3>
                         </div>
-                        {!tierNext && <StatusChip accent>최고 티어</StatusChip>}
+                        <button
+                          onClick={() => setTierOpen(true)}
+                          className="shrink-0 text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors border border-black/10 hover:border-black/25 rounded-full px-3 py-1 outline-none focus:outline-none"
+                        >
+                          등급 안내
+                        </button>
                       </div>
 
                       {/* 현재 티어 — 이름을 앞세운 배지 */}
@@ -1372,8 +1507,8 @@ export default function LevelPage() {
             <Reveal>
               <SectionHeader
                 en="Tier"
-                title="음성 티어"
-                desc="레벨이 오르면 음성 티어가 함께 오르고, 음성 채널 5분당 받는 XP가 늘어납니다. 8단계이며 최고 티어는 이글루입니다."
+                title="등급"
+                desc="레벨이 오르면 등급이 함께 오르고, 음성 채널 5분당 받는 XP가 늘어납니다. 10단계이며 최고 등급은 이글루입니다."
               />
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {VOICE_TIERS.map((t, i) => (
@@ -1591,7 +1726,7 @@ export default function LevelPage() {
             </Reveal>
 
             <Reveal>
-              <SectionHeader en="Tier" title="음성 티어별 지급량" desc="음성/내전 채널 이용 시 레벨 구간에 따른 추가 XP — 레벨이 오를수록 계단처럼 쌓입니다" />
+              <SectionHeader en="Tier" title="등급별 지급량" desc="음성/내전 채널 이용 시 레벨 구간에 따른 추가 XP — 레벨이 오를수록 계단처럼 쌓입니다" />
 
               {/* 📌 계단 차트 — 표 15줄 대신 '성장의 계단'을 그대로 시각화 */}
               <TierStairs base={P.voiceXp} />
@@ -1617,7 +1752,7 @@ export default function LevelPage() {
                     { l: "550 ~ 599 Lv", x: "+4,600", d: "▲ 200", c: "text-[#e91e3f]" },
                     { l: "600 ~ 649 Lv", x: "+4,800", d: "▲ 200", c: "text-[#e91e3f]" },
                     { l: "649 ~ 699 Lv", x: "+5,000", d: "▲ 200", c: "text-[#e91e3f]" },
-                    { l: "700 Lv 이상 최고 구간", x: "+6,000", d: "▲ 1,000", c: "text-[#e91e3f]" },
+                    { l: "700 Lv 이상 최고 등급", x: "+6,000", d: "▲ 1,000", c: "text-[#e91e3f]" },
                   ].map((row, i) => (
                     <div key={i} className="grid grid-cols-3 px-1 py-3 text-xs items-center hover:bg-black/[0.02] transition-colors group">
                       <div className="text-[#4b4b4b] text-left font-medium">{row.l}</div>
