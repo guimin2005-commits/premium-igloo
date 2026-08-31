@@ -5,6 +5,8 @@ import mongoose from "mongoose";
 //    별도 추적 컬렉션을 만들지 않으므로, 봇이 기록하는 활동만 퀘스트 대상이 될 수 있다.
 const DailyQuestSchema = new mongoose.Schema({
   name: { type: String, required: true },              // "첫 대화"
+  // 주기 — daily(매일) / weekly(매주 월요일) / monthly(매월 1일) 초기화
+  period: { type: String, default: "daily", enum: ["daily", "weekly", "monthly"] },
   desc: { type: String, default: "" },                 // 유저에게 보여줄 한 줄 설명
   // 무엇을 세는가 — XpLog.reason 과 1:1. "any"는 사유 무관 전체.
   reason: { type: String, default: "chat", enum: ["chat", "voice", "attend", "any"] },

@@ -11,13 +11,14 @@ const ADMIN_USERS = ["elahw.06"];
 const CHANNEL_TYPE_LABEL: Record<string, string> = { text: "텍스트", voice: "음성", category: "카테고리" };
 const CHANNEL_TYPE_ICON: Record<string, string> = { text: "#", voice: "🔊", category: "📁" };
 const REASON_LABEL: Record<string, string> = { chat: "채팅", voice: "음성", attend: "출석" };
+const PERIOD_LABEL: Record<string, string> = { daily: "일일", weekly: "주간", monthly: "월간" };
 
 const TAB_META: Record<string, { title: string; desc: string }> = {
   settings: { title: "기본 정책", desc: "지급량·쿨타임·음소거·퇴장 처리 등 봇의 기본 XP 규칙을 설정합니다." },
   roles: { title: "역할 설정", desc: "레벨 보상 역할과 역할별 Boost 효과를 관리합니다." },
   channels: { title: "채널 · 카테고리", desc: "채널별 XP Boost와 지급 제외를 관리합니다." },
   boosts: { title: "기간제 부스트", desc: "대상·XP·기간을 지정한 한시적 부스트를 운영합니다." },
-  quests: { title: "일일 퀘스트", desc: "유저가 하루 동안 달성하고 보상을 받는 퀘스트를 관리합니다. 진행도는 봇의 XP 지급 로그로 자동 판정됩니다." },
+  quests: { title: "퀘스트", desc: "일일·주간·월간 퀘스트를 관리합니다. 진행도는 봇의 XP 지급 로그로 자동 판정되며, 주기마다 초기화됩니다." },
   grant: { title: "XP 수동 지급", desc: "특정 유저나 전원에게 XP를 지급·제거하거나, 보유 XP를 초기화합니다." },
   leaderboard: { title: "리더보드", desc: "누적·월간 XP 랭킹을 확인합니다." },
   logs: { title: "XP 로그", desc: "봇이 지급한 XP 내역을 조회합니다. (최근 60일 보관)" },
@@ -67,7 +68,7 @@ export default function AdminBotPage() {
   const saved = () => notify("저장되었습니다. 봇에는 1분 이내 자동 반영됩니다.");
 
   const [quests, setQuests] = useState<any[]>([]);
-  const emptyQuest = { id: "", name: "", desc: "", reason: "chat", metric: "count", target: 1, rewardXp: 0, enabled: true, order: 0 };
+  const emptyQuest = { id: "", name: "", desc: "", period: "daily", reason: "chat", metric: "count", target: 1, rewardXp: 0, enabled: true, order: 0 };
   const [questForm, setQuestForm] = useState<any>(emptyQuest);
 
   // ── 데이터 로드 ─────────────────────────────
@@ -857,6 +858,32 @@ export default function AdminBotPage() {
                     <p className={fieldNote}>유저 화면에서 퀘스트 이름 아래 회색으로 표시됩니다.</p>
                   </div>
 
+                  <div className="md:col-span-2">
+                    <label className={labelClass}>초기화 주기</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { v: "daily", l: "일일", d: "매일 자정" },
+                        { v: "weekly", l: "주간", d: "매주 월요일" },
+                        { v: "monthly", l: "월간", d: "매월 1일" },
+                      ].map((o) => (
+                        <button
+                          key={o.v}
+                          type="button"
+                          onClick={() => setQuestForm({ ...questForm, period: o.v })}
+                          className={`py-3 rounded-lg text-xs font-bold border transition-all outline-none focus:outline-none ${
+                            questForm.period === o.v
+                              ? "bg-[#e91e3f] border-[#e91e3f] text-white"
+                              : "bg-transparent border-white/10 text-gray-400 hover:border-white/30 hover:text-white"
+                          }`}
+                        >
+                          {o.l}
+                          <span className="block text-[10px] font-medium opacity-70 mt-0.5">{o.d}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <p className={fieldNote}>진행도와 보상 수령이 이 주기마다 초기화됩니다 (KST 기준).</p>
+                  </div>
+
                   <div>
                     <label className={labelClass}>측정 대상</label>
                     <div className="grid grid-cols-4 gap-2">
@@ -987,6 +1014,7 @@ export default function AdminBotPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className={`text-sm font-bold ${q.enabled ? "text-white" : "text-gray-500 line-through"}`}>{q.name}</p>
+                            <span className="text-[10px] font-black text-[#e91e3f] border border-[#e91e3f]/30 rounded-full px-2 py-0.5">{PERIOD_LABEL[q.period || "daily"]}</span>
                             {!q.enabled && <span className="text-[10px] font-black text-gray-500 border border-white/10 rounded-full px-2 py-0.5">비활성</span>}
                           </div>
                           <p className="text-[11px] text-gray-500 mt-1 tabular-nums">
@@ -1000,7 +1028,7 @@ export default function AdminBotPage() {
                         <div className="shrink-0 flex items-center gap-2">
                           <button
                             onClick={() => {
-                              setQuestForm({ id: q._id, name: q.name, desc: q.desc || "", reason: q.reason, metric: q.metric, target: q.target, rewardXp: q.rewardXp, enabled: q.enabled, order: q.order });
+                              setQuestForm({ id: q._id, name: q.name, desc: q.desc || "", period: q.period || "daily", reason: q.reason, metric: q.metric, target: q.target, rewardXp: q.rewardXp, enabled: q.enabled, order: q.order });
                               window.scrollTo({ top: 0, behavior: "smooth" });
                             }}
                             className="text-[11px] font-bold text-gray-400 hover:text-white transition-colors outline-none focus:outline-none"

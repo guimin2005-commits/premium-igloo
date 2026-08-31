@@ -4,8 +4,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
-import { getQuestState, ATTEND_QUEST_ID } from "@/lib/quests";
-import { kstToday } from "@/lib/kst";
+import { getQuestState, ATTEND_QUEST_ID, PERIOD_LABEL } from "@/lib/quests";
+import { kstToday, periodKey } from "@/lib/kst";
 import QuestClaim from "@/models/QuestClaim";
 import Payout from "@/models/Payout";
 import UserXp from "@/models/UserXp";
@@ -57,6 +57,8 @@ export async function POST(request) {
 
     const today = kstToday();
     const isAttend = questId === ATTEND_QUEST_ID;
+    // 주기별 잠금 키 — 일일/주간/월간이 각자 초기화된다
+    const lockKey = periodKey(quest.period || "daily");
 
     // 1) 자물쇠부터 — 하루 한 번만 통과하는 조건부 갱신/유니크 인덱스로 중복 지급을 막는다.
     //    출석은 봇의 출석 기록과 같은 자물쇠(lastAttendDate)를 써서 양쪽이 겹치지 않게 한다.
@@ -80,7 +82,7 @@ export async function POST(request) {
       try {
         claim = await QuestClaim.create({
           userId,
-          date: today,
+          date: lockKey,
           questId,
           questName: quest.name,
           amount: quest.rewardXp,
@@ -100,7 +102,7 @@ export async function POST(request) {
         userName: session.user.name || "",
         userId,
         amount: quest.rewardXp,
-        reason: isAttend ? "일일 출석 보상" : `일일 퀘스트: ${quest.name}`,
+        reason: isAttend ? "일일 출석 보상" : `${PERIOD_LABEL[quest.period] || "일일"} 퀘스트: ${quest.name}`,
         source: "quest",
       });
     } catch (e) {

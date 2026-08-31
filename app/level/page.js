@@ -10,23 +10,12 @@ import {
 } from "../components/Hud";
 import { SEASON, getSeasonProgress } from "@/lib/season";
 import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel } from "@/lib/voiceTiers";
+import { getCumulativeXpByLevel, getLevelByXp } from "@/lib/leveling";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
 const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
 
-const getCumulativeXpByLevel = (lvl) => {
-  if (lvl <= 0) return 0;
-  return Math.floor(((23 * lvl) ** 2 - 525) / 5) + 1;
-};
-
-const getLevelByXp = (xp) => {
-  if (xp <= 0) return 0;
-  for (let l = 1; l <= 1000; l++) {
-    let requiredTotalXp = Math.floor(((23 * l) ** 2 - 525) / 5) + 1;
-    if (xp < requiredTotalXp) return l - 1;
-  }
-  return 1000;
-};
+// 레벨 공식은 lib/leveling.js 단일 소스 (봇 지급 로직과 1:1)
 
 // 📌 스크롤 등장 모션 컴포넌트 (Intersection Observer)
 const Reveal = ({ children, delay = 0, className = "" }) => {
@@ -356,8 +345,9 @@ export default function LevelPage() {
     setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 4000);
   }, []);
 
-  // 일일 퀘스트 — 30초 폴링에 함께 실려 진행도가 실시간으로 찬다
+  // 퀘스트 — 30초 폴링에 함께 실려 진행도가 실시간으로 찬다
   const [quests, setQuests] = useState(null);
+  const [questPeriod, setQuestPeriod] = useState("daily");
   const [claiming, setClaiming] = useState("");
 
   const loadMe = useCallback(async () => {
@@ -448,12 +438,16 @@ export default function LevelPage() {
   const tierNext = VOICE_TIERS[tierIdx + 1] || null;
   const tierNextBound = tierNext ? tierNext.min : null;
 
-  // 일일 퀘스트 요약 — 출석(봇이 지급)도 한 칸으로 세어 전체 달성률을 만든다
-  const questRows = quests?.quests || [];
+  // 퀘스트 — 주기(일일/주간/월간)별로 나눠 본다
+  const questAll = quests?.quests || [];
+  const questRows = questAll.filter((q) => (q.period || "daily") === questPeriod);
   const questDone = questRows.filter((q) => q.claimed || q.done).length;
   const questTotal = questRows.length;
   const questPct = Math.round((questDone / Math.max(1, questTotal)) * 100);
   const questClaimable = questRows.filter((q) => q.claimable).length;
+  // 탭에 붙일 '받을 수 있는 보상' 개수
+  const claimableBy = { daily: 0, weekly: 0, monthly: 0 };
+  for (const q of questAll) if (q.claimable) claimableBy[q.period || "daily"]++;
 
   // 킬피드 확장 토글 — 내부 스크롤 대신 6건 + 전체 보기 (이중 스크롤 회피)
   const [feedOpen, setFeedOpen] = useState(false);
@@ -740,7 +734,8 @@ export default function LevelPage() {
 
       {/* ── TAB NAV — ARCTIC 알약 탭 ─────── */}
       <div className="w-full px-5 md:px-8 pb-2">
-        <div className="max-w-7xl mx-auto flex gap-2 overflow-x-auto no-bar sm:justify-center">
+        <div className="max-w-7xl mx-auto relative flex items-center justify-center">
+          <div className="min-w-0 flex gap-2 overflow-x-auto no-bar">
           {[
             { id: "my", name: "내 대시보드" },
             { id: "intro", name: "시스템 소개" },
@@ -761,6 +756,19 @@ export default function LevelPage() {
               </button>
             );
           })}
+          </div>
+
+          {/* ARCTIC STORE — 탭 줄 우측 진입 동선 */}
+          {canSeeShop && (
+            <Link
+              href="/shop"
+              className="group hidden xl:inline-flex absolute right-0 top-1/2 -translate-y-1/2 items-center gap-2 h-9 px-4 rounded-full border transition-colors"
+              style={{ borderColor: "rgba(90,150,200,0.5)", color: ICE }}
+            >
+              <span className="text-[11px] font-black tracking-[0.12em] whitespace-nowrap">ARCTIC STORE</span>
+              <span className="text-[12px] transition-transform group-hover:translate-x-0.5">→</span>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -941,112 +949,22 @@ export default function LevelPage() {
                         </div>
                       ))}
                     </div>
+
                   </div>
                 </div>
 
-
-                {/* ARCTIC STORE — 배너 바로 아래 전체 폭 진입 동선 */}
-                {canSeeShop && (
-                  <Link
-                    href="/shop"
-                    className="group relative flex items-center gap-3 mt-6 px-5 h-14 rounded-2xl border transition-colors hover:brightness-[0.98]"
-                    style={{ borderColor: "rgba(90,150,200,0.5)", background: "#e7ecef" }}
-                  >
-                    <LiveDot color="bg-[#3f83b8]" />
-                    <span className="text-sm font-black tracking-tight shrink-0" style={{ color: ICE }}>ARCTIC STORE</span>
-                    <span className="hidden sm:inline text-[11px] font-bold text-[#8a8a8a] truncate">쌓은 XP로 역할과 혜택을 구매하세요</span>
-                    <span
-                      className="ml-auto shrink-0 w-8 h-8 rounded-full border flex items-center justify-center text-[13px] transition-transform group-hover:translate-x-0.5"
-                      style={{ borderColor: "rgba(90,150,200,0.45)", color: ICE }}
-                    >
-                      →
-                    </span>
-                  </Link>
-                )}
 
                 {/* 본문 — 8:4 비대칭 2열 */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-12 mt-12">
 
                   {/* 메인 열 */}
                   <div className="lg:col-span-8 min-w-0 space-y-14">
-                    {/* 획득 현황 */}
-                    <section>
-                      <div className="flex items-end justify-between mb-6">
-                        <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Intake</span>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">획득 현황</h3>
-                        </div>
-                        <span className="text-[11px] font-bold text-[#a3a3a3]">채팅 · 음성 · 출석</span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
-                        {[
-                          { key: "today", label: "오늘", data: myLogs?.today },
-                          { key: "month", label: "이번 달", data: myLogs?.month },
-                        ].map(({ key, label, data }) => {
-                          const total = data?.total ?? 0;
-                          return (
-                            <div key={key}>
-                              <div className="flex items-baseline justify-between mb-3">
-                                <span className="text-[12px] font-bold text-[#5a5a5a]">{label}</span>
-                                <span className="text-3xl md:text-4xl font-black text-[#131313] tabular-nums tracking-tight">+{total.toLocaleString()}<span className="text-[11px] font-bold text-[#a3a3a3] ml-1">XP</span></span>
-                              </div>
-                              {total > 0 ? (
-                                <>
-                                  <div className="flex h-3 rounded-full overflow-hidden bg-black/[0.05]">
-                                    {["chat", "voice", "attend"].map((r) => (
-                                      <div key={r} style={{ width: `${((data?.[r] || 0) / total) * 100}%`, background: REASON_COLORS[r] }}></div>
-                                    ))}
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5">
-                                    {["chat", "voice", "attend"].map((r) => (
-                                      <span key={r} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#8a8a8a] tabular-nums">
-                                        <span className="w-2 h-2 rounded-full" style={{ background: REASON_COLORS[r] }}></span>
-                                        {REASON_LABELS[r]} {(data?.[r] || 0).toLocaleString()}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </>
-                              ) : (
-                                <EmptySlot className="h-[56px]">아직 획득 없음 — 활동하면 채워집니다</EmptySlot>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </section>
-
-                    {/* 서버 랭킹 */}
-                    <section>
-                      <div className="flex items-end justify-between mb-5">
-                        <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Ranking</span>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1">TOP 10</span></h3>
-                        </div>
-                        <span className="flex items-center gap-3">
-                          {["all", "month"].map((k) => (
-                            <button key={k} onClick={() => setLbTab(k)} className={`text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 ${lbTab === k ? "text-[#131313] border-b-2 border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a]"}`}>{k === "all" ? "누적" : "이번 달"}</button>
-                          ))}
-                        </span>
-                      </div>
-                      {!lb[lbTab] ? (
-                        <div className="py-10 text-center text-[11px] font-bold text-[#c4c4c4]">불러오는 중…</div>
-                      ) : !lb[lbTab].data?.length ? (
-                        <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
-                      ) : (
-                        <RankRows rows={lb[lbTab].data} myId={session.user.id} me={lbTab === "all" ? me : null} myName={session.user.name} />
-                      )}
-                      {lbTab === "month" && <p className="text-[10px] text-[#c4c4c4] mt-2.5">이번 달 지급 로그 합산 기준 · 매월 1일(KST) 초기화</p>}
-                    </section>
-                  </div>
-
-                  {/* 사이드 열 */}
-                  <div className="lg:col-span-4 min-w-0 space-y-14 mt-14 lg:mt-0">
                     {/* 일일 퀘스트 — 출석(봇 지급) + 관리자가 정의한 퀘스트(원클릭 수령) */}
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Daily</span>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">일일 퀘스트</h3>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Quests</span>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">퀘스트</h3>
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-lg font-black text-[#131313] tabular-nums leading-none">
@@ -1056,6 +974,32 @@ export default function LevelPage() {
                         </div>
                       </div>
 
+                      {/* 주기 탭 */}
+                      <div className="flex gap-2 mb-5">
+                        {[
+                          { v: "daily", l: "일일" },
+                          { v: "weekly", l: "주간" },
+                          { v: "monthly", l: "월간" },
+                        ].map((t) => {
+                          const on = questPeriod === t.v;
+                          const n = claimableBy[t.v];
+                          return (
+                            <button
+                              key={t.v}
+                              onClick={() => setQuestPeriod(t.v)}
+                              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
+                                on ? "bg-[#131313] text-white" : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"
+                              }`}
+                            >
+                              {t.l}
+                              {n > 0 && (
+                                <span className={`inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black ${on ? "bg-[#e91e3f] text-white" : "bg-[#e91e3f] text-white"}`}>{n}</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
                       {/* 전체 달성률 */}
                       <div className="h-1.5 rounded-full bg-black/[0.06] overflow-hidden mb-1.5">
                         <div className="h-full rounded-full bg-[#e91e3f] transition-[width] duration-700" style={{ width: `${questPct}%` }}></div>
@@ -1063,7 +1007,13 @@ export default function LevelPage() {
                       <p className="text-[10px] font-bold text-[#a3a3a3] mb-5">
                         {questClaimable > 0
                           ? <span className="text-[#e91e3f]">받을 수 있는 보상 {questClaimable}개</span>
-                          : questDone === questTotal ? "오늘 퀘스트를 모두 마쳤습니다" : "매일 자정(KST)에 초기화됩니다"}
+                          : questTotal > 0 && questDone === questTotal
+                          ? "이 주기의 퀘스트를 모두 마쳤습니다"
+                          : questPeriod === "monthly"
+                          ? "매월 1일(KST)에 초기화됩니다"
+                          : questPeriod === "weekly"
+                          ? "매주 월요일(KST)에 초기화됩니다"
+                          : "매일 자정(KST)에 초기화됩니다"}
                       </p>
 
                       {/* 퀘스트 목록 — 첫 항목은 내장 출석(음성 N분) */}
@@ -1152,8 +1102,8 @@ export default function LevelPage() {
                       })}
 
                       {/* 관리자가 아직 퀘스트를 등록하지 않은 상태 */}
-                      {quests && questRows.length <= 1 && (
-                        <EmptySlot>추가 퀘스트가 없습니다 — 출석 보상만 진행됩니다</EmptySlot>
+                      {quests && questRows.length <= (questPeriod === "daily" ? 1 : 0) && (
+                        <EmptySlot>{questPeriod === "daily" ? "추가 퀘스트가 없습니다 — 출석 보상만 진행됩니다" : "등록된 퀘스트가 없습니다"}</EmptySlot>
                       )}
 
                       {/* 지급 안내 — 보상은 봇 대기열을 거치므로 즉시가 아닐 수 있다 */}
@@ -1161,12 +1111,84 @@ export default function LevelPage() {
                         <p className="text-[10px] text-[#c4c4c4] mt-3 break-keep">수령한 보상은 잠시 뒤 XP에 반영됩니다.</p>
                       )}
 
-                      <div className="flex items-center justify-between border-t border-black/[0.08] mt-5 pt-4">
+                      <div className={`${questPeriod === "daily" ? "flex" : "hidden"} items-center justify-between border-t border-black/[0.08] mt-5 pt-4`}>
                         <span className="text-[11px] font-bold text-[#8a8a8a]">누적 출석 <b className="text-[#131313] tabular-nums">{(me.attendCount || 0).toLocaleString()}일</b></span>
                         <span className="text-[11px] font-bold text-[#8a8a8a]">마지막 <b className="text-[#131313] tabular-nums">{me.lastAttendDate ? me.lastAttendDate.replace(/-/g, ".") : "—"}</b></span>
                       </div>
                     </section>
 
+                    {/* 획득 현황 */}
+                    <section>
+                      <div className="flex items-end justify-between mb-6">
+                        <div>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Intake</span>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">획득 현황</h3>
+                        </div>
+                        <span className="text-[11px] font-bold text-[#a3a3a3]">채팅 · 음성 · 출석</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+                        {[
+                          { key: "today", label: "오늘", data: myLogs?.today },
+                          { key: "month", label: "이번 달", data: myLogs?.month },
+                        ].map(({ key, label, data }) => {
+                          const total = data?.total ?? 0;
+                          return (
+                            <div key={key}>
+                              <div className="flex items-baseline justify-between mb-3">
+                                <span className="text-[12px] font-bold text-[#5a5a5a]">{label}</span>
+                                <span className="text-3xl md:text-4xl font-black text-[#131313] tabular-nums tracking-tight">+{total.toLocaleString()}<span className="text-[11px] font-bold text-[#a3a3a3] ml-1">XP</span></span>
+                              </div>
+                              {total > 0 ? (
+                                <>
+                                  <div className="flex h-3 rounded-full overflow-hidden bg-black/[0.05]">
+                                    {["chat", "voice", "attend"].map((r) => (
+                                      <div key={r} style={{ width: `${((data?.[r] || 0) / total) * 100}%`, background: REASON_COLORS[r] }}></div>
+                                    ))}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5">
+                                    {["chat", "voice", "attend"].map((r) => (
+                                      <span key={r} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#8a8a8a] tabular-nums">
+                                        <span className="w-2 h-2 rounded-full" style={{ background: REASON_COLORS[r] }}></span>
+                                        {REASON_LABELS[r]} {(data?.[r] || 0).toLocaleString()}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </>
+                              ) : (
+                                <EmptySlot className="h-[56px]">아직 획득 없음 — 활동하면 채워집니다</EmptySlot>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+
+                    {/* 서버 랭킹 */}
+                    <section>
+                      <div className="flex items-end justify-between mb-5">
+                        <div>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Ranking</span>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1">TOP 10</span></h3>
+                        </div>
+                        <span className="flex items-center gap-3">
+                          {["all", "month"].map((k) => (
+                            <button key={k} onClick={() => setLbTab(k)} className={`text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 ${lbTab === k ? "text-[#131313] border-b-2 border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a]"}`}>{k === "all" ? "누적" : "이번 달"}</button>
+                          ))}
+                        </span>
+                      </div>
+                      {!lb[lbTab] ? (
+                        <div className="py-10 text-center text-[11px] font-bold text-[#c4c4c4]">불러오는 중…</div>
+                      ) : !lb[lbTab].data?.length ? (
+                        <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
+                      ) : (
+                        <RankRows rows={lb[lbTab].data} myId={session.user.id} me={lbTab === "all" ? me : null} myName={session.user.name} />
+                      )}
+                      {lbTab === "month" && <p className="text-[10px] text-[#c4c4c4] mt-2.5">이번 달 지급 로그 합산 기준 · 매월 1일(KST) 초기화</p>}
+                    </section>
+                  </div>
+
+                  {/* 사이드 열 */}
+                  <div className="lg:col-span-4 min-w-0 space-y-14 mt-14 lg:mt-0">
                     {/* 진행 중 이벤트 */}
                     {events.length > 0 && (
                       <section>

@@ -14,6 +14,7 @@ async function requireAdmin() {
 }
 
 const REASONS = ["chat", "voice", "attend", "any"];
+const PERIODS = ["daily", "weekly", "monthly"];
 const METRICS = ["count", "xp"];
 const num = (v, def, { min = 0, max = 1_000_000 } = {}) => {
   const n = Number(v);
@@ -44,6 +45,7 @@ export async function POST(request) {
   const doc = {
     name: name.slice(0, 40),
     desc: String(b?.desc || "").trim().slice(0, 120),
+    period: PERIODS.includes(b?.period) ? b.period : "daily",
     reason: REASONS.includes(b?.reason) ? b.reason : "chat",
     metric: METRICS.includes(b?.metric) ? b.metric : "count",
     target: num(b?.target, 1, { min: 1, max: 1_000_000 }),

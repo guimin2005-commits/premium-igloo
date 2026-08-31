@@ -1,11 +1,10 @@
 // ── 레벨 공식 (사이트 시뮬레이터와 동일) ──────
-export const getCumulativeXpByLevel = (lvl) => {
-  if (lvl <= 0) return 0;
-  return Math.floor(((23 * lvl) ** 2 - 525) / 5) + 1;
-};
+// 누적 XP = 100 × (레벨² − 1) · 필요 XP = 200 × 레벨 − 100 · Lv1 = 0 (시작 레벨)
+// ⚠️ 사이트 lib/leveling.js 와 반드시 같은 값이어야 한다 (봇은 별도 배포라 import 불가)
+export const getCumulativeXpByLevel = (lvl) => (lvl <= 0 ? 0 : 100 * (lvl * lvl - 1));
 
 export const getLevelByXp = (xp) => {
-  if (xp <= 0) return 0;
+  if (xp <= 0) return 1;
   for (let l = 1; l <= 1000; l++) {
     if (xp < getCumulativeXpByLevel(l)) return l - 1;
   }
