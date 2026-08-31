@@ -1,151 +1,96 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { signIn, useSession } from "next-auth/react";
-import { Reveal } from "./components/Lux";
-import {
-  HudStyles, HudLabel, HudSection, HudCount, LiveDot, StatusChip,
-  Sparkline, SegBar, RankRows, EmptySlot,
-} from "./components/Hud";
-import { SEASON, getSeasonDday } from "@/lib/season";
-import { isAdminName } from "@/lib/admins";
+import { Reveal, CountUp, LuxStyles } from "./components/Lux";
 
-/* ═══════════════════════════════════════════════════════════════
-   메인 홈 — OBSERVER DECK (중계 오버레이 시점)
-   서버 전체의 '경기'를 옵저버 화면처럼 보여준다. 세로 1칼럼 대신
-   스코어바 + 티커 + 3열 레일. 박스 카드 대신 헤어라인·타이포 직결 배치.
-   레드(#e91e3f)는 LIVE·나·1위·게이지 전용 신호색, 시머는 워드마크 1곳.
-   ═══════════════════════════════════════════════════════════════ */
 
-const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
-const ICE = "#9fc9e8"; // ARCTIC 동선 전용 아이스 틴트 — 이글루 세계관 예외색
+// 📌 24시간 온라인 활동 그래프 (섹션용 와이드 버전)
+const ActivityChart = ({ history }: { history: { ts: string; online: number }[] }) => {
+  if (!history || history.length < 2) return null;
+  const w = 600, h = 120;
+  const values = history.map((p) => p.online);
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = max - min || 1;
+  const points = values.map((v, i) => `${(i / (values.length - 1)) * w},${h - 8 - ((v - min) / range) * (h - 20)}`).join(" ");
 
+  return (
+    <div className="w-full">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[10px] font-black tracking-[0.25em] text-gray-600 uppercase">24H Activity</span>
+        <span className="text-[10px] font-bold text-gray-500">피크 <span className="text-[#e91e3f] font-black">{max.toLocaleString()}</span>명</span>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-24 md:h-28 overflow-visible" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="actFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#e91e3f" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#e91e3f" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polygon points={`0,${h} ${points} ${w},${h}`} fill="url(#actFill)" />
+        <polyline points={points} fill="none" stroke="#e91e3f" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+    </div>
+  );
+};
+
+// 📌 최신 소식 카드용 짧은 날짜 표기
 const fmtDate = (s: string) => {
   const d = new Date(s);
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
 };
 
-// ── 뉴스 티커 — 카테고리 라벨만 유색, 저속(장식이 아니라 정보 스트립) ──
-const Ticker = ({ items }: { items: any[] }) => {
-  if (!items.length) return null;
-  // 항목이 적어도 트랙이 화면을 덮도록 반복 후 2배 복제 (translateX(-50%) 루프)
-  const repeat = Math.max(1, Math.ceil(6 / items.length));
-  const half: any[] = [];
-  for (let i = 0; i < repeat; i++) half.push(...items);
-  const track = [...half, ...half];
-  return (
-    <div className="hud-ticker relative overflow-hidden border-y border-white/[0.08] h-9">
-      <div
-        className="hud-ticker-track absolute left-0 top-0 h-full flex items-center whitespace-nowrap will-change-transform"
-        style={{ animation: `hudTicker ${Math.max(36, half.length * 11)}s linear infinite` }}
-      >
-        {track.map((it, i) => (
-          <Link key={i} href={it.href} className="inline-flex items-center h-full px-6 group">
-            {it.tone === "live" && <LiveDot color="bg-[#e91e3f]" />}
-            <span className={`text-[10px] font-black tracking-[0.2em] uppercase ${it.tone === "live" ? "text-[#e91e3f] ml-2" : it.tone === "ice" ? "" : "text-gray-600"}`} style={it.tone === "ice" ? { color: ICE } : undefined}>{it.tag}</span>
-            <span className="text-[12px] font-bold text-white/70 group-hover:text-white transition-colors ml-2.5">{it.text}</span>
-            <span aria-hidden className="text-white/15 ml-6 text-[9px]">◆</span>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// ── 매치 카드용 미니 브래킷 글리프 (대진선 3단) ──
-const BracketGlyph = ({ live = false }: { live?: boolean }) => (
-  <svg viewBox="0 0 44 28" className="w-11 h-7 shrink-0" fill="none">
-    <path d="M2 4 h10 v8 h10 M2 20 h10 v-8" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
-    <path d="M22 12 h10 v2 h10" stroke={live ? "#e91e3f" : "rgba(255,255,255,0.2)"} strokeWidth="1.5" />
-  </svg>
-);
-
-// ── 플레이어 위젯 — 우 레일(데스크톱)·상단(모바일) 겸용 ──
-const PlayerBlock = ({ session, me }: { session: any; me: any }) => {
-  if (!session?.user) {
-    return (
-      <div>
-        <p className="text-[10px] font-black tracking-[0.3em] text-gray-500 uppercase mb-2">Spectator Mode</p>
-        <p className="text-sm font-bold text-white mb-1.5">현재 관전 중입니다</p>
-        <p className="text-[11px] text-gray-500 leading-relaxed mb-5 break-keep">로그인하면 내 레벨·순위가 이 자리에 실시간으로 표시됩니다.</p>
-        <button
-          onClick={() => signIn("discord", { callbackUrl: "/" })}
-          className="w-full py-3 rounded-lg border border-[#e91e3f]/40 text-[#e91e3f] text-xs font-black tracking-[0.15em] uppercase hover:bg-[#e91e3f] hover:text-white transition-colors outline-none focus:outline-none"
-        >
-          Join the Roster
-        </button>
-        <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="block text-center text-[11px] font-bold text-gray-600 hover:text-white transition-colors mt-3">디스코드 서버 입장 →</a>
-      </div>
-    );
-  }
-  const prog = me?.levelProgress || { current: 0, required: 1, needToNext: 0 };
-  const pct = Math.min(100, Math.floor((prog.current / Math.max(1, prog.required)) * 100));
-  return (
-    <div>
-      <div className="flex items-center gap-3 mb-5">
-        {session.user.image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={session.user.image} alt="" className="w-10 h-10 rounded-lg object-cover ring-1 ring-[#e91e3f]/50" />
-        ) : (
-          <span className="w-10 h-10 rounded-lg bg-white/[0.06] ring-1 ring-white/15 flex items-center justify-center text-sm font-black text-white/60">{(session.user.name || "?").slice(0, 1)}</span>
-        )}
-        <div className="min-w-0">
-          <p className="text-[13px] font-bold text-white truncate">{session.user.name}</p>
-          <p className="text-[10px] font-bold text-gray-600 tabular-nums">{me ? `RANK #${me.rank.toLocaleString()} / ${me.total.toLocaleString()}` : "—"}</p>
-        </div>
-        <span className="ml-auto text-2xl font-black text-white tabular-nums tracking-tight shrink-0">
-          <span className="text-[10px] font-black text-gray-600 align-middle mr-1">LV</span>{me ? me.level : "—"}
-        </span>
-      </div>
-      <SegBar pct={me ? pct : 0} segments={10} h="h-1.5" />
-      <div className="flex justify-between mt-2 mb-5">
-        <span className="text-[10px] font-bold text-gray-600 tabular-nums">{me ? `${prog.current.toLocaleString()} / ${prog.required.toLocaleString()} XP` : "동기화 중…"}</span>
-        {me && <span className="text-[10px] font-bold text-gray-500">다음 레벨까지 <b className="text-[#e91e3f]">{prog.needToNext.toLocaleString()}</b></span>}
-      </div>
-      <Link href="/level" className="block w-full py-3 rounded-lg border border-[#e91e3f]/40 text-center text-[#e91e3f] text-xs font-black tracking-[0.15em] uppercase hover:bg-[#e91e3f] hover:text-white transition-colors">
-        내 대시보드 →
-      </Link>
-    </div>
-  );
-};
-
 export default function Home() {
-  const { data: session } = useSession();
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<{ memberCount: number; onlineCount: number; history: any[] } | null>(null);
+  const [schedule, setSchedule] = useState<any[]>([]);
+  const [scheduleLoaded, setScheduleLoaded] = useState(false); // 로딩 중엔 자리를 잡아둔다
   const [notices, setNotices] = useState<any[]>([]);
-  const [events, setEvents] = useState<any[]>([]);
-  const [matches, setMatches] = useState<any[]>([]);
-  const [auctions, setAuctions] = useState<any[]>([]);
-  const [shopPublic, setShopPublic] = useState(false);
-  const [me, setMe] = useState<any>(null);
-  const [lb, setLb] = useState<any>({ all: null, month: null });
-  const [lbTab, setLbTab] = useState<"all" | "month">("all");
 
-  const isAdmin = isAdminName(session?.user?.name);
-  const canSeeShop = shopPublic || isAdmin;
-  const dday = getSeasonDday();
-
-  // 서버 통계 — 60초 폴링 (스코어바가 '살아있는 중계'가 되도록)
+  // 📌 히어로를 스크롤하는 동안 진행률(0~1)을 추적 — 라이트 패널이 그 비율만큼 위로 떠오른다
+  const heroRef = useRef<HTMLElement>(null);
+  const [heroProgress, setHeroProgress] = useState(0);
   useEffect(() => {
-    const load = () =>
-      fetch("/api/stats", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((d) => { if (d.success) setStats({ memberCount: d.memberCount, onlineCount: d.onlineCount, history: d.history || [] }); })
-        .catch(() => {});
-    load();
-    const t = setInterval(load, 60 * 1000);
-    return () => clearInterval(t);
+    const onScroll = () => {
+      const h = heroRef.current?.offsetHeight || 0;
+      if (!h) return;
+      setHeroProgress(Math.min(Math.max(window.scrollY / h, 0), 1));
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, []);
 
-  // 소식·대회·경매·상점 공개 여부 — 1회
   useEffect(() => {
+    fetch("/api/stats")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) setStats({ memberCount: data.memberCount, onlineCount: data.onlineCount, history: data.history || [] });
+      })
+      .catch(() => {});
+
     Promise.all([
-      fetch("/api/posts?category=공지사항", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/posts?category=이벤트", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/posts?category=대회", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/auction", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch("/api/xp/policy", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
-    ]).then(([no, ev, tn, au, po]) => {
+      fetch("/api/posts?category=공지사항", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+    ]).then(([ev, tn, au, no]) => {
+      const events = (Array.isArray(ev?.data) ? ev.data : []).slice(0, 2).map((p: any) => ({ type: "이벤트", title: p.title, path: "/event", period: p.eventPeriod }));
+      const tournaments = (Array.isArray(tn?.data) ? tn.data : [])
+        .filter((p: any) => p.tournamentStatus !== "종료됨")
+        .slice(0, 2)
+        .map((p: any) => ({ type: p.tournamentStatus === "진행중" ? "대회 진행중" : "대회 예정", title: p.title, path: "/tournament", period: p.tournamentDate }));
+      // 진행 중인 선수 경매는 최상단 LIVE로 노출
+      const liveAuctions = (Array.isArray(au?.data) ? au.data : [])
+        // 테스트 방은 메인 노출 제외 (관리자에게도 표시하지 않음)
+        .filter((a: any) => a.status === "진행중" && !a.isTest && !a.isPrivate)
+        .slice(0, 2)
+        .map((a: any) => ({ type: "경매 LIVE", title: a.title, path: `/auction/${a._id}`, period: "" }));
+      setSchedule([...liveAuctions, ...tournaments, ...events].slice(0, 4));
+      setScheduleLoaded(true);
+
       const noticeList = (Array.isArray(no?.data) ? no.data : [])
         .slice()
         .sort((a: any, b: any) => {
@@ -155,360 +100,337 @@ export default function Home() {
         })
         .slice(0, 4);
       setNotices(noticeList);
-      setEvents((Array.isArray(ev?.data) ? ev.data : []).slice(0, 2));
-      setMatches(
-        (Array.isArray(tn?.data) ? tn.data : [])
-          .filter((p: any) => p.tournamentStatus !== "종료됨")
-          .slice(0, 2)
-      );
-      setAuctions(
-        (Array.isArray(au?.data) ? au.data : [])
-          .filter((a: any) => a.status === "진행중" && !a.isTest && !a.isPrivate)
-          .slice(0, 2)
-      );
-      if (po?.success) setShopPublic(!!po.data?.shopPublic);
     });
   }, []);
 
-  // 내 레벨 요약 — 로그인 시에만
-  useEffect(() => {
-    if (!session?.user) { setMe(null); return; }
-    fetch("/api/xp/me", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => { if (d?.success) setMe(d.data); })
-      .catch(() => {});
-  }, [(session?.user as any)?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 스탠딩 TOP 5
-  useEffect(() => {
-    (["all", "month"] as const).forEach((period) =>
-      fetch(`/api/xp/leaderboard?period=${period}&limit=5`, { cache: "no-store" })
-        .then((r) => r.json())
-        .then((d) => { if (d?.success) setLb((p: any) => ({ ...p, [period]: d })); })
-        .catch(() => {})
-    );
-  }, []);
-
-  const liveMatch = matches.some((m: any) => m.tournamentStatus === "진행중");
-
-  // 티커 항목 — 데스크톱은 ARCTIC 포함, 모바일은 배너로 승격되므로 CSS에서 티커 자체가 공용
-  const tickerItems = [
-    ...(canSeeShop ? [{ tag: "ARCTIC", text: "ARCTIC STORE NOW OPEN →", href: "/shop", tone: "ice" }] : []),
-    ...(notices[0] ? [{ tag: "Notice", text: notices[0].title, href: `/notice?id=${notices[0]._id}`, tone: "" }] : []),
-    ...matches.map((m: any) => ({ tag: "Match", text: `${m.title} · ${m.tournamentStatus}`, href: "/tournament", tone: m.tournamentStatus === "진행중" ? "live" : "" })),
-    ...auctions.map((a: any) => ({ tag: "Auction", text: a.title, href: `/auction/${a._id}`, tone: "live" })),
-    { tag: "Season", text: `SEASON ${SEASON.number} '${SEASON.name}' · ${dday.ended ? "종료" : `D-${dday.days}`}`, href: "/level", tone: "" },
-  ];
-
-  const featured = notices[0];
-  const bulletin = notices.slice(1, 4);
-
   return (
-    <main className="flex-1 w-full relative">
-      <HudStyles />
-      <div className="absolute inset-x-0 top-0 h-[420px] hud-grid-bg pointer-events-none"></div>
-      <div className="absolute top-[-140px] left-1/2 -translate-x-1/2 w-[640px] h-[320px] bg-[#e91e3f]/[0.06] blur-[130px] rounded-full pointer-events-none"></div>
+    <main className="flex-1 w-full relative flex flex-col">
+      <LuxStyles />
 
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-5 md:px-8">
+      {/* ═══ 커튼 컨테이너 — 히어로는 화면에 고정(sticky)되고, 흰 패널이 그 위로 타고 올라온다.
+             불투명한 배경 + z-10로, 아래에 깔린 CTA(스티키 리빌)가 패널이 끝나기 전엔 안 비치게 한다 ═══ */}
+      <div className="relative z-10 bg-[#090909]">
 
-        {/* ═══ 밴드 1 · 서버 스코어바 — 방송 상단바 (패널 아님) ═══ */}
-        <Reveal>
-          <div className="border-b border-white/[0.08] py-5 md:py-0 md:h-24 grid grid-cols-1 md:grid-cols-12 items-center gap-y-4">
-            {/* 좌 — 아이덴티티 */}
-            <div className="md:col-span-4 flex items-center gap-3.5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="고급 이글루" className="w-10 h-10 md:w-11 md:h-11 object-contain" />
-              <div>
-                <p className="text-lg md:text-xl font-black tracking-tight leading-none"><span className="hud-shimmer">고급 이글루</span></p>
-                <p className="text-[9px] font-black tracking-[0.35em] text-gray-600 uppercase mt-1.5">Premium Igloo · Since 2023</p>
+      {/* ═══ SECTION 1 · 히어로 (풀스크린 · 브랜드만) ═══
+             sticky로 뷰포트에 핀 고정 — 스크롤하면 히어로는 멈춰 있고 아래 흰 패널이 위로 덮으며 올라온다.
+             heroProgress에 따라 내용물이 서서히 어두워지고 살짝 작아져 깊이감을 더한다 ═══ */}
+      <section ref={heroRef} className="sticky top-0 w-full h-[calc(100svh-3.5rem)] flex flex-col overflow-hidden">
+        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
+        <div className="absolute top-[-150px] left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#e91e3f]/[0.08] blur-[130px] rounded-full pointer-events-none"></div>
+
+
+        {/* 높이 단위는 vh가 아니라 svh — 모바일 100vh는 URL바 숨김 기준이라 초기 상태에서 히어로 하단이 화면 밖으로 밀린다 */}
+        <div
+          className="flex-1 w-full max-w-7xl mx-auto px-6 flex items-center relative z-10"
+          style={{ opacity: 1 - heroProgress * 0.65, transform: `scale(${1 - heroProgress * 0.05})`, willChange: "opacity, transform" }}
+        >
+          <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center">
+            {/* 로고 */}
+            <Reveal className="flex justify-center md:justify-end">
+              <div className="relative">
+                <div className="absolute inset-0 scale-90 bg-[#e91e3f]/15 blur-[80px] rounded-full animate-[pulseGlow_5s_ease-in-out_infinite] pointer-events-none"></div>
+                <img
+                  src="/logo.png"
+                  alt="고급 이글루"
+                  className="relative w-[min(14rem,22svh)] h-[min(14rem,22svh)] md:w-80 md:h-80 lg:w-96 lg:h-96 object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
+                />
               </div>
-            </div>
-            {/* 중 — 스코어 블록 */}
-            <div className="md:col-span-4 flex items-center justify-start md:justify-center gap-6 md:gap-8">
-              <div>
-                <p className="text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase mb-1">전체 멤버</p>
-                <p className="text-xl md:text-2xl font-black text-white tabular-nums tracking-tight leading-none">{stats ? <HudCount end={stats.memberCount} /> : "—"}</p>
-              </div>
-              <span aria-hidden className="w-px h-9 bg-white/10"></span>
-              <div>
-                <p className="flex items-center gap-1.5 text-[9px] font-black tracking-[0.25em] text-gray-600 uppercase mb-1"><LiveDot />현재 온라인</p>
-                <p className="text-xl md:text-2xl font-black text-[#e91e3f] tabular-nums tracking-tight leading-none">{stats ? <HudCount end={stats.onlineCount} /> : "—"}</p>
-              </div>
-            </div>
-            {/* 우 — 미니 ID / 입장 */}
-            <div className="md:col-span-4 flex md:justify-end">
-              {session?.user ? (
-                <Link href="/level" className="group flex items-center gap-3">
-                  {session.user.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={session.user.image} alt="" className="w-8 h-8 rounded-full object-cover ring-1 ring-[#e91e3f]/60" />
-                  ) : (
-                    <span className="w-8 h-8 rounded-full bg-white/[0.06] ring-1 ring-white/15 flex items-center justify-center text-xs font-black text-white/60">{(session.user.name || "?").slice(0, 1)}</span>
-                  )}
-                  <span className="text-right">
-                    <span className="block text-[12px] font-bold text-white group-hover:text-[#e91e3f] transition-colors leading-none">{session.user.name}</span>
-                    <span className="block text-[10px] font-bold text-gray-600 tabular-nums mt-1">{me ? `LV.${me.level} · RANK #${me.rank.toLocaleString()}` : "SYNC…"}</span>
-                  </span>
-                </Link>
-              ) : (
-                <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 rounded-lg border border-white/15 text-[11px] font-black tracking-[0.2em] uppercase text-white/70 hover:border-[#e91e3f]/50 hover:text-white transition-colors">
-                  Enter the Server
-                </a>
-              )}
-            </div>
-          </div>
-        </Reveal>
-
-        {/* ═══ 모바일 전용 · ARCTIC 진입 배너 (기획안: 최상단 동선) ═══ */}
-        {canSeeShop && (
-          <Link href="/shop" className="lg:hidden flex items-center justify-between h-12 px-4 mt-4 rounded-lg border transition-colors" style={{ borderColor: "rgba(180,220,255,0.22)", background: "rgba(180,220,255,0.05)" }}>
-            <span className="flex items-center gap-2.5">
-              <LiveDot color="bg-[#9fc9e8]" />
-              <span className="text-[11px] font-black tracking-[0.25em] uppercase" style={{ color: ICE }}>Arctic Store Open</span>
-            </span>
-            <span className="text-[12px] font-bold" style={{ color: ICE }}>→</span>
-          </Link>
-        )}
-
-        {/* ═══ 밴드 2 · 뉴스 티커 ═══ */}
-        <Reveal delay={60}>
-          <div className="mt-4">
-            <Ticker items={tickerItems} />
-          </div>
-        </Reveal>
-
-        {/* ═══ 밴드 3 · 메인 3열 — 좌 텔레메트리·모듈 / 중앙 스테이지 / 우 플레이어·경매·스탠딩 ═══ */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 mt-8 lg:mt-10 lg:divide-x lg:divide-white/[0.06]">
-
-          {/* ── 중앙 스테이지 (모바일 1순위) ── */}
-          <div className="order-1 lg:order-2 lg:col-span-6 lg:px-8 space-y-10 min-w-0">
-            {/* 03 · FEATURED — 화면에서 유일하게 '이미지 볼륨'을 허용하는 블록 */}
-            {featured && (
-              <Reveal delay={80}>
-                <HudSection label="01 · Featured" right={<span className="text-[11px] font-bold text-gray-600">주요 소식</span>}>
-                  <Link href={`/notice?id=${featured._id}`} className="group block relative overflow-hidden rounded-lg border border-white/[0.09]">
-                    {featured.bannerUrl ? (
-                      <>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={featured.bannerUrl} alt="" className="w-full aspect-video lg:aspect-[16/7] object-cover opacity-80 group-hover:opacity-100 group-hover:scale-[1.02] transition-all duration-700" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0b0b0c] via-[#0b0b0c]/40 to-transparent pointer-events-none"></div>
-                      </>
-                    ) : (
-                      <div className="w-full aspect-video lg:aspect-[16/7] bg-[#0d0d0d] hud-grid-bg"></div>
-                    )}
-                    {/* 로어서드 캡션 */}
-                    <div className="absolute inset-x-0 bottom-0 p-5 md:p-6">
-                      <div className="flex items-center gap-2 mb-2">
-                        {featured.isPinned && <StatusChip>Pinned</StatusChip>}
-                        <span className="text-[10px] font-bold text-gray-400 tabular-nums">{fmtDate(featured.createdAt)}</span>
-                      </div>
-                      <h2 className="text-lg md:text-xl font-black text-white leading-snug break-keep line-clamp-2 group-hover:text-[#ffd7de] transition-colors">{featured.title}</h2>
-                    </div>
-                  </Link>
-                </HudSection>
-              </Reveal>
-            )}
-
-            {/* 04 · BULLETIN */}
-            {bulletin.length > 0 && (
-              <Reveal delay={120}>
-                <HudSection label="02 · Bulletin" right={<Link href="/notice" className="text-[11px] font-bold text-gray-600 hover:text-[#e91e3f] transition-colors">전체보기 →</Link>}>
-                  <div>
-                    {bulletin.map((n: any) => (
-                      <Link key={n._id} href={`/notice?id=${n._id}`} className="group relative flex items-center h-12 gap-4 border-b border-white/[0.06] hover:bg-white/[0.03] transition-colors">
-                        {n.isPinned && <span className="absolute left-0 top-2 bottom-2 w-0.5 bg-[#e91e3f]"></span>}
-                        <span className="pl-3 shrink-0 text-[10px] font-bold text-gray-600 tabular-nums">{fmtDate(n.createdAt)}</span>
-                        <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-gray-300 group-hover:text-white transition-colors">{n.title}</span>
-                        <span className="shrink-0 pr-1 text-gray-700 group-hover:text-[#e91e3f] group-hover:translate-x-0.5 transition-all">→</span>
-                      </Link>
-                    ))}
-                  </div>
-                </HudSection>
-              </Reveal>
-            )}
-
-            {/* 05 · MATCHES — 0건이면 섹션 숨김 (중앙 스테이지는 빈 패널을 남기지 않는다) */}
-            {matches.length > 0 && (
-              <Reveal delay={160}>
-                <HudSection label="03 · Matches" live={liveMatch} accent={liveMatch} right={<Link href="/tournament" className="text-[11px] font-bold text-gray-600 hover:text-[#e91e3f] transition-colors">대회 허브 →</Link>}>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {matches.map((m: any) => {
-                      const live = m.tournamentStatus === "진행중";
-                      return (
-                        <Link key={m._id} href="/tournament" className={`group border-l-2 pl-4 py-1 transition-colors ${live ? "border-[#e91e3f]" : "border-white/15 hover:border-white/40"}`}>
-                          <div className="flex items-center gap-2 mb-2">
-                            <StatusChip accent={live} dot={live}>{live ? "Live" : "Upcoming"}</StatusChip>
-                            {m.tournamentDate && <span className="text-[10px] font-bold text-gray-600">{m.tournamentDate}</span>}
-                          </div>
-                          <p className="text-sm font-bold text-white leading-snug break-keep line-clamp-2 mb-3 group-hover:text-[#ffd7de] transition-colors">{m.title}</p>
-                          <div className="flex items-center justify-between">
-                            <BracketGlyph live={live} />
-                            <span className="text-[10px] font-black tracking-[0.2em] text-gray-600 uppercase group-hover:text-gray-400 transition-colors">Bracket →</span>
-                          </div>
-                        </Link>
-                      );
-                    })}
-                    {matches.length === 1 && <EmptySlot className="hidden md:flex">NO ACTIVE OPS — 대기 중</EmptySlot>}
-                  </div>
-                </HudSection>
-              </Reveal>
-            )}
-
-            {/* 06 · EVENTS — 조용한 행 (시각 위계는 대회 아래) */}
-            {events.length > 0 && (
-              <Reveal delay={200}>
-                <HudSection label="04 · Events" right={<Link href="/event" className="text-[11px] font-bold text-gray-600 hover:text-[#e91e3f] transition-colors">이벤트 →</Link>}>
-                  <div>
-                    {events.map((ev: any) => (
-                      <Link key={ev._id} href="/event" className="group flex items-center h-12 gap-4 border-b border-white/[0.06] hover:bg-white/[0.03] transition-colors">
-                        <span className="shrink-0 text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase border border-white/10 rounded-full px-2 py-0.5">Event</span>
-                        <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-gray-300 group-hover:text-white transition-colors">{ev.title}</span>
-                        {ev.eventPeriod && <span className="shrink-0 text-[10px] font-bold text-gray-600">{ev.eventPeriod}</span>}
-                      </Link>
-                    ))}
-                  </div>
-                </HudSection>
-              </Reveal>
-            )}
-          </div>
-
-          {/* ── 우 레일 (모바일 2순위: 플레이어·경매·스탠딩) ── */}
-          <div className="order-2 lg:order-3 lg:col-span-3 lg:pl-8 mt-10 lg:mt-0 space-y-10 min-w-0">
-            {/* 07 · PLAYER */}
-            <Reveal delay={160}>
-              <HudSection label="05 · Player" right={session?.user ? <StatusChip dot>Online</StatusChip> : <StatusChip>Spectator</StatusChip>}>
-                <PlayerBlock session={session} me={me} />
-              </HudSection>
             </Reveal>
 
-            {/* 08 · AUCTION */}
-            <Reveal delay={200}>
-              <HudSection label="06 · Auction" live={auctions.length > 0} accent={auctions.length > 0} right={<Link href="/auction" className="text-[11px] font-bold text-gray-600 hover:text-[#e91e3f] transition-colors">경매장 →</Link>}>
-                {auctions.length > 0 ? (
-                  <div>
-                    {auctions.map((a: any) => (
-                      <Link key={a._id} href={`/auction/${a._id}`} className="group flex items-center h-12 gap-3 border-b border-white/[0.06] hover:bg-white/[0.03] transition-colors">
-                        <LiveDot color="bg-[#e91e3f]" />
-                        <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-white group-hover:text-[#ffd7de] transition-colors">{a.title}</span>
-                        <span className="shrink-0 text-[10px] font-black tracking-[0.15em] text-[#e91e3f] uppercase">Live</span>
-                      </Link>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptySlot>NO SIGNAL — 진행 중인 경매 없음</EmptySlot>
-                )}
-              </HudSection>
-            </Reveal>
+            {/* 브랜드 텍스트 — 이것만! */}
+            <div className="flex flex-col justify-center items-center md:items-start text-center md:text-left">
+              <Reveal>
+                <div className="flex items-center gap-3 mb-4 md:mb-6 justify-center md:justify-start">
+                  <span className="w-8 h-px bg-[#e91e3f]"></span>
+                  <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Since 2023 · Community</span>
+                </div>
+                <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter text-white mb-3 leading-none">고급 이글루</h1>
+                <p className="text-base md:text-lg font-light tracking-[0.45em] text-transparent bg-clip-text bg-gradient-to-r from-gray-400 to-gray-600 mb-4 md:mb-5 pl-1 uppercase">Premium Igloo</p>
+                <p className="text-sm md:text-base font-bold text-gray-300 mb-7 md:mb-10">
+                  <span className="lux-shimmer">활동이 곧 자산이 되는 곳.</span>
+                </p>
+              </Reveal>
 
-            {/* 09 · STANDINGS */}
-            <Reveal delay={240}>
-              <HudSection
-                label="07 · Standings"
-                right={
-                  <span className="flex items-center gap-3">
-                    {(["all", "month"] as const).map((k) => (
-                      <button key={k} onClick={() => setLbTab(k)} className={`relative text-[10px] font-black tracking-[0.15em] uppercase transition-colors outline-none focus:outline-none pb-0.5 ${lbTab === k ? "text-white border-b-2 border-[#e91e3f]" : "text-gray-600 hover:text-gray-400"}`}>
-                        {k === "all" ? "누적" : "이번 달"}
-                      </button>
-                    ))}
-                  </span>
-                }
-              >
-                {!lb[lbTab] ? (
-                  <div className="py-8 text-center text-[11px] font-bold text-gray-700">불러오는 중…</div>
-                ) : !lb[lbTab].data?.length ? (
-                  <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
-                ) : (
-                  <>
-                    <RankRows
-                      rows={lb[lbTab].data}
-                      myId={(session?.user as any)?.id || null}
-                      me={lbTab === "all" ? me : null}
-                      myName={session?.user?.name || ""}
-                    />
-                    <Link href="/level" className="block text-right text-[11px] font-bold text-gray-600 hover:text-[#e91e3f] transition-colors mt-3">풀 랭킹 →</Link>
-                  </>
-                )}
-              </HudSection>
-            </Reveal>
-          </div>
-
-          {/* ── 좌 레일 (모바일 3순위: 텔레메트리·모듈) ── */}
-          <div className="order-3 lg:order-1 lg:col-span-3 lg:pr-8 mt-10 lg:mt-0 space-y-10 min-w-0">
-            {/* 01 · TELEMETRY */}
-            <Reveal delay={80}>
-              <HudSection label="08 · Telemetry" live right={<span className="text-[11px] font-bold text-gray-600">24H 접속 추이</span>}>
-                <Sparkline history={stats?.history || []} h={104} />
-              </HudSection>
-            </Reveal>
-
-            {/* 02 · MODULES — 게임 메인 메뉴식 내비게이션 */}
-            <Reveal delay={120}>
-              <HudSection label="09 · Modules" right={<span className="text-[11px] font-bold text-gray-600">바로가기</span>}>
-                <div>
-                  {canSeeShop && (
-                    <Link href="/shop" className="group relative flex items-center h-11 gap-3 border-b transition-colors hover:bg-white/[0.03]" style={{ borderColor: "rgba(180,220,255,0.18)" }}>
-                      <span className="w-6 shrink-0 text-[10px] font-black tabular-nums text-center" style={{ color: ICE }}>00</span>
-                      <span className="min-w-0 flex-1 text-[13px] font-bold" style={{ color: ICE }}>ARCTIC <span className="text-[10px] font-black tracking-[0.2em] uppercase opacity-70 ml-1.5">Store Open</span></span>
-                      <span className="shrink-0 transition-transform group-hover:translate-x-0.5" style={{ color: ICE }}>→</span>
-                    </Link>
-                  )}
-                  {[
-                    { n: "01", t: "SYSTEM : LEVEL", href: "/level", live: false },
-                    { n: "02", t: "e스포츠 대회", href: "/tournament", live: liveMatch },
-                    { n: "03", t: "선수 경매", href: "/auction", live: auctions.length > 0 },
-                    { n: "04", t: "명예의 전당", href: "/hall-of-fame", live: false },
-                    { n: "05", t: "서버 부스터", href: "/booster", live: false },
-                  ].map((m) => (
-                    <Link key={m.n} href={m.href} className="group relative flex items-center h-11 gap-3 border-b border-white/[0.06] hover:bg-white/[0.03] transition-colors">
-                      <span aria-hidden className="absolute left-0 top-2 bottom-2 w-0.5 bg-[#e91e3f] scale-y-0 group-hover:scale-y-100 origin-center transition-transform"></span>
-                      <span className="w-6 shrink-0 text-[10px] font-black tabular-nums text-white/30 text-center">{m.n}</span>
-                      <span className="min-w-0 flex-1 text-[13px] font-bold text-white/70 group-hover:text-white transition-colors flex items-center gap-2">{m.t}{m.live && <LiveDot color="bg-[#e91e3f]" />}</span>
-                      <span className="shrink-0 text-gray-700 group-hover:text-[#e91e3f] group-hover:translate-x-0.5 transition-all">→</span>
-                    </Link>
-                  ))}
-                  <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="group flex items-center h-11 gap-3 border-b border-white/[0.06] hover:bg-white/[0.03] transition-colors">
-                    <span className="w-6 shrink-0 text-[10px] font-black tabular-nums text-white/30 text-center">06</span>
-                    <span className="min-w-0 flex-1 text-[13px] font-bold text-white/70 group-hover:text-white transition-colors">디스코드 입장</span>
-                    <span className="shrink-0 text-gray-700 group-hover:text-[#e91e3f] transition-colors">↗</span>
+              <Reveal delay={150}>
+                {/* 📌 좁은 폰(320px)에서 두 버튼이 두 줄로 접히며 커튼 밖으로 밀리던 문제 —
+                       모바일에서는 알약을 한 단계 작게 잡아 항상 한 줄에 들어가게 한다 */}
+                <div className="flex flex-wrap justify-center md:justify-start gap-3 md:gap-4">
+                  <a
+                    href="https://discord.gg/V2uW2nUczU"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-6 py-3.5 md:px-8 md:py-4 bg-[#e91e3f] text-white rounded-full font-bold text-sm md:text-lg hover:bg-[#d01634] transition-all shadow-[0_10px_36px_rgba(233,30,63,0.35)] hover:shadow-[0_14px_44px_rgba(233,30,63,0.5)] hover:-translate-y-0.5 outline-none focus:outline-none"
+                  >
+                    서버 바로가기
                   </a>
+                  <Link
+                    href="/faq"
+                    className="px-6 py-3.5 md:px-8 md:py-4 bg-white/[0.03] border border-white/10 text-white rounded-full font-bold text-sm md:text-lg hover:bg-white/[0.07] hover:border-white/25 transition-all outline-none focus:outline-none"
+                  >
+                    이용 가이드
+                  </Link>
                 </div>
-              </HudSection>
-            </Reveal>
-
-            {/* 시즌 — 좌 레일 하단의 조용한 상태 표기 */}
-            <Reveal delay={160}>
-              <HudSection label="10 · Season">
-                <div className="flex items-end justify-between mb-3">
-                  <div>
-                    <p className="text-sm font-black text-white tracking-tight">SEASON {SEASON.number} <span className="text-gray-500">&apos;{SEASON.name}&apos;</span></p>
-                    <p className="text-[10px] font-bold text-gray-600 tabular-nums mt-1">{SEASON.start.replace(/-/g, ".")} ~ {SEASON.end.replace(/-/g, ".")}</p>
-                  </div>
-                  {!dday.ended && dday.days >= 0 && <StatusChip accent>D-{dday.days}</StatusChip>}
-                </div>
-                <Link href="/level" className="block text-[11px] font-bold text-gray-600 hover:text-[#e91e3f] transition-colors">시즌 대시보드 →</Link>
-              </HudSection>
-            </Reveal>
+              </Reveal>
+            </div>
           </div>
         </div>
 
-        {/* ═══ 밴드 4 · 클로징 — 밀도 뒤의 호흡 (럭셔리 톤 유지 장치) ═══ */}
-        <Reveal delay={100}>
-          <div className="border-t border-white/[0.08] mt-14 py-16 md:py-20 text-center">
-            <p className="text-[10px] font-black tracking-[0.4em] text-gray-600 uppercase mb-5">Join Premium Igloo</p>
-            <h2 className="text-2xl md:text-4xl font-black tracking-tighter text-white mb-3 leading-tight break-keep">활동이 곧 자산이 되는 곳</h2>
-            <p className="text-sm text-gray-500 mb-9">지금 이 순간에도 서버는 움직이고 있습니다.</p>
-            <div className="flex items-center justify-center gap-3">
-              <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="px-8 py-3.5 bg-[#e91e3f] text-white rounded-lg font-bold text-sm hover:bg-[#d01634] transition-all shadow-[0_10px_36px_rgba(233,30,63,0.3)]">
-                디스코드 서버 입장
-              </a>
-              <Link href="/faq" className="px-8 py-3.5 border border-white/15 text-white/80 rounded-lg font-bold text-sm hover:border-white/35 hover:text-white transition-colors">
-                이용 가이드
-              </Link>
+      </section>
+
+      {/* ═══ SECTION 2 · 통합 라이트 패널 (01 서버현황 + 02 LIVE&UPCOMING + 03 핵심콘텐츠 + 04 최신소식) ═══
+             첫 화면에서는 보이지 않고, 스크롤하면 멈춰 있는 히어로 위로 흰 배경이 커튼처럼 올라온다 ═══ */}
+      <section className="relative w-full z-10 overflow-x-clip bg-[#f5f3f0] rounded-t-[40px] md:rounded-t-[56px] rounded-b-[40px] md:rounded-b-[56px] shadow-[0_-24px_70px_-24px_rgba(0,0,0,0.6),0_40px_90px_-30px_rgba(0,0,0,0.65)] [clip-path:inset(0_round_40px)] md:[clip-path:inset(0_round_56px)]">
+        {/* ※ overflow-hidden 대신 clip-path 사용 — overflow-hidden은 하위 sticky 제목의 위치 고정을 깨버린다.
+               overflow-x-clip은 스크롤 컨테이너를 만들지 않아 sticky에 영향 없이, 장식용 glow(우측 음수 offset)가
+               문서 가로 스크롤을 만드는 것만 막는다 (clip-path는 렌더링만 자르고 레이아웃 오버플로우는 못 막음) */}
+        <div className="absolute top-[-80px] right-[-60px] w-[400px] h-[300px] bg-[#e91e3f]/[0.08] blur-[110px] rounded-full pointer-events-none"></div>
+
+        <div className="relative z-10 divide-y divide-black/[0.06]">
+
+        {/* 01 · 서버 현황 — 제목 위 · 내용 아래 세로 구성 */}
+        {/* 📌 데이터를 기다리며 통째로 비워두면 뒤늦게 툭 튀어나온다 — 틀은 먼저 그리고 숫자만 채운다 */}
+        <div className="w-full py-20 md:py-28 px-6">
+          <div className="max-w-6xl mx-auto">
+            <Reveal>
+              <div className="relative mb-12">
+                <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">01</span>
+                <div className="relative flex items-baseline gap-4 mb-2">
+                  <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+                </div>
+                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3 break-keep">살아있는 커뮤니티</h2>
+                <p className="relative text-sm text-gray-600 break-keep">고급 이글루는 지금 이 순간에도 움직이고 있습니다.</p>
+              </div>
+            </Reveal>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 items-center">
+              <Reveal delay={100}>
+                <div className="grid grid-cols-3 gap-px bg-black/[0.08] rounded-2xl overflow-hidden border border-black/[0.06] shadow-[0_16px_44px_-28px_rgba(0,0,0,0.3)]">
+                  {[
+                    { n: stats?.memberCount, l: "전체 멤버", dot: false },
+                    { n: stats?.onlineCount, l: "현재 온라인", dot: true },
+                    { n: 2023, l: "Since", raw: true },
+                  ].map((s: any, i) => (
+                    <div key={i} className="relative bg-white px-4 py-9 text-center group hover:bg-white hover:shadow-[0_16px_44px_-18px_rgba(233,30,63,0.3)] hover:z-10 transition-all duration-300">
+                      <div className="text-3xl md:text-4xl font-black text-[#131313] group-hover:text-[#e91e3f] transition-colors tracking-tight flex items-center justify-center gap-2">
+                        {s.dot && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-[pulseGlow_2s_ease-in-out_infinite]"></span>}
+                        {s.raw ? s.n : s.n == null ? <span className="text-gray-300">—</span> : <CountUp end={s.n} />}
+                      </div>
+                      <div className="text-[9px] md:text-[10px] font-bold tracking-[0.25em] text-gray-500 mt-2.5 uppercase">{s.l}</div>
+                    </div>
+                  ))}
+                </div>
+              </Reveal>
+
+              <Reveal delay={200}>
+                {stats ? <ActivityChart history={stats.history} /> : <div className="h-[220px] rounded-2xl bg-black/[0.03] border border-black/[0.05]"></div>}
+              </Reveal>
             </div>
           </div>
-        </Reveal>
-      </div>
+        </div>
+
+        {/* 02 · LIVE & UPCOMING — 제목은 고정, 내용만 스크롤 (md 이상) */}
+        {(!scheduleLoaded || schedule.length > 0) && (
+        <div className="relative w-full py-20 md:py-28 px-6">
+          <div className="absolute top-0 right-[-100px] w-[400px] h-[300px] bg-[#e91e3f]/[0.05] blur-[110px] rounded-full pointer-events-none"></div>
+          <div className="max-w-6xl mx-auto relative z-10">
+            <Reveal>
+              <div className="relative mb-12">
+                <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">02</span>
+                <div className="relative flex items-baseline gap-4 mb-2">
+                  <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+                </div>
+                <h2 className="relative text-2xl md:text-4xl font-black text-[#131313] tracking-tight mb-3 break-keep">지금, 이글루에서는</h2>
+                <p className="relative text-sm text-gray-600 break-keep">진행 중인 대회와 이벤트를 확인하세요.</p>
+              </div>
+            </Reveal>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 불러오는 동안 자리만 잡아둔다 — 나중에 툭 튀어나오지 않게 */}
+              {!scheduleLoaded &&
+                [0, 1].map((i) => (
+                  <div key={`sk-${i}`} className="h-[74px] rounded-2xl border border-black/[0.05] bg-white/60"></div>
+                ))}
+              {schedule.map((item, i) => (
+                <Reveal key={i} delay={i * 100}>
+                  <Link href={item.path} className={`flex items-center gap-4 px-6 py-5 rounded-2xl border backdrop-blur-sm transition-all duration-300 group/sch h-full hover:-translate-y-1 ${item.type === "경매 LIVE" ? "bg-emerald-500/[0.06] border-emerald-500/25 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:shadow-[0_20px_50px_-20px_rgba(16,185,129,0.3)]" : "bg-white/75 border-black/[0.05] hover:border-[#e91e3f]/30 hover:bg-white hover:shadow-[0_20px_50px_-20px_rgba(233,30,63,0.22)]"}`}>
+                    <span className={`shrink-0 text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1.5 ${item.type === "경매 LIVE" ? "bg-emerald-500/15 text-emerald-600" : item.type.includes("진행중") ? "bg-emerald-500/15 text-emerald-600" : item.type.includes("대회") ? "bg-blue-500/15 text-blue-600" : "bg-[#e91e3f]/15 text-[#e91e3f]"}`}>
+                      {item.type === "경매 LIVE" && (
+                        <span className="relative flex w-1.5 h-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
+                        </span>
+                      )}
+                      {item.type}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-[#131313] truncate transition-colors">{item.title}</p>
+                      {item.period && <p className="text-[11px] text-gray-500 mt-0.5">{item.period}</p>}
+                    </div>
+                    <span className="ml-auto shrink-0 text-gray-400 group-hover/sch:text-[#e91e3f] group-hover/sch:translate-x-1 transition-all">→</span>
+                  </Link>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* 03 · 핵심 콘텐츠 소개 — 제목은 왼쪽에 고정(sticky), 오른쪽엔 긴 세로 스택이 흘러간다 */}
+        <div className="w-full py-20 md:py-28 px-6">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-[210px_1fr] lg:grid-cols-[250px_1fr] gap-10 md:gap-14">
+            {/* 제목 칸 — sticky 범위를 마지막 카드 하나만큼(300px) 줄여서,
+                   스크롤이 섹션 끝에 다다르면 고정이 풀리고 콘텐츠와 함께 자연스럽게 올라간다 */}
+            <div className="relative">
+              <div className="md:absolute md:inset-x-0 md:top-0 md:bottom-[300px]">
+                <Reveal className="md:sticky md:top-24">
+                  <div className="relative">
+                    <span aria-hidden className="absolute -top-2 md:-top-6 left-0 text-[56px] md:text-[84px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">03</span>
+                    <div className="relative flex items-center gap-3 mb-2">
+                      <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
+                      <div className="h-px w-8 bg-black/15"></div>
+                    </div>
+                    <h2 className="relative text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-3 break-keep">이글루에서 즐기는 방법</h2>
+                    <p className="relative text-sm text-gray-600 break-keep">활동하고, 성장하고, 증명하세요.</p>
+                  </div>
+                </Reveal>
+              </div>
+            </div>
+
+            {/* 긴 세로 스택 — 카드 하나하나가 큼직해서 제목 고정이 확실히 체감된다 */}
+            <div className="flex flex-col gap-5">
+              <Reveal>
+                <Link href="/level" className="group relative flex flex-col justify-between min-h-[300px] md:min-h-[340px] rounded-3xl bg-[#111111] p-8 md:p-10 overflow-hidden shadow-[0_30px_70px_-30px_rgba(0,0,0,0.55)] hover:shadow-[0_36px_80px_-24px_rgba(233,30,63,0.4)] hover:-translate-y-1.5 transition-all duration-500">
+                  <div className="absolute -bottom-16 -right-16 w-64 h-64 bg-[#e91e3f]/20 blur-[90px] rounded-full pointer-events-none group-hover:bg-[#e91e3f]/30 transition-colors duration-500"></div>
+                  <div className="absolute inset-0 lux-grid-bg opacity-40 pointer-events-none"></div>
+                  <span aria-hidden className="absolute top-4 right-7 text-[90px] font-black text-white/[0.04] leading-none select-none pointer-events-none">I</span>
+                  <div className="relative z-10">
+                    <span className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] uppercase">Featured</span>
+                    <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight mt-3 mb-4">SYSTEM : LEVEL</h3>
+                    <p className="text-sm text-gray-400 leading-relaxed break-keep max-w-sm">채팅과 음성 활동으로 XP를 쌓아 최대 1,000레벨까지 성장하는 고급 이글루만의 성장 시스템.</p>
+                  </div>
+                  <div className="relative z-10 flex items-end justify-between mt-10">
+                    <div>
+                      <div className="text-4xl md:text-5xl font-black text-white tracking-tight tabular-nums"><CountUp end={1000} /></div>
+                      <div className="text-[10px] font-bold tracking-[0.2em] text-gray-500 uppercase mt-1">Max Level</div>
+                    </div>
+                    <span className="w-11 h-11 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm flex items-center justify-center text-white group-hover:bg-[#e91e3f] group-hover:border-[#e91e3f] group-hover:rotate-45 transition-all duration-300">→</span>
+                  </div>
+                </Link>
+              </Reveal>
+
+              <Reveal delay={100}>
+                <Link href="/tournament" className="group relative flex flex-col justify-between min-h-[260px] md:min-h-[300px] rounded-3xl bg-white/85 backdrop-blur-md border border-black/[0.05] p-8 md:p-10 overflow-hidden shadow-[0_16px_44px_-24px_rgba(0,0,0,0.18)] hover:shadow-[0_26px_60px_-20px_rgba(233,30,63,0.28)] hover:-translate-y-1.5 hover:border-[#e91e3f]/25 transition-all duration-500">
+                  <span aria-hidden className="absolute top-4 right-7 text-[90px] font-black text-black/[0.04] leading-none select-none pointer-events-none">II</span>
+                  <div className="relative z-10">
+                    <span className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] uppercase">Esports</span>
+                    <h3 className="text-2xl md:text-3xl font-black text-[#131313] tracking-tight mt-3 mb-4 group-hover:text-[#e91e3f] transition-colors">e스포츠 대회</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed break-keep max-w-sm">토너먼트에 도전하고 특별한 상금과 명예의 전당에 이름을 남기세요. 참가 신청부터 대진표, 선수 경매까지.</p>
+                  </div>
+                  <div className="relative z-10 flex items-end justify-between mt-10">
+                    <span className="text-[11px] font-black tracking-[0.2em] text-gray-400 uppercase">Tournament · Hall of Fame</span>
+                    <span className="w-11 h-11 rounded-full bg-black/[0.04] border border-black/[0.06] flex items-center justify-center text-[#131313] group-hover:bg-[#e91e3f] group-hover:border-[#e91e3f] group-hover:text-white group-hover:rotate-45 transition-all duration-300">→</span>
+                  </div>
+                </Link>
+              </Reveal>
+
+              <Reveal delay={100}>
+                <Link href="/booster" className="group relative flex flex-col justify-between min-h-[260px] md:min-h-[300px] rounded-3xl bg-white/85 backdrop-blur-md border border-black/[0.05] p-8 md:p-10 overflow-hidden shadow-[0_16px_44px_-24px_rgba(0,0,0,0.18)] hover:shadow-[0_26px_60px_-20px_rgba(233,30,63,0.28)] hover:-translate-y-1.5 hover:border-[#e91e3f]/25 transition-all duration-500">
+                  <span aria-hidden className="absolute top-4 right-7 text-[90px] font-black text-black/[0.04] leading-none select-none pointer-events-none">III</span>
+                  <div className="relative z-10">
+                    <span className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] uppercase">Support</span>
+                    <h3 className="text-2xl md:text-3xl font-black text-[#131313] tracking-tight mt-3 mb-4 group-hover:text-[#e91e3f] transition-colors">SERVER BOOSTER</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed break-keep max-w-sm">서버를 후원하고 전용 역할과 압도적인 XP 혜택을 받으세요.</p>
+                  </div>
+                  <div className="relative z-10 flex items-end justify-between mt-10">
+                    <span className="text-[11px] font-black tracking-[0.2em] text-gray-400 uppercase">+2,000 XP · 35% 환급</span>
+                    <span className="w-11 h-11 rounded-full bg-black/[0.04] border border-black/[0.06] flex items-center justify-center text-[#131313] group-hover:bg-[#e91e3f] group-hover:border-[#e91e3f] group-hover:text-white group-hover:rotate-45 transition-all duration-300">→</span>
+                  </div>
+                </Link>
+              </Reveal>
+            </div>
+          </div>
+        </div>
+
+        {/* 04 · 최신 소식 — 제목 위 · 내용 아래 세로 구성 */}
+        {notices.length > 0 && (
+          <div className="w-full py-20 md:py-28 px-6 relative z-10">
+            <div className="max-w-6xl mx-auto">
+              <Reveal>
+                <div className="relative mb-12 flex items-end justify-between gap-6">
+                  <span aria-hidden className="absolute -top-3 md:-top-8 left-0 text-[70px] md:text-[120px] font-black text-black/[0.05] leading-none select-none pointer-events-none tracking-tighter">04</span>
+                  <div className="relative min-w-0 flex-1">
+                    <div className="flex items-baseline gap-4 mb-2">
+                      <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">04</span>
+                      <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
+                    </div>
+                    <h2 className="text-2xl md:text-4xl font-black text-[#131313] tracking-tight break-keep">최신 소식</h2>
+                  </div>
+                  <Link href="/notice" className="relative shrink-0 inline-flex items-center gap-1 text-xs font-bold text-gray-600 hover:text-[#e91e3f] transition-colors group/more mb-1">
+                    전체 보기 <span className="group-hover/more:translate-x-1 transition-transform">→</span>
+                  </Link>
+                </div>
+              </Reveal>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Reveal className="h-full">
+                  <Link href={`/notice?id=${notices[0]._id}`} className="group relative flex flex-col justify-end h-full min-h-[220px] md:min-h-[320px] rounded-3xl bg-[#111111] p-7 md:p-8 overflow-hidden shadow-[0_26px_60px_-26px_rgba(0,0,0,0.5)] hover:shadow-[0_32px_70px_-20px_rgba(233,30,63,0.35)] hover:-translate-y-1.5 transition-all duration-500">
+                    {notices[0].bannerUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={notices[0].bannerUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-45 group-hover:opacity-55 group-hover:scale-105 transition-all duration-700" />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/10 pointer-events-none"></div>
+                    <div className="relative z-10">
+                      <h3 className="text-lg md:text-xl font-black text-white leading-snug break-keep line-clamp-2 mb-2">{notices[0].title}</h3>
+                      <p className="text-xs text-gray-400">{fmtDate(notices[0].createdAt)}</p>
+                    </div>
+                  </Link>
+                </Reveal>
+
+                <div className="flex flex-col gap-3">
+                  {notices.slice(1, 4).map((n, i) => (
+                    <Reveal key={n._id} delay={i * 90}>
+                      <Link href={`/notice?id=${n._id}`} className="group flex items-center gap-4 bg-white/85 backdrop-blur-md rounded-2xl border border-black/[0.05] px-5 py-4 shadow-[0_10px_28px_-18px_rgba(0,0,0,0.2)] hover:shadow-[0_18px_40px_-16px_rgba(233,30,63,0.25)] hover:-translate-y-0.5 hover:border-[#e91e3f]/25 transition-all duration-300">
+                        <span className="shrink-0 text-[10px] font-bold text-gray-400 tabular-nums">{fmtDate(n.createdAt)}</span>
+                        <p className="min-w-0 flex-1 text-sm font-bold text-[#131313] truncate group-hover:text-[#e91e3f] transition-colors">{n.title}</p>
+                        <span className="shrink-0 text-gray-300 group-hover:text-[#e91e3f] group-hover:translate-x-1 transition-all">→</span>
+                      </Link>
+                    </Reveal>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        </div>
+      </section>
+
+      </div>{/* 커튼 컨테이너 끝 */}
+
+      {/* ═══ SECTION 6 · 마지막 CTA — 역방향 커튼(스티키 리빌):
+             화면 하단에 미리 깔려 있다가, 흰 패널이 위로 걷히면서 밑에서 드러난다 ═══ */}
+      <section className="sticky bottom-0 z-0 w-full py-24 md:py-32 px-6 overflow-hidden">
+        <div className="absolute bottom-[-150px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[130px] rounded-full pointer-events-none"></div>
+        <div className="max-w-3xl mx-auto text-center relative z-10">
+          <Reveal>
+            <p className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase mb-5">Join Premium Igloo</p>
+            <h2 className="text-3xl md:text-5xl font-black tracking-tighter text-white mb-4 leading-tight">
+              지금 바로 <span className="lux-shimmer">참여하세요</span>
+            </h2>
+            <p className="text-sm md:text-base text-gray-400 mb-10">나의 활동이 나의 자산이 되는 순간을.</p>
+            <a
+              href="https://discord.gg/V2uW2nUczU"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block px-12 py-4 bg-[#e91e3f] text-white rounded-full font-bold text-base md:text-lg hover:bg-[#d01634] transition-all shadow-[0_10px_36px_rgba(233,30,63,0.35)] hover:shadow-[0_14px_44px_rgba(233,30,63,0.5)] hover:-translate-y-0.5"
+            >
+              디스코드 서버 입장하기
+            </a>
+          </Reveal>
+        </div>
+      </section>
     </main>
   );
 }
