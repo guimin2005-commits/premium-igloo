@@ -30,9 +30,18 @@ export async function GET(request, { params }) {
   }
 }
 
+// 📌 글 쓰기·수정·삭제는 관리자만 — 대회 설문에 개인정보(실명·계좌번호)가 붙으므로
+//    화면 단 차단만으로는 부족하다. 서버에서 반드시 다시 확인한다.
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  return isAdminName(session?.user?.name);
+}
+const denied = () => NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+
 // 📌 2. 글 수정 완료 버튼을 눌렀을 때 실행되는 기능 (PUT)
 export async function PUT(request, { params }) {
   try {
+    if (!(await requireAdmin())) return denied();
     await connectToDatabase();
     const resolvedParams = await params;
     const { id } = resolvedParams;
@@ -50,6 +59,7 @@ export async function PUT(request, { params }) {
 // 📌 3. 삭제 팝업에서 '삭제하기'를 눌렀을 때 실행되는 기능 (DELETE)
 export async function DELETE(request, { params }) {
   try {
+    if (!(await requireAdmin())) return denied();
     await connectToDatabase();
     const resolvedParams = await params;
     const { id } = resolvedParams;
