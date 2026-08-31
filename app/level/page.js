@@ -162,121 +162,7 @@ const REASON_LABELS = { chat: "채팅", voice: "음성", attend: "출석" };
 
 // 음성 티어 경계·이름·색은 lib/voiceTiers.js 단일 소스 (봇 지급표와 1:1)
 
-// 📌 레벨 성장 곡선 — 이 페이지의 시그니처. Lv 1~1000 누적 XP를 곡선으로 그리고,
-//    마우스/터치를 따라 임의 레벨의 누적·필요 XP를 실시간으로 읽어준다.
-//    myLevel이 있으면(로그인) 곡선 위에 'YOU' 마커로 내 위치를 표시한다.
-const LevelCurve = ({ myLevel = null }) => {
-  const boxRef = useRef(null);
-  const [probe, setProbe] = useState(null); // { lv }
-  const W = 800, H = 300, PB = 34, PT = 14;
-  const maxXp = getCumulativeXpByLevel(1000);
-  const X = (lv) => (lv / 1000) * W;
-  const Y = (xp) => H - PB - (xp / maxXp) * (H - PB - PT);
-
-  const path = useMemo(() => {
-    let d = "";
-    for (let lv = 1; lv <= 1000; lv += 5) d += `${d ? "L" : "M"}${X(lv).toFixed(1)},${Y(getCumulativeXpByLevel(lv)).toFixed(1)}`;
-    d += `L${X(1000).toFixed(1)},${Y(maxXp).toFixed(1)}`;
-    return d;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const milestones = [100, 250, 500, 750, 1000];
-  const hasMe = typeof myLevel === "number" && myLevel > 0;
-  const lv = probe?.lv ?? (hasMe ? myLevel : 1000);
-  const cum = getCumulativeXpByLevel(lv);
-  const req = lv <= 1 ? 0 : cum - getCumulativeXpByLevel(lv - 1);
-  const modeLabel = probe ? "탐색 중" : hasMe ? "내 위치" : "MAX";
-
-  const onMove = (e) => {
-    const rect = boxRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const ratio = Math.min(Math.max((cx - rect.left) / rect.width, 0), 1);
-    setProbe({ lv: Math.max(1, Math.round(ratio * 1000)) });
-  };
-
-  return (
-    <div>
-      {/* 판독값 — 곡선 위 어느 지점이든 짚으면 갱신 */}
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-5">
-        <div>
-          <p className="text-[10px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase mb-1.5">Growth Curve · Lv 1 → 1,000</p>
-          <p className="text-3xl md:text-4xl font-black text-[#131313] tracking-tight tabular-nums">
-            Lv {lv.toLocaleString()}
-            <span className={`ml-2 text-xs font-bold align-middle ${probe ? "text-[#e91e3f]" : hasMe ? "text-[#131313]" : "text-[#a3a3a3]"}`}>{modeLabel}</span>
-          </p>
-        </div>
-        <div className="flex gap-8 text-right">
-          <div>
-            <p className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase mb-1">누적 XP</p>
-            <p className="text-base md:text-lg font-black text-[#e91e3f] tabular-nums">{cum.toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase mb-1">이 레벨 필요 XP</p>
-            <p className="text-base md:text-lg font-black text-[#131313] tabular-nums">{req.toLocaleString()}</p>
-          </div>
-        </div>
-      </div>
-
-      <div
-        ref={boxRef}
-        className="relative cursor-crosshair select-none touch-none"
-        onMouseMove={onMove}
-        onTouchStart={onMove}
-        onTouchMove={onMove}
-        onMouseLeave={() => setProbe(null)}
-      >
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-52 md:h-72 overflow-visible" preserveAspectRatio="none">
-          <defs>
-            <linearGradient id="lvFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#e91e3f" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="#e91e3f" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {/* 가로 눈금 */}
-          {[0.25, 0.5, 0.75].map((r) => (
-            <line key={r} x1="0" x2={W} y1={PT + (H - PB - PT) * r} y2={PT + (H - PB - PT) * r} stroke="rgba(0,0,0,0.05)" strokeWidth="1" />
-          ))}
-          <polygon points={`0,${H - PB} ${path.replace(/[ML]/g, " ").trim()} ${W},${H - PB}`} fill="url(#lvFill)" />
-          <path d={path} fill="none" stroke="#e91e3f" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 8px rgba(233,30,63,0.5))" }} />
-          {/* 마일스톤 */}
-          {milestones.map((m) => (
-            <g key={m}>
-              <circle cx={X(m)} cy={Y(getCumulativeXpByLevel(m))} r="3.5" fill="#f5f3f0" stroke="#e91e3f" strokeWidth="2" />
-              <text x={X(m)} y={H - PB + 20} textAnchor={m === 1000 ? "end" : "middle"} fill="rgba(0,0,0,0.35)" fontSize="11" fontWeight="800">{m}</text>
-            </g>
-          ))}
-          {/* 내 위치(YOU) 마커 — 로그인 시 실데이터 연동 */}
-          {hasMe && (
-            <g>
-              <line x1={X(myLevel)} x2={X(myLevel)} y1={Y(getCumulativeXpByLevel(myLevel))} y2={H - PB} stroke="rgba(0,0,0,0.25)" strokeWidth="1" strokeDasharray="2 4" />
-              <circle cx={X(myLevel)} cy={Y(getCumulativeXpByLevel(myLevel))} r="5" fill="#ffffff" stroke="#e91e3f" strokeWidth="2.5" style={{ filter: "drop-shadow(0 0 8px rgba(233,30,63,0.35))" }} />
-              <text
-                x={Math.min(Math.max(X(myLevel), 30), W - 30)}
-                y={Math.max(Y(getCumulativeXpByLevel(myLevel)) - 14, 12)}
-                textAnchor="middle" fill="#e91e3f" stroke="#f5f3f0" strokeWidth="3" paintOrder="stroke" fontSize="11" fontWeight="900" letterSpacing="1"
-              >YOU</text>
-            </g>
-          )}
-          {/* 프로브(탐색) 라인 */}
-          {probe && (
-            <g>
-              <line x1={X(lv)} x2={X(lv)} y1={PT} y2={H - PB} stroke="rgba(233,30,63,0.4)" strokeWidth="1" strokeDasharray="3 4" />
-              <circle cx={X(lv)} cy={Y(cum)} r="5" fill="#e91e3f" style={{ filter: "drop-shadow(0 0 10px rgba(233,30,63,0.9))" }} />
-            </g>
-          )}
-          {/* 바닥 축 */}
-          <line x1="0" x2={W} y1={H - PB} y2={H - PB} stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
-        </svg>
-      </div>
-      <p className="text-[10px] text-[#c4c4c4] mt-2">곡선 위에 마우스를 올리거나 터치하면 해당 레벨의 XP를 확인할 수 있습니다.</p>
-    </div>
-  );
-};
-
-// 📌 레벨 구간별 음성 XP 계단 차트 — 표 대신 '레벨이 오를수록 쌓이는 계단'을 그대로 보여준다
-// 📌 음성 티어 계단 — 티어별 이름·색과 5분당 지급량을 함께 보여 준다
+// 📌 음성 티어 계단 — 표 대신 '티어가 오를수록 쌓이는 계단'으로 지급량을 보여준다
 const TierStairs = ({ base = 3000 }) => {
   const vals = VOICE_TIERS.map((t) => base + t.bonus);
   const min = Math.min(...vals) - 400;
@@ -828,15 +714,8 @@ export default function LevelPage() {
                 </div>
 
                 {/* 공개 섹션 — 관전자에게도 실데이터 */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-12 mt-14">
-                  <div className="lg:col-span-7 min-w-0">
-                    <div className="mb-5">
-                      <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Curve</span>
-                      <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">성장 곡선</h3>
-                    </div>
-                    <LevelCurve />
-                  </div>
-                  <div className="lg:col-span-5 mt-12 lg:mt-0 min-w-0">
+                <div className="mt-14">
+                  <div className="max-w-2xl mx-auto min-w-0">
                     <div className="flex items-end justify-between mb-5">
                       <div>
                         <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Ranking</span>
@@ -948,87 +827,6 @@ export default function LevelPage() {
 
                   {/* 메인 열 */}
                   <div className="lg:col-span-8 min-w-0 space-y-14">
-                    {/* 획득 현황 */}
-                    <section>
-                      <div className="flex items-end justify-between mb-6">
-                        <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Intake</span>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">획득 현황</h3>
-                        </div>
-                        <span className="text-[11px] font-bold text-[#a3a3a3]">채팅 · 음성 · 출석</span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
-                        {[
-                          { key: "today", label: "오늘", data: myLogs?.today },
-                          { key: "month", label: "이번 달", data: myLogs?.month },
-                        ].map(({ key, label, data }) => {
-                          const total = data?.total ?? 0;
-                          return (
-                            <div key={key}>
-                              <div className="flex items-baseline justify-between mb-3">
-                                <span className="text-[12px] font-bold text-[#5a5a5a]">{label}</span>
-                                <span className="text-3xl md:text-4xl font-black text-[#131313] tabular-nums tracking-tight">+{total.toLocaleString()}<span className="text-[11px] font-bold text-[#a3a3a3] ml-1">XP</span></span>
-                              </div>
-                              {total > 0 ? (
-                                <>
-                                  <div className="flex h-3 rounded-full overflow-hidden bg-black/[0.05]">
-                                    {["chat", "voice", "attend"].map((r) => (
-                                      <div key={r} style={{ width: `${((data?.[r] || 0) / total) * 100}%`, background: REASON_COLORS[r] }}></div>
-                                    ))}
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5">
-                                    {["chat", "voice", "attend"].map((r) => (
-                                      <span key={r} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#8a8a8a] tabular-nums">
-                                        <span className="w-2 h-2 rounded-full" style={{ background: REASON_COLORS[r] }}></span>
-                                        {REASON_LABELS[r]} {(data?.[r] || 0).toLocaleString()}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </>
-                              ) : (
-                                <EmptySlot className="h-[56px]">아직 획득 없음 — 활동하면 채워집니다</EmptySlot>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </section>
-
-                    {/* 성장 곡선 */}
-                    <section>
-                      <div className="mb-5">
-                        <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Curve</span>
-                        <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">성장 곡선</h3>
-                      </div>
-                      <LevelCurve myLevel={me.level} />
-                    </section>
-
-                    {/* 서버 랭킹 */}
-                    <section>
-                      <div className="flex items-end justify-between mb-5">
-                        <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Ranking</span>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1">TOP 10</span></h3>
-                        </div>
-                        <span className="flex items-center gap-3">
-                          {["all", "month"].map((k) => (
-                            <button key={k} onClick={() => setLbTab(k)} className={`text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 ${lbTab === k ? "text-[#131313] border-b-2 border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a]"}`}>{k === "all" ? "누적" : "이번 달"}</button>
-                          ))}
-                        </span>
-                      </div>
-                      {!lb[lbTab] ? (
-                        <div className="py-10 text-center text-[11px] font-bold text-[#c4c4c4]">불러오는 중…</div>
-                      ) : !lb[lbTab].data?.length ? (
-                        <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
-                      ) : (
-                        <RankRows rows={lb[lbTab].data} myId={session.user.id} me={lbTab === "all" ? me : null} myName={session.user.name} />
-                      )}
-                      {lbTab === "month" && <p className="text-[10px] text-[#c4c4c4] mt-2.5">이번 달 지급 로그 합산 기준 · 매월 1일(KST) 초기화</p>}
-                    </section>
-                  </div>
-
-                  {/* 사이드 열 */}
-                  <div className="lg:col-span-4 min-w-0 space-y-14 mt-14 lg:mt-0">
                     {/* 일일 퀘스트 — 출석(봇 지급) + 관리자가 정의한 퀘스트(원클릭 수령) */}
                     <section>
                       <div className="flex items-end justify-between mb-5">
@@ -1104,7 +902,7 @@ export default function LevelPage() {
                               <button
                                 onClick={() => claimQuest(q)}
                                 disabled={claiming === q.id}
-                                className="w-full mt-3 py-2.5 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[13px] font-bold transition-colors outline-none focus:outline-none"
+                                className="w-full sm:w-auto sm:ml-auto sm:block sm:px-7 mt-3 py-2.5 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[13px] font-bold transition-colors outline-none focus:outline-none"
                               >
                                 {claiming === q.id ? "수령 중…" : `보상 ${q.rewardXp.toLocaleString()} XP 받기`}
                               </button>
@@ -1136,6 +934,78 @@ export default function LevelPage() {
                       </div>
                     </section>
 
+                    {/* 획득 현황 */}
+                    <section>
+                      <div className="flex items-end justify-between mb-6">
+                        <div>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Intake</span>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">획득 현황</h3>
+                        </div>
+                        <span className="text-[11px] font-bold text-[#a3a3a3]">채팅 · 음성 · 출석</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+                        {[
+                          { key: "today", label: "오늘", data: myLogs?.today },
+                          { key: "month", label: "이번 달", data: myLogs?.month },
+                        ].map(({ key, label, data }) => {
+                          const total = data?.total ?? 0;
+                          return (
+                            <div key={key}>
+                              <div className="flex items-baseline justify-between mb-3">
+                                <span className="text-[12px] font-bold text-[#5a5a5a]">{label}</span>
+                                <span className="text-3xl md:text-4xl font-black text-[#131313] tabular-nums tracking-tight">+{total.toLocaleString()}<span className="text-[11px] font-bold text-[#a3a3a3] ml-1">XP</span></span>
+                              </div>
+                              {total > 0 ? (
+                                <>
+                                  <div className="flex h-3 rounded-full overflow-hidden bg-black/[0.05]">
+                                    {["chat", "voice", "attend"].map((r) => (
+                                      <div key={r} style={{ width: `${((data?.[r] || 0) / total) * 100}%`, background: REASON_COLORS[r] }}></div>
+                                    ))}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5">
+                                    {["chat", "voice", "attend"].map((r) => (
+                                      <span key={r} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#8a8a8a] tabular-nums">
+                                        <span className="w-2 h-2 rounded-full" style={{ background: REASON_COLORS[r] }}></span>
+                                        {REASON_LABELS[r]} {(data?.[r] || 0).toLocaleString()}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </>
+                              ) : (
+                                <EmptySlot className="h-[56px]">아직 획득 없음 — 활동하면 채워집니다</EmptySlot>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+
+                    {/* 서버 랭킹 */}
+                    <section>
+                      <div className="flex items-end justify-between mb-5">
+                        <div>
+                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Ranking</span>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1">TOP 10</span></h3>
+                        </div>
+                        <span className="flex items-center gap-3">
+                          {["all", "month"].map((k) => (
+                            <button key={k} onClick={() => setLbTab(k)} className={`text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 ${lbTab === k ? "text-[#131313] border-b-2 border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a]"}`}>{k === "all" ? "누적" : "이번 달"}</button>
+                          ))}
+                        </span>
+                      </div>
+                      {!lb[lbTab] ? (
+                        <div className="py-10 text-center text-[11px] font-bold text-[#c4c4c4]">불러오는 중…</div>
+                      ) : !lb[lbTab].data?.length ? (
+                        <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
+                      ) : (
+                        <RankRows rows={lb[lbTab].data} myId={session.user.id} me={lbTab === "all" ? me : null} myName={session.user.name} />
+                      )}
+                      {lbTab === "month" && <p className="text-[10px] text-[#c4c4c4] mt-2.5">이번 달 지급 로그 합산 기준 · 매월 1일(KST) 초기화</p>}
+                    </section>
+                  </div>
+
+                  {/* 사이드 열 */}
+                  <div className="lg:col-span-4 min-w-0 space-y-14 mt-14 lg:mt-0">
                     {/* ARCTIC 상점 바로가기 — 레벨 ↔ 상점 동선 (아이스 틴트 전용색) */}
                     {canSeeShop && (
                       <section>
