@@ -53,6 +53,7 @@ export async function POST(request) {
         voiceXp: num(b.voiceXp, 3000),
         voiceIntervalSec: num(b.voiceIntervalSec, 300, { min: 30, max: 86400 }),
         attendXp: num(b.attendXp, 7000),
+        attendVoiceMin: num(b.attendVoiceMin, 60, { min: 1, max: 1440 }),
         muteMode: ["off", "reduce", "block"].includes(b.muteMode) ? b.muteMode : "reduce",
         muteReducePct: num(b.muteReducePct, 90, { min: 0, max: 100 }),
         muteTarget: ["both", "any"].includes(b.muteTarget) ? b.muteTarget : "both",

@@ -340,11 +340,16 @@ export default function LevelPage() {
     setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 4000);
   }, []);
 
+  // 일일 퀘스트 — 30초 폴링에 함께 실려 진행도가 실시간으로 찬다
+  const [quests, setQuests] = useState(null);
+  const [claiming, setClaiming] = useState("");
+
   const loadMe = useCallback(async () => {
     try {
-      const [meRes, logRes] = await Promise.all([
+      const [meRes, logRes, qRes] = await Promise.all([
         fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/xp/my-logs", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/xp/quests", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       ]);
       if (meRes?.success) {
         const d = meRes.data;
@@ -356,13 +361,39 @@ export default function LevelPage() {
         setLastSync(new Date());
       }
       if (logRes?.success) setMyLogs(logRes.data);
+      if (qRes?.success) setQuests(qRes.data);
     } catch {}
     setMeLoaded(true);
   }, [pushToast]);
 
+  // 보상 수령 — 서버가 진행도를 다시 세고 중복을 막는다. 결과는 토스트+효과음으로 알린다.
+  const claimQuest = useCallback(async (q) => {
+    setClaiming(q.id);
+    try {
+      const res = await fetch("/api/xp/quests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questId: q.id }),
+      }).then((r) => r.json());
+
+      if (res?.success) {
+        setQuests(res.data);
+        pushToast(`${q.name} 보상 +${q.rewardXp.toLocaleString()} XP 수령`, true);
+        sfxLevelUp();
+      } else {
+        pushToast(res?.error || "수령하지 못했습니다.");
+        // 서버 상태와 어긋났을 수 있으니 다시 맞춘다
+        loadMe();
+      }
+    } catch {
+      pushToast("네트워크 오류로 수령하지 못했습니다.");
+    }
+    setClaiming("");
+  }, [pushToast, loadMe]);
+
   useEffect(() => {
     if (authStatus === "loading") return;
-    if (!session?.user) { setMe(null); setMyLogs(null); prevXpRef.current = null; setMeLoaded(true); return; }
+    if (!session?.user) { setMe(null); setMyLogs(null); setQuests(null); prevXpRef.current = null; setMeLoaded(true); return; }
     loadMe();
     const t = setInterval(loadMe, 30 * 1000);
     const onFocus = () => loadMe();
@@ -400,6 +431,13 @@ export default function LevelPage() {
   const tierCur = TIER_STEPS[tierIdx];
   const tierNext = TIER_STEPS[tierIdx + 1] || null;
   const tierNextBound = TIER_BOUNDS[tierIdx + 1] ?? null;
+
+  // 일일 퀘스트 요약 — 출석(봇이 지급)도 한 칸으로 세어 전체 달성률을 만든다
+  const questRows = quests?.quests || [];
+  const questDone = questRows.filter((q) => q.claimed || q.done).length;
+  const questTotal = questRows.length;
+  const questPct = Math.round((questDone / Math.max(1, questTotal)) * 100);
+  const questClaimable = questRows.filter((q) => q.claimable).length;
 
   // 킬피드 확장 토글 — 내부 스크롤 대신 6건 + 전체 보기 (이중 스크롤 회피)
   const [feedOpen, setFeedOpen] = useState(false);
@@ -987,27 +1025,108 @@ export default function LevelPage() {
 
                   {/* 사이드 열 */}
                   <div className="lg:col-span-4 min-w-0 space-y-14 mt-14 lg:mt-0">
-                    {/* 출석 퀘스트 */}
+                    {/* 일일 퀘스트 — 출석(봇 지급) + 관리자가 정의한 퀘스트(원클릭 수령) */}
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
                           <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Daily</span>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">출석 퀘스트</h3>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">일일 퀘스트</h3>
                         </div>
-                        {attendedToday ? <StatusChip dot>오늘 완료</StatusChip> : <StatusChip accent>진행 가능</StatusChip>}
-                      </div>
-                      <div className={`rounded-2xl border p-5 transition-all ${attendedToday ? "border-black/[0.08] bg-black/[0.02] opacity-70" : "border-[#e91e3f]/25 bg-[#e91e3f]/[0.05]"}`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-sm font-bold text-[#131313]">매일 출석 체크</p>
-                          <p className="text-lg font-black text-[#e91e3f] tabular-nums shrink-0">+{P.attendXp.toLocaleString()} <span className="text-[10px] font-bold">XP</span></p>
-                        </div>
-                        <p className="text-[11px] text-[#8a8a8a] leading-relaxed mb-4 break-keep">디스코드에서 아래 명령을 입력하면 즉시 지급되고, 이 화면에 실시간 반영됩니다.</p>
-                        <div className="flex items-center gap-3">
-                          <code className="px-3.5 py-2 rounded-lg bg-black/[0.05] border border-black/10 text-[13px] font-mono font-bold text-[#131313]/85">/출석체크</code>
-                          <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">디스코드에서 받기 ↗</a>
+                        <div className="text-right shrink-0">
+                          <p className="text-lg font-black text-[#131313] tabular-nums leading-none">
+                            {questDone}<span className="text-[#c4c4c4]"> / {questTotal}</span>
+                          </p>
+                          <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mt-1">Complete</p>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between border-t border-black/[0.08] mt-6 pt-4">
+
+                      {/* 전체 달성률 */}
+                      <div className="h-1.5 rounded-full bg-black/[0.06] overflow-hidden mb-1.5">
+                        <div className="h-full rounded-full bg-[#e91e3f] transition-[width] duration-700" style={{ width: `${questPct}%` }}></div>
+                      </div>
+                      <p className="text-[10px] font-bold text-[#a3a3a3] mb-5">
+                        {questClaimable > 0
+                          ? <span className="text-[#e91e3f]">받을 수 있는 보상 {questClaimable}개</span>
+                          : questDone === questTotal ? "오늘 퀘스트를 모두 마쳤습니다" : "매일 자정(KST)에 초기화됩니다"}
+                      </p>
+
+                      {/* 퀘스트 목록 — 첫 항목은 내장 출석(음성 N분) */}
+                      {questRows.map((q) => {
+                        const pct = Math.min(100, Math.round((q.current / Math.max(1, q.target)) * 100));
+                        const unit = q.metric === "xp" ? " XP" : q.metric === "minute" ? "분" : "회";
+                        return (
+                          <div
+                            key={q.id}
+                            className={`rounded-2xl border p-4 mb-2.5 transition-all ${
+                              q.claimable
+                                ? "border-[#e91e3f]/45 bg-[#e91e3f]/[0.06] shadow-[0_10px_30px_-18px_rgba(233,30,63,0.6)]"
+                                : q.claimed || q.done
+                                ? "border-black/[0.08] bg-black/[0.02]"
+                                : "border-black/[0.08]"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className={`text-sm font-bold ${q.claimed ? "text-[#8a8a8a]" : "text-[#131313]"}`}>{q.name}</p>
+                                {q.desc && <p className="text-[11px] text-[#a3a3a3] mt-0.5 break-keep">{q.desc}</p>}
+                                {q.builtin && !q.done && (
+                                  <p className="text-[11px] font-bold text-[#8a8a8a] mt-1 tabular-nums">
+                                    오늘 음성 {quests?.voiceMin ?? 0}분 · {Math.max(0, q.target - q.current)}분 남음
+                                  </p>
+                                )}
+                              </div>
+                              {q.rewardXp > 0 && (
+                                <p className={`shrink-0 text-sm font-black tabular-nums ${q.claimed ? "text-[#c4c4c4]" : "text-[#e91e3f]"}`}>
+                                  +{q.rewardXp.toLocaleString()}<span className="text-[10px] ml-0.5">XP</span>
+                                </p>
+                              )}
+                            </div>
+
+                            {/* 진행 게이지 */}
+                            <div className="flex items-center gap-3 mt-3">
+                              <div className="flex-1 h-1.5 rounded-full bg-black/[0.07] overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-[width] duration-700 ${q.done ? "bg-emerald-600" : "bg-[#131313]/45"}`}
+                                  style={{ width: `${pct}%` }}
+                                ></div>
+                              </div>
+                              <span className="shrink-0 text-[10px] font-black text-[#a3a3a3] tabular-nums">
+                                {q.current.toLocaleString()} / {q.target.toLocaleString()}{unit}
+                              </span>
+                            </div>
+
+                            {/* 상태 · 수령 */}
+                            {q.claimable ? (
+                              <button
+                                onClick={() => claimQuest(q)}
+                                disabled={claiming === q.id}
+                                className="w-full mt-3 py-2.5 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[13px] font-bold transition-colors outline-none focus:outline-none"
+                              >
+                                {claiming === q.id ? "수령 중…" : `보상 ${q.rewardXp.toLocaleString()} XP 받기`}
+                              </button>
+                            ) : q.claimed ? (
+                              <p className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-black text-emerald-700">
+                                <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                보상 수령 완료
+                              </p>
+                            ) : q.done ? (
+                              <p className="mt-2.5 text-[11px] font-black text-emerald-700">달성</p>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+
+                      {/* 관리자가 아직 퀘스트를 등록하지 않은 상태 */}
+                      {quests && questRows.length <= 1 && (
+                        <EmptySlot>추가 퀘스트가 없습니다 — 출석 보상만 진행됩니다</EmptySlot>
+                      )}
+
+                      {/* 지급 안내 — 보상은 봇 대기열을 거치므로 즉시가 아닐 수 있다 */}
+                      {questRows.some((q) => q.claimed) && (
+                        <p className="text-[10px] text-[#c4c4c4] mt-3 break-keep">수령한 보상은 잠시 뒤 XP에 반영됩니다.</p>
+                      )}
+
+                      <div className="flex items-center justify-between border-t border-black/[0.08] mt-5 pt-4">
                         <span className="text-[11px] font-bold text-[#8a8a8a]">누적 출석 <b className="text-[#131313] tabular-nums">{(me.attendCount || 0).toLocaleString()}일</b></span>
                         <span className="text-[11px] font-bold text-[#8a8a8a]">마지막 <b className="text-[#131313] tabular-nums">{me.lastAttendDate ? me.lastAttendDate.replace(/-/g, ".") : "—"}</b></span>
                       </div>

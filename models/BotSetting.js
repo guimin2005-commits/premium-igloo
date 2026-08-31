@@ -9,7 +9,8 @@ const BotSettingSchema = new mongoose.Schema({
   chatCooldownSec: { type: Number, default: 60 },  // 채팅 쿨타임 (초)
   voiceXp: { type: Number, default: 3000 },        // 음성 1회 지급량
   voiceIntervalSec: { type: Number, default: 300 },// 음성 지급 주기 (초)
-  attendXp: { type: Number, default: 7000 },       // 출석 1회 지급량
+  attendXp: { type: Number, default: 7000 },
+  attendVoiceMin: { type: Number, default: 60 },   // 일일 출석 인정 기준 — 음성 접속 누적 분       // 출석 1회 지급량
 
   muteMode: { type: String, default: "reduce" },   // "off"(제한 없음) | "reduce"(감소) | "block"(차단)
   muteReducePct: { type: Number, default: 90 },    // reduce일 때 감소율 %

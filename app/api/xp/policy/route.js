@@ -23,6 +23,7 @@ export async function GET() {
         voiceXp: doc?.voiceXp ?? 3000,
         voiceIntervalSec: doc?.voiceIntervalSec ?? 300,
         attendXp: doc?.attendXp ?? 7000,
+        attendVoiceMin: doc?.attendVoiceMin ?? 60,
         muteMode: doc?.muteMode ?? "reduce",
         muteReducePct: doc?.muteReducePct ?? 90,
         muteTarget: doc?.muteTarget ?? "both",

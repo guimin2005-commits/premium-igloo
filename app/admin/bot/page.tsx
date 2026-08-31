@@ -17,6 +17,7 @@ const TAB_META: Record<string, { title: string; desc: string }> = {
   roles: { title: "역할 설정", desc: "레벨 보상 역할과 역할별 Boost 효과를 관리합니다." },
   channels: { title: "채널 · 카테고리", desc: "채널별 XP Boost와 지급 제외를 관리합니다." },
   boosts: { title: "기간제 부스트", desc: "대상·XP·기간을 지정한 한시적 부스트를 운영합니다." },
+  quests: { title: "일일 퀘스트", desc: "유저가 하루 동안 달성하고 보상을 받는 퀘스트를 관리합니다. 진행도는 봇의 XP 지급 로그로 자동 판정됩니다." },
   grant: { title: "XP 수동 지급", desc: "특정 유저나 전원에게 XP를 지급·제거하거나, 보유 XP를 초기화합니다." },
   leaderboard: { title: "리더보드", desc: "누적·월간 XP 랭킹을 확인합니다." },
   logs: { title: "XP 로그", desc: "봇이 지급한 XP 내역을 조회합니다. (최근 60일 보관)" },
@@ -44,7 +45,7 @@ export default function AdminBotPage() {
   const tab = TAB_META[tabParam] ? tabParam : "settings";
 
   const [popup, setPopup] = useState({ isOpen: false, message: "", isError: false });
-  const [deleteConfirm, setDeleteConfirm] = useState<{ kind: "role" | "channel" | "boost"; id: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ kind: "role" | "channel" | "boost" | "quest"; id: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // 공통 데이터
@@ -65,6 +66,10 @@ export default function AdminBotPage() {
   const notify = (message: string, isError = false) => setPopup({ isOpen: true, message, isError });
   const saved = () => notify("저장되었습니다. 봇에는 1분 이내 자동 반영됩니다.");
 
+  const [quests, setQuests] = useState<any[]>([]);
+  const emptyQuest = { id: "", name: "", desc: "", reason: "chat", metric: "count", target: 1, rewardXp: 0, enabled: true, order: 0 };
+  const [questForm, setQuestForm] = useState<any>(emptyQuest);
+
   // ── 데이터 로드 ─────────────────────────────
   const fetchCore = useCallback(() => {
     Promise.all([
@@ -74,13 +79,15 @@ export default function AdminBotPage() {
       fetch("/api/discord-channels", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/bot-settings", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: null })),
       fetch("/api/xp-boost", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-    ]).then(([cfg, roles, chCfg, channels, st, bst]) => {
+      fetch("/api/daily-quest", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+    ]).then(([cfg, roles, chCfg, channels, st, bst, qst]) => {
       setConfigs(Array.isArray(cfg?.data) ? cfg.data : []);
       setGuildRoles(Array.isArray(roles?.data) ? roles.data : []);
       setChannelConfigs(Array.isArray(chCfg?.data) ? chCfg.data : []);
       setGuildChannels(Array.isArray(channels?.data) ? channels.data : []);
       if (st?.data) setSettings(st.data);
       setBoosts(Array.isArray(bst?.data) ? bst.data : []);
+      setQuests(Array.isArray(qst?.data) ? qst.data : []);
     }).finally(() => setIsLoading(false));
   }, []);
 
@@ -240,9 +247,25 @@ export default function AdminBotPage() {
     else notify(d?.message || "저장에 실패했습니다.", true);
   };
 
+  // ── 일일 퀘스트 ─────────────────────────────
+  const saveQuest = async () => {
+    if (!questForm.name.trim()) return notify("퀘스트 이름을 입력해 주세요.", true);
+    const res = await fetch("/api/daily-quest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(questForm),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    if (d?.success) {
+      setQuestForm(emptyQuest);
+      fetchCore();
+      notify("저장되었습니다. 유저 화면에 바로 반영됩니다.");
+    } else notify(d?.error || "저장에 실패했습니다.", true);
+  };
+
   const executeDelete = async () => {
     if (!deleteConfirm) return;
-    const api = { role: "/api/role-config", channel: "/api/channel-config", boost: "/api/xp-boost" }[deleteConfirm.kind];
+    const api = { role: "/api/role-config", channel: "/api/channel-config", boost: "/api/xp-boost", quest: "/api/daily-quest" }[deleteConfirm.kind];
     const res = await fetch(`${api}?id=${deleteConfirm.id}`, { method: "DELETE" }).catch(() => null);
     if (res?.ok) fetchCore();
     setDeleteConfirm(null);
@@ -333,7 +356,12 @@ export default function AdminBotPage() {
                 <div>
                   <label className={labelClass}>출석체크 XP</label>
                   <input type="number" min={0} value={settings.attendXp} onChange={(e) => setSettings({ ...settings, attendXp: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>/출석체크 1일 1회 지급량</p>
+                  <p className={fieldNote}>일일 출석 보상 지급량 (1일 1회)</p>
+                </div>
+                <div>
+                  <label className={labelClass}>출석 인정 접속 시간 (분)</label>
+                  <input type="number" min={1} max={1440} value={settings.attendVoiceMin ?? 60} onChange={(e) => setSettings({ ...settings, attendVoiceMin: e.target.value })} className={inputClass} />
+                  <p className={fieldNote}>음성 채널에 하루 이만큼 머무르면 출석 보상을 받을 수 있습니다 (기본 60분)</p>
                 </div>
               </div>
             </section>
@@ -789,6 +817,212 @@ export default function AdminBotPage() {
 
         {/* ═══ 리더보드 ═══ */}
         {/* ═══ XP 수동 지급 ═══ */}
+        {tab === "quests" && (
+          <>
+            <Reveal>
+              <section className="mb-16">
+                <SectionHead no="01" title={questForm.id ? "퀘스트 수정" : "퀘스트 추가"} />
+
+                <div className="p-5 md:p-6 rounded-xl border border-white/10 bg-white/[0.02] mb-6">
+                  <p className="text-xs text-gray-400 leading-relaxed break-keep">
+                    진행도는 <b className="text-white">봇이 기록한 오늘(KST)의 XP 지급 로그</b>로 자동 판정됩니다. 따라서 봇이 지급하는 활동(채팅·음성·출석)만 조건으로 쓸 수 있습니다.
+                    보상은 유저가 <b className="text-white">직접 &lsquo;받기&rsquo;를 눌러야</b> 지급되며, 하루 한 번만 받을 수 있습니다. 매일 자정(KST)에 초기화됩니다.
+                  </p>
+                  <p className="text-xs text-gray-400 leading-relaxed break-keep mt-2">
+                    출석 퀘스트(음성 N분 접속)는 기본 제공되므로 여기에 만들 필요가 없습니다 — 기준 시간과 보상은 <b className="text-white">기본 정책</b> 탭에서 조정하세요.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+                  <div className="md:col-span-2">
+                    <label className={labelClass}>퀘스트 이름</label>
+                    <input
+                      value={questForm.name}
+                      onChange={(e) => setQuestForm({ ...questForm, name: e.target.value })}
+                      placeholder="예: 오늘의 수다"
+                      maxLength={40}
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className={labelClass}>설명 (선택)</label>
+                    <input
+                      value={questForm.desc}
+                      onChange={(e) => setQuestForm({ ...questForm, desc: e.target.value })}
+                      placeholder="예: 채팅으로 XP를 5번 받으세요"
+                      maxLength={120}
+                      className={inputClass}
+                    />
+                    <p className={fieldNote}>유저 화면에서 퀘스트 이름 아래 회색으로 표시됩니다.</p>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>측정 대상</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { v: "chat", l: "채팅" },
+                        { v: "voice", l: "음성" },
+                        { v: "attend", l: "출석" },
+                        { v: "any", l: "전체" },
+                      ].map((o) => (
+                        <button
+                          key={o.v}
+                          type="button"
+                          onClick={() => setQuestForm({ ...questForm, reason: o.v })}
+                          className={`py-2.5 rounded-lg text-xs font-bold border transition-all outline-none focus:outline-none ${
+                            questForm.reason === o.v
+                              ? "bg-[#e91e3f] border-[#e91e3f] text-white"
+                              : "bg-transparent border-white/10 text-gray-400 hover:border-white/30 hover:text-white"
+                          }`}
+                        >
+                          {o.l}
+                        </button>
+                      ))}
+                    </div>
+                    <p className={fieldNote}>어떤 활동의 지급 로그를 셀지 고릅니다.</p>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>측정 방식</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { v: "count", l: "지급 횟수" },
+                        { v: "xp", l: "XP 합계" },
+                      ].map((o) => (
+                        <button
+                          key={o.v}
+                          type="button"
+                          onClick={() => setQuestForm({ ...questForm, metric: o.v })}
+                          className={`py-2.5 rounded-lg text-xs font-bold border transition-all outline-none focus:outline-none ${
+                            questForm.metric === o.v
+                              ? "bg-[#e91e3f] border-[#e91e3f] text-white"
+                              : "bg-transparent border-white/10 text-gray-400 hover:border-white/30 hover:text-white"
+                          }`}
+                        >
+                          {o.l}
+                        </button>
+                      ))}
+                    </div>
+                    <p className={fieldNote}>
+                      {questForm.metric === "xp" ? "오늘 받은 XP의 합계로 판정합니다." : "오늘 XP를 받은 횟수로 판정합니다. (음성은 1회 = 지급 주기)"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>목표치</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={questForm.target}
+                      onChange={(e) => setQuestForm({ ...questForm, target: e.target.value })}
+                      className={inputClass}
+                    />
+                    <p className={fieldNote}>{questForm.metric === "xp" ? "달성에 필요한 XP 합계" : "달성에 필요한 지급 횟수"}</p>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>보상 XP</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={questForm.rewardXp}
+                      onChange={(e) => setQuestForm({ ...questForm, rewardXp: e.target.value })}
+                      className={inputClass}
+                    />
+                    <p className={fieldNote}>0으로 두면 보상 없는 &lsquo;목표&rsquo;로만 표시됩니다.</p>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>표시 순서</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={questForm.order}
+                      onChange={(e) => setQuestForm({ ...questForm, order: e.target.value })}
+                      className={inputClass}
+                    />
+                    <p className={fieldNote}>작을수록 위에 표시됩니다.</p>
+                  </div>
+
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={() => setQuestForm({ ...questForm, enabled: !questForm.enabled })}
+                      className={`w-full py-3.5 rounded-lg text-sm font-bold border transition-all outline-none focus:outline-none ${
+                        questForm.enabled
+                          ? "bg-[#e91e3f] border-[#e91e3f] text-white"
+                          : "bg-transparent border-white/10 text-gray-400 hover:border-white/30"
+                      }`}
+                    >
+                      {questForm.enabled ? "활성화됨 — 유저에게 표시" : "비활성 — 숨김"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 mt-8">
+                  <button onClick={saveQuest} className={primaryBtn}>{questForm.id ? "수정 저장" : "퀘스트 등록"}</button>
+                  {questForm.id && (
+                    <button
+                      onClick={() => setQuestForm(emptyQuest)}
+                      className="px-6 py-3.5 border border-white/10 text-gray-400 hover:text-white hover:border-white/30 text-sm font-bold rounded-lg transition-all outline-none focus:outline-none"
+                    >
+                      취소
+                    </button>
+                  )}
+                </div>
+              </section>
+            </Reveal>
+
+            <Reveal>
+              <section>
+                <SectionHead no="02" title={`등록된 퀘스트 (${quests.length})`} />
+                {quests.length === 0 ? (
+                  <p className="py-14 text-center text-sm text-gray-500">아직 등록된 퀘스트가 없습니다. 위에서 추가해 주세요.</p>
+                ) : (
+                  <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                    {quests.map((q: any) => (
+                      <div key={q._id} className="py-4 flex items-center gap-4">
+                        <span className="shrink-0 w-8 text-center text-xs font-black text-gray-600 tabular-nums">{q.order}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={`text-sm font-bold ${q.enabled ? "text-white" : "text-gray-500 line-through"}`}>{q.name}</p>
+                            {!q.enabled && <span className="text-[10px] font-black text-gray-500 border border-white/10 rounded-full px-2 py-0.5">비활성</span>}
+                          </div>
+                          <p className="text-[11px] text-gray-500 mt-1 tabular-nums">
+                            {(REASON_LABEL[q.reason] || "전체")} {q.metric === "xp" ? "XP" : "횟수"} {q.target.toLocaleString()} 달성
+                            {q.desc ? ` · ${q.desc}` : ""}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-sm font-black text-[#e91e3f] tabular-nums">
+                          {q.rewardXp > 0 ? `+${q.rewardXp.toLocaleString()} XP` : <span className="text-gray-600">보상 없음</span>}
+                        </span>
+                        <div className="shrink-0 flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setQuestForm({ id: q._id, name: q.name, desc: q.desc || "", reason: q.reason, metric: q.metric, target: q.target, rewardXp: q.rewardXp, enabled: q.enabled, order: q.order });
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className="text-[11px] font-bold text-gray-400 hover:text-white transition-colors outline-none focus:outline-none"
+                          >
+                            수정
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirm({ kind: "quest", id: q._id })}
+                            className="text-[11px] font-bold text-gray-600 hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </Reveal>
+          </>
+        )}
+
         {tab === "grant" && (
           <>
             <Reveal>
