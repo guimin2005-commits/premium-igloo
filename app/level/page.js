@@ -445,13 +445,63 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5 }) => {
   );
 };
 
+// 📌 아이템 아이콘 — 종류가 한눈에 갈리도록 모양을 나눈다.
+//    부스트류는 이름으로 가른다 (상품명·역할명에 Boost/부스트가 들어간다).
+const invIconKind = (it) => {
+  const n = `${it.name || ""} ${it.description || ""}`.toLowerCase();
+  if (/boost|부스트/.test(n)) return "boost";
+  if (it.kind === "physical") return "box";
+  if (it.category === "notify") return "bell";
+  if (it.category === "title") return "title";
+  if (it.source === "level") return "medal";
+  return "shield";
+};
+
+const InvIcon = ({ it, size = 24, color = "#fff", dim = false }) => {
+  const k = invIconKind(it);
+  const c = dim ? "rgba(255,255,255,0.3)" : color;
+  const p = { viewBox: "0 0 24 24", width: size, height: size };
+  if (k === "boost")
+    // 번개 — 부스트
+    return <svg {...p} fill={c}><path d="M13.2 2 5 13.4h5.3L9.9 22l8.4-11.6H12.8Z" /></svg>;
+  if (k === "box")
+    return (
+      <svg {...p} fill="none" stroke={c} strokeWidth="1.7">
+        <path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5Z" strokeLinejoin="round" />
+        <path d="M3 8.5 12 13l9-4.5M12 13v7" strokeLinejoin="round" />
+      </svg>
+    );
+  if (k === "bell")
+    return (
+      <svg {...p} fill="none" stroke={c} strokeWidth="1.7">
+        <path d="M6 9a6 6 0 1 1 12 0c0 4 1.2 5.5 1.8 6.2.3.4 0 .9-.5.9H4.7c-.5 0-.8-.5-.5-.9C4.8 14.5 6 13 6 9Z" strokeLinejoin="round" />
+        <path d="M10 19.5a2 2 0 0 0 4 0" strokeLinecap="round" />
+      </svg>
+    );
+  if (k === "title")
+    // 리본 — 칭호
+    return (
+      <svg {...p} fill="none" stroke={c} strokeWidth="1.7">
+        <path d="M7 3h10v11l-5-3-5 3Z" strokeLinejoin="round" />
+        <path d="M9 16.5 7 21l5-2.6L17 21l-2-4.5" strokeLinejoin="round" />
+      </svg>
+    );
+  if (k === "medal")
+    return (
+      <svg {...p} fill="none" stroke={c} strokeWidth="1.7">
+        <circle cx="12" cy="14.5" r="5.5" />
+        <path d="M8.5 9 6.5 3h11l-2 6" strokeLinejoin="round" />
+      </svg>
+    );
+  return <svg {...p} fill={c}><path d="M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z" opacity="0.92" /></svg>;
+};
+
 // 📌 가방 — 인벤토리를 대시보드에 펼치지 않고 오버레이로 연다.
 //    껍데기는 TierModal 과 같은 문법(모바일 바텀시트 / 데스크톱 모달, 잉크 패널).
 //    스크롤 잠금은 손대지 않는다 — 루트 className 에 "fixed inset-0" 이 붙어 있고
 //    z-index 가 50 이상이면 ScrollLock 이 알아서 건다(iOS 대응 포함).
-//    ESC 만 직접 받는다.
 const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
-  const [sel, setSel] = useState(null); // 선택한 아이템 (uid 로 붙잡는다)
+  const [sel, setSel] = useState(null); // 선택한 아이템 uid
 
   useEffect(() => {
     if (!open) return;
@@ -466,10 +516,14 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
 
   const active = groups.find((g) => g.id === tab) || groups[0];
   const rows = active?.items || [];
-  // 선택은 uid 로 되짚는다 — 30초 폴링이 배열을 갈아끼워도 엉뚱한 것을 가리키지 않는다
+  // uid 로 되짚는다 — 30초 폴링이 배열을 갈아끼워도 엉뚱한 것을 가리키지 않는다
   const selItem = sel ? rows.find((r) => r.uid === sel) || null : null;
-  // 가방답게 빈 칸을 채운다 (한 줄 4칸 기준, 최소 두 줄)
   const slots = Math.max(8, Math.ceil(rows.length / 4) * 4);
+  const accentOf = (it) => it.color || (it.source === "level" ? "#ff5c77" : it.source === "inventory" ? "#5aa9dd" : "#ffffff");
+  const ddayOf = (it) =>
+    it.expiresAt && it.status === "completed"
+      ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000))
+      : null;
 
   return (
     <div
@@ -479,7 +533,7 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full sm:max-w-2xl max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-[#131313] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
+        className="relative w-full sm:max-w-3xl max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-[#131313] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
         style={{ animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
       >
         <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
@@ -508,7 +562,6 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
             </button>
           </div>
 
-          {/* 분류 — 가진 것만 */}
           {groups.length > 1 && (
             <div className="flex items-center gap-1.5 overflow-x-auto no-bar mt-4 -mb-1 pb-1">
               {groups.map((g) => {
@@ -530,97 +583,120 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
           )}
         </div>
 
-        {/* 슬롯 격자 — 여기가 '주르르륵' 보이는 자리 */}
-        <div className="relative z-10 flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 py-5">
-          {/* 4열 고정 — 열 수가 브레이크포인트마다 바뀌면 빈 칸 수를 맞출 수 없어 마지막 줄이 어긋난다 */}
-          <div className="grid grid-cols-4 gap-2.5">
-            {Array.from({ length: slots }, (_, i) => {
-              const it = rows[i];
-              if (!it) {
-                return (
-                  <div
-                    key={`empty-${i}`}
-                    className="aspect-square rounded-xl border border-dashed border-white/[0.10] bg-white/[0.02]"
-                  ></div>
-                );
-              }
-              const dead = it.status === "pending" || it.status === "missing";
-              const accent = it.color || (it.source === "level" ? "#ff5c77" : it.source === "inventory" ? "#5aa9dd" : "#ffffff");
-              const dday =
-                it.expiresAt && it.status === "completed"
-                  ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000))
-                  : null;
-              const on = sel === it.uid;
-              return (
-                <button
-                  key={it.uid || `i-${i}`}
-                  onClick={() => { setSel(on ? null : it.uid); onTone(); }}
-                  title={it.name}
-                  className={`relative aspect-square rounded-xl flex flex-col items-center justify-center px-1.5 transition-all outline-none focus:outline-none ${
-                    on ? "ring-2 ring-white/70 -translate-y-0.5" : "hover:-translate-y-0.5"
-                  }`}
+        {/* 본문 — 왼쪽 아이템 정보 / 오른쪽 칸 */}
+        <div className="relative z-10 flex-1 min-h-0 overflow-y-auto sm:overflow-hidden sm:flex">
+          {/* 왼쪽 — 고른 아이템 */}
+          <div className="shrink-0 sm:w-[236px] sm:border-r border-white/[0.08] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto">
+            {selItem ? (
+              <div>
+                <div
+                  className="w-20 h-20 rounded-2xl flex items-center justify-center mb-4"
                   style={{
-                    background: dead ? "rgba(255,255,255,0.03)" : `linear-gradient(160deg, ${accent}2e, ${accent}0d)`,
-                    boxShadow: dead ? "inset 0 0 0 1px rgba(255,255,255,0.07)" : `inset 0 0 0 1px ${accent}44`,
+                    background: `linear-gradient(160deg, ${accentOf(selItem)}33, ${accentOf(selItem)}0f)`,
+                    boxShadow: `inset 0 0 0 1px ${accentOf(selItem)}55`,
                   }}
                 >
-                  <span aria-hidden className="mb-1.5">
-                    {it.kind === "physical" ? (
-                      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke={dead ? "rgba(255,255,255,0.3)" : accent} strokeWidth="1.7">
-                        <path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5Z" strokeLinejoin="round" />
-                        <path d="M3 8.5 12 13l9-4.5M12 13v7" strokeLinejoin="round" />
-                      </svg>
-                    ) : (
-                      <svg viewBox="0 0 24 24" className="w-6 h-6" fill={dead ? "rgba(255,255,255,0.3)" : accent}>
-                        <path d="M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z" opacity="0.92" />
-                      </svg>
-                    )}
-                  </span>
-                  <span className={`w-full text-[9px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
-                    {it.name}
-                  </span>
+                  <InvIcon it={selItem} size={38} color={accentOf(selItem)} dim={selItem.status !== "completed"} />
+                </div>
+                <p className="text-[15px] font-black text-white leading-snug break-keep">{selItem.name}</p>
+                <p className="text-[11px] text-white/45 mt-2 leading-relaxed break-keep">{invSubLabel(selItem)}</p>
 
-                  {dday !== null && (
-                    <span className={`absolute top-1 right-1 text-[8px] font-black tabular-nums px-1 py-0.5 rounded ${dday <= 3 ? "bg-[#e91e3f] text-white" : "bg-white/15 text-white/70"}`}>
-                      D-{dday}
+                <div className="mt-4 pt-4 border-t border-white/[0.08] space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] font-black tracking-[0.15em] text-white/30 uppercase">Status</span>
+                    <span className={`text-[11px] font-black ${selItem.status === "missing" ? "text-[#ff5c77]" : selItem.status === "pending" ? "text-white/60" : "text-emerald-400"}`}>
+                      {selItem.status === "pending" ? "지급 대기" : selItem.status === "missing" ? "확인 필요" : "보유 중"}
                     </span>
+                  </div>
+                  {ddayOf(selItem) !== null && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-black tracking-[0.15em] text-white/30 uppercase">Expires</span>
+                      <span className={`text-[11px] font-black tabular-nums ${ddayOf(selItem) <= 3 ? "text-[#ff5c77]" : "text-white/70"}`}>
+                        D-{ddayOf(selItem)}
+                      </span>
+                    </div>
                   )}
-                  {it.status === "pending" && (
-                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white/40"></span>
+                  {selItem.rewardLevel != null && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-black tracking-[0.15em] text-white/30 uppercase">Level</span>
+                      <span className="text-[11px] font-black tabular-nums text-white/70">Lv.{selItem.rewardLevel}</span>
+                    </div>
                   )}
-                  {it.status === "missing" && (
-                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#e91e3f]"></span>
-                  )}
-                </button>
-              );
-            })}
+                </div>
+
+                {selItem.status === "missing" && (
+                  <p className="text-[10px] text-[#ff5c77]/80 mt-4 leading-relaxed break-keep">
+                    구매 기록은 있는데 디스코드 역할이 확인되지 않습니다. 운영진에 문의해 주세요.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center py-6 sm:py-0">
+                <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-white/15 flex items-center justify-center mb-3">
+                  <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.6">
+                    <path d="M4 9h16l-1 10.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5Z" strokeLinejoin="round" />
+                    <path d="M8.5 9V6.5a3.5 3.5 0 0 1 7 0V9" strokeLinecap="round" />
+                  </svg>
+                </span>
+                <p className="text-[11px] font-bold text-white/30 break-keep">칸을 누르면 여기에 보입니다</p>
+              </div>
+            )}
           </div>
 
-          {groups[0]?.items.length === 0 && (
-            <p className="text-[12px] font-bold text-white/35 text-center mt-6">아직 보유한 아이템이 없습니다</p>
-          )}
+          {/* 오른쪽 — 칸 */}
+          <div className="min-w-0 flex-1 px-5 sm:px-6 pb-5 pt-1 sm:py-6 sm:overflow-y-auto">
+            <div className="grid grid-cols-4 gap-2.5">
+              {Array.from({ length: slots }, (_, i) => {
+                const it = rows[i];
+                if (!it) {
+                  return <div key={`empty-${i}`} className="aspect-square rounded-xl border border-dashed border-white/[0.10] bg-white/[0.02]"></div>;
+                }
+                const dead = it.status === "pending" || it.status === "missing";
+                const accent = accentOf(it);
+                const dday = ddayOf(it);
+                const on = sel === it.uid;
+                return (
+                  <button
+                    key={it.uid || `i-${i}`}
+                    onClick={() => { setSel(on ? null : it.uid); onTone(); }}
+                    title={it.name}
+                    className={`relative aspect-square rounded-xl flex flex-col items-center justify-center px-1.5 transition-all outline-none focus:outline-none ${
+                      on ? "ring-2 ring-white/70 -translate-y-0.5" : "hover:-translate-y-0.5"
+                    }`}
+                    style={{
+                      background: dead ? "rgba(255,255,255,0.03)" : `linear-gradient(160deg, ${accent}2e, ${accent}0d)`,
+                      boxShadow: dead ? "inset 0 0 0 1px rgba(255,255,255,0.07)" : `inset 0 0 0 1px ${accent}44`,
+                    }}
+                  >
+                    <span aria-hidden className="mb-1.5">
+                      <InvIcon it={it} size={24} color={accent} dim={dead} />
+                    </span>
+                    <span className={`w-full text-[9px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
+                      {it.name}
+                    </span>
+                    {dday !== null && (
+                      <span className={`absolute top-1 right-1 text-[8px] font-black tabular-nums px-1 py-0.5 rounded ${dday <= 3 ? "bg-[#e91e3f] text-white" : "bg-white/15 text-white/70"}`}>
+                        D-{dday}
+                      </span>
+                    )}
+                    {it.status === "pending" && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white/40"></span>}
+                    {it.status === "missing" && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {groups[0]?.items.length === 0 && (
+              <p className="text-[12px] font-bold text-white/35 text-center mt-6">아직 보유한 아이템이 없습니다</p>
+            )}
+          </div>
         </div>
 
-        {/* 선택한 것 — 슬롯을 누르면 여기에 뜬다 */}
-        <div className="relative z-10 shrink-0 border-t border-white/[0.08] bg-white/[0.02] px-5 sm:px-7 py-4">
-          {selItem ? (
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-[13px] font-black text-white truncate">{selItem.name}</p>
-                <p className="text-[11px] text-white/45 mt-1 break-keep">{invSubLabel(selItem)}</p>
-              </div>
-              <span className="shrink-0 text-[10px] font-black tracking-[0.12em] uppercase px-2 py-1 rounded-full border border-white/15 text-white/60">
-                {selItem.status === "pending" ? "지급 대기" : selItem.status === "missing" ? "확인 필요" : "보유 중"}
-              </span>
-            </div>
-          ) : (
-            <p className="text-[11px] text-white/30 break-keep">
-              {synced === false
-                ? "디스코드 역할을 확인하지 못해 구매 기록 기준으로 표시하고 있습니다."
-                : "칸을 누르면 자세히 볼 수 있습니다."}
-            </p>
-          )}
-        </div>
+        {synced === false && (
+          <div className="relative z-10 shrink-0 border-t border-white/[0.08] bg-white/[0.02] px-5 sm:px-7 py-3">
+            <p className="text-[11px] text-white/30 break-keep">디스코드 역할을 확인하지 못해 구매 기록 기준으로 표시하고 있습니다.</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1592,62 +1668,59 @@ export default function LevelPage() {
                       </div>
 
                       {!myItems ? (
-                        <div className="h-[92px] rounded-2xl bg-black/[0.04] animate-pulse"></div>
+                        <div className="h-[58px] rounded-xl bg-black/[0.04] animate-pulse"></div>
                       ) : (
                         <button
                           onClick={openBag}
-                          className="group w-full rounded-2xl bg-[#131313] px-5 py-4 flex items-center gap-4 text-left transition-transform hover:-translate-y-0.5 outline-none focus:outline-none relative overflow-hidden"
-                          style={{ boxShadow: "0 20px 50px -30px rgba(0,0,0,0.7)" }}
+                          className="group w-full rounded-xl bg-[#131313] pl-3 pr-4 py-2.5 flex items-center gap-3 text-left transition-transform hover:-translate-y-0.5 outline-none focus:outline-none relative overflow-hidden"
+                          style={{ boxShadow: "0 14px 34px -24px rgba(0,0,0,0.7)" }}
                         >
                           <span aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-50 pointer-events-none"></span>
 
-                          {/* 가방 아이콘 */}
-                          <span aria-hidden className="relative shrink-0 w-12 h-12 rounded-xl bg-white/[0.07] flex items-center justify-center">
-                            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="#ffffff" strokeWidth="1.7">
+                          <span aria-hidden className="relative shrink-0 w-9 h-9 rounded-lg bg-white/[0.07] flex items-center justify-center">
+                            <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="none" stroke="#ffffff" strokeWidth="1.8">
                               <path d="M4 9h16l-1 10.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5Z" strokeLinejoin="round" />
                               <path d="M8.5 9V6.5a3.5 3.5 0 0 1 7 0V9" strokeLinecap="round" />
                             </svg>
                             {invUnread > 0 && (
-                              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#e91e3f] text-white text-[10px] font-black flex items-center justify-center tabular-nums">
+                              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">
                                 {invUnread}
                               </span>
                             )}
                           </span>
 
-                          <span className="relative min-w-0 flex-1">
-                            <span className="block text-[13px] font-black text-white">
-                              가방
-                              <span className="text-white/40 ml-2 tabular-nums">{myItems.items.length}</span>
-                            </span>
-                            <span className="block text-[11px] text-white/40 mt-1 truncate">
+                          {/* 한 줄로 — 이름·개수·분류 요약을 나란히 */}
+                          <span className="relative min-w-0 flex-1 flex items-baseline gap-2">
+                            <span className="text-[13px] font-black text-white shrink-0">가방</span>
+                            <span className="text-[13px] font-black text-white/40 tabular-nums shrink-0">{myItems.items.length}</span>
+                            <span className="text-[11px] text-white/35 truncate">
                               {myItems.items.length === 0
                                 ? "아직 보유한 아이템이 없습니다"
                                 : invGroups.slice(1).map((g) => `${g.label} ${g.items.length}`).join(" · ")}
                             </span>
                           </span>
 
-                          {/* 미리보기 — 앞 4칸만 */}
-                          <span aria-hidden className="relative hidden sm:flex items-center gap-1.5 shrink-0">
+                          <span aria-hidden className="relative hidden sm:flex items-center gap-1 shrink-0">
                             {invAll.slice(0, 4).map((it, i) => {
                               const accent = it.color || (it.source === "level" ? "#ff5c77" : it.source === "inventory" ? "#5aa9dd" : "#ffffff");
                               return (
                                 <span
                                   key={it.uid || i}
-                                  className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                  className="w-6 h-6 rounded-md flex items-center justify-center"
                                   style={{ background: `${accent}22`, boxShadow: `inset 0 0 0 1px ${accent}44` }}
                                 >
-                                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill={accent}>
+                                  <svg viewBox="0 0 24 24" className="w-3 h-3" fill={accent}>
                                     <path d="M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z" opacity="0.92" />
                                   </svg>
                                 </span>
                               );
                             })}
                             {myItems.items.length > 4 && (
-                              <span className="text-[11px] font-black text-white/35 tabular-nums ml-0.5">+{myItems.items.length - 4}</span>
+                              <span className="text-[10px] font-black text-white/30 tabular-nums ml-0.5">+{myItems.items.length - 4}</span>
                             )}
                           </span>
 
-                          <span aria-hidden className="relative shrink-0 text-white/40 group-hover:text-white transition-colors text-lg">→</span>
+                          <span aria-hidden className="relative shrink-0 text-white/35 group-hover:text-white transition-colors text-sm">→</span>
                         </button>
                       )}
                     </section>
