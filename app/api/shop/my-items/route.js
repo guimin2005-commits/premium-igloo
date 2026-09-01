@@ -89,6 +89,8 @@ export async function GET() {
       }
 
       owned.push({
+        // 갱신돼도 같은 것을 가리키도록 하는 키 (구매 건 단위)
+        uid: `p:${p._id}`,
         kind: isRole ? "role" : "physical",
         name: p.itemName || item?.name || "상품",
         imageUrl: item?.imageUrl || "",
@@ -110,6 +112,8 @@ export async function GET() {
         // 사이트가 관리하는 역할만 보여준다 (상품·레벨 보상·인벤토리 등록)
         if (!item && !cfg && !inv) continue;
         owned.push({
+          // 역할은 역할 ID 자체가 안정적인 키다
+          uid: `r:${roleId}`,
           kind: "role",
           name: inv?.label || item?.name || inv?.roleName || cfg?.roleName || "역할",
           imageUrl: item?.imageUrl || "",

@@ -445,6 +445,188 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5 }) => {
   );
 };
 
+// 📌 가방 — 인벤토리를 대시보드에 펼치지 않고 오버레이로 연다.
+//    껍데기는 TierModal 과 같은 문법(모바일 바텀시트 / 데스크톱 모달, 잉크 패널).
+//    스크롤 잠금은 손대지 않는다 — 루트 className 에 "fixed inset-0" 이 붙어 있고
+//    z-index 가 50 이상이면 ScrollLock 이 알아서 건다(iOS 대응 포함).
+//    ESC 만 직접 받는다.
+const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
+  const [sel, setSel] = useState(null); // 선택한 아이템 (uid 로 붙잡는다)
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  useEffect(() => { if (!open) setSel(null); }, [open]);
+
+  if (!open) return null;
+
+  const active = groups.find((g) => g.id === tab) || groups[0];
+  const rows = active?.items || [];
+  // 선택은 uid 로 되짚는다 — 30초 폴링이 배열을 갈아끼워도 엉뚱한 것을 가리키지 않는다
+  const selItem = sel ? rows.find((r) => r.uid === sel) || null : null;
+  // 가방답게 빈 칸을 채운다 (한 줄 4칸 기준, 최소 두 줄)
+  const slots = Math.max(8, Math.ceil(rows.length / 4) * 4);
+
+  return (
+    <div
+      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
+      style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full sm:max-w-2xl max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-[#131313] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
+        style={{ animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
+      >
+        <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
+        <div aria-hidden className="absolute -top-24 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none" style={{ background: "rgba(63,131,184,0.28)" }}></div>
+
+        {/* 헤더 */}
+        <div className="relative z-10 shrink-0 px-5 sm:px-7 pt-5 sm:pt-6 pb-4 border-b border-white/[0.08]">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#ff5c77] uppercase mb-1.5">
+                <span aria-hidden className="w-4 h-px bg-[#ff5c77]"></span>Inventory
+              </span>
+              <h3 className="text-lg sm:text-xl font-black text-white tracking-tight">
+                가방
+                <span className="text-sm font-black text-white/35 ml-2 tabular-nums">{groups[0]?.items.length ?? 0}</span>
+              </h3>
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="닫기"
+              className="shrink-0 w-9 h-9 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-white/70 hover:text-white flex items-center justify-center transition-colors outline-none focus:outline-none"
+            >
+              <svg viewBox="0 0 20 20" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+
+          {/* 분류 — 가진 것만 */}
+          {groups.length > 1 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto no-bar mt-4 -mb-1 pb-1">
+              {groups.map((g) => {
+                const on = active?.id === g.id;
+                return (
+                  <button
+                    key={g.id}
+                    onClick={() => { onTab(g.id); setSel(null); onTone(); }}
+                    className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
+                      on ? "bg-white text-[#131313]" : "text-white/45 hover:text-white"
+                    }`}
+                  >
+                    {g.label}
+                    <span className={`tabular-nums text-[10px] font-black ${on ? "text-[#8a8a8a]" : "opacity-60"}`}>{g.items.length}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 슬롯 격자 — 여기가 '주르르륵' 보이는 자리 */}
+        <div className="relative z-10 flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 py-5">
+          {/* 4열 고정 — 열 수가 브레이크포인트마다 바뀌면 빈 칸 수를 맞출 수 없어 마지막 줄이 어긋난다 */}
+          <div className="grid grid-cols-4 gap-2.5">
+            {Array.from({ length: slots }, (_, i) => {
+              const it = rows[i];
+              if (!it) {
+                return (
+                  <div
+                    key={`empty-${i}`}
+                    className="aspect-square rounded-xl border border-dashed border-white/[0.10] bg-white/[0.02]"
+                  ></div>
+                );
+              }
+              const dead = it.status === "pending" || it.status === "missing";
+              const accent = it.color || (it.source === "level" ? "#ff5c77" : it.source === "inventory" ? "#5aa9dd" : "#ffffff");
+              const dday =
+                it.expiresAt && it.status === "completed"
+                  ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000))
+                  : null;
+              const on = sel === it.uid;
+              return (
+                <button
+                  key={it.uid || `i-${i}`}
+                  onClick={() => { setSel(on ? null : it.uid); onTone(); }}
+                  title={it.name}
+                  className={`relative aspect-square rounded-xl flex flex-col items-center justify-center px-1.5 transition-all outline-none focus:outline-none ${
+                    on ? "ring-2 ring-white/70 -translate-y-0.5" : "hover:-translate-y-0.5"
+                  }`}
+                  style={{
+                    background: dead ? "rgba(255,255,255,0.03)" : `linear-gradient(160deg, ${accent}2e, ${accent}0d)`,
+                    boxShadow: dead ? "inset 0 0 0 1px rgba(255,255,255,0.07)" : `inset 0 0 0 1px ${accent}44`,
+                  }}
+                >
+                  <span aria-hidden className="mb-1.5">
+                    {it.kind === "physical" ? (
+                      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke={dead ? "rgba(255,255,255,0.3)" : accent} strokeWidth="1.7">
+                        <path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5Z" strokeLinejoin="round" />
+                        <path d="M3 8.5 12 13l9-4.5M12 13v7" strokeLinejoin="round" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" className="w-6 h-6" fill={dead ? "rgba(255,255,255,0.3)" : accent}>
+                        <path d="M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z" opacity="0.92" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className={`w-full text-[9px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
+                    {it.name}
+                  </span>
+
+                  {dday !== null && (
+                    <span className={`absolute top-1 right-1 text-[8px] font-black tabular-nums px-1 py-0.5 rounded ${dday <= 3 ? "bg-[#e91e3f] text-white" : "bg-white/15 text-white/70"}`}>
+                      D-{dday}
+                    </span>
+                  )}
+                  {it.status === "pending" && (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white/40"></span>
+                  )}
+                  {it.status === "missing" && (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#e91e3f]"></span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {groups[0]?.items.length === 0 && (
+            <p className="text-[12px] font-bold text-white/35 text-center mt-6">아직 보유한 아이템이 없습니다</p>
+          )}
+        </div>
+
+        {/* 선택한 것 — 슬롯을 누르면 여기에 뜬다 */}
+        <div className="relative z-10 shrink-0 border-t border-white/[0.08] bg-white/[0.02] px-5 sm:px-7 py-4">
+          {selItem ? (
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[13px] font-black text-white truncate">{selItem.name}</p>
+                <p className="text-[11px] text-white/45 mt-1 break-keep">{invSubLabel(selItem)}</p>
+              </div>
+              <span className="shrink-0 text-[10px] font-black tracking-[0.12em] uppercase px-2 py-1 rounded-full border border-white/15 text-white/60">
+                {selItem.status === "pending" ? "지급 대기" : selItem.status === "missing" ? "확인 필요" : "보유 중"}
+              </span>
+            </div>
+          ) : (
+            <p className="text-[11px] text-white/30 break-keep">
+              {synced === false
+                ? "디스코드 역할을 확인하지 못해 구매 기록 기준으로 표시하고 있습니다."
+                : "칸을 누르면 자세히 볼 수 있습니다."}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 // 📌 음성 티어 계단 — 표 대신 '티어가 오를수록 쌓이는 계단'으로 지급량을 보여준다
 const TierStairs = ({ base = 3000, intervalMin = 5 }) => {
   const vals = VOICE_TIERS.map((t) => base + t.bonus);
@@ -512,6 +694,7 @@ export default function LevelPage() {
   );
   const [introSec, setIntroSec] = useState(INTRO_STEPS[0].id);
   const [invTab, setInvTab] = useState("all");
+  const [bagOpen, setBagOpen] = useState(false);
   const { data: session, status: authStatus } = useSession();
 
   // 하이드레이션 불일치 방지 — 서버/클라이언트 첫 페인트는 항상 스켈레톤으로 통일하고,
@@ -652,6 +835,19 @@ export default function LevelPage() {
   }, [invAll]);
   const invActive = invGroups.find((g) => g.id === invTab) || invGroups[0];
   const invRows = invActive?.items || [];
+  // 손봐야 할 것 — 지급 대기·확인 필요는 배지로 알린다
+  const invUnread = invAll.filter((i) => i.status === "pending" || i.status === "missing").length;
+  // 가방 여닫는 소리 — 기존 어휘(880·523·620Hz)와 겹치지 않게 낮은음 → 높은음
+  const openBag = () => {
+    setBagOpen(true);
+    playTone(392, 0.06, "sine", 0.03);
+    setTimeout(() => playTone(587, 0.08, "sine", 0.03), 90);
+  };
+  const closeBag = () => {
+    setBagOpen(false);
+    playTone(523, 0.06, "sine", 0.025);
+    setTimeout(() => playTone(349, 0.08, "sine", 0.025), 90);
+  };
 
   const voiceTracked = isVoiceTimeTracked();
   const introIdx = Math.max(0, INTRO_STEPS.findIndex((x) => x.id === introSec));
@@ -951,6 +1147,15 @@ export default function LevelPage() {
       `}} />
 
       <TierModal open={tierOpen} onClose={() => setTierOpen(false)} level={me?.level || 0} baseXp={P.voiceXp} intervalMin={P_voiceMin} />
+      <BagOverlay
+        open={bagOpen}
+        onClose={closeBag}
+        groups={invGroups}
+        tab={invTab}
+        onTab={setInvTab}
+        synced={myItems?.synced}
+        onTone={() => playTone(620, 0.04, "sine", 0.025)}
+      />
 
       {/* ── 탭 줄 — 어떤 탭이든 헤더 바로 아래 같은 자리. 여기가 움직이면 안 된다.
              ARCTIC 은 전역 헤더 대신 상점 헤더가 서므로 그쪽 topSlot 으로 넘긴다. ── */}
@@ -1369,15 +1574,12 @@ export default function LevelPage() {
                       </div>
                     </section>
 
-                    {/* ═══ 인벤토리 — 분류 탭 + 행 목록 (개수가 늘어도 무너지지 않게) ═══ */}
+                    {/* ═══ 인벤토리 — 대시보드에는 가방 입구만, 내용은 오버레이로 ═══ */}
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
                           <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Inventory</span>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">
-                            인벤토리
-                            <span className="text-sm font-black text-[#a3a3a3] ml-2 tabular-nums">{myItems ? myItems.items.length : 0}</span>
-                          </h3>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">인벤토리</h3>
                         </div>
                         {canSeeShop && (
                           <button
@@ -1390,99 +1592,66 @@ export default function LevelPage() {
                       </div>
 
                       {!myItems ? (
-                        <div className="space-y-2">
-                          {[0, 1, 2].map((i) => (
-                            <div key={i} className="h-[68px] rounded-xl bg-black/[0.04] animate-pulse"></div>
-                          ))}
-                        </div>
-                      ) : myItems.items.length === 0 ? (
-                        <EmptySlot>아직 보유한 아이템이 없습니다</EmptySlot>
+                        <div className="h-[92px] rounded-2xl bg-black/[0.04] animate-pulse"></div>
                       ) : (
-                        <>
-                          {/* 분류 탭 — 실제로 가진 분류만 뜬다 */}
-                          {invGroups.length > 1 && (
-                            <div className="flex items-center gap-1.5 overflow-x-auto no-bar mb-4">
-                              {invGroups.map((g) => {
-                                const on = invTab === g.id;
-                                return (
-                                  <button
-                                    key={g.id}
-                                    onClick={() => { setInvTab(g.id); playTone(620, 0.04, "sine", 0.025); }}
-                                    className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
-                                      on
-                                        ? "bg-white text-[#131313] ring-1 ring-black/10 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.3)]"
-                                        : "text-[#a3a3a3] hover:text-[#131313]"
-                                    }`}
-                                  >
-                                    {g.label}
-                                    <span className={`tabular-nums text-[10px] font-black ${on ? "text-[#a3a3a3]" : "opacity-50"}`}>{g.items.length}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
+                        <button
+                          onClick={openBag}
+                          className="group w-full rounded-2xl bg-[#131313] px-5 py-4 flex items-center gap-4 text-left transition-transform hover:-translate-y-0.5 outline-none focus:outline-none relative overflow-hidden"
+                          style={{ boxShadow: "0 20px 50px -30px rgba(0,0,0,0.7)" }}
+                        >
+                          <span aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-50 pointer-events-none"></span>
 
-                          {/* 행 목록 — 박스 대신 헤어라인 */}
-                          <div className="border-y border-black/[0.08] divide-y divide-black/[0.06]">
-                            {invRows.map((it, i) => {
-                              const dead = it.status === "pending" || it.status === "missing";
-                              const accent =
-                                it.color || (it.source === "level" ? "#e91e3f" : it.source === "inventory" ? ICE : "#131313");
-                              const dday =
-                                it.expiresAt && it.status === "completed"
-                                  ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000))
-                                  : null;
+                          {/* 가방 아이콘 */}
+                          <span aria-hidden className="relative shrink-0 w-12 h-12 rounded-xl bg-white/[0.07] flex items-center justify-center">
+                            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="#ffffff" strokeWidth="1.7">
+                              <path d="M4 9h16l-1 10.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5Z" strokeLinejoin="round" />
+                              <path d="M8.5 9V6.5a3.5 3.5 0 0 1 7 0V9" strokeLinecap="round" />
+                            </svg>
+                            {invUnread > 0 && (
+                              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#e91e3f] text-white text-[10px] font-black flex items-center justify-center tabular-nums">
+                                {invUnread}
+                              </span>
+                            )}
+                          </span>
+
+                          <span className="relative min-w-0 flex-1">
+                            <span className="block text-[13px] font-black text-white">
+                              가방
+                              <span className="text-white/40 ml-2 tabular-nums">{myItems.items.length}</span>
+                            </span>
+                            <span className="block text-[11px] text-white/40 mt-1 truncate">
+                              {myItems.items.length === 0
+                                ? "아직 보유한 아이템이 없습니다"
+                                : invGroups.slice(1).map((g) => `${g.label} ${g.items.length}`).join(" · ")}
+                            </span>
+                          </span>
+
+                          {/* 미리보기 — 앞 4칸만 */}
+                          <span aria-hidden className="relative hidden sm:flex items-center gap-1.5 shrink-0">
+                            {invAll.slice(0, 4).map((it, i) => {
+                              const accent = it.color || (it.source === "level" ? "#ff5c77" : it.source === "inventory" ? "#5aa9dd" : "#ffffff");
                               return (
-                                <div key={i} className="flex items-center gap-3.5 py-3.5 group">
-                                  {/* 아이콘 */}
-                                  <span
-                                    aria-hidden
-                                    className="shrink-0 w-10 h-10 rounded-xl bg-white flex items-center justify-center"
-                                    style={{ boxShadow: dead ? "inset 0 0 0 1px rgba(0,0,0,0.07)" : `0 6px 16px -10px ${accent}, inset 0 0 0 1px ${accent}22` }}
-                                  >
-                                    {it.kind === "physical" ? (
-                                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke={dead ? "#c4c4c4" : accent} strokeWidth="1.7">
-                                        <path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5Z" strokeLinejoin="round" />
-                                        <path d="M3 8.5 12 13l9-4.5M12 13v7" strokeLinejoin="round" />
-                                      </svg>
-                                    ) : (
-                                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill={dead ? "#c4c4c4" : accent}>
-                                        <path d="M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z" opacity="0.92" />
-                                      </svg>
-                                    )}
-                                  </span>
-
-                                  {/* 이름 · 출처 */}
-                                  <div className="min-w-0 flex-1">
-                                    <p className={`text-[13px] font-black truncate ${dead ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{it.name}</p>
-                                    <p className="text-[11px] text-[#a3a3a3] truncate mt-0.5">{invSubLabel(it)}</p>
-                                  </div>
-
-                                  {/* 상태 */}
-                                  <div className="shrink-0">
-                                    {it.status === "pending" ? (
-                                      <StatusChip>지급 대기</StatusChip>
-                                    ) : it.status === "missing" ? (
-                                      <StatusChip accent dot>확인 필요</StatusChip>
-                                    ) : dday !== null ? (
-                                      <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-black tabular-nums ${dday <= 3 ? "bg-[#e91e3f] text-white" : "bg-black/[0.06] text-[#5a5a5a]"}`}>
-                                        D-{dday}
-                                      </span>
-                                    ) : (
-                                      <span className="text-[10px] font-black text-[#c4c4c4] tracking-[0.1em]">보유 중</span>
-                                    )}
-                                  </div>
-                                </div>
+                                <span
+                                  key={it.uid || i}
+                                  className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                  style={{ background: `${accent}22`, boxShadow: `inset 0 0 0 1px ${accent}44` }}
+                                >
+                                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill={accent}>
+                                    <path d="M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z" opacity="0.92" />
+                                  </svg>
+                                </span>
                               );
                             })}
-                          </div>
-                        </>
-                      )}
+                            {myItems.items.length > 4 && (
+                              <span className="text-[11px] font-black text-white/35 tabular-nums ml-0.5">+{myItems.items.length - 4}</span>
+                            )}
+                          </span>
 
-                      {myItems && !myItems.synced && (
-                        <p className="text-[10px] text-[#c4c4c4] mt-3 break-keep">디스코드 역할을 확인하지 못해 구매 기록 기준으로 표시하고 있습니다.</p>
+                          <span aria-hidden className="relative shrink-0 text-white/40 group-hover:text-white transition-colors text-lg">→</span>
+                        </button>
                       )}
                     </section>
+
 
                     {/* 서버 랭킹 */}
                     <section>
