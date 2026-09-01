@@ -1480,10 +1480,10 @@ export default function LevelPage() {
                       <button
                         onClick={openBag}
                         aria-label="인벤토리 열기"
-                        className="group w-full mt-6 pt-5 border-t border-white/10 flex items-center gap-4 text-left outline-none focus:outline-none"
+                        className="group w-full mt-8 pt-6 md:pt-10 border-t border-white/10 flex items-center gap-4 text-left outline-none focus:outline-none"
                       >
                         <span aria-hidden className="relative shrink-0">
-                          <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" stroke="#8ec6ea" strokeWidth="1.8">
+                          <svg viewBox="0 0 24 24" className="w-7 h-7 text-white/45 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
                             <path d="M4 9h16l-1 10.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5Z" strokeLinejoin="round" />
                             <path d="M8.5 9V6.5a3.5 3.5 0 0 1 7 0V9" strokeLinecap="round" />
                           </svg>
@@ -1502,9 +1502,7 @@ export default function LevelPage() {
                           </span>
                         </span>
 
-                        <span className="shrink-0 inline-flex items-center gap-1.5 h-8 px-4 rounded-full bg-white text-[#131313] text-[11px] font-black transition-transform group-hover:translate-x-0.5">
-                          열기 <span aria-hidden>→</span>
-                        </span>
+                        <span aria-hidden className="shrink-0 text-white/30 group-hover:text-white text-base transition-all group-hover:translate-x-0.5">→</span>
                       </button>
                     )}
 
