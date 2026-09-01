@@ -36,5 +36,8 @@ export const getVoiceBracketBonus = (level) => {
 };
 
 // KST 기준 오늘 날짜 "YYYY-MM-DD"
+// 📌 누적 음성 참여 시간 집계 시작일 (KST) — lib/season.js 의 VOICE_TIME_START 와 같아야 한다
+export const VOICE_TIME_START = "2026-10-01";
+
 export const kstToday = () =>
   new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);

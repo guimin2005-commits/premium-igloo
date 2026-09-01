@@ -106,7 +106,8 @@ export async function grantXp(member, amount, meta = {}) {
   const doc = await UserXp.findOneAndUpdate(
     { userId: member.id },
     {
-      $inc: { xp: amount },
+      // 음성 지급이면 그 주기만큼 누적 참여 시간도 같은 쓰기에서 올린다 (추가 왕복 없음)
+      $inc: meta.voiceSeconds ? { xp: amount, voiceSeconds: meta.voiceSeconds } : { xp: amount },
       $set: { username: member.user.username, displayName: member.displayName, updatedAt: new Date() },
     },
     { upsert: true, new: true }

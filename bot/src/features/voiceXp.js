@@ -1,6 +1,6 @@
 // ── 음성 XP (설정된 주기마다 지급) ──────────────────
 import { UserXp } from "../db.js";
-import { getVoiceBracketBonus } from "../leveling.js";
+import { getVoiceBracketBonus, kstToday, VOICE_TIME_START } from "../leveling.js";
 import { getBuffXp } from "../roleConfigs.js";
 import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getActiveBoostXp, getMuteMultiplier } from "../botSettings.js";
@@ -14,6 +14,9 @@ async function voiceXpTick(client) {
 
     const s = getSettings();
     const afkChannelId = guild.afkChannelId;
+    // 이번 틱이 대표하는 접속 시간 — XP를 준 틱만 시간으로 인정하므로
+    // 잠수·제외 채널·음소거 차단으로 지급을 건너뛴 시간은 쌓이지 않는다.
+    const tickSec = kstToday() >= VOICE_TIME_START ? s.voiceIntervalSec || 300 : 0;
 
     for (const [, voiceState] of guild.voiceStates.cache) {
       const member = voiceState.member;
@@ -42,6 +45,7 @@ async function voiceXpTick(client) {
         reason: "voice",
         channelId: channel.id,
         channelName: channel.name || "",
+        voiceSeconds: tickSec,
       });
     }
   } catch (e) {

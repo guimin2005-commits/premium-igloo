@@ -8,7 +8,7 @@ import {
   HudPanel, HudSection, HudStyles, LiveDot, RingGauge, SegBar,
   StatusChip, SegLadder, TickRuler, RankRows, EmptySlot,
 } from "../components/Hud";
-import { SEASON, getSeasonProgress } from "@/lib/season";
+import { SEASON, getSeasonProgress, isVoiceTimeTracked, VOICE_TIME_START } from "@/lib/season";
 import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel } from "@/lib/voiceTiers";
 import { getCumulativeXpByLevel, getLevelByXp } from "@/lib/leveling";
 import TierEmblem from "../components/TierEmblem";
@@ -157,6 +157,13 @@ const kstTodayStr = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString(
 // XP 사유 서브팔레트 — 채팅 모노/음성 아이스/출석 레드 (그 외 유채색 금지)
 const REASON_COLORS = { chat: "#a8adb8", voice: "#6fa8c4", attend: "#e91e3f" };
 const REASON_LABELS = { chat: "채팅", voice: "음성", attend: "출석" };
+
+// 누적 음성 참여 시간 — 한 시간을 넘기면 시간 단위로, 그 전에는 분 단위로 읽는다
+const fmtVoiceTime = (sec) => {
+  const min = Math.floor((sec || 0) / 60);
+  if (min < 60) return `${min}분`;
+  return `${Math.floor(min / 60).toLocaleString()}시간`;
+};
 
 // 음성 티어 경계·이름·색은 lib/voiceTiers.js 단일 소스 (봇 지급표와 1:1)
 
@@ -566,6 +573,8 @@ export default function LevelPage() {
   const questAll = quests?.quests || [];
   const questRows = questAll.filter((q) => (q.period || "daily") === questPeriod);
   // 주기마다 무작위로 뽑아 내보내는 경우 — 안내 문구를 "교체"로 바꾼다
+  // 누적 음성 시간은 시즌 2 개시일부터 쌓인다 — 그 전에는 집계 예정임을 알린다
+  const voiceTracked = isVoiceTimeTracked();
   const questPool = quests?.pool?.[questPeriod] || null;
   const questRotates = !!(questPool && questPool.pick > 0 && questPool.total > questPool.shown);
   const questDone = questRows.filter((q) => q.claimed || q.done).length;
@@ -951,7 +960,7 @@ export default function LevelPage() {
                         <SegBar pct={0} segments={20} h="h-3.5" track="bg-white/10" tick="rgba(19,19,19,0.92)" />
                       </div>
                       <div className="relative z-10 grid grid-cols-2 md:grid-cols-4 border-t border-white/10 mt-8 pt-6 md:divide-x md:divide-white/10">
-                        {["TOTAL", "TODAY", "STREAK", "PER 5MIN"].map((s, i) => (
+                        {["TOTAL", "TODAY", "STREAK", "VOICE"].map((s, i) => (
                           <div key={i} className={`px-0 md:px-6 ${i < 2 ? "pb-5 md:pb-0" : ""} ${i === 0 ? "md:pl-0" : ""}`}>
                             <p className="text-[9px] font-black tracking-[0.28em] text-white/20 uppercase mb-2">{s}</p>
                             <p className="text-xl md:text-2xl font-black text-white/15 tabular-nums leading-none">—</p>
@@ -1074,16 +1083,19 @@ export default function LevelPage() {
                     </div>
 
                     {/* 배너 하단 스탯 스트립 — 세로 구분선으로 계기판 느낌 */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 border-t border-white/10 mt-8 pt-6 md:divide-x md:divide-white/10">
+                    <div className="grid grid-cols-2 md:grid-cols-4 border-t border-white/10 mt-8 pt-6 md:divide-x md:divide-white/10">
                       {[
                         { l: "누적 XP", v: (me.xp || 0).toLocaleString(), s: "TOTAL" },
                         { l: "오늘 획득", v: `+${todayTotal.toLocaleString()}`, s: "TODAY", hot: todayTotal > 0 },
                         { l: "누적 출석", v: `${(me.attendCount || 0).toLocaleString()}일`, s: "STREAK" },
+                        voiceTracked
+                          ? { l: "누적 음성 시간", v: fmtVoiceTime(me.voiceSeconds), s: "VOICE" }
+                          : { l: `${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터 집계`, v: "—", s: "VOICE", dim: true },
                       ].map((st, i) => (
-                        <div key={i} className={`px-0 md:px-6 ${i === 0 ? "md:pl-0" : ""} ${i === 2 ? "col-span-2 md:col-span-1 pt-5 md:pt-0 border-t md:border-t-0 border-white/10" : ""}`}>
+                        <div key={i} className={`px-0 md:px-6 ${i === 0 ? "md:pl-0" : ""} ${i >= 2 ? "pt-5 md:pt-0 border-t md:border-t-0 border-white/10" : ""}`}>
                           <p className="text-[9px] font-black tracking-[0.28em] text-white/30 uppercase mb-2">{st.s}</p>
                           <p
-                            className={`text-xl md:text-2xl font-black tabular-nums tracking-tight leading-none ${st.hot ? "text-[#ff5c77]" : "text-white"}`}
+                            className={`text-xl md:text-2xl font-black tabular-nums tracking-tight leading-none ${st.hot ? "text-[#ff5c77]" : st.dim ? "text-white/25" : "text-white"}`}
                             style={st.tint ? { color: st.tint } : undefined}
                           >{st.v}</p>
                           <p className="text-[10px] font-bold text-white/40 mt-1.5">{st.l}</p>
@@ -1203,19 +1215,7 @@ export default function LevelPage() {
 
                               {/* 임무 내용 */}
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className={`text-[14px] font-black tracking-tight ${q.claimed ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{q.name}</p>
-                                  {q.rewardXp > 0 && (
-                                    <span
-                                      className={`inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-black tabular-nums ${
-                                        q.claimed ? "bg-black/[0.05] text-[#c4c4c4]" : "bg-[#e91e3f]/10 text-[#e91e3f]"
-                                      }`}
-                                    >
-                                      <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-current"></span>
-                                      +{q.rewardXp.toLocaleString()} XP
-                                    </span>
-                                  )}
-                                </div>
+                                <p className={`text-[14px] font-black tracking-tight truncate ${q.claimed ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{q.name}</p>
                                 {q.desc && <p className="text-[11px] text-[#a3a3a3] mt-1 truncate">{q.desc}</p>}
 
                                 {/* 진행 게이지 */}
@@ -1232,23 +1232,31 @@ export default function LevelPage() {
                                 </div>
                               </div>
 
-                              {/* 수령 */}
-                              <div className="shrink-0">
-                                {q.claimable ? (
-                                  <button
-                                    onClick={() => claimQuest(q)}
-                                    disabled={claiming === q.id}
-                                    className="px-4 sm:px-5 py-2.5 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[12px] font-black transition-colors outline-none focus:outline-none shadow-[0_8px_20px_-10px_rgba(233,30,63,0.9)]"
-                                  >
-                                    {claiming === q.id ? "…" : "받기"}
-                                  </button>
-                                ) : q.claimed ? (
-                                  <span className="text-[11px] font-black text-emerald-700">완료</span>
-                                ) : done ? (
-                                  <span className="text-[11px] font-black text-emerald-700">달성</span>
-                                ) : (
-                                  <span className="text-[11px] font-bold text-[#c4c4c4]">진행 중</span>
+                              {/* 보상 → 수령 — 오른쪽에 세로로 쌓아 "얼마를 · 받는다" 순으로 읽히게 한다 */}
+                              <div className="shrink-0 flex flex-col items-end text-right">
+                                {q.rewardXp > 0 && (
+                                  <span className={`text-[15px] font-black tabular-nums leading-none ${q.claimed ? "text-[#c4c4c4]" : "text-[#e91e3f]"}`}>
+                                    +{q.rewardXp.toLocaleString()}
+                                    <span className={`text-[10px] font-bold ml-1 ${q.claimed ? "text-[#c4c4c4]" : "text-[#a3a3a3]"}`}>XP</span>
+                                  </span>
                                 )}
+                                <div className={q.rewardXp > 0 ? "mt-2.5" : ""}>
+                                  {q.claimable ? (
+                                    <button
+                                      onClick={() => claimQuest(q)}
+                                      disabled={claiming === q.id}
+                                      className="px-4 sm:px-5 py-2.5 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[12px] font-black transition-colors outline-none focus:outline-none shadow-[0_8px_20px_-10px_rgba(233,30,63,0.9)]"
+                                    >
+                                      {claiming === q.id ? "…" : "받기"}
+                                    </button>
+                                  ) : q.claimed ? (
+                                    <span className="text-[11px] font-black text-emerald-700">완료</span>
+                                  ) : done ? (
+                                    <span className="text-[11px] font-black text-emerald-700">달성</span>
+                                  ) : (
+                                    <span className="text-[11px] font-bold text-[#c4c4c4]">진행 중</span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>

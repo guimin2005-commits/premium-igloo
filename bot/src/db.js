@@ -9,6 +9,10 @@ const UserXpSchema = new mongoose.Schema({
   level: { type: Number, default: 0 },
   lastChatXpAt: { type: Date, default: null },
   lastAttendDate: { type: String, default: "" }, // "2026-07-05" (KST)
+  // 스키마에 없으면 strict 모드에서 $inc 가 조용히 버려진다 — 사이트가 이 값을 보여주므로 반드시 필요
+  attendCount: { type: Number, default: 0 },
+  // 누적 음성 참여 시간(초) — 시즌 무관 통산 기록 (VOICE_TIME_START 이후부터 적립)
+  voiceSeconds: { type: Number, default: 0 },
 
   // 사이트에서 XP·레벨을 바꿨을 때 레벨 역할을 다시 맞추도록 세우는 표시
   needsRoleSync: { type: Boolean, default: false },

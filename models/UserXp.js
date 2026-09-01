@@ -11,6 +11,9 @@ const UserXpSchema = new mongoose.Schema({
   lastChatXpAt: { type: Date, default: null },
   lastAttendDate: { type: String, default: "" }, // "2026-07-05" (KST)
   attendCount: { type: Number, default: 0 },
+  // 누적 음성 참여 시간(초) — 시즌이 바뀌어도 초기화하지 않는 통산 기록.
+  // 봇이 음성 XP를 지급할 때 그 주기만큼 함께 더한다 (lib/season.js VOICE_TIME_START 이후부터).
+  voiceSeconds: { type: Number, default: 0 },
   // 사이트에서 XP·레벨을 바꿨을 때 봇이 레벨 역할을 다시 맞추도록 세우는 표시
   needsRoleSync: { type: Boolean, default: false },
   updatedAt: { type: Date, default: Date.now },

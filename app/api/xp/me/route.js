@@ -36,6 +36,8 @@ export async function GET() {
         rank: above + 1,
         total,
         attendCount: doc?.attendCount || 0,
+        // 통산 음성 참여 시간(초) — 시즌이 바뀌어도 이어진다
+        voiceSeconds: doc?.voiceSeconds || 0,
         lastAttendDate: doc?.lastAttendDate || "",
         // 진행률 표시용: 현재 레벨 구간 내 진행 XP / 구간 총 XP
         levelProgress: {
