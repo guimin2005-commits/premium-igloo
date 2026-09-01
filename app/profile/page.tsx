@@ -10,6 +10,7 @@ import { ADMIN_USERS } from "@/lib/admins";
 import { salePrice } from "@/lib/shopPricing";
 import { verifyBadge } from "@/lib/verifyBadge";
 import { EsportsStyles } from "../components/Esports";
+import ArcticDock from "../shop/ArcticDock";
 
 // 미리보기(접힘)용 마크다운 기호 제거
 const stripMd = (t: string) =>
@@ -62,6 +63,7 @@ export default function MyInfoPage() {
     .map((c) => ({ ...c, item: shopItems.find((i) => i._id === c.itemId) }))
     .filter((r): r is { itemId: string; qty: number; item: any } => !!r.item);
   const shopCartTotal = shopCartRows.reduce((n, r) => n + salePrice(r.item) * r.qty, 0);
+  const shopCartCount = shopCart.reduce((n, c) => n + (c.qty || 1), 0);
   const shopSpent = shopOrders.filter((o) => o.status !== "cancelled").reduce((n, o) => n + (o.price || 0), 0);
 
   // 찜·장바구니는 브라우저에 보관하므로 화면과 저장소를 함께 갱신한다
@@ -892,6 +894,13 @@ export default function MyInfoPage() {
         </div>
       )}
       </div>
+
+      {/* 📌 스토어에서 넘어왔으면 스토어 독을 그대로 세운다.
+             전역 독으로 갈아타면 스토어로 돌아갈 칸이 없어 엄지로 한 번에 못 돌아간다.
+             ClientLayout 이 이 경우 전역 독을 비우므로 두 겹이 되지 않는다. */}
+      {backTo?.href === "/level?tab=arctic" && (
+        <ArcticDock activeKey="me" cartCount={shopCartCount} wishCount={shopWish.length} />
+      )}
     </main>
   );
 }

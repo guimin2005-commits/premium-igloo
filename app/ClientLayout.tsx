@@ -129,6 +129,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // ARCTIC 은 자체 헤더를 쓰므로 전역 크롬(헤더·모바일 독·푸터·하단 패딩)을 통째로 넘긴다.
   // SYSTEM:LEVEL 의 ARCTIC 탭도 같은 화면이므로 같이 넘긴다 — 나머지 레벨 탭은 전역 헤더를 그대로 쓴다.
   const isArcticTab = pathname === "/level" && searchParams.get("tab") === "arctic";
+  // 스토어에서 넘어온 프로필은 스토어 독을 그대로 쓴다 — 전역 독과 겹치므로 이쪽을 비운다.
+  // 헤더·푸터는 그대로 두므로 isShopPage 에는 넣지 않는다.
+  const isArcticProfile = pathname === "/profile" && searchParams.get("from") === "arctic";
 
   // 📌 브랜드 표기는 ARCTIC 을 기준으로 통일한다 — 작은 회색 "고급 이글루" + 구분선 + 큰 섹션명.
   //    섹션 이름이 있는 곳만 뒤를 채우고, 나머지는 "고급 이글루" 하나만 큰 글씨로 세운다.
@@ -644,7 +647,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
              스크롤 시 상단 헤더가 변하는 알약과 같은 톤(bg #0b0b0b/75 + backdrop-blur-2xl + 얇은 흰 테두리).
              ※ bottom은 홈 인디케이터/제스처 바를 피하도록 safe-area와 12px 중 큰 값.
              (경매방에서는 오조작 방지를 위해 숨김) */}
-      {!isVerifyPage && !isAuctionRoom && !isShopPage && mounted && (
+      {!isVerifyPage && !isAuctionRoom && !isShopPage && !isArcticProfile && mounted && (
         <nav className={`md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border backdrop-blur-2xl grid grid-cols-5 ${isLightPage ? "border-black/[0.07] bg-white/85 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.22)]" : "border-white/[0.07] bg-[#0b0b0b]/75 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85)]"}`}>
           {[
             { name: "홈", path: "/", icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" },
