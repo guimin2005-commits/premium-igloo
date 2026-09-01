@@ -15,6 +15,10 @@ const nextConfig: NextConfig = {
          경로 자체를 넘겨준다. 하위 라우트(/shop/cart 등)는 그대로 살아 있다.
          permanent:false — 브라우저가 영구 캐시하면 나중에 되돌릴 수 없다. */
       { source: "/shop", destination: "/level?tab=arctic", permanent: false },
+
+      /* 📌 프로필은 /profile 한 곳뿐이다. /shop/me 는 주문·장바구니·찜만 있는
+         부분집합이었고 /profile 이 그 셋에 쿠폰까지 이미 담고 있었다. */
+      { source: "/shop/me", destination: "/profile", permanent: false },
     ];
   },
 };

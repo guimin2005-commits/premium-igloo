@@ -958,11 +958,11 @@ export default function LevelPage() {
 
       {/* ── 공통 헤더 — ARCTIC 에서는 상점 헤더가 그 자리를 대신하므로 감춘다 ── */}
       {activeMainTab !== "arctic" && (<>
-      <div className="relative w-full px-5 md:px-8 pt-10 md:pt-12 pb-6">
+      <div className="relative w-full px-5 md:px-8 pt-14 pb-10">
         <div aria-hidden className="absolute -top-16 left-1/2 -translate-x-1/2 w-[560px] h-[280px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
         <div className="relative max-w-7xl mx-auto">
           <div className="flex flex-col items-center text-center">
-            <h1 className="text-2xl md:text-3xl font-black tracking-tighter leading-none">
+            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none">
               <span className="text-[#131313]">SYSTEM</span>
               <span className="text-[#e91e3f] mx-1.5">:</span>
               <span className="lux-shimmer">LEVEL</span>

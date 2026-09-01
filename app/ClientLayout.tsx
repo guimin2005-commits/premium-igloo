@@ -129,6 +129,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // ARCTIC 은 자체 헤더를 쓰므로 전역 크롬(헤더·모바일 독·푸터·하단 패딩)을 통째로 넘긴다.
   // SYSTEM:LEVEL 의 ARCTIC 탭도 같은 화면이므로 같이 넘긴다 — 나머지 레벨 탭은 전역 헤더를 그대로 쓴다.
   const isArcticTab = pathname === "/level" && searchParams.get("tab") === "arctic";
+
+  // 📌 브랜드 표기는 ARCTIC 을 기준으로 통일한다 — 작은 회색 "고급 이글루" + 구분선 + 큰 섹션명.
+  //    섹션 이름이 있는 곳만 뒤를 채우고, 나머지는 "고급 이글루" 하나만 큰 글씨로 세운다.
+  const SECTION_BRANDS: { match: (p: string) => boolean; name: string; href: string }[] = [
+    { match: (p) => p === "/level" || p.startsWith("/level/"), name: "SYSTEM : LEVEL", href: "/level" },
+  ];
+  const sectionBrand = SECTION_BRANDS.find((b) => b.match(pathname || "")) || null;
   // 메뉴 활성 판정 — 항목 경로에 쿼리가 붙어 있으면(예: /level?tab=arctic)
   // pathname 만으로는 절대 맞지 않고, 반대로 /level 항목이 ARCTIC 탭에서도 켜진다.
   const isMenuActive = (itemPath?: string) => {
@@ -369,18 +376,30 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <header className={`mx-auto transition-[max-width,border-radius,padding,height] duration-500 ease-out ${
         scrolled
           ? isLightPage
-            ? "max-w-3xl rounded-full border border-black/[0.06] bg-white/80 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] px-5 md:px-6 h-14"
-            : "max-w-3xl rounded-full border border-white/[0.06] bg-[#0b0b0b]/70 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)] px-5 md:px-6 h-14"
+            ? "max-w-5xl rounded-full border border-black/[0.06] bg-white/80 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] px-5 md:px-6 h-14"
+            : "max-w-5xl rounded-full border border-white/[0.06] bg-[#0b0b0b]/70 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)] px-5 md:px-6 h-14"
           : isLightPage
             ? "max-w-[1600px] border border-x-transparent border-t-transparent border-b-black/[0.08] bg-[#f5f3f0]/85 backdrop-blur-md px-6 h-16"
             : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-16"
       }`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
-          <div className="flex-1 flex items-center z-10">
+          <div className="flex-1 flex items-center z-10 min-w-0">
             {isVerifyPage ? (
-              <span className={`font-bold cursor-default select-none transition-[font-size,letter-spacing] duration-500 ease-out ${isLightPage ? "text-[#131313]" : "text-white"} ${scrolled ? "text-[15px] tracking-[0.12em]" : "text-[17px] tracking-[0.18em]"}`}>고급 이글루</span>
+              <span className={`font-bold cursor-default select-none text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] ${isLightPage ? "text-[#131313]" : "text-white"}`}>고급 이글루</span>
+            ) : sectionBrand ? (
+              /* ARCTIC 과 같은 표기 — 고급 이글루 ㅣ 섹션명 */
+              <div className="flex flex-row items-center gap-2 sm:gap-3 min-w-0 leading-none">
+                {/* 좁은 화면에서는 상위 브랜드를 접는다 — 섹션명이 길면 우측 아이콘과 겹친다 */}
+                <Link href="/" className={`hidden sm:block text-[9px] sm:text-[10px] font-bold tracking-[0.18em] whitespace-nowrap transition-colors ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313]" : "text-white/45 hover:text-white"}`}>
+                  고급 이글루
+                </Link>
+                <span className={`hidden sm:block w-px h-4 ${isLightPage ? "bg-[#d6d3ce]" : "bg-white/20"}`}></span>
+                <Link href={sectionBrand.href} className={`min-w-0 truncate text-[14px] sm:text-[17px] font-black tracking-[0.1em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-[#ff5c77]"}`}>
+                  {sectionBrand.name}
+                </Link>
+              </div>
             ) : (
-              <Link href="/" className={`font-bold transition-[font-size,letter-spacing] duration-500 ease-out ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-gray-300"} ${scrolled ? "text-[15px] tracking-[0.12em]" : "text-[17px] tracking-[0.18em]"}`}>고급 이글루</Link>
+              <Link href="/" className={`font-bold text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-gray-300"}`}>고급 이글루</Link>
             )}
           </div>
           

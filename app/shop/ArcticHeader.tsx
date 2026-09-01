@@ -13,7 +13,7 @@ export function ArcticBrand() {
       </Link>
       <span className="w-px h-3.5 sm:h-4 bg-[#d6d3ce]"></span>
       <Link href="/level?tab=arctic" className="text-[15px] sm:text-[17px] font-black tracking-[0.16em] sm:tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
-        ARCTIC
+        ARCT<span className="text-[#e91e3f]">I</span>C
       </Link>
     </div>
   );

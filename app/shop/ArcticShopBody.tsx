@@ -660,7 +660,7 @@ export default function ArcticShopBody({
             </Link>
             <span className="w-px h-3.5 lg:h-4 bg-[#d6d3ce]"></span>
             <Link href="/level?tab=arctic" className="text-[15px] lg:text-[17px] font-black tracking-[0.16em] lg:tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
-              ARCTIC
+              ARCT<span className="text-[#e91e3f]">I</span>C
             </Link>
 
             {/* 비공개 상태 — 관리자에게만 작은 점으로 알린다 */}
@@ -751,7 +751,7 @@ export default function ArcticShopBody({
                 </Link>
 
                 {/* 프로필 — 내 정보 페이지로 */}
-                <Link href="/shop/me" aria-label="내 정보" className="relative shrink-0 hidden md:flex items-center justify-center w-9 h-9">
+                <Link href="/profile" aria-label="내 정보" className="relative shrink-0 hidden md:flex items-center justify-center w-9 h-9">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={session?.user?.image || ""} alt=""
                     className="w-8 h-8 rounded-full bg-[#e2e0dc] ring-1 ring-[#e2e0dc] hover:ring-[#131313] transition-all" />
@@ -776,7 +776,9 @@ export default function ArcticShopBody({
 
       {/* ── 홈 · 브랜드 ── */}
       {view === "home" && (<>
-      <section className="w-full bg-gradient-to-b from-[#eceae6] to-[#f5f3f0] border-b border-[#e2e0dc]">
+      {/* 히어로 — 대시보드와 같은 처리(아이보리 단색 + 은은한 붉은 글로우). 회색 그라데이션·경계선 금지 */}
+      <section className="relative w-full">
+        <div aria-hidden className="absolute -top-16 left-1/2 -translate-x-1/2 w-[560px] h-[280px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
         <div className="max-w-7xl mx-auto px-5 md:px-8 pt-14 pb-10">
           {/* 중앙 — 타이틀 */}
           <div className="text-center break-keep">
@@ -785,7 +787,7 @@ export default function ArcticShopBody({
               <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Premium Igloo SHOP</span>
               <span className="w-8 h-px bg-[#8a8a8a]"></span>
             </div>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-[#131313] mb-4">ARCTIC</h1>
+            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none text-[#131313] mb-4">ARCT<span className="text-[#e91e3f]">I</span>C</h1>
 
             {/* 관리자에게만 보이는 상품 관리 진입점 */}
             {isAdmin && (
