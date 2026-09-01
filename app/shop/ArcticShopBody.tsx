@@ -14,12 +14,11 @@ const ADMIN_USERS = ["elahw.06"];
 // 📌 ARCTIC 본문 — /shop 라우트와 SYSTEM:LEVEL 의 ARCTIC 탭이 이 한 벌을 함께 쓴다.
 //    공개 전에는 관리자만 볼 수 있다 (레벨 대시보드 → 기본 정책 → ARCTIC 공개)
 //
-//    embedded=true (= /level 안에 들어갈 때)
-//      전역 헤더·하단 독·푸터가 이미 살아 있으므로 ARCTIC 자체 크롬과 겹친다.
-//      특히 ArcticDock 은 전역 모바일 독과 위치·크기·격자가 같아 그대로 두면
-//      전역 독을 완전히 덮어 LEVEL 을 빠져나갈 수단이 사라진다. 그래서 독과 푸터는
-//      끄고, 헤더는 기능(검색·장바구니·쿠폰·찜·보유 XP)을 살리되 sticky 만 해제한다.
-//      바깥이 이미 min-h-screen 이라 루트의 min-h-screen 도 뺀다 (한 화면만큼 늘어남).
+//    ARCTIC 으로 넘어가면 헤더가 바뀐다 — ClientLayout 이 /level?tab=arctic 을
+//    isShopPage 로 쳐서 전역 헤더·모바일 독·푸터를 넘기고, 여기 자체 크롬이 그 자리를
+//    대신한다. 그래서 크롬은 두 경로에서 똑같이 그린다.
+//    embedded 는 레이아웃 차이 하나만 흡수한다 — /level 래퍼가 이미 min-h-screen 이라
+//    루트에서 한 번 더 주면 빈 화면 하나만큼 세로가 늘어난다.
 const SORTS = [
   { v: "recommended", l: "추천순" },
   { v: "priceAsc", l: "낮은 가격순" },
@@ -54,7 +53,14 @@ const PRICE_RANGES = [
 
 const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "지급 완료", cancelled: "취소됨" };
 
-export default function ArcticShopBody({ embedded = false }: { embedded?: boolean }) {
+export default function ArcticShopBody({
+  embedded = false,
+  topSlot = null,
+}: {
+  embedded?: boolean;
+  /** 자체 헤더 바로 아래에 끼워 넣을 것 — /level 은 여기에 탭 줄을 넣어 돌아갈 길을 남긴다 */
+  topSlot?: React.ReactNode;
+}) {
   const { data: session, status } = useSession();
   const isLoggedIn = status === "authenticated";
   const isAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
@@ -637,7 +643,7 @@ export default function ArcticShopBody({ embedded = false }: { embedded?: boolea
   return (
     <div className={`w-full flex-1 bg-[#f5f3f0] text-[#131313] ${embedded ? "" : "min-h-screen"}`}>
       {/* ── ARCTIC 전용 헤더 — 스크롤하면 알약 독으로 좁아진다 ── */}
-      <div className={`w-full transition-[padding] duration-500 ease-out ${embedded ? "relative z-30" : "sticky top-0 z-[95]"} ${pastBanner ? "pt-3 px-3 md:px-6" : ""}`}>
+      <div className={`sticky top-0 z-[95] w-full transition-[padding] duration-500 ease-out ${pastBanner ? "pt-3 px-3 md:px-6" : ""}`}>
       {/* max-width를 고정값끼리 오가게 해야 알약 전환이 부드럽게 애니메이션된다 */}
       <header className={`mx-auto transition-all duration-500 ease-out ${
         pastBanner
@@ -764,54 +770,12 @@ export default function ArcticShopBody({ embedded = false }: { embedded?: boolea
       </header>
       </div>
 
-      {/* ── 모바일 유틸 줄 (/level 안 전용) ──
-             하단 독을 끄면서 사라지는 검색·찜·장바구니를 여기서 되살린다.
-             fixed 가 아니라 흐름 안에 있어 전역 독과 겹치지 않는다. */}
-      {embedded && (
-        <div className="md:hidden w-full px-4 pt-3">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowMobileSearch(true)}
-              className="flex-1 flex items-center gap-2 h-10 px-3.5 rounded-full border border-[#d6d3ce] bg-white text-[12px] font-bold text-[#8a8a8a] outline-none focus:outline-none"
-            >
-              <svg viewBox="0 0 20 20" className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" />
-              </svg>
-              {query || "상품 검색"}
-            </button>
-            <button
-              onClick={() => setShowWishList(true)}
-              aria-label="찜 목록"
-              className="relative shrink-0 w-10 h-10 rounded-full border border-[#d6d3ce] bg-white flex items-center justify-center outline-none focus:outline-none"
-            >
-              <svg viewBox="0 0 20 20" className="w-4 h-4 text-[#5a5a5a]" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M10 16.5 3.8 10.3a3.6 3.6 0 1 1 5.1-5.1l1.1 1.1 1.1-1.1a3.6 3.6 0 1 1 5.1 5.1Z" strokeLinejoin="round" />
-              </svg>
-              {wish.length > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{wish.length}</span>
-              )}
-            </button>
-            <Link
-              href="/shop/cart"
-              aria-label="장바구니"
-              className="relative shrink-0 w-10 h-10 rounded-full border border-[#d6d3ce] bg-white flex items-center justify-center"
-            >
-              <svg viewBox="0 0 20 20" className="w-4 h-4 text-[#5a5a5a]" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M3 4h2l1.6 8.4a1 1 0 0 0 1 .8h6.8a1 1 0 0 0 1-.8L17 7H6" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="8.5" cy="16" r="1.2" /><circle cx="14.5" cy="16" r="1.2" />
-              </svg>
-              {cartCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#131313] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{cartCount}</span>
-              )}
-            </Link>
-          </div>
-        </div>
-      )}
+      {topSlot}
 
       {/* ── 홈 · 브랜드 ── */}
       {view === "home" && (<>
       <section className="w-full bg-gradient-to-b from-[#eceae6] to-[#f5f3f0] border-b border-[#e2e0dc]">
-        <div className="max-w-6xl mx-auto px-6 pt-14 pb-10">
+        <div className="max-w-7xl mx-auto px-5 md:px-8 pt-14 pb-10">
           {/* 중앙 — 타이틀 */}
           <div className="text-center break-keep">
             <div className="flex items-center justify-center gap-3 mb-4">
@@ -846,7 +810,7 @@ export default function ArcticShopBody({ embedded = false }: { embedded?: boolea
 
       {/* ── 이미지 배너 (관리자 등록) ── */}
       {banners.length > 0 && (
-        <section className="max-w-6xl mx-auto px-6 pt-10">
+        <section className="max-w-7xl mx-auto px-5 md:px-8 pt-10">
           <div className="relative rounded-2xl overflow-hidden border border-[#e2e0dc] bg-[#eceae6] shadow-[0_10px_30px_-14px_rgba(0,0,0,0.25)]">
             <div className="relative" style={{ aspectRatio: String(bannerRatio) }}>
               {banners.map((b, i) => {
@@ -894,7 +858,7 @@ export default function ArcticShopBody({ embedded = false }: { embedded?: boolea
       )}
 
       {/* ── 홈 · 카테고리 (모바일) — 상품 화면과 같은 탭 모양 ── */}
-      <section className="md:hidden max-w-6xl mx-auto px-6 pt-8">
+      <section className="md:hidden max-w-7xl mx-auto px-5 md:px-8 pt-8">
         <div className="flex items-center gap-1 overflow-x-auto no-bar border-b border-[#e2e0dc]">
           {TYPES.map((t) => (
             <button key={t.v} onClick={() => goProducts(t.v)}
@@ -906,7 +870,7 @@ export default function ArcticShopBody({ embedded = false }: { embedded?: boolea
       </section>
 
       {/* ── 홈 · 추천 상품 ── */}
-      <section className="max-w-6xl mx-auto px-6 pt-14">
+      <section className="max-w-7xl mx-auto px-5 md:px-8 pt-14">
         <div className="flex items-end justify-between gap-4 mb-6">
           <div>
             <div className="flex items-center gap-3 mb-2">
@@ -952,7 +916,7 @@ export default function ArcticShopBody({ embedded = false }: { embedded?: boolea
 
       {/* ── 상품 · 검색 · 필터 ── */}
       {view === "products" && (<>
-      <section className="max-w-6xl mx-auto px-6 pt-8">
+      <section className="max-w-7xl mx-auto px-5 md:px-8 pt-8">
         {/* 📌 아이콘 상태로 접혀 있다가 호버·포커스·입력 시 펼쳐지는 검색창
                (모바일은 터치라 호버가 없으므로 항상 펼친 상태) */}
         {/* 검색어 표시 (검색은 헤더에서) */}
@@ -1063,7 +1027,7 @@ export default function ArcticShopBody({ embedded = false }: { embedded?: boolea
       </section>
 
       {/* ── 상품 목록 ── */}
-      <section className="max-w-6xl mx-auto px-6 py-10 pb-32 md:pb-24">
+      <section className="max-w-7xl mx-auto px-5 md:px-8 py-10 pb-32 md:pb-24">
         <div id="shop-list" className="scroll-mt-24"></div>
 
         {/* 찜만 보기 — 해제 버튼을 눈에 띄게 */}
@@ -1329,11 +1293,8 @@ export default function ArcticShopBody({ embedded = false }: { embedded?: boolea
         </div>
       )}
 
-      {/* ── 모바일 하단바 ──
-             /level 안에서는 전역 모바일 독과 위치·크기·격자가 같아 정확히 포개진다.
-             그대로 두면 전역 독을 덮어 LEVEL 을 빠져나갈 수 없으므로 끄고,
-             독에만 있던 검색·찜·장바구니는 위쪽 인라인 줄로 대신한다. */}
-      {!embedded && (
+      {/* ── 모바일 하단바 — 하위 페이지와 같은 공용 컴포넌트를 쓴다.
+             ARCTIC 탭에서는 ClientLayout 이 전역 독을 숨기므로 겹치지 않는다. */}
       <ArcticDock
         activeKey={showWishList ? "wish" : showMobileSearch || query ? "search" : view === "home" ? "home" : ""}
         cartCount={cartCount}
@@ -1346,7 +1307,6 @@ export default function ArcticShopBody({ embedded = false }: { embedded?: boolea
           return false; // 장바구니·내 정보는 이동
         }}
       />
-      )}
 
       {/* ── 모바일 검색 시트 ── */}
       {showMobileSearch && (
@@ -1677,8 +1637,7 @@ export default function ArcticShopBody({ embedded = false }: { embedded?: boolea
         </div>
       )}
 
-      {/* 전역 푸터와 내용이 같으므로 /level 안에서는 그리지 않는다 */}
-      {!embedded && <ArcticFooter />}
+      <ArcticFooter />
     </div>
   );
 }

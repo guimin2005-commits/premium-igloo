@@ -7,7 +7,7 @@ import Link from "next/link";
 export default function ArcticFooter() {
   return (
     <footer className="w-full mt-auto border-t border-[#e2e0dc] bg-[#f5f3f0]">
-      <div className="max-w-6xl mx-auto px-6 py-10 pb-28 md:pb-10">
+      <div className="max-w-7xl mx-auto px-5 md:px-8 py-10 pb-28 md:pb-10">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-6">
           <div>
             <div className="text-base font-black tracking-widest text-[#131313] mb-1">고급 이글루</div>

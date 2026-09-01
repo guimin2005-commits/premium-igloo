@@ -868,6 +868,32 @@ export default function LevelPage() {
     return { neededXp, dailyXp, days, months: Math.floor(days / 30), remDays: days % 30, targetLv };
   }, [simLevel, goalLevel, goalDailyTime, simChannel, simResult, simAttendBoost]);
 
+  // 📌 탭 줄 — 일반 탭에서는 히어로 아래, ARCTIC 에서는 상점 헤더 바로 아래에 그린다.
+  //    ARCTIC 은 전역 헤더를 넘겨받은 화면이라 카테고리도 그 헤더에 붙어 있어야 자연스럽다.
+  const tabBar = (
+    <div className={`w-full px-5 md:px-8 ${activeMainTab === "arctic" ? "bg-[#f5f3f0] border-b border-[#e2e0dc] py-3" : "pb-2"}`}>
+      {/* 정렬은 탭마다 바뀌지 않는다 — ARCTIC 으로 넘어갈 때 카테고리가 좌우로 튀면 안 된다 */}
+      <div className="max-w-7xl mx-auto flex items-center justify-center">
+        <div className="min-w-0 flex gap-2 overflow-x-auto no-bar">
+          {MAIN_TABS.filter((t) => !t.shopOnly || canSeeShop).map((tab) => {
+            const active = activeMainTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveMainTab(tab.id)}
+                className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-bold transition-colors outline-none focus:outline-none ${
+                  active ? "bg-[#131313] text-white" : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"
+                }`}
+              >
+                {tab.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     // ⚠️ main에 overflow-hidden 금지 — 하위 sticky(탭바)가 죽는다. 글로우 가로 넘침은 body의 overflow-x: clip이 전역 처리
     <main className="w-full flex-1 flex flex-col relative">
@@ -926,7 +952,8 @@ export default function LevelPage() {
 
       <TierModal open={tierOpen} onClose={() => setTierOpen(false)} level={me?.level || 0} baseXp={P.voiceXp} intervalMin={P_voiceMin} />
 
-      {/* ── 공통 헤더 — 모든 탭 동일 프레임 ── */}
+      {/* ── 공통 헤더 — ARCTIC 에서는 상점 헤더가 그 자리를 대신하므로 감춘다 ── */}
+      {activeMainTab !== "arctic" && (<>
       <div className="relative w-full px-5 md:px-8 pt-10 md:pt-12 pb-6">
         <div aria-hidden className="absolute -top-16 left-1/2 -translate-x-1/2 w-[560px] h-[280px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
         <div className="relative max-w-7xl mx-auto">
@@ -957,28 +984,10 @@ export default function LevelPage() {
         </div>
       </div>
 
-      {/* ── TAB NAV — ARCTIC 알약 탭 ─────── */}
-      <div className="w-full px-5 md:px-8 pb-2">
-        <div className="max-w-7xl mx-auto relative flex items-center justify-center">
-          <div className="min-w-0 flex gap-2 overflow-x-auto no-bar">
-          {MAIN_TABS.filter((t) => !t.shopOnly || canSeeShop).map((tab) => {
-            const active = activeMainTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveMainTab(tab.id)}
-                className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-bold transition-colors outline-none focus:outline-none ${
-                  active ? "bg-[#131313] text-white" : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"
-                }`}
-              >
-                {tab.name}
-              </button>
-            );
-          })}
-          </div>
+      </>)}
 
-        </div>
-      </div>
+      {/* ── 탭 줄 — ARCTIC 에서는 상점 헤더 바로 아래(topSlot)로 내려간다 ── */}
+      {activeMainTab !== "arctic" && tabBar}
 
       {/* 대시보드 탭은 좌우 공간을 쓰는 와이드 HUD(7xl), 문서형 탭은 기존 에디토리얼 폭 유지 */}
       <div
@@ -990,7 +999,9 @@ export default function LevelPage() {
       >
 
         {/* ══ TAB : ARCTIC — /shop 과 같은 본문 한 벌 ══ */}
-        {activeMainTab === "arctic" && canSeeShop && <ArcticShopBody embedded />}
+        {/* 접근 판정(공개 여부·관리자)은 ArcticShopBody 가 스스로 한다 — 여기서 또 막으면
+            정책이 로드되기 전 한순간 전역 헤더도 본문도 없는 빈 화면이 된다 */}
+        {activeMainTab === "arctic" && <ArcticShopBody embedded topSlot={tabBar} />}
 
 
         {/* ══ TAB : MY DASHBOARD — 게임 프로필 화면 ══
