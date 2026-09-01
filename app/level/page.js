@@ -15,6 +15,28 @@ import TierEmblem from "../components/TierEmblem";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
 const INV_CAT = { perk: "특전", title: "칭호", notify: "알림", etc: "기타" };
+
+// 인벤토리 행의 보조 한 줄 — 어디서 온 것인지 / 어떤 조건인지
+const invSubLabel = (it) => {
+  if (it.description) return it.description;
+  if (it.kind === "physical") return "실물 상품";
+  if (it.source === "level") return it.rewardLevel != null ? `레벨 보상 · Lv.${it.rewardLevel} 도달` : "레벨 보상";
+  if (it.source === "inventory") return INV_CAT[it.category] || "특전";
+  if (it.source === "shop") return it.days > 0 ? `상점 · ${it.days}일 이용권` : "상점 · 영구 보유";
+  return "운영진 지급";
+};
+
+// 분류 탭 — 실제로 가진 것만 만든다 (빈 탭을 띄우지 않는다)
+const invGroupOf = (it) => {
+  if (it.kind === "physical") return { id: "physical", label: "실물" };
+  if (it.source === "level") return { id: "level", label: "레벨 보상" };
+  if (it.source === "shop") return { id: "shop", label: "상점" };
+  if (it.source === "inventory") {
+    const c = it.category || "etc";
+    return { id: c, label: INV_CAT[c] || "기타" };
+  }
+  return { id: "grant", label: "지급" };
+};
 const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
 // 내전 채널은 기본 음성 XP에 더하는 게 아니라 통째로 대체한다 (bot/src/config.js policy.scrimBaseXp)
 // SCRIM_CHANNEL_IDS 가 비어 있으면 봇이 내전 채널을 인식하지 못해 실제로는 적용되지 않는다.
@@ -462,6 +484,7 @@ export default function LevelPage() {
   // 리뉴얼: 정적 안내 대신 '내 대시보드'가 첫 화면
   const [activeMainTab, setActiveMainTab] = useState("my");
   const [introSec, setIntroSec] = useState(INTRO_STEPS[0].id);
+  const [invTab, setInvTab] = useState("all");
   const { data: session, status: authStatus } = useSession();
 
   // 하이드레이션 불일치 방지 — 서버/클라이언트 첫 페인트는 항상 스켈레톤으로 통일하고,
@@ -588,6 +611,21 @@ export default function LevelPage() {
   const questRows = questAll.filter((q) => (q.period || "daily") === questPeriod);
   // 주기마다 무작위로 뽑아 내보내는 경우 — 안내 문구를 "교체"로 바꾼다
   // 누적 음성 시간은 시즌 2 개시일부터 쌓인다 — 그 전에는 집계 예정임을 알린다
+  // 인벤토리 분류 — 가진 항목에서 탭을 만들고, 없는 탭을 고르고 있으면 전체로 되돌린다
+  const invAll = myItems?.items || [];
+  const invGroups = useMemo(() => {
+    if (invAll.length === 0) return [];
+    const byId = new Map();
+    for (const it of invAll) {
+      const g = invGroupOf(it);
+      if (!byId.has(g.id)) byId.set(g.id, { ...g, items: [] });
+      byId.get(g.id).items.push(it);
+    }
+    return [{ id: "all", label: "전체", items: invAll }, ...byId.values()];
+  }, [invAll]);
+  const invActive = invGroups.find((g) => g.id === invTab) || invGroups[0];
+  const invRows = invActive?.items || [];
+
   const voiceTracked = isVoiceTimeTracked();
   const introIdx = Math.max(0, INTRO_STEPS.findIndex((x) => x.id === introSec));
   const introPrev = introIdx > 0 ? INTRO_STEPS[introIdx - 1] : null;
@@ -1298,7 +1336,7 @@ export default function LevelPage() {
                       </div>
                     </section>
 
-                    {/* ═══ 인벤토리 — 넓은 열에서 제대로 펼친 슬롯 그리드 ═══ */}
+                    {/* ═══ 인벤토리 — 분류 탭 + 행 목록 (개수가 늘어도 무너지지 않게) ═══ */}
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
@@ -1316,92 +1354,93 @@ export default function LevelPage() {
                       </div>
 
                       {!myItems ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                          {[0, 1, 2, 3].map((i) => (
-                            <div key={i} className="h-[132px] rounded-2xl bg-black/[0.04] animate-pulse"></div>
+                        <div className="space-y-2">
+                          {[0, 1, 2].map((i) => (
+                            <div key={i} className="h-[68px] rounded-xl bg-black/[0.04] animate-pulse"></div>
                           ))}
                         </div>
+                      ) : myItems.items.length === 0 ? (
+                        <EmptySlot>아직 보유한 아이템이 없습니다</EmptySlot>
                       ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                          {myItems.items.map((it, i) => {
-                            const dead = it.status === "pending" || it.status === "missing";
-                            const accent =
-                              it.color || (it.source === "level" ? "#e91e3f" : it.source === "inventory" ? "#3f83b8" : "#131313");
-                            const dday =
-                              it.expiresAt && it.status === "completed"
-                                ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000))
-                                : null;
-                            const typeLabel =
-                              it.status === "pending"
-                                ? "지급 대기"
-                                : it.status === "missing"
-                                ? "확인 필요"
-                                : it.kind === "physical"
-                                ? "실물 상품"
-                                : it.source === "level"
-                                ? `레벨 보상 · Lv.${it.rewardLevel}`
-                                : it.source === "inventory"
-                                ? INV_CAT[it.category] || "특전"
-                                : it.days > 0
-                                ? `${it.days}일 이용권`
-                                : "영구 보유";
-                            return (
-                              <div
-                                key={i}
-                                className="group relative rounded-2xl overflow-hidden px-4 pt-5 pb-4 flex flex-col items-center text-center transition-transform hover:-translate-y-1"
-                                style={{
-                                  background: dead ? "rgba(0,0,0,0.02)" : `linear-gradient(160deg, ${accent}1c, ${accent}05)`,
-                                  border: `1px solid ${dead ? "rgba(0,0,0,0.08)" : accent + "3d"}`,
-                                  boxShadow: dead ? "none" : `0 12px 28px -20px ${accent}`,
-                                }}
-                              >
-                                {/* 슬롯 브래킷 */}
-                                <span aria-hidden className="absolute top-2 left-2 w-2.5 h-2.5 border-t border-l rounded-tl" style={{ borderColor: dead ? "rgba(0,0,0,0.12)" : accent + "66" }}></span>
-                                <span aria-hidden className="absolute bottom-2 right-2 w-2.5 h-2.5 border-b border-r rounded-br" style={{ borderColor: dead ? "rgba(0,0,0,0.12)" : accent + "66" }}></span>
-
-                                {/* 아이콘 */}
-                                <span
-                                  aria-hidden
-                                  className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center mb-3 shrink-0"
-                                  style={{ boxShadow: dead ? "inset 0 0 0 1px rgba(0,0,0,0.06)" : `0 8px 20px -10px ${accent}, inset 0 0 0 1px ${accent}22` }}
-                                >
-                                  {it.kind === "physical" ? (
-                                    <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" stroke={dead ? "#c4c4c4" : accent} strokeWidth="1.7">
-                                      <path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5Z" strokeLinejoin="round" />
-                                      <path d="M3 8.5 12 13l9-4.5M12 13v7" strokeLinejoin="round" />
-                                    </svg>
-                                  ) : (
-                                    <svg viewBox="0 0 24 24" className="w-7 h-7" fill={dead ? "#c4c4c4" : accent}>
-                                      <path d="M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z" opacity="0.92" />
-                                    </svg>
-                                  )}
-                                </span>
-
-                                <p className={`text-[13px] font-black leading-tight line-clamp-2 ${dead ? "text-[#a3a3a3]" : "text-[#131313]"}`}>
-                                  {it.name}
-                                </p>
-                                <p className="text-[10px] font-bold text-[#a3a3a3] mt-1.5 truncate w-full">{typeLabel}</p>
-
-                                {dday !== null && (
-                                  <span className={`absolute top-2.5 right-2.5 text-[9px] font-black tabular-nums px-1.5 py-0.5 rounded-md ${dday <= 3 ? "bg-[#e91e3f] text-white" : "bg-black/10 text-[#5a5a5a]"}`}>
-                                    D-{dday}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
-
-                          {/* 빈 슬롯 — 4칸 단위로 줄을 채운다 (5개면 8칸, 9개면 12칸) */}
-                          {Array.from({ length: Math.max(4, Math.ceil(myItems.items.length / 4) * 4) - myItems.items.length }, (_, i) => (
-                            <div
-                              key={`empty-${i}`}
-                              className="h-[132px] rounded-2xl border border-dashed border-black/[0.09] flex flex-col items-center justify-center gap-2"
-                            >
-                              <span aria-hidden className="w-8 h-8 rounded-xl border border-dashed border-black/[0.12]"></span>
-                              <span className="text-[10px] font-bold text-[#c4c4c4]">빈 슬롯</span>
+                        <>
+                          {/* 분류 탭 — 실제로 가진 분류만 뜬다 */}
+                          {invGroups.length > 1 && (
+                            <div className="flex items-center gap-1.5 overflow-x-auto no-bar mb-4">
+                              {invGroups.map((g) => {
+                                const on = invTab === g.id;
+                                return (
+                                  <button
+                                    key={g.id}
+                                    onClick={() => { setInvTab(g.id); playTone(620, 0.04, "sine", 0.025); }}
+                                    className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
+                                      on
+                                        ? "bg-white text-[#131313] ring-1 ring-black/10 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.3)]"
+                                        : "text-[#a3a3a3] hover:text-[#131313]"
+                                    }`}
+                                  >
+                                    {g.label}
+                                    <span className={`tabular-nums text-[10px] font-black ${on ? "text-[#a3a3a3]" : "opacity-50"}`}>{g.items.length}</span>
+                                  </button>
+                                );
+                              })}
                             </div>
-                          ))}
-                        </div>
+                          )}
+
+                          {/* 행 목록 — 박스 대신 헤어라인 */}
+                          <div className="border-y border-black/[0.08] divide-y divide-black/[0.06]">
+                            {invRows.map((it, i) => {
+                              const dead = it.status === "pending" || it.status === "missing";
+                              const accent =
+                                it.color || (it.source === "level" ? "#e91e3f" : it.source === "inventory" ? ICE : "#131313");
+                              const dday =
+                                it.expiresAt && it.status === "completed"
+                                  ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000))
+                                  : null;
+                              return (
+                                <div key={i} className="flex items-center gap-3.5 py-3.5 group">
+                                  {/* 아이콘 */}
+                                  <span
+                                    aria-hidden
+                                    className="shrink-0 w-10 h-10 rounded-xl bg-white flex items-center justify-center"
+                                    style={{ boxShadow: dead ? "inset 0 0 0 1px rgba(0,0,0,0.07)" : `0 6px 16px -10px ${accent}, inset 0 0 0 1px ${accent}22` }}
+                                  >
+                                    {it.kind === "physical" ? (
+                                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke={dead ? "#c4c4c4" : accent} strokeWidth="1.7">
+                                        <path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5Z" strokeLinejoin="round" />
+                                        <path d="M3 8.5 12 13l9-4.5M12 13v7" strokeLinejoin="round" />
+                                      </svg>
+                                    ) : (
+                                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill={dead ? "#c4c4c4" : accent}>
+                                        <path d="M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z" opacity="0.92" />
+                                      </svg>
+                                    )}
+                                  </span>
+
+                                  {/* 이름 · 출처 */}
+                                  <div className="min-w-0 flex-1">
+                                    <p className={`text-[13px] font-black truncate ${dead ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{it.name}</p>
+                                    <p className="text-[11px] text-[#a3a3a3] truncate mt-0.5">{invSubLabel(it)}</p>
+                                  </div>
+
+                                  {/* 상태 */}
+                                  <div className="shrink-0">
+                                    {it.status === "pending" ? (
+                                      <StatusChip>지급 대기</StatusChip>
+                                    ) : it.status === "missing" ? (
+                                      <StatusChip accent dot>확인 필요</StatusChip>
+                                    ) : dday !== null ? (
+                                      <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-black tabular-nums ${dday <= 3 ? "bg-[#e91e3f] text-white" : "bg-black/[0.06] text-[#5a5a5a]"}`}>
+                                        D-{dday}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-black text-[#c4c4c4] tracking-[0.1em]">보유 중</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
                       )}
 
                       {myItems && !myItems.synced && (
