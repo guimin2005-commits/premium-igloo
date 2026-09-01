@@ -1419,6 +1419,33 @@ export default function LevelPage() {
                         </div>
                       </div>
 
+                      {/* 가방 — 캐릭터의 물건이니 캐릭터 카드 안에 둔다.
+                          데스크톱에서는 아이덴티티와 등급 사이 빈 가운데를 채우고,
+                          모바일에서는 배너가 세로로 쌓이므로 한 줄로 내려앉는다. */}
+                      {myItems && (
+                        <button
+                          onClick={openBag}
+                          aria-label="가방 열기"
+                          className="group mt-6 md:mt-0 md:mx-auto shrink-0 inline-flex md:flex-col items-center gap-3 md:gap-2 rounded-2xl bg-white/[0.05] hover:bg-white/[0.09] px-4 py-3 md:px-5 md:py-4 transition-colors outline-none focus:outline-none"
+                        >
+                          <span aria-hidden className="relative shrink-0">
+                            <svg viewBox="0 0 24 24" className="w-7 h-7 md:w-8 md:h-8" fill="none" stroke="#ffffff" strokeWidth="1.7">
+                              <path d="M4 9h16l-1 10.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5Z" strokeLinejoin="round" />
+                              <path d="M8.5 9V6.5a3.5 3.5 0 0 1 7 0V9" strokeLinecap="round" />
+                            </svg>
+                            {invUnread > 0 && (
+                              <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">
+                                {invUnread}
+                              </span>
+                            )}
+                          </span>
+                          <span className="flex items-baseline md:flex-col md:items-center gap-2 md:gap-0.5 leading-none">
+                            <span className="text-[11px] font-black tracking-[0.15em] text-white/40 uppercase group-hover:text-white/70 transition-colors">Bag</span>
+                            <span className="text-[15px] md:text-lg font-black text-white tabular-nums">{myItems.items.length}</span>
+                          </span>
+                        </button>
+                      )}
+
                       <div className="mt-8 md:mt-0 md:text-right shrink-0 md:pl-10">
                         {/* 등급 — 레벨과 함께 이 화면의 주인공. 누르면 등급 사다리를 편다 */}
                         <button
@@ -1650,82 +1677,6 @@ export default function LevelPage() {
                         <span className="text-[11px] font-bold text-[#8a8a8a]">마지막 <b className="text-[#131313] tabular-nums">{me.lastAttendDate ? me.lastAttendDate.replace(/-/g, ".") : "—"}</b></span>
                       </div>
                     </section>
-
-                    {/* ═══ 인벤토리 — 대시보드에는 가방 입구만, 내용은 오버레이로 ═══ */}
-                    <section>
-                      <div className="flex items-end justify-between mb-5">
-                        <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Inventory</span>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">인벤토리</h3>
-                        </div>
-                        {canSeeShop && (
-                          <button
-                            onClick={() => setActiveMainTab("arctic")}
-                            className="shrink-0 inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#131313] text-white text-[12px] font-bold hover:bg-[#2a2a2a] transition-colors outline-none focus:outline-none"
-                          >
-                            상점에서 더 보기 <span>→</span>
-                          </button>
-                        )}
-                      </div>
-
-                      {!myItems ? (
-                        <div className="h-[58px] rounded-xl bg-black/[0.04] animate-pulse"></div>
-                      ) : (
-                        <button
-                          onClick={openBag}
-                          className="group w-full rounded-xl bg-[#131313] pl-3 pr-4 py-2.5 flex items-center gap-3 text-left transition-transform hover:-translate-y-0.5 outline-none focus:outline-none relative overflow-hidden"
-                          style={{ boxShadow: "0 14px 34px -24px rgba(0,0,0,0.7)" }}
-                        >
-                          <span aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-50 pointer-events-none"></span>
-
-                          <span aria-hidden className="relative shrink-0 w-9 h-9 rounded-lg bg-white/[0.07] flex items-center justify-center">
-                            <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="none" stroke="#ffffff" strokeWidth="1.8">
-                              <path d="M4 9h16l-1 10.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5Z" strokeLinejoin="round" />
-                              <path d="M8.5 9V6.5a3.5 3.5 0 0 1 7 0V9" strokeLinecap="round" />
-                            </svg>
-                            {invUnread > 0 && (
-                              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">
-                                {invUnread}
-                              </span>
-                            )}
-                          </span>
-
-                          {/* 한 줄로 — 이름·개수·분류 요약을 나란히 */}
-                          <span className="relative min-w-0 flex-1 flex items-baseline gap-2">
-                            <span className="text-[13px] font-black text-white shrink-0">가방</span>
-                            <span className="text-[13px] font-black text-white/40 tabular-nums shrink-0">{myItems.items.length}</span>
-                            <span className="text-[11px] text-white/35 truncate">
-                              {myItems.items.length === 0
-                                ? "아직 보유한 아이템이 없습니다"
-                                : invGroups.slice(1).map((g) => `${g.label} ${g.items.length}`).join(" · ")}
-                            </span>
-                          </span>
-
-                          <span aria-hidden className="relative hidden sm:flex items-center gap-1 shrink-0">
-                            {invAll.slice(0, 4).map((it, i) => {
-                              const accent = it.color || (it.source === "level" ? "#ff5c77" : it.source === "inventory" ? "#5aa9dd" : "#ffffff");
-                              return (
-                                <span
-                                  key={it.uid || i}
-                                  className="w-6 h-6 rounded-md flex items-center justify-center"
-                                  style={{ background: `${accent}22`, boxShadow: `inset 0 0 0 1px ${accent}44` }}
-                                >
-                                  <svg viewBox="0 0 24 24" className="w-3 h-3" fill={accent}>
-                                    <path d="M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z" opacity="0.92" />
-                                  </svg>
-                                </span>
-                              );
-                            })}
-                            {myItems.items.length > 4 && (
-                              <span className="text-[10px] font-black text-white/30 tabular-nums ml-0.5">+{myItems.items.length - 4}</span>
-                            )}
-                          </span>
-
-                          <span aria-hidden className="relative shrink-0 text-white/35 group-hover:text-white transition-colors text-sm">→</span>
-                        </button>
-                      )}
-                    </section>
-
 
                     {/* 서버 랭킹 */}
                     <section>
