@@ -3,6 +3,8 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { signIn, useSession } from "next-auth/react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import ArcticShopBody from "../shop/ArcticShopBody";
 import { isAdminName } from "@/lib/admins";
 import {
   HudPanel, HudSection, HudStyles, LiveDot, RingGauge, SegBar,
@@ -38,6 +40,16 @@ const invGroupOf = (it) => {
   return { id: "grant", label: "지급" };
 };
 const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
+
+// 📌 메인 탭 — ARCTIC 은 /shop 과 같은 본문(ArcticShopBody)을 탭 안에서 그린다.
+//    탭이 URL(?tab=)에 남아야 상점 링크가 이 탭을 바로 가리킬 수 있다.
+const MAIN_TABS = [
+  { id: "my", name: "내 대시보드" },
+  { id: "intro", name: "시스템 안내" },
+  { id: "arctic", name: "ARCTIC", shopOnly: true },
+  { id: "table", name: "XP 테이블" },
+  { id: "sim", name: "시뮬레이터" },
+];
 // 내전 채널은 기본 음성 XP에 더하는 게 아니라 통째로 대체한다 (bot/src/config.js policy.scrimBaseXp)
 // SCRIM_CHANNEL_IDS 가 비어 있으면 봇이 내전 채널을 인식하지 못해 실제로는 적용되지 않는다.
 const SCRIM_BASE_XP = 3500;
@@ -482,7 +494,22 @@ const TierStairs = ({ base = 3000, intervalMin = 5 }) => {
 
 export default function LevelPage() {
   // 리뉴얼: 정적 안내 대신 '내 대시보드'가 첫 화면
-  const [activeMainTab, setActiveMainTab] = useState("my");
+  // 탭은 URL 이 기준 — 외부에서 /level?tab=arctic 로 바로 들어올 수 있어야 한다.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const tabParam = searchParams.get("tab") || "";
+  const activeMainTab = MAIN_TABS.some((t) => t.id === tabParam) ? tabParam : "my";
+  const setActiveMainTab = useCallback(
+    (id) => {
+      const q = new URLSearchParams(Array.from(searchParams.entries()));
+      if (id === "my") q.delete("tab");
+      else q.set("tab", id);
+      const qs = q.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [searchParams, router, pathname]
+  );
   const [introSec, setIntroSec] = useState(INTRO_STEPS[0].id);
   const [invTab, setInvTab] = useState("all");
   const { data: session, status: authStatus } = useSession();
@@ -934,12 +961,7 @@ export default function LevelPage() {
       <div className="w-full px-5 md:px-8 pb-2">
         <div className="max-w-7xl mx-auto relative flex items-center justify-center">
           <div className="min-w-0 flex gap-2 overflow-x-auto no-bar">
-          {[
-            { id: "my", name: "내 대시보드" },
-            { id: "intro", name: "시스템 안내" },
-            { id: "table", name: "XP 테이블" },
-            { id: "sim", name: "시뮬레이터" },
-          ].map((tab) => {
+          {MAIN_TABS.filter((t) => !t.shopOnly || canSeeShop).map((tab) => {
             const active = activeMainTab === tab.id;
             return (
               <button
@@ -955,22 +977,21 @@ export default function LevelPage() {
           })}
           </div>
 
-          {/* ARCTIC STORE — 탭 줄 우측 진입 동선 */}
-          {canSeeShop && (
-            <Link
-              href="/shop"
-              className="group hidden xl:inline-flex absolute right-0 top-1/2 -translate-y-1/2 items-center gap-2 h-9 px-4 rounded-full border transition-colors"
-              style={{ borderColor: "rgba(90,150,200,0.5)", color: ICE }}
-            >
-              <span className="text-[11px] font-black tracking-[0.12em] whitespace-nowrap">ARCTIC STORE</span>
-              <span className="text-[12px] transition-transform group-hover:translate-x-0.5">→</span>
-            </Link>
-          )}
         </div>
       </div>
 
       {/* 대시보드 탭은 좌우 공간을 쓰는 와이드 HUD(7xl), 문서형 탭은 기존 에디토리얼 폭 유지 */}
-      <div className={`w-full max-w-7xl mx-auto px-5 md:px-8 flex-1 ${activeMainTab === "my" ? "py-6 md:py-10" : "py-10 md:py-14"}`}>
+      <div
+        className={
+          activeMainTab === "arctic"
+            ? "w-full flex-1" // ARCTIC 본문이 자체 폭(최대 1600px)과 여백을 갖는다
+            : `w-full max-w-7xl mx-auto px-5 md:px-8 flex-1 ${activeMainTab === "my" ? "py-6 md:py-10" : "py-10 md:py-14"}`
+        }
+      >
+
+        {/* ══ TAB : ARCTIC — /shop 과 같은 본문 한 벌 ══ */}
+        {activeMainTab === "arctic" && canSeeShop && <ArcticShopBody embedded />}
+
 
         {/* ══ TAB : MY DASHBOARD — 게임 프로필 화면 ══
                앵커는 플레이어 배너(레벨 링 + 대형 레벨 + 와이드 XP 게이지) 하나.
@@ -1347,9 +1368,12 @@ export default function LevelPage() {
                           </h3>
                         </div>
                         {canSeeShop && (
-                          <Link href="/shop" className="shrink-0 inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#131313] text-white text-[12px] font-bold hover:bg-[#2a2a2a] transition-colors">
+                          <button
+                            onClick={() => setActiveMainTab("arctic")}
+                            className="shrink-0 inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#131313] text-white text-[12px] font-bold hover:bg-[#2a2a2a] transition-colors outline-none focus:outline-none"
+                          >
                             상점에서 더 보기 <span>→</span>
-                          </Link>
+                          </button>
                         )}
                       </div>
 
