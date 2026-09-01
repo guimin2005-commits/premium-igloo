@@ -686,7 +686,8 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
               })}
             </div>
 
-            {groups[0]?.items.length === 0 && (
+            {/* invGroups 는 보유 0개면 [] 를 돌려준다 — groups[0] 로 판정하면 신규 유저에게 문구가 안 뜬다 */}
+            {rows.length === 0 && (
               <p className="text-[12px] font-bold text-white/35 text-center mt-6">아직 보유한 아이템이 없습니다</p>
             )}
           </div>
