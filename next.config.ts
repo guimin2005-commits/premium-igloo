@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
 
       /* 📌 프로필은 /profile 한 곳뿐이다. /shop/me 는 주문·장바구니·찜만 있는
          부분집합이었고 /profile 이 그 셋에 쿠폰까지 이미 담고 있었다. */
-      { source: "/shop/me", destination: "/profile", permanent: false },
+      { source: "/shop/me", destination: "/profile?from=arctic", permanent: false },
     ];
   },
 };

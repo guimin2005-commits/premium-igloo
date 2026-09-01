@@ -293,12 +293,35 @@ export default function MyInfoPage() {
     return rec.status === recruitFilter;
   });
 
+  // 어디서 왔는지 — 링크가 ?from= 으로 알려준다 (referrer 는 못 믿는다)
+  const BACK_TARGETS: Record<string, { href: string; label: string }> = {
+    arctic: { href: "/level?tab=arctic", label: "스토어로" },
+    level: { href: "/level", label: "대시보드로" },
+  };
+  const backTo = BACK_TARGETS[searchParams.get("from") || ""] || null;
+
   return (
     <main className="w-full flex-1 flex flex-col relative text-[#131313] animate-in fade-in duration-500">
       <LuxStyles />
 
       {/* ── 프로필 카드 (ARCTIC 마이페이지와 같은 구성) ── */}
-      <section className="w-full max-w-4xl mx-auto px-6 pt-10 pb-2">
+      {/* 📌 돌아갈 길 — 스토어에서 프로필로 나오면 되돌아갈 수단이 없어서,
+             모바일에서는 전역 독의 레벨 → ARCTIC 알약까지 두 단계를 밟아야 했다.
+             주문 내역을 훑다가도 바로 돌아갈 수 있게 헤더 아래에 붙여 둔다. */}
+      {backTo && (
+        <div className="sticky top-16 z-30 w-full bg-[#f5f3f0]/92 backdrop-blur-md border-b border-black/[0.06]">
+          <div className="max-w-4xl mx-auto px-6 py-2.5">
+            <Link
+              href={backTo.href}
+              className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors"
+            >
+              <span aria-hidden>←</span> {backTo.label}
+            </Link>
+          </div>
+        </div>
+      )}
+
+      <section className="w-full max-w-4xl mx-auto px-6 pt-8 pb-2">
         <div className="flex items-center gap-3 mb-5">
           <span className="w-8 h-px bg-[#e91e3f]"></span>
           <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">My Account</span>

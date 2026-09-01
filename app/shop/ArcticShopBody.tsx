@@ -751,7 +751,7 @@ export default function ArcticShopBody({
                 </Link>
 
                 {/* 프로필 — 내 정보 페이지로 */}
-                <Link href="/profile" aria-label="내 정보" className="relative shrink-0 hidden md:flex items-center justify-center w-9 h-9">
+                <Link href="/profile?from=arctic" aria-label="내 정보" className="relative shrink-0 hidden md:flex items-center justify-center w-9 h-9">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={session?.user?.image || ""} alt=""
                     className="w-8 h-8 rounded-full bg-[#e2e0dc] ring-1 ring-[#e2e0dc] hover:ring-[#131313] transition-all" />
