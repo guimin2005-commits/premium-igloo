@@ -1,14 +1,11 @@
 // ── 슬래시 커맨드 정의 + 핸들러 ────────────────
 import { Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
-import { UserXp, isDuplicateKeyError } from "./db.js";
-import { getCumulativeXpByLevel, kstToday } from "./leveling.js";
-import { getAttendBuffXp } from "./roleConfigs.js";
-import { getSettings } from "./botSettings.js";
+import { UserXp } from "./db.js";
+import { getCumulativeXpByLevel } from "./leveling.js";
 import { grantXp, EMBED_COLOR, EMBED_FOOTER } from "./xp.js";
-import { config, policy } from "./config.js";
+import { config } from "./config.js";
 
 const definitions = [
-  new SlashCommandBuilder().setName("출석체크").setDescription("일일 출석체크로 XP를 받습니다."),
   new SlashCommandBuilder().setName("레벨").setDescription("다음 레벨까지 필요한 XP를 확인합니다."),
   new SlashCommandBuilder().setName("랭크").setDescription("내 XP, 레벨, 서버 내 순위를 확인합니다."),
 ].map((c) => c.toJSON());
@@ -19,40 +16,9 @@ export async function registerCommandDefinitions(client) {
   await rest.put(Routes.applicationGuildCommands(client.user.id, config.guildId), { body: definitions });
 }
 
-// /출석체크 — 오늘 미출석인 경우에만 매치되는 원자적 갱신 (중복 수령 방지)
-async function handleAttend(interaction) {
-  const today = kstToday();
-  try {
-    const res = await UserXp.updateOne(
-      { userId: interaction.user.id, lastAttendDate: { $ne: today } },
-      { $set: { lastAttendDate: today }, $inc: { attendCount: 1 } },
-      { upsert: true }
-    );
-    if (res.matchedCount === 0 && !res.upsertedCount) {
-      return interaction.reply({ content: "⛔ 오늘은 이미 출석체크를 완료했습니다. 내일 다시 만나요!", flags: MessageFlags.Ephemeral });
-    }
-  } catch (e) {
-    if (isDuplicateKeyError(e)) {
-      return interaction.reply({ content: "⛔ 오늘은 이미 출석체크를 완료했습니다. 내일 다시 만나요!", flags: MessageFlags.Ephemeral });
-    }
-    throw e;
-  }
-
-  let amount = getSettings().attendXp;
-  if (config.attendBoostRoleId && interaction.member.roles.cache.has(config.attendBoostRoleId)) {
-    amount += policy.attendBoostXp;
-  }
-  amount += getAttendBuffXp(interaction.member);
-
-  const updated = await grantXp(interaction.member, amount, { reason: "attend" });
-
-  const embed = new EmbedBuilder()
-    .setColor(EMBED_COLOR)
-    .setTitle("✅ 출석체크 완료!")
-    .setDescription(`**+${amount.toLocaleString()} XP** 지급되었습니다.\n현재 누적 XP: **${updated.xp.toLocaleString()}** · Lv.**${updated.level}**`)
-    .setFooter({ text: `누적 출석 ${updated.attendCount || 0}회 · 고급 이글루` });
-  return interaction.reply({ embeds: [embed] });
-}
+// 📌 출석은 사이트 전용이다 — 음성 누적 시간을 채워야만 인정되므로,
+//    조건을 통째로 우회하던 /출석체크 슬래시 커맨드는 제거했다.
+//    수령은 app/api/xp/quests 의 출석 퀘스트에서만 이뤄지고 자물쇠는 그대로 lastAttendDate 다.
 
 async function handleLevel(interaction) {
   const doc = await UserXp.findOne({ userId: interaction.user.id }).lean();
@@ -93,7 +59,6 @@ async function handleRank(interaction) {
 }
 
 const handlers = {
-  출석체크: handleAttend,
   레벨: handleLevel,
   랭크: handleRank,
 };
