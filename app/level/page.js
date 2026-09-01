@@ -547,7 +547,7 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
                 <span aria-hidden className="w-4 h-px bg-[#ff5c77]"></span>Inventory
               </span>
               <h3 className="text-lg sm:text-xl font-black text-white tracking-tight">
-                가방
+                인벤토리
                 <span className="text-sm font-black text-white/35 ml-2 tabular-nums">{groups[0]?.items.length ?? 0}</span>
               </h3>
             </div>
@@ -1474,43 +1474,35 @@ export default function LevelPage() {
                       ))}
                     </div>
 
-                    {/* 가방 — 스탯 스트립 바로 아래. 투명한 줄이면 눌리는 것인지도,
-                        무엇인지도 안 보인다. 잉크 배너 위에 뜬 밝은 면으로 세운다. */}
+                    {/* 가방 — 스탯 스트립 아래 헤어라인 줄. 카드(면·테두리·둥근 상자)는 쓰지 않는다.
+                        눌리는 것임은 오른쪽 "열기" 버튼 하나로 드러낸다. */}
                     {myItems && (
                       <button
                         onClick={openBag}
-                        aria-label="가방 열기"
-                        className="group w-full mt-6 rounded-2xl bg-white/[0.08] hover:bg-white/[0.14] ring-1 ring-white/10 hover:ring-white/25 px-4 py-3.5 flex items-center gap-3.5 text-left transition-all outline-none focus:outline-none"
+                        aria-label="인벤토리 열기"
+                        className="group w-full mt-6 pt-5 border-t border-white/10 flex items-center gap-4 text-left outline-none focus:outline-none"
                       >
-                        <span
-                          aria-hidden
-                          className="relative shrink-0 w-11 h-11 rounded-xl flex items-center justify-center"
-                          style={{ background: `${ICE}33`, boxShadow: `inset 0 0 0 1px ${ICE}66` }}
-                        >
-                          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="#8ec6ea" strokeWidth="1.9">
+                        <span aria-hidden className="relative shrink-0">
+                          <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" stroke="#8ec6ea" strokeWidth="1.8">
                             <path d="M4 9h16l-1 10.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5Z" strokeLinejoin="round" />
                             <path d="M8.5 9V6.5a3.5 3.5 0 0 1 7 0V9" strokeLinecap="round" />
                           </svg>
                           {invUnread > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#e91e3f] text-white text-[10px] font-black flex items-center justify-center tabular-nums ring-2 ring-[#1a1a1a]">{invUnread}</span>
+                            <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{invUnread}</span>
                           )}
                         </span>
 
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-2">
-                            <span className="text-[14px] font-black text-white">가방</span>
-                            <span className="inline-flex items-center justify-center min-w-[22px] h-[20px] px-1.5 rounded-full bg-white/15 text-white text-[11px] font-black tabular-nums">
-                              {myItems.items.length}
-                            </span>
-                          </span>
-                          <span className="block text-[11px] text-white/45 mt-1 truncate">
+                        <span className="min-w-0 flex-1 flex items-baseline gap-2.5">
+                          <span className="text-[15px] font-black text-white shrink-0">인벤토리</span>
+                          <span className="text-[15px] font-black text-white/45 tabular-nums shrink-0">{myItems.items.length}</span>
+                          <span className="text-[11px] text-white/35 truncate">
                             {myItems.items.length === 0
                               ? "아직 보유한 아이템이 없습니다"
                               : invGroups.slice(1).map((g) => `${g.label} ${g.items.length}`).join(" · ")}
                           </span>
                         </span>
 
-                        <span className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-white text-[#131313] text-[11px] font-black transition-transform group-hover:translate-x-0.5">
+                        <span className="shrink-0 inline-flex items-center gap-1.5 h-8 px-4 rounded-full bg-white text-[#131313] text-[11px] font-black transition-transform group-hover:translate-x-0.5">
                           열기 <span aria-hidden>→</span>
                         </span>
                       </button>
