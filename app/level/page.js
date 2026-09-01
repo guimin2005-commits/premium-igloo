@@ -871,7 +871,7 @@ export default function LevelPage() {
   // 📌 탭 줄 — 일반 탭에서는 히어로 아래, ARCTIC 에서는 상점 헤더 바로 아래에 그린다.
   //    ARCTIC 은 전역 헤더를 넘겨받은 화면이라 카테고리도 그 헤더에 붙어 있어야 자연스럽다.
   const tabBar = (
-    <div className={`w-full px-5 md:px-8 ${activeMainTab === "arctic" ? "bg-[#f5f3f0] border-b border-[#e2e0dc] py-3" : "pb-2"}`}>
+    <div className="w-full px-5 md:px-8 pt-5 pb-3">
       {/* 정렬은 탭마다 바뀌지 않는다 — ARCTIC 으로 넘어갈 때 카테고리가 좌우로 튀면 안 된다 */}
       <div className="max-w-7xl mx-auto flex items-center justify-center">
         <div className="min-w-0 flex gap-2 overflow-x-auto no-bar">
@@ -952,6 +952,10 @@ export default function LevelPage() {
 
       <TierModal open={tierOpen} onClose={() => setTierOpen(false)} level={me?.level || 0} baseXp={P.voiceXp} intervalMin={P_voiceMin} />
 
+      {/* ── 탭 줄 — 어떤 탭이든 헤더 바로 아래 같은 자리. 여기가 움직이면 안 된다.
+             ARCTIC 은 전역 헤더 대신 상점 헤더가 서므로 그쪽 topSlot 으로 넘긴다. ── */}
+      {activeMainTab !== "arctic" && tabBar}
+
       {/* ── 공통 헤더 — ARCTIC 에서는 상점 헤더가 그 자리를 대신하므로 감춘다 ── */}
       {activeMainTab !== "arctic" && (<>
       <div className="relative w-full px-5 md:px-8 pt-10 md:pt-12 pb-6">
@@ -985,9 +989,6 @@ export default function LevelPage() {
       </div>
 
       </>)}
-
-      {/* ── 탭 줄 — ARCTIC 에서는 상점 헤더 바로 아래(topSlot)로 내려간다 ── */}
-      {activeMainTab !== "arctic" && tabBar}
 
       {/* 대시보드 탭은 좌우 공간을 쓰는 와이드 HUD(7xl), 문서형 탭은 기존 에디토리얼 폭 유지 */}
       <div

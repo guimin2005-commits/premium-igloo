@@ -203,7 +203,7 @@ export default function CheckoutPage() {
             </div>
           )}
           <div className="flex gap-3">
-            <Link href="/shop" className="flex-1 py-3.5 bg-[#eceae6] text-[#4b4b4b] font-bold rounded-xl hover:bg-[#e2e0dc] transition-colors">상점으로</Link>
+            <Link href="/level?tab=arctic" className="flex-1 py-3.5 bg-[#eceae6] text-[#4b4b4b] font-bold rounded-xl hover:bg-[#e2e0dc] transition-colors">상점으로</Link>
             {!result.ok && (
               <button onClick={() => setResult(null)} className="flex-1 py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl hover:bg-[#d01634] transition-colors">다시 시도</button>
             )}
@@ -220,7 +220,7 @@ export default function CheckoutPage() {
         <div className="py-32 text-center break-keep px-6">
           <h1 className="text-2xl font-black text-[#131313] mb-3">장바구니가 비어 있습니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">상점에서 마음에 드는 상품을 담아보세요.</p>
-          <Link href="/shop" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">상점으로 가기</Link>
+          <Link href="/level?tab=arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">상점으로 가기</Link>
         </div>
       </div>
     );
@@ -235,7 +235,7 @@ export default function CheckoutPage() {
     <div className="w-full flex-1 bg-[#f5f3f0] text-[#131313] min-h-screen">
       <ArcticHeader />
       <section className="max-w-5xl mx-auto px-6 pt-10 pb-20">
-        <Link href="/shop" className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] mb-5 transition-colors">
+        <Link href="/level?tab=arctic" className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] mb-5 transition-colors">
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
           계속 쇼핑하기
         </Link>

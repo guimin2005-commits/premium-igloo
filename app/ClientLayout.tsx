@@ -129,6 +129,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // ARCTIC 은 자체 헤더를 쓰므로 전역 크롬(헤더·모바일 독·푸터·하단 패딩)을 통째로 넘긴다.
   // SYSTEM:LEVEL 의 ARCTIC 탭도 같은 화면이므로 같이 넘긴다 — 나머지 레벨 탭은 전역 헤더를 그대로 쓴다.
   const isArcticTab = pathname === "/level" && searchParams.get("tab") === "arctic";
+  // 메뉴 활성 판정 — 항목 경로에 쿼리가 붙어 있으면(예: /level?tab=arctic)
+  // pathname 만으로는 절대 맞지 않고, 반대로 /level 항목이 ARCTIC 탭에서도 켜진다.
+  const isMenuActive = (itemPath?: string) => {
+    if (!itemPath) return false;
+    const [base, qs] = itemPath.split("?");
+    if (pathname !== base) return false;
+    if (!qs) return !searchParams.get("tab"); // 쿼리 없는 항목은 기본 탭일 때만
+    return new URLSearchParams(qs).get("tab") === searchParams.get("tab");
+  };
+
   const isShopPage = pathname === "/shop" || pathname?.startsWith("/shop/") || isArcticTab;
   const isLightPage = isShopPage || pathname === "/profile" || pathname?.startsWith("/profile/") || pathname === "/level" || pathname?.startsWith("/level/") || (pathname?.startsWith("/admin") && !pathname.startsWith("/admin/room")) || pathname === "/write";   // 라이트 톤만 따라가는 페이지 (SYSTEM:LEVEL·관리자 화면은 ARCTIC 테마)
   // 📌 경매방 안에서는 모바일 하단 탭을 숨긴다.
@@ -161,14 +171,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // 📌 카테고리 그룹화: 큰 카테고리 → 세부 카테고리 (메가 메뉴)
   const rawCategoryGroups = [
     { name: "소식", desc: "고급 이글루의 최신 소식", tagline: "고급 이글루의 소식", items: [{ name: "공지사항", path: "/notice", desc: "최신 소식과 주요 안내" }, { name: "이벤트", path: "/event", desc: "다양한 이벤트와 혜택" }, { name: "구인", path: "/recruit", desc: "스태프 및 서포터즈 모집" }] },
-    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", tagline: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "ARCTIC", path: "/shop", desc: "XP로 역할과 혜택을 구매" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "경매", path: "/auction", desc: "실시간 포인트 경매 관전 및 참여" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }] },
+    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", tagline: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "ARCTIC", path: "/level?tab=arctic", desc: "XP로 역할과 혜택을 구매" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "경매", path: "/auction", desc: "실시간 포인트 경매 관전 및 참여" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }] },
     { name: "지원", desc: "도움이 필요하신가요?", tagline: "무엇을 도와드릴까요?", items: [{ name: "1:1 문의", path: "/support", desc: "불편 사항 및 문의 접수" }, { name: "FAQ", path: "/faq", desc: "자주 묻는 질문" }] },
   ];
 
   // ARCTIC이 비공개면 일반 유저 메뉴에서 제외 (관리자는 그대로 보인다)
   const categoryGroups = rawCategoryGroups.map((g) => ({
     ...g,
-    items: g.items.filter((it) => it.path !== "/shop" || shopPublic || isAdmin),
+    items: g.items.filter((it) => it.name !== "ARCTIC" || shopPublic || isAdmin),
   }));
 
   const [openMegaMenu, setOpenMegaMenu] = useState<string | null>(null);
@@ -378,7 +388,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           {!isVerifyPage && (status !== "authenticated" || isVerified) && (
             <nav className={`hidden md:flex items-center justify-center font-bold absolute left-1/2 transform -translate-x-1/2 h-full z-50 transition-all duration-500 ${scrolled ? "gap-0.5 text-[13px]" : "gap-2 text-sm"}`}>
               {categoryGroups.map((group) => {
-                const isGroupActive = group.items.some((item) => pathname === item.path);
+                const isGroupActive = group.items.some((item) => isMenuActive(item.path));
                 const isOpen = openMegaMenu === group.name;
                 return (
                   <div key={group.name} className="relative h-full flex items-center group/gnav" onMouseEnter={() => setOpenMegaMenu(group.name)}>
@@ -555,7 +565,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               {/* 우: 텍스트 링크 리스트 */}
               <div className="col-span-12 lg:col-span-7">
                 {group.items.map((item) => {
-                  const isActive = pathname === item.path;
+                  const isActive = isMenuActive(item.path);
                   return (
                     <Link
                       key={item.path}
@@ -852,7 +862,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     <p className={`text-[11px] font-black tracking-[0.14em] ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>{group.name}</p>
                   </div>
                   {group.items.map((item) => {
-                    const active = pathname === item.path;
+                    const active = isMenuActive(item.path);
                     return (
                       <Link key={item.path} href={item.path} onClick={closeMobileMenu} className={itemCls(active)}>
                         {item.name}
@@ -871,7 +881,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   </div>
                   {accountItems.map((item) =>
                     item.path ? (
-                      <Link key={item.name} href={item.path} onClick={closeMobileMenu} className={itemCls(pathname === item.path, item.accent)}>{item.name}</Link>
+                      <Link key={item.name} href={item.path} onClick={closeMobileMenu} className={itemCls(isMenuActive(item.path), item.accent)}>{item.name}</Link>
                     ) : (
                       <button key={item.name} onClick={item.onClick} className={itemCls(false)}>{item.name}</button>
                     )

@@ -95,7 +95,7 @@ export default function ItemDetailPage() {
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">상품을 찾을 수 없습니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">삭제되었거나 판매가 종료된 상품일 수 있어요.</p>
-          <Link href="/shop" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
+          <Link href="/level?tab=arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
             상점으로 가기
           </Link>
         </div>
@@ -324,7 +324,7 @@ export default function ItemDetailPage() {
           <div className="mt-16 pt-10 border-t border-[#e2e0dc]">
             <div className="flex items-baseline justify-between gap-4 mb-5">
               <h2 className="text-base font-black text-[#131313] tracking-tight">다른 상품도 둘러보세요</h2>
-              <Link href="/shop" className="text-[12px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors shrink-0">
+              <Link href="/level?tab=arctic" className="text-[12px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors shrink-0">
                 전체 보기
               </Link>
             </div>

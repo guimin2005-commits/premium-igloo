@@ -615,7 +615,7 @@ export default function MyInfoPage() {
                   </span>
                 )}
               </div>
-              <Link href="/shop" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">ARCTIC 둘러보기</Link>
+              <Link href="/level?tab=arctic" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">ARCTIC 둘러보기</Link>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

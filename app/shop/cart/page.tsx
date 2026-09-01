@@ -105,7 +105,7 @@ export default function CartPage() {
       <ArcticHeader />
 
       <section className="max-w-5xl mx-auto px-6 pt-10 pb-24">
-        <Link href="/shop" className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] mb-5 transition-colors">
+        <Link href="/level?tab=arctic" className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] mb-5 transition-colors">
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
           계속 쇼핑하기
         </Link>
@@ -125,7 +125,7 @@ export default function CartPage() {
             </div>
             <p className="text-sm font-bold text-[#131313] mb-1.5">장바구니가 비어 있습니다</p>
             <p className="text-xs text-[#8a8a8a] mb-7">마음에 드는 상품을 담아보세요.</p>
-            <Link href="/shop" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
+            <Link href="/level?tab=arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
               상품 보러가기
             </Link>
           </div>
@@ -169,7 +169,7 @@ export default function CartPage() {
                           {on && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                         </span>
                       </button>
-                      <Link href="/shop" className="w-20 h-20 rounded-xl bg-[#eceae6] overflow-hidden shrink-0">
+                      <Link href="/level?tab=arctic" className="w-20 h-20 rounded-xl bg-[#eceae6] overflow-hidden shrink-0">
                         {r.item.imageUrl && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />

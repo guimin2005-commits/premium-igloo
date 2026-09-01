@@ -12,7 +12,7 @@ export function ArcticBrand() {
         고급 이글루
       </Link>
       <span className="w-px h-3.5 sm:h-4 bg-[#d6d3ce]"></span>
-      <Link href="/shop" className="text-[15px] sm:text-[17px] font-black tracking-[0.16em] sm:tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
+      <Link href="/level?tab=arctic" className="text-[15px] sm:text-[17px] font-black tracking-[0.16em] sm:tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
         ARCTIC
       </Link>
     </div>
@@ -37,7 +37,8 @@ export default function ArcticHeader({ right }: { right?: React.ReactNode }) {
           ? "max-w-5xl rounded-full border border-[#e2e0dc] bg-white/85 backdrop-blur-2xl shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)]"
           : "max-w-[1600px] rounded-none border-x-transparent border-t-transparent border-b border-b-[#e2e0dc] bg-[#f5f3f0]/92 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)]"
       }`}>
-        <div className={`mx-auto flex items-center justify-between gap-3 md:gap-4 transition-all duration-500 ease-out ${scrolled ? "max-w-5xl px-4 md:px-5 h-14" : "max-w-6xl px-4 md:px-6 h-16"}`}>
+        {/* 좌우 시작점을 전역 헤더와 같게 (ArcticShopBody 와 동일) */}
+        <div className={`mx-auto flex items-center justify-between gap-3 md:gap-4 transition-all duration-500 ease-out ${scrolled ? "max-w-5xl px-5 md:px-6 h-14" : "max-w-7xl px-6 h-16"}`}>
           <ArcticBrand />
           <div className="flex items-center gap-1.5 shrink-0">{right}</div>
         </div>

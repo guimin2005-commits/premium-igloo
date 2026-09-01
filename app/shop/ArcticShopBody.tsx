@@ -58,7 +58,8 @@ export default function ArcticShopBody({
   topSlot = null,
 }: {
   embedded?: boolean;
-  /** 자체 헤더 바로 아래에 끼워 넣을 것 — /level 은 여기에 탭 줄을 넣어 돌아갈 길을 남긴다 */
+  /** 자체 헤더 바로 아래에 끼워 넣을 것 — /level 은 카테고리 줄을 여기에 넣어
+   *  어느 탭이든 카테고리가 헤더 바로 아래 같은 높이에 오게 한다 */
   topSlot?: React.ReactNode;
 }) {
   const { data: session, status } = useSession();
@@ -650,14 +651,15 @@ export default function ArcticShopBody({
           ? "max-w-5xl rounded-full border border-[#e2e0dc] bg-white/85 backdrop-blur-2xl shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)]"
           : "max-w-[1600px] rounded-none border-x-transparent border-t-transparent border-b border-b-[#e2e0dc] bg-[#f5f3f0]/92 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)]"
       }`}>
-        <div className={`mx-auto flex items-center gap-3 md:gap-6 transition-all duration-500 ease-out ${pastBanner ? "max-w-5xl px-4 md:px-5 h-14" : "max-w-6xl px-4 md:px-6 h-16"}`}>
+        {/* 좌우 시작점을 전역 헤더와 같게 — 전역은 header px-6 + 안쪽 max-w-7xl 이다 */}
+        <div className={`mx-auto flex items-center gap-3 md:gap-6 transition-all duration-500 ease-out ${pastBanner ? "max-w-5xl px-5 md:px-6 h-14" : "max-w-7xl px-6 h-16"}`}>
           {/* 브랜드 — 고급 이글루의 ARCTIC (좁은 화면에서도 가로로) */}
           <div className="flex flex-row items-center gap-2 lg:gap-3 min-w-0 leading-none">
             <Link href="/" className="text-[9px] lg:text-[10px] font-bold tracking-[0.18em] text-[#8a8a8a] hover:text-[#131313] transition-colors whitespace-nowrap">
               고급 이글루
             </Link>
             <span className="w-px h-3.5 lg:h-4 bg-[#d6d3ce]"></span>
-            <Link href="/shop" className="text-[15px] lg:text-[17px] font-black tracking-[0.16em] lg:tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
+            <Link href="/level?tab=arctic" className="text-[15px] lg:text-[17px] font-black tracking-[0.16em] lg:tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
               ARCTIC
             </Link>
 
@@ -752,7 +754,7 @@ export default function ArcticShopBody({
                 <Link href="/shop/me" aria-label="내 정보" className="relative shrink-0 hidden md:flex items-center justify-center w-9 h-9">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={session?.user?.image || ""} alt=""
-                    className="w-[30px] h-[30px] rounded-full bg-[#e2e0dc] ring-1 ring-[#e2e0dc] hover:ring-[#131313] transition-all" />
+                    className="w-8 h-8 rounded-full bg-[#e2e0dc] ring-1 ring-[#e2e0dc] hover:ring-[#131313] transition-all" />
                   {pendingOrders > 0 && (
                     <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[#e91e3f] ring-2 ring-[#f5f3f0]"></span>
                   )}
