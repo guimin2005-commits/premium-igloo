@@ -262,7 +262,6 @@ const LevelCurve = ({ myLevel = null }) => {
       {/* 판독값 — 곡선 위 어느 지점이든 짚으면 갱신 */}
       <div className="flex flex-wrap items-end justify-between gap-4 mb-5">
         <div>
-          <p className="text-[10px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase mb-1.5">Growth Curve · Lv 1 → 1,000</p>
           <p className="text-3xl md:text-4xl font-black text-[#131313] tracking-tight tabular-nums">
             Lv {lv.toLocaleString()}
             <span className={`ml-2 text-xs font-bold align-middle ${probe ? "text-[#e91e3f]" : hasMe ? "text-[#131313]" : "text-[#a3a3a3]"}`}>{modeLabel}</span>
@@ -270,11 +269,11 @@ const LevelCurve = ({ myLevel = null }) => {
         </div>
         <div className="flex gap-8 text-right">
           <div>
-            <p className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase mb-1">누적 XP</p>
+            <p className="text-[9px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase mb-1">누적 XP</p>
             <p className="text-base md:text-lg font-black text-[#e91e3f] tabular-nums">{cum.toLocaleString()}</p>
           </div>
           <div>
-            <p className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase mb-1">이 레벨 필요 XP</p>
+            <p className="text-[9px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase mb-1">이 레벨 필요 XP</p>
             <p className="text-base md:text-lg font-black text-[#131313] tabular-nums">{req.toLocaleString()}</p>
           </div>
         </div>
@@ -1975,7 +1974,7 @@ export default function LevelPage() {
         {activeMainTab === "intro" && (
           <div>
             {/* 단계 알약 — 번호는 권장 순서일 뿐, 눌러서 바로 건너뛸 수 있다 */}
-            <div className="mb-9 flex items-center gap-1.5 overflow-x-auto no-bar">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-bar mb-6">
               {INTRO_STEPS.map((x) => {
                 const on = introSec === x.id;
                 return (
@@ -1984,8 +1983,8 @@ export default function LevelPage() {
                     onClick={() => goIntro(x.id)}
                     className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
                       on
-                        ? "bg-white text-[#131313] ring-1 ring-black/10 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.3)]"
-                        : "text-[#a3a3a3] hover:text-[#131313]"
+                        ? "bg-[#131313] text-white"
+                        : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"
                     }`}
                   >
                     <span className="tabular-nums mr-1.5 text-[10px] font-black opacity-40">{x.no}</span>
@@ -2019,8 +2018,8 @@ export default function LevelPage() {
                           {i > 0 && (
                             <span aria-hidden className="shrink-0 self-center text-[#ff5c77] font-black text-sm px-0.5">→</span>
                           )}
-                          <div className="shrink-0 w-[142px] md:w-auto md:flex-1 px-4 py-5 rounded-xl bg-white/[0.05]">
-                            <p className="text-[9px] font-black tracking-[0.25em] text-white/30 tabular-nums mb-2.5">{n.no}</p>
+                          <div className="shrink-0 w-[142px] md:w-auto md:flex-1 px-4 py-5 rounded-lg bg-white/[0.05]">
+                            <p className="text-[9px] font-black tracking-[0.3em] text-white/35 tabular-nums mb-2.5">{n.no}</p>
                             <p className="text-[15px] font-black text-white leading-none mb-2.5">{n.t}</p>
                             <p className="text-[11px] text-white/45 leading-relaxed break-keep">{n.d}</p>
                           </div>
@@ -2042,7 +2041,7 @@ export default function LevelPage() {
                   </div>
 
                   {!me && (
-                    <p className="text-[12px] font-bold text-[#a3a3a3] mt-6">로그인하면 내 레벨과 등급이 함께 표시됩니다.</p>
+                    <p className="text-[11px] text-[#a3a3a3] mt-5 break-keep">로그인하면 내 레벨과 등급이 함께 표시됩니다.</p>
                   )}
                 </Reveal>
               )}
@@ -2059,7 +2058,7 @@ export default function LevelPage() {
                       <div key={i} className={`group py-7 md:px-7 first:md:pl-0 last:md:pr-0 ${i > 0 ? "border-t md:border-t-0 border-black/[0.08]" : ""}`}>
                         <div className="flex items-center justify-between mb-5">
                           <span className="text-xs font-bold text-[#5a5a5a] tracking-wide">{item.t}</span>
-                          <span className="text-[10px] font-black text-emerald-700">{item.c}</span>
+                          <span className="text-[10px] font-black text-[#a3a3a3]">{item.c}</span>
                         </div>
                         <div className="mb-4">
                           <span className="text-4xl font-black text-[#131313] tracking-tighter group-hover:text-[#e91e3f] transition-colors duration-300 tabular-nums">+{item.x}</span>
@@ -2071,8 +2070,8 @@ export default function LevelPage() {
                   </div>
 
                   {/* 출석 — 받는 길이 둘인데 자물쇠는 하나 */}
-                  <LuxCard className="p-6 md:p-7 mt-10">
-                    <div className="flex items-center justify-between gap-4 pb-5 border-b border-black/[0.07]">
+                  <LuxCard className="p-6 md:p-7 mt-12">
+                    <div className="flex items-center justify-between gap-4 pb-5 border-b border-black/[0.08]">
                       <div className="min-w-0">
                         <p className="text-sm font-black text-[#131313]">출석 — 하루 1회</p>
                         <p className="text-xs text-[#8a8a8a] mt-1 break-keep">음성 채널에 오늘 {P.attendVoiceMin}분 이상 머무르면 받을 수 있습니다.</p>
@@ -2082,14 +2081,14 @@ export default function LevelPage() {
                         <span className="text-[10px] font-bold text-[#a3a3a3] ml-1">XP</span>
                       </span>
                     </div>
-                    <div className="divide-y divide-black/[0.05]">
+                    <div className="divide-y divide-black/[0.06]">
                       {[
                         { t: "자동으로 집계", d: `음성 채널에 머문 시간이 쌓여 ${P.attendVoiceMin}분을 넘으면 달성됩니다. 따로 할 일은 없습니다.` },
                         { t: "직접 받기", d: "달성한 뒤 대시보드 퀘스트에서 눌러야 XP가 들어옵니다. 자정(KST)에 초기화됩니다." },
                       ].map((r, i) => (
                         <div key={i} className="flex items-start justify-between gap-4 py-3.5">
-                          <span className="shrink-0 text-[12px] font-bold text-[#131313] w-24">{r.t}</span>
-                          <span className="min-w-0 flex-1 text-[11px] text-[#8a8a8a] leading-relaxed break-keep">{r.d}</span>
+                          <span className="shrink-0 text-[12px] font-bold text-[#131313] w-24 md:w-32">{r.t}</span>
+                          <span className="min-w-0 flex-1 text-[12px] text-[#8a8a8a] leading-relaxed break-keep">{r.d}</span>
                         </div>
                       ))}
                     </div>
@@ -2191,7 +2190,7 @@ export default function LevelPage() {
                         {policy.activeBoosts.map((b, i) => {
                           const left = b.endAt ? Math.max(0, Math.ceil((new Date(b.endAt).getTime() - Date.now()) / 86400000)) : null;
                           return (
-                            <div key={i} className="flex items-center gap-4 py-4">
+                            <div key={i} className="flex items-center gap-3.5 py-3.5">
                               <div className="min-w-0 flex-1">
                                 <p className="text-sm font-bold text-[#131313] truncate">{b.name}</p>
                                 {(b.targetRoleName || b.targetChannelName) && (
@@ -2240,7 +2239,7 @@ export default function LevelPage() {
                     ))}
                   </div>
 
-                  <div className="border-l-2 border-[#e91e3f]/50 pl-5 py-0.5 mt-8">
+                  <div className="border-l-2 border-[#e91e3f]/50 pl-5 py-0.5 mt-12">
                     <strong className="text-[#131313] text-sm font-bold block mb-1.5">진행도는 XP를 받은 활동만 셉니다</strong>
                     <p className="text-[#8a8a8a] text-[13px] leading-relaxed break-keep">
                       쿨타임에 걸린 채팅, 제외된 채널에서의 활동, 음소거로 막힌 음성은 진행도에 들어가지 않습니다.
@@ -2255,8 +2254,8 @@ export default function LevelPage() {
                         { t: "지급 대기", d: "결제는 끝났고 역할 지급을 기다리는 중입니다." },
                         { t: "확인 필요", d: "구매 기록은 있는데 디스코드 역할이 확인되지 않습니다. 운영진에 문의해 주세요." },
                       ].map((r, i) => (
-                        <div key={i} className="flex items-start justify-between gap-4 py-4">
-                          <span className="shrink-0 text-[12px] font-bold text-[#131313] w-32 md:w-44">{r.t}</span>
+                        <div key={i} className="flex items-start justify-between gap-4 py-3.5">
+                          <span className="shrink-0 text-[12px] font-bold text-[#131313] w-24 md:w-32 md:w-32">{r.t}</span>
                           <span className="min-w-0 flex-1 text-[12px] text-[#8a8a8a] leading-relaxed break-keep">{r.d}</span>
                         </div>
                       ))}
@@ -2274,7 +2273,7 @@ export default function LevelPage() {
                       { c: "/레벨", d: "다음 레벨까지 필요한 XP" },
                       { c: "/랭크", d: "XP · 레벨 · 서버 순위" },
                     ].map((item, i) => (
-                      <div key={i} className="flex items-center justify-between px-1 py-[18px] group hover:bg-black/[0.02] transition-colors">
+                      <div key={i} className="flex items-center justify-between px-1 py-3.5 group hover:bg-black/[0.02] transition-colors">
                         <span className="text-[#e91e3f] font-mono font-bold text-sm tracking-tight">{item.c}</span>
                         <span className="text-[#8a8a8a] text-xs md:text-sm text-right">{item.d}</span>
                       </div>
@@ -2292,7 +2291,7 @@ export default function LevelPage() {
                     </p>
                     <SegBar pct={seasonPct} segments={20} />
                     {!voiceTracked && (
-                      <p className="text-[11px] text-[#a3a3a3] mt-4 break-keep">
+                      <p className="text-[11px] text-[#a3a3a3] mt-5 break-keep">
                         누적 음성 시간은 {+VOICE_TIME_START.slice(5, 7)}월 {+VOICE_TIME_START.slice(8, 10)}일부터 집계되며, 시즌이 바뀌어도 이어집니다.
                       </p>
                     )}
@@ -2321,7 +2320,7 @@ export default function LevelPage() {
               )}
 
               {/* 이전 / 다음 — 순서대로 완주할 수 있는 경로 */}
-              <div className="mt-14 pt-5 border-t border-black/[0.08] flex items-center justify-between gap-4">
+              <div className="mt-12 pt-5 border-t border-black/[0.08] flex items-center justify-between gap-4">
                 {introPrev ? (
                   <button
                     onClick={() => goIntro(introPrev.id)}
@@ -2560,31 +2559,31 @@ export default function LevelPage() {
           <Reveal>
             <SectionHeader en="Table" title="XP 테이블" />
 
-            <LuxCard className="p-6 md:p-8 mb-6" glow>
-              <div className="flex flex-col lg:flex-row gap-6 items-stretch lg:items-center">
-                <div className="flex gap-2 shrink-0 w-full lg:w-auto">
+            <LuxCard className="p-6 md:p-8 mb-12" glow>
+              <div className="flex flex-col lg:flex-row lg:gap-6 items-stretch lg:items-center">
+                <div className="flex gap-2 shrink-0 w-full lg:w-auto mb-6 lg:mb-0">
                   <input
                     type="number"
                     value={searchLevel}
                     onChange={(e) => setSearchLevel(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                     placeholder="레벨 입력"
-                    className="w-full lg:w-40 px-5 py-3.5 bg-white border border-black/10 rounded-xl text-[#131313] text-sm outline-none focus:outline-none focus:border-[#e91e3f] text-center transition-colors font-bold"
+                    className="w-full lg:w-40 px-4 py-2.5 bg-white border border-black/10 rounded-full text-[#131313] text-xs font-bold text-center tabular-nums outline-none focus:outline-none focus:border-[#e91e3f] transition-colors"
                   />
                   <button
                     onClick={handleSearch}
-                    className="px-6 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-all outline-none focus:outline-none shadow-[0_8px_24px_rgba(233,30,63,0.3)] shrink-0"
+                    className="shrink-0 px-6 py-2.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-xs font-bold rounded-full transition-colors outline-none focus:outline-none"
                   >
                     검색
                   </button>
                 </div>
-                <div className="flex-1 grid grid-cols-2 rounded-xl overflow-hidden bg-[#131313] divide-x divide-white/10">
+                <div className="flex-1 grid grid-cols-2 rounded-lg overflow-hidden bg-[#131313] divide-x divide-white/10">
                   <div className="px-4 py-5 text-center">
-                    <span className="block text-[10px] font-black tracking-[0.2em] text-white/35 uppercase mb-2">누적 XP</span>
+                    <span className="block text-[9px] font-black tracking-[0.3em] text-white/35 uppercase mb-2">누적 XP</span>
                     <span className="text-lg md:text-2xl font-black text-white tabular-nums tracking-tight">{searchResult.cumXp ? searchResult.cumXp.toLocaleString() : "—"}</span>
                   </div>
                   <div className="px-4 py-5 text-center">
-                    <span className="block text-[10px] font-black tracking-[0.2em] text-white/35 uppercase mb-2">레벨업 필요 XP</span>
+                    <span className="block text-[9px] font-black tracking-[0.3em] text-white/35 uppercase mb-2">레벨업 필요 XP</span>
                     <span className="text-lg md:text-2xl font-black text-[#ff5c77] tabular-nums tracking-tight">{searchResult.reqXp !== null ? searchResult.reqXp.toLocaleString() : "—"}</span>
                   </div>
                 </div>
@@ -2592,7 +2591,7 @@ export default function LevelPage() {
             </LuxCard>
 
             {/* 성장 곡선 — 표의 숫자를 한눈에 보는 그림 */}
-            <div className="mb-10">
+            <div className="mb-12">
               <SectionHeader en="Curve" title="성장 곡선" />
               <LevelCurve myLevel={me?.level || null} />
             </div>
@@ -2602,22 +2601,22 @@ export default function LevelPage() {
               <div className="max-h-[520px] overflow-y-auto custom-scrollbar">
                 <table className="w-full text-center text-xs">
                   <thead className="bg-[#ffffff] sticky top-0 z-10">
-                    <tr className="text-[10px] font-black tracking-[0.15em] text-[#8a8a8a] uppercase">
-                      <th className="p-4 border-b border-black/10">Level</th>
-                      <th className="p-4 border-b border-black/10">누적 XP 총량</th>
-                      <th className="p-4 border-b border-black/10">필요 XP</th>
+                    <tr className="text-[9px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase">
+                      <th className="p-4 border-b border-black/[0.08]">레벨</th>
+                      <th className="p-4 border-b border-black/[0.08]">누적 XP 총량</th>
+                      <th className="p-4 border-b border-black/[0.08]">필요 XP</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-black/[0.04] text-[#5a5a5a]">
+                  <tbody className="divide-y divide-black/[0.06] text-[#5a5a5a]">
                     {fullTableRows.map((row) => (
                       <tr
                         key={row.level}
                         id={`row-lvl-${row.level}`}
-                        className={`hover:bg-black/[0.03] transition-colors ${searchResult.inputVal === row.level ? 'bg-[#e91e3f]/10' : ''}`}
+                        className={`hover:bg-black/[0.02] transition-colors ${searchResult.inputVal === row.level ? 'bg-[#e91e3f]/[0.05]' : ''}`}
                       >
-                        <td className={`p-3 font-black ${searchResult.inputVal === row.level ? 'text-[#e91e3f]' : 'text-[#131313]/80'}`}>{row.level}</td>
-                        <td className="p-3 text-[#4b4b4b] font-medium">{row.cumXp.toLocaleString()}</td>
-                        <td className="p-3">{row.reqXp.toLocaleString()}</td>
+                        <td className={`p-3 font-black tabular-nums ${searchResult.inputVal === row.level ? 'text-[#e91e3f]' : 'text-[#131313]/80'}`}>{row.level}</td>
+                        <td className="p-3 text-[#5a5a5a] tabular-nums">{row.cumXp.toLocaleString()}</td>
+                        <td className="p-3 tabular-nums">{row.reqXp.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2635,33 +2634,33 @@ export default function LevelPage() {
 
               {/* ── 좌: 조건 설정 ── */}
               <LuxCard className="p-6 md:p-7">
-                <div className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase mb-6">Configuration</div>
+                <p className="text-sm font-black text-[#131313] mb-5">조건 입력</p>
 
                 {[
                   { l: "현재 유저 레벨", val: simLevel, set: setSimLevel, p: "0~1000", max: 1000 },
                   { l: "총 활동 시간 (분)", val: simTime, set: setSimTime, p: "0~999999", max: 999999 },
                   { l: "총 출석 횟수", val: simAttend, set: setSimAttend, p: "0~9999", max: 9999 },
                 ].map((input, idx) => (
-                  <div key={idx} className="flex justify-between items-center py-3.5 border-b border-black/5">
-                    <label className="text-xs font-medium text-[#4b4b4b]">{input.l}</label>
+                  <div key={idx} className="flex justify-between items-center py-3.5 border-b border-black/[0.06]">
+                    <label className="text-xs font-bold text-[#5a5a5a]">{input.l}</label>
                     <input
                       type="number"
                       placeholder={input.p}
                       value={input.val}
                       onChange={handleLimitInput(input.set, input.max)}
-                      className="w-32 px-3 py-2 bg-white border border-black/10 rounded-lg text-[#131313] text-xs text-center outline-none focus:outline-none focus:border-[#e91e3f] transition-colors font-bold"
+                      className="w-32 px-4 py-2.5 bg-white border border-black/10 rounded-full text-[#131313] text-xs font-bold text-center tabular-nums outline-none focus:outline-none focus:border-[#e91e3f] transition-colors"
                     />
                   </div>
                 ))}
 
                 <div className="relative">
-                  <div className="flex justify-between items-center py-3.5 border-b border-black/5">
-                    <label className="text-xs font-medium text-[#4b4b4b]">이용 활동 채널</label>
+                  <div className="flex justify-between items-center py-3.5 border-b border-black/[0.06]">
+                    <label className="text-xs font-bold text-[#5a5a5a]">이용 활동 채널</label>
                     <div className="w-32">
                       <button
                         type="button"
                         onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)}
-                        className="w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-[#131313] text-xs outline-none focus:outline-none transition-colors hover:border-[#e91e3f]/50 flex justify-between items-center font-bold"
+                        className="w-full px-4 py-2.5 bg-white border border-black/10 rounded-full text-[#131313] text-xs font-bold outline-none focus:outline-none transition-colors hover:border-[#e91e3f]/50 flex justify-between items-center"
                       >
                         <span className="truncate">
                           {simChannel === 'chat' ? '채팅 (1분)' : simChannel === 'voice' ? `음성 (${P_voiceMin}분)` : `내전 (${P_voiceMin}분)`}
@@ -2672,7 +2671,7 @@ export default function LevelPage() {
                       {isChannelDropdownOpen && (
                         <>
                           <div className="fixed inset-0 z-40" onClick={() => setIsChannelDropdownOpen(false)}></div>
-                          <div className="absolute top-full right-0 w-36 mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-2xl z-50">
+                          <div className="absolute top-full right-0 w-36 mt-1.5 bg-[#ffffff] border border-black/10 rounded-lg overflow-hidden shadow-2xl z-50">
                             {[
                               { val: 'chat', label: '채팅 채널 (1분)' },
                               { val: 'voice', label: '음성 채널 (5분)' },
@@ -2695,23 +2694,23 @@ export default function LevelPage() {
                 </div>
 
                 {/* 아이템 상품 [영구제] */}
-                <div className="mt-5 rounded-xl border border-black/10 bg-black/[0.03] p-5">
-                  <div className="text-[10px] font-black tracking-[0.2em] text-[#e91e3f] uppercase mb-4">Permanent Items</div>
-                  <div className="flex justify-between items-center py-2.5 border-b border-black/5">
-                    <label className="text-xs font-medium text-[#4b4b4b]">[아이템] XP Boost+ 적용</label>
-                    <button type="button" onClick={() => setSimBoost1(!simBoost1)} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors ${simBoost1 ? 'bg-[#e91e3f]' : 'bg-black/10'}`}>
+                <div className="mt-6 pt-6 border-t border-black/[0.08]">
+                  <p className="text-xs font-bold text-[#5a5a5a] tracking-wide mb-4">영구 아이템</p>
+                  <div className="flex justify-between items-center py-3.5 border-b border-black/[0.06]">
+                    <label className="text-xs font-bold text-[#5a5a5a]">[아이템] XP Boost+ 적용</label>
+                    <button type="button" onClick={() => setSimBoost1(!simBoost1)} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors ${simBoost1 ? 'bg-[#131313]' : 'bg-black/10'}`}>
                       <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform duration-200 ${simBoost1 ? 'translate-x-5' : ''}`}></div>
                     </button>
                   </div>
-                  <div className="flex justify-between items-center py-2.5 border-b border-black/5">
-                    <label className="text-xs font-medium text-[#4b4b4b]">[아이템] 출석 Boost 적용</label>
-                    <button type="button" onClick={() => setSimAttendBoost(!simAttendBoost)} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors ${simAttendBoost ? 'bg-[#e91e3f]' : 'bg-black/10'}`}>
+                  <div className="flex justify-between items-center py-3.5 border-b border-black/[0.06]">
+                    <label className="text-xs font-bold text-[#5a5a5a]">[아이템] 출석 Boost 적용</label>
+                    <button type="button" onClick={() => setSimAttendBoost(!simAttendBoost)} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors ${simAttendBoost ? 'bg-[#131313]' : 'bg-black/10'}`}>
                       <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform duration-200 ${simAttendBoost ? 'translate-x-5' : ''}`}></div>
                     </button>
                   </div>
 
                   <div className="pt-3">
-                    <label className="text-xs font-medium text-[#4b4b4b] block mb-3">[아이템] 보유 펭귄 선택 (중복 가능)</label>
+                    <label className="text-xs font-bold text-[#5a5a5a] block mb-3">[아이템] 보유 펭귄 선택 (중복 가능)</label>
                     <div className="flex flex-wrap gap-2">
                       {[
                         { l: "어린이 +250", val: penChild, set: setPenChild },
@@ -2719,7 +2718,7 @@ export default function LevelPage() {
                         { l: "어른 +450", val: penAdult, set: setPenAdult },
                         { l: "어미 +550", val: penMother, set: setPenMother },
                       ].map((p, idx) => (
-                        <button key={idx} type="button" onClick={() => p.set(!p.val)} className={`px-3.5 py-2 rounded-lg text-[11px] font-bold outline-none focus:outline-none transition-all border ${p.val ? 'bg-[#e91e3f] border-[#e91e3f] text-white shadow-[0_4px_14px_rgba(233,30,63,0.3)]' : 'bg-transparent border-black/10 text-[#8a8a8a] hover:border-black/30 hover:text-[#4b4b4b]'}`}>
+                        <button key={idx} type="button" onClick={() => p.set(!p.val)} className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-bold outline-none focus:outline-none transition-colors ${p.val ? 'bg-[#131313] text-white' : 'bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]'}`}>
                           {p.l}
                         </button>
                       ))}
@@ -2727,18 +2726,18 @@ export default function LevelPage() {
                   </div>
                 </div>
 
-                <button onClick={resetSimulator} className="mt-5 w-full py-3 bg-transparent border border-black/10 rounded-xl text-xs font-bold outline-none focus:outline-none text-[#8a8a8a] hover:text-[#131313] hover:border-black/30 transition-all">
+                <button onClick={resetSimulator} className="mt-6 w-full py-2.5 rounded-full border border-black/12 hover:border-black/30 text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none">
                   전체 초기화
                 </button>
               </LuxCard>
 
               {/* ── 우: 결과 ── */}
-              <div className="md:sticky md:top-36 space-y-4">
+              <div className="md:sticky md:top-36 space-y-6">
                 <div className="relative rounded-2xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-34px_rgba(0,0,0,0.55)]">
                   <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
                   <div aria-hidden className="absolute -top-20 -right-16 w-72 h-72 bg-[#e91e3f]/[0.18] blur-[100px] rounded-full pointer-events-none"></div>
                   <div className="relative z-10 p-7">
-                    <p className="text-[10px] font-black tracking-[0.3em] text-white/35 uppercase mb-6">Projection Result</p>
+                    <p className="text-[9px] font-black tracking-[0.3em] text-white/35 uppercase mb-5">예상 결과</p>
                     <p className="text-[11px] font-bold text-white/50 mb-2">예상 최종 누적</p>
                     <p className="text-4xl md:text-5xl font-black text-white tabular-nums tracking-tighter leading-none">
                       {simResult.projectedTotalXp.toLocaleString()}<span className="text-sm text-[#ff5c77] ml-2 font-bold">XP</span>
@@ -2754,9 +2753,9 @@ export default function LevelPage() {
                 </div>
 
                 <LuxCard className="p-6">
-                  <div className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase mb-4">Breakdown</div>
+                  <p className="text-sm font-black text-[#131313] mb-5">계산 내역</p>
                   <table className="w-full text-xs">
-                    <tbody className="divide-y divide-black/[0.04]">
+                    <tbody className="divide-y divide-black/[0.06]">
                       {[
                         { l: "선택 채널 기본 XP (1회당)", v: `${simResult.channelBaseXp.toLocaleString()} XP` },
                         { l: "레벨별 구간 추가 XP (1회당)", v: `${simResult.levelBonusXp.toLocaleString()} XP` },
@@ -2771,8 +2770,8 @@ export default function LevelPage() {
                         { l: "[출석] 기본 출석 보상 합계", v: `${simResult.attendanceBaseTotal.toLocaleString()} XP` },
                       ].map((row, idx) => (
                         <tr key={idx}>
-                          <td className="py-2.5 text-[#8a8a8a] break-keep pr-4">{row.l}</td>
-                          <td className="py-2.5 text-right text-[#131313] font-bold whitespace-nowrap">{row.v}</td>
+                          <td className="py-3.5 text-[#8a8a8a] break-keep pr-4">{row.l}</td>
+                          <td className="py-3.5 text-right text-[#131313] font-bold whitespace-nowrap tabular-nums">{row.v}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -2781,32 +2780,30 @@ export default function LevelPage() {
 
                 {/* 🎯 목표 모드 */}
                 <LuxCard className="p-6">
-                  <div className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase mb-1.5">Goal Mode</div>
-                  <p className="text-[11px] text-[#a3a3a3] mb-5 leading-relaxed">위 조건(레벨·채널·아이템) 기준으로, 목표 레벨까지 걸리는 예상 기간을 계산합니다.</p>
+                  <p className="text-sm font-black text-[#131313] mb-1.5">목표 모드</p>
+                  <p className="text-[11px] text-[#a3a3a3] mb-5 leading-relaxed break-keep">위 조건(레벨·채널·아이템) 기준으로, 목표 레벨까지 걸리는 예상 기간을 계산합니다.</p>
                   <div className="grid grid-cols-2 gap-3 mb-5">
                     <div>
                       <label className="block text-[10px] font-bold text-[#8a8a8a] mb-1.5">목표 레벨</label>
-                      <input type="number" placeholder="예: 500" value={goalLevel} onChange={handleLimitInput(setGoalLevel, 1000)} className="w-full px-3 py-2.5 bg-white border border-black/10 rounded-lg text-[#131313] text-xs text-center outline-none focus:border-[#e91e3f] transition-colors font-bold" />
+                      <input type="number" placeholder="예: 500" value={goalLevel} onChange={handleLimitInput(setGoalLevel, 1000)} className="w-full px-4 py-2.5 bg-white border border-black/10 rounded-full text-[#131313] text-xs font-bold text-center tabular-nums outline-none focus:outline-none focus:border-[#e91e3f] transition-colors" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-[#8a8a8a] mb-1.5">하루 활동 시간 (분)</label>
-                      <input type="number" placeholder="예: 120" value={goalDailyTime} onChange={handleLimitInput(setGoalDailyTime, 1440)} className="w-full px-3 py-2.5 bg-white border border-black/10 rounded-lg text-[#131313] text-xs text-center outline-none focus:border-[#e91e3f] transition-colors font-bold" />
+                      <input type="number" placeholder="예: 120" value={goalDailyTime} onChange={handleLimitInput(setGoalDailyTime, 1440)} className="w-full px-4 py-2.5 bg-white border border-black/10 rounded-full text-[#131313] text-xs font-bold text-center tabular-nums outline-none focus:outline-none focus:border-[#e91e3f] transition-colors" />
                     </div>
                   </div>
 
                   {goalResult ? (
-                    <div className="rounded-xl border border-[#e91e3f]/20 bg-gradient-to-b from-[#e91e3f]/[0.06] to-transparent p-5 text-center">
+                    <div className="rounded-lg border border-[#e91e3f]/20 bg-[#e91e3f]/[0.05] p-5 text-center">
                       <p className="text-[10px] font-bold text-[#8a8a8a] mb-2">Lv.{goalResult.targetLv} 도달까지</p>
-                      <p className="text-3xl font-black text-[#e91e3f] tracking-tighter mb-1.5">
+                      <p className="text-3xl font-black text-[#e91e3f] tracking-tighter tabular-nums mb-1.5">
                         약 {goalResult.days.toLocaleString()}일
                         {goalResult.months > 0 && <span className="text-sm text-[#5a5a5a] font-bold ml-2">({goalResult.months}개월 {goalResult.remDays}일)</span>}
                       </p>
                       <p className="text-[10px] text-[#8a8a8a]">필요 XP {goalResult.neededXp.toLocaleString()} · 일일 예상 획득 {goalResult.dailyXp.toLocaleString()} XP (출석 1회 포함)</p>
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-black/5 bg-black/[0.02] p-5 text-center text-[11px] text-[#a3a3a3]">
-                      목표 레벨과 하루 활동 시간을 입력하면<br/>예상 소요 기간이 표시됩니다.
-                    </div>
+                    <EmptySlot>목표 레벨과 하루 활동 시간을 입력하면 예상 소요 기간이 표시됩니다</EmptySlot>
                   )}
                 </LuxCard>
               </div>
