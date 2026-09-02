@@ -1481,10 +1481,11 @@ export default function AdminBotPage() {
 
                   <div>
                     <label className={labelClass}>측정 방식</label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       {[
                         { v: "count", l: "지급 횟수" },
                         { v: "xp", l: "XP 합계" },
+                        { v: "minute", l: "접속 시간" },
                       ].map((o) => (
                         <button
                           key={o.v}
@@ -1501,7 +1502,11 @@ export default function AdminBotPage() {
                       ))}
                     </div>
                     <p className={fieldNote}>
-                      {questForm.metric === "xp" ? "오늘 받은 XP의 합계로 판정합니다." : "오늘 XP를 받은 횟수로 판정합니다. (음성은 1회 = 지급 주기)"}
+                      {questForm.metric === "xp"
+                        ? "받은 XP의 합계로 판정합니다."
+                        : questForm.metric === "minute"
+                        ? `음성 채널에 머문 시간(분)으로 판정합니다. 지급 주기 ${Math.max(1, Math.round((settings?.voiceIntervalSec ?? 300) / 60))}분마다 1분 단위로 쌓입니다.`
+                        : "XP를 받은 횟수로 판정합니다. (음성은 1회 = 지급 주기)"}
                     </p>
                   </div>
 
@@ -1514,7 +1519,13 @@ export default function AdminBotPage() {
                       onChange={(e) => setQuestForm({ ...questForm, target: e.target.value })}
                       className={inputClass}
                     />
-                    <p className={fieldNote}>{questForm.metric === "xp" ? "달성에 필요한 XP 합계" : "달성에 필요한 지급 횟수"}</p>
+                    <p className={fieldNote}>
+                      {questForm.metric === "xp"
+                        ? "달성에 필요한 XP 합계"
+                        : questForm.metric === "minute"
+                        ? "달성에 필요한 접속 시간 (분) — 예: 2시간이면 120"
+                        : "달성에 필요한 지급 횟수"}
+                    </p>
                   </div>
 
                   <div>
@@ -1617,7 +1628,9 @@ export default function AdminBotPage() {
                                     {!q.enabled && <span className="text-[10px] font-black text-[#8a8a8a] border border-black/10 rounded-full px-2 py-0.5">비활성</span>}
                                   </div>
                                   <p className="text-[11px] text-[#8a8a8a] mt-1 tabular-nums">
-                                    {(REASON_LABEL[q.reason] || "전체")} {q.metric === "xp" ? "XP" : "횟수"} {q.target.toLocaleString()} 달성
+                                    {(REASON_LABEL[q.reason] || "전체")}{" "}
+                                    {q.metric === "xp" ? "XP" : q.metric === "minute" ? "접속" : "횟수"}{" "}
+                                    {q.target.toLocaleString()}{q.metric === "minute" ? "분" : ""} 달성
                                     {q.desc ? ` · ${q.desc}` : ""}
                                   </p>
                                 </div>

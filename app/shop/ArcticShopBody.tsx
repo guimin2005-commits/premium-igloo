@@ -467,7 +467,9 @@ export default function ArcticShopBody({
   if (status === "loading" || shopPublic === null) {
     return <div className={`w-full flex-1 bg-[#f5f3f0] ${embedded ? "py-24" : "min-h-screen"} flex items-center justify-center text-sm text-[#8a8a8a]`}>불러오는 중...</div>;
   }
-  if (!shopPublic && !isAdmin) {
+  // 접근은 실제 권한으로 판정한다 — 미리보기는 관리 UI 만 숨기는 것이지
+  // 스토어를 못 보게 하는 게 아니다 (공개 전에도 유저 화면을 확인할 수 있어야 한다)
+  if (!shopPublic && !realAdmin) {
     return (
       <div className={`w-full flex-1 bg-[#f5f3f0] text-[#131313] ${embedded ? "py-24" : "min-h-screen"} flex items-center justify-center px-6`}>
         {/* break-keep을 주지 않으면 한국어가 단어 중간에서 잘려 내려간다 */}

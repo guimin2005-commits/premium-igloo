@@ -11,7 +11,10 @@ const DailyQuestSchema = new mongoose.Schema({
   // 무엇을 세는가 — XpLog.reason 과 1:1. "any"는 사유 무관 전체.
   reason: { type: String, default: "chat", enum: ["chat", "voice", "attend", "any"] },
   // 세는 방식 — count: 지급 건수 / xp: XP 합계
-  metric: { type: String, default: "count", enum: ["count", "xp"] },
+  // count: 지급 건수 / xp: XP 합계 / minute: 실제 접속 분
+  //   minute 은 음성에만 의미가 있다 — 봇이 지급 주기마다 로그를 1건 남기므로
+  //   (로그 건수 × 지급 주기 분) 이 곧 접속 시간이다.
+  metric: { type: String, default: "count", enum: ["count", "xp", "minute"] },
   target: { type: Number, default: 1, min: 1 },        // 목표치
   rewardXp: { type: Number, default: 0, min: 0 },      // 달성 보상 (0이면 보상 없는 목표)
   enabled: { type: Boolean, default: true },

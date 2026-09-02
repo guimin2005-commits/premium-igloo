@@ -15,7 +15,7 @@ async function requireAdmin() {
 
 const REASONS = ["chat", "voice", "attend", "any"];
 const PERIODS = ["daily", "weekly", "monthly"];
-const METRICS = ["count", "xp"];
+const METRICS = ["count", "xp", "minute"];
 const num = (v, def, { min = 0, max = 1_000_000 } = {}) => {
   const n = Number(v);
   if (!Number.isFinite(n)) return def;
