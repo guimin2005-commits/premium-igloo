@@ -6,6 +6,62 @@ import UserXp from "@/models/UserXp";
 import XpLog from "@/models/XpLog";
 import { kstMonthStart } from "@/lib/kst";
 
+// 📌 프로필 사진 — UserXp 에 저장하지 않으므로 디스코드에서 가져온다.
+//    시상대(1~3위)에만 쓰므로 한 번에 3건이고, 10분 캐시로 호출을 줄인다.
+const AVATAR_TTL = 10 * 60 * 1000;
+let avatarCache = { at: 0, byUser: new Map() };
+
+const defaultAvatar = (userId) => {
+  // 디스코드 기본 아바타 — 새 유저명 체계는 (id >> 22) % 6
+  let n = 0;
+  try { n = Number((BigInt(userId) >> 22n) % 6n); } catch { n = 0; }
+  return `https://cdn.discordapp.com/embed/avatars/${n}.png`;
+};
+
+async function fetchAvatars(userIds) {
+  const now = Date.now();
+  if (now - avatarCache.at > AVATAR_TTL) avatarCache = { at: now, byUser: new Map() };
+
+  const GUILD_ID = process.env.DISCORD_GUILD_ID;
+  const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+  const out = new Map();
+
+  await Promise.all(
+    userIds.map(async (id) => {
+      if (avatarCache.byUser.has(id)) { out.set(id, avatarCache.byUser.get(id)); return; }
+      if (!GUILD_ID || !BOT_TOKEN) { out.set(id, defaultAvatar(id)); return; }
+      try {
+        const res = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${id}`, {
+          headers: { Authorization: `Bot ${BOT_TOKEN}` },
+          cache: "no-store",
+        });
+        if (!res.ok) { out.set(id, defaultAvatar(id)); return; }
+        const m = await res.json();
+        // 서버 전용 프로필 사진이 있으면 그것을 우선한다
+        const url = m?.avatar
+          ? `https://cdn.discordapp.com/guilds/${GUILD_ID}/users/${id}/avatars/${m.avatar}.png?size=128`
+          : m?.user?.avatar
+          ? `https://cdn.discordapp.com/avatars/${id}/${m.user.avatar}.png?size=128`
+          : defaultAvatar(id);
+        avatarCache.byUser.set(id, url);
+        out.set(id, url);
+      } catch {
+        out.set(id, defaultAvatar(id));
+      }
+    })
+  );
+  return out;
+}
+
+// 첫 페이지의 상위 3명에게만 사진을 붙인다 (시상대 전용)
+async function withPodiumAvatars(rows, skip) {
+  if (skip !== 0) return rows;
+  const top = rows.slice(0, 3);
+  if (top.length === 0) return rows;
+  const map = await fetchAvatars(top.map((r) => r.userId));
+  return rows.map((r) => (map.has(r.userId) ? { ...r, avatar: map.get(r.userId) } : r));
+}
+
 // ── [조회] 랭킹 ──────────────────────────────────────────────
 //   period=all   누적 XP        (UserXp.xp)
 //   period=month 이번 달 획득   (XpLog 합산 — 봇 가동 이후분만 잡힌다)
@@ -46,19 +102,17 @@ export async function GET(request) {
       ).lean();
       const byId = new Map(docs.map((u) => [u.userId, u]));
 
-      return NextResponse.json({
-        success: true,
-        period,
-        monthStart,
-        data: rows.map((r, i) => ({
+      const monthData = await withPodiumAvatars(
+        rows.map((r, i) => ({
           rank: skip + i + 1,
           userId: r._id,
           name: byId.get(r._id)?.displayName || r.displayName || "이름 없음",
           xp: r.xp,
           level: byId.get(r._id)?.level ?? 0,
         })),
-        total: countRows[0]?.n || 0,
-      });
+        skip
+      );
+      return NextResponse.json({ success: true, period, monthStart, data: monthData, total: countRows[0]?.n || 0 });
     }
 
     if (period === "voice") {
@@ -74,18 +128,17 @@ export async function GET(request) {
         UserXp.countDocuments(filter),
       ]);
 
-      return NextResponse.json({
-        success: true,
-        period,
-        data: rows.map((r, i) => ({
+      const voiceData = await withPodiumAvatars(
+        rows.map((r, i) => ({
           rank: skip + i + 1,
           userId: r.userId,
           name: r.displayName || r.username || "이름 없음",
           level: r.level,
           voiceSeconds: r.voiceSeconds || 0,
         })),
-        total,
-      });
+        skip
+      );
+      return NextResponse.json({ success: true, period, data: voiceData, total });
     }
 
     const [rows, total] = await Promise.all([
@@ -97,10 +150,8 @@ export async function GET(request) {
       UserXp.countDocuments(),
     ]);
 
-    return NextResponse.json({
-      success: true,
-      period,
-      data: rows.map((r, i) => ({
+    const allData = await withPodiumAvatars(
+      rows.map((r, i) => ({
         rank: skip + i + 1,
         userId: r.userId,
         name: r.displayName || r.username || "이름 없음",
@@ -108,8 +159,9 @@ export async function GET(request) {
         level: r.level,
         attendCount: r.attendCount || 0,
       })),
-      total,
-    });
+      skip
+    );
+    return NextResponse.json({ success: true, period, data: allData, total });
   } catch (e) {
     console.error("리더보드 조회 오류:", e);
     return NextResponse.json({ success: false, data: [], total: 0 }, { status: 500 });

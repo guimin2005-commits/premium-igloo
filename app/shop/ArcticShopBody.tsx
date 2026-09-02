@@ -806,11 +806,6 @@ export default function ArcticShopBody({
         <div className="max-w-7xl mx-auto px-5 md:px-8 pt-14 pb-10">
           {/* 중앙 — 타이틀 */}
           <div className="text-center break-keep">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <span className="w-8 h-px bg-[#8a8a8a]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Premium Igloo SHOP</span>
-              <span className="w-8 h-px bg-[#8a8a8a]"></span>
-            </div>
             <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none text-[#131313] mb-4">ARCT<span className="text-[#e91e3f]">I</span>C</h1>
 
             {/* 관리자에게만 보이는 상품 관리 진입점 */}

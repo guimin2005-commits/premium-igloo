@@ -1731,6 +1731,13 @@ export default function LevelPage() {
                           {["all", "month"].map((k) => (
                             <button key={k} onClick={() => setLbTab(k)} className={`text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 ${lbTab === k ? "text-[#131313] border-b-2 border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a]"}`}>{k === "all" ? "누적" : "이번 달"}</button>
                           ))}
+                          {/* 전체 순위는 랭킹 탭에서 — 여기는 TOP 10 만 */}
+                          <button
+                            onClick={() => { setRankMode(lbTab); setRankPage(0); setActiveMainTab("rank"); }}
+                            className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
+                          >
+                            전체 보기 →
+                          </button>
                         </span>
                       </div>
                       {!lb[lbTab] ? (
@@ -2397,8 +2404,80 @@ export default function LevelPage() {
               </EmptySlot>
             ) : (
               <>
+                {/* 시상대 — 1~3위를 프로필 사진으로 크게. 첫 페이지에서만 나온다.
+                    가운데가 1위, 왼쪽 2위, 오른쪽 3위. 단상 높이로 순위를 한 번 더 말한다. */}
+                {rankPage === 0 && rankRows.length >= 3 && (
+                  <div className="relative mb-10 pt-6">
+                    {/* 1위 뒤에서 번지는 빛 */}
+                    <div
+                      aria-hidden
+                      className="absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[240px] rounded-full blur-[90px] pointer-events-none"
+                      style={{ background: "rgba(233,30,63,0.16)" }}
+                    ></div>
+
+                    <div className="relative grid grid-cols-3 gap-2 sm:gap-5 items-end">
+                      {[rankRows[1], rankRows[0], rankRows[2]].map((r) => {
+                        const first = r.rank === 1;
+                        const c = r.rank === 1 ? "#e91e3f" : r.rank === 2 ? "#8a8a8a" : "#a06a3c";
+                        const isMe = r.userId === session?.user?.id;
+                        const tier = VOICE_TIERS[getTierIndex(r.level || 0)];
+                        const pedestal = first ? "h-16 sm:h-24" : r.rank === 2 ? "h-10 sm:h-16" : "h-7 sm:h-11";
+                        return (
+                          <div key={r.userId} className="flex flex-col items-center text-center min-w-0">
+                            {/* 1위 왕관 */}
+                            {first && (
+                              <svg aria-hidden viewBox="0 0 24 24" className="w-6 h-6 sm:w-7 sm:h-7 mb-1.5" fill="#e91e3f">
+                                <path d="M3 8.5 7 12l5-7 5 7 4-3.5-1.8 10H4.8Z" />
+                                <rect x="4.6" y="19" width="14.8" height="2.2" rx="1.1" />
+                              </svg>
+                            )}
+
+                            <span className="relative shrink-0">
+                              <span
+                                className={`block rounded-full overflow-hidden ${first ? "w-20 h-20 sm:w-28 sm:h-28" : "w-14 h-14 sm:w-20 sm:h-20"}`}
+                                style={{ boxShadow: `0 0 0 3px ${c}, 0 18px 36px -16px ${c}` }}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={r.avatar || ""} alt="" className="w-full h-full object-cover bg-[#e2e0dc]" />
+                              </span>
+                              {/* 순위는 원에 겹쳐 붙인다 — 따로 두면 원 크기가 달라 높이가 어긋난다 */}
+                              <span
+                                className={`absolute left-1/2 -translate-x-1/2 -bottom-2 inline-flex items-center justify-center rounded-full text-white font-black tabular-nums ring-2 ring-[#f5f3f0] ${first ? "w-7 h-7 text-[13px]" : "w-6 h-6 text-[11px]"}`}
+                                style={{ backgroundColor: c }}
+                              >
+                                {r.rank}
+                              </span>
+                            </span>
+
+                            <p className={`mt-5 w-full truncate font-black ${first ? "text-[14px] sm:text-[15px]" : "text-[12px] sm:text-[13px]"} ${isMe ? "text-[#e91e3f]" : "text-[#131313]"}`}>
+                              {r.name}
+                            </p>
+
+                            {/* 등급 — 레벨에서 바로 나온다 */}
+                            <span className="inline-flex items-center gap-1 mt-1.5">
+                              <TierEmblem tier={tier} size={12} />
+                              <span className="text-[10px] font-black" style={{ color: tier.c }}>{tier.name}</span>
+                            </span>
+
+                            <p className={`font-black text-[#131313] tabular-nums mt-2 ${first ? "text-[15px]" : "text-[12px]"}`}>
+                              {rankMode === "voice" ? fmtVoiceTime(r.voiceSeconds) : `${(r.xp || 0).toLocaleString()} XP`}
+                            </p>
+
+                            {/* 단상 */}
+                            <div
+                              className={`w-full mt-3 rounded-t-xl ${pedestal}`}
+                              style={{ background: `linear-gradient(180deg, ${c}2e, ${c}08)`, boxShadow: `inset 0 1px 0 ${c}55` }}
+                            ></div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div aria-hidden className="relative h-px bg-black/[0.10]"></div>
+                  </div>
+                )}
+
                 <div className="border-y border-black/[0.08] divide-y divide-black/[0.06]">
-                  {rankRows.map((r) => {
+                  {(rankPage === 0 && rankRows.length >= 3 ? rankRows.slice(3) : rankRows).map((r) => {
                     const isMe = me && r.userId === session?.user?.id;
                     const medal = r.rank <= 3;
                     return (
