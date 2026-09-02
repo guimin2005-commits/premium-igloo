@@ -47,12 +47,21 @@ const MAIN_TABS = [
   { id: "my", name: "내 대시보드" },
   { id: "intro", name: "시스템 안내" },
   { id: "arctic", name: "ARCTIC", shopOnly: true },
+  { id: "rank", name: "랭킹" },
   { id: "table", name: "XP 테이블" },
   { id: "sim", name: "시뮬레이터" },
 ];
 // 내전 채널은 기본 음성 XP에 더하는 게 아니라 통째로 대체한다 (bot/src/config.js policy.scrimBaseXp)
 // SCRIM_CHANNEL_IDS 가 비어 있으면 봇이 내전 채널을 인식하지 못해 실제로는 적용되지 않는다.
 const SCRIM_BASE_XP = 3500;
+
+// 📌 랭킹 기준 — 누적 XP / 이번 달 획득 / 누적 음성 시간
+const RANK_MODES = [
+  { id: "all", label: "누적" },
+  { id: "month", label: "이번 달" },
+  { id: "voice", label: "음성 시간" },
+];
+const RANK_PAGE_SIZE = 20;
 
 // 📌 시스템 안내 = 6단계 튜토리얼. 한 번에 한 단계만 보여주고 하단에서 이어 간다.
 //    번호는 권장 순서일 뿐이라 알약을 눌러 바로 건너뛸 수도 있다.
@@ -772,6 +781,11 @@ export default function LevelPage() {
   const [introSec, setIntroSec] = useState(INTRO_STEPS[0].id);
   const [invTab, setInvTab] = useState("all");
   const [bagOpen, setBagOpen] = useState(false);
+  const [rankMode, setRankMode] = useState("all");
+  const [rankPage, setRankPage] = useState(0);
+  const [rankRows, setRankRows] = useState([]);
+  const [rankTotal, setRankTotal] = useState(0);
+  const [rankLoading, setRankLoading] = useState(false);
   const { data: session, status: authStatus } = useSession();
 
   // 하이드레이션 불일치 방지 — 서버/클라이언트 첫 페인트는 항상 스켈레톤으로 통일하고,
@@ -925,6 +939,29 @@ export default function LevelPage() {
     playTone(523, 0.06, "sine", 0.025);
     setTimeout(() => playTone(349, 0.08, "sine", 0.025), 90);
   };
+
+  // 랭킹 — 탭이 열려 있을 때만 부른다. 기준이나 페이지가 바뀌면 다시 부른다.
+  const rankPages = Math.max(1, Math.ceil(rankTotal / RANK_PAGE_SIZE));
+  useEffect(() => {
+    if (activeMainTab !== "rank") return;
+    let alive = true;
+    setRankLoading(true);
+    const qs = new URLSearchParams({
+      period: rankMode,
+      limit: String(RANK_PAGE_SIZE),
+      skip: String(rankPage * RANK_PAGE_SIZE),
+    });
+    fetch(`/api/xp/leaderboard?${qs}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive) return;
+        setRankRows(Array.isArray(d?.data) ? d.data : []);
+        setRankTotal(d?.total || 0);
+      })
+      .catch(() => { if (alive) { setRankRows([]); setRankTotal(0); } })
+      .finally(() => { if (alive) setRankLoading(false); });
+    return () => { alive = false; };
+  }, [activeMainTab, rankMode, rankPage]);
 
   const voiceTracked = isVoiceTimeTracked();
   const introIdx = Math.max(0, INTRO_STEPS.findIndex((x) => x.id === introSec));
@@ -2309,6 +2346,133 @@ export default function LevelPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ══ TAB : RANKING ════════════════ */}
+        {activeMainTab === "rank" && (
+          <Reveal>
+            <SectionHeader
+              en="Ranking"
+              title="서버 랭킹"
+              right={
+                <span className="shrink-0 text-[11px] font-bold text-[#a3a3a3] tabular-nums">
+                  {rankTotal.toLocaleString()}명
+                </span>
+              }
+            />
+
+            {/* 기준 — 누적 / 이번 달 / 음성 시간 */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-bar mb-6">
+              {RANK_MODES.map((m) => {
+                const on = rankMode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => { setRankMode(m.id); setRankPage(0); playTone(620, 0.04, "sine", 0.025); }}
+                    className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
+                      on
+                        ? "bg-[#131313] text-white"
+                        : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {rankLoading ? (
+              <div className="space-y-2">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-[52px] rounded-lg bg-black/[0.04] animate-pulse"></div>
+                ))}
+              </div>
+            ) : rankRows.length === 0 ? (
+              <EmptySlot>
+                {rankMode === "voice"
+                  ? `누적 음성 시간은 ${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터 집계됩니다`
+                  : rankMode === "month"
+                  ? "이번 달 획득 기록이 아직 없습니다"
+                  : "아직 기록이 없습니다"}
+              </EmptySlot>
+            ) : (
+              <>
+                <div className="border-y border-black/[0.08] divide-y divide-black/[0.06]">
+                  {rankRows.map((r) => {
+                    const isMe = me && r.userId === session?.user?.id;
+                    const medal = r.rank <= 3;
+                    return (
+                      <div
+                        key={r.userId}
+                        className={`flex items-center gap-3.5 py-3.5 transition-colors ${isMe ? "bg-[#e91e3f]/[0.05]" : ""}`}
+                      >
+                        {/* 순위 */}
+                        <span
+                          className={`shrink-0 w-9 text-center tabular-nums ${
+                            medal ? "text-[15px] font-black text-[#e91e3f]" : "text-[13px] font-black text-[#c4c4c4]"
+                          }`}
+                        >
+                          {r.rank}
+                        </span>
+
+                        {/* 이름 · 레벨 */}
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-[13px] font-black truncate ${isMe ? "text-[#e91e3f]" : "text-[#131313]"}`}>
+                            {r.name}
+                            {isMe && <span className="text-[10px] font-black text-[#e91e3f]/70 ml-1.5">나</span>}
+                          </p>
+                          <p className="text-[11px] text-[#a3a3a3] tabular-nums mt-0.5">Lv.{r.level ?? 0}</p>
+                        </div>
+
+                        {/* 값 */}
+                        <span className="shrink-0 text-[13px] font-black text-[#131313] tabular-nums">
+                          {rankMode === "voice"
+                            ? fmtVoiceTime(r.voiceSeconds)
+                            : `${(r.xp || 0).toLocaleString()} XP`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 페이지 — 옆으로 넘겨 다음 순위를 본다 */}
+                {rankPages > 1 && (
+                  <div className="flex items-center justify-between gap-4 mt-6">
+                    <button
+                      onClick={() => { setRankPage((p) => Math.max(0, p - 1)); playTone(560, 0.04, "sine", 0.025); }}
+                      disabled={rankPage === 0}
+                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-30 disabled:cursor-default bg-black/[0.04] text-[#5a5a5a] enabled:hover:bg-black/[0.08] enabled:hover:text-[#131313]"
+                    >
+                      <span aria-hidden>←</span> 이전
+                    </button>
+
+                    <span className="text-[12px] font-black text-[#8a8a8a] tabular-nums">
+                      {rankPage + 1} <span className="text-[#c4c4c4]">/ {rankPages}</span>
+                    </span>
+
+                    <button
+                      onClick={() => { setRankPage((p) => Math.min(rankPages - 1, p + 1)); playTone(680, 0.04, "sine", 0.025); }}
+                      disabled={rankPage >= rankPages - 1}
+                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-30 disabled:cursor-default bg-black/[0.04] text-[#5a5a5a] enabled:hover:bg-black/[0.08] enabled:hover:text-[#131313]"
+                    >
+                      다음 <span aria-hidden>→</span>
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {rankMode === "month" && (
+              <p className="text-[11px] text-[#a3a3a3] mt-5 break-keep">
+                이번 달 획득은 봇이 기록한 지급 로그로 셉니다 — 기록은 60일간 보관됩니다.
+              </p>
+            )}
+            {rankMode === "voice" && !voiceTracked && (
+              <p className="text-[11px] text-[#a3a3a3] mt-5 break-keep">
+                누적 음성 시간은 {+VOICE_TIME_START.slice(5, 7)}월 {+VOICE_TIME_START.slice(8, 10)}일부터 쌓이며, 시즌이 바뀌어도 이어집니다.
+              </p>
+            )}
+          </Reveal>
         )}
 
         {/* ══ TAB : POLICY ═════════════════ */}

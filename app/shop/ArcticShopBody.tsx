@@ -64,7 +64,11 @@ export default function ArcticShopBody({
 }) {
   const { data: session, status } = useSession();
   const isLoggedIn = status === "authenticated";
-  const isAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const realAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  // 📌 관리 버튼이 화면 곳곳에 박혀 있어 일반 유저가 보는 모습을 확인할 수 없었다.
+  //    미리보기를 켜면 관리 UI 만 숨긴다 — 접근 권한(비공개 상점 열람)은 그대로 둔다.
+  const [userPreview, setUserPreview] = useState(false);
+  const isAdmin = realAdmin && !userPreview;
 
   const [shopPublic, setShopPublic] = useState<boolean | null>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -664,6 +668,24 @@ export default function ArcticShopBody({
             </Link>
 
             {/* 비공개 상태 — 관리자에게만 작은 점으로 알린다 */}
+            {realAdmin && (
+              <button
+                onClick={() => setUserPreview((v) => !v)}
+                title={userPreview ? "관리 화면으로 돌아가기" : "일반 유저에게 보이는 화면으로 보기"}
+                className={`inline-flex shrink-0 items-center gap-1.5 h-8 px-2.5 md:px-3 rounded-full text-[11px] font-bold border transition-colors ${
+                  userPreview
+                    ? "bg-[#131313] text-white border-[#131313]"
+                    : "bg-white text-[#5a5a5a] border-[#e2e0dc] hover:text-[#131313] hover:border-[#a3a3a3]"
+                }`}
+              >
+                <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z" strokeLinejoin="round" />
+                  <circle cx="10" cy="10" r="2.6" />
+                </svg>
+                <span className="hidden sm:inline">{userPreview ? "미리보기 중" : "유저 화면"}</span>
+              </button>
+            )}
+
             {!shopPublic && isAdmin && (
               <Link href="/admin/bot?tab=settings" title="비공개 상태입니다 · 눌러서 공개 전환"
                 className="group/dot relative flex items-center shrink-0">
