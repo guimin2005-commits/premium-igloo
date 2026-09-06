@@ -8,6 +8,7 @@ import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPr
 import ArcticFooter from "./ArcticFooter";
 import ArcticDock from "./ArcticDock";
 import { useSearchParams } from "next/navigation";
+import { SEASON, getSeasonDday } from "@/lib/season";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -68,6 +69,7 @@ export default function ArcticShopBody({
   // 📌 관리 버튼이 화면 곳곳에 박혀 있어 일반 유저가 보는 모습을 확인할 수 없었다.
   //    미리보기를 켜면 관리 UI 만 숨긴다 — 접근 권한(비공개 상점 열람)은 그대로 둔다.
   const [userPreview, setUserPreview] = useState(false);
+  const seasonDday = getSeasonDday();
   const isAdmin = realAdmin && !userPreview;
 
   const [shopPublic, setShopPublic] = useState<boolean | null>(null);
@@ -807,6 +809,17 @@ export default function ArcticShopBody({
           {/* 중앙 — 타이틀 */}
           <div className="text-center break-keep">
             <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none text-[#131313] mb-4">ARCT<span className="text-[#e91e3f]">I</span>C</h1>
+
+            {/* 시즌 칩 — SYSTEM : LEVEL 히어로와 같은 문법 */}
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-3.5">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e91e3f]/10 border border-[#e91e3f]/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_2.5s_ease-in-out_infinite]"></span>
+                <span className="text-[10px] font-black text-[#e91e3f] tracking-wide">SEASON {SEASON.number} · {SEASON.name}</span>
+              </span>
+              {!seasonDday.ended && seasonDday.days >= 0 && (
+                <span className="text-[11px] font-black text-[#131313] bg-black/5 border border-black/10 px-2.5 py-1 rounded-full">종료까지 D-{seasonDday.days}</span>
+              )}
+            </div>
 
             {/* 관리자에게만 보이는 상품 관리 진입점 */}
             {isAdmin && (

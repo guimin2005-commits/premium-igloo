@@ -14,6 +14,9 @@ const UserXpSchema = new mongoose.Schema({
   // 누적 음성 참여 시간(초) — 시즌이 바뀌어도 초기화하지 않는 통산 기록.
   // 봇이 음성 XP를 지급할 때 그 주기만큼 함께 더한다 (lib/season.js VOICE_TIME_START 이후부터).
   voiceSeconds: { type: Number, default: 0 },
+  // 오늘(KST) 음성 누적 분 — 출석 자동 지급 판정용. 날짜가 바뀌면 봇이 리셋한다.
+  voiceTodayMin: { type: Number, default: 0 },
+  voiceTodayDate: { type: String, default: "" },
   // 사이트에서 XP·레벨을 바꿨을 때 봇이 레벨 역할을 다시 맞추도록 세우는 표시
   needsRoleSync: { type: Boolean, default: false },
   updatedAt: { type: Date, default: Date.now },

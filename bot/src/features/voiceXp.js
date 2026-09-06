@@ -1,7 +1,7 @@
 // ── 음성 XP (설정된 주기마다 지급) ──────────────────
 import { UserXp } from "../db.js";
 import { getVoiceBracketBonus, kstToday, VOICE_TIME_START } from "../leveling.js";
-import { getBuffXp } from "../roleConfigs.js";
+import { getBuffXp, getAttendBuffXp } from "../roleConfigs.js";
 import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getActiveBoostXp, getMuteMultiplier } from "../botSettings.js";
 import { grantXp } from "../xp.js";
@@ -17,6 +17,10 @@ async function voiceXpTick(client) {
     // 이번 틱이 대표하는 접속 시간 — XP를 준 틱만 시간으로 인정하므로
     // 잠수·제외 채널·음소거 차단으로 지급을 건너뛴 시간은 쌓이지 않는다.
     const tickSec = kstToday() >= VOICE_TIME_START ? s.voiceIntervalSec || 300 : 0;
+    // 출석 자동 지급 판정에 쓰는 값 — 시간 집계와 달리 시즌 2 게이트를 타지 않는다
+    const today = kstToday();
+    const tickMin = Math.max(1, Math.round((s.voiceIntervalSec || 300) / 60));
+    const attendMin = Math.max(1, s.attendVoiceMin || 60);
 
     for (const [, voiceState] of guild.voiceStates.cache) {
       const member = voiceState.member;
@@ -47,6 +51,43 @@ async function voiceXpTick(client) {
         channelName: channel.name || "",
         voiceSeconds: tickSec,
       });
+
+      // ── 출석 자동 지급 ──
+      //    유저가 눌러서 받는 방식이 아니라, 기준 시간을 채우면 그 자리에서 준다.
+      //    오늘 누적 분은 파이프라인 갱신으로 원자적으로 쌓는다 — 날짜가 바뀌면 그 자리에서 리셋.
+      const upd = await UserXp.findOneAndUpdate(
+        { userId: member.id },
+        [
+          {
+            $set: {
+              voiceTodayMin: {
+                $cond: [
+                  { $eq: [{ $ifNull: ["$voiceTodayDate", ""] }, today] },
+                  { $add: [{ $ifNull: ["$voiceTodayMin", 0] }, tickMin] },
+                  tickMin,
+                ],
+              },
+              voiceTodayDate: today,
+            },
+          },
+        ],
+        { new: true, projection: { voiceTodayMin: 1, lastAttendDate: 1 } }
+      );
+
+      if (upd && upd.voiceTodayMin >= attendMin && upd.lastAttendDate !== today) {
+        // 자물쇠부터 — 오늘 미출석인 경우에만 통과하는 조건부 갱신 (틱이 겹쳐도 한 번만)
+        const lock = await UserXp.updateOne(
+          { userId: member.id, lastAttendDate: { $ne: today } },
+          { $set: { lastAttendDate: today }, $inc: { attendCount: 1 } }
+        );
+        if (lock.modifiedCount) {
+          const attendAmount = (s.attendXp || 0) + getAttendBuffXp(member);
+          if (attendAmount > 0) {
+            await grantXp(member, attendAmount, { reason: "attend" });
+            console.log(`✅ 출석 자동 지급: ${member.displayName} +${attendAmount.toLocaleString()} (음성 ${upd.voiceTodayMin}분)`);
+          }
+        }
+      }
     }
   } catch (e) {
     console.error("음성 XP 오류:", e.message);

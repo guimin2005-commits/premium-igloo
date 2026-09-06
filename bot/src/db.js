@@ -13,6 +13,9 @@ const UserXpSchema = new mongoose.Schema({
   attendCount: { type: Number, default: 0 },
   // 누적 음성 참여 시간(초) — 시즌 무관 통산 기록 (VOICE_TIME_START 이후부터 적립)
   voiceSeconds: { type: Number, default: 0 },
+  // 오늘(KST) 음성 누적 분 — 출석 자동 지급 판정용
+  voiceTodayMin: { type: Number, default: 0 },
+  voiceTodayDate: { type: String, default: "" },
 
   // 사이트에서 XP·레벨을 바꿨을 때 레벨 역할을 다시 맞추도록 세우는 표시
   needsRoleSync: { type: Boolean, default: false },

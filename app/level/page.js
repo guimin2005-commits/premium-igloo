@@ -1694,7 +1694,10 @@ export default function LevelPage() {
                                   ) : q.claimed ? (
                                     <span className="text-[11px] font-black text-emerald-700">완료</span>
                                   ) : done ? (
-                                    <span className="text-[11px] font-black text-emerald-700">달성</span>
+                                    /* 자동 지급 퀘스트는 달성 직후 봇이 준다 — 잠깐 뜨는 상태 */
+                                    <span className="text-[11px] font-black text-emerald-700">{q.auto ? "지급 중" : "달성"}</span>
+                                  ) : q.auto ? (
+                                    <span className="text-[11px] font-bold text-[#a3a3a3]">자동 지급</span>
                                   ) : (
                                     <span className="text-[11px] font-bold text-[#c4c4c4]">진행 중</span>
                                   )}
@@ -2087,7 +2090,7 @@ export default function LevelPage() {
                     <div className="divide-y divide-black/[0.06]">
                       {[
                         { t: "자동으로 집계", d: `음성 채널에 머문 시간이 쌓여 ${P.attendVoiceMin}분을 넘으면 달성됩니다. 따로 할 일은 없습니다.` },
-                        { t: "직접 받기", d: "달성한 뒤 대시보드 퀘스트에서 눌러야 XP가 들어옵니다. 자정(KST)에 초기화됩니다." },
+                        { t: "자동 지급", d: "기준 시간을 채우는 순간 바로 지급됩니다. 따로 받을 필요가 없습니다. 자정(KST)에 초기화됩니다." },
                       ].map((r, i) => (
                         <div key={i} className="flex items-start justify-between gap-4 py-3.5">
                           <span className="shrink-0 text-[12px] font-bold text-[#131313] w-24 md:w-32">{r.t}</span>

@@ -8,25 +8,6 @@ import { getQuestState, ATTEND_QUEST_ID, PERIOD_LABEL } from "@/lib/quests";
 import { kstToday, periodKey } from "@/lib/kst";
 import QuestClaim from "@/models/QuestClaim";
 import Payout from "@/models/Payout";
-import UserXp from "@/models/UserXp";
-import RoleConfig from "@/models/RoleConfig";
-
-// 📌 출석 역할 보너스를 얹으려면 멤버가 지금 들고 있는 역할을 알아야 한다.
-//    /출석체크 를 없애면서 봇의 getAttendBuffXp 호출부가 사라졌고, 그때부터
-//    RoleConfig.attendBuffXp 가 아무 데도 적용되지 않고 있었다. 지급 주체가
-//    사이트로 옮겨졌으니 보정도 여기서 한다. (실패하면 기본 보상만 준다)
-async function fetchMemberRoles(userId) {
-  const GUILD_ID = process.env.DISCORD_GUILD_ID;
-  const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-  if (!GUILD_ID || !BOT_TOKEN) return null;
-  const res = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${userId}`, {
-    headers: { Authorization: `Bot ${BOT_TOKEN}` },
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  return Array.isArray(data.roles) ? data.roles : null;
-}
 
 // ── [조회] 오늘의 일일 퀘스트 + 내 진행도 ─────────────────────
 export async function GET() {
@@ -75,69 +56,41 @@ export async function POST(request) {
 
     const today = kstToday();
     const isAttend = questId === ATTEND_QUEST_ID;
+    if (isAttend) {
+      // 출석은 봇이 기준 시간을 채우는 순간 자동 지급한다 — 수령 경로가 없다
+      return NextResponse.json(
+        { success: false, error: "출석 보상은 기준 시간을 채우면 자동으로 지급됩니다." },
+        { status: 400 }
+      );
+    }
     // 주기별 잠금 키 — 일일/주간/월간이 각자 초기화된다
     const lockKey = periodKey(quest.period || "daily");
 
-    // 1) 자물쇠부터 — 하루 한 번만 통과하는 조건부 갱신/유니크 인덱스로 중복 지급을 막는다.
-    //    출석은 봇의 출석 기록과 같은 자물쇠(lastAttendDate)를 써서 양쪽이 겹치지 않게 한다.
-    let unlock;
-    if (isAttend) {
-      const before = await UserXp.findOne({ userId }, { lastAttendDate: 1 }).lean();
-      const res = await UserXp.updateOne(
-        { userId, lastAttendDate: { $ne: today } },
-        { $set: { lastAttendDate: today, updatedAt: new Date() }, $inc: { attendCount: 1 } }
-      );
-      if (res.matchedCount === 0) {
-        return NextResponse.json({ success: false, error: "오늘 출석 보상은 이미 받았습니다." }, { status: 409 });
+    // 1) 자물쇠부터 — QuestClaim 유니크 인덱스(userId, date, questId)가 중복 수령을 막는다
+    let claim;
+    try {
+      claim = await QuestClaim.create({
+        userId,
+        date: lockKey,
+        questId,
+        questName: quest.name,
+        amount: quest.rewardXp,
+      });
+    } catch (e) {
+      if (e?.code === 11000) {
+        return NextResponse.json({ success: false, error: "이미 수령한 보상입니다." }, { status: 409 });
       }
-      unlock = () =>
-        UserXp.updateOne(
-          { userId },
-          { $set: { lastAttendDate: before?.lastAttendDate || "" }, $inc: { attendCount: -1 } }
-        ).catch(() => {});
-    } else {
-      let claim;
-      try {
-        claim = await QuestClaim.create({
-          userId,
-          date: lockKey,
-          questId,
-          questName: quest.name,
-          amount: quest.rewardXp,
-        });
-      } catch (e) {
-        if (e?.code === 11000) {
-          return NextResponse.json({ success: false, error: "이미 수령한 보상입니다." }, { status: 409 });
-        }
-        throw e;
-      }
-      unlock = () => QuestClaim.deleteOne({ _id: claim._id }).catch(() => {});
+      throw e;
     }
-
-    // 출석 보상에는 역할 보너스를 얹는다
-    let payAmount = quest.rewardXp;
-    if (isAttend) {
-      try {
-        const held = await fetchMemberRoles(userId);
-        if (held?.length) {
-          const cfgs = await RoleConfig.find(
-            { roleId: { $in: held }, attendBuffXp: { $gt: 0 } },
-            { attendBuffXp: 1 }
-          ).lean();
-          payAmount += cfgs.reduce((n, c) => n + (c.attendBuffXp || 0), 0);
-        }
-      } catch {
-        // 역할을 못 읽으면 기본 보상만 지급한다 — 수령 자체를 막지는 않는다
-      }
-    }
+    const unlock = () => QuestClaim.deleteOne({ _id: claim._id }).catch(() => {});
 
     // 2) 자물쇠를 잡은 뒤에만 지급 예약. 실패하면 자물쇠를 풀어 다시 시도할 수 있게 한다.
     try {
       await Payout.create({
         userName: session.user.name || "",
         userId,
-        amount: payAmount,
-        reason: isAttend ? "일일 출석 보상" : `${PERIOD_LABEL[quest.period] || "일일"} 퀘스트: ${quest.name}`,
+        amount: quest.rewardXp,
+        reason: `${PERIOD_LABEL[quest.period] || "일일"} 퀘스트: ${quest.name}`,
         source: "quest",
       });
     } catch (e) {
@@ -148,7 +101,7 @@ export async function POST(request) {
     const next = await getQuestState(userId);
     return NextResponse.json({
       success: true,
-      data: { ...next, claimed: { name: quest.name, amount: payAmount } },
+      data: { ...next, claimed: { name: quest.name, amount: quest.rewardXp } },
     });
   } catch (e) {
     console.error("일일 퀘스트 수령 오류:", e);
