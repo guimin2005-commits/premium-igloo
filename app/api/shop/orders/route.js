@@ -25,7 +25,7 @@ export async function GET(request) {
     await connectToDatabase();
     const sp = new URL(request.url).searchParams;
     const status = sp.get("status");
-    const filter = status && ["pending", "completed", "cancelled"].includes(status) ? { status } : {};
+    const filter = status && ["pending", "completed", "cancelled", "refunded"].includes(status) ? { status } : {};
 
     const [rows, pendingCount] = await Promise.all([
       Purchase.find(filter).sort({ createdAt: -1 }).limit(200).lean(),
@@ -45,14 +45,25 @@ export async function PATCH(request) {
     }
     await connectToDatabase();
     const { id, status, adminNote } = await request.json();
-    if (!id || !["completed", "cancelled"].includes(status)) {
+    if (!id || !["completed", "cancelled", "refunded"].includes(status)) {
       return NextResponse.json({ success: false, message: "잘못된 요청입니다." }, { status: 400 });
     }
 
-    // 대기 중인 건만 상태 변경 — 이미 처리된 건의 중복 환불을 막는다
+    // 📌 상태 전이는 두 갈래다.
+    //    pending   → completed(발송) | cancelled(취소·환불)
+    //    completed → refunded(환불) — 역할 상품은 봇이 30초 안에 completed 로 바꾸므로
+    //    pending 만 취소할 수 있으면 관리자가 실제로 환불할 창이 거의 없다.
+    //    조건에 이전 상태를 넣어 두 번 눌러도 두 번 환불되지 않게 한다.
+    const fromStatus = status === "refunded" ? "completed" : "pending";
     const purchase = await Purchase.findOneAndUpdate(
-      { _id: id, status: "pending" },
-      { status, adminNote: (adminNote || "").trim(), processedAt: new Date() },
+      { _id: id, status: fromStatus },
+      {
+        status,
+        adminNote: (adminNote || "").trim(),
+        processedAt: new Date(),
+        // 환불은 봇이 디스코드 역할을 떼야 끝난다 — roleDetached 를 내려 큐가 집어 가게 한다
+        ...(status === "refunded" ? { revokedAt: new Date(), roleDetached: false } : {}),
+      },
       { new: true }
     );
     if (!purchase) {
@@ -63,7 +74,7 @@ export async function PATCH(request) {
     //    📌 price 는 쿠폰 적용 전 정가라 그대로 돌려주면 과다 환불이 된다.
     //       실제 결제한 금액(paidXp/paidPoint)을 그 지갑으로 되돌린다.
     //       옛 기록에는 두 필드가 없으므로 그때만 price 로 떨어진다.
-    if (status === "cancelled") {
+    if (status === "cancelled" || status === "refunded") {
       const hasSplit = (purchase.paidXp || 0) > 0 || (purchase.paidPoint || 0) > 0;
       const backXp = hasSplit ? purchase.paidXp || 0 : purchase.price || 0;
       const backPoint = hasSplit ? purchase.paidPoint || 0 : 0;

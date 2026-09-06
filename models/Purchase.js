@@ -27,7 +27,7 @@ const PurchaseSchema = new mongoose.Schema({
   siteOnlyAt: { type: Date, default: null },
   // 봇이 디스코드 역할을 실제로 뗐는지 (사이트가 표시를 바꾼 시점과 다를 수 있다)
   roleDetached: { type: Boolean, default: false },
-  status: { type: String, default: "pending", index: true }, // pending | completed | expired | cancelled
+  status: { type: String, default: "pending", index: true }, // pending | completed | expired | cancelled | refunded(완료 후 관리자 환불)
   contact: { type: String, default: "" },   // 실물 상품 수령 정보 (구매자 입력)
   adminNote: { type: String, default: "" }, // 운송장 번호 등
   error: { type: String, default: "" },     // 역할 지급 실패 사유

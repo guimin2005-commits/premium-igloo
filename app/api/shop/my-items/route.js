@@ -69,7 +69,7 @@ export async function GET() {
     const seenRoles = new Set();
 
     for (const p of purchases) {
-      if (p.status === "cancelled") continue;
+      if (p.status === "cancelled" || p.status === "refunded") continue;
       const item = items.find((i) => String(i._id) === p.itemId);
       const isRole = p.itemType === "role" || p.itemType === "perk";
       let status = p.status; // pending | completed | expired

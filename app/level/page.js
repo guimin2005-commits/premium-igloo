@@ -1332,7 +1332,10 @@ export default function LevelPage() {
     <div className="w-full px-5 md:px-8 pt-5 pb-3">
       {/* 정렬은 탭마다 바뀌지 않는다 — ARCTIC 으로 넘어갈 때 카테고리가 좌우로 튀면 안 된다 */}
       <div className="max-w-7xl mx-auto flex items-center justify-center">
-        <div className="min-w-0 flex gap-2 overflow-x-auto no-bar">
+        {/* ⚠️ min-w-0 만 주면 justify-center 부모 안에서 폭이 0 으로 접히고, 활성 탭을 가운데로
+            미는 스크롤이 첫 탭(내 대시보드)을 왼쪽으로 잘라 클릭이 안 된다.
+            내용만큼 커지되 부모 폭을 넘기면(max-w-full) 그때만 가로 스크롤한다. */}
+        <div className="max-w-full flex gap-2 overflow-x-auto no-bar">
           {MAIN_TABS.filter((t) => (!t.shopOnly || canSeeShop) && (!t.passOnly || passEnabled)).map((tab) => {
             const active = activeMainTab === tab.id;
             return (

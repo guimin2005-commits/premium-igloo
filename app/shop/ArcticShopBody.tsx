@@ -552,6 +552,27 @@ export default function ArcticShopBody({
   // 적용 중인 필터 개수 (모바일 필터 버튼 배지용)
   const activeFilterCount = (priceFilter !== "all" ? 1 : 0) + (inStockOnly ? 1 : 0) + (affordableOnly ? 1 : 0);
 
+  // 소지 칩 — 시즌 칩과 같은 문법. XP·POINT 는 쓰는 돈이라 진하게, 레벨은 상태라 흐리게.
+  //    히어로(홈)에서는 시즌 칩 아래 가운데, 다른 화면(장바구니·상세)에서는 오른쪽 위에 조용히.
+  //    카드·띠로 감싸지 않는다 — 앞서 헤더 아래 헤어라인 띠로 뒀더니 동떨어진 줄처럼 보였다.
+  const walletChips = (justify: "center" | "end") =>
+    isLoggedIn ? (
+      <div className={`flex flex-wrap items-center gap-2 ${justify === "center" ? "justify-center mt-3.5" : "justify-end"}`}>
+        <span className="inline-flex items-baseline gap-1.5 px-3 py-1 rounded-full bg-white border border-[#dedddb]">
+          <span className="text-[13px] font-black text-[#131313] tabular-nums leading-none">{(myXp ?? 0).toLocaleString()}</span>
+          <span className="text-[10px] font-black text-[#e91e3f] leading-none">XP</span>
+        </span>
+        <span className="inline-flex items-baseline gap-1.5 px-3 py-1 rounded-full bg-white border border-[#dedddb]">
+          <span className="text-[13px] font-black text-[#131313] tabular-nums leading-none">{(myPoint ?? 0).toLocaleString()}</span>
+          <span className="text-[10px] font-black text-[#3f9e93] leading-none">P</span>
+        </span>
+        <span className="inline-flex items-baseline gap-1 px-2.5 py-1 rounded-full text-[#8a8a8a]">
+          <span className="text-[10px] font-black leading-none">Lv</span>
+          <span className="text-[12px] font-black tabular-nums leading-none">{myLevel ?? 0}</span>
+        </span>
+      </div>
+    ) : null;
+
   const canAfford = (p: number) => isAdmin || (myXp != null && myXp >= p);
   const chip = (active: boolean) =>
     `px-3.5 py-1.5 rounded-full text-[12px] font-bold border transition-colors ${
@@ -893,27 +914,8 @@ export default function ArcticShopBody({
 
       {topSlot}
 
-      {/* ── 지갑 ── 헤더 툴바에서 빼내 자기 줄을 준다.
-             카드로 감싸지 않고 헤어라인 한 줄로만 구획한다 (비로그인은 아예 없음) */}
-      {isLoggedIn && (
-        <div className="w-full border-b border-black/[0.08]">
-          <div className="max-w-7xl mx-auto px-5 md:px-8 py-3 md:py-4 flex items-center gap-3 sm:gap-5">
-            {/* XP·POINT 는 쓰는 돈이라 크게, 레벨은 상태라 작게 — 셋이 같은 크기면 볼 곳이 없다 */}
-            <span className="flex items-baseline gap-1.5 min-w-0">
-              <span className="text-[18px] sm:text-[22px] font-black text-[#131313] tabular-nums leading-none">{(myXp ?? 0).toLocaleString()}</span>
-              <span className="text-[11px] sm:text-[12px] font-black text-[#e91e3f] leading-none">XP</span>
-            </span>
-            <span aria-hidden className="w-px h-4 sm:h-5 bg-[#d2d1cf] shrink-0"></span>
-            <span className="flex items-baseline gap-1.5 min-w-0">
-              <span className="text-[18px] sm:text-[22px] font-black text-[#131313] tabular-nums leading-none">{(myPoint ?? 0).toLocaleString()}</span>
-              <span className="text-[11px] sm:text-[12px] font-black text-[#3f9e93] leading-none">P</span>
-            </span>
-            <span className="ml-auto flex items-baseline gap-1 shrink-0">
-              <span className="text-[10px] font-black text-[#a3a3a3] leading-none">Lv</span>
-              <span className="text-[13px] font-black text-[#5a5a5a] tabular-nums leading-none">{myLevel ?? 0}</span>
-            </span>
-          </div>
-        </div>
+      {view !== "home" && isLoggedIn && (
+        <div className="max-w-7xl mx-auto px-5 md:px-8 pt-4">{walletChips("end")}</div>
       )}
 
       {/* ── 홈 · 브랜드 ── */}
@@ -936,6 +938,8 @@ export default function ArcticShopBody({
                 <span className="text-[11px] font-black text-[#131313] bg-black/5 border border-black/10 px-2.5 py-1 rounded-full">종료까지 D-{seasonDday.days}</span>
               )}
             </div>
+
+            {walletChips("center")}
 
             {/* 관리자에게만 보이는 상품 관리 진입점 */}
             {isAdmin && (

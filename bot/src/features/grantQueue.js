@@ -203,6 +203,47 @@ async function processExpiries(guild) {
 //    사이트가 siteOnly를 세운 구매 건의 디스코드 역할만 뗀다.
 //    회수가 아니다 — 소유도 인벤토리도 그대로라 DM은 보내지 않는다.
 //    (잃은 게 없는데 알림이 가면 뺏긴 줄 안다. 기록은 로그로만 남긴다)
+// ── 환불 역할 회수 ────────────────────────────
+//    관리자가 완료된 구매를 환불하면 XP·POINT 는 사이트가 바로 돌려주지만
+//    디스코드 역할은 봇만 뗄 수 있다. 만료와 같은 alive 검사를 거쳐 회수한다.
+async function processRefunds(guild) {
+  const rows = await Purchase.find({ status: "refunded", roleDetached: { $ne: true } })
+    .sort({ revokedAt: 1 })
+    .limit(50);
+
+  for (const p of rows) {
+    try {
+      const hasRole = p.roleId && ["role", "perk", "item"].includes(p.itemType);
+      if (hasRole) {
+        const member = await fetchMember(guild, p.userId);
+        if (member) {
+          // 같은 역할을 정당하게 주는 다른 구매가 살아 있으면 남긴다 (만료 처리와 같은 기준)
+          const alive = await Purchase.findOne({
+            userId: p.userId,
+            roleId: p.roleId,
+            status: "completed",
+            siteOnly: { $ne: true },
+            _id: { $ne: p._id },
+            $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+          }).lean();
+          if (!alive) {
+            await member.roles.remove(p.roleId, `ARCTIC 환불: ${p.itemName}`);
+            member.send(`↩️ **${p.itemName}** 구매가 환불되어 역할이 회수되었습니다. 결제한 XP·POINT 는 돌려드렸습니다.`).catch(() => {});
+          }
+        }
+      }
+      p.roleDetached = true;
+      p.error = "";
+      await p.save();
+      console.log(`↩️ 환불 역할 회수: ${p.userName} → ${p.itemName}`);
+    } catch (e) {
+      p.error = e.message;
+      await p.save();
+      console.error(`↩️ 환불 역할 회수 실패 (${p.userName} / ${p.itemName}):`, e.message);
+    }
+  }
+}
+
 async function processDetachments(guild) {
   // 정렬 키 조합으로 head-of-line blocking 을 막는다.
   //  · error 오름차순 — 빈 문자열("")·필드 없음이 먼저라 아직 시도 안 한 건이 앞에 온다.
@@ -305,6 +346,7 @@ async function tick(client) {
     if (!guild) return;
     await processPurchases(guild);
     await processExpiries(guild);
+    await processRefunds(guild);
     await processDetachments(guild);
     await processPayouts(guild);
     await processCodeGrants(guild);

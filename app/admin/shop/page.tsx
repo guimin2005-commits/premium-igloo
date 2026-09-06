@@ -42,7 +42,7 @@ const TAB_ORDER = [
   { id: "season", short: "시즌 전환" },
 ];
 
-const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "완료", cancelled: "취소" };
+const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "완료", cancelled: "취소", refunded: "환불" };
 
 // 상품 유형 — 라벨과 배지 색을 실제 상점(ArcticShopBody 의 TYPE_BADGE)과 맞춘다.
 // 관리자 쪽에서만 '아이템'을 '역할'로 적어 두면 카드 미리보기가 거짓말을 한다.
@@ -304,13 +304,13 @@ export default function AdminShopPage() {
     setDeleteTarget(null);
   };
 
-  const processOrder = async (id: string, newStatus: "completed" | "cancelled", note = "") => {
+  const processOrder = async (id: string, newStatus: "completed" | "cancelled" | "refunded", note = "") => {
     const res = await fetch("/api/shop/orders", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, status: newStatus, adminNote: note }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    if (res?.ok && d?.success) { fetchAll(); notify(newStatus === "completed" ? "발송 처리했습니다." : "취소하고 XP를 환불했습니다."); }
+    if (res?.ok && d?.success) { fetchAll(); notify(newStatus === "completed" ? "발송 처리했습니다." : newStatus === "refunded" ? "환불했습니다. 디스코드 역할은 봇이 1분 안에 회수합니다." : "취소하고 환불했습니다."); }
     else notify(d?.message || "처리에 실패했습니다.", true);
     setNoteTarget(null); setNoteText(""); setCancelTarget(null);
   };
@@ -920,7 +920,7 @@ export default function AdminShopPage() {
             {/* 필터는 제목 옆이 아니라 아래 한 줄로 — 좁은 화면에서 제목과 서로 밀지 않는다 */}
             <FilterChips
               className="mb-5"
-              options={[{ v: "", l: "전체" }, { v: "pending", l: `대기 ${pendingCount}` }, { v: "completed", l: "완료" }, { v: "cancelled", l: "취소" }]}
+              options={[{ v: "", l: "전체" }, { v: "pending", l: `대기 ${pendingCount}` }, { v: "completed", l: "완료" }, { v: "cancelled", l: "취소" }, { v: "refunded", l: "환불" }]}
               value={orderFilter}
               onChange={setOrderFilter}
             />
@@ -934,7 +934,7 @@ export default function AdminShopPage() {
                       <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                         <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 w-fit ${
                           o.status === "completed" ? "bg-emerald-500/15 text-emerald-700"
-                          : o.status === "cancelled" ? "bg-red-500/15 text-red-600"
+                          : o.status === "cancelled" || o.status === "refunded" ? "bg-red-500/15 text-red-600"
                           : "bg-[#e91e3f] text-white"}`}>
                           {STATUS_LABEL[o.status]}
                         </span>
@@ -947,6 +947,11 @@ export default function AdminShopPage() {
                           <span className="text-[11px] text-[#5a5a5a]">{fmtDateTime(o.createdAt)}</span>
                           {o.error && <span className="text-[11px] font-bold text-red-600">지급 실패: {o.error}</span>}
                         </div>
+                        {o.status === "completed" && o.itemType !== "physical" && (
+                          <div className="flex gap-4 shrink-0">
+                            <button onClick={() => setCancelTarget(o)} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">환불</button>
+                          </div>
+                        )}
                         {o.status === "pending" && (
                           <div className="flex gap-4 shrink-0">
                             {o.itemType === "physical" && (
@@ -1046,16 +1051,24 @@ export default function AdminShopPage() {
       <ConfirmDialog
         open={!!cancelTarget}
         danger
-        title="구매 취소 · 환불"
-        confirmLabel="취소하고 환불"
+        title={cancelTarget?.status === "completed" ? "환불" : "구매 취소 · 환불"}
+        confirmLabel={cancelTarget?.status === "completed" ? "환불" : "취소하고 환불"}
         body={cancelTarget ? (
           <>
             <span className="block font-bold text-[#131313]">{cancelTarget.itemName}</span>
-            <span className="block mb-3">{cancelTarget.userName} · {(cancelTarget.price || 0).toLocaleString()} XP</span>
-            XP를 환불하고 재고를 되돌립니다. 되돌리려면 유저가 다시 구매해야 합니다.
+            <span className="block mb-3">
+              {cancelTarget.userName} · {
+                (cancelTarget.paidXp || 0) > 0 || (cancelTarget.paidPoint || 0) > 0
+                  ? [cancelTarget.paidXp > 0 && `${cancelTarget.paidXp.toLocaleString()} XP`, cancelTarget.paidPoint > 0 && `${cancelTarget.paidPoint.toLocaleString()} P`].filter(Boolean).join(" + ")
+                  : `${(cancelTarget.price || 0).toLocaleString()} XP`
+              } 환불
+            </span>
+            {cancelTarget.status === "completed"
+              ? "결제한 XP·POINT를 돌려주고 디스코드 역할은 봇이 회수합니다."
+              : "결제한 XP·POINT를 돌려주고 재고를 되돌립니다."}
           </>
         ) : null}
-        onConfirm={() => cancelTarget && processOrder(cancelTarget._id, "cancelled")}
+        onConfirm={() => cancelTarget && processOrder(cancelTarget._id, cancelTarget.status === "completed" ? "refunded" : "cancelled")}
         onCancel={() => setCancelTarget(null)}
       />
 
