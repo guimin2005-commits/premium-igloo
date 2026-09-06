@@ -58,11 +58,26 @@ export async function PATCH(request) {
       return NextResponse.json({ success: false, message: "이미 처리된 구매입니다." }, { status: 409 });
     }
 
-    // 취소 시 XP 환불 + 재고 복구 (환불로 레벨이 다시 올라갈 수 있다)
+    // 취소 시 환불 + 재고 복구 (환불로 레벨이 다시 올라갈 수 있다)
+    //    📌 price 는 쿠폰 적용 전 정가라 그대로 돌려주면 과다 환불이 된다.
+    //       실제 결제한 금액(paidXp/paidPoint)을 그 지갑으로 되돌린다.
+    //       옛 기록에는 두 필드가 없으므로 그때만 price 로 떨어진다.
     if (status === "cancelled") {
-      await UserXp.updateOne({ userId: purchase.userId }, { $inc: { xp: purchase.price } });
-      const refunded = await UserXp.findOne({ userId: purchase.userId }, { xp: 1 }).lean();
-      await UserXp.updateOne({ userId: purchase.userId }, { $set: { level: getLevelByXp(refunded?.xp ?? 0) } });
+      const hasSplit = (purchase.paidXp || 0) > 0 || (purchase.paidPoint || 0) > 0;
+      const backXp = hasSplit ? purchase.paidXp || 0 : purchase.price || 0;
+      const backPoint = hasSplit ? purchase.paidPoint || 0 : 0;
+      const inc = {};
+      if (backXp) inc.xp = backXp;
+      if (backPoint) inc.point = backPoint;
+      if (Object.keys(inc).length) await UserXp.updateOne({ userId: purchase.userId }, { $inc: inc });
+      if (backXp) {
+        // XP 가 돌아오면 레벨이 오를 수 있다 — 봇이 보상 역할을 다시 맞추도록 표시한다
+        const refunded = await UserXp.findOne({ userId: purchase.userId }, { xp: 1 }).lean();
+        await UserXp.updateOne(
+          { userId: purchase.userId },
+          { $set: { level: getLevelByXp(refunded?.xp ?? 0), needsRoleSync: true } }
+        );
+      }
       await ShopItem.updateOne(
         { _id: purchase.itemId, stock: { $gte: 0 } },
         { $inc: { stock: 1, soldCount: -1 } }

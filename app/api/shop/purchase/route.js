@@ -29,7 +29,8 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "아직 공개되지 않은 상점입니다." }, { status: 403 });
     }
 
-    const { itemId, contact, days: rawDays } = await request.json();
+    const body = await request.json();
+    const { itemId, contact, days: rawDays } = body;
     if (!itemId) {
       return NextResponse.json({ success: false, message: "상품이 지정되지 않았습니다." }, { status: 400 });
     }
@@ -76,14 +77,18 @@ export async function POST(request) {
       await ShopItem.updateOne({ _id: item._id }, { $inc: { soldCount: 1 } });
     }
 
-    // 2) XP 차감 — XP는 화폐이므로 쓰면 레벨도 함께 내려간다.
+    // 2) 잔액 차감 — 주문 단위로 결제 수단을 고른다. 두 화폐는 1:1 등가라
+    //    가격은 하나를 공유하고 어느 지갑에서 빼느냐만 다르다.
+    //    XP 는 화폐이므로 쓰면 레벨도 내려가지만 POINT 는 레벨과 무관하다.
     //    잔액이 충분할 때만 매치되는 원자적 갱신 (중복 구매·마이너스 방지)
     //    📌 관리자는 잔액 검사를 건너뛰고 소모도 하지 않는다 (테스트 구매)
     const price = salePrice(item, days);
+    const payMethod = body?.payMethod === "point" ? "point" : "xp";
+    const field = payMethod === "point" ? "point" : "xp";
     const charged = isAdmin ? 0 : price;
     const paid = await UserXp.updateOne(
-      isAdmin ? { userId } : { userId, xp: { $gte: price } },
-      { $inc: { xp: -charged }, $set: { updatedAt: new Date() } },
+      isAdmin ? { userId } : { userId, [field]: { $gte: price } },
+      { $inc: { [field]: -charged }, $set: { updatedAt: new Date() } },
       isAdmin ? { upsert: true } : {}
     );
     if (!paid.matchedCount && !paid.upsertedCount) {
@@ -92,7 +97,10 @@ export async function POST(request) {
         ? { $inc: { stock: 1, soldCount: -1 } }
         : { $inc: { soldCount: -1 } };
       await ShopItem.updateOne({ _id: item._id }, rollback);
-      return NextResponse.json({ success: false, message: "보유 XP가 부족합니다." }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: payMethod === "point" ? "보유 POINT가 부족합니다." : "보유 XP가 부족합니다." },
+        { status: 400 }
+      );
     }
 
     // 3) 구매 기록 (봇/관리자가 처리할 대기 건)
@@ -104,6 +112,9 @@ export async function POST(request) {
       itemType: item.type,
       roleId: item.roleId || "",
       price,
+      payMethod,
+      paidXp: payMethod === "xp" ? charged : 0,
+      paidPoint: payMethod === "point" ? charged : 0,
       days,
       // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다
       expiresAt: days > 0 ? new Date(Date.now() + days * 86400000) : null,
