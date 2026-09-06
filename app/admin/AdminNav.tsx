@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
-import { ADMIN_USERS } from "@/lib/admins";
+// 관리자 판정은 공용 가드 하나만 쓴다 — 여기서 ADMIN_USERS 를 또 뒤지면 규칙이 두 곳으로 갈라진다
+import { useAdminGuard } from "./ui";
 
 // 📌 관리자 영역 공용 좌측 패널 — /admin 하위 전 페이지에 표시 (layout.tsx에서 사용)
 //    하위 카테고리가 있는 항목은 트리로 표시, 모바일에서는 상단 가로 스크롤 칩 바로 변형
@@ -37,18 +37,16 @@ const NAV_GROUPS: NavGroup[] = [
       { title: "대회 룸", href: "/admin/room" },
       { title: "경매 목록", href: "/auction" },
       {
+        // 📌 9탭 → 4탭 재편 (2026-09). 채널·부스트·퀘스트·인벤토리 역할은 성격별로
+        //    정책 / 역할 / 콘텐츠 안으로 접혔고, XP 수동 지급과 XP 로그는 '지급·내역' 하나로 합쳤다.
+        //    리더보드는 유저 화면 /level?tab=rank 가 상위호환이라 관리자 쪽에서 뺐다.
         title: "레벨 대시보드",
         href: "/admin/bot",
         children: [
-          { title: "기본 정책", href: "/admin/bot?tab=settings" },
-          { title: "역할 설정", href: "/admin/bot?tab=roles" },
-          { title: "채널·카테고리", href: "/admin/bot?tab=channels" },
-          { title: "기간제 부스트", href: "/admin/bot?tab=boosts" },
-          { title: "퀘스트", href: "/admin/bot?tab=quests" },
-          { title: "인벤토리 역할", href: "/admin/bot?tab=inventory" },
-          { title: "XP 수동 지급", href: "/admin/bot?tab=grant" },
-          { title: "리더보드", href: "/admin/bot?tab=leaderboard" },
-          { title: "XP 로그", href: "/admin/bot?tab=logs" },
+          { title: "정책", href: "/admin/bot?tab=policy" },
+          { title: "역할", href: "/admin/bot?tab=roles" },
+          { title: "콘텐츠", href: "/admin/bot?tab=content" },
+          { title: "지급·내역", href: "/admin/bot?tab=ledger" },
         ],
       },
       {
@@ -59,6 +57,8 @@ const NAV_GROUPS: NavGroup[] = [
           { title: "이미지 배너", href: "/admin/shop?tab=banners" },
           { title: "쿠폰 관리", href: "/admin/shop?tab=coupons" },
           { title: "구매 내역", href: "/admin/shop?tab=orders" },
+          // 모바일 칩 바는 부모를 빼고 children 만 펼치므로, 여기 없으면 시즌 전환으로 갈 길이 없다
+          { title: "시즌 전환", href: "/admin/shop?tab=season" },
         ],
       },
     ],
@@ -66,10 +66,10 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 export default function AdminNav() {
-  const { data: session, status } = useSession();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  // gate 는 쓰지 않는다 — 내비는 권한이 없으면 자리 자체를 비운다 (본문 화면이 안내를 낸다)
+  const { isAdmin } = useAdminGuard();
 
   if (!isAdmin) return null;
 
@@ -81,8 +81,10 @@ export default function AdminNav() {
     const want = new URLSearchParams(query || "");
     const wantTab = want.get("tab");
     if (wantTab != null) {
-      const defaultTab = path === "/admin/shop" ? "items" : "settings";
-      return (searchParams.get("tab") || defaultTab) === wantTab;
+      // ?tab 없이 들어와도 첫 탭이 활성으로 보이도록 화면별 기본 탭을 알고 있어야 한다.
+      // 각 화면이 정하는 값이라, 그 화면의 탭 id 가 바뀌면 여기도 같이 고쳐야 한다.
+      const DEFAULT_TAB: Record<string, string> = { "/admin/shop": "items", "/admin/bot": "policy" };
+      return (searchParams.get("tab") || DEFAULT_TAB[path]) === wantTab;
     }
 
     const wantCategory = want.get("category");

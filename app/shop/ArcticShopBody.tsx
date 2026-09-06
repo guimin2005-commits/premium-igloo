@@ -56,6 +56,57 @@ const PRICE_RANGES = [
 
 const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "지급 완료", cancelled: "취소됨" };
 
+// 📌 관리자 상품 폼 묶음 — 기간·시즌 항목이 붙으면서 폼이 화면보다 길어졌다.
+//    접힌 상태에서도 값을 알 수 있게 한 줄 요약을 오른쪽에 남긴다.
+//    (컴포넌트를 본문 안에서 정의하면 입력할 때마다 새로 마운트돼 포커스를 잃는다 — 모듈 최상단에 둔다)
+function FormGroup({ title, summary, open, onToggle, children }: {
+  title: string;
+  summary?: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-b border-black/[0.08]">
+      <button type="button" onClick={onToggle} className="w-full flex items-center justify-between gap-3 py-3.5 text-left">
+        <span className="text-[13px] font-black text-[#131313] shrink-0">{title}</span>
+        <span className="flex items-center gap-2 min-w-0">
+          {/* min-w-0 이 없으면 flex 안에서 줄어들지 못해 truncate 가 안 걸린다 */}
+          {!open && summary && <span className="min-w-0 text-[11px] text-[#8a8a8a] truncate">{summary}</span>}
+          <svg className={`w-3.5 h-3.5 shrink-0 text-[#a3a3a3] transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+            fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </span>
+      </button>
+      {open && (
+        <div className="pb-5 space-y-4" style={{ animation: "menuDrop 0.22s cubic-bezier(0.16,1,0.3,1)" }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 관리자 폼 입력칸 공통 모양
+const F_LABEL = "block text-xs font-bold text-[#4b4b4b] mb-2";
+const F_INPUT = "w-full bg-white border border-[#dedddb] rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]";
+const F_INPUT_SM = "w-full bg-white border border-[#dedddb] rounded-lg px-3 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]";
+const F_NOTE = "text-[10px] text-[#8a8a8a] mt-1.5";
+
+// 판매 상태 · 기간제 · 시즌 동작이 같은 모양을 쓴다
+function FormToggle({ on, onClick, onLabel, offLabel }: { on: boolean; onClick: () => void; onLabel: string; offLabel: string }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-sm transition-colors ${on ? "border-[#e91e3f] bg-[#e91e3f]/[0.06]" : "border-[#dedddb] bg-white"}`}>
+      <span className={on ? "font-bold text-[#e91e3f]" : "text-[#8a8a8a]"}>{on ? onLabel : offLabel}</span>
+      <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${on ? "bg-[#e91e3f]" : "bg-[#d2d1cf]"}`}>
+        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? "left-[18px]" : "left-0.5"}`}></span>
+      </span>
+    </button>
+  );
+}
+
 export default function ArcticShopBody({
   embedded = false,
   topSlot = null,
@@ -288,11 +339,33 @@ export default function ArcticShopBody({
   }, [banners.length]);
 
   // 관리자 — 상점 안에서 바로 상품 추가·수정
-  const EMPTY_ITEM = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", roleName: "", price: "", discountPct: "", stock: "", sortOrder: "", active: true, detachOnSeason: false };
+  const EMPTY_ITEM = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", roleName: "", price: "", discountPct: "", stock: "", sortOrder: "", active: true, detachOnSeason: false, timed: false, price7: "", price30: "", priceInf: "" };
   const [editForm, setEditForm] = useState<any>(null);
   const [guildRoles, setGuildRoles] = useState<any[]>([]);
   const [isSavingItem, setIsSavingItem] = useState(false);
   const [editError, setEditError] = useState("");
+  const [openGroups, setOpenGroups] = useState({ basic: true, price: false, stock: false, season: false });
+  const toggleGroup = (k: "basic" | "price" | "stock" | "season") => setOpenGroups((p) => ({ ...p, [k]: !p[k] }));
+
+  // 📌 기간제 — 값을 매긴 기간만 판매 목록에 올린다 (days 0 = 무제한, 기간 옵션과 나란히 팔 수 있다)
+  const buildDurations = (f: any) => {
+    if (!f?.timed || f.type === "physical") return [];
+    return [
+      { days: 7, price: Math.max(0, Math.floor(Number(f.price7) || 0)) },
+      { days: 30, price: Math.max(0, Math.floor(Number(f.price30) || 0)) },
+      { days: 0, price: Math.max(0, Math.floor(Number(f.priceInf) || 0)) },
+    ].filter((d) => d.price > 0);
+  };
+
+  // 유형을 바꾸면 그 유형에 없는 설정을 함께 끈다 — 감춰진 채로 저장되면 안 된다.
+  //   기프트카드는 기간 개념이 없고, 권한은 역할이 곧 디스코드 기능이라 시즌에 떼면 기능이 사라진다.
+  const pickType = (v: string) =>
+    setEditForm((f: any) => ({
+      ...f,
+      type: v,
+      timed: v === "physical" ? false : f.timed,
+      detachOnSeason: v === "physical" || v === "perk" ? false : f.detachOnSeason,
+    }));
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -304,13 +377,30 @@ export default function ArcticShopBody({
 
   const openEdit = (it?: any) => {
     setEditError("");
+    setOpenGroups({ basic: true, price: false, stock: false, season: false });
     setEditForm(it
-      ? { id: it._id, name: it.name, description: it.description || "", imageUrl: it.imageUrl || "", type: it.type, roleId: it.roleId || "", roleName: it.roleName || "", price: String(it.price), discountPct: it.discountPct ? String(it.discountPct) : "", stock: it.stock < 0 ? "" : String(it.stock), sortOrder: String(it.sortOrder || 0), active: it.active }
+      ? {
+          id: it._id, name: it.name, description: it.description || "", imageUrl: it.imageUrl || "", type: it.type,
+          roleId: it.roleId || "", roleName: it.roleName || "", price: String(it.price),
+          discountPct: it.discountPct ? String(it.discountPct) : "", stock: it.stock < 0 ? "" : String(it.stock),
+          sortOrder: String(it.sortOrder || 0), active: it.active,
+          // 기존 기간·시즌 설정을 입력칸으로 되돌린다 — 안 채우면 수정 저장할 때마다 조용히 꺼진다
+          timed: Array.isArray(it.durations) && it.durations.length > 0,
+          price7: String(it.durations?.find((d: any) => d.days === 7)?.price ?? ""),
+          price30: String(it.durations?.find((d: any) => d.days === 30)?.price ?? ""),
+          priceInf: String(it.durations?.find((d: any) => d.days === 0)?.price ?? ""),
+          detachOnSeason: !!it.detachOnSeason,
+        }
       : { ...EMPTY_ITEM });
   };
 
   const saveItem = async () => {
     if (!editForm || isSavingItem) return;
+    const durations = buildDurations(editForm);
+    if (editForm.timed && editForm.type !== "physical" && durations.length === 0) {
+      setEditError("기간 가격을 하나 이상 입력해주세요.");
+      return;
+    }
     setIsSavingItem(true);
     setEditError("");
     try {
@@ -318,7 +408,7 @@ export default function ArcticShopBody({
       const res = await fetch("/api/shop/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...editForm, roleName: role?.name || editForm.roleName || "" }),
+        body: JSON.stringify({ ...editForm, roleName: role?.name || editForm.roleName || "", durations }),
       });
       const d = await res.json();
       if (res.ok && d.success) {
@@ -479,17 +569,9 @@ export default function ArcticShopBody({
       <div className={`w-full flex-1 bg-[#f4f3f2] text-[#131313] ${embedded ? "py-24" : "min-h-screen"} flex items-center justify-center px-6`}>
         {/* break-keep을 주지 않으면 한국어가 단어 중간에서 잘려 내려간다 */}
         <div className="text-center max-w-md break-keep">
-          <div className="flex items-center justify-center gap-3 mb-5">
-            <span className="w-8 h-px bg-[#e91e3f]"></span>
-            <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Coming Soon</span>
-            <span className="w-8 h-px bg-[#e91e3f]"></span>
-          </div>
           <h1 className="text-3xl font-black tracking-tighter mb-3">ARCTIC 준비 중</h1>
-          <p className="text-sm text-[#4b4b4b] leading-relaxed mb-8">
-            쌓아온 XP로 역할과 혜택을 교환할 수 있는 상점을 준비하고 있습니다.
-            <br />
-            오픈 소식은 공지사항으로 안내드릴게요.
-          </p>
+          {/* 오픈 시점은 화면에 없는 정보라 이 한 줄만 남긴다 */}
+          <p className="text-sm text-[#4b4b4b] leading-relaxed mb-8">오픈 소식은 공지사항으로 안내드릴게요.</p>
           <Link href="/level" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
             SYSTEM : LEVEL 보러가기
           </Link>
@@ -652,6 +734,18 @@ export default function ArcticShopBody({
     );
   };
 
+  // 접힌 묶음에서도 값을 알 수 있게 만드는 한 줄 요약 (editForm 이 없으면 폼도 안 그린다)
+  const efDiscount = Math.min(100, Math.max(0, Number(editForm?.discountPct) || 0));
+  const efSale = Math.max(0, Math.floor(((Number(editForm?.price) || 0) * (100 - efDiscount)) / 100));
+  const efDurations = buildDurations(editForm);
+  const efRoleName = guildRoles.find((r) => r.id === editForm?.roleId)?.name || editForm?.roleName || "";
+  const efBasicSummary = [editForm?.name || "이름 없음", TYPE_BADGE[editForm?.type]?.label, efRoleName].filter(Boolean).join(" · ");
+  const efPriceSummary = Number(editForm?.price) > 0
+    ? `${efSale.toLocaleString()} XP${efDiscount > 0 ? ` (-${efDiscount}%)` : ""}${editForm?.timed ? ` · 기간제 ${efDurations.length}종` : ""}`
+    : "가격 미입력";
+  const efStockSummary = `${editForm?.stock === "" ? "재고 무제한" : `재고 ${editForm?.stock}`} · 추천 ${editForm?.sortOrder || 0} · ${editForm?.active ? "판매 중" : "숨김"}`;
+  const efSeasonSummary = editForm?.detachOnSeason ? "시즌 바뀌면 디스코드 표기 뗌" : "디스코드 역할 계속 유지";
+
   return (
     <div className={`w-full flex-1 bg-[#f4f3f2] text-[#131313] ${embedded ? "" : "min-h-screen"}`}>
       {/* ── ARCTIC 전용 헤더 — 스크롤하면 알약 독으로 좁아진다 ── */}
@@ -694,7 +788,7 @@ export default function ArcticShopBody({
             )}
 
             {!shopPublic && isAdmin && (
-              <Link href="/admin/bot?tab=settings" title="비공개 상태입니다 · 눌러서 공개 전환"
+              <Link href="/admin/bot?tab=policy&sec=mute" title="비공개 상태입니다 · 눌러서 공개 전환"
                 className="group/dot relative flex items-center shrink-0">
                 <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>
                 <span className="absolute left-0 w-2 h-2 rounded-full bg-[#e91e3f] animate-ping opacity-60"></span>
@@ -739,23 +833,8 @@ export default function ArcticShopBody({
 
             {isLoggedIn ? (
               <>
-
-                {/* 소지 — 우측 하단 카드를 없앤 대신 헤더에서 늘 보이게 한다.
-                    XP · 레벨을 한 알약에 담고, 좁은 화면에서는 XP 만 남긴다. */}
-                <span className="inline-flex items-center h-9 rounded-full border border-[#dedddb] bg-white shrink-0 overflow-hidden">
-                  <span className="inline-flex items-baseline gap-1 px-2.5 text-[11px] font-black text-[#131313] tabular-nums">
-                    {(myXp ?? 0).toLocaleString()}
-                    <span className="text-[10px] font-black text-[#e91e3f]">XP</span>
-                  </span>
-                  <span className="inline-flex items-baseline gap-1 px-2.5 border-l border-[#dedddb] text-[11px] font-black text-[#131313] tabular-nums">
-                    {(myPoint ?? 0).toLocaleString()}
-                    <span className="text-[10px] font-black text-[#3f9e93]">P</span>
-                  </span>
-                  <span className="hidden sm:inline-flex items-baseline gap-1 h-full items-center px-2.5 border-l border-[#dedddb] text-[11px] font-black text-[#5a5a5a] tabular-nums">
-                    Lv
-                    <span className="text-[#131313]">{myLevel ?? 0}</span>
-                  </span>
-                </span>
+                {/* 📌 소지(XP·POINT·레벨)는 여기 있던 알약에서 헤더 아래 지갑 줄로 옮겼다 —
+                    검색·쿠폰함·장바구니는 '도구'고 소지는 '정보'라 한 줄에 섞이면 둘 다 읽히지 않는다 */}
 
                 {/* 쿠폰함 */}
                 <button onClick={() => setShowCoupons(true)} aria-label="쿠폰함" title="쿠폰함"
@@ -813,6 +892,29 @@ export default function ArcticShopBody({
       </div>
 
       {topSlot}
+
+      {/* ── 지갑 ── 헤더 툴바에서 빼내 자기 줄을 준다.
+             카드로 감싸지 않고 헤어라인 한 줄로만 구획한다 (비로그인은 아예 없음) */}
+      {isLoggedIn && (
+        <div className="w-full border-b border-black/[0.08]">
+          <div className="max-w-7xl mx-auto px-5 md:px-8 py-3 md:py-4 flex items-center gap-3 sm:gap-5">
+            {/* XP·POINT 는 쓰는 돈이라 크게, 레벨은 상태라 작게 — 셋이 같은 크기면 볼 곳이 없다 */}
+            <span className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-[18px] sm:text-[22px] font-black text-[#131313] tabular-nums leading-none">{(myXp ?? 0).toLocaleString()}</span>
+              <span className="text-[11px] sm:text-[12px] font-black text-[#e91e3f] leading-none">XP</span>
+            </span>
+            <span aria-hidden className="w-px h-4 sm:h-5 bg-[#d2d1cf] shrink-0"></span>
+            <span className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-[18px] sm:text-[22px] font-black text-[#131313] tabular-nums leading-none">{(myPoint ?? 0).toLocaleString()}</span>
+              <span className="text-[11px] sm:text-[12px] font-black text-[#3f9e93] leading-none">P</span>
+            </span>
+            <span className="ml-auto flex items-baseline gap-1 shrink-0">
+              <span className="text-[10px] font-black text-[#a3a3a3] leading-none">Lv</span>
+              <span className="text-[13px] font-black text-[#5a5a5a] tabular-nums leading-none">{myLevel ?? 0}</span>
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ── 홈 · 브랜드 ── */}
       {view === "home" && (<>
@@ -923,10 +1025,6 @@ export default function ArcticShopBody({
       <section className="max-w-7xl mx-auto px-5 md:px-8 pt-14">
         <div className="flex items-end justify-between gap-4 mb-6">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <span className="w-6 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.35em] text-[#8a8a8a] uppercase">Recommended</span>
-            </div>
             <h2 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">추천 상품</h2>
           </div>
           <button onClick={() => goProducts("all")} className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors shrink-0">더 보기</button>
@@ -945,10 +1043,8 @@ export default function ArcticShopBody({
         {/* 전체 상품 맛보기 — 네 개만 세워두고 아래에서 전체로 넘어간다 */}
         {!isLoading && preview.length > 0 && (
           <div className="mt-14">
-            <div className="flex items-center gap-3 mb-6">
-              <span className="w-6 h-px bg-[#131313]"></span>
-              <h2 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">전체 상품</h2>
-            </div>
+            {/* 위 '추천 상품'에서 가로선을 뺐으므로 여기도 같이 뺀다 (둘이 나란히 붙어 있다) */}
+            <h2 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight mb-6">전체 상품</h2>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
               {preview.map((it) => renderCard(it))}
             </div>
@@ -1086,8 +1182,7 @@ export default function ArcticShopBody({
           <div className="py-24 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
         ) : visible.length === 0 ? (
           <div className="py-24 text-center break-keep">
-            <p className="text-sm font-bold text-[#4b4b4b] mb-1">조건에 맞는 상품이 없습니다.</p>
-            <p className="text-xs text-[#8a8a8a]">필터를 조정하거나 다른 검색어를 입력해보세요.</p>
+            <p className="text-sm font-bold text-[#4b4b4b]">조건에 맞는 상품이 없습니다.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 lg:gap-6">
@@ -1117,10 +1212,8 @@ export default function ArcticShopBody({
             </div>
 
             <h2 className="text-base font-black text-[#131313] mb-1.5">이미 장바구니에 있는 상품입니다</h2>
-            <p className="text-[13px] text-[#5a5a5a] leading-relaxed mb-6 break-keep">
-              <span className="font-bold text-[#131313]">{cartConflict.name}</span> 은(는) 장바구니에 담겨 있어요.
-              지금 이 상품만 결제할지, 장바구니에 담은 다른 상품과 함께 결제할지 골라주세요.
-            </p>
+            {/* 무엇을 고르는지는 아래 두 버튼이 말한다 — 여기는 어떤 상품인지만 */}
+            <p className="text-[13px] font-bold text-[#131313] mb-6 break-keep">{cartConflict.name}</p>
 
             <div className="space-y-2">
               <Link href="/shop/cart"
@@ -1157,8 +1250,7 @@ export default function ArcticShopBody({
             <div className="overflow-y-auto">
               {wishRows.length === 0 ? (
                 <div className="py-16 text-center px-6 break-keep">
-                  <p className="text-sm font-bold text-[#131313] mb-1.5">찜한 상품이 없습니다</p>
-                  <p className="text-xs text-[#8a8a8a]">상품 카드의 하트를 눌러 담아보세요.</p>
+                  <p className="text-sm font-bold text-[#131313]">찜한 상품이 없습니다</p>
                 </div>
               ) : (
                 <div className="divide-y divide-[#ececea]">
@@ -1248,7 +1340,7 @@ export default function ArcticShopBody({
 
             <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden">
               <div className="px-6 pt-4 pb-2 flex items-center justify-between">
-                <span className="text-[11px] font-black tracking-[0.2em] text-[#8a8a8a] uppercase">My Coupons</span>
+                <span className="text-[12px] font-black text-[#131313]">보유 쿠폰</span>
                 {myCoupons.length > 0 && <span className="text-[11px] font-black text-[#e91e3f]">{myCoupons.length}장</span>}
               </div>
               {isLoadingCoupons ? (
@@ -1392,7 +1484,7 @@ export default function ArcticShopBody({
                     <h2 className="text-base font-black text-[#131313] truncate">{buyTarget.name}</h2>
                     <p className="text-sm font-black text-[#e91e3f] tabular-nums mt-0.5">
                       {salePrice(buyTarget, buyTarget._days).toLocaleString()} XP
-                      {buyTarget._days > 0 && <span className="text-[11px] font-bold text-[#8a8a8a] ml-1.5">/ {durationLabel(buyTarget._days)}</span>}
+                      {isTimed(buyTarget) && <span className="text-[11px] font-bold text-[#8a8a8a] ml-1.5">/ {durationLabel(buyTarget._days)}</span>}
                     </p>
                   </div>
                 </div>
@@ -1408,7 +1500,7 @@ export default function ArcticShopBody({
                     </div>
                   )}
 
-                  {buyTarget._days > 0 && (
+                  {isTimed(buyTarget) && (
                     <div className="mb-5">
                       <label className="block text-xs font-bold text-[#4b4b4b] mb-2">이용 기간</label>
                       <div className="flex gap-2">
@@ -1434,11 +1526,12 @@ export default function ArcticShopBody({
                     <div className="flex justify-between"><span className="text-[#5a5a5a]">구매 후 잔액</span><span className="font-black text-[#131313] tabular-nums">{Math.max(0, (myXp ?? 0) - salePrice(buyTarget, buyTarget._days)).toLocaleString()}</span></div>
                   </div>
 
+                  {/* 화면에 안 보이는 것만 남긴다 — 지급까지 걸리는 시간과 되돌릴 수 없다는 경고
+                      (기간 만료 회수는 위 '이용 기간' 칸이 이미 말한다) */}
                   <p className="text-[11px] text-[#8a8a8a] leading-relaxed mb-5 break-keep">
                     {buyTarget.type !== "physical"
-                      ? (buyTarget._days > 0 ? `구매 즉시 XP가 차감되며, 봇이 30초 이내에 역할을 지급합니다. ${durationLabel(buyTarget._days)} 뒤 자동으로 회수됩니다.` : "구매 즉시 XP가 차감되며, 봇이 30초 이내에 역할을 지급합니다.")
-                      : "구매 즉시 XP가 차감되며, 운영진 확인 후 순차적으로 발송됩니다."}
-                    {" "}구매 후에는 직접 취소할 수 없습니다.
+                      ? "역할은 30초 이내에 지급되며, 구매 후 취소할 수 없습니다."
+                      : "운영진 확인 후 발송되며, 구매 후 취소할 수 없습니다."}
                   </p>
 
                   <div className="flex gap-3">
@@ -1468,96 +1561,145 @@ export default function ArcticShopBody({
 
             <div className="overflow-y-auto grid grid-cols-1 md:grid-cols-2">
               {/* 좌 — 입력 폼 */}
-              <div className="p-6 space-y-4 md:border-r border-[#ececea]">
-                <div>
-                  <label className="block text-xs font-bold text-[#4b4b4b] mb-2">상품명 <span className="text-[#c62828]">*</span></label>
-                  <input type="text" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                    placeholder="예: [XP] Boost+" className="w-full bg-white border border-[#dedddb] rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
+              <div className="p-6 md:border-r border-[#ececea]">
+                <div className="border-t border-black/[0.08]">
+
+                  {/* ── 기본 정보 ── */}
+                  <FormGroup title="기본 정보" summary={efBasicSummary} open={openGroups.basic} onToggle={() => toggleGroup("basic")}>
+                    <div>
+                      <label className={F_LABEL}>상품명 <span className="text-[#c62828]">*</span></label>
+                      <input type="text" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                        placeholder="예: [XP] Boost+" className={F_INPUT} />
+                    </div>
+
+                    <div>
+                      <label className={F_LABEL}>상품 유형 <span className="text-[#c62828]">*</span></label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {[{ v: "role", l: "역할" }, { v: "perk", l: "권한" }, { v: "item", l: "아이템" }, { v: "physical", l: "기프트카드" }].map((o) => (
+                          <button key={o.v} type="button" onClick={() => pickType(o.v)}
+                            className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors ${editForm.type === o.v ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#4b4b4b] border-[#dedddb] hover:border-[#a3a3a3]"}`}>
+                            {o.l}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 아이템은 역할이 없어도 된다 — 사이트 인벤토리에만 두는 수집품도 판다 */}
+                    {(editForm.type === "role" || editForm.type === "perk" || editForm.type === "item") && (
+                      <div>
+                        <label className={F_LABEL}>
+                          지급할 역할 {editForm.type === "item" ? <span className="font-normal text-[#8a8a8a]">(선택)</span> : <span className="text-[#c62828]">*</span>}
+                        </label>
+                        <Dropdown
+                          theme="light"
+                          value={editForm.roleId}
+                          onChange={(v) => setEditForm({ ...editForm, roleId: v })}
+                          placeholder="역할을 선택하세요"
+                          options={guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))}
+                        />
+                        {editForm.type === "item" && <p className={F_NOTE}>비우면 사이트 인벤토리에만 남습니다</p>}
+                      </div>
+                    )}
+
+                    <div>
+                      <label className={F_LABEL}>상품 설명</label>
+                      <textarea rows={2} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                        placeholder="카드에 표시될 설명" className={`${F_INPUT} resize-none`} />
+                    </div>
+
+                    <div>
+                      <label className={F_LABEL}>상품 이미지 URL</label>
+                      <input type="text" value={editForm.imageUrl} onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })}
+                        placeholder="https://..." className={F_INPUT} />
+                    </div>
+                  </FormGroup>
+
+                  {/* ── 가격 · 기간 ── */}
+                  <FormGroup title="가격 · 기간" summary={efPriceSummary} open={openGroups.price} onToggle={() => toggleGroup("price")}>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={F_LABEL}>정가 <span className="text-[#c62828]">*</span></label>
+                        <input type="number" min={1} value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+                          placeholder="500000" className={F_INPUT_SM} />
+                      </div>
+                      <div>
+                        <label className={F_LABEL}>할인율 (%)</label>
+                        <input type="number" min={0} max={100} value={editForm.discountPct} onChange={(e) => setEditForm({ ...editForm, discountPct: e.target.value })}
+                          placeholder="0" className={F_INPUT_SM} />
+                      </div>
+                    </div>
+                    {efDiscount > 0 && Number(editForm.price) > 0 && (
+                      <p className="text-[11px] font-bold text-[#e91e3f]">판매가 {efSale.toLocaleString()} XP</p>
+                    )}
+
+                    {/* 📌 기간제 — 기프트카드는 기간 개념이 없어 아예 감춘다 */}
+                    {editForm.type !== "physical" && (
+                      <div>
+                        <label className={F_LABEL}>판매 방식</label>
+                        <FormToggle on={!!editForm.timed} onClick={() => setEditForm({ ...editForm, timed: !editForm.timed })}
+                          onLabel="기간제" offLabel="영구 보유" />
+                        {editForm.timed && (
+                          <>
+                            <div className="grid grid-cols-3 gap-2 mt-3">
+                              {([{ k: "price7", l: "7일" }, { k: "price30", l: "30일" }, { k: "priceInf", l: "무제한" }] as const).map(({ k, l }) => (
+                                <div key={k}>
+                                  <label className="block text-[11px] font-bold text-[#4b4b4b] mb-1.5">{l}</label>
+                                  {/* 세 칸이 나란히 서므로 좌우 여백·글자를 한 단계 줄인다
+                                      (v4 는 ! 접두 important 를 안 먹어 클래스를 따로 쓴다) */}
+                                  <input type="number" min={0} value={editForm[k]}
+                                    onChange={(e) => setEditForm({ ...editForm, [k]: e.target.value })}
+                                    placeholder="0" className="w-full bg-white border border-[#dedddb] rounded-lg px-2.5 py-3 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
+                                </div>
+                              ))}
+                            </div>
+                            {/* 값이 0이면 그 기간은 안 판다는 뜻이라, 아무것도 안 넣으면 저장이 막힌다 */}
+                            <p className={F_NOTE}>값을 넣은 기간만 판매합니다. 기간이 끝나면 봇이 역할을 회수합니다.</p>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </FormGroup>
+
+                  {/* ── 재고 · 노출 ── */}
+                  <FormGroup title="재고 · 노출" summary={efStockSummary} open={openGroups.stock} onToggle={() => toggleGroup("stock")}>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={F_LABEL}>재고</label>
+                        <input type="number" min={0} value={editForm.stock} onChange={(e) => setEditForm({ ...editForm, stock: e.target.value })}
+                          placeholder="무제한" className={F_INPUT_SM} />
+                        <p className={F_NOTE}>비우면 무제한</p>
+                      </div>
+                      <div>
+                        <label className={F_LABEL}>추천 순서</label>
+                        <input type="number" value={editForm.sortOrder} onChange={(e) => setEditForm({ ...editForm, sortOrder: e.target.value })}
+                          placeholder="0" className={F_INPUT_SM} />
+                        <p className={F_NOTE}>작을수록 상점 앞쪽</p>
+                      </div>
+                    </div>
+                    <div>
+                      <label className={F_LABEL}>판매 상태</label>
+                      <FormToggle on={!!editForm.active} onClick={() => setEditForm({ ...editForm, active: !editForm.active })}
+                        onLabel="판매 중" offLabel="숨김" />
+                    </div>
+                  </FormGroup>
+
+                  {/* ── 시즌 동작 ── 기프트카드는 시즌과 무관하고,
+                       권한은 역할이 곧 디스코드 기능이라 떼면 기능이 사라진다 — 둘 다 감춘다 */}
+                  {editForm.type !== "physical" && editForm.type !== "perk" && (
+                    <FormGroup title="시즌 동작" summary={efSeasonSummary} open={openGroups.season} onToggle={() => toggleGroup("season")}>
+                      <FormToggle on={!!editForm.detachOnSeason} onClick={() => setEditForm({ ...editForm, detachOnSeason: !editForm.detachOnSeason })}
+                        onLabel="시즌 바뀌면 디스코드 표기 뗌" offLabel="디스코드 역할 계속 유지" />
+                      <p className={F_NOTE}>표기만 내려가고 인벤토리 소유는 남습니다.</p>
+                    </FormGroup>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-[#4b4b4b] mb-2">상품 유형 <span className="text-[#c62828]">*</span></label>
-                  <div className="flex gap-2">
-                    {[{ v: "role", l: "역할" }, { v: "perk", l: "권한" }, { v: "physical", l: "기프트카드" }].map((o) => (
-                      <button key={o.v} type="button" onClick={() => setEditForm({ ...editForm, type: o.v })}
-                        className={`flex-1 py-2.5 rounded-lg text-[12px] font-bold border transition-colors ${editForm.type === o.v ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#4b4b4b] border-[#dedddb] hover:border-[#a3a3a3]"}`}>
-                        {o.l}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {(editForm.type === "role" || editForm.type === "perk") && (
-                  <div>
-                    <label className="block text-xs font-bold text-[#4b4b4b] mb-2">지급할 역할 <span className="text-[#c62828]">*</span></label>
-                    <Dropdown
-                      theme="light"
-                      value={editForm.roleId}
-                      onChange={(v) => setEditForm({ ...editForm, roleId: v })}
-                      placeholder="역할을 선택하세요"
-                      options={guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))}
-                    />
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-xs font-bold text-[#4b4b4b] mb-2">상품 설명</label>
-                  <textarea rows={2} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                    placeholder="카드에 표시될 설명" className="w-full bg-white border border-[#dedddb] rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] resize-none placeholder:text-[#a3a3a3]" />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#4b4b4b] mb-2">상품 이미지 URL</label>
-                  <input type="text" value={editForm.imageUrl} onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })}
-                    placeholder="https://..." className="w-full bg-white border border-[#dedddb] rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-[#4b4b4b] mb-2">정가 <span className="text-[#c62828]">*</span></label>
-                    <input type="number" min={1} value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
-                      placeholder="500000" className="w-full bg-white border border-[#dedddb] rounded-lg px-3 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-[#4b4b4b] mb-2">할인율 (%)</label>
-                    <input type="number" min={0} max={100} value={editForm.discountPct} onChange={(e) => setEditForm({ ...editForm, discountPct: e.target.value })}
-                      placeholder="0" className="w-full bg-white border border-[#dedddb] rounded-lg px-3 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
-                  </div>
-                </div>
-                {Number(editForm.discountPct) > 0 && Number(editForm.price) > 0 && (
-                  <p className="text-[11px] font-bold text-[#e91e3f] -mt-1">
-                    판매가 {Math.max(0, Math.floor((Number(editForm.price) * (100 - Math.min(100, Number(editForm.discountPct)))) / 100)).toLocaleString()} XP
-                  </p>
-                )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-[#4b4b4b] mb-2">재고</label>
-                    <input type="number" min={0} value={editForm.stock} onChange={(e) => setEditForm({ ...editForm, stock: e.target.value })}
-                      placeholder="무제한" className="w-full bg-white border border-[#dedddb] rounded-lg px-3 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-[#4b4b4b] mb-2">추천 순서</label>
-                    <input type="number" value={editForm.sortOrder} onChange={(e) => setEditForm({ ...editForm, sortOrder: e.target.value })}
-                      placeholder="0" className="w-full bg-white border border-[#dedddb] rounded-lg px-3 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
-                  </div>
-                </div>
-                <p className="text-[10px] text-[#8a8a8a] -mt-1">추천 순서가 작을수록 상점 앞쪽에 노출됩니다</p>
-
-                <button type="button" onClick={() => setEditForm({ ...editForm, active: !editForm.active })}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-sm transition-colors ${editForm.active ? "border-[#e91e3f] bg-[#e91e3f]/[0.06]" : "border-[#dedddb] bg-white"}`}>
-                  <span className={editForm.active ? "font-bold text-[#e91e3f]" : "text-[#8a8a8a]"}>{editForm.active ? "판매 중" : "숨김"}</span>
-                  <span className={`w-9 h-5 rounded-full relative transition-colors ${editForm.active ? "bg-[#e91e3f]" : "bg-[#d2d1cf]"}`}>
-                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${editForm.active ? "left-[18px]" : "left-0.5"}`}></span>
-                  </span>
-                </button>
-
-                {editError && <p className="text-[12px] font-bold text-[#c62828]">{editError}</p>}
+                {editError && <p className="mt-4 text-[12px] font-bold text-[#c62828]">{editError}</p>}
               </div>
 
               {/* 우 — 실시간 카드 미리보기 */}
               <div className="p-6 bg-[#f4f3f2]">
-                <div className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase mb-3">Preview</div>
+                <div className="text-[12px] font-black text-[#131313] mb-3">카드 미리보기</div>
                 <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col">
                   <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
                     {editForm.imageUrl ? (
@@ -1597,7 +1739,6 @@ export default function ArcticShopBody({
                     </div>
                   </div>
                 </div>
-                <p className="mt-3 text-[11px] text-[#8a8a8a] leading-relaxed">입력하는 대로 상점에 보일 모습이 그대로 반영됩니다.</p>
               </div>
             </div>
 

@@ -54,7 +54,10 @@ export async function POST(request) {
     if (!quest) return NextResponse.json({ success: false, error: "존재하지 않는 퀘스트입니다." }, { status: 404 });
     if (quest.claimed) return NextResponse.json({ success: false, error: "이미 수령한 보상입니다." }, { status: 409 });
     if (!quest.done) return NextResponse.json({ success: false, error: "아직 목표를 달성하지 않았습니다." }, { status: 400 });
-    if (quest.rewardXp <= 0) return NextResponse.json({ success: false, error: "보상이 없는 목표입니다." }, { status: 400 });
+    // XP·POINT 둘 다 0일 때만 거절한다 — POINT 만 주는 퀘스트도 수령 대상이다
+    if (quest.rewardXp <= 0 && (quest.rewardPoint || 0) <= 0) {
+      return NextResponse.json({ success: false, error: "보상이 없는 목표입니다." }, { status: 400 });
+    }
 
     const today = kstToday();
     const isAttend = questId === ATTEND_QUEST_ID;
@@ -95,22 +98,33 @@ export async function POST(request) {
     const unlock = () => QuestClaim.deleteOne({ _id: claim._id }).catch(() => {});
 
     // 2) 자물쇠를 잡은 뒤에만 지급 예약. 실패하면 자물쇠를 풀어 다시 시도할 수 있게 한다.
-    try {
-      await Payout.create({
-        userName: session.user.name || "",
-        userId,
-        amount: quest.rewardXp,
-        reason: `${PERIOD_LABEL[quest.period] || "일일"} 퀘스트: ${quest.name}`,
-        source: "quest",
-      });
-    } catch (e) {
-      await unlock();
-      throw e;
+    //    XP 가 0 인 퀘스트(POINT 전용)는 큐에 넣지 않는다 — 봇이 0 XP 를 처리하며 도는 빈 작업만 쌓인다.
+    if (quest.rewardXp > 0) {
+      try {
+        await Payout.create({
+          userName: session.user.name || "",
+          userId,
+          amount: quest.rewardXp,
+          reason: `${PERIOD_LABEL[quest.period] || "일일"} 퀘스트: ${quest.name}`,
+          source: "quest",
+        });
+      } catch (e) {
+        await unlock();
+        throw e;
+      }
     }
 
     // POINT 는 큐를 타지 않는다 — 디스코드 부작용이 없으므로 사이트가 바로 쓴다.
     //    자물쇠(QuestClaim)를 이미 잡았으므로 중복 지급은 구조적으로 막혀 있다.
-    if (payPoint > 0) await addPoints(userId, payPoint).catch(() => {});
+    //    다만 실패를 삼키면 안 된다 — POINT 전용 퀘스트는 이게 유일한 지급이라 자물쇠만 남으면 그 주기 보상을 통째로 잃는다.
+    if (payPoint > 0) {
+      try {
+        await addPoints(userId, payPoint);
+      } catch (e) {
+        await unlock();
+        throw e;
+      }
+    }
 
     const next = await getQuestState(userId);
     return NextResponse.json({

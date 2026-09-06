@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { useSession, signIn } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { EsportsStyles } from "../../components/Esports";
+import { useAdminGuard } from "../ui";
 import DmPreview from "../../components/DmPreview";
 import { DEFAULTS, LIMITS } from "@/lib/nudgeMessage";
 
@@ -43,8 +44,11 @@ const atLabel = (d: Date) => {
 const PALETTE = ["#7dd3fc", "#a5b4fc", "#fcd34d", "#f0abfc", "#6ee7b7", "#fca5a5", "#c4b5fd", "#fdba74"];
 
 export default function AdminScrimPage() {
-  const { data: session, status } = useSession();
-  const isAdmin = status === "authenticated" && !!session?.user?.name;
+  // 📌 판정만 공용 가드에서 빌려 온다 (관리자 목록이 한 곳에 모이도록). 화면(gate)은 쓰지 않는다 —
+  //    대회 룸은 경기 중 화면이라 배경이 어둡고(ClientLayout 의 isLightPage 예외),
+  //    밝은 배경용 공용 권한 화면을 붙이면 글자가 배경에 묻혀 안 보인다.
+  //    실제 방어는 /api/room 의 isAdminName 이며, 아래 data.isAdmin 검사도 그대로 둔다.
+  const { status, isAdmin } = useAdminGuard();
 
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);

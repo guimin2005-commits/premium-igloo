@@ -18,7 +18,8 @@ async function fetchMember(guild, userId) {
 
 // ── 역할 상품 구매 처리 ──────────────────────
 async function processPurchases(guild) {
-  const rows = await Purchase.find({ status: "pending", itemType: { $in: ["role", "perk"] } }).limit(25);
+  // 아이템 유형도 결국 디스코드 역할을 주는 상품이다 — 여기서 빠지면 사도 영영 지급되지 않는다
+  const rows = await Purchase.find({ status: "pending", itemType: { $in: ["role", "perk", "item"] } }).limit(25);
 
   for (const p of rows) {
     try {
@@ -160,7 +161,7 @@ async function processRoleSyncs(guild) {
 async function processExpiries(guild) {
   const rows = await Purchase.find({
     status: "completed",
-    itemType: { $in: ["role", "perk"] },
+    itemType: { $in: ["role", "perk", "item"] }, // 기간제 아이템도 기간이 지나면 회수한다
     expiresAt: { $ne: null, $lte: new Date() },
   }).limit(50);
 

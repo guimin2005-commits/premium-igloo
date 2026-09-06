@@ -44,8 +44,9 @@ export async function POST(request) {
     }
 
     // 📌 기간제 상품은 파는 기간 중 하나를 반드시 골라야 한다
+    //    무제한은 days 0 이라 !days 로 걸면 안 된다 — 가격표에 있는지(durationPrice)로만 판정한다
     const days = isTimed(item) ? Math.floor(Number(rawDays) || 0) : 0;
-    if (isTimed(item) && (!days || durationPrice(item, days) == null)) {
+    if (isTimed(item) && durationPrice(item, days) == null) {
       return NextResponse.json({ success: false, message: "이용 기간을 골라주세요." }, { status: 400 });
     }
 

@@ -2,10 +2,9 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useSession, signIn } from "next-auth/react";
 import { Reveal, LuxStyles } from "../../components/Lux";
 import { DiscordIdInput, parseIds, useDiscordProfiles } from "../../components/DiscordIds";
-import { ADMIN_USERS } from "@/lib/admins";
+import { useAdminGuard } from "../ui";
 import { HONOR_CATEGORIES } from "@/lib/honors";
 
 /* 📌 명예의 전당 관리 — 등재·수정·삭제를 이 한 곳에서 처리한다.
@@ -17,8 +16,8 @@ type TournamentRow = { _id: string; title: string; game: string; winner: string;
 const EMPTY: Omit<Honor, "_id"> = { category: "SYSTEM : LEVEL", title: "", winner: "", winnerId: "", detail: "", dateLabel: "" };
 
 export default function AdminHonorsPage() {
-  const { data: session, status } = useSession();
-  const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  // 화면 가리기 전용 — 실제 방어는 /api/honors 가 서버에서 한 번 더 한다
+  const { gate } = useAdminGuard();
 
   const [honors, setHonors] = useState<Honor[]>([]);
   const [tournaments, setTournaments] = useState<TournamentRow[]>([]);
@@ -175,16 +174,8 @@ export default function AdminHonorsPage() {
   );
   const missingWinner = tournaments.filter((t) => !t.winner.trim()).length;
 
-  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-[#8a8a8a]">로딩 중...</div>;
-  if (!isAdmin) {
-    return (
-      <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-xl font-black text-[#131313] mb-2">권한 없음</h2>
-        <p className="text-[#5a5a5a] text-sm mb-4">관리자 권한이 필요합니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
-      </main>
-    );
-  }
+  // 로딩 · 권한 없음 화면은 공용 가드가 만든다 (관리자 화면마다 복사돼 있던 것)
+  if (gate) return gate;
 
   const Members = ({ ids }: { ids: string }) => {
     const list = parseIds(ids).map((id) => profiles[id]).filter((p) => p && !p.failed);
@@ -210,10 +201,6 @@ export default function AdminHonorsPage() {
         <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
         <div className="max-w-5xl mx-auto relative z-10">
           <Reveal>
-            <div className="flex items-center gap-3 mb-5">
-              <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Admin · Hall of Fame</span>
-            </div>
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-3">

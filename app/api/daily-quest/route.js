@@ -50,6 +50,8 @@ export async function POST(request) {
     metric: METRICS.includes(b?.metric) ? b.metric : "count",
     target: num(b?.target, 1, { min: 1, max: 1_000_000 }),
     rewardXp: num(b?.rewardXp, 0, { min: 0, max: 1_000_000 }),
+    // 등급 배율은 수령 시점에 곱하므로 여기 저장하는 값은 배율 적용 전 기본값이다
+    rewardPoint: num(b?.rewardPoint, 0, { min: 0, max: 1_000_000 }),
     enabled: b?.enabled !== false,
     order: num(b?.order, 0, { min: 0, max: 999 }),
     updatedAt: new Date(),

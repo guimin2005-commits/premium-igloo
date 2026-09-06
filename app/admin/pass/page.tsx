@@ -1,15 +1,32 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Reveal, LuxStyles } from "../../components/Lux";
 import Dropdown from "../../components/Dropdown";
-import { ADMIN_USERS } from "@/lib/admins";
 import { SEASON } from "@/lib/season";
+import {
+  inputClass,
+  fieldNote,
+  SectionHead,
+  FilterChips,
+  EmptyRow,
+  ListFrame,
+  Btn,
+  Toggle,
+  useNotice,
+  ConfirmDialog,
+  useAdminGuard,
+  AdminHero,
+  TableScroll,
+} from "../ui";
 
 // 📌 시즌 패스 구성 화면 — 무료/프리미엄 2트랙의 티어 사다리를 관리한다.
 //    티어가 20개를 넘어가면 세로로 늘어선 폼은 훑기가 불가능해지므로,
 //    목록은 한 줄 요약만 보여주고 실제 편집은 모달에서 한다.
+//
+//    입력칸 · 섹션 머리 · 알림 모달 · 확인 모달 · 권한 화면은 예전에 이 파일이
+//    직접 들고 있었지만, 같은 것이 관리자 화면마다 복사돼 조금씩 갈라졌다 —
+//    지금은 전부 ../ui 의 공용 컴포넌트를 쓴다.
 
 type RewardKind = "xp" | "point" | "role" | "none";
 type Reward = { kind: RewardKind; amount: number; roleId: string; roleName: string };
@@ -29,15 +46,12 @@ const KIND_OPTIONS: { v: RewardKind; l: string }[] = [
   { v: "role", l: "역할" },
 ];
 
-const inputClass =
-  "w-full bg-transparent border border-black/10 rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#8a8a8a]";
 const labelClass = "block text-xs font-bold text-[#5a5a5a] mb-2";
-const fieldNote = "text-[10px] text-[#5a5a5a] mt-1.5";
 
 const EMPTY_REWARD: Reward = { kind: "none", amount: 0, roleId: "", roleName: "" };
 
 // 불러오기에 실패한 채로 저장하면 빈 구성이 운영 중인 설정을 통째로 덮어쓴다
-const LOAD_FAILED_MSG = "현재 설정을 불러오지 못해 저장할 수 없습니다. 위의 [다시 불러오기]가 성공한 뒤에 저장해 주세요.";
+const LOAD_FAILED_MSG = "현재 설정을 불러오지 못해 저장할 수 없습니다. [다시 불러오기] 후에 저장해 주세요.";
 
 const toInt = (v: any) => {
   const n = Math.floor(Number(v));
@@ -94,22 +108,13 @@ function RewardEditor({
         <span className="text-[10px] text-[#8a8a8a] break-keep text-right">{hint}</span>
       </div>
 
-      <div className="flex gap-2 mb-3">
-        {KIND_OPTIONS.map((o) => (
-          <button
-            key={o.v}
-            type="button"
-            onClick={() => onChange({ ...value, kind: o.v })}
-            className={`flex-1 py-2.5 rounded-lg text-[11px] font-bold border transition-colors outline-none focus:outline-none ${
-              value.kind === o.v
-                ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40"
-                : "text-[#5a5a5a] border-black/10 hover:text-[#131313]"
-            }`}
-          >
-            {o.l}
-          </button>
-        ))}
-      </div>
+      {/* 보상 종류 — 화면마다 다르게 생기던 칩을 공용 것으로 통일 */}
+      <FilterChips
+        options={KIND_OPTIONS}
+        value={value.kind}
+        onChange={(v) => onChange({ ...value, kind: v as RewardKind })}
+        className="mb-3"
+      />
 
       {(value.kind === "xp" || value.kind === "point") && (
         <div>
@@ -122,9 +127,7 @@ function RewardEditor({
             className={inputClass}
           />
           <p className={fieldNote}>
-            {value.kind === "xp"
-              ? "봇 지급 큐에 쌓여 30초 이내 반영됩니다 (레벨 재계산 포함)"
-              : "사이트가 즉시 지급합니다"}
+            {value.kind === "xp" ? "봇 큐를 거쳐 30초 이내 지급 (레벨 재계산 포함)" : "즉시 지급"}
           </p>
         </div>
       )}
@@ -140,23 +143,21 @@ function RewardEditor({
             }
             options={roles.map((r: any) => ({ value: r.id, label: r.name, color: r.color }))}
           />
-          <p className={fieldNote}>수령 시 구매 문서로 쌓여 봇이 30초 이내에 역할을 붙입니다</p>
+          <p className={fieldNote}>수령하면 봇이 30초 이내에 역할을 붙입니다</p>
         </div>
       )}
-
-      {value.kind === "none" && <p className="text-[11px] text-[#a3a3a3]">이 칸은 비어 있습니다. 목록에는 &lsquo;-&rsquo; 로 표시됩니다.</p>}
     </div>
   );
 }
 
 export default function AdminPassPage() {
-  const { data: session, status } = useSession();
-  const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  // 화면 가리기 전용 — 실제 방어는 /api/admin/pass 가 서버에서 한 번 더 한다
+  const { isAdmin, gate } = useAdminGuard();
+  const { notify, noticeEl } = useNotice();
 
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [popup, setPopup] = useState({ isOpen: false, message: "", isError: false });
 
   const [guildRoles, setGuildRoles] = useState<any[]>([]);
   // 역할 목록은 설정과 다른 API 라 따로 실패한다 — 조용히 넘기면 드롭다운이 빈 상자로 열려
@@ -177,8 +178,6 @@ export default function AdminPassPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [deleteIdx, setDeleteIdx] = useState<number | null>(null);
   const [confirmSort, setConfirmSort] = useState(false);
-
-  const notify = (message: string, isError = false) => setPopup({ isOpen: true, message, isError });
 
   // 📌 목록 편집은 저장 전 로컬 변경이라 모달로 막아 세우면 오히려 방해가 된다.
   //    하단 저장 바에 잠깐 뜨는 한 줄로만 알린다.
@@ -268,6 +267,8 @@ export default function AdminPassPage() {
   const badZero = tiers.some((t) => t.need <= 0);
   const missingRole =
     tiers.some((t) => (t.free.kind === "role" && !t.free.roleId) || (t.paid.kind === "role" && !t.paid.roleId));
+  // 📌 사다리를 먼저 깔고 보상을 나중에 채우는 흐름이 정상이라 저장을 막지는 않는다 — 세어서 보여만 준다
+  const emptyTierCount = tiers.filter((t) => t.free.kind === "none" && t.paid.kind === "none").length;
 
   // ── 티어 조작 ────────────────────────────────
   // 서버가 100개에서 잘라 버리므로 화면에서 먼저 막는다
@@ -285,14 +286,14 @@ export default function AdminPassPage() {
       // tid 는 빈 문자열 — 저장할 때 서버가 새로 발급한다 (화면이 임의로 짓지 않는다)
       return [...prev, { key, tid: "", level: prev.length + 1, need, free: { ...EMPTY_REWARD }, paid: { ...EMPTY_REWARD } }];
     });
-    setFlash("티어를 추가했습니다. 보상을 채운 뒤 저장하세요.");
+    setFlash("티어를 추가했습니다.");
   };
 
   const removeTier = () => {
     if (deleteIdx == null) return;
     setTiers((prev) => prev.filter((_, i) => i !== deleteIdx).map((t, i) => ({ ...t, level: i + 1 })));
     setDeleteIdx(null);
-    setFlash("목록에서 뺐습니다. 저장해야 실제로 반영됩니다.");
+    setFlash("목록에서 뺐습니다. 저장해야 반영됩니다.");
   };
 
   const sortTiers = () => {
@@ -371,7 +372,7 @@ export default function AdminPassPage() {
       if (d.config) applyConfig(d.config);
       else fetchAll();
       setLoadFailed(false);
-      notify("저장되었습니다. 유저 화면에 바로 반영됩니다.");
+      notify("저장되었습니다.");
     } else {
       notify(d?.message || "저장에 실패했습니다.", true);
     }
@@ -389,30 +390,8 @@ export default function AdminPassPage() {
     doSave();
   };
 
-  // ── 권한 게이트 ──────────────────────────────
-  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-[#8a8a8a]">로딩 중...</div>;
-  if (!isAdmin) {
-    return (
-      <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-xl font-black text-[#131313] mb-2">권한 없음</h2>
-        <p className="text-[#5a5a5a] text-sm mb-4">관리자 권한이 필요합니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
-      </main>
-    );
-  }
-
-  const SectionHead = ({ no, title, right }: { no: string; title: string; right?: React.ReactNode }) => (
-    <div className="mb-6">
-      <div className="flex items-baseline gap-4 mb-2">
-        <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">{no}</span>
-        <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
-      </div>
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-lg md:text-xl font-black text-[#131313] tracking-tight">{title}</h2>
-        {right}
-      </div>
-    </div>
-  );
+  // 로딩 · 권한 없음 화면은 공용 가드가 만든다 (7개 파일에 복사돼 있던 것)
+  if (gate) return gate;
 
   const maxNeed = tiers.length ? Math.max(...tiers.map((t) => t.need)) : 0;
 
@@ -420,40 +399,25 @@ export default function AdminPassPage() {
     <main className="w-full flex-1 flex flex-col relative">
       <LuxStyles />
 
-      {/* ── HERO ── */}
-      <section className="relative w-full pt-16 pb-10 md:pt-20 md:pb-12 px-6">
-        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
-        <div className="max-w-4xl mx-auto relative z-10">
-          <Reveal>
-            <div className="flex items-center gap-3 mb-3">
-              <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Admin · Season Pass</span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-black tracking-tighter leading-none mb-2.5">
-              <span className="text-[#131313]">시즌 </span>
-              <span className="text-[#e91e3f]">패스</span>
-            </h1>
-            <p className="text-[#5a5a5a] text-[13px] leading-relaxed break-keep">
-              시즌 {SEASON.number} &lsquo;{SEASON.name}&rsquo; 의 무료 · 프리미엄 2트랙 보상 사다리를 구성합니다.
-              진행도는 이번 시즌에 번 XP이며, 새 시즌이 시작되면 수령 기록과 해금 상태가 자동으로 초기화됩니다.
-            </p>
-          </Reveal>
-        </div>
-      </section>
+      {/* desc 에는 어느 시즌을 만지는지와, 화면에 안 보이는 초기화 시점만 남긴다 */}
+      <AdminHero
+        title="시즌 패스"
+        desc={`시즌 ${SEASON.number} ‘${SEASON.name}’ · 새 시즌이 시작되면 수령 기록과 해금 상태가 초기화됩니다.`}
+      />
 
       <div className="w-full max-w-6xl mx-auto px-6 pb-16 flex-1 flex flex-col space-y-14">
         {loadFailed && (
           <div className="px-4 py-3 rounded-lg border border-[#e91e3f]/30 bg-[#e91e3f]/[0.06] text-[12px] font-bold text-[#c2183a] break-keep">
-            현재 설정을 불러오지 못했습니다 (/api/admin/pass 응답 없음). 아래는 빈 구성이므로,
-            운영 중인 설정을 덮어쓰지 않도록 <strong>저장을 막아 두었습니다.</strong> 다시 불러오기에 성공하면 저장할 수 있습니다.
+            현재 설정을 불러오지 못했습니다 (/api/admin/pass 응답 없음).
+            아래 빈 구성이 운영 설정을 덮어쓰지 않도록 <strong>저장을 막아 두었습니다.</strong>
             <button onClick={fetchAll} className="ml-2 underline underline-offset-2 outline-none focus:outline-none">다시 불러오기</button>
           </div>
         )}
 
         {rolesFailed && !isLoading && (
           <div className="px-4 py-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] text-[12px] font-bold text-amber-700 break-keep">
-            역할 목록을 불러오지 못했습니다 (/api/discord-roles). 역할 보상 드롭다운이 빈 상자로 열리며,
-            이미 지정된 역할 보상은 그대로 유지됩니다.
+            역할 목록을 불러오지 못했습니다 (/api/discord-roles). 이미 지정된 역할 보상은 그대로 유지됩니다.
+            {/* ⚠️ fetchRoles 다 — fetchAll 로 바꾸면 서버 저장본이 덮어써져 저장 안 한 티어 편집이 사라진다 */}
             <button onClick={fetchRoles} className="ml-2 underline underline-offset-2 outline-none focus:outline-none">다시 불러오기</button>
           </div>
         )}
@@ -465,17 +429,15 @@ export default function AdminPassPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>시즌 패스 사용</label>
-                <button
-                  type="button"
+                {/* grid 한 칸이라 폭 제한(md:max-w-md)을 끈다 — 옆 입력칸과 길이를 맞춘다 */}
+                <Toggle
+                  on={enabled}
                   onClick={() => setEnabled(!enabled)}
-                  className={`${inputClass} flex items-center justify-between text-left ${enabled ? "border-[#e91e3f]/50" : ""}`}
-                >
-                  <span className={enabled ? "text-[#e91e3f] font-bold" : "text-[#5a5a5a]"}>{enabled ? "운영 중" : "중단 (수령 불가)"}</span>
-                  <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${enabled ? "bg-[#e91e3f]" : "bg-[#e6e3de]"}`}>
-                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-all ${enabled ? "left-[18px]" : "left-0.5"}`}></span>
-                  </span>
-                </button>
-                <p className={fieldNote}>끄면 유저 화면에 보상표는 그대로 보이지만 수령 · 해금이 모두 막힙니다</p>
+                  onLabel="운영 중"
+                  offLabel="중단 (수령 불가)"
+                  className=""
+                />
+                <p className={fieldNote}>끄면 보상표는 그대로 보이지만 수령 · 해금이 막힙니다</p>
               </div>
 
               <div>
@@ -497,7 +459,7 @@ export default function AdminPassPage() {
                   placeholder="예: 50000"
                   className={inputClass}
                 />
-                <p className={fieldNote}>XP 또는 POINT 로 한 번만 결제하면 그 시즌 내내 열립니다 (XP · POINT 는 1:1 등가) · 1 이상이어야 합니다</p>
+                <p className={fieldNote}>XP · POINT 어느 쪽으로도 결제하며 1:1 등가입니다 (1 이상)</p>
               </div>
             </div>
 
@@ -526,103 +488,96 @@ export default function AdminPassPage() {
               title={`티어 구성 (${tiers.length})`}
               right={
                 <div className="flex gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={sortTiers}
-                    disabled={tiers.length < 2}
-                    className="px-4 py-2 rounded-full text-[11px] font-bold text-[#5a5a5a] border border-black/15 hover:text-[#131313] hover:border-black/35 disabled:opacity-40 transition-colors outline-none focus:outline-none"
-                  >
+                  <Btn variant="ghost" onClick={sortTiers} disabled={tiers.length < 2}>
                     정렬
-                  </button>
-                  <button
-                    type="button"
-                    onClick={addTier}
-                    className="px-4 py-2 rounded-full text-[11px] font-bold bg-[#131313] text-white hover:bg-[#2a2a2a] transition-colors outline-none focus:outline-none"
-                  >
-                    티어 추가
-                  </button>
+                  </Btn>
+                  <Btn onClick={addTier}>티어 추가</Btn>
                 </div>
               }
             />
 
             {badOrder && (
               <div className="mb-4 px-4 py-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] text-[12px] font-bold text-amber-700 break-keep">
-                필요 XP가 오름차순이 아닙니다. 이대로 저장하면 서버가 오름차순으로 다시 정렬하고 레벨을 새로 매깁니다.
+                필요 XP가 오름차순이 아닙니다. 이대로 저장하면 서버가 다시 정렬하고 레벨을 새로 매깁니다.
+              </div>
+            )}
+
+            {/* 보상이 빈 티어는 막지 않는다 — 저장 전에 개수만 알린다 */}
+            {!isLoading && emptyTierCount > 0 && (
+              <div className="mb-4 px-4 py-3 rounded-lg border border-black/10 bg-black/[0.03] text-[12px] font-bold text-[#5a5a5a] break-keep">
+                무료 · 프리미엄 보상이 모두 비어 있는 티어 {emptyTierCount}개 — 이대로도 저장됩니다.
               </div>
             )}
 
             {isLoading ? (
               <div className="py-10 text-center text-[#8a8a8a] text-sm">불러오는 중...</div>
             ) : tiers.length === 0 ? (
-              <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">
-                등록된 티어가 없습니다. &lsquo;티어 추가&rsquo;로 첫 보상을 만들어 주세요.
-              </div>
+              <EmptyRow>등록된 티어가 없습니다.</EmptyRow>
             ) : (
               // 좁은 화면에서 표가 넘칠 수 있어 이 안에서만 가로로 스크롤시킨다 (페이지 자체는 넘치지 않는다)
               <>
-                <p className="md:hidden text-[10px] text-[#a3a3a3] mb-2">← 표를 옆으로 밀어 볼 수 있습니다</p>
-                <div className="-mx-6 px-6 overflow-x-auto no-bar">
-                <div className="min-w-[640px]">
-                  <div className="flex items-center gap-3 pb-2.5 border-b border-black/10 text-[10px] font-black tracking-[0.12em] text-[#a3a3a3]">
-                    <span className="w-12 shrink-0">티어</span>
-                    <span className="w-32 shrink-0 text-right">필요 XP</span>
-                    <span className="flex-1 min-w-0 pl-4">무료 보상</span>
-                    <span className="flex-1 min-w-0">프리미엄 보상</span>
-                    <span className="w-20 shrink-0 text-right">관리</span>
-                  </div>
+                <TableScroll>
+                  <div className="min-w-[640px]">
+                    <div className="flex items-center gap-3 pb-2.5 text-[10px] font-black tracking-[0.12em] text-[#a3a3a3]">
+                      <span className="w-12 shrink-0">티어</span>
+                      <span className="w-32 shrink-0 text-right">필요 XP</span>
+                      <span className="flex-1 min-w-0 pl-4">무료 보상</span>
+                      <span className="flex-1 min-w-0">프리미엄 보상</span>
+                      <span className="w-20 shrink-0 text-right">관리</span>
+                    </div>
 
-                  <div className="divide-y divide-black/[0.06]">
-                    {tiers.map((t, i) => {
-                      const gap = i > 0 ? t.need - tiers[i - 1].need : t.need;
-                      const broken = i > 0 && t.need <= tiers[i - 1].need;
-                      return (
-                        // 인덱스가 아니라 tid 기반 키 — 정렬 · 삭제로 순서가 바뀌어도 입력 상태가 옆 행으로 새지 않는다
-                        <div key={t.key} className="flex items-center gap-3 py-3.5">
-                          <span className="w-12 shrink-0 text-[13px] font-black text-[#131313] tabular-nums">{i + 1}</span>
-                          <span className="w-32 shrink-0 text-right">
-                            <span className={`block text-[13px] font-black tabular-nums ${broken || t.need <= 0 ? "text-[#e91e3f]" : "text-[#131313]"}`}>
-                              {t.need.toLocaleString()}
+                    <ListFrame>
+                      {tiers.map((t, i) => {
+                        const gap = i > 0 ? t.need - tiers[i - 1].need : t.need;
+                        const broken = i > 0 && t.need <= tiers[i - 1].need;
+                        return (
+                          // 인덱스가 아니라 tid 기반 키 — 정렬 · 삭제로 순서가 바뀌어도 입력 상태가 옆 행으로 새지 않는다
+                          <div key={t.key} className="flex items-center gap-3 py-3.5">
+                            <span className="w-12 shrink-0 text-[13px] font-black text-[#131313] tabular-nums">{i + 1}</span>
+                            <span className="w-32 shrink-0 text-right">
+                              <span className={`block text-[13px] font-black tabular-nums ${broken || t.need <= 0 ? "text-[#e91e3f]" : "text-[#131313]"}`}>
+                                {t.need.toLocaleString()}
+                              </span>
+                              <span className="block text-[10px] text-[#a3a3a3] tabular-nums">+{gap.toLocaleString()}</span>
                             </span>
-                            <span className="block text-[10px] text-[#a3a3a3] tabular-nums">+{gap.toLocaleString()}</span>
-                          </span>
-                          <span className="flex-1 min-w-0 pl-4 flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#3f83b8]"></span>
-                            <span className={`text-[12px] font-bold truncate ${t.free.kind === "none" ? "text-[#c4c4c4]" : "text-[#3a3a3a]"}`}>
-                              {rewardLabel(t.free, roleNameOf)}
+                            <span className="flex-1 min-w-0 pl-4 flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#3f83b8]"></span>
+                              <span className={`text-[12px] font-bold truncate ${t.free.kind === "none" ? "text-[#c4c4c4]" : "text-[#3a3a3a]"}`}>
+                                {rewardLabel(t.free, roleNameOf)}
+                              </span>
                             </span>
-                          </span>
-                          <span className="flex-1 min-w-0 flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#e91e3f]"></span>
-                            <span className={`text-[12px] font-bold truncate ${t.paid.kind === "none" ? "text-[#c4c4c4]" : "text-[#3a3a3a]"}`}>
-                              {rewardLabel(t.paid, roleNameOf)}
+                            <span className="flex-1 min-w-0 flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#e91e3f]"></span>
+                              <span className={`text-[12px] font-bold truncate ${t.paid.kind === "none" ? "text-[#c4c4c4]" : "text-[#3a3a3a]"}`}>
+                                {rewardLabel(t.paid, roleNameOf)}
+                              </span>
                             </span>
-                          </span>
-                          <span className="w-20 shrink-0 flex items-center justify-end gap-3">
-                            <button
-                              onClick={() => openEditor(i)}
-                              className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
-                            >
-                              편집
-                            </button>
-                            <button
-                              onClick={() => setDeleteIdx(i)}
-                              className="text-[11px] font-bold text-[#a3a3a3] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
-                            >
-                              삭제
-                            </button>
-                          </span>
-                        </div>
-                      );
-                    })}
+                            <span className="w-20 shrink-0 flex items-center justify-end gap-3">
+                              <button
+                                onClick={() => openEditor(i)}
+                                className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
+                              >
+                                편집
+                              </button>
+                              <button
+                                onClick={() => setDeleteIdx(i)}
+                                className="text-[11px] font-bold text-[#a3a3a3] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
+                              >
+                                삭제
+                              </button>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </ListFrame>
                   </div>
-                </div>
-                </div>
+                </TableScroll>
               </>
             )}
 
             <p className="mt-6 text-xs text-[#8a8a8a] leading-relaxed break-keep">
-              💡 진행도는 <strong className="text-[#4b4b4b]">이번 시즌에 번 XP</strong>입니다. XP · 역할 보상은 봇 큐를 거쳐 30초 이내에,
-              POINT 보상은 사이트가 즉시 지급합니다. 이미 수령한 티어의 보상을 바꿔도 수령 기록은 남으므로 다시 받을 수 없습니다.
+              XP · 역할 보상은 봇 큐를 거쳐 30초 이내에, POINT 는 즉시 지급됩니다.
+              이미 수령한 티어는 보상을 바꿔도 다시 받을 수 없습니다.
             </p>
           </section>
         </Reveal>
@@ -635,19 +590,18 @@ export default function AdminPassPage() {
             }`}
           >
             {loadFailed
-              ? "설정을 불러오지 못해 저장이 막혀 있습니다 · 위의 [다시 불러오기]를 먼저 눌러 주세요"
+              ? "설정을 불러오지 못해 저장이 막혀 있습니다"
               : flash || (isDirty ? "저장되지 않은 변경이 있습니다." : "변경 사항 없음")}
           </span>
-          <button
-            type="button"
+          <Btn
             onClick={trySave}
             // 불러오기 실패 상태에서는 한 번의 클릭으로 운영 설정 전체가 지워지므로 버튼 자체를 잠근다
             disabled={isSaving || loadFailed}
             title={loadFailed ? LOAD_FAILED_MSG : undefined}
-            className="px-10 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#e91e3f] text-white text-sm font-bold rounded-lg transition-all shrink-0 outline-none focus:outline-none"
+            className="px-10 py-3.5 text-sm shrink-0"
           >
             {isSaving ? "저장 중..." : "저장"}
-          </button>
+          </Btn>
         </div>
       </div>
 
@@ -659,11 +613,8 @@ export default function AdminPassPage() {
               <h2 className="text-lg font-black text-[#131313]">티어 {draft.index + 1} 편집</h2>
               <span className="text-[10px] font-bold text-[#a3a3a3]">저장 버튼을 눌러야 반영됩니다</span>
             </div>
-            <p className="text-[11px] text-[#8a8a8a] mb-6 break-keep">
-              무료 보상은 누구나, 프리미엄 보상은 해금한 유저만 받습니다.
-            </p>
-
-            <div className="mb-5">
+            {/* 트랙 설명은 아래 각 보상 블록의 한 줄 힌트가 대신한다 */}
+            <div className="mt-6 mb-5">
               <label className={labelClass}>필요 XP <span className="text-[#e91e3f]">*</span></label>
               <input
                 type="number"
@@ -695,63 +646,48 @@ export default function AdminPassPage() {
             />
 
             <div className="flex gap-3 mt-8">
-              <button onClick={() => setDraft(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] font-bold rounded-xl transition-colors outline-none focus:outline-none">
+              <Btn variant="ghost" onClick={() => setDraft(null)} className="flex-1 py-3">
                 취소
-              </button>
-              <button onClick={applyDraft} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-colors outline-none focus:outline-none">
+              </Btn>
+              <Btn onClick={applyDraft} className="flex-1 py-3">
                 확인
-              </button>
+              </Btn>
             </div>
           </div>
         </div>
       )}
 
       {/* ── 티어 삭제 확인 ── */}
-      {deleteIdx !== null && (
-        <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-[#ffffff] border border-[#e91e3f]/25 rounded-3xl w-full max-w-sm p-8 text-center">
-            <h2 className="text-xl font-bold text-[#131313] mb-3">티어 삭제</h2>
-            <p className="text-sm text-[#5a5a5a] mb-8 break-keep">
-              티어 {deleteIdx + 1}을(를) 목록에서 뺍니다. 뒤 티어의 번호는 하나씩 당겨지지만,
-              티어마다 고유 번호가 붙어 있어 남은 티어의 수령 기록은 그대로 유지됩니다.<br />
-              다만 <strong className="text-[#131313]">이미 이 티어를 받은 유저가 있어도 수령 기록만 남고 티어 자체는 사라집니다.</strong>
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteIdx(null)} className="flex-1 py-3 bg-[#e6e3de] text-[#131313] rounded-xl outline-none focus:outline-none">취소</button>
-              <button onClick={removeTier} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white rounded-xl font-bold outline-none focus:outline-none">삭제</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={deleteIdx !== null}
+        danger
+        title="티어 삭제"
+        confirmLabel="삭제"
+        onCancel={() => setDeleteIdx(null)}
+        onConfirm={removeTier}
+        body={
+          <>
+            티어 {(deleteIdx ?? 0) + 1}을(를) 목록에서 뺍니다. 남은 티어의 수령 기록은 유지되지만,
+            <strong className="text-[#131313]"> 이미 이 티어를 받은 유저가 있어도 티어 자체는 사라집니다.</strong>
+          </>
+        }
+      />
 
       {/* ── 오름차순이 아닐 때 한 번 더 확인 ── */}
-      {confirmSort && (
-        <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-[#ffffff] border border-amber-500/30 rounded-3xl w-full max-w-sm p-8">
-            <h2 className="text-lg font-bold text-[#131313] mb-3">순서를 확인해 주세요</h2>
-            <p className="text-sm text-[#5a5a5a] leading-relaxed mb-8 break-keep">
-              필요 XP가 오름차순이 아닙니다. 이대로 저장하면 서버가 오름차순으로 정렬하고 레벨을 다시 매기므로,
-              화면에서 보던 순서와 달라집니다. (티어마다 고유 번호가 붙어 있어 유저의 수령 기록은 어긋나지 않습니다.)
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmSort(false)} className="flex-1 py-3 bg-[#e6e3de] text-[#131313] rounded-xl outline-none focus:outline-none">돌아가기</button>
-              <button onClick={doSave} disabled={isSaving || loadFailed} className="flex-1 py-3 bg-[#e91e3f] disabled:opacity-40 text-white rounded-xl font-bold outline-none focus:outline-none">
-                {isSaving ? "저장 중..." : "이대로 저장"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 📌 loadFailed 면 이 모달까지 오지 못한다 (trySave 가 먼저 막는다). 혹시 뚫려도
+          doSave 가 다시 막고 이유를 알림으로 띄우므로 버튼을 죽여 두는 대신 그쪽에 맡긴다. */}
+      <ConfirmDialog
+        open={confirmSort}
+        title="순서를 확인해 주세요"
+        confirmLabel="이대로 저장"
+        cancelLabel="돌아가기"
+        busy={isSaving}
+        onCancel={() => setConfirmSort(false)}
+        onConfirm={doSave}
+        body="이대로 저장하면 서버가 오름차순으로 정렬하고 레벨을 다시 매겨, 화면에서 보던 순서와 달라집니다."
+      />
 
-      {popup.isOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
-          <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
-            <h2 className="text-xl font-bold text-[#131313] mb-3">{popup.isError ? "오류" : "완료"}</h2>
-            <p className="text-sm text-[#5a5a5a] mb-8 break-keep">{popup.message}</p>
-            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] font-bold rounded-xl transition-colors outline-none focus:outline-none">확인</button>
-          </div>
-        </div>
-      )}
+      {noticeEl}
     </main>
   );
 }

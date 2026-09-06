@@ -54,8 +54,9 @@ export async function POST(request) {
     for (const d of docs) {
       const id = String(d._id);
       if (!isTimed(d)) { daysOf.set(id, 0); continue; }
-      const days = pickedDays.get(id);
-      if (!days || durationPrice(d, days) == null) {
+      // 무제한은 days 0 — !days 로 걸면 그 한 줄이 주문 전체를 막는다. 가격표 존재 여부로만 판정한다
+      const days = Math.floor(Number(pickedDays.get(id)) || 0);
+      if (durationPrice(d, days) == null) {
         return NextResponse.json({ success: false, message: `"${d.name}"의 이용 기간을 골라주세요.` }, { status: 400 });
       }
       daysOf.set(id, days);

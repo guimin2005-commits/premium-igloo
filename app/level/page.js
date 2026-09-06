@@ -154,13 +154,10 @@ const CountUp = ({ end, duration = 1400, suffix = "" }) => {
 
 // 📌 섹션 헤더 (에디토리얼 넘버링 스타일)
 // 📌 문서형 탭 섹션 헤더 — 대시보드 섹션과 같은 문법을 쓴다 (탭을 옮겨도 같은 화면으로 읽히게)
-const SectionHeader = ({ en, title, desc, right }) => (
+const SectionHeader = ({ title, desc, right }) => (
   <div className="mb-8">
     <div className="flex items-end justify-between gap-4">
       <div className="min-w-0">
-        <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5">
-          <span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>{en}
-        </span>
         <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight break-keep">{title}</h3>
       </div>
       {right}
@@ -431,7 +428,6 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5 }) => {
         <div className="relative z-10 shrink-0 px-6 sm:px-8 pt-7 pb-5 border-b border-white/[0.08]">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[9px] font-black tracking-[0.35em] text-white/35 uppercase mb-2">Rank Ladder</p>
               <h3 className="text-2xl font-black text-white tracking-tight">등급 안내</h3>
             </div>
             <button
@@ -443,7 +439,7 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5 }) => {
             </button>
           </div>
           <p className="text-[12px] text-white/45 leading-relaxed mt-3 break-keep">
-            레벨이 오르면 등급이 올라가고, <b className="text-white/75">음성 채널에서 받는 XP에 아래 금액이 더해집니다.</b>
+            <b className="text-white/75">음성 채널에서 받는 XP에 아래 금액이 더해집니다.</b>
           </p>
         </div>
 
@@ -611,9 +607,6 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
         <div className="relative z-10 shrink-0 px-5 sm:px-7 pt-5 sm:pt-6 pb-4 border-b border-white/[0.08]">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#ff5c77] uppercase mb-1.5">
-                <span aria-hidden className="w-4 h-px bg-[#ff5c77]"></span>Inventory
-              </span>
               <h3 className="text-lg sm:text-xl font-black text-white tracking-tight">
                 인벤토리
                 <span className="text-sm font-black text-white/35 ml-2 tabular-nums">{groups[0]?.items.length ?? 0}</span>
@@ -927,7 +920,14 @@ export default function LevelPage() {
 
       if (res?.success) {
         setQuests(res.data);
-        pushToast(`${q.name} 보상 +${q.rewardXp.toLocaleString()} XP 수령`, true);
+        // 화면에 적힌 값은 배율 적용 전 기본값이다 — 실제 지급액은 서버가 돌려준 claimed 를 쓴다
+        const got = res.data?.claimed;
+        const gotXp = Number(got?.amount ?? q.rewardXp) || 0;
+        const gotPoint = Number(got?.point) || 0;
+        const parts = [];
+        if (gotXp > 0) parts.push(`+${gotXp.toLocaleString()} XP`);
+        if (gotPoint > 0) parts.push(`+${gotPoint.toLocaleString()} P`);
+        pushToast(parts.length ? `${q.name} 보상 ${parts.join(" · ")} 수령` : `${q.name} 보상 수령`, true);
         sfxLevelUp();
       } else {
         pushToast(res?.error || "수령하지 못했습니다.");
@@ -1530,8 +1530,7 @@ export default function LevelPage() {
                     <HudPanel accent glow corners={false} className="w-full max-w-sm bg-[#ffffff] px-7 py-8 md:px-9 text-center">
                       <svg viewBox="0 0 24 24" className="w-6 h-6 mx-auto mb-4" fill="none" stroke="rgba(0,0,0,0.4)" strokeWidth="1.5"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
                       <p className="text-[10px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase mb-2.5">관전 모드</p>
-                      <p className="text-sm font-bold text-[#131313] mb-1.5">내 대시보드가 잠겨 있습니다</p>
-                      <p className="text-[11px] text-[#8a8a8a] leading-relaxed mb-7 break-keep">로그인하면 레벨·순위·획득 기록이<br />실시간으로 활성화됩니다.</p>
+                      <p className="text-sm font-bold text-[#131313] mb-7">내 대시보드가 잠겨 있습니다</p>
                       <button onClick={() => signIn("discord", { callbackUrl: "/level" })} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors shadow-[0_10px_30px_rgba(233,30,63,0.35)] outline-none focus:outline-none">Discord로 로그인</button>
                       {process.env.NODE_ENV === "development" && (
                         <button onClick={() => signIn("devlogin", { callbackUrl: "/level" })} className="mt-3.5 text-[11px] font-bold text-[#a3a3a3] hover:text-[#131313] underline underline-offset-4 transition-colors outline-none focus:outline-none">로컬 확인용 로그인 (dev)</button>
@@ -1545,7 +1544,6 @@ export default function LevelPage() {
                   <div className="max-w-2xl mx-auto min-w-0">
                     <div className="flex items-end justify-between mb-5">
                       <div>
-                        <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Ranking</span>
                         <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹</h3>
                       </div>
                       <span className="flex items-center gap-3">
@@ -1743,7 +1741,6 @@ export default function LevelPage() {
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Quests</span>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">퀘스트</h3>
                         </div>
                         <div className="text-right shrink-0">
@@ -1801,6 +1798,9 @@ export default function LevelPage() {
                         const pct = Math.min(100, Math.round((q.current / Math.max(1, q.target)) * 100));
                         const unit = q.metric === "xp" ? " XP" : q.metric === "minute" ? "분" : "회";
                         const done = q.done;
+                        // POINT 보상은 나중에 서버에 실린 값이라 없을 수도 있다 — 없으면 0 으로 본다
+                        const rXp = Number(q.rewardXp) || 0;
+                        const rPoint = Number(q.rewardPoint) || 0;
                         return (
                           <div
                             key={q.id}
@@ -1861,13 +1861,24 @@ export default function LevelPage() {
 
                               {/* 보상 → 수령 — 오른쪽에 세로로 쌓아 "얼마를 · 받는다" 순으로 읽히게 한다 */}
                               <div className="shrink-0 flex flex-col items-end text-right">
-                                {q.rewardXp > 0 && (
-                                  <span className={`text-[15px] font-black tabular-nums leading-none ${q.claimed ? "text-[#c4c4c4]" : "text-[#e91e3f]"}`}>
-                                    +{q.rewardXp.toLocaleString()}
-                                    <span className={`text-[10px] font-bold ml-1 ${q.claimed ? "text-[#c4c4c4]" : "text-[#a3a3a3]"}`}>XP</span>
+                                {/* XP 자리는 그대로 두고 POINT 만 옆에 붙인다 (가로 flex 라 gap 이 먹는다) */}
+                                {(rXp > 0 || rPoint > 0) && (
+                                  <span className="flex items-baseline gap-2.5">
+                                    {rXp > 0 && (
+                                      <span className={`text-[15px] font-black tabular-nums leading-none ${q.claimed ? "text-[#c4c4c4]" : "text-[#e91e3f]"}`}>
+                                        +{rXp.toLocaleString()}
+                                        <span className={`text-[10px] font-bold ml-1 ${q.claimed ? "text-[#c4c4c4]" : "text-[#a3a3a3]"}`}>XP</span>
+                                      </span>
+                                    )}
+                                    {rPoint > 0 && (
+                                      <span className={`text-[15px] font-black tabular-nums leading-none ${q.claimed ? "text-[#c4c4c4]" : "text-[#3f9e93]"}`}>
+                                        +{rPoint.toLocaleString()}
+                                        <span className={`text-[10px] font-bold ml-1 ${q.claimed ? "text-[#c4c4c4]" : "text-[#a3a3a3]"}`}>P</span>
+                                      </span>
+                                    )}
                                   </span>
                                 )}
-                                <div className={q.rewardXp > 0 ? "mt-2.5" : ""}>
+                                <div className={rXp > 0 || rPoint > 0 ? "mt-2.5" : ""}>
                                   {q.claimable ? (
                                     <button
                                       onClick={() => claimQuest(q)}
@@ -1899,6 +1910,11 @@ export default function LevelPage() {
                         <EmptySlot>{questPeriod === "daily" ? "추가 퀘스트가 없습니다 — 출석 보상만 진행됩니다" : "등록된 퀘스트가 없습니다"}</EmptySlot>
                       )}
 
+                      {/* 화면에 적힌 POINT 는 배율 적용 전 기본값이라 실제 지급액과 다르다 */}
+                      {questRows.some((q) => Number(q.rewardPoint) > 0) && (
+                        <p className="text-[10px] text-[#c4c4c4] mt-3 break-keep">POINT는 등급에 따라 더 받습니다.</p>
+                      )}
+
                       {/* 지급 안내 — 보상은 봇 대기열을 거치므로 즉시가 아닐 수 있다 */}
                       {questRows.some((q) => q.claimed) && (
                         <p className="text-[10px] text-[#c4c4c4] mt-3 break-keep">수령한 보상은 잠시 뒤 XP에 반영됩니다.</p>
@@ -1914,7 +1930,6 @@ export default function LevelPage() {
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Ranking</span>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1">TOP 10</span></h3>
                         </div>
                         <span className="flex items-center gap-3">
@@ -1947,7 +1962,6 @@ export default function LevelPage() {
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Rank</span>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">등급</h3>
                         </div>
                         <button
@@ -2036,7 +2050,6 @@ export default function LevelPage() {
                     <section>
                       <div className="flex items-end justify-between mb-6">
                         <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Intake</span>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">획득 현황</h3>
                         </div>
                         <span className="text-[11px] font-bold text-[#a3a3a3]">채팅 · 음성 · 출석</span>
@@ -2083,7 +2096,6 @@ export default function LevelPage() {
                       <section>
                         <div className="flex items-end justify-between mb-4">
                           <div>
-                            <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Event</span>
                             <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">진행 중 이벤트</h3>
                           </div>
                           <Link href="/event" className="text-[11px] font-bold text-[#a3a3a3] hover:text-[#e91e3f] transition-colors">전체 →</Link>
@@ -2104,7 +2116,6 @@ export default function LevelPage() {
                     <section>
                       <div className="flex items-end justify-between mb-4">
                         <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Feed</span>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">획득 피드</h3>
                         </div>
                         <span className="flex items-center gap-1.5"><LiveDot /><span className="text-[10px] font-bold text-[#a3a3a3] tabular-nums">{myLogs?.logs?.length || 0}건</span></span>
@@ -2136,7 +2147,6 @@ export default function LevelPage() {
                     <section>
                       <div className="flex items-end justify-between mb-5">
                         <div>
-                          <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase mb-1.5"><span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Season</span>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">시즌 진행</h3>
                         </div>
                         {!seasonDday.ended && seasonDday.days >= 0 && <span className="text-xl font-black text-[#e91e3f] tabular-nums leading-none">D-{seasonDday.days}</span>}
@@ -2191,7 +2201,7 @@ export default function LevelPage() {
               {/* ═══ 01 한눈에 ═══ */}
               {introSec === "overview" && (
                 <Reveal>
-                  <SectionHeader en="Overview" title="성장은 이렇게 이어집니다" />
+                  <SectionHeader title="성장은 이렇게 이어집니다" />
 
                   {/* 인과 사슬 — 읽기 전에 지도를 먼저 준다 */}
                   <div className="relative rounded-3xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)] p-6 md:p-9">
@@ -2240,11 +2250,11 @@ export default function LevelPage() {
               {/* ═══ 02 모으기 ═══ */}
               {introSec === "earn" && (
                 <Reveal>
-                  <SectionHeader en="Earn" title="XP는 이렇게 쌓입니다" />
+                  <SectionHeader title="XP는 이렇게 쌓입니다" />
                   <div className="grid grid-cols-1 md:grid-cols-2 border-y border-black/[0.08] md:divide-x divide-black/[0.08]">
                     {[
                       { t: "채팅", x: P.chatXp.toLocaleString(), c: `쿨타임 ${P_chatCooldownLabel}`, d: "메시지를 보내면 지급됩니다. 쿨타임 안에 보낸 메시지는 지급도 진행도 집계도 되지 않습니다." },
-                      { t: "음성", x: P.voiceXp.toLocaleString(), c: `${P_voiceMin}분마다`, d: `${P_voiceMin}분마다 돌아오는 지급 시각에 음성 채널에 있으면 받습니다. 그 시각에 접속해 있기만 하면 됩니다.` },
+                      { t: "음성", x: P.voiceXp.toLocaleString(), c: `${P_voiceMin}분마다`, d: `${P_voiceMin}분마다 돌아오는 지급 시각에 음성 채널에 있으면 받습니다.` },
                     ].map((item, i) => (
                       <div key={i} className={`group py-7 md:px-7 first:md:pl-0 last:md:pr-0 ${i > 0 ? "border-t md:border-t-0 border-black/[0.08]" : ""}`}>
                         <div className="flex items-center justify-between mb-5">
@@ -2274,8 +2284,8 @@ export default function LevelPage() {
                     </div>
                     <div className="divide-y divide-black/[0.06]">
                       {[
-                        { t: "자동으로 집계", d: `음성 채널에 머문 시간이 쌓여 ${P.attendVoiceMin}분을 넘으면 달성됩니다. 따로 할 일은 없습니다.` },
-                        { t: "자동 지급", d: "기준 시간을 채우는 순간 바로 지급됩니다. 따로 받을 필요가 없습니다. 자정(KST)에 초기화됩니다." },
+                        { t: "자동으로 집계", d: `음성 채널에 머문 시간이 쌓여 ${P.attendVoiceMin}분을 넘으면 달성됩니다.` },
+                        { t: "자동 지급", d: "기준 시간을 채우는 순간 지급되고, 자정(KST)에 초기화됩니다." },
                       ].map((r, i) => (
                         <div key={i} className="flex items-start justify-between gap-4 py-3.5">
                           <span className="shrink-0 text-[12px] font-bold text-[#131313] w-24 md:w-32">{r.t}</span>
@@ -2287,7 +2297,7 @@ export default function LevelPage() {
 
                   {/* 지급이 막히는 경우 */}
                   <div className="mt-12">
-                    <SectionHeader en="Blocked" title="활동해도 XP가 안 붙을 때" />
+                    <SectionHeader title="활동해도 XP가 안 붙을 때" />
                     <div className="space-y-5">
                       {[
                         { t: "잠수 채널", d: "잠수 채널에 있는 동안에는 음성 XP가 지급되지 않습니다." },
@@ -2316,7 +2326,6 @@ export default function LevelPage() {
               {introSec === "grow" && (
                 <Reveal>
                   <SectionHeader
-                    en="Grow"
                     title="레벨이 오르면 음성 지급량이 커집니다"
                     right={
                       <button
@@ -2369,7 +2378,7 @@ export default function LevelPage() {
 
                   {/* 진행 중인 부스트 — 실제 DB를 읽으므로 낡지 않는다 */}
                   <div className="mt-12">
-                    <SectionHeader en="Active" title="지금 진행 중인 부스트" />
+                    <SectionHeader title="지금 진행 중인 부스트" />
                     {!policy ? (
                       <div className="space-y-2">
                         {[0, 1].map((i) => <div key={i} className="h-[72px] rounded-lg bg-black/[0.04] animate-pulse"></div>)}
@@ -2405,7 +2414,6 @@ export default function LevelPage() {
               {introSec === "claim" && (
                 <Reveal>
                   <SectionHeader
-                    en="Claim"
                     title="쌓은 것을 받는 법"
                     right={
                       <button
@@ -2419,7 +2427,7 @@ export default function LevelPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 border-y border-black/[0.08] md:divide-x divide-black/[0.08]">
                     {[
                       { n: "01", t: "일일 · 주간 · 월간", d: "세 주기로 나뉘고 각각 자정 · 월요일 · 1일(KST)에 초기화됩니다." },
-                      { n: "02", t: "주기마다 새로 뽑힙니다", d: "등록된 퀘스트 중 일부만 나옵니다. 같은 주기 동안 모두에게 같은 목록이 보이고, 주기가 바뀌면 다시 뽑힙니다." },
+                      { n: "02", t: "주기마다 새로 뽑힙니다", d: "등록된 퀘스트 중 일부만 나오고, 주기가 바뀌면 다시 뽑힙니다." },
                       { n: "03", t: "직접 눌러서 받기", d: "달성해도 자동 지급이 아닙니다. 대시보드에서 받아야 XP가 들어옵니다." },
                     ].map((f, i) => (
                       <div key={i} className={`group py-7 md:px-7 first:md:pl-0 last:md:pr-0 ${i > 0 ? "border-t md:border-t-0 border-black/[0.08]" : ""}`}>
@@ -2438,7 +2446,7 @@ export default function LevelPage() {
                   </div>
 
                   <div className="mt-12">
-                    <SectionHeader en="Inventory" title="받은 것은 인벤토리에 남습니다" />
+                    <SectionHeader title="받은 것은 인벤토리에 남습니다" />
                     <div className="border-y border-black/[0.08] divide-y divide-black/[0.06]">
                       {[
                         { t: "영구 보유 · N일 이용권", d: "기간이 있는 상품은 남은 날짜가 D-day로 붙습니다." },
@@ -2458,7 +2466,7 @@ export default function LevelPage() {
               {/* ═══ 05 규칙·시즌 ═══ */}
               {introSec === "rules" && (
                 <Reveal>
-                  <SectionHeader en="Commands" title="디스코드 명령어" />
+                  <SectionHeader title="디스코드 명령어" />
                   <div className="border-y border-black/[0.08] divide-y divide-black/[0.06]">
                     {[
                       { c: "/레벨", d: "다음 레벨까지 필요한 XP" },
@@ -2473,7 +2481,6 @@ export default function LevelPage() {
 
                   <div className="mt-12">
                     <SectionHeader
-                      en="Season"
                       title={`SEASON ${SEASON.number} · ${SEASON.name}`}
                       right={<StatusChip accent dot>{seasonDday.ended ? "종료" : `D-${seasonDday.days}`}</StatusChip>}
                     />
@@ -2489,7 +2496,7 @@ export default function LevelPage() {
                   </div>
 
                   <div className="mt-12">
-                    <SectionHeader en="Notice" title="알아두실 것" />
+                    <SectionHeader title="알아두실 것" />
                     <div className="space-y-5">
                       {[
                         ...(canSeeShop
@@ -2552,9 +2559,8 @@ export default function LevelPage() {
         {activeMainTab === "pass" && (
           <Reveal>
             <SectionHeader
-              en="Season Pass"
               title="시즌 패스"
-              desc="이번 시즌에 모은 XP 만큼 티어가 오릅니다. 무료 트랙은 누구나 받을 수 있고, 프리미엄 트랙은 한 번 해금하면 시즌이 끝날 때까지 열려 있습니다."
+              desc="이번 시즌에 모은 XP 만큼 티어가 오릅니다."
               right={
                 <div className="shrink-0 text-right">
                   <p className="text-[9px] font-black tracking-[0.22em] text-[#a3a3a3] uppercase">
@@ -2571,8 +2577,7 @@ export default function LevelPage() {
               // 패스 진행도는 계정에 붙는 값이라 관전 모드로는 아무것도 셀 수 없다
               <div className="border-y border-black/[0.08] py-14 text-center">
                 <svg aria-hidden viewBox="0 0 24 24" className="w-6 h-6 mx-auto mb-4" fill="none" stroke="rgba(0,0,0,0.28)" strokeWidth="1.5"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
-                <p className="text-sm font-bold text-[#131313] mb-1.5">로그인이 필요합니다</p>
-                <p className="text-[11px] text-[#8a8a8a] mb-7 break-keep">시즌 패스 진행도는 내 계정이 이번 시즌에 모은 XP로 셉니다.</p>
+                <p className="text-sm font-bold text-[#131313] mb-7">로그인이 필요합니다</p>
                 <button
                   onClick={() => signIn("discord", { callbackUrl: "/level?tab=pass" })}
                   className="h-10 px-6 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors outline-none focus:outline-none"
@@ -2636,12 +2641,11 @@ export default function LevelPage() {
                     <div aria-hidden className="absolute -top-24 -right-16 w-[360px] h-[360px] bg-[#e91e3f]/[0.18] blur-[110px] rounded-full pointer-events-none"></div>
                     <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row md:items-center md:justify-between">
                       <div className="min-w-0">
-                        <p className="text-[9px] font-black tracking-[0.35em] text-white/35 uppercase mb-2">Premium Track</p>
                         <p className="text-xl md:text-2xl font-black text-white tracking-tight break-keep">
                           프리미엄 트랙 해금 · <span className="text-[#ff5c77] tabular-nums">{(pass.unlockPrice || 0).toLocaleString()}</span>
                         </p>
                         <p className="text-[11px] text-white/45 mt-2.5 leading-relaxed break-keep">
-                          한 번만 내면 이번 시즌이 끝날 때까지 아래쪽 보상 줄이 모두 열립니다. 이미 지나온 티어의 프리미엄 보상도 그대로 받을 수 있습니다.
+                          시즌 패스를 열고, 이번 시즌의 다양한 보상을 받아보세요!
                         </p>
                         {me && (
                           <p className="text-[11px] font-bold text-white/35 mt-2.5 tabular-nums">
@@ -2672,10 +2676,8 @@ export default function LevelPage() {
 
                 {/* ── 2트랙 레일 — 위 무료 / 아래 프리미엄. 가로로 밀어 다음 티어를 본다 ── */}
                 <div className="mt-10">
-                  <div className="flex items-end justify-between gap-4 mb-3.5">
-                    <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase">
-                      <span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Rewards
-                    </span>
+                  {/* 이브로우를 걷어 낸 자리 — 남은 안내는 원래대로 오른쪽에 붙인다 */}
+                  <div className="flex items-end justify-end gap-4 mb-3.5">
                     <span className="text-[10px] font-bold text-[#a3a3a3] shrink-0">옆으로 밀어 보세요 →</span>
                   </div>
 
@@ -2737,10 +2739,10 @@ export default function LevelPage() {
                 </div>
 
                 <p className="text-[11px] text-[#a3a3a3] mt-6 break-keep leading-relaxed">
-                  XP·역할 보상은 봇이 처리합니다 — 수령을 누르면 대기열에 올라가고 최대 1분 안에 디스코드에 반영됩니다. POINT 보상은 즉시 들어옵니다.
+                  XP·역할 보상은 1분 안에 지급됩니다. POINT는 즉시 들어옵니다.
                   {seasonDday.ended
-                    ? " 이번 시즌은 종료됐습니다 — 다음 시즌이 시작되면 진행도와 수령 기록이 초기화됩니다."
-                    : " 시즌이 끝나면 진행도와 수령 기록은 초기화됩니다."}
+                    ? " 다음 시즌이 시작되면 진행도가 초기화됩니다."
+                    : " 시즌이 끝나면 진행도가 초기화됩니다."}
                 </p>
               </>
             )}
@@ -2750,7 +2752,6 @@ export default function LevelPage() {
         {activeMainTab === "rank" && (
           <Reveal>
             <SectionHeader
-              en="Ranking"
               title="서버 랭킹"
               right={
                 <span className="shrink-0 text-[11px] font-bold text-[#a3a3a3] tabular-nums">
@@ -2934,7 +2935,7 @@ export default function LevelPage() {
 
             {rankMode === "month" && (
               <p className="text-[11px] text-[#a3a3a3] mt-5 break-keep">
-                이번 달 획득은 봇이 기록한 지급 로그로 셉니다 — 기록은 60일간 보관됩니다.
+                지급 기록은 60일간 보관됩니다.
               </p>
             )}
             {rankMode === "voice" && !voiceTracked && (
@@ -2949,7 +2950,7 @@ export default function LevelPage() {
         {/* ══ TAB : TABLE ══════════════════ */}
         {activeMainTab === "table" && (
           <Reveal>
-            <SectionHeader en="Table" title="XP 테이블" />
+            <SectionHeader title="XP 테이블" />
 
             <LuxCard className="p-6 md:p-8 mb-12" glow>
               <div className="flex flex-col lg:flex-row lg:gap-6 items-stretch lg:items-center">
@@ -2984,11 +2985,11 @@ export default function LevelPage() {
 
             {/* 성장 곡선 — 표의 숫자를 한눈에 보는 그림 */}
             <div className="mb-12">
-              <SectionHeader en="Curve" title="성장 곡선" />
+              <SectionHeader title="성장 곡선" />
               <LevelCurve myLevel={me?.level || null} />
             </div>
 
-            <SectionHeader en="Full Table" title="전체 레벨 표" />
+            <SectionHeader title="전체 레벨 표" />
             <LuxCard className="overflow-hidden">
               <div className="max-h-[520px] overflow-y-auto custom-scrollbar">
                 <table className="w-full text-center text-xs">
@@ -3021,7 +3022,7 @@ export default function LevelPage() {
         {/* ══ TAB : SIMULATOR ══════════════ */}
         {activeMainTab === "sim" && (
           <Reveal>
-            <SectionHeader en="Simulator" title="XP 시뮬레이터" />
+            <SectionHeader title="XP 시뮬레이터" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
 
               {/* ── 좌: 조건 설정 ── */}
@@ -3172,8 +3173,7 @@ export default function LevelPage() {
 
                 {/* 🎯 목표 모드 */}
                 <LuxCard className="p-6">
-                  <p className="text-sm font-black text-[#131313] mb-1.5">목표 모드</p>
-                  <p className="text-[11px] text-[#a3a3a3] mb-5 leading-relaxed break-keep">위 조건(레벨·채널·아이템) 기준으로, 목표 레벨까지 걸리는 예상 기간을 계산합니다.</p>
+                  <p className="text-sm font-black text-[#131313] mb-5">목표 모드</p>
                   <div className="grid grid-cols-2 gap-3 mb-5">
                     <div>
                       <label className="block text-[10px] font-bold text-[#8a8a8a] mb-1.5">목표 레벨</label>
@@ -3195,7 +3195,7 @@ export default function LevelPage() {
                       <p className="text-[10px] text-[#8a8a8a]">필요 XP {goalResult.neededXp.toLocaleString()} · 일일 예상 획득 {goalResult.dailyXp.toLocaleString()} XP (출석 1회 포함)</p>
                     </div>
                   ) : (
-                    <EmptySlot>목표 레벨과 하루 활동 시간을 입력하면 예상 소요 기간이 표시됩니다</EmptySlot>
+                    <EmptySlot>목표 레벨과 하루 활동 시간을 입력하세요</EmptySlot>
                   )}
                 </LuxCard>
               </div>

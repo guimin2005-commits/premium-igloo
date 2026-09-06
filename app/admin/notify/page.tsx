@@ -1,11 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { useSession, signIn } from "next-auth/react";
 import { Reveal, LuxStyles } from "../../components/Lux";
 import { RenderFormattedText } from "../../components/FormattedText";
-
-const ADMIN_USERS = ["elahw.06"];
+// 알림 모달 · 확인 모달 · 라벨은 관리자 공용 것을 쓴다 — 이 파일이 따로 들고 있던 복사본은 뺐다
+import { inputClass, labelClass, useAdminGuard, useNotice, ConfirmDialog } from "../ui";
 
 // 통지 유형별 색상 프리셋
 const TYPE_STYLES: Record<string, { badge: string }> = {
@@ -18,14 +17,16 @@ const TYPE_STYLES: Record<string, { badge: string }> = {
 const TYPES = ["경고", "제재", "안내", "축하", "일반"];
 
 export default function AdminNotifyPage() {
-  const { data: session, status } = useSession();
-  const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  // 화면 가리기 전용 — 실제 방어는 /api/notifications 가 서버에서 한 번 더 한다.
+  // 예전에는 이 파일이 관리자 목록을 직접 들고 있어, 관리자가 늘면 여기만 조용히 어긋났다.
+  const { isAdmin, gate } = useAdminGuard();
+  const { notify, noticeEl } = useNotice();
 
   const [sent, setSent] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [popup, setPopup] = useState({ isOpen: false, message: "", isError: false });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [recipient, setRecipient] = useState("");
   const [type, setType] = useState("경고");
@@ -83,7 +84,7 @@ export default function AdminNotifyPage() {
     e.preventDefault();
     if (isSubmitting) return;
     if (!recipient.trim() || !title.trim() || !content.trim()) {
-      setPopup({ isOpen: true, message: "수신자·제목·본문을 모두 입력해 주세요.", isError: true });
+      notify("수신자 · 제목 · 본문을 모두 입력해 주세요.", true);
       return;
     }
     setIsSubmitting(true);
@@ -99,52 +100,44 @@ export default function AdminNotifyPage() {
         setContent("");
         // 수신자/유형은 연속 발송 편의를 위해 유지
         fetchSent();
+        // 저장은 됐는데 DM 만 실패하는 경우가 있어, 어디까지 갔는지는 알려야 한다
         const msg = data.userFound
           ? data.dmSent
-            ? "통지를 저장하고 디스코드 DM 알림도 발송했습니다."
-            : "통지는 저장됐지만 DM 발송에 실패했습니다. (수신자가 DM을 막아뒀을 수 있습니다) 수신자는 사이트 알림함에서 확인할 수 있습니다."
-          : "통지를 저장했습니다. 다만 디스코드에서 해당 닉네임의 유저를 찾지 못해 DM은 발송하지 못했습니다. 사용자명을 확인해 주세요. (수신자가 로그인하면 사이트 알림함에서 확인 가능합니다)";
-        setPopup({ isOpen: true, message: msg, isError: false });
+            ? "통지를 발송했습니다."
+            : "통지를 저장했지만 DM 발송에 실패했습니다. 수신자가 DM을 막아 뒀을 수 있습니다."
+          : "통지를 저장했지만 디스코드에서 해당 사용자명을 찾지 못해 DM은 보내지 못했습니다.";
+        notify(msg);
       } else {
-        setPopup({ isOpen: true, message: data.error || "발송에 실패했습니다.", isError: true });
+        notify(data.error || "발송에 실패했습니다.", true);
       }
     } catch {
-      setPopup({ isOpen: true, message: "서버 통신 오류가 발생했습니다.", isError: true });
+      notify("서버 통신 오류가 발생했습니다.", true);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const executeDelete = async () => {
-    if (!deleteConfirmId) return;
+    if (!deleteConfirmId || isDeleting) return;
+    setIsDeleting(true);
     try {
       const res = await fetch(`/api/notifications?id=${deleteConfirmId}`, { method: "DELETE" });
       if (res.ok) {
         setSent((prev) => prev.filter((n) => n._id !== deleteConfirmId));
-        setPopup({ isOpen: true, message: "통지 기록을 삭제했습니다.", isError: false });
+        notify("통지 기록을 삭제했습니다.");
       } else {
-        setPopup({ isOpen: true, message: "삭제에 실패했습니다.", isError: true });
+        notify("삭제에 실패했습니다.", true);
       }
     } catch {
-      setPopup({ isOpen: true, message: "서버 통신 오류가 발생했습니다.", isError: true });
+      notify("서버 통신 오류가 발생했습니다.", true);
     } finally {
+      setIsDeleting(false);
       setDeleteConfirmId(null);
     }
   };
 
-  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-[#8a8a8a]">로딩 중...</div>;
-  if (!isAdmin) {
-    return (
-      <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-xl font-black text-[#131313] mb-2">권한 없음</h2>
-        <p className="text-[#5a5a5a] text-sm mb-4">관리자 권한이 필요합니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
-      </main>
-    );
-  }
-
-  const inputClass = "w-full bg-[#ffffff] border border-black/10 rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#8a8a8a]";
-  const labelClass = "block text-[11px] font-bold text-[#8a8a8a] tracking-wide mb-2 uppercase";
+  // 로딩 · 권한 없음 화면은 공용 가드가 만든다 (관리자 화면마다 복사돼 있던 것)
+  if (gate) return gate;
 
   const ToolBtn = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
     <button type="button" onClick={onClick} className="px-2.5 py-1.5 text-xs font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-black/5 rounded-md transition-all flex items-center gap-1">{children}</button>
@@ -158,12 +151,10 @@ export default function AdminNotifyPage() {
       <section className="relative w-full pt-14 pb-8 md:pt-20 md:pb-10 px-6 border-b border-black/5">
         <div className="max-w-4xl mx-auto relative z-10">
           <Reveal>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Official Dispatch</span>
-            </div>
+            {/* 가로선 + 영문 라벨(eyebrow)은 뺐다 — 제목이 첫 줄이다 */}
             <h1 className="text-3xl md:text-4xl font-black tracking-tight leading-none mb-3 text-[#131313]">회원 통지 발송</h1>
-            <p className="text-[#8a8a8a] text-sm leading-relaxed break-keep">특정 회원에게 경고·제재·안내 등 공식 통지를 전달합니다. 통지 내용은 사이트 알림함에 기록되며, 디스코드로 도착 알림(DM)이 함께 전송됩니다.</p>
+            {/* 화면 밖에서 일어나는 것만 남긴다 — 알림함 기록과 디스코드 DM */}
+            <p className="text-[#8a8a8a] text-sm leading-relaxed break-keep">통지는 사이트 알림함에 기록되고 디스코드 DM으로도 전송됩니다.</p>
           </Reveal>
         </div>
       </section>
@@ -188,7 +179,8 @@ export default function AdminNotifyPage() {
               <div>
                 <label className={labelClass}>수신자 (디스코드 사용자명) <span className="text-[#e91e3f]">*</span></label>
                 <input type="text" required placeholder="예: elahw.06" value={recipient} onChange={(e) => setRecipient(e.target.value)} className={inputClass} />
-                <p className="text-[10px] text-[#5a5a5a] mt-1.5 leading-relaxed">표시 이름·별명이 아닌 <span className="text-[#5a5a5a]">고유 사용자명(핸들)</span>을 정확히 입력하세요.</p>
+                {/* 표시 이름으로 넣으면 유저를 못 찾아 DM 만 조용히 빠진다 */}
+                <p className="text-[10px] text-[#5a5a5a] mt-1.5">표시 이름이 아닌 고유 사용자명(핸들)이어야 합니다.</p>
               </div>
               <div>
                 <label className={labelClass}>통지 유형 <span className="text-[#e91e3f]">*</span></label>
@@ -219,9 +211,9 @@ export default function AdminNotifyPage() {
                   <span className="w-px h-4 bg-black/10 mx-1"></span>
                   <ToolBtn onClick={() => insertTable(2, 2)}><span className="text-sm font-bold">⊞</span> 표</ToolBtn>
                 </div>
-                <textarea ref={textareaRef} required rows={7} placeholder="회원에게 전달할 통지 내용을 작성하세요. 위 버튼으로 굵게·밑줄·강조 등 서식을 넣을 수 있습니다. (본문은 사이트 알림함에서 표시됩니다)" value={content} onChange={(e) => setContent(e.target.value)} className="w-full bg-[#ffffff] px-4 py-3.5 text-sm text-[#131313] outline-none resize-none leading-relaxed placeholder:text-[#8a8a8a] [&::-webkit-scrollbar]:hidden" />
+                <textarea ref={textareaRef} required rows={7} placeholder="통지 내용을 작성하세요" value={content} onChange={(e) => setContent(e.target.value)} className="w-full bg-[#ffffff] px-4 py-3.5 text-sm text-[#131313] outline-none resize-none leading-relaxed placeholder:text-[#8a8a8a] [&::-webkit-scrollbar]:hidden" />
               </div>
-              <p className="text-[10px] text-[#5a5a5a] mt-1.5">서식: <code className="text-[#8a8a8a]">**굵게**</code> · <code className="text-[#8a8a8a]">__밑줄__</code> · <code className="text-[#8a8a8a]">~~취소선~~</code> · <code className="text-[#8a8a8a]">==강조==</code></p>
+              {/* 서식 문법 안내는 뺐다 — 위 툴바 버튼이 같은 일을 하고 아래 미리보기가 결과를 보여 준다 */}
             </div>
 
             {/* 미리보기 */}
@@ -287,28 +279,19 @@ export default function AdminNotifyPage() {
         </Reveal>
       </div>
 
-      {deleteConfirmId && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-[#ffffff] border border-[#e91e3f]/25 rounded-3xl w-full max-w-sm p-8 text-center">
-            <h2 className="text-xl font-bold text-[#131313] mb-3">삭제 확인</h2>
-            <p className="text-sm text-[#5a5a5a] mb-8">해당 통지 기록을 삭제하시겠습니까? 수신자의 알림함에서도 사라집니다.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 bg-[#e6e3de] text-[#131313] rounded-xl">취소</button>
-              <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white rounded-xl">삭제</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── 통지 기록 삭제 확인 — 수신자 알림함에서도 사라지므로 되돌릴 수 없다 ── */}
+      <ConfirmDialog
+        open={!!deleteConfirmId}
+        danger
+        busy={isDeleting}
+        title="통지 기록 삭제"
+        confirmLabel="삭제"
+        body="수신자의 알림함에서도 사라집니다."
+        onConfirm={executeDelete}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
 
-      {popup.isOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
-          <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-md p-8 text-center shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
-            <h2 className="text-xl font-bold text-[#131313] mb-3">{popup.isError ? "오류" : "발송 완료"}</h2>
-            <p className="text-sm text-[#5a5a5a] mb-8 leading-relaxed break-keep">{popup.message}</p>
-            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] font-bold rounded-xl transition-colors">확인</button>
-          </div>
-        </div>
-      )}
+      {noticeEl}
     </main>
   );
 }

@@ -1,14 +1,28 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useSession, signIn } from "next-auth/react";
 import { Reveal, LuxStyles } from "../components/Lux";
+// 📌 관리자 공용 UI — 권한 가드·히어로·섹션 머리는 여기서 가져온다.
+//    예전에는 이 파일이 ADMIN_USERS 와 SectionHead 를 따로 들고 있었고,
+//    그 SectionHead 만 gap-4 가 빠져 다른 관리자 화면과 미세하게 어긋나 있었다.
+import { SectionHead, useAdminGuard, AdminHero } from "./ui";
 
-const ADMIN_USERS = ["elahw.06"];
+// 📌 섹션 안 작은 블록의 머리 — 라벨(+우측 요약값) 한 줄.
+//    같은 역할인데 화면 안에서 mb-4 / mb-5 / block 으로 갈려 있어 한 곳으로 모은다.
+function BlockHead({ label, right }: { label: string; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 mb-5">
+      <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase">{label}</span>
+      {right}
+    </div>
+  );
+}
+
+// 📌 지표 숫자 아래 라벨 — 핵심 지표줄과 디스코드 지표줄이 서로 다른 크기·자간을 쓰고 있었다.
+const STAT_LABEL = "text-[9px] md:text-[10px] font-bold tracking-[0.2em] text-[#5a5a5a] mt-1.5 uppercase";
 
 export default function AdminHubPage() {
-  const { data: session, status } = useSession();
-  const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const { isAdmin, gate } = useAdminGuard();
 
   const [stats, setStats] = useState({
     inquiries: 0, pending: 0, applies: 0, codes: 0, payoutPending: 0,
@@ -133,64 +147,29 @@ export default function AdminHubPage() {
     return Array.from(byDay.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([date, members]) => ({ date, members }));
   })();
 
-  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-[#8a8a8a]">로딩 중...</div>;
-  if (!isAdmin) {
-    return (
-      <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-xl font-black text-[#131313] mb-2">권한 없음</h2>
-        <p className="text-[#5a5a5a] text-sm mb-4">관리자 권한이 필요합니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
-      </main>
-    );
-  }
-
-  // 플랫 섹션 헤더 (공문서 스타일)
-  const SectionHead = ({ no, title, right }: { no: string; title: string; right?: React.ReactNode }) => (
-    <div className="mb-6">
-      <div className="flex items-baseline gap-4 mb-2">
-        <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">{no}</span>
-        <div className="h-px flex-1 bg-gradient-to-r from-black/15 to-transparent"></div>
-      </div>
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg md:text-xl font-black text-[#131313] tracking-tight">{title}</h2>
-        {right}
-      </div>
-    </div>
-  );
+  // 로딩 중 / 권한 없음 화면은 공용 가드가 낸다 — 훅을 모두 부른 뒤에 빠져나가야 한다.
+  if (gate) return gate;
 
   return (
     <main className="w-full flex-1 flex flex-col relative">
       <LuxStyles />
 
-      {/* ── HERO ── */}
-      <section className="relative w-full pt-16 pb-10 md:pt-20 md:pb-12 px-6">
-        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
-        <div className="max-w-5xl mx-auto relative z-10">
-          <Reveal>
-            <div className="flex items-center gap-3 mb-5">
-              <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Admin Console</span>
-            </div>
-            <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-4">
-              <span className="text-[#131313]">관리자 </span><span className="text-[#e91e3f]">대시보드</span>
-            </h1>
-            <p className="text-[#5a5a5a] text-sm md:text-base leading-relaxed">서버·사이트 현황 요약 — 작업은 왼쪽 패널에서 이동합니다</p>
-          </Reveal>
-        </div>
-      </section>
+      {/* 이동 안내는 뺐다 — 좁은 화면에서는 좌측 패널이 아니라 상단 칩 바라 가리키는 대상이 달라진다 */}
+      <AdminHero size="lg" width="max-w-5xl" title="관리자 대시보드" desc="서버 · 사이트 현황 요약" />
 
-      <div className="w-full max-w-5xl mx-auto px-6 pb-16 flex-1 flex flex-col">
+      {/* flex-col 에는 gap-* 가 먹지 않는다 (Tailwind v4) — 섹션 간격은 space-y-* 로 준다 */}
+      <div className="w-full max-w-5xl mx-auto px-6 pb-16 flex-1 flex flex-col space-y-14">
 
       {/* 01 — 핵심 지표 */}
       <Reveal>
-      <section className="mb-14">
+      <section>
         <SectionHead
           no="01"
           title="핵심 지표"
           right={
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 shrink-0">
               <span className={`text-[10px] font-black tracking-wider ${maintenance ? "text-[#e91e3f]" : "text-[#5a5a5a]"}`}>{maintenance ? "🔧 점검 중" : "점검 모드"}</span>
-              <button onClick={toggleMaintenance} disabled={maintenanceLoading} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors ${maintenance ? "bg-[#e91e3f]" : "bg-black/10"}`}>
+              <button onClick={toggleMaintenance} disabled={maintenanceLoading} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors disabled:opacity-40 ${maintenance ? "bg-[#e91e3f]" : "bg-black/10"}`}>
                 <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-transform duration-200 ${maintenance ? "translate-x-5" : ""}`}></div>
               </button>
             </div>
@@ -209,7 +188,7 @@ export default function AdminHubPage() {
                 {s.dot && <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>}
                 {s.n.toLocaleString()}
               </div>
-              <div className="text-[9px] md:text-[10px] font-bold tracking-[0.2em] text-[#5a5a5a] mt-1.5 uppercase">{s.l}</div>
+              <div className={STAT_LABEL}>{s.l}</div>
             </div>
           ))}
         </div>
@@ -217,10 +196,10 @@ export default function AdminHubPage() {
         {/* 디스코드 서버 현황 — 플랫 행 */}
         {discordStats && (
           <div className="border-b border-black/[0.06] py-6">
-            <div className="flex items-center justify-between mb-5">
-              <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase">Discord 서버 현황</span>
-              <span className="text-[10px] font-bold text-[#5a5a5a]">개설 D+{discordStats.ageDays.toLocaleString()}일</span>
-            </div>
+            <BlockHead
+              label="Discord 서버 현황"
+              right={<span className="text-[10px] font-bold text-[#5a5a5a]">개설 D+{discordStats.ageDays.toLocaleString()}일</span>}
+            />
             <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
               {[
                 { n: discordStats.boostCount, l: "부스트", sub: `Tier ${discordStats.boostTier}`, accent: true },
@@ -232,7 +211,7 @@ export default function AdminHubPage() {
               ].map((s: any, i: number) => (
                 <div key={i} className="text-center">
                   <div className={`text-xl md:text-2xl font-black tracking-tight ${s.accent ? "text-[#e91e3f]" : "text-[#131313]"}`}>{s.n.toLocaleString()}</div>
-                  <div className="text-[9px] font-bold tracking-[0.15em] text-[#5a5a5a] mt-1 uppercase">{s.l}</div>
+                  <div className={STAT_LABEL}>{s.l}</div>
                   {s.sub && <div className="text-[9px] font-bold text-[#c01734] mt-0.5">{s.sub}</div>}
                 </div>
               ))}
@@ -244,17 +223,17 @@ export default function AdminHubPage() {
 
       {/* 02 — 활동 분석 */}
       <Reveal>
-      <section className="mb-14">
+      <section>
         <SectionHead no="02" title="활동 분석" />
 
-        {/* 요일×시간대 온라인 히트맵 */}
+        {/* 요일×시간대 온라인 히트맵 — 좁은 화면에서 페이지가 아니라 이 블록만 가로로 스크롤된다 */}
         {heatmap.hasData && (
           <div className="border-b border-black/[0.06] pb-6 mb-6 overflow-x-auto no-bar">
-            <div className="flex items-center justify-between mb-5 min-w-[560px]">
-              <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase">활동 골든타임 (최근 7일 · 평균 온라인)</span>
-              <span className="text-[10px] font-bold text-[#5a5a5a]">피크 {Math.round(heatmap.max)}명</span>
-            </div>
             <div className="min-w-[560px]">
+              <BlockHead
+                label="활동 골든타임 (최근 7일 · 평균 온라인)"
+                right={<span className="text-[10px] font-bold text-[#5a5a5a]">피크 {Math.round(heatmap.max)}명</span>}
+              />
               <div className="grid gap-[3px]" style={{ gridTemplateColumns: "28px repeat(24, 1fr)" }}>
                 <div></div>
                 {Array.from({ length: 24 }, (_, h) => (
@@ -274,7 +253,8 @@ export default function AdminHubPage() {
                   </React.Fragment>
                 ))}
               </div>
-              <p className="text-[9px] text-[#5a5a5a] mt-3">색이 진할수록 온라인 인원이 많은 시간대 · 데이터가 쌓일수록 정확해집니다</p>
+              {/* 표본이 적을 때 값이 튄다는 건 화면만 봐서는 모른다 — 그것만 남긴다 */}
+              <p className="text-[9px] text-[#5a5a5a] mt-3">데이터가 쌓일수록 정확해집니다</p>
             </div>
           </div>
         )}
@@ -289,10 +269,10 @@ export default function AdminHubPage() {
           const delta = vals[vals.length - 1] - vals[0];
           return (
             <div className="border-b border-black/[0.06] pb-6 mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase">멤버 증감 (최근 {memberDaily.length}일)</span>
-                <span className={`text-[11px] font-black ${delta >= 0 ? "text-emerald-700" : "text-[#e91e3f]"}`}>{delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toLocaleString()}명</span>
-              </div>
+              <BlockHead
+                label={`멤버 증감 (최근 ${memberDaily.length}일)`}
+                right={<span className={`text-[11px] font-black ${delta >= 0 ? "text-emerald-700" : "text-[#e91e3f]"}`}>{delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toLocaleString()}명</span>}
+              />
               <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-20 overflow-visible">
                 <defs>
                   <linearGradient id="memberFill" x1="0" y1="0" x2="0" y2="1">
@@ -314,21 +294,22 @@ export default function AdminHubPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
           {/* 최근 7일 문의 추이 바 차트 */}
           <div>
-            <div className="flex items-center justify-between mb-5">
-              <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase">최근 7일 문의</span>
-              <span className="text-[10px] font-bold text-[#5a5a5a]">총 {stats.weeklyInquiries}건</span>
-            </div>
+            <BlockHead
+              label="최근 7일 문의"
+              right={<span className="text-[10px] font-bold text-[#5a5a5a]">총 {stats.weeklyInquiries}건</span>}
+            />
             <div className="flex items-end justify-between gap-2 h-24">
               {stats.inquiryDaily.map((d, i) => {
                 const max = Math.max(...stats.inquiryDaily.map((x) => x.count), 1);
                 return (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                    {d.count > 0 && <span className="text-[9px] font-black text-[#e91e3f]">{d.count}</span>}
+                  // flex-col 에는 gap-* 가 먹지 않는다 (Tailwind v4) — 막대 위아래 간격은 마진으로 준다
+                  <div key={i} className="flex-1 flex flex-col items-center h-full justify-end">
+                    {d.count > 0 && <span className="text-[9px] font-black text-[#e91e3f] mb-1.5">{d.count}</span>}
                     <div
                       className={`w-full rounded-t-md transition-all ${d.count > 0 ? "bg-gradient-to-t from-[#e91e3f]/60 to-[#e91e3f]" : "bg-black/5"}`}
                       style={{ height: d.count > 0 ? `${Math.max((d.count / max) * 100, 12)}%` : "4px" }}
                     ></div>
-                    <span className="text-[8px] font-bold text-[#5a5a5a]">{d.label}</span>
+                    <span className="text-[8px] font-bold text-[#5a5a5a] mt-1.5">{d.label}</span>
                   </div>
                 );
               })}
@@ -337,7 +318,7 @@ export default function AdminHubPage() {
 
           {/* 콘텐츠/활동 현황 — 표 형식 */}
           <div>
-            <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase block mb-5">콘텐츠 & 활동 현황</span>
+            <BlockHead label="콘텐츠 & 활동 현황" />
             <div>
               {[
                 { l: "게시글", v: `공지 ${stats.postCounts.공지사항} · 이벤트 ${stats.postCounts.이벤트} · 대회 ${stats.postCounts.대회} · 구인 ${stats.postCounts.구인}` },
@@ -348,7 +329,7 @@ export default function AdminHubPage() {
               ].map((row, i) => (
                 <div key={i} className="flex items-baseline justify-between gap-4 py-2 border-b border-black/[0.05] last:border-0">
                   <span className="text-[11px] font-bold text-[#8a8a8a] shrink-0">{row.l}</span>
-                  <span className="text-[11px] font-bold text-[#4b4b4b] text-right">{row.v}</span>
+                  <span className="text-[11px] font-bold text-[#5a5a5a] text-right">{row.v}</span>
                 </div>
               ))}
             </div>
