@@ -77,7 +77,17 @@ async function processPayouts(guild) {
 
       // 지급·회수로 레벨이 달라졌을 수 있으니 보상 역할을 현재 레벨에 맞춘다
       const member = await fetchMember(guild, userId);
-      if (member) await syncRewardRoles(member, newLevel).catch(() => {});
+      if (member) {
+        await syncRewardRoles(member, newLevel).catch(() => {});
+        // 큐로만 XP 가 들어온 계정은 이름이 비어 있어 랭킹에 "이름 없음" 으로 뜬다.
+        // grantXp 와 달리 여기서는 이름을 채우지 않았기 때문 — 멤버를 이미 받아왔으니 같이 채운다.
+        if (!doc.displayName || !doc.username) {
+          await UserXp.updateOne(
+            { userId },
+            { $set: { displayName: member.displayName, username: member.user.username } }
+          ).catch(() => {});
+        }
+      }
 
       p.status = "paid";
       p.paidAt = new Date();

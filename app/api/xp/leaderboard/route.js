@@ -6,8 +6,9 @@ import UserXp from "@/models/UserXp";
 import XpLog from "@/models/XpLog";
 import { kstMonthStart } from "@/lib/kst";
 
-// 📌 프로필 사진 — UserXp 에 저장하지 않으므로 디스코드에서 가져온다.
-//    시상대(1~3위)에만 쓰므로 한 번에 3건이고, 10분 캐시로 호출을 줄인다.
+// 📌 디스코드 멤버 정보 — 프로필 사진과 표시 이름을 함께 가져온다.
+//    사진은 시상대(1~3위)에만, 이름은 UserXp 에 비어 있는 사람에게만 쓴다.
+//    (봇의 grantXp 를 거치지 않고 XP 만 들어간 계정은 이름이 비어 있다)
 const AVATAR_TTL = 10 * 60 * 1000;
 let avatarCache = { at: 0, byUser: new Map() };
 
@@ -18,7 +19,7 @@ const defaultAvatar = (userId) => {
   return `https://cdn.discordapp.com/embed/avatars/${n}.png`;
 };
 
-async function fetchAvatars(userIds) {
+async function fetchMembers(userIds) {
   const now = Date.now();
   if (now - avatarCache.at > AVATAR_TTL) avatarCache = { at: now, byUser: new Map() };
 
@@ -29,37 +30,51 @@ async function fetchAvatars(userIds) {
   await Promise.all(
     userIds.map(async (id) => {
       if (avatarCache.byUser.has(id)) { out.set(id, avatarCache.byUser.get(id)); return; }
-      if (!GUILD_ID || !BOT_TOKEN) { out.set(id, defaultAvatar(id)); return; }
+      const fallback = { avatar: defaultAvatar(id), name: "" };
+      if (!GUILD_ID || !BOT_TOKEN) { out.set(id, fallback); return; }
       try {
         const res = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${id}`, {
           headers: { Authorization: `Bot ${BOT_TOKEN}` },
           cache: "no-store",
         });
-        if (!res.ok) { out.set(id, defaultAvatar(id)); return; }
+        if (!res.ok) { out.set(id, fallback); return; }
         const m = await res.json();
         // 서버 전용 프로필 사진이 있으면 그것을 우선한다
-        const url = m?.avatar
+        const avatar = m?.avatar
           ? `https://cdn.discordapp.com/guilds/${GUILD_ID}/users/${id}/avatars/${m.avatar}.png?size=128`
           : m?.user?.avatar
           ? `https://cdn.discordapp.com/avatars/${id}/${m.user.avatar}.png?size=128`
           : defaultAvatar(id);
-        avatarCache.byUser.set(id, url);
-        out.set(id, url);
+        // 서버 별명 → 표시 이름 → 계정 이름 순
+        const name = m?.nick || m?.user?.global_name || m?.user?.username || "";
+        const info = { avatar, name };
+        avatarCache.byUser.set(id, info);
+        out.set(id, info);
       } catch {
-        out.set(id, defaultAvatar(id));
+        out.set(id, fallback);
       }
     })
   );
   return out;
 }
 
-// 첫 페이지의 상위 3명에게만 사진을 붙인다 (시상대 전용)
-async function withPodiumAvatars(rows, skip) {
-  if (skip !== 0) return rows;
-  const top = rows.slice(0, 3);
-  if (top.length === 0) return rows;
-  const map = await fetchAvatars(top.map((r) => r.userId));
-  return rows.map((r) => (map.has(r.userId) ? { ...r, avatar: map.get(r.userId) } : r));
+// 사진은 첫 페이지 상위 3명(시상대)에만, 이름은 비어 있는 사람 전부에게 채운다.
+const NO_NAME = "이름 없음";
+async function decorate(rows, skip) {
+  const needAvatar = skip === 0 ? rows.slice(0, 3).map((r) => r.userId) : [];
+  const needName = rows.filter((r) => !r.name || r.name === NO_NAME).map((r) => r.userId);
+  const ids = [...new Set([...needAvatar, ...needName])];
+  if (ids.length === 0) return rows;
+  const map = await fetchMembers(ids);
+  const avatarSet = new Set(needAvatar);
+  return rows.map((r) => {
+    const info = map.get(r.userId);
+    if (!info) return r;
+    const out = { ...r };
+    if (avatarSet.has(r.userId)) out.avatar = info.avatar;
+    if ((!r.name || r.name === NO_NAME) && info.name) out.name = info.name;
+    return out;
+  });
 }
 
 // ── [조회] 랭킹 ──────────────────────────────────────────────
@@ -102,7 +117,7 @@ export async function GET(request) {
       ).lean();
       const byId = new Map(docs.map((u) => [u.userId, u]));
 
-      const monthData = await withPodiumAvatars(
+      const monthData = await decorate(
         rows.map((r, i) => ({
           rank: skip + i + 1,
           userId: r._id,
@@ -128,7 +143,7 @@ export async function GET(request) {
         UserXp.countDocuments(filter),
       ]);
 
-      const voiceData = await withPodiumAvatars(
+      const voiceData = await decorate(
         rows.map((r, i) => ({
           rank: skip + i + 1,
           userId: r.userId,
@@ -150,7 +165,7 @@ export async function GET(request) {
       UserXp.countDocuments(),
     ]);
 
-    const allData = await withPodiumAvatars(
+    const allData = await decorate(
       rows.map((r, i) => ({
         rank: skip + i + 1,
         userId: r.userId,
