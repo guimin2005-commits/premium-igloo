@@ -83,7 +83,8 @@ export async function GET() {
 
         // 아직 유효한데 디스코드에 역할이 없다 = 지급 실패·수동 회수 같은 이상 상태.
         // 산 물건을 조용히 지우면 안 되므로 '역할 없음'으로 드러낸다.
-        if (held !== null && p.status === "completed" && !held.has(p.roleId)) {
+        // 다만 siteOnly 는 일부러 뗀 것이라 이상 상태가 아니다 — 그대로 보유로 둔다.
+        if (!p.siteOnly && held !== null && p.status === "completed" && !held.has(p.roleId)) {
           status = "missing";
         }
       }
@@ -98,6 +99,8 @@ export async function GET() {
         days: p.days || 0,
         expiresAt: p.expiresAt || null,
         acquiredAt: p.processedAt || p.createdAt,
+        // 디스코드 역할 없이 사이트에서만 들고 있는 것
+        siteOnly: !!p.siteOnly,
         source: "shop",
       });
     }

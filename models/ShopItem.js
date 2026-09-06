@@ -18,6 +18,10 @@ const ShopItemSchema = new mongoose.Schema({
     type: [{ days: Number, price: Number }],
     default: [],
   },
+  // 📌 시즌이 바뀔 때 디스코드 역할만 떼고 사이트 인벤토리에는 그대로 남길지.
+  //    표시용 역할 상품에만 켠다. 권한 상품(perk)은 역할이 곧 디스코드 기능이라
+  //    떼면 기능이 사라지므로 켜면 안 된다. 기본값 false — 실수로 권한이 날아가지 않게.
+  detachOnSeason: { type: Boolean, default: false },
   discountPct: { type: Number, default: 0 },     // 할인율 % (0이면 할인 없음)
   stock: { type: Number, default: -1 },          // -1 = 무제한
   soldCount: { type: Number, default: 0 },

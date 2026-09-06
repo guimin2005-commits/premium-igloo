@@ -111,6 +111,13 @@ const PurchaseSchema = new mongoose.Schema({
   days: { type: Number, default: 0 },
   expiresAt: { type: Date, default: null, index: true },
   revokedAt: { type: Date, default: null },
+  // 📌 사이트 보유 — 소유는 그대로 두고 디스코드 역할 표기만 뗀 상태.
+  //    시즌이 바뀌면 디스코드가 역할로 지저분해지므로 표기를 사이트로 옮긴다.
+  //    만료(expired)와는 다르다 — 물건은 계속 갖고 있고 인벤토리에도 그대로 뜬다.
+  siteOnly: { type: Boolean, default: false },
+  siteOnlyAt: { type: Date, default: null },
+  // 봇이 디스코드 역할을 실제로 뗐는지 (사이트가 표시를 바꾼 시점과 다를 수 있다)
+  roleDetached: { type: Boolean, default: false },
   status: { type: String, default: "pending", index: true },
   contact: { type: String, default: "" },
   adminNote: { type: String, default: "" },

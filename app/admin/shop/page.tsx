@@ -40,7 +40,7 @@ export default function AdminShopPage() {
   const [noteText, setNoteText] = useState("");
   const [showPreview, setShowPreview] = useState(false);
 
-  const emptyForm = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", price: "", discountPct: "", stock: "", sortOrder: "", active: true, timed: false, price7: "", price30: "" };
+  const emptyForm = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", price: "", discountPct: "", stock: "", sortOrder: "", active: true, timed: false, price7: "", price30: "", priceInf: "", detachOnSeason: false };
   const [form, setForm] = useState(emptyForm);
   const [isRoleOpen, setIsRoleOpen] = useState(false);
   const selectedRole = guildRoles.find((r) => r.id === form.roleId);
@@ -150,6 +150,8 @@ export default function AdminShopPage() {
       timed: Array.isArray(it.durations) && it.durations.length > 0,
       price7: String(it.durations?.find((d: any) => d.days === 7)?.price ?? ""),
       price30: String(it.durations?.find((d: any) => d.days === 30)?.price ?? ""),
+      priceInf: String(it.durations?.find((d: any) => d.days === 0)?.price ?? ""),
+      detachOnSeason: !!it.detachOnSeason,
     });
   }, [editId, items]);
 
@@ -159,6 +161,8 @@ export default function AdminShopPage() {
     return [
       { days: 7, price: Math.max(0, Math.floor(Number(form.price7) || 0)) },
       { days: 30, price: Math.max(0, Math.floor(Number(form.price30) || 0)) },
+      // days 0 = 무제한. 기간 옵션과 나란히 팔 수 있다.
+      { days: 0, price: Math.max(0, Math.floor(Number(form.priceInf) || 0)) },
     ].filter((d) => d.price > 0);
   };
 
@@ -272,7 +276,7 @@ export default function AdminShopPage() {
                   <div>
                     <label className={labelClass}>상품 유형 <span className="text-[#e91e3f]">*</span></label>
                     <div className="flex gap-2">
-                      {[{ v: "role", l: "역할" }, { v: "perk", l: "권한" }, { v: "physical", l: "기프트카드" }].map((o) => (
+                      {[{ v: "role", l: "역할" }, { v: "perk", l: "권한" }, { v: "item", l: "아이템" }, { v: "physical", l: "기프트카드" }].map((o) => (
                         <button key={o.v} type="button" onClick={() => setForm({ ...form, type: o.v })}
                           className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-colors ${form.type === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-[#4b4b4b] border-black/10 hover:text-[#131313]"}`}>
                           {o.l}
@@ -296,7 +300,7 @@ export default function AdminShopPage() {
                 </div>
 
                 {/* 역할 상품일 때만 역할 선택 — 드롭다운이 아래 요소를 덮도록 열릴 때 z를 올린다 */}
-                {(form.type === "role" || form.type === "perk") && (
+                {(form.type === "role" || form.type === "perk" || form.type === "item") && (
                   <div className={`mb-4 relative ${isRoleOpen ? "z-50" : ""}`}>
                     <label className={labelClass}>지급할 역할 <span className="text-[#e91e3f]">*</span></label>
                     <button type="button" onClick={() => setIsRoleOpen(!isRoleOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
@@ -352,6 +356,22 @@ export default function AdminShopPage() {
                 {/* 📌 기간제 역할 — 역할·권한 상품만 (기프트카드는 기간 개념이 없다) */}
                 {form.type !== "physical" && (
                   <div className="mb-6 border-t border-black/[0.06] pt-5">
+                    {/* 시즌 전환 때 디스코드 역할만 떼고 사이트 인벤토리에는 남긴다 */}
+                    <button type="button" onClick={() => setForm({ ...form, detachOnSeason: !form.detachOnSeason })}
+                      className={`${inputClass} md:max-w-md flex items-center justify-between text-left ${form.detachOnSeason ? "border-[#e91e3f]/40" : ""}`}>
+                      <span className={form.detachOnSeason ? "text-[#e91e3f] font-bold" : "text-[#5a5a5a]"}>
+                        {form.detachOnSeason ? "시즌 바뀌면 디스코드 역할 뗌" : "디스코드 역할 계속 유지"}
+                      </span>
+                      <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${form.detachOnSeason ? "bg-[#e91e3f]" : "bg-[#e6e3de]"}`}>
+                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-all ${form.detachOnSeason ? "left-[18px]" : "left-0.5"}`}></span>
+                      </span>
+                    </button>
+                    <p className={`${fieldNote} mb-6`}>
+                      {form.detachOnSeason
+                        ? "소유는 그대로 두고 디스코드 표기만 뗍니다. 인벤토리에는 계속 남습니다. 표시용 역할에만 켜세요."
+                        : "권한 상품처럼 역할 자체가 디스코드 기능인 것은 이대로 두세요. 떼면 기능이 사라집니다."}
+                    </p>
+
                     <button type="button" onClick={() => setForm({ ...form, timed: !form.timed })}
                       className={`${inputClass} md:max-w-xs flex items-center justify-between text-left ${form.timed ? "border-[#e91e3f]/40" : ""}`}>
                       <span className={form.timed ? "text-[#e91e3f] font-bold" : "text-[#5a5a5a]"}>{form.timed ? "기간제 역할" : "영구 보유"}</span>
@@ -361,7 +381,7 @@ export default function AdminShopPage() {
                     </button>
                     <p className={fieldNote}>
                       {form.timed
-                        ? "고른 기간이 지나면 봇이 역할을 자동으로 회수합니다. 기간이 끝난 뒤에는 다시 구매할 수 있습니다."
+                        ? "7일 · 30일 · 무제한 중 값을 매긴 것만 판매 목록에 오릅니다. 기간이 지나면 봇이 역할을 자동으로 회수하고, 무제한은 회수하지 않습니다."
                         : "한 번 사면 계속 보유합니다."}
                     </p>
 
@@ -448,6 +468,8 @@ export default function AdminShopPage() {
                           timed: Array.isArray(it.durations) && it.durations.length > 0,
                           price7: String(it.durations?.find((d: any) => d.days === 7)?.price ?? ""),
                           price30: String(it.durations?.find((d: any) => d.days === 30)?.price ?? ""),
+      priceInf: String(it.durations?.find((d: any) => d.days === 0)?.price ?? ""),
+      detachOnSeason: !!it.detachOnSeason,
                         }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">수정</button>
                         <button onClick={() => setDeleteTarget({ kind: "item", id: it._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">삭제</button>
                       </div>

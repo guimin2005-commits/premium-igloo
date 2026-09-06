@@ -32,6 +32,7 @@ const TYPES = [
   { v: "all", l: "전체" },
   { v: "role", l: "역할" },
   { v: "perk", l: "권한" },
+  { v: "item", l: "아이템" },
   { v: "physical", l: "기프트카드" },
 ];
 
@@ -39,6 +40,7 @@ const TYPES = [
 const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
   role: { label: "역할", cls: "bg-[#e91e3f] text-white" },
   perk: { label: "권한", cls: "bg-[#2f6fb0] text-white" },
+  item: { label: "아이템", cls: "bg-[#3f9e93] text-white" },
   physical: { label: "기프트카드", cls: "bg-[#131313] text-white" },
 };
 
@@ -285,7 +287,7 @@ export default function ArcticShopBody({
   }, [banners.length]);
 
   // 관리자 — 상점 안에서 바로 상품 추가·수정
-  const EMPTY_ITEM = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", roleName: "", price: "", discountPct: "", stock: "", sortOrder: "", active: true };
+  const EMPTY_ITEM = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", roleName: "", price: "", discountPct: "", stock: "", sortOrder: "", active: true, detachOnSeason: false };
   const [editForm, setEditForm] = useState<any>(null);
   const [guildRoles, setGuildRoles] = useState<any[]>([]);
   const [isSavingItem, setIsSavingItem] = useState(false);
@@ -737,10 +739,17 @@ export default function ArcticShopBody({
             {isLoggedIn ? (
               <>
 
-                {/* 보유 XP — 모바일에서는 우측 카드가 없으므로 헤더에 둔다 */}
-                <span className="md:hidden inline-flex items-center h-9 px-2.5 rounded-full border border-[#dedddb] bg-white text-[11px] font-black text-[#131313] tabular-nums shrink-0">
-                  {(myXp ?? 0).toLocaleString()}
-                  <span className="ml-1 text-[10px] font-black text-[#e91e3f]">XP</span>
+                {/* 소지 — 우측 하단 카드를 없앤 대신 헤더에서 늘 보이게 한다.
+                    XP · 레벨을 한 알약에 담고, 좁은 화면에서는 XP 만 남긴다. */}
+                <span className="inline-flex items-center h-9 rounded-full border border-[#dedddb] bg-white shrink-0 overflow-hidden">
+                  <span className="inline-flex items-baseline gap-1 px-2.5 text-[11px] font-black text-[#131313] tabular-nums">
+                    {(myXp ?? 0).toLocaleString()}
+                    <span className="text-[10px] font-black text-[#e91e3f]">XP</span>
+                  </span>
+                  <span className="hidden sm:inline-flex items-baseline gap-1 h-full items-center px-2.5 border-l border-[#dedddb] text-[11px] font-black text-[#5a5a5a] tabular-nums">
+                    Lv
+                    <span className="text-[#131313]">{myLevel ?? 0}</span>
+                  </span>
                 </span>
 
                 {/* 쿠폰함 */}
@@ -1083,65 +1092,6 @@ export default function ArcticShopBody({
       </section>
       </>)}
 
-
-      {/* ── 우측 하단 고정 XP 카드 (PC) ── */}
-      {isLoggedIn && (
-        <div className="hidden md:block fixed bottom-6 right-6 z-[92] w-[268px]">
-          <div className="rounded-2xl p-px bg-gradient-to-b from-white via-[#e6e3de] to-[#dcd8d1] shadow-[0_18px_50px_-16px_rgba(0,0,0,0.3)]">
-            <div className="relative rounded-[15px] bg-gradient-to-b from-white to-[#fbfaf8] px-5 py-4 overflow-hidden">
-              <div className="absolute top-0 left-5 right-5 h-px bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
-
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="min-w-0">
-                  <div className="text-[9px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase mb-1.5">Balance</div>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-[26px] leading-none font-black tracking-tighter text-[#131313] tabular-nums">
-                      {myXp == null ? "—" : myXp.toLocaleString()}
-                    </span>
-                    <span className="text-[11px] font-black tracking-[0.12em] text-[#e91e3f]">XP</span>
-                  </div>
-                </div>
-                <div className="shrink-0 text-right">
-                  <div className="text-[9px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase mb-1.5">Lv</div>
-                  <div className="text-[17px] leading-none font-black text-[#131313] tabular-nums">{myLevel}</div>
-                </div>
-              </div>
-
-              {myProgress && myProgress.required > 0 && (
-                <div className="mb-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-bold text-[#8a8a8a]">다음 레벨까지</span>
-                    <span className="text-[10px] font-bold text-[#4b4b4b] tabular-nums">{myProgress.needToNext.toLocaleString()} XP</span>
-                  </div>
-                  <div className="h-1 rounded-full bg-[#e9e8e6] overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] transition-[width] duration-700 ease-out"
-                      style={{ width: `${Math.min(100, Math.round((myProgress.current / myProgress.required) * 100))}%` }}></div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center gap-1 pt-3 border-t border-[#ececea]">
-                <button onClick={() => setShowWishList(true)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f4f3f2] transition-colors">
-                  <svg className={`w-3.5 h-3.5 transition-colors ${wish.length > 0 ? "text-[#e91e3f]" : ""}`}
-                    fill={wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                  </svg>
-                  찜{wish.length > 0 ? ` ${wish.length}` : ""}
-                </button>
-                <span className="w-px h-3.5 bg-[#ececea]"></span>
-                <Link href="/shop/cart"
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold text-[#4b4b4b] hover:text-[#131313] hover:bg-[#f4f3f2] transition-colors">
-                  <svg className={`w-3.5 h-3.5 ${cartCount > 0 ? "text-[#131313]" : ""}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
-                  </svg>
-                  장바구니{cartCount > 0 ? ` ${cartCount}` : ""}
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── 장바구니에 이미 담긴 상품을 '구매'로 눌렀을 때 ── */}
       {cartConflict && (

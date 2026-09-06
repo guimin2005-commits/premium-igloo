@@ -49,19 +49,22 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "가격을 입력해주세요." }, { status: 400 });
     }
     const discountPct = Math.max(0, Math.min(100, Math.floor(Number(b.discountPct) || 0)));
-    const type = ["physical", "perk", "role"].includes(b.type) ? b.type : "role";
-    const grantsRole = type === "role" || type === "perk";
-    if (grantsRole && !b.roleId?.trim()) {
+    const type = ["physical", "perk", "role", "item"].includes(b.type) ? b.type : "role";
+    // 아이템은 역할이 있어도 되고 없어도 된다 — 사이트 인벤토리에만 두는 수집품도 판다
+    const grantsRole = type === "role" || type === "perk" || (type === "item" && !!b.roleId?.trim());
+    const roleRequired = type === "role" || type === "perk";
+    if (roleRequired && !b.roleId?.trim()) {
       return NextResponse.json({ success: false, message: "역할·권한 상품은 지급할 역할을 선택해야 합니다." }, { status: 400 });
     }
 
     // 📌 기간제 역할 — 기간(일)과 값이 모두 있는 것만 판매 목록에 올린다.
     //    기프트카드는 기간 개념이 없으므로 무시한다.
-    const durations = grantsRole && Array.isArray(b.durations)
+    //    days 0 은 무제한(영구) 옵션이다. 기간 옵션과 나란히 팔 수 있다.
+    const durations = type !== "physical" && Array.isArray(b.durations)
       ? b.durations
-          .map((d) => ({ days: Math.floor(Number(d?.days) || 0), price: Math.max(0, Math.floor(Number(d?.price) || 0)) }))
-          .filter((d) => d.days > 0 && d.price > 0)
-          .sort((x, y) => x.days - y.days)
+          .map((d) => ({ days: Math.max(0, Math.floor(Number(d?.days) || 0)), price: Math.max(0, Math.floor(Number(d?.price) || 0)) }))
+          .filter((d) => d.price > 0)
+          .sort((x, y) => (x.days === 0 ? 1 : y.days === 0 ? -1 : x.days - y.days))
       : [];
 
     const payload = {
@@ -74,6 +77,8 @@ export async function POST(request) {
       roleName: grantsRole ? (b.roleName || "").trim() : "",
       price,
       discountPct,
+      // 시즌 전환 때 디스코드 역할만 뗄 대상인지 (권한 상품에는 켜면 안 된다)
+      detachOnSeason: !!b.detachOnSeason,
       // 빈 값이면 무제한(-1)
       stock: b.stock === "" || b.stock == null ? -1 : Math.max(-1, Math.floor(Number(b.stock))),
       active: b.active !== false,
