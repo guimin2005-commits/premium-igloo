@@ -193,9 +193,9 @@ export default function AdminHonorsPage() {
       <span className="inline-flex -space-x-2 align-middle shrink-0">
         {list.slice(0, 5).map((p, i) => (
           // eslint-disable-next-line @next/next/no-img-element
-          <img key={i} src={p.avatarUrl} alt={p.globalName} title={p.globalName} className="w-6 h-6 rounded-full bg-gray-800 object-cover ring-2 ring-[#efece7]" />
+          <img key={i} src={p.avatarUrl} alt={p.globalName} title={p.globalName} className="w-6 h-6 rounded-full bg-gray-800 object-cover ring-2 ring-[#edecea]" />
         ))}
-        {list.length > 5 && <span className="w-6 h-6 rounded-full bg-black/10 ring-2 ring-[#efece7] grid place-items-center text-[9px] font-bold text-[#4b4b4b]">+{list.length - 5}</span>}
+        {list.length > 5 && <span className="w-6 h-6 rounded-full bg-black/10 ring-2 ring-[#edecea] grid place-items-center text-[9px] font-bold text-[#4b4b4b]">+{list.length - 5}</span>}
       </span>
     );
   };
@@ -399,7 +399,7 @@ export default function AdminHonorsPage() {
             </div>
 
             <div className="flex gap-3 mt-8">
-              <button type="button" onClick={() => setForm(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d6d3ce] text-[#131313] font-bold rounded-xl transition-colors">취소</button>
+              <button type="button" onClick={() => setForm(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] font-bold rounded-xl transition-colors">취소</button>
               <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20">
                 {isSaving ? "저장 중..." : form.mode === "create" ? "등재" : "저장"}
               </button>
@@ -438,7 +438,7 @@ export default function AdminHonorsPage() {
             </div>
 
             <div className="flex gap-3 mt-8">
-              <button type="button" onClick={() => setWinnerEdit(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d6d3ce] text-[#131313] font-bold rounded-xl transition-colors">취소</button>
+              <button type="button" onClick={() => setWinnerEdit(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] font-bold rounded-xl transition-colors">취소</button>
               <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20">{isSaving ? "저장 중..." : "저장"}</button>
             </div>
           </form>
@@ -452,7 +452,7 @@ export default function AdminHonorsPage() {
             <h2 className="text-xl font-bold text-[#131313] mb-3">삭제 확인</h2>
             <p className="text-sm text-[#5a5a5a] mb-8"><span className="text-[#131313] font-bold">{deleteTarget.title}</span> 기록을<br />명예의 전당에서 삭제하시겠습니까?</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d6d3ce] text-[#131313] rounded-xl transition-colors">취소</button>
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] rounded-xl transition-colors">취소</button>
               <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white rounded-xl transition-colors">삭제</button>
             </div>
           </div>

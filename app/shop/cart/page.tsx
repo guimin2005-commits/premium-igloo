@@ -80,7 +80,7 @@ export default function CartPage() {
 
   if (status === "loading" || isLoading) {
     return (
-      <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen">
+      <div className="w-full flex-1 bg-[#f4f3f2] min-h-screen">
         <ArcticHeader />
         <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
       </div>
@@ -89,7 +89,7 @@ export default function CartPage() {
 
   if (!isLoggedIn) {
     return (
-      <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen">
+      <div className="w-full flex-1 bg-[#f4f3f2] min-h-screen">
         <ArcticHeader />
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
@@ -101,7 +101,7 @@ export default function CartPage() {
   }
 
   return (
-    <div className="w-full flex-1 bg-[#f5f3f0] text-[#131313] min-h-screen">
+    <div className="w-full flex-1 bg-[#f4f3f2] text-[#131313] min-h-screen">
       <ArcticHeader />
 
       <section className="max-w-5xl mx-auto px-6 pt-10 pb-24">
@@ -117,8 +117,8 @@ export default function CartPage() {
         </div>
 
         {rows.length === 0 ? (
-          <div className="py-24 text-center break-keep bg-white rounded-2xl border border-[#e2e0dc]">
-            <div className="w-14 h-14 mx-auto rounded-full bg-[#f5f3f0] flex items-center justify-center mb-5 text-[#c4c4c4]">
+          <div className="py-24 text-center break-keep bg-white rounded-2xl border border-[#dedddb]">
+            <div className="w-14 h-14 mx-auto rounded-full bg-[#f4f3f2] flex items-center justify-center mb-5 text-[#c4c4c4]">
               <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
               </svg>
@@ -134,10 +134,10 @@ export default function CartPage() {
             {/* 좌 — 담은 상품 */}
             <div className="lg:col-span-2">
               {/* 전체 선택 */}
-              <div className="flex items-center justify-between px-5 py-3 mb-3 bg-white rounded-xl border border-[#e2e0dc]">
+              <div className="flex items-center justify-between px-5 py-3 mb-3 bg-white rounded-xl border border-[#dedddb]">
                 <button onClick={toggleAll} className="flex items-center gap-2.5 text-[12px] font-bold text-[#131313]">
                   <span className={`w-[18px] h-[18px] rounded-md border flex items-center justify-center transition-colors ${
-                    allChecked ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#d6d3ce]"
+                    allChecked ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#d2d1cf]"
                   }`}>
                     {allChecked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                   </span>
@@ -155,7 +155,7 @@ export default function CartPage() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden divide-y divide-[#ececea]">
+              <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden divide-y divide-[#ececea]">
                 {rows.map((r) => {
                   const sp = salePrice(r.item, r.days);
                   const on = selected.includes(r.itemId);
@@ -164,12 +164,12 @@ export default function CartPage() {
                     <div key={r.itemId} className={`p-5 flex gap-4 items-center transition-colors ${on ? "" : "bg-[#fafaf9]"}`}>
                       <button onClick={() => toggleOne(r.itemId)} aria-label="선택" className="shrink-0">
                         <span className={`w-[18px] h-[18px] rounded-md border flex items-center justify-center transition-colors ${
-                          on ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#d6d3ce]"
+                          on ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#d2d1cf]"
                         }`}>
                           {on && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                         </span>
                       </button>
-                      <Link href="/level?tab=arctic" className="w-20 h-20 rounded-xl bg-[#eceae6] overflow-hidden shrink-0">
+                      <Link href="/level?tab=arctic" className="w-20 h-20 rounded-xl bg-[#e9e8e6] overflow-hidden shrink-0">
                         {r.item.imageUrl && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
@@ -204,7 +204,7 @@ export default function CartPage() {
 
             {/* 우 — 요약 */}
             <div className="lg:col-span-1">
-              <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6 lg:sticky lg:top-24">
+              <div className="bg-white rounded-2xl border border-[#dedddb] p-6 lg:sticky lg:top-24">
                 <h2 className="text-sm font-black text-[#131313] mb-5">주문 요약</h2>
 
                 <div className="space-y-2.5 text-[13px] mb-4">
@@ -226,7 +226,7 @@ export default function CartPage() {
                 <Link href="/shop/checkout"
                   onClick={(e) => { if (!canCheckout) { e.preventDefault(); return; } goCheckout(); }}
                   className={`block w-full py-4 text-center font-bold rounded-xl transition-colors ${
-                    canCheckout ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#eceae6] text-[#a3a3a3] cursor-not-allowed"
+                    canCheckout ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#e9e8e6] text-[#a3a3a3] cursor-not-allowed"
                   }`}>
                   {picked.length === 0 ? "상품을 선택해주세요" : !enoughXp ? "XP가 부족합니다" : "결제하러 가기"}
                 </Link>

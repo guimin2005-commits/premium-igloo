@@ -1,7 +1,7 @@
 "use client";
 
 // 📌 게임형 HUD 공용 프리미티브 — 메인 홈(/)과 SYSTEM:LEVEL 대시보드가 공유하는 디자인 시스템.
-//    다크 럭셔리(#f5f3f0 + #e91e3f) 위에 절제된 게임 HUD 요소(브래킷 패널·게이지·라이브 인디케이터)를 얹는다.
+//    다크 럭셔리(#f4f3f2 + #e91e3f) 위에 절제된 게임 HUD 요소(브래킷 패널·게이지·라이브 인디케이터)를 얹는다.
 //    ⚠️ Tailwind v4 빌드 특성: flex-col + gap 미적용(간격은 space-y/마진), 임의 grid-template 값 금지(표준 grid-cols-N만).
 
 import React, { useState, useEffect, useRef } from "react";

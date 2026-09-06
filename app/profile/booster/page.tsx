@@ -42,7 +42,7 @@ export default function BoosterBenefitPage() {
         </Link>
 
         {isBooster && (
-          <div className="mb-6 rounded-2xl border border-[#e2e0dc] bg-white px-5 py-4 flex items-center gap-3 break-keep">
+          <div className="mb-6 rounded-2xl border border-[#dedddb] bg-white px-5 py-4 flex items-center gap-3 break-keep">
             <span className="inline-flex items-center gap-1 text-[10px] font-black bg-[#e91e3f] text-white px-2 py-0.5 rounded shrink-0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" /></svg>BOOSTER</span>
             <p className="text-[13px] font-bold text-[#4b4b4b]">부스터 혜택이 적용 중입니다. 아래 혜택이 자동으로 지급됩니다.</p>
           </div>
@@ -61,7 +61,7 @@ export default function BoosterBenefitPage() {
 
             {/* 01. 전용 기능 권한 */}
             <Reveal>
-            <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6 md:p-7">
+            <div className="bg-white rounded-2xl border border-[#dedddb] p-6 md:p-7">
               <SectionHead no="01" title="전용 기능 권한" />
               <div className="divide-y divide-[#ececea]">
                 {[
@@ -78,7 +78,7 @@ export default function BoosterBenefitPage() {
 
             {/* 02. XP 혜택 */}
             <Reveal>
-            <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6 md:p-7">
+            <div className="bg-white rounded-2xl border border-[#dedddb] p-6 md:p-7">
               <SectionHead no="02" title="경험치 혜택" />
               <div className="divide-y divide-[#ececea]">
                 {[
@@ -95,7 +95,7 @@ export default function BoosterBenefitPage() {
 
             {/* 03. 누적 유지 개월 혜택 */}
             <Reveal>
-            <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6 md:p-7">
+            <div className="bg-white rounded-2xl border border-[#dedddb] p-6 md:p-7">
               <SectionHead no="03" title="누적 유지 개월 혜택" />
               <div className="divide-y divide-[#ececea]">
                 {[
@@ -116,7 +116,7 @@ export default function BoosterBenefitPage() {
 
             {/* 04. 특별 보상 — 같은 행 구성으로 이어간다 */}
             <Reveal>
-            <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6 md:p-7">
+            <div className="bg-white rounded-2xl border border-[#dedddb] p-6 md:p-7">
               <SectionHead no="04" title="특별 보상" />
               {[
                 {
@@ -154,7 +154,7 @@ export default function BoosterBenefitPage() {
             </Reveal>
 
             <Reveal>
-            <div className="bg-white rounded-2xl border border-[#e2e0dc] px-6 py-5">
+            <div className="bg-white rounded-2xl border border-[#dedddb] px-6 py-5">
               <p className="text-[13px] text-[#5a5a5a] break-keep leading-relaxed">
                 디스코드에서 서버 부스트를 시작하면 시스템이 자동으로 감지해 위 혜택을 지급합니다.
               </p>

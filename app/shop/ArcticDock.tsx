@@ -62,7 +62,7 @@ export default function ArcticDock({
   };
 
   return (
-    <nav className="md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[92] p-1.5 rounded-full border border-[#e2e0dc] bg-white/90 backdrop-blur-2xl shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)] grid grid-cols-5">
+    <nav className="md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[92] p-1.5 rounded-full border border-[#dedddb] bg-white/90 backdrop-blur-2xl shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)] grid grid-cols-5">
       {ITEMS.map((it) => {
         const active = isActive(it);
         const badge = it.key === "cart" ? cartCount : it.key === "wish" ? wishCount : 0;

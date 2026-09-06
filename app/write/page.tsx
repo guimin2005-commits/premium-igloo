@@ -1364,7 +1364,7 @@ export default function AdminWritePage() {
 
             <div className="flex gap-3 mt-7">
               <button type="button" onClick={() => setImageOpen(false)}
-                className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d6d3ce] text-[#131313] text-sm font-bold rounded-xl transition-colors">취소</button>
+                className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] text-sm font-bold rounded-xl transition-colors">취소</button>
               <button type="button" disabled={!/^https?:\/\/\S+$/i.test(imageUrl.trim())}
                 onClick={() => { insertImage(imageUrl, imageCap); setImageOpen(false); setImageUrl(""); setImageCap(""); }}
                 className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 text-white text-sm font-bold rounded-xl transition-colors">넣기</button>

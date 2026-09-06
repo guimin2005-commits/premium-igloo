@@ -107,7 +107,7 @@ export default function AdminNav() {
   return (
     <>
       {/* ── 데스크톱: 좌측 사이드 패널 ── */}
-      <aside className={`hidden lg:block w-60 shrink-0 border-r ${isDark ? "border-white/10 bg-[#0e0e0e]" : "border-black/10 bg-[#efece7]"}`}>
+      <aside className={`hidden lg:block w-60 shrink-0 border-r ${isDark ? "border-white/10 bg-[#0e0e0e]" : "border-black/10 bg-[#edecea]"}`}>
         <nav className="sticky top-24 px-6 py-10 space-y-8">
           {NAV_GROUPS.map((group) => (
             <div key={group.label}>
@@ -146,7 +146,7 @@ export default function AdminNav() {
       </aside>
 
       {/* ── 모바일: 상단 가로 스크롤 칩 바 (하위 카테고리는 펼쳐서 표시) ── */}
-      <div className={`lg:hidden w-full border-b ${isDark ? "border-white/10 bg-[#0e0e0e]" : "border-black/10 bg-[#efece7]"}`}>
+      <div className={`lg:hidden w-full border-b ${isDark ? "border-white/10 bg-[#0e0e0e]" : "border-black/10 bg-[#edecea]"}`}>
         <div className="flex gap-2 overflow-x-auto no-bar px-4 py-3">
           {NAV_GROUPS.flatMap((g) => g.items).flatMap((item) =>
             item.children

@@ -81,7 +81,7 @@ export default function ItemDetailPage() {
 
   if (status === "loading" || isLoading) {
     return (
-      <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen">
+      <div className="w-full flex-1 bg-[#f4f3f2] min-h-screen">
         <ArcticHeader />
         <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
       </div>
@@ -90,7 +90,7 @@ export default function ItemDetailPage() {
 
   if (notFound || !item) {
     return (
-      <div className="w-full flex-1 bg-[#f5f3f0] min-h-screen">
+      <div className="w-full flex-1 bg-[#f4f3f2] min-h-screen">
         <ArcticHeader />
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">상품을 찾을 수 없습니다</h1>
@@ -171,7 +171,7 @@ export default function ItemDetailPage() {
   };
 
   return (
-    <div className="w-full flex-1 bg-[#f5f3f0] text-[#131313] min-h-screen">
+    <div className="w-full flex-1 bg-[#f4f3f2] text-[#131313] min-h-screen">
       <ArcticHeader />
 
       <section className="max-w-5xl mx-auto px-6 pt-8 pb-32 md:pb-24">
@@ -183,7 +183,7 @@ export default function ItemDetailPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* 좌 — 이미지 */}
-          <div className="relative aspect-square rounded-2xl bg-[#eceae6] border border-[#e2e0dc] overflow-hidden">
+          <div className="relative aspect-square rounded-2xl bg-[#e9e8e6] border border-[#dedddb] overflow-hidden">
             {item.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
@@ -232,7 +232,7 @@ export default function ItemDetailPage() {
                     return (
                       <button key={o.days} type="button" onClick={() => setPickedDays(o.days)}
                         className={`flex-1 py-3 rounded-xl border text-[13px] font-bold transition-colors ${
-                          on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#e2e0dc] hover:border-[#131313]"
+                          on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#dedddb] hover:border-[#131313]"
                         }`}>
                         {durationLabel(o.days)}
                         <span className={`block text-[12px] font-bold tabular-nums mt-0.5 ${on ? "text-white/70" : "text-[#a3a3a3]"}`}>
@@ -251,7 +251,7 @@ export default function ItemDetailPage() {
             )}
 
             {/* 상세 정보 */}
-            <div className="rounded-xl bg-white border border-[#e2e0dc] divide-y divide-[#ececea] mb-6">
+            <div className="rounded-xl bg-white border border-[#dedddb] divide-y divide-[#ececea] mb-6">
               {[
                 { l: "상품 유형", v: badge.label },
                 ...(item.roleName ? [{ l: "지급 역할", v: item.roleName }] : []),
@@ -275,7 +275,7 @@ export default function ItemDetailPage() {
 
             {/* 보유 XP */}
             {isLoggedIn && (
-              <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-white border border-[#e2e0dc] mb-4 text-[13px]">
+              <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-white border border-[#dedddb] mb-4 text-[13px]">
                 <span className="text-[#5a5a5a]">보유 XP</span>
                 <span className={`font-black tabular-nums ${affordable ? "text-[#131313]" : "text-[#c62828]"}`}>
                   {(myXp ?? 0).toLocaleString()} XP
@@ -287,7 +287,7 @@ export default function ItemDetailPage() {
             <div className="mt-auto flex gap-2">
               <button onClick={toggleWish} aria-label="찜하기"
                 className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center border transition-colors ${
-                  wished ? "bg-[#e91e3f]/10 border-[#e91e3f]/30 text-[#e91e3f]" : "bg-white border-[#e2e0dc] text-[#a3a3a3] hover:text-[#131313]"
+                  wished ? "bg-[#e91e3f]/10 border-[#e91e3f]/30 text-[#e91e3f]" : "bg-white border-[#dedddb] text-[#a3a3a3] hover:text-[#131313]"
                 }`}>
                 <svg className="w-5 h-5" fill={wished ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
@@ -297,10 +297,10 @@ export default function ItemDetailPage() {
               <button onClick={toggleCart} disabled={soldOut || owned}
                 className={`flex-1 h-12 rounded-full text-[13px] font-bold transition-colors ${
                   soldOut || owned
-                    ? "bg-[#eceae6] text-[#a3a3a3] cursor-not-allowed"
+                    ? "bg-[#e9e8e6] text-[#a3a3a3] cursor-not-allowed"
                     : inCart
                     ? "bg-[#131313] text-white hover:bg-[#333]"
-                    : "bg-white text-[#131313] border border-[#e2e0dc] hover:border-[#131313]"
+                    : "bg-white text-[#131313] border border-[#dedddb] hover:border-[#131313]"
                 }`}>
                 {inCart ? "장바구니에서 삭제" : "장바구니에 담기"}
               </button>
@@ -308,9 +308,9 @@ export default function ItemDetailPage() {
               <button onClick={openBuy} disabled={soldOut || owned}
                 className={`flex-1 h-12 rounded-full text-[13px] font-bold transition-colors ${
                   owned || soldOut
-                    ? "bg-[#eceae6] text-[#a3a3a3] cursor-not-allowed"
+                    ? "bg-[#e9e8e6] text-[#a3a3a3] cursor-not-allowed"
                     : isLoggedIn && !affordable
-                    ? "bg-[#eceae6] text-[#8a8a8a]"
+                    ? "bg-[#e9e8e6] text-[#8a8a8a]"
                     : "bg-[#e91e3f] text-white hover:bg-[#d01634]"
                 }`}>
                 {owned ? "보유 중" : soldOut ? "품절" : !isLoggedIn ? "로그인" : affordable ? "구매" : "XP 부족"}
@@ -321,7 +321,7 @@ export default function ItemDetailPage() {
 
         {/* ── 다른 상품 ── */}
         {related.length > 0 && (
-          <div className="mt-16 pt-10 border-t border-[#e2e0dc]">
+          <div className="mt-16 pt-10 border-t border-[#dedddb]">
             <div className="flex items-baseline justify-between gap-4 mb-5">
               <h2 className="text-base font-black text-[#131313] tracking-tight">다른 상품도 둘러보세요</h2>
               <Link href="/level?tab=arctic" className="text-[12px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors shrink-0">
@@ -336,8 +336,8 @@ export default function ItemDetailPage() {
                 const rBadge = TYPE_BADGE[r.type] || TYPE_BADGE.physical;
                 return (
                   <Link key={r._id} href={`/shop/item/${r._id}`}
-                    className="group bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
-                    <div className="relative aspect-[4/3] bg-[#eceae6] overflow-hidden">
+                    className="group bg-white rounded-2xl border border-[#dedddb] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
+                    <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
                       {r.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={r.imageUrl} alt={r.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -384,7 +384,7 @@ export default function ItemDetailPage() {
       {/* 구매 모달 */}
       {buying && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => !isPaying && setBuying(false)}>
-          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden border border-[#e2e0dc] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden border border-[#dedddb] shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {result ? (
               <div className="p-8 text-center">
                 <div className={`w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-5 ${result.ok ? "bg-[#e8f3e6] text-[#3f7a35]" : "bg-[#fdeaea] text-[#c62828]"}`}>
@@ -395,7 +395,7 @@ export default function ItemDetailPage() {
                 <h2 className="text-lg font-black text-[#131313] mb-2">{result.ok ? "구매 완료" : "구매 실패"}</h2>
                 <p className="text-sm text-[#4b4b4b] leading-relaxed mb-7 break-keep">{result.message}</p>
                 <div className="flex gap-3">
-                  <button onClick={() => { setBuying(false); setResult(null); }} className="flex-1 py-3.5 bg-[#eceae6] text-[#4b4b4b] font-bold rounded-xl">닫기</button>
+                  <button onClick={() => { setBuying(false); setResult(null); }} className="flex-1 py-3.5 bg-[#e9e8e6] text-[#4b4b4b] font-bold rounded-xl">닫기</button>
                   {result.ok && (
                     <Link href="/shop/orders" className="flex-1 py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl text-center">구매 내역</Link>
                   )}
@@ -411,14 +411,14 @@ export default function ItemDetailPage() {
                     <label className="block text-xs font-bold text-[#4b4b4b] mb-2">수령 정보 <span className="text-[#c62828]">*</span></label>
                     <textarea rows={3} value={contact} onChange={(e) => setContact(e.target.value)}
                       placeholder="연락처 또는 기프티콘 받을 번호를 입력해주세요."
-                      className="w-full bg-white border border-[#e2e0dc] rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] resize-none placeholder:text-[#a3a3a3]" />
+                      className="w-full bg-white border border-[#dedddb] rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] resize-none placeholder:text-[#a3a3a3]" />
                   </div>
                 )}
 
-                <div className="bg-[#f5f3f0] rounded-xl px-4 py-3 mb-5 text-[12px] space-y-1.5">
+                <div className="bg-[#f4f3f2] rounded-xl px-4 py-3 mb-5 text-[12px] space-y-1.5">
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold tabular-nums">{(myXp ?? 0).toLocaleString()}</span></div>
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 XP</span><span className="font-bold text-[#c62828] tabular-nums">-{sp.toLocaleString()}</span></div>
-                  <div className="h-px bg-[#e2e0dc]"></div>
+                  <div className="h-px bg-[#dedddb]"></div>
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">구매 후 잔액</span><span className="font-black tabular-nums">{Math.max(0, (myXp ?? 0) - sp).toLocaleString()}</span></div>
                 </div>
 
@@ -427,7 +427,7 @@ export default function ItemDetailPage() {
                 </p>
 
                 <div className="flex gap-3">
-                  <button onClick={() => setBuying(false)} className="flex-1 py-3.5 bg-[#eceae6] hover:bg-[#e2e0dc] text-[#4b4b4b] font-bold rounded-xl transition-colors">취소</button>
+                  <button onClick={() => setBuying(false)} className="flex-1 py-3.5 bg-[#e9e8e6] hover:bg-[#dedddb] text-[#4b4b4b] font-bold rounded-xl transition-colors">취소</button>
                   <button onClick={confirmBuy} disabled={isPaying || !affordable || (item.type === "physical" && !contact.trim())}
                     className="flex-1 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 text-white font-bold rounded-xl transition-colors">
                     {isPaying ? "처리 중..." : affordable ? "구매 확정" : "XP 부족"}

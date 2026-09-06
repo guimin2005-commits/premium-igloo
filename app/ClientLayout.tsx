@@ -370,7 +370,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   return (
-    <div className={`flex flex-col min-h-screen ${isLightPage ? "bg-[#f5f3f0]" : "bg-[#090909]"}`}>
+    <div className={`flex flex-col min-h-screen ${isLightPage ? "bg-[#f4f3f2]" : "bg-[#090909]"}`}>
       <ScrollLock />
       <RouteProgress pathname={pathname} />
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
@@ -382,7 +382,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             ? "max-w-5xl rounded-full border border-black/[0.06] bg-white/80 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] px-5 md:px-6 h-14"
             : "max-w-5xl rounded-full border border-white/[0.06] bg-[#0b0b0b]/70 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)] px-5 md:px-6 h-14"
           : isLightPage
-            ? "max-w-[1600px] border border-x-transparent border-t-transparent border-b-black/[0.08] bg-[#f5f3f0]/85 backdrop-blur-md px-6 h-16"
+            ? "max-w-[1600px] border border-x-transparent border-t-transparent border-b-black/[0.08] bg-[#f4f3f2]/85 backdrop-blur-md px-6 h-16"
             : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-16"
       }`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
@@ -396,7 +396,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 <Link href="/" className={`hidden sm:block text-[9px] sm:text-[10px] font-bold tracking-[0.18em] whitespace-nowrap transition-colors ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313]" : "text-white/45 hover:text-white"}`}>
                   고급 이글루
                 </Link>
-                <span className={`hidden sm:block w-px h-4 ${isLightPage ? "bg-[#d6d3ce]" : "bg-white/20"}`}></span>
+                <span className={`hidden sm:block w-px h-4 ${isLightPage ? "bg-[#d2d1cf]" : "bg-white/20"}`}></span>
                 <Link href={sectionBrand.href} className={`min-w-0 truncate text-[14px] sm:text-[17px] font-black tracking-[0.1em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-[#ff5c77]"}`}>
                   {sectionBrand.name}
                 </Link>
@@ -668,7 +668,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </nav>
       )}
 
-      <footer className={`w-full mt-auto flex-shrink-0 ${isShopPage ? "hidden" : "hidden md:block"} relative overflow-hidden ${isLightPage ? "border-t border-black/[0.06] bg-[#f5f3f0]" : "border-t border-white/5 bg-[#090909]"}`}>
+      <footer className={`w-full mt-auto flex-shrink-0 ${isShopPage ? "hidden" : "hidden md:block"} relative overflow-hidden ${isLightPage ? "border-t border-black/[0.06] bg-[#f4f3f2]" : "border-t border-white/5 bg-[#090909]"}`}>
         <div className="absolute bottom-[-80px] left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-[#e91e3f]/[0.04] blur-[90px] rounded-full pointer-events-none"></div>
         <div className="max-w-7xl mx-auto px-6 py-10 relative z-10">
           <div className="flex items-center justify-between mb-6">
@@ -696,7 +696,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       {isCodeModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 overlay-in" onClick={() => setIsCodeModalOpen(false)}>
           <div onClick={(e) => e.stopPropagation()}
-            className={`rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[88dvh] sm:max-h-[80vh] overflow-hidden shadow-2xl relative flex flex-col animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200 border ${isLightPage ? "bg-white border-[#e2e0dc]" : "bg-[#121212] border-white/10"}`}>
+            className={`rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[88dvh] sm:max-h-[80vh] overflow-hidden shadow-2xl relative flex flex-col animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200 border ${isLightPage ? "bg-white border-[#dedddb]" : "bg-[#121212] border-white/10"}`}>
             {/* 머리 */}
             <div className={`shrink-0 flex items-center justify-between px-6 py-4 border-b ${isLightPage ? "border-[#ececea]" : "border-white/[0.07]"}`}>
               <div className="flex items-center gap-2.5">
@@ -714,7 +714,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <div className={`shrink-0 px-6 pt-5 pb-4 border-b ${isLightPage ? "border-[#ececea]" : "border-white/[0.07]"}`}>
               <form onSubmit={handleCodeSubmit} className="flex gap-2">
                 <input type="text" required placeholder="쿠폰 코드 입력" value={voucherCode} onChange={(e) => setVoucherCode(e.target.value)}
-                  className={`flex-1 min-w-0 px-4 py-3 rounded-xl text-sm outline-none focus:border-[#e91e3f] transition-colors uppercase placeholder:normal-case border ${isLightPage ? "bg-white border-[#e2e0dc] text-[#131313] placeholder:text-[#a3a3a3]" : "bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600"}`} />
+                  className={`flex-1 min-w-0 px-4 py-3 rounded-xl text-sm outline-none focus:border-[#e91e3f] transition-colors uppercase placeholder:normal-case border ${isLightPage ? "bg-white border-[#dedddb] text-[#131313] placeholder:text-[#a3a3a3]" : "bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600"}`} />
                 <button type="submit" disabled={isCodeSubmitting}
                   className="px-5 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-[13px] font-bold rounded-xl transition-colors outline-none shrink-0">
                   {isCodeSubmitting ? "확인" : "등록"}
@@ -837,7 +837,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           />
 
           <div
-            className={`absolute right-0 top-0 bottom-0 w-[82%] max-w-xs backdrop-blur-2xl border-l rounded-l-[28px] flex flex-col overflow-hidden ${isLightPage ? "bg-[#f5f3f0]/92 border-black/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.25)]" : "bg-[#0d0d0d]/90 border-white/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.8)]"}`}
+            className={`absolute right-0 top-0 bottom-0 w-[82%] max-w-xs backdrop-blur-2xl border-l rounded-l-[28px] flex flex-col overflow-hidden ${isLightPage ? "bg-[#f4f3f2]/92 border-black/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.25)]" : "bg-[#0d0d0d]/90 border-white/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.8)]"}`}
             style={{ animation: isMenuClosing ? "mmSlideOut 0.26s cubic-bezier(0.4,0,1,1) forwards" : "mmSlideIn 0.32s cubic-bezier(0.22,1,0.36,1)" }}
           >
             {/* 상단 크림슨 글로우 */}
@@ -860,7 +860,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 /* 눌러서 내 정보로 — 부스터 역할이 있으면 인증 배지 옆에 표시한다 */
                 <Link href="/profile" onClick={closeMobileMenu}
                   className={`relative flex items-center gap-3.5 p-3.5 mb-5 border rounded-2xl overflow-hidden transition-colors ${isLightPage ? "bg-black/[0.03] border-black/[0.06] active:bg-black/[0.06]" : "bg-white/[0.04] border-white/[0.06] active:bg-white/[0.07]"}`}>
-                  <img src={session.user?.image || ""} alt="Profile" className={`relative w-11 h-11 rounded-full ${isLightPage ? "bg-[#e2e0dc]" : "bg-gray-700"}`} />
+                  <img src={session.user?.image || ""} alt="Profile" className={`relative w-11 h-11 rounded-full ${isLightPage ? "bg-[#dedddb]" : "bg-gray-700"}`} />
                   <div className="relative min-w-0 flex-1">
                     <p className={`font-bold text-sm truncate ${isLightPage ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</p>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">

@@ -718,7 +718,7 @@ export default function AdminBotPage() {
             )}
 
             {/* 스크롤 끝까지 내려가지 않아도 저장할 수 있게 하단에 고정 */}
-            <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#f5f3f0]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
+            <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#f4f3f2]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
               <span className="text-[11px] font-bold text-[#8a8a8a]">봇에는 1분 이내 자동 반영됩니다.</span>
               <button type="submit" className="px-10 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-lg transition-all shrink-0">저장</button>
             </div>
@@ -826,7 +826,7 @@ export default function AdminBotPage() {
                   </div>
                 </div>
                 {/* 스크롤 끝까지 내려가지 않아도 저장할 수 있게 하단에 고정 */}
-            <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#f5f3f0]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
+            <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#f4f3f2]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
               <span className="text-[11px] font-bold text-[#8a8a8a]">봇에는 1분 이내 자동 반영됩니다.</span>
               <button type="submit" className="px-10 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-lg transition-all shrink-0">저장</button>
             </div>
@@ -927,7 +927,7 @@ export default function AdminBotPage() {
                   </div>
                 </div>
                 {/* 스크롤 끝까지 내려가지 않아도 저장할 수 있게 하단에 고정 */}
-            <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#f5f3f0]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
+            <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#f4f3f2]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
               <span className="text-[11px] font-bold text-[#8a8a8a]">봇에는 1분 이내 자동 반영됩니다.</span>
               <button type="submit" className="px-10 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-lg transition-all shrink-0">저장</button>
             </div>
@@ -1950,7 +1950,7 @@ export default function AdminBotPage() {
           <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
             <h2 className="text-xl font-bold text-[#131313] mb-3">{popup.isError ? "오류" : "완료"}</h2>
             <p className="text-sm text-[#5a5a5a] mb-8">{popup.message}</p>
-            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#e6e3de] hover:bg-[#d6d3ce] text-[#131313] font-bold rounded-xl transition-colors">확인</button>
+            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] font-bold rounded-xl transition-colors">확인</button>
           </div>
         </div>
       )}

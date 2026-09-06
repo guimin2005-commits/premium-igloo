@@ -305,7 +305,7 @@ export default function AdminNotifyPage() {
           <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-md p-8 text-center shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
             <h2 className="text-xl font-bold text-[#131313] mb-3">{popup.isError ? "오류" : "발송 완료"}</h2>
             <p className="text-sm text-[#5a5a5a] mb-8 leading-relaxed break-keep">{popup.message}</p>
-            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#e6e3de] hover:bg-[#d6d3ce] text-[#131313] font-bold rounded-xl transition-colors">확인</button>
+            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] font-bold rounded-xl transition-colors">확인</button>
           </div>
         </div>
       )}

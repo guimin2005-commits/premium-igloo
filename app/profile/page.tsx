@@ -27,7 +27,7 @@ const NOTI_TYPE_STYLES: Record<string, string> = {
   제재: "bg-[#fdf1e3] text-[#a8763a] border-[#f0dcc0]",
   안내: "bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]",
   축하: "bg-[#e8f3e6] text-[#3f7a35] border-[#cfe5cb]",
-  일반: "bg-[#f5f3f0] text-[#4b4b4b] border-[#e2e0dc]",
+  일반: "bg-[#f4f3f2] text-[#4b4b4b] border-[#dedddb]",
 };
 
 // ARCTIC 주문 상태 표기
@@ -311,7 +311,7 @@ export default function MyInfoPage() {
              모바일에서는 전역 독의 레벨 → ARCTIC 알약까지 두 단계를 밟아야 했다.
              주문 내역을 훑다가도 바로 돌아갈 수 있게 헤더 아래에 붙여 둔다. */}
       {backTo && (
-        <div className="sticky top-16 z-30 w-full bg-[#f5f3f0]/92 backdrop-blur-md border-b border-black/[0.06]">
+        <div className="sticky top-16 z-30 w-full bg-[#f4f3f2]/92 backdrop-blur-md border-b border-black/[0.06]">
           <div className="max-w-4xl mx-auto px-6 py-2.5">
             <Link
               href={backTo.href}
@@ -329,10 +329,10 @@ export default function MyInfoPage() {
           <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">My Account</span>
         </div>
 
-        <div className="bg-white rounded-2xl border border-[#e2e0dc] p-6">
+        <div className="bg-white rounded-2xl border border-[#dedddb] p-6">
           <div className="flex items-center gap-4 md:gap-5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={session?.user?.image || ""} alt="" className={`w-16 h-16 md:w-[72px] md:h-[72px] rounded-full bg-[#e2e0dc] shrink-0 ${isBooster ? "ring-2 ring-[#e91e3f]/50 ring-offset-2 ring-offset-white" : ""}`} />
+            <img src={session?.user?.image || ""} alt="" className={`w-16 h-16 md:w-[72px] md:h-[72px] rounded-full bg-[#dedddb] shrink-0 ${isBooster ? "ring-2 ring-[#e91e3f]/50 ring-offset-2 ring-offset-white" : ""}`} />
             <div className="min-w-0 flex-1">
               <h1 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight truncate flex items-center gap-2">
                 {session?.user?.name}
@@ -362,7 +362,7 @@ export default function MyInfoPage() {
                 <span className="text-[11px] font-bold text-[#8a8a8a]">다음 레벨까지</span>
                 <span className="text-[11px] font-bold text-[#4b4b4b] tabular-nums">{shopMe.levelProgress.needToNext.toLocaleString()} XP</span>
               </div>
-              <div className="h-1.5 rounded-full bg-[#eceae6] overflow-hidden">
+              <div className="h-1.5 rounded-full bg-[#e9e8e6] overflow-hidden">
                 <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] transition-[width] duration-700"
                   style={{ width: `${Math.min(100, Math.round((shopMe.levelProgress.current / shopMe.levelProgress.required) * 100))}%` }}></div>
               </div>
@@ -410,7 +410,7 @@ export default function MyInfoPage() {
               <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") registerCoupon(); }}
                 placeholder="쿠폰 코드 입력"
-                className="flex-1 min-w-0 bg-white border border-[#e2e0dc] rounded-lg px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
+                className="flex-1 min-w-0 bg-white border border-[#dedddb] rounded-lg px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
               <button onClick={registerCoupon} disabled={!couponInput.trim() || isRegisteringCoupon}
                 className="px-4 py-2.5 rounded-lg bg-[#131313] hover:bg-black text-white text-[12px] font-bold disabled:opacity-40 transition-colors shrink-0">
                 {isRegisteringCoupon ? "확인" : "등록"}
@@ -427,7 +427,7 @@ export default function MyInfoPage() {
 
       {/* 내전 채널 이용 권한 획득 - 고정형 배너 */}
       {isVerified && !hasScrimRole && (
-        <div className="relative w-full mb-12 rounded-xl border border-[#e2e0dc] bg-white flex items-center justify-between gap-4 px-5 py-4">
+        <div className="relative w-full mb-12 rounded-xl border border-[#dedddb] bg-white flex items-center justify-between gap-4 px-5 py-4">
           <div className="flex items-center gap-3 min-w-0">
             <span className="hidden sm:flex shrink-0 items-center justify-center w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f]">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-[18px] h-[18px]">
@@ -506,7 +506,7 @@ export default function MyInfoPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         {/* ═══ 알림함 ═══ */}
         <section id="sec-notice" className="scroll-mt-32">
-          <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+          <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
             <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
               <h2 className="text-sm font-black text-[#131313]">
                 알림함 {notifications.length > 0 && <span className="text-[#e91e3f]">{notifications.length}</span>}
@@ -542,14 +542,14 @@ export default function MyInfoPage() {
 
         {/* ═══ 1:1 문의 내역 ═══ */}
         <section id="sec-inquiry" className="scroll-mt-32">
-          <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+          <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
             <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between gap-3 flex-wrap">
               <h2 className="text-sm font-black text-[#131313]">
                 1:1 문의 내역 {fetchedInquiries.length > 0 && <span className="text-[#e91e3f]">{fetchedInquiries.length}</span>}
               </h2>
               <div className="flex gap-1.5">
                 {[{ label: "전체", key: "all" }, { label: "접수 중", key: "pending" }, { label: "답변 완료", key: "completed" }].map(f => (
-                  <button key={f.key} onClick={() => setInquiryFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${inquiryFilter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-white border-[#e2e0dc] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
+                  <button key={f.key} onClick={() => setInquiryFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${inquiryFilter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-white border-[#dedddb] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
                 ))}
               </div>
             </div>
@@ -574,14 +574,14 @@ export default function MyInfoPage() {
 
         {/* ═══ 구인 지원 목록 ═══ */}
         <section id="sec-recruit" className="scroll-mt-32">
-          <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+          <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
             <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between gap-3 flex-wrap">
               <h2 className="text-sm font-black text-[#131313]">
                 구인 지원 목록 {fetchedRecruits.length > 0 && <span className="text-[#e91e3f]">{fetchedRecruits.length}</span>}
               </h2>
               <div className="flex gap-1.5 flex-wrap">
                 {[{ label: "전체", key: "all" }, { label: "심사 중", key: "심사 중" }, { label: "합격", key: "합격" }, { label: "불합격", key: "불합격" }].map(f => (
-                  <button key={f.key} onClick={() => setRecruitFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${recruitFilter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-white border-[#e2e0dc] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
+                  <button key={f.key} onClick={() => setRecruitFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${recruitFilter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-white border-[#dedddb] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
                 ))}
               </div>
             </div>
@@ -596,7 +596,7 @@ export default function MyInfoPage() {
                     <div className="flex gap-3 items-center">
                       <span className={`text-xs font-bold px-3 py-1 rounded-full border ${rec.status === '합격' ? 'bg-[#e8f3e6] text-[#3f7a35] border-[#cfe5cb]' : rec.status === '취소' || rec.status === '취소/반려' || rec.status === '불합격' ? 'bg-[#fdeaea] text-[#c62828] border-[#f5cdcd]' : 'bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]'}`}>{rec.status}</span>
                       {rec.status === "심사 중" && (
-                        <button onClick={() => setCancelConfirmId(rec.id)} className="text-xs font-bold px-3 py-1 bg-[#eceae6] text-[#4b4b4b] hover:bg-[#e91e3f] hover:text-white rounded-full transition-colors outline-none focus:outline-none">지원 취소</button>
+                        <button onClick={() => setCancelConfirmId(rec.id)} className="text-xs font-bold px-3 py-1 bg-[#e9e8e6] text-[#4b4b4b] hover:bg-[#e91e3f] hover:text-white rounded-full transition-colors outline-none focus:outline-none">지원 취소</button>
                       )}
                     </div>
                   </div>
@@ -609,7 +609,7 @@ export default function MyInfoPage() {
         {/* ═══ 서버 부스터 혜택 — 분량이 커서 전용 페이지로 분리 ═══ */}
         <section id="sec-booster" className="scroll-mt-32">
           <Link href="/profile/booster"
-            className="group block bg-white rounded-2xl border border-[#e2e0dc] px-6 py-6 hover:border-[#a3a3a3] transition-colors">
+            className="group block bg-white rounded-2xl border border-[#dedddb] px-6 py-6 hover:border-[#a3a3a3] transition-colors">
             <div className="flex items-center gap-4">
               <span className="w-11 h-11 rounded-xl bg-[#ff41cf]/10 text-[#ff41cf] flex items-center justify-center shrink-0">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" /></svg>
@@ -645,7 +645,7 @@ export default function MyInfoPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* 주문 내역 */}
-              <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+              <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
                 <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
                   <h2 className="text-sm font-black text-[#131313]">주문 내역 {shopOrders.length > 0 && <span className="text-[#e91e3f]">{shopOrders.length}</span>}</h2>
                   {shopOrders.length > 0 && (
@@ -682,7 +682,7 @@ export default function MyInfoPage() {
               </div>
 
               {/* 장바구니 */}
-              <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+              <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
                 <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
                   <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
                     <svg className="w-3.5 h-3.5 text-[#131313]" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -701,7 +701,7 @@ export default function MyInfoPage() {
                     <div className="divide-y divide-[#ececea] max-h-[260px] overflow-y-auto">
                       {shopCartRows.map((r) => (
                         <div key={r.itemId} className="px-5 py-3.5 flex items-center gap-3">
-                          <Link href={`/shop/item/${r.item._id}`} className="w-11 h-11 rounded-lg bg-[#eceae6] overflow-hidden shrink-0">
+                          <Link href={`/shop/item/${r.item._id}`} className="w-11 h-11 rounded-lg bg-[#e9e8e6] overflow-hidden shrink-0">
                             {r.item.imageUrl && (
                               /* eslint-disable-next-line @next/next/no-img-element */
                               <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
@@ -727,7 +727,7 @@ export default function MyInfoPage() {
               </div>
 
               {/* 찜한 상품 */}
-              <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+              <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
                 <div className="px-5 py-4 border-b border-[#ececea]">
                   <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
                     <svg className="w-3.5 h-3.5 text-[#e91e3f]" fill="currentColor" viewBox="0 0 24 24">
@@ -742,7 +742,7 @@ export default function MyInfoPage() {
                   <div className="divide-y divide-[#ececea] max-h-[320px] overflow-y-auto">
                     {shopWishRows.map((it) => (
                       <div key={it._id} className="px-5 py-3.5 flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-lg bg-[#eceae6] overflow-hidden shrink-0">
+                        <div className="w-11 h-11 rounded-lg bg-[#e9e8e6] overflow-hidden shrink-0">
                           {it.imageUrl && (
                             /* eslint-disable-next-line @next/next/no-img-element */
                             <img src={it.imageUrl} alt="" className="w-full h-full object-cover" />
@@ -763,7 +763,7 @@ export default function MyInfoPage() {
               </div>
 
               {/* 보유 쿠폰 */}
-              <div className="bg-white rounded-2xl border border-[#e2e0dc] overflow-hidden">
+              <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
                 <div className="px-5 py-4 border-b border-[#ececea]">
                   <h2 className="text-sm font-black text-[#131313]">보유 쿠폰 {shopWallet.length > 0 && <span className="text-[#e91e3f]">{shopWallet.length}</span>}</h2>
                 </div>
@@ -799,10 +799,10 @@ export default function MyInfoPage() {
       {/* 📌 통지 상세 모달 (사무적 통지서) */}
       {selectedNotif && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#131313]/45 backdrop-blur-sm sm:p-4 overlay-in" onClick={() => setSelectedNotif(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#e2e0dc] rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#dedddb] rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
             <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-[#ececea] bg-[#faf9f7] shrink-0">
               <span className="text-[10px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase">Official Notice · 운영팀 통지</span>
-              <button onClick={() => setSelectedNotif(null)} className="p-1.5 -mr-1.5 text-[#8a8a8a] hover:text-[#131313] rounded-md hover:bg-[#f5f3f0] transition-colors outline-none">
+              <button onClick={() => setSelectedNotif(null)} className="p-1.5 -mr-1.5 text-[#8a8a8a] hover:text-[#131313] rounded-md hover:bg-[#f4f3f2] transition-colors outline-none">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -835,10 +835,10 @@ export default function MyInfoPage() {
       {/* 📌 문의 상세 모달 (사무적) */}
       {selectedInquiry && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#131313]/45 backdrop-blur-sm sm:p-4 overlay-in" onClick={() => setSelectedInquiry(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#e2e0dc] rounded-t-2xl sm:rounded-2xl w-full max-w-2xl max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#dedddb] rounded-t-2xl sm:rounded-2xl w-full max-w-2xl max-h-[88dvh] sm:max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
             <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-[#ececea] bg-[#faf9f7] shrink-0">
               <span className="text-[10px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase">1:1 문의 내역</span>
-              <button onClick={() => setSelectedInquiry(null)} className="p-1.5 -mr-1.5 text-[#8a8a8a] hover:text-[#131313] rounded-md hover:bg-[#f5f3f0] transition-colors outline-none">
+              <button onClick={() => setSelectedInquiry(null)} className="p-1.5 -mr-1.5 text-[#8a8a8a] hover:text-[#131313] rounded-md hover:bg-[#f4f3f2] transition-colors outline-none">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -883,11 +883,11 @@ export default function MyInfoPage() {
 
       {cancelConfirmId && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-[#131313]/45 backdrop-blur-sm p-4 overlay-in">
-          <div className="bg-white border border-[#e2e0dc] rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
+          <div className="bg-white border border-[#dedddb] rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
             <h2 className="text-xl font-bold text-[#131313] mb-3">지원 취소 확인</h2>
             <p className="text-sm text-[#5a5a5a] mb-8 leading-relaxed">정말로 지원을 취소하시겠습니까?<br/>취소 후에는 다시 지원해야 합니다.</p>
             <div className="flex gap-3">
-              <button onClick={() => setCancelConfirmId(null)} className="flex-1 py-3 bg-[#eceae6] hover:bg-[#e2e0dc] text-[#131313] font-bold rounded-xl transition-colors">닫기</button>
+              <button onClick={() => setCancelConfirmId(null)} className="flex-1 py-3 bg-[#e9e8e6] hover:bg-[#dedddb] text-[#131313] font-bold rounded-xl transition-colors">닫기</button>
               <button onClick={executeCancelApply} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-[#131313] font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20">취소하기</button>
             </div>
           </div>

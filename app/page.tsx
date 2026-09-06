@@ -179,7 +179,7 @@ export default function Home() {
 
       {/* ═══ SECTION 2 · 통합 라이트 패널 (01 서버현황 + 02 LIVE&UPCOMING + 03 핵심콘텐츠 + 04 최신소식) ═══
              첫 화면에서는 보이지 않고, 스크롤하면 멈춰 있는 히어로 위로 흰 배경이 커튼처럼 올라온다 ═══ */}
-      <section className="relative w-full z-10 overflow-x-clip bg-[#f5f3f0] rounded-t-[40px] md:rounded-t-[56px] rounded-b-[40px] md:rounded-b-[56px] shadow-[0_-24px_70px_-24px_rgba(0,0,0,0.6),0_40px_90px_-30px_rgba(0,0,0,0.65)] [clip-path:inset(0_round_40px)] md:[clip-path:inset(0_round_56px)]">
+      <section className="relative w-full z-10 overflow-x-clip bg-[#f4f3f2] rounded-t-[40px] md:rounded-t-[56px] rounded-b-[40px] md:rounded-b-[56px] shadow-[0_-24px_70px_-24px_rgba(0,0,0,0.6),0_40px_90px_-30px_rgba(0,0,0,0.65)] [clip-path:inset(0_round_40px)] md:[clip-path:inset(0_round_56px)]">
         {/* ※ overflow-hidden 대신 clip-path 사용 — overflow-hidden은 하위 sticky 제목의 위치 고정을 깨버린다.
                overflow-x-clip은 스크롤 컨테이너를 만들지 않아 sticky에 영향 없이, 장식용 glow(우측 음수 offset)가
                문서 가로 스크롤을 만드는 것만 막는다 (clip-path는 렌더링만 자르고 레이아웃 오버플로우는 못 막음) */}

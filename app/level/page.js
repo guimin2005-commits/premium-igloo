@@ -303,7 +303,7 @@ const LevelCurve = ({ myLevel = null }) => {
           {/* 마일스톤 */}
           {milestones.map((m) => (
             <g key={m}>
-              <circle cx={X(m)} cy={Y(getCumulativeXpByLevel(m))} r="3.5" fill="#f5f3f0" stroke="#e91e3f" strokeWidth="2" />
+              <circle cx={X(m)} cy={Y(getCumulativeXpByLevel(m))} r="3.5" fill="#f4f3f2" stroke="#e91e3f" strokeWidth="2" />
               <text x={X(m)} y={H - PB + 20} textAnchor={m === 1000 ? "end" : "middle"} fill="rgba(0,0,0,0.35)" fontSize="11" fontWeight="800">{m}</text>
             </g>
           ))}
@@ -315,7 +315,7 @@ const LevelCurve = ({ myLevel = null }) => {
               <text
                 x={Math.min(Math.max(X(myLevel), 30), W - 30)}
                 y={Math.max(Y(getCumulativeXpByLevel(myLevel)) - 14, 12)}
-                textAnchor="middle" fill="#e91e3f" stroke="#f5f3f0" strokeWidth="3" paintOrder="stroke" fontSize="11" fontWeight="900" letterSpacing="1"
+                textAnchor="middle" fill="#e91e3f" stroke="#f4f3f2" strokeWidth="3" paintOrder="stroke" fontSize="11" fontWeight="900" letterSpacing="1"
               >YOU</text>
             </g>
           )}
@@ -770,10 +770,13 @@ export default function LevelPage() {
   const setActiveMainTab = useCallback(
     (id) => {
       const q = new URLSearchParams(Array.from(searchParams.entries()));
+      const cur = q.get("tab") || "my";
       if (id === "my") q.delete("tab");
       else q.set("tab", id);
       const qs = q.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      // 같은 탭을 다시 눌렀을 때는 소리를 내지 않는다
+      if (cur !== id) playTone(740, 0.05, "sine", 0.028);
     },
     [searchParams, router, pathname]
   );
@@ -1210,7 +1213,7 @@ export default function LevelPage() {
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d6d3ce; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d2d1cf; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #e91e3f; }
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -2437,11 +2440,11 @@ export default function LevelPage() {
                                 style={{ boxShadow: `0 0 0 3px ${c}, 0 18px 36px -16px ${c}` }}
                               >
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={r.avatar || ""} alt="" className="w-full h-full object-cover bg-[#e2e0dc]" />
+                                <img src={r.avatar || ""} alt="" className="w-full h-full object-cover bg-[#dedddb]" />
                               </span>
                               {/* 순위는 원에 겹쳐 붙인다 — 따로 두면 원 크기가 달라 높이가 어긋난다 */}
                               <span
-                                className={`absolute left-1/2 -translate-x-1/2 -bottom-2 inline-flex items-center justify-center rounded-full text-white font-black tabular-nums ring-2 ring-[#f5f3f0] ${first ? "w-7 h-7 text-[13px]" : "w-6 h-6 text-[11px]"}`}
+                                className={`absolute left-1/2 -translate-x-1/2 -bottom-2 inline-flex items-center justify-center rounded-full text-white font-black tabular-nums ring-2 ring-[#f4f3f2] ${first ? "w-7 h-7 text-[13px]" : "w-6 h-6 text-[11px]"}`}
                                 style={{ backgroundColor: c }}
                               >
                                 {r.rank}
