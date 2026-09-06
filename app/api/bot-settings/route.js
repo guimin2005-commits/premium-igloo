@@ -62,6 +62,11 @@ export async function POST(request) {
         questPickWeekly: num(b.questPickWeekly, 0, { min: 0, max: 20 }),
         questPickMonthly: num(b.questPickMonthly, 0, { min: 0, max: 20 }),
         shopPublic: !!b.shopPublic,
+        // 시즌 전환 보호 역할 — 화이트리스트에 없으면 조용히 무시되어 detach 쪽 안전장치가 항상 빈 배열이 된다.
+        // 역할 ID 문자열만 남기고 개수도 제한한다 (관리자 실수·비정상 입력으로 문서가 부풀지 않게)
+        protectedRoleIds: Array.isArray(b.protectedRoleIds)
+          ? b.protectedRoleIds.filter((s) => typeof s === "string" && s.trim()).slice(0, 50)
+          : [],
         levelupChannelId: (b.levelupChannelId || "").trim(),
         levelupMessage: (b.levelupMessage || "").trim() || "🎉 {user} 님이 **Lv.{level}** 에 도달했습니다!",
         roleGrantChannelId: (b.roleGrantChannelId || "").trim(),

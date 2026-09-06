@@ -22,6 +22,15 @@ const UserXpSchema = new mongoose.Schema({
   // 오늘(KST) 음성 누적 분 — 출석 자동 지급 판정용. 날짜가 바뀌면 봇이 리셋한다.
   voiceTodayMin: { type: Number, default: 0 },
   voiceTodayDate: { type: String, default: "" },
+  // 📌 시즌 패스 — 새 재화를 만들지 않고 "이번 시즌에 번 XP"(xp - passBaseXp)를 진행도로 쓴다.
+  //    XpLog 는 60일 TTL 이라 시즌 전체를 셀 수 없으므로, 시즌 시작 시점의 누적 XP를 찍어두고 뺀다.
+  passSeason: { type: Number, default: 0 },        // SEASON.number 와 다르면 새 시즌 — 조회 시점에 다시 스냅샷한다
+  passBaseXp: { type: Number, default: 0 },        // 시즌 시작 시점의 누적 XP
+  passUnlocked: { type: Boolean, default: false }, // 프리미엄 트랙 해금 여부 (시즌마다 초기화)
+  // 수령 기록은 티어의 안정 식별자(tid, "t1"·"t2" …)를 담는다. 인덱스로 담으면 시즌 도중
+  // 티어를 중간에 추가할 때 뒤쪽이 밀려 이미 받은 보상을 다시 받을 수 있다 (models/SeasonPass.js 참고).
+  passClaimedFree: { type: [String], default: [] }, // 수령한 무료 티어 tid
+  passClaimedPaid: { type: [String], default: [] }, // 수령한 프리미엄 티어 tid
   // 사이트에서 XP·레벨을 바꿨을 때 봇이 레벨 역할을 다시 맞추도록 세우는 표시
   needsRoleSync: { type: Boolean, default: false },
   updatedAt: { type: Date, default: Date.now },

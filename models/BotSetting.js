@@ -30,6 +30,11 @@ const BotSettingSchema = new mongoose.Schema({
   // ARCTIC 공개 여부 — false면 관리자만 접근 가능 (준비 중 상태)
   shopPublic: { type: Boolean, default: false },
 
+  // 📌 시즌 전환 때도 절대 떼지 않는 역할 (펭귄 등급 등)
+  //    상점 상품이 아니어도 같은 역할 ID를 파는 상품이 생길 수 있고,
+  //    등급 역할이 잘못 떨어지면 채널 접근이 통째로 막힌다 — 안전장치로 따로 잠가 둔다.
+  protectedRoleIds: { type: [String], default: [] },
+
   levelupChannelId: { type: String, default: "" }, // 레벨업 알림 채널 (비우면 알림 끔)
   levelupMessage: { type: String, default: "🎉 {user} 님이 **Lv.{level}** 에 도달했습니다!" },
 

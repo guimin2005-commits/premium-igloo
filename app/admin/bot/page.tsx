@@ -28,6 +28,7 @@ const SUB_TABS: Record<string, { id: string; label: string }[]> = {
     { id: "tier", label: "티어 일괄 연결" },
     { id: "form", label: "역할 추가 · 수정" },
     { id: "list", label: "설정된 역할" },
+    { id: "protected", label: "보호 역할" },
   ],
   channels: [
     { id: "form", label: "채널 추가 · 수정" },
@@ -277,6 +278,8 @@ export default function AdminBotPage() {
 
   const [roleForm, setRoleForm] = useState<any>({ roleId: "", rewardLevel: "", buffXp: "", attendBuffXp: "", exclusive: false });
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
+  // 보호 역할은 여러 개를 고르므로 항목을 눌러도 목록이 닫히지 않는다
+  const [isProtectedRoleOpen, setIsProtectedRoleOpen] = useState(false);
   // 봇이 실제로 지급할 수 있는 역할만 — 디스코드가 관리하는 역할(서버 부스트 등)은 줄 수 없다.
   // 부스트 대상 지정과 인벤토리 표시에는 관리 역할도 쓸 수 있으므로 그쪽은 guildRoles 를 그대로 쓴다.
   const grantableRoles = guildRoles.filter((r: any) => !r.managed);
@@ -460,6 +463,16 @@ export default function AdminBotPage() {
 
   const labelClass = "block text-xs font-bold text-[#8a8a8a] mb-2";
   const primaryBtn = "w-full md:w-auto md:px-10 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all";
+
+  // 📌 시즌 전환 보호 역할 — 설정 문서(BotSetting)의 배열 하나라 저장은 기존 postSettings 를 그대로 쓴다
+  const protectedRoleIds: string[] = Array.isArray(settings?.protectedRoleIds) ? settings.protectedRoleIds : [];
+  const toggleProtectedRole = (id: string) =>
+    setSettings({
+      ...settings,
+      protectedRoleIds: protectedRoleIds.includes(id)
+        ? protectedRoleIds.filter((x) => x !== id)
+        : [...protectedRoleIds, id],
+    });
 
   const SectionHead = ({ no, title, right }: { no: string; title: string; right?: React.ReactNode }) => (
     <div className="mb-6">
@@ -868,6 +881,72 @@ export default function AdminBotPage() {
                     );
                   })}
                 </div>
+              )}
+            </section>
+            </Reveal>
+            )}
+            {sub === "protected" && (
+            <Reveal>
+            <section>
+              <SectionHead no="04" title="시즌 전환 보호 역할" />
+              <div className="p-5 md:p-6 rounded-xl border border-black/10 bg-black/[0.02] mb-6">
+                <p className="text-xs text-[#5a5a5a] leading-relaxed break-keep">
+                  시즌 전환으로 디스코드 역할을 뗄 때도 <b className="text-[#131313]">절대 제외</b>할 역할 —
+                  어린이·청소년·어른 같은 등급 역할을 넣습니다.
+                </p>
+              </div>
+              {!settings ? <div className="py-10 text-center text-[#8a8a8a] text-sm">불러오는 중...</div> : (
+              <form onSubmit={saveSettings}>
+                <div className={`mb-4 relative ${isProtectedRoleOpen ? "z-50" : ""}`}>
+                  <label className={labelClass}>보호할 역할 (복수 선택)</label>
+                  <button type="button" onClick={() => setIsProtectedRoleOpen(!isProtectedRoleOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
+                    {protectedRoleIds.length > 0
+                      ? <span className="font-bold">{protectedRoleIds.length}개 역할 선택됨</span>
+                      : <span className="text-[#5a5a5a]">역할을 선택하세요</span>}
+                    <span className="text-[10px] text-[#8a8a8a]">▼</span>
+                  </button>
+                  {isProtectedRoleOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsProtectedRoleOpen(false)}></div>
+                      <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e6e3de]">
+                        {guildRoles.map((r) => {
+                          const picked = protectedRoleIds.includes(r.id);
+                          return (
+                            <button key={r.id} type="button" onClick={() => toggleProtectedRole(r.id)}
+                              className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 transition-colors ${picked ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : "text-[#4b4b4b] hover:bg-black/5"}`}>
+                              <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: r.color }}></span>
+                              <span className="truncate">{r.name}</span>
+                              {picked && <span className="ml-auto text-[10px] shrink-0">선택됨</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                  <p className={fieldNote}>선택한 역할은 상품으로 팔렸더라도 시즌 전환 대상에서 제외됩니다</p>
+                </div>
+
+                {protectedRoleIds.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {protectedRoleIds.map((id) => {
+                      const r = guildRoles.find((g: any) => g.id === id);
+                      return (
+                        <span key={id} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-black/10 bg-black/[0.03] text-xs font-bold text-[#131313]">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: r?.color || "#99aab5" }}></span>
+                          {/* 디스코드에서 지워진 역할도 ID 로 남겨 둔다 — 조용히 사라지면 무엇이 빠졌는지 알 수 없다 */}
+                          <span className="truncate max-w-[14rem]">{r?.name || `삭제된 역할 (${id})`}</span>
+                          <button type="button" onClick={() => toggleProtectedRole(id)} className="text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">✕</button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* 스크롤 끝까지 내려가지 않아도 저장할 수 있게 하단에 고정 */}
+            <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#f4f3f2]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
+              <span className="text-[11px] font-bold text-[#8a8a8a]">봇에는 1분 이내 자동 반영됩니다.</span>
+              <button type="submit" className="px-10 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-lg transition-all shrink-0">저장</button>
+            </div>
+              </form>
               )}
             </section>
             </Reveal>

@@ -86,9 +86,15 @@ export async function POST(request) {
     const payMethod = body?.payMethod === "point" ? "point" : "xp";
     const field = payMethod === "point" ? "point" : "xp";
     const charged = isAdmin ? 0 : price;
+    // 📌 XP 는 상점 화폐이면서 시즌 패스 진행도(xp - passBaseXp)의 원천이기도 하다.
+    //    그냥 깎으면 물건을 살 때마다 이미 도달한 패스 티어가 미도달로 되돌아가고,
+    //    "미도달인데 수령완료" 인 모순 상태가 된다. 기준선을 같은 폭으로 함께 내려
+    //    "이번 시즌에 번 XP" 가 보존되게 한다. POINT 는 진행도와 무관하므로 건드리지 않는다.
+    const inc = { [field]: -charged };
+    if (field === "xp") inc.passBaseXp = -charged;
     const paid = await UserXp.updateOne(
       isAdmin ? { userId } : { userId, [field]: { $gte: price } },
-      { $inc: { [field]: -charged }, $set: { updatedAt: new Date() } },
+      { $inc: inc, $set: { updatedAt: new Date() } },
       isAdmin ? { upsert: true } : {}
     );
     if (!paid.matchedCount && !paid.upsertedCount) {

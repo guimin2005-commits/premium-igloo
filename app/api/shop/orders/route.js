@@ -9,6 +9,7 @@ import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
 import { getLevelByXp } from "@/lib/leveling";
 import ShopItem from "@/models/ShopItem";
+import mongoose from "mongoose";
 
 const requireAdmin = async () => {
   const session = await getServerSession(authOptions);
@@ -67,7 +68,9 @@ export async function PATCH(request) {
       const backXp = hasSplit ? purchase.paidXp || 0 : purchase.price || 0;
       const backPoint = hasSplit ? purchase.paidPoint || 0 : 0;
       const inc = {};
-      if (backXp) inc.xp = backXp;
+      // 차감 때 기준선(passBaseXp)을 함께 내렸으므로 환불도 같은 폭으로 되돌린다.
+      //    한쪽만 움직이면 시즌 패스 진행도가 환불할 때마다 부풀어 오른다.
+      if (backXp) { inc.xp = backXp; inc.passBaseXp = backXp; }
       if (backPoint) inc.point = backPoint;
       if (Object.keys(inc).length) await UserXp.updateOne({ userId: purchase.userId }, { $inc: inc });
       if (backXp) {
@@ -78,10 +81,15 @@ export async function PATCH(request) {
           { $set: { level: getLevelByXp(refunded?.xp ?? 0), needsRoleSync: true } }
         );
       }
-      await ShopItem.updateOne(
-        { _id: purchase.itemId, stock: { $gte: 0 } },
-        { $inc: { stock: 1, soldCount: -1 } }
-      );
+      // 📌 시즌 패스 보상으로 지급한 건은 itemId 가 ObjectId 가 아니라 "season-pass" 문자열이다.
+      //    그대로 _id 로 넘기면 CastError 로 500 이 나는데, 취소는 이미 반영된 뒤라
+      //    관리자 화면은 실패로 보이고 실제로는 취소된 유령 상태가 된다. 상점 상품일 때만 재고를 되돌린다.
+      if (mongoose.Types.ObjectId.isValid(purchase.itemId)) {
+        await ShopItem.updateOne(
+          { _id: purchase.itemId, stock: { $gte: 0 } },
+          { $inc: { stock: 1, soldCount: -1 } }
+        );
+      }
     }
 
     return NextResponse.json({ success: true, data: purchase });

@@ -56,7 +56,17 @@ export async function POST(request) {
         return NextResponse.json({ success: false, message: "해당 유저를 찾을 수 없습니다." }, { status: 404 });
       }
 
-      await UserXp.updateMany(filter, { $set: { xp: 0, level: 0, needsRoleSync: true, updatedAt: new Date() } });
+      // 📌 passBaseXp 를 같이 0 으로 되돌린다. 진행도가 xp - passBaseXp 이므로
+      //    xp 만 0 으로 만들면 기준선(예전 누적치)이 남아 진행도가 남은 시즌 내내 0 에 얼어붙는다.
+      //    시즌 롤오버는 passSeason 이 바뀔 때만 재스냅샷하므로 스스로 풀리지도 않는다.
+      //    수령 기록·해금도 함께 지운다. 남겨 두면 진행도 0 인 화면에 "미도달인데 수령완료" 칸이
+      //    그대로 남고, 시즌 롤오버는 passSeason 이 바뀔 때만 도므로 스스로 풀리지도 않는다.
+      await UserXp.updateMany(filter, {
+        $set: {
+          xp: 0, level: 0, needsRoleSync: true, updatedAt: new Date(),
+          passBaseXp: 0, passUnlocked: false, passClaimedFree: [], passClaimedPaid: [],
+        },
+      });
 
       // 감사 기록 — 이미 반영했으므로 봇 큐가 다시 집지 않도록 paid로 남긴다
       const who = session?.user?.name || "admin";

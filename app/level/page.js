@@ -10,7 +10,7 @@ import {
   HudPanel, HudSection, HudStyles, LiveDot, RingGauge, SegBar,
   StatusChip, SegLadder, TickRuler, RankRows, EmptySlot,
 } from "../components/Hud";
-import { SEASON, getSeasonProgress, isVoiceTimeTracked, VOICE_TIME_START } from "@/lib/season";
+import { SEASON, getSeasonProgress, getSeasonDday, isVoiceTimeTracked, VOICE_TIME_START } from "@/lib/season";
 import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel } from "@/lib/voiceTiers";
 import { getCumulativeXpByLevel, getLevelByXp } from "@/lib/leveling";
 import TierEmblem from "../components/TierEmblem";
@@ -47,6 +47,8 @@ const MAIN_TABS = [
   { id: "my", name: "내 대시보드" },
   { id: "intro", name: "시스템 안내" },
   { id: "arctic", name: "ARCTIC", shopOnly: true },
+  // 시즌 패스는 관리자가 꺼 두면 탭 자체가 없어야 한다 (shopOnly 와 같은 방식)
+  { id: "pass", name: "시즌 패스", passOnly: true },
   { id: "rank", name: "랭킹" },
   { id: "table", name: "XP 테이블" },
   { id: "sim", name: "시뮬레이터" },
@@ -177,6 +179,64 @@ const LuxCard = ({ children, className = "", glow = false }) => (
     {children}
   </div>
 );
+
+// 📌 시즌 패스 보상 머리표 — 칸이 좁아 아이콘 대신 짧은 글자로 종류를 먼저 읽힌다
+const PASS_KIND_MARK = { xp: "XP", point: "POINT", role: "ROLE", none: "—" };
+
+// 📌 시즌 패스 보상 칸 — 무료(위)/프리미엄(아래) 두 줄이 같은 문법을 쓴다.
+//    상태는 색으로 먼저 읽힌다: 받을 수 있으면 잉크 채움, 받았으면 옅게, 잠기면 자물쇠.
+//    좁은 화면에서 칸이 뭉개지지 않도록 높이를 고정하고 레일 쪽에서 가로로 넘긴다.
+const PassRewardCell = ({ reward, trackLabel, tierLevel, locked = false, busy = false, onClaim }) => {
+  const r = reward || {};
+  const empty = !r.kind || r.kind === "none";
+  const claimed = !!r.claimed;
+  const claimable = !!r.claimable && !busy;
+  const tone = r.claimable
+    ? "bg-[#131313] text-white border-transparent hover:bg-[#2a2a2a]"
+    : claimed
+    ? "bg-black/[0.04] text-[#8a8a8a] border-black/[0.06]"
+    : empty
+    ? "bg-transparent text-[#c4c4c4] border-dashed border-black/[0.10]"
+    : "bg-black/[0.03] text-[#5a5a5a] border-black/[0.07]";
+  // 잠긴 프리미엄은 보상 이름은 보여 주되 한 겹 흐리게 — "있다는 것"은 알아야 해금 동기가 된다
+  const dim = locked && !claimed ? "opacity-55" : "";
+  const Tag = r.claimable ? "button" : "div";
+  const tagProps = r.claimable ? { type: "button", onClick: onClaim, disabled: busy } : {};
+
+  return (
+    <Tag
+      {...tagProps}
+      aria-label={`티어 ${tierLevel} ${trackLabel} 보상 ${r.label || "없음"}${claimed ? " · 수령완료" : claimable ? " · 받기" : locked ? " · 잠김" : ""}`}
+      className={`w-full h-[112px] rounded-xl border px-2 flex flex-col items-center justify-center text-center transition-colors outline-none focus:outline-none ${tone} ${dim}`}
+    >
+      <span className={`text-[9px] font-black tracking-[0.18em] ${r.claimable ? "text-white/45" : "text-[#c4c4c4]"}`}>
+        {PASS_KIND_MARK[r.kind] || "—"}
+      </span>
+      <span className="mt-1.5 text-[11px] font-black leading-tight break-keep line-clamp-2">{r.label || "-"}</span>
+      <span className="mt-2 h-5 flex items-center">
+        {empty ? (
+          <span className="text-[10px] font-bold text-[#c4c4c4]">보상 없음</span>
+        ) : claimed ? (
+          <span className="inline-flex items-center gap-1 text-[10px] font-black text-[#8a8a8a]">
+            <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7" /></svg>
+            수령완료
+          </span>
+        ) : claimable ? (
+          <span className="inline-flex items-center h-5 px-2.5 rounded-full bg-[#e91e3f] text-white text-[10px] font-black">받기</span>
+        ) : busy && r.claimable ? (
+          <span className="inline-flex items-center h-5 px-2.5 rounded-full bg-white/20 text-white text-[10px] font-black">처리 중</span>
+        ) : locked ? (
+          <span className="inline-flex items-center gap-1 text-[10px] font-black text-[#a3a3a3]">
+            <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
+            잠김
+          </span>
+        ) : (
+          <span className="text-[10px] font-bold text-[#c4c4c4]">미도달</span>
+        )}
+      </span>
+    </Tag>
+  );
+};
 
 // 📌 대시보드 공용 헬퍼 — 효과음(경매 페이지 playTone 패턴)·상대시간·KST 오늘 날짜
 const playTone = (freq = 880, dur = 0.12, type = "sine", vol = 0.04) => {
@@ -818,15 +878,27 @@ export default function LevelPage() {
   const [tierOpen, setTierOpen] = useState(false);   // 등급 안내 모달
   const [myItems, setMyItems] = useState(null);      // 보유 아이템 (디스코드 역할 대조)
   const [claiming, setClaiming] = useState("");
+  const [pass, setPass] = useState(null);            // /api/pass — 시즌 패스 상태 (비활성/비로그인이면 null)
+  const [passBusy, setPassBusy] = useState("");      // 수령·해금 진행 중 키 ("t2:free" / "unlock") — 티어는 인덱스가 아니라 tid 로 잡는다
+  const passRailRef = useRef(null);                  // 티어 레일 — 현재 티어가 화면에 들어오게 스크롤을 맞춘다
 
   const loadMe = useCallback(async () => {
     try {
-      const [meRes, logRes, qRes, itemRes] = await Promise.all([
+      const [meRes, logRes, qRes, itemRes, passRes] = await Promise.all([
         fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/xp/my-logs", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/xp/quests", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
         fetch("/api/shop/my-items", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+        // 패스는 30초 폴링에 같이 실어 둔다 — 봇이 XP 를 넣어 티어가 오르면 화면도 따라 오른다
+        fetch("/api/pass", { cache: "no-store" })
+          .then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }))
+          .catch(() => null),
       ]);
+      // 로그아웃(401·403) 처럼 서버가 명시적으로 거부했을 때만 비운다.
+      // 500 도 { success:false } 인 정상 JSON 이라 본문만 보면 일시 장애와 구분되지 않는다 —
+      // 한 번 끊겼다고 패스 탭이 통째로 사라지면 안 되므로 상태 코드로 갈라 본다.
+      if (passRes?.body?.success) setPass(passRes.body);
+      else if (passRes && (passRes.status === 401 || passRes.status === 403)) setPass(null);
       if (meRes?.success) {
         const d = meRes.data;
         const prev = prevXpRef.current;
@@ -868,9 +940,65 @@ export default function LevelPage() {
     setClaiming("");
   }, [pushToast, loadMe]);
 
+  // 시즌 패스 수령 — 진행도·중복은 서버가 다시 판정한다. 클라이언트 상태는 근거가 아니다.
+  // 티어는 tid(안정 식별자)로 지목한다 — 시즌 도중 티어가 추가되면 인덱스가 밀려 엉뚱한 보상을 받게 된다
+  const claimPass = useCallback(async (tid, track) => {
+    const busyKey = `${tid}:${track}`;
+    setPassBusy(busyKey);
+    try {
+      const res = await fetch("/api/pass/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tid, track }),
+      }).then((r) => r.json());
+
+      if (res?.success) {
+        pushToast(res.message || `${res.reward?.label || "보상"} 수령`, true);
+        sfxLevelUp();
+      } else {
+        pushToast(res?.message || "수령하지 못했습니다.");
+      }
+    } catch {
+      pushToast("네트워크 오류로 수령하지 못했습니다.");
+    }
+    // 성공이든 실패든 서버 상태로 다시 맞춘다 (수령 기록이 어긋난 채 남으면 안 된다).
+    // 재조회가 끝난 뒤에 버튼을 풀어야 낡은 claimable 로 한 번 더 눌리지 않는다.
+    await loadMe();
+    // 다른 작업이 그 사이 시작됐으면 남의 표시를 지우면 안 된다 — 내 키일 때만 푼다
+    setPassBusy((k) => (k === busyKey ? "" : k));
+  }, [pushToast, loadMe]);
+
+  // 프리미엄 해금 — 되돌릴 수 없는 지출이라 한 번 확인받는다
+  const unlockPass = useCallback(async (payMethod) => {
+    const price = pass?.unlockPrice || 0;
+    const unit = payMethod === "xp" ? "XP" : "POINT";
+    if (!window.confirm(`프리미엄 트랙을 ${unit} ${price.toLocaleString()} 으로 해금할까요?\n이번 시즌에만 적용되며 되돌릴 수 없습니다.`)) return;
+    setPassBusy("unlock");
+    try {
+      const res = await fetch("/api/pass/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payMethod }),
+      }).then((r) => r.json());
+
+      if (res?.success) {
+        pushToast(res.message || "프리미엄 트랙을 해금했습니다", true);
+        sfxLevelUp();
+      } else {
+        pushToast(res?.message || "해금하지 못했습니다.");
+      }
+    } catch {
+      pushToast("네트워크 오류로 해금하지 못했습니다.");
+    }
+    // 해금 결과가 화면에 반영된 뒤에 버튼을 푼다 (중복 결제 방지)
+    await loadMe();
+    // 다른 작업이 그 사이 시작됐으면 남의 표시를 지우면 안 된다 — 내 키일 때만 푼다
+    setPassBusy((k) => (k === "unlock" ? "" : k));
+  }, [pass?.unlockPrice, pushToast, loadMe]);
+
   useEffect(() => {
     if (authStatus === "loading") return;
-    if (!session?.user) { setMe(null); setMyLogs(null); setQuests(null); setMyItems(null); prevXpRef.current = null; setMeLoaded(true); return; }
+    if (!session?.user) { setMe(null); setMyLogs(null); setQuests(null); setMyItems(null); setPass(null); prevXpRef.current = null; setMeLoaded(true); return; }
     loadMe();
     const t = setInterval(loadMe, 30 * 1000);
     const onFocus = () => loadMe();
@@ -1031,14 +1159,32 @@ export default function LevelPage() {
   const canSeeShop = !!policy?.shopPublic || isAdminName(session?.user?.name);
   const P_chatCooldownLabel = P.chatCooldownSec >= 60 ? `${Math.round(P.chatCooldownSec / 60)}분` : `${P.chatCooldownSec}초`;
 
-  // 시즌 D-Day (KST 기준)
-  const seasonDday = useMemo(() => {
-    const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
-    const todayStr = kstNow.toISOString().slice(0, 10);
-    const end = new Date(`${SEASON.end}T23:59:59+09:00`).getTime();
-    const days = Math.ceil((end - Date.now()) / (24 * 60 * 60 * 1000));
-    return { days, ended: todayStr > SEASON.end };
-  }, []);
+  // ── 시즌 패스 파생값 ──
+  // /api/pass 는 비로그인이면 401 이라 pass 가 null 이다 → 그때는 탭을 만들지 않는다 (관리자가 끈 것과 동일 취급)
+  const passEnabled = !!pass?.enabled;
+  const passTiers = pass?.tiers || [];
+  const passMaxTier = passTiers[passTiers.length - 1]?.level ?? passTiers.length;
+  const passClaimable = passTiers.reduce(
+    (n, t) => n + (t.free?.claimable ? 1 : 0) + (t.paid?.claimable ? 1 : 0), 0
+  );
+  const passPct = pass?.maxNeed > 0 ? Math.min(100, Math.round(((pass.progress || 0) / pass.maxNeed) * 100)) : 0;
+  const passTierNo = pass && pass.tierIndex >= 0 ? (passTiers[pass.tierIndex]?.level ?? pass.tierIndex + 1) : 0;
+
+  // 레일은 처음부터 현재 티어를 비춰야 한다 — 탭에 들어올 때와 티어가 오를 때만 다시 맞춘다
+  // (수령 직후에는 tierIndex 가 그대로라 스크롤이 튀지 않는다)
+  useEffect(() => {
+    if (activeMainTab !== "pass") return;
+    const el = passRailRef.current;
+    if (!el) return;
+    const node = el.querySelector(`[data-tier="${Math.max(0, pass?.tierIndex ?? 0)}"]`);
+    if (!node) return;
+    const rail = el.getBoundingClientRect();
+    const box = node.getBoundingClientRect();
+    el.scrollLeft += (box.left - rail.left) - (el.clientWidth - box.width) / 2;
+  }, [activeMainTab, pass?.tierIndex, passTiers.length]);
+
+  // 시즌 D-Day (KST 기준) — 계산은 lib/season.js 단일 소스
+  const seasonDday = useMemo(() => getSeasonDday(), []);
 
   const [searchLevel, setSearchLevel] = useState("");
   const searchResult = useMemo(() => {
@@ -1187,7 +1333,7 @@ export default function LevelPage() {
       {/* 정렬은 탭마다 바뀌지 않는다 — ARCTIC 으로 넘어갈 때 카테고리가 좌우로 튀면 안 된다 */}
       <div className="max-w-7xl mx-auto flex items-center justify-center">
         <div className="min-w-0 flex gap-2 overflow-x-auto no-bar">
-          {MAIN_TABS.filter((t) => !t.shopOnly || canSeeShop).map((tab) => {
+          {MAIN_TABS.filter((t) => (!t.shopOnly || canSeeShop) && (!t.passOnly || passEnabled)).map((tab) => {
             const active = activeMainTab === tab.id;
             return (
               <button
@@ -1539,6 +1685,44 @@ export default function LevelPage() {
                             {myItems.items.length === 0
                               ? "아직 보유한 아이템이 없습니다"
                               : invGroups.slice(1).map((g) => `${g.label} ${g.items.length}`).join(" · ")}
+                          </span>
+                        </span>
+
+                        <span aria-hidden className="shrink-0 text-white/30 group-hover:text-white text-base transition-all group-hover:translate-x-0.5">→</span>
+                      </button>
+                    )}
+
+                    {/* 시즌 패스 — 인벤토리 줄과 같은 무게의 입구 한 줄. 본진은 '시즌 패스' 탭이고
+                        여기서는 진행 바·현재 티어·받을 것 개수만 흘려 준다 (카드로 키우지 않는다) */}
+                    {passEnabled && (
+                      <button
+                        onClick={() => setActiveMainTab("pass")}
+                        aria-label="시즌 패스 열기"
+                        className="group w-full mt-8 pt-6 md:pt-8 border-t border-white/10 flex items-center gap-4 text-left outline-none focus:outline-none"
+                      >
+                        <span aria-hidden className="relative shrink-0">
+                          <svg viewBox="0 0 24 24" className="w-7 h-7 text-white/45 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <path d="M12 3.2l2.5 5.3 5.7.8-4.1 4.1 1 5.8-5.1-2.8-5.1 2.8 1-5.8L3.8 9.3l5.7-.8Z" strokeLinejoin="round" />
+                          </svg>
+                          {passClaimable > 0 && (
+                            <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{passClaimable}</span>
+                          )}
+                        </span>
+
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-baseline gap-2.5">
+                            <span className="text-[15px] font-black text-white shrink-0">시즌 패스</span>
+                            <span className="text-[15px] font-black text-white/45 tabular-nums shrink-0">T{passTierNo}</span>
+                            <span className="text-[11px] text-white/35 truncate">
+                              {passClaimable > 0
+                                ? `받을 수 있는 보상 ${passClaimable}개`
+                                : pass?.nextNeed > 0
+                                ? `다음 티어까지 ${pass.nextNeed.toLocaleString()} XP`
+                                : "모든 티어를 채웠습니다"}
+                            </span>
+                          </span>
+                          <span className="block mt-2.5 h-1 rounded-full bg-white/10 overflow-hidden">
+                            <span className="block h-full rounded-full bg-[#e91e3f]" style={{ width: `${passPct}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}></span>
                           </span>
                         </span>
 
@@ -2362,6 +2546,207 @@ export default function LevelPage() {
         )}
 
         {/* ══ TAB : RANKING ════════════════ */}
+        {/* ══ TAB : SEASON PASS — 무료 / 프리미엄 2트랙 레일 ══
+               진행도는 이번 시즌에 번 XP 하나뿐이다 (새 재화 없음).
+               수령·해금 판정은 전부 서버가 다시 하고, 여기서는 서버가 준 상태만 그린다 ══ */}
+        {activeMainTab === "pass" && (
+          <Reveal>
+            <SectionHeader
+              en="Season Pass"
+              title="시즌 패스"
+              desc="이번 시즌에 모은 XP 만큼 티어가 오릅니다. 무료 트랙은 누구나 받을 수 있고, 프리미엄 트랙은 한 번 해금하면 시즌이 끝날 때까지 열려 있습니다."
+              right={
+                <div className="shrink-0 text-right">
+                  <p className="text-[9px] font-black tracking-[0.22em] text-[#a3a3a3] uppercase">
+                    Season {pass?.season?.number ?? SEASON.number} · {pass?.season?.name ?? SEASON.name}
+                  </p>
+                  <p className="text-[13px] font-black text-[#131313] tabular-nums mt-0.5">
+                    {seasonDday.ended ? "종료" : `D-${Math.max(0, seasonDday.days)}`}
+                  </p>
+                </div>
+              }
+            />
+
+            {authReady && !session?.user ? (
+              // 패스 진행도는 계정에 붙는 값이라 관전 모드로는 아무것도 셀 수 없다
+              <div className="border-y border-black/[0.08] py-14 text-center">
+                <svg aria-hidden viewBox="0 0 24 24" className="w-6 h-6 mx-auto mb-4" fill="none" stroke="rgba(0,0,0,0.28)" strokeWidth="1.5"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
+                <p className="text-sm font-bold text-[#131313] mb-1.5">로그인이 필요합니다</p>
+                <p className="text-[11px] text-[#8a8a8a] mb-7 break-keep">시즌 패스 진행도는 내 계정이 이번 시즌에 모은 XP로 셉니다.</p>
+                <button
+                  onClick={() => signIn("discord", { callbackUrl: "/level?tab=pass" })}
+                  className="h-10 px-6 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors outline-none focus:outline-none"
+                >
+                  Discord로 로그인
+                </button>
+              </div>
+            ) : !authReady || !meLoaded ? (
+              <div className="space-y-3">
+                <div className="h-28 rounded-lg bg-black/[0.04] animate-pulse"></div>
+                <div className="h-[300px] rounded-lg bg-black/[0.03] animate-pulse"></div>
+              </div>
+            ) : !passEnabled || passTiers.length === 0 ? (
+              <EmptySlot>아직 준비 중입니다</EmptySlot>
+            ) : (
+              <>
+                {/* 진행 요약 — 카드 대신 헤어라인 구획 */}
+                <div className="border-y border-black/[0.08] py-6 md:py-7">
+                  <div className="flex flex-wrap items-end justify-between gap-6 mb-5">
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase mb-1.5">이번 시즌 획득</p>
+                      <p className="text-3xl md:text-4xl font-black text-[#131313] tabular-nums tracking-tight leading-none">
+                        {(pass.progress || 0).toLocaleString()}
+                        <span className="text-sm md:text-base text-[#a3a3a3] ml-1.5">XP</span>
+                      </p>
+                    </div>
+                    <div className="flex gap-8 text-right">
+                      <div>
+                        <p className="text-[9px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase mb-1.5">현재 티어</p>
+                        <p className="text-base md:text-lg font-black text-[#131313] tabular-nums">
+                          T{passTierNo}<span className="text-[#c4c4c4]"> / T{passMaxTier}</span>
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase mb-1.5">다음 티어까지</p>
+                        <p className="text-base md:text-lg font-black text-[#e91e3f] tabular-nums">
+                          {pass.nextNeed > 0 ? `${pass.nextNeed.toLocaleString()} XP` : "완주"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <SegBar pct={passPct} segments={Math.min(20, Math.max(4, passTiers.length))} h="h-3" />
+
+                  <div className="flex justify-between gap-4 mt-2.5">
+                    <span className="text-[11px] font-bold text-[#a3a3a3] tabular-nums">
+                      {(pass.progress || 0).toLocaleString()} / {(pass.maxNeed || 0).toLocaleString()} XP
+                    </span>
+                    <span className="text-[11px] font-bold text-[#8a8a8a] text-right">
+                      {passClaimable > 0
+                        ? <b className="text-[#e91e3f]">받을 수 있는 보상 {passClaimable}개</b>
+                        : "지금 받을 수 있는 보상은 없습니다"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 프리미엄 해금 — 이 화면에서 유일하게 카드로 세우는 자리 */}
+                {!pass.unlocked && (
+                  <div className="relative overflow-hidden rounded-2xl bg-[#131313] mt-8 shadow-[0_30px_70px_-34px_rgba(0,0,0,0.55)]">
+                    <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
+                    <div aria-hidden className="absolute -top-24 -right-16 w-[360px] h-[360px] bg-[#e91e3f]/[0.18] blur-[110px] rounded-full pointer-events-none"></div>
+                    <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row md:items-center md:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black tracking-[0.35em] text-white/35 uppercase mb-2">Premium Track</p>
+                        <p className="text-xl md:text-2xl font-black text-white tracking-tight break-keep">
+                          프리미엄 트랙 해금 · <span className="text-[#ff5c77] tabular-nums">{(pass.unlockPrice || 0).toLocaleString()}</span>
+                        </p>
+                        <p className="text-[11px] text-white/45 mt-2.5 leading-relaxed break-keep">
+                          한 번만 내면 이번 시즌이 끝날 때까지 아래쪽 보상 줄이 모두 열립니다. 이미 지나온 티어의 프리미엄 보상도 그대로 받을 수 있습니다.
+                        </p>
+                        {me && (
+                          <p className="text-[11px] font-bold text-white/35 mt-2.5 tabular-nums">
+                            보유 XP {(me.xp || 0).toLocaleString()} · 보유 POINT {(me.point || 0).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2.5 mt-6 md:mt-0 md:ml-8 shrink-0">
+                        <button
+                          onClick={() => unlockPass("xp")}
+                          disabled={!!passBusy || (!!me && (me.xp || 0) < (pass.unlockPrice || 0))}
+                          className="h-11 px-5 rounded-xl text-[13px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-[#e91e3f] text-white enabled:hover:bg-[#d01634]"
+                        >
+                          XP로 해금
+                        </button>
+                        <button
+                          onClick={() => unlockPass("point")}
+                          disabled={!!passBusy || (!!me && (me.point || 0) < (pass.unlockPrice || 0))}
+                          className="h-11 px-5 rounded-xl text-[13px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-white/10 border border-white/15 text-white enabled:hover:bg-white/20"
+                        >
+                          POINT로 해금
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── 2트랙 레일 — 위 무료 / 아래 프리미엄. 가로로 밀어 다음 티어를 본다 ── */}
+                <div className="mt-10">
+                  <div className="flex items-end justify-between gap-4 mb-3.5">
+                    <span className="flex items-center gap-2 text-[9px] font-black tracking-[0.3em] text-[#e91e3f] uppercase">
+                      <span aria-hidden className="w-4 h-px bg-[#e91e3f]"></span>Rewards
+                    </span>
+                    <span className="text-[10px] font-bold text-[#a3a3a3] shrink-0">옆으로 밀어 보세요 →</span>
+                  </div>
+
+                  {/* 페이지가 아니라 이 레일만 가로로 흐른다 (모바일에서 본문이 밀리면 안 된다) */}
+                  <div ref={passRailRef} className="overflow-x-auto no-bar">
+                    <div className="flex min-w-max pb-1">
+                      {/* 트랙 이름 — 가로로 밀어도 왼쪽에 붙어 있는다 */}
+                      <div aria-hidden className="sticky left-0 z-10 shrink-0 w-[44px] bg-[#f4f3f2] pr-2">
+                        <div className="h-[112px] flex items-center"><span className="text-[10px] font-black text-[#8a8a8a]">무료</span></div>
+                        <div className="h-[58px]"></div>
+                        <div className="h-[112px] flex items-center"><span className="text-[10px] font-black text-[#8a8a8a] leading-tight">프리<br />미엄</span></div>
+                      </div>
+
+                      {passTiers.map((t, i) => {
+                        const cur = i === pass.tierIndex;
+                        return (
+                          <div key={t.tid || `i${i}`} data-tier={i} className="relative shrink-0 w-[104px] px-1">
+                            <PassRewardCell
+                              reward={t.free}
+                              trackLabel="무료"
+                              tierLevel={t.level}
+                              busy={passBusy === `${t.tid}:free`}
+                              onClaim={() => claimPass(t.tid, "free")}
+                            />
+
+                            {/* 티어 노드 — 좌우로 이어지는 선 위에 번호를 얹는다 */}
+                            <div className="relative h-[58px] flex flex-col items-center justify-center">
+                              <span
+                                aria-hidden
+                                className={`absolute -left-1 -right-1 top-[22px] h-[2px] ${t.reached ? "bg-[#131313]" : "bg-black/[0.08]"}`}
+                              ></span>
+                              {/* 아이보리 링으로 연결선을 끊어 준다. 현재 티어만 빨강 테두리를 한 겹 더 두른다 */}
+                              <span
+                                className={`relative w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-black tabular-nums ${
+                                  t.reached ? "bg-[#131313] text-white" : "bg-[#dedddb] text-[#8a8a8a]"
+                                }`}
+                                style={{ boxShadow: cur ? "0 0 0 3px #f4f3f2, 0 0 0 5px #e91e3f" : "0 0 0 3px #f4f3f2" }}
+                              >
+                                {t.level}
+                              </span>
+                              <span className={`relative mt-1 text-[9px] font-bold tabular-nums ${t.reached ? "text-[#8a8a8a]" : "text-[#c4c4c4]"}`}>
+                                {(t.need || 0).toLocaleString()}
+                              </span>
+                            </div>
+
+                            <PassRewardCell
+                              reward={t.paid}
+                              trackLabel="프리미엄"
+                              tierLevel={t.level}
+                              locked={!pass.unlocked}
+                              busy={passBusy === `${t.tid}:paid`}
+                              onClaim={() => claimPass(t.tid, "paid")}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-[#a3a3a3] mt-6 break-keep leading-relaxed">
+                  XP·역할 보상은 봇이 처리합니다 — 수령을 누르면 대기열에 올라가고 최대 1분 안에 디스코드에 반영됩니다. POINT 보상은 즉시 들어옵니다.
+                  {seasonDday.ended
+                    ? " 이번 시즌은 종료됐습니다 — 다음 시즌이 시작되면 진행도와 수령 기록이 초기화됩니다."
+                    : " 시즌이 끝나면 진행도와 수령 기록은 초기화됩니다."}
+                </p>
+              </>
+            )}
+          </Reveal>
+        )}
+
         {activeMainTab === "rank" && (
           <Reveal>
             <SectionHeader

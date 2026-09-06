@@ -33,6 +33,7 @@ const NAV_GROUPS: NavGroup[] = [
       { title: "구인 지원자 관리", href: "/recruit?admin=1" },
       { title: "유저 알림 발송", href: "/admin/notify" },
       { title: "명예의 전당 관리", href: "/admin/honors" },
+      { title: "시즌 패스", href: "/admin/pass" },
       { title: "대회 룸", href: "/admin/room" },
       { title: "경매 목록", href: "/auction" },
       {

@@ -22,6 +22,18 @@ const UserXpSchema = new mongoose.Schema({
 
   // 사이트에서 XP·레벨을 바꿨을 때 레벨 역할을 다시 맞추도록 세우는 표시
   needsRoleSync: { type: Boolean, default: false },
+
+  // 📌 시즌 패스 — 봇은 읽지 않지만 사이트와 같은 문서라 스키마를 맞춰 둔다.
+  //    빠지면 봇의 upsert 가 문서를 만들 때 사이트가 기대하는 기본값이 없어진다.
+  //    (models/UserXp.js 와 이름·기본값이 반드시 같아야 한다)
+  passSeason: { type: Number, default: 0 },        // SEASON.number 와 다르면 새 시즌 — 사이트가 진행도를 다시 스냅샷한다
+  passBaseXp: { type: Number, default: 0 },        // 시즌 시작 시점의 누적 XP (진행도 = xp - passBaseXp)
+  passUnlocked: { type: Boolean, default: false }, // 프리미엄 트랙 해금 여부 (시즌마다 초기화)
+  // 수령 기록은 티어의 안정 식별자(tid, "t1"·"t2" …)를 담는다. 인덱스로 담으면 시즌 도중
+  // 티어를 중간에 추가할 때 뒤쪽이 밀려 이미 받은 보상을 다시 받을 수 있다 (models/SeasonPass.js 참고).
+  passClaimedFree: { type: [String], default: [] }, // 수령한 무료 티어 tid
+  passClaimedPaid: { type: [String], default: [] }, // 수령한 프리미엄 티어 tid
+
   updatedAt: { type: Date, default: Date.now },
 });
 export const UserXp = mongoose.models.UserXp || mongoose.model("UserXp", UserXpSchema);
@@ -64,6 +76,8 @@ const BotSettingSchema = new mongoose.Schema({
   attendPassPoint: { type: Number, default: 0 },  // 출석 1회 패스 포인트
   // 봇은 안 쓰지만 사이트와 같은 문서라 빠지면 저장 때 날아갈 수 있다
   shopPublic: { type: Boolean, default: false },
+  // 시즌 전환 때도 절대 떼지 않는 역할 (펭귄 등급 등) — 표기 떼기가 이 목록을 먼저 읽는다
+  protectedRoleIds: { type: [String], default: [] },
   muteMode: { type: String, default: "reduce" },  // "off" | "reduce" | "block"
   muteReducePct: { type: Number, default: 90 },
   muteTarget: { type: String, default: "both" },  // "both" | "any"

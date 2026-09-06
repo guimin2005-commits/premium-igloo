@@ -135,6 +135,38 @@ export default function AdminShopPage() {
     else notify(d?.message || "저장에 실패했습니다.", true);
   };
 
+  // ── 시즌 전환 (디스코드 표기 떼기) ────────────
+  //    되돌리려면 역할을 손으로 다시 붙여야 하므로, 미리보기를 통과해야 실행 버튼이 열린다
+  const [detachPreview, setDetachPreview] = useState<any>(null);
+  // "" | "preview" | "run" — 어느 쪽을 누른 건지 알아야 버튼마다 다른 문구를 띄운다
+  const [detachBusy, setDetachBusy] = useState("");
+
+  const callDetach = async (dryRun: boolean) => {
+    if (detachBusy) return null;
+    setDetachBusy(dryRun ? "preview" : "run");
+    const res = await fetch("/api/season/detach", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dryRun }),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    setDetachBusy("");
+    if (res?.ok && d?.success) return d;
+    notify(d?.message || "처리에 실패했습니다.", true);
+    return null;
+  };
+
+  const runDetach = async () => {
+    if (!detachPreview || detachPreview.matched === 0) return;
+    if (!window.confirm(
+      `구매 ${detachPreview.matched.toLocaleString()}건의 디스코드 역할 표기를 뗍니다.\n\n`
+      + "소유와 사이트 인벤토리는 그대로 유지되지만, 되돌리려면 역할을 손으로 다시 붙여야 합니다.\n\n실행하시겠습니까?"
+    )) return;
+    const d = await callDetach(false);
+    if (!d) return;
+    // 실행한 목록으로 다시 실행하지 못하게 미리보기를 비운다
+    setDetachPreview(null);
+    notify(`${(d.updated || 0).toLocaleString()}건의 디스코드 표기를 내렸습니다. 봇이 30초 안에 실제 역할을 정리합니다.`);
+  };
+
   useEffect(() => { if (isAdmin) fetchAll(); }, [isAdmin, fetchAll]);
 
   // 📌 상점 카드의 '수정' 링크(?edit=<id>)로 들어오면 해당 상품을 폼에 채워 둔다
@@ -475,6 +507,55 @@ export default function AdminShopPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </section>
+            </Reveal>
+
+            {/* ═══ 시즌 전환 ═══ */}
+            <Reveal>
+            <section>
+              <SectionHead no="03" title="시즌 전환" />
+              <p className="text-xs text-[#5a5a5a] leading-relaxed mb-2">
+                &lsquo;시즌 바뀌면 디스코드 역할 뗌&rsquo;으로 등록한 상품의 <span className="font-bold text-[#3a3a3a]">디스코드 표기만</span> 내립니다.
+                회수가 아닙니다 — 소유는 그대로이고 사이트 인벤토리에도 계속 남습니다.
+              </p>
+              <p className="text-xs text-[#5a5a5a] leading-relaxed mb-6">
+                권한 상품과 보호 역할(펭귄 등급 등)은 대상에서 빠지고, 같은 역할을 다른 구매로 아직 갖고 있으면 역할을 남깁니다.
+                표시를 내린 뒤 실제 역할 제거는 봇이 30초 주기로 처리합니다.
+              </p>
+
+              {/* 모바일에서는 flex-col + gap 이 먹지 않아 버튼 간격을 마진으로 준다 */}
+              <div className="flex flex-col md:flex-row md:gap-3 mb-6">
+                <button type="button" onClick={async () => { const d = await callDetach(true); if (d) setDetachPreview(d); }} disabled={!!detachBusy}
+                  className="w-full md:w-auto md:px-8 py-3.5 mb-3 md:mb-0 rounded-lg border border-black/15 text-[#4b4b4b] hover:text-[#131313] text-sm font-bold transition-colors disabled:opacity-40">
+                  {detachBusy === "preview" ? "확인 중..." : "대상 미리보기"}
+                </button>
+                <button type="button" onClick={runDetach} disabled={!detachPreview || detachPreview.matched === 0 || !!detachBusy}
+                  className={primaryBtn}>
+                  {detachBusy === "run" ? "처리 중..." : "디스코드 역할 떼기 실행"}
+                </button>
+              </div>
+
+              {!detachPreview ? (
+                <p className={fieldNote}>먼저 대상을 미리보기 하세요. 확인 전에는 실행할 수 없습니다.</p>
+              ) : detachPreview.matched === 0 ? (
+                <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">표기를 뗄 대상이 없습니다.</div>
+              ) : (
+                <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
+                  {detachPreview.items.map((row: any) => (
+                    <div key={`${row.roleId}-${row.itemName}`} className="py-3.5 md:flex md:items-center md:gap-4">
+                      <span className="block text-sm font-bold text-[#131313] truncate md:w-56 md:shrink-0">{row.itemName}</span>
+                      <span className="block mt-0.5 md:mt-0 text-[11px] text-[#5a5a5a] truncate md:flex-1 md:min-w-0">
+                        {guildRoles.find((r) => r.id === row.roleId)?.name || row.roleId}
+                      </span>
+                      <span className="block mt-1 md:mt-0 text-[11px] font-bold text-[#e91e3f] tabular-nums md:shrink-0">{row.count.toLocaleString()}건</span>
+                    </div>
+                  ))}
+                  <div className="py-3.5 flex items-center justify-between">
+                    <span className="text-xs font-black text-[#131313]">합계</span>
+                    <span className="text-xs font-black text-[#e91e3f] tabular-nums">{detachPreview.matched.toLocaleString()}건</span>
+                  </div>
                 </div>
               )}
             </section>
