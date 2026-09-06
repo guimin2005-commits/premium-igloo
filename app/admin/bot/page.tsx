@@ -277,6 +277,9 @@ export default function AdminBotPage() {
 
   const [roleForm, setRoleForm] = useState<any>({ roleId: "", rewardLevel: "", buffXp: "", attendBuffXp: "", exclusive: false });
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
+  // 봇이 실제로 지급할 수 있는 역할만 — 디스코드가 관리하는 역할(서버 부스트 등)은 줄 수 없다.
+  // 부스트 대상 지정과 인벤토리 표시에는 관리 역할도 쓸 수 있으므로 그쪽은 guildRoles 를 그대로 쓴다.
+  const grantableRoles = guildRoles.filter((r: any) => !r.managed);
   const selectedRole = guildRoles.find((r) => r.id === roleForm.roleId);
 
   // ── 음성 티어 역할 일괄 등록 ──────────────────
@@ -753,7 +756,7 @@ export default function AdminBotPage() {
                         className="flex-1 min-w-0 bg-transparent border border-black/10 rounded-lg px-3 py-2.5 text-xs text-[#131313] outline-none focus:border-[#e91e3f] transition-colors"
                       >
                         <option value="" className="bg-[#ffffff]">— 역할 선택 —</option>
-                        {guildRoles.map((r: any) => (
+                        {grantableRoles.map((r: any) => (
                           <option key={r.id} value={r.id} className="bg-[#ffffff]">{r.name}</option>
                         ))}
                       </select>
@@ -796,7 +799,7 @@ export default function AdminBotPage() {
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setIsRoleDropdownOpen(false)}></div>
                       <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e6e3de]">
-                        {guildRoles.map((r) => (
+                        {grantableRoles.map((r) => (
                           <button key={r.id} type="button" onClick={() => { setRoleForm({ ...roleForm, roleId: r.id }); setIsRoleDropdownOpen(false); }}
                             className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 transition-colors ${roleForm.roleId === r.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : "text-[#4b4b4b] hover:bg-black/5"}`}>
                             <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: r.color }}></span>
