@@ -77,6 +77,7 @@ export default function ArcticShopBody({
   const [shopPublic, setShopPublic] = useState<boolean | null>(null);
   const [items, setItems] = useState<any[]>([]);
   const [myXp, setMyXp] = useState<number | null>(null);
+  const [myPoint, setMyPoint] = useState<number | null>(null);
   const [myLevel, setMyLevel] = useState(0);
   const [myProgress, setMyProgress] = useState<{ current: number; required: number; needToNext: number } | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
@@ -347,7 +348,7 @@ export default function ArcticShopBody({
     if (!isLoggedIn) return;
     fetch("/api/xp/me", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => { if (d?.success) { setMyXp(d.data.xp); setMyLevel(d.data.level); setMyProgress(d.data.levelProgress || null); } })
+      .then((d) => { if (d?.success) { setMyXp(d.data.xp); setMyPoint(d.data.point ?? 0); setMyLevel(d.data.level); setMyProgress(d.data.levelProgress || null); } })
       .catch(() => {});
     fetch("/api/shop/purchase", { cache: "no-store" })
       .then((r) => r.json())
@@ -745,6 +746,10 @@ export default function ArcticShopBody({
                   <span className="inline-flex items-baseline gap-1 px-2.5 text-[11px] font-black text-[#131313] tabular-nums">
                     {(myXp ?? 0).toLocaleString()}
                     <span className="text-[10px] font-black text-[#e91e3f]">XP</span>
+                  </span>
+                  <span className="inline-flex items-baseline gap-1 px-2.5 border-l border-[#dedddb] text-[11px] font-black text-[#131313] tabular-nums">
+                    {(myPoint ?? 0).toLocaleString()}
+                    <span className="text-[10px] font-black text-[#3f9e93]">P</span>
                   </span>
                   <span className="hidden sm:inline-flex items-baseline gap-1 h-full items-center px-2.5 border-l border-[#dedddb] text-[11px] font-black text-[#5a5a5a] tabular-nums">
                     Lv

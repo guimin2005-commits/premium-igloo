@@ -8,6 +8,8 @@ import { getQuestState, ATTEND_QUEST_ID, PERIOD_LABEL } from "@/lib/quests";
 import { kstToday, periodKey } from "@/lib/kst";
 import QuestClaim from "@/models/QuestClaim";
 import Payout from "@/models/Payout";
+import UserXp from "@/models/UserXp";
+import { applyTierMultiplier, addPoints } from "@/lib/points";
 
 // ── [조회] 오늘의 일일 퀘스트 + 내 진행도 ─────────────────────
 export async function GET() {
@@ -66,7 +68,13 @@ export async function POST(request) {
     // 주기별 잠금 키 — 일일/주간/월간이 각자 초기화된다
     const lockKey = periodKey(quest.period || "daily");
 
-    // 1) 자물쇠부터 — QuestClaim 유니크 인덱스(userId, date, questId)가 중복 수령을 막는다
+    // 등급이 높을수록 퀘스트 POINT 를 더 받는다 — 지급 시점의 레벨로 곱한다
+    const meDoc = await UserXp.findOne({ userId }, { level: 1 }).lean();
+    const payPoint = applyTierMultiplier(quest.rewardPoint || 0, meDoc?.level || 0);
+    const payPassPoint = quest.rewardPassPoint || 0;
+
+    // 1) 자물쇠부터 — QuestClaim 유니크 인덱스(userId, date, questId)가 중복 수령을 막는다.
+    //    실지급액을 이 원장에 함께 남긴다 — 나중에 "왜 이만큼이냐"에 답할 수 있어야 한다.
     let claim;
     try {
       claim = await QuestClaim.create({
@@ -75,6 +83,8 @@ export async function POST(request) {
         questId,
         questName: quest.name,
         amount: quest.rewardXp,
+        pointAmount: payPoint,
+        passPoint: payPassPoint,
       });
     } catch (e) {
       if (e?.code === 11000) {
@@ -98,10 +108,14 @@ export async function POST(request) {
       throw e;
     }
 
+    // POINT 는 큐를 타지 않는다 — 디스코드 부작용이 없으므로 사이트가 바로 쓴다.
+    //    자물쇠(QuestClaim)를 이미 잡았으므로 중복 지급은 구조적으로 막혀 있다.
+    if (payPoint > 0) await addPoints(userId, payPoint).catch(() => {});
+
     const next = await getQuestState(userId);
     return NextResponse.json({
       success: true,
-      data: { ...next, claimed: { name: quest.name, amount: quest.rewardXp } },
+      data: { ...next, claimed: { name: quest.name, amount: quest.rewardXp, point: payPoint } },
     });
   } catch (e) {
     console.error("일일 퀘스트 수령 오류:", e);

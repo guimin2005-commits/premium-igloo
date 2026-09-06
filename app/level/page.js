@@ -1493,7 +1493,7 @@ export default function LevelPage() {
                     </div>
 
                     {/* 배너 하단 스탯 스트립 — 세로 구분선으로 계기판 느낌 */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 border-t border-white/10 mt-8 pt-6 md:divide-x md:divide-white/10">
+                    <div className="grid grid-cols-2 md:grid-cols-5 border-t border-white/10 mt-8 pt-6 md:divide-x md:divide-white/10">
                       {[
                         { l: "누적 XP", v: (me.xp || 0).toLocaleString(), s: "TOTAL" },
                         { l: "오늘 획득", v: `+${todayTotal.toLocaleString()}`, s: "TODAY", hot: todayTotal > 0 },
@@ -1501,6 +1501,7 @@ export default function LevelPage() {
                         voiceTracked
                           ? { l: "누적 음성 시간", v: fmtVoiceTime(me.voiceSeconds), s: "VOICE" }
                           : { l: `${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터 집계`, v: "—", s: "VOICE", dim: true },
+                        { l: "보유 포인트", v: (me.point || 0).toLocaleString(), s: "POINT", tint: "#5ec8bb" },
                       ].map((st, i) => (
                         <div key={i} className={`px-0 md:px-6 ${i === 0 ? "md:pl-0" : ""} ${i >= 2 ? "pt-5 md:pt-0 border-t md:border-t-0 border-white/10" : ""}`}>
                           <p className="text-[9px] font-black tracking-[0.28em] text-white/30 uppercase mb-2">{st.s}</p>

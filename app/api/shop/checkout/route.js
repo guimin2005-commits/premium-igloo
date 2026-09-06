@@ -29,7 +29,8 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "아직 공개되지 않은 상점입니다." }, { status: 403 });
     }
 
-    const { items, contact, couponCode } = await request.json();
+    const body = await request.json();
+    const { items, contact, couponCode } = body;
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ success: false, message: "장바구니가 비어 있습니다." }, { status: 400 });
     }
@@ -119,18 +120,24 @@ export async function POST(request) {
 
     // 2) 총액 차감 — 잔액이 충분할 때만 매치
     //    📌 관리자는 잔액 검사를 건너뛴다 (상점 동작 확인용 테스트 구매)
-    //    XP는 화폐이므로 쓰면 레벨도 함께 내려간다
-    const charged = isAdmin ? 0 : total;  // 관리자는 XP 소모 없이 테스트 구매
+    //    XP 는 화폐이므로 쓰면 레벨도 함께 내려간다. POINT 는 레벨과 무관하다.
+    //    두 화폐는 1:1 등가라 가격은 하나를 공유하고, 주문 단위로 한쪽을 고른다.
+    const payMethod = body?.payMethod === "point" ? "point" : "xp";
+    const field = payMethod === "point" ? "point" : "xp";
+    const charged = isAdmin ? 0 : total;  // 관리자는 소모 없이 테스트 구매
     const paid = await UserXp.updateOne(
-      isAdmin ? { userId } : { userId, xp: { $gte: total } },
-      { $inc: { xp: -charged }, $set: { updatedAt: new Date() } },
+      isAdmin ? { userId } : { userId, [field]: { $gte: total } },
+      { $inc: { [field]: -charged }, $set: { updatedAt: new Date() } },
       isAdmin ? { upsert: true } : {}
     );
     if (!paid.matchedCount && !paid.upsertedCount) {
       for (const c of claimed) {
         await ShopItem.updateOne({ _id: c.id }, c.limited ? { $inc: { stock: c.qty, soldCount: -c.qty } } : { $inc: { soldCount: -c.qty } });
       }
-      return NextResponse.json({ success: false, message: "보유 XP가 부족합니다." }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: payMethod === "point" ? "보유 POINT가 부족합니다." : "보유 XP가 부족합니다." },
+        { status: 400 }
+      );
     }
 
     // 3) 구매 기록 — 수량만큼 개별 건으로 남겨 봇·관리자가 건별로 처리
@@ -147,6 +154,9 @@ export async function POST(request) {
           itemType: d.type,
           roleId: d.roleId || "",
           price: salePrice(d, days),
+          payMethod,
+          paidXp: payMethod === "xp" ? salePrice(d, days) : 0,
+          paidPoint: payMethod === "point" ? salePrice(d, days) : 0,
           days,
           // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다
           expiresAt: days > 0 ? new Date(Date.now() + days * 86400000) : null,
@@ -166,12 +176,15 @@ export async function POST(request) {
       );
     }
 
-    // 차감된 XP에 맞춰 레벨을 다시 계산 (레벨이 내려갈 수 있다)
-    const balDoc = await UserXp.findOne({ userId }, { xp: 1 }).lean();
+    // 차감된 XP에 맞춰 레벨을 다시 계산 (레벨이 내려갈 수 있다).
+    //    POINT 결제는 레벨에 영향이 없으므로 재계산도 역할 동기화도 하지 않는다.
+    const balDoc = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
     const newLevel = getLevelByXp(balDoc?.xp ?? 0);
-    // 레벨이 내려갔을 수 있으니 봇이 보상 역할을 다시 맞추도록 표시한다
-    await UserXp.updateOne({ userId }, { $set: { level: newLevel, needsRoleSync: true } });
-    const remain = { xp: balDoc?.xp ?? 0, level: newLevel };
+    if (payMethod === "xp") {
+      // 레벨이 내려갔을 수 있으니 봇이 보상 역할을 다시 맞추도록 표시한다
+      await UserXp.updateOne({ userId }, { $set: { level: newLevel, needsRoleSync: true } });
+    }
+    const remain = { xp: balDoc?.xp ?? 0, point: balDoc?.point ?? 0, level: newLevel };
     const hasRole = docs.some((d) => d.type === "role" || d.type === "perk");
 
     return NextResponse.json({
