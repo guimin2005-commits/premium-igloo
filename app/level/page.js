@@ -43,15 +43,16 @@ const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
 
 // 📌 메인 탭 — ARCTIC 은 /shop 과 같은 본문(ArcticShopBody)을 탭 안에서 그린다.
 //    탭이 URL(?tab=)에 남아야 상점 링크가 이 탭을 바로 가리킬 수 있다.
+// 순서는 "내 것 → 시즌 → 정보" — 자주 보는 것이 앞, 한 번 읽고 마는 안내는 맨 뒤.
 const MAIN_TABS = [
   { id: "my", name: "내 대시보드" },
-  { id: "intro", name: "시스템 안내" },
-  { id: "arctic", name: "ARCTIC", shopOnly: true },
   // 시즌 패스는 관리자가 꺼 두면 탭 자체가 없어야 한다 (shopOnly 와 같은 방식)
   { id: "pass", name: "시즌 패스", passOnly: true },
   { id: "rank", name: "랭킹" },
+  { id: "arctic", name: "ARCTIC", shopOnly: true },
   { id: "table", name: "XP 테이블" },
   { id: "sim", name: "시뮬레이터" },
+  { id: "intro", name: "시스템 안내" },
 ];
 // 내전 채널은 기본 음성 XP에 더하는 게 아니라 통째로 대체한다 (bot/src/config.js policy.scrimBaseXp)
 // SCRIM_CHANNEL_IDS 가 비어 있으면 봇이 내전 채널을 인식하지 못해 실제로는 적용되지 않는다.
