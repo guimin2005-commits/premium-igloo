@@ -9,7 +9,9 @@ const QuestClaimSchema = new mongoose.Schema({
   date: { type: String, required: true },
   questId: { type: String, required: true },           // DailyQuest._id 문자열
   questName: { type: String, default: "" },            // 수령 당시 이름 (정의가 바뀌어도 기록은 남게)
-  amount: { type: Number, default: 0 },                // 지급한 XP
+  amount: { type: Number, default: 0 },        // 실지급 XP
+  pointAmount: { type: Number, default: 0 },   // 실지급 POINT (등급 배율 반영 후)
+  passPoint: { type: Number, default: 0 },     // 지급한 패스 포인트                // 지급한 XP
   createdAt: { type: Date, default: Date.now },
 });
 

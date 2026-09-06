@@ -11,6 +11,10 @@ const PurchaseSchema = new mongoose.Schema({
   itemType: { type: String, default: "role" }, // "role" | "physical"
   roleId: { type: String, default: "" },
   price: { type: Number, default: 0 },
+  // 결제 수단 — XP 와 POINT 는 1:1 등가라 가격은 하나를 공유하고 지불한 쪽만 기록한다
+  payMethod: { type: String, default: "xp" }, // "xp" | "point"
+  paidXp: { type: Number, default: 0 },
+  paidPoint: { type: Number, default: 0 },
   // 📌 기간제 역할 — days가 0이면 영구. 지급 시각 기준으로 expiresAt을 세우고,
   //    기간이 지나면 봇이 역할을 회수하며 status를 expired로 바꾼다.
   days: { type: Number, default: 0 },

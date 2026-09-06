@@ -11,6 +11,11 @@ const UserXpSchema = new mongoose.Schema({
   lastChatXpAt: { type: Date, default: null },
   lastAttendDate: { type: String, default: "" }, // "2026-07-05" (KST)
   attendCount: { type: Number, default: 0 },
+  // 📌 POINT — 상점에서 XP 와 1:1 로 쓰는 소비 재화.
+  //    레벨·등급에 영향을 주지 않으므로 봇 큐를 타지 않고 사이트가 직접 쓴다.
+  point: { type: Number, default: 0 },
+  // 승급 보상을 이미 지급한 최고 등급 인덱스 — 같은 등급에 두 번 주지 않기 위한 표시
+  pointTierPaid: { type: Number, default: 0 },
   // 누적 음성 참여 시간(초) — 시즌이 바뀌어도 초기화하지 않는 통산 기록.
   // 봇이 음성 XP를 지급할 때 그 주기만큼 함께 더한다 (lib/season.js VOICE_TIME_START 이후부터).
   voiceSeconds: { type: Number, default: 0 },

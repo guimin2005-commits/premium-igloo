@@ -17,6 +17,8 @@ const DailyQuestSchema = new mongoose.Schema({
   metric: { type: String, default: "count", enum: ["count", "xp", "minute"] },
   target: { type: Number, default: 1, min: 1 },        // 목표치
   rewardXp: { type: Number, default: 0, min: 0 },      // 달성 보상 (0이면 보상 없는 목표)
+  rewardPoint: { type: Number, default: 0, min: 0 },     // 달성 시 주는 POINT (등급 배율은 지급 시점에 곱한다)
+  rewardPassPoint: { type: Number, default: 0, min: 0 }, // 시즌 패스 진행도
   enabled: { type: Boolean, default: true },
   order: { type: Number, default: 0 },                 // 표시 순서 (작을수록 위)
   updatedAt: { type: Date, default: Date.now },

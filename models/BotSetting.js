@@ -10,6 +10,8 @@ const BotSettingSchema = new mongoose.Schema({
   voiceXp: { type: Number, default: 3000 },        // 음성 1회 지급량
   voiceIntervalSec: { type: Number, default: 300 },// 음성 지급 주기 (초)
   attendXp: { type: Number, default: 7000 },
+  attendPoint: { type: Number, default: 0 },      // 출석 1회 POINT
+  attendPassPoint: { type: Number, default: 0 },  // 출석 1회 패스 포인트
   attendVoiceMin: { type: Number, default: 60 },   // 일일 출석 인정 기준 — 음성 접속 누적 분       // 출석 1회 지급량
 
   muteMode: { type: String, default: "reduce" },   // "off"(제한 없음) | "reduce"(감소) | "block"(차단)

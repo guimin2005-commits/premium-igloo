@@ -11,6 +11,9 @@ const UserXpSchema = new mongoose.Schema({
   lastAttendDate: { type: String, default: "" }, // "2026-07-05" (KST)
   // 스키마에 없으면 strict 모드에서 $inc 가 조용히 버려진다 — 사이트가 이 값을 보여주므로 반드시 필요
   attendCount: { type: Number, default: 0 },
+  // POINT 관련 — 봇은 쓰지 않지만 upsert 로 문서를 만들 때 default 가 필요하다
+  point: { type: Number, default: 0 },
+  pointTierPaid: { type: Number, default: 0 },
   // 누적 음성 참여 시간(초) — 시즌 무관 통산 기록 (VOICE_TIME_START 이후부터 적립)
   voiceSeconds: { type: Number, default: 0 },
   // 오늘(KST) 음성 누적 분 — 출석 자동 지급 판정용
@@ -54,6 +57,13 @@ const BotSettingSchema = new mongoose.Schema({
   voiceXp: { type: Number, default: 3000 },
   voiceIntervalSec: { type: Number, default: 300 },
   attendXp: { type: Number, default: 7000 },
+  // 출석 인정 기준(음성 누적 분) — 자동 출석 지급이 이 값을 읽는다.
+  // 스키마에 없으면 strict 모드에서 조용히 버려져 관리자가 바꿔도 60으로 굳는다.
+  attendVoiceMin: { type: Number, default: 60 },
+  attendPoint: { type: Number, default: 0 },      // 출석 1회 POINT
+  attendPassPoint: { type: Number, default: 0 },  // 출석 1회 패스 포인트
+  // 봇은 안 쓰지만 사이트와 같은 문서라 빠지면 저장 때 날아갈 수 있다
+  shopPublic: { type: Boolean, default: false },
   muteMode: { type: String, default: "reduce" },  // "off" | "reduce" | "block"
   muteReducePct: { type: Number, default: 90 },
   muteTarget: { type: String, default: "both" },  // "both" | "any"
@@ -107,6 +117,9 @@ const PurchaseSchema = new mongoose.Schema({
   itemType: { type: String, default: "role" },
   roleId: { type: String, default: "" },
   price: { type: Number, default: 0 },
+  payMethod: { type: String, default: "xp" },
+  paidXp: { type: Number, default: 0 },
+  paidPoint: { type: Number, default: 0 },
   // 기간제 역할 — days가 0이면 영구. 지나면 이 봇이 회수하고 status를 expired로 바꾼다
   days: { type: Number, default: 0 },
   expiresAt: { type: Date, default: null, index: true },
