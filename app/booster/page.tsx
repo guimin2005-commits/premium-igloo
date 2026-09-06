@@ -17,10 +17,6 @@ export default function BoosterPage() {
         <div className="absolute -top-4 -right-4 text-[120px] md:text-[200px] font-black text-white/[0.02] leading-none select-none pointer-events-none tracking-tighter">BOOST</div>
         <div className="max-w-4xl mx-auto relative z-10">
           <Reveal>
-            <div className="flex items-center gap-3 mb-5">
-              <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Server Booster Program</span>
-            </div>
             <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
               <span className="text-white">SERVER </span><span className="lux-shimmer">BOOSTER</span>
             </h1>

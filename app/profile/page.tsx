@@ -324,10 +324,6 @@ export default function MyInfoPage() {
       )}
 
       <section className="w-full max-w-4xl mx-auto px-6 pt-8 pb-2">
-        <div className="flex items-center gap-3 mb-5">
-          <span className="w-8 h-px bg-[#e91e3f]"></span>
-          <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">My Account</span>
-        </div>
 
         <div className="bg-white rounded-2xl border border-[#dedddb] p-6">
           <div className="flex items-center gap-4 md:gap-5">
@@ -632,8 +628,7 @@ export default function MyInfoPage() {
           <section id="sec-arctic" className="scroll-mt-32 space-y-6">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-3">
-                <span className="w-8 h-px bg-[#e91e3f]"></span>
-                <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">ARCTIC</span>
+                <span className="text-sm font-black text-[#131313] tracking-tight">ARCTIC</span>
                 {!shopPublic && (
                   <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-[#e91e3f]">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>비공개

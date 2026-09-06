@@ -18,11 +18,6 @@ export default function NotFound() {
             <span className="text-white/[0.06]">4</span>
           </p>
 
-          <div className="flex items-center justify-center gap-3 mt-8 mb-4">
-            <span className="w-8 h-px bg-[#e91e3f]"></span>
-            <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Page Not Found</span>
-            <span className="w-8 h-px bg-[#e91e3f]"></span>
-          </div>
 
           <h1 className="text-xl md:text-2xl font-black text-white tracking-tight mb-3">길을 잃었어요</h1>
           <p className="text-sm text-gray-500 leading-relaxed mb-10 break-keep">

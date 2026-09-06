@@ -622,11 +622,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-[#e91e3f]/[0.06] blur-[120px] rounded-full pointer-events-none"></div>
             <div className="relative z-10 text-center max-w-md">
               <p className="text-5xl mb-8">🔧</p>
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <span className="w-8 h-px bg-[#e91e3f]"></span>
-                <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Under Maintenance</span>
-                <span className="w-8 h-px bg-[#e91e3f]"></span>
-              </div>
               <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-4">더 나은 이글루를 짓는 중입니다</h1>
               <p className="text-sm text-gray-400 leading-relaxed mb-8">현재 사이트 점검이 진행 중입니다.<br />잠시 후 다시 방문해 주세요.</p>
               <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="inline-block px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드에서 소식 받기</a>

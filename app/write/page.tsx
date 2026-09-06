@@ -626,10 +626,6 @@ export default function AdminWritePage() {
       <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="flex flex-col gap-8">
         
         <div className="pb-2">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="w-8 h-px bg-[#e91e3f]"></span>
-            <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">{editId ? "Edit" : "New"}</span>
-          </div>
           <h1 className="text-2xl md:text-3xl font-black text-[#131313] tracking-tight">
             {category}{category === "대회" ? " 등록" : " 작성"}
           </h1>

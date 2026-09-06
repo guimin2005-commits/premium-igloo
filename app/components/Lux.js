@@ -105,16 +105,12 @@ export const LuxCard = ({ children, className = "", glow = false, onClick }) => 
 );
 
 // 페이지 히어로 (그리드 배경 + 시머 타이틀)
-export const PageHero = ({ eyebrow, title, accent, desc, children }) => (
+export const PageHero = ({ title, accent, desc, children }) => (
   <section className="relative w-full pt-16 pb-12 md:pt-24 md:pb-16 px-6">
     <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
     <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
     <div className="max-w-5xl mx-auto relative z-10">
       <Reveal>
-        <div className="flex items-center gap-3 mb-5">
-          <span className="w-8 h-px bg-[#e91e3f]"></span>
-          <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">{eyebrow || "Premium Igloo Official"}</span>
-        </div>
         <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-5">
           <span className="text-white">{title}</span>
           {accent && <span className="lux-shimmer ml-3">{accent}</span>}

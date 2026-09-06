@@ -51,10 +51,6 @@ export default function BoosterBenefitPage() {
         <div className="space-y-6">
             {/* 머리말 — 내 정보와 같은 톤 */}
             <div className="mb-1">
-              <div className="flex items-center gap-3 mb-3">
-                <span className="w-8 h-px bg-[#e91e3f]"></span>
-                <span className="text-[10px] font-black tracking-[0.4em] text-[#8a8a8a] uppercase">Server Booster</span>
-              </div>
               <h1 className="text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-2">서버 부스터 혜택</h1>
               <p className="text-sm text-[#5a5a5a] break-keep leading-relaxed">서버 환경 개선을 위한 후원 제도입니다. 부스트를 시작하면 아래 혜택이 자동으로 지급됩니다.</p>
             </div>

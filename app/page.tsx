@@ -140,10 +140,6 @@ export default function Home() {
             {/* 브랜드 텍스트 — 이것만! */}
             <div className="flex flex-col justify-center items-center md:items-start text-center md:text-left">
               <Reveal>
-                <div className="flex items-center gap-3 mb-4 md:mb-6 justify-center md:justify-start">
-                  <span className="w-8 h-px bg-[#e91e3f]"></span>
-                  <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Since 2023 · Community</span>
-                </div>
                 <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter text-white mb-3 leading-none">고급 이글루</h1>
                 <p className="text-base md:text-lg font-light tracking-[0.45em] text-transparent bg-clip-text bg-gradient-to-r from-gray-400 to-gray-600 mb-4 md:mb-5 pl-1 uppercase">Premium Igloo</p>
                 <p className="text-sm md:text-base font-bold text-gray-300 mb-7 md:mb-10">

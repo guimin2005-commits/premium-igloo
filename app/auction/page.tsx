@@ -432,10 +432,6 @@ export default function AuctionListPage() {
       {adminMode && isAdmin && (
         <section className="w-full px-6 pt-10 pb-2">
           <div className="max-w-6xl mx-auto">
-            <div className="flex items-center gap-3 mb-3">
-              <span className="w-8 h-px bg-[#e91e3f]"></span>
-              <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Create Auction</span>
-            </div>
             <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-2">경매 개최</h1>
             <p className="text-sm text-gray-400 break-keep">경매장을 만들고 팀·포지션·포인트 규칙을 설정합니다.</p>
           </div>

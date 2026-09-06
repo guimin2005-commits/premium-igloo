@@ -109,11 +109,6 @@ export default function VerifyPage() {
         <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[500px] h-[280px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
         <div className="relative z-10 text-center max-w-md">
           <p className="text-5xl mb-8">🧊</p>
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <span className="w-8 h-px bg-[#e91e3f]"></span>
-            <span className="text-[10px] font-black tracking-[0.4em] text-gray-500 uppercase">Join Required</span>
-            <span className="w-8 h-px bg-[#e91e3f]"></span>
-          </div>
           <h1 className="text-2xl md:text-3xl font-black tracking-tight mb-4">아직 이글루에 입장하지 않으셨네요!</h1>
           <p className="text-sm text-gray-400 leading-relaxed mb-10">
             사이트의 모든 기능을 이용하시려면<br />
