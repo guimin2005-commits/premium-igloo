@@ -381,6 +381,12 @@ export default function MyInfoPage() {
                   SERVER BOOSTER
                 </span>
               )}
+              {isSupporter && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-[#3f83b8]/10 text-[#3f83b8] border border-[#3f83b8]/30">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z" /></svg>
+                  SUPPORTERS
+                </span>
+              )}
           </div>
 
           {/* ARCTIC 요약 — 볼 수 있는 사람에게만 */}
@@ -502,6 +508,29 @@ export default function MyInfoPage() {
           </button>
         </div>
       )}
+      {/* 서포터즈 진입점 — 부스터 아래에 묻혀 있으면 못 찾는다. 헤더 카드 바로 아래 첫 줄에 둔다 */}
+      {/* ═══ 서포터즈 — 역할 보유자(와 관리자)에게만 진입점을 보인다. 본문은 /supporters ═══ */}
+      {canSeeSupporter && (
+      <section id="sec-supporter" className="scroll-mt-32 mb-6">
+        <Link href="/supporters"
+          className="group block bg-white rounded-2xl border border-[#dedddb] px-6 py-6 hover:border-[#a3a3a3] transition-colors">
+          <div className="flex items-center gap-4">
+            <span className="w-11 h-11 rounded-xl bg-[#3f83b8]/10 text-[#3f83b8] flex items-center justify-center shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" /></svg>
+            </span>
+            <div className="min-w-0 flex-1 break-keep">
+              <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
+                서포터즈
+                {isSupporter && <span className="text-[10px] bg-[#3f83b8] text-white px-2 py-0.5 rounded">활동 중</span>}
+              </h2>
+              <p className="text-xs text-[#8a8a8a] mt-1">이번 달 활동 · 평가와 지급 내역 · 전용 공지</p>
+            </div>
+            <svg className="w-4 h-4 text-[#a3a3a3] group-hover:text-[#e91e3f] shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+          </div>
+        </Link>
+      </section>
+      )}
+
       {/* 📌 탭도 바로가기 바도 없이, 카드로 나란히 펼친다 */}
       <div className="space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -627,27 +656,6 @@ export default function MyInfoPage() {
           </Link>
         </section>
 
-        {/* ═══ 서포터즈 — 역할 보유자(와 관리자)에게만 진입점을 보인다. 본문은 /supporters ═══ */}
-        {canSeeSupporter && (
-        <section id="sec-supporter" className="scroll-mt-32">
-          <Link href="/supporters"
-            className="group block bg-white rounded-2xl border border-[#dedddb] px-6 py-6 hover:border-[#a3a3a3] transition-colors">
-            <div className="flex items-center gap-4">
-              <span className="w-11 h-11 rounded-xl bg-[#3f83b8]/10 text-[#3f83b8] flex items-center justify-center shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" /></svg>
-              </span>
-              <div className="min-w-0 flex-1 break-keep">
-                <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
-                  서포터즈
-                  {isSupporter && <span className="text-[10px] bg-[#3f83b8] text-white px-2 py-0.5 rounded">활동 중</span>}
-                </h2>
-                <p className="text-xs text-[#8a8a8a] mt-1">이번 달 활동 · 평가와 지급 내역 · 전용 공지</p>
-              </div>
-              <svg className="w-4 h-4 text-[#a3a3a3] group-hover:text-[#e91e3f] shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-            </div>
-          </Link>
-        </section>
-        )}
         </div>
 
         {/* ═══ ARCTIC — 공개 전에는 관리자만 볼 수 있다 ═══ */}

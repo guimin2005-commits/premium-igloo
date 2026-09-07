@@ -2492,11 +2492,6 @@ export default function LevelPage() {
                       {SEASON.start.replace(/-/g, ".")} ~ {SEASON.end.replace(/-/g, ".")} · 경과 {seasonPct}%
                     </p>
                     <SegBar pct={seasonPct} segments={20} />
-                    {!voiceTracked && (
-                      <p className="text-[11px] text-[#a3a3a3] mt-5 break-keep">
-                        누적 음성 시간은 {+VOICE_TIME_START.slice(5, 7)}월 {+VOICE_TIME_START.slice(8, 10)}일부터 집계되며, 시즌이 바뀌어도 이어집니다.
-                      </p>
-                    )}
                   </div>
 
                   <div className="mt-12">
@@ -2940,11 +2935,6 @@ export default function LevelPage() {
             {rankMode === "month" && (
               <p className="text-[11px] text-[#a3a3a3] mt-5 break-keep">
                 지급 기록은 60일간 보관됩니다.
-              </p>
-            )}
-            {rankMode === "voice" && !voiceTracked && (
-              <p className="text-[11px] text-[#a3a3a3] mt-5 break-keep">
-                누적 음성 시간은 {+VOICE_TIME_START.slice(5, 7)}월 {+VOICE_TIME_START.slice(8, 10)}일부터 쌓이며, 시즌이 바뀌어도 이어집니다.
               </p>
             )}
           </Reveal>
