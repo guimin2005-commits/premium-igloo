@@ -75,6 +75,7 @@ const SUB_TABS: Record<string, { id: string; label: string }[]> = {
     { id: "reward", label: "레벨 보상" },
     { id: "tier", label: "티어 일괄 연결" },
     { id: "inventory", label: "인벤토리 표기" },
+    { id: "supporter", label: "서포터즈" },
     { id: "protected", label: "보호 역할" },
   ],
   content: [
@@ -1136,10 +1137,56 @@ export default function AdminBotPage() {
           </Reveal>
         )}
 
+        {tab === "roles" && sub === "supporter" && (
+          <Reveal>
+          <section>
+            <SectionHead no="04" title="서포터즈" />
+            {!settings ? loadingRow : (
+            // 📌 서포터즈 설정도 BotSetting 단일 문서의 필드라 저장은 기존 postSettings 를 그대로 탄다
+            <form onSubmit={saveSettings}>
+              <div className="mb-4">
+                <label className={labelClass}>서포터즈 역할</label>
+                <Dropdown
+                  theme="light"
+                  value={settings.supporterRoleId || ""}
+                  onChange={(v) => setSettings({ ...settings, supporterRoleId: v })}
+                  placeholder="역할을 선택하세요"
+                  options={[{ value: "", label: "지정 안 함" }, ...roleOptions(guildRoles)]}
+                />
+                <p className={fieldNote}>환경변수 DISCORD_SUPPORTER_ROLE_ID 가 있으면 그 값이 우선합니다</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className={labelClass}>월 기본 XP</label>
+                  <input type="number" min={0} value={settings.supporterBaseXp ?? 150000} onChange={(e) => setSettings({ ...settings, supporterBaseXp: e.target.value })} className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>월 목표 채팅 (회)</label>
+                  <input type="number" min={0} value={settings.supporterGoalChat ?? 0} onChange={(e) => setSettings({ ...settings, supporterGoalChat: e.target.value })} className={inputClass} />
+                  <p className={fieldNote}>0 이면 목표 없음</p>
+                </div>
+                <div>
+                  <label className={labelClass}>월 목표 음성 (분)</label>
+                  <input type="number" min={0} value={settings.supporterGoalVoiceMin ?? 0} onChange={(e) => setSettings({ ...settings, supporterGoalVoiceMin: e.target.value })} className={inputClass} />
+                  <p className={fieldNote}>0 이면 목표 없음</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 mt-6">
+                <Btn type="submit" variant="primary">저장</Btn>
+                <span className="text-[11px] font-bold text-[#8a8a8a]">입장 반영은 세션 갱신(최대 10분) 뒤입니다.</span>
+              </div>
+            </form>
+            )}
+          </section>
+          </Reveal>
+        )}
+
         {tab === "roles" && sub === "protected" && (
           <Reveal>
           <section>
-            <SectionHead no="04" title="시즌 전환 보호 역할" />
+            <SectionHead no="05" title="시즌 전환 보호 역할" />
             <Note>
               시즌 전환으로 디스코드 역할을 뗄 때도 <b className="text-[#131313]">절대 제외</b>할 역할 —
               어린이·청소년·어른 같은 등급 역할을 넣습니다.

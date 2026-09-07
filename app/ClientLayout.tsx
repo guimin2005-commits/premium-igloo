@@ -150,7 +150,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   const isShopPage = pathname === "/shop" || pathname?.startsWith("/shop/") || isArcticTab;
-  const isLightPage = isShopPage || pathname === "/profile" || pathname?.startsWith("/profile/") || pathname === "/level" || pathname?.startsWith("/level/") || (pathname?.startsWith("/admin") && !pathname.startsWith("/admin/room")) || pathname === "/write";   // 라이트 톤만 따라가는 페이지 (SYSTEM:LEVEL·관리자 화면은 ARCTIC 테마)
+  const isLightPage = isShopPage || pathname === "/profile" || pathname?.startsWith("/profile/") || pathname === "/level" || pathname?.startsWith("/level/") || (pathname?.startsWith("/admin") && !pathname.startsWith("/admin/room")) || pathname === "/write" || pathname === "/supporters" || pathname?.startsWith("/supporters/");   // 라이트 톤만 따라가는 페이지 (SYSTEM:LEVEL·관리자 화면은 ARCTIC 테마)
   // 📌 경매방 안에서는 모바일 하단 탭을 숨긴다.
   //    입찰·채팅 바가 화면 아래에 붙는데 그 위에 전역 탭까지 있으면 잘못 눌러 방을 나가게 된다.
   const isAuctionRoom = /^\/auction\/[^/]+$/.test(pathname || "");
@@ -158,6 +158,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const isVerified = userSession?.isVerified;
   const hasScrimRole = userSession?.hasScrimRole;
   const isBooster = userSession?.isBooster || false;
+  const isSupporter = userSession?.isSupporter || false;
   const isAdmin = status === "authenticated" && userSession?.name && ADMIN_USERS.includes(userSession.name);
 
   // 📌 ARCTIC 공개 여부 — 비공개면 관리자에게만 메뉴에 노출한다
@@ -527,6 +528,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                               SERVER BOOSTER
                             </span>
                           )}
+                          {isSupporter && (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#3f83b8]/10 text-[#3f83b8] border border-[#3f83b8]/25">SUPPORTERS</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -865,6 +869,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" /></svg>
                           BOOSTER
                         </span>
+                      )}
+                      {isSupporter && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#3f83b8]/10 text-[#3f83b8]">SUPPORTERS</span>
                       )}
                     </div>
                   </div>

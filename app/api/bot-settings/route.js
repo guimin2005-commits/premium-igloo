@@ -72,6 +72,11 @@ export async function POST(request) {
         roleGrantChannelId: (b.roleGrantChannelId || "").trim(),
         roleGrantMessage: (b.roleGrantMessage || "").trim() || "🎖 {user} 님에게 **{role}** 역할이 지급되었습니다! (Lv.{level})",
         roleGrantEnabled: b.roleGrantEnabled !== false,
+        // 서포터즈 — 화이트리스트에 없으면 조용히 무시되어 역할 탭에서 저장해도 안 남는다
+        supporterRoleId: typeof b.supporterRoleId === "string" ? b.supporterRoleId.trim() : "",
+        supporterBaseXp: num(b.supporterBaseXp, 150000),
+        supporterGoalChat: num(b.supporterGoalChat, 0),
+        supporterGoalVoiceMin: num(b.supporterGoalVoiceMin, 0),
         updatedAt: new Date(),
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }

@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Reveal, LuxStyles } from "../components/Lux";
 import { RenderFormattedText } from "../components/FormattedText";
 import Link from "next/link";
-import { ADMIN_USERS } from "@/lib/admins";
+import { ADMIN_USERS, isAdminName } from "@/lib/admins";
 import { salePrice } from "@/lib/shopPricing";
 import { verifyBadge } from "@/lib/verifyBadge";
 import { EsportsStyles } from "../components/Esports";
@@ -158,6 +158,7 @@ export default function MyInfoPage() {
     // 지정한 구역이 없으면 맨 위에서 시작한다 (이전 페이지의 스크롤 위치가 남지 않도록)
     if (!tabParam) { window.scrollTo(0, 0); return; }
     if (tabParam === "booster") { router.replace("/profile/booster"); return; }
+    if (tabParam === "supporter") { router.replace("/supporters"); return; }
     const t = setTimeout(() => {
       document.getElementById("sec-" + tabParam)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 400);
@@ -185,6 +186,9 @@ export default function MyInfoPage() {
   const hasScrimRole = userSession?.hasScrimRole;
   const isBooster = userSession?.isBooster || false;
   const isServerBooster = userSession?.isBooster || false;
+  // 서포터즈 진입점은 헤더 메뉴가 아니라 프로필에 둔다 (사용자 요청). 관리자는 확인용으로 항상 보인다.
+  const isSupporter = userSession?.isSupporter || false;
+  const canSeeSupporter = isSupporter || isAdminName(session?.user?.name);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.name) {
@@ -333,6 +337,7 @@ export default function MyInfoPage() {
               <h1 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight truncate flex items-center gap-2">
                 {session?.user?.name}
                 {isBooster && <span className="text-[10px] bg-[#e91e3f] text-white px-2 py-0.5 rounded shrink-0">BOOSTER</span>}
+                {isSupporter && <span className="text-[10px] bg-[#3f83b8] text-white px-2 py-0.5 rounded shrink-0">SUPPORTERS</span>}
               </h1>
               <p className="text-[12px] font-bold text-[#8a8a8a] mt-0.5">Lv.{shopMe?.level ?? 0} · 서버 #{shopMe?.rank ?? "—"}</p>
             </div>
@@ -621,6 +626,28 @@ export default function MyInfoPage() {
             </div>
           </Link>
         </section>
+
+        {/* ═══ 서포터즈 — 역할 보유자(와 관리자)에게만 진입점을 보인다. 본문은 /supporters ═══ */}
+        {canSeeSupporter && (
+        <section id="sec-supporter" className="scroll-mt-32">
+          <Link href="/supporters"
+            className="group block bg-white rounded-2xl border border-[#dedddb] px-6 py-6 hover:border-[#a3a3a3] transition-colors">
+            <div className="flex items-center gap-4">
+              <span className="w-11 h-11 rounded-xl bg-[#3f83b8]/10 text-[#3f83b8] flex items-center justify-center shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" /></svg>
+              </span>
+              <div className="min-w-0 flex-1 break-keep">
+                <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
+                  서포터즈
+                  {isSupporter && <span className="text-[10px] bg-[#3f83b8] text-white px-2 py-0.5 rounded">활동 중</span>}
+                </h2>
+                <p className="text-xs text-[#8a8a8a] mt-1">이번 달 활동 · 평가와 지급 내역 · 전용 공지</p>
+              </div>
+              <svg className="w-4 h-4 text-[#a3a3a3] group-hover:text-[#e91e3f] shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+            </div>
+          </Link>
+        </section>
+        )}
         </div>
 
         {/* ═══ ARCTIC — 공개 전에는 관리자만 볼 수 있다 ═══ */}

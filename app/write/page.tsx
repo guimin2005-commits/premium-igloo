@@ -369,7 +369,7 @@ export default function AdminWritePage() {
   }, []);
 
 
-  const categories = ["공지사항", "이벤트", "구인", "대회"];
+  const categories = ["공지사항", "이벤트", "구인", "대회", "서포터즈"];
 
   const searchParams = useSearchParams();
   useEffect(() => {
@@ -517,6 +517,7 @@ export default function AdminWritePage() {
       if (category === "공지사항") router.push("/notice");
       else if (category === "이벤트") router.push("/event");
       else if (category === "대회") router.push("/tournament");
+      else if (category === "서포터즈") router.push("/supporters");
       else router.push("/recruit");
       router.refresh();
     }
@@ -576,6 +577,8 @@ export default function AdminWritePage() {
       hidden,
       ...(category === "공지사항" && { content, noticeTag, isPinned, bannerUrl }),
       ...(category === "이벤트" && { content, eventTag, bannerUrl, eventPeriod: computedEventPeriod }),
+      // 서포터즈 글은 본문만 — 태그·배너 없이 /supporters 안에서 펼쳐 읽는다
+      ...(category === "서포터즈" && { content }),
       ...(category === "구인" && {
          recruitSubCategory, recruitRole, recruitPeriod: computedRecruitPeriod,
          recruitTasks: formatBulletPoints(recruitTasks), recruitQual: formatBulletPoints(recruitQual), recruitExtra: formatBulletPoints(recruitExtra)
@@ -1300,7 +1303,7 @@ export default function AdminWritePage() {
         <section className="flex flex-col gap-4">
           <p className="text-[11px] font-bold text-[#8a8a8a] tracking-wide">본문</p>
 
-          {(category === "공지사항" || category === "이벤트" || category === "대회") && (
+          {(category === "공지사항" || category === "이벤트" || category === "대회" || category === "서포터즈") && (
             <>
               <div className="flex flex-wrap gap-1 border-b border-black/10 pb-2">
                 <button type="button" onClick={() => insertWrap("**")} className="p-2 text-xs font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-black/5 rounded-lg transition-all flex items-center gap-1"><span className="font-extrabold text-base">B</span> 굵게</button>

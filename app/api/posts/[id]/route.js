@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
+import { isSupporterSession } from "@/lib/supporters";
 import Post from "@/models/Post";
 
 // 📌 1. 수정할 때 기존 데이터를 입력창에 불러오는 기능
@@ -16,10 +17,12 @@ export async function GET(request, { params }) {
     const post = await Post.findById(id);
     if (!post) return NextResponse.json({ error: "존재하지 않는 글입니다." }, { status: 404 });
 
-    // 📌 가린 글은 링크를 알아도 열리지 않는다 — 관리자만 통과
-    if (post.hidden) {
+    // 📌 가린 글은 링크를 알아도 열리지 않는다 — 관리자만 통과.
+    //    서포터즈 글도 마찬가지 — 목록만 막고 상세를 열어 두면 ID 공유로 새어 나간다.
+    if (post.hidden || post.category === "서포터즈") {
       const session = await getServerSession(authOptions);
-      if (!isAdminName(session?.user?.name)) {
+      const ok = post.hidden ? isAdminName(session?.user?.name) : isSupporterSession(session);
+      if (!ok) {
         return NextResponse.json({ error: "존재하지 않는 글입니다." }, { status: 404 });
       }
     }

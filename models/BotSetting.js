@@ -43,6 +43,13 @@ const BotSettingSchema = new mongoose.Schema({
   roleGrantMessage: { type: String, default: "🎖 {user} 님에게 **{role}** 역할이 지급되었습니다! (Lv.{level})" },
   roleGrantEnabled: { type: Boolean, default: true },
 
+  // 📌 서포터즈 — 역할 보유자만 /supporters 입장. 봇은 읽지 않지만 같은 문서라 스키마를 맞춰 둔다
+  //    (bot/src/db.js 와 이름·기본값이 반드시 같아야 한다 — 빠지면 봇 upsert 때 기본값이 사라진다)
+  supporterRoleId:      { type: String, default: "" },      // 서포터즈 역할 — 관리자가 /admin/bot 역할 탭에서 지정
+  supporterBaseXp:      { type: Number, default: 150000 },  // 월 기본 지급 XP (평가 입력의 기본값)
+  supporterGoalChat:    { type: Number, default: 0 },       // 월 목표 채팅 횟수 (0 = 목표 없음)
+  supporterGoalVoiceMin:{ type: Number, default: 0 },       // 월 목표 음성 분 (0 = 목표 없음)
+
   updatedAt: { type: Date, default: Date.now },
 });
 

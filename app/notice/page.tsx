@@ -11,7 +11,8 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
     try {
       await connectToDatabase();
       const post: any = await Post.findById(id).lean();
-      if (post) {
+      // 가린 글·서포터즈 글은 링크 미리보기로도 새면 안 된다
+      if (post && !post.hidden && post.category !== "서포터즈") {
         const desc = (post.content || "").replace(/[*_~=#>\[\]{}|]/g, "").slice(0, 90) || "나의 활동이 곧 나의 자산이 되는 곳";
         return {
           title: `${post.title} | 고급 이글루`,

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
+import { isSupporterSession } from "@/lib/supporters";
 import Post from "@/models/Post";
 
 // 📌 1. 창고에서 글 불러오기 (진열대용)
@@ -18,12 +19,24 @@ export async function GET(request) {
       query.category = category;
     }
 
+    // 세션은 필요한 요청에서만, 한 번만 읽는다
+    let session;
+    const getSession = async () => (session === undefined ? (session = await getServerSession(authOptions)) : session);
+
+    // 📌 서포터즈 글은 역할 보유자(와 관리자)만 — 화면에서 메뉴를 감추는 것만으로는 막은 게 아니다
+    if (category === "서포터즈" && !isSupporterSession(await getSession())) {
+      return NextResponse.json({ error: "서포터즈 전용입니다." }, { status: 403 });
+    }
+    // 카테고리 없이 전부 볼 때도 서포터즈 글은 같은 기준으로 가린다
+    if (!category && !isSupporterSession(await getSession())) {
+      query.category = { $ne: "서포터즈" };
+    }
+
     /* 📌 예약 발행분·가린 글은 목록에서 제외한다.
        ?all=1 로 전부 보는 건 관리자만 — 화면에서 안 부르는 것만으로는 막은 게 아니다. */
     let wantAll = searchParams.get("all") === "1";
     if (wantAll) {
-      const session = await getServerSession(authOptions);
-      if (!isAdminName(session?.user?.name)) wantAll = false;
+      if (!isAdminName((await getSession())?.user?.name)) wantAll = false;
     }
     if (!wantAll) {
       query.$or = [{ publishAt: null }, { publishAt: { $lte: new Date() } }];
