@@ -30,6 +30,7 @@ type MeData = {
   activity: Activity;
   prev: Activity & { month: string };
   voiceSeasonSec: number;
+  daily?: { day: number; chat: number; voiceMin: number }[];
   goals: { chat: number; voiceMin: number };
   baseXp: number;
   evals: EvalRow[];
@@ -546,6 +547,109 @@ export default function SupportersPage() {
                 </div>
               ))}
             </div>
+
+            {/* 일별 활동 — 이번 달 하루하루의 채팅·음성. 목표가 있으면 남은 날 기준 하루 페이스도 같이 */}
+            {(() => {
+              const daily: { day: number; chat: number; voiceMin: number }[] = Array.isArray(me.daily) ? me.daily : [];
+              if (daily.length === 0) return null;
+              const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+              const today = kst.toISOString().slice(0, 7) === me.month ? kst.getUTCDate() : daily.length;
+              const maxChat = Math.max(1, ...daily.map((d) => d.chat));
+              const maxVoice = Math.max(1, ...daily.map((d) => d.voiceMin));
+              const remain = Math.max(0, daily.length - today);
+              const paceChat = goals.chat > 0 && act.chatCount < goals.chat && remain > 0 ? Math.ceil((goals.chat - act.chatCount) / remain) : 0;
+              const paceVoice = goals.voiceMin > 0 && act.voiceMin < goals.voiceMin && remain > 0 ? Math.ceil((goals.voiceMin - act.voiceMin) / remain) : 0;
+              const Bars = ({ k, max, color, label, unit }: { k: "chat" | "voiceMin"; max: number; color: string; label: string; unit: (v: number) => string }) => (
+                <div className="min-w-0">
+                  <div className="flex items-baseline justify-between mb-3">
+                    <p className="text-[11px] font-bold text-[#8a8a8a]">{label}</p>
+                    <p className="text-[10px] font-bold text-[#a3a3a3] tabular-nums">최고 {unit(max)}</p>
+                  </div>
+                  <div className="flex items-end gap-[2px]" style={{ height: 72 }}>
+                    {daily.map((d) => {
+                      const v = d[k];
+                      const h = v > 0 ? Math.max(3, Math.round((v / max) * 72)) : 2;
+                      const future = d.day > today;
+                      return (
+                        <span
+                          key={d.day}
+                          title={`${d.day}일 · ${unit(v)}`}
+                          className="flex-1 min-w-0 rounded-sm"
+                          style={{ height: h, background: future ? "rgba(0,0,0,0.05)" : v > 0 ? color : "rgba(0,0,0,0.10)", opacity: d.day === today ? 1 : 0.85 }}
+                        ></span>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-between mt-2 text-[10px] font-bold text-[#c4c4c4] tabular-nums">
+                    <span>1일</span><span>{today}일</span><span>{daily.length}일</span>
+                  </div>
+                </div>
+              );
+              return (
+                <section className="mt-10 pt-10 border-t border-black/[0.08]">
+                  <SectionHeader
+                    title="일별 활동"
+                    right={
+                      (paceChat > 0 || paceVoice > 0) ? (
+                        <span className="text-[11px] font-bold text-[#8a8a8a] tabular-nums">
+                          남은 {remain}일 · 하루 {[paceChat > 0 && `채팅 ${paceChat}회`, paceVoice > 0 && `음성 ${fmtHm(paceVoice)}`].filter(Boolean).join(" · ")} 페이스
+                        </span>
+                      ) : undefined
+                    }
+                  />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+                    <Bars k="chat" max={maxChat} color="#131313" label="채팅" unit={(v) => `${v.toLocaleString()}회`} />
+                    <Bars k="voiceMin" max={maxVoice} color={BLUE} label="음성" unit={(v) => fmtHm(v)} />
+                  </div>
+                </section>
+              );
+            })()}
+
+            {/* 바로 보기 — 최근 공지 · 최근 평가. 본진은 각 탭이고 여기서는 한 줄씩만 흘려 준다 */}
+            <section className="mt-10 pt-10 border-t border-black/[0.08] grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-10">
+              <div className="min-w-0">
+                <SectionHeader
+                  title="최근 공지"
+                  right={<button onClick={() => setTab("notice")} className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors outline-none focus:outline-none">전체 보기 →</button>}
+                />
+                {posts.length === 0 ? (
+                  <p className="text-[12px] text-[#a3a3a3]">아직 공지가 없습니다</p>
+                ) : (
+                  <ul className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
+                    {posts.slice(0, 3).map((p: any) => (
+                      <li key={p._id}>
+                        <button onClick={() => setTab("notice")} className="w-full py-3 flex items-center gap-3 text-left outline-none focus:outline-none group">
+                          <span className="min-w-0 flex-1 text-[13px] font-bold text-[#131313] truncate group-hover:text-[#e91e3f] transition-colors">{p.title}</span>
+                          <span className="shrink-0 text-[10px] font-bold text-[#a3a3a3] tabular-nums">{fmtDate(p.publishAt || p.createdAt)}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="min-w-0">
+                <SectionHeader
+                  title="최근 평가"
+                  right={<button onClick={() => setTab("evals")} className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors outline-none focus:outline-none">전체 보기 →</button>}
+                />
+                {evals.length === 0 ? (
+                  <p className="text-[12px] text-[#a3a3a3]">아직 평가가 없습니다</p>
+                ) : (
+                  <ul className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
+                    {evals.slice(0, 3).map((e) => (
+                      <li key={e.month} className="py-3 flex items-center gap-3">
+                        <span className="w-16 shrink-0 text-[12px] font-black text-[#131313] tabular-nums">{fmtMonth(e.month)}</span>
+                        <span className="w-10 shrink-0 text-[12px] font-black text-[#131313]">{e.grade || "—"}</span>
+                        <span className="min-w-0 flex-1 text-[12px] font-bold text-[#5a5a5a] tabular-nums truncate">
+                          {(e.xp || 0) > 0 ? `+${(e.xp || 0).toLocaleString()} XP` : ""}{(e.xp || 0) > 0 && (e.point || 0) > 0 ? " · " : ""}{(e.point || 0) > 0 ? `+${(e.point || 0).toLocaleString()} P` : ""}
+                        </span>
+                        <span className={`shrink-0 text-[10px] font-black ${e.status === "paid" ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}>{e.status === "paid" ? "지급 완료" : "평가 중"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
           </Reveal>
         )}
 
