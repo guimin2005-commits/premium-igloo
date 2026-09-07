@@ -48,6 +48,11 @@ export default function Home() {
   // 📌 히어로를 스크롤하는 동안 진행률(0~1)을 추적 — 라이트 패널이 그 비율만큼 위로 떠오른다
   const heroRef = useRef<HTMLElement>(null);
   const [heroProgress, setHeroProgress] = useState(0);
+  // SYSTEM : LEVEL 공개 전(10월)에는 소개 카드에 예고 표시를 단다 — 눌러도 예고 화면이라 미리 알려 준다
+  const [levelPublic, setLevelPublic] = useState(true);
+  useEffect(() => {
+    fetch("/api/xp/policy", { cache: "no-store" }).then((r) => r.json()).then((d) => setLevelPublic(!!d?.data?.levelPublic)).catch(() => {});
+  }, []);
   useEffect(() => {
     const onScroll = () => {
       const h = heroRef.current?.offsetHeight || 0;
@@ -301,7 +306,11 @@ export default function Home() {
                   <div className="absolute inset-0 lux-grid-bg opacity-40 pointer-events-none"></div>
                   <span aria-hidden className="absolute top-4 right-7 text-[90px] font-black text-white/[0.04] leading-none select-none pointer-events-none">I</span>
                   <div className="relative z-10">
-                    <span className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] uppercase">Featured</span>
+                    {levelPublic ? (
+                      <span className="text-[10px] font-black tracking-[0.3em] text-[#e91e3f] uppercase">Featured</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e91e3f]/15 border border-[#e91e3f]/40 text-[11px] font-black text-[#e91e3f]"><span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>10월 공개</span>
+                    )}
                     <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight mt-3 mb-4">SYSTEM : LEVEL</h3>
                     <p className="text-sm text-gray-400 leading-relaxed break-keep max-w-sm">채팅과 음성 활동으로 XP를 쌓아 최대 1,000레벨까지 성장하는 고급 이글루만의 성장 시스템.</p>
                   </div>
