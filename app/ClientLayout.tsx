@@ -163,10 +163,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   // 📌 ARCTIC 공개 여부 — 비공개면 관리자에게만 메뉴에 노출한다
   const [shopPublic, setShopPublic] = useState(false);
+  const [levelPublic, setLevelPublic] = useState(false);
   useEffect(() => {
     fetch("/api/xp/policy", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => setShopPublic(!!d?.data?.shopPublic))
+      .then((d) => { setShopPublic(!!d?.data?.shopPublic); setLevelPublic(!!d?.data?.levelPublic); })
       .catch(() => {});
   }, []);
 
@@ -186,10 +187,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     { name: "지원", desc: "도움이 필요하신가요?", tagline: "무엇을 도와드릴까요?", items: [{ name: "1:1 문의", path: "/support", desc: "불편 사항 및 문의 접수" }, { name: "FAQ", path: "/faq", desc: "자주 묻는 질문" }] },
   ];
 
-  // ARCTIC이 비공개면 일반 유저 메뉴에서 제외 (관리자는 그대로 보인다)
+  // SYSTEM : LEVEL 이 비공개면 레벨·ARCTIC 둘 다, ARCTIC 만 비공개면 ARCTIC 만 일반 유저 메뉴에서 제외 (관리자는 그대로)
+  const levelOpen = levelPublic || isAdmin;
   const categoryGroups = rawCategoryGroups.map((g) => ({
     ...g,
-    items: g.items.filter((it) => it.name !== "ARCTIC" || shopPublic || isAdmin),
+    items: g.items.filter((it) => {
+      if (it.path === "/level") return levelOpen;
+      if (it.name === "ARCTIC") return levelOpen && (shopPublic || isAdmin);
+      return true;
+    }),
   }));
 
   const [openMegaMenu, setOpenMegaMenu] = useState<string | null>(null);
@@ -654,7 +660,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             { name: "이벤트", path: "/event", icon: "M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" },
             { name: "레벨", path: "/level", icon: "M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" },
             { name: "내 정보", path: "/profile", icon: "M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" },
-          ].map((tab) => {
+          ].filter((tab) => tab.path !== "/level" || levelOpen).map((tab) => {
             const isActive = pathname === tab.path;
             return (
               // 라벨 없이 아이콘만 (ARCTIC 하단바와 동일한 형태)

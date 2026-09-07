@@ -76,6 +76,7 @@ const BotSettingSchema = new mongoose.Schema({
   attendPassPoint: { type: Number, default: 0 },  // 출석 1회 패스 포인트
   // 봇은 안 쓰지만 사이트와 같은 문서라 빠지면 저장 때 날아갈 수 있다
   shopPublic: { type: Boolean, default: false },
+  levelPublic: { type: Boolean, default: false }, // SYSTEM : LEVEL 공개 (봇은 읽지 않지만 스키마 동기화)
   // 시즌 전환 때도 절대 떼지 않는 역할 (펭귄 등급 등) — 표기 떼기가 이 목록을 먼저 읽는다
   protectedRoleIds: { type: [String], default: [] },
   muteMode: { type: String, default: "reduce" },  // "off" | "reduce" | "block"

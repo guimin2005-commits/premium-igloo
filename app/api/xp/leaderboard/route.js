@@ -5,6 +5,10 @@ import { connectToDatabase } from "@/lib/mongodb";
 import UserXp from "@/models/UserXp";
 import XpLog from "@/models/XpLog";
 import { kstMonthStart } from "@/lib/kst";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/authOptions";
+import { isAdminName } from "@/lib/admins";
+import BotSetting from "@/models/BotSetting";
 
 // 📌 디스코드 멤버 정보 — 프로필 사진과 표시 이름을 함께 가져온다.
 //    사진은 시상대(1~3위)에만, 이름은 UserXp 에 비어 있는 사람에게만 쓴다.
@@ -85,6 +89,14 @@ async function decorate(rows, skip) {
 export async function GET(request) {
   try {
     await connectToDatabase();
+    // SYSTEM : LEVEL 비공개 동안은 전원 순위를 밖으로 내보내지 않는다 (화면만 가리면 API 로 새어 나간다)
+    const gate = await BotSetting.findOne({ key: "main" }, { levelPublic: 1 }).lean();
+    if (!gate?.levelPublic) {
+      const session = await getServerSession(authOptions);
+      if (!isAdminName(session?.user?.name)) {
+        return NextResponse.json({ success: false, data: [], total: 0, message: "공개 전입니다." }, { status: 403 });
+      }
+    }
     const sp = new URL(request.url).searchParams;
     const limit = Math.min(100, Math.max(1, parseInt(sp.get("limit") || "50", 10) || 50));
     const skip = Math.max(0, parseInt(sp.get("skip") || "0", 10) || 0);

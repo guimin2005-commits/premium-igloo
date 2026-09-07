@@ -1156,8 +1156,11 @@ export default function LevelPage() {
   const tierCurXp = P.voiceXp + tierCur.bonus;
   const tierNextXp = tierNext ? P.voiceXp + tierNext.bonus : null;
 
-  // ARCTIC 상점 동선 — 공개 전에는 관리자에게만 노출 (policy.shopPublic)
-  const canSeeShop = !!policy?.shopPublic || isAdminName(session?.user?.name);
+  // SYSTEM : LEVEL 공개 여부 — 리뉴얼 후 10월 공개. 비공개면 관리자 외에는 아래 예고 화면만 본다.
+  const isAdminUser = isAdminName(session?.user?.name);
+  const levelOpen = !!policy?.levelPublic || isAdminUser;
+  // ARCTIC 상점 동선 — 공개 전에는 관리자에게만 노출 (policy.shopPublic). 레벨이 닫혀 있으면 함께 닫힌다.
+  const canSeeShop = (!!policy?.shopPublic && levelOpen) || isAdminUser;
   const P_chatCooldownLabel = P.chatCooldownSec >= 60 ? `${Math.round(P.chatCooldownSec / 60)}분` : `${P.chatCooldownSec}초`;
 
   // ── 시즌 패스 파생값 ──
@@ -1355,6 +1358,29 @@ export default function LevelPage() {
       </div>
     </div>
   );
+
+  // 📌 예고 화면 — 비공개면 본문을 그리지 않는다. 세션·정책이 오기 전에는 판단을 미뤄 관리자에게 깜빡이지 않게 한다.
+  //    훅은 전부 위에서 이미 호출됐으므로 여기서 갈라도 순서가 흔들리지 않는다.
+  if (mounted && authStatus !== "loading" && policy && !levelOpen) {
+    return (
+      <main className="w-full flex-1 flex flex-col relative">
+        <HudStyles />
+        <section className="relative w-full flex-1 flex items-center justify-center px-6 py-28 md:py-40">
+          <div aria-hidden className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] h-[280px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
+          <div className="relative z-10 text-center max-w-md break-keep">
+            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none text-[#131313] mb-5">
+              SYSTEM<span className="text-[#e91e3f]"> : </span>LEVEL
+            </h1>
+            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#e91e3f]/10 border border-[#e91e3f]/30 text-[12px] font-black text-[#e91e3f]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>10월 공개
+            </span>
+            <p className="text-[13px] text-[#5a5a5a] mt-6">리뉴얼 준비 중입니다. 활동 XP는 계속 쌓이고 있습니다.</p>
+            <Link href="/" className="inline-flex items-center gap-1.5 mt-8 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">홈으로 <span aria-hidden>→</span></Link>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     // ⚠️ main에 overflow-hidden 금지 — 하위 sticky(탭바)가 죽는다. 글로우 가로 넘침은 body의 overflow-x: clip이 전역 처리
@@ -1664,11 +1690,13 @@ export default function LevelPage() {
 
                     {/* 가방 — 스탯 스트립 아래 헤어라인 줄. 카드(면·테두리·둥근 상자)는 쓰지 않는다.
                         눌리는 것임은 오른쪽 "열기" 버튼 하나로 드러낸다. */}
+                    {(myItems || passEnabled) && (
+                    <div className={`mt-8 pt-6 md:pt-8 border-t border-white/10 grid gap-6 md:gap-0 ${myItems && passEnabled ? "md:grid-cols-2 md:divide-x md:divide-white/10" : "grid-cols-1"}`}>
                     {myItems && (
                       <button
                         onClick={openBag}
                         aria-label="인벤토리 열기"
-                        className="group w-full mt-8 pt-6 md:pt-10 border-t border-white/10 flex items-center gap-4 text-left outline-none focus:outline-none"
+                        className="group w-full md:pr-6 flex items-center gap-4 text-left outline-none focus:outline-none"
                       >
                         <span aria-hidden className="relative shrink-0">
                           <svg viewBox="0 0 24 24" className="w-7 h-7 text-white/45 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -1700,7 +1728,7 @@ export default function LevelPage() {
                       <button
                         onClick={() => setActiveMainTab("pass")}
                         aria-label="시즌 패스 열기"
-                        className="group w-full mt-8 pt-6 md:pt-8 border-t border-white/10 flex items-center gap-4 text-left outline-none focus:outline-none"
+                        className="group w-full md:pl-6 flex items-center gap-4 text-left outline-none focus:outline-none"
                       >
                         <span aria-hidden className="relative shrink-0">
                           <svg viewBox="0 0 24 24" className="w-7 h-7 text-white/45 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -1730,6 +1758,8 @@ export default function LevelPage() {
 
                         <span aria-hidden className="shrink-0 text-white/30 group-hover:text-white text-base transition-all group-hover:translate-x-0.5">→</span>
                       </button>
+                    )}
+                    </div>
                     )}
 
                   </div>

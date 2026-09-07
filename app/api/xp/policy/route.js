@@ -28,6 +28,7 @@ export async function GET() {
         muteReducePct: doc?.muteReducePct ?? 90,
         muteTarget: doc?.muteTarget ?? "both",
         shopPublic: !!doc?.shopPublic,
+        levelPublic: !!doc?.levelPublic,
         // 진행 중인 부스트 (유저에게 보여줄 정보만)
         activeBoosts: boosts.map((b) => ({
           name: b.name,

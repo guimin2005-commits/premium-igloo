@@ -47,6 +47,7 @@ export default function MyInfoPage() {
   // ── ARCTIC 연동 ──────────────────────────────
   //    공개 전에는 관리자만 볼 수 있으므로, 구역 자체를 숨긴다
   const [shopPublic, setShopPublic] = useState(false);
+  const [levelPublic, setLevelPublic] = useState(false);
   const [shopOrders, setShopOrders] = useState<any[]>([]);
   const [shopWallet, setShopWallet] = useState<any[]>([]);
   const [shopItems, setShopItems] = useState<any[]>([]);
@@ -55,7 +56,9 @@ export default function MyInfoPage() {
   const [shopCart, setShopCart] = useState<{ itemId: string; qty: number }[]>([]);
 
   const isShopAdmin = status === "authenticated" && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
-  const canSeeShop = shopPublic || isShopAdmin;
+  // SYSTEM : LEVEL 비공개 동안은 레벨·순위·ARCTIC 이 일반 유저 프로필에 보이지 않는다 (10월 공개)
+  const canSeeLevel = levelPublic || isShopAdmin;
+  const canSeeShop = (shopPublic && levelPublic) || isShopAdmin;
   const shopPendingCount = shopOrders.filter((o) => o.status === "pending").length;
 
   const shopWishRows = shopItems.filter((i) => shopWish.includes(i._id));
@@ -119,7 +122,7 @@ export default function MyInfoPage() {
   useEffect(() => {
     fetch("/api/xp/policy", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => setShopPublic(!!d?.data?.shopPublic))
+      .then((d) => { setShopPublic(!!d?.data?.shopPublic); setLevelPublic(!!d?.data?.levelPublic); })
       .catch(() => {});
     try {
       const w = localStorage.getItem("iglooShopWish");
@@ -339,7 +342,7 @@ export default function MyInfoPage() {
                 {isBooster && <span className="text-[10px] bg-[#e91e3f] text-white px-2 py-0.5 rounded shrink-0">BOOSTER</span>}
                 {isSupporter && <span className="text-[10px] bg-[#3f83b8] text-white px-2 py-0.5 rounded shrink-0">SUPPORTERS</span>}
               </h1>
-              <p className="text-[12px] font-bold text-[#8a8a8a] mt-0.5">Lv.{shopMe?.level ?? 0} · 서버 #{shopMe?.rank ?? "—"}</p>
+              {canSeeLevel && <p className="text-[12px] font-bold text-[#8a8a8a] mt-0.5">Lv.{shopMe?.level ?? 0} · 서버 #{shopMe?.rank ?? "—"}</p>}
             </div>
             <div className="ml-auto text-right shrink-0 hidden sm:block">
               <div className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase mb-1">Balance</div>
@@ -357,7 +360,7 @@ export default function MyInfoPage() {
             </span>
           </div>
 
-          {shopMe?.levelProgress?.required > 0 && (
+          {canSeeLevel && shopMe?.levelProgress?.required > 0 && (
             <div className="mt-5">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[11px] font-bold text-[#8a8a8a]">다음 레벨까지</span>

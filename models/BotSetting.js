@@ -29,6 +29,9 @@ const BotSettingSchema = new mongoose.Schema({
 
   // ARCTIC 공개 여부 — false면 관리자만 접근 가능 (준비 중 상태)
   shopPublic: { type: Boolean, default: false },
+  // SYSTEM : LEVEL 공개 여부 — 리뉴얼 후 10월 공개 예정. false 면 관리자만 /level 을 보고
+  // 일반 유저에게는 예고 화면·메뉴 숨김. ARCTIC 은 /level 안에 있으므로 이것이 꺼지면 함께 닫힌다.
+  levelPublic: { type: Boolean, default: false },
 
   // 📌 시즌 전환 때도 절대 떼지 않는 역할 (펭귄 등급 등)
   //    상점 상품이 아니어도 같은 역할 ID를 파는 상품이 생길 수 있고,

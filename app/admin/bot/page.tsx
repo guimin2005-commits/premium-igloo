@@ -760,6 +760,16 @@ export default function AdminBotPage() {
                   />
                   <p className={fieldNote}>비공개면 일반 유저에게 &lsquo;준비 중&rsquo; 화면이 보이고 관리자만 상점을 이용할 수 있습니다</p>
                 </div>
+                <div>
+                  <label className={labelClass}>SYSTEM : LEVEL 공개</label>
+                  <Toggle
+                    on={!!settings.levelPublic}
+                    onClick={() => setSettings({ ...settings, levelPublic: !settings.levelPublic })}
+                    onLabel="공개 중"
+                    offLabel="비공개 (관리자만) · 10월 공개 예정"
+                  />
+                  <p className={fieldNote}>비공개면 /level 전체(ARCTIC·시즌 패스·랭킹 포함)가 예고 화면으로 바뀌고 메뉴에서 빠집니다</p>
+                </div>
               </div>
             </section>
             )}
