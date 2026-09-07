@@ -169,6 +169,23 @@ export default function AdminSupportersPage() {
   const [reportsFailed, setReportsFailed] = useState(false);
   const [expandedId, setExpandedId] = useState("");
   const [replyTarget, setReplyTarget] = useState<Report | null>(null);
+  const [delTarget, setDelTarget] = useState<Report | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  // 작성자는 답변이 달리면 못 지우므로(규칙), 답변한 뒤에 정리할 길은 관리자 삭제뿐이다
+  const deleteReport = async () => {
+    if (!delTarget || isDeleting) return;
+    setIsDeleting(true);
+    const res = await fetch(`/api/admin/supporters/reports?id=${encodeURIComponent(delTarget._id)}`, { method: "DELETE" }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    if (res?.ok && d?.success) {
+      setReports((prev) => prev.filter((x) => x._id !== delTarget._id));
+      notify("삭제했습니다.");
+    } else {
+      notify(d?.error || "삭제하지 못했습니다.", true);
+    }
+    setDelTarget(null);
+    setIsDeleting(false);
+  };
   const [replyText, setReplyText] = useState("");
   const [replyDone, setReplyDone] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
@@ -669,6 +686,13 @@ export default function AdminSupportersPage() {
                             >
                               답변
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => setDelTarget(r)}
+                              className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
+                            >
+                              삭제
+                            </button>
                           </span>
                         </div>
 
@@ -735,6 +759,16 @@ export default function AdminSupportersPage() {
       />
 
       {/* ── 답변 ── */}
+      <ConfirmDialog
+        open={!!delTarget}
+        danger
+        title="제출 건 삭제"
+        confirmLabel="삭제"
+        busy={isDeleting}
+        body={delTarget ? (<><span className="block font-bold text-[#131313]">{delTarget.userName} · {delTarget.type === "report" ? "신고" : "피드백"}</span><span className="block mt-1 text-[#5a5a5a] break-words">{delTarget.content.slice(0, 120)}</span></>) : null}
+        onConfirm={deleteReport}
+        onCancel={() => { if (!isDeleting) setDelTarget(null); }}
+      />
       <ConfirmDialog
         open={!!replyTarget}
         title="답변"

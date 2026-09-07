@@ -100,3 +100,23 @@ export async function PATCH(request) {
     return NextResponse.json({ success: false, error: "처리 중 오류가 발생했습니다." }, { status: 500 });
   }
 }
+
+// ── [삭제] 관리자만 — 작성자는 답변이 달리면 못 지우므로, 답변한 테스트 글·악성 글은 여기서만 정리된다 ──
+export async function DELETE(request) {
+  try {
+    if (!(await requireAdmin())) return denied();
+    await connectToDatabase();
+    const id = new URL(request.url).searchParams.get("id") || "";
+    if (!mongoose.isValidObjectId(id)) {
+      return NextResponse.json({ success: false, error: "대상을 확인해 주세요." }, { status: 400 });
+    }
+    const doc = await SupporterReport.findByIdAndDelete(id).lean();
+    if (!doc) {
+      return NextResponse.json({ success: false, error: "해당 건을 찾을 수 없습니다." }, { status: 404 });
+    }
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    console.error("서포터즈 제출함 삭제 오류:", e);
+    return NextResponse.json({ success: false, error: "삭제 중 오류가 발생했습니다." }, { status: 500 });
+  }
+}

@@ -31,8 +31,12 @@ export async function GET() {
     if (g.deny) return g.deny;
     await connectToDatabase();
 
-    const rows = await SupporterAck.find({ userId: g.session.user.id }, { postId: 1 }).lean();
-    return NextResponse.json({ success: true, postIds: rows.map((r) => r.postId) });
+    const rows = await SupporterAck.find({ userId: g.session.user.id }, { postId: 1, createdAt: 1 }).lean();
+    return NextResponse.json({
+      success: true,
+      postIds: rows.map((r) => r.postId),
+      acks: rows.map((r) => ({ postId: r.postId, at: r.createdAt })), // 창의 "확인함 · 날짜" 용
+    });
   } catch (e) {
     console.error("서포터즈 공지 확인 조회 오류:", e);
     return NextResponse.json({ success: false, error: "조회 중 오류가 발생했습니다." }, { status: 500 });

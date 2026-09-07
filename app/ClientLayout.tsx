@@ -547,6 +547,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       {!isVerifyPage && isVerified && (
                         <Link href="/invite" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] rounded-xl transition-colors font-bold ${isLightPage ? "text-[#4b4b4b] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>친구 초대 이벤트</Link>
                       )}
+                      {!isVerifyPage && (isSupporter || isAdmin) && (
+                        <Link href="/supporters" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] rounded-xl transition-colors font-bold ${isLightPage ? "text-[#4b4b4b] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>서포터즈</Link>
+                      )}
                       {isAdmin && (
                         <Link href="/admin" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-xl transition-colors font-bold">
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" /></svg>
@@ -812,6 +815,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         if (status === "authenticated" && session) {
           if (!isVerifyPage) accountItems.push({ name: "내 정보", path: "/profile" });
           if (!isVerifyPage && isVerified) accountItems.push({ name: "친구 초대 이벤트", path: "/invite" });
+          // 서포터즈 바로가기 — 헤더 메뉴 대신 계정 팝업과 프로필에서만 들어간다 (관리자는 확인용으로 항상)
+          if (!isVerifyPage && (isSupporter || isAdmin)) accountItems.push({ name: "서포터즈", path: "/supporters" });
           if (isVerified) accountItems.push({ name: "쿠폰함", onClick: () => { closeMobileMenu(); setIsCodeModalOpen(true); } });
           if (isAdmin) accountItems.push({ name: "관리자 페이지", path: "/admin", accent: true });
         }
