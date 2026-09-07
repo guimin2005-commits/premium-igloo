@@ -517,7 +517,7 @@ export default function AdminWritePage() {
       if (category === "공지사항") router.push("/notice");
       else if (category === "이벤트") router.push("/event");
       else if (category === "대회") router.push("/tournament");
-      else if (category === "서포터즈") router.push("/supporters");
+      else if (category === "서포터즈") router.push(editId ? `/supporters/notice/${editId}` : "/supporters?tab=notice");
       else router.push("/recruit");
       router.refresh();
     }

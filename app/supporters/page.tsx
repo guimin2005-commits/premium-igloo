@@ -6,14 +6,15 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
 import { Reveal } from "../components/Lux";
 import { EmptySlot } from "../components/Hud";
-import { RenderFormattedText } from "../components/FormattedText";
 import { isAdminName } from "@/lib/admins";
 import { VOICE_TIME_START } from "@/lib/season";
+import { tone, useToasts, ToastStack, fmtDate, BLUE, fieldClass, CheckMark, CommentIcon, ArrowRight, type Post, type AckStats } from "./NoticeDetail";
 
 // 📌 서포터즈 전용 — 활동 · 평가·지급 · 공지·가이드 · 신고·피드백 네 탭.
 //    입장은 세션 플래그(isSupporter)로 먼저 가르고, 서버(/api/supporters/*)가 다시 막는다.
 //    관리자는 운영 확인용으로 통과한다 (서버도 같은 기준).
 //    탭은 URL(?tab=)이 기준 — 디스코드 안내에서 /supporters?tab=reports 로 바로 들어올 수 있어야 한다.
+//    공지 한 건은 창이 아니라 제 주소(/supporters/notice/[id])로 연다 — 효과음·토스트·아이콘은 그 파일에서 가져와 나눠 쓴다.
 
 type Activity = { chatCount: number; voiceMin: number };
 type EvalRow = {
@@ -35,17 +36,6 @@ type MeData = {
   baseXp: number;
   evals: EvalRow[];
 };
-type Post = { _id: string; title: string; content?: string; bannerUrl?: string; createdAt: string; publishAt?: string | null; hidden?: boolean };
-type Comment = {
-  _id: string;
-  userId: string;
-  userName: string;
-  userImage?: string;
-  content: string;
-  createdAt: string;
-  mine?: boolean;
-  pending?: boolean; // 서버 응답 전 낙관적 항목 — 삭제 x 를 감춘다
-};
 type ReportType = "report" | "feedback";
 type Report = {
   _id: string;
@@ -58,14 +48,8 @@ type Report = {
   createdAt: string;
   editable?: boolean; // 서버가 계산 — open 이고 답변 전
 };
-type AckUser = { userId: string; userName: string; at?: string };
-type AckStats = { total: number; byPost: Record<string, { count: number; users: AckUser[] }> };
-type Toast = { id: number; msg: string; accent?: boolean };
-
-const BLUE = "#3f83b8"; // 서포터즈 식별색 — 태그·답변 인용에만 쓴다
 const CONTENT_MAX = 2000;
 const TARGET_MAX = 80;
-const COMMENT_MAX = 1000;
 
 // 첫 탭은 URL 에 남기지 않는다 (/level 과 같은 규칙)
 const TABS = [
@@ -76,15 +60,9 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
-const pad = (n: number) => String(n).padStart(2, "0");
 const fmtMonth = (key: string) => {
   const [y, m] = String(key || "").split("-");
   return y && m ? `${y}년 ${+m}월` : key;
-};
-const fmtDate = (v?: string | null) => {
-  if (!v) return "";
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? "" : `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
 };
 // 분 → 큰 숫자 조각. 한 시간 미만이면 분만 보여 준다
 const hmParts = (min: number) => {
@@ -94,40 +72,8 @@ const hmParts = (min: number) => {
   return h > 0 ? [{ n: h, u: "시간" }, { n: r, u: "분" }] : [{ n: r, u: "분" }];
 };
 const fmtHm = (min: number) => hmParts(min).map((p) => `${p.n.toLocaleString()}${p.u}`).join(" ");
-// 댓글 시각 — 일주일 안은 상대 시간, 그 뒤는 날짜
-const fmtAgo = (v: string) => {
-  const t = new Date(v).getTime();
-  if (isNaN(t)) return "";
-  const d = Date.now() - t;
-  if (d < 60e3) return "방금";
-  if (d < 3600e3) return `${Math.floor(d / 60e3)}분 전`;
-  if (d < 86400e3) return `${Math.floor(d / 3600e3)}시간 전`;
-  if (d < 7 * 86400e3) return `${Math.floor(d / 86400e3)}일 전`;
-  return fmtDate(v);
-};
 const pctOf = (cur: number, goal: number) => (goal > 0 ? Math.min(100, Math.floor((cur / goal) * 100)) : 0);
 const plus = (n?: number) => (n && n > 0 ? `+${n.toLocaleString()}` : "—");
-
-// 클릭 피드백 — 레벨 페이지와 같은 짧은 톤
-const tone = (freq = 620, dur = 0.04) => {
-  try {
-    const w = window as any;
-    const Ctx = w.AudioContext || w.webkitAudioContext;
-    if (!tone.ctx) tone.ctx = new Ctx();
-    const ctx = tone.ctx;
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = "sine";
-    o.frequency.value = freq;
-    g.gain.setValueAtTime(0.025, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
-    o.connect(g);
-    g.connect(ctx.destination);
-    o.start();
-    o.stop(ctx.currentTime + dur);
-  } catch {}
-};
-tone.ctx = null as any;
 
 // 구획 머리말 — /level 랭킹 탭과 같은 크기·색
 const SectionHeader = ({ title, right }: { title: string; right?: React.ReactNode }) => (
@@ -209,37 +155,6 @@ const EvalStatus = ({ e, size = "sm" }: { e: EvalRow; size?: "sm" | "md" }) => {
   );
 };
 
-const CheckMark = ({ className = "w-3 h-3" }: { className?: string }) => (
-  <svg aria-hidden viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="3.2">
-    <path d="m5 12.5 4.5 4.5L19 7.5" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-const CloseIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
-  <svg aria-hidden viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2.2">
-    <path d="M6 18 18 6M6 6l12 12" strokeLinecap="round" />
-  </svg>
-);
-
-const LinkIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
-  <svg aria-hidden viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-const CommentIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
-  <svg aria-hidden viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2.2">
-    <path d="M21 12a8 8 0 0 1-8 8H9l-5 3 1.2-4.2A8 8 0 1 1 21 12Z" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-const ArrowRight = ({ className = "w-4 h-4" }: { className?: string }) => (
-  <svg aria-hidden viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2.2">
-    <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
 const Chevron = ({ open }: { open: boolean }) => (
   <svg
     aria-hidden
@@ -272,9 +187,6 @@ const pillClass = (on: boolean, size: "md" | "sm" = "md") =>
     size === "md" ? "px-4 py-2 text-[13px]" : "px-3.5 py-1.5 text-[12px]"
   } ${on ? "bg-[#131313] text-white" : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"}`;
 
-const fieldClass =
-  "w-full rounded-xl bg-white border border-black/[0.08] focus:border-[#131313] text-[14px] text-[#131313] outline-none transition-colors placeholder:text-[#a3a3a3]";
-
 export default function SupportersPage() {
   const { data: session, status: authStatus } = useSession();
   const user = session?.user as any;
@@ -293,54 +205,26 @@ export default function SupportersPage() {
   const pathname = usePathname();
   const tabParam = searchParams.get("tab") || "";
   const tab: TabId = (TABS.find((t) => t.id === tabParam)?.id ?? "activity") as TabId;
-  // 열린 공지도 URL(?tab=notice&id=)이 기준 — 새로고침·뒤로 가기·링크 공유가 그대로 통한다
-  const idParam = searchParams.get("id") || "";
-  const selectedId = tab === "notice" && idParam ? idParam : null;
 
-  const setQuery = useCallback(
-    (mutate: (q: URLSearchParams) => void, mode: "push" | "replace" = "replace") => {
+  // 탭 전환은 replace — 뒤로 가기가 탭 사이를 오가지 않도록
+  const setTab = useCallback(
+    (id: TabId) => {
       const q = new URLSearchParams(Array.from(searchParams.entries()));
-      mutate(q);
-      if (q.get("tab") === "activity") q.delete("tab");
+      if (id === "activity") q.delete("tab");
+      else q.set("tab", id);
       const qs = q.toString();
-      const url = qs ? `${pathname}?${qs}` : pathname;
-      if (mode === "push") router.push(url, { scroll: false });
-      else router.replace(url, { scroll: false });
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
     [searchParams, router, pathname]
   );
-  // 탭을 옮기면 열린 공지는 닫는다
-  const setTab = useCallback(
-    (id: TabId) =>
-      setQuery((q) => {
-        q.delete("id");
-        if (id === "activity") q.delete("tab");
-        else q.set("tab", id);
-      }),
-    [setQuery]
-  );
-  // 창을 열 때만 push — 뒤로 가기가 곧 닫기. 창 안에서 이전·다음으로 옮기거나 닫을 때는 replace
+  // 공지 한 건은 제 주소로 — 뒤로 가기가 곧 목록
   const openPost = useCallback(
     (id: string) => {
       tone();
-      setQuery((q) => {
-        q.set("tab", "notice");
-        q.set("id", id);
-      }, "push");
+      router.push(`/supporters/notice/${id}`);
     },
-    [setQuery]
+    [router]
   );
-  const goPost = useCallback(
-    (id: string) => {
-      tone();
-      setQuery((q) => {
-        q.set("tab", "notice");
-        q.set("id", id);
-      });
-    },
-    [setQuery]
-  );
-  const closePost = useCallback(() => setQuery((q) => q.delete("id")), [setQuery]);
 
   const [me, setMe] = useState<MeData | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -349,14 +233,8 @@ export default function SupportersPage() {
   const [failed, setFailed] = useState(false);
   const [openEval, setOpenEval] = useState<string | null>(null);
 
-  // 토스트 — 복사·제출 결과 피드백 (모바일 하단바 위로 띄움)
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastIdRef = useRef(0);
-  const pushToast = useCallback((msg: string, accent = false) => {
-    const id = ++toastIdRef.current;
-    setToasts((p) => [...p.slice(-3), { id, msg, accent }]);
-    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3200);
-  }, []);
+  // 토스트 — 복사·제출 결과 피드백
+  const { toasts, pushToast } = useToasts();
 
   // 신고·피드백 — 탭을 열 때만 부른다
   const [reports, setReports] = useState<Report[] | null>(null);
@@ -418,26 +296,16 @@ export default function SupportersPage() {
     if (tab === "reports" && authReady && allowed && !denied) loadReports();
   }, [tab, authReady, allowed, denied, loadReports]);
 
-  // 공지 확인 체크 — 내가 확인한 공지 id. 관리자는 자기 체크 대신 전체 확인 현황(ackStats)을 본다
+  // 공지 확인 체크 — 목록 행의 체크 표시용. 확인 버튼 자체는 상세 페이지에 있다. 관리자는 전체 확인 현황(ackStats)을 본다
   const [acks, setAcks] = useState<Set<string>>(() => new Set<string>());
-  // 확인한 시각 — 서버가 acks: [{postId, at}] 를 주면 그걸, 아니면 이 기기에서 누른 시각만 안다
-  const [ackAt, setAckAt] = useState<Record<string, string>>({});
   const acksLoadedRef = useRef(false);
-  const ackBusyRef = useRef<Set<string>>(new Set<string>());
   const [ackStats, setAckStats] = useState<AckStats | null>(null);
 
   const loadAcks = useCallback(async () => {
     try {
       const r = await fetch("/api/supporters/acks", { cache: "no-store" });
       const body = await r.json().catch(() => null);
-      if (body?.success) {
-        if (Array.isArray(body.postIds)) setAcks(new Set<string>(body.postIds.map(String)));
-        if (Array.isArray(body.acks)) {
-          const at: Record<string, string> = {};
-          for (const a of body.acks) if (a && a.postId && a.at) at[String(a.postId)] = String(a.at);
-          setAckAt((prev) => ({ ...prev, ...at }));
-        }
-      }
+      if (body?.success && Array.isArray(body.postIds)) setAcks(new Set<string>(body.postIds.map(String)));
     } catch {}
     acksLoadedRef.current = true;
   }, []);
@@ -452,7 +320,7 @@ export default function SupportersPage() {
     } catch {}
   }, []);
 
-  // 마운트 때 한 번, 공지 탭에 들어올 때마다 다시 — 다른 기기에서 누른 확인이 반영되도록
+  // 마운트 때 한 번, 공지 탭에 들어올 때마다 다시 — 상세 페이지에서 누른 확인이 목록에 반영되도록
   useEffect(() => {
     if (!(authReady && allowed && !denied)) return;
     if (tab !== "notice" && acksLoadedRef.current) return;
@@ -460,118 +328,8 @@ export default function SupportersPage() {
     if (tab === "notice" && isAdmin) loadAckStats();
   }, [tab, authReady, allowed, denied, isAdmin, loadAcks, loadAckStats]);
 
-  // 낙관적 갱신 — 먼저 뒤집고, 서버가 거절하면 되돌린다. 같은 글은 응답 전까지 다시 누르지 못한다
-  const toggleAck = async (postId: string) => {
-    if (ackBusyRef.current.has(postId)) return;
-    const on = !acks.has(postId);
-    const apply = (v: boolean) =>
-      setAcks((prev) => {
-        const n = new Set(prev);
-        if (v) n.add(postId);
-        else n.delete(postId);
-        return n;
-      });
-    const applyAt = (v: boolean) =>
-      setAckAt((prev) => {
-        const n = { ...prev };
-        if (v) n[postId] = new Date().toISOString();
-        else delete n[postId];
-        return n;
-      });
-    ackBusyRef.current.add(postId);
-    apply(on);
-    applyAt(on);
-    tone(on ? 820 : 520, 0.05);
-    try {
-      const r = await fetch("/api/supporters/acks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ postId, on }),
-      });
-      const body = await r.json().catch(() => null);
-      if (body?.success) {
-        pushToast(on ? "확인했습니다" : "확인을 취소했습니다", on);
-      } else {
-        apply(!on);
-        applyAt(!on);
-        pushToast(body?.error || "저장하지 못했습니다");
-      }
-    } catch {
-      apply(!on);
-      applyAt(!on);
-      pushToast("저장하지 못했습니다");
-    }
-    ackBusyRef.current.delete(postId);
-  };
-
-  // ── 댓글 — 창을 열 때 글 단위로 받고, 목록 배지용 수는 공지 탭에 들어올 때 한 번 받는다 ──
-  // ── 이모지 반응 — 디스코드 메시지 반응처럼 가볍게. 글 단위로 { emoji: { count, mine } } ──
-  type ReactionMap = Record<string, { count: number; mine: boolean }>;
-  const [reactionsByPost, setReactionsByPost] = useState<Record<string, { emojis: string[]; reactions: ReactionMap }>>({});
-  const reactionBusyRef = useRef<Set<string>>(new Set());
-  const loadReactions = useCallback(async (postId: string) => {
-    try {
-      const r = await fetch(`/api/supporters/reactions?postId=${encodeURIComponent(postId)}`, { cache: "no-store" });
-      const body = await r.json().catch(() => null);
-      if (body?.success) setReactionsByPost((prev) => ({ ...prev, [postId]: { emojis: body.emojis || [], reactions: body.reactions || {} } }));
-    } catch {}
-  }, []);
-  const toggleReaction = async (postId: string, emoji: string) => {
-    const key = `${postId}:${emoji}`;
-    if (reactionBusyRef.current.has(key)) return;
-    reactionBusyRef.current.add(key);
-    const cur = reactionsByPost[postId];
-    const was = cur?.reactions?.[emoji] || { count: 0, mine: false };
-    // 낙관적 갱신 — 누른 즉시 바뀌고, 서버가 준 집계로 다시 맞춘다
-    setReactionsByPost((prev) => {
-      const p = prev[postId] || { emojis: [], reactions: {} };
-      return { ...prev, [postId]: { ...p, reactions: { ...p.reactions, [emoji]: { count: Math.max(0, was.count + (was.mine ? -1 : 1)), mine: !was.mine } } } };
-    });
-    tone(was.mine ? 520 : 880, 0.05);
-    try {
-      const r = await fetch("/api/supporters/reactions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ postId, emoji }) });
-      const body = await r.json().catch(() => null);
-      if (body?.success) setReactionsByPost((prev) => ({ ...prev, [postId]: { emojis: prev[postId]?.emojis || [], reactions: body.reactions || {} } }));
-      else { setReactionsByPost((prev) => ({ ...prev, [postId]: { ...(prev[postId] || { emojis: [] }), reactions: { ...(prev[postId]?.reactions || {}), [emoji]: was } } })); pushToast(body?.error || "반응을 남기지 못했습니다"); }
-    } catch {
-      setReactionsByPost((prev) => ({ ...prev, [postId]: { ...(prev[postId] || { emojis: [] }), reactions: { ...(prev[postId]?.reactions || {}), [emoji]: was } } }));
-      pushToast("반응을 남기지 못했습니다");
-    }
-    reactionBusyRef.current.delete(key);
-  };
-
-  const [commentsByPost, setCommentsByPost] = useState<Record<string, Comment[]>>({});
-  const [commentsLoadingId, setCommentsLoadingId] = useState<string | null>(null);
+  // 댓글 수 배지 — 공지 탭에 들어올 때 한 번. 댓글 자체는 상세 페이지가 받는다
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
-  const [cText, setCText] = useState("");
-  const [cSending, setCSending] = useState(false);
-  const [cDelId, setCDelId] = useState<string | null>(null);
-
-  const bumpCount = useCallback((postId: string, d: number) => {
-    setCommentCounts((prev) => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) + d) }));
-  }, []);
-
-  const loadComments = useCallback(
-    async (postId: string) => {
-      setCommentsLoadingId(postId);
-      try {
-        const r = await fetch(`/api/supporters/comments?postId=${encodeURIComponent(postId)}`, { cache: "no-store" });
-        const body = await r.json().catch(() => null);
-        if (body?.success && Array.isArray(body.comments)) {
-          const list: Comment[] = body.comments;
-          setCommentsByPost((prev) => ({ ...prev, [postId]: list }));
-          // 최대 200건까지만 오므로 그 아래일 때만 배지 수를 목록 길이로 맞춘다
-          if (list.length < 200) setCommentCounts((prev) => ({ ...prev, [postId]: list.length }));
-        } else {
-          pushToast(body?.error || "댓글을 불러오지 못했습니다");
-        }
-      } catch {
-        pushToast("댓글을 불러오지 못했습니다");
-      }
-      setCommentsLoadingId((cur) => (cur === postId ? null : cur));
-    },
-    [pushToast]
-  );
 
   const loadCommentCounts = useCallback(async () => {
     try {
@@ -588,121 +346,6 @@ export default function SupportersPage() {
   useEffect(() => {
     if (tab === "notice" && authReady && allowed && !denied) loadCommentCounts();
   }, [tab, authReady, allowed, denied, loadCommentCounts]);
-
-  // 창이 열리거나 다른 글로 옮기면 그 글의 댓글을 새로 받고 입력은 비운다
-  useEffect(() => {
-    if (!selectedId || !(authReady && allowed && !denied)) return;
-    if (!posts.some((p) => p._id === selectedId)) return; // 없는 글은 목록 검사가 닫는다 — 여기서 404 토스트를 겹치지 않게
-    setCText("");
-    setCDelId(null);
-    loadComments(selectedId);
-    loadReactions(selectedId);
-  }, [selectedId, authReady, allowed, denied, posts, loadComments, loadReactions]);
-
-  // 낙관적 등록 — 먼저 붙이고, 서버가 준 문서로 바꿔 끼운다. 실패하면 떼어 내고 입력을 돌려준다
-  const cTrim = cText.trim();
-  const canSendComment = !!selectedId && !cSending && cTrim.length > 0 && cTrim.length <= COMMENT_MAX;
-  const submitComment = async () => {
-    if (!canSendComment || !selectedId) return;
-    const postId = selectedId;
-    const content = cTrim;
-    const tmpId = `tmp-${Date.now()}`;
-    const optimistic: Comment = {
-      _id: tmpId,
-      userId: String(user?.id || ""),
-      userName: String(user?.name || ""),
-      userImage: user?.image || undefined,
-      content,
-      createdAt: new Date().toISOString(),
-      mine: true,
-      pending: true,
-    };
-    setCSending(true);
-    setCommentsByPost((prev) => ({ ...prev, [postId]: [...(prev[postId] || []), optimistic] }));
-    bumpCount(postId, 1);
-    setCText("");
-    tone(820, 0.06);
-    try {
-      const r = await fetch("/api/supporters/comments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ postId, content }),
-      });
-      const body = await r.json().catch(() => null);
-      if (body?.success && body.comment && typeof body.comment === "object") {
-        const saved: Comment = { ...body.comment, _id: String(body.comment._id || tmpId), mine: true };
-        setCommentsByPost((prev) => ({ ...prev, [postId]: (prev[postId] || []).map((c) => (c._id === tmpId ? saved : c)) }));
-        pushToast("댓글을 남겼습니다", true);
-      } else {
-        throw new Error(body?.error || "");
-      }
-    } catch (e: any) {
-      setCommentsByPost((prev) => ({ ...prev, [postId]: (prev[postId] || []).filter((c) => c._id !== tmpId) }));
-      bumpCount(postId, -1);
-      setCText((cur) => cur || content);
-      pushToast(e?.message || "댓글을 보내지 못했습니다");
-    }
-    setCSending(false);
-  };
-
-  // 낙관적 삭제 — 먼저 지우고, 서버가 거절하면 시간순 제자리에 되돌린다. 404 는 이미 없는 것이니 그대로 둔다
-  const deleteComment = async (postId: string, id: string) => {
-    const target = (commentsByPost[postId] || []).find((c) => c._id === id);
-    setCommentsByPost((prev) => ({ ...prev, [postId]: (prev[postId] || []).filter((c) => c._id !== id) }));
-    bumpCount(postId, -1);
-    setCDelId(null);
-    tone(520, 0.06);
-    try {
-      const r = await fetch(`/api/supporters/comments?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-      const body = await r.json().catch(() => null);
-      if (body?.success) {
-        pushToast("댓글을 삭제했습니다", true);
-      } else if (r.status === 404) {
-        pushToast("이미 삭제된 댓글입니다");
-      } else {
-        throw new Error(body?.error || "");
-      }
-    } catch (e: any) {
-      if (target) {
-        setCommentsByPost((prev) => ({
-          ...prev,
-          [postId]: [...(prev[postId] || []), target].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
-        }));
-        bumpCount(postId, 1);
-      }
-      pushToast(e?.message || "댓글을 삭제하지 못했습니다");
-    }
-  };
-
-  // 창 — ESC 로 닫기. 창이 없을 때는 듣지 않는다
-  useEffect(() => {
-    if (!selectedId) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closePost();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, closePost]);
-
-  // URL 의 id 가 목록에 없으면(가린 글·지운 글·오타) 조용히 닫는다 — 목록을 받은 뒤에만 판단
-  useEffect(() => {
-    if (!selectedId || loading || failed || !(authReady && allowed && !denied)) return;
-    if (!posts.some((p) => p._id === selectedId)) {
-      pushToast("공지를 찾을 수 없습니다");
-      closePost();
-    }
-  }, [selectedId, loading, failed, posts, authReady, allowed, denied, pushToast, closePost]);
-
-  const copyPostLink = async (id: string) => {
-    tone();
-    const url = `${window.location.origin}${pathname}?tab=notice&id=${encodeURIComponent(id)}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      pushToast("링크를 복사했습니다", true);
-    } catch {
-      pushToast("복사하지 못했습니다");
-    }
-  };
 
   // 내 제출 수정·삭제 — 답변 전(editable)에만. 한 번에 한 건만 편집한다
   const [editId, setEditId] = useState<string | null>(null);
@@ -797,7 +440,6 @@ export default function SupportersPage() {
     setOpenEval((cur) => (cur === month ? null : month));
     tone();
   };
-  const onCopy = () => pushToast("복사됨");
 
   // 제출 — 길이·대상 검증은 서버가 다시 한다. 여기서는 버튼을 잠그는 용도로만 본다
   const contentTrim = rContent.trim();
@@ -1255,9 +897,8 @@ export default function SupportersPage() {
                   const acked = acks.has(p._id);
                   const stat = ackStats?.byPost?.[p._id];
                   const n = commentCounts[p._id] || 0;
-                  const active = selectedId === p._id;
                   // 확인한 글은 한 톤 죽인다 — 남은 일이 무엇인지 한눈에 보이도록
-                  const dim = !isAdmin && acked && !active;
+                  const dim = !isAdmin && acked;
                   return (
                     <button
                       key={p._id}
@@ -1275,7 +916,7 @@ export default function SupportersPage() {
                         </span>
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className={`text-[14px] font-black break-keep transition-colors ${active ? "text-[#e91e3f]" : "text-[#131313] group-hover:text-[#e91e3f]"}`}>
+                        <p className="text-[14px] font-black break-keep transition-colors text-[#131313] group-hover:text-[#e91e3f]">
                           {p.title}
                         </p>
                         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[#a3a3a3] tabular-nums mt-1">
@@ -1520,14 +1161,10 @@ export default function SupportersPage() {
 
   return (
     <main className="w-full flex-1 flex flex-col relative bg-[#f4f3f2] text-[#131313]">
-      {/* 본문 렌더러는 다크 페이지 기준 색을 내보낸다 — 라이트 면에서 표·이미지 선이 보이도록 덮는다.
-          잉크 패널의 격자·토스트 키프레임은 /level 과 같은 값을 이 페이지 안에서만 정의한다. */}
+      {/* 잉크 패널의 격자 — /level 과 같은 값을 이 페이지 안에서만 정의한다 */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
-        .sp-body table, .sp-body th, .sp-body td { border-color: rgba(0,0,0,0.12); }
-        .sp-body th { background: rgba(0,0,0,0.03); }
-        .sp-body img { border-color: rgba(0,0,0,0.08); }
         .sp-grid-dark {
           background-image: linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
                             linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
@@ -1535,315 +1172,12 @@ export default function SupportersPage() {
           -webkit-mask-image: radial-gradient(ellipse 90% 70% at 30% 0%, black 30%, transparent 100%);
           mask-image: radial-gradient(ellipse 90% 70% at 30% 0%, black 30%, transparent 100%);
         }
-        @keyframes spToastIn {
-          from { opacity: 0; transform: translateY(12px) scale(0.97); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes spWinIn {
-          from { opacity: 0; transform: translateY(18px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
       `,
         }}
       />
       <div className="w-full max-w-5xl mx-auto px-5 md:px-8 pt-12 md:pt-16 pb-20 flex-1">{body}</div>
 
-      {/* ══ 공지 창 — 공지사항(/notice)과 같은 전체 오버레이. Reveal 은 transform 을 걸어 fixed 의 기준이 되므로 탭 밖(main)에 둔다 ══ */}
-      {authReady && allowed && !denied && !loading && selectedId && (() => {
-        const p = posts.find((x) => x._id === selectedId);
-        if (!p) return null;
-        const idx = posts.findIndex((x) => x._id === p._id);
-        // 목록은 최신순 — 아래쪽이 이전(더 오래된) 글
-        const olderPost = idx >= 0 && idx < posts.length - 1 ? posts[idx + 1] : null;
-        const newerPost = idx > 0 ? posts[idx - 1] : null;
-        const scheduled = !!p.publishAt && new Date(p.publishAt).getTime() > Date.now();
-        const acked = acks.has(p._id);
-        const at = ackAt[p._id];
-        const stat = ackStats?.byPost?.[p._id];
-        const ackUsers: AckUser[] = Array.isArray(stat?.users) ? stat!.users : [];
-        const list = commentsByPost[p._id];
-        const cLoading = commentsLoadingId === p._id && !list;
-        const iconBtn =
-          "shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full text-[#8a8a8a] hover:text-[#131313] hover:bg-black/[0.05] transition-colors outline-none focus:outline-none";
-        const navBtn =
-          "inline-flex items-center gap-1.5 h-9 px-2 -mx-2 rounded-full text-[12px] font-bold text-[#5a5a5a] enabled:hover:text-[#131313] transition-colors outline-none focus:outline-none disabled:opacity-30 disabled:cursor-default";
-        return (
-          <div
-            className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6 overlay-in"
-            style={{ background: "rgba(19,19,19,0.5)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
-            onClick={closePost}
-          >
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="sp-notice-title"
-              onClick={(e) => e.stopPropagation()}
-              className="relative w-full sm:max-w-2xl max-h-[92dvh] sm:max-h-[86vh] rounded-t-3xl sm:rounded-3xl bg-white border border-[#dedddb] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.45)] flex flex-col overflow-hidden"
-              style={{ animation: "spWinIn .32s cubic-bezier(0.16,1,0.3,1)" }}
-            >
-              {/* 머리 — 날짜·상태 왼쪽, 도구(수정·링크·닫기) 오른쪽, 그 아래 제목 */}
-              <div className="shrink-0 px-5 sm:px-8 pt-5 sm:pt-6 pb-4 border-b border-black/[0.08]">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-[#8a8a8a] tabular-nums">{fmtDate(p.publishAt || p.createdAt)}</span>
-                  {scheduled && (
-                    <span className="inline-flex items-center h-4 px-1.5 rounded-full text-[9px] font-black text-white" style={{ background: BLUE }}>예약</span>
-                  )}
-                  {p.hidden && (
-                    <span className="inline-flex items-center h-4 px-1.5 rounded-full bg-black/[0.08] text-[9px] font-black text-[#5a5a5a]">가림</span>
-                  )}
-                  <span className="ml-auto flex items-center gap-1">
-                    {isAdmin && (
-                      <Link
-                        href={`/write?id=${p._id}`}
-                        className="shrink-0 inline-flex items-center h-8 px-3 rounded-full bg-black/[0.04] hover:bg-black/[0.08] text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors"
-                      >
-                        수정
-                      </Link>
-                    )}
-                    <button type="button" onClick={() => copyPostLink(p._id)} aria-label="링크 복사" title="링크 복사" className={iconBtn}>
-                      <LinkIcon />
-                    </button>
-                    <button type="button" onClick={() => { tone(); closePost(); }} aria-label="닫기" className={`${iconBtn} -mr-2`}>
-                      <CloseIcon />
-                    </button>
-                  </span>
-                </div>
-                <h2 id="sp-notice-title" className="mt-3 text-xl sm:text-2xl font-black text-[#131313] tracking-tight leading-snug break-keep">
-                  {p.title}
-                </h2>
-              </div>
-
-              {/* 몸통 — 본문 · 확인 · 댓글이 한 스크롤 안에 */}
-              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain no-bar px-5 sm:px-8">
-                <div className="py-6 sp-body text-[15px] text-[#3a3a3a] leading-[1.9] whitespace-pre-wrap break-keep select-text">
-                  <RenderFormattedText text={p.content || ""} onCopy={onCopy} />
-                </div>
-                {p.bannerUrl && (
-                  <div className="mb-6 rounded-2xl overflow-hidden border border-black/[0.08]">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={p.bannerUrl} alt="" className="block w-full h-auto" />
-                  </div>
-                )}
-
-                {/* 확인 — 서포터즈는 꽉 찬 큰 버튼, 관리자는 확인 현황 */}
-                <div className="pb-6">
-                  {isAdmin ? (
-                    <div className="border-y border-black/[0.08] py-4">
-                      <div className="flex items-baseline justify-between gap-4">
-                        <p className="text-[11px] font-bold text-[#8a8a8a]">확인 현황</p>
-                        <p className="text-[15px] font-black tabular-nums leading-none" style={{ color: BLUE }}>
-                          {ackStats ? stat?.count ?? 0 : "—"} <span className="text-[12px] font-bold text-[#a3a3a3]">/ {ackStats ? ackStats.total : "—"}</span>
-                        </p>
-                      </div>
-                      {!ackStats ? (
-                        <div className="mt-3 h-4 w-40 rounded bg-black/[0.05] animate-pulse"></div>
-                      ) : ackUsers.length === 0 ? (
-                        <p className="mt-2.5 text-[12px] text-[#a3a3a3]">아직 확인한 사람이 없습니다</p>
-                      ) : (
-                        <ul className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1.5">
-                          {ackUsers.map((u) => (
-                            <li key={u.userId} className="text-[12px] font-bold text-[#131313] whitespace-nowrap">
-                              {u.userName}
-                              {u.at && <span className="text-[#a3a3a3] tabular-nums"> {fmtDate(u.at)}</span>}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => toggleAck(p._id)}
-                      aria-pressed={acked}
-                      className={`w-full h-14 rounded-2xl inline-flex items-center justify-center gap-2.5 text-[15px] font-black transition-all outline-none focus:outline-none active:scale-[0.99] ${
-                        acked ? "bg-white text-[#131313] hover:bg-black/[0.03]" : "text-white hover:brightness-110 shadow-[0_16px_36px_-12px_rgba(63,131,184,0.7)]"
-                      }`}
-                      style={acked ? { border: `2px solid ${BLUE}` } : { background: BLUE }}
-                    >
-                      {acked ? (
-                        <>
-                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-white" style={{ background: BLUE }}>
-                            <CheckMark className="w-3.5 h-3.5" />
-                          </span>
-                          확인함
-                          {at && <span className="text-[13px] font-bold text-[#8a8a8a] tabular-nums">· {fmtDate(at)}</span>}
-                        </>
-                      ) : (
-                        "확인했습니다"
-                      )}
-                    </button>
-                  )}
-                </div>
-
-                {/* 반응 — 확인 버튼 아래 이모지 줄. 글 대신 가볍게 남기는 자리라 카드 없이 알약만 */}
-                {(() => {
-                  const rx = reactionsByPost[p._id];
-                  const emojis = rx?.emojis?.length ? rx.emojis : ["👍", "✅", "🔥", "👀", "🙏", "❤️"];
-                  return (
-                    <div className="flex flex-wrap items-center gap-2 pb-6">
-                      {emojis.map((em) => {
-                        const v = rx?.reactions?.[em] || { count: 0, mine: false };
-                        return (
-                          <button
-                            key={em}
-                            type="button"
-                            onClick={() => toggleReaction(p._id, em)}
-                            aria-pressed={v.mine}
-                            className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-[13px] font-black transition-all outline-none focus:outline-none active:scale-95 ${
-                              v.mine ? "text-[#131313]" : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08]"
-                            }`}
-                            style={v.mine ? { background: "rgba(63,131,184,0.12)", boxShadow: `inset 0 0 0 1.5px ${BLUE}` } : undefined}
-                          >
-                            <span aria-hidden className="text-[15px] leading-none">{em}</span>
-                            {v.count > 0 && <span className="tabular-nums">{v.count}</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-
-                {/* 댓글 — 오래된 순. 본인·관리자만 x */}
-                <div className="border-t border-black/[0.08] pt-6 pb-6">
-                  <div className="flex items-baseline justify-between gap-4 mb-2">
-                    <h3 className="text-[14px] font-black text-[#131313]">댓글</h3>
-                    <span className="text-[11px] font-bold text-[#a3a3a3] tabular-nums">{(commentCounts[p._id] || 0).toLocaleString()}개</span>
-                  </div>
-                  {cLoading ? (
-                    <div className="space-y-3 py-3">
-                      <div className="h-10 rounded-lg bg-black/[0.04] animate-pulse"></div>
-                      <div className="h-10 rounded-lg bg-black/[0.03] animate-pulse"></div>
-                    </div>
-                  ) : !list || list.length === 0 ? (
-                    <p className="py-4 text-[12px] text-[#a3a3a3]">아직 댓글이 없습니다</p>
-                  ) : (
-                    <ul className="divide-y divide-black/[0.06]">
-                      {list.map((c) => {
-                        const canDel = (c.mine || isAdmin) && !c.pending;
-                        const confirming = cDelId === c._id;
-                        return (
-                          <li key={c._id} className={`py-3.5 flex items-start gap-3 ${c.pending ? "opacity-60" : ""}`}>
-                            <span className="shrink-0 w-8 h-8 rounded-full overflow-hidden bg-black/[0.06] flex items-center justify-center">
-                              {c.userImage ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={c.userImage} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <span className="text-[12px] font-black text-[#8a8a8a]">{String(c.userName || "?").slice(0, 1)}</span>
-                              )}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="min-w-0 text-[12px] font-black text-[#131313] truncate">{c.userName}</span>
-                                <span className="shrink-0 text-[10px] font-bold text-[#a3a3a3] tabular-nums whitespace-nowrap">
-                                  {c.pending ? "보내는 중…" : fmtAgo(c.createdAt)}
-                                </span>
-                                {canDel && (
-                                  <span className="ml-auto shrink-0 flex items-center gap-2 text-[11px] font-bold">
-                                    {confirming ? (
-                                      <>
-                                        <button
-                                          type="button"
-                                          onClick={() => deleteComment(p._id, c._id)}
-                                          className="text-[#e91e3f] hover:underline underline-offset-4 outline-none focus:outline-none"
-                                        >
-                                          삭제
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => { setCDelId(null); tone(); }}
-                                          className="text-[#8a8a8a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
-                                        >
-                                          취소
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => { setCDelId(c._id); tone(); }}
-                                        aria-label="댓글 삭제"
-                                        className="inline-flex items-center justify-center w-6 h-6 -mr-1.5 rounded-full text-[#c4c4c4] hover:text-[#e91e3f] hover:bg-black/[0.04] transition-colors outline-none focus:outline-none"
-                                      >
-                                        <CloseIcon className="w-3 h-3" />
-                                      </button>
-                                    )}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="mt-1 text-[13px] text-[#3a3a3a] leading-[1.75] whitespace-pre-wrap break-words">{c.content}</p>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-
-                  <div className="mt-4">
-                    <textarea
-                      value={cText}
-                      onChange={(e) => setCText(e.target.value.slice(0, COMMENT_MAX))}
-                      onKeyDown={(e) => {
-                        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-                          e.preventDefault();
-                          submitComment();
-                        }
-                      }}
-                      rows={3}
-                      maxLength={COMMENT_MAX}
-                      placeholder="댓글을 남겨 주세요"
-                      className={`${fieldClass} px-4 py-3 leading-relaxed resize-none`}
-                    />
-                    <div className="flex items-center justify-between gap-4 mt-2.5">
-                      <span className={`text-[11px] font-bold tabular-nums ${cText.length >= COMMENT_MAX ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}>
-                        {cText.length.toLocaleString()} / {COMMENT_MAX.toLocaleString()}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={submitComment}
-                        disabled={!canSendComment}
-                        className="h-9 px-4 rounded-full bg-[#131313] enabled:hover:bg-[#2a2a2a] text-white text-[12px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
-                      >
-                        {cSending ? "보내는 중…" : "보내기"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* 꼬리 — 이전·다음. 모바일 홈바 위로 띄운다 */}
-              <div
-                className="shrink-0 px-5 sm:px-8 pt-3 border-t border-black/[0.08] bg-[#faf9f7] flex items-center justify-between gap-4"
-                style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
-              >
-                <button type="button" onClick={() => olderPost && goPost(olderPost._id)} disabled={!olderPost} className={navBtn}>
-                  <ArrowRight className="w-4 h-4 rotate-180" />
-                  이전 공지
-                </button>
-                <button type="button" onClick={() => newerPost && goPost(newerPost._id)} disabled={!newerPost} className={navBtn}>
-                  다음 공지
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* 토스트 — 모바일 하단바 위로 띄운다 */}
-      <div className="fixed bottom-24 md:bottom-8 right-4 md:right-6 z-[200] pointer-events-none">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            style={{ animation: "spToastIn 0.35s cubic-bezier(0.16,1,0.3,1)" }}
-            className={`mt-2 px-5 py-3 rounded-2xl border text-xs font-bold text-right ${
-              t.accent
-                ? "bg-[#e91e3f] border-[#e91e3f] text-white shadow-[0_10px_30px_rgba(233,30,63,0.45)]"
-                : "bg-white/95 border-black/10 text-[#131313] shadow-xl"
-            }`}
-          >
-            {t.msg}
-          </div>
-        ))}
-      </div>
+      <ToastStack toasts={toasts} />
     </main>
   );
 }
