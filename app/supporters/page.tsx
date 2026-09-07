@@ -46,7 +46,10 @@ type Report = {
   adminReply?: string;
   repliedAt?: string | null;
   createdAt: string;
+  editable?: boolean; // 서버가 계산 — open 이고 답변 전
 };
+type AckUser = { userId: string; userName: string; at?: string };
+type AckStats = { total: number; byPost: Record<string, { count: number; users: AckUser[] }> };
 type Toast = { id: number; msg: string; accent?: boolean };
 
 const BLUE = "#3f83b8"; // 서포터즈 식별색 — 태그·답변 인용에만 쓴다
@@ -183,6 +186,12 @@ const EvalStatus = ({ e, size = "sm" }: { e: EvalRow; size?: "sm" | "md" }) => {
     <span className={`font-bold text-[#8a8a8a] whitespace-nowrap ${cls}`}>평가 중</span>
   );
 };
+
+const CheckMark = ({ className = "w-3 h-3" }: { className?: string }) => (
+  <svg aria-hidden viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="3.2">
+    <path d="m5 12.5 4.5 4.5L19 7.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 
 const Chevron = ({ open }: { open: boolean }) => (
   <svg
@@ -324,6 +333,161 @@ export default function SupportersPage() {
   useEffect(() => {
     if (tab === "reports" && authReady && allowed && !denied) loadReports();
   }, [tab, authReady, allowed, denied, loadReports]);
+
+  // 공지 확인 체크 — 내가 확인한 공지 id. 관리자는 자기 체크 대신 전체 확인 현황(ackStats)을 본다
+  const [acks, setAcks] = useState<Set<string>>(() => new Set<string>());
+  const acksLoadedRef = useRef(false);
+  const ackBusyRef = useRef<Set<string>>(new Set<string>());
+  const [ackStats, setAckStats] = useState<AckStats | null>(null);
+  const [ackListId, setAckListId] = useState<string | null>(null);
+
+  const loadAcks = useCallback(async () => {
+    try {
+      const r = await fetch("/api/supporters/acks", { cache: "no-store" });
+      const body = await r.json().catch(() => null);
+      if (body?.success && Array.isArray(body.postIds)) setAcks(new Set<string>(body.postIds.map(String)));
+    } catch {}
+    acksLoadedRef.current = true;
+  }, []);
+
+  const loadAckStats = useCallback(async () => {
+    try {
+      const r = await fetch("/api/admin/supporters/acks", { cache: "no-store" });
+      const body = await r.json().catch(() => null);
+      if (body?.success) {
+        setAckStats({ total: Number(body.total) || 0, byPost: body.byPost && typeof body.byPost === "object" ? body.byPost : {} });
+      }
+    } catch {}
+  }, []);
+
+  // 마운트 때 한 번, 공지 탭에 들어올 때마다 다시 — 다른 기기에서 누른 확인이 반영되도록
+  useEffect(() => {
+    if (!(authReady && allowed && !denied)) return;
+    if (tab !== "notice" && acksLoadedRef.current) return;
+    if (!isAdmin) loadAcks();
+    if (tab === "notice" && isAdmin) loadAckStats();
+  }, [tab, authReady, allowed, denied, isAdmin, loadAcks, loadAckStats]);
+
+  // 낙관적 갱신 — 먼저 뒤집고, 서버가 거절하면 되돌린다. 같은 글은 응답 전까지 다시 누르지 못한다
+  const toggleAck = async (postId: string) => {
+    if (ackBusyRef.current.has(postId)) return;
+    const on = !acks.has(postId);
+    const apply = (v: boolean) =>
+      setAcks((prev) => {
+        const n = new Set(prev);
+        if (v) n.add(postId);
+        else n.delete(postId);
+        return n;
+      });
+    ackBusyRef.current.add(postId);
+    apply(on);
+    tone(on ? 820 : 520, 0.05);
+    try {
+      const r = await fetch("/api/supporters/acks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId, on }),
+      });
+      const body = await r.json().catch(() => null);
+      if (!body?.success) {
+        apply(!on);
+        pushToast(body?.error || "저장하지 못했습니다");
+      }
+    } catch {
+      apply(!on);
+      pushToast("저장하지 못했습니다");
+    }
+    ackBusyRef.current.delete(postId);
+  };
+
+  // 내 제출 수정·삭제 — 답변 전(editable)에만. 한 번에 한 건만 편집한다
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [delId, setDelId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // 구버전 응답(editable 없음)이어도 같은 기준으로 판단한다
+  const canEdit = (r: Report) => (typeof r.editable === "boolean" ? r.editable : r.status === "open" && !r.adminReply);
+
+  const startEdit = (r: Report) => {
+    setDelId(null);
+    setEditId(r._id);
+    setEditTarget(r.target || "");
+    setEditContent(r.content || "");
+    tone();
+  };
+  const cancelEdit = () => {
+    setEditId(null);
+    tone();
+  };
+
+  const editing = editId ? reports?.find((x) => x._id === editId) || null : null;
+  const editContentTrim = editContent.trim();
+  const editTargetTrim = editTarget.trim();
+  const canSaveEdit =
+    !!editing &&
+    !editSaving &&
+    editContentTrim.length > 0 &&
+    editContentTrim.length <= CONTENT_MAX &&
+    (editing.type === "feedback" || (editTargetTrim.length > 0 && editTargetTrim.length <= TARGET_MAX)) &&
+    (editContentTrim !== (editing.content || "") || (editing.type === "report" && editTargetTrim !== (editing.target || "")));
+
+  const saveEdit = async () => {
+    if (!editing || !canSaveEdit) return;
+    setEditSaving(true);
+    try {
+      const payload: Record<string, string> = { id: editing._id, content: editContentTrim };
+      if (editing.type === "report") payload.target = editTargetTrim;
+      const r = await fetch("/api/supporters/reports", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await r.json().catch(() => null);
+      if (body?.success) {
+        tone(820, 0.06);
+        pushToast("수정했습니다", true);
+        setEditId(null);
+        const next: Partial<Report> = body.report && typeof body.report === "object" ? body.report : { content: editContentTrim, target: payload.target };
+        setReports((prev) => (prev ? prev.map((x) => (x._id === editing._id ? { ...x, ...next, _id: x._id } : x)) : prev));
+      } else {
+        // 409(답변 뒤)·404 는 목록이 이미 낡은 것 — 서버 기준으로 다시 맞춘다
+        pushToast(body?.error || "수정하지 못했습니다");
+        if (r.status === 409 || r.status === 404) {
+          setEditId(null);
+          loadReports();
+        }
+      }
+    } catch {
+      pushToast("수정하지 못했습니다");
+    }
+    setEditSaving(false);
+  };
+
+  const deleteReport = async (id: string) => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const r = await fetch(`/api/supporters/reports?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      const body = await r.json().catch(() => null);
+      if (body?.success) {
+        tone(520, 0.06);
+        pushToast("삭제했습니다", true);
+        setDelId(null);
+        if (editId === id) setEditId(null);
+        setReports((prev) => (prev ? prev.filter((x) => x._id !== id) : prev));
+      } else {
+        pushToast(body?.error || "삭제하지 못했습니다");
+        setDelId(null);
+        if (r.status === 409 || r.status === 404) loadReports();
+      }
+    } catch {
+      pushToast("삭제하지 못했습니다");
+    }
+    setDeleting(false);
+  };
 
   const togglePost = (id: string) => {
     setOpenId((cur) => (cur === id ? null : id));
@@ -620,6 +784,11 @@ export default function SupportersPage() {
                       <li key={p._id}>
                         <button onClick={() => setTab("notice")} className="w-full py-3 flex items-center gap-3 text-left outline-none focus:outline-none group">
                           <span className="min-w-0 flex-1 text-[13px] font-bold text-[#131313] truncate group-hover:text-[#e91e3f] transition-colors">{p.title}</span>
+                          {acks.has(p._id) && (
+                            <span aria-label="확인함" className="shrink-0 inline-flex items-center justify-center rounded-full text-white" style={{ width: 14, height: 14, background: BLUE }}>
+                              <CheckMark className="w-2.5 h-2.5" />
+                            </span>
+                          )}
                           <span className="shrink-0 text-[10px] font-bold text-[#a3a3a3] tabular-nums">{fmtDate(p.publishAt || p.createdAt)}</span>
                         </button>
                       </li>
@@ -784,30 +953,83 @@ export default function SupportersPage() {
                   const open = openId === p._id;
                   // 관리자만 받는 상태 — 예약(발행 전)·가림
                   const scheduled = !!p.publishAt && new Date(p.publishAt).getTime() > Date.now();
+                  const acked = acks.has(p._id);
+                  const stat = ackStats?.byPost?.[p._id];
+                  const ackUsers: AckUser[] = Array.isArray(stat?.users) ? stat!.users : [];
+                  const listOpen = ackListId === p._id;
                   return (
                     <div key={p._id}>
-                      <button
-                        type="button"
-                        onClick={() => togglePost(p._id)}
-                        aria-expanded={open}
-                        className="group w-full flex items-center gap-4 py-4 text-left outline-none focus:outline-none"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className={`text-[14px] font-black break-keep transition-colors ${open ? "text-[#e91e3f]" : "text-[#131313] group-hover:text-[#e91e3f]"}`}>
-                            {p.title}
-                          </p>
-                          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[#a3a3a3] tabular-nums mt-1">
-                            <span>{fmtDate(p.publishAt || p.createdAt)}</span>
-                            {scheduled && (
-                              <span className="inline-flex items-center h-4 px-1.5 rounded-full text-[9px] font-black text-white" style={{ background: BLUE }}>예약</span>
-                            )}
-                            {p.hidden && (
-                              <span className="inline-flex items-center h-4 px-1.5 rounded-full bg-black/[0.08] text-[9px] font-black text-[#5a5a5a]">가림</span>
-                            )}
-                          </p>
+                      {/* 제목 버튼과 확인 버튼은 형제로 둔다 — 버튼 안에 버튼을 넣을 수 없다 */}
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => togglePost(p._id)}
+                          aria-expanded={open}
+                          className="group min-w-0 flex-1 flex items-center gap-4 py-4 text-left outline-none focus:outline-none"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-[14px] font-black break-keep transition-colors ${open ? "text-[#e91e3f]" : "text-[#131313] group-hover:text-[#e91e3f]"}`}>
+                              {p.title}
+                            </p>
+                            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[#a3a3a3] tabular-nums mt-1">
+                              <span>{fmtDate(p.publishAt || p.createdAt)}</span>
+                              {scheduled && (
+                                <span className="inline-flex items-center h-4 px-1.5 rounded-full text-[9px] font-black text-white" style={{ background: BLUE }}>예약</span>
+                              )}
+                              {p.hidden && (
+                                <span className="inline-flex items-center h-4 px-1.5 rounded-full bg-black/[0.08] text-[9px] font-black text-[#5a5a5a]">가림</span>
+                              )}
+                            </p>
+                          </div>
+                          <Chevron open={open} />
+                        </button>
+                        {isAdmin ? (
+                          ackStats && (
+                            <button
+                              type="button"
+                              onClick={() => { setAckListId(listOpen ? null : p._id); tone(); }}
+                              aria-expanded={listOpen}
+                              className="shrink-0 inline-flex items-center h-6 px-2 rounded-full border text-[10px] font-black tabular-nums whitespace-nowrap transition-colors outline-none focus:outline-none"
+                              style={listOpen ? { background: BLUE, borderColor: BLUE, color: "#fff" } : { color: BLUE, borderColor: "rgba(63,131,184,0.5)" }}
+                            >
+                              확인 {stat?.count ?? 0} / {ackStats.total}
+                            </button>
+                          )
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => toggleAck(p._id)}
+                            aria-pressed={acked}
+                            className={`shrink-0 -mr-1.5 inline-flex items-center gap-1.5 h-8 pl-1.5 pr-2.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-colors outline-none focus:outline-none hover:bg-black/[0.04] ${
+                              acked ? "text-[#131313]" : "text-[#8a8a8a] hover:text-[#131313]"
+                            }`}
+                          >
+                            <span
+                              className="inline-flex items-center justify-center w-5 h-5 rounded-full border text-white transition-colors"
+                              style={acked ? { background: BLUE, borderColor: BLUE } : { borderColor: "rgba(0,0,0,0.28)" }}
+                            >
+                              {acked && <CheckMark className="w-3 h-3" />}
+                            </span>
+                            {acked ? "확인함" : "확인"}
+                          </button>
+                        )}
+                      </div>
+                      {isAdmin && listOpen && (
+                        <div className="pb-4 -mt-1">
+                          {ackUsers.length === 0 ? (
+                            <p className="text-[12px] text-[#a3a3a3]">아직 확인한 사람이 없습니다</p>
+                          ) : (
+                            <ul className="flex flex-wrap gap-x-3 gap-y-1.5">
+                              {ackUsers.map((u) => (
+                                <li key={u.userId} className="text-[12px] font-bold text-[#131313] whitespace-nowrap">
+                                  {u.userName}
+                                  {u.at && <span className="text-[#a3a3a3] tabular-nums"> {fmtDate(u.at)}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                         </div>
-                        <Chevron open={open} />
-                      </button>
+                      )}
                       {open && (
                         <div className="pb-7">
                           <div className="sp-body text-[14px] text-[#3a3a3a] leading-[1.9] whitespace-pre-wrap break-keep select-text">
@@ -912,12 +1134,15 @@ export default function SupportersPage() {
                 <div className="border-y border-black/[0.08] divide-y divide-black/[0.06]">
                   {reports.map((r) => {
                     const done = r.status === "done";
+                    const editable = canEdit(r);
+                    const isEditing = editId === r._id;
+                    const confirming = delId === r._id;
                     return (
                       <div key={r._id} className="py-5">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                           <TypeBadge type={r.type} />
                           <span className="text-[11px] font-bold text-[#a3a3a3] tabular-nums">{fmtDate(r.createdAt)}</span>
-                          {r.type === "report" && r.target && (
+                          {r.type === "report" && r.target && !isEditing && (
                             <span className="text-[11px] font-bold text-[#8a8a8a] break-all">
                               대상 <span className="text-[#131313] font-black">{r.target}</span>
                             </span>
@@ -926,13 +1151,106 @@ export default function SupportersPage() {
                             {done ? "처리됨" : "미처리"}
                           </span>
                         </div>
-                        <p className="mt-3 text-[14px] text-[#3a3a3a] leading-[1.8] whitespace-pre-wrap break-keep">{r.content}</p>
+                        {isEditing ? (
+                          <div className="mt-3">
+                            {r.type === "report" && (
+                              <input
+                                value={editTarget}
+                                onChange={(e) => setEditTarget(e.target.value)}
+                                maxLength={TARGET_MAX}
+                                placeholder="대상 (닉네임 또는 ID)"
+                                className={`${fieldClass} h-10 px-4 font-bold mb-2.5`}
+                              />
+                            )}
+                            <textarea
+                              value={editContent}
+                              onChange={(e) => setEditContent(e.target.value.slice(0, CONTENT_MAX))}
+                              rows={5}
+                              maxLength={CONTENT_MAX}
+                              className={`${fieldClass} px-4 py-3 leading-relaxed resize-y`}
+                            />
+                            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mt-2.5">
+                              <span className={`text-[11px] font-bold tabular-nums ${editContent.length >= CONTENT_MAX ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}>
+                                {editContent.length.toLocaleString()} / {CONTENT_MAX.toLocaleString()}
+                              </span>
+                              <span className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={cancelEdit}
+                                  disabled={editSaving}
+                                  className="h-9 px-4 rounded-full bg-black/[0.04] hover:bg-black/[0.08] text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none disabled:opacity-50"
+                                >
+                                  취소
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={saveEdit}
+                                  disabled={!canSaveEdit}
+                                  className="h-9 px-4 rounded-full bg-[#131313] enabled:hover:bg-[#2a2a2a] text-white text-[12px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+                                >
+                                  {editSaving ? "저장 중…" : "저장"}
+                                </button>
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-[14px] text-[#3a3a3a] leading-[1.8] whitespace-pre-wrap break-keep">{r.content}</p>
+                        )}
                         {r.adminReply && (
                           <div className="mt-4 pl-4 border-l-2" style={{ borderColor: BLUE }}>
                             <p className="text-[11px] font-black tabular-nums" style={{ color: BLUE }}>
                               관리자 답변{r.repliedAt ? <span className="text-[#a3a3a3] font-bold"> · {fmtDate(r.repliedAt)}</span> : null}
                             </p>
                             <p className="mt-1.5 text-[13px] text-[#3a3a3a] leading-[1.8] whitespace-pre-wrap break-keep">{r.adminReply}</p>
+                          </div>
+                        )}
+                        {/* 행 꼬리 — 답변 전엔 수정·삭제, 답변 뒤엔 잠금 표기 */}
+                        {!isEditing && (
+                          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-bold">
+                            {editable ? (
+                              confirming ? (
+                                <>
+                                  <span className="text-[#131313]">정말 삭제할까요?</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteReport(r._id)}
+                                    disabled={deleting}
+                                    className="text-[#e91e3f] hover:underline underline-offset-4 transition-colors outline-none focus:outline-none disabled:opacity-50"
+                                  >
+                                    {deleting ? "삭제 중…" : "삭제"}
+                                  </button>
+                                  <span className="text-[#d4d4d4]">/</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setDelId(null); tone(); }}
+                                    disabled={deleting}
+                                    className="text-[#8a8a8a] hover:text-[#131313] transition-colors outline-none focus:outline-none disabled:opacity-50"
+                                  >
+                                    취소
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => startEdit(r)}
+                                    className="text-[#8a8a8a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
+                                  >
+                                    수정
+                                  </button>
+                                  <span className="text-[#d4d4d4]">·</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditId(null); setDelId(r._id); tone(); }}
+                                    className="text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
+                                  >
+                                    삭제
+                                  </button>
+                                </>
+                              )
+                            ) : (
+                              <span className="text-[#c4c4c4]">{r.adminReply ? "답변 완료" : "처리됨"} · 수정 불가</span>
+                            )}
                           </div>
                         )}
                       </div>

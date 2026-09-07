@@ -825,8 +825,9 @@ export default function LevelPage() {
     (id) => {
       const q = new URLSearchParams(Array.from(searchParams.entries()));
       const cur = q.get("tab") || "my";
-      if (id === "my") q.delete("tab");
-      else q.set("tab", id);
+      // 📌 기본 탭도 ?tab=my 로 명시한다. 쿼리를 지워 /level 로 replace 하면 페이지를 새로 연 직후
+      //    첫 내비게이션이 무시되어(다른 탭을 한 번 거친 뒤에야 동작) "내 대시보드가 안 들어가진다".
+      q.set("tab", id);
       const qs = q.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
       // 같은 탭을 다시 눌렀을 때는 소리를 내지 않는다

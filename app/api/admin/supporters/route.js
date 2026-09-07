@@ -5,7 +5,15 @@ import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
-import { isMonthKey, monthKeyKST, getActivity, getActivityMany, getSupporterSettings } from "@/lib/supporters";
+import {
+  isMonthKey,
+  monthKeyKST,
+  getActivity,
+  getActivityMany,
+  getSupporterSettings,
+  fetchRoleHolders,
+  defaultAvatar,
+} from "@/lib/supporters";
 import SupporterEval from "@/models/SupporterEval";
 
 const requireAdmin = async () => {
@@ -13,62 +21,6 @@ const requireAdmin = async () => {
   return isAdminName(session?.user?.name);
 };
 const denied = () => NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-
-// ── 디스코드 역할 보유자 목록 (10분 캐시) ──────────────────────
-//    작은 서버라 1,000명 한 페이지면 충분하지만, 넘치면 after 로 몇 장 더 넘긴다.
-//    (List Guild Members 는 봇에 GUILD_MEMBERS 인텐트가 켜져 있어야 한다 — bot/src/index.js 에 이미 있다)
-const MEMBER_TTL = 10 * 60 * 1000;
-const MAX_PAGES = 5;
-let memberCache = { at: 0, roleId: "", rows: [] };
-
-const defaultAvatar = (userId) => {
-  // 디스코드 기본 아바타 — 새 유저명 체계는 (id >> 22) % 6 (leaderboard 와 같은 규칙)
-  let n = 0;
-  try { n = Number((BigInt(userId) >> 22n) % 6n); } catch { n = 0; }
-  return `https://cdn.discordapp.com/embed/avatars/${n}.png`;
-};
-
-async function fetchRoleHolders(roleId, force = false) {
-  const now = Date.now();
-  if (!force && memberCache.roleId === roleId && now - memberCache.at < MEMBER_TTL) return memberCache.rows;
-
-  const GUILD_ID = process.env.DISCORD_GUILD_ID;
-  const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-  if (!GUILD_ID || !BOT_TOKEN) throw new Error("디스코드 설정(DISCORD_GUILD_ID / DISCORD_BOT_TOKEN)이 없습니다.");
-
-  const rows = [];
-  let after = "0";
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const res = await fetch(
-      `https://discord.com/api/v10/guilds/${GUILD_ID}/members?limit=1000&after=${after}`,
-      { headers: { Authorization: `Bot ${BOT_TOKEN}` }, cache: "no-store" }
-    );
-    if (!res.ok) throw new Error(`디스코드 멤버 목록 조회 실패 (${res.status})`);
-    const members = await res.json();
-    if (!Array.isArray(members) || members.length === 0) break;
-
-    for (const m of members) {
-      const id = m?.user?.id;
-      if (!id || !Array.isArray(m.roles) || !m.roles.includes(roleId)) continue;
-      rows.push({
-        userId: id,
-        // 서버 별명 → 표시 이름 → 계정 이름 순
-        name: m.nick || m.user.global_name || m.user.username || "",
-        // 서버 전용 프로필 사진이 있으면 그것을 우선한다
-        avatar: m.avatar
-          ? `https://cdn.discordapp.com/guilds/${GUILD_ID}/users/${id}/avatars/${m.avatar}.png?size=128`
-          : m.user.avatar
-          ? `https://cdn.discordapp.com/avatars/${id}/${m.user.avatar}.png?size=128`
-          : defaultAvatar(id),
-      });
-    }
-    if (members.length < 1000) break;
-    after = members[members.length - 1].user.id;
-  }
-
-  memberCache = { at: now, roleId, rows };
-  return rows;
-}
 
 const pickEval = (e) =>
   e
