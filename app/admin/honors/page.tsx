@@ -6,6 +6,7 @@ import { Reveal, LuxStyles } from "../../components/Lux";
 import { DiscordIdInput, parseIds, useDiscordProfiles } from "../../components/DiscordIds";
 import { useAdminGuard } from "../ui";
 import { HONOR_CATEGORIES } from "@/lib/honors";
+import { statusOf } from "@/lib/tournamentPhase";
 
 /* 📌 명예의 전당 관리 — 등재·수정·삭제를 이 한 곳에서 처리한다.
    (예전에는 공개 페이지 위에서 수정·삭제를 했는데, 관리 동선이 두 군데로 갈라져 있었다) */
@@ -74,10 +75,10 @@ export default function AdminHonorsPage() {
           winnerId: x.winnerId || "", detail: x.detail || "", dateLabel: x.dateLabel || "", createdAt: x.createdAt,
         }));
         const t: TournamentRow[] = (Array.isArray(tn?.data) ? tn.data : [])
-          .filter((p: any) => p.tournamentStatus === "종료됨")
+          .filter((p: any) => statusOf(p) === "종료됨")
           .map((p: any) => ({
             _id: p._id, title: p.title || "", game: p.tournamentGame || "", winner: p.tournamentWinner || "",
-            winnerId: p.tournamentWinnerId || "", dateLabel: p.tournamentDate || "", prize: p.tournamentPrize || "", status: p.tournamentStatus,
+            winnerId: p.tournamentWinnerId || "", dateLabel: p.tournamentDate || "", prize: p.tournamentPrize || "", status: statusOf(p),
           }));
         setHonors(h);
         setTournaments(t);

@@ -7,6 +7,7 @@ import { Reveal, LuxStyles, CountUp } from "../components/Lux";
 import { parseIds, useDiscordProfiles } from "../components/DiscordIds";
 import { ADMIN_USERS } from "@/lib/admins";
 import { HONOR_GROUPS, GROUP_LABEL_EN, groupOf, rankLabelOf } from "@/lib/honors";
+import { statusOf } from "@/lib/tournamentPhase";
 
 const GOLD = "#d4af37";
 
@@ -30,7 +31,7 @@ export default function HallOfFamePage() {
       .then(([tn, hn]) => {
         const posts = Array.isArray(tn?.data) ? tn.data : [];
         const fromTournaments = posts
-          .filter((p: any) => p.tournamentStatus === "종료됨" && p.tournamentWinner?.trim())
+          .filter((p: any) => statusOf(p) === "종료됨" && p.tournamentWinner?.trim())
           .map((p: any) => ({
             _id: p._id, category: p.tournamentGame || "TOURNAMENT", title: p.title,
             winner: p.tournamentWinner, winnerId: p.tournamentWinnerId || "",

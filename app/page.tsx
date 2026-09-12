@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Reveal, CountUp, LuxStyles } from "./components/Lux";
+import { statusOf } from "@/lib/tournamentPhase";
 
 
 // 📌 24시간 온라인 활동 그래프 (섹션용 와이드 버전)
@@ -84,9 +85,9 @@ export default function Home() {
     ]).then(([ev, tn, au, no]) => {
       const events = (Array.isArray(ev?.data) ? ev.data : []).slice(0, 2).map((p: any) => ({ type: "이벤트", title: p.title, path: "/event", period: p.eventPeriod }));
       const tournaments = (Array.isArray(tn?.data) ? tn.data : [])
-        .filter((p: any) => p.tournamentStatus !== "종료됨")
+        .filter((p: any) => statusOf(p) !== "종료됨")
         .slice(0, 2)
-        .map((p: any) => ({ type: p.tournamentStatus === "진행중" ? "대회 진행중" : "대회 예정", title: p.title, path: "/tournament", period: p.tournamentDate }));
+        .map((p: any) => ({ type: statusOf(p) === "진행중" ? "대회 진행중" : "대회 예정", title: p.title, path: "/tournament", period: p.tournamentDate }));
       // 진행 중인 선수 경매는 최상단 LIVE로 노출
       const liveAuctions = (Array.isArray(au?.data) ? au.data : [])
         // 테스트 방은 메인 노출 제외 (관리자에게도 표시하지 않음)

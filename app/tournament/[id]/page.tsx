@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { RenderFormattedText } from "../../components/FormattedText";
 import { BracketView } from "../../components/BracketView";
 import { EsportsStyles, STATUS_META } from "../../components/Esports";
-import { PHASES, phaseOf, phaseMeta, phaseShows, bracketVisible } from "@/lib/tournamentPhase";
+import { PHASES, phaseOf, phaseMeta, phaseShows, bracketVisible, statusOf } from "@/lib/tournamentPhase";
 import { ADMIN_USERS } from "@/lib/admins";
 
 /* 📌 대회 상세 — 팝업이 아니라 페이지.
@@ -66,7 +66,7 @@ export default function TournamentDetailPage() {
      관리자에게는 숨긴 상태에서도 보여야 편성 결과를 확인할 수 있다. */
   const bracketOpen = bracketVisible(post);
   const showBracket = bracketOpen || (isAdmin && !!post.tournamentBracket);
-  const st = post.tournamentStatus && STATUS_META[post.tournamentStatus] ? post.tournamentStatus : "예정됨";
+  const st = statusOf(post); // 저장된 상태가 아니라 단계·날짜에서 파생 (종료된 대회가 진행중으로 남지 않게)
   const meta = STATUS_META[st];
 
   return (

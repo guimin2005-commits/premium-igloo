@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Reveal, LuxStyles } from "../components/Lux";
 import { BracketView } from "../components/BracketView";
 import { EsportsStyles, STATUS_META } from "../components/Esports";
-import { PHASES, phaseOf, phaseMeta, phaseShows } from "@/lib/tournamentPhase";
+import { PHASES, phaseOf, phaseMeta, phaseShows, statusOf } from "@/lib/tournamentPhase";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -230,20 +230,8 @@ export default function TournamentPage() {
     finally { setDeleteConfirmId(null); }
   };
 
-  const getStatus = (t: any) => {
-    const manual = STATUS_META[t.tournamentStatus] ? t.tournamentStatus : "예정됨";
-    if (manual === "종료됨") return manual;
-    // 📌 리그 일정 종료일이 지나면 자동으로 종료 처리
-    if (t.tournamentDate?.includes("~")) {
-      const endDateStr = t.tournamentDate.split("~")[1]?.trim();
-      if (endDateStr) {
-        const kstDate = new Date(Date.now() + 9 * 60 * 60 * 1000);
-        const todayStr = kstDate.toISOString().split("T")[0].replace(/-/g, ".");
-        if (endDateStr < todayStr) return "종료됨";
-      }
-    }
-    return manual;
-  };
+  // 📌 상태는 단계에서 파생 (lib/tournamentPhase.statusOf) — 종료일이 지나면 자동 종료
+  const getStatus = (t: any) => statusOf(t);
 
   const sorted = [...tournaments].sort((a, b) => {
     const order: Record<string, number> = { "모집중": 0, "진행중": 1, "예정됨": 2, "종료됨": 3 };

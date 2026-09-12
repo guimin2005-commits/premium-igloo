@@ -1,5 +1,5 @@
 "use client";
-import { PHASES, phaseOf } from "@/lib/tournamentPhase";
+import { PHASES, phaseOf, statusFromPhase } from "@/lib/tournamentPhase";
 import { useState, useEffect, useRef } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -548,8 +548,7 @@ export default function AdminWritePage() {
     return t === "" ? "" : (/^[ \-*]/.test(t) ? t : "• " + t);
   }).filter(line => line !== "").join("\n");
 
-  /* 단계 하나에서 상태·기간을 끌어낸다 — 같은 걸 여러 칸에서 받으면 반드시 어긋난다 */
-  const statusFromPhase = (ph: string) => (ph === "접수" ? "모집중" : ph === "종료" ? "종료됨" : "진행중");
+  /* 단계 하나에서 상태·기간을 끌어낸다 — 같은 걸 여러 칸에서 받으면 반드시 어긋난다 (statusFromPhase 는 lib 공용) */
   const dateFromDays = (a: string, b: string) => {
     const f = (v: string) => (v || "").replace(/-/g, ".");
     if (a && b) return `${f(a)} ~ ${f(b)}`;
@@ -584,7 +583,8 @@ export default function AdminWritePage() {
          recruitTasks: formatBulletPoints(recruitTasks), recruitQual: formatBulletPoints(recruitQual), recruitExtra: formatBulletPoints(recruitExtra)
        }),
       ...(category === "대회" && {
-         content, bannerUrl, tournamentGame, tournamentPrize, tournamentStatus, tournamentLink,
+         // 상태는 단계에서 파생 — 옛 값을 그대로 보내면 종료된 대회가 '진행중'으로 남는다
+         content, bannerUrl, tournamentGame, tournamentPrize, tournamentStatus: statusFromPhase(tournamentPhase), tournamentLink,
          tournamentType, tournamentPhase, tournamentTeamDay, tournamentEventDay,
          tournamentSchedule: tournamentSchedule.filter((p) => p.label.trim()),
          tournamentBracket: serializeBracket(bracketRounds), tournamentBracketPublic: bracketPublic, tournamentWinner, tournamentWinnerId,
