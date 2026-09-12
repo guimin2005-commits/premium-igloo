@@ -294,7 +294,7 @@ export default function VerifyPage() {
             <div className="mb-8">
               <h1 className="text-3xl md:text-4xl font-black mb-3 tracking-tighter text-white">서버 이용 동의</h1>
               <p className="text-gray-400 text-sm leading-relaxed">
-                고급 이글루 이용을 위해 아래 세 가지 약관을 확인하고 동의해 주세요.<br className="hidden md:block" />
+                고급 이글루 이용을 위해 아래 세 가지 약관을 확인하고 동의해 주세요.{" "}<br className="hidden md:block" />
                 각 항목을 누르면 요약을 볼 수 있고, 전문은 이용약관 페이지에서 확인할 수 있습니다.
               </p>
             </div>
