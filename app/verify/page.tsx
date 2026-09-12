@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 /* 📌 멤버 인증 — 1단계 서버 이용 동의(필수) → 2단계 내전 채널 인증(선택)
    약관 요약은 /policy 의 운영정책·개인정보처리방침 조항을 그대로 따른다. 전문이 바뀌면 여기도 맞춘다. */
 
-type AgreementKey = "rules" | "privacy" | "caution";
+type AgreementKey = "rules" | "privacy" | "caution" | "level" | "arctic";
 
 type Agreement = {
   key: AgreementKey;
@@ -111,6 +111,86 @@ const AGREEMENTS: Agreement[] = [
       },
     ],
   },
+  {
+    key: "level",
+    title: "SYSTEM : LEVEL 운영 규정",
+    summary: "레벨 운영 규정 제1조 ~ 제6조 — 활동 보상(XP)의 성격과 획득 기준, 부정 획득 제재, 시즌 운영.",
+    policyTab: "level",
+    sections: [
+      {
+        heading: "XP의 성격",
+        items: [
+          { desc: "XP는 서버 내 활동 실적을 나타내는 수치이며, 현금 등 법정 통화로 환전되지 않습니다." },
+          { desc: "XP와 레벨은 이용자에게 귀속되는 재산권이 아니며, 서버 운영 종료 또는 시즌 종료 시 소멸·초기화될 수 있습니다." },
+          { desc: "XP는 타 이용자에게 양도·증여·판매할 수 없습니다." },
+        ],
+      },
+      {
+        heading: "획득 기준과 제한",
+        items: [
+          { term: "채팅", desc: "메시지 전송 시 200 XP · 쿨타임 1분" },
+          { term: "음성", desc: "5분 이상 접속 유지 시 3,000 XP · 쿨타임 5분 (내전 음성 채널은 3,500 XP)" },
+          { term: "출석 체크", desc: "1일 1회 7,000 XP" },
+          { desc: "잠수 전용 음성 채널에서는 XP가 지급되지 않으며, 음소거 상태에서는 획득량이 90% 감소합니다." },
+        ],
+      },
+      {
+        heading: "부정 획득 및 제재",
+        items: [
+          { term: "자동화 도구", desc: "매크로·봇으로 채팅 또는 음성 접속을 자동화하는 행위" },
+          { term: "다중 계정", desc: "다수의 계정으로 XP 또는 초대 보상을 중복 수취하는 행위" },
+          { term: "보상 체계 악용", desc: "허위 정보로 보상을 수취하거나, 시스템 오류를 신고하지 않고 반복 이용하는 행위" },
+        ],
+        note: "적발 시 획득 XP 전액 회수, 레벨 조정, 관련 역할 회수, 서버 이용 제한이 이루어질 수 있으며, 부정 XP로 수령한 상품도 회수됩니다.",
+      },
+      {
+        heading: "시즌 운영",
+        items: [
+          { desc: "레벨 시스템은 시즌제로 운영되며, 시즌 종료 시 최종 상위 3인은 RANKER로 선정됩니다." },
+          { desc: "시즌 전환 시 XP·레벨의 초기화 여부와 범위는 시즌 종료 전 공지로 안내합니다." },
+        ],
+      },
+    ],
+  },
+  {
+    key: "arctic",
+    title: "ARCTIC 이용약관",
+    summary: "ARCTIC 이용약관 제1조 ~ 제6조 — XP 상점의 이용 조건, 구매·지급, 취소·환불, 쿠폰.",
+    policyTab: "arctic",
+    sections: [
+      {
+        heading: "이용 조건",
+        items: [
+          { desc: "ARCTIC은 보유 XP로 역할·권한·쿠폰 등을 교환하는 공식 상점이며, 현금 결제는 지원하지 않습니다." },
+          { desc: "서버 인증 완료 회원만 이용할 수 있고, 일부 상품은 특정 역할 보유자만 구매할 수 있습니다." },
+        ],
+      },
+      {
+        heading: "구매 및 지급",
+        items: [
+          { desc: "구매 시 보유 XP가 즉시 차감되며, 그로 인해 레벨이 하락하고 레벨 연동 역할이 회수될 수 있습니다." },
+          { desc: "역할 상품은 봇이 자동 지급하며 통상 30초 이내 반영됩니다. 수동 처리가 필요한 상품은 지연될 수 있습니다." },
+        ],
+        note: "구매 확정 후에는 직접 취소할 수 없습니다. 상품과 수량을 확인한 뒤 결제해 주세요.",
+      },
+      {
+        heading: "취소 및 환불",
+        items: [
+          { desc: "XP는 법정 통화가 아니므로 현금 환불 대상이 아닙니다." },
+          { term: "XP 원복 가능 사유", desc: "지급 누락 · 중복 결제 · 상품 정보 오류 — 발생일로부터 7일 이내 문의 창구로 접수" },
+          { desc: "단순 변심과 구매 실수는 취소·환불 대상이 아닙니다." },
+        ],
+      },
+      {
+        heading: "쿠폰 및 면책",
+        items: [
+          { desc: "쿠폰은 발급 조건 범위에서만 사용할 수 있고, 양도할 수 없으며, 기한이 지나면 소멸합니다." },
+          { desc: "상품 구성·가격·판매 여부는 변경될 수 있으며, 완료된 구매에는 소급되지 않습니다." },
+          { desc: "운영정책 위반으로 차단된 이용자의 미사용 XP와 보유 상품은 복구되지 않습니다." },
+        ],
+      },
+    ],
+  },
 ];
 
 // 📌 내전 규정 — /policy?tab=scrim 의 제1조 ~ 제4조 (2026. 04. 16. 시행)
@@ -130,7 +210,7 @@ export default function VerifyPage() {
   const router = useRouter();
 
   const [step, setStep] = useState(1);
-  const [agreements, setAgreements] = useState<Record<AgreementKey, boolean>>({ rules: false, privacy: false, caution: false });
+  const [agreements, setAgreements] = useState<Record<AgreementKey, boolean>>({ rules: false, privacy: false, caution: false, level: false, arctic: false });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -157,7 +237,7 @@ export default function VerifyPage() {
 
   const handleAllCheck = () => {
     const next = !isAllChecked;
-    setAgreements({ rules: next, privacy: next, caution: next });
+    setAgreements({ rules: next, privacy: next, caution: next, level: next, arctic: next });
   };
 
   const handleCheck = (key: AgreementKey) => {
@@ -267,7 +347,7 @@ export default function VerifyPage() {
           <div className="animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="mb-6">
               <h1 className="text-2xl md:text-3xl font-black mb-2 tracking-tighter text-white">서버 이용 동의</h1>
-              <p className="text-gray-400 text-[13px] leading-relaxed">고급 이글루 이용을 위해 아래 약관을 확인하고 동의해 주세요. 항목을 누르면 요약이 펼쳐지고, 전문은 이용약관 페이지에서 볼 수 있습니다.</p>
+              <p className="text-gray-400 text-[13px] leading-relaxed">서버와 SYSTEM : LEVEL · ARCTIC 이용을 위한 약관입니다. 항목을 누르면 요약이 펼쳐지고, 전문은 이용약관 페이지에서 볼 수 있습니다.</p>
             </div>
 
             {/* 전체 동의 */}
