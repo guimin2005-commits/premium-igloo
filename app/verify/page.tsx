@@ -297,8 +297,7 @@ export default function VerifyPage() {
                         <CheckIcon className="w-3.5 h-3.5" />
                       </button>
                       <button type="button" onClick={() => toggleTab(a.key)} aria-expanded={open} className="flex-1 min-w-0 text-left flex items-center gap-2 group">
-                        <span className="text-[#e91e3f] text-xs font-bold shrink-0">[필수]</span>
-                        <span className="font-semibold text-gray-200 group-hover:text-white text-sm md:text-[15px] transition-colors">{a.title}</span>
+                        <span className="font-semibold text-gray-200 group-hover:text-white text-sm md:text-[15px] transition-colors">{a.title}<span className="text-[#e91e3f] ml-1" aria-hidden="true">*</span></span>
                       </button>
                       <button type="button" onClick={() => toggleTab(a.key)} aria-label={open ? "접기" : "펼치기"} className="shrink-0 w-7 h-7 grid place-items-center text-gray-500 hover:text-white transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform duration-200 ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
@@ -370,7 +369,7 @@ export default function VerifyPage() {
             <div className="border-t border-white/10 mb-5">
               {SCRIM_RULES.map((r) => (
                 <div key={r.no} className="border-b border-white/10 py-4 px-1">
-                  <p className="text-sm font-semibold text-gray-200 mb-1.5"><span className="text-[#e91e3f] mr-2">{r.no}</span>{r.title}</p>
+                  <p className="text-sm font-semibold text-gray-200 mb-1.5"><span className="text-gray-500 mr-2">{r.no}</span>{r.title}</p>
                   <p className="text-xs text-gray-400 leading-relaxed break-keep">{r.desc}</p>
                 </div>
               ))}
