@@ -265,6 +265,28 @@ export default function NoticeDetail({ postId }: { postId: string }) {
     } catch {}
   }, []);
 
+  // 공지 삭제 — 관리자만. 지우면 목록으로 돌아간다 (댓글·확인·반응 문서는 남지만 글이 없으니 닿을 수 없다)
+  const [delConfirm, setDelConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deletePost = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const r = await fetch(`/api/posts/${encodeURIComponent(postId)}`, { method: "DELETE" });
+      const body = await r.json().catch(() => null);
+      if (r.ok && body?.success) {
+        tone(520, 0.06);
+        router.push("/supporters?tab=notice");
+        return;
+      }
+      pushToast(body?.error || "삭제하지 못했습니다");
+    } catch {
+      pushToast("삭제하지 못했습니다");
+    }
+    setDelConfirm(false);
+    setDeleting(false);
+  };
+
   // 낙관적 갱신 — 먼저 뒤집고, 서버가 거절하면 되돌린다. 응답 전까지 다시 누르지 못한다
   const toggleAck = async () => {
     if (ackBusyRef.current) return;
@@ -538,6 +560,23 @@ export default function NoticeDetail({ postId }: { postId: string }) {
                   수정
                 </Link>
               )}
+              {isAdmin && (
+                delConfirm ? (
+                  <span className="shrink-0 inline-flex items-center gap-2 text-[11px] font-bold text-[#5a5a5a]">
+                    정말 삭제할까요?
+                    <button type="button" onClick={deletePost} disabled={deleting} className="text-[#e91e3f] hover:text-[#c8172f] disabled:opacity-40 outline-none focus:outline-none">삭제</button>
+                    <button type="button" onClick={() => setDelConfirm(false)} disabled={deleting} className="hover:text-[#131313] outline-none focus:outline-none">취소</button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setDelConfirm(true)}
+                    className="shrink-0 inline-flex items-center h-8 px-3 rounded-full bg-black/[0.04] hover:bg-[#e91e3f]/10 text-[11px] font-bold text-[#5a5a5a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
+                  >
+                    삭제
+                  </button>
+                )
+              )}
               <button type="button" onClick={copyLink} aria-label="링크 복사" title="링크 복사" className={`${iconBtn} -mr-2`}>
                 <LinkIcon />
               </button>
@@ -566,58 +605,59 @@ export default function NoticeDetail({ postId }: { postId: string }) {
             </div>
           )}
 
-          {/* 확인 — 서포터즈는 꽉 찬 큰 버튼, 관리자는 확인 현황 */}
+          {/* 확인 + 반응 — 한 줄. 서포터즈는 [확인 버튼 | 이모지], 관리자는 확인 현황 아래에 이모지 */}
           <div className="mt-8">
-            {isAdmin ? (
-              <div className="border-y border-black/[0.08] py-4">
-                <div className="flex items-baseline justify-between gap-4">
-                  <p className="text-[11px] font-bold text-[#8a8a8a]">확인 현황</p>
-                  <p className="text-[15px] font-black tabular-nums leading-none" style={{ color: BLUE }}>
-                    {ackStats ? stat?.count ?? 0 : "—"} <span className="text-[12px] font-bold text-[#a3a3a3]">/ {ackStats ? ackStats.total : "—"}</span>
-                  </p>
+            {isAdmin && (
+                <div className="border-y border-black/[0.08] py-4">
+                  <div className="flex items-baseline justify-between gap-4">
+                    <p className="text-[11px] font-bold text-[#8a8a8a]">확인 현황</p>
+                    <p className="text-[15px] font-black tabular-nums leading-none" style={{ color: BLUE }}>
+                      {ackStats ? stat?.count ?? 0 : "—"} <span className="text-[12px] font-bold text-[#a3a3a3]">/ {ackStats ? ackStats.total : "—"}</span>
+                    </p>
+                  </div>
+                  {!ackStats ? (
+                    <div className="mt-3 h-4 w-40 rounded bg-black/[0.05] animate-pulse"></div>
+                  ) : ackUsers.length === 0 ? (
+                    <p className="mt-2.5 text-[12px] text-[#a3a3a3]">아직 확인한 사람이 없습니다</p>
+                  ) : (
+                    <ul className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1.5">
+                      {ackUsers.map((u) => (
+                        <li key={u.userId} className="text-[12px] font-bold text-[#131313] whitespace-nowrap">
+                          {u.userName}
+                          {u.at && <span className="text-[#a3a3a3] tabular-nums"> {fmtDate(u.at)}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
-                {!ackStats ? (
-                  <div className="mt-3 h-4 w-40 rounded bg-black/[0.05] animate-pulse"></div>
-                ) : ackUsers.length === 0 ? (
-                  <p className="mt-2.5 text-[12px] text-[#a3a3a3]">아직 확인한 사람이 없습니다</p>
-                ) : (
-                  <ul className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1.5">
-                    {ackUsers.map((u) => (
-                      <li key={u.userId} className="text-[12px] font-bold text-[#131313] whitespace-nowrap">
-                        {u.userName}
-                        {u.at && <span className="text-[#a3a3a3] tabular-nums"> {fmtDate(u.at)}</span>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={toggleAck}
-                aria-pressed={acked}
-                className={`inline-flex items-center gap-2 h-10 px-4 rounded-full text-[13px] font-black transition-all outline-none focus:outline-none active:scale-[0.98] ${
-                  acked ? "bg-white text-[#131313] hover:bg-black/[0.03]" : "text-white hover:brightness-110"
-                }`}
-                style={acked ? { boxShadow: `inset 0 0 0 1.5px ${BLUE}` } : { background: BLUE }}
-              >
-                {acked ? (
-                  <>
-                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-white" style={{ background: BLUE }}>
-                      <CheckMark className="w-3 h-3" />
-                    </span>
-                    확인함
-                    {ackAt && <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">· {fmtDate(ackAt)}</span>}
-                  </>
-                ) : (
-                  "확인했습니다"
-                )}
-              </button>
             )}
-          </div>
-
-          {/* 반응 — 확인 아래 이모지 줄. 글 대신 가볍게 남기는 자리라 카드 없이 알약만 */}
-          <div className="mt-6 flex flex-wrap items-center gap-2">
+            <div className={`flex flex-wrap items-center gap-2 ${isAdmin ? "mt-4" : ""}`}>
+              {!isAdmin && (
+                <>
+                  <button
+                    type="button"
+                    onClick={toggleAck}
+                    aria-pressed={acked}
+                    className={`inline-flex items-center gap-2 h-9 px-4 rounded-full text-[13px] font-black transition-all outline-none focus:outline-none active:scale-[0.98] ${
+                      acked ? "bg-white text-[#131313] hover:bg-black/[0.03]" : "text-white hover:brightness-110"
+                    }`}
+                    style={acked ? { boxShadow: `inset 0 0 0 1.5px ${BLUE}` } : { background: BLUE }}
+                  >
+                    {acked ? (
+                      <>
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-white" style={{ background: BLUE }}>
+                          <CheckMark className="w-3 h-3" />
+                        </span>
+                        확인함
+                        {ackAt && <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">· {fmtDate(ackAt)}</span>}
+                      </>
+                    ) : (
+                      "확인했습니다"
+                    )}
+                  </button>
+                  <span aria-hidden className="w-px h-5 mx-1 bg-black/[0.1]"></span>
+                </>
+              )}
             {emojis.map((em) => {
               const v = rx?.reactions?.[em] || { count: 0, mine: false };
               return (
@@ -636,6 +676,7 @@ export default function NoticeDetail({ postId }: { postId: string }) {
                 </button>
               );
             })}
+            </div>
           </div>
 
           {/* 댓글 */}

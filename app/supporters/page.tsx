@@ -55,7 +55,7 @@ const TARGET_MAX = 80;
 const TABS = [
   { id: "activity", name: "활동" },
   { id: "evals", name: "평가·지급" },
-  { id: "notice", name: "공지·가이드" },
+  { id: "notice", name: "공지사항" },
   { id: "reports", name: "신고·피드백" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -875,7 +875,7 @@ export default function SupportersPage() {
         {tab === "notice" && (
           <Reveal>
             <SectionHeader
-              title="공지 · 가이드"
+              title="공지사항"
               right={
                 isAdmin ? (
                   <Link
