@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -112,6 +111,14 @@ const AGREEMENTS: Agreement[] = [
       },
     ],
   },
+];
+
+// 📌 내전 규정 — /policy?tab=scrim 의 제1조 ~ 제4조 (2026. 04. 16. 시행)
+const SCRIM_RULES = [
+  { no: "제1조", title: "참여 규정", desc: "모든 인원은 내전을 자유롭게 주최 및 참여할 수 있습니다. 참가 확정 인원은 지정된 시간을 엄수해야 하며, 무단 불참이나 상습적인 지각 시에는 참여 권한이 제한될 수 있습니다." },
+  { no: "제2조", title: "상호 존중 및 매너 준수", desc: "모든 내전은 상호 존중을 바탕으로 진행하며, 상대방에게 불쾌감을 주는 행위(비하 발언, 티배깅 등)를 엄격히 금지합니다." },
+  { no: "제3조", title: "분쟁 규정", desc: "분쟁 발생 시 직접 대응을 금하며, 반드시 웹사이트의 문의 채널을 통해 접수해야 합니다. 모든 사안은 관리자 판단 하에 검토되며, 규정 위반 시 즉각 제재됩니다." },
+  { no: "제4조", title: "채널 이용", desc: "내전은 반드시 지정된 내전 전용 음성 채널에서만 진행해야 하며, 내전 목적 외 해당 채널의 사적 이용은 제한됩니다." },
 ];
 
 const CheckIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
@@ -242,38 +249,14 @@ export default function VerifyPage() {
   }
 
   return (
-    <div className="w-full flex-1 bg-[#090909] text-white flex flex-col items-center relative">
-      {/* ── 상단: 단계 표시 ── */}
-      <section className="relative w-full pt-8 pb-5 md:pt-10 md:pb-6 px-6 border-b border-white/[0.06]">
-        <div className="max-w-2xl mx-auto relative z-10">
+    <div className="w-full flex-1 bg-[#090909] text-white flex flex-col items-center py-10 md:py-14 px-4 relative">
+      <div className="w-full max-w-2xl px-2">
 
-          {/* 2단계 스텝퍼 — 현재 단계는 흰색, 지난 단계는 체크 */}
-          <ol className="flex items-center gap-3 md:gap-4">
-            {[
-              { no: "01", label: "서버 이용 동의", sub: "필수" },
-              { no: "02", label: "내전 채널 인증", sub: "선택" },
-            ].map((s, i) => {
-              const n = i + 1;
-              const done = step > n;
-              const active = step === n;
-              return (
-                <li key={s.no} className="flex items-center gap-3 md:gap-4 min-w-0">
-                  <div className={`w-7 h-7 rounded-full grid place-items-center text-[10px] font-black tabular-nums shrink-0 border transition-colors ${active ? "bg-white border-white text-black" : done ? "bg-white/10 border-white/30 text-white" : "bg-transparent border-white/15 text-gray-500"}`}>
-                    {done ? <CheckIcon className="w-4 h-4" /> : s.no}
-                  </div>
-                  <div className="min-w-0">
-                    <p className={`text-xs md:text-sm font-bold leading-tight truncate ${active ? "text-white" : "text-gray-500"}`}>{s.label}</p>
-                    <p className="text-[10px] text-gray-600 font-bold">{s.sub}</p>
-                  </div>
-                  {i === 0 && <span className="w-8 md:w-14 h-px shrink-0 bg-white/10"></span>}
-                </li>
-              );
-            })}
-          </ol>
+        {/* 진행 막대 — 1단계 절반, 2단계 전체 */}
+        <div className="w-full h-0.5 bg-white/10 rounded-full mb-8 md:mb-10">
+          <div className={`h-full bg-[#e91e3f] transition-all duration-500 rounded-full ${step === 1 ? "w-1/2" : "w-full"}`}></div>
         </div>
-      </section>
 
-      <div className="w-full max-w-2xl mx-auto px-6 pt-6 md:pt-8 pb-10 md:pb-14 flex-1">
         {errorMessage && (
           <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-xl text-red-400 text-sm text-center font-bold">
             {errorMessage}
@@ -282,83 +265,79 @@ export default function VerifyPage() {
 
         {step === 1 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="mb-5">
+            <div className="mb-6">
               <h1 className="text-2xl md:text-3xl font-black mb-2 tracking-tighter text-white">서버 이용 동의</h1>
-              <p className="text-gray-400 text-[13px] leading-relaxed">
-                고급 이글루 이용을 위해 아래 세 가지 약관을 확인하고 동의해 주세요.{" "}<br className="hidden md:block" />
-                각 항목을 누르면 요약을 볼 수 있고, 전문은 이용약관 페이지에서 확인할 수 있습니다.
-              </p>
+              <p className="text-gray-400 text-[13px] leading-relaxed">고급 이글루 이용을 위해 아래 약관을 확인하고 동의해 주세요. 항목을 누르면 요약이 펼쳐지고, 전문은 이용약관 페이지에서 볼 수 있습니다.</p>
             </div>
 
-            {/* 약관 목록 */}
-            <div className="space-y-2 mb-4">
-              {AGREEMENTS.map((a, idx) => {
+            {/* 전체 동의 */}
+            <button type="button" onClick={handleAllCheck} className="flex items-center gap-3 py-3 mb-2 group w-fit text-left">
+              <span className={`w-5 h-5 rounded-md shrink-0 grid place-items-center border-2 transition-colors ${isAllChecked ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-gray-600 group-hover:border-gray-400 text-transparent"}`}>
+                <CheckIcon className="w-3.5 h-3.5" />
+              </span>
+              <span className={`font-bold text-[15px] transition-colors ${isAllChecked ? "text-white" : "text-gray-400 group-hover:text-gray-200"}`}>모든 필수 약관에 동의합니다</span>
+              <span className="text-[11px] text-gray-600 font-bold tabular-nums">{checkedCount}/{AGREEMENTS.length}</span>
+            </button>
+
+            {/* 약관 — 펼치는 목록. 체크박스는 동의, 제목 줄은 펼치기 */}
+            <div className="border-t border-white/10 mb-8">
+              {AGREEMENTS.map((a) => {
                 const checked = agreements[a.key];
                 const open = openTab === a.key;
                 return (
-                  <div key={a.key} className={`rounded-xl border transition-colors ${checked ? "border-white/30 bg-white/[0.04]" : "border-white/10 bg-white/[0.02]"}`}>
-                    {/* 헤더 — 체크박스는 동의, 나머지 영역은 펼치기 */}
-                    <div className="flex items-start gap-3 p-3.5 md:p-4">
+                  <div key={a.key} className="border-b border-white/10">
+                    <div className="flex items-center gap-3 py-4 px-1">
                       <button
                         type="button"
                         onClick={() => handleCheck(a.key)}
                         aria-pressed={checked}
                         aria-label={`${a.title} 동의`}
-                        className={`w-5 h-5 rounded-md shrink-0 grid place-items-center border-2 transition-colors ${checked ? "bg-white border-white text-black" : "bg-transparent border-gray-600 hover:border-gray-400 text-transparent"}`}
+                        className={`w-5 h-5 rounded shrink-0 grid place-items-center border transition-colors ${checked ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-gray-600 hover:border-gray-400 text-transparent"}`}
                       >
-                        <CheckIcon className="w-4 h-4" />
+                        <CheckIcon className="w-3.5 h-3.5" />
                       </button>
-
-                      <button type="button" onClick={() => toggleTab(a.key)} aria-expanded={open} className="flex-1 min-w-0 text-left">
-                        <p className="font-bold text-white text-sm md:text-[15px] leading-snug flex items-center gap-2 flex-wrap">
-                          <span className="text-[10px] font-black tracking-[0.2em] text-gray-600 tabular-nums">0{idx + 1}</span>
-                          {a.title}
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/[0.06] text-gray-400">필수</span>
-                        </p>
-                        <p className="text-[11px] text-gray-500 mt-1 leading-relaxed break-keep">{a.summary}</p>
+                      <button type="button" onClick={() => toggleTab(a.key)} aria-expanded={open} className="flex-1 min-w-0 text-left flex items-center gap-2 group">
+                        <span className="text-[#e91e3f] text-xs font-bold shrink-0">[필수]</span>
+                        <span className="font-semibold text-gray-200 group-hover:text-white text-sm md:text-[15px] transition-colors">{a.title}</span>
                       </button>
-
-                      <button type="button" onClick={() => toggleTab(a.key)} aria-label={open ? "접기" : "펼치기"} className="-mt-1 shrink-0 w-7 h-7 rounded-full grid place-items-center text-gray-500 hover:text-white hover:bg-white/5 transition-colors">
+                      <button type="button" onClick={() => toggleTab(a.key)} aria-label={open ? "접기" : "펼치기"} className="shrink-0 w-7 h-7 grid place-items-center text-gray-500 hover:text-white transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform duration-200 ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                       </button>
                     </div>
 
-                    {/* 상세 — 조항별 소제목 + 항목 */}
                     {open && (
-                      <div className="px-3.5 md:px-4 pb-4 md:pl-12">
-                        <div className="border-t border-white/[0.08] pt-3.5 space-y-4">
-                          {a.sections.map((s) => (
-                            <div key={s.heading}>
-                              <p className="text-[10px] font-black tracking-[0.18em] text-gray-400 uppercase mb-2">{s.heading}</p>
-                              <ul className="space-y-1.5">
-                                {s.items.map((it, i) => (
-                                  <li key={i} className="flex items-start gap-2.5 text-xs leading-relaxed break-keep">
-                                    <span className="mt-[8px] w-1 h-1 rounded-full bg-gray-600 shrink-0"></span>
-                                    <span className="text-gray-400">
-                                      {it.term && <span className="text-gray-200 font-bold">{it.term} — </span>}
-                                      {it.desc}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                              {s.note && (
-                                <p className="mt-2.5 text-[11px] text-gray-400 leading-relaxed bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2.5 break-keep">
-                                  <span className="text-gray-300 font-bold mr-1.5">※</span>{s.note}
-                                </p>
-                              )}
-                            </div>
-                          ))}
-
-                          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                            <Link href={`/policy?tab=${a.policyTab}`} target="_blank" className="text-xs font-bold text-gray-500 hover:text-white transition-colors">
-                              전문 보기 ↗
-                            </Link>
-                            {!checked && (
-                              <button type="button" onClick={() => { handleCheck(a.key); setOpenTab(null); }} className="text-xs font-bold text-white bg-white/[0.06] hover:bg-white/10 border border-white/10 px-3.5 py-2 rounded-lg transition-colors">
-                                확인했습니다 · 동의
-                              </button>
+                      <div className="pb-5 pl-9 pr-2 space-y-4">
+                        <p className="text-[11px] text-gray-500 leading-relaxed break-keep">{a.summary}</p>
+                        {a.sections.map((sec) => (
+                          <div key={sec.heading}>
+                            <p className="text-[10px] font-black tracking-[0.18em] text-gray-400 uppercase mb-2">{sec.heading}</p>
+                            <ul className="space-y-1.5">
+                              {sec.items.map((it, i) => (
+                                <li key={i} className="flex items-start gap-2.5 text-xs leading-relaxed break-keep">
+                                  <span className="mt-[8px] w-1 h-1 rounded-full bg-gray-600 shrink-0"></span>
+                                  <span className="text-gray-400">
+                                    {it.term && <span className="text-gray-200 font-bold">{it.term} — </span>}
+                                    {it.desc}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                            {sec.note && (
+                              <p className="mt-2.5 text-[11px] text-gray-400 leading-relaxed break-keep">
+                                <span className="text-gray-300 font-bold mr-1.5">※</span>{sec.note}
+                              </p>
                             )}
                           </div>
+                        ))}
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                          <a href={`/policy?tab=${a.policyTab}`} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-gray-400 hover:text-white underline underline-offset-4 transition-colors">
+                            전문 보기 ↗
+                          </a>
+                          {!checked && (
+                            <button type="button" onClick={() => { handleCheck(a.key); setOpenTab(null); }} className="text-xs font-bold text-white bg-white/[0.06] hover:bg-white/10 border border-white/10 px-3.5 py-2 rounded-lg transition-colors">
+                              확인했습니다 · 동의
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -367,26 +346,13 @@ export default function VerifyPage() {
               })}
             </div>
 
-            {/* 전체 동의 + 진행 */}
-            <div className="rounded-xl border border-white/10 bg-[#111111] p-3.5 md:p-4">
-              <button type="button" onClick={handleAllCheck} className="w-full flex items-center gap-3 text-left group">
-                <span className={`w-5 h-5 rounded-md shrink-0 grid place-items-center border-2 transition-colors ${isAllChecked ? "bg-white border-white text-black" : "bg-transparent border-gray-600 group-hover:border-gray-400 text-transparent"}`}>
-                  <CheckIcon className="w-4 h-4" />
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className={`block font-bold text-sm transition-colors ${isAllChecked ? "text-white" : "text-gray-300"}`}>모든 필수 약관에 동의합니다</span>
-                  <span className="block text-[11px] text-gray-500 mt-0.5 tabular-nums">{checkedCount} / {AGREEMENTS.length} 항목 동의</span>
-                </span>
-              </button>
-
-              <button
-                onClick={handleNextStep}
-                disabled={!isAllChecked}
-                className={`mt-3 w-full py-3 rounded-xl font-bold text-sm transition-all outline-none focus:outline-none ${isAllChecked ? "bg-[#e91e3f] hover:bg-[#d01634] text-white shadow-lg shadow-[#e91e3f]/20" : "bg-white/5 text-gray-600 cursor-not-allowed"}`}
-              >
-                {isAllChecked ? "다음 단계로" : `약관 ${AGREEMENTS.length - checkedCount}개 더 확인해 주세요`}
-              </button>
-            </div>
+            <button
+              onClick={handleNextStep}
+              disabled={!isAllChecked}
+              className={`w-full py-3.5 rounded-xl font-bold text-base transition-all outline-none focus:outline-none ${isAllChecked ? "bg-[#e91e3f] hover:bg-[#d01634] text-white shadow-lg shadow-[#e91e3f]/20" : "bg-white/5 text-gray-600 cursor-not-allowed"}`}
+            >
+              {isAllChecked ? "다음" : `약관 ${AGREEMENTS.length - checkedCount}개 더 확인해 주세요`}
+            </button>
           </div>
         )}
 
@@ -395,50 +361,35 @@ export default function VerifyPage() {
             <div className="mb-6">
               <h1 className="text-2xl md:text-3xl font-black mb-2 tracking-tighter text-white flex items-baseline gap-2">
                 내전 채널 이용 인증
-                <span className="text-[#e91e3f] text-sm font-bold align-middle bg-[#e91e3f]/10 px-2 py-0.5 rounded">선택</span>
+                <span className="text-gray-400 text-xs font-bold bg-white/[0.06] px-2 py-0.5 rounded">선택</span>
               </h1>
-              <p className="text-gray-400 text-sm">내전 참가를 위해, 아래 운영 정책을 확인해 주세요.</p>
+              <p className="text-gray-400 text-[13px] leading-relaxed">내전에 참가하려면 내전 규정에 동의해야 합니다. 동의하지 않아도 서버 기본 권한은 받을 수 있고, 내 정보 페이지에서 나중에 동의할 수 있습니다.</p>
             </div>
 
-            <div className="flex flex-col gap-4 mb-6">
-              <div className="border-l-2 border-[#e91e3f] pl-4">
-                <h3 className="font-bold text-white mb-1">01. 참여 규정</h3>
-                <p className="text-sm text-gray-400 leading-relaxed">모든 인원은 내전을 자유롭게 주최 및 참여할 수 있습니다. 참가 확정 인원은 지정된 시간을 엄수해야 하며, 무단 불참이나 상습적인 지각 시에는 참여 권한이 제한될 수 있습니다.</p>
-              </div>
-              <div className="border-l-2 border-[#e91e3f] pl-4">
-                <h3 className="font-bold text-white mb-1">02. 상호 존중 및 매너 준수</h3>
-                <p className="text-sm text-gray-400 leading-relaxed">모든 내전은 상호 존중을 바탕으로 진행하며, 상대방에게 불쾌감을 주는 행위(비하 발언, 티배깅 등)를 엄격히 금지합니다.</p>
-              </div>
-              <div className="border-l-2 border-[#e91e3f] pl-4">
-                <h3 className="font-bold text-white mb-1">03. 분쟁 규정</h3>
-                <p className="text-sm text-gray-400 leading-relaxed">분쟁 발생 시 직접 대응을 금하며, 반드시 웹사이트의 <span className="text-white font-semibold">문의</span> 채널을 통해 접수해야 합니다. 모든 사안은 관리자 판단 하에 검토되며, 규정 위반 시 즉각 제재됩니다.</p>
-              </div>
-              <div className="border-l-2 border-[#e91e3f] pl-4">
-                <h3 className="font-bold text-white mb-1">04. 채널 이용</h3>
-                <p className="text-sm text-gray-400 leading-relaxed">내전은 반드시 지정된 <span className="text-white font-semibold">내전 전용 음성 채널</span>에서만 진행해야 하며, 내전 목적 외 해당 채널의 사적 이용은 제한됩니다.</p>
-              </div>
+            {/* 내전 규정 — /policy?tab=scrim 의 조항 그대로 */}
+            <div className="border-t border-white/10 mb-5">
+              {SCRIM_RULES.map((r) => (
+                <div key={r.no} className="border-b border-white/10 py-4 px-1">
+                  <p className="text-sm font-semibold text-gray-200 mb-1.5"><span className="text-[#e91e3f] mr-2">{r.no}</span>{r.title}</p>
+                  <p className="text-xs text-gray-400 leading-relaxed break-keep">{r.desc}</p>
+                </div>
+              ))}
             </div>
 
-            <div className="bg-white/5 rounded-xl p-4 mb-6 text-[13px] text-gray-300 leading-relaxed">
-              {!isRevisiting && (
-                <p className="mb-4">
-                  운영 정책에 동의하지 않으실 경우 내전 참가가 제한됩니다.<br/>
-                  <span className="text-[#e91e3f] font-bold">추후 내 정보 페이지에서 언제든지 동의 후 권한을 획득하실 수 있습니다.</span>
-                </p>
-              )}
-              <div className={`text-xs text-gray-500 ${!isRevisiting ? "border-t border-white/10 pt-4 mt-2" : ""}`}>
-                <p className="mb-1"><span className="text-[#e91e3f] font-bold">[주의]</span> 위 운영 정책 미확인으로 인해 발생하는 불이익이나 제재에 대한 책임은 이용자 본인에게 있습니다.</p>
-                <p>원활한 내전 진행 환경을 위해 참가 권한 획득 전 반드시 상세 내용을 다시 한 번 확인해 주시기 바랍니다.</p>
-              </div>
-            </div>
+            <p className="text-[11px] text-gray-400 leading-relaxed break-keep mb-2">
+              <span className="text-gray-300 font-bold mr-1.5">※</span>위 규정 미확인으로 인해 발생하는 불이익이나 제재에 대한 책임은 이용자 본인에게 있습니다.
+            </p>
+            <a href="/policy?tab=scrim" target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-bold text-gray-400 hover:text-white underline underline-offset-4 transition-colors mb-8">
+              전문 보기 ↗
+            </a>
 
-            <div className="flex flex-col gap-3 mt-4">
+            <div className="flex flex-col gap-3">
               <button
                 onClick={() => handleFinalSubmit(true)}
                 disabled={isSubmitting}
                 className="w-full py-3.5 bg-[#e91e3f] text-white font-bold text-base rounded-xl hover:bg-[#d01634] transition-all shadow-lg shadow-[#e91e3f]/20 outline-none focus:outline-none flex items-center justify-center"
               >
-                {isSubmitting ? "처리 중..." : "동의"}
+                {isSubmitting ? "처리 중..." : "내전 규정에 동의"}
               </button>
 
               {isRevisiting ? (

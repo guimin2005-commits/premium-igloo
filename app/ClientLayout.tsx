@@ -320,7 +320,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
-      if (isVerified === false && !isVerifyPage) router.push("/verify");
+      // 약관 페이지는 미인증이어도 열린다 — 인증 화면의 '전문 보기'가 여기로 오는데, 되돌려보내면 읽을 수가 없다
+      if (isVerified === false && !isVerifyPage && pathname !== "/policy") router.push("/verify");
       else if (isVerified === true && hasScrimRole === true && isVerifyPage) router.replace("/");
     }
   }, [status, session, pathname, router, isVerified, hasScrimRole, isVerifyPage]);
