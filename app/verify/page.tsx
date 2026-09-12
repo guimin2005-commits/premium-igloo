@@ -346,8 +346,7 @@ export default function VerifyPage() {
         {step === 1 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="mb-6">
-              <h1 className="text-2xl md:text-3xl font-black mb-2 tracking-tighter text-white">서버 이용 동의</h1>
-              <p className="text-gray-400 text-[13px] leading-relaxed">서버와 SYSTEM : LEVEL · ARCTIC 이용을 위한 약관입니다. 항목을 누르면 요약이 펼쳐지고, 전문은 이용약관 페이지에서 볼 수 있습니다.</p>
+              <h1 className="text-2xl md:text-3xl font-black tracking-tighter text-white">서버 이용 동의</h1>
             </div>
 
             {/* 전체 동의 */}
@@ -408,16 +407,9 @@ export default function VerifyPage() {
                             )}
                           </div>
                         ))}
-                        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                          <a href={`/policy?tab=${a.policyTab}`} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-gray-400 hover:text-white underline underline-offset-4 transition-colors">
-                            전문 보기 ↗
-                          </a>
-                          {!checked && (
-                            <button type="button" onClick={() => { handleCheck(a.key); setOpenTab(null); }} className="text-xs font-bold text-white bg-white/[0.06] hover:bg-white/10 border border-white/10 px-3.5 py-2 rounded-lg transition-colors">
-                              확인했습니다 · 동의
-                            </button>
-                          )}
-                        </div>
+                        <a href={`/policy?tab=${a.policyTab}`} target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-bold text-gray-400 hover:text-white underline underline-offset-4 transition-colors">
+                          전문 보기 ↗
+                        </a>
                       </div>
                     )}
                   </div>
@@ -442,7 +434,7 @@ export default function VerifyPage() {
                 내전 채널 이용 인증
                 <span className="text-gray-400 text-xs font-bold bg-white/[0.06] px-2 py-0.5 rounded">선택</span>
               </h1>
-              <p className="text-gray-400 text-[13px] leading-relaxed">내전에 참가하려면 내전 규정에 동의해야 합니다. 동의하지 않아도 서버 기본 권한은 받을 수 있고, 내 정보 페이지에서 나중에 동의할 수 있습니다.</p>
+              <p className="text-gray-500 text-[13px]">동의하지 않아도 기본 권한은 받을 수 있으며, 내 정보에서 나중에 동의할 수 있습니다.</p>
             </div>
 
             {/* 내전 규정 — /policy?tab=scrim 의 조항 그대로 */}
