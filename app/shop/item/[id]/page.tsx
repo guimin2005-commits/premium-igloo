@@ -5,14 +5,36 @@ import { useSession, signIn } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
+import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import ArcticHeader from "../../ArcticHeader";
 import ArcticDock from "../../ArcticDock";
 import ArcticFooter from "../../ArcticFooter";
 
-const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
-  role: { label: "역할", cls: "bg-[#e91e3f] text-white" },
-  perk: { label: "권한", cls: "bg-[#2f6fb0] text-white" },
-  physical: { label: "기프트카드", cls: "bg-[#131313] text-white" },
+// 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천
+const TypeBadge = ({ type, className = "" }: { type: string; className?: string }) => (
+  <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
+    {itemTypeLabel(type)}
+  </span>
+);
+
+// 그림 자리 — 이미지가 없으면 등록한 아이콘을 등록 색 그라데이션 위에 크게 찍는다
+const ItemArt = ({ it, imgClass = "", iconClass = "text-7xl" }: { it: any; imgClass?: string; iconClass?: string }) => {
+  const color = it?.color || itemTypeColor(it?.type);
+  if (it?.imageUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={it.imageUrl} alt={it.name || ""} className={`absolute inset-0 w-full h-full object-cover ${imgClass}`} />;
+  }
+  return (
+    <div className="absolute inset-0 flex items-center justify-center" style={{ background: `linear-gradient(160deg, ${color}33, ${color}0a)` }}>
+      {it?.icon ? (
+        <span aria-hidden className={`${iconClass} leading-none select-none`}>{it.icon}</span>
+      ) : (
+        <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke={color} style={{ opacity: 0.55 }}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
+        </svg>
+      )}
+    </div>
+  );
 };
 
 // 📌 상품 상세 — 카드에서 눌러 들어오는 화면
@@ -113,7 +135,6 @@ export default function ItemDetailPage() {
   const soldOut = item.stock === 0;
   const wished = wish.includes(item._id);
   const affordable = myXp != null && myXp >= sp;
-  const badge = TYPE_BADGE[item.type] || TYPE_BADGE.physical;
 
   // 관련 상품 — 같은 유형을 먼저, 부족하면 나머지로 채운다 (현재 상품·품절 제외)
   const others = allItems.filter((x) => x._id !== item._id && x.active && x.stock !== 0);
@@ -184,16 +205,7 @@ export default function ItemDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* 좌 — 이미지 */}
           <div className="relative aspect-square rounded-2xl bg-[#e9e8e6] border border-[#dedddb] overflow-hidden">
-            {item.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-[#c4c4c4]">
-                <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
-                </svg>
-              </div>
-            )}
+            <ItemArt it={item} iconClass="text-8xl" />
             {soldOut && (
               <div className="absolute inset-0 bg-[#131313]/55 flex items-center justify-center">
                 <span className="text-lg font-black text-white tracking-wider">SOLD OUT</span>
@@ -203,7 +215,7 @@ export default function ItemDetailPage() {
 
           {/* 우 — 정보 */}
           <div className="flex flex-col">
-            <span className={`self-start px-2.5 py-1 rounded-full text-[10px] font-black mb-3 ${badge.cls}`}>{badge.label}</span>
+            <TypeBadge type={item.type} className="self-start px-2.5 py-1 text-[10px] mb-3" />
 
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-[#131313] mb-3 break-keep">{item.name}</h1>
 
@@ -253,7 +265,7 @@ export default function ItemDetailPage() {
             {/* 상세 정보 */}
             <div className="rounded-xl bg-white border border-[#dedddb] divide-y divide-[#ececea] mb-6">
               {[
-                { l: "상품 유형", v: badge.label },
+                { l: "상품 유형", v: itemTypeLabel(item.type) },
                 ...(item.roleName ? [{ l: "지급 역할", v: item.roleName }] : []),
                 {
                   l: "재고",
@@ -263,7 +275,11 @@ export default function ItemDetailPage() {
                 { l: "구매 제한", v: "1인 1개" },
                 {
                   l: "지급 방식",
-                  v: item.type === "physical" ? "운영진 확인 후 발송" : "결제 후 30초 이내 자동 지급",
+                  v: item.type === "physical"
+                    ? "운영진 확인 후 발송"
+                    : item.type === "item" && !item.roleId
+                    ? "결제 후 인벤토리에 보관"
+                    : "결제 후 30초 이내 자동 지급",
                 },
               ].map((row, i) => (
                 <div key={i} className="flex items-center justify-between gap-4 px-4 py-3">
@@ -333,22 +349,12 @@ export default function ItemDetailPage() {
               {related.map((r) => {
                 const rp = salePrice(r);
                 const rDiscounted = rp < r.price;
-                const rBadge = TYPE_BADGE[r.type] || TYPE_BADGE.physical;
                 return (
                   <Link key={r._id} href={`/shop/item/${r._id}`}
                     className="group bg-white rounded-2xl border border-[#dedddb] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
                     <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
-                      {r.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={r.imageUrl} alt={r.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[#c4c4c4]">
-                          <svg className="w-9 h-9" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
-                          </svg>
-                        </div>
-                      )}
-                      <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-black ${rBadge.cls}`}>{rBadge.label}</span>
+                      <ItemArt it={r} imgClass="group-hover:scale-105 transition-transform duration-500" iconClass="text-5xl" />
+                      <TypeBadge type={r.type} className="absolute top-2 left-2 px-2 py-0.5 text-[9px]" />
                     </div>
                     <div className="p-3.5 flex flex-col flex-1">
                       <h3 className="text-[13px] font-black text-[#131313] tracking-tight mb-1.5 break-keep line-clamp-2 group-hover:text-[#e91e3f] transition-colors">{r.name}</h3>

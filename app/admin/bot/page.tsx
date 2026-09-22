@@ -35,14 +35,6 @@ const QUEST_PICK_FIELDS = [
   { period: "monthly", key: "questPickMonthly", every: "매월 1일" },
 ];
 
-const INV_CATEGORY: Record<string, string> = { perk: "특전", title: "칭호", notify: "알림", etc: "기타" };
-// 📌 인벤토리에 자동으로 잡히는 역할의 출처 — 상품·레벨 보상·역할 설정
-const ORIGIN_LABEL: Record<string, string> = { shop: "상점", level: "레벨", buff: "역할" };
-const ORIGIN_STYLE: Record<string, string> = {
-  shop: "border-[#131313]/20 text-[#131313] bg-black/[0.04]",
-  level: "border-[#e91e3f]/30 text-[#e91e3f] bg-[#e91e3f]/[0.06]",
-  buff: "border-[#3f83b8]/30 text-[#3f83b8] bg-[#3f83b8]/[0.06]",
-};
 
 // ── 탭 ──────────────────────────────────────────────────────
 //    운영 흐름대로 네 갈래다: 규칙을 정하고(정책) → 역할에 잇고(역할) →
@@ -139,7 +131,6 @@ type LedgerRow = {
 const EMPTY_ROLE = { roleId: "", rewardLevel: "", buffXp: "", attendBuffXp: "", exclusive: false };
 const EMPTY_CHANNEL = { channelId: "", boostXp: "", excluded: false };
 const EMPTY_BOOST = { id: "", name: "", targetRoleId: "", targetChannelId: "", boostXp: "", startAt: "", endAt: "" };
-const EMPTY_INV = { id: "", roleId: "", label: "", category: "perk", description: "", sortOrder: 0, visible: true };
 const EMPTY_QUEST = { id: "", name: "", desc: "", period: "daily", reason: "chat", metric: "count", target: 1, rewardXp: 0, rewardPoint: 0, enabled: true, order: 0 };
 
 const labelClass = "block text-xs font-bold text-[#8a8a8a] mb-2";
@@ -283,7 +274,6 @@ export default function AdminBotPage() {
   const [roleForm, setRoleForm] = useState<any>(EMPTY_ROLE);
   const [chForm, setChForm] = useState<any>(EMPTY_CHANNEL);
   const [boostForm, setBoostForm] = useState<any>(EMPTY_BOOST);
-  const [invForm, setInvForm] = useState<any>(EMPTY_INV);
   const [questForm, setQuestForm] = useState<any>(EMPTY_QUEST);
   // 📌 노출 방식 패널은 자기 폼 상태 없이 공용 settings 를 바로 고친다.
   //    그래서 '취소'로 되돌리려면 연 시점의 값을 붙잡아 둬야 한다 —
@@ -514,17 +504,6 @@ export default function AdminBotPage() {
     else notify(d?.message || "저장에 실패했습니다.", true);
   };
 
-  const saveInvRole = async () => {
-    if (!invForm.roleId) return notify("역할을 선택해 주세요.", true);
-    const res = await fetch("/api/inventory-role", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...invForm, roleName: guildRoles.find((r) => r.id === invForm.roleId)?.name || "" }),
-    }).catch(() => null);
-    const d = await res?.json().catch(() => null);
-    if (d?.success) { setInvForm(EMPTY_INV); closeForm(); fetchCore(); notify("저장되었습니다. 유저 인벤토리에 바로 반영됩니다."); }
-    else notify(d?.error || "저장에 실패했습니다.", true);
-  };
-
   const saveQuest = async () => {
     if (!questForm.name.trim()) return notify("퀘스트 이름을 입력해 주세요.", true);
     const res = await fetch("/api/daily-quest", {
@@ -562,35 +541,6 @@ export default function AdminBotPage() {
   }));
 
   // 📌 등록하지 않아도 인벤토리에 잡히는 역할 — /api/shop/my-items 가 상품·역할 설정 역할을 그대로 인정하기 때문
-  const invRoleIds = new Set(invRoles.map((r) => r.roleId));
-  const autoRoles = [
-    ...shopItems
-      .filter((i) => i.roleId)
-      .map((i) => ({
-        key: "shop-" + i._id,
-        roleId: i.roleId,
-        origin: "shop",
-        name: i.name,
-        roleName: roleNameOf(i.roleId) || i.roleName || "",
-        note: i.type === "perk" ? "권한 상품" : "역할 상품",
-        muted: i.active === false,
-      })),
-    ...configs.map((c) => ({
-      key: "cfg-" + c._id,
-      roleId: c.roleId,
-      origin: c.rewardLevel != null ? "level" : "buff",
-      name: roleNameOf(c.roleId) || c.roleName || "역할",
-      roleName: roleNameOf(c.roleId) || c.roleName || "",
-      note:
-        c.rewardLevel != null
-          ? "Lv." + c.rewardLevel + " 도달 시 자동 지급" + (c.exclusive ? " · 등급 역할" : "")
-          : c.buffXp > 0 || c.attendBuffXp > 0
-          ? "역할 버프 설정"
-          : "역할 설정에 등록됨",
-      muted: false,
-    })),
-  ].map((r) => ({ ...r, overridden: invRoleIds.has(r.roleId), exists: !!roleNameOf(r.roleId) }));
-
   // 📌 시즌 전환 보호 역할 — 설정 문서(BotSetting)의 배열 하나라 저장은 기존 postSettings 를 그대로 쓴다
   const protectedRoleIds: string[] = Array.isArray(settings?.protectedRoleIds) ? settings.protectedRoleIds : [];
   const toggleProtectedRole = (id: string) =>
@@ -986,162 +936,16 @@ export default function AdminBotPage() {
         {tab === "roles" && sub === "inventory" && (
           <Reveal>
           <section>
-            <SectionHead no="03" title={`인벤토리 표기 (${invRoles.length})`} right={
-              <Btn variant="ghost" onClick={() => { setInvForm(EMPTY_INV); openFormAt("inv"); }}>＋ 추가</Btn>
-            } />
-            <Note>
-              상점 상품·레벨 보상 역할은 아래 &lsquo;자동으로 잡히는 역할&rsquo;로 이미 잡히므로, 여기에는
-              <b className="text-[#131313]"> 디스코드에서만 주던 역할</b>(칭호·알림 구독·특전 권한 등)만 등록합니다.
-            </Note>
-
-            <FormPanel
-              open={isFormOpen("inv")}
-              panelRef={formRef}
-              title={invForm.id ? "인벤토리 역할 수정" : "인벤토리 역할 등록"}
-              saveLabel={invForm.id ? "수정 저장" : "등록"}
-              onSubmit={saveInvRole}
-              onCancel={() => { setInvForm(EMPTY_INV); closeForm(); }}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
-                <div className="md:col-span-2">
-                  <label className={labelClass}>디스코드 역할 <span className="text-[#e91e3f]">*</span></label>
-                  <Dropdown
-                    theme="light"
-                    value={invForm.roleId}
-                    onChange={(v) => setInvForm({ ...invForm, roleId: v })}
-                    placeholder="역할을 선택하세요"
-                    options={roleOptions(guildRoles)}
-                  />
-                </div>
-
-                <div>
-                  <label className={labelClass}>인벤토리 표시 이름</label>
-                  <input value={invForm.label} onChange={(e) => setInvForm({ ...invForm, label: e.target.value })}
-                    placeholder="비우면 디스코드 역할 이름 그대로" maxLength={40} className={inputClass} />
-                </div>
-
-                <div>
-                  <label className={labelClass}>분류</label>
-                  <FilterChips
-                    options={[{ v: "perk", l: "특전" }, { v: "title", l: "칭호" }, { v: "notify", l: "알림" }, { v: "etc", l: "기타" }]}
-                    value={invForm.category}
-                    onChange={(v) => setInvForm({ ...invForm, category: v })}
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className={labelClass}>설명 (선택)</label>
-                  <input value={invForm.description} onChange={(e) => setInvForm({ ...invForm, description: e.target.value })}
-                    placeholder="예: 상품 소식 알림을 받습니다" maxLength={120} className={inputClass} />
-                </div>
-
-                <div>
-                  <label className={labelClass}>표시 순서</label>
-                  <input type="number" min={0} value={invForm.sortOrder} onChange={(e) => setInvForm({ ...invForm, sortOrder: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>작을수록 위에 표시됩니다.</p>
-                </div>
-
-                <div>
-                  <label className={labelClass}>유저 화면 표시</label>
-                  <Toggle
-                    on={!!invForm.visible}
-                    onClick={() => setInvForm({ ...invForm, visible: !invForm.visible })}
-                    onLabel="표시함"
-                    offLabel="숨김"
-                  />
-                </div>
-              </div>
-            </FormPanel>
-
-            {invRoles.length === 0 ? (
-              <EmptyRow>아직 등록된 역할이 없습니다.</EmptyRow>
-            ) : (
-              <ListFrame>
-                {invRoles.map((r) => (
-                  <div key={r._id} className="py-4 flex items-center gap-4">
-                    <span className="shrink-0 w-8 text-center text-xs font-black text-[#a3a3a3] tabular-nums">{r.sortOrder}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className={`text-sm font-bold ${r.visible ? "text-[#131313]" : "text-[#a3a3a3] line-through"}`}>{r.label || r.roleName}</p>
-                        <span className="text-[10px] font-black text-[#e91e3f] border border-[#e91e3f]/30 rounded-full px-2 py-0.5">
-                          {INV_CATEGORY[r.category] || "기타"}
-                        </span>
-                        {!r.visible && <span className="text-[10px] font-black text-[#a3a3a3] border border-black/10 rounded-full px-2 py-0.5">숨김</span>}
-                      </div>
-                      <p className="text-[11px] text-[#8a8a8a] mt-1">
-                        {r.roleName}
-                        {r.description ? ` · ${r.description}` : ""}
-                      </p>
-                    </div>
-                    <div className="shrink-0 flex items-center gap-3">
-                      <button
-                        onClick={() => {
-                          setInvForm({ id: r._id, roleId: r.roleId, label: r.label || "", category: r.category || "perk", description: r.description || "", sortOrder: r.sortOrder ?? 0, visible: r.visible !== false });
-                          openFormAt("inv");
-                        }}
-                        className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
-                      >
-                        수정
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirm({ kind: "inventory", id: r._id })}
-                        className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </ListFrame>
-            )}
-
-            <div className="mt-12">
-              <GroupHead
-                title="자동으로 잡히는 역할"
-                count={autoRoles.length}
-                right="등록하지 않아도 인벤토리에 표시됩니다"
-              />
-              <Note>
-                표시 이름·분류·설명을 따로 주고 싶을 때만 &lsquo;표시 설정&rsquo;으로 같은 역할을 등록하면, 그 설정이 우선 적용됩니다.
-              </Note>
-
-              {autoRoles.length === 0 ? (
-                <EmptyRow>자동으로 잡히는 역할이 없습니다.</EmptyRow>
-              ) : (
-                <ListFrame>
-                  {autoRoles.map((r) => (
-                    <div key={r.key} className="py-4 flex items-center gap-4">
-                      <span className={`shrink-0 w-[52px] text-center text-[10px] font-black rounded-full px-2 py-1 border ${ORIGIN_STYLE[r.origin]}`}>
-                        {ORIGIN_LABEL[r.origin]}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className={`text-sm font-bold ${r.muted || r.overridden ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{r.name}</p>
-                          {r.muted && <span className="text-[10px] font-black text-[#a3a3a3] border border-black/10 rounded-full px-2 py-0.5">판매 중지</span>}
-                          {r.overridden && <span className="text-[10px] font-black text-[#8a8a8a] border border-black/10 rounded-full px-2 py-0.5">위에 등록됨 · 그 설정 적용</span>}
-                          {!r.exists && <span className="text-[10px] font-black text-[#e91e3f] border border-[#e91e3f]/30 rounded-full px-2 py-0.5">역할 없음</span>}
-                        </div>
-                        <p className="text-[11px] text-[#8a8a8a] mt-1">
-                          {r.roleName || "디스코드에서 삭제된 역할일 수 있습니다"}
-                          {r.note ? ` · ${r.note}` : ""}
-                        </p>
-                      </div>
-                      <div className="shrink-0">
-                        {r.overridden ? (
-                          <span className="text-[11px] font-bold text-[#c4c4c4]">—</span>
-                        ) : (
-                          <button
-                            onClick={() => { setInvForm({ ...EMPTY_INV, roleId: r.roleId, label: r.name }); openFormAt("inv"); }}
-                            className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
-                          >
-                            표시 설정
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </ListFrame>
-              )}
+            <SectionHead no="03" title="인벤토리 표기" />
+            {/* 📌 표기는 이제 아이템 등록 한 곳에서 관리한다 — 여기 남은 옛 데이터는 그쪽의 가져오기 버튼이 옮긴다 */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-6 border-y border-black/[0.06]">
+              <p className="text-sm text-[#5a5a5a] break-keep">
+                인벤토리 표기는 <b className="text-[#131313]">아이템 등록</b>에서 관리합니다.
+                {invRoles.length > 0 && <span className="block mt-1 text-[11px] text-[#8a8a8a]">옛 표기 역할 {invRoles.length}개가 남아 있습니다.</span>}
+              </p>
+              <Link href="/admin/shop?tab=items" className="shrink-0 px-5 py-2.5 rounded-lg text-[12px] font-bold bg-[#131313] text-white hover:bg-[#2a2a2a] transition-colors text-center outline-none focus:outline-none">
+                아이템 등록으로
+              </Link>
             </div>
           </section>
           </Reveal>

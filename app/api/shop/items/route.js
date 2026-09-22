@@ -6,7 +6,9 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import { getShopAccess } from "@/lib/shopAccess";
+import { isItemType, itemSnapshot, normalizeIcon, normalizeColor } from "@/lib/items";
 import ShopItem from "@/models/ShopItem";
+import Item from "@/models/Item";
 
 const requireAdmin = async () => {
   const session = await getServerSession(authOptions);
@@ -39,7 +41,20 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
     }
     await connectToDatabase();
-    const b = await request.json();
+    let b = await request.json();
+
+    // 📌 등록된 아이템을 골랐으면 표기(이름·설명·아이콘·이미지·색·유형·역할·시즌 떼기)는
+    //    서버가 Item 에서 다시 읽어 복사한다 — 클라이언트가 보낸 값은 믿지 않는다.
+    const itemId = String(b.itemId || "").trim();
+    let linked = null;
+    if (itemId) {
+      linked = await Item.findById(itemId).lean().catch(() => null);
+      if (!linked) {
+        return NextResponse.json({ success: false, message: "등록된 아이템을 찾을 수 없습니다." }, { status: 400 });
+      }
+      // 아래 검증이 같은 코드를 타도록 스냅샷을 b 위에 덮어쓴다
+      b = { ...b, ...itemSnapshot(linked) };
+    }
 
     if (!b.name?.trim()) {
       return NextResponse.json({ success: false, message: "상품명을 입력해주세요." }, { status: 400 });
@@ -49,7 +64,7 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "가격을 입력해주세요." }, { status: 400 });
     }
     const discountPct = Math.max(0, Math.min(100, Math.floor(Number(b.discountPct) || 0)));
-    const type = ["physical", "perk", "role", "item"].includes(b.type) ? b.type : "role";
+    const type = isItemType(b.type) ? b.type : "role";
     // 아이템은 역할이 있어도 되고 없어도 된다 — 사이트 인벤토리에만 두는 수집품도 판다
     const grantsRole = type === "role" || type === "perk" || (type === "item" && !!b.roleId?.trim());
     const roleRequired = type === "role" || type === "perk";
@@ -69,16 +84,19 @@ export async function POST(request) {
 
     const payload = {
       durations,
+      itemId: linked ? String(linked._id) : "",
       name: b.name.trim(),
       description: (b.description || "").trim(),
       imageUrl: (b.imageUrl || "").trim(),
+      icon: normalizeIcon(b.icon),
+      color: normalizeColor(b.color),
       type,
       roleId: grantsRole ? b.roleId.trim() : "",
       roleName: grantsRole ? (b.roleName || "").trim() : "",
       price,
       discountPct,
       // 시즌 전환 때 디스코드 역할만 뗄 대상인지 (권한 상품에는 켜면 안 된다)
-      detachOnSeason: !!b.detachOnSeason,
+      detachOnSeason: type !== "perk" && type !== "physical" && !!b.detachOnSeason,
       // 빈 값이면 무제한(-1)
       stock: b.stock === "" || b.stock == null ? -1 : Math.max(-1, Math.floor(Number(b.stock))),
       active: b.active !== false,

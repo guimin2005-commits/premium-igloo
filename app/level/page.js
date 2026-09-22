@@ -13,31 +13,35 @@ import {
 import { SEASON, getSeasonProgress, getSeasonDday, isVoiceTimeTracked, VOICE_TIME_START } from "@/lib/season";
 import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel } from "@/lib/voiceTiers";
 import { getCumulativeXpByLevel, getLevelByXp } from "@/lib/leveling";
+import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import TierEmblem from "../components/TierEmblem";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
-const INV_CAT = { perk: "특전", title: "칭호", notify: "알림", etc: "기타" };
 
-// 인벤토리 행의 보조 한 줄 — 어디서 온 것인지 / 어떤 조건인지
+// 📌 인벤토리 분류 — 아이템 등록의 유형(type)이 기준이다. 레벨 보상 역할만 따로 묶는다.
+//    탭 순서는 이 표를 따른다 (실제로 가진 분류만 만든다 — 빈 탭을 띄우지 않는다)
+const INV_GROUPS = [
+  { id: "role", label: "역할" },
+  { id: "perk", label: "권한" },
+  { id: "item", label: "아이템" },
+  { id: "physical", label: "실물" },
+  { id: "level", label: "레벨 보상" },
+];
+const INV_GROUP_ORDER = Object.fromEntries(INV_GROUPS.map((g, i) => [g.id, i]));
+
+// 인벤토리 행의 보조 한 줄 — 설명이 있으면 그것, 없으면 유형 + 조건
 const invSubLabel = (it) => {
   if (it.description) return it.description;
-  if (it.kind === "physical") return "실물 상품";
-  if (it.source === "level") return it.rewardLevel != null ? `레벨 보상 · Lv.${it.rewardLevel} 도달` : "레벨 보상";
-  if (it.source === "inventory") return INV_CAT[it.category] || "특전";
-  if (it.source === "shop") return it.days > 0 ? `상점 · ${it.days}일 이용권` : "상점 · 영구 보유";
-  return "운영진 지급";
+  const base = it.source === "level" ? "레벨 보상" : itemTypeLabel(it.type || it.kind);
+  if (it.source === "level") return it.rewardLevel != null ? `${base} · Lv.${it.rewardLevel} 도달` : base;
+  if (it.source === "pass") return `${base} · 시즌 패스`;
+  if (it.days > 0) return `${base} · ${it.days}일 이용권`;
+  return base;
 };
 
-// 분류 탭 — 실제로 가진 것만 만든다 (빈 탭을 띄우지 않는다)
 const invGroupOf = (it) => {
-  if (it.kind === "physical") return { id: "physical", label: "실물" };
-  if (it.source === "level") return { id: "level", label: "레벨 보상" };
-  if (it.source === "shop") return { id: "shop", label: "상점" };
-  if (it.source === "inventory") {
-    const c = it.category || "etc";
-    return { id: c, label: INV_CAT[c] || "기타" };
-  }
-  return { id: "grant", label: "지급" };
+  if (it.source === "level") return INV_GROUPS[4];
+  return INV_GROUPS.find((g) => g.id === (it.type || it.kind)) || INV_GROUPS[2];
 };
 const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
 
@@ -179,7 +183,7 @@ const LuxCard = ({ children, className = "", glow = false }) => (
 );
 
 // 📌 시즌 패스 보상 머리표 — 칸이 좁아 아이콘 대신 짧은 글자로 종류를 먼저 읽힌다
-const PASS_KIND_MARK = { xp: "XP", point: "POINT", role: "ROLE", none: "—" };
+const PASS_KIND_MARK = { xp: "XP", point: "POINT", role: "ROLE", item: "ITEM", none: "—" };
 
 // 📌 시즌 패스 보상 칸 — 무료(위)/프리미엄(아래) 두 줄이 같은 문법을 쓴다.
 //    상태는 색으로 먼저 읽힌다: 받을 수 있으면 잉크 채움, 받았으면 옅게, 잠기면 자물쇠.
@@ -207,9 +211,14 @@ const PassRewardCell = ({ reward, trackLabel, tierLevel, locked = false, busy = 
       aria-label={`티어 ${tierLevel} ${trackLabel} 보상 ${r.label || "없음"}${claimed ? " · 수령완료" : claimable ? " · 받기" : locked ? " · 잠김" : ""}`}
       className={`w-full h-[112px] rounded-xl border px-2 flex flex-col items-center justify-center text-center transition-colors outline-none focus:outline-none ${tone} ${dim}`}
     >
-      <span className={`text-[9px] font-black tracking-[0.18em] ${r.claimable ? "text-white/45" : "text-[#c4c4c4]"}`}>
-        {PASS_KIND_MARK[r.kind] || "—"}
-      </span>
+      {/* 아이템 보상은 등록한 아이콘(이모지)이 머리표를 대신한다 */}
+      {r.kind === "item" && r.icon ? (
+        <span aria-hidden className="text-[16px] leading-none">{r.icon}</span>
+      ) : (
+        <span className={`text-[9px] font-black tracking-[0.18em] ${r.claimable ? "text-white/45" : "text-[#c4c4c4]"}`}>
+          {PASS_KIND_MARK[r.kind] || "—"}
+        </span>
+      )}
       <span className="mt-1.5 text-[11px] font-black leading-tight break-keep line-clamp-2">{r.label || "-"}</span>
       <span className="mt-2 h-5 flex items-center">
         {empty ? (
@@ -510,25 +519,46 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5 }) => {
   );
 };
 
-// 📌 아이템 아이콘 — 종류가 한눈에 갈리도록 모양을 나눈다.
-//    부스트류는 이름으로 가른다 (상품명·역할명에 Boost/부스트가 들어간다).
+// 📌 아이템 아이콘 — 유형별 기본 모양. 등록된 아이콘(이모지)·이미지가 있으면 그것이 우선한다.
+//    role 방패 · perk 열쇠 · item 큐브 · physical 상자 · level 메달
 const invIconKind = (it) => {
-  const n = `${it.name || ""} ${it.description || ""}`.toLowerCase();
-  if (/boost|부스트/.test(n)) return "boost";
-  if (it.kind === "physical") return "box";
-  if (it.category === "notify") return "bell";
-  if (it.category === "title") return "title";
   if (it.source === "level") return "medal";
+  const t = it.type || it.kind;
+  if (t === "physical") return "box";
+  if (t === "perk") return "key";
+  if (t === "item") return "cube";
   return "shield";
 };
 
 const InvIcon = ({ it, size = 24, color = "#fff", dim = false }) => {
-  const k = invIconKind(it);
   const c = dim ? "rgba(255,255,255,0.3)" : color;
+  // 이미지 → 둥근 사각, 아이콘 텍스트 → 큰 글자, 없으면 유형별 SVG
+  if (it.imageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={it.imageUrl}
+        alt=""
+        width={size}
+        height={size}
+        className="object-cover"
+        style={{ width: size, height: size, borderRadius: Math.max(6, size * 0.28), opacity: dim ? 0.35 : 1 }}
+      />
+    );
+  }
+  if (it.icon) {
+    return (
+      <span
+        aria-hidden
+        className="inline-flex items-center justify-center leading-none"
+        style={{ width: size, height: size, fontSize: size * 0.82, opacity: dim ? 0.35 : 1 }}
+      >
+        {it.icon}
+      </span>
+    );
+  }
+  const k = invIconKind(it);
   const p = { viewBox: "0 0 24 24", width: size, height: size };
-  if (k === "boost")
-    // 번개 — 부스트
-    return <svg {...p} fill={c}><path d="M13.2 2 5 13.4h5.3L9.9 22l8.4-11.6H12.8Z" /></svg>;
   if (k === "box")
     return (
       <svg {...p} fill="none" stroke={c} strokeWidth="1.7">
@@ -536,19 +566,18 @@ const InvIcon = ({ it, size = 24, color = "#fff", dim = false }) => {
         <path d="M3 8.5 12 13l9-4.5M12 13v7" strokeLinejoin="round" />
       </svg>
     );
-  if (k === "bell")
+  if (k === "key")
     return (
       <svg {...p} fill="none" stroke={c} strokeWidth="1.7">
-        <path d="M6 9a6 6 0 1 1 12 0c0 4 1.2 5.5 1.8 6.2.3.4 0 .9-.5.9H4.7c-.5 0-.8-.5-.5-.9C4.8 14.5 6 13 6 9Z" strokeLinejoin="round" />
-        <path d="M10 19.5a2 2 0 0 0 4 0" strokeLinecap="round" />
+        <circle cx="8" cy="12" r="4.2" />
+        <path d="M12.2 12H21M17.5 12v3.2M20 12v2.4" strokeLinecap="round" />
       </svg>
     );
-  if (k === "title")
-    // 리본 — 칭호
+  if (k === "cube")
     return (
       <svg {...p} fill="none" stroke={c} strokeWidth="1.7">
-        <path d="M7 3h10v11l-5-3-5 3Z" strokeLinejoin="round" />
-        <path d="M9 16.5 7 21l5-2.6L17 21l-2-4.5" strokeLinejoin="round" />
+        <path d="M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6Z" strokeLinejoin="round" />
+        <path d="M4 7.6 12 12l8-4.4M12 12v8.8" strokeLinejoin="round" />
       </svg>
     );
   if (k === "medal")
@@ -584,7 +613,15 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
   // uid 로 되짚는다 — 30초 폴링이 배열을 갈아끼워도 엉뚱한 것을 가리키지 않는다
   const selItem = sel ? rows.find((r) => r.uid === sel) || null : null;
   const slots = Math.max(8, Math.ceil(rows.length / 4) * 4);
-  const accentOf = (it) => it.color || (it.source === "level" ? "#ff5c77" : it.source === "inventory" ? "#5aa9dd" : "#ffffff");
+  // 색 — 등록된 색 > 유형 기본색 (lib/items.js). 레벨 보상은 서버가 분홍을 실어 보낸다.
+  //    잉크 패널 위라 너무 어두운 색(기프트카드 기본 #131313 등)은 밝은 회색으로 바꿔 칸 테두리가 보이게 한다
+  const accentOf = (it) => {
+    const c = it.color || itemTypeColor(it.type || it.kind);
+    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
+    if (!m) return c;
+    const lum = (parseInt(m[1], 16) * 0.299 + parseInt(m[2], 16) * 0.587 + parseInt(m[3], 16) * 0.114) / 255;
+    return lum < 0.18 ? "#d2d1cf" : c;
+  };
   const ddayOf = (it) =>
     it.expiresAt && it.status === "completed"
       ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000))
@@ -1054,7 +1091,9 @@ export default function LevelPage() {
       if (!byId.has(g.id)) byId.set(g.id, { ...g, items: [] });
       byId.get(g.id).items.push(it);
     }
-    return [{ id: "all", label: "전체", items: invAll }, ...byId.values()];
+    // 탭 순서는 유형 표(INV_GROUPS) 순 — 어떤 것을 먼저 샀든 자리가 바뀌지 않는다
+    const groups = [...byId.values()].sort((a, b) => (INV_GROUP_ORDER[a.id] ?? 99) - (INV_GROUP_ORDER[b.id] ?? 99));
+    return [{ id: "all", label: "전체", items: invAll }, ...groups];
   }, [invAll]);
   const invActive = invGroups.find((g) => g.id === invTab) || invGroups[0];
   const invRows = invActive?.items || [];

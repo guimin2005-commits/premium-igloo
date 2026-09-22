@@ -134,6 +134,7 @@ const PurchaseSchema = new mongoose.Schema({
   userId: { type: String, required: true, index: true },
   userName: { type: String, default: "" },
   itemId: { type: String, required: true },
+  itemRef: { type: String, default: "" }, // 아이템 등록(사이트 models/Item) id 스냅샷 — 봇은 쓰지 않고 보존만 한다
   itemName: { type: String, default: "" },
   itemType: { type: String, default: "role" },
   roleId: { type: String, default: "" },
