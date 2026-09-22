@@ -8,7 +8,13 @@ const ShopItemSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: { type: String, default: "" },
   imageUrl: { type: String, default: "" },       // 상품 이미지 (외부 URL)
-  type: { type: String, default: "role" },       // "role" | "perk" | "physical"
+  // 📌 아이템 등록(models/Item) 참조 — "" 이면 직접 설정한 상품.
+  //    값이 있으면 name/description/icon/imageUrl/color/type/roleId/roleName/detachOnSeason 은
+  //    서버가 Item 에서 복사해 둔 스냅샷이다 (Item 을 고치면 admin/items 가 다시 써 준다).
+  itemId: { type: String, default: "" },
+  icon: { type: String, default: "" },           // 이모지·짧은 텍스트 — 이미지가 없을 때 카드에 크게 찍힌다
+  color: { type: String, default: "" },          // "#rrggbb" — 비면 유형 기본색 (lib/items.js)
+  type: { type: String, default: "role" },       // "role" | "perk" | "item" | "physical"
   roleId: { type: String, default: "" },         // role·perk 일 때 지급할 역할
   roleName: { type: String, default: "" },       // 표시용
   price: { type: Number, required: true },       // 정가 (소모 XP) — 기간제면 표시·정렬용 기준가

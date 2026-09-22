@@ -2,7 +2,15 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Reveal, LuxStyles } from "../../components/Lux";
+import Dropdown from "../../components/Dropdown";
+import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor } from "@/lib/items";
+import {
+  EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
+  buildDurations as buildFormDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload,
+} from "../../shop/productForm";
+import type { ProductForm } from "../../shop/productForm";
 import {
   inputClass,
   fieldNote,
@@ -26,8 +34,10 @@ import {
 //    성격이 완전히 다르다. 상품 탭 03 섹션으로 얹혀 있으면 상품을 손보러 들어왔다가
 //    스크롤 끝에서 마주치게 된다 — 그래서 별도 탭으로 뺐다.
 // desc 에는 화면만 봐서는 모르는 것만 적는다 (지급 시점 · 자동 전환 주기 · 되돌릴 수 없음)
+//    '아이템'은 인벤토리·상품·시즌 패스 표기의 원천이라 맨 앞에 둔다 — 상품을 만들기 전에 먼저 등록한다.
 const TAB_META: Record<string, { title: string; desc: string }> = {
-  items: { title: "상품 관리", desc: "역할 상품은 구매 시 봇이 자동 지급합니다." },
+  items: { title: "아이템 등록", desc: "여기서 등록한 표기가 인벤토리 · 상점 상품 · 시즌 패스 보상에 그대로 쓰입니다." },
+  products: { title: "상품 관리", desc: "역할 상품은 구매 시 봇이 자동 지급합니다." },
   banners: { title: "이미지 배너", desc: "배너가 여럿이면 5초마다 자동 전환됩니다." },
   coupons: { title: "쿠폰 관리", desc: "" },
   orders: { title: "구매 내역", desc: "" },
@@ -35,7 +45,8 @@ const TAB_META: Record<string, { title: string; desc: string }> = {
 };
 
 const TAB_ORDER = [
-  { id: "items", short: "상품" },
+  { id: "items", short: "아이템" },
+  { id: "products", short: "상품" },
   { id: "banners", short: "배너" },
   { id: "coupons", short: "쿠폰" },
   { id: "orders", short: "구매 내역" },
@@ -44,21 +55,42 @@ const TAB_ORDER = [
 
 const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "완료", cancelled: "취소", refunded: "환불" };
 
-// 상품 유형 — 라벨과 배지 색을 실제 상점(ArcticShopBody 의 TYPE_BADGE)과 맞춘다.
-// 관리자 쪽에서만 '아이템'을 '역할'로 적어 두면 카드 미리보기가 거짓말을 한다.
-const TYPE_OPTIONS = [
-  { v: "role", l: "역할" },
-  { v: "perk", l: "권한" },
-  { v: "item", l: "아이템" },
-  { v: "physical", l: "기프트카드" },
-];
-const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
-  role: { label: "역할", cls: "bg-[#e91e3f] text-white" },
-  perk: { label: "권한", cls: "bg-[#2f6fb0] text-white" },
-  item: { label: "아이템", cls: "bg-[#3f9e93] text-white" },
-  physical: { label: "기프트카드", cls: "bg-[#131313] text-white" },
+// 상품 유형 — 라벨·색은 lib/items.js 가 단일 원천 (상점 카드와 같은 값)
+const typeLabel = (t: string) => itemTypeLabel(t);
+function TypeBadge({ type, className = "" }: { type: string; className?: string }) {
+  return (
+    <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
+      {itemTypeLabel(type)}
+    </span>
+  );
+}
+
+// 카드 그림 자리 — 이미지가 없으면 아이콘을 등록 색 위에 크게 (상점 CardArt 와 같은 규칙)
+function CardArt({ it, iconClass = "text-5xl" }: { it: any; iconClass?: string }) {
+  const color = it?.color || itemTypeColor(it?.type);
+  if (it?.imageUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={it.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />;
+  }
+  return (
+    <div className="absolute inset-0 flex items-center justify-center" style={{ background: `linear-gradient(160deg, ${color}33, ${color}0a)` }}>
+      {it?.icon ? (
+        <span aria-hidden className={`${iconClass} leading-none select-none`}>{it.icon}</span>
+      ) : (
+        <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke={color} style={{ opacity: 0.55 }}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
+// 아이템 등록 폼 — 숫자 칸은 비울 수 있어야 해서 문자열로 든다
+type ItemForm = {
+  id: string; name: string; description: string; type: string; roleId: string; icon: string; imageUrl: string;
+  color: string; detachOnSeason: boolean; visible: boolean; sortOrder: string;
 };
-const typeLabel = (t: string) => TYPE_BADGE[t]?.label || "역할";
+const EMPTY_ITEM_FORM: ItemForm = { id: "", name: "", description: "", type: "item", roleId: "", icon: "", imageUrl: "", color: "", detachOnSeason: false, visible: true, sortOrder: "" };
 
 const labelClass = "block text-xs font-bold text-[#5a5a5a] mb-2";
 
@@ -106,24 +138,89 @@ export default function AdminShopPage() {
   const { notify, noticeEl } = useNotice();
 
   const searchParams = useSearchParams();
-  const tabParam = searchParams.get("tab") || "items";
+  // 상점 카드의 '수정' 링크(?edit=<id>)는 탭 없이 들어오므로 상품 탭으로 보낸다
+  const tabParam = searchParams.get("tab") || (searchParams.get("edit") ? "products" : "items");
   const tab = TAB_META[tabParam] ? tabParam : "items";
 
   const [items, setItems] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [guildRoles, setGuildRoles] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [deleteTarget, setDeleteTarget] = useState<{ kind: "item" | "banner" | "coupon"; id: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: "item" | "banner" | "coupon" | "reg"; id: string } | null>(null);
   const [orderFilter, setOrderFilter] = useState("");
   const [noteTarget, setNoteTarget] = useState<any>(null);
   const [noteText, setNoteText] = useState("");
   const [cancelTarget, setCancelTarget] = useState<any>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  const emptyForm = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", price: "", discountPct: "", stock: "", sortOrder: "", active: true, timed: false, price7: "", price30: "", priceInf: "", detachOnSeason: false };
-  const [form, setForm] = useState(emptyForm);
+  // 상품 폼 — 상태 모양·기간·유형·아이템 적용 규칙은 app/shop/productForm 공용 (상점 인라인 폼과 같다)
+  const emptyForm = EMPTY_PRODUCT_FORM;
+  const [form, setForm] = useState<ProductForm>(emptyForm);
   const [isRoleOpen, setIsRoleOpen] = useState(false);
   const selectedRole = guildRoles.find((r) => r.id === form.roleId);
+  const linked = isLinked(form);
+
+  // ── 아이템 등록 ──────────────────────────────
+  const [regItems, setRegItems] = useState<any[]>([]);
+  const [itemForm, setItemForm] = useState<ItemForm>(EMPTY_ITEM_FORM);
+  const [isSavingReg, setIsSavingReg] = useState(false);
+  // 예전 '인벤토리 표기 역할' — 남아 있으면 가져오기 버튼을 보여 준다
+  const [invRoles, setInvRoles] = useState<any[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const fetchRegItems = useCallback(() => {
+    Promise.all([
+      fetch("/api/admin/items?withUsage=1", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/inventory-role", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+    ]).then(([reg, inv]) => {
+      setRegItems(Array.isArray(reg?.data) ? reg.data : []);
+      setInvRoles(Array.isArray(inv?.data) ? inv.data : []);
+    });
+  }, []);
+
+  const fillRegForm = (it: any) =>
+    setItemForm({
+      id: it._id, name: it.name || "", description: it.description || "", type: it.type || "item", roleId: it.roleId || "",
+      icon: it.icon || "", imageUrl: it.imageUrl || "", color: it.color || "", detachOnSeason: !!it.detachOnSeason,
+      visible: it.visible !== false, sortOrder: String(it.sortOrder || 0),
+    });
+
+  const saveRegItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSavingReg) return;
+    if (!itemForm.name.trim()) return notify("이름을 입력해 주세요.", true);
+    if ((itemForm.type === "role" || itemForm.type === "perk") && !itemForm.roleId) return notify("연결할 역할을 선택해 주세요.", true);
+    setIsSavingReg(true);
+    const res = await fetch("/api/admin/items", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...itemForm, roleName: guildRoles.find((r) => r.id === itemForm.roleId)?.name || "" }),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    setIsSavingReg(false);
+    if (res?.ok && d?.success) { setItemForm(EMPTY_ITEM_FORM); fetchRegItems(); fetchAll(); notify("저장되었습니다."); }
+    else notify(d?.message || "저장에 실패했습니다.", true);
+  };
+
+  // 표시 토글 — 목록에서 바로 켜고 끈다 (폼을 열지 않아도 되게)
+  const toggleRegVisible = async (it: any) => {
+    const res = await fetch("/api/admin/items", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...it, id: it._id, visible: it.visible === false }),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    if (res?.ok && d?.success) fetchRegItems();
+    else notify(d?.message || "저장에 실패했습니다.", true);
+  };
+
+  const importInvRoles = async () => {
+    if (isImporting) return;
+    setIsImporting(true);
+    const res = await fetch("/api/admin/items/import", { method: "POST" }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    setIsImporting(false);
+    if (res?.ok && d?.success) { fetchRegItems(); notify(`${d.imported || 0}개를 가져왔습니다.${d.skipped ? ` (이미 있는 ${d.skipped}개는 건너뜀)` : ""}`); }
+    else notify(d?.message || "가져오기에 실패했습니다.", true);
+  };
 
   // 상품 폼 묶음 열림 상태 — 기본 정보와 가격만 펼쳐 두고 나머지는 요약으로 접는다
   const [openGroups, setOpenGroups] = useState({ basic: true, price: true, stock: false, season: false });
@@ -249,21 +346,10 @@ export default function AdminShopPage() {
     notify(`${(d.updated || 0).toLocaleString()}건의 디스코드 표기를 내렸습니다. 봇이 30초 안에 실제 역할을 정리합니다.`);
   };
 
-  useEffect(() => { if (isAdmin) fetchAll(); }, [isAdmin, fetchAll]);
+  useEffect(() => { if (isAdmin) { fetchAll(); fetchRegItems(); } }, [isAdmin, fetchAll, fetchRegItems]);
 
   // 목록·링크에서 상품을 폼으로 끌어오는 자리가 두 군데였다 — 한 함수로 모은다
-  const fillItemForm = useCallback((it: any) => {
-    setForm({
-      id: it._id, name: it.name, description: it.description || "", imageUrl: it.imageUrl || "",
-      type: it.type, roleId: it.roleId || "", price: String(it.price), discountPct: it.discountPct ? String(it.discountPct) : "",
-      stock: it.stock < 0 ? "" : String(it.stock), sortOrder: String(it.sortOrder || 0), active: it.active,
-      timed: Array.isArray(it.durations) && it.durations.length > 0,
-      price7: String(it.durations?.find((d: any) => d.days === 7)?.price ?? ""),
-      price30: String(it.durations?.find((d: any) => d.days === 30)?.price ?? ""),
-      priceInf: String(it.durations?.find((d: any) => d.days === 0)?.price ?? ""),
-      detachOnSeason: !!it.detachOnSeason,
-    });
-  }, []);
+  const fillItemForm = useCallback((it: any) => setForm(formFromShopItem(it)), []);
 
   // 📌 상점 카드의 '수정' 링크(?edit=<id>)로 들어오면 해당 상품을 폼에 채워 둔다
   const editId = searchParams.get("edit");
@@ -274,33 +360,28 @@ export default function AdminShopPage() {
     fillItemForm(it);
   }, [editId, items, fillItemForm]);
 
-  // 📌 기간제 역할 — 켠 기간(값이 들어 있는 칸)만 판매 목록에 올린다
-  const buildDurations = () => {
-    if (!form.timed) return [];
-    return [
-      { days: 7, price: Math.max(0, Math.floor(Number(form.price7) || 0)) },
-      { days: 30, price: Math.max(0, Math.floor(Number(form.price30) || 0)) },
-      // days 0 = 무제한. 기간 옵션과 나란히 팔 수 있다.
-      { days: 0, price: Math.max(0, Math.floor(Number(form.priceInf) || 0)) },
-    ].filter((d) => d.price > 0);
-  };
+  // 📌 기간제 역할 — 켠 기간(값이 들어 있는 칸)만 판매 목록에 올린다 (공용 규칙)
+  const buildDurations = () => buildFormDurations(form);
 
   const saveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await fetch("/api/shop/items", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, roleName: selectedRole?.name || "", durations: buildDurations() }),
+      body: JSON.stringify(toPayload(form, selectedRole?.name || "")),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    if (res?.ok && d?.success) { setForm(emptyForm); fetchAll(); notify("저장되었습니다."); }
+    if (res?.ok && d?.success) { setForm(emptyForm); fetchAll(); fetchRegItems(); notify("저장되었습니다."); }
     else notify(d?.message || "저장에 실패했습니다.", true);
   };
 
   const executeDelete = async () => {
     if (!deleteTarget) return;
-    const api = { item: "/api/shop/items", banner: "/api/shop/banners", coupon: "/api/shop/coupons" }[deleteTarget.kind];
+    const api = { item: "/api/shop/items", banner: "/api/shop/banners", coupon: "/api/shop/coupons", reg: "/api/admin/items" }[deleteTarget.kind];
     const res = await fetch(`${api}?id=${deleteTarget.id}`, { method: "DELETE" }).catch(() => null);
-    if (res?.ok) fetchAll();
+    const d = await res?.json().catch(() => null);
+    if (res?.ok) { fetchAll(); fetchRegItems(); }
+    // 아이템은 참조 상품이 있으면 서버가 409 로 막는다 — 이유를 그대로 보여 준다
+    else notify(d?.message || "삭제에 실패했습니다.", true);
     setDeleteTarget(null);
   };
 
@@ -325,7 +406,7 @@ export default function AdminShopPage() {
   // 접힌 묶음에서도 값이 보이도록 한 줄 요약을 만든다
   const discountPct = Math.min(100, Math.max(0, Number(form.discountPct) || 0));
   const salePreview = Math.max(0, Math.floor(((Number(form.price) || 0) * (100 - discountPct)) / 100));
-  const basicSummary = [form.name || "이름 없음", typeLabel(form.type), selectedRole?.name].filter(Boolean).join(" · ");
+  const basicSummary = [linked ? "등록된 아이템" : "", form.name || "이름 없음", typeLabel(form.type), selectedRole?.name || form.roleName].filter(Boolean).join(" · ");
   const priceSummary = Number(form.price) > 0
     ? `${salePreview.toLocaleString()} XP${discountPct > 0 ? ` (-${discountPct}%)` : ""}${form.timed ? ` · 기간제 ${buildDurations().length}종` : ""}`
     : "가격 미입력";
@@ -342,8 +423,149 @@ export default function AdminShopPage() {
 
       <div className="w-full max-w-4xl mx-auto px-6 pb-16 flex-1 flex flex-col space-y-14">
 
-        {/* ═══ 상품 관리 ═══ */}
+        {/* ═══ 아이템 등록 ═══ */}
         {tab === "items" && (
+          <>
+            <Reveal>
+            <section>
+              <SectionHead no="01" title={itemForm.id ? "아이템 수정" : "아이템 등록"} />
+              <form onSubmit={saveRegItem}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelClass}>이름 <span className="text-[#e91e3f]">*</span></label>
+                    <input type="text" value={itemForm.name} maxLength={40} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="예: 펭귄 칭호" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>설명</label>
+                    <input type="text" value={itemForm.description} maxLength={120} onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })} placeholder="인벤토리 · 카드에 한 줄" className={inputClass} />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className={labelClass}>유형 <span className="text-[#e91e3f]">*</span></label>
+                    <FilterChips options={ITEM_TYPE_OPTIONS} value={itemForm.type}
+                      onChange={(v) => setItemForm({ ...itemForm, type: v, roleId: v === "physical" ? "" : itemForm.roleId, detachOnSeason: v === "role" ? itemForm.detachOnSeason : false })} />
+                  </div>
+
+                  {itemForm.type !== "physical" && (
+                    <div className="md:col-span-2">
+                      <label className={labelClass}>
+                        연결 역할 {itemForm.type === "item" ? <span className="font-normal text-[#8a8a8a]">(선택)</span> : <span className="text-[#e91e3f]">*</span>}
+                      </label>
+                      <Dropdown
+                        theme="light"
+                        value={itemForm.roleId}
+                        onChange={(v) => setItemForm({ ...itemForm, roleId: v })}
+                        placeholder="역할을 선택하세요"
+                        options={[...(itemForm.type === "item" ? [{ value: "", label: "역할 없음 (사이트 보유)" }] : []), ...guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))]}
+                      />
+                      {itemForm.type === "item" && <p className={fieldNote}>역할이 있으면 보유자 인벤토리에 자동 표시되고 지급 시 역할도 붙습니다.</p>}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className={labelClass}>아이콘</label>
+                    <input type="text" value={itemForm.icon} maxLength={8} onChange={(e) => setItemForm({ ...itemForm, icon: e.target.value })} placeholder="🐧" className={inputClass} />
+                    <p className={fieldNote}>이모지 또는 짧은 글자. 이미지가 없을 때 쓰입니다.</p>
+                  </div>
+                  <div>
+                    <label className={labelClass}>이미지 URL</label>
+                    <input type="text" value={itemForm.imageUrl} onChange={(e) => setItemForm({ ...itemForm, imageUrl: e.target.value })} placeholder="https://..." className={inputClass} />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>표기 색상</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={itemForm.color || itemTypeColor(itemForm.type)} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })}
+                        className="w-11 h-11 shrink-0 rounded-lg border border-black/10 bg-white p-1" />
+                      <input type="text" value={itemForm.color} maxLength={7} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })} placeholder={itemTypeColor(itemForm.type)} className={inputClass} />
+                    </div>
+                    <p className={fieldNote}>비우면 유형 기본색</p>
+                  </div>
+                  <div>
+                    <label className={labelClass}>정렬</label>
+                    <input type="number" value={itemForm.sortOrder} onChange={(e) => setItemForm({ ...itemForm, sortOrder: e.target.value })} placeholder="0" className={inputClass} />
+                    <p className={fieldNote}>작을수록 앞</p>
+                  </div>
+
+                  {itemForm.type === "role" && (
+                    <div>
+                      <label className={labelClass}>시즌 전환</label>
+                      <Toggle className="" on={itemForm.detachOnSeason} onClick={() => setItemForm({ ...itemForm, detachOnSeason: !itemForm.detachOnSeason })}
+                        onLabel="시즌 바뀌면 디스코드 역할 뗌" offLabel="디스코드 역할 계속 유지" />
+                    </div>
+                  )}
+                  <div>
+                    <label className={labelClass}>인벤토리 표시</label>
+                    <Toggle className="" on={itemForm.visible} onClick={() => setItemForm({ ...itemForm, visible: !itemForm.visible })} onLabel="표시" offLabel="숨김" />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <Btn type="submit" disabled={isSavingReg} className="w-full md:w-auto md:px-10 py-3.5">{isSavingReg ? "저장 중..." : itemForm.id ? "수정 저장" : "등록"}</Btn>
+                  {itemForm.id && <Btn type="button" variant="ghost" onClick={() => setItemForm(EMPTY_ITEM_FORM)} className="px-6 py-3.5">취소</Btn>}
+                </div>
+              </form>
+            </section>
+            </Reveal>
+
+            <Reveal>
+            <section>
+              <SectionHead no="02" title={`등록된 아이템 (${regItems.length})`} right={
+                invRoles.length > 0 ? (
+                  <Btn variant="ghost" onClick={importInvRoles} disabled={isImporting} className="whitespace-nowrap">
+                    {isImporting ? "가져오는 중..." : `표기 역할 가져오기 (${invRoles.length})`}
+                  </Btn>
+                ) : undefined
+              } />
+              {regItems.length === 0 ? <EmptyRow>등록된 아이템이 없습니다.</EmptyRow> : (
+                <TableScroll>
+                  <ListFrame>
+                    {regItems.map((it) => {
+                      const color = it.color || itemTypeColor(it.type);
+                      return (
+                        <div key={it._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                          <div className="relative w-12 h-12 rounded-lg bg-black/5 overflow-hidden shrink-0">
+                            <CardArt it={it} iconClass="text-2xl" />
+                          </div>
+                          <div className="min-w-0 md:w-56 shrink-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-sm font-bold truncate ${it.visible === false ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>{it.name}</span>
+                              <TypeBadge type={it.type} className="px-2 py-0.5 text-[9px] shrink-0" />
+                            </div>
+                            <span className="text-[10px] font-bold text-[#5a5a5a] truncate block">
+                              {it.roleId ? (guildRoles.find((r) => r.id === it.roleId)?.name || it.roleName || it.roleId) : "역할 없음"}
+                              {it.description ? ` · ${it.description}` : ""}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
+                            <span className="inline-flex items-center gap-1.5 text-[11px] text-[#5a5a5a] tabular-nums">
+                              <span className="w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: color }}></span>
+                              {color}
+                            </span>
+                            <span className="text-[11px] text-[#5a5a5a] tabular-nums">상품 {it.usage || 0}</span>
+                            {it.type === "role" && it.detachOnSeason && <span className="text-[10px] font-bold text-[#5a5a5a] border border-black/15 px-1.5 rounded">시즌 뗌</span>}
+                            <button type="button" onClick={() => toggleRegVisible(it)}
+                              className={`text-[10px] font-bold px-1.5 rounded border transition-colors ${it.visible === false ? "text-[#a3a3a3] border-black/10" : "text-[#e91e3f] border-[#e91e3f]/30"}`}>
+                              {it.visible === false ? "숨김" : "표시"}
+                            </button>
+                          </div>
+                          <div className="flex gap-4 shrink-0">
+                            <button type="button" onClick={() => { fillRegForm(it); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">수정</button>
+                            <button type="button" onClick={() => setDeleteTarget({ kind: "reg", id: it._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">삭제</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </ListFrame>
+                </TableScroll>
+              )}
+            </section>
+            </Reveal>
+          </>
+        )}
+
+        {/* ═══ 상품 관리 ═══ */}
+        {tab === "products" && (
           <>
             <Reveal>
             <section>
@@ -361,42 +583,90 @@ export default function AdminShopPage() {
 
                   {/* ── 기본 정보 ── */}
                   <FormGroup title="기본 정보" summary={basicSummary} open={openGroups.basic} onToggle={() => toggleGroup("basic")}>
+                    {/* 📌 직접 설정 | 등록된 아이템 — 아이템을 고르면 표기 필드는 채워지고 잠긴다 */}
+                    <div className="mb-4">
+                      <FilterChips options={SOURCE_OPTIONS} value={sourceOf(form)}
+                        onChange={(v) => {
+                          if (v === "custom") setForm(unlinkItem(form));
+                          else if (regItems[0]) setForm(applyItem(form, regItems[0]));
+                          else notify("등록된 아이템이 없습니다. 아이템 탭에서 먼저 등록해 주세요.", true);
+                        }} />
+                      {linked && (
+                        <div className="mt-3">
+                          <Dropdown
+                            theme="light"
+                            value={form.itemId}
+                            onChange={(v) => { const it = regItems.find((x) => x._id === v); if (it) setForm(applyItem(form, it)); }}
+                            placeholder="아이템을 선택하세요"
+                            options={regItems.map((x) => ({ value: x._id, label: `${x.icon ? `${x.icon} ` : ""}${x.name}`, hint: itemTypeLabel(x.type), color: x.color || itemTypeColor(x.type) }))}
+                          />
+                          <p className={fieldNote}>
+                            표기는 아이템 등록에서 바꿉니다 ·{" "}
+                            <Link href="/admin/shop?tab=items" className="font-bold text-[#e91e3f] hover:underline">아이템 등록에서 수정</Link>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="mb-4">
                       <label className={labelClass}>상품명 <span className="text-[#e91e3f]">*</span></label>
-                      <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: [XP] Boost+" className={inputClass} />
+                      <input type="text" value={form.name} disabled={linked} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: [XP] Boost+" className={`${inputClass} disabled:text-[#8a8a8a]`} />
                     </div>
 
                     <div className="mb-4">
                       <label className={labelClass}>상품 유형 <span className="text-[#e91e3f]">*</span></label>
-                      <FilterChips options={TYPE_OPTIONS} value={form.type} onChange={(v) => setForm({ ...form, type: v })} />
+                      {linked
+                        ? <TypeBadge type={form.type} className="inline-block px-3 py-1.5 text-[11px]" />
+                        : <FilterChips options={ITEM_TYPE_OPTIONS} value={form.type} onChange={(v) => setForm(pickProductType(form, v))} />}
                     </div>
 
                     <div className="mb-4">
                       <label className={labelClass}>상품 설명</label>
-                      <textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        placeholder="상점 카드에 표시될 설명" className={`${inputClass} resize-none`} />
+                      <textarea rows={2} value={form.description} disabled={linked} onChange={(e) => setForm({ ...form, description: e.target.value })}
+                        placeholder="상점 카드에 표시될 설명" className={`${inputClass} resize-none disabled:text-[#8a8a8a]`} />
                     </div>
 
                     <div className="mb-4">
                       <label className={labelClass}>상품 이미지 URL</label>
-                      <input type="text" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-                        placeholder="https://... (비우면 기본 아이콘 표시)" className={inputClass} />
+                      <input type="text" value={form.imageUrl} disabled={linked} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                        placeholder="https://... (비우면 아이콘 표시)" className={`${inputClass} disabled:text-[#8a8a8a]`} />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className={labelClass}>아이콘</label>
+                        <input type="text" value={form.icon} disabled={linked} maxLength={8} onChange={(e) => setForm({ ...form, icon: e.target.value })}
+                          placeholder="🎁" className={`${inputClass} disabled:text-[#8a8a8a]`} />
+                        <p className={fieldNote}>이미지가 없을 때 카드에 크게</p>
+                      </div>
+                      <div>
+                        <label className={labelClass}>색상</label>
+                        <div className="flex items-center gap-2">
+                          <input type="color" value={form.color || itemTypeColor(form.type)} disabled={linked} onChange={(e) => setForm({ ...form, color: e.target.value })}
+                            className="w-11 h-11 shrink-0 rounded-lg border border-black/10 bg-white p-1 disabled:opacity-50" />
+                          <input type="text" value={form.color} disabled={linked} maxLength={7} onChange={(e) => setForm({ ...form, color: e.target.value })}
+                            placeholder={itemTypeColor(form.type)} className={`${inputClass} disabled:text-[#8a8a8a]`} />
+                        </div>
+                        <p className={fieldNote}>비우면 유형 기본색</p>
+                      </div>
                     </div>
 
                     {/* 역할 상품일 때만 역할 선택 — 드롭다운이 아래 요소를 덮도록 열릴 때 z를 올린다 */}
                     {(form.type === "role" || form.type === "perk" || form.type === "item") && (
                       <div className={`relative ${isRoleOpen ? "z-50" : ""}`}>
-                        <label className={labelClass}>지급할 역할 <span className="text-[#e91e3f]">*</span></label>
-                        <button type="button" onClick={() => setIsRoleOpen(!isRoleOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
+                        <label className={labelClass}>
+                          지급할 역할 {form.type === "item" ? <span className="font-normal text-[#8a8a8a]">(선택)</span> : <span className="text-[#e91e3f]">*</span>}
+                        </label>
+                        <button type="button" disabled={linked} onClick={() => setIsRoleOpen(!isRoleOpen)} className={`${inputClass} flex items-center justify-between text-left disabled:text-[#8a8a8a]`}>
                           {selectedRole ? (
                             <span className="flex items-center gap-2.5">
                               <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: selectedRole.color }}></span>
                               <span className="font-bold">{selectedRole.name}</span>
                             </span>
-                          ) : <span className="text-[#8a8a8a]">역할을 선택하세요</span>}
-                          <span className="text-[10px] text-[#5a5a5a]">▼</span>
+                          ) : <span className="text-[#8a8a8a]">{linked ? form.roleName || "역할 없음" : "역할을 선택하세요"}</span>}
+                          {!linked && <span className="text-[10px] text-[#5a5a5a]">▼</span>}
                         </button>
-                        {isRoleOpen && (
+                        {isRoleOpen && !linked && (
                           <>
                             <div className="fixed inset-0 z-40" onClick={() => setIsRoleOpen(false)}></div>
                             <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e6e3de]">
@@ -496,11 +766,13 @@ export default function AdminShopPage() {
                   {/* ── 시즌 동작 ── 기프트카드는 시즌과 무관하므로 아예 감춘다 */}
                   {form.type !== "physical" && (
                     <FormGroup title="시즌 동작" summary={seasonSummary} open={openGroups.season} onToggle={() => toggleGroup("season")}>
-                      {/* 시즌 전환 때 디스코드 역할만 떼고 사이트 인벤토리에는 남긴다 */}
-                      <Toggle disabled={form.type === "perk"} on={form.type !== "perk" && form.detachOnSeason} onClick={() => setForm({ ...form, detachOnSeason: !form.detachOnSeason })}
+                      {/* 시즌 전환 때 디스코드 역할만 떼고 사이트 인벤토리에는 남긴다 (등록된 아이템이면 아이템 설정을 따른다) */}
+                      <Toggle disabled={form.type === "perk" || linked} on={form.type !== "perk" && form.detachOnSeason} onClick={() => setForm({ ...form, detachOnSeason: !form.detachOnSeason })}
                         onLabel="시즌 바뀌면 디스코드 역할 뗌" offLabel="디스코드 역할 계속 유지" />
                       <p className={fieldNote}>
-                        {form.detachOnSeason
+                        {linked
+                          ? "등록된 아이템의 설정을 따릅니다."
+                          : form.detachOnSeason
                           ? "소유와 인벤토리는 그대로 두고 디스코드 표기만 뗍니다."
                           : "역할 자체가 기능인 권한 상품은 이대로 두세요."}
                       </p>
@@ -532,18 +804,16 @@ export default function AdminShopPage() {
                   <ListFrame>
                     {items.map((it) => (
                       <div key={it._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                        <div className="w-12 h-12 rounded-lg bg-black/5 overflow-hidden shrink-0">
-                          {it.imageUrl && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={it.imageUrl} alt="" className="w-full h-full object-cover" />
-                          )}
+                        <div className="relative w-12 h-12 rounded-lg bg-black/5 overflow-hidden shrink-0">
+                          <CardArt it={it} iconClass="text-2xl" />
                         </div>
                         <div className="min-w-0 md:w-48 shrink-0">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-[#131313] truncate">{it.name}</span>
                             {!it.active && <span className="text-[10px] font-bold text-[#5a5a5a] border border-black/15 px-1.5 rounded shrink-0">숨김</span>}
+                            {it.itemId && <span className="text-[10px] font-bold text-[#5a5a5a] border border-black/15 px-1.5 rounded shrink-0">등록 아이템</span>}
                           </div>
-                          <span className="text-[10px] font-bold text-[#5a5a5a]">{it.type === "physical" ? "기프트카드" : `${typeLabel(it.type)} · ${it.roleName || it.roleId}`}</span>
+                          <span className="text-[10px] font-bold text-[#5a5a5a]">{it.type === "physical" ? "기프트카드" : `${typeLabel(it.type)} · ${it.roleName || it.roleId || "역할 없음"}`}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
                           <span className="text-[11px] font-bold text-[#e91e3f] tabular-nums">{Math.max(0, Math.floor((it.price * (100 - (it.discountPct || 0))) / 100)).toLocaleString()} XP{it.discountPct > 0 ? ` (-${it.discountPct}%)` : ""}</span>
@@ -1040,6 +1310,7 @@ export default function AdminShopPage() {
         confirmLabel="삭제"
         body={
           deleteTarget?.kind === "item" ? <>이 상품을 삭제하시겠습니까?<br />기존 구매 내역은 그대로 유지됩니다.</>
+          : deleteTarget?.kind === "reg" ? <>이 아이템을 삭제하시겠습니까?<br />이 아이템을 쓰는 상품이 있으면 삭제되지 않습니다.</>
           : deleteTarget?.kind === "banner" ? <>이 배너를 삭제하시겠습니까?</>
           : <>이 쿠폰을 삭제하시겠습니까?<br />이미 사용된 내역에는 영향이 없습니다.</>
         }
@@ -1184,19 +1455,8 @@ export default function AdminShopPage() {
             <div className="bg-[#f4f3f2] rounded-2xl p-5">
               <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col">
                 <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
-                  {form.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={form.imageUrl} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[#c4c4c4]">
-                      <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
-                      </svg>
-                    </div>
-                  )}
-                  <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide ${TYPE_BADGE[form.type]?.cls || TYPE_BADGE.role.cls}`}>
-                    {typeLabel(form.type)}
-                  </span>
+                  <CardArt it={form} iconClass="text-6xl" />
+                  <TypeBadge type={form.type} className="absolute top-3 left-3 px-2.5 py-1 text-[10px] tracking-wide" />
                   {form.stock === "0" && (
                     <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
                       <span className="text-sm font-black text-[#131313] tracking-wider">SOLD OUT</span>

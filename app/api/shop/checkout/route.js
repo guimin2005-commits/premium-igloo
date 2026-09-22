@@ -157,6 +157,7 @@ export async function POST(request) {
           userId,
           userName: session.user.name || "",
           itemId: String(d._id),
+          itemRef: d.itemId || "",
           itemName: d.name,
           itemType: d.type,
           roleId: d.roleId || "",

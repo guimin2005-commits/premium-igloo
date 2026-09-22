@@ -5,6 +5,11 @@ import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import Dropdown from "../components/Dropdown";
 import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
+import { itemTypeLabel, itemTypeColor, ITEM_TYPE_OPTIONS } from "@/lib/items";
+import {
+  EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
+  buildDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload,
+} from "./productForm";
 import ArcticFooter from "./ArcticFooter";
 import ArcticDock from "./ArcticDock";
 import { useSearchParams } from "next/navigation";
@@ -36,13 +41,35 @@ const TYPES = [
   { v: "physical", l: "기프트카드" },
 ];
 
-// 상품 유형 배지 (역할·권한은 자동 지급, 기프트카드는 운영진 발송)
-const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
-  role: { label: "역할", cls: "bg-[#e91e3f] text-white" },
-  perk: { label: "권한", cls: "bg-[#2f6fb0] text-white" },
-  item: { label: "아이템", cls: "bg-[#3f9e93] text-white" },
-  physical: { label: "기프트카드", cls: "bg-[#131313] text-white" },
-};
+// 상품 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천 (역할·권한은 자동 지급, 기프트카드는 운영진 발송)
+function TypeBadge({ type, className = "" }: { type: string; className?: string }) {
+  return (
+    <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
+      {itemTypeLabel(type)}
+    </span>
+  );
+}
+
+// 📌 카드 그림 자리 — 이미지가 있으면 이미지, 없으면 등록한 아이콘(이모지)을 큰 글자로.
+//    배경은 등록 색을 연하게 깐 그라데이션이라 이미지 없는 상품도 서로 구분된다.
+function CardArt({ it, imgClass = "", iconClass = "text-5xl" }: { it: any; imgClass?: string; iconClass?: string }) {
+  const color = it?.color || itemTypeColor(it?.type);
+  if (it?.imageUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={it.imageUrl} alt={it.name || ""} className={`absolute inset-0 w-full h-full object-cover ${imgClass}`} />;
+  }
+  return (
+    <div className="absolute inset-0 flex items-center justify-center" style={{ background: `linear-gradient(160deg, ${color}33, ${color}0a)` }}>
+      {it?.icon ? (
+        <span aria-hidden className={`${iconClass} leading-none select-none`}>{it.icon}</span>
+      ) : (
+        <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke={color} style={{ opacity: 0.55 }}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
+        </svg>
+      )}
+    </div>
+  );
+}
 
 // 상품가는 천만·오천만 단위까지 올라간다
 const PRICE_RANGES = [
@@ -338,34 +365,17 @@ export default function ArcticShopBody({
     return () => clearInterval(t);
   }, [banners.length]);
 
-  // 관리자 — 상점 안에서 바로 상품 추가·수정
-  const EMPTY_ITEM = { id: "", name: "", description: "", imageUrl: "", type: "role", roleId: "", roleName: "", price: "", discountPct: "", stock: "", sortOrder: "", active: true, detachOnSeason: false, timed: false, price7: "", price30: "", priceInf: "" };
+  // 관리자 — 상점 안에서 바로 상품 추가·수정 (폼 상태·기간·유형·아이템 적용 규칙은 ./productForm 공용)
   const [editForm, setEditForm] = useState<any>(null);
   const [guildRoles, setGuildRoles] = useState<any[]>([]);
+  // 등록된 아이템(/api/admin/items) — 상품 폼에서 "등록된 아이템" 으로 고른다
+  const [regItems, setRegItems] = useState<any[]>([]);
   const [isSavingItem, setIsSavingItem] = useState(false);
   const [editError, setEditError] = useState("");
   const [openGroups, setOpenGroups] = useState({ basic: true, price: false, stock: false, season: false });
   const toggleGroup = (k: "basic" | "price" | "stock" | "season") => setOpenGroups((p) => ({ ...p, [k]: !p[k] }));
 
-  // 📌 기간제 — 값을 매긴 기간만 판매 목록에 올린다 (days 0 = 무제한, 기간 옵션과 나란히 팔 수 있다)
-  const buildDurations = (f: any) => {
-    if (!f?.timed || f.type === "physical") return [];
-    return [
-      { days: 7, price: Math.max(0, Math.floor(Number(f.price7) || 0)) },
-      { days: 30, price: Math.max(0, Math.floor(Number(f.price30) || 0)) },
-      { days: 0, price: Math.max(0, Math.floor(Number(f.priceInf) || 0)) },
-    ].filter((d) => d.price > 0);
-  };
-
-  // 유형을 바꾸면 그 유형에 없는 설정을 함께 끈다 — 감춰진 채로 저장되면 안 된다.
-  //   기프트카드는 기간 개념이 없고, 권한은 역할이 곧 디스코드 기능이라 시즌에 떼면 기능이 사라진다.
-  const pickType = (v: string) =>
-    setEditForm((f: any) => ({
-      ...f,
-      type: v,
-      timed: v === "physical" ? false : f.timed,
-      detachOnSeason: v === "physical" || v === "perk" ? false : f.detachOnSeason,
-    }));
+  const pickType = (v: string) => setEditForm((f: any) => pickProductType(f, v));
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -373,25 +383,16 @@ export default function ArcticShopBody({
       .then((r) => r.json())
       .then((d) => setGuildRoles(Array.isArray(d?.data) ? d.data : []))
       .catch(() => {});
+    fetch("/api/admin/items", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setRegItems(Array.isArray(d?.data) ? d.data : []))
+      .catch(() => {});
   }, [isAdmin]);
 
   const openEdit = (it?: any) => {
     setEditError("");
     setOpenGroups({ basic: true, price: false, stock: false, season: false });
-    setEditForm(it
-      ? {
-          id: it._id, name: it.name, description: it.description || "", imageUrl: it.imageUrl || "", type: it.type,
-          roleId: it.roleId || "", roleName: it.roleName || "", price: String(it.price),
-          discountPct: it.discountPct ? String(it.discountPct) : "", stock: it.stock < 0 ? "" : String(it.stock),
-          sortOrder: String(it.sortOrder || 0), active: it.active,
-          // 기존 기간·시즌 설정을 입력칸으로 되돌린다 — 안 채우면 수정 저장할 때마다 조용히 꺼진다
-          timed: Array.isArray(it.durations) && it.durations.length > 0,
-          price7: String(it.durations?.find((d: any) => d.days === 7)?.price ?? ""),
-          price30: String(it.durations?.find((d: any) => d.days === 30)?.price ?? ""),
-          priceInf: String(it.durations?.find((d: any) => d.days === 0)?.price ?? ""),
-          detachOnSeason: !!it.detachOnSeason,
-        }
-      : { ...EMPTY_ITEM });
+    setEditForm(it ? formFromShopItem(it) : { ...EMPTY_PRODUCT_FORM });
   };
 
   const saveItem = async () => {
@@ -408,7 +409,7 @@ export default function ArcticShopBody({
       const res = await fetch("/api/shop/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...editForm, roleName: role?.name || editForm.roleName || "", durations }),
+        body: JSON.stringify(toPayload(editForm, role?.name || "")),
       });
       const d = await res.json();
       if (res.ok && d.success) {
@@ -618,19 +619,8 @@ export default function ArcticShopBody({
               <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
                 {/* 상세로 가는 오버레이 — 위에 얹힌 버튼(z-10)은 그대로 눌린다 */}
                 <Link href={`/shop/item/${it._id}`} aria-label={`${it.name} 상세보기`} className="absolute inset-0 z-[1]"></Link>
-                {it.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={it.imageUrl} alt={it.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[#c4c4c4]">
-                    <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
-                    </svg>
-                  </div>
-                )}
-                <span className={`absolute top-2 left-2 sm:top-3 sm:left-3 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black tracking-wide ${TYPE_BADGE[it.type]?.cls || "bg-[#131313] text-white"}`}>
-                  {TYPE_BADGE[it.type]?.label || "상품"}
-                </span>
+                <CardArt it={it} imgClass="group-hover:scale-105 transition-transform duration-500" iconClass="text-5xl sm:text-6xl" />
+                <TypeBadge type={it.type} className="absolute top-2 left-2 sm:top-3 sm:left-3 px-2 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] tracking-wide" />
                 {!it.active && (
                   <span className="absolute top-11 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#dedddb]">숨김</span>
                 )}
@@ -760,7 +750,8 @@ export default function ArcticShopBody({
   const efSale = Math.max(0, Math.floor(((Number(editForm?.price) || 0) * (100 - efDiscount)) / 100));
   const efDurations = buildDurations(editForm);
   const efRoleName = guildRoles.find((r) => r.id === editForm?.roleId)?.name || editForm?.roleName || "";
-  const efBasicSummary = [editForm?.name || "이름 없음", TYPE_BADGE[editForm?.type]?.label, efRoleName].filter(Boolean).join(" · ");
+  const efLinked = isLinked(editForm);
+  const efBasicSummary = [efLinked ? "등록된 아이템" : "", editForm?.name || "이름 없음", itemTypeLabel(editForm?.type), efRoleName].filter(Boolean).join(" · ");
   const efPriceSummary = Number(editForm?.price) > 0
     ? `${efSale.toLocaleString()} XP${efDiscount > 0 ? ` (-${efDiscount}%)` : ""}${editForm?.timed ? ` · 기간제 ${efDurations.length}종` : ""}`
     : "가격 미입력";
@@ -949,9 +940,13 @@ export default function ArcticShopBody({
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                   상품 추가
                 </button>
-                <Link href="/admin/shop?tab=items"
+                <Link href="/admin/shop?tab=products"
                   className="text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] underline underline-offset-4">
                   전체 상품 관리
+                </Link>
+                <Link href="/admin/shop?tab=items"
+                  className="text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] underline underline-offset-4">
+                  아이템 등록
                 </Link>
                 <Link href="/admin/shop?tab=orders"
                   className="text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] underline underline-offset-4">
@@ -1264,16 +1259,11 @@ export default function ArcticShopBody({
                     const soldOut = it.stock === 0;
                     return (
                       <div key={it._id} className="p-5 flex gap-4 items-center">
-                        <div className="w-16 h-16 rounded-xl bg-[#e9e8e6] overflow-hidden shrink-0">
-                          {it.imageUrl && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={it.imageUrl} alt="" className="w-full h-full object-cover" />
-                          )}
+                        <div className="relative w-16 h-16 rounded-xl bg-[#e9e8e6] overflow-hidden shrink-0">
+                          <CardArt it={it} iconClass="text-3xl" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black mb-1 ${TYPE_BADGE[it.type]?.cls || "bg-[#131313] text-white"}`}>
-                            {TYPE_BADGE[it.type]?.label || "상품"}
-                          </span>
+                          <TypeBadge type={it.type} className="inline-block px-2 py-0.5 text-[9px] mb-1" />
                           <h3 className="text-sm font-bold text-[#131313] truncate">{it.name}</h3>
                           <p className="text-[12px] font-black text-[#131313] tabular-nums mt-0.5">
                             {salePrice(it).toLocaleString()} XP
@@ -1475,16 +1465,11 @@ export default function ArcticShopBody({
             ) : (
               <>
                 <div className="flex gap-4 p-6 border-b border-[#ececea]">
-                  <div className="w-20 h-20 rounded-xl bg-[#e9e8e6] overflow-hidden shrink-0">
-                    {buyTarget.imageUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={buyTarget.imageUrl} alt={buyTarget.name} className="w-full h-full object-cover" />
-                    )}
+                  <div className="relative w-20 h-20 rounded-xl bg-[#e9e8e6] overflow-hidden shrink-0">
+                    <CardArt it={buyTarget} iconClass="text-4xl" />
                   </div>
                   <div className="min-w-0">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black mb-1.5 ${TYPE_BADGE[buyTarget.type]?.cls || "bg-[#131313] text-white"}`}>
-                      {TYPE_BADGE[buyTarget.type]?.label || "상품"}
-                    </span>
+                    <TypeBadge type={buyTarget.type} className="inline-block px-2 py-0.5 text-[10px] mb-1.5" />
                     <h2 className="text-base font-black text-[#131313] truncate">{buyTarget.name}</h2>
                     <p className="text-sm font-black text-[#e91e3f] tabular-nums mt-0.5">
                       {salePrice(buyTarget, buyTarget._days).toLocaleString()} XP
@@ -1570,18 +1555,53 @@ export default function ArcticShopBody({
 
                   {/* ── 기본 정보 ── */}
                   <FormGroup title="기본 정보" summary={efBasicSummary} open={openGroups.basic} onToggle={() => toggleGroup("basic")}>
+                    {/* 📌 직접 설정 | 등록된 아이템 — 아이템을 고르면 표기 필드는 채워지고 잠긴다 */}
+                    <div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {SOURCE_OPTIONS.map((o) => {
+                          const on = sourceOf(editForm) === o.v;
+                          return (
+                            <button key={o.v} type="button"
+                              onClick={() => {
+                                if (o.v === "custom") setEditForm(unlinkItem(editForm));
+                                else if (regItems[0]) setEditForm(applyItem(editForm, regItems[0]));
+                                else setEditError("등록된 아이템이 없습니다. 아이템 등록에서 먼저 만들어 주세요.");
+                              }}
+                              className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors ${on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#4b4b4b] border-[#dedddb] hover:border-[#a3a3a3]"}`}>
+                              {o.l}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {efLinked && (
+                        <div className="mt-3">
+                          <Dropdown
+                            theme="light"
+                            value={editForm.itemId}
+                            onChange={(v) => { const it = regItems.find((x) => x._id === v); if (it) setEditForm(applyItem(editForm, it)); }}
+                            placeholder="아이템을 선택하세요"
+                            options={regItems.map((x) => ({ value: x._id, label: `${x.icon ? `${x.icon} ` : ""}${x.name}`, hint: itemTypeLabel(x.type), color: x.color || itemTypeColor(x.type) }))}
+                          />
+                          <p className={F_NOTE}>
+                            표기는 아이템 등록에서 바꿉니다 ·{" "}
+                            <Link href="/admin/shop?tab=items" className="font-bold text-[#e91e3f] hover:underline">아이템 등록에서 수정</Link>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
                     <div>
                       <label className={F_LABEL}>상품명 <span className="text-[#c62828]">*</span></label>
-                      <input type="text" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                        placeholder="예: [XP] Boost+" className={F_INPUT} />
+                      <input type="text" value={editForm.name} disabled={efLinked} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                        placeholder="예: [XP] Boost+" className={`${F_INPUT} disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
                     </div>
 
                     <div>
                       <label className={F_LABEL}>상품 유형 <span className="text-[#c62828]">*</span></label>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {[{ v: "role", l: "역할" }, { v: "perk", l: "권한" }, { v: "item", l: "아이템" }, { v: "physical", l: "기프트카드" }].map((o) => (
-                          <button key={o.v} type="button" onClick={() => pickType(o.v)}
-                            className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors ${editForm.type === o.v ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#4b4b4b] border-[#dedddb] hover:border-[#a3a3a3]"}`}>
+                        {ITEM_TYPE_OPTIONS.map((o) => (
+                          <button key={o.v} type="button" disabled={efLinked} onClick={() => pickType(o.v)}
+                            className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors disabled:cursor-default ${editForm.type === o.v ? "bg-[#e91e3f] text-white border-[#e91e3f]" : `bg-white text-[#4b4b4b] border-[#dedddb] ${efLinked ? "opacity-40" : "hover:border-[#a3a3a3]"}`}`}>
                             {o.l}
                           </button>
                         ))}
@@ -1594,27 +1614,51 @@ export default function ArcticShopBody({
                         <label className={F_LABEL}>
                           지급할 역할 {editForm.type === "item" ? <span className="font-normal text-[#8a8a8a]">(선택)</span> : <span className="text-[#c62828]">*</span>}
                         </label>
-                        <Dropdown
-                          theme="light"
-                          value={editForm.roleId}
-                          onChange={(v) => setEditForm({ ...editForm, roleId: v })}
-                          placeholder="역할을 선택하세요"
-                          options={guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))}
-                        />
-                        {editForm.type === "item" && <p className={F_NOTE}>비우면 사이트 인벤토리에만 남습니다</p>}
+                        {efLinked ? (
+                          <div className={`${F_INPUT} bg-[#f4f3f2] text-[#8a8a8a]`}>{efRoleName || "역할 없음"}</div>
+                        ) : (
+                          <Dropdown
+                            theme="light"
+                            value={editForm.roleId}
+                            onChange={(v) => setEditForm({ ...editForm, roleId: v })}
+                            placeholder="역할을 선택하세요"
+                            options={guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))}
+                          />
+                        )}
+                        {editForm.type === "item" && !efLinked && <p className={F_NOTE}>비우면 사이트 인벤토리에만 남습니다</p>}
                       </div>
                     )}
 
                     <div>
                       <label className={F_LABEL}>상품 설명</label>
-                      <textarea rows={2} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                        placeholder="카드에 표시될 설명" className={`${F_INPUT} resize-none`} />
+                      <textarea rows={2} value={editForm.description} disabled={efLinked} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                        placeholder="카드에 표시될 설명" className={`${F_INPUT} resize-none disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
                     </div>
 
                     <div>
                       <label className={F_LABEL}>상품 이미지 URL</label>
-                      <input type="text" value={editForm.imageUrl} onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })}
-                        placeholder="https://..." className={F_INPUT} />
+                      <input type="text" value={editForm.imageUrl} disabled={efLinked} onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })}
+                        placeholder="https://..." className={`${F_INPUT} disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={F_LABEL}>아이콘</label>
+                        <input type="text" value={editForm.icon} disabled={efLinked} maxLength={8} onChange={(e) => setEditForm({ ...editForm, icon: e.target.value })}
+                          placeholder="🎁" className={`${F_INPUT_SM} disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
+                        <p className={F_NOTE}>이미지가 없을 때 카드에 크게</p>
+                      </div>
+                      <div>
+                        <label className={F_LABEL}>색상</label>
+                        <div className="flex items-center gap-2">
+                          <input type="color" value={editForm.color || itemTypeColor(editForm.type)} disabled={efLinked}
+                            onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
+                            className="w-11 h-11 shrink-0 rounded-lg border border-[#dedddb] bg-white p-1 disabled:opacity-50" />
+                          <input type="text" value={editForm.color} disabled={efLinked} maxLength={7} onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
+                            placeholder={itemTypeColor(editForm.type)} className={`${F_INPUT_SM} disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
+                        </div>
+                        <p className={F_NOTE}>비우면 유형 기본색</p>
+                      </div>
                     </div>
                   </FormGroup>
 
@@ -1706,19 +1750,8 @@ export default function ArcticShopBody({
                 <div className="text-[12px] font-black text-[#131313] mb-3">카드 미리보기</div>
                 <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col">
                   <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
-                    {editForm.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={editForm.imageUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[#c4c4c4]">
-                        <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
-                        </svg>
-                      </div>
-                    )}
-                    <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide ${TYPE_BADGE[editForm.type]?.cls || "bg-[#131313] text-white"}`}>
-                      {TYPE_BADGE[editForm.type]?.label || "상품"}
-                    </span>
+                    <CardArt it={editForm} iconClass="text-6xl" />
+                    <TypeBadge type={editForm.type} className="absolute top-3 left-3 px-2.5 py-1 text-[10px] tracking-wide" />
                     {!editForm.active && (
                       <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#dedddb]">숨김</span>
                     )}

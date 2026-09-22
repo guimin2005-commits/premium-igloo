@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import BotSetting from "@/models/BotSetting";
 import ShopItem from "@/models/ShopItem";
+import Item from "@/models/Item";
 import Purchase from "@/models/Purchase";
 
 // ── [시즌 전환] 디스코드 역할 표기 떼기 (관리자 전용) ──
@@ -25,11 +26,13 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}));
     const dryRun = !!body?.dryRun;
 
-    // 표기를 뗄 역할 — 권한 상품(perk)은 역할이 곧 디스코드 기능이라 떼면 기능이 사라진다
-    const items = await ShopItem.find(
-      { detachOnSeason: true, type: { $ne: "perk" }, roleId: { $ne: "" } },
-      { name: 1, roleId: 1 }
-    ).lean();
+    // 표기를 뗄 역할 — 권한 상품(perk)은 역할이 곧 디스코드 기능이라 떼면 기능이 사라진다.
+    //    상점 상품(ShopItem) 과 아이템 등록(Item, 역할 유형) 양쪽에서 모은다 — 시즌 패스로만 준 아이템 역할도 잡히게.
+    const [shopRows, itemRows] = await Promise.all([
+      ShopItem.find({ detachOnSeason: true, type: { $ne: "perk" }, roleId: { $ne: "" } }, { name: 1, roleId: 1 }).lean(),
+      Item.find({ detachOnSeason: true, type: "role", roleId: { $ne: "" } }, { name: 1, roleId: 1 }).lean(),
+    ]);
+    const items = [...shopRows, ...itemRows];
 
     // 펭귄 등급처럼 관리자가 잠가 둔 역할은 상품으로 팔렸더라도 예외 없이 제외한다
     const setting = await BotSetting.findOne({ key: "main" }, { protectedRoleIds: 1 }).lean();

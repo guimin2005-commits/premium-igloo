@@ -7,8 +7,11 @@ const PurchaseSchema = new mongoose.Schema({
   userId: { type: String, required: true, index: true },
   userName: { type: String, default: "" },
   itemId: { type: String, required: true },
+  // 📌 아이템 등록(models/Item) id 스냅샷 — 상품이 등록된 아이템을 참조했거나 시즌 패스 아이템 보상이면 채운다.
+  //    인벤토리(my-items)가 이 값으로 Item 을 먼저 찾아 표기를 그린다. "" 이면 상품·구매 스냅샷으로 그린다.
+  itemRef: { type: String, default: "" },
   itemName: { type: String, default: "" },
-  itemType: { type: String, default: "role" }, // "role" | "physical"
+  itemType: { type: String, default: "role" }, // "role" | "perk" | "item" | "physical"
   roleId: { type: String, default: "" },
   price: { type: Number, default: 0 },
   // 결제 수단 — XP 와 POINT 는 1:1 등가라 가격은 하나를 공유하고 지불한 쪽만 기록한다

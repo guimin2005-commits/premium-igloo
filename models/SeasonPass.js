@@ -3,12 +3,15 @@ import mongoose from "mongoose";
 // 📌 시즌 패스 설정 — 관리자가 등록하는 단일 문서(key: "main"). BotSetting 과 같은 방식.
 //    진행도는 새 재화가 아니라 "이번 시즌에 번 XP"(UserXp.xp - passBaseXp)를 그대로 쓴다.
 //    보상 kind — none(빈 칸) | xp(봇 Payout 큐로 지급) | point(사이트가 직접 지급) | role(봇 Purchase 큐로 역할 지급)
+//                | item(아이템 등록의 아이템 — Purchase 로 인벤토리에 들어가고, 역할이 있으면 봇이 붙인다)
 const RewardSchema = new mongoose.Schema(
   {
-    kind: { type: String, default: "none", enum: ["none", "xp", "point", "role"] },
+    kind: { type: String, default: "none", enum: ["none", "xp", "point", "role", "item"] },
     amount: { type: Number, default: 0 },    // xp·point 일 때 지급량
     roleId: { type: String, default: "" },   // role 일 때 지급할 역할
     roleName: { type: String, default: "" }, // 표시용 (역할 이름이 바뀌어도 라벨은 남게)
+    itemId: { type: String, default: "" },   // item 일 때 지급할 아이템(models/Item)
+    itemName: { type: String, default: "" }, // 표시용 스냅샷
   },
   { _id: false } // 티어에 박히는 값일 뿐이라 개별 id 를 만들지 않는다
 );
