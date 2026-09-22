@@ -61,6 +61,7 @@ export async function POST(request) {
       //    시즌 롤오버는 passSeason 이 바뀔 때만 재스냅샷하므로 스스로 풀리지도 않는다.
       //    수령 기록·해금도 함께 지운다. 남겨 두면 진행도 0 인 화면에 "미도달인데 수령완료" 칸이
       //    그대로 남고, 시즌 롤오버는 passSeason 이 바뀔 때만 도므로 스스로 풀리지도 않는다.
+      // ⚠️ 강화 단계(chatEnhance/voiceEnhance)는 영구 값이다 — 이 $set 목록에 넣지 않는다 (lib/enhance.js).
       await UserXp.updateMany(filter, {
         $set: {
           xp: 0, level: 0, needsRoleSync: true, updatedAt: new Date(),

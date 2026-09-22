@@ -18,7 +18,18 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: {
-        chatXp: doc?.chatXp ?? 200,
+        chatXp: doc?.chatXp ?? 200, // (구) 고정 지급량 — 화면은 min/max 를 쓴다
+        // 채팅 랜덤 구간 · 강화 정책 — 레벨 페이지 강화 카드/시뮬레이터가 lib/enhance.js 로 같은 식을 돌린다
+        chatXpMin: doc?.chatXpMin ?? 50,
+        chatXpMax: doc?.chatXpMax ?? 500,
+        chatEnhanceStep: doc?.chatEnhanceStep ?? 50,
+        chatEnhanceMax: doc?.chatEnhanceMax ?? 10,
+        chatEnhanceBaseCost: doc?.chatEnhanceBaseCost ?? 20000,
+        chatEnhanceCostGrowthPct: doc?.chatEnhanceCostGrowthPct ?? 50,
+        voiceEnhanceStep: doc?.voiceEnhanceStep ?? 300,
+        voiceEnhanceMax: doc?.voiceEnhanceMax ?? 10,
+        voiceEnhanceBaseCost: doc?.voiceEnhanceBaseCost ?? 50000,
+        voiceEnhanceCostGrowthPct: doc?.voiceEnhanceCostGrowthPct ?? 50,
         chatCooldownSec: doc?.chatCooldownSec ?? 60,
         voiceXp: doc?.voiceXp ?? 3000,
         voiceIntervalSec: doc?.voiceIntervalSec ?? 300,

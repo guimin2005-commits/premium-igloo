@@ -35,6 +35,26 @@ const QUEST_PICK_FIELDS = [
   { period: "monthly", key: "questPickMonthly", every: "매월 1일" },
 ];
 
+// 📌 강화 정책 — 채팅(구간 상승)·음성(가산) 각각 단계당 효과·최대 단계·비용 곡선 (lib/enhance.js 와 같은 키)
+const ENHANCE_FIELDS: {
+  kind: string;
+  label: string;
+  fields: { key: string; label: string; def: number; min: number; max: number; note?: string }[];
+}[] = [
+  { kind: "chat", label: "채팅", fields: [
+    { key: "chatEnhanceStep", label: "단계당 +XP", def: 50, min: 0, max: 1_000_000, note: "최소·최대 양끝에 더해집니다" },
+    { key: "chatEnhanceMax", label: "최대 단계", def: 10, min: 0, max: 100, note: "0 이면 강화 없음" },
+    { key: "chatEnhanceBaseCost", label: "1단계 비용", def: 20000, min: 0, max: 1_000_000_000 },
+    { key: "chatEnhanceCostGrowthPct", label: "단계당 비용 상승 %", def: 50, min: 0, max: 1000, note: "매 단계 복리로 오릅니다" },
+  ] },
+  { kind: "voice", label: "음성", fields: [
+    { key: "voiceEnhanceStep", label: "단계당 +XP", def: 300, min: 0, max: 1_000_000, note: "음성 1회 지급에 더해집니다" },
+    { key: "voiceEnhanceMax", label: "최대 단계", def: 10, min: 0, max: 100, note: "0 이면 강화 없음" },
+    { key: "voiceEnhanceBaseCost", label: "1단계 비용", def: 50000, min: 0, max: 1_000_000_000 },
+    { key: "voiceEnhanceCostGrowthPct", label: "단계당 비용 상승 %", def: 50, min: 0, max: 1000, note: "매 단계 복리로 오릅니다" },
+  ] },
+];
+
 const INV_CATEGORY: Record<string, string> = { perk: "특전", title: "칭호", notify: "알림", etc: "기타" };
 // 📌 인벤토리에 자동으로 잡히는 역할의 출처 — 상품·레벨 보상·역할 설정
 const ORIGIN_LABEL: Record<string, string> = { shop: "상점", level: "레벨", buff: "역할" };
@@ -679,9 +699,14 @@ export default function AdminBotPage() {
               <SectionHead no="01" title="지급량 · 주기" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>채팅 XP</label>
-                  <input type="number" min={0} value={settings.chatXp} onChange={(e) => setSettings({ ...settings, chatXp: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>메시지 1회당 기본 지급량</p>
+                  <label className={labelClass}>채팅 XP 최소</label>
+                  <input type="number" min={0} value={settings.chatXpMin ?? 50} onChange={(e) => setSettings({ ...settings, chatXpMin: e.target.value })} className={inputClass} />
+                  <p className={fieldNote}>메시지 1회당 최소~최대 사이에서 랜덤 지급</p>
+                </div>
+                <div>
+                  <label className={labelClass}>채팅 XP 최대</label>
+                  <input type="number" min={0} value={settings.chatXpMax ?? 500} onChange={(e) => setSettings({ ...settings, chatXpMax: e.target.value })} className={inputClass} />
+                  <p className={fieldNote}>최소보다 작으면 최소로 맞춰집니다</p>
                 </div>
                 <div>
                   <label className={labelClass}>채팅 쿨타임 (초)</label>
@@ -707,6 +732,27 @@ export default function AdminBotPage() {
                   <label className={labelClass}>출석 인정 접속 시간 (분)</label>
                   <input type="number" min={1} max={1440} value={settings.attendVoiceMin ?? 60} onChange={(e) => setSettings({ ...settings, attendVoiceMin: e.target.value })} className={inputClass} />
                   <p className={fieldNote}>음성 채널에 하루 이만큼 머무르면 출석 보상을 받을 수 있습니다 (기본 60분)</p>
+                </div>
+              </div>
+
+              {/* 강화 — 유저가 XP·POINT 로 단계를 올려 채팅 구간·음성 지급을 영구히 키운다 (lib/enhance.js) */}
+              <div className="mt-10 pt-8 border-t border-black/[0.08]">
+                <h3 className="text-sm font-black text-[#131313] tracking-tight mb-6">강화</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {ENHANCE_FIELDS.map((g) => (
+                    <div key={g.kind}>
+                      <p className="text-xs font-black text-[#131313] mb-4">{g.label}</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        {g.fields.map((f) => (
+                          <div key={f.key}>
+                            <label className={labelClass}>{f.label}</label>
+                            <input type="number" min={f.min} max={f.max} value={settings[f.key] ?? f.def} onChange={(e) => setSettings({ ...settings, [f.key]: e.target.value })} className={inputClass} />
+                            {f.note && <p className={fieldNote}>{f.note}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </section>

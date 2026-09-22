@@ -45,10 +45,25 @@ export async function POST(request) {
     await connectToDatabase();
     const b = await request.json();
 
+    // 채팅 랜덤 구간 — 최소 ≤ 최대 보장 (최소가 더 크면 최대를 최소로 끌어올린다)
+    const chatXpMin = num(b.chatXpMin, 50);
+    const chatXpMax = Math.max(chatXpMin, num(b.chatXpMax, 500));
+
     const doc = await BotSetting.findOneAndUpdate(
       { key: "main" },
       {
         chatXp: num(b.chatXp, 200),
+        chatXpMin,
+        chatXpMax,
+        // 강화 — 단계당 가산 0~1e6 · 최대 단계 0~100 · 비용 0~1e9 · 상승 % 0~1000
+        chatEnhanceStep: num(b.chatEnhanceStep, 50, { min: 0, max: 1_000_000 }),
+        chatEnhanceMax: num(b.chatEnhanceMax, 10, { min: 0, max: 100 }),
+        chatEnhanceBaseCost: num(b.chatEnhanceBaseCost, 20000, { min: 0, max: 1_000_000_000 }),
+        chatEnhanceCostGrowthPct: num(b.chatEnhanceCostGrowthPct, 50, { min: 0, max: 1000 }),
+        voiceEnhanceStep: num(b.voiceEnhanceStep, 300, { min: 0, max: 1_000_000 }),
+        voiceEnhanceMax: num(b.voiceEnhanceMax, 10, { min: 0, max: 100 }),
+        voiceEnhanceBaseCost: num(b.voiceEnhanceBaseCost, 50000, { min: 0, max: 1_000_000_000 }),
+        voiceEnhanceCostGrowthPct: num(b.voiceEnhanceCostGrowthPct, 50, { min: 0, max: 1000 }),
         chatCooldownSec: num(b.chatCooldownSec, 60, { min: 0, max: 86400 }),
         voiceXp: num(b.voiceXp, 3000),
         voiceIntervalSec: num(b.voiceIntervalSec, 300, { min: 30, max: 86400 }),

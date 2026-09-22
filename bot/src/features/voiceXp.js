@@ -38,10 +38,12 @@ async function voiceXpTick(client) {
 
       // 내전 채널은 env 설정이 있을 때만 별도 기본값 사용
       const base = config.scrimChannelIds.has(channel.id) ? policy.scrimBaseXp : s.voiceXp;
-      const doc = await UserXp.findOne({ userId: member.id }, { level: 1 }).lean();
+      const doc = await UserXp.findOne({ userId: member.id }, { level: 1, voiceEnhance: 1 }).lean();
 
+      // 강화 가산 — 단계(영구) × voiceEnhanceStep. 등급·역할·채널 가산과 같은 자리에서 더하고 음소거 배율을 곱한다
+      const enhanceXp = Math.max(0, Math.floor(Number(doc?.voiceEnhance) || 0)) * Math.max(0, Number(s.voiceEnhanceStep) || 0);
       const amount = Math.floor(
-        (base + getVoiceBracketBonus(doc?.level || 0) + getBuffXp(member) + channelPolicy.boostXp + getActiveBoostXp(member, channel)) *
+        (base + getVoiceBracketBonus(doc?.level || 0) + enhanceXp + getBuffXp(member) + channelPolicy.boostXp + getActiveBoostXp(member, channel)) *
           muteMultiplier
       );
 

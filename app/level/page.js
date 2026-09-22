@@ -13,6 +13,7 @@ import {
 import { SEASON, getSeasonProgress, getSeasonDday, isVoiceTimeTracked, VOICE_TIME_START } from "@/lib/season";
 import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel } from "@/lib/voiceTiers";
 import { getCumulativeXpByLevel, getLevelByXp } from "@/lib/leveling";
+import { buildEnhanceView, chatRange, voiceBonus } from "@/lib/enhance";
 import TierEmblem from "../components/TierEmblem";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
@@ -394,7 +395,76 @@ const LevelCurve = ({ myLevel = null }) => {
 
 // 📌 등급 안내 모달 — 잉크 패널 위에 등급 사다리를 세운다.
 //    현재 등급은 좌측 레일과 은은한 글로우로 표시하고, 나머지는 조용히 둔다.
-const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5 }) => {
+// 📌 강화 패널 — 대시보드 배너 안, 인벤토리·시즌 패스 줄 아래 반반 줄의 한쪽 (좌 채팅 / 우 음성).
+//    카드(면·테두리)는 쓰지 않는다 — 제목 줄 · 단계 핍 · 효과와 비용 · 필 버튼 두 개.
+//    효과·비용 숫자는 lib/enhance.js buildEnhanceView 가 만든 것을 그대로 보여 준다 (서버와 같은 식).
+const EnhancePanel = ({ kind, v, balance, busy, onEnhance, padClass = "" }) => {
+  const isChat = kind === "chat";
+  const atMax = v.max <= 0 || v.level >= v.max;
+  const fmtRange = (r) => `${r[0].toLocaleString()}~${r[1].toLocaleString()}`;
+  const now = isChat ? `${fmtRange(v.range)} XP` : `+${v.bonus.toLocaleString()} XP`;
+  const next = atMax ? "" : isChat ? fmtRange(v.nextRange) : `+${v.nextBonus.toLocaleString()}`;
+  const cost = v.nextCost || 0;
+  const canXp = !atMax && !busy && (balance?.xp || 0) >= cost;
+  const canPoint = !atMax && !busy && (balance?.point || 0) >= cost;
+  const pipCount = Math.max(v.max, v.level, 1);
+
+  return (
+    <div className={padClass}>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="flex items-baseline gap-2.5 min-w-0">
+          <span className="text-[15px] font-black text-white shrink-0">{isChat ? "채팅 강화" : "음성 강화"}</span>
+          <span className="text-[15px] font-black text-white/45 tabular-nums shrink-0">{v.level}<span className="text-[11px] text-white/30">/{v.max}</span></span>
+        </span>
+        {!atMax && (
+          <span className="text-[11px] font-bold text-white/40 tabular-nums shrink-0">다음 비용 <b className="text-white/75">{cost.toLocaleString()}</b></span>
+        )}
+      </div>
+
+      {/* 단계 핍 — 채워진 개수가 현재 단계 */}
+      <div aria-hidden className="flex flex-wrap gap-1 mt-3">
+        {Array.from({ length: pipCount }, (_, i) => (
+          <span
+            key={i}
+            className={`h-1.5 w-5 rounded-full ${i < v.level ? "bg-[#ff5c77]" : "bg-white/12"}`}
+            style={i < v.level ? { boxShadow: "0 0 10px rgba(255,92,119,0.45)" } : undefined}
+          ></span>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3 mt-4">
+        <span className="text-[12px] font-bold text-white tabular-nums">
+          <span className="text-white/40 mr-1.5">{isChat ? "채팅 1회" : "음성 1회"}</span>{now}
+          {next && <span className="text-white/40"> → {next}</span>}
+        </span>
+        {atMax ? (
+          <span className="inline-flex items-center h-8 px-3 rounded-full border border-white/20 text-[10px] font-black tracking-[0.12em] uppercase text-white/70">MAX</span>
+        ) : (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => onEnhance(kind, "xp")}
+              disabled={!canXp}
+              className="h-8 px-3.5 rounded-full text-[11px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-[#e91e3f] text-white enabled:hover:bg-[#d01634]"
+            >
+              XP로 강화
+            </button>
+            <button
+              type="button"
+              onClick={() => onEnhance(kind, "point")}
+              disabled={!canPoint}
+              className="h-8 px-3.5 rounded-full text-[11px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-white/10 border border-white/15 text-white enabled:hover:bg-white/20"
+            >
+              POINT로 강화
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus = 0 }) => {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -500,6 +570,16 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5 }) => {
 
         {/* 푸터 */}
         <div className="relative z-10 shrink-0 px-6 sm:px-8 py-4 border-t border-white/[0.08] bg-white/[0.02]">
+          {/* 내 음성 강화가 있으면 기본 칩 옆에 강화 칩 하나 — 등급은 그 위에 더해진다 */}
+          {enhanceBonus > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="px-3 py-1.5 rounded-lg bg-white/[0.06] text-white text-[12px] font-bold whitespace-nowrap">기본 {baseXp.toLocaleString()}</span>
+              <span className="text-[#ff5c77] font-black text-sm">+</span>
+              <span className="px-3 py-1.5 rounded-lg bg-white/[0.06] text-white text-[12px] font-bold whitespace-nowrap">강화 {enhanceBonus.toLocaleString()}</span>
+              <span className="text-[#ff5c77] font-black text-sm">+</span>
+              <span className="px-3 py-1.5 rounded-lg bg-white/[0.06] text-white/60 text-[12px] font-bold whitespace-nowrap">등급</span>
+            </div>
+          )}
           <p className="text-[11px] text-white/35 leading-relaxed break-keep">
             음성 {intervalMin}분당 기본 {baseXp.toLocaleString()} XP 위에 더해지는 금액입니다 — 채팅 XP에는 적용되지 않습니다.
             역할·채널 부스트가 있으면 여기에 더 붙습니다.
@@ -998,6 +1078,40 @@ export default function LevelPage() {
     setPassBusy((k) => (k === "unlock" ? "" : k));
   }, [pass?.unlockPrice, pushToast, loadMe]);
 
+  // 강화 — 비용·단계는 서버가 정책으로 다시 계산한다(실패 없음·영구).
+  //    응답의 단계·잔액을 바로 반영하고, 레벨·순위는 /api/xp/me 재조회로 맞춘다.
+  const [enhBusy, setEnhBusy] = useState("");
+  const enhance = useCallback(async (kind, payMethod) => {
+    const key = `${kind}:${payMethod}`;
+    setEnhBusy(key);
+    try {
+      const res = await fetch("/api/xp/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, payMethod }),
+      }).then((r) => r.json());
+
+      if (res?.success) {
+        setMe((m) => (m ? {
+          ...m,
+          xp: res.balance?.xp ?? m.xp,
+          point: res.balance?.point ?? m.point,
+          chatEnhance: res.view?.chat?.level ?? m.chatEnhance,
+          voiceEnhance: res.view?.voice?.level ?? m.voiceEnhance,
+        } : m));
+        pushToast(res.message || "강화 완료", true);
+        sfxLevelUp();
+      } else {
+        pushToast(res?.message || "강화하지 못했습니다.");
+      }
+    } catch {
+      pushToast("네트워크 오류로 강화하지 못했습니다.");
+    }
+    // 성공이든 실패든 서버 상태로 다시 맞춘 뒤 버튼을 푼다 (낡은 잔액으로 한 번 더 눌리지 않게)
+    await loadMe();
+    setEnhBusy((k) => (k === key ? "" : k));
+  }, [pushToast, loadMe]);
+
   useEffect(() => {
     if (authStatus === "loading") return;
     if (!session?.user) { setMe(null); setMyLogs(null); setQuests(null); setMyItems(null); setPass(null); prevXpRef.current = null; setMeLoaded(true); return; }
@@ -1140,7 +1254,18 @@ export default function LevelPage() {
 
   // 정책값 헬퍼 (로드 전에는 기존 기본값 사용)
   const P = {
-    chatXp: policy?.chatXp ?? 200,
+    chatXp: policy?.chatXp ?? 200, // (구) 고정 지급량 — 화면은 아래 min/max 랜덤 구간을 쓴다
+    // 채팅 랜덤 구간 · 강화 정책 — lib/enhance.js 가 같은 키를 읽는다
+    chatXpMin: policy?.chatXpMin ?? 50,
+    chatXpMax: policy?.chatXpMax ?? 500,
+    chatEnhanceStep: policy?.chatEnhanceStep ?? 50,
+    chatEnhanceMax: policy?.chatEnhanceMax ?? 10,
+    chatEnhanceBaseCost: policy?.chatEnhanceBaseCost ?? 20000,
+    chatEnhanceCostGrowthPct: policy?.chatEnhanceCostGrowthPct ?? 50,
+    voiceEnhanceStep: policy?.voiceEnhanceStep ?? 300,
+    voiceEnhanceMax: policy?.voiceEnhanceMax ?? 10,
+    voiceEnhanceBaseCost: policy?.voiceEnhanceBaseCost ?? 50000,
+    voiceEnhanceCostGrowthPct: policy?.voiceEnhanceCostGrowthPct ?? 50,
     chatCooldownSec: policy?.chatCooldownSec ?? 60,
     voiceXp: policy?.voiceXp ?? 3000,
     voiceIntervalSec: policy?.voiceIntervalSec ?? 300,
@@ -1152,6 +1277,11 @@ export default function LevelPage() {
     muteTarget: policy?.muteTarget ?? "both",
   };
   const P_voiceMin = Math.max(1, Math.round(P.voiceIntervalSec / 60));
+  const P_chatMin = Math.max(1, Math.round(P.chatCooldownSec / 60));
+  // 채팅 기본 구간(강화 0) — 안내 문구용. 내 강화 상태는 정책 + 내 단계로 화면에서 바로 만든다 (서버 응답과 같은 식)
+  const P_chatBase = chatRange(P, 0);
+  const enh = buildEnhanceView(P, me);
+  const enhOpen = enh.chat.max > 0 || enh.voice.max > 0;
 
   // 티어 지급량은 관리자가 정한 기본 음성 XP 위에 얹힌다 (P 정의 이후여야 한다)
   const tierCurXp = P.voiceXp + tierCur.bonus;
@@ -1236,6 +1366,16 @@ export default function LevelPage() {
   const [penMother, setPenMother] = useState(false);
   const [simAttend, setSimAttend] = useState("");
   const [simAttendBoost, setSimAttendBoost] = useState(false);
+  // 강화 단계 — 로그인하면 내 단계가 기본값으로 한 번 들어온다 (그 뒤엔 직접 바꿔 볼 수 있다)
+  const [simChatEnh, setSimChatEnh] = useState("");
+  const [simVoiceEnh, setSimVoiceEnh] = useState("");
+  const simEnhSeeded = useRef(false);
+  useEffect(() => {
+    if (!me || simEnhSeeded.current) return;
+    simEnhSeeded.current = true;
+    setSimChatEnh(String(me.chatEnhance || 0));
+    setSimVoiceEnh(String(me.voiceEnhance || 0));
+  }, [me]);
 
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
 
@@ -1260,6 +1400,7 @@ export default function LevelPage() {
     setSimBoost1(false); setSimBoost2(false); setSimEvent(false);
     setPenChild(false); setPenYouth(false); setPenAdult(false); setPenMother(false);
     setSimAttend(""); setSimAttendBoost(false);
+    setSimChatEnh(me ? String(me.chatEnhance || 0) : ""); setSimVoiceEnh(me ? String(me.voiceEnhance || 0) : "");
     setIsChannelDropdownOpen(false);
   };
 
@@ -1268,21 +1409,31 @@ export default function LevelPage() {
     const time = Math.max(0, parseInt(simTime) || 0);
     const attendanceCount = Math.max(0, parseInt(simAttend) || 0);
 
+    const chatEnh = Math.max(0, parseInt(simChatEnh) || 0);
+    const voiceEnh = Math.max(0, parseInt(simVoiceEnh) || 0);
+
     let channelBaseXp = 0;
     let levelBonusXp = 0;
+    let enhanceXp = 0; // 강화 — 채팅은 구간 상승분(기대값 차이), 음성은 1회당 가산 (lib/enhance.js)
     let checkInterval = 1;
 
     if (simChannel === "chat") {
-      channelBaseXp = P.chatXp; levelBonusXp = 0; checkInterval = Math.max(1, Math.round(P.chatCooldownSec / 60));
+      // 채팅은 [최소, 최대] 랜덤이라 기대값 (최소+최대)/2 로 센다. 강화 단계만큼 구간 전체가 위로 밀린다
+      const [bMin, bMax] = chatRange(P, 0);
+      const [cMin, cMax] = chatRange(P, chatEnh);
+      channelBaseXp = Math.round((bMin + bMax) / 2);
+      enhanceXp = Math.round((cMin + cMax) / 2) - channelBaseXp;
+      levelBonusXp = 0; checkInterval = P_chatMin;
     } else {
       checkInterval = P_voiceMin;
       channelBaseXp = simChannel === "voice" ? P.voiceXp : SCRIM_BASE_XP;
       // 봇의 지급표와 같은 값을 쓴다 (lib/voiceTiers 단일 소스)
       levelBonusXp = getVoiceBonus(level);
+      enhanceXp = voiceBonus(P, voiceEnh);
     }
 
     const channelCycles = Math.floor(time / checkInterval);
-    const channelTotalXp = (channelBaseXp + levelBonusXp) * channelCycles;
+    const channelTotalXp = (channelBaseXp + levelBonusXp + enhanceXp) * channelCycles;
 
     const b1Add = simBoost1 ? 300 : 0;
     let penguinAdd = 0;
@@ -1300,17 +1451,18 @@ export default function LevelPage() {
     const projectedTotalXp = currentCumulativeXp + finalGrandTotal;
     const finalLevel = getLevelByXp(projectedTotalXp);
 
-    const cycleText = simChannel === "chat" ? "1분당" : `${P_voiceMin}분당`;
-    const cycleBaseText = simChannel === "chat" ? "1분" : `${P_voiceMin}분`;
+    const cycleText = simChannel === "chat" ? `${P_chatMin}분당` : `${P_voiceMin}분당`;
+    const cycleBaseText = simChannel === "chat" ? `${P_chatMin}분` : `${P_voiceMin}분`;
 
     return {
-      channelBaseXp, levelBonusXp, channelCycles, channelTotalXp,
+      channelBaseXp, levelBonusXp, enhanceXp, channelCycles, channelTotalXp,
       b1Add, penguinAdd, buffTotalXp,
       attendanceBaseTotal, attendanceBoostTotal,
       finalGrandTotal, projectedTotalXp, finalLevel,
       cycleText, cycleBaseText
     };
-  }, [simLevel, simChannel, simTime, simBoost1, penChild, penYouth, penAdult, penMother, simAttend, simAttendBoost, P_voiceMin]);
+    // policy 가 바뀌면(로드·관리자 저장) 구간·강화 값도 다시 센다
+  }, [simLevel, simChannel, simTime, simBoost1, penChild, penYouth, penAdult, penMother, simAttend, simAttendBoost, simChatEnh, simVoiceEnh, P_voiceMin, P_chatMin, policy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 📌 목표 모드 계산 — 현재 시뮬레이터 조건(레벨/채널/버프) 기준 하루 활동량으로 예상 소요일 산출
   const goalResult = useMemo(() => {
@@ -1320,8 +1472,8 @@ export default function LevelPage() {
     if (!targetLv || targetLv <= currentLv || dailyMin <= 0) return null;
 
     const neededXp = getCumulativeXpByLevel(targetLv) - getCumulativeXpByLevel(currentLv);
-    const checkInterval = simChannel === "chat" ? Math.max(1, Math.round(P.chatCooldownSec / 60)) : P_voiceMin;
-    const perCycle = simResult.channelBaseXp + simResult.levelBonusXp + simResult.b1Add + simResult.penguinAdd;
+    const checkInterval = simChannel === "chat" ? P_chatMin : P_voiceMin;
+    const perCycle = simResult.channelBaseXp + simResult.levelBonusXp + simResult.enhanceXp + simResult.b1Add + simResult.penguinAdd;
     const cyclesPerDay = Math.floor(dailyMin / checkInterval);
     const attendDaily = P.attendXp + (simAttendBoost ? P.attendXp : 0); // 하루 1회 출석 가정
     const dailyXp = perCycle * cyclesPerDay + attendDaily;
@@ -1439,7 +1591,7 @@ export default function LevelPage() {
         }
       `}} />
 
-      <TierModal open={tierOpen} onClose={() => setTierOpen(false)} level={me?.level || 0} baseXp={P.voiceXp} intervalMin={P_voiceMin} />
+      <TierModal open={tierOpen} onClose={() => setTierOpen(false)} level={me?.level || 0} baseXp={P.voiceXp} intervalMin={P_voiceMin} enhanceBonus={enh.voice.bonus} />
       <BagOverlay
         open={bagOpen}
         onClose={closeBag}
@@ -1763,6 +1915,14 @@ export default function LevelPage() {
                     </div>
                     )}
 
+                    {/* 강화 — 인벤토리·시즌 패스 줄 아래 한 줄. 좌 채팅 / 우 음성, 모바일은 세로로 쌓인다.
+                        위 두 줄과 같은 헤어라인 문법 — 단계 핍과 버튼만 더한다. */}
+                    {enhOpen && (
+                    <div className="mt-8 pt-6 md:pt-8 border-t border-white/10 grid gap-7 md:gap-0 md:grid-cols-2 md:divide-x md:divide-white/10">
+                      <EnhancePanel kind="chat" v={enh.chat} balance={me} busy={!!enhBusy} onEnhance={enhance} padClass="md:pr-6" />
+                      <EnhancePanel kind="voice" v={enh.voice} balance={me} busy={!!enhBusy} onEnhance={enhance} padClass="md:pl-6" />
+                    </div>
+                    )}
                   </div>
                 </div>
 
@@ -2266,7 +2426,7 @@ export default function LevelPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 border-y border-black/[0.08] md:divide-x divide-black/[0.08] mt-12">
                     {[
-                      { t: "상한은 1,000레벨", d: `채팅 ${P.chatXp.toLocaleString()} XP, 음성 ${P.voiceXp.toLocaleString()} XP부터 시작합니다. 위로 갈수록 필요한 XP가 가팔라집니다.` },
+                      { t: "상한은 1,000레벨", d: `채팅 ${P_chatBase[0].toLocaleString()}~${P_chatBase[1].toLocaleString()} XP, 음성 ${P.voiceXp.toLocaleString()} XP부터 시작합니다. 위로 갈수록 필요한 XP가 가팔라집니다.` },
                       { t: "등급은 따로 올리지 않습니다", d: "레벨이 오르면 자동으로 따라 오르고, 음성으로 받는 XP가 등급만큼 더 커집니다." },
                     ].map((f, i) => (
                       <div key={i} className={`py-7 md:px-7 first:md:pl-0 last:md:pr-0 ${i > 0 ? "border-t md:border-t-0 border-black/[0.08]" : ""}`}>
@@ -2288,7 +2448,7 @@ export default function LevelPage() {
                   <SectionHeader title="XP는 이렇게 쌓입니다" />
                   <div className="grid grid-cols-1 md:grid-cols-2 border-y border-black/[0.08] md:divide-x divide-black/[0.08]">
                     {[
-                      { t: "채팅", x: P.chatXp.toLocaleString(), c: `쿨타임 ${P_chatCooldownLabel}`, d: "메시지를 보내면 지급됩니다. 쿨타임 안에 보낸 메시지는 지급도 진행도 집계도 되지 않습니다." },
+                      { t: "채팅", x: `${P_chatBase[0].toLocaleString()}~${P_chatBase[1].toLocaleString()}`, c: `쿨타임 ${P_chatCooldownLabel}`, d: "메시지를 보내면 구간 안에서 랜덤으로 지급됩니다. 쿨타임 안에 보낸 메시지는 지급도 진행도 집계도 되지 않습니다." },
                       { t: "음성", x: P.voiceXp.toLocaleString(), c: `${P_voiceMin}분마다`, d: `${P_voiceMin}분마다 돌아오는 지급 시각에 음성 채널에 있으면 받습니다.` },
                     ].map((item, i) => (
                       <div key={i} className={`group py-7 md:px-7 first:md:pl-0 last:md:pr-0 ${i > 0 ? "border-t md:border-t-0 border-black/[0.08]" : ""}`}>
@@ -2396,7 +2556,7 @@ export default function LevelPage() {
                     <div className="relative z-10">
                       <p className="text-[9px] font-black tracking-[0.3em] text-white/35 uppercase mb-5">Voice Formula</p>
                       <div className="flex flex-wrap items-center gap-2">
-                        {[`기본 ${P.voiceXp.toLocaleString()}`, "등급", "역할", "채널", "진행 중 부스트"].map((c, i) => (
+                        {[`기본 ${P.voiceXp.toLocaleString()}`, ...(enh.voice.level > 0 ? [`강화 ${enh.voice.bonus.toLocaleString()}`] : []), "등급", "역할", "채널", "진행 중 부스트"].map((c, i) => (
                           <React.Fragment key={c}>
                             {i > 0 && <span className="text-[#ff5c77] font-black text-sm">+</span>}
                             <span className="px-3 py-1.5 rounded-lg bg-white/[0.06] text-white text-[12px] font-bold whitespace-nowrap">{c}</span>
@@ -3058,6 +3218,8 @@ export default function LevelPage() {
                   { l: "현재 유저 레벨", val: simLevel, set: setSimLevel, p: "0~1000", max: 1000 },
                   { l: "총 활동 시간 (분)", val: simTime, set: setSimTime, p: "0~999999", max: 999999 },
                   { l: "총 출석 횟수", val: simAttend, set: setSimAttend, p: "0~9999", max: 9999 },
+                  { l: "채팅 강화 단계", val: simChatEnh, set: setSimChatEnh, p: `0~${P.chatEnhanceMax}`, max: P.chatEnhanceMax },
+                  { l: "음성 강화 단계", val: simVoiceEnh, set: setSimVoiceEnh, p: `0~${P.voiceEnhanceMax}`, max: P.voiceEnhanceMax },
                 ].map((input, idx) => (
                   <div key={idx} className="flex justify-between items-center py-3.5 border-b border-black/[0.06]">
                     <label className="text-xs font-bold text-[#5a5a5a]">{input.l}</label>
@@ -3081,7 +3243,7 @@ export default function LevelPage() {
                         className="w-full px-4 py-2.5 bg-white border border-black/10 rounded-full text-[#131313] text-xs font-bold outline-none focus:outline-none transition-colors hover:border-[#e91e3f]/50 flex justify-between items-center"
                       >
                         <span className="truncate">
-                          {simChannel === 'chat' ? '채팅 (1분)' : simChannel === 'voice' ? `음성 (${P_voiceMin}분)` : `내전 (${P_voiceMin}분)`}
+                          {simChannel === 'chat' ? `채팅 (${P_chatMin}분)` : simChannel === 'voice' ? `음성 (${P_voiceMin}분)` : `내전 (${P_voiceMin}분)`}
                         </span>
                         <span className="text-[9px] text-[#8a8a8a] ml-1">▼</span>
                       </button>
@@ -3091,9 +3253,9 @@ export default function LevelPage() {
                           <div className="fixed inset-0 z-40" onClick={() => setIsChannelDropdownOpen(false)}></div>
                           <div className="absolute top-full right-0 w-36 mt-1.5 bg-[#ffffff] border border-black/10 rounded-lg overflow-hidden shadow-2xl z-50">
                             {[
-                              { val: 'chat', label: '채팅 채널 (1분)' },
-                              { val: 'voice', label: '음성 채널 (5분)' },
-                              { val: 'scrim', label: '내전 채널 (5분)' }
+                              { val: 'chat', label: `채팅 채널 (${P_chatMin}분)` },
+                              { val: 'voice', label: `음성 채널 (${P_voiceMin}분)` },
+                              { val: 'scrim', label: `내전 채널 (${P_voiceMin}분)` }
                             ].map((opt) => (
                               <button
                                 key={opt.val}
@@ -3175,9 +3337,10 @@ export default function LevelPage() {
                   <table className="w-full text-xs">
                     <tbody className="divide-y divide-black/[0.06]">
                       {[
-                        { l: "선택 채널 기본 XP (1회당)", v: `${simResult.channelBaseXp.toLocaleString()} XP` },
+                        { l: simChannel === "chat" ? `선택 채널 기본 XP (1회당 · ${P_chatBase[0].toLocaleString()}~${P_chatBase[1].toLocaleString()} 기대값)` : "선택 채널 기본 XP (1회당)", v: `${simResult.channelBaseXp.toLocaleString()} XP` },
                         { l: "레벨별 구간 추가 XP (1회당)", v: `${simResult.levelBonusXp.toLocaleString()} XP` },
-                        { l: "[채널] 1회 지급당 합계 XP", v: `${(simResult.channelBaseXp + simResult.levelBonusXp).toLocaleString()} XP` },
+                        { l: "강화 추가 XP (1회당)", v: `${simResult.enhanceXp.toLocaleString()} XP` },
+                        { l: "[채널] 1회 지급당 합계 XP", v: `${(simResult.channelBaseXp + simResult.levelBonusXp + simResult.enhanceXp).toLocaleString()} XP` },
                         { l: "[채널] 예상 활동 인정 횟수", v: `${simResult.channelCycles}회` },
                         { l: "[채널] 활동 XP 획득 총량", v: `${simResult.channelTotalXp.toLocaleString()} XP` },
                         { l: `아이템 상품 [영구제] XP Boost+ 추가합산 (${simResult.cycleText})`, v: `${simResult.b1Add.toLocaleString()} XP` },
