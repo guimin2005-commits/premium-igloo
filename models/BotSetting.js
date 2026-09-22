@@ -5,10 +5,23 @@ import mongoose from "mongoose";
 const BotSettingSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true, default: "main" },
 
-  chatXp: { type: Number, default: 200 },          // 채팅 1회 지급량
+  chatXp: { type: Number, default: 200 },          // (구) 채팅 1회 고정 지급량 — 호환용으로 남겨 두고 지급은 min/max 를 쓴다
+  // 📌 채팅 1회 지급은 [chatXpMin, chatXpMax] 사이의 랜덤 정수. 강화 단계(UserXp.chatEnhance)마다
+  //    양끝에 chatEnhanceStep 씩 더해진다 (lib/enhance.js · bot/src/features/chatXp.js)
+  chatXpMin: { type: Number, default: 50 },
+  chatXpMax: { type: Number, default: 500 },
+  chatEnhanceStep: { type: Number, default: 50 },          // 단계당 최소·최대에 더해지는 XP
+  chatEnhanceMax: { type: Number, default: 10 },           // 최대 단계
+  chatEnhanceBaseCost: { type: Number, default: 20000 },   // 1단계 비용
+  chatEnhanceCostGrowthPct: { type: Number, default: 50 }, // 단계마다 비용 상승 %
   chatCooldownSec: { type: Number, default: 60 },  // 채팅 쿨타임 (초)
   voiceXp: { type: Number, default: 3000 },        // 음성 1회 지급량
   voiceIntervalSec: { type: Number, default: 300 },// 음성 지급 주기 (초)
+  // 📌 음성 강화 — 단계(UserXp.voiceEnhance)당 음성 1회 지급에 voiceEnhanceStep 씩 영구 가산
+  voiceEnhanceStep: { type: Number, default: 300 },
+  voiceEnhanceMax: { type: Number, default: 10 },
+  voiceEnhanceBaseCost: { type: Number, default: 50000 },
+  voiceEnhanceCostGrowthPct: { type: Number, default: 50 },
   attendXp: { type: Number, default: 7000 },
   attendPoint: { type: Number, default: 0 },      // 출석 1회 POINT
   attendPassPoint: { type: Number, default: 0 },  // 출석 1회 패스 포인트

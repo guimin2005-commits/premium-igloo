@@ -23,6 +23,12 @@ const UserXpSchema = new mongoose.Schema({
   // 사이트에서 XP·레벨을 바꿨을 때 레벨 역할을 다시 맞추도록 세우는 표시
   needsRoleSync: { type: Boolean, default: false },
 
+  // 📌 강화 단계 — 사이트(app/api/xp/enhance)가 올리고 봇은 읽기만 한다. 영구 값(시즌 무관).
+  //    채팅: 1회 지급 구간 양끝에 단계 × chatEnhanceStep 가산 / 음성: 1회 지급에 단계 × voiceEnhanceStep 가산
+  //    (models/UserXp.js 와 이름·기본값이 반드시 같아야 한다)
+  chatEnhance: { type: Number, default: 0 },
+  voiceEnhance: { type: Number, default: 0 },
+
   // 📌 시즌 패스 — 봇은 읽지 않지만 사이트와 같은 문서라 스키마를 맞춰 둔다.
   //    빠지면 봇의 upsert 가 문서를 만들 때 사이트가 기대하는 기본값이 없어진다.
   //    (models/UserXp.js 와 이름·기본값이 반드시 같아야 한다)
@@ -64,10 +70,22 @@ export const ChannelConfig = mongoose.models.ChannelConfig || mongoose.model("Ch
 // 대시보드에서 관리하는 XP 기본 정책 (단일 문서 key:"main")
 const BotSettingSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true, default: "main" },
-  chatXp: { type: Number, default: 200 },
+  chatXp: { type: Number, default: 200 }, // (구) 고정 지급량 — 호환용. 채팅 지급은 아래 min/max 랜덤을 쓴다
+  // 채팅 1회 지급 = [chatXpMin, chatXpMax] 랜덤 정수, 강화 단계마다 양끝 + chatEnhanceStep
+  chatXpMin: { type: Number, default: 50 },
+  chatXpMax: { type: Number, default: 500 },
+  chatEnhanceStep: { type: Number, default: 50 },
+  chatEnhanceMax: { type: Number, default: 10 },           // 사이트 전용(강화 상한) — 스키마 동기화
+  chatEnhanceBaseCost: { type: Number, default: 20000 },   // 사이트 전용(1단계 비용)
+  chatEnhanceCostGrowthPct: { type: Number, default: 50 }, // 사이트 전용(단계당 비용 상승 %)
   chatCooldownSec: { type: Number, default: 60 },
   voiceXp: { type: Number, default: 3000 },
   voiceIntervalSec: { type: Number, default: 300 },
+  // 음성 강화 — 단계당 음성 1회 지급에 voiceEnhanceStep 가산 (나머지 셋은 사이트 전용)
+  voiceEnhanceStep: { type: Number, default: 300 },
+  voiceEnhanceMax: { type: Number, default: 10 },
+  voiceEnhanceBaseCost: { type: Number, default: 50000 },
+  voiceEnhanceCostGrowthPct: { type: Number, default: 50 },
   attendXp: { type: Number, default: 7000 },
   // 출석 인정 기준(음성 누적 분) — 자동 출석 지급이 이 값을 읽는다.
   // 스키마에 없으면 strict 모드에서 조용히 버려져 관리자가 바꿔도 60으로 굳는다.

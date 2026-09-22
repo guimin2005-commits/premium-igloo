@@ -6,10 +6,21 @@ const REFRESH_MS = 60 * 1000;
 
 // 대시보드 미설정 시 config.js의 기존 정책을 그대로 사용
 const DEFAULTS = {
-  chatXp: fallback.chatXp,
+  chatXp: fallback.chatXp, // (구) 고정 지급량 — 채팅 지급은 min/max 랜덤을 쓴다
+  // 채팅 랜덤 구간 · 강화 (bot/src/db.js BotSettingSchema 와 같은 기본값)
+  chatXpMin: 50,
+  chatXpMax: 500,
+  chatEnhanceStep: 50,
+  chatEnhanceMax: 10,
+  chatEnhanceBaseCost: 20000,
+  chatEnhanceCostGrowthPct: 50,
   chatCooldownSec: fallback.chatCooldownMs / 1000,
   voiceXp: fallback.voiceBaseXp,
   voiceIntervalSec: fallback.voiceIntervalMs / 1000,
+  voiceEnhanceStep: 300,
+  voiceEnhanceMax: 10,
+  voiceEnhanceBaseCost: 50000,
+  voiceEnhanceCostGrowthPct: 50,
   attendXp: fallback.attendXp,
   muteMode: "reduce",
   muteReducePct: 90,

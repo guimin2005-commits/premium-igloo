@@ -47,6 +47,9 @@ export async function GET() {
         // 통산 음성 참여 시간(초) — 시즌이 바뀌어도 이어진다
         voiceSeconds: doc?.voiceSeconds || 0,
         lastAttendDate: doc?.lastAttendDate || "",
+        // 강화 단계(영구) — 레벨 페이지 강화 카드·시뮬레이터 기본값이 이 값을 읽는다 (lib/enhance.js)
+        chatEnhance: Math.max(0, Math.floor(Number(doc?.chatEnhance) || 0)),
+        voiceEnhance: Math.max(0, Math.floor(Number(doc?.voiceEnhance) || 0)),
         // 진행률 표시용: 현재 레벨 구간 내 진행 XP / 구간 총 XP
         levelProgress: {
           current: Math.max(0, xp - currentCum),

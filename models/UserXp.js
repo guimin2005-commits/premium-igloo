@@ -33,6 +33,11 @@ const UserXpSchema = new mongoose.Schema({
   passClaimedPaid: { type: [String], default: [] }, // 수령한 프리미엄 티어 tid
   // 사이트에서 XP·레벨을 바꿨을 때 봇이 레벨 역할을 다시 맞추도록 세우는 표시
   needsRoleSync: { type: Boolean, default: false },
+  // 📌 강화 단계 — 채팅 XP 구간·음성 XP 가산을 올린 횟수. **영구** 값이라 시즌 롤오버
+  //    (lib/seasonPass getPassState)·관리자 초기화(app/api/xp/grant reset)의 $set 목록에 넣지 않는다.
+  //    비용·효과 공식은 lib/enhance.js, 소비는 app/api/xp/enhance, 지급 반영은 봇 chatXp/voiceXp.
+  chatEnhance: { type: Number, default: 0 },
+  voiceEnhance: { type: Number, default: 0 },
   updatedAt: { type: Date, default: Date.now },
 });
 
