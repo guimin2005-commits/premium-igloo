@@ -36,7 +36,7 @@ export async function GET() {
 
     const [purchases, shopItems, itemsAll, roleConfigs, invRoles, discordRoles] = await Promise.all([
       Purchase.find({ userId, status: { $nin: ["cancelled", "refunded"] } }).sort({ createdAt: -1 }).lean(),
-      ShopItem.find({}, { name: 1, description: 1, imageUrl: 1, itemImageUrl: 1, icon: 1, color: 1, type: 1, roleId: 1, itemId: 1 }).lean(),
+      ShopItem.find({}, { name: 1, description: 1, imageUrl: 1, itemImageUrl: 1, icon: 1, color: 1, type: 1, roleId: 1, itemId: 1, active: 1, sortOrder: 1 }).lean(),
       Item.find({}).sort({ sortOrder: 1, createdAt: 1 }).lean(),
       RoleConfig.find({}, { roleId: 1, roleName: 1, rewardLevel: 1, exclusive: 1 }).lean(),
       InventoryRole.find({ visible: true }).sort({ sortOrder: 1 }).lean(),
@@ -46,10 +46,19 @@ export async function GET() {
     const held = discordRoles === null ? null : new Set(discordRoles);
     const shopById = new Map(shopItems.map((s) => [String(s._id), s]));
     const itemById = new Map(itemsAll.map((i) => [String(i._id), i]));
-    // 역할 → 아이템 (여럿이면 정렬 순 첫 번째). (B) 는 visible 인 것만 쓴다
+    // 역할 → 아이템. (A) 의 fallback 은 visible 무관, (B) 는 visible 인 것만 —
+    //    숨긴 아이템은 "없는 것"으로 보고 레벨 보상·상품·옛 표기 분기로 내려간다.
     const itemByRole = new Map();
+    const visibleItemByRole = new Map();
     for (const i of itemsAll) {
-      if (i.roleId && !itemByRole.has(i.roleId)) itemByRole.set(i.roleId, i);
+      if (!i.roleId) continue;
+      if (!itemByRole.has(i.roleId)) itemByRole.set(i.roleId, i);
+      if (i.visible !== false && !visibleItemByRole.has(i.roleId)) visibleItemByRole.set(i.roleId, i);
+    }
+    // 역할 → 직접 설정 상품(역할·권한). 판매 중 우선, 정렬 순 — 아이템으로 등록하지 않은 상품도 역할 보유자에게 보인다
+    const shopByRole = new Map();
+    for (const s of [...shopItems].sort((a, b) => Number(!!b.active) - Number(!!a.active) || (a.sortOrder || 0) - (b.sortOrder || 0))) {
+      if (s.roleId && !shopByRole.has(s.roleId)) shopByRole.set(s.roleId, s);
     }
     const now = Date.now();
 
@@ -104,7 +113,7 @@ export async function GET() {
         acquiredAt: p.processedAt || p.createdAt,
         // 시즌 전환으로 디스코드 표기만 떼고 사이트에서 들고 있는 것
         siteOnly: !!p.siteOnly,
-        source: p.itemId === "season-pass" ? "pass" : "shop",
+        source: p.itemId === "season-pass" ? "pass" : p.itemId === "grant" ? "grant" : "shop",
         rewardLevel: null,
       });
     }
@@ -113,9 +122,8 @@ export async function GET() {
     if (held) {
       for (const roleId of held) {
         if (seenRoles.has(roleId)) continue;
-        const item = itemByRole.get(roleId);
+        const item = visibleItemByRole.get(roleId);
         if (item) {
-          if (item.visible === false) continue;
           const disp = displayOf({ item });
           owned.push({
             // 역할은 역할 ID 자체가 안정적인 키다
@@ -156,6 +164,31 @@ export async function GET() {
             siteOnly: false,
             source: "level",
             rewardLevel: cfg.rewardLevel,
+            exclusive: !!cfg.exclusive, // 등급 사다리 — 인벤토리에서 맨 앞
+          });
+          continue;
+        }
+
+        // 아이템으로 등록하지 않은 직접 설정 상품(역할·권한)도 역할을 들고 있으면 보여 준다
+        const shopItem = shopByRole.get(roleId);
+        if (shopItem && ROLE_LIKE.has(shopItem.type)) {
+          const disp = displayOf({ shopItem });
+          owned.push({
+            uid: `r:${roleId}`,
+            kind: disp.type,
+            type: disp.type,
+            name: disp.name,
+            description: disp.description,
+            icon: disp.icon,
+            imageUrl: disp.imageUrl,
+            color: disp.color,
+            status: "completed",
+            days: 0,
+            expiresAt: null,
+            acquiredAt: null,
+            siteOnly: false,
+            source: "shop",
+            rewardLevel: null,
           });
           continue;
         }
@@ -185,6 +218,10 @@ export async function GET() {
         // 아이템도 레벨 보상도 아닌 역할은 사이트가 관리하지 않으므로 숨긴다
       }
     }
+
+    // 📌 순서 — 등급(배타 티어) → 레벨 보상(낮은 레벨부터) → 나머지는 지금 순서. 등급은 어느 탭에서든 첫 칸.
+    const rankOf = (it) => (it.source === "level" ? (it.exclusive ? 0 : 1) : 2);
+    owned.sort((a, b) => rankOf(a) - rankOf(b) || (rankOf(a) === 1 ? (a.rewardLevel ?? 0) - (b.rewardLevel ?? 0) : 0));
 
     return NextResponse.json({
       success: true,

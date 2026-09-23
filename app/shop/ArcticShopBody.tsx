@@ -119,10 +119,10 @@ const F_INPUT_SM = "w-full bg-white border border-[#dedddb] rounded-lg px-3 py-3
 const F_NOTE = "text-[10px] text-[#8a8a8a] mt-1.5";
 
 // 판매 상태 · 기간제 · 시즌 동작이 같은 모양을 쓴다
-function FormToggle({ on, onClick, onLabel, offLabel }: { on: boolean; onClick: () => void; onLabel: string; offLabel: string }) {
+function FormToggle({ on, onClick, onLabel, offLabel, disabled = false }: { on: boolean; onClick: () => void; onLabel: string; offLabel: string; disabled?: boolean }) {
   return (
-    <button type="button" onClick={onClick}
-      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-sm transition-colors ${on ? "border-[#e91e3f] bg-[#e91e3f]/[0.06]" : "border-[#dedddb] bg-white"}`}>
+    <button type="button" onClick={onClick} disabled={disabled}
+      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-sm transition-colors disabled:opacity-60 disabled:cursor-default ${on ? "border-[#e91e3f] bg-[#e91e3f]/[0.06]" : "border-[#dedddb] bg-white"}`}>
       <span className={on ? "font-bold text-[#e91e3f]" : "text-[#8a8a8a]"}>{on ? onLabel : offLabel}</span>
       <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${on ? "bg-[#e91e3f]" : "bg-[#d2d1cf]"}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? "left-[18px]" : "left-0.5"}`}></span>
@@ -1560,6 +1560,7 @@ export default function ArcticShopBody({
                           return (
                             <button key={o.v} type="button"
                               onClick={() => {
+                                if (on) return; // 이미 그 상태 — 연결 아이템이 첫 항목으로 바뀌지 않게
                                 if (o.v === "custom") setEditForm(unlinkItem(editForm));
                                 else if (regItems[0]) setEditForm(applyItem(editForm, regItems[0]));
                                 else setEditError("등록된 아이템이 없습니다. 아이템 등록에서 먼저 만들어 주세요.");
@@ -1583,7 +1584,6 @@ export default function ArcticShopBody({
                             }))}
                           />
                           <p className={F_NOTE}>
-                            표기는 아이템 등록에서 바꿉니다 ·{" "}
                             <Link href="/admin/shop?tab=items" className="font-bold text-[#e91e3f] hover:underline">아이템 등록에서 수정</Link>
                           </p>
                         </div>
@@ -1736,9 +1736,9 @@ export default function ArcticShopBody({
                        권한은 역할이 곧 디스코드 기능이라 떼면 기능이 사라진다 — 둘 다 감춘다 */}
                   {editForm.type !== "physical" && editForm.type !== "perk" && (
                     <FormGroup title="시즌 동작" summary={efSeasonSummary} open={openGroups.season} onToggle={() => toggleGroup("season")}>
-                      <FormToggle on={!!editForm.detachOnSeason} onClick={() => setEditForm({ ...editForm, detachOnSeason: !editForm.detachOnSeason })}
+                      <FormToggle on={!!editForm.detachOnSeason} disabled={efLinked} onClick={() => setEditForm({ ...editForm, detachOnSeason: !editForm.detachOnSeason })}
                         onLabel="시즌 바뀌면 디스코드 표기 뗌" offLabel="디스코드 역할 계속 유지" />
-                      <p className={F_NOTE}>표기만 내려가고 인벤토리 소유는 남습니다.</p>
+                      <p className={F_NOTE}>{efLinked ? "등록된 아이템의 설정을 따릅니다." : "표기만 내려가고 인벤토리 소유는 남습니다."}</p>
                     </FormGroup>
                   )}
                 </div>

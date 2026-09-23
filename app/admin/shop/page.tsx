@@ -163,7 +163,10 @@ export default function AdminShopPage() {
   const [isSavingReg, setIsSavingReg] = useState(false);
   // 예전 '인벤토리 표기 역할' — 남아 있으면 가져오기 버튼을 보여 준다
   const [invRoles, setInvRoles] = useState<any[]>([]);
+  // 아직 아이템으로 옮기지 않은 옛 표기 역할 — 가져오기 버튼의 숫자·표시 조건
   const [isImporting, setIsImporting] = useState(false);
+
+  const pendingInv = invRoles.filter((r) => r.visible !== false && !regItems.some((i) => i.roleId === r.roleId));
 
   const fetchRegItems = useCallback(() => {
     Promise.all([
@@ -199,14 +202,18 @@ export default function AdminShopPage() {
   };
 
   // 표시 토글 — 목록에서 바로 켜고 끈다 (폼을 열지 않아도 되게)
+  const [visBusy, setVisBusy] = useState("");
   const toggleRegVisible = async (it: any) => {
+    if (visBusy) return;
+    setVisBusy(it._id);
     const res = await fetch("/api/admin/items", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...it, id: it._id, visible: it.visible === false }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    if (res?.ok && d?.success) fetchRegItems();
+    if (res?.ok && d?.success) { fetchRegItems(); notify(it.visible === false ? "인벤토리에 표시합니다." : "인벤토리에서 숨깁니다."); }
     else notify(d?.message || "저장에 실패했습니다.", true);
+    setVisBusy("");
   };
 
   const importInvRoles = async () => {
@@ -508,9 +515,9 @@ export default function AdminShopPage() {
             <Reveal>
             <section>
               <SectionHead no="02" title={`등록된 아이템 (${regItems.length})`} right={
-                invRoles.length > 0 ? (
+                pendingInv.length > 0 ? (
                   <Btn variant="ghost" onClick={importInvRoles} disabled={isImporting} className="whitespace-nowrap">
-                    {isImporting ? "가져오는 중..." : `표기 역할 가져오기 (${invRoles.length})`}
+                    {isImporting ? "가져오는 중..." : `표기 역할 가져오기 (${pendingInv.length})`}
                   </Btn>
                 ) : undefined
               } />
@@ -539,9 +546,9 @@ export default function AdminShopPage() {
                               <span className="w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: color }}></span>
                               {color}
                             </span>
-                            <span className="text-[11px] text-[#5a5a5a] tabular-nums">상품 {it.usage || 0}</span>
+                            <span className="text-[11px] text-[#5a5a5a] tabular-nums">상품 {it.usage || 0}{it.passUsage > 0 ? ` · 패스 ${it.passUsage}` : ""}</span>
                             {it.type === "role" && it.detachOnSeason && <span className="text-[10px] font-bold text-[#5a5a5a] border border-black/15 px-1.5 rounded">시즌 뗌</span>}
-                            <button type="button" onClick={() => toggleRegVisible(it)}
+                            <button type="button" onClick={() => toggleRegVisible(it)} disabled={visBusy === it._id}
                               className={`text-[10px] font-bold px-1.5 rounded border transition-colors ${it.visible === false ? "text-[#a3a3a3] border-black/10" : "text-[#e91e3f] border-[#e91e3f]/30"}`}>
                               {it.visible === false ? "숨김" : "표시"}
                             </button>
@@ -584,6 +591,7 @@ export default function AdminShopPage() {
                     <div className="mb-4">
                       <FilterChips options={SOURCE_OPTIONS} value={sourceOf(form)}
                         onChange={(v) => {
+                          if (v === sourceOf(form)) return; // 이미 그 상태 — 연결 아이템이 첫 항목으로 바뀌지 않게
                           if (v === "custom") setForm(unlinkItem(form));
                           else if (regItems[0]) setForm(applyItem(form, regItems[0]));
                           else notify("등록된 아이템이 없습니다. 아이템 탭에서 먼저 등록해 주세요.", true);
@@ -601,7 +609,6 @@ export default function AdminShopPage() {
                             }))}
                           />
                           <p className={fieldNote}>
-                            표기는 아이템 등록에서 바꿉니다 ·{" "}
                             <Link href="/admin/shop?tab=items" className="font-bold text-[#e91e3f] hover:underline">아이템 등록에서 수정</Link>
                           </p>
                         </div>

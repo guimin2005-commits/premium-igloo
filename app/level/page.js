@@ -37,6 +37,7 @@ const invSubLabel = (it) => {
   const base = it.source === "level" ? "레벨 보상" : itemTypeLabel(it.type || it.kind);
   if (it.source === "level") return it.rewardLevel != null ? `${base} · Lv.${it.rewardLevel} 도달` : base;
   if (it.source === "pass") return `${base} · 시즌 패스`;
+  if (it.source === "grant") return `${base} · 운영진 지급`;
   if (it.days > 0) return `${base} · ${it.days}일 이용권`;
   return base;
 };
