@@ -313,7 +313,7 @@ export default function SupportPage() {
         <p className="text-[12px] text-gray-500 mb-10 text-center break-keep">{notifyDiscord ? "답변이 등록되면 디스코드 DM으로 알려드립니다." : "답변은 내 정보 › 1:1 문의 내역에서 확인할 수 있습니다."}</p>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <button onClick={() => { setIsSubmitted(false); setMainType(""); setSubType(""); setErrorDesc(""); setReportDate(""); setReportType(""); setProductName(""); setRefundType("환불"); setTitle(""); setContent(""); }} className="px-8 py-3.5 bg-white hover:bg-gray-200 text-black text-sm font-bold rounded-lg transition-colors outline-none">새 문의 작성하기</button>
-          <Link href="/profile?tab=inquiry" className="px-8 py-3.5 text-sm font-bold text-gray-400 hover:text-white transition-colors">내 문의 내역 보기</Link>
+          <Link href="/profile/inquiry" className="px-8 py-3.5 text-sm font-bold text-gray-400 hover:text-white transition-colors">내 문의 내역 보기</Link>
         </div>
       </main>
     );
@@ -492,7 +492,7 @@ export default function SupportPage() {
               className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-lg transition-colors outline-none">
               문의하기
             </button>
-            <Link href="/profile?tab=inquiry" className="mt-3 w-full block text-center py-2.5 text-[12px] font-bold text-gray-400 hover:text-white transition-colors">
+            <Link href="/profile/inquiry" className="mt-3 w-full block text-center py-2.5 text-[12px] font-bold text-gray-400 hover:text-white transition-colors">
               내 문의 내역 보기
             </Link>
 

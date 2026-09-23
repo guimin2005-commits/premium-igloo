@@ -968,6 +968,9 @@ export default function LevelPage() {
   const [introSec, setIntroSec] = useState(INTRO_STEPS[0].id);
   const [invTab, setInvTab] = useState("all");
   const [bagOpen, setBagOpen] = useState(false);
+  // /profile 의 인벤토리 줄에서 ?bag=1 로 들어오면 가방을 바로 연다
+  const bagParam = searchParams.get("bag");
+  useEffect(() => { if (bagParam === "1") setBagOpen(true); }, [bagParam]);
   const [rankMode, setRankMode] = useState("all");
   const [rankPage, setRankPage] = useState(0);
   const [rankRows, setRankRows] = useState([]);
