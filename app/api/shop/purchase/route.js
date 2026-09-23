@@ -105,7 +105,7 @@ export async function POST(request) {
         : { $inc: { soldCount: -1 } };
       await ShopItem.updateOne({ _id: item._id }, rollback);
       return NextResponse.json(
-        { success: false, message: payMethod === "point" ? "보유 POINT가 부족합니다." : "보유 XP가 부족합니다." },
+        { success: false, message: payMethod === "point" ? "보유 빙옥이 부족합니다." : "보유 XP가 부족합니다." },
         { status: 400 }
       );
     }

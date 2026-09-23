@@ -6,7 +6,10 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { getCumulativeXpByLevel } from "@/lib/leveling";
 import UserXp from "@/models/UserXp";
+import RoleConfig from "@/models/RoleConfig";
+import XpBoost from "@/models/XpBoost";
 import { settleTierPoints } from "@/lib/points";
+import { fetchMemberRoles } from "@/lib/discordMember";
 
 // ── [조회] 로그인한 유저 본인의 XP·레벨·순위 ──────────────────
 export async function GET() {
@@ -25,10 +28,20 @@ export async function GET() {
     // 승급 보상 정산 — 봇이 레벨을 올리고, 그에 따른 POINT 는 사이트가 여기서 갚는다.
     //    pointTierPaid 조건부 갱신이라 몇 번을 불러도 한 번만 지급된다.
     const tierGain = await settleTierPoints(session.user.id, level).catch(() => 0);
-    const [above, total] = await Promise.all([
+    const now = new Date();
+    const [above, total, heldRoles, buffCfgs, boostRows] = await Promise.all([
       UserXp.countDocuments({ xp: { $gt: xp } }),
       UserXp.countDocuments(),
+      fetchMemberRoles(session.user.id),
+      RoleConfig.find({ buffXp: { $gt: 0 } }, { roleId: 1, roleName: 1, buffXp: 1 }).lean(),
+      XpBoost.find({ startAt: { $lte: now }, endAt: { $gte: now } }, { name: 1, boostXp: 1, targetRoleId: 1, targetChannelId: 1 }).lean(),
     ]);
+    // 📌 획득 XP 계산 재료 — 봇 chatXp/voiceXp 의 가산 항목과 같은 것만 (채널 부스트는 채널마다 달라 뺀다)
+    const held = new Set(heldRoles || []);
+    const buffs = buffCfgs.filter((c) => held.has(c.roleId)).map((c) => ({ name: c.roleName || "역할", xp: c.buffXp }));
+    const boosts = boostRows
+      .filter((b) => !b.targetChannelId && (!b.targetRoleId || held.has(b.targetRoleId)))
+      .map((b) => ({ name: b.name || "부스트", xp: Math.max(0, Number(b.boostXp) || 0) }));
 
     const currentCum = getCumulativeXpByLevel(level);
     const nextCum = getCumulativeXpByLevel(level + 1);
@@ -50,6 +63,12 @@ export async function GET() {
         // 강화 단계(영구) — 레벨 페이지 강화 카드·시뮬레이터 기본값이 이 값을 읽는다 (lib/enhance.js)
         chatEnhance: Math.max(0, Math.floor(Number(doc?.chatEnhance) || 0)),
         voiceEnhance: Math.max(0, Math.floor(Number(doc?.voiceEnhance) || 0)),
+        // 지금 내 역할 버프·부스트 — 채팅·음성 1회 지급에 더해지는 가산 (획득 XP 줄)
+        buffXp: buffs.reduce((s, b) => s + b.xp, 0),
+        buffs,
+        boostXp: boosts.reduce((s, b) => s + b.xp, 0),
+        boosts,
+        rolesSynced: heldRoles !== null,
         // 진행률 표시용: 현재 레벨 구간 내 진행 XP / 구간 총 XP
         levelProgress: {
           current: Math.max(0, xp - currentCum),

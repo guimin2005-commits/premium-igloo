@@ -475,7 +475,7 @@ export default function AdminSupportersPage() {
                         <span className="w-20 shrink-0 text-right">달성률</span>
                         <span className="w-16 shrink-0">등급</span>
                         <span className="w-32 shrink-0">XP</span>
-                        <span className="w-28 shrink-0">POINT</span>
+                        <span className="w-28 shrink-0">빙옥</span>
                         <span className="flex-1 min-w-0">코멘트</span>
                         <span className="w-28 shrink-0">상태</span>
                         <span className="w-36 shrink-0 text-right">처리</span>
@@ -835,7 +835,7 @@ export default function AdminSupportersPage() {
                 <span className="text-[#131313] font-black">{payEval.xp.toLocaleString()}</span>
               </div>
               <div className="flex items-center justify-between gap-4">
-                <span className={dlLabel}>POINT</span>
+                <span className={dlLabel}>빙옥</span>
                 <span className="text-[#3f9e93] font-black">{payEval.point.toLocaleString()}</span>
               </div>
               <p className="pt-2 text-[11px] text-[#8a8a8a]">지급 후에는 수정할 수 없습니다.</p>

@@ -10,6 +10,7 @@ import ShopItem from "@/models/ShopItem";
 import RoleConfig from "@/models/RoleConfig";
 import InventoryRole from "@/models/InventoryRole";
 import Item from "@/models/Item";
+import { fetchMemberRoles } from "@/lib/discordMember";
 
 // 📌 내 보유 아이템 — 구매 내역이 아니라 "지금 실제로 들고 있는 것"을 보여준다.
 //    표기는 아이템 등록(models/Item)이 단일 원천이다:
@@ -18,35 +19,6 @@ import Item from "@/models/Item";
 //          없고 레벨 보상(RoleConfig.rewardLevel) 이면 레벨 보상으로, 둘 다 없으면 숨긴다.
 //          (InventoryRole 은 아이템으로 가져오기 전까지의 호환용 fallback)
 //    (구매했지만 봇이 아직 지급하지 못한 건은 '지급 대기'로 따로 표시)
-
-let cache = { at: 0, byUser: new Map() };
-const TTL = 60 * 1000;
-
-async function fetchDiscordRoles(userId) {
-  const now = Date.now();
-  if (now - cache.at > TTL) cache = { at: now, byUser: new Map() };
-  if (cache.byUser.has(userId)) return cache.byUser.get(userId);
-
-  const GUILD_ID = process.env.DISCORD_GUILD_ID;
-  const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-  if (!GUILD_ID || !BOT_TOKEN) return null;
-
-  try {
-    const res = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${userId}`, {
-      headers: { Authorization: `Bot ${BOT_TOKEN}` },
-      cache: "no-store",
-    });
-    // 404 = 서버 미입장 / 그 외 실패는 '알 수 없음'으로 두고 구매 내역만 보여준다
-    if (res.status === 404) return [];
-    if (!res.ok) return null;
-    const data = await res.json();
-    const roles = Array.isArray(data.roles) ? data.roles : [];
-    cache.byUser.set(userId, roles);
-    return roles;
-  } catch {
-    return null;
-  }
-}
 
 // 레벨 보상 역할의 고정 표기 — 아이템으로 등록되지 않은 보상 역할은 메달·분홍으로 그린다
 const LEVEL_COLOR = "#ff5c77";
@@ -68,7 +40,7 @@ export async function GET() {
       Item.find({}).sort({ sortOrder: 1, createdAt: 1 }).lean(),
       RoleConfig.find({}, { roleId: 1, roleName: 1, rewardLevel: 1, exclusive: 1 }).lean(),
       InventoryRole.find({ visible: true }).sort({ sortOrder: 1 }).lean(),
-      fetchDiscordRoles(userId),
+      fetchMemberRoles(userId),
     ]);
 
     const held = discordRoles === null ? null : new Set(discordRoles);

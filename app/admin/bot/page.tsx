@@ -1313,11 +1313,11 @@ export default function AdminBotPage() {
                       <input type="number" min={0} value={questForm.rewardXp} onChange={(e) => setQuestForm({ ...questForm, rewardXp: e.target.value })} className={inputClass} />
                     </div>
                     <div>
-                      <label className={labelClass}>보상 POINT</label>
+                      <label className={labelClass}>보상 빙옥</label>
                       <input type="number" min={0} value={questForm.rewardPoint} onChange={(e) => setQuestForm({ ...questForm, rewardPoint: e.target.value })} className={inputClass} />
                     </div>
                   </div>
-                  <p className={fieldNote}>POINT 는 등급이 높을수록 배율이 붙어 더 지급됩니다. 둘 다 0이면 보상 없는 &lsquo;목표&rsquo;가 됩니다.</p>
+                  <p className={fieldNote}>빙옥은 등급이 높을수록 배율이 붙어 더 지급됩니다. 둘 다 0이면 보상 없는 &lsquo;목표&rsquo;가 됩니다.</p>
                 </div>
 
                 <div>
@@ -1381,7 +1381,7 @@ export default function AdminBotPage() {
                               <span className="shrink-0 flex items-center gap-2 text-sm font-black tabular-nums">
                                 {q.rewardXp > 0 && <span className="text-[#e91e3f]">+{q.rewardXp.toLocaleString()} XP</span>}
                                 {q.rewardXp > 0 && (q.rewardPoint || 0) > 0 && <span className="text-[#c4c4c4]">·</span>}
-                                {(q.rewardPoint || 0) > 0 && <span className="text-[#3f9e93]">+{Number(q.rewardPoint).toLocaleString()} P</span>}
+                                {(q.rewardPoint || 0) > 0 && <span className="text-[#3f9e93]">+{Number(q.rewardPoint).toLocaleString()} 빙옥</span>}
                                 {q.rewardXp <= 0 && (q.rewardPoint || 0) <= 0 && <span className="text-[#a3a3a3]">보상 없음</span>}
                               </span>
                               <div className="shrink-0 flex items-center gap-3">

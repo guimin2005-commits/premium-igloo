@@ -185,7 +185,7 @@ const LuxCard = ({ children, className = "", glow = false }) => (
 );
 
 // 📌 시즌 패스 보상 머리표 — 칸이 좁아 아이콘 대신 짧은 글자로 종류를 먼저 읽힌다
-const PASS_KIND_MARK = { xp: "XP", point: "POINT", role: "ROLE", item: "ITEM", none: "—" };
+const PASS_KIND_MARK = { xp: "XP", point: "빙옥", role: "ROLE", item: "ITEM", none: "—" };
 
 // 📌 시즌 패스 보상 칸 — 무료(위)/프리미엄(아래) 두 줄이 같은 문법을 쓴다.
 //    상태는 색으로 먼저 읽힌다: 받을 수 있으면 잉크 채움, 받았으면 옅게, 잠기면 자물쇠.
@@ -465,7 +465,7 @@ const EnhancePanel = ({ kind, v, balance, busy, onEnhance, padClass = "" }) => {
               disabled={!canPoint}
               className="h-8 px-3.5 rounded-full text-[11px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-white/10 border border-white/15 text-white enabled:hover:bg-white/20"
             >
-              POINT로 강화
+              빙옥으로 강화
             </button>
           </div>
         )}
@@ -473,6 +473,84 @@ const EnhancePanel = ({ kind, v, balance, busy, onEnhance, padClass = "" }) => {
     </div>
   );
 };
+
+// 📌 강화 창 — 대시보드의 "강화" 버튼으로 연다. 껍데기는 TierModal 과 같은 문법(모바일 바텀시트 / 데스크톱 모달).
+//    최대 단계가 0 인 쪽은 그리지 않는다 (강화가 꺼진 것을 MAX 로 읽지 않게).
+const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance }) => {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [open, onClose]);
+
+  if (!open) return null;
+  const kinds = ["chat", "voice"].filter((k) => enh[k].max > 0);
+
+  return (
+    <div
+      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
+      style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full sm:max-w-lg max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-[#131313] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
+        style={{ animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
+      >
+        <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
+        <div aria-hidden className="absolute -top-24 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none" style={{ background: "rgba(233,30,63,0.22)" }}></div>
+
+        <div className="relative z-10 shrink-0 px-6 sm:px-8 pt-7 pb-5 border-b border-white/[0.08] flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h3 className="text-2xl font-black text-white tracking-tight">강화</h3>
+            <p className="text-[12px] font-bold text-white/45 mt-2 tabular-nums">
+              보유 XP <b className="text-white/80">{(balance?.xp || 0).toLocaleString()}</b>
+              <span className="mx-2 text-white/20">·</span>
+              빙옥 <b className="text-white/80">{(balance?.point || 0).toLocaleString()}</b>
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            className="shrink-0 w-9 h-9 rounded-full border border-white/12 text-white/50 hover:text-white hover:border-white/30 transition-colors flex items-center justify-center outline-none focus:outline-none"
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" /></svg>
+          </button>
+        </div>
+
+        <div className="relative z-10 flex-1 min-h-0 overflow-y-auto px-6 sm:px-8 py-6">
+          {kinds.map((k, i) => (
+            <div key={k} className={i > 0 ? "mt-7 pt-7 border-t border-white/10" : ""}>
+              <EnhancePanel kind={k} v={enh[k]} balance={balance} busy={busy} onEnhance={onEnhance} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 📌 획득 XP 한 칸 — 지금 내 조건으로 1회에 받는 양(큰 숫자)과 그 내역(칩).
+const GainLine = ({ label, value, parts, padClass = "" }) => (
+  <div className={padClass}>
+    <div className="flex items-baseline gap-2.5 min-w-0">
+      <span className="text-[12px] font-bold text-white/40 shrink-0">{label}</span>
+      <span className="text-[20px] font-black text-white tabular-nums truncate">
+        {value}<span className="text-[11px] font-black text-white/40 ml-1">XP</span>
+      </span>
+    </div>
+    <div className="flex flex-wrap gap-1.5 mt-2.5">
+      {parts.map((p) => (
+        <span key={p.l} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06] text-[10px] font-bold text-white/55 tabular-nums">
+          <span className="text-white/35">{p.l}</span>{p.v}
+        </span>
+      ))}
+    </div>
+  </div>
+);
 
 const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus = 0 }) => {
   useEffect(() => {
@@ -979,7 +1057,7 @@ export default function LevelPage() {
         const gotPoint = Number(got?.point) || 0;
         const parts = [];
         if (gotXp > 0) parts.push(`+${gotXp.toLocaleString()} XP`);
-        if (gotPoint > 0) parts.push(`+${gotPoint.toLocaleString()} P`);
+        if (gotPoint > 0) parts.push(`+${gotPoint.toLocaleString()} 빙옥`);
         pushToast(parts.length ? `${q.name} 보상 ${parts.join(" · ")} 수령` : `${q.name} 보상 수령`, true);
         sfxLevelUp();
       } else {
@@ -1024,7 +1102,7 @@ export default function LevelPage() {
   // 프리미엄 해금 — 되돌릴 수 없는 지출이라 한 번 확인받는다
   const unlockPass = useCallback(async (payMethod) => {
     const price = pass?.unlockPrice || 0;
-    const unit = payMethod === "xp" ? "XP" : "POINT";
+    const unit = payMethod === "xp" ? "XP" : "빙옥";
     if (!window.confirm(`프리미엄 트랙을 ${unit} ${price.toLocaleString()} 으로 해금할까요?\n이번 시즌에만 적용되며 되돌릴 수 없습니다.`)) return;
     setPassBusy("unlock");
     try {
@@ -1052,6 +1130,7 @@ export default function LevelPage() {
   // 강화 — 비용·단계는 서버가 정책으로 다시 계산한다(실패 없음·영구).
   //    응답의 단계·잔액을 바로 반영하고, 레벨·순위는 /api/xp/me 재조회로 맞춘다.
   const [enhBusy, setEnhBusy] = useState("");
+  const [enhModal, setEnhModal] = useState(false);
   const enhance = useCallback(async (kind, payMethod) => {
     const key = `${kind}:${payMethod}`;
     setEnhBusy(key);
@@ -1255,6 +1334,24 @@ export default function LevelPage() {
   const P_chatBase = chatRange(P, 0);
   const enh = buildEnhanceView(P, me);
   const enhOpen = enh.chat.max > 0 || enh.voice.max > 0;
+  // 📌 지금 내 조건으로 1회에 받는 XP — 봇 chatXp/voiceXp 의 식과 같은 항목만 더한다
+  //    (채널별 부스트·음소거 감소는 상황마다 달라 뺀다). 내역 칩은 0 인 항목을 생략한다.
+  const gain = (() => {
+    const buff = Math.max(0, Number(me?.buffXp) || 0);
+    const boost = Math.max(0, Number(me?.boostXp) || 0);
+    const chatEnh = enh.chat.level * enh.chat.step;
+    const tier = getVoiceBonus(me?.level || 0);
+    const voiceEnh = enh.voice.bonus || 0;
+    const fmt = (n) => n.toLocaleString();
+    const extra = [buff > 0 && { l: "역할", v: `+${fmt(buff)}` }, boost > 0 && { l: "부스트", v: `+${fmt(boost)}` }].filter(Boolean);
+    return {
+      chatLo: enh.chat.range[0] + buff + boost,
+      chatHi: enh.chat.range[1] + buff + boost,
+      chatParts: [{ l: "기본", v: `${fmt(P_chatBase[0])}~${fmt(P_chatBase[1])}` }, chatEnh > 0 && { l: "강화", v: `+${fmt(chatEnh)}` }, ...extra].filter(Boolean),
+      voice: P.voiceXp + tier + voiceEnh + buff + boost,
+      voiceParts: [{ l: "기본", v: fmt(P.voiceXp) }, tier > 0 && { l: "등급", v: `+${fmt(tier)}` }, voiceEnh > 0 && { l: "강화", v: `+${fmt(voiceEnh)}` }, ...extra].filter(Boolean),
+    };
+  })();
 
   // 티어 지급량은 관리자가 정한 기본 음성 XP 위에 얹힌다 (P 정의 이후여야 한다)
   const tierCurXp = P.voiceXp + tierCur.bonus;
@@ -1565,6 +1662,7 @@ export default function LevelPage() {
       `}} />
 
       <TierModal open={tierOpen} onClose={() => setTierOpen(false)} level={me?.level || 0} baseXp={P.voiceXp} intervalMin={P_voiceMin} enhanceBonus={enh.voice.bonus} />
+      <EnhanceModal open={enhModal} onClose={() => setEnhModal(false)} enh={enh} balance={me} busy={!!enhBusy} onEnhance={enhance} />
       <BagOverlay
         open={bagOpen}
         onClose={closeBag}
@@ -1801,7 +1899,7 @@ export default function LevelPage() {
                         voiceTracked
                           ? { l: "누적 음성 시간", v: fmtVoiceTime(me.voiceSeconds), s: "VOICE" }
                           : { l: `${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터 집계`, v: "—", s: "VOICE", dim: true },
-                        { l: "보유 포인트", v: (me.point || 0).toLocaleString(), s: "POINT", tint: "#5ec8bb" },
+                        { l: "보유 빙옥", v: (me.point || 0).toLocaleString(), s: "빙옥", tint: "#5ec8bb" },
                       ].map((st, i) => (
                         <div key={i} className={`px-0 md:px-6 ${i === 0 ? "md:pl-0" : ""} ${i >= 2 ? "pt-5 md:pt-0 border-t md:border-t-0 border-white/10" : ""}`}>
                           <p className="text-[9px] font-black tracking-[0.28em] text-white/30 uppercase mb-2">{st.s}</p>
@@ -1888,14 +1986,30 @@ export default function LevelPage() {
                     </div>
                     )}
 
-                    {/* 강화 — 인벤토리·시즌 패스 줄 아래 한 줄. 좌 채팅 / 우 음성, 모바일은 세로로 쌓인다.
-                        위 두 줄과 같은 헤어라인 문법 — 단계 핍과 버튼만 더한다. */}
-                    {enhOpen && (
-                    <div className="mt-8 pt-6 md:pt-8 border-t border-white/10 grid gap-7 md:gap-0 md:grid-cols-2 md:divide-x md:divide-white/10">
-                      <EnhancePanel kind="chat" v={enh.chat} balance={me} busy={!!enhBusy} onEnhance={enhance} padClass="md:pr-6" />
-                      <EnhancePanel kind="voice" v={enh.voice} balance={me} busy={!!enhBusy} onEnhance={enhance} padClass="md:pl-6" />
+                    {/* 획득 XP — 지금 내 조건(기본·등급·강화·역할·부스트)을 합친 1회 지급량.
+                        강화는 여기 펼치지 않고 오른쪽 "강화" 버튼이 창을 연다 (위 두 줄과 같은 헤어라인 문법). */}
+                    <div className="mt-8 pt-6 md:pt-8 border-t border-white/10">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="flex items-baseline gap-2.5 min-w-0">
+                          <span className="text-[15px] font-black text-white shrink-0">획득 XP</span>
+                          <span className="text-[11px] text-white/35 truncate">지금 내 조건 · 1회</span>
+                        </span>
+                        {enhOpen && (
+                          <button
+                            type="button"
+                            onClick={() => setEnhModal(true)}
+                            className="shrink-0 inline-flex items-center gap-1.5 h-8 px-4 rounded-full bg-[#e91e3f] text-white text-[11px] font-bold hover:bg-[#d01634] transition-colors outline-none focus:outline-none"
+                          >
+                            강화
+                            <span className="text-white/70 tabular-nums">{enh.chat.level + enh.voice.level > 0 ? `${enh.chat.level}·${enh.voice.level}` : ""}</span>
+                          </button>
+                        )}
+                      </div>
+                      <div className="mt-4 grid gap-5 md:gap-0 md:grid-cols-2 md:divide-x md:divide-white/10">
+                        <GainLine label="채팅 1회" value={`${gain.chatLo.toLocaleString()}~${gain.chatHi.toLocaleString()}`} parts={gain.chatParts} padClass="md:pr-6" />
+                        <GainLine label={`음성 ${P_voiceMin}분`} value={gain.voice.toLocaleString()} parts={gain.voiceParts} padClass="md:pl-6" />
+                      </div>
                     </div>
-                    )}
                   </div>
                 </div>
 
@@ -2041,7 +2155,7 @@ export default function LevelPage() {
                                     {rPoint > 0 && (
                                       <span className={`text-[15px] font-black tabular-nums leading-none ${q.claimed ? "text-[#c4c4c4]" : "text-[#3f9e93]"}`}>
                                         +{rPoint.toLocaleString()}
-                                        <span className={`text-[10px] font-bold ml-1 ${q.claimed ? "text-[#c4c4c4]" : "text-[#a3a3a3]"}`}>P</span>
+                                        <span className={`text-[10px] font-bold ml-1 ${q.claimed ? "text-[#c4c4c4]" : "text-[#a3a3a3]"}`}>빙옥</span>
                                       </span>
                                     )}
                                   </span>
@@ -2080,7 +2194,7 @@ export default function LevelPage() {
 
                       {/* 화면에 적힌 POINT 는 배율 적용 전 기본값이라 실제 지급액과 다르다 */}
                       {questRows.some((q) => Number(q.rewardPoint) > 0) && (
-                        <p className="text-[10px] text-[#c4c4c4] mt-3 break-keep">POINT는 등급에 따라 더 받습니다.</p>
+                        <p className="text-[10px] text-[#c4c4c4] mt-3 break-keep">빙옥은 등급에 따라 더 받습니다.</p>
                       )}
 
                       {/* 지급 안내 — 보상은 봇 대기열을 거치므로 즉시가 아닐 수 있다 */}
@@ -2812,7 +2926,7 @@ export default function LevelPage() {
                         </p>
                         {me && (
                           <p className="text-[11px] font-bold text-white/35 mt-2.5 tabular-nums">
-                            보유 XP {(me.xp || 0).toLocaleString()} · 보유 POINT {(me.point || 0).toLocaleString()}
+                            보유 XP {(me.xp || 0).toLocaleString()} · 보유 빙옥 {(me.point || 0).toLocaleString()}
                           </p>
                         )}
                       </div>
@@ -2830,7 +2944,7 @@ export default function LevelPage() {
                           disabled={!!passBusy || (!!me && (me.point || 0) < (pass.unlockPrice || 0))}
                           className="h-11 px-5 rounded-xl text-[13px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-white/10 border border-white/15 text-white enabled:hover:bg-white/20"
                         >
-                          POINT로 해금
+                          빙옥으로 해금
                         </button>
                       </div>
                     </div>
@@ -2902,7 +3016,7 @@ export default function LevelPage() {
                 </div>
 
                 <p className="text-[11px] text-[#a3a3a3] mt-6 break-keep leading-relaxed">
-                  XP·역할 보상은 1분 안에 지급됩니다. POINT는 즉시 들어옵니다.
+                  XP·역할 보상은 1분 안에 지급됩니다. 빙옥은 즉시 들어옵니다.
                   {seasonDday.ended
                     ? " 다음 시즌이 시작되면 진행도가 초기화됩니다."
                     : " 시즌이 끝나면 진행도가 초기화됩니다."}

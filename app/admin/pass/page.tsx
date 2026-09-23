@@ -44,7 +44,7 @@ type Draft = { index: number; need: string; free: DraftReward; paid: DraftReward
 const KIND_OPTIONS: { v: RewardKind; l: string }[] = [
   { v: "none", l: "없음" },
   { v: "xp", l: "XP" },
-  { v: "point", l: "POINT" },
+  { v: "point", l: "빙옥" },
   { v: "role", l: "역할" },
   { v: "item", l: "아이템" },
 ];
@@ -73,7 +73,7 @@ const normReward = (r: any): Reward => ({
 // 목록에 뿌릴 한 줄 요약 — 서버가 만드는 label 과 같은 모양으로 맞춘다
 const rewardLabel = (r: Reward, roleNameOf: (id: string) => string, itemOf: (id: string) => any) => {
   if (r.kind === "xp") return `XP ${r.amount.toLocaleString()}`;
-  if (r.kind === "point") return `POINT ${r.amount.toLocaleString()}`;
+  if (r.kind === "point") return `빙옥 ${r.amount.toLocaleString()}`;
   if (r.kind === "role") return `역할 · ${roleNameOf(r.roleId) || r.roleName || "미지정"}`;
   if (r.kind === "item") {
     const it = itemOf(r.itemId);
@@ -509,7 +509,7 @@ export default function AdminPassPage() {
                   placeholder="예: 50000"
                   className={inputClass}
                 />
-                <p className={fieldNote}>XP · POINT 어느 쪽으로도 결제하며 1:1 등가입니다 (1 이상)</p>
+                <p className={fieldNote}>XP · 빙옥 어느 쪽으로도 결제하며 1:1 등가입니다 (1 이상)</p>
               </div>
             </div>
 
@@ -626,7 +626,7 @@ export default function AdminPassPage() {
             )}
 
             <p className="mt-6 text-xs text-[#8a8a8a] leading-relaxed break-keep">
-              XP · 역할 · 역할 있는 아이템은 봇 큐를 거쳐 30초 이내에, POINT · 역할 없는 아이템은 즉시 지급됩니다.
+              XP · 역할 · 역할 있는 아이템은 봇 큐를 거쳐 30초 이내에, 빙옥 · 역할 없는 아이템은 즉시 지급됩니다.
               이미 수령한 티어는 보상을 바꿔도 다시 받을 수 없습니다.
             </p>
           </section>

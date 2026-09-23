@@ -142,7 +142,7 @@ export async function POST(request) {
         await ShopItem.updateOne({ _id: c.id }, c.limited ? { $inc: { stock: c.qty, soldCount: -c.qty } } : { $inc: { soldCount: -c.qty } });
       }
       return NextResponse.json(
-        { success: false, message: payMethod === "point" ? "보유 POINT가 부족합니다." : "보유 XP가 부족합니다." },
+        { success: false, message: payMethod === "point" ? "보유 빙옥이 부족합니다." : "보유 XP가 부족합니다." },
         { status: 400 }
       );
     }

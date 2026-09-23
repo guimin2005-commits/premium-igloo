@@ -562,7 +562,7 @@ export default function ArcticShopBody({
         </span>
         <span className="inline-flex items-baseline gap-1.5 px-3 py-1 rounded-full bg-white border border-[#dedddb]">
           <span className="text-[13px] font-black text-[#131313] tabular-nums leading-none">{(myPoint ?? 0).toLocaleString()}</span>
-          <span className="text-[10px] font-black text-[#3f9e93] leading-none">P</span>
+          <span className="text-[10px] font-black text-[#3f9e93] leading-none">빙옥</span>
         </span>
         <span className="inline-flex items-baseline gap-1 px-2.5 py-1 rounded-full text-[#8a8a8a]">
           <span className="text-[10px] font-black leading-none">Lv</span>

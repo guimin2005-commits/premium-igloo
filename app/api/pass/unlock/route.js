@@ -54,7 +54,7 @@ export async function POST(request) {
       if (payMethod === "point") {
         const paid = await addPoints(userId, -price);
         if (!paid) {
-          return NextResponse.json({ success: false, message: "POINT가 부족합니다." }, { status: 400 });
+          return NextResponse.json({ success: false, message: "빙옥이 부족합니다." }, { status: 400 });
         }
       } else {
         // XP 는 화폐이므로 쓰면 레벨도 함께 내려간다 — 봇이 역할을 다시 맞추도록 표시를 세운다.

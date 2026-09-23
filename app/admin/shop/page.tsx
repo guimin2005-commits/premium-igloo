@@ -1337,8 +1337,8 @@ export default function AdminShopPage() {
               } 환불
             </span>
             {cancelTarget.status === "completed"
-              ? "결제한 XP·POINT를 돌려주고 디스코드 역할은 봇이 회수합니다."
-              : "결제한 XP·POINT를 돌려주고 재고를 되돌립니다."}
+              ? "결제한 XP·빙옥을 돌려주고 디스코드 역할은 봇이 회수합니다."
+              : "결제한 XP·빙옥을 돌려주고 재고를 되돌립니다."}
           </>
         ) : null}
         onConfirm={() => cancelTarget && processOrder(cancelTarget._id, cancelTarget.status === "completed" ? "refunded" : "cancelled")}

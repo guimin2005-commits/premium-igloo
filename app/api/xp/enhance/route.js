@@ -79,7 +79,7 @@ export async function POST(request) {
     // 📌 관리자는 상점(checkout)과 같은 규칙으로 소모 없이 올린다 — 동작 확인용
     const charged = isAdmin ? 0 : cost;
     const field = payMethod === "point" ? "point" : "xp";
-    const shortMsg = payMethod === "point" ? "보유 POINT가 부족합니다." : "보유 XP가 부족합니다.";
+    const shortMsg = payMethod === "point" ? "보유 빙옥이 부족합니다." : "보유 XP가 부족합니다.";
 
     // 문서가 없는 유저(디스코드에서 XP 를 한 번도 못 받음)는 잔액 0 — 비용이 있으면 바로 거절
     if (!doc && charged > 0) {

@@ -752,7 +752,7 @@ export default function SupportersPage() {
                         <span className="w-16 shrink-0 text-[12px] font-black text-[#131313] tabular-nums">{fmtMonth(e.month)}</span>
                         <span className="w-10 shrink-0 text-[12px] font-black text-[#131313]">{e.grade || "—"}</span>
                         <span className="min-w-0 flex-1 text-[12px] font-bold text-[#5a5a5a] tabular-nums truncate">
-                          {(e.xp || 0) > 0 ? `+${(e.xp || 0).toLocaleString()} XP` : ""}{(e.xp || 0) > 0 && (e.point || 0) > 0 ? " · " : ""}{(e.point || 0) > 0 ? `+${(e.point || 0).toLocaleString()} P` : ""}
+                          {(e.xp || 0) > 0 ? `+${(e.xp || 0).toLocaleString()} XP` : ""}{(e.xp || 0) > 0 && (e.point || 0) > 0 ? " · " : ""}{(e.point || 0) > 0 ? `+${(e.point || 0).toLocaleString()} 빙옥` : ""}
                         </span>
                         <span className={`shrink-0 text-[10px] font-black ${e.status === "paid" ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}>{e.status === "paid" ? "지급 완료" : "평가 중"}</span>
                       </li>
@@ -794,8 +794,8 @@ export default function SupportersPage() {
                       <Big size="panel" parts={[{ n: plus(latest.xp), u: latest.xp && latest.xp > 0 ? "XP" : "" }]} />
                     </div>
                     <div className="min-w-0">
-                      <Label>POINT</Label>
-                      <Big size="panel" tint="#3f9e93" parts={[{ n: plus(latest.point), u: latest.point && latest.point > 0 ? "P" : "" }]} />
+                      <Label>빙옥</Label>
+                      <Big size="panel" tint="#3f9e93" parts={[{ n: plus(latest.point), u: latest.point && latest.point > 0 ? "빙옥" : "" }]} />
                     </div>
                   </div>
                   <div className="mt-7 pt-6 border-t border-black/[0.06]">
@@ -818,7 +818,7 @@ export default function SupportersPage() {
                       <span className="flex items-center gap-6">
                         <span style={{ width: 56 }}>등급</span>
                         <span className="text-right" style={{ width: 88 }}>XP</span>
-                        <span className="text-right" style={{ width: 88 }}>POINT</span>
+                        <span className="text-right" style={{ width: 88 }}>빙옥</span>
                       </span>
                       <span className="ml-auto">상태</span>
                       <span aria-hidden className="w-4 shrink-0"></span>
@@ -851,7 +851,7 @@ export default function SupportersPage() {
                               <div className="sm:hidden flex flex-wrap gap-x-4 mt-1.5 text-[12px] font-black tabular-nums">
                                 <span className={ink}>{e.grade || "—"}</span>
                                 <span className={ink}>{plus(e.xp)} XP</span>
-                                <span className="text-[#3f9e93]">{plus(e.point)} POINT</span>
+                                <span className="text-[#3f9e93]">{plus(e.point)} 빙옥</span>
                               </div>
                             </button>
                             {open && (
@@ -865,7 +865,7 @@ export default function SupportersPage() {
                     </div>
                   </div>
                 )}
-                <p className="text-[11px] text-[#a3a3a3] mt-5 break-keep">XP는 1분 안에, POINT는 즉시 들어옵니다.</p>
+                <p className="text-[11px] text-[#a3a3a3] mt-5 break-keep">XP는 1분 안에, 빙옥은 즉시 들어옵니다.</p>
               </>
             )}
           </Reveal>
