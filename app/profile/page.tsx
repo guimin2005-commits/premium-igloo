@@ -11,6 +11,7 @@ import { verifyBadge } from "@/lib/verifyBadge";
 import ArcticDock from "../shop/ArcticDock";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
+import { getTier } from "@/lib/voiceTiers";
 import { salePrice } from "@/lib/shopPricing";
 
 // 미리보기(접힘)용 마크다운 기호 제거
@@ -347,106 +348,86 @@ export default function MyInfoPage() {
 
       <section className="w-full max-w-4xl mx-auto px-6 pt-8 pb-2">
 
-        {/* 📌 카드 없이 한 면 위에 — 이름·배지·레벨 한 줄·칩, 오른쪽에 잔액. 아래 헤어라인 하나로 구획한다 */}
-        <div className="pb-6 border-b border-black/[0.08]">
-          <div className="flex items-start gap-4 md:gap-5">
+        {/* 📌 잉크 헤더 — SYSTEM : LEVEL 대시보드와 같은 패널. 이 화면에서 들어 올리는 건 이것 하나뿐이고 아래는 전부 종이다 */}
+        <div className="relative overflow-hidden rounded-3xl bg-[#131313] text-white px-6 py-6 md:px-8 md:py-7">
+          <div aria-hidden className="absolute inset-0 pointer-events-none opacity-60"
+            style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)", backgroundSize: "28px 28px" }}></div>
+          <div aria-hidden className="absolute -top-24 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none" style={{ background: "rgba(233,30,63,0.26)" }}></div>
+
+          <div className="relative z-10 flex items-start gap-4 md:gap-5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={session?.user?.image || ""} alt="" className={`w-16 h-16 md:w-[72px] md:h-[72px] rounded-full bg-[#dedddb] shrink-0 ${isBooster ? "ring-2 ring-[#e91e3f]/50 ring-offset-2 ring-offset-[#f4f3f2]" : ""}`} />
+            <img src={session?.user?.image || ""} alt="" className={`w-16 h-16 md:w-[72px] md:h-[72px] rounded-full bg-white/10 shrink-0 ${isBooster ? "ring-2 ring-[#e91e3f]/70 ring-offset-2 ring-offset-[#131313]" : ""}`} />
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight truncate flex items-center gap-2">
+              <h1 className="text-xl md:text-2xl font-black text-white tracking-tight truncate flex items-center gap-2">
                 {session?.user?.name}
                 {isBooster && <span className="text-[10px] bg-[#e91e3f] text-white px-2 py-0.5 rounded shrink-0">BOOSTER</span>}
                 {isSupporter && <span className="text-[10px] bg-[#3f83b8] text-white px-2 py-0.5 rounded shrink-0">SUPPORTERS</span>}
               </h1>
               {canSeeLevel && (
-                <p className="text-[12px] font-bold text-[#8a8a8a] mt-0.5 tabular-nums">
-                  Lv.{shopMe?.level ?? 0} · 서버 #{shopMe?.rank ?? "—"}
+                <p className="text-[12px] font-bold text-white/45 mt-0.5 tabular-nums">
+                  Lv.{shopMe?.level ?? 0} · 서버 #{shopMe?.rank ?? "—"} · {getTier(shopMe?.level ?? 0).name}
                 </p>
               )}
               <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border ${verifyBadge(isVerified, hasScrimRole).cls}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>
-                {verifyBadge(isVerified, hasScrimRole).label}
-              </span>
-              {isServerBooster && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 text-[#ff41cf] border border-[#ff41cf]/30">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d={ICON_PATHS.sparkles} /></svg>
-                  SERVER BOOSTER
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border border-white/15 bg-white/[0.06] text-white/85">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.check} /></svg>
+                  {verifyBadge(isVerified, hasScrimRole).label}
                 </span>
-              )}
-              {isSupporter && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-[#3f83b8]/10 text-[#3f83b8] border border-[#3f83b8]/30">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.shieldCheck} /></svg>
-                  SUPPORTERS
-                </span>
-              )}
-          </div>
+                {isServerBooster && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border border-[#ff41cf]/40 bg-[#ff41cf]/10 text-[#ff8ae4]">
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3"><path d={ICON_PATHS.sparkles} /></svg>
+                    SERVER BOOSTER
+                  </span>
+                )}
+                {isSupporter && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border border-[#3f83b8]/40 bg-[#3f83b8]/10 text-[#8ec2ec]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.shieldCheck} /></svg>
+                    SUPPORTERS
+                  </span>
+                )}
+              </div>
             </div>
             <div className="ml-auto text-right shrink-0 hidden sm:block">
-              <div className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase mb-1">Balance</div>
-              <div className="text-2xl font-black tracking-tight tabular-nums text-[#131313] leading-none">
-                {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-[#e91e3f] ml-1">XP</span>
+              <div className="text-[9px] font-black tracking-[0.25em] text-white/35 uppercase mb-1">Balance</div>
+              <div className="text-2xl font-black tracking-tight tabular-nums text-white leading-none">
+                {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-[#ff5c77] ml-1">XP</span>
               </div>
               {canSeeShop && (
-                <div className="text-[13px] font-black tabular-nums text-[#131313] leading-none mt-2">
-                  {(shopMe?.point ?? 0).toLocaleString()}<span className="text-[10px] font-black text-[#3f9e93] ml-1">빙옥</span>
+                <div className="text-[13px] font-black tabular-nums text-white/85 leading-none mt-2">
+                  {(shopMe?.point ?? 0).toLocaleString()}<span className="text-[10px] font-black text-[#5ec8bb] ml-1">빙옥</span>
                 </div>
               )}
             </div>
           </div>
 
           {/* 모바일 잔액 */}
-          <div className="sm:hidden mt-4 flex items-baseline justify-between">
-            <span className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase">Balance</span>
-            <span className="text-xl font-black tracking-tight tabular-nums text-[#131313] leading-none">
-              {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-[#e91e3f] ml-1">XP</span>
-              {canSeeShop && <span className="ml-3 text-[13px]">{(shopMe?.point ?? 0).toLocaleString()}<span className="text-[10px] font-black text-[#3f9e93] ml-1">빙옥</span></span>}
+          <div className="relative z-10 sm:hidden mt-4 flex items-baseline justify-between">
+            <span className="text-[9px] font-black tracking-[0.25em] text-white/35 uppercase">Balance</span>
+            <span className="text-xl font-black tracking-tight tabular-nums text-white leading-none">
+              {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-[#ff5c77] ml-1">XP</span>
+              {canSeeShop && <span className="ml-3 text-[13px] text-white/85">{(shopMe?.point ?? 0).toLocaleString()}<span className="text-[10px] font-black text-[#5ec8bb] ml-1">빙옥</span></span>}
             </span>
           </div>
 
           {/* 레벨 진행 바 */}
           {canSeeLevel && shopMe?.levelProgress?.required > 0 && (
-            <div className="mt-5">
+            <div className="relative z-10 mt-5">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-[#8a8a8a]">다음 레벨까지</span>
-                <span className="text-[11px] font-bold text-[#4b4b4b] tabular-nums">{shopMe.levelProgress.needToNext.toLocaleString()} XP</span>
+                <span className="text-[11px] font-bold text-white/45">다음 레벨까지</span>
+                <span className="text-[11px] font-bold text-white/80 tabular-nums">{shopMe.levelProgress.needToNext.toLocaleString()} XP</span>
               </div>
-              <div className="h-1.5 rounded-full bg-[#e9e8e6] overflow-hidden">
+              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
                 <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] transition-[width] duration-700"
                   style={{ width: `${Math.min(100, Math.round((shopMe.levelProgress.current / shopMe.levelProgress.required) * 100))}%` }}></div>
               </div>
             </div>
           )}
         </div>
-
       </section>
 
       <div className="w-full max-w-4xl mx-auto px-6 pt-8 pb-16 flex-1 flex flex-col">
 
-      {/* 내전 채널 이용 권한 획득 - 고정형 배너 */}
-      {isVerified && !hasScrimRole && (
-        <div className="w-full mb-10 border-b border-black/[0.08] flex items-center justify-between gap-4 pb-5">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="hidden sm:flex shrink-0 items-center justify-center w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f]">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-[18px] h-[18px]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-              </svg>
-            </span>
-            <div className="min-w-0">
-              <h3 className="text-sm font-bold text-[#131313] mb-0.5 break-keep">내전 채널 이용 권한 획득</h3>
-              <p className="text-xs text-[#8a8a8a] leading-relaxed break-keep">운영 정책에 동의하고 내전 채널 입장 권한을 획득해 주세요.</p>
-            </div>
-          </div>
-          <button
-            onClick={() => router.push("/verify")}
-            className="shrink-0 self-center px-4 py-2 bg-[#e91e3f] text-white text-xs font-bold rounded-lg hover:bg-[#d01634] transition-colors outline-none whitespace-nowrap"
-          >
-            권한 획득
-          </button>
-        </div>
-      )}
-
-      {/* 📌 아이콘 줄 — 누르면 다른 화면으로 가지 않고 바로 아래에 그 내용이 펼쳐진다. 균등 격자, 선택은 잉크 타일. */}
+      {/* 📌 묶음 줄 목록(계정 / ARCTIC / 멤버십) — 줄을 누르면 다른 화면으로 가지 않고 그 자리에서 펼쳐진다 */}
       {(() => {
         // 공용 아이콘 세트(Icons.tsx) — 헤더·독·레벨과 같은 모양
         const ic: Record<string, string> = {
@@ -463,22 +444,24 @@ export default function MyInfoPage() {
           team: ICON_PATHS.users,
         };
         const unread = notifications.filter((n) => !n.read).length;
-        const items: { k: string; l: string; n?: number; accent?: boolean; on?: boolean }[] = [
-          { k: "notice", l: "알림", n: unread, accent: unread > 0 },
-          { k: "inquiry", l: "문의", n: fetchedInquiries.filter((i) => i.status === "접수 중").length },
-          { k: "recruit", l: "구인 지원", n: fetchedRecruits.filter((r) => r.status === "심사 중").length },
+        type Row = { k: string; g: "account" | "arctic" | "member"; l: string; n?: number; accent?: boolean; pill?: string; pillCls?: string };
+        const items: Row[] = [
+          { k: "notice", g: "account", l: "알림", n: unread, accent: unread > 0 },
+          { k: "inquiry", g: "account", l: "1:1 문의", n: fetchedInquiries.filter((i) => i.status === "접수 중").length },
+          { k: "recruit", g: "account", l: "구인 지원", n: fetchedRecruits.filter((r) => r.status === "심사 중").length },
         ];
-        if (canSeeLevel) items.push({ k: "bag", l: "인벤토리", n: myItems?.length || 0 });
+        if (canSeeLevel) items.push({ k: "bag", g: "arctic", l: "인벤토리", n: myItems?.length || 0 });
         if (canSeeShop) {
-          items.push({ k: "orders", l: "주문 내역", n: shopOrders.length, accent: shopPendingCount > 0 });
-          items.push({ k: "cart", l: "장바구니", n: shopCartCount });
-          items.push({ k: "wish", l: "찜", n: shopWishRows.length });
-          items.push({ k: "coupons", l: "쿠폰함", n: shopWallet.length });
+          items.push({ k: "orders", g: "arctic", l: "주문 내역", n: shopOrders.length, accent: shopPendingCount > 0 });
+          items.push({ k: "cart", g: "arctic", l: "장바구니", n: shopCartCount });
+          items.push({ k: "wish", g: "arctic", l: "찜", n: shopWishRows.length });
+          items.push({ k: "coupons", g: "arctic", l: "쿠폰함", n: shopWallet.length });
         }
-        items.push({ k: "booster", l: "부스터", on: isServerBooster });
-        if (canSeeSupporter) items.push({ k: "supporter", l: "서포터즈", on: isSupporter });
-        if (myTeam || scrimAdmin) items.push({ k: "team", l: myTeam ? "팀 룸" : "대회 룸", on: !!myTeam });
-        const cur = items.some((i) => i.k === panel) ? panel : "notice";
+        items.push({ k: "booster", g: "member", l: "서버 부스터", pill: isServerBooster ? "적용 중" : undefined, pillCls: "bg-[#e91e3f]/[0.08] text-[#e91e3f]" });
+        if (canSeeSupporter) items.push({ k: "supporter", g: "member", l: "서포터즈", pill: isSupporter ? "활동 중" : undefined, pillCls: "bg-[#3f83b8]/[0.1] text-[#3f83b8]" });
+        if (myTeam || scrimAdmin) items.push({ k: "team", g: "member", l: myTeam ? "팀 룸" : "대회 룸", pill: myTeam ? `PLAN ${myTeam.sent}/${myTeam.members.length}` : undefined, pillCls: "bg-black/[0.05] text-[#5a5a5a]" });
+        const GROUPS: { g: Row["g"]; t: string }[] = [{ g: "account", t: "계정" }, { g: "arctic", t: "ARCTIC" }, { g: "member", t: "멤버십" }];
+        const cur = items.some((i) => i.k === panel) ? panel : "";
         const fmtHm = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60 ? `${m % 60}분` : ""}`.trim() : `${m}분`);
         const more = (href: string, label: string) => (
           <div className="mt-4 flex justify-end">
@@ -486,30 +469,10 @@ export default function MyInfoPage() {
           </div>
         );
 
-        return (
-          <>
-            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-y-5">
-              {items.map((q) => {
-                const on = q.k === cur;
-                return (
-                  <button key={q.k} type="button" onClick={() => setPanel(q.k)} aria-pressed={on}
-                    className="group flex flex-col items-center outline-none focus:outline-none">
-                    <span className={`relative w-12 h-12 rounded-2xl transition-colors flex items-center justify-center ${on ? "bg-[#131313] text-white" : "bg-black/[0.045] text-[#131313] group-hover:bg-black/[0.09]"}`}>
-                      <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ic[q.k]} /></svg>
-                      {q.n != null && q.n > 0 && (
-                        <span className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center tabular-nums ${q.accent ? "bg-[#e91e3f] text-white" : on ? "bg-white text-[#131313]" : "bg-[#131313] text-white"}`}>{q.n > 99 ? "99+" : q.n}</span>
-                      )}
-                      {q.on && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>}
-                    </span>
-                    <span className={`mt-1.5 text-[11px] font-bold transition-colors whitespace-nowrap ${on ? "text-[#131313]" : "text-[#8a8a8a] group-hover:text-[#131313]"}`}>{q.l}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* 선택한 것만 아래에 — 위 아이콘 줄과 헤어라인 하나로 이어진다 */}
-            <div key={cur} className="mt-8 pt-8 border-t border-black/[0.08] animate-in fade-in duration-300">
-        {cur === "notice" && (
+        // 각 줄이 펼치는 내용 — 제목 줄(h2)은 줄 자체가 대신하므로 숨긴다
+        const panelOf = (k: string) => {
+          switch (k) {
+        case "notice": return (
         <section id="sec-notice">
           <div>
             <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between">
@@ -544,9 +507,9 @@ export default function MyInfoPage() {
             )}
           </div>
         </section>
-        )}
+        );
 
-        {cur === "inquiry" && (
+        case "inquiry": return (
         <section id="sec-inquiry">
           <div>
             <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between gap-3 flex-wrap">
@@ -577,9 +540,9 @@ export default function MyInfoPage() {
             )}
           </div>
         </section>
-        )}
+        );
 
-        {cur === "recruit" && (
+        case "recruit": return (
         <section id="sec-recruit">
           <div>
             <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between gap-3 flex-wrap">
@@ -612,14 +575,11 @@ export default function MyInfoPage() {
             </div>
           </div>
         </section>
-        )}
+        );
 
         {/* ═══ 인벤토리 — 보유 아이템 격자. 본진은 SYSTEM : LEVEL ═══ */}
-        {cur === "bag" && (
+        case "bag": return (
         <section>
-          <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between">
-            <h2 className="text-sm font-black text-[#131313]">인벤토리 {(myItems?.length || 0) > 0 && <span className="text-[#e91e3f]">{myItems!.length}</span>}</h2>
-          </div>
           {myItems === null ? (
             <p className="text-[#a3a3a3] text-sm py-12 text-center">데이터 로딩 중...</p>
           ) : myItems.length === 0 ? (
@@ -645,14 +605,11 @@ export default function MyInfoPage() {
           )}
           {more("/level?tab=my", "SYSTEM : LEVEL 에서 자세히")}
         </section>
-        )}
+        );
 
         {/* ═══ 주문 내역 ═══ */}
-        {cur === "orders" && (
+        case "orders": return (
         <section>
-          <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between">
-            <h2 className="text-sm font-black text-[#131313]">주문 내역 {shopOrders.length > 0 && <span className="text-[#e91e3f]">{shopOrders.length}</span>}</h2>
-          </div>
           {shopOrders.length === 0 ? (
             <p className="py-14 text-center text-sm text-[#8a8a8a] break-keep">아직 구매한 상품이 없습니다.</p>
           ) : (
@@ -681,14 +638,11 @@ export default function MyInfoPage() {
             </div>
           )}
         </section>
-        )}
+        );
 
         {/* ═══ 장바구니 ═══ */}
-        {cur === "cart" && (
+        case "cart": return (
         <section>
-          <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between">
-            <h2 className="text-sm font-black text-[#131313]">장바구니 {shopCartRows.length > 0 && <span className="text-[#e91e3f]">{shopCartRows.length}</span>}</h2>
-          </div>
           {shopCartRows.length === 0 ? (
             <p className="py-14 text-center text-sm text-[#8a8a8a] break-keep">장바구니가 비어 있습니다.</p>
           ) : (
@@ -717,14 +671,11 @@ export default function MyInfoPage() {
             </>
           )}
         </section>
-        )}
+        );
 
         {/* ═══ 찜한 상품 ═══ */}
-        {cur === "wish" && (
+        case "wish": return (
         <section>
-          <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between">
-            <h2 className="text-sm font-black text-[#131313]">찜한 상품 {shopWishRows.length > 0 && <span className="text-[#e91e3f]">{shopWishRows.length}</span>}</h2>
-          </div>
           {shopWishRows.length === 0 ? (
             <p className="py-14 text-center text-sm text-[#8a8a8a]">찜한 상품이 없습니다.</p>
           ) : (
@@ -747,14 +698,11 @@ export default function MyInfoPage() {
             </div>
           )}
         </section>
-        )}
+        );
 
         {/* ═══ 쿠폰함 — 등록 + 보유 ═══ */}
-        {cur === "coupons" && (
+        case "coupons": return (
         <section>
-          <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between">
-            <h2 className="text-sm font-black text-[#131313]">쿠폰함 {shopWallet.length > 0 && <span className="text-[#e91e3f]">{shopWallet.length}</span>}</h2>
-          </div>
           <div className="pt-4 flex gap-2">
             <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") registerCoupon(); }}
@@ -789,17 +737,11 @@ export default function MyInfoPage() {
             </div>
           )}
         </section>
-        )}
+        );
 
         {/* ═══ 부스터 — 상태와 핵심 혜택만, 전문은 /profile/booster ═══ */}
-        {cur === "booster" && (
+        case "booster": return (
         <section>
-          <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between">
-            <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
-              서버 부스터 혜택
-              {isServerBooster && <span className="text-[10px] bg-[#e91e3f] text-white px-2 py-0.5 rounded">적용 중</span>}
-            </h2>
-          </div>
           <div className="divide-y divide-black/[0.06]">
             {[
               { t: "전용 역할·뱃지", d: "@SERVER BOOSTER 역할과 프로필 배지" },
@@ -820,10 +762,10 @@ export default function MyInfoPage() {
           </div>
           {more("/profile/booster", "누적 유지·특별 보상까지 전체 보기")}
         </section>
-        )}
+        );
 
         {/* ═══ 서포터즈 — 이번 달 활동·최근 평가 요약, 본진은 /supporters ═══ */}
-        {cur === "supporter" && (
+        case "supporter": return (
         <section>
           <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between">
             <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
@@ -869,14 +811,11 @@ export default function MyInfoPage() {
           )}
           {more("/supporters", "활동 · 평가 · 공지 전체 보기")}
         </section>
-        )}
+        );
 
         {/* ═══ 팀 룸 / 대회 룸 ═══ */}
-        {cur === "team" && (
+        case "team": return (
         <section>
-          <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between">
-            <h2 className="text-sm font-black text-[#131313]">{myTeam ? "팀 룸" : "대회 룸 운영"}</h2>
-          </div>
           {myTeam ? (
             <div className="pt-4 flex items-center gap-4">
               <span className="grid place-items-center shrink-0 w-14 h-14 rounded-2xl text-[15px] font-black tracking-tight"
@@ -901,9 +840,60 @@ export default function MyInfoPage() {
           )}
           {more(myTeam ? `/tournament/team/${myTeam._id}` : "/admin/room", myTeam ? "팀 룸 열기" : "대회 룸 열기")}
         </section>
-        )}
-            </div>
-          </>
+        );
+            default: return null;
+          }
+        };
+
+        return (
+          <div className="grid grid-cols-1 gap-y-10">
+            {GROUPS.map((grp) => {
+              const rows = items.filter((i) => i.g === grp.g);
+              const verifyRow = grp.g === "account" && isVerified && !hasScrimRole;
+              if (rows.length === 0 && !verifyRow) return null;
+              return (
+                <section key={grp.g}>
+                  <p className="text-[10px] font-black tracking-[0.16em] text-[#a3a3a3] uppercase mb-1">{grp.t}</p>
+                  <div className="border-t border-black/[0.08]">
+                    {verifyRow && (
+                      <div className="flex items-center gap-3 py-3.5 border-b border-black/[0.06]">
+                        <span className="w-9 h-9 rounded-xl bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
+                          <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.lock} /></svg>
+                        </span>
+                        <span className="text-[14px] font-bold text-[#131313]">내전 채널 권한</span>
+                        <button type="button" onClick={() => router.push("/verify")}
+                          className="ml-auto shrink-0 h-8 px-3.5 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[11px] font-bold transition-colors outline-none focus:outline-none">획득</button>
+                      </div>
+                    )}
+                    {rows.map((q) => {
+                      const open = q.k === cur;
+                      return (
+                        <div key={q.k} className="border-b border-black/[0.06]">
+                          <button type="button" onClick={() => setPanel(open ? "" : q.k)} aria-expanded={open}
+                            className="w-full flex items-center gap-3 py-3.5 text-left outline-none focus:outline-none group">
+                            <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${open ? "bg-[#131313] text-white" : "bg-black/[0.045] text-[#131313] group-hover:bg-black/[0.09]"}`}>
+                              <svg viewBox="0 0 24 24" className="w-[19px] h-[19px]" fill="none" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ic[q.k]} /></svg>
+                            </span>
+                            <span className="text-[14px] font-bold text-[#131313]">{q.l}</span>
+                            <span className="ml-auto flex items-center gap-2.5 shrink-0">
+                              {q.pill && <span className={`text-[10px] font-black px-2 py-0.5 rounded-full tabular-nums ${q.pillCls}`}>{q.pill}</span>}
+                              {q.n != null && q.n > 0 && <span className={`text-[12px] font-black tabular-nums ${q.accent ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>{q.n > 99 ? "99+" : q.n}</span>}
+                              <svg viewBox="0 0 24 24" className={`w-4 h-4 text-[#b9b7b3] transition-transform ${open ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.chevronRight} /></svg>
+                            </span>
+                          </button>
+                          {open && (
+                            <div className="pb-6 pt-1 sm:pl-12 [&_h2]:hidden">
+                              {panelOf(q.k)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
         );
       })()}
 
