@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { LuxStyles } from "../../components/Lux";
+import BackLink from "../../components/BackLink";
 
 const FILTERS = [{ label: "전체", key: "all" }, { label: "심사 중", key: "심사 중" }, { label: "합격", key: "합격" }, { label: "불합격", key: "불합격" }];
 
@@ -54,10 +55,7 @@ export default function MyAppliesPage() {
     <main className="w-full flex-1 flex flex-col text-[#131313]">
       <LuxStyles />
       <section className="w-full max-w-4xl mx-auto px-6 pt-8 pb-20">
-        <Link href="/profile" className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] mb-6 transition-colors">
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
-          내 정보
-        </Link>
+        <BackLink href="/profile" label="내 정보" />
         <div className="flex items-center justify-between gap-3 flex-wrap mb-6">
           <h1 className="text-2xl md:text-3xl font-black tracking-tight">구인 지원 내역 {(rows?.length || 0) > 0 && <span className="text-[#e91e3f]">{rows!.length}</span>}</h1>
           <div className="flex items-center gap-2">

@@ -138,7 +138,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const isArcticTab = pathname === "/level" && searchParams.get("tab") === "arctic";
   // 스토어에서 넘어온 프로필은 스토어 독을 그대로 쓴다 — 전역 독과 겹치므로 이쪽을 비운다.
   // 헤더·푸터는 그대로 두므로 isShopPage 에는 넣지 않는다.
-  const isArcticProfile = pathname === "/profile" && searchParams.get("from") === "arctic";
 
   // 📌 브랜드 표기는 ARCTIC 을 기준으로 통일한다 — 작은 회색 "고급 이글루" + 구분선 + 큰 섹션명.
   //    섹션 이름이 있는 곳만 뒤를 채우고, 나머지는 "고급 이글루" 하나만 큰 글씨로 세운다.
@@ -482,7 +481,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         {adminNotifs.slice(0, 5).map((n) => {
                           const warn = n.type === "경고" || n.type === "제재";
                           return (
-                            <Link key={n._id} href={`/profile/notice?id=${n._id}`} onClick={() => setIsNotifOpen(false)} className={`block px-5 py-3.5 transition-colors ${isLightPage ? "hover:bg-black/[0.03]" : "hover:bg-white/[0.03]"}`}>
+                            <Link key={n._id} href={`/profile/notice/${n._id}`} onClick={() => setIsNotifOpen(false)} className={`block px-5 py-3.5 transition-colors ${isLightPage ? "hover:bg-black/[0.03]" : "hover:bg-white/[0.03]"}`}>
                               <div className="flex items-center gap-2 mb-1">
                                 <span className={`text-[9px] font-black tracking-wider px-1.5 py-0.5 rounded border ${warn ? "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25" : "bg-sky-500/10 text-sky-400 border-sky-500/20"}`}>{n.type || "안내"}</span>
                                 {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>}
@@ -667,7 +666,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
              스크롤 시 상단 헤더가 변하는 알약과 같은 톤(bg #0b0b0b/75 + backdrop-blur-2xl + 얇은 흰 테두리).
              ※ bottom은 홈 인디케이터/제스처 바를 피하도록 safe-area와 12px 중 큰 값.
              (경매방에서는 오조작 방지를 위해 숨김) */}
-      {!isVerifyPage && !isAuctionRoom && !isShopPage && !isArcticProfile && mounted && (
+      {!isVerifyPage && !isAuctionRoom && !isShopPage && mounted && (
         <nav className={`md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border backdrop-blur-2xl grid grid-cols-5 ${isLightPage ? "border-black/[0.07] bg-white/85 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.22)]" : "border-white/[0.07] bg-[#0b0b0b]/75 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85)]"}`}>
           {[
             { name: "홈", path: "/", icon: ICON_PATHS.home },

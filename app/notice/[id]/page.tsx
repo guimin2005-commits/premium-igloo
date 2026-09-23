@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import BackLink from "../../components/BackLink";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -62,7 +63,7 @@ export default function NoticeDetailPage() {
         <div className="max-w-[820px] mx-auto">
           <Reveal>
             <div className="flex items-center gap-3 mb-6">
-              <Link href="/notice" className="text-[11px] font-bold text-gray-500 hover:text-white transition-colors">← 소식</Link>
+              <BackLink href="/notice" label="소식" tone="dark" inline />
               <span className="h-px flex-1 bg-white/10" />
               {isAdmin && (
                 <button onClick={() => router.push(`/write?id=${post._id}`)}

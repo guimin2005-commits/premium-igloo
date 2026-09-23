@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import BackLink from "../../components/BackLink";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EsportsStyles } from "../../components/Esports";
@@ -54,7 +55,7 @@ export default function TournamentNoticeListPage() {
         <div className="max-w-[900px] mx-auto relative z-10">
           {/* 들어오면 나갈 길이 있어야 한다 — 대회로 돌아가는 링크 */}
           <div className="flex items-center gap-3 mb-4">
-            <Link href="/tournament" className="text-[10px] font-black esp-mono text-gray-500 hover:text-white transition-colors shrink-0">← 대회</Link>
+            <BackLink href="/tournament" label="대회" tone="dark" inline className="shrink-0" />
             <span className="w-2 h-2 esp-blink" style={{ background: G, clipPath: "polygon(50% 0,100% 50%,50% 100%,0 50%)" }} />
             <span className="text-[10px] font-black esp-mono uppercase truncate" style={{ color: G }}>{season?.title || "대회 룸"}</span>
             <span className="h-px flex-1 min-w-0 max-w-[200px] bg-gradient-to-r from-[#00e07b]/40 to-transparent" />

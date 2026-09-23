@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import BackLink from "../../components/BackLink";
 import { salePrice, durationLabel } from "@/lib/shopPricing";
 import ArcticHeader from "../ArcticHeader";
 import ArcticFooter from "../ArcticFooter";
@@ -235,10 +236,7 @@ export default function CheckoutPage() {
     <div className="w-full flex-1 bg-[#f4f3f2] text-[#131313] min-h-screen">
       <ArcticHeader />
       <section className="max-w-5xl mx-auto px-6 pt-10 pb-20">
-        <Link href="/level?tab=arctic" className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] mb-5 transition-colors">
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
-          계속 쇼핑하기
-        </Link>
+        <BackLink href="/level?tab=arctic" label="ARCTIC" className="mb-5" inline />
         <h1 className="text-3xl md:text-4xl font-black tracking-tighter mb-10">결제</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

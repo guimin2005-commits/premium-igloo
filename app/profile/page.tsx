@@ -7,7 +7,7 @@ import Link from "next/link";
 import { LuxStyles } from "../components/Lux";
 import { ADMIN_USERS, isAdminName } from "@/lib/admins";
 import { verifyBadge } from "@/lib/verifyBadge";
-import ArcticDock from "../shop/ArcticDock";
+import BackLink from "../components/BackLink";
 import { ICON_PATHS } from "../components/Icons";
 import { getTier } from "@/lib/voiceTiers";
 
@@ -163,12 +163,9 @@ export default function MyInfoPage() {
     );
   }
 
-  // 어디서 왔는지 — 링크가 ?from= 으로 알려준다 (referrer 는 못 믿는다)
-  const BACK_TARGETS: Record<string, { href: string; label: string }> = {
-    arctic: { href: "/level?tab=arctic", label: "스토어로" },
-    level: { href: "/level", label: "대시보드로" },
-  };
-  const backTo = BACK_TARGETS[searchParams.get("from") || ""] || null;
+  // 어디서 왔는지 — 링크가 ?from= 으로 알려준다 (referrer 는 못 믿는다). 규칙 4: 왼쪽 위 '← 상위 이름' 한 줄
+  const from = searchParams.get("from") || "";
+  const back = from === "arctic" ? { href: "/level?tab=arctic", label: "ARCTIC" } : from === "level" ? { href: "/level", label: "SYSTEM : LEVEL" } : null;
 
   // ── 줄 목록 ──
   const rows: Row[] = [
@@ -195,18 +192,8 @@ export default function MyInfoPage() {
     <main className="w-full flex-1 flex flex-col relative text-[#131313]">
       <LuxStyles />
 
-      {/* 스토어에서 넘어왔으면 돌아갈 길 */}
-      {backTo && (
-        <div className="sticky top-16 z-30 w-full bg-[#f4f3f2]/92 backdrop-blur-md border-b border-black/[0.06]">
-          <div className="max-w-4xl mx-auto px-6 py-2.5">
-            <Link href={backTo.href} className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">
-              <span aria-hidden>←</span> {backTo.label}
-            </Link>
-          </div>
-        </div>
-      )}
-
       <section className="w-full max-w-4xl mx-auto px-6 pt-8 pb-20 flex-1">
+        {back && <BackLink href={back.href} label={back.label} />}
         {/* ═══ 잉크 헤더 — SYSTEM : LEVEL 과 같은 패널. 이 화면에서 들어 올리는 건 이것 하나 ═══ */}
         <div className="relative overflow-hidden rounded-3xl bg-[#131313] text-white px-6 py-6 md:px-8 md:py-7">
           <div aria-hidden className="absolute inset-0 pointer-events-none opacity-60"
@@ -337,11 +324,6 @@ export default function MyInfoPage() {
           })}
         </div>
       </section>
-
-      {/* 스토어에서 넘어왔으면 스토어 독을 그대로 세운다 (ClientLayout 이 이 경우 전역 독을 비운다) */}
-      {backTo?.href === "/level?tab=arctic" && (
-        <ArcticDock activeKey="me" cartCount={shopCartCount} wishCount={shopWish.length} />
-      )}
     </main>
   );
 }

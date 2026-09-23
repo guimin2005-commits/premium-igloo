@@ -275,47 +275,6 @@ export default function ArcticShopBody({
     if (panel === "search") setShowMobileSearch(true);
   }, [searchParams]);
 
-  // 📌 쿠폰함 — 코드 등록과 보유 쿠폰을 한 창에서 (ARCTIC 전용, 라이트 톤)
-  const [showCoupons, setShowCoupons] = useState(false);
-  const [myCoupons, setMyCoupons] = useState<any[]>([]);
-  const [isLoadingCoupons, setIsLoadingCoupons] = useState(false);
-  const [couponCode, setCouponCode] = useState("");
-  const [isRegisteringCoupon, setIsRegisteringCoupon] = useState(false);
-  const [couponMsg, setCouponMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  const loadMyCoupons = () => {
-    setIsLoadingCoupons(true);
-    fetch("/api/shop/my-coupons", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setMyCoupons(Array.isArray(d?.data) ? d.data : []))
-      .catch(() => setMyCoupons([]))
-      .finally(() => setIsLoadingCoupons(false));
-  };
-  useEffect(() => { if (showCoupons) loadMyCoupons(); }, [showCoupons]);
-
-  const registerCoupon = async () => {
-    const code = couponCode.trim().toUpperCase();
-    if (!code || isRegisteringCoupon) return;
-    setIsRegisteringCoupon(true);
-    setCouponMsg(null);
-    try {
-      const res = await fetch("/api/shop/my-coupons", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }),
-      });
-      const d = await res.json();
-      if (res.ok && d.success) {
-        setCouponMsg({ ok: true, text: d.message || "쿠폰을 받았습니다." });
-        setCouponCode("");
-        loadMyCoupons();
-      } else {
-        setCouponMsg({ ok: false, text: d.message || "사용할 수 없는 쿠폰입니다." });
-      }
-    } catch {
-      setCouponMsg({ ok: false, text: "서버와 통신 중 오류가 발생했습니다." });
-    } finally {
-      setIsRegisteringCoupon(false);
-    }
-  };
   useEffect(() => {
     try {
       const raw = localStorage.getItem("iglooShopWish");
@@ -847,8 +806,9 @@ export default function ArcticShopBody({
                     검색·쿠폰함·장바구니는 '도구'고 소지는 '정보'라 한 줄에 섞이면 둘 다 읽히지 않는다 */}
 
                 {/* 쿠폰함 */}
-                <button onClick={() => setShowCoupons(true)} aria-label="쿠폰함" title="쿠폰함"
-                  className={`relative flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showCoupons ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
+                {/* 쿠폰함은 사이트에 하나 — 헤더의 창을 연다 */}
+                <button onClick={() => window.dispatchEvent(new Event("igloo:open-coupons"))} aria-label="쿠폰함" title="쿠폰함"
+                  className="relative flex items-center justify-center w-9 h-9 rounded-full transition-colors text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]">
                   <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
                   </svg>
@@ -1291,78 +1251,6 @@ export default function ArcticShopBody({
                   })}
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── 쿠폰함 (ARCTIC) ── */}
-      {showCoupons && (
-        <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center bg-[#131313]/45 backdrop-blur-sm sm:p-4 overlay-in" onClick={() => setShowCoupons(false)}>
-          <div onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-[#dedddb] rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[88dvh] sm:max-h-[80vh] overflow-hidden shadow-[0_30px_70px_-18px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200">
-            <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-[#ececea]">
-              <div className="flex items-center gap-2.5">
-                <svg className="w-[18px] h-[18px] text-[#e91e3f]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
-                </svg>
-                <h2 className="text-base font-black text-[#131313] tracking-tight">쿠폰함</h2>
-              </div>
-              <button onClick={() => setShowCoupons(false)} aria-label="닫기"
-                className="p-1.5 -mr-1.5 text-[#8a8a8a] hover:text-[#131313] rounded-md hover:bg-black/[0.05] transition-colors outline-none">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
-              </button>
-            </div>
-
-            <div className="shrink-0 px-6 pt-5 pb-4 border-b border-[#ececea]">
-              <div className="flex gap-2">
-                <input type="text" value={couponCode} onChange={(e) => setCouponCode(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") registerCoupon(); }}
-                  placeholder="쿠폰 코드 입력"
-                  className="flex-1 min-w-0 bg-white border border-[#dedddb] rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
-                <button onClick={registerCoupon} disabled={!couponCode.trim() || isRegisteringCoupon}
-                  className="px-5 py-3 rounded-xl bg-[#131313] hover:bg-black disabled:opacity-40 text-white text-[13px] font-bold transition-colors shrink-0">
-                  {isRegisteringCoupon ? "확인" : "등록"}
-                </button>
-              </div>
-              {couponMsg && (
-                <p className={`mt-2.5 text-[12px] font-bold break-keep ${couponMsg.ok ? "text-[#3f7a35]" : "text-[#c62828]"}`}>{couponMsg.text}</p>
-              )}
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden">
-              <div className="px-6 pt-4 pb-2 flex items-center justify-between">
-                <span className="text-[12px] font-black text-[#131313]">보유 쿠폰</span>
-                {myCoupons.length > 0 && <span className="text-[11px] font-black text-[#e91e3f]">{myCoupons.length}장</span>}
-              </div>
-              {isLoadingCoupons ? (
-                <p className="px-6 py-10 text-center text-xs text-[#8a8a8a]">불러오는 중...</p>
-              ) : myCoupons.length === 0 ? (
-                <p className="px-6 py-10 text-center text-xs text-[#8a8a8a] break-keep">보유한 쿠폰이 없습니다.</p>
-              ) : (
-                <div className="divide-y divide-[#ececea]">
-                  {myCoupons.map((c) => (
-                    <div key={c.id} className="px-6 py-3.5 flex items-center gap-3">
-                      <span className="w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
-                        <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
-                        </svg>
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-bold text-[#131313] truncate">{c.name}</p>
-                        <p className="text-[11px] text-[#8a8a8a] break-keep">
-                          {c.type === "percent" ? `${c.value}% 할인` : `${(c.value || 0).toLocaleString()} XP 할인`}
-                          {c.minTotal > 0 && ` · ${c.minTotal.toLocaleString()} XP 이상`}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="shrink-0 px-6 py-3 border-t border-[#ececea]">
-              <p className="text-[11px] text-[#a3a3a3] text-center break-keep">할인 쿠폰은 결제 화면에서 사용할 수 있습니다.</p>
             </div>
           </div>
         </div>

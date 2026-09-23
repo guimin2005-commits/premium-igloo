@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import BackLink from "../../../components/BackLink";
 import { useParams, useRouter } from "next/navigation";
 import { useSession, signIn } from "next-auth/react";
 import { EsportsStyles } from "../../../components/Esports";
@@ -401,7 +402,7 @@ export default function TeamRoom() {
       <main className="w-full max-w-lg mx-auto px-6 py-40 text-center">
         <h2 className="text-xl font-black text-white mb-2">팀을 찾을 수 없습니다</h2>
         <p className="text-gray-500 text-sm mb-6">삭제되었거나 아직 등록되지 않은 팀입니다.</p>
-        <button onClick={() => router.push("/tournament")} className="esp-cut-sm bg-white/[0.06] text-gray-300 text-xs font-black px-5 py-3">대회로 돌아가기</button>
+        <BackLink href="/tournament" label="대회" tone="dark" inline />
       </main>
     );
   }
@@ -505,8 +506,7 @@ export default function TeamRoom() {
               </button>
             );
           })}
-          <button onClick={() => router.push("/tournament")}
-            className="ml-auto esp-cut-sm px-4 py-2.5 text-xs font-black shrink-0 bg-white/[0.03] text-gray-600 hover:text-white transition-colors">← 대회</button>
+          <BackLink href="/tournament" label="대회" tone="dark" inline className="ml-auto shrink-0" />
         </div>
       </div>
 

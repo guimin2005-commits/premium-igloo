@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import BackLink from "../components/BackLink";
 import { useRouter } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
 import { Reveal } from "../components/Lux";
@@ -544,13 +545,7 @@ export default function NoticeDetail({ postId }: { postId: string }) {
         <article>
           {/* 머리 — 목록으로 왼쪽, 도구(수정·링크) 오른쪽, 그 아래 날짜·상태와 제목 */}
           <div className="flex items-center gap-2 mb-6 md:mb-8">
-            <Link
-              href={LIST_HREF}
-              className="inline-flex items-center gap-1.5 h-9 px-2 -ml-2 rounded-full text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] transition-colors"
-            >
-              <ArrowRight className="w-4 h-4 rotate-180" />
-              공지 목록
-            </Link>
+            <BackLink href={LIST_HREF} label="공지사항" inline />
             <span className="ml-auto flex items-center gap-1">
               {isAdmin && (
                 <Link

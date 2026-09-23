@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import BackLink from "../../components/BackLink";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -87,7 +88,7 @@ export default function TournamentDetailPage() {
 
         <div className="relative max-w-[1180px] mx-auto px-5 md:px-8 pt-9 pb-7">
           <div className="flex items-center gap-3 mb-5">
-            <Link href="/tournament" className="text-[10px] font-black esp-mono text-gray-500 hover:text-white transition-colors shrink-0">← 대회</Link>
+            <BackLink href="/tournament" label="대회" tone="dark" inline className="shrink-0" />
             <span className="w-2 h-2 esp-blink" style={{ background: G, clipPath: "polygon(50% 0,100% 50%,50% 100%,0 50%)" }} />
             <span className="text-[10px] font-black esp-mono uppercase truncate" style={{ color: G }}>{post.tournamentGame || "TOURNAMENT"}</span>
             <span className="h-px flex-1 min-w-0 max-w-[200px] bg-gradient-to-r from-[#00e07b]/40 to-transparent" />

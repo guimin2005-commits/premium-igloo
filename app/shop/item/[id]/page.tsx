@@ -7,6 +7,7 @@ import Link from "next/link";
 import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import ItemIcon from "../../../components/ItemIcon";
+import BackLink from "../../../components/BackLink";
 import ArcticHeader from "../../ArcticHeader";
 import ArcticDock from "../../ArcticDock";
 import ArcticFooter from "../../ArcticFooter";
@@ -192,11 +193,7 @@ export default function ItemDetailPage() {
       <ArcticHeader />
 
       <section className="max-w-5xl mx-auto px-6 pt-8 pb-32 md:pb-24">
-        <button onClick={() => router.back()}
-          className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] mb-6 transition-colors">
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
-          뒤로
-        </button>
+        <BackLink href="/level?tab=arctic" label="ARCTIC" />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* 좌 — 이미지 */}

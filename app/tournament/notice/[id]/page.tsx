@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import BackLink from "../../../components/BackLink";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { EsportsStyles } from "../../../components/Esports";
@@ -58,7 +59,7 @@ export default function TournamentNoticeDetailPage() {
       <article className="w-full px-5 md:px-8 pt-10 pb-12">
         <div className="max-w-[820px] mx-auto">
           <div className="flex items-center gap-3 mb-6">
-            <Link href="/tournament/notice" className="text-[10px] font-black esp-mono text-gray-500 hover:text-white transition-colors">← 대회 공지</Link>
+            <BackLink href="/tournament/notice" label="대회 공지" tone="dark" inline />
             <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/25 to-transparent" />
             <span className="text-[10px] font-black esp-mono" style={{ color: G }}>{season?.title || "대회 룸"}</span>
           </div>
