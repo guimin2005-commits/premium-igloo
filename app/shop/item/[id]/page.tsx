@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
+import ItemIcon from "../../../components/ItemIcon";
 import ArcticHeader from "../../ArcticHeader";
 import ArcticDock from "../../ArcticDock";
 import ArcticFooter from "../../ArcticFooter";
@@ -17,22 +18,17 @@ const TypeBadge = ({ type, className = "" }: { type: string; className?: string 
   </span>
 );
 
-// 그림 자리 — 이미지가 없으면 등록한 아이콘을 등록 색 그라데이션 위에 크게 찍는다
-const ItemArt = ({ it, imgClass = "", iconClass = "text-7xl" }: { it: any; imgClass?: string; iconClass?: string }) => {
+// 그림 자리 — 상품 이미지 > 아이템 이미지 > 아이콘(ItemIcon)을 등록 색 그라데이션 위에 크게 찍는다
+const ItemArt = ({ it, imgClass = "", iconSize = 72 }: { it: any; imgClass?: string; iconSize?: number }) => {
   const color = it?.color || itemTypeColor(it?.type);
-  if (it?.imageUrl) {
+  const img = it?.imageUrl || it?.itemImageUrl;
+  if (img) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={it.imageUrl} alt={it.name || ""} className={`absolute inset-0 w-full h-full object-cover ${imgClass}`} />;
+    return <img src={img} alt={it.name || ""} className={`absolute inset-0 w-full h-full object-cover ${imgClass}`} />;
   }
   return (
     <div className="absolute inset-0 flex items-center justify-center" style={{ background: `linear-gradient(160deg, ${color}33, ${color}0a)` }}>
-      {it?.icon ? (
-        <span aria-hidden className={`${iconClass} leading-none select-none`}>{it.icon}</span>
-      ) : (
-        <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke={color} style={{ opacity: 0.55 }}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
-        </svg>
-      )}
+      <ItemIcon icon={it?.icon} type={it?.type} size={iconSize} color={color} />
     </div>
   );
 };
@@ -205,7 +201,7 @@ export default function ItemDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* 좌 — 이미지 */}
           <div className="relative aspect-square rounded-2xl bg-[#e9e8e6] border border-[#dedddb] overflow-hidden">
-            <ItemArt it={item} iconClass="text-8xl" />
+            <ItemArt it={item} iconSize={96} />
             {soldOut && (
               <div className="absolute inset-0 bg-[#131313]/55 flex items-center justify-center">
                 <span className="text-lg font-black text-white tracking-wider">SOLD OUT</span>
@@ -353,7 +349,7 @@ export default function ItemDetailPage() {
                   <Link key={r._id} href={`/shop/item/${r._id}`}
                     className="group bg-white rounded-2xl border border-[#dedddb] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
                     <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
-                      <ItemArt it={r} imgClass="group-hover:scale-105 transition-transform duration-500" iconClass="text-5xl" />
+                      <ItemArt it={r} imgClass="group-hover:scale-105 transition-transform duration-500" iconSize={48} />
                       <TypeBadge type={r.type} className="absolute top-2 left-2 px-2 py-0.5 text-[9px]" />
                     </div>
                     <div className="p-3.5 flex flex-col flex-1">

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Reveal, LuxStyles } from "../../components/Lux";
 import Dropdown from "../../components/Dropdown";
+import ItemIcon from "../../components/ItemIcon";
 import { SEASON } from "@/lib/season";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import {
@@ -76,7 +77,7 @@ const rewardLabel = (r: Reward, roleNameOf: (id: string) => string, itemOf: (id:
   if (r.kind === "role") return `역할 · ${roleNameOf(r.roleId) || r.roleName || "미지정"}`;
   if (r.kind === "item") {
     const it = itemOf(r.itemId);
-    return `아이템 · ${it?.icon ? `${it.icon} ` : ""}${it?.name || r.itemName || "미지정"}`;
+    return `아이템 · ${it?.name || r.itemName || "미지정"}`;
   }
   return "-";
 };
@@ -166,9 +167,9 @@ function RewardEditor({
             onChange={(v) => onChange({ ...value, itemId: v, itemName: items.find((it: any) => it._id === v)?.name || "" })}
             options={items.map((it: any) => ({
               value: it._id,
-              label: `${it.icon ? `${it.icon} ` : ""}${it.name}`,
+              label: it.name,
               hint: itemTypeLabel(it.type),
-              color: it.color || itemTypeColor(it.type),
+              icon: <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.type} size={18} color={it.color || itemTypeColor(it.type)} />,
             }))}
           />
           <p className={fieldNote}>인벤토리에 들어가고, 역할이 연결돼 있으면 봇이 역할도 붙입니다</p>

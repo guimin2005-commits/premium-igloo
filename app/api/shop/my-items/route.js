@@ -64,7 +64,7 @@ export async function GET() {
 
     const [purchases, shopItems, itemsAll, roleConfigs, invRoles, discordRoles] = await Promise.all([
       Purchase.find({ userId, status: { $nin: ["cancelled", "refunded"] } }).sort({ createdAt: -1 }).lean(),
-      ShopItem.find({}, { name: 1, description: 1, imageUrl: 1, icon: 1, color: 1, type: 1, roleId: 1, itemId: 1 }).lean(),
+      ShopItem.find({}, { name: 1, description: 1, imageUrl: 1, itemImageUrl: 1, icon: 1, color: 1, type: 1, roleId: 1, itemId: 1 }).lean(),
       Item.find({}).sort({ sortOrder: 1, createdAt: 1 }).lean(),
       RoleConfig.find({}, { roleId: 1, roleName: 1, rewardLevel: 1, exclusive: 1 }).lean(),
       InventoryRole.find({ visible: true }).sort({ sortOrder: 1 }).lean(),

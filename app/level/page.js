@@ -16,6 +16,7 @@ import { getCumulativeXpByLevel, getLevelByXp } from "@/lib/leveling";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { buildEnhanceView, chatRange, voiceBonus } from "@/lib/enhance";
 import TierEmblem from "../components/TierEmblem";
+import ItemIcon from "../components/ItemIcon";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
 
@@ -212,9 +213,9 @@ const PassRewardCell = ({ reward, trackLabel, tierLevel, locked = false, busy = 
       aria-label={`티어 ${tierLevel} ${trackLabel} 보상 ${r.label || "없음"}${claimed ? " · 수령완료" : claimable ? " · 받기" : locked ? " · 잠김" : ""}`}
       className={`w-full h-[112px] rounded-xl border px-2 flex flex-col items-center justify-center text-center transition-colors outline-none focus:outline-none ${tone} ${dim}`}
     >
-      {/* 아이템 보상은 등록한 아이콘(이모지)이 머리표를 대신한다 */}
-      {r.kind === "item" && r.icon ? (
-        <span aria-hidden className="text-[16px] leading-none">{r.icon}</span>
+      {/* 아이템 보상은 등록한 아이콘(프리셋·이모지·이미지)이 머리표를 대신한다 */}
+      {r.kind === "item" && (r.icon || r.imageUrl) ? (
+        <ItemIcon icon={r.icon} imageUrl={r.imageUrl} type={r.itemType || "item"} size={18} color={r.claimable ? "#ffffff" : r.color || undefined} />
       ) : (
         <span className={`text-[9px] font-black tracking-[0.18em] ${r.claimable ? "text-white/45" : "text-[#c4c4c4]"}`}>
           {PASS_KIND_MARK[r.kind] || "—"}
@@ -599,76 +600,9 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
   );
 };
 
-// 📌 아이템 아이콘 — 유형별 기본 모양. 등록된 아이콘(이모지)·이미지가 있으면 그것이 우선한다.
-//    role 방패 · perk 열쇠 · item 큐브 · physical 상자 · level 메달
-const invIconKind = (it) => {
-  if (it.source === "level") return "medal";
-  const t = it.type || it.kind;
-  if (t === "physical") return "box";
-  if (t === "perk") return "key";
-  if (t === "item") return "cube";
-  return "shield";
-};
-
-const InvIcon = ({ it, size = 24, color = "#fff", dim = false }) => {
-  const c = dim ? "rgba(255,255,255,0.3)" : color;
-  // 이미지 → 둥근 사각, 아이콘 텍스트 → 큰 글자, 없으면 유형별 SVG
-  if (it.imageUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={it.imageUrl}
-        alt=""
-        width={size}
-        height={size}
-        className="object-cover"
-        style={{ width: size, height: size, borderRadius: Math.max(6, size * 0.28), opacity: dim ? 0.35 : 1 }}
-      />
-    );
-  }
-  if (it.icon) {
-    return (
-      <span
-        aria-hidden
-        className="inline-flex items-center justify-center leading-none"
-        style={{ width: size, height: size, fontSize: size * 0.82, opacity: dim ? 0.35 : 1 }}
-      >
-        {it.icon}
-      </span>
-    );
-  }
-  const k = invIconKind(it);
-  const p = { viewBox: "0 0 24 24", width: size, height: size };
-  if (k === "box")
-    return (
-      <svg {...p} fill="none" stroke={c} strokeWidth="1.7">
-        <path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5Z" strokeLinejoin="round" />
-        <path d="M3 8.5 12 13l9-4.5M12 13v7" strokeLinejoin="round" />
-      </svg>
-    );
-  if (k === "key")
-    return (
-      <svg {...p} fill="none" stroke={c} strokeWidth="1.7">
-        <circle cx="8" cy="12" r="4.2" />
-        <path d="M12.2 12H21M17.5 12v3.2M20 12v2.4" strokeLinecap="round" />
-      </svg>
-    );
-  if (k === "cube")
-    return (
-      <svg {...p} fill="none" stroke={c} strokeWidth="1.7">
-        <path d="M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6Z" strokeLinejoin="round" />
-        <path d="M4 7.6 12 12l8-4.4M12 12v8.8" strokeLinejoin="round" />
-      </svg>
-    );
-  if (k === "medal")
-    return (
-      <svg {...p} fill="none" stroke={c} strokeWidth="1.7">
-        <circle cx="12" cy="14.5" r="5.5" />
-        <path d="M8.5 9 6.5 3h11l-2 6" strokeLinejoin="round" />
-      </svg>
-    );
-  return <svg {...p} fill={c}><path d="M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z" opacity="0.92" /></svg>;
-};
+// 📌 아이템 아이콘은 공용 ItemIcon(app/components/ItemIcon) 이 그린다 — 이미지 > 프리셋 SVG > 이모지 > 유형 기본.
+//    레벨 보상(source "level")은 유형 대신 "level" 을 넘겨 메달이 나오게 한다.
+const invIconType = (it) => (it.source === "level" ? "level" : it.type || it.kind || "item");
 
 // 📌 가방 — 인벤토리를 대시보드에 펼치지 않고 오버레이로 연다.
 //    껍데기는 TierModal 과 같은 문법(모바일 바텀시트 / 데스크톱 모달, 잉크 패널).
@@ -775,7 +709,7 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
                     boxShadow: `inset 0 0 0 1px ${accentOf(selItem)}55`,
                   }}
                 >
-                  <InvIcon it={selItem} size={38} color={accentOf(selItem)} dim={selItem.status !== "completed"} />
+                  <ItemIcon icon={selItem.icon} imageUrl={selItem.imageUrl} type={invIconType(selItem)} size={38} color={accentOf(selItem)} dim={selItem.status !== "completed"} />
                 </div>
                 <p className="text-[15px] font-black text-white leading-snug break-keep">{selItem.name}</p>
                 <p className="text-[11px] text-white/45 mt-2 leading-relaxed break-keep">{invSubLabel(selItem)}</p>
@@ -848,7 +782,7 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
                     }}
                   >
                     <span aria-hidden className="mb-1.5">
-                      <InvIcon it={it} size={24} color={accent} dim={dead} />
+                      <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={24} color={accent} dim={dead} />
                     </span>
                     <span className={`w-full text-[9px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
                       {it.name}

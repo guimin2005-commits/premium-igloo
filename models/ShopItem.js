@@ -7,11 +7,12 @@ import mongoose from "mongoose";
 const ShopItemSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: { type: String, default: "" },
-  imageUrl: { type: String, default: "" },       // 상품 이미지 (외부 URL)
+  imageUrl: { type: String, default: "" },       // 상품 고유 이미지 (외부 URL) — 아이템 연동과 무관하게 편집한다
   // 📌 아이템 등록(models/Item) 참조 — "" 이면 직접 설정한 상품.
-  //    값이 있으면 name/description/icon/imageUrl/color/type/roleId/roleName/detachOnSeason 은
+  //    값이 있으면 name/description/icon/color/type/roleId/roleName/detachOnSeason 과 itemImageUrl 은
   //    서버가 Item 에서 복사해 둔 스냅샷이다 (Item 을 고치면 admin/items 가 다시 써 준다).
   itemId: { type: String, default: "" },
+  itemImageUrl: { type: String, default: "" },   // Item.imageUrl 스냅샷 — 상품 이미지가 비었을 때 카드에 쓴다
   icon: { type: String, default: "" },           // 이모지·짧은 텍스트 — 이미지가 없을 때 카드에 크게 찍힌다
   color: { type: String, default: "" },          // "#rrggbb" — 비면 유형 기본색 (lib/items.js)
   type: { type: String, default: "role" },       // "role" | "perk" | "item" | "physical"

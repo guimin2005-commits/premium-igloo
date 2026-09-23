@@ -4,6 +4,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import Dropdown from "../components/Dropdown";
+import ItemIcon from "../components/ItemIcon";
+import IconPicker from "../components/IconPicker";
 import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
 import { itemTypeLabel, itemTypeColor, ITEM_TYPE_OPTIONS } from "@/lib/items";
 import {
@@ -50,23 +52,18 @@ function TypeBadge({ type, className = "" }: { type: string; className?: string 
   );
 }
 
-// 📌 카드 그림 자리 — 이미지가 있으면 이미지, 없으면 등록한 아이콘(이모지)을 큰 글자로.
+// 📌 카드 그림 자리 — 상품 이미지 > 아이템 이미지 > 아이콘(ItemIcon: 프리셋 SVG·이모지·유형 기본).
 //    배경은 등록 색을 연하게 깐 그라데이션이라 이미지 없는 상품도 서로 구분된다.
-function CardArt({ it, imgClass = "", iconClass = "text-5xl" }: { it: any; imgClass?: string; iconClass?: string }) {
+function CardArt({ it, imgClass = "", iconSize = 48 }: { it: any; imgClass?: string; iconSize?: number }) {
   const color = it?.color || itemTypeColor(it?.type);
-  if (it?.imageUrl) {
+  const img = it?.imageUrl || it?.itemImageUrl;
+  if (img) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={it.imageUrl} alt={it.name || ""} className={`absolute inset-0 w-full h-full object-cover ${imgClass}`} />;
+    return <img src={img} alt={it.name || ""} className={`absolute inset-0 w-full h-full object-cover ${imgClass}`} />;
   }
   return (
     <div className="absolute inset-0 flex items-center justify-center" style={{ background: `linear-gradient(160deg, ${color}33, ${color}0a)` }}>
-      {it?.icon ? (
-        <span aria-hidden className={`${iconClass} leading-none select-none`}>{it.icon}</span>
-      ) : (
-        <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke={color} style={{ opacity: 0.55 }}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
-        </svg>
-      )}
+      <ItemIcon icon={it?.icon} type={it?.type} size={iconSize} color={color} />
     </div>
   );
 }
@@ -619,7 +616,7 @@ export default function ArcticShopBody({
               <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
                 {/* 상세로 가는 오버레이 — 위에 얹힌 버튼(z-10)은 그대로 눌린다 */}
                 <Link href={`/shop/item/${it._id}`} aria-label={`${it.name} 상세보기`} className="absolute inset-0 z-[1]"></Link>
-                <CardArt it={it} imgClass="group-hover:scale-105 transition-transform duration-500" iconClass="text-5xl sm:text-6xl" />
+                <CardArt it={it} imgClass="group-hover:scale-105 transition-transform duration-500" iconSize={56} />
                 <TypeBadge type={it.type} className="absolute top-2 left-2 sm:top-3 sm:left-3 px-2 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] tracking-wide" />
                 {!it.active && (
                   <span className="absolute top-11 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#dedddb]">숨김</span>
@@ -1260,7 +1257,7 @@ export default function ArcticShopBody({
                     return (
                       <div key={it._id} className="p-5 flex gap-4 items-center">
                         <div className="relative w-16 h-16 rounded-xl bg-[#e9e8e6] overflow-hidden shrink-0">
-                          <CardArt it={it} iconClass="text-3xl" />
+                          <CardArt it={it} iconSize={30} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <TypeBadge type={it.type} className="inline-block px-2 py-0.5 text-[9px] mb-1" />
@@ -1466,7 +1463,7 @@ export default function ArcticShopBody({
               <>
                 <div className="flex gap-4 p-6 border-b border-[#ececea]">
                   <div className="relative w-20 h-20 rounded-xl bg-[#e9e8e6] overflow-hidden shrink-0">
-                    <CardArt it={buyTarget} iconClass="text-4xl" />
+                    <CardArt it={buyTarget} iconSize={36} />
                   </div>
                   <div className="min-w-0">
                     <TypeBadge type={buyTarget.type} className="inline-block px-2 py-0.5 text-[10px] mb-1.5" />
@@ -1580,7 +1577,10 @@ export default function ArcticShopBody({
                             value={editForm.itemId}
                             onChange={(v) => { const it = regItems.find((x) => x._id === v); if (it) setEditForm(applyItem(editForm, it)); }}
                             placeholder="아이템을 선택하세요"
-                            options={regItems.map((x) => ({ value: x._id, label: `${x.icon ? `${x.icon} ` : ""}${x.name}`, hint: itemTypeLabel(x.type), color: x.color || itemTypeColor(x.type) }))}
+                            options={regItems.map((x) => ({
+                              value: x._id, label: x.name, hint: itemTypeLabel(x.type),
+                              icon: <ItemIcon icon={x.icon} imageUrl={x.imageUrl} type={x.type} size={18} color={x.color || itemTypeColor(x.type)} />,
+                            }))}
                           />
                           <p className={F_NOTE}>
                             표기는 아이템 등록에서 바꿉니다 ·{" "}
@@ -1635,30 +1635,31 @@ export default function ArcticShopBody({
                         placeholder="카드에 표시될 설명" className={`${F_INPUT} resize-none disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
                     </div>
 
+                    {/* 상품 이미지는 상품 고유 값 — 아이템을 연동해도 따로 넣을 수 있다 */}
                     <div>
                       <label className={F_LABEL}>상품 이미지 URL</label>
-                      <input type="text" value={editForm.imageUrl} disabled={efLinked} onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })}
-                        placeholder="https://..." className={`${F_INPUT} disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
+                      <input type="text" value={editForm.imageUrl} onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })}
+                        placeholder="https://..." className={F_INPUT} />
+                      <p className={F_NOTE}>비우면 아이템 이미지·아이콘</p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={F_LABEL}>아이콘</label>
-                        <input type="text" value={editForm.icon} disabled={efLinked} maxLength={8} onChange={(e) => setEditForm({ ...editForm, icon: e.target.value })}
-                          placeholder="🎁" className={`${F_INPUT_SM} disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
-                        <p className={F_NOTE}>이미지가 없을 때 카드에 크게</p>
+                    <div>
+                      <label className={F_LABEL}>아이콘</label>
+                      <IconPicker value={editForm.icon} disabled={efLinked} onChange={(v) => setEditForm({ ...editForm, icon: v })}
+                        color={editForm.color || itemTypeColor(editForm.type)} inputClassName={`${F_INPUT_SM} disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
+                      <p className={F_NOTE}>이미지가 없을 때 카드에 크게</p>
+                    </div>
+
+                    <div>
+                      <label className={F_LABEL}>색상</label>
+                      <div className="flex items-center gap-2">
+                        <input type="color" value={editForm.color || itemTypeColor(editForm.type)} disabled={efLinked}
+                          onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
+                          className="w-11 h-11 shrink-0 rounded-lg border border-[#dedddb] bg-white p-1 disabled:opacity-50" />
+                        <input type="text" value={editForm.color} disabled={efLinked} maxLength={7} onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
+                          placeholder={itemTypeColor(editForm.type)} className={`${F_INPUT_SM} disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
                       </div>
-                      <div>
-                        <label className={F_LABEL}>색상</label>
-                        <div className="flex items-center gap-2">
-                          <input type="color" value={editForm.color || itemTypeColor(editForm.type)} disabled={efLinked}
-                            onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
-                            className="w-11 h-11 shrink-0 rounded-lg border border-[#dedddb] bg-white p-1 disabled:opacity-50" />
-                          <input type="text" value={editForm.color} disabled={efLinked} maxLength={7} onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
-                            placeholder={itemTypeColor(editForm.type)} className={`${F_INPUT_SM} disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
-                        </div>
-                        <p className={F_NOTE}>비우면 유형 기본색</p>
-                      </div>
+                      <p className={F_NOTE}>비우면 유형 기본색</p>
                     </div>
                   </FormGroup>
 
@@ -1750,7 +1751,7 @@ export default function ArcticShopBody({
                 <div className="text-[12px] font-black text-[#131313] mb-3">카드 미리보기</div>
                 <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col">
                   <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
-                    <CardArt it={editForm} iconClass="text-6xl" />
+                    <CardArt it={editForm} iconSize={60} />
                     <TypeBadge type={editForm.type} className="absolute top-3 left-3 px-2.5 py-1 text-[10px] tracking-wide" />
                     {!editForm.active && (
                       <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#dedddb]">숨김</span>

@@ -8,8 +8,11 @@ export type ProductForm = {
   id: string;
   // 등록된 아이템(models/Item) 참조 — "" 이면 직접 설정. 값이 있으면 표기 필드는 잠기고 서버가 다시 복사한다
   itemId: string;
+  // 연동한 아이템의 이미지 스냅샷 — 미리보기용. 서버는 이 값을 무시하고 Item 에서 다시 읽는다
+  itemImageUrl: string;
   name: string;
   description: string;
+  // 상품 고유 이미지 — 연동 여부와 무관하게 편집한다. 비우면 아이템 이미지 → 아이콘 순으로 보인다
   imageUrl: string;
   icon: string;
   color: string;
@@ -31,6 +34,7 @@ export type ProductForm = {
 export const EMPTY_PRODUCT_FORM: ProductForm = {
   id: "",
   itemId: "",
+  itemImageUrl: "",
   name: "",
   description: "",
   imageUrl: "",
@@ -63,6 +67,7 @@ export const isLinked = (f: ProductForm | null | undefined) => !!f?.itemId;
 export const formFromShopItem = (it: any): ProductForm => ({
   id: it._id,
   itemId: it.itemId || "",
+  itemImageUrl: it.itemImageUrl || "",
   name: it.name || "",
   description: it.description || "",
   imageUrl: it.imageUrl || "",
@@ -104,14 +109,15 @@ export const pickType = (f: ProductForm, v: string): ProductForm => ({
 });
 
 // 등록된 아이템을 고르면 표기 필드를 채우고 잠근다. 가격·기간·할인·재고·판매·정렬은 그대로 둔다.
+//   상품 이미지(imageUrl)는 상품 고유 값이라 덮지 않는다 — 아이템 이미지는 itemImageUrl 로만 따라온다.
 export const applyItem = (f: ProductForm, item: any): ProductForm => {
   const type = isItemType(item?.type) ? item.type : "item";
   return {
     ...f,
     itemId: String(item?._id || ""),
+    itemImageUrl: item?.imageUrl || "",
     name: item?.name || "",
     description: item?.description || "",
-    imageUrl: item?.imageUrl || "",
     icon: item?.icon || "",
     color: item?.color || "",
     type,
@@ -122,10 +128,10 @@ export const applyItem = (f: ProductForm, item: any): ProductForm => {
   };
 };
 
-// 직접 설정으로 되돌린다 — 값은 남겨 두어 그 자리에서 고쳐 쓸 수 있게 한다
-export const unlinkItem = (f: ProductForm): ProductForm => ({ ...f, itemId: "" });
+// 직접 설정으로 되돌린다 — 값은 남겨 두어 그 자리에서 고쳐 쓸 수 있게 한다 (아이템 이미지 스냅샷만 비운다)
+export const unlinkItem = (f: ProductForm): ProductForm => ({ ...f, itemId: "", itemImageUrl: "" });
 
-// 서버로 보낼 본문 — 등록된 아이템이면 서버가 표기를 다시 복사하므로 여기 값은 참고용이다
+// 서버로 보낼 본문 — 등록된 아이템이면 서버가 표기를 다시 복사하므로 여기 값은 참고용이다 (imageUrl 은 항상 이 값이 저장된다)
 export const toPayload = (f: ProductForm, roleName: string) => ({
   ...f,
   roleName: roleName || f.roleName || "",

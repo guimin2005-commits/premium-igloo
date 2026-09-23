@@ -43,8 +43,9 @@ export async function POST(request) {
     await connectToDatabase();
     let b = await request.json();
 
-    // 📌 등록된 아이템을 골랐으면 표기(이름·설명·아이콘·이미지·색·유형·역할·시즌 떼기)는
+    // 📌 등록된 아이템을 골랐으면 표기(이름·설명·아이콘·색·유형·역할·시즌 떼기)는
     //    서버가 Item 에서 다시 읽어 복사한다 — 클라이언트가 보낸 값은 믿지 않는다.
+    //    상품 이미지(imageUrl)만은 상품 고유 값이라 연동 여부와 상관없이 클라이언트 값을 쓴다.
     const itemId = String(b.itemId || "").trim();
     let linked = null;
     if (itemId) {
@@ -85,6 +86,7 @@ export async function POST(request) {
     const payload = {
       durations,
       itemId: linked ? String(linked._id) : "",
+      itemImageUrl: linked ? String(linked.imageUrl || "").trim() : "",
       name: b.name.trim(),
       description: (b.description || "").trim(),
       imageUrl: (b.imageUrl || "").trim(),

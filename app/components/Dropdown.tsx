@@ -9,6 +9,7 @@ export type DropdownOption = {
   label: string;
   hint?: string;   // 우측 보조 텍스트
   color?: string;  // 좌측 점 색상 (디스코드 역할 등)
+  icon?: React.ReactNode; // 좌측 아이콘 (아이템 등) — 있으면 색 점 대신 이것을 그린다
   indent?: boolean;
   group?: boolean; // 선택 불가한 구분 헤더
 };
@@ -79,7 +80,9 @@ export default function Dropdown({
       >
         {selected ? (
           <span className="flex items-center gap-2.5 min-w-0">
-            {selected.color && <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: selected.color }}></span>}
+            {selected.icon
+              ? <span className="shrink-0 inline-flex items-center justify-center">{selected.icon}</span>
+              : selected.color && <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: selected.color }}></span>}
             <span className="font-bold truncate">{selected.label}</span>
             {selected.hint && <span className={`text-[10px] shrink-0 ${caret}`}>{selected.hint}</span>}
           </span>
@@ -112,7 +115,9 @@ export default function Dropdown({
                 onClick={() => { onChange(o.value); setOpen(false); }}
                 className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors ${o.value === value ? itemActive : itemBase}`}
               >
-                {o.color && <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: o.color }}></span>}
+                {o.icon
+                  ? <span className="shrink-0 inline-flex items-center justify-center">{o.icon}</span>
+                  : o.color && <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: o.color }}></span>}
                 <span className={`truncate ${o.indent ? "ml-4" : ""}`}>{o.label}</span>
                 {o.hint && <span className={`ml-auto text-[10px] shrink-0 ${caret}`}>{o.hint}</span>}
               </button>

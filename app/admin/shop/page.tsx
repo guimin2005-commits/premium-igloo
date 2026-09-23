@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Reveal, LuxStyles } from "../../components/Lux";
 import Dropdown from "../../components/Dropdown";
+import ItemIcon from "../../components/ItemIcon";
+import IconPicker from "../../components/IconPicker";
 import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor } from "@/lib/items";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
@@ -65,22 +67,17 @@ function TypeBadge({ type, className = "" }: { type: string; className?: string 
   );
 }
 
-// 카드 그림 자리 — 이미지가 없으면 아이콘을 등록 색 위에 크게 (상점 CardArt 와 같은 규칙)
-function CardArt({ it, iconClass = "text-5xl" }: { it: any; iconClass?: string }) {
+// 카드 그림 자리 — 상품 이미지 > 아이템 이미지 > 아이콘(ItemIcon)을 등록 색 위에 크게 (상점 CardArt 와 같은 규칙)
+function CardArt({ it, iconSize = 48 }: { it: any; iconSize?: number }) {
   const color = it?.color || itemTypeColor(it?.type);
-  if (it?.imageUrl) {
+  const img = it?.imageUrl || it?.itemImageUrl;
+  if (img) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={it.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />;
+    return <img src={img} alt="" className="absolute inset-0 w-full h-full object-cover" />;
   }
   return (
     <div className="absolute inset-0 flex items-center justify-center" style={{ background: `linear-gradient(160deg, ${color}33, ${color}0a)` }}>
-      {it?.icon ? (
-        <span aria-hidden className={`${iconClass} leading-none select-none`}>{it.icon}</span>
-      ) : (
-        <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke={color} style={{ opacity: 0.55 }}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12A1.125 1.125 0 0119.75 22H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
-        </svg>
-      )}
+      <ItemIcon icon={it?.icon} type={it?.type} size={iconSize} color={color} />
     </div>
   );
 }
@@ -462,10 +459,10 @@ export default function AdminShopPage() {
                     </div>
                   )}
 
-                  <div>
+                  <div className="md:col-span-2">
                     <label className={labelClass}>아이콘</label>
-                    <input type="text" value={itemForm.icon} maxLength={8} onChange={(e) => setItemForm({ ...itemForm, icon: e.target.value })} placeholder="🐧" className={inputClass} />
-                    <p className={fieldNote}>이모지 또는 짧은 글자. 이미지가 없을 때 쓰입니다.</p>
+                    <IconPicker value={itemForm.icon} onChange={(v) => setItemForm({ ...itemForm, icon: v })} color={itemForm.color || itemTypeColor(itemForm.type)} inputClassName={inputClass} />
+                    <p className={fieldNote}>이미지가 없을 때 쓰입니다</p>
                   </div>
                   <div>
                     <label className={labelClass}>이미지 URL</label>
@@ -525,7 +522,7 @@ export default function AdminShopPage() {
                       return (
                         <div key={it._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                           <div className="relative w-12 h-12 rounded-lg bg-black/5 overflow-hidden shrink-0">
-                            <CardArt it={it} iconClass="text-2xl" />
+                            <CardArt it={it} iconSize={26} />
                           </div>
                           <div className="min-w-0 md:w-56 shrink-0">
                             <div className="flex items-center gap-2">
@@ -598,7 +595,10 @@ export default function AdminShopPage() {
                             value={form.itemId}
                             onChange={(v) => { const it = regItems.find((x) => x._id === v); if (it) setForm(applyItem(form, it)); }}
                             placeholder="아이템을 선택하세요"
-                            options={regItems.map((x) => ({ value: x._id, label: `${x.icon ? `${x.icon} ` : ""}${x.name}`, hint: itemTypeLabel(x.type), color: x.color || itemTypeColor(x.type) }))}
+                            options={regItems.map((x) => ({
+                              value: x._id, label: x.name, hint: itemTypeLabel(x.type),
+                              icon: <ItemIcon icon={x.icon} imageUrl={x.imageUrl} type={x.type} size={18} color={x.color || itemTypeColor(x.type)} />,
+                            }))}
                           />
                           <p className={fieldNote}>
                             표기는 아이템 등록에서 바꿉니다 ·{" "}
@@ -626,17 +626,19 @@ export default function AdminShopPage() {
                         placeholder="상점 카드에 표시될 설명" className={`${inputClass} resize-none disabled:text-[#8a8a8a]`} />
                     </div>
 
+                    {/* 상품 이미지는 상품 고유 값 — 아이템을 연동해도 따로 넣을 수 있다 */}
                     <div className="mb-4">
                       <label className={labelClass}>상품 이미지 URL</label>
-                      <input type="text" value={form.imageUrl} disabled={linked} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-                        placeholder="https://... (비우면 아이콘 표시)" className={`${inputClass} disabled:text-[#8a8a8a]`} />
+                      <input type="text" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                        placeholder="https://..." className={inputClass} />
+                      <p className={fieldNote}>비우면 아이템 이미지·아이콘</p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <div>
                         <label className={labelClass}>아이콘</label>
-                        <input type="text" value={form.icon} disabled={linked} maxLength={8} onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                          placeholder="🎁" className={`${inputClass} disabled:text-[#8a8a8a]`} />
+                        <IconPicker value={form.icon} disabled={linked} onChange={(v) => setForm({ ...form, icon: v })}
+                          color={form.color || itemTypeColor(form.type)} inputClassName={`${inputClass} disabled:text-[#8a8a8a]`} />
                         <p className={fieldNote}>이미지가 없을 때 카드에 크게</p>
                       </div>
                       <div>
@@ -805,7 +807,7 @@ export default function AdminShopPage() {
                     {items.map((it) => (
                       <div key={it._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                         <div className="relative w-12 h-12 rounded-lg bg-black/5 overflow-hidden shrink-0">
-                          <CardArt it={it} iconClass="text-2xl" />
+                          <CardArt it={it} iconSize={26} />
                         </div>
                         <div className="min-w-0 md:w-48 shrink-0">
                           <div className="flex items-center gap-2">
@@ -1455,7 +1457,7 @@ export default function AdminShopPage() {
             <div className="bg-[#f4f3f2] rounded-2xl p-5">
               <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col">
                 <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
-                  <CardArt it={form} iconClass="text-6xl" />
+                  <CardArt it={form} iconSize={60} />
                   <TypeBadge type={form.type} className="absolute top-3 left-3 px-2.5 py-1 text-[10px] tracking-wide" />
                   {form.stock === "0" && (
                     <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
