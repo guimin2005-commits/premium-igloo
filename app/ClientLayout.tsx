@@ -106,6 +106,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }, []);
   
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+  // 프로필 바로가기 등 다른 화면에서도 쿠폰함을 연다 — window 이벤트 하나로
+  useEffect(() => {
+    const open = () => setIsCodeModalOpen(true);
+    window.addEventListener("igloo:open-coupons", open);
+    return () => window.removeEventListener("igloo:open-coupons", open);
+  }, []);
   const [myCoupons, setMyCoupons] = useState<any[]>([]); // 쿠폰함에 보여줄 보유 쿠폰
   const [isLoadingCoupons, setIsLoadingCoupons] = useState(false);
   const [voucherCode, setVoucherCode] = useState("");

@@ -7,9 +7,7 @@ import { Reveal, LuxStyles } from "../components/Lux";
 import { RenderFormattedText } from "../components/FormattedText";
 import Link from "next/link";
 import { ADMIN_USERS, isAdminName } from "@/lib/admins";
-import { salePrice } from "@/lib/shopPricing";
 import { verifyBadge } from "@/lib/verifyBadge";
-import { EsportsStyles } from "../components/Esports";
 import ArcticDock from "../shop/ArcticDock";
 
 // 미리보기(접힘)용 마크다운 기호 제거
@@ -65,9 +63,7 @@ export default function MyInfoPage() {
   const shopCartRows = shopCart
     .map((c) => ({ ...c, item: shopItems.find((i) => i._id === c.itemId) }))
     .filter((r): r is { itemId: string; qty: number; item: any } => !!r.item);
-  const shopCartTotal = shopCartRows.reduce((n, r) => n + salePrice(r.item) * r.qty, 0);
   const shopCartCount = shopCart.reduce((n, c) => n + (c.qty || 1), 0);
-  const shopSpent = shopOrders.filter((o) => o.status !== "cancelled").reduce((n, o) => n + (o.price || 0), 0);
 
   // 찜·장바구니는 브라우저에 보관하므로 화면과 저장소를 함께 갱신한다
   const removeShopWish = (id: string) =>
@@ -82,42 +78,6 @@ export default function MyInfoPage() {
       try { localStorage.setItem("iglooShopCart", JSON.stringify(next)); } catch {}
       return next;
     });
-
-  // 쿠폰 코드 등록
-  const [couponInput, setCouponInput] = useState("");
-  const [isRegisteringCoupon, setIsRegisteringCoupon] = useState(false);
-  const [couponMsg, setCouponMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  const registerCoupon = async () => {
-    const code = couponInput.trim().toUpperCase();
-    if (!code || isRegisteringCoupon) return;
-    setIsRegisteringCoupon(true);
-    setCouponMsg(null);
-    try {
-      const res = await fetch("/api/shop/my-coupons", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }),
-      });
-      const d = await res.json();
-      if (res.ok && d.success) {
-        setCouponMsg({ ok: true, text: d.message || "쿠폰을 받았습니다." });
-        setCouponInput("");
-        // 지갑·XP를 다시 읽어 반영
-        Promise.all([
-          fetch("/api/shop/my-coupons", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-          fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
-        ]).then(([cou, me]) => {
-          setShopWallet(Array.isArray(cou?.data) ? cou.data : []);
-          if (me?.success) setShopMe(me.data);
-        });
-      } else {
-        setCouponMsg({ ok: false, text: d.message || "사용할 수 없는 코드입니다." });
-      }
-    } catch {
-      setCouponMsg({ ok: false, text: "서버와 통신 중 오류가 발생했습니다." });
-    } finally {
-      setIsRegisteringCoupon(false);
-    }
-  };
 
   useEffect(() => {
     fetch("/api/xp/policy", { cache: "no-store" })
@@ -162,6 +122,7 @@ export default function MyInfoPage() {
     if (!tabParam) { window.scrollTo(0, 0); return; }
     if (tabParam === "booster") { router.replace("/profile/booster"); return; }
     if (tabParam === "supporter") { router.replace("/supporters"); return; }
+    if (tabParam === "arctic") { router.replace("/shop/orders"); return; }
     const t = setTimeout(() => {
       document.getElementById("sec-" + tabParam)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 400);
@@ -332,48 +293,24 @@ export default function MyInfoPage() {
 
       <section className="w-full max-w-4xl mx-auto px-6 pt-8 pb-2">
 
-        <div className="bg-white rounded-2xl border border-[#dedddb] p-6">
-          <div className="flex items-center gap-4 md:gap-5">
+        {/* 📌 카드 없이 한 면 위에 — 이름·배지·레벨 한 줄·칩, 오른쪽에 잔액. 아래 헤어라인 하나로 구획한다 */}
+        <div className="pb-6 border-b border-black/[0.08]">
+          <div className="flex items-start gap-4 md:gap-5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={session?.user?.image || ""} alt="" className={`w-16 h-16 md:w-[72px] md:h-[72px] rounded-full bg-[#dedddb] shrink-0 ${isBooster ? "ring-2 ring-[#e91e3f]/50 ring-offset-2 ring-offset-white" : ""}`} />
+            <img src={session?.user?.image || ""} alt="" className={`w-16 h-16 md:w-[72px] md:h-[72px] rounded-full bg-[#dedddb] shrink-0 ${isBooster ? "ring-2 ring-[#e91e3f]/50 ring-offset-2 ring-offset-[#f4f3f2]" : ""}`} />
             <div className="min-w-0 flex-1">
               <h1 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight truncate flex items-center gap-2">
                 {session?.user?.name}
                 {isBooster && <span className="text-[10px] bg-[#e91e3f] text-white px-2 py-0.5 rounded shrink-0">BOOSTER</span>}
                 {isSupporter && <span className="text-[10px] bg-[#3f83b8] text-white px-2 py-0.5 rounded shrink-0">SUPPORTERS</span>}
               </h1>
-              {canSeeLevel && <p className="text-[12px] font-bold text-[#8a8a8a] mt-0.5">Lv.{shopMe?.level ?? 0} · 서버 #{shopMe?.rank ?? "—"}</p>}
-            </div>
-            <div className="ml-auto text-right shrink-0 hidden sm:block">
-              <div className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase mb-1">Balance</div>
-              <div className="text-2xl font-black tracking-tight tabular-nums text-[#131313] leading-none">
-                {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-[#e91e3f] ml-1">XP</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 모바일 보유 XP */}
-          <div className="sm:hidden mt-4 flex items-baseline justify-between">
-            <span className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase">Balance</span>
-            <span className="text-xl font-black tracking-tight tabular-nums text-[#131313] leading-none">
-              {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-[#e91e3f] ml-1">XP</span>
-            </span>
-          </div>
-
-          {canSeeLevel && shopMe?.levelProgress?.required > 0 && (
-            <div className="mt-5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-[#8a8a8a]">다음 레벨까지</span>
-                <span className="text-[11px] font-bold text-[#4b4b4b] tabular-nums">{shopMe.levelProgress.needToNext.toLocaleString()} XP</span>
-              </div>
-              <div className="h-1.5 rounded-full bg-[#e9e8e6] overflow-hidden">
-                <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] transition-[width] duration-700"
-                  style={{ width: `${Math.min(100, Math.round((shopMe.levelProgress.current / shopMe.levelProgress.required) * 100))}%` }}></div>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-5 pt-5 border-t border-[#ececea] flex items-center gap-2 flex-wrap">
+              {canSeeLevel && (
+                <p className="text-[12px] font-bold text-[#8a8a8a] mt-0.5 tabular-nums">
+                  Lv.{shopMe?.level ?? 0} · 서버 #{shopMe?.rank ?? "—"}
+                  {shopMe?.levelProgress?.needToNext > 0 && <span className="text-[#a3a3a3]"> · 다음 레벨까지 {shopMe.levelProgress.needToNext.toLocaleString()} XP</span>}
+                </p>
+              )}
+              <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border ${verifyBadge(isVerified, hasScrimRole).cls}`}>
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>
                 {verifyBadge(isVerified, hasScrimRole).label}
@@ -391,53 +328,89 @@ export default function MyInfoPage() {
                 </span>
               )}
           </div>
-
-          {/* ARCTIC 요약 — 볼 수 있는 사람에게만 */}
-          {canSeeShop && (
-            <div className="grid grid-cols-3 mt-5 pt-5 border-t border-[#ececea] divide-x divide-[#ececea]">
-              {[
-                { n: shopOrders.length, l: "전체 주문" },
-                { n: shopPendingCount, l: "처리 대기", accent: shopPendingCount > 0 },
-                { n: shopSpent, l: "사용한 XP" },
-              ].map((s, i) => (
-                <div key={i} className="text-center break-keep">
-                  <div className={`text-lg font-black tabular-nums ${s.accent ? "text-[#e91e3f]" : "text-[#131313]"}`}>{s.n.toLocaleString()}</div>
-                  <div className="text-[10px] font-bold tracking-[0.12em] text-[#8a8a8a] mt-0.5 uppercase">{s.l}</div>
+            </div>
+            <div className="ml-auto text-right shrink-0 hidden sm:block">
+              <div className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase mb-1">Balance</div>
+              <div className="text-2xl font-black tracking-tight tabular-nums text-[#131313] leading-none">
+                {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-[#e91e3f] ml-1">XP</span>
+              </div>
+              {canSeeShop && (
+                <div className="text-[13px] font-black tabular-nums text-[#131313] leading-none mt-2">
+                  {(shopMe?.point ?? 0).toLocaleString()}<span className="text-[10px] font-black text-[#3f9e93] ml-1">빙옥</span>
                 </div>
-              ))}
+              )}
             </div>
-          )}
+          </div>
 
-          {/* 📌 쿠폰 등록 — 아래까지 내려가지 않아도 바로 쓸 수 있게 프로필 카드 안에 둔다 */}
-          <div className="mt-5 pt-5 border-t border-[#ececea]">
-            <div className="flex items-center gap-2 mb-2">
-              <svg className="w-4 h-4 text-[#e91e3f]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
-              </svg>
-              <span className="text-[12px] font-black text-[#131313]">쿠폰 등록</span>
-            </div>
-            <div className="flex gap-2">
-              <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") registerCoupon(); }}
-                placeholder="쿠폰 코드 입력"
-                className="flex-1 min-w-0 bg-white border border-[#dedddb] rounded-lg px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
-              <button onClick={registerCoupon} disabled={!couponInput.trim() || isRegisteringCoupon}
-                className="px-4 py-2.5 rounded-lg bg-[#131313] hover:bg-black text-white text-[12px] font-bold disabled:opacity-40 transition-colors shrink-0">
-                {isRegisteringCoupon ? "확인" : "등록"}
-              </button>
-            </div>
-            {couponMsg && (
-              <p className={`mt-2 text-[11px] font-bold break-keep ${couponMsg.ok ? "text-[#3f7a35]" : "text-[#c62828]"}`}>{couponMsg.text}</p>
-            )}
+          {/* 모바일 잔액 */}
+          <div className="sm:hidden mt-4 flex items-baseline justify-between">
+            <span className="text-[9px] font-black tracking-[0.25em] text-[#a3a3a3] uppercase">Balance</span>
+            <span className="text-xl font-black tracking-tight tabular-nums text-[#131313] leading-none">
+              {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-[#e91e3f] ml-1">XP</span>
+              {canSeeShop && <span className="ml-3 text-[13px]">{(shopMe?.point ?? 0).toLocaleString()}<span className="text-[10px] font-black text-[#3f9e93] ml-1">빙옥</span></span>}
+            </span>
           </div>
         </div>
+
+        {/* 📌 바로가기 — 예전에 카드로 늘어놓던 것(주문·장바구니·찜·쿠폰함·부스터·서포터즈·팀 룸)은 아이콘 한 줄로.
+            개수는 배지로만 보이고, 본문은 각자 화면에 있다. 평면 타일 — 테두리 없이 연한 면만. */}
+        {(() => {
+          const ic = {
+            level: <path strokeLinecap="round" strokeLinejoin="round" d="M4 19h16M6 16V9M11 16V5M16 16v-6" />,
+            bag: <><path d="M4 9h16l-1 10.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5Z" strokeLinejoin="round" /><path d="M8.5 9V6.5a3.5 3.5 0 0 1 7 0V9" strokeLinecap="round" /></>,
+            orders: <path strokeLinecap="round" strokeLinejoin="round" d="M6 3.5h12v17l-2.5-1.5-2 1.5-1.5-1.5-1.5 1.5-2-1.5L6 20.5ZM9 8.5h6M9 12h6M9 15.5h3.5" />,
+            cart: <path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h2.2l2 11h10.8l2-7.5H6.3M9.5 20a1 1 0 1 0 0-.01M16.5 20a1 1 0 1 0 0-.01" />,
+            heart: <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.2 4.6 12.8A4.4 4.4 0 0 1 10.8 6.6L12 7.8l1.2-1.2a4.4 4.4 0 0 1 6.2 6.2Z" />,
+            ticket: <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 9V7.5A1.5 1.5 0 0 1 5 6h14a1.5 1.5 0 0 1 1.5 1.5V9a3 3 0 0 0 0 6v1.5A1.5 1.5 0 0 1 19 18H5a1.5 1.5 0 0 1-1.5-1.5V15a3 3 0 0 0 0-6ZM14.5 6.5v11" />,
+            boost: <path strokeLinecap="round" strokeLinejoin="round" d="M12 4l1.8 4.7 4.7 1.8-4.7 1.8L12 17l-1.8-4.7L5.5 10.5l4.7-1.8ZM19 3.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7Z" />,
+            supporter: <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3zM9 12l2 2 4-4" />,
+            team: <path strokeLinecap="round" strokeLinejoin="round" d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM3 20a6 6 0 0 1 12 0M16 11.5a3 3 0 1 0 0-6M21 20a5.5 5.5 0 0 0-4-5.3" />,
+          };
+          const quick: { k: string; l: string; icon: React.ReactNode; href?: string; onClick?: () => void; n?: number; accent?: boolean; on?: boolean }[] = [];
+          if (canSeeLevel) {
+            quick.push({ k: "level", l: "레벨", icon: ic.level, href: "/level" });
+            quick.push({ k: "bag", l: "인벤토리", icon: ic.bag, href: "/level?tab=my" });
+          }
+          if (canSeeShop) {
+            quick.push({ k: "orders", l: "주문 내역", icon: ic.orders, href: "/shop/orders", n: shopOrders.length, accent: shopPendingCount > 0 });
+            quick.push({ k: "cart", l: "장바구니", icon: ic.cart, href: "/shop/cart", n: shopCartCount });
+            quick.push({ k: "wish", l: "찜", icon: ic.heart, href: "/level?tab=arctic&panel=wish", n: shopWishRows.length });
+            quick.push({ k: "coupon", l: "쿠폰함", icon: ic.ticket, onClick: () => window.dispatchEvent(new Event("igloo:open-coupons")), n: shopWallet.length });
+          }
+          quick.push({ k: "boost", l: "부스터 혜택", icon: ic.boost, href: "/profile/booster", on: isServerBooster });
+          if (canSeeSupporter) quick.push({ k: "supporter", l: "서포터즈", icon: ic.supporter, href: "/supporters", on: isSupporter });
+          if (myTeam || scrimAdmin) quick.push({ k: "team", l: myTeam ? "팀 룸" : "대회 룸", icon: ic.team, href: myTeam ? `/tournament/team/${myTeam._id}` : "/admin/room", on: !!myTeam });
+          const tile = (q: typeof quick[number]) => (
+            <>
+              <span className="relative w-12 h-12 rounded-2xl bg-black/[0.045] group-hover:bg-black/[0.09] transition-colors flex items-center justify-center text-[#131313]">
+                <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth={1.7}>{q.icon}</svg>
+                {q.n != null && q.n > 0 && (
+                  <span className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-white text-[10px] font-black flex items-center justify-center tabular-nums ${q.accent ? "bg-[#e91e3f]" : "bg-[#131313]"}`}>{q.n > 99 ? "99+" : q.n}</span>
+                )}
+                {q.on && <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>}
+              </span>
+              <span className="mt-1.5 text-[11px] font-bold text-[#5a5a5a] group-hover:text-[#131313] transition-colors whitespace-nowrap">{q.l}</span>
+            </>
+          );
+          return (
+            <div className="pt-5 flex flex-wrap gap-x-1 gap-y-4">
+              {quick.map((q) =>
+                q.href ? (
+                  <Link key={q.k} href={q.href} className="group w-[76px] flex flex-col items-center outline-none focus:outline-none">{tile(q)}</Link>
+                ) : (
+                  <button key={q.k} type="button" onClick={q.onClick} className="group w-[76px] flex flex-col items-center outline-none focus:outline-none">{tile(q)}</button>
+                )
+              )}
+            </div>
+          );
+        })()}
       </section>
 
       <div className="w-full max-w-4xl mx-auto px-6 pt-8 pb-16 flex-1 flex flex-col">
 
       {/* 내전 채널 이용 권한 획득 - 고정형 배너 */}
       {isVerified && !hasScrimRole && (
-        <div className="relative w-full mb-12 rounded-xl border border-[#dedddb] bg-white flex items-center justify-between gap-4 px-5 py-4">
+        <div className="w-full mb-10 border-b border-black/[0.08] flex items-center justify-between gap-4 pb-5">
           <div className="flex items-center gap-3 min-w-0">
             <span className="hidden sm:flex shrink-0 items-center justify-center w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f]">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-[18px] h-[18px]">
@@ -458,89 +431,13 @@ export default function MyInfoPage() {
         </div>
       )}
 
-      {/* ═══ 대회 팀 룸 — 화이트 계정 화면에서 이 줄만 대회 UI 로 튄다 ═══ */}
-      {(myTeam || scrimAdmin) && (
-        <div className="mb-6">
-          <EsportsStyles />
-          <button
-            onClick={() => router.push(myTeam ? `/tournament/team/${myTeam._id}` : "/admin/room")}
-            className="esp-cut relative w-full text-left overflow-hidden bg-[#0b0d0c] hover:bg-[#0e120f] transition-colors"
-            style={{ border: "1px solid rgba(0,224,123,.28)" }}
-          >
-            <span className="absolute inset-0 esp-mesh pointer-events-none" />
-            <span className="absolute inset-0 esp-scan pointer-events-none opacity-40" />
-            {myTeam && (
-              <span aria-hidden className="absolute -top-3 right-5 hidden md:block text-[76px] font-black tracking-tighter leading-none pointer-events-none select-none text-transparent"
-                style={{ WebkitTextStroke: `1px ${myTeam.color}2e` }}>{myTeam.tag || "TEAM"}</span>
-            )}
-            <span className="relative flex items-center gap-4 md:gap-5 px-5 md:px-7 py-5">
-              <span className="esp-cut-sm grid place-items-center shrink-0 w-12 h-12 md:w-14 md:h-14 text-[13px] md:text-[15px] font-black tracking-tight"
-                style={myTeam
-                  ? { background: `${myTeam.color}1c`, border: `1px solid ${myTeam.color}55`, color: myTeam.color }
-                  : { background: "rgba(0,224,123,.10)", border: "1px solid rgba(0,224,123,.35)", color: "#00e07b" }}>
-                {myTeam ? (myTeam.tag || "TM") : "OPS"}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2 mb-1.5">
-                  <span className="w-1.5 h-1.5 esp-blink" style={{ background: "#00e07b", clipPath: "polygon(50% 0,100% 50%,50% 100%,0 50%)" }} />
-                  <span className="text-[9px] font-black esp-mono uppercase text-[#00e07b]">{myTeam ? "Team Room" : "Room Operations"}</span>
-                </span>
-                <span className="block text-white font-black text-lg md:text-xl leading-tight truncate">
-                  {myTeam ? myTeam.name : "대회 룸 운영"}
-                </span>
-                <span className="block text-[11px] md:text-xs font-bold text-gray-400 mt-1.5 break-keep">
-                  {myTeam
-                    ? (myTeam.mySent
-                        ? (myTeam.sent >= myTeam.members.length
-                            ? "팀 전원이 일정을 냈습니다 — 스크림 매칭 대기"
-                            : `내 일정은 제출했습니다 · ${myTeam.members.length - myTeam.sent}명 남음`)
-                        : "아직 내 일정을 내지 않았습니다 — 계획판에서 가능한 시간을 알려주세요")
-                    : "팀 등록 · 대회 공지 · 스크림 매칭"}
-                </span>
-              </span>
-              {myTeam && (
-                <span className="hidden sm:block shrink-0 text-right">
-                  <span className="block text-[9px] font-black esp-mono text-gray-600 mb-1">PLAN</span>
-                  <span className="block text-xl font-black tabular-nums" style={{ color: myTeam.sent >= myTeam.members.length ? "#00e07b" : "#fcd34d" }}>
-                    {myTeam.sent}/{myTeam.members.length}
-                  </span>
-                </span>
-              )}
-              <span className="shrink-0 text-[#00e07b] text-2xl">›</span>
-            </span>
-          </button>
-        </div>
-      )}
-      {/* 서포터즈 진입점 — 부스터 아래에 묻혀 있으면 못 찾는다. 헤더 카드 바로 아래 첫 줄에 둔다 */}
-      {/* ═══ 서포터즈 — 역할 보유자(와 관리자)에게만 진입점을 보인다. 본문은 /supporters ═══ */}
-      {canSeeSupporter && (
-      <section id="sec-supporter" className="scroll-mt-32 mb-6">
-        <Link href="/supporters"
-          className="group block bg-white rounded-2xl border border-[#dedddb] px-6 py-6 hover:border-[#a3a3a3] transition-colors">
-          <div className="flex items-center gap-4">
-            <span className="w-11 h-11 rounded-xl bg-[#3f83b8]/10 text-[#3f83b8] flex items-center justify-center shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" /></svg>
-            </span>
-            <div className="min-w-0 flex-1 break-keep">
-              <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
-                서포터즈
-                {isSupporter && <span className="text-[10px] bg-[#3f83b8] text-white px-2 py-0.5 rounded">활동 중</span>}
-              </h2>
-              <p className="text-xs text-[#8a8a8a] mt-1">이번 달 활동 · 평가와 지급 내역 · 전용 공지</p>
-            </div>
-            <svg className="w-4 h-4 text-[#a3a3a3] group-hover:text-[#e91e3f] shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-          </div>
-        </Link>
-      </section>
-      )}
-
-      {/* 📌 탭도 바로가기 바도 없이, 카드로 나란히 펼친다 */}
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      {/* 📌 목록 셋 — 박스 없이 제목·헤어라인·행으로만. 본문이 긴 것은 모달 */}
+      <div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-12 gap-y-12 items-start">
         {/* ═══ 알림함 ═══ */}
         <section id="sec-notice" className="scroll-mt-32">
-          <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
+          <div>
+            <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between">
               <h2 className="text-sm font-black text-[#131313]">
                 알림함 {notifications.length > 0 && <span className="text-[#e91e3f]">{notifications.length}</span>}
               </h2>
@@ -550,11 +447,11 @@ export default function MyInfoPage() {
             ) : notifications.length === 0 ? (
               <p className="py-14 px-5 text-center text-sm text-[#8a8a8a] break-keep">받은 알림이 없습니다.</p>
             ) : (
-              <div className="divide-y divide-[#ececea] max-h-[420px] overflow-y-auto">
+              <div className="divide-y divide-black/[0.06] max-h-[420px] overflow-y-auto">
                 {notifications.map((n) => {
                   const badge = NOTI_TYPE_STYLES[n.type] || NOTI_TYPE_STYLES["일반"];
                   return (
-                    <button key={n._id} onClick={() => setSelectedNotif(n)} className="w-full text-left py-3.5 px-5 flex items-center gap-3.5 hover:bg-[#faf9f7] transition-colors group outline-none">
+                    <button key={n._id} onClick={() => setSelectedNotif(n)} className="w-full text-left py-3.5 px-1 flex items-center gap-3.5 hover:bg-black/[0.02] transition-colors group outline-none">
                       <span className={`shrink-0 text-[10px] font-black tracking-wider border px-2 py-1 rounded ${badge}`}>{n.type}</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
@@ -575,23 +472,23 @@ export default function MyInfoPage() {
 
         {/* ═══ 1:1 문의 내역 ═══ */}
         <section id="sec-inquiry" className="scroll-mt-32">
-          <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between gap-3 flex-wrap">
               <h2 className="text-sm font-black text-[#131313]">
                 1:1 문의 내역 {fetchedInquiries.length > 0 && <span className="text-[#e91e3f]">{fetchedInquiries.length}</span>}
               </h2>
               <div className="flex gap-1.5">
                 {[{ label: "전체", key: "all" }, { label: "접수 중", key: "pending" }, { label: "답변 완료", key: "completed" }].map(f => (
-                  <button key={f.key} onClick={() => setInquiryFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${inquiryFilter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-white border-[#dedddb] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
+                  <button key={f.key} onClick={() => setInquiryFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${inquiryFilter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-transparent border-[#dedddb] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
                 ))}
               </div>
             </div>
             {isDataLoading ? <p className="text-[#a3a3a3] text-sm py-12 text-center">데이터 로딩 중...</p> : filteredInquiries.length === 0 ? (
               <p className="px-5 py-14 text-center text-sm text-[#8a8a8a] break-keep">등록된 문의 내역이 없습니다.</p>
             ) : (
-              <div className="divide-y divide-[#ececea] max-h-[420px] overflow-y-auto">
+              <div className="divide-y divide-black/[0.06] max-h-[420px] overflow-y-auto">
                 {filteredInquiries.map(inq => (
-                  <button key={inq.id} onClick={() => setSelectedInquiry(inq)} className="w-full text-left py-3.5 px-5 flex items-center gap-3.5 hover:bg-[#faf9f7] transition-colors group outline-none">
+                  <button key={inq.id} onClick={() => setSelectedInquiry(inq)} className="w-full text-left py-3.5 px-1 flex items-center gap-3.5 hover:bg-black/[0.02] transition-colors group outline-none">
                     <span className={`shrink-0 text-[10px] font-black tracking-wider border px-2 py-1 rounded ${inq.status === '접수 중' ? 'bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25' : 'bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]'}`}>{inq.status}</span>
                     <div className="min-w-0 flex-1">
                       <h4 className="text-sm font-bold text-[#131313] truncate"><span className="text-[#8a8a8a] font-medium mr-1.5">[{inq.type}]</span>{inq.title}</h4>
@@ -607,21 +504,21 @@ export default function MyInfoPage() {
 
         {/* ═══ 구인 지원 목록 ═══ */}
         <section id="sec-recruit" className="scroll-mt-32">
-          <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="pb-3 border-b border-black/[0.08] flex items-center justify-between gap-3 flex-wrap">
               <h2 className="text-sm font-black text-[#131313]">
                 구인 지원 목록 {fetchedRecruits.length > 0 && <span className="text-[#e91e3f]">{fetchedRecruits.length}</span>}
               </h2>
               <div className="flex gap-1.5 flex-wrap">
                 {[{ label: "전체", key: "all" }, { label: "심사 중", key: "심사 중" }, { label: "합격", key: "합격" }, { label: "불합격", key: "불합격" }].map(f => (
-                  <button key={f.key} onClick={() => setRecruitFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${recruitFilter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-white border-[#dedddb] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
+                  <button key={f.key} onClick={() => setRecruitFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${recruitFilter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-transparent border-[#dedddb] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
                 ))}
               </div>
             </div>
-            <div className="divide-y divide-[#ececea] max-h-[420px] overflow-y-auto">
+            <div className="divide-y divide-black/[0.06] max-h-[420px] overflow-y-auto">
               {isDataLoading ? <p className="text-[#a3a3a3] text-sm py-12 text-center">데이터 로딩 중...</p> : filteredRecruits.length === 0 ? <p className="text-[#8a8a8a] text-sm py-14 text-center break-keep">해당 조건의 지원 내역이 없습니다.</p> : (
                 filteredRecruits.map(rec => (
-                  <div key={rec.id} className="py-4 px-5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-[#faf9f7] transition-colors">
+                  <div key={rec.id} className="py-4 px-1 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-black/[0.02] transition-colors">
                     <div>
                       <h4 className="text-base font-bold text-[#131313] mb-1">{rec.title}</h4>
                       <p className="text-xs text-[#8a8a8a]">분야: <span className="text-[#4b4b4b] font-medium">{rec.role}</span> | 일자: {rec.date}</p>
@@ -639,194 +536,8 @@ export default function MyInfoPage() {
           </div>
         </section>
 
-        {/* ═══ 서버 부스터 혜택 — 분량이 커서 전용 페이지로 분리 ═══ */}
-        <section id="sec-booster" className="scroll-mt-32">
-          <Link href="/profile/booster"
-            className="group block bg-white rounded-2xl border border-[#dedddb] px-6 py-6 hover:border-[#a3a3a3] transition-colors">
-            <div className="flex items-center gap-4">
-              <span className="w-11 h-11 rounded-xl bg-[#ff41cf]/10 text-[#ff41cf] flex items-center justify-center shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" /></svg>
-              </span>
-              <div className="min-w-0 flex-1 break-keep">
-                <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
-                  서버 부스터 혜택
-                  {isServerBooster && <span className="text-[10px] bg-[#e91e3f] text-white px-2 py-0.5 rounded">적용 중</span>}
-                </h2>
-                <p className="text-xs text-[#8a8a8a] mt-1">전용 역할·XP 보너스·누적 개월 혜택을 확인해 주세요.</p>
-              </div>
-              <svg className="w-4 h-4 text-[#a3a3a3] group-hover:text-[#e91e3f] shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-            </div>
-          </Link>
-        </section>
-
         </div>
 
-        {/* ═══ ARCTIC — 공개 전에는 관리자만 볼 수 있다 ═══ */}
-        {canSeeShop && (
-          <section id="sec-arctic" className="scroll-mt-32 space-y-6">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-black text-[#131313] tracking-tight">ARCTIC</span>
-                {!shopPublic && (
-                  <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-[#e91e3f]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>비공개
-                  </span>
-                )}
-              </div>
-              <Link href="/level?tab=arctic" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">ARCTIC 둘러보기</Link>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* 주문 내역 */}
-              <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
-                <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
-                  <h2 className="text-sm font-black text-[#131313]">주문 내역 {shopOrders.length > 0 && <span className="text-[#e91e3f]">{shopOrders.length}</span>}</h2>
-                  {shopOrders.length > 0 && (
-                    <Link href="/shop/orders" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">자세히 보기</Link>
-                  )}
-                </div>
-                {shopOrders.length === 0 ? (
-                  <p className="px-5 py-12 text-center text-xs text-[#8a8a8a] break-keep">아직 구매한 상품이 없습니다.</p>
-                ) : (
-                  <div className="divide-y divide-[#ececea] max-h-[320px] overflow-y-auto">
-                    {shopOrders.slice(0, 8).map((o) => {
-                      const meta = ORDER_STATUS[o.status] || ORDER_STATUS.pending;
-                      return (
-                        <div key={o._id} className="px-5 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black shrink-0 ${meta.cls}`}>{meta.label}</span>
-                            <div className="min-w-0 flex-1">
-                              <Link href={`/shop/item/${o.itemId}`} className="block text-[13px] font-bold text-[#131313] truncate hover:text-[#e91e3f] transition-colors">{o.itemName}</Link>
-                              <p className="text-[10px] text-[#a3a3a3]">
-                                {ITEM_TYPE_LABEL[o.itemType] || "상품"} · {o.createdAt ? new Date(o.createdAt).toLocaleDateString("ko-KR") : ""}
-                              </p>
-                            </div>
-                            <span className={`text-[12px] font-black tabular-nums shrink-0 ${o.status === "cancelled" ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>
-                              -{(o.price || 0).toLocaleString()} XP
-                            </span>
-                          </div>
-                          {o.adminNote && <p className="mt-1.5 text-[10px] text-[#3f7a35] bg-[#e8f3e6] rounded px-2 py-1 break-keep">운영진 메모 · {o.adminNote}</p>}
-                          {o.error && <p className="mt-1.5 text-[10px] text-[#c62828] bg-[#fdeaea] rounded px-2 py-1 break-keep">지급 실패 · {o.error}</p>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* 장바구니 */}
-              <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
-                <div className="px-5 py-4 border-b border-[#ececea] flex items-center justify-between">
-                  <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
-                    <svg className="w-3.5 h-3.5 text-[#131313]" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
-                    </svg>
-                    장바구니 {shopCartRows.length > 0 && <span className="text-[#e91e3f]">{shopCartRows.length}</span>}
-                  </h2>
-                  {shopCartRows.length > 0 && (
-                    <Link href="/shop/cart" className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">자세히 보기</Link>
-                  )}
-                </div>
-                {shopCartRows.length === 0 ? (
-                  <p className="px-5 py-12 text-center text-xs text-[#8a8a8a] break-keep">장바구니가 비어 있습니다.</p>
-                ) : (
-                  <>
-                    <div className="divide-y divide-[#ececea] max-h-[260px] overflow-y-auto">
-                      {shopCartRows.map((r) => (
-                        <div key={r.itemId} className="px-5 py-3.5 flex items-center gap-3">
-                          <Link href={`/shop/item/${r.item._id}`} className="w-11 h-11 rounded-lg bg-[#e9e8e6] overflow-hidden shrink-0">
-                            {r.item.imageUrl && (
-                              /* eslint-disable-next-line @next/next/no-img-element */
-                              <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
-                            )}
-                          </Link>
-                          <div className="min-w-0 flex-1">
-                            <Link href={`/shop/item/${r.item._id}`} className="block text-[13px] font-bold text-[#131313] truncate hover:text-[#e91e3f] transition-colors">{r.item.name}</Link>
-                            <p className="text-[11px] font-black text-[#131313] tabular-nums">{salePrice(r.item).toLocaleString()} XP</p>
-                          </div>
-                          <button onClick={() => removeShopCart(r.itemId)} className="px-3 py-1 text-[10px] font-bold text-[#a3a3a3] hover:text-[#c62828] transition-colors shrink-0">삭제</button>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="px-5 py-4 border-t border-[#ececea] flex items-center justify-between gap-3">
-                      <div className="text-[12px]">
-                        <span className="text-[#5a5a5a]">합계 </span>
-                        <span className="font-black text-[#131313] tabular-nums">{shopCartTotal.toLocaleString()} XP</span>
-                      </div>
-                      <Link href="/shop/cart" className="px-5 py-2.5 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[12px] font-bold transition-colors shrink-0">결제하러 가기</Link>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* 찜한 상품 */}
-              <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
-                <div className="px-5 py-4 border-b border-[#ececea]">
-                  <h2 className="text-sm font-black text-[#131313] flex items-center gap-2">
-                    <svg className="w-3.5 h-3.5 text-[#e91e3f]" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                    </svg>
-                    찜한 상품 {shopWishRows.length > 0 && <span className="text-[#e91e3f]">{shopWishRows.length}</span>}
-                  </h2>
-                </div>
-                {shopWishRows.length === 0 ? (
-                  <p className="px-5 py-12 text-center text-xs text-[#8a8a8a]">찜한 상품이 없습니다.</p>
-                ) : (
-                  <div className="divide-y divide-[#ececea] max-h-[320px] overflow-y-auto">
-                    {shopWishRows.map((it) => (
-                      <div key={it._id} className="px-5 py-3.5 flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-lg bg-[#e9e8e6] overflow-hidden shrink-0">
-                          {it.imageUrl && (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img src={it.imageUrl} alt="" className="w-full h-full object-cover" />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-bold text-[#131313] truncate">{it.name}</p>
-                          <p className="text-[11px] font-black text-[#131313] tabular-nums">{salePrice(it).toLocaleString()} XP</p>
-                        </div>
-                        <div className="flex flex-col gap-1 shrink-0">
-                          <Link href={`/shop/item/${it._id}`} className="px-3 py-1.5 rounded-full text-[10px] font-bold bg-[#e91e3f] text-white hover:bg-[#d01634] transition-colors text-center">보러가기</Link>
-                          <button onClick={() => removeShopWish(it._id)} className="px-3 py-1 text-[10px] font-bold text-[#a3a3a3] hover:text-[#c62828] transition-colors">해제</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 보유 쿠폰 */}
-              <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
-                <div className="px-5 py-4 border-b border-[#ececea]">
-                  <h2 className="text-sm font-black text-[#131313]">보유 쿠폰 {shopWallet.length > 0 && <span className="text-[#e91e3f]">{shopWallet.length}</span>}</h2>
-                </div>
-
-                {shopWallet.length === 0 ? (
-                  <p className="px-5 py-12 text-center text-xs text-[#8a8a8a]">보유한 쿠폰이 없습니다.</p>
-                ) : (
-                  <div className="divide-y divide-[#ececea] max-h-[280px] overflow-y-auto">
-                    {shopWallet.map((w) => (
-                      <div key={w.id} className="px-5 py-3.5 flex items-center gap-3">
-                        <span className="w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
-                          <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
-                          </svg>
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-bold text-[#131313] truncate">{w.name}</p>
-                          <p className="text-[10px] text-[#8a8a8a] break-keep">
-                            {w.type === "percent" ? `${w.value}% 할인` : `${w.value.toLocaleString()} XP 할인`}
-                            {w.minTotal > 0 && ` · ${w.minTotal.toLocaleString()} XP 이상`}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-        )}
       </div>
 
       {/* 📌 통지 상세 모달 (사무적 통지서) */}
