@@ -17,6 +17,7 @@ import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { buildEnhanceView, chatRange, voiceBonus } from "@/lib/enhance";
 import TierEmblem from "../components/TierEmblem";
 import ItemIcon from "../components/ItemIcon";
+import { ICON_PATHS } from "../components/Icons";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
 
@@ -518,7 +519,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance }) => {
             aria-label="닫기"
             className="shrink-0 w-9 h-9 rounded-full border border-white/12 text-white/50 hover:text-white hover:border-white/30 transition-colors flex items-center justify-center outline-none focus:outline-none"
           >
-            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" /></svg>
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d={ICON_PATHS.close} strokeLinecap="round" /></svg>
           </button>
         </div>
 
@@ -595,7 +596,7 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
               aria-label="닫기"
               className="shrink-0 w-9 h-9 rounded-full border border-white/12 text-white/50 hover:text-white hover:border-white/30 transition-colors flex items-center justify-center outline-none focus:outline-none"
             >
-              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" /></svg>
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d={ICON_PATHS.close} strokeLinecap="round" /></svg>
             </button>
           </div>
           <p className="text-[12px] text-white/45 leading-relaxed mt-3 break-keep">
@@ -826,8 +827,7 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
               <div className="h-full flex flex-col items-center justify-center text-center py-6 sm:py-0">
                 <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-white/15 flex items-center justify-center mb-3">
                   <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.6">
-                    <path d="M4 9h16l-1 10.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5Z" strokeLinejoin="round" />
-                    <path d="M8.5 9V6.5a3.5 3.5 0 0 1 7 0V9" strokeLinecap="round" />
+                    <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </span>
                 <p className="text-[11px] font-bold text-white/30 break-keep">칸을 누르면 여기에 보입니다</p>
@@ -1925,8 +1925,7 @@ export default function LevelPage() {
                       >
                         <span aria-hidden className="relative shrink-0">
                           <svg viewBox="0 0 24 24" className="w-7 h-7 text-white/45 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                            <path d="M4 9h16l-1 10.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5Z" strokeLinejoin="round" />
-                            <path d="M8.5 9V6.5a3.5 3.5 0 0 1 7 0V9" strokeLinecap="round" />
+                            <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
                           {invUnread > 0 && (
                             <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{invUnread}</span>
@@ -1957,7 +1956,7 @@ export default function LevelPage() {
                       >
                         <span aria-hidden className="relative shrink-0">
                           <svg viewBox="0 0 24 24" className="w-7 h-7 text-white/45 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                            <path d="M12 3.2l2.5 5.3 5.7.8-4.1 4.1 1 5.8-5.1-2.8-5.1 2.8 1-5.8L3.8 9.3l5.7-.8Z" strokeLinejoin="round" />
+                            <path d={ICON_PATHS.star} strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
                           {passClaimable > 0 && (
                             <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{passClaimable}</span>

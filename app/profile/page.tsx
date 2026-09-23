@@ -10,6 +10,7 @@ import { ADMIN_USERS, isAdminName } from "@/lib/admins";
 import { verifyBadge } from "@/lib/verifyBadge";
 import ArcticDock from "../shop/ArcticDock";
 import ItemIcon from "../components/ItemIcon";
+import { ICON_PATHS } from "../components/Icons";
 import { salePrice } from "@/lib/shopPricing";
 
 // 미리보기(접힘)용 마크다운 기호 제거
@@ -369,13 +370,13 @@ export default function MyInfoPage() {
               </span>
               {isServerBooster && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 text-[#ff41cf] border border-[#ff41cf]/30">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" /></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d={ICON_PATHS.sparkles} /></svg>
                   SERVER BOOSTER
                 </span>
               )}
               {isSupporter && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-[#3f83b8]/10 text-[#3f83b8] border border-[#3f83b8]/30">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z" /></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.shieldCheck} /></svg>
                   SUPPORTERS
                 </span>
               )}
@@ -447,18 +448,19 @@ export default function MyInfoPage() {
 
       {/* 📌 아이콘 줄 — 누르면 다른 화면으로 가지 않고 바로 아래에 그 내용이 펼쳐진다. 균등 격자, 선택은 잉크 타일. */}
       {(() => {
-        const ic: Record<string, React.ReactNode> = {
-          notice: <path strokeLinecap="round" strokeLinejoin="round" d="M6 9a6 6 0 1 1 12 0c0 4 1.2 5.5 1.8 6.2.3.4 0 .9-.5.9H4.7c-.5 0-.8-.5-.5-.9C4.8 14.5 6 13 6 9ZM10 19.5a2 2 0 0 0 4 0" />,
-          inquiry: <path strokeLinecap="round" strokeLinejoin="round" d="M4 5.5h16v10.5H9.5L5.5 19.5v-3.5H4ZM8.5 10.6v.8M12 10.6v.8M15.5 10.6v.8" />,
-          recruit: <path strokeLinecap="round" strokeLinejoin="round" d="M4 8.5h16v11H4ZM9 8.5V6a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 6v2.5M4 13h16" />,
-          orders: <path strokeLinecap="round" strokeLinejoin="round" d="M6 3.5h12v17l-2.5-1.5-2 1.5-1.5-1.5-1.5 1.5-2-1.5L6 20.5ZM9 8.5h6M9 12h6M9 15.5h3.5" />,
-          cart: <path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h2.2l2 11h10.8l2-7.5H6.3M9.5 20a1 1 0 1 0 0-.01M16.5 20a1 1 0 1 0 0-.01" />,
-          wish: <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.2 4.6 12.8A4.4 4.4 0 0 1 10.8 6.6L12 7.8l1.2-1.2a4.4 4.4 0 0 1 6.2 6.2Z" />,
-          coupons: <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 9V7.5A1.5 1.5 0 0 1 5 6h14a1.5 1.5 0 0 1 1.5 1.5V9a3 3 0 0 0 0 6v1.5A1.5 1.5 0 0 1 19 18H5a1.5 1.5 0 0 1-1.5-1.5V15a3 3 0 0 0 0-6ZM14.5 6.5v11" />,
-          bag: <><path d="M4 9h16l-1 10.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5Z" strokeLinejoin="round" /><path d="M8.5 9V6.5a3.5 3.5 0 0 1 7 0V9" strokeLinecap="round" /></>,
-          booster: <path strokeLinecap="round" strokeLinejoin="round" d="M12 4l1.8 4.7 4.7 1.8-4.7 1.8L12 17l-1.8-4.7L5.5 10.5l4.7-1.8ZM19 3.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7Z" />,
-          supporter: <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3zM9 12l2 2 4-4" />,
-          team: <path strokeLinecap="round" strokeLinejoin="round" d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM3 20a6 6 0 0 1 12 0M16 11.5a3 3 0 1 0 0-6M21 20a5.5 5.5 0 0 0-4-5.3" />,
+        // 공용 아이콘 세트(Icons.tsx) — 헤더·독·레벨과 같은 모양
+        const ic: Record<string, string> = {
+          notice: ICON_PATHS.bell,
+          inquiry: ICON_PATHS.chat,
+          recruit: ICON_PATHS.briefcase,
+          orders: ICON_PATHS.receipt,
+          cart: ICON_PATHS.cart,
+          wish: ICON_PATHS.heart,
+          coupons: ICON_PATHS.ticket,
+          bag: ICON_PATHS.bag,
+          booster: ICON_PATHS.sparkles,
+          supporter: ICON_PATHS.shieldCheck,
+          team: ICON_PATHS.users,
         };
         const unread = notifications.filter((n) => !n.read).length;
         const items: { k: string; l: string; n?: number; accent?: boolean; on?: boolean }[] = [
@@ -493,7 +495,7 @@ export default function MyInfoPage() {
                   <button key={q.k} type="button" onClick={() => setPanel(q.k)} aria-pressed={on}
                     className="group flex flex-col items-center outline-none focus:outline-none">
                     <span className={`relative w-12 h-12 rounded-2xl transition-colors flex items-center justify-center ${on ? "bg-[#131313] text-white" : "bg-black/[0.045] text-[#131313] group-hover:bg-black/[0.09]"}`}>
-                      <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth={1.7}>{ic[q.k]}</svg>
+                      <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ic[q.k]} /></svg>
                       {q.n != null && q.n > 0 && (
                         <span className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center tabular-nums ${q.accent ? "bg-[#e91e3f] text-white" : on ? "bg-white text-[#131313]" : "bg-[#131313] text-white"}`}>{q.n > 99 ? "99+" : q.n}</span>
                       )}
@@ -912,7 +914,7 @@ export default function MyInfoPage() {
             <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-[#ececea] bg-[#faf9f7] shrink-0">
               <span className="text-[10px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase">Official Notice · 운영팀 통지</span>
               <button onClick={() => setSelectedNotif(null)} className="p-1.5 -mr-1.5 text-[#8a8a8a] hover:text-[#131313] rounded-md hover:bg-[#f4f3f2] transition-colors outline-none">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
               </button>
             </div>
             <div className="p-6 md:p-7 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden">
@@ -948,7 +950,7 @@ export default function MyInfoPage() {
             <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-[#ececea] bg-[#faf9f7] shrink-0">
               <span className="text-[10px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase">1:1 문의 내역</span>
               <button onClick={() => setSelectedInquiry(null)} className="p-1.5 -mr-1.5 text-[#8a8a8a] hover:text-[#131313] rounded-md hover:bg-[#f4f3f2] transition-colors outline-none">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
               </button>
             </div>
 

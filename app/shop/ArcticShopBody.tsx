@@ -5,6 +5,7 @@ import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import Dropdown from "../components/Dropdown";
 import ItemIcon from "../components/ItemIcon";
+import { ICON_PATHS } from "../components/Icons";
 import IconPicker from "../components/IconPicker";
 import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
 import { itemTypeLabel, itemTypeColor, ITEM_TYPE_OPTIONS } from "@/lib/items";
@@ -627,7 +628,7 @@ export default function ArcticShopBody({
                   className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white border border-[#dedddb] flex items-center justify-center shadow-sm transition-colors z-10">
                   <svg className={`w-4 h-4 transition-colors ${wish.includes(it._id) ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}
                     fill={wish.includes(it._id) ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.heart} />
                   </svg>
                 </button>
                 {soldOut && (
@@ -835,7 +836,7 @@ export default function ArcticShopBody({
               {query && (
                 <button onClick={() => setQuery("")} aria-label="검색어 지우기"
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[#a3a3a3] hover:text-[#131313] transition-colors outline-none">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
                 </button>
               )}
             </div>
@@ -849,7 +850,7 @@ export default function ArcticShopBody({
                 <button onClick={() => setShowCoupons(true)} aria-label="쿠폰함" title="쿠폰함"
                   className={`relative flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showCoupons ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
                   <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
                   </svg>
                 </button>
 
@@ -860,7 +861,7 @@ export default function ArcticShopBody({
                   className={`relative hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showWishList ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
                   <svg className={`w-[18px] h-[18px] transition-all duration-300 ${wish.length > 0 ? "text-[#e91e3f]" : ""}`}
                     fill={wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.heart} />
                   </svg>
                 </button>
 
@@ -1197,7 +1198,7 @@ export default function ArcticShopBody({
             <button onClick={() => setCartConflict(null)} aria-label="닫기"
               className="absolute top-4 right-4 p-1.5 rounded-full text-[#a3a3a3] hover:text-[#131313] hover:bg-[#f4f3f2] transition-colors">
               <svg className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} />
               </svg>
             </button>
 
@@ -1234,12 +1235,12 @@ export default function ArcticShopBody({
             <div className="px-6 py-5 border-b border-[#ececea] flex items-center justify-between shrink-0">
               <h2 className="text-base font-black text-[#131313] flex items-center gap-2">
                 <svg className="w-4 h-4 text-[#e91e3f]" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                  <path d={ICON_PATHS.heart} />
                 </svg>
                 찜한 상품 {wishRows.length > 0 && <span className="text-[#e91e3f]">{wishRows.length}</span>}
               </h2>
               <button onClick={() => setShowWishList(false)} className="p-1.5 text-[#8a8a8a] hover:text-[#131313] transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
               </button>
             </div>
 
@@ -1303,13 +1304,13 @@ export default function ArcticShopBody({
             <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-[#ececea]">
               <div className="flex items-center gap-2.5">
                 <svg className="w-[18px] h-[18px] text-[#e91e3f]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
                 </svg>
                 <h2 className="text-base font-black text-[#131313] tracking-tight">쿠폰함</h2>
               </div>
               <button onClick={() => setShowCoupons(false)} aria-label="닫기"
                 className="p-1.5 -mr-1.5 text-[#8a8a8a] hover:text-[#131313] rounded-md hover:bg-black/[0.05] transition-colors outline-none">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
               </button>
             </div>
 
@@ -1344,7 +1345,7 @@ export default function ArcticShopBody({
                     <div key={c.id} className="px-6 py-3.5 flex items-center gap-3">
                       <span className="w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
                         <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
                         </svg>
                       </span>
                       <div className="min-w-0 flex-1">
@@ -1452,7 +1453,7 @@ export default function ArcticShopBody({
                   {result.ok ? (
                     <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                   ) : (
-                    <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
                   )}
                 </div>
                 <h2 className="text-lg font-black text-[#131313] mb-2">{result.ok ? "구매 완료" : "구매 실패"}</h2>
@@ -1541,7 +1542,7 @@ export default function ArcticShopBody({
             <div className="px-6 py-5 border-b border-[#ececea] flex items-center justify-between shrink-0">
               <h2 className="text-base font-black text-[#131313]">{editForm.id ? "상품 수정" : "상품 추가"}</h2>
               <button onClick={() => setEditForm(null)} className="p-1.5 text-[#8a8a8a] hover:text-[#131313] transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
               </button>
             </div>
 

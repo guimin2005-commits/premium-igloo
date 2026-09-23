@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { ICON_PATHS } from "./components/Icons";
 import AdminNav from "./admin/AdminNav";
 import ScrollLock from "./components/ScrollLock";
 import { verifyBadge } from "@/lib/verifyBadge";
@@ -450,7 +451,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 <button onClick={() => setIsCodeModalOpen(true)} aria-label="쿠폰함" title="쿠폰함"
                   className={`relative transition-[padding,color] duration-500 ease-out outline-none focus:outline-none ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white"} ${scrolled ? "p-1.5" : "p-2"}`}>
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className={`transition-all duration-500 ${scrolled ? "w-[18px] h-[18px]" : "w-5 h-5"}`}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
                   </svg>
                 </button>
               )}
@@ -458,7 +459,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               {/* 📌 알림 센터 종 아이콘 */}
               <div className="relative flex items-center" ref={notifRef}>
                 <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) markNotifsSeen(); }} aria-label="알림" className={`relative transition-[padding,color] duration-500 ease-out outline-none focus:outline-none ${isNotifOpen ? "text-[#e91e3f]" : isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white"} ${scrolled ? "p-1.5" : "p-2"}`}>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill={isNotifOpen ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className={`transition-all duration-500 ${scrolled ? "w-[18px] h-[18px]" : "w-5 h-5"}`}><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill={isNotifOpen ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className={`transition-all duration-500 ${scrolled ? "w-[18px] h-[18px]" : "w-5 h-5"}`}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.bell} /></svg>
                   {unseenCount > 0 && (
                     <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#e91e3f] shadow-[0_0_6px_rgba(233,30,63,0.8)]"></span>
                   )}
@@ -537,7 +538,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                           </span>
                           {isBooster && (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 text-[#ff41cf] border border-[#ff41cf]/25">
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" /></svg>
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5"><path d={ICON_PATHS.sparkles} /></svg>
                               SERVER BOOSTER
                             </span>
                           )}
@@ -576,7 +577,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
             {!isVerifyPage && mounted && (
               <button onClick={() => { setIsMenuClosing(false); setIsMobileMenuOpen(true); }} aria-label="메뉴 열기" className={`pc-hidden md:hidden p-2 -mr-1 outline-none ${isLightPage ? "text-[#4b4b4b] hover:text-[#131313]" : "text-gray-300 hover:text-white"}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.menu} /></svg>
               </button>
             )}
           </div>
@@ -665,11 +666,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       {!isVerifyPage && !isAuctionRoom && !isShopPage && !isArcticProfile && mounted && (
         <nav className={`md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border backdrop-blur-2xl grid grid-cols-5 ${isLightPage ? "border-black/[0.07] bg-white/85 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.22)]" : "border-white/[0.07] bg-[#0b0b0b]/75 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85)]"}`}>
           {[
-            { name: "홈", path: "/", icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" },
-            { name: "공지", path: "/notice", icon: "M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73" },
-            { name: "이벤트", path: "/event", icon: "M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" },
-            { name: "레벨", path: "/level", icon: "M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" },
-            { name: "내 정보", path: "/profile", icon: "M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" },
+            { name: "홈", path: "/", icon: ICON_PATHS.home },
+            { name: "공지", path: "/notice", icon: ICON_PATHS.megaphone },
+            { name: "이벤트", path: "/event", icon: ICON_PATHS.gift },
+            { name: "레벨", path: "/level", icon: ICON_PATHS.chart },
+            { name: "내 정보", path: "/profile", icon: ICON_PATHS.user },
           ].map((tab) => {
             const isActive = pathname === tab.path;
             return (
@@ -716,12 +717,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <div className={`shrink-0 flex items-center justify-between px-6 py-4 border-b ${isLightPage ? "border-[#ececea]" : "border-white/[0.07]"}`}>
               <div className="flex items-center gap-2.5">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[18px] h-[18px] text-[#e91e3f]">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
                 </svg>
                 <h2 className={`text-base font-black tracking-tight ${isLightPage ? "text-[#131313]" : "text-white"}`}>쿠폰함</h2>
               </div>
               <button onClick={() => setIsCodeModalOpen(false)} aria-label="닫기" className={`p-1.5 -mr-1.5 rounded-md transition-colors outline-none ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-400 hover:text-white hover:bg-white/[0.06]"}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
               </button>
             </div>
 
@@ -756,7 +757,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     <div key={c.id} className="px-6 py-3.5 flex items-center gap-3">
                       <span className="w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
                         <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
                         </svg>
                       </span>
                       <div className="min-w-0 flex-1">
@@ -785,7 +786,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl ring-1 ring-white/5 w-full max-w-md overflow-hidden shadow-2xl relative">
             <button onClick={() => setIsLoginModalOpen(false)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/20 rounded-full transition-colors outline-none focus:outline-none">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
             </button>
             <div className="p-8 text-center">
               <h2 className="text-2xl font-bold text-white mb-2">로그인</h2>
@@ -801,7 +802,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl ring-1 ring-white/5 w-full max-w-md overflow-hidden shadow-2xl relative p-8">
             <button onClick={() => {setIsGuestInquiryOpen(false); setIsLoginModalOpen(false);}} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/20 rounded-full transition-colors outline-none focus:outline-none">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
             </button>
             <h2 className="text-xl font-bold text-white mb-2">비회원 문의</h2>
             <form onSubmit={handleGuestInquiry} className="flex flex-col gap-4 mt-6">
@@ -867,7 +868,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 <span className={`text-[15px] font-bold tracking-[0.15em] ${isLightPage ? "text-[#131313]" : "text-white"}`}>고급 이글루</span>
               </div>
               <button onClick={closeMobileMenu} aria-label="메뉴 닫기" className={`p-2 -mr-1 rounded-full transition-colors outline-none ${isLightPage ? "text-[#8a8a8a] active:text-[#131313] bg-black/[0.05]" : "text-gray-400 active:text-white bg-white/[0.05]"}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[18px] h-[18px]"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[18px] h-[18px]"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
               </button>
             </div>
 
@@ -884,7 +885,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-bold ${verifyBadge(isVerified, hasScrimRole).cls}`}>{verifyBadge(isVerified, hasScrimRole).label}</span>
                       {isBooster && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 text-[#ff41cf]">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" /></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5"><path d={ICON_PATHS.sparkles} /></svg>
                           BOOSTER
                         </span>
                       )}
