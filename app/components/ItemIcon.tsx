@@ -13,13 +13,15 @@ export const defaultPresetOf = (type?: string) => TYPE_DEFAULT[type || ""] || "c
 
 // 24×24 · 선 굵기 1.7. 채움형(번개·방패)은 fill, 나머지는 stroke — 기존 인벤토리 톤 그대로.
 //    번개·상자·종·리본·메달·방패는 예전 InvIcon 의 path 를 그대로 옮겼다.
-type Shape = { fill?: boolean; d: string[]; dash?: string };
+type Shape = { fill?: boolean; d: string[]; dash?: string; f?: string[] }; // f: 연하게 채우는 면(윗면·뚜껑)
 const SHAPES: Record<string, Shape> = {
   bolt: { fill: true, d: ["M13.2 2 5 13.4h5.3L9.9 22l8.4-11.6H12.8Z"] },
   shield: { fill: true, d: ["M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z"] },
   key: { d: ["M8 7.8a4.2 4.2 0 1 0 0 8.4 4.2 4.2 0 0 0 0-8.4Z", "M12.2 12H21M17.5 12v3.2M20 12v2.4"] },
-  cube: { d: ["M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6Z", "M4 7.6 12 12l8-4.4M12 12v8.8"] },
-  box: { d: ["M3 8.5 12 4l9 4.5v7L12 20l-9-4.5Z", "M3 8.5 12 13l9-4.5M12 13v7"] },
+  // 블록 — 윗면을 연하게 채운 등각 큐브 (상자와 한눈에 구분되게)
+  cube: { d: ["M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6Z", "M4 7.6 12 12l8-4.4M12 12v8.8"], f: ["M4 7.6 12 3.2 20 7.6 12 12Z"] },
+  // 보물상자 — 둥근 뚜껑(연하게 채움) + 몸통 + 자물쇠 고리
+  box: { d: ["M4 10.5V8a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v2.5", "M3.5 10.5h17v8.5a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5Z", "M10.5 10.5V14h3v-3.5"], f: ["M4 10.5V8a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v2.5Z"] },
   medal: { d: ["M12 9a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z", "M8.5 9 6.5 3h11l-2 6"] },
   star: { d: ["M12 3.4l2.6 5.5 6 .8-4.4 4.2 1.1 6L12 17l-5.3 2.9 1.1-6-4.4-4.2 6-.8Z"] },
   crown: { d: ["M4.5 18.5h15", "M4.5 18.5 3.2 7.5l4.9 3.6L12 5l3.9 6.1 4.9-3.6-1.3 11Z"] },
@@ -85,6 +87,7 @@ export function PresetIcon({
   }
   return (
     <svg {...common} fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      {shape.f?.map((d, i) => <path key={"f" + i} d={d} fill={color} fillOpacity={0.28} stroke="none" />)}
       {shape.d.map((d, i) => <path key={i} d={d} strokeDasharray={shape.dash && i === shape.d.length - 1 ? shape.dash : undefined} />)}
     </svg>
   );
