@@ -473,7 +473,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         <span className="w-4 h-px bg-[#e91e3f]"></span>
                         <span className={`text-sm font-black tracking-tight ${isLightPage ? "text-[#131313]" : "text-white"}`}>알림</span>
                       </div>
-                      <Link href="/profile/notice" onClick={() => setIsNotifOpen(false)} className={`relative text-[11px] font-black hover:text-[#e91e3f] transition-colors ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>전체 보기</Link>
+                      {unseenCount > 0 && <span className="relative text-[11px] font-black text-[#e91e3f] tabular-nums">새 알림 {unseenCount}</span>}
                     </div>
                     {notifications.length === 0 && adminNotifs.length === 0 ? (
                       <div className={`px-5 py-8 text-center text-xs ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>아직 알림이 없습니다.</div>
@@ -482,7 +482,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         {adminNotifs.slice(0, 5).map((n) => {
                           const warn = n.type === "경고" || n.type === "제재";
                           return (
-                            <Link key={n._id} href="/profile/notice" onClick={() => setIsNotifOpen(false)} className={`block px-5 py-3.5 transition-colors ${isLightPage ? "hover:bg-black/[0.03]" : "hover:bg-white/[0.03]"}`}>
+                            <Link key={n._id} href={`/profile/notice?id=${n._id}`} onClick={() => setIsNotifOpen(false)} className={`block px-5 py-3.5 transition-colors ${isLightPage ? "hover:bg-black/[0.03]" : "hover:bg-white/[0.03]"}`}>
                               <div className="flex items-center gap-2 mb-1">
                                 <span className={`text-[9px] font-black tracking-wider px-1.5 py-0.5 rounded border ${warn ? "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25" : "bg-sky-500/10 text-sky-400 border-sky-500/20"}`}>{n.type || "안내"}</span>
                                 {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>}
@@ -493,7 +493,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                           );
                         })}
                         {notifications.slice(0, 5).map((n) => (
-                          <Link key={n._id} href="/profile" onClick={() => setIsNotifOpen(false)} className={`block px-5 py-3.5 transition-colors ${isLightPage ? "hover:bg-black/[0.03]" : "hover:bg-white/[0.03]"}`}>
+                          <Link key={n._id} href="/profile/inquiry" onClick={() => setIsNotifOpen(false)} className={`block px-5 py-3.5 transition-colors ${isLightPage ? "hover:bg-black/[0.03]" : "hover:bg-white/[0.03]"}`}>
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-[9px] font-black tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded">답변 완료</span>
                               <span className="text-[10px] text-gray-600">{n.mainType || "문의"}</span>
@@ -503,6 +503,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         ))}
                       </div>
                     )}
+                    <Link href="/profile/notice" onClick={() => setIsNotifOpen(false)}
+                      className={`block text-center px-5 py-3.5 text-[12px] font-black border-t transition-colors ${isLightPage ? "border-black/[0.06] text-[#131313] hover:bg-black/[0.04]" : "border-white/[0.06] text-white hover:bg-white/[0.05]"}`}>
+                      알림함 열기
+                    </Link>
                   </HeaderPopover>
                 )}
               </div>

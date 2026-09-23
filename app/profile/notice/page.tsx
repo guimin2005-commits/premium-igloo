@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { LuxStyles } from "../../components/Lux";
 import { RenderFormattedText } from "../../components/FormattedText";
@@ -24,6 +25,15 @@ export default function NoticeInboxPage() {
   const { data: session, status } = useSession();
   const [rows, setRows] = useState<any[] | null>(null);
   const [selected, setSelected] = useState<any | null>(null);
+  const searchParams = useSearchParams();
+  const wantId = searchParams.get("id");
+
+  // 헤더 종에서 누른 알림을 바로 연다
+  useEffect(() => {
+    if (!wantId || !rows) return;
+    const hit = rows.find((n) => n._id === wantId);
+    if (hit) setSelected(hit);
+  }, [wantId, rows]);
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.name) return;

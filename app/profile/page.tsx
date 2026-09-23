@@ -228,7 +228,7 @@ export default function MyInfoPage() {
                 </Link>
               )}
               <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border border-white/15 bg-white/[0.06] text-white/85">
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border ${verifyBadge(isVerified, hasScrimRole).cls}`}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.check} /></svg>
                   {verifyBadge(isVerified, hasScrimRole).label}
                 </span>
