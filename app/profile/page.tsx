@@ -57,7 +57,7 @@ export default function MyInfoPage() {
   const [shopWish, setShopWish] = useState<string[]>([]);
   const [shopCart, setShopCart] = useState<{ itemId: string; qty: number }[]>([]);
   // 📌 아이콘을 누르면 아래에 펼쳐지는 패널 — 어느 것을 열었는지
-  const [panel, setPanel] = useState("notice");
+  const [panel, setPanel] = useState("");
   // 인벤토리·서포터즈 요약 (패널용)
   const [myItems, setMyItems] = useState<any[] | null>(null);
   const [supMe, setSupMe] = useState<any>(null);
