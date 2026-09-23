@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import UserXp from "@/models/UserXp";
 import Payout from "@/models/Payout";
+import { addPoints } from "@/lib/points";
 
 const requireAdmin = async () => {
   const session = await getServerSession(authOptions);
@@ -38,7 +39,8 @@ export async function POST(request) {
     if (!ok) return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
 
     await connectToDatabase();
-    const { target, amount, reason, mode } = await request.json();
+    const { target, amount, reason, mode, currency } = await request.json();
+    const isPoint = currency === "point";
 
     // ── [초기화] 보유 XP와 레벨을 0으로 되돌린다 ──
     //    큐를 거치지 않고 즉시 반영한다 (누적값을 지우는 작업이라 증감으로는 표현할 수 없다)
@@ -92,7 +94,7 @@ export async function POST(request) {
 
     const value = Math.trunc(Number(amount) || 0);
     if (!value) {
-      return NextResponse.json({ success: false, message: "지급할 XP를 입력해주세요. (회수는 음수)" }, { status: 400 });
+      return NextResponse.json({ success: false, message: `지급할 ${isPoint ? "빙옥" : "XP"}을 입력해주세요. (회수는 음수)` }, { status: 400 });
     }
 
     // 대상 확인 — "all"이면 XP 기록이 있는 전원
@@ -116,6 +118,43 @@ export async function POST(request) {
       }
     }
 
+    const who = session?.user?.name || "admin";
+    const baseReason = (reason || "").trim() || `관리자 ${value > 0 ? "지급" : "회수"} (${who})`;
+
+    // ── 빙옥 — 봇 큐 없이 즉시 반영하고, 감사 기록은 paid 로 남긴다 ──
+    if (isPoint) {
+      const paidDocs = [];
+      for (const t of targets) {
+        let give = value;
+        if (value < 0) {
+          const cur = await UserXp.findOne({ userId: t.userId }, { point: 1 }).lean();
+          give = -Math.min(Math.abs(value), cur?.point ?? 0);
+          if (give === 0) continue;
+        }
+        const applied = await addPoints(t.userId, give);
+        if (!applied) continue; // 동시에 써서 잔액이 모자라면 건너뛴다 (마이너스 금지)
+        paidDocs.push({
+          userName: t.displayName || t.username || "",
+          userId: t.userId,
+          amount: give,
+          reason: baseReason,
+          source: "manual",
+          status: "paid",
+          paidAt: new Date(),
+          currency: "point",
+        });
+      }
+      if (paidDocs.length === 0) {
+        return NextResponse.json({ success: false, message: value < 0 ? "회수할 빙옥이 있는 유저가 없습니다." : "지급 대상이 없습니다." }, { status: 400 });
+      }
+      await Payout.insertMany(paidDocs);
+      return NextResponse.json({
+        success: true,
+        message: `${paidDocs.length}명에게 빙옥을 ${value > 0 ? "지급" : "회수"}했습니다.`,
+        data: { count: paidDocs.length },
+      });
+    }
+
     // 회수는 보유량을 넘지 않게 잘라 넣는다 (마이너스 방지)
     const docs = [];
     for (const t of targets) {
@@ -129,8 +168,9 @@ export async function POST(request) {
         userName: t.displayName || t.username || "",
         userId: t.userId,
         amount: give,
-        reason: (reason || "").trim() || `관리자 ${value > 0 ? "지급" : "회수"} (${session?.user?.name || "admin"})`,
+        reason: baseReason,
         source: "manual",
+        currency: "xp",
       });
     }
 

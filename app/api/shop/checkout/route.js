@@ -74,11 +74,14 @@ export async function POST(request) {
       }
     }
     // 📌 기간제는 기간이 끝나면 다시 살 수 있어야 하므로, 아직 살아 있는 건만 막는다
+    const linkedIds = docs.map((d) => d.itemId).filter(Boolean);
     const owned = await Purchase.find({
       userId,
-      itemId: { $in: docs.map((d) => String(d._id)) },
       status: { $in: ["pending", "completed"] },
-      $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+      $and: [
+        { $or: [{ itemId: { $in: docs.map((d) => String(d._id)) } }, ...(linkedIds.length ? [{ itemRef: { $in: linkedIds } }] : [])] },
+        { $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] },
+      ],
     }, { itemName: 1, expiresAt: 1 }).lean();
     if (owned.length > 0) {
       return NextResponse.json({

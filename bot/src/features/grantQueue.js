@@ -29,7 +29,7 @@ async function processPurchases(guild) {
         await p.save();
         continue;
       }
-      if (p.roleId) await member.roles.add(p.roleId, `ARCTIC 구매: ${p.itemName}`);
+      if (p.roleId) await member.roles.add(p.roleId, p.itemId === "grant" ? `운영진 지급: ${p.itemName}` : `ARCTIC 구매: ${p.itemName}`);
 
       p.status = "completed";
       p.processedAt = new Date();
@@ -52,7 +52,8 @@ async function processPurchases(guild) {
 
 // ── XP 지급 대기열 처리 ──────────────────────
 async function processPayouts(guild) {
-  const rows = await Payout.find({ status: "pending" }).limit(50);
+  // 빙옥(currency "point") 건은 사이트가 즉시 반영한 것 — 어떤 경우에도 XP 로 지급하지 않는다
+  const rows = await Payout.find({ status: "pending", currency: { $ne: "point" } }).limit(50);
 
   for (const p of rows) {
     try {

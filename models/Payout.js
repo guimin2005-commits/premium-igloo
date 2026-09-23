@@ -7,6 +7,8 @@ const PayoutSchema = new mongoose.Schema({
   reason: { type: String, default: "" },         // 지급 사유 (예: 친구 초대 보상)
   source: { type: String, default: "etc" },      // referral | code | manual | etc
   status: { type: String, default: "pending" },  // pending | paid
+  // 📌 지급 재화 — "xp"(봇 큐가 반영) | "point"(빙옥, 사이트가 즉시 반영하고 paid 로만 남긴다). bot/src/db.js 와 같아야 한다
+  currency: { type: String, default: "xp" },
   createdAt: { type: Date, default: Date.now },
   paidAt: { type: Date },
 });

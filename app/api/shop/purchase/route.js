@@ -54,9 +54,11 @@ export async function POST(request) {
     // 기간제는 기간이 끝나면 다시 살 수 있어야 하므로, 아직 살아 있는 건만 막는다
     const owned = await Purchase.findOne({
       userId,
-      itemId: String(item._id),
       status: { $in: ["pending", "completed"] },
-      $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+      $and: [
+        { $or: [{ itemId: String(item._id) }, ...(item.itemId ? [{ itemRef: item.itemId }] : [])] },
+        { $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] },
+      ],
     }).lean();
     if (owned) {
       return NextResponse.json({

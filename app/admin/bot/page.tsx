@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Reveal, LuxStyles } from "../../components/Lux";
 import Dropdown from "../../components/Dropdown";
+import ItemIcon from "../../components/ItemIcon";
+import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { VOICE_TIERS } from "@/lib/voiceTiers";
 import {
   inputClass,
@@ -70,7 +72,7 @@ const TAB_META: Record<string, { title: string; desc: string }> = {
   policy: { title: "레벨 정책", desc: "지급량·쿨타임·음소거·퇴장 처리와 알림 문구 등 봇의 기본 XP 규칙을 설정합니다." },
   roles: { title: "역할 매핑", desc: "레벨 보상 역할, 음성 티어 일괄 연결, 인벤토리 표기, 시즌 전환 보호 역할을 한자리에서 관리합니다." },
   content: { title: "콘텐츠 설정", desc: "채널별 XP 정책과 퀘스트, 기간제 부스트를 관리합니다." },
-  ledger: { title: "XP 지급·내역", desc: "XP를 직접 주거나 회수·초기화하고, 봇 자동 지급과 수동 지급 내역을 함께 조회합니다." },
+  ledger: { title: "지급·내역", desc: "XP·빙옥·아이템을 직접 주거나 회수·초기화하고, 지급 내역을 조회합니다." },
 };
 
 // 📌 탭 안의 세부 탭 — 설정이 세로로 길게 늘어지지 않도록 한 번에 한 묶음만 보여준다.
@@ -141,10 +143,24 @@ type LedgerRow = {
   at: string | Date;
   name: string;
   amount: number;
+  unit?: string; // "XP" | "빙옥" — 수동 지급 재화
   note: string;
   channelName?: string;
   status?: string | null;
   error?: string | null;
+};
+
+// 📌 수동 지급 — 한 폼에서 XP · 빙옥 · 아이템을 고른다. 아이템 기간은 영구/7일/30일/직접 입력.
+type GrantKind = "xp" | "point" | "item";
+const GRANT_KINDS = [{ v: "xp", l: "XP" }, { v: "point", l: "빙옥" }, { v: "item", l: "아이템" }];
+const ITEM_GRANT_DAYS = [{ v: "0", l: "영구" }, { v: "7", l: "7일" }, { v: "30", l: "30일" }, { v: "custom", l: "직접 입력" }];
+const EMPTY_ITEM_GRANT = { itemId: "", daysMode: "0", days: "", target: "", reason: "" };
+const GRANT_STATUS: Record<string, { l: string; c: string }> = {
+  pending: { l: "지급 대기", c: "bg-amber-500/10 text-amber-700" },
+  completed: { l: "보유", c: "bg-[#e91e3f]/[0.08] text-[#e91e3f]" },
+  expired: { l: "만료", c: "bg-black/[0.05] text-[#8a8a8a]" },
+  refunded: { l: "회수", c: "bg-black/[0.05] text-[#8a8a8a]" },
+  cancelled: { l: "취소", c: "bg-black/[0.05] text-[#8a8a8a]" },
 };
 
 const EMPTY_ROLE = { roleId: "", rewardLevel: "", buffXp: "", attendBuffXp: "", exclusive: false };
@@ -382,6 +398,13 @@ export default function AdminBotPage() {
 
   // ── XP 수동 지급 ─────────────────────────────
   const [grantForm, setGrantForm] = useState({ target: "", amount: "", reason: "" });
+  const [grantKind, setGrantKind] = useState<GrantKind>("xp");
+  const grantUnit = grantKind === "point" ? "빙옥" : "XP";
+  // 아이템 지급
+  const [itemGrant, setItemGrant] = useState(EMPTY_ITEM_GRANT);
+  const [grantItems, setGrantItems] = useState<any[]>([]);
+  const [itemGrants, setItemGrants] = useState<any[]>([]);
+  const [confirmAllItem, setConfirmAllItem] = useState(false);
   const [grantLogs, setGrantLogs] = useState<any[]>([]);
   const [isGranting, setIsGranting] = useState(false);
   const [confirmAll, setConfirmAll] = useState(false);
@@ -394,7 +417,55 @@ export default function AdminBotPage() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => { if (isAdmin && tab === "ledger") loadGrantLogs(); }, [isAdmin, tab, loadGrantLogs]);
+  const loadItemGrants = useCallback(() => {
+    fetch("/api/admin/items/grant", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setItemGrants(Array.isArray(d?.data) ? d.data : []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!isAdmin || tab !== "ledger") return;
+    loadGrantLogs();
+    loadItemGrants();
+    // 기프트카드는 수동 지급 대상이 아니다
+    fetch("/api/admin/items", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setGrantItems((Array.isArray(d?.data) ? d.data : []).filter((it: any) => it.type !== "physical")))
+      .catch(() => {});
+  }, [isAdmin, tab, loadGrantLogs, loadItemGrants]);
+
+  const runItemGrant = async (target: string) => {
+    if (isGranting) return;
+    const days = itemGrant.daysMode === "custom" ? Math.max(1, Math.trunc(Number(itemGrant.days) || 0)) : Number(itemGrant.daysMode);
+    setIsGranting(true);
+    try {
+      const res = await fetch("/api/admin/items/grant", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: itemGrant.itemId, target, days, reason: itemGrant.reason }),
+      });
+      const d = await res.json();
+      if (res.ok && d.success) {
+        notify(d.message || "지급했습니다.");
+        setItemGrant({ ...itemGrant, target: "", reason: "" });
+        loadItemGrants();
+      } else {
+        notify(d.message || "지급에 실패했습니다.", true);
+      }
+    } catch {
+      notify("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setIsGranting(false);
+      setConfirmAllItem(false);
+    }
+  };
+
+  const submitItemGrant = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!itemGrant.itemId) return notify("지급할 아이템을 선택해 주세요.", true);
+    if (!itemGrant.target.trim()) return notify("지급 대상을 입력해주세요.", true);
+    runItemGrant(itemGrant.target.trim());
+  };
 
   // amount를 넘기면 그 값으로, 넘기지 않으면 입력값 그대로 보낸다 (제거는 음수로 뒤집는다)
   const runGrant = async (target: string, override?: { amount?: number; mode?: "reset" }) => {
@@ -403,7 +474,7 @@ export default function AdminBotPage() {
     try {
       const res = await fetch("/api/xp/grant", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...grantForm, target, ...override }),
+        body: JSON.stringify({ ...grantForm, target, currency: grantKind === "point" ? "point" : "xp", ...override }),
       });
       const d = await res.json();
       if (res.ok && d.success) {
@@ -432,7 +503,7 @@ export default function AdminBotPage() {
   const submitRemove = () => {
     const amount = Math.abs(Math.trunc(Number(grantForm.amount) || 0));
     if (!grantForm.target.trim()) return notify("제거할 대상을 입력해주세요.", true);
-    if (!amount) return notify("제거할 XP를 입력해주세요.", true);
+    if (!amount) return notify(`제거할 ${grantUnit}을 입력해주세요.`, true);
     runGrant(grantForm.target.trim(), { amount: -amount });
   };
 
@@ -582,6 +653,7 @@ export default function AdminBotPage() {
       at: g.createdAt,
       name: g.userName || g.userId,
       amount: g.amount || 0,
+      unit: g.currency === "point" ? "빙옥" : "XP",
       note: g.reason || "관리자 지급",
       status: g.status,
       error: g.error,
@@ -1508,7 +1580,10 @@ export default function AdminBotPage() {
         {tab === "ledger" && sub === "grant" && (
           <Reveal>
           <section>
-            <SectionHead no="01" title="XP 지급 · 회수" />
+            <SectionHead no="01" title="지급 · 회수" right={<FilterChips options={GRANT_KINDS} value={grantKind} onChange={(v) => setGrantKind(v as GrantKind)} />} />
+
+            {grantKind !== "item" ? (
+            <>
             <form onSubmit={submitGrant}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
@@ -1518,7 +1593,7 @@ export default function AdminBotPage() {
                   <p className={fieldNote}>XP 기록이 있는 유저만 검색됩니다</p>
                 </div>
                 <div>
-                  <label className={labelClass}>지급 XP <span className="text-[#e91e3f]">*</span></label>
+                  <label className={labelClass}>지급 {grantUnit} <span className="text-[#e91e3f]">*</span></label>
                   <input type="number" value={grantForm.amount} onChange={(e) => setGrantForm({ ...grantForm, amount: e.target.value })}
                     placeholder="예: 50000 (회수는 -50000)" className={inputClass} />
                   <p className={fieldNote}>음수를 넣으면 회수됩니다 (보유량을 넘지 않게 잘립니다)</p>
@@ -1537,18 +1612,95 @@ export default function AdminBotPage() {
                   Number(grantForm.amount) > 0 ? "border-[#e91e3f]/30 bg-[#e91e3f]/[0.06] text-[#e91e3f]" : "border-amber-500/30 bg-amber-500/[0.06] text-amber-700"
                 }`}>
                   {Number(grantForm.amount) > 0
-                    ? `${Number(grantForm.amount).toLocaleString()} XP 지급 — 레벨이 올라갈 수 있습니다`
-                    : `${Math.abs(Number(grantForm.amount)).toLocaleString()} XP 회수 — 레벨이 내려갈 수 있습니다`}
+                    ? `${Number(grantForm.amount).toLocaleString()} ${grantUnit} 지급${grantKind === "xp" ? " — 레벨이 올라갈 수 있습니다" : ""}`
+                    : `${Math.abs(Number(grantForm.amount)).toLocaleString()} ${grantUnit} 회수${grantKind === "xp" ? " — 레벨이 내려갈 수 있습니다" : ""}`}
                 </div>
               )}
 
               <div className="flex flex-wrap gap-3">
                 <Btn type="submit" variant="primary" disabled={isGranting}>{isGranting ? "처리 중..." : "지급"}</Btn>
-                <Btn type="button" variant="danger" onClick={submitRemove} disabled={isGranting || !grantForm.amount}>XP 제거</Btn>
+                <Btn type="button" variant="danger" onClick={submitRemove} disabled={isGranting || !grantForm.amount}>{grantUnit} 제거</Btn>
                 <Btn type="button" variant="ghost" onClick={() => setConfirmAll(true)} disabled={isGranting || !grantForm.amount}>전체 유저에게 지급</Btn>
               </div>
             </form>
-            <p className={fieldNote}>봇 큐에 쌓여 30초 이내에 반영되고(레벨도 함께 재계산), 봇이 꺼져 있으면 켜질 때 처리됩니다.</p>
+            <p className={fieldNote}>
+              {grantKind === "xp"
+                ? "봇 큐에 쌓여 30초 이내에 반영되고(레벨도 함께 재계산), 봇이 꺼져 있으면 켜질 때 처리됩니다."
+                : "즉시 반영됩니다."}
+            </p>
+            </>
+            ) : (
+            <>
+            <form onSubmit={submitItemGrant}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className={labelClass}>아이템 <span className="text-[#e91e3f]">*</span></label>
+                  <Dropdown
+                    theme="light"
+                    value={itemGrant.itemId}
+                    onChange={(v) => setItemGrant({ ...itemGrant, itemId: v })}
+                    placeholder={grantItems.length ? "지급할 아이템을 선택하세요" : "등록된 아이템이 없습니다"}
+                    options={grantItems.map((it: any) => ({
+                      value: it._id, label: it.name, hint: itemTypeLabel(it.type),
+                      icon: <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.type} size={18} color={it.color || itemTypeColor(it.type)} />,
+                    }))}
+                  />
+                  <p className={fieldNote}>
+                    <Link href="/admin/shop?tab=items" className="font-bold text-[#e91e3f] hover:underline">아이템 등록</Link>
+                  </p>
+                </div>
+                <div>
+                  <label className={labelClass}>기간</label>
+                  <FilterChips options={ITEM_GRANT_DAYS} value={itemGrant.daysMode} onChange={(v) => setItemGrant({ ...itemGrant, daysMode: v })} />
+                  {itemGrant.daysMode === "custom" && (
+                    <input type="number" min={1} max={3650} value={itemGrant.days} onChange={(e) => setItemGrant({ ...itemGrant, days: e.target.value })}
+                      placeholder="일수" className={`${inputClass} mt-2`} />
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className={labelClass}>대상 <span className="text-[#e91e3f]">*</span></label>
+                  <input type="text" value={itemGrant.target} onChange={(e) => setItemGrant({ ...itemGrant, target: e.target.value })}
+                    placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
+                  <p className={fieldNote}>XP 기록이 있는 유저만 검색됩니다</p>
+                </div>
+                <div>
+                  <label className={labelClass}>사유</label>
+                  <input type="text" value={itemGrant.reason} onChange={(e) => setItemGrant({ ...itemGrant, reason: e.target.value })}
+                    placeholder="예: 이벤트 우승 보상" className={inputClass} />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Btn type="submit" variant="primary" disabled={isGranting || !itemGrant.itemId}>{isGranting ? "처리 중..." : "지급"}</Btn>
+                <Btn type="button" variant="ghost" onClick={() => setConfirmAllItem(true)} disabled={isGranting || !itemGrant.itemId}>전체 유저에게 지급</Btn>
+              </div>
+            </form>
+            <p className={fieldNote}>역할이 연결된 아이템은 봇이 30초 이내에 역할을 붙입니다. 이미 보유한 유저는 건너뜁니다.</p>
+
+            {itemGrants.length > 0 && (
+              <div className="mt-8">
+                <SectionHead no="02" title="최근 아이템 지급" />
+                <ListFrame>
+                  {itemGrants.map((g: any) => {
+                    const st = GRANT_STATUS[g.status] || { l: g.status, c: "bg-black/[0.05] text-[#8a8a8a]" };
+                    return (
+                      <div key={g._id} className="py-3 flex flex-wrap md:flex-nowrap items-center gap-x-3 gap-y-1">
+                        <span className="min-w-0 w-40 truncate text-sm font-bold text-[#131313]">{g.userName || g.userId}</span>
+                        <span className="min-w-0 flex-1 truncate text-[12px] text-[#5a5a5a]">{g.itemName}{g.adminNote ? ` · ${g.adminNote}` : ""}</span>
+                        <span className="shrink-0 text-[11px] text-[#8a8a8a] tabular-nums">{g.days > 0 ? `${g.days}일` : "영구"}</span>
+                        <span className={`shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full ${st.c}`}>{st.l}</span>
+                        <span className="shrink-0 text-[10px] text-[#a3a3a3] tabular-nums">{fmtDateTime(g.createdAt)}</span>
+                      </div>
+                    );
+                  })}
+                </ListFrame>
+              </div>
+            )}
+            </>
+            )}
           </section>
           </Reveal>
         )}
@@ -1620,6 +1772,7 @@ export default function AdminBotPage() {
                       </div>
                       <span className={`shrink-0 text-sm font-black tabular-nums ${r.amount >= 0 ? "text-[#e91e3f]" : "text-amber-700"}`}>
                         {r.amount >= 0 ? "+" : ""}{r.amount.toLocaleString()}
+                        {r.unit === "빙옥" && <span className="ml-1 text-[10px] text-[#3f9e93]">빙옥</span>}
                       </span>
                     </div>
                   ))}
@@ -1704,12 +1857,28 @@ export default function AdminBotPage() {
             <p className="mb-2 break-keep">
               XP 기록이 있는 <strong className="text-[#131313]">모든 유저</strong>에게{" "}
               <strong className={Number(grantForm.amount) >= 0 ? "text-[#e91e3f]" : "text-amber-700"}>
-                {Number(grantForm.amount) >= 0 ? "+" : ""}{Number(grantForm.amount).toLocaleString()} XP
+                {Number(grantForm.amount) >= 0 ? "+" : ""}{Number(grantForm.amount).toLocaleString()} {grantUnit}
               </strong>
               를 반영합니다.
             </p>
             <p className="text-xs break-keep">되돌리려면 반대 부호로 다시 지급해야 합니다.</p>
           </>
+        }
+      />
+
+      <ConfirmDialog
+        open={confirmAllItem}
+        title="전체 유저에게 아이템 지급"
+        confirmLabel="전체 지급"
+        busy={isGranting}
+        onCancel={() => setConfirmAllItem(false)}
+        onConfirm={() => runItemGrant("all")}
+        body={
+          <p className="break-keep">
+            XP 기록이 있는 <strong className="text-[#131313]">모든 유저</strong>에게{" "}
+            <strong className="text-[#e91e3f]">{grantItems.find((it) => it._id === itemGrant.itemId)?.name || "아이템"}</strong>
+            을 지급합니다. 이미 보유한 유저는 건너뜁니다.
+          </p>
         }
       />
 
