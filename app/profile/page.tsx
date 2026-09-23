@@ -176,7 +176,8 @@ export default function MyInfoPage() {
     { k: "inquiry", g: "account", l: "1:1 문의", icon: ICON_PATHS.chat, href: `/profile/inquiry${q}`, n: pendingInquiries },
     { k: "recruit", g: "account", l: "구인 지원", icon: ICON_PATHS.briefcase, href: `/profile/recruit${q}`, n: pendingApplies },
   ];
-  if (canSeeLevel) rows.push({ k: "bag", g: "arctic", l: "인벤토리", icon: ICON_PATHS.bag, href: "/level?tab=my&bag=1", n: myItemCount });
+  // ARCTIC 맥락이면 스토어 안 인벤토리(/shop/inventory) — 잉크 HUD 로 튀지 않는다
+  if (canSeeLevel) rows.push({ k: "bag", g: "arctic", l: "인벤토리", icon: ICON_PATHS.bag, href: fromArctic ? "/shop/inventory?from=me" : "/level?tab=my&bag=1", n: myItemCount });
   if (canSeeShop) {
     rows.push({ k: "orders", g: "arctic", l: "주문 내역", icon: ICON_PATHS.receipt, href: "/shop/orders", n: shopOrders.length, accent: shopPendingCount > 0 });
     rows.push({ k: "cart", g: "arctic", l: "장바구니", icon: ICON_PATHS.cart, href: "/shop/cart", n: shopCartCount });

@@ -270,7 +270,7 @@ export default function EventPage() {
 
             return (
               <Reveal key={event._id} delay={Math.min(listIdx, 5) * 90}>
-              <div onClick={() => setSelectedEvent(event)} className="group h-full rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px cursor-pointer relative hover:from-[#e91e3f]/40 hover:to-white/[0.02] transition-all duration-300">
+              <div onClick={() => router.push(`/event/${event._id}`)} className="group h-full rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px cursor-pointer relative hover:from-[#e91e3f]/40 hover:to-white/[0.02] transition-all duration-300">
                 {isAdmin && (
                   <div className="absolute top-6 right-6 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={(e) => handleEdit(event._id, e)} className="bg-black/80 text-white px-2.5 py-1.5 rounded-md text-xs font-bold border border-white/10 hover:bg-gray-800">수정</button>
@@ -313,40 +313,6 @@ export default function EventPage() {
         </div>
       )}
 
-      {selectedEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#121212] border border-white/10 rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
-            <div className="flex justify-end mb-4 shrink-0"><button onClick={() => setSelectedEvent(null)} className="p-2 text-gray-400 hover:text-white bg-white/5 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button></div>
-            <div className="overflow-y-auto [&::-webkit-scrollbar]:hidden">
-              <div className="w-full h-52 bg-[#1a1a1a] rounded-2xl mb-6 flex items-center justify-center border border-white/5 relative overflow-hidden shrink-0">
-                {selectedEvent.bannerUrl ? <img src={selectedEvent.bannerUrl} alt="배너" className="w-full h-full object-cover" /> : <span className="text-gray-500 text-sm">이벤트 배너 이미지</span>}
-              </div>
-
-              <div className="flex items-center gap-4 mb-4">
-                {getEventStatus(selectedEvent) === "upcoming" ? (
-                  <span className="px-2.5 py-1 text-xs font-bold rounded-md bg-blue-500 text-white">예정</span>
-                ) : (
-                  selectedEvent.eventTag && selectedEvent.eventTag !== "NONE" && (
-                    <span className={`px-2.5 py-1 text-xs font-bold rounded-md ${
-                      selectedEvent.eventTag === "NEW" ? "bg-emerald-500/10 text-emerald-400" 
-                      : activeTab === "ongoing" ? "bg-[#e91e3f] text-white" 
-                      : "bg-gray-700 text-gray-300"
-                    }`}>
-                      {selectedEvent.eventTag}
-                    </span>
-                  )
-                )}
-                <div className="flex items-center gap-1.5 text-gray-400">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                  <span className="text-sm font-medium">{selectedEvent.eventPeriod || "날짜 미정"}</span>
-                </div>
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-4 border-b border-white/5 pb-4">{selectedEvent.title}</h2>
-              <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap"><RenderFormattedText text={selectedEvent.content} onCopy={() => { setCopyNotification(true); setTimeout(() => setCopyNotification(false), 2000); }} /></div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {deleteConfirmId && <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4"><div className="bg-[#121212] border border-red-500/30 rounded-3xl w-full max-w-sm p-8 text-center"><h2 className="text-xl font-bold text-white mb-3">삭제 안내</h2><p className="text-sm text-gray-400 mb-8">영구 삭제하시겠습니까?</p><div className="flex gap-3"><button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button><button onClick={executeDelete} className="flex-1 py-3 bg-red-500/80 text-white rounded-xl">삭제</button></div></div></div>}
       {popupConfig.isOpen && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in"><div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl flex flex-col items-center"><div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 ${popupConfig.isError ? "bg-red-500/10 text-red-500" : "bg-[#e91e3f]/10 text-[#e91e3f]"}`}>{popupConfig.isError ? <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> : <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}</div><h2 className="text-xl font-bold text-white mb-3">{popupConfig.isError ? "알림" : "처리 완료"}</h2><p className="text-sm text-gray-400 mb-8 whitespace-pre-line leading-relaxed">{popupConfig.message}</p><button onClick={() => setPopupConfig({ ...popupConfig, isOpen: false })} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-all">확인</button></div></div>}
