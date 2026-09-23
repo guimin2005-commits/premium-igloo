@@ -2,14 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { LuxStyles } from "../../../components/Lux";
 import BackLink from "../../../components/BackLink";
+import ArcticDock from "../../../shop/ArcticDock";
 
 // 📌 문의 상세 — 읽는 것은 페이지. 목록(/profile/inquiry)에서 온다.
 export default function InquiryDetailPage() {
   const { data: session, status } = useSession();
   const { id } = useParams<{ id: string }>();
+  const fromArctic = useSearchParams().get("from") === "arctic";
+  const q = fromArctic ? "?from=arctic" : "";
   const [item, setItem] = useState<any | null | undefined>(undefined);
 
   useEffect(() => {
@@ -29,7 +32,7 @@ export default function InquiryDetailPage() {
     <main className="w-full flex-1 flex flex-col text-[#131313]">
       <LuxStyles />
       <article className="w-full max-w-3xl mx-auto px-6 pt-8 pb-20">
-        <BackLink href="/profile/inquiry" label="1:1 문의" />
+        <BackLink href={`/profile/inquiry${q}`} label="1:1 문의" />
         {item === undefined ? (
           <p className="text-[#a3a3a3] text-sm py-12 text-center">데이터 로딩 중...</p>
         ) : item === null ? (
@@ -58,6 +61,7 @@ export default function InquiryDetailPage() {
           </>
         )}
       </article>
+      {fromArctic && <ArcticDock activeKey="me" />}
     </main>
   );
 }

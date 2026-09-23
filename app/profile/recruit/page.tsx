@@ -5,12 +5,16 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { LuxStyles } from "../../components/Lux";
 import BackLink from "../../components/BackLink";
+import ArcticDock from "../../shop/ArcticDock";
+import { useSearchParams } from "next/navigation";
 
 const FILTERS = [{ label: "전체", key: "all" }, { label: "심사 중", key: "심사 중" }, { label: "합격", key: "합격" }, { label: "불합격", key: "불합격" }];
 
 // 📌 구인 지원 내역 — 내 정보에서 분리한 페이지. 새 지원은 /recruit 에서.
 export default function MyAppliesPage() {
   const { data: session, status } = useSession();
+  const fromArctic = useSearchParams().get("from") === "arctic";
+  const q = fromArctic ? "?from=arctic" : "";
   const [rows, setRows] = useState<any[] | null>(null);
   const [filter, setFilter] = useState("all");
   const [cancelId, setCancelId] = useState<string | null>(null);
@@ -55,7 +59,7 @@ export default function MyAppliesPage() {
     <main className="w-full flex-1 flex flex-col text-[#131313]">
       <LuxStyles />
       <section className="w-full max-w-4xl mx-auto px-6 pt-8 pb-20">
-        <BackLink href="/profile" label="내 정보" />
+        <BackLink href={`/profile${q}`} label="내 정보" />
         <div className="flex items-center justify-between gap-3 flex-wrap mb-6">
           <h1 className="text-2xl md:text-3xl font-black tracking-tight">구인 지원 내역 {(rows?.length || 0) > 0 && <span className="text-[#e91e3f]">{rows!.length}</span>}</h1>
           <div className="flex items-center gap-2">
@@ -109,6 +113,7 @@ export default function MyAppliesPage() {
       {toast && (
         <div className="fixed left-1/2 -translate-x-1/2 bottom-24 z-[120] px-4 py-2.5 rounded-full bg-[#131313] text-white text-[12px] font-bold shadow-lg">{toast}</div>
       )}
+      {fromArctic && <ArcticDock activeKey="me" />}
     </main>
   );
 }

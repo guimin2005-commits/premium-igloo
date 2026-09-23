@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Reveal, LuxStyles } from "../../components/Lux";
 import BackLink from "../../components/BackLink";
+import ArcticDock from "../../shop/ArcticDock";
+import { useSearchParams } from "next/navigation";
 
 // 구획 머리말 — 모든 구획이 같은 형태를 쓴다
 const SectionHead = ({ no, title }: { no: string; title: string }) => (
@@ -31,13 +33,15 @@ const BenefitRow = ({ t, d, note, v }: { t: string; d: string; note?: string; v?
 // 📌 서버 부스터 혜택 — 내 정보에서 분리한 전용 페이지
 export default function BoosterBenefitPage() {
   const { data: session } = useSession();
+  const fromArctic = useSearchParams().get("from") === "arctic";
+  const q = fromArctic ? "?from=arctic" : "";
   const isBooster = (session?.user as any)?.isBooster || false;
 
   return (
     <main className="w-full flex-1 flex flex-col text-[#131313] animate-in fade-in duration-500">
       <LuxStyles />
       <section className="w-full max-w-4xl mx-auto px-6 pt-10 pb-20">
-        <BackLink href="/profile" label="내 정보" />
+        <BackLink href={`/profile${q}`} label="내 정보" />
 
         {isBooster && (
           <div className="mb-6 rounded-2xl border border-[#dedddb] bg-white px-5 py-4 flex items-center gap-3 break-keep">
@@ -156,6 +160,7 @@ export default function BoosterBenefitPage() {
             </Reveal>
         </div>
       </section>
+      {fromArctic && <ArcticDock activeKey="me" />}
     </main>
   );
 }

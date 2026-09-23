@@ -5,6 +5,8 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { LuxStyles } from "../../components/Lux";
 import BackLink from "../../components/BackLink";
+import ArcticDock from "../../shop/ArcticDock";
+import { useSearchParams } from "next/navigation";
 import { ICON_PATHS } from "../../components/Icons";
 
 // 미리보기용 마크다운 기호 제거
@@ -22,6 +24,8 @@ const NOTI_TYPE_STYLES: Record<string, string> = {
 // 📌 알림함 — 내 정보에서 분리한 페이지. 헤더 종 아이콘의 '전체 보기'가 여기로 온다.
 export default function NoticeInboxPage() {
   const { data: session, status } = useSession();
+  const fromArctic = useSearchParams().get("from") === "arctic";
+  const q = fromArctic ? "?from=arctic" : "";
   const [rows, setRows] = useState<any[] | null>(null);
 
   useEffect(() => {
@@ -47,7 +51,7 @@ export default function NoticeInboxPage() {
     <main className="w-full flex-1 flex flex-col text-[#131313]">
       <LuxStyles />
       <section className="w-full max-w-4xl mx-auto px-6 pt-8 pb-20">
-        <BackLink href="/profile" label="내 정보" />
+        <BackLink href={`/profile${q}`} label="내 정보" />
         <h1 className="text-2xl md:text-3xl font-black tracking-tight mb-6">알림함 {(rows?.length || 0) > 0 && <span className="text-[#e91e3f]">{rows!.length}</span>}</h1>
 
         <div className="border-t border-black/[0.08]">
@@ -58,7 +62,7 @@ export default function NoticeInboxPage() {
           ) : (
             <div className="divide-y divide-black/[0.06]">
               {rows.map((n) => (
-                <Link key={n._id} href={`/profile/notice/${n._id}`} className="w-full text-left py-3.5 px-1 flex items-center gap-3.5 hover:bg-black/[0.02] transition-colors group outline-none">
+                <Link key={n._id} href={`/profile/notice/${n._id}${q}`} className="w-full text-left py-3.5 px-1 flex items-center gap-3.5 hover:bg-black/[0.02] transition-colors group outline-none">
                   <span className={`shrink-0 text-[10px] font-black tracking-wider border px-2 py-1 rounded ${NOTI_TYPE_STYLES[n.type] || NOTI_TYPE_STYLES["일반"]}`}>{n.type}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -76,6 +80,7 @@ export default function NoticeInboxPage() {
         </div>
       </section>
 
+      {fromArctic && <ArcticDock activeKey="me" />}
     </main>
   );
 }

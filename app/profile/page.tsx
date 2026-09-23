@@ -8,6 +8,7 @@ import { LuxStyles } from "../components/Lux";
 import { ADMIN_USERS, isAdminName } from "@/lib/admins";
 import { verifyBadge } from "@/lib/verifyBadge";
 import BackLink from "../components/BackLink";
+import ArcticDock from "../shop/ArcticDock";
 import { ICON_PATHS } from "../components/Icons";
 import { getTier } from "@/lib/voiceTiers";
 
@@ -166,11 +167,14 @@ export default function MyInfoPage() {
   // 어디서 왔는지 — 링크가 ?from= 으로 알려준다 (referrer 는 못 믿는다). 규칙 4: 왼쪽 위 '← 상위 이름' 한 줄
   const from = searchParams.get("from") || "";
   const back = from === "arctic" ? { href: "/level?tab=arctic", label: "ARCTIC" } : from === "level" ? { href: "/level", label: "SYSTEM : LEVEL" } : null;
+  // ARCTIC 맥락은 하위 페이지까지 이어진다 — 독이 바뀌지 않게 from 을 들고 간다
+  const fromArctic = from === "arctic";
+  const q = fromArctic ? "?from=arctic" : "";
 
   // ── 줄 목록 ──
   const rows: Row[] = [
-    { k: "inquiry", g: "account", l: "1:1 문의", icon: ICON_PATHS.chat, href: "/profile/inquiry", n: pendingInquiries },
-    { k: "recruit", g: "account", l: "구인 지원", icon: ICON_PATHS.briefcase, href: "/profile/recruit", n: pendingApplies },
+    { k: "inquiry", g: "account", l: "1:1 문의", icon: ICON_PATHS.chat, href: `/profile/inquiry${q}`, n: pendingInquiries },
+    { k: "recruit", g: "account", l: "구인 지원", icon: ICON_PATHS.briefcase, href: `/profile/recruit${q}`, n: pendingApplies },
   ];
   if (canSeeLevel) rows.push({ k: "bag", g: "arctic", l: "인벤토리", icon: ICON_PATHS.bag, href: "/level?tab=my&bag=1", n: myItemCount });
   if (canSeeShop) {
@@ -179,7 +183,7 @@ export default function MyInfoPage() {
     rows.push({ k: "wish", g: "arctic", l: "찜", icon: ICON_PATHS.heart, href: "/level?tab=arctic&panel=wish", n: shopWish.length });
     rows.push({ k: "coupons", g: "arctic", l: "쿠폰함", icon: ICON_PATHS.ticket, onClick: () => window.dispatchEvent(new Event("igloo:open-coupons")), n: shopWallet.length });
   }
-  rows.push({ k: "booster", g: "member", l: "서버 부스터", icon: ICON_PATHS.sparkles, href: "/profile/booster", pill: isBooster ? "적용 중" : undefined, pillCls: "bg-[#e91e3f]/[0.08] text-[#e91e3f]" });
+  rows.push({ k: "booster", g: "member", l: "서버 부스터", icon: ICON_PATHS.sparkles, href: `/profile/booster${q}`, pill: isBooster ? "적용 중" : undefined, pillCls: "bg-[#e91e3f]/[0.08] text-[#e91e3f]" });
   if (canSeeSupporter) rows.push({ k: "supporter", g: "member", l: "서포터즈", icon: ICON_PATHS.shieldCheck, href: "/supporters", pill: isSupporter ? "활동 중" : undefined, pillCls: "bg-[#3f83b8]/[0.1] text-[#3f83b8]" });
   if (myTeam || scrimAdmin) rows.push({ k: "team", g: "member", l: myTeam ? "팀 룸" : "대회 룸", icon: ICON_PATHS.users, href: myTeam ? `/tournament/team/${myTeam._id}` : "/admin/room", pill: myTeam ? `PLAN ${myTeam.sent}/${myTeam.members.length}` : undefined, pillCls: "bg-black/[0.05] text-[#5a5a5a]" });
 
@@ -324,6 +328,9 @@ export default function MyInfoPage() {
           })}
         </div>
       </section>
+
+      {/* ARCTIC 에서 왔으면 스토어 독을 그대로 — 전역 독으로 바뀌면 상점으로 돌아갈 칸이 사라진다 (ClientLayout 이 전역 독을 숨긴다) */}
+      {fromArctic && <ArcticDock activeKey="me" cartCount={shopCartCount} wishCount={shopWish.length} />}
     </main>
   );
 }

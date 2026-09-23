@@ -156,6 +156,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   const isShopPage = pathname === "/shop" || pathname?.startsWith("/shop/") || isArcticTab;
+  // ARCTIC 에서 넘어온 내 정보(와 그 하위) — 스토어 독을 그대로 두므로 전역 독은 숨긴다
+  const isArcticProfile = (pathname === "/profile" || !!pathname?.startsWith("/profile/")) && searchParams.get("from") === "arctic";
   const isLightPage = isShopPage || pathname === "/profile" || pathname?.startsWith("/profile/") || pathname === "/level" || pathname?.startsWith("/level/") || (pathname?.startsWith("/admin") && !pathname.startsWith("/admin/room")) || pathname === "/write" || pathname === "/supporters" || pathname?.startsWith("/supporters/");   // 라이트 톤만 따라가는 페이지 (SYSTEM:LEVEL·관리자 화면은 ARCTIC 테마)
   // 📌 경매방 안에서는 모바일 하단 탭을 숨긴다.
   //    입찰·채팅 바가 화면 아래에 붙는데 그 위에 전역 탭까지 있으면 잘못 눌러 방을 나가게 된다.
@@ -666,7 +668,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
              스크롤 시 상단 헤더가 변하는 알약과 같은 톤(bg #0b0b0b/75 + backdrop-blur-2xl + 얇은 흰 테두리).
              ※ bottom은 홈 인디케이터/제스처 바를 피하도록 safe-area와 12px 중 큰 값.
              (경매방에서는 오조작 방지를 위해 숨김) */}
-      {!isVerifyPage && !isAuctionRoom && !isShopPage && mounted && (
+      {!isVerifyPage && !isAuctionRoom && !isShopPage && !isArcticProfile && mounted && (
         <nav className={`md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border backdrop-blur-2xl grid grid-cols-5 ${isLightPage ? "border-black/[0.07] bg-white/85 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.22)]" : "border-white/[0.07] bg-[#0b0b0b]/75 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85)]"}`}>
           {[
             { name: "홈", path: "/", icon: ICON_PATHS.home },

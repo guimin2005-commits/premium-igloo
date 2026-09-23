@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { LuxStyles } from "../../../components/Lux";
 import { RenderFormattedText } from "../../../components/FormattedText";
 import BackLink from "../../../components/BackLink";
+import ArcticDock from "../../../shop/ArcticDock";
 
 const NOTI_TYPE_STYLES: Record<string, string> = {
   경고: "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25",
@@ -19,6 +20,8 @@ const NOTI_TYPE_STYLES: Record<string, string> = {
 export default function NoticeDetailPage() {
   const { data: session, status } = useSession();
   const { id } = useParams<{ id: string }>();
+  const fromArctic = useSearchParams().get("from") === "arctic";
+  const q = fromArctic ? "?from=arctic" : "";
   const [item, setItem] = useState<any | null | undefined>(undefined);
 
   useEffect(() => {
@@ -43,7 +46,7 @@ export default function NoticeDetailPage() {
     <main className="w-full flex-1 flex flex-col text-[#131313]">
       <LuxStyles />
       <article className="w-full max-w-3xl mx-auto px-6 pt-8 pb-20">
-        <BackLink href="/profile/notice" label="알림함" />
+        <BackLink href={`/profile/notice${q}`} label="알림함" />
         {item === undefined ? (
           <p className="text-[#a3a3a3] text-sm py-12 text-center">데이터 로딩 중...</p>
         ) : item === null ? (
@@ -63,6 +66,7 @@ export default function NoticeDetailPage() {
           </>
         )}
       </article>
+      {fromArctic && <ArcticDock activeKey="me" />}
     </main>
   );
 }
