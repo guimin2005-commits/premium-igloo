@@ -97,7 +97,7 @@ const SUB_TABS: Record<string, { id: string; label: string }[]> = {
     { id: "boosts", label: "부스트" },
   ],
   ledger: [
-    { id: "grant", label: "XP 지급 · 회수" },
+    { id: "grant", label: "지급 · 회수" },
     { id: "logs", label: "지급 내역" },
     { id: "reset", label: "XP 초기화" },
   ],
