@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ICON_PRESETS, ICON_PRESET_PREFIX, ICON_MAX, presetKeyOf } from "@/lib/items";
+import { ICON_PRESETS, ICON_PRESET_GROUPS, ICON_PRESET_PREFIX, ICON_MAX, presetKeyOf } from "@/lib/items";
 import { PresetIcon } from "./ItemIcon";
 
 // 📌 아이콘 고르기 — 위는 이모지·짧은 글자 입력 한 칸, 아래는 기본 제공 SVG 격자.
@@ -39,27 +39,33 @@ export default function IconPicker({
         onChange={(e) => onChange(e.target.value)}
         className={inputClassName || DEFAULT_INPUT}
       />
-      <div className="mt-2 grid grid-cols-4 sm:grid-cols-6 gap-2">
-        {ICON_PRESETS.map((p) => {
-          const on = selKey === p.key;
-          return (
-            <button
-              key={p.key}
-              type="button"
-              title={p.label}
-              aria-label={p.label}
-              aria-pressed={on}
-              disabled={disabled}
-              onClick={() => onChange(on ? "" : `${ICON_PRESET_PREFIX}${p.key}`)}
-              className={`aspect-square rounded-lg border flex items-center justify-center transition-colors outline-none focus:outline-none disabled:opacity-40 disabled:cursor-default ${
-                on ? "border-[#131313] ring-2 ring-[#131313] bg-black/[0.04]" : "border-[#dedddb] bg-white hover:border-[#a3a3a3]"
-              }`}
-            >
-              <PresetIcon k={p.key} size={22} color={color} />
-            </button>
-          );
-        })}
-      </div>
+      {/* 묶음별 격자 — 일반 / 권한. 라벨은 작게 한 줄 */}
+      {ICON_PRESET_GROUPS.map((grp) => (
+        <div key={grp.g} className="mt-2">
+          <p className="text-[10px] font-bold text-[#a3a3a3] mb-1.5">{grp.label}</p>
+          <div className="grid grid-cols-6 sm:grid-cols-9 gap-1.5">
+            {ICON_PRESETS.filter((p) => p.g === grp.g).map((p) => {
+              const on = selKey === p.key;
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  title={p.label}
+                  aria-label={p.label}
+                  aria-pressed={on}
+                  disabled={disabled}
+                  onClick={() => onChange(on ? "" : `${ICON_PRESET_PREFIX}${p.key}`)}
+                  className={`aspect-square rounded-lg border flex items-center justify-center transition-colors outline-none focus:outline-none disabled:opacity-40 disabled:cursor-default ${
+                    on ? "border-[#131313] ring-2 ring-[#131313] bg-black/[0.04]" : "border-[#dedddb] bg-white hover:border-[#a3a3a3]"
+                  }`}
+                >
+                  <PresetIcon k={p.key} size={20} color={color} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
