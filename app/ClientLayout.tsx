@@ -402,8 +402,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
              헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
       {/* 📌 상단 바 — 로고 줄과 카테고리 줄이 한 덩어리로 붙어 다닌다.
-             처음엔 두 줄(로고 · 카테고리), 내리면 한 줄로 접혀 카테고리가 계속 따라온다. 알약으로 떠오르지 않는다. */}
-      <div className={`sticky top-0 z-40 flex-shrink-0 ${isAuctionRoom ? "hidden" : ""}`}>
+             처음엔 두 줄(로고 · 카테고리), 내리면 한 줄로 접혀 카테고리가 계속 따라온다.
+             ⚠️ sticky 가 아니라 fixed + 같은 높이의 자리(아래 spacer)다. sticky 로 두면 바가 접힐 때
+                문서 높이가 76px 줄고, 그만큼 스크롤 위치가 당겨져 다시 펴지는 일이 반복돼 카테고리가 위아래로 튄다. */}
+      {!isAuctionRoom && <div aria-hidden className="h-[110px] md:h-[132px] flex-shrink-0" />}
+      <div className={`fixed top-0 left-0 right-0 z-40 ${isAuctionRoom ? "hidden" : ""}`}>
       <header className={`w-full border-b backdrop-blur-md transition-colors duration-300 ${
         isWhitePage ? "border-[#ededed] bg-white/95"
           : isLightPage ? "border-black/[0.08] bg-[#f4f3f2]/95"
@@ -592,25 +595,30 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 })}
               </nav>
 
-              {/* ── 세부 카테고리 띠 — 큰 분류에 올리면 세 묶음이 한 번에, 읽을 만한 크기로 펼쳐진다.
-                     작은 드롭다운으로는 무엇이 있는지 훑어지지 않는다. 모바일은 햄버거 메뉴가 같은 일을 한다. ── */}
-              <div className="hidden md:block absolute left-0 right-0 top-full z-50 pt-px opacity-0 invisible group-hover/gnb:opacity-100 group-hover/gnb:visible transition-opacity duration-150">
-                <div className={`rounded-b-2xl border-x border-b backdrop-blur-2xl ${isLightPage ? "border-[#ededed] bg-white/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.7)]"}`}>
-                  <div className="grid grid-cols-3 gap-8 px-8 py-7">
+              {/* ── 세부 카테고리 띠 — 큰 분류에 올리면 세 묶음이 한 번에 펼쳐진다.
+                     잉크 배너 문법(검정 바탕 · 격자 · 붉은 글로우 · 굵은 흰 글자)을 그대로 쓴다. ── */}
+              <div className="hidden md:block absolute left-0 right-0 top-full z-50 opacity-0 invisible group-hover/gnb:opacity-100 group-hover/gnb:visible transition-opacity duration-150">
+                <div className="relative overflow-hidden bg-[#131313] text-white rounded-b-2xl shadow-[0_28px_56px_-28px_rgba(0,0,0,0.55)]">
+                  <div aria-hidden className="absolute inset-0 pointer-events-none"
+                    style={{
+                      backgroundImage: "linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)",
+                      backgroundSize: "46px 46px",
+                      WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
+                      maskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
+                    }} />
+                  <div aria-hidden className="absolute -right-16 -top-24 w-[380px] h-[300px] rounded-full bg-[#e91e3f]/20 blur-[110px] pointer-events-none" />
+                  <div className="relative grid grid-cols-3 gap-10 px-9 md:px-11 py-8 md:py-9">
                     {categoryGroups.map((group) => (
                       <div key={group.name}>
-                        <div className="flex items-center gap-2.5 mb-3">
-                          <span className="w-4 h-px bg-[#e91e3f]" />
-                          <span className="text-[11px] font-black tracking-[0.2em] text-[#e91e3f]">{group.name}</span>
-                        </div>
+                        <div className="text-[11px] font-black tracking-[0.3em] text-[#ff5c77] mb-4">{group.name}</div>
                         <div className="flex flex-col">
                           {group.items.map((it) => {
                             const cur = pathname === it.path || !!pathname?.startsWith(it.path + "/");
                             return (
                               <Link key={it.path} href={it.path}
-                                className={`py-[7px] text-[15px] font-extrabold tracking-tight transition-colors ${
-                                  cur ? "text-[#e91e3f]" : isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-gray-200 hover:text-[#ff5c77]"
-                                }`}>{it.name}</Link>
+                                className={`py-[9px] text-[17px] font-black tracking-tight transition-colors ${cur ? "text-[#e91e3f]" : "text-white hover:text-[#ff5c77]"}`}>
+                                {it.name}
+                              </Link>
                             );
                           })}
                         </div>
@@ -619,7 +627,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   </div>
                 </div>
               </div>
-
 
               {/* 📌 SYSTEM : LEVEL · ARCTIC 은 카테고리 줄에 세우지 않는다 —
                      홈 가운데(브랜드와 소식 사이)에서 크게 안내하고, 줄에서는 '콘텐츠' 묶음 안으로 간다. */}

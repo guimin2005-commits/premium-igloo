@@ -203,66 +203,33 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── 두 세계 — SYSTEM : LEVEL 과 ARCTIC. 카테고리 줄에서 내려 여기에 크게 세운다.
-             자기 주소를 가진 곳이라, 매일 바뀌는 소식보다 위에 잉크 배너로 한 장씩. ── */}
-      <section className="w-full max-w-7xl mx-auto px-6 md:px-10 pt-10 md:pt-12 space-y-4 md:space-y-5">
-        <Reveal>
-          <Link href="/level" className="group relative block overflow-hidden bg-[#131313] text-white px-7 md:px-11 py-9 md:py-10">
-            <div aria-hidden className="absolute inset-0 pointer-events-none"
-              style={{
-                backgroundImage: "linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)",
-                backgroundSize: "46px 46px",
-                WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
-                maskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
-              }} />
-            <div aria-hidden className="absolute -right-16 -top-20 w-[380px] h-[300px] rounded-full bg-[#e91e3f]/20 blur-[110px] pointer-events-none" />
-            <div className="relative flex flex-col md:flex-row md:items-end gap-6">
-              <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-black tracking-[0.3em] text-[#ff5c77] mb-3.5">SYSTEM : LEVEL</div>
-                <h4 className="text-[24px] md:text-[36px] font-black tracking-tight leading-[1.1] break-keep">
-                  채팅과 음성으로 XP 를 쌓아<br />최대 <span className="text-[#e91e3f]">1,000</span> 레벨까지
-                </h4>
-                <p className="mt-3.5 text-[13.5px] md:text-[14px] text-white/70 max-w-[52ch] break-keep">활동이 XP 가 되고, 레벨이 등급이 됩니다. 아이언에서 이글루까지, 등급마다 보상이 다릅니다.</p>
-              </div>
-              <div className="md:text-right shrink-0">
-                <div aria-hidden className="hidden md:block text-[96px] font-black tracking-[-0.05em] leading-[0.9] text-white/[0.08]">1000</div>
-                <span className="inline-flex items-center gap-2 md:-mt-3.5 px-3.5 py-2 rounded-full border border-white/30 text-[12px] font-black">
-                  <i className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]" />{levelOpen ? "보러 가기" : "10월 공개"}
-                </span>
-              </div>
-            </div>
+      {/* ── 두 세계 — SYSTEM : LEVEL 과 ARCTIC. 카테고리 줄에서 내려 여기에 세운다.
+             잉크 덩어리를 또 쌓지 않는다 — 흰 바탕에 큰 활자와 헤어라인으로만. ── */}
+      <section className="w-full border-b border-[#ededed]">
+        <div className={`max-w-7xl mx-auto px-6 md:px-10 grid ${policy.shopPublic ? "md:grid-cols-2 md:divide-x divide-[#ededed]" : ""}`}>
+          <Link href="/level" className="group flex items-center gap-5 py-9 md:py-11 md:pr-10">
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-black tracking-[0.3em] text-[#e91e3f] mb-3">SYSTEM : LEVEL</span>
+              <span className="block text-[22px] md:text-[28px] font-black tracking-tight leading-tight break-keep group-hover:text-[#e91e3f] transition-colors">
+                채팅과 음성으로 쌓는 <span className="text-[#e91e3f]">1,000</span> 레벨
+              </span>
+              <span className="block mt-2.5 text-[13px] text-[#6a6a6a] break-keep">{levelOpen ? "아이언에서 이글루까지, 등급마다 보상이 다릅니다." : "10월 공개 · 활동 XP 는 지금도 쌓이고 있습니다."}</span>
+            </span>
+            <span className="shrink-0 w-10 h-10 rounded-full border border-[#e0e0e0] grid place-items-center text-[#a3a3a3] font-black group-hover:border-[#131313] group-hover:text-[#131313] transition-colors">›</span>
           </Link>
-        </Reveal>
-
-        {policy.shopPublic && (
-          <Reveal delay={80}>
-            <Link href="/arctic" className="group relative block overflow-hidden bg-[#131313] text-white px-7 md:px-11 py-9 md:py-10">
-              <div aria-hidden className="absolute inset-0 pointer-events-none"
-                style={{
-                  backgroundImage: "linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)",
-                  backgroundSize: "46px 46px",
-                  WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
-                  maskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
-                }} />
-              <div aria-hidden className="absolute -right-16 -top-20 w-[380px] h-[300px] rounded-full bg-[#3f9e93]/20 blur-[110px] pointer-events-none" />
-              <div className="relative flex flex-col md:flex-row md:items-end gap-6">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-black tracking-[0.3em] text-[#ff5c77] mb-3.5">ARCTIC</div>
-                  <h4 className="text-[24px] md:text-[36px] font-black tracking-tight leading-[1.1] break-keep">
-                    모은 XP 로 사는<br />역할 <span className="text-[#e91e3f]">·</span> 권한 <span className="text-[#e91e3f]">·</span> 아이템
-                  </h4>
-                  <p className="mt-3.5 text-[13.5px] md:text-[14px] text-white/70 max-w-[52ch] break-keep">시즌마다 상품이 바뀝니다. 기간제 권한부터 영구 아이템까지, 쌓은 만큼 고를 수 있습니다.</p>
-                </div>
-                <div className="md:text-right shrink-0">
-                  <div aria-hidden className="hidden md:block text-[96px] font-black tracking-[-0.05em] leading-[0.9] text-white/[0.08]">S{SEASON.number}</div>
-                  <span className="inline-flex items-center gap-2 md:-mt-3.5 px-3.5 py-2 rounded-full border border-white/30 text-[12px] font-black">
-                    <i className="w-1.5 h-1.5 rounded-full bg-[#3f9e93]" />시즌 {SEASON.number} · {SEASON.name}
-                  </span>
-                </div>
-              </div>
+          {policy.shopPublic && (
+            <Link href="/arctic" className="group flex items-center gap-5 py-9 md:py-11 md:pl-10 border-t md:border-t-0 border-[#ededed]">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[11px] font-black tracking-[0.3em] text-[#e91e3f] mb-3">ARCTIC</span>
+                <span className="block text-[22px] md:text-[28px] font-black tracking-tight leading-tight break-keep group-hover:text-[#e91e3f] transition-colors">
+                  모은 XP 로 사는 역할 <span className="text-[#e91e3f]">·</span> 권한 <span className="text-[#e91e3f]">·</span> 아이템
+                </span>
+                <span className="block mt-2.5 text-[13px] text-[#6a6a6a] break-keep">시즌 {SEASON.number} · {SEASON.name} · 시즌마다 상품이 바뀝니다.</span>
+              </span>
+              <span className="shrink-0 w-10 h-10 rounded-full border border-[#e0e0e0] grid place-items-center text-[#a3a3a3] font-black group-hover:border-[#131313] group-hover:text-[#131313] transition-colors">›</span>
             </Link>
-          </Reveal>
-        )}
+          )}
+        </div>
       </section>
 
       {/* ── 소식 — 왼쪽 공지사항 · 오른쪽 지금 진행 중 (조금만 내려도 바로 보인다) ── */}
