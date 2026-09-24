@@ -592,13 +592,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               {/* 큰 분류 → 세부 분류 두 단. 세부는 그 분류 바로 아래에 붙는다.
                      한 번에 세 묶음을 다 펼치면 어느 항목이 어느 분류인지 위치로 읽히지 않는다.
                      모바일은 펼치지 않고 햄버거 메뉴가 같은 일을 한다. ── */}
-              <nav className="flex items-center gap-6 md:gap-10 h-full min-w-0 overflow-x-auto md:overflow-visible no-bar md:justify-center">
+              <nav className="flex items-center gap-7 md:gap-11 h-full min-w-0 overflow-x-auto md:overflow-visible no-bar md:justify-center">
                 {categoryGroups.map((group) => {
                   const on = group.items.some((it) => pathname === it.path || !!pathname?.startsWith(it.path + "/"));
                   return (
                     <div key={group.name} className="relative shrink-0 h-full group/cat">
                       <Link href={group.items[0]?.path || "/"}
-                        className={`relative h-full flex items-center font-extrabold transition-colors ${scrolled ? "text-[14px]" : "text-[14px] md:text-[15px]"} ${
+                        className={`relative h-full flex items-center font-black tracking-tight transition-colors ${scrolled ? "text-[15px]" : "text-[15px] md:text-[16px]"} ${
                           on ? (isLightPage ? "text-[#131313]" : "text-white")
                              : (isLightPage ? "text-[#6a6a6a] hover:text-[#131313]" : "text-gray-400 hover:text-white")
                         }`}>
@@ -608,12 +608,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
                       {/* 세부 — 분류 가운데에 맞춰 바로 아래 */}
                       <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 pt-1.5 opacity-0 invisible group-hover/cat:opacity-100 group-hover/cat:visible transition-opacity duration-150">
-                        <div className={`min-w-[190px] rounded-2xl border overflow-hidden backdrop-blur-2xl py-2.5 ${isLightPage ? "border-[#e0e0e0] bg-white/97 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.22)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.6)]"}`}>
+                        <div className={`min-w-[252px] rounded-2xl border overflow-hidden backdrop-blur-2xl py-3 ${isLightPage ? "border-[#e0e0e0] bg-white/97 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.22)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.6)]"}`}>
                           {group.items.map((it) => {
                             const cur = pathname === it.path || !!pathname?.startsWith(it.path + "/");
                             return (
                               <Link key={it.path} href={it.path}
-                                className={`block px-5 py-2.5 text-[15px] font-extrabold tracking-tight whitespace-nowrap transition-colors ${
+                                className={`block px-6 py-3.5 text-[19px] font-black tracking-tight whitespace-nowrap transition-colors ${
                                   cur ? "text-[#e91e3f]" : isLightPage ? "text-[#131313] hover:text-[#e91e3f] hover:bg-black/[0.03]" : "text-gray-200 hover:text-[#ff5c77] hover:bg-white/[0.05]"
                                 }`}>{it.name}</Link>
                             );
@@ -826,7 +826,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         }
         const showCategories = !isVerifyPage && (status !== "authenticated" || isVerified);
         const itemCls = (active: boolean, accent?: boolean) =>
-          `w-full flex items-center rounded-xl px-3 py-3 mb-0.5 text-left text-sm font-bold outline-none transition-colors ${
+          `w-full flex items-center rounded-xl px-3 py-3.5 mb-0.5 text-left text-[16px] font-extrabold outline-none transition-colors ${
             active ? "bg-[#e91e3f]/10 text-[#e91e3f]"
               : accent ? "text-[#e91e3f] " + (isLightPage ? "active:bg-black/[0.05]" : "active:bg-white/[0.05]")
               : isLightPage ? "text-[#4b4b4b] active:bg-black/[0.05] active:text-[#131313]" : "text-gray-300 active:bg-white/[0.05] active:text-white"

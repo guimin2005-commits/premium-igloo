@@ -169,8 +169,44 @@ export default function ArcticShopBody({
   const [inStockOnly, setInStockOnly] = useState(false);
   const [affordableOnly, setAffordableOnly] = useState(false);
   const [query, setQuery] = useState("");
-  // 📌 검색어가 있으면 어느 화면이든 상품(검색 결과)을 보인다 — 지우면 원래 화면으로
-  const showing: "home" | "products" = query.trim() ? "products" : view;
+  // 📌 검색은 엔터를 쳐야 결과가 바뀐다. 치는 동안에는 추천 단어만 보여 준다.
+  const [submitted, setSubmitted] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [recents, setRecents] = useState<string[]>([]);
+  const [recentOn, setRecentOn] = useState(true);
+  const showing: "home" | "products" = submitted.trim() ? "products" : view;
+
+  // 최근 검색어는 이 브라우저에만 남는다
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("arcticRecentSearch");
+      if (raw) setRecents(JSON.parse(raw));
+      setRecentOn(localStorage.getItem("arcticRecentOff") !== "1");
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem("arcticRecentSearch", JSON.stringify(recents.slice(0, 8))); } catch {}
+  }, [recents]);
+
+  const submitSearch = (term?: string) => {
+    const t = (term ?? query).trim();
+    if (!t) return;
+    setQuery(t);
+    setSubmitted(t);
+    if (recentOn) setRecents((prev) => [t, ...prev.filter((x) => x !== t)].slice(0, 8));
+    setSearchOpen(false);
+    setShowMobileSearch(false);
+    setView("products");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const clearSearch = () => { setQuery(""); setSubmitted(""); };
+  const toggleRecent = () => {
+    setRecentOn((v) => {
+      const next = !v;
+      try { localStorage.setItem("arcticRecentOff", next ? "0" : "1"); } catch {}
+      return next;
+    });
+  };
 
   // 구매 모달
   const [buyTarget, setBuyTarget] = useState<any>(null);
@@ -408,7 +444,7 @@ export default function ArcticShopBody({
 
   const visible = useMemo(() => {
     const range = PRICE_RANGES.find((r) => r.v === priceFilter) || PRICE_RANGES[0];
-    const q = query.trim().toLowerCase();
+    const q = submitted.trim().toLowerCase();
 
     const filtered = items.filter((it) => {
       if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : it.type !== typeFilter)) return false;
@@ -428,7 +464,7 @@ export default function ArcticShopBody({
     else if (sort === "popular") sorted.sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
     else sorted.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return sorted;
-  }, [items, typeFilter, priceFilter, inStockOnly, affordableOnly, wishOnly, wish, query, sort, myXp]);
+  }, [items, typeFilter, priceFilter, inStockOnly, affordableOnly, wishOnly, wish, submitted, sort, myXp]);
 
   // 📌 이미 장바구니에 있는 상품을 '구매'로 누르면, 낱개 구매인지
   //    장바구니와 함께 결제할지 먼저 물어본다 (모르고 따로 사는 걸 막는다)
@@ -477,6 +513,73 @@ export default function ArcticShopBody({
   // 관리자는 잔액과 무관하게 구매 가능 (테스트 구매)
   // 적용 중인 필터 개수 (모바일 필터 버튼 배지용)
   const activeFilterCount = (priceFilter !== "all" ? 1 : 0) + (inStockOnly ? 1 : 0) + (affordableOnly ? 1 : 0);
+
+  // 추천 단어 — 지금 있는 상품의 이름 · 역할 이름 · 유형에서 뽑는다
+  const suggestions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [] as string[];
+    const out: string[] = [];
+    const push = (v?: string) => { const t = (v || "").trim(); if (t && t.toLowerCase().includes(q) && !out.includes(t)) out.push(t); };
+    for (const t of TYPES) if (t.v !== "all") push(t.l);
+    for (const it of items) { push(it.name); push(it.roleName); }
+    return out.slice(0, 7);
+  }, [items, query]);
+
+  // 검색창 아래 패널 — 입력 중이면 추천 단어, 비어 있으면 최근 검색어
+  const searchPanel = (
+    <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl border border-[#e0e0e0] bg-white shadow-[0_24px_48px_-24px_rgba(0,0,0,0.22)] overflow-hidden">
+      {query.trim() ? (
+        suggestions.length > 0 ? (
+          <div className="py-2">
+            {suggestions.map((sg) => (
+              <button key={sg} onMouseDown={(e) => { e.preventDefault(); submitSearch(sg); }}
+                className="w-full text-left px-4 py-2.5 text-[14px] font-bold text-[#131313] hover:bg-black/[0.03] transition-colors truncate">
+                {sg}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="px-4 py-4 text-[13px] text-[#a3a3a3]">추천할 단어가 없습니다.</div>
+        )
+      ) : recentOn ? (
+        <>
+          <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-1.5">
+            <span className="text-[12px] font-black text-[#131313]">최근 검색어</span>
+            <span className="flex items-center gap-3">
+              {recents.length > 0 && (
+                <button onMouseDown={(e) => { e.preventDefault(); setRecents([]); }}
+                  className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">전체 삭제</button>
+              )}
+              <button onMouseDown={(e) => { e.preventDefault(); toggleRecent(); }}
+                className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">저장 끄기</button>
+            </span>
+          </div>
+          {recents.length === 0 ? (
+            <div className="px-4 pb-4 pt-1 text-[13px] text-[#a3a3a3]">최근 검색어가 없습니다.</div>
+          ) : (
+            <div className="pb-2">
+              {recents.map((r) => (
+                <div key={r} className="group/rc flex items-center gap-2 px-4 py-2 hover:bg-black/[0.03] transition-colors">
+                  <button onMouseDown={(e) => { e.preventDefault(); submitSearch(r); }}
+                    className="flex-1 min-w-0 text-left text-[14px] font-bold text-[#4b4b4b] hover:text-[#131313] truncate transition-colors">{r}</button>
+                  <button onMouseDown={(e) => { e.preventDefault(); setRecents((prev) => prev.filter((x) => x !== r)); }}
+                    aria-label={`${r} 삭제`} className="shrink-0 p-1 text-[#c4c4c4] hover:text-[#131313] transition-colors">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+          <span className="text-[13px] text-[#8a8a8a]">최근 검색어 저장이 꺼져 있습니다.</span>
+          <button onMouseDown={(e) => { e.preventDefault(); toggleRecent(); }}
+            className="shrink-0 text-[11px] font-bold text-[#e91e3f] hover:text-[#c62828] transition-colors">켜기</button>
+        </div>
+      )}
+    </div>
+  );
 
   const canAfford = (p: number) => isAdmin || (myXp != null && myXp >= p);
   const chip = (active: boolean) =>
@@ -585,7 +688,7 @@ export default function ArcticShopBody({
               return (
                 <button key={t.v}
                   onClick={() => {
-                    if (t.v === "home") { setView("home"); setQuery(""); setShowWishList(false); window.scrollTo({ top: 0, behavior: "smooth" }); }
+                    if (t.v === "home") { setView("home"); clearSearch(); setShowWishList(false); window.scrollTo({ top: 0, behavior: "smooth" }); }
                     else goProducts(t.v);
                   }}
                   className={`relative shrink-0 h-full flex items-center text-[14px] md:text-[15px] font-extrabold transition-colors ${on ? "text-[#131313]" : "text-[#6a6a6a] hover:text-[#131313]"}`}>
@@ -598,19 +701,27 @@ export default function ArcticShopBody({
 
           {/* 검색 — 남는 폭을 가져간다 */}
           <div className="hidden md:flex flex-1 justify-end min-w-0">
-            <div className="relative w-full max-w-[300px] lg:max-w-[360px] h-10 rounded-full border-2 border-[#131313] bg-white overflow-hidden">
-              <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="상품, 유형, 역할 검색"
-                className="absolute inset-0 w-full h-full bg-transparent pl-4 pr-10 text-[13px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
-              {query ? (
-                <button onClick={() => setQuery("")} aria-label="검색어 지우기"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-[#a3a3a3] hover:text-[#131313] transition-colors outline-none">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
-                </button>
-              ) : (
-                <svg className="absolute right-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#131313] pointer-events-none" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.search} />
-                </svg>
-              )}
+            <div className="relative w-full max-w-[300px] lg:max-w-[360px]">
+              <div className="relative h-10 rounded-full border-2 border-[#131313] bg-white overflow-hidden">
+                <input type="text" value={query}
+                  onChange={(e) => { setQuery(e.target.value); setSearchOpen(true); }}
+                  onFocus={() => setSearchOpen(true)}
+                  onBlur={() => setSearchOpen(false)}
+                  onKeyDown={(e) => { if (e.key === "Enter") submitSearch(); if (e.key === "Escape") setSearchOpen(false); }}
+                  placeholder="상품, 유형, 역할 검색"
+                  className="absolute inset-0 w-full h-full bg-transparent pl-4 pr-10 text-[13px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
+                {query ? (
+                  <button onClick={clearSearch} aria-label="검색어 지우기"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-[#a3a3a3] hover:text-[#131313] transition-colors outline-none">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
+                  </button>
+                ) : (
+                  <svg className="absolute right-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#131313] pointer-events-none" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.search} />
+                  </svg>
+                )}
+              </div>
+              {searchOpen && searchPanel}
             </div>
           </div>
 
@@ -690,10 +801,10 @@ export default function ArcticShopBody({
         {/* 📌 아이콘 상태로 접혀 있다가 호버·포커스·입력 시 펼쳐지는 검색창
                (모바일은 터치라 호버가 없으므로 항상 펼친 상태) */}
         {/* 검색어 표시 (검색은 헤더에서) */}
-        {query && (
+        {submitted && (
           <div className="flex items-center gap-2 mb-4">
-            <span className="text-[12px] text-[#8a8a8a]">&ldquo;<span className="font-bold text-[#131313]">{query}</span>&rdquo; 검색 결과</span>
-            <button onClick={() => setQuery("")} className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">검색 해제</button>
+            <span className="text-[12px] text-[#8a8a8a]">&ldquo;<span className="font-bold text-[#131313]">{submitted}</span>&rdquo; 검색 결과</span>
+            <button onClick={clearSearch} className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">검색 해제</button>
           </div>
         )}
 
@@ -917,11 +1028,11 @@ export default function ArcticShopBody({
       {/* ── 모바일 하단바 — 하위 페이지와 같은 공용 컴포넌트를 쓴다.
              ARCTIC 탭에서는 ClientLayout 이 전역 독을 숨기므로 겹치지 않는다. */}
       <ArcticDock
-        activeKey={showWishList ? "wish" : showMobileSearch || query ? "search" : showing === "home" ? "home" : ""}
+        activeKey={showWishList ? "wish" : showMobileSearch || submitted ? "search" : showing === "home" ? "home" : ""}
         cartCount={cartCount}
         wishCount={wish.length}
         onSelect={(key) => {
-          if (key === "home") { setView("home"); setQuery(""); setShowWishList(false); window.scrollTo({ top: 0, behavior: "smooth" }); return true; }
+          if (key === "home") { setView("home"); clearSearch(); setShowWishList(false); window.scrollTo({ top: 0, behavior: "smooth" }); return true; }
           if (key === "wish") { setShowWishList(true); return true; }
           if (key === "search") { setShowMobileSearch(true); return true; }
           if (key === "me" && !isLoggedIn) { signIn("discord"); return true; }
@@ -940,14 +1051,15 @@ export default function ArcticShopBody({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                 </svg>
                 <input autoFocus type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") setShowMobileSearch(false); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") submitSearch(); }}
                   placeholder="상품명, 설명, 역할로 검색"
                   className="w-full bg-[#f5f5f5] rounded-full pl-9 pr-4 py-3 text-[14px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
               </div>
               <button onClick={() => setShowMobileSearch(false)} className="px-4 py-3 text-[13px] font-bold text-[#131313]">닫기</button>
             </div>
+            <div className="relative mt-3">{searchPanel}</div>
             {query && (
-              <button onClick={() => setQuery("")} className="mt-3 text-[12px] font-bold text-[#e91e3f]">검색어 지우기</button>
+              <button onClick={clearSearch} className="mt-3 text-[12px] font-bold text-[#e91e3f]">검색어 지우기</button>
             )}
           </div>
         </div>
