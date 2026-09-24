@@ -17,11 +17,11 @@ export const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: (
         const src = safeUrl(url);
         if (!src) return m;
         const cap = String(alt || "").replace(/[<>"']/g, "");
-        return `<img src='${src}' alt='${cap}' loading='lazy' class='block w-full h-auto rounded-xl border border-white/10 my-5' />`
-          + (cap ? `<span class='block text-center text-[12px] text-gray-500 -mt-3 mb-5'>${cap}</span>` : "");
+        return `<img src='${src}' alt='${cap}' loading='lazy' class='block w-full h-auto rounded-xl border border-[rgba(128,128,128,.35)] my-5' />`
+          + (cap ? `<span class='block text-center text-[12px] text-[#8a8a8a] -mt-3 mb-5'>${cap}</span>` : "");
       })
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href='$2' target='_blank' rel='noopener noreferrer' class='text-[#e91e3f] hover:underline'>$1</a>")
-      .replace(/\{([^}]+)\}/g, (match, code) => `<span class='inline-flex items-center gap-1.5 bg-[#2a2a2a] px-2.5 py-1 rounded'><code class='text-[#e91e3f] font-mono text-sm'>${code}</code><button class='copy-btn text-[#e91e3f] hover:text-white transition-colors flex-shrink-0' data-copy='${code}' title='복사'><svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='2' stroke='currentColor' class='w-3.5 h-3.5'><path strokeLinecap='round' strokeLinejoin='round' d='M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z' /></svg></button></span>`)
+      .replace(/\{([^}]+)\}/g, (match, code) => `<span class='inline-flex items-center gap-1.5 bg-[rgba(128,128,128,.16)] px-2.5 py-1 rounded'><code class='text-[#e91e3f] font-mono text-sm'>${code}</code><button class='copy-btn text-[#e91e3f] hover:opacity-70 transition-opacity flex-shrink-0' data-copy='${code}' title='복사'><svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='2' stroke='currentColor' class='w-3.5 h-3.5'><path strokeLinecap='round' strokeLinejoin='round' d='M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z' /></svg></button></span>`)
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/__(.*?)__/g, "<span class='underline'>$1</span>")
       .replace(/~~(.*?)~~/g, "<span class='line-through'>$1</span>")
@@ -39,16 +39,16 @@ export const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: (
     const headerCells = parseRow(headerLine);
     const dataRows = lines.slice(2).map(parseRow);
 
-    let html = "<table class='w-full border-collapse border border-white/10 my-4'>";
+    let html = "<table class='w-full border-collapse border border-[rgba(128,128,128,.35)] my-4'>";
     html += "<thead><tr>";
     headerCells.forEach((cell) => {
-      html += `<th class='border border-white/10 px-3 py-2 bg-white/5 text-left font-bold'>${formatInlineMarkdown(cell)}</th>`;
+      html += `<th class='border border-[rgba(128,128,128,.35)] px-3 py-2 bg-[rgba(128,128,128,.12)] text-left font-bold'>${formatInlineMarkdown(cell)}</th>`;
     });
     html += "</tr></thead><tbody>";
     dataRows.forEach((cells) => {
       html += "<tr>";
       cells.forEach((cell) => {
-        html += `<td class='border border-white/10 px-3 py-2'>${formatInlineMarkdown(cell)}</td>`;
+        html += `<td class='border border-[rgba(128,128,128,.35)] px-3 py-2'>${formatInlineMarkdown(cell)}</td>`;
       });
       html += "</tr>";
     });

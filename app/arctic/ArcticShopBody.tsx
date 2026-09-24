@@ -7,7 +7,7 @@ import Dropdown from "../components/Dropdown";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 import IconPicker from "../components/IconPicker";
-import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
+import { salePrice, isTimed, durationOptions, durationLabel, durationPrice } from "@/lib/shopPricing";
 import { itemTypeLabel, itemTypeColor, ITEM_TYPE_OPTIONS } from "@/lib/items";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
@@ -516,145 +516,49 @@ export default function ArcticShopBody({
   }
 
 
-  // 📌 상품 카드 하나 — 홈(추천·전체 미리보기)과 상품 화면이 같은 카드를 쓴다
-  //    (홈 카드에만 찜·장바구니·구매가 없어서 반쪽짜리였다)
+  // 📌 상품 하나 — 상자(카드) 없이 그림 · 상품명 · 정가(무제한) · 찜 만. 담기·구매는 상세에서.
+  //    표시 가격은 정가(무제한): 기간제는 무제한 옵션의 정가, 없으면 기준가. 할인·기간은 상세가 말한다.
   const renderCard = (it: any) => {
     const soldOut = it.stock === 0;
-    const timed = isTimed(it);
-    const days = daysFor(it);
-    const price = salePrice(it, days);
-    const affordable = canAfford(price);
-    const owned = ownedItemIds.has(it._id);
-    const inCart = cart.some((c) => c.itemId === it._id);
+    const wished = wish.includes(it._id);
+    const listPrice = isTimed(it) ? (durationPrice(it, 0) ?? it.price) : it.price;
     return (
-            <div key={it._id} className="group bg-white rounded-2xl border border-[#e0e0e0] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
-              {/* 이미지 */}
-              <div className="relative aspect-[4/3] bg-[#f2f2f2] overflow-hidden">
-                {/* 상세로 가는 오버레이 — 위에 얹힌 버튼(z-10)은 그대로 눌린다 */}
-                <Link href={`/arctic/item/${it._id}`} aria-label={`${it.name} 상세보기`} className="absolute inset-0 z-[1]"></Link>
-                <CardArt it={it} imgClass="group-hover:scale-105 transition-transform duration-500" iconSize={56} />
-                <TypeBadge type={it.type} className="absolute top-2 left-2 sm:top-3 sm:left-3 px-2 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] tracking-wide" />
-                {!it.active && (
-                  <span className="absolute top-11 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#e0e0e0]">숨김</span>
-                )}
+      <div key={it._id} className="group relative flex flex-col">
+        <Link href={`/arctic/item/${it._id}`} className="block relative aspect-square overflow-hidden rounded-md bg-[#f2f2f2]">
+          <CardArt it={it} imgClass="group-hover:scale-[1.03] transition-transform duration-500" iconSize={64} />
+          {isAdmin && !it.active && (
+            <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">숨김</span>
+          )}
+          {soldOut && (
+            <span className="absolute inset-0 bg-white/70 flex items-center justify-center">
+              <span className="text-[12px] font-black text-[#131313] tracking-wider">품절</span>
+            </span>
+          )}
+        </Link>
 
-                {/* 찜 */}
-                <button onClick={() => toggleWish(it)} aria-label="찜하기"
-                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white border border-[#e0e0e0] flex items-center justify-center shadow-sm transition-colors z-10">
-                  <svg className={`w-4 h-4 transition-colors ${wish.includes(it._id) ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}
-                    fill={wish.includes(it._id) ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.heart} />
-                  </svg>
-                </button>
-                {soldOut && (
-                  <div className="absolute inset-0 z-[2] bg-[#131313]/55 flex items-center justify-center pointer-events-none">
-                    <span className="text-sm font-black text-white tracking-wider">SOLD OUT</span>
-                  </div>
-                )}
+        {/* 찜 */}
+        <button onClick={() => toggleWish(it)} aria-label={wished ? "찜 해제" : "찜하기"}
+          className="absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-colors">
+          <svg className={`w-4 h-4 transition-colors ${wished ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}
+            fill={wished ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.heart} />
+          </svg>
+        </button>
 
-                {/* 관리자 — 카드에서 바로 수정·삭제 */}
-                {isAdmin && (
-                  <div className="absolute bottom-3 right-3 flex gap-1.5 z-10">
-                    <button onClick={() => openEdit(it)}
-                      className="px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#131313] border border-[#e0e0e0] hover:bg-white shadow-sm transition-colors">
-                      수정
-                    </button>
-                    <button onClick={() => setDeleteTarget(it)}
-                      className="px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#c62828] border border-[#e0e0e0] hover:bg-white shadow-sm transition-colors">
-                      삭제
-                    </button>
-                  </div>
-                )}
-              </div>
+        <Link href={`/arctic/item/${it._id}`} className="block mt-3">
+          <h3 className="text-[13.5px] font-bold text-[#131313] leading-snug line-clamp-2 break-keep">{it.name}</h3>
+          <p className="mt-1.5 text-[15px] font-black text-[#131313] tabular-nums leading-none">
+            {Number(listPrice || 0).toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP</span>
+          </p>
+        </Link>
 
-              {/* 정보 */}
-              <div className="p-3.5 sm:p-5 flex flex-col flex-1">
-                <Link href={`/arctic/item/${it._id}`} className="block">
-                  <h3 className="text-[13px] sm:text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep line-clamp-2 hover:text-[#e91e3f] transition-colors">{it.name}</h3>
-                </Link>
-                {it.description && (
-                  <p className="hidden sm:block text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep">{it.description}</p>
-                )}
-
-                {/* 재고는 얼마 안 남았을 때만 알린다 (무제한·넉넉할 땐 표시 안 함) */}
-                {it.stock >= 0 && it.stock <= 5 && it.stock > 0 && (
-                  <div className="flex items-center gap-1.5 mb-4">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-pulse"></span>
-                    <span className="text-[11px] font-bold text-[#e91e3f]">한정 수량 · {it.stock}개 남음</span>
-                  </div>
-                )}
-
-                <div className="mt-auto">
-                  {/* 📌 기간제 — 기간을 고르면 값이 바로 바뀐다 */}
-                  {timed && (
-                    <div className="flex items-center gap-1.5 mb-2.5">
-                      {durationOptions(it).map((o: any) => {
-                        const on = o.days === days;
-                        return (
-                          <button key={o.days} type="button"
-                            onClick={() => setPickDays((prev) => ({ ...prev, [it._id]: o.days }))}
-                            className={`px-2.5 h-7 rounded-full text-[11px] font-bold border transition-colors ${
-                              on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#8a8a8a] border-[#e0e0e0] hover:border-[#131313] hover:text-[#131313]"
-                            }`}>
-                            {durationLabel(o.days)}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <div className="mb-3">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {it.discountPct > 0 && (
-                        <span className="px-1.5 py-[3px] rounded bg-[#e91e3f] text-white text-[10px] font-black leading-none shrink-0">{it.discountPct}%</span>
-                      )}
-                      <span className="text-[15px] sm:text-xl font-black text-[#131313] tracking-tight tabular-nums leading-none">
-                        {price.toLocaleString()}<span className="text-[11px] sm:text-[12px] font-bold text-[#8a8a8a] ml-1">XP</span>
-                      </span>
-                      {timed && <span className="text-[11px] font-bold text-[#8a8a8a]">/ {durationLabel(days)}</span>}
-                    </div>
-                    {it.discountPct > 0 && (
-                      <span className="block text-[11px] text-[#a3a3a3] line-through tabular-nums">
-                        {(timed ? durationOptions(it).find((o: any) => o.days === days)?.price ?? it.price : it.price).toLocaleString()} XP
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex gap-1.5 sm:gap-2">
-                    <button
-                      onClick={() => addToCart(it)}
-                      disabled={soldOut || owned}
-                      aria-label={inCart ? "장바구니에서 삭제" : "장바구니에 담기"}
-                      title={inCart ? "다시 누르면 장바구니에서 삭제됩니다" : "장바구니에 담기"}
-                      className={`w-8 h-8 sm:w-11 sm:h-11 shrink-0 rounded-full flex items-center justify-center transition-all ${
-                        soldOut || owned
-                          ? "bg-[#f2f2f2] text-[#c4c4c4] cursor-not-allowed"
-                          : inCart
-                          ? "bg-[#131313] text-white"
-                          : "bg-white text-[#131313] border border-[#e0e0e0] hover:border-[#131313]"
-                      }`}
-                    >
-                      <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => openBuy(it)}
-                      disabled={soldOut || owned}
-                      className={`flex-1 min-w-0 px-2 sm:px-5 h-8 sm:h-11 rounded-full text-[11px] sm:text-[12px] font-bold transition-all ${
-                        owned
-                          ? "bg-[#f2f2f2] text-[#8a8a8a] cursor-not-allowed"
-                          : soldOut
-                          ? "bg-[#e0e0e0] text-[#a3a3a3] cursor-not-allowed"
-                          : isLoggedIn && !affordable
-                          ? "bg-[#f2f2f2] text-[#8a8a8a] hover:bg-[#e0e0e0]"
-                          : "bg-[#e91e3f] text-[#ffffff] hover:bg-[#d01634] shadow-[0_4px_12px_rgba(233,30,63,0.25)]"
-                      }`}
-                    >
-                      {owned ? "보유 중" : soldOut ? "품절" : !isLoggedIn ? "로그인" : affordable ? "구매" : "XP 부족"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+        {isAdmin && (
+          <div className="mt-2 flex gap-2 text-[11px] font-bold">
+            <button onClick={() => openEdit(it)} className="text-[#8a8a8a] hover:text-[#131313] transition-colors">수정</button>
+            <button onClick={() => setDeleteTarget(it)} className="text-[#e91e3f] hover:text-[#c62828] transition-colors">삭제</button>
+          </div>
+        )}
+      </div>
     );
   };
 

@@ -3,148 +3,46 @@
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Reveal, LuxStyles } from "../components/Lux";
+import { ADMIN_USERS } from "@/lib/admins";
+import { ICON_PATHS } from "../components/Icons";
 
-// 📌 [관리자 명단 설정]
-const ADMIN_USERS = ["elahw.06"]; 
-
-const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => void }) => {
-  if (!text) return null;
-
-  const parseMarkdownWithTable = (text: string): string => {
-    const lines = text.split("\n");
-    const result: string[] = [];
-    let i = 0;
-
-    while (i < lines.length) {
-      const line = lines[i];
-
-      if (line.trim().startsWith("|")) {
-        const tableLines: string[] = [];
-        while (i < lines.length && lines[i].trim().startsWith("|")) {
-          tableLines.push(lines[i]);
-          i++;
-        }
-
-        const table = parseMarkdownTable(tableLines);
-        if (table) {
-          result.push(table);
-        } else {
-          result.push(...tableLines.map(l => formatInlineMarkdown(l)));
-        }
-      } else {
-        result.push(formatInlineMarkdown(line));
-        i++;
-      }
-    }
-
-    return result.join("\n");
-  };
-
-  const parseMarkdownTable = (lines: string[]): string | null => {
-    if (lines.length < 2) return null;
-
-    const headerLine = lines[0].trim();
-    const separatorLine = lines[1].trim();
-
-    if (!/^\|.*\|$/.test(headerLine) || !/^\|[\s|-]+\|$/.test(separatorLine)) {
-      return null;
-    }
-
-    const parseRow = (line: string): string[] => {
-      return line.split("|").slice(1, -1).map(cell => cell.trim());
-    };
-
-    const headerCells = parseRow(headerLine);
-    const dataRows = lines.slice(2).map(parseRow);
-
-    let html = "<table class='w-full border-collapse border border-white/10 my-4'>";
-    html += "<thead><tr>";
-    headerCells.forEach(cell => {
-      html += `<th class='border border-white/10 px-3 py-2 bg-white/5 text-left font-bold'>${formatInlineMarkdown(cell)}</th>`;
-    });
-    html += "</tr></thead>";
-
-    html += "<tbody>";
-    dataRows.forEach(cells => {
-      html += "<tr>";
-      cells.forEach(cell => {
-        html += `<td class='border border-white/10 px-3 py-2'>${formatInlineMarkdown(cell)}</td>`;
-      });
-      html += "</tr>";
-    });
-    html += "</tbody></table>";
-
-    return html;
-  };
-
-  const formatInlineMarkdown = (text: string): string => {
-    return text
-      // 이미지 — 링크보다 먼저 걸러야 한다 (뒤에 두면 링크로 잡히고 ! 만 남는다)
-      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, url) => {
-        const src = /^https?:\/\/[^"'<>\s]+$/i.test(String(url).trim()) ? String(url).trim() : "";
-        if (!src) return m;
-        const cap = String(alt || "").replace(/[<>"']/g, "");
-        return `<img src='${src}' alt='${cap}' loading='lazy' class='block w-full h-auto rounded-xl border border-white/10 my-5' />`
-          + (cap ? `<span class='block text-center text-[12px] text-gray-500 -mt-3 mb-5'>${cap}</span>` : "");
-      })
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href='$2' target='_blank' rel='noopener noreferrer' class='text-[#e91e3f] hover:underline'>$1</a>")
-      .replace(/\{([^}]+)\}/g, (match, code) => `<span class='inline-flex items-center gap-1.5 bg-[#2a2a2a] px-2.5 py-1 rounded'><code class='text-[#e91e3f] font-mono text-sm'>${code}</code><button class='copy-btn text-[#e91e3f] hover:text-white transition-colors flex-shrink-0' data-copy='${code}' title='복사'><svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='2' stroke='currentColor' class='w-3.5 h-3.5'><path strokeLinecap='round' strokeLinejoin='round' d='M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z' /></svg></button></span>`)
-      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-      .replace(/__(.*?)__/g, "<span class='underline'>$1</span>")
-      .replace(/~~(.*?)~~/g, "<span class='line-through'>$1</span>")
-      .replace(/==(.*?)==/g, "<span class='text-[#e91e3f] font-bold'>$1</span>")
-      .replace(/^(\s*)\*[ \t]+/, "$1<span class='text-[#e91e3f]'>·</span> ");
-  };
-
-  const formatted = parseMarkdownWithTable(text);
-
-  return (
-    <div
-      dangerouslySetInnerHTML={{ __html: formatted }}
-      onClick={(e: React.MouseEvent) => {
-        let target = e.target as HTMLElement;
-        while (target && !target.classList.contains('copy-btn')) {
-          target = target.parentElement as HTMLElement;
-        }
-        if (target?.classList.contains('copy-btn')) {
-          const code = target.getAttribute('data-copy');
-          if (code) {
-            navigator.clipboard.writeText(code);
-            onCopy?.();
-          }
-        }
-      }}
-    />
-  );
-};
+// 📌 공지사항 목록 — 화이트 & 블랙. 제목 · 밑줄 탭 · 검색 · 줄 목록(날짜 · 태그 · 제목 · 미리보기 · ›).
+//    읽는 것은 페이지(이동 규칙 1): 줄을 누르면 /notice/[id] 로 간다. 목록 위 모달은 없다.
 
 const stripMarkdown = (text: string) => {
   if (!text) return "";
   let result = text
-    // 이미지는 미리보기에 담을 게 없으므로 통째로 뺀다 (주소가 그대로 보이던 문제)
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-    // 링크는 주소를 버리고 글자만 남긴다
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/\{([^}]+)\}/g, "$1")
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/__(.*?)__/g, "$1")
     .replace(/~~(.*?)~~/g, "$1")
     .replace(/==(.*?)==/g, "$1");
-  // 마크다운 표 제거
   result = result.replace(/^\|[\s\S]*?\n(?:\|[\s\S]*?\n)*(?:\|.*?\|)?$/gm, "");
-  // 미리보기는 한 줄로 흐르므로 남은 줄바꿈·공백을 하나로 모은다
   return result.replace(/\s+/g, " ").trim();
 };
 
-// 공지 중요 여부 판별 (구버전 '필독'/isImportant 호환)
+// 공지 중요 여부 (구버전 '필독'/isImportant 호환)
 const isImportantNotice = (n: any) => n?.noticeTag === "중요" || n?.noticeTag === "필독" || n?.isImportant;
+const tagOf = (n: any) =>
+  isImportantNotice(n) ? { label: "중요", cls: "text-[#e91e3f]" }
+  : n?.noticeTag === "업데이트" ? { label: "업데이트", cls: "text-[#131313]" }
+  : { label: "일반", cls: "text-[#8a8a8a]" };
 
-// 카테고리 태그 라벨 및 색상 메타데이터
-const getNoticeTagMeta = (n: any) => {
-  if (isImportantNotice(n)) return { label: "중요", className: "bg-[#e91e3f]/10 text-[#e91e3f]" };
-  if (n?.noticeTag === "업데이트") return { label: "업데이트", className: "bg-blue-500/10 text-blue-400" };
-  return { label: "일반", className: "bg-white/10 text-white" };
+const TABS = [
+  { id: "all", label: "전체" },
+  { id: "important", label: "중요" },
+  { id: "update", label: "업데이트" },
+];
+
+const pad = (n: number) => String(n).padStart(2, "0");
+// 올해 글은 MM.DD, 지난해 글은 YYYY.MM.DD
+const fmtDate = (v: string) => {
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return "";
+  const md = `${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+  return d.getFullYear() === new Date().getFullYear() ? md : `${d.getFullYear()}.${md}`;
 };
 
 export default function NoticeClient() {
@@ -152,257 +50,160 @@ export default function NoticeClient() {
   const searchParams = useSearchParams();
   const { data: session, status } = useSession() as any;
   const isLoggedIn = status === "authenticated";
-
-  const isAdmin = isLoggedIn && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const isAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
 
   const [notices, setNotices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedNotice, setSelectedNotice] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("all");
-  const [copyNotification, setCopyNotification] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [toast, setToast] = useState("");
 
-  // 📌 읽은 공지 ID 로드 (NEW 뱃지용)
+  // 읽은 공지 (N 배지용)
   useEffect(() => {
     try {
       const stored = JSON.parse(localStorage.getItem("readNotices") || "[]");
       if (Array.isArray(stored)) setReadIds(new Set(stored));
     } catch {}
   }, []);
-
   const markAsRead = (id: string) => {
-    setReadIds(prev => {
+    setReadIds((prev) => {
       const next = new Set(prev);
       next.add(id);
       try { localStorage.setItem("readNotices", JSON.stringify(Array.from(next).slice(-200))); } catch {}
       return next;
     });
   };
-
-  const isNewNotice = (notice: any) =>
-    !readIds.has(notice._id) && Date.now() - new Date(notice.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000;
-
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [popupConfig, setPopupConfig] = useState({ isOpen: false, message: "", isError: false });
+  const isNewNotice = (n: any) => !readIds.has(n._id) && Date.now() - new Date(n.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000;
 
   const fetchNotices = async (admin = false) => {
     try {
       const res = await fetch(`/api/posts?category=공지사항${admin ? "&all=1" : ""}`, { cache: "no-store" });
       if (res.ok) setNotices((await res.json()).data);
-    } catch { console.error("로드 에러"); } finally { setIsLoading(false); }
+    } catch {} finally { setIsLoading(false); }
   };
-
   useEffect(() => { if (status !== "loading") fetchNotices(!!isAdmin); }, [status, isAdmin]);
 
+  // 옛 주소(/notice?id=) 는 글 페이지로
   useEffect(() => {
     const noticeId = searchParams.get("id");
-    if (noticeId && notices.length > 0) {
-      const notice = notices.find(n => n._id === noticeId);
-      if (notice) router.replace(`/notice/${notice._id}`);
-    }
-  }, [notices, searchParams]);
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
-  };
+    if (noticeId && notices.length > 0 && notices.some((n) => n._id === noticeId)) router.replace(`/notice/${noticeId}`);
+  }, [notices, searchParams, router]);
 
   const executeDelete = async () => {
     if (!deleteConfirmId) return;
     try {
       const res = await fetch(`/api/posts/${deleteConfirmId}`, { method: "DELETE" });
-      if (res.ok) {
-        if (selectedNotice && selectedNotice._id === deleteConfirmId) setSelectedNotice(null);
-        setPopupConfig({ isOpen: true, message: "공지사항이 삭제되었습니다.", isError: false });
-        fetchNotices();
-      }
-    } catch { setPopupConfig({ isOpen: true, message: "에러 발생", isError: true }); }
-    finally { setDeleteConfirmId(null); }
+      if (res.ok) { setToast("공지사항을 삭제했습니다"); setTimeout(() => setToast(""), 1800); fetchNotices(!!isAdmin); }
+    } catch {} finally { setDeleteConfirmId(null); }
   };
 
-  const copyNoticeUrl = () => {
-    if (!selectedNotice) return;
-    const url = `${window.location.origin}/notice?id=${selectedNotice._id}`;
-    navigator.clipboard.writeText(url);
-    setCopyNotification(true);
-    setTimeout(() => setCopyNotification(false), 2000);
-  };
-
-
-  const handleEdit = (id: string, e: React.MouseEvent) => { e.stopPropagation(); router.push(`/write?id=${id}`); };
-
-  const sortedNotices = [...notices].sort((a, b) => {
+  const sorted = [...notices].sort((a, b) => {
     if (a.isPinned && !b.isPinned) return -1;
     if (!a.isPinned && b.isPinned) return 1;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
-
   const tabFiltered =
-    activeTab === "important" ? sortedNotices.filter(n => isImportantNotice(n)) :
-    activeTab === "update" ? sortedNotices.filter(n => n.noticeTag === "업데이트") :
-    sortedNotices;
-
-  // 📌 검색어 필터 (제목 + 내용)
-  const filteredNotices = searchQuery.trim()
-    ? tabFiltered.filter(n =>
-        (n.title || "").toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
-        (n.content || "").toLowerCase().includes(searchQuery.trim().toLowerCase())
-      )
-    : tabFiltered;
-
-  const currentIndex = selectedNotice ? sortedNotices.findIndex(n => n._id === selectedNotice._id) : -1;
-  const prevNotice = currentIndex > 0 ? sortedNotices[currentIndex - 1] : null;
-  const nextNotice = currentIndex !== -1 && currentIndex < sortedNotices.length - 1 ? sortedNotices[currentIndex + 1] : null;
+    activeTab === "important" ? sorted.filter((n) => isImportantNotice(n))
+    : activeTab === "update" ? sorted.filter((n) => n.noticeTag === "업데이트")
+    : sorted;
+  const q = searchQuery.trim().toLowerCase();
+  const filtered = q ? tabFiltered.filter((n) => `${n.title || ""} ${n.content || ""}`.toLowerCase().includes(q)) : tabFiltered;
 
   return (
-    <main className="w-full flex-1 flex flex-col relative">
-      <LuxStyles />
-
-      {/* ── HERO ── */}
-      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6">
-        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
-        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
-        <div className="max-w-5xl mx-auto relative z-10 flex justify-between items-end gap-6">
-          <Reveal>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
-              <span className="text-white">공지</span><span className="lux-shimmer">사항</span>
-            </h1>
-          </Reveal>
+    <main className="w-full flex-1 flex flex-col text-[#131313]">
+      <section className="w-full max-w-5xl mx-auto px-5 md:px-8 pt-10 md:pt-12 pb-24 flex-1">
+        {/* 제목 줄 */}
+        <div className="flex items-end justify-between gap-4 mb-5">
+          <h1 className="text-[30px] md:text-[34px] font-black tracking-tight leading-none">공지사항</h1>
           {isAdmin && (
-            <button
-              onClick={() => router.push("/write?category=공지사항")}
-              className="shrink-0 bg-white text-black font-black text-xs px-5 py-3 rounded-full hover:bg-gray-200 transition-all active:scale-95"
-            >
-              글쓰기
-            </button>
+            <button onClick={() => router.push("/write?category=공지사항")}
+              className="h-9 px-4 rounded-full bg-[#131313] hover:bg-black text-white text-[12px] font-extrabold transition-colors">글쓰기</button>
           )}
         </div>
-      </section>
 
-      {/* ── 탭 (알약 스타일) ── */}
-      <div className="w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
-        <div className="max-w-5xl mx-auto flex items-center gap-3">
-          <div className="flex gap-1.5 overflow-x-auto whitespace-nowrap no-bar flex-1 min-w-0">
-            {[{ id: "all", label: "전체 공지" }, { id: "important", label: "중요 공지" }, { id: "update", label: "업데이트" }].map((tab) => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-5 py-2.5 text-xs md:text-sm font-bold rounded-full shrink-0 outline-none focus:outline-none transition-all duration-300 ${
-                activeTab === tab.id
-                  ? "bg-[#e91e3f] text-white shadow-[0_4px_20px_rgba(233,30,63,0.35)]"
-                  : "bg-white/[0.04] text-gray-500 hover:text-white hover:bg-white/[0.08] border border-white/5"
-              }`}>{tab.label}</button>
-            ))}
-          </div>
-          {/* 📌 공지 검색 */}
-          <div className="relative shrink-0 w-36 md:w-56">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="공지 검색"
-              className="w-full pl-10 pr-4 py-2.5 bg-white/[0.04] border border-white/5 rounded-full text-xs md:text-sm text-white outline-none focus:border-[#e91e3f]/50 focus:bg-white/[0.06] transition-colors placeholder:text-gray-600"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="w-full max-w-5xl mx-auto px-6 py-10 flex-1 flex flex-col">
-      {isLoading ? <div className="text-center py-20 text-gray-500 font-bold">로딩 중...</div> : filteredNotices.length === 0 ? <div className="text-center py-20 text-gray-600 bg-white/[0.02] rounded-3xl border border-white/5">등록된 공지가 없습니다.</div> : (
-        <div className="flex flex-col gap-2 md:gap-3">
-          {filteredNotices.map((notice, listIdx) => {
-            const tagMeta = getNoticeTagMeta(notice);
+        {/* 밑줄 탭 + 검색 */}
+        <div className="flex items-center border-b border-[#ededed] mb-1">
+          {TABS.map((t) => {
+            const on = activeTab === t.id;
             return (
-              <Reveal key={notice._id} delay={Math.min(listIdx, 5) * 70}>
-              <div onClick={() => { markAsRead(notice._id); router.push(`/notice/${notice._id}`); }} className="relative rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px cursor-pointer group hover:from-[#e91e3f]/40 hover:to-white/[0.02] transition-all duration-300">
-              <div className="rounded-2xl bg-[#111111]/95 p-4 md:p-6 group-hover:bg-[#141414] transition-colors duration-300">
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  <div className="flex items-center gap-2 min-h-[24px] shrink-0">
-                    {notice.isPinned && (
-                      <div className="bg-[#e91e3f]/10 border border-[#e91e3f]/20 p-1.5 rounded-md shrink-0 text-[#e91e3f]" title="고정 공지">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
-                          <path fillRule="evenodd" d="M5.25 7.5A6.75 6.75 0 0 1 12 .75h.008a6.75 6.75 0 0 1 6.742 6.75v3.19l1.644 4.931a.75.75 0 0 1-.712.987h-6.932v5.642a.75.75 0 0 1-1.5 0v-5.642H4.25a.75.75 0 0 1-.712-.987l1.644-4.931V7.5Z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    )}
-                    <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded shrink-0 whitespace-nowrap ${tagMeta.className}`}>{tagMeta.label}</span>
-                  </div>
-                  <div className="flex items-center gap-2 ml-auto shrink-0">
-                    {isAdmin && (
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={(e) => handleEdit(notice._id, e)} className="text-xs font-bold text-gray-500 hover:text-white bg-white/5 px-2 py-1 rounded">수정</button>
-                        <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(notice._id); }} className="text-xs font-bold text-red-500/60 hover:text-red-500 bg-white/5 px-2 py-1 rounded">삭제</button>
-                      </div>
-                    )}
-                    <span className="text-xs text-gray-500 whitespace-nowrap">{formatDate(notice.createdAt)}</span>
-                  </div>
-                </div>
-                <h3 className="text-base font-bold text-white transition-colors line-clamp-1 mb-2.5 group-hover:text-[#ff5c77] flex items-center gap-2">
-                  {isNewNotice(notice) && <span className="shrink-0 text-[8px] font-black tracking-widest bg-[#e91e3f] text-white px-1.5 py-0.5 rounded animate-[pulseGlow_2.5s_ease-in-out_infinite]">N</span>}
-                  {isAdmin && notice.hidden && <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 border border-amber-400/30">숨김</span>}
-                  <span className="truncate">{notice.title}</span>
-                </h3>
-                {stripMarkdown(notice.content) && (
-                  <p className="text-gray-500 text-sm leading-relaxed line-clamp-1">{stripMarkdown(notice.content)}</p>
-                )}
-              </div>
-              </div>
-              </Reveal>
+              <button key={t.id} onClick={() => setActiveTab(t.id)}
+                className={`relative py-3 mr-6 md:mr-7 text-[14px] font-extrabold transition-colors outline-none ${on ? "text-[#131313]" : "text-[#6a6a6a] hover:text-[#131313]"}`}>
+                {t.label}
+                {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
+              </button>
             );
           })}
+          <div className="ml-auto relative w-32 md:w-60 h-9 rounded-full border-[1.5px] border-[#131313] bg-white overflow-hidden">
+            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="공지 검색"
+              className="absolute inset-0 w-full h-full bg-transparent pl-4 pr-9 text-[12px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
+            <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-[15px] h-[15px] text-[#131313] pointer-events-none" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.search} />
+            </svg>
+          </div>
         </div>
-      )}
 
-      {selectedNotice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
-          <div className="bg-[#121212] border border-white/10 rounded-[2rem] w-full max-w-2xl h-[80vh] flex flex-col relative shadow-2xl overflow-hidden [&::-webkit-scrollbar]:hidden">
-            <div className="absolute top-6 right-6 flex gap-2 z-10">
-              {isAdmin && (
-                <>
-                  <button onClick={(e) => { e.stopPropagation(); handleEdit(selectedNotice._id, e); }} className="px-3 py-2 text-xs font-bold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors">수정</button>
-                  <button onClick={() => { setDeleteConfirmId(selectedNotice._id); setSelectedNotice(null); }} className="px-3 py-2 text-xs font-bold text-red-500/60 hover:text-red-500 bg-white/5 hover:bg-red-500/10 rounded-lg transition-colors">삭제</button>
-                </>
-              )}
-              <button onClick={copyNoticeUrl} className={`p-2 rounded-full transition-all ${copyNotification ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-gray-400 hover:text-white"}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-              </button>
-              <button onClick={() => setSelectedNotice(null)} className="p-2 text-gray-400 hover:text-white bg-white/5 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
-            </div>
-            
-            <div className="p-8 pb-0 shrink-0">
-              <div className="flex items-center gap-3 mb-4 min-h-[28px]">
-                {selectedNotice.isPinned && <div className="bg-white/10 p-1.5 rounded-md shrink-0 text-white"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M5.25 7.5A6.75 6.75 0 0 1 12 .75h.008a6.75 6.75 0 0 1 6.742 6.75v3.19l1.644 4.931a.75.75 0 0 1-.712.987h-6.932v5.642a.75.75 0 0 1-1.5 0v-5.642H4.25a.75.75 0 0 1-.712-.987l1.644-4.931V7.5Z" clipRule="evenodd" /></svg></div>}
-                {(() => { const m = getNoticeTagMeta(selectedNotice); return <span className={`px-2.5 py-1 text-xs font-bold rounded-md ${m.className}`}>{m.label}</span>; })()}
-                <span className="text-sm text-gray-500">{formatDate(selectedNotice.createdAt)}</span>
-              </div>
-              <h2 className="text-xl md:text-2xl font-bold text-white mb-6 pb-6 border-b border-white/5 line-clamp-2">{selectedNotice.title}</h2>
-            </div>
-            
-            <div className="p-8 pt-0 flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden flex flex-col">
-              <p className="text-gray-300 text-base leading-loose whitespace-pre-wrap flex-1 select-text"><RenderFormattedText text={selectedNotice.content} onCopy={() => { setCopyNotification(true); setTimeout(() => setCopyNotification(false), 2000); }} /></p>
-              
-              {selectedNotice.bannerUrl && (
-                <div className="mt-8 w-full h-52 bg-[#1a1a1a] rounded-2xl flex items-center justify-center border border-white/5 relative overflow-hidden shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={selectedNotice.bannerUrl} alt="공지 이미지" className="w-full h-full object-cover" />
+        {/* 줄 목록 */}
+        {isLoading ? (
+          <p className="py-20 text-center text-sm text-[#8a8a8a]">불러오는 중...</p>
+        ) : filtered.length === 0 ? (
+          <p className="py-20 text-center text-sm text-[#8a8a8a]">등록된 공지가 없습니다.</p>
+        ) : (
+          <div>
+            {filtered.map((n) => {
+              const tag = tagOf(n);
+              const preview = stripMarkdown(n.content);
+              return (
+                <div key={n._id} onClick={() => { markAsRead(n._id); router.push(`/notice/${n._id}`); }}
+                  className="group flex items-center gap-3 md:gap-4 py-4 border-b border-[#ededed] cursor-pointer">
+                  <span className="w-[46px] md:w-[64px] shrink-0 text-[11.5px] text-[#8a8a8a] tabular-nums">{fmtDate(n.createdAt)}</span>
+                  <span className={`hidden md:block w-14 shrink-0 text-[10.5px] font-black ${tag.cls}`}>{tag.label}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="flex items-center gap-2 text-[15px] font-extrabold leading-snug">
+                      {n.isPinned && <span className="shrink-0 text-[11px] font-black text-[#a3a3a3]">고정</span>}
+                      <span className={`md:hidden shrink-0 text-[10.5px] font-black ${tag.cls}`}>{tag.label}</span>
+                      <span className="truncate group-hover:text-[#e91e3f] transition-colors">{n.title}</span>
+                      {isNewNotice(n) && <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-[#e91e3f] text-white text-[9px] font-black leading-none">N</span>}
+                      {isAdmin && n.hidden && <span className="shrink-0 text-[10px] font-black text-[#a8763a]">숨김</span>}
+                    </span>
+                    {preview && <span className="block mt-1 text-[12px] text-[#8a8a8a] truncate">{preview}</span>}
+                  </span>
+                  <span className="flex items-center gap-3 shrink-0">
+                    {isAdmin && (
+                      <span className="hidden md:flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={(e) => { e.stopPropagation(); router.push(`/write?id=${n._id}`); }} className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">수정</button>
+                        <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(n._id); }} className="text-[11px] font-bold text-[#e91e3f] hover:text-[#c62828] transition-colors">삭제</button>
+                      </span>
+                    )}
+                    <span className="text-[#a3a3a3] font-black">›</span>
+                  </span>
                 </div>
-              )}
-            </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
-            <div className="p-6 shrink-0 border-t border-white/5 bg-[#1a1a1a]/50 rounded-b-[2rem] flex items-center justify-between">
-              <button onClick={() => nextNotice && setSelectedNotice(nextNotice)} disabled={!nextNotice} className="flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg> 이전 공지
-              </button>
-              <button onClick={() => prevNotice && setSelectedNotice(prevNotice)} disabled={!prevNotice} className="flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-                다음 공지 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-              </button>
+      {/* 삭제 확인 */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setDeleteConfirmId(null)}>
+          <div className="bg-white rounded-3xl w-full max-w-sm p-7 text-center border border-[#e0e0e0] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-base font-black text-[#131313] mb-2">공지사항을 삭제할까요?</h2>
+            <p className="text-[12px] text-[#8a8a8a] mb-6">되돌릴 수 없습니다.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 rounded-xl bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#4b4b4b] text-[13px] font-bold transition-colors">취소</button>
+              <button onClick={executeDelete} className="flex-1 py-3 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">삭제</button>
             </div>
-
           </div>
         </div>
       )}
 
-      {deleteConfirmId && <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4"><div className="bg-[#121212] border border-red-500/30 rounded-3xl w-full max-w-sm p-8 text-center"><h2 className="text-xl font-bold text-white mb-3">삭제 안내</h2><p className="text-sm text-gray-400 mb-8">영구 삭제하시겠습니까?</p><div className="flex gap-3"><button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button><button onClick={executeDelete} className="flex-1 py-3 bg-red-500/80 text-white rounded-xl">삭제</button></div></div></div>}
-      </div>
+      {toast && (
+        <div className="fixed bottom-24 md:bottom-8 right-4 md:right-6 z-[200] pointer-events-none">
+          <div className="px-5 py-3 rounded-2xl bg-[#131313] text-white text-xs font-bold shadow-2xl">{toast}</div>
+        </div>
+      )}
     </main>
   );
 }

@@ -153,9 +153,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   const isShopPage = pathname === "/arctic" || pathname?.startsWith("/arctic/");
+  // 📌 흰 바탕 페이지 — 화이트 & 블랙으로 옮긴 곳 (공지). 종이색 라이트와 구분한다.
+  const isWhitePage = isShopPage || pathname === "/notice" || !!pathname?.startsWith("/notice/");
   // ARCTIC 에서 넘어온 내 정보(와 그 하위) — 스토어 독을 그대로 두므로 전역 독은 숨긴다
   const isArcticProfile = (pathname === "/profile" || !!pathname?.startsWith("/profile/")) && searchParams.get("from") === "arctic";
-  const isLightPage = isShopPage || pathname === "/profile" || pathname?.startsWith("/profile/") || pathname === "/level" || pathname?.startsWith("/level/") || (pathname?.startsWith("/admin") && !pathname.startsWith("/admin/room")) || pathname === "/write" || pathname === "/supporters" || pathname?.startsWith("/supporters/");   // 라이트 톤만 따라가는 페이지 (SYSTEM:LEVEL·관리자 화면은 ARCTIC 테마)
+  const isLightPage = isWhitePage || pathname === "/profile" || pathname?.startsWith("/profile/") || pathname === "/level" || pathname?.startsWith("/level/") || (pathname?.startsWith("/admin") && !pathname.startsWith("/admin/room")) || pathname === "/write" || pathname === "/supporters" || pathname?.startsWith("/supporters/");   // 라이트 톤만 따라가는 페이지 (SYSTEM:LEVEL·관리자 화면은 ARCTIC 테마)
   // 📌 경매방 안에서는 모바일 하단 탭을 숨긴다.
   //    입찰·채팅 바가 화면 아래에 붙는데 그 위에 전역 탭까지 있으면 잘못 눌러 방을 나가게 된다.
   const isAuctionRoom = /^\/auction\/[^/]+$/.test(pathname || "");
@@ -383,7 +385,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   return (
-    <div className={`flex flex-col min-h-screen ${isShopPage ? "bg-white" : isLightPage ? "bg-[#f4f3f2]" : "bg-[#090909]"}`}>
+    <div className={`flex flex-col min-h-screen ${isWhitePage ? "bg-white" : isLightPage ? "bg-[#f4f3f2]" : "bg-[#090909]"}`}>
       <ScrollLock />
       <RouteProgress pathname={pathname} />
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
@@ -395,7 +397,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             ? "max-w-5xl rounded-full border border-black/[0.06] bg-white/80 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] px-5 md:px-6 h-14"
             : "max-w-5xl rounded-full border border-white/[0.06] bg-[#0b0b0b]/70 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)] px-5 md:px-6 h-14"
           : isLightPage
-            ? "max-w-[1600px] border border-x-transparent border-t-transparent border-b-black/[0.08] bg-[#f4f3f2]/85 backdrop-blur-md px-6 h-16"
+            ? "max-w-[1600px] border border-x-transparent border-t-transparent border-b-black/[0.08] bg-white/90 backdrop-blur-md px-6 h-16"
             : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-16"
       }`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
@@ -686,7 +688,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </nav>
       )}
 
-      <footer className={`w-full mt-auto flex-shrink-0 ${isShopPage ? "hidden" : "hidden md:block"} relative overflow-hidden ${isLightPage ? "border-t border-black/[0.06] bg-[#f4f3f2]" : "border-t border-white/5 bg-[#090909]"}`}>
+      <footer className={`w-full mt-auto flex-shrink-0 ${isShopPage ? "hidden" : "hidden md:block"} relative overflow-hidden ${isLightPage ? "border-t border-black/[0.06] bg-white" : "border-t border-white/5 bg-[#090909]"}`}>
         <div className="absolute bottom-[-80px] left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-[#e91e3f]/[0.04] blur-[90px] rounded-full pointer-events-none"></div>
         <div className="max-w-7xl mx-auto px-6 py-10 relative z-10">
           <div className="flex items-center justify-between mb-6">
@@ -857,7 +859,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           />
 
           <div
-            className={`absolute right-0 top-0 bottom-0 w-[82%] max-w-xs backdrop-blur-2xl border-l rounded-l-[28px] flex flex-col overflow-hidden ${isLightPage ? "bg-[#f4f3f2]/92 border-black/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.25)]" : "bg-[#0d0d0d]/90 border-white/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.8)]"}`}
+            className={`absolute right-0 top-0 bottom-0 w-[82%] max-w-xs backdrop-blur-2xl border-l rounded-l-[28px] flex flex-col overflow-hidden ${isLightPage ? "bg-white/92 border-black/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.25)]" : "bg-[#0d0d0d]/90 border-white/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.8)]"}`}
             style={{ animation: isMenuClosing ? "mmSlideOut 0.26s cubic-bezier(0.4,0,1,1) forwards" : "mmSlideIn 0.32s cubic-bezier(0.22,1,0.36,1)" }}
           >
             {/* 상단 크림슨 글로우 */}
