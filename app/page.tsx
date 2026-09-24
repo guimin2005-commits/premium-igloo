@@ -7,8 +7,8 @@ import { SEASON } from "@/lib/season";
 
 // 📌 홈 — 화이트 & 블랙 편집형 골격 (승인된 2안 목업).
 //    마스트헤드(상자 없음) → 헤어라인 티커 → 소식(공지사항 · 지금 진행 중, 번호 없음)
-//    두 세계(SYSTEM : LEVEL · ARCTIC)는 티커 바로 아래 밴드 한 곳에서만 안내한다.
-//    → 01 살아있는 커뮤니티 → 02 즐기는 방법(대회 · 부스터) → 참여.
+//    티커 아래는 레벨 · 스토어 바로가기 한 줄, 즐기는 방법은 잉크 배너 두 장(대회 · 부스터).
+//    → 살아있는 커뮤니티 → 즐기는 방법 → 참여. 번호는 붙이지 않는다.
 //    소식이 맨 위라 조금만 내려도 공지가 바로 보인다. 커튼(sticky) 구조는 없앴다.
 
 const DISCORD = "https://discord.gg/V2uW2nUczU";
@@ -203,30 +203,23 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── 두 세계 — SYSTEM : LEVEL 과 ARCTIC. 카테고리 줄에서 내려 여기에 세운다.
-             잉크 덩어리를 또 쌓지 않는다 — 흰 바탕에 큰 활자와 헤어라인으로만. ── */}
+      {/* ── 바로가기 — SYSTEM : LEVEL 과 ARCTIC. 전체 멤버 줄과 소식 사이에 짧게. ── */}
       <section className="w-full border-b border-[#ededed]">
         <div className={`max-w-7xl mx-auto px-6 md:px-10 grid ${policy.shopPublic ? "md:grid-cols-2 md:divide-x divide-[#ededed]" : ""}`}>
-          <Link href="/level" className="group flex items-center gap-5 py-9 md:py-11 md:pr-10">
+          <Link href="/level" className="group flex items-center gap-4 py-5 md:py-6 md:pr-10">
             <span className="min-w-0 flex-1">
-              <span className="block text-[11px] font-black tracking-[0.3em] text-[#e91e3f] mb-3">SYSTEM : LEVEL</span>
-              <span className="block text-[22px] md:text-[28px] font-black tracking-tight leading-tight break-keep group-hover:text-[#e91e3f] transition-colors">
-                채팅과 음성으로 쌓는 <span className="text-[#e91e3f]">1,000</span> 레벨
-              </span>
-              <span className="block mt-2.5 text-[13px] text-[#6a6a6a] break-keep">{levelOpen ? "아이언에서 이글루까지, 등급마다 보상이 다릅니다." : "10월 공개 · 활동 XP 는 지금도 쌓이고 있습니다."}</span>
+              <span className="block text-[17px] md:text-[19px] font-black tracking-tight group-hover:text-[#e91e3f] transition-colors">SYSTEM <span className="text-[#e91e3f]">:</span> LEVEL</span>
+              <span className="block mt-1 text-[12.5px] text-[#8a8a8a] break-keep">{levelOpen ? "내 레벨과 XP 보기" : "10월 공개 · XP 는 지금도 쌓이는 중"}</span>
             </span>
-            <span className="shrink-0 w-10 h-10 rounded-full border border-[#e0e0e0] grid place-items-center text-[#a3a3a3] font-black group-hover:border-[#131313] group-hover:text-[#131313] transition-colors">›</span>
+            <span className="shrink-0 text-[#a3a3a3] font-black group-hover:text-[#131313] transition-colors">›</span>
           </Link>
           {policy.shopPublic && (
-            <Link href="/arctic" className="group flex items-center gap-5 py-9 md:py-11 md:pl-10 border-t md:border-t-0 border-[#ededed]">
+            <Link href="/arctic" className="group flex items-center gap-4 py-5 md:py-6 md:pl-10 border-t md:border-t-0 border-[#ededed]">
               <span className="min-w-0 flex-1">
-                <span className="block text-[11px] font-black tracking-[0.3em] text-[#e91e3f] mb-3">ARCTIC</span>
-                <span className="block text-[22px] md:text-[28px] font-black tracking-tight leading-tight break-keep group-hover:text-[#e91e3f] transition-colors">
-                  모은 XP 로 사는 역할 <span className="text-[#e91e3f]">·</span> 권한 <span className="text-[#e91e3f]">·</span> 아이템
-                </span>
-                <span className="block mt-2.5 text-[13px] text-[#6a6a6a] break-keep">시즌 {SEASON.number} · {SEASON.name} · 시즌마다 상품이 바뀝니다.</span>
+                <span className="block text-[17px] md:text-[19px] font-black tracking-tight group-hover:text-[#e91e3f] transition-colors">ARCT<span className="text-[#e91e3f]">I</span>C</span>
+                <span className="block mt-1 text-[12.5px] text-[#8a8a8a] break-keep">XP 로 역할 · 권한 · 아이템 사기</span>
               </span>
-              <span className="shrink-0 w-10 h-10 rounded-full border border-[#e0e0e0] grid place-items-center text-[#a3a3a3] font-black group-hover:border-[#131313] group-hover:text-[#131313] transition-colors">›</span>
+              <span className="shrink-0 text-[#a3a3a3] font-black group-hover:text-[#131313] transition-colors">›</span>
             </Link>
           )}
         </div>
@@ -321,27 +314,62 @@ export default function Home() {
         </Reveal>
       </Sec>
 
-      {/* ── 02 즐기는 방법 — 두 세계는 위 밴드가 맡았고, 여기는 나머지 두 길 ── */}
+      {/* ── 즐기는 방법 — 두 길을 잉크 배너 한 장씩으로 ── */}
       <Sec title="이글루에서 즐기는 방법" desc="활동하고, 성장하고, 증명하세요.">
-        <div className="relative mt-6 md:mt-7">
+        <div className="relative mt-7 md:mt-8 space-y-4 md:space-y-5">
           <Reveal>
-            <Link href="/tournament" className="group flex items-center gap-4 md:gap-[18px] py-6 border-b border-[#ededed]">
-              <span className="flex-1 min-w-0">
-                <span className="block text-[18px] md:text-[20px] font-black tracking-tight group-hover:text-[#e91e3f] transition-colors">e스포츠 대회</span>
-                <span className="block mt-1 text-[13px] text-[#6a6a6a] break-keep">리그를 신청하고, 대진표와 팀 룸에서 경기 준비까지</span>
-              </span>
-              <span className="hidden sm:block shrink-0 text-[12px] font-bold text-[#8a8a8a] tabular-nums">대회 {tnCount.all} · 접수 중 {tnCount.open}</span>
-              <span className="shrink-0 text-[#a3a3a3] font-black">›</span>
+            <Link href="/tournament" className="group relative block overflow-hidden bg-[#131313] text-white px-7 md:px-11 py-9 md:py-10">
+              <div aria-hidden className="absolute inset-0 pointer-events-none"
+                style={{
+                  backgroundImage: "linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)",
+                  backgroundSize: "46px 46px",
+                  WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
+                  maskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
+                }} />
+              <div aria-hidden className="absolute -right-16 -top-20 w-[380px] h-[300px] rounded-full bg-[#e91e3f]/20 blur-[110px] pointer-events-none" />
+              <div className="relative flex flex-col md:flex-row md:items-end gap-6">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-black tracking-[0.3em] text-[#ff5c77] mb-3.5">e스포츠 대회</div>
+                  <h4 className="text-[24px] md:text-[36px] font-black tracking-tight leading-[1.1] break-keep">
+                    리그를 신청하고<br />대진표와 <span className="text-[#e91e3f]">팀 룸</span>에서 경기 준비까지
+                  </h4>
+                  <p className="mt-3.5 text-[13.5px] md:text-[14px] text-white/70 max-w-[52ch] break-keep">참가 접수부터 팀 배정, 연습 일정, 대회 당일까지 한곳에서 굴러갑니다.</p>
+                </div>
+                <div className="md:text-right shrink-0">
+                  <div aria-hidden className="hidden md:block text-[96px] font-black tracking-[-0.05em] leading-[0.9] text-white/[0.08] tabular-nums">{String(tnCount.all).padStart(2, "0")}</div>
+                  <span className="inline-flex items-center gap-2 md:-mt-3.5 px-3.5 py-2 rounded-full border border-white/30 text-[12px] font-black tabular-nums">
+                    <i className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]" />대회 {tnCount.all} · 접수 중 {tnCount.open}
+                  </span>
+                </div>
+              </div>
             </Link>
           </Reveal>
           <Reveal delay={80}>
-              <Link href="/booster" className="group flex items-center gap-4 md:gap-[18px] py-6 border-b border-[#ededed]">
-                <span className="flex-1 min-w-0">
-                  <span className="block text-[18px] md:text-[20px] font-black tracking-tight group-hover:text-[#e91e3f] transition-colors">서버 부스터</span>
-                  <span className="block mt-1 text-[13px] text-[#6a6a6a] break-keep">부스팅하면 전용 역할과 XP 혜택이 따라옵니다</span>
-                </span>
-                <span className="shrink-0 text-[#a3a3a3] font-black">›</span>
-              </Link>
+            <Link href="/booster" className="group relative block overflow-hidden bg-[#131313] text-white px-7 md:px-11 py-9 md:py-10">
+              <div aria-hidden className="absolute inset-0 pointer-events-none"
+                style={{
+                  backgroundImage: "linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)",
+                  backgroundSize: "46px 46px",
+                  WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
+                  maskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
+                }} />
+              <div aria-hidden className="absolute -right-16 -top-20 w-[380px] h-[300px] rounded-full bg-[#ff41cf]/20 blur-[110px] pointer-events-none" />
+              <div className="relative flex flex-col md:flex-row md:items-end gap-6">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-black tracking-[0.3em] text-[#ff5c77] mb-3.5">서버 부스터</div>
+                  <h4 className="text-[24px] md:text-[36px] font-black tracking-tight leading-[1.1] break-keep">
+                    부스팅하면 따라오는<br />전용 역할과 <span className="text-[#e91e3f]">XP</span> 혜택
+                  </h4>
+                  <p className="mt-3.5 text-[13.5px] md:text-[14px] text-white/70 max-w-[52ch] break-keep">시작 100,000 XP, 상시 추가 XP, ARCTIC 환급까지. 유지한 개월만큼 더 쌓입니다.</p>
+                </div>
+                <div className="md:text-right shrink-0">
+                  <div aria-hidden className="hidden md:block text-[96px] font-black tracking-[-0.05em] leading-[0.9] text-white/[0.08] tabular-nums">35%</div>
+                  <span className="inline-flex items-center gap-2 md:-mt-3.5 px-3.5 py-2 rounded-full border border-white/30 text-[12px] font-black">
+                    <i className="w-1.5 h-1.5 rounded-full bg-[#ff41cf]" />ARCTIC 환급 35%
+                  </span>
+                </div>
+              </div>
+            </Link>
           </Reveal>
         </div>
       </Sec>

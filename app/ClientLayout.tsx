@@ -596,29 +596,24 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               </nav>
 
               {/* ── 세부 카테고리 띠 — 큰 분류에 올리면 세 묶음이 한 번에 펼쳐진다.
-                     잉크 배너 문법(검정 바탕 · 격자 · 붉은 글로우 · 굵은 흰 글자)을 그대로 쓴다. ── */}
+                     모바일은 펼치지 않고 햄버거 메뉴가 같은 일을 한다. ── */}
               <div className="hidden md:block absolute left-0 right-0 top-full z-50 opacity-0 invisible group-hover/gnb:opacity-100 group-hover/gnb:visible transition-opacity duration-150">
-                <div className="relative overflow-hidden bg-[#131313] text-white rounded-b-2xl shadow-[0_28px_56px_-28px_rgba(0,0,0,0.55)]">
-                  <div aria-hidden className="absolute inset-0 pointer-events-none"
-                    style={{
-                      backgroundImage: "linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)",
-                      backgroundSize: "46px 46px",
-                      WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
-                      maskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
-                    }} />
-                  <div aria-hidden className="absolute -right-16 -top-24 w-[380px] h-[300px] rounded-full bg-[#e91e3f]/20 blur-[110px] pointer-events-none" />
-                  <div className="relative grid grid-cols-3 gap-10 px-9 md:px-11 py-8 md:py-9">
+                <div className={`rounded-b-2xl border-x border-b backdrop-blur-2xl ${isLightPage ? "border-[#ededed] bg-white/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.7)]"}`}>
+                  <div className="grid grid-cols-3 gap-10 px-9 py-8">
                     {categoryGroups.map((group) => (
                       <div key={group.name}>
-                        <div className="text-[11px] font-black tracking-[0.3em] text-[#ff5c77] mb-4">{group.name}</div>
+                        <div className="flex items-center gap-2.5 mb-3.5">
+                          <span className="w-4 h-px bg-[#e91e3f]" />
+                          <span className="text-[11px] font-black tracking-[0.2em] text-[#e91e3f]">{group.name}</span>
+                        </div>
                         <div className="flex flex-col">
                           {group.items.map((it) => {
                             const cur = pathname === it.path || !!pathname?.startsWith(it.path + "/");
                             return (
                               <Link key={it.path} href={it.path}
-                                className={`py-[9px] text-[17px] font-black tracking-tight transition-colors ${cur ? "text-[#e91e3f]" : "text-white hover:text-[#ff5c77]"}`}>
-                                {it.name}
-                              </Link>
+                                className={`py-[8px] text-[16px] font-extrabold tracking-tight transition-colors ${
+                                  cur ? "text-[#e91e3f]" : isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-gray-200 hover:text-[#ff5c77]"
+                                }`}>{it.name}</Link>
                             );
                           })}
                         </div>
