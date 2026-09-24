@@ -132,10 +132,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const profilePanelRef = useRef<HTMLDivElement>(null);
 
   const isVerifyPage = pathname === "/verify";
-  // 📌 ARCTIC은 라이트 테마 — 헤더/푸터도 밝은 톤으로 전환한다
-  // ARCTIC 은 자체 헤더를 쓰므로 전역 크롬(헤더·모바일 독·푸터·하단 패딩)을 통째로 넘긴다.
-  // SYSTEM:LEVEL 의 ARCTIC 탭도 같은 화면이므로 같이 넘긴다 — 나머지 레벨 탭은 전역 헤더를 그대로 쓴다.
-  const isArcticTab = pathname === "/level" && searchParams.get("tab") === "arctic";
+  // 📌 ARCTIC(/shop) 은 라이트 테마에 자체 헤더 — 전역 크롬(헤더·모바일 독·푸터·하단 패딩)을 통째로 넘긴다.
   // 스토어에서 넘어온 프로필은 스토어 독을 그대로 쓴다 — 전역 독과 겹치므로 이쪽을 비운다.
   // 헤더·푸터는 그대로 두므로 isShopPage 에는 넣지 않는다.
 
@@ -145,7 +142,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     { match: (p) => p === "/level" || p.startsWith("/level/"), name: "SYSTEM : LEVEL", href: "/level" },
   ];
   const sectionBrand = SECTION_BRANDS.find((b) => b.match(pathname || "")) || null;
-  // 메뉴 활성 판정 — 항목 경로에 쿼리가 붙어 있으면(예: /level?tab=arctic)
+  // 메뉴 활성 판정 — 항목 경로에 쿼리가 붙어 있으면(예: /level?tab=pass)
   // pathname 만으로는 절대 맞지 않고, 반대로 /level 항목이 ARCTIC 탭에서도 켜진다.
   const isMenuActive = (itemPath?: string) => {
     if (!itemPath) return false;
@@ -155,7 +152,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return new URLSearchParams(qs).get("tab") === searchParams.get("tab");
   };
 
-  const isShopPage = pathname === "/shop" || pathname?.startsWith("/shop/") || isArcticTab;
+  const isShopPage = pathname === "/shop" || pathname?.startsWith("/shop/");
   // ARCTIC 에서 넘어온 내 정보(와 그 하위) — 스토어 독을 그대로 두므로 전역 독은 숨긴다
   const isArcticProfile = (pathname === "/profile" || !!pathname?.startsWith("/profile/")) && searchParams.get("from") === "arctic";
   const isLightPage = isShopPage || pathname === "/profile" || pathname?.startsWith("/profile/") || pathname === "/level" || pathname?.startsWith("/level/") || (pathname?.startsWith("/admin") && !pathname.startsWith("/admin/room")) || pathname === "/write" || pathname === "/supporters" || pathname?.startsWith("/supporters/");   // 라이트 톤만 따라가는 페이지 (SYSTEM:LEVEL·관리자 화면은 ARCTIC 테마)
@@ -191,7 +188,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // 📌 카테고리 그룹화: 큰 카테고리 → 세부 카테고리 (메가 메뉴)
   const rawCategoryGroups = [
     { name: "소식", desc: "고급 이글루의 최신 소식", tagline: "고급 이글루의 소식", items: [{ name: "공지사항", path: "/notice", desc: "최신 소식과 주요 안내" }, { name: "이벤트", path: "/event", desc: "다양한 이벤트와 혜택" }, { name: "구인", path: "/recruit", desc: "스태프 및 서포터즈 모집" }] },
-    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", tagline: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "ARCTIC", path: "/level?tab=arctic", desc: "XP로 역할과 혜택을 구매" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "경매", path: "/auction", desc: "실시간 포인트 경매 관전 및 참여" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }] },
+    { name: "콘텐츠", desc: "서버의 핵심 콘텐츠", tagline: "서버의 핵심 콘텐츠", items: [{ name: "SYSTEM : LEVEL", path: "/level", desc: "레벨 시스템 및 XP 대시보드" }, { name: "ARCTIC", path: "/shop", desc: "XP로 역할과 혜택을 구매" }, { name: "대회", path: "/tournament", desc: "e스포츠 리그 허브" }, { name: "경매", path: "/auction", desc: "실시간 포인트 경매 관전 및 참여" }, { name: "명예의 전당", path: "/hall-of-fame", desc: "역대 대회 우승 기록" }, { name: "부스터 혜택", path: "/booster", desc: "서버 부스터 전용 혜택 안내" }] },
     { name: "지원", desc: "도움이 필요하신가요?", tagline: "무엇을 도와드릴까요?", items: [{ name: "1:1 문의", path: "/support", desc: "불편 사항 및 문의 접수" }, { name: "FAQ", path: "/faq", desc: "자주 묻는 질문" }] },
   ];
 

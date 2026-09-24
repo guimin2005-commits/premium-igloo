@@ -144,7 +144,7 @@ export default function MyInfoPage() {
     if (!tab) { window.scrollTo(0, 0); return; }
     const to: Record<string, string> = {
       notice: "/profile/notice", inquiry: "/profile/inquiry", recruit: "/profile/recruit",
-      arctic: "/shop/orders", orders: "/shop/orders", cart: "/shop/cart", wish: "/level?tab=arctic&panel=wish",
+      arctic: "/shop/orders", orders: "/shop/orders", cart: "/shop/cart", wish: "/shop?panel=wish",
       bag: "/level?tab=my&bag=1", booster: "/profile/booster", supporter: "/supporters",
     };
     if (to[tab]) router.replace(to[tab]);
@@ -166,7 +166,7 @@ export default function MyInfoPage() {
 
   // 어디서 왔는지 — 링크가 ?from= 으로 알려준다 (referrer 는 못 믿는다). 규칙 4: 왼쪽 위 '← 상위 이름' 한 줄
   const from = searchParams.get("from") || "";
-  const back = from === "arctic" ? { href: "/level?tab=arctic", label: "ARCTIC" } : from === "level" ? { href: "/level", label: "SYSTEM : LEVEL" } : null;
+  const back = from === "arctic" ? { href: "/shop", label: "ARCTIC" } : from === "level" ? { href: "/level", label: "SYSTEM : LEVEL" } : null;
   // ARCTIC 맥락은 하위 페이지까지 이어진다 — 독이 바뀌지 않게 from 을 들고 간다
   const fromArctic = from === "arctic";
   const q = fromArctic ? "?from=arctic" : "";
@@ -181,7 +181,7 @@ export default function MyInfoPage() {
   if (canSeeShop) {
     rows.push({ k: "orders", g: "arctic", l: "주문 내역", icon: ICON_PATHS.receipt, href: "/shop/orders", n: shopOrders.length, accent: shopPendingCount > 0 });
     rows.push({ k: "cart", g: "arctic", l: "장바구니", icon: ICON_PATHS.cart, href: "/shop/cart", n: shopCartCount });
-    rows.push({ k: "wish", g: "arctic", l: "찜", icon: ICON_PATHS.heart, href: "/level?tab=arctic&panel=wish", n: shopWish.length });
+    rows.push({ k: "wish", g: "arctic", l: "찜", icon: ICON_PATHS.heart, href: "/shop?panel=wish", n: shopWish.length });
     rows.push({ k: "coupons", g: "arctic", l: "쿠폰함", icon: ICON_PATHS.ticket, onClick: () => window.dispatchEvent(new Event("igloo:open-coupons")), n: shopWallet.length });
   }
   rows.push({ k: "booster", g: "member", l: "서버 부스터", icon: ICON_PATHS.sparkles, href: `/profile/booster${q}`, pill: isBooster ? "적용 중" : undefined, pillCls: "bg-[#e91e3f]/[0.08] text-[#e91e3f]" });

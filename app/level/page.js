@@ -4,7 +4,6 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import Link from "next/link";
 import { signIn, useSession } from "next-auth/react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import ArcticShopBody from "../shop/ArcticShopBody";
 import { isAdminName } from "@/lib/admins";
 import {
   HudPanel, HudSection, HudStyles, LiveDot, RingGauge, SegBar,
@@ -49,15 +48,15 @@ const invGroupOf = (it) => {
 };
 const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
 
-// 📌 메인 탭 — ARCTIC 은 /shop 과 같은 본문(ArcticShopBody)을 탭 안에서 그린다.
-//    탭이 URL(?tab=)에 남아야 상점 링크가 이 탭을 바로 가리킬 수 있다.
+// 📌 메인 탭 — ARCTIC 은 제 주소 /shop 에 산다(3차). 탭 줄에서는 링크로만 서고,
+//    옛 ?tab= 주소로 들어오면 아래 effect 가 /shop 으로 보낸다.
 // 순서는 "내 것 → 시즌 → 정보" — 자주 보는 것이 앞, 한 번 읽고 마는 안내는 맨 뒤.
 const MAIN_TABS = [
   { id: "my", name: "내 대시보드" },
   // 시즌 패스는 관리자가 꺼 두면 탭 자체가 없어야 한다 (shopOnly 와 같은 방식)
   { id: "pass", name: "시즌 패스", passOnly: true },
   { id: "rank", name: "랭킹" },
-  { id: "arctic", name: "ARCTIC", shopOnly: true },
+  { id: "arctic", name: "ARCTIC", shopOnly: true, href: "/shop" },
   { id: "table", name: "XP 테이블" },
   { id: "sim", name: "시뮬레이터" },
   { id: "intro", name: "시스템 안내" },
@@ -945,12 +944,12 @@ const TierStairs = ({ base = 3000, intervalMin = 5 }) => {
 
 export default function LevelPage() {
   // 리뉴얼: 정적 안내 대신 '내 대시보드'가 첫 화면
-  // 탭은 URL 이 기준 — 외부에서 /level?tab=arctic 로 바로 들어올 수 있어야 한다.
+  // 탭은 URL 이 기준 — 외부에서 /level?tab=pass 처럼 바로 들어올 수 있어야 한다.
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const tabParam = searchParams.get("tab") || "";
-  const activeMainTab = MAIN_TABS.some((t) => t.id === tabParam) ? tabParam : "my";
+  const activeMainTab = MAIN_TABS.some((t) => t.id === tabParam && !t.href) ? tabParam : "my";
   const setActiveMainTab = useCallback(
     (id) => {
       const q = new URLSearchParams(Array.from(searchParams.entries()));
@@ -965,6 +964,12 @@ export default function LevelPage() {
     },
     [searchParams, router, pathname]
   );
+  // 📌 옛 주소(?tab=arctic) 는 ARCTIC 의 제 주소 /shop 으로 보낸다 — 찜·검색 패널 쿼리는 들고 간다
+  useEffect(() => {
+    if (tabParam !== "arctic") return;
+    const panel = searchParams.get("panel");
+    router.replace(panel ? `/shop?panel=${panel}` : "/shop");
+  }, [tabParam, searchParams, router]);
   const [introSec, setIntroSec] = useState(INTRO_STEPS[0].id);
   const [invTab, setInvTab] = useState("all");
   const [bagOpen, setBagOpen] = useState(false);
@@ -1569,14 +1574,13 @@ export default function LevelPage() {
         <div className="max-w-full flex gap-2 overflow-x-auto no-bar">
           {MAIN_TABS.filter((t) => (!t.shopOnly || canSeeShop) && (!t.passOnly || passEnabled)).map((tab) => {
             const active = activeMainTab === tab.id;
+            const cls = `shrink-0 px-4 py-2 rounded-full text-[13px] font-bold transition-colors outline-none focus:outline-none ${
+              active ? "bg-[#131313] text-white" : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"
+            }`;
+            // ARCTIC 은 다른 세계(제 주소) — 탭 줄에서는 링크로 선다 (이동 규칙 2)
+            if (tab.href) return <Link key={tab.id} href={tab.href} className={cls}>{tab.name}</Link>;
             return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveMainTab(tab.id)}
-                className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-bold transition-colors outline-none focus:outline-none ${
-                  active ? "bg-[#131313] text-white" : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"
-                }`}
-              >
+              <button key={tab.id} onClick={() => setActiveMainTab(tab.id)} className={cls}>
                 {tab.name}
               </button>
             );
@@ -1677,12 +1681,10 @@ export default function LevelPage() {
         onTone={() => playTone(620, 0.04, "sine", 0.025)}
       />
 
-      {/* ── 탭 줄 — 어떤 탭이든 헤더 바로 아래 같은 자리. 여기가 움직이면 안 된다.
-             ARCTIC 은 전역 헤더 대신 상점 헤더가 서므로 그쪽 topSlot 으로 넘긴다. ── */}
-      {activeMainTab !== "arctic" && tabBar}
+      {/* ── 탭 줄 — 어떤 탭이든 헤더 바로 아래 같은 자리. 여기가 움직이면 안 된다. ── */}
+      {tabBar}
 
-      {/* ── 공통 헤더 — ARCTIC 에서는 상점 헤더가 그 자리를 대신하므로 감춘다 ── */}
-      {activeMainTab !== "arctic" && (<>
+      {/* ── 공통 헤더 ── */}
       <div className="relative w-full px-5 md:px-8 pt-14 pb-10">
         <div aria-hidden className="absolute -top-16 left-1/2 -translate-x-1/2 w-[560px] h-[280px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
         <div className="relative max-w-7xl mx-auto">
@@ -1713,22 +1715,8 @@ export default function LevelPage() {
         </div>
       </div>
 
-      </>)}
-
       {/* 대시보드 탭은 좌우 공간을 쓰는 와이드 HUD(7xl), 문서형 탭은 기존 에디토리얼 폭 유지 */}
-      <div
-        className={
-          activeMainTab === "arctic"
-            ? "w-full flex-1" // ARCTIC 본문이 자체 폭(최대 1600px)과 여백을 갖는다
-            : `w-full max-w-7xl mx-auto px-5 md:px-8 flex-1 ${activeMainTab === "my" ? "py-6 md:py-10" : "py-10 md:py-14"}`
-        }
-      >
-
-        {/* ══ TAB : ARCTIC — /shop 과 같은 본문 한 벌 ══ */}
-        {/* 접근 판정(공개 여부·관리자)은 ArcticShopBody 가 스스로 한다 — 여기서 또 막으면
-            정책이 로드되기 전 한순간 전역 헤더도 본문도 없는 빈 화면이 된다 */}
-        {activeMainTab === "arctic" && <ArcticShopBody embedded topSlot={tabBar} />}
-
+      <div className={`w-full max-w-7xl mx-auto px-5 md:px-8 flex-1 ${activeMainTab === "my" ? "py-6 md:py-10" : "py-10 md:py-14"}`}>
 
         {/* ══ TAB : MY DASHBOARD — 게임 프로필 화면 ══
                앵커는 플레이어 배너(레벨 링 + 대형 레벨 + 와이드 XP 게이지) 하나.

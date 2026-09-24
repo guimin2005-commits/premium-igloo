@@ -9,12 +9,10 @@ const nextConfig: NextConfig = {
       { source: "/rlues", destination: "/policy", permanent: true },
       { source: "/rules", destination: "/policy", permanent: true },
 
-      /* 📌 ARCTIC 은 SYSTEM:LEVEL 의 탭으로 합쳤다. 입구가 둘이면 프로필에 갔다
-         돌아올 때 어디로 돌아갈지가 갈려 동선이 어긋난다. 코드의 링크는 전부
-         고쳤지만 ShopBanner.link 처럼 DB 에 저장된 주소는 고칠 수 없으므로
-         경로 자체를 넘겨준다. 하위 라우트(/shop/cart 등)는 그대로 살아 있다.
+      /* 📌 ARCTIC 은 제 주소 /shop 에 산다(이동 규칙 2, 3차). 한때 SYSTEM:LEVEL 의 탭이었으므로
+         옛 주소 /level?tab=arctic 로 들어오면 /shop 으로 넘긴다 (DB 에 남은 배너 링크·공유 링크).
          permanent:false — 브라우저가 영구 캐시하면 나중에 되돌릴 수 없다. */
-      { source: "/shop", destination: "/level?tab=arctic", permanent: false },
+      { source: "/level", has: [{ type: "query", key: "tab", value: "arctic" }], destination: "/shop", permanent: false },
 
       /* 📌 프로필은 /profile 한 곳뿐이다. /shop/me 는 주문·장바구니·찜만 있는
          부분집합이었고 /profile 이 그 셋에 쿠폰까지 이미 담고 있었다. */

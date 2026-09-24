@@ -28,7 +28,7 @@ export default function ShopInventoryPage() {
   const { data: session, status } = useSession();
   const searchParams = useSearchParams();
   const from = searchParams.get("from") || "";
-  const back = from === "me" ? { href: "/profile?from=arctic", label: "내 정보" } : { href: "/level?tab=arctic", label: "ARCTIC" };
+  const back = from === "me" ? { href: "/profile?from=arctic", label: "내 정보" } : { href: "/shop", label: "ARCTIC" };
 
   const [items, setItems] = useState<any[] | null>(null);
   const [synced, setSynced] = useState(true);
@@ -89,7 +89,7 @@ export default function ShopInventoryPage() {
         ) : list.length === 0 ? (
           <div className="py-16 text-center break-keep">
             <p className="text-sm text-[#8a8a8a]">아직 보유한 아이템이 없습니다.</p>
-            <Link href="/level?tab=arctic" className="inline-block mt-4 px-5 py-2.5 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[12px] font-bold transition-colors">ARCTIC 둘러보기</Link>
+            <Link href="/shop" className="inline-block mt-4 px-5 py-2.5 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[12px] font-bold transition-colors">ARCTIC 둘러보기</Link>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
