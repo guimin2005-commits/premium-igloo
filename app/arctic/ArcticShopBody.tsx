@@ -546,8 +546,9 @@ export default function ArcticShopBody({
         </button>
 
         <Link href={`/arctic/item/${it._id}`} className="block mt-3">
-          <h3 className="text-[13.5px] font-bold text-[#131313] leading-snug line-clamp-2 break-keep">{it.name}</h3>
-          <p className="mt-1.5 text-[15px] font-black text-[#131313] tabular-nums leading-none">
+          {/* 이름은 작고 가볍게, 가격이 주인공 — 둘이 같은 크기면 값이 안 읽힌다 */}
+          <h3 className="text-[13px] font-semibold text-[#4b4b4b] leading-snug line-clamp-2 break-keep">{it.name}</h3>
+          <p className="mt-2 text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none">
             {Number(listPrice || 0).toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP</span>
           </p>
         </Link>
