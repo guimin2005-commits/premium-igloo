@@ -314,6 +314,8 @@ export default function ArcticShopBody({
 
   // 📌 상단 이미지 배너 — 관리자가 등록, 5초마다 자동 전환
   const [banners, setBanners] = useState<any[]>([]);
+  // 배너를 다 불러오기 전에는 자리만 비워 둔다 — 시즌 히어로가 먼저 떴다 사라지면 튀어 보인다
+  const [bannersLoaded, setBannersLoaded] = useState(false);
   const [bannerIdx, setBannerIdx] = useState(0);
   /* 📌 배너 틀 비율 — 이미지가 실제로 가진 비율에 맞춘다.
      틀을 3/1(모바일)·4/1(PC) 로 고정해 두면 object-cover 가 남는 쪽을 잘라내
@@ -331,7 +333,8 @@ export default function ArcticShopBody({
     fetch(`/api/shop/banners${isAdmin ? "?all=1" : ""}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => { setBannerRatio(4); setBanners(Array.isArray(d?.data) ? d.data : []); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setBannersLoaded(true));
   }, [status, isAdmin]);
 
   useEffect(() => {
@@ -769,7 +772,7 @@ export default function ArcticShopBody({
         <ArcticHome
           items={items} isLoading={isLoading} isAdmin={isAdmin} isLoggedIn={isLoggedIn}
           myXp={myXp} myLevel={myLevel} ownedItemIds={ownedItemIds}
-          banners={banners} bannerIdx={bannerIdx} setBannerIdx={setBannerIdx} bannerRatio={bannerRatio} fitRatio={fitRatio}
+          banners={banners} bannersLoaded={bannersLoaded} bannerIdx={bannerIdx} setBannerIdx={setBannerIdx} bannerRatio={bannerRatio} fitRatio={fitRatio}
           renderCard={renderCard} goProducts={goProducts} openEdit={() => openEdit()}
           adminTools={
             <>

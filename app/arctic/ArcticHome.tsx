@@ -20,6 +20,7 @@ type Props = {
   myLevel: number;
   ownedItemIds: Set<string>;
   banners: any[];
+  bannersLoaded: boolean;
   bannerIdx: number;
   setBannerIdx: (i: number) => void;
   bannerRatio: number;
@@ -46,7 +47,7 @@ const created = (it: any) => new Date(it?.createdAt || 0).getTime();
 
 export default function ArcticHome({
   items, isLoading, isAdmin, isLoggedIn, myXp, myLevel, ownedItemIds,
-  banners, bannerIdx, setBannerIdx, bannerRatio, fitRatio, renderCard, goProducts, openEdit, adminTools,
+  banners, bannersLoaded, bannerIdx, setBannerIdx, bannerRatio, fitRatio, renderCard, goProducts, openEdit, adminTools,
 }: Props) {
   const dday = getSeasonDday();
   const active = useMemo(() => items.filter((it) => it.active !== false), [items]);
@@ -128,6 +129,9 @@ export default function ArcticHome({
                 </div>
               )}
             </>
+          ) : !bannersLoaded ? (
+            /* 아직 모르는 상태 — 자리만 잡고 아무것도 그리지 않는다 */
+            <div className="aspect-[16/7] md:aspect-[3/1]" />
           ) : (
             <div className="relative aspect-[16/7] md:aspect-[3/1]" style={{ background: "linear-gradient(115deg, #dff4f1 0%, #9fd9d1 45%, #4fb6ab 100%)" }}>
               <div className="absolute left-6 md:left-12 top-1/2 -translate-y-1/2 break-keep">

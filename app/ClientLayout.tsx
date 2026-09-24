@@ -591,13 +591,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <div className="order-2 relative group/gnb hidden md:flex items-center shrink-0 h-full">
               {/* 큰 분류만 이 줄에 세우고, 세부는 아래 패널 한 장이 전부 맡는다.
                      모바일은 펼치지 않고 햄버거 메뉴가 같은 일을 한다. ── */}
-              <nav className="flex items-center gap-7 md:gap-11 h-full min-w-0 overflow-x-auto md:overflow-visible no-bar md:justify-center">
+              <nav className="flex items-center gap-6 md:gap-10 h-full min-w-0 overflow-x-auto md:overflow-visible no-bar md:justify-center">
                 {categoryGroups.map((group) => {
                   const on = group.items.some((it) => pathname === it.path || !!pathname?.startsWith(it.path + "/"));
                   return (
                     <div key={group.name} className="shrink-0 h-full">
                       <Link href={group.items[0]?.path || "/"}
-                        className={`relative h-full flex items-center font-black tracking-tight transition-colors ${scrolled ? "text-[15px]" : "text-[15px] md:text-[16px]"} ${
+                        className={`relative h-full flex items-center font-extrabold transition-colors ${scrolled ? "text-[14px]" : "text-[14px] md:text-[15px]"} ${
                           isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-[#ff5c77]"
                         }`}>
                         {group.name}
@@ -612,21 +612,21 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                      분류마다 따로 뜨면 작은 상자가 여기저기 튀어나와 산만하다.
                      바 아래에 매달린 한 장이라 위쪽 모서리는 각지고 아래만 둥글다. ── */}
               <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 opacity-0 invisible group-hover/gnb:opacity-100 group-hover/gnb:visible transition-opacity duration-150"
-                   style={{ width: "min(92vw, 940px)" }}>
+                   style={{ width: "min(92vw, 900px)" }}>
                 <div className={`rounded-b-2xl border-x border-b backdrop-blur-2xl ${isLightPage ? "border-[#ededed] bg-white/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.7)]"}`}>
-                  <div className="grid grid-cols-3 gap-10 px-10 py-8">
+                  <div className="grid grid-cols-3 gap-10 px-9 py-8">
                     {categoryGroups.map((group) => (
                       <div key={group.name}>
-                        <div className="flex items-center gap-2.5 mb-4">
+                        <div className="flex items-center gap-2.5 mb-3.5">
                           <span className="w-4 h-px bg-[#e91e3f]" />
-                          <span className="text-[12px] font-black tracking-[0.2em] text-[#e91e3f]">{group.name}</span>
+                          <span className="text-[11px] font-black tracking-[0.2em] text-[#e91e3f]">{group.name}</span>
                         </div>
                         <div className="flex flex-col">
                           {group.items.map((it) => {
                             const cur = pathname === it.path || !!pathname?.startsWith(it.path + "/");
                             return (
                               <Link key={it.path} href={it.path}
-                                className={`py-[9px] text-[19px] font-bold tracking-tight transition-colors ${
+                                className={`py-[8px] text-[16px] font-extrabold tracking-tight transition-colors ${
                                   cur ? "text-[#e91e3f]" : isLightPage ? "text-[#4b4b4b] hover:text-[#131313]" : "text-gray-400 hover:text-white"
                                 }`}>{it.name}</Link>
                             );
@@ -840,7 +840,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         }
         const showCategories = !isVerifyPage && (status !== "authenticated" || isVerified);
         const itemCls = (active: boolean, accent?: boolean) =>
-          `w-full flex items-center rounded-xl px-3 py-3.5 mb-0.5 text-left text-[16px] font-extrabold outline-none transition-colors ${
+          `w-full flex items-center rounded-xl px-3 py-3 mb-0.5 text-left text-sm font-bold outline-none transition-colors ${
             active ? "bg-[#e91e3f]/10 text-[#e91e3f]"
               : accent ? "text-[#e91e3f] " + (isLightPage ? "active:bg-black/[0.05]" : "active:bg-white/[0.05]")
               : isLightPage ? "text-[#4b4b4b] active:bg-black/[0.05] active:text-[#131313]" : "text-gray-300 active:bg-white/[0.05] active:text-white"
