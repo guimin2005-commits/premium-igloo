@@ -3,7 +3,6 @@
 import React, { useMemo } from "react";
 import Link from "next/link";
 import ItemIcon from "../components/ItemIcon";
-import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
 import { SEASON, getSeasonDday } from "@/lib/season";
 import { getTier } from "@/lib/voiceTiers";
@@ -30,8 +29,6 @@ type Props = {
   openEdit: () => void;
 };
 
-const HOME_TYPES = ["role", "perk", "item", "physical"];
-
 // 이번 주 월요일 ~ 일요일 (M.D – M.D)
 function weekRange() {
   const now = new Date();
@@ -52,19 +49,6 @@ export default function ArcticHome({
 }: Props) {
   const dday = getSeasonDday();
   const active = useMemo(() => items.filter((it) => it.active !== false), [items]);
-
-  // 유형별 개수 · 시작가
-  const typeStats = useMemo(() => {
-    const m: Record<string, { n: number; min: number }> = {};
-    for (const t of HOME_TYPES) m[t] = { n: 0, min: Infinity };
-    for (const it of active) {
-      const s = m[it.type];
-      if (!s) continue;
-      s.n += 1;
-      s.min = Math.min(s.min, salePrice(it));
-    }
-    return m;
-  }, [active]);
 
   // 지금 잘 나가는 — 판매 수 · 추천 순서 · 최신
   const hot = useMemo(
@@ -106,9 +90,9 @@ export default function ArcticHome({
 
   return (
     <>
-      {/* ── 배너 (관리자 등록) — 없으면 시즌 히어로 ── */}
-      <section className="max-w-7xl mx-auto px-5 md:px-8 pt-6">
-        <div className="relative rounded-2xl overflow-hidden border border-[#dedddb] bg-[#e9e8e6] shadow-[0_10px_30px_-14px_rgba(0,0,0,0.25)]">
+      {/* ── 배너 (관리자 등록) — 없으면 시즌 히어로. 모서리 없이 화면 끝까지 (각지게) ── */}
+      <section className="w-full">
+        <div className="relative overflow-hidden bg-[#e9e8e6]">
           {banners.length > 0 ? (
             <>
               <div className="relative" style={{ aspectRatio: String(bannerRatio) }}>
@@ -167,33 +151,6 @@ export default function ArcticHome({
               배너 관리
             </Link>
           )}
-        </div>
-      </section>
-
-      {/* ── 유형 타일 4장 — 배너 아래 살짝 겹친다. 개수와 시작가가 여기 ── */}
-      <section className="max-w-7xl mx-auto px-5 md:px-8">
-        <div className="relative z-10 -mt-6 md:-mt-7 grid grid-cols-2 md:grid-cols-4 bg-white rounded-lg border border-[#dedddb] overflow-hidden shadow-[0_24px_40px_-30px_rgba(19,19,19,.35)]">
-          {HOME_TYPES.map((t, i) => {
-            const s = typeStats[t];
-            const c = itemTypeColor(t);
-            const line = i === 1 ? "border-l border-[#ececea]"
-              : i === 2 ? "border-t md:border-t-0 md:border-l border-[#ececea]"
-              : i === 3 ? "border-l border-t md:border-t-0 border-[#ececea]" : "";
-            return (
-              <button key={t} onClick={() => goProducts(t)}
-                className={`flex items-center gap-3.5 px-4 md:px-5 py-4 md:py-5 text-left hover:bg-[#fafaf9] transition-colors ${line}`}>
-                <span className="w-11 h-11 rounded-xl grid place-items-center shrink-0" style={{ background: `${c}1a` }}>
-                  <ItemIcon type={t} size={22} color={c} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[15px] font-black text-[#131313] leading-tight">{itemTypeLabel(t)}</span>
-                  <span className="block mt-0.5 text-[10.5px] text-[#8a8a8a] tabular-nums truncate">
-                    {s.n > 0 ? `${s.n} · ${s.min.toLocaleString()} XP 부터` : "준비 중"}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
         </div>
       </section>
 
