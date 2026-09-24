@@ -11,8 +11,8 @@ import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor } from "@/lib/items";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
   buildDurations as buildFormDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload,
-} from "../../shop/productForm";
-import type { ProductForm } from "../../shop/productForm";
+} from "../../arctic/productForm";
+import type { ProductForm } from "../../arctic/productForm";
 import {
   inputClass,
   fieldNote,
@@ -150,7 +150,7 @@ export default function AdminShopPage() {
   const [cancelTarget, setCancelTarget] = useState<any>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  // 상품 폼 — 상태 모양·기간·유형·아이템 적용 규칙은 app/shop/productForm 공용 (상점 인라인 폼과 같다)
+  // 상품 폼 — 상태 모양·기간·유형·아이템 적용 규칙은 app/arctic/productForm 공용 (상점 인라인 폼과 같다)
   const emptyForm = EMPTY_PRODUCT_FORM;
   const [form, setForm] = useState<ProductForm>(emptyForm);
   const [isRoleOpen, setIsRoleOpen] = useState(false);
@@ -893,7 +893,7 @@ export default function AdminShopPage() {
                   <div>
                     <label className={labelClass}>클릭 시 이동 (선택)</label>
                     <input type="text" value={bannerForm.link} onChange={(e) => setBannerForm({ ...bannerForm, link: e.target.value })}
-                      placeholder="/shop 또는 /event" className={inputClass} />
+                      placeholder="/arctic 또는 /event" className={inputClass} />
                   </div>
                   <div>
                     <label className={labelClass}>노출 순서</label>

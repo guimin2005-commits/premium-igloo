@@ -8,7 +8,7 @@ import { LuxStyles } from "../components/Lux";
 import { ADMIN_USERS, isAdminName } from "@/lib/admins";
 import { verifyBadge } from "@/lib/verifyBadge";
 import BackLink from "../components/BackLink";
-import ArcticDock from "../shop/ArcticDock";
+import ArcticDock from "../arctic/ArcticDock";
 import { ICON_PATHS } from "../components/Icons";
 import { getTier } from "@/lib/voiceTiers";
 
@@ -144,7 +144,7 @@ export default function MyInfoPage() {
     if (!tab) { window.scrollTo(0, 0); return; }
     const to: Record<string, string> = {
       notice: "/profile/notice", inquiry: "/profile/inquiry", recruit: "/profile/recruit",
-      arctic: "/shop/orders", orders: "/shop/orders", cart: "/shop/cart", wish: "/shop?panel=wish",
+      arctic: "/arctic/orders", orders: "/arctic/orders", cart: "/arctic/cart", wish: "/arctic?panel=wish",
       bag: "/level?tab=my&bag=1", booster: "/profile/booster", supporter: "/supporters",
     };
     if (to[tab]) router.replace(to[tab]);
@@ -166,7 +166,7 @@ export default function MyInfoPage() {
 
   // 어디서 왔는지 — 링크가 ?from= 으로 알려준다 (referrer 는 못 믿는다). 규칙 4: 왼쪽 위 '← 상위 이름' 한 줄
   const from = searchParams.get("from") || "";
-  const back = from === "arctic" ? { href: "/shop", label: "ARCTIC" } : from === "level" ? { href: "/level", label: "SYSTEM : LEVEL" } : null;
+  const back = from === "arctic" ? { href: "/arctic", label: "ARCTIC" } : from === "level" ? { href: "/level", label: "SYSTEM : LEVEL" } : null;
   // ARCTIC 맥락은 하위 페이지까지 이어진다 — 독이 바뀌지 않게 from 을 들고 간다
   const fromArctic = from === "arctic";
   const q = fromArctic ? "?from=arctic" : "";
@@ -177,11 +177,11 @@ export default function MyInfoPage() {
     { k: "recruit", g: "account", l: "구인 지원", icon: ICON_PATHS.briefcase, href: `/profile/recruit${q}`, n: pendingApplies },
   ];
   // ARCTIC 맥락이면 스토어 안 인벤토리(/shop/inventory) — 잉크 HUD 로 튀지 않는다
-  if (canSeeLevel) rows.push({ k: "bag", g: "arctic", l: "인벤토리", icon: ICON_PATHS.bag, href: fromArctic ? "/shop/inventory?from=me" : "/level?tab=my&bag=1", n: myItemCount });
+  if (canSeeLevel) rows.push({ k: "bag", g: "arctic", l: "인벤토리", icon: ICON_PATHS.bag, href: fromArctic ? "/arctic/inventory?from=me" : "/level?tab=my&bag=1", n: myItemCount });
   if (canSeeShop) {
-    rows.push({ k: "orders", g: "arctic", l: "주문 내역", icon: ICON_PATHS.receipt, href: "/shop/orders", n: shopOrders.length, accent: shopPendingCount > 0 });
-    rows.push({ k: "cart", g: "arctic", l: "장바구니", icon: ICON_PATHS.cart, href: "/shop/cart", n: shopCartCount });
-    rows.push({ k: "wish", g: "arctic", l: "찜", icon: ICON_PATHS.heart, href: "/shop?panel=wish", n: shopWish.length });
+    rows.push({ k: "orders", g: "arctic", l: "주문 내역", icon: ICON_PATHS.receipt, href: "/arctic/orders", n: shopOrders.length, accent: shopPendingCount > 0 });
+    rows.push({ k: "cart", g: "arctic", l: "장바구니", icon: ICON_PATHS.cart, href: "/arctic/cart", n: shopCartCount });
+    rows.push({ k: "wish", g: "arctic", l: "찜", icon: ICON_PATHS.heart, href: "/arctic?panel=wish", n: shopWish.length });
     rows.push({ k: "coupons", g: "arctic", l: "쿠폰함", icon: ICON_PATHS.ticket, onClick: () => window.dispatchEvent(new Event("igloo:open-coupons")), n: shopWallet.length });
   }
   rows.push({ k: "booster", g: "member", l: "서버 부스터", icon: ICON_PATHS.sparkles, href: `/profile/booster${q}`, pill: isBooster ? "적용 중" : undefined, pillCls: "bg-[#e91e3f]/[0.08] text-[#e91e3f]" });

@@ -23,7 +23,7 @@ const ADMIN_USERS = ["elahw.06"];
 // 📌 ARCTIC 본문 — /shop 라우트와 SYSTEM:LEVEL 의 ARCTIC 탭이 이 한 벌을 함께 쓴다.
 //    공개 전에는 관리자만 볼 수 있다 (레벨 대시보드 → 기본 정책 → ARCTIC 공개)
 //
-//    ARCTIC 은 제 주소 /shop 에 산다(3차) — ClientLayout 이 /shop 을 isShopPage 로 쳐서
+//    ARCTIC 은 제 주소 /arctic 에 산다(3차) — ClientLayout 이 /shop 을 isShopPage 로 쳐서
 //    전역 헤더·모바일 독·푸터를 넘기고, 여기 자체 크롬이 그 자리를 대신한다.
 //    embedded 는 레이아웃 차이 하나만 흡수한다 — /level 래퍼가 이미 min-h-screen 이라
 //    루트에서 한 번 더 주면 빈 화면 하나만큼 세로가 늘어난다.
@@ -541,7 +541,7 @@ export default function ArcticShopBody({
               {/* 이미지 */}
               <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
                 {/* 상세로 가는 오버레이 — 위에 얹힌 버튼(z-10)은 그대로 눌린다 */}
-                <Link href={`/shop/item/${it._id}`} aria-label={`${it.name} 상세보기`} className="absolute inset-0 z-[1]"></Link>
+                <Link href={`/arctic/item/${it._id}`} aria-label={`${it.name} 상세보기`} className="absolute inset-0 z-[1]"></Link>
                 <CardArt it={it} imgClass="group-hover:scale-105 transition-transform duration-500" iconSize={56} />
                 <TypeBadge type={it.type} className="absolute top-2 left-2 sm:top-3 sm:left-3 px-2 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] tracking-wide" />
                 {!it.active && (
@@ -579,7 +579,7 @@ export default function ArcticShopBody({
 
               {/* 정보 */}
               <div className="p-3.5 sm:p-5 flex flex-col flex-1">
-                <Link href={`/shop/item/${it._id}`} className="block">
+                <Link href={`/arctic/item/${it._id}`} className="block">
                   <h3 className="text-[13px] sm:text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep line-clamp-2 hover:text-[#e91e3f] transition-colors">{it.name}</h3>
                 </Link>
                 {it.description && (
@@ -699,7 +699,7 @@ export default function ArcticShopBody({
               고급 이글루
             </Link>
             <span className="w-px h-3.5 lg:h-4 bg-[#d2d1cf]"></span>
-            <Link href="/shop" className="text-[15px] lg:text-[17px] font-black tracking-[0.16em] lg:tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
+            <Link href="/arctic" className="text-[15px] lg:text-[17px] font-black tracking-[0.16em] lg:tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
               ARCT<span className="text-[#e91e3f]">I</span>C
             </Link>
 
@@ -794,7 +794,7 @@ export default function ArcticShopBody({
                 </button>
 
                 {/* 장바구니 */}
-                <Link href="/shop/cart"
+                <Link href="/arctic/cart"
                   className="hidden md:flex items-center justify-center gap-2 h-9 pl-3.5 pr-4 rounded-full bg-[#131313] hover:bg-black text-white transition-colors">
                   <span className="relative">
                     <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
@@ -1014,7 +1014,7 @@ export default function ArcticShopBody({
             <p className="text-[13px] font-bold text-[#131313] mb-6 break-keep">{cartConflict.name}</p>
 
             <div className="space-y-2">
-              <Link href="/shop/cart"
+              <Link href="/arctic/cart"
                 className="block w-full py-3.5 text-center bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-colors">
                 장바구니에서 함께 결제 ({cartCount})
               </Link>

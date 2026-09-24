@@ -81,7 +81,7 @@ export default function OrdersPage() {
       <ArcticHeader />
 
       <section className="max-w-4xl mx-auto px-6 pt-10 pb-24">
-        <BackLink href="/shop" label="ARCTIC" className="mb-5" inline />
+        <BackLink href="/arctic" label="ARCTIC" className="mb-5" inline />
 
         <h1 className="text-3xl md:text-4xl font-black tracking-tighter mb-8">구매 내역</h1>
 
@@ -119,7 +119,7 @@ export default function OrdersPage() {
               {orders.length === 0 ? "ARCTIC에서 XP로 역할과 혜택을 만나보세요." : "다른 상태를 선택해보세요."}
             </p>
             {orders.length === 0 && (
-              <Link href="/shop" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
+              <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
                 상품 보러가기
               </Link>
             )}

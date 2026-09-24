@@ -241,7 +241,7 @@ export default function ArcticHome({
         </div>
         <div className="grid md:grid-cols-2 gap-4 md:gap-5">
           {deal && (
-            <Link href={`/shop/item/${deal.it._id}`}
+            <Link href={`/arctic/item/${deal.it._id}`}
               className="relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 text-white block bg-gradient-to-br from-[#131313] to-[#3a3a3a] hover:to-[#4a4a4a] transition-colors">
               <span className="inline-flex items-center gap-1.5 text-[11px] font-black opacity-85"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>{deal.kind === "sale" ? "할인" : "새로 들어온"}</span>
               <h3 className="mt-3 pr-16 text-[22px] md:text-[26px] font-black tracking-tight leading-tight break-keep line-clamp-2">

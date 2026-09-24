@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { LuxStyles } from "../../components/Lux";
 import BackLink from "../../components/BackLink";
-import ArcticDock from "../../shop/ArcticDock";
+import ArcticDock from "../../arctic/ArcticDock";
 import { useSearchParams } from "next/navigation";
 
 const FILTERS = [{ label: "전체", key: "all" }, { label: "심사 중", key: "심사 중" }, { label: "합격", key: "합격" }, { label: "불합격", key: "불합격" }];

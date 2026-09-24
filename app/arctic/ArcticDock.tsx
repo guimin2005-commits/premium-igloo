@@ -11,25 +11,25 @@ type Item = { key: string; href: string; label: string; icon: string; match?: (p
 const ITEMS: Item[] = [
   {
     key: "home",
-    href: "/shop",
+    href: "/arctic",
     label: "홈",
     icon: ICON_PATHS.home,
   },
   {
     key: "wish",
-    href: "/shop?panel=wish",
+    href: "/arctic?panel=wish",
     label: "찜한 상품",
     icon: ICON_PATHS.heart,
   },
   {
     key: "search",
-    href: "/shop?panel=search",
+    href: "/arctic?panel=search",
     label: "상품 검색",
     icon: ICON_PATHS.search,
   },
   {
     key: "cart",
-    href: "/shop/cart",
+    href: "/arctic/cart",
     label: "장바구니",
     icon: ICON_PATHS.cart,
   },
@@ -56,9 +56,9 @@ export default function ArcticDock({
 
   const isActive = (it: Item) => {
     if (activeKey) return activeKey === it.key;
-    if (it.key === "cart") return pathname === "/shop/cart";
+    if (it.key === "cart") return pathname === "/arctic/cart";
     if (it.key === "me") return pathname === "/profile";
-    if (it.key === "home") return pathname === "/shop";
+    if (it.key === "home") return pathname === "/arctic";
     return false;
   };
 

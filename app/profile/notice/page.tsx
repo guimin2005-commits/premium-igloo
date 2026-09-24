@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { LuxStyles } from "../../components/Lux";
 import BackLink from "../../components/BackLink";
-import ArcticDock from "../../shop/ArcticDock";
+import ArcticDock from "../../arctic/ArcticDock";
 import { useSearchParams } from "next/navigation";
 import { ICON_PATHS } from "../../components/Icons";
 

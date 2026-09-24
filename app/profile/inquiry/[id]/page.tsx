@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useParams, useSearchParams } from "next/navigation";
 import { LuxStyles } from "../../../components/Lux";
 import BackLink from "../../../components/BackLink";
-import ArcticDock from "../../../shop/ArcticDock";
+import ArcticDock from "../../../arctic/ArcticDock";
 
 // 📌 문의 상세 — 읽는 것은 페이지. 목록(/profile/inquiry)에서 온다.
 export default function InquiryDetailPage() {

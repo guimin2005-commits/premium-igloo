@@ -114,7 +114,7 @@ export default function ItemDetailPage() {
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">상품을 찾을 수 없습니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">삭제되었거나 판매가 종료된 상품일 수 있어요.</p>
-          <Link href="/shop" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
+          <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
             상점으로 가기
           </Link>
         </div>
@@ -193,7 +193,7 @@ export default function ItemDetailPage() {
       <ArcticHeader />
 
       <section className="max-w-5xl mx-auto px-6 pt-8 pb-32 md:pb-24">
-        <BackLink href="/shop" label="ARCTIC" />
+        <BackLink href="/arctic" label="ARCTIC" />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* 좌 — 이미지 */}
@@ -333,7 +333,7 @@ export default function ItemDetailPage() {
           <div className="mt-16 pt-10 border-t border-[#dedddb]">
             <div className="flex items-baseline justify-between gap-4 mb-5">
               <h2 className="text-base font-black text-[#131313] tracking-tight">다른 상품도 둘러보세요</h2>
-              <Link href="/shop" className="text-[12px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors shrink-0">
+              <Link href="/arctic" className="text-[12px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors shrink-0">
                 전체 보기
               </Link>
             </div>
@@ -343,7 +343,7 @@ export default function ItemDetailPage() {
                 const rp = salePrice(r);
                 const rDiscounted = rp < r.price;
                 return (
-                  <Link key={r._id} href={`/shop/item/${r._id}`}
+                  <Link key={r._id} href={`/arctic/item/${r._id}`}
                     className="group bg-white rounded-2xl border border-[#dedddb] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
                     <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
                       <ItemArt it={r} imgClass="group-hover:scale-105 transition-transform duration-500" iconSize={48} />
@@ -396,7 +396,7 @@ export default function ItemDetailPage() {
                 <div className="flex gap-3">
                   <button onClick={() => { setBuying(false); setResult(null); }} className="flex-1 py-3.5 bg-[#e9e8e6] text-[#4b4b4b] font-bold rounded-xl">닫기</button>
                   {result.ok && (
-                    <Link href="/shop/orders" className="flex-1 py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl text-center">구매 내역</Link>
+                    <Link href="/arctic/orders" className="flex-1 py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl text-center">구매 내역</Link>
                   )}
                 </div>
               </div>

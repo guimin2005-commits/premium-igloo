@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Reveal, LuxStyles } from "../../components/Lux";
 import BackLink from "../../components/BackLink";
-import ArcticDock from "../../shop/ArcticDock";
+import ArcticDock from "../../arctic/ArcticDock";
 import { useSearchParams } from "next/navigation";
 
 // 구획 머리말 — 모든 구획이 같은 형태를 쓴다

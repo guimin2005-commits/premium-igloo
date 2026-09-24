@@ -6,7 +6,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { LuxStyles } from "../../../components/Lux";
 import { RenderFormattedText } from "../../../components/FormattedText";
 import BackLink from "../../../components/BackLink";
-import ArcticDock from "../../../shop/ArcticDock";
+import ArcticDock from "../../../arctic/ArcticDock";
 
 const NOTI_TYPE_STYLES: Record<string, string> = {
   경고: "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25",

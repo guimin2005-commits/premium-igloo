@@ -48,15 +48,15 @@ const invGroupOf = (it) => {
 };
 const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
 
-// 📌 메인 탭 — ARCTIC 은 제 주소 /shop 에 산다(3차). 탭 줄에서는 링크로만 서고,
-//    옛 ?tab= 주소로 들어오면 아래 effect 가 /shop 으로 보낸다.
+// 📌 메인 탭 — ARCTIC 은 제 주소 /arctic 에 산다(3차). 탭 줄에서는 링크로만 서고,
+//    옛 ?tab= 주소로 들어오면 아래 effect 가 /arctic 으로 보낸다.
 // 순서는 "내 것 → 시즌 → 정보" — 자주 보는 것이 앞, 한 번 읽고 마는 안내는 맨 뒤.
 const MAIN_TABS = [
   { id: "my", name: "내 대시보드" },
   // 시즌 패스는 관리자가 꺼 두면 탭 자체가 없어야 한다 (shopOnly 와 같은 방식)
   { id: "pass", name: "시즌 패스", passOnly: true },
   { id: "rank", name: "랭킹" },
-  { id: "arctic", name: "ARCTIC", shopOnly: true, href: "/shop" },
+  { id: "arctic", name: "ARCTIC", shopOnly: true, href: "/arctic" },
   { id: "table", name: "XP 테이블" },
   { id: "sim", name: "시뮬레이터" },
   { id: "intro", name: "시스템 안내" },
@@ -964,11 +964,11 @@ export default function LevelPage() {
     },
     [searchParams, router, pathname]
   );
-  // 📌 옛 주소(?tab=arctic) 는 ARCTIC 의 제 주소 /shop 으로 보낸다 — 찜·검색 패널 쿼리는 들고 간다
+  // 📌 옛 주소(?tab=arctic) 는 ARCTIC 의 제 주소 /arctic 으로 보낸다 — 찜·검색 패널 쿼리는 들고 간다
   useEffect(() => {
     if (tabParam !== "arctic") return;
     const panel = searchParams.get("panel");
-    router.replace(panel ? `/shop?panel=${panel}` : "/shop");
+    router.replace(panel ? `/arctic?panel=${panel}` : "/arctic");
   }, [tabParam, searchParams, router]);
   const [introSec, setIntroSec] = useState(INTRO_STEPS[0].id);
   const [invTab, setInvTab] = useState("all");

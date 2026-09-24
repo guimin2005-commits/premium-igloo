@@ -12,7 +12,7 @@ export function ArcticBrand() {
         고급 이글루
       </Link>
       <span className="w-px h-3.5 sm:h-4 bg-[#d2d1cf]"></span>
-      <Link href="/shop" className="text-[15px] sm:text-[17px] font-black tracking-[0.16em] sm:tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
+      <Link href="/arctic" className="text-[15px] sm:text-[17px] font-black tracking-[0.16em] sm:tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
         ARCT<span className="text-[#e91e3f]">I</span>C
       </Link>
     </div>
