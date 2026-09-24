@@ -44,7 +44,7 @@ export default function InquiryDetailPage() {
               <span className="text-[11px] text-[#a3a3a3] font-medium">[{item.mainType || "일반 문의"}]</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-black text-[#131313] break-keep leading-snug tracking-tight mb-6">{item.title || "제목 없음"}</h1>
-            <div className="rounded-lg border border-[#ececea] bg-white divide-y divide-[#ececea] mb-8">
+            <div className="rounded-lg border border-[#ededed] bg-white divide-y divide-[#ededed] mb-8">
               <div className="flex items-center justify-between px-4 py-2.5 text-xs"><span className="text-[#8a8a8a] font-bold">접수일시</span><span className="text-[#4b4b4b] font-bold tabular-nums">{item.createdAt ? new Date(item.createdAt).toLocaleString("ko-KR") : "-"}</span></div>
               {item.status === "답변 완료" && (
                 <div className="flex items-center justify-between px-4 py-2.5 text-xs"><span className="text-[#e91e3f] font-bold">답변일시</span><span className="text-[#4b4b4b] font-bold tabular-nums">{item.answeredAt ? new Date(item.answeredAt).toLocaleString("ko-KR") : item.updatedAt ? new Date(item.updatedAt).toLocaleString("ko-KR") : "처리 완료"}</span></div>

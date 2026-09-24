@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import Dropdown from "../components/Dropdown";
@@ -23,8 +23,9 @@ const ADMIN_USERS = ["elahw.06"];
 // 📌 ARCTIC 본문 — /shop 라우트와 SYSTEM:LEVEL 의 ARCTIC 탭이 이 한 벌을 함께 쓴다.
 //    공개 전에는 관리자만 볼 수 있다 (레벨 대시보드 → 기본 정책 → ARCTIC 공개)
 //
-//    ARCTIC 은 제 주소 /arctic 에 산다(3차) — ClientLayout 이 /shop 을 isShopPage 로 쳐서
-//    전역 헤더·모바일 독·푸터를 넘기고, 여기 자체 크롬이 그 자리를 대신한다.
+//    ARCTIC 은 제 주소 /arctic 에 산다(3차) — 전역 상단 바(ClientLayout)는 여기에도 그대로 걸린다.
+//    그래서 브랜드·쿠폰함·알림·프로필은 전역 바에 두고, 여기서는 스토어에만 있는 줄
+//    (유형 탭 · 검색 · 재화 · 찜 · 장바구니)만 그린다. 모바일 독·푸터는 여전히 여기 몫.
 //    embedded 는 레이아웃 차이 하나만 흡수한다 — /level 래퍼가 이미 min-h-screen 이라
 //    루트에서 한 번 더 주면 빈 화면 하나만큼 세로가 늘어난다.
 const SORTS = [
@@ -137,8 +138,8 @@ export default function ArcticShopBody({
   topSlot = null,
 }: {
   embedded?: boolean;
-  /** 자체 헤더 바로 아래에 끼워 넣을 것 — /level 은 카테고리 줄을 여기에 넣어
-   *  어느 탭이든 카테고리가 헤더 바로 아래 같은 높이에 오게 한다 */
+  /** 스토어 줄 바로 아래에 끼워 넣을 것 — /level 은 카테고리 줄을 여기에 넣어
+   *  어느 탭이든 카테고리가 같은 높이에 오게 한다 */
   topSlot?: React.ReactNode;
 }) {
   const { data: session, status } = useSession();
@@ -182,20 +183,10 @@ export default function ArcticShopBody({
   const [cart, setCart] = useState<{ itemId: string; qty: number; days?: number }[]>([]);
   const [cartToast, setCartToast] = useState("");
 
-  // ARCTIC 헤더 — 알림·프로필 드롭다운
-  const [showNotif, setShowNotif] = useState(false);
+  // 스토어 줄 — 모바일 검색 시트 · 필터 접기
+  //  (알림·프로필은 전역 상단 바가 가져갔다)
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const notifRef = useRef<HTMLDivElement>(null);
-  const pendingOrders = orders.filter((o) => o.status === "pending").length;
-
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setShowNotif(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, []);
 
   // 저장된 장바구니를 먼저 읽고, 그 뒤부터만 저장한다 (첫 렌더에 빈 배열로 덮어쓰지 않게)
   const [cartLoaded, setCartLoaded] = useState(false);
@@ -583,22 +574,38 @@ export default function ArcticShopBody({
 
   return (
     <div className={`w-full flex-1 bg-white text-[#131313] ${embedded ? "" : "min-h-screen"}`}>
-      {/* ── ARCTIC 헤더 — 목업 그대로: 흰 띠 · 작은 "고급 이글루" 위에 큰 ARCTIC · 가운데 큰 검색 · 오른쪽 도구. 알약 변형 없음 ── */}
-      <div className="sticky top-0 z-[95] w-full">
-      <header className="w-full bg-white/95 backdrop-blur-md border-b border-[#ededed]">
-        <div className="max-w-7xl mx-auto flex items-center gap-3 md:gap-6 px-5 md:px-6 h-[68px] md:h-20">
-          {/* 브랜드 락업 — 상위 이름은 작게 위에, ARCTIC 은 크게 */}
-          <div className="flex items-center gap-3 min-w-0 leading-none">
-            <div className="flex flex-col items-start">
-              <Link href="/" className="mb-[3px] text-[9px] md:text-[9.5px] font-bold tracking-[0.14em] text-[#8a8a8a] hover:text-[#131313] transition-colors whitespace-nowrap leading-none">
-                고급 이글루
-              </Link>
-              <Link href="/arctic" className="text-[20px] md:text-[26px] font-black tracking-[0.16em] text-[#131313] hover:text-[#e91e3f] transition-colors leading-none">
-                ARCT<span className="text-[#e91e3f]">I</span>C
-              </Link>
-            </div>
+      {/* ── 스토어 줄 — 유형 탭 + 스토어 도구(검색 · 재화 · 찜 · 장바구니) 한 줄.
+             브랜드 · 쿠폰함 · 알림 · 프로필은 전역 상단 바가 이미 갖고 있어 여기서는 빼둔다 —
+             같은 창을 여는 진입점이 두 벌이면 어느 쪽이 진짜인지 알 수 없다.
+             sticky 도 전역 바 하나면 된다. ── */}
+      <div className="w-full bg-white border-b border-[#ededed]">
+        <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center gap-3 md:gap-5 h-16 md:h-[72px]">
+          {/* 유형 탭 — 홈 · 역할 · 권한 · 아이템 · 기프트카드 · 기간제. 고른 것만 빨간 밑줄 */}
+          <nav className="flex items-center gap-6 md:gap-7 overflow-x-auto no-bar h-full min-w-0 flex-1">
+            {[{ v: "home", l: "홈" }, ...TYPES.filter((t) => t.v !== "all")].map((t) => {
+              const on = t.v === "home" ? showing === "home" : showing === "products" && typeFilter === t.v;
+              return (
+                <button key={t.v}
+                  onClick={() => {
+                    if (t.v === "home") { setView("home"); setQuery(""); setShowWishList(false); window.scrollTo({ top: 0, behavior: "smooth" }); }
+                    else goProducts(t.v);
+                  }}
+                  className={`relative shrink-0 h-full flex items-center text-[15px] font-extrabold transition-colors ${on ? "text-[#131313]" : "text-[#6a6a6a] hover:text-[#131313]"}`}>
+                  {t.l}
+                  {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
+                </button>
+              );
+            })}
+            {/* 시즌 패스 — 유형이 아니라 가는 곳이라 탭 뒤에 선 하나 두고 붙인다 */}
+            <span className="shrink-0 w-px h-4 bg-[#e0e0e0]" />
+            <Link href="/level?tab=pass" className="shrink-0 text-[13px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors whitespace-nowrap">
+              시즌 패스
+            </Link>
+          </nav>
 
-            {/* 비공개 상태 — 관리자에게만 작은 점으로 알린다 */}
+          {/* 스토어 전용 도구 — 여기 말고는 어디에도 없는 것들만 */}
+          <div className="flex items-center gap-1.5 md:gap-2.5 shrink-0">
+            {/* 관리자 — 일반 유저에게 보이는 화면으로 바꿔 보기 */}
             {realAdmin && (
               <button
                 onClick={() => setUserPreview((v) => !v)}
@@ -617,9 +624,10 @@ export default function ArcticShopBody({
               </button>
             )}
 
+            {/* 비공개 상태 — 관리자에게만 작은 점으로 알린다 */}
             {!shopPublic && isAdmin && (
               <Link href="/admin/bot?tab=policy&sec=mute" title="비공개 상태입니다 · 눌러서 공개 전환"
-                className="group/dot relative flex items-center shrink-0">
+                className="group/dot relative flex items-center shrink-0 mr-1">
                 <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>
                 <span className="absolute left-0 w-2 h-2 rounded-full bg-[#e91e3f] animate-ping opacity-60"></span>
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 rounded-md bg-[#131313] text-white text-[10px] font-bold opacity-0 group-hover/dot:opacity-100 transition-opacity pointer-events-none">
@@ -627,55 +635,31 @@ export default function ArcticShopBody({
                 </span>
               </Link>
             )}
-          </div>
 
-          {/* 큰 검색창 — 가운데 주인공. 입력하면 곧바로 검색 결과(상품 화면) */}
-          <div className="hidden md:flex flex-1 justify-center min-w-0 px-2">
-            <div className="relative w-full max-w-[460px] h-11 rounded-full border-2 border-[#131313] bg-white overflow-hidden">
+            {/* 검색 — 상품을 찾는 건 스토어에서만 한다. 입력하면 곧바로 검색 결과 */}
+            <div className="hidden md:block relative w-[200px] lg:w-[280px] xl:w-[320px] h-10 rounded-full border-2 border-[#131313] bg-white overflow-hidden">
               <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="상품, 유형, 역할 검색"
-                className="absolute inset-0 w-full h-full bg-transparent pl-5 pr-11 text-[13px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
+                className="absolute inset-0 w-full h-full bg-transparent pl-4 pr-10 text-[13px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
               {query ? (
                 <button onClick={() => setQuery("")} aria-label="검색어 지우기"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-[#a3a3a3] hover:text-[#131313] transition-colors outline-none">
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-[#a3a3a3] hover:text-[#131313] transition-colors outline-none">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
                 </button>
               ) : (
-                <svg className="absolute right-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#131313] pointer-events-none" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <svg className="absolute right-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#131313] pointer-events-none" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.search} />
                 </svg>
               )}
             </div>
-          </div>
 
-          {/* 우측 도구 */}
-          <div className="flex items-center gap-1.5 ml-auto shrink-0">
-            {isLoggedIn ? (
+            {isLoggedIn && (
               <>
-                {/* 📌 소지(XP·POINT·레벨)는 여기 있던 알약에서 헤더 아래 지갑 줄로 옮겼다 —
-                    검색·쿠폰함·장바구니는 '도구'고 소지는 '정보'라 한 줄에 섞이면 둘 다 읽히지 않는다 */}
-
-                {/* 재화 — 테두리·알약 없이 글자만. XP 와 빙옥은 각각 */}
-                <span className="hidden md:inline-flex items-baseline gap-3.5 mr-1.5 text-[12.5px] font-black text-[#131313] tabular-nums whitespace-nowrap">
+                {/* 재화 — 테두리·알약 없이 글자만. XP 와 빙옥은 각각.
+                    좁은 화면에서는 검색·장바구니에 자리를 내준다 */}
+                <span className="hidden lg:inline-flex items-baseline gap-3.5 ml-1 text-[12.5px] font-black text-[#131313] tabular-nums whitespace-nowrap">
                   <span>{(myXp ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#e91e3f]">XP</span></span>
                   <span>{(myPoint ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#3f9e93]">빙옥</span></span>
                 </span>
-                <span className="hidden md:block w-px h-4 bg-[#e0e0e0] mx-1"></span>
-
-                {/* 쿠폰함 — 사이트에 하나, 헤더의 창을 연다 */}
-                <button onClick={() => window.dispatchEvent(new Event("igloo:open-coupons"))} aria-label="쿠폰함" title="쿠폰함"
-                  className="relative flex items-center justify-center w-9 h-9 rounded-full transition-colors text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]">
-                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
-                  </svg>
-                </button>
-
-                {/* 알림 — 읽는 것은 페이지: 알림함으로 간다 */}
-                <Link href="/profile/notice?from=arctic" aria-label="알림" title="알림"
-                  className="relative hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-colors text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]">
-                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.bell} />
-                  </svg>
-                </Link>
 
                 {/* 찜 — 찜한 상품 목록 열기 */}
                 <button
@@ -701,51 +685,8 @@ export default function ArcticShopBody({
                   </span>
                   <span className="text-[12px] font-bold tabular-nums hidden sm:inline">{cartTotal.toLocaleString()}</span>
                 </Link>
-
-                {/* 프로필 — 내 정보 페이지로 */}
-                <Link href="/profile?from=arctic" aria-label="내 정보" className="relative shrink-0 hidden md:flex items-center justify-center w-9 h-9">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={session?.user?.image || ""} alt=""
-                    className="w-8 h-8 rounded-full bg-[#e0e0e0] ring-1 ring-[#e0e0e0] hover:ring-[#131313] transition-all" />
-                  {pendingOrders > 0 && (
-                    <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[#e91e3f] ring-2 ring-white"></span>
-                  )}
-                </Link>
               </>
-            ) : (
-              <button onClick={() => signIn("discord")}
-                className="h-9 px-4 rounded-full bg-[#5865F2] hover:bg-[#4752C4] text-white text-[12px] font-bold transition-colors shrink-0">
-                디스코드 로그인
-              </button>
             )}
-          </div>
-        </div>
-
-      </header>
-      </div>
-
-      {/* ── 유형 줄 — 홈 · 역할 · 권한 · 아이템 · 기프트카드 · 기간제. 개수·점 없이, 고른 것만 빨간 밑줄 ── */}
-      <div className="w-full bg-white border-b border-[#ededed]">
-        <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center justify-between gap-4">
-          <nav className="flex items-center gap-7 md:gap-9 overflow-x-auto no-bar h-[52px]">
-            {[{ v: "home", l: "홈" }, ...TYPES.filter((t) => t.v !== "all")].map((t) => {
-              const on = t.v === "home" ? showing === "home" : showing === "products" && typeFilter === t.v;
-              return (
-                <button key={t.v}
-                  onClick={() => {
-                    if (t.v === "home") { setView("home"); setQuery(""); setShowWishList(false); window.scrollTo({ top: 0, behavior: "smooth" }); }
-                    else goProducts(t.v);
-                  }}
-                  className={`relative shrink-0 h-full flex items-center text-[15px] font-extrabold transition-colors ${on ? "text-[#131313]" : "text-[#6a6a6a] hover:text-[#131313]"}`}>
-                  {t.l}
-                  {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
-                </button>
-              );
-            })}
-          </nav>
-          <div className="hidden md:flex items-center gap-6 text-[13px] font-bold text-[#8a8a8a] shrink-0">
-            <Link href="/level?tab=pass" className="hover:text-[#131313] transition-colors">시즌 패스</Link>
-            <button onClick={() => window.dispatchEvent(new Event("igloo:open-coupons"))} className="hover:text-[#131313] transition-colors">쿠폰</button>
           </div>
         </div>
       </div>

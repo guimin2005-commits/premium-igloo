@@ -18,7 +18,7 @@ const NOTI_TYPE_STYLES: Record<string, string> = {
   제재: "bg-[#fdf1e3] text-[#a8763a] border-[#f0dcc0]",
   안내: "bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]",
   축하: "bg-[#e8f3e6] text-[#3f7a35] border-[#cfe5cb]",
-  일반: "bg-[#f4f3f2] text-[#4b4b4b] border-[#dedddb]",
+  일반: "bg-[#f5f5f5] text-[#4b4b4b] border-[#e0e0e0]",
 };
 
 // 📌 알림함 — 내 정보에서 분리한 페이지. 헤더 종 아이콘의 '전체 보기'가 여기로 온다.

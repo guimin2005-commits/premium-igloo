@@ -373,7 +373,7 @@ const LevelCurve = ({ myLevel = null }) => {
           {/* 마일스톤 */}
           {milestones.map((m) => (
             <g key={m}>
-              <circle cx={X(m)} cy={Y(getCumulativeXpByLevel(m))} r="3.5" fill="#f4f3f2" stroke="#e91e3f" strokeWidth="2" />
+              <circle cx={X(m)} cy={Y(getCumulativeXpByLevel(m))} r="3.5" fill="#ffffff" stroke="#e91e3f" strokeWidth="2" />
               <text x={X(m)} y={H - PB + 20} textAnchor={m === 1000 ? "end" : "middle"} fill="rgba(0,0,0,0.35)" fontSize="11" fontWeight="800">{m}</text>
             </g>
           ))}
@@ -385,7 +385,7 @@ const LevelCurve = ({ myLevel = null }) => {
               <text
                 x={Math.min(Math.max(X(myLevel), 30), W - 30)}
                 y={Math.max(Y(getCumulativeXpByLevel(myLevel)) - 14, 12)}
-                textAnchor="middle" fill="#e91e3f" stroke="#f4f3f2" strokeWidth="3" paintOrder="stroke" fontSize="11" fontWeight="900" letterSpacing="1"
+                textAnchor="middle" fill="#e91e3f" stroke="#ffffff" strokeWidth="3" paintOrder="stroke" fontSize="11" fontWeight="900" letterSpacing="1"
               >YOU</text>
             </g>
           )}
@@ -713,7 +713,7 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
     const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
     if (!m) return c;
     const lum = (parseInt(m[1], 16) * 0.299 + parseInt(m[2], 16) * 0.587 + parseInt(m[3], 16) * 0.114) / 255;
-    return lum < 0.18 ? "#d2d1cf" : c;
+    return lum < 0.18 ? "#d4d4d4" : c;
   };
   const ddayOf = (it) =>
     it.expiresAt && it.status === "completed"
@@ -1620,7 +1620,7 @@ export default function LevelPage() {
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d2d1cf; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #e91e3f; }
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -2953,7 +2953,7 @@ export default function LevelPage() {
                   <div ref={passRailRef} className="overflow-x-auto no-bar">
                     <div className="flex min-w-max pb-1">
                       {/* 트랙 이름 — 가로로 밀어도 왼쪽에 붙어 있는다 */}
-                      <div aria-hidden className="sticky left-0 z-10 shrink-0 w-[44px] bg-[#f4f3f2] pr-2">
+                      <div aria-hidden className="sticky left-0 z-10 shrink-0 w-[44px] bg-white pr-2">
                         <div className="h-[112px] flex items-center"><span className="text-[10px] font-black text-[#8a8a8a]">무료</span></div>
                         <div className="h-[58px]"></div>
                         <div className="h-[112px] flex items-center"><span className="text-[10px] font-black text-[#8a8a8a] leading-tight">프리<br />미엄</span></div>
@@ -2980,9 +2980,9 @@ export default function LevelPage() {
                               {/* 아이보리 링으로 연결선을 끊어 준다. 현재 티어만 빨강 테두리를 한 겹 더 두른다 */}
                               <span
                                 className={`relative w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-black tabular-nums ${
-                                  t.reached ? "bg-[#131313] text-white" : "bg-[#dedddb] text-[#8a8a8a]"
+                                  t.reached ? "bg-[#131313] text-white" : "bg-[#e0e0e0] text-[#8a8a8a]"
                                 }`}
-                                style={{ boxShadow: cur ? "0 0 0 3px #f4f3f2, 0 0 0 5px #e91e3f" : "0 0 0 3px #f4f3f2" }}
+                                style={{ boxShadow: cur ? "0 0 0 3px #ffffff, 0 0 0 5px #e91e3f" : "0 0 0 3px #ffffff" }}
                               >
                                 {t.level}
                               </span>
@@ -3098,11 +3098,11 @@ export default function LevelPage() {
                                 style={{ boxShadow: `0 0 0 3px ${c}, 0 18px 36px -16px ${c}` }}
                               >
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={r.avatar || ""} alt="" className="w-full h-full object-cover bg-[#dedddb]" />
+                                <img src={r.avatar || ""} alt="" className="w-full h-full object-cover bg-[#e0e0e0]" />
                               </span>
                               {/* 순위는 원에 겹쳐 붙인다 — 따로 두면 원 크기가 달라 높이가 어긋난다 */}
                               <span
-                                className={`absolute left-1/2 -translate-x-1/2 -bottom-2 inline-flex items-center justify-center rounded-full text-white font-black tabular-nums ring-2 ring-[#f4f3f2] ${first ? "w-7 h-7 text-[13px]" : "w-6 h-6 text-[11px]"}`}
+                                className={`absolute left-1/2 -translate-x-1/2 -bottom-2 inline-flex items-center justify-center rounded-full text-white font-black tabular-nums ring-2 ring-[#ffffff] ${first ? "w-7 h-7 text-[13px]" : "w-6 h-6 text-[11px]"}`}
                                 style={{ backgroundColor: c }}
                               >
                                 {r.rank}

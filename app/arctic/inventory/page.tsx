@@ -7,7 +7,6 @@ import Link from "next/link";
 import BackLink from "../../components/BackLink";
 import ItemIcon from "../../components/ItemIcon";
 import { itemTypeLabel } from "@/lib/items";
-import ArcticHeader from "../ArcticHeader";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 
@@ -52,7 +51,6 @@ export default function ShopInventoryPage() {
   if (status === "unauthenticated") {
     return (
       <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
-        <ArcticHeader />
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">인벤토리를 보려면 로그인해주세요.</p>
@@ -64,8 +62,6 @@ export default function ShopInventoryPage() {
 
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
-      <ArcticHeader />
-
       <section className="max-w-4xl mx-auto px-6 pt-10 pb-28">
         <BackLink href={back.href} label={back.label} className="mb-5" inline />
 

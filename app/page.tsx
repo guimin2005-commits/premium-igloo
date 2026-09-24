@@ -6,8 +6,8 @@ import { statusOf } from "@/lib/tournamentPhase";
 import { SEASON } from "@/lib/season";
 
 // 📌 홈 — 화이트 & 블랙 편집형 골격 (승인된 2안 목업).
-//    마스트헤드(상자 없음) → 헤어라인 티커 → 01 소식(공지사항 · 지금 진행 중)
-//    → 02 살아있는 커뮤니티 → 03 즐기는 방법(잉크 섬은 SYSTEM : LEVEL 한 장) → 참여.
+//    마스트헤드(상자 없음) → 헤어라인 티커 → 소식(공지사항 · 지금 진행 중, 번호 없음)
+//    → 01 살아있는 커뮤니티 → 02 즐기는 방법(잉크 섬은 SYSTEM : LEVEL 한 장) → 참여.
 //    소식이 맨 위라 조금만 내려도 공지가 바로 보인다. 커튼(sticky) 구조는 없앴다.
 
 const DISCORD = "https://discord.gg/V2uW2nUczU";
@@ -71,15 +71,15 @@ const PinIcon = () => (
   </svg>
 );
 
-// 번호 섹션 — 워터마크 번호 · 빨간 라벨 · 헤어라인 (지금 홈의 골격)
-function Sec({ no, title, desc, more, children }: { no: string; title: React.ReactNode; desc?: string; more?: { href: string; label: string }; children: React.ReactNode }) {
+// 섹션 — 번호는 '읽는 순서'가 있는 곳에만 붙인다. 소식처럼 매일 바뀌는 묶음에는 번호를 안 붙인다.
+function Sec({ no, title, desc, more, children }: { no?: string; title: React.ReactNode; desc?: string; more?: { href: string; label: string }; children: React.ReactNode }) {
   return (
     <section className="w-full border-b border-[#ededed]">
       <div className="relative max-w-7xl mx-auto px-6 md:px-10 py-14 md:py-[72px]">
-        <div aria-hidden className="absolute top-4 md:top-5 left-4 md:left-8 text-[80px] md:text-[120px] font-black tracking-[-0.04em] leading-none text-[#131313]/[0.05] pointer-events-none select-none">{no}</div>
+        {no && <div aria-hidden className="absolute top-4 md:top-5 left-4 md:left-8 text-[80px] md:text-[120px] font-black tracking-[-0.04em] leading-none text-[#131313]/[0.05] pointer-events-none select-none">{no}</div>}
         <Reveal>
           <div className="relative flex items-center gap-3.5 mb-3.5">
-            <b className="text-[11px] font-black tracking-[0.3em] text-[#e91e3f]">{no}</b>
+            {no && <b className="text-[11px] font-black tracking-[0.3em] text-[#e91e3f]">{no}</b>}
             <i className="h-px flex-1 bg-gradient-to-r from-[#131313]/20 to-transparent" />
             {more && <Link href={more.href} className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors shrink-0">{more.label}</Link>}
           </div>
@@ -204,7 +204,7 @@ export default function Home() {
 
       {/* ── 01 소식 — 왼쪽 공지사항 · 오른쪽 지금 진행 중 (조금만 내려도 바로 보인다) ── */}
       {/* 더보기는 묶음마다 하나씩(공지사항 옆) — 섹션 머리에 또 두면 같은 곳으로 가는 버튼이 둘이 된다 */}
-      <Sec no="01" title="소식">
+      <Sec title="소식">
         {/* Tailwind v4 에서 임의 grid-template 이 안 만들어질 수 있어 규칙을 직접 준다 */}
         <style>{`.homeNewsGrid{display:grid;grid-template-columns:1fr;gap:40px}@media (min-width:768px){.homeNewsGrid{grid-template-columns:1.55fr 1fr;gap:56px}}`}</style>
         <div className="relative mt-6 md:mt-7 homeNewsGrid">
@@ -269,7 +269,7 @@ export default function Home() {
       </Sec>
 
       {/* ── 02 살아있는 커뮤니티 — 박스 없이 큰 숫자 ── */}
-      <Sec no="02" title="살아있는 커뮤니티" desc="고급 이글루는 지금 이 순간에도 움직이고 있습니다.">
+      <Sec no="01" title="살아있는 커뮤니티" desc="고급 이글루는 지금 이 순간에도 움직이고 있습니다.">
         <Reveal delay={100}>
           <div className="relative mt-9 md:mt-10 flex flex-col md:flex-row md:items-end gap-6 md:gap-8">
             <div className="flex-1 grid grid-cols-3 gap-4 md:gap-6">
@@ -294,7 +294,7 @@ export default function Home() {
       </Sec>
 
       {/* ── 03 즐기는 방법 — 잉크 섬 하나 + 번호 줄 두 개 ── */}
-      <Sec no="03" title="이글루에서 즐기는 방법" desc="활동하고, 성장하고, 증명하세요.">
+      <Sec no="02" title="이글루에서 즐기는 방법" desc="활동하고, 성장하고, 증명하세요.">
         <div className="relative mt-8 md:mt-9">
           <Reveal>
             <Link href="/level" className="group relative block overflow-hidden bg-[#131313] text-white px-7 md:px-11 py-9 md:py-10">

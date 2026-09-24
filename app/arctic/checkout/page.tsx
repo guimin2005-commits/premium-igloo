@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BackLink from "../../components/BackLink";
 import { salePrice, durationLabel } from "@/lib/shopPricing";
-import ArcticHeader from "../ArcticHeader";
 import ArcticFooter from "../ArcticFooter";
 import ArcticDock from "../ArcticDock";
 
@@ -163,7 +162,6 @@ export default function CheckoutPage() {
   if (status === "loading" || isLoading) {
     return (
       <div className="w-full flex-1 bg-white min-h-screen">
-        <ArcticHeader />
         <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
       </div>
     );
@@ -172,7 +170,6 @@ export default function CheckoutPage() {
   if (!isLoggedIn) {
     return (
       <div className="w-full flex-1 bg-white min-h-screen">
-        <ArcticHeader />
         <div className="py-32 text-center break-keep px-6">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">결제하려면 로그인해주세요.</p>
@@ -186,7 +183,6 @@ export default function CheckoutPage() {
   if (result) {
     return (
       <div className="w-full flex-1 bg-white min-h-screen">
-        <ArcticHeader />
         <div className="max-w-md mx-auto px-6 py-20 bg-white rounded-3xl mt-10 border border-[#e0e0e0] p-10 text-center shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
           <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-6 ${result.ok ? "bg-[#e8f3e6] text-[#3f7a35]" : "bg-[#fdeaea] text-[#c62828]"}`}>
             {result.ok ? (
@@ -217,7 +213,6 @@ export default function CheckoutPage() {
   if (rows.length === 0) {
     return (
       <div className="w-full flex-1 bg-white min-h-screen">
-        <ArcticHeader />
         <div className="py-32 text-center break-keep px-6">
           <h1 className="text-2xl font-black text-[#131313] mb-3">장바구니가 비어 있습니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">상점에서 마음에 드는 상품을 담아보세요.</p>
@@ -234,7 +229,6 @@ export default function CheckoutPage() {
 
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
-      <ArcticHeader />
       <section className="max-w-5xl mx-auto px-6 pt-10 pb-20">
         <BackLink href="/arctic" label="ARCTIC" className="mb-5" inline />
         <h1 className="text-3xl md:text-4xl font-black tracking-tighter mb-10">결제</h1>

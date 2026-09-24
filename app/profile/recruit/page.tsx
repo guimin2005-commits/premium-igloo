@@ -65,7 +65,7 @@ export default function MyAppliesPage() {
           <div className="flex items-center gap-2">
             <div className="flex gap-1.5 flex-wrap">
               {FILTERS.map((f) => (
-                <button key={f.key} onClick={() => setFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${filter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-transparent border-[#dedddb] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
+                <button key={f.key} onClick={() => setFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${filter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-transparent border-[#e0e0e0] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
               ))}
             </div>
             <Link href="/recruit" className="px-3.5 py-1.5 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[11px] font-bold transition-colors">구인 보기</Link>
@@ -88,7 +88,7 @@ export default function MyAppliesPage() {
                   <div className="flex gap-3 items-center">
                     <span className={`text-xs font-bold px-3 py-1 rounded-full border ${rec.status === "합격" ? "bg-[#e8f3e6] text-[#3f7a35] border-[#cfe5cb]" : rec.status === "취소" || rec.status === "취소/반려" || rec.status === "불합격" ? "bg-[#fdeaea] text-[#c62828] border-[#f5cdcd]" : "bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]"}`}>{rec.status}</span>
                     {rec.status === "심사 중" && (
-                      <button onClick={() => setCancelId(rec.id)} className="text-xs font-bold px-3 py-1 bg-[#e9e8e6] text-[#4b4b4b] hover:bg-[#e91e3f] hover:text-white rounded-full transition-colors outline-none focus:outline-none">지원 취소</button>
+                      <button onClick={() => setCancelId(rec.id)} className="text-xs font-bold px-3 py-1 bg-[#f2f2f2] text-[#4b4b4b] hover:bg-[#e91e3f] hover:text-white rounded-full transition-colors outline-none focus:outline-none">지원 취소</button>
                     )}
                   </div>
                 </div>
@@ -100,11 +100,11 @@ export default function MyAppliesPage() {
 
       {cancelId && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-[#131313]/45 backdrop-blur-sm p-4" onClick={() => !busy && setCancelId(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#dedddb] rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#e0e0e0] rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
             <h2 className="text-xl font-bold text-[#131313] mb-3">지원 취소</h2>
             <p className="text-sm text-[#5a5a5a] mb-8 leading-relaxed break-keep">취소하면 다시 지원해야 합니다.</p>
             <div className="flex gap-3">
-              <button onClick={() => setCancelId(null)} disabled={busy} className="flex-1 py-3 bg-[#e9e8e6] hover:bg-[#dedddb] text-[#131313] font-bold rounded-xl transition-colors">닫기</button>
+              <button onClick={() => setCancelId(null)} disabled={busy} className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#131313] font-bold rounded-xl transition-colors">닫기</button>
               <button onClick={cancelApply} disabled={busy} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-colors disabled:opacity-50">{busy ? "처리 중..." : "취소하기"}</button>
             </div>
           </div>

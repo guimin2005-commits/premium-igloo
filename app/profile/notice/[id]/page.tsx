@@ -13,7 +13,7 @@ const NOTI_TYPE_STYLES: Record<string, string> = {
   제재: "bg-[#fdf1e3] text-[#a8763a] border-[#f0dcc0]",
   안내: "bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]",
   축하: "bg-[#e8f3e6] text-[#3f7a35] border-[#cfe5cb]",
-  일반: "bg-[#f4f3f2] text-[#4b4b4b] border-[#dedddb]",
+  일반: "bg-[#f5f5f5] text-[#4b4b4b] border-[#e0e0e0]",
 };
 
 // 📌 알림 상세 — 읽는 것은 페이지 (URL 이 있고 뒤로가기가 된다). 헤더 종·알림함 목록이 여기로 온다.
@@ -58,7 +58,7 @@ export default function NoticeDetailPage() {
               <span className="ml-auto text-[11px] text-[#a3a3a3] tabular-nums">{item.createdAt ? new Date(item.createdAt).toLocaleString("ko-KR") : ""}</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-black text-[#131313] break-keep leading-snug tracking-tight mb-6">{item.title}</h1>
-            <div className="rounded-lg border border-[#ececea] bg-white divide-y divide-[#ececea] mb-8">
+            <div className="rounded-lg border border-[#ededed] bg-white divide-y divide-[#ededed] mb-8">
               <div className="flex items-center justify-between px-4 py-2.5 text-xs"><span className="text-[#8a8a8a] font-bold">수신</span><span className="text-[#4b4b4b] font-bold">{session?.user?.name}</span></div>
               <div className="flex items-center justify-between px-4 py-2.5 text-xs"><span className="text-[#8a8a8a] font-bold">발신</span><span className="text-[#4b4b4b] font-bold">고급 이글루 운영팀{item.sentBy ? ` (${item.sentBy})` : ""}</span></div>
             </div>

@@ -91,16 +91,6 @@ function RouteProgress({ pathname }: { pathname: string }) {
   );
 }
 
-// 📌 카테고리 줄 — 다섯 개만 세운다. 줄이 길면 무엇이 중요한지 안 읽힌다.
-//    홈은 왼쪽 브랜드가 하고, 구인·명예의 전당은 푸터와 모바일 메뉴에서 간다.
-const WHITE_NAV = [
-  { name: "소식", path: "/notice" },
-  { name: "이벤트", path: "/event" },
-  { name: "대회", path: "/tournament" },
-  { name: "경매", path: "/auction" },
-  { name: "고객센터", path: "/support" },
-];
-
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isGuestInquiryOpen, setIsGuestInquiryOpen] = useState(false);
@@ -147,12 +137,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // 스토어에서 넘어온 프로필은 스토어 독을 그대로 쓴다 — 전역 독과 겹치므로 이쪽을 비운다.
   // 헤더·푸터는 그대로 두므로 isShopPage 에는 넣지 않는다.
 
-  // 📌 브랜드 표기는 ARCTIC 을 기준으로 통일한다 — 작은 회색 "고급 이글루" + 구분선 + 큰 섹션명.
-  //    섹션 이름이 있는 곳만 뒤를 채우고, 나머지는 "고급 이글루" 하나만 큰 글씨로 세운다.
-  const SECTION_BRANDS: { match: (p: string) => boolean; name: string; href: string }[] = [
-    { match: (p) => p === "/level" || p.startsWith("/level/"), name: "SYSTEM : LEVEL", href: "/level" },
-  ];
-  const sectionBrand = SECTION_BRANDS.find((b) => b.match(pathname || "")) || null;
   // 메뉴 활성 판정 — 항목 경로에 쿼리가 붙어 있으면(예: /level?tab=pass)
   // pathname 만으로는 절대 맞지 않고, 반대로 /level 항목이 ARCTIC 탭에서도 켜진다.
   const isMenuActive = (itemPath?: string) => {
@@ -166,7 +150,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const isShopPage = pathname === "/arctic" || pathname?.startsWith("/arctic/");
   // 📌 흰 바탕 페이지 — 화이트 & 블랙으로 옮긴 곳. 종이색 라이트와 구분한다.
   //    경매·대회·명예의 전당은 일부러 개성 있게 만든 화면이라 여기 넣지 않는다.
-  const WHITE_ROOTS = ["/notice", "/event", "/recruit", "/faq", "/support", "/booster"];
+  const WHITE_ROOTS = ["/notice", "/event", "/recruit", "/faq", "/support", "/booster", "/level", "/profile"];
   const isWhitePage = isShopPage || pathname === "/" || WHITE_ROOTS.some((r) => pathname === r || !!pathname?.startsWith(r + "/"));
   // 알약 변형은 없앴다 — 내리면 로고 줄과 카테고리 줄이 한 줄로 접힌다
   const scrolled = scrolledRaw;
@@ -211,6 +195,17 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   // SYSTEM : LEVEL 이 비공개면 레벨·ARCTIC 둘 다, ARCTIC 만 비공개면 ARCTIC 만 일반 유저 메뉴에서 제외 (관리자는 그대로)
   const levelOpen = levelPublic || isAdmin;
+
+  // 📌 모바일 독 — 카테고리 줄(소식 · 이벤트 · 대회 · 경매 · 고객센터)과 겹치지 않는 것만.
+  //    세계를 오가는 길과 내 것으로 채운다. 닫힌 세계는 자리에서 빠진다.
+  const dockTabs = [
+    { name: "홈", path: "/", icon: ICON_PATHS.home },
+    ...(levelOpen ? [{ name: "SYSTEM : LEVEL", path: "/level", icon: ICON_PATHS.chart }] : []),
+    ...(levelOpen && (shopPublic || isAdmin) ? [{ name: "ARCTIC", path: "/arctic", icon: ICON_PATHS.bag }] : []),
+    { name: "알림함", path: "/profile/notice", icon: ICON_PATHS.bell },
+    { name: "내 정보", path: "/profile", icon: ICON_PATHS.user },
+  ];
+
   const categoryGroups = rawCategoryGroups.map((g) => ({
     ...g,
     items: g.items.filter((it) => {
@@ -408,36 +403,26 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
              헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
       {/* 📌 상단 바 — 로고 줄과 카테고리 줄이 한 덩어리로 붙어 다닌다.
              처음엔 두 줄(로고 · 카테고리), 내리면 한 줄로 접혀 카테고리가 계속 따라온다. 알약으로 떠오르지 않는다. */}
-      <div className={`sticky top-0 z-40 flex-shrink-0 ${isAuctionRoom || isShopPage ? "hidden" : ""}`}>
+      <div className={`sticky top-0 z-40 flex-shrink-0 ${isAuctionRoom ? "hidden" : ""}`}>
       <header className={`w-full border-b backdrop-blur-md transition-colors duration-300 ${
         isWhitePage ? "border-[#ededed] bg-white/95"
           : isLightPage ? "border-black/[0.08] bg-[#f4f3f2]/95"
           : "border-white/10 bg-[#090909]/90"
       }`}>
         <div className="max-w-7xl mx-auto px-5 md:px-6 flex flex-wrap items-center relative">
-          <div className={`order-1 flex items-center z-10 min-w-0 ${barH}`}>
+          <div className={`order-1 flex items-center z-10 min-w-0 transition-[height] duration-200 ease-out ${barH}`}>
             {isVerifyPage ? (
               <span className={`font-bold cursor-default select-none text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] ${isLightPage ? "text-[#131313]" : "text-white"}`}>고급 이글루</span>
-            ) : sectionBrand ? (
-              /* ARCTIC 과 같은 표기 — 고급 이글루 ㅣ 섹션명 */
-              <div className="flex flex-row items-center gap-2 sm:gap-3 min-w-0 leading-none">
-                {/* 좁은 화면에서는 상위 브랜드를 접는다 — 섹션명이 길면 우측 아이콘과 겹친다 */}
-                <Link href="/" className={`hidden sm:block text-[9px] sm:text-[10px] font-bold tracking-[0.18em] whitespace-nowrap transition-colors ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313]" : "text-white/45 hover:text-white"}`}>
-                  고급 이글루
-                </Link>
-                <span className={`hidden sm:block w-px h-4 ${isLightPage ? "bg-[#d2d1cf]" : "bg-white/20"}`}></span>
-                <Link href={sectionBrand.href} className={`min-w-0 truncate text-[14px] sm:text-[17px] font-black tracking-[0.1em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-[#ff5c77]"}`}>
-                  {sectionBrand.name}
-                </Link>
-              </div>
             ) : (
+              /* 📌 브랜드는 어느 화면에서나 "고급 이글루" 하나. 지금 있는 곳(SYSTEM : LEVEL · ARCTIC)은
+                     아래 카테고리 줄이 알려 준다 — 화면마다 로고가 달라지면 같은 사이트로 안 읽힌다. */
               <Link href="/" className={isWhitePage
-                ? `font-black tracking-[0.04em] leading-none text-[#131313] hover:text-[#e91e3f] transition-colors ${scrolled ? "text-[17px] md:text-[19px]" : "text-[20px] md:text-[24px]"}`
+                ? `font-black tracking-[0.04em] leading-none text-[#131313] hover:text-[#e91e3f] transition-[color,font-size] duration-200 ease-out ${scrolled ? "text-[17px] md:text-[19px]" : "text-[20px] md:text-[24px]"}`
                 : `font-bold text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-gray-300"}`}>고급 이글루</Link>
             )}
           </div>
           
-<div className={`order-2 ml-auto flex justify-end items-center gap-3 md:gap-4 relative z-10 ${scrolled ? "md:order-3" : ""} ${barH}`}>
+<div className={`order-2 ml-auto flex justify-end items-center gap-3 md:gap-4 relative z-10 transition-[height] duration-200 ease-out ${scrolled ? "md:order-3" : ""} ${barH}`}>
             {!mounted || status === "loading" ? (
                <div className="w-20 h-8"></div>
             ) : status === "authenticated" && session ? (
@@ -584,25 +569,44 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
           {/* ── 카테고리 줄 — 모든 화면이 같은 방식. 내리면 로고 옆으로 접혀 계속 보인다 ── */}
           {!isVerifyPage && (status !== "authenticated" || isVerified) && (
-            <div className={`order-3 basis-full flex items-center gap-4 min-w-0 border-t ${
+            <div className={`order-3 basis-full flex items-center gap-4 min-w-0 border-t transition-[height] duration-200 ease-out ${
               scrolled ? "h-11 md:h-14 md:order-2 md:basis-auto md:flex-1 md:ml-8 md:border-t-transparent" : "h-[46px] md:h-[52px]"
             } ${isWhitePage ? "border-[#ededed]" : isLightPage ? "border-black/[0.06]" : "border-white/[0.07]"}`}>
-              <nav className="flex items-center gap-5 md:gap-7 h-full flex-1 min-w-0 overflow-x-auto no-bar">
-                {WHITE_NAV.map((it) => {
-                  const on = it.path === "/" ? pathname === "/" : pathname === it.path || !!pathname?.startsWith(it.path + "/");
+              {/* 큰 분류 → 세부 분류 두 단. 큰 분류에 마우스를 올리면 그 아래로 세부가 펼쳐진다.
+                     모바일은 펼침 없이 큰 분류만 가로로 흐르고, 세부는 햄버거 메뉴가 맡는다. */}
+              <nav className="flex items-center gap-6 md:gap-9 h-full flex-1 min-w-0 overflow-x-auto md:overflow-visible no-bar">
+                {categoryGroups.map((group) => {
+                  const on = group.items.some((it) => pathname === it.path || !!pathname?.startsWith(it.path + "/"));
                   return (
-                    <Link key={it.path} href={it.path}
-                      className={`relative shrink-0 h-full flex items-center font-extrabold transition-colors ${scrolled ? "text-[14px]" : "text-[14px] md:text-[15px]"} ${
-                        on ? (isLightPage ? "text-[#131313]" : "text-white")
-                           : (isLightPage ? "text-[#6a6a6a] hover:text-[#131313]" : "text-gray-400 hover:text-white")
-                      }`}>
-                      {it.name}
-                      {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
-                    </Link>
+                    <div key={group.name} className="relative shrink-0 h-full group/cat">
+                      <Link href={group.items[0]?.path || "/"}
+                        className={`relative h-full flex items-center font-extrabold transition-[color,font-size] duration-200 ease-out ${scrolled ? "text-[14px]" : "text-[14px] md:text-[15px]"} ${
+                          on ? (isLightPage ? "text-[#131313]" : "text-white")
+                             : (isLightPage ? "text-[#6a6a6a] hover:text-[#131313]" : "text-gray-400 hover:text-white")
+                        }`}>
+                        {group.name}
+                        {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
+                      </Link>
+                      {/* 세부 분류 */}
+                      <div className="hidden md:block absolute left-1/2 -translate-x-1/2 top-full pt-1.5 opacity-0 invisible group-hover/cat:opacity-100 group-hover/cat:visible transition-opacity duration-150 z-50">
+                        <div className={`min-w-[168px] rounded-2xl border overflow-hidden backdrop-blur-2xl py-1 ${isLightPage ? "border-[#e0e0e0] bg-white/97 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.22)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.6)]"}`}>
+                          {group.items.map((it) => {
+                            const cur = pathname === it.path || !!pathname?.startsWith(it.path + "/");
+                            return (
+                              <Link key={it.path} href={it.path}
+                                className={`block px-4 py-2.5 text-[13px] font-bold whitespace-nowrap transition-colors ${
+                                  cur ? "text-[#e91e3f]" : isLightPage ? "text-[#4b4b4b] hover:text-[#131313] hover:bg-black/[0.04]" : "text-gray-300 hover:text-white hover:bg-white/[0.05]"
+                                }`}>{it.name}</Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
               </nav>
-              {/* 다른 세계 — 자기 주소를 가진 곳. 접힌 줄에서는 넓은 화면에서만 */}
+
+
               <div className={`items-center gap-4 md:gap-5 shrink-0 text-[12.5px] font-black tracking-[0.06em] ${scrolled ? "hidden lg:flex" : "hidden md:flex"} ${isLightPage ? "text-[#131313]" : "text-white"}`}>
                 {levelOpen && <Link href="/level" className="hover:text-[#e91e3f] transition-colors whitespace-nowrap">SYSTEM <span className="text-[#e91e3f]">:</span> LEVEL</Link>}
                 {levelOpen && (shopPublic || isAdmin) && <Link href="/arctic" className="hover:text-[#e91e3f] transition-colors whitespace-nowrap">ARCT<span className="text-[#e91e3f]">I</span>C</Link>}
@@ -642,14 +646,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
              ※ bottom은 홈 인디케이터/제스처 바를 피하도록 safe-area와 12px 중 큰 값.
              (경매방에서는 오조작 방지를 위해 숨김) */}
       {!isVerifyPage && !isAuctionRoom && !isShopPage && !isArcticProfile && mounted && (
-        <nav className={`md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border backdrop-blur-2xl grid grid-cols-5 ${isLightPage ? "border-black/[0.07] bg-white/85 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.22)]" : "border-white/[0.07] bg-[#0b0b0b]/75 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85)]"}`}>
-          {[
-            { name: "홈", path: "/", icon: ICON_PATHS.home },
-            { name: "공지", path: "/notice", icon: ICON_PATHS.megaphone },
-            { name: "이벤트", path: "/event", icon: ICON_PATHS.gift },
-            { name: "레벨", path: "/level", icon: ICON_PATHS.chart },
-            { name: "내 정보", path: "/profile", icon: ICON_PATHS.user },
-          ].map((tab) => {
+        <nav style={{ gridTemplateColumns: `repeat(${dockTabs.length}, minmax(0, 1fr))` }}
+          className={`md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border backdrop-blur-2xl grid ${isLightPage ? "border-black/[0.07] bg-white/85 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.22)]" : "border-white/[0.07] bg-[#0b0b0b]/75 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85)]"}`}>
+          {dockTabs.map((tab) => {
             const isActive = pathname === tab.path;
             return (
               // 라벨 없이 아이콘만 (ARCTIC 하단바와 동일한 형태)

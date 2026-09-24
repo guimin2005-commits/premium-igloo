@@ -1,7 +1,7 @@
 "use client";
 
 // 📌 게임형 HUD 공용 프리미티브 — 메인 홈(/)과 SYSTEM:LEVEL 대시보드가 공유하는 디자인 시스템.
-//    다크 럭셔리(#f4f3f2 + #e91e3f) 위에 절제된 게임 HUD 요소(브래킷 패널·게이지·라이브 인디케이터)를 얹는다.
+//    화이트 & 블랙(#ffffff + #e91e3f) 위에 절제된 게임 HUD 요소(브래킷 패널·게이지·라이브 인디케이터)를 얹는다.
 //    ⚠️ Tailwind v4 빌드 특성: flex-col + gap 미적용(간격은 space-y/마진), 임의 grid-template 값 금지(표준 grid-cols-N만).
 
 import React, { useState, useEffect, useRef } from "react";
@@ -77,7 +77,7 @@ export const RingGauge = ({ pct = 0, size = 148, stroke = 7, children, trackClas
 
 // ── 세그먼트 게이지 바 — 칸이 나뉜 게임식 XP 바 ───────────────
 /** @type {import("react").FC<any>} */
-export const SegBar = ({ pct = 0, segments = 10, h = "h-2.5", sheen = false, track = "bg-black/[0.06]", tick = "rgba(245,243,240,1)" }) => {
+export const SegBar = ({ pct = 0, segments = 10, h = "h-2.5", sheen = false, track = "bg-black/[0.06]", tick = "rgba(255,255,255,1)" }) => {
   const step = 100 / segments;
   return (
     <div className={`relative ${h} rounded-full ${track} overflow-hidden`}>

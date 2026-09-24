@@ -8,7 +8,6 @@ import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPr
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import ItemIcon from "../../../components/ItemIcon";
 import BackLink from "../../../components/BackLink";
-import ArcticHeader from "../../ArcticHeader";
 import ArcticDock from "../../ArcticDock";
 import ArcticFooter from "../../ArcticFooter";
 
@@ -101,7 +100,6 @@ export default function ItemDetailPage() {
   if (status === "loading" || isLoading) {
     return (
       <div className="w-full flex-1 bg-white min-h-screen">
-        <ArcticHeader />
         <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
       </div>
     );
@@ -110,7 +108,6 @@ export default function ItemDetailPage() {
   if (notFound || !item) {
     return (
       <div className="w-full flex-1 bg-white min-h-screen">
-        <ArcticHeader />
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">상품을 찾을 수 없습니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">삭제되었거나 판매가 종료된 상품일 수 있어요.</p>
@@ -190,8 +187,6 @@ export default function ItemDetailPage() {
 
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
-      <ArcticHeader />
-
       <section className="max-w-5xl mx-auto px-6 pt-8 pb-32 md:pb-24">
         <BackLink href="/arctic" label="ARCTIC" />
 

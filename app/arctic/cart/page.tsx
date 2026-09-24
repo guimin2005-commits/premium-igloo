@@ -5,7 +5,6 @@ import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import BackLink from "../../components/BackLink";
 import { salePrice, durationLabel } from "@/lib/shopPricing";
-import ArcticHeader from "../ArcticHeader";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 
@@ -82,7 +81,6 @@ export default function CartPage() {
   if (status === "loading" || isLoading) {
     return (
       <div className="w-full flex-1 bg-white min-h-screen">
-        <ArcticHeader />
         <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
       </div>
     );
@@ -91,7 +89,6 @@ export default function CartPage() {
   if (!isLoggedIn) {
     return (
       <div className="w-full flex-1 bg-white min-h-screen">
-        <ArcticHeader />
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
           <p className="text-sm text-[#4b4b4b] mb-7">장바구니를 보려면 로그인해주세요.</p>
@@ -103,8 +100,6 @@ export default function CartPage() {
 
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
-      <ArcticHeader />
-
       <section className="max-w-5xl mx-auto px-6 pt-10 pb-24">
         <BackLink href="/arctic" label="ARCTIC" className="mb-5" inline />
 
