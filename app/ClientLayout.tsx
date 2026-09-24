@@ -598,8 +598,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     <div key={group.name} className="shrink-0 h-full">
                       <Link href={group.items[0]?.path || "/"}
                         className={`relative h-full flex items-center font-black tracking-tight transition-colors ${scrolled ? "text-[15px]" : "text-[15px] md:text-[16px]"} ${
-                          on ? (isLightPage ? "text-[#131313]" : "text-white")
-                             : (isLightPage ? "text-[#6a6a6a] hover:text-[#131313]" : "text-gray-400 hover:text-white")
+                          isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-[#ff5c77]"
                         }`}>
                         {group.name}
                         {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
@@ -627,8 +626,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                             const cur = pathname === it.path || !!pathname?.startsWith(it.path + "/");
                             return (
                               <Link key={it.path} href={it.path}
-                                className={`py-[9px] text-[19px] font-black tracking-tight transition-colors ${
-                                  cur ? "text-[#e91e3f]" : isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-gray-200 hover:text-[#ff5c77]"
+                                className={`py-[9px] text-[19px] font-bold tracking-tight transition-colors ${
+                                  cur ? "text-[#e91e3f]" : isLightPage ? "text-[#4b4b4b] hover:text-[#131313]" : "text-gray-400 hover:text-white"
                                 }`}>{it.name}</Link>
                             );
                           })}
