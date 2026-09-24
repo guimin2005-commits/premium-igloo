@@ -163,7 +163,8 @@ export default function Home() {
             maskImage: "radial-gradient(ellipse 60% 70% at 25% 40%, #000 10%, transparent 100%)",
           }} />
         <div className="relative max-w-7xl mx-auto px-6 md:px-10 pt-12 md:pt-20 pb-10 md:pb-14 flex flex-col md:flex-row md:items-center gap-8 md:gap-10">
-          <Reveal className="flex-1 min-w-0">
+          {/* 첫 화면은 등장 애니메이션 없이 바로 보인다 — 관찰자가 안 붙는 환경에서 빈 화면이 되지 않게 */}
+          <div className="flex-1 min-w-0">
             <h1 className="text-[52px] sm:text-[64px] md:text-[76px] font-black tracking-[-0.035em] leading-[0.98] whitespace-nowrap">고급 이글루</h1>
             <p className="mt-4 md:mt-5 text-[18px] md:text-[22px] font-black tracking-[-0.01em] break-keep">활동이 곧 <span className="text-[#e91e3f]">자산</span>이 되는 곳.</p>
             <div className="mt-7 md:mt-8 flex flex-wrap gap-2.5">
@@ -176,14 +177,14 @@ export default function Home() {
                 이용 가이드
               </Link>
             </div>
-          </Reveal>
-          <Reveal delay={120} className="order-first md:order-last shrink-0 self-center md:self-auto">
+          </div>
+          <div className="order-first md:order-last shrink-0 self-center md:self-auto">
             <div className="relative w-[200px] h-[200px] md:w-[300px] md:h-[300px]">
               <div aria-hidden className="absolute inset-[10%] rounded-full blur-[20px]" style={{ background: "radial-gradient(circle, rgba(233,30,63,.22), rgba(233,30,63,0) 70%)" }} />
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo.png" alt="고급 이글루" className="relative w-full h-full object-contain drop-shadow-[0_24px_40px_rgba(0,0,0,0.28)]" />
             </div>
-          </Reveal>
+          </div>
         </div>
 
         {/* 티커 — 헤어라인 사이 글자 한 줄 */}
