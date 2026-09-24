@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0.35"><stop offset="0" stop-color="#131313"/><stop offset="1" stop-color="#3a3a3a"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#2f6fb0" stop-opacity=".55"/><stop offset="1" stop-color="#2f6fb0" stop-opacity="0"/></radialGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="26" stdDeviation="22" flood-color="#000" flood-opacity=".22"/></filter>
+    <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse"><path d="M44 0H0V44" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="1"/></pattern>
+  </defs>
+  <rect width="1200" height="420" fill="url(#bg)"/>
+  <rect width="1200" height="420" fill="url(#grid)"/>
+  <ellipse cx="960" cy="200" rx="360" ry="230" fill="url(#glow)"/>
+  <text x="80" y="118" font-family="'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Pretendard',sans-serif" font-size="20" font-weight="900" fill="#ffffff">권한</text>
+  <rect x="80" y="132" width="20" height="2" fill="#7fb2e8"/>
+  <text x="80" y="196" font-family="'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Pretendard',sans-serif" font-size="54" font-weight="900" fill="#ffffff" letter-spacing="-1">슬로우 모드 해제</text><text x="80" y="262" font-family="'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Pretendard',sans-serif" font-size="54" font-weight="900" fill="#ffffff" letter-spacing="-1">MUSIC 4 채널</text>
+  <text x="80" y="332" font-family="'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Pretendard',sans-serif" font-size="19" font-weight="700" fill="rgba(255,255,255,.72)">역할로 바로 열리는 채널 권한 · 7일부터 519,000 XP</text>
+  <g transform="translate(790,120) rotate(-8 80 80)" filter="url(#sh)">
+    <rect width="160" height="160" rx="27" fill="rgba(255,255,255,.94)"/><g transform="translate(42.400000000000006,42.400000000000006) scale(3.133333333333333)" fill="none" stroke="#2f6fb0" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"/></g></g>
+  <g transform="translate(985,52) rotate(10 61 61)" filter="url(#sh)">
+    <rect width="122" height="122" rx="21" fill="#2f6fb0"/><g transform="translate(32.33,32.33) scale(2.3891666666666667)" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z"/></g></g>
+  <g transform="translate(1000,250) rotate(-4 52 52)" filter="url(#sh)">
+    <rect width="104" height="104" rx="18" fill="rgba(255,255,255,.94)"/><g transform="translate(27.560000000000002,27.560000000000002) scale(2.0366666666666666)" fill="none" stroke="#2f6fb0" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></g></g>
+</svg>
