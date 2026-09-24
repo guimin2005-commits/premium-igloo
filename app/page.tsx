@@ -203,40 +203,31 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── 바로가기 — SYSTEM : LEVEL 과 ARCTIC. 전체 멤버 줄과 소식 사이에 짧게. ── */}
+      {/* ── 바로가기 — 레벨과 스토어. 이름과 화살표만. ── */}
       <section className="w-full border-b border-[#ededed]">
-        <div className={`max-w-7xl mx-auto px-6 md:px-10 grid ${policy.shopPublic ? "md:grid-cols-2 md:divide-x divide-[#ededed]" : ""}`}>
-          <Link href="/level" className="group flex items-center gap-4 py-5 md:py-6 md:pr-10">
-            <span className="min-w-0 flex-1">
-              <span className="block text-[17px] md:text-[19px] font-black tracking-tight group-hover:text-[#e91e3f] transition-colors">SYSTEM <span className="text-[#e91e3f]">:</span> LEVEL</span>
-              <span className="block mt-1 text-[12.5px] text-[#8a8a8a] break-keep">{levelOpen ? "내 레벨과 XP 보기" : "10월 공개 · XP 는 지금도 쌓이는 중"}</span>
-            </span>
+        <div className="max-w-7xl mx-auto px-6 md:px-10 grid md:grid-cols-2 md:divide-x divide-[#ededed]">
+          <Link href="/level" className="group flex items-center justify-between gap-4 py-5 md:py-6 md:pr-10">
+            <span className="text-[18px] md:text-[20px] font-black tracking-tight group-hover:text-[#e91e3f] transition-colors">SYSTEM <span className="text-[#e91e3f]">:</span> LEVEL</span>
             <span className="shrink-0 text-[#a3a3a3] font-black group-hover:text-[#131313] transition-colors">›</span>
           </Link>
-          {policy.shopPublic && (
-            <Link href="/arctic" className="group flex items-center gap-4 py-5 md:py-6 md:pl-10 border-t md:border-t-0 border-[#ededed]">
-              <span className="min-w-0 flex-1">
-                <span className="block text-[17px] md:text-[19px] font-black tracking-tight group-hover:text-[#e91e3f] transition-colors">ARCT<span className="text-[#e91e3f]">I</span>C</span>
-                <span className="block mt-1 text-[12.5px] text-[#8a8a8a] break-keep">XP 로 역할 · 권한 · 아이템 사기</span>
-              </span>
-              <span className="shrink-0 text-[#a3a3a3] font-black group-hover:text-[#131313] transition-colors">›</span>
-            </Link>
-          )}
+          <Link href="/arctic" className="group flex items-center justify-between gap-4 py-5 md:py-6 md:pl-10 border-t md:border-t-0 border-[#ededed]">
+            <span className="text-[18px] md:text-[20px] font-black tracking-[0.04em] group-hover:text-[#e91e3f] transition-colors">ARCT<span className="text-[#e91e3f]">I</span>C</span>
+            <span className="shrink-0 text-[#a3a3a3] font-black group-hover:text-[#131313] transition-colors">›</span>
+          </Link>
         </div>
       </section>
 
-      {/* ── 소식 — 왼쪽 공지사항 · 오른쪽 지금 진행 중 (조금만 내려도 바로 보인다) ── */}
-      {/* 더보기는 묶음마다 하나씩(공지사항 옆) — 섹션 머리에 또 두면 같은 곳으로 가는 버튼이 둘이 된다 */}
-      <Sec title="소식">
-        {/* Tailwind v4 에서 임의 grid-template 이 안 만들어질 수 있어 규칙을 직접 준다 */}
-        <style>{`.homeNewsGrid{display:grid;grid-template-columns:1fr;gap:40px}@media (min-width:768px){.homeNewsGrid{grid-template-columns:1.55fr 1fr;gap:56px}}`}</style>
-        <div className="relative mt-6 md:mt-7 homeNewsGrid">
+      {/* ── 소식 — 제목 바로 아래 공지 목록. 오른쪽은 지금 진행 중 ── */}
+      <section className="w-full border-b border-[#ededed]">
+        <div className="max-w-7xl mx-auto px-6 md:px-10 py-9 md:py-11">
+        <style>{`.homeNewsGrid{display:grid;grid-template-columns:1fr;gap:36px}@media (min-width:768px){.homeNewsGrid{grid-template-columns:1.55fr 1fr;gap:56px}}`}</style>
+        <div className="flex items-baseline justify-between gap-4 mb-4">
+          <h3 className="text-[24px] md:text-[28px] font-black tracking-tight">소식</h3>
+          <Link href="/notice" className="shrink-0 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">전체 보기 ›</Link>
+        </div>
+        <div className="relative homeNewsGrid">
           {/* 공지사항 */}
           <div className="min-w-0">
-            <div className="flex items-center justify-between gap-3 mb-1">
-              <b className="text-[13px] font-black">공지사항</b>
-              <Link href="/notice" className="shrink-0 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">더보기 ›</Link>
-            </div>
             <Reveal>
               <div>
                 {!scheduleLoaded ? (
@@ -263,7 +254,7 @@ export default function Home() {
           </div>
           {/* 지금 진행 중 */}
           <div className="min-w-0">
-            <b className="block text-[13px] font-black mb-1">지금 진행 중</b>
+            <b className="block text-[12px] font-black text-[#8a8a8a] tracking-[0.1em] mb-1.5">지금 진행 중</b>
             <Reveal delay={80}>
               <div>
                 {!scheduleLoaded ? (
@@ -287,9 +278,10 @@ export default function Home() {
             </Reveal>
           </div>
         </div>
-      </Sec>
+        </div>
+      </section>
 
-      {/* ── 02 살아있는 커뮤니티 — 박스 없이 큰 숫자 ── */}
+      {/* ── 살아있는 커뮤니티 — 박스 없이 큰 숫자 ── */}
       <Sec title="살아있는 커뮤니티" desc="고급 이글루는 지금 이 순간에도 움직이고 있습니다.">
         <Reveal delay={100}>
           <div className="relative mt-9 md:mt-10 flex flex-col md:flex-row md:items-end gap-6 md:gap-8">

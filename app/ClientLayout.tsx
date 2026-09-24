@@ -148,6 +148,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   const isShopPage = pathname === "/arctic" || pathname?.startsWith("/arctic/");
+  // 📌 지금 있는 세계 — 브랜드 옆 한 칸. 줄을 따로 만들지 않는다.
+  const section = isShopPage
+    ? { name: <>ARCT<span className="text-[#e91e3f]">I</span>C</>, href: "/arctic" }
+    : (pathname === "/level" || pathname?.startsWith("/level/"))
+      ? { name: <>SYSTEM <span className="text-[#e91e3f]">:</span> LEVEL</>, href: "/level" }
+      : null;
   // 📌 흰 바탕 페이지 — 화이트 & 블랙으로 옮긴 곳. 종이색 라이트와 구분한다.
   //    경매·대회·명예의 전당은 일부러 개성 있게 만든 화면이라 여기 넣지 않는다.
   const WHITE_ROOTS = ["/notice", "/event", "/recruit", "/faq", "/support", "/booster", "/level", "/profile"];
@@ -216,7 +222,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }));
 
   // 로고 줄·도구 줄의 높이 — 내리면 한 줄로 접히므로 둘이 늘 같아야 한다
-  const barH = scrolled ? "h-12 md:h-14" : isWhitePage ? "h-[64px] md:h-20" : "h-16";
+  const barH = scrolled ? "h-14 md:h-[60px]" : "h-16 md:h-[72px]";
 
   // 📌 점검 모드 — 관리자 외에는 점검 화면 표시
   const [isMaintenance, setIsMaintenance] = useState(false);
@@ -405,27 +411,37 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
              처음엔 두 줄(로고 · 카테고리), 내리면 한 줄로 접혀 카테고리가 계속 따라온다.
              ⚠️ sticky 가 아니라 fixed + 같은 높이의 자리(아래 spacer)다. sticky 로 두면 바가 접힐 때
                 문서 높이가 76px 줄고, 그만큼 스크롤 위치가 당겨져 다시 펴지는 일이 반복돼 카테고리가 위아래로 튄다. */}
-      {!isAuctionRoom && <div aria-hidden className="h-[110px] md:h-[132px] flex-shrink-0" />}
+      {!isAuctionRoom && <div aria-hidden className="h-16 md:h-[72px] flex-shrink-0" />}
       <div className={`fixed top-0 left-0 right-0 z-40 ${isAuctionRoom ? "hidden" : ""}`}>
       <header className={`w-full border-b backdrop-blur-md transition-colors duration-300 ${
         isWhitePage ? "border-[#ededed] bg-white/95"
           : isLightPage ? "border-black/[0.08] bg-[#f4f3f2]/95"
           : "border-white/10 bg-[#090909]/90"
       }`}>
-        <div className="max-w-7xl mx-auto px-5 md:px-6 flex flex-wrap items-center relative">
-          <div className={`order-1 flex items-center z-10 min-w-0 transition-[height] duration-200 ease-out ${barH}`}>
+        <div className={`max-w-7xl mx-auto px-5 md:px-6 flex items-center gap-4 md:gap-6 relative transition-[height] duration-200 ease-out ${barH}`}>
+          <div className="flex items-center gap-3 md:gap-4 h-full shrink-0 z-10 min-w-0">
             {isVerifyPage ? (
               <span className={`font-bold cursor-default select-none text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] ${isLightPage ? "text-[#131313]" : "text-white"}`}>고급 이글루</span>
             ) : (
               /* 📌 브랜드는 어느 화면에서나 "고급 이글루" 하나. 지금 있는 곳(SYSTEM : LEVEL · ARCTIC)은
                      아래 카테고리 줄이 알려 준다 — 화면마다 로고가 달라지면 같은 사이트로 안 읽힌다. */
-              <Link href="/" className={isWhitePage
-                ? `font-black tracking-[0.04em] leading-none text-[#131313] hover:text-[#e91e3f] transition-[color,font-size] duration-200 ease-out ${scrolled ? "text-[17px] md:text-[19px]" : "text-[20px] md:text-[24px]"}`
-                : `font-bold text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-gray-300"}`}>고급 이글루</Link>
+              <>
+                <Link href="/" className={isWhitePage
+                  ? `shrink-0 font-black tracking-[0.04em] leading-none text-[#131313] hover:text-[#e91e3f] transition-[color,font-size] duration-200 ease-out ${scrolled ? "text-[18px] md:text-[20px]" : "text-[19px] md:text-[22px]"}`
+                  : `shrink-0 font-bold text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-gray-300"}`}>고급 이글루</Link>
+                {section && (
+                  <>
+                    <span className={`shrink-0 w-px h-4 ${isLightPage ? "bg-[#d4d4d4]" : "bg-white/20"}`} />
+                    <Link href={section.href} className={`shrink-0 font-black tracking-[0.14em] leading-none whitespace-nowrap transition-colors ${scrolled ? "text-[14px] md:text-[15px]" : "text-[15px] md:text-[17px]"} ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-[#ff5c77]"}`}>
+                      {section.name}
+                    </Link>
+                  </>
+                )}
+              </>
             )}
           </div>
           
-<div className={`order-2 ml-auto flex justify-end items-center gap-3 md:gap-4 relative z-10 transition-[height] duration-200 ease-out ${scrolled ? "md:order-3" : ""} ${barH}`}>
+<div className="order-3 ml-auto flex justify-end items-center gap-3 md:gap-4 relative z-10 h-full shrink-0">
             {!mounted || status === "loading" ? (
                <div className="w-20 h-8"></div>
             ) : status === "authenticated" && session ? (
@@ -572,9 +588,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
           {/* ── 카테고리 줄 — 모든 화면이 같은 방식. 내리면 로고 옆으로 접혀 계속 보인다 ── */}
           {!isVerifyPage && (status !== "authenticated" || isVerified) && (
-            <div className={`relative group/gnb order-3 basis-full flex items-center gap-4 min-w-0 border-t transition-[height] duration-200 ease-out ${
-              scrolled ? "h-11 md:h-14 md:order-2 md:basis-auto md:flex-1 md:ml-8 md:border-t-transparent" : "h-[46px] md:h-[52px]"
-            } ${isWhitePage ? "border-[#ededed]" : isLightPage ? "border-black/[0.06]" : "border-white/[0.07]"}`}>
+            <div className="order-2 relative group/gnb hidden md:flex items-center flex-1 justify-center min-w-0 h-full">
               {/* 큰 분류 → 세부 분류 두 단. 큰 분류에 마우스를 올리면 그 아래로 세부가 펼쳐진다.
                      모바일은 펼침 없이 큰 분류만 가로로 흐르고, 세부는 햄버거 메뉴가 맡는다. */}
               {/* 큰 분류는 가운데 — 올리면 세 묶음이 한 번에 펼쳐지는 사이트 전체 메뉴라 한쪽에 붙어 있으면 어긋나 보인다 */}
@@ -598,7 +612,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
               {/* ── 세부 카테고리 띠 — 큰 분류에 올리면 세 묶음이 한 번에 펼쳐진다.
                      모바일은 펼치지 않고 햄버거 메뉴가 같은 일을 한다. ── */}
-              <div className="hidden md:block absolute left-0 right-0 top-full z-50 opacity-0 invisible group-hover/gnb:opacity-100 group-hover/gnb:visible transition-opacity duration-150">
+              <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 w-[min(92vw,900px)] opacity-0 invisible group-hover/gnb:opacity-100 group-hover/gnb:visible transition-opacity duration-150">
                 <div className={`rounded-b-2xl border-x border-b backdrop-blur-2xl ${isLightPage ? "border-[#ededed] bg-white/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.7)]"}`}>
                   <div className="grid grid-cols-3 gap-10 px-9 py-8">
                     {categoryGroups.map((group) => (
