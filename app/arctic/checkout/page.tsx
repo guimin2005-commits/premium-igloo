@@ -162,7 +162,7 @@ export default function CheckoutPage() {
 
   if (status === "loading" || isLoading) {
     return (
-      <div className="w-full flex-1 bg-[#f4f3f2] min-h-screen">
+      <div className="w-full flex-1 bg-white min-h-screen">
         <ArcticHeader />
         <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
       </div>
@@ -171,7 +171,7 @@ export default function CheckoutPage() {
 
   if (!isLoggedIn) {
     return (
-      <div className="w-full flex-1 bg-[#f4f3f2] min-h-screen">
+      <div className="w-full flex-1 bg-white min-h-screen">
         <ArcticHeader />
         <div className="py-32 text-center break-keep px-6">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
@@ -185,9 +185,9 @@ export default function CheckoutPage() {
   // 결제 완료·실패 화면
   if (result) {
     return (
-      <div className="w-full flex-1 bg-[#f4f3f2] min-h-screen">
+      <div className="w-full flex-1 bg-white min-h-screen">
         <ArcticHeader />
-        <div className="max-w-md mx-auto px-6 py-20 bg-white rounded-3xl mt-10 border border-[#dedddb] p-10 text-center shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+        <div className="max-w-md mx-auto px-6 py-20 bg-white rounded-3xl mt-10 border border-[#e0e0e0] p-10 text-center shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
           <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-6 ${result.ok ? "bg-[#e8f3e6] text-[#3f7a35]" : "bg-[#fdeaea] text-[#c62828]"}`}>
             {result.ok ? (
               <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
@@ -198,13 +198,13 @@ export default function CheckoutPage() {
           <h1 className="text-xl font-black text-[#131313] mb-2">{result.ok ? "주문이 완료되었습니다" : "결제 실패"}</h1>
           <p className="text-sm text-[#4b4b4b] leading-relaxed mb-8 break-keep">{result.message}</p>
           {result.ok && myXp != null && (
-            <div className="bg-[#f4f3f2] rounded-xl px-5 py-3 mb-8 flex items-center justify-between text-[13px]">
+            <div className="bg-[#f5f5f5] rounded-xl px-5 py-3 mb-8 flex items-center justify-between text-[13px]">
               <span className="text-[#5a5a5a]">남은 XP</span>
               <span className="font-black text-[#131313] tabular-nums">{myXp.toLocaleString()}</span>
             </div>
           )}
           <div className="flex gap-3">
-            <Link href="/arctic" className="flex-1 py-3.5 bg-[#e9e8e6] text-[#4b4b4b] font-bold rounded-xl hover:bg-[#dedddb] transition-colors">상점으로</Link>
+            <Link href="/arctic" className="flex-1 py-3.5 bg-[#f2f2f2] text-[#4b4b4b] font-bold rounded-xl hover:bg-[#e0e0e0] transition-colors">상점으로</Link>
             {!result.ok && (
               <button onClick={() => setResult(null)} className="flex-1 py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl hover:bg-[#d01634] transition-colors">다시 시도</button>
             )}
@@ -216,7 +216,7 @@ export default function CheckoutPage() {
 
   if (rows.length === 0) {
     return (
-      <div className="w-full flex-1 bg-[#f4f3f2] min-h-screen">
+      <div className="w-full flex-1 bg-white min-h-screen">
         <ArcticHeader />
         <div className="py-32 text-center break-keep px-6">
           <h1 className="text-2xl font-black text-[#131313] mb-3">장바구니가 비어 있습니다</h1>
@@ -229,11 +229,11 @@ export default function CheckoutPage() {
 
   const checkbox = (checked: boolean) =>
     `w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
-      checked ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#d2d1cf]"
+      checked ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#d4d4d4]"
     }`;
 
   return (
-    <div className="w-full flex-1 bg-[#f4f3f2] text-[#131313] min-h-screen">
+    <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
       <ArcticHeader />
       <section className="max-w-5xl mx-auto px-6 pt-10 pb-20">
         <BackLink href="/arctic" label="ARCTIC" className="mb-5" inline />
@@ -243,14 +243,14 @@ export default function CheckoutPage() {
           {/* 좌 — 주문 상품 · 수령 정보 · 약관 */}
           <div className="lg:col-span-2 space-y-6">
             {/* 주문 상품 */}
-            <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden">
-              <div className="px-6 py-4 border-b border-[#ececea]">
+            <div className="bg-white rounded-2xl border border-[#e0e0e0] overflow-hidden">
+              <div className="px-6 py-4 border-b border-[#ededed]">
                 <h2 className="text-sm font-black text-[#131313]">주문 상품 <span className="text-[#e91e3f]">{count}</span></h2>
               </div>
-              <div className="divide-y divide-[#ececea]">
+              <div className="divide-y divide-[#ededed]">
                 {rows.map((r) => (
                   <div key={r.itemId} className="px-6 py-4 flex gap-4 items-center">
-                    <div className="w-14 h-14 rounded-xl bg-[#e9e8e6] overflow-hidden shrink-0">
+                    <div className="w-14 h-14 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
                       {r.item.imageUrl && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
@@ -278,18 +278,18 @@ export default function CheckoutPage() {
 
             {/* 수령 정보 */}
             {needsContact && (
-              <div className="bg-white rounded-2xl border border-[#dedddb] p-6">
+              <div className="bg-white rounded-2xl border border-[#e0e0e0] p-6">
                 <h2 className="text-sm font-black text-[#131313] mb-1">수령 정보 <span className="text-[#c62828]">*</span></h2>
                 <p className="text-[11px] text-[#8a8a8a] mb-4">기프트카드가 포함되어 있습니다. 받으실 연락처를 입력해주세요.</p>
                 <textarea rows={3} value={contact} onChange={(e) => setContact(e.target.value)}
                   placeholder="휴대폰 번호 또는 기프티콘 받을 정보를 입력해주세요."
-                  className="w-full bg-white border border-[#dedddb] rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] resize-none placeholder:text-[#a3a3a3]" />
+                  className="w-full bg-white border border-[#e0e0e0] rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] resize-none placeholder:text-[#a3a3a3]" />
                 <p className="text-[10px] text-[#a3a3a3] mt-2">운영진만 확인하며, 발송 목적으로만 사용됩니다.</p>
               </div>
             )}
 
             {/* 약관 동의 */}
-            <div className="bg-white rounded-2xl border border-[#dedddb] p-6">
+            <div className="bg-white rounded-2xl border border-[#e0e0e0] p-6">
               <h2 className="text-sm font-black text-[#131313] mb-4">약관 동의</h2>
 
               <button type="button" onClick={() => setAgreeTerms(!agreeTerms)} className="w-full flex items-start gap-3 text-left mb-3">
@@ -315,7 +315,7 @@ export default function CheckoutPage() {
 
           {/* 우 — 결제 요약 */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl border border-[#dedddb] p-6 lg:sticky lg:top-24">
+            <div className="bg-white rounded-2xl border border-[#e0e0e0] p-6 lg:sticky lg:top-24">
               <h2 className="text-sm font-black text-[#131313] mb-5">결제 정보</h2>
 
               {/* 쿠폰 — 보유 쿠폰에서 고르거나 코드 입력 (선택) */}
@@ -340,8 +340,8 @@ export default function CheckoutPage() {
                       disabled={wallet.length === 0}
                       className={`w-full flex items-center justify-between gap-2 px-4 py-3 mb-2 rounded-xl border text-left transition-colors ${
                         wallet.length === 0
-                          ? "border-[#dedddb] bg-[#fafaf9] cursor-not-allowed"
-                          : "border-[#dedddb] bg-white hover:border-[#a3a3a3]"
+                          ? "border-[#e0e0e0] bg-[#fafafa] cursor-not-allowed"
+                          : "border-[#e0e0e0] bg-white hover:border-[#a3a3a3]"
                       }`}
                     >
                       <span className="min-w-0">
@@ -365,15 +365,15 @@ export default function CheckoutPage() {
 
                     {/* 보유 쿠폰 목록 — 하나만 고른 뒤 '적용'을 눌러야 반영된다 */}
                     {showCouponPicker && wallet.length > 0 && (
-                      <div className="mb-2 rounded-xl border border-[#dedddb] overflow-hidden">
-                        <div className="divide-y divide-[#ececea] max-h-56 overflow-y-auto">
+                      <div className="mb-2 rounded-xl border border-[#e0e0e0] overflow-hidden">
+                        <div className="divide-y divide-[#ededed] max-h-56 overflow-y-auto">
                           {wallet.map((w) => {
                             const picked = pendingCouponId === w.id;
                             return (
                               <button key={w.id} onClick={() => w.usable && setPendingCouponId(w.id)} disabled={!w.usable}
-                                className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${picked ? "bg-[#e91e3f]/[0.06]" : w.usable ? "hover:bg-[#f4f3f2]" : "opacity-50 cursor-not-allowed"}`}>
+                                className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${picked ? "bg-[#e91e3f]/[0.06]" : w.usable ? "hover:bg-[#f5f5f5]" : "opacity-50 cursor-not-allowed"}`}>
                                 {/* 선택 표시 — 하나만 고를 수 있다 */}
-                                <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${picked ? "border-[#e91e3f]" : "border-[#d2d1cf]"}`}>
+                                <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${picked ? "border-[#e91e3f]" : "border-[#d4d4d4]"}`}>
                                   {picked && <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
                                 </span>
 
@@ -393,7 +393,7 @@ export default function CheckoutPage() {
                           })}
                         </div>
 
-                        <div className="px-4 py-3 border-t border-[#ececea] bg-[#faf9f7] flex items-center justify-between gap-3">
+                        <div className="px-4 py-3 border-t border-[#ededed] bg-[#faf9f7] flex items-center justify-between gap-3">
                           <span className="text-[10px] text-[#8a8a8a] break-keep">쿠폰은 한 장만 사용할 수 있습니다.</span>
                           <button onClick={applyPendingCoupon} disabled={!pendingCouponId}
                             className="px-4 py-2 rounded-full bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 disabled:cursor-not-allowed text-white text-[12px] font-bold transition-colors shrink-0">
@@ -405,15 +405,15 @@ export default function CheckoutPage() {
 
                     {/* 코드 직접 입력 */}
                     <div className="flex items-center gap-2 my-2">
-                      <span className="flex-1 h-px bg-[#ececea]"></span>
+                      <span className="flex-1 h-px bg-[#ededed]"></span>
                       <span className="text-[10px] font-bold text-[#a3a3a3]">또는 코드 입력</span>
-                      <span className="flex-1 h-px bg-[#ececea]"></span>
+                      <span className="flex-1 h-px bg-[#ededed]"></span>
                     </div>
                     <div className="flex gap-2">
                       <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") applyCoupon(); }}
                         placeholder="쿠폰 코드 입력"
-                        className="flex-1 min-w-0 bg-white border border-[#dedddb] rounded-lg px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
+                        className="flex-1 min-w-0 bg-white border border-[#e0e0e0] rounded-lg px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
                       <button onClick={applyCoupon} disabled={isCheckingCoupon || !couponInput.trim()}
                         className="px-4 py-2.5 rounded-lg bg-[#131313] text-white text-[12px] font-bold hover:bg-black disabled:opacity-40 transition-colors shrink-0">
                         {isCheckingCoupon ? "확인" : "적용"}
@@ -437,7 +437,7 @@ export default function CheckoutPage() {
                 <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 XP</span><span className="font-bold text-[#c62828] tabular-nums">-{total.toLocaleString()}</span></div>
               </div>
 
-              <div className="h-px bg-[#ececea] mb-4"></div>
+              <div className="h-px bg-[#ededed] mb-4"></div>
 
               <div className="flex items-baseline justify-between mb-6">
                 <span className="text-sm font-bold text-[#131313]">결제 후 잔액</span>
@@ -448,7 +448,7 @@ export default function CheckoutPage() {
 
               <button onClick={pay} disabled={!canPay}
                 className={`w-full py-4 font-bold rounded-xl transition-colors ${
-                  canPay ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#e9e8e6] text-[#a3a3a3] cursor-not-allowed"
+                  canPay ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"
                 }`}>
                 {isPaying ? "결제 중..." : !enoughXp ? "XP가 부족합니다" : `${total.toLocaleString()} XP 결제하기`}
               </button>

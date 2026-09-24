@@ -92,7 +92,7 @@ export default function ArcticHome({
     <>
       {/* ── 배너 (관리자 등록) — 없으면 시즌 히어로. 모서리 없이 화면 끝까지 (각지게) ── */}
       <section className="w-full">
-        <div className="relative overflow-hidden bg-[#e9e8e6]">
+        <div className="relative overflow-hidden bg-[#f2f2f2]">
           {banners.length > 0 ? (
             <>
               <div className="relative" style={{ aspectRatio: String(bannerRatio) }}>
@@ -147,7 +147,7 @@ export default function ArcticHome({
 
           {isAdmin && (
             <Link href="/admin/shop?tab=banners"
-              className="absolute top-4 right-4 z-10 px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#131313] border border-[#dedddb] hover:bg-white shadow-sm transition-colors">
+              className="absolute top-4 right-4 z-10 px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#131313] border border-[#e0e0e0] hover:bg-white shadow-sm transition-colors">
               배너 관리
             </Link>
           )}
@@ -172,7 +172,7 @@ export default function ArcticHome({
                 <button onClick={() => goProducts("all")} className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">다른 상품 보기 →</button>
               </div>
             </div>
-            <div className="md:border-l md:border-[#ececea] md:pl-10">
+            <div className="md:border-l md:border-[#ededed] md:pl-10">
               <div className={secHead}>
                 <h2 className={secTitle}>{forMe.title}</h2>
                 <span className="text-[12px] font-bold text-[#8a8a8a] shrink-0">{tier ? "내 등급 기준" : "가장 많이 고른"}</span>

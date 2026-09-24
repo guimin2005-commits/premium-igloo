@@ -51,12 +51,12 @@ export default function OrdersPage() {
 
   const chip = (active: boolean) =>
     `px-3.5 py-1.5 rounded-full text-[12px] font-bold border transition-colors ${
-      active ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#4b4b4b] border-[#dedddb] hover:border-[#a3a3a3]"
+      active ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#4b4b4b] border-[#e0e0e0] hover:border-[#a3a3a3]"
     }`;
 
   if (status === "loading" || isLoading) {
     return (
-      <div className="w-full flex-1 bg-[#f4f3f2] min-h-screen">
+      <div className="w-full flex-1 bg-white min-h-screen">
         <ArcticHeader />
         <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
       </div>
@@ -65,7 +65,7 @@ export default function OrdersPage() {
 
   if (!isLoggedIn) {
     return (
-      <div className="w-full flex-1 bg-[#f4f3f2] min-h-screen">
+      <div className="w-full flex-1 bg-white min-h-screen">
         <ArcticHeader />
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
@@ -77,7 +77,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="w-full flex-1 bg-[#f4f3f2] text-[#131313] min-h-screen">
+    <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
       <ArcticHeader />
 
       <section className="max-w-4xl mx-auto px-6 pt-10 pb-24">
@@ -87,7 +87,7 @@ export default function OrdersPage() {
 
         {/* 요약 */}
         {orders.length > 0 && (
-          <div className="grid grid-cols-3 bg-white rounded-2xl border border-[#dedddb] divide-x divide-[#ececea] mb-6 overflow-hidden">
+          <div className="grid grid-cols-3 bg-white rounded-2xl border border-[#e0e0e0] divide-x divide-[#ededed] mb-6 overflow-hidden">
             {[
               { n: orders.length.toLocaleString(), l: "전체 주문" },
               { n: pendingCount.toLocaleString(), l: "처리 대기", accent: pendingCount > 0 },
@@ -111,7 +111,7 @@ export default function OrdersPage() {
         )}
 
         {shown.length === 0 ? (
-          <div className="py-24 text-center break-keep bg-white rounded-2xl border border-[#dedddb]">
+          <div className="py-24 text-center break-keep bg-white rounded-2xl border border-[#e0e0e0]">
             <p className="text-sm font-bold text-[#131313] mb-1.5">
               {orders.length === 0 ? "아직 구매한 상품이 없습니다" : "해당 상태의 주문이 없습니다"}
             </p>
@@ -125,7 +125,7 @@ export default function OrdersPage() {
             )}
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden divide-y divide-[#ececea]">
+          <div className="bg-white rounded-2xl border border-[#e0e0e0] overflow-hidden divide-y divide-[#ededed]">
             {shown.map((o) => {
               const meta = STATUS_META[o.status] || STATUS_META.pending;
               return (
@@ -150,7 +150,7 @@ export default function OrdersPage() {
                   <p className="text-[11px] text-[#8a8a8a]">{meta.desc}</p>
 
                   {o.contact && (
-                    <div className="mt-3 text-[11px] text-[#5a5a5a] bg-[#f4f3f2] rounded-lg px-3 py-2 whitespace-pre-wrap break-words">
+                    <div className="mt-3 text-[11px] text-[#5a5a5a] bg-[#f5f5f5] rounded-lg px-3 py-2 whitespace-pre-wrap break-words">
                       <span className="font-bold text-[#8a8a8a]">수령 정보 · </span>{o.contact}
                     </div>
                   )}

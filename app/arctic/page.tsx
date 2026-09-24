@@ -7,7 +7,7 @@ export const metadata = { title: "ARCTIC · 고급 이글루" };
 
 export default function ShopPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#f4f3f2]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-white" />}>
       <ArcticShopBody />
     </Suspense>
   );

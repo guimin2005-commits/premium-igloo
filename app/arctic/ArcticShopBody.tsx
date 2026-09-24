@@ -115,17 +115,17 @@ function FormGroup({ title, summary, open, onToggle, children }: {
 
 // 관리자 폼 입력칸 공통 모양
 const F_LABEL = "block text-xs font-bold text-[#4b4b4b] mb-2";
-const F_INPUT = "w-full bg-white border border-[#dedddb] rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]";
-const F_INPUT_SM = "w-full bg-white border border-[#dedddb] rounded-lg px-3 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]";
+const F_INPUT = "w-full bg-white border border-[#e0e0e0] rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]";
+const F_INPUT_SM = "w-full bg-white border border-[#e0e0e0] rounded-lg px-3 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]";
 const F_NOTE = "text-[10px] text-[#8a8a8a] mt-1.5";
 
 // 판매 상태 · 기간제 · 시즌 동작이 같은 모양을 쓴다
 function FormToggle({ on, onClick, onLabel, offLabel, disabled = false }: { on: boolean; onClick: () => void; onLabel: string; offLabel: string; disabled?: boolean }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled}
-      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-sm transition-colors disabled:opacity-60 disabled:cursor-default ${on ? "border-[#e91e3f] bg-[#e91e3f]/[0.06]" : "border-[#dedddb] bg-white"}`}>
+      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-sm transition-colors disabled:opacity-60 disabled:cursor-default ${on ? "border-[#e91e3f] bg-[#e91e3f]/[0.06]" : "border-[#e0e0e0] bg-white"}`}>
       <span className={on ? "font-bold text-[#e91e3f]" : "text-[#8a8a8a]"}>{on ? onLabel : offLabel}</span>
-      <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${on ? "bg-[#e91e3f]" : "bg-[#d2d1cf]"}`}>
+      <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${on ? "bg-[#e91e3f]" : "bg-[#d4d4d4]"}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? "left-[18px]" : "left-0.5"}`}></span>
       </span>
     </button>
@@ -181,16 +181,6 @@ export default function ArcticShopBody({
   // 📌 장바구니 — 로컬에 보관해 새로고침해도 유지 ([{ itemId, qty }])
   const [cart, setCart] = useState<{ itemId: string; qty: number; days?: number }[]>([]);
   const [cartToast, setCartToast] = useState("");
-
-  // 스크롤하면 헤더·유틸바에 그림자를 넣어 떠 있는 느낌을 준다
-  const [pastBanner, setPastBanner] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setPastBanner(window.scrollY > 40);
-    // (카드가 지나간 뒤 유틸바를 띄우는 기준)
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   // ARCTIC 헤더 — 알림·프로필 드롭다운
   const [showNotif, setShowNotif] = useState(false);
@@ -500,18 +490,18 @@ export default function ArcticShopBody({
   const canAfford = (p: number) => isAdmin || (myXp != null && myXp >= p);
   const chip = (active: boolean) =>
     `px-3.5 py-1.5 rounded-full text-[12px] font-bold border transition-colors ${
-      active ? "bg-[#e91e3f] text-[#ffffff] border-[#e91e3f]" : "bg-white/70 text-[#4b4b4b] border-[#dedddb] hover:border-[#a3a3a3]"
+      active ? "bg-[#e91e3f] text-[#ffffff] border-[#e91e3f]" : "bg-white/70 text-[#4b4b4b] border-[#e0e0e0] hover:border-[#a3a3a3]"
     }`;
 
   // 공개 전 · 비관리자 → 준비 중 안내
   if (status === "loading" || shopPublic === null) {
-    return <div className={`w-full flex-1 bg-[#f4f3f2] ${embedded ? "py-24" : "min-h-screen"} flex items-center justify-center text-sm text-[#8a8a8a]`}>불러오는 중...</div>;
+    return <div className={`w-full flex-1 bg-white ${embedded ? "py-24" : "min-h-screen"} flex items-center justify-center text-sm text-[#8a8a8a]`}>불러오는 중...</div>;
   }
   // 접근은 실제 권한으로 판정한다 — 미리보기는 관리 UI 만 숨기는 것이지
   // 스토어를 못 보게 하는 게 아니다 (공개 전에도 유저 화면을 확인할 수 있어야 한다)
   if (!shopPublic && !realAdmin) {
     return (
-      <div className={`w-full flex-1 bg-[#f4f3f2] text-[#131313] ${embedded ? "py-24" : "min-h-screen"} flex items-center justify-center px-6`}>
+      <div className={`w-full flex-1 bg-white text-[#131313] ${embedded ? "py-24" : "min-h-screen"} flex items-center justify-center px-6`}>
         {/* break-keep을 주지 않으면 한국어가 단어 중간에서 잘려 내려간다 */}
         <div className="text-center max-w-md break-keep">
           <h1 className="text-3xl font-black tracking-tighter mb-3">ARCTIC 준비 중</h1>
@@ -537,20 +527,20 @@ export default function ArcticShopBody({
     const owned = ownedItemIds.has(it._id);
     const inCart = cart.some((c) => c.itemId === it._id);
     return (
-            <div key={it._id} className="group bg-white rounded-2xl border border-[#dedddb] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
+            <div key={it._id} className="group bg-white rounded-2xl border border-[#e0e0e0] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
               {/* 이미지 */}
-              <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
+              <div className="relative aspect-[4/3] bg-[#f2f2f2] overflow-hidden">
                 {/* 상세로 가는 오버레이 — 위에 얹힌 버튼(z-10)은 그대로 눌린다 */}
                 <Link href={`/arctic/item/${it._id}`} aria-label={`${it.name} 상세보기`} className="absolute inset-0 z-[1]"></Link>
                 <CardArt it={it} imgClass="group-hover:scale-105 transition-transform duration-500" iconSize={56} />
                 <TypeBadge type={it.type} className="absolute top-2 left-2 sm:top-3 sm:left-3 px-2 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] tracking-wide" />
                 {!it.active && (
-                  <span className="absolute top-11 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#dedddb]">숨김</span>
+                  <span className="absolute top-11 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#e0e0e0]">숨김</span>
                 )}
 
                 {/* 찜 */}
                 <button onClick={() => toggleWish(it)} aria-label="찜하기"
-                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white border border-[#dedddb] flex items-center justify-center shadow-sm transition-colors z-10">
+                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white border border-[#e0e0e0] flex items-center justify-center shadow-sm transition-colors z-10">
                   <svg className={`w-4 h-4 transition-colors ${wish.includes(it._id) ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}
                     fill={wish.includes(it._id) ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.heart} />
@@ -566,11 +556,11 @@ export default function ArcticShopBody({
                 {isAdmin && (
                   <div className="absolute bottom-3 right-3 flex gap-1.5 z-10">
                     <button onClick={() => openEdit(it)}
-                      className="px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#131313] border border-[#dedddb] hover:bg-white shadow-sm transition-colors">
+                      className="px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#131313] border border-[#e0e0e0] hover:bg-white shadow-sm transition-colors">
                       수정
                     </button>
                     <button onClick={() => setDeleteTarget(it)}
-                      className="px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#c62828] border border-[#dedddb] hover:bg-white shadow-sm transition-colors">
+                      className="px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#c62828] border border-[#e0e0e0] hover:bg-white shadow-sm transition-colors">
                       삭제
                     </button>
                   </div>
@@ -604,7 +594,7 @@ export default function ArcticShopBody({
                           <button key={o.days} type="button"
                             onClick={() => setPickDays((prev) => ({ ...prev, [it._id]: o.days }))}
                             className={`px-2.5 h-7 rounded-full text-[11px] font-bold border transition-colors ${
-                              on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#8a8a8a] border-[#dedddb] hover:border-[#131313] hover:text-[#131313]"
+                              on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#8a8a8a] border-[#e0e0e0] hover:border-[#131313] hover:text-[#131313]"
                             }`}>
                             {durationLabel(o.days)}
                           </button>
@@ -636,10 +626,10 @@ export default function ArcticShopBody({
                       title={inCart ? "다시 누르면 장바구니에서 삭제됩니다" : "장바구니에 담기"}
                       className={`w-8 h-8 sm:w-11 sm:h-11 shrink-0 rounded-full flex items-center justify-center transition-all ${
                         soldOut || owned
-                          ? "bg-[#e9e8e6] text-[#c4c4c4] cursor-not-allowed"
+                          ? "bg-[#f2f2f2] text-[#c4c4c4] cursor-not-allowed"
                           : inCart
                           ? "bg-[#131313] text-white"
-                          : "bg-white text-[#131313] border border-[#dedddb] hover:border-[#131313]"
+                          : "bg-white text-[#131313] border border-[#e0e0e0] hover:border-[#131313]"
                       }`}
                     >
                       <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -651,11 +641,11 @@ export default function ArcticShopBody({
                       disabled={soldOut || owned}
                       className={`flex-1 min-w-0 px-2 sm:px-5 h-8 sm:h-11 rounded-full text-[11px] sm:text-[12px] font-bold transition-all ${
                         owned
-                          ? "bg-[#e9e8e6] text-[#8a8a8a] cursor-not-allowed"
+                          ? "bg-[#f2f2f2] text-[#8a8a8a] cursor-not-allowed"
                           : soldOut
-                          ? "bg-[#dedddb] text-[#a3a3a3] cursor-not-allowed"
+                          ? "bg-[#e0e0e0] text-[#a3a3a3] cursor-not-allowed"
                           : isLoggedIn && !affordable
-                          ? "bg-[#e9e8e6] text-[#8a8a8a] hover:bg-[#dedddb]"
+                          ? "bg-[#f2f2f2] text-[#8a8a8a] hover:bg-[#e0e0e0]"
                           : "bg-[#e91e3f] text-[#ffffff] hover:bg-[#d01634] shadow-[0_4px_12px_rgba(233,30,63,0.25)]"
                       }`}
                     >
@@ -682,26 +672,21 @@ export default function ArcticShopBody({
   const efSeasonSummary = editForm?.detachOnSeason ? "시즌 바뀌면 디스코드 표기 뗌" : "디스코드 역할 계속 유지";
 
   return (
-    <div className={`w-full flex-1 bg-[#f4f3f2] text-[#131313] ${embedded ? "" : "min-h-screen"}`}>
-      {/* ── ARCTIC 전용 헤더 — 스크롤하면 알약 독으로 좁아진다 ── */}
-      <div className={`sticky top-0 z-[95] w-full transition-[padding] duration-500 ease-out ${pastBanner ? "pt-3 px-3 md:px-6" : ""}`}>
-      {/* max-width를 고정값끼리 오가게 해야 알약 전환이 부드럽게 애니메이션된다 */}
-      <header className={`mx-auto transition-all duration-500 ease-out ${
-        pastBanner
-          ? "max-w-5xl rounded-full border border-[#dedddb] bg-white/85 backdrop-blur-2xl shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)]"
-          : "max-w-[1600px] rounded-none border-x-transparent border-t-transparent border-b border-b-[#dedddb] bg-[#f4f3f2]/92 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)]"
-      }`}>
-        {/* 좌우 시작점을 전역 헤더와 같게 — 전역은 header px-6 + 안쪽 max-w-7xl 이다 */}
-        <div className={`mx-auto flex items-center gap-3 md:gap-6 transition-all duration-500 ease-out ${pastBanner ? "max-w-5xl px-5 md:px-6 h-14" : "max-w-7xl px-6 h-16"}`}>
-          {/* 브랜드 — 고급 이글루의 ARCTIC (좁은 화면에서도 가로로) */}
-          <div className="flex flex-row items-center gap-2 lg:gap-3 min-w-0 leading-none">
-            <Link href="/" className="text-[9px] lg:text-[10px] font-bold tracking-[0.18em] text-[#8a8a8a] hover:text-[#131313] transition-colors whitespace-nowrap">
-              고급 이글루
-            </Link>
-            <span className="w-px h-3.5 lg:h-4 bg-[#d2d1cf]"></span>
-            <Link href="/arctic" className="text-[15px] lg:text-[17px] font-black tracking-[0.16em] lg:tracking-[0.2em] text-[#131313] hover:text-[#e91e3f] transition-colors">
-              ARCT<span className="text-[#e91e3f]">I</span>C
-            </Link>
+    <div className={`w-full flex-1 bg-white text-[#131313] ${embedded ? "" : "min-h-screen"}`}>
+      {/* ── ARCTIC 헤더 — 목업 그대로: 흰 띠 · 작은 "고급 이글루" 위에 큰 ARCTIC · 가운데 큰 검색 · 오른쪽 도구. 알약 변형 없음 ── */}
+      <div className="sticky top-0 z-[95] w-full">
+      <header className="w-full bg-white/95 backdrop-blur-md border-b border-[#ededed]">
+        <div className="max-w-7xl mx-auto flex items-center gap-3 md:gap-6 px-5 md:px-6 h-[68px] md:h-20">
+          {/* 브랜드 락업 — 상위 이름은 작게 위에, ARCTIC 은 크게 */}
+          <div className="flex items-center gap-3 min-w-0 leading-none">
+            <div className="flex flex-col items-start">
+              <Link href="/" className="mb-[3px] text-[9px] md:text-[9.5px] font-bold tracking-[0.14em] text-[#8a8a8a] hover:text-[#131313] transition-colors whitespace-nowrap leading-none">
+                고급 이글루
+              </Link>
+              <Link href="/arctic" className="text-[20px] md:text-[26px] font-black tracking-[0.16em] text-[#131313] hover:text-[#e91e3f] transition-colors leading-none">
+                ARCT<span className="text-[#e91e3f]">I</span>C
+              </Link>
+            </div>
 
             {/* 비공개 상태 — 관리자에게만 작은 점으로 알린다 */}
             {realAdmin && (
@@ -711,7 +696,7 @@ export default function ArcticShopBody({
                 className={`inline-flex shrink-0 items-center gap-1.5 h-8 px-2.5 md:px-3 rounded-full text-[11px] font-bold border transition-colors ${
                   userPreview
                     ? "bg-[#131313] text-white border-[#131313]"
-                    : "bg-white text-[#5a5a5a] border-[#dedddb] hover:text-[#131313] hover:border-[#a3a3a3]"
+                    : "bg-white text-[#5a5a5a] border-[#e0e0e0] hover:text-[#131313] hover:border-[#a3a3a3]"
                 }`}
               >
                 <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -736,7 +721,7 @@ export default function ArcticShopBody({
 
           {/* 큰 검색창 — 가운데 주인공. 입력하면 곧바로 검색 결과(상품 화면) */}
           <div className="hidden md:flex flex-1 justify-center min-w-0 px-2">
-            <div className={`relative w-full transition-all duration-500 ease-out ${pastBanner ? "max-w-[360px] h-9" : "max-w-[460px] h-11"} rounded-full border-2 border-[#131313] bg-white overflow-hidden`}>
+            <div className="relative w-full max-w-[460px] h-11 rounded-full border-2 border-[#131313] bg-white overflow-hidden">
               <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="상품, 유형, 역할 검색"
                 className="absolute inset-0 w-full h-full bg-transparent pl-5 pr-11 text-[13px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
               {query ? (
@@ -764,7 +749,7 @@ export default function ArcticShopBody({
                   <span>{(myXp ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#e91e3f]">XP</span></span>
                   <span>{(myPoint ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#3f9e93]">빙옥</span></span>
                 </span>
-                <span className="hidden md:block w-px h-4 bg-[#dedddb] mx-1"></span>
+                <span className="hidden md:block w-px h-4 bg-[#e0e0e0] mx-1"></span>
 
                 {/* 쿠폰함 — 사이트에 하나, 헤더의 창을 연다 */}
                 <button onClick={() => window.dispatchEvent(new Event("igloo:open-coupons"))} aria-label="쿠폰함" title="쿠폰함"
@@ -811,9 +796,9 @@ export default function ArcticShopBody({
                 <Link href="/profile?from=arctic" aria-label="내 정보" className="relative shrink-0 hidden md:flex items-center justify-center w-9 h-9">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={session?.user?.image || ""} alt=""
-                    className="w-8 h-8 rounded-full bg-[#dedddb] ring-1 ring-[#dedddb] hover:ring-[#131313] transition-all" />
+                    className="w-8 h-8 rounded-full bg-[#e0e0e0] ring-1 ring-[#e0e0e0] hover:ring-[#131313] transition-all" />
                   {pendingOrders > 0 && (
-                    <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[#e91e3f] ring-2 ring-[#f4f3f2]"></span>
+                    <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[#e91e3f] ring-2 ring-white"></span>
                   )}
                 </Link>
               </>
@@ -830,7 +815,7 @@ export default function ArcticShopBody({
       </div>
 
       {/* ── 유형 줄 — 홈 · 역할 · 권한 · 아이템 · 기프트카드 · 기간제. 개수·점 없이, 고른 것만 빨간 밑줄 ── */}
-      <div className="w-full bg-white border-b border-[#ececea]">
+      <div className="w-full bg-white border-b border-[#ededed]">
         <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center justify-between gap-4">
           <nav className="flex items-center gap-7 md:gap-9 overflow-x-auto no-bar h-[52px]">
             {[{ v: "home", l: "홈" }, ...TYPES.filter((t) => t.v !== "all")].map((t) => {
@@ -889,10 +874,10 @@ export default function ArcticShopBody({
         )}
 
         {/* 📌 모바일은 필터 칩이 너무 많아지므로 접어 두고, 필요할 때만 편다 */}
-        <div className="md:hidden flex items-center justify-between gap-3 pb-4 border-b border-[#dedddb]">
+        <div className="md:hidden flex items-center justify-between gap-3 pb-4 border-b border-[#e0e0e0]">
           <button onClick={() => setShowFilters(!showFilters)}
             className={`inline-flex items-center gap-1.5 px-4 h-9 rounded-full border text-[12px] font-bold transition-colors ${
-              activeFilterCount > 0 ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#4b4b4b] border-[#dedddb]"
+              activeFilterCount > 0 ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#4b4b4b] border-[#e0e0e0]"
             }`}>
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
@@ -915,7 +900,7 @@ export default function ArcticShopBody({
 
         {/* 모바일 — 펼친 필터 */}
         {showFilters && (
-          <div className="md:hidden pt-4 pb-5 border-b border-[#dedddb] space-y-4" style={{ animation: "menuDrop 0.24s cubic-bezier(0.16,1,0.3,1)" }}>
+          <div className="md:hidden pt-4 pb-5 border-b border-[#e0e0e0] space-y-4" style={{ animation: "menuDrop 0.24s cubic-bezier(0.16,1,0.3,1)" }}>
             <div>
               <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mb-2">가격대</p>
               <div className="flex flex-wrap gap-2">
@@ -948,7 +933,7 @@ export default function ArcticShopBody({
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-6 border-b border-[#dedddb]">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-6 border-b border-[#e0e0e0]">
             <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => setInStockOnly(!inStockOnly)} className={chip(inStockOnly)}>재고 있는 상품만</button>
               {isLoggedIn && (
@@ -994,16 +979,16 @@ export default function ArcticShopBody({
       {/* ── 장바구니에 이미 담긴 상품을 '구매'로 눌렀을 때 ── */}
       {cartConflict && (
         <div className="fixed inset-0 z-[145] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setCartConflict(null)}>
-          <div className="relative bg-white rounded-3xl w-full max-w-sm p-7 border border-[#dedddb] shadow-2xl"
+          <div className="relative bg-white rounded-3xl w-full max-w-sm p-7 border border-[#e0e0e0] shadow-2xl"
             style={{ animation: "menuDrop 0.26s cubic-bezier(0.16,1,0.3,1)" }} onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setCartConflict(null)} aria-label="닫기"
-              className="absolute top-4 right-4 p-1.5 rounded-full text-[#a3a3a3] hover:text-[#131313] hover:bg-[#f4f3f2] transition-colors">
+              className="absolute top-4 right-4 p-1.5 rounded-full text-[#a3a3a3] hover:text-[#131313] hover:bg-[#f5f5f5] transition-colors">
               <svg className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} />
               </svg>
             </button>
 
-            <div className="w-12 h-12 rounded-full bg-[#f4f3f2] flex items-center justify-center mb-4 text-[#131313]">
+            <div className="w-12 h-12 rounded-full bg-[#f5f5f5] flex items-center justify-center mb-4 text-[#131313]">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
               </svg>
@@ -1020,7 +1005,7 @@ export default function ArcticShopBody({
               </Link>
               <button
                 onClick={() => { const it = cartConflict; setCartConflict(null); removeFromCart(it._id); startBuy(it); }}
-                className="w-full py-3.5 bg-[#e9e8e6] hover:bg-[#dedddb] text-[#4b4b4b] font-bold rounded-xl transition-colors">
+                className="w-full py-3.5 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#4b4b4b] font-bold rounded-xl transition-colors">
                 이 상품만 지금 구매
               </button>
             </div>
@@ -1031,9 +1016,9 @@ export default function ArcticShopBody({
       {/* ── 찜 목록 패널 ── */}
       {showWishList && (
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowWishList(false)}>
-          <div className="w-full max-w-lg max-h-[80vh] bg-white rounded-3xl border border-[#dedddb] flex flex-col shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] overflow-hidden"
+          <div className="w-full max-w-lg max-h-[80vh] bg-white rounded-3xl border border-[#e0e0e0] flex flex-col shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] overflow-hidden"
             style={{ animation: "menuDrop 0.26s cubic-bezier(0.16,1,0.3,1)" }} onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-5 border-b border-[#ececea] flex items-center justify-between shrink-0">
+            <div className="px-6 py-5 border-b border-[#ededed] flex items-center justify-between shrink-0">
               <h2 className="text-base font-black text-[#131313] flex items-center gap-2">
                 <svg className="w-4 h-4 text-[#e91e3f]" fill="currentColor" viewBox="0 0 24 24">
                   <path d={ICON_PATHS.heart} />
@@ -1051,14 +1036,14 @@ export default function ArcticShopBody({
                   <p className="text-sm font-bold text-[#131313]">찜한 상품이 없습니다</p>
                 </div>
               ) : (
-                <div className="divide-y divide-[#ececea]">
+                <div className="divide-y divide-[#ededed]">
                   {wishRows.map((it) => {
                     const owned = ownedItemIds.has(it._id);
                     const inCart = cart.some((c) => c.itemId === it._id);
                     const soldOut = it.stock === 0;
                     return (
                       <div key={it._id} className="p-5 flex gap-4 items-center">
-                        <div className="relative w-16 h-16 rounded-xl bg-[#e9e8e6] overflow-hidden shrink-0">
+                        <div className="relative w-16 h-16 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
                           <CardArt it={it} iconSize={30} />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -1077,7 +1062,7 @@ export default function ArcticShopBody({
                             disabled={owned || soldOut || inCart}
                             className={`px-3.5 py-2 rounded-full text-[11px] font-bold transition-colors ${
                               owned || soldOut || inCart
-                                ? "bg-[#e9e8e6] text-[#a3a3a3] cursor-not-allowed"
+                                ? "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"
                                 : "bg-[#e91e3f] text-white hover:bg-[#d01634]"
                             }`}>
                             {owned ? "보유 중" : soldOut ? "품절" : inCart ? "담김" : "장바구니"}
@@ -1125,7 +1110,7 @@ export default function ArcticShopBody({
                 <input autoFocus type="text" value={query} onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") setShowMobileSearch(false); }}
                   placeholder="상품명, 설명, 역할로 검색"
-                  className="w-full bg-[#f4f3f2] rounded-full pl-9 pr-4 py-3 text-[14px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
+                  className="w-full bg-[#f5f5f5] rounded-full pl-9 pr-4 py-3 text-[14px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
               </div>
               <button onClick={() => setShowMobileSearch(false)} className="px-4 py-3 text-[13px] font-bold text-[#131313]">닫기</button>
             </div>
@@ -1175,7 +1160,7 @@ export default function ArcticShopBody({
       {/* ── 구매 모달 ── */}
       {buyTarget && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#ffffff] rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-[#dedddb]">
+          <div className="bg-[#ffffff] rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-[#e0e0e0]">
             {result ? (
               <div className="p-8 text-center">
                 <div className={`w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-5 ${result.ok ? "bg-[#e8f3e6] text-[#3f7a35]" : "bg-[#fdeaea] text-[#c62828]"}`}>
@@ -1191,8 +1176,8 @@ export default function ArcticShopBody({
               </div>
             ) : (
               <>
-                <div className="flex gap-4 p-6 border-b border-[#ececea]">
-                  <div className="relative w-20 h-20 rounded-xl bg-[#e9e8e6] overflow-hidden shrink-0">
+                <div className="flex gap-4 p-6 border-b border-[#ededed]">
+                  <div className="relative w-20 h-20 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
                     <CardArt it={buyTarget} iconSize={36} />
                   </div>
                   <div className="min-w-0">
@@ -1211,7 +1196,7 @@ export default function ArcticShopBody({
                       <label className="block text-xs font-bold text-[#4b4b4b] mb-2">수령 정보 <span className="text-[#c62828]">*</span></label>
                       <textarea rows={3} value={contact} onChange={(e) => setContact(e.target.value)}
                         placeholder="연락처 / 배송지 또는 기프티콘 받을 번호를 입력해주세요."
-                        className="w-full bg-white border border-[#dedddb] rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#8a8a8a] resize-none placeholder:text-[#a3a3a3]" />
+                        className="w-full bg-white border border-[#e0e0e0] rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#8a8a8a] resize-none placeholder:text-[#a3a3a3]" />
                       <p className="text-[10px] text-[#8a8a8a] mt-1.5">운영진만 확인하며, 발송 목적으로만 사용됩니다.</p>
                     </div>
                   )}
@@ -1224,7 +1209,7 @@ export default function ArcticShopBody({
                           const on = o.days === buyTarget._days;
                           return (
                             <button key={o.days} type="button" onClick={() => { setPickDays((prev) => ({ ...prev, [buyTarget._id]: o.days })); setBuyTarget({ ...buyTarget, _days: o.days }); }}
-                              className={`flex-1 py-2.5 rounded-xl text-[12px] font-bold border transition-colors ${on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#dedddb] hover:border-[#131313]"}`}>
+                              className={`flex-1 py-2.5 rounded-xl text-[12px] font-bold border transition-colors ${on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#e0e0e0] hover:border-[#131313]"}`}>
                               {durationLabel(o.days)}
                               <span className={`block text-[11px] font-bold tabular-nums mt-0.5 ${on ? "text-white/70" : "text-[#a3a3a3]"}`}>{salePrice(buyTarget, o.days).toLocaleString()} XP</span>
                             </button>
@@ -1235,10 +1220,10 @@ export default function ArcticShopBody({
                     </div>
                   )}
 
-                  <div className="bg-[#f4f3f2] rounded-xl px-4 py-3 mb-5 text-[12px] space-y-1.5">
+                  <div className="bg-[#f5f5f5] rounded-xl px-4 py-3 mb-5 text-[12px] space-y-1.5">
                     <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold text-[#131313] tabular-nums">{(myXp ?? 0).toLocaleString()}</span></div>
                     <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 XP</span><span className="font-bold text-[#c62828] tabular-nums">-{salePrice(buyTarget, buyTarget._days).toLocaleString()}</span></div>
-                    <div className="h-px bg-[#dedddb]"></div>
+                    <div className="h-px bg-[#e0e0e0]"></div>
                     <div className="flex justify-between"><span className="text-[#5a5a5a]">구매 후 잔액</span><span className="font-black text-[#131313] tabular-nums">{Math.max(0, (myXp ?? 0) - salePrice(buyTarget, buyTarget._days)).toLocaleString()}</span></div>
                   </div>
 
@@ -1251,7 +1236,7 @@ export default function ArcticShopBody({
                   </p>
 
                   <div className="flex gap-3">
-                    <button onClick={() => setBuyTarget(null)} className="flex-1 py-3.5 bg-[#e9e8e6] text-[#4b4b4b] font-bold rounded-xl hover:bg-[#dedddb] transition-colors">취소</button>
+                    <button onClick={() => setBuyTarget(null)} className="flex-1 py-3.5 bg-[#f2f2f2] text-[#4b4b4b] font-bold rounded-xl hover:bg-[#e0e0e0] transition-colors">취소</button>
                     <button onClick={confirmBuy} disabled={isBuying || !canAfford(salePrice(buyTarget, buyTarget._days))}
                       className="flex-1 py-3.5 bg-[#e91e3f] text-[#ffffff] font-bold rounded-xl hover:bg-[#d01634] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                       {isBuying ? "처리 중..." : canAfford(salePrice(buyTarget, buyTarget._days)) ? "구매 확정" : "XP 부족"}
@@ -1267,8 +1252,8 @@ export default function ArcticShopBody({
       {/* ── 상품 추가·수정 (관리자, 상점 내 인라인) ── */}
       {editForm && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setEditForm(null)}>
-          <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[88vh] overflow-hidden shadow-2xl border border-[#dedddb] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-5 border-b border-[#ececea] flex items-center justify-between shrink-0">
+          <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[88vh] overflow-hidden shadow-2xl border border-[#e0e0e0] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-5 border-b border-[#ededed] flex items-center justify-between shrink-0">
               <h2 className="text-base font-black text-[#131313]">{editForm.id ? "상품 수정" : "상품 추가"}</h2>
               <button onClick={() => setEditForm(null)} className="p-1.5 text-[#8a8a8a] hover:text-[#131313] transition-colors">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
@@ -1277,7 +1262,7 @@ export default function ArcticShopBody({
 
             <div className="overflow-y-auto grid grid-cols-1 md:grid-cols-2">
               {/* 좌 — 입력 폼 */}
-              <div className="p-6 md:border-r border-[#ececea]">
+              <div className="p-6 md:border-r border-[#ededed]">
                 <div className="border-t border-black/[0.08]">
 
                   {/* ── 기본 정보 ── */}
@@ -1295,7 +1280,7 @@ export default function ArcticShopBody({
                                 else if (regItems[0]) setEditForm(applyItem(editForm, regItems[0]));
                                 else setEditError("등록된 아이템이 없습니다. 아이템 등록에서 먼저 만들어 주세요.");
                               }}
-                              className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors ${on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#4b4b4b] border-[#dedddb] hover:border-[#a3a3a3]"}`}>
+                              className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors ${on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#4b4b4b] border-[#e0e0e0] hover:border-[#a3a3a3]"}`}>
                               {o.l}
                             </button>
                           );
@@ -1323,7 +1308,7 @@ export default function ArcticShopBody({
                     <div>
                       <label className={F_LABEL}>상품명 <span className="text-[#c62828]">*</span></label>
                       <input type="text" value={editForm.name} disabled={efLinked} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                        placeholder="예: [XP] Boost+" className={`${F_INPUT} disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
+                        placeholder="예: [XP] Boost+" className={`${F_INPUT} disabled:bg-[#f5f5f5] disabled:text-[#8a8a8a]`} />
                     </div>
 
                     <div>
@@ -1331,7 +1316,7 @@ export default function ArcticShopBody({
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {ITEM_TYPE_OPTIONS.map((o) => (
                           <button key={o.v} type="button" disabled={efLinked} onClick={() => pickType(o.v)}
-                            className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors disabled:cursor-default ${editForm.type === o.v ? "bg-[#e91e3f] text-white border-[#e91e3f]" : `bg-white text-[#4b4b4b] border-[#dedddb] ${efLinked ? "opacity-40" : "hover:border-[#a3a3a3]"}`}`}>
+                            className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors disabled:cursor-default ${editForm.type === o.v ? "bg-[#e91e3f] text-white border-[#e91e3f]" : `bg-white text-[#4b4b4b] border-[#e0e0e0] ${efLinked ? "opacity-40" : "hover:border-[#a3a3a3]"}`}`}>
                             {o.l}
                           </button>
                         ))}
@@ -1345,7 +1330,7 @@ export default function ArcticShopBody({
                           지급할 역할 {editForm.type === "item" ? <span className="font-normal text-[#8a8a8a]">(선택)</span> : <span className="text-[#c62828]">*</span>}
                         </label>
                         {efLinked ? (
-                          <div className={`${F_INPUT} bg-[#f4f3f2] text-[#8a8a8a]`}>{efRoleName || "역할 없음"}</div>
+                          <div className={`${F_INPUT} bg-[#f5f5f5] text-[#8a8a8a]`}>{efRoleName || "역할 없음"}</div>
                         ) : (
                           <Dropdown
                             theme="light"
@@ -1362,7 +1347,7 @@ export default function ArcticShopBody({
                     <div>
                       <label className={F_LABEL}>상품 설명</label>
                       <textarea rows={2} value={editForm.description} disabled={efLinked} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                        placeholder="카드에 표시될 설명" className={`${F_INPUT} resize-none disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
+                        placeholder="카드에 표시될 설명" className={`${F_INPUT} resize-none disabled:bg-[#f5f5f5] disabled:text-[#8a8a8a]`} />
                     </div>
 
                     {/* 상품 이미지는 상품 고유 값 — 아이템을 연동해도 따로 넣을 수 있다 */}
@@ -1376,7 +1361,7 @@ export default function ArcticShopBody({
                     <div>
                       <label className={F_LABEL}>아이콘</label>
                       <IconPicker value={editForm.icon} disabled={efLinked} onChange={(v) => setEditForm({ ...editForm, icon: v })}
-                        color={editForm.color || itemTypeColor(editForm.type)} inputClassName={`${F_INPUT_SM} disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
+                        color={editForm.color || itemTypeColor(editForm.type)} inputClassName={`${F_INPUT_SM} disabled:bg-[#f5f5f5] disabled:text-[#8a8a8a]`} />
                       <p className={F_NOTE}>이미지가 없을 때 카드에 크게</p>
                     </div>
 
@@ -1385,9 +1370,9 @@ export default function ArcticShopBody({
                       <div className="flex items-center gap-2">
                         <input type="color" value={editForm.color || itemTypeColor(editForm.type)} disabled={efLinked}
                           onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
-                          className="w-11 h-11 shrink-0 rounded-lg border border-[#dedddb] bg-white p-1 disabled:opacity-50" />
+                          className="w-11 h-11 shrink-0 rounded-lg border border-[#e0e0e0] bg-white p-1 disabled:opacity-50" />
                         <input type="text" value={editForm.color} disabled={efLinked} maxLength={7} onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
-                          placeholder={itemTypeColor(editForm.type)} className={`${F_INPUT_SM} disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]`} />
+                          placeholder={itemTypeColor(editForm.type)} className={`${F_INPUT_SM} disabled:bg-[#f5f5f5] disabled:text-[#8a8a8a]`} />
                       </div>
                       <p className={F_NOTE}>비우면 유형 기본색</p>
                     </div>
@@ -1427,7 +1412,7 @@ export default function ArcticShopBody({
                                       (v4 는 ! 접두 important 를 안 먹어 클래스를 따로 쓴다) */}
                                   <input type="number" min={0} value={editForm[k]}
                                     onChange={(e) => setEditForm({ ...editForm, [k]: e.target.value })}
-                                    placeholder="0" className="w-full bg-white border border-[#dedddb] rounded-lg px-2.5 py-3 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
+                                    placeholder="0" className="w-full bg-white border border-[#e0e0e0] rounded-lg px-2.5 py-3 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
                                 </div>
                               ))}
                             </div>
@@ -1477,14 +1462,14 @@ export default function ArcticShopBody({
               </div>
 
               {/* 우 — 실시간 카드 미리보기 */}
-              <div className="p-6 bg-[#f4f3f2]">
+              <div className="p-6 bg-[#f5f5f5]">
                 <div className="text-[12px] font-black text-[#131313] mb-3">카드 미리보기</div>
-                <div className="bg-white rounded-2xl border border-[#dedddb] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col">
-                  <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
+                <div className="bg-white rounded-2xl border border-[#e0e0e0] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col">
+                  <div className="relative aspect-[4/3] bg-[#f2f2f2] overflow-hidden">
                     <CardArt it={editForm} iconSize={60} />
                     <TypeBadge type={editForm.type} className="absolute top-3 left-3 px-2.5 py-1 text-[10px] tracking-wide" />
                     {!editForm.active && (
-                      <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#dedddb]">숨김</span>
+                      <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#e0e0e0]">숨김</span>
                     )}
                     {editForm.stock === "0" && (
                       <div className="absolute inset-0 bg-[#131313]/55 flex items-center justify-center">
@@ -1510,8 +1495,8 @@ export default function ArcticShopBody({
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-[#ececea] flex gap-3 shrink-0">
-              <button onClick={() => setEditForm(null)} className="flex-1 py-3.5 bg-[#e9e8e6] text-[#4b4b4b] font-bold rounded-xl hover:bg-[#dedddb] transition-colors">취소</button>
+            <div className="px-6 py-4 border-t border-[#ededed] flex gap-3 shrink-0">
+              <button onClick={() => setEditForm(null)} className="flex-1 py-3.5 bg-[#f2f2f2] text-[#4b4b4b] font-bold rounded-xl hover:bg-[#e0e0e0] transition-colors">취소</button>
               <button onClick={saveItem} disabled={isSavingItem}
                 className="flex-1 py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl hover:bg-[#d01634] disabled:opacity-40 transition-colors">
                 {isSavingItem ? "저장 중..." : editForm.id ? "수정 저장" : "상품 등록"}
@@ -1524,13 +1509,13 @@ export default function ArcticShopBody({
       {/* ── 상품 삭제 확인 (관리자) ── */}
       {deleteTarget && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl border border-[#dedddb]">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl border border-[#e0e0e0]">
             <h2 className="text-lg font-black text-[#131313] mb-2">상품 삭제</h2>
             <p className="text-sm text-[#4b4b4b] leading-relaxed mb-7">
               <span className="font-bold text-[#131313]">{deleteTarget.name}</span> 상품을 삭제하시겠습니까?<br />기존 구매 내역은 그대로 유지됩니다.
             </p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3.5 bg-[#e9e8e6] text-[#4b4b4b] font-bold rounded-xl hover:bg-[#dedddb] transition-colors">취소</button>
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3.5 bg-[#f2f2f2] text-[#4b4b4b] font-bold rounded-xl hover:bg-[#e0e0e0] transition-colors">취소</button>
               <button onClick={deleteItem} className="flex-1 py-3.5 bg-[#c62828] text-white font-bold rounded-xl hover:bg-[#a81f1f] transition-colors">삭제</button>
             </div>
           </div>

@@ -6,7 +6,7 @@ import Link from "next/link";
 //    (ARCTIC은 전역 푸터를 감추므로 여기서 따로 세운다)
 export default function ArcticFooter() {
   return (
-    <footer className="w-full mt-auto border-t border-[#dedddb] bg-[#f4f3f2]">
+    <footer className="w-full mt-auto border-t border-[#e0e0e0] bg-white">
       <div className="max-w-7xl mx-auto px-5 md:px-8 py-10 pb-28 md:pb-10">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-6">
           <div>

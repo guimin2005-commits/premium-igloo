@@ -383,7 +383,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   return (
-    <div className={`flex flex-col min-h-screen ${isLightPage ? "bg-[#f4f3f2]" : "bg-[#090909]"}`}>
+    <div className={`flex flex-col min-h-screen ${isShopPage ? "bg-white" : isLightPage ? "bg-[#f4f3f2]" : "bg-[#090909]"}`}>
       <ScrollLock />
       <RouteProgress pathname={pathname} />
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
