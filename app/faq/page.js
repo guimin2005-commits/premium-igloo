@@ -101,7 +101,7 @@ export default function FaqPage() {
                 <button
                   key={c.label}
                   onClick={() => selectCategory(c.label)}
-                  className={`relative py-3 mr-5 whitespace-nowrap text-[13px] font-extrabold transition-colors outline-none focus:outline-none ${on ? "text-[#131313]" : "text-[#6a6a6a]"}`}
+                  className={`relative py-3 mr-5 whitespace-nowrap text-[13px] font-extrabold transition-colors outline-none focus:outline-none ${on ? "text-[#131313]" : "text-[#5a5a5a]"}`}
                 >
                   {c.label}
                   <span className="ml-1.5 text-[11px] font-bold text-[#a3a3a3] tabular-nums">{c.count}</span>
@@ -171,7 +171,7 @@ export default function FaqPage() {
                       {isOpen && (
                         <div className="pb-6 pt-0.5 md:pl-[42px] md:pr-12">
                           {faq.t && <span className="block mb-2.5 text-[11px] font-black text-[#e91e3f]">{faq.t}</span>}
-                          <p className="text-[14px] leading-[1.8] text-[#4b4b4b] whitespace-pre-line max-w-[72ch]">{faq.a}</p>
+                          <p className="text-[14px] leading-[1.8] text-[#5a5a5a] whitespace-pre-line max-w-[72ch]">{faq.a}</p>
                         </div>
                       )}
                     </div>

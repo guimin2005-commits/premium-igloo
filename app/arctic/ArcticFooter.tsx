@@ -6,7 +6,7 @@ import Link from "next/link";
 //    (ARCTIC은 전역 푸터를 감추므로 여기서 따로 세운다)
 export default function ArcticFooter() {
   return (
-    <footer className="w-full mt-auto border-t border-[#e0e0e0] bg-white">
+    <footer className="w-full mt-auto border-t border-[#ededed] bg-white">
       <div className="max-w-7xl mx-auto px-5 md:px-8 py-10 pb-28 md:pb-10">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-6">
           <div>
@@ -24,7 +24,7 @@ export default function ArcticFooter() {
             <Link href="/policy?tab=privacy" className="text-xs font-medium text-[#5a5a5a] hover:text-[#131313] transition-colors">개인정보처리방침</Link>
           </div>
         </div>
-        <div className="h-px w-full mb-6 bg-gradient-to-r from-black/10 via-black/5 to-transparent"></div>
+        <div className="h-px w-full mb-6 bg-[#ededed]"></div>
         <p className="text-[11px] font-medium tracking-wide leading-relaxed text-[#a3a3a3] break-keep">
           © 2026 Premium Igloo. All rights reserved. Unauthorized reproduction or redistribution is strictly prohibited.
         </p>

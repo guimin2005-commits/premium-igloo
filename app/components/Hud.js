@@ -13,8 +13,8 @@ export const ACCENT = "#e91e3f";
 /** @type {import("react").FC<any>} */
 export const HudPanel = ({ children, className = "", accent = false, corners = true, glow = false }) => (
   <div
-    className={`relative rounded-lg border bg-[#ffffff]/92 ${accent ? "border-[#e91e3f]/35" : "border-black/[0.09]"} ${
-      glow ? "shadow-[0_20px_60px_-24px_rgba(233,30,63,0.45)]" : ""
+    className={`relative border bg-[#ffffff]/92 ${accent ? "border-[#e91e3f]/35" : "border-black/[0.09]"} ${
+      glow ? "" : ""
     } ${className}`}
   >
     {corners && (
@@ -203,7 +203,7 @@ export const SegLadder = ({ total, currentIndex, titles = [], colors }) => (
 /** @type {import("react").FC<any>} */
 export const Sparkline = ({ history = [], h = 96 }) => {
   if (!history || history.length < 2) {
-    return <div className="h-24 flex items-center justify-center text-[11px] font-bold text-[#c4c4c4] tracking-wide">NO DATA</div>;
+    return <div className="h-24 flex items-center justify-center text-[11px] font-bold text-[#a3a3a3] tracking-wide">NO DATA</div>;
   }
   const W = 300, H = 80;
   const vals = history.map((p) => p.online);
@@ -246,15 +246,15 @@ export const RankRows = ({ rows = [], myId, me, myName = "" }) => {
           <span
             className={`shrink-0 flex items-center justify-center tabular-nums font-black ${
               rank === 1
-                ? "w-8 h-8 rounded-lg bg-[#e91e3f] text-white text-sm shadow-[0_6px_16px_-6px_rgba(233,30,63,0.7)]"
+                ? "w-8 h-8 bg-[#e91e3f] text-white text-sm"
                 : podium
-                ? "w-8 h-8 rounded-lg border-[1.5px] border-[#131313] text-[#131313] text-sm"
-                : "w-8 text-right text-[13px] text-[#c4c4c4]"
+                ? "w-8 h-8 border-[1.5px] border-[#131313] text-[#131313] text-sm"
+                : "w-8 text-right text-[13px] text-[#a3a3a3]"
             }`}
           >
             {rank}
           </span>
-          <span className={`min-w-0 flex-1 truncate ${podium ? "text-[15px] font-black text-[#131313]" : "text-[13px] font-bold text-[#4b4b4b]"}`}>
+          <span className={`min-w-0 flex-1 truncate ${podium ? "text-[15px] font-black text-[#131313]" : "text-[13px] font-bold text-[#5a5a5a]"}`}>
             {name}
             {mine && <span className="inline-flex items-center h-5 px-2 ml-2 rounded-full bg-[#e91e3f] text-[9px] font-black tracking-[0.12em] uppercase text-white align-middle">You</span>}
           </span>
@@ -282,7 +282,7 @@ export const RankRows = ({ rows = [], myId, me, myName = "" }) => {
       ))}
       {myId && !inList && me && (
         <>
-          <div className="py-1.5 text-center text-[#c4c4c4] text-[10px] font-black tracking-[0.4em]">···</div>
+          <div className="py-1.5 text-center text-[#a3a3a3] text-[10px] font-black tracking-[0.4em]">···</div>
           <Row rank={me.rank} name={myName} level={me.level} xp={me.xp} mine />
         </>
       )}
@@ -293,7 +293,7 @@ export const RankRows = ({ rows = [], myId, me, myName = "" }) => {
 // ── 빈 슬롯 — 0건 상태를 게임의 빈 퀘스트 슬롯 문법으로 ──
 /** @type {import("react").FC<any>} */
 export const EmptySlot = ({ children, className = "" }) => (
-  <div className={`border border-dashed border-black/10 rounded-lg h-[72px] flex items-center justify-center text-center text-[11px] font-bold text-[#c4c4c4] tracking-wide px-4 ${className}`}>
+  <div className={`border border-dashed border-black/10 h-[72px] flex items-center justify-center text-center text-[11px] font-bold text-[#a3a3a3] tracking-wide px-4 ${className}`}>
     {children}
   </div>
 );

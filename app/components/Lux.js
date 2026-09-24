@@ -96,9 +96,9 @@ export const SectionHeader = ({ no, title, desc }) => (
 export const LuxCard = ({ children, className = "", glow = false, onClick }) => (
   <div
     onClick={onClick}
-    className={`relative rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px ${glow ? "shadow-[0_20px_60px_-20px_rgba(233,30,63,0.25)]" : ""} ${onClick ? "cursor-pointer" : ""}`}
+    className={`relative rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px ${glow ? "" : ""} ${onClick ? "cursor-pointer" : ""}`}
   >
-    <div className={`rounded-2xl bg-[#111111]/95 backdrop-blur-sm h-full ${className}`}>
+    <div className={`rounded-2xl bg-[#131313] h-full ${className}`}>
       {children}
     </div>
   </div>
@@ -146,7 +146,7 @@ export const ScrollProgress = () => {
       <span className="text-[9px] font-black tracking-[0.2em] text-gray-600 uppercase [writing-mode:vertical-rl]">Scroll</span>
       <div className="relative h-[34vh] w-px bg-white/10 rounded-full overflow-hidden">
         <div
-          className="absolute top-0 left-0 w-full bg-gradient-to-b from-[#e91e3f] to-[#ff5c77] rounded-full shadow-[0_0_8px_rgba(233,30,63,0.6)]"
+          className="absolute top-0 left-0 w-full bg-gradient-to-b from-[#e91e3f] to-[#ff5c77] rounded-full"
           style={{ height: `${progress * 100}%`, transition: "height 0.1s linear" }}
         />
       </div>

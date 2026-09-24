@@ -44,7 +44,7 @@ export default function MyInquiriesPage() {
           <div className="flex items-center gap-2">
             <div className="flex gap-1.5">
               {FILTERS.map((f) => (
-                <button key={f.key} onClick={() => setFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${filter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-transparent border-[#e0e0e0] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
+                <button key={f.key} onClick={() => setFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${filter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-transparent border-[#ededed] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#5a5a5a]"}`}>{f.label}</button>
               ))}
             </div>
             <Link href="/support" className="px-3.5 py-1.5 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[11px] font-bold transition-colors">새 문의</Link>

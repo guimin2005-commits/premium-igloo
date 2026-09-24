@@ -157,7 +157,7 @@ export default function MyInfoPage() {
       <main className="w-full text-[#131313] flex-1 flex flex-col justify-center items-center px-6 py-40 text-center break-keep">
         <h2 className="text-2xl font-black text-[#131313] mb-4 tracking-tight">로그인 필요</h2>
         <p className="text-[#5a5a5a] mb-8 text-sm">내 정보를 확인하시려면 로그인이 필요합니다.</p>
-        <button onClick={() => signIn("discord", { callbackUrl: "/profile" })} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">
+        <button onClick={() => signIn("discord", { callbackUrl: "/profile" })} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold transition-all outline-none focus:outline-none">
           Discord 로그인
         </button>
       </main>
@@ -200,7 +200,7 @@ export default function MyInfoPage() {
       <section className="w-full max-w-4xl mx-auto px-6 pt-8 pb-20 flex-1">
         {back && <BackLink href={back.href} label={back.label} />}
         {/* ═══ 잉크 헤더 — SYSTEM : LEVEL 과 같은 패널. 이 화면에서 들어 올리는 건 이것 하나 ═══ */}
-        <div className="relative overflow-hidden rounded-3xl bg-[#131313] text-white px-6 py-6 md:px-8 md:py-7">
+        <div className="relative overflow-hidden bg-[#131313] text-white px-6 py-6 md:px-8 md:py-7">
           <div aria-hidden className="absolute inset-0 pointer-events-none opacity-60"
             style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)", backgroundSize: "28px 28px" }}></div>
           <div aria-hidden className="absolute -top-24 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none" style={{ background: "rgba(233,30,63,0.26)" }}></div>
@@ -266,7 +266,7 @@ export default function MyInfoPage() {
                 <span className="text-[11px] font-bold text-white/80 tabular-nums">{shopMe.levelProgress.needToNext.toLocaleString()} XP</span>
               </div>
               <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] transition-[width] duration-700"
+                <div className="h-full rounded-full bg-[#e91e3f] transition-[width] duration-700"
                   style={{ width: `${Math.min(100, Math.round((shopMe.levelProgress.current / shopMe.levelProgress.required) * 100))}%` }}></div>
               </div>
             </div>
@@ -278,7 +278,7 @@ export default function MyInfoPage() {
           <div className="mt-6 grid grid-cols-4 gap-2">
             {featured.map((r) => (
               <RowShell key={r.k} r={r} className="group flex flex-col items-center gap-1.5 py-3 rounded-2xl hover:bg-black/[0.04] transition-colors outline-none focus:outline-none">
-                <span className="relative w-12 h-12 rounded-2xl bg-white border border-black/[0.06] shadow-[0_2px_10px_rgba(0,0,0,0.04)] flex items-center justify-center text-[#131313]">
+                <span className="relative w-12 h-12 rounded-2xl bg-white border border-black/[0.06] flex items-center justify-center text-[#131313]">
                   <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={r.icon} /></svg>
                   {r.n != null && r.n > 0 && (
                     <span className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center tabular-nums text-white ${r.accent ? "bg-[#e91e3f]" : "bg-[#131313]"}`}>{r.n > 99 ? "99+" : r.n}</span>
@@ -302,7 +302,7 @@ export default function MyInfoPage() {
                 <div className="border-t border-black/[0.08]">
                   {verifyRow && (
                     <div className="flex items-center gap-3 py-3.5 border-b border-black/[0.06]">
-                      <span className="w-9 h-9 rounded-xl bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
+                      <span className="w-9 h-9 bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
                         <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.lock} /></svg>
                       </span>
                       <span className="text-[14px] font-bold text-[#131313]">내전 채널 권한</span>
@@ -312,14 +312,14 @@ export default function MyInfoPage() {
                   )}
                   {list.map((r) => (
                     <RowShell key={r.k} r={r} className="w-full flex items-center gap-3 py-3.5 border-b border-black/[0.06] text-left outline-none focus:outline-none group">
-                      <span className="w-9 h-9 rounded-xl bg-black/[0.045] group-hover:bg-black/[0.09] flex items-center justify-center shrink-0 text-[#131313] transition-colors">
+                      <span className="w-9 h-9 bg-black/[0.045] group-hover:bg-black/[0.09] flex items-center justify-center shrink-0 text-[#131313] transition-colors">
                         <svg viewBox="0 0 24 24" className="w-[19px] h-[19px]" fill="none" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={r.icon} /></svg>
                       </span>
                       <span className="text-[14px] font-bold text-[#131313]">{r.l}</span>
                       <span className="ml-auto flex items-center gap-2.5 shrink-0">
                         {r.pill && <span className={`text-[10px] font-black px-2 py-0.5 rounded-full tabular-nums ${r.pillCls}`}>{r.pill}</span>}
                         {r.n != null && r.n > 0 && <span className={`text-[12px] font-black tabular-nums ${r.accent ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>{r.n > 99 ? "99+" : r.n}</span>}
-                        <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#b9b7b3] group-hover:text-[#5a5a5a] transition-colors" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.chevronRight} /></svg>
+                        <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#a3a3a3] group-hover:text-[#5a5a5a] transition-colors" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.chevronRight} /></svg>
                       </span>
                     </RowShell>
                   ))}

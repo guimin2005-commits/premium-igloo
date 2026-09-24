@@ -14,7 +14,7 @@ import { ADMIN_USERS } from "@/lib/admins";
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   ongoing: { label: "진행 중", cls: "text-[#e91e3f]" },
   upcoming: { label: "예정", cls: "text-[#131313]" },
-  ended: { label: "종료", cls: "text-[#a3a3a3]" },
+  ended: { label: "종료", cls: "text-[#5a5a5a]" },
 };
 
 export default function EventPage() {
@@ -87,7 +87,7 @@ export default function EventPage() {
           <h1 className="text-[30px] md:text-[34px] font-black tracking-tight leading-none">이벤트</h1>
           {isAdmin ? (
             <button onClick={() => router.push("/write?category=이벤트")}
-              className="shrink-0 h-9 px-4 rounded-full bg-[#131313] hover:bg-black text-white text-[12px] font-extrabold transition-colors">글쓰기</button>
+              className="shrink-0 h-9 px-4 bg-[#131313] hover:bg-[#3a3a3a] text-white text-[12px] font-extrabold transition-colors">글쓰기</button>
           ) : (
             <span className="shrink-0 text-[12px] font-bold text-[#8a8a8a] tabular-nums">{posts.length}건</span>
           )}
@@ -99,7 +99,7 @@ export default function EventPage() {
             const on = activeTab === t.id;
             return (
               <button key={t.id} onClick={() => setActiveTab(t.id)}
-                className={`relative py-3 mr-6 md:mr-7 text-[14px] font-extrabold transition-colors outline-none ${on ? "text-[#131313]" : "text-[#6a6a6a] hover:text-[#131313]"}`}>
+                className={`relative py-3 mr-6 md:mr-7 text-[14px] font-extrabold transition-colors outline-none ${on ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
                 {t.label}
                 <span className="ml-1.5 text-[11px] font-bold text-[#a3a3a3] tabular-nums">{t.count}</span>
                 {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
@@ -163,7 +163,7 @@ export default function EventPage() {
                       <div className="mt-2 flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <button onClick={(e) => handleEdit(event._id, e)}
                           className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">수정</button>
-                        <span className="text-[11px] text-[#e0e0e0]">·</span>
+                        <span className="text-[11px] text-[#a3a3a3]">·</span>
                         <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(event._id); }}
                           className="text-[11px] font-bold text-[#e91e3f] hover:text-[#d01634] transition-colors">삭제</button>
                       </div>
@@ -178,13 +178,13 @@ export default function EventPage() {
 
       {/* 삭제 확인 */}
       {deleteConfirmId && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setDeleteConfirmId(null)}>
-          <div className="bg-white rounded-3xl w-full max-w-sm p-7 text-center border border-[#e0e0e0] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteConfirmId(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-7 text-center border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-base font-black text-[#131313] mb-2">이벤트를 삭제할까요?</h2>
             <p className="text-[12px] text-[#8a8a8a] mb-6">되돌릴 수 없습니다.</p>
             <div className="flex gap-2">
-              <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 rounded-xl bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#4b4b4b] text-[13px] font-bold transition-colors">취소</button>
-              <button onClick={executeDelete} className="flex-1 py-3 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">삭제</button>
+              <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] text-[13px] font-bold transition-colors">취소</button>
+              <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">삭제</button>
             </div>
           </div>
         </div>
@@ -192,7 +192,7 @@ export default function EventPage() {
 
       {toast && (
         <div className="fixed bottom-24 md:bottom-8 right-4 md:right-6 z-[200] pointer-events-none">
-          <div className="px-5 py-3 rounded-2xl bg-[#131313] text-white text-xs font-bold shadow-2xl">{toast}</div>
+          <div className="px-5 py-3 rounded-2xl bg-[#131313] text-white text-xs font-bold shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">{toast}</div>
         </div>
       )}
     </main>

@@ -43,7 +43,7 @@ export default function NoticeDetailPage() {
       <main className="w-full max-w-lg mx-auto px-6 py-40 text-center text-[#131313]">
         <h2 className="text-xl font-black mb-2">글을 찾을 수 없습니다</h2>
         <p className="text-[#8a8a8a] text-sm mb-6">삭제되었거나 잘못된 주소입니다.</p>
-        <button onClick={() => router.push("/notice")} className="rounded-full bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#4b4b4b] text-xs font-bold px-5 py-3 transition-colors">공지사항으로</button>
+        <button onClick={() => router.push("/notice")} className="rounded-full bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] text-xs font-bold px-5 py-3 transition-colors">공지사항으로</button>
       </main>
     );
   }
@@ -79,7 +79,7 @@ export default function NoticeDetailPage() {
               {post.author && <span className="text-[11px] font-bold text-[#a3a3a3]">{post.author}</span>}
               <button
                 onClick={() => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 1600); }}
-                className="ml-auto rounded-full px-3.5 py-1.5 text-[10px] font-bold bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#4b4b4b] transition-colors">
+                className="ml-auto rounded-full px-3.5 py-1.5 text-[10px] font-bold bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] transition-colors">
                 {copied ? "복사됨" : "링크 복사"}
               </button>
             </div>
@@ -91,7 +91,7 @@ export default function NoticeDetailPage() {
               </div>
             )}
 
-            <div className="mt-7 text-[14px] md:text-[15px] leading-[1.9] text-[#4b4b4b] break-keep">
+            <div className="mt-7 text-[14px] md:text-[15px] leading-[1.9] text-[#5a5a5a] break-keep">
               <RenderFormattedText text={post.content || ""} />
             </div>
           </Reveal>

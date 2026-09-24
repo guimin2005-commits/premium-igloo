@@ -99,20 +99,21 @@ export default function AdminNav() {
   const isDark = pathname?.startsWith("/admin/room");
 
   const linkClass = (active: boolean, child = false) =>
-    `relative flex items-center gap-2.5 px-3 py-2 rounded-lg font-bold transition-colors ${child ? "text-[12px] ml-4" : "text-[13px]"} ${
+    `relative flex items-center gap-2.5 px-3 py-2 font-bold transition-colors ${child ? "text-[12px] ml-4" : "text-[13px]"} ${
       active
         ? isDark
           ? "text-white bg-[#e91e3f]/25"
           : "text-[#e91e3f] bg-[#e91e3f]/[0.12]"
         : isDark
         ? "text-gray-400 hover:text-white hover:bg-white/[0.06]"
-        : "text-[#4b4b4b] hover:text-[#131313] hover:bg-black/[0.06]"
+        : "text-[#5a5a5a] hover:text-[#131313] hover:bg-[#f2f2f2]"
     }`;
 
   return (
     <>
       {/* ── 데스크톱: 좌측 사이드 패널 ── */}
-      <aside className={`hidden lg:block w-60 shrink-0 border-r ${isDark ? "border-white/10 bg-[#0e0e0e]" : "border-black/10 bg-[#edecea]"}`}>
+      {/* 패널은 흰 면 — hover 의 #f2f2f2 가 보이려면 바탕이 그보다 밝아야 한다 */}
+      <aside className={`hidden lg:block w-60 shrink-0 border-r ${isDark ? "border-white/10 bg-[#0e0e0e]" : "border-[#ededed] bg-white"}`}>
         <nav className="sticky top-24 px-6 py-10 space-y-8">
           {NAV_GROUPS.map((group) => (
             <div key={group.label}>
@@ -129,7 +130,7 @@ export default function AdminNav() {
                         <span className="truncate">{item.title}</span>
                       </Link>
                       {item.children && (
-                        <div className={`mt-0.5 space-y-0.5 border-l ml-3 ${isDark ? "border-white/15" : "border-black/15"}`}>
+                        <div className={`mt-0.5 space-y-0.5 border-l ml-3 ${isDark ? "border-white/15" : "border-[#ededed]"}`}>
                           {item.children.map((child) => {
                             const active = isActive(child.href);
                             return (
@@ -151,7 +152,7 @@ export default function AdminNav() {
       </aside>
 
       {/* ── 모바일: 상단 가로 스크롤 칩 바 (하위 카테고리는 펼쳐서 표시) ── */}
-      <div className={`lg:hidden w-full border-b ${isDark ? "border-white/10 bg-[#0e0e0e]" : "border-black/10 bg-[#edecea]"}`}>
+      <div className={`lg:hidden w-full border-b ${isDark ? "border-white/10 bg-[#0e0e0e]" : "border-[#ededed] bg-[#f2f2f2]"}`}>
         <div className="flex gap-2 overflow-x-auto no-bar px-4 py-3">
           {NAV_GROUPS.flatMap((g) => g.items).flatMap((item) =>
             item.children
@@ -168,7 +169,8 @@ export default function AdminNav() {
                     ? "bg-[#e91e3f] text-white border-[#e91e3f]"
                     : isDark
                     ? "text-gray-300 border-white/20 hover:text-white hover:border-white/40"
-                    : "text-[#3a3a3a] border-black/20 hover:text-[#131313] hover:border-black/40"
+                    : // 칩 바가 #f2f2f2 라 칩 면을 흰색으로 띄워야 윤곽이 보인다
+                      "bg-white text-[#5a5a5a] border-[#ededed] hover:text-[#131313] hover:border-[#a3a3a3]"
                 }`}
               >
                 {item.title}

@@ -204,7 +204,7 @@ function FormPanel({
   return (
     <div
       ref={panelRef}
-      className="mb-10 border border-black/10 rounded-xl p-5 md:p-6 bg-black/[0.015] scroll-mt-24"
+      className="mb-10 border border-black/10 p-5 md:p-6 bg-black/[0.015] scroll-mt-24"
     >
       <div className="flex items-center justify-between gap-4 mb-5">
         <h3 className="text-sm font-black text-[#131313] tracking-tight">{title}</h3>
@@ -863,7 +863,7 @@ export default function AdminBotPage() {
                   <textarea rows={2} value={settings.levelupMessage} onChange={(e) => setSettings({ ...settings, levelupMessage: e.target.value })}
                     className={`${inputClass} resize-none`} />
                   <p className={fieldNote}>
-                    <span className="text-[#3a3a3a]">{"{user}"}</span> 멘션 · <span className="text-[#3a3a3a]">{"{level}"}</span> 도달 레벨 · <span className="text-[#3a3a3a]">{"{xp}"}</span> 누적 XP · 디스코드 마크다운(**굵게**) 사용 가능
+                    <span className="text-[#5a5a5a]">{"{user}"}</span> 멘션 · <span className="text-[#5a5a5a]">{"{level}"}</span> 도달 레벨 · <span className="text-[#5a5a5a]">{"{xp}"}</span> 누적 XP · 디스코드 마크다운(**굵게**) 사용 가능
                   </p>
                 </div>
               </div>
@@ -902,7 +902,7 @@ export default function AdminBotPage() {
                     <textarea rows={2} value={settings.roleGrantMessage || ""} onChange={(e) => setSettings({ ...settings, roleGrantMessage: e.target.value })}
                       className={`${inputClass} resize-none`} />
                     <p className={fieldNote}>
-                      <span className="text-[#3a3a3a]">{"{user}"}</span> 멘션 · <span className="text-[#3a3a3a]">{"{role}"}</span> 지급된 역할명 · <span className="text-[#3a3a3a]">{"{level}"}</span> 도달 레벨
+                      <span className="text-[#5a5a5a]">{"{user}"}</span> 멘션 · <span className="text-[#5a5a5a]">{"{role}"}</span> 지급된 역할명 · <span className="text-[#5a5a5a]">{"{level}"}</span> 도달 레벨
                     </p>
                   </div>
                 </div>
@@ -911,7 +911,7 @@ export default function AdminBotPage() {
             )}
 
             {/* 설정 항목이 많아 스크롤 끝까지 내려가지 않아도 저장할 수 있게 아래에 붙여 둔다 */}
-            <div className="sticky bottom-0 -mx-6 mt-12 px-6 py-4 bg-[#f4f3f2]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
+            <div className="sticky bottom-0 -mx-6 mt-12 px-6 py-4 bg-white border-t border-black/10 flex items-center justify-between gap-4">
               <span className="text-[11px] font-bold text-[#8a8a8a]">봇에는 1분 이내 자동 반영됩니다.</span>
               <Btn type="submit" variant="primary" className="shrink-0">저장</Btn>
             </div>
@@ -1029,7 +1029,7 @@ export default function AdminBotPage() {
                   <select
                     value={tierMap[t.key] || ""}
                     onChange={(e) => setTierMap({ ...tierMap, [t.key]: e.target.value })}
-                    className="flex-1 min-w-0 bg-transparent border border-black/10 rounded-lg px-3 py-2.5 text-xs text-[#131313] outline-none focus:border-[#e91e3f] transition-colors"
+                    className="flex-1 min-w-0 bg-transparent border border-black/10 px-3 py-2.5 text-xs text-[#131313] outline-none focus:border-[#e91e3f] transition-colors"
                   >
                     <option value="" className="bg-[#ffffff]">— 역할 선택 —</option>
                     {grantableRoles.map((r) => (
@@ -1060,7 +1060,7 @@ export default function AdminBotPage() {
                 인벤토리 표기는 <b className="text-[#131313]">아이템 등록</b>에서 관리합니다.
                 {invRoles.length > 0 && <span className="block mt-1 text-[11px] text-[#8a8a8a]">옛 표기 역할 {invRoles.length}개가 남아 있습니다.</span>}
               </p>
-              <Link href="/admin/shop?tab=items" className="shrink-0 px-5 py-2.5 rounded-lg text-[12px] font-bold bg-[#131313] text-white hover:bg-[#2a2a2a] transition-colors text-center outline-none focus:outline-none">
+              <Link href="/admin/shop?tab=items" className="shrink-0 px-5 py-2.5 text-[12px] font-bold bg-[#131313] text-white hover:bg-[#2a2a2a] transition-colors text-center outline-none focus:outline-none">
                 아이템 등록으로
               </Link>
             </div>
@@ -1136,12 +1136,12 @@ export default function AdminBotPage() {
                 {isProtectedRoleOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsProtectedRoleOpen(false)}></div>
-                    <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e6e3de]">
+                    <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e6e3de]">
                       {guildRoles.map((r) => {
                         const picked = protectedRoleIds.includes(r.id);
                         return (
                           <button key={r.id} type="button" onClick={() => toggleProtectedRole(r.id)}
-                            className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 transition-colors outline-none focus:outline-none ${picked ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : "text-[#4b4b4b] hover:bg-black/5"}`}>
+                            className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 transition-colors outline-none focus:outline-none ${picked ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : "text-[#5a5a5a] hover:bg-black/5"}`}>
                             <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: r.color }}></span>
                             <span className="truncate">{r.name}</span>
                             {picked && <span className="ml-auto text-[10px] shrink-0">선택됨</span>}
@@ -1159,7 +1159,7 @@ export default function AdminBotPage() {
                   {protectedRoleIds.map((id) => {
                     const r = guildRoles.find((g) => g.id === id);
                     return (
-                      <span key={id} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-black/10 bg-black/[0.03] text-xs font-bold text-[#131313]">
+                      <span key={id} className="inline-flex items-center gap-2 px-3 py-1.5 border border-black/10 bg-black/[0.03] text-xs font-bold text-[#131313]">
                         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: r?.color || "#99aab5" }}></span>
                         {/* 디스코드에서 지워진 역할도 ID 로 남겨 둔다 — 조용히 사라지면 무엇이 빠졌는지 알 수 없다 */}
                         <span className="truncate max-w-[14rem]">{r?.name || `삭제된 역할 (${id})`}</span>
@@ -1430,7 +1430,7 @@ export default function AdminBotPage() {
                           : `활성 ${on}개 전부 노출 · ${f.every} 초기화`}
                       />
                       {rows.length === 0 ? (
-                        <p className="py-8 text-center text-[12px] text-[#c4c4c4]">
+                        <p className="py-8 text-center text-[12px] text-[#a3a3a3]">
                           등록된 {PERIOD_LABEL[f.period]} 퀘스트가 없습니다.
                         </p>
                       ) : (
@@ -1452,7 +1452,7 @@ export default function AdminBotPage() {
                               </div>
                               <span className="shrink-0 flex items-center gap-2 text-sm font-black tabular-nums">
                                 {q.rewardXp > 0 && <span className="text-[#e91e3f]">+{q.rewardXp.toLocaleString()} XP</span>}
-                                {q.rewardXp > 0 && (q.rewardPoint || 0) > 0 && <span className="text-[#c4c4c4]">·</span>}
+                                {q.rewardXp > 0 && (q.rewardPoint || 0) > 0 && <span className="text-[#a3a3a3]">·</span>}
                                 {(q.rewardPoint || 0) > 0 && <span className="text-[#3f9e93]">+{Number(q.rewardPoint).toLocaleString()} 빙옥</span>}
                                 {q.rewardXp <= 0 && (q.rewardPoint || 0) <= 0 && <span className="text-[#a3a3a3]">보상 없음</span>}
                               </span>
@@ -1554,7 +1554,7 @@ export default function AdminBotPage() {
                   return (
                     <div key={b._id} className="py-4 flex flex-col md:flex-row md:items-center md:gap-4">
                       <div className="flex items-center gap-2.5 md:w-52 shrink-0 min-w-0 mb-2 md:mb-0">
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${state === "진행 중" ? "bg-[#e91e3f] text-white" : state === "예정" ? "bg-black/10 text-[#4b4b4b]" : "bg-transparent text-[#5a5a5a] border border-black/10"}`}>{state}</span>
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${state === "진행 중" ? "bg-[#e91e3f] text-white" : state === "예정" ? "bg-black/10 text-[#5a5a5a]" : "bg-transparent text-[#5a5a5a] border border-black/10"}`}>{state}</span>
                         <span className="text-sm font-bold text-[#131313] truncate">{b.name}</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1 min-w-0">
@@ -1608,7 +1608,7 @@ export default function AdminBotPage() {
               </div>
 
               {Number(grantForm.amount) !== 0 && grantForm.amount !== "" && (
-                <div className={`mb-6 px-4 py-3 rounded-lg border text-[12px] font-bold ${
+                <div className={`mb-6 px-4 py-3 border text-[12px] font-bold ${
                   Number(grantForm.amount) > 0 ? "border-[#e91e3f]/30 bg-[#e91e3f]/[0.06] text-[#e91e3f]" : "border-amber-500/30 bg-amber-500/[0.06] text-amber-700"
                 }`}>
                   {Number(grantForm.amount) > 0
@@ -1822,8 +1822,8 @@ export default function AdminBotPage() {
         {/* 안내 각주 */}
         <Reveal>
         <div className="mt-14 border-t border-black/[0.06] pt-5 text-xs text-[#8a8a8a] leading-relaxed">
-          💡 <strong className="text-[#4b4b4b]">작동 방식:</strong> 봇이 1분마다 설정을 다시 읽습니다. 최종 지급량 = 기본 XP + 역할 Boost + 채널 Boost + 기간제 부스트 (음소거 시 설정된 배율 적용).<br/>
-          ⚠️ 역할 자동 지급이 작동하려면 봇에게 <strong className="text-[#4b4b4b]">역할 관리 권한</strong>이 있고, 봇의 역할이 지급 대상 역할보다 <strong className="text-[#4b4b4b]">위에</strong> 있어야 합니다.
+          💡 <strong className="text-[#5a5a5a]">작동 방식:</strong> 봇이 1분마다 설정을 다시 읽습니다. 최종 지급량 = 기본 XP + 역할 Boost + 채널 Boost + 기간제 부스트 (음소거 시 설정된 배율 적용).<br/>
+          ⚠️ 역할 자동 지급이 작동하려면 봇에게 <strong className="text-[#5a5a5a]">역할 관리 권한</strong>이 있고, 봇의 역할이 지급 대상 역할보다 <strong className="text-[#5a5a5a]">위에</strong> 있어야 합니다.
         </div>
         </Reveal>
       </div>

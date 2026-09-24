@@ -133,26 +133,26 @@ export default function ArcticHome({
             /* 아직 모르는 상태 — 자리만 잡고 아무것도 그리지 않는다 */
             <div className="aspect-[16/7] md:aspect-[3/1]" />
           ) : (
-            <div className="relative aspect-[16/7] md:aspect-[3/1]" style={{ background: "linear-gradient(115deg, #dff4f1 0%, #9fd9d1 45%, #4fb6ab 100%)" }}>
+            <div className="relative aspect-[16/7] md:aspect-[3/1] bg-white border border-[#ededed]">
               <div className="absolute left-6 md:left-12 top-1/2 -translate-y-1/2 break-keep">
                 <div className="text-[11px] font-black text-[#131313] tracking-wide">SEASON {SEASON.number} · {SEASON.name}</div>
                 <div className="mt-2 text-4xl md:text-6xl font-black tracking-tighter leading-none text-[#131313]">ARCT<span className="text-[#e91e3f]">I</span>C</div>
                 {!dday.ended && dday.days >= 0 && (
-                  <div className="mt-3 text-[12px] font-bold text-[#2a4a47] tabular-nums">종료까지 D-{dday.days}</div>
+                  <div className="mt-3 text-[12px] font-bold text-[#5a5a5a] tabular-nums">종료까지 D-{dday.days}</div>
                 )}
               </div>
               {/* 장식 — 유형 아이콘 세 장 */}
               <div aria-hidden className="hidden md:block absolute right-16 top-1/2 -translate-y-1/2 w-[300px] h-[240px]">
-                <span className="absolute left-0 top-12 w-[140px] h-[140px] rounded-3xl bg-white/55 shadow-[0_30px_60px_-30px_rgba(0,0,0,.35)] grid place-items-center -rotate-6"><ItemIcon type="item" size={64} color="#e91e3f" /></span>
-                <span className="absolute right-0 top-0 w-[110px] h-[110px] rounded-3xl bg-[#131313]/85 grid place-items-center rotate-6"><ItemIcon type="perk" size={50} color="#ffffff" /></span>
-                <span className="absolute right-8 bottom-0 w-[92px] h-[92px] rounded-3xl bg-white/55 grid place-items-center -rotate-3"><ItemIcon type="role" size={40} color="#e91e3f" /></span>
+                <span className="absolute left-0 top-12 w-[140px] h-[140px] bg-[#f2f2f2] grid place-items-center -rotate-6"><ItemIcon type="item" size={64} color="#e91e3f" /></span>
+                <span className="absolute right-0 top-0 w-[110px] h-[110px] bg-[#131313] grid place-items-center rotate-6"><ItemIcon type="perk" size={50} color="#ffffff" /></span>
+                <span className="absolute right-8 bottom-0 w-[92px] h-[92px] bg-[#f2f2f2] grid place-items-center -rotate-3"><ItemIcon type="role" size={40} color="#e91e3f" /></span>
               </div>
             </div>
           )}
 
           {isAdmin && (
             <Link href="/admin/shop?tab=banners"
-              className="absolute top-4 right-4 z-10 px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#131313] border border-[#e0e0e0] hover:bg-white shadow-sm transition-colors">
+              className="absolute top-4 right-4 z-10 px-3 py-1.5 rounded-full text-[11px] font-bold bg-white text-[#131313] border border-[#ededed] hover:border-[#a3a3a3] transition-colors">
               배너 관리
             </Link>
           )}
@@ -204,18 +204,18 @@ export default function ArcticHome({
         <div className="grid md:grid-cols-2 gap-4 md:gap-5">
           {deal && (
             <Link href={`/arctic/item/${deal.it._id}`}
-              className="relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 text-white block bg-gradient-to-br from-[#131313] to-[#3a3a3a] hover:to-[#4a4a4a] transition-colors">
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-black opacity-85"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>{deal.kind === "sale" ? "할인" : "새로 들어온"}</span>
+              className="relative overflow-hidden h-[180px] md:h-[200px] p-6 md:p-7 text-white block bg-[#131313] hover:bg-[#3a3a3a] transition-colors">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-black"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>{deal.kind === "sale" ? "할인" : "새로 들어온"}</span>
               <h3 className="mt-3 pr-16 text-[22px] md:text-[26px] font-black tracking-tight leading-tight break-keep line-clamp-2">
                 {deal.kind === "sale" ? `${deal.it.name} ${deal.it.discountPct}% 할인` : deal.it.name}
               </h3>
-              <p className="mt-1.5 text-[13px] opacity-85 tabular-nums">
+              <p className="mt-1.5 text-[13px] tabular-nums">
                 {deal.kind === "sale"
                   // 기간제는 가장 짧은 기간의 정가 → 할인가 (salePrice 도 그 기간을 기준으로 잡는다)
                   ? `${Number(isTimed(deal.it) ? durationOptions(deal.it)[0]?.price ?? deal.it.price : deal.it.price).toLocaleString()} → ${salePrice(deal.it).toLocaleString()} XP${isTimed(deal.it) ? ` / ${durationLabel(durationOptions(deal.it)[0]?.days ?? 0)}` : ""} · 1인 1개`
                   : `${salePrice(deal.it).toLocaleString()} XP${isTimed(deal.it) ? " 부터" : ""}`}
               </p>
-              <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">
+              <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold tabular-nums">
                 {deal.it.stock === -1 || deal.it.stock == null ? "수량 무제한" : `남은 수량 ${deal.it.stock}`}
               </span>
               <span className="absolute right-6 md:right-7 bottom-6 w-9 h-9 rounded-full border border-white/50 grid place-items-center font-black">›</span>
@@ -225,11 +225,11 @@ export default function ArcticHome({
             </Link>
           )}
           <Link href="/level?tab=pass"
-            className={`relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 text-white block bg-gradient-to-br from-[#e91e3f] to-[#ff5c77] hover:to-[#ff6f86] transition-colors ${deal ? "" : "md:col-span-2"}`}>
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-black opacity-85"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>시즌 {SEASON.number}</span>
+            className={`relative overflow-hidden h-[180px] md:h-[200px] p-6 md:p-7 text-white block bg-[#e91e3f] hover:bg-[#d01634] transition-colors ${deal ? "" : "md:col-span-2"}`}>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-black"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>시즌 {SEASON.number}</span>
             <h3 className="mt-3 pr-16 text-[22px] md:text-[26px] font-black tracking-tight leading-tight break-keep">{SEASON.name}</h3>
-            <p className="mt-1.5 text-[13px] opacity-85">시즌 패스 · 티어 보상</p>
-            <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">
+            <p className="mt-1.5 text-[13px]">시즌 패스 · 티어 보상</p>
+            <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold tabular-nums">
               {dday.ended ? "시즌 종료" : `종료까지 D-${Math.max(0, dday.days)}`}
             </span>
             <span className="absolute right-6 md:right-7 bottom-6 w-9 h-9 rounded-full border border-white/50 grid place-items-center font-black">›</span>
@@ -244,13 +244,13 @@ export default function ArcticHome({
       {isAdmin && (
         <div className="max-w-7xl mx-auto px-5 md:px-8 pb-10 flex flex-wrap items-center gap-3">
           <button onClick={openEdit}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-[#131313] hover:bg-black text-white text-[12px] font-bold rounded-full transition-colors">
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-[#131313] hover:bg-[#3a3a3a] text-white text-[12px] font-bold rounded-full transition-colors">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
             상품 추가
           </button>
-          <Link href="/admin/shop?tab=products" className="text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] underline underline-offset-4">전체 상품 관리</Link>
-          <Link href="/admin/shop?tab=items" className="text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] underline underline-offset-4">아이템 등록</Link>
-          <Link href="/admin/shop?tab=orders" className="text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] underline underline-offset-4">구매 관리</Link>
+          <Link href="/admin/shop?tab=products" className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] underline underline-offset-4">전체 상품 관리</Link>
+          <Link href="/admin/shop?tab=items" className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] underline underline-offset-4">아이템 등록</Link>
+          <Link href="/admin/shop?tab=orders" className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] underline underline-offset-4">구매 관리</Link>
           {adminTools}
         </div>
       )}

@@ -25,7 +25,7 @@ export default function NotFound() {
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <Link href="/" className="px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-all shadow-[0_10px_36px_rgba(233,30,63,0.35)] hover:-translate-y-0.5">
+            <Link href="/" className="px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-all hover:-translate-y-0.5">
               홈으로 돌아가기
             </Link>
             <Link href="/notice" className="px-8 py-3.5 bg-white/[0.03] border border-white/10 text-white text-sm font-bold rounded-full hover:bg-white/[0.07] hover:border-white/25 transition-all">

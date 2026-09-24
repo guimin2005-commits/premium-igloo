@@ -34,13 +34,13 @@ function Row({ k, d, note, v, unit, word, compact = false }: { k: string; d?: st
     <div className="flex flex-wrap sm:flex-nowrap items-baseline gap-x-5 md:gap-x-6 py-[18px] border-b border-[#ededed]">
       <p className={`order-1 flex-1 min-w-0 sm:flex-none ${compact ? "sm:w-[108px]" : "sm:w-[176px]"} text-[15px] md:text-[16px] font-extrabold tracking-tight break-keep`}>{k}</p>
       {v && (
-        <p className={`order-2 sm:order-3 shrink-0 ml-auto sm:ml-0 text-right whitespace-nowrap ${word ? "text-[13px] font-extrabold text-[#4b4b4b]" : "text-[18px] md:text-[20px] font-black tracking-[-0.02em] tabular-nums"}`}>
+        <p className={`order-2 sm:order-3 shrink-0 ml-auto sm:ml-0 text-right whitespace-nowrap ${word ? "text-[13px] font-extrabold text-[#5a5a5a]" : "text-[18px] md:text-[20px] font-black tracking-[-0.02em] tabular-nums"}`}>
           {v}
           {unit && <span className="ml-1.5 text-[11px] font-bold tracking-[0.04em] text-[#8a8a8a]">{unit}</span>}
         </p>
       )}
       <div className="order-3 sm:order-2 w-full sm:w-auto sm:flex-1 min-w-0 mt-1 sm:mt-0">
-        {d && <p className="text-[13px] leading-relaxed text-[#6a6a6a] break-keep">{d}</p>}
+        {d && <p className="text-[13px] leading-relaxed text-[#5a5a5a] break-keep">{d}</p>}
         {note && <p className="mt-1 text-[11px] leading-relaxed text-[#a3a3a3] break-keep">{note}</p>}
       </div>
     </div>
@@ -123,7 +123,7 @@ export default function BoosterPage() {
         {/* 제목 */}
         <div className="border-b border-[#131313] pb-5">
           <h1 className="text-[30px] md:text-[34px] font-black tracking-tight leading-none">서버 부스터</h1>
-          <p className="mt-3 text-[14px] text-[#6a6a6a] break-keep">부스트를 시작하면 아래 혜택이 자동으로 지급됩니다.</p>
+          <p className="mt-3 text-[14px] text-[#5a5a5a] break-keep">부스트를 시작하면 아래 혜택이 자동으로 지급됩니다.</p>
         </div>
 
         {/* 01 전용 기능 권한 */}
@@ -184,7 +184,7 @@ export default function BoosterPage() {
         {/* 부스트 */}
         <div className="pt-10 pb-24 md:pb-16">
           <a href={DISCORD} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center h-12 px-8 rounded-full bg-[#131313] hover:bg-black text-white text-[14px] font-extrabold transition-colors">
+            className="inline-flex items-center h-12 px-8 rounded-full bg-[#131313] hover:bg-[#3a3a3a] text-white text-[14px] font-extrabold transition-colors">
             서버에서 부스트하기
           </a>
         </div>

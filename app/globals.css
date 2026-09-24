@@ -12,6 +12,30 @@
      예전엔 정의되지 않은 --font-geist-sans 를 가리켜 브라우저 기본 폰트로 떨어졌다(사람마다 다르게 보이던 원인). */
   --font-sans: var(--font-inter), var(--font-kr), "Apple SD Gothic Neo", "Malgun Gothic", Arial, Helvetica, sans-serif;
   --font-mono: var(--font-geist-mono);
+
+  /* 📌 디자인 기준 — 값은 여기서만 정한다.
+     화면에서 색·모서리·그림자를 새로 지어내지 말고 아래 이름을 쓴다.
+     (border-line · text-ink-muted · bg-sunken · rounded-panel · shadow-panel)
+     모서리는 셋뿐 — 기본은 각짐, rounded-panel 은 떠 있는 것, rounded-full 은 진짜 알약.
+     그림자는 둘뿐 — shadow-panel(패널·모달), shadow-dock(모바일 독). */
+  --color-surface: #ffffff;
+  --color-sunken: #f2f2f2;
+  --color-ink: #131313;
+  --color-ink-muted: #5a5a5a;
+  --color-ink-soft: #8a8a8a;
+  --color-ink-faint: #a3a3a3;
+  --color-line: #ededed;
+  /* 조작 요소(입력칸·체크박스·라디오·미선택 칩)의 테두리는 3:1 이 필요해
+     머리카락 선으로는 안 보인다. 그런 테두리에는 ink-faint 를 쓴다.
+     들어간 면(#f2f2f2)을 누르거나 올렸을 때는 sunken-press 로 내려간다. */
+  --color-sunken-press: #e0e0e0;
+  --color-accent: #e91e3f;
+  --color-accent-press: #d01634;
+
+  --radius-panel: 16px;
+
+  --shadow-panel: 0 28px 56px -28px rgba(0, 0, 0, 0.25);
+  --shadow-dock: 0 18px 44px -14px rgba(0, 0, 0, 0.26);
 }
 
 /* 📌 확대·스와이프 시 사이트 영역을 이탈하지 않도록 고정

@@ -10,7 +10,7 @@ import ArcticFooter from "../ArcticFooter";
 const STATUS_META: Record<string, { label: string; cls: string; desc: string }> = {
   pending: { label: "처리 대기", cls: "bg-[#fdf3e3] text-[#a8763a]", desc: "지급·발송을 준비하고 있습니다" },
   completed: { label: "완료", cls: "bg-[#e8f3e6] text-[#3f7a35]", desc: "지급이 완료되었습니다" },
-  cancelled: { label: "취소", cls: "bg-[#fdeaea] text-[#c62828]", desc: "취소되어 XP가 환불되었습니다" },
+  cancelled: { label: "취소", cls: "bg-[#fdeaea] text-[#d01634]", desc: "취소되어 XP가 환불되었습니다" },
 };
 
 const TYPE_LABEL: Record<string, string> = { role: "역할", perk: "권한", physical: "기프트카드" };
@@ -50,7 +50,7 @@ export default function OrdersPage() {
 
   const chip = (active: boolean) =>
     `px-3.5 py-1.5 rounded-full text-[12px] font-bold border transition-colors ${
-      active ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#4b4b4b] border-[#e0e0e0] hover:border-[#a3a3a3]"
+      active ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#5a5a5a] border-[#ededed] hover:border-[#a3a3a3]"
     }`;
 
   if (status === "loading" || isLoading) {
@@ -66,8 +66,8 @@ export default function OrdersPage() {
       <div className="w-full flex-1 bg-white min-h-screen">
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
-          <p className="text-sm text-[#4b4b4b] mb-7">구매 내역을 보려면 로그인해주세요.</p>
-          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
+          <p className="text-sm text-[#5a5a5a] mb-7">구매 내역을 보려면 로그인해주세요.</p>
+          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold transition-colors">디스코드 로그인</button>
         </div>
       </div>
     );
@@ -82,7 +82,7 @@ export default function OrdersPage() {
 
         {/* 요약 */}
         {orders.length > 0 && (
-          <div className="grid grid-cols-3 bg-white rounded-2xl border border-[#e0e0e0] divide-x divide-[#ededed] mb-6 overflow-hidden">
+          <div className="grid grid-cols-3 bg-white rounded-2xl border border-[#ededed] divide-x divide-[#ededed] mb-6 overflow-hidden">
             {[
               { n: orders.length.toLocaleString(), l: "전체 주문" },
               { n: pendingCount.toLocaleString(), l: "처리 대기", accent: pendingCount > 0 },
@@ -106,7 +106,7 @@ export default function OrdersPage() {
         )}
 
         {shown.length === 0 ? (
-          <div className="py-24 text-center break-keep bg-white rounded-2xl border border-[#e0e0e0]">
+          <div className="py-24 text-center break-keep bg-white rounded-2xl border border-[#ededed]">
             <p className="text-sm font-bold text-[#131313] mb-1.5">
               {orders.length === 0 ? "아직 구매한 상품이 없습니다" : "해당 상태의 주문이 없습니다"}
             </p>
@@ -114,13 +114,13 @@ export default function OrdersPage() {
               {orders.length === 0 ? "ARCTIC에서 XP로 역할과 혜택을 만나보세요." : "다른 상태를 선택해보세요."}
             </p>
             {orders.length === 0 && (
-              <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
+              <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold transition-colors">
                 상품 보러가기
               </Link>
             )}
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-[#e0e0e0] overflow-hidden divide-y divide-[#ededed]">
+          <div className="bg-white rounded-2xl border border-[#ededed] overflow-hidden divide-y divide-[#ededed]">
             {shown.map((o) => {
               const meta = STATUS_META[o.status] || STATUS_META.pending;
               return (
@@ -145,17 +145,17 @@ export default function OrdersPage() {
                   <p className="text-[11px] text-[#8a8a8a]">{meta.desc}</p>
 
                   {o.contact && (
-                    <div className="mt-3 text-[11px] text-[#5a5a5a] bg-[#f5f5f5] rounded-lg px-3 py-2 whitespace-pre-wrap break-words">
+                    <div className="mt-3 text-[11px] text-[#5a5a5a] bg-[#f2f2f2] px-3 py-2 whitespace-pre-wrap break-words">
                       <span className="font-bold text-[#8a8a8a]">수령 정보 · </span>{o.contact}
                     </div>
                   )}
                   {o.adminNote && (
-                    <div className="mt-2 text-[11px] text-[#3f7a35] bg-[#e8f3e6] rounded-lg px-3 py-2">
+                    <div className="mt-2 text-[11px] text-[#3f7a35] bg-[#e8f3e6] px-3 py-2">
                       <span className="font-bold">운영진 메모 · </span>{o.adminNote}
                     </div>
                   )}
                   {o.error && (
-                    <div className="mt-2 text-[11px] text-[#c62828] bg-[#fdeaea] rounded-lg px-3 py-2">
+                    <div className="mt-2 text-[11px] text-[#d01634] bg-[#fdeaea] px-3 py-2">
                       지급 실패 · {o.error} — 운영진에게 문의해주세요.
                     </div>
                   )}

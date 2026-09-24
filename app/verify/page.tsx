@@ -311,7 +311,7 @@ export default function VerifyPage() {
               href="https://discord.gg/V2uW2nUczU"
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#5865F2]/20"
+              className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-2xl transition-all"
             >
               디스코드 서버 입장하기
             </a>
@@ -338,7 +338,7 @@ export default function VerifyPage() {
         </div>
 
         {errorMessage && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-xl text-red-400 text-sm text-center font-bold">
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 text-red-400 text-sm text-center font-bold">
             {errorMessage}
           </div>
         )}
@@ -420,7 +420,7 @@ export default function VerifyPage() {
             <button
               onClick={handleNextStep}
               disabled={!isAllChecked}
-              className={`w-full py-3.5 rounded-xl font-bold text-base transition-all outline-none focus:outline-none ${isAllChecked ? "bg-[#e91e3f] hover:bg-[#d01634] text-white shadow-lg shadow-[#e91e3f]/20" : "bg-white/5 text-gray-600 cursor-not-allowed"}`}
+              className={`w-full py-3.5 font-bold text-base transition-all outline-none focus:outline-none ${isAllChecked ? "bg-[#e91e3f] hover:bg-[#d01634] text-white" : "bg-white/5 text-gray-600 cursor-not-allowed"}`}
             >
               다음
             </button>
@@ -458,7 +458,7 @@ export default function VerifyPage() {
               <button
                 onClick={() => handleFinalSubmit(true)}
                 disabled={isSubmitting}
-                className="w-full py-3.5 bg-[#e91e3f] text-white font-bold text-base rounded-xl hover:bg-[#d01634] transition-all shadow-lg shadow-[#e91e3f]/20 outline-none focus:outline-none flex items-center justify-center"
+                className="w-full py-3.5 bg-[#e91e3f] text-white font-bold text-base hover:bg-[#d01634] transition-all outline-none focus:outline-none flex items-center justify-center"
               >
                 {isSubmitting ? "처리 중..." : "내전 규정에 동의"}
               </button>
@@ -486,8 +486,8 @@ export default function VerifyPage() {
       </div>
 
       {isSuccessModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overlay-in">
-          <div className="bg-[#1e1e1e] border border-[#e91e3f]/40 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl transform transition-all scale-100 animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 overlay-in">
+          <div className="bg-[#1e1e1e] border border-[#e91e3f]/40 rounded-2xl w-full max-w-sm p-8 text-center shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] transform transition-all scale-100 animate-in zoom-in-95 duration-300">
             <div className="mx-auto w-20 h-20 bg-[#e91e3f]/10 border border-[#e91e3f]/20 rounded-full flex items-center justify-center mb-6">
               <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-[#e91e3f]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -509,7 +509,7 @@ export default function VerifyPage() {
                 setIsSuccessModalOpen(false);
                 router.replace(isRevisiting ? "/profile" : "/");
               }}
-              className="w-full py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl hover:bg-[#d01634] transition-all shadow-lg shadow-[#e91e3f]/20 outline-none focus:outline-none"
+              className="w-full py-3.5 bg-[#e91e3f] text-white font-bold hover:bg-[#d01634] transition-all outline-none focus:outline-none"
             >
               {isRevisiting ? "내 정보로 돌아가기" : "메인으로 이동"}
             </button>

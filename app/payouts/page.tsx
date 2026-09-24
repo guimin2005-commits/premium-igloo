@@ -74,7 +74,7 @@ export default function PayoutAdminPage() {
       <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
         <h2 className="text-xl font-black text-white mb-2">권한 없음</h2>
         <p className="text-gray-400 text-sm mb-4">관리자 권한이 필요합니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
+        <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold mt-4">디스코드 로그인</button>
       </main>
     );
   }
@@ -90,7 +90,7 @@ export default function PayoutAdminPage() {
           <h1 className="text-4xl font-black text-white mb-3 tracking-tight">XP 지급 대기열</h1>
           <p className="text-gray-400 text-sm">보상으로 발생한 XP를 봇 명령어로 지급한 뒤 완료 처리하세요.</p>
         </div>
-        <button onClick={() => router.push("/admin")} className="px-5 py-2.5 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors shrink-0">← 관리자</button>
+        <button onClick={() => router.push("/admin")} className="px-5 py-2.5 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold transition-colors shrink-0">← 관리자</button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-6">
@@ -106,7 +106,7 @@ export default function PayoutAdminPage() {
 
       <div className="bg-[#121212] border border-white/5 rounded-2xl p-5 mb-6">
         <label className="block text-xs font-bold text-gray-400 mb-2">명령어 템플릿 <span className="text-gray-600 font-normal">— {"{user}"}, {"{amount}"}, {"{userId}"} 치환</span></label>
-        <input value={template} onChange={(e) => saveTemplate(e.target.value)} className="w-full px-4 py-3 bg-[#1a1a1a] border border-white/10 rounded-xl text-white text-sm font-mono outline-none focus:border-[#e91e3f] transition-colors" />
+        <input value={template} onChange={(e) => saveTemplate(e.target.value)} className="w-full px-4 py-3 bg-[#1a1a1a] border border-white/10 text-white text-sm font-mono outline-none focus:border-[#e91e3f] transition-colors" />
       </div>
 
       <div className="flex gap-2 mb-5">
@@ -131,9 +131,9 @@ export default function PayoutAdminPage() {
                 <p className="text-[10px] text-gray-600 mt-1 font-mono break-all">{buildCommand(p)}</p>
               </div>
               <div className="flex gap-2 shrink-0">
-                <button onClick={() => copyCommand(p)} className="px-3 py-2 bg-[#2a2a2a] hover:bg-[#333] text-white text-xs font-bold rounded-lg transition-colors">{copiedId === p._id ? "복사됨!" : "명령어 복사"}</button>
-                <button onClick={() => toggleStatus(p)} className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors ${p.status === "paid" ? "bg-white/5 text-gray-300 hover:bg-white/10" : "bg-[#e91e3f] text-white hover:bg-[#d01634]"}`}>{p.status === "paid" ? "되돌리기" : "지급 완료"}</button>
-                <button onClick={() => setDeleteId(p._id)} className="px-3 py-2 bg-white/5 hover:bg-red-500/10 text-red-500/70 hover:text-red-500 text-xs font-bold rounded-lg transition-colors">삭제</button>
+                <button onClick={() => copyCommand(p)} className="px-3 py-2 bg-[#2a2a2a] hover:bg-[#333] text-white text-xs font-bold transition-colors">{copiedId === p._id ? "복사됨!" : "명령어 복사"}</button>
+                <button onClick={() => toggleStatus(p)} className={`px-3 py-2 text-xs font-bold transition-colors ${p.status === "paid" ? "bg-white/5 text-gray-300 hover:bg-white/10" : "bg-[#e91e3f] text-white hover:bg-[#d01634]"}`}>{p.status === "paid" ? "되돌리기" : "지급 완료"}</button>
+                <button onClick={() => setDeleteId(p._id)} className="px-3 py-2 bg-white/5 hover:bg-red-500/10 text-red-500/70 hover:text-red-500 text-xs font-bold transition-colors">삭제</button>
               </div>
             </div>
           ))}
@@ -141,13 +141,13 @@ export default function PayoutAdminPage() {
       )}
 
       {deleteId && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
-          <div className="bg-[#1e1e1e] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4 overlay-in">
+          <div className="bg-[#1e1e1e] border border-white/10 rounded-2xl w-full max-w-sm p-8 text-center shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">
             <h2 className="text-xl font-bold text-white mb-3">지급 항목 삭제</h2>
             <p className="text-sm text-gray-400 mb-8 leading-relaxed">해당 지급 항목을 삭제하시겠습니까?</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteId(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">취소</button>
-              <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-colors">삭제</button>
+              <button onClick={() => setDeleteId(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold transition-colors">취소</button>
+              <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold transition-colors">삭제</button>
             </div>
           </div>
         </div>

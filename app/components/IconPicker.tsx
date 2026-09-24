@@ -8,7 +8,7 @@ import { PresetIcon } from "./ItemIcon";
 //    격자를 누르면 "svg:<key>", 입력칸에 치면 그 글자. 프리셋이 선택된 동안 입력칸은 비워 보인다.
 //    관리자 아이템 폼 / 상품 폼 두 벌이 같이 쓴다 — 입력칸 스타일만 각자 넘긴다.
 const DEFAULT_INPUT =
-  "w-full bg-white border border-[#dedddb] rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3] disabled:bg-[#f4f3f2] disabled:text-[#8a8a8a]";
+  "w-full bg-white border border-[#ededed] px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3] disabled:bg-white disabled:text-[#8a8a8a]";
 
 export default function IconPicker({
   value,
@@ -55,8 +55,8 @@ export default function IconPicker({
                   aria-pressed={on}
                   disabled={disabled}
                   onClick={() => onChange(on ? "" : `${ICON_PRESET_PREFIX}${p.key}`)}
-                  className={`aspect-square rounded-lg border flex items-center justify-center transition-colors outline-none focus:outline-none disabled:opacity-40 disabled:cursor-default ${
-                    on ? "border-[#131313] ring-2 ring-[#131313] bg-black/[0.04]" : "border-[#dedddb] bg-white hover:border-[#a3a3a3]"
+                  className={`aspect-square border flex items-center justify-center transition-colors outline-none focus:outline-none disabled:opacity-40 disabled:cursor-default ${
+                    on ? "border-[#131313] ring-2 ring-[#131313] bg-black/[0.04]" : "border-[#ededed] bg-white hover:border-[#a3a3a3]"
                   }`}
                 >
                   <PresetIcon k={p.key} size={20} color={color} />

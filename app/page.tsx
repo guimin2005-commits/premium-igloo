@@ -85,7 +85,7 @@ function Sec({ no, title, desc, more, children }: { no?: string; title: React.Re
             {more && <Link href={more.href} className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors shrink-0">{more.label}</Link>}
           </div>
           <h3 className="relative text-[26px] md:text-[34px] font-black tracking-tight leading-tight break-keep">{title}</h3>
-          {desc && <p className="relative mt-2 text-[14px] text-[#6a6a6a] break-keep">{desc}</p>}
+          {desc && <p className="relative mt-2 text-[14px] text-[#5a5a5a] break-keep">{desc}</p>}
         </Reveal>
         {children}
       </div>
@@ -173,7 +173,7 @@ export default function Home() {
             <p className="mt-4 md:mt-5 text-[18px] md:text-[22px] font-black tracking-[-0.01em] break-keep">활동이 곧 <span className="text-[#e91e3f]">자산</span>이 되는 곳.</p>
             <div className="mt-7 md:mt-8 flex flex-wrap gap-2.5">
               <a href={DISCORD} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center h-11 md:h-[46px] px-6 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13.5px] font-extrabold shadow-[0_10px_30px_rgba(233,30,63,0.28)] transition-colors">
+                className="inline-flex items-center h-11 md:h-[46px] px-6 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13.5px] font-extrabold transition-colors">
                 서버 바로가기
               </a>
               <Link href="/faq"
@@ -186,7 +186,7 @@ export default function Home() {
             <div className="relative w-[200px] h-[200px] md:w-[300px] md:h-[300px]">
               <div aria-hidden className="absolute inset-[10%] rounded-full blur-[20px]" style={{ background: "radial-gradient(circle, rgba(233,30,63,.22), rgba(233,30,63,0) 70%)" }} />
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="고급 이글루" className="relative w-full h-full object-contain drop-shadow-[0_24px_40px_rgba(0,0,0,0.28)]" />
+              <img src="/logo.png" alt="고급 이글루" className="relative w-full h-full object-contain" />
             </div>
           </div>
         </div>
@@ -288,15 +288,15 @@ export default function Home() {
             <div className="flex-1 grid grid-cols-3 gap-4 md:gap-6">
               <div className="border-t border-[#131313] pt-3.5">
                 <b className="block text-[30px] sm:text-[38px] md:text-[44px] font-black tracking-[-0.03em] leading-none tabular-nums">{stats ? <CountUp end={stats.memberCount} /> : "—"}</b>
-                <small className="block mt-2 text-[12px] font-bold text-[#6a6a6a]">전체 멤버</small>
+                <small className="block mt-2 text-[12px] font-bold text-[#5a5a5a]">전체 멤버</small>
               </div>
               <div className="border-t border-[#131313] pt-3.5">
                 <b className="block text-[30px] sm:text-[38px] md:text-[44px] font-black tracking-[-0.03em] leading-none tabular-nums">{stats ? <CountUp end={stats.onlineCount} /> : "—"}</b>
-                <small className="block mt-2 text-[12px] font-bold text-[#6a6a6a]"><i className="inline-block w-[7px] h-[7px] rounded-full bg-emerald-500 mr-1.5" />현재 온라인</small>
+                <small className="block mt-2 text-[12px] font-bold text-[#5a5a5a]"><i className="inline-block w-[7px] h-[7px] rounded-full bg-emerald-500 mr-1.5" />현재 온라인</small>
               </div>
               <div className="border-t border-[#131313] pt-3.5">
                 <b className="block text-[30px] sm:text-[38px] md:text-[44px] font-black tracking-[-0.03em] leading-none tabular-nums">2023</b>
-                <small className="block mt-2 text-[12px] font-bold text-[#6a6a6a]">Since</small>
+                <small className="block mt-2 text-[12px] font-bold text-[#5a5a5a]">Since</small>
               </div>
             </div>
             <div className="md:w-[340px] shrink-0 border-t border-[#131313] pt-3.5">
@@ -371,9 +371,9 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 md:px-10 py-16 md:py-20 text-center">
           <Reveal>
             <h3 className="text-[34px] md:text-[44px] font-black tracking-[-0.03em] break-keep">지금 바로 <span className="text-[#e91e3f]">참여</span>하세요</h3>
-            <p className="mt-3.5 mb-7 text-[14px] text-[#6a6a6a]">나의 활동이 나의 자산이 되는 순간을.</p>
+            <p className="mt-3.5 mb-7 text-[14px] text-[#5a5a5a]">나의 활동이 나의 자산이 되는 순간을.</p>
             <a href={DISCORD} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center h-[52px] px-8 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[15px] font-black shadow-[0_12px_34px_rgba(233,30,63,0.3)] transition-colors">
+              className="inline-flex items-center h-[52px] px-8 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[15px] font-black transition-colors">
               디스코드 서버 입장하기
             </a>
           </Reveal>

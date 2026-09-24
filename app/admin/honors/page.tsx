@@ -187,7 +187,7 @@ export default function AdminHonorsPage() {
           // eslint-disable-next-line @next/next/no-img-element
           <img key={i} src={p.avatarUrl} alt={p.globalName} title={p.globalName} className="w-6 h-6 rounded-full bg-gray-800 object-cover ring-2 ring-[#edecea]" />
         ))}
-        {list.length > 5 && <span className="w-6 h-6 rounded-full bg-black/10 ring-2 ring-[#edecea] grid place-items-center text-[9px] font-bold text-[#4b4b4b]">+{list.length - 5}</span>}
+        {list.length > 5 && <span className="w-6 h-6 rounded-full bg-black/10 ring-2 ring-[#edecea] grid place-items-center text-[9px] font-bold text-[#5a5a5a]">+{list.length - 5}</span>}
       </span>
     );
   };
@@ -256,12 +256,12 @@ export default function AdminHonorsPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="제목·우승자 검색"
-              className="flex-1 md:w-56 bg-[#ffffff] border border-black/10 rounded-xl px-4 py-2.5 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
+              className="flex-1 md:w-56 bg-[#ffffff] border border-black/10 px-4 py-2.5 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
             />
             {tab === "manual" && (
               <button
                 onClick={() => setForm({ mode: "create", data: { ...EMPTY } })}
-                className="shrink-0 px-4 py-2.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20"
+                className="shrink-0 px-4 py-2.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold transition-colors"
               >
                 + 새 기록 등재
               </button>
@@ -279,7 +279,7 @@ export default function AdminHonorsPage() {
             <div className="rounded-2xl border border-black/[0.07] overflow-hidden divide-y divide-black/[0.06]">
               {manualRows.map((h) => (
                 <div key={h._id} className="flex flex-col md:flex-row md:items-center gap-3 px-4 md:px-5 py-4 hover:bg-black/[0.02] transition-colors">
-                  <span className="shrink-0 self-start text-[9px] font-black tracking-wider bg-black/5 text-[#4b4b4b] border border-black/10 px-2.5 py-1 rounded-full">{h.category}</span>
+                  <span className="shrink-0 self-start text-[9px] font-black tracking-wider bg-black/5 text-[#5a5a5a] border border-black/10 px-2.5 py-1 rounded-full">{h.category}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
                       <Members ids={h.winnerId} />
@@ -290,8 +290,8 @@ export default function AdminHonorsPage() {
                     </p>
                   </div>
                   <div className="flex gap-2 shrink-0">
-                    <button onClick={() => setForm({ mode: "edit", data: { ...h } })} className="text-xs font-bold text-[#4b4b4b] hover:text-[#131313] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 rounded-lg transition-colors">수정</button>
-                    <button onClick={() => setDeleteTarget(h)} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 rounded-lg transition-colors">삭제</button>
+                    <button onClick={() => setForm({ mode: "edit", data: { ...h } })} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 transition-colors">수정</button>
+                    <button onClick={() => setDeleteTarget(h)} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 transition-colors">삭제</button>
                   </div>
                 </div>
               ))}
@@ -303,7 +303,7 @@ export default function AdminHonorsPage() {
           <div className="rounded-2xl border border-black/[0.07] overflow-hidden divide-y divide-black/[0.06]">
             {tournamentRows.map((t) => (
               <div key={t._id} className="flex flex-col md:flex-row md:items-center gap-3 px-4 md:px-5 py-4 hover:bg-black/[0.02] transition-colors">
-                <span className="shrink-0 self-start text-[9px] font-black tracking-wider bg-black/5 text-[#4b4b4b] border border-black/10 px-2.5 py-1 rounded-full truncate max-w-[10rem]">{t.game || "대회"}</span>
+                <span className="shrink-0 self-start text-[9px] font-black tracking-wider bg-black/5 text-[#5a5a5a] border border-black/10 px-2.5 py-1 rounded-full truncate max-w-[10rem]">{t.game || "대회"}</span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 min-w-0">
                     <Members ids={t.winnerId} />
@@ -316,8 +316,8 @@ export default function AdminHonorsPage() {
                   <p className="text-xs text-[#8a8a8a] truncate mt-1">{t.title}{t.dateLabel ? ` · ${t.dateLabel}` : ""}</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <button onClick={() => setWinnerEdit({ ...t })} className="text-xs font-bold text-[#4b4b4b] hover:text-[#131313] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 rounded-lg transition-colors">우승 정보 수정</button>
-                  <Link href={`/write?id=${t._id}`} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 rounded-lg transition-colors">대회 글 ↗</Link>
+                  <button onClick={() => setWinnerEdit({ ...t })} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 transition-colors">우승 정보 수정</button>
+                  <Link href={`/write?id=${t._id}`} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 transition-colors">대회 글 ↗</Link>
                 </div>
               </div>
             ))}
@@ -333,8 +333,8 @@ export default function AdminHonorsPage() {
 
       {/* 📌 등재 / 수정 모달 */}
       {form && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
-          <form onSubmit={submitForm} className="bg-gradient-to-b from-[#1c1c1c] to-[#ffffff] border border-black/10 rounded-3xl w-full max-w-lg p-7 md:p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] max-h-[88vh] overflow-y-auto no-bar">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4 overlay-in">
+          <form onSubmit={submitForm} className="bg-gradient-to-b from-[#1c1c1c] to-[#ffffff] border border-black/10 rounded-2xl w-full max-w-lg p-7 md:p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] max-h-[88vh] overflow-y-auto no-bar">
             <div className="flex items-center gap-3 mb-6">
               <span className="w-1 h-5 bg-[#e91e3f] rounded-full"></span>
               <h2 className="text-lg font-black text-[#131313]">{form.mode === "create" ? "새 기록 등재" : "기록 수정"}</h2>
@@ -374,7 +374,7 @@ export default function AdminHonorsPage() {
                     placeholder={f.placeholder}
                     value={form.data[f.key] || ""}
                     onChange={(e) => setForm({ ...form, data: { ...form.data, [f.key]: e.target.value } })}
-                    className="w-full bg-[#ffffff] border border-black/10 rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
+                    className="w-full bg-[#ffffff] border border-black/10 px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
                   />
                 </div>
               ))}
@@ -387,8 +387,8 @@ export default function AdminHonorsPage() {
             </div>
 
             <div className="flex gap-3 mt-8">
-              <button type="button" onClick={() => setForm(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] font-bold rounded-xl transition-colors">취소</button>
-              <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20">
+              <button type="button" onClick={() => setForm(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] font-bold transition-colors">취소</button>
+              <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold transition-colors">
                 {isSaving ? "저장 중..." : form.mode === "create" ? "등재" : "저장"}
               </button>
             </div>
@@ -398,8 +398,8 @@ export default function AdminHonorsPage() {
 
       {/* 📌 대회 우승 정보 수정 모달 */}
       {winnerEdit && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
-          <form onSubmit={submitWinner} className="bg-gradient-to-b from-[#1c1c1c] to-[#ffffff] border border-black/10 rounded-3xl w-full max-w-lg p-7 md:p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] max-h-[88vh] overflow-y-auto no-bar">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4 overlay-in">
+          <form onSubmit={submitWinner} className="bg-gradient-to-b from-[#1c1c1c] to-[#ffffff] border border-black/10 rounded-2xl w-full max-w-lg p-7 md:p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] max-h-[88vh] overflow-y-auto no-bar">
             <div className="flex items-center gap-3 mb-2">
               <span className="w-1 h-5 bg-[#e91e3f] rounded-full"></span>
               <h2 className="text-lg font-black text-[#131313]">대회 우승 정보 수정</h2>
@@ -415,7 +415,7 @@ export default function AdminHonorsPage() {
                   placeholder="예: 이글루A"
                   value={winnerEdit.winner}
                   onChange={(e) => setWinnerEdit({ ...winnerEdit, winner: e.target.value })}
-                  className="w-full bg-[#ffffff] border border-black/10 rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
+                  className="w-full bg-[#ffffff] border border-black/10 px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
                 />
               </div>
               <DiscordIdInput
@@ -426,8 +426,8 @@ export default function AdminHonorsPage() {
             </div>
 
             <div className="flex gap-3 mt-8">
-              <button type="button" onClick={() => setWinnerEdit(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] font-bold rounded-xl transition-colors">취소</button>
-              <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20">{isSaving ? "저장 중..." : "저장"}</button>
+              <button type="button" onClick={() => setWinnerEdit(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] font-bold transition-colors">취소</button>
+              <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold transition-colors">{isSaving ? "저장 중..." : "저장"}</button>
             </div>
           </form>
         </div>
@@ -436,12 +436,12 @@ export default function AdminHonorsPage() {
       {/* 📌 삭제 확인 */}
       {deleteTarget && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-[#ffffff] border border-[#e91e3f]/25 rounded-3xl w-full max-w-sm p-8 text-center">
+          <div className="bg-[#ffffff] border border-[#e91e3f]/25 rounded-2xl w-full max-w-sm p-8 text-center">
             <h2 className="text-xl font-bold text-[#131313] mb-3">삭제 확인</h2>
             <p className="text-sm text-[#5a5a5a] mb-8"><span className="text-[#131313] font-bold">{deleteTarget.title}</span> 기록을<br />명예의 전당에서 삭제하시겠습니까?</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] rounded-xl transition-colors">취소</button>
-              <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white rounded-xl transition-colors">삭제</button>
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 bg-[#e6e3de] hover:bg-[#d2d1cf] text-[#131313] transition-colors">취소</button>
+              <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white transition-colors">삭제</button>
             </div>
           </div>
         </div>
@@ -449,7 +449,7 @@ export default function AdminHonorsPage() {
 
       {/* 📌 결과 토스트 */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[130] px-5 py-3 rounded-full border shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] text-sm font-bold backdrop-blur-sm"
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[130] px-5 py-3 rounded-full border shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] text-sm font-bold"
           style={toast.error
             ? { background: "rgba(40,12,16,0.95)", borderColor: "rgba(233,30,63,0.45)", color: "#ffb3c0" }
             : { background: "rgba(14,14,14,0.95)", borderColor: "rgba(0,0,0,0.14)", color: "#ffffff" }}>

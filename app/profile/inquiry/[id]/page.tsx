@@ -44,18 +44,18 @@ export default function InquiryDetailPage() {
               <span className="text-[11px] text-[#a3a3a3] font-medium">[{item.mainType || "일반 문의"}]</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-black text-[#131313] break-keep leading-snug tracking-tight mb-6">{item.title || "제목 없음"}</h1>
-            <div className="rounded-lg border border-[#ededed] bg-white divide-y divide-[#ededed] mb-8">
-              <div className="flex items-center justify-between px-4 py-2.5 text-xs"><span className="text-[#8a8a8a] font-bold">접수일시</span><span className="text-[#4b4b4b] font-bold tabular-nums">{item.createdAt ? new Date(item.createdAt).toLocaleString("ko-KR") : "-"}</span></div>
+            <div className=" border border-[#ededed] bg-white divide-y divide-[#ededed] mb-8">
+              <div className="flex items-center justify-between px-4 py-2.5 text-xs"><span className="text-[#8a8a8a] font-bold">접수일시</span><span className="text-[#5a5a5a] font-bold tabular-nums">{item.createdAt ? new Date(item.createdAt).toLocaleString("ko-KR") : "-"}</span></div>
               {item.status === "답변 완료" && (
-                <div className="flex items-center justify-between px-4 py-2.5 text-xs"><span className="text-[#e91e3f] font-bold">답변일시</span><span className="text-[#4b4b4b] font-bold tabular-nums">{item.answeredAt ? new Date(item.answeredAt).toLocaleString("ko-KR") : item.updatedAt ? new Date(item.updatedAt).toLocaleString("ko-KR") : "처리 완료"}</span></div>
+                <div className="flex items-center justify-between px-4 py-2.5 text-xs"><span className="text-[#e91e3f] font-bold">답변일시</span><span className="text-[#5a5a5a] font-bold tabular-nums">{item.answeredAt ? new Date(item.answeredAt).toLocaleString("ko-KR") : item.updatedAt ? new Date(item.updatedAt).toLocaleString("ko-KR") : "처리 완료"}</span></div>
               )}
             </div>
             <p className="text-[11px] font-black tracking-wide text-[#8a8a8a] uppercase mb-2">문의 내용</p>
-            <div className="text-[15px] text-[#4b4b4b] leading-relaxed whitespace-pre-wrap break-keep">{item.content}</div>
+            <div className="text-[15px] text-[#5a5a5a] leading-relaxed whitespace-pre-wrap break-keep">{item.content}</div>
             {item.answer && (
-              <div className="mt-8 bg-[#e91e3f]/[0.04] border border-[#e91e3f]/20 p-5 rounded-lg">
+              <div className="mt-8 bg-[#e91e3f]/[0.04] border border-[#e91e3f]/20 p-5">
                 <span className="text-[11px] font-black text-[#e91e3f] tracking-wide uppercase mb-2.5 flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>운영팀 답변</span>
-                <p className="text-[15px] text-[#4b4b4b] leading-relaxed break-keep whitespace-pre-wrap">{item.answer}</p>
+                <p className="text-[15px] text-[#5a5a5a] leading-relaxed break-keep whitespace-pre-wrap">{item.answer}</p>
               </div>
             )}
           </>

@@ -65,7 +65,7 @@ export default function MyAppliesPage() {
           <div className="flex items-center gap-2">
             <div className="flex gap-1.5 flex-wrap">
               {FILTERS.map((f) => (
-                <button key={f.key} onClick={() => setFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${filter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-transparent border-[#e0e0e0] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#4b4b4b]"}`}>{f.label}</button>
+                <button key={f.key} onClick={() => setFilter(f.key)} className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${filter === f.key ? "bg-[#131313] text-white border-[#131313]" : "bg-transparent border-[#ededed] text-[#8a8a8a] hover:border-[#a3a3a3] hover:text-[#5a5a5a]"}`}>{f.label}</button>
               ))}
             </div>
             <Link href="/recruit" className="px-3.5 py-1.5 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[11px] font-bold transition-colors">구인 보기</Link>
@@ -83,12 +83,12 @@ export default function MyAppliesPage() {
                 <div key={rec.id} className="py-4 px-1 flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <div>
                     <h4 className="text-base font-bold text-[#131313] mb-1">{rec.title}</h4>
-                    <p className="text-xs text-[#8a8a8a]">분야: <span className="text-[#4b4b4b] font-medium">{rec.role}</span> · {rec.date}</p>
+                    <p className="text-xs text-[#8a8a8a]">분야: <span className="text-[#5a5a5a] font-medium">{rec.role}</span> · {rec.date}</p>
                   </div>
                   <div className="flex gap-3 items-center">
-                    <span className={`text-xs font-bold px-3 py-1 rounded-full border ${rec.status === "합격" ? "bg-[#e8f3e6] text-[#3f7a35] border-[#cfe5cb]" : rec.status === "취소" || rec.status === "취소/반려" || rec.status === "불합격" ? "bg-[#fdeaea] text-[#c62828] border-[#f5cdcd]" : "bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]"}`}>{rec.status}</span>
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full border ${rec.status === "합격" ? "bg-[#e8f3e6] text-[#3f7a35] border-[#cfe5cb]" : rec.status === "취소" || rec.status === "취소/반려" || rec.status === "불합격" ? "bg-[#fdeaea] text-[#d01634] border-[#f5cdcd]" : "bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]"}`}>{rec.status}</span>
                     {rec.status === "심사 중" && (
-                      <button onClick={() => setCancelId(rec.id)} className="text-xs font-bold px-3 py-1 bg-[#f2f2f2] text-[#4b4b4b] hover:bg-[#e91e3f] hover:text-white rounded-full transition-colors outline-none focus:outline-none">지원 취소</button>
+                      <button onClick={() => setCancelId(rec.id)} className="text-xs font-bold px-3 py-1 bg-[#f2f2f2] text-[#5a5a5a] hover:bg-[#e91e3f] hover:text-white rounded-full transition-colors outline-none focus:outline-none">지원 취소</button>
                     )}
                   </div>
                 </div>
@@ -99,19 +99,19 @@ export default function MyAppliesPage() {
       </section>
 
       {cancelId && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-[#131313]/45 backdrop-blur-sm p-4" onClick={() => !busy && setCancelId(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#e0e0e0] rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-[#131313]/45 p-4" onClick={() => !busy && setCancelId(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#ededed] rounded-2xl w-full max-w-sm p-8 text-center shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">
             <h2 className="text-xl font-bold text-[#131313] mb-3">지원 취소</h2>
             <p className="text-sm text-[#5a5a5a] mb-8 leading-relaxed break-keep">취소하면 다시 지원해야 합니다.</p>
             <div className="flex gap-3">
-              <button onClick={() => setCancelId(null)} disabled={busy} className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#131313] font-bold rounded-xl transition-colors">닫기</button>
-              <button onClick={cancelApply} disabled={busy} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-colors disabled:opacity-50">{busy ? "처리 중..." : "취소하기"}</button>
+              <button onClick={() => setCancelId(null)} disabled={busy} className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#131313] font-bold transition-colors">닫기</button>
+              <button onClick={cancelApply} disabled={busy} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold transition-colors disabled:opacity-50">{busy ? "처리 중..." : "취소하기"}</button>
             </div>
           </div>
         </div>
       )}
       {toast && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 z-[120] px-4 py-2.5 rounded-full bg-[#131313] text-white text-[12px] font-bold shadow-lg">{toast}</div>
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 z-[120] px-4 py-2.5 rounded-full bg-[#131313] text-white text-[12px] font-bold">{toast}</div>
       )}
       {fromArctic && <ArcticDock activeKey="me" />}
     </main>

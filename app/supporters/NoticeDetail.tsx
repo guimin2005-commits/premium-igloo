@@ -22,7 +22,7 @@ export type Toast = { id: number; msg: string; accent?: boolean };
 
 export const BLUE = "#3f83b8"; // 서포터즈 식별색 — 태그·확인 표시에만 쓴다
 export const fieldClass =
-  "w-full rounded-xl bg-white border border-black/[0.08] focus:border-[#131313] text-[14px] text-[#131313] outline-none transition-colors placeholder:text-[#a3a3a3]";
+  "w-full bg-white border border-black/[0.08] focus:border-[#131313] text-[14px] text-[#131313] outline-none transition-colors placeholder:text-[#a3a3a3]";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 export const fmtDate = (v?: string | null) => {
@@ -84,8 +84,8 @@ export const ToastStack = ({ toasts }: { toasts: Toast[] }) => (
           style={{ animation: "spToastIn 0.35s cubic-bezier(0.16,1,0.3,1)" }}
           className={`mt-2 px-5 py-3 rounded-2xl border text-xs font-bold text-right ${
             t.accent
-              ? "bg-[#e91e3f] border-[#e91e3f] text-white shadow-[0_10px_30px_rgba(233,30,63,0.45)]"
-              : "bg-white/95 border-black/10 text-[#131313] shadow-xl"
+              ? "bg-[#e91e3f] border-[#e91e3f] text-white"
+              : "bg-white/95 border-black/10 text-[#131313]"
           }`}
         >
           {t.msg}
@@ -490,7 +490,7 @@ export default function NoticeDetail({ postId }: { postId: string }) {
   const skeleton = (
     <div className="space-y-6">
       <div className="h-4 w-24 rounded bg-black/[0.05] animate-pulse"></div>
-      <div className="h-9 w-2/3 rounded-lg bg-black/[0.05] animate-pulse"></div>
+      <div className="h-9 w-2/3 bg-black/[0.05] animate-pulse"></div>
       <div className="h-64 rounded-2xl bg-black/[0.03] animate-pulse"></div>
       <div className="h-14 rounded-2xl bg-black/[0.025] animate-pulse"></div>
     </div>
@@ -559,7 +559,7 @@ export default function NoticeDetail({ postId }: { postId: string }) {
                 delConfirm ? (
                   <span className="shrink-0 inline-flex items-center gap-2 text-[11px] font-bold text-[#5a5a5a]">
                     정말 삭제할까요?
-                    <button type="button" onClick={deletePost} disabled={deleting} className="text-[#e91e3f] hover:text-[#c8172f] disabled:opacity-40 outline-none focus:outline-none">삭제</button>
+                    <button type="button" onClick={deletePost} disabled={deleting} className="text-[#e91e3f] hover:text-[#d01634] disabled:opacity-40 outline-none focus:outline-none">삭제</button>
                     <button type="button" onClick={() => setDelConfirm(false)} disabled={deleting} className="hover:text-[#131313] outline-none focus:outline-none">취소</button>
                   </span>
                 ) : (
@@ -590,7 +590,7 @@ export default function NoticeDetail({ postId }: { postId: string }) {
           <h1 className="mt-3 text-2xl md:text-3xl font-black text-[#131313] tracking-tight leading-snug break-keep">{p.title}</h1>
 
           {/* 본문 */}
-          <div className="mt-6 pt-6 border-t border-black/[0.08] sp-body text-[15px] text-[#3a3a3a] leading-[1.9] whitespace-pre-wrap break-keep select-text">
+          <div className="mt-6 pt-6 border-t border-black/[0.08] sp-body text-[15px] text-[#5a5a5a] leading-[1.9] whitespace-pre-wrap break-keep select-text">
             <RenderFormattedText text={p.content || ""} onCopy={() => pushToast("복사됨")} />
           </div>
           {p.bannerUrl && (
@@ -682,8 +682,8 @@ export default function NoticeDetail({ postId }: { postId: string }) {
             </div>
             {!comments ? (
               <div className="space-y-3 py-3">
-                <div className="h-10 rounded-lg bg-black/[0.04] animate-pulse"></div>
-                <div className="h-10 rounded-lg bg-black/[0.03] animate-pulse"></div>
+                <div className="h-10 bg-black/[0.04] animate-pulse"></div>
+                <div className="h-10 bg-black/[0.03] animate-pulse"></div>
               </div>
             ) : comments.length === 0 ? (
               <p className="py-4 text-[12px] text-[#a3a3a3]">아직 댓글이 없습니다</p>
@@ -732,7 +732,7 @@ export default function NoticeDetail({ postId }: { postId: string }) {
                                   type="button"
                                   onClick={() => { setCDelId(c._id); tone(); }}
                                   aria-label="댓글 삭제"
-                                  className="inline-flex items-center justify-center w-6 h-6 -mr-1.5 rounded-full text-[#c4c4c4] hover:text-[#e91e3f] hover:bg-black/[0.04] transition-colors outline-none focus:outline-none"
+                                  className="inline-flex items-center justify-center w-6 h-6 -mr-1.5 rounded-full text-[#a3a3a3] hover:text-[#e91e3f] hover:bg-black/[0.04] transition-colors outline-none focus:outline-none"
                                 >
                                   <CloseIcon className="w-3 h-3" />
                                 </button>
@@ -740,7 +740,7 @@ export default function NoticeDetail({ postId }: { postId: string }) {
                             </span>
                           )}
                         </div>
-                        <p className="mt-1 text-[13px] text-[#3a3a3a] leading-[1.75] whitespace-pre-wrap break-words">{c.content}</p>
+                        <p className="mt-1 text-[13px] text-[#5a5a5a] leading-[1.75] whitespace-pre-wrap break-words">{c.content}</p>
                       </div>
                     </li>
                   );
@@ -796,7 +796,7 @@ export default function NoticeDetail({ postId }: { postId: string }) {
   }
 
   return (
-    <main className="w-full flex-1 flex flex-col relative bg-[#f4f3f2] text-[#131313]">
+    <main className="w-full flex-1 flex flex-col relative bg-white text-[#131313]">
       {/* 본문 렌더러는 다크 페이지 기준 색을 내보낸다 — 라이트 면에서 표·이미지 선이 보이도록 덮는다 */}
       <style
         dangerouslySetInnerHTML={{

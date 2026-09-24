@@ -34,7 +34,7 @@ const getRecruitStatus = (post: any) => {
 };
 
 const FIELD = "w-full h-11 bg-transparent border-b border-[#131313] text-[15px] font-bold text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:font-medium placeholder:text-[#a3a3a3]";
-const FIELD_LOCK = "w-full h-11 bg-transparent border-b border-[#ededed] text-[15px] font-bold text-[#6a6a6a] outline-none cursor-not-allowed";
+const FIELD_LOCK = "w-full h-11 bg-transparent border-b border-[#ededed] text-[15px] font-bold text-[#5a5a5a] outline-none cursor-not-allowed";
 const AREA = "w-full bg-transparent border-b border-[#131313] py-3 text-[14.5px] leading-[1.7] text-[#131313] outline-none focus:border-[#e91e3f] transition-colors resize-none placeholder:text-[#a3a3a3]";
 const LABEL = "block text-[11px] font-black text-[#8a8a8a] mb-1";
 
@@ -106,7 +106,7 @@ export default function RecruitDetailPage() {
       <main className="w-full max-w-lg mx-auto px-6 py-40 text-center text-[#131313]">
         <h2 className="text-xl font-black mb-2">글을 찾을 수 없습니다</h2>
         <p className="text-[#8a8a8a] text-sm mb-6">삭제되었거나 잘못된 주소입니다.</p>
-        <button onClick={() => router.push("/recruit")} className="rounded-full bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#4b4b4b] text-xs font-bold px-5 py-3 transition-colors">구인으로</button>
+        <button onClick={() => router.push("/recruit")} className="rounded-full bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] text-xs font-bold px-5 py-3 transition-colors">구인으로</button>
       </main>
     );
   }
@@ -153,7 +153,7 @@ export default function RecruitDetailPage() {
               {sections.map((s) => (
                 <section key={s.label}>
                   <h2 className="text-[11px] font-black text-[#8a8a8a] pb-2.5 mb-3.5 border-b border-[#ededed]">{s.label}</h2>
-                  <div className="text-[14px] md:text-[15px] leading-[1.9] text-[#4b4b4b] break-keep">
+                  <div className="text-[14px] md:text-[15px] leading-[1.9] text-[#5a5a5a] break-keep">
                     <RenderFormattedText text={String(s.body)} />
                   </div>
                 </section>
@@ -218,13 +218,13 @@ export default function RecruitDetailPage() {
       </article>
 
       {confirmOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setConfirmOpen(false)}>
-          <div className="bg-white rounded-3xl w-full max-w-sm p-7 text-center border border-[#e0e0e0] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4" onClick={() => setConfirmOpen(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-7 text-center border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-base font-black text-[#131313] mb-2">지원서를 제출할까요?</h2>
             <p className="text-[12px] text-[#8a8a8a] mb-6">제출 후에는 수정할 수 없습니다.</p>
             <div className="flex gap-2">
-              <button onClick={() => setConfirmOpen(false)} className="flex-1 py-3 rounded-xl bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#4b4b4b] text-[13px] font-bold transition-colors">취소</button>
-              <button onClick={executeSubmit} className="flex-1 py-3 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">제출</button>
+              <button onClick={() => setConfirmOpen(false)} className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] text-[13px] font-bold transition-colors">취소</button>
+              <button onClick={executeSubmit} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">제출</button>
             </div>
           </div>
         </div>
@@ -232,7 +232,7 @@ export default function RecruitDetailPage() {
 
       {toast && (
         <div className="fixed bottom-24 md:bottom-8 right-4 md:right-6 z-[200] pointer-events-none">
-          <div className="px-5 py-3 rounded-2xl bg-[#131313] text-white text-xs font-bold shadow-2xl">{toast}</div>
+          <div className="px-5 py-3 rounded-2xl bg-[#131313] text-white text-xs font-bold shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">{toast}</div>
         </div>
       )}
     </main>

@@ -417,7 +417,7 @@ export default function AdminSupportersPage() {
         {tab === "eval" && (
           <>
             {loadFailed && (
-              <div className="px-4 py-3 rounded-lg border border-[#e91e3f]/30 bg-[#e91e3f]/[0.06] text-[12px] font-bold text-[#c2183a] break-keep">
+              <div className="px-4 py-3 border border-[#e91e3f]/30 bg-[#e91e3f]/[0.06] text-[12px] font-bold text-[#c2183a] break-keep">
                 목록을 불러오지 못했습니다 (/api/admin/supporters 응답 없음).
                 <button onClick={() => fetchRows(month)} className="ml-2 underline underline-offset-2 outline-none focus:outline-none">다시 불러오기</button>
               </div>
@@ -682,7 +682,7 @@ export default function AdminSupportersPage() {
                             <button
                               type="button"
                               onClick={() => openReply(r)}
-                              className="text-xs font-bold text-[#e91e3f] hover:text-[#c8172f] transition-colors outline-none focus:outline-none"
+                              className="text-xs font-bold text-[#e91e3f] hover:text-[#d01634] transition-colors outline-none focus:outline-none"
                             >
                               답변
                             </button>
@@ -788,7 +788,7 @@ export default function AdminSupportersPage() {
                   <span className="text-[#5a5a5a] truncate">대상 <b className="text-[#131313]">{replyTarget.target}</b></span>
                 )}
               </div>
-              <div className="max-h-32 overflow-y-auto no-bar text-[12px] text-[#131313] leading-relaxed whitespace-pre-wrap break-words bg-black/[0.03] border border-black/[0.06] rounded-lg px-3 py-2">
+              <div className="max-h-32 overflow-y-auto no-bar text-[12px] text-[#131313] leading-relaxed whitespace-pre-wrap break-words bg-black/[0.03] border border-black/[0.06] px-3 py-2">
                 {replyTarget.content}
               </div>
               <div>

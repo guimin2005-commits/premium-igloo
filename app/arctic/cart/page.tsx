@@ -91,8 +91,8 @@ export default function CartPage() {
       <div className="w-full flex-1 bg-white min-h-screen">
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
-          <p className="text-sm text-[#4b4b4b] mb-7">장바구니를 보려면 로그인해주세요.</p>
-          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
+          <p className="text-sm text-[#5a5a5a] mb-7">장바구니를 보려면 로그인해주세요.</p>
+          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold transition-colors">디스코드 로그인</button>
         </div>
       </div>
     );
@@ -110,15 +110,15 @@ export default function CartPage() {
         </div>
 
         {rows.length === 0 ? (
-          <div className="py-24 text-center break-keep bg-white rounded-2xl border border-[#e0e0e0]">
-            <div className="w-14 h-14 mx-auto rounded-full bg-[#f5f5f5] flex items-center justify-center mb-5 text-[#c4c4c4]">
+          <div className="py-24 text-center break-keep bg-white rounded-2xl border border-[#ededed]">
+            <div className="w-14 h-14 mx-auto rounded-full bg-[#f2f2f2] flex items-center justify-center mb-5 text-[#a3a3a3]">
               <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
               </svg>
             </div>
             <p className="text-sm font-bold text-[#131313] mb-1.5">장바구니가 비어 있습니다</p>
             <p className="text-xs text-[#8a8a8a] mb-7">마음에 드는 상품을 담아보세요.</p>
-            <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
+            <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold transition-colors">
               상품 보러가기
             </Link>
           </div>
@@ -127,10 +127,10 @@ export default function CartPage() {
             {/* 좌 — 담은 상품 */}
             <div className="lg:col-span-2">
               {/* 전체 선택 */}
-              <div className="flex items-center justify-between px-5 py-3 mb-3 bg-white rounded-xl border border-[#e0e0e0]">
+              <div className="flex items-center justify-between px-5 py-3 mb-3 bg-white border border-[#ededed]">
                 <button onClick={toggleAll} className="flex items-center gap-2.5 text-[12px] font-bold text-[#131313]">
-                  <span className={`w-[18px] h-[18px] rounded-md border flex items-center justify-center transition-colors ${
-                    allChecked ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#d4d4d4]"
+                  <span className={`w-[18px] h-[18px] border flex items-center justify-center transition-colors ${
+                    allChecked ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#a3a3a3]"
                   }`}>
                     {allChecked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                   </span>
@@ -142,27 +142,27 @@ export default function CartPage() {
                   )}
                   {picked.length > 0 && picked.length < rows.length && (
                     <button onClick={() => setCart((prev) => prev.filter((c) => !selected.includes(c.itemId)))}
-                      className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#c62828] transition-colors">선택 삭제</button>
+                      className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#d01634] transition-colors">선택 삭제</button>
                   )}
-                  <button onClick={clearCart} className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#c62828] transition-colors">전체 비우기</button>
+                  <button onClick={clearCart} className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#d01634] transition-colors">전체 비우기</button>
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl border border-[#e0e0e0] overflow-hidden divide-y divide-[#ededed]">
+              <div className="bg-white rounded-2xl border border-[#ededed] overflow-hidden divide-y divide-[#ededed]">
                 {rows.map((r) => {
                   const sp = salePrice(r.item, r.days);
                   const on = selected.includes(r.itemId);
                   const discounted = sp < r.item.price;
                   return (
-                    <div key={r.itemId} className={`p-5 flex gap-4 items-center transition-colors ${on ? "" : "bg-[#fafafa]"}`}>
+                    <div key={r.itemId} className={`p-5 flex gap-4 items-center transition-colors ${on ? "" : "bg-[#f2f2f2]"}`}>
                       <button onClick={() => toggleOne(r.itemId)} aria-label="선택" className="shrink-0">
-                        <span className={`w-[18px] h-[18px] rounded-md border flex items-center justify-center transition-colors ${
-                          on ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#d4d4d4]"
+                        <span className={`w-[18px] h-[18px] border flex items-center justify-center transition-colors ${
+                          on ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#a3a3a3]"
                         }`}>
                           {on && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                         </span>
                       </button>
-                      <Link href="/arctic" className="w-20 h-20 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
+                      <Link href="/arctic" className="w-20 h-20 bg-[#f2f2f2] overflow-hidden shrink-0">
                         {r.item.imageUrl && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
@@ -174,7 +174,7 @@ export default function CartPage() {
                         </span>
                         <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">
                         {r.item.name}
-                        {(r.days ?? 0) > 0 && <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#131313] text-white text-[10px] font-black">{durationLabel(r.days)}</span>}
+                        {(r.days ?? 0) > 0 && <span className="shrink-0 px-1.5 py-0.5 bg-[#131313] text-white text-[10px] font-black">{durationLabel(r.days)}</span>}
                       </h3>
                         {r.item.description && (
                           <p className="text-[11px] text-[#8a8a8a] truncate mt-0.5">{r.item.description}</p>
@@ -184,7 +184,7 @@ export default function CartPage() {
                         <div className="text-base font-black text-[#131313] tabular-nums">{sp.toLocaleString()} XP</div>
                         {discounted && <div className="text-[11px] text-[#a3a3a3] line-through tabular-nums">{r.item.price.toLocaleString()} XP</div>}
                         <button onClick={() => removeItem(r.itemId)}
-                          className="mt-2 text-[11px] font-bold text-[#a3a3a3] hover:text-[#c62828] transition-colors">
+                          className="mt-2 text-[11px] font-bold text-[#a3a3a3] hover:text-[#d01634] transition-colors">
                           삭제
                         </button>
                       </div>
@@ -197,7 +197,7 @@ export default function CartPage() {
 
             {/* 우 — 요약 */}
             <div className="lg:col-span-1">
-              <div className="bg-white rounded-2xl border border-[#e0e0e0] p-6 lg:sticky lg:top-24">
+              <div className="bg-white rounded-2xl border border-[#ededed] p-6 lg:sticky lg:top-24">
                 <h2 className="text-sm font-black text-[#131313] mb-5">주문 요약</h2>
 
                 <div className="space-y-2.5 text-[13px] mb-4">
@@ -213,12 +213,12 @@ export default function CartPage() {
 
                 <div className="flex items-baseline justify-between mb-6">
                   <span className="text-sm font-bold text-[#131313]">예상 결제 XP</span>
-                  <span className={`text-xl font-black tabular-nums ${enoughXp ? "text-[#131313]" : "text-[#c62828]"}`}>{total.toLocaleString()} XP</span>
+                  <span className={`text-xl font-black tabular-nums ${enoughXp ? "text-[#131313]" : "text-[#d01634]"}`}>{total.toLocaleString()} XP</span>
                 </div>
 
                 <Link href="/arctic/checkout"
                   onClick={(e) => { if (!canCheckout) { e.preventDefault(); return; } goCheckout(); }}
-                  className={`block w-full py-4 text-center font-bold rounded-xl transition-colors ${
+                  className={`block w-full py-4 text-center font-bold transition-colors ${
                     canCheckout ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"
                   }`}>
                   {picked.length === 0 ? "상품을 선택해주세요" : !enoughXp ? "XP가 부족합니다" : "결제하러 가기"}
