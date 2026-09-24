@@ -91,6 +91,17 @@ function RouteProgress({ pathname }: { pathname: string }) {
   );
 }
 
+// 흰 페이지 탭 줄 항목 — 메가 메뉴의 소식·콘텐츠 묶음을 한 줄로 편다
+const WHITE_NAV = [
+  { name: "홈", path: "/" },
+  { name: "소식", path: "/notice" },
+  { name: "이벤트", path: "/event" },
+  { name: "구인", path: "/recruit" },
+  { name: "대회", path: "/tournament" },
+  { name: "경매", path: "/auction" },
+  { name: "명예의 전당", path: "/hall-of-fame" },
+];
+
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isGuestInquiryOpen, setIsGuestInquiryOpen] = useState(false);
@@ -98,7 +109,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // 📌 스크롤 시 상단바를 알약형 독 바로 전환
-  const [scrolled, setScrolled] = useState(false);
+  const [scrolledRaw, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
@@ -154,7 +165,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   const isShopPage = pathname === "/arctic" || pathname?.startsWith("/arctic/");
   // 📌 흰 바탕 페이지 — 화이트 & 블랙으로 옮긴 곳 (공지). 종이색 라이트와 구분한다.
-  const isWhitePage = isShopPage || pathname === "/notice" || !!pathname?.startsWith("/notice/");
+  const isWhitePage = isShopPage || pathname === "/" || pathname === "/notice" || !!pathname?.startsWith("/notice/");
+  // 흰 페이지(홈 · 공지 · 상점)는 스크롤 알약 변형 없음 — 띠 하나로 선다
+  const scrolled = scrolledRaw && !isWhitePage;
   // ARCTIC 에서 넘어온 내 정보(와 그 하위) — 스토어 독을 그대로 두므로 전역 독은 숨긴다
   const isArcticProfile = (pathname === "/profile" || !!pathname?.startsWith("/profile/")) && searchParams.get("from") === "arctic";
   const isLightPage = isWhitePage || pathname === "/profile" || pathname?.startsWith("/profile/") || pathname === "/level" || pathname?.startsWith("/level/") || (pathname?.startsWith("/admin") && !pathname.startsWith("/admin/room")) || pathname === "/write" || pathname === "/supporters" || pathname?.startsWith("/supporters/");   // 라이트 톤만 따라가는 페이지 (SYSTEM:LEVEL·관리자 화면은 ARCTIC 테마)
@@ -417,12 +430,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </Link>
               </div>
             ) : (
-              <Link href="/" className={`font-bold text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-gray-300"}`}>고급 이글루</Link>
+              <Link href="/" className={isWhitePage
+                ? "font-black text-[20px] md:text-[24px] tracking-[0.04em] leading-none text-[#131313] hover:text-[#e91e3f] transition-colors"
+                : `font-bold text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-gray-300"}`}>고급 이글루</Link>
             )}
           </div>
           
           {/* 비로그인(게스트) 또는 인증 유저에게만 카테고리 노출 (로그인 후 미인증 유저는 숨김 → /verify로 유도) */}
-          {!isVerifyPage && (status !== "authenticated" || isVerified) && (
+          {!isVerifyPage && !isWhitePage && (status !== "authenticated" || isVerified) && (
             <nav className={`hidden md:flex items-center justify-center font-bold absolute left-1/2 transform -translate-x-1/2 h-full z-50 transition-all duration-500 ${scrolled ? "gap-0.5 text-[13px]" : "gap-2 text-sm"}`}>
               {categoryGroups.map((group) => {
                 const isGroupActive = group.items.some((item) => isMenuActive(item.path));
@@ -638,6 +653,29 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       })()}
       </div>
 
+      {/* ── 흰 페이지 탭 줄 — 홈 · 소식 · 이벤트 · 구인 · 대회 · 경매 · 명예의 전당 | 다른 세계 두 개 (승인된 목업) ── */}
+      {isWhitePage && !isShopPage && !isVerifyPage && (status !== "authenticated" || isVerified) && (
+        <div className="w-full bg-white border-b border-[#ededed]">
+          <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center justify-between gap-4">
+            <nav className="flex items-center gap-6 md:gap-9 overflow-x-auto no-bar h-[52px]">
+              {WHITE_NAV.map((it) => {
+                const on = it.path === "/" ? pathname === "/" : pathname === it.path || !!pathname?.startsWith(it.path + "/");
+                return (
+                  <Link key={it.path} href={it.path}
+                    className={`relative shrink-0 h-full flex items-center text-[15px] font-extrabold transition-colors ${on ? "text-[#131313]" : "text-[#6a6a6a] hover:text-[#131313]"}`}>
+                    {it.name}
+                    {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
+                  </Link>
+                );
+              })}
+            </nav>
+            <div className="hidden md:flex items-center gap-5 text-[13px] font-black tracking-[0.06em] text-[#131313] shrink-0">
+              {levelOpen && <Link href="/level" className="hover:text-[#e91e3f] transition-colors">SYSTEM <span className="text-[#e91e3f]">:</span> LEVEL</Link>}
+              {levelOpen && (shopPublic || isAdmin) && <Link href="/arctic" className="hover:text-[#e91e3f] transition-colors">ARCT<span className="text-[#e91e3f]">I</span>C</Link>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* pb-24 — 떠 있는 알약 독(12px 여백 + 약 58px 높이)에 콘텐츠 끝이 가리지 않게 */}
       <main className={`flex-1 flex flex-col w-full relative ${isShopPage ? "" : "pb-24 md:pb-0"}`}>
