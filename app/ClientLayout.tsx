@@ -419,7 +419,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           : "border-white/10 bg-[#090909]/90"
       }`}>
         <div className={`max-w-7xl mx-auto px-5 md:px-6 flex items-center gap-4 md:gap-6 relative transition-[height] duration-200 ease-out ${barH}`}>
-          <div className="flex items-center gap-3 md:gap-4 h-full shrink-0 z-10 min-w-0">
+          <div className="flex items-center gap-3 md:gap-4 h-full z-10 min-w-0 flex-1 md:basis-0">
             {isVerifyPage ? (
               <span className={`font-bold cursor-default select-none text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] ${isLightPage ? "text-[#131313]" : "text-white"}`}>고급 이글루</span>
             ) : (
@@ -441,7 +441,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             )}
           </div>
           
-<div className="order-3 ml-auto flex justify-end items-center gap-3 md:gap-4 relative z-10 h-full shrink-0">
+<div className="order-3 flex flex-1 md:basis-0 min-w-0 justify-end items-center gap-3 md:gap-4 relative z-10 h-full">
             {!mounted || status === "loading" ? (
                <div className="w-20 h-8"></div>
             ) : status === "authenticated" && session ? (
@@ -588,15 +588,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
           {/* ── 카테고리 줄 — 모든 화면이 같은 방식. 내리면 로고 옆으로 접혀 계속 보인다 ── */}
           {!isVerifyPage && (status !== "authenticated" || isVerified) && (
-            <div className="order-2 relative group/gnb hidden md:flex items-center flex-1 justify-center min-w-0 h-full">
-              {/* 큰 분류 → 세부 분류 두 단. 세부는 그 분류 바로 아래에 붙는다.
-                     한 번에 세 묶음을 다 펼치면 어느 항목이 어느 분류인지 위치로 읽히지 않는다.
+            <div className="order-2 relative group/gnb hidden md:flex items-center shrink-0 h-full">
+              {/* 큰 분류만 이 줄에 세우고, 세부는 아래 패널 한 장이 전부 맡는다.
                      모바일은 펼치지 않고 햄버거 메뉴가 같은 일을 한다. ── */}
               <nav className="flex items-center gap-7 md:gap-11 h-full min-w-0 overflow-x-auto md:overflow-visible no-bar md:justify-center">
                 {categoryGroups.map((group) => {
                   const on = group.items.some((it) => pathname === it.path || !!pathname?.startsWith(it.path + "/"));
                   return (
-                    <div key={group.name} className="relative shrink-0 h-full group/cat">
+                    <div key={group.name} className="shrink-0 h-full">
                       <Link href={group.items[0]?.path || "/"}
                         className={`relative h-full flex items-center font-black tracking-tight transition-colors ${scrolled ? "text-[15px]" : "text-[15px] md:text-[16px]"} ${
                           on ? (isLightPage ? "text-[#131313]" : "text-white")
@@ -605,31 +604,47 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         {group.name}
                         {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
                       </Link>
+                    </div>
+                  );
+                })}
+              </nav>
 
-                      {/* 세부 — 분류 가운데에 맞춰 바로 아래 */}
-                      <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 pt-1.5 opacity-0 invisible group-hover/cat:opacity-100 group-hover/cat:visible transition-opacity duration-150">
-                        <div className={`min-w-[252px] rounded-2xl border overflow-hidden backdrop-blur-2xl py-3 ${isLightPage ? "border-[#e0e0e0] bg-white/97 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.22)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.6)]"}`}>
+              {/* ── 세부 카테고리 패널 — 큰 분류 어디에 올려도 한 장으로 펼쳐진다.
+                     분류마다 따로 뜨면 작은 상자가 여기저기 튀어나와 산만하다.
+                     바 아래에 매달린 한 장이라 위쪽 모서리는 각지고 아래만 둥글다. ── */}
+              <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 opacity-0 invisible group-hover/gnb:opacity-100 group-hover/gnb:visible transition-opacity duration-150"
+                   style={{ width: "min(92vw, 940px)" }}>
+                <div className={`rounded-b-2xl border-x border-b backdrop-blur-2xl ${isLightPage ? "border-[#ededed] bg-white/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.7)]"}`}>
+                  <div className="grid grid-cols-3 gap-10 px-10 py-8">
+                    {categoryGroups.map((group) => (
+                      <div key={group.name}>
+                        <div className="flex items-center gap-2.5 mb-4">
+                          <span className="w-4 h-px bg-[#e91e3f]" />
+                          <span className="text-[12px] font-black tracking-[0.2em] text-[#e91e3f]">{group.name}</span>
+                        </div>
+                        <div className="flex flex-col">
                           {group.items.map((it) => {
                             const cur = pathname === it.path || !!pathname?.startsWith(it.path + "/");
                             return (
                               <Link key={it.path} href={it.path}
-                                className={`block px-6 py-3.5 text-[19px] font-black tracking-tight whitespace-nowrap transition-colors ${
-                                  cur ? "text-[#e91e3f]" : isLightPage ? "text-[#131313] hover:text-[#e91e3f] hover:bg-black/[0.03]" : "text-gray-200 hover:text-[#ff5c77] hover:bg-white/[0.05]"
+                                className={`py-[9px] text-[19px] font-black tracking-tight transition-colors ${
+                                  cur ? "text-[#e91e3f]" : isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-gray-200 hover:text-[#ff5c77]"
                                 }`}>{it.name}</Link>
                             );
                           })}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </nav>
+                    ))}
+                  </div>
+                </div>
+              </div>
 
               {/* 📌 SYSTEM : LEVEL · ARCTIC 은 카테고리 줄에 세우지 않는다 —
                      홈 가운데(브랜드와 소식 사이)에서 크게 안내하고, 줄에서는 '콘텐츠' 묶음 안으로 간다. */}
             </div>
           )}
         </div>
+
       </header>
       </div>
 
