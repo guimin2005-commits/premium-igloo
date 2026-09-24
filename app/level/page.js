@@ -1564,28 +1564,26 @@ export default function LevelPage() {
 
   // 📌 탭 줄 — 일반 탭에서는 히어로 아래, ARCTIC 에서는 상점 헤더 바로 아래에 그린다.
   //    ARCTIC 은 전역 헤더를 넘겨받은 화면이라 카테고리도 그 헤더에 붙어 있어야 자연스럽다.
+  // 📌 탭 줄 — 스토어의 유형 줄과 같은 문법(흰 줄 · 밑줄 탭). 화면마다 탭 모양이 달라지면 안 된다.
   const tabBar = (
-    <div className="w-full px-5 md:px-8 pt-5 pb-3">
-      {/* 정렬은 탭마다 바뀌지 않는다 — ARCTIC 으로 넘어갈 때 카테고리가 좌우로 튀면 안 된다 */}
-      <div className="max-w-7xl mx-auto flex items-center justify-center">
-        {/* ⚠️ min-w-0 만 주면 justify-center 부모 안에서 폭이 0 으로 접히고, 활성 탭을 가운데로
-            미는 스크롤이 첫 탭(내 대시보드)을 왼쪽으로 잘라 클릭이 안 된다.
-            내용만큼 커지되 부모 폭을 넘기면(max-w-full) 그때만 가로 스크롤한다. */}
-        <div className="max-w-full flex gap-2 overflow-x-auto no-bar">
+    <div className="w-full bg-white border-b border-[#ededed]">
+      <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center h-[56px] md:h-[60px]">
+        <nav className="flex items-center gap-5 md:gap-7 overflow-x-auto no-bar h-full min-w-0">
           {MAIN_TABS.filter((t) => (!t.shopOnly || canSeeShop) && (!t.passOnly || passEnabled)).map((tab) => {
             const active = activeMainTab === tab.id;
-            const cls = `shrink-0 px-4 py-2 rounded-full text-[13px] font-bold transition-colors outline-none focus:outline-none ${
-              active ? "bg-[#131313] text-white" : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"
+            const cls = `relative shrink-0 h-full flex items-center text-[14px] md:text-[15px] font-extrabold transition-colors outline-none focus:outline-none ${
+              active ? "text-[#131313]" : "text-[#6a6a6a] hover:text-[#131313]"
             }`;
+            const bar = active ? <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" /> : null;
             // ARCTIC 은 다른 세계(제 주소) — 탭 줄에서는 링크로 선다 (이동 규칙 2)
-            if (tab.href) return <Link key={tab.id} href={tab.href} className={cls}>{tab.name}</Link>;
+            if (tab.href) return <Link key={tab.id} href={tab.href} className={cls}>{tab.name}{bar}</Link>;
             return (
               <button key={tab.id} onClick={() => setActiveMainTab(tab.id)} className={cls}>
-                {tab.name}
+                {tab.name}{bar}
               </button>
             );
           })}
-        </div>
+        </nav>
       </div>
     </div>
   );

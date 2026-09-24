@@ -27,6 +27,7 @@ type Props = {
   renderCard: (it: any) => React.ReactNode;
   goProducts: (type?: string) => void;
   openEdit: () => void;
+  adminTools?: React.ReactNode;
 };
 
 // 이번 주 월요일 ~ 일요일 (M.D – M.D)
@@ -45,7 +46,7 @@ const created = (it: any) => new Date(it?.createdAt || 0).getTime();
 
 export default function ArcticHome({
   items, isLoading, isAdmin, isLoggedIn, myXp, myLevel, ownedItemIds,
-  banners, bannerIdx, setBannerIdx, bannerRatio, fitRatio, renderCard, goProducts, openEdit,
+  banners, bannerIdx, setBannerIdx, bannerRatio, fitRatio, renderCard, goProducts, openEdit, adminTools,
 }: Props) {
   const dday = getSeasonDday();
   const active = useMemo(() => items.filter((it) => it.active !== false), [items]);
@@ -246,6 +247,7 @@ export default function ArcticHome({
           <Link href="/admin/shop?tab=products" className="text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] underline underline-offset-4">전체 상품 관리</Link>
           <Link href="/admin/shop?tab=items" className="text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] underline underline-offset-4">아이템 등록</Link>
           <Link href="/admin/shop?tab=orders" className="text-[12px] font-bold text-[#4b4b4b] hover:text-[#131313] underline underline-offset-4">구매 관리</Link>
+          {adminTools}
         </div>
       )}
     </>

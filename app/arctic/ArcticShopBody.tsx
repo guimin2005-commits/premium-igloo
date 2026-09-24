@@ -617,10 +617,12 @@ export default function ArcticShopBody({
           <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-auto md:ml-0">
             {isLoggedIn && (
               <>
-                <span className="hidden lg:inline-flex items-baseline gap-3.5 text-[12.5px] font-black text-[#131313] tabular-nums whitespace-nowrap">
-                  <span>{(myXp ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#e91e3f]">XP</span></span>
-                  <span>{(myPoint ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#3f9e93]">빙옥</span></span>
+                {/* 소지 — 보는 값이라 조용하게. 도구와는 가는 선으로 나눈다 */}
+                <span className="hidden lg:inline-flex items-baseline gap-3 text-[12px] font-bold text-[#4b4b4b] tabular-nums whitespace-nowrap">
+                  <span>{(myXp ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#a3a3a3]">XP</span></span>
+                  <span>{(myPoint ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#a3a3a3]">빙옥</span></span>
                 </span>
+                <span className="hidden lg:block w-px h-4 bg-[#e0e0e0]" />
 
                 <button onClick={() => setShowWishList(true)} aria-label="찜한 상품 보기"
                   className={`relative hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showWishList ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
@@ -645,26 +647,6 @@ export default function ArcticShopBody({
               </>
             )}
 
-            {/* 관리자 — 줄 맨 끝. 일반 유저 화면에는 없는 것이라 가장 뒤로 */}
-            {realAdmin && (
-              <button
-                onClick={() => setUserPreview((v) => !v)}
-                title={userPreview ? "관리 화면으로 돌아가기" : "일반 유저에게 보이는 화면으로 보기"}
-                className={`hidden md:inline-flex shrink-0 items-center justify-center w-9 h-9 rounded-full border transition-colors ${
-                  userPreview ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#8a8a8a] border-[#e0e0e0] hover:text-[#131313] hover:border-[#a3a3a3]"
-                }`}>
-                <svg viewBox="0 0 20 20" className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z" strokeLinejoin="round" />
-                  <circle cx="10" cy="10" r="2.6" />
-                </svg>
-              </button>
-            )}
-            {!shopPublic && isAdmin && (
-              <Link href="/admin/bot?tab=policy&sec=mute" title="비공개 상태입니다 · 눌러서 공개 전환" className="group/dot relative flex items-center shrink-0">
-                <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>
-                <span className="absolute left-0 w-2 h-2 rounded-full bg-[#e91e3f] animate-ping opacity-60"></span>
-              </Link>
-            )}
           </div>
         </div>
       </div>
@@ -678,6 +660,27 @@ export default function ArcticShopBody({
           myXp={myXp} myLevel={myLevel} ownedItemIds={ownedItemIds}
           banners={banners} bannerIdx={bannerIdx} setBannerIdx={setBannerIdx} bannerRatio={bannerRatio} fitRatio={fitRatio}
           renderCard={renderCard} goProducts={goProducts} openEdit={() => openEdit()}
+          adminTools={
+            <>
+              {realAdmin && (
+                <button onClick={() => setUserPreview((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-[12px] font-bold border transition-colors ${
+                    userPreview ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#e0e0e0] hover:text-[#131313] hover:border-[#a3a3a3]"
+                  }`}>
+                  <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z" strokeLinejoin="round" />
+                    <circle cx="10" cy="10" r="2.6" />
+                  </svg>
+                  {userPreview ? "미리보기 중" : "유저 화면"}
+                </button>
+              )}
+              {!shopPublic && isAdmin && (
+                <Link href="/admin/bot?tab=policy&sec=mute" className="text-[12px] font-bold text-[#e91e3f] hover:text-[#c62828] underline underline-offset-4 transition-colors">
+                  비공개 · 공개로 바꾸기
+                </Link>
+              )}
+            </>
+          }
         />
       )}
 
