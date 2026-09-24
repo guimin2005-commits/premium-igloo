@@ -6,9 +6,9 @@ import { statusOf } from "@/lib/tournamentPhase";
 import { SEASON } from "@/lib/season";
 
 // 📌 홈 — 화이트 & 블랙 편집형 골격 (승인된 2안 목업).
-//    마스트헤드(상자 없음) → 헤어라인 티커 → 01 살아있는 커뮤니티 → 02 지금, 이글루에서는
-//    → 03 즐기는 방법(잉크 섬은 SYSTEM : LEVEL 한 장) → 04 최신 소식 → 참여.
-//    커튼(sticky) 구조는 없앴다. 배너 상자 · 두 갈래 · 타일은 상점 문법이라 쓰지 않는다.
+//    마스트헤드(상자 없음) → 헤어라인 티커 → 01 소식(공지사항 · 지금 진행 중)
+//    → 02 살아있는 커뮤니티 → 03 즐기는 방법(잉크 섬은 SYSTEM : LEVEL 한 장) → 참여.
+//    소식이 맨 위라 조금만 내려도 공지가 바로 보인다. 커튼(sticky) 구조는 없앴다.
 
 const DISCORD = "https://discord.gg/V2uW2nUczU";
 
@@ -43,17 +43,6 @@ const ActivityChart = ({ history }: { history: { ts: string; online: number }[] 
   );
 };
 
-const pad = (n: number) => String(n).padStart(2, "0");
-const fmtDate = (s: string) => {
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return "";
-  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
-};
-const fmtShort = (s: string) => {
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return "";
-  return `${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
-};
 // 미리보기용 — 마크다운 기호를 걷어낸 한 줄
 const strip = (t: string) =>
   (t || "")
@@ -65,6 +54,22 @@ const strip = (t: string) =>
     .replace(/\s+/g, " ")
     .trim();
 const isImportant = (n: any) => n?.noticeTag === "중요" || n?.noticeTag === "필독" || n?.isImportant;
+// 공지 태그 — 목록(/notice)과 같은 규칙
+const tagOf = (n: any) =>
+  isImportant(n) ? { label: "중요", cls: "text-[#e91e3f]" }
+  : n?.noticeTag === "업데이트" ? { label: "업데이트", cls: "text-[#131313]" }
+  : { label: "일반", cls: "text-[#8a8a8a]" };
+// 7일 안에 올라온 글
+const isNew = (s: string) => {
+  const t = new Date(s).getTime();
+  return !isNaN(t) && Date.now() - t < 7 * 86400000;
+};
+// 고정글 압정
+const PinIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden className="w-[13px] h-[13px] shrink-0 text-[#131313]" fill="currentColor">
+    <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z" />
+  </svg>
+);
 
 // 번호 섹션 — 워터마크 번호 · 빨간 라벨 · 헤어라인 (지금 홈의 골격)
 function Sec({ no, title, desc, more, children }: { no: string; title: React.ReactNode; desc?: string; more?: { href: string; label: string }; children: React.ReactNode }) {
@@ -147,8 +152,6 @@ export default function Home() {
   }, []);
 
   const peak = stats?.history?.length ? Math.max(...stats.history.map((h: any) => h.online || 0)) : null;
-  const lead = notices[0];
-  const rest = notices.slice(1, 5);
   const levelOpen = policy.levelPublic;
 
   return (
@@ -199,8 +202,74 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── 01 살아있는 커뮤니티 — 박스 없이 큰 숫자 ── */}
-      <Sec no="01" title="살아있는 커뮤니티" desc="고급 이글루는 지금 이 순간에도 움직이고 있습니다.">
+      {/* ── 01 소식 — 왼쪽 공지사항 · 오른쪽 지금 진행 중 (조금만 내려도 바로 보인다) ── */}
+      {/* 더보기는 묶음마다 하나씩(공지사항 옆) — 섹션 머리에 또 두면 같은 곳으로 가는 버튼이 둘이 된다 */}
+      <Sec no="01" title="소식">
+        {/* Tailwind v4 에서 임의 grid-template 이 안 만들어질 수 있어 규칙을 직접 준다 */}
+        <style>{`.homeNewsGrid{display:grid;grid-template-columns:1fr;gap:40px}@media (min-width:768px){.homeNewsGrid{grid-template-columns:1.55fr 1fr;gap:56px}}`}</style>
+        <div className="relative mt-6 md:mt-7 homeNewsGrid">
+          {/* 공지사항 */}
+          <div className="min-w-0">
+            <div className="flex items-center justify-between gap-3 mb-1">
+              <b className="text-[13px] font-black">공지사항</b>
+              <Link href="/notice" className="shrink-0 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">더보기 ›</Link>
+            </div>
+            <Reveal>
+              <div>
+                {!scheduleLoaded ? (
+                  <div className="py-10 text-center text-sm text-[#a3a3a3]">불러오는 중...</div>
+                ) : notices.length === 0 ? (
+                  <div className="py-[18px] text-[13px] text-[#a3a3a3]">등록된 공지가 없습니다.</div>
+                ) : notices.map((n) => {
+                  const t = tagOf(n);
+                  const preview = strip(n.content);
+                  return (
+                    <Link key={n._id} href={`/notice/${n._id}`} className="group block py-[13px] border-b border-[#ededed] last:border-b-0">
+                      <span className="flex items-center gap-2.5">
+                        <b className={`w-[46px] shrink-0 text-[11px] font-black whitespace-nowrap ${t.cls}`}>{t.label}</b>
+                        {!!n.isPinned && <PinIcon />}
+                        <span className="flex-1 min-w-0 text-[15px] font-extrabold truncate group-hover:text-[#e91e3f] transition-colors">{n.title}</span>
+                        {isNew(n.createdAt) && (
+                          <i className="shrink-0 w-[15px] h-[15px] rounded-full bg-[#e91e3f] text-white text-[9px] font-black not-italic leading-none flex items-center justify-center">N</i>
+                        )}
+                      </span>
+                      {preview && <span className="block mt-1 pl-[56px] text-[12px] text-[#8a8a8a] truncate">{preview}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+            </Reveal>
+          </div>
+          {/* 지금 진행 중 */}
+          <div className="min-w-0">
+            <b className="block text-[13px] font-black mb-1">지금 진행 중</b>
+            <Reveal delay={80}>
+              <div>
+                {!scheduleLoaded ? (
+                  <div className="py-10 text-center text-sm text-[#a3a3a3]">불러오는 중...</div>
+                ) : schedule.length === 0 ? (
+                  <div className="py-[18px] text-[13px] text-[#a3a3a3]">진행 중인 일정이 없습니다.</div>
+                ) : schedule.slice(0, 4).map((it, i) => (
+                  <Link key={`${it.path}-${i}`} href={it.path} className={rowCls}>
+                    <span className={`w-[52px] shrink-0 text-[11px] font-black ${it.live ? "text-[#e91e3f]" : "text-[#131313]"}`}>
+                      {it.live && <i className="inline-block w-1.5 h-1.5 rounded-full bg-[#e91e3f] mr-1.5 align-[1px]" />}{it.chip}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[15px] font-extrabold truncate group-hover:text-[#e91e3f] transition-colors">{it.title}</span>
+                      {it.sub && <span className="block mt-1 text-[12px] text-[#8a8a8a] truncate">{it.sub}</span>}
+                    </span>
+                    {it.when && <span className="hidden sm:block shrink-0 max-w-[104px] truncate text-[12px] text-[#8a8a8a] tabular-nums">{it.when}</span>}
+                    <span className="shrink-0 text-[#a3a3a3] font-black">›</span>
+                  </Link>
+                ))}
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </Sec>
+
+      {/* ── 02 살아있는 커뮤니티 — 박스 없이 큰 숫자 ── */}
+      <Sec no="02" title="살아있는 커뮤니티" desc="고급 이글루는 지금 이 순간에도 움직이고 있습니다.">
         <Reveal delay={100}>
           <div className="relative mt-9 md:mt-10 flex flex-col md:flex-row md:items-end gap-6 md:gap-8">
             <div className="flex-1 grid grid-cols-3 gap-4 md:gap-6">
@@ -222,29 +291,6 @@ export default function Home() {
             </div>
           </div>
         </Reveal>
-      </Sec>
-
-      {/* ── 02 지금, 이글루에서는 — 줄 목록 ── */}
-      <Sec no="02" title="지금, 이글루에서는" more={{ href: "/event", label: "전체 ›" }}>
-        <div className="relative mt-6 md:mt-7">
-          {!scheduleLoaded ? (
-            <div className="py-10 text-center text-sm text-[#a3a3a3]">불러오는 중...</div>
-          ) : schedule.map((it, i) => (
-            <Reveal key={`${it.path}-${i}`} delay={Math.min(i, 4) * 60}>
-              <Link href={it.path} className={rowCls}>
-                <span className={`w-[52px] md:w-[76px] shrink-0 text-[11px] font-black ${it.live ? "text-[#e91e3f]" : "text-[#131313]"}`}>
-                  {it.live && <i className="inline-block w-1.5 h-1.5 rounded-full bg-[#e91e3f] mr-1.5 align-[1px]" />}{it.chip}
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-[15px] md:text-[16px] font-extrabold truncate group-hover:text-[#e91e3f] transition-colors">{it.title}</span>
-                  {it.sub && <span className="block mt-1 text-[12px] text-[#8a8a8a] truncate">{it.sub}</span>}
-                </span>
-                {it.when && <span className="hidden sm:block shrink-0 text-[12px] text-[#8a8a8a] tabular-nums">{it.when}</span>}
-                <span className="shrink-0 text-[#a3a3a3] font-black">›</span>
-              </Link>
-            </Reveal>
-          ))}
-        </div>
       </Sec>
 
       {/* ── 03 즐기는 방법 — 잉크 섬 하나 + 번호 줄 두 개 ── */}
@@ -312,35 +358,6 @@ export default function Home() {
           </Reveal>
         </div>
       </Sec>
-
-      {/* ── 04 최신 소식 — 대표 한 건 + 줄 ── */}
-      {notices.length > 0 && (
-        <Sec no="04" title="최신 소식" more={{ href: "/notice", label: "전체 보기 ›" }}>
-          <div className="relative mt-6 md:mt-7 grid md:grid-cols-2 gap-8 md:gap-14">
-            <Reveal>
-              <Link href={`/notice/${lead._id}`} className="group block">
-                <span className="text-[11px] font-black text-[#e91e3f]">
-                  {[isImportant(lead) ? "중요" : "", lead.isPinned ? "고정" : ""].filter(Boolean).join(" · ") || "일반"}
-                </span>
-                <h4 className="mt-2.5 mb-3 text-[22px] md:text-[26px] font-black tracking-tight leading-[1.3] break-keep group-hover:text-[#e91e3f] transition-colors">{lead.title}</h4>
-                {strip(lead.content) && <p className="text-[14px] leading-[1.75] text-[#6a6a6a] line-clamp-3 break-keep">{strip(lead.content)}</p>}
-                <span className="block mt-3.5 text-[12px] text-[#8a8a8a] tabular-nums">{fmtDate(lead.createdAt)}</span>
-              </Link>
-            </Reveal>
-            <Reveal delay={80}>
-              <div>
-                {rest.map((n) => (
-                  <Link key={n._id} href={`/notice/${n._id}`} className="group flex items-center gap-4 py-4 first:pt-1 border-b border-[#ededed] last:border-b-0">
-                    <span className="w-[46px] shrink-0 text-[12px] text-[#8a8a8a] tabular-nums">{fmtShort(n.createdAt)}</span>
-                    <span className="flex-1 min-w-0 text-[15px] font-extrabold truncate group-hover:text-[#e91e3f] transition-colors">{n.title}</span>
-                    <span className="shrink-0 text-[#a3a3a3] font-black">›</span>
-                  </Link>
-                ))}
-              </div>
-            </Reveal>
-          </div>
-        </Sec>
-      )}
 
       {/* ── 참여 ── */}
       <section className="w-full">

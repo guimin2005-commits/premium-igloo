@@ -9,6 +9,9 @@ import { ICON_PATHS } from "../components/Icons";
 // 📌 공지사항 목록 — 화이트 & 블랙. 제목 · 밑줄 탭 · 검색 · 줄 목록(날짜 · 태그 · 제목 · ›).
 //    읽는 것은 페이지(이동 규칙 1): 줄을 누르면 /notice/[id] 로 간다. 목록 위 모달·본문 미리보기는 없다.
 
+// 압정(고정) — ICON_PATHS.pin 은 지도 위치 핀이라 고정 표시로는 못 쓴다
+const PUSHPIN = "M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z";
+
 // 공지 중요 여부 (구버전 '필독'/isImportant 호환)
 const isImportantNotice = (n: any) => n?.noticeTag === "중요" || n?.noticeTag === "필독" || n?.isImportant;
 const tagOf = (n: any) =>
@@ -145,10 +148,10 @@ export default function NoticeClient() {
                   <span className="w-[46px] md:w-[64px] shrink-0 text-[11.5px] text-[#8a8a8a] tabular-nums">{fmtDate(n.createdAt)}</span>
                   <span className={`hidden md:block w-14 shrink-0 text-[10.5px] font-black ${tag.cls}`}>{tag.label}</span>
                   <span className="flex-1 min-w-0 flex items-center gap-2 text-[15px] font-extrabold leading-snug">
-                    {/* 고정은 글자 대신 핀 아이콘 하나 */}
+                    {/* 고정은 글자 대신 압정 하나 — 지도 핀(위치)과 헷갈리지 않게 면으로 채운 압정을 쓴다 */}
                     {n.isPinned && (
-                      <svg className="shrink-0 w-[15px] h-[15px] text-[#131313]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" aria-label="고정">
-                        <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.pin} />
+                      <svg className="shrink-0 w-[14px] h-[14px] text-[#131313]" viewBox="0 0 24 24" fill="currentColor" aria-label="고정">
+                        <path d={PUSHPIN} />
                       </svg>
                     )}
                     <span className={`md:hidden shrink-0 text-[10.5px] font-black ${tag.cls}`}>{tag.label}</span>

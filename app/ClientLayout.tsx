@@ -91,15 +91,13 @@ function RouteProgress({ pathname }: { pathname: string }) {
   );
 }
 
-// 📌 카테고리 줄 항목 — 메가 메뉴를 한 줄로 편다. 모든 화면(대회·경매·레벨 포함)이 같은 줄을 쓴다.
+// 📌 카테고리 줄 — 다섯 개만 세운다. 줄이 길면 무엇이 중요한지 안 읽힌다.
+//    홈은 왼쪽 브랜드가 하고, 구인·명예의 전당은 푸터와 모바일 메뉴에서 간다.
 const WHITE_NAV = [
-  { name: "홈", path: "/" },
   { name: "소식", path: "/notice" },
   { name: "이벤트", path: "/event" },
-  { name: "구인", path: "/recruit" },
   { name: "대회", path: "/tournament" },
   { name: "경매", path: "/auction" },
-  { name: "명예의 전당", path: "/hall-of-fame" },
   { name: "고객센터", path: "/support" },
 ];
 
@@ -109,10 +107,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // 📌 스크롤 시 상단바를 알약형 독 바로 전환
+  // 📌 내리면 상단 바가 한 줄로 접힌다.
+  //    접히는 지점과 펴지는 지점을 벌려 둔다 — 한 점으로 두면 경계에서 두 줄↔한 줄이 떨리며 깜빡인다.
   const [scrolledRaw, setScrolled] = useState(false);
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
+    const onScroll = () => setScrolled((was) => (was ? window.scrollY > 24 : window.scrollY > 96));
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -416,7 +415,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           : "border-white/10 bg-[#090909]/90"
       }`}>
         <div className="max-w-7xl mx-auto px-5 md:px-6 flex flex-wrap items-center relative">
-          <div className={`order-1 flex items-center z-10 min-w-0 transition-[height] duration-300 ${barH}`}>
+          <div className={`order-1 flex items-center z-10 min-w-0 ${barH}`}>
             {isVerifyPage ? (
               <span className={`font-bold cursor-default select-none text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] ${isLightPage ? "text-[#131313]" : "text-white"}`}>고급 이글루</span>
             ) : sectionBrand ? (
@@ -433,12 +432,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               </div>
             ) : (
               <Link href="/" className={isWhitePage
-                ? `font-black tracking-[0.04em] leading-none text-[#131313] hover:text-[#e91e3f] transition-[color,font-size] duration-300 ${scrolled ? "text-[17px] md:text-[19px]" : "text-[20px] md:text-[24px]"}`
+                ? `font-black tracking-[0.04em] leading-none text-[#131313] hover:text-[#e91e3f] transition-colors ${scrolled ? "text-[17px] md:text-[19px]" : "text-[20px] md:text-[24px]"}`
                 : `font-bold text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-gray-300"}`}>고급 이글루</Link>
             )}
           </div>
           
-<div className={`order-2 ml-auto flex justify-end items-center gap-3 md:gap-4 relative z-10 transition-[height] duration-300 ${scrolled ? "md:order-3" : ""} ${barH}`}>
+<div className={`order-2 ml-auto flex justify-end items-center gap-3 md:gap-4 relative z-10 ${scrolled ? "md:order-3" : ""} ${barH}`}>
             {!mounted || status === "loading" ? (
                <div className="w-20 h-8"></div>
             ) : status === "authenticated" && session ? (
@@ -585,7 +584,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
           {/* ── 카테고리 줄 — 모든 화면이 같은 방식. 내리면 로고 옆으로 접혀 계속 보인다 ── */}
           {!isVerifyPage && (status !== "authenticated" || isVerified) && (
-            <div className={`order-3 basis-full flex items-center gap-4 min-w-0 transition-[height] duration-300 border-t ${
+            <div className={`order-3 basis-full flex items-center gap-4 min-w-0 border-t ${
               scrolled ? "h-11 md:h-14 md:order-2 md:basis-auto md:flex-1 md:ml-8 md:border-t-transparent" : "h-[46px] md:h-[52px]"
             } ${isWhitePage ? "border-[#ededed]" : isLightPage ? "border-black/[0.06]" : "border-white/[0.07]"}`}>
               <nav className="flex items-center gap-5 md:gap-7 h-full flex-1 min-w-0 overflow-x-auto no-bar">
@@ -593,7 +592,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   const on = it.path === "/" ? pathname === "/" : pathname === it.path || !!pathname?.startsWith(it.path + "/");
                   return (
                     <Link key={it.path} href={it.path}
-                      className={`relative shrink-0 h-full flex items-center font-extrabold transition-[color,font-size] duration-300 ${scrolled ? "text-[14px]" : "text-[14px] md:text-[15px]"} ${
+                      className={`relative shrink-0 h-full flex items-center font-extrabold transition-colors ${scrolled ? "text-[14px]" : "text-[14px] md:text-[15px]"} ${
                         on ? (isLightPage ? "text-[#131313]" : "text-white")
                            : (isLightPage ? "text-[#6a6a6a] hover:text-[#131313]" : "text-gray-400 hover:text-white")
                       }`}>
@@ -675,6 +674,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <div className="flex items-center gap-6">
               <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>Discord</a>
               <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>Kakao Talk</a>
+              <Link href="/recruit" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>구인</Link>
+              <Link href="/hall-of-fame" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>명예의 전당</Link>
               <Link href="/faq" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>FAQ</Link>
               <Link href="/support" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>1:1 문의</Link>
               <Link href="/policy" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>이용약관</Link>

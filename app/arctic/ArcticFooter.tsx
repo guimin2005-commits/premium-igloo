@@ -17,6 +17,7 @@ export default function ArcticFooter() {
           <div className="flex items-center gap-x-5 gap-y-2 flex-wrap">
             <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[#5a5a5a] hover:text-[#131313] transition-colors">Discord</a>
             <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[#5a5a5a] hover:text-[#131313] transition-colors">Kakao Talk</a>
+            <Link href="/recruit" className="text-xs font-medium text-[#5a5a5a] hover:text-[#131313] transition-colors">구인</Link>
             <Link href="/faq" className="text-xs font-medium text-[#5a5a5a] hover:text-[#131313] transition-colors">FAQ</Link>
             <Link href="/support" className="text-xs font-medium text-[#5a5a5a] hover:text-[#131313] transition-colors">1:1 문의</Link>
             <Link href="/policy" className="text-xs font-medium text-[#5a5a5a] hover:text-[#131313] transition-colors">이용약관</Link>
