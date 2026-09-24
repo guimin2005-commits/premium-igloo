@@ -100,6 +100,7 @@ const WHITE_NAV = [
   { name: "대회", path: "/tournament" },
   { name: "경매", path: "/auction" },
   { name: "명예의 전당", path: "/hall-of-fame" },
+  { name: "고객센터", path: "/support" },
 ];
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -739,6 +740,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>Discord</a>
               <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>Kakao Talk</a>
               <Link href="/faq" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>FAQ</Link>
+              <Link href="/support" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>1:1 문의</Link>
               <Link href="/policy" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>이용약관</Link>
               <Link href="/policy?tab=privacy" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>개인정보처리방침</Link>
             </div>

@@ -522,6 +522,8 @@ export default function ArcticShopBody({
     const soldOut = it.stock === 0;
     const wished = wish.includes(it._id);
     const listPrice = isTimed(it) ? (durationPrice(it, 0) ?? it.price) : it.price;
+    const pct = Math.max(0, Math.min(100, Number(it.discountPct) || 0));
+    const finalPrice = pct ? Math.max(0, Math.floor((Number(listPrice || 0) * (100 - pct)) / 100)) : Number(listPrice || 0);
     return (
       <div key={it._id} className="group relative flex flex-col">
         <Link href={`/arctic/item/${it._id}`} className="block relative aspect-square overflow-hidden rounded-md bg-[#f2f2f2]">
@@ -548,8 +550,11 @@ export default function ArcticShopBody({
         <Link href={`/arctic/item/${it._id}`} className="block mt-3">
           {/* 이름은 작고 가볍게, 가격이 주인공 — 둘이 같은 크기면 값이 안 읽힌다 */}
           <h3 className="text-[13px] font-semibold text-[#4b4b4b] leading-snug line-clamp-2 break-keep">{it.name}</h3>
-          <p className="mt-2 text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none">
-            {Number(listPrice || 0).toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP</span>
+          {/* 할인 중이면 정가는 취소선으로 위에, 할인율은 빨간 글자, 큰 숫자는 할인가 */}
+          {pct > 0 && <s className="block mt-2 text-[11.5px] text-[#a3a3a3] tabular-nums leading-none">{Number(listPrice || 0).toLocaleString()} XP</s>}
+          <p className={`${pct > 0 ? "mt-1" : "mt-2"} text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none`}>
+            {pct > 0 && <span className="mr-1.5 text-[14px] font-black text-[#e91e3f]">{pct}%</span>}
+            {finalPrice.toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP</span>
           </p>
         </Link>
 
