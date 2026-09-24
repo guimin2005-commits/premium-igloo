@@ -91,7 +91,7 @@ function RouteProgress({ pathname }: { pathname: string }) {
   );
 }
 
-// 흰 페이지 탭 줄 항목 — 메가 메뉴의 소식·콘텐츠 묶음을 한 줄로 편다
+// 📌 카테고리 줄 항목 — 메가 메뉴를 한 줄로 편다. 모든 화면(대회·경매·레벨 포함)이 같은 줄을 쓴다.
 const WHITE_NAV = [
   { name: "홈", path: "/" },
   { name: "소식", path: "/notice" },
@@ -165,10 +165,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   const isShopPage = pathname === "/arctic" || pathname?.startsWith("/arctic/");
-  // 📌 흰 바탕 페이지 — 화이트 & 블랙으로 옮긴 곳 (공지). 종이색 라이트와 구분한다.
-  const isWhitePage = isShopPage || pathname === "/" || pathname === "/notice" || !!pathname?.startsWith("/notice/");
-  // 흰 페이지(홈 · 공지 · 상점)는 스크롤 알약 변형 없음 — 띠 하나로 선다
-  const scrolled = scrolledRaw && !isWhitePage;
+  // 📌 흰 바탕 페이지 — 화이트 & 블랙으로 옮긴 곳. 종이색 라이트와 구분한다.
+  //    경매·대회·명예의 전당은 일부러 개성 있게 만든 화면이라 여기 넣지 않는다.
+  const WHITE_ROOTS = ["/notice", "/event", "/recruit", "/faq", "/support", "/booster"];
+  const isWhitePage = isShopPage || pathname === "/" || WHITE_ROOTS.some((r) => pathname === r || !!pathname?.startsWith(r + "/"));
+  // 알약 변형은 없앴다 — 내리면 로고 줄과 카테고리 줄이 한 줄로 접힌다
+  const scrolled = scrolledRaw;
   // ARCTIC 에서 넘어온 내 정보(와 그 하위) — 스토어 독을 그대로 두므로 전역 독은 숨긴다
   const isArcticProfile = (pathname === "/profile" || !!pathname?.startsWith("/profile/")) && searchParams.get("from") === "arctic";
   const isLightPage = isWhitePage || pathname === "/profile" || pathname?.startsWith("/profile/") || pathname === "/level" || pathname?.startsWith("/level/") || (pathname?.startsWith("/admin") && !pathname.startsWith("/admin/room")) || pathname === "/write" || pathname === "/supporters" || pathname?.startsWith("/supporters/");   // 라이트 톤만 따라가는 페이지 (SYSTEM:LEVEL·관리자 화면은 ARCTIC 테마)
@@ -219,7 +221,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }),
   }));
 
-  const [openMegaMenu, setOpenMegaMenu] = useState<string | null>(null);
+  // 로고 줄·도구 줄의 높이 — 내리면 한 줄로 접히므로 둘이 늘 같아야 한다
+  const barH = scrolled ? "h-12 md:h-14" : isWhitePage ? "h-[64px] md:h-20" : "h-16";
 
   // 📌 점검 모드 — 관리자 외에는 점검 화면 표시
   const [isMaintenance, setIsMaintenance] = useState(false);
@@ -404,18 +407,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <RouteProgress pathname={pathname} />
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
              헤더가 두 겹으로 쌓이면 내용 영역이 그만큼 좁아진다 */}
-      <div className={`sticky top-0 z-40 transition-[padding] duration-500 ease-out flex-shrink-0 ${isAuctionRoom || isShopPage ? "hidden" : ""} ${scrolled ? "pt-3 px-3 md:px-6" : ""}`} onMouseLeave={() => setOpenMegaMenu(null)}>
-      <header className={`mx-auto transition-[max-width,border-radius,padding,height] duration-500 ease-out ${
-        scrolled
-          ? isLightPage
-            ? "max-w-5xl rounded-full border border-black/[0.06] bg-white/80 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] px-5 md:px-6 h-14"
-            : "max-w-5xl rounded-full border border-white/[0.06] bg-[#0b0b0b]/70 backdrop-blur-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)] px-5 md:px-6 h-14"
-          : isLightPage
-            ? `max-w-[1600px] border border-x-transparent border-t-transparent border-b-black/[0.08] bg-white/90 backdrop-blur-md px-6 ${isWhitePage ? "h-[68px] md:h-20" : "h-16"}`
-            : "max-w-[1600px] border border-x-transparent border-t-transparent border-b-white/10 bg-[#090909]/80 backdrop-blur-md shadow-[0_0_0_rgba(0,0,0,0)] px-6 h-16"
+      {/* 📌 상단 바 — 로고 줄과 카테고리 줄이 한 덩어리로 붙어 다닌다.
+             처음엔 두 줄(로고 · 카테고리), 내리면 한 줄로 접혀 카테고리가 계속 따라온다. 알약으로 떠오르지 않는다. */}
+      <div className={`sticky top-0 z-40 flex-shrink-0 ${isAuctionRoom || isShopPage ? "hidden" : ""}`}>
+      <header className={`w-full border-b backdrop-blur-md transition-colors duration-300 ${
+        isWhitePage ? "border-[#ededed] bg-white/95"
+          : isLightPage ? "border-black/[0.08] bg-[#f4f3f2]/95"
+          : "border-white/10 bg-[#090909]/90"
       }`}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between relative h-full">
-          <div className="flex-1 flex items-center z-10 min-w-0">
+        <div className="max-w-7xl mx-auto px-5 md:px-6 flex flex-wrap items-center relative">
+          <div className={`order-1 flex items-center z-10 min-w-0 transition-[height] duration-300 ${barH}`}>
             {isVerifyPage ? (
               <span className={`font-bold cursor-default select-none text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] ${isLightPage ? "text-[#131313]" : "text-white"}`}>고급 이글루</span>
             ) : sectionBrand ? (
@@ -432,32 +433,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               </div>
             ) : (
               <Link href="/" className={isWhitePage
-                ? "font-black text-[20px] md:text-[24px] tracking-[0.04em] leading-none text-[#131313] hover:text-[#e91e3f] transition-colors"
+                ? `font-black tracking-[0.04em] leading-none text-[#131313] hover:text-[#e91e3f] transition-[color,font-size] duration-300 ${scrolled ? "text-[17px] md:text-[19px]" : "text-[20px] md:text-[24px]"}`
                 : `font-bold text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-gray-300"}`}>고급 이글루</Link>
             )}
           </div>
           
-          {/* 비로그인(게스트) 또는 인증 유저에게만 카테고리 노출 (로그인 후 미인증 유저는 숨김 → /verify로 유도) */}
-          {!isVerifyPage && !isWhitePage && (status !== "authenticated" || isVerified) && (
-            <nav className={`hidden md:flex items-center justify-center font-bold absolute left-1/2 transform -translate-x-1/2 h-full z-50 transition-all duration-500 ${scrolled ? "gap-0.5 text-[13px]" : "gap-2 text-sm"}`}>
-              {categoryGroups.map((group) => {
-                const isGroupActive = group.items.some((item) => isMenuActive(item.path));
-                const isOpen = openMegaMenu === group.name;
-                return (
-                  <div key={group.name} className="relative h-full flex items-center group/gnav" onMouseEnter={() => setOpenMegaMenu(group.name)}>
-                    <button className={`relative h-full flex items-center transition-all duration-500 ease-out outline-none focus:outline-none ${scrolled ? "px-3" : "px-4"} ${isGroupActive || isOpen ? "text-[#e91e3f]" : isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white"}`}>
-                      {group.name}
-                      {/* 대분류 라인 차오름 이펙트 — 평소엔 숨김, 호버 시 왼쪽부터 차오름. 알약 모드에선 라인 위치도 함께 올라온다 */}
-                      <span style={{ transitionProperty: "transform, bottom, left, right", transitionDuration: "0.3s, 0.5s, 0.5s, 0.5s", transitionTimingFunction: "cubic-bezier(0.16,1,0.3,1)" }} className={`absolute h-px bg-[#e91e3f] origin-left ${scrolled ? "bottom-2.5 left-3 right-3" : "bottom-4 left-4 right-4"} ${isGroupActive || isOpen ? "scale-x-100" : "scale-x-0 group-hover/gnav:scale-x-100"}`} />
-                    </button>
-
-                  </div>
-                );
-              })}
-            </nav>
-          )}
-          
-          <div className="flex-1 flex justify-end items-center gap-4 h-full relative z-10">
+<div className={`order-2 ml-auto flex justify-end items-center gap-3 md:gap-4 relative z-10 transition-[height] duration-300 ${scrolled ? "md:order-3" : ""} ${barH}`}>
             {!mounted || status === "loading" ? (
                <div className="w-20 h-8"></div>
             ) : status === "authenticated" && session ? (
@@ -601,82 +582,37 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               </button>
             )}
           </div>
-        </div>
-      </header>
 
-      {/* 📌 메가 메뉴 — 풀폭 · 좌측 헤딩 + 깔끔한 텍스트 리스트 (프리미엄 톤)
-             ※ header(알약 상태에서 좁아짐) 밖, 바깥 래퍼 기준으로 위치시켜 항상 풀폭으로 펼쳐지게 한다 */}
-      {openMegaMenu && (() => {
-        const group = categoryGroups.find((g) => g.name === openMegaMenu);
-        if (!group) return null;
-        // 바깥 div는 위치 잡기 + 알약 모드에선 pt-2 투명 다리(마우스가 알약→메뉴로 건너갈 때 호버가 안 끊기게)
-        // 📌 기준을 항상 가운데로 두고 폭만 바꾼다 — 알약↔전체폭 전환 때 메뉴가 튀지 않고 헤더와 같이 움직인다
-        return (
-          <div className={`hidden md:block absolute top-full left-0 right-0 mx-auto w-full transition-[max-width,padding] duration-500 ease-out ${scrolled ? "pt-2 max-w-3xl" : "pt-0 max-w-[1600px]"}`}>
-            <style dangerouslySetInnerHTML={{ __html: `@keyframes megaDrop{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}` }} />
-            <div className={`backdrop-blur-2xl origin-top transition-[border-radius,border-color,background-color] duration-500 ease-out ${isLightPage ? "bg-white/90" : "bg-[#0c0c0c]/90"} ${scrolled ? (isLightPage ? "rounded-3xl border border-black/[0.07] overflow-hidden shadow-[0_24px_48px_-24px_rgba(0,0,0,0.18)]" : "rounded-3xl border border-white/[0.07] overflow-hidden shadow-[0_24px_48px_-24px_rgba(0,0,0,0.55)]") : (isLightPage ? "border-b border-black/[0.08] shadow-[0_24px_48px_-24px_rgba(0,0,0,0.18)]" : "border-b border-white/10 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.55)]")}`}>
-            <div className="h-px w-full bg-gradient-to-r from-transparent via-[#e91e3f]/50 to-transparent"></div>
-            <div className={`mx-auto grid grid-cols-12 gap-10 items-start transition-[max-width,padding] duration-500 ease-out ${scrolled ? "max-w-3xl px-8 py-7" : "max-w-7xl px-8 py-8 lg:py-10"}`} style={{ animation: "megaDrop 0.42s cubic-bezier(0.16,1,0.3,1) 0.06s both" }}>
-              {/* 좌: 섹션 헤딩 */}
-              <div className="col-span-12 lg:col-span-5">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <span className="w-6 h-px bg-[#e91e3f]"></span>
-                  <span className="text-[10px] font-black tracking-[0.35em] text-[#e91e3f] uppercase">{group.name}</span>
-                </div>
-                <p className={`text-xl lg:text-2xl font-black tracking-tight leading-snug break-keep max-w-md ${isLightPage ? "text-[#131313]" : "text-white"}`}>{group.tagline}</p>
-              </div>
-              {/* 우: 텍스트 링크 리스트 */}
-              <div className="col-span-12 lg:col-span-7">
-                {group.items.map((item) => {
-                  const isActive = isMenuActive(item.path);
+          {/* ── 카테고리 줄 — 모든 화면이 같은 방식. 내리면 로고 옆으로 접혀 계속 보인다 ── */}
+          {!isVerifyPage && (status !== "authenticated" || isVerified) && (
+            <div className={`order-3 basis-full flex items-center gap-4 min-w-0 transition-[height] duration-300 border-t ${
+              scrolled ? "h-11 md:h-14 md:order-2 md:basis-auto md:flex-1 md:ml-8 md:border-t-transparent" : "h-[46px] md:h-[52px]"
+            } ${isWhitePage ? "border-[#ededed]" : isLightPage ? "border-black/[0.06]" : "border-white/[0.07]"}`}>
+              <nav className="flex items-center gap-5 md:gap-7 h-full flex-1 min-w-0 overflow-x-auto no-bar">
+                {WHITE_NAV.map((it) => {
+                  const on = it.path === "/" ? pathname === "/" : pathname === it.path || !!pathname?.startsWith(it.path + "/");
                   return (
-                    <Link
-                      key={item.path}
-                      href={item.path}
-                      onClick={() => setOpenMegaMenu(null)}
-                      className={`group/item relative flex items-center justify-between gap-4 py-3 transition-colors ${isLightPage ? "border-b border-black/[0.08] first:border-t first:border-black/[0.08]" : "border-b border-white/[0.08] first:border-t first:border-white/[0.08]"}`}
-                    >
-                      {/* 상단 내비(소식·콘텐츠·지원)와 같은 밑줄 애니메이션 */}
-                      <span className={`absolute bottom-[-1px] left-0 right-0 h-px bg-[#e91e3f] origin-left transition-transform duration-300 ${isActive ? "scale-x-100" : "scale-x-0 group-hover/item:scale-x-100"}`} />
-                      <div className="min-w-0">
-                        <p className={`text-[15px] lg:text-base font-bold tracking-tight transition-colors ${isActive ? "text-[#e91e3f]" : isLightPage ? "text-[#131313] group-hover/item:text-[#e91e3f]" : "text-gray-100 group-hover/item:text-[#ff5c77]"}`}>{item.name}</p>
-                        <p className={`text-[11px] mt-0.5 truncate ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>{item.desc}</p>
-                      </div>
-                      <svg className={`w-4 h-4 shrink-0 -translate-x-2 opacity-0 group-hover/item:opacity-100 group-hover/item:translate-x-0 group-hover/item:text-[#e91e3f] transition-all duration-300 ${isLightPage ? "text-[#a3a3a3]" : "text-gray-600"}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                    <Link key={it.path} href={it.path}
+                      className={`relative shrink-0 h-full flex items-center font-extrabold transition-[color,font-size] duration-300 ${scrolled ? "text-[14px]" : "text-[14px] md:text-[15px]"} ${
+                        on ? (isLightPage ? "text-[#131313]" : "text-white")
+                           : (isLightPage ? "text-[#6a6a6a] hover:text-[#131313]" : "text-gray-400 hover:text-white")
+                      }`}>
+                      {it.name}
+                      {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
                     </Link>
                   );
                 })}
+              </nav>
+              {/* 다른 세계 — 자기 주소를 가진 곳. 접힌 줄에서는 넓은 화면에서만 */}
+              <div className={`items-center gap-4 md:gap-5 shrink-0 text-[12.5px] font-black tracking-[0.06em] ${scrolled ? "hidden lg:flex" : "hidden md:flex"} ${isLightPage ? "text-[#131313]" : "text-white"}`}>
+                {levelOpen && <Link href="/level" className="hover:text-[#e91e3f] transition-colors whitespace-nowrap">SYSTEM <span className="text-[#e91e3f]">:</span> LEVEL</Link>}
+                {levelOpen && (shopPublic || isAdmin) && <Link href="/arctic" className="hover:text-[#e91e3f] transition-colors whitespace-nowrap">ARCT<span className="text-[#e91e3f]">I</span>C</Link>}
               </div>
             </div>
-            </div>
-          </div>
-        );
-      })()}
-      </div>
-
-      {/* ── 흰 페이지 탭 줄 — 홈 · 소식 · 이벤트 · 구인 · 대회 · 경매 · 명예의 전당 | 다른 세계 두 개 (승인된 목업) ── */}
-      {isWhitePage && !isShopPage && !isVerifyPage && (status !== "authenticated" || isVerified) && (
-        <div className="w-full bg-white border-b border-[#ededed]">
-          <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center justify-between gap-4">
-            <nav className="flex items-center gap-6 md:gap-9 overflow-x-auto no-bar h-[52px]">
-              {WHITE_NAV.map((it) => {
-                const on = it.path === "/" ? pathname === "/" : pathname === it.path || !!pathname?.startsWith(it.path + "/");
-                return (
-                  <Link key={it.path} href={it.path}
-                    className={`relative shrink-0 h-full flex items-center text-[15px] font-extrabold transition-colors ${on ? "text-[#131313]" : "text-[#6a6a6a] hover:text-[#131313]"}`}>
-                    {it.name}
-                    {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
-                  </Link>
-                );
-              })}
-            </nav>
-            <div className="hidden md:flex items-center gap-5 text-[13px] font-black tracking-[0.06em] text-[#131313] shrink-0">
-              {levelOpen && <Link href="/level" className="hover:text-[#e91e3f] transition-colors">SYSTEM <span className="text-[#e91e3f]">:</span> LEVEL</Link>}
-              {levelOpen && (shopPublic || isAdmin) && <Link href="/arctic" className="hover:text-[#e91e3f] transition-colors">ARCT<span className="text-[#e91e3f]">I</span>C</Link>}
-            </div>
-          </div>
+          )}
         </div>
-      )}
+      </header>
+      </div>
 
       {/* pb-24 — 떠 있는 알약 독(12px 여백 + 약 58px 높이)에 콘텐츠 끝이 가리지 않게 */}
       <main className={`flex-1 flex flex-col w-full relative ${isShopPage ? "" : "pb-24 md:pb-0"}`}>

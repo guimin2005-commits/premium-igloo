@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link"; // 만약 Link 관련 에러가 난다면 이 줄이 필요합니다.
-import { Reveal, LuxStyles } from "../components/Lux";
+
+// 📌 자주 묻는 질문 — 화이트 & 블랙. 제목 한 줄 · 왼쪽 세로 분류(모바일은 가로 밑줄 탭) · 헤어라인 아코디언.
+//    한 번에 하나만 열리고, 분류를 바꾸면 열린 항목은 닫힌다.
+
+const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 
 export default function FaqPage() {
-  // 📌 <string | null> 같은 타입스크립트 문법을 모두 제거했습니다.
   const [openFaqIndex, setOpenFaqIndex] = useState(null);
   const [activeCategory, setActiveCategory] = useState("전체");
 
@@ -62,114 +64,124 @@ export default function FaqPage() {
     }
   ];
 
-  // 📌 '(index: string)' 에서 타입 지정을 제거했습니다.
   const toggleFaq = (index) => {
     setOpenFaqIndex(openFaqIndex === index ? null : index);
   };
-  
-  const filteredData = activeCategory === "전체" 
-    ? faqData 
+
+  const selectCategory = (category) => {
+    setActiveCategory(category);
+    setOpenFaqIndex(null);
+  };
+
+  const filteredData = activeCategory === "전체"
+    ? faqData
     : faqData.filter(section => section.category === activeCategory);
 
-  return (
-    <main className="w-full flex-1 flex flex-col relative">
-      <LuxStyles />
+  const totalCount = faqData.reduce((sum, section) => sum + section.items.length, 0);
+  const categories = [
+    { label: "전체", count: totalCount },
+    ...faqData.map(section => ({ label: section.category, count: section.items.length })),
+  ];
 
-      {/* ── HERO ── */}
-      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6">
-        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
-        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
-        <div className="max-w-5xl mx-auto relative z-10">
-          <Reveal>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
-              <span className="lux-shimmer">FAQ</span>
-            </h1>
-            <p className="text-gray-400 text-sm md:text-base leading-relaxed">고급 이글루 이용과 관련한 자주 묻는 질문들입니다.</p>
-          </Reveal>
+  return (
+    <main className="w-full flex-1 flex flex-col text-[#131313]">
+      <section className="w-full max-w-5xl mx-auto px-5 md:px-8 pt-10 md:pt-12 pb-24 md:pb-16 flex-1">
+        {/* 제목 줄 */}
+        <div className="flex items-end justify-between gap-4 mb-5">
+          <h1 className="text-[30px] md:text-[34px] font-black tracking-tight leading-none">자주 묻는 질문</h1>
+          <span className="shrink-0 text-[12px] font-bold text-[#8a8a8a] tabular-nums">질문 {totalCount}</span>
+        </div>
+
+        {/* 모바일 — 가로 스크롤 밑줄 탭 */}
+        <div className="md:hidden -mx-5 px-5 border-b border-[#ededed] overflow-x-auto no-bar">
+          <div className="flex w-max">
+            {categories.map((c) => {
+              const on = activeCategory === c.label;
+              return (
+                <button
+                  key={c.label}
+                  onClick={() => selectCategory(c.label)}
+                  className={`relative py-3 mr-5 whitespace-nowrap text-[13px] font-extrabold transition-colors outline-none focus:outline-none ${on ? "text-[#131313]" : "text-[#6a6a6a]"}`}
+                >
+                  {c.label}
+                  <span className="ml-1.5 text-[11px] font-bold text-[#a3a3a3] tabular-nums">{c.count}</span>
+                  {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-7 md:mt-8 md:flex md:items-start md:gap-14">
+          {/* 데스크톱 — 세로 분류 목록 */}
+          <aside className="hidden md:block shrink-0 sticky top-24 border-t border-[#131313] pt-2" style={{ width: 220 }}>
+            {categories.map((c) => {
+              const on = activeCategory === c.label;
+              return (
+                <button
+                  key={c.label}
+                  onClick={() => selectCategory(c.label)}
+                  className={`w-full flex items-baseline gap-2 text-left py-[11px] pl-3.5 border-l-2 text-[14px] font-extrabold transition-colors outline-none focus:outline-none ${on ? "text-[#131313] border-[#e91e3f]" : "text-[#8a8a8a] border-transparent hover:text-[#131313]"}`}
+                >
+                  <span className="min-w-0 truncate">{c.label}</span>
+                  <span className="shrink-0 text-[11px] font-medium text-[#a3a3a3] tabular-nums" style={{ fontFamily: MONO }}>{c.count}</span>
+                </button>
+              );
+            })}
+          </aside>
+
+          {/* 아코디언 */}
+          <div className="flex-1 min-w-0">
+            {filteredData.map((section, sectionIdx) => (
+              <section key={section.category} className={sectionIdx === 0 ? "" : "mt-8 md:mt-11"}>
+                {activeCategory === "전체" && (
+                  <div className="flex items-baseline justify-between gap-3 border-t border-[#131313] pt-2.5 pb-2.5">
+                    <b className="text-[13px] font-black tracking-[0.02em]">{section.category}</b>
+                    <span className="shrink-0 text-[11px] text-[#8a8a8a] tabular-nums" style={{ fontFamily: MONO }}>{section.items.length}</span>
+                  </div>
+                )}
+
+                {section.items.map((faq, itemIdx) => {
+                  const uniqueIndex = `${sectionIdx}-${itemIdx}`;
+                  const isOpen = openFaqIndex === uniqueIndex;
+
+                  return (
+                    <div key={uniqueIndex} className="border-b border-[#ededed]">
+                      <button
+                        onClick={() => toggleFaq(uniqueIndex)}
+                        aria-expanded={isOpen}
+                        className="w-full flex items-center gap-3.5 py-[18px] text-left outline-none focus:outline-none group"
+                      >
+                        <span
+                          className={`w-7 shrink-0 text-[13px] font-bold transition-colors ${isOpen ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}
+                          style={{ fontFamily: MONO }}
+                        >
+                          Q
+                        </span>
+                        <span className="flex-1 min-w-0 text-[15px] md:text-[16px] font-extrabold leading-[1.4]">{faq.q}</span>
+                        <svg
+                          className={`w-5 h-5 shrink-0 transition-colors ${isOpen ? "text-[#131313]" : "text-[#8a8a8a] group-hover:text-[#131313]"}`}
+                          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden
+                        >
+                          {!isOpen && <path d="M12 5v14" />}
+                          <path d="M5 12h14" />
+                        </svg>
+                      </button>
+
+                      {isOpen && (
+                        <div className="pb-6 pt-0.5 md:pl-[42px] md:pr-12">
+                          {faq.t && <span className="block mb-2.5 text-[11px] font-black text-[#e91e3f]">{faq.t}</span>}
+                          <p className="text-[14px] leading-[1.8] text-[#4b4b4b] whitespace-pre-line max-w-[72ch]">{faq.a}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </section>
+            ))}
+          </div>
         </div>
       </section>
-
-      <div className="w-full max-w-5xl mx-auto px-6 pb-16 flex-1 flex flex-col">
-
-      <div className="flex flex-wrap gap-1.5 mb-12">
-        <button
-          onClick={() => { setActiveCategory("전체"); setOpenFaqIndex(null); }}
-          className={`px-5 py-2.5 rounded-full text-sm font-bold transition-colors outline-none focus:outline-none ${activeCategory === "전체" ? "bg-[#e91e3f] text-white shadow-lg shadow-[#e91e3f]/20" : "bg-[#1a1a1a] text-gray-400 border border-white/5 hover:border-white/20"}`}
-        >
-          전체
-        </button>
-        {faqData.map((section, idx) => (
-          <button
-            key={idx}
-            onClick={() => { setActiveCategory(section.category); setOpenFaqIndex(null); }}
-            className={`px-5 py-2.5 rounded-full text-sm font-bold transition-colors outline-none focus:outline-none ${activeCategory === section.category ? "bg-[#e91e3f] text-white shadow-lg shadow-[#e91e3f]/20" : "bg-[#1a1a1a] text-gray-400 border border-white/5 hover:border-white/20"}`}
-          >
-            {section.category}
-          </button>
-        ))}
-      </div>
-
-      <div className="w-full mx-auto flex flex-col gap-16">
-        {filteredData.map((section, sectionIdx) => (
-          <section key={sectionIdx}>
-            {activeCategory === "전체" && (
-              <h2 className="text-2xl font-black text-white mb-8 flex items-center gap-4">
-                <span className="w-2 h-8 bg-[#e91e3f] rounded-full"></span>
-                {section.category}
-              </h2>
-            )}
-            
-            <div className="flex flex-col gap-4">
-              {section.items.map((faq, itemIdx) => {
-                const uniqueIndex = `${sectionIdx}-${itemIdx}`;
-                const isOpen = openFaqIndex === uniqueIndex;
-                
-                return (
-                  <div 
-                    key={uniqueIndex} 
-                    className={`rounded-2xl transition-all duration-500 overflow-hidden ${
-                      isOpen 
-                        ? 'bg-[#181818] shadow-lg shadow-black/50 border border-white/10' 
-                        : 'bg-transparent border border-white/5 hover:border-white/10'
-                    }`}
-                  >
-                    <button 
-                      onClick={() => toggleFaq(uniqueIndex)} 
-                      className="w-full px-6 py-6 md:px-8 flex items-center justify-between text-left outline-none focus:outline-none group"
-                    >
-                      <div className="flex items-start md:items-center gap-4 md:gap-6 pr-4">
-                        <span className={`font-black text-xl md:text-2xl transition-colors duration-300 ${isOpen ? 'text-[#e91e3f]' : 'text-gray-600 group-hover:text-gray-400'}`}>
-                          Q.
-                        </span>
-                        <span className={`text-[15px] md:text-base font-bold transition-colors duration-300 leading-snug ${isOpen ? 'text-white' : 'text-gray-300 group-hover:text-white'}`}>
-                          {faq.q}
-                        </span>
-                      </div>
-                      
-                      <div className={`relative flex items-center justify-center w-8 h-8 shrink-0 rounded-full transition-all duration-500 ${isOpen ? 'bg-[#e91e3f] rotate-180' : 'bg-white/5 group-hover:bg-white/10'}`}>
-                        <span className={`absolute w-3 h-[2px] rounded-full transition-colors ${isOpen ? 'bg-white' : 'bg-gray-400'}`}></span>
-                        <span className={`absolute w-[2px] h-3 rounded-full transition-all duration-500 ${isOpen ? 'bg-transparent rotate-90' : 'bg-gray-400'}`}></span>
-                      </div>
-                    </button>
-                    
-                    <div className={`transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[800px] opacity-100 pb-8 px-6 md:px-8' : 'max-h-0 opacity-0 px-6 md:px-8 pb-0'}`}>
-                      <div className="pl-0 md:pl-[3.25rem] border-t border-white/5 pt-6 mt-2">
-                        <div className="inline-block px-3 py-1 mb-4 rounded-md bg-[#e91e3f]/10 border border-[#e91e3f]/20 text-[#e91e3f] text-xs font-bold">
-                          {faq.t}
-                        </div>
-                        <p className="text-gray-400 text-[14px] md:text-sm leading-relaxed whitespace-pre-wrap">
-                          {faq.a}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
-      </div>
     </main>
   );
 }

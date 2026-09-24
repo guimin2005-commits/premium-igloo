@@ -6,22 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ADMIN_USERS } from "@/lib/admins";
 import { ICON_PATHS } from "../components/Icons";
 
-// 📌 공지사항 목록 — 화이트 & 블랙. 제목 · 밑줄 탭 · 검색 · 줄 목록(날짜 · 태그 · 제목 · 미리보기 · ›).
-//    읽는 것은 페이지(이동 규칙 1): 줄을 누르면 /notice/[id] 로 간다. 목록 위 모달은 없다.
-
-const stripMarkdown = (text: string) => {
-  if (!text) return "";
-  let result = text
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/\{([^}]+)\}/g, "$1")
-    .replace(/\*\*(.*?)\*\*/g, "$1")
-    .replace(/__(.*?)__/g, "$1")
-    .replace(/~~(.*?)~~/g, "$1")
-    .replace(/==(.*?)==/g, "$1");
-  result = result.replace(/^\|[\s\S]*?\n(?:\|[\s\S]*?\n)*(?:\|.*?\|)?$/gm, "");
-  return result.replace(/\s+/g, " ").trim();
-};
+// 📌 공지사항 목록 — 화이트 & 블랙. 제목 · 밑줄 탭 · 검색 · 줄 목록(날짜 · 태그 · 제목 · ›).
+//    읽는 것은 페이지(이동 규칙 1): 줄을 누르면 /notice/[id] 로 간다. 목록 위 모달·본문 미리보기는 없다.
 
 // 공지 중요 여부 (구버전 '필독'/isImportant 호환)
 const isImportantNotice = (n: any) => n?.noticeTag === "중요" || n?.noticeTag === "필독" || n?.isImportant;
@@ -153,21 +139,22 @@ export default function NoticeClient() {
           <div>
             {filtered.map((n) => {
               const tag = tagOf(n);
-              const preview = stripMarkdown(n.content);
               return (
                 <div key={n._id} onClick={() => { markAsRead(n._id); router.push(`/notice/${n._id}`); }}
                   className="group flex items-center gap-3 md:gap-4 py-4 border-b border-[#ededed] cursor-pointer">
                   <span className="w-[46px] md:w-[64px] shrink-0 text-[11.5px] text-[#8a8a8a] tabular-nums">{fmtDate(n.createdAt)}</span>
                   <span className={`hidden md:block w-14 shrink-0 text-[10.5px] font-black ${tag.cls}`}>{tag.label}</span>
-                  <span className="flex-1 min-w-0">
-                    <span className="flex items-center gap-2 text-[15px] font-extrabold leading-snug">
-                      {n.isPinned && <span className="shrink-0 text-[11px] font-black text-[#a3a3a3]">고정</span>}
-                      <span className={`md:hidden shrink-0 text-[10.5px] font-black ${tag.cls}`}>{tag.label}</span>
-                      <span className="truncate group-hover:text-[#e91e3f] transition-colors">{n.title}</span>
-                      {isNewNotice(n) && <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-[#e91e3f] text-white text-[9px] font-black leading-none">N</span>}
-                      {isAdmin && n.hidden && <span className="shrink-0 text-[10px] font-black text-[#a8763a]">숨김</span>}
-                    </span>
-                    {preview && <span className="block mt-1 text-[12px] text-[#8a8a8a] truncate">{preview}</span>}
+                  <span className="flex-1 min-w-0 flex items-center gap-2 text-[15px] font-extrabold leading-snug">
+                    {/* 고정은 글자 대신 핀 아이콘 하나 */}
+                    {n.isPinned && (
+                      <svg className="shrink-0 w-[15px] h-[15px] text-[#131313]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" aria-label="고정">
+                        <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.pin} />
+                      </svg>
+                    )}
+                    <span className={`md:hidden shrink-0 text-[10.5px] font-black ${tag.cls}`}>{tag.label}</span>
+                    <span className="truncate group-hover:text-[#e91e3f] transition-colors">{n.title}</span>
+                    {isNewNotice(n) && <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-[#e91e3f] text-white text-[9px] font-black leading-none">N</span>}
+                    {isAdmin && n.hidden && <span className="shrink-0 text-[10px] font-black text-[#131313]">숨김</span>}
                   </span>
                   <span className="flex items-center gap-3 shrink-0">
                     {isAdmin && (

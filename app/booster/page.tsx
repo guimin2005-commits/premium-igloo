@@ -1,138 +1,194 @@
 "use client";
 
 import React from "react";
-import { Reveal, LuxStyles, ScrollProgress } from "../components/Lux";
+import { Reveal } from "../components/Lux";
+import BackLink from "../components/BackLink";
 
 // 📌 서버 부스터 혜택 — 비로그인 유저도 볼 수 있는 공개 페이지 (부스팅 유도)
+//    화이트 & 블랙: 홈의 번호 섹션(워터마크 · 빨간 라벨 · 헤어라인) + 헤어라인 줄 목록.
+//    상자 · 격자 · 그림자 · 다크 히어로는 쓰지 않는다.
+
+const DISCORD = "https://discord.gg/V2uW2nUczU";
+
+// 번호 섹션 — 홈(app/page.tsx)의 Sec 골격을 본문 폭 안으로
+function Sec({ no, title, right, children }: { no: string; title: string; right?: string; children: React.ReactNode }) {
+  return (
+    <section className="relative border-b border-[#ededed] py-12 md:py-14 last:border-b-0">
+      <div aria-hidden className="absolute -top-1 md:-top-2 left-0 text-[70px] md:text-[120px] font-black tracking-[-0.04em] leading-none text-[#131313]/[0.05] pointer-events-none select-none">{no}</div>
+      <Reveal>
+        <div className="relative flex items-center gap-3.5 mb-3.5">
+          <b className="text-[11px] font-black tracking-[0.3em] text-[#e91e3f]">{no}</b>
+          <i className="h-px flex-1 bg-gradient-to-r from-[#131313]/20 to-transparent" />
+          {right && <span className="shrink-0 text-[12px] font-bold text-[#8a8a8a] tabular-nums">{right}</span>}
+        </div>
+        <h2 className="relative text-[24px] md:text-[30px] font-black tracking-tight leading-tight break-keep">{title}</h2>
+      </Reveal>
+      {children}
+    </section>
+  );
+}
+
+// 헤어라인 줄 — 모바일은 [이름 · 값] 한 줄 + 설명 아래, 데스크톱은 [이름 · 설명 · 값] 한 줄
+function Row({ k, d, note, v, unit, word, compact = false }: { k: string; d?: string; note?: string; v?: string; unit?: string; word?: boolean; compact?: boolean }) {
+  return (
+    <div className="flex flex-wrap sm:flex-nowrap items-baseline gap-x-5 md:gap-x-6 py-[18px] border-b border-[#ededed]">
+      <p className={`order-1 flex-1 min-w-0 sm:flex-none ${compact ? "sm:w-[108px]" : "sm:w-[176px]"} text-[15px] md:text-[16px] font-extrabold tracking-tight break-keep`}>{k}</p>
+      {v && (
+        <p className={`order-2 sm:order-3 shrink-0 ml-auto sm:ml-0 text-right whitespace-nowrap ${word ? "text-[13px] font-extrabold text-[#4b4b4b]" : "text-[18px] md:text-[20px] font-black tracking-[-0.02em] tabular-nums"}`}>
+          {v}
+          {unit && <span className="ml-1.5 text-[11px] font-bold tracking-[0.04em] text-[#8a8a8a]">{unit}</span>}
+        </p>
+      )}
+      <div className="order-3 sm:order-2 w-full sm:w-auto sm:flex-1 min-w-0 mt-1 sm:mt-0">
+        {d && <p className="text-[13px] leading-relaxed text-[#6a6a6a] break-keep">{d}</p>}
+        {note && <p className="mt-1 text-[11px] leading-relaxed text-[#a3a3a3] break-keep">{note}</p>}
+      </div>
+    </div>
+  );
+}
+
+// 03 사다리 한 줄
+function RankRow({ no, m, v, unit, special = false }: { no: string; m: string; v: string; unit?: string; special?: boolean }) {
+  return (
+    <div className="flex items-baseline gap-4 py-4 border-b border-[#ededed]">
+      <span className={`w-[68px] md:w-[76px] shrink-0 text-[11px] font-bold tracking-[0.08em] ${special ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>{no}</span>
+      <span className={`flex-1 min-w-0 text-[15px] md:text-[16px] font-extrabold tracking-tight ${special ? "text-[#e91e3f]" : ""}`}>{m}</span>
+      <span className={`shrink-0 text-right whitespace-nowrap ${special ? "text-[12px] font-extrabold text-[#e91e3f]" : "text-[17px] md:text-[18px] font-black tracking-[-0.02em] tabular-nums"}`}>
+        {v}
+        {unit && <span className="ml-1.5 text-[11px] font-bold tracking-[0.04em] text-[#8a8a8a]">{unit}</span>}
+      </span>
+    </div>
+  );
+}
+
+const ACCESS = [
+  { k: "전용 역할 · 배지", d: "@SERVER BOOSTER 고유 역할 부여 및 프로필 전용 특수 배지 자동 장착", v: "자동 지급" },
+  { k: "사용자 관리 권한", d: "서버 내 일부 사용자 관리 부가 기능 상시 이용 가능", v: "상시 이용" },
+  { k: "권한 제한 채널", d: "별도의 권한 구매 없이 제한된 채널 이용 가능", note: "권한이 없을 경우, ARCTIC에서 관련 권한 상품을 구매해야 합니다.", v: "구매 없이" },
+  { k: "슬로우 모드 해제", d: "채팅 대기 시간 제한 없이 연속 채팅 가능", note: "권한이 없을 경우, ARCTIC에서 관련 권한 상품을 구매해야 합니다.", v: "제한 없음" },
+];
+
+const XP = [
+  { k: "부스팅 시작", d: "부스팅 시작 보너스 보상 즉시 지급", note: "추가 부스팅 시 개당 50,000 XP 추가 지급", v: "100,000", unit: "XP" },
+  { k: "상시 추가", d: "경험치 획득 조건 충족 시 상시 지급", v: "+2,000", unit: "XP" },
+  { k: "경험치샵 환급", d: "경험치샵 이용 전용 정산 혜택 — 경험치샵 사용 금액 기준 환급", v: "35", unit: "%" },
+  { k: "일일 출석", d: "일일 출석체크 시 추가 보너스 지급", v: "10,000", unit: "XP" },
+];
+
+const RANKS_L = [
+  { no: "RANK 01", m: "1개월", v: "100,000", unit: "XP" },
+  { no: "RANK 02", m: "3개월", v: "300,000", unit: "XP" },
+  { no: "RANK 03", m: "6개월", v: "600,000", unit: "XP" },
+  { no: "RANK 04", m: "9개월", v: "900,000", unit: "XP" },
+  { no: "RANK 05", m: "12개월", v: "특별 보상 · 04", special: true },
+];
+
+const RANKS_R = [
+  { no: "RANK 06", m: "15개월", v: "1,500,000", unit: "XP" },
+  { no: "RANK 07", m: "18개월", v: "1,800,000", unit: "XP" },
+  { no: "RANK 08", m: "21개월", v: "2,100,000", unit: "XP" },
+  { no: "RANK 09", m: "24개월", v: "2,400,000", unit: "XP" },
+  { no: "RANK 10", m: "24개월 연속", v: "특별 보상 · 04", special: true },
+];
+
+const SPECIAL = [
+  {
+    rank: "RANK 05",
+    cond: "12개월 연속 달성",
+    rows: [
+      { k: "누적 보너스", d: "즉시 수령", v: "1,200,000", unit: "XP" },
+      { k: "추가 역할", d: "역할 추가 지급", v: "@BOOSTER RANK 05", word: true },
+      { k: "상시 버프", d: "상시 고정 버프 영구 결합", v: "+2,000", unit: "XP" },
+      { k: "출석 보너스", d: "일일 출석 시 영구 가산 누적 지급", v: "2,000", unit: "XP" },
+    ],
+  },
+  {
+    rank: "RANK 10",
+    cond: "24개월 연속 달성",
+    rows: [
+      { k: "누적 보너스", d: "즉시 수령", v: "2,400,000", unit: "XP" },
+      { k: "추가 역할", d: "특수 역할 추가 지급", v: "@BOOSTER RANK 10", word: true },
+      { k: "상시 버프", d: "상시 고정 버프 영구 결합", v: "+4,000", unit: "XP" },
+      { k: "출석 보너스", d: "일일 출석 시 영구 가산 누적 지급", v: "5,000", unit: "XP" },
+    ],
+  },
+];
+
 export default function BoosterPage() {
   return (
-    <main className="w-full flex-1 flex flex-col relative">
-      <LuxStyles />
-      <ScrollProgress />
+    <main className="w-full flex-1 flex flex-col text-[#131313]">
+      <section className="w-full max-w-5xl mx-auto px-5 md:px-8 pt-10 md:pt-12 flex-1">
+        <BackLink href="/" label="홈" inline className="mb-6" />
 
-      {/* ── HERO ── */}
-      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6 overflow-hidden">
-        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
-        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
-        <div className="absolute -top-4 -right-4 text-[120px] md:text-[200px] font-black text-white/[0.02] leading-none select-none pointer-events-none tracking-tighter">BOOST</div>
-        <div className="max-w-4xl mx-auto relative z-10">
-          <Reveal>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
-              <span className="text-white">SERVER </span><span className="lux-shimmer">BOOSTER</span>
-            </h1>
-            <p className="text-gray-400 text-sm md:text-base leading-relaxed max-w-xl">서버의 환경 개선을 위한 직접적인 후원 시스템입니다.<br className="hidden md:block" />본 서버의 성장을 지원해 주시는 유저분들께 깊은 감사를 드립니다.</p>
-          </Reveal>
+        {/* 제목 */}
+        <div className="border-b border-[#131313] pb-5">
+          <h1 className="text-[30px] md:text-[34px] font-black tracking-tight leading-none">서버 부스터</h1>
+          <p className="mt-3 text-[14px] text-[#6a6a6a] break-keep">부스트를 시작하면 아래 혜택이 자동으로 지급됩니다.</p>
         </div>
-      </section>
 
-      <div className="w-full max-w-4xl mx-auto px-6 py-10 flex-1 flex flex-col space-y-16">
-
-        {/* 01. 전용 기능 권한 */}
-        <Reveal>
-        <div>
-          <div className="flex items-baseline gap-4 mb-2">
-            <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">01</span>
-            <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
+        {/* 01 전용 기능 권한 */}
+        <Sec no="01" title="전용 기능 권한" right="자동 감지 · 즉시 지급">
+          <div className="relative mt-6 md:mt-7 border-t border-[#131313]">
+            {ACCESS.map((r, i) => (
+              <Reveal key={r.k} delay={Math.min(i, 4) * 60}>
+                <Row k={r.k} d={r.d} note={r.note} v={r.v} word />
+              </Reveal>
+            ))}
           </div>
-          <h4 className="text-xl md:text-2xl font-black text-white tracking-tight mb-2">SERVER 전용 기능 권한</h4>
-          <div className="divide-y divide-white/[0.06]">
-            {[
-              { t: "전용 역할 및 뱃지 지급", d: "@SERVER BOOSTER 고유 역할 부여 및 차별화된 프로필 전용 특수 배지 자동 장착", note: "" },
-              { t: "사용자 관리 권한 제공", d: "서버 내 일부 사용자 관리 부가 기능 상시 이용 가능", note: "" },
-              { t: "권한 제한 채널 이용", d: "별도의 권한 구매 없이 제한된 채널 이용 가능!", note: "* 권한이 없을 경우, ARCTIC에서 관련 권한 상품을 구매해야 합니다." },
-              { t: "슬로우 모드 제한 해제", d: "채팅 대기 시간 제한 없이 연속 채팅 가능!", note: "* 권한이 없을 경우, ARCTIC에서 관련 권한 상품을 구매해야 합니다." },
-            ].map((item, idx) => (
-              <div key={idx} className="py-5 flex flex-col md:flex-row md:items-baseline gap-1.5 md:gap-8 group">
-                <p className="font-bold text-white text-sm md:w-52 shrink-0 group-hover:text-[#ff5c77] transition-colors">{item.t}</p>
-                <div className="min-w-0">
-                  <p className="text-xs md:text-[13px] text-gray-500 leading-relaxed">{item.d}</p>
-                  {item.note && <p className="text-[10px] text-gray-600 mt-1">{item.note}</p>}
+        </Sec>
+
+        {/* 02 경험치 혜택 */}
+        <Sec no="02" title="경험치 혜택">
+          <div className="relative mt-6 md:mt-7 border-t border-[#131313]">
+            {XP.map((r, i) => (
+              <Reveal key={r.k} delay={Math.min(i, 4) * 60}>
+                <Row k={r.k} d={r.d} note={r.note} v={r.v} unit={r.unit} />
+              </Reveal>
+            ))}
+          </div>
+        </Sec>
+
+        {/* 03 누적 유지 개월 혜택 */}
+        <Sec no="03" title="누적 유지 개월 혜택" right="RANK 01 – 10">
+          <div className="relative mt-6 md:mt-7 grid md:grid-cols-2 md:gap-x-14">
+            <div className="border-t border-[#131313]">
+              {RANKS_L.map((r) => (
+                <RankRow key={r.no} no={r.no} m={r.m} v={r.v} unit={r.unit} special={r.special} />
+              ))}
+            </div>
+            <div className="md:border-t md:border-[#131313]">
+              {RANKS_R.map((r) => (
+                <RankRow key={r.no} no={r.no} m={r.m} v={r.v} unit={r.unit} special={r.special} />
+              ))}
+            </div>
+          </div>
+        </Sec>
+
+        {/* 04 특별 보상 */}
+        <Sec no="04" title="특별 보상">
+          <div className="relative mt-6 md:mt-7 grid md:grid-cols-2 md:gap-x-14">
+            {SPECIAL.map((b, bi) => (
+              <div key={b.rank} className={bi > 0 ? "mt-10 md:mt-0" : ""}>
+                <div className="flex items-baseline gap-3 pb-3 border-b border-[#131313]">
+                  <b className="text-[11px] font-black tracking-[0.2em] text-[#e91e3f]">{b.rank}</b>
+                  <span className="text-[18px] md:text-[20px] font-black tracking-tight">{b.cond}</span>
                 </div>
+                {b.rows.map((r) => (
+                  <Row key={r.k} k={r.k} d={r.d} v={r.v} unit={r.unit} word={r.word} compact />
+                ))}
               </div>
             ))}
           </div>
-        </div>
-        </Reveal>
+        </Sec>
 
-        {/* 02. XP 혜택 */}
-        <Reveal>
-        <div>
-          <div className="flex items-baseline gap-4 mb-2">
-            <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">02</span>
-            <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
-          </div>
-          <h4 className="text-xl md:text-2xl font-black text-white tracking-tight mb-2">XP BOOSTER 경험치 혜택</h4>
-          <div className="divide-y divide-white/[0.06]">
-            {[
-              { k: "WELCOME", t: "부스팅 시작 보너스 보상 지급!", big: "100,000", unit: "XP 즉시 지급", sub: "추가 부스팅: 개당 50,000 XP 추가 지급!" },
-              { k: "PASSIVE", t: "경험치 획득 조건 충족 시 상시 추가!", big: "+2,000", unit: "XP 상시 지급", sub: "" },
-              { k: "SHOP", t: "경험치샵 이용 전용 정산 혜택!", big: "35%", unit: "XP 환급", sub: "경험치샵 사용 금액 기준" },
-              { k: "DAILY", t: "일일 출석체크 추가 보상!", big: "10,000", unit: "XP 보너스", sub: "일일 출석체크 시 추가 지급" },
-            ].map((row, idx) => (
-              <div key={idx} className="py-6 flex flex-col md:flex-row md:justify-between md:items-center gap-3 md:gap-4 group">
-                <div className="min-w-0 md:flex md:items-baseline md:gap-8">
-                  <p className="font-black text-white text-sm tracking-[0.2em] md:w-52 shrink-0 group-hover:text-[#ff5c77] transition-colors">{row.k}</p>
-                  <p className="text-xs text-gray-500 mt-0.5 md:mt-0">{row.t}</p>
-                </div>
-                <div className="md:text-right shrink-0">
-                  <p className="leading-none">
-                    <span className="text-2xl md:text-3xl font-black text-[#e91e3f] tracking-tighter">{row.big}</span>
-                    <span className="text-[11px] font-bold text-gray-400 ml-2">{row.unit}</span>
-                  </p>
-                  {row.sub && <p className="text-[11px] text-gray-600 mt-1.5">{row.sub}</p>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        </Reveal>
-
-        {/* 03. RANK */}
-        <Reveal>
-        <div>
-          <div className="flex items-baseline gap-4 mb-2">
-            <span className="text-xs font-black tracking-[0.3em] text-[#e91e3f]">03</span>
-            <div className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent"></div>
-          </div>
-          <h4 className="text-xl md:text-2xl font-black text-white tracking-tight mb-2">누적 유지 개월별 추가 혜택 (RANK)</h4>
-          <div className="divide-y divide-white/[0.06]">
-            {[{ r: "RANK 01", m: "1개월", x: "100,000" }, { r: "RANK 02", m: "3개월", x: "300,000" }, { r: "RANK 03", m: "6개월", x: "600,000" }, { r: "RANK 04", m: "9개월", x: "900,000" }, { r: "RANK 06", m: "15개월", x: "1,500,000" }, { r: "RANK 07", m: "18개월", x: "1,800,000" }, { r: "RANK 08", m: "21개월", x: "2,100,000" }, { r: "RANK 09", m: "24개월", x: "2,400,000" }].map((item, idx) => (
-              <div key={idx} className="py-4 grid grid-cols-3 items-center text-sm group hover:bg-white/[0.015] transition-colors">
-                <p className="text-[10px] font-black tracking-[0.2em] text-gray-600 uppercase group-hover:text-[#e91e3f] transition-colors">{item.r}</p>
-                <p className="font-bold text-white text-center">{item.m}</p>
-                <p className="text-right"><span className="text-base md:text-lg font-black text-[#e91e3f] tracking-tight">{item.x}</span><span className="text-[10px] font-bold text-gray-500 ml-1.5">XP</span></p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-10 space-y-10">
-            {[
-              { rank: "RANK 05 SPECIAL BLOCK", title: "🏆 12개월 연속 달성", items: [<React.Fragment key="a">누적 보너스 <span className="text-white font-bold">1,200,000 XP</span> 즉시 수령</React.Fragment>, <React.Fragment key="b"><strong>@BOOSTER RANK 05</strong> 역할 추가 지급</React.Fragment>, <React.Fragment key="c">상시 고정 버프 <strong>+2,000 XP</strong> 추가 영구 결합</React.Fragment>, <React.Fragment key="d">일일 출석 시 <span className="text-white font-bold">2,000 XP</span> 영구 가산 누적 지급</React.Fragment>] },
-              { rank: "RANK 10 SPECIAL BLOCK", title: "👑 24개월 연속 달성", items: [<React.Fragment key="a">누적 보너스 <span className="text-white font-bold">2,400,000 XP</span> 즉시 수령</React.Fragment>, <React.Fragment key="b"><strong>@BOOSTER RANK 10</strong> 특수 역할 추가 지급</React.Fragment>, <React.Fragment key="c">상시 고정 버프 <strong>+4,000 XP</strong> 추가 영구 결합</React.Fragment>, <React.Fragment key="d">일일 출석 시 <span className="text-white font-bold">5,000 XP</span> 영구 가산 누적 지급</React.Fragment>] },
-            ].map((block, idx) => (
-              <div key={idx} className="border-l-2 border-[#e91e3f] pl-5 md:pl-7">
-                <p className="text-[9px] font-black tracking-[0.25em] text-[#e91e3f] mb-1.5 uppercase">{block.rank}</p>
-                <p className="text-lg font-black text-white mb-3">{block.title}</p>
-                <div className="text-xs md:text-[13px] text-gray-400 space-y-1.5">
-                  {block.items.map((it, i) => (
-                    <p key={i} className="flex gap-2.5"><span className="text-[#e91e3f] shrink-0">—</span><span>{it}</span></p>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        </Reveal>
-
-        <Reveal>
-        <div className="pt-6 border-t border-white/10 text-center pb-4">
-          <p className="text-sm text-gray-300 font-bold mb-6">📢 디스코드 서버 부스트 진행 시 시스템이 자동으로 감지하여 모든 혜택을 즉시 지급합니다!</p>
-          <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="inline-block px-10 py-4 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-full transition-all shadow-[0_10px_36px_rgba(233,30,63,0.35)] hover:-translate-y-0.5">
+        {/* 부스트 */}
+        <div className="pt-10 pb-24 md:pb-16">
+          <a href={DISCORD} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center h-12 px-8 rounded-full bg-[#131313] hover:bg-black text-white text-[14px] font-extrabold transition-colors">
             서버에서 부스트하기
           </a>
         </div>
-        </Reveal>
-      </div>
+      </section>
     </main>
   );
 }

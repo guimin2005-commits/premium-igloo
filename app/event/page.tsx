@@ -3,154 +3,33 @@
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Reveal, LuxStyles } from "../components/Lux";
+import { Reveal } from "../components/Lux";
+import { ADMIN_USERS } from "@/lib/admins";
 
-// 📌 [관리자 명단 설정]
-const ADMIN_USERS = ["elahw.06"]; 
+// 📌 이벤트 목록 — 화이트 & 블랙. 제목 · 밑줄 탭(개수) · 친구 초대 한 줄 · 배너 격자.
+//    보이는 건 배너와 제목뿐 — 본문 미리보기는 두지 않는다(공지 목록과 같다).
+//    읽는 것은 페이지(이동 규칙 1): 항목을 누르면 /event/[id] 로 간다. 목록 위 모달은 없다.
 
-const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => void }) => {
-  if (!text) return null;
-
-  const parseMarkdownWithTable = (text: string): string => {
-    const lines = text.split("\n");
-    const result: string[] = [];
-    let i = 0;
-
-    while (i < lines.length) {
-      const line = lines[i];
-
-      if (line.trim().startsWith("|")) {
-        const tableLines: string[] = [];
-        while (i < lines.length && lines[i].trim().startsWith("|")) {
-          tableLines.push(lines[i]);
-          i++;
-        }
-
-        const table = parseMarkdownTable(tableLines);
-        if (table) {
-          result.push(table);
-        } else {
-          result.push(...tableLines.map(l => formatInlineMarkdown(l)));
-        }
-      } else {
-        result.push(formatInlineMarkdown(line));
-        i++;
-      }
-    }
-
-    return result.join("\n");
-  };
-
-  const parseMarkdownTable = (lines: string[]): string | null => {
-    if (lines.length < 2) return null;
-
-    const headerLine = lines[0].trim();
-    const separatorLine = lines[1].trim();
-
-    if (!/^\|.*\|$/.test(headerLine) || !/^\|[\s|-]+\|$/.test(separatorLine)) {
-      return null;
-    }
-
-    const parseRow = (line: string): string[] => {
-      return line.split("|").slice(1, -1).map(cell => cell.trim());
-    };
-
-    const headerCells = parseRow(headerLine);
-    const dataRows = lines.slice(2).map(parseRow);
-
-    let html = "<table class='w-full border-collapse border border-white/10 my-4'>";
-    html += "<thead><tr>";
-    headerCells.forEach(cell => {
-      html += `<th class='border border-white/10 px-3 py-2 bg-white/5 text-left font-bold'>${formatInlineMarkdown(cell)}</th>`;
-    });
-    html += "</tr></thead>";
-
-    html += "<tbody>";
-    dataRows.forEach(cells => {
-      html += "<tr>";
-      cells.forEach(cell => {
-        html += `<td class='border border-white/10 px-3 py-2'>${formatInlineMarkdown(cell)}</td>`;
-      });
-      html += "</tr>";
-    });
-    html += "</tbody></table>";
-
-    return html;
-  };
-
-  const formatInlineMarkdown = (text: string): string => {
-    return text
-      // 이미지 — 링크보다 먼저 걸러야 한다 (뒤에 두면 링크로 잡히고 ! 만 남는다)
-      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, url) => {
-        const src = /^https?:\/\/[^"'<>\s]+$/i.test(String(url).trim()) ? String(url).trim() : "";
-        if (!src) return m;
-        const cap = String(alt || "").replace(/[<>"']/g, "");
-        return `<img src='${src}' alt='${cap}' loading='lazy' class='block w-full h-auto rounded-xl border border-white/10 my-5' />`
-          + (cap ? `<span class='block text-center text-[12px] text-gray-500 -mt-3 mb-5'>${cap}</span>` : "");
-      })
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href='$2' target='_blank' rel='noopener noreferrer' class='text-[#e91e3f] hover:underline'>$1</a>")
-      .replace(/\{([^}]+)\}/g, (match, code) => `<span class='inline-flex items-center gap-1.5 bg-[#2a2a2a] px-2.5 py-1 rounded'><code class='text-[#e91e3f] font-mono text-sm'>${code}</code><button class='copy-btn text-[#e91e3f] hover:text-white transition-colors flex-shrink-0' data-copy='${code}' title='복사'><svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='2' stroke='currentColor' class='w-3.5 h-3.5'><path strokeLinecap='round' strokeLinejoin='round' d='M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z' /></svg></button></span>`)
-      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-      .replace(/__(.*?)__/g, "<span class='underline'>$1</span>")
-      .replace(/~~(.*?)~~/g, "<span class='line-through'>$1</span>")
-      .replace(/==(.*?)==/g, "<span class='text-[#e91e3f] font-bold'>$1</span>")
-      .replace(/^(\s*)\*[ \t]+/, "$1<span class='text-[#e91e3f]'>·</span> ");
-  };
-
-  const formatted = parseMarkdownWithTable(text);
-
-  return (
-    <div
-      dangerouslySetInnerHTML={{ __html: formatted }}
-      onClick={(e: React.MouseEvent) => {
-        let target = e.target as HTMLElement;
-        while (target && !target.classList.contains('copy-btn')) {
-          target = target.parentElement as HTMLElement;
-        }
-        if (target?.classList.contains('copy-btn')) {
-          const code = target.getAttribute('data-copy');
-          if (code) {
-            navigator.clipboard.writeText(code);
-            onCopy?.();
-          }
-        }
-      }}
-    />
-  );
-};
-
-const stripMarkdown = (text: string) => {
-  if (!text) return "";
-  let result = text
-    // 이미지는 미리보기에 담을 게 없으므로 통째로 뺀다 (주소가 그대로 보이던 문제)
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-    // 링크는 주소를 버리고 글자만 남긴다
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/\{([^}]+)\}/g, "$1")
-    .replace(/\*\*(.*?)\*\*/g, "$1")
-    .replace(/__(.*?)__/g, "$1")
-    .replace(/~~(.*?)~~/g, "$1")
-    .replace(/==(.*?)==/g, "$1");
-  // 마크다운 표 제거
-  result = result.replace(/^\|[\s\S]*?\n(?:\|[\s\S]*?\n)*(?:\|.*?\|)?$/gm, "");
-  // 미리보기는 한 줄로 흐르므로 남은 줄바꿈·공백을 하나로 모은다
-  return result.replace(/\s+/g, " ").trim();
+// 진행 중 빨강 · 예정 검정 · 종료 회색 (글자만)
+const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
+  ongoing: { label: "진행 중", cls: "text-[#e91e3f]" },
+  upcoming: { label: "예정", cls: "text-[#131313]" },
+  ended: { label: "종료", cls: "text-[#a3a3a3]" },
 };
 
 export default function EventPage() {
   const router = useRouter();
-  const { data: session, status } = useSession() as any; 
+  const { data: session, status } = useSession() as any;
   const isLoggedIn = status === "authenticated";
-
-  const isAdmin = isLoggedIn && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const isAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
 
   const [activeTab, setActiveTab] = useState("ongoing");
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [copyNotification, setCopyNotification] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [popupConfig, setPopupConfig] = useState({ isOpen: false, message: "", isError: false });
+  const [toast, setToast] = useState("");
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 1800); };
 
   const fetchEvents = async (admin = false) => {
     try {
@@ -165,12 +44,8 @@ export default function EventPage() {
     if (!deleteConfirmId) return;
     try {
       const res = await fetch(`/api/posts/${deleteConfirmId}`, { method: "DELETE" });
-      if (res.ok) {
-        if (selectedEvent && selectedEvent._id === deleteConfirmId) setSelectedEvent(null);
-        setPopupConfig({ isOpen: true, message: "이벤트가 삭제되었습니다.", isError: false });
-        fetchEvents();
-      }
-    } catch { setPopupConfig({ isOpen: true, message: "에러 발생", isError: true }); }
+      if (res.ok) { showToast("이벤트가 삭제되었습니다"); fetchEvents(!!isAdmin); }
+    } catch { showToast("에러 발생"); }
     finally { setDeleteConfirmId(null); }
   };
 
@@ -196,127 +71,130 @@ export default function EventPage() {
   const upcomingEvents = posts.filter(p => getEventStatus(p) === "upcoming");
   const endedEvents = posts.filter(p => getEventStatus(p) === "ended");
 
+  const TABS = [
+    { id: "ongoing", label: "진행 중", count: ongoingEvents.length },
+    { id: "upcoming", label: "예정", count: upcomingEvents.length },
+    { id: "ended", label: "종료", count: endedEvents.length },
+  ];
+
   const currentDisplayEvents = activeTab === "ongoing" ? ongoingEvents : activeTab === "upcoming" ? upcomingEvents : endedEvents;
 
   return (
-    <main className="flex-1 w-full flex flex-col relative">
-      <LuxStyles />
-
-      {/* ── HERO ── */}
-      <section className="relative w-full pt-16 pb-10 md:pt-24 md:pb-14 px-6">
-        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
-        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
-        <div className="max-w-5xl mx-auto relative z-10 flex justify-between items-end gap-6">
-          <Reveal>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-4">
-              <span className="text-white">이</span><span className="lux-shimmer">벤트</span>
-            </h1>
-          </Reveal>
-          {isAdmin && (
-            <button
-              onClick={() => router.push("/write?category=이벤트")}
-              className="shrink-0 bg-white text-black font-black text-xs px-5 py-3 rounded-full hover:bg-gray-200 transition-all active:scale-95"
-            >
-              글쓰기
-            </button>
+    <main className="w-full flex-1 flex flex-col text-[#131313]">
+      <section className="w-full max-w-5xl mx-auto px-5 md:px-8 pt-10 md:pt-12 pb-24 md:pb-16 flex-1">
+        {/* 제목 줄 */}
+        <div className="flex items-end justify-between gap-4 mb-5">
+          <h1 className="text-[30px] md:text-[34px] font-black tracking-tight leading-none">이벤트</h1>
+          {isAdmin ? (
+            <button onClick={() => router.push("/write?category=이벤트")}
+              className="shrink-0 h-9 px-4 rounded-full bg-[#131313] hover:bg-black text-white text-[12px] font-extrabold transition-colors">글쓰기</button>
+          ) : (
+            <span className="shrink-0 text-[12px] font-bold text-[#8a8a8a] tabular-nums">{posts.length}건</span>
           )}
         </div>
-      </section>
 
-      {/* ── 탭 (알약 스타일 · 스티키) ── */}
-      <div className="w-full px-6 py-3 bg-[#090909]/85 backdrop-blur-xl border-y border-white/5">
-        <div className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto whitespace-nowrap no-bar">
-          {[
-            { id: "ongoing", label: "진행 중인 이벤트" },
-            { id: "upcoming", label: "예정된 이벤트" },
-            { id: "ended", label: "종료된 이벤트" },
-          ].map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-5 py-2.5 text-xs md:text-sm font-bold rounded-full shrink-0 outline-none focus:outline-none transition-all duration-300 ${
-              activeTab === tab.id
-                ? "bg-[#e91e3f] text-white shadow-[0_4px_20px_rgba(233,30,63,0.35)]"
-                : "bg-white/[0.04] text-gray-500 hover:text-white hover:bg-white/[0.08] border border-white/5"
-            }`}>{tab.label}</button>
-          ))}
-        </div>
-      </div>
-
-      <div className="w-full max-w-5xl mx-auto px-6 py-10 flex-1 flex flex-col">
-
-      {/* 친구 초대 이벤트 배너 */}
-      <Reveal>
-      <button onClick={() => router.push("/invite")} className="group w-full text-left mb-8 rounded-2xl border border-[#e91e3f]/20 bg-[#161213] relative overflow-hidden flex items-center justify-between gap-4 px-5 py-4 hover:border-[#e91e3f]/50 transition-colors">
-        <div className="absolute -top-16 -right-10 w-40 h-40 rounded-full bg-[#e91e3f]/10 blur-3xl pointer-events-none" />
-        <div className="relative flex items-center gap-3 min-w-0">
-          <span className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f]">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[18px] h-[18px]"><path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" /></svg>
-          </span>
-          <div className="min-w-0">
-            <p className="text-[10px] font-black tracking-widest text-[#e91e3f] uppercase mb-0.5">Invite Event</p>
-            <h3 className="text-sm font-bold text-white break-keep">친구 초대 이벤트 — 코드 공유하고 함께 XP 받기</h3>
-          </div>
-        </div>
-        <span className="relative shrink-0 inline-flex items-center gap-1 text-xs font-bold text-[#e91e3f]">참여하기
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
-        </span>
-      </button>
-      </Reveal>
-
-      {isLoading ? <div className="text-center py-20 text-gray-500 font-bold">로딩 중...</div> : currentDisplayEvents.length === 0 ? <div className="text-center py-20 text-gray-600 bg-white/[0.02] rounded-3xl border border-white/5">등록된 이벤트가 없습니다.</div> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {currentDisplayEvents.map((event, listIdx) => {
-            const status = getEventStatus(event);
-            const isUpcoming = status === "upcoming";
-            const displayTag = isUpcoming ? "예정" : event.eventTag;
-
+        {/* 밑줄 탭 */}
+        <div className="flex items-center border-b border-[#ededed]">
+          {TABS.map((t) => {
+            const on = activeTab === t.id;
             return (
-              <Reveal key={event._id} delay={Math.min(listIdx, 5) * 90}>
-              <div onClick={() => router.push(`/event/${event._id}`)} className="group h-full rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-px cursor-pointer relative hover:from-[#e91e3f]/40 hover:to-white/[0.02] transition-all duration-300">
-                {isAdmin && (
-                  <div className="absolute top-6 right-6 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => handleEdit(event._id, e)} className="bg-black/80 text-white px-2.5 py-1.5 rounded-md text-xs font-bold border border-white/10 hover:bg-gray-800">수정</button>
-                    <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(event._id); }} className="bg-red-500/80 text-white px-2.5 py-1.5 rounded-md text-xs font-bold border border-red-500/50 hover:bg-red-500">삭제</button>
-                  </div>
-                )}
-
-                <div className="bg-[#111111]/95 rounded-2xl overflow-hidden h-full group-hover:bg-[#141414] transition-colors duration-300">
-                  <div className="w-full h-44 bg-[#181818] flex items-center justify-center overflow-hidden relative">
-                    {event.bannerUrl ? (
-                      <img src={event.bannerUrl} alt="배너" className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-700 ease-out" />
-                    ) : (
-                      <span className="text-gray-600 text-sm">이벤트 배너 이미지</span>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#111111] via-transparent to-transparent opacity-60 pointer-events-none"></div>
-                  </div>
-                  <div className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      {displayTag && displayTag !== "NONE" && (
-                        <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full ${isUpcoming ? "bg-blue-500/15 text-blue-400 border border-blue-500/25" : displayTag === "NEW" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : activeTab === "ongoing" ? "bg-[#e91e3f]/15 text-[#e91e3f] border border-[#e91e3f]/25" : "bg-white/5 text-gray-400 border border-white/10"}`}>{displayTag}</span>
-                      )}
-                      <div className="flex items-center gap-1 text-gray-500">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                        <span className="text-xs font-medium">{event.eventPeriod || "날짜 미정"}</span>
-                      </div>
-                    </div>
-                    <h3 className="text-lg font-bold mb-2 text-white group-hover:text-[#ff5c77] transition-colors flex items-center gap-2">
-                      {isAdmin && event.hidden && <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 border border-amber-400/30">숨김</span>}
-                      <span className="min-w-0">{event.title}</span>
-                    </h3>
-                    {stripMarkdown(event.content) && (
-                      <p className="text-sm text-gray-500 line-clamp-2">{stripMarkdown(event.content)}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-              </Reveal>
+              <button key={t.id} onClick={() => setActiveTab(t.id)}
+                className={`relative py-3 mr-6 md:mr-7 text-[14px] font-extrabold transition-colors outline-none ${on ? "text-[#131313]" : "text-[#6a6a6a] hover:text-[#131313]"}`}>
+                {t.label}
+                <span className="ml-1.5 text-[11px] font-bold text-[#a3a3a3] tabular-nums">{t.count}</span>
+                {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
+              </button>
             );
           })}
         </div>
+
+        {/* 친구 초대 이벤트 — 격자 위 한 줄 */}
+        <button onClick={() => router.push("/invite")}
+          className="group w-full flex items-center gap-3 py-4 border-b border-[#ededed] text-left outline-none">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-extrabold leading-snug group-hover:text-[#e91e3f] transition-colors">친구 초대 이벤트</span>
+            <span className="block mt-1 text-[12px] text-[#8a8a8a] truncate">코드 공유하고 함께 XP 받기</span>
+          </span>
+          <span className="shrink-0 text-[11.5px] font-black text-[#e91e3f]">상시</span>
+          <span className="shrink-0 text-[#a3a3a3] font-black">›</span>
+        </button>
+
+        {/* 배너 격자 */}
+        {isLoading ? (
+          <p className="py-20 text-center text-sm text-[#8a8a8a]">로딩 중...</p>
+        ) : currentDisplayEvents.length === 0 ? (
+          <p className="py-20 text-center text-sm text-[#8a8a8a]">등록된 이벤트가 없습니다.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-10 pt-8">
+            {currentDisplayEvents.map((event, listIdx) => {
+              const st = getEventStatus(event);
+              const badge = STATUS_LABEL[st];
+              const extraTag = event.eventTag && event.eventTag !== "NONE" && event.eventTag !== "종료" && event.eventTag !== badge.label
+                ? event.eventTag : "";
+
+              return (
+                <Reveal key={event._id} delay={Math.min(listIdx, 5) * 90}>
+                  <div onClick={() => router.push(`/event/${event._id}`)} className="group cursor-pointer">
+                    {/* 배너 */}
+                    <div className="w-full aspect-[16/7] rounded-none bg-[#f2f2f2] overflow-hidden flex items-center justify-center">
+                      {event.bannerUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={event.bannerUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-[12px] font-bold text-[#a3a3a3]">이벤트</span>
+                      )}
+                    </div>
+
+                    {/* 태그 · 기간 */}
+                    <div className="flex items-center gap-2.5 mt-3.5">
+                      <span className={`text-[11px] font-black ${badge.cls}`}>{badge.label}</span>
+                      {extraTag && <span className="text-[11px] font-black text-[#131313]">{extraTag}</span>}
+                      <span className="min-w-0 text-[11.5px] font-bold text-[#8a8a8a] tabular-nums truncate">{event.eventPeriod || "날짜 미정"}</span>
+                    </div>
+
+                    {/* 제목 */}
+                    <h3 className="mt-1.5 flex items-center gap-2 text-[18px] md:text-[20px] font-black tracking-tight leading-snug break-keep">
+                      {isAdmin && event.hidden && <span className="shrink-0 text-[11px] font-black text-[#a3a3a3]">숨김</span>}
+                      <span className="min-w-0 group-hover:text-[#e91e3f] transition-colors">{event.title}</span>
+                    </h3>
+
+                    {/* 관리자 — 제목 아래 작은 글자 */}
+                    {isAdmin && (
+                      <div className="mt-2 flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <button onClick={(e) => handleEdit(event._id, e)}
+                          className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">수정</button>
+                        <span className="text-[11px] text-[#e0e0e0]">·</span>
+                        <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(event._id); }}
+                          className="text-[11px] font-bold text-[#e91e3f] hover:text-[#d01634] transition-colors">삭제</button>
+                      </div>
+                    )}
+                  </div>
+                </Reveal>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* 삭제 확인 */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setDeleteConfirmId(null)}>
+          <div className="bg-white rounded-3xl w-full max-w-sm p-7 text-center border border-[#e0e0e0] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-base font-black text-[#131313] mb-2">이벤트를 삭제할까요?</h2>
+            <p className="text-[12px] text-[#8a8a8a] mb-6">되돌릴 수 없습니다.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 rounded-xl bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#4b4b4b] text-[13px] font-bold transition-colors">취소</button>
+              <button onClick={executeDelete} className="flex-1 py-3 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">삭제</button>
+            </div>
+          </div>
+        </div>
       )}
 
-
-      {deleteConfirmId && <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4"><div className="bg-[#121212] border border-red-500/30 rounded-3xl w-full max-w-sm p-8 text-center"><h2 className="text-xl font-bold text-white mb-3">삭제 안내</h2><p className="text-sm text-gray-400 mb-8">영구 삭제하시겠습니까?</p><div className="flex gap-3"><button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 bg-[#2a2a2a] text-white rounded-xl">취소</button><button onClick={executeDelete} className="flex-1 py-3 bg-red-500/80 text-white rounded-xl">삭제</button></div></div></div>}
-      {popupConfig.isOpen && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in"><div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl flex flex-col items-center"><div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 ${popupConfig.isError ? "bg-red-500/10 text-red-500" : "bg-[#e91e3f]/10 text-[#e91e3f]"}`}>{popupConfig.isError ? <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> : <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}</div><h2 className="text-xl font-bold text-white mb-3">{popupConfig.isError ? "알림" : "처리 완료"}</h2><p className="text-sm text-gray-400 mb-8 whitespace-pre-line leading-relaxed">{popupConfig.message}</p><button onClick={() => setPopupConfig({ ...popupConfig, isOpen: false })} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-all">확인</button></div></div>}
-      </div>
+      {toast && (
+        <div className="fixed bottom-24 md:bottom-8 right-4 md:right-6 z-[200] pointer-events-none">
+          <div className="px-5 py-3 rounded-2xl bg-[#131313] text-white text-xs font-bold shadow-2xl">{toast}</div>
+        </div>
+      )}
     </main>
   );
 }
