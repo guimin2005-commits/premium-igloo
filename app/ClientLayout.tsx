@@ -569,7 +569,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
           {/* ── 카테고리 줄 — 모든 화면이 같은 방식. 내리면 로고 옆으로 접혀 계속 보인다 ── */}
           {!isVerifyPage && (status !== "authenticated" || isVerified) && (
-            <div className={`order-3 basis-full flex items-center gap-4 min-w-0 border-t transition-[height] duration-200 ease-out ${
+            <div className={`relative group/gnb order-3 basis-full flex items-center gap-4 min-w-0 border-t transition-[height] duration-200 ease-out ${
               scrolled ? "h-11 md:h-14 md:order-2 md:basis-auto md:flex-1 md:ml-8 md:border-t-transparent" : "h-[46px] md:h-[52px]"
             } ${isWhitePage ? "border-[#ededed]" : isLightPage ? "border-black/[0.06]" : "border-white/[0.07]"}`}>
               {/* 큰 분류 → 세부 분류 두 단. 큰 분류에 마우스를 올리면 그 아래로 세부가 펼쳐진다.
@@ -587,30 +587,42 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         {group.name}
                         {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
                       </Link>
-                      {/* 세부 분류 */}
-                      <div className="hidden md:block absolute left-1/2 -translate-x-1/2 top-full pt-1.5 opacity-0 invisible group-hover/cat:opacity-100 group-hover/cat:visible transition-opacity duration-150 z-50">
-                        <div className={`min-w-[168px] rounded-2xl border overflow-hidden backdrop-blur-2xl py-1 ${isLightPage ? "border-[#e0e0e0] bg-white/97 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.22)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.6)]"}`}>
-                          {group.items.map((it) => {
-                            const cur = pathname === it.path || !!pathname?.startsWith(it.path + "/");
-                            return (
-                              <Link key={it.path} href={it.path}
-                                className={`block px-4 py-2.5 text-[13px] font-bold whitespace-nowrap transition-colors ${
-                                  cur ? "text-[#e91e3f]" : isLightPage ? "text-[#4b4b4b] hover:text-[#131313] hover:bg-black/[0.04]" : "text-gray-300 hover:text-white hover:bg-white/[0.05]"
-                                }`}>{it.name}</Link>
-                            );
-                          })}
-                        </div>
-                      </div>
                     </div>
                   );
                 })}
               </nav>
 
-
-              <div className={`items-center gap-4 md:gap-5 shrink-0 text-[12.5px] font-black tracking-[0.06em] ${scrolled ? "hidden lg:flex" : "hidden md:flex"} ${isLightPage ? "text-[#131313]" : "text-white"}`}>
-                {levelOpen && <Link href="/level" className="hover:text-[#e91e3f] transition-colors whitespace-nowrap">SYSTEM <span className="text-[#e91e3f]">:</span> LEVEL</Link>}
-                {levelOpen && (shopPublic || isAdmin) && <Link href="/arctic" className="hover:text-[#e91e3f] transition-colors whitespace-nowrap">ARCT<span className="text-[#e91e3f]">I</span>C</Link>}
+              {/* ── 세부 카테고리 띠 — 큰 분류에 올리면 세 묶음이 한 번에, 읽을 만한 크기로 펼쳐진다.
+                     작은 드롭다운으로는 무엇이 있는지 훑어지지 않는다. 모바일은 햄버거 메뉴가 같은 일을 한다. ── */}
+              <div className="hidden md:block absolute left-0 right-0 top-full z-50 pt-px opacity-0 invisible group-hover/gnb:opacity-100 group-hover/gnb:visible transition-opacity duration-150">
+                <div className={`rounded-b-2xl border-x border-b backdrop-blur-2xl ${isLightPage ? "border-[#ededed] bg-white/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.7)]"}`}>
+                  <div className="grid grid-cols-3 gap-8 px-8 py-7">
+                    {categoryGroups.map((group) => (
+                      <div key={group.name}>
+                        <div className="flex items-center gap-2.5 mb-3">
+                          <span className="w-4 h-px bg-[#e91e3f]" />
+                          <span className="text-[11px] font-black tracking-[0.2em] text-[#e91e3f]">{group.name}</span>
+                        </div>
+                        <div className="flex flex-col">
+                          {group.items.map((it) => {
+                            const cur = pathname === it.path || !!pathname?.startsWith(it.path + "/");
+                            return (
+                              <Link key={it.path} href={it.path}
+                                className={`py-[7px] text-[15px] font-extrabold tracking-tight transition-colors ${
+                                  cur ? "text-[#e91e3f]" : isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-gray-200 hover:text-[#ff5c77]"
+                                }`}>{it.name}</Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
+
+
+              {/* 📌 SYSTEM : LEVEL · ARCTIC 은 카테고리 줄에 세우지 않는다 —
+                     홈 가운데(브랜드와 소식 사이)에서 크게 안내하고, 줄에서는 '콘텐츠' 묶음 안으로 간다. */}
             </div>
           )}
         </div>
