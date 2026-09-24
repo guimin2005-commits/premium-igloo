@@ -8,14 +8,14 @@
   <rect width="1200" height="420" fill="url(#bg)"/>
   
   <ellipse cx="960" cy="200" rx="360" ry="230" fill="url(#glow)"/>
-  <text x="80" y="118" font-family="'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Pretendard',sans-serif" font-size="20" font-weight="900" fill="#131313">XP Boost+</text>
-  <rect x="80" y="132" width="20" height="2" fill="#131313"/>
-  <text x="80" y="196" font-family="'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Pretendard',sans-serif" font-size="54" font-weight="900" fill="#131313" letter-spacing="-1">채팅 한 번에</text><text x="80" y="262" font-family="'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Pretendard',sans-serif" font-size="54" font-weight="900" fill="#131313" letter-spacing="-1">더 많이 쌓이는 7일</text>
-  <text x="80" y="332" font-family="'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Pretendard',sans-serif" font-size="19" font-weight="700" fill="#2a4a47">오픈 이벤트 · 30% 세일 · 7일 154,000 XP</text>
-  <g transform="translate(790,120) rotate(-8 80 80)" filter="url(#sh)">
-    <rect width="160" height="160" rx="27" fill="rgba(255,255,255,.62)" stroke="rgba(255,255,255,.8)" stroke-width="1"/><g transform="translate(42.400000000000006,42.400000000000006) scale(3.133333333333333)" fill="none" stroke="#e91e3f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/></g></g>
-  <g transform="translate(985,52) rotate(10 61 61)" filter="url(#sh)">
-    <rect width="122" height="122" rx="21" fill="rgba(19,19,19,.88)"/><g transform="translate(32.33,32.33) scale(2.3891666666666667)" fill="#ffffff" opacity=".95"><path d="M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z"/></g></g>
-  <g transform="translate(1000,250) rotate(-4 52 52)" filter="url(#sh)">
-    <rect width="104" height="104" rx="18" fill="rgba(255,255,255,.62)" stroke="rgba(255,255,255,.8)" stroke-width="1"/><g transform="translate(27.560000000000002,27.560000000000002) scale(2.0366666666666666)" fill="none" stroke="#e91e3f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z"/></g></g>
+  <text x="80" y="122" font-family="'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Pretendard',sans-serif" font-size="18" font-weight="900" fill="#131313">XP Boost+</text>
+  <rect x="80" y="136" width="20" height="2" fill="#131313"/>
+  <text x="80" y="200" font-family="'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Pretendard',sans-serif" font-size="46" font-weight="900" fill="#131313" letter-spacing="-1">채팅 한 번에</text><text x="80" y="258" font-family="'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Pretendard',sans-serif" font-size="46" font-weight="900" fill="#131313" letter-spacing="-1">더 많이 쌓이는 7일</text>
+  <text x="80" y="322" font-family="'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Pretendard',sans-serif" font-size="17" font-weight="700" fill="#2a4a47">오픈 이벤트 · 30% 세일 · 7일 154,000 XP</text>
+  <g transform="translate(800,132) rotate(-8 72 72)" filter="url(#sh)">
+    <rect width="144" height="144" rx="24" fill="rgba(255,255,255,.62)" stroke="rgba(255,255,255,.8)" stroke-width="1"/><g transform="translate(38.160000000000004,38.160000000000004) scale(2.82)" fill="none" stroke="#e91e3f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/></g></g>
+  <g transform="translate(992,62) rotate(10 55 55)" filter="url(#sh)">
+    <rect width="110" height="110" rx="19" fill="rgba(19,19,19,.88)"/><g transform="translate(29.150000000000002,29.150000000000002) scale(2.1541666666666663)" fill="#ffffff" opacity=".95"><path d="M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z"/></g></g>
+  <g transform="translate(1004,252) rotate(-4 47 47)" filter="url(#sh)">
+    <rect width="94" height="94" rx="16" fill="rgba(255,255,255,.62)" stroke="rgba(255,255,255,.8)" stroke-width="1"/><g transform="translate(24.91,24.91) scale(1.8408333333333333)" fill="none" stroke="#e91e3f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z"/></g></g>
 </svg>

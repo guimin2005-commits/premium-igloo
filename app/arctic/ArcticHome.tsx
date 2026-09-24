@@ -90,8 +90,8 @@ export default function ArcticHome({
 
   return (
     <>
-      {/* ── 배너 (관리자 등록) — 없으면 시즌 히어로. 모서리 없이 화면 끝까지 (각지게) ── */}
-      <section className="w-full">
+      {/* ── 배너 (관리자 등록) — 없으면 시즌 히어로. 모서리는 각지게, 폭은 본문 폭 안에 (화면 끝까지 채우면 너무 꽉 찬다) ── */}
+      <section className="max-w-7xl mx-auto px-5 md:px-8 pt-5 md:pt-6">
         <div className="relative overflow-hidden bg-[#f2f2f2]">
           {banners.length > 0 ? (
             <>
