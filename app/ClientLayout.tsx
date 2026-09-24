@@ -577,7 +577,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             } ${isWhitePage ? "border-[#ededed]" : isLightPage ? "border-black/[0.06]" : "border-white/[0.07]"}`}>
               {/* 큰 분류 → 세부 분류 두 단. 큰 분류에 마우스를 올리면 그 아래로 세부가 펼쳐진다.
                      모바일은 펼침 없이 큰 분류만 가로로 흐르고, 세부는 햄버거 메뉴가 맡는다. */}
-              <nav className="flex items-center gap-6 md:gap-9 h-full flex-1 min-w-0 overflow-x-auto md:overflow-visible no-bar">
+              {/* 큰 분류는 가운데 — 올리면 세 묶음이 한 번에 펼쳐지는 사이트 전체 메뉴라 한쪽에 붙어 있으면 어긋나 보인다 */}
+              <nav className="flex items-center gap-6 md:gap-10 h-full flex-1 min-w-0 overflow-x-auto md:overflow-visible no-bar md:justify-center">
                 {categoryGroups.map((group) => {
                   const on = group.items.some((it) => pathname === it.path || !!pathname?.startsWith(it.path + "/"));
                   return (

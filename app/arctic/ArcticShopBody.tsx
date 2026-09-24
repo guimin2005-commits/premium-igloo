@@ -574,97 +574,66 @@ export default function ArcticShopBody({
 
   return (
     <div className={`w-full flex-1 bg-white text-[#131313] ${embedded ? "" : "min-h-screen"}`}>
-      {/* ── 스토어 줄 — 유형 탭 + 스토어 도구(검색 · 재화 · 찜 · 장바구니) 한 줄.
-             브랜드 · 쿠폰함 · 알림 · 프로필은 전역 상단 바가 이미 갖고 있어 여기서는 빼둔다 —
-             같은 창을 여는 진입점이 두 벌이면 어느 쪽이 진짜인지 알 수 없다.
-             sticky 도 전역 바 하나면 된다. ── */}
+      {/* ── 스토어 도구 줄 — ARCTIC · 큰 검색 · 재화 · 찜 · 장바구니.
+             브랜드(고급 이글루) · 쿠폰함 · 알림 · 프로필은 전역 상단 바가 갖고 있어 여기엔 없다. ── */}
       <div className="w-full bg-white border-b border-[#ededed]">
-        <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center gap-3 md:gap-5 h-16 md:h-[72px]">
-          {/* 유형 탭 — 홈 · 역할 · 권한 · 아이템 · 기프트카드 · 기간제. 고른 것만 빨간 밑줄 */}
-          <nav className="flex items-center gap-6 md:gap-7 overflow-x-auto no-bar h-full min-w-0 flex-1">
-            {[{ v: "home", l: "홈" }, ...TYPES.filter((t) => t.v !== "all")].map((t) => {
-              const on = t.v === "home" ? showing === "home" : showing === "products" && typeFilter === t.v;
-              return (
-                <button key={t.v}
-                  onClick={() => {
-                    if (t.v === "home") { setView("home"); setQuery(""); setShowWishList(false); window.scrollTo({ top: 0, behavior: "smooth" }); }
-                    else goProducts(t.v);
-                  }}
-                  className={`relative shrink-0 h-full flex items-center text-[15px] font-extrabold transition-colors ${on ? "text-[#131313]" : "text-[#6a6a6a] hover:text-[#131313]"}`}>
-                  {t.l}
-                  {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
-                </button>
-              );
-            })}
-            {/* 시즌 패스 — 유형이 아니라 가는 곳이라 탭 뒤에 선 하나 두고 붙인다 */}
-            <span className="shrink-0 w-px h-4 bg-[#e0e0e0]" />
-            <Link href="/level?tab=pass" className="shrink-0 text-[13px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors whitespace-nowrap">
-              시즌 패스
+        <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center gap-4 md:gap-6 h-[60px] md:h-[68px]">
+          {/* 지금 어느 세계인지 — 브랜드가 아니라 구역 이름 */}
+          <Link href="/arctic" className="shrink-0 text-[17px] md:text-[19px] font-black tracking-[0.16em] text-[#131313] hover:text-[#e91e3f] transition-colors">
+            ARCT<span className="text-[#e91e3f]">I</span>C
+          </Link>
+
+          {/* 관리자 — 유저 화면 미리보기 · 비공개 알림 */}
+          {realAdmin && (
+            <button
+              onClick={() => setUserPreview((v) => !v)}
+              title={userPreview ? "관리 화면으로 돌아가기" : "일반 유저에게 보이는 화면으로 보기"}
+              className={`hidden md:inline-flex shrink-0 items-center gap-1.5 h-8 px-3 rounded-full text-[11px] font-bold border transition-colors ${
+                userPreview ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#e0e0e0] hover:text-[#131313] hover:border-[#a3a3a3]"
+              }`}>
+              <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z" strokeLinejoin="round" />
+                <circle cx="10" cy="10" r="2.6" />
+              </svg>
+              {userPreview ? "미리보기 중" : "유저 화면"}
+            </button>
+          )}
+          {!shopPublic && isAdmin && (
+            <Link href="/admin/bot?tab=policy&sec=mute" title="비공개 상태입니다 · 눌러서 공개 전환" className="group/dot relative flex items-center shrink-0">
+              <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>
+              <span className="absolute left-0 w-2 h-2 rounded-full bg-[#e91e3f] animate-ping opacity-60"></span>
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 rounded-md bg-[#131313] text-white text-[10px] font-bold opacity-0 group-hover/dot:opacity-100 transition-opacity pointer-events-none">비공개</span>
             </Link>
-          </nav>
+          )}
 
-          {/* 스토어 전용 도구 — 여기 말고는 어디에도 없는 것들만 */}
-          <div className="flex items-center gap-1.5 md:gap-2.5 shrink-0">
-            {/* 관리자 — 일반 유저에게 보이는 화면으로 바꿔 보기 */}
-            {realAdmin && (
-              <button
-                onClick={() => setUserPreview((v) => !v)}
-                title={userPreview ? "관리 화면으로 돌아가기" : "일반 유저에게 보이는 화면으로 보기"}
-                className={`inline-flex shrink-0 items-center gap-1.5 h-8 px-2.5 md:px-3 rounded-full text-[11px] font-bold border transition-colors ${
-                  userPreview
-                    ? "bg-[#131313] text-white border-[#131313]"
-                    : "bg-white text-[#5a5a5a] border-[#e0e0e0] hover:text-[#131313] hover:border-[#a3a3a3]"
-                }`}
-              >
-                <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z" strokeLinejoin="round" />
-                  <circle cx="10" cy="10" r="2.6" />
-                </svg>
-                <span className="hidden sm:inline">{userPreview ? "미리보기 중" : "유저 화면"}</span>
-              </button>
-            )}
-
-            {/* 비공개 상태 — 관리자에게만 작은 점으로 알린다 */}
-            {!shopPublic && isAdmin && (
-              <Link href="/admin/bot?tab=policy&sec=mute" title="비공개 상태입니다 · 눌러서 공개 전환"
-                className="group/dot relative flex items-center shrink-0 mr-1">
-                <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>
-                <span className="absolute left-0 w-2 h-2 rounded-full bg-[#e91e3f] animate-ping opacity-60"></span>
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 rounded-md bg-[#131313] text-white text-[10px] font-bold opacity-0 group-hover/dot:opacity-100 transition-opacity pointer-events-none">
-                  비공개
-                </span>
-              </Link>
-            )}
-
-            {/* 검색 — 상품을 찾는 건 스토어에서만 한다. 입력하면 곧바로 검색 결과 */}
-            <div className="hidden md:block relative w-[200px] lg:w-[280px] xl:w-[320px] h-10 rounded-full border-2 border-[#131313] bg-white overflow-hidden">
+          {/* 검색 — 가운데 주인공 */}
+          <div className="hidden md:flex flex-1 justify-center min-w-0 px-2">
+            <div className="relative w-full max-w-[460px] h-11 rounded-full border-2 border-[#131313] bg-white overflow-hidden">
               <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="상품, 유형, 역할 검색"
-                className="absolute inset-0 w-full h-full bg-transparent pl-4 pr-10 text-[13px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
+                className="absolute inset-0 w-full h-full bg-transparent pl-5 pr-11 text-[13px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
               {query ? (
                 <button onClick={() => setQuery("")} aria-label="검색어 지우기"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-[#a3a3a3] hover:text-[#131313] transition-colors outline-none">
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-[#a3a3a3] hover:text-[#131313] transition-colors outline-none">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
                 </button>
               ) : (
-                <svg className="absolute right-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#131313] pointer-events-none" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <svg className="absolute right-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#131313] pointer-events-none" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.search} />
                 </svg>
               )}
             </div>
+          </div>
 
+          <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-auto md:ml-0">
             {isLoggedIn && (
               <>
-                {/* 재화 — 테두리·알약 없이 글자만. XP 와 빙옥은 각각.
-                    좁은 화면에서는 검색·장바구니에 자리를 내준다 */}
-                <span className="hidden lg:inline-flex items-baseline gap-3.5 ml-1 text-[12.5px] font-black text-[#131313] tabular-nums whitespace-nowrap">
+                {/* 재화 — 테두리 없이 글자만. XP 와 빙옥은 각각 */}
+                <span className="hidden md:inline-flex items-baseline gap-3.5 text-[12.5px] font-black text-[#131313] tabular-nums whitespace-nowrap">
                   <span>{(myXp ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#e91e3f]">XP</span></span>
                   <span>{(myPoint ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#3f9e93]">빙옥</span></span>
                 </span>
 
-                {/* 찜 — 찜한 상품 목록 열기 */}
-                <button
-                  onClick={() => setShowWishList(true)}
-                  aria-label="찜한 상품 보기"
+                <button onClick={() => setShowWishList(true)} aria-label="찜한 상품 보기"
                   className={`relative hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showWishList ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
                   <svg className={`w-[18px] h-[18px] transition-all duration-300 ${wish.length > 0 ? "text-[#e91e3f]" : ""}`}
                     fill={wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
@@ -672,7 +641,6 @@ export default function ArcticShopBody({
                   </svg>
                 </button>
 
-                {/* 장바구니 */}
                 <Link href="/arctic/cart"
                   className="hidden md:flex items-center justify-center gap-2 h-9 pl-3.5 pr-4 rounded-full bg-[#131313] hover:bg-black text-white transition-colors">
                   <span className="relative">
@@ -683,11 +651,36 @@ export default function ArcticShopBody({
                       <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center">{cartCount}</span>
                     )}
                   </span>
-                  <span className="text-[12px] font-bold tabular-nums hidden sm:inline">{cartTotal.toLocaleString()}</span>
+                  <span className="text-[12px] font-bold tabular-nums">{cartTotal.toLocaleString()}</span>
                 </Link>
               </>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* ── 유형 줄 — 홈 · 역할 · 권한 · 아이템 · 기프트카드 · 기간제. 고른 것만 빨간 밑줄 ── */}
+      <div className="w-full bg-white border-b border-[#ededed]">
+        <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center justify-between gap-4 h-[46px] md:h-[52px]">
+          <nav className="flex items-center gap-6 md:gap-8 overflow-x-auto no-bar h-full min-w-0 flex-1">
+            {[{ v: "home", l: "홈" }, ...TYPES.filter((t) => t.v !== "all")].map((t) => {
+              const on = t.v === "home" ? showing === "home" : showing === "products" && typeFilter === t.v;
+              return (
+                <button key={t.v}
+                  onClick={() => {
+                    if (t.v === "home") { setView("home"); setQuery(""); setShowWishList(false); window.scrollTo({ top: 0, behavior: "smooth" }); }
+                    else goProducts(t.v);
+                  }}
+                  className={`relative shrink-0 h-full flex items-center text-[14px] md:text-[15px] font-extrabold transition-colors ${on ? "text-[#131313]" : "text-[#6a6a6a] hover:text-[#131313]"}`}>
+                  {t.l}
+                  {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
+                </button>
+              );
+            })}
+          </nav>
+          <Link href="/level?tab=pass" className="hidden md:block shrink-0 text-[13px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors whitespace-nowrap">
+            시즌 패스
+          </Link>
         </div>
       </div>
 
