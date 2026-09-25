@@ -3,11 +3,13 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Reveal, CountUp } from "./components/Lux";
 import { statusOf } from "@/lib/tournamentPhase";
-import { SEASON } from "@/lib/season";
+import { SEASON, getSeasonDday } from "@/lib/season";
+import { useSession } from "next-auth/react";
+import { isAdminName } from "@/lib/admins";
 
 // 📌 홈 — 화이트 & 블랙 편집형 골격 (승인된 2안 목업).
 //    마스트헤드(상자 없음) → 헤어라인 티커 → 소식(공지사항 · 지금 진행 중, 번호 없음)
-//    티커 아래는 레벨 · 스토어 바로가기 한 줄, 더 즐기기는 잉크 배너 두 장(대회 · 부스터).
+//    티커 아래는 레벨 · 스토어 바로가기 한 줄, 더 즐기기는 잉크 배너(레벨 · 상점 · 대회 · 부스터) 2×2.
 //    → 지금 이글루 → 더 즐기기 → 참여. 번호는 붙이지 않는다. 섹션 제목 아래 설명 줄은 두지 않는다.
 //    소식이 맨 위라 조금만 내려도 공지가 바로 보인다. 커튼(sticky) 구조는 없앴다.
 
@@ -25,11 +27,13 @@ const ActivityChart = ({ history }: { history: { ts: string; online: number }[] 
   const last = pts[pts.length - 1];
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-2 text-[10.5px] font-medium tracking-wide text-[#8a8a8a] tabular-nums">
-        <span>24H ACTIVITY</span>
+      <div className="flex items-center justify-between mb-2 text-[11px] font-medium tracking-wide text-[#8a8a8a] tabular-nums">
+        <span className="font-bold text-[#5a5a5a]">최근 24시간 온라인</span>
         <span>피크 {max.toLocaleString()}명</span>
       </div>
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-24 overflow-visible" preserveAspectRatio="none">
+      {/* 폭을 늘려 쓰므로(preserveAspectRatio none) 선 굵기는 non-scaling-stroke, 끝점은 SVG 밖 HTML 점으로 — 늘어나 타원이 되지 않게 */}
+      <div className="relative">
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-28 md:h-32 overflow-visible" preserveAspectRatio="none">
         <defs>
           <linearGradient id="homeAct" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#e91e3f" stopOpacity="0.18" />
@@ -37,9 +41,10 @@ const ActivityChart = ({ history }: { history: { ts: string; online: number }[] 
           </linearGradient>
         </defs>
         <polygon points={`0,${h} ${line} ${w},${h}`} fill="url(#homeAct)" />
-        <polyline points={line} fill="none" stroke="#e91e3f" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
-        <circle cx={last[0]} cy={last[1]} r="3" fill="#e91e3f" />
+        <polyline points={line} fill="none" stroke="#e91e3f" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
       </svg>
+      <span aria-hidden className="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-[#e91e3f]" style={{ left: `${(last[0] / w) * 100}%`, top: `${(last[1] / h) * 100}%` }} />
+      </div>
     </div>
   );
 };
@@ -73,23 +78,59 @@ const PinIcon = () => (
 );
 
 // 섹션 — 번호는 '읽는 순서'가 있는 곳에만 붙인다. 소식처럼 매일 바뀌는 묶음에는 번호를 안 붙인다.
-function Sec({ no, title, desc, more, children }: { no?: string; title: React.ReactNode; desc?: string; more?: { href: string; label: string }; children: React.ReactNode }) {
+function Sec({ no, title, desc, more, right, children }: { no?: string; title: React.ReactNode; desc?: string; more?: { href: string; label: string }; right?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="w-full border-b border-[#ededed]">
       <div className="relative max-w-7xl mx-auto px-6 md:px-10 py-14 md:py-[72px]">
         {no && <div aria-hidden className="absolute top-4 md:top-5 left-4 md:left-8 text-[80px] md:text-[120px] font-black tracking-[-0.04em] leading-none text-[#131313]/[0.05] pointer-events-none select-none">{no}</div>}
         <Reveal>
-          <div className="relative flex items-center gap-3.5 mb-3.5">
-            {no && <b className="text-[11px] font-black tracking-[0.3em] text-[#e91e3f]">{no}</b>}
-            <i className="h-px flex-1 bg-gradient-to-r from-[#131313]/20 to-transparent" />
-            {more && <Link href={more.href} className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors shrink-0">{more.label}</Link>}
+          {/* 번호 · 더보기가 있을 때만 선 줄 — 없으면 선만 덩그러니 남는다 */}
+          {(no || more) && (
+            <div className="relative flex items-center gap-3.5 mb-3.5">
+              {no && <b className="text-[11px] font-black tracking-[0.3em] text-[#e91e3f]">{no}</b>}
+              <i className="h-px flex-1 bg-gradient-to-r from-[#131313]/20 to-transparent" />
+              {more && <Link href={more.href} className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors shrink-0">{more.label}</Link>}
+            </div>
+          )}
+          <div className="relative flex items-end justify-between gap-4">
+            <h3 className="text-[26px] md:text-[34px] font-black tracking-tight leading-tight break-keep">{title}</h3>
+            {right}
           </div>
-          <h3 className="relative text-[26px] md:text-[34px] font-black tracking-tight leading-tight break-keep">{title}</h3>
           {desc && <p className="relative mt-2 text-[14px] text-[#5a5a5a] break-keep">{desc}</p>}
         </Reveal>
         {children}
       </div>
     </section>
+  );
+}
+
+// 📌 잉크 배너 — 홈 "더 즐기기" 전용 (검정 + 격자 + 번짐 + 워터마크 + 알약). 다른 곳에 쓰면 반려된 디자인이다.
+//    2×2 로 놓이므로 글자 · 워터마크는 반 폭에 맞춘다. 문구는 제목 한 줄 + 사실만 나열한 부제.
+function InkBanner({ href, eyebrow, title, sub, mark, pill, glow, dot }: { href: string; eyebrow: string; title: React.ReactNode; sub: string; mark: string; pill: string; glow: string; dot: string }) {
+  return (
+    <Link href={href} className="group relative flex h-full overflow-hidden bg-[#131313] text-white px-7 md:px-9 py-8 md:py-9">
+      <div aria-hidden className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: "linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)",
+          backgroundSize: "46px 46px",
+          WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
+          maskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
+        }} />
+      <div aria-hidden className="absolute -right-16 -top-20 w-[340px] h-[280px] rounded-full blur-[110px] pointer-events-none" style={{ background: glow }} />
+      <div className="relative w-full flex flex-col md:flex-row md:items-end gap-6">
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] font-black tracking-[0.3em] text-[#ff5c77] mb-3.5">{eyebrow}</div>
+          <h4 className="text-[24px] md:text-[30px] font-black tracking-tight leading-[1.1] break-keep">{title}</h4>
+          <p className="mt-3.5 text-[13.5px] md:text-[14px] text-white/70 break-keep">{sub}</p>
+        </div>
+        <div className="md:text-right shrink-0">
+          <div aria-hidden className="hidden md:block text-[76px] font-black tracking-[-0.05em] leading-[0.9] text-white/[0.08] tabular-nums">{mark}</div>
+          <span className="inline-flex items-center gap-2 md:-mt-3 px-3.5 py-2 rounded-full border border-white/30 text-[12px] font-black tabular-nums whitespace-nowrap">
+            <i className="w-1.5 h-1.5 rounded-full" style={{ background: dot }} />{pill}
+          </span>
+        </div>
+      </div>
+    </Link>
   );
 }
 
@@ -101,7 +142,8 @@ export default function Home() {
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [notices, setNotices] = useState<any[]>([]);
   const [tnCount, setTnCount] = useState({ all: 0, open: 0 });
-  const [policy, setPolicy] = useState({ levelPublic: true, shopPublic: false });
+  // 닫힌 상태로 시작한다 — 공개 전 레벨 배너가 응답 전에 잠깐 떴다 사라지지 않게 (전역 바와 같은 기본값)
+  const [policy, setPolicy] = useState({ levelPublic: false, shopPublic: false });
 
   useEffect(() => {
     fetch("/api/xp/policy", { cache: "no-store" }).then((r) => r.json())
@@ -151,7 +193,11 @@ export default function Home() {
   }, []);
 
   const peak = stats?.history?.length ? Math.max(...stats.history.map((h: any) => h.online || 0)) : null;
-  const levelOpen = policy.levelPublic;
+  // 레벨 · 상점 배너는 공개됐을 때만 — 관리자는 공개 전에도 본다 (전역 메뉴 · 독과 같은 기준)
+  const { data: session } = useSession();
+  const isAdmin = isAdminName(session?.user?.name);
+  const levelOpen = policy.levelPublic || isAdmin;
+  const shopOpen = levelOpen && (policy.shopPublic || isAdmin);
 
   return (
     <main className="flex-1 w-full flex flex-col text-[#131313]">
@@ -215,17 +261,18 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── 소식 — 제목 바로 아래 공지 목록. 오른쪽은 지금 진행 중 ── */}
+      {/* ── 소식 — 왼쪽 공지사항(전체 보기는 이 칸에만), 오른쪽 지금 진행 중 ── */}
       <section className="w-full border-b border-[#ededed]">
         <div className="max-w-7xl mx-auto px-6 md:px-10 py-9 md:py-11">
         <style>{`.homeNewsGrid{display:grid;grid-template-columns:1fr;gap:36px}@media (min-width:768px){.homeNewsGrid{grid-template-columns:1.55fr 1fr;gap:56px}}`}</style>
-        <div className="flex items-baseline justify-between gap-4 mb-4">
-          <h3 className="text-[24px] md:text-[28px] font-black tracking-tight">소식</h3>
-          <Link href="/notice" className="shrink-0 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">전체 보기 ›</Link>
-        </div>
+        <h3 className="text-[24px] md:text-[28px] font-black tracking-tight mb-4">소식</h3>
         <div className="relative homeNewsGrid">
-          {/* 공지사항 */}
+          {/* 공지사항 — "전체 보기"는 공지 목록에만 해당하므로 섹션 머리가 아니라 이 칸 머리에 둔다 */}
           <div className="min-w-0">
+            <div className="flex items-baseline justify-between gap-4 mb-1.5">
+              <b className="text-[12px] font-black text-[#8a8a8a] tracking-[0.1em]">공지사항</b>
+              <Link href="/notice" className="shrink-0 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">전체 보기 ›</Link>
+            </div>
             <Reveal>
               <div>
                 {!scheduleLoaded ? (
@@ -279,89 +326,71 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── 지금 이글루 — 박스 없이 큰 숫자 ── */}
-      <Sec title="지금 이글루">
+      {/* ── 지금 이글루 — 박스 없이 큰 숫자 한 줄, 그 아래로 넓게 24시간 곡선 ── */}
+      <Sec
+        title="지금 이글루"
+        right={<span className="shrink-0 inline-flex items-center gap-1.5 pb-1.5 text-[12px] font-bold text-[#5a5a5a]"><i className="w-[7px] h-[7px] rounded-full bg-emerald-500 animate-pulse" />실시간</span>}
+      >
         <Reveal delay={100}>
-          <div className="relative mt-9 md:mt-10 flex flex-col md:flex-row md:items-end gap-6 md:gap-8">
-            <div className="flex-1 grid grid-cols-3 gap-4 md:gap-6">
+          <div className="relative mt-9 md:mt-10">
+            <div className="grid grid-cols-3 gap-4 md:gap-8">
               <div className="border-t border-[#131313] pt-3.5">
-                <b className="block text-[30px] sm:text-[38px] md:text-[44px] font-black tracking-[-0.03em] leading-none tabular-nums">{stats ? <CountUp end={stats.memberCount} /> : "—"}</b>
+                <b className="block text-[32px] sm:text-[44px] md:text-[60px] font-black tracking-[-0.04em] leading-none tabular-nums">{stats ? <CountUp end={stats.memberCount} /> : "—"}</b>
                 <small className="block mt-2 text-[12px] font-bold text-[#5a5a5a]">전체 멤버</small>
               </div>
               <div className="border-t border-[#131313] pt-3.5">
-                <b className="block text-[30px] sm:text-[38px] md:text-[44px] font-black tracking-[-0.03em] leading-none tabular-nums">{stats ? <CountUp end={stats.onlineCount} /> : "—"}</b>
+                <b className="block text-[32px] sm:text-[44px] md:text-[60px] font-black tracking-[-0.04em] leading-none tabular-nums">{stats ? <CountUp end={stats.onlineCount} /> : "—"}</b>
                 <small className="block mt-2 text-[12px] font-bold text-[#5a5a5a]"><i className="inline-block w-[7px] h-[7px] rounded-full bg-emerald-500 mr-1.5" />현재 온라인</small>
               </div>
               <div className="border-t border-[#131313] pt-3.5">
-                <b className="block text-[30px] sm:text-[38px] md:text-[44px] font-black tracking-[-0.03em] leading-none tabular-nums">2023</b>
-                <small className="block mt-2 text-[12px] font-bold text-[#5a5a5a]">Since</small>
+                <b className="block text-[32px] sm:text-[44px] md:text-[60px] font-black tracking-[-0.04em] leading-none tabular-nums">2023</b>
+                <small className="block mt-2 text-[12px] font-bold text-[#5a5a5a]">개설</small>
               </div>
             </div>
-            <div className="md:w-[340px] shrink-0 border-t border-[#131313] pt-3.5">
-              {stats && stats.history && stats.history.length >= 2 ? <ActivityChart history={stats.history} /> : <div className="h-24" />}
+            <div className="mt-10 md:mt-12 border-t border-[#131313] pt-3.5">
+              {stats && stats.history && stats.history.length >= 2 ? <ActivityChart history={stats.history} /> : <div className="h-28 md:h-32" />}
             </div>
           </div>
         </Reveal>
       </Sec>
 
-      {/* ── 더 즐기기 — 두 길을 잉크 배너 한 장씩으로 ── */}
+      {/* ── 더 즐기기 — 잉크 배너 넉 장(레벨 · 상점 · 대회 · 부스터). PC 는 2×2, 모바일은 한 장씩.
+             레벨 · 상점은 공개됐을 때만(관리자는 늘) — 닫힌 곳으로 보내지 않는다. 장수가 홀수면 마지막 장이 한 줄을 다 쓴다. ── */}
       <Sec title="더 즐기기">
-        <div className="relative mt-7 md:mt-8 space-y-4 md:space-y-5">
-          <Reveal>
-            <Link href="/tournament" className="group relative block overflow-hidden bg-[#131313] text-white px-7 md:px-11 py-9 md:py-10">
-              <div aria-hidden className="absolute inset-0 pointer-events-none"
-                style={{
-                  backgroundImage: "linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)",
-                  backgroundSize: "46px 46px",
-                  WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
-                  maskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
-                }} />
-              <div aria-hidden className="absolute -right-16 -top-20 w-[380px] h-[300px] rounded-full bg-[#e91e3f]/20 blur-[110px] pointer-events-none" />
-              <div className="relative flex flex-col md:flex-row md:items-end gap-6">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-black tracking-[0.3em] text-[#ff5c77] mb-3.5">e스포츠 대회</div>
-                  <h4 className="text-[24px] md:text-[36px] font-black tracking-tight leading-[1.1] break-keep">
-                    직접 뛰는 <span className="text-[#e91e3f]">리그</span>
-                  </h4>
-                  <p className="mt-3.5 text-[13.5px] md:text-[14px] text-white/70 max-w-[52ch] break-keep">접수 · 대진표 · 팀 룸</p>
-                </div>
-                <div className="md:text-right shrink-0">
-                  <div aria-hidden className="hidden md:block text-[96px] font-black tracking-[-0.05em] leading-[0.9] text-white/[0.08] tabular-nums">{String(tnCount.all).padStart(2, "0")}</div>
-                  <span className="inline-flex items-center gap-2 md:-mt-3.5 px-3.5 py-2 rounded-full border border-white/30 text-[12px] font-black tabular-nums">
-                    <i className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]" />대회 {tnCount.all} · 접수 중 {tnCount.open}
-                  </span>
-                </div>
-              </div>
-            </Link>
-          </Reveal>
-          <Reveal delay={80}>
-            <Link href="/booster" className="group relative block overflow-hidden bg-[#131313] text-white px-7 md:px-11 py-9 md:py-10">
-              <div aria-hidden className="absolute inset-0 pointer-events-none"
-                style={{
-                  backgroundImage: "linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)",
-                  backgroundSize: "46px 46px",
-                  WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
-                  maskImage: "radial-gradient(ellipse 80% 70% at 30% 0%, #000 30%, transparent 100%)",
-                }} />
-              <div aria-hidden className="absolute -right-16 -top-20 w-[380px] h-[300px] rounded-full bg-[#ff41cf]/20 blur-[110px] pointer-events-none" />
-              <div className="relative flex flex-col md:flex-row md:items-end gap-6">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-black tracking-[0.3em] text-[#ff5c77] mb-3.5">서버 부스터</div>
-                  <h4 className="text-[24px] md:text-[36px] font-black tracking-tight leading-[1.1] break-keep">
-                    부스터 전용 <span className="text-[#e91e3f]">혜택</span>
-                  </h4>
-                  <p className="mt-3.5 text-[13.5px] md:text-[14px] text-white/70 max-w-[52ch] break-keep">시작 100,000 XP · 상시 +2,000 XP</p>
-                </div>
-                <div className="md:text-right shrink-0">
-                  <div aria-hidden className="hidden md:block text-[96px] font-black tracking-[-0.05em] leading-[0.9] text-white/[0.08] tabular-nums">35%</div>
-                  <span className="inline-flex items-center gap-2 md:-mt-3.5 px-3.5 py-2 rounded-full border border-white/30 text-[12px] font-black">
-                    <i className="w-1.5 h-1.5 rounded-full bg-[#ff41cf]" />ARCTIC 환급 35%
-                  </span>
-                </div>
-              </div>
-            </Link>
-          </Reveal>
-        </div>
+        {(() => {
+          const dday = getSeasonDday();
+          const cards = [
+            levelOpen && (
+              <InkBanner key="level" href="/level" eyebrow="SYSTEM : LEVEL" glow="rgba(255,176,64,0.2)" dot="#ffb040"
+                title={<>쌓이는 만큼 오르는 <span className="text-[#e91e3f]">레벨</span></>}
+                sub="채팅 · 음성 · 출석 · 등급 10단계" mark="1000"
+                pill={`SEASON ${SEASON.number} · ${dday.ended ? "종료" : `D-${dday.days}`}`} />
+            ),
+            shopOpen && (
+              <InkBanner key="arctic" href="/arctic" eyebrow="ARCTIC" glow="rgba(79,182,216,0.22)" dot="#4fb6d8"
+                title={<>XP로 사는 <span className="text-[#e91e3f]">상점</span></>}
+                sub="역할 · 권한 · 아이템 · 기프트카드" mark="XP"
+                pill="XP · 빙옥으로 결제" />
+            ),
+            <InkBanner key="tournament" href="/tournament" eyebrow="e스포츠 대회" glow="rgba(233,30,63,0.2)" dot="#e91e3f"
+              title={<>직접 뛰는 <span className="text-[#e91e3f]">리그</span></>}
+              sub="접수 · 대진표 · 팀 룸" mark={String(tnCount.all).padStart(2, "0")}
+              pill={`대회 ${tnCount.all} · 접수 중 ${tnCount.open}`} />,
+            <InkBanner key="booster" href="/booster" eyebrow="서버 부스터" glow="rgba(255,65,207,0.2)" dot="#ff41cf"
+              title={<>부스터 전용 <span className="text-[#e91e3f]">혜택</span></>}
+              sub="시작 100,000 XP · 상시 +2,000 XP" mark="35%"
+              pill="ARCTIC 환급 35%" />,
+          ].filter(Boolean) as React.ReactElement[];
+          return (
+            <div className="relative mt-7 md:mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+              {cards.map((c, i) => (
+                <Reveal key={c.key} delay={(i % 2) * 80} className={cards.length % 2 === 1 && i === cards.length - 1 ? "md:col-span-2" : ""}>
+                  {c}
+                </Reveal>
+              ))}
+            </div>
+          );
+        })()}
       </Sec>
 
       {/* ── 참여 ── */}
