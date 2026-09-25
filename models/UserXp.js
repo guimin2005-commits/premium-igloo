@@ -43,6 +43,11 @@ const UserXpSchema = new mongoose.Schema({
   //    비용·효과 공식은 lib/enhance.js, 소비는 app/api/xp/enhance, 지급 반영은 봇 chatXp/voiceXp.
   chatEnhance: { type: Number, default: 0 },
   voiceEnhance: { type: Number, default: 0 },
+  // 강화에 실제로 낸 값 누적 — 관리자 테스트 초기화(app/api/xp/reset)가 단계를 0 으로 되돌릴 때 이만큼 돌려준다
+  enhancePaid: {
+    xp: { type: Number, default: 0 },
+    point: { type: Number, default: 0 },
+  },
   updatedAt: { type: Date, default: Date.now },
 });
 

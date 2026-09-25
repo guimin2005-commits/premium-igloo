@@ -9,14 +9,11 @@ import { salePrice, durationLabel } from "@/lib/shopPricing";
 import ArcticFooter from "../ArcticFooter";
 import ArcticDock from "../ArcticDock";
 
-const ADMIN_USERS = ["elahw.06"];
-
 // 📌 결제 — 장바구니에서 고른 상품을 확인하고 약관 동의 후 결제
 export default function CheckoutPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const isLoggedIn = status === "authenticated";
-  const isAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
 
   const [cart, setCart] = useState<{ itemId: string; qty: number; days?: number }[]>([]);
   const [items, setItems] = useState<any[]>([]);
@@ -69,7 +66,7 @@ export default function CheckoutPage() {
   const total = Math.max(0, subtotal - couponDiscount);
   const count = rows.reduce((n, r) => n + r.qty, 0);
   const needsContact = rows.some((r) => r.item.type === "physical");
-  const enoughXp = isAdmin || (myXp != null && myXp >= total);
+  const enoughXp = myXp != null && myXp >= total;
 
   // 보유 쿠폰 목록 — 주문 금액이 바뀌면 할인액도 다시 계산해 받는다
   const loadWallet = React.useCallback(() => {

@@ -24,7 +24,7 @@ export async function POST(request) {
     await connectToDatabase();
 
     // 공개 전에는 관리자만 구매 가능 (테스트용)
-    const { canView, isAdmin } = await getShopAccess();
+    const { canView } = await getShopAccess();
     if (!canView) {
       return NextResponse.json({ success: false, message: "아직 공개되지 않은 상점입니다." }, { status: 403 });
     }
@@ -84,11 +84,11 @@ export async function POST(request) {
     //    가격은 하나를 공유하고 어느 지갑에서 빼느냐만 다르다.
     //    XP 는 화폐이므로 쓰면 레벨도 내려가지만 POINT 는 레벨과 무관하다.
     //    잔액이 충분할 때만 매치되는 원자적 갱신 (중복 구매·마이너스 방지)
-    //    📌 관리자는 잔액 검사를 건너뛰고 소모도 하지 않는다 (테스트 구매)
+    //    📌 관리자도 일반 유저와 똑같이 차감한다 — 테스트로 쓴 건 관리자 초기화로 되돌린다
     const price = salePrice(item, days);
     const payMethod = body?.payMethod === "point" ? "point" : "xp";
     const field = payMethod === "point" ? "point" : "xp";
-    const charged = isAdmin ? 0 : price;
+    const charged = price;
     // 📌 XP 는 상점 화폐이면서 시즌 패스 진행도(xp - passBaseXp)의 원천이기도 하다.
     //    그냥 깎으면 물건을 살 때마다 이미 도달한 패스 티어가 미도달로 되돌아가고,
     //    "미도달인데 수령완료" 인 모순 상태가 된다. 기준선을 같은 폭으로 함께 내려
@@ -96,9 +96,8 @@ export async function POST(request) {
     const inc = { [field]: -charged };
     if (field === "xp") inc.passBaseXp = -charged;
     const paid = await UserXp.updateOne(
-      isAdmin ? { userId } : { userId, [field]: { $gte: price } },
-      { $inc: inc, $set: { updatedAt: new Date() } },
-      isAdmin ? { upsert: true } : {}
+      { userId, [field]: { $gte: price } },
+      { $inc: inc, $set: { updatedAt: new Date() } }
     );
     if (!paid.matchedCount && !paid.upsertedCount) {
       // 결제 실패 → 선점한 재고 원복
@@ -125,6 +124,7 @@ export async function POST(request) {
       payMethod,
       paidXp: payMethod === "xp" ? charged : 0,
       paidPoint: payMethod === "point" ? charged : 0,
+      billed: true,
       days,
       // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다
       expiresAt: days > 0 ? new Date(Date.now() + days * 86400000) : null,

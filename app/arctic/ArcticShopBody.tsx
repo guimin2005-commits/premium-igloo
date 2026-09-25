@@ -518,7 +518,6 @@ export default function ArcticShopBody({
     }
   };
 
-  // 관리자는 잔액과 무관하게 구매 가능 (테스트 구매)
   // 적용 중인 필터 개수 (모바일 필터 버튼 배지용)
   const activeFilterCount = (priceFilter !== "all" ? 1 : 0) + (inStockOnly ? 1 : 0) + (affordableOnly ? 1 : 0);
 
@@ -589,7 +588,7 @@ export default function ArcticShopBody({
     </div>
   );
 
-  const canAfford = (p: number) => isAdmin || (myXp != null && myXp >= p);
+  const canAfford = (p: number) => myXp != null && myXp >= p;
   const chip = (active: boolean) =>
     `px-3.5 py-1.5 rounded-full text-[12px] font-bold border transition-colors ${
       active ? "bg-[#e91e3f] text-[#ffffff] border-[#e91e3f]" : "bg-white/70 text-[#5a5a5a] border-[#ededed] hover:border-[#a3a3a3]"

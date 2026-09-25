@@ -24,7 +24,7 @@ export async function POST(request) {
     }
 
     await connectToDatabase();
-    const { canView, isAdmin } = await getShopAccess();
+    const { canView } = await getShopAccess();
     if (!canView) {
       return NextResponse.json({ success: false, message: "아직 공개되지 않은 상점입니다." }, { status: 403 });
     }
@@ -123,12 +123,12 @@ export async function POST(request) {
     }
 
     // 2) 총액 차감 — 잔액이 충분할 때만 매치
-    //    📌 관리자는 잔액 검사를 건너뛴다 (상점 동작 확인용 테스트 구매)
+    //    📌 관리자도 일반 유저와 똑같이 차감한다 — 테스트로 쓴 건 관리자 초기화로 되돌린다
     //    XP 는 화폐이므로 쓰면 레벨도 함께 내려간다. POINT 는 레벨과 무관하다.
     //    두 화폐는 1:1 등가라 가격은 하나를 공유하고, 주문 단위로 한쪽을 고른다.
     const payMethod = body?.payMethod === "point" ? "point" : "xp";
     const field = payMethod === "point" ? "point" : "xp";
-    const charged = isAdmin ? 0 : total;  // 관리자는 소모 없이 테스트 구매
+    const charged = total;
     // 📌 XP 는 상점 화폐이면서 시즌 패스 진행도(xp - passBaseXp)의 원천이기도 하다.
     //    그냥 깎으면 물건을 살 때마다 이미 도달한 패스 티어가 미도달로 되돌아가고,
     //    "미도달인데 수령완료" 인 모순 상태가 된다. 기준선을 같은 폭으로 함께 내려
@@ -136,9 +136,8 @@ export async function POST(request) {
     const inc = { [field]: -charged };
     if (field === "xp") inc.passBaseXp = -charged;
     const paid = await UserXp.updateOne(
-      isAdmin ? { userId } : { userId, [field]: { $gte: total } },
-      { $inc: inc, $set: { updatedAt: new Date() } },
-      isAdmin ? { upsert: true } : {}
+      { userId, [field]: { $gte: total } },
+      { $inc: inc, $set: { updatedAt: new Date() } }
     );
     if (!paid.matchedCount && !paid.upsertedCount) {
       for (const c of claimed) {
@@ -151,6 +150,10 @@ export async function POST(request) {
     }
 
     // 3) 구매 기록 — 수량만큼 개별 건으로 남겨 봇·관리자가 건별로 처리
+    //    📌 건마다 실제로 낸 값(paidXp/paidPoint)을 적는다. 쿠폰 할인은 정가 비율로 나누고 끝전은 마지막 건에 몰아,
+    //       건별 합계가 실제 차감액(total)과 정확히 같게 한다 — 환불이 이 값을 그대로 돌려준다.
+    let paidLeft = charged;
+    const lineCount = docs.reduce((n, d) => n + wanted.get(String(d._id)), 0);
     const rows = [];
     for (const d of docs) {
       const qty = wanted.get(String(d._id));
@@ -166,8 +169,9 @@ export async function POST(request) {
           roleId: d.roleId || "",
           price: salePrice(d, days),
           payMethod,
-          paidXp: payMethod === "xp" ? salePrice(d, days) : 0,
-          paidPoint: payMethod === "point" ? salePrice(d, days) : 0,
+          paidXp: 0,
+          paidPoint: 0,
+          billed: true,
           days,
           // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다
           expiresAt: days > 0 ? new Date(Date.now() + days * 86400000) : null,
@@ -176,6 +180,12 @@ export async function POST(request) {
         });
       }
     }
+    rows.forEach((r, i) => {
+      const share = i === lineCount - 1 ? paidLeft : subtotal > 0 ? Math.min(paidLeft, Math.floor((r.price * charged) / subtotal)) : 0;
+      paidLeft -= share;
+      if (payMethod === "point") r.paidPoint = share;
+      else r.paidXp = share;
+    });
     await Purchase.insertMany(rows);
 
     // 쿠폰 사용 처리 (결제가 확정된 뒤에만) — 지갑에 있으면 그 건도 사용 처리

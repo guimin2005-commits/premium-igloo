@@ -18,6 +18,9 @@ const PurchaseSchema = new mongoose.Schema({
   payMethod: { type: String, default: "xp" }, // "xp" | "point"
   paidXp: { type: Number, default: 0 },
   paidPoint: { type: Number, default: 0 },
+  // 📌 지갑에서 실제로 빠졌는지. 관리자가 무료로 사던 시절 기록에도 paidXp 가 적혀 있어서,
+  //    관리자 테스트 초기화(app/api/xp/reset)는 이 표시가 있는 건만 돌려준다 (없으면 공짜 XP 가 생긴다)
+  billed: { type: Boolean, default: false },
   // 📌 기간제 역할 — days가 0이면 영구. 지급 시각 기준으로 expiresAt을 세우고,
   //    기간이 지나면 봇이 역할을 회수하며 status를 expired로 바꾼다.
   days: { type: Number, default: 0 },

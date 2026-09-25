@@ -67,7 +67,7 @@ export default function CartPage() {
   const listTotal = picked.reduce((n, r) => n + ((r.days ?? 0) > 0 ? (r.item.durations?.find((d: any) => d.days === r.days)?.price ?? r.item.price) : r.item.price) * r.qty, 0);
   const total = picked.reduce((n, r) => n + salePrice(r.item, r.days) * r.qty, 0);
   const discount = listTotal - total;
-  const enoughXp = isAdmin || (myXp != null && myXp >= total);
+  const enoughXp = myXp != null && myXp >= total;
   const canCheckout = picked.length > 0 && enoughXp;
 
   // 선택한 항목만 결제로 넘긴다 (나머지는 장바구니에 남는다)

@@ -4,7 +4,6 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
 import { getLevelByXp } from "@/lib/leveling";
 import { buildEnhanceView, enhancePolicy, enhanceCost, ENHANCE_LABEL } from "@/lib/enhance";
 import BotSetting from "@/models/BotSetting";
@@ -59,7 +58,6 @@ export async function POST(request) {
 
     await connectToDatabase();
     const userId = session.user.id;
-    const isAdmin = isAdminName(session.user.name);
     const { setting, doc } = await loadState(userId);
     const p = enhancePolicy(setting);
 
@@ -76,8 +74,8 @@ export async function POST(request) {
     const cost = kind === "chat"
       ? enhanceCost(p.chatEnhanceBaseCost, p.chatEnhanceCostGrowthPct, cur + 1)
       : enhanceCost(p.voiceEnhanceBaseCost, p.voiceEnhanceCostGrowthPct, cur + 1);
-    // 📌 관리자는 상점(checkout)과 같은 규칙으로 소모 없이 올린다 — 동작 확인용
-    const charged = isAdmin ? 0 : cost;
+    // 📌 관리자도 일반 유저와 똑같이 차감한다 — 테스트로 올린 단계는 관리자 초기화로 되돌린다
+    const charged = cost;
     const field = payMethod === "point" ? "point" : "xp";
     const shortMsg = payMethod === "point" ? "보유 빙옥이 부족합니다." : "보유 XP가 부족합니다.";
 
@@ -92,6 +90,7 @@ export async function POST(request) {
     //    XP 는 시즌 패스 진행도(xp - passBaseXp)의 원천이라 기준선도 같은 폭으로 내린다 (checkout 과 동일).
     const inc = { [field]: -charged, [levelField]: 1 };
     if (field === "xp") inc.passBaseXp = -charged;
+    if (charged > 0) inc[`enhancePaid.${field}`] = charged;
     const filter = { userId, [levelField]: cur === 0 ? { $in: [0, null] } : cur };
     if (charged > 0) filter[field] = { $gte: charged };
 
@@ -128,8 +127,7 @@ export async function POST(request) {
     const view = buildEnhanceView(setting, updated);
     return NextResponse.json({
       success: true,
-      // 관리자는 무료라 XP 가 줄지 않는다 — 고장으로 오해하지 않게 알림에 적는다
-      message: `${ENHANCE_LABEL[kind]} 강화 ${view[kind].level}단계${isAdmin ? " · 관리자라 차감 없음" : ""}`,
+      message: `${ENHANCE_LABEL[kind]} 강화 ${view[kind].level}단계`,
       kind,
       payMethod,
       charged,

@@ -1518,7 +1518,7 @@ const invIconType = (it) => (it.source === "level" ? "level" : it.type || it.kin
 //    껍데기는 TierModal 과 같은 문법(모바일 바텀시트 / 데스크톱 모달, 잉크 패널).
 //    스크롤 잠금은 손대지 않는다 — 루트 className 에 "fixed inset-0" 이 붙어 있고
 //    z-index 가 50 이상이면 ScrollLock 이 알아서 건다(iOS 대응 포함).
-const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
+const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, onReset, resetBusy }) => {
   const [sel, setSel] = useState(null); // 선택한 아이템 uid
 
   const active = groups.find((g) => g.id === tab) || groups[0];
@@ -1562,7 +1562,8 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
         <PopTab key={g.id} on={active?.id === g.id} onClick={() => { onTab(g.id); setSel(null); onTone(); }} label={g.label} n={g.items.length} />
       )) : null}
       left={
-        selItem ? (
+        <>
+        {selItem ? (
           <div>
             <div
               className="w-24 h-24 rounded-2xl flex items-center justify-center mb-5"
@@ -1626,7 +1627,9 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
             </span>
             <p className="text-[11px] font-bold text-white/30 break-keep">칸을 누르면 여기에 보입니다</p>
           </div>
-        )
+        )}
+        {onReset && <div className="mt-auto pt-5"><AdminReset onReset={onReset} busy={resetBusy} label="관리자 · 상점 구매 초기화" /></div>}
+        </>
       }
       footer={
         synced === false ? (
@@ -2498,6 +2501,8 @@ export default function LevelPage() {
         onTab={setInvTab}
         synced={myItems?.synced}
         onTone={() => playTone(620, 0.04, "sine", 0.025)}
+        onReset={isAdminUser ? () => resetTest("shop") : null}
+        resetBusy={resetBusy === "shop"}
       />
 
       {/* ── 탭 줄 — 어떤 탭이든 헤더 바로 아래 같은 자리. 여기가 움직이면 안 된다. ── */}

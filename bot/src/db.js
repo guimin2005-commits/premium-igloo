@@ -28,6 +28,11 @@ const UserXpSchema = new mongoose.Schema({
   //    (models/UserXp.js 와 이름·기본값이 반드시 같아야 한다)
   chatEnhance: { type: Number, default: 0 },
   voiceEnhance: { type: Number, default: 0 },
+  // 강화에 실제로 낸 값 누적 — 사이트의 관리자 테스트 초기화가 환불에 쓴다 (models/UserXp.js 와 같은 모양)
+  enhancePaid: {
+    xp: { type: Number, default: 0 },
+    point: { type: Number, default: 0 },
+  },
 
   // 📌 시즌 패스 — 봇은 읽지 않지만 사이트와 같은 문서라 스키마를 맞춰 둔다.
   //    빠지면 봇의 upsert 가 문서를 만들 때 사이트가 기대하는 기본값이 없어진다.
@@ -165,6 +170,7 @@ const PurchaseSchema = new mongoose.Schema({
   payMethod: { type: String, default: "xp" },
   paidXp: { type: Number, default: 0 },
   paidPoint: { type: Number, default: 0 },
+  billed: { type: Boolean, default: false }, // 지갑에서 실제로 빠졌는지 (models/Purchase.js 와 같은 뜻)
   // 기간제 역할 — days가 0이면 영구. 지나면 이 봇이 회수하고 status를 expired로 바꾼다
   days: { type: Number, default: 0 },
   expiresAt: { type: Date, default: null, index: true },
