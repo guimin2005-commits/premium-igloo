@@ -13,7 +13,7 @@ import { SEASON, getSeasonProgress, getSeasonDday, isVoiceTimeTracked, VOICE_TIM
 import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel } from "@/lib/voiceTiers";
 import { getCumulativeXpByLevel, getLevelByXp } from "@/lib/leveling";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
-import { buildEnhanceView, chatRange, voiceBonus } from "@/lib/enhance";
+import { buildEnhanceView, chatRange, voiceBonus, enhanceCost } from "@/lib/enhance";
 import TierEmblem from "../components/TierEmblem";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
@@ -406,74 +406,87 @@ const LevelCurve = ({ myLevel = null }) => {
 
 // 📌 등급 안내 모달 — 잉크 패널 위에 등급 사다리를 세운다.
 //    현재 등급은 좌측 레일과 은은한 글로우로 표시하고, 나머지는 조용히 둔다.
-// 📌 강화 패널 — 대시보드 배너 안, 인벤토리·시즌 패스 줄 아래 반반 줄의 한쪽 (좌 채팅 / 우 음성).
-//    카드(면·테두리)는 쓰지 않는다 — 제목 줄 · 단계 핍 · 효과와 비용 · 필 버튼 두 개.
-//    효과·비용 숫자는 lib/enhance.js buildEnhanceView 가 만든 것을 그대로 보여 준다 (서버와 같은 식).
-const EnhancePanel = ({ kind, v, balance, busy, onEnhance, padClass = "" }) => {
-  const isChat = kind === "chat";
-  const atMax = v.max <= 0 || v.level >= v.max;
-  const fmtRange = (r) => `${r[0].toLocaleString()}~${r[1].toLocaleString()}`;
-  const now = isChat ? `${fmtRange(v.range)} XP` : `+${v.bonus.toLocaleString()} XP`;
-  const next = atMax ? "" : isChat ? fmtRange(v.nextRange) : `+${v.nextBonus.toLocaleString()}`;
-  const cost = v.nextCost || 0;
-  const canXp = !atMax && !busy && (balance?.xp || 0) >= cost;
-  const canPoint = !atMax && !busy && (balance?.point || 0) >= cost;
-  const pipCount = Math.max(v.max, v.level, 1);
+// 📌 팝업 틀 — 인벤토리 · 시즌 패스 · 강화가 같은 틀을 쓴다.
+//    머리(아이콘 · 제목 · 수 · 닫기) → 알약 탭 → 본문(PC 왼쪽 요약 236px | 오른쪽 목록, 모바일은 위아래 바텀시트).
+//    theme 은 바탕과 번짐 색만 바꾼다 — 시즌 패스는 보라.
+//    스크롤 잠금은 루트의 "fixed inset-0" + z-[120] 을 보고 전역 ScrollLock 이 건다.
+const POP_THEME = {
+  ink: { bg: "#131313", glow: "rgba(233,30,63,0.2)" },
+  pass: { bg: "linear-gradient(160deg, #2a1a4d 0%, #1a1233 42%, #120d22 100%)", glow: "rgba(155,107,255,0.38)" },
+};
+const PopShell = ({ open, onClose, title, count, icon, tabs, left, children, footer, theme = "ink" }) => {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
+  if (!open) return null;
+  const t = POP_THEME[theme] || POP_THEME.ink;
   return (
-    <div className={padClass}>
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="flex items-baseline gap-2.5 min-w-0">
-          <span className="text-[15px] font-black text-white shrink-0">{isChat ? "채팅 강화" : "음성 강화"}</span>
-          <span className="text-[15px] font-black text-white/45 tabular-nums shrink-0">{v.level}<span className="text-[11px] text-white/30">/{v.max}</span></span>
-        </span>
-        {!atMax && (
-          <span className="text-[11px] font-bold text-white/40 tabular-nums shrink-0">다음 비용 <b className="text-white/75">{cost.toLocaleString()}</b></span>
-        )}
-      </div>
+    <div
+      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
+      style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full sm:max-w-3xl max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
+        style={{ background: t.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
+      >
+        <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
+        <div aria-hidden className="absolute -top-28 -right-16 w-80 h-80 blur-[100px] rounded-full pointer-events-none" style={{ background: t.glow }}></div>
 
-      {/* 단계 핍 — 채워진 개수가 현재 단계 */}
-      <div aria-hidden className="flex flex-wrap gap-1 mt-3">
-        {Array.from({ length: pipCount }, (_, i) => (
-          <span
-            key={i}
-            className={`h-1.5 w-5 rounded-full ${i < v.level ? "bg-[#ff5c77]" : "bg-white/12"}`}
-            style={i < v.level ? { boxShadow: "0 0 10px rgba(255,92,119,0.45)" } : undefined}
-          ></span>
-        ))}
-      </div>
+        {/* 모바일 바텀시트 손잡이 */}
+        <div aria-hidden className="sm:hidden relative z-10 flex justify-center pt-2.5"><span className="w-10 h-1 rounded-full bg-white/20"></span></div>
 
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3 mt-4">
-        <span className="text-[12px] font-bold text-white tabular-nums">
-          <span className="text-white/40 mr-1.5">{isChat ? "채팅 1회" : "음성 1회"}</span>{now}
-          {next && <span className="text-white/40"> → {next}</span>}
-        </span>
-        {atMax ? (
-          <span className="inline-flex items-center h-8 px-3 rounded-full border border-white/20 text-[10px] font-black tracking-[0.12em] uppercase text-white/70">MAX</span>
-        ) : (
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => onEnhance(kind, "xp")}
-              disabled={!canXp}
-              className="h-8 px-3.5 rounded-full text-[11px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-[#e91e3f] text-white enabled:hover:bg-[#d01634]"
-            >
-              XP로 강화
-            </button>
-            <button
-              type="button"
-              onClick={() => onEnhance(kind, "point")}
-              disabled={!canPoint}
-              className="h-8 px-3.5 rounded-full text-[11px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-white/10 border border-white/15 text-white enabled:hover:bg-white/20"
-            >
-              빙옥으로 강화
-            </button>
+        {/* 머리 */}
+        <div className="relative z-10 shrink-0 px-5 sm:px-7 pt-4 sm:pt-6 flex items-center justify-between gap-4">
+          <div className="min-w-0 flex items-center gap-3">
+            <svg aria-hidden viewBox="0 0 24 24" className="w-[22px] h-[22px] shrink-0 text-white/55" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d={ICON_PATHS[icon]} strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-none truncate">{title}</h3>
+            {count != null && <span className="shrink-0 text-sm font-black text-white/40 tabular-nums">{count}</span>}
           </div>
-        )}
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            className="shrink-0 w-9 h-9 rounded-full border border-white/15 text-white/55 hover:text-white hover:border-white/35 transition-colors flex items-center justify-center outline-none focus:outline-none"
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d={ICON_PATHS.close} strokeLinecap="round" /></svg>
+          </button>
+        </div>
+
+        {/* 탭 */}
+        <div className={`relative z-10 shrink-0 px-5 sm:px-7 border-b border-white/[0.08] ${tabs ? "py-4 flex items-center gap-1.5 overflow-x-auto no-bar" : "pt-4"}`}>{tabs}</div>
+
+        {/* 본문 — PC 는 왼쪽 요약 | 오른쪽 목록, 모바일은 위아래로 한 번에 스크롤 */}
+        <div className="relative z-10 flex-1 min-h-0 overflow-y-auto sm:overflow-hidden sm:flex">
+          <div className="shrink-0 sm:w-[236px] sm:border-r border-white/[0.08] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto flex flex-col">{left}</div>
+          <div className="min-w-0 flex-1 px-5 sm:px-6 pb-6 pt-1 sm:py-6 sm:overflow-y-auto">{children}</div>
+        </div>
+
+        {footer}
       </div>
     </div>
   );
 };
+
+// 팝업 탭 — 흰 알약이 지금 고른 것
+const PopTab = ({ on, onClick, label, n }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
+      on ? "bg-white text-[#131313]" : "bg-white/[0.06] text-white/60 hover:text-white"
+    }`}
+  >
+    {label}
+    {n != null && <span className={`tabular-nums text-[11px] font-black ${on ? "text-[#8a8a8a]" : "text-white/35"}`}>{n}</span>}
+  </button>
+);
 
 // 📌 등급 색 → 반투명(카드의 등급 빛) / 흰색 쪽으로 밝히기(등급 이름 그라데이션)
 const hexA = (hex, a) => {
@@ -487,62 +500,226 @@ const hexLift = (hex, t) => {
   return `#${f(m[1])}${f(m[2])}${f(m[3])}`;
 };
 
-// 📌 강화 창 — 대시보드의 "강화" 버튼으로 연다. 껍데기는 TierModal 과 같은 문법(모바일 바텀시트 / 데스크톱 모달).
-//    최대 단계가 0 인 쪽은 그리지 않는다 (강화가 꺼진 것을 MAX 로 읽지 않게).
-const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance }) => {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    // 뒤 화면 잠금은 전역 ScrollLock 이 맡는다 — 여기서 body 에 overflow:hidden 을 주면
-    // body 가 스크롤 컨테이너가 돼 sticky(따라오는 프로필 카드)가 원래 자리로 튄다
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
+// 📌 강화 창 — 카드의 "강화" 로 연다. 틀은 PopShell(인벤토리 · 시즌 패스와 같은 틀).
+//    왼쪽: 보유 XP · 빙옥, 지금 1회 획득(강화 · 등급 · 역할 · 부스트 포함)과 한 단계 올린 뒤의 값
+//    오른쪽: 진행 막대 · 강화 버튼 · 남은 단계표(단계마다 1회 획득 · 비용). 비용은 서버와 같은 식(lib/enhance)
+//    최대 단계가 0 인 쪽은 탭을 만들지 않는다 (강화가 꺼진 것을 MAX 로 읽지 않게).
+const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voiceMin = 5, policy, onTone }) => {
   const kinds = ["chat", "voice"].filter((k) => enh[k].max > 0);
+  const [pick, setPick] = useState("chat");
+  const kind = kinds.includes(pick) ? pick : kinds[0];
+  if (!kind) return null;
+
+  const v = enh[kind];
+  const isChat = kind === "chat";
+  const atMax = v.level >= v.max;
+  const cost = v.nextCost || 0;
+  const canXp = !atMax && !busy && (balance?.xp || 0) >= cost;
+  const canPoint = !atMax && !busy && (balance?.point || 0) >= cost;
+  const fmt = (n) => (n || 0).toLocaleString();
+  const stepXp = isChat ? policy.chatEnhanceStep : policy.voiceEnhanceStep;
+  // 지금 내 조건으로 1회에 받는 양 — add 만큼 더 강화했을 때
+  const gainAt = (add) => (isChat ? `${fmt(gain.chatLo + add)}~${fmt(gain.chatHi + add)}` : fmt(gain.voice + add));
+  const base = isChat ? policy.chatEnhanceBaseCost : policy.voiceEnhanceBaseCost;
+  const growth = isChat ? policy.chatEnhanceCostGrowthPct : policy.voiceEnhanceCostGrowthPct;
+  const steps = [];
+  for (let n = v.level + 1; n <= v.max; n++) steps.push({ n, g: gainAt((n - v.level) * stepXp), c: enhanceCost(base, growth, n) });
+  const COLS = { gridTemplateColumns: "56px minmax(0,1fr) 96px" };
 
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
-      style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
-      onClick={onClose}
+    <PopShell
+      open={open}
+      onClose={onClose}
+      title="강화"
+      icon="bolt"
+      tabs={kinds.length > 1 ? kinds.map((k) => (
+        <PopTab key={k} on={k === kind} onClick={() => { setPick(k); onTone?.(); }} label={k === "chat" ? "채팅" : "음성"} n={`${enh[k].level}/${enh[k].max}`} />
+      )) : null}
+      left={
+        <>
+          <p className="text-[11px] font-bold text-white/45">보유</p>
+          <p className="mt-2.5 text-[22px] font-black text-white tabular-nums tracking-tight leading-none">{fmt(balance?.xp)}<span className="text-[12px] text-white/40 ml-1">XP</span></p>
+          <p className="mt-2 text-[12px] font-bold text-white/50 tabular-nums">빙옥 {fmt(balance?.point)}</p>
+          <p className="mt-7 text-[11px] font-bold text-white/45">{isChat ? "지금 채팅 1회" : `지금 음성 ${voiceMin}분`}</p>
+          <p className="mt-2.5 text-[26px] font-black text-white tabular-nums tracking-tight leading-none">{gainAt(0)}<span className="text-[12px] text-white/40 ml-1">XP</span></p>
+          {!atMax && <p className="mt-2.5 text-[12px] font-black text-[#ff5c77] tabular-nums">강화하면 {gainAt(stepXp)}</p>}
+        </>
+      }
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="relative w-full sm:max-w-lg max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-[#131313] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
-        style={{ animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
-      >
-        <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
-        <div aria-hidden className="absolute -top-24 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none" style={{ background: "rgba(233,30,63,0.22)" }}></div>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-[18px] font-black text-white">{isChat ? "채팅 강화" : "음성 강화"}</span>
+        <span className="text-[13px] font-black text-white/40 tabular-nums">{v.level} / {v.max}</span>
+      </div>
+      <div className="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
+        <div className="h-full rounded-full bg-[#e91e3f]" style={{ width: `${Math.round((v.level / Math.max(1, v.max)) * 100)}%`, transition: "width 0.6s cubic-bezier(0.16,1,0.3,1)" }}></div>
+      </div>
 
-        <div className="relative z-10 shrink-0 px-6 sm:px-8 pt-7 pb-5 border-b border-white/[0.08] flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h3 className="text-2xl font-black text-white tracking-tight">강화</h3>
-            <p className="text-[12px] font-bold text-white/45 mt-2 tabular-nums">
-              보유 XP <b className="text-white/80">{(balance?.xp || 0).toLocaleString()}</b>
-              <span className="mx-2 text-white/20">·</span>
-              빙옥 <b className="text-white/80">{(balance?.point || 0).toLocaleString()}</b>
-            </p>
+      {atMax ? (
+        <p className="mt-5 inline-flex items-center h-9 px-4 rounded-full border border-white/20 text-[12px] font-black text-white/75">최대 단계</p>
+      ) : (
+        <>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onEnhance(kind, "xp")}
+              disabled={!canXp}
+              className="h-11 px-5 rounded-full bg-[#e91e3f] enabled:hover:bg-[#d01634] text-white text-[13px] font-black tabular-nums transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+            >
+              XP로 강화 · {fmt(cost)}
+            </button>
+            <button
+              type="button"
+              onClick={() => onEnhance(kind, "point")}
+              disabled={!canPoint}
+              className="h-11 px-5 rounded-full bg-white/[0.06] border border-white/15 enabled:hover:bg-white/[0.12] text-white text-[13px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+            >
+              빙옥으로 강화
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="닫기"
-            className="shrink-0 w-9 h-9 rounded-full border border-white/12 text-white/50 hover:text-white hover:border-white/30 transition-colors flex items-center justify-center outline-none focus:outline-none"
-          >
-            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d={ICON_PATHS.close} strokeLinecap="round" /></svg>
-          </button>
-        </div>
 
-        <div className="relative z-10 flex-1 min-h-0 overflow-y-auto px-6 sm:px-8 py-6">
-          {kinds.map((k, i) => (
-            <div key={k} className={i > 0 ? "mt-7 pt-7 border-t border-white/10" : ""}>
-              <EnhancePanel kind={k} v={enh[k]} balance={balance} busy={busy} onEnhance={onEnhance} />
+          {/* 남은 단계 — 맨 위(다음 단계)만 밝게 */}
+          <div className="mt-6 grid px-2.5 -mx-2.5 pb-2" style={COLS}>
+            <span className="text-[11px] font-bold text-white/40">단계</span>
+            <span className="text-[11px] font-bold text-white/40">1회 획득</span>
+            <span className="text-[11px] font-bold text-white/40 text-right">비용</span>
+          </div>
+          {steps.map((r, i) => (
+            <div key={r.n} className={`grid items-center h-9 px-2.5 -mx-2.5 rounded-lg tabular-nums ${i === 0 ? "bg-white/[0.06]" : ""}`} style={COLS}>
+              <span className={`text-[12px] font-black ${i === 0 ? "text-white" : "text-white/40"}`}>{r.n}단계</span>
+              <span className={`text-[12px] font-bold ${i === 0 ? "text-white" : "text-white/55"}`}>{r.g} XP</span>
+              <span className={`text-[12px] font-black text-right ${i === 0 ? "text-[#ff5c77]" : "text-white/40"}`}>{fmt(r.c)}</span>
             </div>
           ))}
-        </div>
+        </>
+      )}
+    </PopShell>
+  );
+};
+
+// 📌 시즌 패스 창 — 카드의 "시즌 패스" 로 연다. 틀은 PopShell, 바탕은 보라.
+//    왼쪽: 내 티어 · 진행 · 시즌 · 프리미엄(잠겨 있으면 해금 버튼). 오른쪽: 티어마다 무료 · 프리미엄 보상 한 줄.
+//    수령 · 해금 판정은 서버가 다시 한다 — 여기서는 서버가 준 상태만 그린다.
+const PASS_DOT = { xp: "#ff5c77", point: "#4fc3b5", role: "#b69cff", item: "#b69cff" };
+const PassCell = ({ r, locked = false, busy = false, onClaim }) => {
+  if (!r || !r.kind || r.kind === "none") return <span className="text-[12px] font-bold text-white/20">—</span>;
+  return (
+    <span className="min-w-0 flex items-center gap-2">
+      <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: PASS_DOT[r.kind] || "#b69cff", opacity: r.claimed || locked ? 0.4 : 1 }}></span>
+      <span className={`min-w-0 truncate text-[13px] font-bold ${r.claimed ? "text-white/35" : locked ? "text-white/45" : "text-white/85"}`}>{r.label}</span>
+      {r.claimable ? (
+        <button
+          type="button"
+          onClick={onClaim}
+          disabled={busy}
+          className="shrink-0 h-6 px-2.5 rounded-full bg-[#9b6bff] enabled:hover:bg-[#8a57f5] text-white text-[10px] font-black transition-colors outline-none focus:outline-none disabled:opacity-50"
+        >
+          {busy ? "…" : "받기"}
+        </button>
+      ) : r.claimed ? (
+        <svg aria-label="수령 완료" viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0 text-white/35" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7" /></svg>
+      ) : locked ? (
+        <svg aria-label="잠김" viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0 text-white/30" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
+      ) : null}
+    </span>
+  );
+};
+const PassInfo = ({ label, value, tone = "text-white" }) => (
+  <div className="flex items-center justify-between gap-3">
+    <span className="text-[11px] font-bold text-white/45">{label}</span>
+    <span className={`text-[12px] font-black tabular-nums ${tone}`}>{value}</span>
+  </div>
+);
+const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, pct = 0, claimable = 0, busyKey = "", onClaim, onUnlock, balance, dday, onTone }) => {
+  const [tab, setTab] = useState("all");
+  if (!pass) return null;
+  const fmt = (n) => (n || 0).toLocaleString();
+  const rows = tab === "claim" ? tiers.filter((t) => t.free?.claimable || t.paid?.claimable) : tiers;
+  const nextIdx = (pass.tierIndex ?? -1) + 1;
+  const COLS = { gridTemplateColumns: "40px minmax(0,1fr) minmax(0,1fr) 72px" };
+  const price = pass.unlockPrice || 0;
+
+  return (
+    <PopShell
+      open={open}
+      onClose={onClose}
+      theme="pass"
+      title="시즌 패스"
+      count={`T${tierNo}`}
+      icon="star"
+      tabs={
+        <>
+          <PopTab on={tab === "all"} onClick={() => { setTab("all"); onTone?.(); }} label="전체" n={tiers.length} />
+          <PopTab on={tab === "claim"} onClick={() => { setTab("claim"); onTone?.(); }} label="받을 보상" n={claimable} />
+        </>
+      }
+      left={
+        <>
+          <p className="text-[11px] font-bold text-white/45">내 티어</p>
+          <p className="mt-3 text-[48px] font-black text-white tabular-nums tracking-[-0.03em] leading-[0.85]">
+            T{tierNo}<span className="text-[16px] text-white/30 ml-1.5 tracking-normal">/ T{maxTier}</span>
+          </p>
+          <div className="mt-5 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full rounded-full bg-[#b69cff]" style={{ width: `${pct}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}></div>
+          </div>
+          <div className="mt-2.5 flex justify-between gap-2 text-[11px] font-bold text-white/45 tabular-nums">
+            <span>{fmt(pass.progress)} XP</span>
+            <span>{pass.nextNeed > 0 ? <>T{tierNo + 1} 까지 <b className="text-white">{fmt(pass.nextNeed)}</b></> : "완주"}</span>
+          </div>
+
+          <div className="mt-8 sm:mt-auto space-y-3">
+            <PassInfo label="시즌" value={`${pass.season?.number ?? SEASON.number} · ${pass.season?.name ?? SEASON.name}`} />
+            <PassInfo label="종료까지" value={dday?.ended ? "종료" : `D-${Math.max(0, dday?.days ?? 0)}`} />
+            {pass.unlocked ? (
+              <PassInfo label="프리미엄" value="해금됨" tone="text-[#b69cff]" />
+            ) : (
+              <div>
+                <PassInfo label="프리미엄 해금" value={fmt(price)} tone="text-white/80" />
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onUnlock("xp")}
+                    disabled={!!busyKey || (balance?.xp || 0) < price}
+                    className="h-10 rounded-full bg-[#9b6bff] enabled:hover:bg-[#8a57f5] text-white text-[11px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+                  >
+                    XP로 해금
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onUnlock("point")}
+                    disabled={!!busyKey || (balance?.point || 0) < price}
+                    className="h-10 rounded-full bg-white/[0.08] border border-white/15 enabled:hover:bg-white/[0.14] text-white text-[11px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+                  >
+                    빙옥으로 해금
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      }
+    >
+      <div className="grid gap-x-3 px-2.5 -mx-2.5 pb-2" style={COLS}>
+        <span></span>
+        <span className="text-[11px] font-bold text-white/40">무료</span>
+        <span className="text-[11px] font-bold text-white/40">프리미엄</span>
+        <span className="text-[11px] font-bold text-white/40 text-right">필요 XP</span>
       </div>
-    </div>
+      {rows.length === 0 ? (
+        <p className="py-10 text-center text-[12px] font-bold text-white/35">지금 받을 보상이 없습니다</p>
+      ) : (
+        rows.map((t) => {
+          const next = tiers.indexOf(t) === nextIdx;
+          return (
+            <div key={t.tid || t.level} className={`grid items-center gap-x-3 h-12 px-2.5 -mx-2.5 rounded-xl ${next ? "bg-white/[0.07]" : ""}`} style={COLS}>
+              <span className={`text-[13px] font-black tabular-nums ${t.reached ? "text-white" : "text-white/40"}`}>T{t.level}</span>
+              <PassCell r={t.free} busy={busyKey === `${t.tid}:free`} onClaim={() => onClaim(t.tid, "free")} />
+              <PassCell r={t.paid} locked={!pass.unlocked} busy={busyKey === `${t.tid}:paid`} onClaim={() => onClaim(t.tid, "paid")} />
+              <span className={`text-[11px] font-black tabular-nums text-right ${next ? "text-[#b69cff]" : "text-white/30"}`}>{fmt(t.need)}</span>
+            </div>
+          );
+        })
+      )}
+    </PopShell>
   );
 };
 
@@ -702,13 +879,6 @@ const invIconType = (it) => (it.source === "level" ? "level" : it.type || it.kin
 const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
   const [sel, setSel] = useState(null); // 선택한 아이템 uid
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
   useEffect(() => { if (!open) setSel(null); }, [open]);
 
   if (!open) return null;
@@ -733,179 +903,126 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
       : null;
 
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
-      style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="relative w-full sm:max-w-3xl max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-[#131313] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
-        style={{ animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
-      >
-        <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
-        <div aria-hidden className="absolute -top-24 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none" style={{ background: "rgba(63,131,184,0.28)" }}></div>
-
-        {/* 헤더 */}
-        <div className="relative z-10 shrink-0 px-5 sm:px-7 pt-5 sm:pt-6 pb-4 border-b border-white/[0.08]">
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <h3 className="text-lg sm:text-xl font-black text-white tracking-tight">
-                인벤토리
-                <span className="text-sm font-black text-white/35 ml-2 tabular-nums">{groups[0]?.items.length ?? 0}</span>
-              </h3>
-            </div>
-            <button
-              onClick={onClose}
-              aria-label="닫기"
-              className="shrink-0 w-9 h-9 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-white/70 hover:text-white flex items-center justify-center transition-colors outline-none focus:outline-none"
+    <PopShell
+      open={open}
+      onClose={onClose}
+      title="인벤토리"
+      count={groups[0]?.items.length ?? 0}
+      icon="bag"
+      tabs={groups.length > 1 ? groups.map((g) => (
+        <PopTab key={g.id} on={active?.id === g.id} onClick={() => { onTab(g.id); setSel(null); onTone(); }} label={g.label} n={g.items.length} />
+      )) : null}
+      left={
+        selItem ? (
+          <div>
+            <div
+              className="w-20 h-20 rounded-2xl flex items-center justify-center mb-4"
+              style={{
+                background: `linear-gradient(160deg, ${accentOf(selItem)}33, ${accentOf(selItem)}0f)`,
+                boxShadow: `inset 0 0 0 1px ${accentOf(selItem)}55`,
+              }}
             >
-              <svg viewBox="0 0 20 20" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
-
-          {groups.length > 1 && (
-            <div className="flex items-center gap-1.5 overflow-x-auto no-bar mt-4 -mb-1 pb-1">
-              {groups.map((g) => {
-                const on = active?.id === g.id;
-                return (
-                  <button
-                    key={g.id}
-                    onClick={() => { onTab(g.id); setSel(null); onTone(); }}
-                    className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
-                      on ? "bg-white text-[#131313]" : "text-white/45 hover:text-white"
-                    }`}
-                  >
-                    {g.label}
-                    <span className={`tabular-nums text-[10px] font-black ${on ? "text-[#8a8a8a]" : "opacity-60"}`}>{g.items.length}</span>
-                  </button>
-                );
-              })}
+              <ItemIcon icon={selItem.icon} imageUrl={selItem.imageUrl} type={invIconType(selItem)} size={38} color={accentOf(selItem)} dim={selItem.status !== "completed"} />
             </div>
-          )}
-        </div>
+            <p className="text-[18px] font-black text-white leading-snug break-keep">{selItem.name}</p>
+            <p className="text-[12px] font-bold text-white/50 mt-2 leading-relaxed break-keep">{invSubLabel(selItem)}</p>
 
-        {/* 본문 — 왼쪽 아이템 정보 / 오른쪽 칸 */}
-        <div className="relative z-10 flex-1 min-h-0 overflow-y-auto sm:overflow-hidden sm:flex">
-          {/* 왼쪽 — 고른 아이템 */}
-          <div className="shrink-0 sm:w-[236px] sm:border-r border-white/[0.08] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto">
-            {selItem ? (
-              <div>
-                <div
-                  className="w-20 h-20 rounded-2xl flex items-center justify-center mb-4"
-                  style={{
-                    background: `linear-gradient(160deg, ${accentOf(selItem)}33, ${accentOf(selItem)}0f)`,
-                    boxShadow: `inset 0 0 0 1px ${accentOf(selItem)}55`,
-                  }}
-                >
-                  <ItemIcon icon={selItem.icon} imageUrl={selItem.imageUrl} type={invIconType(selItem)} size={38} color={accentOf(selItem)} dim={selItem.status !== "completed"} />
-                </div>
-                <p className="text-[15px] font-black text-white leading-snug break-keep">{selItem.name}</p>
-                <p className="text-[11px] text-white/45 mt-2 leading-relaxed break-keep">{invSubLabel(selItem)}</p>
-
-                <div className="mt-4 pt-4 border-t border-white/[0.08] space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[10px] font-black tracking-[0.15em] text-white/30 uppercase">Status</span>
-                    <span className={`text-[11px] font-black ${selItem.status === "missing" ? "text-[#ff5c77]" : selItem.status === "pending" ? "text-white/60" : "text-emerald-400"}`}>
-                      {selItem.status === "pending" ? "지급 대기" : selItem.status === "missing" ? "확인 필요" : "보유 중"}
-                    </span>
-                  </div>
-                  {ddayOf(selItem) !== null && (
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-black tracking-[0.15em] text-white/30 uppercase">Expires</span>
-                      <span className={`text-[11px] font-black tabular-nums ${ddayOf(selItem) <= 3 ? "text-[#ff5c77]" : "text-white/70"}`}>
-                        D-{ddayOf(selItem)}
-                      </span>
-                    </div>
-                  )}
-                  {selItem.rewardLevel != null && (
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-black tracking-[0.15em] text-white/30 uppercase">Level</span>
-                      <span className="text-[11px] font-black tabular-nums text-white/70">Lv.{selItem.rewardLevel}</span>
-                    </div>
-                  )}
-                </div>
-
-                {selItem.status === "missing" && (
-                  <p className="text-[10px] text-[#ff5c77]/80 mt-4 leading-relaxed break-keep">
-                    구매 기록은 있는데 디스코드 역할이 확인되지 않습니다. 운영진에 문의해 주세요.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center py-6 sm:py-0">
-                <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-white/15 flex items-center justify-center mb-3">
-                  <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.6">
-                    <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+            <div className="mt-5 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11px] font-bold text-white/45">상태</span>
+                <span className={`text-[12px] font-black ${selItem.status === "missing" ? "text-[#ff5c77]" : selItem.status === "pending" ? "text-white/60" : "text-emerald-400"}`}>
+                  {selItem.status === "pending" ? "지급 대기" : selItem.status === "missing" ? "확인 필요" : "보유 중"}
                 </span>
-                <p className="text-[11px] font-bold text-white/30 break-keep">칸을 누르면 여기에 보입니다</p>
               </div>
-            )}
-          </div>
-
-          {/* 오른쪽 — 칸 */}
-          <div className="min-w-0 flex-1 px-5 sm:px-6 pb-5 pt-1 sm:py-6 sm:overflow-y-auto">
-            <div className="grid grid-cols-4 gap-2.5">
-              {Array.from({ length: slots }, (_, i) => {
-                const it = rows[i];
-                if (!it) {
-                  return <div key={`empty-${i}`} className="aspect-square rounded-xl border border-dashed border-white/[0.10] bg-white/[0.02]"></div>;
-                }
-                const dead = it.status === "pending" || it.status === "missing";
-                const accent = accentOf(it);
-                const dday = ddayOf(it);
-                const on = sel === it.uid;
-                return (
-                  <button
-                    key={it.uid || `i-${i}`}
-                    onClick={() => { setSel(on ? null : it.uid); onTone(); }}
-                    title={it.name}
-                    className={`relative aspect-square rounded-xl flex flex-col items-center justify-center px-1.5 transition-all outline-none focus:outline-none ${
-                      on ? "ring-2 ring-white/70 -translate-y-0.5" : "hover:-translate-y-0.5"
-                    }`}
-                    style={{
-                      background: dead ? "rgba(255,255,255,0.03)" : `linear-gradient(160deg, ${accent}2e, ${accent}0d)`,
-                      boxShadow: dead ? "inset 0 0 0 1px rgba(255,255,255,0.07)" : `inset 0 0 0 1px ${accent}44`,
-                    }}
-                  >
-                    <span aria-hidden className="mb-1.5">
-                      <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={24} color={accent} dim={dead} />
-                    </span>
-                    <span className={`w-full text-[9px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
-                      {it.name}
-                    </span>
-                    {dday !== null && (
-                      <span className={`absolute top-1 right-1 text-[8px] font-black tabular-nums px-1 py-0.5 rounded ${dday <= 3 ? "bg-[#e91e3f] text-white" : "bg-white/15 text-white/70"}`}>
-                        D-{dday}
-                      </span>
-                    )}
-                    {it.status === "pending" && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white/40"></span>}
-                    {it.status === "missing" && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
-                  </button>
-                );
-              })}
+              {ddayOf(selItem) !== null && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[11px] font-bold text-white/45">남은 기간</span>
+                  <span className={`text-[12px] font-black tabular-nums ${ddayOf(selItem) <= 3 ? "text-[#ff5c77]" : "text-white/70"}`}>
+                    D-{ddayOf(selItem)}
+                  </span>
+                </div>
+              )}
+              {selItem.rewardLevel != null && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[11px] font-bold text-white/45">레벨</span>
+                  <span className="text-[12px] font-black tabular-nums text-white/70">Lv.{selItem.rewardLevel}</span>
+                </div>
+              )}
             </div>
 
-            {/* invGroups 는 보유 0개면 [] 를 돌려준다 — groups[0] 로 판정하면 신규 유저에게 문구가 안 뜬다 */}
-            {rows.length === 0 && (
-              <p className="text-[12px] font-bold text-white/35 text-center mt-6">아직 보유한 아이템이 없습니다</p>
+            {selItem.status === "missing" && (
+              <p className="text-[10px] text-[#ff5c77]/80 mt-4 leading-relaxed break-keep">
+                구매 기록은 있는데 디스코드 역할이 확인되지 않습니다. 운영진에 문의해 주세요.
+              </p>
             )}
           </div>
-        </div>
-
-        {synced === false && (
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-center py-6 sm:py-0">
+            <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-white/15 flex items-center justify-center mb-3">
+              <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.6">
+                <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <p className="text-[11px] font-bold text-white/30 break-keep">칸을 누르면 여기에 보입니다</p>
+          </div>
+        )
+      }
+      footer={
+        synced === false ? (
           <div className="relative z-10 shrink-0 border-t border-white/[0.08] bg-white/[0.02] px-5 sm:px-7 py-3">
             <p className="text-[11px] text-white/30 break-keep">디스코드 역할을 확인하지 못해 구매 기록 기준으로 표시하고 있습니다.</p>
           </div>
-        )}
+        ) : null
+      }
+    >
+      <div className="grid grid-cols-4 gap-2.5">
+        {Array.from({ length: slots }, (_, i) => {
+          const it = rows[i];
+          if (!it) {
+            return <div key={`empty-${i}`} className="aspect-square rounded-xl border border-dashed border-white/[0.10] bg-white/[0.02]"></div>;
+          }
+          const dead = it.status === "pending" || it.status === "missing";
+          const accent = accentOf(it);
+          const dday = ddayOf(it);
+          const on = sel === it.uid;
+          return (
+            <button
+              key={it.uid || `i-${i}`}
+              onClick={() => { setSel(on ? null : it.uid); onTone(); }}
+              title={it.name}
+              className={`relative aspect-square rounded-xl flex flex-col items-center justify-center px-1.5 transition-all outline-none focus:outline-none ${
+                on ? "ring-2 ring-white/70 -translate-y-0.5" : "hover:-translate-y-0.5"
+              }`}
+              style={{
+                background: dead ? "rgba(255,255,255,0.03)" : `linear-gradient(160deg, ${accent}2e, ${accent}0d)`,
+                boxShadow: dead ? "inset 0 0 0 1px rgba(255,255,255,0.07)" : `inset 0 0 0 1px ${accent}44`,
+              }}
+            >
+              <span aria-hidden className="mb-1.5">
+                <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={24} color={accent} dim={dead} />
+              </span>
+              <span className={`w-full text-[9px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
+                {it.name}
+              </span>
+              {dday !== null && (
+                <span className={`absolute top-1 right-1 text-[8px] font-black tabular-nums px-1 py-0.5 rounded ${dday <= 3 ? "bg-[#e91e3f] text-white" : "bg-white/15 text-white/70"}`}>
+                  D-{dday}
+                </span>
+              )}
+              {it.status === "pending" && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white/40"></span>}
+              {it.status === "missing" && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
+            </button>
+          );
+        })}
       </div>
-    </div>
+
+      {/* invGroups 는 보유 0개면 [] 를 돌려준다 — groups[0] 로 판정하면 신규 유저에게 문구가 안 뜬다 */}
+      {rows.length === 0 && (
+        <p className="text-[12px] font-bold text-white/35 text-center mt-6">아직 보유한 아이템이 없습니다</p>
+      )}
+    </PopShell>
   );
 };
-
 
 // 📌 음성 티어 계단 — 표 대신 '티어가 오를수록 쌓이는 계단'으로 지급량을 보여준다
 const TierStairs = ({ base = 3000, intervalMin = 5 }) => {
@@ -1160,6 +1277,7 @@ export default function LevelPage() {
   //    응답의 단계·잔액을 바로 반영하고, 레벨·순위는 /api/xp/me 재조회로 맞춘다.
   const [enhBusy, setEnhBusy] = useState("");
   const [enhModal, setEnhModal] = useState(false);
+  const [passOpen, setPassOpen] = useState(false); // 시즌 패스 창
   const enhance = useCallback(async (kind, payMethod) => {
     const key = `${kind}:${payMethod}`;
     setEnhBusy(key);
@@ -1280,6 +1398,17 @@ export default function LevelPage() {
   const openTier = () => {
     setTierOpen(true);
     playTone(660, 0.06, "sine", 0.03);
+  };
+  // 시즌 패스 창 여닫는 소리 — 강화 · 가방과 겹치지 않게 한 옥타브 위에서
+  const openPass = () => {
+    setPassOpen(true);
+    playTone(523.25, 0.06, "sine", 0.03);
+    setTimeout(() => playTone(783.99, 0.09, "sine", 0.03), 90);
+  };
+  const closePass = () => {
+    setPassOpen(false);
+    playTone(659.25, 0.06, "sine", 0.025);
+    setTimeout(() => playTone(440, 0.08, "sine", 0.025), 90);
   };
 
   // 랭킹 — 탭이 열려 있을 때만 부른다. 기준이나 페이지가 바뀌면 다시 부른다.
@@ -1751,7 +1880,23 @@ export default function LevelPage() {
       `}} />
 
       <TierModal open={tierOpen} onClose={() => setTierOpen(false)} level={me?.level || 0} baseXp={P.voiceXp} intervalMin={P_voiceMin} enhanceBonus={enh.voice.bonus} />
-      <EnhanceModal open={enhModal} onClose={closeEnh} enh={enh} balance={me} busy={!!enhBusy} onEnhance={enhance} />
+      <EnhanceModal open={enhModal} onClose={closeEnh} enh={enh} balance={me} busy={!!enhBusy} onEnhance={enhance} gain={gain} voiceMin={P_voiceMin} policy={P} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
+      <PassModal
+        open={passOpen}
+        onClose={closePass}
+        pass={pass}
+        tiers={passTiers}
+        tierNo={passTierNo}
+        maxTier={passMaxTier}
+        pct={passPct}
+        claimable={passClaimable}
+        busyKey={passBusy}
+        onClaim={claimPass}
+        onUnlock={unlockPass}
+        balance={me}
+        dday={seasonDday}
+        onTone={() => playTone(620, 0.04, "sine", 0.025)}
+      />
       <BagOverlay
         open={bagOpen}
         onClose={closeBag}
@@ -2000,7 +2145,7 @@ export default function LevelPage() {
                               </button>
                             )}
                             {passEnabled && (
-                              <button onClick={() => setActiveMainTab("pass")} aria-label="시즌 패스 열기" className="group min-w-0 flex flex-col items-center justify-center gap-2 py-3 outline-none focus:outline-none">
+                              <button onClick={openPass} aria-label="시즌 패스 열기" className="group min-w-0 flex flex-col items-center justify-center gap-2 py-3 outline-none focus:outline-none">
                                 <span aria-hidden className="relative">
                                   <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/55 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
                                     <path d={ICON_PATHS.star} strokeLinecap="round" strokeLinejoin="round" />
@@ -2032,18 +2177,25 @@ export default function LevelPage() {
                             voiceTracked
                               ? { l: "누적 음성 시간", v: fmtVoiceTime(me.voiceSeconds) }
                               : { l: "누적 음성 시간", v: `${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터`, dim: true },
-                            // 지금 내 조건(강화 · 등급 · 역할 · 부스트 포함)으로 1회에 받는 양. 더해진 게 있으면 아래에 내역
-                            { l: "채팅 1회", v: `${gain.chatLo.toLocaleString()}~${gain.chatHi.toLocaleString()}`, u: "XP", sub: gain.chatParts.length > 1 ? gain.chatParts.map((p) => `${p.l} ${p.v}`).join(" · ") : null },
-                            { l: `음성 ${P_voiceMin}분`, v: gain.voice.toLocaleString(), u: "XP", sub: gain.voiceParts.length > 1 ? gain.voiceParts.map((p) => `${p.l} ${p.v}`).join(" · ") : null },
                           ].map((st, i) => (
                             <div key={i} className={`min-w-0 py-3 ${i % 2 === 0 ? "pr-4 border-r border-white/10" : "pl-4"}`}>
                               <p className="text-[11px] font-bold text-white/45 mb-2 truncate">{st.l}</p>
                               <p className={`text-lg font-black tabular-nums tracking-tight leading-none truncate ${st.hot ? "text-[#ff5c77]" : st.dim ? "text-white/30" : "text-white"}`}>
-                                {st.v}{st.u && <span className="text-[11px] font-black text-white/40 ml-1">{st.u}</span>}
+                                {st.v}
                               </p>
-                              {st.sub && <p className="text-[10px] font-bold text-white/40 mt-1.5 truncate tabular-nums">{st.sub}</p>}
                             </div>
                           ))}
+                        </div>
+
+                        {/* 1회 획득 — 강화 · 등급 · 역할 · 부스트를 다 더한 값. 내역은 강화 창에서 */}
+                        <div className="flex items-center justify-between gap-3 pt-3">
+                          <span className="shrink-0 text-[11px] font-bold text-white/45">1회 획득</span>
+                          <span className="min-w-0 truncate text-[13px] font-black text-white tabular-nums">
+                            채팅 {gain.chatLo.toLocaleString()}~{gain.chatHi.toLocaleString()}
+                            <span className="text-white/25 mx-1.5">·</span>
+                            음성 {P_voiceMin}분 {gain.voice.toLocaleString()}
+                            <span className="text-[10px] text-white/40 ml-1">XP</span>
+                          </span>
                         </div>
 
                       </div>
@@ -2051,8 +2203,8 @@ export default function LevelPage() {
 
                 </div>
 
-                {/* 오른쪽 — 퀘스트 · 랭킹 · 이벤트 · 피드가 한 줄기로 */}
-                <div className="contents lg:block lg:col-span-8 min-w-0 lg:space-y-14">
+                {/* 오른쪽 — 가로로 길게 늘어지지 않게 두 칸으로 나눈다 */}
+                <div className="contents lg:grid lg:grid-cols-2 lg:gap-x-10 lg:col-span-8 lg:items-start min-w-0">
                     {/* 모바일 — 아래로 길게 늘어놓지 않고 아이콘으로 골라 하나씩 본다 */}
                     <nav ref={mNavRef} aria-label="대시보드 섹션" className="lg:hidden sticky top-14 md:top-[60px] z-30 -mx-5 px-5 md:-mx-8 md:px-8 bg-white border-b border-[#ededed]">
                       <div className="grid grid-flow-col auto-cols-fr">
@@ -2079,6 +2231,8 @@ export default function LevelPage() {
                       </div>
                     </nav>
 
+                    {/* 왼쪽 칸 — 퀘스트 · 획득 피드 */}
+                    <div className="contents lg:block lg:space-y-14 min-w-0">
                     {/* 일일 퀘스트 — 출석(봇 지급) + 관리자가 정의한 퀘스트(원클릭 수령) */}
                     <section className={secCls("quest")}>
                       <div className="flex items-end justify-between mb-5">
@@ -2268,57 +2422,6 @@ export default function LevelPage() {
                       </div>
                     </section>
 
-                    {/* 서버 랭킹 */}
-                    <section className={secCls("rank")}>
-                      <div className="flex items-end justify-between mb-5">
-                        <div>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1">TOP 10</span></h3>
-                        </div>
-                        <span className="flex items-center gap-3">
-                          {["all", "month"].map((k) => (
-                            <button key={k} onClick={() => setLbTab(k)} className={`text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 ${lbTab === k ? "text-[#131313] border-b-2 border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a]"}`}>{k === "all" ? "누적" : "이번 달"}</button>
-                          ))}
-                          {/* 전체 순위는 랭킹 탭에서 — 여기는 TOP 10 만 */}
-                          <button
-                            onClick={() => { setRankMode(lbTab); setRankPage(0); setActiveMainTab("rank"); }}
-                            className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
-                          >
-                            전체 보기 →
-                          </button>
-                        </span>
-                      </div>
-                      {!lb[lbTab] ? (
-                        <div className="py-10 text-center text-[11px] font-bold text-[#a3a3a3]">불러오는 중…</div>
-                      ) : !lb[lbTab].data?.length ? (
-                        <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
-                      ) : (
-                        <RankRows rows={lb[lbTab].data} myId={session.user.id} me={lbTab === "all" ? me : null} myName={session.user.name} />
-                      )}
-                      {lbTab === "month" && <p className="text-[10px] text-[#a3a3a3] mt-2.5">이번 달 지급 로그 합산 기준 · 매월 1일(KST) 초기화</p>}
-                    </section>
-
-                    {/* 이벤트 · 획득 피드 — PC 에서는 반씩 나란히 */}
-                    <div className={`contents ${events.length > 0 ? "lg:grid lg:grid-cols-2 lg:gap-10 lg:items-start" : "lg:block"}`}>
-                    {/* 진행 중 이벤트 */}
-                    {events.length > 0 && (
-                      <section className={secCls("event")}>
-                        <div className="flex items-end justify-between mb-4">
-                          <div>
-                            <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">진행 중 이벤트</h3>
-                          </div>
-                          <Link href="/event" className="text-[11px] font-bold text-[#a3a3a3] hover:text-[#e91e3f] transition-colors">전체 →</Link>
-                        </div>
-                        <div className="border-t border-black/[0.08]">
-                          {events.map((ev) => (
-                            <Link key={ev._id} href="/event" className="group flex items-center min-h-[44px] py-1.5 gap-3 border-b border-black/[0.05] hover:bg-black/[0.02] transition-colors">
-                              <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#5a5a5a] group-hover:text-[#131313] transition-colors">{ev.title}</span>
-                              {ev.eventPeriod && <span className="shrink-0 text-[10px] font-bold text-[#a3a3a3]">{ev.eventPeriod}</span>}
-                              <span className="shrink-0 text-[#a3a3a3] group-hover:text-[#e91e3f] transition-colors">→</span>
-                            </Link>
-                          ))}
-                        </div>
-                      </section>
-                    )}
 
                     {/* 획득 피드 — 최근 5건만, 줄을 낮게 */}
                     <section className={secCls("feed")}>
@@ -2350,6 +2453,60 @@ export default function LevelPage() {
                         <EmptySlot>기록 없음 — 첫 활동을 시작하세요</EmptySlot>
                       )}
                     </section>
+                    </div>
+
+                    {/* 오른쪽 칸 — 랭킹 · 이벤트 */}
+                    <div className="contents lg:block lg:space-y-14 min-w-0">
+                    {/* 서버 랭킹 */}
+                    <section className={secCls("rank")}>
+                      <div className="flex items-end justify-between mb-5">
+                        <div>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1">TOP 10</span></h3>
+                        </div>
+                        <span className="flex items-center gap-3">
+                          {["all", "month"].map((k) => (
+                            <button key={k} onClick={() => setLbTab(k)} className={`text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 ${lbTab === k ? "text-[#131313] border-b-2 border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a]"}`}>{k === "all" ? "누적" : "이번 달"}</button>
+                          ))}
+                          {/* 전체 순위는 랭킹 탭에서 — 여기는 TOP 10 만 */}
+                          <button
+                            onClick={() => { setRankMode(lbTab); setRankPage(0); setActiveMainTab("rank"); }}
+                            className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
+                          >
+                            전체 보기 →
+                          </button>
+                        </span>
+                      </div>
+                      {!lb[lbTab] ? (
+                        <div className="py-10 text-center text-[11px] font-bold text-[#a3a3a3]">불러오는 중…</div>
+                      ) : !lb[lbTab].data?.length ? (
+                        <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
+                      ) : (
+                        <RankRows rows={lb[lbTab].data} myId={session.user.id} me={lbTab === "all" ? me : null} myName={session.user.name} />
+                      )}
+                      {lbTab === "month" && <p className="text-[10px] text-[#a3a3a3] mt-2.5">이번 달 지급 로그 합산 기준 · 매월 1일(KST) 초기화</p>}
+                    </section>
+
+                    {/* 진행 중 이벤트 */}
+                    {events.length > 0 && (
+                      <section className={secCls("event")}>
+                        <div className="flex items-end justify-between mb-4">
+                          <div>
+                            <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">진행 중 이벤트</h3>
+                          </div>
+                          <Link href="/event" className="text-[11px] font-bold text-[#a3a3a3] hover:text-[#e91e3f] transition-colors">전체 →</Link>
+                        </div>
+                        <div className="border-t border-black/[0.08]">
+                          {events.map((ev) => (
+                            <Link key={ev._id} href="/event" className="group flex items-center min-h-[44px] py-1.5 gap-3 border-b border-black/[0.05] hover:bg-black/[0.02] transition-colors">
+                              <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#5a5a5a] group-hover:text-[#131313] transition-colors">{ev.title}</span>
+                              {ev.eventPeriod && <span className="shrink-0 text-[10px] font-bold text-[#a3a3a3]">{ev.eventPeriod}</span>}
+                              <span className="shrink-0 text-[#a3a3a3] group-hover:text-[#e91e3f] transition-colors">→</span>
+                            </Link>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+
                     </div>
                 </div>
               </div>
