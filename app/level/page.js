@@ -629,6 +629,86 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
   );
 };
 
+// 📌 확인 창 — 브라우저 기본 confirm 대신. 팝업 틀과 같은 잉크 카드에 창마다의 색(시즌 패스 보라 · 강화 불씨 · 기본 빨강)
+//    금액을 크게, 그 아래 바뀌는 값(잔액 · 레벨)을 줄로 보여 준다. Esc · 바깥 누르기는 취소, 확인 버튼에 처음 초점
+const CONFIRM_TONE = {
+  ink: { bg: "#131313", glow: "rgba(233,30,63,0.24)", btn: "#e91e3f" },
+  pass: { bg: "linear-gradient(160deg, #2a1a4d 0%, #1a1233 55%, #120d22 100%)", glow: "rgba(155,107,255,0.42)", btn: "linear-gradient(135deg, #9b6bff 0%, #e05bb5 100%)" },
+  enh: { bg: "linear-gradient(160deg, #3a1411 0%, #1f0d0c 55%, #140a0a 100%)", glow: "rgba(255,84,54,0.38)", btn: "linear-gradient(135deg, #ff4d3a 0%, #ff9a3c 100%)" },
+};
+const ConfirmDialog = ({ state, onDone }) => {
+  useEffect(() => {
+    if (!state) return;
+    const onKey = (e) => e.key === "Escape" && onDone(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [state, onDone]);
+
+  if (!state) return null;
+  const t = CONFIRM_TONE[state.tone] || CONFIRM_TONE.ink;
+  return (
+    <div
+      className="fixed inset-0 z-[140] flex items-center justify-center p-5"
+      style={{ background: "rgba(10,10,10,0.5)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}
+      onClick={() => onDone(false)}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={state.title}
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-[380px] overflow-hidden rounded-3xl shadow-[0_40px_90px_-30px_rgba(0,0,0,0.75)]"
+        style={{ background: t.bg, animation: "tierIn .28s cubic-bezier(0.16,1,0.3,1)" }}
+      >
+        <div aria-hidden className="absolute -top-24 -right-16 w-64 h-64 blur-[90px] rounded-full pointer-events-none" style={{ background: t.glow }}></div>
+        <div className="relative z-10 p-6 sm:p-7">
+          <span aria-hidden className="w-11 h-11 rounded-full bg-white/[0.08] ring-1 ring-white/15 flex items-center justify-center text-white/80">
+            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d={ICON_PATHS[state.icon] || ICON_PATHS.check} strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <h4 className="mt-4 text-[18px] font-black text-white tracking-tight break-keep">{state.title}</h4>
+          {state.amount != null && (
+            <p className="mt-3 flex items-baseline gap-1.5">
+              <span className="text-[30px] font-black text-white tabular-nums tracking-tight leading-none">{state.amount}</span>
+              <span className="text-[13px] font-black text-white/45">{state.unit}</span>
+            </p>
+          )}
+          {state.rows?.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {state.rows.map((r) => (
+                <div key={r.l} className="flex items-center justify-between gap-3">
+                  <span className="text-[11px] font-bold text-white/45">{r.l}</span>
+                  <span className={`text-[12px] font-black tabular-nums ${r.warn ? "text-[#ffb38a]" : "text-white/85"}`}>{r.v}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {state.body && <p className="mt-4 text-[11px] font-bold text-white/45 leading-relaxed break-keep">{state.body}</p>}
+          <div className="mt-6 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => onDone(false)}
+              className="h-11 rounded-full bg-white/[0.07] border border-white/15 hover:bg-white/[0.12] text-white/80 text-[13px] font-black transition-colors outline-none focus:outline-none"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              autoFocus
+              onClick={() => onDone(true)}
+              className="h-11 rounded-full text-white text-[13px] font-black transition-transform hover:-translate-y-px outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              style={{ background: t.btn }}
+            >
+              {state.ok || "확인"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // 📌 관리자 테스트 초기화 버튼 — 한 번 누르면 확인 문구로 바뀌고, 3초 안에 한 번 더 누르면 실행한다
 const AdminReset = ({ onReset, busy, label }) => {
   const [armed, setArmed] = useState(false);
@@ -803,12 +883,12 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
               </span>
             </div>
             {!pass.unlocked && (
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-3 space-y-2">
                 <button
                   type="button"
                   onClick={() => onUnlock("xp")}
                   disabled={!!busyKey || (balance?.xp || 0) < price}
-                  className="h-9 rounded-full text-white text-[11px] font-black transition-opacity outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+                  className="w-full h-10 rounded-full text-white text-[12px] font-black transition-opacity outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
                   style={{ background: "linear-gradient(135deg, #9b6bff 0%, #e05bb5 100%)" }}
                 >
                   XP로 해금
@@ -817,7 +897,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
                   type="button"
                   onClick={() => onUnlock("point")}
                   disabled={!!busyKey || (balance?.point || 0) < price}
-                  className="h-9 rounded-full bg-white/[0.08] border border-white/15 enabled:hover:bg-white/[0.14] text-white text-[11px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+                  className="w-full h-10 rounded-full bg-white/[0.08] border border-white/15 enabled:hover:bg-white/[0.14] text-white text-[12px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
                 >
                   빙옥으로 해금
                 </button>
@@ -1402,11 +1482,43 @@ export default function LevelPage() {
     setPassBusy((k) => (k === busyKey ? "" : k));
   }, [pushToast, loadMe]);
 
-  // 프리미엄 해금 — 되돌릴 수 없는 지출이라 한 번 확인받는다
+  // 확인 창 — window.confirm 대신. askConfirm 이 true / false 로 풀린다
+  const [confirmState, setConfirmState] = useState(null);
+  const confirmRef = useRef(null);
+  const askConfirm = useCallback((opts) => new Promise((resolve) => {
+    confirmRef.current = resolve;
+    setConfirmState(opts);
+    playTone(587.33, 0.05, "sine", 0.025);
+  }), []);
+  const closeConfirm = useCallback((ok) => {
+    const done = confirmRef.current;
+    confirmRef.current = null;
+    setConfirmState(null);
+    done?.(ok);
+  }, []);
+
+  // 프리미엄 해금 — 되돌릴 수 없는 지출이라 한 번 확인받는다. XP 로 내면 레벨이 내려갈 수 있어 그것도 보여 준다
   const unlockPass = useCallback(async (payMethod) => {
     const price = pass?.unlockPrice || 0;
     const unit = payMethod === "xp" ? "XP" : "빙옥";
-    if (!window.confirm(`프리미엄 트랙을 ${unit} ${price.toLocaleString()} 으로 해금할까요?\n이번 시즌에만 적용되며 되돌릴 수 없습니다.`)) return;
+    const bal = payMethod === "xp" ? me?.xp || 0 : me?.point || 0;
+    const after = Math.max(0, bal - price);
+    const lvNow = me?.level || 0;
+    const lvAfter = payMethod === "xp" ? getLevelByXp(after) : lvNow;
+    const ok = await askConfirm({
+      tone: "pass",
+      icon: "star",
+      title: "프리미엄 트랙을 해금할까요?",
+      amount: price.toLocaleString(),
+      unit,
+      rows: [
+        { l: `보유 ${unit}`, v: `${bal.toLocaleString()} → ${after.toLocaleString()}` },
+        ...(lvAfter !== lvNow ? [{ l: "레벨", v: `${lvNow} → ${lvAfter}`, warn: true }] : []),
+      ],
+      body: "이번 시즌에만 적용되며 되돌릴 수 없습니다.",
+      ok: "해금하기",
+    });
+    if (!ok) return;
     setPassBusy("unlock");
     try {
       const res = await fetch("/api/pass/unlock", {
@@ -1428,7 +1540,7 @@ export default function LevelPage() {
     await loadMe();
     // 다른 작업이 그 사이 시작됐으면 남의 표시를 지우면 안 된다 — 내 키일 때만 푼다
     setPassBusy((k) => (k === "unlock" ? "" : k));
-  }, [pass?.unlockPrice, pushToast, loadMe]);
+  }, [pass?.unlockPrice, me?.xp, me?.point, me?.level, askConfirm, pushToast, loadMe]);
 
   // 강화 — 비용·단계는 서버가 정책으로 다시 계산한다(실패 없음·영구).
   //    응답의 단계·잔액을 바로 반영하고, 레벨·순위는 /api/xp/me 재조회로 맞춘다.
@@ -2079,6 +2191,7 @@ export default function LevelPage() {
         onReset={isAdminUser ? () => resetTest("pass") : null}
         resetBusy={resetBusy === "pass"}
       />
+      <ConfirmDialog state={confirmState} onDone={closeConfirm} />
       <BagOverlay
         open={bagOpen}
         onClose={closeBag}
