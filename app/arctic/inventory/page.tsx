@@ -27,7 +27,10 @@ export default function ShopInventoryPage() {
   const { data: session, status } = useSession();
   const searchParams = useSearchParams();
   const from = searchParams.get("from") || "";
-  const back = from === "me" ? { href: "/profile?from=arctic", label: "내 정보" } : { href: "/arctic", label: "ARCTIC" };
+  // 내 정보에서 왔으면 내 정보로 — 그 내 정보가 ARCTIC 맥락(&via=arctic)이었으면 그 모습 그대로
+  const back = from === "me"
+    ? { href: searchParams.get("via") === "arctic" ? "/profile?from=arctic" : "/profile", label: "내 정보" }
+    : { href: "/arctic", label: "ARCTIC" };
 
   const [items, setItems] = useState<any[] | null>(null);
   const [synced, setSynced] = useState(true);

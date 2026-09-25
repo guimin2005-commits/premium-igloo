@@ -173,11 +173,14 @@ export default function MyInfoPage() {
     { k: "recruit", g: "account", l: "구인 지원", icon: ICON_PATHS.briefcase, href: `/profile/recruit${q}`, n: pendingApplies },
   ];
   // ARCTIC 맥락이면 스토어 안 인벤토리(/shop/inventory) — 잉크 HUD 로 튀지 않는다
-  if (canSeeLevel) rows.push({ k: "bag", g: "arctic", l: "인벤토리", icon: ICON_PATHS.bag, href: fromArctic ? "/arctic/inventory?from=me" : "/level?tab=my&bag=1", n: myItemCount });
+  // 📌 인벤토리는 상점이 열려 있으면 ARCTIC 인벤토리(레벨로 넘기지 않는다), 상점이 닫힌 사람만 레벨의 가방으로.
+  // 📌 ARCTIC 하위 화면은 ?from=me 를 달고 간다 — 경로 줄 · 뒤로가기가 "내 정보"로 돌아온다 (ARCTIC 맥락이면 &via=arctic)
+  const meQ = `from=me${fromArctic ? "&via=arctic" : ""}`;
+  if (canSeeLevel) rows.push({ k: "bag", g: "arctic", l: "인벤토리", icon: ICON_PATHS.bag, href: canSeeShop ? `/arctic/inventory?${meQ}` : "/level?tab=my&bag=1", n: myItemCount });
   if (canSeeShop) {
-    rows.push({ k: "orders", g: "arctic", l: "주문 내역", icon: ICON_PATHS.receipt, href: "/arctic/orders", n: shopOrders.length, accent: shopPendingCount > 0 });
-    rows.push({ k: "cart", g: "arctic", l: "장바구니", icon: ICON_PATHS.cart, href: "/arctic/cart", n: shopCartCount });
-    rows.push({ k: "wish", g: "arctic", l: "찜", icon: ICON_PATHS.heart, href: "/arctic?panel=wish", n: shopWish.length });
+    rows.push({ k: "orders", g: "arctic", l: "구매 내역", icon: ICON_PATHS.receipt, href: `/arctic/orders?${meQ}`, n: shopOrders.length, accent: shopPendingCount > 0 });
+    rows.push({ k: "cart", g: "arctic", l: "장바구니", icon: ICON_PATHS.cart, href: `/arctic/cart?${meQ}`, n: shopCartCount });
+    rows.push({ k: "wish", g: "arctic", l: "찜", icon: ICON_PATHS.heart, href: `/arctic/wish?${meQ}`, n: shopWish.length });
     rows.push({ k: "coupons", g: "arctic", l: "쿠폰함", icon: ICON_PATHS.ticket, href: `/profile/coupons${q}`, n: shopWallet.length });
   }
   rows.push({ k: "booster", g: "member", l: "서버 부스터", icon: ICON_PATHS.sparkles, href: `/profile/booster${q}`, pill: isBooster ? "적용 중" : undefined, pillCls: "bg-[#e91e3f]/[0.08] text-[#e91e3f]" });
@@ -235,11 +238,11 @@ export default function MyInfoPage() {
             <div className="ml-auto text-right shrink-0 hidden sm:block">
               <div className="text-[9px] font-black tracking-[0.25em] text-white/35 uppercase mb-1">Balance</div>
               <div className="text-2xl font-black tracking-tight tabular-nums text-white leading-none">
-                {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-[#ff5c77] ml-1">XP</span>
+                {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-white/55 ml-1">XP</span>
               </div>
               {canSeeShop && (
                 <div className="text-[13px] font-black tabular-nums text-white/85 leading-none mt-2">
-                  {(shopMe?.point ?? 0).toLocaleString()}<span className="text-[10px] font-black text-[#5ec8bb] ml-1">빙옥</span>
+                  {(shopMe?.point ?? 0).toLocaleString()}<span className="text-[10px] font-black text-white/55 ml-1">빙옥</span>
                 </div>
               )}
             </div>
@@ -248,8 +251,8 @@ export default function MyInfoPage() {
           <div className="relative z-10 sm:hidden mt-4 flex items-baseline justify-between">
             <span className="text-[9px] font-black tracking-[0.25em] text-white/35 uppercase">Balance</span>
             <span className="text-xl font-black tracking-tight tabular-nums text-white leading-none">
-              {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-[#ff5c77] ml-1">XP</span>
-              {canSeeShop && <span className="ml-3 text-[13px] text-white/85">{(shopMe?.point ?? 0).toLocaleString()}<span className="text-[10px] font-black text-[#5ec8bb] ml-1">빙옥</span></span>}
+              {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-white/55 ml-1">XP</span>
+              {canSeeShop && <span className="ml-3 text-[13px] text-white/85">{(shopMe?.point ?? 0).toLocaleString()}<span className="text-[10px] font-black text-white/55 ml-1">빙옥</span></span>}
             </span>
           </div>
 

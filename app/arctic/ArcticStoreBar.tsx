@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { Fragment, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ICON_PATHS } from "../components/Icons";
 
 // 📌 하위 화면 경로 줄 — 상품 상세 · 장바구니 · 구매 내역 위의 한 줄.
 //    상점 메인의 유형 줄 · 검색창을 그대로 붙이면 상세 위가 무거워진다. 여기는 "ARCTIC › 유형 › 상품" 경로와
 //    찜 · 장바구니 아이콘만 둔다. 경로의 앞 칸을 누르면 상점 메인 · 그 유형 목록으로 돌아간다.
 //    찜 · 장바구니 개수는 상점 메인과 같은 저장소(iglooShopWish · iglooShopCart)를 읽고, 화면이 개수를 알면 그 값을 쓴다.
+//    내 정보에서 들어오면(?from=me) 앞 칸이 ARCTIC 대신 "내 정보" — 돌아갈 길이 있어야 한다.
+//    내 정보가 ARCTIC 맥락이었으면(&via=arctic) 그 모습(스토어 독)으로 돌려보낸다.
 type Crumb = { label: string; href?: string };
 
 const readCount = (key: string, byQty: boolean) => {
@@ -40,7 +43,11 @@ export default function ArcticStoreBar({ crumbs = [], active = "", cartCount, wi
 
   const cart = cartCount ?? stored.cart;
   const wish = wishCount ?? stored.wish;
-  const path: Crumb[] = [{ label: "ARCTIC", href: "/arctic" }, ...crumbs];
+  const sp = useSearchParams();
+  const home: Crumb = sp.get("from") === "me"
+    ? { label: "내 정보", href: sp.get("via") === "arctic" ? "/profile?from=arctic" : "/profile" }
+    : { label: "ARCTIC", href: "/arctic" };
+  const path: Crumb[] = [home, ...crumbs];
 
   return (
     <div className="w-full bg-white border-b border-[#ededed]">

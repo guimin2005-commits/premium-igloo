@@ -203,10 +203,19 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // 📌 모바일 독 — 카테고리 줄(소식 · 이벤트 · 대회 · 경매 · 고객센터)과 겹치지 않는 것만.
   //    세계를 오가는 길과 내 것으로 채운다. 닫힌 세계는 자리에서 빠진다.
   //    알림은 상단 바 종이 맡는다 (새 알림 점 · 미리보기 · 알림함 열기) — 독에 또 두면 한 화면에 알림이 둘이 된다.
-  const dockTabs = [
-    { name: "홈", path: "/", icon: ICON_PATHS.home },
+  //    📌 늘 다섯 칸 — 홈 · 내 정보는 양 끝 고정, 가운데 세 칸은 열린 세계부터 채운다.
+  //       LEVEL · ARCTIC 이 닫혀 있으면(공개 전 일반 유저) 대회 · 소식 · 이벤트가 그 자리를 잇는다.
+  //       네 칸이면 비어 보이고, 공개 전에는 두 칸뿐이었다.
+  const dockMid = [
     ...(levelOpen ? [{ name: "SYSTEM : LEVEL", path: "/level", icon: ICON_PATHS.chart }] : []),
     ...(levelOpen && (shopPublic || isAdmin) ? [{ name: "ARCTIC", path: "/arctic", icon: ICON_PATHS.bag }] : []),
+    { name: "대회", path: "/tournament", icon: ICON_PATHS.trophy },
+    { name: "소식", path: "/notice", icon: ICON_PATHS.megaphone },
+    { name: "이벤트", path: "/event", icon: ICON_PATHS.gift },
+  ].slice(0, 3);
+  const dockTabs = [
+    { name: "홈", path: "/", icon: ICON_PATHS.home },
+    ...dockMid,
     { name: "내 정보", path: "/profile", icon: ICON_PATHS.user },
   ];
 
@@ -215,6 +224,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     items: g.items.filter((it) => {
       if (it.path === "/level") return true; // 비공개여도 메뉴엔 남긴다 — 들어가면 예고 화면
       if (it.name === "ARCTIC") return levelOpen && (shopPublic || isAdmin);
+      // 로그인한 사람은 내 정보 › 서버 부스터로 본다 — 메뉴에 두 번 두지 않는다
+      if (it.path === "/booster") return status !== "authenticated";
       return true;
     }),
   }));
