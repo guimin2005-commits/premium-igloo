@@ -1818,19 +1818,17 @@ export default function LevelPage() {
 
             {/* ── 로그인 · 내 프로필 ── */}
             {authReady && session?.user && meLoaded && me && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-10 gap-y-14 items-start">
+              <div>
+              {/* 히어로 — 왼쪽 정체성, 오른쪽 레벨과 등급이 나란히, 바닥에 경험치. 이 화면의 얼굴 */}
+              <div className="relative rounded-3xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]">
+                <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
+                <div aria-hidden className="absolute -top-28 -right-20 w-[460px] h-[460px] bg-[#e91e3f]/[0.18] blur-[120px] rounded-full pointer-events-none"></div>
 
-                {/* 왼쪽 기둥 — 세로 프로필 카드와 그 아래 등급 판 */}
-                <div className="contents lg:block lg:col-span-4 min-w-0 lg:space-y-12">
-                    {/* 프로필 카드 — 세로 기둥. 위에서 아래로: 정체성 → 레벨 · 등급 → 경험치 → 스탯 → 입구 */}
-                    <div className="order-first relative rounded-3xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]">
-                      <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
-                      <div aria-hidden className="absolute -top-24 left-1/2 -translate-x-1/2 w-[360px] h-[360px] bg-[#e91e3f]/[0.18] blur-[110px] rounded-full pointer-events-none"></div>
-
-                      <div className="relative z-10 p-5 md:p-7">
-                        {/* 정체성 — 모바일은 아바타 옆에 이름, lg 는 가운데로 */}
-                        <div className="flex items-center gap-4 lg:flex-col lg:gap-0 lg:text-center">
-                          <span className="shrink-0 lg:hidden">
+                <div className="relative z-10 p-5 md:p-9">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+                    {/* 정체성 */}
+                    <div className="flex items-center gap-4 md:gap-6 min-w-0">
+                      <span className="shrink-0 md:hidden">
                             <RingGauge pct={progPct} size={76} stroke={5} trackClass="rgba(255,255,255,0.12)">
                               {session.user.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
@@ -1839,280 +1837,83 @@ export default function LevelPage() {
                                 <span className="w-[54px] h-[54px] rounded-full bg-white/10 flex items-center justify-center text-lg font-black text-white/60">{(session.user.name || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
-                          </span>
-                          <span className="hidden lg:block">
-                            <RingGauge pct={progPct} size={120} stroke={6} trackClass="rgba(255,255,255,0.12)">
+                      </span>
+                      <span className="shrink-0 hidden md:block">
+                            <RingGauge pct={progPct} size={112} stroke={6} trackClass="rgba(255,255,255,0.12)">
                               {session.user.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={session.user.image} alt="" className="w-[86px] h-[86px] rounded-full object-cover" />
+                                <img src={session.user.image} alt="" className="w-[78px] h-[78px] rounded-full object-cover" />
                               ) : (
-                                <span className="w-[86px] h-[86px] rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60">{(session.user.name || "?").slice(0, 1)}</span>
+                                <span className="w-[78px] h-[78px] rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60">{(session.user.name || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-1.5 md:mb-2">Player</p>
+                        <p className="text-xl md:text-4xl font-black text-white truncate tracking-tight leading-none">{session.user.name}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-2.5 md:mt-3.5">
+                          <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/20 text-[10px] font-black tracking-[0.12em] uppercase text-white/70 tabular-nums">
+                            Rank #{me.rank.toLocaleString()}<span className="text-white/35 ml-1">/ {me.total.toLocaleString()}</span>
                           </span>
-                          <div className="min-w-0 flex-1 lg:flex-none lg:w-full">
-                          <p className="text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-1.5 lg:mt-4 lg:mb-2">Player</p>
-                          <p className="max-w-full text-xl lg:text-2xl font-black text-white truncate tracking-tight leading-none">{session.user.name}</p>
-                          <div className="flex flex-wrap items-center gap-2 mt-2.5 lg:mt-3.5 lg:justify-center">
-                            <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/20 text-[10px] font-black tracking-[0.12em] uppercase text-white/70 tabular-nums">
-                              Rank #{me.rank.toLocaleString()}<span className="text-white/35 ml-1">/ {me.total.toLocaleString()}</span>
+                          <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-[#e91e3f] text-[10px] font-black tracking-[0.12em] uppercase text-white tabular-nums">Top {rankPct}%</span>
+                          {todayTotal > 0 && (
+                            <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-[#e91e3f]/55 text-[10px] font-black tracking-[0.12em] uppercase text-[#ff5c77] tabular-nums">
+                              <LiveDot color="bg-[#ff5c77]" />오늘 +{todayTotal.toLocaleString()} XP
                             </span>
-                            <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-[#e91e3f] text-[10px] font-black tracking-[0.12em] uppercase text-white tabular-nums">Top {rankPct}%</span>
-                            {todayTotal > 0 && (
-                              <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-[#e91e3f]/55 text-[10px] font-black tracking-[0.12em] uppercase text-[#ff5c77] tabular-nums">
-                                <LiveDot color="bg-[#ff5c77]" />오늘 +{todayTotal.toLocaleString()} XP
-                              </span>
-                            )}
-                          </div>
-                          </div>
-                        </div>
-
-                        {/* 레벨 · 등급 — 나란히. 이 카드의 얼굴 */}
-                        <div className="grid grid-cols-2 mt-5 lg:mt-7 border-y border-white/10">
-                          <div className="py-4 lg:py-5 pr-3 border-r border-white/10 flex flex-col items-center justify-center">
-                            <p className="text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-2">Level</p>
-                            <p className="text-6xl font-black text-white tabular-nums tracking-tighter leading-[0.85]" style={{ textShadow: "0 0 40px rgba(233,30,63,0.55)" }}>{me.level}</p>
-                          </div>
-                          <button
-                            onClick={() => setTierOpen(true)}
-                            aria-label="등급 안내 열기"
-                            className="group py-4 lg:py-5 pl-3 flex flex-col items-center justify-center outline-none focus:outline-none"
-                          >
-                            <span className="block text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-2">Tier</span>
-                            <span
-                              className="w-11 h-11 mb-2 rounded-xl bg-white flex items-center justify-center transition-transform group-hover:-translate-y-0.5"
-                              style={{ boxShadow: `0 10px 26px -12px ${tierCur.c}, inset 0 0 0 1px ${tierCur.c}33` }}
-                            >
-                              <TierEmblem tier={tierCur} size={26} />
-                            </span>
-                            <span className="text-[15px] font-black tracking-tight leading-none" style={{ color: tierCur.c }}>{tierCur.name}</span>
-                          </button>
-                        </div>
-
-                        {/* 경험치 */}
-                        <div className="mt-5 lg:mt-6">
-                          <div className="flex justify-between items-baseline mb-2">
-                            <span className="text-[11px] font-bold text-white/55">Lv {me.level} <span className="text-white/25 mx-1">→</span> Lv {me.level + 1}</span>
-                            <span className="text-sm font-black text-white tabular-nums">{progPct}<span className="text-[10px] text-white/40 ml-0.5">%</span></span>
-                          </div>
-                          <div aria-hidden className="flex justify-between mb-1">
-                            {Array.from({ length: 21 }, (_, i) => (
-                              <span key={i} className={`w-px ${i % 5 === 0 ? "h-2 bg-white/30" : "h-1 bg-white/12"}`}></span>
-                            ))}
-                          </div>
-                          <SegBar pct={progPct} segments={20} h="h-3" track="bg-white/10" tick="rgba(19,19,19,0.92)" />
-                          <div className="flex justify-between mt-2">
-                            <span className="text-[10px] font-bold text-white/40 tabular-nums">{prog.current.toLocaleString()} / {prog.required.toLocaleString()} XP</span>
-                            <span className="text-[10px] font-bold text-white/50">다음 레벨까지 <b className="text-[#ff5c77] tabular-nums">{prog.needToNext.toLocaleString()} XP</b></span>
-                          </div>
-                        </div>
-
-                        {/* 스탯 — 두 줄 두 칸. 빙옥은 재화라 뺐다 */}
-                        <div className="grid grid-cols-2 mt-5 lg:mt-6 rounded-2xl overflow-hidden border border-white/10">
-                          {[
-                            { l: "누적 XP", v: (me.xp || 0).toLocaleString(), s: "TOTAL" },
-                            { l: "오늘 획득", v: `+${todayTotal.toLocaleString()}`, s: "TODAY", hot: todayTotal > 0 },
-                            { l: "누적 출석", v: `${(me.attendCount || 0).toLocaleString()}일`, s: "STREAK" },
-                            voiceTracked
-                              ? { l: "누적 음성 시간", v: fmtVoiceTime(me.voiceSeconds), s: "VOICE" }
-                              : { l: `${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터 집계`, v: "—", s: "VOICE", dim: true },
-                          ].map((st, i) => (
-                            <div key={i} className={`px-3.5 py-3 lg:px-4 lg:py-3.5 min-w-0 ${i % 2 === 0 ? "border-r border-white/10" : ""} ${i >= 2 ? "border-t border-white/10" : ""}`}>
-                              <p className="text-[9px] font-black tracking-[0.28em] text-white/30 uppercase mb-1.5">{st.s}</p>
-                              <p className={`text-lg font-black tabular-nums tracking-tight leading-none truncate ${st.hot ? "text-[#ff5c77]" : st.dim ? "text-white/25" : "text-white"}`}>{st.v}</p>
-                              <p className="text-[10px] font-bold text-white/40 mt-1 truncate">{st.l}</p>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* 입구 — 인벤토리 · 시즌 패스 · 획득 XP(강화). 카드 안 헤어라인 줄 */}
-                        <div className="mt-5 grid grid-flow-col auto-cols-fr gap-2 lg:mt-6 lg:block lg:border-t lg:border-white/10">
-                          {myItems && (
-                            <button onClick={openBag} aria-label="인벤토리 열기" className="group w-full flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-2 py-3 text-center lg:flex-row lg:justify-start lg:gap-3 lg:rounded-none lg:border-0 lg:border-b lg:bg-transparent lg:px-0 lg:py-3.5 lg:text-left outline-none focus:outline-none">
-                              <span aria-hidden className="relative shrink-0 mb-1.5 lg:mb-0">
-                                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/45 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                  <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                                {invUnread > 0 && (
-                                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{invUnread}</span>
-                                )}
-                              </span>
-                              <span className="min-w-0 lg:flex-1">
-                                <span className="flex items-baseline justify-center gap-2 lg:justify-start">
-                                  <span className="text-[12px] lg:text-[14px] font-black text-white">인벤토리</span>
-                                  <span className="hidden lg:inline text-[13px] font-black text-white/40 tabular-nums">{myItems.items.length}</span>
-                                </span>
-                                <span className="hidden lg:block text-[10px] font-bold text-white/35 truncate mt-0.5">
-                                  {myItems.items.length === 0
-                                    ? "아직 보유한 아이템이 없습니다"
-                                    : invGroups.slice(1).map((g) => `${g.label} ${g.items.length}`).join(" · ")}
-                                </span>
-                              </span>
-                              <span aria-hidden className="hidden lg:inline shrink-0 text-white/30 group-hover:text-white transition-all group-hover:translate-x-0.5">→</span>
-                            </button>
                           )}
-
-                          {passEnabled && (
-                            <button onClick={() => setActiveMainTab("pass")} aria-label="시즌 패스 열기" className="group w-full flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-2 py-3 text-center lg:flex-row lg:justify-start lg:gap-3 lg:rounded-none lg:border-0 lg:border-b lg:bg-transparent lg:px-0 lg:py-3.5 lg:text-left outline-none focus:outline-none">
-                              <span aria-hidden className="relative shrink-0 mb-1.5 lg:mb-0">
-                                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/45 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                  <path d={ICON_PATHS.star} strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                                {passClaimable > 0 && (
-                                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{passClaimable}</span>
-                                )}
-                              </span>
-                              <span className="min-w-0 lg:flex-1">
-                                <span className="flex items-baseline justify-center gap-2 lg:justify-start">
-                                  <span className="text-[12px] lg:text-[14px] font-black text-white">시즌 패스</span>
-                                  <span className="hidden lg:inline text-[13px] font-black text-white/40 tabular-nums">T{passTierNo}</span>
-                                </span>
-                                <span className="hidden lg:block text-[10px] font-bold text-white/35 truncate mt-0.5">
-                                  {passClaimable > 0
-                                    ? `받을 수 있는 보상 ${passClaimable}개`
-                                    : pass?.nextNeed > 0
-                                    ? `다음 티어까지 ${pass.nextNeed.toLocaleString()} XP`
-                                    : "모든 티어를 채웠습니다"}
-                                </span>
-                                <span className="hidden lg:block mt-2 h-1 rounded-full bg-white/10 overflow-hidden">
-                                  <span className="block h-full rounded-full bg-[#e91e3f]" style={{ width: `${passPct}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}></span>
-                                </span>
-                              </span>
-                              <span aria-hidden className="hidden lg:inline shrink-0 text-white/30 group-hover:text-white transition-all group-hover:translate-x-0.5">→</span>
-                            </button>
-                          )}
-
-                          {(() => {
-                            const inner = (
-                              <>
-                                <span aria-hidden className="shrink-0 mb-1.5 lg:mb-0">
-                                  <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/45 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                    <path d={ICON_PATHS.bolt} strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                                </span>
-                                <span className="min-w-0 lg:flex-1">
-                                  {enhOpen && <span className="lg:hidden block text-[12px] font-black text-white">강화</span>}
-                                  <span className="hidden lg:flex items-baseline gap-2">
-                                    <span className="text-[14px] font-black text-white">획득 XP</span>
-                                    <span className="text-[10px] font-bold text-white/35">지금 내 조건 · 1회</span>
-                                  </span>
-                                  <span className="hidden lg:block text-[10px] font-bold text-white/35 truncate mt-0.5 tabular-nums">
-                                    채팅 <b className="text-white/80">{gain.chatLo.toLocaleString()}~{gain.chatHi.toLocaleString()}</b> XP
-                                    <span className="text-white/20 mx-1.5">·</span>
-                                    음성 {P_voiceMin}분 <b className="text-white/80">{gain.voice.toLocaleString()}</b> XP
-                                  </span>
-                                </span>
-                                {enhOpen && (
-                                  <span className="hidden lg:inline-flex shrink-0 items-center gap-1.5 h-8 px-3.5 rounded-full bg-[#e91e3f] text-white text-[11px] font-bold group-hover:bg-[#d01634] transition-colors">
-                                    강화
-                                    {enh.chat.level + enh.voice.level > 0 && <span className="text-white/70 tabular-nums">{enh.chat.level}·{enh.voice.level}</span>}
-                                  </span>
-                                )}
-                              </>
-                            );
-                            return enhOpen ? (
-                              <button type="button" onClick={() => setEnhModal(true)} className="group w-full flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-2 py-3 text-center lg:flex-row lg:justify-start lg:gap-3 lg:rounded-none lg:border-0 lg:bg-transparent lg:px-0 lg:py-3.5 lg:text-left outline-none focus:outline-none">{inner}</button>
-                            ) : (
-                              <div className="hidden lg:flex w-full items-center gap-3 py-3.5">{inner}</div>
-                            );
-                          })()}
                         </div>
                       </div>
                     </div>
 
-                    <div className="order-last">
-                    {/* ═══ 등급 — 랭크 플라크 ═══ */}
-                    <section>
-                      <div className="flex items-end justify-between mb-5">
-                        <div>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">등급</h3>
-                        </div>
-                        <button
-                          onClick={() => setTierOpen(true)}
-                          className="shrink-0 h-8 px-3 rounded-lg bg-black/[0.05] hover:bg-black/[0.09] text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
-                        >
-                          등급 안내
-                        </button>
+                    {/* 레벨 · 등급 — 나란히 */}
+                    <div className="grid grid-cols-2 mt-6 pt-5 border-t border-white/10 lg:mt-0 lg:pt-0 lg:border-t-0 lg:flex lg:items-stretch lg:shrink-0">
+                      <div className="flex flex-col items-center justify-center pr-3 lg:items-end lg:pr-9">
+                        <p className="text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-2">Level</p>
+                        <p className="text-6xl md:text-8xl font-black text-white tabular-nums tracking-tighter leading-[0.85]" style={{ textShadow: "0 0 50px rgba(233,30,63,0.55)" }}>{me.level}</p>
                       </div>
-
-                      {/* 랭크 플라크 — 엠블럼을 가운데 세우고 등급색으로 감싼다 */}
-                      <div
-                        className="relative rounded-2xl overflow-hidden px-5 pt-7 pb-6 text-center"
-                        style={{
-                          background: `radial-gradient(120% 90% at 50% 0%, ${tierCur.c}26, ${tierCur.c}08 60%, transparent)`,
-                          border: `1px solid ${tierCur.c}3d`,
-                        }}
+                      <button
+                        onClick={() => setTierOpen(true)}
+                        aria-label="등급 안내 열기"
+                        className="group flex flex-col items-center justify-center pl-3 border-l border-white/10 lg:pl-9 outline-none focus:outline-none"
                       >
-                        <div
-                          aria-hidden
-                          className="absolute -top-16 left-1/2 -translate-x-1/2 w-52 h-52 rounded-full blur-[54px] pointer-events-none"
-                          style={{ background: `${tierCur.c}3a` }}
-                        ></div>
-
-                        {/* 엠블럼 */}
-                        <div className="relative z-10 flex justify-center mb-4">
-                          <span
-                            className="w-[74px] h-[74px] rounded-2xl bg-white flex items-center justify-center"
-                            style={{ boxShadow: `0 14px 34px -14px ${tierCur.c}, inset 0 0 0 1px ${tierCur.c}33` }}
-                          >
-                            <TierEmblem tier={tierCur} size={42} />
-                          </span>
-                        </div>
-
-                        {/* 등급명 */}
-                        <p className="relative z-10 text-3xl font-black tracking-tight leading-none" style={{ color: tierCur.c }}>
-                          {tierCur.name}
-                        </p>
-                        <p className="relative z-10 text-[10px] font-black tracking-[0.28em] text-[#a3a3a3] uppercase mt-2 tabular-nums">
-                          {tierCur.en} · {tierRangeLabel(tierIdx)}
-                        </p>
-
-                        {/* 등급 진행 핍 — 10칸 중 현재 위치 */}
-                        <div className="relative z-10 flex justify-center gap-1 mt-5">
-                          {VOICE_TIERS.map((t, i) => (
-                            <span
-                              key={t.key}
-                              title={t.name}
-                              className="h-1.5 rounded-full transition-all"
-                              style={{
-                                width: i === tierIdx ? 22 : 10,
-                                backgroundColor: i < tierIdx ? tierCur.c + "55" : i === tierIdx ? tierCur.c : "rgba(0,0,0,0.10)",
-                              }}
-                            ></span>
-                          ))}
-                        </div>
-
-                        {/* 음성 추가 XP */}
-                        <div className="relative z-10 mt-5 pt-4 border-t" style={{ borderColor: `${tierCur.c}26` }}>
-                          <p className={`text-2xl font-black tabular-nums leading-none ${tierCur.bonus > 0 ? "text-[#131313]" : "text-[#a3a3a3]"}`}>
-                            {tierCur.bonus > 0 ? `+${tierCur.bonus.toLocaleString()}` : "—"}
-                          </p>
-                          <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mt-1.5">음성 추가 XP</p>
-                        </div>
-                      </div>
-
-                      {/* 다음 등급 */}
-                      {tierNext && tierNextBound !== null && (
-                        <div className="flex items-center gap-3 mt-4 px-4 py-3 rounded-xl bg-black/[0.03]">
-                          <TierEmblem tier={tierNext} size={22} />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[12px] font-black truncate" style={{ color: tierNext.c }}>다음 · {tierNext.name}</p>
-                            <p className="text-[10px] font-bold text-[#a3a3a3] tabular-nums mt-0.5">
-                              Lv.{tierNextBound} 도달 시 음성 추가 +{tierNext.bonus.toLocaleString()}
-                            </p>
-                          </div>
-                          <span className="shrink-0 text-[11px] font-black text-[#131313] tabular-nums">
-                            {Math.max(0, tierNextBound - me.level)}
-                            <span className="text-[9px] font-bold text-[#a3a3a3] ml-0.5">레벨</span>
-                          </span>
-                        </div>
-                      )}
-                    </section>
+                        <span className="block text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-2.5">Tier</span>
+                        <span
+                          className="w-12 h-12 md:w-14 md:h-14 mb-2 rounded-2xl bg-white flex items-center justify-center transition-transform group-hover:-translate-y-0.5"
+                          style={{ boxShadow: `0 12px 30px -12px ${tierCur.c}, inset 0 0 0 1px ${tierCur.c}33` }}
+                        >
+                          <TierEmblem tier={tierCur} size={30} />
+                        </span>
+                        <span className="block text-base md:text-lg font-black tracking-tight leading-none" style={{ color: tierCur.c }}>{tierCur.name}</span>
+                        <span className="block text-[10px] font-bold text-white/35 group-hover:text-white/70 transition-colors mt-1.5">등급 안내 ›</span>
+                      </button>
                     </div>
-                </div>
+                  </div>
 
-                {/* 오른쪽 — 퀘스트 · 랭킹 · 이벤트 · 피드가 한 줄기로 */}
+                  {/* 경험치 */}
+                  <div className="mt-6 md:mt-9">
+                    <div className="flex justify-between items-baseline mb-2.5">
+                      <span className="text-[11px] font-bold text-white/55">Lv {me.level} <span className="text-white/25 mx-1.5">→</span> Lv {me.level + 1}</span>
+                      <span className="text-base font-black text-white tabular-nums">{progPct}<span className="text-[11px] text-white/40 ml-0.5">%</span></span>
+                    </div>
+                    <div aria-hidden className="flex justify-between mb-1">
+                      {Array.from({ length: 21 }, (_, i) => (
+                        <span key={i} className={`w-px ${i % 5 === 0 ? "h-2 bg-white/30" : "h-1 bg-white/12"}`}></span>
+                      ))}
+                    </div>
+                    <SegBar pct={progPct} segments={20} h="h-3 md:h-3.5" track="bg-white/10" tick="rgba(19,19,19,0.92)" />
+                    <div className="flex justify-between mt-2.5">
+                      <span className="text-[11px] font-bold text-white/40 tabular-nums">{prog.current.toLocaleString()} / {prog.required.toLocaleString()} XP</span>
+                      <span className="text-[11px] font-bold text-white/50">다음 레벨까지 <b className="text-[#ff5c77] tabular-nums">{prog.needToNext.toLocaleString()} XP</b></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 본문 — 왼쪽 퀘스트 · 랭킹, 오른쪽 내 기록 · 바로가기 · 등급 · 피드.
+                  모바일 순서: 히어로 → 내 기록 → 바로가기 → 퀘스트 → 랭킹 → 등급 → 이벤트 · 피드 */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-10 gap-y-10 mt-10 items-start">
                 <div className="contents lg:block lg:col-span-8 min-w-0 lg:space-y-14">
+                  <div className="order-3 lg:order-none min-w-0">
                     {/* 일일 퀘스트 — 출석(봇 지급) + 관리자가 정의한 퀘스트(원클릭 수령) */}
                     <section>
                       <div className="flex items-end justify-between mb-5">
@@ -2301,7 +2102,8 @@ export default function LevelPage() {
                         <span className="text-[11px] font-bold text-[#8a8a8a]">마지막 <b className="text-[#131313] tabular-nums">{me.lastAttendDate ? me.lastAttendDate.replace(/-/g, ".") : "—"}</b></span>
                       </div>
                     </section>
-
+                  </div>
+                  <div className="order-4 lg:order-none min-w-0">
                     {/* 서버 랭킹 */}
                     <section>
                       <div className="flex items-end justify-between mb-5">
@@ -2330,7 +2132,215 @@ export default function LevelPage() {
                       )}
                       {lbTab === "month" && <p className="text-[10px] text-[#a3a3a3] mt-2.5">이번 달 지급 로그 합산 기준 · 매월 1일(KST) 초기화</p>}
                     </section>
+                  </div>
+                </div>
 
+                <div className="contents lg:block lg:col-span-4 min-w-0 lg:space-y-10">
+                  <div className="order-1 lg:order-none min-w-0">
+                    {/* 내 기록 — 네 칸. 빙옥은 재화라 여기 두지 않는다 */}
+                    <div className="rounded-2xl bg-white border border-black/[0.08] shadow-[0_2px_10px_-6px_rgba(0,0,0,0.15)] grid grid-cols-2 overflow-hidden">
+                      {[
+                        { l: "누적 XP", v: (me.xp || 0).toLocaleString(), s: "TOTAL" },
+                        { l: "오늘 획득", v: `+${todayTotal.toLocaleString()}`, s: "TODAY", hot: todayTotal > 0 },
+                        { l: "누적 출석", v: `${(me.attendCount || 0).toLocaleString()}일`, s: "STREAK" },
+                        voiceTracked
+                          ? { l: "누적 음성 시간", v: fmtVoiceTime(me.voiceSeconds), s: "VOICE" }
+                          : { l: `${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터 집계`, v: "—", s: "VOICE", dim: true },
+                      ].map((st, i) => (
+                        <div key={i} className={`p-4 md:p-5 min-w-0 ${i % 2 === 0 ? "border-r border-black/[0.06]" : ""} ${i >= 2 ? "border-t border-black/[0.06]" : ""}`}>
+                          <p className="text-[9px] font-black tracking-[0.28em] text-[#a3a3a3] uppercase mb-2">{st.s}</p>
+                          <p className={`text-xl md:text-2xl font-black tabular-nums tracking-tight leading-none truncate ${st.hot ? "text-[#e91e3f]" : st.dim ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{st.v}</p>
+                          <p className="text-[11px] font-bold text-[#8a8a8a] mt-1.5 truncate">{st.l}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="order-2 lg:order-none min-w-0">
+                    {/* 바로가기 — 누르면 하는 일은 예전 배너 그대로 */}
+                    <div className="rounded-2xl bg-white border border-black/[0.08] shadow-[0_2px_10px_-6px_rgba(0,0,0,0.15)] overflow-hidden">
+                      <div className="grid grid-flow-col auto-cols-fr divide-x divide-black/[0.06] lg:block lg:divide-x-0 lg:divide-y">
+                        {myItems && (
+                          <button onClick={openBag} aria-label="인벤토리 열기" className="group w-full flex flex-col items-center justify-center px-2 py-4 text-center lg:flex-row lg:justify-start lg:gap-3.5 lg:px-5 lg:py-4 lg:text-left transition-colors hover:bg-black/[0.02] outline-none focus:outline-none">
+                            <span aria-hidden className="relative shrink-0 mb-1.5 lg:mb-0">
+                              <svg viewBox="0 0 24 24" className="w-6 h-6 text-[#8a8a8a] group-hover:text-[#131313] transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                              {invUnread > 0 && (
+                                <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{invUnread}</span>
+                              )}
+                            </span>
+                            <span className="min-w-0 lg:flex-1">
+                              <span className="flex items-baseline justify-center gap-2 lg:justify-start">
+                                <span className="text-[12px] lg:text-[15px] font-black text-[#131313]">인벤토리</span>
+                                <span className="hidden lg:inline text-[13px] font-black text-[#a3a3a3] tabular-nums">{myItems.items.length}</span>
+                              </span>
+                              <span className="hidden lg:block text-[11px] font-bold text-[#8a8a8a] truncate mt-0.5">
+                                {myItems.items.length === 0
+                                  ? "아직 보유한 아이템이 없습니다"
+                                  : invGroups.slice(1).map((g) => `${g.label} ${g.items.length}`).join(" · ")}
+                              </span>
+                            </span>
+                            <span aria-hidden className="hidden lg:inline shrink-0 text-[#a3a3a3] group-hover:text-[#131313] transition-all group-hover:translate-x-0.5">→</span>
+                          </button>
+                        )}
+
+                        {passEnabled && (
+                          <button onClick={() => setActiveMainTab("pass")} aria-label="시즌 패스 열기" className="group w-full flex flex-col items-center justify-center px-2 py-4 text-center lg:flex-row lg:justify-start lg:gap-3.5 lg:px-5 lg:py-4 lg:text-left transition-colors hover:bg-black/[0.02] outline-none focus:outline-none">
+                            <span aria-hidden className="relative shrink-0 mb-1.5 lg:mb-0">
+                              <svg viewBox="0 0 24 24" className="w-6 h-6 text-[#8a8a8a] group-hover:text-[#131313] transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d={ICON_PATHS.star} strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                              {passClaimable > 0 && (
+                                <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{passClaimable}</span>
+                              )}
+                            </span>
+                            <span className="min-w-0 lg:flex-1">
+                              <span className="flex items-baseline justify-center gap-2 lg:justify-start">
+                                <span className="text-[12px] lg:text-[15px] font-black text-[#131313]">시즌 패스</span>
+                                <span className="hidden lg:inline text-[13px] font-black text-[#a3a3a3] tabular-nums">T{passTierNo}</span>
+                              </span>
+                              <span className="hidden lg:block text-[11px] font-bold text-[#8a8a8a] truncate mt-0.5">
+                                {passClaimable > 0
+                                  ? `받을 수 있는 보상 ${passClaimable}개`
+                                  : pass?.nextNeed > 0
+                                  ? `다음 티어까지 ${pass.nextNeed.toLocaleString()} XP`
+                                  : "모든 티어를 채웠습니다"}
+                              </span>
+                              <span className="hidden lg:block mt-2 h-1 rounded-full bg-black/[0.06] overflow-hidden">
+                                <span className="block h-full rounded-full bg-[#e91e3f]" style={{ width: `${passPct}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}></span>
+                              </span>
+                            </span>
+                            <span aria-hidden className="hidden lg:inline shrink-0 text-[#a3a3a3] group-hover:text-[#131313] transition-all group-hover:translate-x-0.5">→</span>
+                          </button>
+                        )}
+
+                        {(() => {
+                          const inner = (
+                            <>
+                              <span aria-hidden className="shrink-0 mb-1.5 lg:mb-0">
+                                <svg viewBox="0 0 24 24" className="w-6 h-6 text-[#8a8a8a] group-hover:text-[#131313] transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d={ICON_PATHS.bolt} strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                              </span>
+                              <span className="min-w-0 lg:flex-1">
+                                {enhOpen && <span className="lg:hidden block text-[12px] font-black text-[#131313]">강화</span>}
+                                <span className="hidden lg:flex items-baseline gap-2">
+                                  <span className="text-[15px] font-black text-[#131313]">획득 XP</span>
+                                  <span className="text-[11px] font-bold text-[#a3a3a3]">지금 내 조건 · 1회</span>
+                                </span>
+                                <span className="hidden lg:block text-[11px] font-bold text-[#8a8a8a] truncate mt-0.5 tabular-nums">
+                                  채팅 <b className="text-[#131313]">{gain.chatLo.toLocaleString()}~{gain.chatHi.toLocaleString()}</b> XP
+                                  <span className="text-[#a3a3a3] mx-1.5">·</span>
+                                  음성 {P_voiceMin}분 <b className="text-[#131313]">{gain.voice.toLocaleString()}</b> XP
+                                </span>
+                              </span>
+                              {enhOpen && (
+                                <span className="hidden lg:inline-flex shrink-0 items-center gap-1.5 h-8 px-3.5 rounded-full bg-[#e91e3f] text-white text-[11px] font-bold group-hover:bg-[#d01634] transition-colors">
+                                  강화
+                                  {enh.chat.level + enh.voice.level > 0 && <span className="text-white/70 tabular-nums">{enh.chat.level}·{enh.voice.level}</span>}
+                                </span>
+                              )}
+                            </>
+                          );
+                          return enhOpen ? (
+                            <button type="button" onClick={() => setEnhModal(true)} className="group w-full flex flex-col items-center justify-center px-2 py-4 text-center lg:flex-row lg:justify-start lg:gap-3.5 lg:px-5 lg:py-4 lg:text-left transition-colors hover:bg-black/[0.02] outline-none focus:outline-none">{inner}</button>
+                          ) : (
+                            <div className="hidden lg:flex w-full items-center gap-3.5 px-5 py-4">{inner}</div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="order-5 lg:order-none min-w-0">
+                    {/* ═══ 등급 — 랭크 플라크 ═══ */}
+                    <section>
+                      <div className="flex items-end justify-between mb-5">
+                        <div>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">등급</h3>
+                        </div>
+                        <button
+                          onClick={() => setTierOpen(true)}
+                          className="shrink-0 h-8 px-3 rounded-lg bg-black/[0.05] hover:bg-black/[0.09] text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
+                        >
+                          등급 안내
+                        </button>
+                      </div>
+
+                      {/* 랭크 플라크 — 엠블럼을 가운데 세우고 등급색으로 감싼다 */}
+                      <div
+                        className="relative rounded-2xl overflow-hidden px-5 pt-7 pb-6 text-center"
+                        style={{
+                          background: `radial-gradient(120% 90% at 50% 0%, ${tierCur.c}26, ${tierCur.c}08 60%, transparent)`,
+                          border: `1px solid ${tierCur.c}3d`,
+                        }}
+                      >
+                        <div
+                          aria-hidden
+                          className="absolute -top-16 left-1/2 -translate-x-1/2 w-52 h-52 rounded-full blur-[54px] pointer-events-none"
+                          style={{ background: `${tierCur.c}3a` }}
+                        ></div>
+
+                        {/* 엠블럼 */}
+                        <div className="relative z-10 flex justify-center mb-4">
+                          <span
+                            className="w-[74px] h-[74px] rounded-2xl bg-white flex items-center justify-center"
+                            style={{ boxShadow: `0 14px 34px -14px ${tierCur.c}, inset 0 0 0 1px ${tierCur.c}33` }}
+                          >
+                            <TierEmblem tier={tierCur} size={42} />
+                          </span>
+                        </div>
+
+                        {/* 등급명 */}
+                        <p className="relative z-10 text-3xl font-black tracking-tight leading-none" style={{ color: tierCur.c }}>
+                          {tierCur.name}
+                        </p>
+                        <p className="relative z-10 text-[10px] font-black tracking-[0.28em] text-[#a3a3a3] uppercase mt-2 tabular-nums">
+                          {tierCur.en} · {tierRangeLabel(tierIdx)}
+                        </p>
+
+                        {/* 등급 진행 핍 — 10칸 중 현재 위치 */}
+                        <div className="relative z-10 flex justify-center gap-1 mt-5">
+                          {VOICE_TIERS.map((t, i) => (
+                            <span
+                              key={t.key}
+                              title={t.name}
+                              className="h-1.5 rounded-full transition-all"
+                              style={{
+                                width: i === tierIdx ? 22 : 10,
+                                backgroundColor: i < tierIdx ? tierCur.c + "55" : i === tierIdx ? tierCur.c : "rgba(0,0,0,0.10)",
+                              }}
+                            ></span>
+                          ))}
+                        </div>
+
+                        {/* 음성 추가 XP */}
+                        <div className="relative z-10 mt-5 pt-4 border-t" style={{ borderColor: `${tierCur.c}26` }}>
+                          <p className={`text-2xl font-black tabular-nums leading-none ${tierCur.bonus > 0 ? "text-[#131313]" : "text-[#a3a3a3]"}`}>
+                            {tierCur.bonus > 0 ? `+${tierCur.bonus.toLocaleString()}` : "—"}
+                          </p>
+                          <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mt-1.5">음성 추가 XP</p>
+                        </div>
+                      </div>
+
+                      {/* 다음 등급 */}
+                      {tierNext && tierNextBound !== null && (
+                        <div className="flex items-center gap-3 mt-4 px-4 py-3 rounded-xl bg-black/[0.03]">
+                          <TierEmblem tier={tierNext} size={22} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[12px] font-black truncate" style={{ color: tierNext.c }}>다음 · {tierNext.name}</p>
+                            <p className="text-[10px] font-bold text-[#a3a3a3] tabular-nums mt-0.5">
+                              Lv.{tierNextBound} 도달 시 음성 추가 +{tierNext.bonus.toLocaleString()}
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-[11px] font-black text-[#131313] tabular-nums">
+                            {Math.max(0, tierNextBound - me.level)}
+                            <span className="text-[9px] font-bold text-[#a3a3a3] ml-0.5">레벨</span>
+                          </span>
+                        </div>
+                      )}
+                    </section>
+                  </div>
+                  <div className="order-6 lg:order-none min-w-0 space-y-10">
                     {/* 진행 중 이벤트 */}
                     {events.length > 0 && (
                       <section>
@@ -2382,7 +2392,9 @@ export default function LevelPage() {
                         <EmptySlot>기록 없음 — 첫 활동을 시작하세요</EmptySlot>
                       )}
                     </section>
+                  </div>
                 </div>
+              </div>
               </div>
             )}
 
