@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
-import BackLink from "../../components/BackLink";
+import ArcticStoreBar from "../ArcticStoreBar";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 
@@ -75,8 +75,8 @@ export default function OrdersPage() {
 
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
+      <ArcticStoreBar />
       <section className="max-w-4xl mx-auto px-6 pt-10 pb-24">
-        <BackLink href="/arctic" label="ARCTIC" className="mb-5" inline />
 
         <h1 className="text-3xl md:text-4xl font-black tracking-tighter mb-8">구매 내역</h1>
 

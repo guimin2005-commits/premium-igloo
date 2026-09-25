@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
-import BackLink from "../../components/BackLink";
+import ArcticStoreBar from "../ArcticStoreBar";
 import { salePrice, durationLabel } from "@/lib/shopPricing";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
@@ -100,8 +100,8 @@ export default function CartPage() {
 
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
+      <ArcticStoreBar active="cart" cartCount={cart.reduce((n, c) => n + (c.qty || 1), 0)} />
       <section className="max-w-5xl mx-auto px-6 pt-10 pb-24">
-        <BackLink href="/arctic" label="ARCTIC" className="mb-5" inline />
 
         <div className="flex items-baseline justify-between gap-4 mb-8">
           <h1 className="text-3xl md:text-4xl font-black tracking-tighter">

@@ -7,8 +7,8 @@ import Link from "next/link";
 import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import ItemIcon from "../../../components/ItemIcon";
-import BackLink from "../../../components/BackLink";
 import ArcticDock from "../../ArcticDock";
+import ArcticStoreBar from "../../ArcticStoreBar";
 import ArcticFooter from "../../ArcticFooter";
 
 // 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천
@@ -188,8 +188,8 @@ export default function ItemDetailPage() {
 
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
+      <ArcticStoreBar cartCount={cart.reduce((n, c) => n + (c.qty || 1), 0)} wishCount={wish.length} />
       <section className="max-w-5xl mx-auto px-6 pt-8 pb-32 md:pb-24">
-        <BackLink href="/arctic" label="ARCTIC" />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* 좌 — 이미지 */}

@@ -292,7 +292,12 @@ export default function ArcticShopBody({
     const panel = searchParams.get("panel");
     if (panel === "wish") setShowWishList(true);
     if (panel === "search") setShowMobileSearch(true);
-  }, [searchParams]);
+    // 상품 상세 · 장바구니 위 상점 줄(ArcticStoreBar)에서 유형 · 검색어를 들고 온다
+    const type = searchParams.get("type");
+    if (type && TYPES.some((t) => t.v === type)) goProducts(type);
+    const q = searchParams.get("q");
+    if (q) submitSearch(q);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     try {

@@ -770,8 +770,8 @@ const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left, childr
         <div className={`relative z-10 shrink-0 px-5 sm:px-7 border-b border-white/[0.08] ${tabs ? "py-4 flex items-center gap-1.5 overflow-x-auto no-bar" : "pt-4"}`}>{tabs}</div>
 
         {/* 본문 — PC 는 왼쪽 요약 | 오른쪽 목록, 모바일은 위아래로 한 번에 스크롤 */}
-        <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto sm:overflow-hidden sm:flex">
-          <div className="shrink-0 sm:w-[236px] sm:border-r border-white/[0.08] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto flex flex-col">{left}</div>
+        <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-hidden sm:flex">
+          <div className="shrink-0 sm:w-[236px] sm:border-r border-white/[0.08] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto sm:overflow-x-hidden no-bar flex flex-col">{left}</div>
           <div data-pop-list className="pop-scroll min-w-0 flex-1 px-5 sm:px-6 pb-6 pt-1 sm:py-6 sm:overflow-y-auto">{children}</div>
         </div>
 
@@ -2418,10 +2418,10 @@ export default function LevelPage() {
         }
         @keyframes auraSpin { to { transform: rotate(360deg); } }
         @keyframes auraPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.9; } }
+        /* 크기는 그대로 — 카드가 커지면 팝업 왼쪽 칸이 넘쳐 스크롤바가 잠깐 생긴다. 빛과 테두리 번짐만 */
         @keyframes passUnlock {
-          0%   { transform: scale(0.95); filter: brightness(1.9); box-shadow: inset 0 0 0 1px rgba(214,180,255,0.6), 0 0 0 0 rgba(182,156,255,0.7); }
-          45%  { transform: scale(1.04); }
-          100% { transform: scale(1); filter: brightness(1); box-shadow: inset 0 0 0 1px rgba(214,180,255,0.3), 0 0 0 18px rgba(182,156,255,0); }
+          0%   { filter: brightness(2); box-shadow: inset 0 0 0 1px rgba(214,180,255,0.7), 0 0 0 0 rgba(182,156,255,0.75); }
+          100% { filter: brightness(1); box-shadow: inset 0 0 0 1px rgba(214,180,255,0.3), 0 0 0 18px rgba(182,156,255,0); }
         }
         @keyframes nodeFill {
           0%   { transform: scale(0.3); box-shadow: 0 0 0 0 rgba(255,122,74,0.8); }
