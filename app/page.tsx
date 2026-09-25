@@ -7,8 +7,8 @@ import { SEASON } from "@/lib/season";
 
 // 📌 홈 — 화이트 & 블랙 편집형 골격 (승인된 2안 목업).
 //    마스트헤드(상자 없음) → 헤어라인 티커 → 소식(공지사항 · 지금 진행 중, 번호 없음)
-//    티커 아래는 레벨 · 스토어 바로가기 한 줄, 즐기는 방법은 잉크 배너 두 장(대회 · 부스터).
-//    → 살아있는 커뮤니티 → 즐기는 방법 → 참여. 번호는 붙이지 않는다.
+//    티커 아래는 레벨 · 스토어 바로가기 한 줄, 더 즐기기는 잉크 배너 두 장(대회 · 부스터).
+//    → 지금 이글루 → 더 즐기기 → 참여. 번호는 붙이지 않는다. 섹션 제목 아래 설명 줄은 두지 않는다.
 //    소식이 맨 위라 조금만 내려도 공지가 바로 보인다. 커튼(sticky) 구조는 없앴다.
 
 const DISCORD = "https://discord.gg/V2uW2nUczU";
@@ -135,8 +135,6 @@ export default function Home() {
       const events = (Array.isArray(ev?.data) ? ev.data : []).slice(0, 2)
         .map((p: any) => ({ chip: "이벤트", live: false, title: p.title, sub: p.eventPeriod ? "" : "상시", path: `/event/${p._id}`, when: p.eventPeriod || "상시" }));
       const rows = [...liveAuctions, ...tournaments, ...events];
-      // 비어 있을 때도 줄 하나는 있어야 한다 — 상시 진행 중인 친구 초대 이벤트
-      if (rows.length < 2) rows.push({ chip: "이벤트", live: false, title: "친구 초대 이벤트", sub: "코드 공유하고 함께 XP 받기", path: "/invite", when: "상시" });
       setSchedule(rows.slice(0, 4));
       setScheduleLoaded(true);
 
@@ -281,8 +279,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── 살아있는 커뮤니티 — 박스 없이 큰 숫자 ── */}
-      <Sec title="살아있는 커뮤니티" desc="고급 이글루는 지금 이 순간에도 움직이고 있습니다.">
+      {/* ── 지금 이글루 — 박스 없이 큰 숫자 ── */}
+      <Sec title="지금 이글루">
         <Reveal delay={100}>
           <div className="relative mt-9 md:mt-10 flex flex-col md:flex-row md:items-end gap-6 md:gap-8">
             <div className="flex-1 grid grid-cols-3 gap-4 md:gap-6">
@@ -306,8 +304,8 @@ export default function Home() {
         </Reveal>
       </Sec>
 
-      {/* ── 즐기는 방법 — 두 길을 잉크 배너 한 장씩으로 ── */}
-      <Sec title="이글루에서 즐기는 방법" desc="활동하고, 성장하고, 증명하세요.">
+      {/* ── 더 즐기기 — 두 길을 잉크 배너 한 장씩으로 ── */}
+      <Sec title="더 즐기기">
         <div className="relative mt-7 md:mt-8 space-y-4 md:space-y-5">
           <Reveal>
             <Link href="/tournament" className="group relative block overflow-hidden bg-[#131313] text-white px-7 md:px-11 py-9 md:py-10">
@@ -323,9 +321,9 @@ export default function Home() {
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-black tracking-[0.3em] text-[#ff5c77] mb-3.5">e스포츠 대회</div>
                   <h4 className="text-[24px] md:text-[36px] font-black tracking-tight leading-[1.1] break-keep">
-                    리그를 신청하고<br />대진표와 <span className="text-[#e91e3f]">팀 룸</span>에서 경기 준비까지
+                    직접 뛰는 <span className="text-[#e91e3f]">리그</span>
                   </h4>
-                  <p className="mt-3.5 text-[13.5px] md:text-[14px] text-white/70 max-w-[52ch] break-keep">참가 접수부터 팀 배정, 연습 일정, 대회 당일까지 한곳에서 굴러갑니다.</p>
+                  <p className="mt-3.5 text-[13.5px] md:text-[14px] text-white/70 max-w-[52ch] break-keep">접수 · 대진표 · 팀 룸</p>
                 </div>
                 <div className="md:text-right shrink-0">
                   <div aria-hidden className="hidden md:block text-[96px] font-black tracking-[-0.05em] leading-[0.9] text-white/[0.08] tabular-nums">{String(tnCount.all).padStart(2, "0")}</div>
@@ -350,9 +348,9 @@ export default function Home() {
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-black tracking-[0.3em] text-[#ff5c77] mb-3.5">서버 부스터</div>
                   <h4 className="text-[24px] md:text-[36px] font-black tracking-tight leading-[1.1] break-keep">
-                    부스팅하면 따라오는<br />전용 역할과 <span className="text-[#e91e3f]">XP</span> 혜택
+                    부스터 전용 <span className="text-[#e91e3f]">혜택</span>
                   </h4>
-                  <p className="mt-3.5 text-[13.5px] md:text-[14px] text-white/70 max-w-[52ch] break-keep">시작 100,000 XP, 상시 추가 XP, ARCTIC 환급까지. 유지한 개월만큼 더 쌓입니다.</p>
+                  <p className="mt-3.5 text-[13.5px] md:text-[14px] text-white/70 max-w-[52ch] break-keep">시작 100,000 XP · 상시 +2,000 XP</p>
                 </div>
                 <div className="md:text-right shrink-0">
                   <div aria-hidden className="hidden md:block text-[96px] font-black tracking-[-0.05em] leading-[0.9] text-white/[0.08] tabular-nums">35%</div>

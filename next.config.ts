@@ -17,6 +17,9 @@ const nextConfig: NextConfig = {
       { source: "/shop/me", destination: "/profile?from=arctic", permanent: false },
       { source: "/shop", destination: "/arctic", permanent: false },
       { source: "/shop/:path*", destination: "/arctic/:path*", permanent: false },
+      /* 📌 친구 초대 이벤트(/invite)는 내렸다 — 화면의 누적 보상(역할 · 포인트)이 실제 지급과 연동돼 있지 않았다.
+         리뉴얼 전까지 들어오던 링크는 이벤트 목록으로 보낸다. 서버 쪽(app/api/referral · models/Referral)은 기록 보존용으로 남겨 둔다. */
+      { source: "/invite", destination: "/event", permanent: false },
     ];
   },
 };

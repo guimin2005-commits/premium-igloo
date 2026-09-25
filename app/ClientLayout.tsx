@@ -573,9 +573,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       {!isVerifyPage && (
                         <Link href="/profile" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] rounded-xl transition-colors font-bold ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>내 정보</Link>
                       )}
-                      {!isVerifyPage && isVerified && (
-                        <Link href="/invite" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] rounded-xl transition-colors font-bold ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>친구 초대 이벤트</Link>
-                      )}
                       {!isVerifyPage && (isSupporter || isAdmin) && (
                         <Link href="/supporters" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] rounded-xl transition-colors font-bold ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>서포터즈</Link>
                       )}
@@ -850,7 +847,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         const accountItems: { name: string; path?: string; onClick?: () => void; accent?: boolean }[] = [];
         if (status === "authenticated" && session) {
           if (!isVerifyPage) accountItems.push({ name: "내 정보", path: "/profile" });
-          if (!isVerifyPage && isVerified) accountItems.push({ name: "친구 초대 이벤트", path: "/invite" });
           // 서포터즈 바로가기 — 헤더 메뉴 대신 계정 팝업과 프로필에서만 들어간다 (관리자는 확인용으로 항상)
           if (!isVerifyPage && (isSupporter || isAdmin)) accountItems.push({ name: "서포터즈", path: "/supporters" });
           if (isVerified) accountItems.push({ name: "쿠폰함", onClick: () => { closeMobileMenu(); setIsCodeModalOpen(true); } });

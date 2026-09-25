@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Reveal } from "../components/Lux";
 import { ADMIN_USERS } from "@/lib/admins";
 
-// 📌 이벤트 목록 — 화이트 & 블랙. 제목 · 밑줄 탭(개수) · 친구 초대 한 줄 · 배너 격자.
+// 📌 이벤트 목록 — 화이트 & 블랙. 제목 · 밑줄 탭(개수) · 배너 격자.
 //    보이는 건 배너와 제목뿐 — 본문 미리보기는 두지 않는다(공지 목록과 같다).
 //    읽는 것은 페이지(이동 규칙 1): 항목을 누르면 /event/[id] 로 간다. 목록 위 모달은 없다.
 
@@ -107,17 +107,6 @@ export default function EventPage() {
             );
           })}
         </div>
-
-        {/* 친구 초대 이벤트 — 격자 위 한 줄 */}
-        <button onClick={() => router.push("/invite")}
-          className="group w-full flex items-center gap-3 py-4 border-b border-[#ededed] text-left outline-none">
-          <span className="min-w-0 flex-1">
-            <span className="block text-[15px] font-extrabold leading-snug group-hover:text-[#e91e3f] transition-colors">친구 초대 이벤트</span>
-            <span className="block mt-1 text-[12px] text-[#8a8a8a] truncate">코드 공유하고 함께 XP 받기</span>
-          </span>
-          <span className="shrink-0 text-[11.5px] font-black text-[#e91e3f]">상시</span>
-          <span className="shrink-0 text-[#a3a3a3] font-black">›</span>
-        </button>
 
         {/* 배너 격자 */}
         {isLoading ? (
