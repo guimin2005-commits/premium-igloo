@@ -11,7 +11,7 @@ import { InventoryPopup } from "../components/Inventory";
 import BackLink from "../components/BackLink";
 import ArcticDock from "../arctic/ArcticDock";
 import { ICON_PATHS } from "../components/Icons";
-import { getTier } from "@/lib/voiceTiers";
+import { VOICE_TIERS, getTierIndex } from "@/lib/voiceTiers";
 
 // 📌 내 정보 — A(잉크 헤더) + D(묶음 줄 목록).
 //    줄은 전부 '해당하는 곳'으로 간다. 알림·문의·구인 내역은 /profile/notice · /profile/inquiry · /profile/recruit 로 분리했고,
@@ -198,73 +198,90 @@ export default function MyInfoPage() {
 
       <section className="w-full max-w-4xl mx-auto px-6 pt-8 pb-20 flex-1">
         {back && <BackLink href={back.href} label={back.label} />}
-        {/* ═══ 잉크 헤더 — SYSTEM : LEVEL 과 같은 패널. 이 화면에서 들어 올리는 건 이것 하나 ═══ */}
-        <div className="relative overflow-hidden rounded-3xl bg-[#131313] text-white px-6 py-6 md:px-8 md:py-7">
-          <div aria-hidden className="absolute inset-0 pointer-events-none opacity-60"
-            style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)", backgroundSize: "28px 28px" }}></div>
+        {/* ═══ 잉크 헤더 — 게임 프로필(A안). 사진 둘레 링 = 다음 레벨까지 진행, 아래 Lv 배지.
+               등급 · 서버 순위 · 다음 등급까지 한 줄, 오른쪽에 보유 XP · 빙옥을 크게. 이 화면에서 들어 올리는 건 이것 하나 ═══ */}
+        {(() => {
+          const lv = shopMe?.level ?? 0;
+          const tIdx = getTierIndex(lv);
+          const tier = VOICE_TIERS[tIdx];
+          const next = VOICE_TIERS[tIdx + 1];
+          const lp = shopMe?.levelProgress;
+          const pct = lp?.required > 0 ? Math.min(1, Math.max(0, lp.current / lp.required)) : 0;
+          const C = 2 * Math.PI * 46; // 링 둘레 (viewBox 100, r 46)
+          return (
+            <div className="relative overflow-hidden rounded-3xl bg-[#131313] text-white px-6 py-6 md:px-8 md:py-7">
+              <div aria-hidden className="absolute inset-0 pointer-events-none opacity-60"
+                style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)", backgroundSize: "28px 28px" }}></div>
 
-          <div className="relative z-10 flex items-start gap-4 md:gap-5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={session?.user?.image || ""} alt="" className={`w-16 h-16 md:w-[72px] md:h-[72px] rounded-full bg-white/10 shrink-0 ${isBooster ? "ring-2 ring-[#e91e3f]/70 ring-offset-2 ring-offset-[#131313]" : ""}`} />
-            <div className="min-w-0 flex-1">
-              <h1 className="text-xl md:text-2xl font-black text-white tracking-tight truncate flex items-center gap-2">
-                {session?.user?.name}
-              </h1>
-              {canSeeLevel && (
-                <Link href="/level" className="inline-block text-[12px] font-bold text-white/60 hover:text-white mt-0.5 tabular-nums transition-colors">
-                  Lv.{shopMe?.level ?? 0} · 서버 #{shopMe?.rank ?? "—"} · {getTier(shopMe?.level ?? 0).name}
-                </Link>
-              )}
-              <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-                <VerifyBadge isVerified={isVerified} hasScrimRole={hasScrimRole} />
-                {isBooster && (
-                  <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-bold border border-[#ff41cf]/40 bg-[#ff41cf]/10 text-[#ff8ae4]">
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3"><path d={ICON_PATHS.sparkles} /></svg>
-                    SERVER BOOSTER
-                  </span>
-                )}
-                {isSupporter && (
-                  <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-bold border border-[#3f83b8]/40 bg-[#3f83b8]/10 text-[#8ec2ec]">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.shieldCheck} /></svg>
-                    SUPPORTERS
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="ml-auto text-right shrink-0 hidden sm:block">
-              <div className="text-[9px] font-black tracking-[0.25em] text-white/35 uppercase mb-1">Balance</div>
-              <div className="text-2xl font-black tracking-tight tabular-nums text-white leading-none">
-                {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-white/55 ml-1">XP</span>
-              </div>
-              {canSeeShop && (
-                <div className="text-[13px] font-black tabular-nums text-white/85 leading-none mt-2">
-                  {(shopMe?.point ?? 0).toLocaleString()}<span className="text-[10px] font-black text-white/55 ml-1">빙옥</span>
+              <div className="relative z-10 flex flex-wrap items-center gap-x-5 md:gap-x-6 gap-y-5">
+                {/* 사진 + 레벨 링 */}
+                <div className="relative shrink-0 w-20 h-20 md:w-24 md:h-24">
+                  {canSeeLevel && (
+                    <svg aria-hidden viewBox="0 0 100 100" className="absolute inset-0 w-full h-full -rotate-90">
+                      <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
+                      <circle cx="50" cy="50" r="46" fill="none" stroke="#e91e3f" strokeWidth="6" strokeLinecap="round"
+                        strokeDasharray={C} strokeDashoffset={C * (1 - pct)} className="transition-[stroke-dashoffset] duration-700" />
+                    </svg>
+                  )}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={session?.user?.image || ""} alt="" className="absolute rounded-full bg-white/10 object-cover"
+                    style={canSeeLevel ? { inset: 10, width: "calc(100% - 20px)", height: "calc(100% - 20px)" } : { inset: 0, width: "100%", height: "100%" }} />
+                  {canSeeLevel && (
+                    <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 inline-flex items-center h-6 px-2.5 rounded-full bg-[#e91e3f] text-white text-[12px] font-black tabular-nums whitespace-nowrap ring-[3px] ring-[#131313]">
+                      Lv.{lv.toLocaleString()}
+                    </span>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
 
-          <div className="relative z-10 sm:hidden mt-4 flex items-baseline justify-between">
-            <span className="text-[9px] font-black tracking-[0.25em] text-white/35 uppercase">Balance</span>
-            <span className="text-xl font-black tracking-tight tabular-nums text-white leading-none">
-              {(shopMe?.xp ?? 0).toLocaleString()}<span className="text-[11px] font-black text-white/55 ml-1">XP</span>
-              {canSeeShop && <span className="ml-3 text-[13px] text-white/85">{(shopMe?.point ?? 0).toLocaleString()}<span className="text-[10px] font-black text-white/55 ml-1">빙옥</span></span>}
-            </span>
-          </div>
+                {/* 이름 · 등급 줄 · 배지 */}
+                <div className="min-w-0 flex-1 basis-[180px]">
+                  <h1 className="text-[22px] md:text-[26px] font-black text-white tracking-tight leading-tight truncate">{session?.user?.name}</h1>
+                  {canSeeLevel && (
+                    <Link href="/level" className="mt-1.5 inline-flex items-center gap-x-1.5 gap-y-0.5 flex-wrap text-[12px] md:text-[13px] font-bold text-white/65 hover:text-white tabular-nums transition-colors">
+                      <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: tier.c }}></span>
+                      <span className="text-white">{tier.name}</span>
+                      <span aria-hidden>·</span>
+                      <span>서버 #{shopMe?.rank ?? "—"}</span>
+                      {next && (<><span aria-hidden>·</span><span>{next.name}까지 {(next.min - lv).toLocaleString()}레벨</span></>)}
+                    </Link>
+                  )}
+                  <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+                    <VerifyBadge isVerified={isVerified} hasScrimRole={hasScrimRole} />
+                    {isBooster && (
+                      <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-bold border border-[#ff41cf]/40 bg-[#ff41cf]/10 text-[#ff8ae4]">
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3"><path d={ICON_PATHS.sparkles} /></svg>
+                        SERVER BOOSTER
+                      </span>
+                    )}
+                    {isSupporter && (
+                      <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-bold border border-[#3f83b8]/40 bg-[#3f83b8]/10 text-[#8ec2ec]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.shieldCheck} /></svg>
+                        SUPPORTERS
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-          {canSeeLevel && shopMe?.levelProgress?.required > 0 && (
-            <div className="relative z-10 mt-5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-white/45">다음 레벨까지</span>
-                <span className="text-[11px] font-bold text-white/80 tabular-nums">{shopMe.levelProgress.needToNext.toLocaleString()} XP</span>
-              </div>
-              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                <div className="h-full rounded-full bg-[#e91e3f] transition-[width] duration-700"
-                  style={{ width: `${Math.min(100, Math.round((shopMe.levelProgress.current / shopMe.levelProgress.required) * 100))}%` }}></div>
+                {/* 보유 XP · 빙옥 — 모바일은 아래 줄 전체 폭 */}
+                <div className="w-full sm:w-auto sm:ml-auto flex gap-8 pt-4 sm:pt-0 border-t border-white/10 sm:border-t-0">
+                  <div>
+                    <p className="text-[11px] font-bold text-white/50">보유 XP</p>
+                    <p className="mt-1 text-[22px] md:text-[26px] font-black tracking-[-0.02em] tabular-nums leading-none">{(shopMe?.xp ?? 0).toLocaleString()}</p>
+                    {canSeeLevel && lp?.required > 0 && (
+                      <p className="mt-1.5 text-[11px] font-bold text-white/45 tabular-nums">다음 레벨까지 {lp.needToNext.toLocaleString()}</p>
+                    )}
+                  </div>
+                  {canSeeShop && (
+                    <div>
+                      <p className="text-[11px] font-bold text-white/50">빙옥</p>
+                      <p className="mt-1 text-[22px] md:text-[26px] font-black tracking-[-0.02em] tabular-nums leading-none">{(shopMe?.point ?? 0).toLocaleString()}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          )}
-        </div>
+          );
+        })()}
 
         {/* ═══ 묶음 줄 목록 — 계정 / ARCTIC / 멤버십. 줄은 전부 해당 화면으로 ═══ */}
         <div className="mt-10 grid grid-cols-1 gap-y-9">

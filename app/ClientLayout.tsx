@@ -553,19 +553,19 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     <div className={`border-t px-2 py-2 ${isLightPage ? "border-[#ededed]" : "border-white/[0.07]"}`}>
                       {!isVerifyPage && (
                         <Link href="/profile" onClick={() => setIsProfileOpen(false)} className={`flex items-center gap-3 h-10 px-3 rounded-xl text-[13px] font-bold transition-colors ${isLightPage ? "text-[#131313] hover:bg-[#f2f2f2]" : "text-gray-200 hover:bg-white/[0.06]"}`}>
-                          <svg aria-hidden viewBox="0 0 24 24" className={`w-[18px] h-[18px] ${isLightPage ? "text-[#5a5a5a]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.user} /></svg>
+                          <svg aria-hidden viewBox="0 0 24 24" className={`w-[18px] h-[18px] -translate-y-px ${isLightPage ? "text-[#5a5a5a]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.user} /></svg>
                           내 정보
                         </Link>
                       )}
                       {!isVerifyPage && (isSupporter || isAdmin) && (
                         <Link href="/supporters" onClick={() => setIsProfileOpen(false)} className={`flex items-center gap-3 h-10 px-3 rounded-xl text-[13px] font-bold transition-colors ${isLightPage ? "text-[#131313] hover:bg-[#f2f2f2]" : "text-gray-200 hover:bg-white/[0.06]"}`}>
-                          <svg aria-hidden viewBox="0 0 24 24" className={`w-[18px] h-[18px] ${isLightPage ? "text-[#5a5a5a]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.shieldCheck} /></svg>
+                          <svg aria-hidden viewBox="0 0 24 24" className={`w-[18px] h-[18px] -translate-y-px ${isLightPage ? "text-[#5a5a5a]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.shieldCheck} /></svg>
                           서포터즈
                         </Link>
                       )}
                       {isAdmin && (
                         <Link href="/admin" onClick={() => setIsProfileOpen(false)} className={`flex items-center gap-3 h-10 px-3 rounded-xl text-[13px] font-bold transition-colors ${isLightPage ? "text-[#131313] hover:bg-[#f2f2f2]" : "text-gray-200 hover:bg-white/[0.06]"}`}>
-                          <svg aria-hidden viewBox="0 0 24 24" className={`w-[18px] h-[18px] ${isLightPage ? "text-[#5a5a5a]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.key} /></svg>
+                          <svg aria-hidden viewBox="0 0 24 24" className={`w-[18px] h-[18px] -translate-y-px ${isLightPage ? "text-[#5a5a5a]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.key} /></svg>
                           관리자 페이지
                         </Link>
                       )}
@@ -781,7 +781,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           const active = isMenuActive(href);
           return (
             <Link key={href} href={href} onClick={closeMobileMenu} className={rowCls(active)}>
-              <svg aria-hidden viewBox="0 0 24 24" className={`w-[18px] h-[18px] shrink-0 ${active ? "text-[#e91e3f]" : L ? "text-[#5a5a5a]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth={1.8}>
+              {/* 한글(Noto Sans KR)은 글자 몸이 줄 가운데보다 1px 위에 앉는다 — 아이콘을 1px 올려 눈높이를 맞춘다 */}
+              <svg aria-hidden viewBox="0 0 24 24" className={`w-[18px] h-[18px] shrink-0 -translate-y-px ${active ? "text-[#e91e3f]" : L ? "text-[#5a5a5a]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth={1.8}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={icon || ICON_PATHS.chevronRight} />
               </svg>
               <span className="min-w-0 truncate">{name}</span>
@@ -826,9 +827,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             {/* ── 스크롤 영역 ── */}
             <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 [&::-webkit-scrollbar]:hidden">
               {status === "authenticated" && session && (
-                /* 눌러서 내 정보로 — 배지는 프로필 창과 같은 한 벌 */
+                /* 눌러서 내 정보로 — 배지는 프로필 창과 같은 한 벌. 칸은 흰색이 아니라 판과 같은 옅은 톤(혼자 떠 보이지 않게) */
                 <Link href="/profile" onClick={closeMobileMenu}
-                  className={`flex items-center gap-3 p-3 mb-2 rounded-2xl border transition-colors ${L ? "bg-white border-[#ededed] active:bg-[#f2f2f2]" : "bg-white/[0.04] border-white/[0.08] active:bg-white/[0.07]"}`}>
+                  className={`flex items-center gap-3 p-3 mb-2 rounded-2xl transition-colors ${L ? "bg-black/[0.04] active:bg-black/[0.07]" : "bg-white/[0.05] active:bg-white/[0.08]"}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={session.user?.image || ""} alt="" className={`w-11 h-11 rounded-full shrink-0 ${L ? "bg-[#e0e0e0]" : "bg-gray-700"}`} />
                   <div className="min-w-0 flex-1">
