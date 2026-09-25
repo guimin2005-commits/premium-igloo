@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import ArcticStoreBar from "../ArcticStoreBar";
+import CardArt from "../CardArt";
 import { salePrice, durationLabel } from "@/lib/shopPricing";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
@@ -38,16 +39,36 @@ export default function CartPage() {
     try { localStorage.setItem("iglooShopCart", JSON.stringify(cart)); } catch {}
   }, [cart, cartLoaded]);
 
+  // 📌 장바구니 정리 기준 — 상품 목록을 제대로 받아 왔을 때의 id 들. 받기 전·실패면 null
+  const [validIds, setValidIds] = useState<Set<string> | null>(null);
+
   useEffect(() => {
     if (status === "loading") return;
     Promise.all([
       fetch(`/api/shop/items${isAdmin ? "?all=1" : ""}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
     ]).then(([it, me]) => {
-      setItems(Array.isArray(it?.data) ? it.data : []);
+      const list = Array.isArray(it?.data) ? it.data : [];
+      setItems(list);
+      if (it?.success && Array.isArray(it?.data)) setValidIds(new Set(list.map((i: any) => String(i._id))));
       if (me?.success) setMyXp(me.data.xp);
     }).finally(() => setIsLoading(false));
   }, [status, isAdmin]);
+
+  // 📌 목록에 없는(삭제·숨김) 상품 · 같은 상품 중복은 장바구니에서 뺀다 — 목록엔 없는데 배지만 "1" 로 남던 원인.
+  //    목록을 제대로 받았을 때만 정리한다 (실패로 장바구니를 날리지 않게). 저장은 위 저장 effect 가 한다.
+  useEffect(() => {
+    if (!cartLoaded || !validIds) return;
+    setCart((prev) => {
+      const seen = new Set<string>();
+      const next = prev.filter((c) => {
+        if (!c || !validIds.has(String(c.itemId)) || seen.has(String(c.itemId))) return false;
+        seen.add(String(c.itemId));
+        return true;
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [cartLoaded, validIds]);
 
   const rows = useMemo(
     () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item),
@@ -100,7 +121,8 @@ export default function CartPage() {
 
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
-      <ArcticStoreBar crumbs={[{ label: "장바구니" }]} active="cart" cartCount={cart.reduce((n, c) => n + (c.qty || 1), 0)} />
+      {/* 개수는 화면에 보이는 줄 기준 — 저장소 원본을 세면 목록에 없는 상품까지 센다 */}
+      <ArcticStoreBar crumbs={[{ label: "장바구니" }]} active="cart" cartCount={rows.reduce((n, r) => n + (r.qty || 1), 0)} />
       <section className="max-w-5xl mx-auto px-6 pt-10 pb-24">
 
         <div className="flex items-baseline justify-between gap-4 mb-8">
@@ -162,11 +184,9 @@ export default function CartPage() {
                           {on && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                         </span>
                       </button>
-                      <Link href="/arctic" className="w-20 h-20 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
-                        {r.item.imageUrl && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
-                        )}
+                      {/* 썸네일 — 상점 카드와 같은 그림(이미지 없으면 등록 색 + 아이콘) */}
+                      <Link href="/arctic" className="relative block w-20 h-20 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
+                        <CardArt it={r.item} iconSize={36} />
                       </Link>
                       <div className="flex-1 min-w-0">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black mb-1.5 ${TYPE_CLS[r.item.type] || TYPE_CLS.physical}`}>

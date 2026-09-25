@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BackLink from "../../components/BackLink";
 import { salePrice, durationLabel } from "@/lib/shopPricing";
+import { getLevelByXp } from "@/lib/leveling";
 import ArcticFooter from "../ArcticFooter";
 import ArcticDock from "../ArcticDock";
+import CardArt from "../CardArt";
 
 // 📌 결제 — 장바구니에서 고른 상품을 확인하고 약관 동의 후 결제
 export default function CheckoutPage() {
@@ -135,7 +137,8 @@ export default function CheckoutPage() {
       const res = await fetch("/api/shop/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: cart, contact, couponCode: coupon?.code || "" }),
+        // 화면에 보이는 줄만 보낸다 — 저장소에 남은 옛 항목(지금은 없는 상품)이 결제 요청에 섞이지 않게
+        body: JSON.stringify({ items: rows.map((r) => ({ itemId: r.itemId, qty: r.qty, days: r.days || 0 })), contact, couponCode: coupon?.code || "" }),
       });
       const d = await res.json();
       setResult({ ok: !!d.success, message: d.message || (d.success ? "결제가 완료되었습니다." : "결제에 실패했습니다.") });
@@ -241,11 +244,9 @@ export default function CheckoutPage() {
               <div className="divide-y divide-[#ededed]">
                 {rows.map((r) => (
                   <div key={r.itemId} className="px-6 py-4 flex gap-4 items-center">
-                    <div className="w-14 h-14 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
-                      {r.item.imageUrl && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
-                      )}
+                    {/* 썸네일 — 상점 카드와 같은 그림(이미지 없으면 등록 색 + 아이콘) */}
+                    <div className="relative w-14 h-14 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
+                      <CardArt it={r.item} iconSize={28} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">
@@ -415,26 +416,32 @@ export default function CheckoutPage() {
                 {couponMsg && <p className={`mt-2 text-[11px] font-bold ${couponMsgOk ? "text-[#3f7a35]" : "text-[#d01634]"}`}>{couponMsg}</p>}
               </div>
 
-              <div className="space-y-2.5 text-[13px] mb-4">
-                <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 수</span><span className="font-bold tabular-nums">{count}개</span></div>
-                <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 금액</span><span className="font-bold tabular-nums">{listTotal.toLocaleString()}</span></div>
+              {/* ① 얼마를 내나 — 금액에서 할인을 빼 결제 금액까지. 숫자마다 단위를 붙인다 */}
+              <div className="space-y-2.5 text-[13px]">
+                <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 금액 · {count}개</span><span className="font-bold tabular-nums">{listTotal.toLocaleString()} XP</span></div>
                 {itemDiscount > 0 && (
-                  <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 할인</span><span className="font-bold text-[#e91e3f] tabular-nums">-{itemDiscount.toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 할인</span><span className="font-bold text-[#d01634] tabular-nums">-{itemDiscount.toLocaleString()} XP</span></div>
                 )}
                 {couponDiscount > 0 && (
-                  <div className="flex justify-between"><span className="text-[#5a5a5a]">쿠폰 할인</span><span className="font-bold text-[#e91e3f] tabular-nums">-{couponDiscount.toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">쿠폰 할인</span><span className="font-bold text-[#d01634] tabular-nums">-{couponDiscount.toLocaleString()} XP</span></div>
                 )}
-                <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold tabular-nums">{(myXp ?? 0).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 XP</span><span className="font-bold text-[#d01634] tabular-nums">-{total.toLocaleString()}</span></div>
+              </div>
+              <div className="flex items-baseline justify-between mt-4 pt-4 border-t border-[#ededed]">
+                <span className="text-sm font-bold text-[#131313]">결제 금액</span>
+                <span className="text-xl font-black tabular-nums text-[#131313]">{total.toLocaleString()}<span className="ml-1 text-[12px] font-bold text-[#5a5a5a]">XP</span></span>
               </div>
 
-              <div className="h-px bg-[#ededed] mb-4"></div>
-
-              <div className="flex items-baseline justify-between mb-6">
-                <span className="text-sm font-bold text-[#131313]">결제 후 잔액</span>
-                <span className={`text-xl font-black tabular-nums ${enoughXp ? "text-[#131313]" : "text-[#d01634]"}`}>
-                  {Math.max(0, (myXp ?? 0) - total).toLocaleString()}
-                </span>
+              {/* ② 내 XP 가 어떻게 되나 — XP 는 쓰면 레벨도 내려가므로 레벨이 바뀌면 함께 보여 준다 */}
+              <div className="mt-4 mb-6 bg-[#f2f2f2] px-4 py-3.5 space-y-2 text-[13px]">
+                <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold tabular-nums">{(myXp ?? 0).toLocaleString()} XP</span></div>
+                {enoughXp ? (
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 후 XP</span><span className="font-black tabular-nums">{((myXp ?? 0) - total).toLocaleString()} XP</span></div>
+                ) : (
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">부족한 XP</span><span className="font-black text-[#d01634] tabular-nums">{(total - (myXp ?? 0)).toLocaleString()} XP</span></div>
+                )}
+                {enoughXp && myXp != null && getLevelByXp(myXp - total) < getLevelByXp(myXp) && (
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 후 레벨</span><span className="font-bold tabular-nums">Lv.{getLevelByXp(myXp)} → <b className="font-black text-[#d01634]">Lv.{getLevelByXp(myXp - total)}</b></span></div>
+                )}
               </div>
 
               <button onClick={pay} disabled={!canPay}

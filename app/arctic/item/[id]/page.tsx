@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
+import { isAdminName } from "@/lib/admins";
 import ItemIcon from "../../../components/ItemIcon";
 import ArcticDock from "../../ArcticDock";
 import ArcticStoreBar from "../../ArcticStoreBar";
@@ -40,12 +41,15 @@ export default function ItemDetailPage() {
   const params = useParams();
   const id = String(params?.id || "");
   const isLoggedIn = status === "authenticated";
+  const isAdmin = isAdminName(session?.user?.name);
 
   const [item, setItem] = useState<any>(null);
   const [notFound, setNotFound] = useState(false);
   const [myXp, setMyXp] = useState<number | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [allItems, setAllItems] = useState<any[]>([]);
+  // 📌 장바구니 개수 기준 — 상품 목록을 제대로 받았을 때의 id 들. 실패면 null (그때는 저장된 그대로 센다)
+  const [validIds, setValidIds] = useState<Set<string> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const [cart, setCart] = useState<{ itemId: string; qty: number; days?: number }[]>([]);
@@ -79,15 +83,17 @@ export default function ItemDetailPage() {
       fetch(`/api/shop/items/${id}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       fetch("/api/shop/purchase", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch("/api/shop/items", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      // 관리자는 장바구니 화면처럼 숨김 상품까지 받아야 장바구니 개수가 맞다 (관련 상품은 아래서 active 만 거른다)
+      fetch(`/api/shop/items${isAdmin ? "?all=1" : ""}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
     ]).then(([it, me, ord, all]) => {
       if (it?.success) setItem(it.data);
       else setNotFound(true);
       if (me?.success) setMyXp(me.data.xp);
       setOrders(Array.isArray(ord?.data) ? ord.data : []);
       setAllItems(Array.isArray(all?.data) ? all.data : []);
+      if (all?.success && Array.isArray(all?.data)) setValidIds(new Set(all.data.map((x: any) => String(x._id))));
     }).finally(() => setIsLoading(false));
-  }, [status, id]);
+  }, [status, id, isAdmin]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -122,6 +128,15 @@ export default function ItemDetailPage() {
   const discounted = sp < listPrice;
   const owned = orders.some((o) => o.itemId === item._id && ["pending", "completed"].includes(o.status) && (!o.expiresAt || new Date(o.expiresAt) > new Date()));
   const inCart = cart.some((c) => c.itemId === item._id);
+  // 📌 장바구니 개수 — 장바구니 화면과 같은 기준: 목록에 없는(삭제·숨김) 상품 · 같은 상품 중복은 세지 않는다.
+  //    목록을 못 받았으면 저장된 그대로 센다
+  const cartSeen = new Set<string>();
+  const cartCount = cart.reduce((n, c) => {
+    const cid = String(c?.itemId);
+    if (cartSeen.has(cid) || (validIds && !validIds.has(cid))) return n;
+    cartSeen.add(cid);
+    return n + (c?.qty || 1);
+  }, 0);
   const soldOut = item.stock === 0;
   const wished = wish.includes(item._id);
   const affordable = myXp != null && myXp >= sp;
@@ -163,7 +178,7 @@ export default function ItemDetailPage() {
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
       <ArcticStoreBar
         crumbs={[{ label: itemTypeLabel(item.type), href: `/arctic?type=${item.type}` }, { label: item.name }]}
-        cartCount={cart.reduce((n, c) => n + (c.qty || 1), 0)}
+        cartCount={cartCount}
         wishCount={wish.length}
       />
       <section className="max-w-5xl mx-auto px-6 pt-8 pb-32 md:pb-24">

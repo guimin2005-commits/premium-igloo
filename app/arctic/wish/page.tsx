@@ -3,12 +3,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
-import ItemIcon from "../../components/ItemIcon";
 import { ICON_PATHS } from "../../components/Icons";
 import { isTimed, durationOptions, durationLabel, durationPrice } from "@/lib/shopPricing";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { isAdminName } from "@/lib/admins";
 import ArcticStoreBar from "../ArcticStoreBar";
+import CardArt from "../CardArt";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 
@@ -22,20 +22,6 @@ const TypeBadge = ({ type, className = "" }: { type: string; className?: string 
     {itemTypeLabel(type)}
   </span>
 );
-
-const CardArt = ({ it }: { it: any }) => {
-  const color = it?.color || itemTypeColor(it?.type);
-  const img = it?.imageUrl || it?.itemImageUrl;
-  if (img) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={img} alt={it.name || ""} className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />;
-  }
-  return (
-    <div className="absolute inset-0 flex items-center justify-center" style={{ background: `linear-gradient(160deg, ${color}33, ${color}0a)` }}>
-      <ItemIcon icon={it?.icon} type={it?.type} size={64} color={color} />
-    </div>
-  );
-};
 
 const readList = <T,>(key: string): T[] => {
   try {
@@ -67,11 +53,18 @@ export default function WishPage() {
   useEffect(() => { if (ready) try { localStorage.setItem("iglooShopWish", JSON.stringify(wish)); } catch {} }, [wish, ready]);
   useEffect(() => { if (ready) try { localStorage.setItem("iglooShopCart", JSON.stringify(cart)); } catch {} }, [cart, ready]);
 
+  // 📌 장바구니 정리 기준 — 상품 목록을 제대로 받아 왔을 때의 id 들. 받기 전·실패면 null
+  const [validIds, setValidIds] = useState<Set<string> | null>(null);
+
   useEffect(() => {
     if (status === "loading") return;
     fetch(`/api/shop/items${isAdmin ? "?all=1" : ""}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => setItems(Array.isArray(d?.data) ? d.data : []))
+      .then((d) => {
+        const list = Array.isArray(d?.data) ? d.data : [];
+        setItems(list);
+        if (d?.success && Array.isArray(d?.data)) setValidIds(new Set(list.map((i: any) => String(i._id))));
+      })
       .catch(() => setItems([]))
       .finally(() => setLoaded(true));
     if (isLoggedIn) {
@@ -82,7 +75,22 @@ export default function WishPage() {
     }
   }, [status, isAdmin, isLoggedIn]);
 
-  const owned = useMemo(() => new Set(orders.filter((o) => o.status !== "cancelled").map((o) => o.itemId)), [orders]);
+  // 📌 목록에 없는(삭제·숨김) 상품 · 같은 상품 중복은 장바구니에서 뺀다 — 안 그러면 개수 배지에 유령 "1" 이 남는다.
+  //    목록을 제대로 받았을 때만 정리한다 (실패로 장바구니를 날리지 않게). 저장은 위 저장 effect 가 한다.
+  useEffect(() => {
+    if (!ready || !validIds) return;
+    setCart((prev) => {
+      const seen = new Set<string>();
+      const next = prev.filter((c) => {
+        if (!c || !validIds.has(String(c.itemId)) || seen.has(String(c.itemId))) return false;
+        seen.add(String(c.itemId));
+        return true;
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [ready, validIds]);
+
+  const owned =useMemo(() => new Set(orders.filter((o) => o.status !== "cancelled").map((o) => o.itemId)), [orders]);
   // 찜한 순서대로 — 최근에 찜한 것이 앞에 오게
   const rows = useMemo(() => [...wish].reverse().map((id) => items.find((i) => i._id === id)).filter(Boolean), [wish, items]);
 
@@ -106,7 +114,11 @@ export default function WishPage() {
     say(`${it.name}${days > 0 ? ` (${durationLabel(days)})` : ""} 상품을 장바구니에 담았습니다`);
   };
 
-  const cartCount = cart.reduce((n, c) => n + (c.qty || 1), 0);
+  // 개수는 상품 목록에 있는 것만 — 저장소 원본을 세면 장바구니 화면엔 없는 상품까지 센다
+  const cartCount = useMemo(
+    () => cart.filter((c) => items.some((i) => i._id === c.itemId)).reduce((n, c) => n + (c.qty || 1), 0),
+    [cart, items]
+  );
 
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
@@ -144,7 +156,7 @@ export default function WishPage() {
               return (
                 <div key={it._id} className="group relative flex flex-col">
                   <Link href={`/arctic/item/${it._id}`} className="block relative aspect-square overflow-hidden rounded-md bg-[#f2f2f2]">
-                    <CardArt it={it} />
+                    <CardArt it={it} imgClass="group-hover:scale-[1.03] transition-transform duration-500" iconSize={64} />
                     {soldOut && (
                       <span className="absolute inset-0 bg-white/70 flex items-center justify-center">
                         <span className="text-[12px] font-black text-[#131313] tracking-wider">품절</span>

@@ -16,6 +16,7 @@ import {
 import ArcticFooter from "./ArcticFooter";
 import ArcticDock from "./ArcticDock";
 import ArcticHome from "./ArcticHome";
+import CardArt from "./CardArt";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useArcticFromLevel } from "./fromLevel";
 
@@ -52,22 +53,6 @@ function TypeBadge({ type, className = "" }: { type: string; className?: string 
     <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
       {itemTypeLabel(type)}
     </span>
-  );
-}
-
-// 📌 카드 그림 자리 — 상품 이미지 > 아이템 이미지 > 아이콘(ItemIcon: 프리셋 SVG·이모지·유형 기본).
-//    배경은 등록 색을 연하게 깐 그라데이션이라 이미지 없는 상품도 서로 구분된다.
-function CardArt({ it, imgClass = "", iconSize = 48 }: { it: any; imgClass?: string; iconSize?: number }) {
-  const color = it?.color || itemTypeColor(it?.type);
-  const img = it?.imageUrl || it?.itemImageUrl;
-  if (img) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={img} alt={it.name || ""} className={`absolute inset-0 w-full h-full object-cover ${imgClass}`} />;
-  }
-  return (
-    <div className="absolute inset-0 flex items-center justify-center" style={{ background: `linear-gradient(160deg, ${color}33, ${color}0a)` }}>
-      <ItemIcon icon={it?.icon} type={it?.type} size={iconSize} color={color} />
-    </div>
   );
 }
 
@@ -437,16 +422,39 @@ export default function ArcticShopBody({
       .catch(() => setShopPublic(false));
   }, []);
 
+  // 📌 장바구니 정리 기준 — 상품 목록을 제대로 받아 왔을 때의 id 들. 받기 전·실패(403·네트워크)면 null
+  const [cartValidIds, setCartValidIds] = useState<Set<string> | null>(null);
+
   // 세션 확정 후 조회 — 공개 전에는 관리자 세션이 있어야 200이 온다
   // 관리자는 숨김 상품까지 함께 본다 (카드에 '숨김' 배지 표시)
   useEffect(() => {
     if (status === "loading") return;
     fetch(`/api/shop/items${isAdmin ? "?all=1" : ""}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => setItems(Array.isArray(d?.data) ? d.data : []))
+      .then((d) => {
+        const list = Array.isArray(d?.data) ? d.data : [];
+        setItems(list);
+        // 관리자 '유저 화면' 미리보기는 숨김 상품이 빠진 목록이라 정리 기준으로 쓰지 않는다 (숨김 상품을 지우지 않게)
+        if (d?.success && Array.isArray(d?.data) && !userPreview) setCartValidIds(new Set(list.map((i: any) => String(i._id))));
+      })
       .catch(() => {})
       .finally(() => setIsLoading(false));
-  }, [status, isAdmin]);
+  }, [status, isAdmin, userPreview]);
+
+  // 📌 목록에 없는(삭제·숨김) 상품 · 같은 상품 중복은 장바구니에서 뺀다 — 안 그러면 개수 배지에 유령 "1" 이 남는다.
+  //    목록을 제대로 받았을 때만 정리한다 (실패로 장바구니를 날리지 않게). 저장은 위 저장 effect 가 한다.
+  useEffect(() => {
+    if (!cartLoaded || !cartValidIds) return;
+    setCart((prev) => {
+      const seen = new Set<string>();
+      const next = prev.filter((c) => {
+        if (!c || !cartValidIds.has(String(c.itemId)) || seen.has(String(c.itemId))) return false;
+        seen.add(String(c.itemId));
+        return true;
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [cartLoaded, cartValidIds]);
 
   useEffect(() => { loadMine(); }, [loadMine]);
 
