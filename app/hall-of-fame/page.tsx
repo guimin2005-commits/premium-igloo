@@ -135,31 +135,33 @@ export default function HallOfFamePage() {
       </section>
 
       <div className="w-full max-w-5xl mx-auto px-6 pb-20 flex-1 flex flex-col">
-        {/* ── 분류 필터 ── */}
+        {/* ── 분류 — 사이트 공통 밑줄 탭을 금색으로. 한국어 이름 · 개수, 옆으로 넘기지 않고 줄바꿈.
+               관리자 링크는 같은 줄 오른쪽 끝 (연대기 배치는 그대로) ── */}
         {!isLoading && champions.length > 0 && (
-          <div className="mb-8 md:mb-10">
-            <div className="flex gap-2 overflow-x-auto no-bar -mx-6 px-6 pb-1">
+          <div className="mb-8 md:mb-10 flex items-end justify-between gap-4 border-b" style={{ borderColor: `${GOLD}26` }}>
+            <div role="tablist" aria-label="기록 분류" className="flex flex-wrap min-w-0">
               {tabs.map((t) => {
                 const active = filter === t.key;
                 return (
                   <button
                     key={t.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
                     onClick={() => setFilter(t.key)}
-                    className={`hof-chip shrink-0 px-4 py-2 rounded-full border text-[11px] font-black tracking-[0.14em] uppercase whitespace-nowrap ${active ? "hof-chip-on text-[#0d0b05]" : "text-gray-400 hover:text-white"}`}
-                    style={active ? undefined : { borderColor: `${GOLD}26` }}
+                    className={`relative py-3 mr-5 md:mr-8 text-[14px] md:text-[15px] font-extrabold whitespace-nowrap transition-colors outline-none focus-visible:text-white ${active ? "text-white" : "text-gray-500 hover:text-gray-200"}`}
                   >
-                    {t.en}
-                    <span className={`ml-2 tabular-nums ${active ? "opacity-70" : "opacity-50"}`}>{t.count}</span>
+                    {t.key}
+                    <span className="ml-1.5 text-[11px] font-bold tabular-nums" style={{ color: active ? GOLD : undefined }}>{t.count}</span>
+                    {active && <span aria-hidden className="absolute left-0 right-0 -bottom-px h-[2px]" style={{ background: GOLD }} />}
                   </button>
                 );
               })}
             </div>
             {isAdmin && (
-              <div className="flex justify-end mt-3">
-                <Link href="/admin/honors" className="text-[11px] font-bold text-gray-500 hover:text-white border border-white/10 hover:border-white/25 px-3 py-1.5 rounded-full transition-colors">
-                  관리자 · 기록 관리
-                </Link>
-              </div>
+              <Link href="/admin/honors" className="hidden sm:inline-block shrink-0 mb-2.5 text-[11px] font-bold text-gray-500 hover:text-white transition-colors">
+                기록 관리 ›
+              </Link>
             )}
           </div>
         )}
@@ -176,7 +178,7 @@ export default function HallOfFamePage() {
         ) : (
           /* ── 연대기 — 카드 없이 골드 헤어라인만. 모든 줄이 같은 크기이고, 강조는 마우스를 올린 줄에만 ──
              key에 필터를 걸어, 분류를 바꿀 때마다 줄이 다시 차례로 올라오게 한다 */
-          <div key={filter} className="border-t" style={{ borderColor: `${GOLD}26` }}>
+          <div key={filter}>
             {visible.map((c, idx) => {
               const [sy, ey] = getYears(c);
               const members = parseIds(c.winnerId).map((id) => profiles[id]).filter((p) => p && !p.failed);
