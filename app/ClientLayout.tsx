@@ -431,8 +431,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   : `shrink-0 font-bold text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-gray-300"}`}>고급 이글루</Link>
                 {section && (
                   <>
-                    <span className={`shrink-0 w-px h-4 ${isLightPage ? "bg-[#d4d4d4]" : "bg-white/20"}`} />
-                    <Link href={section.href} className={`shrink-0 font-black tracking-[0.14em] leading-none whitespace-nowrap transition-colors ${scrolled ? "text-[14px] md:text-[15px]" : "text-[15px] md:text-[17px]"} ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-[#ff5c77]"}`}>
+                    <span className={`hidden md:block shrink-0 w-px h-4 ${isLightPage ? "bg-[#d4d4d4]" : "bg-white/20"}`} />
+                    <Link href={section.href} className={`hidden md:inline shrink-0 font-black tracking-[0.14em] leading-none whitespace-nowrap transition-colors ${scrolled ? "text-[14px] md:text-[15px]" : "text-[15px] md:text-[17px]"} ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-[#ff5c77]"}`}>
                       {section.name}
                     </Link>
                   </>
