@@ -718,8 +718,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <div className="flex items-center gap-6">
               <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>Discord</a>
               <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>Kakao Talk</a>
-              <Link href="/recruit" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>구인</Link>
-              <Link href="/hall-of-fame" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>명예의 전당</Link>
               <Link href="/faq" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>FAQ</Link>
               <Link href="/support" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>1:1 문의</Link>
               <Link href="/policy" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>이용약관</Link>
