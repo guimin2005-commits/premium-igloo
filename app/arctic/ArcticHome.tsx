@@ -92,7 +92,10 @@ export default function ArcticHome({
 
   return (
     <>
-      {/* ── 배너 (관리자 등록) — 없으면 시즌 히어로. 모서리는 각지게, 폭은 본문 폭 안에 (화면 끝까지 채우면 너무 꽉 찬다) ── */}
+      {/* ── 배너 (관리자 등록) — 등록된 배너가 없으면 이 자리는 아예 없다.
+             예전엔 시즌 히어로(민트 화면)를 대신 깔았는데 들어올 때마다 튀어나와 없앴다.
+             모서리는 각지게, 폭은 본문 폭 안에 (화면 끝까지 채우면 너무 꽉 찬다) ── */}
+      {banners.length > 0 && (
       <section className="max-w-7xl mx-auto px-5 md:px-8 pt-5 md:pt-6">
         <div className="relative overflow-hidden bg-[#f2f2f2]">
           {banners.length > 0 ? (
@@ -129,26 +132,7 @@ export default function ArcticHome({
                 </div>
               )}
             </>
-          ) : !bannersLoaded ? (
-            /* 아직 모르는 상태 — 자리만 잡고 아무것도 그리지 않는다 */
-            <div className="aspect-[16/7] md:aspect-[3/1]" />
-          ) : (
-            <div className="relative aspect-[16/7] md:aspect-[3/1]" style={{ background: "linear-gradient(115deg, #dff4f1 0%, #9fd9d1 45%, #4fb6ab 100%)" }}>
-              <div className="absolute left-6 md:left-12 top-1/2 -translate-y-1/2 break-keep">
-                <div className="text-[11px] font-black text-[#131313] tracking-wide">SEASON {SEASON.number} · {SEASON.name}</div>
-                <div className="mt-2 text-4xl md:text-6xl font-black tracking-tighter leading-none text-[#131313]">ARCT<span className="text-[#e91e3f]">I</span>C</div>
-                {!dday.ended && dday.days >= 0 && (
-                  <div className="mt-3 text-[12px] font-bold text-[#2a4a47] tabular-nums">종료까지 D-{dday.days}</div>
-                )}
-              </div>
-              {/* 장식 — 유형 아이콘 세 장 */}
-              <div aria-hidden className="hidden md:block absolute right-16 top-1/2 -translate-y-1/2 w-[300px] h-[240px]">
-                <span className="absolute left-0 top-12 w-[140px] h-[140px] rounded-3xl bg-white/55 shadow-[0_30px_60px_-30px_rgba(0,0,0,.35)] grid place-items-center -rotate-6"><ItemIcon type="item" size={64} color="#e91e3f" /></span>
-                <span className="absolute right-0 top-0 w-[110px] h-[110px] rounded-3xl bg-[#131313]/85 grid place-items-center rotate-6"><ItemIcon type="perk" size={50} color="#ffffff" /></span>
-                <span className="absolute right-8 bottom-0 w-[92px] h-[92px] rounded-3xl bg-white/55 grid place-items-center -rotate-3"><ItemIcon type="role" size={40} color="#e91e3f" /></span>
-              </div>
-            </div>
-          )}
+          ) : null}
 
           {isAdmin && (
             <Link href="/admin/shop?tab=banners"
@@ -158,6 +142,7 @@ export default function ArcticHome({
           )}
         </div>
       </section>
+      )}
 
       {/* ── 두 갈래 큐레이션 ── */}
       <section className="max-w-7xl mx-auto px-5 md:px-8 pt-12 md:pt-14">
@@ -251,6 +236,7 @@ export default function ArcticHome({
           <Link href="/admin/shop?tab=products" className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] underline underline-offset-4">전체 상품 관리</Link>
           <Link href="/admin/shop?tab=items" className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] underline underline-offset-4">아이템 등록</Link>
           <Link href="/admin/shop?tab=orders" className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] underline underline-offset-4">구매 관리</Link>
+          <Link href="/admin/shop?tab=banners" className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] underline underline-offset-4">배너 관리</Link>
           {adminTools}
         </div>
       )}
