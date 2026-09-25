@@ -52,13 +52,12 @@ const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
 // 📌 메인 탭 — ARCTIC 은 제 주소 /arctic 에 산다(3차). 탭 줄에서는 링크로만 서고,
 //    옛 ?tab= 주소로 들어오면 아래 effect 가 /arctic 으로 보낸다.
 // 순서는 "내 것 → 시즌 → 정보" — 자주 보는 것이 앞, 한 번 읽고 마는 안내는 맨 뒤.
+// 📌 XP 테이블 · 시뮬레이터는 탭이 아니라 대시보드 안의 카테고리다 (옛 ?tab=table · sim 은 그리로 보낸다)
 const MAIN_TABS = [
   { id: "my", name: "내 대시보드", short: "대시보드" },
   { id: "rank", name: "랭킹" },
   // 레벨에서 왔다는 표시를 달아 ARCTIC 이 돌아갈 길("LEVEL ›")을 보이게 한다 (app/arctic/fromLevel.ts)
   { id: "arctic", name: "ARCTIC", shopOnly: true, href: "/arctic?from=level" },
-  { id: "table", name: "XP 테이블" },
-  { id: "sim", name: "시뮬레이터" },
   { id: "intro", name: "시스템 안내", short: "안내" },
 ];
 
@@ -495,7 +494,7 @@ const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 
 const SIM_DAYS = [7, 30, 90, 180, 365];
 const SIM_CHAT = [0, 30, 60, 120, 240].map((v) => ({ v, l: v ? `${v}회` : "0" }));
 const SIM_VOICE = [0, 60, 120, 240, 480].map((v) => ({ v, l: v ? fmtMin(v) : "0" }));
-const XpSimulator = ({ me, P, ready, onTone }) => {
+const XpSimulator = ({ me, P, ready, onTone, narrow = false }) => {
   const [start, setStart] = useState(""); // 비우면 내 레벨
   const [chatN, setChatN] = useState(60);
   const [voiceMin, setVoiceMin] = useState(120);
@@ -615,10 +614,12 @@ const XpSimulator = ({ me, P, ready, onTone }) => {
   const won = (n) => n.toLocaleString();
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
-      {/* 조건 */}
-      <div className="lg:col-span-5 order-2 lg:order-1">
+    <div className={narrow ? "grid grid-cols-1 gap-8 items-start" : "grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start"}>
+      {/* 조건 — 좁은 모드(대시보드 안, 왼쪽에 프로필 카드)는 결과 아래에서 두 칸으로 */}
+      <div className={narrow ? "order-2" : "lg:col-span-5 order-2 lg:order-1"}>
         <div className="rounded-2xl border border-[#ededed] bg-white px-6 md:px-7 pb-3">
+          <div className={narrow ? "lg:grid lg:grid-cols-2 lg:gap-x-10" : ""}>
+          <div className="min-w-0">
           <SimGroup title="하루 활동" />
           <SimRow stack label="채팅" sub={`쿨타임 ${cooldownLabel}마다 1회 인정 · 1회 ${won(cLo + extra)}~${won(cHi + extra)} XP`}>
             <SimChips value={chatN} options={SIM_CHAT} onChange={pickTone(setChatN)} label="하루 채팅 인정 횟수" />
@@ -634,7 +635,9 @@ const XpSimulator = ({ me, P, ready, onTone }) => {
           <SimRow label="매일 출석" sub={`+${won(P.attendXp + Math.max(0, Number(me?.attendBuffXp) || 0))} XP · 음성 ${P.attendVoiceMin}분 또는 /출석체크`}>
             <SimToggle on={attend} onChange={pickTone(setAttend)} label="매일 출석" />
           </SimRow>
+          </div>
 
+          <div className="min-w-0">
           <SimGroup title="시작 · 목표" />
           <SimRow label="시작 레벨" sub={useMine ? `내 레벨 · ${won(me.xp || 0)} XP` : `${won(baseXp)} XP`}>
             <div className="flex items-center gap-2 shrink-0">
@@ -687,11 +690,13 @@ const XpSimulator = ({ me, P, ready, onTone }) => {
               {me ? "내 조건으로 되돌리기" : "처음으로"}
             </button>
           </div>
+          </div>
+          </div>
         </div>
       </div>
 
       {/* 결과 — XP 테이블 카드와 같은 구성. PC 에서는 따라 내려온다 */}
-      <div className="lg:col-span-7 order-1 lg:order-2 lg:sticky lg:top-24">
+      <div className={narrow ? "order-1" : "lg:col-span-7 order-1 lg:order-2 lg:sticky lg:top-24"}>
         <div className="relative overflow-hidden rounded-2xl bg-[#131313] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">
           <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
           <div className="relative z-10 p-6 md:p-8">
@@ -2295,9 +2300,21 @@ export default function LevelPage() {
     { k: "rank", l: "랭킹", icon: "chart", n: 0 },
     ...(events.length > 0 ? [{ k: "event", l: "이벤트", icon: "gift", n: 0 }] : []),
     { k: "feed", l: "획득 피드", icon: "clock", n: 0 },
+    { k: "table", l: "XP 테이블", icon: "receipt", n: 0 },
+    { k: "sim", l: "시뮬레이터", icon: "sparkles", n: 0 },
   ];
   const mSecOn = mobSecs.some((x) => x.k === mSec) ? mSec : "quest";
-  const secCls = (k) => `${mSecOn === k ? "block" : "hidden"} lg:block`;
+  // PC — 오른쪽 카테고리(현황 · XP 테이블 · 시뮬레이터). 현황이면 퀘스트 · 랭킹 · 피드를 다 펼치고, 아니면 그 카테고리 하나만
+  const deskOverview = mSecOn !== "table" && mSecOn !== "sim";
+  const secCls = (k) => `${mSecOn === k ? "block" : "hidden"} ${deskOverview ? "lg:block" : "lg:hidden"}`;
+  // 📌 옛 주소(?tab=table · ?tab=sim) — 대시보드의 그 카테고리로 연다
+  useEffect(() => {
+    if (tabParam !== "table" && tabParam !== "sim") return;
+    setMSec(tabParam);
+    const q = new URLSearchParams(Array.from(searchParams.entries()));
+    q.delete("tab");
+    router.replace(`${pathname}${q.toString() ? `?${q.toString()}` : ""}`, { scroll: false });
+  }, [tabParam, searchParams, router, pathname]);
   const pickSec = (k) => {
     setMSec(k);
     const nav = mNavRef.current, card = dashCardRef.current;
@@ -2309,18 +2326,35 @@ export default function LevelPage() {
 
   // PC 대시보드 — 프로필 카드가 스크롤을 따라 내려온다. 헤더(60px) 아래 남은 화면의 세로 가운데에 선다.
   // 카드가 화면보다 길면 top 을 음수로 줘서 카드 바닥까지 보인 뒤에 멈춘다
+  // 📌 끝까지 내려오게 — 카드는 기둥(왼쪽 칸) 안에서만 움직이므로, 기둥을 그리드 아래로 필요한 만큼 늘인다(stickExtend).
+  //    그러지 않으면 오른쪽 열이 끝나는 순간 카드가 같이 밀려 올라가 윗부분이 헤더 밑으로 들어간다.
+  //    늘인 만큼은 문서 끝을 넘지 않는다(= 카드 + 위 · 아래 여백이 화면 안에 들어가는 만큼만) — 창이 낮으면 끝에서 푸터 위에 살짝 겹친다.
   const stickRef = useRef(null);
-  const [stickTop, setStickTop] = useState(84);
+  const [stickTop, setStickTop] = useState(null); // 재기 전(첫 화면 · 모바일)에는 비워 둔다 — 모바일 카드가 밀려 내려가지 않게
+  const [stickExtend, setStickExtend] = useState(0);
   useEffect(() => {
-    const el = stickRef.current;
-    if (!el) return;
+    const col = stickRef.current;
+    if (!col) return;
     const calc = () => {
-      const room = window.innerHeight - 60 - el.offsetHeight;
-      setStickTop(room >= 48 ? 60 + Math.round(room / 2) : Math.min(84, window.innerHeight - el.offsetHeight - 24));
+      const card = dashCardRef.current;
+      if (!card) return;
+      const h = card.offsetHeight;
+      // 헤더(60px) 아래 남은 화면의 세로 가운데. 카드가 화면보다 길면 바닥이 보이게(음수 top)
+      const fits = 60 + 24 + h + 24 <= window.innerHeight;
+      const top = fits ? 60 + Math.max(24, Math.round((window.innerHeight - 60 - h) / 2)) : Math.min(84, window.innerHeight - h - 24);
+      // 모바일(lg 미만)에서는 카드가 sticky 가 아니라 relative 라 top 을 주면 그만큼 밀려 내려간다 — 비워 둔다
+      if (window.innerWidth < 1024) { setStickTop(null); setStickExtend(0); return; }
+      setStickTop(top);
+      const grid = col.parentElement;
+      if (!grid) { setStickExtend(0); return; }
+      const gridBottom = grid.getBoundingClientRect().bottom + window.scrollY;
+      const tail = document.documentElement.scrollHeight - gridBottom; // 그리드 아래 → 문서 끝 (본문 여백 + 푸터)
+      setStickExtend(Math.max(0, Math.ceil(top + h + 24 - (window.innerHeight - tail))));
     };
     calc();
     const ro = new ResizeObserver(calc);
-    ro.observe(el);
+    if (dashCardRef.current) ro.observe(dashCardRef.current);
+    if (col.parentElement) ro.observe(col.parentElement);
     window.addEventListener("resize", calc);
     return () => { ro.disconnect(); window.removeEventListener("resize", calc); };
   }, [meLoaded, me, activeMainTab]);
@@ -2611,13 +2645,21 @@ export default function LevelPage() {
       {/* ── 탭 줄 — 어떤 탭이든 헤더 바로 아래 같은 자리. 여기가 움직이면 안 된다. ── */}
       {tabBar}
 
-      {/* ── 시즌 한 줄 — 큰 머리(SYSTEM : LEVEL 제목 · 시즌 알약 · 동기화 줄)를 없앤 자리. 모바일 · PC 같은 모양.
-             구역 이름은 상단 바(고급 이글루 | SYSTEM : LEVEL)가 이미 갖고 있다. PC 는 동기화 글자 · 마지막 갱신 시각까지 ── */}
-      <div className="w-full border-b border-[#ededed]">
-        <div className="max-w-7xl mx-auto px-5 md:px-8 h-10 md:h-11 flex items-center justify-between gap-4 text-[12px] font-bold">
-          <span className="text-[#d01634] font-black whitespace-nowrap">SEASON {SEASON.number} · {SEASON.name}</span>
-          <span className="inline-flex items-center gap-2 md:gap-2.5 text-[#5a5a5a] tabular-nums whitespace-nowrap">
-            {seasonDday.ended ? "시즌 종료" : `종료까지 D-${seasonDday.days}`}
+      {/* 대시보드 탭은 좌우 공간을 쓰는 와이드 HUD(7xl), 문서형 탭은 기존 에디토리얼 폭 유지 */}
+      <div className={`w-full max-w-7xl mx-auto px-5 md:px-8 flex-1 ${activeMainTab === "my" ? "py-6 md:py-10" : "py-10 md:py-14"}`}>
+        {/* ── 머리 한 줄 — 큰 제목(히어로)을 없앤 자리. 선으로 따로 떼지 않고 본문 맨 위에 작게:
+               왼쪽 워드마크 · 시즌 이름, 오른쪽 D-day · 동기화 점 · 갱신 (PC 는 동기화 글자 · 마지막 갱신 시각까지) ── */}
+        <div className="flex items-center justify-between gap-4 mb-6 md:mb-8">
+          <div className="flex items-baseline gap-3 min-w-0">
+            <h1 className="text-[20px] md:text-[26px] font-black tracking-tighter leading-none whitespace-nowrap">
+              <span className="text-[#131313]">SYSTEM</span>
+              <span className="text-[#e91e3f] mx-1">:</span>
+              <span className="lux-shimmer">LEVEL</span>
+            </h1>
+            <span className="hidden sm:inline text-[12px] font-black text-[#d01634] whitespace-nowrap">SEASON {SEASON.number} · {SEASON.name}</span>
+          </div>
+          <div className="inline-flex items-center gap-2 md:gap-2.5 text-[12px] font-bold text-[#5a5a5a] tabular-nums whitespace-nowrap">
+            {seasonDday.ended ? "시즌 종료" : <><span className="sm:hidden">시즌 </span><span className="hidden sm:inline">종료까지 </span>D-{seasonDday.days}</>}
             {authReady && session?.user && (
               <>
                 <span className="hidden md:inline text-[#d4d4d4]" aria-hidden>·</span>
@@ -2627,12 +2669,9 @@ export default function LevelPage() {
                 <button onClick={() => loadMe().then(() => pushToast("동기화 완료"))} className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 border border-[#a3a3a3] rounded-full px-2.5 py-0.5">갱신</button>
               </>
             )}
-          </span>
+          </div>
         </div>
-      </div>
 
-      {/* 대시보드 탭은 좌우 공간을 쓰는 와이드 HUD(7xl), 문서형 탭은 기존 에디토리얼 폭 유지 */}
-      <div className={`w-full max-w-7xl mx-auto px-5 md:px-8 flex-1 ${activeMainTab === "my" ? "py-6 md:py-10" : "py-10 md:py-14"}`}>
 
         {/* ══ TAB : MY DASHBOARD — 게임 프로필 화면 ══
                앵커는 플레이어 배너(레벨 링 + 대형 레벨 + 와이드 XP 게이지) 하나.
@@ -2701,6 +2740,27 @@ export default function LevelPage() {
                   </div>
                 </div>
 
+                {/* 로그인 없이도 — XP 테이블 · 시뮬레이터 (예전 탭) */}
+                <div className="mt-14">
+                  <div role="tablist" aria-label="XP 도구" className="flex border-b border-[#ededed] mb-8">
+                    {[{ k: "table", l: "XP 테이블" }, { k: "sim", l: "시뮬레이터" }].map((t) => {
+                      const on = (mSecOn === "sim" ? "sim" : "table") === t.k;
+                      return (
+                        <button key={t.k} type="button" role="tab" aria-selected={on} onClick={() => setMSec(t.k)}
+                          className={`relative py-3 mr-7 text-[15px] font-extrabold transition-colors outline-none focus-visible:text-[#131313] ${on ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
+                          {t.l}
+                          {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {mSecOn === "sim" ? (
+                    <XpSimulator me={null} P={P} ready={!!policy} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
+                  ) : (
+                    <XpTableView myLevel={0} myXp={null} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
+                  )}
+                </div>
+
                 {/* 공개 섹션 — 관전자에게도 실데이터 */}
                 <div className="mt-14">
                   <div className="max-w-2xl mx-auto min-w-0">
@@ -2731,12 +2791,13 @@ export default function LevelPage() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-10 gap-y-5 lg:gap-y-14 items-start">
 
                 {/* 왼쪽 기둥 — 세로 프로필 카드. PC 에서는 스크롤을 따라 내려온다 */}
-                <div ref={stickRef} className="contents lg:block lg:col-span-4 min-w-0 lg:sticky" style={{ top: stickTop }}>
+                {/* 기둥은 그리드보다 stickExtend 만큼 길다(모바일은 contents 라 높이가 무시된다) — 카드가 그 안에서 끝까지 따라온다 */}
+                <div ref={stickRef} className="contents lg:block lg:col-span-4 min-w-0" style={{ height: `calc(100% + ${stickExtend}px)` }}>
                     {/* 프로필 카드 — 위에서 아래로: 정체성 → 레벨 → 등급 → 경험치 → 인벤토리 · 시즌 패스 · 강화 → 스탯 */}
                     <div
                       ref={dashCardRef}
-                      className="order-first relative rounded-3xl overflow-hidden shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]"
-                      style={{ background: `radial-gradient(420px 320px at 86% 30%, ${hexA(tierCur.c, 0.26)} 0%, ${hexA(tierCur.c, 0)} 72%), linear-gradient(180deg, #1b1b1b 0%, #131313 55%)` }}
+                      className="order-first relative lg:sticky lg:z-20 rounded-3xl overflow-hidden shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]"
+                      style={{ top: stickTop ?? undefined, background: `radial-gradient(420px 320px at 86% 30%, ${hexA(tierCur.c, 0.26)} 0%, ${hexA(tierCur.c, 0)} 72%), linear-gradient(180deg, #1b1b1b 0%, #131313 55%)` }}
                     >
                       <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
                       <span aria-hidden className="hidden lg:block absolute -right-3 -bottom-10 text-[150px] font-black text-white/[0.035] leading-none tracking-tighter tabular-nums select-none pointer-events-none">{me.level}</span>
@@ -2930,6 +2991,20 @@ export default function LevelPage() {
                       </div>
                     </nav>
 
+                    {/* PC 카테고리 — 사이트 공통 밑줄 탭. 모바일은 위 아이콘 줄이 같은 일을 한다 */}
+                    <div role="tablist" aria-label="대시보드 카테고리" className="hidden lg:flex lg:col-span-2 lg:-mb-6 border-b border-[#ededed]">
+                      {[{ k: "quest", l: "현황" }, { k: "table", l: "XP 테이블" }, { k: "sim", l: "시뮬레이터" }].map((t) => {
+                        const on = t.k === "quest" ? deskOverview : mSecOn === t.k;
+                        return (
+                          <button key={t.k} type="button" role="tab" aria-selected={on} onClick={() => { setMSec(t.k); playTone(620, 0.04, "sine", 0.025); }}
+                            className={`relative py-3 mr-7 text-[15px] font-extrabold transition-colors outline-none focus-visible:text-[#131313] ${on ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
+                            {t.l}
+                            {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+
                     {/* 일일 퀘스트 — 출석(봇 지급) + 관리자가 정의한 퀘스트(원클릭 수령) */}
                     <section className={`${secCls("quest")} lg:col-span-2`}>
                       <div className="flex items-end justify-between mb-5">
@@ -3120,7 +3195,8 @@ export default function LevelPage() {
                     </section>
 
                     {/* 아래 왼쪽 — 서버 랭킹 */}
-                    <div className="contents lg:block min-w-0">
+                    {/* 랭킹 묶음 — 현황이 아닐 때는 빈 틀도 숨긴다 */}
+                    <div className={`contents ${deskOverview ? "lg:block" : "lg:hidden"} min-w-0`}>
                     {/* 서버 랭킹 */}
                     <section className={secCls("rank")}>
                       <div className="flex items-end justify-between mb-5">
@@ -3152,7 +3228,8 @@ export default function LevelPage() {
                     </div>
 
                     {/* 아래 오른쪽 — 획득 피드 · 이벤트 */}
-                    <div className="contents lg:block lg:space-y-14 min-w-0">
+                    {/* 피드 · 이벤트 묶음 — 현황이 아닐 때는 빈 틀도 숨긴다 (남겨 두면 빈 줄 하나만큼 간격이 벌어진다) */}
+                    <div className={`contents ${deskOverview ? "lg:block" : "lg:hidden"} lg:space-y-14 min-w-0`}>
                     {/* 획득 피드 — 최근 5건만, 줄을 낮게 */}
                     <section className={secCls("feed")}>
                       <div className="flex items-end justify-between mb-4">
@@ -3206,6 +3283,14 @@ export default function LevelPage() {
                     )}
 
                     </div>
+
+                    {/* XP 테이블 · 시뮬레이터 — 예전엔 탭, 이제 대시보드 카테고리. 왼쪽 카드와 나란히 오른쪽 8칸 */}
+                    <section className={`${mSecOn === "table" ? "block" : "hidden"} lg:col-span-2 min-w-0`}>
+                      <XpTableView myLevel={me?.level || 0} myXp={me?.xp ?? null} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
+                    </section>
+                    <section className={`${mSecOn === "sim" ? "block" : "hidden"} lg:col-span-2 min-w-0`}>
+                      <XpSimulator me={me} P={P} ready={!!policy} narrow onTone={() => playTone(620, 0.04, "sine", 0.025)} />
+                    </section>
                 </div>
               </div>
             )}
@@ -3560,21 +3645,6 @@ export default function LevelPage() {
         )}
 
         {/* ══ TAB : POLICY ═════════════════ */}
-        {/* ══ TAB : TABLE ══════════════════ */}
-        {activeMainTab === "table" && (
-          <Reveal>
-            <SectionHeader title="XP 테이블" />
-            <XpTableView myLevel={me?.level || 0} myXp={me?.xp ?? null} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
-          </Reveal>
-        )}
-
-        {/* ══ TAB : SIMULATOR ══════════════ */}
-        {activeMainTab === "sim" && (
-          <Reveal>
-            <SectionHeader title="XP 시뮬레이터" />
-            <XpSimulator me={me} P={P} ready={!!policy} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
-          </Reveal>
-        )}
       </div>
 
       {/* 토스트 — XP 획득/레벨업/동기화 피드백 (모바일 하단바 위로 띄움) */}
