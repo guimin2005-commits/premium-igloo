@@ -2611,50 +2611,23 @@ export default function LevelPage() {
       {/* ── 탭 줄 — 어떤 탭이든 헤더 바로 아래 같은 자리. 여기가 움직이면 안 된다. ── */}
       {tabBar}
 
-      {/* ── 모바일 시즌 한 줄 — 큰 머리(제목 · 알약 · 동기화 줄) 대신. 동기화 점 + 갱신 버튼 ── */}
-      <div className="sm:hidden w-full px-5 h-10 flex items-center justify-between border-b border-[#ededed] text-[12px] font-bold">
-        <span className="inline-flex items-center gap-2 text-[#d01634] font-black">
-          SEASON {SEASON.number} · {SEASON.name}
-        </span>
-        <span className="inline-flex items-center gap-2 text-[#5a5a5a] tabular-nums">
-          {seasonDday.ended ? "시즌 종료" : `종료까지 D-${seasonDday.days}`}
-          {authReady && session?.user && (
-            <>
-              <span aria-label="실시간 동기화 중" title="실시간 동기화 중"><LiveDot /></span>
-              <button onClick={() => loadMe().then(() => pushToast("동기화 완료"))} className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 border border-[#a3a3a3] rounded-full px-2.5 py-0.5">갱신</button>
-            </>
-          )}
-        </span>
-      </div>
-
-      {/* ── 공통 헤더 — PC 만. 모바일은 탭 줄 바로 아래 본문 (제목 · 시즌 알약 · 동기화 줄이 첫 화면을 다 먹는다) ── */}
-      <div className="relative w-full px-5 md:px-8 pt-14 pb-10 hidden sm:block">
-        <div aria-hidden className="absolute -top-16 left-1/2 -translate-x-1/2 w-[560px] h-[280px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
-        <div className="relative max-w-7xl mx-auto">
-          <div className="flex flex-col items-center text-center">
-            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none">
-              <span className="text-[#131313]">SYSTEM</span>
-              <span className="text-[#e91e3f] mx-1.5">:</span>
-              <span className="lux-shimmer">LEVEL</span>
-            </h1>
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-3.5">
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e91e3f]/10 border border-[#e91e3f]/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] animate-[pulseGlow_2.5s_ease-in-out_infinite]"></span>
-              <span className="text-[10px] font-black text-[#e91e3f] tracking-wide">SEASON {SEASON.number} · {SEASON.name}</span>
-            </span>
-            {!seasonDday.ended && seasonDday.days >= 0 && (
-              <span className="text-[11px] font-black text-[#131313] bg-black/5 border border-black/10 px-2.5 py-1 rounded-full">종료까지 D-{seasonDday.days}</span>
+      {/* ── 시즌 한 줄 — 큰 머리(SYSTEM : LEVEL 제목 · 시즌 알약 · 동기화 줄)를 없앤 자리. 모바일 · PC 같은 모양.
+             구역 이름은 상단 바(고급 이글루 | SYSTEM : LEVEL)가 이미 갖고 있다. PC 는 동기화 글자 · 마지막 갱신 시각까지 ── */}
+      <div className="w-full border-b border-[#ededed]">
+        <div className="max-w-7xl mx-auto px-5 md:px-8 h-10 md:h-11 flex items-center justify-between gap-4 text-[12px] font-bold">
+          <span className="text-[#d01634] font-black whitespace-nowrap">SEASON {SEASON.number} · {SEASON.name}</span>
+          <span className="inline-flex items-center gap-2 md:gap-2.5 text-[#5a5a5a] tabular-nums whitespace-nowrap">
+            {seasonDday.ended ? "시즌 종료" : `종료까지 D-${seasonDday.days}`}
+            {authReady && session?.user && (
+              <>
+                <span className="hidden md:inline text-[#d4d4d4]" aria-hidden>·</span>
+                <span aria-label="실시간 동기화 중" title="실시간 동기화 중"><LiveDot /></span>
+                <span className="hidden md:inline text-[11px] text-[#5a5a5a]">실시간 동기화</span>
+                {lastSync && <span className="hidden md:inline text-[11px] text-[#8a8a8a]">{lastSync.toLocaleTimeString("ko-KR", { hour12: false })}</span>}
+                <button onClick={() => loadMe().then(() => pushToast("동기화 완료"))} className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 border border-[#a3a3a3] rounded-full px-2.5 py-0.5">갱신</button>
+              </>
             )}
-            </div>
-          </div>
-          {authReady && session?.user && (
-            <div className="flex items-center justify-center md:justify-end gap-2.5 mt-5 md:mt-0 md:absolute md:top-0 md:right-0">
-              <LiveDot />
-              <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase">실시간 동기화</span>
-              {lastSync && <span className="hidden md:inline text-[10px] font-bold text-[#a3a3a3] tabular-nums">{lastSync.toLocaleTimeString("ko-KR", { hour12: false })}</span>}
-              <button onClick={() => loadMe().then(() => pushToast("동기화 완료"))} className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors outline-none focus:outline-none border border-black/10 hover:border-black/30 rounded-full px-3 py-1">갱신</button>
-            </div>
-          )}
+          </span>
         </div>
       </div>
 
