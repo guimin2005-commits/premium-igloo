@@ -1,22 +1,26 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Reveal, LuxStyles } from "../../components/Lux";
 import {
   inputClass,
-  FilterChips,
+  labelClass,
+  AdminPage,
+  AdminTabs,
+  Segmented,
+  Toolbar,
+  DataTable,
+  DetailPane,
+  DefRow,
+  StatusChip,
   EmptyRow,
-  ListFrame,
   Btn,
   Toggle,
   useNotice,
   ConfirmDialog,
   useAdminGuard,
-  AdminHero,
-  AdminTabs,
-  TableScroll,
+  type Column,
 } from "../ui";
 
 // 📌 서포터즈 관리 화면 — 두 탭(?tab=).
@@ -24,6 +28,11 @@ import {
 //          적어 임시 저장(draft)한 뒤, 확인을 거쳐 지급(paid)한다. 활동량은 근거일 뿐 금액을
 //          정하는 건 관리자다 — 그래서 자동 계산 없이 입력칸으로 둔다. 지급은 되돌릴 수 없어 paid 행은 잠근다.
 //    신고·피드백: 서포터즈가 올린 유저 신고·피드백을 읽고 답변·처리 상태를 남긴다.
+//
+// 📌 2026-09 관리자 개편 — 목록 화면 틀(머리 + 탭 → 한 줄 도구 → 전체 폭 표 → 오른쪽 상세 칸)로 옮겼다.
+//    예전엔 표 한 줄에 입력칸 · 저장 · 지급을 다 넣어 최소폭 1120px 로 가로 스크롤이 생겼고,
+//    코멘트 · 답변은 모달을 따로 열었다. 이제 표는 읽기만 하고, 줄을 누르면 상세 칸에서
+//    평가 입력(코멘트 포함) · 저장 · 지급, 답변 · 처리 상태 · 삭제를 한곳에서 한다.
 
 type Eval = {
   grade: string;
@@ -128,10 +137,18 @@ const normReport = (r: any): Report => ({
   createdAt: r.createdAt || "",
 });
 
-const TYPE_BADGE: Record<ReportType, { l: string; c: string }> = {
-  report: { l: "신고", c: "bg-[#e91e3f]/15 text-[#e91e3f]" },
-  feedback: { l: "피드백", c: "bg-[#3f83b8]/15 text-[#3f83b8]" },
+// 종류 표시는 공용 상태 칩으로 — 화면마다 따로 칠하던 배지 색을 걷었다
+const TYPE_BADGE: Record<ReportType, { l: string; tone: "bad" | "info" }> = {
+  report: { l: "신고", tone: "bad" },
+  feedback: { l: "피드백", tone: "info" },
 };
+
+// 모바일 줄 카드에는 머리글이 없어서 숫자 앞에 이름을 붙인다 (PC 표에서는 숨김)
+const Mob = ({ children }: { children: ReactNode }) => (
+  <span className="md:hidden font-normal text-[#5a5a5a]">{children} </span>
+);
+
+const Loading = () => <div className="py-12 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</div>;
 
 export default function AdminSupportersPage() {
   // 화면 가리개일 뿐이다 — 실제 방어는 /api/admin/supporters* 가 서버에서 한 번 더 한다
@@ -157,9 +174,8 @@ export default function AdminSupportersPage() {
   const [savingId, setSavingId] = useState("");
   const [payTarget, setPayTarget] = useState<Row | null>(null);
   const [isPaying, setIsPaying] = useState(false);
-  // 코멘트 모달 — 반영을 눌러야 행 편집(edits)에 들어가고, 서버 저장은 기존 저장 버튼이 한다
-  const [noteTarget, setNoteTarget] = useState<Row | null>(null);
-  const [noteDraft, setNoteDraft] = useState("");
+  // 상세 칸에 연 서포터즈 — 편집값(edits)은 칸을 닫아도 남아 표의 "저장되지 않은 변경"으로 보인다
+  const [selId, setSelId] = useState("");
 
   // ── 신고·피드백 ───────────────────────────────
   const [reportFilter, setReportFilter] = useState<ReportFilter>("open");
@@ -167,7 +183,7 @@ export default function AdminSupportersPage() {
   const [reportCounts, setReportCounts] = useState({ open: 0, done: 0 });
   const [reportsLoading, setReportsLoading] = useState(true);
   const [reportsFailed, setReportsFailed] = useState(false);
-  const [expandedId, setExpandedId] = useState("");
+  // 답변 대상 = 상세 칸에 연 건. 줄을 누르면 openReply 로 답변칸을 채워 연다
   const [replyTarget, setReplyTarget] = useState<Report | null>(null);
   const [delTarget, setDelTarget] = useState<Report | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -264,18 +280,6 @@ export default function AdminSupportersPage() {
   const setEdit = (userId: string, patch: Partial<Edit>) =>
     setEdits((prev) => ({ ...prev, [userId]: { ...(prev[userId] || editOf(null, baseXp)), ...patch } }));
 
-  // ── 코멘트 모달 ──────────────────────────────
-  const openNote = (row: Row) => {
-    const e = edits[row.userId] || editOf(row.eval, baseXp);
-    setNoteDraft(e.note);
-    setNoteTarget(row);
-  };
-  const applyNote = () => {
-    if (!noteTarget) return;
-    if (noteTarget.eval?.status !== "paid") setEdit(noteTarget.userId, { note: noteDraft.slice(0, NOTE_MAX) });
-    setNoteTarget(null);
-  };
-
   // ── 저장 (draft) ─────────────────────────────
   const saveRow = async (row: Row) => {
     if (savingId) return;
@@ -344,7 +348,7 @@ export default function AdminSupportersPage() {
     }
   };
 
-  // ── 답변 모달 ────────────────────────────────
+  // ── 답변 (상세 칸) ───────────────────────────
   const openReply = (r: Report) => {
     setReplyText(r.adminReply);
     setReplyDone(r.status === "done");
@@ -396,369 +400,512 @@ export default function AdminSupportersPage() {
   const paid = rows.filter((r) => r.eval?.status === "paid").length;
   // 지급은 서버에 저장된 draft 로 나가므로 모달도 편집칸이 아니라 저장본을 보여 준다
   const payEval = payTarget?.eval || null;
-  const dlLabel = "text-xs font-bold text-[#5a5a5a] shrink-0";
-  const noteLocked = noteTarget?.eval?.status === "paid";
+  const dlLabel = "text-[12px] font-bold text-[#5a5a5a] shrink-0";
 
-  // AdminTabs 는 글자만 받는다 — 미처리 건수는 shop 의 "대기 N" 처럼 이름 뒤에 붙인다
-  const tabs = (Object.keys(TAB_META) as TabId[]).map((id) => ({
-    id,
-    short: id === "reports" && reportCounts.open > 0 ? `${TAB_META[id].short} ${reportCounts.open}` : TAB_META[id].short,
-  }));
+  // 한 줄의 편집 상태 — 표와 상세 칸이 같은 판정을 쓴다
+  const stateOf = (r: Row) => {
+    const e = edits[r.userId] || editOf(r.eval, baseXp);
+    const locked = r.eval?.status === "paid";
+    const dirty = r.eval ? sig(e) !== sig(editOf(r.eval, baseXp)) : true;
+    return {
+      e,
+      locked,
+      dirty,
+      canSave: !locked && dirty && !savingId,
+      // 지급은 서버에 저장된 draft 를 기준으로 나간다 — 안 저장한 편집이 있으면 먼저 저장하게 막는다
+      canPay: r.eval?.status === "draft" && !dirty && !savingId,
+      busy: savingId === r.userId,
+    };
+  };
+
+  const statusChips = (r: Row) => {
+    const { locked, dirty } = stateOf(r);
+    return (
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        {locked ? (
+          <StatusChip tone="ok">지급 완료</StatusChip>
+        ) : r.eval ? (
+          <>
+            <StatusChip tone="info">저장됨</StatusChip>
+            {dirty && <StatusChip tone="warn">저장되지 않은 변경</StatusChip>}
+          </>
+        ) : (
+          <StatusChip tone="neutral">미평가</StatusChip>
+        )}
+      </span>
+    );
+  };
+
+  const rateLine = (label: string, value: number, goal: number, block: boolean) => (
+    <span className={`${block ? "block" : ""} text-[12px] font-bold tabular-nums ${pct(value, goal) >= 100 ? "text-[#e91e3f]" : "text-[#5a5a5a]"}`}>
+      {label} {pct(value, goal)}%
+    </span>
+  );
+
+  const evalCols: Column<Row>[] = [
+    {
+      key: "who",
+      label: "서포터즈",
+      mobile: "title",
+      render: (r) => (
+        <span className="flex items-center gap-2.5 min-w-0">
+          {r.avatar ? (
+            <img src={r.avatar} alt="" className="w-8 h-8 rounded-full bg-[#f2f2f2] object-cover shrink-0" />
+          ) : (
+            <span className="w-8 h-8 rounded-full bg-[#f2f2f2] shrink-0" />
+          )}
+          <span className="min-w-0 max-w-40">
+            <span className="block text-[13px] font-bold text-[#131313] truncate">{r.name}</span>
+            <span className="block text-[11px] font-normal text-[#8a8a8a] tabular-nums truncate">{r.userId}</span>
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "chat",
+      label: "채팅",
+      align: "right",
+      render: (r) => (
+        <span className="font-bold text-[#131313] tabular-nums"><Mob>채팅</Mob>{r.chatCount.toLocaleString()}</span>
+      ),
+    },
+    {
+      key: "voice",
+      label: "음성",
+      align: "right",
+      render: (r) => (
+        <span className="font-bold text-[#131313] tabular-nums">
+          <Mob>음성</Mob>{r.voiceMin.toLocaleString()}<span className="ml-0.5 text-[12px] font-normal text-[#8a8a8a]">분</span>
+        </span>
+      ),
+    },
+    {
+      key: "rate",
+      label: "달성률",
+      align: "right",
+      mobile: "hide",
+      render: (r) =>
+        !hasGoal ? (
+          <span className="text-[#a3a3a3]">-</span>
+        ) : (
+          <>
+            {goals.chat > 0 && rateLine("채팅", r.chatCount, goals.chat, true)}
+            {goals.voiceMin > 0 && rateLine("음성", r.voiceMin, goals.voiceMin, true)}
+          </>
+        ),
+    },
+    {
+      key: "grade",
+      label: "등급",
+      render: (r) => {
+        const g = stateOf(r).e.grade.trim();
+        return g ? (
+          <span className="font-bold text-[#131313]"><Mob>등급</Mob>{g}</span>
+        ) : (
+          <span className="text-[#a3a3a3]"><Mob>등급</Mob>-</span>
+        );
+      },
+    },
+    {
+      key: "xp",
+      label: "XP",
+      align: "right",
+      render: (r) => (
+        <span className="font-bold text-[#131313] tabular-nums"><Mob>XP</Mob>{toInt(stateOf(r).e.xp).toLocaleString()}</span>
+      ),
+    },
+    {
+      key: "point",
+      label: "빙옥",
+      align: "right",
+      render: (r) => (
+        <span className="font-bold text-[#131313] tabular-nums"><Mob>빙옥</Mob>{toInt(stateOf(r).e.point).toLocaleString()}</span>
+      ),
+    },
+    {
+      key: "note",
+      label: "코멘트",
+      mobile: "hide",
+      render: (r) => {
+        const { e } = stateOf(r);
+        const preview = notePreview(e.note);
+        return (
+          <span className={`block max-w-40 truncate ${preview ? "text-[#131313]" : "text-[#a3a3a3]"}`} title={preview ? e.note : undefined}>
+            {preview || "없음"}
+          </span>
+        );
+      },
+    },
+    {
+      key: "status",
+      label: "상태",
+      render: (r) => (
+        <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+          {statusChips(r)}
+          {r.eval?.status === "paid" && <span className="text-[12px] text-[#8a8a8a] tabular-nums">{fmtDate(r.eval?.paidAt)}</span>}
+        </span>
+      ),
+    },
+  ];
+
+  const reportCols: Column<Report>[] = [
+    {
+      key: "type",
+      label: "종류",
+      mobile: "title",
+      render: (r) => <StatusChip tone={TYPE_BADGE[r.type].tone}>{TYPE_BADGE[r.type].l}</StatusChip>,
+    },
+    {
+      key: "user",
+      label: "작성자",
+      mobile: "title",
+      render: (r) => <span className="block max-w-40 truncate font-bold text-[#131313]">{r.userName}</span>,
+    },
+    {
+      key: "target",
+      label: "대상",
+      render: (r) =>
+        r.type === "report" && r.target ? (
+          <span className="block max-w-40 truncate"><Mob>대상</Mob><b className="text-[#131313]">{r.target}</b></span>
+        ) : (
+          <span className="hidden md:inline text-[#a3a3a3]">-</span>
+        ),
+    },
+    {
+      key: "content",
+      label: "내용",
+      render: (r) => (
+        <span className="block max-w-64 md:max-w-md truncate text-[#131313]">{r.content.replace(/\s+/g, " ").trim()}</span>
+      ),
+    },
+    {
+      key: "reply",
+      label: "답변",
+      mobile: "hide",
+      render: (r) =>
+        r.adminReply ? (
+          <span className="text-[12px] text-[#8a8a8a] tabular-nums whitespace-nowrap">{fmtDateTime(r.repliedAt) || "있음"}</span>
+        ) : (
+          <span className="text-[#a3a3a3]">-</span>
+        ),
+    },
+    {
+      key: "at",
+      label: "접수",
+      render: (r) => <span className="text-[12px] text-[#8a8a8a] tabular-nums whitespace-nowrap">{fmtDateTime(r.createdAt)}</span>,
+    },
+    {
+      key: "status",
+      label: "상태",
+      render: (r) => (r.status === "done" ? <StatusChip tone="ok">처리됨</StatusChip> : <StatusChip tone="warn">미처리</StatusChip>),
+    },
+  ];
+
+  // 상세 칸 — 탭을 옮기면 다른 탭의 칸은 닫힌 것으로 본다
+  const selRow = tab === "eval" ? rows.find((r) => r.userId === selId) || null : null;
+  const sel = selRow ? stateOf(selRow) : null;
+  // 삭제로 목록에서 빠진 건은 칸도 닫는다
+  const replyOpen = tab === "reports" && !!replyTarget && reports.some((x) => x._id === replyTarget._id);
 
   return (
-    <main className="w-full flex-1 flex flex-col relative">
-      <LuxStyles />
-
-      <AdminHero size="lg" title={TAB_META[tab].title} />
-      <AdminTabs tabs={tabs} current={tab} hrefOf={(id) => `/admin/supporters?tab=${id}`} />
-
-      <div className="w-full max-w-6xl mx-auto px-6 pb-16 flex-1 flex flex-col space-y-10">
+    <>
+      <AdminPage
+        section="운영"
+        title={TAB_META[tab].title}
+        tabs={
+          <AdminTabs
+            tabs={(Object.keys(TAB_META) as TabId[]).map((id) => ({
+              id,
+              short: TAB_META[id].short,
+              n: id === "reports" ? reportCounts.open : undefined,
+            }))}
+            current={tab}
+            hrefOf={(id) => `/admin/supporters?tab=${id}`}
+          />
+        }
+      >
         {/* ═══ 평가 ═══ */}
         {tab === "eval" && (
           <>
-            {loadFailed && (
-              <div className="px-4 py-3 rounded-lg border border-[#e91e3f]/30 bg-[#e91e3f]/[0.06] text-[12px] font-bold text-[#c2183a] break-keep">
-                목록을 불러오지 못했습니다 (/api/admin/supporters 응답 없음).
-                <button onClick={() => fetchRows(month)} className="ml-2 underline underline-offset-2 outline-none focus:outline-none">다시 불러오기</button>
-              </div>
+            <Toolbar
+              right={
+                <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[#5a5a5a] tabular-nums">
+                  <span>인원 <b className="text-[#131313]">{rows.length}</b></span>
+                  <span>평가 완료 <b className="text-[#131313]">{evaluated}</b></span>
+                  <span>지급 완료 <b className="text-[#131313]">{paid}</b></span>
+                  {hasGoal && (
+                    <span>
+                      목표{goals.chat > 0 && <> 채팅 <b className="text-[#131313]">{goals.chat.toLocaleString()}</b></>}
+                      {goals.voiceMin > 0 && <> 음성 <b className="text-[#131313]">{goals.voiceMin.toLocaleString()}분</b></>}
+                    </span>
+                  )}
+                </span>
+              }
+            >
+              <Segmented
+                options={[
+                  { v: thisMonth, l: "이번 달" },
+                  { v: lastMonth, l: "지난 달" },
+                ]}
+                value={month}
+                onChange={setMonth}
+              />
+              <span className="text-[13px] font-bold text-[#131313] tabular-nums">{month}</span>
+            </Toolbar>
+
+            {isLoading ? (
+              <Loading />
+            ) : loadFailed ? (
+              // 예전엔 위 배너 + 아래 빈 칸으로 같은 실패를 두 번 알렸다 — 한 칸으로 합친다
+              <EmptyRow>
+                목록을 불러오지 못했습니다 (/api/admin/supporters 응답 없음).{" "}
+                <button onClick={() => fetchRows(month)} className="text-[#e91e3f] font-bold underline underline-offset-2 outline-none focus-visible:underline">
+                  다시 불러오기
+                </button>
+              </EmptyRow>
+            ) : !roleId && rows.length === 0 ? (
+              <EmptyRow>
+                서포터즈 역할이 지정되지 않았습니다.{" "}
+                <Link href="/admin/bot?tab=roles&sec=supporter" className="text-[#e91e3f] font-bold underline underline-offset-2">
+                  역할 지정
+                </Link>
+              </EmptyRow>
+            ) : rows.length === 0 ? (
+              <EmptyRow>서포터즈 역할을 가진 멤버가 없습니다.</EmptyRow>
+            ) : (
+              <DataTable
+                columns={evalCols}
+                rows={rows}
+                rowKey={(r) => r.userId}
+                onRowClick={(r) => setSelId(r.userId)}
+                selectedKey={selRow ? selRow.userId : null}
+              />
             )}
-
-            <Reveal>
-              <section>
-                {/* flex-col 에서는 gap 이 안 먹는다(Tailwind v4) — 세로 간격은 mb 로 */}
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between md:gap-4 mb-6">
-                  <div className="flex items-center gap-3 mb-3 md:mb-0">
-                    <FilterChips
-                      options={[
-                        { v: thisMonth, l: "이번 달" },
-                        { v: lastMonth, l: "지난 달" },
-                      ]}
-                      value={month}
-                      onChange={setMonth}
-                    />
-                    <span className="text-[12px] font-black text-[#131313] tabular-nums shrink-0">{month}</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-bold text-[#5a5a5a] tabular-nums">
-                    <span>인원 <b className="text-[#131313]">{rows.length}</b></span>
-                    <span>평가 완료 <b className="text-[#131313]">{evaluated}</b></span>
-                    <span>지급 완료 <b className="text-[#131313]">{paid}</b></span>
-                    {hasGoal && (
-                      <span>
-                        목표{goals.chat > 0 && <> 채팅 <b className="text-[#131313]">{goals.chat.toLocaleString()}</b></>}
-                        {goals.voiceMin > 0 && <> 음성 <b className="text-[#131313]">{goals.voiceMin.toLocaleString()}분</b></>}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {isLoading ? (
-                  <div className="py-10 text-center text-[#8a8a8a] text-sm">불러오는 중...</div>
-                ) : loadFailed ? (
-                  <EmptyRow>목록을 불러오지 못했습니다.</EmptyRow>
-                ) : !roleId && rows.length === 0 ? (
-                  <EmptyRow>
-                    서포터즈 역할이 지정되지 않았습니다.{" "}
-                    <Link href="/admin/bot?tab=roles&sec=supporter" className="text-[#e91e3f] font-bold underline underline-offset-2">
-                      역할 지정
-                    </Link>
-                  </EmptyRow>
-                ) : rows.length === 0 ? (
-                  <EmptyRow>서포터즈 역할을 가진 멤버가 없습니다.</EmptyRow>
-                ) : (
-                  <TableScroll>
-                    {/* ⚠️ min-w-[1120px] 는 빌드 CSS 에 안 생겨 표가 안 넘쳤다 — 최소폭은 인라인으로 */}
-                    <div style={{ minWidth: 1120 }}>
-                      <div className="flex items-center gap-3 pb-2.5 text-[10px] font-black tracking-[0.12em] text-[#a3a3a3]">
-                        <span className="w-44 shrink-0">서포터즈</span>
-                        <span className="w-14 shrink-0 text-right">채팅</span>
-                        <span className="w-16 shrink-0 text-right">음성</span>
-                        <span className="w-20 shrink-0 text-right">달성률</span>
-                        <span className="w-16 shrink-0">등급</span>
-                        <span className="w-32 shrink-0">XP</span>
-                        <span className="w-28 shrink-0">빙옥</span>
-                        <span className="flex-1 min-w-0">코멘트</span>
-                        <span className="w-28 shrink-0">상태</span>
-                        <span className="w-36 shrink-0 text-right">처리</span>
-                      </div>
-
-                      <ListFrame>
-                        {rows.map((r) => {
-                          const e = edits[r.userId] || editOf(r.eval, baseXp);
-                          const locked = r.eval?.status === "paid";
-                          const dirty = r.eval ? sig(e) !== sig(editOf(r.eval, baseXp)) : true;
-                          const canSave = !locked && dirty && !savingId;
-                          // 지급은 서버에 저장된 draft 를 기준으로 나간다 — 안 저장한 편집이 있으면 먼저 저장하게 막는다
-                          const canPay = r.eval?.status === "draft" && !dirty && !savingId;
-                          const busy = savingId === r.userId;
-                          const cell = `${inputClass} disabled:opacity-40`;
-                          const preview = notePreview(e.note);
-                          return (
-                            <div key={r.userId} className="flex items-center gap-3 py-3">
-                              <span className="w-44 shrink-0 flex items-center gap-2.5 min-w-0">
-                                {r.avatar ? (
-                                  <img src={r.avatar} alt="" className="w-8 h-8 rounded-full bg-[#dedddb] object-cover shrink-0" />
-                                ) : (
-                                  <span className="w-8 h-8 rounded-full bg-[#dedddb] shrink-0"></span>
-                                )}
-                                <span className="min-w-0">
-                                  <span className="block text-[13px] font-bold text-[#131313] truncate">{r.name}</span>
-                                  <span className="block text-[10px] text-[#a3a3a3] tabular-nums truncate">{r.userId}</span>
-                                </span>
-                              </span>
-                              <span className="w-14 shrink-0 text-right text-[13px] font-black text-[#131313] tabular-nums">
-                                {r.chatCount.toLocaleString()}
-                              </span>
-                              <span className="w-16 shrink-0 text-right text-[13px] font-black text-[#131313] tabular-nums">
-                                {r.voiceMin.toLocaleString()}<span className="text-[10px] font-bold text-[#8a8a8a]">분</span>
-                              </span>
-                              <span className="w-20 shrink-0 text-right tabular-nums">
-                                {!hasGoal ? (
-                                  <span className="text-[12px] text-[#a3a3a3]">-</span>
-                                ) : (
-                                  <>
-                                    {goals.chat > 0 && (
-                                      <span className={`block text-[11px] font-bold ${pct(r.chatCount, goals.chat) >= 100 ? "text-[#e91e3f]" : "text-[#5a5a5a]"}`}>
-                                        채팅 {pct(r.chatCount, goals.chat)}%
-                                      </span>
-                                    )}
-                                    {goals.voiceMin > 0 && (
-                                      <span className={`block text-[11px] font-bold ${pct(r.voiceMin, goals.voiceMin) >= 100 ? "text-[#e91e3f]" : "text-[#5a5a5a]"}`}>
-                                        음성 {pct(r.voiceMin, goals.voiceMin)}%
-                                      </span>
-                                    )}
-                                  </>
-                                )}
-                              </span>
-                              <span className="w-16 shrink-0">
-                                <input
-                                  type="text"
-                                  value={e.grade}
-                                  maxLength={8}
-                                  placeholder="A"
-                                  disabled={locked || busy}
-                                  onChange={(ev) => setEdit(r.userId, { grade: ev.target.value })}
-                                  className={cell}
-                                />
-                              </span>
-                              <span className="w-32 shrink-0">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={e.xp}
-                                  placeholder={String(baseXp)}
-                                  disabled={locked || busy}
-                                  onChange={(ev) => setEdit(r.userId, { xp: ev.target.value })}
-                                  className={cell}
-                                />
-                              </span>
-                              <span className="w-28 shrink-0">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={e.point}
-                                  placeholder="0"
-                                  disabled={locked || busy}
-                                  onChange={(ev) => setEdit(r.userId, { point: ev.target.value })}
-                                  className={cell}
-                                />
-                              </span>
-                              <span className="flex-1 min-w-0 flex items-center gap-2">
-                                <span
-                                  className={`flex-1 min-w-0 truncate text-[12px] ${preview ? "text-[#131313]" : "text-[#a3a3a3]"}`}
-                                  title={preview ? e.note : undefined}
-                                >
-                                  {preview || "없음"}
-                                </span>
-                                {/* 처리 열의 Btn 과 크기가 겹치지 않게 목록 행의 글자 단추(shop 의 수정·삭제)와 같은 모양으로 */}
-                                <button
-                                  type="button"
-                                  onClick={() => openNote(r)}
-                                  disabled={busy}
-                                  className="shrink-0 text-xs font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors disabled:opacity-40 outline-none focus:outline-none"
-                                >
-                                  코멘트
-                                </button>
-                              </span>
-                              <span className="w-28 shrink-0">
-                                {locked ? (
-                                  <>
-                                    <span className="block text-[11px] font-black text-[#e91e3f]">지급 완료</span>
-                                    <span className="block text-[10px] text-[#8a8a8a] tabular-nums">{fmtDate(r.eval?.paidAt)}</span>
-                                  </>
-                                ) : r.eval ? (
-                                  <>
-                                    <span className="block text-[11px] font-black text-[#131313]">저장됨</span>
-                                    {dirty && <span className="block text-[10px] font-bold text-[#e91e3f]">저장되지 않은 변경</span>}
-                                  </>
-                                ) : (
-                                  <span className="text-[11px] font-bold text-[#a3a3a3]">미평가</span>
-                                )}
-                              </span>
-                              <span className="w-36 shrink-0 flex items-center justify-end gap-2">
-                                <Btn variant="ghost" onClick={() => saveRow(r)} disabled={!canSave}>
-                                  {busy ? "저장 중" : "저장"}
-                                </Btn>
-                                <Btn
-                                  onClick={() => setPayTarget(r)}
-                                  disabled={!canPay}
-                                  title={locked ? "지급 완료" : !r.eval ? "먼저 저장하세요" : dirty ? "변경을 먼저 저장하세요" : undefined}
-                                >
-                                  지급
-                                </Btn>
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </ListFrame>
-                    </div>
-                  </TableScroll>
-                )}
-
-                <p className="mt-6 text-xs text-[#8a8a8a] leading-relaxed break-keep">XP 는 봇이 1분 안에 지급합니다.</p>
-              </section>
-            </Reveal>
           </>
         )}
 
         {/* ═══ 신고·피드백 ═══ */}
         {tab === "reports" && (
-          <Reveal>
-            <section>
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between md:gap-4 mb-6">
-                <FilterChips
-                  className="mb-3 md:mb-0"
-                  options={[
-                    { v: "open", l: `미처리 ${reportCounts.open}` },
-                    { v: "done", l: `처리됨 ${reportCounts.done}` },
-                    { v: "all", l: "전체" },
-                  ]}
-                  value={reportFilter}
-                  onChange={(v) => { setExpandedId(""); setReportFilter(v as ReportFilter); }}
-                />
-                <button
-                  onClick={() => fetchReports(reportFilter)}
-                  disabled={reportsLoading}
-                  className="self-start md:self-auto text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors disabled:opacity-40 outline-none focus:outline-none"
-                >
+          <>
+            <Toolbar
+              right={
+                <Btn variant="secondary" size="sm" onClick={() => fetchReports(reportFilter)} disabled={reportsLoading}>
                   새로 고침
-                </button>
-              </div>
-
-              {reportsLoading ? (
-                <div className="py-10 text-center text-[#8a8a8a] text-sm">불러오는 중...</div>
-              ) : reportsFailed ? (
-                <EmptyRow>
-                  목록을 불러오지 못했습니다.{" "}
-                  <button onClick={() => fetchReports(reportFilter)} className="text-[#e91e3f] font-bold underline underline-offset-2 outline-none focus:outline-none">
-                    다시 불러오기
-                  </button>
-                </EmptyRow>
-              ) : reports.length === 0 ? (
-                <EmptyRow>
-                  {reportFilter === "open" ? "미처리 건이 없습니다." : reportFilter === "done" ? "처리된 건이 없습니다." : "접수된 건이 없습니다."}
-                </EmptyRow>
-              ) : (
-                <ListFrame>
-                  {reports.map((r) => {
-                    const badge = TYPE_BADGE[r.type];
-                    const open = expandedId === r._id;
-                    // 세 줄을 넘길 만한 길이일 때만 펼치기 단추를 둔다 — 짧은 글에 단추가 붙으면 눈만 어지럽다
-                    const long = r.content.length > 160 || r.content.split("\n").length > 3;
-                    return (
-                      <div key={r._id} className="py-4">
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mb-2">
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${badge.c}`}>{badge.l}</span>
-                          <span className="text-[13px] font-bold text-[#131313] truncate max-w-40 md:max-w-xs">{r.userName}</span>
-                          {r.type === "report" && r.target && (
-                            <span className="text-[11px] text-[#5a5a5a] truncate max-w-40 md:max-w-xs">
-                              대상 <b className="text-[#131313]">{r.target}</b>
-                            </span>
-                          )}
-                          <span className="text-[10px] text-[#a3a3a3] tabular-nums">{fmtDateTime(r.createdAt)}</span>
-                          <span className="ml-auto flex items-center gap-3 shrink-0">
-                            <span className={`text-[11px] font-black ${r.status === "done" ? "text-[#8a8a8a]" : "text-[#e91e3f]"}`}>
-                              {r.status === "done" ? "처리됨" : "미처리"}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => openReply(r)}
-                              className="text-xs font-bold text-[#e91e3f] hover:text-[#d01634] transition-colors outline-none focus:outline-none"
-                            >
-                              답변
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDelTarget(r)}
-                              className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
-                            >
-                              삭제
-                            </button>
-                          </span>
-                        </div>
-
-                        <p className={`text-[13px] text-[#131313] leading-relaxed whitespace-pre-wrap break-words ${open ? "" : "line-clamp-3"}`}>
-                          {r.content}
-                        </p>
-                        {long && (
-                          <button
-                            onClick={() => setExpandedId(open ? "" : r._id)}
-                            className="mt-1 text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
-                          >
-                            {open ? "접기" : "펼치기"}
-                          </button>
-                        )}
-
-                        {r.adminReply && (
-                          <div className="mt-3 pl-3 border-l-2 border-black/10">
-                            <span className="block text-[10px] font-black tracking-[0.08em] text-[#a3a3a3] mb-1 tabular-nums">
-                              답변{r.repliedAt ? ` · ${fmtDateTime(r.repliedAt)}` : ""}
-                            </span>
-                            <p className="text-[12px] text-[#5a5a5a] leading-relaxed whitespace-pre-wrap break-words">{r.adminReply}</p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </ListFrame>
-              )}
-
-              <p className="mt-6 text-xs text-[#8a8a8a] leading-relaxed break-keep">답변은 작성한 서포터즈 본인에게 보입니다.</p>
-            </section>
-          </Reveal>
-        )}
-      </div>
-
-      {/* ── 코멘트 ── */}
-      <ConfirmDialog
-        open={!!noteTarget}
-        title={noteLocked ? "코멘트 (지급 완료)" : "코멘트"}
-        confirmLabel={noteLocked ? "닫기" : "반영"}
-        onCancel={() => setNoteTarget(null)}
-        onConfirm={applyNote}
-        body={
-          noteTarget ? (
-            <div>
-              <p className="text-[12px] text-[#5a5a5a] mb-3 truncate">{noteTarget.name} · {month}</p>
-              <textarea
-                rows={6}
-                maxLength={NOTE_MAX}
-                value={noteDraft}
-                readOnly={noteLocked}
-                autoFocus={!noteLocked}
-                onChange={(ev) => setNoteDraft(ev.target.value)}
-                placeholder="코멘트"
-                className={`${inputClass} resize-none leading-relaxed ${noteLocked ? "opacity-70" : ""}`}
+                </Btn>
+              }
+            >
+              <Segmented
+                options={[
+                  { v: "open", l: "미처리", n: reportCounts.open },
+                  { v: "done", l: "처리됨", n: reportCounts.done },
+                  { v: "all", l: "전체" },
+                ]}
+                value={reportFilter}
+                onChange={(v) => setReportFilter(v as ReportFilter)}
               />
-              <div className="flex items-center justify-between mt-1.5 text-[10px] text-[#8a8a8a] tabular-nums">
-                <span>서포터즈 본인에게 보입니다.</span>
-                <span>{noteDraft.length} / {NOTE_MAX}</span>
-              </div>
-            </div>
+            </Toolbar>
+
+            {reportsLoading ? (
+              <Loading />
+            ) : reportsFailed ? (
+              <EmptyRow>
+                목록을 불러오지 못했습니다.{" "}
+                <button onClick={() => fetchReports(reportFilter)} className="text-[#e91e3f] font-bold underline underline-offset-2 outline-none focus-visible:underline">
+                  다시 불러오기
+                </button>
+              </EmptyRow>
+            ) : reports.length === 0 ? (
+              <EmptyRow>
+                {reportFilter === "open" ? "미처리 건이 없습니다." : reportFilter === "done" ? "처리된 건이 없습니다." : "접수된 건이 없습니다."}
+              </EmptyRow>
+            ) : (
+              <DataTable
+                columns={reportCols}
+                rows={reports}
+                rowKey={(r) => r._id}
+                // 답변을 보내는 중에는 다른 건으로 바꾸지 않는다 — 보내는 대상이 바뀌면 안 된다
+                onRowClick={(r) => { if (!isReplying) openReply(r); }}
+                selectedKey={replyOpen && replyTarget ? replyTarget._id : null}
+              />
+            )}
+          </>
+        )}
+      </AdminPage>
+
+      {/* ── 평가 상세 — 활동 근거 · 평가 입력 · 저장 · 지급 ── */}
+      <DetailPane
+        open={!!selRow}
+        onClose={() => setSelId("")}
+        title={selRow?.name || ""}
+        sub={selRow ? <span className="tabular-nums">{selRow.userId} · {month}</span> : null}
+        badge={selRow ? statusChips(selRow) : null}
+        footer={
+          selRow && sel && !sel.locked ? (
+            <>
+              <Btn variant="secondary" className="ml-auto" onClick={() => saveRow(selRow)} disabled={!sel.canSave}>
+                {sel.busy ? "저장 중" : "저장"}
+              </Btn>
+              <Btn
+                onClick={() => setPayTarget(selRow)}
+                disabled={!sel.canPay}
+                title={!selRow.eval ? "먼저 저장하세요" : sel.dirty ? "변경을 먼저 저장하세요" : undefined}
+              >
+                지급
+              </Btn>
+            </>
           ) : null
         }
-      />
+      >
+        {selRow && sel && (
+          <>
+            <dl className="mb-5">
+              <DefRow k="채팅"><span className="tabular-nums">{selRow.chatCount.toLocaleString()}</span></DefRow>
+              <DefRow k="음성"><span className="tabular-nums">{selRow.voiceMin.toLocaleString()}분</span></DefRow>
+              <DefRow k="달성률">
+                {!hasGoal ? (
+                  <span className="font-normal text-[#a3a3a3]">-</span>
+                ) : (
+                  <span className="inline-flex flex-wrap gap-x-3">
+                    {goals.chat > 0 && rateLine("채팅", selRow.chatCount, goals.chat, false)}
+                    {goals.voiceMin > 0 && rateLine("음성", selRow.voiceMin, goals.voiceMin, false)}
+                  </span>
+                )}
+              </DefRow>
+              {sel.locked && (
+                <DefRow k="지급일"><span className="tabular-nums">{fmtDate(selRow.eval?.paidAt) || "-"}</span></DefRow>
+              )}
+            </dl>
 
-      {/* ── 답변 ── */}
+            {/* 등급 · XP · 빙옥은 한 줄 세 칸 — 폭이 좁은 상세 칸이라 이름을 위에 둔다 */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="min-w-0">
+                <label htmlFor="sup-grade" className={labelClass}>등급</label>
+                <input
+                  id="sup-grade"
+                  type="text"
+                  value={sel.e.grade}
+                  maxLength={8}
+                  placeholder="A"
+                  disabled={sel.locked || sel.busy}
+                  onChange={(ev) => setEdit(selRow.userId, { grade: ev.target.value })}
+                  className={inputClass}
+                />
+              </div>
+              <div className="min-w-0">
+                <label htmlFor="sup-xp" className={labelClass}>XP</label>
+                <input
+                  id="sup-xp"
+                  type="number"
+                  min={0}
+                  value={sel.e.xp}
+                  placeholder={String(baseXp)}
+                  disabled={sel.locked || sel.busy}
+                  onChange={(ev) => setEdit(selRow.userId, { xp: ev.target.value })}
+                  className={`${inputClass} tabular-nums`}
+                />
+              </div>
+              <div className="min-w-0">
+                <label htmlFor="sup-point" className={labelClass}>빙옥</label>
+                <input
+                  id="sup-point"
+                  type="number"
+                  min={0}
+                  value={sel.e.point}
+                  placeholder="0"
+                  disabled={sel.locked || sel.busy}
+                  onChange={(ev) => setEdit(selRow.userId, { point: ev.target.value })}
+                  className={`${inputClass} tabular-nums`}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="sup-note" className={labelClass}>코멘트</label>
+              {/* 지급 뒤에도 읽을 수는 있게 disabled 대신 readOnly 로 잠근다 */}
+              <textarea
+                id="sup-note"
+                rows={6}
+                maxLength={NOTE_MAX}
+                value={sel.e.note}
+                readOnly={sel.locked}
+                disabled={!sel.locked && sel.busy}
+                onChange={(ev) => setEdit(selRow.userId, { note: ev.target.value.slice(0, NOTE_MAX) })}
+                placeholder="코멘트"
+                className={`${inputClass} resize-none leading-relaxed ${sel.locked ? "!bg-[#f2f2f2]" : ""}`}
+              />
+              <div className="flex items-center justify-between gap-3 mt-1.5 text-[12px]">
+                <span className="text-[#5a5a5a]">서포터즈 본인에게 보입니다.</span>
+                <span className="shrink-0 text-[#8a8a8a] tabular-nums">{sel.e.note.length} / {NOTE_MAX}</span>
+              </div>
+            </div>
+          </>
+        )}
+      </DetailPane>
+
+      {/* ── 신고·피드백 상세 — 원문 · 답변 · 처리 상태 · 삭제 ── */}
+      <DetailPane
+        open={replyOpen}
+        onClose={() => { if (!isReplying) setReplyTarget(null); }}
+        title={replyTarget?.userName || ""}
+        badge={
+          replyTarget ? (
+            <span className="inline-flex flex-wrap items-center gap-1.5">
+              <StatusChip tone={TYPE_BADGE[replyTarget.type].tone}>{TYPE_BADGE[replyTarget.type].l}</StatusChip>
+              {replyTarget.status === "done" ? <StatusChip tone="ok">처리됨</StatusChip> : <StatusChip tone="warn">미처리</StatusChip>}
+            </span>
+          ) : null
+        }
+        sub={
+          replyTarget ? (
+            <>
+              {replyTarget.type === "report" && replyTarget.target && (
+                <>대상 <b className="text-[#131313]">{replyTarget.target}</b> · </>
+              )}
+              <span className="text-[#8a8a8a] tabular-nums">{fmtDateTime(replyTarget.createdAt)}</span>
+            </>
+          ) : null
+        }
+        footer={
+          replyTarget ? (
+            <>
+              <Btn variant="secondary" onClick={() => setDelTarget(replyTarget)} disabled={isReplying}>삭제</Btn>
+              <Btn className="ml-auto" onClick={sendReply} disabled={isReplying}>{isReplying ? "저장 중…" : "저장"}</Btn>
+            </>
+          ) : null
+        }
+      >
+        {replyTarget && (
+          <>
+            <p className="pb-5 mb-5 border-b border-[#ededed] text-[14px] text-[#131313] leading-relaxed whitespace-pre-wrap break-words">
+              {replyTarget.content}
+            </p>
+            <div className="mb-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <label htmlFor="sup-reply" className={labelClass}>답변</label>
+                {replyTarget.repliedAt && (
+                  <span className="text-[12px] text-[#8a8a8a] tabular-nums">{fmtDateTime(replyTarget.repliedAt)}</span>
+                )}
+              </div>
+              <textarea
+                id="sup-reply"
+                rows={5}
+                maxLength={REPLY_MAX}
+                value={replyText}
+                onChange={(ev) => setReplyText(ev.target.value)}
+                placeholder="답변 (비워 두면 상태만 바뀝니다)"
+                className={`${inputClass} resize-none leading-relaxed`}
+              />
+              <div className="flex items-center justify-between gap-3 mt-1.5 text-[12px]">
+                <span className="text-[#5a5a5a]">답변은 작성한 서포터즈 본인에게 보입니다.</span>
+                <span className="shrink-0 text-[#8a8a8a] tabular-nums">{replyText.length} / {REPLY_MAX}</span>
+              </div>
+            </div>
+            <Toggle on={replyDone} onClick={() => setReplyDone((v) => !v)} onLabel="처리됨으로 표시" offLabel="미처리로 둠" />
+          </>
+        )}
+      </DetailPane>
+
+      {/* ── 삭제 확인 ── */}
       <ConfirmDialog
         open={!!delTarget}
         danger
@@ -768,45 +915,6 @@ export default function AdminSupportersPage() {
         body={delTarget ? (<><span className="block font-bold text-[#131313]">{delTarget.userName} · {delTarget.type === "report" ? "신고" : "피드백"}</span><span className="block mt-1 text-[#5a5a5a] break-words">{delTarget.content.slice(0, 120)}</span></>) : null}
         onConfirm={deleteReport}
         onCancel={() => { if (!isDeleting) setDelTarget(null); }}
-      />
-      <ConfirmDialog
-        open={!!replyTarget}
-        title="답변"
-        confirmLabel="저장"
-        busy={isReplying}
-        onCancel={() => { if (!isReplying) setReplyTarget(null); }}
-        onConfirm={sendReply}
-        body={
-          replyTarget ? (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]">
-                <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${TYPE_BADGE[replyTarget.type].c}`}>
-                  {TYPE_BADGE[replyTarget.type].l}
-                </span>
-                <span className="font-bold text-[#131313] truncate">{replyTarget.userName}</span>
-                {replyTarget.type === "report" && replyTarget.target && (
-                  <span className="text-[#5a5a5a] truncate">대상 <b className="text-[#131313]">{replyTarget.target}</b></span>
-                )}
-              </div>
-              <div className="max-h-32 overflow-y-auto no-bar text-[12px] text-[#131313] leading-relaxed whitespace-pre-wrap break-words bg-black/[0.03] border border-black/[0.06] rounded-lg px-3 py-2">
-                {replyTarget.content}
-              </div>
-              <div>
-                <textarea
-                  rows={5}
-                  maxLength={REPLY_MAX}
-                  value={replyText}
-                  autoFocus
-                  onChange={(ev) => setReplyText(ev.target.value)}
-                  placeholder="답변 (비워 두면 상태만 바뀝니다)"
-                  className={`${inputClass} resize-none leading-relaxed`}
-                />
-                <p className="text-right mt-1 text-[10px] text-[#8a8a8a] tabular-nums">{replyText.length} / {REPLY_MAX}</p>
-              </div>
-              <Toggle on={replyDone} onClick={() => setReplyDone((v) => !v)} onLabel="처리됨으로 표시" offLabel="미처리로 둠" className="" />
-            </div>
-          ) : null
-        }
       />
 
       {/* ── 지급 확인 ── */}
@@ -838,13 +946,14 @@ export default function AdminSupportersPage() {
                 <span className={dlLabel}>빙옥</span>
                 <span className="text-[#3f9e93] font-black">{payEval.point.toLocaleString()}</span>
               </div>
-              <p className="pt-2 text-[11px] text-[#8a8a8a]">지급 후에는 수정할 수 없습니다.</p>
+              {/* 표 아래 따로 있던 봇 지급 안내는 지급하는 이 자리로 옮겼다 */}
+              <p className="pt-2 text-[12px] text-[#5a5a5a]">지급 후에는 수정할 수 없습니다. XP 는 봇이 1분 안에 지급합니다.</p>
             </div>
           ) : null
         }
       />
 
       {noticeEl}
-    </main>
+    </>
   );
 }

@@ -151,11 +151,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     ? { name: <>ARCT<span className="text-[#e91e3f]">I</span>C</>, href: "/arctic", parent: arcticFromLevel ? { name: "LEVEL", href: "/level" } : undefined }
     : (pathname === "/level" || pathname?.startsWith("/level/"))
       ? { name: <>SYSTEM <span className="text-[#e91e3f]">:</span> LEVEL</>, href: "/level" }
-      : null;
+      // 관리자 화면(대회 룸 포함) · 글쓰기 — 브랜드 옆에 ADMIN
+      : (pathname === "/admin" || pathname?.startsWith("/admin/") || pathname === "/write")
+        ? { name: "ADMIN", href: "/admin" }
+        : null;
   // 📌 흰 바탕 페이지 — 화이트 & 블랙으로 옮긴 곳. 종이색 라이트와 구분한다.
   //    경매·대회·명예의 전당은 일부러 개성 있게 만든 화면이라 여기 넣지 않는다.
   const WHITE_ROOTS = ["/notice", "/event", "/recruit", "/faq", "/support", "/booster", "/level", "/profile", "/verify", "/policy"];
-  const isWhitePage = isShopPage || pathname === "/" || WHITE_ROOTS.some((r) => pathname === r || !!pathname?.startsWith(r + "/"));
+  // 관리자 화면(대회 룸 빼고) · 글쓰기도 흰 바탕 — 관리자 개편(2026-09)에서 종이색을 걷었다
+  const isAdminWhite = (pathname === "/admin" || (!!pathname?.startsWith("/admin/") && !pathname.startsWith("/admin/room"))) || pathname === "/write";
+  const isWhitePage = isShopPage || pathname === "/" || isAdminWhite || WHITE_ROOTS.some((r) => pathname === r || !!pathname?.startsWith(r + "/"));
   // 알약 변형은 없앴다 — 내리면 로고 줄과 카테고리 줄이 한 줄로 접힌다
   const scrolled = scrolledRaw;
   // ARCTIC 에서 넘어온 내 정보(와 그 하위) — 스토어 독을 그대로 두므로 전역 독은 숨긴다
@@ -430,7 +435,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           : isLightPage ? "border-black/[0.08] bg-[#f4f3f2]/95"
           : "border-white/10 bg-[#090909]/90"
       }`}>
-        <div className={`max-w-7xl mx-auto px-5 md:px-6 flex items-center gap-4 md:gap-6 relative transition-[height] duration-200 ease-out ${barH}`}>
+        {/* 관리자 화면은 본문이 화면 끝까지라 상단 바도 넓게 — 로고가 좌측 메뉴와 같은 줄에 선다 */}
+        <div className={`${isAdminSurface ? "max-w-none" : "max-w-7xl"} mx-auto px-5 md:px-6 flex items-center gap-4 md:gap-6 relative transition-[height] duration-200 ease-out ${barH}`}>
           <div className="flex items-center gap-3 md:gap-4 h-full z-10 min-w-0 flex-1 md:basis-0">
             {isVerifyPage ? (
               <span className={`font-bold cursor-default select-none text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] ${isLightPage ? "text-[#131313]" : "text-white"}`}>고급 이글루</span>
@@ -664,7 +670,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             </div>
           </div>
         ) : isAdminSurface ? (
-          /* 📌 관리자 화면 — 좌측 패널(데스크톱) / 상단 칩 바(모바일) + 콘텐츠 */
+          /* 📌 관리자 화면 — 좌측 메뉴(PC) / 페이지 단추 + 메뉴 판(모바일) + 전체 폭 본문. 사이트 푸터는 숨긴다 */
           <div className="w-full flex-1 flex flex-col lg:flex-row">
             <AdminNav />
             <div className="flex-1 min-w-0 flex flex-col">{children}</div>
@@ -694,7 +700,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </nav>
       )}
 
-      <footer className={`w-full mt-auto flex-shrink-0 ${isShopPage ? "hidden" : "hidden md:block"} relative overflow-hidden ${isLightPage ? "border-t border-black/[0.06] bg-white" : "border-t border-white/5 bg-[#090909]"}`}>
+      <footer className={`w-full mt-auto flex-shrink-0 ${isShopPage || isAdminSurface ? "hidden" : "hidden md:block"} relative overflow-hidden ${isLightPage ? "border-t border-black/[0.06] bg-white" : "border-t border-white/5 bg-[#090909]"}`}>
         <div className="absolute bottom-[-80px] left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-[#e91e3f]/[0.04] blur-[90px] rounded-full pointer-events-none"></div>
         <div className="max-w-7xl mx-auto px-6 py-10 relative z-10">
           <div className="flex items-center justify-between mb-6">

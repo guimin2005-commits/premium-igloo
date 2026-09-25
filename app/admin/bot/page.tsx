@@ -3,27 +3,35 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Reveal, LuxStyles } from "../../components/Lux";
 import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { VOICE_TIERS } from "@/lib/voiceTiers";
 import {
+  AdminPage,
+  AdminTabs,
+  Segmented,
+  Panel,
+  PanelGrid,
+  FieldRow,
+  Inline,
   inputClass,
+  numClass,
+  labelClass,
   fieldNote,
-  SectionHead,
-  FilterChips,
-  EmptyRow,
-  ListFrame,
-  Btn,
   Toggle,
+  Btn,
+  SaveBar,
+  Toolbar,
+  SearchInput,
+  StatusChip,
+  DataTable,
+  DetailPane,
   useNotice,
   ConfirmDialog,
   useAdminGuard,
-  AdminHero,
-  AdminTabs,
-  SubTabs,
 } from "../ui";
+import type { Column } from "../ui";
 
 const CHANNEL_TYPE_LABEL: Record<string, string> = { text: "텍스트", voice: "음성", category: "카테고리" };
 const CHANNEL_TYPE_ICON: Record<string, string> = { text: "#", voice: "🔊", category: "📁" };
@@ -56,6 +64,11 @@ const ENHANCE_FIELDS: {
     { key: "voiceEnhanceCostGrowthPct", label: "단계당 비용 상승 %", def: 50, min: 0, max: 1000, note: "매 단계 복리로 오릅니다" },
   ] },
 ];
+// 강화 표의 열 머리 — 채팅/음성이 같은 네 칸이라 행=종류, 열=항목인 작은 표로 그린다
+const ENHANCE_COLS = ["단계당 +XP", "최대 단계", "1단계 비용", "비용 상승 %"];
+
+const MUTE_MODES = [{ v: "off", l: "제한 없음" }, { v: "reduce", l: "감소" }, { v: "block", l: "차단" }];
+const MUTE_TARGETS = [{ v: "both", l: "마이크+헤드셋 모두" }, { v: "any", l: "하나라도 음소거" }];
 
 // ── 탭 ──────────────────────────────────────────────────────
 //    운영 흐름대로 네 갈래다: 규칙을 정하고(정책) → 역할에 잇고(역할) →
@@ -68,55 +81,31 @@ const TAB_ORDER: { id: string; short: string }[] = [
   { id: "ledger", short: "지급·내역" },
 ];
 
-const TAB_META: Record<string, { title: string; desc: string }> = {
-  policy: { title: "레벨 정책", desc: "지급량·쿨타임·음소거·퇴장 처리와 알림 문구 등 봇의 기본 XP 규칙을 설정합니다." },
-  roles: { title: "역할 매핑", desc: "레벨 보상 역할, 음성 티어 일괄 연결, 인벤토리 표기, 시즌 전환 보호 역할을 한자리에서 관리합니다." },
-  content: { title: "콘텐츠 설정", desc: "채널별 XP 정책과 퀘스트, 기간제 부스트를 관리합니다." },
-  ledger: { title: "지급·내역", desc: "XP·빙옥·아이템을 직접 주거나 회수·초기화하고, 지급 내역을 조회합니다." },
+// 📌 세부 탭(?sec=)은 없앴다 — 탭 안의 묶음을 한 화면의 패널로 펼쳤다(메뉴가 세 겹이던 것이 불만이었다).
+//    다만 옛 주소가 곳곳에 남아 있어(ARCTIC 의 '비공개 · 공개로 바꾸기', 서포터즈 화면의 '역할 지정' 등)
+//    sec 가 오면 그 묶음이 옮겨 간 패널(id="sec-…")로 스크롤해 준다.
+//    mute 는 예전 '음소거 · 퇴장' 묶음에 공개 토글이 함께 있었고, 그 주소로 오는 쪽은 전부 공개 토글을 찾는다.
+const SEC_ANCHOR: Record<string, Record<string, string>> = {
+  policy: { xp: "xp", enhance: "enhance", mute: "public", public: "public", levelup: "levelup", rolegrant: "rolegrant" },
+  roles: { reward: "reward", tier: "tier", inventory: "inventory", supporter: "supporter", protected: "protected" },
+  content: { channels: "channels", quests: "quests", boosts: "boosts" },
+  ledger: { grant: "grant", logs: "logs", reset: "reset" },
 };
 
-// 📌 탭 안의 세부 탭 — 설정이 세로로 길게 늘어지지 않도록 한 번에 한 묶음만 보여준다.
-//    첫 항목이 기본값이고, 주소의 ?sec= 로 바로 들어올 수 있다.
-const SUB_TABS: Record<string, { id: string; label: string }[]> = {
-  policy: [
-    { id: "xp", label: "지급량 · 주기" },
-    { id: "mute", label: "음소거 · 퇴장" },
-    { id: "levelup", label: "레벨업 알림" },
-    { id: "rolegrant", label: "역할 지급 알림" },
-  ],
-  roles: [
-    { id: "reward", label: "레벨 보상" },
-    { id: "tier", label: "티어 일괄 연결" },
-    { id: "inventory", label: "인벤토리 표기" },
-    { id: "supporter", label: "서포터즈" },
-    { id: "protected", label: "보호 역할" },
-  ],
-  content: [
-    { id: "channels", label: "채널" },
-    { id: "quests", label: "퀘스트" },
-    { id: "boosts", label: "부스트" },
-  ],
-  ledger: [
-    { id: "grant", label: "지급 · 회수" },
-    { id: "logs", label: "지급 내역" },
-    { id: "reset", label: "XP 초기화" },
-  ],
-};
-
-// 📌 옛 주소 → 새 탭·세부 탭 이사표.
+// 📌 옛 주소 → 새 탭·패널 이사표.
 //    9개 탭을 4개로 접었기 때문에 예전 링크(좌측 내비, 상점의 '비공개' 배너, 북마크,
 //    안내글에 적어 둔 주소)가 그대로 남아 있다. 모르는 tab 값이 들어오면 조용히
 //    첫 탭으로 떨어뜨리지 않고 이 표로 옮겨 준다 — 링크가 죽으면 무엇이 어디로
 //    갔는지 아무도 모른 채 화면만 엉뚱하게 열린다.
 const LEGACY_TAB: Record<string, { tab: string; sec?: string }> = {
-  settings: { tab: "policy" }, // 세부 탭 id(xp/mute/levelup/rolegrant)는 그대로 살아 있다
+  settings: { tab: "policy" }, // 옛 세부 탭 id(xp/mute/levelup/rolegrant)는 SEC_ANCHOR 가 받는다
   channels: { tab: "content", sec: "channels" },
   quests: { tab: "content", sec: "quests" },
   boosts: { tab: "content", sec: "boosts" },
   inventory: { tab: "roles", sec: "inventory" },
-  grant: { tab: "ledger" }, // 세부 탭 id(grant/reset/logs)도 그대로다
+  grant: { tab: "ledger" }, // 옛 세부 탭 id(grant/reset/logs)도 그대로 받는다
   logs: { tab: "ledger", sec: "logs" }, // 옛 XP 로그 탭 = 새 '지급 내역'
-  leaderboard: { tab: "ledger" }, // 랭킹은 /level?tab=rank 로 넘겼다 (ledger 맨 위 바로가기)
+  leaderboard: { tab: "ledger" }, // 랭킹은 /level?tab=rank 로 넘겼다 (ledger 머리의 바로가기)
 };
 // roles 탭은 이름이 그대로라 세부 탭만 옮긴다 — 폼과 목록을 한 화면으로 합쳤다
 const LEGACY_ROLE_SEC: Record<string, string> = { form: "reward", list: "reward" };
@@ -155,12 +144,12 @@ type GrantKind = "xp" | "point" | "item";
 const GRANT_KINDS = [{ v: "xp", l: "XP" }, { v: "point", l: "빙옥" }, { v: "item", l: "아이템" }];
 const ITEM_GRANT_DAYS = [{ v: "0", l: "영구" }, { v: "7", l: "7일" }, { v: "30", l: "30일" }, { v: "custom", l: "직접 입력" }];
 const EMPTY_ITEM_GRANT = { itemId: "", daysMode: "0", days: "", target: "", reason: "" };
-const GRANT_STATUS: Record<string, { l: string; c: string }> = {
-  pending: { l: "지급 대기", c: "bg-amber-500/10 text-amber-700" },
-  completed: { l: "보유", c: "bg-[#e91e3f]/[0.08] text-[#e91e3f]" },
-  expired: { l: "만료", c: "bg-black/[0.05] text-[#8a8a8a]" },
-  refunded: { l: "회수", c: "bg-black/[0.05] text-[#8a8a8a]" },
-  cancelled: { l: "취소", c: "bg-black/[0.05] text-[#8a8a8a]" },
+const GRANT_STATUS: Record<string, { l: string; tone: "ok" | "warn" | "neutral" }> = {
+  pending: { l: "지급 대기", tone: "warn" },
+  completed: { l: "보유", tone: "ok" },
+  expired: { l: "만료", tone: "neutral" },
+  refunded: { l: "회수", tone: "neutral" },
+  cancelled: { l: "취소", tone: "neutral" },
 };
 
 const EMPTY_ROLE = { roleId: "", rewardLevel: "", buffXp: "", attendBuffXp: "", exclusive: false };
@@ -168,82 +157,140 @@ const EMPTY_CHANNEL = { channelId: "", boostXp: "", excluded: false };
 const EMPTY_BOOST = { id: "", name: "", targetRoleId: "", targetChannelId: "", boostXp: "", startAt: "", endAt: "" };
 const EMPTY_QUEST = { id: "", name: "", desc: "", period: "daily", reason: "chat", metric: "count", target: 1, rewardXp: 0, rewardPoint: 0, enabled: true, order: 0 };
 
-const labelClass = "block text-xs font-bold text-[#8a8a8a] mb-2";
+// ── 저장 줄(SaveBar) 용 ─────────────────────────────────────
+//    설정은 BotSetting 단일 문서 하나라 정책 · 서포터즈 · 보호 역할 · 퀘스트 노출이 모두 같은 저장을 탄다.
+//    그래서 저장 줄도 하나 — 불러온 값(스냅샷)과 지금 값을 비교해 바뀐 게 있으면 어느 탭에서든 뜬다
+//    (예전에는 다른 탭에서 고친 값이 이 탭의 '저장'에 조용히 묻어 나갔다).
+const SETTING_LABEL: Record<string, string> = {
+  chatXpMin: "채팅 XP 최소",
+  chatXpMax: "채팅 XP 최대",
+  chatCooldownSec: "채팅 쿨타임",
+  voiceXp: "음성 XP",
+  voiceIntervalSec: "음성 지급 주기",
+  attendXp: "출석체크 XP",
+  attendVoiceMin: "출석 인정 시간",
+  ...Object.fromEntries(ENHANCE_FIELDS.flatMap((g) => g.fields.map((f) => [f.key, `${g.label} 강화 ${f.label}`]))),
+  muteMode: "음소거 처리",
+  muteReducePct: "감소 비율",
+  muteTarget: "적용 기준",
+  levelupChannelId: "레벨업 알림 채널",
+  levelupMessage: "레벨업 알림 문구",
+  roleGrantEnabled: "역할 지급 알림",
+  roleGrantChannelId: "역할 지급 알림 채널",
+  roleGrantMessage: "역할 지급 알림 문구",
+  shopPublic: "ARCTIC 상점 공개",
+  levelPublic: "SYSTEM : LEVEL 공개",
+  resetOnLeave: "퇴장 시 XP 초기화",
+  supporterRoleId: "서포터즈 역할",
+  supporterBaseXp: "서포터즈 월 기본 XP",
+  supporterGoalChat: "서포터즈 월 목표 채팅",
+  supporterGoalVoiceMin: "서포터즈 월 목표 음성",
+  protectedRoleIds: "보호 역할",
+  questPickDaily: "일일 노출 개수",
+  questPickWeekly: "주간 노출 개수",
+  questPickMonthly: "월간 노출 개수",
+};
+// 화면이 비어 있을 때 대신 보여 주던 값 — 비교 · 변경 목록에서도 같은 값으로 친다
+const SETTING_DEFAULT: Record<string, number> = {
+  chatXpMin: 50,
+  chatXpMax: 500,
+  attendVoiceMin: 60,
+  supporterBaseXp: 150000,
+  supporterGoalChat: 0,
+  supporterGoalVoiceMin: 0,
+  questPickDaily: 0,
+  questPickWeekly: 0,
+  questPickMonthly: 0,
+  ...Object.fromEntries(ENHANCE_FIELDS.flatMap((g) => g.fields.map((f) => [f.key, f.def]))),
+};
+const SETTING_TEXT = new Set(["levelupMessage", "roleGrantMessage"]);
+// 입력칸은 문자열, 서버 값은 숫자 · 빈 값은 기본값처럼 — 겉보기가 같으면 같은 값으로 본다
+const normSetting = (k: string, v: any) => {
+  if (k === "roleGrantEnabled") return String(v !== false);
+  if (k === "resetOnLeave" || k === "shopPublic" || k === "levelPublic") return String(!!v);
+  if (k === "muteMode") return v || "off";
+  if (k === "muteTarget") return v || "both";
+  if (Array.isArray(v)) return v.length ? JSON.stringify(v) : "";
+  if (v == null && k in SETTING_DEFAULT) return String(SETTING_DEFAULT[k]);
+  return v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+};
 
-// 📌 안내 문단 — 예전에는 큼직한 테두리 박스 여섯 개가 화면을 아래로 밀어내고 있었다.
-//    내용은 그대로 두고 세로 자리만 줄인다.
-function Note({ children }: { children: React.ReactNode }) {
+// 📌 좁은 판(상세 칸 · 지급 폼) 안의 입력 한 칸 — 이름 위 · 입력 · 아래 한 줄.
+//    FieldRow 의 180px 이름 칸은 440px 판에선 입력칸을 너무 좁게 만든다.
+function Field({ label, hint, children }: { label: React.ReactNode; hint?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <p className="text-xs text-[#5a5a5a] leading-relaxed break-keep border-l-2 border-[#e91e3f]/30 pl-3.5 mb-6">
+    <div className="mb-4 last:mb-0">
+      <div className={labelClass}>{label}</div>
       {children}
-    </p>
+      {hint && <p className={fieldNote}>{hint}</p>}
+    </div>
   );
 }
 
-// 📌 접어 두는 편집 폼 — 목록을 먼저 보여 주고, ＋ 추가나 행의 수정을 눌렀을 때만 펼친다.
-//    폼과 목록을 세부 탭 두 개로 갈라 두면 등록하고 확인하러 탭을 옮겨야 했고,
-//    한 화면에 나란히 두면 세로로 너무 길어졌다.
-function FormPanel({
+const Req = () => <span className="text-[#e91e3f]">*</span>;
+
+// 📌 목록 편집 칸 — ＋ 추가나 줄을 누르면 PC 는 오른쪽 칸, 모바일은 아래 판으로 같은 폼이 뜬다.
+//    예전의 접이식 폼은 목록을 아래로 밀어내고, 편집하려면 화면을 오르내려야 했다.
+//    ⚠️ DetailPane 은 PC · 모바일 판을 둘 다 그려 두고 CSS 로 하나만 보인다 — form id 로 묶지 말고 버튼은 onClick 으로.
+function EditPane({
   open,
   title,
+  sub,
+  badge,
+  saveLabel,
   onSubmit,
   onCancel,
-  saveLabel,
-  panelRef,
+  onDelete,
+  width,
   children,
 }: {
   open: boolean;
   title: string;
+  sub?: React.ReactNode;
+  badge?: React.ReactNode;
+  saveLabel: string;
   onSubmit: () => void;
   onCancel: () => void;
-  saveLabel: string;
-  panelRef?: React.RefObject<HTMLDivElement | null>;
+  onDelete?: () => void;
+  width?: number;
   children: React.ReactNode;
 }) {
-  if (!open) return null;
   return (
-    <div
-      ref={panelRef}
-      className="mb-10 border border-black/10 rounded-xl p-5 md:p-6 bg-black/[0.015] scroll-mt-24"
+    <DetailPane
+      open={open}
+      onClose={onCancel}
+      title={title}
+      sub={sub}
+      badge={badge}
+      width={width}
+      footer={
+        <>
+          <Btn onClick={onSubmit}>{saveLabel}</Btn>
+          <Btn variant="ghost" onClick={onCancel}>취소</Btn>
+          {onDelete && <Btn variant="ghost" onClick={onDelete} className="ml-auto !text-[#d01634]">삭제</Btn>}
+        </>
+      }
     >
-      <div className="flex items-center justify-between gap-4 mb-5">
-        <h3 className="text-sm font-black text-[#131313] tracking-tight">{title}</h3>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
-        >
-          접기
-        </button>
-      </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSubmit();
-        }}
-      >
-        {children}
-        <div className="flex flex-wrap gap-3 mt-7">
-          <Btn type="submit" variant="primary">{saveLabel}</Btn>
-          <Btn type="button" variant="ghost" onClick={onCancel}>취소</Btn>
-        </div>
-      </form>
-    </div>
+      <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>{children}</form>
+    </DetailPane>
   );
 }
 
-// 목록 안의 작은 묶음 머리 — 퀘스트 주기별 / 자동으로 잡히는 역할 등
-function GroupHead({ title, count, right }: { title: string; count?: number; right?: React.ReactNode }) {
-  return (
-    <div className="flex items-end justify-between gap-3 mb-3 pb-2.5 border-b border-black/10">
-      <div className="flex items-center gap-2.5 shrink-0">
-        <span className="text-sm font-black text-[#131313]">{title}</span>
-        {count != null && <span className="text-[11px] font-black text-[#a3a3a3] tabular-nums">{count}</span>}
-      </div>
-      {right && <span className="min-w-0 text-[11px] font-bold text-[#8a8a8a] text-right break-keep">{right}</span>}
-    </div>
-  );
+// 패널 안 빈 목록 — DataTable 의 점선 상자는 패널 안에서 상자가 두 겹이 된다
+function PanelEmpty({ children }: { children: React.ReactNode }) {
+  return <p className="px-5 py-10 text-center text-[13px] text-[#5a5a5a]">{children}</p>;
 }
+
+// 패널 제목 옆 개수
+const Count = ({ n }: { n: number }) => <span className="ml-1.5 text-[13px] font-bold text-[#8a8a8a] tabular-nums">{n}</span>;
+// 표의 빈 칸 — 모바일 줄 카드에서는 대시가 줄줄이 붙지 않게 숨긴다
+const Dash = () => <span className="hidden md:inline text-[#a3a3a3]">—</span>;
+
+// 링크를 버튼(secondary · sm) 모양으로
+const LINK_PILL =
+  "inline-flex items-center justify-center gap-1.5 h-8 px-3.5 rounded-full text-[12px] font-bold whitespace-nowrap bg-white text-[#131313] border border-[#a3a3a3] hover:border-[#131313] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40";
+// 공용 Dropdown(라이트)을 입력칸(inputClass)과 같은 높이 · 테두리로
+const DD = "!px-3 !py-2 min-h-10 !text-[14px] !border-[#a3a3a3]";
 
 export default function AdminBotPage() {
   const { isAdmin, gate } = useAdminGuard();
@@ -256,7 +303,7 @@ export default function AdminBotPage() {
 
   let tab = rawTab;
   let sec = rawSec;
-  if (!TAB_META[tab]) {
+  if (!TAB_ORDER.some((t) => t.id === tab)) {
     const moved = LEGACY_TAB[tab];
     if (moved) {
       tab = moved.tab;
@@ -267,9 +314,8 @@ export default function AdminBotPage() {
     }
   }
   if (tab === "roles" && LEGACY_ROLE_SEC[sec]) sec = LEGACY_ROLE_SEC[sec];
-
-  const subList = SUB_TABS[tab] || [];
-  const sub = subList.some((x) => x.id === sec) ? sec : subList[0]?.id || "";
+  // 옛 세부 탭 → 스크롤할 패널 (모르는 값이면 스크롤하지 않는다)
+  const anchor = SEC_ANCHOR[tab]?.[sec] || "";
 
   const [isLoading, setIsLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<{ kind: "role" | "channel" | "boost" | "quest" | "inventory"; id: string } | null>(null);
@@ -281,6 +327,9 @@ export default function AdminBotPage() {
   const [channelConfigs, setChannelConfigs] = useState<any[]>([]);
   const [boosts, setBoosts] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
+  // 📌 불러온(또는 마지막으로 저장한) 설정 — 저장 줄의 '바뀐 것'과 '되돌리기'가 이 값을 기준으로 한다
+  const [settingsSnap, setSettingsSnap] = useState<any>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [quests, setQuests] = useState<any[]>([]);
   const [invRoles, setInvRoles] = useState<any[]>([]);
   const [shopItems, setShopItems] = useState<any[]>([]);
@@ -295,22 +344,25 @@ export default function AdminBotPage() {
 
   const saved = () => notify("저장되었습니다. 봇에는 1분 이내 자동 반영됩니다.");
 
-  // 편집 폼 — 세부 탭마다 하나씩만 펼친다.
-  // 어느 탭·세부 탭에서 열었는지를 함께 들고 있어서, 다른 화면으로 옮기면 저절로 닫힌 것으로 친다
+  // 편집 칸 — 한 번에 하나만 연다.
+  // 어느 탭에서 열었는지를 함께 들고 있어서, 다른 탭으로 옮기면 저절로 닫힌 것으로 친다
   // (효과로 상태를 되돌리면 렌더가 한 번 더 도는데, 여기선 그럴 이유가 없다).
-  // 매번 새 객체를 넣으므로 이미 열려 있는 폼을 다시 눌러도 아래 스크롤 효과가 다시 돈다.
+  // editId: 고친 줄의 _id — 표에서 그 줄을 표시하고 칸 안의 '삭제'가 쓴다 (새로 만들 땐 null)
   const [openForm, setOpenForm] = useState<{ tab: string; sec: string; kind: string } | null>(null);
-  const formRef = useRef<HTMLDivElement | null>(null);
-  const openFormAt = (kind: string) => setOpenForm({ tab, sec: sub, kind });
+  const [editId, setEditId] = useState<string | null>(null);
+  const openFormAt = (kind: string, id: string | null = null) => {
+    setEditId(id);
+    setOpenForm({ tab, sec: anchor, kind });
+  };
   const closeForm = () => setOpenForm(null);
   const isFormOpen = (kind: string) =>
-    !!openForm && openForm.kind === kind && openForm.tab === tab && openForm.sec === sub;
+    !!openForm && openForm.kind === kind && openForm.tab === tab && openForm.sec === anchor;
 
   const [roleForm, setRoleForm] = useState<any>(EMPTY_ROLE);
   const [chForm, setChForm] = useState<any>(EMPTY_CHANNEL);
   const [boostForm, setBoostForm] = useState<any>(EMPTY_BOOST);
   const [questForm, setQuestForm] = useState<any>(EMPTY_QUEST);
-  // 📌 노출 방식 패널은 자기 폼 상태 없이 공용 settings 를 바로 고친다.
+  // 📌 노출 방식 칸은 자기 폼 상태 없이 공용 settings 를 바로 고친다.
   //    그래서 '취소'로 되돌리려면 연 시점의 값을 붙잡아 둬야 한다 —
   //    안 그러면 취소한 값이 다른 탭의 '저장'에 묻어 조용히 저장된다.
   const [pickSnapshot, setPickSnapshot] = useState<Record<string, any> | null>(null);
@@ -333,7 +385,7 @@ export default function AdminBotPage() {
       setGuildRoles(Array.isArray(roles?.data) ? roles.data : []);
       setChannelConfigs(Array.isArray(chCfg?.data) ? chCfg.data : []);
       setGuildChannels(Array.isArray(channels?.data) ? channels.data : []);
-      if (st?.data) setSettings(st.data);
+      if (st?.data) { setSettings(st.data); setSettingsSnap(st.data); }
       setBoosts(Array.isArray(bst?.data) ? bst.data : []);
       setQuests(Array.isArray(qst?.data) ? qst.data : []);
       setInvRoles(Array.isArray(inv?.data) ? inv.data : []);
@@ -343,15 +395,9 @@ export default function AdminBotPage() {
 
   useEffect(() => { if (isAdmin) fetchCore(); }, [isAdmin, fetchCore]);
 
-  // 펼친 폼으로 데려간다 — 화면 밖에서 열리면 눌린 줄 모른다
+  // 봇 자동 지급 로그 — 지급·내역 탭에서는 내역 표가 늘 보이므로 탭만 본다
   useEffect(() => {
-    if (!openForm) return;
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [openForm]);
-
-  // 봇 자동 지급 로그
-  useEffect(() => {
-    if (!isAdmin || tab !== "ledger" || sub !== "logs") return;
+    if (!isAdmin || tab !== "ledger") return;
     // '수동'은 Payout(grantLogs)만 보여 준다 — 화면에 쓰지도 않을 봇 로그를 부를 이유가 없다
     if (ledgerFilter === "manual") return;
     const qs = new URLSearchParams({ limit: "50", skip: String(logPage * 50) });
@@ -361,21 +407,23 @@ export default function AdminBotPage() {
       .then((r) => r.json())
       .then((d) => { setLogs(Array.isArray(d?.data) ? d.data : []); setLogTotal(d?.total || 0); })
       .catch(() => {});
-  }, [isAdmin, tab, sub, logPage, ledgerFilter, logQuery]);
+  }, [isAdmin, tab, logPage, ledgerFilter, logQuery]);
 
   // ── 설정 저장 ───────────────────────────────
   const postSettings = async () => {
     const res = await fetch("/api/bot-settings", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings),
     }).catch(() => null);
-    if (res?.ok) { const d = await res.json(); setSettings(d.data); saved(); return true; }
+    if (res?.ok) { const d = await res.json(); setSettings(d.data); setSettingsSnap(d.data); saved(); return true; }
     notify("저장에 실패했습니다.", true);
     return false;
   };
 
-  const saveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await postSettings();
+  // 저장 줄의 '저장' — 설정 문서 전체를 기존 postSettings 로 보낸다
+  const saveSettings = async () => {
+    if (savingSettings) return;
+    setSavingSettings(true);
+    try { await postSettings(); } finally { setSavingSettings(false); }
   };
 
   // 퀘스트 노출 방식도 같은 문서를 저장한다 (설정은 단일 문서라 전체를 함께 보낸다)
@@ -384,7 +432,7 @@ export default function AdminBotPage() {
     if (await postSettings()) { setPickSnapshot(null); closeForm(); }
   };
 
-  // 노출 방식 패널 열기/취소 — 취소는 연 시점의 값으로 되돌린다
+  // 노출 방식 칸 열기/취소 — 취소는 연 시점의 값으로 되돌린다
   const openPicks = () => {
     // 아직 설정을 못 불러왔으면 붙잡을 값이 없다 — 0 으로 채워 두면 취소가 오히려 값을 0 으로 만든다
     setPickSnapshot(settings ? Object.fromEntries(QUEST_PICK_FIELDS.map((f) => [f.key, settings[f.key] ?? 0])) : null);
@@ -613,6 +661,20 @@ export default function AdminBotPage() {
     setDeleteConfirm(null);
   };
 
+  // 📌 옛 ?sec= 주소로 들어오면 그 묶음이 옮겨 간 패널로 한 번 데려간다.
+  //    패널은 데이터가 와야 그려지거나 키가 바뀌므로, 불러오기가 끝난 뒤 한 번만 움직인다.
+  const scrolledTo = useRef("");
+  const settingsReady = !!settings;
+  useEffect(() => {
+    if (!anchor || isLoading) return;
+    const key = `${tab}:${anchor}`;
+    if (scrolledTo.current === key) return;
+    const el = document.getElementById(`sec-${anchor}`);
+    if (!el) return;
+    scrolledTo.current = key;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [tab, anchor, isLoading, settingsReady]);
+
   // 화면 가리개일 뿐이다 — 실제 방어는 각 API 의 getServerSession + isAdminName 이 한다
   if (gate) return gate;
 
@@ -621,6 +683,7 @@ export default function AdminBotPage() {
   // 부스트 대상 지정과 인벤토리 표시에는 관리 역할도 쓸 수 있으므로 그쪽은 guildRoles 를 그대로 쓴다.
   const grantableRoles = guildRoles.filter((r) => !r.managed);
   const roleNameOf = (id: string) => guildRoles.find((g) => g.id === id)?.name || "";
+  const channelNameOf = (id: string) => guildChannels.find((c) => c.id === id)?.name || id;
 
   const roleOptions = (list: any[]) => list.map((r) => ({ value: r.id, label: r.name, color: r.color }));
   const channelOptions = guildChannels.map((c) => ({
@@ -629,6 +692,7 @@ export default function AdminBotPage() {
     hint: CHANNEL_TYPE_LABEL[c.type],
     indent: !!c.parentId,
   }));
+  const textChannelOptions = guildChannels.filter((c) => c.type === "text").map((c) => ({ value: c.id, label: `# ${c.name}` }));
 
   // 📌 등록하지 않아도 인벤토리에 잡히는 역할 — /api/shop/my-items 가 상품·역할 설정 역할을 그대로 인정하기 때문
   // 📌 시즌 전환 보호 역할 — 설정 문서(BotSetting)의 배열 하나라 저장은 기존 postSettings 를 그대로 쓴다
@@ -640,6 +704,34 @@ export default function AdminBotPage() {
         ? protectedRoleIds.filter((x) => x !== id)
         : [...protectedRoleIds, id],
     });
+
+  // ── 설정 변경 추적(저장 줄) ─────────────────
+  const settingsDirty =
+    !!settings && !!settingsSnap &&
+    Object.keys({ ...settingsSnap, ...settings }).some((k) => normSetting(k, settings[k]) !== normSetting(k, settingsSnap[k]));
+  const chg = (k: string) => !!settings && !!settingsSnap && normSetting(k, settings[k]) !== normSetting(k, settingsSnap[k]);
+  const fmtSetting = (k: string, v: any): string => {
+    if (k === "roleGrantEnabled") return v !== false ? "사용" : "사용 안 함";
+    if (k === "shopPublic" || k === "levelPublic") return v ? "공개" : "비공개";
+    if (k === "resetOnLeave") return v ? "초기화함" : "유지함";
+    if (k === "muteMode") return MUTE_MODES.find((o) => o.v === (v || "off"))?.l || String(v);
+    if (k === "muteTarget") return MUTE_TARGETS.find((o) => o.v === (v || "both"))?.l || String(v);
+    if (k === "levelupChannelId") return v ? `#${channelNameOf(v)}` : "알림 끄기";
+    if (k === "roleGrantChannelId") return v ? `#${channelNameOf(v)}` : "레벨업 채널과 동일";
+    if (k === "supporterRoleId") return v ? roleNameOf(v) || v : "지정 안 함";
+    if (k === "protectedRoleIds") return `${Array.isArray(v) ? v.length : 0}개`;
+    const raw = v == null && k in SETTING_DEFAULT ? SETTING_DEFAULT[k] : v;
+    if (raw == null || raw === "") return "비움";
+    const n = Number(raw);
+    return Number.isFinite(n) ? n.toLocaleString() : String(raw);
+  };
+  const settingChanges: string[] = settingsDirty
+    ? Object.keys(SETTING_LABEL)
+        .filter((k) => chg(k))
+        .map((k) => (SETTING_TEXT.has(k) ? `${SETTING_LABEL[k]} 수정` : `${SETTING_LABEL[k]} ${fmtSetting(k, settingsSnap[k])} → ${fmtSetting(k, settings[k])}`))
+    : [];
+  // 노출 방식 칸은 자기 저장 · 취소가 있다 — 그 칸이 열린 동안 저장 줄까지 띄우면 저장 단추가 둘이 된다
+  const showSaveBar = settingsDirty && !isFormOpen("questPick");
 
   // ── 지급 내역 — 두 출처를 하나로 ──────────────
   //    XpLog 는 봇이 자동으로 준 것(채팅·음성·출석), Payout 은 관리자가 수동으로 준 것.
@@ -682,1151 +774,1088 @@ export default function AdminBotPage() {
     ledgerRows = botRows;
   }
 
-  const meta = TAB_META[tab];
   const hrefTab = (id: string) => `/admin/bot?tab=${id}`;
-  const hrefSec = (id: string) => `/admin/bot?tab=${tab}&sec=${id}`;
 
-  const loadingRow = <div className="py-10 text-center text-[#8a8a8a] text-sm">불러오는 중...</div>;
+  const loadingRow = <div className="py-10 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</div>;
+
+  // ── 표 열 ───────────────────────────────────
+  const roleCols: Column<any>[] = [
+    {
+      key: "role", label: "역할", mobile: "title",
+      render: (c) => {
+        const role = guildRoles.find((r) => r.id === c.roleId);
+        return (
+          <span className="inline-flex items-center gap-2.5 min-w-0">
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: role?.color || "#99aab5" }} />
+            <span className="font-bold truncate">{c.roleName || role?.name || c.roleId}</span>
+            {c.exclusive && <StatusChip>등급 역할</StatusChip>}
+          </span>
+        );
+      },
+    },
+    {
+      key: "lv", label: "지급 레벨",
+      render: (c) =>
+        c.rewardLevel != null ? (
+          <span className="font-bold text-[#e91e3f] tabular-nums">Lv.{c.rewardLevel}<span className="md:hidden"> 도달 시 지급</span></span>
+        ) : c.buffXp > 0 || c.attendBuffXp > 0 ? <Dash /> : (
+          <span className="text-[#5a5a5a]">효과 없음</span>
+        ),
+    },
+    {
+      key: "buff", label: "채팅·음성 Boost", align: "right",
+      render: (c) => (c.buffXp > 0 ? <span className="tabular-nums"><span className="md:hidden">채팅/음성 </span>+{c.buffXp.toLocaleString()}</span> : <Dash />),
+    },
+    {
+      key: "attend", label: "출석 Boost", align: "right",
+      render: (c) => (c.attendBuffXp > 0 ? <span className="tabular-nums"><span className="md:hidden">출석 </span>+{c.attendBuffXp.toLocaleString()}</span> : <Dash />),
+    },
+  ];
+
+  const channelCols: Column<any>[] = [
+    {
+      key: "ch", label: "채널", mobile: "title",
+      render: (c) => {
+        const live = guildChannels.find((g) => g.id === c.channelId);
+        return (
+          <span className="inline-flex items-center gap-2 min-w-0">
+            <span className="text-[12px] text-[#8a8a8a] shrink-0">{CHANNEL_TYPE_ICON[c.channelType] || "#"}</span>
+            <span className="font-bold truncate">{live?.name || c.channelName || c.channelId}</span>
+          </span>
+        );
+      },
+    },
+    {
+      key: "eff", label: "효과",
+      render: (c) =>
+        c.excluded ? <StatusChip tone="bad">XP 지급 제외</StatusChip>
+        : c.boostXp > 0 ? <span className="font-bold text-[#e91e3f] tabular-nums">+{c.boostXp.toLocaleString()} XP</span>
+        : <span className="text-[#5a5a5a]">효과 없음</span>,
+    },
+    {
+      key: "scope", label: "범위",
+      render: (c) => (c.channelType === "category" ? <span className="text-[#5a5a5a]">하위 채널 전체</span> : <Dash />),
+    },
+  ];
+
+  const boostState = (b: any) => {
+    const now = Date.now();
+    const start = new Date(b.startAt).getTime();
+    const end = new Date(b.endAt).getTime();
+    return now < start ? "예정" : now > end ? "종료" : "진행 중";
+  };
+  const boostCols: Column<any>[] = [
+    {
+      key: "state", label: "상태", mobile: "title", className: "w-20",
+      render: (b) => {
+        const s = boostState(b);
+        return <StatusChip tone={s === "진행 중" ? "ink" : s === "예정" ? "info" : "neutral"}>{s}</StatusChip>;
+      },
+    },
+    { key: "name", label: "이름", mobile: "title", render: (b) => <span className="font-bold">{b.name}</span> },
+    {
+      key: "xp", label: "추가 XP", align: "right",
+      render: (b) => <span className="font-bold text-[#e91e3f] tabular-nums whitespace-nowrap">+{(b.boostXp || 0).toLocaleString()} XP</span>,
+    },
+    {
+      key: "target", label: "대상",
+      render: (b) => (
+        <span className="text-[#5a5a5a]">
+          {b.targetRoleName || "전체 유저"} · {b.targetChannelName ? `${CHANNEL_TYPE_ICON[b.targetChannelType] || "#"} ${b.targetChannelName}` : "모든 채널"}
+        </span>
+      ),
+    },
+    {
+      key: "period", label: "기간",
+      render: (b) => (
+        <span className="text-[12px] text-[#8a8a8a] tabular-nums whitespace-nowrap">
+          <span className="md:block">{fmtDateTime(b.startAt)} ~</span> <span className="md:block">{fmtDateTime(b.endAt)}</span>
+        </span>
+      ),
+    },
+  ];
+
+  // 퀘스트는 주기 순(일일 → 주간 → 월간)으로 한 표에 — 주기별 요약은 표 위 한 줄에
+  const questRows = QUEST_PICK_FIELDS.flatMap((f) => quests.filter((q) => (q.period || "daily") === f.period));
+  const questCols: Column<any>[] = [
+    { key: "period", label: "주기", className: "w-16", render: (q) => <span className="text-[#5a5a5a]">{PERIOD_LABEL[q.period || "daily"]}</span> },
+    {
+      key: "order", label: "순서", align: "center", className: "w-16",
+      render: (q) => <span className="text-[#8a8a8a] tabular-nums"><span className="md:hidden">순서 </span>{q.order}</span>,
+    },
+    {
+      key: "name", label: "퀘스트", mobile: "title",
+      render: (q) => (
+        <span className="block min-w-0">
+          <span className="flex items-center gap-2 flex-wrap">
+            <span className={`font-bold ${q.enabled ? "" : "line-through text-[#5a5a5a]"}`}>{q.name}</span>
+            {!q.enabled && <StatusChip>비활성</StatusChip>}
+          </span>
+          {q.desc && <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a] break-keep">{q.desc}</span>}
+        </span>
+      ),
+    },
+    {
+      key: "cond", label: "조건",
+      render: (q) => (
+        <span className="text-[#5a5a5a] tabular-nums">
+          {(REASON_LABEL[q.reason] || "전체")}{" "}
+          {q.metric === "xp" ? "XP" : q.metric === "minute" ? "접속" : "횟수"}{" "}
+          {q.target.toLocaleString()}{q.metric === "minute" ? "분" : ""} 달성
+        </span>
+      ),
+    },
+    {
+      key: "reward", label: "보상", align: "right",
+      render: (q) => (
+        <span className="inline-flex items-center gap-2 font-black tabular-nums whitespace-nowrap">
+          {q.rewardXp > 0 && <span className="text-[#e91e3f]">+{q.rewardXp.toLocaleString()} XP</span>}
+          {q.rewardXp > 0 && (q.rewardPoint || 0) > 0 && <span className="text-[#a3a3a3]">·</span>}
+          {(q.rewardPoint || 0) > 0 && <span className="text-[#3f9e93]">+{Number(q.rewardPoint).toLocaleString()} 빙옥</span>}
+          {q.rewardXp <= 0 && (q.rewardPoint || 0) <= 0 && <span className="text-[#a3a3a3]">보상 없음</span>}
+        </span>
+      ),
+    },
+  ];
+
+  const ledgerCols: Column<LedgerRow>[] = [
+    {
+      key: "src", label: "구분", mobile: "title", className: "w-16",
+      render: (r) => <StatusChip tone={r.src === "manual" ? "ink" : "neutral"}>{r.src === "manual" ? "수동" : "봇"}</StatusChip>,
+    },
+    {
+      key: "name", label: "유저", mobile: "title",
+      render: (r) => (
+        <span className="inline-flex items-center gap-2 min-w-0">
+          <span className="font-bold truncate max-w-[13rem]">{r.name}</span>
+          {/* 처리 상태는 수동 지급에만 있다 — 값이 비어 있어도 '대기'로 보여 줘야 큐에 남은 걸 알 수 있다 */}
+          {r.src === "manual" && (
+            <StatusChip tone={r.status === "paid" ? "ok" : r.status === "failed" ? "bad" : "neutral"}>
+              {r.status === "paid" ? "완료" : r.status === "failed" ? "실패" : "대기"}
+            </StatusChip>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: "note", label: "내용",
+      render: (r) => (
+        <span className="text-[#5a5a5a] break-keep">
+          {r.note}
+          {r.channelName ? ` · #${r.channelName}` : ""}
+          {r.error ? ` · ${r.error}` : ""}
+        </span>
+      ),
+    },
+    { key: "at", label: "일시", className: "whitespace-nowrap", render: (r) => <span className="text-[12px] text-[#8a8a8a] tabular-nums">{fmtDateTime(r.at)}</span> },
+    {
+      key: "amount", label: "수량", align: "right",
+      render: (r) => (
+        <span className={`font-black tabular-nums whitespace-nowrap ${r.amount >= 0 ? "text-[#e91e3f]" : "text-amber-700"}`}>
+          {r.amount >= 0 ? "+" : ""}{r.amount.toLocaleString()}
+          {r.unit === "빙옥" && <span className="ml-1 text-[11px] text-[#3f9e93]">빙옥</span>}
+        </span>
+      ),
+    },
+  ];
+
+  const tableFlat = "!border-0 !rounded-none";
 
   return (
-    <main className="w-full flex-1 flex flex-col relative">
-      <LuxStyles />
+    <AdminPage
+      section="SYSTEM : LEVEL"
+      title="레벨 설정"
+      tabs={<AdminTabs tabs={TAB_ORDER} current={tab} hrefOf={hrefTab} />}
+      // 랭킹은 유저 화면이 상위호환이라 관리자 쪽에 따로 두지 않는다 — 머리의 바로가기 하나로만 남긴다
+      actions={tab === "ledger" ? <Link href="/level?tab=rank" className={LINK_PILL}>랭킹 보기</Link> : undefined}
+      footer={
+        <SaveBar
+          dirty={showSaveBar}
+          changes={settingChanges}
+          onSave={saveSettings}
+          onReset={() => { if (settingsSnap) setSettings(settingsSnap); }}
+          saving={savingSettings}
+        />
+      }
+    >
+      {/* ═══════════ 정책 ═══════════
+          📌 예전 세부 탭 넷(지급량 · 음소거 · 레벨업 알림 · 역할 지급 알림)을 패널로 한 화면에 펼쳤다.
+             공개 토글 · 퇴장 초기화처럼 되돌리기 어려운 설정은 맨 아래 빨간 테두리 패널 하나에 모았다. */}
+      {tab === "policy" && (settings ? (
+        <>
+          <PanelGrid>
+            <div className="min-w-0 space-y-5">
+              <Panel id="sec-xp" className="scroll-mt-24" title="지급량 · 주기" flush>
+                {/* 최소 · 최대를 한 줄에 — 두 열(xl)의 좁은 칸에서도 안 접히게 칸을 조금 줄이고 단위는 이름에 맡긴다 */}
+                <FieldRow label="채팅 XP" changed={chg("chatXpMin") || chg("chatXpMax")} hint="메시지 1회당 최소~최대 사이 랜덤 · 최대가 최소보다 작으면 최소로 맞춰집니다">
+                  <Inline>
+                    <input type="number" min={0} aria-label="채팅 XP 최소" value={settings.chatXpMin ?? 50} onChange={(e) => setSettings({ ...settings, chatXpMin: e.target.value })} className={`${inputClass} !w-24 tabular-nums`} />
+                    ~
+                    <input type="number" min={0} aria-label="채팅 XP 최대" value={settings.chatXpMax ?? 500} onChange={(e) => setSettings({ ...settings, chatXpMax: e.target.value })} className={`${inputClass} !w-24 tabular-nums`} />
+                  </Inline>
+                </FieldRow>
+                <FieldRow label="채팅 쿨타임" changed={chg("chatCooldownSec")} hint="이 시간 안의 추가 메시지는 지급 없음">
+                  <Inline>
+                    <input type="number" min={0} value={settings.chatCooldownSec} onChange={(e) => setSettings({ ...settings, chatCooldownSec: e.target.value })} className={numClass} />
+                    초
+                  </Inline>
+                </FieldRow>
+                <FieldRow label="음성 XP" changed={chg("voiceXp")} hint="음성 지급 1회당 기본 지급량">
+                  <Inline>
+                    <input type="number" min={0} value={settings.voiceXp} onChange={(e) => setSettings({ ...settings, voiceXp: e.target.value })} className={numClass} />
+                    XP
+                  </Inline>
+                </FieldRow>
+                <FieldRow label="음성 지급 주기" changed={chg("voiceIntervalSec")} hint="음성 채널 접속자에게 이 주기마다 지급 (기본 300초 = 5분)">
+                  <Inline>
+                    <input type="number" min={30} value={settings.voiceIntervalSec} onChange={(e) => setSettings({ ...settings, voiceIntervalSec: e.target.value })} className={numClass} />
+                    초
+                  </Inline>
+                </FieldRow>
+                <FieldRow label="출석체크 XP" changed={chg("attendXp")} hint="일일 출석 보상 지급량 (1일 1회)">
+                  <Inline>
+                    <input type="number" min={0} value={settings.attendXp} onChange={(e) => setSettings({ ...settings, attendXp: e.target.value })} className={numClass} />
+                    XP
+                  </Inline>
+                </FieldRow>
+                <FieldRow label="출석 인정 접속 시간" changed={chg("attendVoiceMin")} hint="음성 채널에 하루 이만큼 머무르면 출석 보상 (기본 60분)">
+                  <Inline>
+                    <input type="number" min={1} max={1440} value={settings.attendVoiceMin ?? 60} onChange={(e) => setSettings({ ...settings, attendVoiceMin: e.target.value })} className={numClass} />
+                    분
+                  </Inline>
+                </FieldRow>
+              </Panel>
 
-      <AdminHero title={meta.title} desc={meta.desc} />
-      <AdminTabs tabs={TAB_ORDER} current={tab} hrefOf={hrefTab} />
+              <Panel title="음소거 처리" flush>
+                <FieldRow label="음소거 시 처리" changed={chg("muteMode")} hint="차단은 지급 자체를 건너뜁니다">
+                  <Segmented options={MUTE_MODES} value={settings.muteMode || "off"} onChange={(v) => setSettings({ ...settings, muteMode: v })} />
+                </FieldRow>
+                <FieldRow label="감소 비율" changed={chg("muteReducePct")} hint="90 = 원래 지급량의 10%만 지급">
+                  <Inline>
+                    <input type="number" min={0} max={100} value={settings.muteReducePct} disabled={settings.muteMode !== "reduce"}
+                      onChange={(e) => setSettings({ ...settings, muteReducePct: e.target.value })} className={numClass} />
+                    %
+                  </Inline>
+                </FieldRow>
+                <FieldRow label="적용 기준" changed={chg("muteTarget")} hint="어떤 상태를 ‘음소거’로 볼지">
+                  <Segmented options={MUTE_TARGETS} value={settings.muteTarget || "both"} onChange={(v) => setSettings({ ...settings, muteTarget: v })} />
+                </FieldRow>
+              </Panel>
+            </div>
 
-      <div className="w-full max-w-6xl mx-auto px-6 pb-16 flex-1 flex flex-col">
-        {/* 랭킹은 유저 화면이 상위호환이라 관리자 쪽에 따로 두지 않는다 — 한 줄 바로가기로만 남긴다 */}
-        {tab === "ledger" && (
-          <Link
-            href="/level?tab=rank"
-            className="flex items-center justify-between gap-4 py-3 mb-6 border-y border-black/[0.06] text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
-          >
-            <span className="break-keep">랭킹은 유저 화면에서 봅니다 — 누적 · 이번 달 · 음성 시간</span>
-            <span className="shrink-0 text-[#e91e3f]">/level?tab=rank →</span>
-          </Link>
-        )}
-
-        <SubTabs tabs={subList} current={sub} hrefOf={hrefSec} />
-
-        <div className="flex-1">
-
-        {/* ═══════════ 정책 ═══════════ */}
-        {tab === "policy" && (settings ? (
-          <Reveal>
-          <form onSubmit={saveSettings}>
-            {sub === "xp" && (
-            <section>
-              <SectionHead no="01" title="지급량 · 주기" />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>채팅 XP 최소</label>
-                  <input type="number" min={0} value={settings.chatXpMin ?? 50} onChange={(e) => setSettings({ ...settings, chatXpMin: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>메시지 1회당 최소~최대 사이에서 랜덤 지급</p>
-                </div>
-                <div>
-                  <label className={labelClass}>채팅 XP 최대</label>
-                  <input type="number" min={0} value={settings.chatXpMax ?? 500} onChange={(e) => setSettings({ ...settings, chatXpMax: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>최소보다 작으면 최소로 맞춰집니다</p>
-                </div>
-                <div>
-                  <label className={labelClass}>채팅 쿨타임 (초)</label>
-                  <input type="number" min={0} value={settings.chatCooldownSec} onChange={(e) => setSettings({ ...settings, chatCooldownSec: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>이 시간 안의 추가 메시지는 지급 없음</p>
-                </div>
-                <div>
-                  <label className={labelClass}>음성 XP</label>
-                  <input type="number" min={0} value={settings.voiceXp} onChange={(e) => setSettings({ ...settings, voiceXp: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>음성 지급 1회당 기본 지급량</p>
-                </div>
-                <div>
-                  <label className={labelClass}>음성 지급 주기 (초)</label>
-                  <input type="number" min={30} value={settings.voiceIntervalSec} onChange={(e) => setSettings({ ...settings, voiceIntervalSec: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>음성 채널 접속자에게 이 주기마다 지급 (기본 300초 = 5분)</p>
-                </div>
-                <div>
-                  <label className={labelClass}>출석체크 XP</label>
-                  <input type="number" min={0} value={settings.attendXp} onChange={(e) => setSettings({ ...settings, attendXp: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>일일 출석 보상 지급량 (1일 1회)</p>
-                </div>
-                <div>
-                  <label className={labelClass}>출석 인정 접속 시간 (분)</label>
-                  <input type="number" min={1} max={1440} value={settings.attendVoiceMin ?? 60} onChange={(e) => setSettings({ ...settings, attendVoiceMin: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>음성 채널에 하루 이만큼 머무르면 출석 보상을 받을 수 있습니다 (기본 60분)</p>
-                </div>
-              </div>
-
-              {/* 강화 — 유저가 XP·POINT 로 단계를 올려 채팅 구간·음성 지급을 영구히 키운다 (lib/enhance.js) */}
-              <div className="mt-10 pt-8 border-t border-black/[0.08]">
-                <h3 className="text-sm font-black text-[#131313] tracking-tight mb-6">강화</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {ENHANCE_FIELDS.map((g) => (
-                    <div key={g.kind}>
-                      <p className="text-xs font-black text-[#131313] mb-4">{g.label}</p>
-                      <div className="grid grid-cols-2 gap-4">
-                        {g.fields.map((f) => (
-                          <div key={f.key}>
-                            <label className={labelClass}>{f.label}</label>
-                            <input type="number" min={f.min} max={f.max} value={settings[f.key] ?? f.def} onChange={(e) => setSettings({ ...settings, [f.key]: e.target.value })} className={inputClass} />
-                            {f.note && <p className={fieldNote}>{f.note}</p>}
-                          </div>
+            <div className="min-w-0 space-y-5">
+              {/* 강화 — 유저가 XP·POINT 로 단계를 올려 채팅 구간·음성 지급을 영구히 키운다 (lib/enhance.js).
+                  채팅/음성이 같은 네 칸이라 행=종류 · 열=항목인 작은 표로. 모바일은 종류마다 두 칸씩 */}
+              <Panel id="sec-enhance" className="scroll-mt-24" title="강화" flush>
+                <div className="px-5 py-4">
+                  <div className="hidden md:flex items-center gap-3 pb-2 text-[12px] font-bold text-[#5a5a5a]">
+                    <span className="w-12 shrink-0" />
+                    <div className="flex-1 min-w-0 grid grid-cols-4 gap-3">
+                      {ENHANCE_COLS.map((c) => <span key={c} className="min-w-0">{c}</span>)}
+                    </div>
+                  </div>
+                  {ENHANCE_FIELDS.map((g, i) => (
+                    <div key={g.kind} className={`flex items-start md:items-center gap-3 py-3 border-[#ededed] ${i > 0 ? "border-t" : "md:border-t"}`}>
+                      <span className="w-12 shrink-0 flex items-center gap-1.5 text-[13px] font-bold md:pt-0 pt-1">
+                        {g.label}
+                        {g.fields.some((f) => chg(f.key)) && <span aria-label="바뀜" className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]" />}
+                      </span>
+                      <div className="flex-1 min-w-0 grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {g.fields.map((f, j) => (
+                          <label key={f.key} className="block min-w-0">
+                            <span className="md:hidden block mb-1 text-[12px] text-[#5a5a5a]">{ENHANCE_COLS[j]}</span>
+                            <input type="number" min={f.min} max={f.max} aria-label={`${g.label} ${f.label}`} value={settings[f.key] ?? f.def}
+                              onChange={(e) => setSettings({ ...settings, [f.key]: e.target.value })} className={`${inputClass} tabular-nums`} />
+                          </label>
                         ))}
                       </div>
                     </div>
                   ))}
+                  <p className={fieldNote}>단계당 +XP — 채팅은 최소·최대 양끝, 음성은 1회 지급에 더해집니다 · 최대 단계 0 이면 강화 없음 · 비용은 매 단계 복리로 오릅니다</p>
                 </div>
-              </div>
-            </section>
-            )}
+              </Panel>
 
-            {sub === "mute" && (
-            <section>
-              <SectionHead no="02" title="음소거 · 퇴장 처리" />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className={labelClass}>음소거 시 처리</label>
-                  <FilterChips
-                    options={[{ v: "off", l: "제한 없음" }, { v: "reduce", l: "감소" }, { v: "block", l: "차단" }]}
-                    value={settings.muteMode || "off"}
-                    onChange={(v) => setSettings({ ...settings, muteMode: v })}
-                  />
-                  <p className={fieldNote}>차단은 지급 자체를 건너뜁니다</p>
-                </div>
-                <div>
-                  <label className={labelClass}>감소 비율 (%)</label>
-                  <input type="number" min={0} max={100} value={settings.muteReducePct} disabled={settings.muteMode !== "reduce"}
-                    onChange={(e) => setSettings({ ...settings, muteReducePct: e.target.value })} className={`${inputClass} disabled:opacity-40`} />
-                  <p className={fieldNote}>90 = 원래 지급량의 10%만 지급</p>
-                </div>
-                <div>
-                  <label className={labelClass}>적용 기준</label>
-                  <FilterChips
-                    options={[{ v: "both", l: "마이크+헤드셋 모두" }, { v: "any", l: "하나라도 음소거" }]}
-                    value={settings.muteTarget || "both"}
-                    onChange={(v) => setSettings({ ...settings, muteTarget: v })}
-                  />
-                  <p className={fieldNote}>어떤 상태를 &lsquo;음소거&rsquo;로 볼지</p>
-                </div>
-                <div>
-                  <label className={labelClass}>서버 퇴장 시 XP 초기화</label>
-                  <Toggle
-                    on={!!settings.resetOnLeave}
-                    onClick={() => setSettings({ ...settings, resetOnLeave: !settings.resetOnLeave })}
-                    onLabel="초기화함"
-                    offLabel="유지함 (기본)"
-                  />
-                  <p className={fieldNote}>⚠️ 켜면 나간 유저의 XP 기록이 삭제되어 복구할 수 없습니다</p>
-                </div>
-                <div>
-                  <label className={labelClass}>ARCTIC 상점 공개</label>
-                  <Toggle
-                    on={!!settings.shopPublic}
-                    onClick={() => setSettings({ ...settings, shopPublic: !settings.shopPublic })}
-                    onLabel="공개 중"
-                    offLabel="비공개 (관리자만)"
-                  />
-                  <p className={fieldNote}>비공개면 일반 유저에게 &lsquo;준비 중&rsquo; 화면이 보이고 관리자만 상점을 이용할 수 있습니다</p>
-                </div>
-                <div>
-                  <label className={labelClass}>SYSTEM : LEVEL 공개</label>
-                  <Toggle
-                    on={!!settings.levelPublic}
-                    onClick={() => setSettings({ ...settings, levelPublic: !settings.levelPublic })}
-                    onLabel="공개 중"
-                    offLabel="비공개 (관리자만) · 10월 공개 예정"
-                  />
-                  <p className={fieldNote}>비공개면 /level 전체(ARCTIC·시즌 패스·랭킹 포함)가 예고 화면으로 바뀌고 메뉴에서 빠집니다</p>
-                </div>
-              </div>
-            </section>
-            )}
-
-            {sub === "levelup" && (
-            <section>
-              <SectionHead no="03" title="레벨업 알림" />
-              <div className="space-y-4">
-                <div>
-                  <label className={labelClass}>알림 채널</label>
+              <Panel id="sec-levelup" className="scroll-mt-24" title="레벨업 알림" flush>
+                <FieldRow label="알림 채널" changed={chg("levelupChannelId")} hint="레벨업 시 메시지를 보낼 채널">
                   <Dropdown
                     theme="light"
+                    buttonClassName={DD}
                     value={settings.levelupChannelId || ""}
                     onChange={(v) => setSettings({ ...settings, levelupChannelId: v })}
-                    options={[
-                      { value: "", label: "알림 끄기" },
-                      ...guildChannels.filter((c) => c.type === "text").map((c) => ({ value: c.id, label: `# ${c.name}` })),
-                    ]}
+                    options={[{ value: "", label: "알림 끄기" }, ...textChannelOptions]}
                   />
-                  <p className={fieldNote}>레벨업 시 메시지를 보낼 채널</p>
-                </div>
-                <div>
-                  <label className={labelClass}>알림 문구</label>
-                  <textarea rows={2} value={settings.levelupMessage} onChange={(e) => setSettings({ ...settings, levelupMessage: e.target.value })}
-                    className={`${inputClass} resize-none`} />
-                  <p className={fieldNote}>
-                    <span className="text-[#5a5a5a]">{"{user}"}</span> 멘션 · <span className="text-[#5a5a5a]">{"{level}"}</span> 도달 레벨 · <span className="text-[#5a5a5a]">{"{xp}"}</span> 누적 XP · 디스코드 마크다운(**굵게**) 사용 가능
-                  </p>
-                </div>
-              </div>
-            </section>
-            )}
+                </FieldRow>
+                <FieldRow
+                  label="알림 문구"
+                  top
+                  changed={chg("levelupMessage")}
+                  hint={<><b className="text-[#131313]">{"{user}"}</b> 멘션 · <b className="text-[#131313]">{"{level}"}</b> 도달 레벨 · <b className="text-[#131313]">{"{xp}"}</b> 누적 XP · 디스코드 마크다운(**굵게**) 사용 가능</>}
+                >
+                  <textarea rows={2} value={settings.levelupMessage} onChange={(e) => setSettings({ ...settings, levelupMessage: e.target.value })} className={`${inputClass} resize-none`} />
+                </FieldRow>
+              </Panel>
 
-            {sub === "rolegrant" && (
-            <section>
-              <SectionHead no="04" title="역할 지급 알림" />
-              <div className="space-y-4">
-                <div>
-                  <label className={labelClass}>알림 사용</label>
+              <Panel id="sec-rolegrant" className="scroll-mt-24" title="역할 지급 알림" flush>
+                <FieldRow label="알림 사용" changed={chg("roleGrantEnabled")}>
                   <Toggle
                     on={settings.roleGrantEnabled !== false}
                     onClick={() => setSettings({ ...settings, roleGrantEnabled: settings.roleGrantEnabled === false })}
                     onLabel="사용 중"
                     offLabel="사용 안 함"
                   />
-                </div>
-                <div className={`space-y-4 ${settings.roleGrantEnabled === false ? "opacity-40 pointer-events-none" : ""}`}>
-                  <div>
-                    <label className={labelClass}>알림 채널</label>
+                </FieldRow>
+                <div className={settings.roleGrantEnabled === false ? "opacity-40 pointer-events-none" : ""}>
+                  <FieldRow label="알림 채널" changed={chg("roleGrantChannelId")} hint="레벨 보상 역할이 지급됐을 때 메시지를 보낼 채널">
                     <Dropdown
                       theme="light"
+                      buttonClassName={DD}
                       value={settings.roleGrantChannelId || ""}
                       onChange={(v) => setSettings({ ...settings, roleGrantChannelId: v })}
-                      options={[
-                        { value: "", label: "레벨업 알림 채널과 동일" },
-                        ...guildChannels.filter((c) => c.type === "text").map((c) => ({ value: c.id, label: `# ${c.name}` })),
-                      ]}
+                      options={[{ value: "", label: "레벨업 알림 채널과 동일" }, ...textChannelOptions]}
                     />
-                    <p className={fieldNote}>레벨 보상 역할이 지급됐을 때 메시지를 보낼 채널</p>
-                  </div>
-                  <div>
-                    <label className={labelClass}>알림 문구</label>
-                    <textarea rows={2} value={settings.roleGrantMessage || ""} onChange={(e) => setSettings({ ...settings, roleGrantMessage: e.target.value })}
-                      className={`${inputClass} resize-none`} />
-                    <p className={fieldNote}>
-                      <span className="text-[#5a5a5a]">{"{user}"}</span> 멘션 · <span className="text-[#5a5a5a]">{"{role}"}</span> 지급된 역할명 · <span className="text-[#5a5a5a]">{"{level}"}</span> 도달 레벨
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </section>
-            )}
-
-            {/* 설정 항목이 많아 스크롤 끝까지 내려가지 않아도 저장할 수 있게 아래에 붙여 둔다 */}
-            <div className="sticky bottom-0 -mx-6 mt-12 px-6 py-4 bg-[#f4f3f2]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
-              <span className="text-[11px] font-bold text-[#8a8a8a]">봇에는 1분 이내 자동 반영됩니다.</span>
-              <Btn type="submit" variant="primary" className="shrink-0">저장</Btn>
-            </div>
-          </form>
-          </Reveal>
-        ) : loadingRow)}
-
-        {/* ═══════════ 역할 ═══════════ */}
-        {tab === "roles" && sub === "reward" && (
-          <Reveal>
-          <section>
-            <SectionHead no="01" title={`레벨 보상 역할 (${configs.length})`} right={
-              <Btn variant="ghost" onClick={() => { setRoleForm(EMPTY_ROLE); openFormAt("role"); }}>＋ 추가</Btn>
-            } />
-
-            <FormPanel
-              open={isFormOpen("role")}
-              panelRef={formRef}
-              title={roleForm.roleId ? "역할 수정" : "역할 추가"}
-              saveLabel="저장"
-              onSubmit={saveRole}
-              onCancel={() => { setRoleForm(EMPTY_ROLE); closeForm(); }}
-            >
-              <div className="mb-4">
-                <label className={labelClass}>디스코드 역할 <span className="text-[#e91e3f]">*</span></label>
-                <Dropdown
-                  theme="light"
-                  value={roleForm.roleId}
-                  onChange={(v) => setRoleForm({ ...roleForm, roleId: v })}
-                  placeholder="역할을 선택하세요"
-                  options={roleOptions(grantableRoles)}
-                />
-                <p className={fieldNote}>디스코드가 관리하는 역할(서버 부스트 등)은 봇이 지급할 수 없어 목록에 없습니다</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className={labelClass}>지급 레벨 (선택)</label>
-                  <input type="number" min={1} max={1000} placeholder="예: 100" value={roleForm.rewardLevel} onChange={(e) => setRoleForm({ ...roleForm, rewardLevel: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>비우면 Boost 효과만 적용</p>
-                </div>
-                <div>
-                  <label className={labelClass}>채팅/음성 Boost XP</label>
-                  <input type="number" min={0} placeholder="예: 300" value={roleForm.buffXp} onChange={(e) => setRoleForm({ ...roleForm, buffXp: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>보유자의 XP 지급마다 추가</p>
-                </div>
-                <div>
-                  <label className={labelClass}>출석 Boost XP</label>
-                  <input type="number" min={0} placeholder="예: 7000" value={roleForm.attendBuffXp} onChange={(e) => setRoleForm({ ...roleForm, attendBuffXp: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>출석체크 시 추가 지급</p>
-                </div>
-              </div>
-              {roleForm.exclusive && (
-                <p className={fieldNote}>이 역할은 티어 사다리(등급 역할)로 저장돼 있습니다 — 승급하면 아래 티어 역할이 자동 회수됩니다.</p>
-              )}
-            </FormPanel>
-
-            {isLoading ? loadingRow
-              : configs.length === 0 ? <EmptyRow>설정된 역할이 없습니다.</EmptyRow>
-              : (
-              <ListFrame>
-                {configs.map((c) => {
-                  const role = guildRoles.find((r) => r.id === c.roleId);
-                  return (
-                    <div key={c._id} className="py-4 flex flex-col md:flex-row md:items-center md:gap-4">
-                      <div className="flex items-center gap-2.5 md:w-48 shrink-0 min-w-0 mb-2 md:mb-0">
-                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: role?.color || "#99aab5" }}></span>
-                        <span className="text-sm font-bold text-[#131313] truncate">{c.roleName || role?.name || c.roleId}</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
-                        {c.rewardLevel != null && <span className="text-[11px] font-bold text-[#e91e3f]">Lv.{c.rewardLevel} 도달 시 지급</span>}
-                        {c.exclusive && <span className="text-[10px] font-black text-[#5a5a5a] border border-black/10 rounded-full px-2 py-0.5">등급 역할</span>}
-                        {c.buffXp > 0 && <span className="text-[11px] font-bold text-[#5a5a5a]">채팅/음성 +{c.buffXp.toLocaleString()}</span>}
-                        {c.attendBuffXp > 0 && <span className="text-[11px] font-bold text-[#5a5a5a]">출석 +{c.attendBuffXp.toLocaleString()}</span>}
-                        {c.rewardLevel == null && !c.buffXp && !c.attendBuffXp && <span className="text-[11px] text-[#5a5a5a]">효과 없음</span>}
-                      </div>
-                      <div className="flex gap-4 shrink-0 mt-2 md:mt-0">
-                        <button onClick={() => {
-                          // exclusive 는 폼에 칸이 없다 — 옮겨 담지 않으면 티어 역할을 수정할 때 조용히 풀린다
-                          setRoleForm({
-                            roleId: c.roleId,
-                            rewardLevel: c.rewardLevel == null ? "" : String(c.rewardLevel),
-                            buffXp: c.buffXp ? String(c.buffXp) : "",
-                            attendBuffXp: c.attendBuffXp ? String(c.attendBuffXp) : "",
-                            exclusive: !!c.exclusive,
-                          });
-                          openFormAt("role");
-                        }} className="text-xs font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors outline-none focus:outline-none">수정</button>
-                        <button onClick={() => setDeleteConfirm({ kind: "role", id: c._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none">삭제</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </ListFrame>
-            )}
-          </section>
-          </Reveal>
-        )}
-
-        {tab === "roles" && sub === "tier" && (
-          <Reveal>
-          <section>
-            <SectionHead no="02" title="음성 티어 역할 일괄 연결" />
-            <Note>
-              연결하면 지급 레벨이 자동으로 채워지고, <b className="text-[#131313]">배타 모드</b>로 저장돼 승급 시 아래 티어 역할이 자동 회수됩니다.
-              역할에 <b className="text-[#131313]">&ldquo;따로 표시(hoist)&rdquo;</b>를 켜 두면 멤버 목록이 티어별로 묶입니다.
-            </Note>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {(VOICE_TIERS as any[]).map((t) => (
-                <div key={t.key} className="flex items-center gap-3 py-2">
-                  <span aria-hidden className="shrink-0 w-2.5 h-2.5 rotate-45" style={{ backgroundColor: t.c }}></span>
-                  <span className="shrink-0 w-24 text-sm font-bold truncate" style={{ color: t.c }}>{t.name}</span>
-                  <span className="shrink-0 w-16 text-[11px] font-black text-[#8a8a8a] tabular-nums">Lv.{t.min}+</span>
-                  <select
-                    value={tierMap[t.key] || ""}
-                    onChange={(e) => setTierMap({ ...tierMap, [t.key]: e.target.value })}
-                    className="flex-1 min-w-0 bg-transparent border border-black/10 rounded-lg px-3 py-2.5 text-xs text-[#131313] outline-none focus:border-[#e91e3f] transition-colors"
+                  </FieldRow>
+                  <FieldRow
+                    label="알림 문구"
+                    top
+                    changed={chg("roleGrantMessage")}
+                    hint={<><b className="text-[#131313]">{"{user}"}</b> 멘션 · <b className="text-[#131313]">{"{role}"}</b> 지급된 역할명 · <b className="text-[#131313]">{"{level}"}</b> 도달 레벨</>}
                   >
-                    <option value="" className="bg-[#ffffff]">— 역할 선택 —</option>
+                    <textarea rows={2} value={settings.roleGrantMessage || ""} onChange={(e) => setSettings({ ...settings, roleGrantMessage: e.target.value })} className={`${inputClass} resize-none`} />
+                  </FieldRow>
+                </div>
+              </Panel>
+            </div>
+          </PanelGrid>
+
+          {/* 📌 공개 · 초기화 — 켜고 끄는 순간 유저 화면이 바뀌거나 기록이 지워지는 설정만 한곳에. 저장 줄로 저장된다 */}
+          <Panel id="sec-public" className="mt-5 scroll-mt-24 !border-[#e91e3f]/40" title={<span className="text-[#d01634]">공개 · 초기화</span>} flush>
+            <FieldRow label="ARCTIC 상점 공개" changed={chg("shopPublic")} hint="비공개면 일반 유저에게 ‘준비 중’ 화면이 보이고 관리자만 상점을 이용할 수 있습니다">
+              <Toggle
+                on={!!settings.shopPublic}
+                onClick={() => setSettings({ ...settings, shopPublic: !settings.shopPublic })}
+                onLabel="공개 중"
+                offLabel="비공개 (관리자만)"
+              />
+            </FieldRow>
+            <FieldRow label="SYSTEM : LEVEL 공개" changed={chg("levelPublic")} hint="비공개면 /level 전체(ARCTIC·시즌 패스·랭킹 포함)가 예고 화면으로 바뀌고 메뉴에서 빠집니다">
+              <Toggle
+                on={!!settings.levelPublic}
+                onClick={() => setSettings({ ...settings, levelPublic: !settings.levelPublic })}
+                onLabel="공개 중"
+                offLabel="비공개 (관리자만) · 10월 공개 예정"
+              />
+            </FieldRow>
+            <FieldRow label="서버 퇴장 시 XP 초기화" changed={chg("resetOnLeave")} hint="켜면 나간 유저의 XP 기록이 삭제되어 복구할 수 없습니다">
+              <Toggle
+                on={!!settings.resetOnLeave}
+                onClick={() => setSettings({ ...settings, resetOnLeave: !settings.resetOnLeave })}
+                onLabel="초기화함"
+                offLabel="유지함 (기본)"
+              />
+            </FieldRow>
+          </Panel>
+        </>
+      ) : loadingRow)}
+
+      {/* ═══════════ 역할 ═══════════
+          📌 세부 탭 다섯을 두 열로 — 왼쪽은 역할 목록 · 티어 연결, 오른쪽은 서포터즈 · 보호 역할(저장 줄) · 인벤토리 안내 */}
+      {tab === "roles" && (
+        <PanelGrid>
+          <div className="min-w-0 space-y-5">
+            <Panel
+              id="sec-reward"
+              className="scroll-mt-24"
+              title={<>레벨 보상 역할<Count n={configs.length} /></>}
+              right={<Btn variant="secondary" size="sm" onClick={() => { setRoleForm(EMPTY_ROLE); openFormAt("role"); }}>＋ 추가</Btn>}
+              flush
+            >
+              {isLoading ? loadingRow
+                : configs.length === 0 ? <PanelEmpty>설정된 역할이 없습니다.</PanelEmpty>
+                : (
+                  <DataTable
+                    className={tableFlat}
+                    columns={roleCols}
+                    rows={configs}
+                    rowKey={(c) => c._id}
+                    selectedKey={isFormOpen("role") ? editId : null}
+                    onRowClick={(c) => {
+                      // exclusive 는 폼에 칸이 없다 — 옮겨 담지 않으면 티어 역할을 수정할 때 조용히 풀린다
+                      setRoleForm({
+                        roleId: c.roleId,
+                        rewardLevel: c.rewardLevel == null ? "" : String(c.rewardLevel),
+                        buffXp: c.buffXp ? String(c.buffXp) : "",
+                        attendBuffXp: c.attendBuffXp ? String(c.attendBuffXp) : "",
+                        exclusive: !!c.exclusive,
+                      });
+                      openFormAt("role", c._id);
+                    }}
+                  />
+                )}
+            </Panel>
+
+            <Panel
+              id="sec-tier"
+              className="scroll-mt-24"
+              title="음성 티어 역할 일괄 연결"
+              desc="지급 레벨이 자동으로 채워지고 배타 모드로 저장돼 승급 시 아래 티어 역할이 회수됩니다 · 역할의 ‘따로 표시(hoist)’를 켜면 멤버 목록이 티어별로 묶입니다"
+              right={
+                <>
+                  <Btn variant="ghost" size="sm" onClick={() => setTierMap({})}>선택 초기화</Btn>
+                  <Btn size="sm" onClick={saveTierRoles} disabled={tierSaving}>{tierSaving ? "연결 중…" : "티어 역할 연결"}</Btn>
+                </>
+              }
+              flush
+            >
+              {(VOICE_TIERS as any[]).map((t) => (
+                <FieldRow
+                  key={t.key}
+                  label={
+                    <span className="inline-flex items-center gap-2 min-w-0">
+                      <span aria-hidden className="shrink-0 w-2.5 h-2.5 rotate-45" style={{ backgroundColor: t.c }} />
+                      <span className="truncate" style={{ color: t.c }}>{t.name}</span>
+                      <span className="shrink-0 text-[12px] font-bold text-[#8a8a8a] tabular-nums">Lv.{t.min}+</span>
+                    </span>
+                  }
+                >
+                  <select value={tierMap[t.key] || ""} onChange={(e) => setTierMap({ ...tierMap, [t.key]: e.target.value })} className={inputClass}>
+                    <option value="">— 역할 선택 —</option>
                     {grantableRoles.map((r) => (
-                      <option key={r.id} value={r.id} className="bg-[#ffffff]">{r.name}</option>
+                      <option key={r.id} value={r.id}>{r.name}</option>
                     ))}
                   </select>
-                </div>
+                </FieldRow>
               ))}
-            </div>
+            </Panel>
+          </div>
 
-            <div className="flex flex-wrap gap-3 mt-7">
-              <Btn variant="primary" onClick={saveTierRoles} disabled={tierSaving}>
-                {tierSaving ? "연결 중…" : "티어 역할 연결"}
-              </Btn>
-              <Btn variant="ghost" onClick={() => setTierMap({})}>선택 초기화</Btn>
-            </div>
-          </section>
-          </Reveal>
-        )}
+          <div className="min-w-0 space-y-5">
+            {/* 📌 서포터즈 설정도 BotSetting 단일 문서의 필드라 저장은 저장 줄(기존 postSettings)을 그대로 탄다 */}
+            <Panel id="sec-supporter" className="scroll-mt-24" title="서포터즈" desc="입장 반영은 세션 갱신(최대 10분) 뒤입니다." flush>
+              {!settings ? loadingRow : (
+                <>
+                  <FieldRow label="서포터즈 역할" changed={chg("supporterRoleId")} hint="환경변수 DISCORD_SUPPORTER_ROLE_ID 가 있으면 그 값이 우선합니다">
+                    <Dropdown
+                      theme="light"
+                      buttonClassName={DD}
+                      value={settings.supporterRoleId || ""}
+                      onChange={(v) => setSettings({ ...settings, supporterRoleId: v })}
+                      placeholder="역할을 선택하세요"
+                      options={[{ value: "", label: "지정 안 함" }, ...roleOptions(guildRoles)]}
+                    />
+                  </FieldRow>
+                  <FieldRow label="월 기본 XP" changed={chg("supporterBaseXp")}>
+                    <Inline>
+                      <input type="number" min={0} value={settings.supporterBaseXp ?? 150000} onChange={(e) => setSettings({ ...settings, supporterBaseXp: e.target.value })} className={numClass} />
+                      XP
+                    </Inline>
+                  </FieldRow>
+                  <FieldRow label="월 목표 채팅" changed={chg("supporterGoalChat")} hint="0 이면 목표 없음">
+                    <Inline>
+                      <input type="number" min={0} value={settings.supporterGoalChat ?? 0} onChange={(e) => setSettings({ ...settings, supporterGoalChat: e.target.value })} className={numClass} />
+                      회
+                    </Inline>
+                  </FieldRow>
+                  <FieldRow label="월 목표 음성" changed={chg("supporterGoalVoiceMin")} hint="0 이면 목표 없음">
+                    <Inline>
+                      <input type="number" min={0} value={settings.supporterGoalVoiceMin ?? 0} onChange={(e) => setSettings({ ...settings, supporterGoalVoiceMin: e.target.value })} className={numClass} />
+                      분
+                    </Inline>
+                  </FieldRow>
+                </>
+              )}
+            </Panel>
 
-        {tab === "roles" && sub === "inventory" && (
-          <Reveal>
-          <section>
-            <SectionHead no="03" title="인벤토리 표기" />
-            {/* 📌 표기는 이제 아이템 등록 한 곳에서 관리한다 — 여기 남은 옛 데이터는 그쪽의 가져오기 버튼이 옮긴다 */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-6 border-y border-black/[0.06]">
-              <p className="text-sm text-[#5a5a5a] break-keep">
-                인벤토리 표기는 <b className="text-[#131313]">아이템 등록</b>에서 관리합니다.
-                {invRoles.length > 0 && <span className="block mt-1 text-[11px] text-[#8a8a8a]">옛 표기 역할 {invRoles.length}개가 남아 있습니다.</span>}
-              </p>
-              <Link href="/admin/shop?tab=items" className="shrink-0 px-5 py-2.5 rounded-lg text-[12px] font-bold bg-[#131313] text-white hover:bg-[#2a2a2a] transition-colors text-center outline-none focus:outline-none">
-                아이템 등록으로
-              </Link>
-            </div>
-          </section>
-          </Reveal>
-        )}
-
-        {tab === "roles" && sub === "supporter" && (
-          <Reveal>
-          <section>
-            <SectionHead no="04" title="서포터즈" />
-            {!settings ? loadingRow : (
-            // 📌 서포터즈 설정도 BotSetting 단일 문서의 필드라 저장은 기존 postSettings 를 그대로 탄다
-            <form onSubmit={saveSettings}>
-              <div className="mb-4">
-                <label className={labelClass}>서포터즈 역할</label>
-                <Dropdown
-                  theme="light"
-                  value={settings.supporterRoleId || ""}
-                  onChange={(v) => setSettings({ ...settings, supporterRoleId: v })}
-                  placeholder="역할을 선택하세요"
-                  options={[{ value: "", label: "지정 안 함" }, ...roleOptions(guildRoles)]}
-                />
-                <p className={fieldNote}>환경변수 DISCORD_SUPPORTER_ROLE_ID 가 있으면 그 값이 우선합니다</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className={labelClass}>월 기본 XP</label>
-                  <input type="number" min={0} value={settings.supporterBaseXp ?? 150000} onChange={(e) => setSettings({ ...settings, supporterBaseXp: e.target.value })} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>월 목표 채팅 (회)</label>
-                  <input type="number" min={0} value={settings.supporterGoalChat ?? 0} onChange={(e) => setSettings({ ...settings, supporterGoalChat: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>0 이면 목표 없음</p>
-                </div>
-                <div>
-                  <label className={labelClass}>월 목표 음성 (분)</label>
-                  <input type="number" min={0} value={settings.supporterGoalVoiceMin ?? 0} onChange={(e) => setSettings({ ...settings, supporterGoalVoiceMin: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>0 이면 목표 없음</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 mt-6">
-                <Btn type="submit" variant="primary">저장</Btn>
-                <span className="text-[11px] font-bold text-[#8a8a8a]">입장 반영은 세션 갱신(최대 10분) 뒤입니다.</span>
-              </div>
-            </form>
-            )}
-          </section>
-          </Reveal>
-        )}
-
-        {tab === "roles" && sub === "protected" && (
-          <Reveal>
-          <section>
-            <SectionHead no="05" title="시즌 전환 보호 역할" />
-            <Note>
-              시즌 전환으로 디스코드 역할을 뗄 때도 <b className="text-[#131313]">절대 제외</b>할 역할 —
-              어린이·청소년·어른 같은 등급 역할을 넣습니다.
-            </Note>
-            {!settings ? loadingRow : (
-            <form onSubmit={saveSettings}>
-              {/* 여러 개를 고르는 자리라 항목을 눌러도 목록이 닫히지 않는다 — 공용 Dropdown 은 단일 선택용이다 */}
-              <div className={`mb-4 relative ${isProtectedRoleOpen ? "z-50" : ""}`}>
-                <label className={labelClass}>보호할 역할 (복수 선택)</label>
-                <button type="button" onClick={() => setIsProtectedRoleOpen(!isProtectedRoleOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
-                  {protectedRoleIds.length > 0
-                    ? <span className="font-bold">{protectedRoleIds.length}개 역할 선택됨</span>
-                    : <span className="text-[#5a5a5a]">역할을 선택하세요</span>}
-                  <span className="text-[10px] text-[#8a8a8a]">▼</span>
-                </button>
-                {isProtectedRoleOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setIsProtectedRoleOpen(false)}></div>
-                    <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#f2f2f2]">
-                      {guildRoles.map((r) => {
-                        const picked = protectedRoleIds.includes(r.id);
+            <Panel
+              id="sec-protected"
+              className="scroll-mt-24"
+              title="시즌 전환 보호 역할"
+              desc="시즌 전환으로 디스코드 역할을 뗄 때도 절대 제외할 역할 — 어린이·청소년·어른 같은 등급 역할"
+              flush
+            >
+              {!settings ? loadingRow : (
+                <FieldRow label="보호할 역할" top changed={chg("protectedRoleIds")} hint="선택한 역할은 상품으로 팔렸더라도 시즌 전환 대상에서 제외됩니다">
+                  {/* 여러 개를 고르는 자리라 항목을 눌러도 목록이 닫히지 않는다 — 공용 Dropdown 은 단일 선택용이다 */}
+                  <div className={`relative ${isProtectedRoleOpen ? "z-50" : ""}`}>
+                    <button type="button" onClick={() => setIsProtectedRoleOpen(!isProtectedRoleOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
+                      {protectedRoleIds.length > 0
+                        ? <span className="font-bold">{protectedRoleIds.length}개 역할 선택됨</span>
+                        : <span className="text-[#a3a3a3]">역할을 선택하세요</span>}
+                      <span className="text-[10px] text-[#a3a3a3]">▼</span>
+                    </button>
+                    {isProtectedRoleOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setIsProtectedRoleOpen(false)}></div>
+                        <div className="absolute top-full left-0 w-full mt-1.5 bg-white border border-[#ededed] rounded-lg overflow-hidden shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] z-50 max-h-64 overflow-y-auto">
+                          {guildRoles.map((r) => {
+                            const picked = protectedRoleIds.includes(r.id);
+                            return (
+                              <button key={r.id} type="button" onClick={() => toggleProtectedRole(r.id)}
+                                className={`w-full text-left px-3 py-2.5 text-[13px] flex items-center gap-2.5 transition-colors outline-none ${picked ? "bg-[#e91e3f]/[0.08] text-[#d01634] font-bold" : "text-[#5a5a5a] hover:bg-[#f2f2f2]"}`}>
+                                <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: r.color }}></span>
+                                <span className="truncate">{r.name}</span>
+                                {picked && <span className="ml-auto text-[11px] shrink-0">선택됨</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {protectedRoleIds.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2.5">
+                      {protectedRoleIds.map((id) => {
+                        const r = guildRoles.find((g) => g.id === id);
                         return (
-                          <button key={r.id} type="button" onClick={() => toggleProtectedRole(r.id)}
-                            className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 transition-colors outline-none focus:outline-none ${picked ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : "text-[#5a5a5a] hover:bg-black/5"}`}>
-                            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: r.color }}></span>
-                            <span className="truncate">{r.name}</span>
-                            {picked && <span className="ml-auto text-[10px] shrink-0">선택됨</span>}
-                          </button>
+                          <span key={id} className="inline-flex items-center gap-2 h-8 pl-3 pr-2 rounded-full bg-[#f2f2f2] text-[12px] font-bold text-[#131313]">
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: r?.color || "#99aab5" }}></span>
+                            {/* 디스코드에서 지워진 역할도 ID 로 남겨 둔다 — 조용히 사라지면 무엇이 빠졌는지 알 수 없다 */}
+                            <span className="truncate max-w-[14rem]">{r?.name || `삭제된 역할 (${id})`}</span>
+                            <button type="button" aria-label="빼기" onClick={() => toggleProtectedRole(id)} className="w-5 h-5 rounded-full text-[#5a5a5a] hover:text-[#d01634] transition-colors outline-none">✕</button>
+                          </span>
                         );
                       })}
                     </div>
-                  </>
-                )}
-                <p className={fieldNote}>선택한 역할은 상품으로 팔렸더라도 시즌 전환 대상에서 제외됩니다</p>
-              </div>
-
-              {protectedRoleIds.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {protectedRoleIds.map((id) => {
-                    const r = guildRoles.find((g) => g.id === id);
-                    return (
-                      <span key={id} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-black/10 bg-black/[0.03] text-xs font-bold text-[#131313]">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: r?.color || "#99aab5" }}></span>
-                        {/* 디스코드에서 지워진 역할도 ID 로 남겨 둔다 — 조용히 사라지면 무엇이 빠졌는지 알 수 없다 */}
-                        <span className="truncate max-w-[14rem]">{r?.name || `삭제된 역할 (${id})`}</span>
-                        <button type="button" onClick={() => toggleProtectedRole(id)} className="text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none">✕</button>
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-
-              <div className="flex items-center gap-3">
-                <Btn type="submit" variant="primary">저장</Btn>
-                <span className="text-[11px] font-bold text-[#8a8a8a]">봇에는 1분 이내 자동 반영됩니다.</span>
-              </div>
-            </form>
-            )}
-          </section>
-          </Reveal>
-        )}
-
-        {/* ═══════════ 콘텐츠 ═══════════ */}
-        {tab === "content" && sub === "channels" && (
-          <Reveal>
-          <section>
-            <SectionHead no="01" title={`채널 정책 (${channelConfigs.length})`} right={
-              <Btn variant="ghost" onClick={() => { setChForm(EMPTY_CHANNEL); openFormAt("channel"); }}>＋ 추가</Btn>
-            } />
-
-            <FormPanel
-              open={isFormOpen("channel")}
-              panelRef={formRef}
-              title={chForm.channelId ? "채널 정책 수정" : "채널 정책 추가"}
-              saveLabel="저장"
-              onSubmit={saveChannel}
-              onCancel={() => { setChForm(EMPTY_CHANNEL); closeForm(); }}
-            >
-              <div className="mb-4">
-                <label className={labelClass}>디스코드 채널 · 카테고리 <span className="text-[#e91e3f]">*</span></label>
-                <Dropdown
-                  theme="light"
-                  value={chForm.channelId}
-                  onChange={(v) => setChForm({ ...chForm, channelId: v })}
-                  placeholder="채널 또는 카테고리를 선택하세요"
-                  options={channelOptions}
-                />
-                <p className={fieldNote}>카테고리를 선택하면 하위 채널 전체에 적용됩니다</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>Boost XP</label>
-                  <input type="number" min={0} placeholder="예: 500" value={chForm.boostXp} onChange={(e) => setChForm({ ...chForm, boostXp: e.target.value })} disabled={chForm.excluded} className={`${inputClass} disabled:opacity-40`} />
-                  <p className={fieldNote}>이 채널에서의 XP 지급마다 추가</p>
-                </div>
-                <div>
-                  <label className={labelClass}>XP 지급 제외</label>
-                  <Toggle
-                    on={!!chForm.excluded}
-                    onClick={() => setChForm({ ...chForm, excluded: !chForm.excluded })}
-                    onLabel="지급 안 함"
-                    offLabel="지급함 (기본)"
-                  />
-                  <p className={fieldNote}>봇 명령어 채널 등에 사용</p>
-                </div>
-              </div>
-            </FormPanel>
-
-            {isLoading ? loadingRow
-              : channelConfigs.length === 0 ? <EmptyRow>설정된 채널이 없습니다.</EmptyRow>
-              : (
-              <ListFrame>
-                {channelConfigs.map((c) => {
-                  const live = guildChannels.find((g) => g.id === c.channelId);
-                  return (
-                    <div key={c._id} className="py-4 flex flex-col md:flex-row md:items-center md:gap-4">
-                      <div className="flex items-center gap-2.5 md:w-56 shrink-0 min-w-0 mb-2 md:mb-0">
-                        <span className="text-[#8a8a8a] text-xs shrink-0">{CHANNEL_TYPE_ICON[c.channelType] || "#"}</span>
-                        <span className="text-sm font-bold text-[#131313] truncate">{live?.name || c.channelName || c.channelId}</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
-                        {c.excluded ? <span className="text-[11px] font-bold text-red-600">XP 지급 제외</span>
-                          : c.boostXp > 0 ? <span className="text-[11px] font-bold text-[#e91e3f]">+{c.boostXp.toLocaleString()} XP</span>
-                          : <span className="text-[11px] text-[#5a5a5a]">효과 없음</span>}
-                        {c.channelType === "category" && <span className="text-[11px] font-bold text-[#8a8a8a]">하위 채널 전체</span>}
-                      </div>
-                      <div className="flex gap-4 shrink-0 mt-2 md:mt-0">
-                        <button onClick={() => { setChForm({ channelId: c.channelId, boostXp: c.boostXp ? String(c.boostXp) : "", excluded: !!c.excluded }); openFormAt("channel"); }} className="text-xs font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors outline-none focus:outline-none">수정</button>
-                        <button onClick={() => setDeleteConfirm({ kind: "channel", id: c._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none">삭제</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </ListFrame>
-            )}
-          </section>
-          </Reveal>
-        )}
-
-        {tab === "content" && sub === "quests" && (
-          <Reveal>
-          <section>
-            <SectionHead no="02" title={`퀘스트 (${quests.length})`} right={
-              <div className="flex gap-2">
-                <Btn variant="ghost" onClick={openPicks}>노출 방식</Btn>
-                <Btn variant="ghost" onClick={() => { setQuestForm(EMPTY_QUEST); openFormAt("quest"); }}>＋ 추가</Btn>
-              </div>
-            } />
-
-            <FormPanel
-              open={isFormOpen("questPick")}
-              panelRef={formRef}
-              title="주기별 노출 방식"
-              saveLabel="노출 방식 저장"
-              onSubmit={savePicks}
-              onCancel={cancelPicks}
-            >
-              <Note>
-                뽑기는 날짜로 고정돼 같은 주기 안에서는 모든 유저가 같은 퀘스트를 보며, 뽑히지 않은 퀘스트는 보상도 받을 수 없습니다.
-              </Note>
-              {/* 설정 문서를 통째로 덮어쓰기 때문에, 아직 못 불러왔으면 손대지 못하게 막는다 */}
-              {!settings ? loadingRow : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6">
-                {QUEST_PICK_FIELDS.map((f) => {
-                  const total = quests.filter((q) => (q.period || "daily") === f.period && q.enabled).length;
-                  const pick = Number(settings?.[f.key] ?? 0);
-                  return (
-                    <div key={f.key}>
-                      <label className={labelClass}>{PERIOD_LABEL[f.period]} 노출 개수</label>
-                      <input type="number" min={0} max={20} value={settings?.[f.key] ?? 0}
-                        onChange={(e) => setSettings({ ...settings, [f.key]: e.target.value })} className={inputClass} />
-                      <p className={fieldNote}>
-                        {pick > 0
-                          ? `활성 ${total}개 중 ${Math.min(pick, total)}개를 ${f.every}마다 새로 뽑습니다`
-                          : `활성 ${total}개를 전부 보여줍니다`}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-              )}
-            </FormPanel>
-
-            <FormPanel
-              open={isFormOpen("quest")}
-              panelRef={formRef}
-              title={questForm.id ? "퀘스트 수정" : "퀘스트 추가"}
-              saveLabel={questForm.id ? "수정 저장" : "퀘스트 등록"}
-              onSubmit={saveQuest}
-              onCancel={() => { setQuestForm(EMPTY_QUEST); closeForm(); }}
-            >
-              <Note>
-                진행도는 봇이 남긴 XP 지급 로그로 판정하므로, 봇이 지급하는 활동(채팅·음성·출석)만 조건으로 쓸 수 있습니다.
-                출석 퀘스트는 기본 제공되며 기준 시간과 보상은 <b className="text-[#131313]">정책 › 지급량 · 주기</b>에서 조정합니다.
-              </Note>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
-                <div className="md:col-span-2">
-                  <label className={labelClass}>퀘스트 이름</label>
-                  <input value={questForm.name} onChange={(e) => setQuestForm({ ...questForm, name: e.target.value })}
-                    placeholder="예: 오늘의 수다" maxLength={40} className={inputClass} />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className={labelClass}>설명 (선택)</label>
-                  <input value={questForm.desc} onChange={(e) => setQuestForm({ ...questForm, desc: e.target.value })}
-                    placeholder="예: 채팅으로 XP를 5번 받으세요" maxLength={120} className={inputClass} />
-                  <p className={fieldNote}>유저 화면에서 퀘스트 이름 아래 회색으로 표시됩니다.</p>
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className={labelClass}>초기화 주기</label>
-                  <FilterChips
-                    options={[{ v: "daily", l: "일일" }, { v: "weekly", l: "주간" }, { v: "monthly", l: "월간" }]}
-                    value={questForm.period}
-                    onChange={(v) => setQuestForm({ ...questForm, period: v })}
-                  />
-                  <p className={fieldNote}>진행도와 보상 수령이 이 주기마다 초기화됩니다 (KST 기준) — 일일 매일 자정 · 주간 매주 월요일 · 월간 매월 1일.</p>
-                </div>
-
-                <div>
-                  <label className={labelClass}>측정 대상</label>
-                  <FilterChips
-                    options={[{ v: "chat", l: "채팅" }, { v: "voice", l: "음성" }, { v: "attend", l: "출석" }, { v: "any", l: "전체" }]}
-                    value={questForm.reason}
-                    onChange={(v) => setQuestForm({ ...questForm, reason: v })}
-                  />
-                  <p className={fieldNote}>어떤 활동의 지급 로그를 셀지 고릅니다.</p>
-                </div>
-
-                <div>
-                  <label className={labelClass}>측정 방식</label>
-                  <FilterChips
-                    options={[{ v: "count", l: "지급 횟수" }, { v: "xp", l: "XP 합계" }, { v: "minute", l: "접속 시간" }]}
-                    value={questForm.metric}
-                    onChange={(v) => setQuestForm({ ...questForm, metric: v })}
-                  />
-                  <p className={fieldNote}>
-                    {questForm.metric === "xp"
-                      ? "받은 XP의 합계로 판정합니다."
-                      : questForm.metric === "minute"
-                      ? `음성 채널에 머문 시간(분)으로 판정합니다. 지급 주기 ${Math.max(1, Math.round((settings?.voiceIntervalSec ?? 300) / 60))}분마다 1분 단위로 쌓입니다.`
-                      : "XP를 받은 횟수로 판정합니다. (음성은 1회 = 지급 주기)"}
-                  </p>
-                </div>
-
-                <div>
-                  <label className={labelClass}>목표치</label>
-                  <input type="number" min={1} value={questForm.target} onChange={(e) => setQuestForm({ ...questForm, target: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>
-                    {questForm.metric === "xp"
-                      ? "달성에 필요한 XP 합계"
-                      : questForm.metric === "minute"
-                      ? "달성에 필요한 접속 시간 (분) — 예: 2시간이면 120"
-                      : "달성에 필요한 지급 횟수"}
-                  </p>
-                </div>
-
-                {/* 보상 두 칸은 한 줄로 묶는다 — 바깥 격자에 그냥 얹으면 XP 와 POINT 가 서로 다른 줄로 갈라진다 */}
-                <div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelClass}>보상 XP</label>
-                      <input type="number" min={0} value={questForm.rewardXp} onChange={(e) => setQuestForm({ ...questForm, rewardXp: e.target.value })} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>보상 빙옥</label>
-                      <input type="number" min={0} value={questForm.rewardPoint} onChange={(e) => setQuestForm({ ...questForm, rewardPoint: e.target.value })} className={inputClass} />
-                    </div>
-                  </div>
-                  <p className={fieldNote}>빙옥은 등급이 높을수록 배율이 붙어 더 지급됩니다. 둘 다 0이면 보상 없는 &lsquo;목표&rsquo;가 됩니다.</p>
-                </div>
-
-                <div>
-                  <label className={labelClass}>표시 순서</label>
-                  <input type="number" min={0} value={questForm.order} onChange={(e) => setQuestForm({ ...questForm, order: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>작을수록 위에 표시됩니다.</p>
-                </div>
-
-                <div>
-                  <label className={labelClass}>유저 화면 표시</label>
-                  <Toggle
-                    on={!!questForm.enabled}
-                    onClick={() => setQuestForm({ ...questForm, enabled: !questForm.enabled })}
-                    onLabel="활성화됨 — 유저에게 표시"
-                    offLabel="비활성 — 숨김"
-                  />
-                </div>
-              </div>
-            </FormPanel>
-
-            {quests.length === 0 ? (
-              <EmptyRow>아직 등록된 퀘스트가 없습니다. ＋ 추가로 만들어 주세요.</EmptyRow>
-            ) : (
-              <div className="space-y-12">
-                {QUEST_PICK_FIELDS.map((f) => {
-                  const rows = quests.filter((q) => (q.period || "daily") === f.period);
-                  const on = rows.filter((q) => q.enabled).length;
-                  const pick = Number(settings?.[f.key] ?? 0);
-                  return (
-                    <div key={f.period}>
-                      <GroupHead
-                        title={`${PERIOD_LABEL[f.period]} 퀘스트`}
-                        count={rows.length}
-                        right={rows.length === 0
-                          ? f.every + " 초기화"
-                          : pick > 0
-                          ? `${f.every}마다 활성 ${on}개 중 ${Math.min(pick, on)}개 무작위`
-                          : `활성 ${on}개 전부 노출 · ${f.every} 초기화`}
-                      />
-                      {rows.length === 0 ? (
-                        <p className="py-8 text-center text-[12px] text-[#a3a3a3]">
-                          등록된 {PERIOD_LABEL[f.period]} 퀘스트가 없습니다.
-                        </p>
-                      ) : (
-                        <div className="divide-y divide-black/[0.06]">
-                          {rows.map((q) => (
-                            <div key={q._id} className="py-4 flex items-center gap-4">
-                              <span className="shrink-0 w-8 text-center text-xs font-black text-[#a3a3a3] tabular-nums">{q.order}</span>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className={`text-sm font-bold ${q.enabled ? "text-[#131313]" : "text-[#8a8a8a] line-through"}`}>{q.name}</p>
-                                  {!q.enabled && <span className="text-[10px] font-black text-[#8a8a8a] border border-black/10 rounded-full px-2 py-0.5">비활성</span>}
-                                </div>
-                                <p className="text-[11px] text-[#8a8a8a] mt-1 tabular-nums">
-                                  {(REASON_LABEL[q.reason] || "전체")}{" "}
-                                  {q.metric === "xp" ? "XP" : q.metric === "minute" ? "접속" : "횟수"}{" "}
-                                  {q.target.toLocaleString()}{q.metric === "minute" ? "분" : ""} 달성
-                                  {q.desc ? ` · ${q.desc}` : ""}
-                                </p>
-                              </div>
-                              <span className="shrink-0 flex items-center gap-2 text-sm font-black tabular-nums">
-                                {q.rewardXp > 0 && <span className="text-[#e91e3f]">+{q.rewardXp.toLocaleString()} XP</span>}
-                                {q.rewardXp > 0 && (q.rewardPoint || 0) > 0 && <span className="text-[#a3a3a3]">·</span>}
-                                {(q.rewardPoint || 0) > 0 && <span className="text-[#3f9e93]">+{Number(q.rewardPoint).toLocaleString()} 빙옥</span>}
-                                {q.rewardXp <= 0 && (q.rewardPoint || 0) <= 0 && <span className="text-[#a3a3a3]">보상 없음</span>}
-                              </span>
-                              <div className="shrink-0 flex items-center gap-3">
-                                <button
-                                  onClick={() => {
-                                    setQuestForm({ id: q._id, name: q.name, desc: q.desc || "", period: q.period || "daily", reason: q.reason, metric: q.metric, target: q.target, rewardXp: q.rewardXp, rewardPoint: q.rewardPoint || 0, enabled: q.enabled, order: q.order });
-                                    openFormAt("quest");
-                                  }}
-                                  className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
-                                >
-                                  수정
-                                </button>
-                                <button
-                                  onClick={() => setDeleteConfirm({ kind: "quest", id: q._id })}
-                                  className="text-[11px] font-bold text-[#a3a3a3] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
-                                >
-                                  삭제
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-          </Reveal>
-        )}
-
-        {tab === "content" && sub === "boosts" && (
-          <Reveal>
-          <section>
-            <SectionHead no="03" title={`기간제 부스트 (${boosts.length})`} right={
-              <Btn variant="ghost" onClick={() => { setBoostForm(EMPTY_BOOST); openFormAt("boost"); }}>＋ 추가</Btn>
-            } />
-
-            <FormPanel
-              open={isFormOpen("boost")}
-              panelRef={formRef}
-              title={boostForm.id ? "부스트 수정" : "부스트 추가"}
-              saveLabel={boostForm.id ? "수정 저장" : "부스트 등록"}
-              onSubmit={saveBoost}
-              onCancel={() => { setBoostForm(EMPTY_BOOST); closeForm(); }}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>부스트 이름</label>
-                  <input type="text" placeholder="예: 주말 2배 이벤트" value={boostForm.name} onChange={(e) => setBoostForm({ ...boostForm, name: e.target.value })} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>대상 역할</label>
-                  <Dropdown
-                    theme="light"
-                    value={boostForm.targetRoleId}
-                    onChange={(v) => setBoostForm({ ...boostForm, targetRoleId: v })}
-                    options={[{ value: "", label: "서버 전체" }, ...roleOptions(guildRoles)]}
-                  />
-                  <p className={fieldNote}>역할을 고르면 해당 역할 보유자에게만 적용</p>
-                </div>
-                <div>
-                  <label className={labelClass}>대상 채널 · 카테고리</label>
-                  <Dropdown
-                    theme="light"
-                    value={boostForm.targetChannelId}
-                    onChange={(v) => setBoostForm({ ...boostForm, targetChannelId: v })}
-                    options={[{ value: "", label: "모든 채널" }, ...channelOptions]}
-                  />
-                  <p className={fieldNote}>카테고리 선택 시 하위 채널 전체에 적용 · 역할과 함께 지정하면 둘 다 만족해야 발동</p>
-                </div>
-                <div>
-                  <label className={labelClass}>추가 XP <span className="text-[#e91e3f]">*</span></label>
-                  <input type="number" min={1} placeholder="예: 1000" value={boostForm.boostXp} onChange={(e) => setBoostForm({ ...boostForm, boostXp: e.target.value })} className={inputClass} />
-                  <p className={fieldNote}>채팅·음성 지급 1회당 추가</p>
-                </div>
-                <div>
-                  <label className={labelClass}>시작 <span className="text-[#e91e3f]">*</span></label>
-                  <input type="datetime-local" value={boostForm.startAt} onChange={(e) => setBoostForm({ ...boostForm, startAt: e.target.value })} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>종료 <span className="text-[#e91e3f]">*</span></label>
-                  <input type="datetime-local" value={boostForm.endAt} onChange={(e) => setBoostForm({ ...boostForm, endAt: e.target.value })} className={inputClass} />
-                </div>
-              </div>
-            </FormPanel>
-
-            {isLoading ? loadingRow
-              : boosts.length === 0 ? <EmptyRow>등록된 부스트가 없습니다.</EmptyRow>
-              : (
-              <ListFrame>
-                {boosts.map((b) => {
-                  const now = Date.now();
-                  const start = new Date(b.startAt).getTime();
-                  const end = new Date(b.endAt).getTime();
-                  const state = now < start ? "예정" : now > end ? "종료" : "진행 중";
-                  return (
-                    <div key={b._id} className="py-4 flex flex-col md:flex-row md:items-center md:gap-4">
-                      <div className="flex items-center gap-2.5 md:w-52 shrink-0 min-w-0 mb-2 md:mb-0">
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${state === "진행 중" ? "bg-[#e91e3f] text-white" : state === "예정" ? "bg-black/10 text-[#5a5a5a]" : "bg-transparent text-[#5a5a5a] border border-black/10"}`}>{state}</span>
-                        <span className="text-sm font-bold text-[#131313] truncate">{b.name}</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1 min-w-0">
-                        <span className="text-[11px] font-bold text-[#e91e3f]">+{(b.boostXp || 0).toLocaleString()} XP</span>
-                        <span className="text-[11px] font-bold text-[#5a5a5a]">{b.targetRoleName || "전체 유저"}</span>
-                        <span className="text-[11px] font-bold text-[#5a5a5a]">{b.targetChannelName ? `${CHANNEL_TYPE_ICON[b.targetChannelType] || "#"} ${b.targetChannelName}` : "모든 채널"}</span>
-                        <span className="text-[11px] text-[#8a8a8a]">{fmtDateTime(b.startAt)} ~ {fmtDateTime(b.endAt)}</span>
-                      </div>
-                      <div className="flex gap-4 shrink-0 mt-2 md:mt-0">
-                        <button onClick={() => { setBoostForm({ id: b._id, name: b.name, targetRoleId: b.targetRoleId || "", targetChannelId: b.targetChannelId || "", boostXp: String(b.boostXp), startAt: toLocalInput(b.startAt), endAt: toLocalInput(b.endAt) }); openFormAt("boost"); }} className="text-xs font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors outline-none focus:outline-none">수정</button>
-                        <button onClick={() => setDeleteConfirm({ kind: "boost", id: b._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none">삭제</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </ListFrame>
-            )}
-          </section>
-          </Reveal>
-        )}
-
-        {/* ═══════════ 지급 · 내역 ═══════════ */}
-        {tab === "ledger" && sub === "grant" && (
-          <Reveal>
-          <section>
-            <SectionHead no="01" title="지급 · 회수" right={<FilterChips options={GRANT_KINDS} value={grantKind} onChange={(v) => setGrantKind(v as GrantKind)} />} />
-
-            {grantKind !== "item" ? (
-            <>
-            <form onSubmit={submitGrant}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className={labelClass}>대상 <span className="text-[#e91e3f]">*</span></label>
-                  <input type="text" value={grantForm.target} onChange={(e) => setGrantForm({ ...grantForm, target: e.target.value })}
-                    placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
-                  <p className={fieldNote}>XP 기록이 있는 유저만 검색됩니다</p>
-                </div>
-                <div>
-                  <label className={labelClass}>지급 {grantUnit} <span className="text-[#e91e3f]">*</span></label>
-                  <input type="number" value={grantForm.amount} onChange={(e) => setGrantForm({ ...grantForm, amount: e.target.value })}
-                    placeholder="예: 50000 (회수는 -50000)" className={inputClass} />
-                  <p className={fieldNote}>음수를 넣으면 회수됩니다 (보유량을 넘지 않게 잘립니다)</p>
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <label className={labelClass}>사유</label>
-                <input type="text" value={grantForm.reason} onChange={(e) => setGrantForm({ ...grantForm, reason: e.target.value })}
-                  placeholder="예: 이벤트 우승 보상" className={inputClass} />
-                <p className={fieldNote}>비우면 &lsquo;관리자 지급&rsquo;으로 기록됩니다</p>
-              </div>
-
-              {Number(grantForm.amount) !== 0 && grantForm.amount !== "" && (
-                <div className={`mb-6 px-4 py-3 rounded-lg border text-[12px] font-bold ${
-                  Number(grantForm.amount) > 0 ? "border-[#e91e3f]/30 bg-[#e91e3f]/[0.06] text-[#e91e3f]" : "border-amber-500/30 bg-amber-500/[0.06] text-amber-700"
-                }`}>
-                  {Number(grantForm.amount) > 0
-                    ? `${Number(grantForm.amount).toLocaleString()} ${grantUnit} 지급${grantKind === "xp" ? " — 레벨이 올라갈 수 있습니다" : ""}`
-                    : `${Math.abs(Number(grantForm.amount)).toLocaleString()} ${grantUnit} 회수${grantKind === "xp" ? " — 레벨이 내려갈 수 있습니다" : ""}`}
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-3">
-                <Btn type="submit" variant="primary" disabled={isGranting}>{isGranting ? "처리 중..." : "지급"}</Btn>
-                <Btn type="button" variant="danger" onClick={submitRemove} disabled={isGranting || !grantForm.amount}>{grantUnit} 제거</Btn>
-                <Btn type="button" variant="ghost" onClick={() => setConfirmAll(true)} disabled={isGranting || !grantForm.amount}>전체 유저에게 지급</Btn>
-              </div>
-            </form>
-            <p className={fieldNote}>
-              {grantKind === "xp"
-                ? "봇 큐에 쌓여 30초 이내에 반영되고(레벨도 함께 재계산), 봇이 꺼져 있으면 켜질 때 처리됩니다."
-                : "즉시 반영됩니다."}
-            </p>
-            </>
-            ) : (
-            <>
-            <form onSubmit={submitItemGrant}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className={labelClass}>아이템 <span className="text-[#e91e3f]">*</span></label>
-                  <Dropdown
-                    theme="light"
-                    value={itemGrant.itemId}
-                    onChange={(v) => setItemGrant({ ...itemGrant, itemId: v })}
-                    placeholder={grantItems.length ? "지급할 아이템을 선택하세요" : "등록된 아이템이 없습니다"}
-                    options={grantItems.map((it: any) => ({
-                      value: it._id, label: it.name, hint: itemTypeLabel(it.type),
-                      icon: <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.type} size={18} color={it.color || itemTypeColor(it.type)} />,
-                    }))}
-                  />
-                  <p className={fieldNote}>
-                    <Link href="/admin/shop?tab=items" className="font-bold text-[#e91e3f] hover:underline">아이템 등록</Link>
-                  </p>
-                </div>
-                <div>
-                  <label className={labelClass}>기간</label>
-                  <FilterChips options={ITEM_GRANT_DAYS} value={itemGrant.daysMode} onChange={(v) => setItemGrant({ ...itemGrant, daysMode: v })} />
-                  {itemGrant.daysMode === "custom" && (
-                    <input type="number" min={1} max={3650} value={itemGrant.days} onChange={(e) => setItemGrant({ ...itemGrant, days: e.target.value })}
-                      placeholder="일수" className={`${inputClass} mt-2`} />
                   )}
-                </div>
-              </div>
+                </FieldRow>
+              )}
+            </Panel>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className={labelClass}>대상 <span className="text-[#e91e3f]">*</span></label>
-                  <input type="text" value={itemGrant.target} onChange={(e) => setItemGrant({ ...itemGrant, target: e.target.value })}
-                    placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
-                  <p className={fieldNote}>XP 기록이 있는 유저만 검색됩니다</p>
-                </div>
-                <div>
-                  <label className={labelClass}>사유</label>
-                  <input type="text" value={itemGrant.reason} onChange={(e) => setItemGrant({ ...itemGrant, reason: e.target.value })}
-                    placeholder="예: 이벤트 우승 보상" className={inputClass} />
-                </div>
-              </div>
+            {/* 📌 표기는 이제 아이템 등록 한 곳에서 관리한다 — 여기 남은 옛 데이터는 그쪽의 가져오기 버튼이 옮긴다 */}
+            <Panel
+              id="sec-inventory"
+              className="scroll-mt-24"
+              title="인벤토리 표기"
+              right={<Link href="/admin/shop?tab=items" className={LINK_PILL}>아이템 등록으로</Link>}
+            >
+              <p className="text-[13px] text-[#5a5a5a] break-keep">
+                인벤토리 표기는 <b className="text-[#131313]">아이템 등록</b>에서 관리합니다.
+                {invRoles.length > 0 && <span className="block mt-1 text-[12px] text-[#5a5a5a]">옛 표기 역할 {invRoles.length}개가 남아 있습니다.</span>}
+              </p>
+            </Panel>
+          </div>
+        </PanelGrid>
+      )}
 
-              <div className="flex flex-wrap gap-3">
-                <Btn type="submit" variant="primary" disabled={isGranting || !itemGrant.itemId}>{isGranting ? "처리 중..." : "지급"}</Btn>
-                <Btn type="button" variant="ghost" onClick={() => setConfirmAllItem(true)} disabled={isGranting || !itemGrant.itemId}>전체 유저에게 지급</Btn>
-              </div>
-            </form>
-            <p className={fieldNote}>역할이 연결된 아이템은 봇이 30초 이내에 역할을 붙입니다. 이미 보유한 유저는 건너뜁니다.</p>
+      {/* ═══════════ 콘텐츠 ═══════════
+          📌 퀘스트(표가 넓다)는 전체 폭, 채널 정책 · 부스트는 그 아래 두 열. 줄을 누르면 편집 칸이 뜬다 */}
+      {tab === "content" && (
+        <>
+          <Panel
+            id="sec-quests"
+            className="scroll-mt-24"
+            title={<>퀘스트<Count n={quests.length} /></>}
+            right={
+              <>
+                <Btn variant="ghost" size="sm" onClick={openPicks}>노출 방식</Btn>
+                <Btn variant="secondary" size="sm" onClick={() => { setQuestForm(EMPTY_QUEST); openFormAt("quest"); }}>＋ 추가</Btn>
+              </>
+            }
+            flush
+          >
+            {/* 주기별 요약 — 예전 주기별 묶음 머리에 있던 개수 · 노출 방식 한 줄 */}
+            <div className="grid grid-cols-1 md:grid-cols-3 border-b border-[#ededed]">
+              {QUEST_PICK_FIELDS.map((f, i) => {
+                const rows = quests.filter((q) => (q.period || "daily") === f.period);
+                const on = rows.filter((q) => q.enabled).length;
+                const pick = Number(settings?.[f.key] ?? 0);
+                return (
+                  <div key={f.period} className={`min-w-0 px-5 py-3 border-[#ededed] ${i > 0 ? "border-t md:border-t-0 md:border-l" : ""}`}>
+                    <p className="text-[13px] font-bold">{PERIOD_LABEL[f.period]} 퀘스트<Count n={rows.length} /></p>
+                    <p className="mt-0.5 text-[12px] text-[#5a5a5a] break-keep">
+                      {rows.length === 0
+                        ? f.every + " 초기화"
+                        : pick > 0
+                        ? `${f.every}마다 활성 ${on}개 중 ${Math.min(pick, on)}개 무작위`
+                        : `활성 ${on}개 전부 노출 · ${f.every} 초기화`}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            {isLoading ? loadingRow
+              : questRows.length === 0 ? <PanelEmpty>등록된 퀘스트가 없습니다.</PanelEmpty>
+              : (
+                <DataTable
+                  className={tableFlat}
+                  columns={questCols}
+                  rows={questRows}
+                  rowKey={(q) => q._id}
+                  selectedKey={isFormOpen("quest") ? editId : null}
+                  onRowClick={(q) => {
+                    setQuestForm({ id: q._id, name: q.name, desc: q.desc || "", period: q.period || "daily", reason: q.reason, metric: q.metric, target: q.target, rewardXp: q.rewardXp, rewardPoint: q.rewardPoint || 0, enabled: q.enabled, order: q.order });
+                    openFormAt("quest", q._id);
+                  }}
+                />
+              )}
+          </Panel>
 
-            {itemGrants.length > 0 && (
-              <div className="mt-8">
-                <SectionHead no="02" title="최근 아이템 지급" />
-                <ListFrame>
+          <PanelGrid className="mt-5">
+            <Panel
+              id="sec-channels"
+              className="scroll-mt-24"
+              title={<>채널 정책<Count n={channelConfigs.length} /></>}
+              right={<Btn variant="secondary" size="sm" onClick={() => { setChForm(EMPTY_CHANNEL); openFormAt("channel"); }}>＋ 추가</Btn>}
+              flush
+            >
+              {isLoading ? loadingRow
+                : channelConfigs.length === 0 ? <PanelEmpty>설정된 채널이 없습니다.</PanelEmpty>
+                : (
+                  <DataTable
+                    className={tableFlat}
+                    columns={channelCols}
+                    rows={channelConfigs}
+                    rowKey={(c) => c._id}
+                    selectedKey={isFormOpen("channel") ? editId : null}
+                    onRowClick={(c) => { setChForm({ channelId: c.channelId, boostXp: c.boostXp ? String(c.boostXp) : "", excluded: !!c.excluded }); openFormAt("channel", c._id); }}
+                  />
+                )}
+            </Panel>
+
+            <Panel
+              id="sec-boosts"
+              className="scroll-mt-24"
+              title={<>기간제 부스트<Count n={boosts.length} /></>}
+              right={<Btn variant="secondary" size="sm" onClick={() => { setBoostForm(EMPTY_BOOST); openFormAt("boost"); }}>＋ 추가</Btn>}
+              flush
+            >
+              {isLoading ? loadingRow
+                : boosts.length === 0 ? <PanelEmpty>등록된 부스트가 없습니다.</PanelEmpty>
+                : (
+                  <DataTable
+                    className={tableFlat}
+                    columns={boostCols}
+                    rows={boosts}
+                    rowKey={(b) => b._id}
+                    selectedKey={isFormOpen("boost") ? editId : null}
+                    onRowClick={(b) => {
+                      setBoostForm({ id: b._id, name: b.name, targetRoleId: b.targetRoleId || "", targetChannelId: b.targetChannelId || "", boostXp: String(b.boostXp), startAt: toLocalInput(b.startAt), endAt: toLocalInput(b.endAt) });
+                      openFormAt("boost", b._id);
+                    }}
+                  />
+                )}
+            </Panel>
+          </PanelGrid>
+        </>
+      )}
+
+      {/* ═══════════ 지급 · 내역 ═══════════
+          📌 왼쪽 좁은 열에 수동 지급 · 초기화 폼, 오른쪽 넓은 열에 내역 표. 좁은 화면에선 위아래로 */}
+      {tab === "ledger" && (
+        <div className="xl:flex xl:items-start xl:gap-5">
+          <div className="xl:w-[440px] xl:shrink-0 min-w-0 space-y-5 mb-5 xl:mb-0">
+            <Panel
+              id="sec-grant"
+              className="scroll-mt-24"
+              title="수동 지급"
+              right={<Segmented options={GRANT_KINDS} value={grantKind} onChange={(v) => setGrantKind(v as GrantKind)} />}
+            >
+              {grantKind !== "item" ? (
+                <>
+                  <form onSubmit={submitGrant}>
+                    <Field label={<>대상 <Req /></>} hint="XP 기록이 있는 유저만 검색됩니다">
+                      <input type="text" value={grantForm.target} onChange={(e) => setGrantForm({ ...grantForm, target: e.target.value })}
+                        placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
+                    </Field>
+                    <Field label={<>지급 {grantUnit} <Req /></>} hint="음수를 넣으면 회수됩니다 (보유량을 넘지 않게 잘립니다)">
+                      <input type="number" value={grantForm.amount} onChange={(e) => setGrantForm({ ...grantForm, amount: e.target.value })}
+                        placeholder="예: 50000 (회수는 -50000)" className={inputClass} />
+                    </Field>
+                    <Field label="사유" hint="비우면 ‘관리자 지급’으로 기록됩니다">
+                      <input type="text" value={grantForm.reason} onChange={(e) => setGrantForm({ ...grantForm, reason: e.target.value })}
+                        placeholder="예: 이벤트 우승 보상" className={inputClass} />
+                    </Field>
+
+                    {Number(grantForm.amount) !== 0 && grantForm.amount !== "" && (
+                      <p className={`mb-4 px-3 py-2.5 rounded-lg text-[13px] font-bold break-keep ${
+                        Number(grantForm.amount) > 0 ? "bg-[#e91e3f]/[0.08] text-[#d01634]" : "bg-amber-50 text-amber-700"
+                      }`}>
+                        {Number(grantForm.amount) > 0
+                          ? `${Number(grantForm.amount).toLocaleString()} ${grantUnit} 지급${grantKind === "xp" ? " — 레벨이 올라갈 수 있습니다" : ""}`
+                          : `${Math.abs(Number(grantForm.amount)).toLocaleString()} ${grantUnit} 회수${grantKind === "xp" ? " — 레벨이 내려갈 수 있습니다" : ""}`}
+                      </p>
+                    )}
+
+                    <div className="flex flex-wrap gap-2">
+                      <Btn type="submit" variant="primary" disabled={isGranting}>{isGranting ? "처리 중…" : "지급"}</Btn>
+                      <Btn type="button" variant="danger" onClick={submitRemove} disabled={isGranting || !grantForm.amount}>{grantUnit} 제거</Btn>
+                      <Btn type="button" variant="secondary" onClick={() => setConfirmAll(true)} disabled={isGranting || !grantForm.amount}>전체 유저에게 지급</Btn>
+                    </div>
+                  </form>
+                  <p className={fieldNote}>
+                    {grantKind === "xp"
+                      ? "봇 큐에 쌓여 30초 이내에 반영되고(레벨도 함께 재계산), 봇이 꺼져 있으면 켜질 때 처리됩니다."
+                      : "즉시 반영됩니다."}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <form onSubmit={submitItemGrant}>
+                    <Field label={<>아이템 <Req /></>} hint={<Link href="/admin/shop?tab=items" className="font-bold text-[#e91e3f] hover:text-[#d01634] hover:underline">아이템 등록</Link>}>
+                      <Dropdown
+                        theme="light"
+                        buttonClassName={DD}
+                        value={itemGrant.itemId}
+                        onChange={(v) => setItemGrant({ ...itemGrant, itemId: v })}
+                        placeholder={grantItems.length ? "지급할 아이템을 선택하세요" : "등록된 아이템이 없습니다"}
+                        options={grantItems.map((it: any) => ({
+                          value: it._id, label: it.name, hint: itemTypeLabel(it.type),
+                          icon: <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.type} size={18} color={it.color || itemTypeColor(it.type)} />,
+                        }))}
+                      />
+                    </Field>
+                    <Field label="기간">
+                      <Segmented options={ITEM_GRANT_DAYS} value={itemGrant.daysMode} onChange={(v) => setItemGrant({ ...itemGrant, daysMode: v })} />
+                      {itemGrant.daysMode === "custom" && (
+                        <Inline className="mt-2">
+                          <input type="number" min={1} max={3650} value={itemGrant.days} onChange={(e) => setItemGrant({ ...itemGrant, days: e.target.value })}
+                            placeholder="일수" className={numClass} />
+                          일
+                        </Inline>
+                      )}
+                    </Field>
+                    <Field label={<>대상 <Req /></>} hint="XP 기록이 있는 유저만 검색됩니다">
+                      <input type="text" value={itemGrant.target} onChange={(e) => setItemGrant({ ...itemGrant, target: e.target.value })}
+                        placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
+                    </Field>
+                    <Field label="사유">
+                      <input type="text" value={itemGrant.reason} onChange={(e) => setItemGrant({ ...itemGrant, reason: e.target.value })}
+                        placeholder="예: 이벤트 우승 보상" className={inputClass} />
+                    </Field>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Btn type="submit" variant="primary" disabled={isGranting || !itemGrant.itemId}>{isGranting ? "처리 중…" : "지급"}</Btn>
+                      <Btn type="button" variant="secondary" onClick={() => setConfirmAllItem(true)} disabled={isGranting || !itemGrant.itemId}>전체 유저에게 지급</Btn>
+                    </div>
+                  </form>
+                  <p className={fieldNote}>역할이 연결된 아이템은 봇이 30초 이내에 역할을 붙입니다. 이미 보유한 유저는 건너뜁니다.</p>
+                </>
+              )}
+            </Panel>
+
+            {grantKind === "item" && itemGrants.length > 0 && (
+              <Panel title={<>최근 아이템 지급<Count n={itemGrants.length} /></>} flush>
+                <div className="divide-y divide-[#ededed]">
                   {itemGrants.map((g: any) => {
-                    const st = GRANT_STATUS[g.status] || { l: g.status, c: "bg-black/[0.05] text-[#8a8a8a]" };
+                    const st = GRANT_STATUS[g.status] || { l: g.status, tone: "neutral" as const };
                     return (
-                      <div key={g._id} className="py-3 flex flex-wrap md:flex-nowrap items-center gap-x-3 gap-y-1">
-                        <span className="min-w-0 w-40 truncate text-sm font-bold text-[#131313]">{g.userName || g.userId}</span>
-                        <span className="min-w-0 flex-1 truncate text-[12px] text-[#5a5a5a]">{g.itemName}{g.adminNote ? ` · ${g.adminNote}` : ""}</span>
-                        <span className="shrink-0 text-[11px] text-[#8a8a8a] tabular-nums">{g.days > 0 ? `${g.days}일` : "영구"}</span>
-                        <span className={`shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full ${st.c}`}>{st.l}</span>
-                        <span className="shrink-0 text-[10px] text-[#a3a3a3] tabular-nums">{fmtDateTime(g.createdAt)}</span>
+                      <div key={g._id} className="px-5 py-3 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{g.userName || g.userId}</span>
+                          <StatusChip tone={st.tone}>{st.l}</StatusChip>
+                        </div>
+                        <p className="mt-1 text-[12px] text-[#5a5a5a] truncate">
+                          {g.itemName}{g.adminNote ? ` · ${g.adminNote}` : ""} · {g.days > 0 ? `${g.days}일` : "영구"}
+                          <span className="ml-2 text-[#8a8a8a] tabular-nums">{fmtDateTime(g.createdAt)}</span>
+                        </p>
                       </div>
                     );
                   })}
-                </ListFrame>
-              </div>
+                </div>
+              </Panel>
             )}
-            </>
-            )}
-          </section>
-          </Reveal>
-        )}
 
-        {tab === "ledger" && sub === "logs" && (
-          <Reveal>
-          <section>
+            {/* 📌 초기화는 되돌릴 수 없다 — 빨간 테두리로 따로 떼고, 누르면 확인 모달을 한 번 더 거친다 */}
+            <Panel
+              id="sec-reset"
+              className="scroll-mt-24 !border-[#e91e3f]/40"
+              title={<span className="text-[#d01634]">XP 초기화</span>}
+              desc="되돌릴 수 없습니다 — 레벨 보상 역할도 봇이 30초 이내에 함께 회수하며, ARCTIC에서 구매한 역할만 남습니다."
+            >
+              <Field label="대상" hint="‘수동 지급’의 XP · 빙옥 대상 칸과 같은 값을 씁니다">
+                <input type="text" value={grantForm.target} onChange={(e) => setGrantForm({ ...grantForm, target: e.target.value })}
+                  placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                <Btn variant="danger" disabled={isGranting || !grantForm.target.trim()} onClick={() => setConfirmReset(grantForm.target.trim())}>
+                  위 대상 초기화
+                </Btn>
+                <Btn variant="danger" disabled={isGranting} onClick={() => setConfirmReset("all")}>
+                  전체 유저 초기화
+                </Btn>
+              </div>
+            </Panel>
+          </div>
+
+          <div className="flex-1 min-w-0">
             {/* 두 출처의 건수는 세는 기준이 달라(봇=전체 검색 결과, 수동=최근 50건) 따로 적는다.
                 지금 필터가 덮지 않는 쪽은 감춘다 — '채팅'을 보는 중에 '수동 37'이 남아 있으면 그 37건이 목록에 있는 줄 안다. */}
-            <SectionHead no="02" title="지급 내역" right={
-              <span className="text-[11px] font-bold text-[#8a8a8a] tabular-nums shrink-0">
-                {ledgerFilter === "manual"
-                  ? `수동 ${manualRows.length.toLocaleString()}`
-                  : ledgerFilter === ""
-                  ? `봇 ${logTotal.toLocaleString()} · 수동 ${manualRows.length.toLocaleString()}`
-                  : `봇 ${logTotal.toLocaleString()}`}
-              </span>
-            } />
-            <div className="mb-4">
-              <input type="text" placeholder="유저 이름 검색" value={logQuery}
-                onChange={(e) => { setLogQuery(e.target.value); setLogPage(0); }} className={`${inputClass} md:max-w-xs`} />
-            </div>
-            <FilterChips
-              className="mb-3"
-              options={[
-                { v: "", l: "전체" },
-                { v: "chat", l: "채팅" },
-                { v: "voice", l: "음성" },
-                { v: "attend", l: "출석" },
-                { v: "manual", l: "수동" },
-              ]}
-              value={ledgerFilter}
-              onChange={(v) => { setLedgerFilter(v); setLogPage(0); }}
-            />
-            <p className={`${fieldNote} mb-6`}>
-              봇 기록은 <b className="text-[#131313]">60일까지만 보관</b>되고, 수동 기록은 최근 50건만 보여 줍니다.
-            </p>
+            <Panel
+              id="sec-logs"
+              className="scroll-mt-24"
+              title="지급 내역"
+              desc="봇 기록은 60일까지만 보관 · 수동 기록은 최근 50건"
+              right={
+                <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">
+                  {ledgerFilter === "manual"
+                    ? `수동 ${manualRows.length.toLocaleString()}`
+                    : ledgerFilter === ""
+                    ? `봇 ${logTotal.toLocaleString()} · 수동 ${manualRows.length.toLocaleString()}`
+                    : `봇 ${logTotal.toLocaleString()}`}
+                </span>
+              }
+              flush
+            >
+              <div className="px-5 py-3 border-b border-[#ededed]">
+                <Toolbar className="!mb-0">
+                  <SearchInput value={logQuery} onChange={(v) => { setLogQuery(v); setLogPage(0); }} placeholder="유저 이름 검색" />
+                  <Segmented
+                    options={[
+                      { v: "", l: "전체" },
+                      { v: "chat", l: "채팅" },
+                      { v: "voice", l: "음성" },
+                      { v: "attend", l: "출석" },
+                      { v: "manual", l: "수동" },
+                    ]}
+                    value={ledgerFilter}
+                    onChange={(v) => { setLedgerFilter(v); setLogPage(0); }}
+                  />
+                </Toolbar>
+              </div>
 
-            {ledgerRows.length === 0 ? (
-              <EmptyRow>표시할 지급 내역이 없습니다.</EmptyRow>
-            ) : (
-              <>
-                <ListFrame>
-                  {ledgerRows.map((r) => (
-                    <div key={r.k} className="py-3 flex items-center gap-3">
-                      <span className={`shrink-0 text-[10px] font-black px-2 py-0.5 rounded ${
-                        r.src === "manual" ? "bg-[#e91e3f]/15 text-[#e91e3f]" : "bg-black/[0.06] text-[#5a5a5a]"
-                      }`}>
-                        {r.src === "manual" ? "수동" : "봇"}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-bold text-[#131313] truncate max-w-[13rem]">{r.name}</span>
-                          {/* 처리 상태는 수동 지급에만 있다 — 값이 비어 있어도 '대기'로 보여 줘야 큐에 남은 걸 알 수 있다 */}
-                          {r.src === "manual" && (
-                            <span className={`text-[10px] font-black px-2 py-0.5 rounded ${
-                              r.status === "paid" ? "bg-emerald-500/15 text-emerald-700"
-                              : r.status === "failed" ? "bg-red-500/15 text-red-600"
-                              : "bg-black/[0.06] text-[#5a5a5a]"}`}>
-                              {r.status === "paid" ? "완료" : r.status === "failed" ? "실패" : "대기"}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-[#8a8a8a] mt-0.5 tabular-nums truncate">
-                          {fmtDateTime(r.at)} · {r.note}
-                          {r.channelName ? ` · #${r.channelName}` : ""}
-                          {r.error ? ` · ${r.error}` : ""}
-                        </p>
-                      </div>
-                      <span className={`shrink-0 text-sm font-black tabular-nums ${r.amount >= 0 ? "text-[#e91e3f]" : "text-amber-700"}`}>
-                        {r.amount >= 0 ? "+" : ""}{r.amount.toLocaleString()}
-                        {r.unit === "빙옥" && <span className="ml-1 text-[10px] text-[#3f9e93]">빙옥</span>}
-                      </span>
+              {ledgerRows.length === 0 ? (
+                <PanelEmpty>표시할 지급 내역이 없습니다.</PanelEmpty>
+              ) : (
+                <>
+                  <DataTable className={tableFlat} columns={ledgerCols} rows={ledgerRows} rowKey={(r) => r.k} />
+                  {/* 쪽 넘김은 봇 로그 기준 — 수동 지급은 최근 50건이 전부라 나눌 쪽이 없다 */}
+                  {ledgerFilter !== "manual" && (
+                    <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-[#ededed]">
+                      <Btn variant="ghost" size="sm" disabled={logPage === 0} onClick={() => setLogPage((p) => Math.max(0, p - 1))}>이전</Btn>
+                      <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">{logPage + 1} / {Math.max(1, Math.ceil(logTotal / 50))}</span>
+                      <Btn variant="ghost" size="sm" disabled={(logPage + 1) * 50 >= logTotal} onClick={() => setLogPage((p) => p + 1)}>다음</Btn>
                     </div>
-                  ))}
-                </ListFrame>
-
-                {/* 쪽 넘김은 봇 로그 기준 — 수동 지급은 최근 50건이 전부라 나눌 쪽이 없다 */}
-                {ledgerFilter !== "manual" && (
-                  <div className="flex items-center justify-between mt-6">
-                    <Btn variant="ghost" disabled={logPage === 0} onClick={() => setLogPage((p) => Math.max(0, p - 1))}>이전</Btn>
-                    <span className="text-[11px] font-bold text-[#5a5a5a]">{logPage + 1} / {Math.max(1, Math.ceil(logTotal / 50))}</span>
-                    <Btn variant="ghost" disabled={(logPage + 1) * 50 >= logTotal} onClick={() => setLogPage((p) => p + 1)}>다음</Btn>
-                  </div>
-                )}
-              </>
-            )}
-          </section>
-          </Reveal>
-        )}
-
-        {tab === "ledger" && sub === "reset" && (
-          <Reveal>
-          <section>
-            <SectionHead no="03" title="XP 초기화" />
-            <Note>
-              되돌릴 수 없습니다 — 레벨 보상 역할도 봇이 30초 이내에 함께 회수하며, ARCTIC에서 구매한 역할만 남습니다.
-            </Note>
-            <div className="mb-6 md:max-w-xs">
-              <label className={labelClass}>대상</label>
-              <input type="text" value={grantForm.target} onChange={(e) => setGrantForm({ ...grantForm, target: e.target.value })}
-                placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
-              <p className={fieldNote}>&lsquo;XP 지급 · 회수&rsquo;의 대상 칸과 같은 값을 씁니다</p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Btn variant="danger" disabled={isGranting || !grantForm.target.trim()} onClick={() => setConfirmReset(grantForm.target.trim())}>
-                위 대상 초기화
-              </Btn>
-              <Btn variant="danger" disabled={isGranting} onClick={() => setConfirmReset("all")}>
-                전체 유저 초기화
-              </Btn>
-            </div>
-          </section>
-          </Reveal>
-        )}
-
+                  )}
+                </>
+              )}
+            </Panel>
+          </div>
         </div>
+      )}
 
-        {/* 안내 각주 */}
-        <Reveal>
-        <div className="mt-14 border-t border-black/[0.06] pt-5 text-xs text-[#8a8a8a] leading-relaxed">
-          💡 <strong className="text-[#5a5a5a]">작동 방식:</strong> 봇이 1분마다 설정을 다시 읽습니다. 최종 지급량 = 기본 XP + 역할 Boost + 채널 Boost + 기간제 부스트 (음소거 시 설정된 배율 적용).<br/>
-          ⚠️ 역할 자동 지급이 작동하려면 봇에게 <strong className="text-[#5a5a5a]">역할 관리 권한</strong>이 있고, 봇의 역할이 지급 대상 역할보다 <strong className="text-[#5a5a5a]">위에</strong> 있어야 합니다.
-        </div>
-        </Reveal>
+      {/* 작동 방식 각주 */}
+      <div className="mt-8 pt-5 border-t border-[#ededed] max-w-4xl text-[12px] text-[#5a5a5a] leading-relaxed break-keep">
+        <p><b className="text-[#131313]">작동 방식</b> — 봇이 1분마다 설정을 다시 읽습니다. 최종 지급량 = 기본 XP + 역할 Boost + 채널 Boost + 기간제 부스트 (음소거 시 설정된 배율 적용).</p>
+        <p className="mt-1">역할 자동 지급이 작동하려면 봇에게 <b className="text-[#131313]">역할 관리 권한</b>이 있고, 봇의 역할이 지급 대상 역할보다 <b className="text-[#131313]">위에</b> 있어야 합니다.</p>
       </div>
+
+      {/* ═══════════ 편집 칸 ═══════════ */}
+      <EditPane
+        open={isFormOpen("role")}
+        title={editId ? "역할 수정" : "역할 추가"}
+        badge={roleForm.exclusive ? <StatusChip>등급 역할</StatusChip> : undefined}
+        saveLabel="저장"
+        onSubmit={saveRole}
+        onCancel={() => { setRoleForm(EMPTY_ROLE); closeForm(); }}
+        onDelete={editId ? () => setDeleteConfirm({ kind: "role", id: editId }) : undefined}
+      >
+        <Field label={<>디스코드 역할 <Req /></>} hint="디스코드가 관리하는 역할(서버 부스트 등)은 봇이 지급할 수 없어 목록에 없습니다">
+          <Dropdown
+            theme="light"
+            buttonClassName={DD}
+            value={roleForm.roleId}
+            onChange={(v) => setRoleForm({ ...roleForm, roleId: v })}
+            placeholder="역할을 선택하세요"
+            options={roleOptions(grantableRoles)}
+          />
+        </Field>
+        <Field label="지급 레벨 (선택)" hint="비우면 Boost 효과만 적용">
+          <input type="number" min={1} max={1000} placeholder="예: 100" value={roleForm.rewardLevel} onChange={(e) => setRoleForm({ ...roleForm, rewardLevel: e.target.value })} className={inputClass} />
+        </Field>
+        <Field label="채팅/음성 Boost XP" hint="보유자의 XP 지급마다 추가">
+          <input type="number" min={0} placeholder="예: 300" value={roleForm.buffXp} onChange={(e) => setRoleForm({ ...roleForm, buffXp: e.target.value })} className={inputClass} />
+        </Field>
+        <Field label="출석 Boost XP" hint="출석체크 시 추가 지급">
+          <input type="number" min={0} placeholder="예: 7000" value={roleForm.attendBuffXp} onChange={(e) => setRoleForm({ ...roleForm, attendBuffXp: e.target.value })} className={inputClass} />
+        </Field>
+        {roleForm.exclusive && (
+          <p className={fieldNote}>티어 사다리(등급 역할)로 저장돼 있습니다 — 승급하면 아래 티어 역할이 자동 회수됩니다.</p>
+        )}
+      </EditPane>
+
+      <EditPane
+        open={isFormOpen("channel")}
+        title={editId ? "채널 정책 수정" : "채널 정책 추가"}
+        saveLabel="저장"
+        onSubmit={saveChannel}
+        onCancel={() => { setChForm(EMPTY_CHANNEL); closeForm(); }}
+        onDelete={editId ? () => setDeleteConfirm({ kind: "channel", id: editId }) : undefined}
+      >
+        <Field label={<>디스코드 채널 · 카테고리 <Req /></>} hint="카테고리를 선택하면 하위 채널 전체에 적용됩니다">
+          <Dropdown
+            theme="light"
+            buttonClassName={DD}
+            value={chForm.channelId}
+            onChange={(v) => setChForm({ ...chForm, channelId: v })}
+            placeholder="채널 또는 카테고리를 선택하세요"
+            options={channelOptions}
+          />
+        </Field>
+        <Field label="Boost XP" hint="이 채널에서의 XP 지급마다 추가">
+          <input type="number" min={0} placeholder="예: 500" value={chForm.boostXp} onChange={(e) => setChForm({ ...chForm, boostXp: e.target.value })} disabled={chForm.excluded} className={inputClass} />
+        </Field>
+        <Field label="XP 지급 제외" hint="봇 명령어 채널 등에 사용">
+          <Toggle
+            on={!!chForm.excluded}
+            onClick={() => setChForm({ ...chForm, excluded: !chForm.excluded })}
+            onLabel="지급 안 함"
+            offLabel="지급함 (기본)"
+          />
+        </Field>
+      </EditPane>
+
+      <EditPane
+        open={isFormOpen("boost")}
+        title={editId ? "부스트 수정" : "부스트 추가"}
+        saveLabel={boostForm.id ? "수정 저장" : "부스트 등록"}
+        onSubmit={saveBoost}
+        onCancel={() => { setBoostForm(EMPTY_BOOST); closeForm(); }}
+        onDelete={editId ? () => setDeleteConfirm({ kind: "boost", id: editId }) : undefined}
+      >
+        <Field label="부스트 이름">
+          <input type="text" placeholder="예: 주말 2배 이벤트" value={boostForm.name} onChange={(e) => setBoostForm({ ...boostForm, name: e.target.value })} className={inputClass} />
+        </Field>
+        <Field label="대상 역할" hint="역할을 고르면 해당 역할 보유자에게만 적용">
+          <Dropdown
+            theme="light"
+            buttonClassName={DD}
+            value={boostForm.targetRoleId}
+            onChange={(v) => setBoostForm({ ...boostForm, targetRoleId: v })}
+            options={[{ value: "", label: "서버 전체" }, ...roleOptions(guildRoles)]}
+          />
+        </Field>
+        <Field label="대상 채널 · 카테고리" hint="카테고리 선택 시 하위 채널 전체에 적용 · 역할과 함께 지정하면 둘 다 만족해야 발동">
+          <Dropdown
+            theme="light"
+            buttonClassName={DD}
+            value={boostForm.targetChannelId}
+            onChange={(v) => setBoostForm({ ...boostForm, targetChannelId: v })}
+            options={[{ value: "", label: "모든 채널" }, ...channelOptions]}
+          />
+        </Field>
+        <Field label={<>추가 XP <Req /></>} hint="채팅·음성 지급 1회당 추가">
+          <input type="number" min={1} placeholder="예: 1000" value={boostForm.boostXp} onChange={(e) => setBoostForm({ ...boostForm, boostXp: e.target.value })} className={inputClass} />
+        </Field>
+        <Field label={<>시작 <Req /></>}>
+          <input type="datetime-local" value={boostForm.startAt} onChange={(e) => setBoostForm({ ...boostForm, startAt: e.target.value })} className={inputClass} />
+        </Field>
+        <Field label={<>종료 <Req /></>}>
+          <input type="datetime-local" value={boostForm.endAt} onChange={(e) => setBoostForm({ ...boostForm, endAt: e.target.value })} className={inputClass} />
+        </Field>
+      </EditPane>
+
+      <EditPane
+        open={isFormOpen("quest")}
+        width={480}
+        title={editId ? "퀘스트 수정" : "퀘스트 추가"}
+        sub="진행도는 봇의 XP 지급 로그(채팅·음성·출석)로 판정합니다 · 출석 기준 시간과 보상은 정책 탭 지급량 · 주기에서"
+        saveLabel={questForm.id ? "수정 저장" : "퀘스트 등록"}
+        onSubmit={saveQuest}
+        onCancel={() => { setQuestForm(EMPTY_QUEST); closeForm(); }}
+        onDelete={editId ? () => setDeleteConfirm({ kind: "quest", id: editId }) : undefined}
+      >
+        <Field label="퀘스트 이름">
+          <input value={questForm.name} onChange={(e) => setQuestForm({ ...questForm, name: e.target.value })}
+            placeholder="예: 오늘의 수다" maxLength={40} className={inputClass} />
+        </Field>
+        <Field label="설명 (선택)" hint="유저 화면에서 퀘스트 이름 아래 회색으로 표시됩니다.">
+          <input value={questForm.desc} onChange={(e) => setQuestForm({ ...questForm, desc: e.target.value })}
+            placeholder="예: 채팅으로 XP를 5번 받으세요" maxLength={120} className={inputClass} />
+        </Field>
+        <Field label="초기화 주기" hint="진행도와 보상 수령이 이 주기마다 초기화됩니다 (KST) — 일일 매일 자정 · 주간 매주 월요일 · 월간 매월 1일">
+          <Segmented
+            options={[{ v: "daily", l: "일일" }, { v: "weekly", l: "주간" }, { v: "monthly", l: "월간" }]}
+            value={questForm.period}
+            onChange={(v) => setQuestForm({ ...questForm, period: v })}
+          />
+        </Field>
+        <Field label="측정 대상" hint="어떤 활동의 지급 로그를 셀지 고릅니다.">
+          <Segmented
+            options={[{ v: "chat", l: "채팅" }, { v: "voice", l: "음성" }, { v: "attend", l: "출석" }, { v: "any", l: "전체" }]}
+            value={questForm.reason}
+            onChange={(v) => setQuestForm({ ...questForm, reason: v })}
+          />
+        </Field>
+        <Field
+          label="측정 방식"
+          hint={
+            questForm.metric === "xp"
+              ? "받은 XP의 합계로 판정합니다."
+              : questForm.metric === "minute"
+              ? `음성 채널에 머문 시간(분)으로 판정합니다. 지급 주기 ${Math.max(1, Math.round((settings?.voiceIntervalSec ?? 300) / 60))}분마다 1분 단위로 쌓입니다.`
+              : "XP를 받은 횟수로 판정합니다. (음성은 1회 = 지급 주기)"
+          }
+        >
+          <Segmented
+            options={[{ v: "count", l: "지급 횟수" }, { v: "xp", l: "XP 합계" }, { v: "minute", l: "접속 시간" }]}
+            value={questForm.metric}
+            onChange={(v) => setQuestForm({ ...questForm, metric: v })}
+          />
+        </Field>
+        <Field
+          label="목표치"
+          hint={
+            questForm.metric === "xp"
+              ? "달성에 필요한 XP 합계"
+              : questForm.metric === "minute"
+              ? "달성에 필요한 접속 시간 (분) — 예: 2시간이면 120"
+              : "달성에 필요한 지급 횟수"
+          }
+        >
+          <input type="number" min={1} value={questForm.target} onChange={(e) => setQuestForm({ ...questForm, target: e.target.value })} className={inputClass} />
+        </Field>
+        {/* 보상 두 칸은 한 줄로 묶는다 — XP 와 빙옥이 서로 다른 줄로 갈라지지 않게 */}
+        <Field label="보상" hint="빙옥은 등급이 높을수록 배율이 붙어 더 지급됩니다. 둘 다 0이면 보상 없는 ‘목표’가 됩니다.">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block min-w-0">
+              <span className="block mb-1 text-[12px] text-[#5a5a5a]">보상 XP</span>
+              <input type="number" min={0} value={questForm.rewardXp} onChange={(e) => setQuestForm({ ...questForm, rewardXp: e.target.value })} className={inputClass} />
+            </label>
+            <label className="block min-w-0">
+              <span className="block mb-1 text-[12px] text-[#5a5a5a]">보상 빙옥</span>
+              <input type="number" min={0} value={questForm.rewardPoint} onChange={(e) => setQuestForm({ ...questForm, rewardPoint: e.target.value })} className={inputClass} />
+            </label>
+          </div>
+        </Field>
+        <Field label="표시 순서" hint="작을수록 위에 표시됩니다.">
+          <input type="number" min={0} value={questForm.order} onChange={(e) => setQuestForm({ ...questForm, order: e.target.value })} className={numClass} />
+        </Field>
+        <Field label="유저 화면 표시">
+          <Toggle
+            on={!!questForm.enabled}
+            onClick={() => setQuestForm({ ...questForm, enabled: !questForm.enabled })}
+            onLabel="활성화됨 — 유저에게 표시"
+            offLabel="비활성 — 숨김"
+          />
+        </Field>
+      </EditPane>
+
+      {/* 노출 방식 — 설정 문서를 통째로 덮어쓰기 때문에, 아직 못 불러왔으면 손대지 못하게 막는다 */}
+      <EditPane
+        open={isFormOpen("questPick")}
+        title="주기별 노출 방식"
+        sub="뽑기는 날짜로 고정돼 같은 주기 안에서는 모든 유저가 같은 퀘스트를 보며, 뽑히지 않은 퀘스트는 보상도 받을 수 없습니다."
+        saveLabel="노출 방식 저장"
+        onSubmit={savePicks}
+        onCancel={cancelPicks}
+      >
+        {!settings ? loadingRow : QUEST_PICK_FIELDS.map((f) => {
+          const total = quests.filter((q) => (q.period || "daily") === f.period && q.enabled).length;
+          const pick = Number(settings?.[f.key] ?? 0);
+          return (
+            <Field
+              key={f.key}
+              label={`${PERIOD_LABEL[f.period]} 노출 개수`}
+              hint={pick > 0 ? `활성 ${total}개 중 ${Math.min(pick, total)}개를 ${f.every}마다 새로 뽑습니다` : `활성 ${total}개를 전부 보여줍니다`}
+            >
+              <Inline>
+                <input type="number" min={0} max={20} value={settings?.[f.key] ?? 0}
+                  onChange={(e) => setSettings({ ...settings, [f.key]: e.target.value })} className={numClass} />
+                개
+              </Inline>
+            </Field>
+          );
+        })}
+      </EditPane>
 
       <ConfirmDialog
         open={!!deleteConfirm}
@@ -1834,7 +1863,12 @@ export default function AdminBotPage() {
         title="삭제 확인"
         confirmLabel="삭제"
         onCancel={() => setDeleteConfirm(null)}
-        onConfirm={executeDelete}
+        onConfirm={async () => {
+          // 편집 칸에서 지운 줄이면 칸도 닫는다 — 열어 두면 '저장'이 지운 것을 다시 만든다
+          const id = deleteConfirm?.id;
+          await executeDelete();
+          if (id && id === editId) closeForm();
+        }}
         body={
           deleteConfirm?.kind === "role" ? <>해당 역할 설정을 삭제하시겠습니까?<br/>이미 지급된 역할은 회수되지 않습니다.</>
           : deleteConfirm?.kind === "channel" ? <>해당 채널 설정을 삭제하시겠습니까?<br/>삭제 후 기본 XP 정책으로 돌아갑니다.</>
@@ -1861,7 +1895,7 @@ export default function AdminBotPage() {
               </strong>
               를 반영합니다.
             </p>
-            <p className="text-xs break-keep">되돌리려면 반대 부호로 다시 지급해야 합니다.</p>
+            <p className="text-[12px] break-keep">되돌리려면 반대 부호로 다시 지급해야 합니다.</p>
           </>
         }
       />
@@ -1895,15 +1929,15 @@ export default function AdminBotPage() {
           <>
             <p className="mb-2 break-keep">
               {confirmReset === "all"
-                ? <>XP 기록이 있는 <strong className="text-[#131313]">모든 유저</strong>의 보유 XP와 레벨이 <strong className="text-red-600">0</strong>이 됩니다.</>
-                : <><strong className="text-[#131313]">{confirmReset}</strong> 님의 보유 XP와 레벨이 <strong className="text-red-600">0</strong>이 됩니다.</>}
+                ? <>XP 기록이 있는 <strong className="text-[#131313]">모든 유저</strong>의 보유 XP와 레벨이 <strong className="text-[#d01634]">0</strong>이 됩니다.</>
+                : <><strong className="text-[#131313]">{confirmReset}</strong> 님의 보유 XP와 레벨이 <strong className="text-[#d01634]">0</strong>이 됩니다.</>}
             </p>
-            <p className="text-xs break-keep">되돌릴 수 없으며, 레벨 보상 역할도 함께 회수됩니다.</p>
+            <p className="text-[12px] break-keep">되돌릴 수 없으며, 레벨 보상 역할도 함께 회수됩니다.</p>
           </>
         }
       />
 
       {noticeEl}
-    </main>
+    </AdminPage>
   );
 }

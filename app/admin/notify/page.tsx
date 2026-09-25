@@ -1,20 +1,73 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { Reveal, LuxStyles } from "../../components/Lux";
-import { RenderFormattedText } from "../../components/FormattedText";
-// 알림 모달 · 확인 모달 · 라벨은 관리자 공용 것을 쓴다 — 이 파일이 따로 들고 있던 복사본은 뺐다
-import { inputClass, labelClass, useAdminGuard, useNotice, ConfirmDialog } from "../ui";
+// 📌 회원 통지 발송 — 목록 화면 틀(머리 → 왼쪽 작성 패널 | 오른쪽 발송 이력 표 → 줄을 누르면 상세 칸).
+//    예전엔 가운데 좁은 폭에 작성 카드와 이력이 위아래로 쌓여, 이력을 보려면 폼을 한참 지나 내려가야 했다.
+//    넓은 화면(xl)에서는 둘을 나란히 두고, 이력 한 줄의 본문 · 삭제는 오른쪽 상세 칸으로 옮겼다.
+//    두 열은 flex 로 — 임의 grid-template 은 이 빌드에서 컴파일되지 않는다(메모: tailwind-v4-quirks).
 
-// 통지 유형별 색상 프리셋
-const TYPE_STYLES: Record<string, { badge: string }> = {
-  경고: { badge: "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25" },
-  제재: { badge: "bg-orange-500/10 text-orange-700 border-orange-500/25" },
-  안내: { badge: "bg-sky-500/10 text-sky-700 border-sky-500/25" },
-  축하: { badge: "bg-emerald-500/10 text-emerald-700 border-emerald-500/25" },
-  일반: { badge: "bg-black/5 text-[#5a5a5a] border-black/15" },
+import React, { useState, useEffect, useRef } from "react";
+import { RenderFormattedText } from "../../components/FormattedText";
+// 알림 모달 · 확인 모달 · 입력칸은 관리자 공용 것을 쓴다 — 이 파일이 따로 들고 있던 복사본은 뺐다
+import {
+  AdminPage,
+  Panel,
+  FieldRow,
+  Segmented,
+  Btn,
+  Toolbar,
+  StatusChip,
+  DataTable,
+  DetailPane,
+  DefRow,
+  inputClass,
+  useAdminGuard,
+  useNotice,
+  ConfirmDialog,
+  type Column,
+} from "../ui";
+
+// 📌 통지 유형 → 공용 상태 칩 색. 예전 전용 배지(테두리 + 흐린 면) 대신 관리자 화면 칩 한 벌로 맞춘다
+const TYPE_TONE: Record<string, "bad" | "warn" | "info" | "ok" | "neutral"> = {
+  경고: "bad",
+  제재: "warn",
+  안내: "info",
+  축하: "ok",
+  일반: "neutral",
 };
 const TYPES = ["경고", "제재", "안내", "축하", "일반"];
+const TYPE_OPTIONS = TYPES.map((t) => ({ v: t, l: t }));
+
+const fmtFull = (d: any) => new Date(d).toLocaleString("ko-KR");
+// 표 안 일시는 짧게 — 초 · 오전/오후를 빼 한 칸 폭을 줄인다(상세 칸에는 전체 형식)
+const fmtShort = (d: any) =>
+  new Date(d).toLocaleString("ko-KR", { year: "2-digit", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+
+function TypeChip({ type }: { type: string }) {
+  return <StatusChip tone={TYPE_TONE[type] || "neutral"} className="shrink-0">{type}</StatusChip>;
+}
+
+// 읽음 · DM · 유저가 지움 — 표 한 칸과 상세 칸에서 같은 모양으로
+//    wrap: 상세 칸처럼 폭이 좁을 수 있는 곳에서는 줄을 넘긴다(표 칸은 한 줄 고정)
+function StateChips({ n, wrap = false }: { n: any; wrap?: boolean }) {
+  return (
+    <span className={`inline-flex items-center gap-1 ${wrap ? "flex-wrap" : "whitespace-nowrap"}`}>
+      <StatusChip tone={n.read ? "info" : "neutral"}>{n.read ? "읽음" : "안 읽음"}</StatusChip>
+      <StatusChip tone={n.dmSent ? "ok" : "neutral"}>{n.dmSent ? "DM 발송됨" : "DM 미발송"}</StatusChip>
+      {n.hiddenAt && <StatusChip tone="neutral">유저가 지움</StatusChip>}
+    </span>
+  );
+}
+
+// 본문 서식 버튼 — 입력칸 위 한 줄 (렌더 안에서 매번 새로 만들던 것을 밖으로)
+function ToolBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} className="inline-flex items-center gap-1 h-8 px-2.5 rounded-full text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-[#f2f2f2] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30">
+      {children}
+    </button>
+  );
+}
+
+const Req = () => <span className="text-[#e91e3f]">*</span>;
 
 export default function AdminNotifyPage() {
   // 화면 가리기 전용 — 실제 방어는 /api/notifications 가 서버에서 한 번 더 한다.
@@ -27,6 +80,8 @@ export default function AdminNotifyPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  // 상세 칸에 연 이력 — id 만 들고 목록에서 찾는다(삭제되면 저절로 닫힌다)
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [recipient, setRecipient] = useState("");
   const [type, setType] = useState("경고");
@@ -139,146 +194,163 @@ export default function AdminNotifyPage() {
   // 로딩 · 권한 없음 화면은 공용 가드가 만든다 (관리자 화면마다 복사돼 있던 것)
   if (gate) return gate;
 
-  const ToolBtn = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
-    <button type="button" onClick={onClick} className="px-2.5 py-1.5 text-xs font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-black/5 rounded-md transition-all flex items-center gap-1">{children}</button>
-  );
+  const selected = selectedId ? sent.find((n) => n._id === selectedId) || null : null;
+
+  // 📌 이력 표 — 유형 칩은 제목 칸 앞에 붙여 칸 하나를 아낀다(xl 두 열에서 표 폭이 좁다).
+  //    제목 칸만 남는 폭을 다 받고 말줄임(w-full max-w-0), 나머지 칸은 한 줄 고정.
+  const columns: Column<any>[] = [
+    {
+      key: "title",
+      label: "제목",
+      mobile: "title",
+      className: "w-full max-w-0",
+      render: (n) => (
+        <span className="flex items-center gap-2 min-w-0">
+          <TypeChip type={n.type} />
+          <span className="min-w-0 truncate font-bold text-[#131313]">{n.title}</span>
+        </span>
+      ),
+    },
+    {
+      key: "recipient",
+      label: "수신자",
+      className: "whitespace-nowrap",
+      render: (n) => (
+        <span className="block max-w-40 truncate font-bold text-[#131313]">
+          <span className="md:hidden">→ </span>
+          {n.recipientName}
+        </span>
+      ),
+    },
+    { key: "state", label: "상태", className: "whitespace-nowrap", render: (n) => <StateChips n={n} /> },
+    {
+      key: "at",
+      label: "일시",
+      align: "right",
+      className: "whitespace-nowrap",
+      render: (n) => <span className="text-[#8a8a8a] tabular-nums">{fmtShort(n.createdAt)}</span>,
+    },
+  ];
 
   return (
-    <main className="w-full flex-1 flex flex-col relative">
-      <LuxStyles />
-
-      {/* ── HERO (사무적 톤) ── */}
-      <section className="relative w-full pt-14 pb-8 md:pt-20 md:pb-10 px-6 border-b border-black/5">
-        <div className="max-w-4xl mx-auto relative z-10">
-          <Reveal>
-            {/* 가로선 + 영문 라벨(eyebrow)은 뺐다 — 제목이 첫 줄이다 */}
-            <h1 className="text-3xl md:text-4xl font-black tracking-tight leading-none mb-3 text-[#131313]">회원 통지 발송</h1>
-            {/* 화면 밖에서 일어나는 것만 남긴다 — 알림함 기록과 디스코드 DM */}
-            <p className="text-[#8a8a8a] text-sm leading-relaxed break-keep">통지는 사이트 알림함에 기록되고 디스코드 DM으로도 전송됩니다.</p>
-          </Reveal>
-        </div>
-      </section>
-
-      <div className="w-full max-w-4xl mx-auto px-6 py-10 flex-1 flex flex-col space-y-10">
-
-        {/* 통지서 작성 */}
-        <Reveal>
-        <form onSubmit={handleSubmit} className="rounded-xl border border-black/10 bg-[#ffffff] overflow-hidden">
-          {/* 문서 헤더 */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-black/5 bg-black/[0.015]">
-            <div className="flex items-center gap-2.5">
-              <span className="w-1 h-4 bg-[#e91e3f] rounded-full"></span>
-              <span className="text-sm font-black text-[#131313] tracking-tight">통지서 작성</span>
-            </div>
-            <span className="text-[10px] font-bold text-[#5a5a5a] tracking-wide">발신 · 고급 이글루 운영팀</span>
-          </div>
-
-          <div className="p-6 md:p-8 space-y-6">
-            {/* 수신자 / 유형 */}
-            <div className="grid grid-cols-1 md:grid-cols-[1.3fr_1fr] gap-6">
-              <div>
-                <label className={labelClass}>수신자 (디스코드 사용자명) <span className="text-[#e91e3f]">*</span></label>
+    <AdminPage section="운영" title="회원 통지 발송" desc="통지는 사이트 알림함에 기록되고 디스코드 DM으로도 전송됩니다.">
+      <div className="flex flex-col xl:flex-row xl:items-start">
+        {/* ── 통지서 작성 — xl 에서 왼쪽 고정 폭(유형 알약 다섯 개가 한 줄에 드는 폭) ── */}
+        <div className="min-w-0 xl:w-[540px] 2xl:w-[620px] xl:shrink-0 mb-6 xl:mb-0 xl:mr-6">
+          <Panel flush title="통지서 작성" right={<span className="text-[12px] text-[#8a8a8a]">발신 · 고급 이글루 운영팀</span>}>
+            <form onSubmit={handleSubmit}>
+              {/* 표시 이름으로 넣으면 유저를 못 찾아 DM 만 조용히 빠진다 */}
+              <FieldRow label={<>수신자 <Req /></>} hint="표시 이름이 아닌 디스코드 고유 사용자명(핸들)이어야 합니다.">
                 <input type="text" required placeholder="예: elahw.06" value={recipient} onChange={(e) => setRecipient(e.target.value)} className={inputClass} />
-                {/* 표시 이름으로 넣으면 유저를 못 찾아 DM 만 조용히 빠진다 */}
-                <p className="text-[10px] text-[#5a5a5a] mt-1.5">표시 이름이 아닌 고유 사용자명(핸들)이어야 합니다.</p>
-              </div>
-              <div>
-                <label className={labelClass}>통지 유형 <span className="text-[#e91e3f]">*</span></label>
-                <div className="flex flex-wrap gap-1.5">
-                  {TYPES.map((t) => (
-                    <button type="button" key={t} onClick={() => setType(t)} className={`px-3.5 py-2 text-xs font-bold rounded-md border transition-all ${type === t ? TYPE_STYLES[t].badge : "bg-transparent border-black/10 text-[#8a8a8a] hover:border-black/25"}`}>{t}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
+              </FieldRow>
 
-            {/* 제목 */}
-            <div>
-              <label className={labelClass}>제목 <span className="text-[#e91e3f]">*</span></label>
-              <input type="text" required placeholder="예: 커뮤니티 이용 규칙 위반에 대한 경고 통지" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
-              <p className="text-[10px] text-[#5a5a5a] mt-1.5">제목은 디스코드 DM 알림에도 표시됩니다.</p>
-            </div>
+              <FieldRow label={<>통지 유형 <Req /></>}>
+                <Segmented options={TYPE_OPTIONS} value={type} onChange={setType} />
+              </FieldRow>
 
-            {/* 본문 + 서식 툴바 */}
-            <div>
-              <label className={labelClass}>본문 <span className="text-[#e91e3f]">*</span></label>
-              <div className="border border-black/10 rounded-lg overflow-hidden focus-within:border-[#e91e3f] transition-colors">
-                <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 bg-black/[0.02] border-b border-black/5">
-                  <ToolBtn onClick={() => insertWrap("**")}><span className="font-extrabold text-sm">B</span> 굵게</ToolBtn>
-                  <ToolBtn onClick={() => insertWrap("__")}><span className="underline text-sm">U</span> 밑줄</ToolBtn>
-                  <ToolBtn onClick={() => insertWrap("~~")}><span className="line-through text-sm">S</span> 취소선</ToolBtn>
-                  <ToolBtn onClick={() => insertWrap("==")}><span className="text-sm font-extrabold text-[#e91e3f]">A</span> 강조</ToolBtn>
-                  <span className="w-px h-4 bg-black/10 mx-1"></span>
-                  <ToolBtn onClick={() => insertTable(2, 2)}><span className="text-sm font-bold">⊞</span> 표</ToolBtn>
-                </div>
-                <textarea ref={textareaRef} required rows={7} placeholder="통지 내용을 작성하세요" value={content} onChange={(e) => setContent(e.target.value)} className="w-full bg-[#ffffff] px-4 py-3.5 text-sm text-[#131313] outline-none resize-none leading-relaxed placeholder:text-[#8a8a8a] [&::-webkit-scrollbar]:hidden" />
-              </div>
-              {/* 서식 문법 안내는 뺐다 — 위 툴바 버튼이 같은 일을 하고 아래 미리보기가 결과를 보여 준다 */}
-            </div>
+              <FieldRow label={<>제목 <Req /></>} hint="제목은 디스코드 DM 알림에도 표시됩니다.">
+                <input type="text" required placeholder="예: 커뮤니티 이용 규칙 위반에 대한 경고 통지" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
+              </FieldRow>
 
-            {/* 미리보기 */}
-            {(title.trim() || content.trim()) && (
-              <div>
-                <label className={labelClass}>수신자에게 표시될 미리보기</label>
-                <div className={`rounded-lg border p-5 ${type === "경고" || type === "제재" ? "border-[#e91e3f]/20 bg-[#e91e3f]/[0.03]" : "border-black/10 bg-black/[0.02]"}`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-[10px] font-black tracking-wider border px-2 py-0.5 rounded-full ${TYPE_STYLES[type].badge}`}>{type}</span>
-                    <span className="ml-auto text-[11px] text-[#5a5a5a]">운영팀 · 방금</span>
+              {/* 본문 + 서식 툴바 — 입력칸 테두리(#a3a3a3) 안에 버튼 줄과 글칸을 함께 둔다 */}
+              <FieldRow label={<>본문 <Req /></>} top>
+                <div className="rounded-lg border border-[#a3a3a3] bg-white overflow-hidden transition-colors focus-within:border-[#131313] focus-within:ring-2 focus-within:ring-[#131313]/10">
+                  <div className="flex flex-wrap items-center gap-0.5 px-1.5 py-1 border-b border-[#ededed]">
+                    <ToolBtn onClick={() => insertWrap("**")}><span className="font-extrabold text-[13px]">B</span> 굵게</ToolBtn>
+                    <ToolBtn onClick={() => insertWrap("__")}><span className="underline text-[13px]">U</span> 밑줄</ToolBtn>
+                    <ToolBtn onClick={() => insertWrap("~~")}><span className="line-through text-[13px]">S</span> 취소선</ToolBtn>
+                    <ToolBtn onClick={() => insertWrap("==")}><span className="text-[13px] font-extrabold text-[#e91e3f]">A</span> 강조</ToolBtn>
+                    <span className="w-px h-4 bg-[#ededed] mx-1"></span>
+                    <ToolBtn onClick={() => insertTable(2, 2)}><span className="text-[13px] font-bold">⊞</span> 표</ToolBtn>
                   </div>
-                  <h4 className="text-sm md:text-base font-bold text-[#131313] break-keep mb-2">{title || <span className="text-[#5a5a5a]">제목 미입력</span>}</h4>
-                  <div className="text-sm text-[#5a5a5a]">
-                    {content.trim() ? <RenderFormattedText text={content} /> : <span className="text-[#5a5a5a] text-sm">본문 미입력</span>}
-                  </div>
+                  <textarea
+                    ref={textareaRef}
+                    required
+                    rows={7}
+                    placeholder="통지 내용을 작성하세요"
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    className="block w-full bg-white px-3 py-2.5 text-[14px] text-[#131313] outline-none resize-none leading-relaxed placeholder:text-[#a3a3a3] [&::-webkit-scrollbar]:hidden"
+                  />
                 </div>
-              </div>
-            )}
+              </FieldRow>
 
-            <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-lg transition-all">
-              {isSubmitting ? "발송 중..." : "통지 발송"}
-            </button>
-          </div>
-        </form>
-        </Reveal>
-
-        {/* 발송 이력 */}
-        <Reveal>
-        <div>
-          <div className="flex items-baseline gap-4 mb-4">
-            <span className="text-[11px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase">발송 이력</span>
-            <div className="h-px flex-1 bg-gradient-to-r from-black/10 to-transparent"></div>
-            <span className="text-[11px] font-bold text-[#5a5a5a]">{sent.length}건</span>
-          </div>
-          {isLoading ? (
-            <div className="text-center py-10 text-[#8a8a8a] text-sm">불러오는 중...</div>
-          ) : sent.length === 0 ? (
-            <div className="text-center py-10 text-[#5a5a5a] text-sm bg-black/[0.02] rounded-xl border border-black/5">발송한 통지가 없습니다.</div>
-          ) : (
-            <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
-              {sent.map((n) => {
-                const ts = TYPE_STYLES[n.type] || TYPE_STYLES["일반"];
-                return (
-                  <div key={n._id} className="py-4 flex items-start gap-4 group">
-                    <span className={`shrink-0 mt-0.5 text-[9px] font-black tracking-wider border px-2 py-1 rounded ${ts.badge}`}>{n.type}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-[#131313] truncate">{n.title}</p>
-                      <p className="text-xs text-[#8a8a8a] truncate mt-0.5">{n.content}</p>
-                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1.5 text-[10px] font-bold">
-                        <span className="text-[#5a5a5a]">→ {n.recipientName}</span>
-                        <span className={n.dmSent ? "text-emerald-700/80" : "text-[#5a5a5a]"}>{n.dmSent ? "DM 발송됨" : "DM 미발송"}</span>
-                        <span className={n.read ? "text-sky-700/80" : "text-[#5a5a5a]"}>{n.read ? "읽음" : "안 읽음"}</span>
-                        {n.hiddenAt && <span className="text-[#5a5a5a]">유저가 지움</span>}
-                        <span className="text-[#5a5a5a]">{new Date(n.createdAt).toLocaleString("ko-KR")}</span>
-                      </div>
+              {/* 미리보기 — 제목이나 본문이 있을 때만 */}
+              {(title.trim() || content.trim()) && (
+                <FieldRow label="미리보기" top>
+                  <div className="rounded-lg border border-[#ededed] p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TypeChip type={type} />
+                      <span className="ml-auto text-[12px] text-[#8a8a8a]">운영팀 · 방금</span>
                     </div>
-                    <button onClick={() => setDeleteConfirmId(n._id)} className="shrink-0 text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] bg-black/5 px-3 py-1.5 rounded-lg transition-colors">삭제</button>
+                    <h4 className="text-[14px] md:text-[15px] font-bold text-[#131313] break-keep mb-2">{title || <span className="text-[#a3a3a3]">제목 미입력</span>}</h4>
+                    <div className="text-[14px] text-[#5a5a5a]">
+                      {content.trim() ? <RenderFormattedText text={content} /> : <span className="text-[#a3a3a3]">본문 미입력</span>}
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                </FieldRow>
+              )}
+
+              <div className="flex justify-end px-5 py-4">
+                <Btn type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+                  {isSubmitting ? "발송 중..." : "통지 발송"}
+                </Btn>
+              </div>
+            </form>
+          </Panel>
         </div>
-        </Reveal>
+
+        {/* ── 발송 이력 — 남은 폭 전부. 줄을 누르면 상세 칸 ── */}
+        <section className="flex-1 min-w-0">
+          <Toolbar right={<span className="text-[12px] text-[#8a8a8a] tabular-nums">{sent.length}건</span>}>
+            <h2 className="text-[15px] font-black tracking-tight">발송 이력</h2>
+          </Toolbar>
+          {isLoading ? (
+            <div className="py-12 text-center text-[13px] text-[#8a8a8a]">불러오는 중...</div>
+          ) : (
+            <DataTable
+              columns={columns}
+              rows={sent}
+              rowKey={(n) => n._id}
+              onRowClick={(n) => setSelectedId(n._id)}
+              selectedKey={selectedId}
+              empty="발송한 통지가 없습니다."
+            />
+          )}
+        </section>
       </div>
+
+      {/* ── 이력 상세 — 본문 · 메타 · 삭제 ── */}
+      <DetailPane
+        open={!!selected}
+        onClose={() => setSelectedId(null)}
+        badge={selected ? <TypeChip type={selected.type} /> : undefined}
+        title={selected?.title}
+        footer={
+          selected ? (
+            <Btn variant="danger" className="ml-auto" onClick={() => setDeleteConfirmId(selected._id)}>
+              삭제
+            </Btn>
+          ) : undefined
+        }
+      >
+        {selected && (
+          <>
+            <dl className="mb-5">
+              <DefRow k="수신자">{selected.recipientName}</DefRow>
+              <DefRow k="발송 일시"><span className="tabular-nums">{fmtFull(selected.createdAt)}</span></DefRow>
+              <DefRow k="상태"><StateChips n={selected} wrap /></DefRow>
+              {selected.readAt && <DefRow k="읽은 시각"><span className="tabular-nums">{fmtFull(selected.readAt)}</span></DefRow>}
+              {selected.hiddenAt && <DefRow k="지운 시각"><span className="tabular-nums">{fmtFull(selected.hiddenAt)}</span></DefRow>}
+              {selected.sentBy && <DefRow k="발신 관리자">{selected.sentBy}</DefRow>}
+            </dl>
+            <p className="text-[12px] font-bold text-[#5a5a5a] mb-2">본문</p>
+            <div className="text-[14px] text-[#131313] leading-relaxed break-keep">
+              <RenderFormattedText text={selected.content || ""} />
+            </div>
+          </>
+        )}
+      </DetailPane>
 
       {/* ── 통지 기록 삭제 확인 — 수신자 알림함에서도 사라지므로 되돌릴 수 없다 ── */}
       <ConfirmDialog
@@ -293,6 +365,6 @@ export default function AdminNotifyPage() {
       />
 
       {noticeEl}
-    </main>
+    </AdminPage>
   );
 }

@@ -1,31 +1,31 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Reveal, LuxStyles } from "../components/Lux";
-// 📌 관리자 공용 UI — 권한 가드·히어로·섹션 머리는 여기서 가져온다.
-//    예전에는 이 파일이 ADMIN_USERS 와 SectionHead 를 따로 들고 있었고,
-//    그 SectionHead 만 gap-4 가 빠져 다른 관리자 화면과 미세하게 어긋나 있었다.
-import { SectionHead, useAdminGuard, AdminHero } from "./ui";
+import Link from "next/link";
+// 📌 관리자 공용 UI — 권한 가드 · 페이지 틀 · 숫자 줄 · 패널은 모두 여기서 가져온다.
+import { useAdminGuard, AdminPage, StatRow, Panel, PanelGrid, Switch, DefRow, StatusChip } from "./ui";
 
-// 📌 섹션 안 작은 블록의 머리 — 라벨(+우측 요약값) 한 줄.
-//    같은 역할인데 화면 안에서 mb-4 / mb-5 / block 으로 갈려 있어 한 곳으로 모은다.
-function BlockHead({ label, right }: { label: string; right?: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 mb-5">
-      <span className="text-[10px] font-black tracking-[0.25em] text-[#8a8a8a] uppercase">{label}</span>
-      {right}
-    </div>
-  );
-}
+// 📌 대시보드 (2026-09 개편)
+//    예전엔 가운데 좁은 폭(max-w-5xl)에 번호 섹션(01 · 02)을 세로로 쌓고, 지표 · 차트가 전부 빨강이었다.
+//    지금은 전체 폭에 네 줄 — 숫자 줄 → [확인할 일 · 서버 현황] → [골든타임 · 멤버 증감] → [문의 · 콘텐츠].
+//    넓은 화면에서는 패널 두 개가 나란히, 좁으면 하나씩. 빨강은 "처리할 게 남았다"는 표시에만 쓴다.
 
-// 📌 지표 숫자 아래 라벨 — 핵심 지표줄과 디스코드 지표줄이 서로 다른 크기·자간을 쓰고 있었다.
-const STAT_LABEL = "text-[9px] md:text-[10px] font-bold tracking-[0.2em] text-[#5a5a5a] mt-1.5 uppercase";
+// 📌 히트맵 칸 강도 — 빨강 농도 대신 잉크(#131313) 알파 다섯 단계. 0 은 가장 옅게, 데이터 없는 칸은 더 옅게
+const HEAT_ALPHA = [0.05, 0.14, 0.3, 0.48, 0.68, 0.9];
+const heatColor = (v: number, max: number) => {
+  if (v < 0) return "rgba(19,19,19,0.03)";
+  const step = v <= 0 ? 0 : Math.min(5, Math.max(1, Math.ceil((v / max) * 5)));
+  return `rgba(19,19,19,${HEAT_ALPHA[step]})`;
+};
+
+// 📌 패널 안 작은 숫자 · 날짜 글자 (메타 전용 #8a8a8a)
+const META = "text-[12px] text-[#8a8a8a] tabular-nums";
 
 export default function AdminHubPage() {
   const { isAdmin, gate } = useAdminGuard();
 
   const [stats, setStats] = useState({
-    inquiries: 0, pending: 0, applies: 0, codes: 0, payoutPending: 0,
+    inquiries: 0, pending: 0, applies: 0, appliesPending: 0, codes: 0, payoutPending: 0,
     weeklyInquiries: 0, weeklyApplies: 0,
     codeUses: 0, honors: 0,
     postCounts: { 공지사항: 0, 이벤트: 0, 대회: 0, 구인: 0 },
@@ -88,6 +88,8 @@ export default function AdminHubPage() {
         inquiries: inquiries.length,
         pending: inquiries.filter((i: any) => i.status === "접수 중").length,
         applies: applies.length,
+        // 📌 "확인할 일" 줄의 심사 중 지원 — 좌측 메뉴 숫자와 같은 규칙(상태가 비면 심사 중)
+        appliesPending: applies.filter((a: any) => (a.status || "심사 중") === "심사 중").length,
         codes: codes.length,
         codeUses: codes.reduce((sum: number, c: any) => sum + (c.usedCount ?? c.usedBy?.length ?? 0), 0),
         honors: Array.isArray(honors?.data) ? honors.data.length : 0,
@@ -150,194 +152,209 @@ export default function AdminHubPage() {
   // 로딩 중 / 권한 없음 화면은 공용 가드가 낸다 — 훅을 모두 부른 뒤에 빠져나가야 한다.
   if (gate) return gate;
 
+  // 📌 숫자 줄에서 누르면 처리 화면으로 가는 값 — 칸 전체가 아니라 숫자에만 링크를 건다
+  const statLink = (href: string, n: number) => (
+    <Link href={href} className="hover:underline underline-offset-4 decoration-2 outline-none focus-visible:underline">{n.toLocaleString()}</Link>
+  );
+
+  // 📌 확인할 일 — 처리할 게 남은 곳으로 가는 줄. 0 이면 "없음"
+  const todos = [
+    { l: "미답변 문의", n: stats.pending, href: "/support?admin=1" },
+    { l: "심사 중 지원", n: stats.appliesPending, href: "/recruit?admin=1" },
+    { l: "지급 대기", n: stats.payoutPending, href: "/payouts" },
+  ];
+
+  // 📌 서버 현황 — 불러오기 전(또는 실패)에도 판 자리는 둔다. 값만 "—"
+  const ds = discordStats;
+  const discordCells = [
+    { l: "부스트", n: ds?.boostCount, sub: ds ? `Tier ${ds.boostTier}` : undefined },
+    { l: "역할", n: ds?.roleCount },
+    { l: "텍스트 채널", n: ds?.textChannels },
+    { l: "음성 채널", n: ds?.voiceChannels },
+    { l: "카테고리", n: ds?.categories },
+    { l: "이모지·스티커", n: ds ? ds.emojiCount + ds.stickerCount : undefined },
+  ];
+
+  const inquiryMax = Math.max(...stats.inquiryDaily.map((x) => x.count), 1);
+
+  // 📌 멤버 증감 선 — 칸 폭을 끝까지 쓰도록 늘여 그리고(preserveAspectRatio none), 선 굵기는 고정
+  const memberChart = (() => {
+    if (memberDaily.length < 2) return null;
+    const w = 600, h = 100;
+    const vals = memberDaily.map((d) => d.members);
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const range = max - min || 1;
+    const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - 6 - ((v - min) / range) * (h - 12)}`).join(" ");
+    const delta = vals[vals.length - 1] - vals[0];
+    return { w, h, vals, pts, delta };
+  })();
+
   return (
-    <main className="w-full flex-1 flex flex-col relative">
-      <LuxStyles />
+    <AdminPage
+      title="대시보드"
+      actions={
+        // 📌 점검 모드 — 글자를 눌러도 켜고 끈다(label 이 스위치 단추를 가리킨다)
+        <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+          <span className={`text-[13px] font-bold ${maintenance ? "text-[#d01634]" : "text-[#5a5a5a]"}`}>{maintenance ? "점검 중" : "점검 모드"}</span>
+          <Switch on={maintenance} onChange={() => toggleMaintenance()} disabled={maintenanceLoading} label="점검 모드" />
+        </label>
+      }
+      bodyClass="space-y-5"
+    >
+      {/* 1 — 숫자 줄 */}
+      <StatRow
+        items={[
+          { label: "전체 멤버", value: stats.memberCount.toLocaleString() },
+          {
+            label: "현재 온라인",
+            value: (
+              <span className="inline-flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                {stats.onlineCount.toLocaleString()}
+              </span>
+            ),
+          },
+          { label: "미답변 문의", value: statLink("/support?admin=1", stats.pending), tone: stats.pending > 0 ? "bad" : undefined },
+          { label: "지급 대기", value: statLink("/payouts", stats.payoutPending), tone: stats.payoutPending > 0 ? "bad" : undefined },
+        ]}
+      />
 
-      {/* 이동 안내는 뺐다 — 좁은 화면에서는 좌측 패널이 아니라 상단 칩 바라 가리키는 대상이 달라진다 */}
-      <AdminHero size="lg" width="max-w-5xl" title="관리자 대시보드" desc="서버 · 사이트 현황 요약" />
-
-      {/* flex-col 에는 gap-* 가 먹지 않는다 (Tailwind v4) — 섹션 간격은 space-y-* 로 준다 */}
-      <div className="w-full max-w-5xl mx-auto px-6 pb-16 flex-1 flex flex-col space-y-14">
-
-      {/* 01 — 핵심 지표 */}
-      <Reveal>
-      <section>
-        <SectionHead
-          no="01"
-          title="핵심 지표"
-          right={
-            <div className="flex items-center gap-2.5 shrink-0">
-              <span className={`text-[10px] font-black tracking-wider ${maintenance ? "text-[#e91e3f]" : "text-[#5a5a5a]"}`}>{maintenance ? "🔧 점검 중" : "점검 모드"}</span>
-              <button onClick={toggleMaintenance} disabled={maintenanceLoading} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors disabled:opacity-40 ${maintenance ? "bg-[#e91e3f]" : "bg-black/10"}`}>
-                <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-transform duration-200 ${maintenance ? "translate-x-5" : ""}`}></div>
-              </button>
-            </div>
-          }
-        />
-
-        <div className="grid grid-cols-2 md:grid-cols-4 border-y border-black/10 divide-x divide-black/[0.06]">
-          {[
-            { n: stats.memberCount, l: "전체 멤버", accent: false },
-            { n: stats.onlineCount, l: "현재 온라인", accent: false, dot: true },
-            { n: stats.pending, l: "미답변 문의", accent: stats.pending > 0 },
-            { n: stats.payoutPending, l: "지급 대기", accent: stats.payoutPending > 0 },
-          ].map((s, i) => (
-            <div key={i} className="px-4 py-7 text-center">
-              <div className={`text-2xl md:text-3xl font-black tracking-tight flex items-center justify-center gap-2 ${s.accent ? "text-[#e91e3f]" : "text-[#131313]"}`}>
-                {s.dot && <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>}
-                {s.n.toLocaleString()}
-              </div>
-              <div className={STAT_LABEL}>{s.l}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* 디스코드 서버 현황 — 플랫 행 */}
-        {discordStats && (
-          <div className="border-b border-black/[0.06] py-6">
-            <BlockHead
-              label="Discord 서버 현황"
-              right={<span className="text-[10px] font-bold text-[#5a5a5a]">개설 D+{discordStats.ageDays.toLocaleString()}일</span>}
-            />
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
-              {[
-                { n: discordStats.boostCount, l: "부스트", sub: `Tier ${discordStats.boostTier}`, accent: true },
-                { n: discordStats.roleCount, l: "역할" },
-                { n: discordStats.textChannels, l: "텍스트 채널" },
-                { n: discordStats.voiceChannels, l: "음성 채널" },
-                { n: discordStats.categories, l: "카테고리" },
-                { n: discordStats.emojiCount + discordStats.stickerCount, l: "이모지·스티커" },
-              ].map((s: any, i: number) => (
-                <div key={i} className="text-center">
-                  <div className={`text-xl md:text-2xl font-black tracking-tight ${s.accent ? "text-[#e91e3f]" : "text-[#131313]"}`}>{s.n.toLocaleString()}</div>
-                  <div className={STAT_LABEL}>{s.l}</div>
-                  {s.sub && <div className="text-[9px] font-bold text-[#c01734] mt-0.5">{s.sub}</div>}
-                </div>
-              ))}
-            </div>
+      {/* 2 — 확인할 일 · 서버 현황 (두 판 높이를 맞춘다: 그리드 칸 안에서 h-full) */}
+      <PanelGrid>
+        <Panel title="확인할 일" flush className="h-full">
+          <div className="divide-y divide-[#ededed]">
+            {todos.map((t) => (
+              <Link
+                key={t.l}
+                href={t.href}
+                className="flex items-center gap-3 px-5 py-3.5 hover:bg-[#f7f7f7] transition-colors outline-none focus-visible:bg-[#f7f7f7]"
+              >
+                <span className="min-w-0 flex-1 text-[14px] font-bold">{t.l}</span>
+                {t.n > 0 ? (
+                  <span className="text-[14px] font-black text-[#d01634] tabular-nums">{t.n.toLocaleString()}건</span>
+                ) : (
+                  <span className="text-[13px] text-[#a3a3a3]">없음</span>
+                )}
+                <svg aria-hidden viewBox="0 0 24 24" className="w-4 h-4 shrink-0 text-[#a3a3a3]" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 6l6 6-6 6" />
+                </svg>
+              </Link>
+            ))}
           </div>
-        )}
-      </section>
-      </Reveal>
+        </Panel>
 
-      {/* 02 — 활동 분석 */}
-      <Reveal>
-      <section>
-        <SectionHead no="02" title="활동 분석" />
+        <Panel
+          title="Discord 서버 현황"
+          right={ds ? <span className={META}>개설 D+{ds.ageDays.toLocaleString()}일</span> : undefined}
+          flush
+          className="h-full"
+        >
+          {/* 칸 사이 선은 1px 틈으로 — StatRow 와 같은 방식 */}
+          <div className="grid grid-cols-3 gap-px bg-[#ededed] rounded-b-2xl overflow-hidden">
+            {discordCells.map((s) => (
+              <div key={s.l} className="px-4 md:px-5 py-4 bg-white min-w-0">
+                <p className="text-[12px] font-bold text-[#5a5a5a] truncate">{s.l}</p>
+                <p className="mt-1.5 text-[20px] font-black tracking-[-0.02em] tabular-nums leading-none">{s.n != null ? s.n.toLocaleString() : "—"}</p>
+                {s.sub && <p className={`mt-1.5 ${META}`}>{s.sub}</p>}
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </PanelGrid>
 
-        {/* 요일×시간대 온라인 히트맵 — 좁은 화면에서 페이지가 아니라 이 블록만 가로로 스크롤된다 */}
-        {heatmap.hasData && (
-          <div className="border-b border-black/[0.06] pb-6 mb-6 overflow-x-auto no-bar">
-            <div className="min-w-[560px]">
-              <BlockHead
-                label="활동 골든타임 (최근 7일 · 평균 온라인)"
-                right={<span className="text-[10px] font-bold text-[#5a5a5a]">피크 {Math.round(heatmap.max)}명</span>}
-              />
-              <div className="grid gap-[3px]" style={{ gridTemplateColumns: "28px repeat(24, 1fr)" }}>
+      {/* 3 — 활동 골든타임 · 멤버 증감 */}
+      <PanelGrid>
+        <Panel
+          title="활동 골든타임"
+          desc="최근 7일 · 평균 온라인"
+          right={heatmap.hasData ? <span className={META}>피크 {Math.round(heatmap.max)}명</span> : undefined}
+          className="h-full"
+        >
+          {/* 좁은 화면에서는 페이지가 아니라 이 판만 가로로 스크롤된다 */}
+          <div className="overflow-x-auto no-bar">
+            <div className="min-w-[420px]">
+              <div className="grid gap-[2px]" style={{ gridTemplateColumns: "24px repeat(24, minmax(0, 1fr))" }}>
                 <div></div>
                 {Array.from({ length: 24 }, (_, h) => (
-                  <div key={h} className="text-center text-[8px] font-bold text-[#5a5a5a]">{h % 3 === 0 ? h : ""}</div>
+                  <div key={h} className="text-center text-[11px] text-[#8a8a8a] tabular-nums leading-4">{h % 3 === 0 ? h : ""}</div>
                 ))}
                 {["일", "월", "화", "수", "목", "금", "토"].map((dayName, d) => (
                   <React.Fragment key={d}>
-                    <div className="text-[9px] font-bold text-[#8a8a8a] flex items-center">{dayName}</div>
+                    <div className="text-[12px] font-bold text-[#5a5a5a] flex items-center">{dayName}</div>
                     {heatmap.avg[d].map((v, h) => (
                       <div
                         key={h}
                         title={v >= 0 ? `${dayName} ${h}시 · 평균 ${Math.round(v)}명` : "데이터 없음"}
-                        className="aspect-square rounded-[3px]"
-                        style={{ backgroundColor: v < 0 ? "rgba(0,0,0,0.03)" : `rgba(233,30,63,${0.08 + (v / heatmap.max) * 0.85})` }}
+                        className="aspect-square"
+                        style={{ backgroundColor: heatColor(v, heatmap.max) }}
                       ></div>
                     ))}
                   </React.Fragment>
                 ))}
               </div>
               {/* 표본이 적을 때 값이 튄다는 건 화면만 봐서는 모른다 — 그것만 남긴다 */}
-              <p className="text-[9px] text-[#5a5a5a] mt-3">데이터가 쌓일수록 정확해집니다</p>
+              <p className="mt-3 text-[12px] text-[#5a5a5a]">데이터가 쌓일수록 정확해집니다</p>
             </div>
           </div>
-        )}
+        </Panel>
 
-        {/* 멤버 증감 (최근 30일) */}
-        {memberDaily.length >= 2 && (() => {
-          const w = 600, h = 80;
-          const vals = memberDaily.map((d) => d.members);
-          const min = Math.min(...vals), max = Math.max(...vals);
-          const range = max - min || 1;
-          const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - 6 - ((v - min) / range) * (h - 12)}`).join(" ");
-          const delta = vals[vals.length - 1] - vals[0];
-          return (
-            <div className="border-b border-black/[0.06] pb-6 mb-6">
-              <BlockHead
-                label={`멤버 증감 (최근 ${memberDaily.length}일)`}
-                right={<span className={`text-[11px] font-black ${delta >= 0 ? "text-emerald-700" : "text-[#e91e3f]"}`}>{delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toLocaleString()}명</span>}
-              />
-              <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-20 overflow-visible">
-                <defs>
-                  <linearGradient id="memberFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#e91e3f" stopOpacity="0.2" />
-                    <stop offset="100%" stopColor="#e91e3f" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <polygon points={`0,${h} ${pts} ${w},${h}`} fill="url(#memberFill)" />
-                <polyline points={pts} fill="none" stroke="#e91e3f" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <Panel
+          title="멤버 증감"
+          desc={memberDaily.length >= 2 ? `최근 ${memberDaily.length}일` : undefined}
+          right={
+            memberChart ? (
+              <StatusChip tone={memberChart.delta >= 0 ? "ok" : "bad"}>
+                {memberChart.delta >= 0 ? "▲" : "▼"} {Math.abs(memberChart.delta).toLocaleString()}명
+              </StatusChip>
+            ) : undefined
+          }
+          className="h-full"
+        >
+          {memberChart ? (
+            <>
+              <svg viewBox={`0 0 ${memberChart.w} ${memberChart.h}`} preserveAspectRatio="none" className="block w-full h-32 overflow-visible">
+                <polygon points={`0,${memberChart.h} ${memberChart.pts} ${memberChart.w},${memberChart.h}`} fill="#131313" fillOpacity="0.05" />
+                <polyline points={memberChart.pts} fill="none" stroke="#131313" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
               </svg>
-              <div className="flex justify-between text-[9px] font-bold text-[#5a5a5a] mt-2">
-                <span>{memberDaily[0].date.slice(5).replace("-", "/")} · {vals[0].toLocaleString()}명</span>
-                <span>{memberDaily[memberDaily.length - 1].date.slice(5).replace("-", "/")} · {vals[vals.length - 1].toLocaleString()}명</span>
+              <div className={`flex justify-between gap-3 mt-2 ${META}`}>
+                <span>{memberDaily[0].date.slice(5).replace("-", "/")} · {memberChart.vals[0].toLocaleString()}명</span>
+                <span>{memberDaily[memberDaily.length - 1].date.slice(5).replace("-", "/")} · {memberChart.vals[memberChart.vals.length - 1].toLocaleString()}명</span>
               </div>
-            </div>
-          );
-        })()}
+            </>
+          ) : (
+            <p className="py-10 text-center text-[13px] text-[#5a5a5a]">데이터 없음</p>
+          )}
+        </Panel>
+      </PanelGrid>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-          {/* 최근 7일 문의 추이 바 차트 */}
-          <div>
-            <BlockHead
-              label="최근 7일 문의"
-              right={<span className="text-[10px] font-bold text-[#5a5a5a]">총 {stats.weeklyInquiries}건</span>}
-            />
-            <div className="flex items-end justify-between gap-2 h-24">
-              {stats.inquiryDaily.map((d, i) => {
-                const max = Math.max(...stats.inquiryDaily.map((x) => x.count), 1);
-                return (
-                  // flex-col 에는 gap-* 가 먹지 않는다 (Tailwind v4) — 막대 위아래 간격은 마진으로 준다
-                  <div key={i} className="flex-1 flex flex-col items-center h-full justify-end">
-                    {d.count > 0 && <span className="text-[9px] font-black text-[#e91e3f] mb-1.5">{d.count}</span>}
-                    <div
-                      className={`w-full rounded-t-md transition-all ${d.count > 0 ? "bg-gradient-to-t from-[#e91e3f]/60 to-[#e91e3f]" : "bg-black/5"}`}
-                      style={{ height: d.count > 0 ? `${Math.max((d.count / max) * 100, 12)}%` : "4px" }}
-                    ></div>
-                    <span className="text-[8px] font-bold text-[#5a5a5a] mt-1.5">{d.label}</span>
-                  </div>
-                );
-              })}
-            </div>
+      {/* 4 — 최근 7일 문의 · 콘텐츠 현황 */}
+      <PanelGrid>
+        <Panel title="최근 7일 문의" right={<span className={META}>총 {stats.weeklyInquiries}건</span>} className="h-full">
+          <div className="flex items-end justify-between gap-2 h-32">
+            {stats.inquiryDaily.map((d, i) => (
+              // flex-col 에는 gap-* 가 먹지 않는다 (Tailwind v4) — 막대 위아래 간격은 마진으로 준다
+              <div key={i} className="flex-1 min-w-0 flex flex-col items-center h-full justify-end">
+                {d.count > 0 && <span className="text-[12px] font-bold text-[#131313] tabular-nums mb-1">{d.count}</span>}
+                <div
+                  className={`w-full ${d.count > 0 ? "bg-[#131313]" : "bg-[#ededed]"}`}
+                  style={{ height: d.count > 0 ? `${Math.max((d.count / inquiryMax) * 100, 12)}%` : "4px" }}
+                ></div>
+                <span className={`mt-1.5 ${META}`}>{d.label}</span>
+              </div>
+            ))}
           </div>
+        </Panel>
 
-          {/* 콘텐츠/활동 현황 — 표 형식 */}
-          <div>
-            <BlockHead label="콘텐츠 & 활동 현황" />
-            <div>
-              {[
-                { l: "게시글", v: `공지 ${stats.postCounts.공지사항} · 이벤트 ${stats.postCounts.이벤트} · 대회 ${stats.postCounts.대회} · 구인 ${stats.postCounts.구인}` },
-                { l: "문의", v: `전체 ${stats.inquiries}건 · 이번 주 ${stats.weeklyInquiries}건` },
-                { l: "구인 지원", v: `전체 ${stats.applies}건 · 이번 주 ${stats.weeklyApplies}건` },
-                { l: "쿠폰", v: `발급 ${stats.codes}개 · 누적 사용 ${stats.codeUses}회` },
-                { l: "명예의 전당", v: `수동 기록 ${stats.honors}건` },
-              ].map((row, i) => (
-                <div key={i} className="flex items-baseline justify-between gap-4 py-2 border-b border-black/[0.05] last:border-0">
-                  <span className="text-[11px] font-bold text-[#8a8a8a] shrink-0">{row.l}</span>
-                  <span className="text-[11px] font-bold text-[#5a5a5a] text-right">{row.v}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-      </Reveal>
-      </div>
-    </main>
+        <Panel title="콘텐츠 & 활동 현황" className="h-full">
+          <dl className="-my-2.5">
+            <DefRow k="게시글">공지 {stats.postCounts.공지사항} · 이벤트 {stats.postCounts.이벤트} · 대회 {stats.postCounts.대회} · 구인 {stats.postCounts.구인}</DefRow>
+            <DefRow k="문의">전체 {stats.inquiries}건 · 이번 주 {stats.weeklyInquiries}건</DefRow>
+            <DefRow k="구인 지원">전체 {stats.applies}건 · 이번 주 {stats.weeklyApplies}건</DefRow>
+            <DefRow k="쿠폰">발급 {stats.codes}개 · 누적 사용 {stats.codeUses}회</DefRow>
+            <DefRow k="명예의 전당">수동 기록 {stats.honors}건</DefRow>
+          </dl>
+        </Panel>
+      </PanelGrid>
+    </AdminPage>
   );
 }

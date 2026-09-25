@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Reveal, LuxStyles } from "../../components/Lux";
 import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import IconPicker from "../../components/IconPicker";
@@ -14,21 +13,27 @@ import {
 } from "../../arctic/productForm";
 import type { ProductForm } from "../../arctic/productForm";
 import {
+  AdminPage,
+  AdminTabs,
+  Segmented,
+  Toolbar,
+  SearchInput,
+  DataTable,
+  DetailPane,
+  DefRow,
+  StatusChip,
+  Panel,
   inputClass,
+  labelClass,
   fieldNote,
-  SectionHead,
-  FilterChips,
   EmptyRow,
-  ListFrame,
   Btn,
   Toggle,
   useNotice,
   ConfirmDialog,
   useAdminGuard,
-  AdminHero,
-  AdminTabs,
-  TableScroll,
 } from "../ui";
+import type { Column } from "../ui";
 
 // 📌 탭 구성
 //    상품·배너·쿠폰·구매내역은 ARCTIC 상점을 채우고 굴리는 일상 작업이다.
@@ -37,13 +42,18 @@ import {
 //    스크롤 끝에서 마주치게 된다 — 그래서 별도 탭으로 뺐다.
 // desc 에는 화면만 봐서는 모르는 것만 적는다 (지급 시점 · 자동 전환 주기 · 되돌릴 수 없음)
 //    '아이템'은 인벤토리·상품·시즌 패스 표기의 원천이라 맨 앞에 둔다 — 상품을 만들기 전에 먼저 등록한다.
-const TAB_META: Record<string, { title: string; desc: string }> = {
-  items: { title: "아이템 등록", desc: "여기서 등록한 표기가 인벤토리 · 상점 상품 · 시즌 패스 보상에 그대로 쓰입니다." },
-  products: { title: "상품 관리", desc: "역할 상품은 구매 시 봇이 자동 지급합니다." },
-  banners: { title: "이미지 배너", desc: "배너가 여럿이면 5초마다 자동 전환됩니다." },
-  coupons: { title: "쿠폰 관리", desc: "" },
-  orders: { title: "구매 내역", desc: "" },
-  season: { title: "시즌 전환", desc: "되돌리려면 역할을 손으로 다시 붙여야 합니다." },
+// 📌 2026-09 개편 — 목록 화면 틀 하나로 맞췄다.
+//    머리(ARCTIC · 상점 관리 · 탭 한 줄) → 검색 · 상태 토글 · 새로 만들기 한 줄 → 전체 폭 표 → 줄을 누르면 오른쪽 상세 칸.
+//    예전에는 탭마다 위에 긴 등록 폼 + 아래 목록이라, 목록을 보려면 폼을 지나 내려가야 했고 '수정'은 맨 위로 튀어 올랐다.
+//    이제 새로 만들기 · 수정은 같은 상세 칸 안의 같은 폼이다.
+const TAB_META: Record<string, { desc: string }> = {
+  items: { desc: "여기서 등록한 표기가 인벤토리 · 상점 상품 · 시즌 패스 보상에 그대로 쓰입니다." },
+  products: { desc: "역할 상품은 구매 시 봇이 자동 지급합니다." },
+  banners: { desc: "배너가 여럿이면 5초마다 자동 전환됩니다." },
+  coupons: { desc: "" },
+  // 예전 목록 아래 한 줄 안내를 머리로 올렸다
+  orders: { desc: "역할 상품은 봇이 30초 주기로 자동 지급합니다. 취소하면 XP가 환불되고 재고가 복구됩니다." },
+  season: { desc: "되돌리려면 역할을 손으로 다시 붙여야 합니다." },
 };
 
 const TAB_ORDER = [
@@ -56,12 +66,13 @@ const TAB_ORDER = [
 ];
 
 const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "완료", cancelled: "취소", refunded: "환불" };
+const STATUS_TONE: Record<string, "warn" | "ok" | "bad"> = { pending: "warn", completed: "ok", cancelled: "bad", refunded: "bad" };
 
 // 상품 유형 — 라벨·색은 lib/items.js 가 단일 원천 (상점 카드와 같은 값)
 const typeLabel = (t: string) => itemTypeLabel(t);
 function TypeBadge({ type, className = "" }: { type: string; className?: string }) {
   return (
-    <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
+    <span className={`rounded-full font-black text-white whitespace-nowrap ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
       {itemTypeLabel(type)}
     </span>
   );
@@ -82,6 +93,15 @@ function CardArt({ it, iconSize = 48 }: { it: any; iconSize?: number }) {
   );
 }
 
+// 표 줄 앞 작은 그림
+function Thumb({ it }: { it: any }) {
+  return (
+    <span className="relative block w-10 h-10 rounded-lg bg-[#f2f2f2] overflow-hidden shrink-0">
+      <CardArt it={it} iconSize={22} />
+    </span>
+  );
+}
+
 // 아이템 등록 폼 — 숫자 칸은 비울 수 있어야 해서 문자열로 든다
 type ItemForm = {
   id: string; name: string; description: string; type: string; roleId: string; icon: string; imageUrl: string;
@@ -89,46 +109,87 @@ type ItemForm = {
 };
 const EMPTY_ITEM_FORM: ItemForm = { id: "", name: "", description: "", type: "item", roleId: "", icon: "", imageUrl: "", color: "", detachOnSeason: false, visible: true, sortOrder: "" };
 
-const labelClass = "block text-xs font-bold text-[#5a5a5a] mb-2";
-
 const fmtDateTime = (v: string | Date) => {
   const d = new Date(v);
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
-// 📌 접이식 묶음 — 상품 폼은 칸이 열 개가 넘어 한 화면에 들어오지 않는다.
-//    접어 둬도 무엇이 들어 있는지 알 수 있게 요약을 한 줄 보여 준다.
+// 필수 · 선택 표시 (라벨 옆 기호)
+const Req = () => <span className="text-[#e91e3f]"> *</span>;
+const Opt = () => <span className="text-[#5a5a5a] font-medium"> (선택)</span>;
+
+// 📌 모바일 줄 카드에는 표 머리가 없다 — 값 앞에 이름을 붙이고 PC 표에서는 숨긴다
+const ML = ({ children }: { children: React.ReactNode }) => <span className="md:hidden text-[#8a8a8a]">{children} </span>;
+
+// 📌 상세 칸 안 입력 한 칸 — 칸 폭(520)이 좁아 FieldRow(이름 180px 옆)가 아니라 이름을 위에 둔다.
 //    ⚠️ 페이지 컴포넌트 안에서 정의하면 입력할 때마다 다시 마운트돼 포커스가 날아간다 — 모듈 바깥에 둔다.
-function FormGroup({
-  title,
-  summary,
-  open,
-  onToggle,
-  children,
-}: {
-  title: string;
-  summary?: string;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
+function Field({ label, hint, children }: { label: React.ReactNode; hint?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="border-b border-black/[0.06]">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full py-4 flex items-center justify-between gap-4 text-left outline-none focus:outline-none"
-      >
-        <span className="min-w-0">
-          <span className="block text-sm font-black text-[#131313] tracking-tight">{title}</span>
-          {!open && summary && <span className="block mt-1 text-[11px] text-[#5a5a5a] truncate">{summary}</span>}
-        </span>
-        <span className={`text-[10px] text-[#8a8a8a] shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>▼</span>
-      </button>
-      {open && <div className="pb-6">{children}</div>}
+    <div className="mb-4 min-w-0">
+      <div className={labelClass}>{label}</div>
+      {children}
+      {hint && <p className={fieldNote}>{hint}</p>}
     </div>
   );
 }
+// 두 칸 한 줄 (모바일은 한 칸) — 세로 간격은 Field 의 mb 로 (flex-col gap 이 안 먹는 빌드)
+function Two({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">{children}</div>;
+}
+// 📌 긴 폼의 소제목 — 예전 접이식 묶음(FormGroup)을 걷고 소제목 + 선으로만 나눈다(상세 칸이 따로 스크롤된다)
+function PaneSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="pb-1 mb-4 border-b border-[#ededed] last:border-b-0 last:mb-0 last:pb-0">
+      <h3 className="text-[14px] font-black tracking-tight mb-3">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+// 📌 표시 토글 — 표 줄(PC <tr> · 모바일 <button>) 안에 놓이므로 <button> 이 아니라 span 으로 만든다(버튼 속 버튼 금지).
+//    누르면 줄의 상세 칸이 열리지 않게 전파를 끊는다. 모양은 ui.tsx Switch 와 같은 값.
+function VisSwitch({ on, busy, onToggle }: { on: boolean; busy: boolean; onToggle: () => void }) {
+  const fire = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!busy) onToggle();
+  };
+  return (
+    <span
+      role="switch"
+      aria-checked={on}
+      aria-disabled={busy}
+      aria-label="인벤토리 표시"
+      tabIndex={0}
+      onClick={fire}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fire(e); }}
+      className={`inline-flex items-center gap-2 rounded-full cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 ${busy ? "opacity-40" : ""}`}
+    >
+      <span className={`relative shrink-0 w-9 h-5 rounded-full transition-colors ${on ? "bg-[#131313]" : "bg-[#d4d4d4]"}`}>
+        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
+      </span>
+      <span className={`text-[12px] font-bold ${on ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{on ? "표시" : "숨김"}</span>
+    </span>
+  );
+}
+
+// 📌 상세 칸 아래 줄의 저장 단추는 <form> 밖에 있다. DetailPane 이 PC 칸 · 모바일 판을 둘 다 그려 form id 를 겹쳐 쓸 수 없으니,
+//    누른 단추가 속한 칸 안의 form 을 찾아 제출한다(requestSubmit — 숫자 칸 min/max 검사 · onSubmit 은 예전 그대로).
+const submitNearest = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const f = e.currentTarget.closest('[role="dialog"]')?.querySelector("form");
+  if (!f) return;
+  if (typeof f.requestSubmit === "function") f.requestSubmit();
+  else f.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+};
+// 폼 안 숨은 제출 단추 — 입력칸에서 Enter 로 저장되던 것을 그대로 둔다
+const HiddenSubmit = () => <button type="submit" hidden aria-hidden tabIndex={-1} />;
+
+// Dropdown(라이트) 단추를 inputClass 높이 · 테두리에 맞춘다
+const DD_BTN = "min-h-10 !py-2 !px-3 !border-[#a3a3a3] !text-[14px]";
+// 상세 칸 아래 줄의 삭제 — 저장 옆에 빨간 덩어리를 두지 않고 글자만
+const DEL_BTN = "ml-auto !text-[#d01634]";
+
+type PaneKind = "" | "reg" | "product" | "banner" | "coupon" | "order";
 
 export default function AdminShopPage() {
   const { isAdmin, gate } = useAdminGuard();
@@ -150,12 +211,24 @@ export default function AdminShopPage() {
   const [cancelTarget, setCancelTarget] = useState<any>(null);
   const [showPreview, setShowPreview] = useState(false);
 
+  // 📌 상세 칸 — 한 번에 하나만 연다. 폼 탭은 그 탭의 폼 상태(id 유무)가 새로 만들기 / 수정을 가른다
+  const [pane, setPane] = useState<PaneKind>("");
+  const [orderSelId, setOrderSelId] = useState<string | null>(null);
+  // 목록 한 줄 도구 — 검색어는 탭마다 새로, 상태 토글은 탭별로 따로 둔다
+  const [q, setQ] = useState("");
+  const [regType, setRegType] = useState("");
+  const [productView, setProductView] = useState("");
+  const [bannerView, setBannerView] = useState("");
+  const [couponView, setCouponView] = useState("");
+
   // 상품 폼 — 상태 모양·기간·유형·아이템 적용 규칙은 app/arctic/productForm 공용 (상점 인라인 폼과 같다)
   const emptyForm = EMPTY_PRODUCT_FORM;
   const [form, setForm] = useState<ProductForm>(emptyForm);
   const [isRoleOpen, setIsRoleOpen] = useState(false);
   const selectedRole = guildRoles.find((r) => r.id === form.roleId);
   const linked = isLinked(form);
+
+  const closePane = useCallback(() => { setPane(""); setIsRoleOpen(false); }, []);
 
   // ── 아이템 등록 ──────────────────────────────
   const [regItems, setRegItems] = useState<any[]>([]);
@@ -197,7 +270,7 @@ export default function AdminShopPage() {
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
     setIsSavingReg(false);
-    if (res?.ok && d?.success) { setItemForm(EMPTY_ITEM_FORM); fetchRegItems(); fetchAll(); notify("저장되었습니다."); }
+    if (res?.ok && d?.success) { setItemForm(EMPTY_ITEM_FORM); fetchRegItems(); fetchAll(); closePane(); notify("저장되었습니다."); }
     else notify(d?.message || "저장에 실패했습니다.", true);
   };
 
@@ -225,10 +298,6 @@ export default function AdminShopPage() {
     if (res?.ok && d?.success) { fetchRegItems(); notify(`${d.imported || 0}개를 가져왔습니다.${d.skipped ? ` (이미 있는 ${d.skipped}개는 건너뜀)` : ""}`); }
     else notify(d?.message || "가져오기에 실패했습니다.", true);
   };
-
-  // 상품 폼 묶음 열림 상태 — 기본 정보와 가격만 펼쳐 두고 나머지는 요약으로 접는다
-  const [openGroups, setOpenGroups] = useState({ basic: true, price: true, stock: false, season: false });
-  const toggleGroup = (k: keyof typeof openGroups) => setOpenGroups((g) => ({ ...g, [k]: !g[k] }));
 
   const fetchAll = useCallback(() => {
     Promise.all([
@@ -269,9 +338,13 @@ export default function AdminShopPage() {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bannerForm),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    if (res?.ok && d?.success) { setBannerForm(EMPTY_BANNER); fetchAll(); notify("저장되었습니다."); }
+    if (res?.ok && d?.success) { setBannerForm(EMPTY_BANNER); fetchAll(); closePane(); notify("저장되었습니다."); }
     else notify(d?.message || "저장에 실패했습니다.", true);
   };
+
+  // 목록 줄 → 배너 폼 (예전 '수정' 단추 안의 값 그대로)
+  const fillBannerForm = (b: any) =>
+    setBannerForm({ id: b._id, imageUrl: b.imageUrl, title: b.title || "", subtitle: b.subtitle || "", link: b.link || "", sortOrder: String(b.sortOrder || 0), active: b.active });
 
   // ── 쿠폰 ────────────────────────────────────
   const EMPTY_COUPON = { id: "", code: "", name: "", kind: "discount", reward: "", rewardRoleId: "", rewardRoleName: "", rewardXp: "", requiredRoleId: "", requiredRoleName: "", type: "percent", value: "", maxDiscount: "", minTotal: "", maxUses: "", perUserLimit: "1", active: true, expiresAt: "" };
@@ -316,9 +389,13 @@ export default function AdminShopPage() {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(couponForm),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    if (res?.ok && d?.success) { setCouponForm(EMPTY_COUPON); fetchAll(); notify("저장되었습니다."); }
+    if (res?.ok && d?.success) { setCouponForm(EMPTY_COUPON); fetchAll(); closePane(); notify("저장되었습니다."); }
     else notify(d?.message || "저장에 실패했습니다.", true);
   };
+
+  // 목록 줄 → 쿠폰 폼 (예전 '수정' 단추 안의 값 그대로 — 만료 일시는 지역 시각으로 바꿔 넣는다)
+  const fillCouponForm = (c: any) =>
+    setCouponForm({ id: c._id, code: c.code, name: c.name || "", kind: c.kind || "discount", reward: c.reward || "", rewardRoleId: c.rewardRoleId || "", rewardRoleName: c.rewardRoleName || "", rewardXp: c.rewardXp ? String(c.rewardXp) : "", requiredRoleId: c.requiredRoleId || "", requiredRoleName: c.requiredRoleName || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: c.expiresAt ? new Date(new Date(c.expiresAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "" });
 
   // ── 시즌 전환 (디스코드 표기 떼기) ────────────
   //    되돌리려면 역할을 손으로 다시 붙여야 하므로, 미리보기를 통과해야 실행 버튼이 열린다
@@ -356,13 +433,26 @@ export default function AdminShopPage() {
   const fillItemForm = useCallback((it: any) => setForm(formFromShopItem(it)), []);
 
   // 📌 상점 카드의 '수정' 링크(?edit=<id>)로 들어오면 해당 상품을 폼에 채워 둔다
+  //    상세 칸은 처음 한 번만 연다 — 저장 뒤 목록을 다시 불러와도 칸이 저절로 다시 열리지 않게
   const editId = searchParams.get("edit");
+  const editOpened = useRef<string | null>(null);
   useEffect(() => {
     if (!editId || items.length === 0) return;
     const it = items.find((x) => x._id === editId);
     if (!it) return;
     fillItemForm(it);
+    if (editOpened.current !== editId) { editOpened.current = editId; setPane("product"); }
   }, [editId, items, fillItemForm]);
+
+  // 📌 탭을 옮기면 열린 상세 칸 · 검색어를 비운다 (렌더 중 조정 — 이펙트로 한 박자 늦게 닫히지 않게)
+  const [paneTab, setPaneTab] = useState(tab);
+  if (paneTab !== tab) {
+    setPaneTab(tab);
+    setPane("");
+    setOrderSelId(null);
+    setQ("");
+    setIsRoleOpen(false);
+  }
 
   // 📌 기간제 역할 — 켠 기간(값이 들어 있는 칸)만 판매 목록에 올린다 (공용 규칙)
   const buildDurations = () => buildFormDurations(form);
@@ -374,7 +464,7 @@ export default function AdminShopPage() {
       body: JSON.stringify(toPayload(form, selectedRole?.name || "")),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    if (res?.ok && d?.success) { setForm(emptyForm); fetchAll(); fetchRegItems(); notify("저장되었습니다."); }
+    if (res?.ok && d?.success) { setForm(emptyForm); fetchAll(); fetchRegItems(); closePane(); notify("저장되었습니다."); }
     else notify(d?.message || "저장에 실패했습니다.", true);
   };
 
@@ -383,7 +473,8 @@ export default function AdminShopPage() {
     const api = { item: "/api/shop/items", banner: "/api/shop/banners", coupon: "/api/shop/coupons", reg: "/api/admin/items" }[deleteTarget.kind];
     const res = await fetch(`${api}?id=${deleteTarget.id}`, { method: "DELETE" }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    if (res?.ok) { fetchAll(); fetchRegItems(); }
+    // 지운 줄의 상세 칸은 닫는다
+    if (res?.ok) { fetchAll(); fetchRegItems(); closePane(); }
     // 아이템은 참조 상품이 있으면 서버가 409 로 막는다 — 이유를 그대로 보여 준다
     else notify(d?.message || "삭제에 실패했습니다.", true);
     setDeleteTarget(null);
@@ -404,284 +495,443 @@ export default function AdminShopPage() {
   if (gate) return gate;
 
   const meta = TAB_META[tab];
-  const shownOrders = orderFilter ? orders.filter((o) => o.status === orderFilter) : orders;
   const pendingCount = orders.filter((o) => o.status === "pending").length;
+  const shownOrdersByStatus = orderFilter ? orders.filter((o) => o.status === orderFilter) : orders;
 
-  // 접힌 묶음에서도 값이 보이도록 한 줄 요약을 만든다
   const discountPct = Math.min(100, Math.max(0, Number(form.discountPct) || 0));
   const salePreview = Math.max(0, Math.floor(((Number(form.price) || 0) * (100 - discountPct)) / 100));
-  const basicSummary = [linked ? "등록된 아이템" : "", form.name || "이름 없음", typeLabel(form.type), selectedRole?.name || form.roleName].filter(Boolean).join(" · ");
-  const priceSummary = Number(form.price) > 0
-    ? `${salePreview.toLocaleString()} XP${discountPct > 0 ? ` (-${discountPct}%)` : ""}${form.timed ? ` · 기간제 ${buildDurations().length}종` : ""}`
-    : "가격 미입력";
-  // 판매 상태는 묶음 밖으로 뺐으므로 요약에서도 뺀다 (항상 보이는 값을 두 번 적지 않는다)
-  const stockSummary = `${form.stock === "" ? "재고 무제한" : `재고 ${form.stock}`} · 추천 ${form.sortOrder || 0}`;
-  const seasonSummary = form.detachOnSeason ? "시즌 바뀌면 디스코드 역할 뗌" : "디스코드 역할 계속 유지";
+
+  // ── 목록 거르기 ──
+  const qq = q.trim().toLowerCase();
+  const hit = (...vals: any[]) => !qq || vals.some((v) => String(v ?? "").toLowerCase().includes(qq));
+  const roleNameOf = (id: string, fallback?: string) => guildRoles.find((r) => r.id === id)?.name || fallback || id;
+
+  const shownReg = regItems.filter((it) => (!regType || it.type === regType) && hit(it.name, it.description, it.roleId ? roleNameOf(it.roleId, it.roleName) : ""));
+  const shownProducts = items.filter((it) => (!productView || (productView === "on" ? !!it.active : !it.active)) && hit(it.name, it.description, it.roleName, typeLabel(it.type)));
+  const shownBanners = banners.filter((b) => (!bannerView || (bannerView === "on" ? !!b.active : !b.active)) && hit(b.title, b.subtitle, b.link));
+  const couponState = (c: any) => {
+    const expired = c.expiresAt && new Date(c.expiresAt) < new Date();
+    const exhausted = c.maxUses > 0 && c.usedCount >= c.maxUses;
+    return !c.active ? "중지" : expired ? "만료" : exhausted ? "소진" : "사용 가능";
+  };
+  const shownCoupons = coupons.filter((c) => (!couponView || couponState(c) === couponView) && hit(c.code, c.name));
+  const shownOrders = shownOrdersByStatus.filter((o) => hit(o.itemName, o.userName, o.contact, o.adminNote));
+
+  const noResult = "검색 결과가 없습니다.";
+  const orderSel = orderSelId ? orders.find((o) => o._id === orderSelId) : null;
+  const couponSel = couponForm.id ? coupons.find((c) => c._id === couponForm.id) : null;
+
+  // 새로 만들기 — 수정 중이던 폼이면 비우고, 쓰다 만 새 폼이면 그대로 이어 쓴다
+  const openNewReg = () => { if (itemForm.id) setItemForm(EMPTY_ITEM_FORM); setPane("reg"); };
+  const openNewProduct = () => { if (form.id) setForm(emptyForm); setIsRoleOpen(false); setPane("product"); };
+  const openNewBanner = () => { if (bannerForm.id) setBannerForm(EMPTY_BANNER); setPane("banner"); };
+  const openNewCoupon = () => { if (couponForm.id) setCouponForm(EMPTY_COUPON); setPane("coupon"); };
+
+  // ── 표 열 ─────────────────────────────────────
+  const regCols: Column<any>[] = [
+    {
+      key: "name", label: "아이템", mobile: "title",
+      render: (it) => (
+        <span className="flex items-center gap-3 min-w-0">
+          <Thumb it={it} />
+          <span className="block min-w-0 max-w-[340px]">
+            <span className="flex items-center gap-2 min-w-0">
+              <span className={`truncate font-bold ${it.visible === false ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>{it.name}</span>
+              <TypeBadge type={it.type} className="shrink-0 px-2 py-0.5 text-[10px]" />
+            </span>
+            {it.description && <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a] truncate">{it.description}</span>}
+          </span>
+        </span>
+      ),
+    },
+    { key: "role", label: "연결 역할", render: (it) => <span className="text-[#5a5a5a]">{it.roleId ? roleNameOf(it.roleId, it.roleName) : "역할 없음"}</span> },
+    {
+      key: "color", label: "색상",
+      render: (it) => {
+        const color = it.color || itemTypeColor(it.type);
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[#5a5a5a] tabular-nums">
+            <span className="w-3 h-3 rounded-full border border-black/10 shrink-0" style={{ backgroundColor: color }} />
+            {color}
+          </span>
+        );
+      },
+    },
+    { key: "usage", label: "사용", render: (it) => <span className="text-[#5a5a5a] tabular-nums">상품 {it.usage || 0}{it.passUsage > 0 ? ` · 패스 ${it.passUsage}` : ""}</span> },
+    { key: "season", label: "시즌", render: (it) => (it.type === "role" && it.detachOnSeason ? <StatusChip>시즌 뗌</StatusChip> : null) },
+    { key: "vis", label: "인벤토리", render: (it) => <VisSwitch on={it.visible !== false} busy={visBusy === it._id} onToggle={() => toggleRegVisible(it)} /> },
+  ];
+
+  const productCols: Column<any>[] = [
+    {
+      key: "name", label: "상품", mobile: "title",
+      render: (it) => (
+        <span className="flex items-center gap-3 min-w-0">
+          <Thumb it={it} />
+          <span className="block min-w-0 max-w-[320px]">
+            <span className="block truncate font-bold">{it.name}</span>
+            {it.itemId && <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a]">등록 아이템</span>}
+          </span>
+        </span>
+      ),
+    },
+    { key: "status", label: "상태", mobile: "title", render: (it) => <StatusChip tone={it.active ? "ok" : "neutral"}>{it.active ? "판매 중" : "숨김"}</StatusChip> },
+    { key: "type", label: "유형 · 역할", render: (it) => <span className="text-[#5a5a5a]">{it.type === "physical" ? "기프트카드" : `${typeLabel(it.type)} · ${it.roleName || it.roleId || "역할 없음"}`}</span> },
+    {
+      key: "price", label: "가격", align: "right",
+      render: (it) => (
+        <span className="font-bold tabular-nums whitespace-nowrap">
+          {Math.max(0, Math.floor((it.price * (100 - (it.discountPct || 0))) / 100)).toLocaleString()} XP
+          {it.discountPct > 0 && <span className="ml-1 text-[#e91e3f]">-{it.discountPct}%</span>}
+        </span>
+      ),
+    },
+    { key: "stock", label: "재고", align: "right", render: (it) => <span className="tabular-nums"><ML>재고</ML>{it.stock < 0 ? "무제한" : it.stock}</span> },
+    { key: "sold", label: "판매", align: "right", render: (it) => <span className="text-[#5a5a5a] tabular-nums">{it.soldCount || 0}개<span className="md:hidden"> 판매</span></span> },
+    { key: "sort", label: "추천", align: "right", render: (it) => <span className="text-[#5a5a5a] tabular-nums"><ML>추천</ML>{it.sortOrder || 0}</span> },
+  ];
+
+  const bannerCols: Column<any>[] = [
+    {
+      key: "banner", label: "배너", mobile: "title",
+      render: (b) => (
+        <span className="flex items-center gap-3 min-w-0">
+          <span className="block w-24 h-12 rounded-lg bg-[#f2f2f2] overflow-hidden shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={b.imageUrl} alt="" className="w-full h-full object-cover" />
+          </span>
+          <span className="block min-w-0 max-w-[360px]">
+            <span className="block truncate font-bold">{b.title || "(제목 없음)"}</span>
+            {b.subtitle && <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a] truncate">{b.subtitle}</span>}
+          </span>
+        </span>
+      ),
+    },
+    { key: "status", label: "상태", mobile: "title", render: (b) => <StatusChip tone={b.active ? "ok" : "neutral"}>{b.active ? "노출 중" : "숨김"}</StatusChip> },
+    { key: "link", label: "이동", render: (b) => (b.link ? <span className="font-bold text-[#5a5a5a]">→ {b.link}</span> : null) },
+    { key: "sort", label: "순서", align: "right", render: (b) => <span className="text-[#5a5a5a] tabular-nums"><ML>순서</ML>{b.sortOrder || 0}</span> },
+  ];
+
+  const couponCols: Column<any>[] = [
+    { key: "state", label: "상태", mobile: "title", render: (c) => { const s = couponState(c); return <StatusChip tone={s === "사용 가능" ? "ok" : "neutral"}>{s}</StatusChip>; } },
+    {
+      key: "code", label: "코드", mobile: "title",
+      render: (c) => (
+        <span className="block min-w-0 max-w-[260px]">
+          <span className="block truncate font-black">{c.code}</span>
+          {c.name && <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a] truncate">{c.name}</span>}
+        </span>
+      ),
+    },
+    { key: "kind", label: "종류", render: (c) => <StatusChip tone={c.kind === "reward" ? "info" : "neutral"}>{c.kind === "reward" ? "보상형" : "할인형"}</StatusChip> },
+    {
+      key: "benefit", label: "혜택",
+      render: (c) => (
+        <span className="font-bold">
+          {c.kind === "reward"
+            ? [c.rewardRoleName && `역할 ${c.rewardRoleName}`, c.rewardXp > 0 && `${c.rewardXp.toLocaleString()} XP`].filter(Boolean).join(" · ") || "지급 없음"
+            : <>
+                {c.type === "percent" ? `${c.value}% 할인` : `${c.value.toLocaleString()} XP 할인`}
+                {c.type === "percent" && c.maxDiscount > 0 && ` (최대 ${c.maxDiscount.toLocaleString()})`}
+              </>}
+        </span>
+      ),
+    },
+    {
+      key: "cond", label: "조건",
+      render: (c) =>
+        c.kind === "reward" && c.requiredRoleName ? <span className="text-[#5a5a5a]">{c.requiredRoleName} 전용</span>
+        : c.kind !== "reward" && c.minTotal > 0 ? <span className="text-[#5a5a5a]">{c.minTotal.toLocaleString()} XP 이상</span>
+        : null,
+    },
+    { key: "used", label: "사용", align: "right", render: (c) => <span className="text-[#5a5a5a] tabular-nums"><ML>사용</ML>{c.usedCount || 0}{c.maxUses > 0 ? ` / ${c.maxUses}` : ""}</span> },
+    { key: "per", label: "1인", align: "right", render: (c) => <span className="text-[#5a5a5a]"><ML>1인</ML>{c.perUserLimit === 0 ? "무제한" : `${c.perUserLimit}회`}</span> },
+    { key: "exp", label: "만료", render: (c) => (c.expiresAt ? <span className="text-[#8a8a8a] tabular-nums whitespace-nowrap">~ {fmtDateTime(c.expiresAt)}</span> : null) },
+  ];
+
+  const orderCols: Column<any>[] = [
+    { key: "status", label: "상태", mobile: "title", render: (o) => <StatusChip tone={STATUS_TONE[o.status] || "neutral"}>{STATUS_LABEL[o.status]}</StatusChip> },
+    { key: "item", label: "상품", mobile: "title", render: (o) => <span className="block truncate max-w-[280px] font-bold">{o.itemName}</span> },
+    { key: "type", label: "유형", render: (o) => <span className="text-[#5a5a5a]">{typeLabel(o.itemType)}</span> },
+    { key: "user", label: "구매자", render: (o) => <span className="font-bold text-[#5a5a5a]">{o.userName}</span> },
+    { key: "price", label: "금액", align: "right", render: (o) => <span className="font-bold tabular-nums whitespace-nowrap">{o.price.toLocaleString()} XP</span> },
+    { key: "at", label: "일시", render: (o) => <span className="text-[#8a8a8a] tabular-nums whitespace-nowrap">{fmtDateTime(o.createdAt)}</span> },
+    {
+      key: "memo", label: "메모",
+      render: (o) =>
+        o.error || o.adminNote ? (
+          <span className="block min-w-0 max-w-[260px]">
+            {o.error && <span className="block truncate font-bold text-[#d01634]">지급 실패: {o.error}</span>}
+            {o.adminNote && <span className="block truncate text-[#5a5a5a]">{o.adminNote}</span>}
+          </span>
+        ) : null,
+    },
+  ];
+
+  // ── 쿠폰 종류 카드 — 설명을 함께 읽어야 고를 수 있어 알약 대신 카드로 둔다 ──
+  const COUPON_KINDS = [
+    { v: "discount", l: "할인형", d: "ARCTIC 결제 시 금액 할인" },
+    { v: "reward", l: "보상형", d: "입력 즉시 역할·XP 지급" },
+  ];
+
+  const newBtn = (onClick: () => void) => <Btn onClick={onClick}>새로 만들기</Btn>;
 
   return (
-    <main className="w-full flex-1 flex flex-col relative">
-      <LuxStyles />
-
-      <AdminHero size="lg" title={meta.title} desc={meta.desc} width="max-w-4xl" />
-      <AdminTabs tabs={TAB_ORDER} current={tab} hrefOf={(id) => `/admin/shop?tab=${id}`} width="max-w-4xl" />
-
-      <div className="w-full max-w-4xl mx-auto px-6 pb-16 flex-1 flex flex-col space-y-14">
-
+    <>
+      <AdminPage
+        section="ARCTIC"
+        title={tab === "orders" ? "구매 내역" : "상점 관리"}
+        desc={meta.desc || undefined}
+        tabs={
+          <AdminTabs
+            tabs={TAB_ORDER.map((t) => (t.id === "orders" ? { ...t, n: pendingCount } : t))}
+            current={tab}
+            hrefOf={(id) => `/admin/shop?tab=${id}`}
+          />
+        }
+      >
         {/* ═══ 아이템 등록 ═══ */}
         {tab === "items" && (
           <>
-            <Reveal>
-            <section>
-              <SectionHead no="01" title={itemForm.id ? "아이템 수정" : "아이템 등록"} />
-              <form onSubmit={saveRegItem}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className={labelClass}>이름 <span className="text-[#e91e3f]">*</span></label>
-                    <input type="text" value={itemForm.name} maxLength={40} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="예: 펭귄 칭호" className={inputClass} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>설명</label>
-                    <input type="text" value={itemForm.description} maxLength={120} onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })} placeholder="인벤토리 · 카드에 한 줄" className={inputClass} />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className={labelClass}>유형 <span className="text-[#e91e3f]">*</span></label>
-                    <FilterChips options={ITEM_TYPE_OPTIONS} value={itemForm.type}
-                      onChange={(v) => setItemForm({ ...itemForm, type: v, roleId: v === "physical" ? "" : itemForm.roleId, detachOnSeason: v === "role" ? itemForm.detachOnSeason : false })} />
-                  </div>
-
-                  {itemForm.type !== "physical" && (
-                    <div className="md:col-span-2">
-                      <label className={labelClass}>
-                        연결 역할 {itemForm.type === "item" ? <span className="font-normal text-[#8a8a8a]">(선택)</span> : <span className="text-[#e91e3f]">*</span>}
-                      </label>
-                      <Dropdown
-                        theme="light"
-                        value={itemForm.roleId}
-                        onChange={(v) => setItemForm({ ...itemForm, roleId: v })}
-                        placeholder="역할을 선택하세요"
-                        options={[...(itemForm.type === "item" ? [{ value: "", label: "역할 없음 (사이트 보유)" }] : []), ...guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))]}
-                      />
-                      {itemForm.type === "item" && <p className={fieldNote}>역할이 있으면 보유자 인벤토리에 자동 표시되고 지급 시 역할도 붙습니다.</p>}
-                    </div>
+            <Toolbar
+              right={
+                <>
+                  {pendingInv.length > 0 && (
+                    <Btn variant="secondary" onClick={importInvRoles} disabled={isImporting}>
+                      {isImporting ? "가져오는 중..." : `표기 역할 가져오기 (${pendingInv.length})`}
+                    </Btn>
                   )}
+                  {newBtn(openNewReg)}
+                </>
+              }
+            >
+              <SearchInput value={q} onChange={setQ} placeholder="이름 · 설명 · 역할" />
+              <Segmented
+                options={[{ v: "", l: "전체", n: regItems.length }, ...ITEM_TYPE_OPTIONS.map((o) => ({ v: o.v, l: o.l, n: regItems.filter((i) => i.type === o.v).length }))]}
+                value={regType}
+                onChange={setRegType}
+              />
+            </Toolbar>
+            <DataTable
+              columns={regCols}
+              rows={shownReg}
+              rowKey={(it) => it._id}
+              onRowClick={(it) => { fillRegForm(it); setPane("reg"); }}
+              selectedKey={pane === "reg" ? itemForm.id : null}
+              empty={regItems.length === 0 ? "등록된 아이템이 없습니다." : noResult}
+            />
 
-                  <div className="md:col-span-2">
-                    <label className={labelClass}>아이콘</label>
-                    <IconPicker value={itemForm.icon} onChange={(v) => setItemForm({ ...itemForm, icon: v })} color={itemForm.color || itemTypeColor(itemForm.type)} inputClassName={inputClass} />
-                    <p className={fieldNote}>이미지가 없을 때 쓰입니다</p>
-                  </div>
-                  <div>
-                    <label className={labelClass}>이미지 URL</label>
-                    <input type="text" value={itemForm.imageUrl} onChange={(e) => setItemForm({ ...itemForm, imageUrl: e.target.value })} placeholder="https://..." className={inputClass} />
-                  </div>
+            <DetailPane
+              open={pane === "reg"}
+              onClose={closePane}
+              width={520}
+              title={itemForm.id ? "아이템 수정" : "아이템 등록"}
+              footer={
+                <>
+                  <Btn onClick={submitNearest} disabled={isSavingReg}>{isSavingReg ? "저장 중..." : itemForm.id ? "수정 저장" : "등록"}</Btn>
+                  {itemForm.id && <Btn variant="ghost" className={DEL_BTN} onClick={() => setDeleteTarget({ kind: "reg", id: itemForm.id })}>삭제</Btn>}
+                </>
+              }
+            >
+              <form onSubmit={saveRegItem}>
+                <Field label={<>이름<Req /></>}>
+                  <input type="text" value={itemForm.name} maxLength={40} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="예: 펭귄 칭호" className={inputClass} />
+                </Field>
+                <Field label="설명">
+                  <input type="text" value={itemForm.description} maxLength={120} onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })} placeholder="인벤토리 · 카드에 한 줄" className={inputClass} />
+                </Field>
+                <Field label={<>유형<Req /></>}>
+                  <Segmented options={ITEM_TYPE_OPTIONS} value={itemForm.type}
+                    onChange={(v) => setItemForm({ ...itemForm, type: v, roleId: v === "physical" ? "" : itemForm.roleId, detachOnSeason: v === "role" ? itemForm.detachOnSeason : false })} />
+                </Field>
 
-                  <div>
-                    <label className={labelClass}>표기 색상</label>
+                {itemForm.type !== "physical" && (
+                  <Field
+                    label={<>연결 역할{itemForm.type === "item" ? <Opt /> : <Req />}</>}
+                    hint={itemForm.type === "item" ? "역할이 있으면 보유자 인벤토리에 자동 표시되고 지급 시 역할도 붙습니다." : undefined}
+                  >
+                    <Dropdown
+                      theme="light"
+                      buttonClassName={DD_BTN}
+                      value={itemForm.roleId}
+                      onChange={(v) => setItemForm({ ...itemForm, roleId: v })}
+                      placeholder="역할을 선택하세요"
+                      options={[...(itemForm.type === "item" ? [{ value: "", label: "역할 없음 (사이트 보유)" }] : []), ...guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))]}
+                    />
+                  </Field>
+                )}
+
+                <Field label="아이콘" hint="이미지가 없을 때 쓰입니다">
+                  <IconPicker value={itemForm.icon} onChange={(v) => setItemForm({ ...itemForm, icon: v })} color={itemForm.color || itemTypeColor(itemForm.type)} inputClassName={inputClass} />
+                </Field>
+                <Field label="이미지 URL">
+                  <input type="text" value={itemForm.imageUrl} onChange={(e) => setItemForm({ ...itemForm, imageUrl: e.target.value })} placeholder="https://..." className={inputClass} />
+                </Field>
+
+                <Two>
+                  <Field label="표기 색상" hint="비우면 유형 기본색">
                     <div className="flex items-center gap-2">
                       <input type="color" value={itemForm.color || itemTypeColor(itemForm.type)} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })}
-                        className="w-11 h-11 shrink-0 rounded-lg border border-black/10 bg-white p-1" />
+                        className="w-10 h-10 shrink-0 rounded-lg border border-[#a3a3a3] bg-white p-1" />
                       <input type="text" value={itemForm.color} maxLength={7} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })} placeholder={itemTypeColor(itemForm.type)} className={inputClass} />
                     </div>
-                    <p className={fieldNote}>비우면 유형 기본색</p>
-                  </div>
-                  <div>
-                    <label className={labelClass}>정렬</label>
+                  </Field>
+                  <Field label="정렬" hint="작을수록 앞">
                     <input type="number" value={itemForm.sortOrder} onChange={(e) => setItemForm({ ...itemForm, sortOrder: e.target.value })} placeholder="0" className={inputClass} />
-                    <p className={fieldNote}>작을수록 앞</p>
-                  </div>
+                  </Field>
+                </Two>
 
-                  {itemForm.type === "role" && (
-                    <div>
-                      <label className={labelClass}>시즌 전환</label>
-                      <Toggle className="" on={itemForm.detachOnSeason} onClick={() => setItemForm({ ...itemForm, detachOnSeason: !itemForm.detachOnSeason })}
-                        onLabel="시즌 바뀌면 디스코드 역할 뗌" offLabel="디스코드 역할 계속 유지" />
-                    </div>
-                  )}
-                  <div>
-                    <label className={labelClass}>인벤토리 표시</label>
-                    <Toggle className="" on={itemForm.visible} onClick={() => setItemForm({ ...itemForm, visible: !itemForm.visible })} onLabel="표시" offLabel="숨김" />
-                  </div>
-                </div>
-
-                <div className="flex gap-3 mt-6">
-                  <Btn type="submit" disabled={isSavingReg} className="w-full md:w-auto md:px-10 py-3.5">{isSavingReg ? "저장 중..." : itemForm.id ? "수정 저장" : "등록"}</Btn>
-                  {itemForm.id && <Btn type="button" variant="ghost" onClick={() => setItemForm(EMPTY_ITEM_FORM)} className="px-6 py-3.5">취소</Btn>}
-                </div>
+                {itemForm.type === "role" && (
+                  <Field label="시즌 전환">
+                    <Toggle on={itemForm.detachOnSeason} onClick={() => setItemForm({ ...itemForm, detachOnSeason: !itemForm.detachOnSeason })}
+                      onLabel="시즌 바뀌면 디스코드 역할 뗌" offLabel="디스코드 역할 계속 유지" />
+                  </Field>
+                )}
+                <Field label="인벤토리 표시">
+                  <Toggle on={itemForm.visible} onClick={() => setItemForm({ ...itemForm, visible: !itemForm.visible })} onLabel="표시" offLabel="숨김" />
+                </Field>
+                <HiddenSubmit />
               </form>
-            </section>
-            </Reveal>
-
-            <Reveal>
-            <section>
-              <SectionHead no="02" title={`등록된 아이템 (${regItems.length})`} right={
-                pendingInv.length > 0 ? (
-                  <Btn variant="ghost" onClick={importInvRoles} disabled={isImporting} className="whitespace-nowrap">
-                    {isImporting ? "가져오는 중..." : `표기 역할 가져오기 (${pendingInv.length})`}
-                  </Btn>
-                ) : undefined
-              } />
-              {regItems.length === 0 ? <EmptyRow>등록된 아이템이 없습니다.</EmptyRow> : (
-                <TableScroll>
-                  <ListFrame>
-                    {regItems.map((it) => {
-                      const color = it.color || itemTypeColor(it.type);
-                      return (
-                        <div key={it._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                          <div className="relative w-12 h-12 rounded-lg bg-black/5 overflow-hidden shrink-0">
-                            <CardArt it={it} iconSize={26} />
-                          </div>
-                          <div className="min-w-0 md:w-56 shrink-0">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-sm font-bold truncate ${it.visible === false ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>{it.name}</span>
-                              <TypeBadge type={it.type} className="px-2 py-0.5 text-[9px] shrink-0" />
-                            </div>
-                            <span className="text-[10px] font-bold text-[#5a5a5a] truncate block">
-                              {it.roleId ? (guildRoles.find((r) => r.id === it.roleId)?.name || it.roleName || it.roleId) : "역할 없음"}
-                              {it.description ? ` · ${it.description}` : ""}
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
-                            <span className="inline-flex items-center gap-1.5 text-[11px] text-[#5a5a5a] tabular-nums">
-                              <span className="w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: color }}></span>
-                              {color}
-                            </span>
-                            <span className="text-[11px] text-[#5a5a5a] tabular-nums">상품 {it.usage || 0}{it.passUsage > 0 ? ` · 패스 ${it.passUsage}` : ""}</span>
-                            {it.type === "role" && it.detachOnSeason && <span className="text-[10px] font-bold text-[#5a5a5a] border border-black/15 px-1.5 rounded">시즌 뗌</span>}
-                            <button type="button" onClick={() => toggleRegVisible(it)} disabled={visBusy === it._id}
-                              className={`text-[10px] font-bold px-1.5 rounded border transition-colors ${it.visible === false ? "text-[#a3a3a3] border-black/10" : "text-[#e91e3f] border-[#e91e3f]/30"}`}>
-                              {it.visible === false ? "숨김" : "표시"}
-                            </button>
-                          </div>
-                          <div className="flex gap-4 shrink-0">
-                            <button type="button" onClick={() => { fillRegForm(it); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">수정</button>
-                            <button type="button" onClick={() => setDeleteTarget({ kind: "reg", id: it._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">삭제</button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </ListFrame>
-                </TableScroll>
-              )}
-            </section>
-            </Reveal>
+            </DetailPane>
           </>
         )}
 
         {/* ═══ 상품 관리 ═══ */}
         {tab === "products" && (
           <>
-            <Reveal>
-            <section>
-              <SectionHead no="01" title={form.id ? "상품 수정" : "상품 등록"} right={
-                <Btn type="button" variant="ghost" onClick={() => setShowPreview(true)} className="flex items-center gap-1.5 whitespace-nowrap">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  카드 미리보기
-                </Btn>
-              } />
+            <Toolbar right={newBtn(openNewProduct)}>
+              <SearchInput value={q} onChange={setQ} placeholder="상품명 · 역할" />
+              <Segmented
+                options={[
+                  { v: "", l: "전체", n: items.length },
+                  { v: "on", l: "판매 중", n: items.filter((it) => !!it.active).length },
+                  { v: "off", l: "숨김", n: items.filter((it) => !it.active).length },
+                ]}
+                value={productView}
+                onChange={setProductView}
+              />
+            </Toolbar>
+            {isLoading ? <EmptyRow>불러오는 중...</EmptyRow> : (
+              <DataTable
+                columns={productCols}
+                rows={shownProducts}
+                rowKey={(it) => it._id}
+                onRowClick={(it) => { fillItemForm(it); setIsRoleOpen(false); setPane("product"); }}
+                selectedKey={pane === "product" ? form.id : null}
+                empty={items.length === 0 ? "등록된 상품이 없습니다." : noResult}
+              />
+            )}
+
+            <DetailPane
+              open={pane === "product"}
+              onClose={closePane}
+              width={520}
+              title={form.id ? "상품 수정" : "상품 등록"}
+              footer={
+                <>
+                  <Btn onClick={submitNearest}>{form.id ? "수정 저장" : "상품 등록"}</Btn>
+                  <Btn variant="secondary" onClick={() => setShowPreview(true)}>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" aria-hidden>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    카드 미리보기
+                  </Btn>
+                  {form.id && <Btn variant="ghost" className={DEL_BTN} onClick={() => setDeleteTarget({ kind: "item", id: form.id })}>삭제</Btn>}
+                </>
+              }
+            >
               <form onSubmit={saveItem}>
-                <div className="border-t border-black/[0.06]">
-
-                  {/* ── 기본 정보 ── */}
-                  <FormGroup title="기본 정보" summary={basicSummary} open={openGroups.basic} onToggle={() => toggleGroup("basic")}>
-                    {/* 📌 직접 설정 | 등록된 아이템 — 아이템을 고르면 표기 필드는 채워지고 잠긴다 */}
-                    <div className="mb-4">
-                      <FilterChips options={SOURCE_OPTIONS} value={sourceOf(form)}
-                        onChange={(v) => {
-                          if (v === sourceOf(form)) return; // 이미 그 상태 — 연결 아이템이 첫 항목으로 바뀌지 않게
-                          if (v === "custom") setForm(unlinkItem(form));
-                          else if (regItems[0]) setForm(applyItem(form, regItems[0]));
-                          else notify("등록된 아이템이 없습니다. 아이템 탭에서 먼저 등록해 주세요.", true);
-                        }} />
-                      {linked && (
-                        <div className="mt-3">
-                          <Dropdown
-                            theme="light"
-                            value={form.itemId}
-                            onChange={(v) => { const it = regItems.find((x) => x._id === v); if (it) setForm(applyItem(form, it)); }}
-                            placeholder="아이템을 선택하세요"
-                            options={regItems.map((x) => ({
-                              value: x._id, label: x.name, hint: itemTypeLabel(x.type),
-                              icon: <ItemIcon icon={x.icon} imageUrl={x.imageUrl} type={x.type} size={18} color={x.color || itemTypeColor(x.type)} />,
-                            }))}
-                          />
-                          <p className={fieldNote}>
-                            <Link href="/admin/shop?tab=items" className="font-bold text-[#e91e3f] hover:underline">아이템 등록에서 수정</Link>
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mb-4">
-                      <label className={labelClass}>상품명 <span className="text-[#e91e3f]">*</span></label>
-                      <input type="text" value={form.name} disabled={linked} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: [XP] Boost+" className={`${inputClass} disabled:text-[#8a8a8a]`} />
-                    </div>
-
-                    <div className="mb-4">
-                      <label className={labelClass}>상품 유형 <span className="text-[#e91e3f]">*</span></label>
-                      {linked
-                        ? <TypeBadge type={form.type} className="inline-block px-3 py-1.5 text-[11px]" />
-                        : <FilterChips options={ITEM_TYPE_OPTIONS} value={form.type} onChange={(v) => setForm(pickProductType(form, v))} />}
-                    </div>
-
-                    <div className="mb-4">
-                      <label className={labelClass}>상품 설명</label>
-                      <textarea rows={2} value={form.description} disabled={linked} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        placeholder="상점 카드에 표시될 설명" className={`${inputClass} resize-none disabled:text-[#8a8a8a]`} />
-                    </div>
-
-                    {/* 상품 이미지는 상품 고유 값 — 아이템을 연동해도 따로 넣을 수 있다 */}
-                    <div className="mb-4">
-                      <label className={labelClass}>상품 이미지 URL</label>
-                      <input type="text" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-                        placeholder="https://..." className={inputClass} />
-                      <p className={fieldNote}>비우면 아이템 이미지·아이콘</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <label className={labelClass}>아이콘</label>
-                        <IconPicker value={form.icon} disabled={linked} onChange={(v) => setForm({ ...form, icon: v })}
-                          color={form.color || itemTypeColor(form.type)} inputClassName={`${inputClass} disabled:text-[#8a8a8a]`} />
-                        <p className={fieldNote}>이미지가 없을 때 카드에 크게</p>
+                {/* ── 기본 정보 ── */}
+                <PaneSection title="기본 정보">
+                  {/* 📌 직접 설정 | 등록된 아이템 — 아이템을 고르면 표기 필드는 채워지고 잠긴다 */}
+                  <div className="mb-4">
+                    <Segmented options={SOURCE_OPTIONS} value={sourceOf(form)}
+                      onChange={(v) => {
+                        if (v === sourceOf(form)) return; // 이미 그 상태 — 연결 아이템이 첫 항목으로 바뀌지 않게
+                        if (v === "custom") setForm(unlinkItem(form));
+                        else if (regItems[0]) setForm(applyItem(form, regItems[0]));
+                        else notify("등록된 아이템이 없습니다. 아이템 탭에서 먼저 등록해 주세요.", true);
+                      }} />
+                    {linked && (
+                      <div className="mt-3">
+                        <Dropdown
+                          theme="light"
+                          buttonClassName={DD_BTN}
+                          value={form.itemId}
+                          onChange={(v) => { const it = regItems.find((x) => x._id === v); if (it) setForm(applyItem(form, it)); }}
+                          placeholder="아이템을 선택하세요"
+                          options={regItems.map((x) => ({
+                            value: x._id, label: x.name, hint: itemTypeLabel(x.type),
+                            icon: <ItemIcon icon={x.icon} imageUrl={x.imageUrl} type={x.type} size={18} color={x.color || itemTypeColor(x.type)} />,
+                          }))}
+                        />
+                        <p className={fieldNote}>
+                          <Link href="/admin/shop?tab=items" className="font-bold text-[#e91e3f] hover:underline">아이템 등록에서 수정</Link>
+                        </p>
                       </div>
-                      <div>
-                        <label className={labelClass}>색상</label>
-                        <div className="flex items-center gap-2">
-                          <input type="color" value={form.color || itemTypeColor(form.type)} disabled={linked} onChange={(e) => setForm({ ...form, color: e.target.value })}
-                            className="w-11 h-11 shrink-0 rounded-lg border border-black/10 bg-white p-1 disabled:opacity-50" />
-                          <input type="text" value={form.color} disabled={linked} maxLength={7} onChange={(e) => setForm({ ...form, color: e.target.value })}
-                            placeholder={itemTypeColor(form.type)} className={`${inputClass} disabled:text-[#8a8a8a]`} />
-                        </div>
-                        <p className={fieldNote}>비우면 유형 기본색</p>
-                      </div>
-                    </div>
+                    )}
+                  </div>
 
-                    {/* 역할 상품일 때만 역할 선택 — 드롭다운이 아래 요소를 덮도록 열릴 때 z를 올린다 */}
-                    {(form.type === "role" || form.type === "perk" || form.type === "item") && (
+                  <Field label={<>상품명<Req /></>}>
+                    <input type="text" value={form.name} disabled={linked} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: [XP] Boost+" className={inputClass} />
+                  </Field>
+
+                  <Field label={<>상품 유형<Req /></>}>
+                    {linked
+                      ? <TypeBadge type={form.type} className="inline-block px-3 py-1.5 text-[11px]" />
+                      : <Segmented options={ITEM_TYPE_OPTIONS} value={form.type} onChange={(v) => setForm(pickProductType(form, v))} />}
+                  </Field>
+
+                  <Field label="상품 설명">
+                    <textarea rows={2} value={form.description} disabled={linked} onChange={(e) => setForm({ ...form, description: e.target.value })}
+                      placeholder="상점 카드에 표시될 설명" className={`${inputClass} resize-none`} />
+                  </Field>
+
+                  {/* 상품 이미지는 상품 고유 값 — 아이템을 연동해도 따로 넣을 수 있다 */}
+                  <Field label="상품 이미지 URL" hint="비우면 아이템 이미지·아이콘">
+                    <input type="text" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                      placeholder="https://..." className={inputClass} />
+                  </Field>
+
+                  <Field label="아이콘" hint="이미지가 없을 때 카드에 크게">
+                    <IconPicker value={form.icon} disabled={linked} onChange={(v) => setForm({ ...form, icon: v })}
+                      color={form.color || itemTypeColor(form.type)} inputClassName={inputClass} />
+                  </Field>
+
+                  <Field label="색상" hint="비우면 유형 기본색">
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={form.color || itemTypeColor(form.type)} disabled={linked} onChange={(e) => setForm({ ...form, color: e.target.value })}
+                        className="w-10 h-10 shrink-0 rounded-lg border border-[#a3a3a3] bg-white p-1 disabled:opacity-40" />
+                      <input type="text" value={form.color} disabled={linked} maxLength={7} onChange={(e) => setForm({ ...form, color: e.target.value })}
+                        placeholder={itemTypeColor(form.type)} className={inputClass} />
+                    </div>
+                  </Field>
+
+                  {/* 역할 상품일 때만 역할 선택 — 드롭다운이 아래 요소를 덮도록 열릴 때 z를 올린다 */}
+                  {(form.type === "role" || form.type === "perk" || form.type === "item") && (
+                    <Field label={<>지급할 역할{form.type === "item" ? <Opt /> : <Req />}</>}>
                       <div className={`relative ${isRoleOpen ? "z-50" : ""}`}>
-                        <label className={labelClass}>
-                          지급할 역할 {form.type === "item" ? <span className="font-normal text-[#8a8a8a]">(선택)</span> : <span className="text-[#e91e3f]">*</span>}
-                        </label>
-                        <button type="button" disabled={linked} onClick={() => setIsRoleOpen(!isRoleOpen)} className={`${inputClass} flex items-center justify-between text-left disabled:text-[#8a8a8a]`}>
+                        <button type="button" disabled={linked} onClick={() => setIsRoleOpen(!isRoleOpen)} className={`${inputClass} flex items-center justify-between gap-3 text-left`}>
                           {selectedRole ? (
-                            <span className="flex items-center gap-2.5">
+                            <span className="flex items-center gap-2.5 min-w-0">
                               <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: selectedRole.color }}></span>
-                              <span className="font-bold">{selectedRole.name}</span>
+                              <span className="font-bold truncate">{selectedRole.name}</span>
                             </span>
-                          ) : <span className="text-[#8a8a8a]">{linked ? form.roleName || "역할 없음" : "역할을 선택하세요"}</span>}
-                          {!linked && <span className="text-[10px] text-[#5a5a5a]">▼</span>}
+                          ) : <span className={linked ? "text-[#8a8a8a]" : "text-[#a3a3a3]"}>{linked ? form.roleName || "역할 없음" : "역할을 선택하세요"}</span>}
+                          {!linked && (
+                            <svg className={`w-3.5 h-3.5 shrink-0 text-[#a3a3a3] transition-transform ${isRoleOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                            </svg>
+                          )}
                         </button>
                         {isRoleOpen && !linked && (
                           <>
                             <div className="fixed inset-0 z-40" onClick={() => setIsRoleOpen(false)}></div>
-                            <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#f2f2f2]">
+                            <div className="absolute top-full left-0 w-full mt-1.5 bg-white border border-[#ededed] rounded-lg overflow-hidden shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] z-50 max-h-64 overflow-y-auto">
                               {guildRoles.map((r) => (
                                 <button key={r.id} type="button" onClick={() => { setForm({ ...form, roleId: r.id }); setIsRoleOpen(false); }}
-                                  className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 transition-colors ${form.roleId === r.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : "text-[#5a5a5a] hover:bg-black/5"}`}>
+                                  className={`w-full text-left px-3 py-2.5 text-[14px] flex items-center gap-2.5 transition-colors ${form.roleId === r.id ? "bg-[#f2f2f2] text-[#131313] font-bold" : "text-[#5a5a5a] hover:bg-[#f7f7f7] hover:text-[#131313]"}`}>
                                   <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: r.color }}></span>
                                   {r.name}
                                 </button>
@@ -690,92 +940,81 @@ export default function AdminShopPage() {
                           </>
                         )}
                       </div>
-                    )}
-                  </FormGroup>
+                    </Field>
+                  )}
+                </PaneSection>
 
-                  {/* ── 가격 · 기간 ── */}
-                  <FormGroup title="가격 · 기간" summary={priceSummary} open={openGroups.price} onToggle={() => toggleGroup("price")}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className={labelClass}>정가 (XP) <span className="text-[#e91e3f]">*</span></label>
-                        <input type="number" min={1} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="예: 500000" className={inputClass} />
-                      </div>
-                      <div>
-                        <label className={labelClass}>할인율 (%)</label>
-                        <input type="number" min={0} max={100} value={form.discountPct} onChange={(e) => setForm({ ...form, discountPct: e.target.value })} placeholder="0" className={inputClass} />
-                        {discountPct > 0 && Number(form.price) > 0 && (
-                          <p className="text-[10px] font-bold text-[#e91e3f] mt-1.5">판매가 {salePreview.toLocaleString()} XP</p>
-                        )}
-                      </div>
-                    </div>
+                {/* ── 가격 · 기간 ── */}
+                <PaneSection title="가격 · 기간">
+                  <Two>
+                    <Field label={<>정가 (XP)<Req /></>}>
+                      <input type="number" min={1} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="예: 500000" className={inputClass} />
+                    </Field>
+                    <Field label="할인율 (%)" hint={discountPct > 0 && Number(form.price) > 0 ? <span className="font-bold text-[#e91e3f]">판매가 {salePreview.toLocaleString()} XP</span> : undefined}>
+                      <input type="number" min={0} max={100} value={form.discountPct} onChange={(e) => setForm({ ...form, discountPct: e.target.value })} placeholder="0" className={inputClass} />
+                    </Field>
+                  </Two>
 
-                    {/* 📌 기간제 역할 — 역할·권한·아이템만 (기프트카드는 기간 개념이 없다) */}
-                    {form.type !== "physical" && (
-                      <div className="mt-6">
-                        <Toggle on={form.timed} onClick={() => setForm({ ...form, timed: !form.timed })}
-                          onLabel="기간제 역할" offLabel="영구 보유" />
-                        {/* 회수는 화면 밖에서 일어나는 일이라 이것만 남긴다 */}
-                        {form.timed && (
+                  {/* 📌 기간제 역할 — 역할·권한·아이템만 (기프트카드는 기간 개념이 없다) */}
+                  {form.type !== "physical" && (
+                    <div className="mb-4">
+                      <Toggle on={form.timed} onClick={() => setForm({ ...form, timed: !form.timed })}
+                        onLabel="기간제 역할" offLabel="영구 보유" />
+                      {/* 회수는 화면 밖에서 일어나는 일이라 이것만 남긴다 */}
+                      {form.timed && (
+                        <>
                           <p className={fieldNote}>기간이 지나면 봇이 역할을 자동 회수합니다 (무제한은 회수하지 않습니다).</p>
-                        )}
-
-                        {/* 기간이 열릴 때 높이까지 함께 펼친다 */}
-                        <div className="grid transition-[grid-template-rows,opacity] duration-500 ease-out" style={{ gridTemplateRows: form.timed ? "1fr" : "0fr", opacity: form.timed ? 1 : 0 }}>
-                          <div className="overflow-hidden">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                          <div className="mt-4">
+                            <Two>
                               {([{ k: "price7", d: 7 }, { k: "price30", d: 30 }] as const).map(({ k, d }) => {
                                 const raw = Number((form as any)[k]) || 0;
                                 return (
-                                  <div key={k}>
-                                    <label className={labelClass}>{d}일 가격 (XP)</label>
+                                  <Field key={k} label={`${d}일 가격 (XP)`}
+                                    hint={raw > 0
+                                      ? discountPct > 0
+                                        ? `판매가 ${Math.max(0, Math.floor((raw * (100 - discountPct)) / 100)).toLocaleString()} XP (${discountPct}% 할인)`
+                                        : `판매가 ${raw.toLocaleString()} XP`
+                                      : "비우면 이 기간은 팔지 않습니다"}>
                                     <input type="number" min={0} value={(form as any)[k]}
                                       onChange={(e) => setForm({ ...form, [k]: e.target.value })}
                                       placeholder={d === 7 ? "예: 30000" : "예: 100000"} className={inputClass} />
-                                    <p className={fieldNote}>
-                                      {raw > 0
-                                        ? discountPct > 0
-                                          ? `판매가 ${Math.max(0, Math.floor((raw * (100 - discountPct)) / 100)).toLocaleString()} XP (${discountPct}% 할인)`
-                                          : `판매가 ${raw.toLocaleString()} XP`
-                                        : "비우면 이 기간은 팔지 않습니다"}
-                                    </p>
-                                  </div>
+                                  </Field>
                                 );
                               })}
-                            </div>
-                            {/* 무제한(days 0)은 이 화면에 입력 칸이 없다 — 저장 때 값은 그대로 유지되므로 보이기라도 한다 */}
-                            {Number(form.priceInf) > 0 && (
-                              <p className={`${fieldNote} mt-3`}>
-                                무제한 옵션 <span className="font-bold text-[#5a5a5a] tabular-nums">{Number(form.priceInf).toLocaleString()} XP</span> — 기존 값이 그대로 유지됩니다
-                              </p>
-                            )}
-                            {form.timed && buildDurations().length === 0 && (
-                              <p className="text-[10px] font-bold text-amber-700 mt-3">기간 가격을 하나 이상 넣어야 기간제로 저장됩니다.</p>
-                            )}
+                            </Two>
                           </div>
-                        </div>
-                      </div>
-                    )}
-                  </FormGroup>
-
-                  {/* ── 재고 · 순서 ── */}
-                  <FormGroup title="재고 · 순서" summary={stockSummary} open={openGroups.stock} onToggle={() => toggleGroup("stock")}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className={labelClass}>재고</label>
-                        <input type="number" min={-1} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="비우면 무제한" className={inputClass} />
-                      </div>
-                      <div>
-                        <label className={labelClass}>추천 순서</label>
-                        <input type="number" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })} placeholder="0" className={inputClass} />
-                        <p className={fieldNote}>작을수록 상점 앞쪽 (추천순 기준)</p>
-                      </div>
+                          {/* 무제한(days 0)은 이 화면에 입력 칸이 없다 — 저장 때 값은 그대로 유지되므로 보이기라도 한다 */}
+                          {Number(form.priceInf) > 0 && (
+                            <p className={fieldNote}>
+                              무제한 옵션 <span className="font-bold tabular-nums">{Number(form.priceInf).toLocaleString()} XP</span> — 기존 값이 그대로 유지됩니다
+                            </p>
+                          )}
+                          {buildDurations().length === 0 && (
+                            <p className="mt-1.5 text-[12px] font-bold text-amber-700">기간 가격을 하나 이상 넣어야 기간제로 저장됩니다.</p>
+                          )}
+                        </>
+                      )}
                     </div>
-                  </FormGroup>
+                  )}
+                </PaneSection>
 
-                  {/* ── 시즌 동작 ── 기프트카드는 시즌과 무관하므로 아예 감춘다 */}
-                  {form.type !== "physical" && (
-                    <FormGroup title="시즌 동작" summary={seasonSummary} open={openGroups.season} onToggle={() => toggleGroup("season")}>
-                      {/* 시즌 전환 때 디스코드 역할만 떼고 사이트 인벤토리에는 남긴다 (등록된 아이템이면 아이템 설정을 따른다) */}
+                {/* ── 재고 · 순서 ── */}
+                <PaneSection title="재고 · 순서">
+                  <Two>
+                    <Field label="재고">
+                      <input type="number" min={-1} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="비우면 무제한" className={inputClass} />
+                    </Field>
+                    <Field label="추천 순서" hint="작을수록 상점 앞쪽 (추천순 기준)">
+                      <input type="number" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })} placeholder="0" className={inputClass} />
+                    </Field>
+                  </Two>
+                </PaneSection>
+
+                {/* ── 시즌 동작 ── 기프트카드는 시즌과 무관하므로 아예 감춘다 */}
+                {form.type !== "physical" && (
+                  <PaneSection title="시즌 동작">
+                    {/* 시즌 전환 때 디스코드 역할만 떼고 사이트 인벤토리에는 남긴다 (등록된 아이템이면 아이템 설정을 따른다) */}
+                    <div className="mb-4">
                       <Toggle disabled={form.type === "perk" || linked} on={form.type !== "perk" && form.detachOnSeason} onClick={() => setForm({ ...form, detachOnSeason: !form.detachOnSeason })}
                         onLabel="시즌 바뀌면 디스코드 역할 뗌" offLabel="디스코드 역할 계속 유지" />
                       <p className={fieldNote}>
@@ -785,81 +1024,69 @@ export default function AdminShopPage() {
                           ? "소유와 인벤토리는 그대로 두고 디스코드 표기만 뗍니다."
                           : "역할 자체가 기능인 권한 상품은 이대로 두세요."}
                       </p>
-                    </FormGroup>
-                  )}
+                    </div>
+                  </PaneSection>
+                )}
 
-                  {/* 📌 판매 상태는 접이식 묶음 밖에 둔다 — 안에 있으면 등록 화면을 끝까지 봐도 보이지 않는다 */}
-                  <div className="py-4">
-                    <label className={labelClass}>판매 상태</label>
+                {/* 📌 판매 상태는 늘 보이는 마지막 소제목으로 */}
+                <PaneSection title="판매 상태">
+                  <div className="mb-4">
                     <Toggle on={form.active} onClick={() => setForm({ ...form, active: !form.active })} onLabel="판매 중" offLabel="숨김" />
                   </div>
-                </div>
-
-                <div className="flex gap-3 mt-6">
-                  <Btn type="submit" className="w-full md:w-auto md:px-10 py-3.5">{form.id ? "수정 저장" : "상품 등록"}</Btn>
-                  {form.id && <Btn type="button" variant="ghost" onClick={() => setForm(emptyForm)} className="px-6 py-3.5">취소</Btn>}
-                </div>
+                </PaneSection>
+                <HiddenSubmit />
               </form>
-            </section>
-            </Reveal>
-
-            <Reveal>
-            <section>
-              <SectionHead no="02" title={`등록된 상품 (${items.length})`} />
-              {isLoading ? <EmptyRow>불러오는 중...</EmptyRow>
-                : items.length === 0 ? <EmptyRow>등록된 상품이 없습니다.</EmptyRow>
-                : (
-                <TableScroll>
-                  <ListFrame>
-                    {items.map((it) => (
-                      <div key={it._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                        <div className="relative w-12 h-12 rounded-lg bg-black/5 overflow-hidden shrink-0">
-                          <CardArt it={it} iconSize={26} />
-                        </div>
-                        <div className="min-w-0 md:w-48 shrink-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-[#131313] truncate">{it.name}</span>
-                            {!it.active && <span className="text-[10px] font-bold text-[#5a5a5a] border border-black/15 px-1.5 rounded shrink-0">숨김</span>}
-                            {it.itemId && <span className="text-[10px] font-bold text-[#5a5a5a] border border-black/15 px-1.5 rounded shrink-0">등록 아이템</span>}
-                          </div>
-                          <span className="text-[10px] font-bold text-[#5a5a5a]">{it.type === "physical" ? "기프트카드" : `${typeLabel(it.type)} · ${it.roleName || it.roleId || "역할 없음"}`}</span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
-                          <span className="text-[11px] font-bold text-[#e91e3f] tabular-nums">{Math.max(0, Math.floor((it.price * (100 - (it.discountPct || 0))) / 100)).toLocaleString()} XP{it.discountPct > 0 ? ` (-${it.discountPct}%)` : ""}</span>
-                          <span className="text-[11px] font-bold text-[#5a5a5a]">{it.stock < 0 ? "재고 무제한" : `재고 ${it.stock}`}</span>
-                          <span className="text-[11px] text-[#5a5a5a]">{it.soldCount || 0}개 판매</span>
-                          <span className="text-[11px] text-[#5a5a5a]">추천 {it.sortOrder || 0}</span>
-                        </div>
-                        <div className="flex gap-4 shrink-0">
-                          <button onClick={() => { fillItemForm(it); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">수정</button>
-                          <button onClick={() => setDeleteTarget({ kind: "item", id: it._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">삭제</button>
-                        </div>
-                      </div>
-                    ))}
-                  </ListFrame>
-                </TableScroll>
-              )}
-            </section>
-            </Reveal>
+            </DetailPane>
           </>
         )}
 
         {/* ═══ 이미지 배너 ═══ */}
         {tab === "banners" && (
           <>
-            <Reveal>
-            <section>
-              <SectionHead no="01" title={bannerForm.id ? "배너 수정" : "배너 등록"} />
+            <Toolbar right={newBtn(openNewBanner)}>
+              <SearchInput value={q} onChange={setQ} placeholder="제목 · 부제 · 링크" />
+              <Segmented
+                options={[
+                  { v: "", l: "전체", n: banners.length },
+                  { v: "on", l: "노출 중", n: banners.filter((b) => !!b.active).length },
+                  { v: "off", l: "숨김", n: banners.filter((b) => !b.active).length },
+                ]}
+                value={bannerView}
+                onChange={setBannerView}
+              />
+            </Toolbar>
+            {isLoading ? <EmptyRow>불러오는 중...</EmptyRow> : (
+              <DataTable
+                columns={bannerCols}
+                rows={shownBanners}
+                rowKey={(b) => b._id}
+                onRowClick={(b) => { fillBannerForm(b); setPane("banner"); }}
+                selectedKey={pane === "banner" ? bannerForm.id : null}
+                empty={banners.length === 0 ? "등록된 배너가 없습니다." : noResult}
+              />
+            )}
+
+            <DetailPane
+              open={pane === "banner"}
+              onClose={closePane}
+              width={520}
+              title={bannerForm.id ? "배너 수정" : "배너 등록"}
+              footer={
+                <>
+                  <Btn onClick={submitNearest}>{bannerForm.id ? "수정 저장" : "배너 등록"}</Btn>
+                  {bannerForm.id && <Btn variant="ghost" className={DEL_BTN} onClick={() => setDeleteTarget({ kind: "banner", id: bannerForm.id })}>삭제</Btn>}
+                </>
+              }
+            >
               <form onSubmit={saveBanner}>
-                <div className="mb-4">
-                  <label className={labelClass}>배너 이미지 URL <span className="text-[#e91e3f]">*</span></label>
+                <Field label={<>배너 이미지 URL<Req /></>}>
                   <input type="text" value={bannerForm.imageUrl} onChange={(e) => setBannerForm({ ...bannerForm, imageUrl: e.target.value })}
                     placeholder="https://..." className={inputClass} />
                   <p className={fieldNote}>
-                    권장 크기 <span className="text-[#5a5a5a] font-bold tabular-nums">2400 × 600 px</span> (4:1) · 최소 1200 × 300 px · JPG/PNG/WebP
+                    권장 크기 <span className="font-bold tabular-nums">2400 × 600 px</span> (4:1) · 최소 1200 × 300 px · JPG/PNG/WebP
                   </p>
                   <p className={fieldNote}>
-                    모바일에서는 3:1로 잘립니다 — 글자 · 로고는 가운데 <span className="text-[#5a5a5a] font-bold">가로 75%</span> 안에.
+                    모바일에서는 3:1로 잘립니다 — 글자 · 로고는 가운데 <span className="font-bold">가로 75%</span> 안에.
                   </p>
                   {bannerSize && (() => {
                     const ratio = bannerSize.w / bannerSize.h;
@@ -867,449 +1094,342 @@ export default function AdminShopPage() {
                     const offRatio = ratio < 3.4 || ratio > 4.6;
                     const ok = !tooSmall && !offRatio;
                     return (
-                      <p className={`text-[10px] mt-1.5 font-bold ${ok ? "text-emerald-700" : "text-amber-700"}`}>
+                      <p className={`mt-1.5 text-[12px] font-bold ${ok ? "text-emerald-700" : "text-amber-700"}`}>
                         현재 이미지 <span className="tabular-nums">{bannerSize.w} × {bannerSize.h} px</span> ({ratio.toFixed(2)}:1)
                         {ok ? " · 적당합니다" : tooSmall ? " · 가로가 1200px보다 작아 흐리게 보일 수 있습니다" : " · 4:1에서 벗어나 위아래가 잘립니다"}
                       </p>
                     );
                   })()}
-                </div>
+                </Field>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className={labelClass}>제목 (선택)</label>
+                <Two>
+                  <Field label={<>제목<Opt /></>}>
                     <input type="text" value={bannerForm.title} onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })}
                       placeholder="예: 시즌 한정 기프트카드" className={inputClass} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>부제 (선택)</label>
+                  </Field>
+                  <Field label={<>부제<Opt /></>}>
                     <input type="text" value={bannerForm.subtitle} onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
                       placeholder="예: 한정 수량 소진 시 조기 마감" className={inputClass} />
-                  </div>
-                </div>
+                  </Field>
+                </Two>
                 {/* 제목 · 부제가 어떻게 얹히는지는 아래 미리보기가 그대로 보여 준다 */}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  <div>
-                    <label className={labelClass}>클릭 시 이동 (선택)</label>
+                <Two>
+                  <Field label={<>클릭 시 이동<Opt /></>}>
                     <input type="text" value={bannerForm.link} onChange={(e) => setBannerForm({ ...bannerForm, link: e.target.value })}
                       placeholder="/arctic 또는 /event" className={inputClass} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>노출 순서</label>
+                  </Field>
+                  <Field label="노출 순서" hint="작을수록 먼저 노출">
                     <input type="number" value={bannerForm.sortOrder} onChange={(e) => setBannerForm({ ...bannerForm, sortOrder: e.target.value })}
                       placeholder="0" className={inputClass} />
-                    <p className={fieldNote}>작을수록 먼저 노출</p>
-                  </div>
-                </div>
+                  </Field>
+                </Two>
 
-                <div className="mb-6">
-                  <label className={labelClass}>노출 상태</label>
+                <Field label="노출 상태">
                   <Toggle on={bannerForm.active} onClick={() => setBannerForm({ ...bannerForm, active: !bannerForm.active })}
                     onLabel="노출 중" offLabel="숨김" />
-                </div>
+                </Field>
 
                 {/* 미리보기 */}
                 {bannerForm.imageUrl && (
-                  <div className="mb-6">
-                    <div className="text-[10px] font-black tracking-[0.25em] text-[#5a5a5a] uppercase mb-2">Preview</div>
-                    <div className="relative rounded-2xl overflow-hidden border border-black/10 aspect-[4/1] bg-[#ffffff]">
+                  <Field label="미리보기">
+                    <div className="relative rounded-lg overflow-hidden border border-[#ededed] aspect-[4/1] bg-white">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={bannerForm.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
                       {(bannerForm.title || bannerForm.subtitle) && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-8">
-                          {bannerForm.title && <h3 className="text-xl font-black tracking-tight text-[#131313] mb-1">{bannerForm.title}</h3>}
+                        <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-5">
+                          {bannerForm.title && <h3 className="text-[16px] font-black tracking-tight text-[#131313] mb-1">{bannerForm.title}</h3>}
                           {bannerForm.subtitle && <p className="text-[12px] text-[#131313]/85">{bannerForm.subtitle}</p>}
                         </div>
                       )}
                     </div>
-                  </div>
+                  </Field>
                 )}
-
-                <div className="flex gap-3">
-                  <Btn type="submit" className="w-full md:w-auto md:px-10 py-3.5">{bannerForm.id ? "수정 저장" : "배너 등록"}</Btn>
-                  {bannerForm.id && <Btn type="button" variant="ghost" onClick={() => setBannerForm(EMPTY_BANNER)} className="px-6 py-3.5">취소</Btn>}
-                </div>
+                <HiddenSubmit />
               </form>
-            </section>
-            </Reveal>
-
-            <Reveal>
-            <section>
-              <SectionHead no="02" title={`등록된 배너 (${banners.length})`} />
-              {isLoading ? <EmptyRow>불러오는 중...</EmptyRow>
-                : banners.length === 0 ? <EmptyRow>등록된 배너가 없습니다.</EmptyRow>
-                : (
-                <TableScroll>
-                  <ListFrame>
-                    {banners.map((b) => (
-                      <div key={b._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                        <div className="w-28 h-14 rounded-lg bg-black/5 overflow-hidden shrink-0">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={b.imageUrl} alt="" className="w-full h-full object-cover" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-[#131313] truncate">{b.title || "(제목 없음)"}</span>
-                            {!b.active && <span className="text-[10px] font-bold text-[#5a5a5a] border border-black/15 px-1.5 rounded shrink-0">숨김</span>}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
-                            {b.subtitle && <span className="text-[11px] text-[#5a5a5a] truncate">{b.subtitle}</span>}
-                            {b.link && <span className="text-[11px] font-bold text-[#5a5a5a]">→ {b.link}</span>}
-                            <span className="text-[11px] text-[#5a5a5a]">순서 {b.sortOrder || 0}</span>
-                          </div>
-                        </div>
-                        <div className="flex gap-4 shrink-0">
-                          <button onClick={() => { setBannerForm({ id: b._id, imageUrl: b.imageUrl, title: b.title || "", subtitle: b.subtitle || "", link: b.link || "", sortOrder: String(b.sortOrder || 0), active: b.active }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">수정</button>
-                          <button onClick={() => setDeleteTarget({ kind: "banner", id: b._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">삭제</button>
-                        </div>
-                      </div>
-                    ))}
-                  </ListFrame>
-                </TableScroll>
-              )}
-            </section>
-            </Reveal>
+            </DetailPane>
           </>
         )}
 
         {/* ═══ 쿠폰 관리 ═══ */}
         {tab === "coupons" && (
           <>
-            <Reveal>
-            <section>
-              <SectionHead no="01" title={couponForm.id ? "쿠폰 수정" : "쿠폰 발급"} right={
-                <Btn type="button" variant="ghost" onClick={migrateCodes} disabled={isMigrating} className="whitespace-nowrap">
-                  {isMigrating ? "이전 중..." : "예전 코드 가져오기"}
-                </Btn>
-              } />
+            <Toolbar
+              right={
+                <>
+                  <Btn variant="secondary" onClick={migrateCodes} disabled={isMigrating}>
+                    {isMigrating ? "이전 중..." : "예전 코드 가져오기"}
+                  </Btn>
+                  {newBtn(openNewCoupon)}
+                </>
+              }
+            >
+              <SearchInput value={q} onChange={setQ} placeholder="코드 · 이름" />
+              <Segmented
+                options={[
+                  { v: "", l: "전체", n: coupons.length },
+                  ...["사용 가능", "중지", "만료", "소진"].map((s) => ({ v: s, l: s, n: coupons.filter((c) => couponState(c) === s).length })),
+                ]}
+                value={couponView}
+                onChange={setCouponView}
+              />
+            </Toolbar>
+            {isLoading ? <EmptyRow>불러오는 중...</EmptyRow> : (
+              <DataTable
+                columns={couponCols}
+                rows={shownCoupons}
+                rowKey={(c) => c._id}
+                onRowClick={(c) => { fillCouponForm(c); setPane("coupon"); }}
+                selectedKey={pane === "coupon" ? couponForm.id : null}
+                empty={coupons.length === 0 ? "발급된 쿠폰이 없습니다." : noResult}
+              />
+            )}
+
+            <DetailPane
+              open={pane === "coupon"}
+              onClose={closePane}
+              width={520}
+              title={couponForm.id ? "쿠폰 수정" : "쿠폰 발급"}
+              footer={
+                <>
+                  <Btn onClick={submitNearest}>{couponForm.id ? "수정 저장" : "쿠폰 발급"}</Btn>
+                  {couponSel && couponSel.kind !== "reward" && (
+                    <Btn variant="secondary" onClick={() => { setIssueTarget(couponSel); setIssueInput(""); }}>지급</Btn>
+                  )}
+                  {couponForm.id && <Btn variant="ghost" className={DEL_BTN} onClick={() => setDeleteTarget({ kind: "coupon", id: couponForm.id })}>삭제</Btn>}
+                </>
+              }
+            >
               <form onSubmit={saveCoupon}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className={labelClass}>쿠폰 코드 <span className="text-[#e91e3f]">*</span></label>
-                    <input type="text" value={couponForm.code} onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
-                      placeholder="예: WELCOME10" className={`${inputClass} uppercase`} />
-                    <p className={fieldNote}>대문자로 저장됩니다</p>
-                  </div>
-                  <div>
-                    <label className={labelClass}>쿠폰 이름</label>
-                    <input type="text" value={couponForm.name} onChange={(e) => setCouponForm({ ...couponForm, name: e.target.value })}
-                      placeholder="예: 신규 가입 축하 쿠폰" className={inputClass} />
-                    <p className={fieldNote}>주문서에 표시될 이름</p>
-                  </div>
-                </div>
+                <PaneSection title="쿠폰">
+                  <Two>
+                    <Field label={<>쿠폰 코드<Req /></>} hint="대문자로 저장됩니다">
+                      <input type="text" value={couponForm.code} onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                        placeholder="예: WELCOME10" className={`${inputClass} uppercase`} />
+                    </Field>
+                    <Field label="쿠폰 이름" hint="주문서에 표시될 이름">
+                      <input type="text" value={couponForm.name} onChange={(e) => setCouponForm({ ...couponForm, name: e.target.value })}
+                        placeholder="예: 신규 가입 축하 쿠폰" className={inputClass} />
+                    </Field>
+                  </Two>
 
-                {/* 쿠폰 종류 — 보상형(역할·XP 지급) / 할인형(결제 할인).
-                    설명을 함께 읽어야 고를 수 있어 칩 대신 카드로 둔다 */}
-                <div className="mb-4">
-                  <label className={labelClass}>쿠폰 종류 <span className="text-[#e91e3f]">*</span></label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {[
-                      { v: "discount", l: "할인형", d: "ARCTIC 결제 시 금액 할인" },
-                      { v: "reward", l: "보상형", d: "입력 즉시 역할·XP 지급" },
-                    ].map((o) => (
-                      <button key={o.v} type="button" onClick={() => setCouponForm({ ...couponForm, kind: o.v })}
-                        className={`py-3 px-4 rounded-lg text-left border transition-colors outline-none focus:outline-none ${
-                          (couponForm.kind || "discount") === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-[#5a5a5a] border-black/10 hover:text-[#131313]"
-                        }`}>
-                        <span className="block text-xs font-bold">{o.l}</span>
-                        <span className="block text-[10px] text-[#5a5a5a] mt-0.5">{o.d}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  {/* 쿠폰 종류 — 보상형(역할·XP 지급) / 할인형(결제 할인) */}
+                  <Field label={<>쿠폰 종류<Req /></>}>
+                    <div className="grid grid-cols-2 gap-2">
+                      {COUPON_KINDS.map((o) => {
+                        const on = (couponForm.kind || "discount") === o.v;
+                        return (
+                          <button key={o.v} type="button" aria-pressed={on} onClick={() => setCouponForm({ ...couponForm, kind: o.v })}
+                            className={`min-w-0 px-3.5 py-2.5 rounded-lg text-left border transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 ${
+                              on ? "border-[#131313] ring-1 ring-[#131313]" : "border-[#a3a3a3] hover:border-[#131313]"
+                            }`}>
+                            <span className={`block text-[13px] font-bold ${on ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{o.l}</span>
+                            <span className="block mt-0.5 text-[12px] text-[#5a5a5a] break-keep">{o.d}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Field>
+                </PaneSection>
 
-                {/* ── 보상형 설정 ── */}
-                {couponForm.kind === "reward" && (
-                  <div className="mb-4 space-y-4 p-4 rounded-lg border border-black/10">
-                    <div>
-                      <label className={labelClass}>안내 문구</label>
+                {couponForm.kind === "reward" ? (
+                  /* ── 보상형 설정 ── */
+                  <PaneSection title="보상">
+                    <Field label="안내 문구" hint="유저가 쿠폰을 쓴 직후 보게 될 문구">
                       <input type="text" value={couponForm.reward || ""} onChange={(e) => setCouponForm({ ...couponForm, reward: e.target.value })}
                         placeholder="예: 시즌 참가 보상이 지급되었습니다" className={inputClass} />
-                      <p className={fieldNote}>유저가 쿠폰을 쓴 직후 보게 될 문구</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className={labelClass}>지급할 역할</label>
+                    </Field>
+                    <Two>
+                      <Field label="지급할 역할">
                         <select value={couponForm.rewardRoleId || ""}
                           onChange={(e) => setCouponForm({ ...couponForm, rewardRoleId: e.target.value, rewardRoleName: guildRoles.find((r) => r.id === e.target.value)?.name || "" })}
-                          className={`${inputClass} [&>option]:bg-[#ffffff]`}>
+                          className={inputClass}>
                           <option value="">지급 안 함</option>
                           {guildRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                         </select>
-                      </div>
-                      <div>
-                        <label className={labelClass}>지급할 XP</label>
+                      </Field>
+                      <Field label="지급할 XP" hint="역할·XP 중 하나는 지정해야 합니다">
                         <input type="number" min={0} value={couponForm.rewardXp || ""} onChange={(e) => setCouponForm({ ...couponForm, rewardXp: e.target.value })}
                           placeholder="0" className={inputClass} />
-                        <p className={fieldNote}>역할·XP 중 하나는 지정해야 합니다</p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>사용 조건 역할</label>
+                      </Field>
+                    </Two>
+                    <Field label="사용 조건 역할" hint="지정하면 해당 역할 보유자만 사용할 수 있습니다">
                       <select value={couponForm.requiredRoleId || ""}
                         onChange={(e) => setCouponForm({ ...couponForm, requiredRoleId: e.target.value, requiredRoleName: guildRoles.find((r) => r.id === e.target.value)?.name || "" })}
-                        className={`${inputClass} [&>option]:bg-[#ffffff]`}>
+                        className={inputClass}>
                         <option value="">제한 없음</option>
                         {guildRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                       </select>
-                      <p className={fieldNote}>지정하면 해당 역할 보유자만 사용할 수 있습니다</p>
-                    </div>
-                  </div>
+                    </Field>
+                  </PaneSection>
+                ) : (
+                  /* ── 할인형 설정 ── */
+                  <PaneSection title="할인">
+                    <Field label={<>할인 방식<Req /></>}>
+                      <Segmented
+                        options={[{ v: "percent", l: "정률 (%)" }, { v: "flat", l: "정액 (XP)" }]}
+                        value={couponForm.type}
+                        onChange={(v) => setCouponForm({ ...couponForm, type: v })}
+                      />
+                    </Field>
+                    <Two>
+                      <Field label={<>할인 값<Req /></>} hint={couponForm.type === "percent" ? "주문 금액의 %" : "차감할 XP"}>
+                        <input type="number" min={1} max={couponForm.type === "percent" ? 100 : undefined}
+                          value={couponForm.value} onChange={(e) => setCouponForm({ ...couponForm, value: e.target.value })}
+                          placeholder={couponForm.type === "percent" ? "10" : "50000"} className={inputClass} />
+                      </Field>
+                      <Field label="최대 할인액" hint="정률일 때만 상한 적용">
+                        <input type="number" min={0} value={couponForm.maxDiscount} disabled={couponForm.type !== "percent"}
+                          onChange={(e) => setCouponForm({ ...couponForm, maxDiscount: e.target.value })}
+                          placeholder="0 = 제한 없음" className={inputClass} />
+                      </Field>
+                    </Two>
+                  </PaneSection>
                 )}
 
-                {/* ── 할인형 설정 ── */}
-                <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 ${couponForm.kind === "reward" ? "hidden" : ""}`}>
-                  <div>
-                    <label className={labelClass}>할인 방식 <span className="text-[#e91e3f]">*</span></label>
-                    <FilterChips
-                      options={[{ v: "percent", l: "정률 (%)" }, { v: "flat", l: "정액 (XP)" }]}
-                      value={couponForm.type}
-                      onChange={(v) => setCouponForm({ ...couponForm, type: v })}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>할인 값 <span className="text-[#e91e3f]">*</span></label>
-                    <input type="number" min={1} max={couponForm.type === "percent" ? 100 : undefined}
-                      value={couponForm.value} onChange={(e) => setCouponForm({ ...couponForm, value: e.target.value })}
-                      placeholder={couponForm.type === "percent" ? "10" : "50000"} className={inputClass} />
-                    <p className={fieldNote}>{couponForm.type === "percent" ? "주문 금액의 %" : "차감할 XP"}</p>
-                  </div>
-                  <div>
-                    <label className={labelClass}>최대 할인액</label>
-                    <input type="number" min={0} value={couponForm.maxDiscount} disabled={couponForm.type !== "percent"}
-                      onChange={(e) => setCouponForm({ ...couponForm, maxDiscount: e.target.value })}
-                      placeholder="0 = 제한 없음" className={`${inputClass} disabled:opacity-40`} />
-                    <p className={fieldNote}>정률일 때만 상한 적용</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                  <div className={couponForm.kind === "reward" ? "hidden" : ""}>
-                    <label className={labelClass}>최소 주문 금액</label>
-                    <input type="number" min={0} value={couponForm.minTotal} onChange={(e) => setCouponForm({ ...couponForm, minTotal: e.target.value })}
-                      placeholder="0" className={inputClass} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>전체 사용 한도</label>
-                    <input type="number" min={0} value={couponForm.maxUses} onChange={(e) => setCouponForm({ ...couponForm, maxUses: e.target.value })}
-                      placeholder="0 = 무제한" className={inputClass} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>1인당 사용 횟수</label>
-                    <input type="number" min={0} value={couponForm.perUserLimit} onChange={(e) => setCouponForm({ ...couponForm, perUserLimit: e.target.value })}
-                      placeholder="1" className={inputClass} />
-                    <p className={fieldNote}>0 = 무제한</p>
-                  </div>
-                  <div>
-                    <label className={labelClass}>만료 일시</label>
-                    <input type="datetime-local" value={couponForm.expiresAt} onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
-                      className={inputClass} />
-                    <p className={fieldNote}>비우면 무기한</p>
-                  </div>
-                </div>
-
-                <div className="mb-6">
-                  <label className={labelClass}>사용 상태</label>
-                  <Toggle on={couponForm.active} onClick={() => setCouponForm({ ...couponForm, active: !couponForm.active })}
-                    onLabel="사용 가능" offLabel="사용 중지" />
-                </div>
-
-                <div className="flex gap-3">
-                  <Btn type="submit" className="w-full md:w-auto md:px-10 py-3.5">{couponForm.id ? "수정 저장" : "쿠폰 발급"}</Btn>
-                  {couponForm.id && <Btn type="button" variant="ghost" onClick={() => setCouponForm(EMPTY_COUPON)} className="px-6 py-3.5">취소</Btn>}
-                </div>
+                <PaneSection title="한도 · 상태">
+                  <Two>
+                    {couponForm.kind !== "reward" && (
+                      <Field label="최소 주문 금액">
+                        <input type="number" min={0} value={couponForm.minTotal} onChange={(e) => setCouponForm({ ...couponForm, minTotal: e.target.value })}
+                          placeholder="0" className={inputClass} />
+                      </Field>
+                    )}
+                    <Field label="전체 사용 한도">
+                      <input type="number" min={0} value={couponForm.maxUses} onChange={(e) => setCouponForm({ ...couponForm, maxUses: e.target.value })}
+                        placeholder="0 = 무제한" className={inputClass} />
+                    </Field>
+                    <Field label="1인당 사용 횟수" hint="0 = 무제한">
+                      <input type="number" min={0} value={couponForm.perUserLimit} onChange={(e) => setCouponForm({ ...couponForm, perUserLimit: e.target.value })}
+                        placeholder="1" className={inputClass} />
+                    </Field>
+                    <Field label="만료 일시" hint="비우면 무기한">
+                      <input type="datetime-local" value={couponForm.expiresAt} onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
+                        className={inputClass} />
+                    </Field>
+                  </Two>
+                  <Field label="사용 상태">
+                    <Toggle on={couponForm.active} onClick={() => setCouponForm({ ...couponForm, active: !couponForm.active })}
+                      onLabel="사용 가능" offLabel="사용 중지" />
+                  </Field>
+                </PaneSection>
+                <HiddenSubmit />
               </form>
-            </section>
-            </Reveal>
-
-            <Reveal>
-            <section>
-              <SectionHead no="02" title={`발급된 쿠폰 (${coupons.length})`} />
-              {isLoading ? <EmptyRow>불러오는 중...</EmptyRow>
-                : coupons.length === 0 ? <EmptyRow>발급된 쿠폰이 없습니다.</EmptyRow>
-                : (
-                <TableScroll>
-                  <ListFrame>
-                    {coupons.map((c) => {
-                      const expired = c.expiresAt && new Date(c.expiresAt) < new Date();
-                      const exhausted = c.maxUses > 0 && c.usedCount >= c.maxUses;
-                      const state = !c.active ? "중지" : expired ? "만료" : exhausted ? "소진" : "사용 가능";
-                      return (
-                        <div key={c._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                          <div className="flex items-center gap-2.5 md:w-56 shrink-0 min-w-0">
-                            <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${
-                              state === "사용 가능" ? "bg-[#e91e3f] text-white" : "bg-black/10 text-[#5a5a5a]"}`}>{state}</span>
-                            <div className="min-w-0">
-                              <div className="text-sm font-black text-[#131313] tracking-wide truncate">{c.code}</div>
-                              {c.name && <div className="text-[10px] text-[#5a5a5a] truncate">{c.name}</div>}
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1 min-w-0">
-                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded shrink-0 ${
-                              c.kind === "reward" ? "bg-[#2f6fb0]/15 text-[#2f6fb0]" : "bg-black/10 text-[#5a5a5a]"}`}>
-                              {c.kind === "reward" ? "보상형" : "할인형"}
-                            </span>
-
-                            {c.kind === "reward" ? (
-                              <span className="text-[11px] font-bold text-[#e91e3f]">
-                                {[c.rewardRoleName && `역할 ${c.rewardRoleName}`, c.rewardXp > 0 && `${c.rewardXp.toLocaleString()} XP`]
-                                  .filter(Boolean).join(" · ") || "지급 없음"}
-                              </span>
-                            ) : (
-                              <span className="text-[11px] font-bold text-[#e91e3f]">
-                                {c.type === "percent" ? `${c.value}% 할인` : `${c.value.toLocaleString()} XP 할인`}
-                                {c.type === "percent" && c.maxDiscount > 0 && ` (최대 ${c.maxDiscount.toLocaleString()})`}
-                              </span>
-                            )}
-
-                            {c.kind === "reward" && c.requiredRoleName && (
-                              <span className="text-[11px] text-[#5a5a5a]">{c.requiredRoleName} 전용</span>
-                            )}
-                            {c.kind !== "reward" && c.minTotal > 0 && <span className="text-[11px] text-[#5a5a5a]">{c.minTotal.toLocaleString()} XP 이상</span>}
-                            <span className="text-[11px] text-[#5a5a5a]">사용 {c.usedCount || 0}{c.maxUses > 0 ? ` / ${c.maxUses}` : ""}</span>
-                            <span className="text-[11px] text-[#5a5a5a]">1인 {c.perUserLimit === 0 ? "무제한" : `${c.perUserLimit}회`}</span>
-                            {c.expiresAt && <span className="text-[11px] text-[#5a5a5a]">~ {fmtDateTime(c.expiresAt)}</span>}
-                          </div>
-                          <div className="flex gap-4 shrink-0">
-                            {c.kind !== "reward" && (
-                              <button onClick={() => { setIssueTarget(c); setIssueInput(""); }} className="text-xs font-bold text-emerald-700/80 hover:text-emerald-700 transition-colors">지급</button>
-                            )}
-                            <button onClick={() => { setCouponForm({ id: c._id, code: c.code, name: c.name || "", kind: c.kind || "discount", reward: c.reward || "", rewardRoleId: c.rewardRoleId || "", rewardRoleName: c.rewardRoleName || "", rewardXp: c.rewardXp ? String(c.rewardXp) : "", requiredRoleId: c.requiredRoleId || "", requiredRoleName: c.requiredRoleName || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: c.expiresAt ? new Date(new Date(c.expiresAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "" }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">수정</button>
-                            <button onClick={() => setDeleteTarget({ kind: "coupon", id: c._id })} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">삭제</button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </ListFrame>
-                </TableScroll>
-              )}
-            </section>
-            </Reveal>
+            </DetailPane>
           </>
         )}
 
         {/* ═══ 구매 내역 ═══ */}
         {tab === "orders" && (
-          <Reveal>
-          <section>
-            <SectionHead no="01" title={`구매 내역 (${orders.length})`} />
-            {/* 필터는 제목 옆이 아니라 아래 한 줄로 — 좁은 화면에서 제목과 서로 밀지 않는다 */}
-            <FilterChips
-              className="mb-5"
-              options={[{ v: "", l: "전체" }, { v: "pending", l: `대기 ${pendingCount}` }, { v: "completed", l: "완료" }, { v: "cancelled", l: "취소" }, { v: "refunded", l: "환불" }]}
-              value={orderFilter}
-              onChange={setOrderFilter}
-            />
-            {isLoading ? <EmptyRow>불러오는 중...</EmptyRow>
-              : shownOrders.length === 0 ? <EmptyRow>구매 내역이 없습니다.</EmptyRow>
-              : (
-              <TableScroll>
-                <ListFrame>
-                  {shownOrders.map((o) => (
-                    <div key={o._id} className="py-4">
-                      <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 w-fit ${
-                          o.status === "completed" ? "bg-emerald-500/15 text-emerald-700"
-                          : o.status === "cancelled" || o.status === "refunded" ? "bg-red-500/15 text-red-600"
-                          : "bg-[#e91e3f] text-white"}`}>
-                          {STATUS_LABEL[o.status]}
-                        </span>
-                        <div className="min-w-0 md:w-44 shrink-0">
-                          <div className="text-sm font-bold text-[#131313] truncate">{o.itemName}</div>
-                          <div className="text-[10px] font-bold text-[#5a5a5a]">{typeLabel(o.itemType)} · {o.userName}</div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 flex-1">
-                          <span className="text-[11px] font-bold text-[#e91e3f] tabular-nums">{o.price.toLocaleString()} XP</span>
-                          <span className="text-[11px] text-[#5a5a5a]">{fmtDateTime(o.createdAt)}</span>
-                          {o.error && <span className="text-[11px] font-bold text-red-600">지급 실패: {o.error}</span>}
-                        </div>
-                        {o.status === "completed" && o.itemType !== "physical" && (
-                          <div className="flex gap-4 shrink-0">
-                            <button onClick={() => setCancelTarget(o)} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">환불</button>
-                          </div>
-                        )}
-                        {o.status === "pending" && (
-                          <div className="flex gap-4 shrink-0">
-                            {o.itemType === "physical" && (
-                              <button onClick={() => { setNoteTarget(o); setNoteText(""); }} className="text-xs font-bold text-emerald-700/80 hover:text-emerald-700 transition-colors">발송 처리</button>
-                            )}
-                            <button onClick={() => setCancelTarget(o)} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors">취소·환불</button>
-                          </div>
-                        )}
-                      </div>
-                      {o.contact && (
-                        <div className="mt-2 md:ml-[4.5rem] text-[11px] text-[#5a5a5a] bg-black/[0.03] border border-black/[0.06] rounded-lg px-3 py-2 whitespace-pre-wrap break-words">
-                          <span className="font-bold text-[#5a5a5a]">수령 정보 · </span>{o.contact}
-                        </div>
-                      )}
-                      {o.adminNote && <div className="mt-1.5 md:ml-[4.5rem] text-[11px] text-[#5a5a5a]">메모: {o.adminNote}</div>}
-                    </div>
-                  ))}
-                </ListFrame>
-              </TableScroll>
+          <>
+            <Toolbar>
+              <SearchInput value={q} onChange={setQ} placeholder="상품 · 구매자 · 메모" />
+              <Segmented
+                options={[
+                  { v: "", l: "전체", n: orders.length },
+                  { v: "pending", l: "대기", n: pendingCount },
+                  { v: "completed", l: "완료", n: orders.filter((o) => o.status === "completed").length },
+                  { v: "cancelled", l: "취소", n: orders.filter((o) => o.status === "cancelled").length },
+                  { v: "refunded", l: "환불", n: orders.filter((o) => o.status === "refunded").length },
+                ]}
+                value={orderFilter}
+                onChange={setOrderFilter}
+              />
+            </Toolbar>
+            {isLoading ? <EmptyRow>불러오는 중...</EmptyRow> : (
+              <DataTable
+                columns={orderCols}
+                rows={shownOrders}
+                rowKey={(o) => o._id}
+                onRowClick={(o) => { setOrderSelId(o._id); setPane("order"); }}
+                selectedKey={pane === "order" ? orderSelId : null}
+                empty={orders.length === 0 || !qq ? "구매 내역이 없습니다." : noResult}
+              />
             )}
-            <p className="mt-6 text-xs text-[#5a5a5a] leading-relaxed break-keep">
-              역할 상품은 봇이 30초 주기로 자동 지급합니다. 취소하면 XP가 환불되고 재고가 복구됩니다.
-            </p>
-          </section>
-          </Reveal>
+
+            {/* 📌 줄을 누르면 수령 정보 · 메모 · 처리 단추가 상세 칸에 모인다 (예전엔 줄마다 펼쳐 놓아 목록이 길어졌다) */}
+            <DetailPane
+              open={pane === "order" && !!orderSel}
+              onClose={closePane}
+              title={orderSel?.itemName || ""}
+              sub={orderSel ? `${orderSel.userName} · ${fmtDateTime(orderSel.createdAt)}` : undefined}
+              badge={orderSel ? <StatusChip tone={STATUS_TONE[orderSel.status] || "neutral"}>{STATUS_LABEL[orderSel.status]}</StatusChip> : undefined}
+              footer={
+                orderSel && (orderSel.status === "pending" || (orderSel.status === "completed" && orderSel.itemType !== "physical")) ? (
+                  <>
+                    {orderSel.status === "pending" && orderSel.itemType === "physical" && (
+                      <Btn onClick={() => { setNoteTarget(orderSel); setNoteText(""); }}>발송 처리</Btn>
+                    )}
+                    {orderSel.status === "pending" && (
+                      <Btn variant="secondary" onClick={() => setCancelTarget(orderSel)}>취소·환불</Btn>
+                    )}
+                    {orderSel.status === "completed" && orderSel.itemType !== "physical" && (
+                      <Btn variant="secondary" onClick={() => setCancelTarget(orderSel)}>환불</Btn>
+                    )}
+                  </>
+                ) : undefined
+              }
+            >
+              {orderSel && (
+                <dl>
+                  <DefRow k="유형">{typeLabel(orderSel.itemType)}</DefRow>
+                  <DefRow k="구매자">{orderSel.userName}</DefRow>
+                  <DefRow k="금액"><span className="tabular-nums">{orderSel.price.toLocaleString()} XP</span></DefRow>
+                  <DefRow k="일시"><span className="tabular-nums">{fmtDateTime(orderSel.createdAt)}</span></DefRow>
+                  {orderSel.error && <DefRow k="지급 실패"><span className="text-[#d01634]">{orderSel.error}</span></DefRow>}
+                  {orderSel.contact && <DefRow k="수령 정보"><span className="font-normal whitespace-pre-wrap break-words">{orderSel.contact}</span></DefRow>}
+                  {orderSel.adminNote && <DefRow k="메모"><span className="font-normal">{orderSel.adminNote}</span></DefRow>}
+                </dl>
+              )}
+            </DetailPane>
+          </>
         )}
 
         {/* ═══ 시즌 전환 ═══ */}
         {tab === "season" && (
-          <Reveal>
-          <section>
-            <SectionHead no="01" title="디스코드 역할 떼기" />
-            {/* 대상에서 무엇이 빠지는지 · 언제 실제로 떨어지는지는 화면에 안 나온다 — 그것만 남긴다 */}
-            <p className="text-xs text-[#5a5a5a] leading-relaxed mb-6 break-keep">
-              소유와 사이트 인벤토리는 그대로 두고 <span className="font-bold text-[#5a5a5a]">디스코드 표기만</span> 내립니다.
-              권한 상품과 보호 역할은 대상에서 빠지며, 실제 역할 제거는 봇이 30초 주기로 처리합니다.
-            </p>
-
-            {/* 모바일에서는 flex-col 에 gap 이 먹지 않아 버튼 간격을 마진으로 준다 */}
-            <div className="flex flex-col md:flex-row md:gap-3 mb-6">
-              <Btn type="button" variant="ghost" disabled={!!detachBusy}
-                onClick={async () => { const d = await callDetach(true); if (d) setDetachPreview(d); }}
-                className="w-full md:w-auto md:px-8 py-3.5 mb-3 md:mb-0">
-                {detachBusy === "preview" ? "확인 중..." : "대상 미리보기"}
-              </Btn>
-              <Btn type="button" variant="danger" onClick={() => setDetachConfirm(true)}
-                disabled={!detachPreview || detachPreview.matched === 0 || !!detachBusy}
-                className="w-full md:w-auto md:px-10 py-3.5">
-                {detachBusy === "run" ? "처리 중..." : "디스코드 역할 떼기 실행"}
-              </Btn>
-            </div>
-
+          <Panel
+            title="디스코드 역할 떼기"
+            desc="소유와 사이트 인벤토리는 그대로 두고 디스코드 표기만 내립니다. 권한 상품과 보호 역할은 빠지며, 실제 제거는 봇이 30초 주기로 처리합니다."
+            right={
+              <>
+                <Btn variant="secondary" disabled={!!detachBusy}
+                  onClick={async () => { const d = await callDetach(true); if (d) setDetachPreview(d); }}>
+                  {detachBusy === "preview" ? "확인 중..." : "대상 미리보기"}
+                </Btn>
+                <Btn variant="danger" onClick={() => setDetachConfirm(true)}
+                  disabled={!detachPreview || detachPreview.matched === 0 || !!detachBusy}>
+                  {detachBusy === "run" ? "처리 중..." : "디스코드 역할 떼기 실행"}
+                </Btn>
+              </>
+            }
+            flush
+          >
             {!detachPreview ? (
-              <p className={fieldNote}>먼저 대상을 미리보기 해야 실행할 수 있습니다.</p>
+              <p className="px-5 py-4 text-[13px] text-[#5a5a5a]">먼저 대상을 미리보기 해야 실행할 수 있습니다.</p>
             ) : detachPreview.matched === 0 ? (
-              <EmptyRow>표기를 뗄 대상이 없습니다.</EmptyRow>
+              <p className="px-5 py-10 text-center text-[13px] text-[#5a5a5a]">표기를 뗄 대상이 없습니다.</p>
             ) : (
-              <TableScroll>
-                <ListFrame>
-                  {detachPreview.items.map((row: any) => (
-                    <div key={`${row.roleId}-${row.itemName}`} className="py-3.5 md:flex md:items-center md:gap-4">
-                      <span className="block text-sm font-bold text-[#131313] truncate md:w-56 md:shrink-0">{row.itemName}</span>
-                      <span className="block mt-0.5 md:mt-0 text-[11px] text-[#5a5a5a] truncate md:flex-1 md:min-w-0">
+              <div className="divide-y divide-[#ededed]">
+                {detachPreview.items.map((row: any) => (
+                  <div key={`${row.roleId}-${row.itemName}`} className="flex items-center gap-4 px-5 py-3 text-[13px]">
+                    <div className="min-w-0 flex-1 md:flex md:items-center md:gap-4">
+                      <p className="font-bold truncate md:w-72 md:shrink-0">{row.itemName}</p>
+                      <p className="mt-0.5 md:mt-0 text-[12px] md:text-[13px] text-[#5a5a5a] truncate md:flex-1 md:min-w-0">
                         {guildRoles.find((r) => r.id === row.roleId)?.name || row.roleId}
-                      </span>
-                      <span className="block mt-1 md:mt-0 text-[11px] font-bold text-[#e91e3f] tabular-nums md:shrink-0">{row.count.toLocaleString()}건</span>
+                      </p>
                     </div>
-                  ))}
-                  <div className="py-3.5 flex items-center justify-between">
-                    <span className="text-xs font-black text-[#131313]">합계</span>
-                    <span className="text-xs font-black text-[#e91e3f] tabular-nums">{detachPreview.matched.toLocaleString()}건</span>
+                    <span className="shrink-0 font-bold tabular-nums">{row.count.toLocaleString()}건</span>
                   </div>
-                </ListFrame>
-              </TableScroll>
+                ))}
+                <div className="flex items-center justify-between px-5 py-3.5 text-[13px] font-black">
+                  <span>합계</span>
+                  <span className="tabular-nums text-[#e91e3f]">{detachPreview.matched.toLocaleString()}건</span>
+                </div>
+              </div>
             )}
-          </section>
-          </Reveal>
+          </Panel>
         )}
-      </div>
+      </AdminPage>
 
       {/* ── 삭제 확인 ── */}
       <ConfirmDialog
@@ -1364,15 +1484,15 @@ export default function AdminShopPage() {
             <span className="block mb-3">
               구매 <span className="font-bold text-[#131313] tabular-nums">{detachPreview.matched.toLocaleString()}건</span>의 디스코드 역할 표기를 내립니다.
             </span>
-            <span className="block border-y border-black/[0.06] py-2 mb-3 max-h-40 overflow-y-auto no-bar">
+            <span className="block border-y border-[#ededed] py-2 mb-3 max-h-40 overflow-y-auto no-bar">
               {detachPreview.items.slice(0, 6).map((row: any) => (
-                <span key={`${row.roleId}-${row.itemName}`} className="flex items-center justify-between gap-3 py-1 text-[11px]">
+                <span key={`${row.roleId}-${row.itemName}`} className="flex items-center justify-between gap-3 py-1 text-[12px]">
                   <span className="truncate font-bold text-[#131313]">{row.itemName}</span>
                   <span className="shrink-0 font-bold text-[#e91e3f] tabular-nums">{row.count.toLocaleString()}건</span>
                 </span>
               ))}
               {detachPreview.items.length > 6 && (
-                <span className="block pt-1 text-[11px] text-[#8a8a8a]">외 {detachPreview.items.length - 6}종</span>
+                <span className="block pt-1 text-[12px] text-[#8a8a8a]">외 {detachPreview.items.length - 6}종</span>
               )}
             </span>
             소유와 사이트 인벤토리는 그대로 유지되지만, 되돌리려면 역할을 손으로 다시 붙여야 합니다.
@@ -1382,32 +1502,36 @@ export default function AdminShopPage() {
         onCancel={() => setDetachConfirm(false)}
       />
 
-      {/* ── 쿠폰 지급 ── */}
+      {/* ── 쿠폰 지급 ── 모바일 상세 판(z-120) 위에 뜨도록 z-125, 확인 모달(z-130)보다는 아래 */}
       {issueTarget && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
-          <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-sm p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
-            <h2 className="text-lg font-bold text-[#131313] mb-2">쿠폰 지급</h2>
-            <p className="text-xs text-[#5a5a5a] mb-5">
-              <span className="font-black text-[#131313] tracking-wide">{issueTarget.code}</span>
+        <div className="fixed inset-0 z-[125] flex items-center justify-center bg-black/40 p-4 overlay-in">
+          <div role="dialog" aria-modal="true" aria-label="쿠폰 지급" className="bg-white border border-[#ededed] rounded-2xl w-full max-w-sm p-6 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313]">
+            <h2 className="text-[17px] font-black tracking-tight">쿠폰 지급</h2>
+            <p className="mt-1 text-[13px] text-[#5a5a5a] break-keep">
+              <span className="font-black text-[#131313]">{issueTarget.code}</span>
               {issueTarget.name ? ` · ${issueTarget.name}` : ""}
             </p>
 
-            <label className={labelClass}>지급 대상</label>
-            <input type="text" value={issueInput} onChange={(e) => setIssueInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && issueInput.trim()) issueCoupon(issueInput.trim()); }}
-              placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
-            <p className={`${fieldNote} mb-6`}>XP 기록이 있는 유저만 검색되고, 이미 보유 중이면 건너뜁니다.</p>
+            <div className="mt-5">
+              <div className={labelClass}>지급 대상</div>
+              <input type="text" value={issueInput} onChange={(e) => setIssueInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && issueInput.trim()) issueCoupon(issueInput.trim()); }}
+                placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
+              <p className={fieldNote}>XP 기록이 있는 유저만 검색되고, 이미 보유 중이면 건너뜁니다.</p>
+            </div>
 
-            <div className="flex gap-3 mb-3">
-              <Btn variant="ghost" onClick={() => setIssueTarget(null)} className="flex-1 py-3">닫기</Btn>
-              <Btn onClick={() => issueCoupon(issueInput.trim())} disabled={!issueInput.trim() || isIssuing} className="flex-1 py-3">
+            <div className="mt-6 flex justify-end gap-2">
+              <Btn variant="ghost" onClick={() => setIssueTarget(null)}>닫기</Btn>
+              <Btn onClick={() => issueCoupon(issueInput.trim())} disabled={!issueInput.trim() || isIssuing}>
                 {isIssuing ? "지급 중..." : "지급"}
               </Btn>
             </div>
             {/* 바로 실행하지 않는다 — 확인 모달을 거친다 */}
-            <Btn variant="ghost" onClick={() => setIssueAllConfirm(true)} disabled={isIssuing} className="w-full py-3">
-              전체 유저에게 지급
-            </Btn>
+            <div className="mt-4 pt-4 border-t border-[#ededed]">
+              <Btn variant="secondary" onClick={() => setIssueAllConfirm(true)} disabled={isIssuing} className="w-full">
+                전체 유저에게 지급
+              </Btn>
+            </div>
           </div>
         </div>
       )}
@@ -1421,7 +1545,7 @@ export default function AdminShopPage() {
         confirmLabel="지급"
         body={issueTarget ? (
           <>
-            <span className="block font-black text-[#131313] tracking-wide">{issueTarget.code}</span>
+            <span className="block font-black text-[#131313]">{issueTarget.code}</span>
             {issueTarget.name && <span className="block mb-3">{issueTarget.name}</span>}
             XP 기록이 있는 전 유저의 지갑에 들어가며, 지급 후에는 되돌릴 수 없습니다.
           </>
@@ -1430,33 +1554,33 @@ export default function AdminShopPage() {
         onCancel={() => setIssueAllConfirm(false)}
       />
 
-      {/* ── 기프트카드 발송 처리 ── */}
+      {/* ── 기프트카드 발송 처리 ── (z-125: 모바일 상세 판 위) */}
       {noteTarget && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
-          <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-sm p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
-            <h2 className="text-lg font-bold text-[#131313] mb-2">발송 처리</h2>
-            <p className="text-xs text-[#5a5a5a] mb-5">{noteTarget.userName} · {noteTarget.itemName}</p>
+        <div className="fixed inset-0 z-[125] flex items-center justify-center bg-black/40 p-4 overlay-in">
+          <div role="dialog" aria-modal="true" aria-label="발송 처리" className="bg-white border border-[#ededed] rounded-2xl w-full max-w-sm p-6 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313]">
+            <h2 className="text-[17px] font-black tracking-tight">발송 처리</h2>
+            <p className="mt-1 text-[13px] text-[#5a5a5a] break-keep">{noteTarget.userName} · {noteTarget.itemName}</p>
             {noteTarget.contact && (
-              <div className="text-[11px] text-[#5a5a5a] bg-black/[0.03] border border-black/[0.06] rounded-lg px-3 py-2 mb-4 whitespace-pre-wrap">{noteTarget.contact}</div>
+              <div className="mt-4 text-[13px] text-[#5a5a5a] bg-[#f2f2f2] rounded-lg px-3 py-2 whitespace-pre-wrap break-words">{noteTarget.contact}</div>
             )}
             <input type="text" value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="운송장 번호 등 메모 (선택)"
-              className={`${inputClass} mb-6`} />
-            <div className="flex gap-3">
-              <Btn variant="ghost" onClick={() => setNoteTarget(null)} className="flex-1 py-3">닫기</Btn>
-              <Btn onClick={() => processOrder(noteTarget._id, "completed", noteText)} className="flex-1 py-3">완료 처리</Btn>
+              className={`${inputClass} mt-4`} />
+            <div className="mt-6 flex justify-end gap-2">
+              <Btn variant="ghost" onClick={() => setNoteTarget(null)}>닫기</Btn>
+              <Btn onClick={() => processOrder(noteTarget._id, "completed", noteText)}>완료 처리</Btn>
             </div>
           </div>
         </div>
       )}
 
-      {/* 📌 카드 미리보기 — 상점(라이트 톤)에서 실제로 어떻게 보이는지 그대로 렌더 */}
+      {/* 📌 카드 미리보기 — 상점(라이트 톤)에서 실제로 어떻게 보이는지 그대로 렌더 (z-125: 모바일 상세 판 위) */}
       {showPreview && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in" onClick={() => setShowPreview(false)}>
-          <div className="w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-black tracking-[0.3em] text-[#5a5a5a] uppercase">Shop Preview</span>
-              <button onClick={() => setShowPreview(false)} className="p-1.5 text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        <div className="fixed inset-0 z-[125] flex items-center justify-center bg-black/40 p-4 overlay-in" onClick={() => setShowPreview(false)}>
+          <div role="dialog" aria-modal="true" aria-label="카드 미리보기" className="w-full max-w-sm bg-white border border-[#ededed] rounded-2xl p-5 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[17px] font-black tracking-tight">카드 미리보기</h2>
+              <button type="button" onClick={() => setShowPreview(false)} aria-label="닫기" className="shrink-0 w-9 h-9 rounded-full bg-[#f2f2f2] text-[#5a5a5a] hover:text-[#131313] flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
@@ -1492,15 +1616,15 @@ export default function AdminShopPage() {
               </div>
             </div>
 
-            <p className="mt-3 text-center text-[11px] text-[#5a5a5a]">
+            <p className="mt-3 text-center text-[12px] text-[#5a5a5a]">
               {form.active ? "판매 중 — 상점에 노출됩니다" : "숨김 — 상점에 노출되지 않습니다"}
-              {form.type === "role" && !form.roleId && <span className="block mt-1 text-[#e91e3f]">지급할 역할을 선택해야 저장할 수 있습니다</span>}
+              {form.type === "role" && !form.roleId && <span className="block mt-1 font-bold text-[#d01634]">지급할 역할을 선택해야 저장할 수 있습니다</span>}
             </p>
           </div>
         </div>
       )}
 
       {noticeEl}
-    </main>
+    </>
   );
 }

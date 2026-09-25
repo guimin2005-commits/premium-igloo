@@ -2,19 +2,52 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Reveal, LuxStyles } from "../../components/Lux";
 import { DiscordIdInput, parseIds, useDiscordProfiles } from "../../components/DiscordIds";
-import { useAdminGuard } from "../ui";
+import {
+  useAdminGuard,
+  AdminPage,
+  StatRow,
+  Toolbar,
+  Segmented,
+  SearchInput,
+  Btn,
+  DataTable,
+  DetailPane,
+  StatusChip,
+  ConfirmDialog,
+  inputClass,
+  labelClass,
+  type Column,
+} from "../ui";
 import { HONOR_CATEGORIES } from "@/lib/honors";
 import { statusOf } from "@/lib/tournamentPhase";
 
 /* 📌 명예의 전당 관리 — 등재·수정·삭제를 이 한 곳에서 처리한다.
-   (예전에는 공개 페이지 위에서 수정·삭제를 했는데, 관리 동선이 두 군데로 갈라져 있었다) */
+   (예전에는 공개 페이지 위에서 수정·삭제를 했는데, 관리 동선이 두 군데로 갈라져 있었다)
+   📌 2026-09 개편 — 목록 화면 틀: 머리 → 요약 → 한 줄 도구(수동/대회 토글 · 검색 · 등재) → 전체 폭 표 → 줄을 누르면 상세 칸.
+      가운데 모달 두 개(등재·수정 / 우승 정보)를 상세 칸 하나로 합쳐, 목록을 보면서 다른 줄로 바로 옮겨 가게 했다. */
 
 type Honor = { _id: string; category: string; title: string; winner: string; winnerId: string; detail: string; dateLabel: string; createdAt?: string };
 type TournamentRow = { _id: string; title: string; game: string; winner: string; winnerId: string; dateLabel: string; prize: string; status: string };
 
 const EMPTY: Omit<Honor, "_id"> = { category: "SYSTEM : LEVEL", title: "", winner: "", winnerId: "", detail: "", dateLabel: "" };
+
+// 📌 링크를 Btn(secondary) 과 같은 알약으로 — 공개 페이지 · 대회 글처럼 다른 화면으로 가는 것
+const linkBtn = (size: "sm" | "md") =>
+  `inline-flex items-center justify-center gap-1.5 rounded-full font-bold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 bg-white text-[#131313] border border-[#a3a3a3] hover:border-[#131313] ${size === "sm" ? "h-8 px-3.5 text-[12px]" : "h-10 px-5 text-[13px]"}`;
+
+// 📌 상세 칸 아래 줄의 저장 단추는 <form> 밖에 있다. DetailPane 이 PC 칸 · 모바일 판을 둘 다 그려 form id 를 겹쳐 쓸 수 없으니,
+//    누른 단추가 속한 칸 안의 form 을 찾아 제출한다(requestSubmit — required 검사 · onSubmit 은 예전 그대로).
+const submitNearest = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const f = e.currentTarget.closest('[role="dialog"]')?.querySelector("form");
+  if (!f) return;
+  if (typeof f.requestSubmit === "function") f.requestSubmit();
+  else f.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+};
+
+// 필수 · 선택 표시 (라벨 옆 기호)
+const Req = () => <span className="text-[#e91e3f]"> *</span>;
+const Opt = () => <span className="text-[#5a5a5a] font-medium"> (선택)</span>;
 
 export default function AdminHonorsPage() {
   // 화면 가리기 전용 — 실제 방어는 /api/honors 가 서버에서 한 번 더 한다
@@ -152,6 +185,8 @@ export default function AdminHonorsPage() {
       const res = await fetch(`/api/honors?id=${deleteTarget._id}`, { method: "DELETE" });
       if (res.ok) {
         setHonors((prev) => prev.filter((h) => h._id !== deleteTarget._id));
+        // 삭제는 상세 칸 안에서 누르므로, 지운 기록의 편집 칸도 함께 닫는다
+        setForm((f) => (f?.data?._id === deleteTarget._id ? null : f));
         notify("기록이 삭제되었습니다.");
       } else {
         notify("삭제에 실패했습니다.", true);
@@ -185,281 +220,234 @@ export default function AdminHonorsPage() {
       <span className="inline-flex -space-x-2 align-middle shrink-0">
         {list.slice(0, 5).map((p, i) => (
           // eslint-disable-next-line @next/next/no-img-element
-          <img key={i} src={p.avatarUrl} alt={p.globalName} title={p.globalName} className="w-6 h-6 rounded-full bg-gray-800 object-cover ring-2 ring-[#edecea]" />
+          <img key={i} src={p.avatarUrl} alt={p.globalName} title={p.globalName} className="w-6 h-6 rounded-full bg-[#f2f2f2] object-cover ring-2 ring-white" />
         ))}
-        {list.length > 5 && <span className="w-6 h-6 rounded-full bg-black/10 ring-2 ring-[#edecea] grid place-items-center text-[9px] font-bold text-[#5a5a5a]">+{list.length - 5}</span>}
+        {list.length > 5 && <span className="w-6 h-6 rounded-full bg-[#f2f2f2] ring-2 ring-white grid place-items-center text-[9px] font-bold text-[#5a5a5a]">+{list.length - 5}</span>}
       </span>
     );
   };
 
+  // 등재 · 수정 칸과 우승 정보 칸은 같은 자리를 쓴다 — 하나를 열면 다른 하나는 닫는다
+  const openForm = (next: { mode: "create" | "edit"; data: any }) => { setWinnerEdit(null); setForm(next); };
+  const openWinner = (t: TournamentRow) => { setForm(null); setWinnerEdit({ ...t }); };
+  const paneOpen = !!form || !!winnerEdit;
+
+  // ── 표 열 ──
+  const manualCols: Column<Honor>[] = [
+    { key: "category", label: "분류", className: "w-40", render: (h) => <StatusChip>{h.category}</StatusChip> },
+    {
+      key: "winner", label: "우승자", mobile: "title",
+      render: (h) => (
+        <span className="flex items-center gap-2 min-w-0">
+          <Members ids={h.winnerId} />
+          <span className="font-bold text-[#131313] truncate">{h.winner}</span>
+        </span>
+      ),
+    },
+    { key: "title", label: "기록 제목", render: (h) => <span className="text-[#131313]">{h.title}</span> },
+    { key: "detail", label: "부가 설명", render: (h) => (h.detail ? <span className="text-[#5a5a5a] break-keep">{h.detail}</span> : null) },
+    { key: "date", label: "표시 기간", className: "whitespace-nowrap", render: (h) => (h.dateLabel ? <span className="text-[#8a8a8a] tabular-nums">{h.dateLabel}</span> : null) },
+  ];
+  const tournamentCols: Column<TournamentRow>[] = [
+    { key: "game", label: "게임", className: "w-40", render: (t) => <StatusChip className="max-w-[10rem]"><span className="truncate">{t.game || "대회"}</span></StatusChip> },
+    {
+      key: "winner", label: "우승팀 / 우승자", mobile: "title",
+      render: (t) => (
+        <span className="flex items-center gap-2 min-w-0">
+          <Members ids={t.winnerId} />
+          {t.winner.trim() ? <span className="font-bold text-[#131313] truncate">{t.winner}</span> : <StatusChip tone="bad">우승자 미기재</StatusChip>}
+        </span>
+      ),
+    },
+    { key: "title", label: "대회", render: (t) => <span className="text-[#131313]">{t.title}</span> },
+    { key: "date", label: "날짜", className: "whitespace-nowrap", render: (t) => (t.dateLabel ? <span className="text-[#8a8a8a] tabular-nums">{t.dateLabel}</span> : null) },
+  ];
+
   return (
-    <main className="w-full flex-1 flex flex-col relative">
-      <LuxStyles />
+    <AdminPage
+      section="운영"
+      title="명예의 전당"
+      actions={<Link href="/hall-of-fame" className={linkBtn("sm")}>공개 페이지 보기 ↗</Link>}
+      // PC 넓은 화면에서 상세 칸(440px)이 열리면 표가 그 밑에 깔리지 않게 오른쪽을 비운다
+    >
+      {/* ── 요약 ── */}
+      <StatRow
+        className="mb-5"
+        items={[
+          { label: "전체 기록", value: honors.length + tournaments.filter((t) => t.winner.trim()).length },
+          { label: "수동 기록", value: honors.length },
+          { label: "대회 우승", value: tournaments.filter((t) => t.winner.trim()).length },
+          { label: "우승자 미기재", value: missingWinner, tone: missingWinner > 0 ? "bad" : undefined },
+        ]}
+      />
 
-      {/* ── HERO ── */}
-      <section className="relative w-full pt-16 pb-8 md:pt-20 md:pb-10 px-6">
-        <div className="absolute inset-0 lux-grid-bg pointer-events-none"></div>
-        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
-        <div className="max-w-5xl mx-auto relative z-10">
-          <Reveal>
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-3">
-                  <span className="text-[#131313]">명예의 전당 </span><span className="text-[#e91e3f]">관리</span>
-                </h1>
-                <p className="text-[#5a5a5a] text-sm leading-relaxed">기록 등재·수정·삭제를 이곳에서 처리합니다. 대회 우승은 대회 글의 우승팀 정보를 그대로 가져옵니다.</p>
+      {/* ── 수동/대회 토글 · 검색 · 등재 ── */}
+      <Toolbar
+        right={tab === "manual" && <Btn onClick={() => openForm({ mode: "create", data: { ...EMPTY } })}>+ 새 기록 등재</Btn>}
+      >
+        <Segmented
+          options={[
+            { v: "manual", l: "수동 기록", n: honors.length },
+            { v: "tournament", l: "대회 우승", n: tournaments.length },
+          ]}
+          value={tab}
+          onChange={(v) => { setTab(v as "manual" | "tournament"); setForm(null); setWinnerEdit(null); }}
+        />
+        <SearchInput value={query} onChange={setQuery} placeholder="제목·우승자 검색" />
+      </Toolbar>
+
+      {/* ── 목록 ── */}
+      {isLoading ? (
+        <div className="py-16 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</div>
+      ) : tab === "manual" ? (
+        <DataTable
+          columns={manualCols}
+          rows={manualRows}
+          rowKey={(h) => h._id}
+          onRowClick={(h) => openForm({ mode: "edit", data: { ...h } })}
+          selectedKey={form?.mode === "edit" ? form.data._id : null}
+          empty={query.trim() ? "검색 결과가 없습니다." : "등재된 수동 기록이 없습니다."}
+        />
+      ) : (
+        <DataTable
+          columns={tournamentCols}
+          rows={tournamentRows}
+          rowKey={(t) => t._id}
+          onRowClick={openWinner}
+          selectedKey={winnerEdit?._id ?? null}
+          empty={query.trim() ? "검색 결과가 없습니다." : "종료된 대회가 없습니다."}
+        />
+      )}
+
+      <p className="mt-3 text-[12px] text-[#5a5a5a] break-keep">
+        {tab === "manual"
+          ? "수동 기록은 SYSTEM : LEVEL 시즌 1등 · 이벤트 우승 등 대회 외 기록입니다."
+          : "대회 우승은 대회 글에 저장된 값이라 여기서 고치면 공개 페이지에 그대로 반영됩니다."}
+      </p>
+
+      {/* 📌 등재 / 수정 — 상세 칸 */}
+      <DetailPane
+        open={!!form}
+        onClose={() => setForm(null)}
+        title={form?.mode === "create" ? "새 기록 등재" : "기록 수정"}
+        sub={form?.mode === "edit" ? form.data.title : undefined}
+        footer={
+          form && (
+            <>
+              {form.mode === "edit" && (
+                <Btn variant="ghost" className="!text-[#d01634]" onClick={() => setDeleteTarget(form.data as Honor)} disabled={isSaving}>삭제</Btn>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                <Btn variant="secondary" onClick={() => setForm(null)}>취소</Btn>
+                <Btn onClick={submitNearest} disabled={isSaving}>{isSaving ? "저장 중…" : form.mode === "create" ? "등재" : "저장"}</Btn>
               </div>
-              <Link href="/hall-of-fame" className="shrink-0 text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] border border-black/12 hover:border-black/30 px-3.5 py-2 rounded-full transition-colors">공개 페이지 보기 ↗</Link>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      <div className="w-full max-w-5xl mx-auto px-6 pb-16 flex-1 flex flex-col">
-        {/* ── 요약 ── */}
-        <Reveal>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-            {[
-              { label: "전체 기록", value: honors.length + tournaments.filter((t) => t.winner.trim()).length },
-              { label: "수동 기록", value: honors.length },
-              { label: "대회 우승", value: tournaments.filter((t) => t.winner.trim()).length },
-              { label: "우승자 미기재", value: missingWinner, warn: missingWinner > 0 },
-            ].map((s) => (
-              <div key={s.label} className="rounded-2xl border border-black/[0.07] bg-black/[0.02] px-4 py-3.5">
-                <p className="text-[10px] font-black tracking-[0.2em] text-[#8a8a8a] uppercase mb-1.5">{s.label}</p>
-                <p className={`text-2xl font-black tabular-nums ${s.warn ? "text-[#e91e3f]" : "text-[#131313]"}`}>{s.value}</p>
-              </div>
-            ))}
-          </div>
-        </Reveal>
-
-        {/* ── 탭 + 도구 막대 ── */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
-          <div className="inline-flex p-1 rounded-full bg-black/[0.04] border border-black/[0.07] self-start">
-            {([
-              { key: "manual", label: "수동 기록", count: honors.length },
-              { key: "tournament", label: "대회 우승", count: tournaments.length },
-            ] as const).map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${tab === t.key ? "bg-[#e91e3f] text-white" : "text-[#5a5a5a] hover:text-[#131313]"}`}
-              >
-                {t.label} <span className="tabular-nums opacity-70">{t.count}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="제목·우승자 검색"
-              className="flex-1 md:w-56 bg-[#ffffff] border border-black/10 rounded-xl px-4 py-2.5 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
-            />
-            {tab === "manual" && (
-              <button
-                onClick={() => setForm({ mode: "create", data: { ...EMPTY } })}
-                className="shrink-0 px-4 py-2.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20"
-              >
-                + 새 기록 등재
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* ── 목록 ── */}
-        {isLoading ? (
-          <div className="text-center py-16 text-[#8a8a8a] text-sm">불러오는 중...</div>
-        ) : tab === "manual" ? (
-          manualRows.length === 0 ? (
-            <EmptyBox text={query.trim() ? "검색 결과가 없습니다." : "등재된 수동 기록이 없습니다."} />
-          ) : (
-            <div className="rounded-2xl border border-black/[0.07] overflow-hidden divide-y divide-black/[0.06]">
-              {manualRows.map((h) => (
-                <div key={h._id} className="flex flex-col md:flex-row md:items-center gap-3 px-4 md:px-5 py-4 hover:bg-black/[0.02] transition-colors">
-                  <span className="shrink-0 self-start text-[9px] font-black tracking-wider bg-black/5 text-[#5a5a5a] border border-black/10 px-2.5 py-1 rounded-full">{h.category}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Members ids={h.winnerId} />
-                      <p className="text-sm font-bold text-[#131313] truncate">{h.winner}</p>
-                    </div>
-                    <p className="text-xs text-[#8a8a8a] truncate mt-1">
-                      {h.title}{h.detail ? ` · ${h.detail}` : ""}{h.dateLabel ? ` · ${h.dateLabel}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    <button onClick={() => setForm({ mode: "edit", data: { ...h } })} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 rounded-lg transition-colors">수정</button>
-                    <button onClick={() => setDeleteTarget(h)} className="text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 rounded-lg transition-colors">삭제</button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            </>
           )
-        ) : tournamentRows.length === 0 ? (
-          <EmptyBox text={query.trim() ? "검색 결과가 없습니다." : "종료된 대회가 없습니다."} />
-        ) : (
-          <div className="rounded-2xl border border-black/[0.07] overflow-hidden divide-y divide-black/[0.06]">
-            {tournamentRows.map((t) => (
-              <div key={t._id} className="flex flex-col md:flex-row md:items-center gap-3 px-4 md:px-5 py-4 hover:bg-black/[0.02] transition-colors">
-                <span className="shrink-0 self-start text-[9px] font-black tracking-wider bg-black/5 text-[#5a5a5a] border border-black/10 px-2.5 py-1 rounded-full truncate max-w-[10rem]">{t.game || "대회"}</span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Members ids={t.winnerId} />
-                    {t.winner.trim() ? (
-                      <p className="text-sm font-bold text-[#131313] truncate">{t.winner}</p>
-                    ) : (
-                      <p className="text-sm font-bold text-[#e91e3f]">우승자 미기재</p>
-                    )}
-                  </div>
-                  <p className="text-xs text-[#8a8a8a] truncate mt-1">{t.title}{t.dateLabel ? ` · ${t.dateLabel}` : ""}</p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button onClick={() => setWinnerEdit({ ...t })} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 rounded-lg transition-colors">우승 정보 수정</button>
-                  <Link href={`/write?id=${t._id}`} className="text-xs font-bold text-[#5a5a5a] hover:text-[#131313] bg-black/5 hover:bg-black/10 border border-black/10 px-3 py-1.5 rounded-lg transition-colors">대회 글 ↗</Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <p className="text-[11px] text-[#a3a3a3] mt-4 leading-relaxed">
-          {tab === "manual"
-            ? "수동 기록은 SYSTEM : LEVEL 시즌 1등, 이벤트 우승 등 대회 외 기록을 위한 항목입니다."
-            : "대회 우승은 대회 글에 저장된 값이라 이곳에서 우승팀·우승자만 고쳐도 공개 페이지에 그대로 반영됩니다."}
-        </p>
-      </div>
-
-      {/* 📌 등재 / 수정 모달 */}
-      {form && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
-          <form onSubmit={submitForm} className="bg-gradient-to-b from-[#1c1c1c] to-[#ffffff] border border-black/10 rounded-3xl w-full max-w-lg p-7 md:p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] max-h-[88vh] overflow-y-auto no-bar">
-            <div className="flex items-center gap-3 mb-6">
-              <span className="w-1 h-5 bg-[#e91e3f] rounded-full"></span>
-              <h2 className="text-lg font-black text-[#131313]">{form.mode === "create" ? "새 기록 등재" : "기록 수정"}</h2>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#8a8a8a] mb-2">분류 <span className="text-[#e91e3f]">*</span></label>
-                <div className="flex flex-wrap gap-2">
-                  {HONOR_CATEGORIES.map((c) => (
-                    <button
-                      type="button"
-                      key={c}
-                      onClick={() => setForm({ ...form, data: { ...form.data, category: c } })}
-                      className={`px-3.5 py-1.5 text-xs font-bold rounded-full border transition-all ${form.data.category === c ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-black/10 text-[#5a5a5a] hover:border-black/30"}`}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {[
-                { label: "기록 제목", key: "title", required: true, placeholder: "예: LEVEL SEASON 1" },
-                { label: "우승자 / 팀명", key: "winner", required: true, placeholder: "예: 팀 이글루 · elahw.06" },
-                { label: "표시 기간", key: "dateLabel", required: false, placeholder: "예: 2026.01 ~ 2026.06" },
-                { label: "부가 설명", key: "detail", required: false, placeholder: "예: 최종 레벨 512 달성 · 보상 문화상품권 5만원" },
-              ].map((f) => (
-                <div key={f.key}>
-                  <label className="block text-xs font-bold text-[#8a8a8a] mb-2">
-                    {f.label}
-                    {f.required ? <span className="text-[#e91e3f]"> *</span> : <span className="text-[#a3a3a3] font-medium"> (선택)</span>}
-                  </label>
-                  <input
-                    type="text"
-                    required={f.required}
-                    placeholder={f.placeholder}
-                    value={form.data[f.key] || ""}
-                    onChange={(e) => setForm({ ...form, data: { ...form.data, [f.key]: e.target.value } })}
-                    className="w-full bg-[#ffffff] border border-black/10 rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
-                  />
-                </div>
-              ))}
-
-              <DiscordIdInput
-                value={form.data.winnerId || ""}
-                onChange={(next) => setForm({ ...form, data: { ...form.data, winnerId: next } })}
-                label="우승자 명단"
+        }
+      >
+        {form && (
+          <form onSubmit={submitForm} className="space-y-4">
+            <div>
+              <p className={labelClass}>분류<Req /></p>
+              <Segmented
+                options={HONOR_CATEGORIES.map((c) => ({ v: c, l: c }))}
+                value={form.data.category}
+                onChange={(c) => setForm({ ...form, data: { ...form.data, category: c } })}
               />
             </div>
 
-            <div className="flex gap-3 mt-8">
-              <button type="button" onClick={() => setForm(null)} className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#131313] font-bold rounded-xl transition-colors">취소</button>
-              <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20">
-                {isSaving ? "저장 중..." : form.mode === "create" ? "등재" : "저장"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* 📌 대회 우승 정보 수정 모달 */}
-      {winnerEdit && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
-          <form onSubmit={submitWinner} className="bg-gradient-to-b from-[#1c1c1c] to-[#ffffff] border border-black/10 rounded-3xl w-full max-w-lg p-7 md:p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] max-h-[88vh] overflow-y-auto no-bar">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="w-1 h-5 bg-[#e91e3f] rounded-full"></span>
-              <h2 className="text-lg font-black text-[#131313]">대회 우승 정보 수정</h2>
-            </div>
-            <p className="text-xs text-[#8a8a8a] mb-6 pl-4 truncate">{winnerEdit.title}</p>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#8a8a8a] mb-2">우승팀 / 우승자 <span className="text-[#e91e3f]">*</span></label>
+            {[
+              { label: "기록 제목", key: "title", required: true, placeholder: "예: LEVEL SEASON 1" },
+              { label: "우승자 / 팀명", key: "winner", required: true, placeholder: "예: 팀 이글루 · elahw.06" },
+              { label: "표시 기간", key: "dateLabel", required: false, placeholder: "예: 2026.01 ~ 2026.06" },
+              { label: "부가 설명", key: "detail", required: false, placeholder: "예: 최종 레벨 512 달성 · 보상 문화상품권 5만원" },
+            ].map((f) => (
+              <label key={f.key} className="block">
+                <span className={labelClass}>{f.label}{f.required ? <Req /> : <Opt />}</span>
                 <input
                   type="text"
-                  required
-                  placeholder="예: 이글루A"
-                  value={winnerEdit.winner}
-                  onChange={(e) => setWinnerEdit({ ...winnerEdit, winner: e.target.value })}
-                  className="w-full bg-[#ffffff] border border-black/10 rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
+                  required={f.required}
+                  placeholder={f.placeholder}
+                  value={form.data[f.key] || ""}
+                  onChange={(e) => setForm({ ...form, data: { ...form.data, [f.key]: e.target.value } })}
+                  className={inputClass}
                 />
-              </div>
-              <DiscordIdInput
-                value={winnerEdit.winnerId}
-                onChange={(next) => setWinnerEdit({ ...winnerEdit, winnerId: next })}
-                label="우승 팀원 명단"
-              />
-            </div>
+              </label>
+            ))}
 
-            <div className="flex gap-3 mt-8">
-              <button type="button" onClick={() => setWinnerEdit(null)} className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#131313] font-bold rounded-xl transition-colors">취소</button>
-              <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-xl transition-colors shadow-lg shadow-[#e91e3f]/20">{isSaving ? "저장 중..." : "저장"}</button>
-            </div>
+            <DiscordIdInput
+              value={form.data.winnerId || ""}
+              onChange={(next) => setForm({ ...form, data: { ...form.data, winnerId: next } })}
+              label="우승자 명단"
+            />
+
+            {/* Enter 로 제출되던 동작을 살리는 숨은 단추 (보이는 저장 단추는 칸 아래 줄에 있다) */}
+            <button type="submit" tabIndex={-1} aria-hidden className="sr-only">저장</button>
           </form>
-        </div>
-      )}
+        )}
+      </DetailPane>
+
+      {/* 📌 대회 우승 정보 수정 — 상세 칸 */}
+      <DetailPane
+        open={!!winnerEdit}
+        onClose={() => setWinnerEdit(null)}
+        title="대회 우승 정보 수정"
+        sub={winnerEdit?.title}
+        footer={
+          winnerEdit && (
+            <>
+              <Link href={`/write?id=${winnerEdit._id}`} className={linkBtn("md")}>대회 글 ↗</Link>
+              <div className="ml-auto flex items-center gap-2">
+                <Btn variant="secondary" onClick={() => setWinnerEdit(null)}>취소</Btn>
+                <Btn onClick={submitNearest} disabled={isSaving}>{isSaving ? "저장 중…" : "저장"}</Btn>
+              </div>
+            </>
+          )
+        }
+      >
+        {winnerEdit && (
+          <form onSubmit={submitWinner} className="space-y-4">
+            <label className="block">
+              <span className={labelClass}>우승팀 / 우승자<Req /></span>
+              <input
+                type="text"
+                required
+                placeholder="예: 이글루A"
+                value={winnerEdit.winner}
+                onChange={(e) => setWinnerEdit({ ...winnerEdit, winner: e.target.value })}
+                className={inputClass}
+              />
+            </label>
+            <DiscordIdInput
+              value={winnerEdit.winnerId}
+              onChange={(next) => setWinnerEdit({ ...winnerEdit, winnerId: next })}
+              label="우승 팀원 명단"
+            />
+            <button type="submit" tabIndex={-1} aria-hidden className="sr-only">저장</button>
+          </form>
+        )}
+      </DetailPane>
 
       {/* 📌 삭제 확인 */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-[#ffffff] border border-[#e91e3f]/25 rounded-3xl w-full max-w-sm p-8 text-center">
-            <h2 className="text-xl font-bold text-[#131313] mb-3">삭제 확인</h2>
-            <p className="text-sm text-[#5a5a5a] mb-8"><span className="text-[#131313] font-bold">{deleteTarget.title}</span> 기록을<br />명예의 전당에서 삭제하시겠습니까?</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#131313] rounded-xl transition-colors">취소</button>
-              <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white rounded-xl transition-colors">삭제</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="삭제 확인"
+        body={deleteTarget && <><b className="text-[#131313]">{deleteTarget.title}</b> 기록을 명예의 전당에서 삭제하시겠습니까?</>}
+        confirmLabel="삭제"
+        danger
+        onConfirm={executeDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
-      {/* 📌 결과 토스트 */}
+      {/* 📌 결과 토스트 — 모바일은 하단 독 위로 */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[130] px-5 py-3 rounded-full border shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] text-sm font-bold backdrop-blur-sm"
-          style={toast.error
-            ? { background: "rgba(40,12,16,0.95)", borderColor: "rgba(233,30,63,0.45)", color: "#ffb3c0" }
-            : { background: "rgba(14,14,14,0.95)", borderColor: "rgba(0,0,0,0.14)", color: "#ffffff" }}>
+        <div
+          role="status"
+          className={`fixed bottom-[96px] md:bottom-6 left-1/2 -translate-x-1/2 z-[130] w-max max-w-[calc(100vw-2rem)] px-5 py-3 rounded-full border text-[13px] font-bold break-keep shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] ${toast.error ? "bg-white border-[#e91e3f] text-[#d01634]" : "bg-[#131313] border-[#131313] text-white"}`}
+        >
           {toast.error ? "⚠ " : "✓ "}{toast.msg}
         </div>
       )}
-    </main>
+    </AdminPage>
   );
 }
-
-const EmptyBox = ({ text }: { text: string }) => (
-  <div className="text-center py-14 text-[#5a5a5a] text-sm bg-black/[0.02] rounded-2xl border border-black/[0.06]">{text}</div>
-);

@@ -1,12 +1,25 @@
 "use client";
 import { PHASES, phaseOf, statusFromPhase } from "@/lib/tournamentPhase";
-import { useState, useEffect, useRef } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BracketView } from "../components/BracketView";
 import { DiscordIdInput } from "../components/DiscordIds";
-
-const ADMIN_USERS = ["elahw.06"];
+import {
+  AdminPage,
+  AdminTabs,
+  Panel,
+  FieldRow,
+  Inline,
+  Segmented,
+  Switch,
+  Toggle,
+  Btn,
+  EmptyRow,
+  inputClass,
+  labelClass,
+  fieldNote,
+  useAdminGuard,
+} from "../admin/ui";
 
 // 개인정보 수집·이용 안내 기본 문구 (관리자가 "기본 문구 넣기"로 채운 뒤 자유롭게 수정)
 const DEFAULT_PRIVACY_TITLE = "[중요] 개인정보 수집 및 이용 안내";
@@ -24,42 +37,47 @@ const DEFAULT_PRIVACY_BODY = [
 const DEFAULT_PRIVACY_CONFIRM = "본 상금 및 상품 수령을 위한 개인정보 수집 및 이용 안내, 유의사항을 충분히 숙지하였으며 이에 동의합니다.";
 const EMPTY_PRIVACY = { enabled: false, title: "", body: "", confirmLabel: "" };
 
-const CustomSelect = ({ value, options, onChange }: { value: string, options: {value: string, label: string}[], onChange: (val: string) => void }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const selectRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => { if (selectRef.current && !selectRef.current.contains(e.target as Node)) setIsOpen(false); };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+// 📌 오른쪽 좁은 칸(게시 설정)용 줄 — FieldRow 의 180px 이름 칸이 360px 안에 들어가지 않아 이름 위 · 입력 아래로 쌓는다.
+//    right: 이름 줄 오른쪽 끝(스위치 · 해제 단추)
+function SideRow({ label, right, children }: { label: ReactNode; right?: ReactNode; children?: ReactNode }) {
   return (
-    <div className="relative w-full" ref={selectRef}>
-      <div onClick={() => setIsOpen(!isOpen)} className={`bg-transparent border-0 border-b ${isOpen ? 'border-[#e91e3f]' : 'border-black/12'} text-[#131313] text-sm rounded-none px-0 py-2.5 cursor-pointer flex items-center justify-between gap-4 transition-colors`}>
-        <span className="font-bold">{options.find(o => o.value === value)?.label}</span>
-        <svg className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+    <div className="px-5 py-3.5 border-b border-[#ededed] last:border-b-0">
+      <div className="flex items-center gap-3 min-h-8">
+        <span className="min-w-0 flex-1 text-[13px] font-bold text-[#131313]">{label}</span>
+        {right}
       </div>
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-full bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 animate-in fade-in zoom-in-95">
-          {options.map((opt) => (
-            <div key={opt.value} onClick={() => { onChange(opt.value); setIsOpen(false); }} className="px-5 py-3 text-sm text-[#5a5a5a] font-bold hover:bg-[#e91e3f]/20 hover:text-[#131313] cursor-pointer transition-colors">{opt.label}</div>
-          ))}
-        </div>
-      )}
+      {children && <div className="mt-2">{children}</div>}
     </div>
   );
 }
 
-const CustomCheckbox = ({ checked, onChange, label }: { checked: boolean, onChange: (val: boolean) => void, label: string }) => (
-  <div onClick={() => onChange(!checked)} className="flex items-center gap-3 cursor-pointer group w-fit">
-    <div className={`w-5 h-5 rounded-[6px] border flex items-center justify-center transition-all ${checked ? 'bg-[#e91e3f] border-[#e91e3f]' : 'border-gray-600 group-hover:border-gray-400 bg-transparent'}`}>
-      {checked && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-    </div>
-    <span className={`text-sm font-bold select-none transition-colors ${checked ? 'text-[#131313]' : 'text-[#5a5a5a] group-hover:text-[#5a5a5a]'}`}>{label}</span>
-  </div>
-)
+// 📌 시작일 ~ 종료일 + 상시 스위치 — 이벤트 기간 · 모집 기간이 같은 모양을 쓴다 (옛 CustomCheckbox 자리)
+const dateClass = `${inputClass} !w-auto`;
+function DateRange({ start, end, always, onStart, onEnd, onAlways, alwaysLabel }: {
+  start: string; end: string; always: boolean;
+  onStart: (v: string) => void; onEnd: (v: string) => void; onAlways: (v: boolean) => void;
+  alwaysLabel: string;
+}) {
+  return (
+    <Inline>
+      <input type="date" value={start} onChange={(e) => onStart(e.target.value)} required className={dateClass} />
+      {!always && (
+        <>
+          <span className="text-[#a3a3a3] font-bold">~</span>
+          <input type="date" value={end} onChange={(e) => onEnd(e.target.value)} className={dateClass} />
+        </>
+      )}
+      <span className="inline-flex items-center gap-2.5 sm:ml-2">
+        <Switch on={always} onChange={onAlways} label={alwaysLabel} />
+        <span className={`text-[13px] font-bold ${always ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{alwaysLabel}</span>
+      </span>
+    </Inline>
+  );
+}
 
 export default function AdminWritePage() {
-  const { data: session, status } = useSession();
+  // 📌 권한 가드는 관리자 공용(useAdminGuard) — 같은 ADMIN_USERS(lib/admins)로 막고, 막힌 화면도 다른 관리 화면과 같은 모양
+  const { session, gate } = useAdminGuard();
   const router = useRouter();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
@@ -523,17 +541,8 @@ export default function AdminWritePage() {
     }
   };
 
-  const isAdmin = session?.user?.name && ADMIN_USERS.includes(session.user.name);
-  if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-[#8a8a8a]">로딩 중...</div>;
-  if (status === "unauthenticated" || !session || !isAdmin) {
-    return (
-      <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-xl font-black text-[#131313] mb-2">권한 없음</h2>
-        <p className="text-[#5a5a5a] text-sm mb-4">관리자 권한이 필요합니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
-      </main>
-    );
-  }
+  // 불러오는 중 · 비로그인 · 관리자 아님 → 공용 가드 화면
+  if (gate) return gate;
 
   const isFormValid = () => {
     if (!title.trim()) return false;
@@ -571,7 +580,7 @@ export default function AdminWritePage() {
     // 대표 기간은 팀 배정일 ~ 대회 당일에서 만든다 (따로 묻지 않는다)
     const computedTournamentDate = category === "대회" ? dateFromDays(tournamentTeamDay, tournamentEventDay) : "";
     const postData = {
-      author: session.user?.name || "관리자", category, title,
+      author: session?.user?.name || "관리자", category, title,
       publishAt: publishAt ? new Date(publishAt).toISOString() : null,
       hidden,
       ...(category === "공지사항" && { content, noticeTag, isPinned, bannerUrl }),
@@ -622,470 +631,366 @@ export default function AdminWritePage() {
     finally { setIsSubmitting(false); }
   };
 
-  const textareaClass = "w-full bg-transparent border-0 px-0 py-2 text-[15px] text-[#131313] focus:outline-none resize-none leading-[1.9] placeholder:text-[#a3a3a3] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]";
+  // 본문 편집기 — 패널 안에서 테두리 없이 제목 아래로 이어진다
+  const textareaClass = "w-full bg-transparent border-0 text-[15px] text-[#131313] outline-none resize-none leading-[1.9] placeholder:text-[#a3a3a3] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]";
+  // 구인 세 칸 · 설문 긴 입력 — 공용 입력칸 모양에 줄 수만 늘린다
+  const areaClass = `${inputClass} resize-y leading-relaxed`;
+  const usesEditor = category === "공지사항" || category === "이벤트" || category === "대회" || category === "서포터즈";
+  const req = <span className="text-[#e91e3f]">*</span>;
+  const optTag = <span className="text-[#8a8a8a] font-normal">(선택)</span>;
+  const iconBtn = "w-8 h-8 inline-flex items-center justify-center rounded-full text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] hover:bg-[#f2f2f2] disabled:opacity-25 disabled:hover:bg-transparent transition-colors";
+  const delBtn = "w-8 h-8 inline-flex items-center justify-center rounded-full text-[#a3a3a3] hover:text-[#d01634] hover:bg-[#f2f2f2] transition-colors";
+  const winBtn = (on: boolean) => `h-8 px-3 rounded-full border text-[12px] font-bold transition-colors disabled:opacity-30 ${on ? "bg-emerald-500 border-emerald-500 text-[#131313]" : "border-[#a3a3a3] text-[#5a5a5a] hover:border-emerald-500"}`;
+  const validImage = /^https?:\/\/\S+$/i.test(imageUrl.trim());
+
+  // 📌 글 종류는 머리 탭 한 줄로 (예전엔 ?category= 로만 바뀌었다). 수정 중에는 종류를 바꿀 수 없으니 지금 것만 보인다
+  const kindTabs = (editId ? [category] : categories).map((c) => ({ id: c, short: c }));
 
   return (
-    <main className="w-full max-w-4xl mx-auto px-6 py-12 flex-1 flex flex-col relative">
-      <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="flex flex-col gap-8">
-        
-        <div className="pb-2">
-          <h1 className="text-2xl md:text-3xl font-black text-[#131313] tracking-tight">
-            {category}{category === "대회" ? " 등록" : " 작성"}
-          </h1>
-        </div>
-
-        <section className="flex flex-col gap-2 border-b border-black/10 pb-5">
-          {/* 보류된 글 이어서 작성 안내 */}
+    <AdminPage
+      section="작성"
+      title={editId ? "글 수정" : "글쓰기"}
+      tabs={<AdminTabs tabs={kindTabs} current={category} onSelect={(id) => { if (!editId) setCategory(id); }} />}
+    >
+      {/* 📌 두 칸 — 왼쪽 넓은 칸은 글 자체(제목 · 본문 · 종류별 항목), 오른쪽 좁은 칸은 게시 설정 + 등록 단추(따라 내려온다).
+             xl 미만은 위아래로. flex-col 에서는 gap 이 먹지 않는 빌드라 칸 사이는 margin 으로 */}
+      <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="flex flex-col xl:flex-row xl:items-start">
+        <div className="min-w-0 flex-1 space-y-5">
+          {/* 보류된 글 이어서 작성 */}
           {hasDraft && (
-            <div className="mb-4 border-y border-[#e91e3f]/25 bg-[#e91e3f]/[0.05] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-black text-[#131313]">보류된 글이 있습니다</p>
-                <p className="text-xs text-[#5a5a5a] mt-0.5">이전에 작성하다 보류한 글을 이어서 작성할 수 있습니다.</p>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button type="button" onClick={discardDraft} className="px-4 py-2 text-xs font-bold text-[#5a5a5a] hover:text-[#131313] bg-black/5 rounded-lg transition-colors">삭제</button>
-                <button type="button" onClick={restoreDraft} className="px-4 py-2 text-xs font-black text-white bg-[#e91e3f] hover:bg-[#d01634] rounded-lg transition-colors">이어서 작성</button>
-              </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-[#ededed] bg-white px-5 py-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] shrink-0" />
+              <p className="min-w-0 flex-1 text-[13px] font-bold">보류된 글이 있습니다</p>
+              <Btn variant="ghost" size="sm" onClick={discardDraft}>삭제</Btn>
+              <Btn size="sm" onClick={restoreDraft}>이어서 작성</Btn>
             </div>
           )}
 
-          <input type="text" placeholder="제목을 입력하세요" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} required className="w-full bg-transparent text-3xl md:text-4xl font-black text-[#131313] placeholder:text-[#a3a3a3] outline-none tracking-tight"/>
+          {/* 📌 제목 + 본문 — 한 판 안에서 문서처럼 이어 쓴다 */}
+          <Panel flush>
+            <input type="text" placeholder="제목을 입력하세요" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} required
+              className="block w-full px-5 py-4 bg-transparent border-b border-[#ededed] text-[20px] md:text-[22px] font-black tracking-tight text-[#131313] placeholder:text-[#a3a3a3] outline-none" />
 
-          {/* 📌 예약 발행 */}
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <span className="text-xs font-bold text-[#8a8a8a]">예약 발행 (선택)</span>
-            <input type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} className="bg-transparent border-0 border-b border-black/12 rounded-none px-4 py-2 text-xs text-[#131313] focus:outline-none focus:border-[#e91e3f]" />
-            {publishAt && (
+            {usesEditor && (
               <>
-                <span className="text-[10px] font-bold text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/20 px-2.5 py-1 rounded-full">해당 시각부터 공개됩니다</span>
-                <button type="button" onClick={() => setPublishAt("")} className="text-[10px] font-bold text-[#8a8a8a] hover:text-[#131313] underline underline-offset-2">해제</button>
+                <div className="flex flex-wrap items-center gap-1 px-3 py-2 border-b border-[#ededed]">
+                  <Btn variant="ghost" size="sm" onClick={() => insertWrap("**")}><span className="text-[14px] font-black">B</span>굵게</Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => insertWrap("__")}><span className="text-[14px] underline">U</span>밑줄</Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => insertWrap("~~")}><span className="text-[14px] line-through">S</span>취소선</Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => insertWrap("==")}><span className="text-[14px] font-black text-[#e91e3f]">A</span>강조</Btn>
+                  <span aria-hidden className="w-px h-4 mx-1 bg-[#ededed]" />
+                  <Btn variant="ghost" size="sm" onClick={() => insertTable(2, 2)}><span className="text-[14px]">⊞</span>표</Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => setImageOpen(true)} title="본문에 넣은 이미지는 글 너비에 맞춰 크게 나옵니다."><span className="text-[14px]">🖼</span>이미지</Btn>
+                </div>
+                <textarea ref={textareaRef} placeholder="내용을 입력하세요..." value={content} onChange={(e) => setContent(e.target.value)} className={`block min-h-[400px] px-5 py-4 ${textareaClass}`} />
               </>
             )}
-            {/* 📌 글 가리기 — 삭제와 달리 되돌릴 수 있다 */}
-            <button type="button" onClick={() => setHidden((v) => !v)}
-              className={`ml-auto text-[11px] font-black px-3 py-1.5 rounded-full border transition-colors ${hidden ? "text-amber-700 border-amber-400/40 bg-amber-400/10" : "text-[#8a8a8a] border-black/12 hover:text-[#131313]"}`}>
-              {hidden ? "숨김 상태 · 눌러서 공개" : "글 가리기"}
-            </button>
-          </div>
-          {hidden && (
-            <p className="mt-2 text-[11px] font-bold text-amber-700/80">이 글은 목록과 링크에서 감춰집니다. 관리자만 볼 수 있습니다.</p>
-          )}
-        </section>
 
-        <section className="flex flex-col gap-6">
-          <p className="text-[11px] font-bold text-[#8a8a8a] tracking-wide">설정</p>
-          
-          {category === "공지사항" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-[#5a5a5a]">카테고리 태그</span>
-                <CustomSelect value={noticeTag} onChange={setNoticeTag} options={[{value:"일반", label:"[일반]"}, {value:"중요", label:"[중요]"}, {value:"업데이트", label:"[업데이트]"}]} />
-              </div>
-              <div className="flex flex-col justify-center gap-3 pt-6">
-                <CustomCheckbox checked={isPinned} onChange={setIsPinned} label="상단에 중요 공지로 고정" />
-              </div>
-              <div className="flex flex-col gap-3 md:col-span-2">
-                <span className="text-xs font-bold text-[#5a5a5a]">상단 배너 URL (선택)</span>
-                <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className="w-full bg-transparent border-0 border-b border-black/12 rounded-none px-5 py-3 text-sm text-[#131313] focus:outline-none focus:border-[#e91e3f]" />
-              </div>
-            </div>
-          )}
+            {category === "구인" && (
+              <>
+                <FieldRow top label={<>지원 자격 {req}</>}>
+                  <textarea rows={4} placeholder="지원에 필요한 자격 요건을 입력하세요." value={recruitQual} onChange={(e) => setRecruitQual(e.target.value)} className={areaClass} />
+                </FieldRow>
+                <FieldRow top label={<>주요 업무 {req}</>}>
+                  <textarea rows={4} placeholder="담당하게 될 주요 업무를 입력하세요." value={recruitTasks} onChange={(e) => setRecruitTasks(e.target.value)} className={areaClass} />
+                </FieldRow>
+                <FieldRow top label={<>우대 사항 및 추가 안내 {optTag}</>}>
+                  <textarea rows={3} placeholder="우대 사항 또는 혜택 등을 자유롭게 입력하세요." value={recruitExtra} onChange={(e) => setRecruitExtra(e.target.value)} className={areaClass} />
+                </FieldRow>
+              </>
+            )}
+          </Panel>
 
           {category === "이벤트" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-[#5a5a5a]">강조 태그</span>
-                <CustomSelect value={eventTag} onChange={setEventTag} options={[{value:"NONE", label:"선택 안함"}, {value:"HOT", label:"HOT"}, {value:"NEW", label:"NEW"}, {value:"종료", label:"종료됨"}]} />
-              </div>
-              <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-[#5a5a5a]">배너 이미지 URL</span>
-                <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className="w-full bg-transparent border-0 border-b border-black/12 rounded-none px-5 py-3 text-sm text-[#131313] focus:outline-none focus:border-[#e91e3f]" />
-              </div>
-              <div className="flex flex-col gap-3 md:col-span-2">
-                <span className="text-xs font-bold text-[#5a5a5a]">이벤트 기간 <span className="text-[#e91e3f]">*</span></span>
-                <div className="flex flex-wrap items-center gap-3 w-full bg-transparent border-0 border-b border-black/12 rounded-none px-4 py-2.5 focus-within:border-[#e91e3f] transition-colors">
-                  <div className="flex items-center gap-2 bg-transparent border-b border-black/10 px-3 py-1.5 flex-1 min-w-[140px]">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-[#5a5a5a] shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                    <input type="date" value={eventStartDate} onChange={(e) => setEventStartDate(e.target.value)} required className="bg-transparent text-sm text-[#131313] font-medium focus:outline-none cursor-pointer w-full" />
-                  </div>
-                  {!isEventAlways && (
-                    <>
-                      <span className="text-[#a3a3a3] font-bold shrink-0">~</span>
-                      <div className="flex items-center gap-2 bg-transparent border-b border-black/10 px-3 py-1.5 flex-1 min-w-[140px]">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-[#5a5a5a] shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                        <input type="date" value={eventEndDate} onChange={(e) => setEventEndDate(e.target.value)} className="bg-transparent text-sm text-[#131313] font-medium focus:outline-none cursor-pointer w-full" />
-                      </div>
-                    </>
-                  )}
-                  <div className="w-px h-5 bg-black/10 mx-1 hidden sm:block shrink-0"></div>
-                  <CustomCheckbox checked={isEventAlways} onChange={(v) => { setIsEventAlways(v); if(v) setEventEndDate(""); }} label="상시 진행" />
-                </div>
-              </div>
-            </div>
+            <Panel flush>
+              <FieldRow label={<>이벤트 기간 {req}</>}>
+                <DateRange start={eventStartDate} end={eventEndDate} always={isEventAlways}
+                  onStart={setEventStartDate} onEnd={setEventEndDate}
+                  onAlways={(v) => { setIsEventAlways(v); if (v) setEventEndDate(""); }} alwaysLabel="상시 진행" />
+              </FieldRow>
+            </Panel>
           )}
 
           {category === "구인" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-[#5a5a5a]">모집 분류 (필터)</span>
-                <CustomSelect value={recruitSubCategory} onChange={setRecruitSubCategory} options={[{value:"staff", label:"스태프 모집"}, {value:"sup", label:"서포터즈 모집"}]} />
-              </div>
-              <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-[#5a5a5a]">모집 직책명 (태그) <span className="text-[#e91e3f]">*</span></span>
-                <input type="text" placeholder="예: MANAGER, SUPPORTERS" value={recruitRole} onChange={(e) => setRecruitRole(e.target.value)} className="w-full bg-[#ffffff] border border-black/10 rounded-xl px-5 py-3 text-sm text-[#131313] font-bold tracking-wider focus:border-[#e91e3f] focus:outline-none" />
-              </div>
-              <div className="flex flex-col gap-3 md:col-span-2">
-                <span className="text-xs font-bold text-[#5a5a5a]">모집 기간 <span className="text-[#e91e3f]">*</span></span>
-                <div className="flex flex-wrap items-center gap-3 w-full bg-transparent border-0 border-b border-black/12 rounded-none px-4 py-2.5 focus-within:border-[#e91e3f] transition-colors">
-                  <div className="flex items-center gap-2 bg-transparent border-b border-black/10 px-3 py-1.5 flex-1 min-w-[140px]">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-[#5a5a5a] shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                    <input type="date" value={recruitStartDate} onChange={(e) => setRecruitStartDate(e.target.value)} required className="bg-transparent text-sm text-[#131313] font-medium focus:outline-none cursor-pointer w-full" />
-                  </div>
-                  {!isRecruitAlways && (
-                    <>
-                      <span className="text-[#a3a3a3] font-bold shrink-0">~</span>
-                      <div className="flex items-center bg-transparent border-b border-black/10 px-3 py-1.5 flex-1 min-w-[140px]">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-[#5a5a5a] shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                        <input type="date" value={recruitEndDate} onChange={(e) => setRecruitEndDate(e.target.value)} className="bg-transparent text-sm text-[#131313] font-medium focus:outline-none cursor-pointer w-full" />
-                      </div>
-                    </>
-                  )}
-                  <div className="w-px h-5 bg-black/10 mx-1 hidden sm:block shrink-0"></div>
-                  <CustomCheckbox checked={isRecruitAlways} onChange={(v) => { setIsRecruitAlways(v); if(v) setRecruitEndDate(""); }} label="상시 모집" />
-                </div>
-              </div>
-            </div>
+            <Panel flush>
+              <FieldRow label={<>모집 직책명 (태그) {req}</>}>
+                <input type="text" placeholder="예: MANAGER, SUPPORTERS" value={recruitRole} onChange={(e) => setRecruitRole(e.target.value)} className={`${inputClass} font-bold`} />
+              </FieldRow>
+              <FieldRow label={<>모집 기간 {req}</>}>
+                <DateRange start={recruitStartDate} end={recruitEndDate} always={isRecruitAlways}
+                  onStart={setRecruitStartDate} onEnd={setRecruitEndDate}
+                  onAlways={(v) => { setIsRecruitAlways(v); if (v) setRecruitEndDate(""); }} alwaysLabel="상시 모집" />
+              </FieldRow>
+            </Panel>
           )}
 
           {category === "대회" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <>
               {/* 📌 대회 단계 — 글 하나가 접수부터 종료까지 따라간다.
                      타입(모집/대진표)으로 글을 쪼개던 구조를 대체한다. */}
-              <div className="md:col-span-2 flex flex-col gap-3">
-                <span className="text-xs font-bold text-[#5a5a5a]">대회 단계 <span className="text-[#e91e3f]">*</span>
-                  <span className="ml-2 text-[#a3a3a3] font-medium">— 이 단계에 따라 대회 화면이 달라집니다</span></span>
+              <Panel title={<>대회 단계 {req}</>}>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                   {PHASES.map((ph) => {
                     const on = tournamentPhase === ph.id;
                     return (
-                      <button key={ph.id} type="button" onClick={() => setTournamentPhase(ph.id)}
-                        className={`text-left rounded-xl border p-3 transition-all ${on ? "border-[#e91e3f] bg-[#e91e3f]/[0.08]" : "border-black/10 bg-[#ffffff] hover:border-black/25"}`}>
-                        <p className={`text-[9px] font-black tracking-[0.14em] mb-1 ${on ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}>{ph.code}</p>
-                        <p className={`text-[13px] font-black mb-0.5 ${on ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{ph.label}</p>
-                        <p className="text-[10px] text-[#8a8a8a] leading-tight break-keep">{ph.desc}</p>
+                      <button key={ph.id} type="button" onClick={() => setTournamentPhase(ph.id)} aria-pressed={on}
+                        className={`text-left rounded-xl border px-3.5 py-3 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 ${on ? "border-[#131313] ring-1 ring-[#131313]" : "border-[#ededed] hover:border-[#a3a3a3]"}`}>
+                        <p className={`text-[11px] font-bold ${on ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}>{ph.code}</p>
+                        <p className={`mt-0.5 text-[13px] font-black ${on ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{ph.label}</p>
+                        <p className="mt-0.5 text-[12px] text-[#5a5a5a] leading-snug break-keep">{ph.desc}</p>
                       </button>
                     );
                   })}
                 </div>
-              </div>
+              </Panel>
 
-              {/* 📌 두 날짜만 있으면 단계가 자동으로 흘러간다 (토: 팀 배정 → 일주일 연습 → 일: 대회 당일) */}
-              <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-[#5a5a5a]">팀 배정일 <span className="text-[#a3a3a3] font-medium">— 경매하는 날</span></span>
-                <input type="date" value={tournamentTeamDay} onChange={(e) => setTournamentTeamDay(e.target.value)}
-                  className="w-full bg-[#ffffff] border border-black/10 rounded-xl px-5 py-3 text-sm text-[#131313] focus:border-[#e91e3f] focus:outline-none" />
-              </div>
-              <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-[#5a5a5a]">대회 당일 <span className="text-[#a3a3a3] font-medium">— 8강~결승을 하루에</span></span>
-                <input type="date" value={tournamentEventDay} onChange={(e) => setTournamentEventDay(e.target.value)}
-                  className="w-full bg-[#ffffff] border border-black/10 rounded-xl px-5 py-3 text-sm text-[#131313] focus:border-[#e91e3f] focus:outline-none" />
-              </div>
-              <div className="md:col-span-2 -mt-2">
-                {tournamentTeamDay && tournamentEventDay && (
-                  <p className="text-[11px] text-[#8a8a8a]">
-                    연습 주간은 <b className="text-[#5a5a5a]">{tournamentTeamDay}</b> 다음날부터 <b className="text-[#5a5a5a]">{tournamentEventDay}</b> 전날까지로 잡힙니다.
-                    <span className="text-[#a3a3a3]"> 스크림 캘린더 기간도 여기에 맞춥니다.</span>
-                  </p>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-[#5a5a5a]">종목 영문명 (부제) <span className="text-[#e91e3f]">*</span></span>
-                <input type="text" placeholder="예: LEAGUE OF LEGENDS" value={tournamentGame} onChange={(e) => setTournamentGame(e.target.value)} className="w-full bg-[#ffffff] border border-black/10 rounded-xl px-5 py-3 text-sm text-[#131313] font-bold tracking-wider focus:border-[#e91e3f] focus:outline-none" />
-              </div>
-              <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-[#5a5a5a]">보상 및 상금 <span className="text-[#e91e3f]">*</span></span>
-                <input type="text" placeholder="예: 총 상금 1,000,000원" value={tournamentPrize} onChange={(e) => setTournamentPrize(e.target.value)} className="w-full bg-[#ffffff] border border-black/10 rounded-xl px-5 py-3 text-sm text-[#131313] focus:border-[#e91e3f] focus:outline-none" />
-              </div>
-              <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-[#5a5a5a]">참가 신청 링크 {tournamentPhase === "접수" ? <span className="text-[#e91e3f]">(권장)</span> : "(선택)"}</span>
-                <input type="text" placeholder="https://..." value={tournamentLink} onChange={(e) => setTournamentLink(e.target.value)} className="w-full bg-transparent border-0 border-b border-black/12 rounded-none px-5 py-3 text-sm text-[#131313] focus:outline-none focus:border-[#e91e3f]" />
-              </div>
+              <Panel title="대회 정보" flush>
+                {/* 📌 두 날짜만 있으면 단계가 자동으로 흘러간다 (토: 팀 배정 → 일주일 연습 → 일: 대회 당일) */}
+                <FieldRow label="팀 배정일" hint="경매하는 날">
+                  <input type="date" value={tournamentTeamDay} onChange={(e) => setTournamentTeamDay(e.target.value)} className={dateClass} />
+                </FieldRow>
+                <FieldRow label={<>대회 당일 {req}</>} hint={
+                  <>
+                    8강~결승을 하루에
+                    {tournamentTeamDay && tournamentEventDay && (
+                      <span className="block">연습 주간은 <b className="text-[#131313]">{tournamentTeamDay}</b> 다음날부터 <b className="text-[#131313]">{tournamentEventDay}</b> 전날까지로 잡힙니다.</span>
+                    )}
+                  </>
+                }>
+                  <input type="date" value={tournamentEventDay} onChange={(e) => setTournamentEventDay(e.target.value)} className={dateClass} />
+                </FieldRow>
+                <FieldRow label={<>종목 영문명 (부제) {req}</>}>
+                  <input type="text" placeholder="예: LEAGUE OF LEGENDS" value={tournamentGame} onChange={(e) => setTournamentGame(e.target.value)} className={`${inputClass} font-bold`} />
+                </FieldRow>
+                <FieldRow label={<>보상 및 상금 {req}</>}>
+                  <input type="text" placeholder="예: 총 상금 1,000,000원" value={tournamentPrize} onChange={(e) => setTournamentPrize(e.target.value)} className={inputClass} />
+                </FieldRow>
+                <FieldRow label={<>참가 신청 링크 {tournamentPhase === "접수" ? <span className="text-[#e91e3f]">(권장)</span> : optTag}</>}>
+                  <input type="text" placeholder="https://..." value={tournamentLink} onChange={(e) => setTournamentLink(e.target.value)} className={inputClass} />
+                </FieldRow>
+              </Panel>
 
               {/* 📌 대진표 — 단계와 무관하게 언제든 짤 수 있다.
                      연습 주간에 미리 만들어 두고 공개는 따로 정한다. */}
-              <div className="md:col-span-2 flex flex-col gap-3">
-                <div className="mt-1 space-y-4">
-                  {/* 자동 생성기 */}
-                  <div className="rounded-xl border border-black/10 bg-[#ffffff] p-4">
-                    <div className="flex items-center justify-between gap-2 mb-3">
-                      <span className="text-xs font-bold text-[#5a5a5a]">대진표 <span className="text-[#a3a3a3] font-medium">(선택 · 패자부활전 지원)</span></span>
-                      {bracketRounds.length > 0 && (
-                        <button type="button" onClick={() => setBracketRounds([])} className="text-[10px] font-bold text-[#a3a3a3] hover:text-red-600 px-2 py-1 transition-colors">전체 초기화</button>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <div className="rounded-lg border border-black/8 bg-[#ffffff] p-3">
-                        <p className="text-[10px] font-black text-[#5a5a5a] mb-2">단일 토너먼트</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[4, 8, 16].map((n) => (
-                            <button key={n} type="button" onClick={() => quickBracket(n)} className="text-[10px] font-black text-[#5a5a5a] bg-black/5 border border-black/10 px-3 py-1.5 rounded-full hover:text-[#131313] hover:border-black/30 transition-all">{n}팀</button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-[#e91e3f]/20 bg-[#e91e3f]/[0.04] p-3">
-                        <p className="text-[10px] font-black text-[#e91e3f] mb-2">패자부활전 (더블 엘리미네이션)</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[4, 8, 16].map((n) => (
-                            <button key={n} type="button" onClick={() => doubleBracket(n)} className="text-[10px] font-black text-[#e91e3f] bg-[#e91e3f]/10 border border-[#e91e3f]/25 px-3 py-1.5 rounded-full hover:bg-[#e91e3f]/20 transition-all">{n}팀</button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5 mt-3">
-                      <span className="text-[10px] font-bold text-[#a3a3a3] mr-1">직접 추가</span>
-                      {GROUP_ORDER.map((g) => (
-                        <button key={g} type="button" onClick={() => setBracketRounds([...bracketRounds, { name: "", bracket: g, matches: [{ a: "", b: "", winner: "" }] }])} className="text-[10px] font-black text-[#5a5a5a] bg-black/5 border border-black/10 px-3 py-1.5 rounded-full hover:text-[#131313] transition-colors">+ {GROUP_LABEL[g]}</button>
-                      ))}
-                    </div>
-                  </div>
+              <Panel title="대진표" right={bracketRounds.length > 0 && <Btn variant="ghost" size="sm" onClick={() => setBracketRounds([])}>전체 초기화</Btn>}>
+                {/* 자동 생성기 — 세 묶음을 한 줄에 (좁으면 줄바꿈) */}
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                  <Inline>
+                    <span className="font-bold">단일 토너먼트</span>
+                    {[4, 8, 16].map((n) => (
+                      <Btn key={n} variant="secondary" size="sm" onClick={() => quickBracket(n)}>{n}팀</Btn>
+                    ))}
+                  </Inline>
+                  <Inline>
+                    <span className="font-bold">패자부활전 (더블 엘리미네이션)</span>
+                    {[4, 8, 16].map((n) => (
+                      <Btn key={n} variant="secondary" size="sm" onClick={() => doubleBracket(n)}>{n}팀</Btn>
+                    ))}
+                  </Inline>
+                  <Inline>
+                    <span className="font-bold">직접 추가</span>
+                    {GROUP_ORDER.map((g) => (
+                      <Btn key={g} variant="secondary" size="sm" onClick={() => setBracketRounds([...bracketRounds, { name: "", bracket: g, matches: [{ a: "", b: "", winner: "" }] }])}>+ {GROUP_LABEL[g]}</Btn>
+                    ))}
+                  </Inline>
+                </div>
 
-                  {/* 라운드 편집 */}
+                {/* 라운드 편집 */}
+                <div className="mt-5">
                   {bracketRounds.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-black/10 bg-[#ffffff] py-8 text-center">
-                      <p className="text-xs text-[#8a8a8a]">위 버튼으로 토너먼트 골격을 자동 생성하거나 라운드를 직접 추가하세요.</p>
-                      <p className="text-[10px] text-[#a3a3a3] mt-1">팀 이름은 나중에 채워도 되고, 승자는 경기 후 수정으로 지정하면 됩니다.</p>
-                    </div>
+                    <EmptyRow>위 버튼으로 토너먼트 골격을 자동 생성하거나 라운드를 직접 추가하세요.</EmptyRow>
                   ) : (
                     <div className="space-y-3">
                       {bracketRounds.map((round, ri) => {
+                        // 그룹 색(승자조 초록 · 패자조 주황 · 결승 빨강)은 데이터에 딸린 색이라 그대로 둔다
                         const gBorder = round.bracket === "L" ? "border-l-orange-400/60" : round.bracket === "F" ? "border-l-[#e91e3f]/60" : "border-l-emerald-400/60";
                         return (
-                        <div key={ri} className={`rounded-xl border border-black/10 border-l-4 ${gBorder} bg-[#ffffff] p-4`}>
-                          <div className="flex flex-wrap items-center gap-2 mb-3">
-                            <div className="flex gap-1 shrink-0">
-                              {GROUP_ORDER.map((g) => {
-                                const active = round.bracket === g;
-                                const activeCls = g === "L" ? "bg-orange-500/15 border-orange-500/40 text-orange-700" : g === "F" ? "bg-[#e91e3f]/15 border-[#e91e3f]/40 text-[#e91e3f]" : "bg-emerald-500/15 border-emerald-500/40 text-emerald-700";
-                                return <button key={g} type="button" onClick={() => updateRound(ri, { bracket: g })} className={`px-2 py-1 text-[9px] font-black rounded-md border transition-all ${active ? activeCls : "border-black/10 text-[#a3a3a3] hover:text-[#5a5a5a]"}`}>{GROUP_LABEL[g]}</button>;
-                              })}
-                            </div>
-                            <input type="text" placeholder="라운드명 (예: 8강)" value={round.name} onChange={(e) => updateRound(ri, { name: e.target.value })} className="w-28 bg-[#ffffff] border border-black/10 rounded-lg px-3 py-2 text-xs font-black text-[#131313] focus:outline-none focus:border-[#e91e3f]" />
-                            <button type="button" onClick={() => updateRound(ri, { matches: [...round.matches, { a: "", b: "", winner: "" }] })} className="text-[10px] font-black text-[#5a5a5a] bg-black/5 border border-black/10 px-3 py-1.5 rounded-full hover:text-[#131313] transition-colors">매치 추가</button>
-                            <button type="button" onClick={() => setBracketRounds(bracketRounds.filter((_, i) => i !== ri))} className="ml-auto text-[10px] font-bold text-[#a3a3a3] hover:text-red-600 transition-colors">라운드 삭제</button>
-                          </div>
-                          <div className="space-y-2">
-                            {round.matches.map((m, mi) => (
-                              <div key={mi} className="flex flex-wrap items-center gap-2">
-                                <span className="text-[9px] font-black text-[#a3a3a3] w-5 text-center shrink-0">{mi + 1}</span>
-                                <input type="text" placeholder="팀 A" value={m.a} onChange={(e) => updateMatch(ri, mi, { a: e.target.value, winner: m.winner === m.a ? e.target.value : m.winner })} className={`flex-1 min-w-[100px] bg-[#ffffff] border rounded-lg px-3 py-2 text-xs text-[#131313] focus:outline-none focus:border-[#e91e3f] ${m.winner && m.winner === m.a ? "border-emerald-500/50" : "border-black/10"}`} />
-                                <span className="text-[9px] font-black text-[#a3a3a3] shrink-0">VS</span>
-                                <input type="text" placeholder="팀 B" value={m.b} onChange={(e) => updateMatch(ri, mi, { b: e.target.value, winner: m.winner === m.b ? e.target.value : m.winner })} className={`flex-1 min-w-[100px] bg-[#ffffff] border rounded-lg px-3 py-2 text-xs text-[#131313] focus:outline-none focus:border-[#e91e3f] ${m.winner && m.winner === m.b ? "border-emerald-500/50" : "border-black/10"}`} />
-                                <div className="flex gap-1 shrink-0">
-                                  <button type="button" disabled={!m.a.trim()} onClick={() => updateMatch(ri, mi, { winner: m.winner === m.a ? "" : m.a })} className={`px-2.5 py-2 text-[10px] font-black rounded-lg border transition-all ${m.winner && m.winner === m.a ? "bg-emerald-500/90 border-emerald-500 text-[#131313]" : "border-black/10 text-[#8a8a8a] hover:border-emerald-500/50 disabled:opacity-30"}`}>A승</button>
-                                  <button type="button" disabled={!m.b.trim()} onClick={() => updateMatch(ri, mi, { winner: m.winner === m.b ? "" : m.b })} className={`px-2.5 py-2 text-[10px] font-black rounded-lg border transition-all ${m.winner && m.winner === m.b ? "bg-emerald-500/90 border-emerald-500 text-[#131313]" : "border-black/10 text-[#8a8a8a] hover:border-emerald-500/50 disabled:opacity-30"}`}>B승</button>
-                                </div>
-                                <button type="button" onClick={() => updateRound(ri, { matches: round.matches.filter((_, j) => j !== mi) })} className="shrink-0 text-[#a3a3a3] hover:text-red-600 text-sm font-black px-1 transition-colors">×</button>
+                          <div key={ri} className={`rounded-xl border border-[#ededed] border-l-4 ${gBorder} p-4`}>
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                              <div className="flex gap-1 shrink-0">
+                                {GROUP_ORDER.map((g) => {
+                                  const active = round.bracket === g;
+                                  const activeCls = g === "L" ? "bg-orange-500/15 border-orange-500/40 text-orange-700" : g === "F" ? "bg-[#e91e3f]/15 border-[#e91e3f]/40 text-[#e91e3f]" : "bg-emerald-500/15 border-emerald-500/40 text-emerald-700";
+                                  return <button key={g} type="button" onClick={() => updateRound(ri, { bracket: g })} className={`h-8 px-3 rounded-full border text-[12px] font-bold transition-colors ${active ? activeCls : "border-[#ededed] text-[#8a8a8a] hover:text-[#131313] hover:border-[#a3a3a3]"}`}>{GROUP_LABEL[g]}</button>;
+                                })}
                               </div>
-                            ))}
+                              <input type="text" placeholder="라운드명 (예: 8강)" value={round.name} onChange={(e) => updateRound(ri, { name: e.target.value })} className={`${inputClass} !w-36 font-bold`} />
+                              <Btn variant="secondary" size="sm" onClick={() => updateRound(ri, { matches: [...round.matches, { a: "", b: "", winner: "" }] })}>매치 추가</Btn>
+                              <Btn variant="ghost" size="sm" className="ml-auto" onClick={() => setBracketRounds(bracketRounds.filter((_, i) => i !== ri))}>라운드 삭제</Btn>
+                            </div>
+                            <div className="space-y-2">
+                              {round.matches.map((m, mi) => (
+                                <div key={mi} className="flex flex-wrap items-center gap-2">
+                                  <span className="w-5 shrink-0 text-center text-[12px] font-bold text-[#8a8a8a] tabular-nums">{mi + 1}</span>
+                                  <input type="text" placeholder="팀 A" value={m.a} onChange={(e) => updateMatch(ri, mi, { a: e.target.value, winner: m.winner === m.a ? e.target.value : m.winner })} className={`${inputClass} flex-1 min-w-[100px] ${m.winner && m.winner === m.a ? "!border-emerald-500" : ""}`} />
+                                  <span className="shrink-0 text-[12px] font-bold text-[#a3a3a3]">VS</span>
+                                  <input type="text" placeholder="팀 B" value={m.b} onChange={(e) => updateMatch(ri, mi, { b: e.target.value, winner: m.winner === m.b ? e.target.value : m.winner })} className={`${inputClass} flex-1 min-w-[100px] ${m.winner && m.winner === m.b ? "!border-emerald-500" : ""}`} />
+                                  <div className="flex gap-1 shrink-0">
+                                    <button type="button" disabled={!m.a.trim()} onClick={() => updateMatch(ri, mi, { winner: m.winner === m.a ? "" : m.a })} className={winBtn(!!m.winner && m.winner === m.a)}>A승</button>
+                                    <button type="button" disabled={!m.b.trim()} onClick={() => updateMatch(ri, mi, { winner: m.winner === m.b ? "" : m.b })} className={winBtn(!!m.winner && m.winner === m.b)}>B승</button>
+                                  </div>
+                                  <button type="button" onClick={() => updateRound(ri, { matches: round.matches.filter((_, j) => j !== mi) })} aria-label="매치 삭제" className={`shrink-0 text-[16px] font-bold ${delBtn}`}>×</button>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
                         );
                       })}
-                      <p className="text-[10px] text-[#a3a3a3]">각 라운드 좌측에서 승자조/패자조/결승 그룹 지정 · 승자 버튼(A승/B승)으로 승리 팀 하이라이트.</p>
                     </div>
                   )}
-
-                  {/* 실시간 미리보기 */}
-                  {serializeBracket(bracketRounds).trim() && (
-                    <div className="rounded-xl border border-black/10 bg-[#ffffff] p-4">
-                      <p className="text-[10px] font-black tracking-[0.2em] text-[#8a8a8a] uppercase mb-3">미리보기 · 대회 페이지 표시 형태</p>
-                      <BracketView text={serializeBracket(bracketRounds)} showHeader={false} />
-                    </div>
-                  )}
-
-                  {/* 📌 공개 여부 — 짜는 것과 보여주는 것을 나눈다.
-                         대회 당일부터는 숨길 이유가 없으므로 잠그고 항상 공개로 둔다. */}
-                  {bracketRounds.length > 0 && (() => {
-                    const forced = tournamentPhase === "당일" || tournamentPhase === "종료";
-                    const on = forced || bracketPublic;
-                    return (
-                      <button type="button" disabled={forced} onClick={() => setBracketPublic((v) => !v)}
-                        className={`w-full flex items-center gap-3 rounded-xl border p-4 text-left transition-all ${forced ? "border-black/10 bg-[#ffffff] cursor-default" : on ? "border-[#e91e3f] bg-[#e91e3f]/[0.08]" : "border-black/10 bg-[#ffffff] hover:border-black/25"}`}>
-                        <span className={`w-9 h-5 rounded-full shrink-0 relative transition-colors ${on ? "bg-[#e91e3f]" : "bg-black/15"}`}>
-                          <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-[13px] font-black text-[#131313]">
-                            {on ? "대진표를 참가자에게 공개" : "대진표를 아직 숨김"}
-                          </span>
-                          <span className="block text-[11px] text-[#8a8a8a] mt-0.5 break-keep">
-                            {forced
-                              ? "대회 당일부터는 항상 공개됩니다."
-                              : on
-                                ? "지금 대회 페이지에 대진표가 보입니다."
-                                : "짜두기만 하고 보여주지 않습니다. 관리자에게는 계속 보입니다."}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })()}
                 </div>
 
-                <span className="text-xs font-bold text-[#5a5a5a] mt-4 block">우승팀 / 우승자 (선택 · 명예의 전당 표시)</span>
-                <input type="text" placeholder="예시: 이글루A" value={tournamentWinner} onChange={(e) => setTournamentWinner(e.target.value)} className="w-full bg-transparent border-0 border-b border-black/12 rounded-none px-5 py-3 text-sm text-[#131313] focus:outline-none focus:border-[#e91e3f]" />
+                {/* 실시간 미리보기 */}
+                {serializeBracket(bracketRounds).trim() && (
+                  <div className="mt-5 rounded-xl border border-[#ededed] p-4">
+                    <p className="mb-3 text-[12px] font-bold text-[#5a5a5a]">미리보기 · 대회 페이지 표시 형태</p>
+                    <BracketView text={serializeBracket(bracketRounds)} showHeader={false} />
+                  </div>
+                )}
 
+                {/* 📌 공개 여부 — 짜는 것과 보여주는 것을 나눈다.
+                       대회 당일부터는 숨길 이유가 없으므로 잠그고 항상 공개로 둔다. */}
+                {bracketRounds.length > 0 && (() => {
+                  const forced = tournamentPhase === "당일" || tournamentPhase === "종료";
+                  const on = forced || bracketPublic;
+                  return (
+                    <div className="mt-5 flex items-center gap-3 rounded-xl border border-[#ededed] px-4 py-3">
+                      <Switch on={on} disabled={forced} onChange={() => setBracketPublic((v) => !v)} label="대진표 공개" />
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-bold text-[#131313]">{on ? "대진표를 참가자에게 공개" : "대진표를 아직 숨김"}</p>
+                        <p className="mt-0.5 text-[12px] text-[#5a5a5a] break-keep">
+                          {forced
+                            ? "대회 당일부터는 항상 공개됩니다."
+                            : on
+                              ? "지금 대회 페이지에 대진표가 보입니다."
+                              : "짜두기만 하고 보여주지 않습니다. 관리자에게는 계속 보입니다."}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </Panel>
+
+              <Panel title="우승" flush>
+                <FieldRow label="우승팀 / 우승자" hint="선택 · 명예의 전당 표시">
+                  <input type="text" placeholder="예시: 이글루A" value={tournamentWinner} onChange={(e) => setTournamentWinner(e.target.value)} className={inputClass} />
+                </FieldRow>
                 {/* 팀원은 한 명씩 칩으로 담는다 — 쉼표로 나열하면 오타를 알아채기 어렵다 */}
-                <div className="mt-4">
+                <div className="px-5 py-4">
                   <DiscordIdInput value={tournamentWinnerId} onChange={setTournamentWinnerId} label="우승 팀원 명단 (명예의 전당에 각자 프로필로 표시)" />
                 </div>
-              </div>
+              </Panel>
 
-              {/* 📌 참가 설문 (구글폼 형식) */}
-              <div className="md:col-span-2">
-                <div className="border-y border-black/10">
-                  <div className="flex flex-wrap items-center gap-3 py-3.5 border-b border-black/[0.06]">
-                    <span className="w-1 h-4 bg-[#e91e3f] rounded-full"></span>
-                    <span className="text-sm font-black text-[#131313]">참가 설문</span>
+              {/* 📌 참가 설문 (구글폼 형식) — 켜기 스위치는 판 머리에, 켜면 설정 줄 → 문항 도구 → 문항 → 문항 추가 순으로 */}
+              <Panel
+                title="참가 설문"
+                flush
+                className={survey.enabled ? "" : "[&>div:first-child]:border-b-0"}
+                right={
+                  <>
                     {survey.enabled && survey.questions.length > 0 && (
-                      <span className="text-[10px] font-bold text-[#8a8a8a]">
+                      <span className="text-[12px] text-[#8a8a8a] tabular-nums">
                         문항 {survey.questions.length}개 · 필수 {survey.questions.filter((q) => q.required).length}개
                       </span>
                     )}
-                    <div className="ml-auto flex items-center gap-2">
-                      {survey.enabled && (
-                        <>
-                          <button type="button" onClick={() => setSurveyPreview(true)} disabled={!survey.questions.length} className="text-[11px] font-black px-3 py-1.5 rounded-full border border-black/15 text-[#5a5a5a] hover:text-[#131313] hover:border-black/30 disabled:opacity-40 transition-all">미리보기</button>
-                          <button type="button" onClick={() => setSurvey({ ...survey, closed: !survey.closed })} className={`text-[11px] font-black px-3 py-1.5 rounded-full border transition-all ${survey.closed ? "bg-black/10 text-[#5a5a5a] border-black/20" : "bg-emerald-500/10 text-emerald-700 border-emerald-500/30"}`}>
-                            {survey.closed ? "접수 마감됨" : "접수 중"}
-                          </button>
-                        </>
+                    {survey.enabled && (
+                      <Btn variant="secondary" size="sm" onClick={() => setSurveyPreview(true)} disabled={!survey.questions.length}>미리보기</Btn>
+                    )}
+                    <Toggle on={survey.enabled} onClick={() => setSurvey({ ...survey, enabled: !survey.enabled })} onLabel="설문 사용 중" offLabel="설문 사용 안 함" />
+                  </>
+                }
+              >
+                {survey.enabled && (
+                  <>
+                    <FieldRow label="설문 제목">
+                      <input type="text" placeholder="예: 제1회 대회 참가 신청서" value={survey.title} onChange={(e) => setSurvey({ ...survey, title: e.target.value })} className={inputClass} />
+                    </FieldRow>
+                    <FieldRow label={<>설명 {optTag}</>}>
+                      <input type="text" value={survey.desc} onChange={(e) => setSurvey({ ...survey, desc: e.target.value })} className={inputClass} />
+                    </FieldRow>
+                    <FieldRow label="접수">
+                      <Segmented
+                        options={[{ v: "open", l: "접수 중" }, { v: "closed", l: "접수 마감됨" }]}
+                        value={survey.closed ? "closed" : "open"}
+                        onChange={(v) => setSurvey({ ...survey, closed: v === "closed" })}
+                      />
+                    </FieldRow>
+
+                    {/* 개인정보 수집·이용 안내 — 참가자가 제출 전 반드시 동의해야 한다 */}
+                    <FieldRow top label="개인정보 수집 · 이용 안내" hint={survey.privacy.enabled ? undefined : "계좌번호 · 실명 등을 받는 대회라면 반드시 켭니다."}>
+                      <div className="min-h-10 flex items-center">
+                        <Toggle
+                          on={survey.privacy.enabled}
+                          onClick={() => {
+                            const on = !survey.privacy.enabled;
+                            // 처음 켤 때는 기본 문구를 미리 채워 준다
+                            if (on && !survey.privacy.body.trim()) {
+                              setPrivacy({ enabled: true, title: DEFAULT_PRIVACY_TITLE, body: DEFAULT_PRIVACY_BODY, confirmLabel: DEFAULT_PRIVACY_CONFIRM });
+                            } else {
+                              setPrivacy({ enabled: on });
+                            }
+                          }}
+                          onLabel="사용 중"
+                          offLabel="사용 안 함"
+                        />
+                      </div>
+                      {survey.privacy.enabled && (
+                        <div className="mt-3 space-y-4">
+                          <div>
+                            <label className={labelClass}>안내 제목</label>
+                            <input type="text" value={survey.privacy.title} onChange={(e) => setPrivacy({ title: e.target.value })} placeholder={DEFAULT_PRIVACY_TITLE} className={inputClass} />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <label className="text-[13px] font-bold text-[#131313]">안내 본문</label>
+                              <Btn variant="secondary" size="sm" onClick={() => setPrivacy({ title: DEFAULT_PRIVACY_TITLE, body: DEFAULT_PRIVACY_BODY, confirmLabel: DEFAULT_PRIVACY_CONFIRM })}>기본 문구 넣기</Btn>
+                            </div>
+                            <textarea value={survey.privacy.body} onChange={(e) => setPrivacy({ body: e.target.value })} rows={12} placeholder="수집 목적 · 수집 항목 · 보유 기간을 적어 주세요." className={`${areaClass} text-[13px]`} />
+                            <p className={fieldNote}>줄바꿈은 그대로 보입니다.</p>
+                          </div>
+                          <div>
+                            <label className={labelClass}>동의 체크 문구</label>
+                            <input type="text" value={survey.privacy.confirmLabel} onChange={(e) => setPrivacy({ confirmLabel: e.target.value })} placeholder={DEFAULT_PRIVACY_CONFIRM} className={inputClass} />
+                            <p className={fieldNote}>체크하지 않으면 참가자의 제출 버튼이 잠깁니다.</p>
+                          </div>
+                        </div>
                       )}
-                      <button type="button" onClick={() => setSurvey({ ...survey, enabled: !survey.enabled })} className={`text-[11px] font-black px-3 py-1.5 rounded-full border transition-all ${survey.enabled ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-transparent border-black/15 text-[#5a5a5a] hover:text-[#131313]"}`}>
-                        {survey.enabled ? "설문 사용 중" : "설문 사용 안 함"}
-                      </button>
+                    </FieldRow>
+
+                    {/* 템플릿 · 일괄 조작 */}
+                    <div className="flex flex-wrap items-center gap-2 px-5 py-3.5 border-b border-[#ededed]">
+                      <span className="mr-1 text-[13px] font-bold">템플릿</span>
+                      {SURVEY_TEMPLATES.map((t) => (
+                        <Btn key={t.name} variant="secondary" size="sm" onClick={() => applyTemplate(t)} title={t.desc}>{t.name}</Btn>
+                      ))}
+                      {survey.questions.length > 0 && (
+                        <div className="ml-auto flex items-center gap-1">
+                          <Btn variant="ghost" size="sm" onClick={() => setSurvey({ ...survey, questions: survey.questions.map((q) => ({ ...q, required: !survey.questions.every((x) => x.required) })) })}>
+                            {survey.questions.every((q) => q.required) ? "필수 전체 해제" : "전체 필수로"}
+                          </Btn>
+                          <Btn variant="ghost" size="sm" onClick={() => { if (confirm("작성한 문항을 모두 삭제할까요?")) setSurvey({ ...survey, questions: [] }); }}>전체 삭제</Btn>
+                        </div>
+                      )}
                     </div>
-                  </div>
 
-                  {survey.enabled && (
-                    <div className="p-5 space-y-5">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <input type="text" placeholder="설문 제목 (예: 제1회 대회 참가 신청서)" value={survey.title} onChange={(e) => setSurvey({ ...survey, title: e.target.value })} className="w-full bg-transparent border-0 border-b border-black/12 rounded-none px-5 py-3 text-sm text-[#131313] focus:outline-none focus:border-[#e91e3f]" />
-                        <input type="text" placeholder="설명 (선택)" value={survey.desc} onChange={(e) => setSurvey({ ...survey, desc: e.target.value })} className="w-full bg-transparent border-0 border-b border-black/12 rounded-none px-5 py-3 text-sm text-[#131313] focus:outline-none focus:border-[#e91e3f]" />
+                    {/* 질문 목록 */}
+                    {survey.questions.length === 0 ? (
+                      <div className="px-5 py-4 border-b border-[#ededed]">
+                        <EmptyRow>위 템플릿을 고르거나, 아래에서 문항을 추가하세요.</EmptyRow>
                       </div>
-
-                      {/* 개인정보 수집·이용 안내 — 참가자가 제출 전 반드시 동의해야 한다 */}
-                      <div className="rounded-xl border border-black/10 overflow-hidden">
-                        <div className="flex items-center justify-between gap-3 px-5 py-4 bg-black/[0.02]">
-                          <div className="min-w-0">
-                            <p className="text-sm font-black text-[#131313]">개인정보 수집 · 이용 안내</p>
-                            <p className="text-[11px] text-[#8a8a8a] mt-1 break-keep">
-                              계좌번호·실명 등을 받는 대회라면 반드시 켜세요. 참가자는 동의해야만 제출할 수 있고, 동의한 문구가 응답에 함께 기록됩니다.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const on = !survey.privacy.enabled;
-                              // 처음 켤 때는 기본 문구를 미리 채워 준다
-                              if (on && !survey.privacy.body.trim()) {
-                                setPrivacy({ enabled: true, title: DEFAULT_PRIVACY_TITLE, body: DEFAULT_PRIVACY_BODY, confirmLabel: DEFAULT_PRIVACY_CONFIRM });
-                              } else {
-                                setPrivacy({ enabled: on });
-                              }
-                            }}
-                            className={`shrink-0 px-4 py-2 rounded-full text-[11px] font-black transition-all ${
-                              survey.privacy.enabled ? "bg-[#e91e3f] text-white" : "border border-black/15 text-[#5a5a5a] hover:text-[#131313] hover:border-black/35"
-                            }`}
-                          >
-                            {survey.privacy.enabled ? "사용 중" : "사용 안 함"}
-                          </button>
-                        </div>
-
-                        {survey.privacy.enabled && (
-                          <div className="p-5 space-y-4 border-t border-black/[0.07]">
-                            <div>
-                              <label className="block text-[11px] font-bold text-[#8a8a8a] mb-2">안내 제목</label>
-                              <input
-                                type="text"
-                                value={survey.privacy.title}
-                                onChange={(e) => setPrivacy({ title: e.target.value })}
-                                placeholder={DEFAULT_PRIVACY_TITLE}
-                                className="w-full bg-transparent border border-black/10 rounded-lg px-4 py-3 text-sm text-[#131313] focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
-                              />
-                            </div>
-
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <label className="block text-[11px] font-bold text-[#8a8a8a]">안내 본문</label>
-                                <button
-                                  type="button"
-                                  onClick={() => setPrivacy({ title: DEFAULT_PRIVACY_TITLE, body: DEFAULT_PRIVACY_BODY, confirmLabel: DEFAULT_PRIVACY_CONFIRM })}
-                                  className="text-[11px] font-bold text-[#5a5a5a] border border-black/10 px-3 py-1 rounded-full hover:border-[#e91e3f]/50 hover:text-[#131313] transition-all"
-                                >
-                                  기본 문구 넣기
-                                </button>
-                              </div>
-                              <textarea
-                                value={survey.privacy.body}
-                                onChange={(e) => setPrivacy({ body: e.target.value })}
-                                rows={12}
-                                placeholder="수집 목적 · 수집 항목 · 보유 기간을 적어 주세요."
-                                className="w-full bg-transparent border border-black/10 rounded-lg px-4 py-3 text-[13px] leading-relaxed text-[#131313] focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3] resize-y"
-                              />
-                              <p className="text-[10px] text-[#8a8a8a] mt-1.5">줄바꿈은 그대로 보입니다. 대회마다 수집 항목이 다르면 그에 맞게 고쳐 주세요.</p>
-                            </div>
-
-                            <div>
-                              <label className="block text-[11px] font-bold text-[#8a8a8a] mb-2">동의 체크 문구</label>
-                              <input
-                                type="text"
-                                value={survey.privacy.confirmLabel}
-                                onChange={(e) => setPrivacy({ confirmLabel: e.target.value })}
-                                placeholder={DEFAULT_PRIVACY_CONFIRM}
-                                className="w-full bg-transparent border border-black/10 rounded-lg px-4 py-3 text-sm text-[#131313] focus:outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#a3a3a3]"
-                              />
-                              <p className="text-[10px] text-[#8a8a8a] mt-1.5">참가자가 체크할 문장입니다. 체크하지 않으면 제출 버튼이 잠깁니다.</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 템플릿 */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] font-black tracking-widest text-[#a3a3a3] uppercase mr-1">템플릿</span>
-                        {SURVEY_TEMPLATES.map((t) => (
-                          <button key={t.name} type="button" onClick={() => applyTemplate(t)} title={t.desc} className="text-[11px] font-bold text-[#5a5a5a] border border-black/10 px-3 py-1.5 rounded-full hover:border-[#e91e3f]/50 hover:text-[#131313] transition-all">
-                            {t.name}
-                          </button>
-                        ))}
-                        {survey.questions.length > 0 && (
-                          <>
-                            <span className="w-px h-4 bg-black/10 mx-1" />
-                            <button type="button" onClick={() => setSurvey({ ...survey, questions: survey.questions.map((q) => ({ ...q, required: !survey.questions.every((x) => x.required) })) })} className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">
-                              {survey.questions.every((q) => q.required) ? "필수 전체 해제" : "전체 필수로"}
-                            </button>
-                            <button type="button" onClick={() => { if (confirm("작성한 문항을 모두 삭제할까요?")) setSurvey({ ...survey, questions: [] }); }} className="text-[11px] font-bold text-[#a3a3a3] hover:text-red-600 transition-colors">전체 삭제</button>
-                          </>
-                        )}
-                      </div>
-
-                      {/* 질문 목록 */}
-                      {survey.questions.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-black/10 py-10 text-center">
-                          <p className="text-xs text-[#8a8a8a]">위 템플릿을 고르거나, 아래에서 문항을 추가하세요.</p>
-                        </div>
-                      ) : (
-                        <div className="border-t border-black/[0.08]">
-                          {survey.questions.map((q, qi) => {
-                            const isOpen = !collapsed[q.qid];
-                            const dupOpts = q.options.filter((o, i) => o.trim() && q.options.findIndex((x) => x.trim() === o.trim()) !== i);
-                            return (
+                    ) : (
+                      <div>
+                        {survey.questions.map((q, qi) => {
+                          const isOpen = !collapsed[q.qid];
+                          const dupOpts = q.options.filter((o, i) => o.trim() && q.options.findIndex((x) => x.trim() === o.trim()) !== i);
+                          const isOver = overQ === qi && dragQ !== null && dragQ !== qi;
+                          return (
                             <div
                               key={q.qid}
                               onDragOver={(e) => { if (dragQ !== null) { e.preventDefault(); setOverQ(qi); } }}
                               onDrop={(e) => { if (dragQ !== null) { e.preventDefault(); dropQuestion(qi); setDragQ(null); setOverQ(null); } }}
-                              className={`border-b border-black/[0.08] transition-colors ${dragQ === qi ? "opacity-40" : ""} ${overQ === qi && dragQ !== null && dragQ !== qi ? "bg-[#e91e3f]/[0.06] shadow-[inset_0_2px_0_0_#e91e3f]" : ""}`}
+                              // 놓일 자리는 위쪽 빨간 선 + 들어간 면으로 (색 덩어리 대신)
+                              className={`px-5 border-t-2 border-b border-[#ededed] transition-colors ${dragQ === qi ? "opacity-40" : ""} ${isOver ? "border-t-[#e91e3f] bg-[#f2f2f2]" : "border-t-transparent"}`}
                             >
                               <div className="flex flex-wrap items-center gap-2 py-3">
                                 {/* 드래그 핸들 */}
@@ -1094,35 +999,36 @@ export default function AdminWritePage() {
                                   onDragStart={() => setDragQ(qi)}
                                   onDragEnd={() => { setDragQ(null); setOverQ(null); }}
                                   title="끌어서 순서 변경"
-                                  className="shrink-0 cursor-grab active:cursor-grabbing px-1.5 py-2 text-[#a3a3a3] hover:text-[#5a5a5a] select-none leading-none"
+                                  className="shrink-0 cursor-grab active:cursor-grabbing px-1 py-2 text-[#a3a3a3] hover:text-[#5a5a5a] select-none leading-none"
                                 >
                                   <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.3"/><circle cx="11" cy="3" r="1.3"/><circle cx="5" cy="8" r="1.3"/><circle cx="11" cy="8" r="1.3"/><circle cx="5" cy="13" r="1.3"/><circle cx="11" cy="13" r="1.3"/></svg>
                                 </span>
-                                <span className="text-[10px] font-black text-[#a3a3a3] w-5 tabular-nums shrink-0">{String(qi + 1).padStart(2, "0")}</span>
+                                <span className="w-5 shrink-0 text-[12px] font-bold text-[#8a8a8a] tabular-nums">{String(qi + 1).padStart(2, "0")}</span>
                                 <input
                                   type="text"
                                   placeholder={q.type === "note" ? "설명 제목 (비워둘 수 있음)" : "질문을 입력하세요"}
                                   value={q.label}
                                   onChange={(e) => updateQuestion(qi, { label: e.target.value })}
                                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addQuestion(q.type); } }}
-                                  className="flex-1 min-w-[160px] bg-transparent border-b border-black/10 px-1 py-2 text-sm font-bold text-[#131313] outline-none focus:border-[#e91e3f] transition-colors"
+                                  className={`${inputClass} flex-1 min-w-[160px] font-bold`}
                                 />
-                                <select value={q.type} onChange={(e) => { const t = e.target.value; updateQuestion(qi, { type: t, options: isChoiceType(t) && q.options.length === 0 ? ["선택지 1"] : q.options, required: t === "note" ? false : q.required }); }} className="bg-[#ffffff] border border-black/10 rounded-lg px-2.5 py-2 text-xs font-bold text-[#131313] outline-none focus:border-[#e91e3f] shrink-0">
+                                <select value={q.type} onChange={(e) => { const t = e.target.value; updateQuestion(qi, { type: t, options: isChoiceType(t) && q.options.length === 0 ? ["선택지 1"] : q.options, required: t === "note" ? false : q.required }); }} className={`${inputClass} !w-auto shrink-0`}>
                                   {Q_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
                                 </select>
                                 {q.type !== "note" && (
-                                  <button type="button" onClick={() => updateQuestion(qi, { required: !q.required })} title="필수 응답 여부" className={`text-[10px] font-black px-2.5 py-2 rounded-lg border transition-all shrink-0 ${q.required ? "bg-[#e91e3f]/15 border-[#e91e3f]/40 text-[#e91e3f]" : "border-black/10 text-[#8a8a8a] hover:text-[#5a5a5a]"}`}>필수</button>
+                                  <button type="button" onClick={() => updateQuestion(qi, { required: !q.required })} title="필수 응답 여부" aria-pressed={q.required}
+                                    className={`shrink-0 h-8 px-3 rounded-full border text-[12px] font-bold transition-colors ${q.required ? "border-[#e91e3f] text-[#e91e3f]" : "border-[#a3a3a3] text-[#5a5a5a] hover:text-[#131313] hover:border-[#131313]"}`}>필수</button>
                                 )}
-                                <div className="flex gap-0.5 shrink-0">
-                                  <button type="button" onClick={() => moveQuestion(qi, -1)} disabled={qi === 0} title="위로" className="px-2 py-2 text-[10px] font-black text-[#8a8a8a] hover:text-[#131313] disabled:opacity-25 rounded-lg hover:bg-black/5">▲</button>
-                                  <button type="button" onClick={() => moveQuestion(qi, 1)} disabled={qi === survey.questions.length - 1} title="아래로" className="px-2 py-2 text-[10px] font-black text-[#8a8a8a] hover:text-[#131313] disabled:opacity-25 rounded-lg hover:bg-black/5">▼</button>
-                                  <button type="button" onClick={() => dupQuestion(qi)} title="문항 복사" className="px-2 py-2 text-[#8a8a8a] hover:text-[#131313] rounded-lg hover:bg-black/5">
+                                <div className="flex shrink-0">
+                                  <button type="button" onClick={() => moveQuestion(qi, -1)} disabled={qi === 0} title="위로" className={iconBtn}>▲</button>
+                                  <button type="button" onClick={() => moveQuestion(qi, 1)} disabled={qi === survey.questions.length - 1} title="아래로" className={iconBtn}>▼</button>
+                                  <button type="button" onClick={() => dupQuestion(qi)} title="문항 복사" className={iconBtn}>
                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" /></svg>
                                   </button>
-                                  <button type="button" onClick={() => setCollapsed((c) => ({ ...c, [q.qid]: !c[q.qid] }))} title={isOpen ? "접기" : "펼치기"} className="px-2 py-2 text-[#8a8a8a] hover:text-[#131313] rounded-lg hover:bg-black/5">
+                                  <button type="button" onClick={() => setCollapsed((c) => ({ ...c, [q.qid]: !c[q.qid] }))} title={isOpen ? "접기" : "펼치기"} className={iconBtn}>
                                     <svg className={`w-3.5 h-3.5 transition-transform ${isOpen ? "" : "-rotate-90"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
                                   </button>
-                                  <button type="button" onClick={() => removeQuestion(qi)} title="문항 삭제" className="px-2 py-2 text-[#a3a3a3] hover:text-red-600 rounded-lg hover:bg-black/5">
+                                  <button type="button" onClick={() => removeQuestion(qi)} title="문항 삭제" className={delBtn}>
                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                                   </button>
                                 </div>
@@ -1130,36 +1036,36 @@ export default function AdminWritePage() {
 
                               {/* 📌 부가 설명 — 모든 문항 공통 (note 타입은 이게 본문) */}
                               {isOpen && (
-                                <div className="pl-9 pb-3">
+                                <div className="md:pl-9 pb-3">
                                   <textarea
                                     rows={q.type === "note" ? 3 : 1}
                                     placeholder={q.type === "note" ? "참가자에게 보여줄 안내 문구를 입력하세요 (줄바꿈 가능)" : "부가 설명 (선택) — 질문 아래 회색으로 표시됩니다"}
                                     value={q.desc}
                                     onChange={(e) => updateQuestion(qi, { desc: e.target.value })}
-                                    className={`w-full bg-transparent border-b px-1 py-1.5 text-xs outline-none resize-none leading-relaxed transition-colors ${q.type === "note" ? "border-black/15 text-[#5a5a5a] focus:border-[#e91e3f]" : "border-black/[0.07] text-[#5a5a5a] focus:border-[#e91e3f]"}`}
+                                    className={`${areaClass} text-[13px]`}
                                   />
                                 </div>
                               )}
 
                               {isOpen && (isChoiceType(q.type) ? (
-                                <div className="pl-9 pb-4 space-y-1">
+                                <div className="md:pl-9 pb-4 space-y-1.5">
                                   {q.options.map((opt, oi) => (
                                     <div
                                       key={oi}
                                       onDragOver={(e) => { if (dragOpt?.qi === qi) e.preventDefault(); }}
                                       onDrop={(e) => { if (dragOpt?.qi === qi) { e.preventDefault(); dropOption(qi, oi); setDragOpt(null); } }}
-                                      className={`flex items-center gap-2 group/opt rounded ${dragOpt && dragOpt.qi === qi && dragOpt.oi === oi ? "opacity-40" : ""}`}
+                                      className={`flex items-center gap-2 group/opt ${dragOpt && dragOpt.qi === qi && dragOpt.oi === oi ? "opacity-40" : ""}`}
                                     >
                                       <span
                                         draggable
                                         onDragStart={() => setDragOpt({ qi, oi })}
                                         onDragEnd={() => setDragOpt(null)}
                                         title="끌어서 순서 변경"
-                                        className="shrink-0 cursor-grab active:cursor-grabbing text-gray-800 group-hover/opt:text-[#8a8a8a] leading-none"
+                                        className="shrink-0 cursor-grab active:cursor-grabbing text-[#a3a3a3] group-hover/opt:text-[#5a5a5a] leading-none"
                                       >
                                         <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/><circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/></svg>
                                       </span>
-                                      <span className={`w-3 h-3 shrink-0 border border-black/25 ${q.type === "single" ? "rounded-full" : "rounded-[3px]"}`}></span>
+                                      <span className={`w-3 h-3 shrink-0 border border-[#a3a3a3] ${q.type === "single" ? "rounded-full" : "rounded-[3px]"}`}></span>
                                       <input
                                         type="text"
                                         value={opt}
@@ -1170,220 +1076,221 @@ export default function AdminWritePage() {
                                           if (e.key === "Backspace" && !opt && q.options.length > 1) { e.preventDefault(); updateQuestion(qi, { options: q.options.filter((_, i) => i !== oi) }); }
                                         }}
                                         placeholder={`선택지 ${oi + 1}`}
-                                        className="flex-1 bg-transparent border-b border-black/10 px-1 py-1.5 text-xs text-[#131313] outline-none focus:border-[#e91e3f] transition-colors"
+                                        className={`${inputClass} flex-1 min-w-0`}
                                       />
-                                      <button type="button" onClick={() => { const opts = [...q.options]; opts.splice(oi + 1, 0, opt); updateQuestion(qi, { options: opts }); }} title="선택지 복사" className="opacity-0 group-hover/opt:opacity-100 text-[#a3a3a3] hover:text-[#131313] text-[11px] px-1 transition-opacity">복사</button>
+                                      <button type="button" onClick={() => { const opts = [...q.options]; opts.splice(oi + 1, 0, opt); updateQuestion(qi, { options: opts }); }} title="선택지 복사" className="shrink-0 px-1 text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] opacity-0 group-hover/opt:opacity-100 focus:opacity-100 transition-opacity">복사</button>
                                       {q.options.length > 1 && (
-                                        <button type="button" onClick={() => updateQuestion(qi, { options: q.options.filter((_, i) => i !== oi) })} title="선택지 삭제" className="text-[#a3a3a3] hover:text-red-600 text-xs px-1">×</button>
+                                        <button type="button" onClick={() => updateQuestion(qi, { options: q.options.filter((_, i) => i !== oi) })} title="선택지 삭제" className={`shrink-0 text-[14px] font-bold ${delBtn}`}>×</button>
                                       )}
                                     </div>
                                   ))}
-                                  <div className="flex flex-wrap items-center gap-3 pt-2">
-                                    <button type="button" onClick={() => updateQuestion(qi, { options: [...q.options, ""] })} className="text-[11px] font-bold text-[#e91e3f] hover:underline">+ 선택지 추가</button>
-                                    <button type="button" onClick={() => updateQuestion(qi, { etc: !q.etc })} className={`text-[11px] font-bold ${q.etc ? "text-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a]"}`}>기타(직접 입력) {q.etc ? "사용 중" : "추가"}</button>
-                                    <button type="button" onClick={() => updateQuestion(qi, { options: [...q.options].sort((a, b) => a.localeCompare(b, "ko")) })} className="text-[11px] font-bold text-[#a3a3a3] hover:text-[#5a5a5a]">가나다 정렬</button>
-                                    <span className="text-[10px] text-[#a3a3a3]">Enter=추가 · 여러 줄 붙여넣기=일괄 등록</span>
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-2">
+                                    <button type="button" onClick={() => updateQuestion(qi, { options: [...q.options, ""] })} className="text-[12px] font-bold text-[#e91e3f] hover:text-[#d01634]">+ 선택지 추가</button>
+                                    <button type="button" onClick={() => updateQuestion(qi, { etc: !q.etc })} className={`text-[12px] font-bold ${q.etc ? "text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>기타(직접 입력) {q.etc ? "사용 중" : "추가"}</button>
+                                    <button type="button" onClick={() => updateQuestion(qi, { options: [...q.options].sort((a, b) => a.localeCompare(b, "ko")) })} className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313]">가나다 정렬</button>
+                                    <span className="text-[12px] text-[#8a8a8a]">Enter=추가 · 여러 줄 붙여넣기=일괄 등록</span>
                                   </div>
                                   {dupOpts.length > 0 && (
-                                    <p className="text-[10px] font-bold text-amber-700/90 pt-1">중복된 선택지가 있습니다: {[...new Set(dupOpts)].join(", ")}</p>
+                                    <p className="pt-1 text-[12px] font-bold text-amber-700">중복된 선택지가 있습니다: {[...new Set(dupOpts)].join(", ")}</p>
                                   )}
                                 </div>
                               ) : (
-                                <p className="pl-9 pb-4 text-[11px] text-[#a3a3a3]">
+                                <p className="md:pl-9 pb-4 text-[12px] text-[#5a5a5a]">
                                   {q.type === "short" ? "참가자가 한 줄로 입력합니다."
                                     : q.type === "long" ? "참가자가 여러 줄로 입력합니다."
                                     : "입력칸 없이 안내 문구만 표시됩니다. (응답에 포함되지 않음)"}
                                 </p>
                               ))}
                             </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* 문항 추가 */}
-                      <div className="space-y-3">
-                        <div className="flex flex-wrap gap-2">
-                          {Q_TYPES.map((t) => (
-                            <button key={t.v} type="button" onClick={() => addQuestion(t.v)} className="text-[11px] font-black text-[#5a5a5a] bg-black/5 border border-black/10 px-3.5 py-2 rounded-full hover:border-[#e91e3f]/40 hover:text-[#131313] transition-all">+ {t.l}</button>
-                          ))}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[10px] font-black tracking-widest text-[#a3a3a3] uppercase mr-1">자주 쓰는 문항</span>
-                          {QUICK_QS.map((x) => (
-                            <button key={x.l} type="button" onClick={() => addQuickQuestion(x.q)} className="text-[11px] font-bold text-[#8a8a8a] border-b border-black/10 px-1.5 py-1 hover:text-[#131313] hover:border-[#e91e3f] transition-all">{x.l}</button>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
+                    )}
 
-                      <p className="text-[10px] text-[#a3a3a3]">설문을 사용하면 대회 상세에서 참가자가 바로 신청할 수 있고, 응답과 통계는 관리자만 확인할 수 있습니다.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* 📌 설문 미리보기 — 참가자에게 보이는 그대로 */}
-              {surveyPreview && (
-                <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm sm:p-4" onClick={() => setSurveyPreview(false)}>
-                  <div onClick={(e) => e.stopPropagation()} className="bg-[#ffffff] border border-black/10 w-full max-w-2xl rounded-t-3xl sm:rounded-3xl max-h-[92dvh] flex flex-col shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] overflow-hidden">
-                    <div className="shrink-0 px-5 sm:px-8 pt-6 pb-5 border-b border-black/10 bg-gradient-to-b from-emerald-500/[0.07] to-transparent">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-black tracking-[0.25em] text-emerald-700 mb-1.5">PREVIEW</p>
-                          <h2 className="text-xl sm:text-2xl font-black text-[#131313] leading-tight break-keep">{survey.title || `${title || "대회"} 참가 신청서`}</h2>
-                          {survey.desc && <p className="text-xs sm:text-sm text-[#5a5a5a] mt-2 leading-relaxed whitespace-pre-wrap">{survey.desc}</p>}
-                        </div>
-                        <button type="button" onClick={() => setSurveyPreview(false)} className="shrink-0 p-2 text-[#5a5a5a] hover:text-[#131313] bg-black/5 hover:bg-black/10 rounded-full transition-colors">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
+                    {/* 문항 추가 */}
+                    <div className="px-5 py-4 space-y-3">
+                      <div className="flex flex-wrap gap-2">
+                        {Q_TYPES.map((t) => (
+                          <Btn key={t.v} variant="secondary" size="sm" onClick={() => addQuestion(t.v)}>+ {t.l}</Btn>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="mr-1 text-[12px] font-bold text-[#5a5a5a]">자주 쓰는 문항</span>
+                        {QUICK_QS.map((x) => (
+                          <button key={x.l} type="button" onClick={() => addQuickQuestion(x.q)} className="h-8 px-3 rounded-full bg-[#f2f2f2] text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">{x.l}</button>
+                        ))}
                       </div>
                     </div>
-                    <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8">
-                      {(() => { let n = 0; return survey.questions.map((q) => {
-                        if (q.type !== "note") n += 1;
-                        const no = n;
-                        return (
-                        <div key={q.qid} className="py-6 border-b border-black/[0.07] last:border-b-0">
-                          {q.type === "note" ? (
-                            <div className="border-l-2 border-emerald-500/50 pl-4">
-                              {q.label && <p className="text-sm sm:text-base font-black text-[#131313] mb-1.5 break-keep">{q.label}</p>}
-                              <p className="text-[13px] text-[#5a5a5a] leading-relaxed whitespace-pre-wrap break-keep">{q.desc || <span className="text-[#a3a3a3]">(설명 미입력)</span>}</p>
-                            </div>
-                          ) : (<>
-                          <div className="flex items-start gap-3 mb-4">
-                            <span className="shrink-0 mt-0.5 text-[11px] font-black text-[#a3a3a3] tabular-nums">{String(no).padStart(2, "0")}</span>
-                            <div className="min-w-0">
-                              <p className="text-sm sm:text-base font-bold text-[#131313] leading-snug break-keep">
-                                {q.label || <span className="text-[#a3a3a3]">(질문 미입력)</span>}
-                                {q.required && <span className="text-red-600 ml-1">*</span>}
-                              </p>
-                              {q.desc && <p className="text-xs text-[#8a8a8a] mt-1.5 leading-relaxed whitespace-pre-wrap break-keep">{q.desc}</p>}
-                            </div>
-                          </div>
-                          <div className="sm:pl-7">
-                            {q.type === "short" && <div className="border-b border-black/12 py-2.5 text-sm text-[#a3a3a3]">답변을 입력해주세요</div>}
-                            {q.type === "long" && <div className="border-b border-black/12 py-2.5 pb-12 text-sm text-[#a3a3a3]">답변을 입력해주세요</div>}
-                            {isChoiceType(q.type) && (
-                              <div className="border-t border-black/[0.07]">
-                                {q.options.map((opt, oi) => (
-                                  <div key={oi} className="flex items-center gap-3 px-1 py-3 border-b border-black/[0.07]">
-                                    <span className={`w-4 h-4 border-2 border-gray-600 shrink-0 ${q.type === "multi" ? "rounded-[4px]" : "rounded-full"}`} />
-                                    <span className="text-sm text-[#5a5a5a]">{opt || `선택지 ${oi + 1}`}</span>
-                                  </div>
-                                ))}
-                                {q.etc && (
-                                  <div className="flex items-center gap-3 px-1 py-3 border-b border-black/[0.07]">
-                                    <span className={`w-4 h-4 border-2 border-gray-600 shrink-0 ${q.type === "multi" ? "rounded-[4px]" : "rounded-full"}`} />
-                                    <span className="text-sm text-[#5a5a5a]">기타 (직접 입력)</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          </>)}
-                        </div>
-                        );
-                      }); })()}
-                    </div>
-                    <div className="shrink-0 px-5 sm:px-8 py-4 border-t border-black/10 bg-[#ffffff]">
-                      <button type="button" onClick={() => setSurveyPreview(false)} className="w-full py-3.5 rounded-xl font-black text-sm bg-black/5 hover:bg-black/10 text-[#5a5a5a] transition-colors">미리보기 닫기</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-3 md:col-span-2">
-                <span className="text-xs font-bold text-[#5a5a5a]">배너 이미지 URL (선택)</span>
-                <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className="w-full bg-transparent border-0 border-b border-black/12 rounded-none px-5 py-3 text-sm text-[#131313] focus:outline-none focus:border-[#e91e3f]" />
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className="flex flex-col gap-4">
-          <p className="text-[11px] font-bold text-[#8a8a8a] tracking-wide">본문</p>
-
-          {(category === "공지사항" || category === "이벤트" || category === "대회" || category === "서포터즈") && (
-            <>
-              <div className="flex flex-wrap gap-1 border-b border-black/10 pb-2">
-                <button type="button" onClick={() => insertWrap("**")} className="p-2 text-xs font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-black/5 rounded-lg transition-all flex items-center gap-1"><span className="font-extrabold text-base">B</span> 굵게</button>
-                <div className="w-px h-6 bg-black/10 self-center" />
-                <button type="button" onClick={() => insertWrap("__")} className="p-2 text-xs font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-black/5 rounded-lg transition-all flex items-center gap-1"><span className="underline text-base font-medium">U</span> 밑줄</button>
-                <div className="w-px h-6 bg-black/10 self-center" />
-                <button type="button" onClick={() => insertWrap("~~")} className="p-2 text-xs font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-black/5 rounded-lg transition-all flex items-center gap-1"><span className="line-through text-base font-medium">S</span> 취소선</button>
-                <div className="w-px h-6 bg-black/10 self-center" />
-                <button type="button" onClick={() => insertWrap("==")} className="p-2 text-xs font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-black/5 rounded-lg transition-all flex items-center gap-1"><span className="text-base font-extrabold text-[#e91e3f]">A</span> 강조</button>
-                <div className="w-px h-6 bg-black/10 self-center" />
-                <button type="button" onClick={() => insertTable(2, 2)} className="p-2 text-xs font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-black/5 rounded-lg transition-all flex items-center gap-1"><span className="text-base font-bold">⊞</span> 표</button>
-                <div className="w-px h-6 bg-black/10 self-center" />
-                <button type="button" onClick={() => setImageOpen(true)} className="p-2 text-xs font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-black/5 rounded-lg transition-all flex items-center gap-1"><span className="text-base font-bold">🖼</span> 이미지</button>
-              </div>
-              <p className="-mt-2 text-[11px] text-[#a3a3a3]">본문에 넣은 이미지는 글 너비에 맞춰 크게 나옵니다.</p>
-              <textarea ref={textareaRef} placeholder="내용을 입력하세요..." value={content} onChange={(e) => setContent(e.target.value)} className={`min-h-[400px] ${textareaClass}`} />
+                  </>
+                )}
+              </Panel>
             </>
           )}
-
-          {category === "구인" && (
-            <div className="flex flex-col gap-6">
-              <div className="flex flex-col gap-2"><span className="text-xs font-bold text-[#5a5a5a]">지원 자격 <span className="text-[#e91e3f]">*</span></span><textarea rows={4} placeholder="지원에 필요한 자격 요건을 입력하세요." value={recruitQual} onChange={(e) => setRecruitQual(e.target.value)} className={textareaClass} /></div>
-              <div className="flex flex-col gap-2"><span className="text-xs font-bold text-[#5a5a5a]">주요 업무 <span className="text-[#e91e3f]">*</span></span><textarea rows={4} placeholder="담당하게 될 주요 업무를 입력하세요." value={recruitTasks} onChange={(e) => setRecruitTasks(e.target.value)} className={textareaClass} /></div>
-              <div className="flex flex-col gap-2"><span className="text-xs font-bold text-[#5a5a5a]">우대 사항 및 추가 안내 (선택)</span><textarea rows={3} placeholder="우대 사항 또는 혜택 등을 자유롭게 입력하세요." value={recruitExtra} onChange={(e) => setRecruitExtra(e.target.value)} className={textareaClass} /></div>
-            </div>
-          )}
-        </section>
-
-        <div className="flex items-center justify-between pt-6 border-t border-black/5">
-          <button type="button" onClick={() => router.back()} className="text-sm font-bold text-[#a3a3a3] hover:text-[#131313] transition-colors">취소</button>
-          {!editId && (
-            <button type="button" onClick={saveDraft} className="px-6 py-3.5 rounded-xl text-sm font-bold bg-black/5 border border-black/10 text-[#5a5a5a] hover:text-[#131313] hover:border-black/25 transition-all">보류</button>
-          )}
-          <button type="submit" disabled={isSubmitting || !isFormValid()} className={`px-8 py-3.5 rounded-xl text-sm font-bold transition-all ${isSubmitting || !isFormValid() ? "bg-black/5 text-[#a3a3a3] cursor-not-allowed" : "bg-[#e91e3f] text-white hover:bg-[#d01634]"}`}>{isSubmitting ? "처리 중..." : editId ? "수정하기" : "등록하기"}</button>
         </div>
+
+        {/* 📌 오른쪽 칸 — 게시 설정 + 등록 단추. 넓은 화면에서는 따라 내려와 긴 대회 글에서도 단추가 늘 보인다 */}
+        <aside className="mt-5 xl:mt-0 xl:ml-6 xl:w-[360px] shrink-0 xl:sticky xl:top-[88px] xl:max-h-[calc(100dvh-104px)] xl:overflow-y-auto no-bar">
+          <Panel title="게시 설정" flush>
+            {/* 📌 예약 발행 (비우면 즉시 공개) */}
+            <SideRow label={<>예약 발행 {optTag}</>} right={publishAt ? <Btn variant="ghost" size="sm" onClick={() => setPublishAt("")}>해제</Btn> : null}>
+              <input type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} className={inputClass} />
+              {publishAt && <p className={fieldNote}>해당 시각부터 공개됩니다</p>}
+            </SideRow>
+
+            {/* 📌 글 가리기 — 삭제와 달리 되돌릴 수 있다 */}
+            <SideRow label="글 가리기" right={<Switch on={hidden} onChange={() => setHidden((v) => !v)} label="글 가리기" />}>
+              {hidden && <p className="text-[12px] font-bold text-amber-700 break-keep">이 글은 목록과 링크에서 감춰집니다. 관리자만 볼 수 있습니다.</p>}
+            </SideRow>
+
+            {category === "공지사항" && (
+              <>
+                <SideRow label="카테고리 태그">
+                  <Segmented options={[{ v: "일반", l: "일반" }, { v: "중요", l: "중요" }, { v: "업데이트", l: "업데이트" }]} value={noticeTag} onChange={setNoticeTag} />
+                </SideRow>
+                <SideRow label="상단에 중요 공지로 고정" right={<Switch on={isPinned} onChange={setIsPinned} label="상단에 중요 공지로 고정" />} />
+                <SideRow label={<>상단 배너 URL {optTag}</>}>
+                  <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className={inputClass} />
+                </SideRow>
+              </>
+            )}
+
+            {category === "이벤트" && (
+              <>
+                <SideRow label="강조 태그">
+                  <Segmented options={[{ v: "NONE", l: "선택 안함" }, { v: "HOT", l: "HOT" }, { v: "NEW", l: "NEW" }, { v: "종료", l: "종료됨" }]} value={eventTag} onChange={setEventTag} />
+                </SideRow>
+                <SideRow label="배너 이미지 URL">
+                  <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className={inputClass} />
+                </SideRow>
+              </>
+            )}
+
+            {category === "구인" && (
+              <SideRow label="모집 분류 (필터)">
+                <Segmented options={[{ v: "staff", l: "스태프 모집" }, { v: "sup", l: "서포터즈 모집" }]} value={recruitSubCategory} onChange={setRecruitSubCategory} />
+              </SideRow>
+            )}
+
+            {category === "대회" && (
+              <SideRow label={<>배너 이미지 URL {optTag}</>}>
+                <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className={inputClass} />
+              </SideRow>
+            )}
+
+            {/* 제출 — 등록/수정 조건(isFormValid)은 그대로. 보류는 새 글에서만 */}
+            <div className="flex flex-wrap items-center gap-2 px-5 py-4">
+              <Btn variant="ghost" onClick={() => router.back()}>취소</Btn>
+              {!editId && <Btn variant="secondary" onClick={saveDraft}>보류</Btn>}
+              <Btn type="submit" disabled={isSubmitting || !isFormValid()} className="ml-auto">{isSubmitting ? "처리 중..." : editId ? "수정하기" : "등록하기"}</Btn>
+            </div>
+          </Panel>
+        </aside>
       </form>
+
+      {/* 📌 설문 미리보기 — 참가자에게 보이는 그대로 */}
+      {surveyPreview && (
+        <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" onClick={() => setSurveyPreview(false)}>
+          <div role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()} className="bg-white border border-[#ededed] w-full max-w-2xl rounded-t-2xl sm:rounded-2xl max-h-[92dvh] flex flex-col shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] overflow-hidden text-[#131313]">
+            <div className="shrink-0 flex items-start gap-3 px-5 sm:px-8 pt-5 pb-4 border-b border-[#ededed]">
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-bold text-[#8a8a8a]">미리보기</p>
+                <h2 className="mt-1 text-[18px] sm:text-[20px] font-black tracking-tight leading-tight break-keep">{survey.title || `${title || "대회"} 참가 신청서`}</h2>
+                {survey.desc && <p className="mt-1.5 text-[13px] text-[#5a5a5a] leading-relaxed whitespace-pre-wrap">{survey.desc}</p>}
+              </div>
+              <button type="button" onClick={() => setSurveyPreview(false)} aria-label="닫기" className="shrink-0 w-9 h-9 rounded-full bg-[#f2f2f2] text-[#5a5a5a] hover:text-[#131313] flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8">
+              {(() => { let n = 0; return survey.questions.map((q) => {
+                if (q.type !== "note") n += 1;
+                const no = n;
+                return (
+                <div key={q.qid} className="py-6 border-b border-[#ededed] last:border-b-0">
+                  {q.type === "note" ? (
+                    <div className="border-l-2 border-emerald-500/50 pl-4">
+                      {q.label && <p className="text-[14px] sm:text-[15px] font-black mb-1.5 break-keep">{q.label}</p>}
+                      <p className="text-[13px] text-[#5a5a5a] leading-relaxed whitespace-pre-wrap break-keep">{q.desc || <span className="text-[#a3a3a3]">(설명 미입력)</span>}</p>
+                    </div>
+                  ) : (<>
+                  <div className="flex items-start gap-3 mb-4">
+                    <span className="shrink-0 mt-0.5 text-[12px] font-bold text-[#8a8a8a] tabular-nums">{String(no).padStart(2, "0")}</span>
+                    <div className="min-w-0">
+                      <p className="text-[14px] sm:text-[15px] font-bold leading-snug break-keep">
+                        {q.label || <span className="text-[#a3a3a3]">(질문 미입력)</span>}
+                        {q.required && <span className="text-[#e91e3f] ml-1">*</span>}
+                      </p>
+                      {q.desc && <p className="text-[12px] text-[#5a5a5a] mt-1.5 leading-relaxed whitespace-pre-wrap break-keep">{q.desc}</p>}
+                    </div>
+                  </div>
+                  <div className="sm:pl-7">
+                    {q.type === "short" && <div className="border-b border-[#a3a3a3] py-2.5 text-[14px] text-[#a3a3a3]">답변을 입력해주세요</div>}
+                    {q.type === "long" && <div className="border-b border-[#a3a3a3] py-2.5 pb-12 text-[14px] text-[#a3a3a3]">답변을 입력해주세요</div>}
+                    {isChoiceType(q.type) && (
+                      <div className="border-t border-[#ededed]">
+                        {q.options.map((opt, oi) => (
+                          <div key={oi} className="flex items-center gap-3 px-1 py-3 border-b border-[#ededed]">
+                            <span className={`w-4 h-4 border-2 border-[#a3a3a3] shrink-0 ${q.type === "multi" ? "rounded-[4px]" : "rounded-full"}`} />
+                            <span className="text-[14px] text-[#5a5a5a]">{opt || `선택지 ${oi + 1}`}</span>
+                          </div>
+                        ))}
+                        {q.etc && (
+                          <div className="flex items-center gap-3 px-1 py-3 border-b border-[#ededed]">
+                            <span className={`w-4 h-4 border-2 border-[#a3a3a3] shrink-0 ${q.type === "multi" ? "rounded-[4px]" : "rounded-full"}`} />
+                            <span className="text-[14px] text-[#5a5a5a]">기타 (직접 입력)</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  </>)}
+                </div>
+                );
+              }); })()}
+            </div>
+            <div className="shrink-0 px-5 sm:px-8 py-3.5 border-t border-[#ededed] flex justify-end">
+              <Btn variant="secondary" onClick={() => setSurveyPreview(false)}>미리보기 닫기</Btn>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 본문 이미지 넣기 — 주소를 넣으면 미리 보여주고, 넣으면 글 너비에 맞춰 크게 들어간다 */}
       {imageOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in" onClick={() => setImageOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-md p-8">
-            <h2 className="text-lg font-black text-[#131313] mb-1.5">본문에 이미지 넣기</h2>
-            <p className="text-[11px] text-[#8a8a8a] mb-6">감사 편지처럼 글 안에서 크게 보여줄 이미지입니다. 상단 배너와는 별개입니다.</p>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 overlay-in" onClick={() => setImageOpen(false)}>
+          <div role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()} className="bg-white border border-[#ededed] rounded-2xl w-full max-w-md p-6 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313]">
+            <h2 className="text-[17px] font-black tracking-tight">본문에 이미지 넣기</h2>
 
-            <label className="block text-xs font-bold text-[#5a5a5a] mb-2">이미지 주소 <span className="text-[#e91e3f]">*</span></label>
-            <input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} autoFocus placeholder="https://..."
-              className="w-full bg-transparent border-0 border-b border-black/20 focus:border-black/60 px-0 py-2.5 text-sm text-[#131313] outline-none transition-colors placeholder:text-[#a3a3a3]" />
+            <label className={`${labelClass} mt-5`}>이미지 주소 {req}</label>
+            <input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} autoFocus placeholder="https://..." className={inputClass} />
 
-            <label className="block text-xs font-bold text-[#5a5a5a] mt-5 mb-2">설명 (선택)</label>
-            <input type="text" value={imageCap} onChange={(e) => setImageCap(e.target.value)} placeholder="이미지 아래 작게 들어갑니다"
-              className="w-full bg-transparent border-0 border-b border-black/20 focus:border-black/60 px-0 py-2.5 text-sm text-[#131313] outline-none transition-colors placeholder:text-[#a3a3a3]" />
+            <label className={`${labelClass} mt-4`}>설명 {optTag}</label>
+            <input type="text" value={imageCap} onChange={(e) => setImageCap(e.target.value)} placeholder="이미지 아래 작게 들어갑니다" className={inputClass} />
 
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {/^https?:\/\/\S+$/i.test(imageUrl.trim()) && (
-              <img src={imageUrl.trim()} alt="" className="mt-5 w-full h-auto max-h-56 object-contain rounded-xl border border-black/10 bg-black/30" />
+            {validImage && (
+              <img src={imageUrl.trim()} alt="" className="mt-4 w-full h-auto max-h-56 object-contain rounded-lg border border-[#ededed] bg-[#f2f2f2]" />
             )}
 
-            <div className="flex gap-3 mt-7">
-              <button type="button" onClick={() => setImageOpen(false)}
-                className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#131313] text-sm font-bold rounded-xl transition-colors">취소</button>
-              <button type="button" disabled={!/^https?:\/\/\S+$/i.test(imageUrl.trim())}
-                onClick={() => { insertImage(imageUrl, imageCap); setImageOpen(false); setImageUrl(""); setImageCap(""); }}
-                className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 text-white text-sm font-bold rounded-xl transition-colors">넣기</button>
+            <div className="mt-6 flex justify-end gap-2">
+              <Btn variant="ghost" onClick={() => setImageOpen(false)}>취소</Btn>
+              <Btn disabled={!validImage}
+                onClick={() => { insertImage(imageUrl, imageCap); setImageOpen(false); setImageUrl(""); setImageCap(""); }}>넣기</Btn>
             </div>
           </div>
         </div>
       )}
 
+      {/* 결과 알림 — 닫으면(성공 시) 해당 게시판으로 이동한다 (handleModalClose). 바깥을 눌러 닫지 않는다 */}
       {popupConfig.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
-          <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] flex flex-col items-center">
-            <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 ${popupConfig.isError ? "bg-red-500/10 text-red-500" : "bg-[#e91e3f]/10 text-[#e91e3f]"}`}>
-              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-            </div>
-            <h2 className="text-xl font-bold text-[#131313] mb-3">알림</h2>
-            <p className="text-sm text-[#5a5a5a] mb-8">{popupConfig.message}</p>
-            <button onClick={handleModalClose} className="w-full py-3 bg-[#f2f2f2] text-[#131313] font-bold rounded-xl">확인</button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 overlay-in">
+          <div role="alertdialog" aria-modal="true" className="bg-white border border-[#ededed] rounded-2xl w-full max-w-sm p-6 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313]">
+            <p className={`text-[12px] font-black ${popupConfig.isError ? "text-[#d01634]" : "text-emerald-700"}`}>{popupConfig.isError ? "오류" : "알림"}</p>
+            <p className="mt-2 text-[14px] leading-relaxed break-keep whitespace-pre-line">{popupConfig.message}</p>
+            <div className="mt-6 flex justify-end"><Btn onClick={handleModalClose} autoFocus>확인</Btn></div>
           </div>
         </div>
       )}
-    </main>
+    </AdminPage>
   );
 }
