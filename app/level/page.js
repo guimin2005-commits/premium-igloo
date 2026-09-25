@@ -475,6 +475,18 @@ const EnhancePanel = ({ kind, v, balance, busy, onEnhance, padClass = "" }) => {
   );
 };
 
+// 📌 등급 색 → 반투명(카드의 등급 빛) / 흰색 쪽으로 밝히기(등급 이름 그라데이션)
+const hexA = (hex, a) => {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+  return m ? `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${a})` : `rgba(255,255,255,${a})`;
+};
+const hexLift = (hex, t) => {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+  if (!m) return hex;
+  const f = (h) => Math.round(parseInt(h, 16) + (255 - parseInt(h, 16)) * t).toString(16).padStart(2, "0");
+  return `#${f(m[1])}${f(m[2])}${f(m[3])}`;
+};
+
 // 📌 강화 창 — 대시보드의 "강화" 버튼으로 연다. 껍데기는 TierModal 과 같은 문법(모바일 바텀시트 / 데스크톱 모달).
 //    최대 단계가 0 인 쪽은 그리지 않는다 (강화가 꺼진 것을 MAX 로 읽지 않게).
 const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance }) => {
@@ -482,9 +494,9 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance }) => {
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+    // 뒤 화면 잠금은 전역 ScrollLock 이 맡는다 — 여기서 body 에 overflow:hidden 을 주면
+    // body 가 스크롤 컨테이너가 돼 sticky(따라오는 프로필 카드)가 원래 자리로 튄다
+    return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   if (!open) return null;
@@ -558,9 +570,9 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+    // 뒤 화면 잠금은 전역 ScrollLock 이 맡는다 — 여기서 body 에 overflow:hidden 을 주면
+    // body 가 스크롤 컨테이너가 돼 sticky(따라오는 프로필 카드)가 원래 자리로 튄다
+    return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   if (!open) return null;
@@ -1293,11 +1305,47 @@ export default function LevelPage() {
   const claimableBy = { daily: 0, weekly: 0, monthly: 0 };
   for (const q of questAll) if (q.claimable) claimableBy[q.period || "daily"]++;
 
-  // 킬피드 확장 토글 — 내부 스크롤 대신 6건 + 전체 보기 (이중 스크롤 회피)
+  // 킬피드 확장 토글 — 내부 스크롤 대신 5건 + 전체 보기 (이중 스크롤 회피)
   const [feedOpen, setFeedOpen] = useState(false);
 
   // 진행 중 이벤트 — 대시보드 사이드 위젯
   const [events, setEvents] = useState([]);
+
+  // 모바일 대시보드 — 섹션을 길게 늘어놓지 않고 아이콘으로 골라 하나씩 본다
+  const [mSec, setMSec] = useState("quest");
+  const mNavRef = useRef(null);
+  const dashCardRef = useRef(null);
+  const mobSecs = [
+    { k: "quest", l: "퀘스트", icon: "flag", n: questAll.filter((q) => q.claimable).length },
+    { k: "rank", l: "랭킹", icon: "chart", n: 0 },
+    ...(events.length > 0 ? [{ k: "event", l: "이벤트", icon: "gift", n: 0 }] : []),
+    { k: "feed", l: "획득 피드", icon: "clock", n: 0 },
+  ];
+  const mSecOn = mobSecs.some((x) => x.k === mSec) ? mSec : "quest";
+  const secCls = (k) => `${mSecOn === k ? "block" : "hidden"} lg:block`;
+  const pickSec = (k) => {
+    setMSec(k);
+    const nav = mNavRef.current, card = dashCardRef.current;
+    // 아이콘 줄이 위에 붙어 있을 때만 — 새 섹션의 첫 줄이 줄 바로 아래에 오게 올린다
+    if (nav && card && nav.getBoundingClientRect().top <= 64) {
+      requestAnimationFrame(() => window.scrollTo({ top: card.getBoundingClientRect().bottom + window.scrollY + 20 - nav.getBoundingClientRect().top }));
+    }
+  };
+
+  // PC 대시보드 — 프로필 카드가 스크롤을 따라 내려온다.
+  // 카드가 화면보다 길면 top 을 음수로 줘서 카드 바닥까지 보인 뒤에 멈춘다
+  const stickRef = useRef(null);
+  const [stickTop, setStickTop] = useState(84);
+  useEffect(() => {
+    const el = stickRef.current;
+    if (!el) return;
+    const calc = () => setStickTop(Math.min(84, window.innerHeight - el.offsetHeight - 24));
+    calc();
+    const ro = new ResizeObserver(calc);
+    ro.observe(el);
+    window.addEventListener("resize", calc);
+    return () => { ro.disconnect(); window.removeEventListener("resize", calc); };
+  }, [meLoaded, me, activeMainTab]);
   useEffect(() => {
     fetch("/api/posts?category=이벤트", { cache: "no-store" })
       .then((r) => r.json())
@@ -1818,14 +1866,17 @@ export default function LevelPage() {
 
             {/* ── 로그인 · 내 프로필 ── */}
             {authReady && session?.user && meLoaded && me && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-10 gap-y-14 items-start">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-10 gap-y-5 lg:gap-y-14 items-start">
 
-                {/* 왼쪽 기둥 — 세로 프로필 카드 */}
-                <div className="contents lg:block lg:col-span-4 min-w-0 lg:space-y-12">
-                    {/* 프로필 카드 — 위에서 아래로: 정체성 → 레벨 · 등급 → 경험치 → 스탯 → 입구 */}
-                    <div className="order-first relative rounded-3xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]">
+                {/* 왼쪽 기둥 — 세로 프로필 카드. PC 에서는 스크롤을 따라 내려온다 */}
+                <div ref={stickRef} className="contents lg:block lg:col-span-4 min-w-0 lg:sticky" style={{ top: stickTop }}>
+                    {/* 프로필 카드 — 위에서 아래로: 정체성 → 레벨 → 등급 → 경험치 → 인벤토리 · 시즌 패스 · 강화 → 스탯 */}
+                    <div
+                      ref={dashCardRef}
+                      className="order-first relative rounded-3xl overflow-hidden shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]"
+                      style={{ background: `radial-gradient(420px 320px at 86% 30%, ${hexA(tierCur.c, 0.26)} 0%, ${hexA(tierCur.c, 0)} 72%), linear-gradient(180deg, #1b1b1b 0%, #131313 55%)` }}
+                    >
                       <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
-                      <div aria-hidden className="absolute -top-24 -left-20 w-[360px] h-[360px] bg-[#e91e3f]/[0.18] blur-[110px] rounded-full pointer-events-none"></div>
                       <span aria-hidden className="absolute -right-3 -bottom-10 text-[150px] font-black text-white/[0.035] leading-none tracking-tighter tabular-nums select-none pointer-events-none">{me.level}</span>
 
                       <div className="relative z-10 p-5 md:p-7">
@@ -1852,15 +1903,14 @@ export default function LevelPage() {
                             </RingGauge>
                           </span>
                           <div className="min-w-0 flex-1">
-                          <p className="text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-1.5">Player</p>
                           <p className="max-w-full text-xl lg:text-[26px] font-black text-white truncate tracking-tight leading-none">{session.user.name}</p>
-                          <div className="flex flex-wrap items-center gap-2 mt-2.5">
-                            <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/20 text-[10px] font-black tracking-[0.12em] uppercase text-white/70 tabular-nums">
-                              Rank #{me.rank.toLocaleString()}<span className="text-white/35 ml-1">/ {me.total.toLocaleString()}</span>
+                          <div className="flex flex-wrap items-center gap-2 mt-3">
+                            <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/20 text-[11px] font-bold text-white/75 tabular-nums">
+                              랭크 #{me.rank.toLocaleString()}<span className="text-white/40 ml-1">/ {me.total.toLocaleString()}</span>
                             </span>
-                            <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-[#e91e3f] text-[10px] font-black tracking-[0.12em] uppercase text-white tabular-nums">Top {rankPct}%</span>
+                            <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-[#e91e3f] text-[11px] font-bold text-white tabular-nums">상위 {rankPct}%</span>
                             {todayTotal > 0 && (
-                              <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-[#e91e3f]/55 text-[10px] font-black tracking-[0.12em] uppercase text-[#ff5c77] tabular-nums">
+                              <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-[#e91e3f]/55 text-[11px] font-bold text-[#ff5c77] tabular-nums">
                                 <LiveDot color="bg-[#ff5c77]" />오늘 +{todayTotal.toLocaleString()} XP
                               </span>
                             )}
@@ -1868,20 +1918,27 @@ export default function LevelPage() {
                           </div>
                         </div>
 
-                        {/* 레벨 · 등급 — 나란히. 이 카드의 얼굴 */}
-                        <div className="grid grid-cols-2 mt-5 lg:mt-7 border-y border-white/10">
-                          <div className="py-4 lg:py-5 pr-3 border-r border-white/10 flex flex-col items-center justify-center">
-                            <p className="text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-2">Level</p>
-                            <p className="text-6xl font-black text-white tabular-nums tracking-tighter leading-[0.85]" style={{ textShadow: "0 0 40px rgba(233,30,63,0.55)" }}>{me.level}</p>
-                          </div>
+                        {/* 레벨 — 카드의 얼굴. 등급은 나란히 두지 않고 바로 아래 한 줄로 */}
+                        <div className="mt-6 lg:mt-7 pt-5 lg:pt-6 border-t border-white/10">
+                          <p className="text-[12px] font-bold text-white/45 mb-3">레벨</p>
+                          <p className="text-[72px] lg:text-[88px] font-black text-white tabular-nums tracking-[-0.045em] leading-[0.8]">{me.level}</p>
                           <button
                             onClick={() => setTierOpen(true)}
                             aria-label="등급 안내 열기"
-                            className="group py-4 lg:py-5 pl-3 flex flex-col items-center justify-center outline-none focus:outline-none"
+                            className="group mt-5 w-full flex items-center gap-2.5 text-left outline-none focus:outline-none"
                           >
-                            <span className="block text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-3">Tier</span>
-                            <span className="block mb-2.5 transition-transform group-hover:-translate-y-0.5"><TierEmblem tier={tierCur} size={40} /></span>
-                            <span className="text-base font-black text-white tracking-tight leading-none">{tierCur.name}</span>
+                            <span className="shrink-0 transition-transform group-hover:-translate-y-0.5"><TierEmblem tier={tierCur} size={30} /></span>
+                            <span
+                              className="text-[22px] font-black tracking-tight leading-none"
+                              style={{ background: `linear-gradient(180deg, ${hexLift(tierCur.c, 0.45)} 0%, ${tierCur.c} 100%)`, WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", color: tierCur.c }}
+                            >
+                              {tierCur.name}
+                            </span>
+                            {tierNext && tierNextBound !== null && (
+                              <span className="ml-auto shrink-0 text-[12px] font-bold text-white/55 group-hover:text-white/80 transition-colors tabular-nums">
+                                <span style={{ color: hexLift(tierNext.c, 0.15) }}>{tierNext.name}</span>까지 {Math.max(0, tierNextBound - me.level)}레벨
+                              </span>
+                            )}
                           </button>
                         </div>
 
@@ -1895,6 +1952,44 @@ export default function LevelPage() {
                             <span className="text-[11px] font-bold text-white/60">Lv {me.level + 1} 까지 <b className="text-white tabular-nums">{prog.needToNext.toLocaleString()} XP</b></span>
                           </div>
                         </div>
+
+                        {/* 인벤토리 · 시즌 패스 · 강화 — 한 줄에 셋. 상자 없이 선으로만 나눈다 */}
+                        {(myItems || passEnabled || enhOpen) && (
+                          <div className="grid grid-flow-col auto-cols-fr mt-6 border-y border-white/10 divide-x divide-white/10">
+                            {myItems && (
+                              <button onClick={openBag} aria-label="인벤토리 열기" className="group min-w-0 flex flex-col items-center justify-center gap-2 py-4 outline-none focus:outline-none">
+                                <span aria-hidden className="relative">
+                                  <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/55 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                    <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                  {invUnread > 0 && <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{invUnread}</span>}
+                                </span>
+                                <span className="max-w-full truncate text-[12px] font-bold text-white/80 group-hover:text-white transition-colors">인벤토리 <span className="text-white/40 tabular-nums">{myItems.items.length}</span></span>
+                              </button>
+                            )}
+                            {passEnabled && (
+                              <button onClick={() => setActiveMainTab("pass")} aria-label="시즌 패스 열기" className="group min-w-0 flex flex-col items-center justify-center gap-2 py-4 outline-none focus:outline-none">
+                                <span aria-hidden className="relative">
+                                  <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/55 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                    <path d={ICON_PATHS.star} strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                  {passClaimable > 0 && <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{passClaimable}</span>}
+                                </span>
+                                <span className="max-w-full truncate text-[12px] font-bold text-white/80 group-hover:text-white transition-colors">시즌 패스 <span className="text-white/40 tabular-nums">T{passTierNo}</span></span>
+                              </button>
+                            )}
+                            {enhOpen && (
+                              <button type="button" onClick={() => setEnhModal(true)} aria-label="강화 열기" className="group min-w-0 flex flex-col items-center justify-center gap-2 py-4 outline-none focus:outline-none">
+                                <span aria-hidden className="relative">
+                                  <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/55 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                    <path d={ICON_PATHS.bolt} strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                </span>
+                                <span className="max-w-full truncate text-[12px] font-bold text-white/80 group-hover:text-white transition-colors">강화 <span className="text-white/40 tabular-nums">{enh.chat.level}·{enh.voice.level}</span></span>
+                              </button>
+                            )}
+                          </div>
+                        )}
 
                         {/* 스탯 — 두 줄 두 칸, 선으로만 나눈다. 빙옥은 재화라 뺐다 */}
                         <div className="grid grid-cols-2 mt-6 border-y border-white/10">
@@ -1913,63 +2008,6 @@ export default function LevelPage() {
                           ))}
                         </div>
 
-                        {/* 입구 — 인벤토리 · 시즌 패스 · 강화. 한 줄씩, 선으로 나눈다 */}
-                        <div className="mt-7 border-t border-white/10">
-                          {myItems && (
-                            <button onClick={openBag} aria-label="인벤토리 열기" className="group w-full flex items-center gap-3 py-3.5 border-b border-white/10 text-left outline-none focus:outline-none">
-                              <span aria-hidden className="relative shrink-0">
-                                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/45 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                  <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                                {invUnread > 0 && (
-                                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{invUnread}</span>
-                                )}
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="flex items-baseline gap-2">
-                                  <span className="text-[14px] font-black text-white">인벤토리</span>
-                                  <span className="text-[13px] font-black text-white/40 tabular-nums">{myItems.items.length}</span>
-                                </span>
-                              </span>
-                              <span aria-hidden className="shrink-0 text-white/30 group-hover:text-white transition-all group-hover:translate-x-0.5">→</span>
-                            </button>
-                          )}
-
-                          {passEnabled && (
-                            <button onClick={() => setActiveMainTab("pass")} aria-label="시즌 패스 열기" className="group w-full flex items-center gap-3 py-3.5 border-b border-white/10 text-left outline-none focus:outline-none">
-                              <span aria-hidden className="relative shrink-0">
-                                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/45 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                  <path d={ICON_PATHS.star} strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                                {passClaimable > 0 && (
-                                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{passClaimable}</span>
-                                )}
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="flex items-baseline gap-2">
-                                  <span className="text-[14px] font-black text-white">시즌 패스</span>
-                                  <span className="text-[13px] font-black text-white/40 tabular-nums">T{passTierNo}</span>
-                                </span>
-                              </span>
-                              <span aria-hidden className="shrink-0 text-white/30 group-hover:text-white transition-all group-hover:translate-x-0.5">→</span>
-                            </button>
-                          )}
-
-                          {enhOpen && (
-                            <button type="button" onClick={() => setEnhModal(true)} aria-label="강화 열기" className="group w-full flex items-center gap-3 py-3.5 text-left outline-none focus:outline-none">
-                              <span aria-hidden className="shrink-0">
-                                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/45 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                  <path d={ICON_PATHS.bolt} strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              </span>
-                              <span className="min-w-0 flex-1 flex items-baseline gap-2">
-                                <span className="text-[14px] font-black text-white">강화</span>
-                                {enh.chat.level + enh.voice.level > 0 && <span className="text-[13px] font-black text-white/40 tabular-nums">채팅 {enh.chat.level} · 음성 {enh.voice.level}</span>}
-                              </span>
-                              <span aria-hidden className="shrink-0 text-white/30 group-hover:text-white transition-all group-hover:translate-x-0.5">→</span>
-                            </button>
-                          )}
-                        </div>
                       </div>
                     </div>
 
@@ -1977,8 +2015,34 @@ export default function LevelPage() {
 
                 {/* 오른쪽 — 퀘스트 · 랭킹 · 이벤트 · 피드가 한 줄기로 */}
                 <div className="contents lg:block lg:col-span-8 min-w-0 lg:space-y-14">
+                    {/* 모바일 — 아래로 길게 늘어놓지 않고 아이콘으로 골라 하나씩 본다 */}
+                    <nav ref={mNavRef} aria-label="대시보드 섹션" className="lg:hidden sticky top-14 md:top-[60px] z-30 -mx-5 px-5 md:-mx-8 md:px-8 bg-white border-b border-[#ededed]">
+                      <div className="grid grid-flow-col auto-cols-fr">
+                        {mobSecs.map((x) => {
+                          const on = mSecOn === x.k;
+                          return (
+                            <button
+                              key={x.k}
+                              onClick={() => pickSec(x.k)}
+                              aria-pressed={on}
+                              className={`relative flex flex-col items-center justify-center gap-1 h-14 outline-none focus:outline-none transition-colors ${on ? "text-[#131313]" : "text-[#a3a3a3]"}`}
+                            >
+                              <span aria-hidden className="relative">
+                                <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                  <path d={ICON_PATHS[x.icon]} strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                                {x.n > 0 && <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{x.n}</span>}
+                              </span>
+                              <span className="text-[11px] font-bold">{x.l}</span>
+                              {on && <span aria-hidden className="absolute left-4 right-4 bottom-0 h-[2px] rounded-full bg-[#e91e3f]"></span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </nav>
+
                     {/* 일일 퀘스트 — 출석(봇 지급) + 관리자가 정의한 퀘스트(원클릭 수령) */}
-                    <section>
+                    <section className={secCls("quest")}>
                       <div className="flex items-end justify-between mb-5">
                         <div>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">퀘스트</h3>
@@ -2167,7 +2231,7 @@ export default function LevelPage() {
                     </section>
 
                     {/* 서버 랭킹 */}
-                    <section>
+                    <section className={secCls("rank")}>
                       <div className="flex items-end justify-between mb-5">
                         <div>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1">TOP 10</span></h3>
@@ -2195,9 +2259,11 @@ export default function LevelPage() {
                       {lbTab === "month" && <p className="text-[10px] text-[#a3a3a3] mt-2.5">이번 달 지급 로그 합산 기준 · 매월 1일(KST) 초기화</p>}
                     </section>
 
+                    {/* 이벤트 · 획득 피드 — PC 에서는 반씩 나란히 */}
+                    <div className={`contents ${events.length > 0 ? "lg:grid lg:grid-cols-2 lg:gap-10 lg:items-start" : "lg:block"}`}>
                     {/* 진행 중 이벤트 */}
                     {events.length > 0 && (
-                      <section>
+                      <section className={secCls("event")}>
                         <div className="flex items-end justify-between mb-4">
                           <div>
                             <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">진행 중 이벤트</h3>
@@ -2216,8 +2282,8 @@ export default function LevelPage() {
                       </section>
                     )}
 
-                    {/* 획득 피드 */}
-                    <section>
+                    {/* 획득 피드 — 최근 5건만, 줄을 낮게 */}
+                    <section className={secCls("feed")}>
                       <div className="flex items-end justify-between mb-4">
                         <div>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">획득 피드</h3>
@@ -2227,8 +2293,8 @@ export default function LevelPage() {
                       {myLogs?.logs?.length ? (
                         <>
                           <div className="border-t border-black/[0.08]">
-                            {(feedOpen ? myLogs.logs : myLogs.logs.slice(0, 6)).map((l, i) => (
-                              <div key={`${l.createdAt}-${i}`} className="flex items-center h-11 gap-3 border-b border-black/[0.05]">
+                            {(feedOpen ? myLogs.logs : myLogs.logs.slice(0, 5)).map((l, i) => (
+                              <div key={`${l.createdAt}-${i}`} className="flex items-center h-10 gap-3 border-b border-black/[0.05]">
                                 <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: REASON_COLORS[l.reason] || "#6b7280" }}></span>
                                 <span className="shrink-0 w-16 text-[13px] font-black text-[#131313] tabular-nums">+{(l.amount || 0).toLocaleString()}</span>
                                 <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-[#8a8a8a]">{l.channelName || (l.reason === "attend" ? "출석 체크" : REASON_LABELS[l.reason] || "—")}</span>
@@ -2236,7 +2302,7 @@ export default function LevelPage() {
                               </div>
                             ))}
                           </div>
-                          {(myLogs.logs.length > 6) && (
+                          {(myLogs.logs.length > 5) && (
                             <button onClick={() => setFeedOpen((v) => !v)} className="block w-full text-center text-[11px] font-bold text-[#a3a3a3] hover:text-[#131313] transition-colors mt-3.5 outline-none focus:outline-none">
                               {feedOpen ? "접기 ↑" : `전체 ${myLogs.logs.length}건 보기 ↓`}
                             </button>
@@ -2246,6 +2312,7 @@ export default function LevelPage() {
                         <EmptySlot>기록 없음 — 첫 활동을 시작하세요</EmptySlot>
                       )}
                     </section>
+                    </div>
                 </div>
               </div>
             )}

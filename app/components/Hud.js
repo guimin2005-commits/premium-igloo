@@ -232,11 +232,8 @@ export const Sparkline = ({ history = [], h = 96 }) => {
 
 // ── 리더보드 행 — 홈·레벨 공용. 상위 3인은 포디움 대우(뱃지·굵기·크기) ──
 /** @type {import("react").FC<any>} */
-export const RankRows = ({ rows = [], myId, me, myName = "" }) => {
-  const topXp = rows[0]?.xp || 0;
-  const inList = !!myId && rows.some((r) => r.userId === myId);
-
-  const Row = ({ rank, name, level, xp, mine }) => {
+// 랭킹 한 줄 — RankRows 안에서 정의하면 렌더마다 새 컴포넌트가 돼 행이 통째로 다시 붙는다
+const RankRow = ({ rank, name, level, xp, mine, topXp }) => {
     const podium = rank <= 3;
     return (
       <div className={`relative border-b border-black/[0.07] transition-colors ${mine ? "bg-[#e91e3f]/[0.05]" : "hover:bg-black/[0.02]"}`}>
@@ -273,17 +270,21 @@ export const RankRows = ({ rows = [], myId, me, myName = "" }) => {
         )}
       </div>
     );
-  };
+};
+
+export const RankRows = ({ rows = [], myId, me, myName = "" }) => {
+  const topXp = rows[0]?.xp || 0;
+  const inList = !!myId && rows.some((r) => r.userId === myId);
 
   return (
     <div className="border-t border-black/[0.07]">
       {rows.map((r) => (
-        <Row key={r.userId} rank={r.rank} name={r.name} level={r.level} xp={r.xp} mine={!!myId && r.userId === myId} />
+        <RankRow key={r.userId} rank={r.rank} name={r.name} level={r.level} xp={r.xp} mine={!!myId && r.userId === myId} topXp={topXp} />
       ))}
       {myId && !inList && me && (
         <>
           <div className="py-1.5 text-center text-[#a3a3a3] text-[10px] font-black tracking-[0.4em]">···</div>
-          <Row rank={me.rank} name={myName} level={me.level} xp={me.xp} mine />
+          <RankRow rank={me.rank} name={myName} level={me.level} xp={me.xp} mine topXp={topXp} />
         </>
       )}
     </div>
