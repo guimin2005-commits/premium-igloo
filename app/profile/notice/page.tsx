@@ -8,6 +8,7 @@ import BackLink from "../../components/BackLink";
 import ArcticDock from "../../arctic/ArcticDock";
 import { useSearchParams } from "next/navigation";
 import { ICON_PATHS } from "../../components/Icons";
+import { agoLabel } from "@/lib/ago";
 
 // 미리보기용 마크다운 기호 제거
 const stripMd = (t: string) =>
@@ -38,6 +39,22 @@ export default function NoticeInboxPage() {
       .catch(() => setRows([]));
   }, [status, session]);
 
+  // 📌 전체 삭제 — 한 번 누르면 확인 문구, 3초 안에 한 번 더 누르면 삭제 (본인 알림만 · 서버가 세션으로 확인)
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  const clearAll = async () => {
+    if (!armed) { setArmed(true); return; }
+    setArmed(false);
+    try {
+      const r = await fetch("/api/notifications?mine=all", { method: "DELETE" }).then((x) => x.json());
+      if (r?.success) setRows([]);
+    } catch {}
+  };
+
   // 들어오면 안 읽은 알림을 읽음 처리
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.name || !rows?.some((n) => !n.read)) return;
@@ -52,7 +69,14 @@ export default function NoticeInboxPage() {
       <LuxStyles />
       <section className="w-full max-w-4xl mx-auto px-6 pt-8 pb-20">
         <BackLink href={`/profile${q}`} label="내 정보" />
-        <h1 className="text-2xl md:text-3xl font-black tracking-tight mb-6">알림함 {(rows?.length || 0) > 0 && <span className="text-[#e91e3f]">{rows!.length}</span>}</h1>
+        <div className="flex items-end justify-between gap-4 mb-6">
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight">알림함 {(rows?.length || 0) > 0 && <span className="text-[#e91e3f]">{rows!.length}</span>}</h1>
+          {(rows?.length || 0) > 0 && (
+            <button type="button" onClick={clearAll} className={`shrink-0 text-[12px] font-bold transition-colors outline-none focus-visible:underline ${armed ? "text-[#d01634]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
+              {armed ? "한 번 더 누르면 삭제" : "전체 삭제"}
+            </button>
+          )}
+        </div>
 
         <div className="border-t border-black/[0.08]">
           {rows === null ? (
@@ -71,7 +95,8 @@ export default function NoticeInboxPage() {
                     </div>
                     <p className="text-xs text-[#8a8a8a] truncate mt-0.5">{stripMd(n.content)}</p>
                   </div>
-                  <span className="text-[11px] text-[#a3a3a3] shrink-0 hidden sm:block tabular-nums">{n.createdAt ? new Date(n.createdAt).toLocaleDateString("ko-KR") : ""}</span>
+                  {/* 언제 왔는지 — 모바일에도 보인다 */}
+                  <span className="text-[11px] text-[#8a8a8a] shrink-0 tabular-nums">{agoLabel(n.createdAt)}</span>
                   <svg className="w-4 h-4 text-[#b9b7b3] group-hover:text-[#5a5a5a] shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.chevronRight} /></svg>
                 </Link>
               ))}

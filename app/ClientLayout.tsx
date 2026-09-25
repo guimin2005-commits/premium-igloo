@@ -9,6 +9,7 @@ import { ICON_PATHS } from "./components/Icons";
 import AdminNav from "./admin/AdminNav";
 import ScrollLock from "./components/ScrollLock";
 import { useArcticFromLevel, ARCTIC_FROM_KEY, ARCTIC_ORIGIN_KEY } from "./arctic/fromLevel";
+import { agoLabel } from "@/lib/ago";
 
 // 서버에서는 layout effect 가 돌지 않으므로 경고 없이 effect 로 대신한다
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -307,8 +308,43 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isNotifOpen]);
 
+  // 📌 전체 삭제 — 운영팀 알림은 서버에서 지우고(본인 것만), 문의 답변은 문의 내역에 남으니 종 목록에서만 치운다
+  const [clearedAnswerIds, setClearedAnswerIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("clearedAnswerIds") || "[]");
+      if (Array.isArray(stored)) setClearedAnswerIds(new Set(stored));
+    } catch {}
+  }, []);
+  const visibleAnswers = notifications.filter((n) => !clearedAnswerIds.has(n._id));
+  const [clearArmed, setClearArmed] = useState(false); // 한 번 누르면 확인 문구, 3초 안에 한 번 더 누르면 삭제
+  useEffect(() => {
+    if (!clearArmed) return;
+    const t = setTimeout(() => setClearArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [clearArmed]);
+  const clearAllNotifs = async () => {
+    if (!clearArmed) { setClearArmed(true); return; }
+    setClearArmed(false);
+    try { await fetch("/api/notifications?mine=all", { method: "DELETE" }); } catch {}
+    setAdminNotifs([]);
+    const next = new Set(clearedAnswerIds);
+    notifications.forEach((n) => next.add(n._id));
+    setClearedAnswerIds(next);
+    try { localStorage.setItem("clearedAnswerIds", JSON.stringify(Array.from(next).slice(-300))); } catch {}
+  };
+  // 종 목록 — 운영팀 알림 · 문의 답변을 받은 시각 순으로 한 줄에
+  const bellItems = [
+    ...adminNotifs.map((n) => ({ key: n._id, kind: "admin", href: `/profile/notice/${n._id}`, chip: n.type || "안내", warn: n.type === "경고" || n.type === "제재", unread: !n.read, title: n.title, at: n.createdAt })),
+    ...visibleAnswers.map((n) => ({ key: n._id, kind: "answer", href: "/profile/inquiry", chip: "답변 완료", warn: false, unread: !seenNotifIds.has(n._id), title: n.title || n.content?.slice(0, 40) || "문의 내역", at: n.answeredAt || n.updatedAt || n.createdAt })),
+  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 8);
+  const bellChip = (it: { kind: string; warn: boolean }) =>
+    it.kind === "answer" ? (isLightPage ? "bg-emerald-500/10 text-emerald-700" : "bg-emerald-500/10 text-emerald-400")
+    : it.warn ? (isLightPage ? "bg-[#e91e3f]/10 text-[#d01634]" : "bg-[#e91e3f]/15 text-[#ff5c77]")
+    : (isLightPage ? "bg-[#131313]/[0.06] text-[#5a5a5a]" : "bg-white/[0.08] text-gray-300");
+
   const unreadAdminCount = adminNotifs.filter((n) => !n.read).length;
-  const unseenCount = notifications.filter((n) => !seenNotifIds.has(n._id)).length + unreadAdminCount;
+  const unseenCount = visibleAnswers.filter((n) => !seenNotifIds.has(n._id)).length + unreadAdminCount;
 
   const markNotifsSeen = () => {
     const next = new Set(seenNotifIds);
@@ -458,45 +494,39 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
 
                 {isNotifOpen && (
-                  <HeaderPopover anchorRef={notifRef} panelRef={notifPanelRef} className={`w-auto sm:w-[300px] rounded-3xl backdrop-blur-2xl border overflow-hidden overlay-in ${isLightPage ? "bg-white/75 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/75 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
-                    <div className={`px-5 pt-4 pb-3.5 border-b flex items-center justify-between relative overflow-hidden ${isLightPage ? "border-black/[0.06]" : "border-white/[0.06]"}`}>
-                      <div className="absolute top-[-30px] right-[-20px] w-32 h-16 bg-[#e91e3f]/[0.12] blur-[36px] rounded-full pointer-events-none"></div>
-                      <div className="relative flex items-center gap-2.5">
-                        <span className="w-4 h-px bg-[#e91e3f]"></span>
-                        <span className={`text-sm font-black tracking-tight ${isLightPage ? "text-[#131313]" : "text-white"}`}>알림</span>
-                      </div>
-                      {unseenCount > 0 && <span className="relative text-[11px] font-black text-[#e91e3f] tabular-nums">새 알림 {unseenCount}</span>}
+                  <HeaderPopover anchorRef={notifRef} panelRef={notifPanelRef} className={`w-auto sm:w-[320px] rounded-2xl border overflow-hidden overlay-in ${isLightPage ? "bg-white border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "bg-[#141414] border-white/[0.08] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.8)]"}`}>
+                    {/* 머리 — 제목 · 새 알림 수 · 전체 삭제(두 번 눌러 확정). 색 번짐 · 흐림 없이 흰 판 (디자인 기준) */}
+                    <div className={`px-5 h-12 flex items-center justify-between border-b ${isLightPage ? "border-[#ededed]" : "border-white/[0.07]"}`}>
+                      <span className={`text-[14px] font-black ${isLightPage ? "text-[#131313]" : "text-white"}`}>
+                        알림{unseenCount > 0 && <span className="ml-1.5 text-[#e91e3f] tabular-nums">{unseenCount}</span>}
+                      </span>
+                      {bellItems.length > 0 && (
+                        <button type="button" onClick={clearAllNotifs} className={`text-[11px] font-bold transition-colors outline-none focus-visible:underline ${clearArmed ? "text-[#e91e3f]" : isLightPage ? "text-[#8a8a8a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>
+                          {clearArmed ? "한 번 더 누르면 삭제" : "전체 삭제"}
+                        </button>
+                      )}
                     </div>
-                    {notifications.length === 0 && adminNotifs.length === 0 ? (
-                      <div className={`px-5 py-8 text-center text-xs ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>아직 알림이 없습니다.</div>
+                    {bellItems.length === 0 ? (
+                      <div className={`px-5 py-10 text-center text-[12px] ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>알림이 없습니다.</div>
                     ) : (
-                      <div className={`max-h-72 overflow-y-auto [&::-webkit-scrollbar]:hidden divide-y ${isLightPage ? "divide-black/[0.05]" : "divide-white/[0.04]"}`}>
-                        {adminNotifs.slice(0, 5).map((n) => {
-                          const warn = n.type === "경고" || n.type === "제재";
-                          return (
-                            <Link key={n._id} href={`/profile/notice/${n._id}`} onClick={() => setIsNotifOpen(false)} className={`block px-5 py-3.5 transition-colors ${isLightPage ? "hover:bg-black/[0.03]" : "hover:bg-white/[0.03]"}`}>
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className={`text-[9px] font-black tracking-wider px-1.5 py-0.5 rounded border ${warn ? "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25" : "bg-sky-500/10 text-sky-400 border-sky-500/20"}`}>{n.type || "안내"}</span>
-                                {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>}
-                                <span className="ml-auto text-[10px] text-gray-600">운영팀</span>
+                      <div className={`max-h-80 overflow-y-auto [&::-webkit-scrollbar]:hidden divide-y ${isLightPage ? "divide-[#f0f0f0]" : "divide-white/[0.05]"}`}>
+                        {bellItems.map((it) => (
+                          <Link key={it.key} href={it.href} onClick={() => setIsNotifOpen(false)} className={`flex items-start gap-3 px-5 py-3.5 transition-colors ${isLightPage ? "hover:bg-[#f7f7f7]" : "hover:bg-white/[0.04]"}`}>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${bellChip(it)}`}>{it.chip}</span>
+                                {it.unread && <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]" />}
                               </div>
-                              <p className={`text-xs font-bold line-clamp-1 ${isLightPage ? "text-[#131313]" : "text-gray-200"}`}>{n.title}</p>
-                            </Link>
-                          );
-                        })}
-                        {notifications.slice(0, 5).map((n) => (
-                          <Link key={n._id} href="/profile/inquiry" onClick={() => setIsNotifOpen(false)} className={`block px-5 py-3.5 transition-colors ${isLightPage ? "hover:bg-black/[0.03]" : "hover:bg-white/[0.03]"}`}>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-[9px] font-black tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded">답변 완료</span>
-                              <span className="text-[10px] text-gray-600">{n.mainType || "문의"}</span>
+                              <p className={`text-[13px] font-bold line-clamp-1 ${isLightPage ? "text-[#131313]" : "text-gray-100"}`}>{it.title}</p>
                             </div>
-                            <p className={`text-xs font-bold line-clamp-1 ${isLightPage ? "text-[#5a5a5a]" : "text-gray-300"}`}>{n.title || n.content?.slice(0, 40) || "문의 내역"}</p>
+                            {/* 언제 왔는지 */}
+                            <span className={`shrink-0 pt-0.5 text-[11px] tabular-nums ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>{agoLabel(it.at)}</span>
                           </Link>
                         ))}
                       </div>
                     )}
                     <Link href="/profile/notice" onClick={() => setIsNotifOpen(false)}
-                      className={`block text-center px-5 py-3.5 text-[12px] font-black border-t transition-colors ${isLightPage ? "border-black/[0.06] text-[#131313] hover:bg-black/[0.04]" : "border-white/[0.06] text-white hover:bg-white/[0.05]"}`}>
+                      className={`block text-center px-5 py-3.5 text-[12px] font-black border-t transition-colors ${isLightPage ? "border-[#ededed] text-[#131313] hover:bg-[#f7f7f7]" : "border-white/[0.07] text-white hover:bg-white/[0.05]"}`}>
                       알림함 열기
                     </Link>
                   </HeaderPopover>
@@ -519,46 +549,46 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
                 
                 {isProfileOpen && (
-                  <HeaderPopover anchorRef={profileDropdownRef} panelRef={profilePanelRef} className={`w-auto sm:w-[272px] rounded-3xl backdrop-blur-2xl border p-5 overflow-hidden overlay-in ${isLightPage ? "bg-white/75 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/75 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
-                    <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 w-48 h-24 bg-[#e91e3f]/[0.1] blur-[44px] rounded-full pointer-events-none"></div>
-                    <div className={`relative flex items-center gap-4 mb-4 pb-4 border-b ${isLightPage ? "border-black/[0.06]" : "border-white/[0.06]"}`}>
-                      <div className="relative shrink-0">
-                        <img src={session.user?.image || ""} alt="Profile" className="relative w-12 h-12 rounded-full bg-gray-700" />
-                      </div>
-                      <div>
-                        <div className={`font-bold text-base flex items-center gap-2 ${isLightPage ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</div>
-                        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border ${verifyBadge(isVerified, hasScrimRole).cls}`}>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>
+                  <HeaderPopover anchorRef={profileDropdownRef} panelRef={profilePanelRef} className={`w-auto sm:w-[280px] rounded-2xl border overflow-hidden overlay-in ${isLightPage ? "bg-white border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "bg-[#141414] border-white/[0.08] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.8)]"}`}>
+                    {/* 머리 — 사진 · 이름 · 배지. 색 번짐 · 흐림 없이 흰 판 (디자인 기준) */}
+                    <div className="px-5 pt-5 pb-4 flex items-center gap-3.5">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={session.user?.image || ""} alt="" className="w-11 h-11 rounded-full bg-gray-700 shrink-0" />
+                      <div className="min-w-0">
+                        <p className={`text-[15px] font-black truncate ${isLightPage ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</p>
+                        <div className="mt-1.5 flex items-center gap-1 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-bold border ${verifyBadge(isVerified, hasScrimRole).cls}`}>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>
                             {verifyBadge(isVerified, hasScrimRole).label}
                           </span>
-                          {isBooster && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 text-[#ff41cf] border border-[#ff41cf]/25">
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5"><path d={ICON_PATHS.sparkles} /></svg>
-                              SERVER BOOSTER
-                            </span>
-                          )}
-                          {isSupporter && (
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#3f83b8]/10 text-[#3f83b8] border border-[#3f83b8]/25">SUPPORTERS</span>
-                          )}
+                          {isBooster && <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 border border-[#ff41cf]/25 ${isLightPage ? "text-[#c2189b]" : "text-[#ff6fdc]"}`}>SERVER BOOSTER</span>}
+                          {isSupporter && <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold bg-[#3f83b8]/10 border border-[#3f83b8]/25 ${isLightPage ? "text-[#2f6fa3]" : "text-[#7db4df]"}`}>SUPPORTERS</span>}
                         </div>
                       </div>
                     </div>
-                    <div className="relative flex flex-col gap-0.5">
+                    {/* 메뉴 — 아이콘 + 이름 한 줄씩 (관리자도 같은 모양, 빨강은 로그아웃에만) */}
+                    <div className={`border-t px-2 py-2 ${isLightPage ? "border-[#ededed]" : "border-white/[0.07]"}`}>
                       {!isVerifyPage && (
-                        <Link href="/profile" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] rounded-xl transition-colors font-bold ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>내 정보</Link>
+                        <Link href="/profile" onClick={() => setIsProfileOpen(false)} className={`flex items-center gap-3 h-10 px-3 rounded-xl text-[13px] font-bold transition-colors ${isLightPage ? "text-[#131313] hover:bg-[#f2f2f2]" : "text-gray-200 hover:bg-white/[0.06]"}`}>
+                          <svg aria-hidden viewBox="0 0 24 24" className={`w-[18px] h-[18px] ${isLightPage ? "text-[#5a5a5a]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.user} /></svg>
+                          내 정보
+                        </Link>
                       )}
                       {!isVerifyPage && (isSupporter || isAdmin) && (
-                        <Link href="/supporters" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] rounded-xl transition-colors font-bold ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>서포터즈</Link>
+                        <Link href="/supporters" onClick={() => setIsProfileOpen(false)} className={`flex items-center gap-3 h-10 px-3 rounded-xl text-[13px] font-bold transition-colors ${isLightPage ? "text-[#131313] hover:bg-[#f2f2f2]" : "text-gray-200 hover:bg-white/[0.06]"}`}>
+                          <svg aria-hidden viewBox="0 0 24 24" className={`w-[18px] h-[18px] ${isLightPage ? "text-[#5a5a5a]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.shieldCheck} /></svg>
+                          서포터즈
+                        </Link>
                       )}
                       {isAdmin && (
-                        <Link href="/admin" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-xl transition-colors font-bold">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" /></svg>
+                        <Link href="/admin" onClick={() => setIsProfileOpen(false)} className={`flex items-center gap-3 h-10 px-3 rounded-xl text-[13px] font-bold transition-colors ${isLightPage ? "text-[#131313] hover:bg-[#f2f2f2]" : "text-gray-200 hover:bg-white/[0.06]"}`}>
+                          <svg aria-hidden viewBox="0 0 24 24" className={`w-[18px] h-[18px] ${isLightPage ? "text-[#5a5a5a]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.key} /></svg>
                           관리자 페이지
                         </Link>
                       )}
-                      <div className={`h-px my-1.5 mx-1 ${isLightPage ? "bg-black/[0.07]" : "bg-white/[0.06]"}`}></div>
-                      <button onClick={() => { setIsProfileOpen(false); signOut(); }} className="w-full text-left px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-xl transition-colors outline-none focus:outline-none font-black">로그아웃</button>
+                    </div>
+                    <div className={`border-t px-2 py-2 ${isLightPage ? "border-[#ededed]" : "border-white/[0.07]"}`}>
+                      <button type="button" onClick={() => { setIsProfileOpen(false); signOut(); }} className={`w-full h-10 px-3 rounded-xl text-left text-[13px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 ${isLightPage ? "text-[#d01634] hover:bg-[#e91e3f]/[0.06]" : "text-[#ff5c77] hover:bg-[#e91e3f]/10"}`}>로그아웃</button>
                     </div>
                   </HeaderPopover>
                 )}

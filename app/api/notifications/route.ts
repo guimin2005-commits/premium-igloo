@@ -94,6 +94,15 @@ async function sendDiscordDM(userId: string, type: string, title: string, siteUr
   }
 }
 
+// 📌 본인 알림 조건 — 요청이 보낸 닉네임 · ID 가 아니라 서버 세션으로 정한다.
+//    예전엔 쿼리의 user · id 를 그대로 믿어서, 닉네임만 알면 남의 알림을 읽고 읽음 처리할 수 있었다.
+function mineFilter(session: any) {
+  const or: any[] = [];
+  if (session?.user?.name) or.push({ recipientName: session.user.name });
+  if (session?.user?.id) or.push({ recipientId: session.user.id });
+  return or.length ? { $or: or } : null;
+}
+
 // ── [조회] 내 알림 목록 (또는 관리자 발송 이력) ──────────────
 export async function GET(request: Request) {
   try {
@@ -113,14 +122,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, data: list });
     }
 
-    // 내 알림 목록 (닉네임 또는 디스코드 ID로 매칭 — 닉네임 변경에도 안전)
-    if (!user && !discordId) {
-      return NextResponse.json({ success: false, error: "대상이 지정되지 않았습니다." }, { status: 400 });
+    // 내 알림 목록 (닉네임 또는 디스코드 ID로 매칭 — 닉네임 변경에도 안전). 대상은 세션으로만 정한다
+    void user; void discordId; // 옛 호출이 붙여 보내는 값 — 더는 쓰지 않는다
+    const me: any = await getServerSession(authOptions);
+    const mine = mineFilter(me);
+    if (!mine) {
+      return NextResponse.json({ success: false, error: "로그인이 필요합니다.", data: [] }, { status: 401 });
     }
-    const or: any[] = [];
-    if (user) or.push({ recipientName: user });
-    if (discordId) or.push({ recipientId: discordId });
-    const list = await Notification.find({ $or: or }).sort({ createdAt: -1 });
+    const list = await Notification.find(mine).sort({ createdAt: -1 });
     return NextResponse.json({ success: true, data: list });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -172,19 +181,19 @@ export async function POST(request: Request) {
   }
 }
 
-// ── [읽음] 유저가 알림 확인 처리 ────────────────────────────
+// ── [읽음] 유저가 알림 확인 처리 — 본인 알림만 (세션 기준) ──────────
 export async function PATCH(request: Request) {
   try {
+    const session: any = await getServerSession(authOptions);
+    const mine = mineFilter(session);
+    if (!mine) return NextResponse.json({ success: false, error: "로그인이 필요합니다." }, { status: 401 });
     await connectToDatabase();
     const body = await request.json();
 
     // 전체 읽음
-    if (body.markAll && (body.user || body.id)) {
-      const or: any[] = [];
-      if (body.user) or.push({ recipientName: body.user });
-      if (body.id) or.push({ recipientId: body.id });
+    if (body.markAll) {
       await Notification.updateMany(
-        { $or: or, read: false },
+        { ...mine, read: false },
         { read: true, readAt: new Date() }
       );
       return NextResponse.json({ success: true });
@@ -192,8 +201,8 @@ export async function PATCH(request: Request) {
 
     // 단건 읽음
     if (body.id) {
-      const updated = await Notification.findByIdAndUpdate(
-        body.id,
+      const updated = await Notification.findOneAndUpdate(
+        { _id: body.id, ...mine },
         { read: true, readAt: new Date() },
         { new: true }
       );
@@ -206,10 +215,18 @@ export async function PATCH(request: Request) {
   }
 }
 
-// ── [삭제] 관리자 발송 취소/삭제 ────────────────────────────
+// ── [삭제] 내 알림 전체 삭제(?mine=all) · 관리자 발송 취소/삭제(?id=) ─────────
 export async function DELETE(request: Request) {
   try {
     const session: any = await getServerSession(authOptions);
+    // 📌 내 알림 전체 삭제 — 알림은 받는 사람마다 한 건씩이라 본인 것만 지우면 된다 (세션 기준)
+    if (new URL(request.url).searchParams.get("mine") === "all") {
+      const mine = mineFilter(session);
+      if (!mine) return NextResponse.json({ success: false, error: "로그인이 필요합니다." }, { status: 401 });
+      await connectToDatabase();
+      const r = await Notification.deleteMany(mine);
+      return NextResponse.json({ success: true, deleted: r.deletedCount || 0 });
+    }
     if (!isAdminName(session?.user?.name)) {
       return NextResponse.json({ success: false, error: "관리자만 삭제할 수 있습니다." }, { status: 403 });
     }
