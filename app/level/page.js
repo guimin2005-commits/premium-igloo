@@ -2611,8 +2611,24 @@ export default function LevelPage() {
       {/* ── 탭 줄 — 어떤 탭이든 헤더 바로 아래 같은 자리. 여기가 움직이면 안 된다. ── */}
       {tabBar}
 
-      {/* ── 공통 헤더 ── */}
-      <div className="relative w-full px-5 md:px-8 pt-14 pb-10">
+      {/* ── 모바일 시즌 한 줄 — 큰 머리(제목 · 알약 · 동기화 줄) 대신. 동기화 점 + 갱신 버튼 ── */}
+      <div className="sm:hidden w-full px-5 h-10 flex items-center justify-between border-b border-[#ededed] text-[12px] font-bold">
+        <span className="inline-flex items-center gap-2 text-[#d01634] font-black">
+          SEASON {SEASON.number} · {SEASON.name}
+        </span>
+        <span className="inline-flex items-center gap-2 text-[#5a5a5a] tabular-nums">
+          {seasonDday.ended ? "시즌 종료" : `종료까지 D-${seasonDday.days}`}
+          {authReady && session?.user && (
+            <>
+              <span aria-label="실시간 동기화 중" title="실시간 동기화 중"><LiveDot /></span>
+              <button onClick={() => loadMe().then(() => pushToast("동기화 완료"))} className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 border border-[#a3a3a3] rounded-full px-2.5 py-0.5">갱신</button>
+            </>
+          )}
+        </span>
+      </div>
+
+      {/* ── 공통 헤더 — PC 만. 모바일은 탭 줄 바로 아래 본문 (제목 · 시즌 알약 · 동기화 줄이 첫 화면을 다 먹는다) ── */}
+      <div className="relative w-full px-5 md:px-8 pt-14 pb-10 hidden sm:block">
         <div aria-hidden className="absolute -top-16 left-1/2 -translate-x-1/2 w-[560px] h-[280px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
         <div className="relative max-w-7xl mx-auto">
           <div className="flex flex-col items-center text-center">

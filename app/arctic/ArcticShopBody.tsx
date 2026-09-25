@@ -18,7 +18,7 @@ import ArcticDock from "./ArcticDock";
 import ArcticHome from "./ArcticHome";
 import CardArt from "./CardArt";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useArcticFromLevel } from "./fromLevel";
+import { useArcticOrigin } from "./fromLevel";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -272,7 +272,7 @@ export default function ArcticShopBody({
   // 하위 페이지 하단바에서 찜·검색을 누르면 ?panel= 로 넘어온다
   const searchParams = useSearchParams();
   const router = useRouter();
-  const fromLevel = useArcticFromLevel(); // 레벨 탭에서 왔을 때만 모바일 유형 줄 맨 앞에 "‹ 레벨"
+  const origin = useArcticOrigin(); // 들어온 곳 — 모바일 유형 줄 맨 앞 "‹ 메인 · ‹ 레벨 …"
   useEffect(() => {
     const panel = searchParams.get("panel");
     // 찜한 상품은 따로 페이지가 됐다 — 옛 주소(?panel=wish)는 그리로 보낸다
@@ -700,11 +700,11 @@ export default function ArcticShopBody({
         <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center gap-4 md:gap-6 h-[56px] md:h-[60px]">
           {/* 유형 탭 — 고른 것만 빨간 밑줄 */}
           <nav className="flex items-center gap-5 md:gap-7 overflow-x-auto no-bar h-full min-w-0 flex-1 md:flex-none">
-            {/* 모바일 — 레벨 탭에서 들어왔을 때만 맨 앞에 돌아갈 길 (넓은 화면은 상단 바의 "LEVEL ›") */}
-            {fromLevel && (
+            {/* 모바일 — 들어온 곳으로 돌아갈 길 (독 · 메뉴 · 레벨 탭 어디서 왔든). 넓은 화면은 상단 바 · 브라우저 뒤로 */}
+            {origin && (
               <>
-                <Link href="/level" className="md:hidden shrink-0 flex items-center gap-1 text-[13px] font-extrabold text-[#a3a3a3] hover:text-[#131313] transition-colors">
-                  <span aria-hidden>‹</span>레벨
+                <Link href={origin.href} className="md:hidden shrink-0 flex items-center gap-1 text-[13px] font-extrabold text-[#5a5a5a] hover:text-[#131313] transition-colors">
+                  <span aria-hidden>‹</span>{origin.label}
                 </Link>
                 <span aria-hidden className="md:hidden shrink-0 w-px h-4 bg-[#e0e0e0] -ml-1"></span>
               </>

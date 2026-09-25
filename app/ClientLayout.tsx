@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, FormEvent, RefObject, ReactNode } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, FormEvent, RefObject, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
@@ -8,7 +8,10 @@ import Link from "next/link";
 import { ICON_PATHS } from "./components/Icons";
 import AdminNav from "./admin/AdminNav";
 import ScrollLock from "./components/ScrollLock";
-import { useArcticFromLevel, ARCTIC_FROM_KEY } from "./arctic/fromLevel";
+import { useArcticFromLevel, ARCTIC_FROM_KEY, ARCTIC_ORIGIN_KEY } from "./arctic/fromLevel";
+
+// 서버에서는 layout effect 가 돌지 않으므로 경고 없이 effect 로 대신한다
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { verifyBadge } from "@/lib/verifyBadge";
 
 // 📌 헤더에서 내려오는 카드(알림·내 프로필)
@@ -161,6 +164,21 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     if (isShopPage || isArcticProfile) return;
     try { sessionStorage.removeItem(ARCTIC_FROM_KEY); } catch {}
   }, [isShopPage, isArcticProfile]);
+  // 📌 ARCTIC 에 들어온 곳을 적는다 (app/arctic/fromLevel.ts useArcticOrigin 이 읽는다).
+  //    ARCTIC 밖 → 안으로 넘어오는 순간 직전 주소를 적고, ARCTIC 을 벗어나면 지운다. ARCTIC 에서 넘어간 내 정보는 ARCTIC 의 연장.
+  //    상점 화면(자식)이 effect 에서 읽기 전에 적혀 있도록 layout effect 로.
+  const lastPathRef = useRef<{ path: string; arctic: boolean } | null>(null);
+  const qsNow = searchParams.toString();
+  const fullPath = `${pathname || ""}${qsNow ? `?${qsNow}` : ""}`;
+  useIsoLayoutEffect(() => {
+    const inArctic = isShopPage || isArcticProfile;
+    const prev = lastPathRef.current;
+    try {
+      if (inArctic && prev && !prev.arctic) sessionStorage.setItem(ARCTIC_ORIGIN_KEY, prev.path);
+      if (!inArctic) sessionStorage.removeItem(ARCTIC_ORIGIN_KEY);
+    } catch {}
+    lastPathRef.current = { path: fullPath, arctic: inArctic };
+  }, [fullPath, isShopPage, isArcticProfile]);
   const isLightPage = isWhitePage || pathname === "/profile" || pathname?.startsWith("/profile/") || pathname === "/level" || pathname?.startsWith("/level/") || (pathname?.startsWith("/admin") && !pathname.startsWith("/admin/room")) || pathname === "/write" || pathname === "/supporters" || pathname?.startsWith("/supporters/");   // 라이트 톤만 따라가는 페이지 (SYSTEM:LEVEL·관리자 화면은 ARCTIC 테마)
   // 📌 경매방 안에서는 모바일 하단 탭을 숨긴다.
   //    입찰·채팅 바가 화면 아래에 붙는데 그 위에 전역 탭까지 있으면 잘못 눌러 방을 나가게 된다.
