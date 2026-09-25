@@ -7,7 +7,7 @@ import { ADMIN_USERS } from "@/lib/admins";
 import { ICON_PATHS } from "../components/Icons";
 
 // 📌 1:1 문의 — 화이트 & 블랙.
-//    유저: 예전 서식의 흐름 — 왼쪽 문의 입력(라벨 좌측 줄 · 라디오) + 오른쪽 답변 알림 · 문의하기.
+//    유저: 예전 서식의 흐름 — 왼쪽 문의 입력(라벨 좌측 줄 · 알약) + 오른쪽 답변 알림 · 문의하기.
 //    관리(?admin=1): 헤어라인 줄 목록 + 흰 시트 답변 모달.
 
 // 문의 유형 — 고르면 아래에 짧은 설명이 붙는다
@@ -39,17 +39,24 @@ const fmtDate = (v: string) => {
 };
 const isPending = (s?: string) => s !== "답변 완료";
 
-// 라디오 — 고른 것만 빨간 테두리 · 점 · 글자 (조작 요소 테두리는 #a3a3a3)
-const RadioDot = ({ on }: { on: boolean }) => (
-  <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${on ? "border-[#e91e3f]" : "border-[#a3a3a3] group-hover:border-[#131313]"}`}>
-    {on && <span className="w-2 h-2 rounded-full bg-[#e91e3f]" />}
-  </span>
-);
-const Radio = ({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) => (
-  <button type="button" role="radio" aria-checked={on} onClick={onClick} className="group flex items-center gap-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">
-    <RadioDot on={on} />
-    <span className={`text-[13px] font-bold ${on ? "text-[#d01634]" : "text-[#131313]"}`}>{label}</span>
+// 알약 — 고른 것만 검정 테두리 · 검정 글자 (잉크 채움 없음). 미선택 테두리는 조작 요소 기준 #a3a3a3
+const Pill = ({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) => (
+  <button
+    type="button"
+    aria-pressed={on}
+    onClick={onClick}
+    className={`h-8 px-3.5 rounded-full border text-[12.5px] font-extrabold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 ${
+      on ? "border-[#131313] text-[#131313]" : "border-[#a3a3a3] text-[#5a5a5a] hover:border-[#131313] hover:text-[#131313]"
+    }`}
+  >
+    {label}
   </button>
+);
+// 구매 상품 고르기 점 — 고른 것만 검정
+const PickDot = ({ on }: { on: boolean }) => (
+  <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${on ? "border-[#131313]" : "border-[#a3a3a3]"}`}>
+    {on && <span className="w-2 h-2 rounded-full bg-[#131313]" />}
+  </span>
 );
 
 // 라벨 좌측 행 — 모바일에서는 라벨이 입력 위로 올라간다
@@ -446,7 +453,7 @@ export default function SupportPage() {
   }
 
   /* ═══════════ 유저 · 문의 서식 ═══════════ */
-  //    예전(다크) 서식의 흐름 그대로 — 왼쪽 "문의 입력"(라벨 좌측 줄 · 라디오 · 칸), 오른쪽 "답변 알림"(DM 동의 · 문의하기 · 내역 · 관리).
+  //    예전(다크) 서식의 흐름 그대로 — 왼쪽 "문의 입력"(라벨 좌측 줄 · 알약 · 칸), 오른쪽 "답변 알림"(DM 동의 · 문의하기 · 내역 · 관리).
   //    색 · 선 · 모서리만 화이트 & 블랙 기준으로 바꿨다. PC 는 오른쪽 칸이 따라 내려온다.
   const typeDesc = TYPE_META.find((t) => t.key === mainType)?.desc;
   return (
@@ -466,9 +473,9 @@ export default function SupportPage() {
             </FormRow>
 
             <FormRow label="문의 유형" required>
-              <div className="flex flex-wrap gap-x-6 gap-y-2 py-1">
+              <div className="flex flex-wrap items-center gap-2">
                 {TYPE_META.map((t) => (
-                  <Radio
+                  <Pill
                     key={t.key}
                     label={t.key}
                     on={mainType === t.key}
@@ -491,8 +498,8 @@ export default function SupportPage() {
               <div className="overflow-hidden min-h-0">
                 {mainType === "일반" && (
                   <FormRow label="문의 분류" required>
-                    <div className="flex flex-wrap gap-x-6 gap-y-2 py-1">
-                      {SUB_TYPES.map((t) => <Radio key={t} label={t} on={subType === t} onClick={() => setSubType(t)} />)}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {SUB_TYPES.map((t) => <Pill key={t} label={t} on={subType === t} onClick={() => setSubType(t)} />)}
                     </div>
                   </FormRow>
                 )}
@@ -509,8 +516,8 @@ export default function SupportPage() {
                       <input type="text" placeholder="예: 2026-08-12 오전 경" value={reportDate} onChange={(e) => setReportDate(e.target.value)} className={boxClass} />
                     </FormRow>
                     <FormRow label="신고 유형" required>
-                      <div className="flex flex-wrap gap-x-6 gap-y-2 py-1">
-                        {REPORT_TYPES.map((t) => <Radio key={t} label={t} on={reportType === t} onClick={() => setReportType(t)} />)}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {REPORT_TYPES.map((t) => <Pill key={t} label={t} on={reportType === t} onClick={() => setReportType(t)} />)}
                       </div>
                     </FormRow>
                   </>
@@ -532,9 +539,9 @@ export default function SupportPage() {
                                   onClick={() => setProductName(label)}
                                   className={`w-full text-left px-3.5 py-3 flex items-center gap-3 border-b border-[#ededed] last:border-b-0 transition-colors outline-none focus-visible:bg-[#f2f2f2] ${picked ? "bg-[#f2f2f2]" : "hover:bg-[#f2f2f2]"}`}
                                 >
-                                  <RadioDot on={picked} />
+                                  <PickDot on={picked} />
                                   <span className="min-w-0 flex-1">
-                                    <span className={`block text-[13px] font-extrabold truncate ${picked ? "text-[#d01634]" : "text-[#131313]"}`}>{o.itemName}</span>
+                                    <span className={`block text-[13px] font-extrabold truncate ${picked ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{o.itemName}</span>
                                     <span className="block text-[11px] text-[#8a8a8a] tabular-nums">
                                       {ORDER_TYPE_LABEL[o.itemType] || "상품"} · {new Date(o.createdAt).toLocaleDateString("ko-KR")} · {(o.price || 0).toLocaleString()} XP
                                     </span>
@@ -552,8 +559,8 @@ export default function SupportPage() {
                       )}
                     </FormRow>
                     <FormRow label="처리 유형" required>
-                      <div className="flex flex-wrap gap-x-6 gap-y-2 py-1">
-                        {["환불", "교환"].map((t) => <Radio key={t} label={t} on={refundType === t} onClick={() => setRefundType(t)} />)}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {["환불", "교환"].map((t) => <Pill key={t} label={t} on={refundType === t} onClick={() => setRefundType(t)} />)}
                       </div>
                     </FormRow>
                   </>
@@ -587,7 +594,7 @@ export default function SupportPage() {
 
             <button type="button" role="checkbox" aria-checked={notifyDiscord} onClick={() => setNotifyDiscord(!notifyDiscord)}
               className="w-full flex items-center gap-3 py-3 text-left outline-none group focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">
-              <span className={`w-[18px] h-[18px] border flex items-center justify-center shrink-0 transition-colors ${notifyDiscord ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "border-[#a3a3a3] text-transparent group-hover:border-[#131313]"}`}>
+              <span className={`w-[18px] h-[18px] rounded border flex items-center justify-center shrink-0 transition-colors ${notifyDiscord ? "bg-[#131313] border-[#131313] text-white" : "border-[#a3a3a3] text-transparent group-hover:border-[#131313]"}`}>
                 <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>
               </span>
               <span className="min-w-0">

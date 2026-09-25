@@ -10,7 +10,7 @@ import { isAdminName } from "@/lib/admins";
 // 📌 홈 — 화이트 & 블랙 편집형 골격 (승인된 2안 목업).
 //    마스트헤드(상자 없음) → 헤어라인 티커 → 소식(공지사항 · 지금 진행 중, 번호 없음)
 //    티커 아래는 레벨 · 스토어 바로가기 한 줄, 더 즐기기는 잉크 배너(레벨 · 상점 · 대회 · 부스터) 2×2.
-//    → 지금 이글루 → 더 즐기기 → 참여. 번호는 붙이지 않는다. 섹션 제목 아래 설명 줄은 두지 않는다.
+//    → 지금 이글루 → 더 즐기기 (맨 아래 "참여" 띠는 뺐다 — 마스트헤드의 서버 바로가기와 중복). 번호는 붙이지 않는다. 섹션 제목 아래 설명 줄은 두지 않는다.
 //    소식이 맨 위라 조금만 내려도 공지가 바로 보인다. 커튼(sticky) 구조는 없앴다.
 
 const DISCORD = "https://discord.gg/V2uW2nUczU";
@@ -80,7 +80,7 @@ const PinIcon = () => (
 // 섹션 — 번호는 '읽는 순서'가 있는 곳에만 붙인다. 소식처럼 매일 바뀌는 묶음에는 번호를 안 붙인다.
 function Sec({ no, title, desc, more, right, children }: { no?: string; title: React.ReactNode; desc?: string; more?: { href: string; label: string }; right?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="w-full border-b border-[#ededed]">
+    <section className="w-full border-b border-[#ededed] last:border-b-0">
       <div className="relative max-w-7xl mx-auto px-6 md:px-10 py-14 md:py-[72px]">
         {no && <div aria-hidden className="absolute top-4 md:top-5 left-4 md:left-8 text-[80px] md:text-[120px] font-black tracking-[-0.04em] leading-none text-[#131313]/[0.05] pointer-events-none select-none">{no}</div>}
         <Reveal>
@@ -393,19 +393,6 @@ export default function Home() {
         })()}
       </Sec>
 
-      {/* ── 참여 ── */}
-      <section className="w-full">
-        <div className="max-w-7xl mx-auto px-6 md:px-10 py-16 md:py-20 text-center">
-          <Reveal>
-            <h3 className="text-[34px] md:text-[44px] font-black tracking-[-0.03em] break-keep">지금 바로 <span className="text-[#e91e3f]">참여</span>하세요</h3>
-            <p className="mt-3.5 mb-7 text-[14px] text-[#5a5a5a]">나의 활동이 나의 자산이 되는 순간을.</p>
-            <a href={DISCORD} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center h-[52px] px-8 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[15px] font-black shadow-[0_12px_34px_rgba(233,30,63,0.3)] transition-colors">
-              디스코드 서버 입장하기
-            </a>
-          </Reveal>
-        </div>
-      </section>
     </main>
   );
 }
