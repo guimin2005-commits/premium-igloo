@@ -648,7 +648,7 @@ export default function AdminSupportersPage() {
                   { v: lastMonth, l: "지난 달" },
                 ]}
                 value={month}
-                onChange={setMonth}
+                onChange={(v) => { setSelId(""); setMonth(v); }}
               />
               <span className="text-[13px] font-bold text-[#131313] tabular-nums">{month}</span>
             </Toolbar>
@@ -724,7 +724,7 @@ export default function AdminSupportersPage() {
                 rows={reports}
                 rowKey={(r) => r._id}
                 // 답변을 보내는 중에는 다른 건으로 바꾸지 않는다 — 보내는 대상이 바뀌면 안 된다
-                onRowClick={(r) => { if (!isReplying) openReply(r); }}
+                onRowClick={(r) => { if (isReplying || replyTarget?._id === r._id) return; openReply(r); }}
                 selectedKey={replyOpen && replyTarget ? replyTarget._id : null}
               />
             )}
@@ -779,9 +779,9 @@ export default function AdminSupportersPage() {
             {/* 등급 · XP · 빙옥은 한 줄 세 칸 — 폭이 좁은 상세 칸이라 이름을 위에 둔다 */}
             <div className="grid grid-cols-3 gap-3 mb-4">
               <div className="min-w-0">
-                <label htmlFor="sup-grade" className={labelClass}>등급</label>
+                <label className={labelClass}>등급</label>
                 <input
-                  id="sup-grade"
+                  aria-label="등급"
                   type="text"
                   value={sel.e.grade}
                   maxLength={8}
@@ -792,9 +792,9 @@ export default function AdminSupportersPage() {
                 />
               </div>
               <div className="min-w-0">
-                <label htmlFor="sup-xp" className={labelClass}>XP</label>
+                <label className={labelClass}>XP</label>
                 <input
-                  id="sup-xp"
+                  aria-label="XP"
                   type="number"
                   min={0}
                   value={sel.e.xp}
@@ -805,9 +805,9 @@ export default function AdminSupportersPage() {
                 />
               </div>
               <div className="min-w-0">
-                <label htmlFor="sup-point" className={labelClass}>빙옥</label>
+                <label className={labelClass}>빙옥</label>
                 <input
-                  id="sup-point"
+                  aria-label="빙옥"
                   type="number"
                   min={0}
                   value={sel.e.point}
@@ -820,10 +820,10 @@ export default function AdminSupportersPage() {
             </div>
 
             <div>
-              <label htmlFor="sup-note" className={labelClass}>코멘트</label>
+              <label className={labelClass}>코멘트</label>
               {/* 지급 뒤에도 읽을 수는 있게 disabled 대신 readOnly 로 잠근다 */}
               <textarea
-                id="sup-note"
+                aria-label="코멘트"
                 rows={6}
                 maxLength={NOTE_MAX}
                 value={sel.e.note}
@@ -881,13 +881,13 @@ export default function AdminSupportersPage() {
             </p>
             <div className="mb-4">
               <div className="flex items-baseline justify-between gap-3">
-                <label htmlFor="sup-reply" className={labelClass}>답변</label>
+                <label className={labelClass}>답변</label>
                 {replyTarget.repliedAt && (
                   <span className="text-[12px] text-[#8a8a8a] tabular-nums">{fmtDateTime(replyTarget.repliedAt)}</span>
                 )}
               </div>
               <textarea
-                id="sup-reply"
+                aria-label="답변"
                 rows={5}
                 maxLength={REPLY_MAX}
                 value={replyText}

@@ -234,9 +234,10 @@ export default function AdminNotifyPage() {
 
   return (
     <AdminPage section="운영" title="회원 통지 발송" desc="통지는 사이트 알림함에 기록되고 디스코드 DM으로도 전송됩니다.">
-      <div className="flex flex-col xl:flex-row xl:items-start">
+      {/* 상세 칸이 열리면 본문이 그 폭만큼 좁아진다 — 그때는 두 열 대신 위아래로 쌓아 이력 표가 사라지지 않게 */}
+      <div className={`flex flex-col ${selected ? "" : "xl:flex-row xl:items-start"}`}>
         {/* ── 통지서 작성 — xl 에서 왼쪽 고정 폭(유형 알약 다섯 개가 한 줄에 드는 폭) ── */}
-        <div className="min-w-0 xl:w-[540px] 2xl:w-[620px] xl:shrink-0 mb-6 xl:mb-0 xl:mr-6">
+        <div className={`min-w-0 mb-6 ${selected ? "" : "xl:w-[540px] 2xl:w-[620px] xl:shrink-0 xl:mb-0 xl:mr-6"}`}>
           <Panel flush title="통지서 작성" right={<span className="text-[12px] text-[#8a8a8a]">발신 · 고급 이글루 운영팀</span>}>
             <form onSubmit={handleSubmit}>
               {/* 표시 이름으로 넣으면 유저를 못 찾아 DM 만 조용히 빠진다 */}

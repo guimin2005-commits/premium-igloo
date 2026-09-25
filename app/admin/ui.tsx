@@ -331,7 +331,8 @@ export function SaveBar({
   const list = changes || [];
   return (
     <div className="sticky bottom-[84px] md:bottom-0 z-30 mx-3 md:mx-0 mb-3 md:mb-0 rounded-2xl md:rounded-none border md:border-x-0 md:border-b-0 border-[#ededed] bg-white/95 backdrop-blur-md shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] md:shadow-none">
-      <div className="flex items-center gap-3 px-4 md:px-8 min-h-16 py-3">
+      <style>{`@media (min-width: 768px) { .admin-savebar { padding-right: calc(2rem + var(--admin-pane, 0px)); } }`}</style>
+      <div className="admin-savebar flex items-center gap-3 px-4 md:px-8 min-h-16 py-3">
         <div className="min-w-0 flex-1">
           {dirty ? (
             <>
@@ -442,7 +443,10 @@ export function DataTable<T>({
                 <tr
                   key={k}
                   onClick={onRowClick ? () => onRowClick(r) : undefined}
-                  className={`${onRowClick ? "cursor-pointer" : ""} ${sel ? "bg-[#f2f2f2]" : onRowClick ? "hover:bg-[#f7f7f7]" : ""} transition-colors`}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  aria-selected={onRowClick ? sel : undefined}
+                  onKeyDown={onRowClick ? (e) => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRowClick(r); } } : undefined}
+                  className={`${onRowClick ? "cursor-pointer outline-none focus-visible:bg-[#f2f2f2] focus-visible:shadow-[inset_3px_0_0_#131313]" : ""} ${sel ? "bg-[#f2f2f2]" : onRowClick ? "hover:bg-[#f7f7f7]" : ""} transition-colors`}
                 >
                   {columns.map((c, i) => (
                     <td key={c.key} className={`py-3 align-middle ${c.wrap ? "" : "whitespace-nowrap"} ${al(c.align)} ${i === 0 ? "pl-5" : "pl-4"} ${i === columns.length - 1 ? "pr-5" : ""} ${c.className || ""}`}>{c.render(r)}</td>
@@ -510,7 +514,16 @@ export function DetailPane({
   }, [open, width]);
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      // 드롭다운이 먼저 받아 닫았으면(preventDefault) 칸은 그대로 — 한 번의 Esc 에 둘이 같이 닫혀 입력이 사라지던 것
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      // 칸 위에 다른 덮개(확인 · 알림 · 미리보기 모달)가 떠 있으면 그 창 차례다
+      const overlay = Array.from(document.querySelectorAll<HTMLElement>(".fixed.inset-0")).some(
+        (el) => !el.closest("[data-detail-pane]") && el.getClientRects().length > 0
+      );
+      if (overlay) return;
+      onClose();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
@@ -534,11 +547,11 @@ export function DetailPane({
   return (
     <>
       {/* PC — 오른쪽 칸 (목록을 가리지 않게 딤 없이) */}
-      <aside role="dialog" aria-modal="false" className="hidden md:flex fixed top-0 right-0 bottom-0 z-[60] flex-col bg-white border-l border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313]" style={{ width }}>
+      <aside data-detail-pane role="dialog" aria-modal="false" className="hidden md:flex fixed top-0 right-0 bottom-0 z-[60] flex-col bg-white border-l border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313]" style={{ width }}>
         {body}
       </aside>
       {/* 모바일 — 아래에서 올라오는 판 */}
-      <div className="md:hidden fixed inset-0 z-[120] flex items-end bg-black/40" onClick={onClose}>
+      <div data-detail-pane className="md:hidden fixed inset-0 z-[120] flex items-end bg-black/40" onClick={onClose}>
         <div role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()} className="w-full max-h-[88dvh] flex flex-col rounded-t-2xl bg-white text-[#131313] pb-[env(safe-area-inset-bottom)]">
           {body}
         </div>

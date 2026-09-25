@@ -141,7 +141,8 @@ export default function AdminHonorsPage() {
         body: JSON.stringify(creating ? fields : { id: form.data._id, ...fields }),
       });
       if (res.ok) {
-        setForm(null);
+        const savedId = form.data._id;
+        setForm((f) => (f && (creating ? f.mode === "create" : f.data?._id === savedId) ? null : f));
         fetchAll();
         notify(creating ? "명예의 전당에 등재되었습니다." : "기록이 수정되었습니다.");
       } else {
@@ -167,7 +168,8 @@ export default function AdminHonorsPage() {
       if (res.ok) {
         setTournaments((prev) => prev.map((t) => (t._id === winnerEdit._id ? winnerEdit : t)));
         load(parseIds(winnerEdit.winnerId));
-        setWinnerEdit(null);
+        const savedId = winnerEdit._id;
+        setWinnerEdit((w) => (w && w._id === savedId ? null : w));
         notify("대회 우승 정보가 수정되었습니다.");
       } else {
         notify("수정에 실패했습니다.", true);
@@ -304,7 +306,7 @@ export default function AdminHonorsPage() {
           columns={manualCols}
           rows={manualRows}
           rowKey={(h) => h._id}
-          onRowClick={(h) => openForm({ mode: "edit", data: { ...h } })}
+          onRowClick={(h) => { if (isSaving || form?.data?._id === h._id) return; openForm({ mode: "edit", data: { ...h } }); }}
           selectedKey={form?.mode === "edit" ? form.data._id : null}
           empty={query.trim() ? "검색 결과가 없습니다." : "등재된 수동 기록이 없습니다."}
         />
@@ -313,7 +315,7 @@ export default function AdminHonorsPage() {
           columns={tournamentCols}
           rows={tournamentRows}
           rowKey={(t) => t._id}
-          onRowClick={openWinner}
+          onRowClick={(t) => { if (isSaving || winnerEdit?._id === t._id) return; openWinner(t); }}
           selectedKey={winnerEdit?._id ?? null}
           empty={query.trim() ? "검색 결과가 없습니다." : "종료된 대회가 없습니다."}
         />

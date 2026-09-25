@@ -271,7 +271,11 @@ function EditPane({
         </>
       }
     >
-      <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>{children}</form>
+      <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>
+        {children}
+        {/* 입력칸에서 Enter 로 저장 — 여러 칸짜리 폼은 폼 안에 제출 단추가 있어야 Enter 가 먹는다 */}
+        <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
+      </form>
     </DetailPane>
   );
 }
@@ -329,6 +333,9 @@ export default function AdminBotPage() {
   const [settings, setSettings] = useState<any>(null);
   // 📌 불러온(또는 마지막으로 저장한) 설정 — 저장 줄의 '바뀐 것'과 '되돌리기'가 이 값을 기준으로 한다
   const [settingsSnap, setSettingsSnap] = useState<any>(null);
+  // fetchCore 가 목록 저장 뒤에도 불린다 — 그때 저장 안 한 설정 수정분을 지키려고 최신 스냅샷을 들고 있는다
+  const settingsSnapRef = useRef<any>(null);
+  useEffect(() => { settingsSnapRef.current = settingsSnap; }, [settingsSnap]);
   const [savingSettings, setSavingSettings] = useState(false);
   const [quests, setQuests] = useState<any[]>([]);
   const [invRoles, setInvRoles] = useState<any[]>([]);
@@ -385,7 +392,18 @@ export default function AdminBotPage() {
       setGuildRoles(Array.isArray(roles?.data) ? roles.data : []);
       setChannelConfigs(Array.isArray(chCfg?.data) ? chCfg.data : []);
       setGuildChannels(Array.isArray(channels?.data) ? channels.data : []);
-      if (st?.data) { setSettings(st.data); setSettingsSnap(st.data); }
+      if (st?.data) {
+        // 📌 역할 · 퀘스트 · 채널 · 부스트를 저장/삭제한 뒤에도 여기로 온다. 그때 아직 저장 안 한 설정 수정분(저장 줄에 떠 있는 것)을
+        //    서버 값으로 덮으면 말없이 사라진다 → 기준(스냅샷)은 서버 값으로 새로 하고, 바꾼 칸만 로컬 값을 얹는다
+        const next = st.data;
+        setSettings((prev: any) => {
+          const snap = settingsSnapRef.current;
+          if (!prev || !snap) return next;
+          const changed = Object.keys({ ...snap, ...prev }).filter((k) => normSetting(k, prev[k]) !== normSetting(k, snap[k]));
+          return changed.length ? { ...next, ...Object.fromEntries(changed.map((k) => [k, prev[k]])) } : next;
+        });
+        setSettingsSnap(next);
+      }
       setBoosts(Array.isArray(bst?.data) ? bst.data : []);
       setQuests(Array.isArray(qst?.data) ? qst.data : []);
       setInvRoles(Array.isArray(inv?.data) ? inv.data : []);

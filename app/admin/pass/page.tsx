@@ -323,6 +323,8 @@ export default function AdminPassPage() {
   }, []);
 
   const fetchAll = useCallback(() => {
+    // 초안은 티어 번호로 가리킨다 — 목록이 서버 값으로 바뀌면 엉뚱한 티어를 가리키므로 먼저 닫는다
+    setDraft(null);
     setIsLoading(true);
     Promise.all([
       fetch("/api/admin/pass", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
