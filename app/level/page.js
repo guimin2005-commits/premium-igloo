@@ -1347,14 +1347,17 @@ export default function LevelPage() {
     }
   };
 
-  // PC 대시보드 — 프로필 카드가 스크롤을 따라 내려온다.
+  // PC 대시보드 — 프로필 카드가 스크롤을 따라 내려온다. 헤더(60px) 아래 남은 화면의 세로 가운데에 선다.
   // 카드가 화면보다 길면 top 을 음수로 줘서 카드 바닥까지 보인 뒤에 멈춘다
   const stickRef = useRef(null);
   const [stickTop, setStickTop] = useState(84);
   useEffect(() => {
     const el = stickRef.current;
     if (!el) return;
-    const calc = () => setStickTop(Math.min(84, window.innerHeight - el.offsetHeight - 24));
+    const calc = () => {
+      const room = window.innerHeight - 60 - el.offsetHeight;
+      setStickTop(room >= 48 ? 60 + Math.round(room / 2) : Math.min(84, window.innerHeight - el.offsetHeight - 24));
+    };
     calc();
     const ro = new ResizeObserver(calc);
     ro.observe(el);
@@ -1718,6 +1721,15 @@ export default function LevelPage() {
           -webkit-text-fill-color: transparent;
           animation: shimmer 6s linear infinite;
         }
+        @keyframes emblemHop {
+          0%   { transform: translateY(0) rotate(0) scale(1); }
+          40%  { transform: translateY(-5px) rotate(-10deg) scale(1.14); }
+          70%  { transform: translateY(-2px) rotate(5deg) scale(1.1); }
+          100% { transform: translateY(-2px) rotate(0) scale(1.1); }
+        }
+        .tier-emblem { display: inline-block; transition: transform .3s cubic-bezier(0.16,1,0.3,1); }
+        .tier-emblem:hover { animation: emblemHop .6s cubic-bezier(0.16,1,0.3,1) forwards; }
+        @media (prefers-reduced-motion: reduce) { .tier-emblem:hover { animation: none; } }
         @keyframes tierIn {
           from { opacity: 0; transform: translateY(16px) scale(0.985); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -1938,7 +1950,7 @@ export default function LevelPage() {
                           <p className="text-[10px] font-black tracking-[0.35em] text-white/40 uppercase mb-2.5">LEVEL</p>
                           <p className="text-[52px] lg:text-6xl font-black text-white tabular-nums tracking-[-0.04em] leading-[0.85]">{me.level}</p>
                           <div className="mt-4 flex items-center gap-3">
-                            <span className="shrink-0"><TierEmblem tier={tierCur} size={32} /></span>
+                            <span className="tier-emblem shrink-0 cursor-default"><TierEmblem tier={tierCur} size={32} /></span>
                             <div className="min-w-0 flex-1">
                               <p
                                 className="text-[18px] font-black tracking-tight leading-none truncate"
@@ -2020,10 +2032,16 @@ export default function LevelPage() {
                             voiceTracked
                               ? { l: "누적 음성 시간", v: fmtVoiceTime(me.voiceSeconds) }
                               : { l: "누적 음성 시간", v: `${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터`, dim: true },
+                            // 지금 내 조건(강화 · 등급 · 역할 · 부스트 포함)으로 1회에 받는 양. 더해진 게 있으면 아래에 내역
+                            { l: "채팅 1회", v: `${gain.chatLo.toLocaleString()}~${gain.chatHi.toLocaleString()}`, u: "XP", sub: gain.chatParts.length > 1 ? gain.chatParts.map((p) => `${p.l} ${p.v}`).join(" · ") : null },
+                            { l: `음성 ${P_voiceMin}분`, v: gain.voice.toLocaleString(), u: "XP", sub: gain.voiceParts.length > 1 ? gain.voiceParts.map((p) => `${p.l} ${p.v}`).join(" · ") : null },
                           ].map((st, i) => (
                             <div key={i} className={`min-w-0 py-3 ${i % 2 === 0 ? "pr-4 border-r border-white/10" : "pl-4"}`}>
                               <p className="text-[11px] font-bold text-white/45 mb-2 truncate">{st.l}</p>
-                              <p className={`text-lg font-black tabular-nums tracking-tight leading-none truncate ${st.hot ? "text-[#ff5c77]" : st.dim ? "text-white/30" : "text-white"}`}>{st.v}</p>
+                              <p className={`text-lg font-black tabular-nums tracking-tight leading-none truncate ${st.hot ? "text-[#ff5c77]" : st.dim ? "text-white/30" : "text-white"}`}>
+                                {st.v}{st.u && <span className="text-[11px] font-black text-white/40 ml-1">{st.u}</span>}
+                              </p>
+                              {st.sub && <p className="text-[10px] font-bold text-white/40 mt-1.5 truncate tabular-nums">{st.sub}</p>}
                             </div>
                           ))}
                         </div>
