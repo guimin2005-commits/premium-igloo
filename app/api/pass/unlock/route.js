@@ -77,7 +77,7 @@ export async function POST(request) {
     // 2) 해금 표시 — 조건부로 세우고, 못 세웠으면 방금 받은 값을 되돌린다
     const lock = await UserXp.updateOne(
       { userId, passSeason: SEASON.number, passUnlocked: { $ne: true } },
-      { $set: { passUnlocked: true, updatedAt: new Date() } }
+      { $set: { passUnlocked: true, passUnlockPaid: { method: payMethod, amount: price }, updatedAt: new Date() } }
     );
     if (!lock.modifiedCount) {
       if (price > 0) {

@@ -27,6 +27,11 @@ const UserXpSchema = new mongoose.Schema({
   passSeason: { type: Number, default: 0 },        // SEASON.number 와 다르면 새 시즌 — 조회 시점에 다시 스냅샷한다
   passBaseXp: { type: Number, default: 0 },        // 시즌 시작 시점의 누적 XP
   passUnlocked: { type: Boolean, default: false }, // 프리미엄 트랙 해금 여부 (시즌마다 초기화)
+  // 해금 때 낸 값 — 관리자 테스트 초기화(app/api/xp/reset)가 이만큼 돌려준다. 시즌이 바뀌면 함께 비운다
+  passUnlockPaid: {
+    method: { type: String, default: "" }, // "xp" | "point"
+    amount: { type: Number, default: 0 },
+  },
   // 수령 기록은 티어의 안정 식별자(tid, "t1"·"t2" …)를 담는다. 인덱스로 담으면 시즌 도중
   // 티어를 중간에 추가할 때 뒤쪽이 밀려 이미 받은 보상을 다시 받을 수 있다 (models/SeasonPass.js 참고).
   passClaimedFree: { type: [String], default: [] }, // 수령한 무료 티어 tid

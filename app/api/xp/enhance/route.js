@@ -128,7 +128,8 @@ export async function POST(request) {
     const view = buildEnhanceView(setting, updated);
     return NextResponse.json({
       success: true,
-      message: `${ENHANCE_LABEL[kind]} 강화 ${view[kind].level}단계`,
+      // 관리자는 무료라 XP 가 줄지 않는다 — 고장으로 오해하지 않게 알림에 적는다
+      message: `${ENHANCE_LABEL[kind]} 강화 ${view[kind].level}단계${isAdmin ? " · 관리자라 차감 없음" : ""}`,
       kind,
       payMethod,
       charged,

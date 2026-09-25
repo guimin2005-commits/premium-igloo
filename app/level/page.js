@@ -476,7 +476,7 @@ const hexLift = (hex, t) => {
 //    오른쪽: 다음 단계와 강화 버튼, 전 단계 레일(지난 단계는 채운 노드, 다음은 고리, 남은 건 빈 노드 · 1회 획득 · 비용).
 //    비용은 서버와 같은 식(lib/enhance enhanceCost). 최대 단계가 0 인 쪽은 탭을 만들지 않는다.
 const EMBER = "linear-gradient(135deg, #ff4d3a 0%, #ff9a3c 100%)";
-const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voiceMin = 5, policy, onTone }) => {
+const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voiceMin = 5, policy, onTone, onReset, resetBusy }) => {
   const kinds = ["chat", "voice"].filter((k) => enh[k].max > 0);
   const [pick, setPick] = useState("chat");
   const kind = kinds.includes(pick) ? pick : kinds[0];
@@ -554,6 +554,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
               </p>
             )}
           </div>
+          {onReset && <AdminReset onReset={onReset} busy={resetBusy} label="관리자 · 강화 초기화" />}
         </>
       }
     >
@@ -628,6 +629,28 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
   );
 };
 
+// 📌 관리자 테스트 초기화 버튼 — 한 번 누르면 확인 문구로 바뀌고, 3초 안에 한 번 더 누르면 실행한다
+const AdminReset = ({ onReset, busy, label }) => {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => { if (!armed) { setArmed(true); return; } setArmed(false); onReset(); }}
+      className={`mt-3 w-full h-9 shrink-0 rounded-full text-[11px] font-black transition-colors outline-none focus:outline-none disabled:opacity-40 ${
+        armed ? "bg-white text-[#131313]" : "border border-dashed border-white/20 text-white/50 hover:text-white hover:border-white/40"
+      }`}
+    >
+      {busy ? "초기화 중…" : armed ? "한 번 더 누르면 초기화" : label}
+    </button>
+  );
+};
+
 // 📌 시즌 패스 창 — 카드의 "시즌 패스" 로 연다. 틀은 PopShell, 바탕은 보라 · 별빛.
 //    왼쪽: 티어 메달(다음 티어까지 채워지는 보라→분홍 링) · 남은 XP · 프리미엄 카드(잠겨 있으면 해금 버튼)
 //    오른쪽: 티어 레일 — 노드 · 무료 보상 칩 · 프리미엄 보상 칩(보라 · 분홍 결) · 필요 XP. 열면 다음 티어로 스크롤
@@ -699,7 +722,7 @@ const PassReward = ({ r, premium = false, locked = false, busy = false, onClaim 
     </span>
   );
 };
-const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, claimable = 0, busyKey = "", onClaim, onUnlock, balance, dday, onTone }) => {
+const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, claimable = 0, busyKey = "", onClaim, onUnlock, balance, dday, onTone, onReset, resetBusy }) => {
   const [tab, setTab] = useState("all");
   const listRef = useRef(null);
   const nextIdx = (pass?.tierIndex ?? -1) + 1;
@@ -801,6 +824,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
               </div>
             )}
           </div>
+          {onReset && <AdminReset onReset={onReset} busy={resetBusy} label="관리자 · 시즌 패스 초기화" />}
         </>
       }
     >
@@ -1450,6 +1474,28 @@ export default function LevelPage() {
     setEnhBusy((k) => (k === key ? "" : k));
   }, [pushToast, loadMe]);
 
+  // 관리자 테스트 초기화 — 서버가 관리자인지 다시 확인한다 (app/api/xp/reset)
+  const [resetBusy, setResetBusy] = useState("");
+  const resetTest = useCallback(async (what) => {
+    setResetBusy(what);
+    try {
+      const res = await fetch("/api/xp/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ what }),
+      }).then((r) => r.json());
+      pushToast(res?.message || (res?.success ? "초기화했습니다." : "초기화하지 못했습니다."), !!res?.success);
+      if (res?.success) {
+        playTone(523.25, 0.07, "triangle", 0.03);
+        setTimeout(() => playTone(392, 0.1, "triangle", 0.03), 90);
+      }
+    } catch {
+      pushToast("네트워크 오류로 초기화하지 못했습니다.");
+    }
+    await loadMe();
+    setResetBusy("");
+  }, [pushToast, loadMe]);
+
   useEffect(() => {
     if (authStatus === "loading") return;
     if (!session?.user) { setMe(null); setMyLogs(null); setQuests(null); setMyItems(null); setPass(null); prevXpRef.current = null; setMeLoaded(true); return; }
@@ -2015,7 +2061,7 @@ export default function LevelPage() {
       `}} />
 
       <TierModal open={tierOpen} onClose={() => setTierOpen(false)} level={me?.level || 0} baseXp={P.voiceXp} intervalMin={P_voiceMin} enhanceBonus={enh.voice.bonus} />
-      <EnhanceModal open={enhModal} onClose={closeEnh} enh={enh} balance={me} busy={!!enhBusy} onEnhance={enhance} gain={gain} voiceMin={P_voiceMin} policy={P} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
+      <EnhanceModal open={enhModal} onClose={closeEnh} enh={enh} balance={me} busy={!!enhBusy} onEnhance={enhance} gain={gain} voiceMin={P_voiceMin} policy={P} onTone={() => playTone(620, 0.04, "sine", 0.025)} onReset={isAdminUser ? () => resetTest("enhance") : null} resetBusy={resetBusy === "enhance"} />
       <PassModal
         open={passOpen}
         onClose={closePass}
@@ -2030,6 +2076,8 @@ export default function LevelPage() {
         balance={me}
         dday={seasonDday}
         onTone={() => playTone(620, 0.04, "sine", 0.025)}
+        onReset={isAdminUser ? () => resetTest("pass") : null}
+        resetBusy={resetBusy === "pass"}
       />
       <BagOverlay
         open={bagOpen}
