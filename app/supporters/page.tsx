@@ -555,13 +555,21 @@ export default function SupportersPage() {
           <p className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">{fmtMonth(me.month)}</p>
         </div>
 
-        {/* 탭 줄 — 내용만큼 커지되 화면을 넘기면 이 줄만 가로 스크롤한다 */}
-        <div className="max-w-full flex gap-2 overflow-x-auto no-bar mb-8 md:mb-10">
-          {TABS.map((t) => (
-            <button key={t.id} type="button" onClick={() => setTab(t.id)} className={pillClass(tab === t.id)}>
-              {t.name}
-            </button>
-          ))}
+        {/* 탭 줄 — 사이트 공통 밑줄 탭(고른 것만 빨간 밑줄). 화면을 넘기면 이 줄만 가로 스크롤한다 */}
+        {/* 스크롤은 바깥, 선은 안쪽 줄에 — 스크롤 칸에 선을 두면 밑줄 아래 1px 가 잘린다 */}
+        <div className="max-w-full overflow-x-auto no-bar mb-8 md:mb-10">
+        <div role="tablist" className="flex w-max min-w-full border-b border-[#ededed]">
+          {TABS.map((t) => {
+            const on = tab === t.id;
+            return (
+              <button key={t.id} type="button" role="tab" aria-selected={on} onClick={() => setTab(t.id)}
+                className={`relative shrink-0 py-3 mr-6 md:mr-7 text-[14px] font-extrabold whitespace-nowrap transition-colors outline-none focus-visible:text-[#131313] ${on ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
+                {t.name}
+                {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
+              </button>
+            );
+          })}
+        </div>
         </div>
 
         {/* ══ 활동 — 잉크 패널 하나 + 헤어라인 스탯 스트립 ══ */}
