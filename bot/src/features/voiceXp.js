@@ -5,7 +5,7 @@ import { getBuffXp, getAttendBuffXp } from "../roleConfigs.js";
 import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getActiveBoostXp, getMuteMultiplier } from "../botSettings.js";
 import { grantXp } from "../xp.js";
-import { config, policy } from "../config.js";
+import { config } from "../config.js";
 
 async function voiceXpTick(client) {
   try {
@@ -36,8 +36,8 @@ async function voiceXpTick(client) {
       const muteMultiplier = getMuteMultiplier(voiceState);
       if (muteMultiplier === 0) continue;
 
-      // 내전 채널은 env 설정이 있을 때만 별도 기본값 사용
-      const base = config.scrimChannelIds.has(channel.id) ? policy.scrimBaseXp : s.voiceXp;
+      // 기본 음성 XP — 내전 채널도 따로 두지 않고 같은 값(대시보드 설정)을 쓴다
+      const base = s.voiceXp;
       const doc = await UserXp.findOne({ userId: member.id }, { level: 1, voiceEnhance: 1 }).lean();
 
       // 강화 가산 — 단계(영구) × voiceEnhanceStep. 등급·역할·채널 가산과 같은 자리에서 더하고 음소거 배율을 곱한다

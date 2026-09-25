@@ -8,7 +8,6 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-const csv = (v) => new Set((v || "").split(",").map((s) => s.trim()).filter(Boolean));
 
 /* 📌 재촉 DM 전용 모드
    레벨링·상점 처리는 켜지 않고 캘린더 재촉 DM 만 보낸다.
@@ -22,7 +21,6 @@ export const config = {
   mongoUri: process.env.MONGODB_URI,
 
   levelupChannelId: process.env.LEVELUP_CHANNEL_ID || null,
-  scrimChannelIds: csv(process.env.SCRIM_CHANNEL_IDS),
   eventBonusXp: parseInt(process.env.EVENT_BONUS_XP || "0", 10) || 0,
 
   // env 기반 역할 버프 (하위 호환 — 대시보드 RoleConfig가 우선)
@@ -44,7 +42,6 @@ export const policy = {
 
   voiceIntervalMs: 5 * 60 * 1000,
   voiceBaseXp: 3000,
-  scrimBaseXp: 3500,
   mutedMultiplier: 0.1, // 마이크+헤드셋 음소거 시 90% 감소
 
   attendXp: 7000,
