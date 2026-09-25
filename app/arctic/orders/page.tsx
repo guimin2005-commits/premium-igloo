@@ -75,7 +75,7 @@ export default function OrdersPage() {
 
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
-      <ArcticStoreBar />
+      <ArcticStoreBar crumbs={[{ label: "구매 내역" }]} width="max-w-4xl" />
       <section className="max-w-4xl mx-auto px-6 pt-10 pb-24">
 
         <h1 className="text-3xl md:text-4xl font-black tracking-tighter mb-8">구매 내역</h1>

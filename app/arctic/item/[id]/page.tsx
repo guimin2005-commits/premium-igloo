@@ -188,7 +188,11 @@ export default function ItemDetailPage() {
 
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
-      <ArcticStoreBar cartCount={cart.reduce((n, c) => n + (c.qty || 1), 0)} wishCount={wish.length} />
+      <ArcticStoreBar
+        crumbs={[{ label: itemTypeLabel(item.type), href: `/arctic?type=${item.type}` }, { label: item.name }]}
+        cartCount={cart.reduce((n, c) => n + (c.qty || 1), 0)}
+        wishCount={wish.length}
+      />
       <section className="max-w-5xl mx-auto px-6 pt-8 pb-32 md:pb-24">
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

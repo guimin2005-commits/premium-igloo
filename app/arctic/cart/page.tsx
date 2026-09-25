@@ -100,7 +100,7 @@ export default function CartPage() {
 
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
-      <ArcticStoreBar active="cart" cartCount={cart.reduce((n, c) => n + (c.qty || 1), 0)} />
+      <ArcticStoreBar crumbs={[{ label: "장바구니" }]} active="cart" cartCount={cart.reduce((n, c) => n + (c.qty || 1), 0)} />
       <section className="max-w-5xl mx-auto px-6 pt-10 pb-24">
 
         <div className="flex items-baseline justify-between gap-4 mb-8">
