@@ -142,10 +142,9 @@ export default function MyInfoPage() {
     const to: Record<string, string> = {
       notice: "/profile/notice", inquiry: "/profile/inquiry", recruit: "/profile/recruit",
       arctic: "/arctic/orders", orders: "/arctic/orders", cart: "/arctic/cart", wish: "/arctic?panel=wish",
-      bag: "/level?tab=my&bag=1", booster: "/profile/booster", supporter: "/supporters",
+      bag: "/level?tab=my&bag=1", booster: "/profile/booster", supporter: "/supporters", coupons: "/profile/coupons",
     };
     if (to[tab]) router.replace(to[tab]);
-    else if (tab === "coupons") window.dispatchEvent(new Event("igloo:open-coupons"));
   }, [searchParams, router]);
 
   if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-[#8a8a8a]">로딩 중...</div>;
@@ -179,7 +178,7 @@ export default function MyInfoPage() {
     rows.push({ k: "orders", g: "arctic", l: "주문 내역", icon: ICON_PATHS.receipt, href: "/arctic/orders", n: shopOrders.length, accent: shopPendingCount > 0 });
     rows.push({ k: "cart", g: "arctic", l: "장바구니", icon: ICON_PATHS.cart, href: "/arctic/cart", n: shopCartCount });
     rows.push({ k: "wish", g: "arctic", l: "찜", icon: ICON_PATHS.heart, href: "/arctic?panel=wish", n: shopWish.length });
-    rows.push({ k: "coupons", g: "arctic", l: "쿠폰함", icon: ICON_PATHS.ticket, onClick: () => window.dispatchEvent(new Event("igloo:open-coupons")), n: shopWallet.length });
+    rows.push({ k: "coupons", g: "arctic", l: "쿠폰함", icon: ICON_PATHS.ticket, href: `/profile/coupons${q}`, n: shopWallet.length });
   }
   rows.push({ k: "booster", g: "member", l: "서버 부스터", icon: ICON_PATHS.sparkles, href: `/profile/booster${q}`, pill: isBooster ? "적용 중" : undefined, pillCls: "bg-[#e91e3f]/[0.08] text-[#e91e3f]" });
   if (canSeeSupporter) rows.push({ k: "supporter", g: "member", l: "서포터즈", icon: ICON_PATHS.shieldCheck, href: "/supporters", pill: isSupporter ? "활동 중" : undefined, pillCls: "bg-[#3f83b8]/[0.1] text-[#3f83b8]" });

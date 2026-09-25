@@ -108,17 +108,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
   
-  const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
-  // 프로필 바로가기 등 다른 화면에서도 쿠폰함을 연다 — window 이벤트 하나로
-  useEffect(() => {
-    const open = () => setIsCodeModalOpen(true);
-    window.addEventListener("igloo:open-coupons", open);
-    return () => window.removeEventListener("igloo:open-coupons", open);
-  }, []);
-  const [myCoupons, setMyCoupons] = useState<any[]>([]); // 쿠폰함에 보여줄 보유 쿠폰
-  const [isLoadingCoupons, setIsLoadingCoupons] = useState(false);
-  const [voucherCode, setVoucherCode] = useState("");
-  const [codeResult, setCodeResult] = useState<{isOpen: boolean, message: string, isError: boolean}>({isOpen: false, message: "", isError: false});
+  // 📌 쿠폰함은 페이지(/profile/coupons)다 — 예전 모달 · 여는 이벤트(igloo:open-coupons)는 없앴다
 
   const [guestContent, setGuestContent] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
@@ -199,7 +189,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       ADMIN_SURFACE_PATHS.includes(pathname || "") ||
       (ADMIN_QUERY_PATHS.includes(pathname || "") && searchParams.get("admin") === "1"));
 
-  const [isCodeSubmitting, setIsCodeSubmitting] = useState(false);
 
   // 📌 카테고리 그룹화: 큰 카테고리 → 세부 카테고리 (메가 메뉴)
   const rawCategoryGroups = [
@@ -367,49 +356,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     else { alert("오류가 발생했습니다."); }
   };
 
-  // 쿠폰함을 열면 보유 쿠폰을 불러온다
-  const loadMyCoupons = () => {
-    setIsLoadingCoupons(true);
-    fetch("/api/shop/my-coupons", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setMyCoupons(Array.isArray(d?.data) ? d.data : []))
-      .catch(() => setMyCoupons([]))
-      .finally(() => setIsLoadingCoupons(false));
-  };
-  useEffect(() => {
-    if (isCodeModalOpen && status === "authenticated") loadMyCoupons();
-  }, [isCodeModalOpen, status]);
-
-  const handleCodeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!voucherCode.trim() || isCodeSubmitting) return;
-    setIsCodeSubmitting(true);
-    try {
-      const res = await fetch("/api/shop/my-coupons", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code: voucherCode,
-          userId: (session?.user as any)?.id,
-          userName: session?.user?.name,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setCodeResult({ isOpen: true, message: data.message || "쿠폰이 정상적으로 등록되었습니다.", isError: false });
-        setVoucherCode("");
-        loadMyCoupons();
-      } else {
-        setCodeResult({ isOpen: true, message: data.message || "사용할 수 없는 쿠폰입니다.", isError: true });
-      }
-    } catch {
-      setCodeResult({ isOpen: true, message: "서버와 통신하는 중 오류가 발생했습니다.", isError: true });
-    } finally {
-      setIsCodeSubmitting(false);
-      setVoucherCode("");
-    }
-  };
-
   return (
     <div className={`flex flex-col min-h-screen ${isWhitePage ? "bg-white" : isLightPage ? "bg-[#f4f3f2]" : "bg-[#090909]"}`}>
       <ScrollLock />
@@ -465,12 +411,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               <>
               {/* 📌 쿠폰 등록 — 알림 옆에 두어 어디서든 바로 쓸 수 있게 (미인증 유저는 숨김) */}
               {isVerified && (
-                <button onClick={() => setIsCodeModalOpen(true)} aria-label="쿠폰함" title="쿠폰함"
+                <Link href="/profile/coupons" aria-label="쿠폰함" title="쿠폰함"
                   className={`relative transition-[padding,color] duration-500 ease-out outline-none focus:outline-none ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white"} ${scrolled ? "p-1.5" : "p-2"}`}>
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className={`transition-all duration-500 ${scrolled ? "w-[18px] h-[18px]" : "w-5 h-5"}`}>
                     <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
                   </svg>
-                </button>
+                </Link>
               )}
 
               {/* 📌 알림 센터 종 아이콘 */}
@@ -731,80 +677,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </div>
       </footer>
 
-      {/* 📌 쿠폰함 — 코드 등록과 보유 쿠폰을 한 창에서 */}
-      {isCodeModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 overlay-in" onClick={() => setIsCodeModalOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()}
-            className={`rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[88dvh] sm:max-h-[80vh] overflow-hidden shadow-2xl relative flex flex-col animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200 border ${isLightPage ? "bg-white border-[#ededed]" : "bg-[#121212] border-white/10"}`}>
-            {/* 머리 */}
-            <div className={`shrink-0 flex items-center justify-between px-6 py-4 border-b ${isLightPage ? "border-[#ededed]" : "border-white/[0.07]"}`}>
-              <div className="flex items-center gap-2.5">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[18px] h-[18px] text-[#e91e3f]">
-                  <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
-                </svg>
-                <h2 className={`text-base font-black tracking-tight ${isLightPage ? "text-[#131313]" : "text-white"}`}>쿠폰함</h2>
-              </div>
-              <button onClick={() => setIsCodeModalOpen(false)} aria-label="닫기" className={`p-1.5 -mr-1.5 rounded-md transition-colors outline-none ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-400 hover:text-white hover:bg-white/[0.06]"}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
-              </button>
-            </div>
-
-            {/* 코드 등록 */}
-            <div className={`shrink-0 px-6 pt-5 pb-4 border-b ${isLightPage ? "border-[#ededed]" : "border-white/[0.07]"}`}>
-              <form onSubmit={handleCodeSubmit} className="flex gap-2">
-                <input type="text" required placeholder="쿠폰 코드 입력" value={voucherCode} onChange={(e) => setVoucherCode(e.target.value)}
-                  className={`flex-1 min-w-0 px-4 py-3 rounded-xl text-sm outline-none focus:border-[#e91e3f] transition-colors uppercase placeholder:normal-case border ${isLightPage ? "bg-white border-[#ededed] text-[#131313] placeholder:text-[#a3a3a3]" : "bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600"}`} />
-                <button type="submit" disabled={isCodeSubmitting}
-                  className="px-5 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-[13px] font-bold rounded-xl transition-colors outline-none shrink-0">
-                  {isCodeSubmitting ? "확인" : "등록"}
-                </button>
-              </form>
-              {codeResult.isOpen && (
-                <p className={`mt-2.5 text-[12px] font-bold break-keep ${codeResult.isError ? (isLightPage ? "text-[#d01634]" : "text-red-400") : (isLightPage ? "text-[#3f7a35]" : "text-emerald-400")}`}>{codeResult.message}</p>
-              )}
-            </div>
-
-            {/* 보유 쿠폰 */}
-            <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden">
-              <div className="px-6 pt-4 pb-2 flex items-center justify-between">
-                <span className={`text-[11px] font-black tracking-[0.2em] uppercase ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>My Coupons</span>
-                {myCoupons.length > 0 && <span className="text-[11px] font-black text-[#e91e3f]">{myCoupons.length}장</span>}
-              </div>
-              {isLoadingCoupons ? (
-                <p className="px-6 py-10 text-center text-xs text-gray-500">불러오는 중...</p>
-              ) : myCoupons.length === 0 ? (
-                <p className="px-6 py-10 text-center text-xs text-gray-500 break-keep">보유한 쿠폰이 없습니다.</p>
-              ) : (
-                <div className={`divide-y ${isLightPage ? "divide-[#ececea]" : "divide-white/[0.05]"}`}>
-                  {myCoupons.map((c) => (
-                    <div key={c.id} className="px-6 py-3.5 flex items-center gap-3">
-                      <span className="w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
-                        <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
-                        </svg>
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className={`text-[13px] font-bold truncate ${isLightPage ? "text-[#131313]" : "text-white"}`}>{c.name}</p>
-                        <p className={`text-[11px] break-keep ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>
-                          {c.type === "percent" ? `${c.value}% 할인` : `${(c.value || 0).toLocaleString()} XP 할인`}
-                          {c.minTotal > 0 && ` · ${c.minTotal.toLocaleString()} XP 이상`}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {isAdmin && (
-              <div className={`shrink-0 px-6 py-3 border-t ${isLightPage ? "border-[#ededed]" : "border-white/[0.07]"}`}>
-                <Link href="/admin/shop?tab=coupons" onClick={() => setIsCodeModalOpen(false)} className={`block text-center text-[12px] font-bold transition-colors ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>쿠폰 관리 (관리자) →</Link>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {isLoginModalOpen && !isGuestInquiryOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl ring-1 ring-white/5 w-full max-w-md overflow-hidden shadow-2xl relative">
@@ -847,7 +719,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           if (!isVerifyPage) accountItems.push({ name: "내 정보", path: "/profile" });
           // 서포터즈 바로가기 — 헤더 메뉴 대신 계정 팝업과 프로필에서만 들어간다 (관리자는 확인용으로 항상)
           if (!isVerifyPage && (isSupporter || isAdmin)) accountItems.push({ name: "서포터즈", path: "/supporters" });
-          if (isVerified) accountItems.push({ name: "쿠폰함", onClick: () => { closeMobileMenu(); setIsCodeModalOpen(true); } });
+          if (isVerified) accountItems.push({ name: "쿠폰함", path: "/profile/coupons" });
           if (isAdmin) accountItems.push({ name: "관리자 페이지", path: "/admin", accent: true });
         }
         const showCategories = !isVerifyPage && (status !== "authenticated" || isVerified);
