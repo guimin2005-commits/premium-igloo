@@ -34,9 +34,6 @@ const GROUPS: { g: Row["g"]; t: string }[] = [
   { g: "member", t: "멤버십" },
 ];
 
-// 대표 아이콘 우선순위 — 있는 것 중 앞에서 4개
-const FEATURED_ORDER = ["bag", "orders", "coupons", "cart", "wish", "supporter", "booster", "team", "inquiry", "recruit"];
-
 export default function MyInfoPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -188,8 +185,6 @@ export default function MyInfoPage() {
   if (canSeeSupporter) rows.push({ k: "supporter", g: "member", l: "서포터즈", icon: ICON_PATHS.shieldCheck, href: "/supporters", pill: isSupporter ? "활동 중" : undefined, pillCls: "bg-[#3f83b8]/[0.1] text-[#3f83b8]" });
   if (myTeam || scrimAdmin) rows.push({ k: "team", g: "member", l: myTeam ? "팀 룸" : "대회 룸", icon: ICON_PATHS.users, href: myTeam ? `/tournament/team/${myTeam._id}` : "/admin/room", pill: myTeam ? `PLAN ${myTeam.sent}/${myTeam.members.length}` : undefined, pillCls: "bg-black/[0.05] text-[#5a5a5a]" });
 
-  const featured = FEATURED_ORDER.map((k) => rows.find((r) => r.k === k)).filter(Boolean).slice(0, 4) as Row[];
-
   const RowShell = ({ r, children, className }: { r: Row; children: React.ReactNode; className: string }) =>
     r.href ? <Link href={r.href} className={className}>{children}</Link> : <button type="button" onClick={r.onClick} className={className}>{children}</button>;
 
@@ -272,23 +267,6 @@ export default function MyInfoPage() {
             </div>
           )}
         </div>
-
-        {/* ═══ 대표 4개 — 헤더 바로 아래 한 줄. 누르면 해당 화면으로 ═══ */}
-        {featured.length > 0 && (
-          <div className="mt-6 grid grid-cols-4 gap-2">
-            {featured.map((r) => (
-              <RowShell key={r.k} r={r} className="group flex flex-col items-center gap-1.5 py-3 rounded-2xl hover:bg-black/[0.04] transition-colors outline-none focus:outline-none">
-                <span className="relative w-12 h-12 rounded-2xl bg-white border border-black/[0.06] shadow-[0_2px_10px_rgba(0,0,0,0.04)] flex items-center justify-center text-[#131313]">
-                  <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={r.icon} /></svg>
-                  {r.n != null && r.n > 0 && (
-                    <span className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center tabular-nums text-white ${r.accent ? "bg-[#e91e3f]" : "bg-[#131313]"}`}>{r.n > 99 ? "99+" : r.n}</span>
-                  )}
-                </span>
-                <span className="text-[11px] font-bold text-[#5a5a5a] group-hover:text-[#131313] whitespace-nowrap">{r.l}</span>
-              </RowShell>
-            ))}
-          </div>
-        )}
 
         {/* ═══ 묶음 줄 목록 — 계정 / ARCTIC / 멤버십. 줄은 전부 해당 화면으로 ═══ */}
         <div className="mt-10 grid grid-cols-1 gap-y-9">
