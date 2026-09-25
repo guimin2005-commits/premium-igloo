@@ -100,13 +100,11 @@ export default function ShopInventoryPage() {
                 <div key={it.uid} className="bg-white rounded-2xl border border-[#ededed] p-4 flex flex-col items-center text-center">
                   <span className="relative w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: `${c}14`, boxShadow: `inset 0 0 0 1px ${c}33` }}>
                     <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.source === "level" ? "level" : it.type} size={30} color={c} dim={dead} />
-                    {dday !== null && <span className={`absolute -top-1.5 -right-1.5 px-1.5 h-[18px] rounded-full text-white text-[10px] font-black flex items-center tabular-nums ${dday <= 3 ? "bg-[#e91e3f]" : "bg-[#131313]"}`}>D-{dday}</span>}
-                    {it.status === "pending" && <span className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-[#a3a3a3]"></span>}
-                    {it.status === "missing" && <span className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-[#e91e3f]"></span>}
+                    
                   </span>
                   <span className="mt-3 text-[13px] font-black text-[#131313] leading-tight line-clamp-2 break-keep">{it.name}</span>
                   <span className={`mt-1 text-[11px] font-bold tabular-nums ${dead ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>{sub}</span>
-                  {until && <span className="mt-0.5 text-[11px] font-bold text-[#5a5a5a] tabular-nums">{it.days > 0 ? `${it.days}일 · ` : ""}{until}까지</span>}
+                  {until && <span className={`mt-0.5 text-[11px] font-bold tabular-nums ${dday !== null && dday <= 3 ? "text-[#e91e3f]" : "text-[#5a5a5a]"}`}>D-{dday} · {until}까지</span>}
                 </div>
               );
             })}

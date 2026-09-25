@@ -1,145 +1,161 @@
 "use client";
 
-// 📌 등급 엠블럼 — 등급마다 형태가 다르다. 색만 다르면 사다리가 읽히지 않는다.
-//    위로 갈수록 형태가 복잡해진다: 조각 → 방패 → 보석 → 훈장 → 월계관 → 왕관 → 제관.
-//    모두 currentColor 를 쓰므로 감싸는 쪽에서 등급색만 지정하면 된다.
+import { useId } from "react";
 
-const SHAPES = {
-  // 1. 아이언 — 다듬지 않은 광석 조각
-  iron: (
-    <>
-      <path d="M12 3.5 19 9.5 12 20.5 5 9.5Z" fill="currentColor" opacity="0.9" />
-      <path d="M12 3.5 12 20.5" stroke="currentColor" strokeWidth="1" opacity="0.35" />
-    </>
-  ),
-  // 2. 브론즈 — 기본 방패
-  bronze: (
-    <path
-      d="M12 2.8 20 5.6V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.6Z"
-      fill="currentColor"
-      opacity="0.9"
-    />
-  ),
-  // 3. 실버 — 방패 + 안쪽 갈매기
-  silver: (
-    <>
-      <path d="M12 2.8 20 5.6V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.6Z" fill="currentColor" opacity="0.85" />
-      <path d="M8.2 11.2 12 14.6l3.8-3.4" stroke="#fff" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
-    </>
-  ),
-  // 4. 골드 — 방패 + 별
-  gold: (
-    <>
-      <path d="M12 2.8 20 5.6V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.6Z" fill="currentColor" opacity="0.85" />
-      <path d="M12 7.6l1.5 3.1 3.4.5-2.45 2.4.58 3.4L12 15.4l-3.03 1.6.58-3.4L7.1 11.2l3.4-.5Z" fill="#fff" opacity="0.9" />
-    </>
-  ),
-  // 5. 플래티넘 — 육각 보석
-  platinum: (
-    <>
-      <path d="M12 2.6 20 7.3v9.4L12 21.4 4 16.7V7.3Z" fill="currentColor" opacity="0.9" />
-      <path d="M12 6.6 16.6 9.3v5.4L12 17.4 7.4 14.7V9.3Z" fill="none" stroke="#fff" strokeWidth="1.2" opacity="0.75" />
-    </>
-  ),
-  // 6. 다이아몬드 — 면이 잡힌 보석
-  diamond: (
-    <>
-      <path d="M12 2.8 18.8 9.2 12 21.2 5.2 9.2Z" fill="currentColor" opacity="0.9" />
-      <path d="M5.2 9.2h13.6M12 2.8 9 9.2M12 2.8l3 6.4M9 9.2 12 21.2l3-12" stroke="#fff" strokeWidth="1" fill="none" opacity="0.7" />
-    </>
-  ),
-  // 7. 마스터 — 별이 박힌 원형 훈장. 보석(다이아) 다음 단계로 격을 올린다
-  master: (
-    <>
-      <circle cx="12" cy="12" r="9.2" fill="currentColor" opacity="0.16" />
-      <circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.95" />
-      <path
-        d="M12 4.4 13.6 10.4 19.6 12 13.6 13.6 12 19.6 10.4 13.6 4.4 12 10.4 10.4Z"
-        fill="currentColor"
-        opacity="0.95"
-      />
-      <circle cx="12" cy="12" r="1.7" fill="#fff" opacity="0.9" />
-    </>
-  ),
-  // 8. 그랜드마스터 — 월계관을 두른 별.
-  //    마스터(원형 훈장)와 같은 계열이면서 한 급 위로 읽힌다.
-  grandmaster: (
-    <>
-      {/* 좌우 월계 가지 */}
-      <path d="M10.6 21C7.3 19.7 5.2 16.8 4.7 12.7c-.25-2 0-3.8.75-5.4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.85" />
-      <path d="M13.4 21c3.3-1.3 5.4-4.2 5.9-8.3.25-2 0-3.8-.75-5.4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.85" />
-      {/* 잎 — 좌 */}
-      <ellipse cx="4.5" cy="15.1" rx="1.75" ry="0.95" transform="rotate(-52 4.5 15.1)" fill="currentColor" opacity="0.65" />
-      <ellipse cx="4.6" cy="11.4" rx="1.7" ry="0.9" transform="rotate(-70 4.6 11.4)" fill="currentColor" opacity="0.65" />
-      <ellipse cx="5.6" cy="8" rx="1.6" ry="0.9" transform="rotate(-84 5.6 8)" fill="currentColor" opacity="0.65" />
-      {/* 잎 — 우 */}
-      <ellipse cx="19.5" cy="15.1" rx="1.75" ry="0.95" transform="rotate(52 19.5 15.1)" fill="currentColor" opacity="0.65" />
-      <ellipse cx="19.4" cy="11.4" rx="1.7" ry="0.9" transform="rotate(70 19.4 11.4)" fill="currentColor" opacity="0.65" />
-      <ellipse cx="18.4" cy="8" rx="1.6" ry="0.9" transform="rotate(84 18.4 8)" fill="currentColor" opacity="0.65" />
-      {/* 중앙 별 */}
-      <path d="M12 4.2 13.75 9.6h5.65l-4.57 3.32 1.75 5.38L12 15l-4.58 3.3 1.75-5.38L4.6 9.6h5.65Z" fill="currentColor" opacity="0.95" />
-      {/* 흰 포인트 — 별 중심과 월계관 매듭 */}
-      <circle cx="12" cy="11.4" r="1.6" fill="#fff" opacity="0.9" />
-      <path d="M10.6 20.9 12 19.8l1.4 1.1" stroke="#fff" strokeWidth="1.3" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
-    </>
-  ),
-  // 9. 챌린저 — 보석이 박힌 왕관 + 받침대
-  challenger: (
-    <>
-      {/* 왕관 몸통 */}
-      <path d="M2.4 8 6.7 12.2 12 4.6l5.3 7.6L21.6 8v9.4H2.4Z" fill="currentColor" opacity="0.95" />
-      {/* 꼭짓점 보석 */}
-      <circle cx="2.4" cy="6.5" r="1.6" fill="currentColor" />
-      <circle cx="12" cy="3.1" r="1.9" fill="currentColor" />
-      <circle cx="21.6" cy="6.5" r="1.6" fill="currentColor" />
-      {/* 왕관 띠 장식 */}
-      <path d="M6.4 15h11.2" stroke="#fff" strokeWidth="0.9" opacity="0.5" />
-      <circle cx="12" cy="12.6" r="1.5" fill="#fff" opacity="0.85" />
-      {/* 받침대 */}
-      <rect x="2.4" y="18.6" width="19.2" height="2.6" rx="1.3" fill="currentColor" opacity="0.72" />
-    </>
-  ),
-  // 10. 이글루 — 사다리의 끝. 이글루 형상을 그리지 않고,
-  //     챌린저(왕관) 위 단계로 읽히는 제관(帝冠)으로 간다.
-  //     왕관에 아치와 보주를 얹고 광휘를 둘러 한 급 위임을 드러낸다.
-  igloo: (
-    <>
-      {/* 광휘 */}
-      <path
-        d="M12 0.6v1.9M4.1 3.6l1.4 1.4M19.9 3.6l-1.4 1.4M1.4 10.4h1.8M20.8 10.4h1.8"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        opacity="0.45"
-      />
-      {/* 최상단 보주 */}
-      <circle cx="12" cy="4.5" r="1.8" fill="currentColor" />
-      {/* 제관 아치 — 두 겹 */}
-      <path d="M5.9 13.2C6.7 8.7 9 6.4 12 6.4s5.3 2.3 6.1 6.8" fill="none" stroke="currentColor" strokeWidth="1.6" opacity="0.9" strokeLinecap="round" />
-      <path d="M8.8 13.2C9.2 9.7 10.3 8 12 8s2.8 1.7 3.2 5.2" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.45" strokeLinecap="round" />
-      {/* 왕관 몸통 */}
-      <path d="M3.4 11.4 7.1 15 12 9.2 16.9 15l3.7-3.6v7.2H3.4Z" fill="currentColor" opacity="0.95" />
-      {/* 몸통 중앙 보석 */}
-      <circle cx="12" cy="15.6" r="1.5" fill="#fff" opacity="0.9" />
-      {/* 받침대 */}
-      <rect x="2.9" y="19.6" width="18.2" height="2.6" rx="1.3" fill="currentColor" opacity="0.75" />
-    </>
-  ),
+// 📌 등급 엠블럼 — 육각 각인 (2026-09 시안 A 채택).
+//    열 등급이 같은 육각 틀을 쓰고, 안쪽 표식이 한 단계씩 올라간다:
+//    줄 → 갈매기 1·2·3 → 보석 테 → 보석 → 별 → 별(중심) → 왕관 → 왕관(보석).
+//    마스터부터 바깥 테, 그랜드마스터부터 양옆 날개, 챌린저부터 머리 보석이 붙는다.
+//    확대해도 싸 보이지 않게: 금속 결 그라데이션 · 위가 밝고 아래가 어두운 테 · 한 단 파인 안쪽 판 ·
+//    부드러운 광택(딱딱한 면 음영 대신) · 표식의 얕은 그림자.
+//    색은 등급색(tier.c) 하나에서 밝히고 어둡혀 만든다. 한 화면에 여럿 그려도 그라데이션 id 가 겹치지 않게 useId 를 쓴다.
+
+const mix = (hex, t, toWhite) => {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+  if (!m) return hex;
+  const f = (h) => {
+    const v = parseInt(h, 16);
+    return Math.round(v + ((toWhite ? 255 : 0) - v) * t).toString(16).padStart(2, "0");
+  };
+  return `#${f(m[1])}${f(m[2])}${f(m[3])}`;
 };
+
+// 꼭짓점이 위인 육각 — 중심 (24, 25)
+const hex = (r) =>
+  [-90, -30, 30, 90, 150, 210]
+    .map((a) => {
+      const rad = (a * Math.PI) / 180;
+      return `${(24 + r * Math.cos(rad)).toFixed(2)},${(25 + r * Math.sin(rad)).toFixed(2)}`;
+    })
+    .join(" ");
+const BODY = hex(19);
+const RIM = hex(18.2);
+const FIELD = hex(14.6);
+const OUTER = hex(22.2);
+
+const STAR = "M24 13.6l2.7 8.7 8.7 2.7-8.7 2.7L24 36.4l-2.7-8.7-8.7-2.7 8.7-2.7z";
+const CROWN = "M15.2 31.4V19.8l4.9 4.5 3.9-7 3.9 7 4.9-4.5v11.6z";
+
+// 표식 — fill 은 흰 면, stroke 는 흰 선. 그림자는 같은 모양을 어두운 색으로 한 번 더 그린다
+const glyph = (key, ink, accent) => {
+  const line = { fill: "none", stroke: ink, strokeLinecap: "round", strokeLinejoin: "round" };
+  switch (key) {
+    case "iron":
+      return <path d="M17.6 25h12.8" {...line} strokeWidth="2.8" />;
+    case "bronze":
+      return <path d="M17.2 28.2 24 21.4l6.8 6.8" {...line} strokeWidth="2.8" />;
+    case "silver":
+      return <path d="M17.6 24.6 24 18.2l6.4 6.4M17.6 31 24 24.6l6.4 6.4" {...line} strokeWidth="2.7" />;
+    case "gold":
+      return <path d="M18.6 21.6 24 16.2l5.4 5.4M18.6 27.4 24 22l5.4 5.4M18.6 33.2 24 27.8l5.4 5.4" {...line} strokeWidth="2.4" />;
+    case "platinum":
+      return <path d="M24 16 32.2 25 24 34 15.8 25z" {...line} strokeWidth="2.5" />;
+    case "diamond":
+      return (
+        <>
+          <path d="M24 15.2 33 25 24 34.8 15 25z" fill={ink} />
+          {accent && <path d="M15 25h18M24 15.2 20.9 25 24 34.8 27.1 25z" fill="none" stroke={accent} strokeWidth="1" opacity="0.5" />}
+        </>
+      );
+    case "master":
+      return <path d={STAR} fill={ink} />;
+    case "grandmaster":
+      return (
+        <>
+          <path d={STAR} fill={ink} />
+          {accent && <circle cx="24" cy="25" r="2.1" fill={accent} />}
+        </>
+      );
+    case "challenger":
+      return <path d={CROWN} fill={ink} />;
+    case "igloo":
+      return (
+        <>
+          <path d={CROWN} fill={ink} />
+          {accent && <path d="M24 23.2l2.1 2.3-2.1 2.3-2.1-2.3z" fill={accent} />}
+        </>
+      );
+    default:
+      return null;
+  }
+};
+
+const RANK = ["iron", "bronze", "silver", "gold", "platinum", "diamond", "master", "grandmaster", "challenger", "igloo"];
 
 /** 등급 엠블럼 · tier = VOICE_TIERS 항목 */
 export default function TierEmblem({ tier, size = 24, className = "", muted = false }) {
-  const shape = SHAPES[tier?.key] || SHAPES.iron;
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const key = RANK.includes(tier?.key) ? tier.key : "iron";
+  const r = RANK.indexOf(key);
+  const c = tier?.c || "#8a8a8a";
+  const hi = mix(c, 0.5, true);
+  const light = mix(c, 0.62, true);
+  const lo = mix(c, 0.32, false);
+  const deep = mix(c, 0.55, false);
+  const id = (n) => `te-${n}-${uid}`;
+
   return (
     <svg
-      viewBox="0 0 24 24"
+      viewBox="0 0 48 48"
       width={size}
       height={size}
       className={`shrink-0 ${className}`}
-      style={{ color: tier?.c || "#8a8a8a", opacity: muted ? 0.45 : 1 }}
+      style={{ opacity: muted ? 0.45 : 1, overflow: "visible" }}
       aria-hidden
     >
-      {shape}
+      <defs>
+        {/* 몸통 — 금속 결 */}
+        <linearGradient id={id("metal")} x1="0.15" y1="0" x2="0.55" y2="1">
+          <stop offset="0%" stopColor={hi} />
+          <stop offset="48%" stopColor={c} />
+          <stop offset="100%" stopColor={lo} />
+        </linearGradient>
+        {/* 테 · 날개 · 머리 보석 — 위는 밝고 아래는 어둡다 */}
+        <linearGradient id={id("rim")} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={light} />
+          <stop offset="55%" stopColor={mix(c, 0.15, true)} />
+          <stop offset="100%" stopColor={deep} />
+        </linearGradient>
+        {/* 안쪽 판 — 한 단 파여 위가 어둡다 */}
+        <linearGradient id={id("field")} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={mix(c, 0.22, false)} />
+          <stop offset="100%" stopColor={mix(c, 0.06, true)} />
+        </linearGradient>
+        {/* 광택 — 왼쪽 위에서 번지는 부드러운 빛 */}
+        <radialGradient id={id("shine")} cx="0.32" cy="0.18" r="0.72">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.42" />
+          <stop offset="55%" stopColor="#ffffff" stopOpacity="0.08" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {/* 그랜드마스터부터 — 양옆 칼날 날개 */}
+      {r >= 7 && (
+        <>
+          <path d="M7.4 16.4 0.9 25l6.5 8.6-1.9-8.6z" fill={`url(#${id("rim")})`} />
+          <path d="M40.6 16.4 47.1 25l-6.5 8.6 1.9-8.6z" fill={`url(#${id("rim")})`} />
+        </>
+      )}
+      {/* 마스터부터 — 바깥 테 */}
+      {r >= 6 && <polygon points={OUTER} fill="none" stroke={`url(#${id("rim")})`} strokeWidth="1.3" strokeLinejoin="round" />}
+
+      {/* 몸통 · 테 · 안쪽 판 · 광택 */}
+      <polygon points={BODY} fill={`url(#${id("metal")})`} strokeLinejoin="round" />
+      <polygon points={RIM} fill="none" stroke={`url(#${id("rim")})`} strokeWidth="1.4" strokeLinejoin="round" />
+      <polygon points={FIELD} fill={`url(#${id("field")})`} stroke={deep} strokeOpacity="0.55" strokeWidth="0.9" strokeLinejoin="round" />
+      <polygon points={BODY} fill={`url(#${id("shine")})`} />
+
+      {/* 챌린저부터 — 머리 보석 */}
+      {r >= 8 && (
+        <>
+          <path d="M24 0.6 27.4 3.9 24 7.4 20.6 3.9z" fill={`url(#${id("rim")})`} />
+          <path d="M20.6 3.9h6.8M24 0.6v6.8" stroke="#ffffff" strokeOpacity="0.35" strokeWidth="0.7" />
+        </>
+      )}
+
+      {/* 표식 — 얕은 그림자 위에 흰 표식 */}
+      <g transform="translate(0 0.9)" opacity="0.55">{glyph(key, deep, null)}</g>
+      {glyph(key, "#ffffff", c)}
     </svg>
   );
 }

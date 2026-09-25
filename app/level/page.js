@@ -1666,13 +1666,12 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
               <span className={`w-full text-[10px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
                 {it.name}
               </span>
-              {dday !== null && (
-                <span className={`absolute top-1 right-1 text-[8px] font-black tabular-nums px-1 py-0.5 rounded ${dday <= 3 ? "bg-[#e91e3f] text-white" : "bg-white/15 text-white/70"}`}>
-                  D-{dday}
+              {/* 상태 · 기간 — 모서리 배지 · 점 대신 이름 아래 한 줄 글자로 (3일 이하 · 확인 필요는 빨강) */}
+              {(it.status === "pending" || it.status === "missing" || dday !== null) && (
+                <span className={`mt-1 text-[9px] font-bold tabular-nums leading-none ${it.status === "missing" || (dday !== null && dday <= 3) ? "text-[#ff5c77]" : "text-white/45"}`}>
+                  {[it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "", dday !== null ? `D-${dday}` : ""].filter(Boolean).join(" · ")}
                 </span>
               )}
-              {it.status === "pending" && <span className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-white/40" title="지급 대기"></span>}
-              {it.status === "missing" && <span className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-[#e91e3f]" title="확인 필요"></span>}
             </button>
           );
         })}

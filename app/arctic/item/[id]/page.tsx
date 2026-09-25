@@ -54,11 +54,6 @@ export default function ItemDetailPage() {
   const [wish, setWish] = useState<string[]>([]);
   const [toast, setToast] = useState("");
 
-  // 구매 모달
-  const [buying, setBuying] = useState(false);
-  const [contact, setContact] = useState("");
-  const [isPaying, setIsPaying] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   useEffect(() => {
     try {
@@ -156,34 +151,12 @@ export default function ItemDetailPage() {
     flash(wished ? "찜을 해제했습니다" : "찜 목록에 추가했습니다");
   };
 
+  // 구매 — 팝업 대신 결제 화면으로 넘어간다. 이 상품 하나만 결제 대상으로 넘기고(장바구니는 그대로),
+  //    쿠폰 · 약관 동의 · 수령 정보는 결제 화면(app/arctic/checkout)이 맡는다
   const openBuy = () => {
     if (!isLoggedIn) return signIn("discord");
-    setContact("");
-    setResult(null);
-    setBuying(true);
-  };
-
-  const confirmBuy = async () => {
-    if (isPaying) return;
-    setIsPaying(true);
-    try {
-      const res = await fetch("/api/shop/purchase", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: item._id, contact, days }),
-      });
-      const d = await res.json();
-      setResult({ ok: !!d.success, message: d.message || (d.success ? "구매가 완료되었습니다." : "구매에 실패했습니다.") });
-      if (d.success) {
-        if (typeof d.data?.remainXp === "number") setMyXp(d.data.remainXp);
-        if (inCart) saveCart(cart.filter((c) => c.itemId !== item._id));
-        load();
-      }
-    } catch {
-      setResult({ ok: false, message: "서버와 통신 중 오류가 발생했습니다." });
-    } finally {
-      setIsPaying(false);
-    }
+    try { localStorage.setItem("iglooShopCheckout", JSON.stringify([{ itemId: item._id, qty: 1, days }])); } catch {}
+    router.push("/arctic/checkout");
   };
 
   return (
@@ -380,63 +353,6 @@ export default function ItemDetailPage() {
         </div>
       )}
 
-      {/* 구매 모달 */}
-      {buying && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => !isPaying && setBuying(false)}>
-          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden border border-[#ededed] shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            {result ? (
-              <div className="p-8 text-center">
-                <div className={`w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-5 ${result.ok ? "bg-[#e8f3e6] text-[#3f7a35]" : "bg-[#fdeaea] text-[#d01634]"}`}>
-                  {result.ok
-                    ? <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                    : <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>}
-                </div>
-                <h2 className="text-lg font-black text-[#131313] mb-2">{result.ok ? "구매 완료" : "구매 실패"}</h2>
-                <p className="text-sm text-[#5a5a5a] leading-relaxed mb-7 break-keep">{result.message}</p>
-                <div className="flex gap-3">
-                  <button onClick={() => { setBuying(false); setResult(null); }} className="flex-1 py-3.5 bg-[#f2f2f2] text-[#5a5a5a] font-bold rounded-xl">닫기</button>
-                  {result.ok && (
-                    <Link href="/arctic/orders" className="flex-1 py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl text-center">구매 내역</Link>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="p-6">
-                <h2 className="text-base font-black text-[#131313] mb-1">구매 확인</h2>
-                <p className="text-[13px] text-[#8a8a8a] mb-5">{item.name}</p>
-
-                {item.type === "physical" && (
-                  <div className="mb-5">
-                    <label className="block text-xs font-bold text-[#5a5a5a] mb-2">수령 정보 <span className="text-[#d01634]">*</span></label>
-                    <textarea rows={3} value={contact} onChange={(e) => setContact(e.target.value)}
-                      placeholder="연락처 또는 기프티콘 받을 번호를 입력해주세요."
-                      className="w-full bg-white border border-[#ededed] rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] resize-none placeholder:text-[#a3a3a3]" />
-                  </div>
-                )}
-
-                <div className="bg-[#f2f2f2] rounded-xl px-4 py-3 mb-5 text-[12px] space-y-1.5">
-                  <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold tabular-nums">{(myXp ?? 0).toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 XP</span><span className="font-bold text-[#d01634] tabular-nums">-{sp.toLocaleString()}</span></div>
-                  <div className="h-px bg-[#e0e0e0]"></div>
-                  <div className="flex justify-between"><span className="text-[#5a5a5a]">구매 후 잔액</span><span className="font-black tabular-nums">{Math.max(0, (myXp ?? 0) - sp).toLocaleString()}</span></div>
-                </div>
-
-                <p className="text-[11px] text-[#a3a3a3] leading-relaxed mb-5 break-keep">
-                  XP를 사용하면 레벨이 함께 내려갑니다. 구매 후에는 직접 취소할 수 없습니다.
-                </p>
-
-                <div className="flex gap-3">
-                  <button onClick={() => setBuying(false)} className="flex-1 py-3.5 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] font-bold rounded-xl transition-colors">취소</button>
-                  <button onClick={confirmBuy} disabled={isPaying || !affordable || (item.type === "physical" && !contact.trim())}
-                    className="flex-1 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 text-white font-bold rounded-xl transition-colors">
-                    {isPaying ? "처리 중..." : affordable ? "구매 확정" : "XP 부족"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
       <ArcticFooter />
       <ArcticDock />
     </div>
