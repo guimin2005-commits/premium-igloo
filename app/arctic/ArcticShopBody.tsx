@@ -17,6 +17,7 @@ import ArcticFooter from "./ArcticFooter";
 import ArcticDock from "./ArcticDock";
 import ArcticHome from "./ArcticHome";
 import { useSearchParams } from "next/navigation";
+import { useArcticFromLevel } from "./fromLevel";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -278,7 +279,6 @@ export default function ArcticShopBody({
     [cart, items]
   );
   const cartCount = cartRows.reduce((n, r) => n + r.qty, 0);
-  const cartTotal = cartRows.reduce((n, r) => n + salePrice(r.item, r.days) * r.qty, 0);
 
   // 📌 찜 — 로컬에 보관 (상품 id 목록)
   const [wish, setWish] = useState<string[]>([]);
@@ -287,6 +287,7 @@ export default function ArcticShopBody({
 
   // 하위 페이지 하단바에서 찜·검색을 누르면 ?panel= 로 넘어온다
   const searchParams = useSearchParams();
+  const fromLevel = useArcticFromLevel(); // 레벨 탭에서 왔을 때만 모바일 유형 줄 맨 앞에 "‹ 레벨"
   useEffect(() => {
     const panel = searchParams.get("panel");
     if (panel === "wish") setShowWishList(true);
@@ -688,11 +689,15 @@ export default function ArcticShopBody({
         <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center gap-4 md:gap-6 h-[56px] md:h-[60px]">
           {/* 유형 탭 — 고른 것만 빨간 밑줄 */}
           <nav className="flex items-center gap-5 md:gap-7 overflow-x-auto no-bar h-full min-w-0 flex-1 md:flex-none">
-            {/* 모바일 — ARCTIC 은 SYSTEM : LEVEL 안의 상점이라 맨 앞에 돌아갈 길 (넓은 화면은 상단 바의 "LEVEL ›") */}
-            <Link href="/level" className="md:hidden shrink-0 flex items-center gap-1 text-[13px] font-extrabold text-[#a3a3a3] hover:text-[#131313] transition-colors">
-              <span aria-hidden>‹</span>레벨
-            </Link>
-            <span aria-hidden className="md:hidden shrink-0 w-px h-4 bg-[#e0e0e0] -ml-1"></span>
+            {/* 모바일 — 레벨 탭에서 들어왔을 때만 맨 앞에 돌아갈 길 (넓은 화면은 상단 바의 "LEVEL ›") */}
+            {fromLevel && (
+              <>
+                <Link href="/level" className="md:hidden shrink-0 flex items-center gap-1 text-[13px] font-extrabold text-[#a3a3a3] hover:text-[#131313] transition-colors">
+                  <span aria-hidden>‹</span>레벨
+                </Link>
+                <span aria-hidden className="md:hidden shrink-0 w-px h-4 bg-[#e0e0e0] -ml-1"></span>
+              </>
+            )}
             {[{ v: "home", l: "홈" }, ...TYPES].map((t) => {
               const on = t.v === "home" ? showing === "home" : showing === "products" && typeFilter === t.v;
               return (
@@ -745,25 +750,27 @@ export default function ArcticShopBody({
                 </span>
                 <span className="hidden lg:block w-px h-4 bg-[#e0e0e0]" />
 
-                <button onClick={() => setShowWishList(true)} aria-label="찜한 상품 보기"
+                {/* 찜 · 장바구니 — 같은 모양: 테두리 아이콘 + 빨간 개수 점. 개수가 바뀌면 점이 한 번 튄다 */}
+                <button onClick={() => setShowWishList(true)} aria-label={`찜한 상품 보기${wish.length ? ` (${wish.length})` : ""}`}
                   className={`relative hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showWishList ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
-                  <svg className={`w-[18px] h-[18px] transition-all duration-300 ${wish.length > 0 ? "text-[#e91e3f]" : ""}`}
-                    fill={wish.length > 0 ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.heart} />
                   </svg>
+                  {wish.length > 0 && (
+                    <span key={wish.length} className="count-pop absolute top-0 right-0 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{wish.length}</span>
+                  )}
                 </button>
 
-                <Link href="/arctic/cart"
-                  className="hidden md:flex items-center justify-center gap-2 h-9 pl-3.5 pr-4 rounded-full bg-[#131313] hover:bg-black text-white transition-colors">
-                  <span className="relative">
+                <Link href="/arctic/cart" aria-label={`장바구니${cartCount ? ` (${cartCount})` : ""}`}
+                  className="relative hidden md:flex items-center justify-center w-9 h-9 rounded-full text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] transition-colors">
+                  <span>
                     <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
                     </svg>
-                    {cartCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center">{cartCount}</span>
-                    )}
                   </span>
-                  <span className="text-[12px] font-bold tabular-nums">{cartTotal.toLocaleString()}</span>
+                  {cartCount > 0 && (
+                    <span key={cartCount} className="count-pop absolute top-0 right-0 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{cartCount}</span>
+                  )}
                 </Link>
               </>
             )}
@@ -1097,6 +1104,13 @@ export default function ArcticShopBody({
           100% { transform: scale(1); }
         }
         .wish-pop { animation: wishPop 0.34s cubic-bezier(0.16,1,0.3,1); }
+        @keyframes countPop {
+          0%   { transform: scale(0.4); }
+          55%  { transform: scale(1.3); }
+          100% { transform: scale(1); }
+        }
+        .count-pop { animation: countPop 0.38s cubic-bezier(0.16,1,0.3,1); }
+        @media (prefers-reduced-motion: reduce) { .count-pop, .wish-pop { animation: none; } }
         @keyframes menuDrop {
           0%   { opacity: 0; transform: translateY(-8px) scale(0.96); }
           100% { opacity: 1; transform: translateY(0) scale(1); }

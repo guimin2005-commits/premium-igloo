@@ -8,6 +8,7 @@ import Link from "next/link";
 import { ICON_PATHS } from "./components/Icons";
 import AdminNav from "./admin/AdminNav";
 import ScrollLock from "./components/ScrollLock";
+import { useArcticFromLevel, ARCTIC_FROM_KEY } from "./arctic/fromLevel";
 import { verifyBadge } from "@/lib/verifyBadge";
 
 // 📌 헤더에서 내려오는 카드(알림·내 프로필)
@@ -148,10 +149,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   const isShopPage = pathname === "/arctic" || pathname?.startsWith("/arctic/");
+  const arcticFromLevel = useArcticFromLevel();
   // 📌 지금 있는 세계 — 브랜드 옆 한 칸. 줄을 따로 만들지 않는다.
-  //    ARCTIC 은 SYSTEM : LEVEL 안의 상점이라 넓은 화면에서는 앞에 "LEVEL ›" 을 붙여 돌아갈 길을 둔다
+  //    레벨 탭에서 ARCTIC 으로 들어왔을 때만 넓은 화면에서 앞에 "LEVEL ›" 을 붙여 돌아갈 길을 둔다
+  //    (상단 메뉴에서는 둘이 나란한 곳이라 붙이지 않는다 — app/arctic/fromLevel.ts)
   const section: { name: ReactNode; href: string; parent?: { name: string; href: string } } | null = isShopPage
-    ? { name: <>ARCT<span className="text-[#e91e3f]">I</span>C</>, href: "/arctic", parent: { name: "LEVEL", href: "/level" } }
+    ? { name: <>ARCT<span className="text-[#e91e3f]">I</span>C</>, href: "/arctic", parent: arcticFromLevel ? { name: "LEVEL", href: "/level" } : undefined }
     : (pathname === "/level" || pathname?.startsWith("/level/"))
       ? { name: <>SYSTEM <span className="text-[#e91e3f]">:</span> LEVEL</>, href: "/level" }
       : null;
@@ -163,6 +166,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const scrolled = scrolledRaw;
   // ARCTIC 에서 넘어온 내 정보(와 그 하위) — 스토어 독을 그대로 두므로 전역 독은 숨긴다
   const isArcticProfile = (pathname === "/profile" || !!pathname?.startsWith("/profile/")) && searchParams.get("from") === "arctic";
+  // ARCTIC 을 벗어나면 "레벨에서 왔다" 표시를 지운다 (ARCTIC 에서 넘어간 내 정보는 ARCTIC 의 연장이라 둔다)
+  useEffect(() => {
+    if (isShopPage || isArcticProfile) return;
+    try { sessionStorage.removeItem(ARCTIC_FROM_KEY); } catch {}
+  }, [isShopPage, isArcticProfile]);
   const isLightPage = isWhitePage || pathname === "/profile" || pathname?.startsWith("/profile/") || pathname === "/level" || pathname?.startsWith("/level/") || (pathname?.startsWith("/admin") && !pathname.startsWith("/admin/room")) || pathname === "/write" || pathname === "/supporters" || pathname?.startsWith("/supporters/");   // 라이트 톤만 따라가는 페이지 (SYSTEM:LEVEL·관리자 화면은 ARCTIC 테마)
   // 📌 경매방 안에서는 모바일 하단 탭을 숨긴다.
   //    입찰·채팅 바가 화면 아래에 붙는데 그 위에 전역 탭까지 있으면 잘못 눌러 방을 나가게 된다.

@@ -54,7 +54,8 @@ const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
 const MAIN_TABS = [
   { id: "my", name: "내 대시보드" },
   { id: "rank", name: "랭킹" },
-  { id: "arctic", name: "ARCTIC", shopOnly: true, href: "/arctic" },
+  // 레벨에서 왔다는 표시를 달아 ARCTIC 이 돌아갈 길("LEVEL ›")을 보이게 한다 (app/arctic/fromLevel.ts)
+  { id: "arctic", name: "ARCTIC", shopOnly: true, href: "/arctic?from=level" },
   { id: "table", name: "XP 테이블" },
   { id: "sim", name: "시뮬레이터" },
   { id: "intro", name: "시스템 안내" },
@@ -819,6 +820,8 @@ const sparksOf = (n, r0) => Array.from({ length: n }, (_, i) => {
 });
 const SPARKS = sparksOf(12, 80);
 const SPARKS_MAX = sparksOf(28, 96);
+// 시즌 패스 해금 — 같은 불티를 보라 · 분홍 · 흰빛으로
+const PASS_SPARKS = sparksOf(20, 110).map((p, i) => ({ ...p, c: ["#d9c6ff", "#ff9fd6", "#ffffff", "#b69cff"][i % 4] }));
 const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voiceMin = 5, policy, onTone, onReset, resetBusy }) => {
   const kinds = ["chat", "voice"].filter((k) => enh[k].max > 0);
   const [pick, setPick] = useState("chat");
@@ -1194,6 +1197,19 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
     return () => cancelAnimationFrame(id);
   }, [open, tab, nextIdx]);
 
+  // 프리미엄이 막 열리면 — 카드가 번쩍이며 부풀었다 돌아오고, 왕관이 튀고, 불티가 퍼진다
+  const prevUnlocked = useRef(!!pass?.unlocked);
+  const [unlockPop, setUnlockPop] = useState(false);
+  useEffect(() => {
+    const now = !!pass?.unlocked;
+    const opened = now && !prevUnlocked.current;
+    prevUnlocked.current = now;
+    if (!opened) return;
+    setUnlockPop(true);
+    const t = setTimeout(() => setUnlockPop(false), 1300);
+    return () => clearTimeout(t);
+  }, [pass?.unlocked]);
+
   if (!pass) return null;
   const fmt = (n) => (n || 0).toLocaleString();
   const rows = tab === "claim" ? tiers.filter((t) => t.free?.claimable || t.paid?.claimable) : tiers;
@@ -1242,11 +1258,31 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
 
           {/* 프리미엄 — 이 창에서 유일한 카드 */}
           <div
-            className="mt-7 sm:mt-auto rounded-2xl p-4"
-            style={{ background: "linear-gradient(135deg, rgba(182,156,255,0.2), rgba(255,122,198,0.12))", boxShadow: "inset 0 0 0 1px rgba(214,180,255,0.3)" }}
+            className="enh-anim relative mt-7 sm:mt-auto rounded-2xl p-4"
+            style={{
+              background: "linear-gradient(135deg, rgba(182,156,255,0.2), rgba(255,122,198,0.12))",
+              boxShadow: "inset 0 0 0 1px rgba(214,180,255,0.3)",
+              ...(unlockPop ? { animation: "passUnlock .9s cubic-bezier(0.16,1,0.3,1)" } : {}),
+            }}
           >
+            {unlockPop && PASS_SPARKS.map((p, i) => (
+              <span
+                key={i}
+                aria-hidden
+                className="enh-anim absolute left-1/2 top-1/2 w-1.5 h-1.5 rounded-full pointer-events-none opacity-0"
+                style={{ background: p.c, "--dx": `${p.dx}px`, "--dy": `${p.dy}px`, animation: `sparkFly .9s ${p.delay}ms cubic-bezier(0.16,1,0.3,1) forwards` }}
+              ></span>
+            ))}
             <div className="flex items-center gap-2">
-              <svg aria-hidden viewBox="0 0 24 24" className="w-4 h-4 shrink-0 text-[#e4d4ff]" fill="currentColor"><path d={CROWN} /></svg>
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="enh-anim w-4 h-4 shrink-0 text-[#e4d4ff]"
+                fill="currentColor"
+                style={unlockPop ? { animation: "numPop .8s cubic-bezier(0.16,1,0.3,1)" } : undefined}
+              >
+                <path d={CROWN} />
+              </svg>
               <span className="text-[13px] font-black text-white">프리미엄</span>
               <span
                 className="ml-auto text-[12px] font-black tabular-nums"
@@ -2382,6 +2418,11 @@ export default function LevelPage() {
         }
         @keyframes auraSpin { to { transform: rotate(360deg); } }
         @keyframes auraPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.9; } }
+        @keyframes passUnlock {
+          0%   { transform: scale(0.95); filter: brightness(1.9); box-shadow: inset 0 0 0 1px rgba(214,180,255,0.6), 0 0 0 0 rgba(182,156,255,0.7); }
+          45%  { transform: scale(1.04); }
+          100% { transform: scale(1); filter: brightness(1); box-shadow: inset 0 0 0 1px rgba(214,180,255,0.3), 0 0 0 18px rgba(182,156,255,0); }
+        }
         @keyframes nodeFill {
           0%   { transform: scale(0.3); box-shadow: 0 0 0 0 rgba(255,122,74,0.8); }
           60%  { transform: scale(1.6); box-shadow: 0 0 0 8px rgba(255,122,74,0); }
