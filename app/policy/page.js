@@ -8,9 +8,9 @@ import { useSearchParams } from "next/navigation";
    가독성(본문 대비·행간·측정 폭)과 조문 구조의 명확함만 남긴다. */
 
 const Article = ({ title, children }) => (
-  <section className="pt-7 border-t border-white/[0.09] first:border-t-0 first:pt-0">
-    <h2 className="text-[15px] md:text-base font-bold text-white mb-4 tracking-tight">{title}</h2>
-    <div className="text-gray-300 space-y-3.5 text-[13.5px] md:text-sm leading-[1.85]">{children}</div>
+  <section className="pt-7 border-t border-[#ededed] first:border-t-0 first:pt-0">
+    <h2 className="text-[15px] md:text-base font-bold text-[#131313] mb-4 tracking-tight">{title}</h2>
+    <div className="text-[#5a5a5a] space-y-3.5 text-[13.5px] md:text-sm leading-[1.85]">{children}</div>
   </section>
 );
 
@@ -18,7 +18,7 @@ const NumberedList = ({ items }) => (
   <ol className="space-y-3">
     {items.map((it, i) => (
       <li key={i} className="flex gap-3.5">
-        <span className="text-gray-500 font-bold text-xs pt-1 shrink-0 tabular-nums">{i + 1}.</span>
+        <span className="text-[#8a8a8a] font-bold text-xs pt-1 shrink-0 tabular-nums">{i + 1}.</span>
         <span>{it}</span>
       </li>
     ))}
@@ -26,11 +26,11 @@ const NumberedList = ({ items }) => (
 );
 
 const DefList = ({ items }) => (
-  <ul className="divide-y divide-white/[0.07] border-y border-white/[0.07]">
+  <ul className="divide-y divide-[#ededed] border-y border-[#ededed]">
     {items.map((it, i) => (
       <li key={i} className="py-4">
-        <p className="text-white font-bold text-[13.5px] md:text-sm mb-1.5">{it.term}</p>
-        <p className="text-gray-400 text-[13px] md:text-[13.5px] leading-[1.8]">{it.desc}</p>
+        <p className="text-[#131313] font-bold text-[13.5px] md:text-sm mb-1.5">{it.term}</p>
+        <p className="text-[#5a5a5a] text-[13px] md:text-[13.5px] leading-[1.8]">{it.desc}</p>
       </li>
     ))}
   </ul>
@@ -38,17 +38,17 @@ const DefList = ({ items }) => (
 
 // 조문 중 특별히 주의를 요하는 항 — 색 대신 좌측 선과 라벨로만 구분
 const Notice = ({ label = "주의", children }) => (
-  <div className="border-l-2 border-white/25 pl-4 py-0.5">
-    <p className="text-[11px] font-bold text-gray-500 tracking-wider mb-1">{label}</p>
-    <p className="text-gray-300 text-[13px] md:text-[13.5px] leading-[1.8]">{children}</p>
+  <div className="border-l-2 border-[#a3a3a3] pl-4 py-0.5">
+    <p className="text-[11px] font-bold text-[#8a8a8a] tracking-wider mb-1">{label}</p>
+    <p className="text-[#5a5a5a] text-[13px] md:text-[13.5px] leading-[1.8]">{children}</p>
   </div>
 );
 
 const Addendum = ({ date }) => (
-  <section className="pt-7 border-t border-white/[0.09]">
-    <h2 className="text-[15px] md:text-base font-bold text-white mb-3 tracking-tight">부칙</h2>
-    <p className="text-gray-400 text-[13.5px] md:text-sm leading-[1.85]">
-      본 문서는 <span className="text-white font-bold">{date}</span>부터 시행됩니다.
+  <section className="pt-7 border-t border-[#ededed]">
+    <h2 className="text-[15px] md:text-base font-bold text-[#131313] mb-3 tracking-tight">부칙</h2>
+    <p className="text-[#5a5a5a] text-[13.5px] md:text-sm leading-[1.85]">
+      본 문서는 <span className="text-[#131313] font-bold">{date}</span>부터 시행됩니다.
     </p>
   </section>
 );
@@ -75,15 +75,15 @@ function PolicyContent() {
     <main className="w-full flex-1 flex flex-col relative">
 
       {/* ── 문서 표제 — 장식 없이 활자만 ── */}
-      <section className="w-full pt-14 pb-8 md:pt-20 md:pb-10 px-6 border-b border-white/[0.09]">
+      <section className="w-full pt-14 pb-8 md:pt-20 md:pb-10 px-6 border-b border-[#ededed]">
         <div className="max-w-3xl mx-auto">
-          <p className="text-[10px] font-bold tracking-[0.35em] text-gray-500 uppercase mb-4">Official Document</p>
-          <h1 className="text-2xl md:text-4xl font-bold text-white tracking-tight leading-tight">약관 및 운영 정책</h1>
+          <p className="text-[10px] font-bold tracking-[0.35em] text-[#8a8a8a] uppercase mb-4">Official Document</p>
+          <h1 className="text-2xl md:text-4xl font-bold text-[#131313] tracking-tight leading-tight">약관 및 운영 정책</h1>
         </div>
       </section>
 
       {/* ── 문서 목차 — 색 채움 없이 밑줄로만 현재 문서를 표시 ── */}
-      <div className="w-full px-6 border-b border-white/[0.09]">
+      <div className="w-full px-6 border-b border-[#ededed]">
         {/* ⚠️ 가로 스크롤로 두면 좁은 화면에서 뒤쪽 탭이 글자 중간에 잘린다.
             줄을 바꿔 전부 보이게 하고, 모바일에서는 짧은 이름을 쓴다
             (전체 이름은 바로 아래 서지 정보에 그대로 나온다). */}
@@ -95,12 +95,12 @@ function PolicyContent() {
                 key={d.id}
                 onClick={() => setTab(d.id)}
                 className={`relative py-3.5 sm:py-4 text-[13px] md:text-sm font-bold shrink-0 whitespace-nowrap outline-none focus:outline-none transition-colors ${
-                  active ? "text-white" : "text-gray-500 hover:text-gray-300"
+                  active ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"
                 }`}
               >
                 <span className="sm:hidden">{d.short || d.label}</span>
                 <span className="hidden sm:inline">{d.label}</span>
-                {active && <span className="absolute left-0 right-0 bottom-0 h-[2px] bg-white/70" />}
+                {active && <span className="absolute left-0 right-0 bottom-0 h-[2px] bg-[#e91e3f]" />}
               </button>
             );
           })}
@@ -110,11 +110,11 @@ function PolicyContent() {
       {/* ── 현재 문서의 서지 정보 ── */}
       <div className="w-full px-6 pt-8">
         <div className="max-w-3xl mx-auto flex flex-wrap items-baseline gap-x-5 gap-y-1.5">
-          <h2 className="text-lg md:text-xl font-bold text-white tracking-tight">
+          <h2 className="text-lg md:text-xl font-bold text-[#131313] tracking-tight">
             {activeDoc.label}
-            {activeDoc.note && <span className="text-gray-500 font-medium text-sm ml-2">({activeDoc.note})</span>}
+            {activeDoc.note && <span className="text-[#8a8a8a] font-medium text-sm ml-2">({activeDoc.note})</span>}
           </h2>
-          <p className="text-[11px] md:text-xs text-gray-500">시행일 {activeDoc.date}</p>
+          <p className="text-[11px] md:text-xs text-[#8a8a8a]">시행일 {activeDoc.date}</p>
         </div>
       </div>
 
@@ -177,7 +177,7 @@ function PolicyContent() {
               "모든 참가 팀 및 선수는 대회 참가 신청 시 본 규정을 숙지하고 준수하는 데 전적으로 동의한 것으로 간주합니다.",
               <>
                 모든 경기는 본인 명의의 순수 본계정으로만 참여할 수 있으며, 다음 각 목에 해당하는 부정행위 적발 시 즉시 실격 및 서버 영구 제재 처분을 받습니다.
-                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-gray-600 text-gray-400">
+                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-[#a3a3a3] text-[#5a5a5a]">
                   <li>타인의 계정을 이용한 대리 출전</li>
                   <li>본인의 실제 실력보다 현저히 낮은 티어의 부계정을 이용한 위장 참가(양학)</li>
                   <li>비인가 외부 프로그램(불법 핵, 매크로, 인게임 변조 툴 등)의 사용</li>
@@ -188,11 +188,11 @@ function PolicyContent() {
 
           <Article title="제2조 (출석, 지각 및 무단 불참)">
             <NumberedList items={[
-              <>모든 참가 선수는 경기 개시 <span className="text-white font-bold">15분 전</span>까지 지정된 디스코드 음성 채널에 입장하여야 합니다.</>,
+              <>모든 참가 선수는 경기 개시 <span className="text-[#131313] font-bold">15분 전</span>까지 지정된 디스코드 음성 채널에 입장하여야 합니다.</>,
               "사전 고지 없이 공식 경기 시작 시점까지 접속하지 않거나 경기 준비를 완료하지 못한 경우, 해당 팀은 즉시 기권패(몰수패) 처리됩니다.",
               <>
                 무단 불참 선수는 고의적인 경기 방해로 간주하여 향후 고급 이글루에서 주최하는 모든 대회 및 커뮤니티 이벤트 참여가 영구 제한됩니다.
-                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-gray-600 text-gray-400">
+                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-[#a3a3a3] text-[#5a5a5a]">
                   <li>무단 불참 선수의 팀의 경우, 기권패 처리됩니다.</li>
                 </ul>
               </>,
@@ -201,11 +201,11 @@ function PolicyContent() {
 
           <Article title="제3조 (불가피한 사유에 따른 결원 및 대체 선수 출전)">
             <NumberedList items={[
-              <><span className="text-white font-bold">[불가피한 불참의 면책]</span> 본인 및 직계존비속의 경조사(상례, 결혼 등), 응급 진료, 입원, 갑작스러운 사고 등 객관적으로 소명이 가능한 긴급 사유로 불참하는 경우, 제2조 제3항의 불참 페널티를 면제합니다.</>,
-              <><span className="text-white font-bold">[사전 통보 의무]</span> 제1항의 사유가 발생한 경우, 선수는 최소 경기 시작 하루 전까지 운영진에게 유선 또는 메시지로 사유를 전달해야 하며, 운영진의 요청이 있을 시 관련 증빙 자료(진료 확인서, 부고장 등)를 제출해야 합니다.</>,
+              <><span className="text-[#131313] font-bold">[불가피한 불참의 면책]</span> 본인 및 직계존비속의 경조사(상례, 결혼 등), 응급 진료, 입원, 갑작스러운 사고 등 객관적으로 소명이 가능한 긴급 사유로 불참하는 경우, 제2조 제3항의 불참 페널티를 면제합니다.</>,
+              <><span className="text-[#131313] font-bold">[사전 통보 의무]</span> 제1항의 사유가 발생한 경우, 선수는 최소 경기 시작 하루 전까지 운영진에게 유선 또는 메시지로 사유를 전달해야 하며, 운영진의 요청이 있을 시 관련 증빙 자료(진료 확인서, 부고장 등)를 제출해야 합니다.</>,
               <>
-                <span className="text-white font-bold">[대체 선수(용병) 투입 규정]</span>
-                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-gray-600 text-gray-400">
+                <span className="text-[#131313] font-bold">[대체 선수(용병) 투입 규정]</span>
+                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-[#a3a3a3] text-[#5a5a5a]">
                   <li>긴급 결원 발생 시, 대회 최소 하루 전 운영진의 사전 검증 및 승인을 득한 동급 이하 티어의 대체 선수를 투입할 수 있습니다.</li>
                   <li>운영진의 사전 승인 없이 임의로 외부 인원을 인게임에 투입하여 경기를 진행할 경우, 해당 세트는 즉시 몰수패 처리됩니다.</li>
                 </ul>
@@ -218,7 +218,7 @@ function PolicyContent() {
               "모든 선수는 상호 존중을 바탕으로 정정당당하게 경기에 임해야 합니다.",
               <>
                 인게임 전체 채팅, 디스코드, 보이스 채널을 통한 다음 각 목의 비매너 행위를 엄격히 금지합니다.
-                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-gray-600 text-gray-400">
+                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-[#a3a3a3] text-[#5a5a5a]">
                   <li>상대방에 대한 비속어, 욕설, 인신공격 및 비하 발언</li>
                   <li>감정표현(이모티콘, 음성 휠) 연타, 티배깅 등 상대에게 불쾌감과 굴욕감을 주는 도발 행위</li>
                   <li>고의적인 경기 지연 및 비신사적인 행위</li>
@@ -226,7 +226,7 @@ function PolicyContent() {
               </>,
               <>
                 비매너 행위 적발 시 사안에 따라 다음과 같이 단계별 제재를 부과합니다.
-                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-gray-600 text-gray-400">
+                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-[#a3a3a3] text-[#5a5a5a]">
                   <li>1차 적발: 공식 경고 1회 부여</li>
                   <li>2차 적발(경고 2회 누적): 해당 세트 몰수패</li>
                   <li>중대 위반 시: 운영진 재량으로 즉시 팀 전체 실격 및 상금 수령 자격 박탈</li>
@@ -237,9 +237,9 @@ function PolicyContent() {
 
           <Article title="제5조 (디스코드 운영 및 부정행위 방지 검증)">
             <NumberedList items={[
-              <>모든 선수는 경기 진행 중 지정된 디스코드 팀 음성 채널에 상시 접속하여 실시간 마이크 소통 상태를 유지 및 <span className="text-white font-bold">최소 1인 화면 공유</span>를 진행해야 하며, 외부 음성 프로그램의 사용을 금합니다.</>,
+              <>모든 선수는 경기 진행 중 지정된 디스코드 팀 음성 채널에 상시 접속하여 실시간 마이크 소통 상태를 유지 및 <span className="text-[#131313] font-bold">최소 1인 화면 공유</span>를 진행해야 하며, 외부 음성 프로그램의 사용을 금합니다.</>,
               "방플(중계 화면 시청), 대리 플레이 등 부정행위를 차단하기 위해, 운영진은 경기 중 불시에 [디스코드 화면 공유 / 작업관리자 인증 / 캠 인증]을 요구할 수 있습니다.",
-              <>참가 선수가 정당한 사유 없이 운영진의 검증 요청에 <span className="text-white font-bold">3분</span> 이상 불응하거나 거부할 경우, 부정행위 의심으로 간주하여 즉시 실격 처리할 수 있습니다.</>,
+              <>참가 선수가 정당한 사유 없이 운영진의 검증 요청에 <span className="text-[#131313] font-bold">3분</span> 이상 불응하거나 거부할 경우, 부정행위 의심으로 간주하여 즉시 실격 처리할 수 있습니다.</>,
             ]} />
           </Article>
 
@@ -247,11 +247,11 @@ function PolicyContent() {
             <NumberedList items={[
               <>
                 인게임 시스템 오류, 네트워크 튕김(디스콘), 장비 결함 등 불가피한 상황 발생 시 즉시 퍼즈(일시정지)를 요청하고 운영진을 호출해야 합니다.
-                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-gray-600 text-gray-400">
+                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-[#a3a3a3] text-[#5a5a5a]">
                   <li>경기 진행 중 문제를 파악했음에도 퍼즈 요청을 하지 않고, 경기가 끝난 후 문제 제기 시 재경기가 이루어지지 않을 수 있습니다.</li>
                 </ul>
               </>,
-              <>각 팀에 부여되는 퍼즈 시간은 <span className="text-white font-bold">팀당 세트별 최대 10분</span>으로 제한되며, 10분 초과 시 복귀 여부와 관계없이 인원 부족 상태로 속행해야 합니다.</>,
+              <>각 팀에 부여되는 퍼즈 시간은 <span className="text-[#131313] font-bold">팀당 세트별 최대 10분</span>으로 제한되며, 10분 초과 시 복귀 여부와 관계없이 인원 부족 상태로 속행해야 합니다.</>,
               "퍼즈 해제는 인게임 채팅을 통해 양 팀 리더의 준비 완료를 상호 확인한 후 운영진의 신호에 맞춰 경기를 재개해야 합니다.",
               "경기 중 발생한 모든 판정 및 분쟁의 최종 결정권은 운영진에게 있으며, 참가자는 리더를 통해서만 공식적으로 이의를 제기할 수 있습니다. 운영진의 최종 판정에 불복하여 경기 진행을 고의로 방해하는 경우 즉시 실격 처리됩니다.",
             ]} />
@@ -262,15 +262,15 @@ function PolicyContent() {
               "상금은 참가 신청서에 기재된 계좌로 입금되며, 팀 내부 분배에 관한 제반 책임은 참가 팀에게 있습니다.",
               <>
                 대회가 종료된 이후라도 대리 출전, 비인가 프로그램(핵/매크로) 사용, 티어 위장(부캐/양학), 승부조작 등 중대한 부정행위가 사후 적발될 경우 다음 각 목의 조치를 시행합니다.
-                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-gray-600 text-gray-400">
+                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-[#a3a3a3] text-[#5a5a5a]">
                   <li>해당 팀의 대회 수상 및 입상 자격 즉시 박탈</li>
                   <li>기지급된 상금 및 상품에 대한 전액 즉각 환수</li>
                   <li>차순위 팀으로의 수상 자격 승계 및 위반자 영구 제재</li>
                 </ul>
               </>,
               <>
-                <span className="text-white font-bold">[상금 반환 거부 시 법적 조치]</span> 수상 자격이 박탈되었음에도 불구하고 지정된 기한 내에 상금 반환을 거부하거나 고의로 회피할 경우, 주최 측은 참가 신청 시 확보된 신원 및 계좌 정보를 바탕으로 사전 예고 없이 다음 각 목의 민·형사상 법적 절차를 진행합니다.
-                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-gray-600 text-gray-400">
+                <span className="text-[#131313] font-bold">[상금 반환 거부 시 법적 조치]</span> 수상 자격이 박탈되었음에도 불구하고 지정된 기한 내에 상금 반환을 거부하거나 고의로 회피할 경우, 주최 측은 참가 신청 시 확보된 신원 및 계좌 정보를 바탕으로 사전 예고 없이 다음 각 목의 민·형사상 법적 절차를 진행합니다.
+                <ul className="mt-2.5 space-y-1.5 list-disc pl-5 marker:text-[#a3a3a3] text-[#5a5a5a]">
                   <li>형사 고소: 위계에 의한 주최 업무 방해(형법 제314조) 및 부정 수급에 따른 사기죄(형법 제347조)로 관할 수사기관(경찰서) 정식 형사 고소</li>
                   <li>민사상 강제집행: 민법 제741조(부당이득반환청구)에 따른 법원 지급명령 신청, 은행 계좌 및 재산 가압류 등 법적 강제집행 절차 착수</li>
                   <li>손해배상 청구: 법적 조치 진행에 따라 발생하는 소송 비용, 법률 자문료 및 주최 측의 유무형 손해에 대한 전액 배상 청구</li>
@@ -282,10 +282,10 @@ function PolicyContent() {
 
           <Article title="부칙">
             <NumberedList items={[
-              <>본 규정은 공지된 날(<span className="text-white font-bold">2026. 08. 21.</span>)로부터 즉시 효력을 발생합니다.</>,
+              <>본 규정은 공지된 날(<span className="text-[#131313] font-bold">2026. 08. 21.</span>)로부터 즉시 효력을 발생합니다.</>,
               "본 규정에 명시되지 아니한 돌발 상황 및 예외적인 분쟁은 운영진의 상호 합의와 최종 유권해석에 따라 결정합니다.",
             ]} />
-            <p className="pt-2 text-[12px] text-gray-500">최종 수정일 2026. 08. 21.</p>
+            <p className="pt-2 text-[12px] text-[#8a8a8a]">최종 수정일 2026. 08. 21.</p>
           </Article>
         </div>
       ) : tab === "privacy" ? (
@@ -300,7 +300,7 @@ function PolicyContent() {
 
           <Article title="제2조 (개인정보의 이용 목적)">
             <p>수집된 정보는 다음의 목적 이외의 용도로는 사용되지 않으며, 이용 목적이 변경될 시에는 사전에 공지합니다.</p>
-            <ul className="space-y-3 list-disc pl-5 marker:text-gray-600">
+            <ul className="space-y-3 list-disc pl-5 marker:text-[#a3a3a3]">
               <li>서버 내 멤버 식별 및 본인 확인</li>
               <li>악성 유저 방지, 운영정책 위반 행위 조사 및 제재(보안 목적)</li>
               <li>서버 내 이벤트 진행 및 보상 지급</li>
@@ -323,16 +323,16 @@ function PolicyContent() {
 
           <Article title="제5조 (개인정보 보호 책임자 안내)">
             <p>본 서버의 개인정보 관련 문의 및 운영정책 위반 신고는 아래의 창구를 이용해 주시기 바랍니다.</p>
-            <p><span className="text-white font-bold">문의:</span> 고급 이글루 공식 사이트의 문의 카테고리 이용</p>
+            <p><span className="text-[#131313] font-bold">문의:</span> 고급 이글루 공식 사이트의 문의 카테고리 이용</p>
           </Article>
 
-          <p className="text-gray-400 text-[13px] md:text-[13.5px] leading-[1.85]">본 방침은 관련 법령에 의거하여 고급 이글루 서버 내에서 처리되는 이용자의 개인정보 보호 및 권익을 보호하기 위해 수립되었습니다.</p>
+          <p className="text-[#5a5a5a] text-[13px] md:text-[13.5px] leading-[1.85]">본 방침은 관련 법령에 의거하여 고급 이글루 서버 내에서 처리되는 이용자의 개인정보 보호 및 권익을 보호하기 위해 수립되었습니다.</p>
           <Addendum date="2023년 1월 22일" />
         </div>
       ) : tab === "level" ? (
         <div className="space-y-7 text-sm">
           <Article title="제1조 (목적 및 XP의 성격)">
-            <p>본 규정은 고급 이글루의 활동 보상 체계인 <span className="text-white font-bold">SYSTEM : LEVEL</span>의 운영 기준을 정함을 목적으로 합니다.</p>
+            <p>본 규정은 고급 이글루의 활동 보상 체계인 <span className="text-[#131313] font-bold">SYSTEM : LEVEL</span>의 운영 기준을 정함을 목적으로 합니다.</p>
             <NumberedList items={[
               "XP는 서버 내 활동 실적을 나타내는 수치이며, 현금 등 법정 통화로 환전되지 않습니다.",
               "XP 및 레벨은 이용자에게 귀속되는 재산권이 아니며, 서버 운영 종료 또는 시즌 종료 시 소멸·초기화될 수 있습니다.",
@@ -392,7 +392,7 @@ function PolicyContent() {
       ) : tab === "arctic" ? (
         <div className="space-y-7 text-sm">
           <Article title="제1조 (목적 및 정의)">
-            <p>본 약관은 XP 상점 <span className="text-white font-bold">ARCTIC</span>의 이용 조건과 절차를 정함을 목적으로 합니다.</p>
+            <p>본 약관은 XP 상점 <span className="text-[#131313] font-bold">ARCTIC</span>의 이용 조건과 절차를 정함을 목적으로 합니다.</p>
             <DefList items={[
               { term: "ARCTIC", desc: "이용자가 보유 XP를 사용하여 역할·권한·쿠폰 등의 상품을 교환하는 고급 이글루 공식 상점" },
               { term: "결제 수단", desc: "보유 XP에 한합니다. 현금 결제는 지원하지 않습니다." },
@@ -425,7 +425,7 @@ function PolicyContent() {
               { term: "중복 결제", desc: "동일 상품이 의도와 달리 중복 차감된 경우" },
               { term: "상품 정보 오류", desc: "등록된 상품 설명과 실제 지급 내용이 다른 경우" },
             ]} />
-            <p>위 사유는 발생일로부터 <span className="text-white font-bold">7일 이내</span>에 공식 사이트의 문의 창구로 접수해야 하며, 운영진 확인 후 처리됩니다. 단순 변심 및 구매 실수는 취소·환불 대상이 아닙니다.</p>
+            <p>위 사유는 발생일로부터 <span className="text-[#131313] font-bold">7일 이내</span>에 공식 사이트의 문의 창구로 접수해야 하며, 운영진 확인 후 처리됩니다. 단순 변심 및 구매 실수는 취소·환불 대상이 아닙니다.</p>
           </Article>
 
           <Article title="제5조 (쿠폰)">
@@ -458,11 +458,11 @@ function PolicyContent() {
           </Article>
 
           <Article title="제3조 (분쟁 규정)">
-            <p>분쟁 발생 시 직접 대응을 금하며, 반드시 웹사이트의 <span className="text-white font-semibold">문의</span> 채널을 통해 접수해야 합니다. 모든 사안은 관리자 판단 하에 검토되며, 규정 위반 시 즉각 제재됩니다.</p>
+            <p>분쟁 발생 시 직접 대응을 금하며, 반드시 웹사이트의 <span className="text-[#131313] font-semibold">문의</span> 채널을 통해 접수해야 합니다. 모든 사안은 관리자 판단 하에 검토되며, 규정 위반 시 즉각 제재됩니다.</p>
           </Article>
 
           <Article title="제4조 (채널 이용)">
-            <p>내전은 반드시 지정된 <span className="text-white font-semibold">내전 전용 음성 채널</span>에서만 진행해야 하며, 내전 목적 외 해당 채널의 사적 이용은 제한됩니다.</p>
+            <p>내전은 반드시 지정된 <span className="text-[#131313] font-semibold">내전 전용 음성 채널</span>에서만 진행해야 하며, 내전 목적 외 해당 채널의 사적 이용은 제한됩니다.</p>
           </Article>
 
           <Notice>위 운영 정책 미확인으로 인해 발생하는 불이익이나 제재에 대한 책임은 이용자 본인에게 있습니다.</Notice>

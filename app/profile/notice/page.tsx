@@ -39,16 +39,8 @@ export default function NoticeInboxPage() {
       .catch(() => setRows([]));
   }, [status, session]);
 
-  // 📌 전체 삭제 — 한 번 누르면 확인 문구, 3초 안에 한 번 더 누르면 삭제 (본인 알림만 · 서버가 세션으로 확인)
-  const [armed, setArmed] = useState(false);
-  useEffect(() => {
-    if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 3000);
-    return () => clearTimeout(t);
-  }, [armed]);
+  // 📌 전체 삭제 — 누르면 바로 (본인 알림만 · 서버가 세션으로 확인)
   const clearAll = async () => {
-    if (!armed) { setArmed(true); return; }
-    setArmed(false);
     try {
       const r = await fetch("/api/notifications?mine=all", { method: "DELETE" }).then((x) => x.json());
       if (r?.success) setRows([]);
@@ -72,8 +64,8 @@ export default function NoticeInboxPage() {
         <div className="flex items-end justify-between gap-4 mb-6">
           <h1 className="text-2xl md:text-3xl font-black tracking-tight">알림함 {(rows?.length || 0) > 0 && <span className="text-[#e91e3f]">{rows!.length}</span>}</h1>
           {(rows?.length || 0) > 0 && (
-            <button type="button" onClick={clearAll} className={`shrink-0 text-[12px] font-bold transition-colors outline-none focus-visible:underline ${armed ? "text-[#d01634]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
-              {armed ? "한 번 더 누르면 삭제" : "전체 삭제"}
+            <button type="button" onClick={clearAll} className="shrink-0 text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus-visible:underline">
+              전체 삭제
             </button>
           )}
         </div>

@@ -287,7 +287,7 @@ export default function VerifyPage() {
     }
   };
 
-  if (status === "loading") return <div className="min-h-screen bg-[#090909] text-white flex justify-center items-center">로딩 중...</div>;
+  if (status === "loading") return <div className="min-h-screen bg-white text-[#8a8a8a] flex justify-center items-center">로딩 중...</div>;
   if (status === "unauthenticated") {
     router.push("/");
     return null;
@@ -296,14 +296,13 @@ export default function VerifyPage() {
   // 📌 디스코드 서버에 입장하지 않은 유저 — 입장 안내 화면
   if ((session?.user as any)?.isGuildMember === false) {
     return (
-      <div className="w-full flex-1 bg-[#090909] text-white flex flex-col items-center justify-center py-24 px-6 relative min-h-[70vh]">
-        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[500px] h-[280px] bg-[#e91e3f]/[0.07] blur-[120px] rounded-full pointer-events-none"></div>
+      <div className="w-full flex-1 bg-white text-[#131313] flex flex-col items-center justify-center py-24 px-6 relative min-h-[70vh]">
         <div className="relative z-10 text-center max-w-md">
           <p className="text-5xl mb-8">🧊</p>
           <h1 className="text-2xl md:text-3xl font-black tracking-tight mb-4">아직 서버에 입장하지 않았습니다.</h1>
-          <p className="text-sm text-gray-400 leading-relaxed mb-10">
+          <p className="text-sm text-[#5a5a5a] leading-relaxed mb-10">
             사이트의 모든 기능을 이용하시려면<br />
-            먼저 <span className="text-white font-bold">고급 이글루 디스코드 서버</span>에 입장해야 합니다.<br />
+            먼저 <span className="text-[#131313] font-bold">고급 이글루 디스코드 서버</span>에 입장해야 합니다.<br />
             입장 후 아래 버튼으로 다시 확인해주세요.
           </p>
           <div className="flex flex-col gap-3">
@@ -311,34 +310,34 @@ export default function VerifyPage() {
               href="https://discord.gg/V2uW2nUczU"
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#5865F2]/20"
+              className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-2xl transition-all"
             >
               디스코드 서버 입장하기
             </a>
             <button
               onClick={() => signIn("discord", { callbackUrl: "/verify" })}
-              className="w-full py-4 bg-white/[0.04] border border-white/10 text-white font-bold rounded-2xl hover:bg-white/[0.08] hover:border-white/25 transition-all"
+              className="w-full py-4 bg-white border border-[#a3a3a3] text-[#131313] font-bold rounded-2xl hover:bg-[#f2f2f2] hover:border-[#131313] transition-all"
             >
               입장 완료 — 다시 확인하기
             </button>
           </div>
-          <p className="text-[11px] text-gray-600 mt-6">서버 입장 후 &lsquo;다시 확인하기&rsquo;를 누르면 인증 절차가 시작됩니다.</p>
+          <p className="text-[11px] text-[#5a5a5a] mt-6">서버 입장 후 &lsquo;다시 확인하기&rsquo;를 누르면 인증 절차가 시작됩니다.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full flex-1 bg-[#090909] text-white flex flex-col items-center py-10 md:py-14 px-4 relative">
+    <div className="w-full flex-1 bg-white text-[#131313] flex flex-col items-center py-10 md:py-14 px-4 relative">
       <div className="w-full max-w-2xl px-2">
 
         {/* 진행 막대 — 1단계 절반, 2단계 전체 */}
-        <div className="w-full h-0.5 bg-white/10 rounded-full mb-8 md:mb-10">
+        <div className="w-full h-0.5 bg-[#ededed] rounded-full mb-8 md:mb-10">
           <div className={`h-full bg-[#e91e3f] transition-all duration-500 rounded-full ${step === 1 ? "w-1/2" : "w-full"}`}></div>
         </div>
 
         {errorMessage && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-xl text-red-400 text-sm text-center font-bold">
+          <div className="mb-4 p-3 bg-[#e91e3f]/[0.06] border border-[#e91e3f]/30 rounded-xl text-[#d01634] text-sm text-center font-bold">
             {errorMessage}
           </div>
         )}
@@ -346,68 +345,68 @@ export default function VerifyPage() {
         {step === 1 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="mb-6">
-              <h1 className="text-2xl md:text-3xl font-black tracking-tighter text-white">서버 이용 동의</h1>
+              <h1 className="text-2xl md:text-3xl font-black tracking-tighter text-[#131313]">서버 이용 동의</h1>
             </div>
 
             {/* 전체 동의 */}
             <button type="button" onClick={handleAllCheck} className="flex items-center gap-3 py-4 mb-3 group w-fit text-left">
-              <span className={`shrink-0 grid place-items-center transition-colors ${isAllChecked ? "text-[#e91e3f]" : "text-gray-600 group-hover:text-gray-400"}`}>
+              <span className={`shrink-0 grid place-items-center transition-colors ${isAllChecked ? "text-[#e91e3f]" : "text-[#a3a3a3] group-hover:text-[#5a5a5a]"}`}>
                 <CheckIcon className="w-6 h-6" />
               </span>
-              <span className={`font-black text-lg md:text-xl tracking-tight transition-colors ${isAllChecked ? "text-white" : "text-gray-300 group-hover:text-white"}`}>모든 필수 약관에 동의합니다</span>
-              <span className="text-xs text-gray-600 font-bold tabular-nums">{checkedCount}/{AGREEMENTS.length}</span>
+              <span className={`font-black text-lg md:text-xl tracking-tight transition-colors ${isAllChecked ? "text-[#131313]" : "text-[#5a5a5a] group-hover:text-[#131313]"}`}>모든 필수 약관에 동의합니다</span>
+              <span className="text-xs text-[#8a8a8a] font-bold tabular-nums">{checkedCount}/{AGREEMENTS.length}</span>
             </button>
 
             {/* 약관 — 펼치는 목록. 체크박스는 동의, 제목 줄은 펼치기 */}
-            <div className="border-t border-white/10 mb-8">
+            <div className="border-t border-[#ededed] mb-8">
               {AGREEMENTS.map((a) => {
                 const checked = agreements[a.key];
                 const open = openTab === a.key;
                 return (
-                  <div key={a.key} className="border-b border-white/10">
+                  <div key={a.key} className="border-b border-[#ededed]">
                     <div className="flex items-center gap-3 py-3.5 px-1">
                       <button
                         type="button"
                         onClick={() => handleCheck(a.key)}
                         aria-pressed={checked}
                         aria-label={`${a.title} 동의`}
-                        className={`shrink-0 grid place-items-center transition-colors ${checked ? "text-[#e91e3f]" : "text-gray-700 hover:text-gray-400"}`}
+                        className={`shrink-0 grid place-items-center transition-colors ${checked ? "text-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a]"}`}
                       >
                         <CheckIcon className="w-4 h-4" />
                       </button>
                       <button type="button" onClick={() => toggleTab(a.key)} aria-expanded={open} className="flex-1 min-w-0 text-left flex items-center gap-2 group">
-                        <span className="font-medium text-gray-300 group-hover:text-white text-sm transition-colors">{a.title}<span className="text-[#e91e3f] ml-1" aria-hidden="true">*</span></span>
+                        <span className="font-medium text-[#131313] text-sm transition-colors">{a.title}<span className="text-[#e91e3f] ml-1" aria-hidden="true">*</span></span>
                       </button>
-                      <button type="button" onClick={() => toggleTab(a.key)} aria-label={open ? "접기" : "펼치기"} className="shrink-0 w-7 h-7 grid place-items-center text-gray-500 hover:text-white transition-colors">
+                      <button type="button" onClick={() => toggleTab(a.key)} aria-label={open ? "접기" : "펼치기"} className="shrink-0 w-7 h-7 grid place-items-center text-[#a3a3a3] hover:text-[#131313] transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform duration-200 ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                       </button>
                     </div>
 
                     {open && (
                       <div className="pb-5 pl-9 pr-2 space-y-4">
-                        <p className="text-[11px] text-gray-500 leading-relaxed break-keep">{a.summary}</p>
+                        <p className="text-[11px] text-[#5a5a5a] leading-relaxed break-keep">{a.summary}</p>
                         {a.sections.map((sec) => (
                           <div key={sec.heading}>
-                            <p className="text-[10px] font-black tracking-[0.18em] text-gray-400 uppercase mb-2">{sec.heading}</p>
+                            <p className="text-[10px] font-black tracking-[0.18em] text-[#5a5a5a] uppercase mb-2">{sec.heading}</p>
                             <ul className="space-y-1.5">
                               {sec.items.map((it, i) => (
                                 <li key={i} className="flex items-start gap-2.5 text-xs leading-relaxed break-keep">
-                                  <span className="mt-[8px] w-1 h-1 rounded-full bg-gray-600 shrink-0"></span>
-                                  <span className="text-gray-400">
-                                    {it.term && <span className="text-gray-200 font-bold">{it.term} — </span>}
+                                  <span className="mt-[8px] w-1 h-1 rounded-full bg-[#a3a3a3] shrink-0"></span>
+                                  <span className="text-[#5a5a5a]">
+                                    {it.term && <span className="text-[#131313] font-bold">{it.term} — </span>}
                                     {it.desc}
                                   </span>
                                 </li>
                               ))}
                             </ul>
                             {sec.note && (
-                              <p className="mt-2.5 text-[11px] text-gray-400 leading-relaxed break-keep">
-                                <span className="text-gray-300 font-bold mr-1.5">※</span>{sec.note}
+                              <p className="mt-2.5 text-[11px] text-[#5a5a5a] leading-relaxed break-keep">
+                                <span className="text-[#131313] font-bold mr-1.5">※</span>{sec.note}
                               </p>
                             )}
                           </div>
                         ))}
-                        <a href={`/policy?tab=${a.policyTab}`} target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-bold text-gray-400 hover:text-white underline underline-offset-4 transition-colors">
+                        <a href={`/policy?tab=${a.policyTab}`} target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-bold text-[#5a5a5a] hover:text-[#131313] underline underline-offset-4 transition-colors">
                           전문 보기 ↗
                         </a>
                       </div>
@@ -420,7 +419,7 @@ export default function VerifyPage() {
             <button
               onClick={handleNextStep}
               disabled={!isAllChecked}
-              className={`w-full py-3.5 rounded-xl font-bold text-base transition-all outline-none focus:outline-none ${isAllChecked ? "bg-[#e91e3f] hover:bg-[#d01634] text-white shadow-lg shadow-[#e91e3f]/20" : "bg-white/5 text-gray-600 cursor-not-allowed"}`}
+              className={`w-full py-3.5 rounded-xl font-bold text-base transition-all outline-none focus:outline-none ${isAllChecked ? "bg-[#e91e3f] hover:bg-[#d01634] text-white" : "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"}`}
             >
               다음
             </button>
@@ -430,27 +429,27 @@ export default function VerifyPage() {
         {step === 2 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="mb-6">
-              <h1 className="text-2xl md:text-3xl font-black mb-2 tracking-tighter text-white flex items-baseline gap-2">
+              <h1 className="text-2xl md:text-3xl font-black mb-2 tracking-tighter text-[#131313] flex items-baseline gap-2">
                 내전 채널 이용 인증
-                <span className="text-gray-400 text-xs font-bold bg-white/[0.06] px-2 py-0.5 rounded">선택</span>
+                <span className="text-[#5a5a5a] text-xs font-bold bg-[#f2f2f2] px-2 py-0.5 rounded">선택</span>
               </h1>
-              <p className="text-gray-500 text-[13px]">동의하지 않아도 기본 권한은 받을 수 있으며, 내 정보에서 나중에 동의할 수 있습니다.</p>
+              <p className="text-[#5a5a5a] text-[13px]">동의하지 않아도 기본 권한은 받을 수 있으며, 내 정보에서 나중에 동의할 수 있습니다.</p>
             </div>
 
             {/* 내전 규정 — /policy?tab=scrim 의 조항 그대로 */}
-            <div className="border-t border-white/10 mb-5">
+            <div className="border-t border-[#ededed] mb-5">
               {SCRIM_RULES.map((r) => (
-                <div key={r.no} className="border-b border-white/10 py-4 px-1">
-                  <p className="text-sm font-semibold text-gray-200 mb-1.5"><span className="text-gray-500 mr-2">{r.no}</span>{r.title}</p>
-                  <p className="text-xs text-gray-400 leading-relaxed break-keep">{r.desc}</p>
+                <div key={r.no} className="border-b border-[#ededed] py-4 px-1">
+                  <p className="text-sm font-semibold text-[#131313] mb-1.5"><span className="text-[#8a8a8a] mr-2">{r.no}</span>{r.title}</p>
+                  <p className="text-xs text-[#5a5a5a] leading-relaxed break-keep">{r.desc}</p>
                 </div>
               ))}
             </div>
 
-            <p className="text-[11px] text-gray-400 leading-relaxed break-keep mb-2">
-              <span className="text-gray-300 font-bold mr-1.5">※</span>위 규정 미확인으로 인해 발생하는 불이익이나 제재에 대한 책임은 이용자 본인에게 있습니다.
+            <p className="text-[11px] text-[#5a5a5a] leading-relaxed break-keep mb-2">
+              <span className="text-[#131313] font-bold mr-1.5">※</span>위 규정 미확인으로 인해 발생하는 불이익이나 제재에 대한 책임은 이용자 본인에게 있습니다.
             </p>
-            <a href="/policy?tab=scrim" target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-bold text-gray-400 hover:text-white underline underline-offset-4 transition-colors mb-8">
+            <a href="/policy?tab=scrim" target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-bold text-[#5a5a5a] hover:text-[#131313] underline underline-offset-4 transition-colors mb-8">
               전문 보기 ↗
             </a>
 
@@ -458,7 +457,7 @@ export default function VerifyPage() {
               <button
                 onClick={() => handleFinalSubmit(true)}
                 disabled={isSubmitting}
-                className="w-full py-3.5 bg-[#e91e3f] text-white font-bold text-base rounded-xl hover:bg-[#d01634] transition-all shadow-lg shadow-[#e91e3f]/20 outline-none focus:outline-none flex items-center justify-center"
+                className="w-full py-3.5 bg-[#e91e3f] text-white font-bold text-base rounded-xl hover:bg-[#d01634] transition-all outline-none focus:outline-none flex items-center justify-center"
               >
                 {isSubmitting ? "처리 중..." : "내전 규정에 동의"}
               </button>
@@ -467,7 +466,7 @@ export default function VerifyPage() {
                 <button
                   onClick={() => router.push("/profile")}
                   disabled={isSubmitting}
-                  className="w-full py-3 text-gray-500 hover:text-white text-sm font-medium transition-colors outline-none focus:outline-none"
+                  className="w-full py-3 text-[#5a5a5a] hover:text-[#131313] text-sm font-medium transition-colors outline-none focus:outline-none"
                 >
                   취소(내 정보 돌아가기)
                 </button>
@@ -475,7 +474,7 @@ export default function VerifyPage() {
                 <button
                   onClick={() => handleFinalSubmit(false)}
                   disabled={isSubmitting}
-                  className="w-full py-3 text-gray-500 hover:text-white text-sm font-medium transition-colors outline-none focus:outline-none"
+                  className="w-full py-3 text-[#5a5a5a] hover:text-[#131313] text-sm font-medium transition-colors outline-none focus:outline-none"
                 >
                   동의하지 않고 기본 권한만 받기
                 </button>
@@ -486,17 +485,17 @@ export default function VerifyPage() {
       </div>
 
       {isSuccessModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overlay-in">
-          <div className="bg-[#1e1e1e] border border-[#e91e3f]/40 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl transform transition-all scale-100 animate-in zoom-in-95 duration-300">
-            <div className="mx-auto w-20 h-20 bg-[#e91e3f]/10 border border-[#e91e3f]/20 rounded-full flex items-center justify-center mb-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overlay-in">
+          <div className="bg-white border border-[#ededed] rounded-3xl w-full max-w-sm p-8 text-center shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] transform transition-all scale-100 animate-in zoom-in-95 duration-300">
+            <div className="mx-auto w-20 h-20 bg-[#e91e3f]/[0.08] border border-[#e91e3f]/20 rounded-full flex items-center justify-center mb-6">
               <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-[#e91e3f]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-2xl font-black text-white mb-2">
+            <h2 className="text-2xl font-black text-[#131313] mb-2">
               {isRevisiting ? "권한 획득 완료!" : "인증 완료"}
             </h2>
-            <p className="text-gray-400 text-sm mb-8 leading-relaxed">
+            <p className="text-[#5a5a5a] text-sm mb-8 leading-relaxed">
               {isRevisiting ? (
                 <>내전 채널 이용 권한이 부여되었습니다.<br/>이제 내전에 참가하실 수 있습니다.</>
               ) : (
@@ -509,7 +508,7 @@ export default function VerifyPage() {
                 setIsSuccessModalOpen(false);
                 router.replace(isRevisiting ? "/profile" : "/");
               }}
-              className="w-full py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl hover:bg-[#d01634] transition-all shadow-lg shadow-[#e91e3f]/20 outline-none focus:outline-none"
+              className="w-full py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl hover:bg-[#d01634] transition-all outline-none focus:outline-none"
             >
               {isRevisiting ? "내 정보로 돌아가기" : "메인으로 이동"}
             </button>

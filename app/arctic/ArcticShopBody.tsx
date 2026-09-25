@@ -19,6 +19,7 @@ import ArcticHome from "./ArcticHome";
 import CardArt from "./CardArt";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useArcticOrigin } from "./fromLevel";
+import { InventoryPopup } from "../components/Inventory";
 
 const ADMIN_USERS = ["elahw.06"];
 
@@ -268,6 +269,7 @@ export default function ArcticShopBody({
   // 📌 찜 — 로컬에 보관 (상품 id 목록)
   const [wish, setWish] = useState<string[]>([]);
   const [wishOnly, setWishOnly] = useState(false);
+  const [invOpen, setInvOpen] = useState(false); // 인벤토리 팝업 — 옛 주소 /arctic/inventory 는 ?panel=bag 로 여기서 연다
 
   // 하위 페이지 하단바에서 찜·검색을 누르면 ?panel= 로 넘어온다
   const searchParams = useSearchParams();
@@ -278,6 +280,7 @@ export default function ArcticShopBody({
     // 찜한 상품은 따로 페이지가 됐다 — 옛 주소(?panel=wish)는 그리로 보낸다
     if (panel === "wish") router.replace("/arctic/wish");
     if (panel === "search") setShowMobileSearch(true);
+    if (panel === "bag") setInvOpen(true);
     // 상품 상세 · 장바구니 위 상점 줄(ArcticStoreBar)에서 유형 · 검색어를 들고 온다
     const type = searchParams.get("type");
     if (type && TYPES.some((t) => t.v === type)) goProducts(type);
@@ -761,6 +764,14 @@ export default function ArcticShopBody({
                 </span>
                 <span className="hidden lg:block w-px h-4 bg-[#e0e0e0]" />
 
+                {/* 인벤토리 — 산 것 · 받은 것을 그 자리에서 팝업으로. 모바일도 여기서 연다 (하단바 다섯 칸은 찼다) */}
+                <button type="button" onClick={() => setInvOpen(true)} aria-label="인벤토리" title="인벤토리"
+                  className="relative flex items-center justify-center w-9 h-9 rounded-full transition-colors text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.bag} />
+                  </svg>
+                </button>
+
                 {/* 찜 · 장바구니 — 같은 모양: 테두리 아이콘 + 빨간 개수 점. 개수가 바뀌면 점이 한 번 튄다 */}
                 <Link href="/arctic/wish" aria-label={`찜한 상품 보기${wish.length ? ` (${wish.length})` : ""}`}
                   className="relative hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-colors text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]">
@@ -975,6 +986,8 @@ export default function ArcticShopBody({
           </div>
         </div>
       )}
+
+      <InventoryPopup open={invOpen} onClose={() => setInvOpen(false)} />
 
       {/* ── 모바일 하단바 — 하위 페이지와 같은 공용 컴포넌트를 쓴다.
              ARCTIC 탭에서는 ClientLayout 이 전역 독을 숨기므로 겹치지 않는다. */}

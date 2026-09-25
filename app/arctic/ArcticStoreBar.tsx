@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { Fragment, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { ICON_PATHS } from "../components/Icons";
+import { InventoryPopup } from "../components/Inventory";
 
 // 📌 하위 화면 경로 줄 — 상품 상세 · 장바구니 · 구매 내역 위의 한 줄.
 //    상점 메인의 유형 줄 · 검색창을 그대로 붙이면 상세 위가 무거워진다. 여기는 "ARCTIC › 유형 › 상품" 경로와
@@ -29,6 +31,8 @@ const Badge = ({ n }: { n: number }) => (
 
 export default function ArcticStoreBar({ crumbs = [], active = "", cartCount, wishCount, width = "max-w-5xl" }: { crumbs?: Crumb[]; active?: string; cartCount?: number; wishCount?: number; width?: string }) {
   const [stored, setStored] = useState({ cart: 0, wish: 0 });
+  const [invOpen, setInvOpen] = useState(false);
+  const { status } = useSession();
 
   useEffect(() => {
     const load = () => setStored({ cart: readCount("iglooShopCart", true), wish: readCount("iglooShopWish", false) });
@@ -74,8 +78,18 @@ export default function ArcticStoreBar({ crumbs = [], active = "", cartCount, wi
           })}
         </nav>
 
-        {/* 찜 · 장바구니 — 상점 메인과 같은 모양 (모바일은 하단바가 맡는다) */}
-        <div className="hidden md:flex items-center gap-1 shrink-0">
+        {/* 인벤토리 — 산 것 · 받은 것을 그 자리에서 팝업으로. 모바일도 여기서 연다 (하단바 다섯 칸은 찼다) */}
+        {status === "authenticated" && (
+          <button type="button" onClick={() => setInvOpen(true)} aria-label="인벤토리" title="인벤토리"
+            className="relative shrink-0 flex items-center justify-center w-9 h-9 rounded-full transition-colors text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">
+            <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.bag} />
+            </svg>
+          </button>
+        )}
+
+        {/* 찜 · 장바구니 — 상점 메인과 같은 모양 (모바일은 하단바가 맡는다). 인벤토리와 붙여 세 아이콘 간격을 맞춘다 */}
+        <div className="hidden md:flex items-center gap-1 shrink-0 -ml-3">
           <Link href="/arctic/wish" aria-label={`찜한 상품 보기${wish ? ` (${wish})` : ""}`}
             className={`relative flex items-center justify-center w-9 h-9 rounded-full transition-colors ${active === "wish" ? "text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
             <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
@@ -92,6 +106,7 @@ export default function ArcticStoreBar({ crumbs = [], active = "", cartCount, wi
           </Link>
         </div>
       </div>
+      <InventoryPopup open={invOpen} onClose={() => setInvOpen(false)} />
     </div>
   );
 }

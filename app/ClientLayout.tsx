@@ -13,7 +13,7 @@ import { agoLabel } from "@/lib/ago";
 
 // 서버에서는 layout effect 가 돌지 않으므로 경고 없이 effect 로 대신한다
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
-import { verifyBadge } from "@/lib/verifyBadge";
+import { VerifyIcon, VerifyBadge } from "./components/VerifyMark";
 
 // 📌 헤더에서 내려오는 카드(알림·내 프로필)
 //    헤더 자체가 backdrop-blur를 갖고 있어, 그 안에 두면 카드가 뒤 배경을 읽지 못해 블러가 걸리지 않는다.
@@ -154,7 +154,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       : null;
   // 📌 흰 바탕 페이지 — 화이트 & 블랙으로 옮긴 곳. 종이색 라이트와 구분한다.
   //    경매·대회·명예의 전당은 일부러 개성 있게 만든 화면이라 여기 넣지 않는다.
-  const WHITE_ROOTS = ["/notice", "/event", "/recruit", "/faq", "/support", "/booster", "/level", "/profile"];
+  const WHITE_ROOTS = ["/notice", "/event", "/recruit", "/faq", "/support", "/booster", "/level", "/profile", "/verify", "/policy"];
   const isWhitePage = isShopPage || pathname === "/" || WHITE_ROOTS.some((r) => pathname === r || !!pathname?.startsWith(r + "/"));
   // 알약 변형은 없앴다 — 내리면 로고 줄과 카테고리 줄이 한 줄로 접힌다
   const scrolled = scrolledRaw;
@@ -308,7 +308,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isNotifOpen]);
 
-  // 📌 전체 삭제 — 운영팀 알림은 서버에서 지우고(본인 것만), 문의 답변은 문의 내역에 남으니 종 목록에서만 치운다
+  // 📌 전체 삭제(누르면 바로) — 운영팀 알림은 서버에서 지우고(본인 것만), 문의 답변은 문의 내역에 남으니 종 목록에서만 치운다
   const [clearedAnswerIds, setClearedAnswerIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     try {
@@ -317,15 +317,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     } catch {}
   }, []);
   const visibleAnswers = notifications.filter((n) => !clearedAnswerIds.has(n._id));
-  const [clearArmed, setClearArmed] = useState(false); // 한 번 누르면 확인 문구, 3초 안에 한 번 더 누르면 삭제
-  useEffect(() => {
-    if (!clearArmed) return;
-    const t = setTimeout(() => setClearArmed(false), 3000);
-    return () => clearTimeout(t);
-  }, [clearArmed]);
   const clearAllNotifs = async () => {
-    if (!clearArmed) { setClearArmed(true); return; }
-    setClearArmed(false);
     try { await fetch("/api/notifications?mine=all", { method: "DELETE" }); } catch {}
     setAdminNotifs([]);
     const next = new Set(clearedAnswerIds);
@@ -494,15 +486,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
 
                 {isNotifOpen && (
-                  <HeaderPopover anchorRef={notifRef} panelRef={notifPanelRef} className={`w-auto sm:w-[320px] rounded-2xl border overflow-hidden overlay-in ${isLightPage ? "bg-white border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "bg-[#141414] border-white/[0.08] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.8)]"}`}>
-                    {/* 머리 — 제목 · 새 알림 수 · 전체 삭제(두 번 눌러 확정). 색 번짐 · 흐림 없이 흰 판 (디자인 기준) */}
+                  <HeaderPopover anchorRef={notifRef} panelRef={notifPanelRef} className={`w-auto sm:w-[320px] rounded-2xl border overflow-hidden overlay-in backdrop-blur-xl ${isLightPage ? "bg-white/80 border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "bg-[#141414]/80 border-white/[0.08] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.8)]"}`}>
+                    {/* 머리 — 제목 · 새 알림 수 · 전체 삭제. 판은 프로필 창과 같은 블러 (색 번짐 없음) */}
                     <div className={`px-5 h-12 flex items-center justify-between border-b ${isLightPage ? "border-[#ededed]" : "border-white/[0.07]"}`}>
                       <span className={`text-[14px] font-black ${isLightPage ? "text-[#131313]" : "text-white"}`}>
                         알림{unseenCount > 0 && <span className="ml-1.5 text-[#e91e3f] tabular-nums">{unseenCount}</span>}
                       </span>
                       {bellItems.length > 0 && (
-                        <button type="button" onClick={clearAllNotifs} className={`text-[11px] font-bold transition-colors outline-none focus-visible:underline ${clearArmed ? "text-[#e91e3f]" : isLightPage ? "text-[#8a8a8a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>
-                          {clearArmed ? "한 번 더 누르면 삭제" : "전체 삭제"}
+                        <button type="button" onClick={clearAllNotifs} className={`text-[11px] font-bold transition-colors outline-none focus-visible:underline ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>
+                          전체 삭제
                         </button>
                       )}
                     </div>
@@ -538,29 +530,20 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   <img src={session.user?.image || ""} alt="Profile" className={`rounded-full bg-gray-700 transition-all duration-500 ${scrolled ? "w-7 h-7" : "w-8 h-8"}`} />
                   <div className="flex items-center gap-2 ml-1">
                     <span className={`font-bold transition-[font-size,letter-spacing] duration-500 ease-out ${isLightPage ? "text-[#131313]" : "text-white"} ${scrolled ? "text-[13px]" : "text-sm"}`}>{session.user?.name}</span>
-                    {isVerified && hasScrimRole ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-green-400"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>
-                    ) : isVerified ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-yellow-400"><path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" /></svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-red-400"><path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-1.72 6.97a.75.75 0 10-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 101.06 1.06L12 13.06l1.72 1.72a.75.75 0 101.06-1.06L13.06 12l1.72-1.72a.75.75 0 10-1.06-1.06L12 10.94l-1.72-1.72z" clipRule="evenodd" /></svg>
-                    )}
+                    <VerifyIcon isVerified={isVerified} hasScrimRole={hasScrimRole} />
                   </div>
                 </button>
                 
                 {isProfileOpen && (
-                  <HeaderPopover anchorRef={profileDropdownRef} panelRef={profilePanelRef} className={`w-auto sm:w-[280px] rounded-2xl border overflow-hidden overlay-in ${isLightPage ? "bg-white border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "bg-[#141414] border-white/[0.08] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.8)]"}`}>
-                    {/* 머리 — 사진 · 이름 · 배지. 색 번짐 · 흐림 없이 흰 판 (디자인 기준) */}
+                  <HeaderPopover anchorRef={profileDropdownRef} panelRef={profilePanelRef} className={`w-auto sm:w-[280px] rounded-2xl border overflow-hidden overlay-in backdrop-blur-xl ${isLightPage ? "bg-white/80 border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "bg-[#141414]/80 border-white/[0.08] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.8)]"}`}>
+                    {/* 머리 — 사진 · 이름 · 배지. 판은 색 번짐 없이 뒤가 살짝 비치는 블러 (헤더 바와 같은 결) */}
                     <div className="px-5 pt-5 pb-4 flex items-center gap-3.5">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={session.user?.image || ""} alt="" className="w-11 h-11 rounded-full bg-gray-700 shrink-0" />
                       <div className="min-w-0">
                         <p className={`text-[15px] font-black truncate ${isLightPage ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</p>
                         <div className="mt-1.5 flex items-center gap-1 flex-wrap">
-                          <span className={`inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-bold border ${verifyBadge(isVerified, hasScrimRole).cls}`}>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>
-                            {verifyBadge(isVerified, hasScrimRole).label}
-                          </span>
+                          <VerifyBadge isVerified={isVerified} hasScrimRole={hasScrimRole} />
                           {isBooster && <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 border border-[#ff41cf]/25 ${isLightPage ? "text-[#c2189b]" : "text-[#ff6fdc]"}`}>SERVER BOOSTER</span>}
                           {isSupporter && <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold bg-[#3f83b8]/10 border border-[#3f83b8]/25 ${isLightPage ? "text-[#2f6fa3]" : "text-[#7db4df]"}`}>SUPPORTERS</span>}
                         </div>
@@ -772,26 +755,47 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
              같은 궤적으로 밀려 들어간다. 왼쪽 모서리에만 라운드를 줘 패널이 화면 밖에서
              들어온 판처럼 보이게 한다. 항상 최상위 + DOM 최하단 배치로 클릭/스택 보장 */}
       {isMobileMenuOpen && (() => {
-        // 계정 영역 — 링크/버튼이 섞여 있어 한 배열로 모아 같은 스타일로 렌더한다
-        const accountItems: { name: string; path?: string; onClick?: () => void; accent?: boolean }[] = [];
+        const L = isLightPage;
+        // 계정 영역 — 프로필 창과 같은 항목 · 같은 아이콘
+        const accountItems: { name: string; path: string; icon: string }[] = [];
         if (status === "authenticated" && session) {
-          if (!isVerifyPage) accountItems.push({ name: "내 정보", path: "/profile" });
+          if (!isVerifyPage) accountItems.push({ name: "내 정보", path: "/profile", icon: ICON_PATHS.user });
           // 서포터즈 바로가기 — 헤더 메뉴 대신 계정 팝업과 프로필에서만 들어간다 (관리자는 확인용으로 항상)
-          if (!isVerifyPage && (isSupporter || isAdmin)) accountItems.push({ name: "서포터즈", path: "/supporters" });
-          if (isVerified) accountItems.push({ name: "쿠폰함", path: "/profile/coupons" });
-          if (isAdmin) accountItems.push({ name: "관리자 페이지", path: "/admin", accent: true });
+          if (!isVerifyPage && (isSupporter || isAdmin)) accountItems.push({ name: "서포터즈", path: "/supporters", icon: ICON_PATHS.shieldCheck });
+          if (isVerified) accountItems.push({ name: "쿠폰함", path: "/profile/coupons", icon: ICON_PATHS.ticket });
+          if (isAdmin) accountItems.push({ name: "관리자 페이지", path: "/admin", icon: ICON_PATHS.key });
         }
         const showCategories = !isVerifyPage && (status !== "authenticated" || isVerified);
-        const itemCls = (active: boolean, accent?: boolean) =>
-          `w-full flex items-center rounded-xl px-3 py-3 mb-0.5 text-left text-sm font-bold outline-none transition-colors ${
-            active ? "bg-[#e91e3f]/10 text-[#e91e3f]"
-              : accent ? "text-[#e91e3f] " + (isLightPage ? "active:bg-black/[0.05]" : "active:bg-white/[0.05]")
-              : isLightPage ? "text-[#5a5a5a] active:bg-black/[0.05] active:text-[#131313]" : "text-gray-300 active:bg-white/[0.05] active:text-white"
+        // 메뉴 줄 아이콘 — 프로필 창처럼 아이콘 + 이름 한 줄
+        const NAV_ICON: Record<string, string> = {
+          "/notice": ICON_PATHS.megaphone, "/event": ICON_PATHS.gift, "/recruit": ICON_PATHS.briefcase,
+          "/level": ICON_PATHS.chart, "/arctic": ICON_PATHS.bag, "/tournament": ICON_PATHS.trophy, "/auction": ICON_PATHS.flag,
+          "/hall-of-fame": ICON_PATHS.star, "/booster": ICON_PATHS.sparkles, "/support": ICON_PATHS.chat, "/faq": ICON_PATHS.search,
+        };
+        const rowCls = (active: boolean) =>
+          `w-full flex items-center gap-3 h-11 px-3 rounded-xl text-left text-[15px] font-bold outline-none transition-colors ${
+            active ? (L ? "bg-[#f2f2f2] text-[#131313]" : "bg-white/[0.08] text-white")
+              : L ? "text-[#131313] active:bg-[#f2f2f2]" : "text-gray-200 active:bg-white/[0.06]"
           }`;
+        const row = (href: string, icon: string | undefined, name: string) => {
+          const active = isMenuActive(href);
+          return (
+            <Link key={href} href={href} onClick={closeMobileMenu} className={rowCls(active)}>
+              <svg aria-hidden viewBox="0 0 24 24" className={`w-[18px] h-[18px] shrink-0 ${active ? "text-[#e91e3f]" : L ? "text-[#5a5a5a]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d={icon || ICON_PATHS.chevronRight} />
+              </svg>
+              <span className="min-w-0 truncate">{name}</span>
+              {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#e91e3f] shrink-0"></span>}
+            </Link>
+          );
+        };
+        const groupHead = `px-3 mb-1 text-[11px] font-black tracking-[0.08em] ${L ? "text-[#8a8a8a]" : "text-gray-500"}`;
+        const groupGap = `mt-3 pt-3 border-t ${L ? "border-[#ededed]" : "border-white/[0.07]"}`;
 
-        // data-scroll-lock-skip: 전역 ScrollLock의 body position:fixed 잠금을 건너뛴다.
-        // 이 메뉴는 폭 82%라 옆에 헤더가 보이는데, body를 고정하면 sticky 헤더가 사라진다.
-        // 대신 위 useEffect에서 html에 스크롤 잠금을 걸어 sticky를 살린다.
+        // 📌 모바일 서랍 — 헤더 팝업(프로필 · 알림)과 같은 결: 뒤가 살짝 비치는 블러 판, 색 번짐 없음, 아이콘 + 이름 줄.
+        //    data-scroll-lock-skip: 전역 ScrollLock의 body position:fixed 잠금을 건너뛴다.
+        //    이 메뉴는 폭 84%라 옆에 헤더가 보이는데, body를 고정하면 sticky 헤더가 사라진다.
+        //    대신 위 useEffect에서 html에 스크롤 잠금을 걸어 sticky를 살린다.
         return (
         <div className="md:hidden fixed inset-0 z-[200]" data-scroll-lock-skip="">
           <style dangerouslySetInnerHTML={{ __html: `
@@ -802,107 +806,70 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           `}} />
 
           <div
-            className="absolute inset-0 bg-black/55 backdrop-blur-[6px]"
+            className="absolute inset-0 bg-black/40"
             style={{ animation: isMenuClosing ? "mmFadeOut 0.24s ease-in forwards" : "mmFadeIn 0.26s ease-out" }}
             onClick={closeMobileMenu}
           />
 
           <div
-            className={`absolute right-0 top-0 bottom-0 w-[82%] max-w-xs backdrop-blur-2xl border-l rounded-l-[28px] flex flex-col overflow-hidden ${isLightPage ? "bg-white/92 border-black/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.25)]" : "bg-[#0d0d0d]/90 border-white/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.8)]"}`}
+            className={`absolute right-0 top-0 bottom-0 w-[84%] max-w-[340px] rounded-l-2xl border-l flex flex-col overflow-hidden backdrop-blur-xl ${L ? "bg-white/85 border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "bg-[#141414]/85 border-white/[0.08] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.8)]"}`}
             style={{ animation: isMenuClosing ? "mmSlideOut 0.26s cubic-bezier(0.4,0,1,1) forwards" : "mmSlideIn 0.32s cubic-bezier(0.22,1,0.36,1)" }}
           >
-            {/* 상단 크림슨 글로우 */}
-            <div className="absolute top-[-60px] right-[-30px] w-56 h-32 bg-[#e91e3f]/[0.1] blur-[60px] rounded-full pointer-events-none"></div>
-
-            {/* ── 헤더 ── */}
-            <div className={`relative shrink-0 flex items-center justify-between px-5 h-16 border-b ${isLightPage ? "border-black/[0.07]" : "border-white/[0.07]"}`}>
-              <div className="flex items-center gap-2.5">
-                <span className="w-4 h-px bg-[#e91e3f]"></span>
-                <span className={`text-[15px] font-bold tracking-[0.15em] ${isLightPage ? "text-[#131313]" : "text-white"}`}>고급 이글루</span>
-              </div>
-              <button onClick={closeMobileMenu} aria-label="메뉴 닫기" className={`p-2 -mr-1 rounded-full transition-colors outline-none ${isLightPage ? "text-[#8a8a8a] active:text-[#131313] bg-black/[0.05]" : "text-gray-400 active:text-white bg-white/[0.05]"}`}>
+            {/* ── 머리 — 브랜드 · 닫기 ── */}
+            <div className={`shrink-0 flex items-center justify-between pl-5 pr-4 h-16 border-b ${L ? "border-[#ededed]" : "border-white/[0.08]"}`}>
+              <span className={`text-[18px] font-black tracking-[0.02em] ${L ? "text-[#131313]" : "text-white"}`}>고급 이글루</span>
+              <button onClick={closeMobileMenu} aria-label="메뉴 닫기" className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors outline-none ${L ? "bg-[#f2f2f2] text-[#5a5a5a] active:text-[#131313] active:bg-[#e0e0e0]" : "bg-white/[0.07] text-gray-300 active:text-white"}`}>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[18px] h-[18px]"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
               </button>
             </div>
 
             {/* ── 스크롤 영역 ── */}
-            <div className="relative flex-1 overflow-y-auto overscroll-contain px-4 py-4 [&::-webkit-scrollbar]:hidden">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 [&::-webkit-scrollbar]:hidden">
               {status === "authenticated" && session && (
-                /* 눌러서 내 정보로 — 부스터 역할이 있으면 인증 배지 옆에 표시한다 */
+                /* 눌러서 내 정보로 — 배지는 프로필 창과 같은 한 벌 */
                 <Link href="/profile" onClick={closeMobileMenu}
-                  className={`relative flex items-center gap-3.5 p-3.5 mb-5 border rounded-2xl overflow-hidden transition-colors ${isLightPage ? "bg-black/[0.03] border-black/[0.06] active:bg-black/[0.06]" : "bg-white/[0.04] border-white/[0.06] active:bg-white/[0.07]"}`}>
-                  <img src={session.user?.image || ""} alt="Profile" className={`relative w-11 h-11 rounded-full ${isLightPage ? "bg-[#dedddb]" : "bg-gray-700"}`} />
-                  <div className="relative min-w-0 flex-1">
-                    <p className={`font-bold text-sm truncate ${isLightPage ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</p>
-                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-bold ${verifyBadge(isVerified, hasScrimRole).cls}`}>{verifyBadge(isVerified, hasScrimRole).label}</span>
-                      {isBooster && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 text-[#ff41cf]">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5"><path d={ICON_PATHS.sparkles} /></svg>
-                          BOOSTER
-                        </span>
-                      )}
-                      {isSupporter && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#3f83b8]/10 text-[#3f83b8]">SUPPORTERS</span>
-                      )}
+                  className={`flex items-center gap-3 p-3 mb-2 rounded-2xl border transition-colors ${L ? "bg-white border-[#ededed] active:bg-[#f2f2f2]" : "bg-white/[0.04] border-white/[0.08] active:bg-white/[0.07]"}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={session.user?.image || ""} alt="" className={`w-11 h-11 rounded-full shrink-0 ${L ? "bg-[#e0e0e0]" : "bg-gray-700"}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-[15px] font-black truncate ${L ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</p>
+                    <div className="mt-1.5 flex items-center gap-1 flex-wrap">
+                      <VerifyBadge isVerified={isVerified} hasScrimRole={hasScrimRole} />
+                      {isBooster && <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 border border-[#ff41cf]/25 ${L ? "text-[#c2189b]" : "text-[#ff6fdc]"}`}>SERVER BOOSTER</span>}
+                      {isSupporter && <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold bg-[#3f83b8]/10 border border-[#3f83b8]/25 ${L ? "text-[#2f6fa3]" : "text-[#7db4df]"}`}>SUPPORTERS</span>}
                     </div>
                   </div>
-                  <svg className={`w-4 h-4 shrink-0 ${isLightPage ? "text-[#a3a3a3]" : "text-gray-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                  <svg aria-hidden className={`w-4 h-4 shrink-0 ${L ? "text-[#a3a3a3]" : "text-gray-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.chevronRight} /></svg>
                 </Link>
               )}
 
               {showCategories && categoryGroups.map((group, gIdx) => (
-                <div key={group.name} className={gIdx > 0 ? "mt-6" : ""}>
-                  <div className="flex items-center gap-2 px-3 mb-1.5">
-                    <span className="w-3 h-px bg-[#e91e3f]/70"></span>
-                    <p className={`text-[11px] font-black tracking-[0.14em] ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>{group.name}</p>
-                  </div>
-                  {group.items.map((item) => {
-                    const active = isMenuActive(item.path);
-                    return (
-                      <Link key={item.path} href={item.path} onClick={closeMobileMenu} className={itemCls(active)}>
-                        {item.name}
-                        {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#e91e3f] shadow-[0_0_8px_rgba(233,30,63,0.8)]"></span>}
-                      </Link>
-                    );
-                  })}
+                <div key={group.name} className={gIdx > 0 || (status === "authenticated" && session) ? groupGap : ""}>
+                  <p className={groupHead}>{group.name}</p>
+                  {group.items.map((item) => row(item.path, NAV_ICON[item.path], item.name))}
                 </div>
               ))}
 
               {accountItems.length > 0 && (
-                <div className="mt-6">
-                  <div className="flex items-center gap-2 px-3 mb-1.5">
-                    <span className="w-3 h-px bg-[#e91e3f]/70"></span>
-                    <p className={`text-[11px] font-black tracking-[0.14em] ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>계정</p>
-                  </div>
-                  {accountItems.map((item) =>
-                    item.path ? (
-                      <Link key={item.name} href={item.path} onClick={closeMobileMenu} className={itemCls(isMenuActive(item.path), item.accent)}>{item.name}</Link>
-                    ) : (
-                      <button key={item.name} onClick={item.onClick} className={itemCls(false)}>{item.name}</button>
-                    )
-                  )}
+                <div className={groupGap}>
+                  <p className={groupHead}>계정</p>
+                  {accountItems.map((item) => row(item.path, item.icon, item.name))}
                 </div>
               )}
             </div>
 
-            {/* ── 푸터 ── */}
-            <div className={`relative shrink-0 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${isLightPage ? "border-black/[0.07]" : "border-white/[0.07]"}`}>
+            {/* ── 바닥 — 로그아웃(빨강은 여기만) · 바깥 링크 ── */}
+            <div className={`shrink-0 border-t px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${L ? "border-[#ededed]" : "border-white/[0.08]"}`}>
               {status === "authenticated" && session ? (
-                <button onClick={() => { closeMobileMenu(); signOut(); }} className="w-full text-left px-3 py-3 rounded-xl text-sm font-black text-[#e91e3f] active:bg-[#e91e3f]/10 transition-colors outline-none">로그아웃</button>
+                <button onClick={() => { closeMobileMenu(); signOut(); }} className={`w-full h-11 px-3 rounded-xl text-left text-[15px] font-bold transition-colors outline-none ${L ? "text-[#d01634] active:bg-[#e91e3f]/[0.06]" : "text-[#ff5c77] active:bg-[#e91e3f]/10"}`}>로그아웃</button>
               ) : (
-                <button onClick={() => { closeMobileMenu(); signIn("discord", { callbackUrl: "/" }); }} className="w-full py-3 rounded-full bg-[#5865F2] active:bg-[#4752C4] text-white text-sm font-bold transition-colors outline-none">Discord 로그인</button>
+                <button onClick={() => { closeMobileMenu(); signIn("discord", { callbackUrl: "/" }); }} className="w-full h-11 rounded-full bg-[#5865F2] active:bg-[#4752C4] text-white text-sm font-bold transition-colors outline-none">Discord 로그인</button>
               )}
-
-              <div className="flex items-center gap-4 px-3 pt-3">
-                <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 active:text-white transition-colors font-medium">Discord</a>
-                <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 active:text-white transition-colors font-medium">Kakao Talk</a>
-              </div>
-
-              <div className="flex items-center gap-3 px-3 pt-3 pb-1">
-                <Link href="/policy" onClick={closeMobileMenu} className="text-[11px] text-gray-600 active:text-gray-400 transition-colors">이용약관</Link>
-                <span className="w-px h-2.5 bg-white/10"></span>
-                <Link href="/policy?tab=privacy" onClick={closeMobileMenu} className="text-[11px] text-gray-600 active:text-gray-400 transition-colors">개인정보처리방침</Link>
+              <div className={`flex flex-wrap items-center gap-x-3.5 gap-y-1 px-3 pt-2.5 pb-1 text-[11px] font-bold ${L ? "text-[#8a8a8a]" : "text-gray-500"}`}>
+                <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className={L ? "active:text-[#131313]" : "active:text-white"}>Discord</a>
+                <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className={L ? "active:text-[#131313]" : "active:text-white"}>Kakao Talk</a>
+                <Link href="/policy" onClick={closeMobileMenu} className={L ? "active:text-[#131313]" : "active:text-white"}>이용약관</Link>
+                <Link href="/policy?tab=privacy" onClick={closeMobileMenu} className={L ? "active:text-[#131313]" : "active:text-white"}>개인정보처리방침</Link>
               </div>
             </div>
           </div>

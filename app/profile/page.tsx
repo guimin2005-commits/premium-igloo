@@ -6,7 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { LuxStyles } from "../components/Lux";
 import { ADMIN_USERS, isAdminName } from "@/lib/admins";
-import { verifyBadge } from "@/lib/verifyBadge";
+import { VerifyBadge } from "../components/VerifyMark";
+import { InventoryPopup } from "../components/Inventory";
 import BackLink from "../components/BackLink";
 import ArcticDock from "../arctic/ArcticDock";
 import { ICON_PATHS } from "../components/Icons";
@@ -51,6 +52,7 @@ export default function MyInfoPage() {
   const [pendingApplies, setPendingApplies] = useState(0);
   const [myTeam, setMyTeam] = useState<any>(null);
   const [scrimAdmin, setScrimAdmin] = useState(false);
+  const [invOpen, setInvOpen] = useState(false); // 인벤토리 — 다른 화면으로 넘기지 않고 이 자리에서 팝업
 
   const isShopAdmin = status === "authenticated" && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
   // SYSTEM : LEVEL 비공개 동안은 레벨·순위·ARCTIC 이 일반 유저 프로필에 보이지 않는다 (10월 공개)
@@ -139,10 +141,11 @@ export default function MyInfoPage() {
   useEffect(() => {
     const tab = searchParams.get("tab");
     if (!tab) { window.scrollTo(0, 0); return; }
+    if (tab === "bag") { setInvOpen(true); router.replace("/profile"); return; }
     const to: Record<string, string> = {
       notice: "/profile/notice", inquiry: "/profile/inquiry", recruit: "/profile/recruit",
       arctic: "/arctic/orders", orders: "/arctic/orders", cart: "/arctic/cart", wish: "/arctic?panel=wish",
-      bag: "/level?tab=my&bag=1", booster: "/profile/booster", supporter: "/supporters", coupons: "/profile/coupons",
+      booster: "/profile/booster", supporter: "/supporters", coupons: "/profile/coupons",
     };
     if (to[tab]) router.replace(to[tab]);
   }, [searchParams, router]);
@@ -172,11 +175,10 @@ export default function MyInfoPage() {
     { k: "inquiry", g: "account", l: "1:1 문의", icon: ICON_PATHS.chat, href: `/profile/inquiry${q}`, n: pendingInquiries },
     { k: "recruit", g: "account", l: "구인 지원", icon: ICON_PATHS.briefcase, href: `/profile/recruit${q}`, n: pendingApplies },
   ];
-  // ARCTIC 맥락이면 스토어 안 인벤토리(/shop/inventory) — 잉크 HUD 로 튀지 않는다
-  // 📌 인벤토리는 상점이 열려 있으면 ARCTIC 인벤토리(레벨로 넘기지 않는다), 상점이 닫힌 사람만 레벨의 가방으로.
+  // 📌 인벤토리는 이 자리에서 팝업으로 연다 — 레벨 · 상점 화면으로 넘기지 않는다 (app/components/Inventory)
   // 📌 ARCTIC 하위 화면은 ?from=me 를 달고 간다 — 경로 줄 · 뒤로가기가 "내 정보"로 돌아온다 (ARCTIC 맥락이면 &via=arctic)
   const meQ = `from=me${fromArctic ? "&via=arctic" : ""}`;
-  if (canSeeLevel) rows.push({ k: "bag", g: "arctic", l: "인벤토리", icon: ICON_PATHS.bag, href: canSeeShop ? `/arctic/inventory?${meQ}` : "/level?tab=my&bag=1", n: myItemCount });
+  if (canSeeLevel) rows.push({ k: "bag", g: "arctic", l: "인벤토리", icon: ICON_PATHS.bag, onClick: () => setInvOpen(true), n: myItemCount });
   if (canSeeShop) {
     rows.push({ k: "orders", g: "arctic", l: "구매 내역", icon: ICON_PATHS.receipt, href: `/arctic/orders?${meQ}`, n: shopOrders.length, accent: shopPendingCount > 0 });
     rows.push({ k: "cart", g: "arctic", l: "장바구니", icon: ICON_PATHS.cart, href: `/arctic/cart?${meQ}`, n: shopCartCount });
@@ -200,7 +202,6 @@ export default function MyInfoPage() {
         <div className="relative overflow-hidden rounded-3xl bg-[#131313] text-white px-6 py-6 md:px-8 md:py-7">
           <div aria-hidden className="absolute inset-0 pointer-events-none opacity-60"
             style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)", backgroundSize: "28px 28px" }}></div>
-          <div aria-hidden className="absolute -top-24 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none" style={{ background: "rgba(233,30,63,0.26)" }}></div>
 
           <div className="relative z-10 flex items-start gap-4 md:gap-5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -208,27 +209,22 @@ export default function MyInfoPage() {
             <div className="min-w-0 flex-1">
               <h1 className="text-xl md:text-2xl font-black text-white tracking-tight truncate flex items-center gap-2">
                 {session?.user?.name}
-                {isBooster && <span className="text-[10px] bg-[#e91e3f] text-white px-2 py-0.5 rounded shrink-0">BOOSTER</span>}
-                {isSupporter && <span className="text-[10px] bg-[#3f83b8] text-white px-2 py-0.5 rounded shrink-0">SUPPORTERS</span>}
               </h1>
               {canSeeLevel && (
-                <Link href="/level" className="inline-block text-[12px] font-bold text-white/45 hover:text-white/80 mt-0.5 tabular-nums transition-colors">
+                <Link href="/level" className="inline-block text-[12px] font-bold text-white/60 hover:text-white mt-0.5 tabular-nums transition-colors">
                   Lv.{shopMe?.level ?? 0} · 서버 #{shopMe?.rank ?? "—"} · {getTier(shopMe?.level ?? 0).name}
                 </Link>
               )}
               <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border ${verifyBadge(isVerified, hasScrimRole).cls}`}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.check} /></svg>
-                  {verifyBadge(isVerified, hasScrimRole).label}
-                </span>
+                <VerifyBadge isVerified={isVerified} hasScrimRole={hasScrimRole} />
                 {isBooster && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border border-[#ff41cf]/40 bg-[#ff41cf]/10 text-[#ff8ae4]">
+                  <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-bold border border-[#ff41cf]/40 bg-[#ff41cf]/10 text-[#ff8ae4]">
                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3"><path d={ICON_PATHS.sparkles} /></svg>
                     SERVER BOOSTER
                   </span>
                 )}
                 {isSupporter && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border border-[#3f83b8]/40 bg-[#3f83b8]/10 text-[#8ec2ec]">
+                  <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-bold border border-[#3f83b8]/40 bg-[#3f83b8]/10 text-[#8ec2ec]">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.shieldCheck} /></svg>
                     SUPPORTERS
                   </span>
@@ -263,7 +259,7 @@ export default function MyInfoPage() {
                 <span className="text-[11px] font-bold text-white/80 tabular-nums">{shopMe.levelProgress.needToNext.toLocaleString()} XP</span>
               </div>
               <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                <div className="h-full rounded-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] transition-[width] duration-700"
+                <div className="h-full rounded-full bg-[#e91e3f] transition-[width] duration-700"
                   style={{ width: `${Math.min(100, Math.round((shopMe.levelProgress.current / shopMe.levelProgress.required) * 100))}%` }}></div>
               </div>
             </div>
@@ -312,6 +308,7 @@ export default function MyInfoPage() {
 
       {/* ARCTIC 에서 왔으면 스토어 독을 그대로 — 전역 독으로 바뀌면 상점으로 돌아갈 칸이 사라진다 (ClientLayout 이 전역 독을 숨긴다) */}
       {fromArctic && <ArcticDock activeKey="me" cartCount={shopCartCount} wishCount={shopWish.length} />}
+      <InventoryPopup open={invOpen} onClose={() => setInvOpen(false)} />
     </main>
   );
 }
