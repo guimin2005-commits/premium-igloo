@@ -1906,11 +1906,103 @@ export default function LevelPage() {
                       <span className="text-[11px] font-bold text-white/50">다음 레벨까지 <b className="text-[#ff5c77] tabular-nums">{prog.needToNext.toLocaleString()} XP</b></span>
                     </div>
                   </div>
+
+                  {/* 바로가기 — 히어로 안, 경험치 바로 아래. 페이지 맨 위에서 바로 누른다 */}
+                  <div className="grid grid-flow-col auto-cols-fr gap-2 md:gap-3 mt-6 md:mt-8">
+                    {myItems && (
+                      <button onClick={openBag} aria-label="인벤토리 열기" className="group min-w-0 flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-3.5 text-center md:flex-row md:justify-start md:gap-3.5 md:px-5 md:py-4 md:text-left hover:bg-white/[0.08] hover:border-white/20 transition-colors outline-none focus:outline-none">
+                        <span aria-hidden className="relative shrink-0 mb-1.5 md:mb-0">
+                          <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/50 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                          <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                          {invUnread > 0 && (
+                            <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{invUnread}</span>
+                          )}
+                        </span>
+                        <span className="min-w-0 md:flex-1">
+                          <span className="flex items-baseline justify-center gap-2 md:justify-start">
+                            <span className="text-[12px] md:text-[14px] font-black text-white">인벤토리</span>
+                            <span className="hidden md:inline text-[13px] font-black text-white/40 tabular-nums">{myItems.items.length}</span>
+                          </span>
+                          <span className="hidden md:block text-[11px] font-bold text-white/40 truncate mt-0.5">
+                            {myItems.items.length === 0
+                              ? "아직 보유한 아이템이 없습니다"
+                              : invGroups.slice(1).map((g) => `${g.label} ${g.items.length}`).join(" · ")}
+                          </span>
+                        </span>
+                        <span aria-hidden className="hidden md:inline shrink-0 text-white/30 group-hover:text-white transition-all group-hover:translate-x-0.5">→</span>
+                      </button>
+                    )}
+
+                    {passEnabled && (
+                      <button onClick={() => setActiveMainTab("pass")} aria-label="시즌 패스 열기" className="group min-w-0 flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-3.5 text-center md:flex-row md:justify-start md:gap-3.5 md:px-5 md:py-4 md:text-left hover:bg-white/[0.08] hover:border-white/20 transition-colors outline-none focus:outline-none">
+                        <span aria-hidden className="relative shrink-0 mb-1.5 md:mb-0">
+                          <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/50 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                          <path d={ICON_PATHS.star} strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                          {passClaimable > 0 && (
+                            <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{passClaimable}</span>
+                          )}
+                        </span>
+                        <span className="min-w-0 md:flex-1">
+                          <span className="flex items-baseline justify-center gap-2 md:justify-start">
+                            <span className="text-[12px] md:text-[14px] font-black text-white">시즌 패스</span>
+                            <span className="hidden md:inline text-[13px] font-black text-white/40 tabular-nums">T{passTierNo}</span>
+                          </span>
+                          <span className="hidden md:block text-[11px] font-bold text-white/40 truncate mt-0.5">
+                            {passClaimable > 0
+                              ? `받을 수 있는 보상 ${passClaimable}개`
+                              : pass?.nextNeed > 0
+                              ? `다음 티어까지 ${pass.nextNeed.toLocaleString()} XP`
+                              : "모든 티어를 채웠습니다"}
+                          </span>
+                          <span className="hidden md:block mt-2 h-1 rounded-full bg-white/10 overflow-hidden">
+                            <span className="block h-full rounded-full bg-[#e91e3f]" style={{ width: `${passPct}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}></span>
+                          </span>
+                        </span>
+                        <span aria-hidden className="hidden md:inline shrink-0 text-white/30 group-hover:text-white transition-all group-hover:translate-x-0.5">→</span>
+                      </button>
+                    )}
+
+                    {enhOpen ? (
+                      <button type="button" onClick={() => setEnhModal(true)} className="group min-w-0 flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-3.5 text-center md:flex-row md:justify-start md:gap-3.5 md:px-5 md:py-4 md:text-left hover:bg-white/[0.08] hover:border-white/20 transition-colors outline-none focus:outline-none">
+                        <span aria-hidden className="shrink-0 mb-1.5 md:mb-0">
+                          <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/50 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                          <path d={ICON_PATHS.bolt} strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        </span>
+                        <span className="min-w-0 md:flex-1">
+                          <span className="flex items-baseline justify-center gap-2 md:justify-start">
+                            <span className="text-[12px] md:text-[14px] font-black text-white">강화</span>
+                            {enh.chat.level + enh.voice.level > 0 && <span className="hidden md:inline text-[13px] font-black text-white/40 tabular-nums">{enh.chat.level}·{enh.voice.level}</span>}
+                          </span>
+                          <span className="hidden md:block text-[11px] font-bold text-white/40 truncate mt-0.5 tabular-nums">
+                            채팅 1회 {gain.chatLo.toLocaleString()}~{gain.chatHi.toLocaleString()} XP · 음성 {P_voiceMin}분 {gain.voice.toLocaleString()} XP
+                          </span>
+                        </span>
+                        <span aria-hidden className="hidden md:inline shrink-0 text-white/30 group-hover:text-white transition-all group-hover:translate-x-0.5">→</span>
+                      </button>
+                    ) : (
+                      <div className="hidden md:flex min-w-0 items-center gap-3.5 rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-4">
+                        <span aria-hidden className="shrink-0">
+                          <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/40" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <path d={ICON_PATHS.bolt} strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[14px] font-black text-white">획득 XP</span>
+                          <span className="block text-[11px] font-bold text-white/40 truncate mt-0.5 tabular-nums">
+                            채팅 1회 {gain.chatLo.toLocaleString()}~{gain.chatHi.toLocaleString()} XP · 음성 {P_voiceMin}분 {gain.voice.toLocaleString()} XP
+                          </span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* 본문 — 왼쪽 퀘스트 · 랭킹, 오른쪽 내 기록 · 바로가기 · 등급 · 피드.
-                  모바일 순서: 히어로 → 내 기록 → 바로가기 → 퀘스트 → 랭킹 → 등급 → 이벤트 · 피드 */}
+              {/* 본문 — 왼쪽 퀘스트 · 랭킹, 오른쪽 내 기록 · 등급 · 피드.
+                  모바일 순서: 히어로(바로가기 포함) → 내 기록 → 퀘스트 → 랭킹 → 등급 → 이벤트 · 피드 */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-10 gap-y-10 mt-10 items-start">
                 <div className="contents lg:block lg:col-span-8 min-w-0 lg:space-y-14">
                   <div className="order-3 lg:order-none min-w-0">
@@ -2153,102 +2245,6 @@ export default function LevelPage() {
                           <p className="text-[11px] font-bold text-[#8a8a8a] mt-1.5 truncate">{st.l}</p>
                         </div>
                       ))}
-                    </div>
-                  </div>
-                  <div className="order-2 lg:order-none min-w-0">
-                    {/* 바로가기 — 누르면 하는 일은 예전 배너 그대로 */}
-                    <div className="rounded-2xl bg-white border border-black/[0.08] shadow-[0_2px_10px_-6px_rgba(0,0,0,0.15)] overflow-hidden">
-                      <div className="grid grid-flow-col auto-cols-fr divide-x divide-black/[0.06] lg:block lg:divide-x-0 lg:divide-y">
-                        {myItems && (
-                          <button onClick={openBag} aria-label="인벤토리 열기" className="group w-full flex flex-col items-center justify-center px-2 py-4 text-center lg:flex-row lg:justify-start lg:gap-3.5 lg:px-5 lg:py-4 lg:text-left transition-colors hover:bg-black/[0.02] outline-none focus:outline-none">
-                            <span aria-hidden className="relative shrink-0 mb-1.5 lg:mb-0">
-                              <svg viewBox="0 0 24 24" className="w-6 h-6 text-[#8a8a8a] group-hover:text-[#131313] transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                              {invUnread > 0 && (
-                                <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{invUnread}</span>
-                              )}
-                            </span>
-                            <span className="min-w-0 lg:flex-1">
-                              <span className="flex items-baseline justify-center gap-2 lg:justify-start">
-                                <span className="text-[12px] lg:text-[15px] font-black text-[#131313]">인벤토리</span>
-                                <span className="hidden lg:inline text-[13px] font-black text-[#a3a3a3] tabular-nums">{myItems.items.length}</span>
-                              </span>
-                              <span className="hidden lg:block text-[11px] font-bold text-[#8a8a8a] truncate mt-0.5">
-                                {myItems.items.length === 0
-                                  ? "아직 보유한 아이템이 없습니다"
-                                  : invGroups.slice(1).map((g) => `${g.label} ${g.items.length}`).join(" · ")}
-                              </span>
-                            </span>
-                            <span aria-hidden className="hidden lg:inline shrink-0 text-[#a3a3a3] group-hover:text-[#131313] transition-all group-hover:translate-x-0.5">→</span>
-                          </button>
-                        )}
-
-                        {passEnabled && (
-                          <button onClick={() => setActiveMainTab("pass")} aria-label="시즌 패스 열기" className="group w-full flex flex-col items-center justify-center px-2 py-4 text-center lg:flex-row lg:justify-start lg:gap-3.5 lg:px-5 lg:py-4 lg:text-left transition-colors hover:bg-black/[0.02] outline-none focus:outline-none">
-                            <span aria-hidden className="relative shrink-0 mb-1.5 lg:mb-0">
-                              <svg viewBox="0 0 24 24" className="w-6 h-6 text-[#8a8a8a] group-hover:text-[#131313] transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                <path d={ICON_PATHS.star} strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                              {passClaimable > 0 && (
-                                <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{passClaimable}</span>
-                              )}
-                            </span>
-                            <span className="min-w-0 lg:flex-1">
-                              <span className="flex items-baseline justify-center gap-2 lg:justify-start">
-                                <span className="text-[12px] lg:text-[15px] font-black text-[#131313]">시즌 패스</span>
-                                <span className="hidden lg:inline text-[13px] font-black text-[#a3a3a3] tabular-nums">T{passTierNo}</span>
-                              </span>
-                              <span className="hidden lg:block text-[11px] font-bold text-[#8a8a8a] truncate mt-0.5">
-                                {passClaimable > 0
-                                  ? `받을 수 있는 보상 ${passClaimable}개`
-                                  : pass?.nextNeed > 0
-                                  ? `다음 티어까지 ${pass.nextNeed.toLocaleString()} XP`
-                                  : "모든 티어를 채웠습니다"}
-                              </span>
-                              <span className="hidden lg:block mt-2 h-1 rounded-full bg-black/[0.06] overflow-hidden">
-                                <span className="block h-full rounded-full bg-[#e91e3f]" style={{ width: `${passPct}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}></span>
-                              </span>
-                            </span>
-                            <span aria-hidden className="hidden lg:inline shrink-0 text-[#a3a3a3] group-hover:text-[#131313] transition-all group-hover:translate-x-0.5">→</span>
-                          </button>
-                        )}
-
-                        {(() => {
-                          const inner = (
-                            <>
-                              <span aria-hidden className="shrink-0 mb-1.5 lg:mb-0">
-                                <svg viewBox="0 0 24 24" className="w-6 h-6 text-[#8a8a8a] group-hover:text-[#131313] transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                <path d={ICON_PATHS.bolt} strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                              </span>
-                              <span className="min-w-0 lg:flex-1">
-                                {enhOpen && <span className="lg:hidden block text-[12px] font-black text-[#131313]">강화</span>}
-                                <span className="hidden lg:flex items-baseline gap-2">
-                                  <span className="text-[15px] font-black text-[#131313]">획득 XP</span>
-                                  <span className="text-[11px] font-bold text-[#a3a3a3]">지금 내 조건 · 1회</span>
-                                </span>
-                                <span className="hidden lg:block text-[11px] font-bold text-[#8a8a8a] truncate mt-0.5 tabular-nums">
-                                  채팅 <b className="text-[#131313]">{gain.chatLo.toLocaleString()}~{gain.chatHi.toLocaleString()}</b> XP
-                                  <span className="text-[#a3a3a3] mx-1.5">·</span>
-                                  음성 {P_voiceMin}분 <b className="text-[#131313]">{gain.voice.toLocaleString()}</b> XP
-                                </span>
-                              </span>
-                              {enhOpen && (
-                                <span className="hidden lg:inline-flex shrink-0 items-center gap-1.5 h-8 px-3.5 rounded-full bg-[#e91e3f] text-white text-[11px] font-bold group-hover:bg-[#d01634] transition-colors">
-                                  강화
-                                  {enh.chat.level + enh.voice.level > 0 && <span className="text-white/70 tabular-nums">{enh.chat.level}·{enh.voice.level}</span>}
-                                </span>
-                              )}
-                            </>
-                          );
-                          return enhOpen ? (
-                            <button type="button" onClick={() => setEnhModal(true)} className="group w-full flex flex-col items-center justify-center px-2 py-4 text-center lg:flex-row lg:justify-start lg:gap-3.5 lg:px-5 lg:py-4 lg:text-left transition-colors hover:bg-black/[0.02] outline-none focus:outline-none">{inner}</button>
-                          ) : (
-                            <div className="hidden lg:flex w-full items-center gap-3.5 px-5 py-4">{inner}</div>
-                          );
-                        })()}
-                      </div>
                     </div>
                   </div>
                   <div className="order-5 lg:order-none min-w-0">
