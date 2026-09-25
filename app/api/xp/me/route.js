@@ -33,12 +33,15 @@ export async function GET() {
       UserXp.countDocuments({ xp: { $gt: xp } }),
       UserXp.countDocuments(),
       fetchMemberRoles(session.user.id),
-      RoleConfig.find({ buffXp: { $gt: 0 } }, { roleId: 1, roleName: 1, buffXp: 1 }).lean(),
+      RoleConfig.find({ $or: [{ buffXp: { $gt: 0 } }, { attendBuffXp: { $gt: 0 } }] }, { roleId: 1, roleName: 1, buffXp: 1, attendBuffXp: 1 }).lean(),
       XpBoost.find({ startAt: { $lte: now }, endAt: { $gte: now } }, { name: 1, boostXp: 1, targetRoleId: 1, targetChannelId: 1 }).lean(),
     ]);
     // 📌 획득 XP 계산 재료 — 봇 chatXp/voiceXp 의 가산 항목과 같은 것만 (채널 부스트는 채널마다 달라 뺀다)
     const held = new Set(heldRoles || []);
-    const buffs = buffCfgs.filter((c) => held.has(c.roleId)).map((c) => ({ name: c.roleName || "역할", xp: c.buffXp }));
+    const heldCfgs = buffCfgs.filter((c) => held.has(c.roleId));
+    const buffs = heldCfgs.filter((c) => c.buffXp > 0).map((c) => ({ name: c.roleName || "역할", xp: c.buffXp }));
+    // 출석 1회에만 붙는 역할 가산 (봇 getAttendBuffXp 와 같은 값) — 시뮬레이터 출석 줄이 읽는다
+    const attendBuffXp = heldCfgs.reduce((s, c) => s + Math.max(0, Number(c.attendBuffXp) || 0), 0);
     const boosts = boostRows
       .filter((b) => !b.targetChannelId && (!b.targetRoleId || held.has(b.targetRoleId)))
       .map((b) => ({ name: b.name || "부스트", xp: Math.max(0, Number(b.boostXp) || 0) }));
@@ -66,6 +69,7 @@ export async function GET() {
         // 지금 내 역할 버프·부스트 — 채팅·음성 1회 지급에 더해지는 가산 (획득 XP 줄)
         buffXp: buffs.reduce((s, b) => s + b.xp, 0),
         buffs,
+        attendBuffXp,
         boostXp: boosts.reduce((s, b) => s + b.xp, 0),
         boosts,
         rolesSynced: heldRoles !== null,
