@@ -17,7 +17,7 @@ export const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: (
         const src = safeUrl(url);
         if (!src) return m;
         const cap = String(alt || "").replace(/[<>"']/g, "");
-        return `<img src='${src}' alt='${cap}' loading='lazy' class='block w-full h-auto border border-[rgba(128,128,128,.35)] my-5' />`
+        return `<img src='${src}' alt='${cap}' loading='lazy' class='block w-full h-auto rounded-xl border border-[rgba(128,128,128,.35)] my-5' />`
           + (cap ? `<span class='block text-center text-[12px] text-[#8a8a8a] -mt-3 mb-5'>${cap}</span>` : "");
       })
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href='$2' target='_blank' rel='noopener noreferrer' class='text-[#e91e3f] hover:underline'>$1</a>")

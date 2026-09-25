@@ -49,7 +49,8 @@ export default function ItemDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const [cart, setCart] = useState<{ itemId: string; qty: number; days?: number }[]>([]);
-  const [pickedDays, setPickedDays] = useState(0); // 기간제 상품에서 고른 기간
+  // 무제한은 days 가 0 이라 "안 고름"과 구분해야 한다 — 안 고른 상태는 null
+  const [pickedDays, setPickedDays] = useState<number | null>(null);
   const [wish, setWish] = useState<string[]>([]);
   const [toast, setToast] = useState("");
 
@@ -111,7 +112,7 @@ export default function ItemDetailPage() {
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">상품을 찾을 수 없습니다</h1>
           <p className="text-sm text-[#5a5a5a] mb-7">삭제되었거나 판매가 종료된 상품일 수 있어요.</p>
-          <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold transition-colors">
+          <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
             상점으로 가기
           </Link>
         </div>
@@ -120,7 +121,7 @@ export default function ItemDetailPage() {
   }
 
   const timed = isTimed(item);
-  const days = timed ? (pickedDays || durationOptions(item)[0]?.days || 0) : 0;
+  const days = timed ? (pickedDays ?? durationOptions(item)[0]?.days ?? 0) : 0;
   const sp = salePrice(item, days);
   const listPrice = timed ? (durationOptions(item).find((o: any) => o.days === days)?.price ?? item.price) : item.price;
   const discounted = sp < listPrice;
@@ -210,7 +211,7 @@ export default function ItemDetailPage() {
             <div className="mb-6">
               <div className="flex items-center gap-2.5 flex-wrap">
                 {discounted && (
-                  <span className="px-2 py-1 bg-[#e91e3f] text-white text-[12px] font-black leading-none shrink-0">{item.discountPct}% OFF</span>
+                  <span className="px-2 py-1 rounded-md bg-[#e91e3f] text-white text-[12px] font-black leading-none shrink-0">{item.discountPct}% OFF</span>
                 )}
                 <span className="text-3xl font-black tracking-tight tabular-nums leading-none text-[#131313]">
                   {sp.toLocaleString()}<span className="text-sm font-bold text-[#8a8a8a] ml-1.5">XP</span>
@@ -231,7 +232,7 @@ export default function ItemDetailPage() {
                     const on = o.days === days;
                     return (
                       <button key={o.days} type="button" onClick={() => setPickedDays(o.days)}
-                        className={`flex-1 py-3 border text-[13px] font-bold transition-colors ${
+                        className={`flex-1 py-3 rounded-xl border text-[13px] font-bold transition-colors ${
                           on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#ededed] hover:border-[#131313]"
                         }`}>
                         {durationLabel(o.days)}
@@ -251,7 +252,7 @@ export default function ItemDetailPage() {
             )}
 
             {/* 상세 정보 */}
-            <div className="bg-white border border-[#ededed] divide-y divide-[#ededed] mb-6">
+            <div className="rounded-xl bg-white border border-[#ededed] divide-y divide-[#ededed] mb-6">
               {[
                 { l: "상품 유형", v: itemTypeLabel(item.type) },
                 ...(item.roleName ? [{ l: "지급 역할", v: item.roleName }] : []),
@@ -279,7 +280,7 @@ export default function ItemDetailPage() {
 
             {/* 보유 XP */}
             {isLoggedIn && (
-              <div className="flex items-center justify-between px-4 py-3 bg-white border border-[#ededed] mb-4 text-[13px]">
+              <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-white border border-[#ededed] mb-4 text-[13px]">
                 <span className="text-[#5a5a5a]">보유 XP</span>
                 <span className={`font-black tabular-nums ${affordable ? "text-[#131313]" : "text-[#d01634]"}`}>
                   {(myXp ?? 0).toLocaleString()} XP
@@ -290,7 +291,7 @@ export default function ItemDetailPage() {
             {/* 액션 */}
             <div className="mt-auto flex gap-2">
               <button onClick={toggleWish} aria-label="찜하기"
-                className={`w-12 h-12 shrink-0 flex items-center justify-center border transition-colors ${
+                className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center border transition-colors ${
                   wished ? "bg-[#e91e3f]/10 border-[#e91e3f]/30 text-[#e91e3f]" : "bg-white border-[#ededed] text-[#a3a3a3] hover:text-[#131313]"
                 }`}>
                 <svg className="w-5 h-5" fill={wished ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -299,7 +300,7 @@ export default function ItemDetailPage() {
               </button>
 
               <button onClick={toggleCart} disabled={soldOut || owned}
-                className={`flex-1 h-12 text-[13px] font-bold transition-colors ${
+                className={`flex-1 h-12 rounded-full text-[13px] font-bold transition-colors ${
                   soldOut || owned
                     ? "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"
                     : inCart
@@ -310,7 +311,7 @@ export default function ItemDetailPage() {
               </button>
 
               <button onClick={openBuy} disabled={soldOut || owned}
-                className={`flex-1 h-12 text-[13px] font-bold transition-colors ${
+                className={`flex-1 h-12 rounded-full text-[13px] font-bold transition-colors ${
                   owned || soldOut
                     ? "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"
                     : isLoggedIn && !affordable
@@ -339,7 +340,7 @@ export default function ItemDetailPage() {
                 const rDiscounted = rp < r.price;
                 return (
                   <Link key={r._id} href={`/arctic/item/${r._id}`}
-                    className="group bg-white rounded-2xl border border-[#ededed] overflow-hidden hover:-translate-y-1 transition-all duration-300 flex flex-col">
+                    className="group bg-white rounded-2xl border border-[#ededed] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
                     <div className="relative aspect-[4/3] bg-[#f2f2f2] overflow-hidden">
                       <ItemArt it={r} imgClass="group-hover:scale-105 transition-transform duration-500" iconSize={48} />
                       <TypeBadge type={r.type} className="absolute top-2 left-2 px-2 py-0.5 text-[9px]" />
@@ -349,7 +350,7 @@ export default function ItemDetailPage() {
                       <div className="mt-auto">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {rDiscounted && (
-                            <span className="px-1.5 py-[3px] bg-[#e91e3f] text-white text-[10px] font-black leading-none shrink-0">{r.discountPct}%</span>
+                            <span className="px-1.5 py-[3px] rounded bg-[#e91e3f] text-white text-[10px] font-black leading-none shrink-0">{r.discountPct}%</span>
                           )}
                           <span className="text-[15px] font-black text-[#131313] tabular-nums leading-none">
                             {rp.toLocaleString()}<span className="text-[11px] font-bold text-[#8a8a8a] ml-1">XP</span>
@@ -370,15 +371,15 @@ export default function ItemDetailPage() {
 
       {/* 토스트 */}
       {toast && (
-        <div key={toast} className="fixed top-20 left-1/2 -translate-x-1/2 z-[150] px-5 py-3 bg-[#131313] text-white rounded-full text-[12px] font-bold whitespace-nowrap">
+        <div key={toast} className="fixed top-20 left-1/2 -translate-x-1/2 z-[150] px-5 py-3 bg-[#131313] text-white rounded-full shadow-lg text-[12px] font-bold whitespace-nowrap">
           {toast}
         </div>
       )}
 
       {/* 구매 모달 */}
       {buying && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 p-4" onClick={() => !isPaying && setBuying(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => !isPaying && setBuying(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden border border-[#ededed] shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {result ? (
               <div className="p-8 text-center">
                 <div className={`w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-5 ${result.ok ? "bg-[#e8f3e6] text-[#3f7a35]" : "bg-[#fdeaea] text-[#d01634]"}`}>
@@ -389,9 +390,9 @@ export default function ItemDetailPage() {
                 <h2 className="text-lg font-black text-[#131313] mb-2">{result.ok ? "구매 완료" : "구매 실패"}</h2>
                 <p className="text-sm text-[#5a5a5a] leading-relaxed mb-7 break-keep">{result.message}</p>
                 <div className="flex gap-3">
-                  <button onClick={() => { setBuying(false); setResult(null); }} className="flex-1 py-3.5 bg-[#f2f2f2] text-[#5a5a5a] font-bold">닫기</button>
+                  <button onClick={() => { setBuying(false); setResult(null); }} className="flex-1 py-3.5 bg-[#f2f2f2] text-[#5a5a5a] font-bold rounded-xl">닫기</button>
                   {result.ok && (
-                    <Link href="/arctic/orders" className="flex-1 py-3.5 bg-[#e91e3f] text-white font-bold text-center">구매 내역</Link>
+                    <Link href="/arctic/orders" className="flex-1 py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl text-center">구매 내역</Link>
                   )}
                 </div>
               </div>
@@ -405,14 +406,14 @@ export default function ItemDetailPage() {
                     <label className="block text-xs font-bold text-[#5a5a5a] mb-2">수령 정보 <span className="text-[#d01634]">*</span></label>
                     <textarea rows={3} value={contact} onChange={(e) => setContact(e.target.value)}
                       placeholder="연락처 또는 기프티콘 받을 번호를 입력해주세요."
-                      className="w-full bg-white border border-[#ededed] px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] resize-none placeholder:text-[#a3a3a3]" />
+                      className="w-full bg-white border border-[#ededed] rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] resize-none placeholder:text-[#a3a3a3]" />
                   </div>
                 )}
 
-                <div className="bg-[#f2f2f2] px-4 py-3 mb-5 text-[12px] space-y-1.5">
+                <div className="bg-[#f2f2f2] rounded-xl px-4 py-3 mb-5 text-[12px] space-y-1.5">
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold tabular-nums">{(myXp ?? 0).toLocaleString()}</span></div>
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 XP</span><span className="font-bold text-[#d01634] tabular-nums">-{sp.toLocaleString()}</span></div>
-                  <div className="h-px bg-[#ededed]"></div>
+                  <div className="h-px bg-[#e0e0e0]"></div>
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">구매 후 잔액</span><span className="font-black tabular-nums">{Math.max(0, (myXp ?? 0) - sp).toLocaleString()}</span></div>
                 </div>
 
@@ -421,9 +422,9 @@ export default function ItemDetailPage() {
                 </p>
 
                 <div className="flex gap-3">
-                  <button onClick={() => setBuying(false)} className="flex-1 py-3.5 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] font-bold transition-colors">취소</button>
+                  <button onClick={() => setBuying(false)} className="flex-1 py-3.5 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] font-bold rounded-xl transition-colors">취소</button>
                   <button onClick={confirmBuy} disabled={isPaying || !affordable || (item.type === "physical" && !contact.trim())}
-                    className="flex-1 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 text-white font-bold transition-colors">
+                    className="flex-1 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 text-white font-bold rounded-xl transition-colors">
                     {isPaying ? "처리 중..." : affordable ? "구매 확정" : "XP 부족"}
                   </button>
                 </div>

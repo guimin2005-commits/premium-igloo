@@ -17,10 +17,10 @@ import { ADMIN_USERS } from "@/lib/admins";
 
 // ── 입력 ───────────────────────────────────────────────────
 //    팔레트는 /level 대시보드와 같은 그레이지다 —
-//    잉크 #131313, 보조 #5a5a5a / #8a8a8a / #a3a3a3, 강조 #e91e3f, 면 #f2f2f2 / #ededed.
+//    잉크 #131313, 보조 #5a5a5a / #8a8a8a / #a3a3a3, 강조 #e91e3f, 면 #e6e3de / #d2d1cf.
 //    Tailwind 임의값은 리터럴이라 상수로 뽑아도 클래스에 못 쓰므로 값은 여기 주석으로만 남긴다.
 export const inputClass =
-  "w-full bg-transparent border border-[#a3a3a3] px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#8a8a8a]";
+  "w-full bg-transparent border border-black/10 rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] transition-colors placeholder:text-[#8a8a8a]";
 export const fieldNote = "text-[10px] text-[#5a5a5a] mt-1.5";
 export const labelClass = "block text-xs font-bold text-[#5a5a5a] mb-2";
 
@@ -74,10 +74,10 @@ export function FilterChips({
             key={o.v}
             type="button"
             onClick={() => onChange(o.v)}
-            className={`shrink-0 px-4 py-2 rounded-full text-[11px] font-bold border transition-colors outline-none focus:outline-none ${
+            className={`shrink-0 px-4 py-2 rounded-lg text-[11px] font-bold border transition-colors outline-none focus:outline-none ${
               on
                 ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40"
-                : "text-[#5a5a5a] border-[#ededed] hover:text-[#131313]"
+                : "text-[#5a5a5a] border-black/10 hover:text-[#131313]"
             }`}
           >
             {o.l}
@@ -92,7 +92,7 @@ export function FilterChips({
 //    헤어라인 사이의 한 줄. 카드로 감싸지 않는다.
 export function EmptyRow({ children }: { children: React.ReactNode }) {
   return (
-    <div className="py-10 text-[#5a5a5a] text-sm border-y border-[#ededed]">{children}</div>
+    <div className="py-10 text-[#5a5a5a] text-sm border-y border-black/[0.06]">{children}</div>
   );
 }
 
@@ -106,7 +106,7 @@ export function ListFrame({
   className?: string;
 }) {
   return (
-    <div className={`divide-y divide-[#ededed] border-y border-[#ededed] ${className}`}>
+    <div className={`divide-y divide-black/[0.06] border-y border-black/[0.06] ${className}`}>
       {children}
     </div>
   );
@@ -119,7 +119,7 @@ export function ListFrame({
 const BTN: Record<string, string> = {
   primary: "bg-[#131313] text-white hover:bg-[#2a2a2a] disabled:opacity-40",
   ghost:
-    "bg-transparent text-[#5a5a5a] border border-[#ededed] hover:text-[#131313] disabled:opacity-40",
+    "bg-transparent text-[#5a5a5a] border border-black/10 hover:text-[#131313] disabled:opacity-40",
   danger: "bg-[#e91e3f] text-white hover:bg-[#d01634] disabled:opacity-40",
 };
 
@@ -135,7 +135,7 @@ export function Btn({
     <button
       type={type}
       {...rest}
-      className={`px-5 py-2.5 text-[12px] font-bold transition-colors outline-none focus:outline-none disabled:cursor-default ${BTN[variant]} ${className}`}
+      className={`px-5 py-2.5 rounded-lg text-[12px] font-bold transition-colors outline-none focus:outline-none disabled:cursor-default ${BTN[variant]} ${className}`}
     />
   );
 }
@@ -171,11 +171,11 @@ export function Toggle({
       </span>
       <span
         className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${
-          on ? "bg-[#e91e3f]" : "bg-[#a3a3a3]"
+          on ? "bg-[#e91e3f]" : "bg-[#f2f2f2]"
         }`}
       >
         <span
-          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 transition-all ${
+          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-all ${
             on ? "left-[18px]" : "left-0.5"
           }`}
         ></span>
@@ -197,13 +197,13 @@ export function useNotice() {
   const close = useCallback(() => setPopup((p) => ({ ...p, isOpen: false })), []);
 
   const noticeEl = popup.isOpen ? (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4 overlay-in">
-      <div className="bg-[#ffffff] border border-[#ededed] rounded-2xl w-full max-w-sm p-8 text-center shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
+      <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
         <h2 className="text-xl font-bold text-[#131313] mb-3">{popup.isError ? "오류" : "완료"}</h2>
         <p className="text-sm text-[#5a5a5a] mb-8 break-keep whitespace-pre-line">{popup.message}</p>
         <button
           onClick={close}
-          className="w-full py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#131313] font-bold transition-colors outline-none focus:outline-none"
+          className="w-full py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#131313] font-bold rounded-xl transition-colors outline-none focus:outline-none"
         >
           확인
         </button>
@@ -240,8 +240,8 @@ export function ConfirmDialog({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4 overlay-in">
-      <div className="bg-[#ffffff] border border-[#ededed] rounded-2xl w-full max-w-sm p-8 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
+      <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-sm p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
         <h2 className="text-xl font-bold text-[#131313] mb-3">{title}</h2>
         {body && <div className="text-sm text-[#5a5a5a] mb-8 break-keep">{body}</div>}
         <div className="flex gap-3">
@@ -280,7 +280,7 @@ export function useAdminGuard() {
         <p className="text-[#5a5a5a] text-sm mb-4">관리자 권한이 필요합니다.</p>
         <button
           onClick={() => signIn("discord")}
-          className="w-full py-3.5 bg-[#5865F2] text-white font-bold mt-4 outline-none focus:outline-none"
+          className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4 outline-none focus:outline-none"
         >
           디스코드 로그인
         </button>
@@ -350,10 +350,10 @@ export function AdminTabs({
               key={t.id}
               href={hrefOf(t.id)}
               scroll={false}
-              className={`shrink-0 px-4 py-2 rounded-full text-[12px] font-bold border transition-colors outline-none focus:outline-none ${
+              className={`shrink-0 px-4 py-2 rounded-lg text-[12px] font-bold border transition-colors outline-none focus:outline-none ${
                 active
                   ? "bg-[#131313] text-white border-[#131313]"
-                  : "text-[#5a5a5a] border-[#ededed] hover:text-[#131313]"
+                  : "text-[#5a5a5a] border-black/10 hover:text-[#131313]"
               }`}
             >
               {t.short}
@@ -389,7 +389,7 @@ export function SubTabs({
             className={`shrink-0 px-3.5 py-1.5 rounded-full text-[11px] font-bold transition-colors outline-none focus:outline-none ${
               on
                 ? "bg-[#e91e3f]/15 text-[#e91e3f]"
-                : "text-[#5a5a5a] hover:text-[#131313] hover:bg-[#f2f2f2]"
+                : "text-[#8a8a8a] hover:text-[#131313] hover:bg-black/[0.04]"
             }`}
           >
             {s.label}

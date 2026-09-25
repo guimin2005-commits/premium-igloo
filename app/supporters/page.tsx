@@ -478,7 +478,7 @@ export default function SupportersPage() {
 
   const skeleton = (
     <div className="space-y-6">
-      <div className="h-10 w-40 bg-black/[0.05] animate-pulse"></div>
+      <div className="h-10 w-40 rounded-lg bg-black/[0.05] animate-pulse"></div>
       <div className="h-44 rounded-2xl bg-black/[0.03] animate-pulse"></div>
       <div className="h-32 rounded-2xl bg-black/[0.025] animate-pulse"></div>
       <div className="h-56 rounded-2xl bg-black/[0.02] animate-pulse"></div>
@@ -494,7 +494,7 @@ export default function SupportersPage() {
         <p className="text-sm font-bold text-[#131313] mb-6">로그인이 필요합니다</p>
         <button
           onClick={() => signIn("discord", { callbackUrl: "/supporters" })}
-          className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold transition-colors outline-none focus:outline-none"
+          className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors shadow-[0_10px_30px_rgba(233,30,63,0.35)] outline-none focus:outline-none"
         >
           Discord로 로그인
         </button>
@@ -567,7 +567,7 @@ export default function SupportersPage() {
         {/* ══ 활동 — 잉크 패널 하나 + 헤어라인 스탯 스트립 ══ */}
         {tab === "activity" && (
           <Reveal>
-            <div className="relative rounded-2xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]">
+            <div className="relative rounded-3xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]">
               <div aria-hidden className="absolute inset-0 sp-grid-dark opacity-70 pointer-events-none"></div>
               <div
                 aria-hidden
@@ -680,7 +680,7 @@ export default function SupportersPage() {
                         <span
                           key={d.day}
                           title={`${d.day}일 · ${unit(v)}`}
-                          className="flex-1 min-w-0"
+                          className="flex-1 min-w-0 rounded-sm"
                           style={{ height: h, background: future ? "rgba(0,0,0,0.05)" : v > 0 ? color : "rgba(0,0,0,0.10)", opacity: d.day === today ? 1 : 0.85 }}
                         ></span>
                       );
@@ -1009,8 +1009,8 @@ export default function SupportersPage() {
               />
               {reportsLoading && !reports ? (
                 <div className="space-y-3">
-                  <div className="h-20 bg-black/[0.04] animate-pulse"></div>
-                  <div className="h-20 bg-black/[0.03] animate-pulse"></div>
+                  <div className="h-20 rounded-lg bg-black/[0.04] animate-pulse"></div>
+                  <div className="h-20 rounded-lg bg-black/[0.03] animate-pulse"></div>
                 </div>
               ) : reportsError && !reports ? (
                 <div className="py-10 text-center">
@@ -1160,7 +1160,7 @@ export default function SupportersPage() {
   }
 
   return (
-    <main className="w-full flex-1 flex flex-col relative bg-white text-[#131313]">
+    <main className="w-full flex-1 flex flex-col relative bg-[#f4f3f2] text-[#131313]">
       {/* 잉크 패널의 격자 — /level 과 같은 값을 이 페이지 안에서만 정의한다 */}
       <style
         dangerouslySetInnerHTML={{

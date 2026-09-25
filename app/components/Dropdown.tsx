@@ -52,13 +52,13 @@ export default function Dropdown({
   const isLight = theme === "light";
 
   const button = isLight
-    ? "w-full bg-white border border-[#ededed] px-4 py-3 text-sm text-[#131313] hover:border-[#a3a3a3] focus:border-[#e91e3f]"
-    : "w-full bg-transparent border border-white/10 px-4 py-3 text-sm text-white hover:border-white/25 focus:border-[#e91e3f]";
+    ? "w-full bg-white border border-[#ededed] rounded-lg px-4 py-3 text-sm text-[#131313] hover:border-[#a3a3a3] focus:border-[#e91e3f]"
+    : "w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white hover:border-white/25 focus:border-[#e91e3f]";
   const panel = isLight
     ? "bg-white border border-[#ededed] shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)]"
-    : "bg-[#161616] border border-white/10 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]";
+    : "bg-[#161616] border border-white/10 shadow-2xl";
   const itemBase = isLight
-    ? "text-[#5a5a5a] hover:bg-white"
+    ? "text-[#5a5a5a] hover:bg-[#f4f3f2]"
     : "text-gray-300 hover:bg-white/5";
   const itemActive = isLight
     ? "bg-[#e91e3f]/[0.08] text-[#e91e3f] font-bold"
@@ -66,7 +66,7 @@ export default function Dropdown({
   const placeholderCls = isLight ? "text-[#a3a3a3]" : "text-gray-500";
   const caret = isLight ? "text-[#a3a3a3]" : "text-gray-400";
   const scrollbar = isLight
-    ? "[&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#d2d1cf] [&::-webkit-scrollbar-thumb]:rounded-full"
+    ? "[&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e0e0e0] [&::-webkit-scrollbar-thumb]:rounded-full"
     : "[&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#2a2a2a] [&::-webkit-scrollbar-thumb]:rounded-full";
 
   return (
@@ -99,11 +99,11 @@ export default function Dropdown({
         <div
           role="listbox"
           style={{ maxHeight }}
-          className={`absolute top-full left-0 w-full mt-1.5 overflow-y-auto overflow-x-hidden z-50 ${panel} ${scrollbar}`}
+          className={`absolute top-full left-0 w-full mt-1.5 rounded-xl overflow-y-auto overflow-x-hidden z-50 ${panel} ${scrollbar}`}
         >
           {options.map((o, i) =>
             o.group ? (
-              <div key={`g-${i}`} className={`px-4 py-2 text-[10px] font-black tracking-[0.15em] uppercase ${isLight ? "text-[#a3a3a3] bg-white" : "text-gray-400 bg-white/[0.03]"}`}>
+              <div key={`g-${i}`} className={`px-4 py-2 text-[10px] font-black tracking-[0.15em] uppercase ${isLight ? "text-[#a3a3a3] bg-[#f4f3f2]" : "text-gray-400 bg-white/[0.03]"}`}>
                 {o.label}
               </div>
             ) : (

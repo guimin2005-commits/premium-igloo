@@ -39,7 +39,7 @@ const Pill = ({ on, label, onClick }: { on: boolean; label: string; onClick: () 
     type="button"
     onClick={onClick}
     className={`h-8 px-3.5 rounded-full border text-[12.5px] font-extrabold whitespace-nowrap transition-colors outline-none ${
-      on ? "border-[#131313] text-[#131313]" : "border-[#a3a3a3] text-[#5a5a5a] hover:border-[#131313] hover:text-[#131313]"
+      on ? "border-[#131313] text-[#131313]" : "border-[#ededed] text-[#5a5a5a] hover:border-[#a3a3a3] hover:text-[#131313]"
     }`}
   >
     {label}
@@ -192,15 +192,15 @@ export default function SupportPage() {
 
   // 완료 · 오류 알림 (유저 화면 · 관리 화면 공용) — 흰 시트, 확인 하나
   const popupSheet = popupConfig.isOpen ? (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-sm p-7 text-center border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl w-full max-w-sm p-7 text-center border border-[#ededed] shadow-2xl">
         <h2 className={`text-base font-black mb-2 ${popupConfig.isError ? "text-[#e91e3f]" : "text-[#131313]"}`}>
           {popupConfig.isError ? "오류" : "완료"}
         </h2>
         <p className="text-[13px] text-[#5a5a5a] mb-6 leading-relaxed whitespace-pre-line break-keep">{popupConfig.message}</p>
         <button
           onClick={() => setPopupConfig({ ...popupConfig, isOpen: false })}
-          className="w-full py-3 bg-[#131313] hover:bg-[#3a3a3a] text-white text-[13px] font-bold transition-colors"
+          className="w-full py-3 rounded-xl bg-[#131313] hover:bg-black text-white text-[13px] font-bold transition-colors"
         >
           확인
         </button>
@@ -220,7 +220,7 @@ export default function SupportPage() {
           <p className="text-[13px] text-[#8a8a8a] mb-8">로그인이 필요합니다.</p>
           <button
             onClick={() => signIn("discord")}
-            className="w-full h-12 bg-[#131313] hover:bg-[#3a3a3a] text-white text-[13px] font-extrabold transition-colors outline-none"
+            className="w-full h-12 rounded-full bg-[#131313] hover:bg-black text-white text-[13px] font-extrabold transition-colors outline-none"
           >
             Discord 로그인
           </button>
@@ -259,8 +259,8 @@ export default function SupportPage() {
             <div className="border-t border-[#131313]">
               {[0, 1, 2, 3, 4].map((i) => (
                 <div key={i} className="py-4 border-b border-[#ededed]">
-                  <div className="h-3 w-1/2 bg-[#f2f2f2]" />
-                  <div className="h-2.5 w-1/4 bg-[#f2f2f2] mt-2" />
+                  <div className="h-3 w-1/2 rounded bg-[#f2f2f2]" />
+                  <div className="h-2.5 w-1/4 rounded bg-[#f2f2f2] mt-2" />
                 </div>
               ))}
             </div>
@@ -298,12 +298,12 @@ export default function SupportPage() {
         {/* 답변 — 흰 시트 */}
         {selectedAdminInquiry && (
           <div
-            className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/50 md:p-4"
+            className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm md:p-4"
             onClick={() => setSelectedAdminInquiry(null)}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="bg-white w-full max-w-4xl rounded-t-2xl md:rounded-2xl border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] max-h-[92dvh] md:max-h-[86vh] flex flex-col overflow-hidden"
+              className="bg-white w-full max-w-4xl rounded-t-3xl md:rounded-3xl border border-[#ededed] shadow-2xl max-h-[92dvh] md:max-h-[86vh] flex flex-col overflow-hidden"
             >
               <div className="flex items-center gap-3 px-5 md:px-6 h-14 shrink-0 border-b border-[#131313]">
                 <span className={`shrink-0 text-[11px] font-black whitespace-nowrap ${isPending(selectedAdminInquiry.status) ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>
@@ -378,7 +378,7 @@ export default function SupportPage() {
                       className={`${taClass} h-48 md:h-56`}
                     />
                     <div className="flex items-center gap-4 mt-4">
-                      <button type="submit" className="flex-1 h-12 bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-extrabold transition-colors outline-none">
+                      <button type="submit" className="flex-1 h-12 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-extrabold transition-colors outline-none">
                         답변 저장
                       </button>
                       <button
@@ -398,13 +398,13 @@ export default function SupportPage() {
 
         {/* 삭제 확인 */}
         {deleteConfirmId && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteConfirmId(null)}>
-            <div className="bg-white rounded-2xl w-full max-w-sm p-7 text-center border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setDeleteConfirmId(null)}>
+            <div className="bg-white rounded-3xl w-full max-w-sm p-7 text-center border border-[#ededed] shadow-2xl" onClick={(e) => e.stopPropagation()}>
               <h2 className="text-base font-black text-[#131313] mb-2">이 문의를 삭제할까요?</h2>
               <p className="text-[12px] text-[#8a8a8a] mb-6">되돌릴 수 없습니다.</p>
               <div className="flex gap-2">
-                <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] text-[13px] font-bold transition-colors">취소</button>
-                <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">삭제</button>
+                <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 rounded-xl bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] text-[13px] font-bold transition-colors">취소</button>
+                <button onClick={executeDelete} className="flex-1 py-3 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">삭제</button>
               </div>
             </div>
           </div>
@@ -426,7 +426,7 @@ export default function SupportPage() {
           </p>
           <button
             onClick={() => { setIsSubmitted(false); setMainType(""); setSubType(""); setErrorDesc(""); setReportDate(""); setReportType(""); setProductName(""); setRefundType("환불"); setTitle(""); setContent(""); }}
-            className="w-full h-12 bg-[#131313] hover:bg-[#3a3a3a] text-white text-[13px] font-extrabold transition-colors outline-none"
+            className="w-full h-12 rounded-full bg-[#131313] hover:bg-black text-white text-[13px] font-extrabold transition-colors outline-none"
           >
             새 문의 작성하기
           </button>
@@ -448,7 +448,7 @@ export default function SupportPage() {
             <button
               type="button"
               onClick={() => setViewMode("admin")}
-              className="shrink-0 h-9 px-4 bg-[#131313] hover:bg-[#3a3a3a] text-white text-[12px] font-extrabold transition-colors outline-none"
+              className="shrink-0 h-9 px-4 rounded-full bg-[#131313] hover:bg-black text-white text-[12px] font-extrabold transition-colors outline-none"
             >
               문의 관리
             </button>
@@ -526,7 +526,7 @@ export default function SupportPage() {
                                 onClick={() => setProductName(label)}
                                 className={`w-full text-left px-3.5 py-3 flex items-center gap-3 border-b border-[#ededed] last:border-b-0 transition-colors outline-none ${picked ? "bg-[#f2f2f2]" : "hover:bg-[#f2f2f2]"}`}
                               >
-                                <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${picked ? "border-[#131313]" : "border-[#a3a3a3]"}`}>
+                                <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${picked ? "border-[#131313]" : "border-[#ededed]"}`}>
                                   {picked && <span className="w-2 h-2 rounded-full bg-[#131313]" />}
                                 </span>
                                 <span className="min-w-0 flex-1">
@@ -580,7 +580,7 @@ export default function SupportPage() {
           {/* 접수 */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-6">
             <button type="button" onClick={() => setNotifyDiscord(!notifyDiscord)} className="inline-flex items-center gap-2.5 self-start outline-none group">
-              <span className={`w-[18px] h-[18px] grid place-items-center shrink-0 transition-colors ${notifyDiscord ? "bg-[#131313] text-white" : "border border-[#a3a3a3] text-transparent group-hover:border-[#131313]"}`}>
+              <span className={`w-[18px] h-[18px] rounded grid place-items-center shrink-0 transition-colors ${notifyDiscord ? "bg-[#131313] text-white" : "border border-[#ededed] text-transparent group-hover:border-[#a3a3a3]"}`}>
                 <svg className="w-[11px] h-[11px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
                   <path d="M5 13l4 4L19 7" />
                 </svg>
@@ -590,7 +590,7 @@ export default function SupportPage() {
 
             <button
               type="submit"
-              className="w-full sm:w-48 h-12 px-8 bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-extrabold transition-colors outline-none"
+              className="w-full sm:w-48 h-12 px-8 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-extrabold transition-colors outline-none"
             >
               문의 접수하기
             </button>

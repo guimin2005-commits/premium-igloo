@@ -175,9 +175,11 @@ const SectionHeader = ({ title, desc, right }) => (
 );
 
 // 📌 카드 — 아이보리 배경 위에서 흐려지지 않도록 또렷한 헤어라인 + 얕은 그림자
-const LuxCard = ({ children, className = "" }) => (
+const LuxCard = ({ children, className = "", glow = false }) => (
   <div
-    className={`rounded-2xl bg-white border border-[#ededed] ${className}`}
+    className={`rounded-2xl bg-white border border-black/[0.09] ${
+      glow ? "shadow-[0_24px_60px_-34px_rgba(0,0,0,0.45)]" : "shadow-[0_2px_10px_-6px_rgba(0,0,0,0.15)]"
+    } ${className}`}
   >
     {children}
   </div>
@@ -210,7 +212,7 @@ const PassRewardCell = ({ reward, trackLabel, tierLevel, locked = false, busy = 
     <Tag
       {...tagProps}
       aria-label={`티어 ${tierLevel} ${trackLabel} 보상 ${r.label || "없음"}${claimed ? " · 수령완료" : claimable ? " · 받기" : locked ? " · 잠김" : ""}`}
-      className={`w-full h-[112px] border px-2 flex flex-col items-center justify-center text-center transition-colors outline-none focus:outline-none ${tone} ${dim}`}
+      className={`w-full h-[112px] rounded-xl border px-2 flex flex-col items-center justify-center text-center transition-colors outline-none focus:outline-none ${tone} ${dim}`}
     >
       {/* 아이템 보상은 등록한 아이콘(프리셋·이모지·이미지)이 머리표를 대신한다 */}
       {r.kind === "item" && (r.icon || r.imageUrl) ? (
@@ -367,7 +369,7 @@ const LevelCurve = ({ myLevel = null }) => {
             <line key={r} x1="0" x2={W} y1={PT + (H - PB - PT) * r} y2={PT + (H - PB - PT) * r} stroke="rgba(0,0,0,0.05)" strokeWidth="1" />
           ))}
           <polygon points={`0,${H - PB} ${path.replace(/[ML]/g, " ").trim()} ${W},${H - PB}`} fill="url(#lvFill)" />
-          <path d={path} fill="none" stroke="#e91e3f" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+          <path d={path} fill="none" stroke="#e91e3f" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 8px rgba(233,30,63,0.5))" }} />
           {/* 마일스톤 */}
           {milestones.map((m) => (
             <g key={m}>
@@ -379,7 +381,7 @@ const LevelCurve = ({ myLevel = null }) => {
           {hasMe && (
             <g>
               <line x1={X(myLevel)} x2={X(myLevel)} y1={Y(getCumulativeXpByLevel(myLevel))} y2={H - PB} stroke="rgba(0,0,0,0.25)" strokeWidth="1" strokeDasharray="2 4" />
-              <circle cx={X(myLevel)} cy={Y(getCumulativeXpByLevel(myLevel))} r="5" fill="#ffffff" stroke="#e91e3f" strokeWidth="2.5" />
+              <circle cx={X(myLevel)} cy={Y(getCumulativeXpByLevel(myLevel))} r="5" fill="#ffffff" stroke="#e91e3f" strokeWidth="2.5" style={{ filter: "drop-shadow(0 0 8px rgba(233,30,63,0.35))" }} />
               <text
                 x={Math.min(Math.max(X(myLevel), 30), W - 30)}
                 y={Math.max(Y(getCumulativeXpByLevel(myLevel)) - 14, 12)}
@@ -391,7 +393,7 @@ const LevelCurve = ({ myLevel = null }) => {
           {probe && (
             <g>
               <line x1={X(lv)} x2={X(lv)} y1={PT} y2={H - PB} stroke="rgba(233,30,63,0.4)" strokeWidth="1" strokeDasharray="3 4" />
-              <circle cx={X(lv)} cy={Y(cum)} r="5" fill="#e91e3f" />
+              <circle cx={X(lv)} cy={Y(cum)} r="5" fill="#e91e3f" style={{ filter: "drop-shadow(0 0 10px rgba(233,30,63,0.9))" }} />
             </g>
           )}
           {/* 바닥 축 */}
@@ -422,11 +424,11 @@ const EnhancePanel = ({ kind, v, balance, busy, onEnhance, padClass = "" }) => {
     <div className={padClass}>
       <div className="flex items-baseline justify-between gap-3">
         <span className="flex items-baseline gap-2.5 min-w-0">
-          <span className="text-[15px] font-black text-[#131313] shrink-0">{isChat ? "채팅 강화" : "음성 강화"}</span>
-          <span className="text-[15px] font-black text-[#5a5a5a] tabular-nums shrink-0">{v.level}<span className="text-[11px] text-[#a3a3a3]">/{v.max}</span></span>
+          <span className="text-[15px] font-black text-white shrink-0">{isChat ? "채팅 강화" : "음성 강화"}</span>
+          <span className="text-[15px] font-black text-white/45 tabular-nums shrink-0">{v.level}<span className="text-[11px] text-white/30">/{v.max}</span></span>
         </span>
         {!atMax && (
-          <span className="text-[11px] font-bold text-[#8a8a8a] tabular-nums shrink-0">다음 비용 <b className="text-[#131313]">{cost.toLocaleString()}</b></span>
+          <span className="text-[11px] font-bold text-white/40 tabular-nums shrink-0">다음 비용 <b className="text-white/75">{cost.toLocaleString()}</b></span>
         )}
       </div>
 
@@ -435,18 +437,19 @@ const EnhancePanel = ({ kind, v, balance, busy, onEnhance, padClass = "" }) => {
         {Array.from({ length: pipCount }, (_, i) => (
           <span
             key={i}
-            className={`h-1.5 w-5 rounded-full ${i < v.level ? "bg-[#e91e3f]" : "bg-[#ededed]"}`}
+            className={`h-1.5 w-5 rounded-full ${i < v.level ? "bg-[#ff5c77]" : "bg-white/12"}`}
+            style={i < v.level ? { boxShadow: "0 0 10px rgba(255,92,119,0.45)" } : undefined}
           ></span>
         ))}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3 mt-4">
-        <span className="text-[12px] font-bold text-[#131313] tabular-nums">
-          <span className="text-[#8a8a8a] mr-1.5">{isChat ? "채팅 1회" : "음성 1회"}</span>{now}
-          {next && <span className="text-[#8a8a8a]"> → {next}</span>}
+        <span className="text-[12px] font-bold text-white tabular-nums">
+          <span className="text-white/40 mr-1.5">{isChat ? "채팅 1회" : "음성 1회"}</span>{now}
+          {next && <span className="text-white/40"> → {next}</span>}
         </span>
         {atMax ? (
-          <span className="inline-flex items-center h-8 px-3 rounded-full border border-[#ededed] text-[10px] font-black tracking-[0.12em] uppercase text-[#5a5a5a]">MAX</span>
+          <span className="inline-flex items-center h-8 px-3 rounded-full border border-white/20 text-[10px] font-black tracking-[0.12em] uppercase text-white/70">MAX</span>
         ) : (
           <div className="flex items-center gap-2 shrink-0">
             <button
@@ -461,7 +464,7 @@ const EnhancePanel = ({ kind, v, balance, busy, onEnhance, padClass = "" }) => {
               type="button"
               onClick={() => onEnhance(kind, "point")}
               disabled={!canPoint}
-              className="h-8 px-3.5 rounded-full text-[11px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-[#f2f2f2] border border-[#ededed] text-[#131313] enabled:hover:bg-[#ededed]"
+              className="h-8 px-3.5 rounded-full text-[11px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-white/10 border border-white/15 text-white enabled:hover:bg-white/20"
             >
               빙옥으로 강화
             </button>
@@ -490,30 +493,30 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance }) => {
   return (
     <div
       className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
-      style={{ background: "rgba(10,10,10,0.55)" }}
+      style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full sm:max-w-lg max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] flex flex-col"
+        className="relative w-full sm:max-w-lg max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-[#131313] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
         style={{ animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
       >
         <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
         <div aria-hidden className="absolute -top-24 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none" style={{ background: "rgba(233,30,63,0.22)" }}></div>
 
-        <div className="relative z-10 shrink-0 px-6 sm:px-8 pt-7 pb-5 border-b border-[#ededed] flex items-start justify-between gap-4">
+        <div className="relative z-10 shrink-0 px-6 sm:px-8 pt-7 pb-5 border-b border-white/[0.08] flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h3 className="text-2xl font-black text-[#131313] tracking-tight">강화</h3>
-            <p className="text-[12px] font-bold text-[#5a5a5a] mt-2 tabular-nums">
-              보유 XP <b className="text-[#131313]">{(balance?.xp || 0).toLocaleString()}</b>
-              <span className="mx-2 text-[#a3a3a3]">·</span>
-              빙옥 <b className="text-[#131313]">{(balance?.point || 0).toLocaleString()}</b>
+            <h3 className="text-2xl font-black text-white tracking-tight">강화</h3>
+            <p className="text-[12px] font-bold text-white/45 mt-2 tabular-nums">
+              보유 XP <b className="text-white/80">{(balance?.xp || 0).toLocaleString()}</b>
+              <span className="mx-2 text-white/20">·</span>
+              빙옥 <b className="text-white/80">{(balance?.point || 0).toLocaleString()}</b>
             </p>
           </div>
           <button
             onClick={onClose}
             aria-label="닫기"
-            className="shrink-0 w-9 h-9 rounded-full border border-[#ededed] text-[#8a8a8a] hover:text-[#131313] hover:border-[#a3a3a3] transition-colors flex items-center justify-center outline-none focus:outline-none"
+            className="shrink-0 w-9 h-9 rounded-full border border-white/12 text-white/50 hover:text-white hover:border-white/30 transition-colors flex items-center justify-center outline-none focus:outline-none"
           >
             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d={ICON_PATHS.close} strokeLinecap="round" /></svg>
           </button>
@@ -521,7 +524,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance }) => {
 
         <div className="relative z-10 flex-1 min-h-0 overflow-y-auto px-6 sm:px-8 py-6">
           {kinds.map((k, i) => (
-            <div key={k} className={i > 0 ? "mt-7 pt-7 border-t border-[#ededed]" : ""}>
+            <div key={k} className={i > 0 ? "mt-7 pt-7 border-t border-white/10" : ""}>
               <EnhancePanel kind={k} v={enh[k]} balance={balance} busy={busy} onEnhance={onEnhance} />
             </div>
           ))}
@@ -566,12 +569,12 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
   return (
     <div
       className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
-      style={{ background: "rgba(10,10,10,0.55)" }}
+      style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full sm:max-w-lg max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] flex flex-col"
+        className="relative w-full sm:max-w-lg max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-[#131313] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
         style={{ animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
       >
         <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
@@ -582,21 +585,21 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
         ></div>
 
         {/* 헤더 */}
-        <div className="relative z-10 shrink-0 px-6 sm:px-8 pt-7 pb-5 border-b border-[#ededed]">
+        <div className="relative z-10 shrink-0 px-6 sm:px-8 pt-7 pb-5 border-b border-white/[0.08]">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-2xl font-black text-[#131313] tracking-tight">등급 안내</h3>
+              <h3 className="text-2xl font-black text-white tracking-tight">등급 안내</h3>
             </div>
             <button
               onClick={onClose}
               aria-label="닫기"
-              className="shrink-0 w-9 h-9 rounded-full border border-[#ededed] text-[#8a8a8a] hover:text-[#131313] hover:border-[#a3a3a3] transition-colors flex items-center justify-center outline-none focus:outline-none"
+              className="shrink-0 w-9 h-9 rounded-full border border-white/12 text-white/50 hover:text-white hover:border-white/30 transition-colors flex items-center justify-center outline-none focus:outline-none"
             >
               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d={ICON_PATHS.close} strokeLinecap="round" /></svg>
             </button>
           </div>
-          <p className="text-[12px] text-[#5a5a5a] leading-relaxed mt-3 break-keep">
-            <b className="text-[#131313]">음성 채널에서 받는 XP에 아래 금액이 더해집니다.</b>
+          <p className="text-[12px] text-white/45 leading-relaxed mt-3 break-keep">
+            <b className="text-white/75">음성 채널에서 받는 XP에 아래 금액이 더해집니다.</b>
           </p>
         </div>
 
@@ -608,7 +611,7 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
             return (
               <div
                 key={t.key}
-                className={`relative flex items-center gap-4 py-3.5 border-b border-[#ededed] last:border-0 transition-opacity ${passed ? "opacity-45" : ""}`}
+                className={`relative flex items-center gap-4 py-3.5 border-b border-white/[0.06] last:border-0 transition-opacity ${passed ? "opacity-45" : ""}`}
               >
                 {cur && (
                   <span
@@ -621,8 +624,9 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
                   aria-hidden
                   className="shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center transition-transform"
                   style={{
-                    backgroundColor: cur ? `${t.c}22` : "#f2f2f2",
-                    border: `1px solid ${cur ? t.c + "88" : "#ededed"}`,
+                    backgroundColor: cur ? `${t.c}22` : "rgba(255,255,255,0.04)",
+                    border: `1px solid ${cur ? t.c + "88" : "rgba(255,255,255,0.08)"}`,
+                    boxShadow: cur ? `0 0 22px -6px ${t.c}` : "none",
                   }}
                 >
                   <TierEmblem tier={t} size={24} />
@@ -637,16 +641,16 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
                       </span>
                     )}
                   </p>
-                  <p className="text-[10px] font-black tracking-[0.16em] text-[#8a8a8a] uppercase tabular-nums mt-1">
+                  <p className="text-[10px] font-black tracking-[0.16em] text-white/35 uppercase tabular-nums mt-1">
                     {t.en} · {tierRangeLabel(i)}
                   </p>
                 </div>
 
                 <div className="shrink-0 text-right">
-                  <p className="text-[15px] font-black tabular-nums leading-none" style={{ color: t.bonus > 0 ? "#131313" : "#a3a3a3" }}>
+                  <p className="text-[15px] font-black tabular-nums leading-none" style={{ color: t.bonus > 0 ? "#ffffff" : "rgba(255,255,255,0.3)" }}>
                     {t.bonus > 0 ? `+${t.bonus.toLocaleString()}` : "—"}
                   </p>
-                  <p className="text-[10px] font-bold text-[#8a8a8a] mt-1">추가 XP</p>
+                  <p className="text-[10px] font-bold text-white/35 mt-1">추가 XP</p>
                 </div>
               </div>
             );
@@ -654,18 +658,18 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
         </div>
 
         {/* 푸터 */}
-        <div className="relative z-10 shrink-0 px-6 sm:px-8 py-4 border-t border-[#ededed] bg-white">
+        <div className="relative z-10 shrink-0 px-6 sm:px-8 py-4 border-t border-white/[0.08] bg-white/[0.02]">
           {/* 내 음성 강화가 있으면 기본 칩 옆에 강화 칩 하나 — 등급은 그 위에 더해진다 */}
           {enhanceBonus > 0 && (
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="px-3 py-1.5 bg-[#f2f2f2] text-[#131313] text-[12px] font-bold whitespace-nowrap">기본 {baseXp.toLocaleString()}</span>
-              <span className="text-[#e91e3f] font-black text-sm">+</span>
-              <span className="px-3 py-1.5 bg-[#f2f2f2] text-[#131313] text-[12px] font-bold whitespace-nowrap">강화 {enhanceBonus.toLocaleString()}</span>
-              <span className="text-[#e91e3f] font-black text-sm">+</span>
-              <span className="px-3 py-1.5 bg-[#f2f2f2] text-[#5a5a5a] text-[12px] font-bold whitespace-nowrap">등급</span>
+              <span className="px-3 py-1.5 rounded-lg bg-white/[0.06] text-white text-[12px] font-bold whitespace-nowrap">기본 {baseXp.toLocaleString()}</span>
+              <span className="text-[#ff5c77] font-black text-sm">+</span>
+              <span className="px-3 py-1.5 rounded-lg bg-white/[0.06] text-white text-[12px] font-bold whitespace-nowrap">강화 {enhanceBonus.toLocaleString()}</span>
+              <span className="text-[#ff5c77] font-black text-sm">+</span>
+              <span className="px-3 py-1.5 rounded-lg bg-white/[0.06] text-white/60 text-[12px] font-bold whitespace-nowrap">등급</span>
             </div>
           )}
-          <p className="text-[11px] text-[#8a8a8a] leading-relaxed break-keep">
+          <p className="text-[11px] text-white/35 leading-relaxed break-keep">
             음성 {intervalMin}분당 기본 {baseXp.toLocaleString()} XP 위에 더해지는 금액입니다 — 채팅 XP에는 적용되지 않습니다.
             역할·채널 부스트가 있으면 여기에 더 붙습니다.
           </p>
@@ -719,30 +723,30 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
   return (
     <div
       className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
-      style={{ background: "rgba(10,10,10,0.55)" }}
+      style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full sm:max-w-3xl max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] flex flex-col"
+        className="relative w-full sm:max-w-3xl max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-[#131313] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
         style={{ animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
       >
         <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
         <div aria-hidden className="absolute -top-24 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none" style={{ background: "rgba(63,131,184,0.28)" }}></div>
 
         {/* 헤더 */}
-        <div className="relative z-10 shrink-0 px-5 sm:px-7 pt-5 sm:pt-6 pb-4 border-b border-[#ededed]">
+        <div className="relative z-10 shrink-0 px-5 sm:px-7 pt-5 sm:pt-6 pb-4 border-b border-white/[0.08]">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <h3 className="text-lg sm:text-xl font-black text-[#131313] tracking-tight">
+              <h3 className="text-lg sm:text-xl font-black text-white tracking-tight">
                 인벤토리
-                <span className="text-sm font-black text-[#8a8a8a] ml-2 tabular-nums">{groups[0]?.items.length ?? 0}</span>
+                <span className="text-sm font-black text-white/35 ml-2 tabular-nums">{groups[0]?.items.length ?? 0}</span>
               </h3>
             </div>
             <button
               onClick={onClose}
               aria-label="닫기"
-              className="shrink-0 w-9 h-9 rounded-full bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] hover:text-[#131313] flex items-center justify-center transition-colors outline-none focus:outline-none"
+              className="shrink-0 w-9 h-9 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-white/70 hover:text-white flex items-center justify-center transition-colors outline-none focus:outline-none"
             >
               <svg viewBox="0 0 20 20" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2">
                 <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
@@ -759,11 +763,11 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
                     key={g.id}
                     onClick={() => { onTab(g.id); setSel(null); onTone(); }}
                     className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
-                      on ? "bg-[#131313] text-white" : "text-[#8a8a8a] hover:text-[#131313]"
+                      on ? "bg-white text-[#131313]" : "text-white/45 hover:text-white"
                     }`}
                   >
                     {g.label}
-                    <span className={`tabular-nums text-[10px] font-black ${on ? "text-white/50" : "opacity-60"}`}>{g.items.length}</span>
+                    <span className={`tabular-nums text-[10px] font-black ${on ? "text-[#8a8a8a]" : "opacity-60"}`}>{g.items.length}</span>
                   </button>
                 );
               })}
@@ -774,7 +778,7 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
         {/* 본문 — 왼쪽 아이템 정보 / 오른쪽 칸 */}
         <div className="relative z-10 flex-1 min-h-0 overflow-y-auto sm:overflow-hidden sm:flex">
           {/* 왼쪽 — 고른 아이템 */}
-          <div className="shrink-0 sm:w-[236px] sm:border-r border-[#ededed] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto">
+          <div className="shrink-0 sm:w-[236px] sm:border-r border-white/[0.08] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto">
             {selItem ? (
               <div>
                 <div
@@ -786,46 +790,46 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
                 >
                   <ItemIcon icon={selItem.icon} imageUrl={selItem.imageUrl} type={invIconType(selItem)} size={38} color={accentOf(selItem)} dim={selItem.status !== "completed"} />
                 </div>
-                <p className="text-[15px] font-black text-[#131313] leading-snug break-keep">{selItem.name}</p>
-                <p className="text-[11px] text-[#5a5a5a] mt-2 leading-relaxed break-keep">{invSubLabel(selItem)}</p>
+                <p className="text-[15px] font-black text-white leading-snug break-keep">{selItem.name}</p>
+                <p className="text-[11px] text-white/45 mt-2 leading-relaxed break-keep">{invSubLabel(selItem)}</p>
 
-                <div className="mt-4 pt-4 border-t border-[#ededed] space-y-2">
+                <div className="mt-4 pt-4 border-t border-white/[0.08] space-y-2">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-[10px] font-black tracking-[0.15em] text-[#a3a3a3] uppercase">Status</span>
-                    <span className={`text-[11px] font-black ${selItem.status === "missing" ? "text-[#e91e3f]" : selItem.status === "pending" ? "text-[#5a5a5a]" : "text-emerald-700"}`}>
+                    <span className="text-[10px] font-black tracking-[0.15em] text-white/30 uppercase">Status</span>
+                    <span className={`text-[11px] font-black ${selItem.status === "missing" ? "text-[#ff5c77]" : selItem.status === "pending" ? "text-white/60" : "text-emerald-400"}`}>
                       {selItem.status === "pending" ? "지급 대기" : selItem.status === "missing" ? "확인 필요" : "보유 중"}
                     </span>
                   </div>
                   {ddayOf(selItem) !== null && (
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-black tracking-[0.15em] text-[#a3a3a3] uppercase">Expires</span>
-                      <span className={`text-[11px] font-black tabular-nums ${ddayOf(selItem) <= 3 ? "text-[#e91e3f]" : "text-[#5a5a5a]"}`}>
+                      <span className="text-[10px] font-black tracking-[0.15em] text-white/30 uppercase">Expires</span>
+                      <span className={`text-[11px] font-black tabular-nums ${ddayOf(selItem) <= 3 ? "text-[#ff5c77]" : "text-white/70"}`}>
                         D-{ddayOf(selItem)}
                       </span>
                     </div>
                   )}
                   {selItem.rewardLevel != null && (
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-black tracking-[0.15em] text-[#a3a3a3] uppercase">Level</span>
-                      <span className="text-[11px] font-black tabular-nums text-[#5a5a5a]">Lv.{selItem.rewardLevel}</span>
+                      <span className="text-[10px] font-black tracking-[0.15em] text-white/30 uppercase">Level</span>
+                      <span className="text-[11px] font-black tabular-nums text-white/70">Lv.{selItem.rewardLevel}</span>
                     </div>
                   )}
                 </div>
 
                 {selItem.status === "missing" && (
-                  <p className="text-[10px] text-[#e91e3f] mt-4 leading-relaxed break-keep">
+                  <p className="text-[10px] text-[#ff5c77]/80 mt-4 leading-relaxed break-keep">
                     구매 기록은 있는데 디스코드 역할이 확인되지 않습니다. 운영진에 문의해 주세요.
                   </p>
                 )}
               </div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-center py-6 sm:py-0">
-                <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-[#ededed] flex items-center justify-center mb-3">
-                  <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="#a3a3a3" strokeWidth="1.6">
+                <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-white/15 flex items-center justify-center mb-3">
+                  <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.6">
                     <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </span>
-                <p className="text-[11px] font-bold text-[#a3a3a3] break-keep">칸을 누르면 여기에 보입니다</p>
+                <p className="text-[11px] font-bold text-white/30 break-keep">칸을 누르면 여기에 보입니다</p>
               </div>
             )}
           </div>
@@ -836,7 +840,7 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
               {Array.from({ length: slots }, (_, i) => {
                 const it = rows[i];
                 if (!it) {
-                  return <div key={`empty-${i}`} className="aspect-square border border-dashed border-[#ededed] bg-[#f2f2f2]"></div>;
+                  return <div key={`empty-${i}`} className="aspect-square rounded-xl border border-dashed border-white/[0.10] bg-white/[0.02]"></div>;
                 }
                 const dead = it.status === "pending" || it.status === "missing";
                 const accent = accentOf(it);
@@ -847,26 +851,26 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
                     key={it.uid || `i-${i}`}
                     onClick={() => { setSel(on ? null : it.uid); onTone(); }}
                     title={it.name}
-                    className={`relative aspect-square flex flex-col items-center justify-center px-1.5 transition-all outline-none focus:outline-none ${
-                      on ? "ring-2 ring-[#131313] -translate-y-0.5" : "hover:-translate-y-0.5"
+                    className={`relative aspect-square rounded-xl flex flex-col items-center justify-center px-1.5 transition-all outline-none focus:outline-none ${
+                      on ? "ring-2 ring-white/70 -translate-y-0.5" : "hover:-translate-y-0.5"
                     }`}
                     style={{
-                      background: dead ? "#f2f2f2" : `linear-gradient(160deg, ${accent}2e, ${accent}0d)`,
-                      boxShadow: dead ? "inset 0 0 0 1px #ededed" : `inset 0 0 0 1px ${accent}44`,
+                      background: dead ? "rgba(255,255,255,0.03)" : `linear-gradient(160deg, ${accent}2e, ${accent}0d)`,
+                      boxShadow: dead ? "inset 0 0 0 1px rgba(255,255,255,0.07)" : `inset 0 0 0 1px ${accent}44`,
                     }}
                   >
                     <span aria-hidden className="mb-1.5">
                       <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={24} color={accent} dim={dead} />
                     </span>
-                    <span className={`w-full text-[9px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-[#a3a3a3]" : "text-[#131313]"}`}>
+                    <span className={`w-full text-[9px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
                       {it.name}
                     </span>
                     {dday !== null && (
-                      <span className={`absolute top-1 right-1 text-[8px] font-black tabular-nums px-1 py-0.5 rounded ${dday <= 3 ? "bg-[#e91e3f] text-white" : "bg-[#f2f2f2] text-[#5a5a5a]"}`}>
+                      <span className={`absolute top-1 right-1 text-[8px] font-black tabular-nums px-1 py-0.5 rounded ${dday <= 3 ? "bg-[#e91e3f] text-white" : "bg-white/15 text-white/70"}`}>
                         D-{dday}
                       </span>
                     )}
-                    {it.status === "pending" && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#a3a3a3]"></span>}
+                    {it.status === "pending" && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white/40"></span>}
                     {it.status === "missing" && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
                   </button>
                 );
@@ -875,14 +879,14 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
 
             {/* invGroups 는 보유 0개면 [] 를 돌려준다 — groups[0] 로 판정하면 신규 유저에게 문구가 안 뜬다 */}
             {rows.length === 0 && (
-              <p className="text-[12px] font-bold text-[#8a8a8a] text-center mt-6">아직 보유한 아이템이 없습니다</p>
+              <p className="text-[12px] font-bold text-white/35 text-center mt-6">아직 보유한 아이템이 없습니다</p>
             )}
           </div>
         </div>
 
         {synced === false && (
-          <div className="relative z-10 shrink-0 border-t border-[#ededed] bg-[#f2f2f2] px-5 sm:px-7 py-3">
-            <p className="text-[11px] text-[#8a8a8a] break-keep">디스코드 역할을 확인하지 못해 구매 기록 기준으로 표시하고 있습니다.</p>
+          <div className="relative z-10 shrink-0 border-t border-white/[0.08] bg-white/[0.02] px-5 sm:px-7 py-3">
+            <p className="text-[11px] text-white/30 break-keep">디스코드 역할을 확인하지 못해 구매 기록 기준으로 표시하고 있습니다.</p>
           </div>
         )}
       </div>
@@ -914,6 +918,7 @@ const TierStairs = ({ base = 3000, intervalMin = 5 }) => {
                   height: `${10 + hRatio * 86}%`,
                   backgroundColor: t.c,
                   opacity: top ? 1 : 0.85,
+                  boxShadow: top ? `0 0 18px ${t.c}55` : "none",
                 }}
               />
             </div>
@@ -970,7 +975,15 @@ export default function LevelPage() {
   const [bagOpen, setBagOpen] = useState(false);
   // /profile 의 인벤토리 줄에서 ?bag=1 로 들어오면 가방을 바로 연다
   const bagParam = searchParams.get("bag");
-  useEffect(() => { if (bagParam === "1") setBagOpen(true); }, [bagParam]);
+  useEffect(() => {
+    if (bagParam !== "1") return;
+    setBagOpen(true);
+    // 열고 나면 주소에서 bag 을 지운다 — 남겨 두면 뒤로가기나 다시 들어올 때
+    // 가방이 제멋대로 다시 열린다
+    const u = new URL(window.location.href);
+    u.searchParams.delete("bag");
+    window.history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
+  }, [bagParam]);
   const [rankMode, setRankMode] = useState("all");
   const [rankPage, setRankPage] = useState(0);
   const [rankRows, setRankRows] = useState([]);
@@ -1733,7 +1746,7 @@ export default function LevelPage() {
                 <div className="relative">
                   <div aria-hidden className="opacity-40 pointer-events-none select-none">
                     {/* 플레이어 배너 셸 — 수치는 전부 — (가짜 수치 금지) */}
-                    <div className="relative rounded-2xl overflow-hidden bg-[#131313] p-6 md:p-10">
+                    <div className="relative rounded-3xl overflow-hidden bg-[#131313] p-6 md:p-10">
                       <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
                       <div className="relative z-10 flex items-center gap-5 md:gap-7">
                         <RingGauge pct={0} size={112} stroke={6} trackClass="rgba(255,255,255,0.12)">
@@ -1770,7 +1783,7 @@ export default function LevelPage() {
                       <svg viewBox="0 0 24 24" className="w-6 h-6 mx-auto mb-4" fill="none" stroke="rgba(0,0,0,0.4)" strokeWidth="1.5"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
                       <p className="text-[10px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase mb-2.5">관전 모드</p>
                       <p className="text-sm font-bold text-[#131313] mb-7">내 대시보드가 잠겨 있습니다</p>
-                      <button onClick={() => signIn("discord", { callbackUrl: "/level" })} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold transition-colors outline-none focus:outline-none">Discord로 로그인</button>
+                      <button onClick={() => signIn("discord", { callbackUrl: "/level" })} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors shadow-[0_10px_30px_rgba(233,30,63,0.35)] outline-none focus:outline-none">Discord로 로그인</button>
                       {process.env.NODE_ENV === "development" && (
                         <button onClick={() => signIn("devlogin", { callbackUrl: "/level" })} className="mt-3.5 text-[11px] font-bold text-[#a3a3a3] hover:text-[#131313] underline underline-offset-4 transition-colors outline-none focus:outline-none">로컬 확인용 로그인 (dev)</button>
                       )}
@@ -1807,7 +1820,7 @@ export default function LevelPage() {
             {authReady && session?.user && meLoaded && me && (
               <div>
                 {/* 플레이어 배너 — 아이보리 위 잉크 카드. 이 화면의 유일한 볼륨 앵커 */}
-                <div className="relative rounded-2xl overflow-hidden bg-[#131313]">
+                <div className="relative rounded-3xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]">
                   <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
                   <div aria-hidden className="absolute -top-28 -right-20 w-[420px] h-[420px] bg-[#e91e3f]/[0.18] blur-[120px] rounded-full pointer-events-none"></div>
                   <span aria-hidden className="absolute top-5 right-8 text-[120px] md:text-[150px] font-black text-white/[0.03] leading-none select-none pointer-events-none tracking-tighter tabular-nums">{me.level}</span>
@@ -1853,7 +1866,7 @@ export default function LevelPage() {
                           <span className="text-[10px] font-bold text-white/35 group-hover:text-white/70 transition-colors">등급 안내</span>
                         </button>
                         <p className="text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-1">Level</p>
-                        <p className="text-7xl md:text-8xl font-black text-white tabular-nums tracking-tighter leading-[0.85]">{me.level}</p>
+                        <p className="text-7xl md:text-8xl font-black text-white tabular-nums tracking-tighter leading-[0.85]" style={{ textShadow: "0 0 50px rgba(233,30,63,0.55)" }}>{me.level}</p>
                       </div>
                     </div>
 
@@ -2072,7 +2085,7 @@ export default function LevelPage() {
                             key={q.id}
                             className={`relative overflow-hidden rounded-2xl border mb-3 transition-all ${
                               q.claimable
-                                ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.05]"
+                                ? "border-[#e91e3f]/50 bg-[#e91e3f]/[0.05] shadow-[0_14px_36px_-22px_rgba(233,30,63,0.75)]"
                                 : q.claimed
                                 ? "border-black/[0.07] bg-black/[0.02]"
                                 : "border-black/[0.09] bg-white"
@@ -2085,7 +2098,7 @@ export default function LevelPage() {
                               {/* 임무 인장 — 달성하면 채워진다 */}
                               <span
                                 aria-hidden
-                                className={`shrink-0 w-11 h-11 flex items-center justify-center transition-colors ${
+                                className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
                                   q.claimed
                                     ? "bg-emerald-600/10"
                                     : done
@@ -2149,7 +2162,7 @@ export default function LevelPage() {
                                     <button
                                       onClick={() => claimQuest(q)}
                                       disabled={claiming === q.id}
-                                      className="px-4 sm:px-5 py-2.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[12px] font-black transition-colors outline-none focus:outline-none"
+                                      className="px-4 sm:px-5 py-2.5 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[12px] font-black transition-colors outline-none focus:outline-none shadow-[0_8px_20px_-10px_rgba(233,30,63,0.9)]"
                                     >
                                       {claiming === q.id ? "…" : "받기"}
                                     </button>
@@ -2232,7 +2245,7 @@ export default function LevelPage() {
                         </div>
                         <button
                           onClick={() => setTierOpen(true)}
-                          className="shrink-0 h-8 px-3 bg-black/[0.05] hover:bg-black/[0.09] text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
+                          className="shrink-0 h-8 px-3 rounded-lg bg-black/[0.05] hover:bg-black/[0.09] text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
                         >
                           등급 안내
                         </button>
@@ -2256,7 +2269,7 @@ export default function LevelPage() {
                         <div className="relative z-10 flex justify-center mb-4">
                           <span
                             className="w-[74px] h-[74px] rounded-2xl bg-white flex items-center justify-center"
-                            style={{ boxShadow: `inset 0 0 0 1px ${tierCur.c}33` }}
+                            style={{ boxShadow: `0 14px 34px -14px ${tierCur.c}, inset 0 0 0 1px ${tierCur.c}33` }}
                           >
                             <TierEmblem tier={tierCur} size={42} />
                           </span>
@@ -2296,7 +2309,7 @@ export default function LevelPage() {
 
                       {/* 다음 등급 */}
                       {tierNext && tierNextBound !== null && (
-                        <div className="flex items-center gap-3 mt-4 px-4 py-3 bg-black/[0.03]">
+                        <div className="flex items-center gap-3 mt-4 px-4 py-3 rounded-xl bg-black/[0.03]">
                           <TierEmblem tier={tierNext} size={22} />
                           <div className="min-w-0 flex-1">
                             <p className="text-[12px] font-black truncate" style={{ color: tierNext.c }}>다음 · {tierNext.name}</p>
@@ -2470,7 +2483,7 @@ export default function LevelPage() {
                   <SectionHeader title="성장은 이렇게 이어집니다" />
 
                   {/* 인과 사슬 — 읽기 전에 지도를 먼저 준다 */}
-                  <div className="relative rounded-2xl overflow-hidden bg-[#131313] p-6 md:p-9">
+                  <div className="relative rounded-3xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)] p-6 md:p-9">
                     <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70"></div>
                     <div aria-hidden className="absolute -top-28 -right-20 w-[420px] h-[420px] bg-[#e91e3f]/[0.18] blur-[120px] rounded-full pointer-events-none"></div>
                     <div className="relative z-10 flex items-stretch gap-2 overflow-x-auto no-bar">
@@ -2485,7 +2498,7 @@ export default function LevelPage() {
                           {i > 0 && (
                             <span aria-hidden className="shrink-0 self-center text-[#ff5c77] font-black text-sm px-0.5">→</span>
                           )}
-                          <div className="shrink-0 w-[142px] md:w-auto md:flex-1 px-4 py-5 bg-white/[0.05]">
+                          <div className="shrink-0 w-[142px] md:w-auto md:flex-1 px-4 py-5 rounded-lg bg-white/[0.05]">
                             <p className="text-[9px] font-black tracking-[0.3em] text-white/35 tabular-nums mb-2.5">{n.no}</p>
                             <p className="text-[15px] font-black text-white leading-none mb-2.5">{n.t}</p>
                             <p className="text-[11px] text-white/45 leading-relaxed break-keep">{n.d}</p>
@@ -2621,7 +2634,7 @@ export default function LevelPage() {
                   <TierStairs base={P.voiceXp} intervalMin={P_voiceMin} />
 
                   {/* 지급식 — 등급이 어디에 더해지는지 */}
-                  <div className="relative rounded-2xl overflow-hidden bg-[#131313] p-6 md:p-9 mt-12">
+                  <div className="relative rounded-3xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)] p-6 md:p-9 mt-12">
                     <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70"></div>
                     <div aria-hidden className="absolute -top-28 -right-20 w-[420px] h-[420px] bg-[#e91e3f]/[0.18] blur-[120px] rounded-full pointer-events-none"></div>
                     <div className="relative z-10">
@@ -2630,7 +2643,7 @@ export default function LevelPage() {
                         {[`기본 ${P.voiceXp.toLocaleString()}`, ...(enh.voice.level > 0 ? [`강화 ${enh.voice.bonus.toLocaleString()}`] : []), "등급", "역할", "채널", "진행 중 부스트"].map((c, i) => (
                           <React.Fragment key={c}>
                             {i > 0 && <span className="text-[#ff5c77] font-black text-sm">+</span>}
-                            <span className="px-3 py-1.5 bg-white/[0.06] text-white text-[12px] font-bold whitespace-nowrap">{c}</span>
+                            <span className="px-3 py-1.5 rounded-lg bg-white/[0.06] text-white text-[12px] font-bold whitespace-nowrap">{c}</span>
                           </React.Fragment>
                         ))}
                         <span className="text-white/40 font-black text-sm ml-1">×</span>
@@ -2647,7 +2660,7 @@ export default function LevelPage() {
                     <SectionHeader title="지금 진행 중인 부스트" />
                     {!policy ? (
                       <div className="space-y-2">
-                        {[0, 1].map((i) => <div key={i} className="h-[72px] bg-black/[0.04] animate-pulse"></div>)}
+                        {[0, 1].map((i) => <div key={i} className="h-[72px] rounded-lg bg-black/[0.04] animate-pulse"></div>)}
                       </div>
                     ) : (policy.activeBoosts || []).length === 0 ? (
                       <EmptySlot>진행 중인 부스트가 없습니다</EmptySlot>
@@ -2848,8 +2861,8 @@ export default function LevelPage() {
               </div>
             ) : !authReady || !meLoaded ? (
               <div className="space-y-3">
-                <div className="h-28 bg-black/[0.04] animate-pulse"></div>
-                <div className="h-[300px] bg-black/[0.03] animate-pulse"></div>
+                <div className="h-28 rounded-lg bg-black/[0.04] animate-pulse"></div>
+                <div className="h-[300px] rounded-lg bg-black/[0.03] animate-pulse"></div>
               </div>
             ) : !passEnabled || passTiers.length === 0 ? (
               <EmptySlot>아직 준비 중입니다</EmptySlot>
@@ -2897,7 +2910,7 @@ export default function LevelPage() {
 
                 {/* 프리미엄 해금 — 이 화면에서 유일하게 카드로 세우는 자리 */}
                 {!pass.unlocked && (
-                  <div className="relative overflow-hidden rounded-2xl bg-[#131313] mt-8">
+                  <div className="relative overflow-hidden rounded-2xl bg-[#131313] mt-8 shadow-[0_30px_70px_-34px_rgba(0,0,0,0.55)]">
                     <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
                     <div aria-hidden className="absolute -top-24 -right-16 w-[360px] h-[360px] bg-[#e91e3f]/[0.18] blur-[110px] rounded-full pointer-events-none"></div>
                     <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row md:items-center md:justify-between">
@@ -2919,14 +2932,14 @@ export default function LevelPage() {
                         <button
                           onClick={() => unlockPass("xp")}
                           disabled={!!passBusy || (!!me && (me.xp || 0) < (pass.unlockPrice || 0))}
-                          className="h-11 px-5 text-[13px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-[#e91e3f] text-white enabled:hover:bg-[#d01634]"
+                          className="h-11 px-5 rounded-xl text-[13px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-[#e91e3f] text-white enabled:hover:bg-[#d01634]"
                         >
                           XP로 해금
                         </button>
                         <button
                           onClick={() => unlockPass("point")}
                           disabled={!!passBusy || (!!me && (me.point || 0) < (pass.unlockPrice || 0))}
-                          className="h-11 px-5 text-[13px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-white/10 border border-white/15 text-white enabled:hover:bg-white/20"
+                          className="h-11 px-5 rounded-xl text-[13px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-white/10 border border-white/15 text-white enabled:hover:bg-white/20"
                         >
                           빙옥으로 해금
                         </button>
@@ -2973,7 +2986,7 @@ export default function LevelPage() {
                               {/* 아이보리 링으로 연결선을 끊어 준다. 현재 티어만 빨강 테두리를 한 겹 더 두른다 */}
                               <span
                                 className={`relative w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-black tabular-nums ${
-                                  t.reached ? "bg-[#131313] text-white" : "bg-[#ededed] text-[#8a8a8a]"
+                                  t.reached ? "bg-[#131313] text-white" : "bg-[#e0e0e0] text-[#8a8a8a]"
                                 }`}
                                 style={{ boxShadow: cur ? "0 0 0 3px #ffffff, 0 0 0 5px #e91e3f" : "0 0 0 3px #ffffff" }}
                               >
@@ -3044,7 +3057,7 @@ export default function LevelPage() {
             {rankLoading ? (
               <div className="space-y-2">
                 {[0, 1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-[52px] bg-black/[0.04] animate-pulse"></div>
+                  <div key={i} className="h-[52px] rounded-lg bg-black/[0.04] animate-pulse"></div>
                 ))}
               </div>
             ) : rankRows.length === 0 ? (
@@ -3088,10 +3101,10 @@ export default function LevelPage() {
                             <span className="relative shrink-0">
                               <span
                                 className={`block rounded-full overflow-hidden ${first ? "w-20 h-20 sm:w-28 sm:h-28" : "w-14 h-14 sm:w-20 sm:h-20"}`}
-                                style={{ boxShadow: `0 0 0 3px ${c}` }}
+                                style={{ boxShadow: `0 0 0 3px ${c}, 0 18px 36px -16px ${c}` }}
                               >
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={r.avatar || ""} alt="" className="w-full h-full object-cover bg-[#f2f2f2]" />
+                                <img src={r.avatar || ""} alt="" className="w-full h-full object-cover bg-[#e0e0e0]" />
                               </span>
                               {/* 순위는 원에 겹쳐 붙인다 — 따로 두면 원 크기가 달라 높이가 어긋난다 */}
                               <span
@@ -3118,7 +3131,7 @@ export default function LevelPage() {
 
                             {/* 단상 */}
                             <div
-                              className={`w-full mt-3 ${pedestal}`}
+                              className={`w-full mt-3 rounded-t-xl ${pedestal}`}
                               style={{ background: `linear-gradient(180deg, ${c}2e, ${c}08)`, boxShadow: `inset 0 1px 0 ${c}55` }}
                             ></div>
                           </div>
@@ -3208,7 +3221,7 @@ export default function LevelPage() {
           <Reveal>
             <SectionHeader title="XP 테이블" />
 
-            <LuxCard className="p-6 md:p-8 mb-12">
+            <LuxCard className="p-6 md:p-8 mb-12" glow>
               <div className="flex flex-col lg:flex-row lg:gap-6 items-stretch lg:items-center">
                 <div className="flex gap-2 shrink-0 w-full lg:w-auto mb-6 lg:mb-0">
                   <input
@@ -3226,7 +3239,7 @@ export default function LevelPage() {
                     검색
                   </button>
                 </div>
-                <div className="flex-1 grid grid-cols-2 overflow-hidden bg-[#131313] divide-x divide-white/10">
+                <div className="flex-1 grid grid-cols-2 rounded-lg overflow-hidden bg-[#131313] divide-x divide-white/10">
                   <div className="px-4 py-5 text-center">
                     <span className="block text-[9px] font-black tracking-[0.3em] text-white/35 uppercase mb-2">누적 XP</span>
                     <span className="text-lg md:text-2xl font-black text-white tabular-nums tracking-tight">{searchResult.cumXp ? searchResult.cumXp.toLocaleString() : "—"}</span>
@@ -3322,7 +3335,7 @@ export default function LevelPage() {
                       {isChannelDropdownOpen && (
                         <>
                           <div className="fixed inset-0 z-40" onClick={() => setIsChannelDropdownOpen(false)}></div>
-                          <div className="absolute top-full right-0 w-36 mt-1.5 bg-[#ffffff] border border-black/10 overflow-hidden shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] z-50">
+                          <div className="absolute top-full right-0 w-36 mt-1.5 bg-[#ffffff] border border-black/10 rounded-lg overflow-hidden shadow-2xl z-50">
                             {[
                               { val: 'chat', label: `채팅 채널 (${P_chatMin}분)` },
                               { val: 'voice', label: `음성 채널 (${P_voiceMin}분)` },
@@ -3349,13 +3362,13 @@ export default function LevelPage() {
                   <p className="text-xs font-bold text-[#5a5a5a] tracking-wide mb-4">영구 아이템</p>
                   <div className="flex justify-between items-center py-3.5 border-b border-black/[0.06]">
                     <label className="text-xs font-bold text-[#5a5a5a]">[아이템] XP Boost+ 적용</label>
-                    <button type="button" onClick={() => setSimBoost1(!simBoost1)} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors ${simBoost1 ? 'bg-[#131313]' : 'bg-[#a3a3a3]'}`}>
+                    <button type="button" onClick={() => setSimBoost1(!simBoost1)} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors ${simBoost1 ? 'bg-[#131313]' : 'bg-black/10'}`}>
                       <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform duration-200 ${simBoost1 ? 'translate-x-5' : ''}`}></div>
                     </button>
                   </div>
                   <div className="flex justify-between items-center py-3.5 border-b border-black/[0.06]">
                     <label className="text-xs font-bold text-[#5a5a5a]">[아이템] 출석 Boost 적용</label>
-                    <button type="button" onClick={() => setSimAttendBoost(!simAttendBoost)} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors ${simAttendBoost ? 'bg-[#131313]' : 'bg-[#a3a3a3]'}`}>
+                    <button type="button" onClick={() => setSimAttendBoost(!simAttendBoost)} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors ${simAttendBoost ? 'bg-[#131313]' : 'bg-black/10'}`}>
                       <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform duration-200 ${simAttendBoost ? 'translate-x-5' : ''}`}></div>
                     </button>
                   </div>
@@ -3384,7 +3397,7 @@ export default function LevelPage() {
 
               {/* ── 우: 결과 ── */}
               <div className="md:sticky md:top-36 space-y-6">
-                <div className="relative rounded-2xl overflow-hidden bg-[#131313]">
+                <div className="relative rounded-2xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-34px_rgba(0,0,0,0.55)]">
                   <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
                   <div aria-hidden className="absolute -top-20 -right-16 w-72 h-72 bg-[#e91e3f]/[0.18] blur-[100px] rounded-full pointer-events-none"></div>
                   <div className="relative z-10 p-7">
@@ -3395,7 +3408,7 @@ export default function LevelPage() {
                     </p>
                     <div className="flex items-end justify-between mt-7 pt-6 border-t border-white/10">
                       <span className="text-[11px] font-bold text-white/50">도달 예상 레벨</span>
-                      <span className="text-3xl font-black text-white tabular-nums leading-none">
+                      <span className="text-3xl font-black text-white tabular-nums leading-none" style={{ textShadow: "0 0 40px rgba(233,30,63,0.55)" }}>
                         <span className="text-[11px] font-black text-white/40 align-middle mr-1.5">LV</span>{simResult.finalLevel}
                       </span>
                     </div>
@@ -3445,7 +3458,7 @@ export default function LevelPage() {
                   </div>
 
                   {goalResult ? (
-                    <div className=" border border-[#e91e3f]/20 bg-[#e91e3f]/[0.05] p-5 text-center">
+                    <div className="rounded-lg border border-[#e91e3f]/20 bg-[#e91e3f]/[0.05] p-5 text-center">
                       <p className="text-[10px] font-bold text-[#8a8a8a] mb-2">Lv.{goalResult.targetLv} 도달까지</p>
                       <p className="text-3xl font-black text-[#e91e3f] tracking-tighter tabular-nums mb-1.5">
                         약 {goalResult.days.toLocaleString()}일
@@ -3470,7 +3483,7 @@ export default function LevelPage() {
           <div
             key={t.id}
             style={{ animation: "toastIn 0.35s cubic-bezier(0.16,1,0.3,1)" }}
-            className={`mt-2 px-5 py-3 rounded-2xl border text-xs font-bold shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-right ${t.accent ? "bg-[#e91e3f] border-[#e91e3f] text-white" : "bg-white border-[#ededed] text-[#131313]"}`}
+            className={`mt-2 px-5 py-3 rounded-2xl border text-xs font-bold shadow-2xl backdrop-blur-md text-right ${t.accent ? "bg-[#e91e3f] border-[#e91e3f] text-white shadow-[0_10px_30px_rgba(233,30,63,0.45)]" : "bg-white/95 border-black/10 text-[#131313] shadow-xl"}`}
           >
             {t.msg}
           </div>

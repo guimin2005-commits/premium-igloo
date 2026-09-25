@@ -54,7 +54,7 @@ export default function ShopInventoryPage() {
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
           <p className="text-sm text-[#5a5a5a] mb-7">인벤토리를 보려면 로그인해주세요.</p>
-          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold transition-colors">디스코드 로그인</button>
+          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
         </div>
       </div>
     );
@@ -85,7 +85,7 @@ export default function ShopInventoryPage() {
         ) : list.length === 0 ? (
           <div className="py-16 text-center break-keep">
             <p className="text-sm text-[#8a8a8a]">아직 보유한 아이템이 없습니다.</p>
-            <Link href="/arctic" className="inline-block mt-4 px-5 py-2.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-[12px] font-bold transition-colors">ARCTIC 둘러보기</Link>
+            <Link href="/arctic" className="inline-block mt-4 px-5 py-2.5 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[12px] font-bold transition-colors">ARCTIC 둘러보기</Link>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">

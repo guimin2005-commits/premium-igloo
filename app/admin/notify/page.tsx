@@ -140,7 +140,7 @@ export default function AdminNotifyPage() {
   if (gate) return gate;
 
   const ToolBtn = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
-    <button type="button" onClick={onClick} className="px-2.5 py-1.5 text-xs font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-black/5 transition-all flex items-center gap-1">{children}</button>
+    <button type="button" onClick={onClick} className="px-2.5 py-1.5 text-xs font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-black/5 rounded-md transition-all flex items-center gap-1">{children}</button>
   );
 
   return (
@@ -163,7 +163,7 @@ export default function AdminNotifyPage() {
 
         {/* 통지서 작성 */}
         <Reveal>
-        <form onSubmit={handleSubmit} className=" border border-black/10 bg-[#ffffff] overflow-hidden">
+        <form onSubmit={handleSubmit} className="rounded-xl border border-black/10 bg-[#ffffff] overflow-hidden">
           {/* 문서 헤더 */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-black/5 bg-black/[0.015]">
             <div className="flex items-center gap-2.5">
@@ -186,7 +186,7 @@ export default function AdminNotifyPage() {
                 <label className={labelClass}>통지 유형 <span className="text-[#e91e3f]">*</span></label>
                 <div className="flex flex-wrap gap-1.5">
                   {TYPES.map((t) => (
-                    <button type="button" key={t} onClick={() => setType(t)} className={`px-3.5 py-2 text-xs font-bold border transition-all ${type === t ? TYPE_STYLES[t].badge : "bg-transparent border-black/10 text-[#8a8a8a] hover:border-black/25"}`}>{t}</button>
+                    <button type="button" key={t} onClick={() => setType(t)} className={`px-3.5 py-2 text-xs font-bold rounded-md border transition-all ${type === t ? TYPE_STYLES[t].badge : "bg-transparent border-black/10 text-[#8a8a8a] hover:border-black/25"}`}>{t}</button>
                   ))}
                 </div>
               </div>
@@ -202,7 +202,7 @@ export default function AdminNotifyPage() {
             {/* 본문 + 서식 툴바 */}
             <div>
               <label className={labelClass}>본문 <span className="text-[#e91e3f]">*</span></label>
-              <div className="border border-black/10 overflow-hidden focus-within:border-[#e91e3f] transition-colors">
+              <div className="border border-black/10 rounded-lg overflow-hidden focus-within:border-[#e91e3f] transition-colors">
                 <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 bg-black/[0.02] border-b border-black/5">
                   <ToolBtn onClick={() => insertWrap("**")}><span className="font-extrabold text-sm">B</span> 굵게</ToolBtn>
                   <ToolBtn onClick={() => insertWrap("__")}><span className="underline text-sm">U</span> 밑줄</ToolBtn>
@@ -220,7 +220,7 @@ export default function AdminNotifyPage() {
             {(title.trim() || content.trim()) && (
               <div>
                 <label className={labelClass}>수신자에게 표시될 미리보기</label>
-                <div className={` border p-5 ${type === "경고" || type === "제재" ? "border-[#e91e3f]/20 bg-[#e91e3f]/[0.03]" : "border-black/10 bg-black/[0.02]"}`}>
+                <div className={`rounded-lg border p-5 ${type === "경고" || type === "제재" ? "border-[#e91e3f]/20 bg-[#e91e3f]/[0.03]" : "border-black/10 bg-black/[0.02]"}`}>
                   <div className="flex items-center gap-2 mb-2">
                     <span className={`text-[10px] font-black tracking-wider border px-2 py-0.5 rounded-full ${TYPE_STYLES[type].badge}`}>{type}</span>
                     <span className="ml-auto text-[11px] text-[#5a5a5a]">운영팀 · 방금</span>
@@ -233,7 +233,7 @@ export default function AdminNotifyPage() {
               </div>
             )}
 
-            <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold transition-all">
+            <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white font-bold rounded-lg transition-all">
               {isSubmitting ? "발송 중..." : "통지 발송"}
             </button>
           </div>
@@ -251,7 +251,7 @@ export default function AdminNotifyPage() {
           {isLoading ? (
             <div className="text-center py-10 text-[#8a8a8a] text-sm">불러오는 중...</div>
           ) : sent.length === 0 ? (
-            <div className="text-center py-10 text-[#5a5a5a] text-sm bg-black/[0.02] border border-black/5">발송한 통지가 없습니다.</div>
+            <div className="text-center py-10 text-[#5a5a5a] text-sm bg-black/[0.02] rounded-xl border border-black/5">발송한 통지가 없습니다.</div>
           ) : (
             <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
               {sent.map((n) => {
@@ -269,7 +269,7 @@ export default function AdminNotifyPage() {
                         <span className="text-[#5a5a5a]">{new Date(n.createdAt).toLocaleString("ko-KR")}</span>
                       </div>
                     </div>
-                    <button onClick={() => setDeleteConfirmId(n._id)} className="shrink-0 text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] bg-black/5 px-3 py-1.5 transition-colors">삭제</button>
+                    <button onClick={() => setDeleteConfirmId(n._id)} className="shrink-0 text-xs font-bold text-[#8a8a8a] hover:text-[#e91e3f] bg-black/5 px-3 py-1.5 rounded-lg transition-colors">삭제</button>
                   </div>
                 );
               })}

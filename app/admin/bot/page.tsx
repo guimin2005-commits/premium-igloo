@@ -204,7 +204,7 @@ function FormPanel({
   return (
     <div
       ref={panelRef}
-      className="mb-10 border border-black/10 p-5 md:p-6 bg-black/[0.015] scroll-mt-24"
+      className="mb-10 border border-black/10 rounded-xl p-5 md:p-6 bg-black/[0.015] scroll-mt-24"
     >
       <div className="flex items-center justify-between gap-4 mb-5">
         <h3 className="text-sm font-black text-[#131313] tracking-tight">{title}</h3>
@@ -911,7 +911,7 @@ export default function AdminBotPage() {
             )}
 
             {/* 설정 항목이 많아 스크롤 끝까지 내려가지 않아도 저장할 수 있게 아래에 붙여 둔다 */}
-            <div className="sticky bottom-0 -mx-6 mt-12 px-6 py-4 bg-white border-t border-black/10 flex items-center justify-between gap-4">
+            <div className="sticky bottom-0 -mx-6 mt-12 px-6 py-4 bg-[#f4f3f2]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
               <span className="text-[11px] font-bold text-[#8a8a8a]">봇에는 1분 이내 자동 반영됩니다.</span>
               <Btn type="submit" variant="primary" className="shrink-0">저장</Btn>
             </div>
@@ -1029,7 +1029,7 @@ export default function AdminBotPage() {
                   <select
                     value={tierMap[t.key] || ""}
                     onChange={(e) => setTierMap({ ...tierMap, [t.key]: e.target.value })}
-                    className="flex-1 min-w-0 bg-transparent border border-black/10 px-3 py-2.5 text-xs text-[#131313] outline-none focus:border-[#e91e3f] transition-colors"
+                    className="flex-1 min-w-0 bg-transparent border border-black/10 rounded-lg px-3 py-2.5 text-xs text-[#131313] outline-none focus:border-[#e91e3f] transition-colors"
                   >
                     <option value="" className="bg-[#ffffff]">— 역할 선택 —</option>
                     {grantableRoles.map((r) => (
@@ -1060,7 +1060,7 @@ export default function AdminBotPage() {
                 인벤토리 표기는 <b className="text-[#131313]">아이템 등록</b>에서 관리합니다.
                 {invRoles.length > 0 && <span className="block mt-1 text-[11px] text-[#8a8a8a]">옛 표기 역할 {invRoles.length}개가 남아 있습니다.</span>}
               </p>
-              <Link href="/admin/shop?tab=items" className="shrink-0 px-5 py-2.5 text-[12px] font-bold bg-[#131313] text-white hover:bg-[#2a2a2a] transition-colors text-center outline-none focus:outline-none">
+              <Link href="/admin/shop?tab=items" className="shrink-0 px-5 py-2.5 rounded-lg text-[12px] font-bold bg-[#131313] text-white hover:bg-[#2a2a2a] transition-colors text-center outline-none focus:outline-none">
                 아이템 등록으로
               </Link>
             </div>
@@ -1136,7 +1136,7 @@ export default function AdminBotPage() {
                 {isProtectedRoleOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsProtectedRoleOpen(false)}></div>
-                    <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e6e3de]">
+                    <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#f2f2f2]">
                       {guildRoles.map((r) => {
                         const picked = protectedRoleIds.includes(r.id);
                         return (
@@ -1159,7 +1159,7 @@ export default function AdminBotPage() {
                   {protectedRoleIds.map((id) => {
                     const r = guildRoles.find((g) => g.id === id);
                     return (
-                      <span key={id} className="inline-flex items-center gap-2 px-3 py-1.5 border border-black/10 bg-black/[0.03] text-xs font-bold text-[#131313]">
+                      <span key={id} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-black/10 bg-black/[0.03] text-xs font-bold text-[#131313]">
                         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: r?.color || "#99aab5" }}></span>
                         {/* 디스코드에서 지워진 역할도 ID 로 남겨 둔다 — 조용히 사라지면 무엇이 빠졌는지 알 수 없다 */}
                         <span className="truncate max-w-[14rem]">{r?.name || `삭제된 역할 (${id})`}</span>
@@ -1608,7 +1608,7 @@ export default function AdminBotPage() {
               </div>
 
               {Number(grantForm.amount) !== 0 && grantForm.amount !== "" && (
-                <div className={`mb-6 px-4 py-3 border text-[12px] font-bold ${
+                <div className={`mb-6 px-4 py-3 rounded-lg border text-[12px] font-bold ${
                   Number(grantForm.amount) > 0 ? "border-[#e91e3f]/30 bg-[#e91e3f]/[0.06] text-[#e91e3f]" : "border-amber-500/30 bg-amber-500/[0.06] text-amber-700"
                 }`}>
                   {Number(grantForm.amount) > 0

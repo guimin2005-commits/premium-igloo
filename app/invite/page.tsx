@@ -79,7 +79,7 @@ export default function InvitePage() {
       <main className="w-full max-w-md mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
         <h2 className="text-2xl font-black text-white mb-4 tracking-tight">로그인 필요</h2>
         <p className="text-gray-400 mb-8 text-sm">친구 초대 이벤트에 참여하시려면 로그인이 필요합니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold transition-all">Discord 로그인</button>
+        <button onClick={() => signIn("discord")} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#5865F2]/20">Discord 로그인</button>
       </main>
     );
   }
@@ -112,10 +112,10 @@ export default function InvitePage() {
         <div className="relative p-6 md:p-8">
           <p className="text-xs font-bold text-gray-400 mb-3">내 초대 코드</p>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex-1 bg-black/30 border border-white/10 px-5 py-4 font-mono text-2xl md:text-3xl font-black text-white tracking-[0.3em] text-center">
+            <div className="flex-1 bg-black/30 border border-white/10 rounded-xl px-5 py-4 font-mono text-2xl md:text-3xl font-black text-white tracking-[0.3em] text-center">
               {isLoading ? "······" : code}
             </div>
-            <button onClick={copyCode} disabled={isLoading || !code} className="shrink-0 px-6 py-4 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-sm font-bold transition-colors">
+            <button onClick={copyCode} disabled={isLoading || !code} className="shrink-0 px-6 py-4 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-colors">
               {copied ? "복사됨!" : "코드 복사"}
             </button>
           </div>
@@ -135,14 +135,14 @@ export default function InvitePage() {
         <h3 className="text-base font-bold text-white mb-1">친구 코드 입력</h3>
         <p className="text-xs text-gray-500 mb-5">초대받은 친구라면 코드를 입력하고 웰컴 보상을 받으세요. (1인 1회)</p>
         {hasUsed ? (
-          <div className="flex items-center gap-2 bg-emerald-500/5 border border-emerald-500/20 text-emerald-400 text-sm font-bold px-5 py-4">
+          <div className="flex items-center gap-2 bg-emerald-500/5 border border-emerald-500/20 text-emerald-400 text-sm font-bold rounded-xl px-5 py-4">
             <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
             이미 친구 초대 코드를 입력하셨습니다.
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
-            <input value={friendCode} onChange={(e) => setFriendCode(e.target.value.toUpperCase())} placeholder="친구의 초대 코드" maxLength={6} className="flex-1 px-5 py-3.5 bg-[#1a1a1a] border border-white/10 text-white text-sm font-mono tracking-widest uppercase outline-none focus:border-[#e91e3f] transition-colors placeholder:font-sans placeholder:tracking-normal placeholder:normal-case" />
-            <button type="submit" disabled={isSubmitting} className="shrink-0 px-7 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-sm font-bold transition-colors">{isSubmitting ? "확인 중..." : "입력하기"}</button>
+            <input value={friendCode} onChange={(e) => setFriendCode(e.target.value.toUpperCase())} placeholder="친구의 초대 코드" maxLength={6} className="flex-1 px-5 py-3.5 bg-[#1a1a1a] border border-white/10 rounded-xl text-white text-sm font-mono tracking-widest uppercase outline-none focus:border-[#e91e3f] transition-colors placeholder:font-sans placeholder:tracking-normal placeholder:normal-case" />
+            <button type="submit" disabled={isSubmitting} className="shrink-0 px-7 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-colors">{isSubmitting ? "확인 중..." : "입력하기"}</button>
           </form>
         )}
       </div>
@@ -170,8 +170,8 @@ export default function InvitePage() {
       </div>
 
       {popup.isOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4 overlay-in">
-          <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-sm p-8 text-center shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] flex flex-col items-center">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
+          <div className="bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl flex flex-col items-center">
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 ${popup.isError ? "bg-red-500/10 text-red-500" : "bg-[#e91e3f]/10 text-[#e91e3f]"}`}>
               {popup.isError ? (
                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -181,7 +181,7 @@ export default function InvitePage() {
             </div>
             <h2 className="text-xl font-bold text-white mb-3">{popup.isError ? "오류" : "초대 완료"}</h2>
             <p className="text-sm text-gray-400 mb-8 leading-relaxed whitespace-pre-line">{popup.message}</p>
-            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold transition-colors">확인</button>
+            <button onClick={() => setPopup({ ...popup, isOpen: false })} className="w-full py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">확인</button>
           </div>
         </div>
       )}

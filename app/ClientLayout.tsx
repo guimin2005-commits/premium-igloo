@@ -79,7 +79,7 @@ function RouteProgress({ pathname }: { pathname: string }) {
   if (animKey === 0) return null;
   return (
     <div key={animKey} className="fixed top-0 left-0 right-0 z-[300] h-[2px] pointer-events-none">
-      <div className="h-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] animate-[routeBar_0.7s_cubic-bezier(0.16,1,0.3,1)_forwards]"></div>
+      <div className="h-full bg-gradient-to-r from-[#e91e3f] to-[#ff5c77] shadow-[0_0_10px_rgba(233,30,63,0.7)] animate-[routeBar_0.7s_cubic-bezier(0.16,1,0.3,1)_forwards]"></div>
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes routeBar {
           0% { width: 0%; opacity: 1; }
@@ -402,7 +402,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   return (
-    <div className={`flex flex-col min-h-screen ${isWhitePage ? "bg-white" : isLightPage ? "bg-white" : "bg-[#090909]"}`}>
+    <div className={`flex flex-col min-h-screen ${isWhitePage ? "bg-white" : isLightPage ? "bg-[#f4f3f2]" : "bg-[#090909]"}`}>
       <ScrollLock />
       <RouteProgress pathname={pathname} />
       {/* 📌 경매방 모바일에서는 전역 헤더를 감춘다 — 경매 바가 자체 뒤로가기를 갖고 있고,
@@ -415,7 +415,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <div className={`fixed top-0 left-0 right-0 z-40 ${isAuctionRoom ? "hidden" : ""}`}>
       <header className={`w-full border-b backdrop-blur-md transition-colors duration-300 ${
         isWhitePage ? "border-[#ededed] bg-white/95"
-          : isLightPage ? "border-[#ededed] bg-white/95"
+          : isLightPage ? "border-black/[0.08] bg-[#f4f3f2]/95"
           : "border-white/10 bg-[#090909]/90"
       }`}>
         <div className={`max-w-7xl mx-auto px-5 md:px-6 flex items-center gap-4 md:gap-6 relative transition-[height] duration-200 ease-out ${barH}`}>
@@ -431,7 +431,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   : `shrink-0 font-bold text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-gray-300"}`}>고급 이글루</Link>
                 {section && (
                   <>
-                    <span className={`shrink-0 w-px h-4 ${isLightPage ? "bg-[#a3a3a3]" : "bg-white/20"}`} />
+                    <span className={`shrink-0 w-px h-4 ${isLightPage ? "bg-[#d4d4d4]" : "bg-white/20"}`} />
                     <Link href={section.href} className={`shrink-0 font-black tracking-[0.14em] leading-none whitespace-nowrap transition-colors ${scrolled ? "text-[14px] md:text-[15px]" : "text-[15px] md:text-[17px]"} ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-[#ff5c77]"}`}>
                       {section.name}
                     </Link>
@@ -461,12 +461,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) markNotifsSeen(); }} aria-label="알림" className={`relative transition-[padding,color] duration-500 ease-out outline-none focus:outline-none ${isNotifOpen ? "text-[#e91e3f]" : isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white"} ${scrolled ? "p-1.5" : "p-2"}`}>
                   <svg xmlns="http://www.w3.org/2000/svg" fill={isNotifOpen ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className={`transition-all duration-500 ${scrolled ? "w-[18px] h-[18px]" : "w-5 h-5"}`}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.bell} /></svg>
                   {unseenCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#e91e3f]"></span>
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#e91e3f] shadow-[0_0_6px_rgba(233,30,63,0.8)]"></span>
                   )}
                 </button>
 
                 {isNotifOpen && (
-                  <HeaderPopover anchorRef={notifRef} panelRef={notifPanelRef} className={`w-auto sm:w-[300px] rounded-2xl border overflow-hidden overlay-in shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] ${isLightPage ? "bg-white border-black/[0.07]" : "bg-[#131313] border-white/[0.07]"}`}>
+                  <HeaderPopover anchorRef={notifRef} panelRef={notifPanelRef} className={`w-auto sm:w-[300px] rounded-3xl backdrop-blur-2xl border overflow-hidden overlay-in ${isLightPage ? "bg-white/75 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/75 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
                     <div className={`px-5 pt-4 pb-3.5 border-b flex items-center justify-between relative overflow-hidden ${isLightPage ? "border-black/[0.06]" : "border-white/[0.06]"}`}>
                       <div className="absolute top-[-30px] right-[-20px] w-32 h-16 bg-[#e91e3f]/[0.12] blur-[36px] rounded-full pointer-events-none"></div>
                       <div className="relative flex items-center gap-2.5">
@@ -513,7 +513,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
               <div className="relative flex items-center h-full" ref={profileDropdownRef}>
                 <button onClick={() => setIsProfileOpen(!isProfileOpen)} className={`hidden md:flex items-center gap-2 rounded-full hover:bg-white/5 transition-all duration-500 outline-none focus:outline-none ${scrolled ? "p-1" : "p-1.5"}`}>
-                  <img src={session.user?.image || ""} alt="Profile" className={`rounded-full transition-all duration-500 ${isLightPage ? "bg-[#f2f2f2]" : "bg-gray-700"} ${scrolled ? "w-7 h-7" : "w-8 h-8"}`} />
+                  <img src={session.user?.image || ""} alt="Profile" className={`rounded-full bg-gray-700 transition-all duration-500 ${scrolled ? "w-7 h-7" : "w-8 h-8"}`} />
                   <div className="flex items-center gap-2 ml-1">
                     <span className={`font-bold transition-[font-size,letter-spacing] duration-500 ease-out ${isLightPage ? "text-[#131313]" : "text-white"} ${scrolled ? "text-[13px]" : "text-sm"}`}>{session.user?.name}</span>
                     {isVerified && hasScrimRole ? (
@@ -527,11 +527,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
                 
                 {isProfileOpen && (
-                  <HeaderPopover anchorRef={profileDropdownRef} panelRef={profilePanelRef} className={`w-auto sm:w-[272px] rounded-2xl border p-5 overflow-hidden overlay-in shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] ${isLightPage ? "bg-white border-black/[0.07]" : "bg-[#131313] border-white/[0.07]"}`}>
+                  <HeaderPopover anchorRef={profileDropdownRef} panelRef={profilePanelRef} className={`w-auto sm:w-[272px] rounded-3xl backdrop-blur-2xl border p-5 overflow-hidden overlay-in ${isLightPage ? "bg-white/75 border-black/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.28)]" : "bg-[#111111]/75 border-white/[0.07] shadow-[0_30px_70px_-18px_rgba(0,0,0,0.9)]"}`}>
                     <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 w-48 h-24 bg-[#e91e3f]/[0.1] blur-[44px] rounded-full pointer-events-none"></div>
                     <div className={`relative flex items-center gap-4 mb-4 pb-4 border-b ${isLightPage ? "border-black/[0.06]" : "border-white/[0.06]"}`}>
                       <div className="relative shrink-0">
-                        <img src={session.user?.image || ""} alt="Profile" className={`relative w-12 h-12 rounded-full ${isLightPage ? "bg-[#f2f2f2]" : "bg-gray-700"}`} />
+                        <img src={session.user?.image || ""} alt="Profile" className="relative w-12 h-12 rounded-full bg-gray-700" />
                       </div>
                       <div>
                         <div className={`font-bold text-base flex items-center gap-2 ${isLightPage ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</div>
@@ -554,22 +554,22 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     </div>
                     <div className="relative flex flex-col gap-0.5">
                       {!isVerifyPage && (
-                        <Link href="/profile" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] transition-colors font-bold ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>내 정보</Link>
+                        <Link href="/profile" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] rounded-xl transition-colors font-bold ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>내 정보</Link>
                       )}
                       {!isVerifyPage && isVerified && (
-                        <Link href="/invite" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] transition-colors font-bold ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>친구 초대 이벤트</Link>
+                        <Link href="/invite" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] rounded-xl transition-colors font-bold ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>친구 초대 이벤트</Link>
                       )}
                       {!isVerifyPage && (isSupporter || isAdmin) && (
-                        <Link href="/supporters" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] transition-colors font-bold ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>서포터즈</Link>
+                        <Link href="/supporters" onClick={() => setIsProfileOpen(false)} className={`w-full block px-3.5 py-2.5 text-[13px] rounded-xl transition-colors font-bold ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-300 hover:text-white hover:bg-white/[0.06]"}`}>서포터즈</Link>
                       )}
                       {isAdmin && (
-                        <Link href="/admin" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 transition-colors font-bold">
+                        <Link href="/admin" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-xl transition-colors font-bold">
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" /></svg>
                           관리자 페이지
                         </Link>
                       )}
                       <div className={`h-px my-1.5 mx-1 ${isLightPage ? "bg-black/[0.07]" : "bg-white/[0.06]"}`}></div>
-                      <button onClick={() => { setIsProfileOpen(false); signOut(); }} className="w-full text-left px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 transition-colors outline-none focus:outline-none font-black">로그아웃</button>
+                      <button onClick={() => { setIsProfileOpen(false); signOut(); }} className="w-full text-left px-3.5 py-2.5 text-[13px] text-[#e91e3f] hover:bg-[#e91e3f]/10 rounded-xl transition-colors outline-none focus:outline-none font-black">로그아웃</button>
                     </div>
                   </HeaderPopover>
                 )}
@@ -614,7 +614,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                      바 아래에 매달린 한 장이라 위쪽 모서리는 각지고 아래만 둥글다. ── */}
               <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 opacity-0 invisible group-hover/gnb:opacity-100 group-hover/gnb:visible transition-opacity duration-150"
                    style={{ width: "min(92vw, 900px)" }}>
-                <div className={`rounded-b-2xl border-x border-b shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] ${isLightPage ? "border-[#ededed] bg-white" : "border-white/[0.08] bg-[#0c0c0c]"}`}>
+                <div className={`rounded-b-2xl border-x border-b backdrop-blur-2xl ${isLightPage ? "border-[#ededed] bg-white/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.7)]"}`}>
                   <div className="grid grid-cols-3 gap-10 px-9 py-8">
                     {categoryGroups.map((group) => (
                       <div key={group.name}>
@@ -628,7 +628,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                             return (
                               <Link key={it.path} href={it.path}
                                 className={`py-[8px] text-[16px] font-semibold tracking-tight transition-colors ${
-                                  cur ? "text-[#e91e3f]" : isLightPage ? "text-[#8a8a8a] hover:text-[#131313]" : "text-gray-400 hover:text-white"
+                                  cur ? "text-[#e91e3f]" : isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white"
                                 }`}>{it.name}</Link>
                             );
                           })}
@@ -656,8 +656,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-[#e91e3f]/[0.06] blur-[120px] rounded-full pointer-events-none"></div>
             <div className="relative z-10 text-center max-w-md">
               <p className="text-5xl mb-8">🔧</p>
-              <h1 className="text-2xl md:text-3xl font-black text-[#131313] tracking-tight mb-4">더 나은 이글루를 짓는 중입니다</h1>
-              <p className="text-sm text-[#5a5a5a] leading-relaxed mb-8">현재 사이트 점검이 진행 중입니다.<br />잠시 후 다시 방문해 주세요.</p>
+              <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-4">더 나은 이글루를 짓는 중입니다</h1>
+              <p className="text-sm text-gray-400 leading-relaxed mb-8">현재 사이트 점검이 진행 중입니다.<br />잠시 후 다시 방문해 주세요.</p>
               <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="inline-block px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드에서 소식 받기</a>
             </div>
           </div>
@@ -678,7 +678,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
              (경매방에서는 오조작 방지를 위해 숨김) */}
       {!isVerifyPage && !isAuctionRoom && !isShopPage && !isArcticProfile && mounted && (
         <nav style={{ gridTemplateColumns: `repeat(${dockTabs.length}, minmax(0, 1fr))` }}
-          className={`md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border grid shadow-[0_18px_44px_-14px_rgba(0,0,0,0.26)] ${isLightPage ? "border-black/[0.07] bg-white" : "border-white/[0.07] bg-[#0c0c0c]"}`}>
+          className={`md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border backdrop-blur-2xl grid ${isLightPage ? "border-black/[0.07] bg-white/85 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.22)]" : "border-white/[0.07] bg-[#0b0b0b]/75 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85)]"}`}>
           {dockTabs.map((tab) => {
             const isActive = pathname === tab.path;
             return (
@@ -721,9 +721,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
       {/* 📌 쿠폰함 — 코드 등록과 보유 쿠폰을 한 창에서 */}
       {isCodeModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 sm:p-4 overlay-in" onClick={() => setIsCodeModalOpen(false)}>
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 overlay-in" onClick={() => setIsCodeModalOpen(false)}>
           <div onClick={(e) => e.stopPropagation()}
-            className={`rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[88dvh] sm:max-h-[80vh] overflow-hidden shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] relative flex flex-col animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200 border ${isLightPage ? "bg-white border-[#ededed]" : "bg-[#121212] border-white/10"}`}>
+            className={`rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[88dvh] sm:max-h-[80vh] overflow-hidden shadow-2xl relative flex flex-col animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200 border ${isLightPage ? "bg-white border-[#ededed]" : "bg-[#121212] border-white/10"}`}>
             {/* 머리 */}
             <div className={`shrink-0 flex items-center justify-between px-6 py-4 border-b ${isLightPage ? "border-[#ededed]" : "border-white/[0.07]"}`}>
               <div className="flex items-center gap-2.5">
@@ -732,7 +732,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </svg>
                 <h2 className={`text-base font-black tracking-tight ${isLightPage ? "text-[#131313]" : "text-white"}`}>쿠폰함</h2>
               </div>
-              <button onClick={() => setIsCodeModalOpen(false)} aria-label="닫기" className={`p-1.5 -mr-1.5 transition-colors outline-none ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-400 hover:text-white hover:bg-white/[0.06]"}`}>
+              <button onClick={() => setIsCodeModalOpen(false)} aria-label="닫기" className={`p-1.5 -mr-1.5 rounded-md transition-colors outline-none ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313] hover:bg-black/[0.05]" : "text-gray-400 hover:text-white hover:bg-white/[0.06]"}`}>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
               </button>
             </div>
@@ -741,9 +741,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <div className={`shrink-0 px-6 pt-5 pb-4 border-b ${isLightPage ? "border-[#ededed]" : "border-white/[0.07]"}`}>
               <form onSubmit={handleCodeSubmit} className="flex gap-2">
                 <input type="text" required placeholder="쿠폰 코드 입력" value={voucherCode} onChange={(e) => setVoucherCode(e.target.value)}
-                  className={`flex-1 min-w-0 px-4 py-3 text-sm outline-none focus:border-[#e91e3f] transition-colors uppercase placeholder:normal-case border ${isLightPage ? "bg-white border-[#ededed] text-[#131313] placeholder:text-[#a3a3a3]" : "bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600"}`} />
+                  className={`flex-1 min-w-0 px-4 py-3 rounded-xl text-sm outline-none focus:border-[#e91e3f] transition-colors uppercase placeholder:normal-case border ${isLightPage ? "bg-white border-[#ededed] text-[#131313] placeholder:text-[#a3a3a3]" : "bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600"}`} />
                 <button type="submit" disabled={isCodeSubmitting}
-                  className="px-5 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-[13px] font-bold transition-colors outline-none shrink-0">
+                  className="px-5 py-3 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-50 text-white text-[13px] font-bold rounded-xl transition-colors outline-none shrink-0">
                   {isCodeSubmitting ? "확인" : "등록"}
                 </button>
               </form>
@@ -763,10 +763,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               ) : myCoupons.length === 0 ? (
                 <p className="px-6 py-10 text-center text-xs text-gray-500 break-keep">보유한 쿠폰이 없습니다.</p>
               ) : (
-                <div className={`divide-y ${isLightPage ? "divide-[#ededed]" : "divide-white/[0.05]"}`}>
+                <div className={`divide-y ${isLightPage ? "divide-[#ececea]" : "divide-white/[0.05]"}`}>
                   {myCoupons.map((c) => (
                     <div key={c.id} className="px-6 py-3.5 flex items-center gap-3">
-                      <span className="w-9 h-9 bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
+                      <span className="w-9 h-9 rounded-lg bg-[#e91e3f]/10 text-[#e91e3f] flex items-center justify-center shrink-0">
                         <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.ticket} />
                         </svg>
@@ -794,32 +794,32 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       )}
 
       {isLoginModalOpen && !isGuestInquiryOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white border border-[#ededed] rounded-2xl w-full max-w-md overflow-hidden shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] relative">
-            <button onClick={() => setIsLoginModalOpen(false)} className="absolute top-4 right-4 p-2 text-[#8a8a8a] hover:text-[#131313] hover:bg-[#f2f2f2] rounded-full transition-colors outline-none focus:outline-none">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl ring-1 ring-white/5 w-full max-w-md overflow-hidden shadow-2xl relative">
+            <button onClick={() => setIsLoginModalOpen(false)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/20 rounded-full transition-colors outline-none focus:outline-none">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
             </button>
             <div className="p-8 text-center">
-              <h2 className="text-2xl font-bold text-[#131313] mb-2">로그인</h2>
-              <p className="text-sm text-[#5a5a5a] mb-8 leading-relaxed">고급 이글루의 모든 기능을 이용하시려면<br/>디스코드 계정으로 로그인해주세요.</p>
-              <button onClick={() => signIn("discord", { callbackUrl: "/" })} className="w-full flex items-center justify-center gap-3 py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-2xl transition-all outline-none focus:outline-none">Discord 로그인</button>
-              <button onClick={() => setIsGuestInquiryOpen(true)} className="mt-6 text-sm text-[#5a5a5a] hover:text-[#131313] underline underline-offset-4 outline-none focus:outline-none transition-colors">비회원으로 문의하시겠습니까?</button>
+              <h2 className="text-2xl font-bold text-white mb-2">로그인</h2>
+              <p className="text-sm text-gray-400 mb-8 leading-relaxed">고급 이글루의 모든 기능을 이용하시려면<br/>디스코드 계정으로 로그인해주세요.</p>
+              <button onClick={() => signIn("discord", { callbackUrl: "/" })} className="w-full flex items-center justify-center gap-3 py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">Discord 로그인</button>
+              <button onClick={() => setIsGuestInquiryOpen(true)} className="mt-6 text-sm text-gray-400 hover:text-white underline underline-offset-4 outline-none focus:outline-none transition-colors">비회원으로 문의하시겠습니까?</button>
             </div>
           </div>
         </div>
       )}
 
       {isGuestInquiryOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white border border-[#ededed] rounded-2xl w-full max-w-md overflow-hidden shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] relative p-8">
-            <button onClick={() => {setIsGuestInquiryOpen(false); setIsLoginModalOpen(false);}} className="absolute top-4 right-4 p-2 text-[#8a8a8a] hover:text-[#131313] hover:bg-[#f2f2f2] rounded-full transition-colors outline-none focus:outline-none">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl ring-1 ring-white/5 w-full max-w-md overflow-hidden shadow-2xl relative p-8">
+            <button onClick={() => {setIsGuestInquiryOpen(false); setIsLoginModalOpen(false);}} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/20 rounded-full transition-colors outline-none focus:outline-none">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
             </button>
-            <h2 className="text-xl font-bold text-[#131313] mb-2">비회원 문의</h2>
+            <h2 className="text-xl font-bold text-white mb-2">비회원 문의</h2>
             <form onSubmit={handleGuestInquiry} className="flex flex-col gap-4 mt-6">
-              <input type="email" required placeholder="답변 받을 이메일 주소" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} className="w-full px-4 py-3 bg-white border border-[#ededed] text-[#131313] placeholder:text-[#a3a3a3] text-sm outline-none focus:border-[#e91e3f] transition-colors" />
-              <textarea required placeholder="문의 내용을 상세히 적어주세요." rows={4} value={guestContent} onChange={(e) => setGuestContent(e.target.value)} className="w-full px-4 py-3 bg-white border border-[#ededed] text-[#131313] placeholder:text-[#a3a3a3] text-sm outline-none resize-none focus:border-[#e91e3f] transition-colors" />
-              <button type="submit" className="w-full py-3 mt-2 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold transition-all outline-none focus:outline-none">문의 접수하기</button>
+              <input type="email" required placeholder="답변 받을 이메일 주소" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} className="w-full px-4 py-3 bg-[#121212] border border-white/10 rounded-xl text-white text-sm outline-none focus:border-[#e91e3f] transition-colors" />
+              <textarea required placeholder="문의 내용을 상세히 적어주세요." rows={4} value={guestContent} onChange={(e) => setGuestContent(e.target.value)} className="w-full px-4 py-3 bg-[#121212] border border-white/10 rounded-xl text-white text-sm outline-none resize-none focus:border-[#e91e3f] transition-colors" />
+              <button type="submit" className="w-full py-3 mt-2 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#e91e3f]/20 outline-none focus:outline-none">문의 접수하기</button>
             </form>
           </div>
         </div>
@@ -841,7 +841,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         }
         const showCategories = !isVerifyPage && (status !== "authenticated" || isVerified);
         const itemCls = (active: boolean, accent?: boolean) =>
-          `w-full flex items-center px-3 py-3 mb-0.5 text-left text-sm font-bold outline-none transition-colors ${
+          `w-full flex items-center rounded-xl px-3 py-3 mb-0.5 text-left text-sm font-bold outline-none transition-colors ${
             active ? "bg-[#e91e3f]/10 text-[#e91e3f]"
               : accent ? "text-[#e91e3f] " + (isLightPage ? "active:bg-black/[0.05]" : "active:bg-white/[0.05]")
               : isLightPage ? "text-[#5a5a5a] active:bg-black/[0.05] active:text-[#131313]" : "text-gray-300 active:bg-white/[0.05] active:text-white"
@@ -860,13 +860,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           `}} />
 
           <div
-            className="absolute inset-0 bg-black/55"
+            className="absolute inset-0 bg-black/55 backdrop-blur-[6px]"
             style={{ animation: isMenuClosing ? "mmFadeOut 0.24s ease-in forwards" : "mmFadeIn 0.26s ease-out" }}
             onClick={closeMobileMenu}
           />
 
           <div
-            className={`absolute right-0 top-0 bottom-0 w-[82%] max-w-xs border-l flex flex-col overflow-hidden shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] ${isLightPage ? "bg-white border-[#ededed]" : "bg-[#0c0c0c] border-white/[0.07]"}`}
+            className={`absolute right-0 top-0 bottom-0 w-[82%] max-w-xs backdrop-blur-2xl border-l rounded-l-[28px] flex flex-col overflow-hidden ${isLightPage ? "bg-white/92 border-black/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.25)]" : "bg-[#0d0d0d]/90 border-white/[0.07] shadow-[-24px_0_70px_-20px_rgba(0,0,0,0.8)]"}`}
             style={{ animation: isMenuClosing ? "mmSlideOut 0.26s cubic-bezier(0.4,0,1,1) forwards" : "mmSlideIn 0.32s cubic-bezier(0.22,1,0.36,1)" }}
           >
             {/* 상단 크림슨 글로우 */}
@@ -889,7 +889,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 /* 눌러서 내 정보로 — 부스터 역할이 있으면 인증 배지 옆에 표시한다 */
                 <Link href="/profile" onClick={closeMobileMenu}
                   className={`relative flex items-center gap-3.5 p-3.5 mb-5 border rounded-2xl overflow-hidden transition-colors ${isLightPage ? "bg-black/[0.03] border-black/[0.06] active:bg-black/[0.06]" : "bg-white/[0.04] border-white/[0.06] active:bg-white/[0.07]"}`}>
-                  <img src={session.user?.image || ""} alt="Profile" className={`relative w-11 h-11 rounded-full ${isLightPage ? "bg-[#f2f2f2]" : "bg-gray-700"}`} />
+                  <img src={session.user?.image || ""} alt="Profile" className={`relative w-11 h-11 rounded-full ${isLightPage ? "bg-[#dedddb]" : "bg-gray-700"}`} />
                   <div className="relative min-w-0 flex-1">
                     <p className={`font-bold text-sm truncate ${isLightPage ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</p>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
@@ -920,7 +920,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     return (
                       <Link key={item.path} href={item.path} onClick={closeMobileMenu} className={itemCls(active)}>
                         {item.name}
-                        {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>}
+                        {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#e91e3f] shadow-[0_0_8px_rgba(233,30,63,0.8)]"></span>}
                       </Link>
                     );
                   })}
@@ -947,20 +947,20 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             {/* ── 푸터 ── */}
             <div className={`relative shrink-0 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${isLightPage ? "border-black/[0.07]" : "border-white/[0.07]"}`}>
               {status === "authenticated" && session ? (
-                <button onClick={() => { closeMobileMenu(); signOut(); }} className="w-full text-left px-3 py-3 text-sm font-black text-[#e91e3f] active:bg-[#e91e3f]/10 transition-colors outline-none">로그아웃</button>
+                <button onClick={() => { closeMobileMenu(); signOut(); }} className="w-full text-left px-3 py-3 rounded-xl text-sm font-black text-[#e91e3f] active:bg-[#e91e3f]/10 transition-colors outline-none">로그아웃</button>
               ) : (
                 <button onClick={() => { closeMobileMenu(); signIn("discord", { callbackUrl: "/" }); }} className="w-full py-3 rounded-full bg-[#5865F2] active:bg-[#4752C4] text-white text-sm font-bold transition-colors outline-none">Discord 로그인</button>
               )}
 
               <div className="flex items-center gap-4 px-3 pt-3">
-                <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#8a8a8a] active:text-[#131313]" : "text-gray-500 active:text-white"}`}>Discord</a>
-                <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#8a8a8a] active:text-[#131313]" : "text-gray-500 active:text-white"}`}>Kakao Talk</a>
+                <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 active:text-white transition-colors font-medium">Discord</a>
+                <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 active:text-white transition-colors font-medium">Kakao Talk</a>
               </div>
 
               <div className="flex items-center gap-3 px-3 pt-3 pb-1">
-                <Link href="/policy" onClick={closeMobileMenu} className={`text-[11px] transition-colors ${isLightPage ? "text-[#a3a3a3] active:text-[#131313]" : "text-gray-600 active:text-gray-400"}`}>이용약관</Link>
-                <span className={`w-px h-2.5 ${isLightPage ? "bg-[#ededed]" : "bg-white/10"}`}></span>
-                <Link href="/policy?tab=privacy" onClick={closeMobileMenu} className={`text-[11px] transition-colors ${isLightPage ? "text-[#a3a3a3] active:text-[#131313]" : "text-gray-600 active:text-gray-400"}`}>개인정보처리방침</Link>
+                <Link href="/policy" onClick={closeMobileMenu} className="text-[11px] text-gray-600 active:text-gray-400 transition-colors">이용약관</Link>
+                <span className="w-px h-2.5 bg-white/10"></span>
+                <Link href="/policy?tab=privacy" onClick={closeMobileMenu} className="text-[11px] text-gray-600 active:text-gray-400 transition-colors">개인정보처리방침</Link>
               </div>
             </div>
           </div>

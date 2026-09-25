@@ -13,8 +13,8 @@ export const ACCENT = "#e91e3f";
 /** @type {import("react").FC<any>} */
 export const HudPanel = ({ children, className = "", accent = false, corners = true, glow = false }) => (
   <div
-    className={`relative border bg-[#ffffff]/92 ${accent ? "border-[#e91e3f]/35" : "border-black/[0.09]"} ${
-      glow ? "" : ""
+    className={`relative rounded-lg border bg-[#ffffff]/92 ${accent ? "border-[#e91e3f]/35" : "border-black/[0.09]"} ${
+      glow ? "shadow-[0_20px_60px_-24px_rgba(233,30,63,0.45)]" : ""
     } ${className}`}
   >
     {corners && (
@@ -246,9 +246,9 @@ export const RankRows = ({ rows = [], myId, me, myName = "" }) => {
           <span
             className={`shrink-0 flex items-center justify-center tabular-nums font-black ${
               rank === 1
-                ? "w-8 h-8 bg-[#e91e3f] text-white text-sm"
+                ? "w-8 h-8 rounded-lg bg-[#e91e3f] text-white text-sm shadow-[0_6px_16px_-6px_rgba(233,30,63,0.7)]"
                 : podium
-                ? "w-8 h-8 border-[1.5px] border-[#131313] text-[#131313] text-sm"
+                ? "w-8 h-8 rounded-lg border-[1.5px] border-[#131313] text-[#131313] text-sm"
                 : "w-8 text-right text-[13px] text-[#a3a3a3]"
             }`}
           >
@@ -293,7 +293,7 @@ export const RankRows = ({ rows = [], myId, me, myName = "" }) => {
 // ── 빈 슬롯 — 0건 상태를 게임의 빈 퀘스트 슬롯 문법으로 ──
 /** @type {import("react").FC<any>} */
 export const EmptySlot = ({ children, className = "" }) => (
-  <div className={`border border-dashed border-black/10 h-[72px] flex items-center justify-center text-center text-[11px] font-bold text-[#a3a3a3] tracking-wide px-4 ${className}`}>
+  <div className={`border border-dashed border-black/10 rounded-lg h-[72px] flex items-center justify-center text-center text-[11px] font-bold text-[#a3a3a3] tracking-wide px-4 ${className}`}>
     {children}
   </div>
 );

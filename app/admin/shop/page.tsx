@@ -480,7 +480,7 @@ export default function AdminShopPage() {
                     <label className={labelClass}>표기 색상</label>
                     <div className="flex items-center gap-2">
                       <input type="color" value={itemForm.color || itemTypeColor(itemForm.type)} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })}
-                        className="w-11 h-11 shrink-0 border border-black/10 bg-white p-1" />
+                        className="w-11 h-11 shrink-0 rounded-lg border border-black/10 bg-white p-1" />
                       <input type="text" value={itemForm.color} maxLength={7} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })} placeholder={itemTypeColor(itemForm.type)} className={inputClass} />
                     </div>
                     <p className={fieldNote}>비우면 유형 기본색</p>
@@ -528,7 +528,7 @@ export default function AdminShopPage() {
                       const color = it.color || itemTypeColor(it.type);
                       return (
                         <div key={it._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                          <div className="relative w-12 h-12 bg-black/5 overflow-hidden shrink-0">
+                          <div className="relative w-12 h-12 rounded-lg bg-black/5 overflow-hidden shrink-0">
                             <CardArt it={it} iconSize={26} />
                           </div>
                           <div className="min-w-0 md:w-56 shrink-0">
@@ -652,7 +652,7 @@ export default function AdminShopPage() {
                         <label className={labelClass}>색상</label>
                         <div className="flex items-center gap-2">
                           <input type="color" value={form.color || itemTypeColor(form.type)} disabled={linked} onChange={(e) => setForm({ ...form, color: e.target.value })}
-                            className="w-11 h-11 shrink-0 border border-black/10 bg-white p-1 disabled:opacity-50" />
+                            className="w-11 h-11 shrink-0 rounded-lg border border-black/10 bg-white p-1 disabled:opacity-50" />
                           <input type="text" value={form.color} disabled={linked} maxLength={7} onChange={(e) => setForm({ ...form, color: e.target.value })}
                             placeholder={itemTypeColor(form.type)} className={`${inputClass} disabled:text-[#8a8a8a]`} />
                         </div>
@@ -678,7 +678,7 @@ export default function AdminShopPage() {
                         {isRoleOpen && !linked && (
                           <>
                             <div className="fixed inset-0 z-40" onClick={() => setIsRoleOpen(false)}></div>
-                            <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e6e3de]">
+                            <div className="absolute top-full left-0 w-full mt-1.5 bg-[#ffffff] border border-black/10 rounded-xl overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)] z-50 max-h-64 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#f2f2f2]">
                               {guildRoles.map((r) => (
                                 <button key={r.id} type="button" onClick={() => { setForm({ ...form, roleId: r.id }); setIsRoleOpen(false); }}
                                   className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2.5 transition-colors ${form.roleId === r.id ? "bg-[#e91e3f]/15 text-[#e91e3f] font-bold" : "text-[#5a5a5a] hover:bg-black/5"}`}>
@@ -813,7 +813,7 @@ export default function AdminShopPage() {
                   <ListFrame>
                     {items.map((it) => (
                       <div key={it._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                        <div className="relative w-12 h-12 bg-black/5 overflow-hidden shrink-0">
+                        <div className="relative w-12 h-12 rounded-lg bg-black/5 overflow-hidden shrink-0">
                           <CardArt it={it} iconSize={26} />
                         </div>
                         <div className="min-w-0 md:w-48 shrink-0">
@@ -944,7 +944,7 @@ export default function AdminShopPage() {
                   <ListFrame>
                     {banners.map((b) => (
                       <div key={b._id} className="py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                        <div className="w-28 h-14 bg-black/5 overflow-hidden shrink-0">
+                        <div className="w-28 h-14 rounded-lg bg-black/5 overflow-hidden shrink-0">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={b.imageUrl} alt="" className="w-full h-full object-cover" />
                         </div>
@@ -1009,7 +1009,7 @@ export default function AdminShopPage() {
                       { v: "reward", l: "보상형", d: "입력 즉시 역할·XP 지급" },
                     ].map((o) => (
                       <button key={o.v} type="button" onClick={() => setCouponForm({ ...couponForm, kind: o.v })}
-                        className={`py-3 px-4 text-left border transition-colors outline-none focus:outline-none ${
+                        className={`py-3 px-4 rounded-lg text-left border transition-colors outline-none focus:outline-none ${
                           (couponForm.kind || "discount") === o.v ? "bg-[#e91e3f]/15 text-[#e91e3f] border-[#e91e3f]/40" : "text-[#5a5a5a] border-black/10 hover:text-[#131313]"
                         }`}>
                         <span className="block text-xs font-bold">{o.l}</span>
@@ -1021,7 +1021,7 @@ export default function AdminShopPage() {
 
                 {/* ── 보상형 설정 ── */}
                 {couponForm.kind === "reward" && (
-                  <div className="mb-4 space-y-4 p-4 border border-black/10">
+                  <div className="mb-4 space-y-4 p-4 rounded-lg border border-black/10">
                     <div>
                       <label className={labelClass}>안내 문구</label>
                       <input type="text" value={couponForm.reward || ""} onChange={(e) => setCouponForm({ ...couponForm, reward: e.target.value })}
@@ -1241,7 +1241,7 @@ export default function AdminShopPage() {
                         )}
                       </div>
                       {o.contact && (
-                        <div className="mt-2 md:ml-[4.5rem] text-[11px] text-[#5a5a5a] bg-black/[0.03] border border-black/[0.06] px-3 py-2 whitespace-pre-wrap break-words">
+                        <div className="mt-2 md:ml-[4.5rem] text-[11px] text-[#5a5a5a] bg-black/[0.03] border border-black/[0.06] rounded-lg px-3 py-2 whitespace-pre-wrap break-words">
                           <span className="font-bold text-[#5a5a5a]">수령 정보 · </span>{o.contact}
                         </div>
                       )}
@@ -1384,8 +1384,8 @@ export default function AdminShopPage() {
 
       {/* ── 쿠폰 지급 ── */}
       {issueTarget && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4 overlay-in">
-          <div className="bg-[#ffffff] border border-black/10 rounded-2xl w-full max-w-sm p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
+          <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-sm p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
             <h2 className="text-lg font-bold text-[#131313] mb-2">쿠폰 지급</h2>
             <p className="text-xs text-[#5a5a5a] mb-5">
               <span className="font-black text-[#131313] tracking-wide">{issueTarget.code}</span>
@@ -1432,12 +1432,12 @@ export default function AdminShopPage() {
 
       {/* ── 기프트카드 발송 처리 ── */}
       {noteTarget && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4 overlay-in">
-          <div className="bg-[#ffffff] border border-black/10 rounded-2xl w-full max-w-sm p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in">
+          <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-sm p-8 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.28)]">
             <h2 className="text-lg font-bold text-[#131313] mb-2">발송 처리</h2>
             <p className="text-xs text-[#5a5a5a] mb-5">{noteTarget.userName} · {noteTarget.itemName}</p>
             {noteTarget.contact && (
-              <div className="text-[11px] text-[#5a5a5a] bg-black/[0.03] border border-black/[0.06] px-3 py-2 mb-4 whitespace-pre-wrap">{noteTarget.contact}</div>
+              <div className="text-[11px] text-[#5a5a5a] bg-black/[0.03] border border-black/[0.06] rounded-lg px-3 py-2 mb-4 whitespace-pre-wrap">{noteTarget.contact}</div>
             )}
             <input type="text" value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="운송장 번호 등 메모 (선택)"
               className={`${inputClass} mb-6`} />
@@ -1451,7 +1451,7 @@ export default function AdminShopPage() {
 
       {/* 📌 카드 미리보기 — 상점(라이트 톤)에서 실제로 어떻게 보이는지 그대로 렌더 */}
       {showPreview && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4 overlay-in" onClick={() => setShowPreview(false)}>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overlay-in" onClick={() => setShowPreview(false)}>
           <div className="w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <span className="text-[10px] font-black tracking-[0.3em] text-[#5a5a5a] uppercase">Shop Preview</span>
@@ -1461,7 +1461,7 @@ export default function AdminShopPage() {
             </div>
 
             {/* 상점 배경 위에 실제 카드 마크업 그대로 */}
-            <div className="bg-white rounded-2xl p-5">
+            <div className="bg-[#f4f3f2] rounded-2xl p-5">
               <div className="bg-white rounded-2xl border border-[#ededed] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col">
                 <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
                   <CardArt it={form} iconSize={60} />
@@ -1486,7 +1486,7 @@ export default function AdminShopPage() {
                       <div className="text-xl font-black text-[#131313] tracking-tight tabular-nums">{(Number(form.price) || 0).toLocaleString()}</div>
                       <div className="text-[10px] font-bold text-[#8a8a8a] tracking-wider">XP</div>
                     </div>
-                    <span className="px-5 py-2.5 rounded-full text-[12px] font-bold bg-[#e91e3f] text-white">구매하기</span>
+                    <span className="px-5 py-2.5 rounded-full text-[12px] font-bold bg-[#e91e3f] text-white shadow-[0_4px_12px_rgba(233,30,63,0.25)]">구매하기</span>
                   </div>
                 </div>
               </div>

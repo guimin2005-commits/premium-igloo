@@ -24,7 +24,7 @@ export default function ArcticFooter() {
             <Link href="/policy?tab=privacy" className="text-xs font-medium text-[#5a5a5a] hover:text-[#131313] transition-colors">개인정보처리방침</Link>
           </div>
         </div>
-        <div className="h-px w-full mb-6 bg-[#ededed]"></div>
+        <div className="h-px w-full mb-6 bg-gradient-to-r from-black/10 via-black/5 to-transparent"></div>
         <p className="text-[11px] font-medium tracking-wide leading-relaxed text-[#a3a3a3] break-keep">
           © 2026 Premium Igloo. All rights reserved. Unauthorized reproduction or redistribution is strictly prohibited.
         </p>

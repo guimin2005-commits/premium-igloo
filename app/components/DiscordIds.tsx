@@ -112,7 +112,7 @@ export function DiscordIdInput({
         {ids.length > 0 && <span className="text-[10px] font-bold text-gray-500 tabular-nums">{ids.length}명</span>}
       </div>
 
-      <div className=" bg-[#121212] border border-white/10 p-2.5 focus-within:border-[color:var(--dii-accent)] transition-colors" style={{ ["--dii-accent" as any]: accent }}>
+      <div className="rounded-xl bg-[#121212] border border-white/10 p-2.5 focus-within:border-[color:var(--dii-accent)] transition-colors" style={{ ["--dii-accent" as any]: accent }}>
         {ids.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
             {ids.map((id) => {
@@ -168,7 +168,7 @@ export function DiscordIdInput({
             type="button"
             onClick={() => add(draft)}
             disabled={!draft.trim()}
-            className="shrink-0 px-3.5 py-2 text-xs font-bold text-white disabled:opacity-35 transition-opacity"
+            className="shrink-0 px-3.5 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-35 transition-opacity"
             style={{ background: accent }}
           >
             추가

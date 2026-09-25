@@ -67,7 +67,7 @@ export default function OrdersPage() {
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
           <p className="text-sm text-[#5a5a5a] mb-7">구매 내역을 보려면 로그인해주세요.</p>
-          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold transition-colors">디스코드 로그인</button>
+          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
         </div>
       </div>
     );
@@ -114,7 +114,7 @@ export default function OrdersPage() {
               {orders.length === 0 ? "ARCTIC에서 XP로 역할과 혜택을 만나보세요." : "다른 상태를 선택해보세요."}
             </p>
             {orders.length === 0 && (
-              <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold transition-colors">
+              <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
                 상품 보러가기
               </Link>
             )}
@@ -145,17 +145,17 @@ export default function OrdersPage() {
                   <p className="text-[11px] text-[#8a8a8a]">{meta.desc}</p>
 
                   {o.contact && (
-                    <div className="mt-3 text-[11px] text-[#5a5a5a] bg-[#f2f2f2] px-3 py-2 whitespace-pre-wrap break-words">
+                    <div className="mt-3 text-[11px] text-[#5a5a5a] bg-[#f2f2f2] rounded-lg px-3 py-2 whitespace-pre-wrap break-words">
                       <span className="font-bold text-[#8a8a8a]">수령 정보 · </span>{o.contact}
                     </div>
                   )}
                   {o.adminNote && (
-                    <div className="mt-2 text-[11px] text-[#3f7a35] bg-[#e8f3e6] px-3 py-2">
+                    <div className="mt-2 text-[11px] text-[#3f7a35] bg-[#e8f3e6] rounded-lg px-3 py-2">
                       <span className="font-bold">운영진 메모 · </span>{o.adminNote}
                     </div>
                   )}
                   {o.error && (
-                    <div className="mt-2 text-[11px] text-[#d01634] bg-[#fdeaea] px-3 py-2">
+                    <div className="mt-2 text-[11px] text-[#d01634] bg-[#fdeaea] rounded-lg px-3 py-2">
                       지급 실패 · {o.error} — 운영진에게 문의해주세요.
                     </div>
                   )}

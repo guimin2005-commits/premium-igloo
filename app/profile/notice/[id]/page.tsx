@@ -58,7 +58,7 @@ export default function NoticeDetailPage() {
               <span className="ml-auto text-[11px] text-[#a3a3a3] tabular-nums">{item.createdAt ? new Date(item.createdAt).toLocaleString("ko-KR") : ""}</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-black text-[#131313] break-keep leading-snug tracking-tight mb-6">{item.title}</h1>
-            <div className=" border border-[#ededed] bg-white divide-y divide-[#ededed] mb-8">
+            <div className="rounded-lg border border-[#ededed] bg-white divide-y divide-[#ededed] mb-8">
               <div className="flex items-center justify-between px-4 py-2.5 text-xs"><span className="text-[#8a8a8a] font-bold">수신</span><span className="text-[#5a5a5a] font-bold">{session?.user?.name}</span></div>
               <div className="flex items-center justify-between px-4 py-2.5 text-xs"><span className="text-[#8a8a8a] font-bold">발신</span><span className="text-[#5a5a5a] font-bold">고급 이글루 운영팀{item.sentBy ? ` (${item.sentBy})` : ""}</span></div>
             </div>

@@ -218,13 +218,13 @@ export default function RecruitDetailPage() {
       </article>
 
       {confirmOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4" onClick={() => setConfirmOpen(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm p-7 text-center border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setConfirmOpen(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-sm p-7 text-center border border-[#ededed] shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-base font-black text-[#131313] mb-2">지원서를 제출할까요?</h2>
             <p className="text-[12px] text-[#8a8a8a] mb-6">제출 후에는 수정할 수 없습니다.</p>
             <div className="flex gap-2">
-              <button onClick={() => setConfirmOpen(false)} className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] text-[13px] font-bold transition-colors">취소</button>
-              <button onClick={executeSubmit} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">제출</button>
+              <button onClick={() => setConfirmOpen(false)} className="flex-1 py-3 rounded-xl bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] text-[13px] font-bold transition-colors">취소</button>
+              <button onClick={executeSubmit} className="flex-1 py-3 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">제출</button>
             </div>
           </div>
         </div>
@@ -232,7 +232,7 @@ export default function RecruitDetailPage() {
 
       {toast && (
         <div className="fixed bottom-24 md:bottom-8 right-4 md:right-6 z-[200] pointer-events-none">
-          <div className="px-5 py-3 rounded-2xl bg-[#131313] text-white text-xs font-bold shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">{toast}</div>
+          <div className="px-5 py-3 rounded-2xl bg-[#131313] text-white text-xs font-bold shadow-2xl">{toast}</div>
         </div>
       )}
     </main>

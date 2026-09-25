@@ -173,7 +173,7 @@ export default function CheckoutPage() {
         <div className="py-32 text-center break-keep px-6">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
           <p className="text-sm text-[#5a5a5a] mb-7">결제하려면 로그인해주세요.</p>
-          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold transition-colors">디스코드 로그인</button>
+          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
         </div>
       </div>
     );
@@ -183,7 +183,7 @@ export default function CheckoutPage() {
   if (result) {
     return (
       <div className="w-full flex-1 bg-white min-h-screen">
-        <div className="max-w-md mx-auto px-6 py-20 bg-white rounded-2xl mt-10 border border-[#ededed] p-10 text-center">
+        <div className="max-w-md mx-auto px-6 py-20 bg-white rounded-3xl mt-10 border border-[#ededed] p-10 text-center shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
           <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-6 ${result.ok ? "bg-[#e8f3e6] text-[#3f7a35]" : "bg-[#fdeaea] text-[#d01634]"}`}>
             {result.ok ? (
               <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
@@ -194,15 +194,15 @@ export default function CheckoutPage() {
           <h1 className="text-xl font-black text-[#131313] mb-2">{result.ok ? "주문이 완료되었습니다" : "결제 실패"}</h1>
           <p className="text-sm text-[#5a5a5a] leading-relaxed mb-8 break-keep">{result.message}</p>
           {result.ok && myXp != null && (
-            <div className="bg-[#f2f2f2] px-5 py-3 mb-8 flex items-center justify-between text-[13px]">
+            <div className="bg-[#f2f2f2] rounded-xl px-5 py-3 mb-8 flex items-center justify-between text-[13px]">
               <span className="text-[#5a5a5a]">남은 XP</span>
               <span className="font-black text-[#131313] tabular-nums">{myXp.toLocaleString()}</span>
             </div>
           )}
           <div className="flex gap-3">
-            <Link href="/arctic" className="flex-1 py-3.5 bg-[#f2f2f2] text-[#5a5a5a] font-bold hover:bg-[#ededed] transition-colors">상점으로</Link>
+            <Link href="/arctic" className="flex-1 py-3.5 bg-[#f2f2f2] text-[#5a5a5a] font-bold rounded-xl hover:bg-[#e0e0e0] transition-colors">상점으로</Link>
             {!result.ok && (
-              <button onClick={() => setResult(null)} className="flex-1 py-3.5 bg-[#e91e3f] text-white font-bold hover:bg-[#d01634] transition-colors">다시 시도</button>
+              <button onClick={() => setResult(null)} className="flex-1 py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl hover:bg-[#d01634] transition-colors">다시 시도</button>
             )}
           </div>
         </div>
@@ -216,15 +216,15 @@ export default function CheckoutPage() {
         <div className="py-32 text-center break-keep px-6">
           <h1 className="text-2xl font-black text-[#131313] mb-3">장바구니가 비어 있습니다</h1>
           <p className="text-sm text-[#5a5a5a] mb-7">상점에서 마음에 드는 상품을 담아보세요.</p>
-          <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold transition-colors">상점으로 가기</Link>
+          <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">상점으로 가기</Link>
         </div>
       </div>
     );
   }
 
   const checkbox = (checked: boolean) =>
-    `w-5 h-5 border flex items-center justify-center shrink-0 transition-colors ${
-      checked ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#a3a3a3]"
+    `w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+      checked ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#ededed]"
     }`;
 
   return (
@@ -244,7 +244,7 @@ export default function CheckoutPage() {
               <div className="divide-y divide-[#ededed]">
                 {rows.map((r) => (
                   <div key={r.itemId} className="px-6 py-4 flex gap-4 items-center">
-                    <div className="w-14 h-14 bg-[#f2f2f2] overflow-hidden shrink-0">
+                    <div className="w-14 h-14 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
                       {r.item.imageUrl && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
@@ -253,7 +253,7 @@ export default function CheckoutPage() {
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">
                         {r.item.name}
-                        {(r.days ?? 0) > 0 && <span className="shrink-0 px-1.5 py-0.5 bg-[#131313] text-white text-[10px] font-black">{durationLabel(r.days)}</span>}
+                        {(r.days ?? 0) > 0 && <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#131313] text-white text-[10px] font-black">{durationLabel(r.days)}</span>}
                       </h3>
                       <p className="text-[10px] font-bold text-[#8a8a8a] mt-0.5">
                         {r.item.type === "physical" ? "기프트카드" : r.item.type === "perk" ? "권한" : "역할"} · 수량 {r.qty}
@@ -277,7 +277,7 @@ export default function CheckoutPage() {
                 <p className="text-[11px] text-[#8a8a8a] mb-4">기프트카드가 포함되어 있습니다. 받으실 연락처를 입력해주세요.</p>
                 <textarea rows={3} value={contact} onChange={(e) => setContact(e.target.value)}
                   placeholder="휴대폰 번호 또는 기프티콘 받을 정보를 입력해주세요."
-                  className="w-full bg-white border border-[#ededed] px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] resize-none placeholder:text-[#a3a3a3]" />
+                  className="w-full bg-white border border-[#ededed] rounded-xl px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] resize-none placeholder:text-[#a3a3a3]" />
                 <p className="text-[10px] text-[#a3a3a3] mt-2">운영진만 확인하며, 발송 목적으로만 사용됩니다.</p>
               </div>
             )}
@@ -317,7 +317,7 @@ export default function CheckoutPage() {
                 <label className="block text-[11px] font-bold text-[#5a5a5a] mb-2">쿠폰 <span className="text-[#a3a3a3] font-medium">(선택)</span></label>
 
                 {coupon ? (
-                  <div className="flex items-center justify-between gap-2 px-4 py-3 bg-[#e91e3f]/[0.07] border border-[#e91e3f]/25">
+                  <div className="flex items-center justify-between gap-2 px-4 py-3 rounded-xl bg-[#e91e3f]/[0.07] border border-[#e91e3f]/25">
                     <div className="min-w-0">
                       <div className="text-[12px] font-black text-[#e91e3f] truncate">{coupon.name || "할인 쿠폰"}</div>
                       <div className="text-[10px] font-bold text-[#8a8a8a]">
@@ -332,7 +332,7 @@ export default function CheckoutPage() {
                     <button
                       onClick={() => { if (!showCouponPicker) setPendingCouponId(wallet.find((w: any) => w.code === coupon?.code)?.id ?? null); setShowCouponPicker(!showCouponPicker); }}
                       disabled={wallet.length === 0}
-                      className={`w-full flex items-center justify-between gap-2 px-4 py-3 mb-2 border text-left transition-colors ${
+                      className={`w-full flex items-center justify-between gap-2 px-4 py-3 mb-2 rounded-xl border text-left transition-colors ${
                         wallet.length === 0
                           ? "border-[#ededed] bg-[#f2f2f2] cursor-not-allowed"
                           : "border-[#ededed] bg-white hover:border-[#a3a3a3]"
@@ -359,7 +359,7 @@ export default function CheckoutPage() {
 
                     {/* 보유 쿠폰 목록 — 하나만 고른 뒤 '적용'을 눌러야 반영된다 */}
                     {showCouponPicker && wallet.length > 0 && (
-                      <div className="mb-2 border border-[#ededed] overflow-hidden">
+                      <div className="mb-2 rounded-xl border border-[#ededed] overflow-hidden">
                         <div className="divide-y divide-[#ededed] max-h-56 overflow-y-auto">
                           {wallet.map((w) => {
                             const picked = pendingCouponId === w.id;
@@ -367,7 +367,7 @@ export default function CheckoutPage() {
                               <button key={w.id} onClick={() => w.usable && setPendingCouponId(w.id)} disabled={!w.usable}
                                 className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${picked ? "bg-[#e91e3f]/[0.06]" : w.usable ? "hover:bg-[#f2f2f2]" : "opacity-50 cursor-not-allowed"}`}>
                                 {/* 선택 표시 — 하나만 고를 수 있다 */}
-                                <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${picked ? "border-[#e91e3f]" : "border-[#a3a3a3]"}`}>
+                                <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${picked ? "border-[#e91e3f]" : "border-[#ededed]"}`}>
                                   {picked && <span className="w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
                                 </span>
 
@@ -387,10 +387,10 @@ export default function CheckoutPage() {
                           })}
                         </div>
 
-                        <div className="px-4 py-3 border-t border-[#ededed] bg-white flex items-center justify-between gap-3">
+                        <div className="px-4 py-3 border-t border-[#ededed] bg-[#faf9f7] flex items-center justify-between gap-3">
                           <span className="text-[10px] text-[#8a8a8a] break-keep">쿠폰은 한 장만 사용할 수 있습니다.</span>
                           <button onClick={applyPendingCoupon} disabled={!pendingCouponId}
-                            className="px-4 py-2 bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 disabled:cursor-not-allowed text-white text-[12px] font-bold transition-colors shrink-0">
+                            className="px-4 py-2 rounded-full bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-40 disabled:cursor-not-allowed text-white text-[12px] font-bold transition-colors shrink-0">
                             적용
                           </button>
                         </div>
@@ -407,9 +407,9 @@ export default function CheckoutPage() {
                       <input type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") applyCoupon(); }}
                         placeholder="쿠폰 코드 입력"
-                        className="flex-1 min-w-0 bg-white border border-[#ededed] px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
+                        className="flex-1 min-w-0 bg-white border border-[#ededed] rounded-lg px-3 py-2.5 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] uppercase placeholder:normal-case placeholder:text-[#a3a3a3]" />
                       <button onClick={applyCoupon} disabled={isCheckingCoupon || !couponInput.trim()}
-                        className="px-4 py-2.5 bg-[#131313] text-white text-[12px] font-bold hover:bg-[#3a3a3a] disabled:opacity-40 transition-colors shrink-0">
+                        className="px-4 py-2.5 rounded-lg bg-[#131313] text-white text-[12px] font-bold hover:bg-black disabled:opacity-40 transition-colors shrink-0">
                         {isCheckingCoupon ? "확인" : "적용"}
                       </button>
                     </div>
@@ -441,7 +441,7 @@ export default function CheckoutPage() {
               </div>
 
               <button onClick={pay} disabled={!canPay}
-                className={`w-full py-4 font-bold transition-colors ${
+                className={`w-full py-4 font-bold rounded-xl transition-colors ${
                   canPay ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"
                 }`}>
                 {isPaying ? "결제 중..." : !enoughXp ? "XP가 부족합니다" : `${total.toLocaleString()} XP 결제하기`}

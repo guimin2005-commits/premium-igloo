@@ -184,7 +184,7 @@ export default function BoosterPage() {
         {/* 부스트 */}
         <div className="pt-10 pb-24 md:pb-16">
           <a href={DISCORD} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center h-12 px-8 rounded-full bg-[#131313] hover:bg-[#3a3a3a] text-white text-[14px] font-extrabold transition-colors">
+            className="inline-flex items-center h-12 px-8 rounded-full bg-[#131313] hover:bg-black text-white text-[14px] font-extrabold transition-colors">
             서버에서 부스트하기
           </a>
         </div>

@@ -92,7 +92,7 @@ export default function CartPage() {
         <div className="py-32 text-center px-6 break-keep">
           <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
           <p className="text-sm text-[#5a5a5a] mb-7">장바구니를 보려면 로그인해주세요.</p>
-          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold transition-colors">디스코드 로그인</button>
+          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
         </div>
       </div>
     );
@@ -118,7 +118,7 @@ export default function CartPage() {
             </div>
             <p className="text-sm font-bold text-[#131313] mb-1.5">장바구니가 비어 있습니다</p>
             <p className="text-xs text-[#8a8a8a] mb-7">마음에 드는 상품을 담아보세요.</p>
-            <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold transition-colors">
+            <Link href="/arctic" className="inline-block px-8 py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-full transition-colors">
               상품 보러가기
             </Link>
           </div>
@@ -127,10 +127,10 @@ export default function CartPage() {
             {/* 좌 — 담은 상품 */}
             <div className="lg:col-span-2">
               {/* 전체 선택 */}
-              <div className="flex items-center justify-between px-5 py-3 mb-3 bg-white border border-[#ededed]">
+              <div className="flex items-center justify-between px-5 py-3 mb-3 bg-white rounded-xl border border-[#ededed]">
                 <button onClick={toggleAll} className="flex items-center gap-2.5 text-[12px] font-bold text-[#131313]">
-                  <span className={`w-[18px] h-[18px] border flex items-center justify-center transition-colors ${
-                    allChecked ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#a3a3a3]"
+                  <span className={`w-[18px] h-[18px] rounded-md border flex items-center justify-center transition-colors ${
+                    allChecked ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#ededed]"
                   }`}>
                     {allChecked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                   </span>
@@ -156,13 +156,13 @@ export default function CartPage() {
                   return (
                     <div key={r.itemId} className={`p-5 flex gap-4 items-center transition-colors ${on ? "" : "bg-[#f2f2f2]"}`}>
                       <button onClick={() => toggleOne(r.itemId)} aria-label="선택" className="shrink-0">
-                        <span className={`w-[18px] h-[18px] border flex items-center justify-center transition-colors ${
-                          on ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#a3a3a3]"
+                        <span className={`w-[18px] h-[18px] rounded-md border flex items-center justify-center transition-colors ${
+                          on ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#ededed]"
                         }`}>
                           {on && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                         </span>
                       </button>
-                      <Link href="/arctic" className="w-20 h-20 bg-[#f2f2f2] overflow-hidden shrink-0">
+                      <Link href="/arctic" className="w-20 h-20 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
                         {r.item.imageUrl && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={r.item.imageUrl} alt="" className="w-full h-full object-cover" />
@@ -174,7 +174,7 @@ export default function CartPage() {
                         </span>
                         <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">
                         {r.item.name}
-                        {(r.days ?? 0) > 0 && <span className="shrink-0 px-1.5 py-0.5 bg-[#131313] text-white text-[10px] font-black">{durationLabel(r.days)}</span>}
+                        {(r.days ?? 0) > 0 && <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#131313] text-white text-[10px] font-black">{durationLabel(r.days)}</span>}
                       </h3>
                         {r.item.description && (
                           <p className="text-[11px] text-[#8a8a8a] truncate mt-0.5">{r.item.description}</p>
@@ -218,7 +218,7 @@ export default function CartPage() {
 
                 <Link href="/arctic/checkout"
                   onClick={(e) => { if (!canCheckout) { e.preventDefault(); return; } goCheckout(); }}
-                  className={`block w-full py-4 text-center font-bold transition-colors ${
+                  className={`block w-full py-4 text-center font-bold rounded-xl transition-colors ${
                     canCheckout ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"
                   }`}>
                   {picked.length === 0 ? "상품을 선택해주세요" : !enoughXp ? "XP가 부족합니다" : "결제하러 가기"}

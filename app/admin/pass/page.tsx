@@ -457,7 +457,7 @@ export default function AdminPassPage() {
 
       <div className="w-full max-w-6xl mx-auto px-6 pb-16 flex-1 flex flex-col space-y-14">
         {loadFailed && (
-          <div className="px-4 py-3 border border-[#e91e3f]/30 bg-[#e91e3f]/[0.06] text-[12px] font-bold text-[#c2183a] break-keep">
+          <div className="px-4 py-3 rounded-lg border border-[#e91e3f]/30 bg-[#e91e3f]/[0.06] text-[12px] font-bold text-[#c2183a] break-keep">
             현재 설정을 불러오지 못했습니다 (/api/admin/pass 응답 없음).
             아래 빈 구성이 운영 설정을 덮어쓰지 않도록 <strong>저장을 막아 두었습니다.</strong>
             <button onClick={fetchAll} className="ml-2 underline underline-offset-2 outline-none focus:outline-none">다시 불러오기</button>
@@ -465,7 +465,7 @@ export default function AdminPassPage() {
         )}
 
         {rolesFailed && !isLoading && (
-          <div className="px-4 py-3 border border-amber-500/30 bg-amber-500/[0.06] text-[12px] font-bold text-amber-700 break-keep">
+          <div className="px-4 py-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] text-[12px] font-bold text-amber-700 break-keep">
             역할 목록을 불러오지 못했습니다 (/api/discord-roles). 이미 지정된 역할 보상은 그대로 유지됩니다.
             {/* ⚠️ fetchRoles 다 — fetchAll 로 바꾸면 서버 저장본이 덮어써져 저장 안 한 티어 편집이 사라진다 */}
             <button onClick={fetchRoles} className="ml-2 underline underline-offset-2 outline-none focus:outline-none">다시 불러오기</button>
@@ -521,7 +521,7 @@ export default function AdminPassPage() {
                 { l: "해금가", v: toInt(unlockPrice).toLocaleString() },
                 { l: "상태", v: enabled ? "운영 중" : "중단" },
               ].map((s) => (
-                <div key={s.l} className="bg-white px-4 py-3.5">
+                <div key={s.l} className="bg-[#f4f3f2] px-4 py-3.5">
                   <div className="text-[10px] font-bold text-[#8a8a8a] mb-1">{s.l}</div>
                   <div className="text-[15px] font-black text-[#131313] tabular-nums">{s.v}</div>
                 </div>
@@ -547,14 +547,14 @@ export default function AdminPassPage() {
             />
 
             {badOrder && (
-              <div className="mb-4 px-4 py-3 border border-amber-500/30 bg-amber-500/[0.06] text-[12px] font-bold text-amber-700 break-keep">
+              <div className="mb-4 px-4 py-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] text-[12px] font-bold text-amber-700 break-keep">
                 필요 XP가 오름차순이 아닙니다. 이대로 저장하면 서버가 다시 정렬하고 레벨을 새로 매깁니다.
               </div>
             )}
 
             {/* 보상이 빈 티어는 막지 않는다 — 저장 전에 개수만 알린다 */}
             {!isLoading && emptyTierCount > 0 && (
-              <div className="mb-4 px-4 py-3 border border-black/10 bg-black/[0.03] text-[12px] font-bold text-[#5a5a5a] break-keep">
+              <div className="mb-4 px-4 py-3 rounded-lg border border-black/10 bg-black/[0.03] text-[12px] font-bold text-[#5a5a5a] break-keep">
                 무료 · 프리미엄 보상이 모두 비어 있는 티어 {emptyTierCount}개 — 이대로도 저장됩니다.
               </div>
             )}
@@ -633,7 +633,7 @@ export default function AdminPassPage() {
         </Reveal>
 
         {/* 스크롤 끝까지 내려가지 않아도 저장할 수 있게 하단에 고정 */}
-        <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-white border-t border-black/10 flex items-center justify-between gap-4">
+        <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#f4f3f2]/95 backdrop-blur border-t border-black/10 flex items-center justify-between gap-4">
           <span
             className={`text-[11px] font-bold break-keep ${
               loadFailed ? "text-[#e91e3f]" : flash ? "text-[#3f83b8]" : isDirty ? "text-[#e91e3f]" : "text-[#8a8a8a]"
@@ -658,7 +658,7 @@ export default function AdminPassPage() {
       {/* ── 티어 편집 모달 ── */}
       {draft && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-[#ffffff] border border-black/10 rounded-2xl w-full max-w-md max-h-[88svh] overflow-y-auto p-7 md:p-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#e6e3de]">
+          <div className="bg-[#ffffff] border border-black/10 rounded-3xl w-full max-w-md max-h-[88svh] overflow-y-auto p-7 md:p-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#f2f2f2]">
             <div className="flex items-baseline justify-between gap-3 mb-1">
               <h2 className="text-lg font-black text-[#131313]">티어 {draft.index + 1} 편집</h2>
               <span className="text-[10px] font-bold text-[#a3a3a3]">저장 버튼을 눌러야 반영됩니다</span>

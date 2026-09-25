@@ -99,19 +99,19 @@ export default function MyAppliesPage() {
       </section>
 
       {cancelId && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-[#131313]/45 p-4" onClick={() => !busy && setCancelId(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#ededed] rounded-2xl w-full max-w-sm p-8 text-center shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-[#131313]/45 backdrop-blur-sm p-4" onClick={() => !busy && setCancelId(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white border border-[#ededed] rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
             <h2 className="text-xl font-bold text-[#131313] mb-3">지원 취소</h2>
             <p className="text-sm text-[#5a5a5a] mb-8 leading-relaxed break-keep">취소하면 다시 지원해야 합니다.</p>
             <div className="flex gap-3">
-              <button onClick={() => setCancelId(null)} disabled={busy} className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#131313] font-bold transition-colors">닫기</button>
-              <button onClick={cancelApply} disabled={busy} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold transition-colors disabled:opacity-50">{busy ? "처리 중..." : "취소하기"}</button>
+              <button onClick={() => setCancelId(null)} disabled={busy} className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#131313] font-bold rounded-xl transition-colors">닫기</button>
+              <button onClick={cancelApply} disabled={busy} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-colors disabled:opacity-50">{busy ? "처리 중..." : "취소하기"}</button>
             </div>
           </div>
         </div>
       )}
       {toast && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 z-[120] px-4 py-2.5 rounded-full bg-[#131313] text-white text-[12px] font-bold">{toast}</div>
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 z-[120] px-4 py-2.5 rounded-full bg-[#131313] text-white text-[12px] font-bold shadow-lg">{toast}</div>
       )}
       {fromArctic && <ArcticDock activeKey="me" />}
     </main>

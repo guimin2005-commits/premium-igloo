@@ -108,7 +108,7 @@ export default function NoticeClient() {
           <h1 className="text-[30px] md:text-[34px] font-black tracking-tight leading-none">공지사항</h1>
           {isAdmin && (
             <button onClick={() => router.push("/write?category=공지사항")}
-              className="h-9 px-4 bg-[#131313] hover:bg-[#3a3a3a] text-white text-[12px] font-extrabold transition-colors">글쓰기</button>
+              className="h-9 px-4 rounded-full bg-[#131313] hover:bg-black text-white text-[12px] font-extrabold transition-colors">글쓰기</button>
           )}
         </div>
 
@@ -124,7 +124,7 @@ export default function NoticeClient() {
               </button>
             );
           })}
-          <div className="ml-auto relative w-32 md:w-60 h-9 border border-[#131313] bg-white overflow-hidden">
+          <div className="ml-auto relative w-32 md:w-60 h-9 rounded-full border-[1.5px] border-[#131313] bg-white overflow-hidden">
             <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="공지 검색"
               className="absolute inset-0 w-full h-full bg-transparent pl-4 pr-9 text-[12px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
             <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-[15px] h-[15px] text-[#131313] pointer-events-none" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -177,13 +177,13 @@ export default function NoticeClient() {
 
       {/* 삭제 확인 */}
       {deleteConfirmId && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteConfirmId(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm p-7 text-center border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setDeleteConfirmId(null)}>
+          <div className="bg-white rounded-3xl w-full max-w-sm p-7 text-center border border-[#ededed] shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-base font-black text-[#131313] mb-2">공지사항을 삭제할까요?</h2>
             <p className="text-[12px] text-[#8a8a8a] mb-6">되돌릴 수 없습니다.</p>
             <div className="flex gap-2">
-              <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] text-[13px] font-bold transition-colors">취소</button>
-              <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">삭제</button>
+              <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 rounded-xl bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] text-[13px] font-bold transition-colors">취소</button>
+              <button onClick={executeDelete} className="flex-1 py-3 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">삭제</button>
             </div>
           </div>
         </div>
@@ -191,7 +191,7 @@ export default function NoticeClient() {
 
       {toast && (
         <div className="fixed bottom-24 md:bottom-8 right-4 md:right-6 z-[200] pointer-events-none">
-          <div className="px-5 py-3 rounded-2xl bg-[#131313] text-white text-xs font-bold shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">{toast}</div>
+          <div className="px-5 py-3 rounded-2xl bg-[#131313] text-white text-xs font-bold shadow-2xl">{toast}</div>
         </div>
       )}
     </main>

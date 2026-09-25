@@ -151,7 +151,7 @@ export default function AdminHubPage() {
   if (gate) return gate;
 
   return (
-    <main className="w-full flex-1 flex flex-col relative text-[#131313]">
+    <main className="w-full flex-1 flex flex-col relative">
       <LuxStyles />
 
       {/* 이동 안내는 뺐다 — 좁은 화면에서는 좌측 패널이 아니라 상단 칩 바라 가리키는 대상이 달라진다 */}
@@ -169,14 +169,14 @@ export default function AdminHubPage() {
           right={
             <div className="flex items-center gap-2.5 shrink-0">
               <span className={`text-[10px] font-black tracking-wider ${maintenance ? "text-[#e91e3f]" : "text-[#5a5a5a]"}`}>{maintenance ? "🔧 점검 중" : "점검 모드"}</span>
-              <button onClick={toggleMaintenance} disabled={maintenanceLoading} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors disabled:opacity-40 ${maintenance ? "bg-[#e91e3f]" : "bg-[#a3a3a3]"}`}>
-                <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 transition-transform duration-200 ${maintenance ? "translate-x-5" : ""}`}></div>
+              <button onClick={toggleMaintenance} disabled={maintenanceLoading} className={`w-11 h-6 rounded-full relative outline-none focus:outline-none transition-colors disabled:opacity-40 ${maintenance ? "bg-[#e91e3f]" : "bg-black/10"}`}>
+                <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white ring-1 ring-black/15 shadow-sm transition-transform duration-200 ${maintenance ? "translate-x-5" : ""}`}></div>
               </button>
             </div>
           }
         />
 
-        <div className="grid grid-cols-2 md:grid-cols-4 border-y border-[#ededed] divide-x divide-[#ededed]">
+        <div className="grid grid-cols-2 md:grid-cols-4 border-y border-black/10 divide-x divide-black/[0.06]">
           {[
             { n: stats.memberCount, l: "전체 멤버", accent: false },
             { n: stats.onlineCount, l: "현재 온라인", accent: false, dot: true },
@@ -195,7 +195,7 @@ export default function AdminHubPage() {
 
         {/* 디스코드 서버 현황 — 플랫 행 */}
         {discordStats && (
-          <div className="border-b border-[#ededed] py-6">
+          <div className="border-b border-black/[0.06] py-6">
             <BlockHead
               label="Discord 서버 현황"
               right={<span className="text-[10px] font-bold text-[#5a5a5a]">개설 D+{discordStats.ageDays.toLocaleString()}일</span>}
@@ -228,7 +228,7 @@ export default function AdminHubPage() {
 
         {/* 요일×시간대 온라인 히트맵 — 좁은 화면에서 페이지가 아니라 이 블록만 가로로 스크롤된다 */}
         {heatmap.hasData && (
-          <div className="border-b border-[#ededed] pb-6 mb-6 overflow-x-auto no-bar">
+          <div className="border-b border-black/[0.06] pb-6 mb-6 overflow-x-auto no-bar">
             <div className="min-w-[560px]">
               <BlockHead
                 label="활동 골든타임 (최근 7일 · 평균 온라인)"
@@ -247,7 +247,7 @@ export default function AdminHubPage() {
                         key={h}
                         title={v >= 0 ? `${dayName} ${h}시 · 평균 ${Math.round(v)}명` : "데이터 없음"}
                         className="aspect-square rounded-[3px]"
-                        style={{ backgroundColor: v < 0 ? "#f2f2f2" : `rgba(233,30,63,${0.08 + (v / heatmap.max) * 0.85})` }}
+                        style={{ backgroundColor: v < 0 ? "rgba(0,0,0,0.03)" : `rgba(233,30,63,${0.08 + (v / heatmap.max) * 0.85})` }}
                       ></div>
                     ))}
                   </React.Fragment>
@@ -268,7 +268,7 @@ export default function AdminHubPage() {
           const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - 6 - ((v - min) / range) * (h - 12)}`).join(" ");
           const delta = vals[vals.length - 1] - vals[0];
           return (
-            <div className="border-b border-[#ededed] pb-6 mb-6">
+            <div className="border-b border-black/[0.06] pb-6 mb-6">
               <BlockHead
                 label={`멤버 증감 (최근 ${memberDaily.length}일)`}
                 right={<span className={`text-[11px] font-black ${delta >= 0 ? "text-emerald-700" : "text-[#e91e3f]"}`}>{delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toLocaleString()}명</span>}
@@ -306,7 +306,7 @@ export default function AdminHubPage() {
                   <div key={i} className="flex-1 flex flex-col items-center h-full justify-end">
                     {d.count > 0 && <span className="text-[9px] font-black text-[#e91e3f] mb-1.5">{d.count}</span>}
                     <div
-                      className={`w-full transition-all ${d.count > 0 ? "bg-gradient-to-t from-[#e91e3f]/60 to-[#e91e3f]" : "bg-[#f2f2f2]"}`}
+                      className={`w-full rounded-t-md transition-all ${d.count > 0 ? "bg-gradient-to-t from-[#e91e3f]/60 to-[#e91e3f]" : "bg-black/5"}`}
                       style={{ height: d.count > 0 ? `${Math.max((d.count / max) * 100, 12)}%` : "4px" }}
                     ></div>
                     <span className="text-[8px] font-bold text-[#5a5a5a] mt-1.5">{d.label}</span>
@@ -327,7 +327,7 @@ export default function AdminHubPage() {
                 { l: "쿠폰", v: `발급 ${stats.codes}개 · 누적 사용 ${stats.codeUses}회` },
                 { l: "명예의 전당", v: `수동 기록 ${stats.honors}건` },
               ].map((row, i) => (
-                <div key={i} className="flex items-baseline justify-between gap-4 py-2 border-b border-[#ededed] last:border-0">
+                <div key={i} className="flex items-baseline justify-between gap-4 py-2 border-b border-black/[0.05] last:border-0">
                   <span className="text-[11px] font-bold text-[#8a8a8a] shrink-0">{row.l}</span>
                   <span className="text-[11px] font-bold text-[#5a5a5a] text-right">{row.v}</span>
                 </div>
