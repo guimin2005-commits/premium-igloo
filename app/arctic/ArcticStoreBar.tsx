@@ -69,8 +69,8 @@ export default function ArcticStoreBar({ crumbs = [], active = "", cartCount, wi
 
         {/* 찜 · 장바구니 — 상점 메인과 같은 모양 (모바일은 하단바가 맡는다) */}
         <div className="hidden md:flex items-center gap-1 shrink-0">
-          <Link href="/arctic?panel=wish" aria-label={`찜한 상품 보기${wish ? ` (${wish})` : ""}`}
-            className="relative flex items-center justify-center w-9 h-9 rounded-full text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] transition-colors">
+          <Link href="/arctic/wish" aria-label={`찜한 상품 보기${wish ? ` (${wish})` : ""}`}
+            className={`relative flex items-center justify-center w-9 h-9 rounded-full transition-colors ${active === "wish" ? "text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
             <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.heart} />
             </svg>

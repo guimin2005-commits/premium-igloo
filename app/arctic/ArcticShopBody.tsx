@@ -16,7 +16,7 @@ import {
 import ArcticFooter from "./ArcticFooter";
 import ArcticDock from "./ArcticDock";
 import ArcticHome from "./ArcticHome";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useArcticFromLevel } from "./fromLevel";
 
 const ADMIN_USERS = ["elahw.06"];
@@ -283,14 +283,15 @@ export default function ArcticShopBody({
   // 📌 찜 — 로컬에 보관 (상품 id 목록)
   const [wish, setWish] = useState<string[]>([]);
   const [wishOnly, setWishOnly] = useState(false);
-  const [showWishList, setShowWishList] = useState(false);
 
   // 하위 페이지 하단바에서 찜·검색을 누르면 ?panel= 로 넘어온다
   const searchParams = useSearchParams();
+  const router = useRouter();
   const fromLevel = useArcticFromLevel(); // 레벨 탭에서 왔을 때만 모바일 유형 줄 맨 앞에 "‹ 레벨"
   useEffect(() => {
     const panel = searchParams.get("panel");
-    if (panel === "wish") setShowWishList(true);
+    // 찜한 상품은 따로 페이지가 됐다 — 옛 주소(?panel=wish)는 그리로 보낸다
+    if (panel === "wish") router.replace("/arctic/wish");
     if (panel === "search") setShowMobileSearch(true);
     // 상품 상세 · 장바구니 위 상점 줄(ArcticStoreBar)에서 유형 · 검색어를 들고 온다
     const type = searchParams.get("type");
@@ -309,8 +310,6 @@ export default function ArcticShopBody({
     try { localStorage.setItem("iglooShopWish", JSON.stringify(wish)); } catch {}
   }, [wish]);
 
-  // 찜한 상품 목록 (패널용)
-  const wishRows = useMemo(() => items.filter((i) => wish.includes(i._id)), [items, wish]);
 
   const toggleWish = (item: any) => {
     setWish((prev) => (prev.includes(item._id) ? prev.filter((x) => x !== item._id) : [...prev, item._id]));
@@ -708,7 +707,7 @@ export default function ArcticShopBody({
               return (
                 <button key={t.v}
                   onClick={() => {
-                    if (t.v === "home") { setView("home"); clearSearch(); setShowWishList(false); window.scrollTo({ top: 0, behavior: "smooth" }); }
+                    if (t.v === "home") { setView("home"); clearSearch(); window.scrollTo({ top: 0, behavior: "smooth" }); }
                     else goProducts(t.v);
                   }}
                   className={`relative shrink-0 h-full flex items-center text-[14px] md:text-[15px] font-extrabold transition-colors ${on ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
@@ -756,15 +755,15 @@ export default function ArcticShopBody({
                 <span className="hidden lg:block w-px h-4 bg-[#e0e0e0]" />
 
                 {/* 찜 · 장바구니 — 같은 모양: 테두리 아이콘 + 빨간 개수 점. 개수가 바뀌면 점이 한 번 튄다 */}
-                <button onClick={() => setShowWishList(true)} aria-label={`찜한 상품 보기${wish.length ? ` (${wish.length})` : ""}`}
-                  className={`relative hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showWishList ? "bg-[#e91e3f]/10 text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]"}`}>
+                <Link href="/arctic/wish" aria-label={`찜한 상품 보기${wish.length ? ` (${wish.length})` : ""}`}
+                  className="relative hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-colors text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]">
                   <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.heart} />
                   </svg>
                   {wish.length > 0 && (
                     <span key={wish.length} className="count-pop absolute top-0 right-0 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{wish.length}</span>
                   )}
-                </button>
+                </Link>
 
                 <Link href="/arctic/cart" aria-label={`장바구니${cartCount ? ` (${cartCount})` : ""}`}
                   className="relative hidden md:flex items-center justify-center w-9 h-9 rounded-full text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] transition-colors">
@@ -970,84 +969,14 @@ export default function ArcticShopBody({
         </div>
       )}
 
-      {/* ── 찜 목록 패널 ── */}
-      {showWishList && (
-        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowWishList(false)}>
-          <div className="w-full max-w-lg max-h-[80vh] bg-white rounded-3xl border border-[#ededed] flex flex-col shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] overflow-hidden"
-            style={{ animation: "menuDrop 0.26s cubic-bezier(0.16,1,0.3,1)" }} onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-5 border-b border-[#ededed] flex items-center justify-between shrink-0">
-              <h2 className="text-base font-black text-[#131313] flex items-center gap-2">
-                <svg className="w-4 h-4 text-[#e91e3f]" fill="currentColor" viewBox="0 0 24 24">
-                  <path d={ICON_PATHS.heart} />
-                </svg>
-                찜한 상품 {wishRows.length > 0 && <span className="text-[#e91e3f]">{wishRows.length}</span>}
-              </h2>
-              <button onClick={() => setShowWishList(false)} className="p-1.5 text-[#8a8a8a] hover:text-[#131313] transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
-              </button>
-            </div>
-
-            <div className="overflow-y-auto">
-              {wishRows.length === 0 ? (
-                <div className="py-16 text-center px-6 break-keep">
-                  <p className="text-sm font-bold text-[#131313]">찜한 상품이 없습니다</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-[#ededed]">
-                  {wishRows.map((it) => {
-                    const owned = ownedItemIds.has(it._id);
-                    const inCart = cart.some((c) => c.itemId === it._id);
-                    const soldOut = it.stock === 0;
-                    return (
-                      <div key={it._id} className="p-5 flex gap-4 items-center">
-                        <div className="relative w-16 h-16 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
-                          <CardArt it={it} iconSize={30} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <TypeBadge type={it.type} className="inline-block px-2 py-0.5 text-[9px] mb-1" />
-                          <h3 className="text-sm font-bold text-[#131313] truncate">{it.name}</h3>
-                          <p className="text-[12px] font-black text-[#131313] tabular-nums mt-0.5">
-                            {salePrice(it).toLocaleString()} XP
-                            {salePrice(it) < it.price && (
-                              <span className="ml-1.5 text-[10px] font-normal text-[#a3a3a3] line-through">{it.price.toLocaleString()} XP</span>
-                            )}
-                          </p>
-                        </div>
-                        <div className="flex flex-col gap-1.5 shrink-0">
-                          <button
-                            onClick={() => addToCart(it)}
-                            disabled={owned || soldOut || inCart}
-                            className={`px-3.5 py-2 rounded-full text-[11px] font-bold transition-colors ${
-                              owned || soldOut || inCart
-                                ? "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"
-                                : "bg-[#e91e3f] text-white hover:bg-[#d01634]"
-                            }`}>
-                            {owned ? "보유 중" : soldOut ? "품절" : inCart ? "담김" : "장바구니"}
-                          </button>
-                          <button onClick={() => toggleWish(it)}
-                            className="px-3.5 py-2 rounded-full text-[11px] font-bold text-[#a3a3a3] hover:text-[#d01634] transition-colors">
-                            찜 해제
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── 모바일 하단바 — 하위 페이지와 같은 공용 컴포넌트를 쓴다.
              ARCTIC 탭에서는 ClientLayout 이 전역 독을 숨기므로 겹치지 않는다. */}
       <ArcticDock
-        activeKey={showWishList ? "wish" : showMobileSearch || submitted ? "search" : showing === "home" ? "home" : ""}
+        activeKey={showMobileSearch || submitted ? "search" : showing === "home" ? "home" : ""}
         cartCount={cartCount}
         wishCount={wish.length}
         onSelect={(key) => {
-          if (key === "home") { setView("home"); clearSearch(); setShowWishList(false); window.scrollTo({ top: 0, behavior: "smooth" }); return true; }
-          if (key === "wish") { setShowWishList(true); return true; }
+          if (key === "home") { setView("home"); clearSearch(); window.scrollTo({ top: 0, behavior: "smooth" }); return true; }
           if (key === "search") { setShowMobileSearch(true); return true; }
           if (key === "me" && !isLoggedIn) { signIn("discord"); return true; }
           return false; // 장바구니·내 정보는 이동

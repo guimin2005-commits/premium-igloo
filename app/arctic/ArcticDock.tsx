@@ -17,7 +17,7 @@ const ITEMS: Item[] = [
   },
   {
     key: "wish",
-    href: "/arctic?panel=wish",
+    href: "/arctic/wish",
     label: "찜한 상품",
     icon: ICON_PATHS.heart,
   },
@@ -59,6 +59,7 @@ export default function ArcticDock({
     if (it.key === "cart") return pathname === "/arctic/cart";
     if (it.key === "me") return pathname === "/profile";
     if (it.key === "home") return pathname === "/arctic";
+    if (it.key === "wish") return pathname === "/arctic/wish";
     return false;
   };
 
