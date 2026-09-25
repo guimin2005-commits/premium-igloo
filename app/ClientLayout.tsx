@@ -213,11 +213,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   // 📌 모바일 독 — 카테고리 줄(소식 · 이벤트 · 대회 · 경매 · 고객센터)과 겹치지 않는 것만.
   //    세계를 오가는 길과 내 것으로 채운다. 닫힌 세계는 자리에서 빠진다.
+  //    알림은 상단 바 종이 맡는다 (새 알림 점 · 미리보기 · 알림함 열기) — 독에 또 두면 한 화면에 알림이 둘이 된다.
   const dockTabs = [
     { name: "홈", path: "/", icon: ICON_PATHS.home },
     ...(levelOpen ? [{ name: "SYSTEM : LEVEL", path: "/level", icon: ICON_PATHS.chart }] : []),
     ...(levelOpen && (shopPublic || isAdmin) ? [{ name: "ARCTIC", path: "/arctic", icon: ICON_PATHS.bag }] : []),
-    { name: "알림함", path: "/profile/notice", icon: ICON_PATHS.bell },
     { name: "내 정보", path: "/profile", icon: ICON_PATHS.user },
   ];
 
