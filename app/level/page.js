@@ -53,8 +53,6 @@ const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
 // 순서는 "내 것 → 시즌 → 정보" — 자주 보는 것이 앞, 한 번 읽고 마는 안내는 맨 뒤.
 const MAIN_TABS = [
   { id: "my", name: "내 대시보드" },
-  // 시즌 패스는 관리자가 꺼 두면 탭 자체가 없어야 한다 (shopOnly 와 같은 방식)
-  { id: "pass", name: "시즌 패스", passOnly: true },
   { id: "rank", name: "랭킹" },
   { id: "arctic", name: "ARCTIC", shopOnly: true, href: "/arctic" },
   { id: "table", name: "XP 테이블" },
@@ -184,69 +182,6 @@ const LuxCard = ({ children, className = "", glow = false }) => (
     {children}
   </div>
 );
-
-// 📌 시즌 패스 보상 머리표 — 칸이 좁아 아이콘 대신 짧은 글자로 종류를 먼저 읽힌다
-const PASS_KIND_MARK = { xp: "XP", point: "빙옥", role: "ROLE", item: "ITEM", none: "—" };
-
-// 📌 시즌 패스 보상 칸 — 무료(위)/프리미엄(아래) 두 줄이 같은 문법을 쓴다.
-//    상태는 색으로 먼저 읽힌다: 받을 수 있으면 잉크 채움, 받았으면 옅게, 잠기면 자물쇠.
-//    좁은 화면에서 칸이 뭉개지지 않도록 높이를 고정하고 레일 쪽에서 가로로 넘긴다.
-const PassRewardCell = ({ reward, trackLabel, tierLevel, locked = false, busy = false, onClaim }) => {
-  const r = reward || {};
-  const empty = !r.kind || r.kind === "none";
-  const claimed = !!r.claimed;
-  const claimable = !!r.claimable && !busy;
-  const tone = r.claimable
-    ? "bg-[#131313] text-white border-transparent hover:bg-[#2a2a2a]"
-    : claimed
-    ? "bg-black/[0.04] text-[#8a8a8a] border-black/[0.06]"
-    : empty
-    ? "bg-transparent text-[#a3a3a3] border-dashed border-black/[0.10]"
-    : "bg-black/[0.03] text-[#5a5a5a] border-black/[0.07]";
-  // 잠긴 프리미엄은 보상 이름은 보여 주되 한 겹 흐리게 — "있다는 것"은 알아야 해금 동기가 된다
-  const dim = locked && !claimed ? "opacity-55" : "";
-  const Tag = r.claimable ? "button" : "div";
-  const tagProps = r.claimable ? { type: "button", onClick: onClaim, disabled: busy } : {};
-
-  return (
-    <Tag
-      {...tagProps}
-      aria-label={`티어 ${tierLevel} ${trackLabel} 보상 ${r.label || "없음"}${claimed ? " · 수령완료" : claimable ? " · 받기" : locked ? " · 잠김" : ""}`}
-      className={`w-full h-[112px] rounded-xl border px-2 flex flex-col items-center justify-center text-center transition-colors outline-none focus:outline-none ${tone} ${dim}`}
-    >
-      {/* 아이템 보상은 등록한 아이콘(프리셋·이모지·이미지)이 머리표를 대신한다 */}
-      {r.kind === "item" && (r.icon || r.imageUrl) ? (
-        <ItemIcon icon={r.icon} imageUrl={r.imageUrl} type={r.itemType || "item"} size={18} color={r.claimable ? "#ffffff" : r.color || undefined} />
-      ) : (
-        <span className={`text-[9px] font-black tracking-[0.18em] ${r.claimable ? "text-white/45" : "text-[#a3a3a3]"}`}>
-          {PASS_KIND_MARK[r.kind] || "—"}
-        </span>
-      )}
-      <span className="mt-1.5 text-[11px] font-black leading-tight break-keep line-clamp-2">{r.label || "-"}</span>
-      <span className="mt-2 h-5 flex items-center">
-        {empty ? (
-          <span className="text-[10px] font-bold text-[#a3a3a3]">보상 없음</span>
-        ) : claimed ? (
-          <span className="inline-flex items-center gap-1 text-[10px] font-black text-[#8a8a8a]">
-            <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7" /></svg>
-            수령완료
-          </span>
-        ) : claimable ? (
-          <span className="inline-flex items-center h-5 px-2.5 rounded-full bg-[#e91e3f] text-white text-[10px] font-black">받기</span>
-        ) : busy && r.claimable ? (
-          <span className="inline-flex items-center h-5 px-2.5 rounded-full bg-white/20 text-white text-[10px] font-black">처리 중</span>
-        ) : locked ? (
-          <span className="inline-flex items-center gap-1 text-[10px] font-black text-[#a3a3a3]">
-            <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
-            잠김
-          </span>
-        ) : (
-          <span className="text-[10px] font-bold text-[#a3a3a3]">미도달</span>
-        )}
-      </span>
-    </Tag>
-  );
-};
 
 // 📌 대시보드 공용 헬퍼 — 효과음(경매 페이지 playTone 패턴)·상대시간·KST 오늘 날짜
 const playTone = (freq = 880, dur = 0.12, type = "sine", vol = 0.04) => {
@@ -411,10 +346,27 @@ const LevelCurve = ({ myLevel = null }) => {
 //    theme 은 바탕과 번짐 색만 바꾼다 — 시즌 패스는 보라.
 //    스크롤 잠금은 루트의 "fixed inset-0" + z-[120] 을 보고 전역 ScrollLock 이 건다.
 const POP_THEME = {
-  ink: { bg: "#131313", glow: "rgba(233,30,63,0.2)" },
-  pass: { bg: "linear-gradient(160deg, #2a1a4d 0%, #1a1233 42%, #120d22 100%)", glow: "rgba(155,107,255,0.38)" },
+  ink: { bg: "#131313", glow: "rgba(233,30,63,0.2)", grid: true },
+  pass: {
+    bg: "linear-gradient(160deg, #2a1a4d 0%, #1a1233 42%, #120d22 100%)",
+    glow: "rgba(155,107,255,0.4)",
+    glow2: "rgba(255,122,198,0.16)",
+    // 별빛 — 점 몇 개만 흩뿌린다
+    stars: [
+      "radial-gradient(1.5px 1.5px at 8% 22%, rgba(255,255,255,0.75), transparent 70%)",
+      "radial-gradient(1px 1px at 19% 64%, rgba(255,255,255,0.55), transparent 70%)",
+      "radial-gradient(1.5px 1.5px at 31% 12%, rgba(228,212,255,0.8), transparent 70%)",
+      "radial-gradient(1px 1px at 46% 38%, rgba(255,255,255,0.45), transparent 70%)",
+      "radial-gradient(1px 1px at 58% 8%, rgba(255,255,255,0.6), transparent 70%)",
+      "radial-gradient(1.5px 1.5px at 67% 54%, rgba(228,212,255,0.6), transparent 70%)",
+      "radial-gradient(1px 1px at 79% 18%, rgba(255,255,255,0.7), transparent 70%)",
+      "radial-gradient(1px 1px at 88% 76%, rgba(255,255,255,0.5), transparent 70%)",
+      "radial-gradient(1.5px 1.5px at 94% 40%, rgba(255,255,255,0.65), transparent 70%)",
+      "radial-gradient(1px 1px at 38% 88%, rgba(228,212,255,0.55), transparent 70%)",
+    ].join(","),
+  },
 };
-const PopShell = ({ open, onClose, title, count, icon, tabs, left, children, footer, theme = "ink" }) => {
+const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left, children, footer, theme = "ink" }) => {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -432,11 +384,13 @@ const PopShell = ({ open, onClose, title, count, icon, tabs, left, children, foo
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full sm:max-w-3xl max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
+        className="relative w-full sm:max-w-3xl h-[86dvh] sm:h-[min(620px,88vh)] overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
         style={{ background: t.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
       >
-        <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
+        {t.grid && <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>}
+        {t.stars && <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ backgroundImage: t.stars }}></div>}
         <div aria-hidden className="absolute -top-28 -right-16 w-80 h-80 blur-[100px] rounded-full pointer-events-none" style={{ background: t.glow }}></div>
+        {t.glow2 && <div aria-hidden className="absolute -bottom-32 -left-20 w-80 h-80 blur-[110px] rounded-full pointer-events-none" style={{ background: t.glow2 }}></div>}
 
         {/* 모바일 바텀시트 손잡이 */}
         <div aria-hidden className="sm:hidden relative z-10 flex justify-center pt-2.5"><span className="w-10 h-1 rounded-full bg-white/20"></span></div>
@@ -449,6 +403,7 @@ const PopShell = ({ open, onClose, title, count, icon, tabs, left, children, foo
             </svg>
             <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-none truncate">{title}</h3>
             {count != null && <span className="shrink-0 text-sm font-black text-white/40 tabular-nums">{count}</span>}
+            {badge}
           </div>
           <button
             onClick={onClose}
@@ -463,9 +418,9 @@ const PopShell = ({ open, onClose, title, count, icon, tabs, left, children, foo
         <div className={`relative z-10 shrink-0 px-5 sm:px-7 border-b border-white/[0.08] ${tabs ? "py-4 flex items-center gap-1.5 overflow-x-auto no-bar" : "pt-4"}`}>{tabs}</div>
 
         {/* 본문 — PC 는 왼쪽 요약 | 오른쪽 목록, 모바일은 위아래로 한 번에 스크롤 */}
-        <div className="relative z-10 flex-1 min-h-0 overflow-y-auto sm:overflow-hidden sm:flex">
+        <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto sm:overflow-hidden sm:flex">
           <div className="shrink-0 sm:w-[236px] sm:border-r border-white/[0.08] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto flex flex-col">{left}</div>
-          <div className="min-w-0 flex-1 px-5 sm:px-6 pb-6 pt-1 sm:py-6 sm:overflow-y-auto">{children}</div>
+          <div data-pop-list className="min-w-0 flex-1 px-5 sm:px-6 pb-6 pt-1 sm:py-6 sm:overflow-y-auto">{children}</div>
         </div>
 
         {footer}
@@ -596,47 +551,106 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
   );
 };
 
-// 📌 시즌 패스 창 — 카드의 "시즌 패스" 로 연다. 틀은 PopShell, 바탕은 보라.
-//    왼쪽: 내 티어 · 진행 · 시즌 · 프리미엄(잠겨 있으면 해금 버튼). 오른쪽: 티어마다 무료 · 프리미엄 보상 한 줄.
+// 📌 시즌 패스 창 — 카드의 "시즌 패스" 로 연다. 틀은 PopShell, 바탕은 보라 · 별빛.
+//    왼쪽: 티어 메달(다음 티어까지 채워지는 보라→분홍 링) · 남은 XP · 프리미엄 카드(잠겨 있으면 해금 버튼)
+//    오른쪽: 티어 레일 — 노드 · 무료 보상 칩 · 프리미엄 보상 칩(보라 · 분홍 결) · 필요 XP. 열면 다음 티어로 스크롤
 //    수령 · 해금 판정은 서버가 다시 한다 — 여기서는 서버가 준 상태만 그린다.
-const PASS_DOT = { xp: "#ff5c77", point: "#4fc3b5", role: "#b69cff", item: "#b69cff" };
-const PassCell = ({ r, locked = false, busy = false, onClaim }) => {
-  if (!r || !r.kind || r.kind === "none") return <span className="text-[12px] font-bold text-white/20">—</span>;
+const PASS_KIND_ICON = { xp: "bolt", point: "sparkles", role: "shieldCheck", item: "gift" };
+const CROWN = "M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8z";
+const PassRing = ({ pct = 0, children }) => {
+  const R = 54;
+  const C = 2 * Math.PI * R;
   return (
-    <span className="min-w-0 flex items-center gap-2">
-      <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: PASS_DOT[r.kind] || "#b69cff", opacity: r.claimed || locked ? 0.4 : 1 }}></span>
-      <span className={`min-w-0 truncate text-[13px] font-bold ${r.claimed ? "text-white/35" : locked ? "text-white/45" : "text-white/85"}`}>{r.label}</span>
-      {r.claimable ? (
-        <button
-          type="button"
-          onClick={onClaim}
-          disabled={busy}
-          className="shrink-0 h-6 px-2.5 rounded-full bg-[#9b6bff] enabled:hover:bg-[#8a57f5] text-white text-[10px] font-black transition-colors outline-none focus:outline-none disabled:opacity-50"
-        >
-          {busy ? "…" : "받기"}
-        </button>
-      ) : r.claimed ? (
-        <svg aria-label="수령 완료" viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0 text-white/35" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7" /></svg>
+    <div className="relative w-[136px] h-[136px] shrink-0">
+      <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
+        <defs>
+          <linearGradient id="passRing" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#b69cff" />
+            <stop offset="100%" stopColor="#ff7ac6" />
+          </linearGradient>
+        </defs>
+        <circle cx="60" cy="60" r={R} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
+        {pct > 0 && (
+          <circle
+            cx="60" cy="60" r={R} fill="none" stroke="url(#passRing)" strokeWidth="6" strokeLinecap="round"
+            strokeDasharray={C} strokeDashoffset={C * (1 - Math.min(100, pct) / 100)}
+            style={{ transition: "stroke-dashoffset 0.9s cubic-bezier(0.16,1,0.3,1)" }}
+          />
+        )}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">{children}</div>
+    </div>
+  );
+};
+const PassReward = ({ r, premium = false, locked = false, busy = false, onClaim }) => {
+  if (!r || !r.kind || r.kind === "none") return <span className="text-[12px] font-bold text-white/20 pl-1">—</span>;
+  const icon = (
+    <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9">
+      <path d={ICON_PATHS[PASS_KIND_ICON[r.kind] || "gift"]} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+  const chip = "min-w-0 max-w-full inline-flex items-center gap-1.5 h-8 pl-2.5 pr-3 rounded-full text-[12px] font-bold";
+  if (r.claimable) {
+    return (
+      <button
+        type="button"
+        onClick={onClaim}
+        disabled={busy}
+        className={`${chip} text-white transition-transform hover:-translate-y-px outline-none focus:outline-none disabled:opacity-60`}
+        style={{ background: "linear-gradient(135deg, #9b6bff 0%, #e05bb5 100%)" }}
+      >
+        {icon}
+        <span className="truncate">{r.label}</span>
+        <span className="shrink-0 ml-0.5 text-[10px] font-black">{busy ? "…" : "받기"}</span>
+      </button>
+    );
+  }
+  return (
+    <span
+      className={`${chip} ${premium ? "text-[#efe6ff]" : "text-white/80"} ${r.claimed || locked ? "opacity-45" : ""}`}
+      style={premium
+        ? { background: "linear-gradient(135deg, rgba(182,156,255,0.22), rgba(255,122,198,0.14))", boxShadow: "inset 0 0 0 1px rgba(214,180,255,0.35)" }
+        : { background: "rgba(255,255,255,0.06)", boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.1)" }}
+    >
+      {icon}
+      <span className="truncate">{r.label}</span>
+      {r.claimed ? (
+        <svg aria-label="수령 완료" viewBox="0 0 24 24" className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7" /></svg>
       ) : locked ? (
-        <svg aria-label="잠김" viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0 text-white/30" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
+        <svg aria-label="잠김" viewBox="0 0 24 24" className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
       ) : null}
     </span>
   );
 };
-const PassInfo = ({ label, value, tone = "text-white" }) => (
-  <div className="flex items-center justify-between gap-3">
-    <span className="text-[11px] font-bold text-white/45">{label}</span>
-    <span className={`text-[12px] font-black tabular-nums ${tone}`}>{value}</span>
-  </div>
-);
-const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, pct = 0, claimable = 0, busyKey = "", onClaim, onUnlock, balance, dday, onTone }) => {
+const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, claimable = 0, busyKey = "", onClaim, onUnlock, balance, dday, onTone }) => {
   const [tab, setTab] = useState("all");
+  const listRef = useRef(null);
+  const nextIdx = (pass?.tierIndex ?? -1) + 1;
+
+  // 열 때 · 탭을 바꿀 때 — 다음 티어 줄이 목록 가운데 오게.
+  //    PC 에서 목록 칸이 따로 스크롤될 때만 — 모바일은 창 전체가 한 번에 스크롤돼 위의 티어 메달이 밀려난다
+  useEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(() => {
+      const row = listRef.current?.querySelector('[data-next="1"]');
+      const box = row?.closest("[data-pop-list]");
+      if (!row || !box || !/auto|scroll/.test(getComputedStyle(box).overflowY) || box.scrollHeight <= box.clientHeight + 1) return;
+      const a = row.getBoundingClientRect(), b = box.getBoundingClientRect();
+      box.scrollTop += a.top - b.top - (box.clientHeight - a.height) / 2;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [open, tab, nextIdx]);
+
   if (!pass) return null;
   const fmt = (n) => (n || 0).toLocaleString();
   const rows = tab === "claim" ? tiers.filter((t) => t.free?.claimable || t.paid?.claimable) : tiers;
-  const nextIdx = (pass.tierIndex ?? -1) + 1;
-  const COLS = { gridTemplateColumns: "40px minmax(0,1fr) minmax(0,1fr) 72px" };
   const price = pass.unlockPrice || 0;
+  // 링 — 지금 티어에서 다음 티어까지 얼마나 찼나
+  const prevNeed = pass.tierIndex >= 0 ? tiers[pass.tierIndex]?.need || 0 : 0;
+  const nextTier = tiers[nextIdx];
+  const ringPct = nextTier ? Math.max(0, Math.min(100, ((pass.progress || 0) - prevNeed) / Math.max(1, nextTier.need - prevNeed) * 100)) : 100;
+  const COLS = { gridTemplateColumns: "20px 34px minmax(0,1fr) minmax(0,1fr) 60px" };
+  const seasonLabel = `시즌 ${pass.season?.number ?? SEASON.number} · ${pass.season?.name ?? SEASON.name}`;
 
   return (
     <PopShell
@@ -644,81 +658,119 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, p
       onClose={onClose}
       theme="pass"
       title="시즌 패스"
-      count={`T${tierNo}`}
       icon="star"
+      badge={
+        <span
+          className="min-w-0 inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[11px] font-black text-[#e4d4ff] tabular-nums truncate"
+          style={{ background: "rgba(182,156,255,0.14)", boxShadow: "inset 0 0 0 1px rgba(182,156,255,0.3)" }}
+        >
+          <span className="truncate">{seasonLabel}</span>
+          <span className="shrink-0 text-white/45">{dday?.ended ? "종료" : `D-${Math.max(0, dday?.days ?? 0)}`}</span>
+        </span>
+      }
       tabs={
         <>
-          <PopTab on={tab === "all"} onClick={() => { setTab("all"); onTone?.(); }} label="전체" n={tiers.length} />
+          <PopTab on={tab === "all"} onClick={() => { setTab("all"); onTone?.(); }} label="전체 티어" n={tiers.length} />
           <PopTab on={tab === "claim"} onClick={() => { setTab("claim"); onTone?.(); }} label="받을 보상" n={claimable} />
         </>
       }
       left={
         <>
-          <p className="text-[11px] font-bold text-white/45">내 티어</p>
-          <p className="mt-3 text-[48px] font-black text-white tabular-nums tracking-[-0.03em] leading-[0.85]">
-            T{tierNo}<span className="text-[16px] text-white/30 ml-1.5 tracking-normal">/ T{maxTier}</span>
-          </p>
-          <div className="mt-5 h-1.5 rounded-full bg-white/10 overflow-hidden">
-            <div className="h-full rounded-full bg-[#b69cff]" style={{ width: `${pct}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}></div>
-          </div>
-          <div className="mt-2.5 flex justify-between gap-2 text-[11px] font-bold text-white/45 tabular-nums">
-            <span>{fmt(pass.progress)} XP</span>
-            <span>{pass.nextNeed > 0 ? <>T{tierNo + 1} 까지 <b className="text-white">{fmt(pass.nextNeed)}</b></> : "완주"}</span>
+          <div className="flex flex-col items-center text-center sm:pt-2">
+            <PassRing pct={ringPct}>
+              <span className="text-[40px] font-black text-white tabular-nums tracking-[-0.03em] leading-none">T{tierNo}</span>
+              <span className="mt-1.5 text-[11px] font-bold text-white/40 tabular-nums">/ T{maxTier}</span>
+            </PassRing>
+            <p className="mt-4 text-[12px] font-bold text-white/55 tabular-nums">
+              {pass.nextNeed > 0 ? <>T{tierNo + 1} 까지 <b className="text-white">{fmt(pass.nextNeed)} XP</b></> : "모든 티어 달성"}
+            </p>
+            <p className="mt-1.5 text-[11px] font-bold text-white/35 tabular-nums">이번 시즌 {fmt(pass.progress)} XP</p>
           </div>
 
-          <div className="mt-8 sm:mt-auto space-y-3">
-            <PassInfo label="시즌" value={`${pass.season?.number ?? SEASON.number} · ${pass.season?.name ?? SEASON.name}`} />
-            <PassInfo label="종료까지" value={dday?.ended ? "종료" : `D-${Math.max(0, dday?.days ?? 0)}`} />
-            {pass.unlocked ? (
-              <PassInfo label="프리미엄" value="해금됨" tone="text-[#b69cff]" />
-            ) : (
-              <div>
-                <PassInfo label="프리미엄 해금" value={fmt(price)} tone="text-white/80" />
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onUnlock("xp")}
-                    disabled={!!busyKey || (balance?.xp || 0) < price}
-                    className="h-10 rounded-full bg-[#9b6bff] enabled:hover:bg-[#8a57f5] text-white text-[11px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
-                  >
-                    XP로 해금
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onUnlock("point")}
-                    disabled={!!busyKey || (balance?.point || 0) < price}
-                    className="h-10 rounded-full bg-white/[0.08] border border-white/15 enabled:hover:bg-white/[0.14] text-white text-[11px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
-                  >
-                    빙옥으로 해금
-                  </button>
-                </div>
+          {/* 프리미엄 — 이 창에서 유일한 카드 */}
+          <div
+            className="mt-7 sm:mt-auto rounded-2xl p-4"
+            style={{ background: "linear-gradient(135deg, rgba(182,156,255,0.2), rgba(255,122,198,0.12))", boxShadow: "inset 0 0 0 1px rgba(214,180,255,0.3)" }}
+          >
+            <div className="flex items-center gap-2">
+              <svg aria-hidden viewBox="0 0 24 24" className="w-4 h-4 shrink-0 text-[#e4d4ff]" fill="currentColor"><path d={CROWN} /></svg>
+              <span className="text-[13px] font-black text-white">프리미엄</span>
+              <span
+                className="ml-auto text-[12px] font-black tabular-nums"
+                style={{ background: "linear-gradient(90deg, #d9c6ff, #ff9fd6)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}
+              >
+                {pass.unlocked ? "해금됨" : fmt(price)}
+              </span>
+            </div>
+            {!pass.unlocked && (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => onUnlock("xp")}
+                  disabled={!!busyKey || (balance?.xp || 0) < price}
+                  className="h-9 rounded-full text-white text-[11px] font-black transition-opacity outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+                  style={{ background: "linear-gradient(135deg, #9b6bff 0%, #e05bb5 100%)" }}
+                >
+                  XP로 해금
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUnlock("point")}
+                  disabled={!!busyKey || (balance?.point || 0) < price}
+                  className="h-9 rounded-full bg-white/[0.08] border border-white/15 enabled:hover:bg-white/[0.14] text-white text-[11px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+                >
+                  빙옥으로 해금
+                </button>
               </div>
             )}
           </div>
         </>
       }
     >
-      <div className="grid gap-x-3 px-2.5 -mx-2.5 pb-2" style={COLS}>
-        <span></span>
-        <span className="text-[11px] font-bold text-white/40">무료</span>
-        <span className="text-[11px] font-bold text-white/40">프리미엄</span>
-        <span className="text-[11px] font-bold text-white/40 text-right">필요 XP</span>
+      <div ref={listRef}>
+        <div className="grid items-center gap-x-3 px-2 -mx-2 pb-3" style={COLS}>
+          <span></span>
+          <span></span>
+          <span className="text-[11px] font-bold text-white/40">무료</span>
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#d9c6ff]">
+            <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="currentColor"><path d={CROWN} /></svg>
+            프리미엄
+          </span>
+          <span className="text-[11px] font-bold text-white/40 text-right">필요 XP</span>
+        </div>
+
+        {rows.length === 0 ? (
+          <p className="py-16 text-center text-[12px] font-bold text-white/35">지금 받을 보상이 없습니다</p>
+        ) : (
+          <div className="relative">
+            {/* 티어 레일 — 노드를 잇는 세로선 */}
+            {tab === "all" && <span aria-hidden className="absolute left-[9.5px] top-7 bottom-7 w-px bg-white/12"></span>}
+            {rows.map((t) => {
+              const i = tiers.indexOf(t);
+              const next = i === nextIdx;
+              return (
+                <div
+                  key={t.tid || t.level}
+                  data-next={next ? "1" : undefined}
+                  className={`relative grid items-center gap-x-3 h-14 px-2 -mx-2 rounded-xl ${next ? "bg-white/[0.06]" : ""}`}
+                  style={COLS}
+                >
+                  <span className="relative z-10 flex justify-center">
+                    <span
+                      className={`w-3 h-3 rounded-full ${t.reached ? "" : next ? "ring-2 ring-[#b69cff] bg-[#1a1233]" : "ring-1 ring-white/25 bg-[#1a1233]"}`}
+                      style={t.reached ? { background: "linear-gradient(135deg, #b69cff, #ff7ac6)" } : undefined}
+                    ></span>
+                  </span>
+                  <span className={`text-[13px] font-black tabular-nums ${t.reached || next ? "text-white" : "text-white/40"}`}>T{t.level}</span>
+                  <PassReward r={t.free} busy={busyKey === `${t.tid}:free`} onClaim={() => onClaim(t.tid, "free")} />
+                  <PassReward r={t.paid} premium locked={!pass.unlocked} busy={busyKey === `${t.tid}:paid`} onClaim={() => onClaim(t.tid, "paid")} />
+                  <span className={`text-[11px] font-black tabular-nums text-right ${next ? "text-[#d9c6ff]" : "text-white/30"}`}>{fmt(t.need)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
-      {rows.length === 0 ? (
-        <p className="py-10 text-center text-[12px] font-bold text-white/35">지금 받을 보상이 없습니다</p>
-      ) : (
-        rows.map((t) => {
-          const next = tiers.indexOf(t) === nextIdx;
-          return (
-            <div key={t.tid || t.level} className={`grid items-center gap-x-3 h-12 px-2.5 -mx-2.5 rounded-xl ${next ? "bg-white/[0.07]" : ""}`} style={COLS}>
-              <span className={`text-[13px] font-black tabular-nums ${t.reached ? "text-white" : "text-white/40"}`}>T{t.level}</span>
-              <PassCell r={t.free} busy={busyKey === `${t.tid}:free`} onClaim={() => onClaim(t.tid, "free")} />
-              <PassCell r={t.paid} locked={!pass.unlocked} busy={busyKey === `${t.tid}:paid`} onClaim={() => onClaim(t.tid, "paid")} />
-              <span className={`text-[11px] font-black tabular-nums text-right ${next ? "text-[#b69cff]" : "text-white/30"}`}>{fmt(t.need)}</span>
-            </div>
-          );
-        })
-      )}
     </PopShell>
   );
 };
@@ -1150,7 +1202,6 @@ export default function LevelPage() {
   const [claiming, setClaiming] = useState("");
   const [pass, setPass] = useState(null);            // /api/pass — 시즌 패스 상태 (비활성/비로그인이면 null)
   const [passBusy, setPassBusy] = useState("");      // 수령·해금 진행 중 키 ("t2:free" / "unlock") — 티어는 인덱스가 아니라 tid 로 잡는다
-  const passRailRef = useRef(null);                  // 티어 레일 — 현재 티어가 화면에 들어오게 스크롤을 맞춘다
 
   const loadMe = useCallback(async () => {
     try {
@@ -1278,6 +1329,14 @@ export default function LevelPage() {
   const [enhBusy, setEnhBusy] = useState("");
   const [enhModal, setEnhModal] = useState(false);
   const [passOpen, setPassOpen] = useState(false); // 시즌 패스 창
+  // 📌 옛 주소(?tab=pass) — 시즌 패스는 이제 탭이 아니라 대시보드 위 창이다
+  useEffect(() => {
+    if (tabParam !== "pass") return;
+    const q = new URLSearchParams(Array.from(searchParams.entries()));
+    q.set("tab", "my");
+    router.replace(`${pathname}?${q.toString()}`, { scroll: false });
+    setPassOpen(true);
+  }, [tabParam, searchParams, router, pathname]);
   const enhance = useCallback(async (kind, payMethod) => {
     const key = `${kind}:${payMethod}`;
     setEnhBusy(key);
@@ -1584,21 +1643,7 @@ export default function LevelPage() {
   const passClaimable = passTiers.reduce(
     (n, t) => n + (t.free?.claimable ? 1 : 0) + (t.paid?.claimable ? 1 : 0), 0
   );
-  const passPct = pass?.maxNeed > 0 ? Math.min(100, Math.round(((pass.progress || 0) / pass.maxNeed) * 100)) : 0;
   const passTierNo = pass && pass.tierIndex >= 0 ? (passTiers[pass.tierIndex]?.level ?? pass.tierIndex + 1) : 0;
-
-  // 레일은 처음부터 현재 티어를 비춰야 한다 — 탭에 들어올 때와 티어가 오를 때만 다시 맞춘다
-  // (수령 직후에는 tierIndex 가 그대로라 스크롤이 튀지 않는다)
-  useEffect(() => {
-    if (activeMainTab !== "pass") return;
-    const el = passRailRef.current;
-    if (!el) return;
-    const node = el.querySelector(`[data-tier="${Math.max(0, pass?.tierIndex ?? 0)}"]`);
-    if (!node) return;
-    const rail = el.getBoundingClientRect();
-    const box = node.getBoundingClientRect();
-    el.scrollLeft += (box.left - rail.left) - (el.clientWidth - box.width) / 2;
-  }, [activeMainTab, pass?.tierIndex, passTiers.length]);
 
   // 시즌 D-Day (KST 기준) — 계산은 lib/season.js 단일 소스
   const seasonDday = useMemo(() => getSeasonDday(), []);
@@ -1888,7 +1933,6 @@ export default function LevelPage() {
         tiers={passTiers}
         tierNo={passTierNo}
         maxTier={passMaxTier}
-        pct={passPct}
         claimable={passClaimable}
         busyKey={passBusy}
         onClaim={claimPass}
@@ -2899,202 +2943,6 @@ export default function LevelPage() {
         )}
 
         {/* ══ TAB : RANKING ════════════════ */}
-        {/* ══ TAB : SEASON PASS — 무료 / 프리미엄 2트랙 레일 ══
-               진행도는 이번 시즌에 번 XP 하나뿐이다 (새 재화 없음).
-               수령·해금 판정은 전부 서버가 다시 하고, 여기서는 서버가 준 상태만 그린다 ══ */}
-        {activeMainTab === "pass" && (
-          <Reveal>
-            <SectionHeader
-              title="시즌 패스"
-              desc="이번 시즌에 모은 XP 만큼 티어가 오릅니다."
-              right={
-                <div className="shrink-0 text-right">
-                  <p className="text-[9px] font-black tracking-[0.22em] text-[#a3a3a3] uppercase">
-                    Season {pass?.season?.number ?? SEASON.number} · {pass?.season?.name ?? SEASON.name}
-                  </p>
-                  <p className="text-[13px] font-black text-[#131313] tabular-nums mt-0.5">
-                    {seasonDday.ended ? "종료" : `D-${Math.max(0, seasonDday.days)}`}
-                  </p>
-                </div>
-              }
-            />
-
-            {authReady && !session?.user ? (
-              // 패스 진행도는 계정에 붙는 값이라 관전 모드로는 아무것도 셀 수 없다
-              <div className="border-y border-black/[0.08] py-14 text-center">
-                <svg aria-hidden viewBox="0 0 24 24" className="w-6 h-6 mx-auto mb-4" fill="none" stroke="rgba(0,0,0,0.28)" strokeWidth="1.5"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
-                <p className="text-sm font-bold text-[#131313] mb-7">로그인이 필요합니다</p>
-                <button
-                  onClick={() => signIn("discord", { callbackUrl: "/level?tab=pass" })}
-                  className="h-10 px-6 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors outline-none focus:outline-none"
-                >
-                  Discord로 로그인
-                </button>
-              </div>
-            ) : !authReady || !meLoaded ? (
-              <div className="space-y-3">
-                <div className="h-28 rounded-lg bg-black/[0.04] animate-pulse"></div>
-                <div className="h-[300px] rounded-lg bg-black/[0.03] animate-pulse"></div>
-              </div>
-            ) : !passEnabled || passTiers.length === 0 ? (
-              <EmptySlot>아직 준비 중입니다</EmptySlot>
-            ) : (
-              <>
-                {/* 진행 요약 — 카드 대신 헤어라인 구획 */}
-                <div className="border-y border-black/[0.08] py-6 md:py-7">
-                  <div className="flex flex-wrap items-end justify-between gap-6 mb-5">
-                    <div className="min-w-0">
-                      <p className="text-[9px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase mb-1.5">이번 시즌 획득</p>
-                      <p className="text-3xl md:text-4xl font-black text-[#131313] tabular-nums tracking-tight leading-none">
-                        {(pass.progress || 0).toLocaleString()}
-                        <span className="text-sm md:text-base text-[#a3a3a3] ml-1.5">XP</span>
-                      </p>
-                    </div>
-                    <div className="flex gap-8 text-right">
-                      <div>
-                        <p className="text-[9px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase mb-1.5">현재 티어</p>
-                        <p className="text-base md:text-lg font-black text-[#131313] tabular-nums">
-                          T{passTierNo}<span className="text-[#a3a3a3]"> / T{passMaxTier}</span>
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] font-black tracking-[0.3em] text-[#a3a3a3] uppercase mb-1.5">다음 티어까지</p>
-                        <p className="text-base md:text-lg font-black text-[#e91e3f] tabular-nums">
-                          {pass.nextNeed > 0 ? `${pass.nextNeed.toLocaleString()} XP` : "완주"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <SegBar pct={passPct} segments={Math.min(20, Math.max(4, passTiers.length))} h="h-3" />
-
-                  <div className="flex justify-between gap-4 mt-2.5">
-                    <span className="text-[11px] font-bold text-[#a3a3a3] tabular-nums">
-                      {(pass.progress || 0).toLocaleString()} / {(pass.maxNeed || 0).toLocaleString()} XP
-                    </span>
-                    <span className="text-[11px] font-bold text-[#8a8a8a] text-right">
-                      {passClaimable > 0
-                        ? <b className="text-[#e91e3f]">받을 수 있는 보상 {passClaimable}개</b>
-                        : "지금 받을 수 있는 보상은 없습니다"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* 프리미엄 해금 — 이 화면에서 유일하게 카드로 세우는 자리 */}
-                {!pass.unlocked && (
-                  <div className="relative overflow-hidden rounded-2xl bg-[#131313] mt-8 shadow-[0_30px_70px_-34px_rgba(0,0,0,0.55)]">
-                    <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
-                    <div aria-hidden className="absolute -top-24 -right-16 w-[360px] h-[360px] bg-[#e91e3f]/[0.18] blur-[110px] rounded-full pointer-events-none"></div>
-                    <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row md:items-center md:justify-between">
-                      <div className="min-w-0">
-                        <p className="text-xl md:text-2xl font-black text-white tracking-tight break-keep">
-                          프리미엄 트랙 해금 · <span className="text-[#ff5c77] tabular-nums">{(pass.unlockPrice || 0).toLocaleString()}</span>
-                        </p>
-                        <p className="text-[11px] text-white/45 mt-2.5 leading-relaxed break-keep">
-                          시즌 패스를 열고, 이번 시즌의 다양한 보상을 받아보세요!
-                        </p>
-                        {me && (
-                          <p className="text-[11px] font-bold text-white/35 mt-2.5 tabular-nums">
-                            보유 XP {(me.xp || 0).toLocaleString()} · 보유 빙옥 {(me.point || 0).toLocaleString()}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex gap-2.5 mt-6 md:mt-0 md:ml-8 shrink-0">
-                        <button
-                          onClick={() => unlockPass("xp")}
-                          disabled={!!passBusy || (!!me && (me.xp || 0) < (pass.unlockPrice || 0))}
-                          className="h-11 px-5 rounded-xl text-[13px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-[#e91e3f] text-white enabled:hover:bg-[#d01634]"
-                        >
-                          XP로 해금
-                        </button>
-                        <button
-                          onClick={() => unlockPass("point")}
-                          disabled={!!passBusy || (!!me && (me.point || 0) < (pass.unlockPrice || 0))}
-                          className="h-11 px-5 rounded-xl text-[13px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default bg-white/10 border border-white/15 text-white enabled:hover:bg-white/20"
-                        >
-                          빙옥으로 해금
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ── 2트랙 레일 — 위 무료 / 아래 프리미엄. 가로로 밀어 다음 티어를 본다 ── */}
-                <div className="mt-10">
-                  {/* 이브로우를 걷어 낸 자리 — 남은 안내는 원래대로 오른쪽에 붙인다 */}
-                  <div className="flex items-end justify-end gap-4 mb-3.5">
-                    <span className="text-[10px] font-bold text-[#a3a3a3] shrink-0">옆으로 밀어 보세요 →</span>
-                  </div>
-
-                  {/* 페이지가 아니라 이 레일만 가로로 흐른다 (모바일에서 본문이 밀리면 안 된다) */}
-                  <div ref={passRailRef} className="overflow-x-auto no-bar">
-                    <div className="flex min-w-max pb-1">
-                      {/* 트랙 이름 — 가로로 밀어도 왼쪽에 붙어 있는다 */}
-                      <div aria-hidden className="sticky left-0 z-10 shrink-0 w-[44px] bg-white pr-2">
-                        <div className="h-[112px] flex items-center"><span className="text-[10px] font-black text-[#8a8a8a]">무료</span></div>
-                        <div className="h-[58px]"></div>
-                        <div className="h-[112px] flex items-center"><span className="text-[10px] font-black text-[#8a8a8a] leading-tight">프리<br />미엄</span></div>
-                      </div>
-
-                      {passTiers.map((t, i) => {
-                        const cur = i === pass.tierIndex;
-                        return (
-                          <div key={t.tid || `i${i}`} data-tier={i} className="relative shrink-0 w-[104px] px-1">
-                            <PassRewardCell
-                              reward={t.free}
-                              trackLabel="무료"
-                              tierLevel={t.level}
-                              busy={passBusy === `${t.tid}:free`}
-                              onClaim={() => claimPass(t.tid, "free")}
-                            />
-
-                            {/* 티어 노드 — 좌우로 이어지는 선 위에 번호를 얹는다 */}
-                            <div className="relative h-[58px] flex flex-col items-center justify-center">
-                              <span
-                                aria-hidden
-                                className={`absolute -left-1 -right-1 top-[22px] h-[2px] ${t.reached ? "bg-[#131313]" : "bg-black/[0.08]"}`}
-                              ></span>
-                              {/* 아이보리 링으로 연결선을 끊어 준다. 현재 티어만 빨강 테두리를 한 겹 더 두른다 */}
-                              <span
-                                className={`relative w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-black tabular-nums ${
-                                  t.reached ? "bg-[#131313] text-white" : "bg-[#e0e0e0] text-[#8a8a8a]"
-                                }`}
-                                style={{ boxShadow: cur ? "0 0 0 3px #ffffff, 0 0 0 5px #e91e3f" : "0 0 0 3px #ffffff" }}
-                              >
-                                {t.level}
-                              </span>
-                              <span className={`relative mt-1 text-[9px] font-bold tabular-nums ${t.reached ? "text-[#8a8a8a]" : "text-[#a3a3a3]"}`}>
-                                {(t.need || 0).toLocaleString()}
-                              </span>
-                            </div>
-
-                            <PassRewardCell
-                              reward={t.paid}
-                              trackLabel="프리미엄"
-                              tierLevel={t.level}
-                              locked={!pass.unlocked}
-                              busy={passBusy === `${t.tid}:paid`}
-                              onClaim={() => claimPass(t.tid, "paid")}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-[#a3a3a3] mt-6 break-keep leading-relaxed">
-                  XP·역할 보상은 1분 안에 지급됩니다. 빙옥은 즉시 들어옵니다.
-                  {seasonDday.ended
-                    ? " 다음 시즌이 시작되면 진행도가 초기화됩니다."
-                    : " 시즌이 끝나면 진행도가 초기화됩니다."}
-                </p>
-              </>
-            )}
-          </Reveal>
-        )}
-
         {activeMainTab === "rank" && (
           <Reveal>
             <SectionHeader
