@@ -1820,16 +1820,17 @@ export default function LevelPage() {
             {authReady && session?.user && meLoaded && me && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-10 gap-y-14 items-start">
 
-                {/* 왼쪽 기둥 — 세로 프로필 카드와 그 아래 등급 판 */}
+                {/* 왼쪽 기둥 — 세로 프로필 카드 */}
                 <div className="contents lg:block lg:col-span-4 min-w-0 lg:space-y-12">
-                    {/* 프로필 카드 — 세로 기둥. 위에서 아래로: 정체성 → 레벨 · 등급 → 경험치 → 스탯 → 입구 */}
+                    {/* 프로필 카드 — 위에서 아래로: 정체성 → 레벨 · 등급 → 경험치 → 스탯 → 입구 → 시즌 */}
                     <div className="order-first relative rounded-3xl overflow-hidden bg-[#131313] shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]">
                       <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
-                      <div aria-hidden className="absolute -top-24 left-1/2 -translate-x-1/2 w-[360px] h-[360px] bg-[#e91e3f]/[0.18] blur-[110px] rounded-full pointer-events-none"></div>
+                      <div aria-hidden className="absolute -top-24 -left-20 w-[360px] h-[360px] bg-[#e91e3f]/[0.18] blur-[110px] rounded-full pointer-events-none"></div>
+                      <span aria-hidden className="absolute -right-3 -bottom-10 text-[150px] font-black text-white/[0.035] leading-none tracking-tighter tabular-nums select-none pointer-events-none">{me.level}</span>
 
                       <div className="relative z-10 p-5 md:p-7">
-                        {/* 정체성 — 모바일은 아바타 옆에 이름, lg 는 가운데로 */}
-                        <div className="flex items-center gap-4 lg:flex-col lg:gap-0 lg:text-center">
+                        {/* 정체성 — 아바타 옆에 이름 */}
+                        <div className="flex items-center gap-4 lg:gap-5">
                           <span className="shrink-0 lg:hidden">
                             <RingGauge pct={progPct} size={76} stroke={5} trackClass="rgba(255,255,255,0.12)">
                               {session.user.image ? (
@@ -1841,19 +1842,19 @@ export default function LevelPage() {
                             </RingGauge>
                           </span>
                           <span className="hidden lg:block">
-                            <RingGauge pct={progPct} size={120} stroke={6} trackClass="rgba(255,255,255,0.12)">
+                            <RingGauge pct={progPct} size={96} stroke={6} trackClass="rgba(255,255,255,0.12)">
                               {session.user.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={session.user.image} alt="" className="w-[86px] h-[86px] rounded-full object-cover" />
+                                <img src={session.user.image} alt="" className="w-[68px] h-[68px] rounded-full object-cover" />
                               ) : (
-                                <span className="w-[86px] h-[86px] rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60">{(session.user.name || "?").slice(0, 1)}</span>
+                                <span className="w-[68px] h-[68px] rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60">{(session.user.name || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
                           </span>
-                          <div className="min-w-0 flex-1 lg:flex-none lg:w-full">
-                          <p className="text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-1.5 lg:mt-4 lg:mb-2">Player</p>
-                          <p className="max-w-full text-xl lg:text-2xl font-black text-white truncate tracking-tight leading-none">{session.user.name}</p>
-                          <div className="flex flex-wrap items-center gap-2 mt-2.5 lg:mt-3.5 lg:justify-center">
+                          <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-black tracking-[0.35em] text-white/35 uppercase mb-1.5">Player</p>
+                          <p className="max-w-full text-xl lg:text-[26px] font-black text-white truncate tracking-tight leading-none">{session.user.name}</p>
+                          <div className="flex flex-wrap items-center gap-2 mt-2.5">
                             <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/20 text-[10px] font-black tracking-[0.12em] uppercase text-white/70 tabular-nums">
                               Rank #{me.rank.toLocaleString()}<span className="text-white/35 ml-1">/ {me.total.toLocaleString()}</span>
                             </span>
@@ -1886,6 +1887,10 @@ export default function LevelPage() {
                               <TierEmblem tier={tierCur} size={26} />
                             </span>
                             <span className="text-[15px] font-black tracking-tight leading-none" style={{ color: tierCur.c }}>{tierCur.name}</span>
+                            <span className="block text-[10px] font-bold text-white/40 leading-snug mt-1.5 tabular-nums">
+                              {tierCur.bonus > 0 ? `음성 +${tierCur.bonus.toLocaleString()}` : "음성 보너스 없음"}
+                              {tierNext && tierNextBound !== null ? ` · 다음까지 ${Math.max(0, tierNextBound - me.level)}레벨` : ""}
+                            </span>
                           </button>
                         </div>
 
@@ -2017,98 +2022,16 @@ export default function LevelPage() {
                             );
                           })()}
                         </div>
+
+                        {/* 시즌 — 카드 바닥 띠 */}
+                        <div className="flex items-center gap-3 mt-5 pt-4 border-t border-white/10">
+                          <span className="shrink-0 text-[10px] font-black tracking-[0.2em] text-white/40 uppercase">Season {SEASON.number} · {SEASON.name}</span>
+                          <span className="flex-1 h-[3px] rounded-full bg-white/10 overflow-hidden"><span className="block h-full rounded-full bg-white/45" style={{ width: `${seasonPct}%` }}></span></span>
+                          {!seasonDday.ended && seasonDday.days >= 0 && <span className="shrink-0 text-[11px] font-black text-white tabular-nums">D-{seasonDday.days}</span>}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="order-last">
-                    {/* ═══ 등급 — 랭크 플라크 ═══ */}
-                    <section>
-                      <div className="flex items-end justify-between mb-5">
-                        <div>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">등급</h3>
-                        </div>
-                        <button
-                          onClick={() => setTierOpen(true)}
-                          className="shrink-0 h-8 px-3 rounded-lg bg-black/[0.05] hover:bg-black/[0.09] text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus:outline-none"
-                        >
-                          등급 안내
-                        </button>
-                      </div>
-
-                      {/* 랭크 플라크 — 엠블럼을 가운데 세우고 등급색으로 감싼다 */}
-                      <div
-                        className="relative rounded-2xl overflow-hidden px-5 pt-7 pb-6 text-center"
-                        style={{
-                          background: `radial-gradient(120% 90% at 50% 0%, ${tierCur.c}26, ${tierCur.c}08 60%, transparent)`,
-                          border: `1px solid ${tierCur.c}3d`,
-                        }}
-                      >
-                        <div
-                          aria-hidden
-                          className="absolute -top-16 left-1/2 -translate-x-1/2 w-52 h-52 rounded-full blur-[54px] pointer-events-none"
-                          style={{ background: `${tierCur.c}3a` }}
-                        ></div>
-
-                        {/* 엠블럼 */}
-                        <div className="relative z-10 flex justify-center mb-4">
-                          <span
-                            className="w-[74px] h-[74px] rounded-2xl bg-white flex items-center justify-center"
-                            style={{ boxShadow: `0 14px 34px -14px ${tierCur.c}, inset 0 0 0 1px ${tierCur.c}33` }}
-                          >
-                            <TierEmblem tier={tierCur} size={42} />
-                          </span>
-                        </div>
-
-                        {/* 등급명 */}
-                        <p className="relative z-10 text-3xl font-black tracking-tight leading-none" style={{ color: tierCur.c }}>
-                          {tierCur.name}
-                        </p>
-                        <p className="relative z-10 text-[10px] font-black tracking-[0.28em] text-[#a3a3a3] uppercase mt-2 tabular-nums">
-                          {tierCur.en} · {tierRangeLabel(tierIdx)}
-                        </p>
-
-                        {/* 등급 진행 핍 — 10칸 중 현재 위치 */}
-                        <div className="relative z-10 flex justify-center gap-1 mt-5">
-                          {VOICE_TIERS.map((t, i) => (
-                            <span
-                              key={t.key}
-                              title={t.name}
-                              className="h-1.5 rounded-full transition-all"
-                              style={{
-                                width: i === tierIdx ? 22 : 10,
-                                backgroundColor: i < tierIdx ? tierCur.c + "55" : i === tierIdx ? tierCur.c : "rgba(0,0,0,0.10)",
-                              }}
-                            ></span>
-                          ))}
-                        </div>
-
-                        {/* 음성 추가 XP */}
-                        <div className="relative z-10 mt-5 pt-4 border-t" style={{ borderColor: `${tierCur.c}26` }}>
-                          <p className={`text-2xl font-black tabular-nums leading-none ${tierCur.bonus > 0 ? "text-[#131313]" : "text-[#a3a3a3]"}`}>
-                            {tierCur.bonus > 0 ? `+${tierCur.bonus.toLocaleString()}` : "—"}
-                          </p>
-                          <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mt-1.5">음성 추가 XP</p>
-                        </div>
-                      </div>
-
-                      {/* 다음 등급 */}
-                      {tierNext && tierNextBound !== null && (
-                        <div className="flex items-center gap-3 mt-4 px-4 py-3 rounded-xl bg-black/[0.03]">
-                          <TierEmblem tier={tierNext} size={22} />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[12px] font-black truncate" style={{ color: tierNext.c }}>다음 · {tierNext.name}</p>
-                            <p className="text-[10px] font-bold text-[#a3a3a3] tabular-nums mt-0.5">
-                              Lv.{tierNextBound} 도달 시 음성 추가 +{tierNext.bonus.toLocaleString()}
-                            </p>
-                          </div>
-                          <span className="shrink-0 text-[11px] font-black text-[#131313] tabular-nums">
-                            {Math.max(0, tierNextBound - me.level)}
-                            <span className="text-[9px] font-bold text-[#a3a3a3] ml-0.5">레벨</span>
-                          </span>
-                        </div>
-                      )}
-                    </section>
-                    </div>
                 </div>
 
                 {/* 오른쪽 — 퀘스트 · 랭킹 · 이벤트 · 피드가 한 줄기로 */}
