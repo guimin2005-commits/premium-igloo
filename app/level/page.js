@@ -53,13 +53,13 @@ const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
 //    옛 ?tab= 주소로 들어오면 아래 effect 가 /arctic 으로 보낸다.
 // 순서는 "내 것 → 시즌 → 정보" — 자주 보는 것이 앞, 한 번 읽고 마는 안내는 맨 뒤.
 const MAIN_TABS = [
-  { id: "my", name: "내 대시보드" },
+  { id: "my", name: "내 대시보드", short: "대시보드" },
   { id: "rank", name: "랭킹" },
   // 레벨에서 왔다는 표시를 달아 ARCTIC 이 돌아갈 길("LEVEL ›")을 보이게 한다 (app/arctic/fromLevel.ts)
   { id: "arctic", name: "ARCTIC", shopOnly: true, href: "/arctic?from=level" },
   { id: "table", name: "XP 테이블" },
   { id: "sim", name: "시뮬레이터" },
-  { id: "intro", name: "시스템 안내" },
+  { id: "intro", name: "시스템 안내", short: "안내" },
 ];
 
 // 📌 랭킹 기준 — 누적 XP / 이번 달 획득 / 누적 음성 시간
@@ -242,7 +242,8 @@ const XpTableView = ({ myLevel = 0, myXp = null, onTone }) => {
   const pick = (n, tone = true) => {
     const v = clampLv(n);
     setLv(v);
-    setTierTab(getTierIndex(v));
+    // "전체"(-1)를 보고 있으면 그대로 두고, 등급 탭이면 고른 레벨의 등급으로 옮긴다
+    setTierTab((t) => (t === -1 ? -1 : getTierIndex(v)));
     setDraft("");
     if (tone) onTone?.();
   };
@@ -262,11 +263,13 @@ const XpTableView = ({ myLevel = 0, myXp = null, onTone }) => {
   const myCum = mine ? (myXp ?? getCumulativeXpByLevel(myLevel)) : 0;
   const left = mine ? cum - myCum : 0;
 
-  // 표 — 고른 등급 구간만
-  const tt = VOICE_TIERS[tierTab];
-  const tNext = VOICE_TIERS[tierTab + 1];
+  // 표 — 고른 등급 구간만, "전체"(-1)면 1 – 1000 전부 (등급이 시작되는 줄에 등급 이름을 붙인다)
+  const all = tierTab === -1;
+  const tt = all ? null : VOICE_TIERS[tierTab];
+  const tNext = all ? null : VOICE_TIERS[tierTab + 1];
+  const tierStart = new Map(VOICE_TIERS.map((t) => [Math.max(1, t.min), t]));
   const rows = [];
-  for (let l = Math.max(1, tt.min); l <= (tNext ? tNext.min - 1 : 1000); l++) {
+  for (let l = all ? 1 : Math.max(1, tt.min); l <= (all ? 1000 : tNext ? tNext.min - 1 : 1000); l++) {
     const c = getCumulativeXpByLevel(l);
     rows.push({ l, c, r: l <= 1 ? 0 : c - getCumulativeXpByLevel(l - 1) });
   }
@@ -354,9 +357,18 @@ const XpTableView = ({ myLevel = 0, myXp = null, onTone }) => {
       <section>
         <div className="flex items-end justify-between mb-4">
           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">레벨 표</h3>
-          <span className="text-[11px] font-bold text-[#8a8a8a] tabular-nums">{tierRangeLabel(tierTab)}</span>
+          <span className="text-[11px] font-bold text-[#8a8a8a] tabular-nums">{all ? "Lv.1 – 1000" : tierRangeLabel(tierTab)}</span>
         </div>
         <div className="flex gap-1.5 overflow-x-auto no-bar pb-1 mb-4">
+          <button
+            type="button"
+            onClick={() => { setTierTab(-1); onTone?.(); }}
+            className={`shrink-0 inline-flex items-center h-8 px-3.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
+              all ? "bg-[#131313] text-white" : "bg-[#f2f2f2] text-[#5a5a5a] hover:text-[#131313]"
+            }`}
+          >
+            전체
+          </button>
           {VOICE_TIERS.map((t, i) => (
             <button
               key={t.key}
@@ -394,6 +406,12 @@ const XpTableView = ({ myLevel = 0, myXp = null, onTone }) => {
                 >
                   <span className={`text-[13px] font-black ${on ? "text-[#e91e3f]" : "text-[#131313]"}`}>
                     {r.l}
+                    {all && tierStart.has(r.l) && (
+                      <span className="ml-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#5a5a5a] align-middle">
+                        <span aria-hidden className="w-1.5 h-1.5 rounded-full" style={{ background: tierStart.get(r.l).c }}></span>
+                        {tierStart.get(r.l).name}
+                      </span>
+                    )}
                     {me && <span className="ml-2 inline-flex items-center h-4 px-1.5 rounded-full bg-[#131313] text-white text-[9px] font-black align-middle">나</span>}
                   </span>
                   <span className={`text-[13px] font-bold text-right ${on ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{r.r.toLocaleString()}</span>
@@ -2405,21 +2423,32 @@ export default function LevelPage() {
   // 📌 탭 줄 — 일반 탭에서는 히어로 아래, ARCTIC 에서는 상점 헤더 바로 아래에 그린다.
   //    ARCTIC 은 전역 헤더를 넘겨받은 화면이라 카테고리도 그 헤더에 붙어 있어야 자연스럽다.
   // 📌 탭 줄 — 스토어의 유형 줄과 같은 문법(흰 줄 · 밑줄 탭). 화면마다 탭 모양이 달라지면 안 된다.
+  //    📌 모바일은 가로 스크롤 대신 같은 폭 칸으로 한 줄에 다 — 끝 탭이 잘려 보이면 안 된다.
+  //       ARCTIC 은 모바일 하단 독에 있으므로 모바일 탭 줄에서는 빼고, 긴 이름은 짧은 이름(short)으로.
+  const shownTabs = MAIN_TABS.filter((t) => (!t.shopOnly || canSeeShop) && (!t.passOnly || passEnabled));
+  const mobileTabCount = shownTabs.filter((t) => !t.href).length;
   const tabBar = (
     <div className="w-full bg-white border-b border-[#ededed]">
-      <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center h-[56px] md:h-[60px]">
-        <nav className="flex items-center gap-5 md:gap-7 overflow-x-auto no-bar h-full min-w-0">
-          {MAIN_TABS.filter((t) => (!t.shopOnly || canSeeShop) && (!t.passOnly || passEnabled)).map((tab) => {
+      <div className="max-w-7xl mx-auto px-3 sm:px-5 md:px-6 flex items-center h-[52px] sm:h-[56px] md:h-[60px]">
+        <nav className="grid w-full sm:w-auto sm:flex items-center sm:gap-5 md:gap-7 sm:overflow-x-auto no-bar h-full min-w-0" style={{ gridTemplateColumns: `repeat(${mobileTabCount}, minmax(0, 1fr))` }}>
+          {shownTabs.map((tab) => {
             const active = activeMainTab === tab.id;
-            const cls = `relative shrink-0 h-full flex items-center text-[14px] md:text-[15px] font-extrabold transition-colors outline-none focus:outline-none ${
+            const cls = `shrink-0 h-full items-center justify-center sm:justify-start text-[13px] sm:text-[14px] md:text-[15px] font-extrabold whitespace-nowrap transition-colors outline-none focus-visible:text-[#131313] ${
               active ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"
             }`;
-            const bar = active ? <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" /> : null;
-            // ARCTIC 은 다른 세계(제 주소) — 탭 줄에서는 링크로 선다 (이동 규칙 2)
-            if (tab.href) return <Link key={tab.id} href={tab.href} className={cls}>{tab.name}{bar}</Link>;
+            // 밑줄은 글자 폭만큼 — 칸 폭 전체로 깔리면 모바일에서 탭이 덩어리로 보인다
+            const label = (
+              <span className="relative h-full flex items-center">
+                <span className="sm:hidden">{tab.short || tab.name}</span>
+                <span className="hidden sm:inline">{tab.name}</span>
+                {active && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
+              </span>
+            );
+            // ARCTIC 은 다른 세계(제 주소) — 탭 줄에서는 링크로 선다 (이동 규칙 2). 모바일은 독에 있으므로 숨김
+            if (tab.href) return <Link key={tab.id} href={tab.href} className={`hidden sm:flex ${cls}`}>{label}</Link>;
             return (
-              <button key={tab.id} onClick={() => setActiveMainTab(tab.id)} className={cls}>
-                {tab.name}{bar}
+              <button key={tab.id} onClick={() => setActiveMainTab(tab.id)} className={`flex ${cls}`}>
+                {label}
               </button>
             );
           })}

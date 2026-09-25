@@ -235,14 +235,14 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 티커 — 헤어라인 사이 글자 한 줄 */}
+        {/* 티커 — 헤어라인 사이 글자 한 줄. 모바일은 숫자 셋만 한 줄에 (두 줄로 꺾이면 지저분하다) */}
         <div className="relative max-w-7xl mx-auto px-6 md:px-10">
-          <div className="flex flex-wrap items-center gap-x-8 md:gap-x-10 gap-y-2.5 py-4 border-t border-[#131313] border-b border-[#ededed] text-[12.5px] font-bold text-[#5a5a5a] tabular-nums">
+          <div className="flex flex-nowrap items-center justify-between sm:justify-start gap-x-3 sm:gap-x-8 md:gap-x-10 whitespace-nowrap py-4 border-t border-[#131313] border-b border-[#ededed] text-[12.5px] font-bold text-[#5a5a5a] tabular-nums">
             <span><b className="text-[#131313] font-black mr-1.5">{stats ? stats.memberCount.toLocaleString() : "—"}</b>전체 멤버</span>
             <span><i className="inline-block w-[7px] h-[7px] rounded-full bg-emerald-500 mr-2 shadow-[0_0_0_3px_rgba(16,185,129,0.18)]" /><b className="text-[#131313] font-black mr-1.5">{stats ? stats.onlineCount.toLocaleString() : "—"}</b>지금 접속</span>
             <span><b className="text-[#131313] font-black mr-1.5">{peak != null ? peak.toLocaleString() : "—"}</b>24시간 피크</span>
-            <span><b className="text-[#131313] font-black mr-1.5">2023</b>Since</span>
-            <span className="ml-auto text-[11px] font-medium text-[#8a8a8a] tracking-wide">LIVE · 5분마다 갱신</span>
+            <span className="hidden sm:inline"><b className="text-[#131313] font-black mr-1.5">2023</b>개설</span>
+            <span className="hidden sm:inline ml-auto text-[11px] font-medium text-[#8a8a8a] tracking-wide">LIVE · 5분마다 갱신</span>
           </div>
         </div>
       </section>
