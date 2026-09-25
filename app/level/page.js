@@ -621,10 +621,10 @@ const XpSimulator = ({ me, P, ready, onTone, narrow = false }) => {
           <div className={narrow ? "lg:grid lg:grid-cols-2 lg:gap-x-10" : ""}>
           <div className="min-w-0">
           <SimGroup title="하루 활동" />
-          <SimRow stack label="채팅" sub={`쿨타임 ${cooldownLabel}마다 1회 인정 · 1회 ${won(cLo + extra)}~${won(cHi + extra)} XP`}>
+          <SimRow stack label="채팅" sub={`1회 ${won(cLo + extra)}~${won(cHi + extra)} XP`}>
             <SimChips value={chatN} options={SIM_CHAT} onChange={pickTone(setChatN)} label="하루 채팅 인정 횟수" />
           </SimRow>
-          <SimRow stack label="음성" sub={`${intervalMin}분마다 1회 · ${voiceN.toLocaleString()}회 · 1회 ${won(voiceTickAt(startLv))} XP`}>
+          <SimRow stack label="음성" sub={`${voiceN.toLocaleString()}회 · 1회 ${won(voiceTickAt(startLv))} XP`}>
             <SimChips value={voiceMin} options={SIM_VOICE} onChange={pickTone(setVoiceMin)} label="하루 음성 시간" />
           </SimRow>
           {P.muteMode !== "off" && (
@@ -632,7 +632,7 @@ const XpSimulator = ({ me, P, ready, onTone, narrow = false }) => {
               <SimToggle on={muted} onChange={pickTone(setMuted)} label="음소거로 참여" />
             </SimRow>
           )}
-          <SimRow label="매일 출석" sub={`+${won(P.attendXp + Math.max(0, Number(me?.attendBuffXp) || 0))} XP · 음성 ${P.attendVoiceMin}분 또는 /출석체크`}>
+          <SimRow label="매일 출석" sub={`+${won(P.attendXp + Math.max(0, Number(me?.attendBuffXp) || 0))} XP`}>
             <SimToggle on={attend} onChange={pickTone(setAttend)} label="매일 출석" />
           </SimRow>
           </div>
@@ -655,7 +655,7 @@ const XpSimulator = ({ me, P, ready, onTone, narrow = false }) => {
               />
             </div>
           </SimRow>
-          <SimRow label="목표 레벨" sub="며칠 걸리는지 셉니다">
+          <SimRow label="목표 레벨">
             <input
               type="number"
               inputMode="numeric"
@@ -674,7 +674,7 @@ const XpSimulator = ({ me, P, ready, onTone, narrow = false }) => {
           <SimRow label="음성 강화" sub={`1회 +${won(vEnh)} XP${voiceCost > 0 ? ` · 비용 −${won(voiceCost)} XP` : ""}`}>
             <SimStepper value={voiceEnh} max={P.voiceEnhanceMax} onChange={pickTone(setVoiceEnh)} label="음성 강화" />
           </SimRow>
-          <SimRow label="추가 XP" sub="역할 · 부스트 · 채팅 · 음성 1회마다">
+          <SimRow label="추가 XP" sub="역할 · 부스트">
             <input
               type="number"
               inputMode="numeric"
@@ -769,7 +769,6 @@ const XpSimulator = ({ me, P, ready, onTone, narrow = false }) => {
                 </button>
               ))}
             </div>
-            <p className="mt-5 text-[11px] font-bold text-white/55 break-keep">퀘스트 · 시즌 패스 보상 · 채널 부스트는 빼고 셉니다</p>
           </div>
         </div>
       </div>
@@ -2324,7 +2323,7 @@ export default function LevelPage() {
     }
   };
 
-  // PC 대시보드 — 프로필 카드가 스크롤을 따라 내려온다. 헤더(60px) 아래 남은 화면의 세로 가운데에 선다.
+  // PC 대시보드 — 프로필 카드가 스크롤을 따라 내려온다. 헤더(60px) 바로 아래(24px 띄움)에 붙어 페이지 끝까지.
   // 카드가 화면보다 길면 top 을 음수로 줘서 카드 바닥까지 보인 뒤에 멈춘다
   // 📌 끝까지 내려오게 — 카드는 기둥(왼쪽 칸) 안에서만 움직이므로, 기둥을 그리드 아래로 필요한 만큼 늘인다(stickExtend).
   //    그러지 않으면 오른쪽 열이 끝나는 순간 카드가 같이 밀려 올라가 윗부분이 헤더 밑으로 들어간다.
@@ -2339,9 +2338,10 @@ export default function LevelPage() {
       const card = dashCardRef.current;
       if (!card) return;
       const h = card.offsetHeight;
-      // 헤더(60px) 아래 남은 화면의 세로 가운데. 카드가 화면보다 길면 바닥이 보이게(음수 top)
-      const fits = 60 + 24 + h + 24 <= window.innerHeight;
-      const top = fits ? 60 + Math.max(24, Math.round((window.innerHeight - 60 - h) / 2)) : Math.min(84, window.innerHeight - h - 24);
+      // 헤더(60px) 바로 아래에 붙는다 — 가운데에 띄우면 스크롤 중 카드 윗변이 오른쪽 내용 윗변과 어긋나 보였다.
+      //    창이 낮으면 위 · 아래 여백을 줄여서라도 카드 전체가 들어가게, 그래도 안 들어가면 바닥이 보이게(윗부분이 헤더 밑으로)
+      const H = window.innerHeight;
+      const top = 84 + h + 24 <= H ? 84 : 68 + h + 8 <= H ? 68 : H - h - 8;
       // 모바일(lg 미만)에서는 카드가 sticky 가 아니라 relative 라 top 을 주면 그만큼 밀려 내려간다 — 비워 둔다
       if (window.innerWidth < 1024) { setStickTop(null); setStickExtend(0); return; }
       setStickTop(top);
