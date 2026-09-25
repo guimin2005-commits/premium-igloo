@@ -149,8 +149,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   const isShopPage = pathname === "/arctic" || pathname?.startsWith("/arctic/");
   // 📌 지금 있는 세계 — 브랜드 옆 한 칸. 줄을 따로 만들지 않는다.
-  const section = isShopPage
-    ? { name: <>ARCT<span className="text-[#e91e3f]">I</span>C</>, href: "/arctic" }
+  //    ARCTIC 은 SYSTEM : LEVEL 안의 상점이라 넓은 화면에서는 앞에 "LEVEL ›" 을 붙여 돌아갈 길을 둔다
+  const section: { name: ReactNode; href: string; parent?: { name: string; href: string } } | null = isShopPage
+    ? { name: <>ARCT<span className="text-[#e91e3f]">I</span>C</>, href: "/arctic", parent: { name: "LEVEL", href: "/level" } }
     : (pathname === "/level" || pathname?.startsWith("/level/"))
       ? { name: <>SYSTEM <span className="text-[#e91e3f]">:</span> LEVEL</>, href: "/level" }
       : null;
@@ -432,6 +433,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 {section && (
                   <>
                     <span className={`hidden md:block shrink-0 w-px h-4 ${isLightPage ? "bg-[#d4d4d4]" : "bg-white/20"}`} />
+                    {section.parent && (
+                      <>
+                        <Link href={section.parent.href} className={`hidden lg:inline shrink-0 font-black tracking-[0.14em] leading-none whitespace-nowrap transition-colors ${scrolled ? "text-[14px] md:text-[15px]" : "text-[15px] md:text-[17px]"} ${isLightPage ? "text-[#a3a3a3] hover:text-[#131313]" : "text-white/40 hover:text-white"}`}>
+                          {section.parent.name}
+                        </Link>
+                        <span aria-hidden className={`hidden lg:inline shrink-0 font-black leading-none ${isLightPage ? "text-[#c4c4c4]" : "text-white/25"}`}>›</span>
+                      </>
+                    )}
                     <Link href={section.href} className={`hidden md:inline shrink-0 font-black tracking-[0.14em] leading-none whitespace-nowrap transition-colors ${scrolled ? "text-[14px] md:text-[15px]" : "text-[15px] md:text-[17px]"} ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-[#ff5c77]"}`}>
                       {section.name}
                     </Link>

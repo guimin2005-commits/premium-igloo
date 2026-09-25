@@ -688,7 +688,12 @@ export default function ArcticShopBody({
         <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center gap-4 md:gap-6 h-[56px] md:h-[60px]">
           {/* 유형 탭 — 고른 것만 빨간 밑줄 */}
           <nav className="flex items-center gap-5 md:gap-7 overflow-x-auto no-bar h-full min-w-0 flex-1 md:flex-none">
-            {[{ v: "home", l: "홈" }, ...TYPES.filter((t) => t.v !== "all")].map((t) => {
+            {/* 모바일 — ARCTIC 은 SYSTEM : LEVEL 안의 상점이라 맨 앞에 돌아갈 길 (넓은 화면은 상단 바의 "LEVEL ›") */}
+            <Link href="/level" className="md:hidden shrink-0 flex items-center gap-1 text-[13px] font-extrabold text-[#a3a3a3] hover:text-[#131313] transition-colors">
+              <span aria-hidden>‹</span>레벨
+            </Link>
+            <span aria-hidden className="md:hidden shrink-0 w-px h-4 bg-[#e0e0e0] -ml-1"></span>
+            {[{ v: "home", l: "홈" }, ...TYPES].map((t) => {
               const on = t.v === "home" ? showing === "home" : showing === "products" && typeFilter === t.v;
               return (
                 <button key={t.v}
@@ -810,14 +815,6 @@ export default function ArcticShopBody({
           <div className="flex items-center gap-2 mb-4">
             <span className="text-[12px] text-[#8a8a8a]">&ldquo;<span className="font-bold text-[#131313]">{submitted}</span>&rdquo; 검색 결과</span>
             <button onClick={clearSearch} className="text-[11px] font-bold text-[#e91e3f] hover:text-[#131313] transition-colors">검색 해제</button>
-          </div>
-        )}
-
-        {/* 어느 유형인지는 유형 줄이 말한다 — 여기는 '전체 보기' 로 돌아가는 글자 하나 */}
-        {typeFilter !== "all" && !query && (
-          <div className="flex items-center gap-2.5 mb-4">
-            <span className="text-[13px] font-black text-[#131313]">{TYPES.find((t) => t.v === typeFilter)?.l}</span>
-            <button onClick={() => setTypeFilter("all")} className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors">전체 보기</button>
           </div>
         )}
 
