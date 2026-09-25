@@ -486,7 +486,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </button>
 
                 {isNotifOpen && (
-                  <HeaderPopover anchorRef={notifRef} panelRef={notifPanelRef} className={`w-auto sm:w-[320px] rounded-2xl border overflow-hidden overlay-in backdrop-blur-xl ${isLightPage ? "bg-white/80 border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "bg-[#141414]/80 border-white/[0.08] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.8)]"}`}>
+                  <HeaderPopover anchorRef={notifRef} panelRef={notifPanelRef} className={`w-auto sm:w-[320px] rounded-2xl border overflow-hidden overlay-in backdrop-blur-xl ${isLightPage ? "bg-white/95 border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "bg-[#141414]/90 border-white/[0.08] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.8)]"}`}>
                     {/* 머리 — 제목 · 새 알림 수 · 전체 삭제. 판은 프로필 창과 같은 블러 (색 번짐 없음) */}
                     <div className={`px-5 h-12 flex items-center justify-between border-b ${isLightPage ? "border-[#ededed]" : "border-white/[0.07]"}`}>
                       <span className={`text-[14px] font-black ${isLightPage ? "text-[#131313]" : "text-white"}`}>
@@ -530,12 +530,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   <img src={session.user?.image || ""} alt="Profile" className={`rounded-full bg-gray-700 transition-all duration-500 ${scrolled ? "w-7 h-7" : "w-8 h-8"}`} />
                   <div className="flex items-center gap-2 ml-1">
                     <span className={`font-bold transition-[font-size,letter-spacing] duration-500 ease-out ${isLightPage ? "text-[#131313]" : "text-white"} ${scrolled ? "text-[13px]" : "text-sm"}`}>{session.user?.name}</span>
-                    <VerifyIcon isVerified={isVerified} hasScrimRole={hasScrimRole} />
+                    <VerifyIcon isVerified={isVerified} hasScrimRole={hasScrimRole} dark={!isLightPage} />
                   </div>
                 </button>
                 
                 {isProfileOpen && (
-                  <HeaderPopover anchorRef={profileDropdownRef} panelRef={profilePanelRef} className={`w-auto sm:w-[280px] rounded-2xl border overflow-hidden overlay-in backdrop-blur-xl ${isLightPage ? "bg-white/80 border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "bg-[#141414]/80 border-white/[0.08] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.8)]"}`}>
+                  <HeaderPopover anchorRef={profileDropdownRef} panelRef={profilePanelRef} className={`w-auto sm:w-[280px] rounded-2xl border overflow-hidden overlay-in backdrop-blur-xl ${isLightPage ? "bg-white/95 border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "bg-[#141414]/90 border-white/[0.08] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.8)]"}`}>
                     {/* 머리 — 사진 · 이름 · 배지. 판은 색 번짐 없이 뒤가 살짝 비치는 블러 (헤더 바와 같은 결) */}
                     <div className="px-5 pt-5 pb-4 flex items-center gap-3.5">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -543,7 +543,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       <div className="min-w-0">
                         <p className={`text-[15px] font-black truncate ${isLightPage ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</p>
                         <div className="mt-1.5 flex items-center gap-1 flex-wrap">
-                          <VerifyBadge isVerified={isVerified} hasScrimRole={hasScrimRole} />
+                          <VerifyBadge isVerified={isVerified} hasScrimRole={hasScrimRole} dark={!isLightPage} />
                           {isBooster && <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 border border-[#ff41cf]/25 ${isLightPage ? "text-[#c2189b]" : "text-[#ff6fdc]"}`}>SERVER BOOSTER</span>}
                           {isSupporter && <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold bg-[#3f83b8]/10 border border-[#3f83b8]/25 ${isLightPage ? "text-[#2f6fa3]" : "text-[#7db4df]"}`}>SUPPORTERS</span>}
                         </div>
@@ -793,7 +793,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         const groupHead = `px-3 mb-1 text-[11px] font-black tracking-[0.08em] ${L ? "text-[#8a8a8a]" : "text-gray-500"}`;
         const groupGap = `mt-3 pt-3 border-t ${L ? "border-[#ededed]" : "border-white/[0.07]"}`;
 
-        // 📌 모바일 서랍 — 헤더 팝업(프로필 · 알림)과 같은 결: 뒤가 살짝 비치는 블러 판, 색 번짐 없음, 아이콘 + 이름 줄.
+        // 📌 모바일 서랍 — 헤더 팝업(프로필 · 알림)과 같은 결: 블러 판(농도는 헤더 바와 같은 95%), 색 번짐 없음, 아이콘 + 이름 줄.
+        //    뒤 딤은 인벤토리 같은 팝업과 같게 흐리게(6px). 80%로 두면 잉크 카드 위에서만 회색이 돼 한 판이 갈라져 보였다.
         //    data-scroll-lock-skip: 전역 ScrollLock의 body position:fixed 잠금을 건너뛴다.
         //    이 메뉴는 폭 84%라 옆에 헤더가 보이는데, body를 고정하면 sticky 헤더가 사라진다.
         //    대신 위 useEffect에서 html에 스크롤 잠금을 걸어 sticky를 살린다.
@@ -807,13 +808,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           `}} />
 
           <div
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-black/50 backdrop-blur-[6px]"
             style={{ animation: isMenuClosing ? "mmFadeOut 0.24s ease-in forwards" : "mmFadeIn 0.26s ease-out" }}
             onClick={closeMobileMenu}
           />
 
           <div
-            className={`absolute right-0 top-0 bottom-0 w-[84%] max-w-[340px] rounded-l-2xl border-l flex flex-col overflow-hidden backdrop-blur-xl ${L ? "bg-white/85 border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "bg-[#141414]/85 border-white/[0.08] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.8)]"}`}
+            className={`absolute right-0 top-0 bottom-0 w-[84%] max-w-[340px] rounded-l-2xl border-l flex flex-col overflow-hidden backdrop-blur-xl ${L ? "bg-white/95 border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "bg-[#141414]/90 border-white/[0.08] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.8)]"}`}
             style={{ animation: isMenuClosing ? "mmSlideOut 0.26s cubic-bezier(0.4,0,1,1) forwards" : "mmSlideIn 0.32s cubic-bezier(0.22,1,0.36,1)" }}
           >
             {/* ── 머리 — 브랜드 · 닫기 ── */}
@@ -835,7 +836,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   <div className="min-w-0 flex-1">
                     <p className={`text-[15px] font-black truncate ${L ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</p>
                     <div className="mt-1.5 flex items-center gap-1 flex-wrap">
-                      <VerifyBadge isVerified={isVerified} hasScrimRole={hasScrimRole} />
+                      <VerifyBadge isVerified={isVerified} hasScrimRole={hasScrimRole} dark={!isLightPage} />
                       {isBooster && <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 border border-[#ff41cf]/25 ${L ? "text-[#c2189b]" : "text-[#ff6fdc]"}`}>SERVER BOOSTER</span>}
                       {isSupporter && <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold bg-[#3f83b8]/10 border border-[#3f83b8]/25 ${L ? "text-[#2f6fa3]" : "text-[#7db4df]"}`}>SUPPORTERS</span>}
                     </div>

@@ -141,7 +141,13 @@ export default function MyInfoPage() {
   useEffect(() => {
     const tab = searchParams.get("tab");
     if (!tab) { window.scrollTo(0, 0); return; }
-    if (tab === "bag") { setInvOpen(true); router.replace("/profile"); return; }
+    if (tab === "bag") {
+      setInvOpen(true);
+      const q = new URLSearchParams(Array.from(searchParams.entries()));
+      q.delete("tab");
+      router.replace(q.toString() ? `/profile?${q}` : "/profile");
+      return;
+    }
     const to: Record<string, string> = {
       notice: "/profile/notice", inquiry: "/profile/inquiry", recruit: "/profile/recruit",
       arctic: "/arctic/orders", orders: "/arctic/orders", cart: "/arctic/cart", wish: "/arctic?panel=wish",
@@ -246,7 +252,7 @@ export default function MyInfoPage() {
                     </Link>
                   )}
                   <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-                    <VerifyBadge isVerified={isVerified} hasScrimRole={hasScrimRole} />
+                    <VerifyBadge isVerified={isVerified} hasScrimRole={hasScrimRole} dark />
                     {isBooster && (
                       <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-bold border border-[#ff41cf]/40 bg-[#ff41cf]/10 text-[#ff8ae4]">
                         <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3"><path d={ICON_PATHS.sparkles} /></svg>
@@ -325,7 +331,8 @@ export default function MyInfoPage() {
 
       {/* ARCTIC 에서 왔으면 스토어 독을 그대로 — 전역 독으로 바뀌면 상점으로 돌아갈 칸이 사라진다 (ClientLayout 이 전역 독을 숨긴다) */}
       {fromArctic && <ArcticDock activeKey="me" cartCount={shopCartCount} wishCount={shopWish.length} />}
-      <InventoryPopup open={invOpen} onClose={() => setInvOpen(false)} />
+      {/* 레벨 비공개 기간(10월 공개 전)엔 일반 유저에게 열리지 않는다 — 인벤토리 줄과 같은 게이트 */}
+      <InventoryPopup open={invOpen && canSeeLevel} onClose={() => setInvOpen(false)} />
     </main>
   );
 }

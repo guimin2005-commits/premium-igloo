@@ -280,13 +280,20 @@ export default function ArcticShopBody({
     // 찜한 상품은 따로 페이지가 됐다 — 옛 주소(?panel=wish)는 그리로 보낸다
     if (panel === "wish") router.replace("/arctic/wish");
     if (panel === "search") setShowMobileSearch(true);
-    if (panel === "bag") setInvOpen(true);
+    if (panel === "bag" && status !== "loading") {
+      if (isLoggedIn) setInvOpen(true);
+      else signIn("discord");
+      // 레벨의 ?bag=1 과 같이 — 남겨 두면 뒤로가기 · 새로고침 때 팝업이 제멋대로 다시 열린다
+      const u = new URL(window.location.href);
+      u.searchParams.delete("panel");
+      window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+    }
     // 상품 상세 · 장바구니 위 상점 줄(ArcticStoreBar)에서 유형 · 검색어를 들고 온다
     const type = searchParams.get("type");
     if (type && TYPES.some((t) => t.v === type)) goProducts(type);
     const q = searchParams.get("q");
     if (q) submitSearch(q);
-  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     try {

@@ -266,6 +266,7 @@ export default function AdminNotifyPage() {
                         <span className="text-[#5a5a5a]">→ {n.recipientName}</span>
                         <span className={n.dmSent ? "text-emerald-700/80" : "text-[#5a5a5a]"}>{n.dmSent ? "DM 발송됨" : "DM 미발송"}</span>
                         <span className={n.read ? "text-sky-700/80" : "text-[#5a5a5a]"}>{n.read ? "읽음" : "안 읽음"}</span>
+                        {n.hiddenAt && <span className="text-[#5a5a5a]">유저가 지움</span>}
                         <span className="text-[#5a5a5a]">{new Date(n.createdAt).toLocaleString("ko-KR")}</span>
                       </div>
                     </div>

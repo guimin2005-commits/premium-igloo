@@ -8,11 +8,12 @@ const PATHS = {
   none: "M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-1.72 6.97a.75.75 0 10-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 101.06 1.06L12 13.06l1.72 1.72a.75.75 0 101.06-1.06L13.06 12l1.72-1.72a.75.75 0 10-1.06-1.06L12 10.94l-1.72-1.72z",
 };
 
-type Props = { isVerified?: boolean; hasScrimRole?: boolean; className?: string };
+// dark: 어두운 바탕 위(다크 페이지 · 잉크 카드). 흰 바탕이면 false — 대비가 높은 색으로
+type Props = { isVerified?: boolean; hasScrimRole?: boolean; className?: string; dark?: boolean };
 
 // 아이콘만 — 헤더 이름 옆
-export function VerifyIcon({ isVerified, hasScrimRole, className = "w-4 h-4" }: Props) {
-  const b = verifyBadge(isVerified, hasScrimRole);
+export function VerifyIcon({ isVerified, hasScrimRole, className = "w-4 h-4", dark = true }: Props) {
+  const b = verifyBadge(isVerified, hasScrimRole, dark);
   return (
     <svg role="img" aria-label={b.label} viewBox="0 0 24 24" fill="currentColor" className={`shrink-0 ${b.text} ${className}`}>
       <path fillRule="evenodd" clipRule="evenodd" d={PATHS[b.kind as keyof typeof PATHS]} />
@@ -21,8 +22,8 @@ export function VerifyIcon({ isVerified, hasScrimRole, className = "w-4 h-4" }: 
 }
 
 // 아이콘 + 이름 알약 — 프로필 창 · 모바일 메뉴 · 내 정보
-export function VerifyBadge({ isVerified, hasScrimRole, className = "" }: Props) {
-  const b = verifyBadge(isVerified, hasScrimRole);
+export function VerifyBadge({ isVerified, hasScrimRole, className = "", dark = true }: Props) {
+  const b = verifyBadge(isVerified, hasScrimRole, dark);
   return (
     <span className={`inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-bold border ${b.cls} ${className}`}>
       <svg aria-hidden viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 shrink-0">

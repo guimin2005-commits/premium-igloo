@@ -43,10 +43,14 @@ const Tile = ({ icon, name, every, value, unit = "XP", line, children, className
   </div>
 );
 
-// 더 붙는 것 / 안 붙는 것 한 줄
-const Rule = ({ plus, k, v }) => (
+// 더 붙는 것(+) / 안 붙는 것(−) / 그냥 사실(점) 한 줄
+const Rule = ({ plus, dot, k, v }) => (
   <div className="flex items-start gap-3 py-3 border-b border-[#ededed] last:border-b-0">
-    <span className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[12px] font-black leading-none ${plus ? "bg-[#131313] text-white" : "bg-[#e91e3f]/[0.08] text-[#d01634]"}`}>{plus ? "+" : "−"}</span>
+    {dot ? (
+      <span aria-hidden className="mt-2 mx-[7px] w-1.5 h-1.5 rounded-full bg-[#131313] shrink-0"></span>
+    ) : (
+      <span className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[12px] font-black leading-none ${plus ? "bg-[#131313] text-white" : "bg-[#e91e3f]/[0.08] text-[#d01634]"}`}>{plus ? "+" : "−"}</span>
+    )}
     <p className="min-w-0 text-[13px] leading-relaxed break-keep">
       <span className="font-extrabold text-[#131313]">{k}</span>
       <span className="text-[#5a5a5a]"> · {v}</span>
@@ -83,7 +87,7 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
               {/* 이어지는 길 — 점 하나와 선. 마지막 칸은 선 없이 점만 */}
               <div aria-hidden className="flex items-center gap-2 mb-4">
                 <span className={`w-2 h-2 rounded-full shrink-0 ${i === steps.length - 1 ? "bg-[#e91e3f]" : "bg-white"}`}></span>
-                {i < steps.length - 1 && <span className="flex-1 h-px bg-white/20"></span>}
+                {i < steps.length - 1 && <span className={`flex-1 h-px bg-white/20 ${i % 2 === 1 ? "hidden md:block" : ""}`}></span>}
               </div>
               <p className="text-[11px] font-black tracking-[0.18em] text-[#ff5c77] tabular-nums">{String(i + 1).padStart(2, "0")} · {s.k}</p>
               <p className="mt-2.5 text-[21px] md:text-[26px] font-black tracking-tight leading-tight break-keep">{s.big}</p>
@@ -107,13 +111,13 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
           >
             {/* 등급별 1회 — 가로 막대로 오르는 폭만 보여 준다 (자세한 표는 아래 등급) */}
             <div className="mt-auto pt-6">
-              <div className="flex items-end gap-1 h-16">
+              <div role="img" aria-label={`등급별 음성 추가 XP, ${VOICE_TIERS[0].name} 0 ~ ${VOICE_TIERS[VOICE_TIERS.length - 1].name} ${fmt(topBonus)}`} className="flex items-end gap-1 h-16">
                 {VOICE_TIERS.map((t, i) => {
                   const on = myTier && i === tierIdx;
                   return (
                     <span key={t.key} title={`${t.name} +${fmt(t.bonus)}`}
                       className={`flex-1 rounded-t-[3px] ${on ? "ring-2 ring-[#131313] ring-offset-1" : ""}`}
-                      style={{ height: `${10 + (t.bonus / maxBonus) * 90}%`, backgroundColor: t.c }} />
+                      style={{ height: t.bonus > 0 ? `${(t.bonus / maxBonus) * 100}%` : "2px", backgroundColor: t.c }} />
                   );
                 })}
               </div>
@@ -166,8 +170,8 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
       <section className="mt-14 md:mt-16">
         <Head title="등급" right={`레벨 따라 자동 · ${VOICE_TIERS.length}단계`} />
 
-        {/* PC — 세로 막대 계단 */}
-        <div className="hidden md:block">
+        {/* PC — 세로 막대 계단 (lg 이상 — 그보다 좁으면 이름이 잘린다) */}
+        <div className="hidden lg:block">
           <p className="text-[12px] font-bold text-[#5a5a5a] mb-3">음성 1회 추가 XP</p>
           <div className="grid grid-cols-10 gap-3 items-end h-[200px]">
             {VOICE_TIERS.map((t, i) => {
@@ -177,7 +181,7 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
                   {on && <span className="mb-1.5 inline-flex items-center h-5 px-2 rounded-full bg-[#131313] text-white text-[10px] font-black">나</span>}
                   <span className="text-[13px] font-black tabular-nums mb-1.5">+{fmt(t.bonus)}</span>
                   <span className={`w-full rounded-t-md ${on ? "ring-2 ring-[#131313] ring-offset-2" : ""}`}
-                    style={{ height: `${6 + (t.bonus / maxBonus) * 130}px`, backgroundColor: t.c }} />
+                    style={{ height: t.bonus > 0 ? `${(t.bonus / maxBonus) * 136}px` : "2px", backgroundColor: t.c }} />
                 </div>
               );
             })}
@@ -197,21 +201,22 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
           </div>
         </div>
 
-        {/* 모바일 — 가로 막대 줄 */}
-        <div className="md:hidden border-t border-[#131313]">
+        {/* 모바일 · 태블릿 — 가로 막대 줄 */}
+        <div className="lg:hidden border-t border-[#131313]">
           {VOICE_TIERS.map((t, i) => {
             const on = myTier && i === tierIdx;
             return (
               <div key={t.key} className="flex items-center gap-3 py-3 border-b border-[#ededed]">
                 <TierEmblem tier={t} size={22} />
-                <div className="w-[84px] shrink-0 min-w-0">
-                  <p className={`text-[13px] font-extrabold truncate ${on ? "text-[#d01634]" : ""}`}>
-                    {t.name}{on && <span className="ml-1 inline-flex items-center h-4 px-1.5 rounded-full bg-[#131313] text-white text-[9px] font-black align-middle">나</span>}
+                <div className="w-[96px] shrink-0 min-w-0">
+                  <p className="flex items-center gap-1 min-w-0">
+                    <span className={`min-w-0 truncate text-[13px] font-extrabold ${on ? "text-[#d01634]" : ""}`}>{t.name}</span>
+                    {on && <span className="shrink-0 inline-flex items-center h-4 px-1.5 rounded-full bg-[#131313] text-white text-[9px] font-black">나</span>}
                   </p>
                   <p className="text-[10px] font-bold text-[#8a8a8a] tabular-nums truncate">{tierRangeLabel(i)}</p>
                 </div>
                 <div className="flex-1 min-w-0 h-2 rounded-full bg-[#f2f2f2] overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${Math.max(3, (t.bonus / maxBonus) * 100)}%`, backgroundColor: t.c }} />
+                  <div className="h-full rounded-full" style={{ width: t.bonus > 0 ? `${(t.bonus / maxBonus) * 100}%` : "2px", backgroundColor: t.c }} />
                 </div>
                 <span className="w-[58px] shrink-0 text-right text-[13px] font-black tabular-nums">+{fmt(t.bonus)}</span>
               </div>
@@ -267,9 +272,9 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
                   </p>
                 </div>
                 <div className="mt-5 pt-1 border-t border-[#ededed]">
-                  <Rule plus k="진행" v="이번 시즌에 번 XP만큼 티어가 오름 (써도 줄지 않음)" />
-                  <Rule plus k="무료 트랙" v="누구나, 대시보드에서 직접 받기" />
-                  <Rule k="시즌 종료" v="진행 · 해금 · 받은 기록 초기화" />
+                  <Rule dot k="진행" v="이번 시즌에 번 XP만큼 티어가 오름 (써도 줄지 않음)" />
+                  <Rule dot k="무료 트랙" v="누구나, 대시보드에서 직접 받기" />
+                  <Rule dot k="시즌 종료" v="진행 · 해금 · 받은 기록 초기화" />
                 </div>
               </div>
             )}
@@ -287,9 +292,9 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
               <p className="mt-1.5 text-[34px] md:text-[40px] font-black tracking-[-0.03em] leading-none tabular-nums">1 : 1</p>
             </div>
             <div className="flex-1 min-w-0">
-              <Rule plus k="XP로 사기" v="가격만큼 XP가 빠지고, 레벨이 내려갈 수 있음" />
-              <Rule plus k="빙옥" v="등급이 오를 때 받는 재화, 레벨과 상관없음" />
-              <Rule plus k="인벤토리" v="산 것 · 받은 것, 기간제는 남은 날짜 표시" />
+              <Rule dot k="XP로 사기" v="가격만큼 XP가 빠지고, 레벨이 내려갈 수 있음" />
+              <Rule dot k="빙옥" v="등급이 오를 때 받는 재화, 레벨과 상관없음" />
+              <Rule dot k="인벤토리" v="산 것 · 받은 것, 기간제는 남은 날짜 표시" />
             </div>
             <Link href="/arctic?from=level" className="shrink-0 self-start md:self-center inline-flex items-center gap-1.5 h-11 px-6 rounded-full bg-[#131313] hover:bg-[#3a3a3a] text-white text-[13px] font-extrabold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">
               ARCTIC <Ico d={ICON_PATHS.arrowRight} className="w-4 h-4" />

@@ -60,7 +60,7 @@ export const invIconType = (it) => (it.source === "level" ? "level" : it.type ||
 //    껍데기는 TierModal 과 같은 문법(모바일 바텀시트 / 데스크톱 모달, 잉크 패널).
 //    스크롤 잠금은 손대지 않는다 — 루트 className 에 "fixed inset-0" 이 붙어 있고
 //    z-index 가 50 이상이면 ScrollLock 이 알아서 건다(iOS 대응 포함).
-export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, onReset, resetBusy, loading = false }) => {
+export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, onReset, resetBusy, loading = false, error = "" }) => {
   const [sel, setSel] = useState(null); // 선택한 아이템 uid
 
   const active = groups.find((g) => g.id === tab) || groups[0];
@@ -224,7 +224,7 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
 
       {/* invGroups 는 보유 0개면 [] 를 돌려준다 — groups[0] 로 판정하면 신규 유저에게 문구가 안 뜬다 */}
       {rows.length === 0 && (
-        <p className="text-[12px] font-bold text-white/35 text-center mt-6">{loading ? "불러오는 중…" : "아직 보유한 아이템이 없습니다"}</p>
+        <p className="text-[12px] font-bold text-white/35 text-center mt-6">{loading ? "불러오는 중…" : error || "아직 보유한 아이템이 없습니다"}</p>
       )}
     </PopShell>
   );
@@ -242,8 +242,13 @@ export function InventoryPopup({ open, onClose }) {
     let alive = true;
     fetch("/api/shop/my-items", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => { if (alive) setData(d?.success ? d.data : { items: [] }); })
-      .catch(() => { if (alive) setData((cur) => cur || { items: [] }); });
+      .then((d) => {
+        if (!alive) return;
+        // 실패는 빈 가방과 구분한다 — 받아 둔 목록이 있으면 그대로 두고 문구만 바꾼다
+        if (d?.success) setData(d.data);
+        else setData((cur) => ({ items: cur?.items || [], error: d?.error || "불러오지 못했습니다" }));
+      })
+      .catch(() => { if (alive) setData((cur) => ({ items: cur?.items || [], error: "불러오지 못했습니다" })); });
     return () => { alive = false; clearTimeout(t); };
   }, [open]);
   const groups = useMemo(() => buildInvGroups(data?.items || []), [data]);
@@ -261,6 +266,7 @@ export function InventoryPopup({ open, onClose }) {
       onTab={setTab}
       synced={data?.synced}
       loading={data === null}
+      error={data?.error}
       onTone={() => playTone(620, 0.04, "sine", 0.025)}
     />
   );

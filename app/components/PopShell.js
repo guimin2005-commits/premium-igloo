@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ICON_PATHS } from "./Icons";
 
 // 팝업이 쓰는 모션 · 격자 · 스크롤바 — 레벨 페이지 밖(내 정보 · ARCTIC)에서도 열리므로 틀이 직접 싣는다
@@ -52,6 +52,9 @@ export const POP_THEME = {
   },
 };
 export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left, children, footer, theme = "ink" }) => {
+  const closeRef = useRef(null);
+  // 열리면 닫기 버튼에 포커스 — 키보드로도 바로 닫고, 탭 순서가 팝업 안에서 시작한다
+  useEffect(() => { if (open) closeRef.current?.focus({ preventScroll: true }); }, [open]);
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -68,6 +71,9 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left,
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         onClick={(e) => e.stopPropagation()}
         className="relative w-full sm:max-w-3xl h-[86dvh] sm:h-[min(620px,88vh)] overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
         style={{ background: t.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
@@ -92,9 +98,10 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left,
             {badge}
           </div>
           <button
+            ref={closeRef}
             onClick={onClose}
             aria-label="닫기"
-            className="shrink-0 w-9 h-9 rounded-full border border-white/15 text-white/55 hover:text-white hover:border-white/35 transition-colors flex items-center justify-center outline-none focus:outline-none"
+            className="shrink-0 w-9 h-9 rounded-full border border-white/15 text-white/55 hover:text-white hover:border-white/35 transition-colors flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-white/60"
           >
             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d={ICON_PATHS.close} strokeLinecap="round" /></svg>
           </button>
@@ -120,7 +127,7 @@ export const PopTab = ({ on, onClick, label, n }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
+    className={`shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full text-[12px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${
       on ? "bg-white text-[#131313]" : "bg-white/[0.06] text-white/60 hover:text-white"
     }`}
   >

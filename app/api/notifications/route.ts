@@ -129,7 +129,8 @@ export async function GET(request: Request) {
     if (!mine) {
       return NextResponse.json({ success: false, error: "로그인이 필요합니다.", data: [] }, { status: 401 });
     }
-    const list = await Notification.find(mine).sort({ createdAt: -1 });
+    // 유저가 전체 삭제로 숨긴 것은 빼고 (hiddenAt 이 없거나 null)
+    const list = await Notification.find({ ...mine, hiddenAt: null }).sort({ createdAt: -1 });
     return NextResponse.json({ success: true, data: list });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -219,13 +220,17 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const session: any = await getServerSession(authOptions);
-    // 📌 내 알림 전체 삭제 — 알림은 받는 사람마다 한 건씩이라 본인 것만 지우면 된다 (세션 기준)
+    // 📌 내 알림 전체 삭제 — 본인 것만(세션 기준). 문서를 지우지 않고 hiddenAt 으로 숨긴다 —
+    //    경고 · 제재 같은 발송 기록은 운영 근거라 유저가 지워도 관리자 쪽에는 남아야 한다.
     if (new URL(request.url).searchParams.get("mine") === "all") {
       const mine = mineFilter(session);
       if (!mine) return NextResponse.json({ success: false, error: "로그인이 필요합니다." }, { status: 401 });
       await connectToDatabase();
-      const r = await Notification.deleteMany(mine);
-      return NextResponse.json({ success: true, deleted: r.deletedCount || 0 });
+      const now = new Date();
+      // 안 읽은 채로 지운 것은 읽음으로 — 읽은 시각이 이미 있는 것은 건드리지 않는다
+      await Notification.updateMany({ ...mine, hiddenAt: null, read: false }, { read: true, readAt: now });
+      const r = await Notification.updateMany({ ...mine, hiddenAt: null }, { hiddenAt: now });
+      return NextResponse.json({ success: true, deleted: r.modifiedCount || 0 });
     }
     if (!isAdminName(session?.user?.name)) {
       return NextResponse.json({ success: false, error: "관리자만 삭제할 수 있습니다." }, { status: 403 });
