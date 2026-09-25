@@ -436,7 +436,7 @@ const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left, childr
         {/* 본문 — PC 는 왼쪽 요약 | 오른쪽 목록, 모바일은 위아래로 한 번에 스크롤 */}
         <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto sm:overflow-hidden sm:flex">
           <div className="shrink-0 sm:w-[236px] sm:border-r border-white/[0.08] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto flex flex-col">{left}</div>
-          <div data-pop-list className="min-w-0 flex-1 px-5 sm:px-6 pb-6 pt-1 sm:py-6 sm:overflow-y-auto">{children}</div>
+          <div data-pop-list className="pop-scroll min-w-0 flex-1 px-5 sm:px-6 pb-6 pt-1 sm:py-6 sm:overflow-y-auto">{children}</div>
         </div>
 
         {footer}
@@ -1986,6 +1986,9 @@ export default function LevelPage() {
         .tier-emblem { display: inline-block; transition: transform .3s cubic-bezier(0.16,1,0.3,1); }
         .tier-emblem:hover { animation: emblemHop .6s cubic-bezier(0.16,1,0.3,1) forwards; }
         @media (prefers-reduced-motion: reduce) { .tier-emblem:hover { animation: none; } }
+        /* 팝업 목록 — 스크롤바 자리를 늘 비워 둔다. 목록이 길어 스크롤바가 생기고 없어질 때마다
+           폭이 10px 바뀌어 칸이 움찔하던 것(시즌 패스 전체 ↔ 받을 보상). 어두운 창이라 막대는 얇고 옅게 */
+        .pop-scroll { scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.22) transparent; }
         @keyframes ringPop {
           0%   { transform: scale(1); filter: brightness(1); }
           35%  { transform: scale(1.08); filter: brightness(1.7); }
