@@ -92,18 +92,21 @@ export default function ShopInventoryPage() {
             {list.map((it) => {
               const c = it.color || "#131313";
               const dead = it.status === "pending" || it.status === "missing";
-              const dday = it.expiresAt && it.status === "completed" ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000)) : null;
+              // 기간제 — 만료는 결제 순간부터 정해져 있으니 지급 대기여도 남은 기간을 센다
+              const dday = it.expiresAt ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000)) : null;
+              const until = it.expiresAt ? new Date(it.expiresAt).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric" }) : "";
               const sub = it.status === "pending" ? "지급 대기" : it.status === "missing" ? "역할 없음" : it.source === "level" ? (it.rewardLevel != null ? `레벨 보상 · Lv.${it.rewardLevel}` : "레벨 보상") : it.source === "pass" ? "시즌 패스" : it.source === "grant" ? "운영진 지급" : itemTypeLabel(it.type);
               return (
                 <div key={it.uid} className="bg-white rounded-2xl border border-[#ededed] p-4 flex flex-col items-center text-center">
                   <span className="relative w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: `${c}14`, boxShadow: `inset 0 0 0 1px ${c}33` }}>
                     <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.source === "level" ? "level" : it.type} size={30} color={c} dim={dead} />
-                    {dday !== null && <span className="absolute -top-1.5 -right-1.5 px-1.5 h-[18px] rounded-full bg-[#131313] text-white text-[10px] font-black flex items-center tabular-nums">D-{dday}</span>}
-                    {it.status === "pending" && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#a3a3a3]"></span>}
-                    {it.status === "missing" && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#e91e3f]"></span>}
+                    {dday !== null && <span className={`absolute -top-1.5 -right-1.5 px-1.5 h-[18px] rounded-full text-white text-[10px] font-black flex items-center tabular-nums ${dday <= 3 ? "bg-[#e91e3f]" : "bg-[#131313]"}`}>D-{dday}</span>}
+                    {it.status === "pending" && <span className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-[#a3a3a3]"></span>}
+                    {it.status === "missing" && <span className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-[#e91e3f]"></span>}
                   </span>
                   <span className="mt-3 text-[13px] font-black text-[#131313] leading-tight line-clamp-2 break-keep">{it.name}</span>
                   <span className={`mt-1 text-[11px] font-bold tabular-nums ${dead ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>{sub}</span>
+                  {until && <span className="mt-0.5 text-[11px] font-bold text-[#5a5a5a] tabular-nums">{it.days > 0 ? `${it.days}일 · ` : ""}{until}까지</span>}
                 </div>
               );
             })}

@@ -1543,10 +1543,13 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
     const lum = (parseInt(m[1], 16) * 0.299 + parseInt(m[2], 16) * 0.587 + parseInt(m[3], 16) * 0.114) / 255;
     return lum < 0.18 ? "#d4d4d4" : c;
   };
+  // 기간제 — 만료는 결제 순간부터 정해져 있다(봇 지급이 늦어도 산 만큼 보장). 그래서 지급 대기여도 남은 기간을 센다
   const ddayOf = (it) =>
-    it.expiresAt && it.status === "completed"
-      ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000))
-      : null;
+    it.expiresAt ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000)) : null;
+  const untilOf = (it) =>
+    it.expiresAt
+      ? new Date(it.expiresAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
+      : "";
 
   return (
     <PopShell
@@ -1580,13 +1583,25 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
                   {selItem.status === "pending" ? "지급 대기" : selItem.status === "missing" ? "확인 필요" : "보유 중"}
                 </span>
               </div>
-              {ddayOf(selItem) !== null && (
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[11px] font-bold text-white/45">남은 기간</span>
-                  <span className={`text-[12px] font-black tabular-nums ${ddayOf(selItem) <= 3 ? "text-[#ff5c77]" : "text-white/70"}`}>
-                    D-{ddayOf(selItem)}
-                  </span>
-                </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11px] font-bold text-white/45">기간</span>
+                <span className="text-[12px] font-black text-white/80 tabular-nums">
+                  {selItem.expiresAt ? `${selItem.days > 0 ? `${selItem.days}일 · ` : ""}기간제` : "영구"}
+                </span>
+              </div>
+              {selItem.expiresAt && (
+                <>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[11px] font-bold text-white/45">만료</span>
+                    <span className="text-[12px] font-black text-white/70 tabular-nums">{untilOf(selItem)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[11px] font-bold text-white/45">남은 기간</span>
+                    <span className={`text-[12px] font-black tabular-nums ${ddayOf(selItem) <= 3 ? "text-[#ff5c77]" : "text-white/70"}`}>
+                      D-{ddayOf(selItem)}
+                    </span>
+                  </div>
+                </>
               )}
               {selItem.rewardLevel != null && (
                 <div className="flex items-center justify-between gap-3">
@@ -1656,8 +1671,8 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
                   D-{dday}
                 </span>
               )}
-              {it.status === "pending" && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white/40"></span>}
-              {it.status === "missing" && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
+              {it.status === "pending" && <span className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-white/40" title="지급 대기"></span>}
+              {it.status === "missing" && <span className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-[#e91e3f]" title="확인 필요"></span>}
             </button>
           );
         })}
@@ -2075,7 +2090,9 @@ export default function LevelPage() {
     }
     // 탭 순서는 유형 표(INV_GROUPS) 순 — 어떤 것을 먼저 샀든 자리가 바뀌지 않는다
     const groups = [...byId.values()].sort((a, b) => (INV_GROUP_ORDER[a.id] ?? 99) - (INV_GROUP_ORDER[b.id] ?? 99));
-    return [{ id: "all", label: "전체", items: invAll }, ...groups];
+    // 기간제는 유형과 겹쳐도 따로 모아 본다 — 언제 끝나는지 한눈에 보려는 사람이 많다
+    const timed = invAll.filter((it) => it.expiresAt);
+    return [{ id: "all", label: "전체", items: invAll }, ...groups, ...(timed.length ? [{ id: "timed", label: "기간제", items: timed }] : [])];
   }, [invAll]);
   const invActive = invGroups.find((g) => g.id === invTab) || invGroups[0];
   const invRows = invActive?.items || [];
