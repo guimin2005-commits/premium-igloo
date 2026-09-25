@@ -352,7 +352,7 @@ const POP_THEME = {
     glow: "rgba(155,107,255,0.4)",
     glow2: "rgba(255,122,198,0.16)",
     // 별빛 — 점 몇 개만 흩뿌린다
-    stars: [
+    dots: [
       "radial-gradient(1.5px 1.5px at 8% 22%, rgba(255,255,255,0.75), transparent 70%)",
       "radial-gradient(1px 1px at 19% 64%, rgba(255,255,255,0.55), transparent 70%)",
       "radial-gradient(1.5px 1.5px at 31% 12%, rgba(228,212,255,0.8), transparent 70%)",
@@ -363,6 +363,22 @@ const POP_THEME = {
       "radial-gradient(1px 1px at 88% 76%, rgba(255,255,255,0.5), transparent 70%)",
       "radial-gradient(1.5px 1.5px at 94% 40%, rgba(255,255,255,0.65), transparent 70%)",
       "radial-gradient(1px 1px at 38% 88%, rgba(228,212,255,0.55), transparent 70%)",
+    ].join(","),
+  },
+  // 강화 — 불씨. 짙은 다홍 바탕에 주황 불티
+  enh: {
+    bg: "linear-gradient(160deg, #3a1411 0%, #1f0d0c 45%, #140a0a 100%)",
+    glow: "rgba(255,84,54,0.36)",
+    glow2: "rgba(255,170,64,0.14)",
+    dots: [
+      "radial-gradient(1.5px 1.5px at 12% 80%, rgba(255,176,96,0.85), transparent 70%)",
+      "radial-gradient(1px 1px at 22% 58%, rgba(255,140,90,0.6), transparent 70%)",
+      "radial-gradient(1.5px 1.5px at 35% 90%, rgba(255,200,120,0.7), transparent 70%)",
+      "radial-gradient(1px 1px at 48% 70%, rgba(255,120,80,0.55), transparent 70%)",
+      "radial-gradient(1px 1px at 61% 86%, rgba(255,190,110,0.7), transparent 70%)",
+      "radial-gradient(1.5px 1.5px at 73% 62%, rgba(255,150,90,0.6), transparent 70%)",
+      "radial-gradient(1px 1px at 84% 92%, rgba(255,200,130,0.75), transparent 70%)",
+      "radial-gradient(1px 1px at 92% 74%, rgba(255,130,80,0.55), transparent 70%)",
     ].join(","),
   },
 };
@@ -388,7 +404,7 @@ const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left, childr
         style={{ background: t.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
       >
         {t.grid && <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>}
-        {t.stars && <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ backgroundImage: t.stars }}></div>}
+        {t.dots && <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ backgroundImage: t.dots }}></div>}
         <div aria-hidden className="absolute -top-28 -right-16 w-80 h-80 blur-[100px] rounded-full pointer-events-none" style={{ background: t.glow }}></div>
         {t.glow2 && <div aria-hidden className="absolute -bottom-32 -left-20 w-80 h-80 blur-[110px] rounded-full pointer-events-none" style={{ background: t.glow2 }}></div>}
 
@@ -455,14 +471,28 @@ const hexLift = (hex, t) => {
   return `#${f(m[1])}${f(m[2])}${f(m[3])}`;
 };
 
-// 📌 강화 창 — 카드의 "강화" 로 연다. 틀은 PopShell(인벤토리 · 시즌 패스와 같은 틀).
-//    왼쪽: 보유 XP · 빙옥, 지금 1회 획득(강화 · 등급 · 역할 · 부스트 포함)과 한 단계 올린 뒤의 값
-//    오른쪽: 진행 막대 · 강화 버튼 · 남은 단계표(단계마다 1회 획득 · 비용). 비용은 서버와 같은 식(lib/enhance)
-//    최대 단계가 0 인 쪽은 탭을 만들지 않는다 (강화가 꺼진 것을 MAX 로 읽지 않게).
+// 📌 강화 창 — 카드의 "강화" 로 연다. 틀은 PopShell, 바탕은 불씨(다홍 · 주황).
+//    머리: 보유 XP · 빙옥 배지. 왼쪽: +N 링 메달(단계가 오르면 번쩍) · 지금 1회 획득 → 강화 후.
+//    오른쪽: 다음 단계와 강화 버튼, 전 단계 레일(지난 단계는 채운 노드, 다음은 고리, 남은 건 빈 노드 · 1회 획득 · 비용).
+//    비용은 서버와 같은 식(lib/enhance enhanceCost). 최대 단계가 0 인 쪽은 탭을 만들지 않는다.
+const EMBER = "linear-gradient(135deg, #ff4d3a 0%, #ff9a3c 100%)";
 const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voiceMin = 5, policy, onTone }) => {
   const kinds = ["chat", "voice"].filter((k) => enh[k].max > 0);
   const [pick, setPick] = useState("chat");
   const kind = kinds.includes(pick) ? pick : kinds[0];
+
+  // 단계가 오르면 메달이 한 번 번쩍인다 (종류별로 따로 기억)
+  const prevLv = useRef({ chat: enh.chat.level, voice: enh.voice.level });
+  const [pop, setPop] = useState("");
+  useEffect(() => {
+    const up = ["chat", "voice"].find((k) => enh[k].level > prevLv.current[k]);
+    prevLv.current = { chat: enh.chat.level, voice: enh.voice.level };
+    if (!up) return;
+    setPop(up);
+    const t = setTimeout(() => setPop(""), 750);
+    return () => clearTimeout(t);
+  }, [enh.chat.level, enh.voice.level]);
+
   if (!kind) return null;
 
   const v = enh[kind];
@@ -478,75 +508,122 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
   const base = isChat ? policy.chatEnhanceBaseCost : policy.voiceEnhanceBaseCost;
   const growth = isChat ? policy.chatEnhanceCostGrowthPct : policy.voiceEnhanceCostGrowthPct;
   const steps = [];
-  for (let n = v.level + 1; n <= v.max; n++) steps.push({ n, g: gainAt((n - v.level) * stepXp), c: enhanceCost(base, growth, n) });
-  const COLS = { gridTemplateColumns: "56px minmax(0,1fr) 96px" };
+  for (let n = 1; n <= v.max; n++) steps.push({ n, g: gainAt((n - v.level) * stepXp), c: enhanceCost(base, growth, n) });
+  const COLS = { gridTemplateColumns: "20px 44px minmax(0,1fr) 88px" };
 
   return (
     <PopShell
       open={open}
       onClose={onClose}
+      theme="enh"
       title="강화"
       icon="bolt"
+      badge={
+        <span
+          className="min-w-0 inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[11px] font-black text-[#ffd2b8] tabular-nums truncate"
+          style={{ background: "rgba(255,120,80,0.14)", boxShadow: "inset 0 0 0 1px rgba(255,140,90,0.3)" }}
+        >
+          <span className="truncate">보유 {fmt(balance?.xp)} XP</span>
+          <span className="shrink-0 text-white/45">빙옥 {fmt(balance?.point)}</span>
+        </span>
+      }
       tabs={kinds.length > 1 ? kinds.map((k) => (
-        <PopTab key={k} on={k === kind} onClick={() => { setPick(k); onTone?.(); }} label={k === "chat" ? "채팅" : "음성"} n={`${enh[k].level}/${enh[k].max}`} />
+        <PopTab key={k} on={k === kind} onClick={() => { setPick(k); onTone?.(); }} label={k === "chat" ? "채팅" : "음성"} n={`+${enh[k].level}`} />
       )) : null}
       left={
         <>
-          <p className="text-[11px] font-bold text-white/45">보유</p>
-          <p className="mt-2.5 text-[22px] font-black text-white tabular-nums tracking-tight leading-none">{fmt(balance?.xp)}<span className="text-[12px] text-white/40 ml-1">XP</span></p>
-          <p className="mt-2 text-[12px] font-bold text-white/50 tabular-nums">빙옥 {fmt(balance?.point)}</p>
-          <p className="mt-7 text-[11px] font-bold text-white/45">{isChat ? "지금 채팅 1회" : `지금 음성 ${voiceMin}분`}</p>
-          <p className="mt-2.5 text-[26px] font-black text-white tabular-nums tracking-tight leading-none">{gainAt(0)}<span className="text-[12px] text-white/40 ml-1">XP</span></p>
-          {!atMax && <p className="mt-2.5 text-[12px] font-black text-[#ff5c77] tabular-nums">강화하면 {gainAt(stepXp)}</p>}
+          <div className="flex flex-col items-center text-center sm:pt-2">
+            <GlowRing id="enhRing" from="#ff4d3a" to="#ffb040" pct={(v.level / Math.max(1, v.max)) * 100} pop={pop === kind}>
+              <span className="text-[42px] font-black text-white tabular-nums tracking-[-0.03em] leading-none">+{v.level}</span>
+              <span className="mt-1.5 text-[11px] font-bold text-white/40 tabular-nums">/ +{v.max}</span>
+            </GlowRing>
+            <p className="mt-4 text-[13px] font-black text-white">{isChat ? "채팅 강화" : "음성 강화"}</p>
+          </div>
+
+          {/* 지금 → 강화 후 — 이 창에서 유일한 카드 */}
+          <div
+            className="mt-7 sm:mt-auto rounded-2xl p-4"
+            style={{ background: "linear-gradient(135deg, rgba(255,90,60,0.18), rgba(255,170,64,0.1))", boxShadow: "inset 0 0 0 1px rgba(255,140,90,0.28)" }}
+          >
+            <p className="text-[11px] font-bold text-white/50">{isChat ? "채팅 1회" : `음성 ${voiceMin}분`}</p>
+            <p className="mt-2 text-[20px] font-black text-white tabular-nums tracking-tight leading-none">{gainAt(0)}<span className="text-[11px] text-white/40 ml-1">XP</span></p>
+            {!atMax && (
+              <p className="mt-2.5 flex items-center gap-1.5 text-[12px] font-black text-[#ffb38a] tabular-nums">
+                <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
+                {gainAt(stepXp)} XP
+              </p>
+            )}
+          </div>
         </>
       }
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[18px] font-black text-white">{isChat ? "채팅 강화" : "음성 강화"}</span>
-        <span className="text-[13px] font-black text-white/40 tabular-nums">{v.level} / {v.max}</span>
-      </div>
-      <div className="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
-        <div className="h-full rounded-full bg-[#e91e3f]" style={{ width: `${Math.round((v.level / Math.max(1, v.max)) * 100)}%`, transition: "width 0.6s cubic-bezier(0.16,1,0.3,1)" }}></div>
-      </div>
-
+      {/* 다음 단계 */}
       {atMax ? (
-        <p className="mt-5 inline-flex items-center h-9 px-4 rounded-full border border-white/20 text-[12px] font-black text-white/75">최대 단계</p>
+        <div className="py-2">
+          <p className="text-[11px] font-bold text-white/45">최대 단계</p>
+          <p className="mt-2 text-[28px] font-black text-white tracking-tight leading-none">+{v.max} 달성</p>
+        </div>
       ) : (
         <>
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold text-white/45">다음 단계</p>
+              <p className="mt-2 text-[28px] font-black text-white tabular-nums tracking-tight leading-none">+{v.level + 1}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[11px] font-bold text-white/45">{isChat ? "채팅 1회" : `음성 ${voiceMin}분`}</p>
+              <p className="mt-2 text-[15px] font-black text-white tabular-nums leading-none">{gainAt(stepXp)} XP</p>
+            </div>
+          </div>
+          <div className="mt-5 flex gap-2">
             <button
               type="button"
               onClick={() => onEnhance(kind, "xp")}
               disabled={!canXp}
-              className="h-11 px-5 rounded-full bg-[#e91e3f] enabled:hover:bg-[#d01634] text-white text-[13px] font-black tabular-nums transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+              className="flex-1 h-12 rounded-full text-white text-[14px] font-black tabular-nums transition-transform enabled:hover:-translate-y-px outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+              style={{ background: EMBER }}
             >
-              XP로 강화 · {fmt(cost)}
+              강화 · {fmt(cost)} XP
             </button>
             <button
               type="button"
               onClick={() => onEnhance(kind, "point")}
               disabled={!canPoint}
-              className="h-11 px-5 rounded-full bg-white/[0.06] border border-white/15 enabled:hover:bg-white/[0.12] text-white text-[13px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+              className="shrink-0 h-12 px-5 rounded-full bg-white/[0.07] border border-white/15 enabled:hover:bg-white/[0.13] text-white text-[13px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
             >
-              빙옥으로 강화
+              빙옥으로
             </button>
           </div>
-
-          {/* 남은 단계 — 맨 위(다음 단계)만 밝게 */}
-          <div className="mt-6 grid px-2.5 -mx-2.5 pb-2" style={COLS}>
-            <span className="text-[11px] font-bold text-white/40">단계</span>
-            <span className="text-[11px] font-bold text-white/40">1회 획득</span>
-            <span className="text-[11px] font-bold text-white/40 text-right">비용</span>
-          </div>
-          {steps.map((r, i) => (
-            <div key={r.n} className={`grid items-center h-9 px-2.5 -mx-2.5 rounded-lg tabular-nums ${i === 0 ? "bg-white/[0.06]" : ""}`} style={COLS}>
-              <span className={`text-[12px] font-black ${i === 0 ? "text-white" : "text-white/40"}`}>{r.n}단계</span>
-              <span className={`text-[12px] font-bold ${i === 0 ? "text-white" : "text-white/55"}`}>{r.g} XP</span>
-              <span className={`text-[12px] font-black text-right ${i === 0 ? "text-[#ff5c77]" : "text-white/40"}`}>{fmt(r.c)}</span>
-            </div>
-          ))}
         </>
       )}
+
+      {/* 단계 레일 */}
+      <div className="mt-7 grid items-center gap-x-3 px-2 -mx-2 pb-2" style={COLS}>
+        <span></span>
+        <span className="text-[11px] font-bold text-white/40">단계</span>
+        <span className="text-[11px] font-bold text-white/40">1회 획득</span>
+        <span className="text-[11px] font-bold text-white/40 text-right">비용</span>
+      </div>
+      <div className="relative">
+        <span aria-hidden className="absolute left-[9.5px] top-5 bottom-5 w-px bg-white/12"></span>
+        {steps.map((r) => {
+          const done = r.n <= v.level;
+          const next = r.n === v.level + 1;
+          return (
+            <div key={r.n} className={`relative grid items-center gap-x-3 h-10 px-2 -mx-2 rounded-xl tabular-nums ${next ? "bg-white/[0.07]" : ""}`} style={COLS}>
+              <span className="relative z-10 flex justify-center">
+                <span
+                  className={`w-3 h-3 rounded-full ${done ? "" : next ? "ring-2 ring-[#ff7a4a] bg-[#1f0d0c]" : "ring-1 ring-white/25 bg-[#1f0d0c]"}`}
+                  style={done ? { background: EMBER } : undefined}
+                ></span>
+              </span>
+              <span className={`text-[13px] font-black ${done ? "text-white/45" : next ? "text-white" : "text-white/40"}`}>+{r.n}</span>
+              <span className={`text-[12px] font-bold ${done ? "text-white/35" : next ? "text-white" : "text-white/55"}`}>{r.g} XP</span>
+              <span className={`text-[12px] font-black text-right ${done ? "text-white/30" : next ? "text-[#ffb38a]" : "text-white/40"}`}>{done ? "완료" : fmt(r.c)}</span>
+            </div>
+          );
+        })}
+      </div>
     </PopShell>
   );
 };
@@ -557,22 +634,22 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
 //    수령 · 해금 판정은 서버가 다시 한다 — 여기서는 서버가 준 상태만 그린다.
 const PASS_KIND_ICON = { xp: "bolt", point: "sparkles", role: "shieldCheck", item: "gift" };
 const CROWN = "M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8z";
-const PassRing = ({ pct = 0, children }) => {
+const GlowRing = ({ id, from, to, pct = 0, pop = false, children }) => {
   const R = 54;
   const C = 2 * Math.PI * R;
   return (
-    <div className="relative w-[136px] h-[136px] shrink-0">
+    <div className="relative w-[136px] h-[136px] shrink-0" style={pop ? { animation: "ringPop .7s cubic-bezier(0.16,1,0.3,1)" } : undefined}>
       <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
         <defs>
-          <linearGradient id="passRing" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#b69cff" />
-            <stop offset="100%" stopColor="#ff7ac6" />
+          <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={from} />
+            <stop offset="100%" stopColor={to} />
           </linearGradient>
         </defs>
         <circle cx="60" cy="60" r={R} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
         {pct > 0 && (
           <circle
-            cx="60" cy="60" r={R} fill="none" stroke="url(#passRing)" strokeWidth="6" strokeLinecap="round"
+            cx="60" cy="60" r={R} fill="none" stroke={`url(#${id})`} strokeWidth="6" strokeLinecap="round"
             strokeDasharray={C} strokeDashoffset={C * (1 - Math.min(100, pct) / 100)}
             style={{ transition: "stroke-dashoffset 0.9s cubic-bezier(0.16,1,0.3,1)" }}
           />
@@ -677,10 +754,10 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
       left={
         <>
           <div className="flex flex-col items-center text-center sm:pt-2">
-            <PassRing pct={ringPct}>
+            <GlowRing id="passRing" from="#b69cff" to="#ff7ac6" pct={ringPct}>
               <span className="text-[40px] font-black text-white tabular-nums tracking-[-0.03em] leading-none">T{tierNo}</span>
               <span className="mt-1.5 text-[11px] font-bold text-white/40 tabular-nums">/ T{maxTier}</span>
-            </PassRing>
+            </GlowRing>
             <p className="mt-4 text-[12px] font-bold text-white/55 tabular-nums">
               {pass.nextNeed > 0 ? <>T{tierNo + 1} 까지 <b className="text-white">{fmt(pass.nextNeed)} XP</b></> : "모든 티어 달성"}
             </p>
@@ -931,15 +1008,19 @@ const invIconType = (it) => (it.source === "level" ? "level" : it.type || it.kin
 const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
   const [sel, setSel] = useState(null); // 선택한 아이템 uid
 
-  useEffect(() => { if (!open) setSel(null); }, [open]);
+  const active = groups.find((g) => g.id === tab) || groups[0];
+  const rows = active?.items || [];
+  // 열 때 · 탭을 바꿀 때 첫 아이템을 골라 둔다 — 왼쪽 칸이 비지 않게
+  useEffect(() => {
+    if (!open) { setSel(null); return; }
+    setSel((cur) => (cur && rows.some((r) => r.uid === cur) ? cur : rows[0]?.uid ?? null));
+  }, [open, tab, rows[0]?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null;
 
-  const active = groups.find((g) => g.id === tab) || groups[0];
-  const rows = active?.items || [];
   // uid 로 되짚는다 — 30초 폴링이 배열을 갈아끼워도 엉뚱한 것을 가리키지 않는다
   const selItem = sel ? rows.find((r) => r.uid === sel) || null : null;
-  const slots = Math.max(8, Math.ceil(rows.length / 4) * 4);
+  const slots = Math.max(20, Math.ceil(rows.length / 5) * 5); // 5열 × 4줄 — 커진 창을 채운다
   // 색 — 등록된 색 > 유형 기본색 (lib/items.js). 레벨 보상은 서버가 분홍을 실어 보낸다.
   //    잉크 패널 위라 너무 어두운 색(기프트카드 기본 #131313 등)은 밝은 회색으로 바꿔 칸 테두리가 보이게 한다
   const accentOf = (it) => {
@@ -968,15 +1049,15 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
         selItem ? (
           <div>
             <div
-              className="w-20 h-20 rounded-2xl flex items-center justify-center mb-4"
+              className="w-24 h-24 rounded-2xl flex items-center justify-center mb-5"
               style={{
                 background: `linear-gradient(160deg, ${accentOf(selItem)}33, ${accentOf(selItem)}0f)`,
                 boxShadow: `inset 0 0 0 1px ${accentOf(selItem)}55`,
               }}
             >
-              <ItemIcon icon={selItem.icon} imageUrl={selItem.imageUrl} type={invIconType(selItem)} size={38} color={accentOf(selItem)} dim={selItem.status !== "completed"} />
+              <ItemIcon icon={selItem.icon} imageUrl={selItem.imageUrl} type={invIconType(selItem)} size={46} color={accentOf(selItem)} dim={selItem.status !== "completed"} />
             </div>
-            <p className="text-[18px] font-black text-white leading-snug break-keep">{selItem.name}</p>
+            <p className="text-[20px] font-black text-white leading-snug break-keep">{selItem.name}</p>
             <p className="text-[12px] font-bold text-white/50 mt-2 leading-relaxed break-keep">{invSubLabel(selItem)}</p>
 
             <div className="mt-5 space-y-3">
@@ -1027,7 +1108,7 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
         ) : null
       }
     >
-      <div className="grid grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-4 sm:grid-cols-5 gap-2.5">
         {Array.from({ length: slots }, (_, i) => {
           const it = rows[i];
           if (!it) {
@@ -1043,17 +1124,18 @@ const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone }) => {
               onClick={() => { setSel(on ? null : it.uid); onTone(); }}
               title={it.name}
               className={`relative aspect-square rounded-xl flex flex-col items-center justify-center px-1.5 transition-all outline-none focus:outline-none ${
-                on ? "ring-2 ring-white/70 -translate-y-0.5" : "hover:-translate-y-0.5"
+                on ? "-translate-y-0.5" : "hover:-translate-y-0.5"
               }`}
               style={{
                 background: dead ? "rgba(255,255,255,0.03)" : `linear-gradient(160deg, ${accent}2e, ${accent}0d)`,
-                boxShadow: dead ? "inset 0 0 0 1px rgba(255,255,255,0.07)" : `inset 0 0 0 1px ${accent}44`,
+                // 고른 칸은 흰 테두리 — ring 클래스는 이 인라인 그림자에 덮여 안 보였다
+                boxShadow: `${on ? "0 0 0 2px rgba(255,255,255,0.75), " : ""}${dead ? "inset 0 0 0 1px rgba(255,255,255,0.07)" : `inset 0 0 0 1px ${accent}44`}`,
               }}
             >
               <span aria-hidden className="mb-1.5">
-                <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={24} color={accent} dim={dead} />
+                <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={28} color={accent} dim={dead} />
               </span>
-              <span className={`w-full text-[9px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
+              <span className={`w-full text-[10px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
                 {it.name}
               </span>
               {dday !== null && (
@@ -1904,6 +1986,11 @@ export default function LevelPage() {
         .tier-emblem { display: inline-block; transition: transform .3s cubic-bezier(0.16,1,0.3,1); }
         .tier-emblem:hover { animation: emblemHop .6s cubic-bezier(0.16,1,0.3,1) forwards; }
         @media (prefers-reduced-motion: reduce) { .tier-emblem:hover { animation: none; } }
+        @keyframes ringPop {
+          0%   { transform: scale(1); filter: brightness(1); }
+          35%  { transform: scale(1.08); filter: brightness(1.7); }
+          100% { transform: scale(1); filter: brightness(1); }
+        }
         @keyframes tierIn {
           from { opacity: 0; transform: translateY(16px) scale(0.985); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -2231,15 +2318,24 @@ export default function LevelPage() {
                           ))}
                         </div>
 
-                        {/* 1회 획득 — 강화 · 등급 · 역할 · 부스트를 다 더한 값. 내역은 강화 창에서 */}
-                        <div className="flex items-center justify-between gap-3 pt-3">
-                          <span className="shrink-0 text-[11px] font-bold text-white/45">1회 획득</span>
-                          <span className="min-w-0 truncate text-[13px] font-black text-white tabular-nums">
-                            채팅 {gain.chatLo.toLocaleString()}~{gain.chatHi.toLocaleString()}
-                            <span className="text-white/25 mx-1.5">·</span>
-                            음성 {P_voiceMin}분 {gain.voice.toLocaleString()}
-                            <span className="text-[10px] text-white/40 ml-1">XP</span>
-                          </span>
+                        {/* 1회 획득 — 강화 · 등급 · 역할 · 부스트를 다 더한 값(내역은 강화 창). 스탯과 같은 두 칸 */}
+                        <div className="grid grid-cols-2 border-t border-white/10">
+                          {[
+                            { icon: "chat", l: "채팅 1회", v: `+${gain.chatLo.toLocaleString()}~${gain.chatHi.toLocaleString()}` },
+                            { icon: "mic", l: `음성 ${P_voiceMin}분`, v: `+${gain.voice.toLocaleString()}` },
+                          ].map((g, i) => (
+                            <div key={g.icon} className={`min-w-0 py-3 ${i === 0 ? "pr-4 border-r border-white/10" : "pl-4"}`}>
+                              <p className="flex items-center gap-1.5 text-[11px] font-bold text-white/45 mb-2">
+                                <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9">
+                                  <path d={ICON_PATHS[g.icon]} strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                                {g.l}
+                              </p>
+                              <p className="text-lg font-black text-white tabular-nums tracking-tight leading-none truncate">
+                                {g.v}<span className="text-[11px] text-white/40 ml-1">XP</span>
+                              </p>
+                            </div>
+                          ))}
                         </div>
 
                       </div>
@@ -2247,8 +2343,8 @@ export default function LevelPage() {
 
                 </div>
 
-                {/* 오른쪽 — 가로로 길게 늘어지지 않게 두 칸으로 나눈다 */}
-                <div className="contents lg:grid lg:grid-cols-2 lg:gap-x-10 lg:col-span-8 lg:items-start min-w-0">
+                {/* 오른쪽 — 퀘스트는 위 한 줄 전체(내용이 잘리지 않게), 목록 둘은 아래에 반씩 */}
+                <div className="contents lg:grid lg:grid-cols-2 lg:gap-x-10 lg:gap-y-14 lg:col-span-8 lg:items-start min-w-0">
                     {/* 모바일 — 아래로 길게 늘어놓지 않고 아이콘으로 골라 하나씩 본다 */}
                     <nav ref={mNavRef} aria-label="대시보드 섹션" className="lg:hidden sticky top-14 md:top-[60px] z-30 -mx-5 px-5 md:-mx-8 md:px-8 bg-white border-b border-[#ededed]">
                       <div className="grid grid-flow-col auto-cols-fr">
@@ -2275,10 +2371,8 @@ export default function LevelPage() {
                       </div>
                     </nav>
 
-                    {/* 왼쪽 칸 — 퀘스트 · 획득 피드 */}
-                    <div className="contents lg:block lg:space-y-14 min-w-0">
                     {/* 일일 퀘스트 — 출석(봇 지급) + 관리자가 정의한 퀘스트(원클릭 수령) */}
-                    <section className={secCls("quest")}>
+                    <section className={`${secCls("quest")} lg:col-span-2`}>
                       <div className="flex items-end justify-between mb-5">
                         <div>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">퀘스트</h3>
@@ -2466,7 +2560,40 @@ export default function LevelPage() {
                       </div>
                     </section>
 
+                    {/* 아래 왼쪽 — 서버 랭킹 */}
+                    <div className="contents lg:block min-w-0">
+                    {/* 서버 랭킹 */}
+                    <section className={secCls("rank")}>
+                      <div className="flex items-end justify-between mb-5">
+                        <div>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1">TOP 10</span></h3>
+                        </div>
+                        <span className="flex items-center gap-3">
+                          {["all", "month"].map((k) => (
+                            <button key={k} onClick={() => setLbTab(k)} className={`text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 ${lbTab === k ? "text-[#131313] border-b-2 border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a]"}`}>{k === "all" ? "누적" : "이번 달"}</button>
+                          ))}
+                          {/* 전체 순위는 랭킹 탭에서 — 여기는 TOP 10 만 */}
+                          <button
+                            onClick={() => { setRankMode(lbTab); setRankPage(0); setActiveMainTab("rank"); }}
+                            className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
+                          >
+                            전체 보기 →
+                          </button>
+                        </span>
+                      </div>
+                      {!lb[lbTab] ? (
+                        <div className="py-10 text-center text-[11px] font-bold text-[#a3a3a3]">불러오는 중…</div>
+                      ) : !lb[lbTab].data?.length ? (
+                        <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
+                      ) : (
+                        <RankRows rows={lb[lbTab].data} myId={session.user.id} me={lbTab === "all" ? me : null} myName={session.user.name} />
+                      )}
+                      {lbTab === "month" && <p className="text-[10px] text-[#a3a3a3] mt-2.5">이번 달 지급 로그 합산 기준 · 매월 1일(KST) 초기화</p>}
+                    </section>
+                    </div>
 
+                    {/* 아래 오른쪽 — 획득 피드 · 이벤트 */}
+                    <div className="contents lg:block lg:space-y-14 min-w-0">
                     {/* 획득 피드 — 최근 5건만, 줄을 낮게 */}
                     <section className={secCls("feed")}>
                       <div className="flex items-end justify-between mb-4">
@@ -2496,38 +2623,6 @@ export default function LevelPage() {
                       ) : (
                         <EmptySlot>기록 없음 — 첫 활동을 시작하세요</EmptySlot>
                       )}
-                    </section>
-                    </div>
-
-                    {/* 오른쪽 칸 — 랭킹 · 이벤트 */}
-                    <div className="contents lg:block lg:space-y-14 min-w-0">
-                    {/* 서버 랭킹 */}
-                    <section className={secCls("rank")}>
-                      <div className="flex items-end justify-between mb-5">
-                        <div>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1">TOP 10</span></h3>
-                        </div>
-                        <span className="flex items-center gap-3">
-                          {["all", "month"].map((k) => (
-                            <button key={k} onClick={() => setLbTab(k)} className={`text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 ${lbTab === k ? "text-[#131313] border-b-2 border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a]"}`}>{k === "all" ? "누적" : "이번 달"}</button>
-                          ))}
-                          {/* 전체 순위는 랭킹 탭에서 — 여기는 TOP 10 만 */}
-                          <button
-                            onClick={() => { setRankMode(lbTab); setRankPage(0); setActiveMainTab("rank"); }}
-                            className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
-                          >
-                            전체 보기 →
-                          </button>
-                        </span>
-                      </div>
-                      {!lb[lbTab] ? (
-                        <div className="py-10 text-center text-[11px] font-bold text-[#a3a3a3]">불러오는 중…</div>
-                      ) : !lb[lbTab].data?.length ? (
-                        <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
-                      ) : (
-                        <RankRows rows={lb[lbTab].data} myId={session.user.id} me={lbTab === "all" ? me : null} myName={session.user.name} />
-                      )}
-                      {lbTab === "month" && <p className="text-[10px] text-[#a3a3a3] mt-2.5">이번 달 지급 로그 합산 기준 · 매월 1일(KST) 초기화</p>}
                     </section>
 
                     {/* 진행 중 이벤트 */}
