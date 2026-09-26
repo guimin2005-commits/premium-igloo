@@ -52,6 +52,38 @@ export const buildInvGroups = (invAll) => {
   return [{ id: "all", label: "전체", items: invAll }, ...groups, ...(timed.length ? [{ id: "timed", label: "기간제", items: timed }] : [])];
 };
 
+// 📌 정렬 — 기본(상점 관리에서 정한 순서, 서버가 준 순서) · 최신순(받은 날) · 만료 임박(기간제 먼저).
+//    등급 · 레벨 보상은 어느 정렬에서든 맨 앞(받은 날이 없는 항목이라 뒤로 밀리지 않게). 날짜가 없는 것은 기본 순서로 뒤에.
+export const INV_SORTS = [
+  { v: "default", l: "기본" },
+  { v: "recent", l: "최신순" },
+  { v: "expiry", l: "만료 임박" },
+];
+const INV_SORT_KEY = "iglooInvSort";
+export const sortInvRows = (rows, sort) => {
+  if (sort !== "recent" && sort !== "expiry") return rows;
+  const t = (v) => (v ? new Date(v).getTime() : NaN);
+  return rows
+    .map((it, i) => ({ it, i }))
+    .sort((a, b) => {
+      const la = a.it.source === "level" ? 0 : 1;
+      const lb = b.it.source === "level" ? 0 : 1;
+      if (la !== lb) return la - lb;
+      if (la === 0) return a.i - b.i;
+      if (sort === "recent") {
+        const ta = t(a.it.acquiredAt), tb = t(b.it.acquiredAt);
+        if (Number.isFinite(ta) !== Number.isFinite(tb)) return Number.isFinite(ta) ? -1 : 1;
+        if (Number.isFinite(ta) && ta !== tb) return tb - ta;
+      } else {
+        const ta = t(a.it.expiresAt), tb = t(b.it.expiresAt);
+        if (Number.isFinite(ta) !== Number.isFinite(tb)) return Number.isFinite(ta) ? -1 : 1;
+        if (Number.isFinite(ta) && ta !== tb) return ta - tb;
+      }
+      return a.i - b.i;
+    })
+    .map((x) => x.it);
+};
+
 // 📌 아이템 아이콘은 공용 ItemIcon(app/components/ItemIcon) 이 그린다 — 이미지 > 프리셋 SVG > 이모지 > 유형 기본.
 //    레벨 보상(source "level")은 유형 대신 "level" 을 넘겨 메달이 나오게 한다.
 export const invIconType = (it) => (it.source === "level" ? "level" : it.type || it.kind || "item");
@@ -204,9 +236,19 @@ export function InventoryItemPreview({ item, effectLines }) {
 //    z-index 가 50 이상이면 ScrollLock 이 알아서 건다(iOS 대응 포함).
 export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, onReset, resetBusy, loading = false, error = "" }) => {
   const [sel, setSel] = useState(null); // 선택한 아이템 uid
+  // 정렬 — 보는 사람 브라우저에 기억(편의용). 못 읽으면 기본
+  const [sort, setSort] = useState("default");
+  useEffect(() => {
+    try { const v = localStorage.getItem(INV_SORT_KEY); if (INV_SORTS.some((o) => o.v === v)) setSort(v); } catch {}
+  }, []);
+  const pickSort = (v) => {
+    setSort(v);
+    onTone();
+    try { localStorage.setItem(INV_SORT_KEY, v); } catch {}
+  };
 
   const active = groups.find((g) => g.id === tab) || groups[0];
-  const rows = active?.items || [];
+  const rows = useMemo(() => sortInvRows(active?.items || [], sort), [active, sort]);
   // 열 때 · 탭을 바꿀 때 첫 아이템을 골라 둔다 — 왼쪽 칸이 비지 않게
   useEffect(() => {
     if (!open) { setSel(null); return; }
@@ -254,6 +296,17 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
         ) : null
       }
     >
+      {/* 정렬 — 탭 줄이 아니라 목록 머리에(탭이 밀리지 않게). 고른 것만 밝게, 굵기는 같게 */}
+      {rows.length > 1 && (
+        <div role="radiogroup" aria-label="정렬" className="flex justify-end items-center gap-0.5 mb-2.5 -mt-1">
+          {INV_SORTS.map((o) => (
+            <button key={o.v} type="button" role="radio" aria-checked={sort === o.v} onClick={() => pickSort(o.v)}
+              className={`h-7 px-2 rounded-md text-[11px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${sort === o.v ? "text-white" : "text-white/35 hover:text-white/70"}`}>
+              {o.l}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-4 sm:grid-cols-5 gap-2.5">
         {Array.from({ length: slots }, (_, i) => {
           const it = rows[i];

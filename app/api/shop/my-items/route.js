@@ -124,6 +124,8 @@ export async function GET() {
         // 아이템 효과는 인벤토리 보유 기준(lib/ownedItems.js) — 사이트 보유(siteOnly) · 지급 대기(pending) · 역할 없음(missing)도 붙는다.
         //    기프트카드 구매는 봇이 효과 대상에서 빼므로 여기서도 뺀다
         effectItem: p.itemType !== "physical" ? item || fallbackItem : null,
+        // 순서 — 상점 관리(아이템 등록)에서 정한 자리를 따른다
+        orderRef: (item || fallbackItem)?._id ? String((item || fallbackItem)._id) : "",
         // 역할 버프(RoleConfig)는 그 디스코드 역할을 지금 실제로 가진 동안만 봇이 더한다
         buffRoleId: p.roleId && held !== null && held.has(p.roleId) ? p.roleId : "",
       });
@@ -154,6 +156,7 @@ export async function GET() {
             source: "item",
             rewardLevel: null,
             effectItem: item,
+            orderRef: String(item._id),
             buffRoleId: roleId,
           });
           continue;
@@ -250,9 +253,20 @@ export async function GET() {
       delete it.buffRoleId;
     }
 
-    // 📌 순서 — 등급(배타 티어) → 레벨 보상(낮은 레벨부터) → 나머지는 지금 순서. 등급은 어느 탭에서든 첫 칸.
+    // 📌 순서 — 등급(배타 티어) → 레벨 보상(낮은 레벨부터) → 나머지는 상점 관리(아이템 등록)에서 끌어 정한 순서.
+    //    등급은 어느 탭에서든 첫 칸. 등록 아이템이 아닌 옛 표기(직접 설정 상품 · 옛 표기 역할)는 그 뒤에, 받은 순서대로.
+    //    예전엔 구매 날짜 순 + 역할로 받은 것은 맨 뒤라 관리 화면 순서와 달랐다
+    const itemIdx = new Map(itemsAll.map((i, n) => [String(i._id), n])); // itemsAll 은 sortOrder · createdAt 순 = 관리 목록 순
     const rankOf = (it) => (it.source === "level" ? (it.exclusive ? 0 : 1) : 2);
-    owned.sort((a, b) => rankOf(a) - rankOf(b) || (rankOf(a) === 1 ? (a.rewardLevel ?? 0) - (b.rewardLevel ?? 0) : 0));
+    const posOf = (it) => itemIdx.get(it.orderRef) ?? Number.MAX_SAFE_INTEGER;
+    owned.forEach((it, n) => { it._seq = n; });
+    owned.sort((a, b) =>
+      rankOf(a) - rankOf(b) ||
+      (rankOf(a) === 1 ? (a.rewardLevel ?? 0) - (b.rewardLevel ?? 0) : 0) ||
+      (rankOf(a) === 2 ? posOf(a) - posOf(b) : 0) ||
+      a._seq - b._seq
+    );
+    for (const it of owned) { delete it.orderRef; delete it._seq; }
 
     return NextResponse.json({
       success: true,
