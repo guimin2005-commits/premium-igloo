@@ -1178,13 +1178,16 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
               >
                 <path d={CROWN} />
               </svg>
-              <span className="text-[13px] font-black text-white">프리미엄</span>
-              <span
-                className="ml-auto text-[12px] font-black tabular-nums"
-                style={{ background: "linear-gradient(90deg, #d9c6ff, #ff9fd6)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}
-              >
-                {pass.unlocked ? "해금됨" : `${fmt(price)} XP`}
-              </span>
+              {/* 📌 잠겨 있으면 "프리미엄 해금" 제목 + 단추에 값(500,000 XP · 500 빙옥)을 바로 적는다 — 머리 · 단추에 가격이 두 번 나오지 않게(사용자 요청) */}
+              <span className="text-[13px] font-black text-white">{pass.unlocked ? "프리미엄" : "프리미엄 해금"}</span>
+              {pass.unlocked && (
+                <span
+                  className="ml-auto text-[12px] font-black"
+                  style={{ background: "linear-gradient(90deg, #d9c6ff, #ff9fd6)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}
+                >
+                  해금됨
+                </span>
+              )}
             </div>
             {!pass.unlocked && (
               <div className="mt-3 space-y-2">
@@ -1192,10 +1195,10 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
                   type="button"
                   onClick={() => onUnlock("xp")}
                   disabled={!!busyKey || (balance?.xp || 0) < price}
-                  className="w-full h-10 rounded-full text-white text-[12px] font-black transition-opacity outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+                  className="w-full h-10 rounded-full text-white text-[12px] font-black tabular-nums transition-opacity outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
                   style={{ background: "linear-gradient(135deg, #9b6bff 0%, #e05bb5 100%)" }}
                 >
-                  XP로 해금
+                  {fmt(price)} XP
                 </button>
                 <button
                   type="button"
@@ -1203,7 +1206,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
                   disabled={!!busyKey || (balance?.point || 0) < pointPrice}
                   className="w-full h-10 rounded-full bg-white/[0.08] border border-white/15 enabled:hover:bg-white/[0.14] text-white text-[12px] font-black tabular-nums transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
                 >
-                  빙옥으로 해금 · {fmt(pointPrice)}
+                  {fmt(pointPrice)} 빙옥
                 </button>
               </div>
             )}
