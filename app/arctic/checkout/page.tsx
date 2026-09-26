@@ -50,6 +50,8 @@ export default function CheckoutPage() {
     } catch {}
   }, []);
 
+  // 가격이 바뀌었다는 답을 받으면 올려서 상품 · 지갑을 다시 읽는다
+  const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
     if (status === "loading") return;
     Promise.all([
@@ -59,7 +61,7 @@ export default function CheckoutPage() {
       setItems(Array.isArray(it?.data) ? it.data : []);
       if (me?.success) { setMyXp(me.data.xp); setMyPoint(me.data.point ?? 0); }
     }).finally(() => setIsLoading(false));
-  }, [status]);
+  }, [status, reloadKey]);
 
   const rows = useMemo(
     () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item),
@@ -147,10 +149,11 @@ export default function CheckoutPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // 화면에 보이는 줄만 보낸다 — 저장소에 남은 옛 항목(지금은 없는 상품)이 결제 요청에 섞이지 않게
-        body: JSON.stringify({ items: rows.map((r) => ({ itemId: r.itemId, qty: r.qty, days: r.days || 0 })), contact, couponCode: coupon?.code || "", pointUse: usePoint }),
+        body: JSON.stringify({ items: rows.map((r) => ({ itemId: r.itemId, qty: r.qty, days: r.days || 0 })), contact, couponCode: coupon?.code || "", pointUse: usePoint, expectedSubtotal: subtotal }),
       });
       const d = await res.json();
       setResult({ ok: !!d.success, message: d.message || (d.success ? "결제가 완료되었습니다." : "결제에 실패했습니다.") });
+      if (d.code === "PRICE_CHANGED") { setPointUse(0); setReloadKey((k) => k + 1); }
       if (d.success) {
         try {
           const paidIds = new Set(cart.map((c) => c.itemId));

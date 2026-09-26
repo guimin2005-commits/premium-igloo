@@ -113,7 +113,15 @@ export async function POST(request) {
       }, { status: 409 });
     }
 
-    const subtotal = docs.reduce((sum, d) => sum + salePrice(d, daysOf.get(String(d._id))) * wanted.get(String(d._id)), 0);
+    // 📌 단가는 여기서 한 번만 — 할인 종료 시각이 요청 도중에 지나도 청구액과 기록(Purchase.price)이 같은 값이 되게
+    const unitPrice = new Map(docs.map((d) => [String(d._id), salePrice(d, daysOf.get(String(d._id)))]));
+    const subtotal = docs.reduce((sum, d) => sum + unitPrice.get(String(d._id)) * wanted.get(String(d._id)), 0);
+
+    // 📌 화면에서 본 상품 합계(쿠폰 전)와 다르면(보는 사이 할인이 끝났거나 가격이 바뀜) 결제하지 않는다 — 모르는 사이 더 빠져나가지 않게
+    //    쿠폰 할인액은 화면이 적용 시점에 받아 둔 값이라 여기서 비교하지 않는다(서버가 다시 계산한다)
+    if (body?.expectedSubtotal != null && Number(body.expectedSubtotal) !== subtotal) {
+      return NextResponse.json({ success: false, code: "PRICE_CHANGED", message: "가격이 바뀌었습니다. 바뀐 금액을 확인하고 다시 결제해 주세요." }, { status: 409 });
+    }
 
     // 쿠폰 검증 (사용 처리는 결제 확정 후)
     let coupon = null;
@@ -216,7 +224,7 @@ export async function POST(request) {
           itemName: d.name,
           itemType: d.type,
           roleId: d.roleId || "",
-          price: salePrice(d, days),
+          price: unitPrice.get(String(d._id)),
           payMethod,
           paidXp: 0,
           paidPoint: 0,

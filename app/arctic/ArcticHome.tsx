@@ -3,7 +3,7 @@
 import React, { useMemo } from "react";
 import Link from "next/link";
 import ItemIcon from "../components/ItemIcon";
-import { isTimed, durationLabel, cardPrice, cardListPrice, cardDays } from "@/lib/shopPricing";
+import { isTimed, durationLabel, cardPick, discountActive } from "@/lib/shopPricing";
 import { pointToXp } from "@/lib/pointRate";
 import { SEASON, getSeasonDday } from "@/lib/season";
 import { getTier } from "@/lib/voiceTiers";
@@ -66,7 +66,10 @@ export default function ArcticHome({
     const hotIds = new Set(hot.map((h) => h._id));
     const cands = active.filter((it) => !hotIds.has(it._id) && !ownedItemIds.has(it._id));
     const budget = typeof myXp === "number" ? myXp + pointToXp(myPoint ?? 0) : null;
-    const afford = isLoggedIn && budget != null ? cands.filter((it) => cardPrice(it) <= budget) : cands;
+    // 어느 기간이든 살 수 있으면 — 카드에는 그 살 수 있는 기간(무제한 > 가장 긴 기간)이 걸린다(목록 필터와 같은 규칙)
+    const afford = isLoggedIn && budget != null
+      ? cands.flatMap((it) => { const pick = cardPick(it, (p: number) => p <= budget); return pick ? [{ ...it, _pick: pick }] : []; })
+      : cands;
     const pool = [...(afford.length >= 2 ? afford : cands)];
     const score = (it: any) => (it.type === "perk" || it.type === "item" ? 1 : 0);
     pool.sort((a, b) => score(b) - score(a) || (a.sortOrder || 0) - (b.sortOrder || 0));
@@ -82,7 +85,8 @@ export default function ArcticHome({
 
   // 이번 주 — 할인 상품(없으면 최신) 한 장 + 시즌 한 장
   const deal = useMemo(() => {
-    const sale = active.filter((it) => (it.discountPct || 0) > 0)
+    // 할인이 살아 있는 것만(종료 시각이 지난 할인은 빼고)
+    const sale = active.filter((it) => discountActive(it))
       .sort((a, b) => (b.discountPct || 0) - (a.discountPct || 0) || (b.soldCount || 0) - (a.soldCount || 0))[0];
     if (sale) return { it: sale, kind: "sale" as const };
     const fresh = [...active].sort((a, b) => created(b) - created(a))[0];
@@ -199,9 +203,9 @@ export default function ArcticHome({
               </h3>
               <p className="mt-1.5 text-[13px] opacity-85 tabular-nums">
                 {deal.kind === "sale"
-                  // 카드 · 필터와 같은 값(cardPrice — 기간제면 가장 싼 기간) — 한 상품이 곳마다 다른 값으로 보이지 않게
-                  ? `${cardListPrice(deal.it).toLocaleString()} → ${cardPrice(deal.it).toLocaleString()} XP${isTimed(deal.it) ? ` / ${durationLabel(cardDays(deal.it) ?? 0)}` : ""} · 1인 1개`
-                  : `${cardPrice(deal.it).toLocaleString()} XP`}
+                  // 카드와 같은 값(cardPick — 기본 무제한) — 한 상품이 곳마다 다른 값으로 보이지 않게
+                  ? `${(cardPick(deal.it)?.list ?? 0).toLocaleString()} → ${(cardPick(deal.it)?.price ?? 0).toLocaleString()} XP${isTimed(deal.it) ? ` / ${durationLabel(cardPick(deal.it)?.days ?? 0)}` : ""} · 1인 1개`
+                  : `${(cardPick(deal.it)?.price ?? 0).toLocaleString()} XP`}
               </p>
               <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">
                 {deal.it.stock === -1 || deal.it.stock == null ? "수량 무제한" : `남은 수량 ${deal.it.stock}`}

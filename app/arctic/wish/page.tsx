@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import { ICON_PATHS } from "../../components/Icons";
-import { isTimed, durationOptions, durationLabel, durationPrice, cardPrice, cardListPrice } from "@/lib/shopPricing";
+import { isTimed, durationOptions, durationLabel, durationPrice, cardPick, cardFrom, discountPctOf } from "@/lib/shopPricing";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { isAdminName } from "@/lib/admins";
 import ArcticStoreBar from "../ArcticStoreBar";
@@ -109,7 +109,8 @@ export default function WishPage() {
       setCart((prev) => prev.filter((c) => c.itemId !== it._id));
       return say(`${it.name} 상품을 장바구니에서 뺐습니다`);
     }
-    const days = isTimed(it) ? durationOptions(it)[0]?.days ?? 0 : 0;
+    // 카드에 보이는 기간(기본 무제한)으로 담는다 — 보이는 값과 담기는 값이 같게
+    const days = isTimed(it) ? (cardPick(it)?.days ?? durationOptions(it)[0]?.days ?? 0) : 0;
     setCart((prev) => [...prev, { itemId: it._id, qty: 1, days }]);
     say(`${it.name}${days > 0 ? ` (${durationLabel(days)})` : ""} 상품을 장바구니에 담았습니다`);
   };
@@ -148,10 +149,12 @@ export default function WishPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-10">
             {rows.map((it: any) => {
               const soldOut = it.stock === 0;
-              // 상점 카드와 같은 값(cardPrice — 기간제면 가장 싼 기간) — 찜에서만 무제한 가격이 보이던 것
-              const listPrice = cardListPrice(it);
-              const pct = Math.max(0, Math.min(100, Number(it.discountPct) || 0));
-              const finalPrice = cardPrice(it);
+              // 상점 카드와 같은 표기(cardPick — 기본 무제한, 더 싼 기간은 아래 "…부터")
+              const pick = cardPick(it) || { days: undefined, price: 0, list: 0 };
+              const from = cardFrom(it, pick);
+              const listPrice = pick.list;
+              const finalPrice = pick.price;
+              const pct = finalPrice < listPrice ? discountPctOf(it) : 0;
               const has = owned.has(it._id);
               const inCart = cart.some((c) => c.itemId === it._id);
               return (
@@ -177,7 +180,9 @@ export default function WishPage() {
                     <p className={`${pct > 0 ? "mt-1" : "mt-2"} text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none`}>
                       {pct > 0 && <span className="mr-1.5 text-[14px] font-black text-[#e91e3f]">{pct}%</span>}
                       {finalPrice.toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP</span>
+                      {isTimed(it) && pick.days != null && pick.days > 0 && <span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">/ {durationLabel(pick.days)}</span>}
                     </p>
+                    {from && <p className="mt-1.5 text-[11.5px] font-bold text-[#8a8a8a] tabular-nums leading-none">{durationLabel(from.days)} {from.price.toLocaleString()} XP부터</p>}
                   </Link>
                   {/* 찜 목록에서는 바로 담을 수 있게 — 다시 누르면 뺀다 */}
                   <button

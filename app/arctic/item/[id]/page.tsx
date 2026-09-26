@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { salePrice, basePrice, isTimed, durationOptions, durationLabel, cardPrice, cardListPrice } from "@/lib/shopPricing";
+import { salePrice, basePrice, isTimed, durationOptions, durationLabel, cardPick, discountPctOf, discountUntilLabel } from "@/lib/shopPricing";
 import { pointToXp } from "@/lib/pointRate";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { isAdminName } from "@/lib/admins";
@@ -88,7 +88,15 @@ export default function ItemDetailPage() {
       // 관리자는 장바구니 화면처럼 숨김 상품까지 받아야 장바구니 개수가 맞다 (관련 상품은 아래서 active 만 거른다)
       fetch(`/api/shop/items${isAdmin ? "?all=1" : ""}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
     ]).then(([it, me, ord, all]) => {
-      if (it?.success) setItem(it.data);
+      if (it?.success) {
+        setItem(it.data);
+        // 상점 카드가 필터로 다른 기간을 걸어 보여 줬으면(?days=30) 그 기간으로 연다 — 카드에서 본 값과 첫 값이 같게
+        try {
+          const q = new URLSearchParams(window.location.search).get("days");
+          const d = q != null && q !== "" ? Number(q) : NaN;
+          if (Number.isFinite(d) && durationOptions(it.data).some((o: any) => o.days === d)) setPickedDays(d);
+        } catch {}
+      }
       else setNotFound(true);
       if (me?.success) { setMyXp(me.data.xp); setMyPoint(me.data.point ?? 0); }
       setOrders(Array.isArray(ord?.data) ? ord.data : []);
@@ -124,7 +132,8 @@ export default function ItemDetailPage() {
   }
 
   const timed = isTimed(item);
-  const days = timed ? (pickedDays ?? durationOptions(item)[0]?.days ?? 0) : 0;
+  // 안 골랐으면 카드와 같은 기간(무제한, 없으면 가장 긴 기간) — 카드에서 본 값과 상세 첫 값이 같게
+  const days = timed ? (pickedDays ?? cardPick(item)?.days ?? durationOptions(item)[0]?.days ?? 0) : 0;
   const sp = salePrice(item, days);
   const listPrice = basePrice(item, days);
   const discounted = sp < listPrice;
@@ -206,13 +215,17 @@ export default function ItemDetailPage() {
             <div className="mb-6">
               <div className="flex items-center gap-2.5 flex-wrap">
                 {discounted && (
-                  <span className="px-2 py-1 rounded-md bg-[#e91e3f] text-white text-[12px] font-black leading-none shrink-0">{item.discountPct}% OFF</span>
+                  <span className="px-2 py-1 rounded-md bg-[#e91e3f] text-white text-[12px] font-black leading-none shrink-0">{discountPctOf(item)}% OFF</span>
                 )}
                 <span className="text-3xl font-black tracking-tight tabular-nums leading-none text-[#131313]">
                   {sp.toLocaleString()}<span className="text-sm font-bold text-[#8a8a8a] ml-1.5">XP</span>
                 </span>
                 {timed && <span className="text-[13px] font-bold text-[#8a8a8a]">/ {durationLabel(days)}</span>}
               </div>
+              {/* 할인 종료 시각이 있으면 언제까지인지 */}
+              {discounted && discountUntilLabel(item) && (
+                <span className="block mt-2 text-[12px] font-bold text-[#e91e3f]">할인 {discountUntilLabel(item)}</span>
+              )}
               {discounted && (
                 <span className="block mt-1 text-[14px] text-[#a3a3a3] line-through tabular-nums">{listPrice.toLocaleString()} XP</span>
               )}
@@ -246,20 +259,6 @@ export default function ItemDetailPage() {
               <p className="text-[14px] text-[#5a5a5a] leading-relaxed mb-6 whitespace-pre-wrap break-keep">{item.description}</p>
             )}
 
-            {/* 📌 효과 — 사면 붙는 효과(등록 아이템 효과 + 지급 역할의 역할 버프). 서버가 인벤토리와 같은 문장으로 준다 */}
-            {Array.isArray(item.effectLines) && item.effectLines.length > 0 && (
-              <div className="mb-6">
-                <p className="text-xs font-bold text-[#5a5a5a] mb-2">효과</p>
-                <ul className="rounded-xl bg-white border border-[#ededed] divide-y divide-[#ededed]">
-                  {item.effectLines.map((line: string, i: number) => (
-                    <li key={i} className="flex items-start gap-2.5 px-4 py-3 text-[13px] font-bold text-[#131313] break-keep">
-                      <span aria-hidden className="mt-[7px] w-1.5 h-1.5 rounded-full bg-[#e91e3f] shrink-0" />
-                      <span className="min-w-0">{line}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
             {/* 상세 정보 */}
             <div className="rounded-xl bg-white border border-[#ededed] divide-y divide-[#ededed] mb-6">
@@ -334,6 +333,30 @@ export default function ItemDetailPage() {
           </div>
         </div>
 
+        {/* ── 효과 — 사면 붙는 것(등록 아이템 효과 + 지급 역할의 역할 버프). 오른쪽 정보 칸에 몰리지 않게 아래 전체 폭으로.
+               칸 하나에 효과 하나: 무엇을 하면 · 얼마나 · 조건(요일 · 시간 · 채널 · 하루 1번) ── */}
+        {Array.isArray(item.effects) && item.effects.length > 0 && (
+          <div className="mt-14 pt-10 border-t border-[#ededed]">
+            <h2 className="text-base font-black text-[#131313] tracking-tight mb-5">효과</h2>
+            {/* 칸 수는 개수에 맞춘다(PC 최대 4) — 빈 칸이 남지 않게. 모바일 2열에서 홀수면 마지막 칸이 한 줄을 다 쓴다 */}
+            <div className={`grid grid-cols-2 gap-2 ${item.effects.length >= 4 ? "md:grid-cols-4" : item.effects.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+              {item.effects.map((e: any, i: number) => {
+                const cond = [...(Array.isArray(e.cond) ? e.cond : []), e.once ? "하루 1번" : ""].filter(Boolean);
+                const wide = item.effects.length % 2 === 1 && i === item.effects.length - 1;
+                return (
+                  <div key={i} className={`flex flex-col bg-[#f2f2f2] px-5 py-5 ${wide ? "col-span-2 md:col-span-1" : ""}`}>
+                    <span className="text-[12px] font-bold text-[#5a5a5a] break-keep">{e.label}</span>
+                    <span className="mt-2.5 text-[24px] font-black text-[#131313] tabular-nums leading-none tracking-tight">
+                      {e.amount}<span className="ml-1 text-[12px] font-bold text-[#8a8a8a]">{e.unit}</span>
+                    </span>
+                    {cond.length > 0 && <span className="mt-3 text-[11px] font-bold text-[#8a8a8a] break-keep">{cond.join(" · ")}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* ── 다른 상품 ── */}
         {related.length > 0 && (
           <div className="mt-16 pt-10 border-t border-[#ededed]">
@@ -346,9 +369,10 @@ export default function ItemDetailPage() {
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
               {related.map((r) => {
-                // 상점 카드와 같은 기준 — 가장 싼 기간의 값, 취소선도 그 기간의 정가
-                const rp = cardPrice(r);
-                const rList = cardListPrice(r);
+                // 상점 카드와 같은 기준 — 기본 무제한(없으면 가장 긴 기간), 취소선도 그 기간의 정가
+                const rPick = cardPick(r) || { days: undefined, price: 0, list: 0 };
+                const rp = rPick.price;
+                const rList = rPick.list;
                 const rDiscounted = rp < rList;
                 return (
                   <Link key={r._id} href={`/arctic/item/${r._id}`}
@@ -362,10 +386,11 @@ export default function ItemDetailPage() {
                       <div className="mt-auto">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {rDiscounted && (
-                            <span className="px-1.5 py-[3px] rounded bg-[#e91e3f] text-white text-[10px] font-black leading-none shrink-0">{r.discountPct}%</span>
+                            <span className="px-1.5 py-[3px] rounded bg-[#e91e3f] text-white text-[10px] font-black leading-none shrink-0">{discountPctOf(r)}%</span>
                           )}
                           <span className="text-[15px] font-black text-[#131313] tabular-nums leading-none">
                             {rp.toLocaleString()}<span className="text-[11px] font-bold text-[#8a8a8a] ml-1">XP</span>
+                            {isTimed(r) && rPick.days != null && rPick.days > 0 && <span className="text-[11px] font-bold text-[#8a8a8a] ml-1">/ {durationLabel(rPick.days)}</span>}
                           </span>
                         </div>
                         {rDiscounted && (

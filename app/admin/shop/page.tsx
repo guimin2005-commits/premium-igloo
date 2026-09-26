@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { discountPctOf, discountUntilLabel } from "@/lib/shopPricing";
 import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import IconPicker from "../../components/IconPicker";
@@ -931,8 +932,12 @@ export default function AdminShopPage() {
       key: "price", label: "가격", align: "right",
       render: (it) => (
         <span className="font-bold tabular-nums whitespace-nowrap">
-          {Math.max(0, Math.floor((it.price * (100 - (it.discountPct || 0))) / 100)).toLocaleString()} XP
-          {it.discountPct > 0 && <span className="ml-1 text-[#e91e3f]">-{it.discountPct}%</span>}
+          {Math.max(0, Math.floor((it.price * (100 - discountPctOf(it))) / 100)).toLocaleString()} XP
+          {discountPctOf(it) > 0 && <span className="ml-1 text-[#e91e3f]">-{it.discountPct}%</span>}
+          {/* 할인 종료 — 남아 있으면 언제까지, 지났으면 끝났다고 */}
+          {it.discountPct > 0 && it.discountUntil && (
+            <span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">{discountPctOf(it) > 0 ? `~${discountUntilLabel(it).replace("까지", "")}` : "할인 종료"}</span>
+          )}
         </span>
       ),
     },
@@ -1349,6 +1354,15 @@ export default function AdminShopPage() {
                       <input type="number" min={0} max={100} value={form.discountPct} onChange={(e) => setForm({ ...form, discountPct: e.target.value })} placeholder="0" className={inputClass} />
                     </Field>
                   </Two>
+                  {/* 📌 할인 종료 — 그 시각(KST)이 지나면 할인이 저절로 끝난다. 비우면 계속 */}
+                  {discountPct > 0 && (
+                    <Field label="할인 종료" hint={form.discountUntil && new Date(`${form.discountUntil}:00+09:00`).getTime() <= Date.now() ? <span className="font-bold text-[#d01634]">이미 지난 시각입니다</span> : "비우면 계속"}>
+                      <div className="flex items-center gap-2">
+                        <input type="datetime-local" value={form.discountUntil} onChange={(e) => setForm({ ...form, discountUntil: e.target.value })} className={inputClass} />
+                        {form.discountUntil && <Btn variant="ghost" size="sm" onClick={() => setForm({ ...form, discountUntil: "" })}>지우기</Btn>}
+                      </div>
+                    </Field>
+                  )}
 
                   {/* 📌 기간제 역할 — 역할·권한·아이템만 (기프트카드는 기간 개념이 없다) */}
                   {form.type !== "physical" && (

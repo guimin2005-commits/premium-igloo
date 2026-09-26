@@ -30,6 +30,7 @@ const ShopItemSchema = new mongoose.Schema({
   //    떼면 기능이 사라지므로 켜면 안 된다. 기본값 false — 실수로 권한이 날아가지 않게.
   detachOnSeason: { type: Boolean, default: false },
   discountPct: { type: Number, default: 0 },     // 할인율 % (0이면 할인 없음)
+  discountUntil: { type: Date, default: null },  // 할인 종료 시각 — 지나면 할인이 저절로 끝난다(null 이면 기한 없음). lib/shopPricing discountActive
   stock: { type: Number, default: -1 },          // -1 = 무제한
   soldCount: { type: Number, default: 0 },
   active: { type: Boolean, default: true },      // 판매 중 여부

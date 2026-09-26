@@ -66,6 +66,13 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "가격을 입력해주세요." }, { status: 400 });
     }
     const discountPct = Math.max(0, Math.min(100, Math.floor(Number(b.discountPct) || 0)));
+    // 할인 종료 시각 — 비우면 기한 없음. 폼은 KST 시각에 +09:00 을 붙여 보낸다(productForm toPayload)
+    let discountUntil = null;
+    if (b.discountUntil) {
+      const t = new Date(b.discountUntil);
+      if (!Number.isFinite(t.getTime())) return NextResponse.json({ success: false, message: "할인 종료 시각을 다시 확인해 주세요." }, { status: 400 });
+      discountUntil = t;
+    }
     const type = isItemType(b.type) ? b.type : "role";
     // 아이템은 역할이 있어도 되고 없어도 된다 — 사이트 인벤토리에만 두는 수집품도 판다
     const grantsRole = type === "role" || type === "perk" || (type === "item" && !!b.roleId?.trim());
@@ -99,6 +106,7 @@ export async function POST(request) {
       roleName: grantsRole ? (b.roleName || "").trim() : "",
       price,
       discountPct,
+      discountUntil: discountPct > 0 ? discountUntil : null,
       // 시즌 전환 때 디스코드 역할만 뗄 대상인지 (권한 상품에는 켜면 안 된다)
       detachOnSeason: type !== "perk" && type !== "physical" && !!b.detachOnSeason,
       // 빈 값이면 무제한(-1)

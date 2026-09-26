@@ -69,6 +69,12 @@ export async function POST(request) {
       }, { status: 409 });
     }
 
+    // 📌 가격은 재고를 잡기 전에 정한다 — 화면에서 본 값과 다르면(보는 사이 할인이 끝남) 결제하지 않는다
+    const price = salePrice(item, days);
+    if (body?.expectedPrice != null && Number(body.expectedPrice) !== price) {
+      return NextResponse.json({ success: false, code: "PRICE_CHANGED", message: "가격이 바뀌었습니다. 바뀐 금액을 확인하고 다시 구매해 주세요." }, { status: 409 });
+    }
+
     // 1) 재고 선점 — 무제한(-1)이 아니면 남은 수량이 있을 때만 차감
     if (item.stock >= 0) {
       const claimed = await ShopItem.updateOne(
@@ -92,7 +98,6 @@ export async function POST(request) {
     //    옛 요청의 payMethod "point" 는 전부 빙옥으로 친다.
     //    XP 는 화폐이므로 쓰면 레벨도 내려가지만 빙옥은 레벨과 무관하다.
     //    📌 관리자도 일반 유저와 똑같이 차감한다 — 테스트로 쓴 건 관리자 초기화로 되돌린다
-    const price = salePrice(item, days);
     const maxPoint = xpToPoint(price);
     const askedPoint = body?.payMethod === "point" ? maxPoint : Math.max(0, Math.floor(Number(body?.pointUse) || 0));
     const pointUse = Math.min(askedPoint, maxPoint);

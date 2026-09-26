@@ -7,7 +7,7 @@ import Dropdown from "../components/Dropdown";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 import IconPicker from "../components/IconPicker";
-import { salePrice, isTimed, durationOptions, durationLabel, cardPrice, cardListPrice } from "@/lib/shopPricing";
+import { salePrice, isTimed, durationOptions, durationLabel, cardPick, cardFrom, discountPctOf } from "@/lib/shopPricing";
 import { POINT_RATE, xpToPoint, pointToXp } from "@/lib/pointRate";
 import { itemTypeLabel, itemTypeColor, ITEM_TYPE_OPTIONS } from "@/lib/items";
 import {
@@ -234,9 +234,9 @@ export default function ArcticShopBody({
     [orders]
   );
 
-  // 📌 기간제 상품에서 고른 기간 (상품별). 안 고르면 가장 짧은 기간이 기본.
+  // 📌 기간제 상품에서 고른 기간 (상품별). 안 고르면 카드에 걸린 기간(기본 무제한 · 필터를 켰으면 그에 맞는 기간)이 기본.
   const [pickDays, setPickDays] = useState<Record<string, number>>({});
-  const daysFor = (item: any) => (isTimed(item) ? (pickDays[item._id] ?? durationOptions(item)[0]?.days ?? 0) : 0);
+  const daysFor = (item: any) => (isTimed(item) ? (pickDays[item._id] ?? item._pick?.days ?? cardPick(item)?.days ?? durationOptions(item)[0]?.days ?? 0) : 0);
 
   const addToCart = (item: any) => {
     if (!isLoggedIn) return signIn("discord");
@@ -439,6 +439,7 @@ export default function ArcticShopBody({
   const [cartValidIds, setCartValidIds] = useState<Set<string> | null>(null);
 
   // 세션 확정 후 조회 — 공개 전에는 관리자 세션이 있어야 200이 온다
+  const [itemsReload, setItemsReload] = useState(0);
   // 관리자는 숨김 상품까지 함께 본다 (카드에 '숨김' 배지 표시)
   useEffect(() => {
     if (status === "loading") return;
@@ -452,7 +453,7 @@ export default function ArcticShopBody({
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
-  }, [status, isAdmin, userPreview]);
+  }, [status, isAdmin, userPreview, itemsReload]);
 
   // 📌 목록에 없는(삭제·숨김) 상품 · 같은 상품 중복은 장바구니에서 뺀다 — 안 그러면 개수 배지에 유령 "1" 이 남는다.
   //    목록을 제대로 받았을 때만 정리한다 (실패로 장바구니를 날리지 않게). 저장은 위 저장 effect 가 한다.
@@ -475,22 +476,24 @@ export default function ArcticShopBody({
     const range = PRICE_RANGES.find((r) => r.v === priceFilter) || PRICE_RANGES[0];
     const q = submitted.trim().toLowerCase();
 
-    // 📌 가격 기준은 카드에 적힌 값(cardPrice) 하나 — 기간제는 가장 싼 기간. 표기와 필터 · 정렬이 어긋나지 않게
-    const filtered = items.filter((it) => {
-      if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : it.type !== typeFilter)) return false;
-      const sp = cardPrice(it);
-      if (sp < range.min || sp >= range.max) return false;
-      if (inStockOnly && it.stock === 0) return false;
-      // 빙옥도 함께 낼 수 있으니 XP + 빙옥 × 1,000 까지 산다
-      if (affordableOnly && myXp != null && sp > myXp + pointToXp(myPoint ?? 0)) return false;
-      if (wishOnly && !wish.includes(it._id)) return false;
-      if (q && !`${it.name} ${it.description} ${it.roleName || ""}`.toLowerCase().includes(q)) return false;
-      return true;
+    // 📌 카드 가격은 기본 무제한. 가격 필터 · "살 수 있는 것만" 을 켜면 그 조건을 통과하는 기간(무제한 > 가장 긴 기간)의 값을 건다 —
+    //    필터 · 정렬 · 카드 표기가 모두 그 값(_pick)을 본다. 조건을 통과하는 기간이 하나도 없으면 목록에서 빠진다
+    // 빙옥도 함께 낼 수 있으니 XP + 빙옥 × 1,000 까지 산다
+    const budget = affordableOnly && myXp != null ? myXp + pointToXp(myPoint ?? 0) : Infinity;
+    const priceOk = range.v === "all" && budget === Infinity ? undefined : (p: number) => p >= range.min && p < range.max && p <= budget;
+    const filtered = items.flatMap((it) => {
+      if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : it.type !== typeFilter)) return [];
+      const pick = cardPick(it, priceOk);
+      if (!pick) return [];
+      if (inStockOnly && it.stock === 0) return [];
+      if (wishOnly && !wish.includes(it._id)) return [];
+      if (q && !`${it.name} ${it.description} ${it.roleName || ""}`.toLowerCase().includes(q)) return [];
+      return [{ ...it, _pick: pick }];
     });
 
     const sorted = [...filtered];
-    if (sort === "priceAsc") sorted.sort((a, b) => cardPrice(a) - cardPrice(b));
-    else if (sort === "priceDesc") sorted.sort((a, b) => cardPrice(b) - cardPrice(a));
+    if (sort === "priceAsc") sorted.sort((a, b) => a._pick.price - b._pick.price);
+    else if (sort === "priceDesc") sorted.sort((a, b) => b._pick.price - a._pick.price);
     else if (sort === "newest") sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     else if (sort === "popular") sorted.sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
     else sorted.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -533,10 +536,12 @@ export default function ArcticShopBody({
       const res = await fetch("/api/shop/purchase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: buyTarget._id, contact, days: buyTarget._days || 0, pointUse: buyPoint }),
+        body: JSON.stringify({ itemId: buyTarget._id, contact, days: buyTarget._days || 0, pointUse: buyPoint, expectedPrice: buyTotal }),
       });
       const d = await res.json();
       setResult({ ok: !!d.success, message: d.message || (d.success ? "구매가 완료되었습니다." : "구매에 실패했습니다.") });
+      // 보는 사이 가격이 바뀌었으면 상품을 다시 읽어 새 값을 보여 준다
+      if (d.code === "PRICE_CHANGED") setItemsReload((k) => k + 1);
       if (d.success) {
         // 결제 뒤 잔액 — remain { xp, point } (옛 응답의 remainXp · remainPoint 도 받는다)
         const remain = d.data?.remain ?? d.remain;
@@ -654,17 +659,21 @@ export default function ArcticShopBody({
 
 
   // 📌 상품 하나 — 상자(카드) 없이 그림 · 상품명 · 가격 · 찜 만. 담기·구매는 상세에서.
-  //    표시 가격은 cardPrice — 기간제는 가장 싼 기간의 판매가. 가격 필터 · 정렬과 같은 값("부터" 표기는 사용자 요청으로 뺐다).
-  //    취소선 정가도 같은 기간 기준(cardListPrice)
+  //    큰 값은 카드에 걸린 기간(it._pick — 목록 필터가 정한 것, 없으면 기본 무제한)의 판매가, 기간이면 "/ 30일".
+  //    그보다 싼 기간이 있으면 아래 작은 줄에 "7일 154,000 XP부터". 취소선 정가도 같은 기간 기준
   const renderCard = (it: any) => {
     const soldOut = it.stock === 0;
     const wished = wish.includes(it._id);
-    const listPrice = cardListPrice(it);
-    const finalPrice = cardPrice(it);
-    const pct = finalPrice < listPrice ? Math.max(0, Math.min(100, Number(it.discountPct) || 0)) : 0;
+    const pick = it._pick || cardPick(it) || { days: undefined, price: 0, list: 0 };
+    const from = cardFrom(it, pick);
+    const listPrice = pick.list;
+    const finalPrice = pick.price;
+    const pct = finalPrice < listPrice ? discountPctOf(it) : 0;
+    // 필터로 기본(무제한)과 다른 기간을 걸었으면 상세도 그 기간으로 열리게
+    const href = `/arctic/item/${it._id}${isTimed(it) && it._pick && it._pick.days != null && it._pick.days !== cardPick(it)?.days ? `?days=${it._pick.days}` : ""}`;
     return (
       <div key={it._id} className="group relative flex flex-col">
-        <Link href={`/arctic/item/${it._id}`} className="block relative aspect-square overflow-hidden rounded-md bg-[#f2f2f2]">
+        <Link href={href} className="block relative aspect-square overflow-hidden rounded-md bg-[#f2f2f2]">
           <CardArt it={it} imgClass="group-hover:scale-[1.03] transition-transform duration-500" iconSize={64} />
           {isAdmin && !it.active && (
             <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">숨김</span>
@@ -685,7 +694,7 @@ export default function ArcticShopBody({
           </svg>
         </button>
 
-        <Link href={`/arctic/item/${it._id}`} className="block mt-3">
+        <Link href={href} className="block mt-3">
           {/* 이름 앞에 분류 — 무엇을 사는 것인지 이름만으로는 모른다 */}
           <TypeBadge type={it.type} className="inline-block mb-1.5 px-2 py-[3px] text-[10px] leading-none align-middle" />
           {/* 이름은 작고 가볍게, 가격이 주인공 — 둘이 같은 크기면 값이 안 읽힌다 */}
@@ -695,7 +704,9 @@ export default function ArcticShopBody({
           <p className={`${pct > 0 ? "mt-1" : "mt-2"} text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none`}>
             {pct > 0 && <span className="mr-1.5 text-[14px] font-black text-[#e91e3f]">{pct}%</span>}
             {finalPrice.toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP</span>
+            {isTimed(it) && pick.days != null && pick.days > 0 && <span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">/ {durationLabel(pick.days)}</span>}
           </p>
+          {from && <p className="mt-1.5 text-[11.5px] font-bold text-[#8a8a8a] tabular-nums leading-none">{durationLabel(from.days)} {from.price.toLocaleString()} XP부터</p>}
         </Link>
 
         {isAdmin && (
@@ -709,7 +720,9 @@ export default function ArcticShopBody({
   };
 
   // 접힌 묶음에서도 값을 알 수 있게 만드는 한 줄 요약 (editForm 이 없으면 폼도 안 그린다)
-  const efDiscount = Math.min(100, Math.max(0, Number(editForm?.discountPct) || 0));
+  // 할인 종료 시각이 이미 지났으면 저장해도 할인이 붙지 않는다 — 요약 · 판매가 미리보기도 할인 없이
+  const efUntilPast = !!editForm?.discountUntil && new Date(`${editForm.discountUntil}:00+09:00`).getTime() <= Date.now();
+  const efDiscount = efUntilPast ? 0 : Math.min(100, Math.max(0, Number(editForm?.discountPct) || 0));
   const efSale = Math.max(0, Math.floor(((Number(editForm?.price) || 0) * (100 - efDiscount)) / 100));
   const efDurations = buildDurations(editForm);
   const efRoleName = guildRoles.find((r) => r.id === editForm?.roleId)?.name || editForm?.roleName || "";
@@ -1363,6 +1376,19 @@ export default function ArcticShopBody({
                     </div>
                     {efDiscount > 0 && Number(editForm.price) > 0 && (
                       <p className="text-[11px] font-bold text-[#e91e3f]">판매가 {efSale.toLocaleString()} XP</p>
+                    )}
+                    {/* 📌 할인 종료 — 관리자 상점 관리와 같은 칸. 지난 시각이 남아 있으면 새 할인이 붙지 않으므로 여기서도 보이고 지울 수 있게 */}
+                    {Number(editForm.discountPct) > 0 && (
+                      <div>
+                        <label className={F_LABEL}>할인 종료</label>
+                        <div className="flex items-center gap-2">
+                          <input type="datetime-local" value={editForm.discountUntil || ""} onChange={(e) => setEditForm({ ...editForm, discountUntil: e.target.value })} className={F_INPUT_SM} />
+                          {editForm.discountUntil && (
+                            <button type="button" onClick={() => setEditForm({ ...editForm, discountUntil: "" })} className="shrink-0 text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313]">지우기</button>
+                          )}
+                        </div>
+                        <p className={efUntilPast ? "text-[11px] font-bold text-[#d01634]" : F_NOTE}>{efUntilPast ? "이미 지난 시각입니다" : "비우면 계속"}</p>
+                      </div>
                     )}
 
                     {/* 📌 기간제 — 기프트카드는 기간 개념이 없어 아예 감춘다 */}

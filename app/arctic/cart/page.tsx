@@ -5,7 +5,7 @@ import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import ArcticStoreBar from "../ArcticStoreBar";
 import CardArt from "../CardArt";
-import { salePrice, durationLabel } from "@/lib/shopPricing";
+import { basePrice, salePrice, durationLabel } from "@/lib/shopPricing";
 import { pointToXp } from "@/lib/pointRate";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
@@ -87,7 +87,8 @@ export default function CartPage() {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const toggleAll = () => setSelected(allChecked ? [] : rows.map((r) => r.itemId));
 
-  const listTotal = picked.reduce((n, r) => n + ((r.days ?? 0) > 0 ? (r.item.durations?.find((d: any) => d.days === r.days)?.price ?? r.item.price) : r.item.price) * r.qty, 0);
+  // 정가 합 — 줄마다 고른 기간의 정가(무제한이면 무제한 옵션 값). 결제 화면과 같은 basePrice
+  const listTotal = picked.reduce((n, r) => n + basePrice(r.item, r.days) * r.qty, 0);
   const total = picked.reduce((n, r) => n + salePrice(r.item, r.days) * r.qty, 0);
   const discount = listTotal - total;
   // 빙옥을 결제 화면에서 섞어 쓸 수 있다 — XP 만으로 모자라도 빙옥까지 합쳐 되면 결제로 보낸다
@@ -177,7 +178,8 @@ export default function CartPage() {
                 {rows.map((r) => {
                   const sp = salePrice(r.item, r.days);
                   const on = selected.includes(r.itemId);
-                  const discounted = sp < r.item.price;
+                  const list = basePrice(r.item, r.days);
+                  const discounted = sp < list;
                   return (
                     <div key={r.itemId} className={`p-5 flex gap-4 items-center transition-colors ${on ? "" : "bg-[#f2f2f2]"}`}>
                       <button onClick={() => toggleOne(r.itemId)} aria-label="선택" className="shrink-0">
@@ -205,7 +207,7 @@ export default function CartPage() {
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-base font-black text-[#131313] tabular-nums">{sp.toLocaleString()} XP</div>
-                        {discounted && <div className="text-[11px] text-[#a3a3a3] line-through tabular-nums">{r.item.price.toLocaleString()} XP</div>}
+                        {discounted && <div className="text-[11px] text-[#a3a3a3] line-through tabular-nums">{list.toLocaleString()} XP</div>}
                         <button onClick={() => removeItem(r.itemId)}
                           className="mt-2 text-[11px] font-bold text-[#a3a3a3] hover:text-[#d01634] transition-colors">
                           삭제

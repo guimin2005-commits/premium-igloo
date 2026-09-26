@@ -22,6 +22,8 @@ export type ProductForm = {
   detachOnSeason: boolean;
   price: string;
   discountPct: string;
+  // 할인 종료 — datetime-local 값(KST "YYYY-MM-DDTHH:mm"). 비우면 기한 없음
+  discountUntil: string;
   stock: string;
   sortOrder: string;
   active: boolean;
@@ -46,6 +48,7 @@ export const EMPTY_PRODUCT_FORM: ProductForm = {
   detachOnSeason: false,
   price: "",
   discountPct: "",
+  discountUntil: "",
   stock: "",
   sortOrder: "",
   active: true,
@@ -79,6 +82,7 @@ export const formFromShopItem = (it: any): ProductForm => ({
   detachOnSeason: !!it.detachOnSeason,
   price: String(it.price ?? ""),
   discountPct: it.discountPct ? String(it.discountPct) : "",
+  discountUntil: toKstInput(it.discountUntil),
   stock: it.stock < 0 || it.stock == null ? "" : String(it.stock),
   sortOrder: String(it.sortOrder || 0),
   active: it.active !== false,
@@ -136,4 +140,15 @@ export const toPayload = (f: ProductForm, roleName: string) => ({
   ...f,
   roleName: roleName || f.roleName || "",
   durations: buildDurations(f),
+  // 입력칸 값은 KST 벽시계 — 서버가 헷갈리지 않게 시간대를 붙여 보낸다
+  //    "23:59까지" 가 그 1분이 끝날 때까지 되도록 59초로 보낸다
+  discountUntil: f.discountUntil ? `${f.discountUntil}:59+09:00` : "",
 });
+
+// 저장된 시각(ISO) → datetime-local 입력값(KST)
+export function toKstInput(v: any): string {
+  if (!v) return "";
+  const t = new Date(v).getTime();
+  if (!Number.isFinite(t)) return "";
+  return new Date(t + 9 * 60 * 60 * 1000).toISOString().slice(0, 16);
+}
