@@ -1,9 +1,11 @@
 // ── 음성 XP (설정된 주기마다 지급) ──────────────────
-//    📌 아이템 효과: "음성 XP 받을 때마다"는 이 1회 지급에 더하고(percent 는 기본 음성 XP 기준, 음소거 배율은 전체에),
+//    📌 아이템 효과: "음성 1회당"은 이 1회 지급에 더하고(percent 는 기본 음성 XP 기준, 음소거 배율은 전체에),
 //       "하루 음성 N분"은 오늘 누적 분이 N 이상이 되면 하루 1번 따로, "출석 · 출석 N번째"는 출석 지급에 더한다.
+//       효과는 디스코드 역할이 아니라 인벤토리 보유 아이템 기준이다(itemEffects.js — 아이템 기본 효과 포함).
 import { UserXp } from "../db.js";
 import { getVoiceBracketBonus, kstToday, VOICE_TIME_START } from "../leveling.js";
-import { getBuffXp, getAttendBuffXp, effectXp, getAttendEffectXp } from "../roleConfigs.js";
+import { getBuffXp, getAttendBuffXp } from "../roleConfigs.js";
+import { effectXp, getAttendEffectXp } from "../itemEffects.js";
 import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getActiveBoostXp, getMuteMultiplier } from "../botSettings.js";
 import { grantXp, grantOnceEffects } from "../xp.js";

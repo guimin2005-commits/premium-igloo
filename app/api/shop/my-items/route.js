@@ -10,8 +10,9 @@ import ShopItem from "@/models/ShopItem";
 import RoleConfig from "@/models/RoleConfig";
 import InventoryRole from "@/models/InventoryRole";
 import Item from "@/models/Item";
-import { fetchMemberRoles } from "@/lib/discordMember";
-import { describeBasic, describeEffect } from "@/lib/itemEffects";
+import { fetchMemberRoleInfo } from "@/lib/discordMember";
+import { describeRoleBuff, itemEffectLines } from "@/lib/itemEffects";
+import { channelNames } from "@/lib/channelNames";
 
 // 📌 내 보유 아이템 — 구매 내역이 아니라 "지금 실제로 들고 있는 것"을 보여준다.
 //    표기는 아이템 등록(models/Item)이 단일 원천이다:
@@ -25,33 +26,6 @@ import { describeBasic, describeEffect } from "@/lib/itemEffects";
 const LEVEL_COLOR = "#ff5c77";
 const ROLE_LIKE = new Set(["role", "perk", "item"]);
 
-// 📌 효과 한 줄 — 채널 하나만 지정한 효과는 "#채널이름" 으로 적는다.
-//    이름은 필요할 때만 길드 채널 목록에서 읽고 10분 인메모리 캐시(실패는 1분 — 이름 없이 "지정 채널 1곳" 으로 적힌다)
-let channelCache = { at: 0, ttl: 0, names: new Map() };
-async function channelNames() {
-  const now = Date.now();
-  if (now - channelCache.at < channelCache.ttl) return channelCache.names;
-  const GUILD_ID = process.env.DISCORD_GUILD_ID;
-  const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-  let names = new Map();
-  let ttl = 60 * 1000;
-  if (GUILD_ID && BOT_TOKEN) {
-    try {
-      const res = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/channels`, {
-        headers: { Authorization: `Bot ${BOT_TOKEN}` },
-        cache: "no-store",
-        signal: AbortSignal.timeout(3000),
-      });
-      if (res.ok) {
-        const list = await res.json();
-        names = new Map((Array.isArray(list) ? list : []).map((c) => [String(c.id), String(c.name || "")]));
-        ttl = 10 * 60 * 1000;
-      }
-    } catch {}
-  }
-  channelCache = { at: now, ttl, names };
-  return names;
-}
 
 export async function GET() {
   try {
@@ -63,16 +37,16 @@ export async function GET() {
     await connectToDatabase();
     const userId = session.user.id;
 
-    const [purchases, shopItems, itemsAll, roleConfigs, invRoles, discordRoles] = await Promise.all([
+    const [purchases, shopItems, itemsAll, roleConfigs, invRoles, roleInfo] = await Promise.all([
       Purchase.find({ userId, status: { $nin: ["cancelled", "refunded"] } }).sort({ createdAt: -1 }).lean(),
       ShopItem.find({}, { name: 1, description: 1, imageUrl: 1, itemImageUrl: 1, icon: 1, color: 1, type: 1, roleId: 1, itemId: 1, active: 1, sortOrder: 1 }).lean(),
       Item.find({}).sort({ sortOrder: 1, createdAt: 1 }).lean(),
-      RoleConfig.find({}, { roleId: 1, roleName: 1, rewardLevel: 1, exclusive: 1, buffXp: 1, attendBuffXp: 1, effects: 1 }).lean(),
+      RoleConfig.find({}, { roleId: 1, roleName: 1, rewardLevel: 1, exclusive: 1, buffXp: 1, attendBuffXp: 1 }).lean(),
       InventoryRole.find({ visible: true }).sort({ sortOrder: 1 }).lean(),
-      fetchMemberRoles(userId),
+      fetchMemberRoleInfo(userId),
     ]);
 
-    const held = discordRoles === null ? null : new Set(discordRoles);
+    const held = roleInfo.roles === null ? null : new Set(roleInfo.roles);
     const shopById = new Map(shopItems.map((s) => [String(s._id), s]));
     const itemById = new Map(itemsAll.map((i) => [String(i._id), i]));
     // 역할 → 아이템. (A) 의 fallback 은 visible 무관, (B) 는 visible 인 것만 —
@@ -119,7 +93,9 @@ export async function GET() {
         // 아직 유효한데 디스코드에 역할이 없다 = 지급 실패·수동 회수 같은 이상 상태.
         // 산 물건을 조용히 지우면 안 되므로 '역할 없음'으로 드러낸다.
         // 다만 siteOnly 는 일부러 뗀 것이라 이상 상태가 아니다 — 그대로 보유로 둔다.
-        if (!p.siteOnly && held !== null && p.status === "completed" && !held.has(p.roleId)) {
+        //    역할 목록이 예전 값이거나(디스코드 조회 실패) 지급보다 먼저 찍힌 것이면 판정하지 않는다 — 방금 산 것이 '확인 필요'로 뜨지 않게
+        const rolesAfterGrant = !roleInfo.stale && (!p.processedAt || new Date(p.processedAt).getTime() < roleInfo.at);
+        if (!p.siteOnly && held !== null && rolesAfterGrant && p.status === "completed" && !held.has(p.roleId)) {
           status = "missing";
         }
       }
@@ -145,8 +121,11 @@ export async function GET() {
         siteOnly: !!p.siteOnly,
         source: p.itemId === "season-pass" ? "pass" : p.itemId === "grant" ? "grant" : "shop",
         rewardLevel: null,
-        // 효과는 디스코드 역할을 가진 동안만 붙는다 — 역할을 뗀 사이트 보유(siteOnly) · 아직 지급 전(pending) · 역할 없음(missing)은 효과 없음
-        effectRoleId: roleLike && !p.siteOnly && status === "completed" ? p.roleId : "",
+        // 아이템 효과는 인벤토리 보유 기준(lib/ownedItems.js) — 사이트 보유(siteOnly) · 지급 대기(pending) · 역할 없음(missing)도 붙는다.
+        //    기프트카드 구매는 봇이 효과 대상에서 빼므로 여기서도 뺀다
+        effectItem: p.itemType !== "physical" ? item || fallbackItem : null,
+        // 역할 버프(RoleConfig)는 그 디스코드 역할을 지금 실제로 가진 동안만 봇이 더한다
+        buffRoleId: p.roleId && held !== null && held.has(p.roleId) ? p.roleId : "",
       });
     }
 
@@ -174,7 +153,8 @@ export async function GET() {
             siteOnly: false,
             source: "item",
             rewardLevel: null,
-            effectRoleId: roleId,
+            effectItem: item,
+            buffRoleId: roleId,
           });
           continue;
         }
@@ -197,7 +177,7 @@ export async function GET() {
             siteOnly: false,
             source: "level",
             rewardLevel: cfg.rewardLevel,
-            effectRoleId: roleId,
+            buffRoleId: roleId,
             exclusive: !!cfg.exclusive, // 등급 사다리 — 인벤토리에서 맨 앞
           });
           continue;
@@ -223,7 +203,7 @@ export async function GET() {
             siteOnly: false,
             source: "shop",
             rewardLevel: null,
-            effectRoleId: roleId,
+            buffRoleId: roleId,
           });
           continue;
         }
@@ -248,29 +228,27 @@ export async function GET() {
             siteOnly: false,
             source: "item",
             rewardLevel: null,
-            effectRoleId: roleId,
+            buffRoleId: roleId,
           });
         }
         // 아이템도 레벨 보상도 아닌 역할은 사이트가 관리하지 않으므로 숨긴다
       }
     }
 
-    // 📌 효과 문장 — 역할의 RoleConfig(기본 효과 + 조건 효과). 역할이 없거나 효과가 없으면 [] (화면은 빈 배열이면 줄을 그리지 않는다)
-    const effectCfgs = owned.map((it) => (it.effectRoleId ? cfgByRole.get(it.effectRoleId) : null));
-    const needNames = effectCfgs.some((c) => (c?.effects || []).some((e) => e?.channelIds?.length === 1));
+    // 📌 효과 문장 — 아이템 효과(아이템 문서의 기본 효과 + 조건 효과) + 역할 버프(RoleConfig 의 buffXp · attendBuffXp, 역할을 실제로 가진 동안만).
+    //    둘 다 없으면 [] (화면은 빈 배열이면 줄을 그리지 않는다). 채널 이름은 채널 하나만 지정한 효과가 있을 때만 읽는다
+    const needNames = owned.some((it) => (Array.isArray(it.effectItem?.effects) ? it.effectItem.effects : []).some((e) => e?.channelIds?.length === 1));
     const names = needNames ? await channelNames() : new Map();
-    owned.forEach((it, i) => {
-      const cfg = effectCfgs[i];
-      it.effectLines = cfg
-        ? [
-            ...describeBasic(cfg),
-            ...(Array.isArray(cfg.effects) ? cfg.effects : [])
-              .map((e) => describeEffect(e, e?.channelIds?.length === 1 ? names.get(String(e.channelIds[0])) : undefined))
-              .filter(Boolean),
-          ]
-        : [];
-      delete it.effectRoleId;
-    });
+    const nameOf = (id) => names.get(String(id));
+    for (const it of owned) {
+      const cfg = it.buffRoleId ? cfgByRole.get(it.buffRoleId) : null;
+      it.effectLines = [
+        ...(it.effectItem ? itemEffectLines(it.effectItem, nameOf) : []),
+        ...(cfg ? describeRoleBuff(cfg) : []),
+      ];
+      delete it.effectItem;
+      delete it.buffRoleId;
+    }
 
     // 📌 순서 — 등급(배타 티어) → 레벨 보상(낮은 레벨부터) → 나머지는 지금 순서. 등급은 어느 탭에서든 첫 칸.
     const rankOf = (it) => (it.source === "level" ? (it.exclusive ? 0 : 1) : 2);

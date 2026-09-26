@@ -22,7 +22,7 @@ import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 // 팝업 틀 · 인벤토리 팝업 · 효과음은 내 정보 · ARCTIC 도 같이 쓴다 (app/components/PopShell · Inventory, lib/sfx)
 import { PopShell, PopTab, AdminReset } from "../components/PopShell";
-import { BagOverlay, buildInvGroups } from "../components/Inventory";
+import { BagOverlay, buildInvGroups, mergeMyItems } from "../components/Inventory";
 import { playTone } from "@/lib/sfx";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
@@ -525,10 +525,13 @@ const XpSimulator = ({ me, P, ready, onTone }) => {
 
   // ── 1회 지급량 ──
   const [cLo, cHi] = chatRange(P, chatEnh);
-  const chatPer = (cLo + cHi) / 2 + extra; // 기댓값 — 구간 안 균등 랜덤
+  // 보유 아이템 기본 효과 — 채팅 · 음성 따로 붙는 고정 가산(봇 basic-chat · basic-voice). 손으로 바꾸는 '추가 XP' 와는 따로 둔다
+  const itemChat = Math.max(0, Number(me?.itemChatXp) || 0);
+  const itemVoice = Math.max(0, Number(me?.itemVoiceXp) || 0);
+  const chatPer = (cLo + cHi) / 2 + extra + itemChat; // 기댓값 — 구간 안 균등 랜덤
   const muteMult = !muted || P.muteMode === "off" ? 1 : P.muteMode === "block" ? 0 : Math.max(0, 1 - P.muteReducePct / 100);
   const vEnh = voiceBonus(P, voiceEnh);
-  const voiceTickAt = (l) => Math.floor((P.voiceXp + getVoiceBonus(l) + vEnh + extra) * muteMult);
+  const voiceTickAt = (l) => Math.floor((P.voiceXp + getVoiceBonus(l) + vEnh + extra + itemVoice) * muteMult);
   const voiceN = Math.floor((voiceMin * 60) / Math.max(30, P.voiceIntervalSec));
   const attendXp = attendOn ? P.attendXp + Math.max(0, Number(me?.attendBuffXp) || 0) : 0;
   const goalLv = goal ? clampLv(goal) : 0;
@@ -575,7 +578,7 @@ const XpSimulator = ({ me, P, ready, onTone }) => {
       if (d >= 30 && (!pending || lvNow >= 1000)) break;
     }
     return { lv30, tiers, goalDay };
-  }, [startXp, startLv, startTi, goalLv, chatN, chatPer, voiceN, vEnh, extra, muteMult, attendXp, P.voiceXp]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [startXp, startLv, startTi, goalLv, chatN, chatPer, voiceN, vEnh, extra, itemVoice, muteMult, attendXp, P.voiceXp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!ready) {
     return <div className="py-24 text-center text-sm text-[#8a8a8a]">설정값을 불러오는 중...</div>;
@@ -598,7 +601,7 @@ const XpSimulator = ({ me, P, ready, onTone }) => {
         {preset === "custom" ? (
           <div className="mt-4 space-y-4">
             <div>
-              <p className="text-[12px] font-bold text-[#5a5a5a] mb-2">채팅 <span className="tabular-nums">· 1회 {won(cLo + extra)}~{won(cHi + extra)} XP</span></p>
+              <p className="text-[12px] font-bold text-[#5a5a5a] mb-2">채팅 <span className="tabular-nums">· 1회 {won(cLo + extra + itemChat)}~{won(cHi + extra + itemChat)} XP</span></p>
               <SimChips value={chatC} options={SIM_CHAT} onChange={pickTone(setChatC)} label="하루 채팅 인정 횟수" />
             </div>
             <div>
@@ -1562,10 +1565,19 @@ export default function LevelPage() {
       }
       if (logRes?.success) setMyLogs(logRes.data);
       if (qRes?.success) setQuests(qRes.data);
-      if (itemRes?.success) setMyItems(itemRes.data);
+      if (itemRes?.success) setMyItems((cur) => mergeMyItems(cur, itemRes.data));
     } catch {}
     setMeLoaded(true);
   }, [pushToast]);
+
+  // 📌 가방을 열 때 보유 목록만 새로 읽는다 — 30초 폴링을 기다리면 방금 받은 것이 안 보이거나,
+  //    직전 조회가 실패했을 때 빈 가방이 새로고침 전까지 남는다
+  const refreshItems = useCallback(() => {
+    fetch("/api/shop/my-items", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (d?.success) setMyItems((cur) => mergeMyItems(cur, d.data)); })
+      .catch(() => {});
+  }, []);
 
   // 보상 수령 — 서버가 진행도를 다시 세고 중복을 막는다. 결과는 토스트+효과음으로 알린다.
   const claimQuest = useCallback(async (q) => {
@@ -1810,6 +1822,7 @@ export default function LevelPage() {
   // 가방 여닫는 소리 — 기존 어휘(880·523·620Hz)와 겹치지 않게 낮은음 → 높은음
   const openBag = () => {
     setBagOpen(true);
+    refreshItems();
     playTone(392, 0.06, "sine", 0.03);
     setTimeout(() => playTone(587, 0.08, "sine", 0.03), 90);
   };
@@ -1989,17 +2002,20 @@ export default function LevelPage() {
   const gain = (() => {
     const buff = Math.max(0, Number(me?.buffXp) || 0);
     const boost = Math.max(0, Number(me?.boostXp) || 0);
+    // 보유 아이템 기본 효과 — 채팅 · 음성 따로 (봇 basic-chat · basic-voice 와 같은 값)
+    const itemChat = Math.max(0, Number(me?.itemChatXp) || 0);
+    const itemVoice = Math.max(0, Number(me?.itemVoiceXp) || 0);
     const chatEnh = enh.chat.level * enh.chat.step;
     const tier = getVoiceBonus(me?.level || 0);
     const voiceEnh = enh.voice.bonus || 0;
     const fmt = (n) => n.toLocaleString();
     const extra = [buff > 0 && { l: "역할", v: `+${fmt(buff)}` }, boost > 0 && { l: "부스트", v: `+${fmt(boost)}` }].filter(Boolean);
     return {
-      chatLo: enh.chat.range[0] + buff + boost,
-      chatHi: enh.chat.range[1] + buff + boost,
-      chatParts: [{ l: "기본", v: `${fmt(P_chatBase[0])}~${fmt(P_chatBase[1])}` }, chatEnh > 0 && { l: "강화", v: `+${fmt(chatEnh)}` }, ...extra].filter(Boolean),
-      voice: P.voiceXp + tier + voiceEnh + buff + boost,
-      voiceParts: [{ l: "기본", v: fmt(P.voiceXp) }, tier > 0 && { l: "등급", v: `+${fmt(tier)}` }, voiceEnh > 0 && { l: "강화", v: `+${fmt(voiceEnh)}` }, ...extra].filter(Boolean),
+      chatLo: enh.chat.range[0] + buff + boost + itemChat,
+      chatHi: enh.chat.range[1] + buff + boost + itemChat,
+      chatParts: [{ l: "기본", v: `${fmt(P_chatBase[0])}~${fmt(P_chatBase[1])}` }, chatEnh > 0 && { l: "강화", v: `+${fmt(chatEnh)}` }, ...extra, itemChat > 0 && { l: "아이템", v: `+${fmt(itemChat)}` }].filter(Boolean),
+      voice: P.voiceXp + tier + voiceEnh + buff + boost + itemVoice,
+      voiceParts: [{ l: "기본", v: fmt(P.voiceXp) }, tier > 0 && { l: "등급", v: `+${fmt(tier)}` }, voiceEnh > 0 && { l: "강화", v: `+${fmt(voiceEnh)}` }, ...extra, itemVoice > 0 && { l: "아이템", v: `+${fmt(itemVoice)}` }].filter(Boolean),
     };
   })();
 
@@ -2210,6 +2226,7 @@ export default function LevelPage() {
         tab={invTab}
         onTab={setInvTab}
         synced={myItems?.synced}
+        loading={!!session?.user && myItems === null}
         onTone={() => playTone(620, 0.04, "sine", 0.025)}
         onReset={isAdminUser ? () => resetTest("shop") : null}
         resetBusy={resetBusy === "shop"}

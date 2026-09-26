@@ -9,6 +9,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import BotSetting from "@/models/BotSetting";
+import { fetchGuildMember } from "@/lib/discordMember";
 
 // 📌 디스코드 멤버 정보 — 프로필 사진과 표시 이름을 함께 가져온다.
 //    사진은 시상대(1~3위)에만, 이름은 UserXp 에 비어 있는 사람에게만 쓴다.
@@ -37,12 +38,10 @@ async function fetchMembers(userIds) {
       const fallback = { avatar: defaultAvatar(id), name: "" };
       if (!GUILD_ID || !BOT_TOKEN) { out.set(id, fallback); return; }
       try {
-        const res = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${id}`, {
-          headers: { Authorization: `Bot ${BOT_TOKEN}` },
-          cache: "no-store",
-        });
-        if (!res.ok) { out.set(id, fallback); return; }
-        const m = await res.json();
+        // 멤버 조회는 공용 캐시(lib/discordMember.js) — 세션 · 인벤토리와 같은 조회가 한꺼번에 몰려 429 가 나지 않게
+        const r = await fetchGuildMember(id);
+        if (r.status !== "ok") { out.set(id, fallback); return; }
+        const m = r.member;
         // 서버 전용 프로필 사진이 있으면 그것을 우선한다
         const avatar = m?.avatar
           ? `https://cdn.discordapp.com/guilds/${GUILD_ID}/users/${id}/avatars/${m.avatar}.png?size=128`

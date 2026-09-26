@@ -8,7 +8,7 @@ import ItemIcon from "../../components/ItemIcon";
 import IconPicker from "../../components/IconPicker";
 import { InventoryItemPreview } from "../../components/Inventory";
 import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor } from "@/lib/items";
-import { TRIGGERS, TRIGGER_OF, DAY_LABELS, MAX_EFFECTS, normalizeEffects, describeEffect, describeBasic } from "@/lib/itemEffects";
+import { TRIGGERS, TRIGGER_OF, DAY_LABELS, MAX_EFFECTS, normalizeEffects, describeEffect, describeItemBasic, describeRoleBuff } from "@/lib/itemEffects";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
   buildDurations as buildFormDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload,
@@ -132,16 +132,15 @@ const draftOf = (e: any): EffectDraft => {
 const xpNum = (s: string) => Math.max(0, Math.floor(Number(s) || 0));
 
 // 아이템 등록 폼 — 숫자 칸은 비울 수 있어야 해서 문자열로 든다
-//    효과(buffXp · attendBuffXp · effects)는 연결 역할의 RoleConfig 에 저장된다(서버가 roleId 로 upsert).
-//    effLoaded: 불러온 아이템에 효과가 있었는지 — 전부 0 으로 비운 것도 저장해야 지워지므로
+//    효과(chatBuffXp · voiceBuffXp · attendBuffXp · effects)는 아이템 자체에 저장 — 이 아이템을 인벤토리에 가진 사람에게 적용(디스코드 역할과 무관)
 type ItemForm = {
   id: string; name: string; description: string; type: string; roleId: string; icon: string; imageUrl: string;
-  color: string; detachOnSeason: boolean; visible: boolean; sortOrder: string;
-  buffXp: string; attendBuffXp: string; effects: EffectDraft[]; effLoaded: boolean;
+  color: string; detachOnSeason: boolean; visible: boolean;
+  chatBuffXp: string; voiceBuffXp: string; attendBuffXp: string; effects: EffectDraft[];
 };
 const EMPTY_ITEM_FORM: ItemForm = {
-  id: "", name: "", description: "", type: "item", roleId: "", icon: "", imageUrl: "", color: "", detachOnSeason: false, visible: true, sortOrder: "",
-  buffXp: "", attendBuffXp: "", effects: [], effLoaded: false,
+  id: "", name: "", description: "", type: "item", roleId: "", icon: "", imageUrl: "", color: "", detachOnSeason: false, visible: true,
+  chatBuffXp: "", voiceBuffXp: "", attendBuffXp: "", effects: [],
 };
 
 // 채널 표기 — 봇 관리 화면과 같은 기호
@@ -238,10 +237,10 @@ const HOUR_TO = Array.from({ length: 24 }, (_, h) => h + 1);
 const selectSm = `${inputClass} !w-[84px] tabular-nums`;
 const subLabel = "mb-1.5 text-[12px] font-bold text-[#5a5a5a]";
 function EffectsEditor({
-  buffXp, attendBuffXp, list, disabled, channels, onChange,
+  chatBuffXp, voiceBuffXp, attendBuffXp, list, channels, onChange,
 }: {
-  buffXp: string; attendBuffXp: string; list: EffectDraft[]; disabled: boolean; channels: any[];
-  onChange: (patch: Partial<Pick<ItemForm, "buffXp" | "attendBuffXp" | "effects">>) => void;
+  chatBuffXp: string; voiceBuffXp: string; attendBuffXp: string; list: EffectDraft[]; channels: any[];
+  onChange: (patch: Partial<Pick<ItemForm, "chatBuffXp" | "voiceBuffXp" | "attendBuffXp" | "effects">>) => void;
 }) {
   const setRow = (i: number, patch: Partial<EffectDraft>) => onChange({ effects: list.map((d, j) => (j === i ? { ...d, ...patch } : d)) });
   const chName = (id: string) => channels.find((c) => c.id === id)?.name as string | undefined;
@@ -271,17 +270,23 @@ function EffectsEditor({
   const setChannels = (i: number, ids: string[]) => setRow(i, { channelIds: ids, chText: ids.join(", ") });
 
   return (
-    <fieldset disabled={disabled} className={`min-w-0 ${disabled ? "opacity-50" : ""}`}>
+    <fieldset className="min-w-0">
       <div className={labelClass}>기본 효과</div>
       <div className="mb-5 space-y-2">
         <Inline>
-          <span className="w-[136px] shrink-0 font-bold text-[#131313]">채팅 · 음성 1회마다</span>
+          <span className="w-[88px] shrink-0 font-bold text-[#131313]">채팅 1회당</span>
           <span>+</span>
-          <input type="number" min={0} inputMode="numeric" value={buffXp} onChange={(e) => onChange({ buffXp: e.target.value })} placeholder="0" className={numClass} />
+          <input type="number" min={0} inputMode="numeric" value={chatBuffXp} onChange={(e) => onChange({ chatBuffXp: e.target.value })} placeholder="0" className={numClass} />
           <span>XP</span>
         </Inline>
         <Inline>
-          <span className="w-[136px] shrink-0 font-bold text-[#131313]">출석할 때</span>
+          <span className="w-[88px] shrink-0 font-bold text-[#131313]">음성 1회당</span>
+          <span>+</span>
+          <input type="number" min={0} inputMode="numeric" value={voiceBuffXp} onChange={(e) => onChange({ voiceBuffXp: e.target.value })} placeholder="0" className={numClass} />
+          <span>XP</span>
+        </Inline>
+        <Inline>
+          <span className="w-[88px] shrink-0 font-bold text-[#131313]">출석 시</span>
           <span>+</span>
           <input type="number" min={0} inputMode="numeric" value={attendBuffXp} onChange={(e) => onChange({ attendBuffXp: e.target.value })} placeholder="0" className={numClass} />
           <span>XP</span>
@@ -454,6 +459,12 @@ export default function AdminShopPage() {
   const [productView, setProductView] = useState("");
   const [bannerView, setBannerView] = useState("");
   const [couponView, setCouponView] = useState("");
+  // 📌 순서 바꾸기 — 아이템 · 상품 목록을 끌어서 정한다. orderDraft 는 전체 목록의 id 순서다
+  //    (검색 · 유형으로 거른 목록에서 옮겨도 전체 안의 제자리에 끼워 넣는다). 탭을 옮기면 저장하지 않은 순서는 버린다.
+  const [reorder, setReorder] = useState<"" | "reg" | "product">("");
+  const [orderDraft, setOrderDraft] = useState<string[]>([]);
+  const [savingOrder, setSavingOrder] = useState(false);
+  useEffect(() => { setReorder(""); setOrderDraft([]); }, [tab]);
 
   // 상품 폼 — 상태 모양·기간·유형·아이템 적용 규칙은 app/arctic/productForm 공용 (상점 인라인 폼과 같다)
   const emptyForm = EMPTY_PRODUCT_FORM;
@@ -486,40 +497,17 @@ export default function AdminShopPage() {
   }, []);
 
   const fillRegForm = (it: any) => {
-    // 효과는 GET 이 붙여 준 연결 역할의 RoleConfig 값 (역할이 없으면 0 / [])
+    // 효과는 GET 이 아이템 문서에서 읽어 붙여 준 값 (없으면 0 / [])
     const ef = it.effects || {};
     const list = Array.isArray(ef.list) ? ef.list : [];
     setItemForm({
       id: it._id, name: it.name || "", description: it.description || "", type: it.type || "item", roleId: it.roleId || "",
       icon: it.icon || "", imageUrl: it.imageUrl || "", color: it.color || "", detachOnSeason: !!it.detachOnSeason,
-      visible: it.visible !== false, sortOrder: String(it.sortOrder || 0),
-      buffXp: ef.buffXp ? String(ef.buffXp) : "", attendBuffXp: ef.attendBuffXp ? String(ef.attendBuffXp) : "",
-      effects: list.map(draftOf), effLoaded: !!(ef.buffXp || ef.attendBuffXp || list.length),
-    });
-  };
-
-  // 📌 연결 역할을 고르거나 바꾸면 그 역할의 현재 효과를 불러온다 — 효과는 역할 단위(RoleConfig)라
-  //    빈 칸인 채 저장하면 그 역할의 기존 버프 · 다른 아이템이 쓰던 조건 효과를 0 으로 덮어쓴다.
-  //    먼저 같은 역할을 쓰는 등록 아이템에서, 없으면 역할 설정(RoleConfig) 목록에서 찾는다.
-  const changeItemRole = async (roleId: string) => {
-    setItemForm((f) => ({ ...f, roleId, buffXp: "", attendBuffXp: "", effects: [], effLoaded: false }));
-    if (!roleId) return;
-    let ef: any = regItems.find((it) => it.roleId === roleId && it._id !== itemForm.id && it.effects)?.effects || null;
-    if (!ef) {
-      const d = await fetch("/api/role-config", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
-      const cfg = Array.isArray(d?.data) ? d.data.find((c: any) => c.roleId === roleId) : null;
-      if (cfg) ef = { buffXp: cfg.buffXp || 0, attendBuffXp: cfg.attendBuffXp || 0, list: Array.isArray(cfg.effects) ? cfg.effects : [] };
-    }
-    if (!ef) return;
-    const list = Array.isArray(ef.list) ? ef.list : [];
-    // 그 사이 다른 역할로 또 바꿨으면 늦게 온 값으로 덮지 않는다
-    setItemForm((f) => (f.roleId !== roleId ? f : {
-      ...f,
-      buffXp: ef.buffXp ? String(ef.buffXp) : "",
+      visible: it.visible !== false,
+      chatBuffXp: ef.chatBuffXp ? String(ef.chatBuffXp) : "", voiceBuffXp: ef.voiceBuffXp ? String(ef.voiceBuffXp) : "",
       attendBuffXp: ef.attendBuffXp ? String(ef.attendBuffXp) : "",
       effects: list.map(draftOf),
-      effLoaded: true,
-    }));
+    });
   };
 
   const saveRegItem = async (e: React.FormEvent) => {
@@ -527,15 +515,14 @@ export default function AdminShopPage() {
     if (isSavingReg) return;
     if (!itemForm.name.trim()) return notify("이름을 입력해 주세요.", true);
     if ((itemForm.type === "role" || itemForm.type === "perk") && !itemForm.roleId) return notify("연결할 역할을 선택해 주세요.", true);
-    // 📌 효과 — 역할이 연결된 아이템만. 값이 빈 줄은 서버가 말없이 버리므로 저장 전에 막는다.
-    //    효과가 원래 없고 지금도 비어 있으면 보내지 않는다(효과 없는 역할마다 빈 RoleConfig 가 생기지 않게)
-    const { buffXp, attendBuffXp, effects: effDrafts, effLoaded, ...base } = itemForm;
-    let effects: { buffXp: number; attendBuffXp: number; list: ReturnType<typeof effectOf>[] } | undefined;
-    if (base.type !== "physical" && base.roleId) {
+    // 📌 효과 — 기프트카드를 뺀 모든 아이템(역할 연결 여부와 무관). 값이 빈 줄은 서버가 말없이 버리므로 저장 전에 막는다.
+    //    아이템 문서에 같이 저장되므로 늘 보낸다(전부 비운 것도 그대로 저장돼야 지워진다). 기프트카드는 보내지 않는다(서버가 비움)
+    const { chatBuffXp, voiceBuffXp, attendBuffXp, effects: effDrafts, ...base } = itemForm;
+    let effects: { chatBuffXp: number; voiceBuffXp: number; attendBuffXp: number; list: ReturnType<typeof effectOf>[] } | undefined;
+    if (base.type !== "physical") {
       const bad = effDrafts.findIndex((d) => normalizeEffects([effectOf(d)]).length === 0);
       if (bad >= 0) return notify(`조건 효과 ${bad + 1}번째 줄의 값을 입력해 주세요.`, true);
-      const b = xpNum(buffXp), a = xpNum(attendBuffXp);
-      if (effLoaded || b || a || effDrafts.length) effects = { buffXp: b, attendBuffXp: a, list: effDrafts.map(effectOf) };
+      effects = { chatBuffXp: xpNum(chatBuffXp), voiceBuffXp: xpNum(voiceBuffXp), attendBuffXp: xpNum(attendBuffXp), list: effDrafts.map(effectOf) };
     }
     setIsSavingReg(true);
     const res = await fetch("/api/admin/items", {
@@ -545,11 +532,7 @@ export default function AdminShopPage() {
     const d = await res?.json().catch(() => null);
     setIsSavingReg(false);
     if (res?.ok && d?.success) { setItemForm(EMPTY_ITEM_FORM); fetchRegItems(); fetchAll(); closePane(); notify("저장되었습니다."); }
-    else {
-      // 아이템은 저장되고 효과만 실패하면 서버가 문서를 돌려준다 — id 를 쥐어 다시 저장해도 두 개가 생기지 않게
-      if (!itemForm.id && d?.data?._id) { setItemForm((f) => ({ ...f, id: d.data._id })); fetchRegItems(); }
-      notify(d?.message || "저장에 실패했습니다.", true);
-    }
+    else notify(d?.message || "저장에 실패했습니다.", true);
   };
 
   // 표시 토글 — 목록에서 바로 켜고 끈다 (폼을 열지 않아도 되게)
@@ -559,7 +542,7 @@ export default function AdminShopPage() {
     setVisBusy(it._id);
     const res = await fetch("/api/admin/items", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      // 효과는 빼고 보낸다 — 표시 토글이 역할 효과(RoleConfig)를 다시 쓰지 않게 (undefined 는 JSON 에서 빠진다)
+      // 효과는 빼고 보낸다 — 표시 토글이 아이템 효과를 다시 쓰지 않게(효과가 없으면 서버가 효과 칸을 건드리지 않는다. undefined 는 JSON 에서 빠진다)
       body: JSON.stringify({ ...it, effects: undefined, id: it._id, visible: it.visible === false }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
@@ -708,6 +691,18 @@ export default function AdminShopPage() {
 
   useEffect(() => { if (isAdmin) { fetchAll(); fetchRegItems(); } }, [isAdmin, fetchAll, fetchRegItems]);
 
+  // 📌 역할 버프(관리자 › 레벨 설정 역할 탭) — 연결 역할에 걸려 있으면 효과 칸 · 미리보기에 읽기 전용으로 보여 준다.
+  //    아이템 효과와 별개로 그 역할을 가진 사람에게 더해지므로, 모르고 아이템에 같은 값을 또 넣어 두 번 붙지 않게
+  const [roleCfgs, setRoleCfgs] = useState<any[]>([]);
+  useEffect(() => {
+    if (!isAdmin) return;
+    let alive = true;
+    fetch("/api/role-config", { cache: "no-store" }).then((r) => r.json())
+      .then((d) => { if (alive) setRoleCfgs(Array.isArray(d?.data) ? d.data : []); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [isAdmin]);
+
   // 아이템 효과의 채널 조건용 — 한 번만 읽는다(서버 10분 캐시). 못 읽으면 효과 편집이 채널 ID 입력칸으로 바뀐다
   const [guildChannels, setGuildChannels] = useState<any[]>([]);
   useEffect(() => {
@@ -751,7 +746,7 @@ export default function AdminShopPage() {
     e.preventDefault();
     const res = await fetch("/api/shop/items", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(toPayload(form, selectedRole?.name || "")),
+      body: JSON.stringify({ ...toPayload(form, selectedRole?.name || ""), sortOrder: undefined }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
     if (res?.ok && d?.success) { setForm(emptyForm); fetchAll(); fetchRegItems(); closePane(); notify("저장되었습니다."); }
@@ -779,6 +774,48 @@ export default function AdminShopPage() {
     if (res?.ok && d?.success) { fetchAll(); notify(newStatus === "completed" ? "발송 처리했습니다." : newStatus === "refunded" ? "환불했습니다. 디스코드 역할은 봇이 1분 안에 회수합니다." : "취소하고 환불했습니다."); }
     else notify(d?.message || "처리에 실패했습니다.", true);
     setNoteTarget(null); setNoteText(""); setCancelTarget(null);
+  };
+
+  // ── 순서 바꾸기 ──
+  const startReorder = (kind: "reg" | "product") => {
+    closePane();
+    setOrderDraft((kind === "reg" ? regItems : items).map((it) => String(it._id)));
+    setReorder(kind);
+  };
+  const cancelReorder = () => { setReorder(""); setOrderDraft([]); };
+  // 보이는 줄들의 새 순서를, 그 줄들이 원래 차지하던 자리들에 차례로 다시 채운다 — 안 보이는 줄은 제자리
+  const applyVisibleOrder = (visible: string[]) => {
+    setOrderDraft((prev) => {
+      const pos = visible.map((k) => prev.indexOf(k)).filter((p) => p >= 0).sort((a, b) => a - b);
+      if (pos.length !== visible.length) return prev;
+      const next = prev.slice();
+      pos.forEach((p, i) => { next[p] = visible[i]; });
+      return next;
+    });
+  };
+  // 초안 순서대로 — 그 사이 새로 생긴 줄(초안에 없음)은 맨 뒤
+  const byDraft = (list: any[]) => {
+    const at = new Map(orderDraft.map((k, i) => [k, i]));
+    return [...list].sort((a, b) => (at.get(String(a._id)) ?? 1e9) - (at.get(String(b._id)) ?? 1e9));
+  };
+  const saveOrder = async () => {
+    if (savingOrder || !reorder) return;
+    const kind = reorder;
+    setSavingOrder(true);
+    const res = await fetch(kind === "reg" ? "/api/admin/items" : "/api/shop/items", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order: orderDraft }),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    setSavingOrder(false);
+    if (res?.ok && d?.success) {
+      // 다시 불러오기 전에 옛 순서가 한 번 비치지 않게 화면 목록부터 맞춘다
+      const at = new Map(orderDraft.map((k, i) => [k, i]));
+      const put = (list: any[]) => byDraft(list).map((it) => (at.has(String(it._id)) ? { ...it, sortOrder: at.get(String(it._id)) } : it));
+      if (kind === "reg") { setRegItems(put); fetchRegItems(); } else { setItems(put); fetchAll(); }
+      cancelReorder();
+      notify("순서를 저장했습니다.");
+    } else notify(d?.message || "순서를 저장하지 못했습니다.", true);
   };
 
   // ⚠️ 훅을 모두 부른 뒤에 가린다. 이건 화면을 가리는 장치일 뿐이고 실제 방어는 서버(API)에서 한다.
@@ -812,12 +849,16 @@ export default function AdminShopPage() {
   const couponSel = couponForm.id ? coupons.find((c) => c._id === couponForm.id) : null;
 
   // 📌 아이템 등록 — 인벤토리 미리보기는 폼 값을 그대로 따라간다. 효과 줄은 서버(/api/shop/my-items)와 같은 규칙
-  //    (describeBasic + describeEffect, 역할이 연결된 아이템만)
-  const regEffOn = itemForm.type !== "physical" && !!itemForm.roleId;
+  //    (describeItemBasic + describeEffect, 기프트카드를 뺀 모든 아이템 — 역할 연결 여부와 무관). 채널 하나짜리 효과는 효과 편집과 같은 채널 이름으로
+  const regEffOn = itemForm.type !== "physical";
+  const regRoleBuff: string[] = regEffOn && itemForm.roleId ? describeRoleBuff(roleCfgs.find((c) => c.roleId === itemForm.roleId) || {}) : [];
+  const regChName = (id: string) => guildChannels.find((c) => c.id === id)?.name as string | undefined;
   const regEffectLines: string[] = regEffOn
     ? [
-        ...describeBasic({ buffXp: xpNum(itemForm.buffXp), attendBuffXp: xpNum(itemForm.attendBuffXp) }),
-        ...normalizeEffects(itemForm.effects.map(effectOf)).map((e: any) => describeEffect(e)),
+        ...describeItemBasic({ chatBuffXp: xpNum(itemForm.chatBuffXp), voiceBuffXp: xpNum(itemForm.voiceBuffXp), attendBuffXp: xpNum(itemForm.attendBuffXp) }),
+        ...normalizeEffects(itemForm.effects.map(effectOf)).map((e: any) => describeEffect(e, e.channelIds?.length === 1 ? regChName(e.channelIds[0]) : undefined)),
+        // 인벤토리처럼 역할 버프 줄도 뒤에 — 역할을 가진 사람에게 실제로 붙는 값
+        ...regRoleBuff,
       ]
     : [];
   const regPreviewItem = {
@@ -897,7 +938,6 @@ export default function AdminShopPage() {
     },
     { key: "stock", label: "재고", align: "right", render: (it) => <span className="tabular-nums"><ML>재고</ML>{it.stock < 0 ? "무제한" : it.stock}</span> },
     { key: "sold", label: "판매", align: "right", render: (it) => <span className="text-[#5a5a5a] tabular-nums">{it.soldCount || 0}개<span className="md:hidden"> 판매</span></span> },
-    { key: "sort", label: "추천", align: "right", render: (it) => <span className="text-[#5a5a5a] tabular-nums"><ML>추천</ML>{it.sortOrder || 0}</span> },
   ];
 
   const bannerCols: Column<any>[] = [
@@ -983,7 +1023,21 @@ export default function AdminShopPage() {
     { v: "reward", l: "보상형", d: "입력 즉시 역할·XP 지급" },
   ];
 
-  const newBtn = (onClick: () => void) => <Btn onClick={onClick}>새로 만들기</Btn>;
+  const newBtn = (onClick: () => void, className = "") => <Btn className={className} onClick={onClick}>새로 만들기</Btn>;
+  const ORDER_BTN = "w-[116px]";
+  const orderBtns = (kind: "reg" | "product", count: number, onNew: () => void) =>
+    reorder === kind ? (
+      <>
+        <Btn variant="secondary" className={ORDER_BTN} onClick={cancelReorder} disabled={savingOrder}>취소</Btn>
+        <Btn className={ORDER_BTN} onClick={saveOrder} disabled={savingOrder}>{savingOrder ? "저장 중..." : "순서 저장"}</Btn>
+      </>
+    ) : (
+      <>
+        {/* 상세 칸이 열려 좁아졌을 때는 숨긴다 — 버튼 하나가 더 있으면 도구 줄이 한 줄 더 꺾여 목록이 밀린다 */}
+        {!pane && <Btn variant="secondary" className={ORDER_BTN} onClick={() => startReorder(kind)} disabled={count < 2}>순서 바꾸기</Btn>}
+        {newBtn(onNew, ORDER_BTN)}
+      </>
+    );
 
   return (
     <>
@@ -1008,11 +1062,11 @@ export default function AdminShopPage() {
               right={
                 <>
                   {pendingInv.length > 0 && (
-                    <Btn variant="secondary" onClick={importInvRoles} disabled={isImporting}>
+                    <Btn variant="secondary" onClick={importInvRoles} disabled={isImporting || reorder === "reg"}>
                       {isImporting ? "가져오는 중..." : `표기 역할 가져오기 (${pendingInv.length})`}
                     </Btn>
                   )}
-                  {newBtn(openNewReg)}
+                  {orderBtns("reg", regItems.length, openNewReg)}
                 </>
               }
             >
@@ -1025,10 +1079,12 @@ export default function AdminShopPage() {
             </Toolbar>
             <DataTable
               columns={regCols}
-              rows={shownReg}
+              rows={reorder === "reg" ? byDraft(shownReg) : shownReg}
               rowKey={(it) => it._id}
-              onRowClick={(it) => { fillRegForm(it); setPane("reg"); }}
-              selectedKey={pane === "reg" ? itemForm.id : null}
+              onRowClick={reorder === "reg" ? undefined : (it) => { fillRegForm(it); setPane("reg"); }}
+              selectedKey={reorder === "reg" ? null : pane === "reg" ? itemForm.id : null}
+              onReorder={reorder === "reg" ? applyVisibleOrder : undefined}
+              reorderLocked={savingOrder}
               empty={regItems.length === 0 ? "등록된 아이템이 없습니다." : noResult}
             />
 
@@ -1072,7 +1128,7 @@ export default function AdminShopPage() {
                       theme="light"
                       buttonClassName={DD_BTN}
                       value={itemForm.roleId}
-                      onChange={(v) => changeItemRole(v)}
+                      onChange={(v) => setItemForm({ ...itemForm, roleId: v })}
                       placeholder="역할을 선택하세요"
                       options={[...(itemForm.type === "item" ? [{ value: "", label: "역할 없음 (사이트 보유)" }] : []), ...guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))]}
                     />
@@ -1086,18 +1142,13 @@ export default function AdminShopPage() {
                   <input type="text" value={itemForm.imageUrl} onChange={(e) => setItemForm({ ...itemForm, imageUrl: e.target.value })} placeholder="https://..." className={inputClass} />
                 </Field>
 
-                <Two>
-                  <Field label="표기 색상" hint="비우면 유형 기본색">
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={itemForm.color || itemTypeColor(itemForm.type)} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })}
-                        className="w-10 h-10 shrink-0 rounded-lg border border-[#a3a3a3] bg-white p-1" />
-                      <input type="text" value={itemForm.color} maxLength={7} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })} placeholder={itemTypeColor(itemForm.type)} className={inputClass} />
-                    </div>
-                  </Field>
-                  <Field label="정렬" hint="작을수록 앞">
-                    <input type="number" value={itemForm.sortOrder} onChange={(e) => setItemForm({ ...itemForm, sortOrder: e.target.value })} placeholder="0" className={inputClass} />
-                  </Field>
-                </Two>
+                <Field label="표기 색상" hint="비우면 유형 기본색">
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={itemForm.color || itemTypeColor(itemForm.type)} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })}
+                      className="w-10 h-10 shrink-0 rounded-lg border border-[#a3a3a3] bg-white p-1" />
+                    <input type="text" value={itemForm.color} maxLength={7} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })} placeholder={itemTypeColor(itemForm.type)} className={inputClass} />
+                  </div>
+                </Field>
 
                 {itemForm.type === "role" && (
                   <Field label="시즌 전환">
@@ -1109,19 +1160,27 @@ export default function AdminShopPage() {
                   <Toggle on={itemForm.visible} onClick={() => setItemForm({ ...itemForm, visible: !itemForm.visible })} onLabel="표시" offLabel="숨김" />
                 </Field>
 
-                {/* ── 효과 — 연결 역할을 가진 사람에게 붙는다(저장: 그 역할의 RoleConfig). 기프트카드는 역할이 없어 숨긴다 ── */}
+                {/* ── 효과 — 아이템 자체에 저장, 이 아이템을 인벤토리에 가진 사람에게 적용(디스코드 역할 없어도). 기프트카드는 효과가 없어 숨긴다 ── */}
                 {itemForm.type !== "physical" && (
                   <section className="mt-2 pt-4 border-t border-[#ededed]">
                     <h3 className="text-[14px] font-black tracking-tight mb-3">효과</h3>
-                    {!itemForm.roleId && <p className={`${fieldNote} !mt-0 mb-3`}>디스코드 역할을 연결하면 적용됩니다</p>}
                     <EffectsEditor
-                      buffXp={itemForm.buffXp}
+                      chatBuffXp={itemForm.chatBuffXp}
+                      voiceBuffXp={itemForm.voiceBuffXp}
                       attendBuffXp={itemForm.attendBuffXp}
                       list={itemForm.effects}
-                      disabled={!itemForm.roleId}
                       channels={guildChannels}
                       onChange={(patch) => setItemForm((f) => ({ ...f, ...patch }))}
                     />
+                    {regRoleBuff.length > 0 && (
+                      <div className="mt-5">
+                        <div className={labelClass}>역할 버프</div>
+                        <div className="flex items-start justify-between gap-3 rounded-lg bg-[#f7f7f7] px-3.5 py-3 text-[13px]">
+                          <span className="min-w-0 font-bold text-[#131313] break-keep">{regRoleBuff.map((l) => <span key={l} className="block">{l}</span>)}</span>
+                          <Link href="/admin/bot?tab=roles" className="shrink-0 text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313]">레벨 설정 →</Link>
+                        </div>
+                      </div>
+                    )}
                   </section>
                 )}
                 <HiddenSubmit />
@@ -1133,7 +1192,7 @@ export default function AdminShopPage() {
         {/* ═══ 상품 관리 ═══ */}
         {tab === "products" && (
           <>
-            <Toolbar right={newBtn(openNewProduct)}>
+            <Toolbar right={orderBtns("product", items.length, openNewProduct)}>
               <SearchInput value={q} onChange={setQ} placeholder="상품명 · 역할" />
               <Segmented
                 options={[
@@ -1148,10 +1207,12 @@ export default function AdminShopPage() {
             {isLoading ? <EmptyRow>불러오는 중...</EmptyRow> : (
               <DataTable
                 columns={productCols}
-                rows={shownProducts}
+                rows={reorder === "product" ? byDraft(shownProducts) : shownProducts}
                 rowKey={(it) => it._id}
-                onRowClick={(it) => { fillItemForm(it); setIsRoleOpen(false); setPane("product"); }}
-                selectedKey={pane === "product" ? form.id : null}
+                onRowClick={reorder === "product" ? undefined : (it) => { fillItemForm(it); setIsRoleOpen(false); setPane("product"); }}
+                selectedKey={reorder === "product" ? null : pane === "product" ? form.id : null}
+                onReorder={reorder === "product" ? applyVisibleOrder : undefined}
+                reorderLocked={savingOrder}
                 empty={items.length === 0 ? "등록된 상품이 없습니다." : noResult}
               />
             )}
@@ -1332,14 +1393,11 @@ export default function AdminShopPage() {
                   )}
                 </PaneSection>
 
-                {/* ── 재고 · 순서 ── */}
-                <PaneSection title="재고 · 순서">
+                {/* ── 재고 ── 순서는 목록의 '순서 바꾸기'로 끌어서 정한다 */}
+                <PaneSection title="재고">
                   <Two>
                     <Field label="재고">
                       <input type="number" min={-1} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="비우면 무제한" className={inputClass} />
-                    </Field>
-                    <Field label="추천 순서" hint="작을수록 상점 앞쪽 (추천순 기준)">
-                      <input type="number" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })} placeholder="0" className={inputClass} />
                     </Field>
                   </Two>
                 </PaneSection>

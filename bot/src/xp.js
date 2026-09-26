@@ -2,7 +2,8 @@
 import { EmbedBuilder } from "discord.js";
 import { UserXp, XpLog } from "./db.js";
 import { getLevelByXp, kstToday } from "./leveling.js";
-import { getRoleConfigs, heldEffects, effectXp, effectTimeOk, claimDaily, kstNow } from "./roleConfigs.js";
+import { getRoleConfigs } from "./roleConfigs.js";
+import { heldEffects, effectXp, effectTimeOk, claimDaily, kstNow } from "./itemEffects.js";
 import { getSettings } from "./botSettings.js";
 import { config } from "./config.js";
 
@@ -170,7 +171,7 @@ async function grantLevelUpEffects(member, gained) {
 }
 
 // 📌 "하루 1번" 아이템 효과 지급 — 하루 첫 채팅(firstChat) · 하루 음성 N분(voiceDaily)
-//    요일 · 시간대 조건과 test(e) 를 통과한 효과마다 claimDaily 자물쇠를 세우고, 통과한 것만 따로 지급한다.
+//    요일 · 시간대 조건과 test(e) 를 통과한 효과마다 claimDaily 자물쇠("<itemId>:<effectId>")를 세우고, 통과한 것만 따로 지급한다.
 //    meta: XpLog 에 남길 채널 정보. 오류는 효과별로 삼킨다 — 기존 지급을 막지 않게.
 export async function grantOnceEffects(member, on, { test = () => true, meta = {} } = {}) {
   let effects = [];
@@ -187,7 +188,7 @@ export async function grantOnceEffects(member, on, { test = () => true, meta = {
   for (const e of effects) {
     try {
       if (!effectTimeOk(e, kst) || !test(e)) continue;
-      if (!(await claimDaily(member.id, `${e.roleId}:${e.id}`, today))) continue;
+      if (!(await claimDaily(member.id, `${e.itemId}:${e.id}`, today))) continue;
       await grantXp(member, e.amount, { ...meta, reason: "effect" });
       console.log(`✨ 아이템 효과(${on}): ${member.displayName} +${e.amount.toLocaleString()}`);
     } catch (err) {

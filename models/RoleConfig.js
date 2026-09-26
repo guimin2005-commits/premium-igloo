@@ -10,11 +10,6 @@ const RoleConfigSchema = new mongoose.Schema({
   exclusive: { type: Boolean, default: false },
   buffXp: { type: Number, default: 0 },           // 채팅/음성 1회 지급당 추가 XP
   attendBuffXp: { type: Number, default: 0 },     // 출석체크 1회당 추가 XP
-  // 📌 조건 효과 — 아이템 등록 화면에서 정한다(이 역할이 연결된 아이템). 정의 · 문구 · 정리는 lib/itemEffects.js.
-  //    한 칸: { id, on, mode: "add"|"percent", amount, minMinutes?, everyN?, days?, hourFrom?, hourTo?, channelIds? }
-  //    저장 전에 normalizeEffects 로 정리하므로 스키마는 그대로 담기만 한다(`on` 경로가 문서의 on() 을 가리지 않게 Mixed).
-  //    봇 사본(bot/src/db.js)과 같은 모양 — 봇은 lean() 으로 읽는다. 키를 바꾸면 봇도 함께 고칠 것.
-  effects: { type: [mongoose.Schema.Types.Mixed], default: [] },
   createdAt: { type: Date, default: Date.now },
 });
 

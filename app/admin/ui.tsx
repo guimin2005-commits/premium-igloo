@@ -12,7 +12,7 @@
 //        조작 요소 테두리 #a3a3a3 · 강조 #e91e3f / 누름 #d01634. 모서리는 패널 rounded-2xl · 버튼/토글 rounded-full · 입력칸 rounded-lg.
 //    톤은 "사무적인 공식문서" — 장식 대신 선과 여백으로 나눈다.
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import { ADMIN_USERS } from "@/lib/admins";
@@ -393,6 +393,150 @@ export function StatusChip({ tone = "neutral", children, className = "" }: { ton
 
 // ── 표 ─────────────────────────────────────────────────────
 //    PC 는 전체 폭 표, 모바일(md 미만)은 줄 카드. onRowClick 이 있으면 줄을 눌러 상세를 연다.
+// ── 끌어서 순서 바꾸기 ─────────────────────────────────────
+//    DataTable 에 onReorder 를 주면 줄 앞에 손잡이가 붙는다. 손잡이를 끌어 놓으면 새 순서(키 배열)를 올려 준다.
+//    마우스 · 터치 모두 Pointer Events. 손잡이만 touch-action:none 이라 모바일에서도 목록 스크롤은 그대로 된다.
+//    손잡이에 포커스를 두고 ↑ ↓ 로도 한 칸씩 옮긴다. 화면 위 · 아래 끝으로 끌면 페이지가 따라 내려간다.
+type DragView = { from: number; to: number; dy: number; h: number };
+const moveKey = (keys: string[], from: number, to: number) => {
+  const next = keys.slice();
+  const [k] = next.splice(from, 1);
+  next.splice(to, 0, k);
+  return next;
+};
+function useRowDrag(keys: string[], onReorder?: (keys: string[]) => void, locked = false) {
+  const [view, setView] = useState<DragView | null>(null);
+  // 끄는 동안의 값 — 매 프레임 바뀌므로 상태가 아니라 ref 에 둔다(자동 스크롤 루프가 읽는다)
+  //    armed: 누른 뒤 실제로 6px 넘게 움직였는지 — 화면 끝 손잡이를 누르기만 해도 페이지가 저절로 흘러 줄이 옮겨지지 않게
+  const st = useRef<{ from: number; to: number; startY: number; lastY: number; downY: number; armed: boolean; tops: number[]; hs: number[]; raf: number } | null>(null);
+  // 키보드로 옮긴 뒤 그 줄 손잡이로 포커스를 되돌린다 — 아래로 옮기면 React 가 그 줄을 떼었다 붙여 포커스가 날아간다
+  const refocus = useRef<{ list: Element; key: string } | null>(null);
+  useLayoutEffect(() => {
+    const r = refocus.current;
+    if (!r) return;
+    refocus.current = null;
+    r.list.querySelector<HTMLElement>(`[data-drag-key="${CSS.escape(r.key)}"]`)?.focus();
+  });
+
+  const compute = useCallback(() => {
+    const s = st.current;
+    if (!s) return;
+    const n = s.tops.length;
+    // 목록 밖으로는 못 나가게 — 표 틀(overflow-hidden)에 잘리지 않도록
+    const minDy = s.tops[0] - s.tops[s.from];
+    const maxDy = s.tops[n - 1] + s.hs[n - 1] - (s.tops[s.from] + s.hs[s.from]);
+    const dy = Math.min(maxDy, Math.max(minDy, s.lastY + window.scrollY - s.startY));
+    const center = s.tops[s.from] + s.hs[s.from] / 2 + dy;
+    let to = s.from;
+    for (let j = s.from + 1; j < n; j++) if (center > s.tops[j] + s.hs[j] / 2) to = j;
+    for (let j = s.from - 1; j >= 0; j--) if (center < s.tops[j] + s.hs[j] / 2) to = j;
+    s.to = to;
+    setView({ from: s.from, to, dy, h: s.hs[s.from] });
+  }, []);
+
+  const tick = useCallback(() => {
+    const s = st.current;
+    if (!s) return;
+    const edge = 72;
+    const vh = window.innerHeight;
+    const v = !s.armed ? 0 : s.lastY < edge ? -Math.ceil((edge - s.lastY) / 6) : s.lastY > vh - edge ? Math.ceil((s.lastY - (vh - edge)) / 6) : 0;
+    if (v) {
+      window.scrollBy(0, v);
+      compute();
+    }
+    s.raf = requestAnimationFrame(tick);
+  }, [compute]);
+
+  useEffect(() => () => { if (st.current) cancelAnimationFrame(st.current.raf); }, []);
+  // 순서 바꾸기가 끝나 손잡이가 사라지면(저장 · 취소) 끌던 것을 정리한다 — 잡힌 손잡이가 통째로 빠지면 놓기 이벤트가 오지 않는다
+  const enabled = !!onReorder && !locked;
+  useEffect(() => {
+    if (enabled) return;
+    const s = st.current;
+    if (!s) return;
+    cancelAnimationFrame(s.raf);
+    st.current = null;
+    setView(null);
+  }, [enabled]);
+
+  const finish = (commit: boolean) => {
+    const s = st.current;
+    if (!s) return;
+    cancelAnimationFrame(s.raf);
+    st.current = null;
+    setView(null);
+    if (commit && onReorder && s.to !== s.from) onReorder(moveKey(keys, s.from, s.to));
+  };
+
+  const handleProps = (i: number) => ({
+    "data-drag-key": keys[i],
+    "aria-disabled": locked || undefined,
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+      if (!enabled || (e.pointerType === "mouse" && e.button !== 0)) return;
+      const list = e.currentTarget.closest("[data-drag-list]");
+      if (!list) return;
+      const rows = Array.from(list.querySelectorAll<HTMLElement>("[data-drag-row]"));
+      if (rows.length < 2) return;
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const rects = rows.map((r) => r.getBoundingClientRect());
+      st.current = { from: i, to: i, startY: e.clientY + window.scrollY, lastY: e.clientY, downY: e.clientY, armed: false, tops: rects.map((r) => r.top + window.scrollY), hs: rects.map((r) => r.height), raf: 0 };
+      setView({ from: i, to: i, dy: 0, h: rects[i].height });
+      st.current.raf = requestAnimationFrame(tick);
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      const s = st.current;
+      if (!s) return;
+      s.lastY = e.clientY;
+      if (!s.armed && Math.abs(e.clientY - s.downY) > 6) s.armed = true;
+      compute();
+    },
+    onPointerUp: () => finish(true),
+    onPointerCancel: () => finish(false),
+    onLostPointerCapture: () => finish(true),
+    onClick: (e: React.MouseEvent) => e.stopPropagation(),
+    onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
+      if (!enabled || !onReorder) return;
+      const to = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
+      if (to < 0 || to >= keys.length) return;
+      e.preventDefault();
+      const list = e.currentTarget.closest("[data-drag-list]");
+      if (list) refocus.current = { list, key: keys[i] };
+      onReorder(moveKey(keys, i, to));
+    },
+  });
+
+  // 끄는 줄은 손가락을 따라가고, 그 사이 줄들은 한 칸씩 비켜선다
+  const rowStyle = (i: number): React.CSSProperties | undefined => {
+    if (!view) return undefined;
+    const { from, to, dy, h } = view;
+    if (i === from) return { transform: `translateY(${dy}px)`, position: "relative", zIndex: 2 };
+    const ease = "transform 150ms ease";
+    if (from < to && i > from && i <= to) return { transform: `translateY(${-h}px)`, transition: ease };
+    if (to < from && i >= to && i < from) return { transform: `translateY(${h}px)`, transition: ease };
+    return { transform: "translateY(0)", transition: ease };
+  };
+
+  return { dragging: view != null, dragFrom: view?.from ?? -1, handleProps, rowStyle };
+}
+
+function DragHandle(props: ReturnType<ReturnType<typeof useRowDrag>["handleProps"]>) {
+  return (
+    <button
+      type="button"
+      aria-label="끌어서 순서 바꾸기"
+      {...props}
+      className="touch-none cursor-grab active:cursor-grabbing inline-flex items-center justify-center w-8 h-8 -my-1 shrink-0 rounded-lg text-[#8a8a8a] hover:bg-[#f2f2f2] hover:text-[#131313] outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40"
+    >
+      <svg aria-hidden viewBox="0 0 20 20" className="w-4 h-4" fill="currentColor">
+        <circle cx="7.5" cy="5" r="1.5" /><circle cx="12.5" cy="5" r="1.5" />
+        <circle cx="7.5" cy="10" r="1.5" /><circle cx="12.5" cy="10" r="1.5" />
+        <circle cx="7.5" cy="15" r="1.5" /><circle cx="12.5" cy="15" r="1.5" />
+      </svg>
+    </button>
+  );
+}
+
 export type Column<T> = {
   key: string;
   label: React.ReactNode;
@@ -410,6 +554,8 @@ export function DataTable<T>({
   selectedKey,
   empty = "항목이 없습니다.",
   className = "",
+  onReorder,
+  reorderLocked = false,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -418,36 +564,45 @@ export function DataTable<T>({
   selectedKey?: string | null;
   empty?: React.ReactNode;
   className?: string;
+  onReorder?: (keys: string[]) => void; // 주면 순서 바꾸기 모드 — 줄 앞 손잡이로 끌어 옮긴다(이때는 줄 누르기 없음)
+  reorderLocked?: boolean; // 저장하는 동안 — 손잡이는 그대로 두고(표가 흔들리지 않게) 끌기만 막는다
 }) {
+  const dnd = useRowDrag(rows.map(rowKey), onReorder, reorderLocked);
   if (rows.length === 0) return <EmptyRow>{empty}</EmptyRow>;
+  const sortable = !!onReorder;
+  const liftCls = "bg-white shadow-[0_14px_30px_-14px_rgba(0,0,0,0.35)]";
   const al = (a?: string) => (a === "right" ? "text-right" : a === "center" ? "text-center" : "text-left");
   const titleCols = columns.filter((c) => c.mobile === "title");
   const metaCols = columns.filter((c) => c.mobile !== "title" && c.mobile !== "hide");
   return (
-    <div className={`min-w-0 rounded-2xl border border-[#ededed] bg-white overflow-hidden ${className}`}>
+    <div className={`min-w-0 rounded-2xl border border-[#ededed] bg-white overflow-hidden ${dnd.dragging ? "select-none" : ""} ${className}`}>
       {/* PC */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-[#ededed] text-[12px] text-[#5a5a5a]">
+              {sortable && <th aria-label="순서" className="w-10 pl-3 py-2.5" />}
               {columns.map((c, i) => (
                 <th key={c.key} className={`py-2.5 font-bold whitespace-nowrap ${al(c.align)} ${i === 0 ? "pl-5" : "pl-4"} ${i === columns.length - 1 ? "pr-5" : ""} ${c.className || ""}`}>{c.label}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#ededed]">
-            {rows.map((r) => {
+          <tbody className="divide-y divide-[#ededed]" data-drag-list>
+            {rows.map((r, ri) => {
               const k = rowKey(r);
               const sel = selectedKey != null && selectedKey === k;
               return (
                 <tr
                   key={k}
+                  data-drag-row
+                  style={dnd.rowStyle(ri)}
                   onClick={onRowClick ? () => onRowClick(r) : undefined}
                   tabIndex={onRowClick ? 0 : undefined}
                   aria-selected={onRowClick ? sel : undefined}
                   onKeyDown={onRowClick ? (e) => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRowClick(r); } } : undefined}
-                  className={`${onRowClick ? "cursor-pointer outline-none focus-visible:bg-[#f2f2f2] focus-visible:shadow-[inset_3px_0_0_#131313]" : ""} ${sel ? "bg-[#f2f2f2]" : onRowClick ? "hover:bg-[#f7f7f7]" : ""} transition-colors`}
+                  className={`${onRowClick ? "cursor-pointer outline-none focus-visible:bg-[#f2f2f2] focus-visible:shadow-[inset_3px_0_0_#131313]" : ""} ${sel ? "bg-[#f2f2f2]" : onRowClick ? "hover:bg-[#f7f7f7]" : ""} ${dnd.dragFrom === ri ? liftCls : ""} transition-colors`}
                 >
+                  {sortable && <td className="w-10 pl-3 py-3 align-middle"><DragHandle {...dnd.handleProps(ri)} /></td>}
                   {columns.map((c, i) => (
                     <td key={c.key} className={`py-3 align-middle ${c.wrap ? "" : "whitespace-nowrap"} ${al(c.align)} ${i === 0 ? "pl-5" : "pl-4"} ${i === columns.length - 1 ? "pr-5" : ""} ${c.className || ""}`}>{c.render(r)}</td>
                   ))}
@@ -458,8 +613,8 @@ export function DataTable<T>({
         </table>
       </div>
       {/* 모바일 — 줄 카드 */}
-      <div className="md:hidden divide-y divide-[#ededed]">
-        {rows.map((r) => {
+      <div className="md:hidden divide-y divide-[#ededed]" data-drag-list>
+        {rows.map((r, ri) => {
           const k = rowKey(r);
           const sel = selectedKey != null && selectedKey === k;
           const Body = (
@@ -472,6 +627,14 @@ export function DataTable<T>({
               )}
             </>
           );
+          if (sortable) {
+            return (
+              <div key={k} data-drag-row style={dnd.rowStyle(ri)} className={`flex items-center gap-2 pl-2 pr-4 py-3.5 bg-white ${dnd.dragFrom === ri ? liftCls : ""}`}>
+                <DragHandle {...dnd.handleProps(ri)} />
+                <div className="min-w-0 flex-1">{Body}</div>
+              </div>
+            );
+          }
           return onRowClick ? (
             <button key={k} type="button" onClick={() => onRowClick(r)} className={`block w-full text-left px-4 py-3.5 ${sel ? "bg-[#f2f2f2]" : "active:bg-[#f7f7f7]"}`}>{Body}</button>
           ) : (

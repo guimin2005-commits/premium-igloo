@@ -1,11 +1,13 @@
 // ── 채팅 XP (쿨타임 원자적 갱신으로 중복 지급 방지) ──
 //    지급량은 [chatXpMin, chatXpMax] 사이의 랜덤 정수. 강화 단계(UserXp.chatEnhance)마다
 //    양끝에 chatEnhanceStep 씩 더해진다 — 사이트 lib/enhance.js chatRange 와 같은 식.
-//    📌 아이템 효과: "채팅할 때마다"는 이 1회 지급에 더하고(percent 는 굴린 값 기준),
+//    📌 아이템 효과: "채팅 1회당"은 이 1회 지급에 더하고(percent 는 굴린 값 기준),
 //       "하루 첫 채팅"은 XP 를 받은 메시지에 한해 하루 1번 따로 준다(XpLog reason "effect").
+//       효과는 디스코드 역할이 아니라 인벤토리 보유 아이템 기준이다(itemEffects.js — 아이템 기본 효과 포함).
 import { Events } from "discord.js";
 import { UserXp, isDuplicateKeyError } from "../db.js";
-import { getBuffXp, effectXp } from "../roleConfigs.js";
+import { getBuffXp } from "../roleConfigs.js";
+import { effectXp } from "../itemEffects.js";
 import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getActiveBoostXp } from "../botSettings.js";
 import { grantXp, grantOnceEffects } from "../xp.js";

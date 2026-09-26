@@ -9,6 +9,7 @@ import { Client, GatewayIntentBits, Events } from "discord.js";
 import { config, nudgeOnly } from "./config.js";
 import { connectDb, disconnectDb } from "./db.js";
 import { refreshRoleConfigs, startRoleConfigLoop } from "./roleConfigs.js";
+import { refreshItemEffects, startItemEffectLoop } from "./itemEffects.js";
 import { refreshChannelConfigs, startChannelConfigLoop } from "./channelConfigs.js";
 import { refreshBotSettings, startBotSettingLoop } from "./botSettings.js";
 import { registerChatXp } from "./features/chatXp.js";
@@ -46,11 +47,12 @@ client.once(Events.ClientReady, async (c) => {
   await registerCommandDefinitions(c);
   console.log("✅ 슬래시 커맨드 등록 완료");
 
-  await Promise.all([refreshRoleConfigs(), refreshChannelConfigs(), refreshBotSettings()]);
+  await Promise.all([refreshRoleConfigs(), refreshItemEffects(), refreshChannelConfigs(), refreshBotSettings()]);
   startRoleConfigLoop();
+  startItemEffectLoop(); // 보유 아이템 효과 — 아이템 등록 · 구매 변경을 1분 주기로 반영
   startChannelConfigLoop();
   startBotSettingLoop();
-  console.log("✅ 설정 로드 완료 — 역할·채널·기본 정책 (1분 주기 갱신)");
+  console.log("✅ 설정 로드 완료 — 역할·아이템 효과·채널·기본 정책 (1분 주기 갱신)");
 
   startVoiceXpLoop(c);
   startGrantQueue(c);

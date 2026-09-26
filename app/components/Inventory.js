@@ -160,7 +160,7 @@ const InvDetail = ({ it, compact = false }) => {
         )}
       </div>
 
-      {/* 📌 효과 — 서버(/api/shop/my-items)가 역할 연결 아이템에 붙인 문장(effectLines)을 한 줄씩 */}
+      {/* 📌 효과 — 서버(/api/shop/my-items)가 붙인 문장(effectLines: 아이템 자체 효과 + 지금 가진 역할의 역할 버프)을 한 줄씩 */}
       {lines.length > 0 && (
         <div className={compact ? "mt-4" : "mt-5"}>
           <p className="text-[11px] font-bold text-white/45 mb-1.5">효과</p>
@@ -273,6 +273,20 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
   );
 };
 
+// 📌 새 보유 목록을 받을 때 — 디스코드 역할 확인에 실패한 응답(synced:false)은 역할로 가진 것((B) r: 항목)이 빠져 온다.
+//    그 응답이 멀쩡하던 목록을 덮으면 레벨 보상 · 역할 아이템이 새로고침 전까지 사라지므로, 직전 목록의 역할 항목을 남긴다.
+//    다음에 확인에 성공한 응답(synced:true)이 오면 그대로 갈아끼운다(정말 뺏긴 역할은 그때 빠진다).
+export function mergeMyItems(prev, next) {
+  if (!next || next.synced !== false || !Array.isArray(prev?.items)) return next;
+  const have = new Set((next.items || []).map((it) => it.uid));
+  const keep = prev.items.filter((it) => String(it.uid || "").startsWith("r:") && !have.has(it.uid));
+  if (!keep.length) return next;
+  // 등급 · 레벨 보상은 서버 순서처럼 맨 앞
+  const top = keep.filter((it) => it.source === "level");
+  const rest = keep.filter((it) => it.source !== "level");
+  return { ...next, items: [...top, ...(next.items || []), ...rest] };
+}
+
 // 📌 그 자리에서 여는 인벤토리 — 내 정보 · ARCTIC 이 쓴다. 열 때마다 /api/shop/my-items 를 새로 읽는다.
 //    처음 읽기 전에는 빈 가방 문구 대신 불러오는 중. 여닫는 소리는 레벨 가방과 같다(낮은음 → 높은음 / 반대).
 export function InventoryPopup({ open, onClose }) {
@@ -288,7 +302,7 @@ export function InventoryPopup({ open, onClose }) {
       .then((d) => {
         if (!alive) return;
         // 실패는 빈 가방과 구분한다 — 받아 둔 목록이 있으면 그대로 두고 문구만 바꾼다
-        if (d?.success) setData(d.data);
+        if (d?.success) setData((cur) => mergeMyItems(cur, d.data));
         else setData((cur) => ({ items: cur?.items || [], error: d?.error || "불러오지 못했습니다" }));
       })
       .catch(() => { if (alive) setData((cur) => ({ items: cur?.items || [], error: "불러오지 못했습니다" })); });

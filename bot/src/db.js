@@ -19,8 +19,8 @@ const UserXpSchema = new mongoose.Schema({
   // 오늘(KST) 음성 누적 분 — 출석 자동 지급 판정용
   voiceTodayMin: { type: Number, default: 0 },
   voiceTodayDate: { type: String, default: "" },
-  // 📌 아이템 효과 "하루 1번" 기록 — 키 "<roleId>:<effectId>" → 마지막으로 받은 날(KST "YYYY-MM-DD").
-  //    하루 첫 채팅 · 하루 음성 N분 효과가 roleConfigs.js claimDaily 로 조건부 갱신해 하루 한 번만 지급한다.
+  // 📌 아이템 효과 "하루 1번" 기록 — 키 "<itemId>:<effectId>" → 마지막으로 받은 날(KST "YYYY-MM-DD").
+  //    하루 첫 채팅 · 하루 음성 N분 효과가 itemEffects.js claimDaily 로 조건부 갱신해 하루 한 번만 지급한다.
   //    (Map 키에 점 · $ 가 들어가면 안 되므로 claimDaily 가 키를 정리해서 쓴다)
   effectDaily: { type: Map, of: String, default: {} },
   // 지금까지 도달한 최고 레벨 — 레벨업 효과를 같은 레벨에서 두 번 주지 않으려고(xp.js). 사이트 models/UserXp.js 와 같이
@@ -68,13 +68,34 @@ const RoleConfigSchema = new mongoose.Schema({
   exclusive: { type: Boolean, default: false },  // 티어 사다리 — 최상위 하나만 유지
   buffXp: { type: Number, default: 0 },         // 채팅/음성 1회당 추가 XP
   attendBuffXp: { type: Number, default: 0 },   // 출석 1회당 추가 XP
-  // 📌 조건 효과 — 사이트 아이템 등록 화면에서 정한다(이 역할이 연결된 아이템). 규칙 원본은 사이트 lib/itemEffects.js,
-  //    봇 사본은 roleConfigs.js. 한 칸: { id, on, mode, amount, minMinutes?, everyN?, days?, hourFrom?, hourTo?, channelIds? }
-  //    봇은 읽기만 한다(lean). 사이트 models/RoleConfig.js 와 같은 모양(Mixed 배열) — 키를 바꾸면 같이 고칠 것.
-  effects: { type: [mongoose.Schema.Types.Mixed], default: [] },
   createdAt: { type: Date, default: Date.now },
 });
 export const RoleConfig = mongoose.models.RoleConfig || mongoose.model("RoleConfig", RoleConfigSchema);
+
+// 📌 아이템 등록 (사이트 models/Item.js — 컬렉션 items) · ARCTIC 상품 (사이트 models/ShopItem.js — 컬렉션 shopitems)
+//    봇은 읽기만 한다(lean) — 아이템 효과 보유 판정(itemEffects.js)에 필요한 칸만 옮겨 둔다. 절대 저장하지 말 것.
+//    효과 칸의 모양 · 규칙 원본은 사이트 lib/itemEffects.js — 키를 바꾸면 사이트 모델과 같이 고칠 것.
+const ItemSchema = new mongoose.Schema({
+  name: { type: String, default: "" },
+  type: { type: String, default: "item" },       // "role" | "perk" | "item" | "physical"(기프트카드 — 효과 없음)
+  roleId: { type: String, default: "" },
+  visible: { type: Boolean, default: true },     // false 면 (B) 역할 보유 판정에서 "없는 것"으로 본다
+  sortOrder: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now },
+  chatBuffXp: { type: Number, default: 0 },      // 채팅 1회당 +N XP
+  voiceBuffXp: { type: Number, default: 0 },     // 음성 1회당 +N XP
+  attendBuffXp: { type: Number, default: 0 },    // 출석 시 +N XP
+  // 조건 효과 — 한 칸: { id, on, mode, amount, minMinutes?, everyN?, days?, hourFrom?, hourTo?, channelIds? }
+  effects: { type: [mongoose.Schema.Types.Mixed], default: [] },
+});
+export const Item = mongoose.models.Item || mongoose.model("Item", ItemSchema);
+
+const ShopItemSchema = new mongoose.Schema({
+  itemId: { type: String, default: "" },         // 아이템 등록(Item) 참조 — "" 이면 직접 설정한 상품
+  roleId: { type: String, default: "" },
+  type: { type: String, default: "role" },
+});
+export const ShopItem = mongoose.models.ShopItem || mongoose.model("ShopItem", ShopItemSchema);
 
 // 레벨 대시보드에서 관리하는 채널/카테고리별 XP 정책
 const ChannelConfigSchema = new mongoose.Schema({
@@ -172,7 +193,7 @@ const PurchaseSchema = new mongoose.Schema({
   userId: { type: String, required: true, index: true },
   userName: { type: String, default: "" },
   itemId: { type: String, required: true },
-  itemRef: { type: String, default: "" }, // 아이템 등록(사이트 models/Item) id 스냅샷 — 봇은 쓰지 않고 보존만 한다
+  itemRef: { type: String, default: "" }, // 아이템 등록(사이트 models/Item) id 스냅샷 — 봇은 아이템 효과 보유 판정(itemEffects.js)에 읽기만 한다
   itemName: { type: String, default: "" },
   itemType: { type: String, default: "role" },
   roleId: { type: String, default: "" },

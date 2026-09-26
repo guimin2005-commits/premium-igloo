@@ -56,7 +56,7 @@ export default function ArcticHome({
 
   // 지금 잘 나가는 — 판매 수 · 추천 순서 · 최신
   const hot = useMemo(
-    () => [...active].sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0) || (b.sortOrder || 0) - (a.sortOrder || 0) || created(b) - created(a)).slice(0, 2),
+    () => [...active].sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0) || (a.sortOrder || 0) - (b.sortOrder || 0) || created(b) - created(a)).slice(0, 2),
     [active]
   );
 
@@ -69,7 +69,7 @@ export default function ArcticHome({
     const afford = isLoggedIn && budget != null ? cands.filter((it) => cardPrice(it) <= budget) : cands;
     const pool = [...(afford.length >= 2 ? afford : cands)];
     const score = (it: any) => (it.type === "perk" || it.type === "item" ? 1 : 0);
-    pool.sort((a, b) => score(b) - score(a) || (b.sortOrder || 0) - (a.sortOrder || 0));
+    pool.sort((a, b) => score(b) - score(a) || (a.sortOrder || 0) - (b.sortOrder || 0));
     let picks = pool.slice(0, 2);
     let title = tier ? `${tier.name}에게 맞는` : "처음이라면";
     if (picks.length < 2) {

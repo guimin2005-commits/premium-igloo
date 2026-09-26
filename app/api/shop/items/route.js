@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import { getShopAccess } from "@/lib/shopAccess";
 import { isItemType, itemSnapshot, normalizeIcon, normalizeColor, normalizeDescription } from "@/lib/items";
+import mongoose from "mongoose";
 import ShopItem from "@/models/ShopItem";
 import Item from "@/models/Item";
 
@@ -103,8 +104,14 @@ export async function POST(request) {
       // 빈 값이면 무제한(-1)
       stock: b.stock === "" || b.stock == null ? -1 : Math.max(-1, Math.floor(Number(b.stock))),
       active: b.active !== false,
-      sortOrder: Math.floor(Number(b.sortOrder) || 0),
     };
+    // 📌 순서 — 관리자 상점 관리는 끌어서 정한다(아래 PATCH). 값을 안 보내거나 비우면 수정 때는 그대로 두고,
+    //    새로 만들 때는 맨 뒤에 붙인다(작을수록 앞). 상점 인라인 폼처럼 숫자를 보내면 그 값을 쓴다.
+    if (b.sortOrder !== "" && b.sortOrder != null) payload.sortOrder = Math.floor(Number(b.sortOrder) || 0);
+    else if (!b.id) {
+      const last = await ShopItem.findOne({}, { sortOrder: 1 }).sort({ sortOrder: -1 }).lean();
+      payload.sortOrder = Math.floor(Number(last?.sortOrder) || 0) + 1;
+    }
 
     const doc = b.id
       ? await ShopItem.findByIdAndUpdate(b.id, payload, { new: true })
@@ -113,6 +120,25 @@ export async function POST(request) {
     return NextResponse.json({ success: true, data: doc });
   } catch (e) {
     return NextResponse.json({ success: false }, { status: 500 });
+  }
+}
+
+// ── [순서 저장] 관리자 전용 — { order: [상품 id, ...] } 앞에서부터 0, 1, 2 … ──
+//    상점 관리에서 끌어 놓은 순서를 한 번에 쓴다. 목록에 없는 상품(그 사이 새로 생긴 것)은 건드리지 않는다.
+export async function PATCH(request) {
+  try {
+    if (!(await requireAdmin())) {
+      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+    }
+    const b = await request.json().catch(() => ({}));
+    const ids = [...new Set((Array.isArray(b?.order) ? b.order : []).map((v) => String(v || "")))].filter((v) => mongoose.isValidObjectId(v)).slice(0, 1000);
+    if (ids.length === 0) return NextResponse.json({ success: false, message: "순서를 받지 못했습니다." }, { status: 400 });
+    await connectToDatabase();
+    await ShopItem.bulkWrite(ids.map((id, i) => ({ updateOne: { filter: { _id: id }, update: { $set: { sortOrder: i } } } })), { ordered: false });
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    console.error("상품 순서 저장 오류:", e);
+    return NextResponse.json({ success: false, message: "순서를 저장하지 못했습니다." }, { status: 500 });
   }
 }
 

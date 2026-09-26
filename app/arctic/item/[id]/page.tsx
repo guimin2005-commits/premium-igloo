@@ -246,6 +246,21 @@ export default function ItemDetailPage() {
               <p className="text-[14px] text-[#5a5a5a] leading-relaxed mb-6 whitespace-pre-wrap break-keep">{item.description}</p>
             )}
 
+            {/* 📌 효과 — 사면 붙는 효과(등록 아이템 효과 + 지급 역할의 역할 버프). 서버가 인벤토리와 같은 문장으로 준다 */}
+            {Array.isArray(item.effectLines) && item.effectLines.length > 0 && (
+              <div className="mb-6">
+                <p className="text-xs font-bold text-[#5a5a5a] mb-2">효과</p>
+                <ul className="rounded-xl bg-white border border-[#ededed] divide-y divide-[#ededed]">
+                  {item.effectLines.map((line: string, i: number) => (
+                    <li key={i} className="flex items-start gap-2.5 px-4 py-3 text-[13px] font-bold text-[#131313] break-keep">
+                      <span aria-hidden className="mt-[7px] w-1.5 h-1.5 rounded-full bg-[#e91e3f] shrink-0" />
+                      <span className="min-w-0">{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {/* 상세 정보 */}
             <div className="rounded-xl bg-white border border-[#ededed] divide-y divide-[#ededed] mb-6">
               {[

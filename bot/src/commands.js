@@ -5,7 +5,8 @@ import { getCumulativeXpByLevel, kstToday } from "./leveling.js";
 import { grantXp, EMBED_COLOR, EMBED_FOOTER } from "./xp.js";
 import { config } from "./config.js";
 import { getSettings } from "./botSettings.js";
-import { getAttendBuffXp, getAttendEffectXp } from "./roleConfigs.js";
+import { getAttendBuffXp } from "./roleConfigs.js";
+import { getAttendEffectXp } from "./itemEffects.js";
 
 const definitions = [
   new SlashCommandBuilder().setName("레벨").setDescription("다음 레벨까지 필요한 XP를 확인합니다."),
@@ -41,7 +42,7 @@ async function handleAttend(interaction) {
     return interaction.reply({ content: "오늘은 이미 출석했습니다. 내일 다시 체크해 주세요.", flags: MessageFlags.Ephemeral });
   }
 
-  // 아이템 효과 "출석할 때" · "출석 N번째마다"(방금 올린 누적 출석 수 기준)도 같은 지급에 더한다 — 음성 자동 출석과 같은 규칙
+  // 아이템 효과 "출석 시" · "출석 N번째마다"(방금 올린 누적 출석 수 기준)도 같은 지급에 더한다 — 음성 자동 출석과 같은 규칙
   const amount =
     (s.attendXp || 0) + getAttendBuffXp(interaction.member) + getAttendEffectXp(interaction.member, lock.attendCount);
   if (amount > 0) await grantXp(interaction.member, amount, { reason: "attend" });
