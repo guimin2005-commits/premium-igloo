@@ -6,7 +6,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import { getShopAccess } from "@/lib/shopAccess";
-import { isItemType, itemSnapshot, normalizeIcon, normalizeColor } from "@/lib/items";
+import { isItemType, itemSnapshot, normalizeIcon, normalizeColor, normalizeDescription } from "@/lib/items";
 import ShopItem from "@/models/ShopItem";
 import Item from "@/models/Item";
 
@@ -88,7 +88,8 @@ export async function POST(request) {
       itemId: linked ? String(linked._id) : "",
       itemImageUrl: linked ? String(linked.imageUrl || "").trim() : "",
       name: b.name.trim(),
-      description: (b.description || "").trim(),
+      // 줄바꿈 허용 · 300자 — 아이템 설명과 같은 규칙
+      description: normalizeDescription(b.description),
       imageUrl: (b.imageUrl || "").trim(),
       icon: normalizeIcon(b.icon),
       color: normalizeColor(b.color),

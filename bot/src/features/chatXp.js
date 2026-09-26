@@ -1,12 +1,14 @@
 // ── 채팅 XP (쿨타임 원자적 갱신으로 중복 지급 방지) ──
 //    지급량은 [chatXpMin, chatXpMax] 사이의 랜덤 정수. 강화 단계(UserXp.chatEnhance)마다
 //    양끝에 chatEnhanceStep 씩 더해진다 — 사이트 lib/enhance.js chatRange 와 같은 식.
+//    📌 아이템 효과: "채팅할 때마다"는 이 1회 지급에 더하고(percent 는 굴린 값 기준),
+//       "하루 첫 채팅"은 XP 를 받은 메시지에 한해 하루 1번 따로 준다(XpLog reason "effect").
 import { Events } from "discord.js";
 import { UserXp, isDuplicateKeyError } from "../db.js";
-import { getBuffXp } from "../roleConfigs.js";
+import { getBuffXp, effectXp } from "../roleConfigs.js";
 import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getActiveBoostXp } from "../botSettings.js";
-import { grantXp } from "../xp.js";
+import { grantXp, grantOnceEffects } from "../xp.js";
 import { config } from "../config.js";
 
 export function registerChatXp(client) {
@@ -49,13 +51,17 @@ export function registerChatXp(client) {
       const rolled = min + Math.floor(Math.random() * (max - min + 1));
 
       const amount =
-        rolled + getBuffXp(message.member) + channelPolicy.boostXp + getActiveBoostXp(message.member, message.channel);
+        rolled +
+        getBuffXp(message.member) +
+        channelPolicy.boostXp +
+        getActiveBoostXp(message.member, message.channel) +
+        effectXp(message.member, "chat", { base: rolled, channel: message.channel });
 
-      await grantXp(message.member, amount, {
-        reason: "chat",
-        channelId: message.channel.id,
-        channelName: message.channel.name || "",
-      });
+      const where = { channelId: message.channel.id, channelName: message.channel.name || "" };
+      await grantXp(message.member, amount, { reason: "chat", ...where });
+
+      // 하루 첫 채팅 효과 — 쿨타임을 통과해 XP 를 받은 메시지에서만 (오류는 안에서 삼킨다)
+      await grantOnceEffects(message.member, "firstChat", { meta: where });
     } catch (e) {
       console.error("채팅 XP 오류:", e.message);
     }

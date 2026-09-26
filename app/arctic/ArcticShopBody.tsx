@@ -1448,7 +1448,7 @@ export default function ArcticShopBody({
                   </div>
                   <div className="p-5 flex flex-col flex-1">
                     <h3 className="text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep">{editForm.name || "상품명을 입력하세요"}</h3>
-                    {editForm.description && <p className="text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep">{editForm.description}</p>}
+                    {editForm.description && <p className="text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep whitespace-pre-line">{editForm.description}</p>}
                     <div className="flex items-center gap-2 mb-4 text-[11px] font-bold text-[#8a8a8a]">
                       <span>{Number(editForm.stock) > 0 && Number(editForm.stock) <= 5 ? `한정 수량 · ${editForm.stock}개 남음` : " "}</span>
                     </div>

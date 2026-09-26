@@ -6,7 +6,9 @@ import Link from "next/link";
 import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import IconPicker from "../../components/IconPicker";
+import { InventoryItemPreview } from "../../components/Inventory";
 import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor } from "@/lib/items";
+import { TRIGGERS, TRIGGER_OF, DAY_LABELS, MAX_EFFECTS, normalizeEffects, describeEffect, describeBasic } from "@/lib/itemEffects";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
   buildDurations as buildFormDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload,
@@ -23,7 +25,9 @@ import {
   DefRow,
   StatusChip,
   Panel,
+  Inline,
   inputClass,
+  numClass,
   labelClass,
   fieldNote,
   EmptyRow,
@@ -102,12 +106,50 @@ function Thumb({ it }: { it: any }) {
   );
 }
 
+// 📌 아이템 효과 한 줄(화면용) — 숫자 칸은 비울 수 있어야 해서 문자열로 든다. 정의 · 문구 · 정리는 lib/itemEffects 가 단일 원천.
+//    open(조건 펼침)은 화면 상태라 저장하지 않는다. chText 는 채널 목록을 못 불러왔을 때 쓰는 ID 입력칸의 날 글자
+type EffectDraft = {
+  id: string; on: string; mode: string; amount: string; minMinutes: string; everyN: string;
+  days: number[]; hourFrom: string; hourTo: string; channelIds: string[]; chText: string; open: boolean;
+};
+const newEffectId = () => Math.random().toString(36).slice(2, 10);
+const newEffect = (): EffectDraft => ({ id: newEffectId(), on: "chat", mode: "add", amount: "", minMinutes: "", everyN: "", days: [], hourFrom: "", hourTo: "", channelIds: [], chText: "", open: false });
+// 빈 칸은 undefined 로 넘긴다 — normalizeEffects 는 "" 를 0 으로 읽어 분 · 번째를 최솟값(1분 · 2번째)으로 채워 버린다
+const numOrNone = (s: string) => (String(s ?? "").trim() === "" ? undefined : Number(s));
+const effectOf = (d: EffectDraft) => ({
+  id: d.id, on: d.on, mode: d.mode, amount: numOrNone(d.amount), minMinutes: numOrNone(d.minMinutes), everyN: numOrNone(d.everyN),
+  days: d.days, hourFrom: d.hourFrom, hourTo: d.hourTo, channelIds: d.channelIds,
+});
+const draftOf = (e: any): EffectDraft => {
+  const channelIds = Array.isArray(e?.channelIds) ? e.channelIds.map(String) : [];
+  return {
+    id: String(e?.id || newEffectId()), on: TRIGGER_OF[e?.on] ? e.on : "chat", mode: e?.mode === "percent" ? "percent" : "add",
+    amount: e?.amount ? String(e.amount) : "", minMinutes: e?.minMinutes ? String(e.minMinutes) : "", everyN: e?.everyN ? String(e.everyN) : "",
+    days: Array.isArray(e?.days) ? e.days.map(Number) : [], hourFrom: e?.hourFrom != null ? String(e.hourFrom) : "", hourTo: e?.hourTo != null ? String(e.hourTo) : "",
+    channelIds, chText: channelIds.join(", "), open: false,
+  };
+};
+const xpNum = (s: string) => Math.max(0, Math.floor(Number(s) || 0));
+
 // 아이템 등록 폼 — 숫자 칸은 비울 수 있어야 해서 문자열로 든다
+//    효과(buffXp · attendBuffXp · effects)는 연결 역할의 RoleConfig 에 저장된다(서버가 roleId 로 upsert).
+//    effLoaded: 불러온 아이템에 효과가 있었는지 — 전부 0 으로 비운 것도 저장해야 지워지므로
 type ItemForm = {
   id: string; name: string; description: string; type: string; roleId: string; icon: string; imageUrl: string;
   color: string; detachOnSeason: boolean; visible: boolean; sortOrder: string;
+  buffXp: string; attendBuffXp: string; effects: EffectDraft[]; effLoaded: boolean;
 };
-const EMPTY_ITEM_FORM: ItemForm = { id: "", name: "", description: "", type: "item", roleId: "", icon: "", imageUrl: "", color: "", detachOnSeason: false, visible: true, sortOrder: "" };
+const EMPTY_ITEM_FORM: ItemForm = {
+  id: "", name: "", description: "", type: "item", roleId: "", icon: "", imageUrl: "", color: "", detachOnSeason: false, visible: true, sortOrder: "",
+  buffXp: "", attendBuffXp: "", effects: [], effLoaded: false,
+};
+
+// 채널 표기 — 봇 관리 화면과 같은 기호
+const CH_ICON: Record<string, string> = { text: "#", voice: "🔊", category: "📁" };
+const CH_LABEL: Record<string, string> = { text: "텍스트", voice: "음성", category: "카테고리" };
+const WEEKDAYS = [1, 2, 3, 4, 5];
+const WEEKEND = [0, 6];
+const sameDays = (a: number[], b: number[]) => a.length === b.length && [...a].sort().join(",") === [...b].sort().join(",");
 
 const fmtDateTime = (v: string | Date) => {
   const d = new Date(v);
@@ -189,6 +231,198 @@ const DD_BTN = "min-h-10 !py-2 !px-3 !border-[#a3a3a3] !text-[14px]";
 // 상세 칸 아래 줄의 삭제 — 저장 옆에 빨간 덩어리를 두지 않고 글자만
 const DEL_BTN = "ml-auto !text-[#d01634]";
 
+// 📌 아이템 효과 편집 — 기본 두 칸 + 조건 효과 목록. 상세 칸(520px) · 모바일 판 모두에서 줄이 무너지지 않게 줄바꿈을 허용한다.
+//    ⚠️ 모듈 바깥에 둔다(페이지 안에서 정의하면 입력할 때마다 다시 마운트돼 포커스가 날아간다)
+const HOUR_FROM = Array.from({ length: 24 }, (_, h) => h);
+const HOUR_TO = Array.from({ length: 24 }, (_, h) => h + 1);
+const selectSm = `${inputClass} !w-[84px] tabular-nums`;
+const subLabel = "mb-1.5 text-[12px] font-bold text-[#5a5a5a]";
+function EffectsEditor({
+  buffXp, attendBuffXp, list, disabled, channels, onChange,
+}: {
+  buffXp: string; attendBuffXp: string; list: EffectDraft[]; disabled: boolean; channels: any[];
+  onChange: (patch: Partial<Pick<ItemForm, "buffXp" | "attendBuffXp" | "effects">>) => void;
+}) {
+  const setRow = (i: number, patch: Partial<EffectDraft>) => onChange({ effects: list.map((d, j) => (j === i ? { ...d, ...patch } : d)) });
+  const chName = (id: string) => channels.find((c) => c.id === id)?.name as string | undefined;
+  // 상황을 바꾸면 — 없는 방식(%)은 첫 방식으로, 채팅 ↔ 음성이면 맞지 않는 종류의 채널은 뺀다(카테고리 · 모르는 ID 는 둔다)
+  const pickOn = (i: number, v: string) => {
+    const t = TRIGGER_OF[v];
+    if (!t) return;
+    const d = list[i];
+    const fits = (id: string) => {
+      const c = channels.find((x) => x.id === id);
+      return !c || c.type === "category" || c.type === (v === "voice" ? "voice" : "text");
+    };
+    const ids = t.channels ? d.channelIds.filter(fits) : d.channelIds;
+    setRow(i, { on: v, mode: t.modes.includes(d.mode) ? d.mode : t.modes[0], channelIds: ids, chText: ids.join(", ") });
+  };
+  const toggleDay = (i: number, day: number) => {
+    const cur = list[i].days;
+    setRow(i, { days: cur.includes(day) ? cur.filter((x) => x !== day) : [...cur, day].sort((a, b) => a - b) });
+  };
+  // 시간대 — 한쪽만 고르면 나머지를 한 시간 뒤/앞으로 채운다(한쪽만 있으면 적용되지 않으므로). 비우면 둘 다 비운다
+  const setHour = (i: number, which: "from" | "to", v: string) => {
+    const d = list[i];
+    if (v === "") return setRow(i, { hourFrom: "", hourTo: "" });
+    if (which === "from") setRow(i, { hourFrom: v, hourTo: d.hourTo === "" ? String(Math.min(24, Number(v) + 1)) : d.hourTo });
+    else setRow(i, { hourTo: v, hourFrom: d.hourFrom === "" ? String(Math.max(0, Number(v) - 1)) : d.hourFrom });
+  };
+  const setChannels = (i: number, ids: string[]) => setRow(i, { channelIds: ids, chText: ids.join(", ") });
+
+  return (
+    <fieldset disabled={disabled} className={`min-w-0 ${disabled ? "opacity-50" : ""}`}>
+      <div className={labelClass}>기본 효과</div>
+      <div className="mb-5 space-y-2">
+        <Inline>
+          <span className="w-[136px] shrink-0 font-bold text-[#131313]">채팅 · 음성 1회마다</span>
+          <span>+</span>
+          <input type="number" min={0} inputMode="numeric" value={buffXp} onChange={(e) => onChange({ buffXp: e.target.value })} placeholder="0" className={numClass} />
+          <span>XP</span>
+        </Inline>
+        <Inline>
+          <span className="w-[136px] shrink-0 font-bold text-[#131313]">출석할 때</span>
+          <span>+</span>
+          <input type="number" min={0} inputMode="numeric" value={attendBuffXp} onChange={(e) => onChange({ attendBuffXp: e.target.value })} placeholder="0" className={numClass} />
+          <span>XP</span>
+        </Inline>
+      </div>
+
+      <div className={labelClass}>조건 효과</div>
+      {list.map((d, i) => {
+        const t = TRIGGER_OF[d.on] || TRIGGERS[0];
+        const norm: any = normalizeEffects([effectOf(d)])[0];
+        const hasTime = d.hourFrom !== "" && d.hourTo !== "" && d.hourFrom !== d.hourTo;
+        const condN = (d.days.length > 0 && d.days.length < 7 ? 1 : 0) + (hasTime ? 1 : 0) + (t.channels && d.channelIds.length ? 1 : 0);
+        const dayPreset = d.days.length === 0 || d.days.length === 7 ? "all" : sameDays(d.days, WEEKDAYS) ? "wd" : sameDays(d.days, WEEKEND) ? "we" : "";
+        const chOptions = channels
+          .filter((c) => c.type === "category" || c.type === (d.on === "voice" ? "voice" : "text"))
+          .filter((c) => !d.channelIds.includes(c.id))
+          .map((c) => ({ value: c.id, label: `${CH_ICON[c.type] || "#"} ${c.name}`, hint: CH_LABEL[c.type], indent: !!c.parentId }));
+        return (
+          <div key={d.id} className="mb-2 rounded-xl border border-[#ededed] p-3">
+            <div className="flex items-center gap-2">
+              <select value={d.on} onChange={(e) => pickOn(i, e.target.value)} aria-label="상황" className={`${inputClass} min-w-0 flex-1`}>
+                {TRIGGERS.map((x) => <option key={x.v} value={x.v}>{x.l}</option>)}
+              </select>
+              {/* 폭 고정 — 조건 수가 붙어도 옆 칸이 밀리지 않게 */}
+              <Btn variant={d.open ? "primary" : "secondary"} size="sm" className="shrink-0 w-[72px]" aria-expanded={d.open} onClick={() => setRow(i, { open: !d.open })}>
+                조건{condN > 0 && <span className="tabular-nums">{condN}</span>}
+              </Btn>
+              <button type="button" aria-label="효과 삭제" onClick={() => onChange({ effects: list.filter((_, j) => j !== i) })}
+                className="shrink-0 w-8 h-8 rounded-full text-[#8a8a8a] hover:text-[#d01634] hover:bg-[#f2f2f2] flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30">
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <Inline className="mt-2">
+              {t.needs === "minMinutes" && (
+                <>
+                  <input type="number" min={1} max={1440} inputMode="numeric" value={d.minMinutes} onChange={(e) => setRow(i, { minMinutes: e.target.value })} placeholder="60" aria-label="분" className={`${inputClass} !w-20 tabular-nums`} />
+                  <span>분</span>
+                </>
+              )}
+              {t.needs === "everyN" && (
+                <>
+                  <input type="number" min={2} max={365} inputMode="numeric" value={d.everyN} onChange={(e) => setRow(i, { everyN: e.target.value })} placeholder="7" aria-label="번째" className={`${inputClass} !w-20 tabular-nums`} />
+                  <span>번째</span>
+                </>
+              )}
+              <span>+</span>
+              <input type="number" min={0} max={d.mode === "percent" ? 500 : 1000000} inputMode="numeric" value={d.amount} onChange={(e) => setRow(i, { amount: e.target.value })}
+                placeholder={d.mode === "percent" ? "10" : "100"} aria-label="크기" className={numClass} />
+              {t.modes.length > 1
+                ? <Segmented options={[{ v: "add", l: "XP" }, { v: "percent", l: "%" }]} value={d.mode} onChange={(v) => setRow(i, { mode: v })} />
+                : <span>XP</span>}
+            </Inline>
+
+            {d.open && (
+              <div className="mt-3 pt-3 border-t border-[#ededed]">
+                <div className={subLabel}>요일</div>
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <Segmented
+                    options={[{ v: "all", l: "매일" }, { v: "wd", l: "평일" }, { v: "we", l: "주말" }]}
+                    value={dayPreset}
+                    onChange={(v) => setRow(i, { days: v === "wd" ? WEEKDAYS : v === "we" ? WEEKEND : [] })}
+                  />
+                  <div className="inline-flex p-1 rounded-full bg-[#f2f2f2]" role="group" aria-label="요일">
+                    {DAY_LABELS.map((l, day) => {
+                      const on = d.days.includes(day);
+                      return (
+                        <button key={day} type="button" aria-pressed={on} onClick={() => toggleDay(i, day)}
+                          className={`shrink-0 w-8 h-8 rounded-full text-[13px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 ${on ? "bg-white text-[#131313] ring-1 ring-black/[0.06]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
+                          {l}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className={subLabel}>시간대</div>
+                <Inline className={t.channels ? "mb-3" : ""}>
+                  <select value={d.hourFrom} onChange={(e) => setHour(i, "from", e.target.value)} aria-label="시작 시각" className={selectSm}>
+                    <option value="">—</option>
+                    {HOUR_FROM.map((h) => <option key={h} value={String(h)}>{h}시</option>)}
+                  </select>
+                  <span>~</span>
+                  <select value={d.hourTo} onChange={(e) => setHour(i, "to", e.target.value)} aria-label="끝 시각" className={selectSm}>
+                    <option value="">—</option>
+                    {HOUR_TO.map((h) => <option key={h} value={String(h)}>{h}시</option>)}
+                  </select>
+                </Inline>
+
+                {t.channels && (
+                  <>
+                    <div className={subLabel}>채널</div>
+                    {channels.length > 0 ? (
+                      <>
+                        {d.channelIds.length > 0 && (
+                          <div className="mb-2 flex flex-wrap gap-1.5">
+                            {d.channelIds.map((id) => {
+                              const c = channels.find((x) => x.id === id);
+                              return (
+                              <span key={id} className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full bg-[#f2f2f2] text-[12px] font-bold text-[#131313] max-w-full">
+                                <span className="min-w-0 truncate">{c ? `${CH_ICON[c.type] || "#"} ${c.name}` : id}</span>
+                                <button type="button" aria-label="채널 빼기" onClick={() => setChannels(i, d.channelIds.filter((x) => x !== id))}
+                                  className="shrink-0 w-5 h-5 rounded-full text-[#8a8a8a] hover:text-[#131313] flex items-center justify-center">
+                                  <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.6}><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                              </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <Dropdown
+                          theme="light"
+                          buttonClassName={DD_BTN}
+                          value=""
+                          onChange={(v) => { if (v && d.channelIds.length < 20) setChannels(i, [...d.channelIds, v]); }}
+                          placeholder={d.channelIds.length ? "채널 추가" : "모든 채널"}
+                          options={chOptions}
+                        />
+                      </>
+                    ) : (
+                      <input type="text" value={d.chText} placeholder="채널 ID, 쉼표로 구분"
+                        onChange={(e) => setRow(i, { chText: e.target.value, channelIds: e.target.value.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean).slice(0, 20) })}
+                        className={inputClass} />
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* 저장되면 이렇게 적용된다 — describeEffect 문장(관리자 확인용이라 채널 하나면 이름까지) */}
+            <p className="mt-2 text-[12px] text-[#8a8a8a] leading-relaxed break-keep">
+              {norm ? describeEffect(norm, norm.channelIds?.length === 1 ? chName(norm.channelIds[0]) : undefined) : "값을 입력해 주세요"}
+            </p>
+          </div>
+        );
+      })}
+      <Btn variant="secondary" size="sm" disabled={list.length >= MAX_EFFECTS} onClick={() => onChange({ effects: [...list, newEffect()] })}>+ 효과 추가</Btn>
+    </fieldset>
+  );
+}
+
 type PaneKind = "" | "reg" | "product" | "banner" | "coupon" | "order";
 
 export default function AdminShopPage() {
@@ -251,27 +485,71 @@ export default function AdminShopPage() {
     });
   }, []);
 
-  const fillRegForm = (it: any) =>
+  const fillRegForm = (it: any) => {
+    // 효과는 GET 이 붙여 준 연결 역할의 RoleConfig 값 (역할이 없으면 0 / [])
+    const ef = it.effects || {};
+    const list = Array.isArray(ef.list) ? ef.list : [];
     setItemForm({
       id: it._id, name: it.name || "", description: it.description || "", type: it.type || "item", roleId: it.roleId || "",
       icon: it.icon || "", imageUrl: it.imageUrl || "", color: it.color || "", detachOnSeason: !!it.detachOnSeason,
       visible: it.visible !== false, sortOrder: String(it.sortOrder || 0),
+      buffXp: ef.buffXp ? String(ef.buffXp) : "", attendBuffXp: ef.attendBuffXp ? String(ef.attendBuffXp) : "",
+      effects: list.map(draftOf), effLoaded: !!(ef.buffXp || ef.attendBuffXp || list.length),
     });
+  };
+
+  // 📌 연결 역할을 고르거나 바꾸면 그 역할의 현재 효과를 불러온다 — 효과는 역할 단위(RoleConfig)라
+  //    빈 칸인 채 저장하면 그 역할의 기존 버프 · 다른 아이템이 쓰던 조건 효과를 0 으로 덮어쓴다.
+  //    먼저 같은 역할을 쓰는 등록 아이템에서, 없으면 역할 설정(RoleConfig) 목록에서 찾는다.
+  const changeItemRole = async (roleId: string) => {
+    setItemForm((f) => ({ ...f, roleId, buffXp: "", attendBuffXp: "", effects: [], effLoaded: false }));
+    if (!roleId) return;
+    let ef: any = regItems.find((it) => it.roleId === roleId && it._id !== itemForm.id && it.effects)?.effects || null;
+    if (!ef) {
+      const d = await fetch("/api/role-config", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+      const cfg = Array.isArray(d?.data) ? d.data.find((c: any) => c.roleId === roleId) : null;
+      if (cfg) ef = { buffXp: cfg.buffXp || 0, attendBuffXp: cfg.attendBuffXp || 0, list: Array.isArray(cfg.effects) ? cfg.effects : [] };
+    }
+    if (!ef) return;
+    const list = Array.isArray(ef.list) ? ef.list : [];
+    // 그 사이 다른 역할로 또 바꿨으면 늦게 온 값으로 덮지 않는다
+    setItemForm((f) => (f.roleId !== roleId ? f : {
+      ...f,
+      buffXp: ef.buffXp ? String(ef.buffXp) : "",
+      attendBuffXp: ef.attendBuffXp ? String(ef.attendBuffXp) : "",
+      effects: list.map(draftOf),
+      effLoaded: true,
+    }));
+  };
 
   const saveRegItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSavingReg) return;
     if (!itemForm.name.trim()) return notify("이름을 입력해 주세요.", true);
     if ((itemForm.type === "role" || itemForm.type === "perk") && !itemForm.roleId) return notify("연결할 역할을 선택해 주세요.", true);
+    // 📌 효과 — 역할이 연결된 아이템만. 값이 빈 줄은 서버가 말없이 버리므로 저장 전에 막는다.
+    //    효과가 원래 없고 지금도 비어 있으면 보내지 않는다(효과 없는 역할마다 빈 RoleConfig 가 생기지 않게)
+    const { buffXp, attendBuffXp, effects: effDrafts, effLoaded, ...base } = itemForm;
+    let effects: { buffXp: number; attendBuffXp: number; list: ReturnType<typeof effectOf>[] } | undefined;
+    if (base.type !== "physical" && base.roleId) {
+      const bad = effDrafts.findIndex((d) => normalizeEffects([effectOf(d)]).length === 0);
+      if (bad >= 0) return notify(`조건 효과 ${bad + 1}번째 줄의 값을 입력해 주세요.`, true);
+      const b = xpNum(buffXp), a = xpNum(attendBuffXp);
+      if (effLoaded || b || a || effDrafts.length) effects = { buffXp: b, attendBuffXp: a, list: effDrafts.map(effectOf) };
+    }
     setIsSavingReg(true);
     const res = await fetch("/api/admin/items", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...itemForm, roleName: guildRoles.find((r) => r.id === itemForm.roleId)?.name || "" }),
+      body: JSON.stringify({ ...base, roleName: guildRoles.find((r) => r.id === base.roleId)?.name || "", ...(effects ? { effects } : {}) }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
     setIsSavingReg(false);
     if (res?.ok && d?.success) { setItemForm(EMPTY_ITEM_FORM); fetchRegItems(); fetchAll(); closePane(); notify("저장되었습니다."); }
-    else notify(d?.message || "저장에 실패했습니다.", true);
+    else {
+      // 아이템은 저장되고 효과만 실패하면 서버가 문서를 돌려준다 — id 를 쥐어 다시 저장해도 두 개가 생기지 않게
+      if (!itemForm.id && d?.data?._id) { setItemForm((f) => ({ ...f, id: d.data._id })); fetchRegItems(); }
+      notify(d?.message || "저장에 실패했습니다.", true);
+    }
   };
 
   // 표시 토글 — 목록에서 바로 켜고 끈다 (폼을 열지 않아도 되게)
@@ -281,7 +559,8 @@ export default function AdminShopPage() {
     setVisBusy(it._id);
     const res = await fetch("/api/admin/items", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...it, id: it._id, visible: it.visible === false }),
+      // 효과는 빼고 보낸다 — 표시 토글이 역할 효과(RoleConfig)를 다시 쓰지 않게 (undefined 는 JSON 에서 빠진다)
+      body: JSON.stringify({ ...it, effects: undefined, id: it._id, visible: it.visible === false }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
     if (res?.ok && d?.success) { fetchRegItems(); notify(it.visible === false ? "인벤토리에 표시합니다." : "인벤토리에서 숨깁니다."); }
@@ -429,6 +708,17 @@ export default function AdminShopPage() {
 
   useEffect(() => { if (isAdmin) { fetchAll(); fetchRegItems(); } }, [isAdmin, fetchAll, fetchRegItems]);
 
+  // 아이템 효과의 채널 조건용 — 한 번만 읽는다(서버 10분 캐시). 못 읽으면 효과 편집이 채널 ID 입력칸으로 바뀐다
+  const [guildChannels, setGuildChannels] = useState<any[]>([]);
+  useEffect(() => {
+    if (!isAdmin) return;
+    let alive = true;
+    fetch("/api/discord-channels", { cache: "no-store" }).then((r) => r.json())
+      .then((d) => { if (alive) setGuildChannels(Array.isArray(d?.data) ? d.data : []); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [isAdmin]);
+
   // 목록·링크에서 상품을 폼으로 끌어오는 자리가 두 군데였다 — 한 함수로 모은다
   const fillItemForm = useCallback((it: any) => setForm(formFromShopItem(it)), []);
 
@@ -520,6 +810,25 @@ export default function AdminShopPage() {
   const noResult = "검색 결과가 없습니다.";
   const orderSel = orderSelId ? orders.find((o) => o._id === orderSelId) : null;
   const couponSel = couponForm.id ? coupons.find((c) => c._id === couponForm.id) : null;
+
+  // 📌 아이템 등록 — 인벤토리 미리보기는 폼 값을 그대로 따라간다. 효과 줄은 서버(/api/shop/my-items)와 같은 규칙
+  //    (describeBasic + describeEffect, 역할이 연결된 아이템만)
+  const regEffOn = itemForm.type !== "physical" && !!itemForm.roleId;
+  const regEffectLines: string[] = regEffOn
+    ? [
+        ...describeBasic({ buffXp: xpNum(itemForm.buffXp), attendBuffXp: xpNum(itemForm.attendBuffXp) }),
+        ...normalizeEffects(itemForm.effects.map(effectOf)).map((e: any) => describeEffect(e)),
+      ]
+    : [];
+  const regPreviewItem = {
+    name: itemForm.name.trim() || "아이템 이름",
+    description: itemForm.description.trim(),
+    type: itemForm.type,
+    icon: itemForm.icon,
+    imageUrl: itemForm.imageUrl.trim(),
+    // 쓰는 중인 색(#e9 …)은 유형 기본색으로 — 반쯤 친 값이 엉뚱한 색으로 그려지지 않게
+    color: /^#[0-9a-f]{6}$/i.test(itemForm.color) ? itemForm.color : "",
+  };
 
   // 새로 만들기 — 수정 중이던 폼이면 비우고, 쓰다 만 새 폼이면 그대로 이어 쓴다
   const openNewReg = () => { if (itemForm.id) setItemForm(EMPTY_ITEM_FORM); setPane("reg"); };
@@ -735,12 +1044,19 @@ export default function AdminShopPage() {
                 </>
               }
             >
+              <div className="mb-5">
+                <div className={labelClass}>인벤토리 미리보기</div>
+                <InventoryItemPreview item={regPreviewItem} effectLines={regEffectLines} />
+              </div>
               <form onSubmit={saveRegItem}>
                 <Field label={<>이름<Req /></>}>
                   <input type="text" value={itemForm.name} maxLength={40} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="예: 펭귄 칭호" className={inputClass} />
                 </Field>
                 <Field label="설명">
-                  <input type="text" value={itemForm.description} maxLength={120} onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })} placeholder="인벤토리 · 카드에 한 줄" className={inputClass} />
+                  {/* 줄바꿈 그대로 저장 · 표시 (인벤토리 · 상품 상세는 whitespace-pre-line) */}
+                  <textarea rows={3} value={itemForm.description} maxLength={300} onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+                    placeholder="인벤토리에 보이는 설명" className={`${inputClass} resize-none`} />
+                  <p className="mt-1 text-right text-[12px] text-[#8a8a8a] tabular-nums">{itemForm.description.length}/300</p>
                 </Field>
                 <Field label={<>유형<Req /></>}>
                   <Segmented options={ITEM_TYPE_OPTIONS} value={itemForm.type}
@@ -756,7 +1072,7 @@ export default function AdminShopPage() {
                       theme="light"
                       buttonClassName={DD_BTN}
                       value={itemForm.roleId}
-                      onChange={(v) => setItemForm({ ...itemForm, roleId: v })}
+                      onChange={(v) => changeItemRole(v)}
                       placeholder="역할을 선택하세요"
                       options={[...(itemForm.type === "item" ? [{ value: "", label: "역할 없음 (사이트 보유)" }] : []), ...guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))]}
                     />
@@ -792,6 +1108,22 @@ export default function AdminShopPage() {
                 <Field label="인벤토리 표시">
                   <Toggle on={itemForm.visible} onClick={() => setItemForm({ ...itemForm, visible: !itemForm.visible })} onLabel="표시" offLabel="숨김" />
                 </Field>
+
+                {/* ── 효과 — 연결 역할을 가진 사람에게 붙는다(저장: 그 역할의 RoleConfig). 기프트카드는 역할이 없어 숨긴다 ── */}
+                {itemForm.type !== "physical" && (
+                  <section className="mt-2 pt-4 border-t border-[#ededed]">
+                    <h3 className="text-[14px] font-black tracking-tight mb-3">효과</h3>
+                    {!itemForm.roleId && <p className={`${fieldNote} !mt-0 mb-3`}>디스코드 역할을 연결하면 적용됩니다</p>}
+                    <EffectsEditor
+                      buffXp={itemForm.buffXp}
+                      attendBuffXp={itemForm.attendBuffXp}
+                      list={itemForm.effects}
+                      disabled={!itemForm.roleId}
+                      channels={guildChannels}
+                      onChange={(patch) => setItemForm((f) => ({ ...f, ...patch }))}
+                    />
+                  </section>
+                )}
                 <HiddenSubmit />
               </form>
             </DetailPane>
@@ -1602,7 +1934,7 @@ export default function AdminShopPage() {
 
                 <div className="p-5 flex flex-col flex-1">
                   <h3 className="text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep">{form.name || "상품명을 입력하세요"}</h3>
-                  {form.description && <p className="text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep">{form.description}</p>}
+                  {form.description && <p className="text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep whitespace-pre-line">{form.description}</p>}
 
                   <div className="flex items-center gap-2 mb-4 text-[11px] font-bold text-[#8a8a8a]">
                     <span>{form.stock === "" ? "재고 무제한" : `남은 수량 ${form.stock}개`}</span>

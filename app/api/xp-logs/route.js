@@ -23,7 +23,7 @@ export async function GET(request) {
     const q = sp.get("q");
 
     const filter = {};
-    if (reason && ["chat", "voice", "attend"].includes(reason)) filter.reason = reason;
+    if (reason && ["chat", "voice", "attend", "effect", "effect-levelup"].includes(reason)) filter.reason = reason;
     if (q?.trim()) {
       // 사용자명 부분 일치 (정규식 특수문자는 이스케이프)
       const safe = q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

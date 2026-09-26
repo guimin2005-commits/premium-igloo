@@ -11,7 +11,7 @@ import mongoose from "mongoose";
 //          physical : 기프트카드 — 역할 없음
 const ItemSchema = new mongoose.Schema({
   name: { type: String, required: true, maxlength: 40 },
-  description: { type: String, default: "", maxlength: 120 },
+  description: { type: String, default: "", maxlength: 300 }, // 줄바꿈(\n) 허용 — 정리는 lib/items.js normalizeDescription
   icon: { type: String, default: "" },            // 이모지 또는 짧은 텍스트(≤8자). 비면 유형별 기본 SVG
   imageUrl: { type: String, default: "" },        // 있으면 icon 대신 이미지
   color: { type: String, default: "" },           // "#rrggbb". 비면 유형 기본색 (lib/items.js ITEM_TYPE_COLOR)

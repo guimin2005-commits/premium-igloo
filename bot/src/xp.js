@@ -1,8 +1,8 @@
 // ── XP 지급 · 레벨업 감지 · 보상 역할 지급 · 로그 기록 ──────
 import { EmbedBuilder } from "discord.js";
 import { UserXp, XpLog } from "./db.js";
-import { getLevelByXp } from "./leveling.js";
-import { getRoleConfigs } from "./roleConfigs.js";
+import { getLevelByXp, kstToday } from "./leveling.js";
+import { getRoleConfigs, heldEffects, effectXp, effectTimeOk, claimDaily, kstNow } from "./roleConfigs.js";
 import { getSettings } from "./botSettings.js";
 import { config } from "./config.js";
 
@@ -127,15 +127,71 @@ export async function grantXp(member, amount, meta = {}) {
   if (newLevel !== doc.level) {
     const oldLevel = doc.level;
     doc.level = newLevel;
-    await UserXp.updateOne({ userId: member.id }, { $set: { level: newLevel } });
+    // 바꾸기 직전 레벨을 돌려받는다 — 두 지급이 동시에 같은 레벨업을 봐도 레벨업 효과는 실제로 오른 만큼만 나가게
+    const prev = await UserXp.findOneAndUpdate(
+      { userId: member.id },
+      { $set: { level: newLevel } },
+      { new: false, projection: { level: 1 } }
+    ).lean();
 
     if (newLevel > oldLevel) {
       grantRewardRoles(member, newLevel).catch(() => {});
       announceLevelUp(member, newLevel, doc.xp);
+      // 📌 아이템 효과 "레벨이 오를 때마다" — 효과 지급으로 오른 레벨에는 다시 붙이지 않는다(재귀 방지).
+      //    레벨 0(아직 계산 전인 새 문서) → 1 은 레벨업으로 치지 않는다.
+      //    📌 최고 도달 레벨(maxLevel)을 $max 로 원자적으로 올리고, 그 전 최고치를 넘은 만큼만 준다 —
+      //       상점 · 강화에 XP 를 써서 레벨이 내려갔다가 다시 오를 때 같은 레벨업 효과를 또 받지 않게. (옛 문서는 maxLevel 이 없어 직전 레벨로 본다)
+      if (meta.reason !== "effect-levelup" && prev) {
+        const pm = await UserXp.findOneAndUpdate(
+          { userId: member.id },
+          { $max: { maxLevel: newLevel } },
+          { new: false, projection: { maxLevel: 1 } }
+        ).lean();
+        const floor = Math.max(1, Math.floor(Number(prev.level) || 0), Math.floor(Number(pm?.maxLevel) || 0));
+        await grantLevelUpEffects(member, newLevel - floor);
+      }
     } else {
       // 회수(음수 지급)로 레벨이 내려가면 그만큼 보상 역할도 거둔다
       revokeRewardRoles(member, newLevel).catch(() => {});
     }
   }
   return doc;
+}
+
+// 레벨업 효과 — (효과 합 × 오른 레벨 수) 를 따로 지급. 오류는 로그만 남긴다(원래 지급은 이미 끝났다)
+async function grantLevelUpEffects(member, gained) {
+  if (!(gained > 0)) return;
+  try {
+    const per = effectXp(member, "levelUp");
+    if (per > 0) await grantXp(member, per * gained, { reason: "effect-levelup" });
+  } catch (e) {
+    console.error(`아이템 효과 지급 오류 (levelUp / ${member.displayName}):`, e.message);
+  }
+}
+
+// 📌 "하루 1번" 아이템 효과 지급 — 하루 첫 채팅(firstChat) · 하루 음성 N분(voiceDaily)
+//    요일 · 시간대 조건과 test(e) 를 통과한 효과마다 claimDaily 자물쇠를 세우고, 통과한 것만 따로 지급한다.
+//    meta: XpLog 에 남길 채널 정보. 오류는 효과별로 삼킨다 — 기존 지급을 막지 않게.
+export async function grantOnceEffects(member, on, { test = () => true, meta = {} } = {}) {
+  let effects = [];
+  try {
+    effects = heldEffects(member, on);
+  } catch (e) {
+    console.error(`아이템 효과 조회 오류 (${on}):`, e.message);
+    return;
+  }
+  if (!effects.length) return;
+
+  const kst = kstNow();
+  const today = kstToday();
+  for (const e of effects) {
+    try {
+      if (!effectTimeOk(e, kst) || !test(e)) continue;
+      if (!(await claimDaily(member.id, `${e.roleId}:${e.id}`, today))) continue;
+      await grantXp(member, e.amount, { ...meta, reason: "effect" });
+      console.log(`✨ 아이템 효과(${on}): ${member.displayName} +${e.amount.toLocaleString()}`);
+    } catch (err) {
+      console.error(`아이템 효과 지급 오류 (${on} / ${member.displayName}):`, err.message);
+    }
+  }
 }

@@ -36,7 +36,7 @@ import type { Column } from "../ui";
 
 const CHANNEL_TYPE_LABEL: Record<string, string> = { text: "텍스트", voice: "음성", category: "카테고리" };
 const CHANNEL_TYPE_ICON: Record<string, string> = { text: "#", voice: "🔊", category: "📁" };
-const REASON_LABEL: Record<string, string> = { chat: "채팅", voice: "음성", attend: "출석" };
+const REASON_LABEL: Record<string, string> = { chat: "채팅", voice: "음성", attend: "출석", effect: "아이템 효과", "effect-levelup": "레벨업 효과" };
 const PERIOD_LABEL: Record<string, string> = { daily: "일일", weekly: "주간", monthly: "월간" };
 
 // 📌 주기별 무작위 노출 개수 — 등록된 퀘스트 중 매 주기마다 이 개수만큼 뽑아 보여준다 (0이면 전부)

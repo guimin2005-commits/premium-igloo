@@ -1,10 +1,12 @@
 // ── 음성 XP (설정된 주기마다 지급) ──────────────────
+//    📌 아이템 효과: "음성 XP 받을 때마다"는 이 1회 지급에 더하고(percent 는 기본 음성 XP 기준, 음소거 배율은 전체에),
+//       "하루 음성 N분"은 오늘 누적 분이 N 이상이 되면 하루 1번 따로, "출석 · 출석 N번째"는 출석 지급에 더한다.
 import { UserXp } from "../db.js";
 import { getVoiceBracketBonus, kstToday, VOICE_TIME_START } from "../leveling.js";
-import { getBuffXp, getAttendBuffXp } from "../roleConfigs.js";
+import { getBuffXp, getAttendBuffXp, effectXp, getAttendEffectXp } from "../roleConfigs.js";
 import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getActiveBoostXp, getMuteMultiplier } from "../botSettings.js";
-import { grantXp } from "../xp.js";
+import { grantXp, grantOnceEffects } from "../xp.js";
 import { config } from "../config.js";
 
 async function voiceXpTick(client) {
@@ -42,8 +44,9 @@ async function voiceXpTick(client) {
 
       // 강화 가산 — 단계(영구) × voiceEnhanceStep. 등급·역할·채널 가산과 같은 자리에서 더하고 음소거 배율을 곱한다
       const enhanceXp = Math.max(0, Math.floor(Number(doc?.voiceEnhance) || 0)) * Math.max(0, Number(s.voiceEnhanceStep) || 0);
+      const itemXp = effectXp(member, "voice", { base, channel });
       const amount = Math.floor(
-        (base + getVoiceBracketBonus(doc?.level || 0) + enhanceXp + getBuffXp(member) + channelPolicy.boostXp + getActiveBoostXp(member, channel)) *
+        (base + getVoiceBracketBonus(doc?.level || 0) + enhanceXp + getBuffXp(member) + channelPolicy.boostXp + getActiveBoostXp(member, channel) + itemXp) *
           muteMultiplier
       );
 
@@ -78,17 +81,24 @@ async function voiceXpTick(client) {
 
       if (upd && upd.voiceTodayMin >= attendMin && upd.lastAttendDate !== today) {
         // 자물쇠부터 — 오늘 미출석인 경우에만 통과하는 조건부 갱신 (틱이 겹쳐도 한 번만)
-        const lock = await UserXp.updateOne(
+        //    갱신된 누적 출석 수를 돌려받는다 — "출석 N번째마다" 효과가 이 값으로 판정한다
+        const lock = await UserXp.findOneAndUpdate(
           { userId: member.id, lastAttendDate: { $ne: today } },
-          { $set: { lastAttendDate: today }, $inc: { attendCount: 1 } }
+          { $set: { lastAttendDate: today }, $inc: { attendCount: 1 } },
+          { new: true, projection: { attendCount: 1 } }
         );
-        if (lock.modifiedCount) {
-          const attendAmount = (s.attendXp || 0) + getAttendBuffXp(member);
+        if (lock) {
+          const attendAmount = (s.attendXp || 0) + getAttendBuffXp(member) + getAttendEffectXp(member, lock.attendCount);
           if (attendAmount > 0) {
             await grantXp(member, attendAmount, { reason: "attend" });
             console.log(`✅ 출석 자동 지급: ${member.displayName} +${attendAmount.toLocaleString()} (음성 ${upd.voiceTodayMin}분)`);
           }
         }
+      }
+
+      // 하루 음성 N분 효과 — 오늘 누적 분이 효과의 기준 이상이면 하루 1번 (오류는 안에서 삼킨다)
+      if (upd) {
+        await grantOnceEffects(member, "voiceDaily", { test: (e) => upd.voiceTodayMin >= e.minMinutes });
       }
     }
   } catch (e) {

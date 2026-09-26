@@ -22,6 +22,9 @@ const UserXpSchema = new mongoose.Schema({
   // 오늘(KST) 음성 누적 분 — 출석 자동 지급 판정용. 날짜가 바뀌면 봇이 리셋한다.
   voiceTodayMin: { type: Number, default: 0 },
   voiceTodayDate: { type: String, default: "" },
+  // 📌 아이템 효과(봇이 씀) — 효과별 "하루 1번" 기록("<roleId>:<effectId>" → 날짜) · 최고 도달 레벨(레벨업 효과 중복 방지)
+  effectDaily: { type: Map, of: String, default: {} },
+  maxLevel: { type: Number, default: 0 },
   // 📌 시즌 패스 — 새 재화를 만들지 않고 "이번 시즌에 번 XP"(xp - passBaseXp)를 진행도로 쓴다.
   //    XpLog 는 60일 TTL 이라 시즌 전체를 셀 수 없으므로, 시즌 시작 시점의 누적 XP를 찍어두고 뺀다.
   passSeason: { type: Number, default: 0 },        // SEASON.number 와 다르면 새 시즌 — 조회 시점에 다시 스냅샷한다

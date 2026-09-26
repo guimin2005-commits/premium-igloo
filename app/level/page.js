@@ -167,8 +167,8 @@ const fmtRel = (s) => {
 const kstTodayStr = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 // XP 사유 서브팔레트 — 채팅 모노/음성 아이스/출석 레드 (그 외 유채색 금지)
-const REASON_COLORS = { chat: "#a8adb8", voice: "#6fa8c4", attend: "#e91e3f" };
-const REASON_LABELS = { chat: "채팅", voice: "음성", attend: "출석" };
+const REASON_COLORS = { chat: "#a8adb8", voice: "#6fa8c4", attend: "#e91e3f", effect: "#c39220", "effect-levelup": "#c39220" };
+const REASON_LABELS = { chat: "채팅", voice: "음성", attend: "출석", effect: "아이템 효과", "effect-levelup": "레벨업 효과" };
 
 // 누적 음성 참여 시간 — 한 시간을 넘기면 시간 단위로, 그 전에는 분 단위로 읽는다
 const fmtVoiceTime = (sec) => {

@@ -56,6 +56,148 @@ export const buildInvGroups = (invAll) => {
 //    레벨 보상(source "level")은 유형 대신 "level" 을 넘겨 메달이 나오게 한다.
 export const invIconType = (it) => (it.source === "level" ? "level" : it.type || it.kind || "item");
 
+// 색 — 등록된 색 > 유형 기본색 (lib/items.js). 레벨 보상은 서버가 분홍을 실어 보낸다.
+//    잉크 패널 위라 너무 어두운 색(기프트카드 기본 #131313 등)은 밝은 회색으로 바꿔 칸 테두리가 보이게 한다
+export const invAccentOf = (it) => {
+  const c = it.color || itemTypeColor(it.type || it.kind);
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
+  if (!m) return c;
+  const lum = (parseInt(m[1], 16) * 0.299 + parseInt(m[2], 16) * 0.587 + parseInt(m[3], 16) * 0.114) / 255;
+  return lum < 0.18 ? "#d4d4d4" : c;
+};
+// 기간제 — 만료는 결제 순간부터 정해져 있다(봇 지급이 늦어도 산 만큼 보장). 그래서 지급 대기여도 남은 기간을 센다
+const ddayOf = (it) =>
+  it.expiresAt ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000)) : null;
+const untilOf = (it) =>
+  it.expiresAt
+    ? new Date(it.expiresAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
+    : "";
+
+// 📌 가방 칸 하나 — 가방 격자와 아이템 등록 미리보기가 같은 칸을 쓴다(onClick 이 없으면 누를 수 없는 칸)
+const InvSlot = ({ it, on, onClick }) => {
+  const dead = it.status === "pending" || it.status === "missing";
+  const accent = invAccentOf(it);
+  const dday = ddayOf(it);
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag
+      {...(onClick ? { type: "button", onClick } : {})}
+      title={it.name}
+      className={`relative aspect-square rounded-xl flex flex-col items-center justify-center px-1.5 transition-all outline-none focus:outline-none ${
+        on ? "-translate-y-0.5" : onClick ? "hover:-translate-y-0.5" : ""
+      }`}
+      style={{
+        background: dead ? "rgba(255,255,255,0.03)" : `linear-gradient(160deg, ${accent}2e, ${accent}0d)`,
+        // 고른 칸은 흰 테두리 — ring 클래스는 이 인라인 그림자에 덮여 안 보였다
+        boxShadow: `${on ? "0 0 0 2px rgba(255,255,255,0.75), " : ""}${dead ? "inset 0 0 0 1px rgba(255,255,255,0.07)" : `inset 0 0 0 1px ${accent}44`}`,
+      }}
+    >
+      <span aria-hidden className="mb-1.5">
+        <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={28} color={accent} dim={dead} />
+      </span>
+      <span className={`w-full text-[10px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
+        {it.name}
+      </span>
+      {/* 상태 · 기간 — 모서리 배지 · 점 대신 이름 아래 한 줄 글자로 (3일 이하 · 확인 필요는 빨강) */}
+      {(it.status === "pending" || it.status === "missing" || dday !== null) && (
+        <span className={`mt-1 text-[9px] font-bold tabular-nums leading-none ${it.status === "missing" || (dday !== null && dday <= 3) ? "text-[#ff5c77]" : "text-white/45"}`}>
+          {[it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "", dday !== null ? `D-${dday}` : ""].filter(Boolean).join(" · ")}
+        </span>
+      )}
+    </Tag>
+  );
+};
+
+// 📌 가방 왼쪽 상세 — 큰 아이콘 · 이름 · 설명(줄바꿈 그대로) · 상태 · 기간 · 효과.
+//    compact 는 아이템 등록 미리보기용으로 크기만 줄인다(내용 · 순서는 같다)
+const InvDetail = ({ it, compact = false }) => {
+  const accent = invAccentOf(it);
+  const dday = ddayOf(it);
+  const lines = Array.isArray(it.effectLines) ? it.effectLines.filter(Boolean) : [];
+  return (
+    <div className="min-w-0">
+      <div
+        className={`${compact ? "w-16 h-16 rounded-xl mb-3.5" : "w-24 h-24 rounded-2xl mb-5"} flex items-center justify-center`}
+        style={{ background: `linear-gradient(160deg, ${accent}33, ${accent}0f)`, boxShadow: `inset 0 0 0 1px ${accent}55` }}
+      >
+        <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={compact ? 30 : 46} color={accent} dim={it.status !== "completed"} />
+      </div>
+      <p className={`${compact ? "text-[16px]" : "text-[20px]"} font-black text-white leading-snug break-keep break-words`}>{it.name}</p>
+      <p className="text-[12px] font-bold text-white/50 mt-2 leading-relaxed break-keep break-words whitespace-pre-line">{invSubLabel(it)}</p>
+
+      <div className={`${compact ? "mt-4" : "mt-5"} space-y-3`}>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[11px] font-bold text-white/45">상태</span>
+          <span className={`text-[12px] font-black ${it.status === "missing" ? "text-[#ff5c77]" : it.status === "pending" ? "text-white/60" : "text-emerald-400"}`}>
+            {it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "보유 중"}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[11px] font-bold text-white/45">기간</span>
+          <span className="text-[12px] font-black text-white/80 tabular-nums">
+            {it.expiresAt ? `${it.days > 0 ? `${it.days}일 · ` : ""}기간제` : "영구"}
+          </span>
+        </div>
+        {it.expiresAt && (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[11px] font-bold text-white/45">만료</span>
+              <span className="text-[12px] font-black text-white/70 tabular-nums">{untilOf(it)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[11px] font-bold text-white/45">남은 기간</span>
+              <span className={`text-[12px] font-black tabular-nums ${dday <= 3 ? "text-[#ff5c77]" : "text-white/70"}`}>
+                D-{dday}
+              </span>
+            </div>
+          </>
+        )}
+        {it.rewardLevel != null && (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[11px] font-bold text-white/45">레벨</span>
+            <span className="text-[12px] font-black tabular-nums text-white/70">Lv.{it.rewardLevel}</span>
+          </div>
+        )}
+      </div>
+
+      {/* 📌 효과 — 서버(/api/shop/my-items)가 역할 연결 아이템에 붙인 문장(effectLines)을 한 줄씩 */}
+      {lines.length > 0 && (
+        <div className={compact ? "mt-4" : "mt-5"}>
+          <p className="text-[11px] font-bold text-white/45 mb-1.5">효과</p>
+          <ul className="space-y-1">
+            {lines.map((l, i) => (
+              <li key={i} className="text-[12px] font-bold text-white/70 leading-relaxed break-keep break-words">{l}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {it.status === "missing" && (
+        <p className="text-[10px] text-[#ff5c77]/80 mt-4 leading-relaxed break-keep">
+          구매 기록은 있는데 디스코드 역할이 확인되지 않습니다. 운영진에 문의해 주세요.
+        </p>
+      )}
+    </div>
+  );
+};
+
+// 📌 인벤토리 미리보기 — 아이템 등록 칸에서 "가방에 이렇게 보인다" 를 입력과 함께 바로 보여 준다.
+//    가방(BagOverlay)과 같은 잉크 판 · 같은 상세 · 같은 칸을 작게. 상태는 늘 "보유 중", 기간은 영구로 둔다.
+export function InventoryItemPreview({ item, effectLines }) {
+  const it = { status: "completed", ...item, effectLines: Array.isArray(effectLines) ? effectLines : [] };
+  return (
+    <div className="relative overflow-hidden rounded-2xl bg-[#131313] flex">
+      <div aria-hidden className="absolute -top-20 -right-12 w-52 h-52 blur-[80px] rounded-full pointer-events-none" style={{ background: "rgba(233,30,63,0.2)" }}></div>
+      <div className="relative min-w-0 flex-1 px-4 py-4 border-r border-white/[0.08]">
+        <InvDetail it={it} compact />
+      </div>
+      <div className="relative shrink-0 w-[104px] p-4">
+        <InvSlot it={it} on />
+      </div>
+    </div>
+  );
+}
+
 // 📌 가방 — 인벤토리를 대시보드에 펼치지 않고 오버레이로 연다.
 //    껍데기는 TierModal 과 같은 문법(모바일 바텀시트 / 데스크톱 모달, 잉크 패널).
 //    스크롤 잠금은 손대지 않는다 — 루트 className 에 "fixed inset-0" 이 붙어 있고
@@ -76,22 +218,6 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
   // uid 로 되짚는다 — 30초 폴링이 배열을 갈아끼워도 엉뚱한 것을 가리키지 않는다
   const selItem = sel ? rows.find((r) => r.uid === sel) || null : null;
   const slots = Math.max(20, Math.ceil(rows.length / 5) * 5); // 5열 × 4줄 — 커진 창을 채운다
-  // 색 — 등록된 색 > 유형 기본색 (lib/items.js). 레벨 보상은 서버가 분홍을 실어 보낸다.
-  //    잉크 패널 위라 너무 어두운 색(기프트카드 기본 #131313 등)은 밝은 회색으로 바꿔 칸 테두리가 보이게 한다
-  const accentOf = (it) => {
-    const c = it.color || itemTypeColor(it.type || it.kind);
-    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
-    if (!m) return c;
-    const lum = (parseInt(m[1], 16) * 0.299 + parseInt(m[2], 16) * 0.587 + parseInt(m[3], 16) * 0.114) / 255;
-    return lum < 0.18 ? "#d4d4d4" : c;
-  };
-  // 기간제 — 만료는 결제 순간부터 정해져 있다(봇 지급이 늦어도 산 만큼 보장). 그래서 지급 대기여도 남은 기간을 센다
-  const ddayOf = (it) =>
-    it.expiresAt ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000)) : null;
-  const untilOf = (it) =>
-    it.expiresAt
-      ? new Date(it.expiresAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
-      : "";
 
   return (
     <PopShell
@@ -106,60 +232,7 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
       left={
         <>
         {selItem ? (
-          <div>
-            <div
-              className="w-24 h-24 rounded-2xl flex items-center justify-center mb-5"
-              style={{
-                background: `linear-gradient(160deg, ${accentOf(selItem)}33, ${accentOf(selItem)}0f)`,
-                boxShadow: `inset 0 0 0 1px ${accentOf(selItem)}55`,
-              }}
-            >
-              <ItemIcon icon={selItem.icon} imageUrl={selItem.imageUrl} type={invIconType(selItem)} size={46} color={accentOf(selItem)} dim={selItem.status !== "completed"} />
-            </div>
-            <p className="text-[20px] font-black text-white leading-snug break-keep">{selItem.name}</p>
-            <p className="text-[12px] font-bold text-white/50 mt-2 leading-relaxed break-keep">{invSubLabel(selItem)}</p>
-
-            <div className="mt-5 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[11px] font-bold text-white/45">상태</span>
-                <span className={`text-[12px] font-black ${selItem.status === "missing" ? "text-[#ff5c77]" : selItem.status === "pending" ? "text-white/60" : "text-emerald-400"}`}>
-                  {selItem.status === "pending" ? "지급 대기" : selItem.status === "missing" ? "확인 필요" : "보유 중"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[11px] font-bold text-white/45">기간</span>
-                <span className="text-[12px] font-black text-white/80 tabular-nums">
-                  {selItem.expiresAt ? `${selItem.days > 0 ? `${selItem.days}일 · ` : ""}기간제` : "영구"}
-                </span>
-              </div>
-              {selItem.expiresAt && (
-                <>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[11px] font-bold text-white/45">만료</span>
-                    <span className="text-[12px] font-black text-white/70 tabular-nums">{untilOf(selItem)}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[11px] font-bold text-white/45">남은 기간</span>
-                    <span className={`text-[12px] font-black tabular-nums ${ddayOf(selItem) <= 3 ? "text-[#ff5c77]" : "text-white/70"}`}>
-                      D-{ddayOf(selItem)}
-                    </span>
-                  </div>
-                </>
-              )}
-              {selItem.rewardLevel != null && (
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[11px] font-bold text-white/45">레벨</span>
-                  <span className="text-[12px] font-black tabular-nums text-white/70">Lv.{selItem.rewardLevel}</span>
-                </div>
-              )}
-            </div>
-
-            {selItem.status === "missing" && (
-              <p className="text-[10px] text-[#ff5c77]/80 mt-4 leading-relaxed break-keep">
-                구매 기록은 있는데 디스코드 역할이 확인되지 않습니다. 운영진에 문의해 주세요.
-              </p>
-            )}
-          </div>
+          <InvDetail it={selItem} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center py-6 sm:py-0">
             <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-white/15 flex items-center justify-center mb-3">
@@ -187,38 +260,8 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
           if (!it) {
             return <div key={`empty-${i}`} className="aspect-square rounded-xl border border-dashed border-white/[0.10] bg-white/[0.02]"></div>;
           }
-          const dead = it.status === "pending" || it.status === "missing";
-          const accent = accentOf(it);
-          const dday = ddayOf(it);
           const on = sel === it.uid;
-          return (
-            <button
-              key={it.uid || `i-${i}`}
-              onClick={() => { setSel(on ? null : it.uid); onTone(); }}
-              title={it.name}
-              className={`relative aspect-square rounded-xl flex flex-col items-center justify-center px-1.5 transition-all outline-none focus:outline-none ${
-                on ? "-translate-y-0.5" : "hover:-translate-y-0.5"
-              }`}
-              style={{
-                background: dead ? "rgba(255,255,255,0.03)" : `linear-gradient(160deg, ${accent}2e, ${accent}0d)`,
-                // 고른 칸은 흰 테두리 — ring 클래스는 이 인라인 그림자에 덮여 안 보였다
-                boxShadow: `${on ? "0 0 0 2px rgba(255,255,255,0.75), " : ""}${dead ? "inset 0 0 0 1px rgba(255,255,255,0.07)" : `inset 0 0 0 1px ${accent}44`}`,
-              }}
-            >
-              <span aria-hidden className="mb-1.5">
-                <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={28} color={accent} dim={dead} />
-              </span>
-              <span className={`w-full text-[10px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
-                {it.name}
-              </span>
-              {/* 상태 · 기간 — 모서리 배지 · 점 대신 이름 아래 한 줄 글자로 (3일 이하 · 확인 필요는 빨강) */}
-              {(it.status === "pending" || it.status === "missing" || dday !== null) && (
-                <span className={`mt-1 text-[9px] font-bold tabular-nums leading-none ${it.status === "missing" || (dday !== null && dday <= 3) ? "text-[#ff5c77]" : "text-white/45"}`}>
-                  {[it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "", dday !== null ? `D-${dday}` : ""].filter(Boolean).join(" · ")}
-                </span>
-              )}
-            </button>
-          );
+          return <InvSlot key={it.uid || `i-${i}`} it={it} on={on} onClick={() => { setSel(on ? null : it.uid); onTone(); }} />;
         })}
       </div>
 

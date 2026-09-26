@@ -19,6 +19,12 @@ const UserXpSchema = new mongoose.Schema({
   // 오늘(KST) 음성 누적 분 — 출석 자동 지급 판정용
   voiceTodayMin: { type: Number, default: 0 },
   voiceTodayDate: { type: String, default: "" },
+  // 📌 아이템 효과 "하루 1번" 기록 — 키 "<roleId>:<effectId>" → 마지막으로 받은 날(KST "YYYY-MM-DD").
+  //    하루 첫 채팅 · 하루 음성 N분 효과가 roleConfigs.js claimDaily 로 조건부 갱신해 하루 한 번만 지급한다.
+  //    (Map 키에 점 · $ 가 들어가면 안 되므로 claimDaily 가 키를 정리해서 쓴다)
+  effectDaily: { type: Map, of: String, default: {} },
+  // 지금까지 도달한 최고 레벨 — 레벨업 효과를 같은 레벨에서 두 번 주지 않으려고(xp.js). 사이트 models/UserXp.js 와 같이
+  maxLevel: { type: Number, default: 0 },
 
   // 사이트에서 XP·레벨을 바꿨을 때 레벨 역할을 다시 맞추도록 세우는 표시
   needsRoleSync: { type: Boolean, default: false },
@@ -62,6 +68,10 @@ const RoleConfigSchema = new mongoose.Schema({
   exclusive: { type: Boolean, default: false },  // 티어 사다리 — 최상위 하나만 유지
   buffXp: { type: Number, default: 0 },         // 채팅/음성 1회당 추가 XP
   attendBuffXp: { type: Number, default: 0 },   // 출석 1회당 추가 XP
+  // 📌 조건 효과 — 사이트 아이템 등록 화면에서 정한다(이 역할이 연결된 아이템). 규칙 원본은 사이트 lib/itemEffects.js,
+  //    봇 사본은 roleConfigs.js. 한 칸: { id, on, mode, amount, minMinutes?, everyN?, days?, hourFrom?, hourTo?, channelIds? }
+  //    봇은 읽기만 한다(lean). 사이트 models/RoleConfig.js 와 같은 모양(Mixed 배열) — 키를 바꾸면 같이 고칠 것.
+  effects: { type: [mongoose.Schema.Types.Mixed], default: [] },
   createdAt: { type: Date, default: Date.now },
 });
 export const RoleConfig = mongoose.models.RoleConfig || mongoose.model("RoleConfig", RoleConfigSchema);
@@ -150,7 +160,7 @@ const XpLogSchema = new mongoose.Schema({
   userId: { type: String, index: true },
   displayName: { type: String, default: "" },
   amount: { type: Number, default: 0 },
-  reason: { type: String, default: "" },   // "chat" | "voice" | "attend"
+  reason: { type: String, default: "" },   // "chat" | "voice" | "attend" | "effect"(아이템 효과 따로 지급) | "effect-levelup"
   channelId: { type: String, default: "" },
   channelName: { type: String, default: "" },
   createdAt: { type: Date, default: Date.now, index: { expires: 60 * 60 * 24 * 60 } },
