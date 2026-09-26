@@ -575,37 +575,65 @@ export default function AdminBotPage() {
   };
 
   // ── 음성 티어 역할 일괄 등록 ──────────────────
-  const [tierMap, setTierMap] = useState<Record<string, string>>({});
+  //    📌 칸은 저장된 연결(배타 역할 중 지급 레벨이 그 티어 시작 레벨인 것)을 기본으로 보여 준다.
+  //       예전엔 늘 빈칸으로 시작해, 저장해 둔 연결이 새로고침하면 사라진 것처럼 보였다(DB 에는 그대로 있었다).
+  //    tierEdits 는 바꾼 칸만 든다 — 바꾼 티어만 저장하고, 빠진 역할은 티어에서 뗀다.
+  const [tierEdits, setTierEdits] = useState<Record<string, string>>({});
   const [tierSaving, setTierSaving] = useState(false);
+  const savedTier: Record<string, string> = {};
+  for (const t of VOICE_TIERS as any[]) {
+    const cfg = configs.find((c: any) => c.exclusive && Number(c.rewardLevel) === t.min);
+    if (cfg) savedTier[t.key] = cfg.roleId;
+  }
+  const tierValue = (key: string) => (key in tierEdits ? tierEdits[key] : savedTier[key] || "");
+  const tierChanged = (key: string) => key in tierEdits && tierEdits[key] !== (savedTier[key] || "");
+  const tierDirty = (VOICE_TIERS as any[]).some((t) => tierChanged(t.key));
 
   const saveTierRoles = async () => {
-    const picked = (VOICE_TIERS as any[]).filter((t) => tierMap[t.key]);
-    if (!picked.length) return notify("연결할 역할을 하나 이상 선택해 주세요.", true);
+    const tiers = VOICE_TIERS as any[];
+    const changed = tiers.filter((t) => tierChanged(t.key));
+    if (!changed.length) return;
     // 같은 역할을 두 티어에 붙이면 지급·회수가 서로 싸운다
-    const ids = picked.map((t) => tierMap[t.key]);
-    if (new Set(ids).size !== ids.length) return notify("같은 역할을 여러 티어에 연결할 수 없습니다.", true);
+    const finalIds = tiers.map((t) => tierValue(t.key)).filter(Boolean);
+    if (new Set(finalIds).size !== finalIds.length) return notify("같은 역할을 여러 티어에 연결할 수 없습니다.", true);
 
     setTierSaving(true);
-    let ok = 0;
-    for (const t of picked as any[]) {
-      const roleId = tierMap[t.key];
-      const res = await fetch("/api/role-config", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roleId,
-          roleName: guildRoles.find((r) => r.id === roleId)?.name || t.name,
-          rewardLevel: t.min,
-          buffXp: 0,
-          attendBuffXp: 0,
-          exclusive: true, // 티어 사다리 — 최상위 하나만 유지된다
-        }),
-      }).catch(() => null);
-      if (res?.ok) ok++;
+    let fail = 0;
+    const post = (body: any) =>
+      fetch("/api/role-config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+        .then((r) => r.ok).catch(() => false);
+    // ① 티어에서 빠지는 역할 — 역할 버프가 있으면 버프만 남기고 티어만 풀고, 없으면 설정을 지운다
+    const keep = new Set(finalIds);
+    for (const t of changed) {
+      const oldId = savedTier[t.key];
+      if (!oldId || keep.has(oldId)) continue;
+      const cfg = configs.find((c: any) => c.roleId === oldId);
+      if (!cfg) continue;
+      const ok = cfg.buffXp > 0 || cfg.attendBuffXp > 0
+        ? await post({ roleId: oldId, roleName: cfg.roleName, rewardLevel: null, buffXp: cfg.buffXp, attendBuffXp: cfg.attendBuffXp, exclusive: false })
+        : await fetch(`/api/role-config?id=${cfg._id}`, { method: "DELETE" }).then((r) => r.ok).catch(() => false);
+      if (!ok) fail++;
+    }
+    // ② 새로 붙는 역할 — 그 역할에 걸린 역할 버프는 그대로 둔다(예전엔 0 으로 덮었다)
+    for (const t of changed) {
+      const roleId = tierValue(t.key);
+      if (!roleId) continue;
+      const cfg = configs.find((c: any) => c.roleId === roleId);
+      const ok = await post({
+        roleId,
+        roleName: guildRoles.find((r) => r.id === roleId)?.name || t.name,
+        rewardLevel: t.min,
+        buffXp: cfg?.buffXp || 0,
+        attendBuffXp: cfg?.attendBuffXp || 0,
+        exclusive: true, // 티어 사다리 — 최상위 하나만 유지된다
+      });
+      if (!ok) fail++;
     }
     setTierSaving(false);
+    setTierEdits({});
     fetchCore();
-    if (ok === picked.length) notify(`티어 역할 ${ok}개를 연결했습니다. 봇에는 1분 이내 반영됩니다.`);
-    else notify(`${ok}/${picked.length}개만 저장되었습니다.`, true);
+    if (!fail) notify(`티어 역할 ${changed.length}개를 저장했습니다. 봇에는 1분 이내 반영됩니다.`);
+    else notify(`일부를 저장하지 못했습니다(${fail}건). 다시 시도해 주세요.`, true);
   };
 
   // ── 저장 핸들러 ─────────────────────────────
@@ -1220,8 +1248,8 @@ export default function AdminBotPage() {
               desc="지급 레벨이 자동으로 채워지고 배타 모드로 저장돼 승급 시 아래 티어 역할이 회수됩니다 · 역할의 ‘따로 표시(hoist)’를 켜면 멤버 목록이 티어별로 묶입니다"
               right={
                 <>
-                  <Btn variant="ghost" size="sm" onClick={() => setTierMap({})}>선택 초기화</Btn>
-                  <Btn size="sm" onClick={saveTierRoles} disabled={tierSaving}>{tierSaving ? "연결 중…" : "티어 역할 연결"}</Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => setTierEdits({})} disabled={!tierDirty || tierSaving}>선택 초기화</Btn>
+                  <Btn size="sm" onClick={saveTierRoles} disabled={!tierDirty || tierSaving}>{tierSaving ? "연결 중…" : "티어 역할 연결"}</Btn>
                 </>
               }
               flush
@@ -1229,6 +1257,7 @@ export default function AdminBotPage() {
               {(VOICE_TIERS as any[]).map((t) => (
                 <FieldRow
                   key={t.key}
+                  changed={tierChanged(t.key)}
                   label={
                     <span className="inline-flex items-center gap-2 min-w-0">
                       <span aria-hidden className="shrink-0 w-2.5 h-2.5 rotate-45" style={{ backgroundColor: t.c }} />
@@ -1237,7 +1266,7 @@ export default function AdminBotPage() {
                     </span>
                   }
                 >
-                  <select value={tierMap[t.key] || ""} onChange={(e) => setTierMap({ ...tierMap, [t.key]: e.target.value })} className={inputClass}>
+                  <select value={tierValue(t.key)} onChange={(e) => setTierEdits({ ...tierEdits, [t.key]: e.target.value })} className={inputClass}>
                     <option value="">— 역할 선택 —</option>
                     {grantableRoles.map((r) => (
                       <option key={r.id} value={r.id}>{r.name}</option>
