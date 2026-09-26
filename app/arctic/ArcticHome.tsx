@@ -3,7 +3,7 @@
 import React, { useMemo } from "react";
 import Link from "next/link";
 import ItemIcon from "../components/ItemIcon";
-import { isTimed, durationLabel, cardPrice, cardListPrice, cardDays, hasOptions } from "@/lib/shopPricing";
+import { isTimed, durationLabel, cardPrice, cardListPrice, cardDays } from "@/lib/shopPricing";
 import { pointToXp } from "@/lib/pointRate";
 import { SEASON, getSeasonDday } from "@/lib/season";
 import { getTier } from "@/lib/voiceTiers";
@@ -201,7 +201,7 @@ export default function ArcticHome({
                 {deal.kind === "sale"
                   // 카드 · 필터와 같은 값(cardPrice — 기간제면 가장 싼 기간) — 한 상품이 곳마다 다른 값으로 보이지 않게
                   ? `${cardListPrice(deal.it).toLocaleString()} → ${cardPrice(deal.it).toLocaleString()} XP${isTimed(deal.it) ? ` / ${durationLabel(cardDays(deal.it) ?? 0)}` : ""} · 1인 1개`
-                  : `${cardPrice(deal.it).toLocaleString()} XP${hasOptions(deal.it) ? " 부터" : ""}`}
+                  : `${cardPrice(deal.it).toLocaleString()} XP`}
               </p>
               <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">
                 {deal.it.stock === -1 || deal.it.stock == null ? "수량 무제한" : `남은 수량 ${deal.it.stock}`}

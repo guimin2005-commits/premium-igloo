@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { salePrice, basePrice, isTimed, durationOptions, durationLabel, cardPrice, cardListPrice, hasOptions } from "@/lib/shopPricing";
+import { salePrice, basePrice, isTimed, durationOptions, durationLabel, cardPrice, cardListPrice } from "@/lib/shopPricing";
 import { pointToXp } from "@/lib/pointRate";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { isAdminName } from "@/lib/admins";
@@ -331,7 +331,7 @@ export default function ItemDetailPage() {
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
               {related.map((r) => {
-                // 상점 카드와 같은 기준 — 가장 싼 기간의 값(옵션이 여럿이면 "부터"), 취소선도 그 기간의 정가
+                // 상점 카드와 같은 기준 — 가장 싼 기간의 값, 취소선도 그 기간의 정가
                 const rp = cardPrice(r);
                 const rList = cardListPrice(r);
                 const rDiscounted = rp < rList;
@@ -351,7 +351,6 @@ export default function ItemDetailPage() {
                           )}
                           <span className="text-[15px] font-black text-[#131313] tabular-nums leading-none">
                             {rp.toLocaleString()}<span className="text-[11px] font-bold text-[#8a8a8a] ml-1">XP</span>
-                            {hasOptions(r) && <>{" "}<span className="whitespace-nowrap text-[11px] font-bold text-[#8a8a8a]">부터</span></>}
                           </span>
                         </div>
                         {rDiscounted && (

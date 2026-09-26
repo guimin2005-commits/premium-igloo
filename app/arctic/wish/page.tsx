@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import { ICON_PATHS } from "../../components/Icons";
-import { isTimed, durationOptions, durationLabel, durationPrice, cardPrice, cardListPrice, hasOptions } from "@/lib/shopPricing";
+import { isTimed, durationOptions, durationLabel, durationPrice, cardPrice, cardListPrice } from "@/lib/shopPricing";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { isAdminName } from "@/lib/admins";
 import ArcticStoreBar from "../ArcticStoreBar";
@@ -152,7 +152,6 @@ export default function WishPage() {
               const listPrice = cardListPrice(it);
               const pct = Math.max(0, Math.min(100, Number(it.discountPct) || 0));
               const finalPrice = cardPrice(it);
-              const fromMark = hasOptions(it);
               const has = owned.has(it._id);
               const inCart = cart.some((c) => c.itemId === it._id);
               return (
@@ -177,7 +176,7 @@ export default function WishPage() {
                     {pct > 0 && <s className="block mt-2 text-[11.5px] text-[#a3a3a3] tabular-nums leading-none">{Number(listPrice || 0).toLocaleString()} XP</s>}
                     <p className={`${pct > 0 ? "mt-1" : "mt-2"} text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none`}>
                       {pct > 0 && <span className="mr-1.5 text-[14px] font-black text-[#e91e3f]">{pct}%</span>}
-                      {finalPrice.toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP{fromMark ? " 부터" : ""}</span>
+                      {finalPrice.toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP</span>
                     </p>
                   </Link>
                   {/* 찜 목록에서는 바로 담을 수 있게 — 다시 누르면 뺀다 */}

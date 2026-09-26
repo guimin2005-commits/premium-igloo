@@ -7,7 +7,7 @@ import Dropdown from "../components/Dropdown";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 import IconPicker from "../components/IconPicker";
-import { salePrice, isTimed, durationOptions, durationLabel, cardPrice, cardListPrice, hasOptions } from "@/lib/shopPricing";
+import { salePrice, isTimed, durationOptions, durationLabel, cardPrice, cardListPrice } from "@/lib/shopPricing";
 import { POINT_RATE, xpToPoint, pointToXp } from "@/lib/pointRate";
 import { itemTypeLabel, itemTypeColor, ITEM_TYPE_OPTIONS } from "@/lib/items";
 import {
@@ -654,7 +654,7 @@ export default function ArcticShopBody({
 
 
   // 📌 상품 하나 — 상자(카드) 없이 그림 · 상품명 · 가격 · 찜 만. 담기·구매는 상세에서.
-  //    표시 가격은 cardPrice — 기간제는 가장 싼 기간의 판매가(옵션이 여럿이면 "부터"). 가격 필터 · 정렬과 같은 값.
+  //    표시 가격은 cardPrice — 기간제는 가장 싼 기간의 판매가. 가격 필터 · 정렬과 같은 값("부터" 표기는 사용자 요청으로 뺐다).
   //    취소선 정가도 같은 기간 기준(cardListPrice)
   const renderCard = (it: any) => {
     const soldOut = it.stock === 0;
@@ -695,8 +695,6 @@ export default function ArcticShopBody({
           <p className={`${pct > 0 ? "mt-1" : "mt-2"} text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none`}>
             {pct > 0 && <span className="mr-1.5 text-[14px] font-black text-[#e91e3f]">{pct}%</span>}
             {finalPrice.toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP</span>
-            {/* 좁은 폭에서 넘치면 "부터" 만 통째로 다음 줄로 */}
-            {hasOptions(it) && <>{" "}<span className="whitespace-nowrap text-[11px] font-bold text-[#8a8a8a]">부터</span></>}
           </p>
         </Link>
 
@@ -785,8 +783,9 @@ export default function ArcticShopBody({
           <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-auto md:ml-0">
             {isLoggedIn && (
               <>
-                {/* 소지 — 보는 값이라 조용하게. 도구와는 가는 선으로 나눈다 */}
-                <span className="hidden lg:inline-flex items-baseline gap-3 text-[12px] font-bold text-[#5a5a5a] tabular-nums whitespace-nowrap">
+                {/* 소지 — 보는 값이라 조용하게. 도구와는 가는 선으로 나눈다.
+                    📌 폭 고정 · 오른쪽 정렬 — 숫자 자릿수가 늘 때 칸이 커져 옆의 검색창이 밀리던 것(메모: tabs-never-move). 1억 XP · 10만 빙옥까지 한 칸에 든다 */}
+                <span className="hidden lg:inline-flex w-[188px] shrink-0 justify-end items-baseline gap-3 text-[12px] font-bold text-[#5a5a5a] tabular-nums whitespace-nowrap overflow-hidden">
                   <span>{(myXp ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#a3a3a3]">XP</span></span>
                   <span>{(myPoint ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#a3a3a3]">빙옥</span></span>
                 </span>
