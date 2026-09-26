@@ -729,7 +729,7 @@ const hexLift = (hex, t) => {
 //    오른쪽: 다음 단계와 강화 버튼, 전 단계 레일(지난 단계는 채운 노드, 다음은 고리, 남은 건 빈 노드 · 1회 획득 · 비용).
 //    비용은 서버와 같은 식(lib/enhance enhanceCost). 최대 단계가 0 인 쪽은 탭을 만들지 않는다.
 const EMBER = "linear-gradient(135deg, #ff4d3a 0%, #ff9a3c 100%)";
-const GOLD_TEXT = { background: "linear-gradient(110deg, #ffb040 20%, #fff3c4 45%, #ffb040 70%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 3s linear infinite" };
+const GOLD_TEXT = { backgroundImage: "linear-gradient(110deg, #ffb040 20%, #fff3c4 45%, #ffb040 70%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 3s linear infinite" };
 const sparksOf = (n, r0) => Array.from({ length: n }, (_, i) => {
   const a = (i / n) * Math.PI * 2 + (i % 2) * 0.2;
   const r = r0 + (i % 3) * 12;
@@ -1186,7 +1186,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
               {pass.unlocked && (
                 <span
                   className="ml-auto text-[12px] font-black"
-                  style={{ background: "linear-gradient(90deg, #d9c6ff, #ff9fd6)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}
+                  style={{ backgroundImage: "linear-gradient(90deg, #d9c6ff, #ff9fd6)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}
                 >
                   해금됨
                 </span>
@@ -2439,7 +2439,9 @@ export default function LevelPage() {
                             <div className="min-w-0 flex-1">
                               <p
                                 className="text-[18px] font-black tracking-tight leading-none truncate"
-                                style={{ background: `linear-gradient(180deg, ${hexLift(tierCur.c, 0.45)} 0%, ${tierCur.c} 100%)`, WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", color: tierCur.c }}
+                                // 📌 background 줄임말이 아니라 backgroundImage — 등급이 바뀌어(구매로 레벨 하락 등) 색만 다시 쓰일 때
+                                //    줄임말은 background-clip 을 처음값으로 되돌려, 글자 대신 칸 전체가 그라데이션 막대로 칠해졌다
+                                style={{ backgroundImage: `linear-gradient(180deg, ${hexLift(tierCur.c, 0.45)} 0%, ${tierCur.c} 100%)`, WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", color: tierCur.c }}
                               >
                                 {tierCur.name}
                               </p>
