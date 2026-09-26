@@ -44,8 +44,13 @@ client.once(Events.ClientReady, async (c) => {
     return;
   }
 
-  await registerCommandDefinitions(c);
-  console.log("✅ 슬래시 커맨드 등록 완료");
+  // 등록이 실패해도(디스코드 API 장애 · 권한) 설정 로드 · 음성 XP · 지급 큐는 계속 시작한다 — 이미 등록된 명령은 그대로 쓸 수 있다
+  try {
+    await registerCommandDefinitions(c);
+    console.log("✅ 슬래시 커맨드 등록 완료");
+  } catch (e) {
+    console.error("❌ 슬래시 커맨드 등록 실패 — 나머지는 계속 시작합니다:", e.message);
+  }
 
   await Promise.all([refreshRoleConfigs(), refreshItemEffects(), refreshChannelConfigs(), refreshBotSettings()]);
   startRoleConfigLoop();

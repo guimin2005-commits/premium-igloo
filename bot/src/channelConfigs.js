@@ -18,13 +18,17 @@ export function startChannelConfigLoop() {
 }
 
 // 채널 자신 + 상위 카테고리 설정을 합산한 정책
-// (둘 중 하나라도 지급 제외면 제외, Boost는 합산)
+// (하나라도 지급 제외면 제외, Boost는 합산)
+// 스레드 · 포럼 글은 parentId 가 상위 채널이라 그 카테고리(parent.parentId)까지 본다
 export function getChannelPolicy(channel) {
-  const own = byChannelId.get(channel.id);
-  const parent = channel.parentId ? byChannelId.get(channel.parentId) : null;
-
-  return {
-    excluded: !!(own?.excluded || parent?.excluded),
-    boostXp: (own?.boostXp || 0) + (parent?.boostXp || 0),
-  };
+  const ids = [...new Set([channel.id, channel.parentId, channel.parent?.parentId].filter(Boolean))];
+  let excluded = false;
+  let boostXp = 0;
+  for (const id of ids) {
+    const c = byChannelId.get(id);
+    if (!c) continue;
+    if (c.excluded) excluded = true;
+    boostXp += c.boostXp || 0;
+  }
+  return { excluded, boostXp };
 }

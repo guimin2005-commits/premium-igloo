@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, Suspense } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 /* 📌 이 페이지는 사이트에서 유일하게 '공식 문서' 톤을 따른다.
@@ -68,6 +68,8 @@ function PolicyContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab");
   const [tab, setTab] = useState(VALID_TABS.includes(initialTab) ? initialTab : "terms");
+  // 이미 /policy 에 있을 때 푸터·메뉴 링크로 ?tab 만 바뀌면 페이지가 다시 마운트되지 않는다 — 주소를 따라간다
+  useEffect(() => { setTab(VALID_TABS.includes(initialTab) ? initialTab : "terms"); }, [initialTab]);
 
   const activeDoc = DOCS.find((d) => d.id === tab) || DOCS[0];
 
@@ -93,7 +95,11 @@ function PolicyContent() {
             return (
               <button
                 key={d.id}
-                onClick={() => setTab(d.id)}
+                onClick={() => {
+                  setTab(d.id);
+                  // 주소에도 남겨 새로고침 · 공유 때 같은 탭이 열리게 한다 (기록은 쌓지 않는다)
+                  window.history.replaceState(null, "", d.id === "terms" ? "/policy" : `/policy?tab=${d.id}`);
+                }}
                 className={`relative py-3.5 sm:py-4 text-[13px] md:text-sm font-bold shrink-0 whitespace-nowrap outline-none focus:outline-none transition-colors ${
                   active ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"
                 }`}

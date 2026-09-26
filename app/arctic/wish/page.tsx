@@ -9,6 +9,7 @@ import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { isAdminName } from "@/lib/admins";
 import ArcticStoreBar from "../ArcticStoreBar";
 import CardArt from "../CardArt";
+import { ownedIdsOf } from "../owned";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 
@@ -90,7 +91,8 @@ export default function WishPage() {
     });
   }, [ready, validIds]);
 
-  const owned =useMemo(() => new Set(orders.filter((o) => o.status !== "cancelled").map((o) => o.itemId)), [orders]);
+  // 서버와 같은 기준 — 만료 · 환불 건은 보유가 아니다 (owned.ts)
+  const owned = useMemo(() => ownedIdsOf(orders, items), [orders, items]);
   // 찜한 순서대로 — 최근에 찜한 것이 앞에 오게
   const rows = useMemo(() => [...wish].reverse().map((id) => items.find((i) => i._id === id)).filter(Boolean), [wish, items]);
 

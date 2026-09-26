@@ -19,7 +19,11 @@ async function fetchMember(guild, userId) {
 // ── 역할 상품 구매 처리 ──────────────────────
 async function processPurchases(guild) {
   // 아이템 유형도 결국 디스코드 역할을 주는 상품이다 — 여기서 빠지면 사도 영영 지급되지 않는다
-  const rows = await Purchase.find({ status: "pending", itemType: { $in: ["role", "perk", "item"] } }).limit(25);
+  // 📌 error 오름차순 — 아직 시도 안 한 건("")이 먼저, 실패한 건은 뒤로 (processDetachments 와 같은 이유)
+  //    영구 실패는 error 가 "영구 실패…"(한글)로 시작해 일시 오류(영문)보다도 뒤에 온다
+  const rows = await Purchase.find({ status: "pending", itemType: { $in: ["role", "perk", "item"] } })
+    .sort({ error: 1, createdAt: 1 })
+    .limit(25);
 
   for (const p of rows) {
     try {
@@ -29,12 +33,30 @@ async function processPurchases(guild) {
         await p.save();
         continue;
       }
+      const hadRole = !!p.roleId && member.roles.cache.has(p.roleId);
       if (p.roleId) await member.roles.add(p.roleId, p.itemId === "grant" ? `운영진 지급: ${p.itemName}` : `ARCTIC 구매: ${p.itemName}`);
 
-      p.status = "completed";
-      p.processedAt = new Date();
-      p.error = "";
-      await p.save();
+      // 📌 pending 일 때만 completed 로 — 역할을 붙이는 사이 관리자가 취소(환불)했으면 덮어쓰지 않는다
+      const done = await Purchase.updateOne(
+        { _id: p._id, status: "pending" },
+        { $set: { status: "completed", processedAt: new Date(), error: "" } }
+      );
+      if (!done.modifiedCount) {
+        // 그 사이 취소됨 — 방금 붙인 역할을 되돌린다 (원래 있던 역할이거나 같은 역할을 주는 다른 살아 있는 구매가 있으면 둔다)
+        if (p.roleId && !hadRole) {
+          const alive = await Purchase.findOne({
+            userId: p.userId,
+            roleId: p.roleId,
+            status: "completed",
+            siteOnly: { $ne: true },
+            _id: { $ne: p._id },
+            $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+          }).lean();
+          if (!alive) await member.roles.remove(p.roleId, `지급 중 취소됨: ${p.itemName}`).catch(() => {});
+        }
+        console.log(`🛒 지급 중 취소된 구매: ${p.userName} ← ${p.itemName}`);
+        continue;
+      }
       console.log(`🛒 역할 지급 완료: ${p.userName} ← ${p.itemName}${p.days > 0 ? ` (${p.days}일)` : ""}`);
 
       // 기간제는 언제까지인지 본인에게 알려 준다 (DM이 막혀 있으면 조용히 넘어간다)
@@ -43,7 +65,10 @@ async function processPurchases(guild) {
         member.send(`🎫 **${p.itemName}** 역할이 지급되었습니다.\n이용 기간 ${p.days}일 — ${until}까지 유지되며, 기간이 끝나면 자동으로 회수됩니다.`).catch(() => {});
       }
     } catch (e) {
-      p.error = e.message;
+      // 50013(봇 역할보다 위) · 10011(삭제된 역할)은 다시 해도 같다 — 표시만 남기고 pending 은 둔다.
+      // failed 로 확정하면 주문 관리의 취소(환불)가 pending 만 받아 환불할 길이 없어지고 보유 판정에서도 빠진다.
+      const permanent = e?.code === 50013 || e?.code === 10011;
+      p.error = permanent ? `영구 실패(${e.code}): ${e.message}` : e.message;
       await p.save();
       console.error(`🛒 역할 지급 실패 (${p.userName} / ${p.itemName}):`, e.message);
     }
@@ -70,39 +95,82 @@ async function processPayouts(guild) {
         continue;
       }
 
-      const doc = await UserXp.findOneAndUpdate(
-        { userId },
-        // 📌 시즌 패스 보상 XP 는 진행도(xp - passBaseXp)를 채우면 안 된다 —
-        //    보상이 다음 티어 게이지를 스스로 밀어 올려 관리자가 정한 need 간격이 무의미해진다.
-        //    사이트가 미리 올려 두면 봇이 지급하기 전까지 진행도만 깎여 이미 도달한 티어가 잠기므로,
-        //    실제로 xp 가 들어오는 이 순간에 기준선을 같은 폭으로 함께 올린다.
-        p.source === "pass"
-          ? { $inc: { xp: p.amount, passBaseXp: p.amount }, $set: { updatedAt: new Date() } }
-          : { $inc: { xp: p.amount }, $set: { updatedAt: new Date() } },
-        { upsert: true, new: true }
-      );
-      const newLevel = getLevelByXp(doc.xp);
-      await UserXp.updateOne({ userId }, { $set: { level: newLevel } });
+      // 📌 선점 — pending → processing 에 성공한 틱만 지급한다.
+      //    XP 를 넣은 뒤 paid 를 쓰기 전에 꺼지거나 DB 오류가 나도 pending 으로 남지 않아 같은 건을 두 번 주지 않는다.
+      //    (processing 에 멈춘 건은 자동으로 다시 주지 않는다 — 관리자가 확인한다)
+      const claim = await Payout.updateOne({ _id: p._id, status: "pending" }, { $set: { status: "processing", error: "" } });
+      if (!claim.modifiedCount) continue;
 
-      // 지급·회수로 레벨이 달라졌을 수 있으니 보상 역할을 현재 레벨에 맞춘다
-      const member = await fetchMember(guild, userId);
-      if (member) {
-        await syncRewardRoles(member, newLevel).catch(() => {});
-        // 큐로만 XP 가 들어온 계정은 이름이 비어 있어 랭킹에 "이름 없음" 으로 뜬다.
-        // grantXp 와 달리 여기서는 이름을 채우지 않았기 때문 — 멤버를 이미 받아왔으니 같이 채운다.
-        if (!doc.displayName || !doc.username) {
-          await UserXp.updateOne(
+      let doc;
+      let applied = p.amount;
+      try {
+        if (p.amount < 0) {
+          // 📌 회수는 0 아래로 내리지 않는다 — 사이트는 예약 시점 잔액으로만 자르므로, 그 사이 쓴 만큼은 여기서 다시 자른다
+          //    (이미 0 아래인 옛 문서는 그대로 둔다 — 회수가 XP 를 올리면 안 되므로)
+          const cur = { $ifNull: ["$xp", 0] };
+          const before = await UserXp.findOneAndUpdate(
             { userId },
-            { $set: { displayName: member.displayName, username: member.user.username } }
-          ).catch(() => {});
+            [{ $set: { xp: { $max: [{ $min: [0, cur] }, { $add: [cur, p.amount] }] }, updatedAt: new Date() } }],
+            { new: false }
+          );
+          const beforeXp = Number(before?.xp) || 0;
+          const afterXp = Math.max(Math.min(0, beforeXp), beforeXp + p.amount);
+          applied = afterXp - beforeXp;
+          doc = before ? { xp: afterXp, displayName: before.displayName, username: before.username } : null;
+        } else {
+          doc = await UserXp.findOneAndUpdate(
+            { userId },
+            // 📌 시즌 패스 보상 XP 는 진행도(xp - passBaseXp)를 채우면 안 된다 —
+            //    보상이 다음 티어 게이지를 스스로 밀어 올려 관리자가 정한 need 간격이 무의미해진다.
+            //    사이트가 미리 올려 두면 봇이 지급하기 전까지 진행도만 깎여 이미 도달한 티어가 잠기므로,
+            //    실제로 xp 가 들어오는 이 순간에 기준선을 같은 폭으로 함께 올린다.
+            p.source === "pass"
+              ? { $inc: { xp: p.amount, passBaseXp: p.amount }, $set: { updatedAt: new Date() } }
+              : { $inc: { xp: p.amount }, $set: { updatedAt: new Date() } },
+            { upsert: true, new: true }
+          );
         }
+      } catch (e) {
+        // XP 가 들어가지 않았다 — 다음 틱에 다시 시도하도록 되돌린다
+        await Payout.updateOne({ _id: p._id, status: "processing" }, { $set: { status: "pending", error: e.message } });
+        console.error(`💰 XP 지급 실패 (${p.userName}):`, e.message);
+        continue;
       }
 
-      p.status = "paid";
-      p.paidAt = new Date();
-      p.error = "";
-      await p.save();
-      console.log(`💰 XP 지급 완료: ${p.userName} +${p.amount.toLocaleString()} (${p.reason || p.source})`);
+      // XP 가 들어간 즉시 paid — 아래 부가 작업(레벨 · 역할 · 이름)이 실패해도 다시 지급하지 않는다
+      await Payout.updateOne(
+        { _id: p._id },
+        { $set: { status: "paid", paidAt: new Date(), error: "", ...(applied !== p.amount ? { amount: applied } : {}) } }
+      );
+      console.log(`💰 XP 지급 완료: ${p.userName} ${applied >= 0 ? "+" : ""}${applied.toLocaleString()} (${p.reason || p.source})`);
+      if (!doc) continue; // 회수 대상 문서가 없었다 — 뺄 것도 맞출 것도 없다
+
+      try {
+        const newLevel = getLevelByXp(doc.xp);
+        // 지급 직후 xp 그대로일 때만 레벨을 쓴다 — 그 사이 채팅 · 음성 지급이 xp 를 바꿨으면 그쪽이 맞춘다(레벨 역행 방지)
+        const lv = await UserXp.updateOne({ userId, xp: doc.xp }, { $set: { level: newLevel } });
+        // 최고 도달 레벨 — 큐로 오른 레벨도 기록해야 이미 도달한 레벨에서 레벨업 효과를 다시 주지 않는다(xp.js)
+        await UserXp.updateOne({ userId }, { $max: { maxLevel: newLevel } });
+
+        // 지급·회수로 레벨이 달라졌을 수 있으니 보상 역할을 현재 레벨에 맞춘다
+        const member = await fetchMember(guild, userId);
+        if (member) {
+          // 레벨을 못 썼으면(그 사이 xp 가 바뀜) 옛 레벨로 역할을 맞추지 않는다 — 바꾼 쪽이 맞춘다
+          if (lv.matchedCount) await syncRewardRoles(member, newLevel).catch(() => {});
+          // 큐로만 XP 가 들어온 계정은 이름이 비어 있어 랭킹에 "이름 없음" 으로 뜬다.
+          // grantXp 와 달리 여기서는 이름을 채우지 않았기 때문 — 멤버를 이미 받아왔으니 같이 채운다.
+          if (!doc.displayName || !doc.username) {
+            await UserXp.updateOne(
+              { userId },
+              { $set: { displayName: member.displayName, username: member.user.username } }
+            ).catch(() => {});
+          }
+        }
+      } catch (e) {
+        // 지급은 끝났다 — 사유만 남긴다 (status 는 paid 그대로)
+        await Payout.updateOne({ _id: p._id }, { $set: { error: e.message } }).catch(() => {});
+        console.error(`💰 XP 지급 후 레벨 · 역할 처리 실패 (${p.userName}):`, e.message);
+      }
     } catch (e) {
       p.error = e.message;
       await p.save();
@@ -113,7 +181,8 @@ async function processPayouts(guild) {
 
 // ── 코드 역할 지급 처리 ──────────────────────
 async function processCodeGrants(guild) {
-  const rows = await CodeGrant.find({ status: "pending" }).limit(25);
+  // 실패한 건은 뒤로 — 앞자리 실패 건이 뒤의 새 건을 막지 않게 (processPurchases 와 같은 정렬)
+  const rows = await CodeGrant.find({ status: "pending" }).sort({ error: 1, createdAt: 1 }).limit(25);
 
   for (const g of rows) {
     try {
@@ -131,7 +200,10 @@ async function processCodeGrants(guild) {
       await g.save();
       console.log(`🎫 코드 역할 지급 완료: ${g.userName} (${g.code})`);
     } catch (e) {
-      g.error = e.message;
+      // 50013 · 10011 은 다시 해도 같다 — 코드 역할은 관리 화면이 없어 남겨 두면 영영 큐에 머문다. failed 로 확정하고 사유를 남긴다
+      const permanent = e?.code === 50013 || e?.code === 10011;
+      g.error = permanent ? `영구 실패(${e.code}): ${e.message}` : e.message;
+      if (permanent) g.status = "failed";
       await g.save();
       console.error(`🎫 코드 역할 지급 실패 (${g.userName}):`, e.message);
     }
@@ -149,7 +221,8 @@ async function processRoleSyncs(guild) {
       const member = await fetchMember(guild, r.userId);
       if (member) await syncRewardRoles(member, r.level || 0);
       // 서버에 없는 유저는 다시 들어올 때 레벨업 흐름에서 처리되므로 표시만 내린다
-      await UserXp.updateOne({ userId: r.userId }, { $set: { needsRoleSync: false } });
+      // 📌 읽은 레벨 그대로일 때만 내린다 — 맞추는 사이 사이트가 레벨을 바꾸고 다시 세웠으면 남겨 다음 틱에 다시 맞춘다
+      await UserXp.updateOne({ userId: r.userId, needsRoleSync: true, level: r.level ?? null }, { $set: { needsRoleSync: false } });
     } catch (e) {
       console.error(`🧩 역할 동기화 실패 (${r.displayName || r.userId}):`, e.message);
     }
@@ -164,7 +237,9 @@ async function processExpiries(guild) {
     status: "completed",
     itemType: { $in: ["role", "perk", "item"] }, // 기간제 아이템도 기간이 지나면 회수한다
     expiresAt: { $ne: null, $lte: new Date() },
-  }).limit(50);
+  })
+    .sort({ error: 1, expiresAt: 1 }) // 실패한 건은 뒤로 — 앞자리 실패 건이 뒤의 회수를 막지 않게
+    .limit(50);
 
   for (const p of rows) {
     try {
@@ -188,13 +263,25 @@ async function processExpiries(guild) {
         }
       }
 
-      p.status = "expired";
-      p.revokedAt = new Date();
-      await p.save();
+      // 📌 completed 일 때만 expired 로 — 그 사이 관리자가 환불(refunded)했으면 덮어쓰지 않는다 (역할은 환불 큐가 뗀다)
+      const done = await Purchase.updateOne(
+        { _id: p._id, status: "completed" },
+        { $set: { status: "expired", revokedAt: new Date(), error: "" } }
+      );
+      if (!done.modifiedCount) continue;
       console.log(`⌛ 기간제 역할 회수: ${p.userName} → ${p.itemName} (${p.days}일)`);
     } catch (e) {
-      p.error = e.message;
-      await p.save();
+      // 50013 · 10011 은 다시 해도 같다 — 기간은 이미 끝났으니 expired 로 확정하고 사유를 남긴다 (봇이 못 뗀 역할은 관리자가 뗀다)
+      const permanent = e?.code === 50013 || e?.code === 10011;
+      if (permanent) {
+        await Purchase.updateOne(
+          { _id: p._id, status: "completed" },
+          { $set: { status: "expired", revokedAt: new Date(), error: `영구 실패(${e.code}): ${e.message}` } }
+        );
+      } else {
+        p.error = e.message;
+        await p.save();
+      }
       console.error(`⌛ 기간제 역할 회수 실패 (${p.userName} / ${p.itemName}):`, e.message);
     }
   }
@@ -209,7 +296,7 @@ async function processExpiries(guild) {
 //    디스코드 역할은 봇만 뗄 수 있다. 만료와 같은 alive 검사를 거쳐 회수한다.
 async function processRefunds(guild) {
   const rows = await Purchase.find({ status: "refunded", roleDetached: { $ne: true } })
-    .sort({ revokedAt: 1 })
+    .sort({ error: 1, revokedAt: 1 }) // 실패한 건은 뒤로 — 앞자리 실패 건이 뒤의 회수를 막지 않게
     .limit(50);
 
   for (const p of rows) {
@@ -238,7 +325,10 @@ async function processRefunds(guild) {
       await p.save();
       console.log(`↩️ 환불 역할 회수: ${p.userName} → ${p.itemName}`);
     } catch (e) {
-      p.error = e.message;
+      // 50013 · 10011 은 다시 해도 같다 — 큐에서 확정해 빼고 사유를 남긴다 (processDetachments 와 같은 방식)
+      const permanent = e?.code === 50013 || e?.code === 10011;
+      p.error = permanent ? `영구 실패(${e.code}): ${e.message}` : e.message;
+      if (permanent) p.roleDetached = true;
       await p.save();
       console.error(`↩️ 환불 역할 회수 실패 (${p.userName} / ${p.itemName}):`, e.message);
     }

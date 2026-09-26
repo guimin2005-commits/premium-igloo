@@ -6,7 +6,7 @@ import BotSetting from "@/models/BotSetting";
 import XpBoost from "@/models/XpBoost";
 
 // ── [공개] 현재 XP 정책 — SYSTEM:LEVEL 페이지가 실시간으로 표시 ──
-//    관리 전용 값(퇴장 초기화 등)은 내보내지 않는다
+//    관리 전용 값은 내보내지 않는다. 퇴장 초기화 여부는 유저가 알아야 하는 정책이라 켜짐 여부만 내보낸다(시스템 안내 경고)
 export async function GET() {
   try {
     await connectToDatabase();
@@ -40,6 +40,7 @@ export async function GET() {
         muteTarget: doc?.muteTarget ?? "both",
         shopPublic: !!doc?.shopPublic,
         levelPublic: !!doc?.levelPublic,
+        resetOnLeave: !!doc?.resetOnLeave,
         // 진행 중인 부스트 (유저에게 보여줄 정보만)
         activeBoosts: boosts.map((b) => ({
           name: b.name,

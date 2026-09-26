@@ -11,11 +11,13 @@ import { xpToPoint, POINT_RATE } from "@/lib/pointRate";
 import ShopItem from "@/models/ShopItem";
 import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
+import ShopLock from "@/models/ShopLock";
 import mongoose from "mongoose";
 
 // ── [구매] 본인 XP · 빙옥을 소모해 상품 구매 — pointUse: 쓸 빙옥 개수(나머지는 XP) ──
 //    역할 상품은 봇이 큐(status:pending)를 보고 자동 지급, 실물은 관리자가 발송 처리
 export async function POST(request) {
+  let lock = null;
   try {
     const session = await getServerSession(authOptions);
     const userId = session?.user?.id;
@@ -50,6 +52,13 @@ export async function POST(request) {
     const days = isTimed(item) ? Math.floor(Number(rawDays) || 0) : 0;
     if (isTimed(item) && durationPrice(item, days) == null) {
       return NextResponse.json({ success: false, message: "이용 기간을 골라주세요." }, { status: 400 });
+    }
+
+    // 📌 유저 자물쇠 — 기보유 확인부터 구매 기록까지 이 유저의 다른 결제(장바구니 결제 포함)가 끼어들지 못하게 한다.
+    //    없으면 동시에 보낸 두 요청이 둘 다 기보유 확인을 통과해 같은 상품이 두 번 결제된다. 아래 finally 에서 푼다
+    lock = await ShopLock.acquire(userId);
+    if (!lock) {
+      return NextResponse.json({ success: false, message: "처리 중인 결제가 있습니다. 잠시 후 다시 시도해 주세요." }, { status: 409 });
     }
 
     // 📌 모든 상품은 1인 1개 — 이미 구매(대기·완료)한 건이 있으면 재구매 불가
@@ -124,15 +133,15 @@ export async function POST(request) {
     const inc = {};
     if (chargedXp > 0) { filter.xp = { $gte: chargedXp }; inc.xp = -chargedXp; inc.passBaseXp = -chargedXp; }
     if (pointUse > 0) { filter.point = { $gte: pointUse }; inc.point = -pointUse; }
-    const paid = await UserXp.updateOne(filter, {
-      ...(Object.keys(inc).length ? { $inc: inc } : {}),
-      $set: { updatedAt: new Date() },
-    });
-    if (!paid.matchedCount) {
-      // 사전 확인과 갱신 사이에 잔액이 바뀐 경우 — 다시 읽어 모자란 쪽을 알린다. 선점한 재고는 원복
-      const now = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
-      await releaseStock();
-      return NextResponse.json({ success: false, message: shortOf(now) || "보유 XP가 부족합니다." }, { status: 400 });
+    //    청구액이 0 이면(100% 할인) 지갑을 건드리지 않는다 — XP 기록이 없는 신규 유저는 문서가 없어 matchedCount 가 0 이 된다
+    if (Object.keys(inc).length) {
+      const paid = await UserXp.updateOne(filter, { $inc: inc, $set: { updatedAt: new Date() } });
+      if (!paid.matchedCount) {
+        // 사전 확인과 갱신 사이에 잔액이 바뀐 경우 — 다시 읽어 모자란 쪽을 알린다. 선점한 재고는 원복
+        const now = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
+        await releaseStock();
+        return NextResponse.json({ success: false, message: shortOf(now) || "보유 XP가 부족합니다." }, { status: 400 });
+      }
     }
 
     // 3) 구매 기록 (봇/관리자가 처리할 대기 건)
@@ -177,11 +186,15 @@ export async function POST(request) {
       await UserXp.updateOne({ userId }, { $set: { level: getLevelByXp(doc?.xp ?? 0), needsRoleSync: true } });
     }
     const remain = { xp: doc?.xp ?? 0, point: doc?.point ?? 0 };
+    // 역할이 없는 아이템(사이트 인벤토리 전용)도 봇이 자동 지급한다 — 역할 문구는 역할이 있을 때만
+    const autoMsg = item.roleId
+      ? (days > 0 ? `구매가 완료되었습니다. ${days}일 동안 역할이 유지되며, 잠시 후 자동으로 지급됩니다.` : "구매가 완료되었습니다. 잠시 후 역할이 자동으로 지급됩니다.")
+      : (days > 0 ? `구매가 완료되었습니다. ${days}일 동안 이용할 수 있으며, 잠시 후 자동으로 지급됩니다.` : "구매가 완료되었습니다. 잠시 후 자동으로 지급됩니다.");
 
     return NextResponse.json({
       success: true,
       message: item.type !== "physical"
-        ? (days > 0 ? `구매가 완료되었습니다. ${days}일 동안 역할이 유지되며, 잠시 후 자동으로 지급됩니다.` : "구매가 완료되었습니다. 잠시 후 역할이 자동으로 지급됩니다.")
+        ? autoMsg
         : "구매가 완료되었습니다. 운영진 확인 후 발송해 드립니다.",
       // usedPoint 는 뺀 빙옥, chargedXp 는 뺀 XP.
       // charged 는 옛 필드 — 한쪽으로만 냈을 때의 그 화폐 값. 섞어 냈으면 XP 몫이다(usedPoint · chargedXp 를 본다)
@@ -195,6 +208,8 @@ export async function POST(request) {
   } catch (e) {
     console.error("구매 처리 오류:", e);
     return NextResponse.json({ success: false, message: "구매 처리 중 오류가 발생했습니다." }, { status: 500 });
+  } finally {
+    if (lock) await ShopLock.release(lock);
   }
 }
 
@@ -207,7 +222,19 @@ export async function GET() {
       return NextResponse.json({ success: false, data: [] }, { status: 401 });
     }
     await connectToDatabase();
-    const rows = await Purchase.find({ userId }).sort({ createdAt: -1 }).limit(50).lean();
+    // 📌 최근 50건 + 그 밖의 살아 있는 보유 건(대기 · 완료, 기간이 없거나 남음) — 화면의 보유 판정(app/arctic/owned.ts)이 이 목록을 쓴다.
+    //    최근 건만 주면 구매가 50건을 넘은 유저는 오래된 영구 구매가 빠져 이미 산 상품이 미보유로 보인다.
+    //    최근 50건 밖의 건은 모두 그보다 오래됐으므로 뒤에 붙여도 최신순이 유지된다
+    const [recent, live] = await Promise.all([
+      Purchase.find({ userId }).sort({ createdAt: -1 }).limit(50).lean(),
+      Purchase.find({
+        userId,
+        status: { $in: ["pending", "completed"] },
+        $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+      }).sort({ createdAt: -1 }).limit(500).lean(),
+    ]);
+    const seen = new Set(recent.map((r) => String(r._id)));
+    const rows = [...recent, ...live.filter((r) => !seen.has(String(r._id)))];
     return NextResponse.json({ success: true, data: rows });
   } catch (e) {
     return NextResponse.json({ success: false, data: [] }, { status: 500 });

@@ -15,6 +15,17 @@ import { isAdminName } from "@/lib/admins";
 
 const DISCORD = "https://discord.gg/V2uW2nUczU";
 
+// 이벤트가 지금 진행 중인지 — /event 목록(app/event/page.tsx getEventStatus)과 같은 기준.
+//    수동 마감('종료' 태그) · 기간이 끝난 것 · 시작 전인 것은 '지금 진행 중'에서 뺀다
+const isEventOngoing = (p: any) => {
+  if (p.eventTag === "종료") return false;
+  if (!p.eventPeriod) return true;
+  const [start = "", end = ""] = String(p.eventPeriod).split("~").map((s: string) => s.trim());
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split("T")[0].replace(/-/g, ".");
+  if (end && end !== "상시" && end < today) return false;
+  return !(start > today);
+};
+
 // 24시간 온라인 곡선 — 면 + 선 + 끝점
 const ActivityChart = ({ history }: { history: { ts: string; online: number }[] }) => {
   if (!history || history.length < 2) return null;
@@ -174,7 +185,7 @@ export default function Home() {
         const live = statusOf(p) === "진행중";
         return { chip: "대회", live, title: p.title, sub: `${p.tournamentGame || "e스포츠"} · ${live ? "진행 중" : "접수 중"}`, path: `/tournament/${p._id}`, when: p.tournamentDate || p.tournamentPeriod || "" };
       });
-      const events = (Array.isArray(ev?.data) ? ev.data : []).slice(0, 2)
+      const events = (Array.isArray(ev?.data) ? ev.data : []).filter(isEventOngoing).slice(0, 2)
         .map((p: any) => ({ chip: "이벤트", live: false, title: p.title, sub: p.eventPeriod ? "" : "상시", path: `/event/${p._id}`, when: p.eventPeriod || "상시" }));
       const rows = [...liveAuctions, ...tournaments, ...events];
       setSchedule(rows.slice(0, 4));
@@ -185,7 +196,8 @@ export default function Home() {
         .sort((a: any, b: any) => {
           if (a.isPinned && !b.isPinned) return -1;
           if (!a.isPinned && b.isPinned) return 1;
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          // 예약 공지는 공개 시각 기준 (공지 목록과 같은 기준)
+          return new Date(b.publishAt || b.createdAt).getTime() - new Date(a.publishAt || a.createdAt).getTime();
         })
         .slice(0, 5);
       setNotices(noticeList);
@@ -277,7 +289,7 @@ export default function Home() {
                         <b className={`w-[46px] shrink-0 text-[11px] font-black whitespace-nowrap ${t.cls}`}>{t.label}</b>
                         {!!n.isPinned && <PinIcon />}
                         <span className="flex-1 min-w-0 text-[15px] font-extrabold truncate group-hover:text-[#e91e3f] transition-colors">{n.title}</span>
-                        {isNew(n.createdAt) && (
+                        {isNew(n.publishAt || n.createdAt) && (
                           <i className="shrink-0 w-[15px] h-[15px] rounded-full bg-[#e91e3f] text-white text-[9px] font-black not-italic leading-none flex items-center justify-center">N</i>
                         )}
                       </span>

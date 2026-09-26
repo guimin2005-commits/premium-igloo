@@ -34,9 +34,9 @@ export default function NoticeDetailPage() {
         const rows = d?.success && Array.isArray(d.data) ? d.data : [];
         const hit = rows.find((n: any) => n._id === id) || null;
         setItem(hit);
-        // 읽음 처리
+        // 읽음 처리 — 연 알림 한 건만 (다른 안 읽은 알림은 그대로 둔다)
         if (hit && !hit.read) {
-          fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ markAll: true, user: session.user!.name, id: uid }) }).catch(() => {});
+          fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: hit._id }) }).catch(() => {});
         }
       })
       .catch(() => setItem(null));

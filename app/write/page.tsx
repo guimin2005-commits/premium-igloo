@@ -404,6 +404,7 @@ export default function AdminWritePage() {
           const post = json.data;
           setCategory(post.category);
           setTitle(post.title);
+          setHidden(!!post.hidden); // 모든 카테고리 공통 — 빠지면 수정 저장 때 가리기가 풀린다
           if (post.publishAt) {
             const d = new Date(post.publishAt);
             const pad = (n: number) => String(n).padStart(2, "0");
@@ -452,7 +453,6 @@ export default function AdminWritePage() {
             setBannerUrl(post.bannerUrl || "");
             setNoticeTag(post.noticeTag || (post.isImportant ? "중요" : "일반"));
             setIsPinned(post.isPinned || false);
-            setHidden(!!post.hidden);
             
             if (post.eventPeriod && post.eventPeriod.includes("~")) {
               const [start, end] = post.eventPeriod.split("~").map((s: string) => s.trim());
@@ -554,7 +554,7 @@ export default function AdminWritePage() {
 
   const formatBulletPoints = (text = "") => text.split("\n").map(line => {
     const t = line.trim();
-    return t === "" ? "" : (/^[ \-*]/.test(t) ? t : "• " + t);
+    return t === "" ? "" : (/^[\-*•·]/.test(t) ? t : "• " + t);
   }).filter(line => line !== "").join("\n");
 
   /* 단계 하나에서 상태·기간을 끌어낸다 — 같은 걸 여러 칸에서 받으면 반드시 어긋난다 (statusFromPhase 는 lib 공용) */

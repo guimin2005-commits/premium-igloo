@@ -48,7 +48,10 @@ export async function POST(request) {
   }
 }
 
-// [상태변경] 지급 완료 / 대기로 토글
+// [상태변경] 대기로 남은 빙옥 기록만 완료로 되돌린다
+//    📌 XP 건은 봇 큐(status pending)가 지급한다. 여기서 상태를 바꾸면 이미 준 건을 대기로 돌려 다시 주거나
+//       (paid → pending, 초기화 기록이면 음수가 한 번 더 빠진다), 주지 않은 건을 닫아 보상이 사라진다(pending → paid).
+//       빙옥 건은 사이트가 이미 반영했고 봇은 집지 않으므로, 대기로 남은 기록을 완료로 되돌리는 것만 허용한다.
 export async function PUT(request) {
   try {
     const deny = await denyIfNotAdmin();
@@ -56,10 +59,17 @@ export async function PUT(request) {
     await connectToDatabase();
     const { id, status } = await request.json();
     if (!id) return NextResponse.json({ success: false, error: "ID가 없습니다." }, { status: 400 });
-    const update = status === "paid"
-      ? { status: "paid", paidAt: new Date() }
-      : { status: "pending", paidAt: null };
-    const doc = await Payout.findByIdAndUpdate(id, update, { new: true });
+    if (status !== "paid") {
+      return NextResponse.json({ success: false, error: "지급된 건은 되돌릴 수 없습니다." }, { status: 409 });
+    }
+    const doc = await Payout.findOneAndUpdate(
+      { _id: id, status: "pending", currency: "point" },
+      { $set: { status: "paid", paidAt: new Date() } },
+      { new: true }
+    );
+    if (!doc) {
+      return NextResponse.json({ success: false, error: "XP 지급은 봇이 처리합니다." }, { status: 409 });
+    }
     return NextResponse.json({ success: true, data: doc });
   } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

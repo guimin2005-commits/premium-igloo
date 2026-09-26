@@ -68,6 +68,10 @@ async function tick(client) {
   if (!rows.length) return;
 
   for (const n of rows) {
+    // 선점 — pending → sending 에 성공한 쪽만 보낸다 (재촉 전용 프로세스와 본 봇이 함께 돌아도 한 번만)
+    //    DB 오류는 실패로 남기지 않고 틱 밖으로 넘겨 다음 틱에 다시 시도한다
+    const claimed = await ScrimNudge.findOneAndUpdate({ _id: n._id, status: "pending" }, { $set: { status: "sending" } });
+    if (!claimed) continue;
     try {
       const user = await client.users.fetch(n.userId).catch(() => null);
       if (!user) {

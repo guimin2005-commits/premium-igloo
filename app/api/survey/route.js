@@ -50,7 +50,9 @@ export async function POST(request) {
     if (!postId) return NextResponse.json({ success: false, message: "postId가 필요합니다." }, { status: 400 });
 
     const post = await Post.findById(postId);
-    if (!post || !post.survey?.enabled) {
+    // 가린 글·공개 시각 전 예약 글은 상세처럼 설문도 닫혀 있다 — 관리자만 통과
+    const unpublished = !!post && (post.hidden || (!!post.publishAt && new Date(post.publishAt) > new Date()));
+    if (!post || !post.survey?.enabled || (unpublished && !isAdminName(session.user.name))) {
       return NextResponse.json({ success: false, message: "설문이 열려 있지 않습니다." }, { status: 400 });
     }
     if (post.survey.closed) {

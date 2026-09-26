@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiAuth";
+import { forgetGuildMember } from "@/lib/discordMember";
 
 export async function POST(request) {
   try {
@@ -44,6 +45,9 @@ export async function POST(request) {
         headers: { "Authorization": `Bot ${TOKEN}`, "Content-Length": "0" }
       });
     }
+
+    // 멤버 조회 캐시에 남은 지급 전 역할을 버린다 — 이어지는 세션 갱신이 새 역할을 받게
+    forgetGuildMember(userId);
 
     return NextResponse.json({ success: true, message: "인증이 완료되었습니다." });
 

@@ -121,6 +121,26 @@ export async function POST(request) {
       payload.sortOrder = Math.floor(Number(last?.sortOrder) || 0) + 1;
     }
 
+    // 📌 수정 저장의 재고 — 폼 값은 편집을 시작할 때 읽은 재고라, 그대로 덮어쓰면 그 사이 팔린 수량이 되살아나 한정 상품이 초과 판매된다.
+    //    폼이 편집 시작 때의 재고(stockBase)를 함께 보내면: 안 바꿨으면 재고를 건드리지 않고, 한정 → 한정으로 바꿨으면
+    //    바꾼 폭만큼만 더한다(0 아래로는 내리지 않는다 — 음수는 무제한이다). 무제한이 끼면 그 값으로 바꾼다. stockBase 가 없으면 예전처럼 덮어쓴다
+    const stockBase = b.stockBase === "" || b.stockBase == null ? null : Math.floor(Number(b.stockBase));
+    if (b.id && stockBase != null && Number.isFinite(stockBase)) {
+      const next = payload.stock;
+      delete payload.stock;
+      if (next !== stockBase) {
+        if (next >= 0 && stockBase >= 0) {
+          await ShopItem.updateOne(
+            { _id: b.id, stock: { $gte: 0 } },
+            [{ $set: { stock: { $max: [0, { $add: ["$stock", next - stockBase] }] } } }],
+            { updatePipeline: true }
+          );
+        } else {
+          payload.stock = next;
+        }
+      }
+    }
+
     const doc = b.id
       ? await ShopItem.findByIdAndUpdate(b.id, payload, { new: true })
       : await ShopItem.create(payload);

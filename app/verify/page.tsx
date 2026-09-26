@@ -235,6 +235,11 @@ export default function VerifyPage() {
     }
   }, [status, session, isSuccessModalOpen, router, step]);
 
+  // 비로그인은 홈으로 — 렌더 중에 이동하면 경고가 나고 기록이 쌓이니 효과에서 replace 로
+  useEffect(() => {
+    if (status === "unauthenticated") router.replace("/");
+  }, [status, router]);
+
   const handleAllCheck = () => {
     const next = !isAllChecked;
     setAgreements({ rules: next, privacy: next, caution: next, level: next, arctic: next });
@@ -288,10 +293,7 @@ export default function VerifyPage() {
   };
 
   if (status === "loading") return <div className="min-h-screen bg-white text-[#8a8a8a] flex justify-center items-center">로딩 중...</div>;
-  if (status === "unauthenticated") {
-    router.push("/");
-    return null;
-  }
+  if (status === "unauthenticated") return null;
 
   // 📌 디스코드 서버에 입장하지 않은 유저 — 입장 안내 화면
   if ((session?.user as any)?.isGuildMember === false) {

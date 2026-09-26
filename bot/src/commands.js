@@ -1,7 +1,7 @@
 // ── 슬래시 커맨드 정의 + 핸들러 ────────────────
 import { Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import { UserXp } from "./db.js";
-import { getCumulativeXpByLevel, kstToday } from "./leveling.js";
+import { getCumulativeXpByLevel, getLevelByXp, kstToday } from "./leveling.js";
 import { grantXp, EMBED_COLOR, EMBED_FOOTER } from "./xp.js";
 import { config } from "./config.js";
 import { getSettings } from "./botSettings.js";
@@ -62,7 +62,8 @@ async function handleAttend(interaction) {
 async function handleLevel(interaction) {
   const doc = await UserXp.findOne({ userId: interaction.user.id }).lean();
   const xp = doc?.xp || 0;
-  const level = doc?.level || 0;
+  // 저장된 level 은 새 문서 · 초기화 직후 0 일 수 있다 — xp 로 계산한다 (0 XP = Lv.1, 사이트와 같은 기준)
+  const level = getLevelByXp(xp);
   const need = Math.max(0, getCumulativeXpByLevel(level + 1) - xp);
 
   const embed = new EmbedBuilder()
@@ -90,7 +91,7 @@ async function handleRank(interaction) {
     .setTitle(`🏆 ${interaction.member.displayName} 님의 랭크`)
     .addFields(
       { name: "서버 순위", value: `#${above + 1} / ${total}`, inline: true },
-      { name: "레벨", value: `Lv.${doc?.level || 0}`, inline: true },
+      { name: "레벨", value: `Lv.${getLevelByXp(xp)}`, inline: true },
       { name: "누적 XP", value: xp.toLocaleString(), inline: true },
     )
     .setFooter({ text: EMBED_FOOTER });

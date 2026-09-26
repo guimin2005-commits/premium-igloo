@@ -68,7 +68,8 @@ export function getActiveBoostXp(member, channel = null) {
 
     if (b.targetChannelId) {
       if (!channel) continue;
-      const matches = channel.id === b.targetChannelId || channel.parentId === b.targetChannelId;
+      // 스레드 · 포럼 글은 상위 채널의 카테고리(parent.parentId)까지 본다
+      const matches = [channel.id, channel.parentId, channel.parent?.parentId].includes(b.targetChannelId);
       if (!matches) continue;
     }
 

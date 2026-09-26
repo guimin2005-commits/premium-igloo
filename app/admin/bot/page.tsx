@@ -380,7 +380,8 @@ export default function AdminBotPage() {
   const fetchCore = useCallback(() => {
     Promise.all([
       fetch("/api/role-config", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch("/api/discord-roles", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      // 관리 역할(서버 부스터 등)도 받는다 — 부스트 대상 · 표시용. 지급 목록은 grantableRoles 가 거른다
+      fetch("/api/discord-roles?includeManaged=1", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/channel-config", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/discord-channels", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/bot-settings", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: null })),
@@ -445,10 +446,26 @@ export default function AdminBotPage() {
     try { await postSettings(); } finally { setSavingSettings(false); }
   };
 
-  // 퀘스트 노출 방식도 같은 문서를 저장한다 (설정은 단일 문서라 전체를 함께 보낸다)
+  // 퀘스트 노출 방식도 같은 문서를 저장한다
+  // 📌 이 칸이 열린 동안은 저장 줄이 숨는다 — 전체를 보내면 다른 탭의 저장 안 한 수정분(레벨 공개 등)이
+  //    보이지 않은 채 함께 저장됐다 → 불러온 값(스냅샷) 위에 노출 개수만 얹어 보낸다
   const savePicks = async () => {
-    if (!settings) { notify("설정을 아직 불러오지 못했습니다.", true); return; }
-    if (await postSettings()) { setPickSnapshot(null); closeForm(); }
+    if (!settings || !settingsSnap) { notify("설정을 아직 불러오지 못했습니다.", true); return; }
+    const pickKeys = new Set(QUEST_PICK_FIELDS.map((f) => f.key));
+    const picks = Object.fromEntries(QUEST_PICK_FIELDS.map((f) => [f.key, settings[f.key]]));
+    const res = await fetch("/api/bot-settings", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...settingsSnap, ...picks }),
+    }).catch(() => null);
+    const d = res?.ok ? await res.json().catch(() => null) : null;
+    if (!d?.data) { notify("저장에 실패했습니다.", true); return; }
+    // 다른 칸의 저장 안 한 수정분은 저장 줄에 그대로 남긴다 (fetchCore 와 같은 방식)
+    const changed = Object.keys({ ...settingsSnap, ...settings })
+      .filter((k) => !pickKeys.has(k) && normSetting(k, settings[k]) !== normSetting(k, settingsSnap[k]));
+    setSettings({ ...d.data, ...Object.fromEntries(changed.map((k) => [k, settings[k]])) });
+    setSettingsSnap(d.data);
+    saved();
+    setPickSnapshot(null);
+    closeForm();
   };
 
   // 노출 방식 칸 열기/취소 — 취소는 연 시점의 값으로 되돌린다
@@ -649,7 +666,16 @@ export default function AdminBotPage() {
         exclusive: !!roleForm.exclusive,
       }),
     }).catch(() => null);
-    if (res?.ok) { setRoleForm(EMPTY_ROLE); closeForm(); fetchCore(); saved(); }
+    if (res?.ok) {
+      // 📌 저장은 역할 ID 로 upsert 한다 — 수정 칸에서 역할을 바꾸면 새 역할 설정만 생기고 옛 설정이 남아
+      //    그 레벨에서 두 역할을 다 받았다 → 대상이 바뀌었으면 옛 설정을 지운다
+      const orig = editId ? configs.find((c) => c._id === editId) : null;
+      const moved = orig && orig.roleId !== roleForm.roleId
+        ? await fetch(`/api/role-config?id=${editId}`, { method: "DELETE" }).then((r) => r.ok).catch(() => false)
+        : true;
+      setRoleForm(EMPTY_ROLE); closeForm(); fetchCore();
+      if (moved) saved(); else notify("기존 역할 설정을 지우지 못했습니다. 목록에서 삭제해 주세요.", true);
+    }
     else notify("저장에 실패했습니다.", true);
   };
 
@@ -665,7 +691,15 @@ export default function AdminBotPage() {
         boostXp: chForm.excluded ? 0 : Number(chForm.boostXp) || 0, excluded: chForm.excluded,
       }),
     }).catch(() => null);
-    if (res?.ok) { setChForm(EMPTY_CHANNEL); closeForm(); fetchCore(); saved(); }
+    if (res?.ok) {
+      // 채널도 채널 ID 로 upsert 한다 — 수정 칸에서 채널을 바꿨으면 옛 채널 설정을 지운다
+      const orig = editId ? channelConfigs.find((c) => c._id === editId) : null;
+      const moved = orig && orig.channelId !== chForm.channelId
+        ? await fetch(`/api/channel-config?id=${editId}`, { method: "DELETE" }).then((r) => r.ok).catch(() => false)
+        : true;
+      setChForm(EMPTY_CHANNEL); closeForm(); fetchCore();
+      if (moved) saved(); else notify("기존 채널 설정을 지우지 못했습니다. 목록에서 삭제해 주세요.", true);
+    }
     else notify("저장에 실패했습니다.", true);
   };
 

@@ -65,10 +65,17 @@ export async function POST(request) {
     } else {
       const key = String(target || "").trim();
       if (!key) return NextResponse.json({ success: false, message: "지급 대상을 입력해주세요." }, { status: 400 });
-      targets = await UserXp.find(
-        { $or: [{ userId: key }, { username: key }, { displayName: key }] },
-        { userId: 1, username: 1, displayName: 1 }
-      ).lean();
+      // 유저 ID 가 맞으면 그 한 명만 — 아니면 사용자명 · 표시 이름으로 찾되, 여러 명이 걸리면 아무에게도 주지 않는다 (동명이인)
+      targets = await UserXp.find({ userId: key }, { userId: 1, username: 1, displayName: 1 }).lean();
+      if (targets.length === 0) {
+        targets = await UserXp.find({ $or: [{ username: key }, { displayName: key }] }, { userId: 1, username: 1, displayName: 1 }).lean();
+      }
+      if (targets.length > 1) {
+        return NextResponse.json({
+          success: false,
+          message: `같은 이름의 유저가 ${targets.length}명입니다. 유저 ID로 지정해 주세요. (${targets.slice(0, 5).map((r) => `${r.displayName || r.username || "이름 없음"} ${r.userId}`).join(", ")})`,
+        }, { status: 409 });
+      }
       if (targets.length === 0) return NextResponse.json({ success: false, message: "해당 유저를 찾을 수 없습니다." }, { status: 404 });
     }
 

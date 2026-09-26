@@ -688,10 +688,10 @@ const XpSimulator = ({ me, P, ready, onTone }) => {
                 onChange={(e) => setExtra(Math.max(0, Math.min(99999, parseInt(e.target.value, 10) || 0)))} className={`${inputCls} w-24`} />
             </SimRow>
             <SimRow label="채팅 강화" sub={`1회 ${won(cLo)}~${won(cHi)} XP${chatCost > 0 ? ` · 비용 −${won(chatCost)} XP` : ""}`}>
-              <SimStepper value={chatEnh} max={P.chatEnhanceMax} onChange={pickTone(setChatEnh)} label="채팅 강화" />
+              <SimStepper value={chatEnh} min={me?.chatEnhance || 0} max={P.chatEnhanceMax} onChange={pickTone(setChatEnh)} label="채팅 강화" />
             </SimRow>
             <SimRow label="음성 강화" sub={`1회 +${won(vEnh)} XP${voiceCost > 0 ? ` · 비용 −${won(voiceCost)} XP` : ""}`}>
-              <SimStepper value={voiceEnh} max={P.voiceEnhanceMax} onChange={pickTone(setVoiceEnh)} label="음성 강화" />
+              <SimStepper value={voiceEnh} min={me?.voiceEnhance || 0} max={P.voiceEnhanceMax} onChange={pickTone(setVoiceEnh)} label="음성 강화" />
             </SimRow>
             {P.muteMode !== "off" && (
               <SimRow label="음소거로 참여" sub={P.muteMode === "block" ? "음성 XP 없음" : `음성 XP −${P.muteReducePct}%`}>
@@ -1197,7 +1197,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
                 <button
                   type="button"
                   onClick={() => onUnlock("xp")}
-                  disabled={!!busyKey || (balance?.xp || 0) < price}
+                  disabled={!!busyKey || !!dday?.ended || (balance?.xp || 0) < price}
                   className="w-full h-10 rounded-full text-white text-[12px] font-black tabular-nums transition-opacity outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
                   style={{ background: "linear-gradient(135deg, #9b6bff 0%, #e05bb5 100%)" }}
                 >
@@ -1206,7 +1206,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
                 <button
                   type="button"
                   onClick={() => onUnlock("point")}
-                  disabled={!!busyKey || (balance?.point || 0) < pointPrice}
+                  disabled={!!busyKey || !!dday?.ended || (balance?.point || 0) < pointPrice}
                   className="w-full h-10 rounded-full bg-white/[0.08] border border-white/15 enabled:hover:bg-white/[0.14] text-white text-[12px] font-black tabular-nums transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
                 >
                   {fmt(pointPrice)} 빙옥
@@ -1945,9 +1945,18 @@ export default function LevelPage() {
 
   // 📌 PC 프로필 카드는 따라오지 않고 제자리에 둔다 (따라오기 · 가운데 · 끝까지를 거쳐 고정으로 정리)
   useEffect(() => {
+    // 진행 중인 것만 — 종료 태그 · 종료일이 지난 글 · 시작 전 글은 뺀다 (app/event/page.tsx getEventStatus 와 같은 판정)
+    const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10).replace(/-/g, ".");
+    const ongoing = (ev) => {
+      if (ev?.eventTag === "종료") return false;
+      if (!ev?.eventPeriod) return true;
+      const [startStr = "", endStr = ""] = String(ev.eventPeriod).split("~").map((s) => s.trim());
+      if (endStr && endStr !== "상시" && endStr < todayStr) return false;
+      return !(startStr > todayStr);
+    };
     fetch("/api/posts?category=이벤트", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => setEvents((Array.isArray(d?.data) ? d.data : []).slice(0, 3)))
+      .then((d) => setEvents((Array.isArray(d?.data) ? d.data : []).filter(ongoing).slice(0, 3)))
       .catch(() => {});
   }, []);
 
@@ -2864,7 +2873,7 @@ export default function LevelPage() {
                         </div>
                         <div className="border-t border-black/[0.08]">
                           {events.map((ev) => (
-                            <Link key={ev._id} href="/event" className="group flex items-center min-h-[44px] py-1.5 gap-3 border-b border-black/[0.05] hover:bg-black/[0.02] transition-colors">
+                            <Link key={ev._id} href={`/event/${ev._id}`} className="group flex items-center min-h-[44px] py-1.5 gap-3 border-b border-black/[0.05] hover:bg-black/[0.02] transition-colors">
                               <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#5a5a5a] group-hover:text-[#131313] transition-colors">{ev.title}</span>
                               {ev.eventPeriod && <span className="shrink-0 text-[10px] font-bold text-[#a3a3a3]">{ev.eventPeriod}</span>}
                               <span className="shrink-0 text-[#a3a3a3] group-hover:text-[#e91e3f] transition-colors">→</span>

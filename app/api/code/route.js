@@ -2,10 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { denyIfNotAdmin, requireUser } from "@/lib/apiAuth";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import Code from "@/models/Code";
-import CodeGrant from "@/models/CodeGrant";
-import Payout from "@/models/Payout";
 
 // [조회] 관리자용 전체 코드 목록
 // ⚠️ 미사용 코드 문자열이 그대로 담기므로 반드시 관리자만 볼 수 있어야 한다
@@ -21,12 +19,12 @@ export async function GET() {
   }
 }
 
-// [수정] 관리자용 코드 수정 또는 [사용] 유저가 코드를 입력하여 보상 수령
+// [수정] 관리자용 코드 수정 (유저 사용 경로는 닫혔다 — 아래 410)
 export async function POST(request) {
   try {
     await connectToDatabase();
     const body = await request.json();
-    const { id, reward, roleId, requiredRoleId, requiredRoleName, maxUses, expiresAt, code } = body;
+    const { id, reward, roleId, requiredRoleId, requiredRoleName, maxUses, expiresAt } = body;
 
     // 관리자: 코드 수정
     if (id) {
@@ -53,81 +51,10 @@ export async function POST(request) {
       return NextResponse.json({ success: true, data: updated });
     }
 
-    // 유저: 코드 사용
-    // ⚠️ 사용자 신원은 요청 본문이 아니라 세션에서 가져온다 —
-    //    body의 userId를 믿으면 남의 계정으로 보상·XP를 몰아줄 수 있다.
-    const auth = await requireUser();
-    if (auth.deny) return auth.deny;
-    const userName = auth.name;
-    const userId = auth.userId;
-
-    if (!code || !code.trim()) {
-      return NextResponse.json({ success: false, message: "코드를 입력해 주세요." }, { status: 400 });
-    }
-
-    const normalized = code.trim().toUpperCase();
-    const found = await Code.findOne({ code: normalized });
-
-    if (!found || !found.isActive) {
-      return NextResponse.json({ success: false, message: "유효하지 않은 코드입니다." }, { status: 404 });
-    }
-    if (found.expiresAt && new Date(found.expiresAt) < new Date()) {
-      return NextResponse.json({ success: false, message: "이미 만료된 코드입니다." }, { status: 410 });
-    }
-    if (userName && found.usedBy.includes(userName)) {
-      return NextResponse.json({ success: false, message: "이미 사용한 코드입니다." }, { status: 409 });
-    }
-    if (found.maxUses !== 0 && found.usedBy.length >= found.maxUses) {
-      return NextResponse.json({ success: false, message: "사용 한도가 초과된 코드입니다." }, { status: 409 });
-    }
-
-    // 📌 특정 역할 소지자 전용 코드 — 디스코드에서 실시간 역할 확인
-    if (found.requiredRoleId) {
-      if (!userId) {
-        return NextResponse.json({ success: false, message: "이 코드는 특정 역할 소지자 전용입니다." }, { status: 403 });
-      }
-      const GUILD_ID = process.env.DISCORD_GUILD_ID;
-      const TOKEN = process.env.DISCORD_BOT_TOKEN;
-      try {
-        const memberRes = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${userId}`, {
-          headers: { Authorization: `Bot ${TOKEN}` },
-        });
-        if (!memberRes.ok) {
-          return NextResponse.json({ success: false, message: "서버 멤버 정보를 확인할 수 없습니다." }, { status: 403 });
-        }
-        const memberData = await memberRes.json();
-        if (!memberData.roles.includes(found.requiredRoleId)) {
-          const roleLabel = found.requiredRoleName ? `[${found.requiredRoleName}] ` : "";
-          return NextResponse.json({ success: false, message: `이 코드는 ${roleLabel}역할 소지자만 사용할 수 있습니다.` }, { status: 403 });
-        }
-      } catch {
-        return NextResponse.json({ success: false, message: "역할 확인 중 오류가 발생했습니다." }, { status: 500 });
-      }
-    }
-
-    // 📌 역할·XP 지급은 봇이 처리한다 — 대기열에 넣으면 30초 내 자동 지급
-    if (found.roleId && userId) {
-      await CodeGrant.create({
-        userId,
-        userName: userName || "",
-        roleId: found.roleId,
-        code: normalized,
-      }).catch(() => {});
-    }
-    if (found.xpAmount > 0 && userId) {
-      await Payout.create({
-        userName: userName || "",
-        userId,
-        amount: found.xpAmount,
-        reason: `코드 사용: ${normalized}`,
-        source: "code",
-      }).catch(() => {});
-    }
-
-    found.usedBy.push(userName || "익명");
-    await found.save();
-
-    return NextResponse.json({ success: true, message: found.reward });
+    // 유저: 코드 사용 — 쿠폰 등록(app/api/shop/my-coupons)으로 옮겨 이 경로는 닫는다.
+    //    사용 기록이 닉네임 기준이고 선점 없이 지급해, 동시 요청 · 이름 변경 · 쿠폰 이전 뒤 재사용으로 여러 번 받을 수 있었다.
+    //    화면에서 부르는 곳은 없다.
+    return NextResponse.json({ success: false, message: "코드 입력은 쿠폰 등록으로 바뀌었습니다." }, { status: 410 });
   } catch (error) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }

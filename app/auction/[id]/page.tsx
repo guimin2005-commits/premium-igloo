@@ -407,7 +407,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           const fresh = d.chat.filter((m: any) => !chatIds.current.has(m._id));
           if (fresh.length) {
             fresh.forEach((m: any) => chatIds.current.add(m._id));
-            if (fresh.some((m: any) => !m.isSystem)) { sfxChat(); setChatUnread((u) => u + fresh.filter((m: any) => !m.isSystem).length); }
+            // 입장 직후 첫 응답(지난 채팅)은 새 메시지가 아니니 효과음·안 읽은 수를 올리지 않는다
+            if (qs.has("chatSince") && fresh.some((m: any) => !m.isSystem)) { sfxChat(); setChatUnread((u) => u + fresh.filter((m: any) => !m.isSystem).length); }
             setChat((prev) => [...prev, ...fresh].slice(-150));
             lastChatAt.current = d.chat[d.chat.length - 1].createdAt;
           }

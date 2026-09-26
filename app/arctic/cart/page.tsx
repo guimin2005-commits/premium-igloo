@@ -7,13 +7,15 @@ import ArcticStoreBar from "../ArcticStoreBar";
 import CardArt from "../CardArt";
 import { basePrice, salePrice, durationLabel } from "@/lib/shopPricing";
 import { pointToXp } from "@/lib/pointRate";
+import { ITEM_TYPE_LABEL } from "@/lib/items";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 
 const ADMIN_USERS = ["elahw.06"];
 
-const TYPE_LABEL: Record<string, string> = { role: "역할", perk: "권한", physical: "기프트카드" };
-const TYPE_CLS: Record<string, string> = { role: "bg-[#e91e3f] text-white", perk: "bg-[#2f6fb0] text-white", physical: "bg-[#131313] text-white" };
+// 유형 라벨 — lib/items.js 가 단일 원천. 색은 ITEM_TYPE_COLOR 와 같은 값
+const TYPE_LABEL: Record<string, string> = ITEM_TYPE_LABEL;
+const TYPE_CLS: Record<string, string> = { role: "bg-[#e91e3f] text-white", perk: "bg-[#2f6fb0] text-white", item: "bg-[#3f9e93] text-white", physical: "bg-[#131313] text-white" };
 
 // 📌 장바구니 페이지 — 담은 상품 확인·삭제 후 주문서로 이동
 export default function CartPage() {

@@ -6,6 +6,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { getPassState, grantReward } from "@/lib/seasonPass";
 import { SEASON } from "@/lib/season";
+import { denyIfLevelClosed } from "@/lib/levelAccess";
 import UserXp from "@/models/UserXp";
 
 // ── [수령] 티어 보상 받기 — body { tid, track } ──
@@ -30,6 +31,8 @@ export async function POST(request) {
     }
 
     await connectToDatabase();
+    const closed = await denyIfLevelClosed(session);
+    if (closed) return closed;
     const userId = session.user.id;
     const state = await getPassState(userId);
 

@@ -75,6 +75,22 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "지급할 역할이나 XP 중 하나는 지정해야 합니다." }, { status: 400 });
     }
 
+    // 만료 일시 — 관리자 폼은 datetime-local 값(시간대 없는 KST 벽시계 "YYYY-MM-DDTHH:mm")을 보낸다.
+    //    서버(UTC)가 그대로 읽으면 9시간 늦게 만료되므로 +09:00 으로 읽는다. 초가 없으면 그 1분이 끝날 때까지(59초 — 상품 할인 종료와 같다).
+    //    시간대가 붙어 오면 그대로 읽는다. 비우면 무기한 — undefined 로 두면 수정 저장에서 빠져 옛 만료가 남으므로 null 로 지운다
+    let expiresAt = null;
+    const rawExp = String(b.expiresAt || "").trim();
+    if (rawExp) {
+      const local = rawExp.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/);
+      const t = new Date(local ? `${rawExp}${local[1] ? "" : ":59"}+09:00` : rawExp);
+      if (!Number.isFinite(t.getTime())) {
+        return NextResponse.json({ success: false, message: "만료 일시를 다시 확인해 주세요." }, { status: 400 });
+      }
+      expiresAt = t;
+    }
+    // 1인당 사용 횟수 — 빈칸이면 폼 자리표시 · 모델 기본값과 같은 1회(무제한은 0 을 넣는다)
+    const perRaw = b.perUserLimit === "" || b.perUserLimit == null ? 1 : Math.floor(Number(b.perUserLimit));
+
     const payload = {
       code: b.code.trim().toUpperCase(),
       name: (b.name || "").trim(),
@@ -95,9 +111,9 @@ export async function POST(request) {
       minTotal: Math.max(0, Math.floor(Number(b.minTotal) || 0)),
 
       maxUses: Math.max(0, Math.floor(Number(b.maxUses) || 0)),
-      perUserLimit: Math.max(0, Math.floor(Number(b.perUserLimit) ?? 1)),
+      perUserLimit: Number.isFinite(perRaw) ? Math.max(0, perRaw) : 1,
       active: b.active !== false,
-      expiresAt: b.expiresAt ? new Date(b.expiresAt) : undefined,
+      expiresAt,
     };
 
     const doc = b.id

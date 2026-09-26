@@ -10,6 +10,7 @@ import QuestClaim from "@/models/QuestClaim";
 import Payout from "@/models/Payout";
 import UserXp from "@/models/UserXp";
 import { applyTierMultiplier, addPoints } from "@/lib/points";
+import { denyIfLevelClosed } from "@/lib/levelAccess";
 
 // ── [조회] 오늘의 일일 퀘스트 + 내 진행도 ─────────────────────
 export async function GET() {
@@ -46,6 +47,8 @@ export async function POST(request) {
     }
 
     await connectToDatabase();
+    const closed = await denyIfLevelClosed(session);
+    if (closed) return closed;
     const userId = session.user.id;
 
     const state = await getQuestState(userId);
@@ -99,9 +102,10 @@ export async function POST(request) {
 
     // 2) 자물쇠를 잡은 뒤에만 지급 예약. 실패하면 자물쇠를 풀어 다시 시도할 수 있게 한다.
     //    XP 가 0 인 퀘스트(POINT 전용)는 큐에 넣지 않는다 — 봇이 0 XP 를 처리하며 도는 빈 작업만 쌓인다.
+    let queued = null;
     if (quest.rewardXp > 0) {
       try {
-        await Payout.create({
+        queued = await Payout.create({
           userName: session.user.name || "",
           userId,
           amount: quest.rewardXp,
@@ -121,6 +125,12 @@ export async function POST(request) {
       try {
         await addPoints(userId, payPoint);
       } catch (e) {
+        // 자물쇠만 풀면 방금 넣은 XP 예약이 남아 다시 수령할 때 XP 가 두 번 나간다 — 봇이 아직 집지 않았으면 함께 지운다.
+        //    이미 집어 갔으면(처리 중 · 지급) XP 는 나간 것이라 자물쇠를 남겨 둔다
+        if (queued) {
+          const del = await Payout.deleteOne({ _id: queued._id, status: "pending" }).catch(() => null);
+          if (!del?.deletedCount) throw e;
+        }
         await unlock();
         throw e;
       }

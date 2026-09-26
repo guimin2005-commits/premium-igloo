@@ -74,13 +74,20 @@ export default function AdminHubPage() {
       allPosts.forEach((p: any) => { if (postCounts[p.category] !== undefined) postCounts[p.category]++; });
 
       // 최근 7일 일별 문의 추이
+      // 📌 날짜 키 · 라벨 모두 KST 로 — createdAt 은 UTC ISO 라 앞 10자로 자르면 KST 새벽 문의가 전날 막대에 잡혔다
+      const KST = 9 * 60 * 60 * 1000;
+      const kstKey = (t: number) => new Date(t + KST).toISOString().slice(0, 10);
       const inquiryDaily: { label: string; count: number }[] = [];
       for (let i = 6; i >= 0; i--) {
-        const day = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-        const dayStr = day.toISOString().slice(0, 10);
+        const t = Date.now() - i * 24 * 60 * 60 * 1000;
+        const dayStr = kstKey(t);
+        const k = new Date(t + KST);
         inquiryDaily.push({
-          label: `${day.getMonth() + 1}/${day.getDate()}`,
-          count: inquiries.filter((q: any) => (q.createdAt || "").slice(0, 10) === dayStr).length,
+          label: `${k.getUTCMonth() + 1}/${k.getUTCDate()}`,
+          count: inquiries.filter((q: any) => {
+            const at = q.createdAt ? new Date(q.createdAt).getTime() : NaN;
+            return Number.isFinite(at) && kstKey(at) === dayStr;
+          }).length,
         });
       }
 

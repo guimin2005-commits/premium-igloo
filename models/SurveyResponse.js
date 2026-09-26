@@ -27,6 +27,7 @@ const SurveyResponseSchema = new mongoose.Schema({
 });
 
 // 한 대회당 유저 1회 제출
-SurveyResponseSchema.index({ postId: 1, userId: 1 }, { unique: true, partialFilterExpression: { userId: { $type: "string", $ne: "" } } });
+// ⚠️ 부분 인덱스 조건엔 $ne 를 못 쓴다(생성 실패). $gt "" 는 빈 문자열이 아닌 문자열에만 걸린다.
+SurveyResponseSchema.index({ postId: 1, userId: 1 }, { unique: true, partialFilterExpression: { userId: { $gt: "" } } });
 
 export default mongoose.models.SurveyResponse || mongoose.model("SurveyResponse", SurveyResponseSchema);

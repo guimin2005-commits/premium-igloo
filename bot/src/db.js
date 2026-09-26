@@ -229,7 +229,7 @@ const PayoutSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   reason: { type: String, default: "" },
   source: { type: String, default: "etc" },   // referral | code | manual | shop | etc
-  status: { type: String, default: "pending" }, // pending | paid | failed
+  status: { type: String, default: "pending" }, // pending | processing(봇이 선점해 지급 중) | paid | failed
   // "xp" | "point" — 빙옥(point) 건은 사이트가 즉시 반영하고 paid 로 남기므로 봇은 집지 않는다 (models/Payout.js 와 동일)
   currency: { type: String, default: "xp" },
   error: { type: String, default: "" },

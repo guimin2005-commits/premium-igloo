@@ -66,6 +66,10 @@ export async function DELETE(request: Request) {
     if (!auth.isAdmin && target.discordTag !== auth.name) {
       return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
     }
+    // 본인은 심사 중인 지원만 취소할 수 있다 — 판정이 난 기록은 운영 근거로 남긴다
+    if (!auth.isAdmin && (target.status || "심사 중") !== "심사 중") {
+      return NextResponse.json({ success: false, error: "심사가 끝난 지원은 취소할 수 없습니다." }, { status: 403 });
+    }
 
     await Apply.findByIdAndDelete(id);
     return NextResponse.json({ success: true });

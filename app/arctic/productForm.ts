@@ -25,6 +25,8 @@ export type ProductForm = {
   // 할인 종료 — datetime-local 값(KST "YYYY-MM-DDTHH:mm"). 비우면 기한 없음
   discountUntil: string;
   stock: string;
+  // 편집을 시작할 때의 재고(-1 = 무제한) — 서버가 그 사이 팔린 수량을 되살리지 않게 바꾼 폭만 반영한다
+  stockBase: string;
   sortOrder: string;
   active: boolean;
   timed: boolean;
@@ -50,6 +52,7 @@ export const EMPTY_PRODUCT_FORM: ProductForm = {
   discountPct: "",
   discountUntil: "",
   stock: "",
+  stockBase: "",
   sortOrder: "",
   active: true,
   timed: false,
@@ -84,6 +87,7 @@ export const formFromShopItem = (it: any): ProductForm => ({
   discountPct: it.discountPct ? String(it.discountPct) : "",
   discountUntil: toKstInput(it.discountUntil),
   stock: it.stock < 0 || it.stock == null ? "" : String(it.stock),
+  stockBase: String(it.stock ?? -1),
   sortOrder: String(it.sortOrder || 0),
   active: it.active !== false,
   timed: Array.isArray(it.durations) && it.durations.length > 0,

@@ -207,7 +207,7 @@ export default function AdminSupportersPage() {
   const [isReplying, setIsReplying] = useState(false);
 
   const fetchRows = useCallback(
-    (m: string) => {
+    (m: string, keepEdits = false) => {
       setIsLoading(true);
       fetch(`/api/admin/supporters?month=${m}`, { cache: "no-store" })
         .then((r) => r.json())
@@ -237,7 +237,15 @@ export default function AdminSupportersPage() {
             setBaseXp(base);
             setRoleId(d.roleId || "");
             // 📌 월을 바꾸면 편집 중이던 값은 버린다 — 같은 userId 라도 다른 달의 평가라 섞이면 안 된다
-            setEdits(Object.fromEntries(list.map((r) => [r.userId, editOf(r.eval, base)])));
+            //    같은 달을 다시 받을 때(지급 · 409 뒤)는 다른 줄의 저장 안 한 입력을 남긴다 — 지급 완료 줄만 서버 값으로
+            setEdits((prev) =>
+              Object.fromEntries(
+                list.map((r) => {
+                  const old = prev[r.userId];
+                  return [r.userId, keepEdits && old && r.eval?.status !== "paid" ? old : editOf(r.eval, base)];
+                })
+              )
+            );
             setLoadFailed(false);
           } else {
             setRows([]);
@@ -293,7 +301,8 @@ export default function AdminSupportersPage() {
         userName: row.name,
         month,
         grade: e.grade.trim(),
-        xp: toInt(e.xp),
+        // 빈칸은 null — 서버가 월 기본 XP(자리표시 값)로 저장한다. toInt("") 는 0 이라 0 XP 가 저장됐다
+        xp: e.xp.trim() === "" ? null : toInt(e.xp),
         point: toInt(e.point),
         note: e.note.trim(),
       }),
@@ -312,14 +321,14 @@ export default function AdminSupportersPage() {
             status: d.eval.status === "paid" ? "paid" : "draft",
             paidAt: d.eval.paidAt || null,
           }
-        : { grade: e.grade.trim(), xp: toInt(e.xp), point: toInt(e.point), note: e.note.trim(), status: "draft", paidAt: null };
+        : { grade: e.grade.trim(), xp: e.xp.trim() === "" ? baseXp : toInt(e.xp), point: toInt(e.point), note: e.note.trim(), status: "draft", paidAt: null };
       setRows((prev) => prev.map((r) => (r.userId === row.userId ? { ...r, eval: saved } : r)));
       setEdits((prev) => ({ ...prev, [row.userId]: editOf(saved, baseXp) }));
       notify(`${row.name} · ${month} 평가를 저장했습니다.`);
     } else if (res?.status === 409) {
       // 이미 지급된 평가 — 화면이 낡았을 수 있으니 다시 받아 잠근다
       notify("이미 지급된 평가라 수정할 수 없습니다.", true);
-      fetchRows(month);
+      fetchRows(month, true);
     } else {
       notify(d?.message || d?.error || "저장에 실패했습니다.", true);
     }
@@ -341,7 +350,7 @@ export default function AdminSupportersPage() {
       const name = payTarget.name;
       setPayTarget(null);
       // paidAt 은 서버가 찍는다 — 다시 받아서 잠금과 날짜를 맞춘다
-      fetchRows(month);
+      fetchRows(month, true);
       notify(`${name} · ${month} 보상을 지급했습니다.`);
     } else {
       notify(d?.message || d?.error || "지급에 실패했습니다.", true);

@@ -12,6 +12,7 @@ import ItemIcon from "../../../components/ItemIcon";
 import ArcticDock from "../../ArcticDock";
 import ArcticStoreBar from "../../ArcticStoreBar";
 import ArcticFooter from "../../ArcticFooter";
+import { ownsItem } from "../../owned";
 
 // 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천
 const TypeBadge = ({ type, className = "" }: { type: string; className?: string }) => (
@@ -137,7 +138,8 @@ export default function ItemDetailPage() {
   const sp = salePrice(item, days);
   const listPrice = basePrice(item, days);
   const discounted = sp < listPrice;
-  const owned = orders.some((o) => o.itemId === item._id && ["pending", "completed"].includes(o.status) && (!o.expiresAt || new Date(o.expiresAt) > new Date()));
+  // 서버와 같은 기준 — 연결된 아이템을 수동 지급 · 시즌 패스로 받은 건(itemRef)도 보유다 (owned.ts)
+  const owned = ownsItem(orders, item);
   const inCart = cart.some((c) => c.itemId === item._id);
   // 📌 장바구니 개수 — 장바구니 화면과 같은 기준: 목록에 없는(삭제·숨김) 상품 · 같은 상품 중복은 세지 않는다.
   //    목록을 못 받았으면 저장된 그대로 센다

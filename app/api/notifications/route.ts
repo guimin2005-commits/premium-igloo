@@ -7,28 +7,35 @@ import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import Notification from "@/models/Notification";
 
-// ── 디스코드 닉네임 → 유저 ID 조회 (길드 멤버 검색) ─────────────
-// 봇에 GUILD_MEMBERS 권한이 없으면 실패할 수 있으므로 null 반환을 우아하게 처리
-async function resolveDiscordId(username: string): Promise<string | null> {
+// ── 디스코드 사용자명(핸들) 또는 ID → 유저 조회 (길드 멤버 검색) ─────────────
+// ⚠️ 사용자명이 정확히 같은 사람(또는 입력한 ID 의 멤버)만 인정한다 — 검색은 앞글자 일치라,
+//    오타 · 서버를 나간 사람이면 앞글자만 같은 다른 회원에게 경고 · 제재 통지가 갔다.
+// 반환: { id, name } 찾음 · "missing" 서버에 그런 사람 없음 · null 조회 실패(봇 권한 · 네트워크)
+async function resolveRecipient(input: string): Promise<{ id: string; name: string } | "missing" | null> {
   try {
     const guild = process.env.DISCORD_GUILD_ID;
     const token = process.env.DISCORD_BOT_TOKEN;
     if (!guild || !token) return null;
+    // 숫자 ID 로 넣었으면 그 멤버를 바로 본다
+    if (/^\d{17,20}$/.test(input)) {
+      const res = await fetch(`https://discord.com/api/v10/guilds/${guild}/members/${input}`, {
+        headers: { Authorization: `Bot ${token}` },
+      });
+      if (res.status === 404) return "missing";
+      if (!res.ok) return null;
+      const m = await res.json();
+      return m?.user?.id ? { id: m.user.id, name: m.user.username || input } : null;
+    }
     const res = await fetch(
-      `https://discord.com/api/v10/guilds/${guild}/members/search?query=${encodeURIComponent(username)}&limit=100`,
+      `https://discord.com/api/v10/guilds/${guild}/members/search?query=${encodeURIComponent(input)}&limit=100`,
       { headers: { Authorization: `Bot ${token}` } }
     );
     if (!res.ok) return null;
     const members = await res.json();
-    if (!Array.isArray(members) || members.length === 0) return null;
-    const q = username.toLowerCase();
-    const exact = members.find(
-      (m: any) =>
-        m.user?.username?.toLowerCase() === q ||
-        m.user?.global_name?.toLowerCase() === q ||
-        m.nick?.toLowerCase() === q
-    );
-    return (exact || members[0])?.user?.id || null;
+    if (!Array.isArray(members)) return null;
+    const q = input.toLowerCase();
+    const exact = members.find((m: any) => m.user?.username?.toLowerCase() === q);
+    return exact?.user?.id ? { id: exact.user.id, name: exact.user.username } : "missing";
   } catch {
     return null;
   }
@@ -152,8 +159,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "수신자·제목·내용을 모두 입력해 주세요." }, { status: 400 });
     }
 
-    const recipientName = recipient.trim();
-    const recipientId = await resolveDiscordId(recipientName);
+    const input = recipient.trim();
+    const found = await resolveRecipient(input);
+    if (found === "missing") {
+      return NextResponse.json({ success: false, error: "디스코드 서버에서 해당 사용자명(핸들)을 찾지 못했습니다." }, { status: 404 });
+    }
+    // 조회 자체가 실패하면(봇 권한 · 네트워크) 입력값 그대로 저장한다 — 알림함은 로그인 이름(또는 ID)이 정확히 같은 사람에게만 보인다
+    const recipientName = found ? found.name : input;
+    const recipientId = found ? found.id : /^\d{17,20}$/.test(input) ? input : null;
 
     // 디스코드 ID를 찾은 경우에만 DM 핑 발송 (본문은 사이트에 저장)
     let dmSent = false;

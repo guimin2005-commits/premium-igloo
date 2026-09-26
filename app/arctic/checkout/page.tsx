@@ -8,6 +8,7 @@ import BackLink from "../../components/BackLink";
 import { salePrice, basePrice, durationLabel } from "@/lib/shopPricing";
 import { POINT_RATE, xpToPoint } from "@/lib/pointRate";
 import { getLevelByXp } from "@/lib/leveling";
+import { itemTypeLabel } from "@/lib/items";
 import ArcticFooter from "../ArcticFooter";
 import ArcticDock from "../ArcticDock";
 import CardArt from "../CardArt";
@@ -91,6 +92,32 @@ export default function CheckoutPage() {
   }, [status, subtotal]);
 
   useEffect(() => { loadWallet(); }, [loadWallet]);
+
+  // 📌 적용한 쿠폰의 할인액은 적용 순간 금액 기준이다. 가격이 바뀌어 다시 읽으면(PRICE_CHANGED) 금액이 달라지므로
+  //    새 금액으로 다시 받아 화면의 결제 XP 를 서버 청구액(새 금액으로 다시 계산)과 맞춘다. 못 쓰게 됐으면 해제한다
+  const couponCode = coupon?.code || "";
+  useEffect(() => {
+    if (!couponCode || subtotal <= 0 || status !== "authenticated") return;
+    let stale = false;
+    fetch("/api/shop/coupons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ validate: true, code: couponCode, total: subtotal }),
+    })
+      .then(async (res) => ({ ok: res.ok, d: await res.json() }))
+      .then(({ ok, d }) => {
+        if (stale) return;
+        if (ok && d?.success) {
+          setCoupon((c: any) => (c?.code === couponCode ? { ...c, discount: d.data.discount } : c));
+        } else if (d?.message) {
+          setCoupon((c: any) => (c?.code === couponCode ? null : c));
+          setCouponMsg(d.message);
+          setCouponMsgOk(false);
+        }
+      })
+      .catch(() => {});
+    return () => { stale = true; };
+  }, [couponCode, subtotal, status]);
 
   // 코드로 적용 — 지갑에 없으면 담고, 곧바로 적용까지
   const applyCoupon = async () => {
@@ -278,7 +305,7 @@ export default function CheckoutPage() {
                         {(r.days ?? 0) > 0 && <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#131313] text-white text-[10px] font-black">{durationLabel(r.days)}</span>}
                       </h3>
                       <p className="text-[10px] font-bold text-[#8a8a8a] mt-0.5">
-                        {r.item.type === "physical" ? "기프트카드" : r.item.type === "perk" ? "권한" : "역할"} · 수량 {r.qty}
+                        {itemTypeLabel(r.item.type)} · 수량 {r.qty}
                       </p>
                     </div>
                     <div className="text-right shrink-0">

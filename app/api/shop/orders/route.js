@@ -98,11 +98,10 @@ export async function PATCH(request) {
       // 📌 시즌 패스 보상으로 지급한 건은 itemId 가 ObjectId 가 아니라 "season-pass" 문자열이다.
       //    그대로 _id 로 넘기면 CastError 로 500 이 나는데, 취소는 이미 반영된 뒤라
       //    관리자 화면은 실패로 보이고 실제로는 취소된 유령 상태가 된다. 상점 상품일 때만 재고를 되돌린다.
+      //    재고와 판매 수는 따로 되돌린다 — 한 조건(stock >= 0)으로 묶으면 무제한(-1) 상품은 판매 수가 줄지 않아 인기순이 부풀려진다
       if (mongoose.Types.ObjectId.isValid(purchase.itemId)) {
-        await ShopItem.updateOne(
-          { _id: purchase.itemId, stock: { $gte: 0 } },
-          { $inc: { stock: 1, soldCount: -1 } }
-        );
+        await ShopItem.updateOne({ _id: purchase.itemId, stock: { $gte: 0 } }, { $inc: { stock: 1 } });
+        await ShopItem.updateOne({ _id: purchase.itemId, soldCount: { $gt: 0 } }, { $inc: { soldCount: -1 } });
       }
     }
 

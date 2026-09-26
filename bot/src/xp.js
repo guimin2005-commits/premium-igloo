@@ -126,32 +126,38 @@ export async function grantXp(member, amount, meta = {}) {
 
   const newLevel = getLevelByXp(doc.xp);
   if (newLevel !== doc.level) {
-    const oldLevel = doc.level;
     doc.level = newLevel;
-    // 바꾸기 직전 레벨을 돌려받는다 — 두 지급이 동시에 같은 레벨업을 봐도 레벨업 효과는 실제로 오른 만큼만 나가게
+    // 바꾸기 직전 레벨을 돌려받는다 — 두 지급이 동시에 같은 레벨업을 봐도 알림 · 역할 · 레벨업 효과는 실제로 오른 쪽 하나만 처리하게.
+    // 📌 xp 가 방금 $inc 결과 그대로일 때만 쓴다 — 그 사이 다른 지급(채팅 · 음성 · 큐)이 xp 를 바꿨으면
+    //    뒤에 온 쪽이 더 큰 xp 로 레벨을 맞추므로 여기서 작은 레벨로 덮어쓰지 않는다(레벨 역행 방지).
     const prev = await UserXp.findOneAndUpdate(
-      { userId: member.id },
+      { userId: member.id, xp: doc.xp },
       { $set: { level: newLevel } },
       { new: false, projection: { level: 1 } }
     ).lean();
+    if (!prev) return doc;
+    const before = Math.floor(Number(prev.level) || 0);
 
-    if (newLevel > oldLevel) {
-      grantRewardRoles(member, newLevel).catch(() => {});
-      announceLevelUp(member, newLevel, doc.xp);
-      // 📌 아이템 효과 "레벨이 오를 때마다" — 효과 지급으로 오른 레벨에는 다시 붙이지 않는다(재귀 방지).
-      //    레벨 0(아직 계산 전인 새 문서) → 1 은 레벨업으로 치지 않는다.
-      //    📌 최고 도달 레벨(maxLevel)을 $max 로 원자적으로 올리고, 그 전 최고치를 넘은 만큼만 준다 —
-      //       상점 · 강화에 XP 를 써서 레벨이 내려갔다가 다시 오를 때 같은 레벨업 효과를 또 받지 않게. (옛 문서는 maxLevel 이 없어 직전 레벨로 본다)
-      if (meta.reason !== "effect-levelup" && prev) {
-        const pm = await UserXp.findOneAndUpdate(
-          { userId: member.id },
-          { $max: { maxLevel: newLevel } },
-          { new: false, projection: { maxLevel: 1 } }
-        ).lean();
-        const floor = Math.max(1, Math.floor(Number(prev.level) || 0), Math.floor(Number(pm?.maxLevel) || 0));
+    if (newLevel > before) {
+      // 지급하면서 하위 티어(배타 역할)도 함께 거둔다
+      syncRewardRoles(member, newLevel).catch(() => {});
+      // 레벨 0(아직 계산 전인 새 문서) → 1 은 시작 레벨이라 알리지 않는다 (역할 지급은 그대로)
+      if (newLevel > Math.max(1, before)) announceLevelUp(member, newLevel, doc.xp);
+      // 📌 최고 도달 레벨(maxLevel)은 어떤 지급으로 올랐든 $max 로 원자적으로 기록한다 — 효과 지급으로 오른 레벨 포함.
+      //    📌 아이템 효과 "레벨이 오를 때마다" — 효과 지급으로 오른 레벨에는 다시 붙이지 않는다(재귀 방지).
+      //       레벨 0(아직 계산 전인 새 문서) → 1 은 레벨업으로 치지 않는다.
+      //       그 전 최고치를 넘은 만큼만 준다 — 상점 · 강화에 XP 를 써서 레벨이 내려갔다가 다시 오를 때 같은 레벨업 효과를 또 받지 않게.
+      //       (옛 문서는 maxLevel 이 없어 직전 레벨로 본다)
+      const pm = await UserXp.findOneAndUpdate(
+        { userId: member.id },
+        { $max: { maxLevel: newLevel } },
+        { new: false, projection: { maxLevel: 1 } }
+      ).lean();
+      if (meta.reason !== "effect-levelup") {
+        const floor = Math.max(1, before, Math.floor(Number(pm?.maxLevel) || 0));
         await grantLevelUpEffects(member, newLevel - floor);
       }
-    } else {
+    } else if (newLevel < before) {
       // 회수(음수 지급)로 레벨이 내려가면 그만큼 보상 역할도 거둔다
       revokeRewardRoles(member, newLevel).catch(() => {});
     }

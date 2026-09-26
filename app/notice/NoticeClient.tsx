@@ -33,6 +33,8 @@ const fmtDate = (v: string) => {
   const md = `${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
   return d.getFullYear() === new Date().getFullYear() ? md : `${d.getFullYear()}.${md}`;
 };
+// 예약 발행 글은 공개 시각이 게시일이다 (상세 페이지와 같은 기준)
+const shownAt = (n: any) => n?.publishAt || n?.createdAt;
 
 export default function NoticeClient() {
   const router = useRouter();
@@ -64,7 +66,7 @@ export default function NoticeClient() {
       return next;
     });
   };
-  const isNewNotice = (n: any) => !readIds.has(n._id) && Date.now() - new Date(n.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000;
+  const isNewNotice = (n: any) => !readIds.has(n._id) && Date.now() - new Date(shownAt(n)).getTime() < 7 * 24 * 60 * 60 * 1000;
 
   const fetchNotices = async (admin = false) => {
     try {
@@ -91,7 +93,7 @@ export default function NoticeClient() {
   const sorted = [...notices].sort((a, b) => {
     if (a.isPinned && !b.isPinned) return -1;
     if (!a.isPinned && b.isPinned) return 1;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return new Date(shownAt(b)).getTime() - new Date(shownAt(a)).getTime();
   });
   const tabFiltered =
     activeTab === "important" ? sorted.filter((n) => isImportantNotice(n))
@@ -145,7 +147,7 @@ export default function NoticeClient() {
               return (
                 <div key={n._id} onClick={() => { markAsRead(n._id); router.push(`/notice/${n._id}`); }}
                   className="group flex items-center gap-3 md:gap-4 py-4 border-b border-[#ededed] cursor-pointer">
-                  <span className="w-[46px] md:w-[64px] shrink-0 text-[11.5px] text-[#8a8a8a] tabular-nums">{fmtDate(n.createdAt)}</span>
+                  <span className="w-[46px] md:w-[64px] shrink-0 text-[11.5px] text-[#8a8a8a] tabular-nums">{fmtDate(shownAt(n))}</span>
                   <span className={`hidden md:block w-14 shrink-0 text-[10.5px] font-black ${tag.cls}`}>{tag.label}</span>
                   <span className="flex-1 min-w-0 flex items-center gap-2 text-[15px] font-extrabold leading-snug">
                     {/* 고정은 글자 대신 압정 하나 — 지도 핀(위치)과 헷갈리지 않게 면으로 채운 압정을 쓴다 */}

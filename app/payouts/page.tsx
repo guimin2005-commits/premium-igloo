@@ -3,27 +3,21 @@
 import { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { isAdminName } from "@/lib/admins";
 
-const ADMIN_USERS = ["elahw.06"];
-const TEMPLATE_KEY = "xp_command_template";
-const DEFAULT_TEMPLATE = "/xp add @{user} {amount}";
+// 📌 XP 지급은 봇 큐가 30초마다 자동으로 한다 — 이 화면은 기록 조회와 삭제만.
+//    예전의 명령어 복사 · '지급 완료/되돌리기' 토글은 봇 큐와 부딪혀(이미 준 건 재지급 · 안 준 건 닫힘) 걷어냈다.
+//    남은 상태 변경은 대기로 남은 빙옥 기록을 완료로 되돌리는 것뿐이다 (app/api/payout PUT).
 
 export default function PayoutAdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const isAdmin = status === "authenticated" && isAdminName(session?.user?.name);
 
   const [payouts, setPayouts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<"pending" | "paid" | "all">("pending");
-  const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const saved = typeof window !== "undefined" ? localStorage.getItem(TEMPLATE_KEY) : null;
-    if (saved) setTemplate(saved);
-  }, []);
 
   const fetchPayouts = async () => {
     setIsLoading(true);
@@ -36,27 +30,12 @@ export default function PayoutAdminPage() {
 
   useEffect(() => { if (isAdmin) fetchPayouts(); }, [isAdmin]);
 
-  const saveTemplate = (v: string) => {
-    setTemplate(v);
-    try { localStorage.setItem(TEMPLATE_KEY, v); } catch { /* noop */ }
-  };
-
-  const buildCommand = (p: any) =>
-    template.replace(/\{user\}/g, p.userName).replace(/\{amount\}/g, String(p.amount)).replace(/\{userId\}/g, p.userId || "");
-
-  const copyCommand = async (p: any) => {
+  // 대기로 남은 빙옥 기록만 — 빙옥은 사이트가 이미 반영했고 봇은 집지 않는다
+  const markPointPaid = async (p: any) => {
     try {
-      await navigator.clipboard.writeText(buildCommand(p));
-      setCopiedId(p._id);
-      setTimeout(() => setCopiedId(null), 1500);
-    } catch { /* noop */ }
-  };
-
-  const toggleStatus = async (p: any) => {
-    const next = p.status === "paid" ? "pending" : "paid";
-    setPayouts(prev => prev.map(x => x._id === p._id ? { ...x, status: next } : x));
-    try {
-      await fetch("/api/payout", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p._id, status: next }) });
+      const res = await fetch("/api/payout", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p._id, status: "paid" }) });
+      if (res.ok) setPayouts(prev => prev.map(x => x._id === p._id ? { ...x, status: "paid" } : x));
+      else fetchPayouts();
     } catch { fetchPayouts(); }
   };
 
@@ -81,14 +60,13 @@ export default function PayoutAdminPage() {
 
   const pending = payouts.filter(p => p.status === "pending");
   const visible = filter === "all" ? payouts : payouts.filter(p => p.status === filter);
-  const totalPendingXp = pending.reduce((s, p) => s + (p.amount || 0), 0);
+  const totalPendingXp = pending.filter(p => p.currency !== "point").reduce((s, p) => s + (p.amount || 0), 0);
 
   return (
     <main className="w-full max-w-4xl mx-auto px-6 py-16 flex-1 flex flex-col">
       <div className="mb-8 border-b border-white/10 pb-6 flex justify-between items-end">
         <div>
-          <h1 className="text-4xl font-black text-white mb-3 tracking-tight">XP 지급 대기열</h1>
-          <p className="text-gray-400 text-sm">보상으로 발생한 XP를 봇 명령어로 지급한 뒤 완료 처리하세요.</p>
+          <h1 className="text-4xl font-black text-white tracking-tight">XP 지급 대기열</h1>
         </div>
         <button onClick={() => router.push("/admin")} className="px-5 py-2.5 bg-[#2a2a2a] hover:bg-[#333] text-white text-sm font-bold rounded-xl transition-colors shrink-0">← 관리자</button>
       </div>
@@ -102,11 +80,6 @@ export default function PayoutAdminPage() {
           <p className="text-xs text-gray-500 mb-1">대기 중 총 XP</p>
           <p className="text-2xl font-black text-white">{totalPendingXp.toLocaleString()}</p>
         </div>
-      </div>
-
-      <div className="bg-[#121212] border border-white/5 rounded-2xl p-5 mb-6">
-        <label className="block text-xs font-bold text-gray-400 mb-2">명령어 템플릿 <span className="text-gray-600 font-normal">— {"{user}"}, {"{amount}"}, {"{userId}"} 치환</span></label>
-        <input value={template} onChange={(e) => saveTemplate(e.target.value)} className="w-full px-4 py-3 bg-[#1a1a1a] border border-white/10 rounded-xl text-white text-sm font-mono outline-none focus:border-[#e91e3f] transition-colors" />
       </div>
 
       <div className="flex gap-2 mb-5">
@@ -124,15 +97,17 @@ export default function PayoutAdminPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className="font-bold text-white text-sm">{p.userName}</span>
-                  <span className="text-[#e91e3f] font-black text-sm">+{p.amount.toLocaleString()} XP</span>
+                  <span className="text-[#e91e3f] font-black text-sm">{p.amount > 0 ? "+" : ""}{p.amount.toLocaleString()} {p.currency === "point" ? "빙옥" : "XP"}</span>
                   {p.status === "paid" && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400">지급 완료</span>}
+                  {p.status === "processing" && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400">처리 중</span>}
+                  {p.status === "failed" && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-500/10 text-red-400">실패</span>}
                 </div>
                 <p className="text-xs text-gray-500 truncate">{p.reason || "-"}</p>
-                <p className="text-[10px] text-gray-600 mt-1 font-mono break-all">{buildCommand(p)}</p>
               </div>
               <div className="flex gap-2 shrink-0">
-                <button onClick={() => copyCommand(p)} className="px-3 py-2 bg-[#2a2a2a] hover:bg-[#333] text-white text-xs font-bold rounded-lg transition-colors">{copiedId === p._id ? "복사됨!" : "명령어 복사"}</button>
-                <button onClick={() => toggleStatus(p)} className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors ${p.status === "paid" ? "bg-white/5 text-gray-300 hover:bg-white/10" : "bg-[#e91e3f] text-white hover:bg-[#d01634]"}`}>{p.status === "paid" ? "되돌리기" : "지급 완료"}</button>
+                {p.status === "pending" && p.currency === "point" && (
+                  <button onClick={() => markPointPaid(p)} className="px-3 py-2 text-xs font-bold rounded-lg transition-colors bg-[#e91e3f] text-white hover:bg-[#d01634]">지급 완료</button>
+                )}
                 <button onClick={() => setDeleteId(p._id)} className="px-3 py-2 bg-white/5 hover:bg-red-500/10 text-red-500/70 hover:text-red-500 text-xs font-bold rounded-lg transition-colors">삭제</button>
               </div>
             </div>

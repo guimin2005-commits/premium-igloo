@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/authOptions";
 import { getLevelByXp } from "@/lib/leveling";
 import { buildEnhanceView, enhancePolicy, enhanceCost, ENHANCE_LABEL } from "@/lib/enhance";
 import { xpToPoint } from "@/lib/pointRate";
+import { denyIfLevelClosed } from "@/lib/levelAccess";
 import BotSetting from "@/models/BotSetting";
 import UserXp from "@/models/UserXp";
 
@@ -58,6 +59,8 @@ export async function POST(request) {
     }
 
     await connectToDatabase();
+    const closed = await denyIfLevelClosed(session);
+    if (closed) return closed;
     const userId = session.user.id;
     const { setting, doc } = await loadState(userId);
     const p = enhancePolicy(setting);

@@ -37,7 +37,10 @@ export async function GET(request, { params }) {
     const chatSince = new URL(request.url).searchParams.get("chatSince");
     const chatQuery = { auctionId: id };
     if (chatSince) chatQuery.createdAt = { $gt: new Date(chatSince) };
-    const chat = await AuctionChat.find(chatQuery).sort({ createdAt: 1 }).limit(80);
+    // 첫 요청은 최근 80개를, 이후는 chatSince 다음 것부터 (둘 다 오래된 순으로 전달)
+    const chat = chatSince
+      ? await AuctionChat.find(chatQuery).sort({ createdAt: 1 }).limit(80)
+      : (await AuctionChat.find(chatQuery).sort({ createdAt: -1 }).limit(80)).reverse();
 
     // 🔒 스카우터 정보는 사용한 리더에게만 — 서버에서 가려서 전송 (진행자/종료 후엔 전체 공개)
     const session = await getServerSession(authOptions);
@@ -49,13 +52,12 @@ export async function GET(request, { params }) {
     // 모든 응답에 hasMost(공개할 모스트 보유 여부) 포함 — 진행자·종료 시에도 동일 기준
     data.players = data.players.map((p) => ({ ...p, hasMost: Array.isArray(p.mostChampions) && p.mostChampions.filter(Boolean).length > 0 }));
     if (!isHostViewer && data.status !== "종료") {
-      // 1순위: 디스코드 ID로 본인 확인. 2순위: ID 미등록 리더에 한해 클라이언트가 알린 역할(as) 허용
+      // 1순위: 디스코드 ID로 본인 확인. 2순위: 관리자가 알린 리더 역할(as)
       let viewerIdx = data.leaders.findIndex((l) => l.discordId && l.discordId === viewerId);
       if (viewerIdx < 0 && asParam !== null && asParam !== "") {
         const asIdx = Number(asParam);
-        // ID 미등록 리더이거나, 관리자가 리더 역할로 관전 중일 때만 허용
-        const canUseAs = Number.isInteger(asIdx) && data.leaders[asIdx] &&
-          (!data.leaders[asIdx].discordId || isAdminName(session?.user?.name));
+        // 관리자가 리더 역할로 관전 중일 때만 허용 (ID 미등록 리더는 관리자만 조작할 수 있으므로)
+        const canUseAs = Number.isInteger(asIdx) && data.leaders[asIdx] && isAdminName(session?.user?.name);
         if (canUseAs) viewerIdx = asIdx;
       }
       data.players = data.players.map((p) => {
@@ -65,6 +67,10 @@ export async function GET(request, { params }) {
         if (scouted) return { ...p, hasMost };
         return { ...p, hasMost, mainPos: "", subPos: "", mostChampions: [] };
       });
+    }
+    // 🔒 공개(host:reveal) 전 선수의 디스코드 ID 는 진행자에게만 — 프로필 조회로 정체가 드러나지 않게 (종료 후에도 공개는 진행자 재량)
+    if (!isHostViewer) {
+      data.players = data.players.map((p) => (p.revealed ? p : { ...p, discordId: "" }));
     }
 
     return NextResponse.json({ success: true, auction: data, chat, now: new Date().toISOString() });
@@ -81,26 +87,39 @@ export async function POST(request, { params }) {
     const body = await request.json();
     const { action } = body;
 
-    // ── 입장 알림 (최소화 표시용) ──
+    // 🔒 호출한 사람을 서버에서 확인한다 (화면의 역할 구분은 버튼을 숨길 뿐)
+    //  · 진행자 조작(host:*)은 관리자만 — host:posSwap 은 이름과 달리 리더가 쓰는 포지션 체인지라 아래 리더 확인으로 막는다
+    //  · 리더 조작은 디스코드 ID 가 일치하는 리더 본인만 (ID 미등록 리더는 진행자가 리더 시점으로 대신 조작)
+    const session = await getServerSession(authOptions);
+    const isAdmin = isAdminName(session?.user?.name);
+    const myId = session?.user?.id || "";
+    const isLeaderSelf = (leader) => isAdmin || (!!leader?.discordId && leader.discordId === myId);
+    if (typeof action === "string" && action.startsWith("host:") && action !== "host:posSwap" && !isAdmin) {
+      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+    }
+
+    // ── 입장 알림 (최소화 표시용) — 이름은 세션 기준 ──
     if (action === "enter") {
-      if (!body.userName?.trim()) return NextResponse.json({ success: true });
+      const userName = session?.user?.name?.trim();
+      if (!userName) return NextResponse.json({ success: true });
       await AuctionChat.create({
         auctionId: id,
-        message: `${body.userName.trim()}님이 입장했습니다`,
+        message: `${userName}님이 입장했습니다`,
         isSystem: true,
         kind: "join",
       });
       return NextResponse.json({ success: true });
     }
 
-    // ── 채팅 ──
+    // ── 채팅 — 이름·프로필 사진은 세션 기준 (본문 값으로 남을 사칭하지 못하게) ──
     if (action === "chat") {
+      if (!session?.user?.name) return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
       if (!body.message?.trim()) return NextResponse.json({ success: false }, { status: 400 });
       // 📌 생성된 메시지를 즉시 돌려줘 보낸 사람 화면에 바로 표시 (폴링 대기 없음)
       const created = await AuctionChat.create({
         auctionId: id,
-        userName: body.userName || "익명",
-        avatar: body.avatar || "",
+        userName: session.user.name,
+        avatar: session.user.image || "",
         message: body.message.trim().slice(0, 200),
       });
       return NextResponse.json({ success: true, message: created });
@@ -111,6 +130,10 @@ export async function POST(request, { params }) {
       const { leaderIdx, amount, playerIdx } = body;
       const auction = await Auction.findById(id);
       if (!auction || auction.status !== "진행중") return NextResponse.json({ success: false, message: "진행 중인 경매가 아닙니다." }, { status: 400 });
+      // 🔒 남의 리더 이름으로 입찰하지 못하게
+      if (auction.leaders[leaderIdx] && !isLeaderSelf(auction.leaders[leaderIdx])) {
+        return NextResponse.json({ success: false, message: "본인 리더로만 입찰할 수 있습니다." }, { status: 403 });
+      }
       if (auction.current.playerIdx !== playerIdx) return NextResponse.json({ success: false, message: "경매 대상이 변경되었습니다." }, { status: 409 });
 
       // 📌 인벤토리 초과 소지 중에는 입찰 불가 — 먼저 배정해 칸을 비워야 한다
@@ -194,6 +217,19 @@ export async function POST(request, { params }) {
     const auction = await Auction.findById(id);
     if (!auction) return NextResponse.json({ success: false }, { status: 404 });
     const S = auction.settings;
+
+    // 🔒 리더 조작은 실제 대상 리더 본인만 — byLeaderIdx 는 클라이언트 값이라 빼고 보내도 진행자로 통하지 않게 대상 리더로 확인한다
+    {
+      const byBodyLeader = ["scout", "scout:owned", "leader:ready", "leader:setPos", "assign:place", "overflow:toInventory", "leader:invPlus", "overflow:leaderPos", "host:posSwap"];
+      const targetIdx = byBodyLeader.includes(action) ? body.leaderIdx
+        : action === "assignSlot" ? auction.pendingAssign?.leaderIdx
+        : action === "moveSlot" ? auction.pendingOverflow?.leaderIdx
+        : undefined;
+      const target = targetIdx !== null && targetIdx !== undefined ? auction.leaders[targetIdx] : null;
+      if (target && !isLeaderSelf(target)) {
+        return NextResponse.json({ success: false, message: "본인 팀만 조작할 수 있습니다." }, { status: 403 });
+      }
+    }
 
     switch (action) {
       // 스카우터: 호명된 현재 선수에 대해서만 사용 가능

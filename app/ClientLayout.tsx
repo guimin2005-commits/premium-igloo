@@ -405,7 +405,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
       // 약관 페이지는 미인증이어도 열린다 — 인증 화면의 '전문 보기'가 여기로 오는데, 되돌려보내면 읽을 수가 없다
-      if (isVerified === false && !isVerifyPage && pathname !== "/policy") router.push("/verify");
+      // replace — push 로 쌓으면 뒤로가기가 원래 페이지로 돌아갔다가 다시 여기로 밀려 사이트를 떠날 수 없다
+      if (isVerified === false && !isVerifyPage && pathname !== "/policy") router.replace("/verify");
       else if (isVerified === true && hasScrimRole === true && isVerifyPage) router.replace("/");
     }
   }, [status, session, pathname, router, isVerified, hasScrimRole, isVerifyPage]);
@@ -663,8 +664,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-[#e91e3f]/[0.06] blur-[120px] rounded-full pointer-events-none"></div>
             <div className="relative z-10 text-center max-w-md">
               <p className="text-5xl mb-8">🔧</p>
-              <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-4">더 나은 이글루를 짓는 중입니다</h1>
-              <p className="text-sm text-gray-400 leading-relaxed mb-8">현재 사이트 점검이 진행 중입니다.<br />잠시 후 다시 방문해 주세요.</p>
+              <h1 className={`text-2xl md:text-3xl font-black tracking-tight mb-4 ${isLightPage ? "text-[#131313]" : "text-white"}`}>더 나은 이글루를 짓는 중입니다</h1>
+              <p className={`text-sm leading-relaxed mb-8 ${isLightPage ? "text-[#5a5a5a]" : "text-gray-400"}`}>현재 사이트 점검이 진행 중입니다.<br />잠시 후 다시 방문해 주세요.</p>
               <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="inline-block px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드에서 소식 받기</a>
             </div>
           </div>

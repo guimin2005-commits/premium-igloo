@@ -7,6 +7,8 @@ const InquirySchema = new mongoose.Schema({
   errorDesc: { type: String }, // 오류 설명
   reportDate: { type: String }, // 발생 일시
   reportType: { type: String }, // 신고 유형
+  productName: { type: String }, // 환불·교환 대상 상품
+  refundType: { type: String }, // 환불 · 교환 구분
   title: { type: String }, // 자동 생성 제목
   content: { type: String, required: true }, // 상세 내용
   userId: { type: String, default: "" }, // 디스코드 유저 ID (답변 DM 발송용)

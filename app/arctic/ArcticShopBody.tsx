@@ -20,6 +20,7 @@ import ArcticHome from "./ArcticHome";
 import CardArt from "./CardArt";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useArcticOrigin } from "./fromLevel";
+import { ownedIdsOf } from "./owned";
 import { InventoryPopup } from "../components/Inventory";
 
 const ADMIN_USERS = ["elahw.06"];
@@ -228,10 +229,10 @@ export default function ArcticShopBody({
     try { localStorage.setItem("iglooShopCart", JSON.stringify(cart)); } catch {}
   }, [cart, cartLoaded]);
 
-  // 📌 상품은 1인 1개 — 이미 구매한 상품은 다시 담거나 살 수 없다
+  // 📌 상품은 1인 1개 — 이미 구매한 상품은 다시 담거나 살 수 없다 (만료 · 환불 건은 보유가 아니다 — owned.ts)
   const ownedItemIds = useMemo(
-    () => new Set(orders.filter((o) => o.status !== "cancelled").map((o) => o.itemId)),
-    [orders]
+    () => ownedIdsOf(orders, items),
+    [orders, items]
   );
 
   // 📌 기간제 상품에서 고른 기간 (상품별). 안 고르면 카드에 걸린 기간(기본 무제한 · 필터를 켰으면 그에 맞는 기간)이 기본.
@@ -431,7 +432,8 @@ export default function ArcticShopBody({
   useEffect(() => {
     fetch("/api/xp/policy", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => setShopPublic(!!d?.data?.shopPublic))
+      // 서버(lib/shopAccess)와 같은 조건 — ARCTIC 은 SYSTEM : LEVEL 안에 있어 레벨도 공개여야 열린다
+      .then((d) => setShopPublic(!!d?.data?.shopPublic && !!d?.data?.levelPublic))
       .catch(() => setShopPublic(false));
   }, []);
 

@@ -12,7 +12,7 @@ import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { TRIGGERS, TRIGGER_OF, DAY_LABELS, MAX_EFFECTS, normalizeEffects, describeEffect, describeItemBasic, describeRoleBuff } from "@/lib/itemEffects";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
-  buildDurations as buildFormDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload,
+  buildDurations as buildFormDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload, toKstInput,
 } from "../../arctic/productForm";
 import type { ProductForm } from "../../arctic/productForm";
 import {
@@ -70,8 +70,9 @@ const TAB_ORDER = [
   { id: "season", short: "시즌 전환" },
 ];
 
-const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "완료", cancelled: "취소", refunded: "환불" };
-const STATUS_TONE: Record<string, "warn" | "ok" | "bad"> = { pending: "warn", completed: "ok", cancelled: "bad", refunded: "bad" };
+// expired — 기간제가 끝나 봇이 회수한 건 (bot/src/features/grantQueue.js)
+const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "완료", cancelled: "취소", refunded: "환불", expired: "만료" };
+const STATUS_TONE: Record<string, "warn" | "ok" | "bad" | "neutral"> = { pending: "warn", completed: "ok", cancelled: "bad", refunded: "bad", expired: "neutral" };
 
 // 상품 유형 — 라벨·색은 lib/items.js 가 단일 원천 (상점 카드와 같은 값)
 const typeLabel = (t: string) => itemTypeLabel(t);
@@ -656,9 +657,9 @@ export default function AdminShopPage() {
     else notify(d?.message || "저장에 실패했습니다.", true);
   };
 
-  // 목록 줄 → 쿠폰 폼 (예전 '수정' 단추 안의 값 그대로 — 만료 일시는 지역 시각으로 바꿔 넣는다)
+  // 목록 줄 → 쿠폰 폼 (예전 '수정' 단추 안의 값 그대로 — 만료 일시는 KST 로 바꿔 넣는다. 서버도 KST 로 읽는다)
   const fillCouponForm = (c: any) =>
-    setCouponForm({ id: c._id, code: c.code, name: c.name || "", kind: c.kind || "discount", reward: c.reward || "", rewardRoleId: c.rewardRoleId || "", rewardRoleName: c.rewardRoleName || "", rewardXp: c.rewardXp ? String(c.rewardXp) : "", requiredRoleId: c.requiredRoleId || "", requiredRoleName: c.requiredRoleName || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: c.expiresAt ? new Date(new Date(c.expiresAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "" });
+    setCouponForm({ id: c._id, code: c.code, name: c.name || "", kind: c.kind || "discount", reward: c.reward || "", rewardRoleId: c.rewardRoleId || "", rewardRoleName: c.rewardRoleName || "", rewardXp: c.rewardXp ? String(c.rewardXp) : "", requiredRoleId: c.requiredRoleId || "", requiredRoleName: c.requiredRoleName || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: toKstInput(c.expiresAt) });
 
   // ── 시즌 전환 (디스코드 표기 떼기) ────────────
   //    되돌리려면 역할을 손으로 다시 붙여야 하므로, 미리보기를 통과해야 실행 버튼이 열린다
@@ -1737,6 +1738,7 @@ export default function AdminShopPage() {
                   { v: "completed", l: "완료", n: orders.filter((o) => o.status === "completed").length },
                   { v: "cancelled", l: "취소", n: orders.filter((o) => o.status === "cancelled").length },
                   { v: "refunded", l: "환불", n: orders.filter((o) => o.status === "refunded").length },
+                  { v: "expired", l: "만료", n: orders.filter((o) => o.status === "expired").length },
                 ]}
                 value={orderFilter}
                 onChange={setOrderFilter}

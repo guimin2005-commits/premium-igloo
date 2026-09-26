@@ -38,9 +38,13 @@ export async function GET() {
   }
 }
 
-// [생성]
+// [생성] (관리자만)
 export async function POST(request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!isAdminName(session?.user?.name)) {
+      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
+    }
     await connectToDatabase();
     const body = await request.json();
     if (!body.title?.trim()) {
@@ -118,9 +122,13 @@ export async function PATCH(request) {
   }
 }
 
-// [삭제]
+// [삭제] (관리자만)
 export async function DELETE(request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!isAdminName(session?.user?.name)) {
+      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
+    }
     await connectToDatabase();
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return NextResponse.json({ success: false }, { status: 400 });

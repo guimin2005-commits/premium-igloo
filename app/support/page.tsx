@@ -358,6 +358,21 @@ export default function SupportPage() {
                         {selectedAdminInquiry.subType ? ` › ${selectedAdminInquiry.subType}` : ""}
                       </span>
                     </div>
+                    {/* 유형별 세부 항목 — 고른 유형의 것만 (예전 문의는 다른 유형 칸이 남아 있을 수 있다) */}
+                    {([
+                      ["오류", "errorDesc", "발생 오류"],
+                      ["신고", "reportDate", "발생 일시"],
+                      ["신고", "reportType", "신고 유형"],
+                      ["환불 및 교환", "productName", "구매 상품"],
+                      ["환불 및 교환", "refundType", "처리 유형"],
+                    ] as const)
+                      .filter(([t, k]) => selectedAdminInquiry.mainType === t && selectedAdminInquiry[k])
+                      .map(([, k, label]) => (
+                        <div key={k} className="flex gap-3 text-[12.5px]">
+                          <span className="w-14 shrink-0 font-bold text-[#8a8a8a]">{label}</span>
+                          <span className="min-w-0 flex-1 font-bold text-[#131313] break-keep break-words">{selectedAdminInquiry[k]}</span>
+                        </div>
+                      ))}
                     <div className="flex gap-3 text-[12.5px]">
                       <span className="w-14 shrink-0 font-bold text-[#8a8a8a]">접수</span>
                       <span className="min-w-0 flex-1 font-bold text-[#131313] tabular-nums">

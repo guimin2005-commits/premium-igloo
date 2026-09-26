@@ -11,8 +11,8 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
     try {
       await connectToDatabase();
       const post: any = await Post.findById(id).lean();
-      // 가린 글·서포터즈 글은 링크 미리보기로도 새면 안 된다
-      if (post && !post.hidden && post.category !== "서포터즈") {
+      // 가린 글·서포터즈 글·공개 시각 전 예약 글은 링크 미리보기로도 새면 안 된다
+      if (post && !post.hidden && post.category !== "서포터즈" && !(post.publishAt && new Date(post.publishAt) > new Date())) {
         const desc = (post.content || "").replace(/[*_~=#>\[\]{}|]/g, "").slice(0, 90) || "나의 활동이 곧 나의 자산이 되는 곳";
         return {
           title: `${post.title} | 고급 이글루`,

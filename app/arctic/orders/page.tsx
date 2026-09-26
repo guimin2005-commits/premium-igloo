@@ -6,14 +6,20 @@ import Link from "next/link";
 import ArcticStoreBar from "../ArcticStoreBar";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
+import { ITEM_TYPE_LABEL } from "@/lib/items";
 
 const STATUS_META: Record<string, { label: string; cls: string; desc: string }> = {
   pending: { label: "처리 대기", cls: "bg-[#fdf3e3] text-[#a8763a]", desc: "지급·발송을 준비하고 있습니다" },
   completed: { label: "완료", cls: "bg-[#e8f3e6] text-[#3f7a35]", desc: "지급이 완료되었습니다" },
   cancelled: { label: "취소", cls: "bg-[#fdeaea] text-[#d01634]", desc: "취소되어 XP가 환불되었습니다" },
+  refunded: { label: "환불", cls: "bg-[#fdeaea] text-[#d01634]", desc: "환불되어 XP·빙옥을 돌려드렸습니다" },
+  expired: { label: "기간 만료", cls: "bg-[#f2f2f2] text-[#8a8a8a]", desc: "이용 기간이 끝났습니다" },
 };
+// 돌려받은 건 — '사용한 XP'에서 빼고 금액에 취소선을 긋는다
+const REFUNDED = ["cancelled", "refunded"];
 
-const TYPE_LABEL: Record<string, string> = { role: "역할", perk: "권한", physical: "기프트카드" };
+// 유형 라벨 — lib/items.js 가 단일 원천 (아이템 유형 포함)
+const TYPE_LABEL: Record<string, string> = ITEM_TYPE_LABEL;
 
 const fmtDate = (v: string | Date) => {
   const d = new Date(v);
@@ -47,7 +53,7 @@ export default function OrdersPage() {
   );
   // 실제로 낸 값 — 빙옥을 섞어 낸 건은 XP 몫만 XP 합계에 (옛 건은 결제 기록이 없어 price)
   const paidXpOf = (o: any) => (o.billed || o.paidXp > 0 || o.paidPoint > 0 ? o.paidXp || 0 : o.price || 0);
-  const totalSpent = orders.filter((o) => o.status !== "cancelled").reduce((n, o) => n + paidXpOf(o), 0);
+  const totalSpent = orders.filter((o) => !REFUNDED.includes(o.status)).reduce((n, o) => n + paidXpOf(o), 0);
   const pendingCount = orders.filter((o) => o.status === "pending").length;
 
   const chip = (active: boolean) =>
@@ -101,7 +107,7 @@ export default function OrdersPage() {
         {/* 필터 */}
         {orders.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-6">
-            {[{ v: "", l: "전체" }, { v: "pending", l: "처리 대기" }, { v: "completed", l: "완료" }, { v: "cancelled", l: "취소" }].map((f) => (
+            {[{ v: "", l: "전체" }, { v: "pending", l: "처리 대기" }, { v: "completed", l: "완료" }, { v: "cancelled", l: "취소" }, { v: "refunded", l: "환불" }, { v: "expired", l: "기간 만료" }].map((f) => (
               <button key={f.v} onClick={() => setFilter(f.v)} className={chip(filter === f.v)}>{f.l}</button>
             ))}
           </div>
@@ -137,7 +143,7 @@ export default function OrdersPage() {
                       <p className="text-[11px] text-[#a3a3a3] mt-0.5">{fmtDate(o.createdAt)}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className={`text-base font-black tabular-nums ${o.status === "cancelled" ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>
+                      <div className={`text-base font-black tabular-nums ${REFUNDED.includes(o.status) ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>
                         -{paidXpOf(o) > 0 || !(o.paidPoint > 0) ? `${paidXpOf(o).toLocaleString()}` : `${o.paidPoint.toLocaleString()}`}
                       </div>
                       <div className="text-[10px] font-bold text-[#8a8a8a]">

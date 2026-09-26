@@ -76,6 +76,9 @@ const PostSchema = new mongoose.Schema({
   publishAt: { type: Date, default: null }, // 📌 예약 발행 시각 (null이면 즉시 공개)
   // 📌 글 가리기 — 지우지 않고 목록·상세에서 감춘다. 관리자에게만 보인다.
   hidden: { type: Boolean, default: false },
+  // 📌 디스코드 공지 웹훅을 보낸 시각 — 글마다 한 번만 보내려는 표시. 서버만 쓴다.
+  //    필드가 없는 옛 글은 대상이 아니다(null 로 저장된 새 글만 지연 발송 대상).
+  noticeWebhookAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
 });
 

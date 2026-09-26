@@ -10,7 +10,8 @@ import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
 import Coupon from "@/models/Coupon";
 import UserCoupon from "@/models/UserCoupon";
-import { salePrice, couponDiscount, couponError, isTimed, durationPrice } from "@/lib/shopPricing";
+import ShopLock from "@/models/ShopLock";
+import { salePrice, couponDiscount, couponError, couponClaimFilter, couponReleaseUpdate, isTimed, durationPrice } from "@/lib/shopPricing";
 import { getLevelByXp } from "@/lib/leveling";
 import { xpToPoint, POINT_RATE } from "@/lib/pointRate";
 import mongoose from "mongoose";
@@ -37,6 +38,7 @@ function splitByPrice(amount, prices) {
 // ── [결제] 장바구니 일괄 구매 ──
 //    items: [{ itemId, qty }] · pointUse: 쓸 빙옥 개수(나머지는 XP) · 재고 선점 → 총액 차감 → 실패 시 전부 원복
 export async function POST(request) {
+  let lock = null;
   try {
     const session = await getServerSession(authOptions);
     const userId = session?.user?.id;
@@ -94,6 +96,23 @@ export async function POST(request) {
         return NextResponse.json({ success: false, message: `"${d.name}"은(는) 1인 1개만 구매할 수 있습니다.` }, { status: 400 });
       }
     }
+    // 같은 아이템을 가리키는 상품 둘(예: 7일 · 30일 상품)을 함께 사면 값만 두 번 빠진다 — 효과 · 인벤토리는 하나로 합쳐진다
+    const seenRef = new Set();
+    for (const d of docs) {
+      if (!d.itemId) continue;
+      if (seenRef.has(d.itemId)) {
+        return NextResponse.json({ success: false, message: `"${d.name}"과(와) 같은 아이템이 이미 담겨 있습니다.` }, { status: 400 });
+      }
+      seenRef.add(d.itemId);
+    }
+
+    // 📌 유저 자물쇠 — 기보유 확인부터 구매 기록까지 이 유저의 다른 결제(바로 구매 포함)가 끼어들지 못하게 한다.
+    //    없으면 동시에 보낸 두 요청이 둘 다 기보유 확인을 통과해 같은 상품이 두 번 결제된다. 아래 finally 에서 푼다
+    lock = await ShopLock.acquire(userId);
+    if (!lock) {
+      return NextResponse.json({ success: false, message: "처리 중인 결제가 있습니다. 잠시 후 다시 시도해 주세요." }, { status: 409 });
+    }
+
     // 📌 기간제는 기간이 끝나면 다시 살 수 있어야 하므로, 아직 살아 있는 건만 막는다
     const linkedIds = docs.map((d) => d.itemId).filter(Boolean);
     const owned = await Purchase.find({
@@ -123,7 +142,7 @@ export async function POST(request) {
       return NextResponse.json({ success: false, code: "PRICE_CHANGED", message: "가격이 바뀌었습니다. 바뀐 금액을 확인하고 다시 결제해 주세요." }, { status: 409 });
     }
 
-    // 쿠폰 검증 (사용 처리는 결제 확정 후)
+    // 쿠폰 검증 (사용권은 재고를 잡은 뒤 선점한다)
     let coupon = null;
     let discount = 0;
     if (couponCode?.trim()) {
@@ -158,6 +177,19 @@ export async function POST(request) {
       }
     };
 
+    // 1-2) 쿠폰 사용권 선점 — 한도 검사와 사용 기록을 조건부 갱신 한 번으로 한다(동시 결제가 한도를 넘지 못하게).
+    //      결제 · 기록이 실패하면 releaseCoupon 으로 되돌린다
+    if (coupon) {
+      const took = await Coupon.updateOne(couponClaimFilter(coupon, userId), { $inc: { usedCount: 1 }, $push: { usedBy: userId } });
+      if (!took.modifiedCount) {
+        await releaseStock();
+        return NextResponse.json({ success: false, message: "이미 사용했거나 한도가 찬 쿠폰입니다." }, { status: 409 });
+      }
+    }
+    const releaseCoupon = async () => {
+      if (coupon) await Coupon.updateOne({ _id: coupon._id }, couponReleaseUpdate(userId), { updatePipeline: true });
+    };
+
     // 2) 결제 — 빙옥은 원하는 만큼(pointUse 개) 쓰고, 나머지를 XP 로 낸다
     //    📌 관리자도 일반 유저와 똑같이 차감한다 — 테스트로 쓴 건 관리자 초기화로 되돌린다
     //    XP 는 화폐이므로 쓰면 레벨도 함께 내려간다. 빙옥은 레벨과 무관하다.
@@ -176,6 +208,7 @@ export async function POST(request) {
     const wallet = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
     const short = shortOf(wallet);
     if (short) {
+      await releaseCoupon();
       await releaseStock();
       return NextResponse.json({ success: false, message: short }, { status: 400 });
     }
@@ -190,15 +223,16 @@ export async function POST(request) {
     const inc = {};
     if (chargedXp > 0) { filter.xp = { $gte: chargedXp }; inc.xp = -chargedXp; inc.passBaseXp = -chargedXp; }
     if (pointUse > 0) { filter.point = { $gte: pointUse }; inc.point = -pointUse; }
-    const paid = await UserXp.updateOne(filter, {
-      ...(Object.keys(inc).length ? { $inc: inc } : {}),
-      $set: { updatedAt: new Date() },
-    });
-    if (!paid.matchedCount) {
-      // 사전 확인과 갱신 사이에 잔액이 바뀐 경우 — 다시 읽어 모자란 쪽을 알린다
-      const now = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
-      await releaseStock();
-      return NextResponse.json({ success: false, message: shortOf(now) || "보유 XP가 부족합니다." }, { status: 400 });
+    //    청구액이 0 이면(100% 할인 · 쿠폰) 지갑을 건드리지 않는다 — XP 기록이 없는 신규 유저는 문서가 없어 matchedCount 가 0 이 된다
+    if (Object.keys(inc).length) {
+      const paid = await UserXp.updateOne(filter, { $inc: inc, $set: { updatedAt: new Date() } });
+      if (!paid.matchedCount) {
+        // 사전 확인과 갱신 사이에 잔액이 바뀐 경우 — 다시 읽어 모자란 쪽을 알린다
+        const now = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
+        await releaseCoupon();
+        await releaseStock();
+        return NextResponse.json({ success: false, message: shortOf(now) || "보유 XP가 부족합니다." }, { status: 400 });
+      }
     }
     // 뺀 만큼 그대로 되돌린다 — 기록을 못 남겼을 때만 쓴다
     const refundWallet = async () => {
@@ -251,13 +285,13 @@ export async function POST(request) {
       //    지우기부터 실패하면 되돌리지 않는다(기록이 남았을 수 있어 공짜가 된다) — 바깥 catch 로 넘긴다
       await Purchase.deleteMany({ _id: { $in: rows.map((r) => r._id) } });
       await refundWallet();
+      await releaseCoupon();
       await releaseStock();
       throw e;
     }
 
-    // 쿠폰 사용 처리 (결제가 확정된 뒤에만) — 지갑에 있으면 그 건도 사용 처리
+    // 쿠폰 사용권은 위에서 이미 잡았다 — 지갑에 있으면 그 건도 사용 처리
     if (coupon) {
-      await Coupon.updateOne({ _id: coupon._id }, { $inc: { usedCount: 1 }, $push: { usedBy: userId } });
       await UserCoupon.updateOne(
         { userId, couponId: String(coupon._id), status: "unused" },
         { $set: { status: "used", usedAt: new Date() } }
@@ -272,13 +306,17 @@ export async function POST(request) {
       await UserXp.updateOne({ userId }, { $set: { level: getLevelByXp(balDoc?.xp ?? 0), needsRoleSync: true } });
     }
     const remain = { xp: balDoc?.xp ?? 0, point: balDoc?.point ?? 0 };
-    const hasRole = docs.some((d) => d.type === "role" || d.type === "perk");
+    // 기프트카드만 운영진이 발송한다 — 나머지 유형(역할 · 권한 · 아이템)은 봇이 자동 지급한다
+    const hasGift = docs.some((d) => d.type === "physical");
+    const hasAuto = docs.some((d) => d.type !== "physical");
 
     return NextResponse.json({
       success: true,
-      message: hasRole
-        ? "결제가 완료되었습니다. 역할 상품은 잠시 후 자동으로 지급됩니다."
-        : "결제가 완료되었습니다. 운영진 확인 후 발송해 드립니다.",
+      message: hasGift && hasAuto
+        ? "결제가 완료되었습니다. 기프트카드는 운영진 확인 후 발송해 드리고, 나머지 상품은 잠시 후 자동으로 지급됩니다."
+        : hasGift
+          ? "결제가 완료되었습니다. 운영진 확인 후 발송해 드립니다."
+          : "결제가 완료되었습니다. 잠시 후 자동으로 지급됩니다.",
       // subtotal · discount · total 은 XP 기준. usedPoint 는 뺀 빙옥, chargedXp 는 뺀 XP.
       // charged 는 옛 필드 — 한쪽으로만 냈을 때의 그 화폐 값. 섞어 냈으면 XP 몫이다(usedPoint · chargedXp 를 본다)
       data: {
@@ -291,5 +329,7 @@ export async function POST(request) {
   } catch (e) {
     console.error("결제 처리 오류:", e);
     return NextResponse.json({ success: false, message: "결제 처리 중 오류가 발생했습니다." }, { status: 500 });
+  } finally {
+    if (lock) await ShopLock.release(lock);
   }
 }

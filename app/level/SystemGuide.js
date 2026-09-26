@@ -330,7 +330,7 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
 
       {/* ── 알아두실 것 — 한두 줄 ── */}
       <div className="mt-12 md:mt-14 pt-5 border-t border-[#ededed] space-y-1.5">
-        {policy?.resetOnLeave && <p className="text-[12px] font-bold text-[#d01634] break-keep">서버를 나가면 보유 XP와 레벨이 삭제되고 복구되지 않습니다.</p>}
+        {policy?.resetOnLeave && <p className="text-[12px] font-bold text-[#d01634] break-keep">서버를 나가면 XP · 레벨 · 빙옥 · 강화가 삭제되고 복구되지 않습니다.</p>}
         <p className="text-[12px] text-[#5a5a5a] break-keep">숫자는 지금 설정값이며, 운영 상황에 따라 바뀔 수 있습니다.</p>
       </div>
     </div>

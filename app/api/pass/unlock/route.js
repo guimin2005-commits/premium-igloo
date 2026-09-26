@@ -5,8 +5,9 @@ import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { getPassState } from "@/lib/seasonPass";
-import { SEASON } from "@/lib/season";
+import { SEASON, getSeasonDday } from "@/lib/season";
 import { addPoints } from "@/lib/points";
+import { denyIfLevelClosed } from "@/lib/levelAccess";
 import { xpToPoint } from "@/lib/pointRate";
 import { getLevelByXp } from "@/lib/leveling";
 import UserXp from "@/models/UserXp";
@@ -37,11 +38,18 @@ export async function POST(request) {
     }
 
     await connectToDatabase();
+    const closed = await denyIfLevelClosed(session);
+    if (closed) return closed;
     const userId = session.user.id;
     const state = await getPassState(userId);
 
     if (!state.enabled) {
       return NextResponse.json({ success: false, message: "시즌 패스가 열려 있지 않습니다." }, { status: 403 });
+    }
+    // 📌 끝난 시즌은 해금을 받지 않는다 — 시즌 번호(lib/season.js)는 손으로 올리므로 종료일 뒤에도 잠시 같은 시즌이 남는데,
+    //    그 사이 해금하면 번호가 바뀌는 순간 롤오버(getPassState)가 해금을 환불 없이 비운다. 수령은 막지 않는다(이미 번 보상)
+    if (getSeasonDday().ended) {
+      return NextResponse.json({ success: false, message: "시즌이 종료되었습니다." }, { status: 403 });
     }
     if (state.unlocked) {
       return NextResponse.json({ success: false, message: "이미 해금했습니다." }, { status: 409 });

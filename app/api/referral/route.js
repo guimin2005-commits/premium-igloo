@@ -2,15 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { requireUser, requireSelfOrAdmin } from "@/lib/apiAuth";
+import { requireSelfOrAdmin } from "@/lib/apiAuth";
 import Referral from "@/models/Referral";
-import Payout from "@/models/Payout";
-
-// 친구 초대 보상 정책 (XP)
-const INVITER_REWARD = 10000; // 초대한 사람
-const INVITEE_REWARD = 5000;  // 코드를 입력한 사람
-// 누적 초대 마일스톤 추가 보너스 (해당 인원 도달 시 1회 지급)
-const MILESTONE_BONUS = { 3: 30000, 5: 50000, 10: 150000 };
 
 // 고유 코드 생성 (혼동되는 문자 제외)
 const genCode = () => {
@@ -59,58 +52,9 @@ export async function GET(request) {
   }
 }
 
-// [사용] 친구의 초대 코드 입력
-export async function POST(request) {
-  try {
-    // ⚠️ 신원을 세션에서 가져온다 — body의 userName을 믿으면 가짜 닉네임으로
-    //    초대 보상(10,000 XP)과 마일스톤 보너스를 무한히 파밍할 수 있다.
-    const auth = await requireUser();
-    if (auth.deny) return auth.deny;
-    const userName = auth.name;
-    const userId = auth.userId;
-
-    await connectToDatabase();
-    const { code } = await request.json();
-    if (!code || !code.trim()) {
-      return NextResponse.json({ success: false, message: "코드를 입력해 주세요." }, { status: 400 });
-    }
-
-    const normalized = code.trim().toUpperCase();
-    const me = await getOrCreate(userName, userId);
-
-    if (me.referredBy) {
-      return NextResponse.json({ success: false, message: "이미 친구 초대 코드를 입력하셨습니다." }, { status: 409 });
-    }
-    if (me.code === normalized) {
-      return NextResponse.json({ success: false, message: "본인의 코드는 사용할 수 없습니다." }, { status: 400 });
-    }
-
-    const owner = await Referral.findOne({ code: normalized });
-    if (!owner) {
-      return NextResponse.json({ success: false, message: "유효하지 않은 초대 코드입니다." }, { status: 404 });
-    }
-
-    owner.invitees.push(userName);
-    me.referredBy = normalized;
-    await owner.save();
-    await me.save();
-
-    // XP 지급 대기열 생성 (관리자 대시보드에서 지급 처리)
-    const inviteCount = owner.invitees.length;
-    const payouts = [
-      { userName: owner.userName, userId: owner.userId, amount: INVITER_REWARD, reason: `친구 초대 보상 (${userName} 초대)`, source: "referral" },
-      { userName: userName, userId: userId || "", amount: INVITEE_REWARD, reason: `초대 코드 입력 웰컴 보상 (${owner.userName}님 코드)`, source: "referral" },
-    ];
-    if (MILESTONE_BONUS[inviteCount]) {
-      payouts.push({ userName: owner.userName, userId: owner.userId, amount: MILESTONE_BONUS[inviteCount], reason: `누적 ${inviteCount}명 초대 마일스톤 보너스`, source: "referral" });
-    }
-    try { await Payout.insertMany(payouts); } catch { /* 지급 대기 생성 실패해도 초대는 유효 */ }
-
-    return NextResponse.json({
-      success: true,
-      message: `${owner.userName}님의 초대가 확인되었습니다!\n초대 보상이 양쪽 모두에게 지급됩니다.`,
-    });
-  } catch (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
-  }
+// [사용] 친구 초대 이벤트는 폐기됐다(next.config.ts /invite 리다이렉트) — 기록 조회(GET)만 남기고 지급 경로는 닫는다.
+//    열어 두면 부계정 · 동시 요청으로 초대 보상과 마일스톤 XP 가 끝없이 찍혀 나온다.
+//    되살린다면 referredBy 를 조건부 갱신으로 먼저 선점하고(userId 기준) 선점에 성공한 요청만 지급할 것.
+export async function POST() {
+  return NextResponse.json({ success: false, message: "친구 초대 이벤트가 종료되었습니다." }, { status: 410 });
 }

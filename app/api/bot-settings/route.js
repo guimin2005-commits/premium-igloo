@@ -14,6 +14,8 @@ const requireAdmin = async () => {
 
 // 숫자 필드는 음수/NaN을 막고 상한을 둔다 (봇이 그대로 지급에 사용하므로)
 const num = (v, def, { min = 0, max = 10_000_000 } = {}) => {
+  // 빈 칸·null 은 "입력 안 함" — Number("") 은 0 이라 그냥 두면 0 이 저장된다 (명시한 0 은 그대로 0)
+  if (v == null || String(v).trim() === "") return def;
   const n = Number(v);
   if (!Number.isFinite(n)) return def;
   return Math.min(max, Math.max(min, Math.floor(n)));
@@ -44,6 +46,12 @@ export async function POST(request) {
     }
     await connectToDatabase();
     const b = await request.json();
+    // 📌 숫자 칸을 비우고 저장하면 "" 가 온다 — 기본값으로 되돌리지 않고 지금 저장된 값을 그대로 둔다
+    //    (문자열 칸의 "" 는 '알림 끄기' 같은 뜻이 있으니 저장값이 숫자인 칸만)
+    const cur = await BotSetting.findOne({ key: "main" }).lean();
+    for (const k of Object.keys(b)) {
+      if (typeof b[k] === "string" && !b[k].trim() && typeof cur?.[k] === "number") b[k] = cur[k];
+    }
 
     // 채팅 랜덤 구간 — 최소 ≤ 최대 보장 (최소가 더 크면 최대를 최소로 끌어올린다)
     const chatXpMin = num(b.chatXpMin, 50);

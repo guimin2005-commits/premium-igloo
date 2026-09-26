@@ -9,9 +9,11 @@ export const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: (
 
   // 본문이 그대로 HTML 로 들어가므로 주소는 http(s) 만 허용하고 따옴표·꺾쇠는 막는다
   const safeUrl = (u: string) => (/^https?:\/\/[^"'<>\s]+$/i.test(String(u).trim()) ? String(u).trim() : "");
+  // 본문의 꺾쇠·따옴표를 먼저 글자로 바꿔 둔다 (a<b 가 태그로 먹히거나 속성이 깨지지 않게)
+  const escapeHtml = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
   const formatInlineMarkdown = (t: string): string => {
-    return t
+    return escapeHtml(t)
       // 이미지 — 링크보다 먼저 걸러야 한다 (뒤에 두면 링크로 잡히고 ! 만 남는다)
       .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m: string, alt: string, url: string) => {
         const src = safeUrl(url);
@@ -20,7 +22,11 @@ export const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: (
         return `<img src='${src}' alt='${cap}' loading='lazy' class='block w-full h-auto rounded-xl border border-[rgba(128,128,128,.35)] my-5' />`
           + (cap ? `<span class='block text-center text-[12px] text-[#8a8a8a] -mt-3 mb-5'>${cap}</span>` : "");
       })
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href='$2' target='_blank' rel='noopener noreferrer' class='text-[#e91e3f] hover:underline'>$1</a>")
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m: string, label: string, url: string) => {
+        const href = safeUrl(url);
+        if (!href) return label;
+        return `<a href='${href}' target='_blank' rel='noopener noreferrer' class='text-[#e91e3f] hover:underline'>${label}</a>`;
+      })
       .replace(/\{([^}]+)\}/g, (match, code) => `<span class='inline-flex items-center gap-1.5 bg-[rgba(128,128,128,.16)] px-2.5 py-1 rounded'><code class='text-[#e91e3f] font-mono text-sm'>${code}</code><button class='copy-btn text-[#e91e3f] hover:opacity-70 transition-opacity flex-shrink-0' data-copy='${code}' title='복사'><svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='2' stroke='currentColor' class='w-3.5 h-3.5'><path strokeLinecap='round' strokeLinejoin='round' d='M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z' /></svg></button></span>`)
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/__(.*?)__/g, "<span class='underline'>$1</span>")

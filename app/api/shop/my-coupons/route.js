@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
-import { couponDiscount, couponError } from "@/lib/shopPricing";
+import { couponDiscount, couponError, couponClaimFilter, couponReleaseUpdate } from "@/lib/shopPricing";
 import Coupon from "@/models/Coupon";
 import UserCoupon from "@/models/UserCoupon";
 import CodeGrant from "@/models/CodeGrant";
@@ -116,22 +116,33 @@ export async function POST(request) {
         }
       }
 
-      if (coupon.rewardRoleId) {
-        await CodeGrant.create({
-          userId, userName: session.user.name || "",
-          roleId: coupon.rewardRoleId, code: coupon.code,
-        }).catch(() => {});
-      }
-      if (coupon.rewardXp > 0) {
-        await Payout.create({
-          userName: session.user.name || "", userId,
-          amount: coupon.rewardXp,
-          reason: `쿠폰 사용: ${coupon.code}`,
-          source: "code",
-        }).catch(() => {});
+      // 📌 사용권부터 잡는다 — 위 한도 검사는 읽은 값이라, 동시에 여러 번 보내면 모두 통과해 보상이 여러 번 지급된다.
+      //    한도 검사와 사용 기록을 조건부 갱신 한 번으로 묶고, 잡은 요청만 지급을 예약한다
+      const took = await Coupon.updateOne(couponClaimFilter(coupon, userId), { $inc: { usedCount: 1 }, $push: { usedBy: userId } });
+      if (!took.modifiedCount) {
+        return NextResponse.json({ success: false, message: "이미 사용했거나 한도가 찬 쿠폰입니다." }, { status: 409 });
       }
 
-      await Coupon.updateOne({ _id: coupon._id }, { $inc: { usedCount: 1 }, $push: { usedBy: userId } });
+      // 지급 예약에 실패하면 사용권을 되돌려 다시 입력할 수 있게 한다 (삼키면 사용 처리만 남고 보상은 사라진다)
+      try {
+        if (coupon.rewardRoleId) {
+          await CodeGrant.create({
+            userId, userName: session.user.name || "",
+            roleId: coupon.rewardRoleId, code: coupon.code,
+          });
+        }
+        if (coupon.rewardXp > 0) {
+          await Payout.create({
+            userName: session.user.name || "", userId,
+            amount: coupon.rewardXp,
+            reason: `쿠폰 사용: ${coupon.code}`,
+            source: "code",
+          });
+        }
+      } catch (e) {
+        await Coupon.updateOne({ _id: coupon._id }, couponReleaseUpdate(userId), { updatePipeline: true }).catch(() => {});
+        throw e;
+      }
 
       return NextResponse.json({
         success: true,
