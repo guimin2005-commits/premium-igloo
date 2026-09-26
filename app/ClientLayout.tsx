@@ -439,14 +439,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         <div className={`${isAdminSurface ? "max-w-none" : "max-w-7xl"} mx-auto px-5 md:px-6 flex items-center gap-4 md:gap-6 relative transition-[height] duration-200 ease-out ${barH}`}>
           <div className="flex items-center gap-3 md:gap-4 h-full z-10 min-w-0 flex-1 md:basis-0">
             {isVerifyPage ? (
-              <span className={`font-bold cursor-default select-none text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] ${isLightPage ? "text-[#131313]" : "text-white"}`}>고급 이글루</span>
+              <span className={`shrink-0 font-black tracking-[0.04em] leading-none cursor-default select-none transition-[font-size] duration-200 ease-out ${scrolled ? "text-[18px] md:text-[20px]" : "text-[19px] md:text-[22px]"} ${isLightPage ? "text-[#131313]" : "text-white"}`}>고급 이글루</span>
             ) : (
               /* 📌 브랜드는 어느 화면에서나 "고급 이글루" 하나. 지금 있는 곳(SYSTEM : LEVEL · ARCTIC)은
                      아래 카테고리 줄이 알려 준다 — 화면마다 로고가 달라지면 같은 사이트로 안 읽힌다. */
               <>
-                <Link href="/" className={isWhitePage
-                  ? `shrink-0 font-black tracking-[0.04em] leading-none text-[#131313] hover:text-[#e91e3f] transition-[color,font-size] duration-200 ease-out ${scrolled ? "text-[18px] md:text-[20px]" : "text-[19px] md:text-[22px]"}`
-                  : `shrink-0 font-bold text-[15px] sm:text-[17px] tracking-[0.16em] sm:tracking-[0.2em] transition-colors ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-gray-300"}`}>고급 이글루</Link>
+                {/* 📌 로고는 모든 화면에서 같은 크기 · 같은 굵기 — 경매 · 대회 · 명예의 전당(다크)만 작고 자간 넓은 옛 모양이라 달라 보였다. 색만 바탕을 따른다 */}
+                <Link href="/" className={`shrink-0 font-black tracking-[0.04em] leading-none transition-[color,font-size] duration-200 ease-out ${scrolled ? "text-[18px] md:text-[20px]" : "text-[19px] md:text-[22px]"} ${isLightPage ? "text-[#131313] hover:text-[#e91e3f]" : "text-white hover:text-[#ff5c77]"}`}>고급 이글루</Link>
                 {section && (
                   <>
                     <span className={`hidden md:block shrink-0 w-px h-4 ${isLightPage ? "bg-[#d4d4d4]" : "bg-white/20"}`} />

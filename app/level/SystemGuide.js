@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { VOICE_TIERS, tierRangeLabel } from "@/lib/voiceTiers";
 import { SEASON } from "@/lib/season";
+import { POINT_RATE } from "@/lib/pointRate";
 import TierEmblem from "../components/TierEmblem";
 import { ICON_PATHS } from "../components/Icons";
 
@@ -289,7 +290,14 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
           <div className="rounded-2xl border border-[#ededed] p-5 md:p-6 flex flex-col md:flex-row md:items-center gap-5 md:gap-10">
             <div className="shrink-0">
               <p className="text-[12px] font-bold text-[#5a5a5a]">빙옥 · XP</p>
-              <p className="mt-1.5 text-[34px] md:text-[40px] font-black tracking-[-0.03em] leading-none tabular-nums">1 : 1</p>
+              {/* 📌 환율은 lib/pointRate 한 곳에서 읽는다 — 빙옥으로 내면 XP 가격 ÷ 환율(올림) */}
+              <p className="mt-1.5 flex items-baseline gap-1.5 whitespace-nowrap">
+                <span className="text-[34px] md:text-[40px] font-black tracking-[-0.03em] leading-none tabular-nums">1</span>
+                <span className="text-[13px] font-black text-[#8a8a8a]">빙옥</span>
+                <span className="px-0.5 text-[24px] md:text-[28px] font-black text-[#a3a3a3] leading-none">=</span>
+                <span className="text-[34px] md:text-[40px] font-black tracking-[-0.03em] leading-none tabular-nums">{fmt(POINT_RATE)}</span>
+                <span className="text-[13px] font-black text-[#8a8a8a]">XP</span>
+              </p>
             </div>
             <div className="flex-1 min-w-0">
               <Rule dot k="XP로 사기" v="가격만큼 XP가 빠지고, 레벨이 내려갈 수 있음" />

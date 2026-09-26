@@ -7,7 +7,8 @@ import Dropdown from "../components/Dropdown";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 import IconPicker from "../components/IconPicker";
-import { salePrice, isTimed, durationOptions, durationLabel, durationPrice } from "@/lib/shopPricing";
+import { salePrice, isTimed, durationOptions, durationLabel, cardPrice, cardListPrice, hasOptions } from "@/lib/shopPricing";
+import { POINT_RATE, xpToPoint, pointToXp } from "@/lib/pointRate";
 import { itemTypeLabel, itemTypeColor, ITEM_TYPE_OPTIONS } from "@/lib/items";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
@@ -200,6 +201,8 @@ export default function ArcticShopBody({
   const [contact, setContact] = useState("");
   const [isBuying, setIsBuying] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  // 📌 쓸 빙옥 개수 — 나머지는 XP 로. 창 · 요청은 0 ~ 최대로 자른 값만 쓴다 (결제 화면과 같은 계산)
+  const [pointUse, setPointUse] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
   // 📌 장바구니 — 로컬에 보관해 새로고침해도 유지 ([{ itemId, qty }])
@@ -472,25 +475,27 @@ export default function ArcticShopBody({
     const range = PRICE_RANGES.find((r) => r.v === priceFilter) || PRICE_RANGES[0];
     const q = submitted.trim().toLowerCase();
 
+    // 📌 가격 기준은 카드에 적힌 값(cardPrice) 하나 — 기간제는 가장 싼 기간. 표기와 필터 · 정렬이 어긋나지 않게
     const filtered = items.filter((it) => {
       if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : it.type !== typeFilter)) return false;
-      const sp = salePrice(it);
+      const sp = cardPrice(it);
       if (sp < range.min || sp >= range.max) return false;
       if (inStockOnly && it.stock === 0) return false;
-      if (affordableOnly && myXp != null && sp > myXp) return false;
+      // 빙옥도 함께 낼 수 있으니 XP + 빙옥 × 1,000 까지 산다
+      if (affordableOnly && myXp != null && sp > myXp + pointToXp(myPoint ?? 0)) return false;
       if (wishOnly && !wish.includes(it._id)) return false;
       if (q && !`${it.name} ${it.description} ${it.roleName || ""}`.toLowerCase().includes(q)) return false;
       return true;
     });
 
     const sorted = [...filtered];
-    if (sort === "priceAsc") sorted.sort((a, b) => salePrice(a) - salePrice(b));
-    else if (sort === "priceDesc") sorted.sort((a, b) => salePrice(b) - salePrice(a));
+    if (sort === "priceAsc") sorted.sort((a, b) => cardPrice(a) - cardPrice(b));
+    else if (sort === "priceDesc") sorted.sort((a, b) => cardPrice(b) - cardPrice(a));
     else if (sort === "newest") sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     else if (sort === "popular") sorted.sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
     else sorted.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return sorted;
-  }, [items, typeFilter, priceFilter, inStockOnly, affordableOnly, wishOnly, wish, submitted, sort, myXp]);
+  }, [items, typeFilter, priceFilter, inStockOnly, affordableOnly, wishOnly, wish, submitted, sort, myXp, myPoint]);
 
   // 📌 이미 장바구니에 있는 상품을 '구매'로 누르면, 낱개 구매인지
   //    장바구니와 함께 결제할지 먼저 물어본다 (모르고 따로 사는 걸 막는다)
@@ -499,8 +504,16 @@ export default function ArcticShopBody({
   const startBuy = (item: any) => {
     setContact("");
     setResult(null);
+    setPointUse(0);
     setBuyTarget(item);
   };
+
+  // 바로 구매 창의 금액 — 총액(XP) · 쓸 수 있는 빙옥 최대 · 실제로 쓸 빙옥 · 결제 XP
+  const buyTotal = buyTarget ? salePrice(buyTarget, buyTarget._days) : 0;
+  const buyMaxPoint = Math.max(0, Math.min(myPoint ?? 0, xpToPoint(buyTotal)));
+  const buyPoint = Math.min(pointUse, buyMaxPoint);
+  const buyXp = Math.max(0, buyTotal - buyPoint * POINT_RATE);
+  const buyEnough = myXp != null && myXp >= buyXp && buyPoint <= (myPoint ?? 0);
 
   const openBuy = (item: any) => {
     if (!isLoggedIn) return signIn("discord");
@@ -520,12 +533,18 @@ export default function ArcticShopBody({
       const res = await fetch("/api/shop/purchase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: buyTarget._id, contact, days: buyTarget._days || 0 }),
+        body: JSON.stringify({ itemId: buyTarget._id, contact, days: buyTarget._days || 0, pointUse: buyPoint }),
       });
       const d = await res.json();
       setResult({ ok: !!d.success, message: d.message || (d.success ? "구매가 완료되었습니다." : "구매에 실패했습니다.") });
       if (d.success) {
-        if (typeof d.data?.remainXp === "number") setMyXp(d.data.remainXp);
+        // 결제 뒤 잔액 — remain { xp, point } (옛 응답의 remainXp · remainPoint 도 받는다)
+        const remain = d.data?.remain ?? d.remain;
+        const rx = typeof remain?.xp === "number" ? remain.xp : d.data?.remainXp;
+        const rp = typeof remain?.point === "number" ? remain.point : d.data?.remainPoint;
+        if (typeof rx === "number") setMyXp(rx);
+        if (typeof rp === "number") setMyPoint(rp);
+        setPointUse(0);
         setItems((prev) => prev.map((it) => (it._id === buyTarget._id ? { ...it, stock: it.stock > 0 ? it.stock - 1 : it.stock, soldCount: (it.soldCount || 0) + 1 } : it)));
         loadMine();
       }
@@ -606,7 +625,6 @@ export default function ArcticShopBody({
     </div>
   );
 
-  const canAfford = (p: number) => myXp != null && myXp >= p;
   const chip = (active: boolean) =>
     `px-3.5 py-1.5 rounded-full text-[12px] font-bold border transition-colors ${
       active ? "bg-[#e91e3f] text-[#ffffff] border-[#e91e3f]" : "bg-white/70 text-[#5a5a5a] border-[#ededed] hover:border-[#a3a3a3]"
@@ -635,14 +653,15 @@ export default function ArcticShopBody({
   }
 
 
-  // 📌 상품 하나 — 상자(카드) 없이 그림 · 상품명 · 정가(무제한) · 찜 만. 담기·구매는 상세에서.
-  //    표시 가격은 정가(무제한): 기간제는 무제한 옵션의 정가, 없으면 기준가. 할인·기간은 상세가 말한다.
+  // 📌 상품 하나 — 상자(카드) 없이 그림 · 상품명 · 가격 · 찜 만. 담기·구매는 상세에서.
+  //    표시 가격은 cardPrice — 기간제는 가장 싼 기간의 판매가(옵션이 여럿이면 "부터"). 가격 필터 · 정렬과 같은 값.
+  //    취소선 정가도 같은 기간 기준(cardListPrice)
   const renderCard = (it: any) => {
     const soldOut = it.stock === 0;
     const wished = wish.includes(it._id);
-    const listPrice = isTimed(it) ? (durationPrice(it, 0) ?? it.price) : it.price;
-    const pct = Math.max(0, Math.min(100, Number(it.discountPct) || 0));
-    const finalPrice = pct ? Math.max(0, Math.floor((Number(listPrice || 0) * (100 - pct)) / 100)) : Number(listPrice || 0);
+    const listPrice = cardListPrice(it);
+    const finalPrice = cardPrice(it);
+    const pct = finalPrice < listPrice ? Math.max(0, Math.min(100, Number(it.discountPct) || 0)) : 0;
     return (
       <div key={it._id} className="group relative flex flex-col">
         <Link href={`/arctic/item/${it._id}`} className="block relative aspect-square overflow-hidden rounded-md bg-[#f2f2f2]">
@@ -672,10 +691,12 @@ export default function ArcticShopBody({
           {/* 이름은 작고 가볍게, 가격이 주인공 — 둘이 같은 크기면 값이 안 읽힌다 */}
           <h3 className="text-[13px] font-semibold text-[#5a5a5a] leading-snug line-clamp-2 break-keep">{it.name}</h3>
           {/* 할인 중이면 정가는 취소선으로 위에, 할인율은 빨간 글자, 큰 숫자는 할인가 */}
-          {pct > 0 && <s className="block mt-2 text-[11.5px] text-[#a3a3a3] tabular-nums leading-none">{Number(listPrice || 0).toLocaleString()} XP</s>}
+          {pct > 0 && <s className="block mt-2 text-[11.5px] text-[#a3a3a3] tabular-nums leading-none">{listPrice.toLocaleString()} XP</s>}
           <p className={`${pct > 0 ? "mt-1" : "mt-2"} text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none`}>
             {pct > 0 && <span className="mr-1.5 text-[14px] font-black text-[#e91e3f]">{pct}%</span>}
             {finalPrice.toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP</span>
+            {/* 좁은 폭에서 넘치면 "부터" 만 통째로 다음 줄로 */}
+            {hasOptions(it) && <>{" "}<span className="whitespace-nowrap text-[11px] font-bold text-[#8a8a8a]">부터</span></>}
           </p>
         </Link>
 
@@ -814,7 +835,7 @@ export default function ArcticShopBody({
       {showing === "home" && (
         <ArcticHome
           items={items} isLoading={isLoading} isAdmin={isAdmin} isLoggedIn={isLoggedIn}
-          myXp={myXp} myLevel={myLevel} ownedItemIds={ownedItemIds}
+          myXp={myXp} myPoint={myPoint} myLevel={myLevel} ownedItemIds={ownedItemIds}
           banners={banners} bannersLoaded={bannersLoaded} bannerIdx={bannerIdx} setBannerIdx={setBannerIdx} bannerRatio={bannerRatio} fitRatio={fitRatio}
           renderCard={renderCard} goProducts={goProducts} openEdit={() => openEdit()}
           adminTools={
@@ -1081,7 +1102,8 @@ export default function ArcticShopBody({
       {/* ── 구매 모달 ── */}
       {buyTarget && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#ffffff] rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-[#ededed]">
+          {/* 낮은 화면(모바일 가로 · 기프트카드 수령 칸 + 기간 + 빙옥 칸)에서도 위아래가 잘리지 않게 창 안에서 스크롤 */}
+          <div className="bg-[#ffffff] rounded-3xl w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto shadow-2xl border border-[#ededed]">
             {result ? (
               <div className="p-8 text-center">
                 <div className={`w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-5 ${result.ok ? "bg-[#e8f3e6] text-[#3f7a35]" : "bg-[#fdeaea] text-[#d01634]"}`}>
@@ -1141,11 +1163,38 @@ export default function ArcticShopBody({
                     </div>
                   )}
 
+                  {/* 📌 빙옥 사용 — 원하는 만큼 쓰고 나머지는 XP 로. 결제 화면(arctic/checkout)과 같은 모양 */}
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="buy-point" className="shrink-0 text-[11px] font-bold text-[#5a5a5a]">빙옥 사용</label>
+                      <input id="buy-point" type="text" inputMode="numeric" autoComplete="off"
+                        value={buyPoint ? String(buyPoint) : ""} placeholder="0"
+                        onChange={(e) => setPointUse(Math.min(buyMaxPoint, parseInt(e.target.value.replace(/\D/g, "") || "0", 10) || 0))}
+                        disabled={buyMaxPoint === 0}
+                        className="min-w-0 flex-1 max-w-[88px] min-h-9 px-3 py-1.5 rounded-lg border border-[#a3a3a3] bg-white text-[14px] text-right text-[#131313] tabular-nums outline-none transition-colors placeholder:text-[#a3a3a3] focus:border-[#131313] focus:ring-2 focus:ring-[#131313]/10 disabled:bg-[#f2f2f2] disabled:text-[#8a8a8a] disabled:border-[#e0e0e0]" />
+                      <button type="button" onClick={() => setPointUse(buyMaxPoint > 0 && buyPoint === buyMaxPoint ? 0 : buyMaxPoint)} disabled={buyMaxPoint === 0}
+                        className={`shrink-0 px-2.5 py-1 rounded-full border text-[11px] font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                          buyMaxPoint > 0 && buyPoint === buyMaxPoint ? "bg-[#131313] border-[#131313] text-white" : "bg-white border-[#a3a3a3] text-[#131313] hover:border-[#131313]"
+                        }`}>
+                        전액 사용
+                      </button>
+                      <span className="ml-auto shrink-0 text-[11px] text-[#8a8a8a] tabular-nums">보유 {(myPoint ?? 0).toLocaleString()}</span>
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-[#8a8a8a]">1 빙옥 = {POINT_RATE.toLocaleString()} XP</p>
+                  </div>
+
                   <div className="bg-[#f2f2f2] rounded-xl px-4 py-3 mb-5 text-[12px] space-y-1.5">
                     <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold text-[#131313] tabular-nums">{(myXp ?? 0).toLocaleString()}</span></div>
-                    <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 XP</span><span className="font-bold text-[#d01634] tabular-nums">-{salePrice(buyTarget, buyTarget._days).toLocaleString()}</span></div>
+                    {buyPoint > 0 && (
+                      <div className="flex justify-between gap-3">
+                        <span className="shrink-0 text-[#5a5a5a]">빙옥 사용</span>
+                        <span className="text-right font-bold text-[#d01634] tabular-nums">-{buyPoint.toLocaleString()} 빙옥 <span className="text-[11px] font-medium text-[#8a8a8a]">(−{(buyPoint * POINT_RATE).toLocaleString()} XP)</span></span>
+                      </div>
+                    )}
+                    <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 XP</span><span className="font-bold text-[#d01634] tabular-nums">-{buyXp.toLocaleString()}</span></div>
                     <div className="h-px bg-[#e0e0e0]"></div>
-                    <div className="flex justify-between"><span className="text-[#5a5a5a]">구매 후 잔액</span><span className="font-black text-[#131313] tabular-nums">{Math.max(0, (myXp ?? 0) - salePrice(buyTarget, buyTarget._days)).toLocaleString()}</span></div>
+                    <div className="flex justify-between"><span className="text-[#5a5a5a]">구매 후 XP</span><span className="font-black text-[#131313] tabular-nums">{Math.max(0, (myXp ?? 0) - buyXp).toLocaleString()}</span></div>
+                    <div className="flex justify-between"><span className="text-[#5a5a5a]">구매 후 빙옥</span><span className="font-black text-[#131313] tabular-nums">{Math.max(0, (myPoint ?? 0) - buyPoint).toLocaleString()}</span></div>
                   </div>
 
                   {/* 화면에 안 보이는 것만 남긴다 — 지급까지 걸리는 시간과 되돌릴 수 없다는 경고
@@ -1158,9 +1207,9 @@ export default function ArcticShopBody({
 
                   <div className="flex gap-3">
                     <button onClick={() => setBuyTarget(null)} className="flex-1 py-3.5 bg-[#f2f2f2] text-[#5a5a5a] font-bold rounded-xl hover:bg-[#e0e0e0] transition-colors">취소</button>
-                    <button onClick={confirmBuy} disabled={isBuying || !canAfford(salePrice(buyTarget, buyTarget._days))}
+                    <button onClick={confirmBuy} disabled={isBuying || !buyEnough}
                       className="flex-1 py-3.5 bg-[#e91e3f] text-[#ffffff] font-bold rounded-xl hover:bg-[#d01634] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                      {isBuying ? "처리 중..." : canAfford(salePrice(buyTarget, buyTarget._days)) ? "구매 확정" : "XP 부족"}
+                      {isBuying ? "처리 중..." : buyEnough ? "구매 확정" : "XP 부족"}
                     </button>
                   </div>
                 </div>

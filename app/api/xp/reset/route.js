@@ -19,6 +19,8 @@ import ShopItem from "@/models/ShopItem";
 //    · shop: 상점에서 산 건을 모두 되돌린다. 대기 건은 취소, 지급된 건은 환불(봇이 역할을 뗀다).
 //      실제로 빠진 건(billed)만 돌려준다 — 관리자가 무료로 사던 시절 기록은 되돌리기만 한다.
 //    관리자 판정은 서버 세션으로 다시 한다 (화면의 표시는 믿지 않는다).
+//    기록된 값(enhancePaid · passUnlockPaid · paidXp/paidPoint)은 모두 낸 화폐 단위 그대로다 —
+//    빙옥은 결제 때 환율(1 빙옥 = 1,000 XP)을 적용해 뺀 값이 적혀 있으니 여기서 다시 환산하지 않는다.
 const WHATS = ["enhance", "pass", "shop"];
 
 // XP · 빙옥을 돌려준다. XP 는 차감 때 기준선(passBaseXp)도 같이 내렸으므로 같은 폭으로 되돌리고 레벨을 다시 맞춘다

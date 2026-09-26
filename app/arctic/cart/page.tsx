@@ -6,6 +6,7 @@ import Link from "next/link";
 import ArcticStoreBar from "../ArcticStoreBar";
 import CardArt from "../CardArt";
 import { salePrice, durationLabel } from "@/lib/shopPricing";
+import { pointToXp } from "@/lib/pointRate";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 
@@ -23,6 +24,7 @@ export default function CartPage() {
   const [cart, setCart] = useState<{ itemId: string; qty: number; days?: number }[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [myXp, setMyXp] = useState<number | null>(null);
+  const [myPoint, setMyPoint] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   // 저장된 장바구니를 먼저 읽고, 그 뒤부터만 저장한다
@@ -51,7 +53,7 @@ export default function CartPage() {
       const list = Array.isArray(it?.data) ? it.data : [];
       setItems(list);
       if (it?.success && Array.isArray(it?.data)) setValidIds(new Set(list.map((i: any) => String(i._id))));
-      if (me?.success) setMyXp(me.data.xp);
+      if (me?.success) { setMyXp(me.data.xp); setMyPoint(me.data.point || 0); }
     }).finally(() => setIsLoading(false));
   }, [status, isAdmin]);
 
@@ -88,7 +90,8 @@ export default function CartPage() {
   const listTotal = picked.reduce((n, r) => n + ((r.days ?? 0) > 0 ? (r.item.durations?.find((d: any) => d.days === r.days)?.price ?? r.item.price) : r.item.price) * r.qty, 0);
   const total = picked.reduce((n, r) => n + salePrice(r.item, r.days) * r.qty, 0);
   const discount = listTotal - total;
-  const enoughXp = myXp != null && myXp >= total;
+  // 빙옥을 결제 화면에서 섞어 쓸 수 있다 — XP 만으로 모자라도 빙옥까지 합쳐 되면 결제로 보낸다
+  const enoughXp = myXp != null && myXp + pointToXp(myPoint) >= total;
   const canCheckout = picked.length > 0 && enoughXp;
 
   // 선택한 항목만 결제로 넘긴다 (나머지는 장바구니에 남는다)
@@ -227,6 +230,7 @@ export default function CartPage() {
                     <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 할인</span><span className="font-bold text-[#e91e3f] tabular-nums">-{discount.toLocaleString()} XP</span></div>
                   )}
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold tabular-nums">{(myXp ?? 0).toLocaleString()} XP</span></div>
+                  {myPoint > 0 && <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 빙옥</span><span className="font-bold tabular-nums">{myPoint.toLocaleString()} 빙옥</span></div>}
                 </div>
 
                 <div className="h-px bg-[#ededed] mb-4"></div>
@@ -241,7 +245,7 @@ export default function CartPage() {
                   className={`block w-full py-4 text-center font-bold rounded-xl transition-colors ${
                     canCheckout ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"
                   }`}>
-                  {picked.length === 0 ? "상품을 선택해주세요" : !enoughXp ? "XP가 부족합니다" : "결제하러 가기"}
+                  {picked.length === 0 ? "상품을 선택해주세요" : !enoughXp ? "XP · 빙옥이 부족합니다" : "결제하러 가기"}
                 </Link>
 
                 <p className="mt-4 text-[10px] text-[#a3a3a3] leading-relaxed break-keep">

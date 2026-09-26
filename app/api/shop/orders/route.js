@@ -72,10 +72,13 @@ export async function PATCH(request) {
 
     // 취소 시 환불 + 재고 복구 (환불로 레벨이 다시 올라갈 수 있다)
     //    📌 price 는 쿠폰 적용 전 정가라 그대로 돌려주면 과다 환불이 된다.
-    //       실제 결제한 금액(paidXp/paidPoint)을 그 지갑으로 되돌린다.
+    //       실제 결제한 금액(paidXp/paidPoint)을 그 지갑으로 되돌린다. 둘 다 낸 화폐 단위 그대로라
+    //       (빙옥은 1 빙옥 = 1,000 XP 로 환산해 뺀 값) 다시 환산하지 않는다.
     //       옛 기록에는 두 필드가 없으므로 그때만 price 로 떨어진다.
+    //       📌 billed 건은 몫이 0 이어도 그 값을 믿는다 — 빙옥은 몫이 작아 장바구니 한 줄이 0 이 될 수 있고,
+    //          100% 쿠폰도 0 이다. 여기서 price(XP)로 떨어지면 내지 않은 XP 를 돌려주게 된다.
     if (status === "cancelled" || status === "refunded") {
-      const hasSplit = (purchase.paidXp || 0) > 0 || (purchase.paidPoint || 0) > 0;
+      const hasSplit = !!purchase.billed || (purchase.paidXp || 0) > 0 || (purchase.paidPoint || 0) > 0;
       const backXp = hasSplit ? purchase.paidXp || 0 : purchase.price || 0;
       const backPoint = hasSplit ? purchase.paidPoint || 0 : 0;
       const inc = {};

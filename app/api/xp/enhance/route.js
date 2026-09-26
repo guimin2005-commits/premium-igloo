@@ -6,6 +6,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
 import { getLevelByXp } from "@/lib/leveling";
 import { buildEnhanceView, enhancePolicy, enhanceCost, ENHANCE_LABEL } from "@/lib/enhance";
+import { xpToPoint } from "@/lib/pointRate";
 import BotSetting from "@/models/BotSetting";
 import UserXp from "@/models/UserXp";
 
@@ -75,8 +76,9 @@ export async function POST(request) {
       ? enhanceCost(p.chatEnhanceBaseCost, p.chatEnhanceCostGrowthPct, cur + 1)
       : enhanceCost(p.voiceEnhanceBaseCost, p.voiceEnhanceCostGrowthPct, cur + 1);
     // 📌 관리자도 일반 유저와 똑같이 차감한다 — 테스트로 올린 단계는 관리자 초기화로 되돌린다
-    const charged = cost;
+    //    비용은 XP 로만 정한다. 빙옥으로 내면 환율(1 빙옥 = 1,000 XP · 올림 — lib/pointRate.js)을 적용한 값을 뺀다
     const field = payMethod === "point" ? "point" : "xp";
+    const charged = field === "point" ? xpToPoint(cost) : cost;
     const shortMsg = payMethod === "point" ? "보유 빙옥이 부족합니다." : "보유 XP가 부족합니다.";
 
     // 문서가 없는 유저(디스코드에서 XP 를 한 번도 못 받음)는 잔액 0 — 비용이 있으면 바로 거절
@@ -90,6 +92,7 @@ export async function POST(request) {
     //    XP 는 시즌 패스 진행도(xp - passBaseXp)의 원천이라 기준선도 같은 폭으로 내린다 (checkout 과 동일).
     const inc = { [field]: -charged, [levelField]: 1 };
     if (field === "xp") inc.passBaseXp = -charged;
+    // 누적도 실제로 뺀 값(그 화폐 단위)으로 쌓는다 — 관리자 초기화가 이 값을 그대로 돌려준다
     if (charged > 0) inc[`enhancePaid.${field}`] = charged;
     const filter = { userId, [levelField]: cur === 0 ? { $in: [0, null] } : cur };
     if (charged > 0) filter[field] = { $gte: charged };
@@ -130,7 +133,7 @@ export async function POST(request) {
       message: `${ENHANCE_LABEL[kind]} 강화 ${view[kind].level}단계`,
       kind,
       payMethod,
-      charged,
+      charged, // 실제로 뺀 값 (payMethod 단위 — 빙옥이면 빙옥)
       view,
       balance: balanceOf(updated),
     });

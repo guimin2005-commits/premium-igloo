@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import { ICON_PATHS } from "../../components/Icons";
-import { isTimed, durationOptions, durationLabel, durationPrice } from "@/lib/shopPricing";
+import { isTimed, durationOptions, durationLabel, durationPrice, cardPrice, cardListPrice, hasOptions } from "@/lib/shopPricing";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { isAdminName } from "@/lib/admins";
 import ArcticStoreBar from "../ArcticStoreBar";
@@ -148,9 +148,11 @@ export default function WishPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-10">
             {rows.map((it: any) => {
               const soldOut = it.stock === 0;
-              const listPrice = isTimed(it) ? (durationPrice(it, 0) ?? it.price) : it.price;
+              // 상점 카드와 같은 값(cardPrice — 기간제면 가장 싼 기간) — 찜에서만 무제한 가격이 보이던 것
+              const listPrice = cardListPrice(it);
               const pct = Math.max(0, Math.min(100, Number(it.discountPct) || 0));
-              const finalPrice = pct ? Math.max(0, Math.floor((Number(listPrice || 0) * (100 - pct)) / 100)) : Number(listPrice || 0);
+              const finalPrice = cardPrice(it);
+              const fromMark = hasOptions(it);
               const has = owned.has(it._id);
               const inCart = cart.some((c) => c.itemId === it._id);
               return (
@@ -175,7 +177,7 @@ export default function WishPage() {
                     {pct > 0 && <s className="block mt-2 text-[11.5px] text-[#a3a3a3] tabular-nums leading-none">{Number(listPrice || 0).toLocaleString()} XP</s>}
                     <p className={`${pct > 0 ? "mt-1" : "mt-2"} text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none`}>
                       {pct > 0 && <span className="mr-1.5 text-[14px] font-black text-[#e91e3f]">{pct}%</span>}
-                      {finalPrice.toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP</span>
+                      {finalPrice.toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP{fromMark ? " 부터" : ""}</span>
                     </p>
                   </Link>
                   {/* 찜 목록에서는 바로 담을 수 있게 — 다시 누르면 뺀다 */}

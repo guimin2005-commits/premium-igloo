@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
+import { salePrice, basePrice, isTimed, durationOptions, durationLabel, cardPrice, cardListPrice, hasOptions } from "@/lib/shopPricing";
+import { pointToXp } from "@/lib/pointRate";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { isAdminName } from "@/lib/admins";
 import ItemIcon from "../../../components/ItemIcon";
@@ -46,6 +47,7 @@ export default function ItemDetailPage() {
   const [item, setItem] = useState<any>(null);
   const [notFound, setNotFound] = useState(false);
   const [myXp, setMyXp] = useState<number | null>(null);
+  const [myPoint, setMyPoint] = useState<number | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [allItems, setAllItems] = useState<any[]>([]);
   // 📌 장바구니 개수 기준 — 상품 목록을 제대로 받았을 때의 id 들. 실패면 null (그때는 저장된 그대로 센다)
@@ -88,7 +90,7 @@ export default function ItemDetailPage() {
     ]).then(([it, me, ord, all]) => {
       if (it?.success) setItem(it.data);
       else setNotFound(true);
-      if (me?.success) setMyXp(me.data.xp);
+      if (me?.success) { setMyXp(me.data.xp); setMyPoint(me.data.point ?? 0); }
       setOrders(Array.isArray(ord?.data) ? ord.data : []);
       setAllItems(Array.isArray(all?.data) ? all.data : []);
       if (all?.success && Array.isArray(all?.data)) setValidIds(new Set(all.data.map((x: any) => String(x._id))));
@@ -124,7 +126,7 @@ export default function ItemDetailPage() {
   const timed = isTimed(item);
   const days = timed ? (pickedDays ?? durationOptions(item)[0]?.days ?? 0) : 0;
   const sp = salePrice(item, days);
-  const listPrice = timed ? (durationOptions(item).find((o: any) => o.days === days)?.price ?? item.price) : item.price;
+  const listPrice = basePrice(item, days);
   const discounted = sp < listPrice;
   const owned = orders.some((o) => o.itemId === item._id && ["pending", "completed"].includes(o.status) && (!o.expiresAt || new Date(o.expiresAt) > new Date()));
   const inCart = cart.some((c) => c.itemId === item._id);
@@ -139,7 +141,8 @@ export default function ItemDetailPage() {
   }, 0);
   const soldOut = item.stock === 0;
   const wished = wish.includes(item._id);
-  const affordable = myXp != null && myXp >= sp;
+  // 📌 빙옥도 함께 낼 수 있다(결제 화면에서 고른다) — XP + 빙옥 × 1,000 으로 판정
+  const affordable = myXp != null && myXp + pointToXp(myPoint ?? 0) >= sp;
 
   // 관련 상품 — 같은 유형을 먼저, 부족하면 나머지로 채운다 (현재 상품·품절 제외)
   const others = allItems.filter((x) => x._id !== item._id && x.active && x.stock !== 0);
@@ -270,12 +273,12 @@ export default function ItemDetailPage() {
               ))}
             </div>
 
-            {/* 보유 XP */}
+            {/* 보유 XP · 빙옥 — 둘 다 결제에 쓸 수 있다 */}
             {isLoggedIn && (
-              <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-white border border-[#ededed] mb-4 text-[13px]">
-                <span className="text-[#5a5a5a]">보유 XP</span>
-                <span className={`font-black tabular-nums ${affordable ? "text-[#131313]" : "text-[#d01634]"}`}>
-                  {(myXp ?? 0).toLocaleString()} XP
+              <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-white border border-[#ededed] mb-4 text-[13px]">
+                <span className="shrink-0 text-[#5a5a5a]">보유</span>
+                <span className={`text-right font-black tabular-nums ${affordable ? "text-[#131313]" : "text-[#d01634]"}`}>
+                  {(myXp ?? 0).toLocaleString()} XP · {(myPoint ?? 0).toLocaleString()} 빙옥
                 </span>
               </div>
             )}
@@ -328,8 +331,10 @@ export default function ItemDetailPage() {
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
               {related.map((r) => {
-                const rp = salePrice(r);
-                const rDiscounted = rp < r.price;
+                // 상점 카드와 같은 기준 — 가장 싼 기간의 값(옵션이 여럿이면 "부터"), 취소선도 그 기간의 정가
+                const rp = cardPrice(r);
+                const rList = cardListPrice(r);
+                const rDiscounted = rp < rList;
                 return (
                   <Link key={r._id} href={`/arctic/item/${r._id}`}
                     className="group bg-white rounded-2xl border border-[#ededed] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10)] hover:-translate-y-1 transition-all duration-300 flex flex-col">
@@ -346,10 +351,11 @@ export default function ItemDetailPage() {
                           )}
                           <span className="text-[15px] font-black text-[#131313] tabular-nums leading-none">
                             {rp.toLocaleString()}<span className="text-[11px] font-bold text-[#8a8a8a] ml-1">XP</span>
+                            {hasOptions(r) && <>{" "}<span className="whitespace-nowrap text-[11px] font-bold text-[#8a8a8a]">부터</span></>}
                           </span>
                         </div>
                         {rDiscounted && (
-                          <span className="block text-[11px] text-[#a3a3a3] line-through tabular-nums">{r.price.toLocaleString()} XP</span>
+                          <span className="block text-[11px] text-[#a3a3a3] line-through tabular-nums">{rList.toLocaleString()} XP</span>
                         )}
                       </div>
                     </div>

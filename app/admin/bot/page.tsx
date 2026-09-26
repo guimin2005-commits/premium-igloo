@@ -7,6 +7,7 @@ import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { VOICE_TIERS } from "@/lib/voiceTiers";
+import { POINT_RATE } from "@/lib/pointRate";
 import {
   AdminPage,
   AdminTabs,
@@ -985,7 +986,8 @@ export default function AdminBotPage() {
       title="레벨 설정"
       tabs={<AdminTabs tabs={TAB_ORDER} current={tab} hrefOf={hrefTab} />}
       // 랭킹은 유저 화면이 상위호환이라 관리자 쪽에 따로 두지 않는다 — 머리의 바로가기 하나로만 남긴다
-      actions={tab === "ledger" ? <Link href="/level?tab=rank" className={LINK_PILL}>랭킹 보기</Link> : undefined}
+      // 탭마다 머리 단추가 생겼다 없어지면 모바일에서 줄바꿈이 달라져 탭 줄이 밀린다 — 늘 같은 단추(메모: tabs-never-move)
+      actions={<Link href="/level?tab=rank" className={LINK_PILL}>랭킹 보기</Link>}
       footer={
         <SaveBar
           dirty={showSaveBar}
@@ -1474,9 +1476,13 @@ export default function AdminBotPage() {
                       <input type="text" value={grantForm.target} onChange={(e) => setGrantForm({ ...grantForm, target: e.target.value })}
                         placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
                     </Field>
-                    <Field label={<>지급 {grantUnit} <Req /></>} hint="음수를 넣으면 회수됩니다 (보유량을 넘지 않게 잘립니다)">
+                    {/* 📌 빙옥은 1 = 1,000 XP 단위(lib/pointRate) — XP 숫자를 그대로 넣지 않게 입력 옆에 환율을 둔다 */}
+                    <Field
+                      label={<>지급 {grantUnit} <Req /></>}
+                      hint={`${grantKind === "point" ? `1 빙옥 = ${POINT_RATE.toLocaleString()} XP · ` : ""}음수를 넣으면 회수됩니다 (보유량을 넘지 않게 잘립니다)`}
+                    >
                       <input type="number" value={grantForm.amount} onChange={(e) => setGrantForm({ ...grantForm, amount: e.target.value })}
-                        placeholder="예: 50000 (회수는 -50000)" className={inputClass} />
+                        placeholder={grantKind === "point" ? "예: 50 (회수는 -50)" : "예: 50000 (회수는 -50000)"} className={inputClass} />
                     </Field>
                     <Field label="사유" hint="비우면 ‘관리자 지급’으로 기록됩니다">
                       <input type="text" value={grantForm.reason} onChange={(e) => setGrantForm({ ...grantForm, reason: e.target.value })}

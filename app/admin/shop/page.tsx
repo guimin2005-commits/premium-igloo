@@ -680,8 +680,8 @@ export default function AdminShopPage() {
     <>
       <AdminPage
         section="ARCTIC"
-        title={tab === "orders" ? "구매 내역" : "상점 관리"}
-        desc={meta.desc || undefined}
+        // 📌 머리(제목 · 설명)는 탭과 무관하게 고정 — 탭마다 바꾸면 머리 높이가 달라져 탭 줄이 밀린다(메모: tabs-never-move)
+        title="상점 관리"
         tabs={
           <AdminTabs
             tabs={TAB_ORDER.map((t) => (t.id === "orders" ? { ...t, n: pendingCount } : t))}
@@ -690,6 +690,8 @@ export default function AdminShopPage() {
           />
         }
       >
+        {/* 탭별 설명은 탭 줄 아래 본문 첫 줄에 */}
+        {meta.desc && <p className="mb-4 text-[13px] text-[#5a5a5a] break-keep">{meta.desc}</p>}
         {/* ═══ 아이템 등록 ═══ */}
         {tab === "items" && (
           <>
@@ -1458,8 +1460,9 @@ export default function AdminShopPage() {
             <span className="block font-bold text-[#131313]">{cancelTarget.itemName}</span>
             <span className="block mb-3">
               {cancelTarget.userName} · {
-                (cancelTarget.paidXp || 0) > 0 || (cancelTarget.paidPoint || 0) > 0
-                  ? [cancelTarget.paidXp > 0 && `${cancelTarget.paidXp.toLocaleString()} XP`, cancelTarget.paidPoint > 0 && `${cancelTarget.paidPoint.toLocaleString()} P`].filter(Boolean).join(" + ")
+                // 서버(orders)는 billed 면 몫이 0 이어도 그 몫을 돌려준다 — 확인창도 같은 값을 보여야 한다
+                cancelTarget.billed || (cancelTarget.paidXp || 0) > 0 || (cancelTarget.paidPoint || 0) > 0
+                  ? [cancelTarget.paidXp > 0 && `${cancelTarget.paidXp.toLocaleString()} XP`, cancelTarget.paidPoint > 0 && `${cancelTarget.paidPoint.toLocaleString()} 빙옥`].filter(Boolean).join(" + ") || "0 XP"
                   : `${(cancelTarget.price || 0).toLocaleString()} XP`
               } 환불
             </span>

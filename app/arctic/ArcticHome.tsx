@@ -3,7 +3,8 @@
 import React, { useMemo } from "react";
 import Link from "next/link";
 import ItemIcon from "../components/ItemIcon";
-import { salePrice, isTimed, durationOptions, durationLabel } from "@/lib/shopPricing";
+import { isTimed, durationLabel, cardPrice, cardListPrice, cardDays, hasOptions } from "@/lib/shopPricing";
+import { pointToXp } from "@/lib/pointRate";
 import { SEASON, getSeasonDday } from "@/lib/season";
 import { getTier } from "@/lib/voiceTiers";
 
@@ -17,6 +18,7 @@ type Props = {
   isAdmin: boolean;
   isLoggedIn: boolean;
   myXp: number | null;
+  myPoint?: number | null; // 빙옥도 결제에 섞어 쓸 수 있다 — 살 수 있는지는 XP + 빙옥으로 본다
   myLevel: number;
   ownedItemIds: Set<string>;
   banners: any[];
@@ -46,7 +48,7 @@ function weekRange() {
 const created = (it: any) => new Date(it?.createdAt || 0).getTime();
 
 export default function ArcticHome({
-  items, isLoading, isAdmin, isLoggedIn, myXp, myLevel, ownedItemIds,
+  items, isLoading, isAdmin, isLoggedIn, myXp, myPoint, myLevel, ownedItemIds,
   banners, bannersLoaded, bannerIdx, setBannerIdx, bannerRatio, fitRatio, renderCard, goProducts, openEdit, adminTools,
 }: Props) {
   const dday = getSeasonDday();
@@ -63,7 +65,8 @@ export default function ArcticHome({
   const forMe = useMemo(() => {
     const hotIds = new Set(hot.map((h) => h._id));
     const cands = active.filter((it) => !hotIds.has(it._id) && !ownedItemIds.has(it._id));
-    const afford = isLoggedIn && typeof myXp === "number" ? cands.filter((it) => salePrice(it) <= myXp) : cands;
+    const budget = typeof myXp === "number" ? myXp + pointToXp(myPoint ?? 0) : null;
+    const afford = isLoggedIn && budget != null ? cands.filter((it) => cardPrice(it) <= budget) : cands;
     const pool = [...(afford.length >= 2 ? afford : cands)];
     const score = (it: any) => (it.type === "perk" || it.type === "item" ? 1 : 0);
     pool.sort((a, b) => score(b) - score(a) || (b.sortOrder || 0) - (a.sortOrder || 0));
@@ -75,7 +78,7 @@ export default function ArcticHome({
       if (timed.length) { picks = [...picks, ...timed].slice(0, 2); title = "기간제만 모아보기"; }
     }
     return { picks, title };
-  }, [active, hot, ownedItemIds, isLoggedIn, myXp, tier]);
+  }, [active, hot, ownedItemIds, isLoggedIn, myXp, myPoint, tier]);
 
   // 이번 주 — 할인 상품(없으면 최신) 한 장 + 시즌 한 장
   const deal = useMemo(() => {
@@ -196,9 +199,9 @@ export default function ArcticHome({
               </h3>
               <p className="mt-1.5 text-[13px] opacity-85 tabular-nums">
                 {deal.kind === "sale"
-                  // 기간제는 가장 짧은 기간의 정가 → 할인가 (salePrice 도 그 기간을 기준으로 잡는다)
-                  ? `${Number(isTimed(deal.it) ? durationOptions(deal.it)[0]?.price ?? deal.it.price : deal.it.price).toLocaleString()} → ${salePrice(deal.it).toLocaleString()} XP${isTimed(deal.it) ? ` / ${durationLabel(durationOptions(deal.it)[0]?.days ?? 0)}` : ""} · 1인 1개`
-                  : `${salePrice(deal.it).toLocaleString()} XP${isTimed(deal.it) ? " 부터" : ""}`}
+                  // 카드 · 필터와 같은 값(cardPrice — 기간제면 가장 싼 기간) — 한 상품이 곳마다 다른 값으로 보이지 않게
+                  ? `${cardListPrice(deal.it).toLocaleString()} → ${cardPrice(deal.it).toLocaleString()} XP${isTimed(deal.it) ? ` / ${durationLabel(cardDays(deal.it) ?? 0)}` : ""} · 1인 1개`
+                  : `${cardPrice(deal.it).toLocaleString()} XP${hasOptions(deal.it) ? " 부터" : ""}`}
               </p>
               <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">
                 {deal.it.stock === -1 || deal.it.stock == null ? "수량 무제한" : `남은 수량 ${deal.it.stock}`}

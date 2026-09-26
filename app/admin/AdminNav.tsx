@@ -22,7 +22,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       // 글 종류(공지 · 이벤트 · 대회 · 구인)는 글쓰기 화면 머리의 탭에서 고른다
       { title: "글쓰기", href: "/write?category=공지사항", icon: ICON_PATHS.megaphone, match: (p) => p === "/write" },
-      { title: "경매 개최", href: "/auction?admin=1", icon: ICON_PATHS.flag },
+      // 경매 개최 · 목록은 공개 경매 화면에서 떼어 관리자 화면(/admin/auction)으로 옮겼다 — 공개 화면은 보기만
+      { title: "경매 개최", href: "/admin/auction?tab=new", icon: ICON_PATHS.flag, match: (p, tab) => p === "/admin/auction" && tab === "new" },
     ],
   },
   {
@@ -34,7 +35,7 @@ const NAV_GROUPS: NavGroup[] = [
       { title: "명예의 전당", href: "/admin/honors", icon: ICON_PATHS.trophy },
       { title: "서포터즈 평가", href: "/admin/supporters", icon: ICON_PATHS.shieldCheck },
       { title: "대회 룸", href: "/admin/room", icon: ICON_PATHS.users },
-      { title: "경매 목록", href: "/auction", icon: ICON_PATHS.eye },
+      { title: "경매 목록", href: "/admin/auction", icon: ICON_PATHS.eye, match: (p, tab) => p === "/admin/auction" && tab !== "new" },
     ],
   },
   {

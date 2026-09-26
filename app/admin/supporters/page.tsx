@@ -611,7 +611,8 @@ export default function AdminSupportersPage() {
     <>
       <AdminPage
         section="운영"
-        title={TAB_META[tab].title}
+        // 📌 제목은 탭과 무관하게 고정 — 탭마다 바꾸면 글자 수 따라 머리가 달라져 탭 줄이 밀린다(메모: tabs-never-move)
+        title="서포터즈"
         tabs={
           <AdminTabs
             tabs={(Object.keys(TAB_META) as TabId[]).map((id) => ({

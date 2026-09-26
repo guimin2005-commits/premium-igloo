@@ -5,6 +5,7 @@ import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import { SEASON } from "@/lib/season";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
+import { POINT_RATE } from "@/lib/pointRate";
 import {
   AdminPage,
   Panel,
@@ -178,7 +179,7 @@ function RewardEditor({
             min={0}
             value={value.amount}
             onChange={(e) => onChange({ ...value, amount: e.target.value })}
-            placeholder={value.kind === "xp" ? "예: 1000" : "예: 500"}
+            placeholder={value.kind === "xp" ? "예: 1000" : "예: 50"}
             aria-label={`${title} 수량`}
             className={inputClass}
           />
@@ -702,7 +703,7 @@ export default function AdminPassPage() {
                 flash === PRICE_REVERT_MSG ? (
                   <span className="font-bold text-[#d01634]">{flash}</span>
                 ) : (
-                  "XP · 빙옥 어느 쪽으로도 결제하며 1:1 등가입니다 (1 이상)"
+                  `XP 기준이며, 빙옥 결제는 ÷${POINT_RATE.toLocaleString()} 올림입니다 (1 이상)`
                 )
               }
               changed={priceChanged}
@@ -734,7 +735,7 @@ export default function AdminPassPage() {
             items={[
               { label: "티어 수", value: tiers.length.toLocaleString() },
               { label: "만렙 필요 XP", value: maxNeed.toLocaleString() },
-              { label: "해금가", value: toInt(unlockPrice).toLocaleString() },
+              { label: "해금가 XP", value: toInt(unlockPrice).toLocaleString() },
               { label: "상태", value: onOffLabel(enabled) },
             ]}
           />

@@ -14,6 +14,8 @@ import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel }
 import { getCumulativeXpByLevel, getLevelByXp } from "@/lib/leveling";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { buildEnhanceView, chatRange, voiceBonus, enhanceCost } from "@/lib/enhance";
+// 빙옥 가격 = XP 가격 ÷ 1,000 올림 — 서버와 같은 식 (lib/pointRate)
+import { xpToPoint } from "@/lib/pointRate";
 import TierEmblem from "../components/TierEmblem";
 import SystemGuide from "./SystemGuide";
 import ItemIcon from "../components/ItemIcon";
@@ -761,8 +763,10 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
   const isChat = kind === "chat";
   const atMax = v.level >= v.max;
   const cost = v.nextCost || 0;
+  // 📌 빙옥으로 낼 때는 XP 비용이 아니라 환산값(÷1,000 올림)과 비교한다
+  const pointCost = xpToPoint(cost);
   const canXp = !atMax && !busy && (balance?.xp || 0) >= cost;
-  const canPoint = !atMax && !busy && (balance?.point || 0) >= cost;
+  const canPoint = !atMax && !busy && (balance?.point || 0) >= pointCost;
   const fmt = (n) => (n || 0).toLocaleString();
   const stepXp = isChat ? policy.chatEnhanceStep : policy.voiceEnhanceStep;
   // 지금 내 조건으로 1회에 받는 양 — add 만큼 더 강화했을 때
@@ -880,7 +884,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
               disabled={!canPoint}
               className="shrink-0 h-12 px-5 rounded-full bg-white/[0.07] border border-white/15 enabled:hover:bg-white/[0.13] text-white text-[13px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
             >
-              빙옥으로
+              {fmt(pointCost)} 빙옥
             </button>
           </div>
         </>
@@ -1104,6 +1108,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
   const fmt = (n) => (n || 0).toLocaleString();
   const rows = tab === "claim" ? tiers.filter((t) => t.free?.claimable || t.paid?.claimable) : tiers;
   const price = pass.unlockPrice || 0;
+  const pointPrice = xpToPoint(price); // 빙옥으로 해금할 때 (÷1,000 올림)
   // 링 — 지금 티어에서 다음 티어까지 얼마나 찼나
   const prevNeed = pass.tierIndex >= 0 ? tiers[pass.tierIndex]?.need || 0 : 0;
   const nextTier = tiers[nextIdx];
@@ -1178,7 +1183,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
                 className="ml-auto text-[12px] font-black tabular-nums"
                 style={{ background: "linear-gradient(90deg, #d9c6ff, #ff9fd6)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}
               >
-                {pass.unlocked ? "해금됨" : fmt(price)}
+                {pass.unlocked ? "해금됨" : `${fmt(price)} XP`}
               </span>
             </div>
             {!pass.unlocked && (
@@ -1195,10 +1200,10 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
                 <button
                   type="button"
                   onClick={() => onUnlock("point")}
-                  disabled={!!busyKey || (balance?.point || 0) < price}
-                  className="w-full h-10 rounded-full bg-white/[0.08] border border-white/15 enabled:hover:bg-white/[0.14] text-white text-[12px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+                  disabled={!!busyKey || (balance?.point || 0) < pointPrice}
+                  className="w-full h-10 rounded-full bg-white/[0.08] border border-white/15 enabled:hover:bg-white/[0.14] text-white text-[12px] font-black tabular-nums transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
                 >
-                  빙옥으로 해금
+                  빙옥으로 해금 · {fmt(pointPrice)}
                 </button>
               </div>
             )}
@@ -1636,7 +1641,8 @@ export default function LevelPage() {
 
   // 프리미엄 해금 — 되돌릴 수 없는 지출이라 한 번 확인받는다. XP 로 내면 레벨이 내려갈 수 있어 그것도 보여 준다
   const unlockPass = useCallback(async (payMethod) => {
-    const price = pass?.unlockPrice || 0;
+    // 가격은 XP 로만 저장된다 — 빙옥이면 환산값(÷1,000 올림)을 보여 주고 뺀다
+    const price = payMethod === "xp" ? pass?.unlockPrice || 0 : xpToPoint(pass?.unlockPrice);
     const unit = payMethod === "xp" ? "XP" : "빙옥";
     const bal = payMethod === "xp" ? me?.xp || 0 : me?.point || 0;
     const after = Math.max(0, bal - price);

@@ -14,8 +14,10 @@ const PurchaseSchema = new mongoose.Schema({
   itemType: { type: String, default: "role" }, // "role" | "perk" | "item" | "physical"
   roleId: { type: String, default: "" },
   price: { type: Number, default: 0 },
-  // 결제 수단 — XP 와 POINT 는 1:1 등가라 가격은 하나를 공유하고 지불한 쪽만 기록한다
-  payMethod: { type: String, default: "xp" }, // "xp" | "point"
+  // 결제 수단 — 가격은 XP 하나만 두고, 빙옥(1 빙옥 = 1,000 XP — lib/pointRate.js)을 원하는 만큼 쓰고 나머지를 XP 로 낸다.
+  //    📌 "mixed" 는 둘 다 0 보다 크게 낸 건. enum 이 없어 봇 스키마(bot/src/db.js)도 그대로 저장된다
+  payMethod: { type: String, default: "xp" }, // "xp" | "point" | "mixed"
+  // 실제로 뺀 값 — 낸 화폐 단위 그대로. 환불 · 관리자 초기화가 이 값을 그대로 돌려준다
   paidXp: { type: Number, default: 0 },
   paidPoint: { type: Number, default: 0 },
   // 📌 지갑에서 실제로 빠졌는지. 관리자가 무료로 사던 시절 기록에도 paidXp 가 적혀 있어서,

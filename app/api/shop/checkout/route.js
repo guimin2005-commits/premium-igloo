@@ -12,9 +12,30 @@ import Coupon from "@/models/Coupon";
 import UserCoupon from "@/models/UserCoupon";
 import { salePrice, couponDiscount, couponError, isTimed, durationPrice } from "@/lib/shopPricing";
 import { getLevelByXp } from "@/lib/leveling";
+import { xpToPoint, POINT_RATE } from "@/lib/pointRate";
+import mongoose from "mongoose";
+
+// 📌 실제 차감액(amount)을 줄 가격(prices) 비율로 나눈다 — 합이 amount 와 정확히 같다(최대 나머지 방식).
+//    먼저 각 줄에 비례 몫의 버림을 주고, 모자란 만큼을 소수점 아래가 큰 줄부터 1 씩 더 준다.
+//    빙옥은 1 = 1,000 XP 라 몫이 작아서, 끝전을 마지막 줄에 몰면 그 줄만 몇 배로 커지고 나머지가 0 이 된다.
+//    환불은 줄 단위라 줄마다 제 가격에 가까운 몫을 들고 있어야 하고, 합은 반드시 실제로 뺀 값이어야 한다.
+function splitByPrice(amount, prices) {
+  const sum = prices.reduce((s, p) => s + p, 0);
+  if (amount <= 0 || sum <= 0) {
+    // 가격이 전부 0 인데 뺀 값이 있을 수는 없지만, 있더라도 합이 어긋나지 않게 마지막 줄에 둔다
+    return prices.map((_, i) => (i === prices.length - 1 ? Math.max(0, amount) : 0));
+  }
+  const shares = prices.map((p) => Math.floor((p * amount) / sum));
+  let left = amount - shares.reduce((s, v) => s + v, 0);
+  const order = prices
+    .map((p, i) => ({ i, rem: (p * amount) % sum }))
+    .sort((a, b) => b.rem - a.rem || a.i - b.i);
+  for (let k = 0; left > 0 && k < order.length; k++, left--) shares[order[k].i] += 1;
+  return shares;
+}
 
 // ── [결제] 장바구니 일괄 구매 ──
-//    items: [{ itemId, qty }] · 재고 선점 → 총액 차감 → 실패 시 전부 원복
+//    items: [{ itemId, qty }] · pointUse: 쓸 빙옥 개수(나머지는 XP) · 재고 선점 → 총액 차감 → 실패 시 전부 원복
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
@@ -122,44 +143,72 @@ export async function POST(request) {
       claimed.push({ id: d._id, qty, limited: d.stock >= 0 });
     }
 
-    // 2) 총액 차감 — 잔액이 충분할 때만 매치
-    //    📌 관리자도 일반 유저와 똑같이 차감한다 — 테스트로 쓴 건 관리자 초기화로 되돌린다
-    //    XP 는 화폐이므로 쓰면 레벨도 함께 내려간다. POINT 는 레벨과 무관하다.
-    //    두 화폐는 1:1 등가라 가격은 하나를 공유하고, 주문 단위로 한쪽을 고른다.
-    const payMethod = body?.payMethod === "point" ? "point" : "xp";
-    const field = payMethod === "point" ? "point" : "xp";
-    const charged = total;
-    // 📌 XP 는 상점 화폐이면서 시즌 패스 진행도(xp - passBaseXp)의 원천이기도 하다.
-    //    그냥 깎으면 물건을 살 때마다 이미 도달한 패스 티어가 미도달로 되돌아가고,
-    //    "미도달인데 수령완료" 인 모순 상태가 된다. 기준선을 같은 폭으로 함께 내려
-    //    "이번 시즌에 번 XP" 가 보존되게 한다. POINT 는 진행도와 무관하므로 건드리지 않는다.
-    const inc = { [field]: -charged };
-    if (field === "xp") inc.passBaseXp = -charged;
-    const paid = await UserXp.updateOne(
-      { userId, [field]: { $gte: total } },
-      { $inc: inc, $set: { updatedAt: new Date() } }
-    );
-    if (!paid.matchedCount && !paid.upsertedCount) {
+    // 선점한 재고를 되돌린다 — 결제 실패 · 기록 실패 때 쓴다
+    const releaseStock = async () => {
       for (const c of claimed) {
         await ShopItem.updateOne({ _id: c.id }, c.limited ? { $inc: { stock: c.qty, soldCount: -c.qty } } : { $inc: { soldCount: -c.qty } });
       }
-      return NextResponse.json(
-        { success: false, message: payMethod === "point" ? "보유 빙옥이 부족합니다." : "보유 XP가 부족합니다." },
-        { status: 400 }
-      );
+    };
+
+    // 2) 결제 — 빙옥은 원하는 만큼(pointUse 개) 쓰고, 나머지를 XP 로 낸다
+    //    📌 관리자도 일반 유저와 똑같이 차감한다 — 테스트로 쓴 건 관리자 초기화로 되돌린다
+    //    XP 는 화폐이므로 쓰면 레벨도 함께 내려간다. 빙옥은 레벨과 무관하다.
+    //    가격은 XP 하나만 둔다. 쿠폰까지 뺀 총액(XP)에서 빙옥 몫(1 빙옥 = 1,000 XP — lib/pointRate.js)을 한 번만 뺀다.
+    //    빙옥 상한은 xpToPoint(총액)(올림) — 넘게 보내면 상한으로 깎는다. 끝전 때문에 빙옥 몫이 총액보다 크면 XP 는 0.
+    //    옛 요청의 payMethod "point" 는 전부 빙옥으로 친다.
+    const maxPoint = xpToPoint(total);
+    const askedPoint = body?.payMethod === "point" ? maxPoint : Math.max(0, Math.floor(Number(body?.pointUse) || 0));
+    const pointUse = Math.min(askedPoint, maxPoint);
+    const chargedXp = Math.max(0, total - pointUse * POINT_RATE);
+    const payMethod = pointUse > 0 ? (chargedXp > 0 ? "mixed" : "point") : "xp";
+
+    // 어느 쪽이 모자란지 — 빙옥을 먼저 본다. 둘 다 충분하면 ""
+    const shortOf = (w) =>
+      (w?.point ?? 0) < pointUse ? "보유 빙옥이 부족합니다." : (w?.xp ?? 0) < chargedXp ? "보유 XP가 부족합니다." : "";
+    const wallet = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
+    const short = shortOf(wallet);
+    if (short) {
+      await releaseStock();
+      return NextResponse.json({ success: false, message: short }, { status: 400 });
     }
 
+    // 📌 XP 는 상점 화폐이면서 시즌 패스 진행도(xp - passBaseXp)의 원천이기도 하다.
+    //    그냥 깎으면 물건을 살 때마다 이미 도달한 패스 티어가 미도달로 되돌아가고,
+    //    "미도달인데 수령완료" 인 모순 상태가 된다. 기준선을 같은 폭으로 함께 내려
+    //    "이번 시즌에 번 XP" 가 보존되게 한다. 빙옥은 진행도와 무관하므로 건드리지 않는다.
+    // 📌 XP · 빙옥은 문서 하나에 대한 조건부 갱신 한 번으로 함께 뺀다 — 둘 중 하나라도 모자라면 아무것도 빠지지 않는다.
+    //    0 인 쪽은 조건에서 뺀다: point 필드가 없는 옛 문서는 { point: { $gte: 0 } } 에도 매치되지 않는다.
+    const filter = { userId };
+    const inc = {};
+    if (chargedXp > 0) { filter.xp = { $gte: chargedXp }; inc.xp = -chargedXp; inc.passBaseXp = -chargedXp; }
+    if (pointUse > 0) { filter.point = { $gte: pointUse }; inc.point = -pointUse; }
+    const paid = await UserXp.updateOne(filter, {
+      ...(Object.keys(inc).length ? { $inc: inc } : {}),
+      $set: { updatedAt: new Date() },
+    });
+    if (!paid.matchedCount) {
+      // 사전 확인과 갱신 사이에 잔액이 바뀐 경우 — 다시 읽어 모자란 쪽을 알린다
+      const now = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
+      await releaseStock();
+      return NextResponse.json({ success: false, message: shortOf(now) || "보유 XP가 부족합니다." }, { status: 400 });
+    }
+    // 뺀 만큼 그대로 되돌린다 — 기록을 못 남겼을 때만 쓴다
+    const refundWallet = async () => {
+      const back = Object.fromEntries(Object.entries(inc).map(([k, v]) => [k, -v]));
+      if (Object.keys(back).length) await UserXp.updateOne({ userId }, { $inc: back });
+    };
+
     // 3) 구매 기록 — 수량만큼 개별 건으로 남겨 봇·관리자가 건별로 처리
-    //    📌 건마다 실제로 낸 값(paidXp/paidPoint)을 적는다. 쿠폰 할인은 정가 비율로 나누고 끝전은 마지막 건에 몰아,
-    //       건별 합계가 실제 차감액(total)과 정확히 같게 한다 — 환불이 이 값을 그대로 돌려준다.
-    let paidLeft = charged;
-    const lineCount = docs.reduce((n, d) => n + wanted.get(String(d._id)), 0);
+    //    📌 건마다 실제로 낸 값(paidXp/paidPoint — 낸 화폐 단위 그대로)을 적는다. 뺀 XP(chargedXp)와 빙옥(pointUse)을
+    //       각각 판매가 비율로 나눠(splitByPrice) 건별 합계가 차감액과 정확히 같게 한다 — 환불이 이 값을 그대로 돌려준다.
+    //    _id 를 미리 정해 두어, 넣다 만 경우 그 건들만 골라 지울 수 있게 한다.
     const rows = [];
     for (const d of docs) {
       const qty = wanted.get(String(d._id));
       const days = daysOf.get(String(d._id)) || 0;
       for (let i = 0; i < qty; i++) {
         rows.push({
+          _id: new mongoose.Types.ObjectId(),
           userId,
           userName: session.user.name || "",
           itemId: String(d._id),
@@ -180,13 +229,23 @@ export async function POST(request) {
         });
       }
     }
+    const prices = rows.map((r) => r.price);
+    const xpShares = splitByPrice(chargedXp, prices);
+    const pointShares = splitByPrice(pointUse, prices);
     rows.forEach((r, i) => {
-      const share = i === lineCount - 1 ? paidLeft : subtotal > 0 ? Math.min(paidLeft, Math.floor((r.price * charged) / subtotal)) : 0;
-      paidLeft -= share;
-      if (payMethod === "point") r.paidPoint = share;
-      else r.paidXp = share;
+      r.paidXp = xpShares[i];
+      r.paidPoint = pointShares[i];
     });
-    await Purchase.insertMany(rows);
+    try {
+      await Purchase.insertMany(rows);
+    } catch (e) {
+      // 📌 기록이 안 남으면 값만 빠지고 물건은 없는 상태가 된다 — 넣다 만 건을 지우고 지갑 · 재고를 되돌린다.
+      //    지우기부터 실패하면 되돌리지 않는다(기록이 남았을 수 있어 공짜가 된다) — 바깥 catch 로 넘긴다
+      await Purchase.deleteMany({ _id: { $in: rows.map((r) => r._id) } });
+      await refundWallet();
+      await releaseStock();
+      throw e;
+    }
 
     // 쿠폰 사용 처리 (결제가 확정된 뒤에만) — 지갑에 있으면 그 건도 사용 처리
     if (coupon) {
@@ -198,14 +257,13 @@ export async function POST(request) {
     }
 
     // 차감된 XP에 맞춰 레벨을 다시 계산 (레벨이 내려갈 수 있다).
-    //    POINT 결제는 레벨에 영향이 없으므로 재계산도 역할 동기화도 하지 않는다.
+    //    빙옥만 냈으면 레벨에 영향이 없으므로 재계산도 역할 동기화도 하지 않는다.
     const balDoc = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
-    const newLevel = getLevelByXp(balDoc?.xp ?? 0);
-    if (payMethod === "xp") {
+    if (chargedXp > 0) {
       // 레벨이 내려갔을 수 있으니 봇이 보상 역할을 다시 맞추도록 표시한다
-      await UserXp.updateOne({ userId }, { $set: { level: newLevel, needsRoleSync: true } });
+      await UserXp.updateOne({ userId }, { $set: { level: getLevelByXp(balDoc?.xp ?? 0), needsRoleSync: true } });
     }
-    const remain = { xp: balDoc?.xp ?? 0, point: balDoc?.point ?? 0, level: newLevel };
+    const remain = { xp: balDoc?.xp ?? 0, point: balDoc?.point ?? 0 };
     const hasRole = docs.some((d) => d.type === "role" || d.type === "perk");
 
     return NextResponse.json({
@@ -213,7 +271,14 @@ export async function POST(request) {
       message: hasRole
         ? "결제가 완료되었습니다. 역할 상품은 잠시 후 자동으로 지급됩니다."
         : "결제가 완료되었습니다. 운영진 확인 후 발송해 드립니다.",
-      data: { count: rows.length, subtotal, discount, total, remainXp: remain?.xp ?? 0 },
+      // subtotal · discount · total 은 XP 기준. usedPoint 는 뺀 빙옥, chargedXp 는 뺀 XP.
+      // charged 는 옛 필드 — 한쪽으로만 냈을 때의 그 화폐 값. 섞어 냈으면 XP 몫이다(usedPoint · chargedXp 를 본다)
+      data: {
+        count: rows.length, subtotal, discount, total, payMethod,
+        charged: payMethod === "point" ? pointUse : chargedXp,
+        usedPoint: pointUse, chargedXp,
+        remain, remainXp: remain.xp, remainPoint: remain.point,
+      },
     });
   } catch (e) {
     console.error("결제 처리 오류:", e);

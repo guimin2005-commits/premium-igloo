@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/authOptions";
 import { getPassState } from "@/lib/seasonPass";
 import { SEASON } from "@/lib/season";
 import { addPoints } from "@/lib/points";
+import { xpToPoint } from "@/lib/pointRate";
 import { getLevelByXp } from "@/lib/leveling";
 import UserXp from "@/models/UserXp";
 
@@ -47,12 +48,15 @@ export async function POST(request) {
     }
 
     // 가격은 서버 설정값만 쓴다 — 클라이언트가 보낸 금액은 보지 않는다
+    //    해금가는 XP 로만 정한다. 빙옥으로 내면 환율(1 빙옥 = 1,000 XP · 올림 — lib/pointRate.js)을 적용한 값을 뺀다.
+    //    charge 는 낸 화폐 단위 그대로의 실제 차감액 — 되돌리기 · 결제 기록(passUnlockPaid)이 모두 이 값을 쓴다
     const price = state.unlockPrice;
+    const charge = payMethod === "point" ? xpToPoint(price) : price;
 
     // 1) 차감 — 잔액이 충분할 때만 매치되는 조건부 갱신이라 동시에 눌러도 마이너스가 되지 않는다
-    if (price > 0) {
+    if (charge > 0) {
       if (payMethod === "point") {
-        const paid = await addPoints(userId, -price);
+        const paid = await addPoints(userId, -charge);
         if (!paid) {
           return NextResponse.json({ success: false, message: "빙옥이 부족합니다." }, { status: 400 });
         }
@@ -63,8 +67,8 @@ export async function POST(request) {
         //    이미 받은 무료 칸은 "미도달인데 수령완료" 인 모순 상태가 된다.
         //    (POINT 결제는 진행도와 무관하므로 건드리지 않는다)
         const paid = await UserXp.findOneAndUpdate(
-          { userId, xp: { $gte: price } },
-          { $inc: { xp: -price, passBaseXp: -price }, $set: { needsRoleSync: true, updatedAt: new Date() } },
+          { userId, xp: { $gte: charge } },
+          { $inc: { xp: -charge, passBaseXp: -charge }, $set: { needsRoleSync: true, updatedAt: new Date() } },
           { new: true, projection: { xp: 1 } }
         );
         if (!paid) {
@@ -77,15 +81,15 @@ export async function POST(request) {
     // 2) 해금 표시 — 조건부로 세우고, 못 세웠으면 방금 받은 값을 되돌린다
     const lock = await UserXp.updateOne(
       { userId, passSeason: SEASON.number, passUnlocked: { $ne: true } },
-      { $set: { passUnlocked: true, passUnlockPaid: { method: payMethod, amount: price }, updatedAt: new Date() } }
+      { $set: { passUnlocked: true, passUnlockPaid: { method: payMethod, amount: charge }, updatedAt: new Date() } }
     );
     if (!lock.modifiedCount) {
-      if (price > 0) {
+      if (charge > 0) {
         if (payMethod === "point") {
-          await addPoints(userId, price).catch(() => {});
+          await addPoints(userId, charge).catch(() => {});
         } else {
           // 차감 때 기준선도 함께 내렸으므로 환불도 같은 폭으로 되돌린다
-          await UserXp.updateOne({ userId }, { $inc: { xp: price, passBaseXp: price } }).catch(() => {});
+          await UserXp.updateOne({ userId }, { $inc: { xp: charge, passBaseXp: charge } }).catch(() => {});
           await resyncLevel(userId).catch(() => {});
         }
       }
