@@ -7,7 +7,6 @@ import Link from "next/link";
 import { LuxStyles } from "../components/Lux";
 import { ADMIN_USERS, isAdminName } from "@/lib/admins";
 import { VerifyBadge } from "../components/VerifyMark";
-import { InventoryPopup } from "../components/Inventory";
 import BackLink from "../components/BackLink";
 import ArcticDock from "../arctic/ArcticDock";
 import { ICON_PATHS } from "../components/Icons";
@@ -47,12 +46,10 @@ export default function MyInfoPage() {
   const [shopMe, setShopMe] = useState<any>(null);
   const [shopWish, setShopWish] = useState<string[]>([]);
   const [shopCart, setShopCart] = useState<{ itemId: string; qty: number }[]>([]);
-  const [myItemCount, setMyItemCount] = useState(0);
   const [pendingInquiries, setPendingInquiries] = useState(0);
   const [pendingApplies, setPendingApplies] = useState(0);
   const [myTeam, setMyTeam] = useState<any>(null);
   const [scrimAdmin, setScrimAdmin] = useState(false);
-  const [invOpen, setInvOpen] = useState(false); // 인벤토리 — 다른 화면으로 넘기지 않고 이 자리에서 팝업
 
   const isShopAdmin = status === "authenticated" && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
   // SYSTEM : LEVEL 비공개 동안은 레벨·순위·ARCTIC 이 일반 유저 프로필에 보이지 않는다 (10월 공개)
@@ -102,12 +99,6 @@ export default function MyInfoPage() {
     });
   }, [status, canSeeShop]);
 
-  useEffect(() => {
-    if (status !== "authenticated" || !canSeeLevel) return;
-    fetch("/api/shop/my-items", { cache: "no-store" }).then((r) => r.json())
-      .then((d) => setMyItemCount(Array.isArray(d?.data?.items) ? d.data.items.length : 0))
-      .catch(() => {});
-  }, [status, canSeeLevel]);
 
   // 문의·구인은 진행 중인 건수만 (목록은 각자 페이지)
   useEffect(() => {
@@ -141,17 +132,12 @@ export default function MyInfoPage() {
   useEffect(() => {
     const tab = searchParams.get("tab");
     if (!tab) { window.scrollTo(0, 0); return; }
-    if (tab === "bag") {
-      setInvOpen(true);
-      const q = new URLSearchParams(Array.from(searchParams.entries()));
-      q.delete("tab");
-      router.replace(q.toString() ? `/profile?${q}` : "/profile");
-      return;
-    }
     const to: Record<string, string> = {
       notice: "/profile/notice", inquiry: "/profile/inquiry", recruit: "/profile/recruit",
       arctic: "/arctic/orders", orders: "/arctic/orders", cart: "/arctic/cart", wish: "/arctic?panel=wish",
       booster: "/profile/booster", supporter: "/supporters", coupons: "/profile/coupons",
+      // 인벤토리는 내 정보에서 뺐다(사용자 요청) — 옛 링크는 레벨 대시보드의 가방 팝업으로
+      bag: "/level?tab=my&bag=1",
     };
     if (to[tab]) router.replace(to[tab]);
   }, [searchParams, router]);
@@ -181,10 +167,9 @@ export default function MyInfoPage() {
     { k: "inquiry", g: "account", l: "1:1 문의", icon: ICON_PATHS.chat, href: `/profile/inquiry${q}`, n: pendingInquiries },
     { k: "recruit", g: "account", l: "구인 지원", icon: ICON_PATHS.briefcase, href: `/profile/recruit${q}`, n: pendingApplies },
   ];
-  // 📌 인벤토리는 이 자리에서 팝업으로 연다 — 레벨 · 상점 화면으로 넘기지 않는다 (app/components/Inventory)
+  // 📌 인벤토리 줄은 뺐다(사용자 요청) — 레벨 대시보드 카드 · ARCTIC 상점 줄의 가방 단추가 같은 팝업을 연다
   // 📌 ARCTIC 하위 화면은 ?from=me 를 달고 간다 — 경로 줄 · 뒤로가기가 "내 정보"로 돌아온다 (ARCTIC 맥락이면 &via=arctic)
   const meQ = `from=me${fromArctic ? "&via=arctic" : ""}`;
-  if (canSeeLevel) rows.push({ k: "bag", g: "arctic", l: "인벤토리", icon: ICON_PATHS.bag, onClick: () => setInvOpen(true), n: myItemCount });
   if (canSeeShop) {
     rows.push({ k: "orders", g: "arctic", l: "구매 내역", icon: ICON_PATHS.receipt, href: `/arctic/orders?${meQ}`, n: shopOrders.length, accent: shopPendingCount > 0 });
     rows.push({ k: "cart", g: "arctic", l: "장바구니", icon: ICON_PATHS.cart, href: `/arctic/cart?${meQ}`, n: shopCartCount });
@@ -205,12 +190,11 @@ export default function MyInfoPage() {
       <section className="w-full max-w-4xl mx-auto px-6 pt-8 pb-20 flex-1">
         {back && <BackLink href={back.href} label={back.label} />}
         {/* ═══ 잉크 헤더 — 게임 프로필(A안). 사진 둘레 링 = 다음 레벨까지 진행, 아래 Lv 배지.
-               등급 · 서버 순위 · 다음 등급까지 한 줄, 오른쪽에 보유 XP · 빙옥을 크게. 이 화면에서 들어 올리는 건 이것 하나 ═══ */}
+               등급 · 서버 순위 한 줄(다음 등급까지 몇 레벨은 사용자 요청으로 뺐다), 오른쪽에 보유 XP · 빙옥을 크게. 이 화면에서 들어 올리는 건 이것 하나 ═══ */}
         {(() => {
           const lv = shopMe?.level ?? 0;
           const tIdx = getTierIndex(lv);
           const tier = VOICE_TIERS[tIdx];
-          const next = VOICE_TIERS[tIdx + 1];
           const lp = shopMe?.levelProgress;
           const pct = lp?.required > 0 ? Math.min(1, Math.max(0, lp.current / lp.required)) : 0;
           const C = 2 * Math.PI * 46; // 링 둘레 (viewBox 100, r 46)
@@ -248,7 +232,6 @@ export default function MyInfoPage() {
                       <span className="text-white">{tier.name}</span>
                       <span aria-hidden>·</span>
                       <span>서버 #{shopMe?.rank ?? "—"}</span>
-                      {next && (<><span aria-hidden>·</span><span>{next.name}까지 {(next.min - lv).toLocaleString()}레벨</span></>)}
                     </Link>
                   )}
                   <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
@@ -331,8 +314,6 @@ export default function MyInfoPage() {
 
       {/* ARCTIC 에서 왔으면 스토어 독을 그대로 — 전역 독으로 바뀌면 상점으로 돌아갈 칸이 사라진다 (ClientLayout 이 전역 독을 숨긴다) */}
       {fromArctic && <ArcticDock activeKey="me" cartCount={shopCartCount} wishCount={shopWish.length} />}
-      {/* 레벨 비공개 기간(10월 공개 전)엔 일반 유저에게 열리지 않는다 — 인벤토리 줄과 같은 게이트 */}
-      <InventoryPopup open={invOpen && canSeeLevel} onClose={() => setInvOpen(false)} />
     </main>
   );
 }
