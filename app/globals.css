@@ -125,3 +125,11 @@ input[type="number"] {
    바가 보이면 지저분하고, 없다고 스크롤이 안 되는 것도 아니다. */
 .no-bar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-bar::-webkit-scrollbar { display: none; }
+
+/* 📌 상품 그림 무대(CardArt stage) — 아이콘을 칸 폭의 46% 로 키운다. 도트 아이콘(16칸)이 고르게 보이도록
+   되는 브라우저에서는 폭을 16px 배수로 올린다(칸 하나 = 정수 px, 폰 두 칸 카드에서도 작아지지 않게). 칸 폭 기준이라 컨테이너로 둔다 */
+.art-stage { container-type: inline-size; }
+.art-stage-icon { width: 46%; margin-top: -4%; }
+@supports (width: round(down, 10px, 16px)) {
+  .art-stage-icon { width: round(up, 46cqw, 16px); }
+}

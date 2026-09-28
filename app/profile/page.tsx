@@ -234,9 +234,10 @@ export default function MyInfoPage() {
                     {canSeeLevel && Array.isArray(shopMe?.badges) && shopMe.badges.length > 0 && (
                       <span className="shrink-0 inline-flex items-center gap-1">
                         {shopMe.badges.slice(0, 3).map((b: any) => (
+                          // 📌 흰 네모 없이 아이콘만 — 도트 아이콘은 정수 배율(28 → 32px, 16칸 × 2)이라 또렷하다. 칸은 28px 로 두고 넘치는 2px 는 겹쳐 그린다
                           <span key={b.itemId} title={b.name} aria-label={b.name} role="img"
-                            className="w-6 h-6 md:w-7 md:h-7 flex items-center justify-center bg-white">
-                            <ItemIcon icon={b.icon} imageUrl={b.imageUrl} type={b.type} size={16} color={b.color || itemTypeColor(b.type)} />
+                            className="w-7 h-7 flex items-center justify-center">
+                            <ItemIcon icon={b.icon} imageUrl={b.imageUrl} type={b.type} size={28} color={b.color || itemTypeColor(b.type)} />
                           </span>
                         ))}
                       </span>

@@ -41,7 +41,7 @@ export default function ProductCard({
   return (
     <div className={`group relative flex flex-col ${className}`}>
       <Link href={href} className="block relative aspect-square overflow-hidden rounded-md bg-[#f2f2f2]">
-        <CardArt it={it} imgClass="group-hover:scale-[1.03] transition-transform duration-500" iconSize={64} />
+        <CardArt it={it} imgClass="group-hover:scale-[1.03] transition-transform duration-500" stage />
         {overlay}
         {soldOut && (
           <span className="absolute inset-0 bg-white/70 flex items-center justify-center">

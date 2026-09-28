@@ -7,11 +7,11 @@ import Link from "next/link";
 import { salePrice, basePrice, isTimed, durationOptions, durationLabel, cardPick, discountPctOf, discountUntilLabel, isPointOnly, shownPrice, priceUnit, priceText, affordFor } from "@/lib/shopPricing";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { isAdminName } from "@/lib/admins";
-import ItemIcon from "../../../components/ItemIcon";
 import ArcticDock from "../../ArcticDock";
 import ArcticStoreBar from "../../ArcticStoreBar";
 import ArcticFooter from "../../ArcticFooter";
 import ProductCard from "../../ProductCard";
+import CardArt from "../../CardArt";
 import { ownStateOf, renewBaseOf, renewPickOf, expiryLabel } from "../../owned";
 
 // 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천
@@ -21,20 +21,6 @@ const TypeBadge = ({ type, className = "" }: { type: string; className?: string 
   </span>
 );
 
-// 그림 자리 — 상품 이미지 > 아이템 이미지 > 아이콘(ItemIcon)을 등록 색 그라데이션 위에 크게 찍는다
-const ItemArt = ({ it, imgClass = "", iconSize = 72 }: { it: any; imgClass?: string; iconSize?: number }) => {
-  const color = it?.color || itemTypeColor(it?.type);
-  const img = it?.imageUrl || it?.itemImageUrl;
-  if (img) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={img} alt={it.name || ""} className={`absolute inset-0 w-full h-full object-cover ${imgClass}`} />;
-  }
-  return (
-    <div className="absolute inset-0 flex items-center justify-center" style={{ background: `linear-gradient(160deg, ${color}33, ${color}0a)` }}>
-      <ItemIcon icon={it?.icon} type={it?.type} size={iconSize} color={color} />
-    </div>
-  );
-};
 
 // 📌 상품 상세 — 카드에서 눌러 들어오는 화면
 export default function ItemDetailPage() {
@@ -230,7 +216,7 @@ export default function ItemDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* 좌 — 이미지 */}
           <div className="relative aspect-square rounded-2xl bg-[#f2f2f2] border border-[#ededed] overflow-hidden">
-            <ItemArt it={item} iconSize={96} />
+            <CardArt it={item} stage />
             {soldOut && (
               <div className="absolute inset-0 bg-[#131313]/55 flex items-center justify-center">
                 <span className="text-lg font-black text-white tracking-wider">SOLD OUT</span>

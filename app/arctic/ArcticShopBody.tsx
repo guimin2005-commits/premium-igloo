@@ -1452,7 +1452,7 @@ export default function ArcticShopBody({
                 <div className="text-[12px] font-black text-[#131313] mb-3">카드 미리보기</div>
                 <div className="bg-white rounded-2xl border border-[#ededed] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col">
                   <div className="relative aspect-[4/3] bg-[#f2f2f2] overflow-hidden">
-                    <CardArt it={editForm} iconSize={60} />
+                    <CardArt it={editForm} stage />
                     <TypeBadge type={editForm.type} className="absolute top-3 left-3 px-2.5 py-1 text-[10px] tracking-wide" />
                     {!editForm.active && (
                       <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#ededed]">숨김</span>
