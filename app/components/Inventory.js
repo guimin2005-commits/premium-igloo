@@ -121,8 +121,7 @@ const untilOf = (it) =>
 const hasSlotStatus = (it) => it.status === "pending" || it.status === "missing" || !!it.expiresAt;
 
 // 📌 가방 칸 하나 — 가방 격자와 아이템 등록 미리보기가 같은 칸을 쓴다(onClick 이 없으면 누를 수 없는 칸)
-//    padStatus: 격자에 상태 줄이 있는 칸이 하나라도 있으면 없는 칸도 그 줄 자리를 비워 둔다(아이콘 높이를 맞추려고)
-const InvSlot = ({ it, on, onClick, padStatus = false }) => {
+const InvSlot = ({ it, on, onClick }) => {
   const dead = it.status === "pending" || it.status === "missing";
   const accent = invAccentOf(it);
   const dday = ddayOf(it);
@@ -140,21 +139,27 @@ const InvSlot = ({ it, on, onClick, padStatus = false }) => {
         boxShadow: `${on ? "0 0 0 2px rgba(255,255,255,0.75), " : ""}${dead ? "inset 0 0 0 1px rgba(255,255,255,0.07)" : `inset 0 0 0 1px ${accent}44`}`,
       }}
     >
-      <span aria-hidden className="mb-1.5">
+      {/* 아이콘 자리는 늘 28px — 등급 문장(32)은 이 자리 가운데서 위아래로 2px 씩 넘친다(문장 그림에 여백이 있어 괜찮다).
+          아이템 아이콘(28)과 칸마다 높이가 달라 아이콘이 오르내리지 않게 */}
+      <span aria-hidden className="mb-1.5 h-7 flex items-center justify-center">
         <InvIcon it={it} size={28} color={accent} dim={dead} />
       </span>
-      {/* 📌 이름은 늘 두 줄 자리 — 칸은 가운데 정렬이라 이름 줄 수 · 상태 줄 유무로 같은 줄 칸들의 아이콘 높이가 들쭉날쭉했다 */}
-      <span className={`w-full min-h-[2.5em] text-[10px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
-        {it.name}
-      </span>
-      {/* 상태 · 기간 — 모서리 배지 · 점 대신 이름 아래 한 줄 글자로 (3일 이하 · 확인 필요는 빨강) */}
-      {hasSlotStatus(it) ? (
-        <span className={`mt-1 text-[9px] font-bold tabular-nums leading-none ${it.status === "missing" || (dday !== null && dday <= 3) ? "text-[#ff5c77]" : "text-white/45"}`}>
-          {[it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "", dday !== null ? `D-${dday}` : ""].filter(Boolean).join(" · ")}
+      {/* 📌 가운데 맞춤은 '아이콘 + 이름 첫 줄'로만 — 이름 둘째 줄 · 상태 줄은 그 아래로 늘어뜨린다.
+             그래서 이름 줄 수 · 상태 줄이 칸마다 달라도 아이콘 · 이름 첫 줄이 모든 칸에서 같은 높이, 한 줄짜리 칸은 예전처럼 한가운데.
+             늘어뜨리는 건 한 줄까지 — 상태 줄이 있으면 이름은 한 줄(말줄임), 좁은 폰 칸에서도 칸 밖으로 넘치지 않게 */}
+      <span className="relative w-full h-[12.5px]">
+        <span className="absolute inset-x-0 top-0 flex flex-col items-center">
+          <span className={`w-full text-[10px] font-black leading-tight text-center ${hasSlotStatus(it) ? "line-clamp-1" : "line-clamp-2"} ${dead ? "text-white/35" : "text-white/85"}`}>
+            {it.name}
+          </span>
+          {/* 상태 · 기간 — 모서리 배지 · 점 대신 이름 아래 한 줄 글자로 (3일 이하 · 확인 필요는 빨강) */}
+          {hasSlotStatus(it) && (
+            <span className={`mt-1 text-[9px] font-bold tabular-nums leading-none ${it.status === "missing" || (dday !== null && dday <= 3) ? "text-[#ff5c77]" : "text-white/45"}`}>
+              {[it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "", dday !== null ? `D-${dday}` : ""].filter(Boolean).join(" · ")}
+            </span>
+          )}
         </span>
-      ) : padStatus ? (
-        <span aria-hidden className="invisible mt-1 text-[9px] leading-none">{"\u00a0"}</span>
-      ) : null}
+      </span>
     </Tag>
   );
 };
@@ -286,7 +291,6 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
   // uid 로 되짚는다 — 30초 폴링이 배열을 갈아끼워도 엉뚱한 것을 가리키지 않는다
   const selItem = sel ? rows.find((r) => r.uid === sel) || null : null;
   const slots = Math.max(20, Math.ceil(rows.length / 5) * 5); // 5열 × 4줄 — 커진 창을 채운다
-  const padStatus = rows.some(hasSlotStatus);
 
   return (
     <PopShell
@@ -344,7 +348,7 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
             return <div key={`empty-${i}`} className="aspect-square w-full self-stretch rounded-xl border border-dashed border-white/[0.10] bg-white/[0.02]"></div>;
           }
           const on = sel === it.uid;
-          return <InvSlot key={it.uid || `i-${i}`} it={it} on={on} padStatus={padStatus} onClick={() => { setSel(on ? null : it.uid); onTone(); }} />;
+          return <InvSlot key={it.uid || `i-${i}`} it={it} on={on} onClick={() => { setSel(on ? null : it.uid); onTone(); }} />;
         })}
       </div>
 
