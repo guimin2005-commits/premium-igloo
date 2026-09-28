@@ -213,6 +213,8 @@ function RouteProgress({ pathname }: { pathname: string }) {
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  // 상단 카테고리 줄에서 마지막으로 올린 큰 분류 — 아래 패널은 이 분류의 세부만 보여 준다
+  const [gnbGroup, setGnbGroup] = useState("");
   const [isGuestInquiryOpen, setIsGuestInquiryOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -736,7 +738,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 {categoryGroups.map((group) => {
                   const on = group.items.some((it) => pathname === it.path || !!pathname?.startsWith(it.path + "/"));
                   return (
-                    <div key={group.name} className="shrink-0 h-full">
+                    <div key={group.name} className="shrink-0 h-full" onMouseEnter={() => setGnbGroup(group.name)} onFocus={() => setGnbGroup(group.name)}>
                       <Link href={group.items[0]?.path || "/"}
                         className={`relative h-full flex items-center font-extrabold transition-colors ${scrolled ? "text-[14px]" : "text-[14px] md:text-[15px]"} ${
                           on ? (isLightPage ? "text-[#131313]" : "text-white")
@@ -750,35 +752,30 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 })}
               </nav>
 
-              {/* ── 세부 카테고리 패널 — 큰 분류 어디에 올려도 한 장으로 펼쳐진다.
-                     분류마다 따로 뜨면 작은 상자가 여기저기 튀어나와 산만하다.
-                     바 아래에 매달린 한 장이라 위쪽 모서리는 각지고 아래만 둥글다. ── */}
-              <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 opacity-0 invisible group-hover/gnb:opacity-100 group-hover/gnb:visible transition-opacity duration-150"
-                   style={{ width: "min(92vw, 900px)" }}>
-                <div className={`rounded-b-2xl border-x border-b backdrop-blur-2xl ${isLightPage ? "border-[#ededed] bg-white/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.7)]"}`}>
-                  <div className="grid grid-cols-3 gap-10 px-9 py-8">
-                    {categoryGroups.map((group) => (
-                      <div key={group.name}>
-                        <div className="flex items-center gap-2.5 mb-3.5">
-                          <span className="w-4 h-px bg-[#e91e3f]" />
-                          <span className="text-[11px] font-black tracking-[0.2em] text-[#e91e3f]">{group.name}</span>
-                        </div>
-                        <div className="flex flex-col">
-                          {group.items.map((it) => {
-                            const cur = pathname === it.path || !!pathname?.startsWith(it.path + "/");
-                            return (
-                              <Link key={it.path} href={it.path}
-                                className={`py-[8px] text-[16px] font-semibold tracking-tight transition-colors ${
-                                  cur ? "text-[#e91e3f]" : isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white"
-                                }`}>{it.name}</Link>
-                            );
-                          })}
-                        </div>
+              {/* ── 세부 카테고리 패널 — 올린 큰 분류의 세부만 가로 한 줄로.
+                     패널 자리 · 폭은 분류와 상관없이 같다(바 아래에 매달린 한 장) — 분류마다 상자가 따로 튀어나오지 않게.
+                     위쪽 모서리는 각지고 아래만 둥글다. ── */}
+              {(() => {
+                const g = categoryGroups.find((x) => x.name === gnbGroup) || categoryGroups[0];
+                return (
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 opacity-0 invisible group-hover/gnb:opacity-100 group-hover/gnb:visible group-focus-within/gnb:opacity-100 group-focus-within/gnb:visible transition-opacity duration-150"
+                       style={{ width: "min(92vw, 900px)" }}>
+                    <div className={`rounded-b-2xl border-x border-b backdrop-blur-2xl ${isLightPage ? "border-[#ededed] bg-white/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.7)]"}`}>
+                      <div className="flex items-center justify-center flex-wrap gap-x-10 gap-y-2 px-9 py-5">
+                        {g?.items.map((it) => {
+                          const cur = pathname === it.path || !!pathname?.startsWith(it.path + "/");
+                          return (
+                            <Link key={it.path} href={it.path}
+                              className={`py-1 text-[15px] font-semibold tracking-tight whitespace-nowrap transition-colors ${
+                                cur ? "text-[#e91e3f]" : isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white"
+                              }`}>{it.name}</Link>
+                          );
+                        })}
                       </div>
-                    ))}
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* 📌 SYSTEM : LEVEL · ARCTIC 은 카테고리 줄에 세우지 않는다 —
                      홈 가운데(브랜드와 소식 사이)에서 크게 안내하고, 줄에서는 '콘텐츠' 묶음 안으로 간다. */}
