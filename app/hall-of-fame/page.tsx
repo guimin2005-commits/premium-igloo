@@ -120,7 +120,8 @@ export default function HallOfFamePage() {
             <p className="text-gray-400 text-sm md:text-base leading-relaxed">고급 이글루의 역사를 기록합니다.</p>
 
             {!isLoading && champions.length > 0 && (
-              <p className="mt-5 text-xs md:text-sm font-bold tracking-[0.2em] uppercase" style={{ color: `${GOLD}cc` }}>
+              // 📌 tabular-nums — 숫자가 올라가는 동안 자릿수 폭이 흔들려 가운데 맞춤 문구가 좌우로 떨리지 않게
+              <p className="mt-5 text-xs md:text-sm font-bold tracking-[0.2em] uppercase tabular-nums" style={{ color: `${GOLD}cc` }}>
                 <CountUp end={champions.length} duration={1200} /> Records Engraved
               </p>
             )}

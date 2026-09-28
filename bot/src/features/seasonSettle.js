@@ -6,7 +6,7 @@
 import { UserXp, BotSetting, SeasonResult, isDuplicateKeyError } from "../db.js";
 import { SEASONS, seasonEndMs, getLevelByXp } from "../leveling.js";
 import { config } from "../config.js";
-import { buildMessage, SITE_URL } from "../botMessages.js";
+import { buildMessageWithCard, cardAvatar, SITE_URL } from "../botMessages.js";
 
 const TICK_MS = 5 * 60 * 1000;
 const NO_NAME = "이름 없음";
@@ -156,19 +156,33 @@ async function announce(guild, r, role, top, present, setting) {
   }
   const who = (t) => (t ? (present.has(t.userId) ? `<@${t.userId}>` : `**${t.name || NO_NAME}**`) : "");
   const [a, b, c] = top;
-  const payload = buildMessage("rankerAnnounce", {
-    server: guild.name,
-    site: SITE_URL,
-    season: r.season,
-    seasonName: r.name,
-    first: who(a),
-    second: who(b),
-    third: who(c),
-    firstXp: a?.xp,
-    secondXp: b?.xp,
-    thirdXp: c?.xp,
-    role: role.name,
-  });
+  // 카드가 켜져 있으면 포디움 카드를 붙인다 — 사진은 서버에 있는 사람만(없으면 이름 첫 글자 원형)
+  const payload = await buildMessageWithCard(
+    "rankerAnnounce",
+    {
+      server: guild.name,
+      site: SITE_URL,
+      season: r.season,
+      seasonName: r.name,
+      first: who(a),
+      second: who(b),
+      third: who(c),
+      firstXp: a?.xp,
+      secondXp: b?.xp,
+      thirdXp: c?.xp,
+      role: role.name,
+    },
+    async () => ({
+      season: r.season,
+      seasonName: r.name,
+      top: await Promise.all(
+        top.slice(0, 3).map(async (t) => {
+          const m = present.get(t.userId);
+          return { name: t.name || m?.displayName || NO_NAME, avatar: m ? await cardAvatar(m) : null, xp: t.xp };
+        })
+      ),
+    })
+  );
   if (!payload) return; // 관리자가 끈 메시지
 
   // 선점 후 보낸다 — 보내기에 실패하면 되돌리고 사유를 남긴다

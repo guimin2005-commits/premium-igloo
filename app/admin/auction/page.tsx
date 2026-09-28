@@ -26,6 +26,7 @@ import {
   FieldRow,
   Switch,
   Btn,
+  SwapLabel,
   EmptyRow,
   inputClass,
   labelClass,
@@ -537,7 +538,7 @@ export default function AdminAuctionPage() {
                           className={`${inputClass} flex-1 min-w-0`}
                         />
                         <Btn onClick={renameAuction} disabled={!renameTarget.title.trim() || renameTarget.title.trim() === sel.title || isRenaming}>
-                          {isRenaming ? "저장 중…" : "저장"}
+                          <SwapLabel swap={isRenaming} to="저장 중…">저장</SwapLabel>
                         </Btn>
                       </div>
                       <p className="mt-1.5 text-right text-[12px] text-[#8a8a8a] tabular-nums">{renameTarget.title.length}/60</p>
@@ -639,7 +640,8 @@ export default function AdminAuctionPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {leaders.map((l, i) => (
                       <div key={i} className="min-w-0 rounded-2xl border border-[#ededed] p-4">
-                        <div className="flex items-center justify-between gap-2 mb-3">
+                        {/* 📌 줄 높이를 '제거' 단추(h-8)에 맞춰 둔다 — 리더가 하나일 땐 단추가 없어, 리더를 추가하는 순간 카드 속 입력칸이 한꺼번에 내려앉던 것 */}
+                        <div className="flex items-center justify-between gap-2 mb-3 min-h-8">
                           <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">리더 {i + 1}</span>
                           {leaders.length > 1 && (
                             <Btn variant="ghost" size="sm" className="!text-[#d01634]" onClick={() => setLeaders(leaders.filter((_, idx) => idx !== i))}>제거</Btn>
@@ -807,7 +809,7 @@ export default function AdminAuctionPage() {
                       </p>
                     </div>
                     <span className="text-[12px] font-bold text-[#d01634] shrink-0">
-                      {isImporting ? "불러오는 중" : "불러오기"}
+                      <SwapLabel swap={isImporting} to="불러오는 중" align="end">불러오기</SwapLabel>
                     </span>
                   </button>
                 ))

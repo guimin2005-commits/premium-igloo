@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/apiAuth";
 import { currentSeason } from "@/lib/season";
+import { checkServerBooster } from "@/lib/seasonPass";
 import UserXp from "@/models/UserXp";
 import Purchase from "@/models/Purchase";
 import Payout from "@/models/Payout";
@@ -75,19 +76,23 @@ async function detail(userId) {
     : names.length ? { discordTag: { $in: names } } : null;
 
   const couponIds = [...new Set(userCoupons.map((c) => c.couponId).filter((id) => mongoose.isValidObjectId(id)))];
+  const cur = currentSeason();
+  const passCurrent = !!user && user.passSeason === cur.number;
 
-  const [payouts, notifications, inquiries, applies, coupons] = await Promise.all([
+  const [payouts, notifications, inquiries, applies, coupons, booster] = await Promise.all([
     Payout.find(byIdOrName("userId", "userName", userId, names)).sort({ createdAt: -1 }).limit(LIMIT).lean(),
     Notification.find(byIdOrName("recipientId", "recipientName", userId, names), { content: 0 }).sort({ createdAt: -1 }).limit(LIMIT).lean(),
     Inquiry.find(byIdOrName("userId", "user", userId, names), { mainType: 1, subType: 1, title: 1, status: 1, createdAt: 1, answeredAt: 1 })
       .sort({ createdAt: -1 }).limit(LIMIT).lean(),
     applyQuery ? Apply.find(applyQuery, { position: 1, status: 1, createdAt: 1 }).sort({ createdAt: -1 }).limit(LIMIT).lean() : [],
     couponIds.length ? Coupon.find({ _id: { $in: couponIds } }, { name: 1, code: 1, kind: 1, type: 1, value: 1, expiresAt: 1 }).lean() : [],
+    // 📌 서버 부스터는 사지 않아도 프리미엄이 열린다(lib/seasonPass getPassState 의 premiumBy) — 산 사람은 물을 필요가 없다.
+    //    getPassState 는 새 시즌 전환 쓰기가 일어날 수 있어, 조회 전용인 여기선 부스터 판정만 따로 부른다
+    passCurrent && !user.passUnlocked ? checkServerBooster(userId) : false,
   ]);
 
   const couponById = new Map(coupons.map((c) => [String(c._id), c]));
-  const cur = currentSeason();
-  const passCurrent = !!user && user.passSeason === cur.number;
+  const premiumBy = !passCurrent ? null : user.passUnlocked ? "purchase" : booster === true ? "booster" : null;
 
   return {
     names,
@@ -112,9 +117,11 @@ async function detail(userId) {
           pass: {
             season: user.passSeason || 0,
             current: passCurrent,
-            unlocked: passCurrent && !!user.passUnlocked,
+            unlocked: !!premiumBy, // 프리미엄이 열려 있나 (구매 또는 부스터)
+            premiumBy, // "purchase" | "booster" | null
+            boosterUnknown: passCurrent && booster === null, // 디스코드 장애로 부스터인지 확인 못 함
             seasonXp: passCurrent ? Math.max(0, (user.xp || 0) - (user.passBaseXp || 0)) : null,
-            claimed: passCurrent ? (user.passClaimedFree?.length || 0) + (user.passClaimedPaid?.length || 0) : 0,
+            claimed: passCurrent ? [...(user.passClaimedFree || []), ...(user.passClaimedPaid || [])].filter((t) => !String(t).includes("#")).length : 0,
           },
         }
       : null,

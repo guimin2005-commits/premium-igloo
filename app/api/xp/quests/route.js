@@ -10,6 +10,8 @@ import QuestClaim from "@/models/QuestClaim";
 import Payout from "@/models/Payout";
 import UserXp from "@/models/UserXp";
 import { applyTierMultiplier, addPoints } from "@/lib/points";
+import { getPerks } from "@/lib/itemPerks";
+import { withBonus } from "@/lib/itemEffects";
 import { denyIfLevelClosed } from "@/lib/levelAccess";
 import { denyIfMaintenance } from "@/lib/apiAuth";
 
@@ -79,8 +81,14 @@ export async function POST(request) {
     const lockKey = periodKey(quest.period || "daily");
 
     // 등급이 높을수록 퀘스트 POINT 를 더 받는다 — 지급 시점의 레벨로 곱한다
-    const meDoc = await UserXp.findOne({ userId }, { level: 1 }).lean();
-    const payPoint = applyTierMultiplier(quest.rewardPoint || 0, meDoc?.level || 0);
+    //    📌 퀘스트 보상 보너스(아이템 효과 questBonus — 상한 적용 %)는 XP · 빙옥 둘 다에 얹는다(등급 배율 뒤, 버림). 패스 포인트는 그대로
+    const [meDoc, perks] = await Promise.all([
+      UserXp.findOne({ userId }, { level: 1 }).lean(),
+      getPerks(userId),
+    ]);
+    const bonusPct = perks.questBonus || 0;
+    const payXp = withBonus(quest.rewardXp || 0, bonusPct);
+    const payPoint = withBonus(applyTierMultiplier(quest.rewardPoint || 0, meDoc?.level || 0), bonusPct);
     const payPassPoint = quest.rewardPassPoint || 0;
 
     // 1) 자물쇠부터 — QuestClaim 유니크 인덱스(userId, date, questId)가 중복 수령을 막는다.
@@ -92,7 +100,7 @@ export async function POST(request) {
         date: lockKey,
         questId,
         questName: quest.name,
-        amount: quest.rewardXp,
+        amount: payXp,
         pointAmount: payPoint,
         passPoint: payPassPoint,
       });
@@ -107,12 +115,12 @@ export async function POST(request) {
     // 2) 자물쇠를 잡은 뒤에만 지급 예약. 실패하면 자물쇠를 풀어 다시 시도할 수 있게 한다.
     //    XP 가 0 인 퀘스트(POINT 전용)는 큐에 넣지 않는다 — 봇이 0 XP 를 처리하며 도는 빈 작업만 쌓인다.
     let queued = null;
-    if (quest.rewardXp > 0) {
+    if (payXp > 0) {
       try {
         queued = await Payout.create({
           userName: session.user.name || "",
           userId,
-          amount: quest.rewardXp,
+          amount: payXp,
           reason: `${PERIOD_LABEL[quest.period] || "일일"} 퀘스트: ${quest.name}`,
           source: "quest",
         });
@@ -148,7 +156,8 @@ export async function POST(request) {
     const next = await getQuestState(userId);
     return NextResponse.json({
       success: true,
-      data: { ...next, claimed: { name: quest.name, amount: quest.rewardXp, point: payPoint } },
+      // amount · point 는 실제로 준 값(보너스 포함). bonusPct 는 붙은 퀘스트 보상 보너스 %
+      data: { ...next, claimed: { name: quest.name, amount: payXp, point: payPoint, bonusPct } },
     });
   } catch (e) {
     console.error("일일 퀘스트 수령 오류:", e);

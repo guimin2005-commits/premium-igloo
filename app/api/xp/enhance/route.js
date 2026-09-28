@@ -10,20 +10,33 @@ import { xpToPoint } from "@/lib/pointRate";
 import { denyIfLevelClosed } from "@/lib/levelAccess";
 import { denyIfMaintenance } from "@/lib/apiAuth";
 import { logWallet } from "@/lib/wallet";
+import { getPerks } from "@/lib/itemPerks";
+import { discountedCost } from "@/lib/itemEffects";
 import BotSetting from "@/models/BotSetting";
 import UserXp from "@/models/UserXp";
 
 const USER_FIELDS = { xp: 1, point: 1, level: 1, chatEnhance: 1, voiceEnhance: 1 };
 
+// 📌 강화 비용 할인(아이템 효과 enhanceDiscount — 상한 적용 %)도 함께 읽는다. 비용 = 정책 비용 × (1 − %/100) 올림 (lib/itemEffects discountedCost)
 const loadState = async (userId) => {
-  const [setting, doc] = await Promise.all([
+  const [setting, doc, perks] = await Promise.all([
     BotSetting.findOne({ key: "main" }).lean(),
     UserXp.findOne({ userId }, USER_FIELDS).lean(),
+    getPerks(userId),
   ]);
-  return { setting, doc };
+  return { setting, doc, discount: perks.enhanceDiscount || 0 };
 };
 const balanceOf = (doc) => ({ xp: doc?.xp ?? 0, point: doc?.point ?? 0 });
 const levelOf = (doc, field) => Math.max(0, Math.floor(Number(doc?.[field]) || 0));
+// 화면용 강화 상태 — 다음 비용은 할인 반영 값(실제로 빼는 값). 정가는 baseCost, 할인 % 는 discount
+const viewOf = (setting, doc, discount) => {
+  const v = buildEnhanceView(setting, doc);
+  for (const k of ["chat", "voice"]) {
+    v[k].baseCost = v[k].nextCost;
+    if (v[k].nextCost != null) v[k].nextCost = discountedCost(v[k].nextCost, discount);
+  }
+  return { ...v, discount };
+};
 
 // ── [조회] 내 강화 단계 · 다음 효과 · 다음 비용 · 잔액 ──
 export async function GET() {
@@ -33,10 +46,10 @@ export async function GET() {
       return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
     }
     await connectToDatabase();
-    const { setting, doc } = await loadState(session.user.id);
+    const { setting, doc, discount } = await loadState(session.user.id);
     return NextResponse.json({
       success: true,
-      data: { ...buildEnhanceView(setting, doc), balance: balanceOf(doc) },
+      data: { ...viewOf(setting, doc, discount), balance: balanceOf(doc) },
     });
   } catch (e) {
     console.error("강화 조회 오류:", e);
@@ -44,8 +57,9 @@ export async function GET() {
   }
 }
 
-// ── [강화] body { kind: "chat" | "voice", payMethod: "xp" | "point" } ──
-//    실패 없음 · 단계마다 비용 상승 · 영구. 비용은 서버가 정책으로 다시 계산한다 (클라이언트 값은 보지 않는다).
+// ── [강화] body { kind: "chat" | "voice", payMethod: "xp" | "point", expectedCost?: 화면에서 본 XP 비용 } ──
+//    실패 없음 · 단계마다 비용 상승 · 영구. 비용은 서버가 정책 · 할인으로 다시 계산한다 (클라이언트 값으로 빼지 않는다).
+//    expectedCost 를 보내면 서버 비용과 다를 때(보는 사이 할인 아이템이 만료되는 등) 빼지 않고 409 로 돌려보낸다
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
@@ -67,7 +81,7 @@ export async function POST(request) {
     const closed = await denyIfLevelClosed(session);
     if (closed) return closed;
     const userId = session.user.id;
-    const { setting, doc } = await loadState(userId);
+    const { setting, doc, discount } = await loadState(userId);
     const p = enhancePolicy(setting);
 
     const levelField = `${kind}Enhance`;
@@ -75,14 +89,22 @@ export async function POST(request) {
     const max = kind === "chat" ? p.chatEnhanceMax : p.voiceEnhanceMax;
     if (cur >= max) {
       return NextResponse.json(
-        { success: false, message: "최대 단계입니다", view: buildEnhanceView(setting, doc), balance: balanceOf(doc) },
+        { success: false, message: "최대 단계입니다", view: viewOf(setting, doc, discount), balance: balanceOf(doc) },
         { status: 400 }
       );
     }
 
-    const cost = kind === "chat"
+    const baseCost = kind === "chat"
       ? enhanceCost(p.chatEnhanceBaseCost, p.chatEnhanceCostGrowthPct, cur + 1)
       : enhanceCost(p.voiceEnhanceBaseCost, p.voiceEnhanceCostGrowthPct, cur + 1);
+    // 📌 강화 비용 할인 — 화면(xp/me enhanceNextCost · GET view.nextCost)과 같은 식
+    const cost = discountedCost(baseCost, discount);
+    if (body?.expectedCost != null && Number(body.expectedCost) !== cost) {
+      return NextResponse.json(
+        { success: false, code: "PRICE_CHANGED", message: "비용이 바뀌었습니다. 다시 확인해 주세요.", view: viewOf(setting, doc, discount), balance: balanceOf(doc) },
+        { status: 409 }
+      );
+    }
     // 📌 관리자도 일반 유저와 똑같이 차감한다 — 테스트로 올린 단계는 관리자 초기화로 되돌린다
     //    비용은 XP 로만 정한다. 빙옥으로 내면 환율(1 빙옥 = 1,000 XP · 올림 — lib/pointRate.js)을 적용한 값을 뺀다
     const field = payMethod === "point" ? "point" : "xp";
@@ -118,7 +140,7 @@ export async function POST(request) {
 
     if (!updated) {
       const now = await UserXp.findOne({ userId }, USER_FIELDS).lean();
-      const view = buildEnhanceView(setting, now);
+      const view = viewOf(setting, now, discount);
       if (levelOf(now, levelField) !== cur) {
         return NextResponse.json(
           { success: false, message: "단계가 바뀌었습니다. 다시 확인해 주세요.", view, balance: balanceOf(now) },
@@ -137,7 +159,7 @@ export async function POST(request) {
         amount: -charged,
         kind: "enhance",
         label: `강화 · ${ENHANCE_LABEL[kind]} ${cur + 1}단계`,
-        meta: { kind, level: cur + 1 },
+        meta: { kind, level: cur + 1, ...(discount > 0 ? { baseCost, discountPct: discount } : {}) },
       });
     }
 
@@ -148,7 +170,7 @@ export async function POST(request) {
       updated.level = newLevel;
     }
 
-    const view = buildEnhanceView(setting, updated);
+    const view = viewOf(setting, updated, discount);
     return NextResponse.json({
       success: true,
       message: `${ENHANCE_LABEL[kind]} 강화 ${view[kind].level}단계`,

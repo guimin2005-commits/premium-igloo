@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import { ADMIN_USERS } from "@/lib/admins";
+import { priceText } from "@/lib/shopPricing";
 import { ICON_PATHS } from "../components/Icons";
 
 // 📌 1:1 문의 — 화이트 & 블랙.
@@ -498,7 +499,8 @@ export default function SupportPage() {
                   />
                 ))}
               </div>
-              {typeDesc && <p className="mt-1.5 text-[12px] text-[#5a5a5a]">{typeDesc}</p>}
+              {/* 📌 설명 줄은 고르기 전에도 자리를 잡아 둔다 — 처음 고를 때 줄이 생기며 왼쪽 '문의 유형' 이름이 아래로 내려앉지 않게 */}
+              <p aria-hidden={!typeDesc} className={`mt-1.5 text-[12px] text-[#5a5a5a] ${typeDesc ? "" : "invisible"}`}>{typeDesc || " "}</p>
             </FormRow>
 
             {/* 유형을 고르면 아래 줄이 높이째 열린다 */}
@@ -558,7 +560,7 @@ export default function SupportPage() {
                                   <span className="min-w-0 flex-1">
                                     <span className={`block text-[13px] font-extrabold truncate ${picked ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{o.itemName}</span>
                                     <span className="block text-[11px] text-[#8a8a8a] tabular-nums">
-                                      {ORDER_TYPE_LABEL[o.itemType] || "상품"} · {new Date(o.createdAt).toLocaleDateString("ko-KR")} · {(o.price || 0).toLocaleString()} XP
+                                      {ORDER_TYPE_LABEL[o.itemType] || "상품"} · {new Date(o.createdAt).toLocaleDateString("ko-KR")} · {priceText(o, o.price)}
                                     </span>
                                   </span>
                                 </button>

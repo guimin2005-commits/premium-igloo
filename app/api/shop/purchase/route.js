@@ -7,12 +7,15 @@ import { authOptions } from "@/lib/authOptions";
 import { getShopAccess } from "@/lib/shopAccess";
 import { salePrice, isTimed, durationPrice } from "@/lib/shopPricing";
 import { getLevelByXp } from "@/lib/leveling";
-import { xpToPoint, POINT_RATE } from "@/lib/pointRate";
+import { planPayment } from "@/lib/shopPay";
 import ShopItem from "@/models/ShopItem";
 import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
 import ShopLock from "@/models/ShopLock";
 import { denyIfMaintenance } from "@/lib/apiAuth";
+import { getPerks } from "@/lib/itemPerks";
+import { cashbackOf } from "@/lib/itemEffects";
+import { logWallet } from "@/lib/wallet";
 import { liveHoldings, planPurchase, timingOf, kstStamp } from "../_lib/renewal";
 import mongoose from "mongoose";
 
@@ -78,6 +81,16 @@ export async function POST(request) {
     if (body?.expectedPrice != null && Number(body.expectedPrice) !== price) {
       return NextResponse.json({ success: false, code: "PRICE_CHANGED", message: "가격이 바뀌었습니다. 바뀐 금액을 확인하고 다시 구매해 주세요." }, { status: 409 });
     }
+    // 📌 보는 사이 빙옥 전용으로 바뀌었거나 풀렸으면 결제 수단이 달라진다 — 값이 같아도 다시 보게 한다
+    if (body?.expectedPointOnly != null && !!body.expectedPointOnly !== !!item.pointOnly) {
+      return NextResponse.json({ success: false, code: "PRICE_CHANGED", message: "결제 수단이 바뀌었습니다. 다시 확인하고 구매해 주세요." }, { status: 409 });
+    }
+
+    // 📌 캐시백 % (아이템 효과 shopCashback — 상한 적용) — 이번 결제 전에 가진 것으로 정한다(방금 사는 캐시백 아이템이 제 결제에 붙지 않게).
+    //    재고를 잡기 전에 읽는다. 읽지 못하면 캐시백 없이 결제한다(결제를 막지 않는다) — 장바구니 결제와 같은 규칙
+    const cashPct = await getPerks(userId)
+      .then((p) => p.shopCashback || 0)
+      .catch((e) => { console.error("캐시백 조회 실패:", e); return 0; });
 
     // 1) 재고 선점 — 무제한(-1)이 아니면 남은 수량이 있을 때만 차감
     if (item.stock >= 0) {
@@ -96,17 +109,20 @@ export async function POST(request) {
     const releaseStock = () =>
       ShopItem.updateOne({ _id: item._id }, item.stock >= 0 ? { $inc: { stock: 1, soldCount: -1 } } : { $inc: { soldCount: -1 } });
 
-    // 2) 결제 — 빙옥은 원하는 만큼(pointUse 개) 쓰고, 나머지를 XP 로 낸다 (장바구니 결제와 같은 계약)
+    // 2) 결제 — 빙옥은 원하는 만큼(pointUse 개) 쓰고, 나머지를 XP 로 낸다 (장바구니 결제와 같은 계약 — lib/shopPay.js planPayment)
     //    가격은 XP 하나만 둔다. 가격(XP)에서 빙옥 몫(1 빙옥 = 1,000 XP — lib/pointRate.js)을 뺀 나머지가 XP 차감액이다.
     //    빙옥 상한은 xpToPoint(가격)(올림) — 넘게 보내면 상한으로 깎는다. 끝전 때문에 빙옥 몫이 가격보다 크면 XP 는 0.
     //    옛 요청의 payMethod "point" 는 전부 빙옥으로 친다.
+    //    📌 빙옥 전용 상품은 pointUse 를 보지 않는다 — 판매가 전부를 빙옥(xpToPoint, 올림)으로만 뺀다. XP 는 0
     //    XP 는 화폐이므로 쓰면 레벨도 내려가지만 빙옥은 레벨과 무관하다.
     //    📌 관리자도 일반 유저와 똑같이 차감한다 — 테스트로 쓴 건 관리자 초기화로 되돌린다
-    const maxPoint = xpToPoint(price);
-    const askedPoint = body?.payMethod === "point" ? maxPoint : Math.max(0, Math.floor(Number(body?.pointUse) || 0));
-    const pointUse = Math.min(askedPoint, maxPoint);
-    const chargedXp = Math.max(0, price - pointUse * POINT_RATE);
-    const payMethod = pointUse > 0 ? (chargedXp > 0 ? "mixed" : "point") : "xp";
+    const pay = planPayment({
+      lines: [{ price, pointOnly: !!item.pointOnly }],
+      pointUse: body?.payMethod === "point" ? "max" : body?.pointUse,
+    });
+    const chargedXp = pay.chargedXp;
+    const pointUse = pay.point; // 뺄 빙옥 전부 — 빙옥 전용이면 판매가를 빙옥으로 친 값, 아니면 고른 빙옥
+    const payMethod = pay.payMethod;
 
     // 어느 쪽이 모자란지 — 빙옥을 먼저 본다. 둘 다 충분하면 ""
     const shortOf = (w) =>
@@ -144,6 +160,8 @@ export async function POST(request) {
     //       지우기부터 실패하면 되돌리지 않는다(기록이 남았을 수 있어 공짜가 된다) — 바깥 catch 로 넘긴다
     const purchaseId = new mongoose.Types.ObjectId();
     const timing = timingOf(plan, days);
+    // 이 건에 돌려줄 캐시백 — 실제로 낸 XP 의 % (버림). 지급에 실패하면 아래에서 0 으로 되돌린다
+    const cashbackXp = cashbackOf(chargedXp, cashPct);
     let purchase;
     try {
       purchase = await Purchase.create({
@@ -157,9 +175,11 @@ export async function POST(request) {
         roleId: item.roleId || "",
         price,
         payMethod,
+        pointOnly: !!item.pointOnly,
         paidXp: chargedXp,
         paidPoint: pointUse,
         billed: true,
+        cashbackXp,
         days,
         // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다. 연장이면 이어 붙인 건의 만료부터(renewOf · startsAt)
         expiresAt: timing.expiresAt,
@@ -174,6 +194,30 @@ export async function POST(request) {
       if (Object.keys(back).length) await UserXp.updateOne({ userId }, { $inc: back });
       await releaseStock();
       throw e;
+    }
+
+    // 4) 캐시백 — 결제 · 기록이 확정된 뒤 실제로 낸 XP 의 % 를 XP 로 돌려준다(장바구니 결제와 같은 규칙).
+    //    결제 때 내린 기준선(passBaseXp)도 같은 폭으로 올린다 — 쇼핑으로 시즌 패스 진행도가 늘지 않게.
+    //    지급에 실패하면 기록을 0 으로 되돌린다(환불 때 받지 않은 캐시백을 회수하지 않게). 구매 자체는 성공으로 둔다
+    let cashbackGiven = 0;
+    if (cashbackXp > 0) {
+      try {
+        const cb = await UserXp.updateOne({ userId }, { $inc: { xp: cashbackXp, passBaseXp: cashbackXp }, $set: { updatedAt: new Date() } });
+        if (!cb.matchedCount) throw new Error("지갑 문서 없음");
+        cashbackGiven = cashbackXp;
+        await logWallet({
+          userId,
+          currency: "xp",
+          amount: cashbackXp,
+          kind: "cashback",
+          label: `캐시백 · ${item.name}`,
+          refId: String(purchaseId),
+          meta: { pct: cashPct, purchaseIds: [String(purchaseId)] },
+        });
+      } catch (e) {
+        console.error("캐시백 지급 실패:", e);
+        await Purchase.updateOne({ _id: purchaseId }, { $set: { cashbackXp: 0 } }).catch(() => {});
+      }
     }
 
     // 차감된 XP에 맞춰 레벨을 다시 계산 (레벨이 내려갈 수 있다)
@@ -191,11 +235,13 @@ export async function POST(request) {
       ? (days > 0 ? `구매가 완료되었습니다. ${days}일 동안 역할이 유지되며, 잠시 후 자동으로 지급됩니다.` : "구매가 완료되었습니다. 잠시 후 역할이 자동으로 지급됩니다.")
       : (days > 0 ? `구매가 완료되었습니다. ${days}일 동안 이용할 수 있으며, 잠시 후 자동으로 지급됩니다.` : "구매가 완료되었습니다. 잠시 후 자동으로 지급됩니다.");
 
+    const doneMsg = item.type !== "physical"
+      ? autoMsg
+      : "구매가 완료되었습니다. 운영진 확인 후 발송해 드립니다.";
+
     return NextResponse.json({
       success: true,
-      message: item.type !== "physical"
-        ? autoMsg
-        : "구매가 완료되었습니다. 운영진 확인 후 발송해 드립니다.",
+      message: cashbackGiven > 0 ? `${doneMsg} (캐시백 +${cashbackGiven.toLocaleString("ko-KR")} XP)` : doneMsg,
       // usedPoint 는 뺀 빙옥, chargedXp 는 뺀 XP.
       // charged 는 옛 필드 — 한쪽으로만 냈을 때의 그 화폐 값. 섞어 냈으면 XP 몫이다(usedPoint · chargedXp 를 본다)
       data: {
@@ -204,6 +250,8 @@ export async function POST(request) {
         renewOf: timing.renewOf, expiresAt: timing.expiresAt,
         charged: payMethod === "point" ? pointUse : chargedXp,
         usedPoint: pointUse, chargedXp,
+        // 돌려받은 캐시백 XP(remain 에 이미 들어 있다) · 그때의 캐시백 %
+        cashbackXp: cashbackGiven, cashbackPct: cashPct,
         remain, remainXp: remain.xp, remainPoint: remain.point,
       },
     });

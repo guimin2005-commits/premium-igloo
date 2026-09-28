@@ -87,8 +87,11 @@ export default function MyAppliesPage() {
                   </div>
                   <div className="flex gap-3 items-center">
                     <span className={`text-xs font-bold px-3 py-1 rounded-full border ${rec.status === "합격" ? "bg-[#e8f3e6] text-[#3f7a35] border-[#cfe5cb]" : rec.status === "취소" || rec.status === "취소/반려" || rec.status === "불합격" ? "bg-[#fdeaea] text-[#d01634] border-[#f5cdcd]" : "bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]"}`}>{rec.status}</span>
-                    {rec.status === "심사 중" && (
+                    {rec.status === "심사 중" ? (
                       <button onClick={() => setCancelId(rec.id)} className="text-xs font-bold px-3 py-1 bg-[#f2f2f2] text-[#5a5a5a] hover:bg-[#e91e3f] hover:text-white rounded-full transition-colors outline-none focus:outline-none">지원 취소</button>
+                    ) : (
+                      // 📌 취소 단추가 없는 줄도 그 자리를 비워 둔다 — 줄마다 상태 칩이 단추 폭만큼 들쭉날쭉하지 않게
+                      <span aria-hidden className="invisible text-xs font-bold px-3 py-1">지원 취소</span>
                     )}
                   </div>
                 </div>

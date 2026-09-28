@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import ItemIcon from "../components/ItemIcon";
-import { isTimed, durationLabel, cardPick, discountActive } from "@/lib/shopPricing";
+import { isTimed, durationLabel, cardPick, discountActive, affordFor, shownPrice, priceText } from "@/lib/shopPricing";
 import { pointToXp } from "@/lib/pointRate";
 import { SEASON, getSeasonDday } from "@/lib/season";
 import { getTier } from "@/lib/voiceTiers";
@@ -11,6 +11,8 @@ import { getTier } from "@/lib/voiceTiers";
 // 📌 ARCTIC 홈 — 배너 → 유형 타일 4장 → 두 갈래 큐레이션 → 이번 주.
 //    헤더·유형 줄·독·푸터는 ArcticShopBody 가 그린다. 여기는 홈 본문만.
 //    상품 카드는 부모의 renderCard 를 그대로 받아 쓴다 (찜·장바구니·구매가 한 벌).
+//    📌 무엇을 걸지는 서버 추천(/api/shop/recommend — lib/shopRecommend.js)이 정한다.
+//       결과가 오기 전 · 실패하면 아래 기본 규칙(판매 수 · 관리자 순서)으로 그린다.
 
 type Props = {
   items: any[];
@@ -47,28 +49,93 @@ function weekRange() {
 
 const created = (it: any) => new Date(it?.createdAt || 0).getTime();
 
+// 📌 추천 결과 — 서버가 고른 상품 id 와 제목만 온다
+type Rec = {
+  hot: string[];
+  forMe: { title: string; ids: string[]; basis?: string };
+  deal: { id: string; kind: "sale" | "new" } | null;
+  renewSoon?: { id: string; expiresAt: string }[];
+};
+// 📌 한 번 받은 추천은 모듈에 둔다 — 홈 ↔ 상품 화면을 오갈 때마다 카드가 다시 바뀌지 않게.
+//    5분(서버 집계 캐시와 같은 주기)이 지나면 둔 것을 먼저 그리고 뒤에서 새로 받는다
+const REC_TTL = 5 * 60 * 1000;
+// 상품 목록이 먼저 와도 추천을 이만큼은 기다렸다 그린다 — 기본 규칙으로 그렸다가 곧바로 바뀌는 깜빡임을 없앤다
+const REC_WAIT = 800;
+let recMemo: { at: number; data: Rec } | null = null;
+const freshRec = () => (recMemo && Date.now() - recMemo.at < REC_TTL ? recMemo.data : null);
+
 export default function ArcticHome({
   items, isLoading, isAdmin, isLoggedIn, myXp, myPoint, myLevel, ownedItemIds,
   banners, bannersLoaded, bannerIdx, setBannerIdx, bannerRatio, fitRatio, renderCard, goProducts, openEdit, adminTools,
 }: Props) {
   const dday = getSeasonDday();
   const active = useMemo(() => items.filter((it) => it.active !== false), [items]);
+  const byId = useMemo(() => new Map(active.map((it) => [String(it._id), it])), [active]);
 
-  // 지금 잘 나가는 — 판매 수 · 추천 순서 · 최신
-  const hot = useMemo(
-    () => [...active].sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0) || (a.sortOrder || 0) - (b.sortOrder || 0) || created(b) - created(a)).slice(0, 2),
-    [active]
-  );
+  // ── 서버 추천 — 상품 목록과 나란히 받는다(대개 목록보다 먼저 와서 첫 카드부터 추천으로 그려진다) ──
+  const [rec, setRec] = useState<Rec | null>(() => recMemo?.data ?? null);
+  // 추천을 기다리는 중인가 — 둔 추천이 있으면 기다리지 않는다. 목록이 온 뒤 REC_WAIT 가 지나면 기본 규칙으로 그린다
+  const [recWait, setRecWait] = useState(() => !recMemo);
+  const ready = !isLoading && !recWait;
+  const curRef = useRef<HTMLElement>(null);
+  const shownRef = useRef(false); // 카드가 이미 그려졌는가 — 그 뒤에 결과가 오면 높이를 잡아 두고 바꾼다
+  const [lockH, setLockH] = useState(0);
+  const recRef = useRef(rec); // 지금 그려진 추천 — 새로 받은 것과 같으면 다시 그리지 않는다
+  useEffect(() => { recRef.current = rec; }, [rec]);
+  useEffect(() => { shownRef.current = ready && active.length > 0; }, [ready, active.length]);
+  useEffect(() => {
+    if (freshRec()) return;
+    let alive = true;
+    fetch("/api/shop/recommend", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j?.success || !j.data) return;
+        recMemo = { at: Date.now(), data: j.data }; // 그새 화면을 떠났어도 둔다 — 돌아오면 바로 쓴다
+        if (!alive || JSON.stringify(recRef.current) === JSON.stringify(j.data)) return;
+        // 📌 이미 그려 둔 뒤라면 지금 높이를 최소 높이로 잡는다 — 바뀐 카드가 짧아도 아래 칸이 끌려 올라오지 않게
+        if (shownRef.current && curRef.current) setLockH(curRef.current.offsetHeight);
+        setRec(j.data);
+      })
+      .catch(() => {}) // 실패하면 기본 규칙 그대로
+      .finally(() => { if (alive) setRecWait(false); });
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    if (isLoading || !recWait) return;
+    const t = setTimeout(() => setRecWait(false), REC_WAIT);
+    return () => clearTimeout(t);
+  }, [isLoading, recWait]);
+  // 화면 폭이 바뀌면(가로 · 세로 전환 등) 잡아 둔 높이는 풀어 준다 — 모바일 주소창이 접히는 세로 변화는 무시
+  useEffect(() => {
+    if (!lockH) return;
+    const w0 = window.innerWidth;
+    const onResize = () => { if (window.innerWidth !== w0) setLockH(0); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [lockH]);
 
-  // ○○에게 맞는 — 내 등급·소지 XP 기준. 안 산 것, 살 수 있는 것, 권한·아이템 우선.
+  // 지금 잘 나가는 — 추천(최근 14일 구매자 · 시간 감쇠)이 오면 그 순서, 기본은 판매 수 · 추천 순서 · 최신
+  const hot = useMemo(() => {
+    const base = [...active].sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0) || (a.sortOrder || 0) - (b.sortOrder || 0) || created(b) - created(a)).slice(0, 2);
+    if (!rec) return base;
+    const out = rec.hot.map((id) => byId.get(id)).filter(Boolean);
+    // 목록에 없는 id(그새 내려간 상품 등)로 모자라면 기본 규칙으로 채운다 — 칸 수가 줄지 않게
+    for (const it of base) if (out.length < 2 && !out.some((o) => o._id === it._id)) out.push(it);
+    return out.slice(0, 2);
+  }, [active, byId, rec]);
+
+  // ○○에게 맞는 — 기본 규칙: 내 등급·소지 XP 기준. 안 산 것, 살 수 있는 것, 권한·아이템 우선.
+  //    추천: 같은 등급의 최근 구매 · 함께 산 상품 · 예산 적합도 (제목도 근거에 따라 "○○에게 인기" · "함께 많이 산")
   const tier = isLoggedIn ? getTier(myLevel || 0) : null;
   const forMe = useMemo(() => {
     const hotIds = new Set(hot.map((h) => h._id));
     const cands = active.filter((it) => !hotIds.has(it._id) && !ownedItemIds.has(it._id));
     const budget = typeof myXp === "number" ? myXp + pointToXp(myPoint ?? 0) : null;
     // 어느 기간이든 살 수 있으면 — 카드에는 그 살 수 있는 기간(무제한 > 가장 긴 기간)이 걸린다(목록 필터와 같은 규칙)
+    //    📌 빙옥 전용 상품은 빙옥만으로 산다 (affordFor — 상점 목록 필터와 같은 기준)
+    const okFor = (it: any) => affordFor(it, myXp ?? 0, myPoint ?? 0);
     const afford = isLoggedIn && budget != null
-      ? cands.flatMap((it) => { const pick = cardPick(it, (p: number) => p <= budget); return pick ? [{ ...it, _pick: pick }] : []; })
+      ? cands.flatMap((it) => { const pick = cardPick(it, okFor(it)); return pick ? [{ ...it, _pick: pick }] : []; })
       : cands;
     const pool = [...(afford.length >= 2 ? afford : cands)];
     const score = (it: any) => (it.type === "perk" || it.type === "item" ? 1 : 0);
@@ -80,18 +147,39 @@ export default function ArcticHome({
       const timed = active.filter((it) => isTimed(it) && !pickIds.has(it._id) && !hotIds.has(it._id));
       if (timed.length) { picks = [...picks, ...timed].slice(0, 2); title = "기간제만 모아보기"; }
     }
-    return { picks, title };
-  }, [active, hot, ownedItemIds, isLoggedIn, myXp, myPoint, tier]);
+    if (!rec) return { picks, title, basis: "" };
 
-  // 이번 주 — 할인 상품(없으면 최신) 한 장 + 시즌 한 장
+    // 📌 추천이 오면 그 순서 — 카드에 걸 값(_pick)은 기본 규칙과 같이 예산 안의 기간으로.
+    //    그새 산 상품 · 위 칸과 겹치는 상품은 빼고, 모자라면 기본 규칙으로 채운다
+    const withPick = (it: (typeof active)[number]) => {
+      if (!isLoggedIn || budget == null) return it;
+      const pick = cardPick(it, okFor(it));
+      return pick ? { ...it, _pick: pick } : it;
+    };
+    const timedFill = rec.forMe.basis === "timed"; // 기간제 채움은 가진 기간제(연장 대상)도 들어온다
+    const out = rec.forMe.ids
+      .map((id) => byId.get(id))
+      .filter((it) => it && !hotIds.has(it._id) && (timedFill || !ownedItemIds.has(it._id)))
+      .map(withPick);
+    for (const it of picks) if (out.length < 2 && !out.some((o) => o._id === it._id)) out.push(it);
+    return { picks: out.slice(0, 2), title: rec.forMe.title || title, basis: rec.forMe.basis || "" };
+  }, [active, byId, rec, hot, ownedItemIds, isLoggedIn, myXp, myPoint, tier]);
+
+  // 이번 주 — 할인 상품(없으면 최신) 한 장 + 시즌 한 장. 추천은 종료 임박 · 할인율 · 요즘 인기를 섞어 고른다
   const deal = useMemo(() => {
+    if (!ready) return null; // 추천을 기다리는 동안은 두 갈래와 같이 비워 둔다 — 기본 규칙 카드가 잠깐 떴다 바뀌지 않게
+    if (rec?.deal) {
+      const it = byId.get(rec.deal.id);
+      // 그새 할인이 끝났으면 기본 규칙으로
+      if (it && (rec.deal.kind === "new" || discountActive(it))) return { it, kind: rec.deal.kind };
+    }
     // 할인이 살아 있는 것만(종료 시각이 지난 할인은 빼고)
     const sale = active.filter((it) => discountActive(it))
       .sort((a, b) => (b.discountPct || 0) - (a.discountPct || 0) || (b.soldCount || 0) - (a.soldCount || 0))[0];
     if (sale) return { it: sale, kind: "sale" as const };
     const fresh = [...active].sort((a, b) => created(b) - created(a))[0];
     return fresh ? { it: fresh, kind: "new" as const } : null;
-  }, [active]);
+  }, [active, byId, rec, ready]);
 
   const secHead = "flex items-baseline justify-between gap-4 mb-5";
   const secTitle = "text-xl md:text-2xl font-black text-[#131313] tracking-tight";
@@ -152,32 +240,34 @@ export default function ArcticHome({
       )}
 
       {/* ── 두 갈래 큐레이션 ── */}
-      <section className="max-w-7xl mx-auto px-5 md:px-8 pt-12 md:pt-14">
-        {isLoading ? (
+      <section ref={curRef} className="max-w-7xl mx-auto px-5 md:px-8 pt-12 md:pt-14" style={lockH ? { minHeight: lockH } : undefined}>
+        {!ready ? (
           <div className="py-16 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
         ) : active.length === 0 ? (
           <div className="py-16 text-center text-sm text-[#8a8a8a]">등록된 상품이 없습니다.</div>
         ) : (
           <div className="grid md:grid-cols-2 gap-10 md:gap-0">
-            <div className="md:pr-10">
+            {/* 📌 PC 에서는 두 갈래 카드 네 장이 한 줄로 보인다 — 두 칸을 같은 높이로 늘리고(flex-col + 카드 묶음 flex-1)
+                   카드의 가격 묶음이 아래에 붙으므로, 이름 줄 수 · 할인 유무가 갈래마다 달라도 가격 줄이 같은 높이 */}
+            <div className="md:pr-10 flex flex-col">
               <div className={secHead}>
                 <h2 className={secTitle}>지금 잘 나가는</h2>
                 <button onClick={() => goProducts("all")} className={secLink}>전체 ›</button>
               </div>
-              <div className="grid grid-cols-2 gap-3 md:gap-5">{hot.map((it) => renderCard(it))}</div>
+              <div className="flex-1 grid grid-cols-2 gap-3 md:gap-5">{hot.map((it) => renderCard(it))}</div>
               <div className="mt-5 text-right">
                 <button onClick={() => goProducts("all")} className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">다른 상품 보기 →</button>
               </div>
             </div>
-            <div className="md:border-l md:border-[#ededed] md:pl-10">
+            <div className="md:border-l md:border-[#ededed] md:pl-10 flex flex-col">
               <div className={secHead}>
                 <h2 className={secTitle}>{forMe.title}</h2>
-                <span className="text-[12px] font-bold text-[#8a8a8a] shrink-0">{tier ? "내 등급 기준" : "가장 많이 고른"}</span>
+                <span className="text-[12px] font-bold text-[#8a8a8a] shrink-0">{forMe.basis === "co" ? "내 아이템 기준" : tier ? "내 등급 기준" : "가장 많이 고른"}</span>
               </div>
               {forMe.picks.length === 0 ? (
                 <p className="py-10 text-center text-sm text-[#a3a3a3]">준비 중</p>
               ) : (
-                <div className="grid grid-cols-2 gap-3 md:gap-5">{forMe.picks.map((it) => renderCard(it))}</div>
+                <div className="flex-1 grid grid-cols-2 gap-3 md:gap-5">{forMe.picks.map((it) => renderCard(it))}</div>
               )}
               <div className="mt-5 text-right">
                 <button onClick={() => goProducts("perk")} className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">권한 전체 보기 →</button>
@@ -194,6 +284,8 @@ export default function ArcticHome({
           <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums shrink-0">{weekRange()}</span>
         </div>
         <div className="grid md:grid-cols-2 gap-4 md:gap-5">
+          {/* 📌 추천을 기다리는 동안은 할인 칸 자리만 비워 둔다 — 시즌 칸이 두 칸 폭으로 그려졌다가 반으로 줄어들지 않게 */}
+          {!deal && !ready && <div aria-hidden className="h-[180px] md:h-[200px]"></div>}
           {deal && (
             <Link href={`/arctic/item/${deal.it._id}`}
               className="relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 text-white block bg-gradient-to-br from-[#131313] to-[#3a3a3a] hover:to-[#4a4a4a] transition-colors">
@@ -204,8 +296,9 @@ export default function ArcticHome({
               <p className="mt-1.5 text-[13px] opacity-85 tabular-nums">
                 {deal.kind === "sale"
                   // 카드와 같은 값(cardPick — 기본 무제한) — 한 상품이 곳마다 다른 값으로 보이지 않게
-                  ? `${(cardPick(deal.it)?.list ?? 0).toLocaleString()} → ${(cardPick(deal.it)?.price ?? 0).toLocaleString()} XP${isTimed(deal.it) ? ` / ${durationLabel(cardPick(deal.it)?.days ?? 0)}` : ""} · 1인 1개`
-                  : `${(cardPick(deal.it)?.price ?? 0).toLocaleString()} XP`}
+                  //    빙옥 전용 상품은 단위만 빙옥 (priceText — 올림)
+                  ? `${shownPrice(deal.it, cardPick(deal.it)?.list ?? 0).toLocaleString()} → ${priceText(deal.it, cardPick(deal.it)?.price ?? 0)}${isTimed(deal.it) ? ` / ${durationLabel(cardPick(deal.it)?.days ?? 0)}` : ""} · 1인 1개`
+                  : priceText(deal.it, cardPick(deal.it)?.price ?? 0)}
               </p>
               <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">
                 {deal.it.stock === -1 || deal.it.stock == null ? "수량 무제한" : `남은 수량 ${deal.it.stock}`}
@@ -217,7 +310,7 @@ export default function ArcticHome({
             </Link>
           )}
           <Link href="/level?tab=pass"
-            className={`relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 text-white block bg-gradient-to-br from-[#e91e3f] to-[#ff5c77] hover:to-[#ff6f86] transition-colors ${deal ? "" : "md:col-span-2"}`}>
+            className={`relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 text-white block bg-gradient-to-br from-[#e91e3f] to-[#ff5c77] hover:to-[#ff6f86] transition-colors ${deal || !ready ? "" : "md:col-span-2"}`}>
             <span className="inline-flex items-center gap-1.5 text-[11px] font-black opacity-85"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>시즌 {SEASON.number}</span>
             <h3 className="mt-3 pr-16 text-[22px] md:text-[26px] font-black tracking-tight leading-tight break-keep">{SEASON.name}</h3>
             <p className="mt-1.5 text-[13px] opacity-85">시즌 패스 · 티어 보상</p>

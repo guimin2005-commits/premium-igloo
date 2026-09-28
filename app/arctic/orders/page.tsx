@@ -54,6 +54,8 @@ export default function OrdersPage() {
   // 실제로 낸 값 — 빙옥을 섞어 낸 건은 XP 몫만 XP 합계에 (옛 건은 결제 기록이 없어 price)
   const paidXpOf = (o: any) => (o.billed || o.paidXp > 0 || o.paidPoint > 0 ? o.paidXp || 0 : o.price || 0);
   const totalSpent = orders.filter((o) => !REFUNDED.includes(o.status)).reduce((n, o) => n + paidXpOf(o), 0);
+  // 📌 빙옥으로 적을 건 — 빙옥 전용 상품(o.pointOnly — 늘 빙옥, 0 이어도)이거나 XP 없이 빙옥만 낸 건
+  const inPoint = (o: any) => !!o.pointOnly || (!(paidXpOf(o) > 0) && o.paidPoint > 0);
   const pendingCount = orders.filter((o) => o.status === "pending").length;
 
   const chip = (active: boolean) =>
@@ -144,11 +146,11 @@ export default function OrdersPage() {
                     </div>
                     <div className="text-right shrink-0">
                       <div className={`text-base font-black tabular-nums ${REFUNDED.includes(o.status) ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>
-                        -{paidXpOf(o) > 0 || !(o.paidPoint > 0) ? `${paidXpOf(o).toLocaleString()}` : `${o.paidPoint.toLocaleString()}`}
+                        -{inPoint(o) ? `${(o.paidPoint || 0).toLocaleString()}` : `${paidXpOf(o).toLocaleString()}`}
                       </div>
                       <div className="text-[10px] font-bold text-[#8a8a8a]">
-                        {paidXpOf(o) > 0 || !(o.paidPoint > 0) ? "XP" : "빙옥"}
-                        {paidXpOf(o) > 0 && o.paidPoint > 0 && ` + ${o.paidPoint.toLocaleString()} 빙옥`}
+                        {inPoint(o) ? "빙옥" : "XP"}
+                        {!inPoint(o) && paidXpOf(o) > 0 && o.paidPoint > 0 && ` + ${o.paidPoint.toLocaleString()} 빙옥`}
                       </div>
                     </div>
                   </div>

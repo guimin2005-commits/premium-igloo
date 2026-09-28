@@ -2,8 +2,11 @@ import mongoose from "mongoose";
 
 // 📌 시즌 패스 설정 — 관리자가 등록하는 단일 문서(key: "main"). BotSetting 과 같은 방식.
 //    진행도는 새 재화가 아니라 "이번 시즌에 번 XP"(UserXp.xp - passBaseXp)를 그대로 쓴다.
-//    보상 kind — none(빈 칸) | xp(봇 Payout 큐로 지급) | point(사이트가 직접 지급) | role(봇 Purchase 큐로 역할 지급)
+//    보상 kind — xp(봇 Payout 큐로 지급) | point(사이트가 직접 지급) | role(봇 Purchase 큐로 역할 지급)
 //                | item(아이템 등록의 아이템 — Purchase 로 인벤토리에 들어가고, 역할이 있으면 봇이 붙인다)
+//    📌 티어의 무료 · 프리미엄 칸은 각각 보상 목록이다(트랙당 최대 4개 — lib/seasonPass.js 의 MAX_REWARDS). 빈 보상(none)은 저장하지 않는다.
+//       2026-09 이전 문서는 칸 하나가 보상 객체 하나였다 — 읽는 쪽(normalizeTiers)이 [객체] 로 읽는다(none 이면 []).
+//       그래서 이 문서는 늘 .lean() 으로 읽고 normalizeTiers 를 거친다(스키마로 되살려 쓰지 않는다).
 const RewardSchema = new mongoose.Schema(
   {
     kind: { type: String, default: "none", enum: ["none", "xp", "point", "role", "item"] },
@@ -26,8 +29,8 @@ const TierSchema = new mongoose.Schema(
     tid: { type: String, default: "" },
     level: { type: Number, default: 1 },  // 1..N — 저장할 때 need 순서대로 다시 매긴다 (표시용, 식별자가 아니다)
     need: { type: Number, default: 0 },   // 이 티어에 도달하는 데 필요한 시즌 XP
-    free: { type: RewardSchema, default: () => ({}) },
-    paid: { type: RewardSchema, default: () => ({}) },
+    free: { type: [RewardSchema], default: () => [] },
+    paid: { type: [RewardSchema], default: () => [] },
   },
   { _id: false }
 );
@@ -36,7 +39,8 @@ const SeasonPassSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true, default: "main" },
   // 관리자가 켜기 전에는 패스를 노출하지 않는다 — 티어를 다 채우기 전에 새는 걸 막는 기본 꺼짐
   enabled: { type: Boolean, default: false },
-  // 프리미엄 트랙 해금가 — XP 와 POINT 는 1:1 등가라 가격은 하나를 공유한다
+  // 프리미엄 트랙 해금가 — XP 단위로 저장한다(다른 가격 계산과 단위를 맞추려고). 결제는 빙옥만:
+  //    xpToPoint(unlockPrice) 빙옥(lib/pointRate.js). 서버 부스터는 사지 않아도 자동으로 열린다(lib/seasonPass.js)
   unlockPrice: { type: Number, default: 50000 },
   // 티어는 need 오름차순으로만 저장된다 (정렬·검증은 lib/seasonPass.js 의 normalizeTiers)
   tiers: { type: [TierSchema], default: [] },

@@ -11,6 +11,8 @@ import BackLink from "../components/BackLink";
 import ArcticDock from "../arctic/ArcticDock";
 import { ICON_PATHS } from "../components/Icons";
 import { VOICE_TIERS, getTierIndex } from "@/lib/voiceTiers";
+import ItemIcon from "../components/ItemIcon";
+import { itemTypeColor } from "@/lib/items";
 
 // 📌 내 정보 — A(잉크 헤더) + D(묶음 줄 목록).
 //    줄은 전부 '해당하는 곳'으로 간다. 알림·문의·구인 내역은 /profile/notice · /profile/inquiry · /profile/recruit 로 분리했고,
@@ -226,7 +228,20 @@ export default function MyInfoPage() {
 
                 {/* 이름 · 등급 줄 · 배지 */}
                 <div className="min-w-0 flex-1 basis-[180px]">
-                  <h1 className="text-[22px] md:text-[26px] font-black text-white tracking-tight leading-tight truncate">{session?.user?.name}</h1>
+                  {/* 📌 이름 옆 프로필 배지 — 보유한 '프로필 배지' 효과 아이템 아이콘(최대 3, 관리자 순서 — /api/xp/me badges). 이름이 길면 이름만 줄인다 */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <h1 className="min-w-0 text-[22px] md:text-[26px] font-black text-white tracking-tight leading-tight truncate">{session?.user?.name}</h1>
+                    {canSeeLevel && Array.isArray(shopMe?.badges) && shopMe.badges.length > 0 && (
+                      <span className="shrink-0 inline-flex items-center gap-1">
+                        {shopMe.badges.slice(0, 3).map((b: any) => (
+                          <span key={b.itemId} title={b.name} aria-label={b.name} role="img"
+                            className="w-6 h-6 md:w-7 md:h-7 flex items-center justify-center bg-white">
+                            <ItemIcon icon={b.icon} imageUrl={b.imageUrl} type={b.type} size={16} color={b.color || itemTypeColor(b.type)} />
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </div>
                   {canSeeLevel && (
                     <Link href="/level" className="mt-1.5 inline-flex items-center gap-x-1.5 gap-y-0.5 flex-wrap text-[12px] md:text-[13px] font-bold text-white/65 hover:text-white tabular-nums transition-colors">
                       <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: tier.c }}></span>

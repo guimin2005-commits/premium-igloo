@@ -4,7 +4,7 @@ import { durationOptions } from "@/lib/shopPricing";
 //    대기 · 완료이면서 기간이 남은 구매만 보유로 본다(만료 · 환불 · 취소, 기간이 지났는데 아직 완료인 건은 제외).
 //    상품 id 가 같거나, 상품에 연결된 아이템(itemId)을 수동 지급 · 시즌 패스로 받은 건(itemRef)도 보유다.
 export const isLiveOwn = (o: any) =>
-  ["pending", "completed"].includes(o?.status) && (!o.expiresAt || new Date(o.expiresAt).getTime() > Date.now());
+  ["pending", "completed"].includes(o?.status) && !o?.consumedAt && (!o.expiresAt || new Date(o.expiresAt).getTime() > Date.now());
 
 // 상품 하나에 해당하는 살아 있는 보유 건
 const liveOf = (orders: any[], item: any) =>

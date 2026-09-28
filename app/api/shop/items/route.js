@@ -5,6 +5,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { denyIfNotAdmin } from "@/lib/apiAuth";
 import { getShopAccess } from "@/lib/shopAccess";
 import { isItemType, itemSnapshot, normalizeIcon, normalizeColor, normalizeDescription } from "@/lib/items";
+import { POINT_RATE } from "@/lib/pointRate";
 import mongoose from "mongoose";
 import ShopItem from "@/models/ShopItem";
 import Item from "@/models/Item";
@@ -53,7 +54,14 @@ export async function POST(request) {
     if (!b.name?.trim()) {
       return NextResponse.json({ success: false, message: "상품명을 입력해주세요." }, { status: 400 });
     }
-    const price = Math.max(0, Math.floor(Number(b.price) || 0));
+    // 📌 빙옥 전용 — 폼은 빙옥으로 받아 ×1,000 한 XP 를 보낸다(productForm toPayload). 가격은 늘 XP 로 저장하되
+    //    1 빙옥(1,000 XP)의 배수로 맞춘다(올림) — 표기 "N 빙옥"과 저장값이 끝전 없이 같게. 기간별 가격도 같다
+    const pointOnly = !!b.pointOnly;
+    const toXp = (v) => {
+      const n = Math.max(0, Math.floor(Number(v) || 0));
+      return pointOnly ? Math.ceil(n / POINT_RATE) * POINT_RATE : n;
+    };
+    const price = toXp(b.price);
     if (price <= 0) {
       return NextResponse.json({ success: false, message: "가격을 입력해주세요." }, { status: 400 });
     }
@@ -78,7 +86,7 @@ export async function POST(request) {
     //    days 0 은 무제한(영구) 옵션이다. 기간 옵션과 나란히 팔 수 있다.
     const durations = type !== "physical" && Array.isArray(b.durations)
       ? b.durations
-          .map((d) => ({ days: Math.max(0, Math.floor(Number(d?.days) || 0)), price: Math.max(0, Math.floor(Number(d?.price) || 0)) }))
+          .map((d) => ({ days: Math.max(0, Math.floor(Number(d?.days) || 0)), price: toXp(d?.price) }))
           .filter((d) => d.price > 0)
           .sort((x, y) => (x.days === 0 ? 1 : y.days === 0 ? -1 : x.days - y.days))
       : [];
@@ -97,6 +105,7 @@ export async function POST(request) {
       roleId: grantsRole ? b.roleId.trim() : "",
       roleName: grantsRole ? (b.roleName || "").trim() : "",
       price,
+      pointOnly,
       discountPct,
       discountUntil: discountPct > 0 ? discountUntil : null,
       // 시즌 전환 때 디스코드 역할만 뗄 대상인지 (권한 상품에는 켜면 안 된다)

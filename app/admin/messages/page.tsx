@@ -13,18 +13,29 @@ import {
   sampleVars,
   resolveColor,
   formatUntil,
+  isCardKey,
+  defaultTemplate,
+  sanitizeTemplate,
+  progressBar,
 } from "@/lib/botMessages";
+import { CARD_SIZE, CARD_TIERS, sampleCardData } from "@/lib/botCards";
 import { playTone } from "@/lib/sfx";
-import { AdminPage, Panel, Btn, Switch, SaveBar, StatusChip, ConfirmDialog, inputClass, useAdminGuard } from "../ui";
+import { AdminPage, Panel, Btn, Switch, SaveBar, StatusChip, ConfirmDialog, Segmented, inputClass, useAdminGuard } from "../ui";
 
 // 📌 봇 메시지 편집 — 레벨업 · 역할 지급 · DM · 명령어 응답의 임베드 디자인과 문구를 키마다 고친다.
 //    왼쪽(모바일은 위) 키 목록 → 편집 → 디스코드처럼 그린 미리보기. 넓은 화면(xl)에서는 세 칸이 나란히.
 //    · 초안은 키마다 따로 들고 있어 다른 키로 옮겨도 고치던 것이 남는다(목록에 빨간 점). 저장은 지금 키만.
 //    · 미리보기는 lib/botMessages.js 의 renderTemplate(봇과 같은 규칙)에 예시 값(sampleVars)을 넣은 결과를 그린다.
 //    · 채널은 레벨 설정에서 고른다 — 여기서는 '보내는 곳' 한 줄만.
-//    API: /api/admin/bot-messages (GET 목록 · PUT 저장 · DELETE 기본값으로 · POST 테스트 발송)
+//    · 카드 키(CARD_KEYS)는 이미지 카드 켜기/끄기 — 켜지면 미리보기의 큰 이미지 자리에 카드(등급 칩으로 바꿔 보기).
+//    API: /api/admin/bot-messages (GET 목록 · PUT 저장 · DELETE 기본값으로 · POST 테스트 발송) · /card?key=&tier= (카드 PNG)
 
 const API = "/api/admin/bot-messages";
+const CARD_API = "/api/admin/bot-messages/card";
+// 등급에 따라 그림이 바뀌는 카드 — 출석(강조색 하나) · RANKER(금은동)는 등급 칩이 없다
+const TIER_CARD_KEYS = new Set(["levelUp", "cmdLevel", "cmdRank"]);
+const TIER_OPTIONS = (CARD_TIERS as { name: string }[]).map((t, i) => ({ v: String(i), l: t.name }));
+const DEFAULT_CARD_TIER = 1; // 브론즈 — 예시 레벨(128)의 등급
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 type Field = { name: string; value: string; inline: boolean };
@@ -43,13 +54,14 @@ type Embed = {
   timestamp: boolean;
   fields: Field[];
 };
-type Tpl = { enabled: boolean; content: string; embed: Embed };
+type Tpl = { enabled: boolean; card: boolean; content: string; embed: Embed };
 // 초안의 필드에는 화면 전용 id — 순서를 바꾸거나 지워도 입력칸이 같은 필드를 따라가게 (서버로는 안 보낸다)
 type DField = Field & { id: number };
-type Draft = { enabled: boolean; content: string; embed: Omit<Embed, "fields"> & { fields: DField[] } };
+type DEmbed = Omit<Embed, "fields"> & { fields: DField[] };
+type Draft = { enabled: boolean; card: boolean; content: string; embed: DEmbed };
 type Item = { key: string; custom: boolean; template: Tpl; updatedAt: string | null; updatedBy: string };
 type VarDef = { name: string; label: string; sample: unknown };
-type Def = { group: string; label: string; vars: VarDef[] };
+type Def = { group: string; label: string; vars: VarDef[]; plainEmbed?: unknown };
 type REmbed = Omit<Embed, "on">;
 type Rendered = { enabled: boolean; content: string; embed: REmbed | null; empty: boolean };
 type EmbedText = "color" | "authorName" | "authorIcon" | "title" | "url" | "description" | "thumbnail" | "image" | "footerText" | "footerIcon";
@@ -86,7 +98,7 @@ function normTpl(raw: any): Tpl {
   const embed = { on: e.on !== false, timestamp: !!e.timestamp } as Embed;
   for (const k of TEXT_KEYS) embed[k] = str(e[k]);
   embed.fields = (Array.isArray(e.fields) ? e.fields : []).map((f: any) => ({ name: str(f?.name), value: str(f?.value), inline: !!f?.inline }));
-  return { enabled: raw?.enabled !== false, content: str(raw?.content), embed };
+  return { enabled: raw?.enabled !== false, card: raw?.card !== false, content: str(raw?.content), embed };
 }
 const normItem = (x: any): Item => ({
   key: String(x?.key || ""),
@@ -98,22 +110,34 @@ const normItem = (x: any): Item => ({
 
 let fieldSeq = 0;
 // prev 를 주면 같은 자리 필드의 id 를 이어 쓴다 — 저장 직후 입력칸이 다시 그려져 커서가 빠지지 않게
+const toDEmbed = (e: Embed, prev?: DEmbed): DEmbed => ({ ...e, fields: e.fields.map((f, i) => ({ ...f, id: prev?.fields[i]?.id ?? ++fieldSeq })) });
 const toDraft = (t: Tpl, prev?: Draft): Draft => ({
   enabled: t.enabled,
+  card: t.card,
   content: t.content,
-  embed: { ...t.embed, fields: t.embed.fields.map((f, i) => ({ ...f, id: prev?.embed.fields[i]?.id ?? ++fieldSeq })) },
+  embed: toDEmbed(t.embed, prev?.embed),
 });
 const fromDraft = (d: Draft): Tpl => ({
   enabled: d.enabled,
+  card: d.card,
   content: d.content,
   embed: { ...d.embed, fields: d.embed.fields.map(({ name, value, inline }) => ({ name, value, inline })) },
 });
-const sigOf = (t: Tpl) =>
-  JSON.stringify([t.enabled, t.content, t.embed.on, ...TEXT_KEYS.map((k) => t.embed[k]), t.embed.timestamp, t.embed.fields.map((f) => [f.name, f.value, f.inline])]);
+const embedSig = (e: Omit<Embed, "fields"> & { fields: Field[] }) =>
+  JSON.stringify([e.on, ...TEXT_KEYS.map((k) => e[k]), e.timestamp, e.fields.map((f) => [f.name, f.value, f.inline])]);
+const sigOf = (t: Tpl) => JSON.stringify([t.enabled, t.card, t.content, embedSig(t.embed)]);
+
+// 카드 켜기/끄기 짝 — 카드와 쓰는 짧은 기본 임베드 · 카드를 끈 예전 기본 임베드(lib/botMessages.js 의 plainEmbed)
+const cardEmbedOf = (key: string): Embed | null => (isCardKey(key) ? normTpl(defaultTemplate(key)).embed : null);
+const plainEmbedOf = (key: string): Embed | null => {
+  const p = DEFS[key]?.plainEmbed;
+  return isCardKey(key) && p ? normTpl(sanitizeTemplate({ embed: p }, key)).embed : null;
+};
 
 // 바뀐 묶음 — 저장 줄의 변경 목록 · 칸 이름 옆 빨간 점
 const PARTS: { label: string; get: (t: Tpl) => unknown }[] = [
   { label: "보내기", get: (t) => t.enabled },
+  { label: "카드", get: (t) => t.card },
   { label: "본문", get: (t) => t.content },
   { label: "임베드", get: (t) => t.embed.on },
   { label: "색", get: (t) => t.embed.color },
@@ -347,8 +371,18 @@ function fieldRows(fields: Field[], hasThumb: boolean) {
   return rows;
 }
 
-function previewVars(key: string) {
+// cardTier 를 주면(카드 켜짐 · 등급 카드) 예시 레벨 · XP 를 카드 샘플(lib/botCards.js sampleCardData)과 같게 — 글과 카드 숫자가 어긋나지 않게
+function previewVars(key: string, cardTier: number | null = null) {
   const v = { ...(sampleVars(key) as Record<string, unknown>) };
+  if (cardTier != null && TIER_CARD_KEYS.has(key)) {
+    const d = sampleCardData(key, cardTier, null) as { level: number; prevLevel?: number; xp: number; need: number; progress: number; rank?: number; total?: number };
+    v.level = d.level;
+    v.xp = d.xp;
+    v.tier = (CARD_TIERS as { name: string }[])[cardTier]?.name;
+    if (key === "levelUp") Object.assign(v, { prevLevel: d.prevLevel, nextXp: d.need, progressBar: progressBar(d.progress) });
+    if (key === "cmdLevel") Object.assign(v, { need: d.need, nextLevel: d.level + 1, progressBar: progressBar(d.progress) });
+    if (key === "cmdRank") Object.assign(v, { rank: d.rank, total: d.total });
+  }
   for (const n of MENTION_VARS) if (typeof v[n] === "string") v[n] = `${M_OPEN}${String(v[n]).replace(/^@/, "")}${M_CLOSE}`;
   return v;
 }
@@ -374,6 +408,10 @@ const DC_CSS = `
 .dc-fvalue{white-space:pre-wrap;overflow-wrap:anywhere}
 .dc-thumb{width:80px;height:80px;margin:8px 0 0 16px;border-radius:4px;object-fit:contain;flex-shrink:0}
 .dc-image{display:block;margin-top:16px;max-width:100%;max-height:300px;border-radius:4px;object-fit:contain}
+.dc-card{position:relative;display:block;margin-top:16px;width:100%;border-radius:4px;overflow:hidden;background:#1e1f22}
+.dc-card.alone{margin-top:6px;max-width:520px}
+.dc-card img{display:block;width:100%;height:100%}
+.dc-card-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#949ba4;font-size:12px}
 .dc-footer{display:flex;align-items:center;padding-top:8px;color:#b5bac1;font-size:12px;font-weight:500}
 .dc-footer img{width:20px;height:20px;border-radius:50%;margin-right:8px;object-fit:cover;flex-shrink:0}
 .dc-link{color:#00a8fc}
@@ -397,7 +435,20 @@ const hideImg = (e: React.SyntheticEvent<HTMLImageElement>) => {
   e.currentTarget.style.display = "none";
 };
 
-function EmbedView({ e, clock }: { e: REmbed; clock: string }) {
+// 카드 미리보기 — 봇이 붙이는 PNG 와 같은 템플릿(/api/admin/bot-messages/card). 자리는 카드 비율로 먼저 잡아 두어 불러오는 동안 아래가 밀리지 않게
+//   주소가 바뀌면 key 로 다시 그린다(불러오는 중 상태부터)
+type CardView = { src: string; ratio: number };
+function CardImg({ card, alone = false }: { card: CardView; alone?: boolean }) {
+  const [state, setState] = useState<"load" | "ok" | "err">("load");
+  return (
+    <div className={`dc-card ${alone ? "alone" : ""} ${state === "load" ? "animate-pulse" : ""}`} style={{ aspectRatio: card.ratio }}>
+      {state !== "err" && <img src={card.src} alt="카드 이미지" onLoad={() => setState("ok")} onError={() => setState("err")} />}
+      {state === "err" && <span className="dc-card-msg">카드를 불러오지 못했습니다</span>}
+    </div>
+  );
+}
+
+function EmbedView({ e, clock, card }: { e: REmbed; clock: string; card: CardView | null }) {
   const rows = fieldRows(e.fields, !!e.thumbnail);
   const titleHtml = e.title ? inline(e.title, NO_LINKS) : "";
   return (
@@ -437,7 +488,8 @@ function EmbedView({ e, clock }: { e: REmbed; clock: string }) {
         </div>
         {e.thumbnail && <img key={e.thumbnail} src={e.thumbnail} alt="" className="dc-thumb" onError={hideImg} />}
       </div>
-      {e.image && <img key={e.image} src={e.image} alt="" className="dc-image" onError={hideImg} />}
+      {/* 카드가 켜져 있으면 봇이 큰 이미지 자리를 카드로 채운다 */}
+      {card ? <CardImg key={card.src} card={card} /> : e.image && <img key={e.image} src={e.image} alt="" className="dc-image" onError={hideImg} />}
       {(e.footerText || e.timestamp) && (
         <div className="dc-footer">
           {e.footerIcon && e.footerText && <img key={e.footerIcon} src={e.footerIcon} alt="" onError={hideImg} />}
@@ -452,7 +504,9 @@ function EmbedView({ e, clock }: { e: REmbed; clock: string }) {
   );
 }
 
-function DiscordPreview({ r, clock, off }: { r: Rendered | null; clock: string; off: boolean }) {
+// 카드가 켜져 있으면 — 임베드가 있으면 그 안, 없으면(임베드 꺼짐 · 빈 임베드) 본문 아래 첨부. 글이 전부 비어도 카드만 간다
+function DiscordPreview({ r, clock, off, card }: { r: Rendered | null; clock: string; off: boolean; card: CardView | null }) {
+  const nothing = (!r || r.empty) && !card;
   return (
     <div className="dc-root px-4 py-4">
       <style>{DC_CSS}</style>
@@ -464,12 +518,13 @@ function DiscordPreview({ r, clock, off }: { r: Rendered | null; clock: string; 
             <span className="dc-app">앱</span>
             <span className="dc-time tabular-nums">{clock ? `오늘 ${clock}` : ""}</span>
           </div>
-          {!r || r.empty ? (
+          {nothing ? (
             <p className="dc-empty">보낼 내용이 없습니다</p>
           ) : (
             <>
-              {r.content && <div className="dc-text" dangerouslySetInnerHTML={{ __html: md(r.content) }} />}
-              {r.embed && <EmbedView e={r.embed} clock={clock} />}
+              {r?.content && <div className="dc-text" dangerouslySetInnerHTML={{ __html: md(r.content) }} />}
+              {r?.embed && <EmbedView e={r.embed} clock={clock} card={card} />}
+              {card && !r?.embed && <CardImg key={card.src} card={card} alone />}
             </>
           )}
         </div>
@@ -492,6 +547,7 @@ function TextBox({
   placeholder,
   label,
   invalid = false,
+  disabled = false,
 }: {
   path: string;
   value: string;
@@ -502,6 +558,7 @@ function TextBox({
   placeholder?: string;
   label: string;
   invalid?: boolean;
+  disabled?: boolean;
 }) {
   // 모바일은 16px — 14px 이하면 iOS 가 포커스할 때 화면을 확대한다
   const cls = `${inputClass} max-md:text-[16px] ${invalid ? "!border-[#e91e3f]" : ""}`;
@@ -512,6 +569,7 @@ function TextBox({
     value,
     maxLength: max,
     placeholder,
+    disabled,
     "aria-label": label,
     "aria-invalid": invalid || undefined,
     onFocus: track,
@@ -592,6 +650,8 @@ export default function AdminBotMessagesPage() {
   const [testing, setTesting] = useState(false);
   const [clock, setClock] = useState("");
   const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(null);
+  // 카드 미리보기 등급 — 키를 옮겨도 그대로 (레벨업 · /레벨 · /랭크 공통)
+  const [cardTier, setCardTier] = useState(DEFAULT_CARD_TIER);
 
   const alive = useRef(true);
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -681,10 +741,21 @@ export default function AdminBotMessagesPage() {
     return () => window.removeEventListener("beforeunload", h);
   }, [dirtyKeys]);
 
+  const cardKey = isCardKey(sel);
+  const cardOn = !!draft && cardKey && draft.card;
+  const tierCard = cardOn && TIER_CARD_KEYS.has(sel);
+  const pv = useMemo(() => previewVars(sel, tierCard ? cardTier : null), [sel, tierCard, cardTier]);
   const rendered = useMemo(
-    () => (draft ? (renderTemplate(fromDraft(draft), previewVars(sel)) as unknown as Rendered) : null),
-    [draft, sel]
+    () => (draft ? (renderTemplate(fromDraft(draft), pv) as unknown as Rendered) : null),
+    [draft, pv]
   );
+  const cardView = useMemo<CardView | null>(() => {
+    if (!cardOn) return null;
+    const size = (CARD_SIZE as Record<string, { width: number; height: number }>)[sel];
+    const q = new URLSearchParams({ key: sel });
+    if (tierCard) q.set("tier", String(cardTier));
+    return { src: `${CARD_API}?${q}`, ratio: size ? size.width / size.height : 1200 / 630 };
+  }, [cardOn, tierCard, sel, cardTier]);
   // 📌 디스코드는 임베드 하나의 글자 합 6,000 을 넘으면 거절한다 — 봇은 뒤 필드부터 빼서 보낸다
   const overTotal = useMemo(() => {
     if (!draft || !draft.embed.on) return false;
@@ -700,6 +771,14 @@ export default function AdminBotMessagesPage() {
   const setTop = (k: "enabled" | "content", v: boolean | string) => patch((d) => ({ ...d, [k]: v }));
   const setEmb = (k: keyof Omit<Embed, "fields">, v: string | boolean) => patch((d) => ({ ...d, embed: { ...d.embed, [k]: v } }));
   const setText = (path: string, v: string) => patch((d) => withText(d, path, v));
+  // 카드 켜기/끄기 — 임베드가 기본 모양 그대로면 짝 모양으로 바꾼다(끄면 예전 임베드, 켜면 카드와 겹치지 않는 짧은 임베드). 고친 임베드는 그대로
+  const setCard = (on: boolean) =>
+    patch((d) => {
+      const from = on ? plainEmbedOf(sel) : cardEmbedOf(sel);
+      const to = on ? cardEmbedOf(sel) : plainEmbedOf(sel);
+      const swap = !!from && !!to && embedSig(d.embed) === embedSig(from);
+      return { ...d, card: on, embed: swap && to ? toDEmbed(to) : d.embed };
+    });
   const setFieldInline = (id: number, v: boolean) =>
     patch((d) => ({ ...d, embed: { ...d.embed, fields: d.embed.fields.map((f) => (f.id === id ? { ...f, inline: v } : f)) } }));
   const addField = () => {
@@ -889,7 +968,7 @@ export default function AdminBotMessagesPage() {
 
   const vars = [...(def?.vars || []), ...COMMON];
   const keyVarCount = def?.vars?.length || 0;
-  const tierColor = resolveColor("tier", sampleVars(sel) as Record<string, unknown>) as string;
+  const tierColor = resolveColor("tier", pv) as string;
   const meta = item
     ? item.custom
       ? `저장 ${formatUntil(item.updatedAt)}${item.updatedBy ? ` · ${item.updatedBy}` : ""}`
@@ -1016,6 +1095,20 @@ export default function AdminBotMessagesPage() {
                   </Blk>
                 </Panel>
 
+                {/* 카드 이미지 — 카드 키만. 임베드 패널 머리와 같은 한 줄 */}
+                {cardKey && (
+                  <Panel flush className="mb-5">
+                    <div className="flex items-center px-5 py-3.5">
+                      <h2 className="inline-flex items-center text-[15px] font-black tracking-tight">
+                        카드 이미지{chg.has("카드") && <Dot />}
+                      </h2>
+                      <span className="ml-auto inline-flex items-center shrink-0">
+                        <Switch on={draft.card} onChange={setCard} label="카드 이미지" />
+                      </span>
+                    </div>
+                  </Panel>
+                )}
+
                 <Panel
                   flush
                   title={
@@ -1099,8 +1192,9 @@ export default function AdminBotMessagesPage() {
                         <Sub label="썸네일 · 오른쪽 위" err={problems.thumbnail}>
                           <TextBox path="embed.thumbnail" value={e.thumbnail} onChange={(v) => setText("embed.thumbnail", v)} onCaret={onCaret} max={LIM.url} label="썸네일 주소" placeholder="https://… 또는 {avatar}" invalid={!!problems.thumbnail} />
                         </Sub>
-                        <Sub label="큰 이미지 · 아래" err={problems.image}>
-                          <TextBox path="embed.image" value={e.image} onChange={(v) => setText("embed.image", v)} onCaret={onCaret} max={LIM.url} label="큰 이미지 주소" placeholder="https://…" invalid={!!problems.image} />
+                        {/* 카드가 켜져 있으면 이 자리는 카드가 쓴다 — 적어 둔 주소는 카드를 못 그렸을 때만 */}
+                        <Sub label={cardOn ? "큰 이미지 · 카드" : "큰 이미지 · 아래"} err={problems.image}>
+                          <TextBox path="embed.image" value={e.image} onChange={(v) => setText("embed.image", v)} onCaret={onCaret} max={LIM.url} label="큰 이미지 주소" placeholder={cardOn ? "카드 이미지" : "https://…"} invalid={!!problems.image} disabled={cardOn} />
                         </Sub>
                       </Blk>
 
@@ -1156,13 +1250,23 @@ export default function AdminBotMessagesPage() {
                   className="overflow-hidden"
                   title="미리보기"
                   right={
-                    <>
+                    // 📌 칩 자리 높이(h-6)를 늘 잡아 둔다 — 칩(24px)이 제목 줄(22.5px)보다 커서, '보내기'를 끄고 켤 때마다 미리보기가 1~2px 오르내리던 것
+                    <span className="flex items-center gap-2 h-6">
                       {overTotal && <StatusChip tone="warn">6,000자 초과</StatusChip>}
                       {!draft.enabled && <StatusChip>꺼짐</StatusChip>}
-                    </>
+                    </span>
                   }
                 >
-                  <DiscordPreview r={rendered} clock={clock} off={!draft.enabled} />
+                  {/* 등급 칩 — 등급 카드(레벨업 · /레벨 · /랭크)에서 카드가 켜져 있을 때만. 한 줄 가로 스크롤 */}
+                  {tierCard && (
+                    <div className="flex items-center px-4 py-2.5 border-b border-[#ededed]">
+                      <span className="shrink-0 mr-3 text-[12px] font-bold text-[#5a5a5a]">등급</span>
+                      <div className="min-w-0 flex-1">
+                        <Segmented options={TIER_OPTIONS} value={String(cardTier)} onChange={(v) => setCardTier(Number(v))} />
+                      </div>
+                    </div>
+                  )}
+                  <DiscordPreview r={rendered} clock={clock} off={!draft.enabled} card={cardView} />
                 </Panel>
               </div>
             </div>

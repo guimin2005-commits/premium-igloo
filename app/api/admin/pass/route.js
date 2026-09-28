@@ -8,6 +8,8 @@ import SeasonPass from "@/models/SeasonPass";
 
 // 저장한 문서를 화면이 그대로 다시 그릴 수 있는 모양으로 (계약: { enabled, unlockPrice, tiers })
 // 각 티어에는 tid 가 실려 나간다 — 화면은 편집·정렬·삭제 뒤에도 이 값을 그대로 되돌려 보내야 한다
+// 티어의 free · paid 는 보상 목록(최대 4개)이다. 옛 문서(칸마다 객체 하나)도 normalizeTiers 가 목록으로 읽어 준다.
+// unlockPrice 는 XP 단위 그대로 주고받는다 — 화면이 빙옥으로 받아 ×1,000 해서 보낸다(lib/pointRate.js)
 const toConfig = (doc) => ({
   enabled: !!doc?.enabled,
   unlockPrice: doc?.unlockPrice == null ? DEFAULT_UNLOCK_PRICE : doc.unlockPrice,
@@ -54,6 +56,7 @@ export async function PUT(request) {
     //    enabled 가 빠졌을 때 패스가 통째로 꺼진다. 백업이 없어 되돌릴 방법이 없다.
     const $set = { updatedAt: new Date() };
     if (Array.isArray(b?.tiers)) {
+      // 칸마다 빈 보상은 빼고 최대 4개까지만 남는다 (normalizeTiers → rewardsOf)
       const n = normalizeTiers(b.tiers, cur?.nextTid);
       $set.tiers = n.tiers;
       // 발급된 번호를 함께 저장해야 다음 저장 때 같은 tid 를 다시 내주지 않는다

@@ -1,12 +1,13 @@
 "use client";
 
-import React from "react";
-import { presetKeyOf, isPresetKey, itemTypeColor } from "@/lib/items";
+import React, { useMemo } from "react";
+import { presetKeyOf, isPresetKey, itemTypeColor, artKeyOf } from "@/lib/items";
+import { itemArtBody, ART_GRID } from "@/lib/itemArt";
 import { ICON_PATHS } from "./Icons";
 
 // 📌 아이템 아이콘 한 곳 — 인벤토리 슬롯·상점 카드·상품 상세·관리자 목록이 전부 이걸로 그린다.
-//    우선순위: 이미지(둥근 사각) > 프리셋 SVG("svg:<key>") > 이모지·텍스트 > 유형 기본 SVG.
-//    프리셋 목록·검증은 lib/items.js (서버도 같이 씀), 그림은 여기에만 둔다.
+//    우선순위: 이미지(둥근 사각) > 일러스트("art:<key>") > 프리셋 SVG("svg:<key>") > 이모지·텍스트 > 유형 기본 SVG.
+//    프리셋 목록·검증은 lib/items.js (서버도 같이 씀), 선 프리셋 그림은 여기, 일러스트 그림은 lib/itemArt.js.
 
 // 유형별 기본 모양 — role 방패 · perk 열쇠 · item 큐브 · physical 상자 · level(레벨 보상) 메달
 const TYPE_DEFAULT: Record<string, string> = { role: "shield", perk: "key", item: "cube", physical: "box", level: "medal" };
@@ -94,8 +95,45 @@ export function PresetIcon({
   );
 }
 
+// 📌 도트 일러스트(16×16) 한 개 — 자체 색이 있어 color 를 받지 않는다.
+//    칸이 번지지 않게 정수 배율로만 그린다: n = round(size/16), n×16 이 size+6 을 넘으면 한 단계 작게(18·24→16, 28→32, 46·48→48).
+//    자리는 요청한 size 그대로 차지하고 그림은 그 가운데 — 그림이 더 크면 음수 여백으로 양쪽에 고르게 넘친다(주변이 밀리지 않게).
+//    그림 문자열은 lib/itemArt.js 가 목록에 있는 key 로만 만든다(사용자 입력이 섞이지 않음).
+export function ArtIcon({
+  k,
+  size = 24,
+  className = "",
+  style,
+}: {
+  k: string;
+  size?: number;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  // 📌 그림 문자열은 key 가 같으면 그대로 — 목록이 다시 그려질 때마다 새로 만들지 않게
+  const html = useMemo(() => ({ __html: itemArtBody(k) }), [k]);
+  let n = Math.max(1, Math.round(size / ART_GRID));
+  if (n > 1 && n * ART_GRID > size + 6) n -= 1;
+  const px = n * ART_GRID;
+  // 홀수 차이는 한쪽에 1px 더 — 반 픽셀 위치에 놓이면 칸 경계가 흐려진다
+  const lead = Math.floor((size - px) / 2);
+  const trail = size - px - lead;
+  return (
+    <svg
+      viewBox={`0 0 ${ART_GRID} ${ART_GRID}`}
+      width={px}
+      height={px}
+      shapeRendering="crispEdges"
+      className={className}
+      style={{ marginLeft: lead, marginRight: trail, marginTop: lead, marginBottom: trail, ...style }}
+      aria-hidden
+      dangerouslySetInnerHTML={html}
+    />
+  );
+}
+
 // 📌 아이템 아이콘 — 인벤토리·카드·상세·관리자 공용.
-//    color 를 안 주면 유형 기본색(레벨 보상은 #ff5c77), dim 이면 35% 로 흐리게(만료·미지급).
+//    color 를 안 주면 유형 기본색(레벨 보상은 #ff5c77), dim 이면 35% 로 흐리게(만료·미지급 — 일러스트도 같이).
 export default function ItemIcon({
   icon = "",
   imageUrl = "",
@@ -132,10 +170,14 @@ export default function ItemIcon({
     );
   }
 
+  const art = artKeyOf(icon);
+  if (art) return <ArtIcon k={art} size={size} className={`shrink-0 ${className}`} style={{ opacity, ...style }} />;
+
   const key = presetKeyOf(icon);
   if (key) return <PresetIcon k={key} size={size} color={c} className={`shrink-0 ${className}`} style={{ opacity, ...style }} />;
 
-  if (icon) {
+  // 📌 목록에서 빠진 "art:…"/"svg:…" 값은 글자로 찍지 않고 유형 기본 모양으로
+  if (icon && !/^(art|svg):/.test(icon)) {
     return (
       <span
         aria-hidden

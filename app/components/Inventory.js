@@ -5,6 +5,8 @@ import Link from "next/link";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { playTone } from "@/lib/sfx";
 import ItemIcon from "./ItemIcon";
+import TierEmblem from "./TierEmblem";
+import { VOICE_TIERS } from "@/lib/voiceTiers";
 import { ICON_PATHS } from "./Icons";
 import { PopShell, PopTab, AdminReset } from "./PopShell";
 
@@ -89,10 +91,19 @@ export const sortInvRows = (rows, sort) => {
 //    레벨 보상(source "level")은 유형 대신 "level" 을 넘겨 메달이 나오게 한다.
 export const invIconType = (it) => (it.source === "level" ? "level" : it.type || it.kind || "item");
 
+// 📌 등급 보상(아이언 · 브론즈 …) — 지급 레벨이 등급 시작 레벨과 같으면 그 등급의 엠블럼 · 색으로 그린다(메달 대신)
+export const invTierOf = (it) => (it?.source === "level" && it.rewardLevel != null ? VOICE_TIERS.find((t) => t.min === it.rewardLevel) || null : null);
+// 칸 · 상세의 아이콘 — 등급 보상은 엠블럼, 나머지는 공용 ItemIcon
+const InvIcon = ({ it, size, color, dim }) => {
+  const tier = invTierOf(it);
+  if (tier) return <TierEmblem tier={tier} size={Math.round(size * 1.15)} muted={dim} />;
+  return <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={size} color={color} dim={dim} />;
+};
+
 // 색 — 등록된 색 > 유형 기본색 (lib/items.js). 레벨 보상은 서버가 분홍을 실어 보낸다.
 //    잉크 패널 위라 너무 어두운 색(기프트카드 기본 #131313 등)은 밝은 회색으로 바꿔 칸 테두리가 보이게 한다
 export const invAccentOf = (it) => {
-  const c = it.color || itemTypeColor(it.type || it.kind);
+  const c = invTierOf(it)?.c || it.color || itemTypeColor(it.type || it.kind);
   const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
   if (!m) return c;
   const lum = (parseInt(m[1], 16) * 0.299 + parseInt(m[2], 16) * 0.587 + parseInt(m[3], 16) * 0.114) / 255;
@@ -106,8 +117,12 @@ const untilOf = (it) =>
     ? new Date(it.expiresAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
     : "";
 
+// 칸 이름 아래 상태 · 기간 줄이 있는 항목 (지급 대기 · 확인 필요 · 기간제)
+const hasSlotStatus = (it) => it.status === "pending" || it.status === "missing" || !!it.expiresAt;
+
 // 📌 가방 칸 하나 — 가방 격자와 아이템 등록 미리보기가 같은 칸을 쓴다(onClick 이 없으면 누를 수 없는 칸)
-const InvSlot = ({ it, on, onClick }) => {
+//    padStatus: 격자에 상태 줄이 있는 칸이 하나라도 있으면 없는 칸도 그 줄 자리를 비워 둔다(아이콘 높이를 맞추려고)
+const InvSlot = ({ it, on, onClick, padStatus = false }) => {
   const dead = it.status === "pending" || it.status === "missing";
   const accent = invAccentOf(it);
   const dday = ddayOf(it);
@@ -126,17 +141,20 @@ const InvSlot = ({ it, on, onClick }) => {
       }}
     >
       <span aria-hidden className="mb-1.5">
-        <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={28} color={accent} dim={dead} />
+        <InvIcon it={it} size={28} color={accent} dim={dead} />
       </span>
-      <span className={`w-full text-[10px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
+      {/* 📌 이름은 늘 두 줄 자리 — 칸은 가운데 정렬이라 이름 줄 수 · 상태 줄 유무로 같은 줄 칸들의 아이콘 높이가 들쭉날쭉했다 */}
+      <span className={`w-full min-h-[2.5em] text-[10px] font-black leading-tight text-center line-clamp-2 ${dead ? "text-white/35" : "text-white/85"}`}>
         {it.name}
       </span>
       {/* 상태 · 기간 — 모서리 배지 · 점 대신 이름 아래 한 줄 글자로 (3일 이하 · 확인 필요는 빨강) */}
-      {(it.status === "pending" || it.status === "missing" || dday !== null) && (
+      {hasSlotStatus(it) ? (
         <span className={`mt-1 text-[9px] font-bold tabular-nums leading-none ${it.status === "missing" || (dday !== null && dday <= 3) ? "text-[#ff5c77]" : "text-white/45"}`}>
           {[it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "", dday !== null ? `D-${dday}` : ""].filter(Boolean).join(" · ")}
         </span>
-      )}
+      ) : padStatus ? (
+        <span aria-hidden className="invisible mt-1 text-[9px] leading-none">{"\u00a0"}</span>
+      ) : null}
     </Tag>
   );
 };
@@ -153,7 +171,7 @@ const InvDetail = ({ it, compact = false, onGo }) => {
         className={`${compact ? "w-16 h-16 rounded-xl mb-3.5" : "w-24 h-24 rounded-2xl mb-5"} flex items-center justify-center`}
         style={{ background: `linear-gradient(160deg, ${accent}33, ${accent}0f)`, boxShadow: `inset 0 0 0 1px ${accent}55` }}
       >
-        <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={compact ? 30 : 46} color={accent} dim={it.status !== "completed"} />
+        <InvIcon it={it} size={compact ? 30 : 46} color={accent} dim={it.status !== "completed"} />
       </div>
       <p className={`${compact ? "text-[16px]" : "text-[20px]"} font-black text-white leading-snug break-keep break-words`}>{it.name}</p>
       <p className="text-[12px] font-bold text-white/50 mt-2 leading-relaxed break-keep break-words whitespace-pre-line">{invSubLabel(it)}</p>
@@ -268,6 +286,7 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
   // uid 로 되짚는다 — 30초 폴링이 배열을 갈아끼워도 엉뚱한 것을 가리키지 않는다
   const selItem = sel ? rows.find((r) => r.uid === sel) || null : null;
   const slots = Math.max(20, Math.ceil(rows.length / 5) * 5); // 5열 × 4줄 — 커진 창을 채운다
+  const padStatus = rows.some(hasSlotStatus);
 
   return (
     <PopShell
@@ -276,9 +295,10 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
       title="인벤토리"
       count={groups[0]?.items.length ?? 0}
       icon="bag"
+      // 📌 불러오는 동안은 탭 줄 높이만 잡아 둔다 — 목록이 오면서 탭 줄이 생겨 본문이 한 번 밀려 내려가지 않게
       tabs={groups.length > 1 ? groups.map((g) => (
         <PopTab key={g.id} on={active?.id === g.id} onClick={() => { onTab(g.id); setSel(null); onTone(); }} label={g.label} n={g.items.length} />
-      )) : null}
+      )) : loading ? <span aria-hidden className="h-8"></span> : null}
       left={
         <>
         {selItem ? (
@@ -304,9 +324,10 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
         ) : null
       }
     >
-      {/* 정렬 — 탭 줄이 아니라 목록 머리에(탭이 밀리지 않게). 고른 것만 밝게, 굵기는 같게 */}
-      {rows.length > 1 && (
-        <div role="radiogroup" aria-label="정렬" className="flex justify-end items-center gap-0.5 mb-2.5 -mt-1">
+      {/* 정렬 — 탭 줄이 아니라 목록 머리에(탭이 밀리지 않게). 고른 것만 밝게, 굵기는 같게
+          📌 한 개뿐인 탭에서도 자리는 남긴다(가린다) — 탭을 오갈 때 격자가 이 줄만큼 오르내리지 않게 */}
+      {(groups[0]?.items.length ?? 0) > 1 && (
+        <div role="radiogroup" aria-label="정렬" aria-hidden={rows.length > 1 ? undefined : true} className={`flex justify-end items-center gap-0.5 mb-2.5 -mt-1 ${rows.length > 1 ? "" : "invisible"}`}>
           {INV_SORTS.map((o) => (
             <button key={o.v} type="button" role="radio" aria-checked={sort === o.v} onClick={() => pickSort(o.v)}
               className={`h-7 px-2 rounded-md text-[11px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${sort === o.v ? "text-white" : "text-white/35 hover:text-white/70"}`}>
@@ -319,10 +340,11 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
         {Array.from({ length: slots }, (_, i) => {
           const it = rows[i];
           if (!it) {
-            return <div key={`empty-${i}`} className="aspect-square rounded-xl border border-dashed border-white/[0.10] bg-white/[0.02]"></div>;
+            // 📌 빈 칸은 줄 높이에 맞춰 늘린다 — 좁은 폰에서 이름 두 줄 + 상태 줄 자리로 채운 칸이 정사각형보다 조금 길어져도 같은 줄 바닥이 맞게
+            return <div key={`empty-${i}`} className="aspect-square w-full self-stretch rounded-xl border border-dashed border-white/[0.10] bg-white/[0.02]"></div>;
           }
           const on = sel === it.uid;
-          return <InvSlot key={it.uid || `i-${i}`} it={it} on={on} onClick={() => { setSel(on ? null : it.uid); onTone(); }} />;
+          return <InvSlot key={it.uid || `i-${i}`} it={it} on={on} padStatus={padStatus} onClick={() => { setSel(on ? null : it.uid); onTone(); }} />;
         })}
       </div>
 

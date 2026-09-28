@@ -80,6 +80,7 @@ export async function POST(request) {
         userId: { $in: targets.map((t) => t.userId) },
         itemRef: String(item._id),
         status: { $in: ["pending", "completed"] },
+        consumedAt: null, // 다 쓴 소모품은 다시 줄 수 있다
         $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
       },
       { userId: 1 }

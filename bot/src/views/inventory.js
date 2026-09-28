@@ -19,7 +19,7 @@ export async function inventoryView(member) {
   const userId = member?.id || member?.user?.id;
   const [purchases, items, shopItems] = await Promise.all([
     Purchase.find(
-      { userId, status: { $in: ["pending", "completed"] } },
+      { userId, status: { $in: ["pending", "completed"] }, consumedAt: null }, // 다 쓴 보호막은 목록에서 뺀다
       { status: 1, itemRef: 1, itemId: 1, roleId: 1, itemType: 1, expiresAt: 1 }
     ).lean(),
     Item.find({}, { name: 1, type: 1, roleId: 1, visible: 1, sortOrder: 1, createdAt: 1 }).sort({ sortOrder: 1, createdAt: 1 }).lean(),

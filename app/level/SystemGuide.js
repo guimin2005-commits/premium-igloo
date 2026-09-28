@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { VOICE_TIERS, tierRangeLabel } from "@/lib/voiceTiers";
 import { SEASON } from "@/lib/season";
-import { POINT_RATE } from "@/lib/pointRate";
+import { POINT_RATE, xpToPoint } from "@/lib/pointRate";
 import TierEmblem from "../components/TierEmblem";
 import { ICON_PATHS } from "../components/Icons";
 
@@ -84,7 +84,8 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
           style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)", backgroundSize: "28px 28px" }}></div>
         <div className={`relative grid grid-cols-2 gap-x-6 gap-y-8 ${steps.length === 4 ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
           {steps.map((s, i) => (
-            <div key={s.k} className="min-w-0">
+            // 📌 큰 글자가 두 줄로 넘어가는 칸이 있어도 아래 한 줄(meta)은 같은 높이에 — 칸을 세로 flex 로, meta 는 바닥에
+            <div key={s.k} className="min-w-0 flex flex-col">
               {/* 이어지는 길 — 점 하나와 선. 마지막 칸은 선 없이 점만 */}
               <div aria-hidden className="flex items-center gap-2 mb-4">
                 <span className={`w-2 h-2 rounded-full shrink-0 ${i === steps.length - 1 ? "bg-[#e91e3f]" : "bg-white"}`}></span>
@@ -92,7 +93,7 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
               </div>
               <p className="text-[11px] font-black tracking-[0.18em] text-[#ff5c77] tabular-nums">{String(i + 1).padStart(2, "0")} · {s.k}</p>
               <p className="mt-2.5 text-[21px] md:text-[26px] font-black tracking-tight leading-tight break-keep">{s.big}</p>
-              <p className="mt-2 text-[12px] md:text-[13px] font-bold text-white/60 break-keep">{s.meta}</p>
+              <p className="mt-auto pt-2 text-[12px] md:text-[13px] font-bold text-white/60 break-keep">{s.meta}</p>
             </div>
           ))}
         </div>
@@ -268,8 +269,8 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
                 <div className="mt-5">
                   <p className="text-[12px] font-bold text-[#5a5a5a]">프리미엄 해금</p>
                   <p className="mt-1.5 flex items-baseline gap-1.5">
-                    <span className="text-[28px] md:text-[32px] font-black tracking-[-0.03em] leading-none tabular-nums">{fmt(pass?.unlockPrice)}</span>
-                    <span className="text-[13px] font-black text-[#8a8a8a]">XP</span>
+                    <span className="text-[28px] md:text-[32px] font-black tracking-[-0.03em] leading-none tabular-nums">{fmt(pass?.unlockPoint ?? xpToPoint(pass?.unlockPrice))}</span>
+                    <span className="text-[13px] font-black text-[#8a8a8a]">빙옥</span>
                   </p>
                 </div>
                 <div className="mt-5 pt-1 border-t border-[#ededed]">

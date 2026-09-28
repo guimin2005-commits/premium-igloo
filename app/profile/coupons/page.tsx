@@ -96,7 +96,11 @@ export default function CouponBoxPage() {
           <label htmlFor="coupon-code" className="sr-only">쿠폰 코드</label>
           <input id="coupon-code" value={code} onChange={(e) => { setCode(e.target.value); if (result) setResult(null); }}
             placeholder="쿠폰 코드 입력" autoComplete="off" className={INPUT_CLS} />
-          <button type="submit" disabled={busy || !code.trim()} className={BTN_CLS}>{busy ? "확인 중" : "등록"}</button>
+          {/* 📌 두 글자를 한 칸에 겹쳐 폭을 긴 쪽에 고정 — "확인 중"으로 바뀔 때 단추가 넓어져 입력칸이 줄어들지 않게 */}
+          <button type="submit" disabled={busy || !code.trim()} className={`${BTN_CLS} inline-grid place-items-center`}>
+            <span className={`col-start-1 row-start-1 ${busy ? "invisible" : ""}`}>등록</span>
+            <span aria-hidden={!busy} className={`col-start-1 row-start-1 ${busy ? "" : "invisible"}`}>확인 중</span>
+          </button>
         </form>
         {result && (
           <p role="status" className={`mt-3 text-[13px] font-bold break-keep ${result.ok ? "text-[#3f7a35]" : "text-[#d01634]"}`}>{result.message}</p>

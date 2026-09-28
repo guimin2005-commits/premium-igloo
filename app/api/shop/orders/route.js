@@ -6,6 +6,7 @@ import { denyIfNotAdmin } from "@/lib/apiAuth";
 import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
 import { getLevelByXp } from "@/lib/leveling";
+import { logWallet } from "@/lib/wallet";
 import ShopItem from "@/models/ShopItem";
 import mongoose from "mongoose";
 
@@ -70,14 +71,29 @@ export async function PATCH(request) {
     //          100% 쿠폰도 0 이다. 여기서 price(XP)로 떨어지면 내지 않은 XP 를 돌려주게 된다.
     if (status === "cancelled" || status === "refunded") {
       const hasSplit = !!purchase.billed || (purchase.paidXp || 0) > 0 || (purchase.paidPoint || 0) > 0;
-      const backXp = hasSplit ? purchase.paidXp || 0 : purchase.price || 0;
+      const paidBackXp = hasSplit ? purchase.paidXp || 0 : purchase.price || 0;
       const backPoint = hasSplit ? purchase.paidPoint || 0 : 0;
+      // 📌 캐시백 회수 — 결제 때 돌려준 캐시백(cashbackXp)은 환불할 XP 에서 뺀다. 캐시백은 낸 XP 의 일부(상한 30%)라
+      //    돌려줄 XP 보다 클 수 없지만, 혹시 커도 돌려줄 XP 까지만 뺀다 — 환불로 지갑이 0 아래로 내려가지 않게
+      const claw = Math.min(Math.max(0, Math.floor(Number(purchase.cashbackXp) || 0)), paidBackXp);
+      const backXp = paidBackXp - claw;
       const inc = {};
       // 차감 때 기준선(passBaseXp)을 함께 내렸으므로 환불도 같은 폭으로 되돌린다.
-      //    한쪽만 움직이면 시즌 패스 진행도가 환불할 때마다 부풀어 오른다.
+      //    한쪽만 움직이면 시즌 패스 진행도가 환불할 때마다 부풀어 오른다. (캐시백도 기준선과 함께 올렸으므로 같은 순액)
       if (backXp) { inc.xp = backXp; inc.passBaseXp = backXp; }
       if (backPoint) inc.point = backPoint;
       if (Object.keys(inc).length) await UserXp.updateOne({ userId: purchase.userId }, { $inc: inc });
+      // 회수한 캐시백은 원장에 따로 남긴다 — 환불(+paidXp)은 구매 기록이 세고, 여기서는 캐시백만 되돌린다
+      if (claw > 0) {
+        await logWallet({
+          userId: purchase.userId,
+          currency: "xp",
+          amount: -claw,
+          kind: "cashback",
+          label: `캐시백 회수 · ${purchase.itemName || "상품"}`,
+          refId: String(purchase._id),
+        });
+      }
       if (backXp) {
         // XP 가 돌아오면 레벨이 오를 수 있다 — 봇이 보상 역할을 다시 맞추도록 표시한다
         const refunded = await UserXp.findOne({ userId: purchase.userId }, { xp: 1 }).lean();

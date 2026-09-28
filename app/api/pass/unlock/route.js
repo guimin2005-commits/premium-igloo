@@ -10,22 +10,13 @@ import { addPoints } from "@/lib/points";
 import { denyIfLevelClosed } from "@/lib/levelAccess";
 import { denyIfMaintenance } from "@/lib/apiAuth";
 import { logWallet } from "@/lib/wallet";
-import { xpToPoint } from "@/lib/pointRate";
-import { getLevelByXp } from "@/lib/leveling";
 import UserXp from "@/models/UserXp";
 
-// 차감된 XP에 맞춰 레벨을 다시 계산한다 (내려갈 수 있다).
-//    상점 결제(app/api/shop/checkout)와 같은 방식 — 봇이 보상 역할을 다시 맞추도록 표시도 함께 세운다.
-const resyncLevel = async (userId) => {
-  const doc = await UserXp.findOne({ userId }, { xp: 1 }).lean();
-  await UserXp.updateOne(
-    { userId },
-    { $set: { level: getLevelByXp(doc?.xp ?? 0), needsRoleSync: true } }
-  );
-};
-
-// ── [해금] 프리미엄 트랙 열기 — body { payMethod: "xp" | "point" } ──
+// ── [해금] 프리미엄 트랙 열기 — 빙옥 전용 ──
 //    한 번 열면 그 시즌 내내 열려 있다 (시즌이 바뀌면 passUnlocked 가 초기화된다).
+//    📌 2026-09 — XP 결제를 없앴다. 진행도가 "이번 시즌에 번 XP" 라, 해금가만큼 XP 를 모은 유저는
+//       이미 티어가 올라 있어 사자마자 프리미엄이 한꺼번에 풀리는 구조였다(사용자 지적).
+//       서버 부스터는 사지 않아도 자동으로 열린다(lib/seasonPass.js getPassState 의 premiumBy).
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
@@ -36,10 +27,10 @@ export async function POST(request) {
     const maint = await denyIfMaintenance(session);
     if (maint) return maint;
 
+    // 예전 화면(캐시)이 XP 결제를 보내면 빙옥으로 바꿔 빼지 않고 거절한다 — 유저가 확인한 화폐와 다른 걸 빼면 안 된다
     const body = await request.json().catch(() => ({}));
-    const payMethod = body?.payMethod === "point" ? "point" : body?.payMethod === "xp" ? "xp" : "";
-    if (!payMethod) {
-      return NextResponse.json({ success: false, message: "결제 수단을 선택해 주세요." }, { status: 400 });
+    if (body?.payMethod === "xp") {
+      return NextResponse.json({ success: false, message: "프리미엄 해금은 빙옥으로만 할 수 있습니다." }, { status: 400 });
     }
 
     await connectToDatabase();
@@ -58,38 +49,44 @@ export async function POST(request) {
     if (getSeasonDday().ended) {
       return NextResponse.json({ success: false, message: "시즌이 종료되었습니다." }, { status: 403 });
     }
-    if (state.unlocked) {
+    if (state.premiumBy === "purchase") {
       return NextResponse.json({ success: false, message: "이미 해금했습니다." }, { status: 409 });
     }
+    // 부스터는 이미 열려 있다 — 돈을 받지 않는다
+    if (state.premiumBy === "booster") {
+      return NextResponse.json({ success: false, message: "서버 부스터는 자동으로 해금됩니다." }, { status: 409 });
+    }
+    // 부스터인지 확인하지 못했으면(디스코드 장애) 받지 않는다 — 부스터가 잠깐 잠긴 화면을 보고 사는 일을 막는다
+    if (state.boosterUnknown) {
+      return NextResponse.json(
+        { success: false, message: "디스코드 확인이 늦어지고 있습니다. 잠시 후 다시 시도해 주세요." },
+        { status: 503 }
+      );
+    }
 
-    // 가격은 서버 설정값만 쓴다 — 클라이언트가 보낸 금액은 보지 않는다
-    //    해금가는 XP 로만 정한다. 빙옥으로 내면 환율(1 빙옥 = 1,000 XP · 올림 — lib/pointRate.js)을 적용한 값을 뺀다.
-    //    charge 는 낸 화폐 단위 그대로의 실제 차감액 — 되돌리기 · 결제 기록(passUnlockPaid)이 모두 이 값을 쓴다
-    const price = state.unlockPrice;
-    const charge = payMethod === "point" ? xpToPoint(price) : price;
+    // 가격은 서버 설정값만 쓴다 — 클라이언트가 보낸 금액은 보지 않는다.
+    //    해금가는 XP 단위로 저장되고, 빙옥 환율(1 빙옥 = 1,000 XP · 올림 — lib/pointRate.js)을 적용한 값을 뺀다.
+    //    📌 XP 로 내지 않으므로 진행도 기준선(passBaseXp)은 건드리지 않는다
+    const charge = state.unlockPoint;
+    // 📌 화면이 확인창에서 보여 준 금액(expectedPoint)과 다르면 빼지 않는다 — 보는 사이 관리자가 해금가를 바꾼 경우
+    //    (상점 expectedPrice · 강화 expectedCost 와 같은 가드. 값이 없는 옛 화면 요청은 그대로 받는다)
+    if (body?.expectedPoint != null && Number(body.expectedPoint) !== charge) {
+      return NextResponse.json(
+        { success: false, code: "PRICE_CHANGED", message: "해금 가격이 바뀌었습니다. 다시 확인해 주세요.", unlockPoint: charge },
+        { status: 409 }
+      );
+    }
 
     // 1) 차감 — 잔액이 충분할 때만 매치되는 조건부 갱신이라 동시에 눌러도 마이너스가 되지 않는다
     if (charge > 0) {
-      if (payMethod === "point") {
-        const paid = await addPoints(userId, -charge);
-        if (!paid) {
-          return NextResponse.json({ success: false, message: "빙옥이 부족합니다." }, { status: 400 });
+      const paid = await addPoints(userId, -charge);
+      if (!paid) {
+        // 📌 두 번 눌림(다른 탭) — 앞 요청이 방금 빼 가서 잔액이 모자란 것이면 "부족"이 아니라 "이미 해금"으로 알린다
+        const now = await UserXp.findOne({ userId }, { passSeason: 1, passUnlocked: 1 }).lean();
+        if (now?.passUnlocked && now?.passSeason === SEASON.number) {
+          return NextResponse.json({ success: false, message: "이미 해금했습니다." }, { status: 409 });
         }
-      } else {
-        // XP 는 화폐이므로 쓰면 레벨도 함께 내려간다 — 봇이 역할을 다시 맞추도록 표시를 세운다.
-        // 📌 기준선(passBaseXp)도 같은 폭으로 내린다. 진행도가 xp - passBaseXp 라 이걸 빠뜨리면
-        //    방금 돈 내고 연 프리미엄 티어가 오히려 전부 미도달로 잠기고,
-        //    이미 받은 무료 칸은 "미도달인데 수령완료" 인 모순 상태가 된다.
-        //    (POINT 결제는 진행도와 무관하므로 건드리지 않는다)
-        const paid = await UserXp.findOneAndUpdate(
-          { userId, xp: { $gte: charge } },
-          { $inc: { xp: -charge, passBaseXp: -charge }, $set: { needsRoleSync: true, updatedAt: new Date() } },
-          { new: true, projection: { xp: 1 } }
-        );
-        if (!paid) {
-          return NextResponse.json({ success: false, message: "XP가 부족합니다." }, { status: 400 });
-        }
-        await UserXp.updateOne({ userId }, { $set: { level: getLevelByXp(paid.xp ?? 0) } });
+        return NextResponse.json({ success: false, message: "빙옥이 부족합니다." }, { status: 400 });
       }
     }
 
@@ -98,18 +95,10 @@ export async function POST(request) {
     const seasonNo = SEASON.number;
     const lock = await UserXp.updateOne(
       { userId, passSeason: seasonNo, passUnlocked: { $ne: true } },
-      { $set: { passUnlocked: true, passUnlockPaid: { method: payMethod, amount: charge }, updatedAt: new Date() } }
+      { $set: { passUnlocked: true, passUnlockPaid: { method: "point", amount: charge }, updatedAt: new Date() } }
     );
     if (!lock.modifiedCount) {
-      if (charge > 0) {
-        if (payMethod === "point") {
-          await addPoints(userId, charge).catch(() => {});
-        } else {
-          // 차감 때 기준선도 함께 내렸으므로 환불도 같은 폭으로 되돌린다
-          await UserXp.updateOne({ userId }, { $inc: { xp: charge, passBaseXp: charge } }).catch(() => {});
-          await resyncLevel(userId).catch(() => {});
-        }
-      }
+      if (charge > 0) await addPoints(userId, charge).catch(() => {});
       const now = await UserXp.findOne({ userId }, { passUnlocked: 1 }).lean();
       return NextResponse.json(
         {
@@ -127,7 +116,7 @@ export async function POST(request) {
     if (charge > 0) {
       await logWallet({
         userId,
-        currency: payMethod,
+        currency: "point",
         amount: -charge,
         kind: "pass-unlock",
         label: `시즌 ${seasonNo} 패스 프리미엄 해금`,
@@ -140,6 +129,7 @@ export async function POST(request) {
       success: true,
       message: "프리미엄 트랙을 해금했습니다. 이번 시즌 내내 유지됩니다.",
       unlocked: true,
+      premiumBy: "purchase",
       xp: bal?.xp ?? 0,
       point: bal?.point ?? 0,
     });

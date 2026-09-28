@@ -225,9 +225,18 @@ export default function AuctionListPage() {
                 const isEnd = a.status === "종료";
                 return (
                   <div key={a._id} className="auc-in mt-10 flex flex-col items-center text-center">
-                    <h2 className={`text-2xl md:text-4xl font-black leading-snug break-keep max-w-3xl ${isEnd ? "text-gray-500" : "text-white"}`}>
-                      {a.title}
-                    </h2>
+                    {/* 📌 티켓을 넘길 때 제목 줄 수가 달라 아래 버튼·점 줄이 오르내렸다 →
+                           무대의 제목들을 한 칸에 겹쳐(보이지 않게) 가장 긴 제목 높이를 잡아둔다 */}
+                    <div className="grid max-w-3xl">
+                      {recent.map((x: any) => x._id !== a._id && (
+                        <span key={x._id} aria-hidden className="invisible col-start-1 row-start-1 text-2xl md:text-4xl font-black leading-snug break-keep">
+                          {x.title}
+                        </span>
+                      ))}
+                      <h2 className={`col-start-1 row-start-1 text-2xl md:text-4xl font-black leading-snug break-keep ${isEnd ? "text-gray-500" : "text-white"}`}>
+                        {a.title}
+                      </h2>
+                    </div>
 
                     <button
                       onClick={() => enter(a._id, isEnd)}

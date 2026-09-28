@@ -14,7 +14,7 @@ const UserXpSchema = new mongoose.Schema({
   // 📌 연속 출석 — claimAttendance(attend.js)가 씀. 어제 출석이면 +1, 끊기면 1 부터 (models/UserXp.js 와 같아야 한다)
   attendStreak: { type: Number, default: 0 },     // 지금 연속 일수
   attendBestStreak: { type: Number, default: 0 }, // 최고 연속 일수
-  // POINT 관련 — 봇은 연속 출석 보너스 빙옥(attend.js)만 $inc 한다. upsert 로 문서를 만들 때 default 도 필요하다
+  // POINT 관련 — 봇은 출석 때 빙옥(연속 출석 보너스 · 아이템 효과 출석 빙옥, attend.js)만 $inc 한다. upsert 로 문서를 만들 때 default 도 필요하다
   point: { type: Number, default: 0 },
   pointTierPaid: { type: Number, default: 0 },
   // 누적 음성 참여 시간(초) — 시즌 무관 통산 기록 (VOICE_TIME_START 이후부터 적립)
@@ -203,6 +203,9 @@ const XpLogSchema = new mongoose.Schema({
   reason: { type: String, default: "" },   // "chat" | "voice" | "attend" | "effect"(아이템 효과 따로 지급) | "effect-levelup"
   channelId: { type: String, default: "" },
   channelName: { type: String, default: "" },
+  // 📌 시즌 패스 가속(아이템 효과 passBoost) — 이 지급과 함께 passBaseXp 를 낮춘 폭(진행도에만 더해진 XP). 없으면 0.
+  //    시즌 기준선을 로그로 되짚을 때(seasonStartBaseXp) amount 와 함께 빼야 가속분이 사라지지 않는다
+  passBoost: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now, index: { expires: 60 * 60 * 24 * 60 } },
 });
 export const XpLog = mongoose.models.XpLog || mongoose.model("XpLog", XpLogSchema);
@@ -230,6 +233,9 @@ const PurchaseSchema = new mongoose.Schema({
   // 📌 연장 구매 — 이어 붙인 원래 구매 _id("" 이면 새 구매) · 연장분이 시작되는 시각(표시용) (models/Purchase.js 와 같아야 한다)
   renewOf: { type: String, default: "" },
   startsAt: { type: Date, default: null },
+  // 📌 소모형 아이템(연속 출석 보호막)을 쓴 시각 — 세워지면 보유에서 빠진다(itemEffects.js · 사이트 lib/ownedItems.js).
+  //    attend.js 가 consumedAt 이 비어 있을 때만 세운다(조건부 — 두 번 쓰지 않게). models/Purchase.js 와 같아야 한다
+  consumedAt: { type: Date, default: null },
   // 📌 사이트 보유 — 소유는 그대로 두고 디스코드 역할 표기만 뗀 상태.
   //    시즌이 바뀌면 디스코드가 역할로 지저분해지므로 표기를 사이트로 옮긴다.
   //    만료(expired)와는 다르다 — 물건은 계속 갖고 있고 인벤토리에도 그대로 뜬다.
@@ -290,6 +296,16 @@ const WalletLogSchema = new mongoose.Schema({
 });
 WalletLogSchema.index({ userId: 1, createdAt: -1 });
 export const WalletLog = mongoose.models.WalletLog || mongoose.model("WalletLog", WalletLogSchema);
+
+// 📌 새 멤버 첫 답장 기록 — 아이템 효과 welcomeReply 를 새 멤버(newcomerId)당 답장한 사람(userId)별로 한 번만 주려고 남긴다.
+//    unique(newcomerId, userId) 가 잠금이다 — 먼저 넣은 쪽만 지급(features/chatXp.js). 사이트 models/WelcomeReply.js 와 같아야 한다
+const WelcomeReplySchema = new mongoose.Schema({
+  newcomerId: { type: String, required: true },
+  userId: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+WelcomeReplySchema.index({ newcomerId: 1, userId: 1 }, { unique: true });
+export const WelcomeReply = mongoose.models.WelcomeReply || mongoose.model("WelcomeReply", WelcomeReplySchema);
 
 // 📌 봇 생존 신호 (단일 문서 key:"main") — 관리자 대시보드가 lastSeen 으로 켜짐/꺼짐을 본다. 사이트 models/BotStatus.js 와 같아야 한다
 const BotStatusSchema = new mongoose.Schema({

@@ -9,8 +9,10 @@
     "start:nudge": "node src/index.js --nudge-only"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "discord.js": "^14.16.3",
+    "dotenv": "^16.4.7",
     "mongoose": "^8.9.0",
-    "dotenv": "^16.4.7"
+    "satori": "^0.25.0"
   }
 }

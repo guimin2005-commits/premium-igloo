@@ -1,5 +1,6 @@
 // ── 슬래시 커맨드 정의 + 핸들러 ────────────────
 //    📌 응답 모양 · 문구는 관리자 화면(봇 메시지)의 템플릿 — buildMessage(키, 변수). 관리자가 끈 키(null)면 짧은 기본 글로 답한다.
+//       /레벨 · /랭크 · /출석체크는 이미지 카드를 붙인다(buildMessageWithCard — 카드를 끄거나 못 그리면 글만).
 import {
   Events, REST, Routes, SlashCommandBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 } from "discord.js";
@@ -8,7 +9,7 @@ import { getCumulativeXpByLevel, getLevelByXp } from "./leveling.js";
 import { config } from "./config.js";
 import { getSettings } from "./botSettings.js";
 import { claimAttendance } from "./attend.js";
-import { buildMessage, commonVars, progressBar, tierOf, SITE_URL } from "./botMessages.js";
+import { buildMessage, buildMessageWithCard, cardAvatar, commonVars, progressBar, tierOf, SITE_URL } from "./botMessages.js";
 import { questView } from "./views/quests.js";
 import { inventoryView } from "./views/inventory.js";
 import { passView } from "./views/pass.js";
@@ -41,6 +42,18 @@ const linkRow = (label, path) =>
 
 // 템플릿 메시지 — 관리자가 끈 키(null)면 짧은 기본 글
 const msg = (key, vars, fallback) => buildMessage(key, vars) || { content: fallback, allowedMentions: { parse: [] } };
+// 카드 붙인 템플릿 메시지 — 카드가 켜진 키면 이미지 카드를 붙인다(못 그리면 글만). cardData 는 카드가 켜져 있을 때만 부른다
+const msgCard = async (key, vars, cardData, fallback) =>
+  (await buildMessageWithCard(key, vars, cardData)) || { content: fallback, allowedMentions: { parse: [] } };
+// 카드 사진 — 캐시에 없는 멤버(API 모양)는 아바타 함수가 없어 유저 쪽으로
+const avatarOf = (interaction) => cardAvatar(typeof interaction.member?.displayAvatarURL === "function" ? interaction.member : interaction.user);
+// 다음 레벨까지 — 남은 XP · 진행률 (만렙이면 0 · 1)
+function levelSpan(level, xp) {
+  if (level >= MAX_LEVEL) return { need: 0, progress: 1 };
+  const cur = getCumulativeXpByLevel(level);
+  const next = getCumulativeXpByLevel(level + 1);
+  return { need: Math.max(0, next - xp), progress: (xp - cur) / Math.max(1, next - cur) };
+}
 
 // 📌 응답 도우미 — 3초 안에 첫 응답이 없으면 디스코드가 명령을 실패로 끝낸다.
 //    1.5초 안에 끝나면 그냥 reply, 늦어지면 먼저 공개로 defer 해 두고 결과를 editReply 로 채운다.
@@ -99,9 +112,19 @@ async function handleAttend(interaction, r) {
   const bonusParts = b ? [b.xp > 0 ? `+${b.xp.toLocaleString("ko-KR")} XP` : "", b.point > 0 ? `빙옥 +${b.point.toLocaleString("ko-KR")}` : ""].filter(Boolean) : [];
   const streakBonus = bonusParts.length ? `연속 ${b.days}일 보너스 ${bonusParts.join(" · ")}` : "";
 
-  const payload = msg(
+  const vars = { ...base, amount: res.amount, attendCount: res.attendCount, streak: res.streak, bestStreak: res.bestStreak, streakBonus };
+  const payload = await msgCard(
     "cmdAttend",
-    { ...base, amount: res.amount, attendCount: res.attendCount, streak: res.streak, bestStreak: res.bestStreak, streakBonus },
+    vars,
+    async () => ({
+      avatar: await avatarOf(interaction),
+      name: base.name,
+      amount: res.amount,
+      streak: res.streak,
+      bestStreak: res.bestStreak,
+      attendCount: res.attendCount,
+      streakBonus,
+    }),
     `출석 완료 · +${(res.amount || 0).toLocaleString("ko-KR")} XP · 연속 ${res.streak}일${streakBonus ? ` · ${streakBonus}` : ""}`
   );
   return r.send({ ...payload, components: [linkRow("대시보드", "/level?tab=my")] });
@@ -112,23 +135,22 @@ async function handleLevel(interaction, r) {
   const xp = doc?.xp || 0;
   // 저장된 level 은 새 문서 · 초기화 직후 0 일 수 있다 — xp 로 계산한다 (0 XP = Lv.1, 사이트와 같은 기준)
   const level = getLevelByXp(xp);
-  const top = level >= MAX_LEVEL;
-  const cur = getCumulativeXpByLevel(level);
-  const next = getCumulativeXpByLevel(level + 1);
-  const need = top ? 0 : Math.max(0, next - xp);
-  const nextLevel = top ? MAX_LEVEL : level + 1;
+  const { need, progress } = levelSpan(level, xp);
+  const nextLevel = level >= MAX_LEVEL ? MAX_LEVEL : level + 1;
+  const base = commonVars(interaction.member, interaction.guild);
 
-  const payload = msg(
+  const payload = await msgCard(
     "cmdLevel",
     {
-      ...commonVars(interaction.member, interaction.guild),
+      ...base,
       level,
       xp,
       need,
       nextLevel,
-      progressBar: progressBar(top ? 1 : (xp - cur) / Math.max(1, next - cur)),
+      progressBar: progressBar(progress),
       tier: tierOf(level).name,
     },
+    async () => ({ avatar: await avatarOf(interaction), name: base.name, level, xp, need, progress }),
     `Lv.${level} · 누적 ${xp.toLocaleString("ko-KR")} XP · Lv.${nextLevel}까지 ${need.toLocaleString("ko-KR")} XP`
   );
   return r.send({ ...payload, components: [linkRow("대시보드", "/level?tab=my")] });
@@ -143,10 +165,12 @@ async function handleRank(interaction, r) {
   ]);
   const level = getLevelByXp(xp);
   const rank = above + 1;
+  const base = commonVars(interaction.member, interaction.guild);
 
-  const payload = msg(
+  const payload = await msgCard(
     "cmdRank",
-    { ...commonVars(interaction.member, interaction.guild), rank, total, level, xp, tier: tierOf(level).name },
+    { ...base, rank, total, level, xp, tier: tierOf(level).name },
+    async () => ({ avatar: await avatarOf(interaction), name: base.name, level, xp, ...levelSpan(level, xp), rank, total }),
     `#${rank} / ${total.toLocaleString("ko-KR")} · Lv.${level} · 누적 ${xp.toLocaleString("ko-KR")} XP`
   );
   return r.send({ ...payload, components: [linkRow("랭킹", "/level?tab=rank")] });
@@ -177,7 +201,7 @@ async function handleInventory(interaction, r) {
 
 async function handlePass(interaction, r) {
   if (!levelOpen()) return sendClosed(interaction, r);
-  const v = await passView(interaction.user.id);
+  const v = await passView(interaction.user.id, interaction.member);
   if (!v.enabled) return r.send({ content: "시즌 패스 준비 중입니다.", allowedMentions: { parse: [] } }, { ephemeral: true });
   const payload = msg(
     "cmdPass",

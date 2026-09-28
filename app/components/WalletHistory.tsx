@@ -270,7 +270,6 @@ export default function WalletHistory({ open, onClose, initial = "xp", userId = 
               ))}
 
               <div className="px-5 pt-4 pb-6">
-                {page.error && <p className="mb-3 text-center text-[12px] text-[#d01634]">{page.error}</p>}
                 {page.hasMore ? (
                   <button
                     type="button"
@@ -285,6 +284,8 @@ export default function WalletHistory({ open, onClose, initial = "xp", userId = 
                     <p className="text-center text-[12px] text-[#5a5a5a]">채팅 · 음성 · 출석 적립은 최근 {page.retentionDays}일만 남습니다.</p>
                   )
                 )}
+                {/* 📌 더 보기 실패 문구는 단추 아래에 — 위에 끼면 방금 누른 단추가 한 줄 내려간다 */}
+                {page.error && <p className="mt-3 text-center text-[12px] text-[#d01634]">{page.error}</p>}
               </div>
             </>
           )}

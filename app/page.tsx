@@ -350,7 +350,13 @@ export default function Home() {
               </div>
             </div>
             <div className="mt-10 md:mt-12 border-t border-[#131313] pt-3.5">
-              {stats && stats.history && stats.history.length >= 2 ? <ActivityChart history={stats.history} /> : <div className="h-28 md:h-32" />}
+              {/* 📌 자리 표시도 곡선 위 머리 줄(글자 한 줄 + mb-2)까지 같은 높이로 — 수치가 도착할 때 아래 '더 즐기기'가 밀려 내려가지 않게 */}
+              {stats && stats.history && stats.history.length >= 2 ? <ActivityChart history={stats.history} /> : (
+                <div aria-hidden>
+                  <div className="mb-2 text-[11px]">{" "}</div>
+                  <div className="h-28 md:h-32" />
+                </div>
+              )}
             </div>
           </div>
         </Reveal>

@@ -244,8 +244,8 @@ export default function RecruitPage() {
   return (
     <main key={viewMode} className="w-full flex-1 flex flex-col text-[#131313]">
       <section className="w-full max-w-5xl mx-auto px-5 md:px-8 pt-10 md:pt-12 pb-24 md:pb-16 flex-1">
-        {/* 제목 줄 */}
-        <div className="flex items-end justify-between gap-4 mb-5">
+        {/* 제목 줄 — 📌 min-h-9: 관리자 단추(h-9)가 세션을 읽은 뒤 붙어도 줄 높이가 그대로라 아래 탭 줄이 밀리지 않는다 */}
+        <div className="flex items-end justify-between gap-4 mb-5 min-h-9">
           <h1 className="text-[30px] md:text-[34px] font-black tracking-tight leading-none">구인</h1>
           {isAdmin ? (
             <div className="flex items-center gap-2 shrink-0">

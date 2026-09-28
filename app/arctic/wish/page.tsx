@@ -4,11 +4,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import { ICON_PATHS } from "../../components/Icons";
-import { isTimed, durationOptions, durationLabel, durationPrice, cardPick, cardFrom, discountPctOf } from "@/lib/shopPricing";
-import { itemTypeLabel, itemTypeColor } from "@/lib/items";
+import { isTimed, durationOptions, durationLabel, cardPick, isPointOnly, affordFor } from "@/lib/shopPricing";
 import { isAdminName } from "@/lib/admins";
 import ArcticStoreBar from "../ArcticStoreBar";
-import CardArt from "../CardArt";
+import ProductCard from "../ProductCard";
 import { ownedIdsOf, renewableIdsOf } from "../owned";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
@@ -17,12 +16,6 @@ import ArcticFooter from "../ArcticFooter";
 //    상품 카드는 상점 목록과 같은 모양(그림 · 유형 · 이름 · 가격 · 찜)에, 찜 목록답게 아래에 '담기' 한 줄을 더한다.
 //    찜 · 장바구니는 상점 메인과 같은 저장소(iglooShopWish · iglooShopCart)를 쓴다 — 여기서 바꾸면 메인에도 그대로다.
 type CartRow = { itemId: string; qty: number; days?: number };
-
-const TypeBadge = ({ type, className = "" }: { type: string; className?: string }) => (
-  <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
-    {itemTypeLabel(type)}
-  </span>
-);
 
 const readList = <T,>(key: string): T[] => {
   try {
@@ -45,6 +38,8 @@ export default function WishPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [ready, setReady] = useState(false); // 저장소를 읽기 전에는 쓰지 않는다 (빈 값으로 덮지 않게)
   const [toast, setToast] = useState("");
+  // 내 빙옥 — 빙옥 전용 상품은 모자라면 담기를 잠근다 (지갑을 못 읽었으면 null — 잠그지 않는다)
+  const [myPoint, setMyPoint] = useState<number | null>(null);
 
   useEffect(() => {
     setWish(readList<string>("iglooShopWish"));
@@ -72,6 +67,10 @@ export default function WishPage() {
       fetch("/api/shop/purchase", { cache: "no-store" })
         .then((r) => r.json())
         .then((d) => { if (d?.success) setOrders(d.data); })
+        .catch(() => {});
+      fetch("/api/xp/me", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => { if (d?.success) setMyPoint(d.data.point ?? 0); })
         .catch(() => {});
     }
   }, [status, isAdmin, isLoggedIn]);
@@ -107,6 +106,8 @@ export default function WishPage() {
     setWish((prev) => prev.filter((x) => x !== it._id));
     say(`${it.name} 상품의 찜을 해제했습니다`);
   };
+  // 📌 빙옥 전용 상품 — 카드에 걸린 값(담길 값)을 빙옥으로 낼 수 없으면 담기 잠금
+  const pointShort = (it: any) => isLoggedIn && isPointOnly(it) && myPoint != null && !affordFor(it, 0, myPoint)(cardPick(it)?.price ?? 0);
   const toggleCart = (it: any) => {
     if (!isLoggedIn) return signIn("discord");
     if (locked(it._id)) return say("이미 구매하신 상품입니다");
@@ -114,6 +115,7 @@ export default function WishPage() {
       setCart((prev) => prev.filter((c) => c.itemId !== it._id));
       return say(`${it.name} 상품을 장바구니에서 뺐습니다`);
     }
+    if (pointShort(it)) return say("빙옥이 부족합니다");
     // 카드에 보이는 기간(기본 무제한)으로 담는다 — 보이는 값과 담기는 값이 같게
     const days = isTimed(it) ? (cardPick(it)?.days ?? durationOptions(it)[0]?.days ?? 0) : 0;
     setCart((prev) => [...prev, { itemId: it._id, qty: 1, days }]);
@@ -154,53 +156,24 @@ export default function WishPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-10">
             {rows.map((it: any) => {
               const soldOut = it.stock === 0;
-              // 상점 카드와 같은 표기(cardPick — 기본 무제한, 더 싼 기간은 아래 "…부터")
-              const pick = cardPick(it) || { days: undefined, price: 0, list: 0 };
-              const from = cardFrom(it, pick);
-              const listPrice = pick.list;
-              const finalPrice = pick.price;
-              const pct = finalPrice < listPrice ? discountPctOf(it) : 0;
               const has = locked(it._id);
               const inCart = cart.some((c) => c.itemId === it._id);
+              const short = !inCart && pointShort(it);
+              // 상점 카드와 같은 카드(ProductCard) — 찜 목록이라 하트는 늘 채워져 있고, 누르면 찜 해제
               return (
-                <div key={it._id} className="group relative flex flex-col">
-                  <Link href={`/arctic/item/${it._id}`} className="block relative aspect-square overflow-hidden rounded-md bg-[#f2f2f2]">
-                    <CardArt it={it} imgClass="group-hover:scale-[1.03] transition-transform duration-500" iconSize={64} />
-                    {soldOut && (
-                      <span className="absolute inset-0 bg-white/70 flex items-center justify-center">
-                        <span className="text-[12px] font-black text-[#131313] tracking-wider">품절</span>
-                      </span>
-                    )}
-                  </Link>
-                  <button onClick={() => unwish(it)} aria-label="찜 해제"
-                    className="absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-colors">
-                    <svg className="w-4 h-4 text-[#e91e3f]" fill="currentColor" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.heart} />
-                    </svg>
-                  </button>
-                  <Link href={`/arctic/item/${it._id}`} className="block mt-3">
-                    <TypeBadge type={it.type} className="inline-block mb-1.5 px-2 py-[3px] text-[10px] leading-none align-middle" />
-                    <h3 className="text-[13px] font-semibold text-[#5a5a5a] leading-snug line-clamp-2 break-keep">{it.name}</h3>
-                    {pct > 0 && <s className="block mt-2 text-[11.5px] text-[#a3a3a3] tabular-nums leading-none">{Number(listPrice || 0).toLocaleString()} XP</s>}
-                    <p className={`${pct > 0 ? "mt-1" : "mt-2"} text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none`}>
-                      {pct > 0 && <span className="mr-1.5 text-[14px] font-black text-[#e91e3f]">{pct}%</span>}
-                      {finalPrice.toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP</span>
-                      {isTimed(it) && pick.days != null && pick.days > 0 && <span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">/ {durationLabel(pick.days)}</span>}
-                    </p>
-                    {from && <p className="mt-1.5 text-[11.5px] font-bold text-[#8a8a8a] tabular-nums leading-none">{durationLabel(from.days)} {from.price.toLocaleString()} XP부터</p>}
-                  </Link>
+                <ProductCard key={it._id} it={it} href={`/arctic/item/${it._id}`} wished onWish={() => unwish(it)} wishLabel="찜 해제">
                   {/* 찜 목록에서는 바로 담을 수 있게 — 다시 누르면 뺀다 */}
                   <button
                     type="button"
                     onClick={() => toggleCart(it)}
-                    disabled={has || soldOut}
+                    disabled={has || soldOut || short}
                     className={`mt-3 h-9 rounded-full text-[12px] font-bold transition-colors disabled:cursor-default ${
-                      has || soldOut ? "bg-[#f2f2f2] text-[#a3a3a3]" : inCart ? "bg-[#131313] text-white hover:bg-black" : "border border-[#a3a3a3] text-[#131313] hover:border-[#131313]"
+                      has || soldOut || short ? "bg-[#f2f2f2] text-[#a3a3a3]" : inCart ? "bg-[#131313] text-white hover:bg-black" : "border border-[#a3a3a3] text-[#131313] hover:border-[#131313]"
                     }`}
                   >
-                    {has ? "보유 중" : soldOut ? "품절" : inCart ? "담김 · 빼기" : "장바구니에 담기"}
+                    {has ? "보유 중" : soldOut ? "품절" : inCart ? "담김 · 빼기" : short ? "빙옥 부족" : "장바구니에 담기"}
                   </button>
-                </div>
+                </ProductCard>
               );
             })}
           </div>

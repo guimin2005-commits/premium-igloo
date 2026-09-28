@@ -7,16 +7,26 @@
 //    효과는 디스코드 역할이 아니라 "인벤토리에 들고 있는 아이템"에서 나온다 — 사이트 models/Item 의 chatBuffXp · voiceBuffXp · attendBuffXp · effects.
 //    (역할 버프 RoleConfig.buffXp · attendBuffXp 는 roleConfigs.js 가 따로, 역할 기준으로 그대로 더한다)
 //
-//    효과 하나: { id, on, mode: "add" | "percent", amount, minMinutes?, everyN?, days?, hourFrom?, hourTo?, channelIds? }
+//    효과 하나: { id, on, mode: "add" | "percent", amount, minMinutes?, everyN?, days?, hourFrom?, hourTo?, channelIds?,
+//                chance?, minMembers?, seconds?, skin? }
 //      · days      : KST 요일(0=일 … 6=토). 비면 매일
 //      · hourFrom/hourTo : KST 시각. from <= 지금 < to, from > to 면 자정을 넘는 구간(22~2)
 //      · channelIds : 채팅 · 음성에서만 — 그 채널(또는 그 카테고리 안)에서만
 //      · percent   : 그 1회 지급의 기본 XP(다른 효과 · 버프를 더하기 전 값)의 N%
+//      · chance(1~100 %) · minMembers(2~99) · seconds(1~3600) · skin(카드 스킨 키)
 //    기본 효과 세 칸은 같은 목록에 합쳐 둔다 —
 //      chatBuffXp → "채팅 1회당 +N"(basic-chat), voiceBuffXp → "음성 1회당 +N"(basic-voice), attendBuffXp → "출석 시 +N"(basic-attend)
 //
+//    📌 효과 종류 (계약: 발동형 · 상시형 · 소모형 · 꾸미기형)
+//      발동형  — 지급할 때 붙는다. 요일 · 시간대(· 채널) 조건을 탄다
+//               chatJackpot(features/chatXp) · voiceParty(features/voiceXp) · welcomeReply(features/chatXp) · attendLucky · attendPoint(attend.js)
+//      상시형  — 들고 있는 동안. 조건 없음, 같은 효과는 합산 후 상한 — perksOf
+//               봇: passBoost(xp.js grantXp) · cooldownCut(chatXp) · muteRelief(voiceXp) / 사이트만: enhanceDiscount · shopCashback · tierPointBonus · questBonus
+//      소모형  — streakShield(attend.js) — 구매 하나를 consumeStreakShield 로 소모(Purchase.consumedAt)
+//      꾸미기형 — cardSkin(이미지 카드 스킨 — perksOf().cardSkin) / 사이트만: profileBadge
+//
 //    📌 보유 판정 (사이트 lib/ownedItems.js · app/api/shop/my-items (A)/(B) 와 같은 규칙)
-//      (A) 구매 건 — status pending(결제 끝, 지급 대기) · completed 이고 기간이 안 지난 것
+//      (A) 구매 건 — status pending(결제 끝, 지급 대기) · completed 이고 기간이 안 지났고 소모되지 않은 것(consumedAt 없음)
 //          아이템 = Item(itemRef) > Item(상품.itemId) > (상품도 아이템도 못 찾고 roleId 가 있으면) 그 역할의 첫 아이템(숨김 포함)
 //          디스코드 역할 유무는 보지 않는다 — siteOnly · 지급 대기 · 역할이 빠진 완료 건도 보유다.
 //          roleId 가 있는 역할형(role · perk · item) 건은 아이템을 찾았든 못 찾았든 그 역할을 "구매로 본 역할"에 넣는다.
@@ -26,29 +36,63 @@
 // ═══════════════════════════════════════════════════════
 import { Item, ShopItem, Purchase, UserXp } from "./db.js";
 import { kstToday } from "./leveling.js";
+import { getSettings } from "./botSettings.js";
 
 const REFRESH_MS = 60 * 1000;
 const ROLE_LIKE = new Set(["role", "perk", "item"]);
 
+//    📌 사이트 lib/itemEffects.js TRIGGERS 의 사본(봇이 정리에 쓰는 칸만) — on 값 · kind · modes · needs · channels · cap · noAmount 가 같아야 한다.
+//    kind: trigger(발동 — 요일 · 시간대 조건) · perk(상시 — 합산 후 상한) · consumable(소모) · cosmetic(꾸미기)
+//    needs: 반드시 있어야 하는 값 / noAmount: 크기 없이 쓰는 효과(amount 1 고정) / cap: 상시형 한 칸 · 합의 최대
 const EFFECT_TRIGGERS = {
-  chat: { modes: ["add", "percent"], channels: true },          // 채팅 1회당
-  voice: { modes: ["add", "percent"], channels: true },         // 음성 1회당
-  voiceDaily: { modes: ["add"], needs: "minMinutes", once: true }, // 하루 음성 N분 채우면 (하루 1번)
-  firstChat: { modes: ["add"], once: true },                    // 하루 첫 채팅 (하루 1번)
-  attend: { modes: ["add"] },                                   // 출석 시
-  attendEvery: { modes: ["add"], needs: "everyN" },             // 출석 N번째마다 (누적 출석 수 기준)
-  levelUp: { modes: ["add"] },                                  // 레벨이 오를 때마다
+  // ── 발동형 ──
+  chat: { kind: "trigger", modes: ["add", "percent"], channels: true },          // 채팅 1회당
+  voice: { kind: "trigger", modes: ["add", "percent"], channels: true },         // 음성 1회당
+  voiceDaily: { kind: "trigger", modes: ["add"], needs: "minMinutes", once: true }, // 하루 음성 N분 채우면 (하루 1번)
+  firstChat: { kind: "trigger", modes: ["add"], once: true },                    // 하루 첫 채팅 (하루 1번)
+  attend: { kind: "trigger", modes: ["add"] },                                   // 출석 시
+  attendEvery: { kind: "trigger", modes: ["add"], needs: "everyN" },             // 출석 N번째마다 (누적 출석 수 기준)
+  levelUp: { kind: "trigger", modes: ["add"] },                                  // 레벨이 오를 때마다
+  chatJackpot: { kind: "trigger", modes: ["add"], needs: "chance", channels: true },              // 채팅 XP 가 나갈 때 chance% 로 +amount
+  voiceParty: { kind: "trigger", modes: ["add", "percent"], needs: "minMembers", channels: true }, // 음성 채널(봇 제외) minMembers 명 이상일 때 1회당
+  welcomeReply: { kind: "trigger", modes: ["add"], channels: true },                               // 입장 7일 이내 멤버에게 첫 답장 — 그 멤버당 한 번
+  attendLucky: { kind: "trigger", modes: ["percent"], needs: "chance" },                           // 출석 때 chance% 로 기본 출석 XP 의 amount%
+  attendPoint: { kind: "trigger", modes: ["add"] },                                                // 출석 때 빙옥 +amount
+  // ── 상시형 (합산 후 상한 — perksOf / 사이트 lib/itemPerks.js) ──
+  enhanceDiscount: { kind: "perk", modes: ["percent"], cap: 50 },  // 사이트 — 강화 비용 −%
+  shopCashback: { kind: "perk", modes: ["percent"], cap: 30 },     // 사이트 — ARCTIC 결제 캐시백 %
+  tierPointBonus: { kind: "perk", modes: ["percent"], cap: 100 },  // 사이트 — 승급 빙옥 +%
+  questBonus: { kind: "perk", modes: ["percent"], cap: 100 },      // 사이트 — 퀘스트 보상 +%
+  passBoost: { kind: "perk", modes: ["percent"], cap: 50 },        // 시즌 패스 진행 +% (xp.js grantXp)
+  cooldownCut: { kind: "perk", modes: ["add"], needs: "seconds", cap: 3600 }, // 채팅 쿨타임 −초 (실제 상한은 쿨타임의 절반 — perksOf)
+  muteRelief: { kind: "perk", modes: ["percent"], cap: 100 },      // 음소거 감소율 −%p (실제 상한은 감소율 전체 — perksOf)
+  // ── 소모형 · 꾸미기형 ──
+  streakShield: { kind: "consumable", modes: ["add"], noAmount: true },          // 연속 출석 보호막 1회
+  cardSkin: { kind: "cosmetic", modes: ["add"], needs: "skin", noAmount: true }, // 이미지 카드 스킨
+  profileBadge: { kind: "cosmetic", modes: ["add"], noAmount: true },            // 사이트 — 프로필 배지
 };
+// 📌 카드 스킨 키 — 사이트 lib/itemEffects.js SKINS · botCards.js CARD_SKINS 와 같아야 한다(모르는 키는 저장 때처럼 버린다)
+const SKIN_KEYS = new Set(["gold", "aurora", "ice", "crimson"]);
 const MAX_EFFECTS = 20;
 const LIMIT = { add: 1_000_000, percent: 500, minutes: 1440, everyN: 365 };
+// 새 칸의 범위 — 사이트 FIELD_RANGE 와 같다
+const FIELD_RANGE = { chance: [1, 100], minMembers: [2, 99], seconds: [1, 3600] };
 
 const toInt = (v, lo, hi) => {
   const n = Math.floor(Number(v));
   if (!Number.isFinite(n)) return null;
   return Math.min(hi, Math.max(lo, n));
 };
+// 비었거나(undefined · null · "") 0 이하면 없음 — 사이트 need 와 같다(0 을 최솟값으로 채우지 않는다)
+const need = (v, lo, hi) => {
+  if (v === "" || v == null) return null;
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) && n > 0 ? Math.min(hi, Math.max(lo, n)) : null;
+};
+// 효과 한 칸의 크기 최대 — 상시형은 cap, 나머지는 방식별 (사이트 amountMaxOf 와 같다)
+const amountMaxOf = (t, mode) => (t?.cap ? t.cap : mode === "percent" ? LIMIT.percent : LIMIT.add);
 
-// 사이트 normalizeEffects 와 같은 정리 — 모르는 상황 · 빈 값은 버린다.
+// 📌 사이트 normalizeEffects 와 같은 정리(한 줄씩 같은 순서) — 모르는 상황 · 빈 값은 버린다.
 //    단 id 가 비면 무작위 대신 자리 번호로 채운다(1분마다 다시 읽어도 "하루 1번" 키가 바뀌지 않게).
 function cleanEffects(list) {
   if (!Array.isArray(list)) return [];
@@ -57,7 +101,14 @@ function cleanEffects(list) {
     const t = EFFECT_TRIGGERS[raw?.on];
     if (!t) return;
     const mode = t.modes.includes(raw?.mode) ? raw.mode : t.modes[0];
-    const amount = toInt(raw?.amount, 0, mode === "percent" ? LIMIT.percent : LIMIT.add);
+    let amount;
+    let seconds = null;
+    if (t.noAmount) amount = 1;
+    else if (t.needs === "seconds") {
+      // 쿨타임 단축은 초 칸 하나 — amount 에도 같은 값을 둔다
+      seconds = need(raw?.seconds ?? raw?.amount, ...FIELD_RANGE.seconds);
+      amount = seconds;
+    } else amount = toInt(raw?.amount, 0, amountMaxOf(t, mode));
     if (!amount) return;
     const e = { id: String(raw?.id || "").slice(0, 24) || `${raw.on}-${i}`, on: raw.on, mode, amount };
     if (t.needs === "minMinutes") {
@@ -70,11 +121,30 @@ function cleanEffects(list) {
       if (!n) return;
       e.everyN = n;
     }
-    const days = Array.isArray(raw?.days) ? [...new Set(raw.days.map((d) => toInt(d, 0, 6)).filter((d) => d != null))] : [];
-    if (days.length && days.length < 7) e.days = days;
-    const hf = raw?.hourFrom === "" || raw?.hourFrom == null ? null : toInt(raw.hourFrom, 0, 23);
-    const ht = raw?.hourTo === "" || raw?.hourTo == null ? null : toInt(raw.hourTo, 0, 24);
-    if (hf != null && ht != null && hf !== ht) { e.hourFrom = hf; e.hourTo = ht; }
+    if (t.needs === "chance") {
+      const c = need(raw?.chance, ...FIELD_RANGE.chance);
+      if (!c) return;
+      e.chance = c;
+    }
+    if (t.needs === "minMembers") {
+      const m = need(raw?.minMembers, ...FIELD_RANGE.minMembers);
+      if (!m) return;
+      e.minMembers = m;
+    }
+    if (t.needs === "seconds") e.seconds = seconds;
+    if (t.needs === "skin") {
+      const s = String(raw?.skin || "");
+      if (!SKIN_KEYS.has(s)) return;
+      e.skin = s;
+    }
+    // 요일 · 시간대는 발동형에만 — 상시 · 소모 · 꾸미기는 가지고 있는 동안 늘 붙는다
+    if (t.kind === "trigger") {
+      const days = Array.isArray(raw?.days) ? [...new Set(raw.days.map((d) => toInt(d, 0, 6)).filter((d) => d != null))].sort() : [];
+      if (days.length && days.length < 7) e.days = days;
+      const hf = raw?.hourFrom === "" || raw?.hourFrom == null ? null : toInt(raw.hourFrom, 0, 23);
+      const ht = raw?.hourTo === "" || raw?.hourTo == null ? null : toInt(raw.hourTo, 0, 24);
+      if (hf != null && ht != null && hf !== ht) { e.hourFrom = hf; e.hourTo = ht; }
+    }
     if (t.channels && Array.isArray(raw?.channelIds)) {
       const ch = [...new Set(raw.channelIds.map((c) => String(c || "").trim()).filter(Boolean))].slice(0, 20);
       if (ch.length) e.channelIds = ch;
@@ -101,22 +171,40 @@ function itemEffectList(item) {
 // 📌 캐시 — 1분마다 통째로 새로 만들어 한 번에 바꿔 낀다(읽는 쪽이 반쯤 만든 상태를 보지 않게). 실패하면 이전 상태 유지
 //    effectsById       : 아이템 id → 효과 목록 (효과 없는 아이템은 넣지 않는다 — 보유 판정은 아래 두 표가 효과와 무관하게 한다)
 //    visibleItemByRole : 역할 id → 그 역할의 첫 "보이는" 아이템 id — (B)
-//    byUser            : 유저 id → 구매 건 [{ itemId, roleId, exp }] — (A) 를 미리 풀어 둔 것. 만료(exp)는 쓸 때 다시 본다
-let state = { effectsById: new Map(), visibleItemByRole: new Map(), byUser: new Map() };
+//    byUser            : 유저 id → 구매 건 [{ pid, itemId, roleId, exp }] — (A) 를 미리 풀어 둔 것. 만료(exp)는 쓸 때 다시 본다
+//    itemByRole · shopRef : (A) 해석용 표 — 보호막 소모(consumeStreakShield)가 방금 읽은 구매 건을 같은 규칙으로 풀 때 쓴다
+//    ⚠️ effectsById 는 아이템 순서(sortOrder · createdAt)대로 넣는다 — perksOf 의 카드 스킨 "관리자 순서상 첫 번째" 가 이 순서를 따른다
+let state = { effectsById: new Map(), visibleItemByRole: new Map(), byUser: new Map(), itemByRole: new Map(), shopRef: new Map(), itemIds: new Set() };
+
+// 방금 소모한 구매 _id → 소모 시각(ms). 캐시가 소모 전에 읽은 값이어도 보유에서 빼도록 몇 분 들고 있다
+const consumedPids = new Map();
+const CONSUMED_KEEP_MS = 5 * 60 * 1000;
+
+// 📌 보유로 치는 구매 건 조건 — 결제 끝(pending) · 완료, 기간이 남음, 소모되지 않음(consumedAt 없음 — 쓴 보호막 등)
+const ownFilter = (now = new Date()) => ({
+  status: { $in: ["pending", "completed"] },
+  itemType: { $ne: "physical" },
+  consumedAt: null,
+  $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+});
+
+// (A) 구매 건 하나 → 아이템 id ("" 이면 못 찾음) — 사이트 lib/ownedItems.js 와 같은 순서
+function purchaseItemId(p, itemIds, shopRef, itemByRole) {
+  const hasShop = shopRef.has(String(p.itemId));
+  const ref = p.itemRef ? String(p.itemRef) : "";
+  const viaShop = shopRef.get(String(p.itemId)) || "";
+  let itemId = (ref && itemIds.has(ref) && ref) || (viaShop && itemIds.has(viaShop) && viaShop) || "";
+  // 상품 스냅샷도 없는 옛 건(시즌 패스 역할 보상 등) — 같은 역할의 첫 아이템
+  if (!itemId && !hasShop && p.roleId) itemId = itemByRole.get(p.roleId) || "";
+  return itemId;
+}
 
 export async function refreshItemEffects() {
   try {
     const [items, shopItems, purchases] = await Promise.all([
       Item.find({}).sort({ sortOrder: 1, createdAt: 1 }).lean(),
       ShopItem.find({}, { itemId: 1 }).lean(),
-      Purchase.find(
-        {
-          status: { $in: ["pending", "completed"] },
-          itemType: { $ne: "physical" },
-          $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
-        },
-        { userId: 1, itemRef: 1, itemId: 1, roleId: 1, itemType: 1, expiresAt: 1 }
-      ).lean(),
+      Purchase.find(ownFilter(), { userId: 1, itemRef: 1, itemId: 1, roleId: 1, itemType: 1, expiresAt: 1 }).lean(),
     ]);
 
     const itemIds = new Set();
@@ -140,23 +228,20 @@ export async function refreshItemEffects() {
     const byUser = new Map();
     for (const p of purchases) {
       if (!p.userId) continue;
-      const hasShop = shopRef.has(String(p.itemId));
-      const ref = p.itemRef ? String(p.itemRef) : "";
-      const viaShop = shopRef.get(String(p.itemId)) || "";
-      let itemId = (ref && itemIds.has(ref) && ref) || (viaShop && itemIds.has(viaShop) && viaShop) || "";
-      // 상품 스냅샷도 없는 옛 건(시즌 패스 역할 보상 등) — 같은 역할의 첫 아이템
-      if (!itemId && !hasShop && p.roleId) itemId = itemByRole.get(p.roleId) || "";
+      const itemId = purchaseItemId(p, itemIds, shopRef, itemByRole);
       // 역할형 건은 아이템을 찾았든 못 찾았든 그 역할을 "구매로 본 역할"로 — (B) 에서 다시 세지 않게
       const roleId = p.roleId && ROLE_LIKE.has(p.itemType) ? String(p.roleId) : "";
       if (!itemId && !roleId) continue;
       const exp = p.expiresAt ? new Date(p.expiresAt).getTime() : 0;
-      const row = { itemId, roleId, exp };
+      const row = { pid: String(p._id), itemId, roleId, exp };
       const list = byUser.get(p.userId);
       if (list) list.push(row);
       else byUser.set(p.userId, [row]);
     }
 
-    state = { effectsById, visibleItemByRole, byUser };
+    state = { effectsById, visibleItemByRole, byUser, itemByRole, shopRef, itemIds };
+    const old = Date.now() - CONSUMED_KEEP_MS;
+    for (const [pid, at] of consumedPids) if (at < old) consumedPids.delete(pid);
   } catch (e) {
     console.error("아이템 효과 갱신 오류:", e.message);
   }
@@ -174,11 +259,15 @@ function ownedItemIds(member, now = Date.now()) {
   // (A) 구매 건 — 디스코드 역할 유무와 무관
   for (const p of state.byUser.get(userId) || []) {
     if (p.exp && p.exp <= now) continue;
+    if (consumedPids.size && consumedPids.has(p.pid)) continue; // 방금 소모한 건
     if (p.itemId) owned.add(p.itemId);
     if (p.roleId) seenRoles.add(p.roleId);
   }
   // (B) 구매로 보지 못한 실보유 역할 → 그 역할의 첫 보이는 아이템
-  const roles = member?.roles?.cache;
+  //    캐시에 없는 멤버(명령어의 API 모양 멤버)는 roles 가 id 배열이다
+  const cache = member?.roles?.cache;
+  const list = !cache && Array.isArray(member?.roles) ? new Set(member.roles) : null;
+  const roles = cache || list;
   if (roles) {
     for (const [roleId, itemId] of state.visibleItemByRole) {
       if (!seenRoles.has(roleId) && roles.has(roleId)) owned.add(itemId);
@@ -191,7 +280,7 @@ function ownedItemIds(member, now = Date.now()) {
 //    위 캐시 판정(refreshItemEffects · ownedItemIds)과 같은 (A)(B) 규칙을, 캐시 대신 넘겨받은 이 유저의 최신 문서로 한다
 //    (방금 산 것 · 방금 환불된 것도 바로 맞게). 사이트 lib/ownedItems.js 의 ownedItems 와 같아야 한다 — 한쪽을 고치면 같이 고칠 것.
 //    보유는 효과와 무관하다 — 기프트카드(physical)도 보유로 센다(효과만 없다).
-//    입력: purchases(이 유저의 구매 건) · items(전체 Item, sortOrder · createdAt 순) · shopItems(전체 ShopItem) · heldRoles(디스코드 역할 id, 모르면 null)
+//    입력: purchases(이 유저의 구매 건 — consumedAt 도 함께 읽어 올 것) · items(전체 Item, sortOrder · createdAt 순) · shopItems(전체 ShopItem) · heldRoles(디스코드 역할 id, 모르면 null)
 //    반환: [{ item, expiresAt: Date | null(영구), pending }] — items 순서. 같은 아이템은 한 번(기간은 가장 늦게 끝나는 것, 영구가 있으면 영구)
 //          pending 은 그 아이템을 준 구매 건이 전부 지급 대기(pending)일 때만 true
 export function ownedItemList({ purchases, items, shopItems, heldRoles = null, now = Date.now() } = {}) {
@@ -220,6 +309,7 @@ export function ownedItemList({ purchases, items, shopItems, heldRoles = null, n
   // ── (A) 구매 건 — 디스코드 역할 유무와 무관 ──
   for (const p of Array.isArray(purchases) ? purchases : []) {
     if (!p || (p.status !== "pending" && p.status !== "completed")) continue;
+    if (p.consumedAt) continue; // 소모한 구매(쓴 보호막 등)는 보유가 아니다
     const exp = p.expiresAt ? new Date(p.expiresAt).getTime() : 0;
     if (exp && exp <= nowMs) continue;
     const shop = shopById.get(String(p.itemId)) || null;
@@ -287,13 +377,14 @@ export function heldEffects(member, on) {
 }
 
 // 1회 지급에 더할 효과 XP — add 합 + (percent 합 × base / 100, 내림). 요일 · 시간대 · 채널 조건을 통과한 것만.
-//    오류가 나도 0 을 돌려준다 — 효과 때문에 기존 지급이 막히면 안 된다.
-export function effectXp(member, on, { base = 0, channel = null, kst = kstNow() } = {}) {
+//    test(e): 효과별 추가 조건(음성 인원 등). 오류가 나도 0 을 돌려준다 — 효과 때문에 기존 지급이 막히면 안 된다.
+export function effectXp(member, on, { base = 0, channel = null, kst = kstNow(), test = null } = {}) {
   try {
     let add = 0;
     let pct = 0;
     for (const e of heldEffects(member, on)) {
       if (!effectTimeOk(e, kst) || !effectChannelOk(e, channel)) continue;
+      if (test && !test(e)) continue;
       if (e.mode === "percent") pct += e.amount;
       else add += e.amount;
     }
@@ -318,6 +409,127 @@ export function getAttendEffectXp(member, attendCount, kst = kstNow()) {
     console.error("아이템 효과 계산 오류 (attendEvery):", e.message);
   }
   return total;
+}
+
+// ── 발동형 (새 효과) ─────────────────────────────
+//    📌 확률 효과는 효과마다 따로 굴린다(합치지 않는다) — 10% 두 개면 둘 다 터질 수도, 하나만 터질 수도 있다
+const rolled = (chance) => Math.random() * 100 < chance;
+
+// 채팅 잭팟 — 채팅 XP 가 나가는 메시지에서 효과마다 chance% 로 +amount. 터진 합(0 이면 없음)
+export function jackpotXp(member, { channel = null, kst = kstNow() } = {}) {
+  try {
+    let total = 0;
+    for (const e of heldEffects(member, "chatJackpot")) {
+      if (!effectTimeOk(e, kst) || !effectChannelOk(e, channel)) continue;
+      if (rolled(e.chance)) total += e.amount;
+    }
+    return total;
+  } catch (e) {
+    console.error("아이템 효과 계산 오류 (chatJackpot):", e.message);
+    return 0;
+  }
+}
+
+// 음성 파티 — 그 음성 채널 인원(봇 제외, 본인 포함)이 minMembers 이상일 때 1회당 (percent 는 기본 음성 XP 기준)
+export function voicePartyXp(member, { base = 0, channel = null, count = 0, kst = kstNow() } = {}) {
+  return effectXp(member, "voiceParty", { base, channel, kst, test: (e) => count >= e.minMembers });
+}
+
+// 새 멤버 첫 답장 — 효과 합(조건 통과분). 새 멤버당 한 번은 부르는 쪽(features/chatXp)이 WelcomeReply 로 잠근다
+export function welcomeReplyXp(member, { channel = null, kst = kstNow() } = {}) {
+  return effectXp(member, "welcomeReply", { channel, kst });
+}
+
+// 럭키 출석 — 효과마다 chance% 로 기본 출석 XP(base = 설정 attendXp)의 amount%. 터진 합(XP)
+export function attendLuckyXp(member, base, kst = kstNow()) {
+  try {
+    let pct = 0;
+    for (const e of heldEffects(member, "attendLucky")) {
+      if (effectTimeOk(e, kst) && rolled(e.chance)) pct += e.amount;
+    }
+    return Math.floor((Math.max(0, Number(base) || 0) * pct) / 100);
+  } catch (e) {
+    console.error("아이템 효과 계산 오류 (attendLucky):", e.message);
+    return 0;
+  }
+}
+
+// 출석 빙옥 — 조건 통과한 효과의 빙옥 합
+export function attendPointOf(member, kst = kstNow()) {
+  try {
+    let total = 0;
+    for (const e of heldEffects(member, "attendPoint")) if (effectTimeOk(e, kst)) total += e.amount;
+    return total;
+  } catch (e) {
+    console.error("아이템 효과 계산 오류 (attendPoint):", e.message);
+    return 0;
+  }
+}
+
+// ── 상시형 · 꾸미기형 ─────────────────────────────
+/**
+ * 📌 들고 있는 동안 붙는 효과의 합 — 사이트 lib/itemPerks.js getPerks 의 봇 쪽 사본(봇이 쓰는 칸만). 캐시만 본다.
+ *    같은 효과는 합산 후 상한: cooldownCut ≤ 채팅 쿨타임의 절반(초), muteRelief ≤ 음소거 감소율(%p), passBoost ≤ 50(%)
+ *    cardSkin: 스킨 키 — 여러 개면 관리자 순서(아이템 sortOrder · createdAt)상 첫 번째. 없으면 ""
+ *    오류가 나도 0 · "" 을 돌려준다.
+ * @returns {{ cooldownCut: number, muteRelief: number, passBoost: number, cardSkin: string }}
+ */
+export function perksOf(member) {
+  const out = { cooldownCut: 0, muteRelief: 0, passBoost: 0, cardSkin: "" };
+  try {
+    if (!state.effectsById.size) return out;
+    const owned = ownedItemIds(member);
+    if (!owned.size) return out;
+    let cut = 0;
+    let relief = 0;
+    let boost = 0;
+    let skin = "";
+    for (const [itemId, list] of state.effectsById) {
+      if (!owned.has(itemId)) continue;
+      for (const e of list) {
+        if (e.on === "cooldownCut") cut += e.seconds || e.amount;
+        else if (e.on === "muteRelief") relief += e.amount;
+        else if (e.on === "passBoost") boost += e.amount;
+        else if (e.on === "cardSkin" && !skin) skin = e.skin;
+      }
+    }
+    const s = getSettings();
+    out.cooldownCut = Math.min(cut, EFFECT_TRIGGERS.cooldownCut.cap, Math.floor(Math.max(0, Number(s.chatCooldownSec) || 0) / 2));
+    out.muteRelief = Math.min(relief, EFFECT_TRIGGERS.muteRelief.cap, Math.max(0, Number(s.muteReducePct) || 0));
+    out.passBoost = Math.min(boost, EFFECT_TRIGGERS.passBoost.cap);
+    out.cardSkin = skin;
+  } catch (e) {
+    console.error("아이템 효과 계산 오류 (perks):", e.message);
+  }
+  return out;
+}
+
+// ── 소모형 — 연속 출석 보호막 ─────────────────────
+/**
+ * 📌 보호막 하나 소모 — 이 유저의 살아 있는 구매 중 보호막(streakShield) 아이템인 것 하나(먼저 산 것부터)에
+ *    consumedAt 을 조건부로 세운다(consumedAt 이 비어 있을 때만 — 두 번 쓰지 않게). 성공하면 그 구매 _id, 없으면 null.
+ *    구매 건은 캐시가 아니라 DB 에서 바로 읽는다(방금 산 것 · 방금 쓴 것도 맞게). 역할만 들고 있는 (B) 보유는 소모할 구매가 없어 막지 못한다.
+ */
+export async function consumeStreakShield(member) {
+  const userId = member?.id || member?.user?.id;
+  if (!userId) return null;
+  const shieldItems = new Set();
+  for (const [itemId, list] of state.effectsById) if (list.some((e) => e.on === "streakShield")) shieldItems.add(itemId);
+  if (!shieldItems.size) return null;
+
+  const now = new Date();
+  const rows = await Purchase.find({ userId, ...ownFilter(now) }, { itemRef: 1, itemId: 1, roleId: 1 })
+    .sort({ createdAt: 1 })
+    .lean();
+  for (const p of rows) {
+    if (!shieldItems.has(purchaseItemId(p, state.itemIds, state.shopRef, state.itemByRole))) continue;
+    const r = await Purchase.updateOne({ _id: p._id, consumedAt: null }, { $set: { consumedAt: now } });
+    if (r.modifiedCount === 1) {
+      consumedPids.set(String(p._id), Date.now()); // 다음 캐시 갱신 전까지도 보유에서 빼 둔다
+      return String(p._id);
+    }
+  }
+  return null;
 }
 
 // 📌 "하루 1번" 자물쇠 — effectDaily.<key> 가 오늘이 아닐 때만 오늘로 바꾸는 조건부 갱신.

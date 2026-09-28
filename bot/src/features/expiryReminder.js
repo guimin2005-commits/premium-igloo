@@ -1,6 +1,7 @@
 // ── 기간제 만료 임박 DM (10분 주기) ──────────────
 //  · completed 기간제(역할 · 퍽 · 아이템) 중 N시간 안에 끝나는 건에 한 번만 DM (reminderSentAt 조건부 선점)
 //  · 같은 역할 · 아이템이 더 늦게까지 이어지면(연장분 · 다른 구매) 보내지 않는다
+//  · 소모된 건(consumedAt)은 대상도, 이어지는 구매도 아니다
 //  · 설정: BotSetting.expiryReminderEnabled(기본 켜짐) · expiryReminderHours(기본 24)
 import { Purchase, BotSetting, ShopItem } from "../db.js";
 import { config } from "../config.js";
@@ -58,6 +59,7 @@ async function tick(client) {
     itemType: { $in: ["role", "perk", "item"] },
     expiresAt: { $gt: now, $lte: new Date(now.getTime() + windowMs) },
     reminderSentAt: null, // 필드가 없는 옛 문서도 잡힌다
+    consumedAt: null, // 📌 이미 소모한 건(쓴 보호막 등)은 끝날 것도 연장할 것도 없다
     // 📌 쓰기 시작한 때가 이미 알림 구간 안인 짧은 건(24시간 알림에 1일권 등)은 빼낸다 — 지급 DM 직후 "곧 끝납니다" 가 가지 않게
     $expr: {
       $lt: [
@@ -80,7 +82,7 @@ async function tick(client) {
       // 📌 조건부 선점 — 봇이 둘 떠 있거나 틱이 겹쳐도 한 번만.
       //    연장은 새 구매 문서(renewOf)라 이 건의 만료는 그대로다 — 연장분은 자기 reminderSentAt 으로 따로 알린다
       const claim = await Purchase.updateOne(
-        { _id: p._id, status: "completed", reminderSentAt: null },
+        { _id: p._id, status: "completed", reminderSentAt: null, consumedAt: null }, // 읽은 뒤 소모됐으면 보내지 않는다
         { $set: { reminderSentAt: new Date() } }
       );
       if (!claim.modifiedCount) continue;

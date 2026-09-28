@@ -8,6 +8,7 @@ import { kstMonthStart } from "@/lib/kst";
 import { requireAdmin } from "@/lib/apiAuth";
 import BotSetting from "@/models/BotSetting";
 import { fetchGuildMember } from "@/lib/discordMember";
+import { badgesOfUsers } from "@/lib/itemPerks";
 
 // 📌 디스코드 멤버 정보 — 프로필 사진과 표시 이름을 함께 가져온다.
 //    사진은 시상대(1~3위)에만, 이름은 UserXp 에 비어 있는 사람에게만 쓴다.
@@ -78,6 +79,20 @@ async function decorate(rows, skip) {
   });
 }
 
+// 📌 이름 옆 프로필 배지(최대 3) — 쪽 전체를 한 번에 모아 계산한다(lib/itemPerks badgesOfUsers · 구매 기록 기준 보유).
+//    사진 · 이름 채우기(decorate)와 함께 돌리고, 배지 계산이 실패해도 랭킹은 그대로 보낸다
+async function finish(rows, skip) {
+  const [out, badgeMap] = await Promise.all([
+    decorate(rows, skip),
+    badgesOfUsers(rows.map((r) => r.userId)).catch((e) => {
+      console.error("랭킹 배지 계산 오류:", e?.message || e);
+      return null;
+    }),
+  ]);
+  if (!badgeMap?.size) return out;
+  return out.map((r) => (badgeMap.has(r.userId) ? { ...r, badges: badgeMap.get(r.userId) } : r));
+}
+
 // ── [조회] 랭킹 ──────────────────────────────────────────────
 //   period=all   누적 XP        (UserXp.xp)
 //   period=month 이번 달 획득   (XpLog 합산 — 봇 가동 이후분만 잡힌다)
@@ -123,7 +138,7 @@ export async function GET(request) {
       ).lean();
       const byId = new Map(docs.map((u) => [u.userId, u]));
 
-      const monthData = await decorate(
+      const monthData = await finish(
         rows.map((r, i) => ({
           rank: skip + i + 1,
           userId: r._id,
@@ -149,7 +164,7 @@ export async function GET(request) {
         UserXp.countDocuments(filter),
       ]);
 
-      const voiceData = await decorate(
+      const voiceData = await finish(
         rows.map((r, i) => ({
           rank: skip + i + 1,
           userId: r.userId,
@@ -171,7 +186,7 @@ export async function GET(request) {
       UserXp.countDocuments(),
     ]);
 
-    const allData = await decorate(
+    const allData = await finish(
       rows.map((r, i) => ({
         rank: skip + i + 1,
         userId: r.userId,

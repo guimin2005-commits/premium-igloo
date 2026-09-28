@@ -633,22 +633,30 @@ export default function NoticeDetail({ postId }: { postId: string }) {
                     type="button"
                     onClick={toggleAck}
                     aria-pressed={acked}
-                    className={`inline-flex items-center gap-2 h-9 px-4 rounded-full text-[13px] font-black transition-all outline-none focus:outline-none active:scale-[0.98] ${
+                    className={`inline-grid place-items-center h-9 px-4 rounded-full text-[13px] font-black transition-all outline-none focus:outline-none active:scale-[0.98] ${
                       acked ? "bg-white text-[#131313] hover:bg-black/[0.03]" : "text-white hover:brightness-110"
                     }`}
                     style={acked ? { boxShadow: `inset 0 0 0 1.5px ${BLUE}` } : { background: BLUE }}
                   >
-                    {acked ? (
-                      <>
-                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-white" style={{ background: BLUE }}>
-                          <CheckMark className="w-3 h-3" />
-                        </span>
-                        확인함
-                        {ackAt && <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">· {fmtDate(ackAt)}</span>}
-                      </>
-                    ) : (
-                      "확인했습니다"
-                    )}
+                    {/* 📌 가장 넓은 모양(확인함 · 날짜)을 안 보이게 깔아 폭을 고정 — 누를 때마다 버튼 폭이 바뀌어 옆 이모지 반응들이 밀리지 않게 */}
+                    <span aria-hidden className="col-start-1 row-start-1 invisible inline-flex items-center gap-2">
+                      <span className="w-5 h-5" />
+                      확인함
+                      <span className="text-[12px] font-bold tabular-nums">· 0000.00.00</span>
+                    </span>
+                    <span className="col-start-1 row-start-1 inline-flex items-center gap-2">
+                      {acked ? (
+                        <>
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-white" style={{ background: BLUE }}>
+                            <CheckMark className="w-3 h-3" />
+                          </span>
+                          확인함
+                          {ackAt && <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">· {fmtDate(ackAt)}</span>}
+                        </>
+                      ) : (
+                        "확인했습니다"
+                      )}
+                    </span>
                   </button>
                   <span aria-hidden className="w-px h-5 mx-1 bg-black/[0.1]"></span>
                 </>
@@ -661,13 +669,20 @@ export default function NoticeDetail({ postId }: { postId: string }) {
                   type="button"
                   onClick={() => toggleReaction(em)}
                   aria-pressed={v.mine}
-                  className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-[13px] font-black transition-all outline-none focus:outline-none active:scale-95 ${
+                  className={`inline-grid place-items-center h-9 px-3 rounded-full text-[13px] font-black transition-all outline-none focus:outline-none active:scale-95 ${
                     v.mine ? "text-[#131313]" : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08]"
                   }`}
                   style={v.mine ? { background: "rgba(63,131,184,0.12)", boxShadow: `inset 0 0 0 1.5px ${BLUE}` } : undefined}
                 >
-                  <span aria-hidden className="text-[15px] leading-none">{em}</span>
-                  {v.count > 0 && <span className="tabular-nums">{v.count}</span>}
+                  {/* 📌 0 일 때도 숫자 한 자리 폭을 안 보이게 잡아 둔다 — 처음 누를 때 알약이 넓어져 옆 반응들이 밀리지 않게 */}
+                  <span aria-hidden className="col-start-1 row-start-1 invisible inline-flex items-center gap-1.5">
+                    <span className="text-[15px] leading-none">{em}</span>
+                    <span className="tabular-nums">0</span>
+                  </span>
+                  <span className="col-start-1 row-start-1 inline-flex items-center gap-1.5">
+                    <span aria-hidden className="text-[15px] leading-none">{em}</span>
+                    {v.count > 0 && <span className="tabular-nums">{v.count}</span>}
+                  </span>
                 </button>
               );
             })}
@@ -771,9 +786,11 @@ export default function NoticeDetail({ postId }: { postId: string }) {
                   type="button"
                   onClick={submitComment}
                   disabled={!canSendComment}
-                  className="h-9 px-4 rounded-full bg-[#131313] enabled:hover:bg-[#2a2a2a] text-white text-[12px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+                  className="inline-grid place-items-center h-9 px-4 rounded-full bg-[#131313] enabled:hover:bg-[#2a2a2a] text-white text-[12px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
                 >
-                  {cSending ? "보내는 중…" : "보내기"}
+                  {/* 📌 두 글자를 한 칸에 겹쳐 폭을 긴 쪽에 고정 — 보내는 동안 단추 폭이 바뀌지 않게 */}
+                  <span className={`col-start-1 row-start-1 ${cSending ? "invisible" : ""}`}>보내기</span>
+                  <span aria-hidden={!cSending} className={`col-start-1 row-start-1 ${cSending ? "" : "invisible"}`}>보내는 중…</span>
                 </button>
               </div>
             </div>

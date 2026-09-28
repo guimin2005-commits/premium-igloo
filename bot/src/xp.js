@@ -2,9 +2,9 @@
 import { UserXp, XpLog } from "./db.js";
 import { getLevelByXp, getCumulativeXpByLevel, kstToday } from "./leveling.js";
 import { getRoleConfigs } from "./roleConfigs.js";
-import { heldEffects, effectXp, effectTimeOk, claimDaily, kstNow } from "./itemEffects.js";
+import { heldEffects, effectXp, effectTimeOk, claimDaily, kstNow, perksOf } from "./itemEffects.js";
 import { getSettings, isLevelOpen } from "./botSettings.js";
-import { buildMessage, commonVars, tierOf, progressBar } from "./botMessages.js";
+import { buildMessage, buildMessageWithCard, cardAvatar, commonVars, tierOf, progressBar } from "./botMessages.js";
 import { config } from "./config.js";
 
 export const EMBED_COLOR = 0xe91e3f;
@@ -88,23 +88,44 @@ export async function syncRewardRoles(member, level, opts = {}) {
   await revokeRewardRoles(member, level);
 }
 
-// 레벨업 알림 — 채널은 대시보드 설정, 문구 · 디자인은 관리자 봇 메시지 설정(levelUp)
+// 레벨업 알림 — 채널은 대시보드 설정, 문구 · 디자인은 관리자 봇 메시지 설정(levelUp). 카드가 켜져 있으면 이미지 카드를 붙인다
+//   📌 지급(grantXp)은 기다리지 않는다 — 아바타 받기 · 카드 그리기로 지급이 늦어지지 않게
 function announceLevelUp(member, prevLevel, newLevel, totalXp) {
+  sendLevelUp(member, prevLevel, newLevel, totalXp).catch((e) =>
+    console.error(`레벨업 알림 오류 (${member.displayName}):`, e?.message || e)
+  );
+}
+
+async function sendLevelUp(member, prevLevel, newLevel, totalXp) {
   const s = getSettings();
+  const channelId = s.levelupChannelId || config.levelupChannelId;
+  // 보낼 채널이 없으면 카드도 그리지 않는다
+  if (!channelId || !member.guild.channels.cache.get(channelId)?.isTextBased()) return;
   const cur = getCumulativeXpByLevel(newLevel);
   const next = getCumulativeXpByLevel(newLevel + 1);
   const span = next - cur;
-  const payload = buildMessage("levelUp", {
+  const need = Math.max(0, next - totalXp);
+  const progress = span > 0 ? (totalXp - cur) / span : 1;
+  const vars = {
     ...commonVars(member),
     level: newLevel,
     prevLevel,
     xp: totalXp,
-    nextXp: Math.max(0, next - totalXp),
+    nextXp: need,
     tier: tierOf(newLevel).name,
-    progressBar: progressBar(span > 0 ? (totalXp - cur) / span : 1),
-  });
+    progressBar: progressBar(progress),
+  };
+  const payload = await buildMessageWithCard("levelUp", vars, async () => ({
+    avatar: await cardAvatar(member),
+    name: vars.name,
+    level: newLevel,
+    prevLevel,
+    xp: totalXp,
+    need,
+    progress,
+  }));
 
-  sendNotice(member.guild, s.levelupChannelId || config.levelupChannelId, payload);
+  sendNotice(member.guild, channelId, payload);
 }
 
 // XP 지급 + 레벨 재계산. 레벨업 시 알림·보상 역할까지 처리
@@ -129,11 +150,17 @@ export async function grantXp(member, amount, meta = {}) {
     return null;
   }
 
+  // 📌 시즌 패스 가속(아이템 효과 passBoost, 상한 50%) — 이 지급 XP 의 합% 만큼 기준선(passBaseXp)을 같은 쓰기에서 낮춘다.
+  //    진행도(xp - passBaseXp)만 더 오르고 레벨 · XP 는 그대로다. 회수(음수)에는 붙이지 않는다
+  const passBoost = amount > 0 ? Math.floor((amount * perksOf(member).passBoost) / 100) : 0;
+  // 음성 지급이면 그 주기만큼 누적 참여 시간도 같은 쓰기에서 올린다 (추가 왕복 없음)
+  const inc = { xp: amount };
+  if (meta.voiceSeconds) inc.voiceSeconds = meta.voiceSeconds;
+  if (passBoost > 0) inc.passBaseXp = -passBoost;
   const doc = await UserXp.findOneAndUpdate(
     { userId: member.id },
     {
-      // 음성 지급이면 그 주기만큼 누적 참여 시간도 같은 쓰기에서 올린다 (추가 왕복 없음)
-      $inc: meta.voiceSeconds ? { xp: amount, voiceSeconds: meta.voiceSeconds } : { xp: amount },
+      $inc: inc,
       $set: { username: member.user.username, displayName: member.displayName, updatedAt: new Date() },
     },
     { upsert: true, new: true }
@@ -147,6 +174,7 @@ export async function grantXp(member, amount, meta = {}) {
     reason: meta.reason || "",
     channelId: meta.channelId || "",
     channelName: meta.channelName || "",
+    ...(passBoost > 0 ? { passBoost } : {}),
   }).catch(() => {});
 
   const newLevel = getLevelByXp(doc.xp);

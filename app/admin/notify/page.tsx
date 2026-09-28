@@ -14,6 +14,7 @@ import {
   FieldRow,
   Segmented,
   Btn,
+  SwapLabel,
   Toolbar,
   StatusChip,
   DataTable,
@@ -294,7 +295,7 @@ export default function AdminNotifyPage() {
 
               <div className="flex justify-end px-5 py-4">
                 <Btn type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-                  {isSubmitting ? "발송 중..." : "통지 발송"}
+                  <SwapLabel swap={isSubmitting} to="발송 중...">통지 발송</SwapLabel>
                 </Btn>
               </div>
             </form>

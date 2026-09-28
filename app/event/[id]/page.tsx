@@ -67,8 +67,10 @@ export default function EventDetailPage() {
               {post.author && <span className="text-[11px] font-bold text-[#a3a3a3]">{post.author}</span>}
               <button
                 onClick={() => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 1600); }}
-                className="ml-auto rounded-full px-3.5 py-1.5 text-[10px] font-bold bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] transition-colors">
-                {copied ? "복사됨" : "링크 복사"}
+                className="ml-auto inline-grid place-items-center rounded-full px-3.5 py-1.5 text-[10px] font-bold bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] transition-colors">
+                {/* 📌 두 글자를 한 칸에 겹쳐 폭을 긴 쪽에 고정 — 누른 뒤 "복사됨"으로 바뀌며 단추가 줄어들지 않게 */}
+                <span className={`col-start-1 row-start-1 ${copied ? "invisible" : ""}`}>링크 복사</span>
+                <span aria-hidden={!copied} className={`col-start-1 row-start-1 ${copied ? "" : "invisible"}`}>복사됨</span>
               </button>
             </div>
 

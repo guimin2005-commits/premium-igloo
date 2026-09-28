@@ -7,17 +7,20 @@ import Dropdown from "../components/Dropdown";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 import IconPicker from "../components/IconPicker";
-import { salePrice, isTimed, durationOptions, durationLabel, cardPick, cardFrom, discountPctOf } from "@/lib/shopPricing";
-import { POINT_RATE, xpToPoint, pointToXp } from "@/lib/pointRate";
+import { salePrice, isTimed, durationOptions, durationLabel, cardPick, cardFrom, discountPctOf, isPointOnly, shownPrice, priceUnit, priceText, affordFor } from "@/lib/shopPricing";
+import { POINT_RATE } from "@/lib/pointRate";
+import { planPayment } from "@/lib/shopPay";
 import { itemTypeLabel, itemTypeColor, ITEM_TYPE_OPTIONS } from "@/lib/items";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
   buildDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload,
+  setPointOnly, formUnit, formSalePrice, priceCalc, durationsCalc,
 } from "./productForm";
 import ArcticFooter from "./ArcticFooter";
 import ArcticDock from "./ArcticDock";
 import ArcticHome from "./ArcticHome";
 import CardArt from "./CardArt";
+import ProductCard from "./ProductCard";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useArcticOrigin } from "./fromLevel";
 import { ownedIdsOf } from "./owned";
@@ -480,11 +483,13 @@ export default function ArcticShopBody({
 
     // 📌 카드 가격은 기본 무제한. 가격 필터 · "살 수 있는 것만" 을 켜면 그 조건을 통과하는 기간(무제한 > 가장 긴 기간)의 값을 건다 —
     //    필터 · 정렬 · 카드 표기가 모두 그 값(_pick)을 본다. 조건을 통과하는 기간이 하나도 없으면 목록에서 빠진다
-    // 빙옥도 함께 낼 수 있으니 XP + 빙옥 × 1,000 까지 산다
-    const budget = affordableOnly && myXp != null ? myXp + pointToXp(myPoint ?? 0) : Infinity;
-    const priceOk = range.v === "all" && budget === Infinity ? undefined : (p: number) => p >= range.min && p < range.max && p <= budget;
+    // 빙옥도 함께 낼 수 있으니 XP + 빙옥 × 1,000 까지 산다 — 빙옥 전용 상품은 빙옥만 (affordFor)
+    //    가격대는 XP 값(빙옥 전용은 XP 로 친 값) 기준 — 정렬과 같은 값
+    const inRange = (p: number) => p >= range.min && p < range.max;
     const filtered = items.flatMap((it) => {
       if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : it.type !== typeFilter)) return [];
+      const afford = affordableOnly && myXp != null ? affordFor(it, myXp, myPoint ?? 0) : null;
+      const priceOk = range.v === "all" && !afford ? undefined : (p: number) => inRange(p) && (!afford || afford(p));
       const pick = cardPick(it, priceOk);
       if (!pick) return [];
       if (inStockOnly && it.stock === 0) return [];
@@ -513,12 +518,16 @@ export default function ArcticShopBody({
     setBuyTarget(item);
   };
 
-  // 바로 구매 창의 금액 — 총액(XP) · 쓸 수 있는 빙옥 최대 · 실제로 쓸 빙옥 · 결제 XP
+  // 바로 구매 창의 금액 — 총액(XP) · 쓸 수 있는 빙옥 최대 · 실제로 쓸 빙옥 · 결제 XP (서버와 같은 lib/shopPay planPayment)
+  //    빙옥 전용 상품은 빙옥 칸이 없다 — 판매가 전부를 빙옥으로(buyPointAll)
   const buyTotal = buyTarget ? salePrice(buyTarget, buyTarget._days) : 0;
-  const buyMaxPoint = Math.max(0, Math.min(myPoint ?? 0, xpToPoint(buyTotal)));
-  const buyPoint = Math.min(pointUse, buyMaxPoint);
-  const buyXp = Math.max(0, buyTotal - buyPoint * POINT_RATE);
-  const buyEnough = myXp != null && myXp >= buyXp && buyPoint <= (myPoint ?? 0);
+  const buyPO = isPointOnly(buyTarget);
+  const buyPlan = planPayment({ lines: [{ price: buyTotal, pointOnly: buyPO }], pointUse, pointBalance: myPoint ?? 0 });
+  const buyMaxPoint = buyPlan.maxPoint;
+  const buyPoint = buyPlan.pointUse;
+  const buyXp = buyPlan.chargedXp;
+  const buyPointAll = buyPlan.point;
+  const buyEnough = myXp != null && myXp >= buyXp && buyPointAll <= (myPoint ?? 0);
 
   const openBuy = (item: any) => {
     if (!isLoggedIn) return signIn("discord");
@@ -538,7 +547,7 @@ export default function ArcticShopBody({
       const res = await fetch("/api/shop/purchase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: buyTarget._id, contact, days: buyTarget._days || 0, pointUse: buyPoint, expectedPrice: buyTotal }),
+        body: JSON.stringify({ itemId: buyTarget._id, contact, days: buyTarget._days || 0, pointUse: buyPoint, expectedPrice: buyTotal, expectedPointOnly: buyPO }),
       });
       const d = await res.json();
       setResult({ ok: !!d.success, message: d.message || (d.success ? "구매가 완료되었습니다." : "구매에 실패했습니다.") });
@@ -660,64 +669,23 @@ export default function ArcticShopBody({
   }
 
 
-  // 📌 상품 하나 — 상자(카드) 없이 그림 · 상품명 · 가격 · 찜 만. 담기·구매는 상세에서.
-  //    큰 값은 카드에 걸린 기간(it._pick — 목록 필터가 정한 것, 없으면 기본 무제한)의 판매가, 기간이면 "/ 30일".
-  //    그보다 싼 기간이 있으면 아래 작은 줄에 "7일 154,000 XP부터". 취소선 정가도 같은 기간 기준
+  // 📌 상품 하나 — 모양은 ProductCard 한 벌(상점 · 홈 · 찜 · 상세의 다른 상품이 같이 쓴다).
+  //    카드에 걸린 기간은 it._pick(목록 필터가 정한 것, 없으면 기본 무제한)
   const renderCard = (it: any) => {
-    const soldOut = it.stock === 0;
-    const wished = wish.includes(it._id);
-    const pick = it._pick || cardPick(it) || { days: undefined, price: 0, list: 0 };
-    const from = cardFrom(it, pick);
-    const listPrice = pick.list;
-    const finalPrice = pick.price;
-    const pct = finalPrice < listPrice ? discountPctOf(it) : 0;
     // 필터로 기본(무제한)과 다른 기간을 걸었으면 상세도 그 기간으로 열리게
     const href = `/arctic/item/${it._id}${isTimed(it) && it._pick && it._pick.days != null && it._pick.days !== cardPick(it)?.days ? `?days=${it._pick.days}` : ""}`;
     return (
-      <div key={it._id} className="group relative flex flex-col">
-        <Link href={href} className="block relative aspect-square overflow-hidden rounded-md bg-[#f2f2f2]">
-          <CardArt it={it} imgClass="group-hover:scale-[1.03] transition-transform duration-500" iconSize={64} />
-          {isAdmin && !it.active && (
-            <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">숨김</span>
-          )}
-          {soldOut && (
-            <span className="absolute inset-0 bg-white/70 flex items-center justify-center">
-              <span className="text-[12px] font-black text-[#131313] tracking-wider">품절</span>
-            </span>
-          )}
-        </Link>
-
-        {/* 찜 */}
-        <button onClick={() => toggleWish(it)} aria-label={wished ? "찜 해제" : "찜하기"}
-          className="absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-colors">
-          <svg className={`w-4 h-4 transition-colors ${wished ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}
-            fill={wished ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.heart} />
-          </svg>
-        </button>
-
-        <Link href={href} className="block mt-3">
-          {/* 이름 앞에 분류 — 무엇을 사는 것인지 이름만으로는 모른다 */}
-          <TypeBadge type={it.type} className="inline-block mb-1.5 px-2 py-[3px] text-[10px] leading-none align-middle" />
-          {/* 이름은 작고 가볍게, 가격이 주인공 — 둘이 같은 크기면 값이 안 읽힌다 */}
-          <h3 className="text-[13px] font-semibold text-[#5a5a5a] leading-snug line-clamp-2 break-keep">{it.name}</h3>
-          {/* 할인 중이면 정가는 취소선으로 위에, 할인율은 빨간 글자, 큰 숫자는 할인가 */}
-          {pct > 0 && <s className="block mt-2 text-[11.5px] text-[#a3a3a3] tabular-nums leading-none">{listPrice.toLocaleString()} XP</s>}
-          <p className={`${pct > 0 ? "mt-1" : "mt-2"} text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none`}>
-            {pct > 0 && <span className="mr-1.5 text-[14px] font-black text-[#e91e3f]">{pct}%</span>}
-            {finalPrice.toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">XP</span>
-            {isTimed(it) && pick.days != null && pick.days > 0 && <span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">/ {durationLabel(pick.days)}</span>}
-          </p>
-          {from && <p className="mt-1.5 text-[11.5px] font-bold text-[#8a8a8a] tabular-nums leading-none">{durationLabel(from.days)} {from.price.toLocaleString()} XP부터</p>}
-        </Link>
-
+      <ProductCard key={it._id} it={it} href={href} pick={it._pick} wished={wish.includes(it._id)} onWish={() => toggleWish(it)}
+        overlay={isAdmin && !it.active ? (
+          <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">숨김</span>
+        ) : null}>
         {isAdmin && (
           <div className="mt-2 flex gap-2 text-[11px] font-bold">
             <button onClick={() => openEdit(it)} className="text-[#8a8a8a] hover:text-[#131313] transition-colors">수정</button>
             <button onClick={() => setDeleteTarget(it)} className="text-[#e91e3f] hover:text-[#d01634] transition-colors">삭제</button>
           </div>
         )}
-      </div>
+      </ProductCard>
     );
   };
 
@@ -725,13 +693,15 @@ export default function ArcticShopBody({
   // 할인 종료 시각이 이미 지났으면 저장해도 할인이 붙지 않는다 — 요약 · 판매가 미리보기도 할인 없이
   const efUntilPast = !!editForm?.discountUntil && new Date(`${editForm.discountUntil}:00+09:00`).getTime() <= Date.now();
   const efDiscount = efUntilPast ? 0 : Math.min(100, Math.max(0, Number(editForm?.discountPct) || 0));
-  const efSale = Math.max(0, Math.floor(((Number(editForm?.price) || 0) * (100 - efDiscount)) / 100));
+  // 입력칸 단위 그대로(빙옥 전용이면 빙옥)
+  const efSale = formSalePrice(editForm, editForm?.price, efDiscount);
+  const efUnit = formUnit(editForm);
   const efDurations = buildDurations(editForm);
   const efRoleName = guildRoles.find((r) => r.id === editForm?.roleId)?.name || editForm?.roleName || "";
   const efLinked = isLinked(editForm);
   const efBasicSummary = [efLinked ? "등록된 아이템" : "", editForm?.name || "이름 없음", itemTypeLabel(editForm?.type), efRoleName].filter(Boolean).join(" · ");
   const efPriceSummary = Number(editForm?.price) > 0
-    ? `${efSale.toLocaleString()} XP${efDiscount > 0 ? ` (-${efDiscount}%)` : ""}${editForm?.timed ? ` · 기간제 ${efDurations.length}종` : ""}`
+    ? `${efSale.toLocaleString()} ${efUnit}${efDiscount > 0 ? ` (-${efDiscount}%)` : ""}${editForm?.pointOnly ? " · 빙옥 전용" : ""}${editForm?.timed ? ` · 기간제 ${efDurations.length}종` : ""}`
     : "가격 미입력";
   const efStockSummary = `${editForm?.stock === "" ? "재고 무제한" : `재고 ${editForm?.stock}`} · 추천 ${editForm?.sortOrder || 0} · ${editForm?.active ? "판매 중" : "숨김"}`;
   const efSeasonSummary = editForm?.detachOnSeason ? "시즌 바뀌면 디스코드 표기 뗌" : "디스코드 역할 계속 유지";
@@ -1141,7 +1111,7 @@ export default function ArcticShopBody({
                     <TypeBadge type={buyTarget.type} className="inline-block px-2 py-0.5 text-[10px] mb-1.5" />
                     <h2 className="text-base font-black text-[#131313] truncate">{buyTarget.name}</h2>
                     <p className="text-sm font-black text-[#e91e3f] tabular-nums mt-0.5">
-                      {salePrice(buyTarget, buyTarget._days).toLocaleString()} XP
+                      {priceText(buyTarget, salePrice(buyTarget, buyTarget._days))}
                       {isTimed(buyTarget) && <span className="text-[11px] font-bold text-[#8a8a8a] ml-1.5">/ {durationLabel(buyTarget._days)}</span>}
                     </p>
                   </div>
@@ -1168,7 +1138,7 @@ export default function ArcticShopBody({
                             <button key={o.days} type="button" onClick={() => { setPickDays((prev) => ({ ...prev, [buyTarget._id]: o.days })); setBuyTarget({ ...buyTarget, _days: o.days }); }}
                               className={`flex-1 py-2.5 rounded-xl text-[12px] font-bold border transition-colors ${on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#ededed] hover:border-[#131313]"}`}>
                               {durationLabel(o.days)}
-                              <span className={`block text-[11px] font-bold tabular-nums mt-0.5 ${on ? "text-white/70" : "text-[#a3a3a3]"}`}>{salePrice(buyTarget, o.days).toLocaleString()} XP</span>
+                              <span className={`block text-[11px] font-bold tabular-nums mt-0.5 ${on ? "text-white/70" : "text-[#a3a3a3]"}`}>{priceText(buyTarget, salePrice(buyTarget, o.days))}</span>
                             </button>
                           );
                         })}
@@ -1177,8 +1147,8 @@ export default function ArcticShopBody({
                     </div>
                   )}
 
-                  {/* 📌 빙옥 사용 — 원하는 만큼 쓰고 나머지는 XP 로. 결제 화면(arctic/checkout)과 같은 모양 */}
-                  <div className="mb-4">
+                  {/* 📌 빙옥 사용 — 원하는 만큼 쓰고 나머지는 XP 로. 결제 화면(arctic/checkout)과 같은 모양. 빙옥 전용 상품은 고를 게 없어 감춘다 */}
+                  {!buyPO && <div className="mb-4">
                     <div className="flex items-center gap-2">
                       <label htmlFor="buy-point" className="shrink-0 text-[11px] font-bold text-[#5a5a5a]">빙옥 사용</label>
                       <input id="buy-point" type="text" inputMode="numeric" autoComplete="off"
@@ -1195,8 +1165,16 @@ export default function ArcticShopBody({
                       <span className="ml-auto shrink-0 text-[11px] text-[#8a8a8a] tabular-nums">보유 {(myPoint ?? 0).toLocaleString()}</span>
                     </div>
                     <p className="mt-1.5 text-[10px] text-[#8a8a8a]">1 빙옥 = {POINT_RATE.toLocaleString()} XP</p>
-                  </div>
+                  </div>}
 
+                  {buyPO ? (
+                    <div className="bg-[#f2f2f2] rounded-xl px-4 py-3 mb-5 text-[12px] space-y-1.5">
+                      <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 빙옥</span><span className="font-bold text-[#131313] tabular-nums">{(myPoint ?? 0).toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 빙옥</span><span className="font-bold text-[#d01634] tabular-nums">-{buyPointAll.toLocaleString()}</span></div>
+                      <div className="h-px bg-[#e0e0e0]"></div>
+                      <div className="flex justify-between"><span className="text-[#5a5a5a]">구매 후 빙옥</span><span className="font-black text-[#131313] tabular-nums">{Math.max(0, (myPoint ?? 0) - buyPointAll).toLocaleString()}</span></div>
+                    </div>
+                  ) : (
                   <div className="bg-[#f2f2f2] rounded-xl px-4 py-3 mb-5 text-[12px] space-y-1.5">
                     <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold text-[#131313] tabular-nums">{(myXp ?? 0).toLocaleString()}</span></div>
                     {buyPoint > 0 && (
@@ -1210,6 +1188,7 @@ export default function ArcticShopBody({
                     <div className="flex justify-between"><span className="text-[#5a5a5a]">구매 후 XP</span><span className="font-black text-[#131313] tabular-nums">{Math.max(0, (myXp ?? 0) - buyXp).toLocaleString()}</span></div>
                     <div className="flex justify-between"><span className="text-[#5a5a5a]">구매 후 빙옥</span><span className="font-black text-[#131313] tabular-nums">{Math.max(0, (myPoint ?? 0) - buyPoint).toLocaleString()}</span></div>
                   </div>
+                  )}
 
                   {/* 화면에 안 보이는 것만 남긴다 — 지급까지 걸리는 시간과 되돌릴 수 없다는 경고
                       (기간 만료 회수는 위 '이용 기간' 칸이 이미 말한다) */}
@@ -1223,7 +1202,7 @@ export default function ArcticShopBody({
                     <button onClick={() => setBuyTarget(null)} className="flex-1 py-3.5 bg-[#f2f2f2] text-[#5a5a5a] font-bold rounded-xl hover:bg-[#e0e0e0] transition-colors">취소</button>
                     <button onClick={confirmBuy} disabled={isBuying || !buyEnough}
                       className="flex-1 py-3.5 bg-[#e91e3f] text-[#ffffff] font-bold rounded-xl hover:bg-[#d01634] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                      {isBuying ? "처리 중..." : buyEnough ? "구매 확정" : "XP 부족"}
+                      {isBuying ? "처리 중..." : buyEnough ? "구매 확정" : buyPO ? "빙옥 부족" : "XP 부족"}
                     </button>
                   </div>
                 </div>
@@ -1364,11 +1343,19 @@ export default function ArcticShopBody({
 
                   {/* ── 가격 · 기간 ── */}
                   <FormGroup title="가격 · 기간" summary={efPriceSummary} open={openGroups.price} onToggle={() => toggleGroup("price")}>
+                    {/* 📌 빙옥 전용 — 켜면 가격 칸은 빙옥으로 받고 ×1,000 해 XP 로 저장한다. 새 기프트카드는 켜진 채로 시작한다 */}
+                    <div>
+                      <label className={F_LABEL}>결제 수단</label>
+                      <FormToggle on={!!editForm.pointOnly} onClick={() => setEditForm(setPointOnly(editForm, !editForm.pointOnly))}
+                        onLabel="빙옥 전용" offLabel="XP · 빙옥" />
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className={F_LABEL}>정가 <span className="text-[#d01634]">*</span></label>
+                        <label className={F_LABEL}>정가 ({efUnit}) <span className="text-[#d01634]">*</span></label>
                         <input type="number" min={1} value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
-                          placeholder="500000" className={F_INPUT_SM} />
+                          placeholder={editForm.pointOnly ? "500" : "500000"} className={F_INPUT_SM} />
+                        {/* 가격 칸 바로 아래 계산 한 줄 — 사용자가 요청한 빙옥 계산 안내 */}
+                        {priceCalc(editForm, editForm.price) && <p className={F_NOTE}>{priceCalc(editForm, editForm.price)}</p>}
                       </div>
                       <div>
                         <label className={F_LABEL}>할인율 (%)</label>
@@ -1377,7 +1364,7 @@ export default function ArcticShopBody({
                       </div>
                     </div>
                     {efDiscount > 0 && Number(editForm.price) > 0 && (
-                      <p className="text-[11px] font-bold text-[#e91e3f]">판매가 {efSale.toLocaleString()} XP</p>
+                      <p className="text-[11px] font-bold text-[#e91e3f]">판매가 {efSale.toLocaleString()} {efUnit}</p>
                     )}
                     {/* 📌 할인 종료 — 관리자 상점 관리와 같은 칸. 지난 시각이 남아 있으면 새 할인이 붙지 않으므로 여기서도 보이고 지울 수 있게 */}
                     {Number(editForm.discountPct) > 0 && (
@@ -1413,6 +1400,8 @@ export default function ArcticShopBody({
                                 </div>
                               ))}
                             </div>
+                            {/* 세 칸이 좁아 계산은 한 줄 요약으로 */}
+                            {durationsCalc(editForm) && <p className={F_NOTE}>{durationsCalc(editForm)}</p>}
                             {/* 값이 0이면 그 기간은 안 판다는 뜻이라, 아무것도 안 넣으면 저장이 막힌다 */}
                             <p className={F_NOTE}>값을 넣은 기간만 판매합니다. 기간이 끝나면 봇이 역할을 회수합니다.</p>
                           </>
@@ -1483,7 +1472,7 @@ export default function ArcticShopBody({
                     <div className="mt-auto flex items-end justify-between gap-3">
                       <div>
                         <div className="text-xl font-black text-[#131313] tracking-tight tabular-nums">{(Number(editForm.price) || 0).toLocaleString()}</div>
-                        <div className="text-[10px] font-bold text-[#8a8a8a] tracking-wider">XP</div>
+                        <div className="text-[10px] font-bold text-[#8a8a8a] tracking-wider">{efUnit}</div>
                       </div>
                       <span className="px-5 py-2.5 rounded-full text-[12px] font-bold bg-[#e91e3f] text-white shadow-[0_4px_12px_rgba(233,30,63,0.25)]">구매하기</span>
                     </div>

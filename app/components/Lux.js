@@ -77,7 +77,8 @@ export const CountUp = ({ end, duration = 1400, suffix = "" }) => {
     return () => cancelAnimationFrame(raf);
   }, [started, end, duration]);
 
-  return <span ref={ref}>{value.toLocaleString()}{suffix}</span>;
+  // 📌 tabular-nums — 세는 동안 자릿수 폭이 흔들려 옆 글자가 떨리지 않게
+  return <span ref={ref} className="tabular-nums">{value.toLocaleString()}{suffix}</span>;
 };
 
 // 에디토리얼 섹션 헤더 (01 / 02 넘버링)

@@ -5,10 +5,11 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { denyIfNotAdmin } from "@/lib/apiAuth";
 import mongoose from "mongoose";
 import { normalizeItemPayload, itemSnapshot } from "@/lib/items";
-import { normalizeEffects } from "@/lib/itemEffects";
+import { normalizeEffects, TRIGGER_OF } from "@/lib/itemEffects";
 import Item from "@/models/Item";
 import ShopItem from "@/models/ShopItem";
 import SeasonPass from "@/models/SeasonPass";
+import { rewardsOf } from "@/lib/seasonPass";
 
 // 📌 아이템 효과 — 아이템 문서 자체에 저장한다(chatBuffXp · voiceBuffXp · attendBuffXp · effects). 디스코드 역할 연결과 무관하게
 //    이 아이템을 인벤토리에 가진 사람(lib/ownedItems.js)에게 봇이 적용한다. 기프트카드(physical)는 항상 0 / [].
@@ -45,7 +46,7 @@ async function passUsageOf() {
   const pass = await SeasonPass.findOne({ key: "main" }, { tiers: 1 }).lean();
   const count = new Map();
   for (const t of pass?.tiers || []) {
-    for (const r of [t.free, t.paid]) {
+    for (const r of [...rewardsOf(t.free), ...rewardsOf(t.paid)]) {
       if (r?.kind === "item" && r.itemId) count.set(String(r.itemId), (count.get(String(r.itemId)) || 0) + 1);
     }
   }
@@ -101,6 +102,14 @@ export async function POST(request) {
     const data = ef ? { ...n.data, ...ef } : n.data;
 
     const id = String(b?.id || "").trim();
+    // 📌 소모형 효과(연속 출석 보호막 등)가 있는 아이템에는 역할을 연결하지 않는다 — 쓴 뒤에도 역할이 남아
+    //    역할 기준 보유(lib/ownedItems.js (B))로 다시 '보유'가 되어 소모가 되살아난다. 효과를 안 보냈으면(표시 토글) 저장된 효과로 본다
+    if (data.roleId) {
+      const list = ef ? ef.effects : id && mongoose.isValidObjectId(id) ? (await Item.findById(id, { effects: 1 }).lean())?.effects : [];
+      if ((Array.isArray(list) ? list : []).some((e) => TRIGGER_OF[e?.on]?.kind === "consumable")) {
+        return NextResponse.json({ success: false, message: "소모품에는 역할을 연결할 수 없습니다." }, { status: 400 });
+      }
+    }
     let doc;
     if (id) {
       doc = await Item.findByIdAndUpdate(id, { $set: data }, { new: true, runValidators: true }).lean();

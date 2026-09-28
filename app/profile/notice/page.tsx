@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { LuxStyles } from "../../components/Lux";
@@ -48,12 +48,15 @@ export default function NoticeInboxPage() {
   };
 
   // 들어오면 안 읽은 알림을 읽음 처리
+  //    📌 서버에만 알리고 화면의 빨간 점은 이번에 보는 동안 그대로 둔다 — 응답이 오자마자 점을 지우면
+  //       들어온 직후 점 자리만큼 제목들이 왼쪽으로 당겨져 목록이 움직인다 (다시 들어오면 점 없이 나온다)
+  const markedRef = useRef(false);
   useEffect(() => {
-    if (status !== "authenticated" || !session?.user?.name || !rows?.some((n) => !n.read)) return;
+    if (markedRef.current || status !== "authenticated" || !session?.user?.name || !rows?.some((n) => !n.read)) return;
+    markedRef.current = true;
     const uid = (session.user as any)?.id;
     fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ markAll: true, user: session.user.name, id: uid }) })
-      .then(() => setRows((prev) => (prev ? prev.map((n) => ({ ...n, read: true })) : prev)))
-      .catch(() => {});
+      .catch(() => { markedRef.current = false; });
   }, [rows, status, session]);
 
   return (

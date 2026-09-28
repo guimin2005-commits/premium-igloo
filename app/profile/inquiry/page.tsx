@@ -60,7 +60,11 @@ export default function MyInquiriesPage() {
             <div className="divide-y divide-black/[0.06]">
               {list.map((inq) => (
                 <Link key={inq.id} href={`/profile/inquiry/${inq.id}${q}`} className="w-full text-left py-3.5 px-1 flex items-center gap-3.5 hover:bg-black/[0.02] transition-colors group outline-none">
-                  <span className={`shrink-0 text-[10px] font-black tracking-wider border px-2 py-1 rounded ${inq.status === "접수 중" ? "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25" : "bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]"}`}>{inq.status}</span>
+                  {/* 📌 칩 폭은 긴 상태("답변 완료")에 맞춰 고정 — 상태마다 칩 폭이 달라 줄마다 제목 시작 위치가 들쭉날쭉하지 않게 */}
+                  <span className={`shrink-0 inline-grid place-items-center text-[10px] font-black tracking-wider border px-2 py-1 rounded ${inq.status === "접수 중" ? "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25" : "bg-[#e6f0fa] text-[#2f6fb0] border-[#c9dff2]"}`}>
+                    <span aria-hidden className="col-start-1 row-start-1 invisible">답변 완료</span>
+                    <span className="col-start-1 row-start-1">{inq.status}</span>
+                  </span>
                   <div className="min-w-0 flex-1">
                     <h4 className="text-sm font-bold text-[#131313] truncate"><span className="text-[#8a8a8a] font-medium mr-1.5">[{inq.type}]</span>{inq.title}</h4>
                     <p className="text-xs text-[#a3a3a3] mt-0.5 tabular-nums">{inq.date}</p>

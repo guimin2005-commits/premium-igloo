@@ -11,10 +11,11 @@ import RoleConfig from "@/models/RoleConfig";
 import InventoryRole from "@/models/InventoryRole";
 import Item from "@/models/Item";
 import { fetchMemberRoleInfo } from "@/lib/discordMember";
-import { describeRoleBuff, itemEffectLines } from "@/lib/itemEffects";
+import { describeRoleBuff, itemEffectLines, perksOfItems } from "@/lib/itemEffects";
 import { channelNames } from "@/lib/channelNames";
 import { durationOptions } from "@/lib/shopPricing";
 import { getShopAccess } from "@/lib/shopAccess";
+import { VOICE_TIERS } from "@/lib/voiceTiers";
 
 // 📌 내 보유 아이템 — 구매 내역이 아니라 "지금 실제로 들고 있는 것"을 보여준다.
 //    표기는 아이템 등록(models/Item)이 단일 원천이다:
@@ -50,7 +51,8 @@ export async function GET() {
       getShopAccess(),
     ]);
 
-    const purchases = purchaseRows.filter((p) => p.status !== "cancelled" && p.status !== "refunded");
+    // 📌 소모된 건(consumedAt — 연속 출석 보호막 등 소모형을 쓴 건)도 보유가 아니다(lib/ownedItems.js 와 같게) — 환불 건처럼 고리로만 따라간다
+    const purchases = purchaseRows.filter((p) => p.status !== "cancelled" && p.status !== "refunded" && !p.consumedAt);
     const held = roleInfo.roles === null ? null : new Set(roleInfo.roles);
     const shopById = new Map(shopItems.map((s) => [String(s._id), s]));
     const itemById = new Map(itemsAll.map((i) => [String(i._id), i]));
@@ -306,12 +308,18 @@ export async function GET() {
 
     // 📌 효과 문장 — 아이템 효과(아이템 문서의 기본 효과 + 조건 효과) + 역할 버프(RoleConfig 의 buffXp · attendBuffXp, 역할을 실제로 가진 동안만).
     //    둘 다 없으면 [] (화면은 빈 배열이면 줄을 그리지 않는다). 채널 이름은 채널 하나만 지정한 효과가 있을 때만 읽는다
+    //    📌 프로필 배지 · 카드 스킨 — 효과가 붙는 보유 아이템(effectItem, 같은 아이템은 한 번)으로 lib/itemPerks.js 와 같은 규칙(관리자 순서 · 배지 최대 3)
+    const effectItems = [...new Map(owned.filter((it) => it.effectItem).map((it) => [String(it.effectItem._id), it.effectItem])).values()];
+    const { badges, cardSkin } = perksOfItems(effectItems);
     const needNames = owned.some((it) => (Array.isArray(it.effectItem?.effects) ? it.effectItem.effects : []).some((e) => e?.channelIds?.length === 1));
     const names = needNames ? await channelNames() : new Map();
     const nameOf = (id) => names.get(String(id));
     for (const it of owned) {
       const cfg = it.buffRoleId ? cfgByRole.get(it.buffRoleId) : null;
+      // 📌 등급 보상(아이언 · 브론즈 …) — 그 등급의 음성 보너스(lib/voiceTiers · 봇 지급과 같은 값)를 효과로 보여 준다
+      const tier = it.source === "level" && it.rewardLevel != null ? VOICE_TIERS.find((t) => t.min === it.rewardLevel) : null;
       it.effectLines = [
+        ...(tier && tier.bonus > 0 ? [`음성 1회당 +${tier.bonus.toLocaleString("ko-KR")} XP`] : []),
         ...(it.effectItem ? itemEffectLines(it.effectItem, nameOf) : []),
         ...(cfg ? describeRoleBuff(cfg) : []),
       ];
@@ -339,6 +347,9 @@ export async function GET() {
       data: {
         // 디스코드 조회에 실패하면 구매 내역 기준으로만 보여준다는 뜻
         synced: held !== null,
+        // 지금 붙은 프로필 배지 [{ itemId, name, icon, imageUrl, color, type }] (최대 3) · 카드 스킨 키("" 이면 기본)
+        badges,
+        cardSkin,
         items: owned,
       },
     });

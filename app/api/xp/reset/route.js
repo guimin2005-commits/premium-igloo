@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireUser } from "@/lib/apiAuth";
 import { addPoints } from "@/lib/points";
+import { logWallet } from "@/lib/wallet";
 import { getLevelByXp } from "@/lib/leveling";
 import UserXp from "@/models/UserXp";
 import Purchase from "@/models/Purchase";
@@ -96,6 +97,7 @@ export async function POST(request) {
     let backXp = 0;
     let backPoint = 0;
     let count = 0;
+    const claws = [];
     for (const r of rows) {
       // 대기 건은 역할이 아직 없으니 취소, 지급된 건은 환불 — 봇이 roleDetached 를 보고 역할을 뗀다.
       //    만료 건은 봇이 이미 역할을 뗐으므로 roleDetached 를 세워 둔다 (다시 떼며 알림을 보내지 않게)
@@ -115,8 +117,12 @@ export async function POST(request) {
       if (!p) continue;
       count++;
       if (p.billed) {
-        backXp += p.paidXp || 0;
+        // 📌 캐시백 회수 — 결제 때 받은 캐시백은 돌려줄 XP 에서 뺀다(돌려줄 XP 까지만). 관리자 환불(app/api/shop/orders)과 같은 규칙
+        const paid = p.paidXp || 0;
+        const claw = Math.min(Math.max(0, Math.floor(Number(p.cashbackXp) || 0)), paid);
+        backXp += paid - claw;
         backPoint += p.paidPoint || 0;
+        if (claw > 0) claws.push({ claw, name: p.itemName, refId: String(p._id) });
       }
       await ShopItem.updateOne({ _id: p.itemId, stock: { $gte: 0 } }, { $inc: { stock: 1 } });
       await ShopItem.updateOne({ _id: p.itemId, soldCount: { $gt: 0 } }, { $inc: { soldCount: -1 } });
@@ -125,6 +131,10 @@ export async function POST(request) {
       return NextResponse.json({ success: true, message: "되돌릴 상점 구매가 없습니다." });
     }
     const msg = await refund(userId, backXp, backPoint);
+    // 회수한 캐시백은 원장에 따로 남긴다 — 환불(+paidXp)은 구매 기록이 세므로, 빼고 돌려준 몫을 여기서 맞춘다
+    for (const c of claws) {
+      await logWallet({ userId, currency: "xp", amount: -c.claw, kind: "cashback", label: `캐시백 회수 · ${c.name || "상품"}`, refId: c.refId });
+    }
     return NextResponse.json({ success: true, message: `상점 구매 ${count}건을 되돌렸습니다${msg}.` });
   } catch (e) {
     console.error("관리자 초기화 오류:", e);

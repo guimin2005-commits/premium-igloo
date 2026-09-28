@@ -61,12 +61,9 @@ function DateRange({ start, end, always, onStart, onEnd, onAlways, alwaysLabel }
   return (
     <Inline>
       <input type="date" value={start} onChange={(e) => onStart(e.target.value)} required className={dateClass} />
-      {!always && (
-        <>
-          <span className="text-[#a3a3a3] font-bold">~</span>
-          <input type="date" value={end} onChange={(e) => onEnd(e.target.value)} className={dateClass} />
-        </>
-      )}
+      {/* 📌 상시를 켜도 '~ 종료일' 자리는 남겨 둔다(안 보이게) — 없애면 방금 누른 상시 스위치가 그 폭만큼 왼쪽으로 뛴다 */}
+      <span aria-hidden={always} className={`text-[#a3a3a3] font-bold ${always ? "invisible" : ""}`}>~</span>
+      <input type="date" value={end} onChange={(e) => onEnd(e.target.value)} disabled={always} className={`${dateClass} ${always ? "invisible" : ""}`} />
       <span className="inline-flex items-center gap-2.5 sm:ml-2">
         <Switch on={always} onChange={onAlways} label={alwaysLabel} />
         <span className={`text-[13px] font-bold ${always ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{alwaysLabel}</span>
@@ -896,7 +893,15 @@ export default function AdminWritePage() {
                     {survey.enabled && (
                       <Btn variant="secondary" size="sm" onClick={() => setSurveyPreview(true)} disabled={!survey.questions.length}>미리보기</Btn>
                     )}
-                    <Toggle on={survey.enabled} onClick={() => setSurvey({ ...survey, enabled: !survey.enabled })} onLabel="설문 사용 중" offLabel="설문 사용 안 함" />
+                    {/* 📌 Toggle 과 같은 모양이되 상태 글자 둘을 한 칸에 겹쳐 폭을 긴 쪽에 고정 —
+                           판 머리 오른쪽 끝에 붙어 있어, 글자 폭이 바뀌면 방금 누른 스위치가 옆으로 뛴다 */}
+                    <span className="inline-flex items-center gap-2.5">
+                      <Switch on={survey.enabled} onChange={() => setSurvey({ ...survey, enabled: !survey.enabled })} label={survey.enabled ? "설문 사용 중" : "설문 사용 안 함"} />
+                      <span className="grid text-[13px] font-bold">
+                        <span className={`col-start-1 row-start-1 text-[#131313] ${survey.enabled ? "" : "invisible"}`}>설문 사용 중</span>
+                        <span className={`col-start-1 row-start-1 text-[#5a5a5a] ${survey.enabled ? "invisible" : ""}`}>설문 사용 안 함</span>
+                      </span>
+                    </span>
                   </>
                 }
               >
@@ -966,7 +971,11 @@ export default function AdminWritePage() {
                       {survey.questions.length > 0 && (
                         <div className="ml-auto flex items-center gap-1">
                           <Btn variant="ghost" size="sm" onClick={() => setSurvey({ ...survey, questions: survey.questions.map((q) => ({ ...q, required: !survey.questions.every((x) => x.required) })) })}>
-                            {survey.questions.every((q) => q.required) ? "필수 전체 해제" : "전체 필수로"}
+                            {/* 📌 두 글자를 한 칸에 겹쳐 폭을 긴 쪽에 고정 — 누를 때마다 단추 폭이 바뀌어 흔들리지 않게 */}
+                            <span className="grid place-items-center">
+                              <span className={`col-start-1 row-start-1 ${survey.questions.every((q) => q.required) ? "" : "invisible"}`}>필수 전체 해제</span>
+                              <span className={`col-start-1 row-start-1 ${survey.questions.every((q) => q.required) ? "invisible" : ""}`}>전체 필수로</span>
+                            </span>
                           </Btn>
                           <Btn variant="ghost" size="sm" onClick={() => { if (confirm("작성한 문항을 모두 삭제할까요?")) setSurvey({ ...survey, questions: [] }); }}>전체 삭제</Btn>
                         </div>
@@ -1086,7 +1095,11 @@ export default function AdminWritePage() {
                                   ))}
                                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-2">
                                     <button type="button" onClick={() => updateQuestion(qi, { options: [...q.options, ""] })} className="text-[12px] font-bold text-[#e91e3f] hover:text-[#d01634]">+ 선택지 추가</button>
-                                    <button type="button" onClick={() => updateQuestion(qi, { etc: !q.etc })} className={`text-[12px] font-bold ${q.etc ? "text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>기타(직접 입력) {q.etc ? "사용 중" : "추가"}</button>
+                                    {/* 📌 두 글자를 한 칸에 겹쳐 폭을 긴 쪽에 고정 — 누를 때 글자 폭이 바뀌어 옆 '가나다 정렬'이 밀리지 않게 */}
+                                    <button type="button" onClick={() => updateQuestion(qi, { etc: !q.etc })} className={`inline-grid text-left text-[12px] font-bold ${q.etc ? "text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
+                                      <span aria-hidden={!q.etc} className={`col-start-1 row-start-1 ${q.etc ? "" : "invisible"}`}>기타(직접 입력) 사용 중</span>
+                                      <span aria-hidden={q.etc} className={`col-start-1 row-start-1 ${q.etc ? "invisible" : ""}`}>기타(직접 입력) 추가</span>
+                                    </button>
                                     <button type="button" onClick={() => updateQuestion(qi, { options: [...q.options].sort((a, b) => a.localeCompare(b, "ko")) })} className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313]">가나다 정렬</button>
                                     <span className="text-[12px] text-[#8a8a8a]">Enter=추가 · 여러 줄 붙여넣기=일괄 등록</span>
                                   </div>
@@ -1181,7 +1194,13 @@ export default function AdminWritePage() {
             <div className="flex flex-wrap items-center gap-2 px-5 py-4">
               <Btn variant="ghost" onClick={() => router.back()}>취소</Btn>
               {!editId && <Btn variant="secondary" onClick={saveDraft}>보류</Btn>}
-              <Btn type="submit" disabled={isSubmitting || !isFormValid()} className="ml-auto">{isSubmitting ? "처리 중..." : editId ? "수정하기" : "등록하기"}</Btn>
+              <Btn type="submit" disabled={isSubmitting || !isFormValid()} className="ml-auto">
+                {/* 📌 두 글자를 한 칸에 겹쳐 폭을 긴 쪽에 고정 — "처리 중..."으로 바뀔 때 단추 폭이 바뀌지 않게 */}
+                <span className="grid place-items-center">
+                  <span className={`col-start-1 row-start-1 ${isSubmitting ? "invisible" : ""}`}>{editId ? "수정하기" : "등록하기"}</span>
+                  <span aria-hidden={!isSubmitting} className={`col-start-1 row-start-1 ${isSubmitting ? "" : "invisible"}`}>처리 중...</span>
+                </span>
+              </Btn>
             </div>
           </Panel>
         </aside>

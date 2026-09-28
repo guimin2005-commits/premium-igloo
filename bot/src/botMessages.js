@@ -3,10 +3,12 @@
 //     한쪽을 고치면 반드시 다른 쪽도 고칠 것.
 //  · 60초마다 BotMessage 를 다시 읽는다 — 문서가 없는 키는 기본 디자인
 //  · buildMessage(key, vars) → { content?, embeds?, allowedMentions } | null (꺼져 있거나 보낼 게 없으면 null)
+//  · buildMessageWithCard(key, vars, cardData) → 위 모양 + files(card.png) — 카드 키(CARD_KEYS) · 카드 켜짐일 때 (bot/src/botCards.js)
 //  · 관리자 테스트 발송(BotMessageTest)을 10초마다 관리자 DM 으로 보낸다
 import mongoose from "mongoose";
 import { EmbedBuilder } from "discord.js";
 import { getSettings } from "./botSettings.js";
+import { perksOf } from "./itemEffects.js";
 import { config } from "./config.js";
 
 // ⚠️ 사이트 lib/voiceTiers.js 의 VOICE_TIERS(이름 · 시작 레벨 · 색)를 옮긴 사본 — 한쪽만 고치지 말 것
@@ -134,6 +136,8 @@ const BAR_SAMPLE = progressBar(0.135);
 
 // 📌 메시지 목록 — 키 · 변수 이름은 계약서(3절) 고정. 다른 곳은 이 키와 변수로만 부른다.
 //    defaults 는 관리자가 아직 저장하지 않았을 때 쓰는 기본 디자인.
+//    카드 키(CARD_KEYS)는 기본으로 이미지 카드를 붙인다(card) — 임베드는 카드와 겹치지 않게 색 막대 · 한 줄 · 푸터만.
+//    plainEmbed 는 카드를 끈 예전 모양 — 편집 화면에서 기본 모양 그대로 카드를 끄면 이것으로 바꿔 준다.
 export const MESSAGE_DEFS = {
   // ── 채널 알림 ──
   levelUp: {
@@ -151,20 +155,26 @@ export const MESSAGE_DEFS = {
     ],
     defaults: {
       enabled: true,
+      card: true,
       content: "",
       embed: embed({
         color: "tier",
-        title: "LEVEL UP",
-        description: "{user} 님이 **Lv.{level}** 에 올랐습니다.\n`{progressBar}`  다음 레벨까지 {nextXp} XP",
-        thumbnail: "{avatar}",
+        description: "{user} 님이 **Lv.{level}** 에 올랐습니다.",
         timestamp: true,
-        fields: [
-          f("레벨", "Lv.{prevLevel} → **Lv.{level}**"),
-          f("등급", "{tier}"),
-          f("누적 XP", "{xp}"),
-        ],
       }),
     },
+    plainEmbed: embed({
+      color: "tier",
+      title: "LEVEL UP",
+      description: "{user} 님이 **Lv.{level}** 에 올랐습니다.\n`{progressBar}`  다음 레벨까지 {nextXp} XP",
+      thumbnail: "{avatar}",
+      timestamp: true,
+      fields: [
+        f("레벨", "Lv.{prevLevel} → **Lv.{level}**"),
+        f("등급", "{tier}"),
+        f("누적 XP", "{xp}"),
+      ],
+    }),
   },
   roleGrant: {
     group: "channel",
@@ -205,20 +215,25 @@ export const MESSAGE_DEFS = {
     ],
     defaults: {
       enabled: true,
+      card: true,
       content: "{first} {second} {third}",
       embed: embed({
-        authorName: "SEASON {season} · {seasonName}",
-        title: "RANKER",
         description: "시즌 {season} 상위 3인입니다. 축하합니다.",
         timestamp: true,
-        fields: [
-          f("🥇 1위", "{first}\n`{firstXp} XP`"),
-          f("🥈 2위", "{second}\n`{secondXp} XP`"),
-          f("🥉 3위", "{third}\n`{thirdXp} XP`"),
-          f("지급 역할", "{role}", false),
-        ],
       }),
     },
+    plainEmbed: embed({
+      authorName: "SEASON {season} · {seasonName}",
+      title: "RANKER",
+      description: "시즌 {season} 상위 3인입니다. 축하합니다.",
+      timestamp: true,
+      fields: [
+        f("🥇 1위", "{first}\n`{firstXp} XP`"),
+        f("🥈 2위", "{second}\n`{secondXp} XP`"),
+        f("🥉 3위", "{third}\n`{thirdXp} XP`"),
+        f("지급 역할", "{role}", false),
+      ],
+    }),
   },
 
   // ── DM ──
@@ -367,16 +382,21 @@ export const MESSAGE_DEFS = {
     ],
     defaults: {
       enabled: true,
+      card: true,
       content: "",
       embed: embed({
         color: "tier",
-        authorName: "{name}",
-        authorIcon: "{avatar}",
-        title: "Lv.{level}",
-        description: "`{progressBar}`\nLv.{nextLevel} 까지 **{need} XP**",
-        fields: [f("등급", "{tier}"), f("누적 XP", "{xp}")],
+        description: "**Lv.{level}** · {tier}",
       }),
     },
+    plainEmbed: embed({
+      color: "tier",
+      authorName: "{name}",
+      authorIcon: "{avatar}",
+      title: "Lv.{level}",
+      description: "`{progressBar}`\nLv.{nextLevel} 까지 **{need} XP**",
+      fields: [f("등급", "{tier}"), f("누적 XP", "{xp}")],
+    }),
   },
   cmdRank: {
     group: "command",
@@ -391,23 +411,28 @@ export const MESSAGE_DEFS = {
     ],
     defaults: {
       enabled: true,
+      card: true,
       content: "",
       embed: embed({
         color: "tier",
-        authorName: "{name}",
-        authorIcon: "{avatar}",
-        title: "#{rank}",
         description: "{total}명 중 **{rank}위**입니다.",
-        fields: [f("레벨", "Lv.{level}"), f("등급", "{tier}"), f("누적 XP", "{xp}")],
       }),
     },
+    plainEmbed: embed({
+      color: "tier",
+      authorName: "{name}",
+      authorIcon: "{avatar}",
+      title: "#{rank}",
+      description: "{total}명 중 **{rank}위**입니다.",
+      fields: [f("레벨", "Lv.{level}"), f("등급", "{tier}"), f("누적 XP", "{xp}")],
+    }),
   },
   cmdAttend: {
     group: "command",
     label: "/출석체크",
     desc: "/출석체크 성공 응답",
     vars: [
-      { name: "amount", label: "받은 XP", sample: 7000 },
+      { name: "amount", label: "받은 XP", sample: 10000 },
       { name: "attendCount", label: "누적 출석", sample: 42 },
       { name: "streak", label: "연속 출석", sample: 5 },
       { name: "bestStreak", label: "최고 연속", sample: 12 },
@@ -415,15 +440,19 @@ export const MESSAGE_DEFS = {
     ],
     defaults: {
       enabled: true,
+      card: true,
       content: "",
       embed: embed({
-        authorName: "{name}",
-        authorIcon: "{avatar}",
-        title: "출석 완료",
-        description: "> {streakBonus}",
-        fields: [f("받은 XP", "+{amount}"), f("연속 출석", "{streak}일"), f("누적 출석", "{attendCount}일")],
+        description: "출석 완료 · **+{amount} XP**",
       }),
     },
+    plainEmbed: embed({
+      authorName: "{name}",
+      authorIcon: "{avatar}",
+      title: "출석 완료",
+      description: "> {streakBonus}",
+      fields: [f("받은 XP", "+{amount}"), f("연속 출석", "{streak}일"), f("누적 출석", "{attendCount}일")],
+    }),
   },
   cmdAttendAlready: {
     group: "command",
@@ -532,6 +561,11 @@ export const MESSAGE_DEFS = {
 
 export const MESSAGE_KEYS = Object.keys(MESSAGE_DEFS);
 
+// 📌 이미지 카드를 붙일 수 있는 키 — lib/botCards.js · bot/src/botCards.js 의 CARD_KINDS 와 같다.
+//    카드가 켜져 있으면(card) 봇이 PNG 를 그려 임베드 큰 이미지 자리에(임베드가 없으면 본문 아래 첨부로) 붙인다.
+export const CARD_KEYS = ["levelUp", "cmdLevel", "cmdRank", "cmdAttend", "rankerAnnounce"];
+export const isCardKey = (key) => CARD_KEYS.includes(key);
+
 // 📌 예전 BotSetting 한 줄 문구의 기본값 — 이것과 같으면 관리자가 바꾼 적이 없는 것이라 새 기본 디자인을 쓴다
 export const LEGACY_DEFAULTS = {
   levelUp: "🎉 {user} 님이 **Lv.{level}** 에 도달했습니다!",
@@ -551,7 +585,8 @@ function normColor(v) {
 }
 
 // 📌 어떤 입력이 와도 템플릿 모양으로 정리한다 — 관리자 저장(API) · 봇 캐시 · 미리보기가 같은 함수를 쓴다
-export function sanitizeTemplate(input) {
+//    card(이미지 카드)는 없으면 켜짐. key 를 주면 카드 키가 아닌 키는 false 로 정리한다
+export function sanitizeTemplate(input, key) {
   const t = input && typeof input === "object" ? input : {};
   const e = t.embed && typeof t.embed === "object" ? t.embed : {};
   const fields = (Array.isArray(e.fields) ? e.fields : []).slice(0, LIMITS.fields).map((x) => ({
@@ -561,6 +596,7 @@ export function sanitizeTemplate(input) {
   }));
   return {
     enabled: t.enabled !== false,
+    card: t.card !== false && (key === undefined || isCardKey(key)),
     content: str(t.content, LIMITS.content),
     embed: {
       on: e.on !== false,
@@ -582,19 +618,20 @@ export function sanitizeTemplate(input) {
 
 export function defaultTemplate(key) {
   const def = MESSAGE_DEFS[key];
-  return def ? sanitizeTemplate(clone(def.defaults)) : null;
+  return def ? sanitizeTemplate(clone(def.defaults), key) : null;
 }
 
 // 📌 저장된 문서(doc)가 있으면 그것이 전부다(관리자가 비운 칸은 비운 그대로).
 //    문서가 없으면 기본 디자인 — 이때 legacy(BotSetting 문서 또는 문구 문자열)를 주면
 //    관리자가 예전에 바꿔 둔 한 줄 문구를 설명 첫 줄로 살리고, roleGrantEnabled=false 도 꺼짐으로 옮긴다.
+//    카드가 생기기 전에 저장한 문서(card 없음)는 기본값(카드 키면 켜짐)을 따른다.
 export function mergeTemplate(key, doc, { legacy } = {}) {
   const def = MESSAGE_DEFS[key];
   if (!def) return null;
   if (doc && typeof doc === "object") {
     const plain = typeof doc.toObject === "function" ? doc.toObject() : doc;
     const base = clone(def.defaults);
-    return sanitizeTemplate({ ...base, ...plain, embed: { ...base.embed, ...(plain.embed || {}) } });
+    return sanitizeTemplate({ ...base, ...plain, embed: { ...base.embed, ...(plain.embed || {}) } }, key);
   }
   const t = defaultTemplate(key);
   if (legacy && def.legacyKey) {
@@ -754,6 +791,7 @@ const BotMessageFieldSchema = new mongoose.Schema(
 const BotMessageSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true },
   enabled: { type: Boolean, default: true },
+  card: { type: Boolean, default: true },
   content: { type: String, default: "" },
   embed: {
     on: { type: Boolean, default: true },
@@ -831,13 +869,82 @@ function toEmbed(r) {
   return e;
 }
 
-function toPayload(tpl, vars) {
+// 📌 keepEmpty — 카드가 켜진 템플릿은 글이 전부 비어도 모양을 돌려준다(카드만 보낼 수 있게). 보낼 게 있는지는 sendable 로 본다
+function toPayload(tpl, vars, { keepEmpty = false } = {}) {
   const r = renderTemplate(tpl, vars);
-  if (r.empty) return null;
+  if (r.empty && !keepEmpty) return null;
   const payload = { allowedMentions: mentionsFor(tpl.content) };
   if (r.content) payload.content = r.content;
   if (r.embed) payload.embeds = [toEmbed(r.embed)];
   return payload;
+}
+
+const sendable = (p) => !!(p && (p.content || p.embeds?.length || p.files?.length));
+
+// ── 이미지 카드 (bot/src/botCards.js) ──────────────
+//    📌 처음 쓸 때 불러온다 — 그림 모듈(@resvg/resvg-js 네이티브)을 못 불러와도 봇은 뜨고 글(임베드)만 보낸다
+let cardsMod = null;
+function loadCards() {
+  if (!cardsMod) {
+    cardsMod = import("./botCards.js").catch((e) => {
+      console.error("[카드] 그림 모듈을 불러오지 못했습니다 — 카드 없이 보냅니다:", e?.message || e);
+      return null;
+    });
+  }
+  return cardsMod;
+}
+
+// 📌 한 번에 둘까지만 그린다 — 음성 지급 한 번에 여러 명이 레벨업해도 CPU 를 몰아 쓰지 않게. 기다리는 게 많으면 카드 없이 보낸다
+const CARD_SLOTS = 2;
+const CARD_QUEUE_MAX = 10;
+let cardBusy = 0;
+const cardWaiters = [];
+async function withCardSlot(fn) {
+  if (cardBusy < CARD_SLOTS) cardBusy += 1;
+  else {
+    if (cardWaiters.length >= CARD_QUEUE_MAX) return null;
+    await new Promise((resolve) => cardWaiters.push(resolve)); // 끝난 쪽이 자리를 그대로 넘겨준다
+  }
+  try {
+    return await fn();
+  } finally {
+    const next = cardWaiters.shift();
+    if (next) next();
+    else cardBusy -= 1;
+  }
+}
+
+/**
+ * 카드 PNG 그리기 → { png, name } | null. 던지지 않는다.
+ * cardData: 카드 data(CARD_FIELDS 모양) 또는 (cards 모듈) => data | Promise<data> — 함수면 카드가 켜져 있을 때만 부른다(아바타 받기 등)
+ */
+async function drawCard(key, cardData) {
+  const m = await loadCards();
+  if (!m || !cardData) return null;
+  let data = null;
+  try {
+    data = typeof cardData === "function" ? await cardData(m) : cardData;
+  } catch (e) {
+    console.error(`[카드] ${key} 값 준비 오류:`, e?.message || e);
+    return null;
+  }
+  if (!data) return null;
+  const png = await withCardSlot(() => m.renderCard(key, data));
+  return png ? { png, name: m.CARD_FILE } : null;
+}
+
+// 카드 붙이기 — 임베드가 있으면 그 큰 이미지 자리로, 없으면 본문 아래 첨부로
+function attachCard(payload, card) {
+  const out = { ...payload, files: [...(payload.files || []), { attachment: card.png, name: card.name }] };
+  if (out.embeds?.length) out.embeds[0].setImage(`attachment://${card.name}`);
+  return out;
+}
+
+// 카드용 아바타 — member · user 의 디스코드 아바타(png 256)를 data URI 로. 못 받으면 null(첫 글자 원형)
+export async function cardAvatar(x) {
+  const m = await loadCards();
+  if (!m) return null;
+  return m.fetchAvatarDataUri(avatarOf(x)).catch(() => null);
 }
 
 // 📌 이 키가 쓰는 변수(공통 + 키 변수)는 호출하는 쪽이 빠뜨려도 빈 값으로 본다 —
@@ -850,27 +957,55 @@ function withDeclaredVars(key, vars) {
   return { ...base, ...(vars && typeof vars === "object" ? vars : {}) };
 }
 
-// 📌 보낼 메시지 만들기 — 관리자가 끈 키는 null(보내지 않는다). 던지지 않는다.
-//    vars 에는 commonVars(member) 와 키 변수를 함께 넣는다: buildMessage("levelUp", { ...commonVars(member), level, … })
-export function buildMessage(key, vars = {}) {
+// 템플릿 고르기 + 모양 만들기 → { payload, card } | null (꺼진 키 · 보낼 게 없음). 던지지 않는다.
+//   card: 카드 키이고 템플릿이 카드를 켰는지 — 켜져 있으면 글이 비어도 payload 를 돌려준다(카드만 보낼 수 있게)
+function compose(key, vars) {
   if (!MESSAGE_DEFS[key]) {
     console.error(`알 수 없는 봇 메시지 키: ${key}`);
     return null;
   }
   const v = withDeclaredVars(key, vars);
+  const make = (tpl) => {
+    const card = isCardKey(key) && tpl.card === true;
+    const payload = toPayload(tpl, v, { keepEmpty: card });
+    return payload ? { payload, card } : null;
+  };
   try {
     const tpl = mergeTemplate(key, cache.get(key), { legacy: getSettings() });
     if (!tpl || !tpl.enabled) return null;
-    return toPayload(tpl, v);
+    return make(tpl);
   } catch (e) {
     // 저장된 디자인이 디스코드 검증에 걸려도 알림 자체는 나가게 기본 디자인으로 한 번 더 만든다
     console.error(`봇 메시지 만들기 오류 (${key}) — 기본 디자인으로 보냅니다:`, e.message);
     try {
-      return toPayload(defaultTemplate(key), v);
+      return make(defaultTemplate(key));
     } catch {
       return null;
     }
   }
+}
+
+// 📌 보낼 메시지 만들기 — 관리자가 끈 키는 null(보내지 않는다). 던지지 않는다. 카드는 붙이지 않는다(buildMessageWithCard).
+//    vars 에는 commonVars(member) 와 키 변수를 함께 넣는다: buildMessage("levelUp", { ...commonVars(member), level, … })
+export function buildMessage(key, vars = {}) {
+  const c = compose(key, vars);
+  return c && sendable(c.payload) ? c.payload : null;
+}
+
+/**
+ * 📌 카드 붙인 메시지 — 카드 키이고 템플릿이 카드를 켰으면 PNG 를 그려 files 에 붙이고 임베드 큰 이미지를 attachment:// 로.
+ *    임베드가 꺼져 있으면 본문 + 파일. 그리기 실패 · 시간 초과 · 모듈 없음이면 카드 없이 buildMessage 와 같은 모양. 던지지 않는다.
+ *    cardData: CARD_FIELDS 모양(bot/src/botCards.js) 또는 async (cards) => data — 함수면 카드가 켜져 있을 때만 부른다
+ *    buildMessageWithCard("levelUp", { ...commonVars(member), level, … }, async () => ({ avatar: await cardAvatar(member), name, level, … }))
+ */
+export async function buildMessageWithCard(key, vars = {}, cardData = null) {
+  const c = compose(key, vars);
+  if (!c) return null;
+  if (c.card && cardData) {
+    const card = await drawCard(key, withSkin(key, vars, cardData));
+    if (card) return attachCard(c.payload, card);
+  }
+  return sendable(c.payload) ? c.payload : null;
 }
 
 function avatarOf(x) {
@@ -879,6 +1014,22 @@ function avatarOf(x) {
   } catch {
     return "";
   }
+}
+
+// 📌 카드 스킨(아이템 효과 cardSkin) — commonVars 가 심볼 칸에 실어 둔 멤버로 스킨을 찾아 카드 data 에 넣는다.
+//    레벨업 · /레벨 · /랭크 · /출석체크만(RANKER 제외). data 에 skin 이 이미 있으면 그대로 둔다. 부르는 쪽은 고칠 게 없다
+//    (vars 를 { ...commonVars(member), … } 로 만들면 심볼 칸도 함께 복사된다 — 템플릿 치환 · JSON 에는 드러나지 않는다)
+const VARS_MEMBER = Symbol("member");
+const SKIN_KEYS = new Set(["levelUp", "cmdLevel", "cmdRank", "cmdAttend"]);
+function withSkin(key, vars, cardData) {
+  const member = vars?.[VARS_MEMBER];
+  if (!SKIN_KEYS.has(key) || !member) return cardData;
+  return async (m) => {
+    const data = typeof cardData === "function" ? await cardData(m) : cardData;
+    if (!data || data.skin !== undefined) return data;
+    const skin = perksOf(member).cardSkin;
+    return skin ? { ...data, skin } : data;
+  };
 }
 
 // 공통 변수 — member 는 GuildMember 또는 User (DM 대상이 서버에 없을 때)
@@ -892,6 +1043,7 @@ export function commonVars(member, guild) {
     avatar: avatarOf(member) || avatarOf(user),
     server: g?.name || "",
     site: SITE_URL,
+    [VARS_MEMBER]: member || null, // 카드 스킨용(withSkin) — 글에는 쓰이지 않는다
   };
 }
 
@@ -934,8 +1086,18 @@ async function processTests(client) {
           ? mergeTemplate(t.key, t.template)
           : mergeTemplate(t.key, await BotMessage.findOne({ key: t.key }).lean(), { legacy: getSettings() });
       const vars = { ...sampleVars(t.key), ...commonVars(member || user, guild) };
-      const payload = toPayload(tpl, vars);
-      if (!payload) throw new Error("보낼 내용이 없습니다.");
+      // 카드 키 · 카드 켜짐이면 샘플 카드(예시 레벨의 등급 · 요청한 관리자 이름 · 사진)를 붙인다. 못 그리면 글만
+      const card = isCardKey(t.key) && tpl.card === true;
+      let payload = toPayload(tpl, vars, { keepEmpty: card });
+      if (card && payload) {
+        const drawn = await drawCard(t.key, async (m) => {
+          const data = m.sampleCardData(t.key, m.cardTierIndex(vars.level), await cardAvatar(member || user));
+          if (t.key !== "rankerAnnounce" && vars.name) data.name = vars.name;
+          return data;
+        });
+        if (drawn) payload = attachCard(payload, drawn);
+      }
+      if (!sendable(payload)) throw new Error("보낼 내용이 없습니다.");
       await user.send(payload);
       delivered = true;
       await BotMessageTest.updateOne({ _id: t._id, status: "sending" }, { $set: { status: "sent", sentAt: new Date(), error: "" } });
@@ -977,5 +1139,6 @@ export function startBotMessageLoop(client) {
   };
   run();
   setInterval(run, TEST_TICK_MS);
+  loadCards(); // 첫 카드가 늦지 않게 그림 모듈을 미리 불러 둔다(실패해도 봇은 그대로)
   console.log("✅ 봇 메시지 템플릿 시작 (1분 주기 갱신 · 테스트 발송 10초 주기)");
 }

@@ -105,10 +105,19 @@ export function AdminTabs({
             {active && <span className="absolute left-0 right-0 bottom-0 h-[2px] bg-[#e91e3f]" />}
           </>
         );
-        return hrefOf ? (
+        const el = hrefOf ? (
           <Link key={t.id} href={hrefOf(t.id)} scroll={false} className={cls} aria-current={active ? "page" : undefined}>{inner}</Link>
         ) : (
           <button key={t.id} type="button" onClick={() => onSelect?.(t.id)} className={cls} aria-current={active ? "page" : undefined}>{inner}</button>
+        );
+        if (t.n == null) return el;
+        // 📌 개수를 다는 탭은 0 이라 숫자가 빠질 때도 한 자리 폭을 지킨다 — 불러오기 전(0) → 뒤, 마지막 건을 처리해 0 이 될 때
+        //    숫자가 생겼다 없어지며 오른쪽 탭들이 옆으로 밀리던 것. 빈 자리는 탭(빨간 밑줄) 밖에 둔다
+        return (
+          <span key={t.id} className="shrink-0 flex">
+            {el}
+            {t.n <= 0 && <span aria-hidden className="invisible ml-1.5 text-[12px] font-black tabular-nums">0</span>}
+          </span>
         );
       })}
     </nav>
@@ -307,6 +316,20 @@ export function Btn({
   );
 }
 
+// ── 상태 따라 바뀌는 글자 ──────────────────────────────────
+//    📌 "저장" ↔ "저장 중…"처럼 누르면 글자가 바뀌는 단추 · 이름 — 두 글자를 한 칸에 겹쳐 두고 긴 쪽 폭을 늘 잡는다.
+//       글자 수가 달라 단추 폭이 줄었다 늘며 옆 단추 · 입력칸이 밀리던 것. 안 보이는 쪽은 자리만(invisible)
+//       <Btn><SwapLabel swap={saving} to="저장 중…">저장</SwapLabel></Btn>
+export function SwapLabel({ swap, to, children, align = "center" }: { swap: boolean; to: React.ReactNode; children: React.ReactNode; align?: "center" | "end" }) {
+  const cell = "col-start-1 row-start-1";
+  return (
+    <span className={`inline-grid ${align === "end" ? "justify-items-end" : "justify-items-center"}`}>
+      <span className={`${cell} ${swap ? "invisible" : ""}`} aria-hidden={swap || undefined}>{children}</span>
+      <span className={`${cell} ${swap ? "" : "invisible"}`} aria-hidden={!swap || undefined}>{to}</span>
+    </span>
+  );
+}
+
 // ── 저장 줄 ────────────────────────────────────────────────
 //    바뀐 것이 있을 때만 화면 아래에 붙는다. 무엇이 바뀌었는지(changes) · 되돌리기 · 저장.
 //    모바일은 하단 독 위에 뜬 판으로.
@@ -344,7 +367,7 @@ export function SaveBar({
           )}
         </div>
         {dirty && onReset && <Btn variant="ghost" onClick={onReset} disabled={saving}>되돌리기</Btn>}
-        <Btn onClick={onSave} disabled={!dirty || saving}>{saving ? "저장 중…" : saveLabel}</Btn>
+        <Btn onClick={onSave} disabled={!dirty || saving}><SwapLabel swap={saving} to="저장 중…">{saveLabel}</SwapLabel></Btn>
       </div>
     </div>
   );
@@ -789,7 +812,7 @@ export function ConfirmDialog({
   confirmLabel = "확인",
   cancelLabel = "취소",
   danger = false,
-  busy = false,
+  busy,
   onConfirm,
   onCancel,
 }: {
@@ -811,7 +834,11 @@ export function ConfirmDialog({
         {body && <div className="mt-2 text-[13px] text-[#5a5a5a] leading-relaxed break-keep">{body}</div>}
         <div className="mt-6 flex justify-end gap-2">
           <Btn variant="ghost" onClick={onCancel} disabled={busy}>{cancelLabel}</Btn>
-          <Btn variant={danger ? "danger" : "primary"} onClick={onConfirm} disabled={busy}>{busy ? "처리 중…" : confirmLabel}</Btn>
+          {/* 📌 busy 를 받는 모달만 "처리 중…" 폭을 미리 잡는다(SwapLabel) — 누르는 순간 단추가 넓어져 '취소'가 옆으로 밀리던 것.
+              busy 를 쓰지 않는 모달은 글자가 바뀌지 않으니 예전 폭 그대로 */}
+          <Btn variant={danger ? "danger" : "primary"} onClick={onConfirm} disabled={busy}>
+            {busy === undefined ? confirmLabel : <SwapLabel swap={busy} to="처리 중…">{confirmLabel}</SwapLabel>}
+          </Btn>
         </div>
       </div>
     </div>

@@ -11,9 +11,13 @@ import XpBoost from "@/models/XpBoost";
 import Purchase from "@/models/Purchase";
 import Item from "@/models/Item";
 import ShopItem from "@/models/ShopItem";
+import BotSetting from "@/models/BotSetting";
 import { settleTierPoints } from "@/lib/points";
 import { fetchMemberRoles } from "@/lib/discordMember";
 import { ownedItems } from "@/lib/ownedItems";
+import { OWN_PURCHASE_QUERY, OWN_PURCHASE_FIELDS, PERK_ITEM_FIELDS } from "@/lib/itemPerks";
+import { perksOfItems, discountedCost } from "@/lib/itemEffects";
+import { buildEnhanceView } from "@/lib/enhance";
 
 // ── [조회] 로그인한 유저 본인의 XP·레벨·순위 ──────────────────
 export async function GET() {
@@ -29,24 +33,28 @@ export async function GET() {
     const xp = doc?.xp || 0;
     const level = doc?.level || 0;
 
-    // 승급 보상 정산 — 봇이 레벨을 올리고, 그에 따른 POINT 는 사이트가 여기서 갚는다.
-    //    pointTierPaid 조건부 갱신이라 몇 번을 불러도 한 번만 지급된다.
-    const tierGain = await settleTierPoints(session.user.id, level).catch(() => 0);
     const now = new Date();
-    const [above, total, heldRoles, buffCfgs, boostRows, myPurchases, itemsAll, shopItems] = await Promise.all([
+    const [above, total, heldRoles, buffCfgs, boostRows, myPurchases, itemsAll, shopItems, setting] = await Promise.all([
       UserXp.countDocuments({ xp: { $gt: xp } }),
       UserXp.countDocuments(),
       fetchMemberRoles(session.user.id),
       RoleConfig.find({ $or: [{ buffXp: { $gt: 0 } }, { attendBuffXp: { $gt: 0 } }] }, { roleId: 1, roleName: 1, buffXp: 1, attendBuffXp: 1 }).lean(),
       XpBoost.find({ startAt: { $lte: now }, endAt: { $gte: now } }, { name: 1, boostXp: 1, targetRoleId: 1, targetChannelId: 1 }).lean(),
-      // 📌 보유 아이템 판정 재료 — 봇(bot/src/itemEffects.js)이 읽는 조건과 같게: 결제된 건(pending · completed), 기프트카드 제외
-      Purchase.find(
-        { userId: session.user.id, status: { $in: ["pending", "completed"] }, itemType: { $ne: "physical" } },
-        { status: 1, itemRef: 1, itemId: 1, roleId: 1, itemType: 1, expiresAt: 1 }
-      ).lean(),
-      Item.find({}, { name: 1, type: 1, roleId: 1, visible: 1, chatBuffXp: 1, voiceBuffXp: 1, attendBuffXp: 1, sortOrder: 1, createdAt: 1 }).sort({ sortOrder: 1, createdAt: 1 }).lean(),
+      // 📌 보유 아이템 판정 재료 — 봇(bot/src/itemEffects.js)이 읽는 조건과 같게: 결제된 건(pending · completed), 기프트카드 · 소모된 건 제외
+      //    (lib/itemPerks.js 와 같은 조건 — 상시 효과 · 배지도 이 판정으로 붙는다)
+      Purchase.find(OWN_PURCHASE_QUERY(session.user.id), OWN_PURCHASE_FIELDS).lean(),
+      Item.find({}, PERK_ITEM_FIELDS).sort({ sortOrder: 1, createdAt: 1 }).lean(),
       ShopItem.find({}, { itemId: 1 }).lean(),
+      // 강화 정책 — 다음 단계 비용(할인 반영)을 여기서 함께 준다(app/api/xp/enhance 와 같은 값)
+      BotSetting.findOne({ key: "main" }).lean(),
     ]);
+    const owned = ownedItems({ purchases: myPurchases, items: itemsAll, shopItems, heldRoles });
+    // 📌 상시 효과(강화 할인 · 캐시백 · 승급 빙옥 · 퀘스트 보상 …) · 프로필 배지 · 카드 스킨 — lib/itemPerks.js getPerks 와 같은 계산
+    const perks = perksOfItems(owned);
+
+    // 승급 보상 정산 — 봇이 레벨을 올리고, 그에 따른 POINT 는 사이트가 여기서 갚는다.
+    //    pointTierPaid 조건부 갱신이라 몇 번을 불러도 한 번만 지급된다. 승급 빙옥 보너스(tierPointBonus)는 지급할 때 얹는다
+    const tierGain = await settleTierPoints(session.user.id, level, { bonusPct: perks.tierPointBonus }).catch(() => 0);
     // 📌 획득 XP 계산 재료 — 봇 chatXp/voiceXp 의 가산 항목과 같은 것만 (채널 부스트는 채널마다 달라 뺀다)
     const held = new Set(heldRoles || []);
     const heldCfgs = buffCfgs.filter((c) => held.has(c.roleId));
@@ -57,7 +65,7 @@ export async function GET() {
     //    같은 아이템은 몇 번 사도 한 번. 역할 조회에 실패하면(null) 구매 건(A)만 본다. 조건 효과는 상황마다 달라 뺀다
     //    채팅 · 음성을 따로 정하므로 역할 버프(buffs — 둘 다에 붙는다)와 나눠 준다
     const itemBuffs = [];
-    for (const it of ownedItems({ purchases: myPurchases, items: itemsAll, shopItems, heldRoles })) {
+    for (const it of owned) {
       if (it.type === "physical") continue;
       const chat = Math.max(0, Number(it.chatBuffXp) || 0);
       const voice = Math.max(0, Number(it.voiceBuffXp) || 0);
@@ -70,6 +78,14 @@ export async function GET() {
 
     const currentCum = getCumulativeXpByLevel(level);
     const nextCum = getCumulativeXpByLevel(level + 1);
+
+    // 📌 다음 강화 비용(XP) — 강화 비용 할인(enhanceDiscount)을 반영한 값. 강화 API 가 실제로 빼는 값과 같다(빙옥은 이 값의 환산)
+    const enh = buildEnhanceView(setting, doc);
+    const enhanceNextCost = {
+      chat: enh.chat.nextCost == null ? null : discountedCost(enh.chat.nextCost, perks.enhanceDiscount),
+      voice: enh.voice.nextCost == null ? null : discountedCost(enh.voice.nextCost, perks.enhanceDiscount),
+    };
+    const { badges, cardSkin, ...perkSums } = perks;
 
     return NextResponse.json({
       success: true,
@@ -98,6 +114,14 @@ export async function GET() {
         attendBuffXp,
         boostXp: boosts.reduce((s, b) => s + b.xp, 0),
         boosts,
+        // 상시 효과 합(상한 적용) — { enhanceDiscount, shopCashback, tierPointBonus, questBonus, passBoost, cooldownCut, muteRelief }
+        perks: perkSums,
+        // 강화 비용 할인 % 와 할인을 반영한 다음 단계 비용 { chat, voice } (최대 단계면 null) — 강화 창 비용 표시가 이 값을 쓴다
+        enhanceDiscount: perks.enhanceDiscount,
+        enhanceNextCost,
+        // 프로필 배지(최대 3, 관리자 순서) [{ itemId, name, icon, imageUrl, color, type }] · 카드 스킨 키("" 이면 기본)
+        badges,
+        cardSkin,
         rolesSynced: heldRoles !== null,
         // 진행률 표시용: 현재 레벨 구간 내 진행 XP / 구간 총 XP
         levelProgress: {

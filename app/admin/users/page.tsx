@@ -9,7 +9,10 @@ import { AdminPage, SearchInput, Segmented, Btn, DataTable, DetailPane, StatusCh
 import { getTier } from "@/lib/voiceTiers";
 
 type Row = { userId: string; username: string; displayName: string; xp: number; level: number; point: number; noXp?: boolean };
-type Pass = { season: number; current: boolean; unlocked: boolean; seasonXp: number | null; claimed: number };
+type Pass = {
+  season: number; current: boolean; unlocked: boolean; seasonXp: number | null; claimed: number;
+  premiumBy?: "purchase" | "booster" | null; boosterUnknown?: boolean;
+};
 type UserSum = {
   userId: string; username: string; displayName: string;
   xp: number; level: number; point: number;
@@ -280,7 +283,12 @@ export default function AdminUsersPage() {
         { l: "강화", v: `${u.chatEnhance} · ${u.voiceEnhance}`, s: "채팅 · 음성" },
         {
           l: "패스",
-          v: u.pass.current ? (u.pass.unlocked ? "해금" : "미해금") : "—",
+          // 서버 부스터는 사지 않아도 프리미엄이 열린다 — 구매 해금과 나눠 보인다
+          v: !u.pass.current ? "—"
+            : u.pass.premiumBy === "booster" ? "부스터 해금"
+            : u.pass.unlocked ? "해금"
+            : u.pass.boosterUnknown ? "확인 불가"
+            : "미해금",
           s: u.pass.current ? `시즌 XP ${num(u.pass.seasonXp)} · 수령 ${u.pass.claimed}` : u.pass.season ? `시즌 ${u.pass.season} 기록` : "기록 없음",
         },
         { l: "출석", v: `${num(u.attendCount)}일`, s: `연속 ${u.attendStreak} · 최고 ${u.attendBestStreak}` },

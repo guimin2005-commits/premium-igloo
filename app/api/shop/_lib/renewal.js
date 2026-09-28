@@ -17,6 +17,7 @@ export async function liveHoldings(userId, docs) {
   return Purchase.find({
     userId,
     status: { $in: ["pending", "completed"] },
+    consumedAt: null, // 다 쓴 소모품(연속 출석 보호막)은 보유가 아니다
     $and: [
       { $or: [{ itemId: { $in: ids } }, ...(refs.length ? [{ itemRef: { $in: refs } }] : [])] },
       { $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] },

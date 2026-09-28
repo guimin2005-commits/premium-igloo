@@ -3,16 +3,20 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { discountPctOf, discountUntilLabel } from "@/lib/shopPricing";
+import { discountPctOf, discountUntilLabel, priceText } from "@/lib/shopPricing";
 import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import IconPicker from "../../components/IconPicker";
 import { InventoryItemPreview } from "../../components/Inventory";
 import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor } from "@/lib/items";
-import { TRIGGERS, TRIGGER_OF, DAY_LABELS, MAX_EFFECTS, normalizeEffects, describeEffect, describeItemBasic, describeRoleBuff } from "@/lib/itemEffects";
+import {
+  TRIGGERS, TRIGGER_OF, EFFECT_KINDS, SKINS, FIELD_RANGE, DAY_LABELS, MAX_EFFECTS, amountMaxOf,
+  normalizeEffects, describeEffect, describeItemBasic, describeRoleBuff,
+} from "@/lib/itemEffects";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
   buildDurations as buildFormDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload, toKstInput,
+  setPointOnly, formUnit, formSalePrice, priceCalc, durationsCalc,
 } from "../../arctic/productForm";
 import type { ProductForm } from "../../arctic/productForm";
 import {
@@ -33,6 +37,7 @@ import {
   fieldNote,
   EmptyRow,
   Btn,
+  SwapLabel,
   Toggle,
   useNotice,
   ConfirmDialog,
@@ -112,14 +117,21 @@ function Thumb({ it }: { it: any }) {
 //    open(조건 펼침)은 화면 상태라 저장하지 않는다. chText 는 채널 목록을 못 불러왔을 때 쓰는 ID 입력칸의 날 글자
 type EffectDraft = {
   id: string; on: string; mode: string; amount: string; minMinutes: string; everyN: string;
+  chance: string; minMembers: string; seconds: string; skin: string;
   days: number[]; hourFrom: string; hourTo: string; channelIds: string[]; chText: string; open: boolean;
 };
 const newEffectId = () => Math.random().toString(36).slice(2, 10);
-const newEffect = (): EffectDraft => ({ id: newEffectId(), on: "chat", mode: "add", amount: "", minMinutes: "", everyN: "", days: [], hourFrom: "", hourTo: "", channelIds: [], chText: "", open: false });
+const newEffect = (): EffectDraft => ({
+  id: newEffectId(), on: "chat", mode: "add", amount: "", minMinutes: "", everyN: "", chance: "", minMembers: "", seconds: "", skin: "",
+  days: [], hourFrom: "", hourTo: "", channelIds: [], chText: "", open: false,
+});
 // 빈 칸은 undefined 로 넘긴다 — normalizeEffects 는 "" 를 0 으로 읽어 분 · 번째를 최솟값(1분 · 2번째)으로 채워 버린다
 const numOrNone = (s: string) => (String(s ?? "").trim() === "" ? undefined : Number(s));
+// 📌 초 칸 효과(쿨타임 단축)는 크기 칸이 화면에 없다 — 다른 효과에서 바꿔 온 크기가 초로 읽히지 않게 amount 를 넘기지 않는다
 const effectOf = (d: EffectDraft) => ({
-  id: d.id, on: d.on, mode: d.mode, amount: numOrNone(d.amount), minMinutes: numOrNone(d.minMinutes), everyN: numOrNone(d.everyN),
+  id: d.id, on: d.on, mode: d.mode, amount: TRIGGER_OF[d.on]?.needs === "seconds" ? undefined : numOrNone(d.amount),
+  minMinutes: numOrNone(d.minMinutes), everyN: numOrNone(d.everyN),
+  chance: numOrNone(d.chance), minMembers: numOrNone(d.minMembers), seconds: numOrNone(d.seconds), skin: d.skin || undefined,
   days: d.days, hourFrom: d.hourFrom, hourTo: d.hourTo, channelIds: d.channelIds,
 });
 const draftOf = (e: any): EffectDraft => {
@@ -127,6 +139,8 @@ const draftOf = (e: any): EffectDraft => {
   return {
     id: String(e?.id || newEffectId()), on: TRIGGER_OF[e?.on] ? e.on : "chat", mode: e?.mode === "percent" ? "percent" : "add",
     amount: e?.amount ? String(e.amount) : "", minMinutes: e?.minMinutes ? String(e.minMinutes) : "", everyN: e?.everyN ? String(e.everyN) : "",
+    chance: e?.chance ? String(e.chance) : "", minMembers: e?.minMembers ? String(e.minMembers) : "",
+    seconds: e?.seconds ? String(e.seconds) : "", skin: typeof e?.skin === "string" ? e.skin : "",
     days: Array.isArray(e?.days) ? e.days.map(Number) : [], hourFrom: e?.hourFrom != null ? String(e.hourFrom) : "", hourTo: e?.hourTo != null ? String(e.hourTo) : "",
     channelIds, chText: channelIds.join(", "), open: false,
   };
@@ -232,12 +246,15 @@ const DD_BTN = "min-h-10 !py-2 !px-3 !border-[#a3a3a3] !text-[14px]";
 // 상세 칸 아래 줄의 삭제 — 저장 옆에 빨간 덩어리를 두지 않고 글자만
 const DEL_BTN = "ml-auto !text-[#d01634]";
 
-// 📌 아이템 효과 편집 — 기본 두 칸 + 조건 효과 목록. 상세 칸(520px) · 모바일 판 모두에서 줄이 무너지지 않게 줄바꿈을 허용한다.
+// 📌 아이템 효과 편집 — 기본 세 칸 + 추가 효과 목록(발동 · 상시 · 소모 · 꾸미기). 상세 칸(520px) · 모바일 판 모두에서 줄이 무너지지 않게 줄바꿈을 허용한다.
 //    ⚠️ 모듈 바깥에 둔다(페이지 안에서 정의하면 입력할 때마다 다시 마운트돼 포커스가 날아간다)
 const HOUR_FROM = Array.from({ length: 24 }, (_, h) => h);
 const HOUR_TO = Array.from({ length: 24 }, (_, h) => h + 1);
 const selectSm = `${inputClass} !w-[84px] tabular-nums`;
 const subLabel = "mb-1.5 text-[12px] font-bold text-[#5a5a5a]";
+// 크기 칸 앞 기호 · 뒤 단위 — 문구(describeEffect)와 같은 모양: 할인 · 단축 · 완화는 "−", 캐시백은 기호 없음, 나머지 "+"
+const PERK_SIGN: Record<string, string> = { enhanceDiscount: "−", muteRelief: "−", shopCashback: "" };
+const unitOf = (t: any, mode: string) => t?.unit || (mode === "percent" ? "%" : "XP");
 function EffectsEditor({
   chatBuffXp, voiceBuffXp, attendBuffXp, list, channels, onChange,
 }: {
@@ -246,17 +263,24 @@ function EffectsEditor({
 }) {
   const setRow = (i: number, patch: Partial<EffectDraft>) => onChange({ effects: list.map((d, j) => (j === i ? { ...d, ...patch } : d)) });
   const chName = (id: string) => channels.find((c) => c.id === id)?.name as string | undefined;
-  // 상황을 바꾸면 — 없는 방식(%)은 첫 방식으로, 채팅 ↔ 음성이면 맞지 않는 종류의 채널은 뺀다(카테고리 · 모르는 ID 는 둔다)
+  // 상황을 바꾸면 — 없는 방식(%)은 첫 방식으로, 채팅 ↔ 음성이면 맞지 않는 종류의 채널은 뺀다(카테고리 · 모르는 ID 는 둔다).
+  //    채널 종류는 TRIGGERS 의 channels("voice" 면 음성, true 면 텍스트)
+  //    발동형이 아니면(상시 · 소모 · 꾸미기) 요일 · 시간대 · 채널 조건이 없다 — 비우고 접는다. 카드 스킨은 첫 스킨을 골라 둔다
   const pickOn = (i: number, v: string) => {
     const t = TRIGGER_OF[v];
     if (!t) return;
     const d = list[i];
     const fits = (id: string) => {
       const c = channels.find((x) => x.id === id);
-      return !c || c.type === "category" || c.type === (v === "voice" ? "voice" : "text");
+      return !c || c.type === "category" || c.type === (t.channels === "voice" ? "voice" : "text");
     };
     const ids = t.channels ? d.channelIds.filter(fits) : d.channelIds;
-    setRow(i, { on: v, mode: t.modes.includes(d.mode) ? d.mode : t.modes[0], channelIds: ids, chText: ids.join(", ") });
+    const trig = t.kind === "trigger";
+    setRow(i, {
+      on: v, mode: t.modes.includes(d.mode) ? d.mode : t.modes[0], channelIds: ids, chText: ids.join(", "),
+      ...(trig ? {} : { days: [], hourFrom: "", hourTo: "", channelIds: [], chText: "", open: false }),
+      ...(t.needs === "skin" && !d.skin ? { skin: SKINS[0].v } : {}),
+    });
   };
   const toggleDay = (i: number, day: number) => {
     const cur = list[i].days;
@@ -295,25 +319,31 @@ function EffectsEditor({
         </Inline>
       </div>
 
-      <div className={labelClass}>조건 효과</div>
+      <div className={labelClass}>추가 효과</div>
       {list.map((d, i) => {
         const t = TRIGGER_OF[d.on] || TRIGGERS[0];
+        const trig = t.kind === "trigger";
         const norm: any = normalizeEffects([effectOf(d)])[0];
         const hasTime = d.hourFrom !== "" && d.hourTo !== "" && d.hourFrom !== d.hourTo;
-        const condN = (d.days.length > 0 && d.days.length < 7 ? 1 : 0) + (hasTime ? 1 : 0) + (t.channels && d.channelIds.length ? 1 : 0);
+        const condN = trig ? (d.days.length > 0 && d.days.length < 7 ? 1 : 0) + (hasTime ? 1 : 0) + (t.channels && d.channelIds.length ? 1 : 0) : 0;
         const dayPreset = d.days.length === 0 || d.days.length === 7 ? "all" : sameDays(d.days, WEEKDAYS) ? "wd" : sameDays(d.days, WEEKEND) ? "we" : "";
         const chOptions = channels
-          .filter((c) => c.type === "category" || c.type === (d.on === "voice" ? "voice" : "text"))
+          .filter((c) => c.type === "category" || c.type === (t.channels === "voice" ? "voice" : "text"))
           .filter((c) => !d.channelIds.includes(c.id))
           .map((c) => ({ value: c.id, label: `${CH_ICON[c.type] || "#"} ${c.name}`, hint: CH_LABEL[c.type], indent: !!c.parentId }));
         return (
           <div key={d.id} className="mb-2 rounded-xl border border-[#ededed] p-3">
             <div className="flex items-center gap-2">
-              <select value={d.on} onChange={(e) => pickOn(i, e.target.value)} aria-label="상황" className={`${inputClass} min-w-0 flex-1`}>
-                {TRIGGERS.map((x) => <option key={x.v} value={x.v}>{x.l}</option>)}
+              {/* 종류가 많아 묶음(발동 · 상시 · 소모 · 꾸미기)으로 나눠 고른다 */}
+              <select value={d.on} onChange={(e) => pickOn(i, e.target.value)} aria-label="효과" className={`${inputClass} min-w-0 flex-1`}>
+                {EFFECT_KINDS.map((k) => (
+                  <optgroup key={k.v} label={k.l}>
+                    {TRIGGERS.filter((x) => x.kind === k.v).map((x) => <option key={x.v} value={x.v}>{x.l}</option>)}
+                  </optgroup>
+                ))}
               </select>
-              {/* 폭 고정 — 조건 수가 붙어도 옆 칸이 밀리지 않게 */}
-              <Btn variant={d.open ? "primary" : "secondary"} size="sm" className="shrink-0 w-[72px]" aria-expanded={d.open} onClick={() => setRow(i, { open: !d.open })}>
+              {/* 폭 고정 — 조건 수가 붙어도 옆 칸이 밀리지 않게. 조건은 발동형만(나머지는 자리를 지킨 채 잠근다) */}
+              <Btn variant={d.open && trig ? "primary" : "secondary"} size="sm" className="shrink-0 w-[72px]" aria-expanded={d.open && trig} disabled={!trig} onClick={() => setRow(i, { open: !d.open })}>
                 조건{condN > 0 && <span className="tabular-nums">{condN}</span>}
               </Btn>
               <button type="button" aria-label="효과 삭제" onClick={() => onChange({ effects: list.filter((_, j) => j !== i) })}
@@ -322,28 +352,59 @@ function EffectsEditor({
               </button>
             </div>
 
-            <Inline className="mt-2">
-              {t.needs === "minMinutes" && (
-                <>
-                  <input type="number" min={1} max={1440} inputMode="numeric" value={d.minMinutes} onChange={(e) => setRow(i, { minMinutes: e.target.value })} placeholder="60" aria-label="분" className={`${inputClass} !w-20 tabular-nums`} />
-                  <span>분</span>
-                </>
-              )}
-              {t.needs === "everyN" && (
-                <>
-                  <input type="number" min={2} max={365} inputMode="numeric" value={d.everyN} onChange={(e) => setRow(i, { everyN: e.target.value })} placeholder="7" aria-label="번째" className={`${inputClass} !w-20 tabular-nums`} />
-                  <span>번째</span>
-                </>
-              )}
-              <span>+</span>
-              <input type="number" min={0} max={d.mode === "percent" ? 500 : 1000000} inputMode="numeric" value={d.amount} onChange={(e) => setRow(i, { amount: e.target.value })}
-                placeholder={d.mode === "percent" ? "10" : "100"} aria-label="크기" className={numClass} />
-              {t.modes.length > 1
-                ? <Segmented options={[{ v: "add", l: "XP" }, { v: "percent", l: "%" }]} value={d.mode} onChange={(v) => setRow(i, { mode: v })} />
-                : <span>XP</span>}
-            </Inline>
+            {/* 값 줄 — 효과마다 필요한 칸만. 크기가 없는 효과(보호막 · 배지)는 줄이 없다 */}
+            {(!t.noAmount || t.needs) && (
+              <Inline className="mt-2">
+                {t.needs === "minMinutes" && (
+                  <>
+                    <input type="number" min={1} max={1440} inputMode="numeric" value={d.minMinutes} onChange={(e) => setRow(i, { minMinutes: e.target.value })} placeholder="60" aria-label="분" className={`${inputClass} !w-20 tabular-nums`} />
+                    <span>분</span>
+                  </>
+                )}
+                {t.needs === "everyN" && (
+                  <>
+                    <input type="number" min={2} max={365} inputMode="numeric" value={d.everyN} onChange={(e) => setRow(i, { everyN: e.target.value })} placeholder="7" aria-label="번째" className={`${inputClass} !w-20 tabular-nums`} />
+                    <span>번째</span>
+                  </>
+                )}
+                {t.needs === "chance" && (
+                  <>
+                    <input type="number" min={FIELD_RANGE.chance[0]} max={FIELD_RANGE.chance[1]} inputMode="numeric" value={d.chance} onChange={(e) => setRow(i, { chance: e.target.value })} placeholder="10" aria-label="확률" className={`${inputClass} !w-20 tabular-nums`} />
+                    <span>% 확률</span>
+                  </>
+                )}
+                {t.needs === "minMembers" && (
+                  <>
+                    <input type="number" min={FIELD_RANGE.minMembers[0]} max={FIELD_RANGE.minMembers[1]} inputMode="numeric" value={d.minMembers} onChange={(e) => setRow(i, { minMembers: e.target.value })} placeholder="3" aria-label="인원" className={`${inputClass} !w-20 tabular-nums`} />
+                    <span>명 이상</span>
+                  </>
+                )}
+                {t.needs === "seconds" && (
+                  <>
+                    <span>−</span>
+                    <input type="number" min={FIELD_RANGE.seconds[0]} max={FIELD_RANGE.seconds[1]} inputMode="numeric" value={d.seconds} onChange={(e) => setRow(i, { seconds: e.target.value })} placeholder="15" aria-label="초" className={`${inputClass} !w-20 tabular-nums`} />
+                    <span>초</span>
+                  </>
+                )}
+                {t.needs === "skin" && (
+                  <Segmented options={SKINS.map((s) => ({ v: s.v, l: s.l }))} value={d.skin} onChange={(v) => setRow(i, { skin: v })} />
+                )}
+                {!t.noAmount && t.needs !== "seconds" && (
+                  <>
+                    {(PERK_SIGN[t.v] ?? "+") && <span>{PERK_SIGN[t.v] ?? "+"}</span>}
+                    <input type="number" min={0} max={amountMaxOf(t, d.mode)} inputMode="numeric" value={d.amount} onChange={(e) => setRow(i, { amount: e.target.value })}
+                      placeholder={unitOf(t, d.mode) === "XP" ? "100" : "10"} aria-label="크기" className={numClass} />
+                    {t.modes.length > 1
+                      ? <Segmented options={[{ v: "add", l: "XP" }, { v: "percent", l: "%" }]} value={d.mode} onChange={(v) => setRow(i, { mode: v })} />
+                      : <span>{unitOf(t, d.mode)}</span>}
+                  </>
+                )}
+                {/* 상시형은 아이템끼리 합한 뒤 상한으로 자른다 */}
+                {t.kind === "perk" && t.cap && t.needs !== "seconds" && <span className="text-[#8a8a8a] tabular-nums">합 최대 {t.cap}{t.unit}</span>}
+              </Inline>
+            )}
 
-            {d.open && (
+            {d.open && trig && (
               <div className="mt-3 pt-3 border-t border-[#ededed]">
                 <div className={subLabel}>요일</div>
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -430,6 +491,115 @@ function EffectsEditor({
   );
 }
 
+// 📌 추천 아이템 창 — 목록(lib/itemPresets.js · /api/admin/items/presets)에서 골라 한 번에 등록한다. 같은 이름이 이미 있으면 잠근다(등록됨).
+//    모바일은 아래에서 올라오는 판, PC 는 가운데 창. 머리 · 전체 선택 줄 · 아래 동작 줄은 고정이고 목록만 스크롤한다
+//    열 때만 그린다(페이지가 presetOpen 일 때 마운트) — 열 때마다 상태가 새로 시작하고 목록을 다시 읽는다
+type PresetRow = { key: string; name: string; icon: string; group: string; lines: string[]; exists: boolean };
+type PresetIconSwap = { name: string; icon: string; found: number; pending: number };
+const CHECK = "w-4 h-4 shrink-0 accent-[#131313] cursor-pointer disabled:cursor-default";
+function PresetDialog({
+  onClose, onDone, notify,
+}: {
+  onClose: () => void;
+  onDone: (d: { created?: string[]; skipped?: string[]; iconsUpdated?: number }) => void;
+  notify: (message: string, isError?: boolean) => void;
+}) {
+  const [rows, setRows] = useState<PresetRow[] | null>(null);
+  const [icons, setIcons] = useState<PresetIconSwap[]>([]);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [swap, setSwap] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  // 처음엔 아직 없는 것을 전부 골라 둔다
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/admin/items/presets", { cache: "no-store" }).then((r) => r.json()).catch(() => null).then((d) => {
+      if (!alive) return;
+      const list: PresetRow[] = d?.success && Array.isArray(d.data) ? d.data : [];
+      setFailed(!d?.success);
+      setRows(list);
+      setIcons(d?.success && Array.isArray(d.icons) ? d.icons : []);
+      setSel(new Set(list.filter((r) => !r.exists).map((r) => r.key)));
+    });
+    return () => { alive = false; };
+  }, []);
+
+  const avail = (rows || []).filter((r) => !r.exists);
+  const picked = avail.filter((r) => sel.has(r.key));
+  const allOn = avail.length > 0 && picked.length === avail.length;
+  const pendingIcons = icons.reduce((s, i) => s + (i.pending || 0), 0);
+  const doSwap = swap && pendingIcons > 0;
+  const toggle = (k: string) => setSel((prev) => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+
+  const submit = async () => {
+    if (busy || (!picked.length && !doSwap)) return;
+    setBusy(true);
+    const res = await fetch("/api/admin/items/presets", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keys: picked.map((r) => r.key), replaceIcons: doSwap }),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    setBusy(false);
+    if (res?.ok && d?.success) onDone(d);
+    else notify(d?.message || "등록에 실패했습니다.", true);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" onClick={busy ? undefined : onClose}>
+      <div role="dialog" aria-modal="true" aria-label="추천 아이템" onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-lg max-h-[88dvh] sm:max-h-[84dvh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-white border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313] pb-[env(safe-area-inset-bottom)] sm:pb-0">
+        <div className="shrink-0 flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[#ededed]">
+          <h2 className="min-w-0 flex-1 text-[17px] font-black tracking-tight">추천 아이템</h2>
+          <button type="button" onClick={onClose} disabled={busy} aria-label="닫기" className="shrink-0 w-9 h-9 rounded-full bg-[#f2f2f2] text-[#5a5a5a] hover:text-[#131313] flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 disabled:opacity-40">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        <div className="shrink-0 flex items-center gap-3 px-5 h-11 border-b border-[#ededed]">
+          <label className="flex items-center gap-2 text-[13px] font-bold cursor-pointer">
+            <input type="checkbox" className={CHECK} checked={allOn} disabled={!avail.length || busy}
+              onChange={() => setSel(allOn ? new Set() : new Set(avail.map((r) => r.key)))} />
+            전체 선택
+          </label>
+          <span className="ml-auto text-[12px] font-bold text-[#8a8a8a] tabular-nums">{picked.length} / {avail.length}</span>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-2">
+          {rows == null ? (
+            <p className="py-12 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</p>
+          ) : failed ? (
+            <p className="py-12 text-center text-[13px] text-[#d01634]">목록을 불러오지 못했습니다.</p>
+          ) : (
+            rows.map((r, i) => (
+              <React.Fragment key={r.key}>
+                {r.group && r.group !== rows[i - 1]?.group && <p className="px-5 pt-4 pb-1 text-[11px] font-black text-[#8a8a8a]">{r.group}</p>}
+                <label className={`flex items-center gap-3 px-5 py-2 ${r.exists ? "cursor-default" : "cursor-pointer hover:bg-[#f2f2f2]"}`}>
+                  <input type="checkbox" className={CHECK} checked={r.exists || sel.has(r.key)} disabled={r.exists || busy} onChange={() => toggle(r.key)} />
+                  <ItemIcon icon={r.icon} type="item" size={32} />
+                  <span className="min-w-0 flex-1">
+                    <span className={`block truncate text-[14px] font-bold ${r.exists ? "text-[#a3a3a3]" : ""}`}>{r.name}</span>
+                    {r.lines.map((l, j) => <span key={j} className="block truncate text-[12px] text-[#5a5a5a] tabular-nums">{l}</span>)}
+                  </span>
+                  {r.exists && <StatusChip className="shrink-0">등록됨</StatusChip>}
+                </label>
+              </React.Fragment>
+            ))
+          )}
+        </div>
+
+        <div className="shrink-0 border-t border-[#ededed] px-5 py-3.5 flex items-center gap-3">
+          <label className={`min-w-0 flex-1 flex items-center gap-2 text-[13px] font-bold break-keep ${pendingIcons ? "cursor-pointer" : "text-[#a3a3a3]"}`}>
+            <input type="checkbox" className={CHECK} checked={doSwap} disabled={!pendingIcons || busy} onChange={(e) => setSwap(e.target.checked)} />
+            <span className="min-w-0">기존 아이템 아이콘도 도트로 바꾸기</span>
+          </label>
+          <Btn className="w-[88px] shrink-0" onClick={submit} disabled={busy || rows == null || (!picked.length && !doSwap)}>{busy ? "등록 중…" : "등록"}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type PaneKind = "" | "reg" | "product" | "banner" | "coupon" | "order";
 
 export default function AdminShopPage() {
@@ -485,6 +655,8 @@ export default function AdminShopPage() {
   const [invRoles, setInvRoles] = useState<any[]>([]);
   // 아직 아이템으로 옮기지 않은 옛 표기 역할 — 가져오기 버튼의 숫자·표시 조건
   const [isImporting, setIsImporting] = useState(false);
+  // 추천 아이템 창 (PresetDialog)
+  const [presetOpen, setPresetOpen] = useState(false);
 
   const pendingInv = invRoles.filter((r) => r.visible !== false && !regItems.some((i) => i.roleId === r.roleId));
 
@@ -523,7 +695,7 @@ export default function AdminShopPage() {
     let effects: { chatBuffXp: number; voiceBuffXp: number; attendBuffXp: number; list: ReturnType<typeof effectOf>[] } | undefined;
     if (base.type !== "physical") {
       const bad = effDrafts.findIndex((d) => normalizeEffects([effectOf(d)]).length === 0);
-      if (bad >= 0) return notify(`조건 효과 ${bad + 1}번째 줄의 값을 입력해 주세요.`, true);
+      if (bad >= 0) return notify(`추가 효과 ${bad + 1}번째 줄의 값을 입력해 주세요.`, true);
       effects = { chatBuffXp: xpNum(chatBuffXp), voiceBuffXp: xpNum(voiceBuffXp), attendBuffXp: xpNum(attendBuffXp), list: effDrafts.map(effectOf) };
     }
     setIsSavingReg(true);
@@ -561,6 +733,20 @@ export default function AdminShopPage() {
     setIsImporting(false);
     if (res?.ok && d?.success) { fetchRegItems(); notify(`${d.imported || 0}개를 가져왔습니다.${d.skipped ? ` (이미 있는 ${d.skipped}개는 건너뜀)` : ""}`); }
     else notify(d?.message || "가져오기에 실패했습니다.", true);
+  };
+
+  // 추천 아이템 등록 결과 — 창을 닫고 목록을 다시 불러온다
+  const onPresetDone = (d: { created?: string[]; skipped?: string[]; iconsUpdated?: number }) => {
+    setPresetOpen(false);
+    fetchRegItems();
+    const made = d.created?.length || 0;
+    const skip = d.skipped?.length || 0;
+    const icon = d.iconsUpdated || 0;
+    notify([
+      made ? `아이템 ${made}개를 등록했습니다.` : icon ? "" : "새로 등록한 아이템이 없습니다.",
+      skip ? `이미 있는 ${skip}개는 건너뛰었습니다.` : "",
+      icon ? `기존 아이템 아이콘 ${icon}개를 바꿨습니다.` : "",
+    ].filter(Boolean).join("\n"));
   };
 
   const fetchAll = useCallback(() => {
@@ -828,7 +1014,9 @@ export default function AdminShopPage() {
   const shownOrdersByStatus = orderFilter ? orders.filter((o) => o.status === orderFilter) : orders;
 
   const discountPct = Math.min(100, Math.max(0, Number(form.discountPct) || 0));
-  const salePreview = Math.max(0, Math.floor(((Number(form.price) || 0) * (100 - discountPct)) / 100));
+  // 입력칸 단위 그대로(빙옥 전용이면 빙옥 — XP 로 할인한 뒤 올림, 상점 · 결제와 같은 계산)
+  const salePreview = formSalePrice(form, form.price, discountPct);
+  const unit = formUnit(form);
 
   // ── 목록 거르기 ──
   const qq = q.trim().toLowerCase();
@@ -933,7 +1121,7 @@ export default function AdminShopPage() {
       key: "price", label: "가격", align: "right",
       render: (it) => (
         <span className="font-bold tabular-nums whitespace-nowrap">
-          {Math.max(0, Math.floor((it.price * (100 - discountPctOf(it))) / 100)).toLocaleString()} XP
+          {priceText(it, Math.max(0, Math.floor((it.price * (100 - discountPctOf(it))) / 100)))}
           {discountPctOf(it) > 0 && <span className="ml-1 text-[#e91e3f]">-{it.discountPct}%</span>}
           {/* 할인 종료 — 남아 있으면 언제까지, 지났으면 끝났다고 */}
           {it.discountPct > 0 && it.discountUntil && (
@@ -1009,7 +1197,8 @@ export default function AdminShopPage() {
     { key: "item", label: "상품", mobile: "title", render: (o) => <span className="block truncate max-w-[280px] font-bold">{o.itemName}</span> },
     { key: "type", label: "유형", render: (o) => <span className="text-[#5a5a5a]">{typeLabel(o.itemType)}</span> },
     { key: "user", label: "구매자", render: (o) => <span className="font-bold text-[#5a5a5a]">{o.userName}</span> },
-    { key: "price", label: "금액", align: "right", render: (o) => <span className="font-bold tabular-nums whitespace-nowrap">{o.price.toLocaleString()} XP</span> },
+    // 빙옥 전용 상품을 산 건은 빙옥으로 (o.pointOnly — 구매 시점 스냅샷)
+    { key: "price", label: "금액", align: "right", render: (o) => <span className="font-bold tabular-nums whitespace-nowrap">{priceText(o, o.price)}</span> },
     { key: "at", label: "일시", render: (o) => <span className="text-[#8a8a8a] tabular-nums whitespace-nowrap">{fmtDateTime(o.createdAt)}</span> },
     {
       key: "memo", label: "메모",
@@ -1059,8 +1248,9 @@ export default function AdminShopPage() {
           />
         }
       >
-        {/* 탭별 설명은 탭 줄 아래 본문 첫 줄에 */}
-        {meta.desc && <p className="mb-4 text-[13px] text-[#5a5a5a] break-keep">{meta.desc}</p>}
+        {/* 탭별 설명은 탭 줄 아래 본문 첫 줄에
+            📌 설명이 없는 탭(쿠폰)도 한 줄 자리를 지킨다 — 그 탭으로 옮길 때만 아래 검색 · 토글 줄이 한 줄 위로 뛰던 것 */}
+        <p aria-hidden={!meta.desc || undefined} className={`mb-4 text-[13px] text-[#5a5a5a] break-keep ${meta.desc ? "" : "invisible"}`}>{meta.desc || "\u00a0"}</p>
         {/* ═══ 아이템 등록 ═══ */}
         {tab === "items" && (
           <>
@@ -1069,7 +1259,15 @@ export default function AdminShopPage() {
                 <>
                   {pendingInv.length > 0 && (
                     <Btn variant="secondary" onClick={importInvRoles} disabled={isImporting || reorder === "reg"}>
-                      {isImporting ? "가져오는 중..." : `표기 역할 가져오기 (${pendingInv.length})`}
+                      <SwapLabel swap={isImporting} to="가져오는 중...">{`표기 역할 가져오기 (${pendingInv.length})`}</SwapLabel>
+                    </Btn>
+                  )}
+                  {/* 📌 추천 아이템 — 상세 칸이 열려 좁을 땐 숨긴다(순서 바꾸기와 같은 이유). 순서 바꾸는 중엔 자리를 지킨 채 잠근다.
+                      모바일은 "추천" 두 글자로 — 세 버튼이 한 줄에 들게(폭 고정이라 글자가 바뀌어도 줄이 밀리지 않는다) */}
+                  {!pane && (
+                    <Btn variant="secondary" className="w-[64px] md:w-[116px]" onClick={() => setPresetOpen(true)} disabled={reorder === "reg"}>
+                      <span className="md:hidden">추천</span>
+                      <span className="hidden md:inline">추천 아이템</span>
                     </Btn>
                   )}
                   {orderBtns("reg", regItems.length, openNewReg)}
@@ -1101,7 +1299,7 @@ export default function AdminShopPage() {
               title={itemForm.id ? "아이템 수정" : "아이템 등록"}
               footer={
                 <>
-                  <Btn onClick={submitNearest} disabled={isSavingReg}>{isSavingReg ? "저장 중..." : itemForm.id ? "수정 저장" : "등록"}</Btn>
+                  <Btn onClick={submitNearest} disabled={isSavingReg}><SwapLabel swap={isSavingReg} to="저장 중...">{itemForm.id ? "수정 저장" : "등록"}</SwapLabel></Btn>
                   {itemForm.id && <Btn variant="ghost" className={DEL_BTN} onClick={() => setDeleteTarget({ kind: "reg", id: itemForm.id })}>삭제</Btn>}
                 </>
               }
@@ -1142,7 +1340,8 @@ export default function AdminShopPage() {
                 )}
 
                 <Field label="아이콘" hint="이미지가 없을 때 쓰입니다">
-                  <IconPicker value={itemForm.icon} onChange={(v) => setItemForm({ ...itemForm, icon: v })} color={itemForm.color || itemTypeColor(itemForm.type)} inputClassName={inputClass} />
+                  {/* 📌 key — 칸을 연 채 다른 아이템 줄을 누르면 다시 마운트해 탭이 그 아이템 아이콘의 묶음으로 열리게 */}
+                  <IconPicker key={itemForm.id || "new"} value={itemForm.icon} onChange={(v) => setItemForm({ ...itemForm, icon: v })} color={itemForm.color || itemTypeColor(itemForm.type)} inputClassName={inputClass} />
                 </Field>
                 <Field label="이미지 URL">
                   <input type="text" value={itemForm.imageUrl} onChange={(e) => setItemForm({ ...itemForm, imageUrl: e.target.value })} placeholder="https://..." className={inputClass} />
@@ -1296,7 +1495,7 @@ export default function AdminShopPage() {
                   </Field>
 
                   <Field label="아이콘" hint="이미지가 없을 때 카드에 크게">
-                    <IconPicker value={form.icon} disabled={linked} onChange={(v) => setForm({ ...form, icon: v })}
+                    <IconPicker key={`${form.id || "new"}:${form.itemId}`} value={form.icon} disabled={linked} onChange={(v) => setForm({ ...form, icon: v })}
                       color={form.color || itemTypeColor(form.type)} inputClassName={inputClass} />
                   </Field>
 
@@ -1347,20 +1546,28 @@ export default function AdminShopPage() {
 
                 {/* ── 가격 · 기간 ── */}
                 <PaneSection title="가격 · 기간">
+                  {/* 📌 빙옥 전용 — 켜면 가격 칸은 빙옥으로 받고 ×1,000 해 XP 로 저장한다. 새 기프트카드는 켜진 채로 시작한다 */}
+                  <div className="mb-4">
+                    <Toggle on={!!form.pointOnly} onClick={() => setForm(setPointOnly(form, !form.pointOnly))}
+                      onLabel="빙옥 전용" offLabel="XP · 빙옥 결제" />
+                  </div>
                   <Two>
-                    <Field label={<>정가 (XP)<Req /></>}>
-                      <input type="number" min={1} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="예: 500000" className={inputClass} />
+                    {/* 가격 칸 바로 아래 계산 한 줄 — 사용자가 요청한 빙옥 계산 안내 */}
+                    <Field label={<>정가 ({unit})<Req /></>} hint={priceCalc(form, form.price) || undefined}>
+                      <input type="number" min={1} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder={form.pointOnly ? "예: 500" : "예: 500000"} className={inputClass} />
                     </Field>
-                    <Field label="할인율 (%)" hint={discountPct > 0 && Number(form.price) > 0 ? <span className="font-bold text-[#e91e3f]">판매가 {salePreview.toLocaleString()} XP</span> : undefined}>
+                    <Field label="할인율 (%)" hint={discountPct > 0 && Number(form.price) > 0 ? <span className="font-bold text-[#e91e3f]">판매가 {salePreview.toLocaleString()} {unit}</span> : undefined}>
                       <input type="number" min={0} max={100} value={form.discountPct} onChange={(e) => setForm({ ...form, discountPct: e.target.value })} placeholder="0" className={inputClass} />
                     </Field>
                   </Two>
                   {/* 📌 할인 종료 — 그 시각(KST)이 지나면 할인이 저절로 끝난다. 비우면 계속 */}
                   {discountPct > 0 && (
                     <Field label="할인 종료" hint={form.discountUntil && new Date(`${form.discountUntil}:00+09:00`).getTime() <= Date.now() ? <span className="font-bold text-[#d01634]">이미 지난 시각입니다</span> : "비우면 계속"}>
+                      {/* 📌 '지우기'는 값이 없을 때도 자리를 지킨다 — 시각을 고르는 순간 단추가 붙으며 입력칸이 줄어들던 것 */}
                       <div className="flex items-center gap-2">
                         <input type="datetime-local" value={form.discountUntil} onChange={(e) => setForm({ ...form, discountUntil: e.target.value })} className={inputClass} />
-                        {form.discountUntil && <Btn variant="ghost" size="sm" onClick={() => setForm({ ...form, discountUntil: "" })}>지우기</Btn>}
+                        <Btn variant="ghost" size="sm" className={form.discountUntil ? "" : "invisible"} aria-hidden={!form.discountUntil || undefined}
+                          onClick={() => setForm({ ...form, discountUntil: "" })}>지우기</Btn>
                       </div>
                     </Field>
                   )}
@@ -1379,24 +1586,26 @@ export default function AdminShopPage() {
                               {([{ k: "price7", d: 7 }, { k: "price30", d: 30 }] as const).map(({ k, d }) => {
                                 const raw = Number((form as any)[k]) || 0;
                                 return (
-                                  <Field key={k} label={`${d}일 가격 (XP)`}
+                                  <Field key={k} label={`${d}일 가격 (${unit})`}
                                     hint={raw > 0
                                       ? discountPct > 0
-                                        ? `판매가 ${Math.max(0, Math.floor((raw * (100 - discountPct)) / 100)).toLocaleString()} XP (${discountPct}% 할인)`
-                                        : `판매가 ${raw.toLocaleString()} XP`
+                                        ? `판매가 ${formSalePrice(form, raw, discountPct).toLocaleString()} ${unit} (${discountPct}% 할인)`
+                                        : `판매가 ${raw.toLocaleString()} ${unit}`
                                       : "비우면 이 기간은 팔지 않습니다"}>
                                     <input type="number" min={0} value={(form as any)[k]}
                                       onChange={(e) => setForm({ ...form, [k]: e.target.value })}
-                                      placeholder={d === 7 ? "예: 30000" : "예: 100000"} className={inputClass} />
+                                      placeholder={form.pointOnly ? (d === 7 ? "예: 30" : "예: 100") : d === 7 ? "예: 30000" : "예: 100000"} className={inputClass} />
                                   </Field>
                                 );
                               })}
                             </Two>
+                            {/* 기간 칸은 반 폭이라 계산은 한 줄 요약으로 */}
+                            {durationsCalc(form) && <p className={`${fieldNote} -mt-2 mb-3`}>{durationsCalc(form)}</p>}
                           </div>
                           {/* 무제한(days 0)은 이 화면에 입력 칸이 없다 — 저장 때 값은 그대로 유지되므로 보이기라도 한다 */}
                           {Number(form.priceInf) > 0 && (
                             <p className={fieldNote}>
-                              무제한 옵션 <span className="font-bold tabular-nums">{Number(form.priceInf).toLocaleString()} XP</span> — 기존 값이 그대로 유지됩니다
+                              무제한 옵션 <span className="font-bold tabular-nums">{Number(form.priceInf).toLocaleString()} {unit}</span> — 기존 값이 그대로 유지됩니다
                             </p>
                           )}
                           {buildDurations().length === 0 && (
@@ -1565,7 +1774,7 @@ export default function AdminShopPage() {
               right={
                 <>
                   <Btn variant="secondary" onClick={migrateCodes} disabled={isMigrating}>
-                    {isMigrating ? "이전 중..." : "예전 코드 가져오기"}
+                    <SwapLabel swap={isMigrating} to="이전 중...">예전 코드 가져오기</SwapLabel>
                   </Btn>
                   {newBtn(openNewCoupon)}
                 </>
@@ -1782,7 +1991,7 @@ export default function AdminShopPage() {
                 <dl>
                   <DefRow k="유형">{typeLabel(orderSel.itemType)}</DefRow>
                   <DefRow k="구매자">{orderSel.userName}</DefRow>
-                  <DefRow k="금액"><span className="tabular-nums">{orderSel.price.toLocaleString()} XP</span></DefRow>
+                  <DefRow k="금액"><span className="tabular-nums">{priceText(orderSel, orderSel.price)}</span></DefRow>
                   <DefRow k="일시"><span className="tabular-nums">{fmtDateTime(orderSel.createdAt)}</span></DefRow>
                   {orderSel.error && <DefRow k="지급 실패"><span className="text-[#d01634]">{orderSel.error}</span></DefRow>}
                   {orderSel.contact && <DefRow k="수령 정보"><span className="font-normal whitespace-pre-wrap break-words">{orderSel.contact}</span></DefRow>}
@@ -1802,11 +2011,11 @@ export default function AdminShopPage() {
               <>
                 <Btn variant="secondary" disabled={!!detachBusy}
                   onClick={async () => { const d = await callDetach(true); if (d) setDetachPreview(d); }}>
-                  {detachBusy === "preview" ? "확인 중..." : "대상 미리보기"}
+                  <SwapLabel swap={detachBusy === "preview"} to="확인 중...">대상 미리보기</SwapLabel>
                 </Btn>
                 <Btn variant="danger" onClick={() => setDetachConfirm(true)}
                   disabled={!detachPreview || detachPreview.matched === 0 || !!detachBusy}>
-                  {detachBusy === "run" ? "처리 중..." : "디스코드 역할 떼기 실행"}
+                  <SwapLabel swap={detachBusy === "run"} to="처리 중...">디스코드 역할 떼기 실행</SwapLabel>
                 </Btn>
               </>
             }
@@ -1868,9 +2077,11 @@ export default function AdminShopPage() {
               {cancelTarget.userName} · {
                 // 서버(orders)는 billed 면 몫이 0 이어도 그 몫을 돌려준다 — 확인창도 같은 값을 보여야 한다
                 cancelTarget.billed || (cancelTarget.paidXp || 0) > 0 || (cancelTarget.paidPoint || 0) > 0
-                  ? [cancelTarget.paidXp > 0 && `${cancelTarget.paidXp.toLocaleString()} XP`, cancelTarget.paidPoint > 0 && `${cancelTarget.paidPoint.toLocaleString()} 빙옥`].filter(Boolean).join(" + ") || "0 XP"
+                  ? [cancelTarget.paidXp > 0 && `${cancelTarget.paidXp.toLocaleString()} XP`, cancelTarget.paidPoint > 0 && `${cancelTarget.paidPoint.toLocaleString()} 빙옥`].filter(Boolean).join(" + ") || (cancelTarget.pointOnly ? "0 빙옥" : "0 XP")
                   : `${(cancelTarget.price || 0).toLocaleString()} XP`
               } 환불
+              {/* 결제 때 돌려준 캐시백은 환불에서 뺀다(app/api/shop/orders) */}
+              {(cancelTarget.cashbackXp || 0) > 0 && ` · 캐시백 ${cancelTarget.cashbackXp.toLocaleString()} XP 회수`}
             </span>
             {cancelTarget.status === "completed"
               ? "결제한 XP·빙옥을 돌려주고 디스코드 역할은 봇이 회수합니다."
@@ -1932,7 +2143,7 @@ export default function AdminShopPage() {
             <div className="mt-6 flex justify-end gap-2">
               <Btn variant="ghost" onClick={() => setIssueTarget(null)}>닫기</Btn>
               <Btn onClick={() => issueCoupon(issueInput.trim())} disabled={!issueInput.trim() || isIssuing}>
-                {isIssuing ? "지급 중..." : "지급"}
+                <SwapLabel swap={isIssuing} to="지급 중...">지급</SwapLabel>
               </Btn>
             </div>
             {/* 바로 실행하지 않는다 — 확인 모달을 거친다 */}
@@ -2017,7 +2228,7 @@ export default function AdminShopPage() {
                   <div className="mt-auto flex items-end justify-between gap-3">
                     <div>
                       <div className="text-xl font-black text-[#131313] tracking-tight tabular-nums">{(Number(form.price) || 0).toLocaleString()}</div>
-                      <div className="text-[10px] font-bold text-[#8a8a8a] tracking-wider">XP</div>
+                      <div className="text-[10px] font-bold text-[#8a8a8a] tracking-wider">{unit}</div>
                     </div>
                     <span className="px-5 py-2.5 rounded-full text-[12px] font-bold bg-[#e91e3f] text-white shadow-[0_4px_12px_rgba(233,30,63,0.25)]">구매하기</span>
                   </div>
@@ -2032,6 +2243,9 @@ export default function AdminShopPage() {
           </div>
         </div>
       )}
+
+      {/* ── 추천 아이템 불러오기 ── (z-125: 알림 모달(z-130) 아래) */}
+      {presetOpen && <PresetDialog onClose={() => setPresetOpen(false)} onDone={onPresetDone} notify={notify} />}
 
       {noticeEl}
     </>

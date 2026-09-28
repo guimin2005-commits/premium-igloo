@@ -16,6 +16,7 @@ import {
   StatusChip,
   EmptyRow,
   Btn,
+  SwapLabel,
   Toggle,
   useNotice,
   ConfirmDialog,
@@ -753,7 +754,7 @@ export default function AdminSupportersPage() {
           selRow && sel && !sel.locked ? (
             <>
               <Btn variant="secondary" className="ml-auto" onClick={() => saveRow(selRow)} disabled={!sel.canSave}>
-                {sel.busy ? "저장 중" : "저장"}
+                <SwapLabel swap={sel.busy} to="저장 중">저장</SwapLabel>
               </Btn>
               <Btn
                 onClick={() => setPayTarget(selRow)}
@@ -879,7 +880,7 @@ export default function AdminSupportersPage() {
           replyTarget ? (
             <>
               <Btn variant="secondary" onClick={() => setDelTarget(replyTarget)} disabled={isReplying}>삭제</Btn>
-              <Btn className="ml-auto" onClick={sendReply} disabled={isReplying}>{isReplying ? "저장 중…" : "저장"}</Btn>
+              <Btn className="ml-auto" onClick={sendReply} disabled={isReplying}><SwapLabel swap={isReplying} to="저장 중…">저장</SwapLabel></Btn>
             </>
           ) : null
         }

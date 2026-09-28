@@ -17,12 +17,19 @@ const PurchaseSchema = new mongoose.Schema({
   // 결제 수단 — 가격은 XP 하나만 두고, 빙옥(1 빙옥 = 1,000 XP — lib/pointRate.js)을 원하는 만큼 쓰고 나머지를 XP 로 낸다.
   //    📌 "mixed" 는 둘 다 0 보다 크게 낸 건. enum 이 없어 봇 스키마(bot/src/db.js)도 그대로 저장된다
   payMethod: { type: String, default: "xp" }, // "xp" | "point" | "mixed"
+  // 📌 빙옥 전용 상품을 산 건(구매 시점 스냅샷) — paidXp 는 늘 0, 값은 전부 paidPoint. 구매 내역 · 관리자 목록이 "N 빙옥"으로 적는다
+  pointOnly: { type: Boolean, default: false },
   // 실제로 뺀 값 — 낸 화폐 단위 그대로. 환불 · 관리자 초기화가 이 값을 그대로 돌려준다
   paidXp: { type: Number, default: 0 },
   paidPoint: { type: Number, default: 0 },
   // 📌 지갑에서 실제로 빠졌는지. 관리자가 무료로 사던 시절 기록에도 paidXp 가 적혀 있어서,
   //    관리자 테스트 초기화(app/api/xp/reset)는 이 표시가 있는 건만 돌려준다 (없으면 공짜 XP 가 생긴다)
   billed: { type: Boolean, default: false },
+  // 📌 캐시백(아이템 효과 shopCashback)으로 돌려준 XP — 결제 뒤 이 건의 paidXp × 캐시백 %(버림). 환불 · 취소 때 이만큼 회수한다
+  cashbackXp: { type: Number, default: 0 },
+  // 📌 소모형 아이템(연속 출석 보호막 — 효과 streakShield)을 쓴 시각. 있으면 보유에서 빠진다(lib/ownedItems.js · 봇 사본 둘 다).
+  //    봇(attend)이 { consumedAt: null } 조건부 갱신으로 한 번만 세운다. bot/src/db.js 의 Purchase 스키마에도 같은 칸이 있어야 한다
+  consumedAt: { type: Date, default: null },
   // 📌 기간제 역할 — days가 0이면 영구. 지급 시각 기준으로 expiresAt을 세우고,
   //    기간이 지나면 봇이 역할을 회수하며 status를 expired로 바꾼다.
   days: { type: Number, default: 0 },
@@ -47,5 +54,8 @@ const PurchaseSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   processedAt: { type: Date },
 });
+
+// 📌 상점 추천 집계(app/api/shop/recommend) — 최근 N일 · 구매로 세는 상태만 최신순으로 읽는다
+PurchaseSchema.index({ createdAt: -1, status: 1 });
 
 export default mongoose.models.Purchase || mongoose.model("Purchase", PurchaseSchema);

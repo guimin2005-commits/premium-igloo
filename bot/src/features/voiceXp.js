@@ -1,17 +1,28 @@
 // ── 음성 XP (설정된 주기마다 지급) ──────────────────
 //    📌 아이템 효과: "음성 1회당"은 이 1회 지급에 더하고(percent 는 기본 음성 XP 기준, 음소거 배율은 전체에),
 //       "하루 음성 N분"은 오늘 누적 분이 N 이상이 되면 하루 1번 따로, "출석 · 출석 N번째"는 출석 지급에 더한다.
+//       "음성 파티"는 그 채널 인원(봇 제외)이 효과의 기준 이상일 때 1회당, "음소거 감소 완화"는 감소율에서 %p 를 뺀다(막기 모드는 그대로).
 //       효과는 디스코드 역할이 아니라 인벤토리 보유 아이템 기준이다(itemEffects.js — 아이템 기본 효과 포함).
 //    📌 레벨 비공개면 XP · 출석 · 효과는 주지 않고(grantXp · claimAttendance 가 막는다) 음성 시간 · 오늘 누적 분만 쌓는다.
 import { UserXp } from "../db.js";
 import { getVoiceBracketBonus, kstToday, VOICE_TIME_START } from "../leveling.js";
 import { getBuffXp } from "../roleConfigs.js";
-import { effectXp } from "../itemEffects.js";
+import { effectXp, voicePartyXp, perksOf } from "../itemEffects.js";
 import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getActiveBoostXp, getMuteMultiplier, isLevelOpen } from "../botSettings.js";
 import { grantXp, grantOnceEffects } from "../xp.js";
 import { claimAttendance } from "../attend.js";
 import { config } from "../config.js";
+
+// 📌 음소거 감소 완화(아이템 효과 muteRelief) — 감소 모드에서 음소거로 깎일 때만, 감소율에서 합 %p 를 뺀다.
+//    상한(감소율 전체)은 perksOf 가 건다. 막기(block) · 끔(off) 은 그대로
+function relieveMute(multiplier, member, s) {
+  if (!(multiplier < 1) || s.muteMode !== "reduce") return multiplier;
+  const relief = perksOf(member).muteRelief;
+  if (!(relief > 0)) return multiplier;
+  const pct = Math.min(100, Math.max(0, Number(s.muteReducePct) || 0));
+  return Math.max(0, 1 - Math.max(0, pct - relief) / 100);
+}
 
 async function voiceXpTick(client) {
   try {
@@ -27,6 +38,12 @@ async function voiceXpTick(client) {
     const today = kstToday();
     const tickMin = Math.max(1, Math.round((s.voiceIntervalSec || 300) / 60));
     const attendMin = Math.max(1, s.attendVoiceMin || 60);
+    // 채널별 인원(봇 제외) — 음성 파티 효과용, 틱마다 채널당 한 번만 센다
+    const headcount = new Map();
+    const countOf = (channel) => {
+      if (!headcount.has(channel.id)) headcount.set(channel.id, channel.members?.filter((m) => !m.user.bot).size || 0);
+      return headcount.get(channel.id);
+    };
 
     for (const [, voiceState] of guild.voiceStates.cache) {
       const member = voiceState.member;
@@ -38,8 +55,8 @@ async function voiceXpTick(client) {
       const channelPolicy = getChannelPolicy(channel);
       if (channelPolicy.excluded) continue;
 
-      // 음소거 정책 — block이면 지급 자체를 건너뜀
-      const muteMultiplier = getMuteMultiplier(voiceState);
+      // 음소거 정책 — block이면 지급 자체를 건너뜀 (감소 모드는 아이템 효과로 완화될 수 있다)
+      const muteMultiplier = relieveMute(getMuteMultiplier(voiceState), member, s);
       if (muteMultiplier === 0) continue;
 
       // 기본 음성 XP — 내전 채널도 따로 두지 않고 같은 값(대시보드 설정)을 쓴다
@@ -48,7 +65,7 @@ async function voiceXpTick(client) {
 
       // 강화 가산 — 단계(영구) × voiceEnhanceStep. 등급·역할·채널 가산과 같은 자리에서 더하고 음소거 배율을 곱한다
       const enhanceXp = Math.max(0, Math.floor(Number(doc?.voiceEnhance) || 0)) * Math.max(0, Number(s.voiceEnhanceStep) || 0);
-      const itemXp = effectXp(member, "voice", { base, channel });
+      const itemXp = effectXp(member, "voice", { base, channel }) + voicePartyXp(member, { base, channel, count: countOf(channel) });
       const amount = Math.floor(
         (base + getVoiceBracketBonus(doc?.level || 0) + enhanceXp + getBuffXp(member) + channelPolicy.boostXp + getActiveBoostXp(member, channel) + itemXp) *
           muteMultiplier

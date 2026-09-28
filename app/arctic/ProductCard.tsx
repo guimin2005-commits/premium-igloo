@@ -1,0 +1,83 @@
+"use client";
+
+import React from "react";
+import Link from "next/link";
+import { ICON_PATHS } from "../components/Icons";
+import { isTimed, durationLabel, cardPick, cardFrom, discountPctOf, shownPrice, priceUnit, priceText } from "@/lib/shopPricing";
+import { itemTypeLabel, itemTypeColor } from "@/lib/items";
+import CardArt from "./CardArt";
+
+// 📌 상품 카드 한 벌 — 상점 목록 · ARCTIC 홈 · 찜 · 상품 상세의 '다른 상품'이 모두 이 카드를 쓴다(곳마다 모양이 갈라지지 않게).
+//    상자(테두리 · 그림자) 없이 그림 · 유형 · 이름 · 가격 · 찜 만. 담기 · 구매는 상세에서 (찜 목록은 아래 children 으로 '담기' 한 줄).
+//    큰 값은 카드에 걸린 기간(pick — 목록 필터가 정한 것, 없으면 기본 무제한)의 판매가, 기간이면 "/ 30일".
+//    그보다 싼 기간이 있으면 아래 작은 줄에 "7일 154,000 XP부터". 취소선 정가도 같은 기간 기준.
+type Pick = { days?: number; price: number; list: number };
+
+export function TypeBadge({ type, className = "" }: { type: string; className?: string }) {
+  return (
+    <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
+      {itemTypeLabel(type)}
+    </span>
+  );
+}
+
+export default function ProductCard({
+  it, href, pick: pickIn, wished, onWish, wishLabel, overlay, className = "", children,
+}: {
+  it: any;
+  href: string;
+  pick?: Pick | null;
+  wished: boolean;
+  onWish: () => void;
+  wishLabel?: string;
+  overlay?: React.ReactNode; // 그림 위 왼쪽 위 표시(관리자 '숨김' 등)
+  className?: string;
+  children?: React.ReactNode; // 카드 맨 아래 한 줄(관리자 수정 · 삭제, 찜 목록의 담기)
+}) {
+  const soldOut = it.stock === 0;
+  const pick = pickIn || cardPick(it) || { days: undefined, price: 0, list: 0 };
+  const from = cardFrom(it, pick);
+  const pct = pick.price < pick.list ? discountPctOf(it) : 0;
+  return (
+    <div className={`group relative flex flex-col ${className}`}>
+      <Link href={href} className="block relative aspect-square overflow-hidden rounded-md bg-[#f2f2f2]">
+        <CardArt it={it} imgClass="group-hover:scale-[1.03] transition-transform duration-500" iconSize={64} />
+        {overlay}
+        {soldOut && (
+          <span className="absolute inset-0 bg-white/70 flex items-center justify-center">
+            <span className="text-[12px] font-black text-[#131313] tracking-wider">품절</span>
+          </span>
+        )}
+      </Link>
+
+      {/* 찜 */}
+      <button onClick={onWish} aria-label={wishLabel || (wished ? "찜 해제" : "찜하기")}
+        className="absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-colors">
+        <svg className={`w-4 h-4 transition-colors ${wished ? "text-[#e91e3f]" : "text-[#a3a3a3]"}`}
+          fill={wished ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.heart} />
+        </svg>
+      </button>
+
+      <Link href={href} className="block mt-3">
+        {/* 이름 앞에 분류 — 무엇을 사는 것인지 이름만으로는 모른다 */}
+        <TypeBadge type={it.type} className="inline-block mb-1.5 px-2 py-[3px] text-[10px] leading-none align-middle" />
+        {/* 이름은 작고 가볍게, 가격이 주인공 — 둘이 같은 크기면 값이 안 읽힌다 */}
+        <h3 className="text-[13px] font-semibold text-[#5a5a5a] leading-snug line-clamp-2 break-keep">{it.name}</h3>
+        {/* 가격은 늘 이름 바로 아래 — 할인율은 빨간 글자, 큰 숫자는 할인가.
+            취소선 정가 · "…부터" 는 가격 아래 작은 줄이라, 있든 없든 같은 줄 카드의 가격 높이가 같다 */}
+        {/* 빙옥 전용 상품은 같은 규칙에 단위만 빙옥 (priceText · shownPrice — 올림) */}
+        <p className="mt-2 text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none">
+          {pct > 0 && <span className="mr-1.5 text-[14px] font-black text-[#e91e3f]">{pct}%</span>}
+          {shownPrice(it, pick.price).toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">{priceUnit(it)}</span>
+          {isTimed(it) && pick.days != null && pick.days > 0 && <span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">/ {durationLabel(pick.days)}</span>}
+        </p>
+        {pct > 0 && <s className="block mt-1.5 text-[11.5px] text-[#a3a3a3] tabular-nums leading-none">{priceText(it, Number(pick.list || 0))}</s>}
+        {from && <p className="mt-1.5 text-[11.5px] font-bold text-[#8a8a8a] tabular-nums leading-none">{durationLabel(from.days)} {priceText(it, from.price)}부터</p>}
+      </Link>
+
+      {/* 맨 아래 줄(담기 · 수정/삭제)은 카드 바닥에 붙인다 — 위의 작은 줄 수가 달라도 같은 줄 카드끼리 버튼 높이가 같게 */}
+      {children && <div className="mt-auto flex flex-col">{children}</div>}
+    </div>
+  );
+}

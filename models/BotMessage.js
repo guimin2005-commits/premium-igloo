@@ -15,6 +15,7 @@ const FieldSchema = new mongoose.Schema(
 const BotMessageSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true },
   enabled: { type: Boolean, default: true }, // 끄면 봇이 보내지 않는다
+  card: { type: Boolean, default: true },    // 이미지 카드 — 카드 키(CARD_KEYS)만 쓴다. 다른 키는 저장할 때 false 로 정리된다
   content: { type: String, default: "" },    // 임베드 위 일반 글 (멘션은 여기 있어야 울린다)
   embed: {
     on: { type: Boolean, default: true },

@@ -12,7 +12,7 @@ import BotSetting from "@/models/BotSetting";
 // 📌 관리자 '봇 메시지' 편집 API — 레벨업 · 역할 지급 · DM · 명령어 응답의 임베드 디자인 · 문구
 //    GET              → 모든 키를 MESSAGE_DEFS 순서로 [{ key, custom, template(병합된 값), updatedAt, updatedBy }]
 //    GET ?test=<id>   → 내 테스트 발송 한 건의 상태 { status, error }
-//    PUT { key, template, baseUpdatedAt } → 정리해서 저장(upsert)
+//    PUT { key, template, baseUpdatedAt } → 정리해서 저장(upsert). template.card — 카드 키(CARD_KEYS)의 이미지 카드 켜기/끄기
 //    DELETE ?key=     → 기본값으로 (문서 삭제)
 //    POST { action:"test", key, template? } → 테스트 발송 대기열(BotMessageTest)에 넣는다 — 봇이 요청한 관리자 DM 으로 보낸다
 //    저장된 문서는 봇이 1분 주기로 다시 읽는다(bot/src/botMessages.js).
@@ -56,12 +56,14 @@ function badUrlField(key, embed) {
 
 // 화면이 보낸 템플릿 → 저장할 모양 { tpl } 또는 { error }
 //    길이 · 필드 수는 sanitizeTemplate 이 디스코드 한도로 자르고, 색 · 주소는 여기서 거절한다(조용히 비우면 관리자가 모른다)
+//    card(이미지 카드)는 참/거짓만 — 카드 키가 아니면 false 로 정리된다
 function cleanTemplate(key, raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { error: "템플릿 형식이 올바르지 않습니다." };
   const e = raw.embed && typeof raw.embed === "object" ? raw.embed : {};
   if (Array.isArray(e.fields) && e.fields.length > LIMITS.fields) return { error: `필드는 ${LIMITS.fields}개까지입니다.` };
+  if (raw.card !== undefined && typeof raw.card !== "boolean") return { error: "카드 이미지 값이 올바르지 않습니다." };
   const rawColor = String(e.color ?? "").trim();
-  const tpl = sanitizeTemplate(raw);
+  const tpl = sanitizeTemplate(raw, key);
   if (rawColor && !tpl.embed.color) return { error: "색은 #rrggbb 또는 등급 색만 쓸 수 있습니다." };
   for (const [f] of URL_FIELDS) tpl.embed[f] = tpl.embed[f].trim();
   const bad = badUrlField(key, tpl.embed);

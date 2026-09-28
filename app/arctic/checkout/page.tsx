@@ -5,8 +5,9 @@ import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BackLink from "../../components/BackLink";
-import { salePrice, basePrice, durationLabel } from "@/lib/shopPricing";
-import { POINT_RATE, xpToPoint } from "@/lib/pointRate";
+import { salePrice, basePrice, durationLabel, isPointOnly, shownPrice, priceUnit } from "@/lib/shopPricing";
+import { POINT_RATE } from "@/lib/pointRate";
+import { planPayment } from "@/lib/shopPay";
 import { getLevelByXp } from "@/lib/leveling";
 import { itemTypeLabel } from "@/lib/items";
 import ArcticFooter from "../ArcticFooter";
@@ -73,18 +74,35 @@ export default function CheckoutPage() {
     () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item),
     [cart, items]
   );
+  // 상품 합계(쿠폰 전, 일반 + 빙옥 전용 — XP 로 친 값). 쿠폰 조건 · 서버의 가격 확인(expectedSubtotal)이 이 값을 본다
   const subtotal = rows.reduce((n, r) => n + salePrice(r.item, r.days) * r.qty, 0);
-  const listTotal = rows.reduce((n, r) => n + basePrice(r.item, r.days) * r.qty, 0);
-  const itemDiscount = listTotal - subtotal;
-  const couponDiscount = coupon?.discount || 0;
-  const total = Math.max(0, subtotal - couponDiscount);
   const count = rows.reduce((n, r) => n + r.qty, 0);
   const needsContact = rows.some((r) => r.item.type === "physical");
-  // 📌 빙옥 — 최대 = min(보유, 총액을 빙옥으로 친 값). 서버(api/shop/checkout)와 같은 계산
-  const maxPoint = Math.max(0, Math.min(myPoint ?? 0, xpToPoint(total)));
-  const usePoint = Math.min(pointUse, maxPoint);
-  const chargedXp = Math.max(0, total - usePoint * POINT_RATE);
-  const enoughXp = myXp != null && myXp >= chargedXp && usePoint <= (myPoint ?? 0);
+  // 📌 빙옥 전용 줄은 빙옥으로만, 나머지 줄은 XP + 고른 빙옥 — 서버(api/shop/checkout)와 같은 함수(lib/shopPay planPayment)
+  //    쿠폰 할인은 주문 전체 판매가 비율로 줄마다 나뉜다(빙옥 전용 줄 몫은 빙옥이 그만큼 줄어든다 — 올림)
+  const normalRows = rows.filter((r) => !isPointOnly(r.item));
+  const poRows = rows.filter((r) => isPointOnly(r.item));
+  const hasNormal = normalRows.length > 0;
+  const hasPO = poRows.length > 0;
+  const couponDiscount = coupon?.discount || 0;
+  const plan = planPayment({
+    lines: rows.flatMap((r) => Array.from({ length: r.qty }, () => ({ price: salePrice(r.item, r.days), pointOnly: isPointOnly(r.item) }))),
+    discount: couponDiscount,
+    pointUse,
+    pointBalance: myPoint ?? 0,
+  });
+  const listTotal = normalRows.reduce((n, r) => n + basePrice(r.item, r.days) * r.qty, 0);
+  const itemDiscount = listTotal - plan.normalSubtotal;
+  const couponXp = plan.normalDiscount; // 쿠폰 할인 중 일반 줄 몫(XP)
+  const couponPoint = plan.pointOnlyListPoint - plan.pointOnlyPoint; // 쿠폰 할인 중 빙옥 전용 줄 몫(빙옥)
+  const poPoint = plan.pointOnlyPoint;
+  // 📌 빙옥 — 일반 줄에 쓸 최대 = min(보유 − 빙옥 전용 몫, 일반 줄 합계를 빙옥으로 친 값)
+  const maxPoint = plan.maxPoint;
+  const usePoint = plan.pointUse;
+  const chargedXp = plan.chargedXp;
+  const pointAll = plan.point; // 뺄 빙옥 전부
+  const pointShort = myXp != null && poPoint > (myPoint ?? 0);
+  const enoughXp = myXp != null && !pointShort && myXp >= chargedXp && pointAll <= (myPoint ?? 0);
   const inputPoint = (v: string) => setPointUse(Math.min(maxPoint, parseInt(v.replace(/\D/g, "") || "0", 10) || 0));
 
   // 보유 쿠폰 목록 — 주문 금액이 바뀌면 할인액도 다시 계산해 받는다
@@ -181,7 +199,8 @@ export default function CheckoutPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // 화면에 보이는 줄만 보낸다 — 저장소에 남은 옛 항목(지금은 없는 상품)이 결제 요청에 섞이지 않게
-        body: JSON.stringify({ items: rows.map((r) => ({ itemId: r.itemId, qty: r.qty, days: r.days || 0 })), contact, couponCode: coupon?.code || "", pointUse: usePoint, expectedSubtotal: subtotal }),
+        // pointOnlyIds — 화면이 빙옥 전용으로 본 상품. 보는 사이 바뀌었으면 서버가 409(PRICE_CHANGED)로 돌려보낸다
+        body: JSON.stringify({ items: rows.map((r) => ({ itemId: r.itemId, qty: r.qty, days: r.days || 0 })), contact, couponCode: coupon?.code || "", pointUse: usePoint, expectedSubtotal: subtotal, pointOnlyIds: poRows.map((r) => r.itemId) }),
       });
       const d = await res.json();
       setResult({ ok: !!d.success, message: d.message || (d.success ? "결제가 완료되었습니다." : "결제에 실패했습니다.") });
@@ -318,9 +337,13 @@ export default function CheckoutPage() {
                     </div>
                     <div className="text-right shrink-0">
                       {/* 고른 기간의 값 — 합계(subtotal · listTotal)와 같은 기준 */}
-                      <div className="text-sm font-black tabular-nums">{(salePrice(r.item, r.days) * r.qty).toLocaleString()} XP</div>
-                      {salePrice(r.item, r.days) < basePrice(r.item, r.days) && (
-                        <div className="text-[10px] text-[#a3a3a3] line-through tabular-nums">{(basePrice(r.item, r.days) * r.qty).toLocaleString()} XP</div>
+                      {/* 빙옥 전용 상품은 빙옥으로 (카드 · 장바구니와 같은 올림) */}
+                      <div className="text-sm font-black tabular-nums">{(shownPrice(r.item, salePrice(r.item, r.days)) * r.qty).toLocaleString()} {priceUnit(r.item)}</div>
+                      {/* 📌 취소선 줄은 할인이 없어도 자리를 잡는다 — 줄마다 가격 높이가 같게 (줄 높이는 썸네일이 정해 그대로) */}
+                      {salePrice(r.item, r.days) < basePrice(r.item, r.days) ? (
+                        <div className="text-[10px] text-[#a3a3a3] line-through tabular-nums">{(shownPrice(r.item, basePrice(r.item, r.days)) * r.qty).toLocaleString()} {priceUnit(r.item)}</div>
+                      ) : (
+                        <div aria-hidden className="invisible text-[10px]">{"\u00a0"}</div>
                       )}
                     </div>
                   </div>
@@ -477,8 +500,9 @@ export default function CheckoutPage() {
                 {couponMsg && <p className={`mt-2 text-[11px] font-bold ${couponMsgOk ? "text-[#3f7a35]" : "text-[#d01634]"}`}>{couponMsg}</p>}
               </div>
 
-              {/* 📌 빙옥 사용 — 원하는 만큼 쓰고 나머지는 XP 로. 바로 구매 창(ArcticShopBody)과 같은 모양 */}
-              <div className="mb-5">
+              {/* 📌 빙옥 사용 — 원하는 만큼 쓰고 나머지는 XP 로. 바로 구매 창(ArcticShopBody)과 같은 모양.
+                     빙옥 전용 상품만 있으면 고를 게 없어 감춘다 */}
+              {hasNormal && <div className="mb-5">
                 <div className="flex items-center gap-2">
                   <label htmlFor="checkout-point" className="shrink-0 text-[11px] font-bold text-[#5a5a5a]">빙옥 사용</label>
                   <input id="checkout-point" type="text" inputMode="numeric" autoComplete="off"
@@ -494,16 +518,28 @@ export default function CheckoutPage() {
                   <span className="ml-auto shrink-0 text-[11px] text-[#8a8a8a] tabular-nums">보유 {(myPoint ?? 0).toLocaleString()}</span>
                 </div>
                 <p className="mt-1.5 text-[10px] text-[#8a8a8a]">1 빙옥 = {POINT_RATE.toLocaleString()} XP</p>
-              </div>
+              </div>}
 
-              {/* ① 얼마를 내나 — 금액에서 할인 · 빙옥을 빼 결제 XP 까지. 숫자마다 단위를 붙인다 */}
+              {/* ① 얼마를 내나 — 금액에서 할인 · 빙옥을 빼 결제 XP 까지. 숫자마다 단위를 붙인다.
+                     빙옥 전용 상품은 따로 한 줄(빙옥) — 쿠폰 할인도 XP 몫 · 빙옥 몫으로 나눠 적는다 */}
               <div className="space-y-2.5 text-[13px]">
-                <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 금액 · {count}개</span><span className="font-bold tabular-nums">{listTotal.toLocaleString()} XP</span></div>
+                {hasNormal && (
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 금액 · {hasPO ? normalRows.reduce((n, r) => n + r.qty, 0) : count}개</span><span className="font-bold tabular-nums">{listTotal.toLocaleString()} XP</span></div>
+                )}
                 {itemDiscount > 0 && (
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 할인</span><span className="font-bold text-[#d01634] tabular-nums">-{itemDiscount.toLocaleString()} XP</span></div>
                 )}
+                {hasPO && (
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">빙옥 전용 · {poRows.reduce((n, r) => n + r.qty, 0)}개</span><span className="font-bold tabular-nums">{plan.pointOnlyListPoint.toLocaleString()} 빙옥</span></div>
+                )}
                 {couponDiscount > 0 && (
-                  <div className="flex justify-between"><span className="text-[#5a5a5a]">쿠폰 할인</span><span className="font-bold text-[#d01634] tabular-nums">-{couponDiscount.toLocaleString()} XP</span></div>
+                  <div className="flex justify-between gap-3">
+                    <span className="shrink-0 text-[#5a5a5a]">쿠폰 할인</span>
+                    <span className="text-right font-bold text-[#d01634] tabular-nums">
+                      {/* 빙옥 전용만 담았으면 0 이어도 빙옥으로 (끝전 올림에 묻힌 작은 쿠폰) */}
+                      {[hasNormal && (couponXp > 0 || couponPoint <= 0) ? `-${couponXp.toLocaleString()} XP` : "", couponPoint > 0 || !hasNormal ? `-${couponPoint.toLocaleString()} 빙옥` : ""].filter(Boolean).join(" · ")}
+                    </span>
+                  </div>
                 )}
                 {usePoint > 0 && (
                   <div className="flex justify-between gap-3">
@@ -512,20 +548,36 @@ export default function CheckoutPage() {
                   </div>
                 )}
               </div>
-              <div className="flex items-baseline justify-between mt-4 pt-4 border-t border-[#ededed]">
-                <span className="text-sm font-bold text-[#131313]">결제 XP</span>
-                <span className="text-xl font-black tabular-nums text-[#131313]">{chargedXp.toLocaleString()}<span className="ml-1 text-[12px] font-bold text-[#5a5a5a]">XP</span></span>
+              <div className="mt-4 pt-4 border-t border-[#ededed] space-y-1.5">
+                {hasNormal && (
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-sm font-bold text-[#131313]">결제 XP</span>
+                    <span className="text-xl font-black tabular-nums text-[#131313]">{chargedXp.toLocaleString()}<span className="ml-1 text-[12px] font-bold text-[#5a5a5a]">XP</span></span>
+                  </div>
+                )}
+                {/* 빙옥 전용 몫 + 일반 줄에 고른 빙옥 — 빙옥에서 빠지는 전부 */}
+                {hasPO && (
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-sm font-bold text-[#131313]">결제 빙옥</span>
+                    <span className="text-xl font-black tabular-nums text-[#131313]">{pointAll.toLocaleString()}<span className="ml-1 text-[12px] font-bold text-[#5a5a5a]">빙옥</span></span>
+                  </div>
+                )}
               </div>
 
               {/* ② 내 잔액이 어떻게 되나 — XP 는 쓰면 레벨도 내려가므로 레벨이 바뀌면 함께 보여 준다 */}
               <div className="mt-4 mb-6 bg-[#f2f2f2] px-4 py-3.5 space-y-2 text-[13px]">
-                <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold tabular-nums">{(myXp ?? 0).toLocaleString()} XP</span></div>
-                {enoughXp ? (
+                {hasNormal && <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold tabular-nums">{(myXp ?? 0).toLocaleString()} XP</span></div>}
+                {hasNormal && (myXp != null && myXp >= chargedXp ? (
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 후 XP</span><span className="font-black tabular-nums">{((myXp ?? 0) - chargedXp).toLocaleString()} XP</span></div>
                 ) : (
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">부족한 XP</span><span className="font-black text-[#d01634] tabular-nums">{(chargedXp - (myXp ?? 0)).toLocaleString()} XP</span></div>
+                ))}
+                {hasPO && <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 빙옥</span><span className="font-bold tabular-nums">{(myPoint ?? 0).toLocaleString()} 빙옥</span></div>}
+                {pointShort ? (
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">부족한 빙옥</span><span className="font-black text-[#d01634] tabular-nums">{(poPoint - (myPoint ?? 0)).toLocaleString()} 빙옥</span></div>
+                ) : (
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 후 빙옥</span><span className="font-black tabular-nums">{Math.max(0, (myPoint ?? 0) - pointAll).toLocaleString()} 빙옥</span></div>
                 )}
-                <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 후 빙옥</span><span className="font-black tabular-nums">{Math.max(0, (myPoint ?? 0) - usePoint).toLocaleString()} 빙옥</span></div>
                 {enoughXp && myXp != null && getLevelByXp(myXp - chargedXp) < getLevelByXp(myXp) && (
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">결제 후 레벨</span><span className="font-bold tabular-nums">Lv.{getLevelByXp(myXp)} → <b className="font-black text-[#d01634]">Lv.{getLevelByXp(myXp - chargedXp)}</b></span></div>
                 )}
@@ -536,9 +588,10 @@ export default function CheckoutPage() {
                   canPay ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"
                 }`}>
                 {isPaying ? "결제 중..."
+                  : pointShort ? "빙옥이 부족합니다"
                   : !enoughXp ? "XP가 부족합니다"
-                  : usePoint === 0 ? `${chargedXp.toLocaleString()} XP 결제하기`
-                  : chargedXp === 0 ? `${usePoint.toLocaleString()} 빙옥 결제하기`
+                  : pointAll === 0 && hasNormal ? `${chargedXp.toLocaleString()} XP 결제하기`
+                  : chargedXp === 0 ? `${pointAll.toLocaleString()} 빙옥 결제하기`
                   : "결제하기"}
               </button>
 

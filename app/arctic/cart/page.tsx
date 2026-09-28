@@ -5,8 +5,9 @@ import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import ArcticStoreBar from "../ArcticStoreBar";
 import CardArt from "../CardArt";
-import { basePrice, salePrice, durationLabel } from "@/lib/shopPricing";
+import { basePrice, salePrice, durationLabel, isPointOnly, priceText } from "@/lib/shopPricing";
 import { pointToXp } from "@/lib/pointRate";
+import { planPayment } from "@/lib/shopPay";
 import { ITEM_TYPE_LABEL } from "@/lib/items";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
@@ -95,11 +96,20 @@ export default function CartPage() {
   const toggleAll = () => setSelected(allChecked ? [] : rows.map((r) => r.itemId));
 
   // 정가 합 — 줄마다 고른 기간의 정가(무제한이면 무제한 옵션 값). 결제 화면과 같은 basePrice
-  const listTotal = picked.reduce((n, r) => n + basePrice(r.item, r.days) * r.qty, 0);
-  const total = picked.reduce((n, r) => n + salePrice(r.item, r.days) * r.qty, 0);
+  //    📌 빙옥 전용 줄은 따로 — 일반 줄은 XP 로, 빙옥 전용 줄은 빙옥으로 합친다(lib/shopPay planPayment — 결제 화면 · 서버와 같은 계산)
+  const normal = picked.filter((r) => !isPointOnly(r.item));
+  const listTotal = normal.reduce((n, r) => n + basePrice(r.item, r.days) * r.qty, 0);
+  const plan = planPayment({
+    lines: picked.flatMap((r) => Array.from({ length: r.qty }, () => ({ price: salePrice(r.item, r.days), pointOnly: isPointOnly(r.item) }))),
+  });
+  const total = plan.normalTotal;
   const discount = listTotal - total;
-  // 빙옥을 결제 화면에서 섞어 쓸 수 있다 — XP 만으로 모자라도 빙옥까지 합쳐 되면 결제로 보낸다
-  const enoughXp = myXp != null && myXp + pointToXp(myPoint) >= total;
+  const poPoint = plan.pointOnlyPoint;
+  const hasPO = picked.some((r) => isPointOnly(r.item));
+  // 빙옥 전용 몫이 보유 빙옥보다 크면 결제할 수 없다
+  const pointShort = myXp != null && poPoint > myPoint;
+  // 빙옥을 결제 화면에서 섞어 쓸 수 있다 — XP 만으로 모자라도 (빙옥 전용 몫을 뺀) 빙옥까지 합쳐 되면 결제로 보낸다
+  const enoughXp = myXp != null && !pointShort && myXp + pointToXp(Math.max(0, myPoint - poPoint)) >= total;
   const canCheckout = picked.length > 0 && enoughXp;
 
   // 선택한 항목만 결제로 넘긴다 (나머지는 장바구니에 남는다)
@@ -210,13 +220,12 @@ export default function CartPage() {
                         {/* 기간제를 가진 상품이면 "30일 연장" — 지금 만료 뒤에 이어 붙는다 */}
                         {(r.days ?? 0) > 0 && <span className={`shrink-0 px-1.5 py-0.5 rounded ${renew ? "bg-[#e91e3f]" : "bg-[#131313]"} text-white text-[10px] font-black`}>{durationLabel(r.days)}{renew ? " 연장" : ""}</span>}
                       </h3>
-                        {r.item.description && (
-                          <p className="text-[11px] text-[#8a8a8a] truncate mt-0.5">{r.item.description}</p>
-                        )}
+                        {/* 📌 설명 줄 · 취소선 줄은 없어도 자리를 잡는다 — 줄마다 이름 · 가격 · 삭제 위치가 같게 (줄 높이는 썸네일이 정해 그대로) */}
+                        <p className={`text-[11px] text-[#8a8a8a] truncate mt-0.5 ${r.item.description ? "" : "invisible"}`} aria-hidden={!r.item.description}>{r.item.description || "\u00a0"}</p>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="text-base font-black text-[#131313] tabular-nums">{sp.toLocaleString()} XP</div>
-                        {discounted && <div className="text-[11px] text-[#a3a3a3] line-through tabular-nums">{list.toLocaleString()} XP</div>}
+                        <div className="text-base font-black text-[#131313] tabular-nums">{priceText(r.item, sp)}</div>
+                        <div className={`text-[11px] text-[#a3a3a3] line-through tabular-nums ${discounted ? "" : "invisible"}`} aria-hidden={!discounted}>{discounted ? priceText(r.item, list) : "\u00a0"}</div>
                         <button onClick={() => removeItem(r.itemId)}
                           className="mt-2 text-[11px] font-bold text-[#a3a3a3] hover:text-[#d01634] transition-colors">
                           삭제
@@ -236,19 +245,32 @@ export default function CartPage() {
 
                 <div className="space-y-2.5 text-[13px] mb-4">
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">선택한 상품</span><span className="font-bold tabular-nums">{picked.length}개</span></div>
-                  <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 금액</span><span className="font-bold tabular-nums">{listTotal.toLocaleString()} XP</span></div>
+                  {(!hasPO || normal.length > 0) && (
+                    <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 금액</span><span className="font-bold tabular-nums">{listTotal.toLocaleString()} XP</span></div>
+                  )}
                   {discount > 0 && (
                     <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 할인</span><span className="font-bold text-[#e91e3f] tabular-nums">-{discount.toLocaleString()} XP</span></div>
                   )}
+                  {/* 빙옥 전용 상품 — 빙옥으로만 결제 (줄마다 보인 값의 합) */}
+                  {hasPO && (
+                    <div className="flex justify-between"><span className="text-[#5a5a5a]">빙옥 전용</span><span className="font-bold tabular-nums">{poPoint.toLocaleString()} 빙옥</span></div>
+                  )}
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 XP</span><span className="font-bold tabular-nums">{(myXp ?? 0).toLocaleString()} XP</span></div>
-                  {myPoint > 0 && <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 빙옥</span><span className="font-bold tabular-nums">{myPoint.toLocaleString()} 빙옥</span></div>}
+                  {(myPoint > 0 || hasPO) && <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 빙옥</span><span className={`font-bold tabular-nums ${pointShort ? "text-[#d01634]" : ""}`}>{myPoint.toLocaleString()} 빙옥</span></div>}
                 </div>
 
                 <div className="h-px bg-[#ededed] mb-4"></div>
 
-                <div className="flex items-baseline justify-between mb-6">
-                  <span className="text-sm font-bold text-[#131313]">예상 결제 XP</span>
-                  <span className={`text-xl font-black tabular-nums ${enoughXp ? "text-[#131313]" : "text-[#d01634]"}`}>{total.toLocaleString()} XP</span>
+                <div className="flex items-baseline justify-between gap-3 mb-6">
+                  <span className="shrink-0 text-sm font-bold text-[#131313]">{hasPO ? "예상 결제" : "예상 결제 XP"}</span>
+                  <span className={`text-right tabular-nums ${enoughXp ? "text-[#131313]" : "text-[#d01634]"}`}>
+                    {(!hasPO || normal.length > 0) && <span className="block text-xl font-black">{total.toLocaleString()} XP</span>}
+                    {hasPO && (
+                      <span className={`block ${normal.length > 0 ? "mt-0.5 text-[13px] font-bold" : "text-xl font-black"}`}>
+                        {normal.length > 0 ? "+ " : ""}{poPoint.toLocaleString()} 빙옥
+                      </span>
+                    )}
+                  </span>
                 </div>
 
                 <Link href="/arctic/checkout"
@@ -256,7 +278,7 @@ export default function CartPage() {
                   className={`block w-full py-4 text-center font-bold rounded-xl transition-colors ${
                     canCheckout ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"
                   }`}>
-                  {picked.length === 0 ? "상품을 선택해주세요" : !enoughXp ? "XP · 빙옥이 부족합니다" : "결제하러 가기"}
+                  {picked.length === 0 ? "상품을 선택해주세요" : pointShort ? "빙옥이 부족합니다" : !enoughXp ? "XP · 빙옥이 부족합니다" : "결제하러 가기"}
                 </Link>
 
                 <p className="mt-4 text-[10px] text-[#a3a3a3] leading-relaxed break-keep">

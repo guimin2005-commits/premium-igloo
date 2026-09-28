@@ -215,6 +215,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   // 상단 카테고리 줄에서 마지막으로 올린 큰 분류 — 아래 패널은 이 분류의 세부만 보여 준다
   const [gnbGroup, setGnbGroup] = useState("");
+  // 누르면 열린 채로 둔다(터치 · 사파리처럼 버튼에 포커스가 안 잡히는 곳에서도) — 바깥을 누르거나 페이지가 바뀌면 닫힌다
+  const [gnbOpen, setGnbOpen] = useState(false);
   const [isGuestInquiryOpen, setIsGuestInquiryOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -245,6 +247,21 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const searchParams = useMemo(() => new URLSearchParams(routeQuery.qs), [routeQuery.qs]);
   const pathname = usePathname();
   const router = useRouter();
+  // 📌 카테고리 패널 — 세부 메뉴를 눌러 페이지가 바뀌면 닫는다(누른 열림 · 포커스 둘 다)
+  useEffect(() => {
+    setGnbOpen(false);
+    const el = document.activeElement as HTMLElement | null;
+    if (el && el.closest?.("[data-gnb]")) el.blur();
+  }, [pathname]);
+  // 열려 있을 때 바깥을 누르거나 Esc 면 닫는다
+  useEffect(() => {
+    if (!gnbOpen) return;
+    const onDown = (e: PointerEvent) => { if (!(e.target as HTMLElement | null)?.closest?.("[data-gnb]")) setGnbOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setGnbOpen(false); };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("pointerdown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [gnbOpen]);
 
   // 📌 토스트 — 로그인 취소 · 실패 안내, 비회원 문의 결과
   const [toast, setToast] = useState("");
@@ -731,7 +748,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
           {/* ── 카테고리 줄 — 모든 화면이 같은 방식. 내리면 로고 옆으로 접혀 계속 보인다 ── */}
           {!isVerifyPage && (status !== "authenticated" || isVerified) && (
-            <div className="order-2 relative group/gnb hidden md:flex items-center shrink-0 h-full">
+            <div data-gnb onMouseLeave={() => setGnbOpen(false)} className="order-2 relative group/gnb hidden md:flex items-center shrink-0 h-full">
               {/* 큰 분류만 이 줄에 세우고, 세부는 아래 패널 한 장이 전부 맡는다.
                      모바일은 펼치지 않고 햄버거 메뉴가 같은 일을 한다. ── */}
               <nav className="flex items-center gap-6 md:gap-10 h-full min-w-0 overflow-x-auto md:overflow-visible no-bar md:justify-center">
@@ -739,14 +756,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   const on = group.items.some((it) => pathname === it.path || !!pathname?.startsWith(it.path + "/"));
                   return (
                     <div key={group.name} className="shrink-0 h-full" onMouseEnter={() => setGnbGroup(group.name)} onFocus={() => setGnbGroup(group.name)}>
-                      <Link href={group.items[0]?.path || "/"}
-                        className={`relative h-full flex items-center font-extrabold transition-colors ${scrolled ? "text-[14px]" : "text-[14px] md:text-[15px]"} ${
+                      {/* 📌 큰 분류는 페이지로 가지 않는다 — 누르면(터치 포함) 포커스가 잡혀 아래 세부 패널만 열린다(group-focus-within) */}
+                      <button type="button" aria-haspopup="true" aria-expanded={gnbOpen && gnbGroup === group.name}
+                        onClick={() => { setGnbOpen((o) => !(o && gnbGroup === group.name)); setGnbGroup(group.name); }}
+                        className={`relative h-full flex items-center font-extrabold transition-colors outline-none ${scrolled ? "text-[14px]" : "text-[14px] md:text-[15px]"} ${
                           on ? (isLightPage ? "text-[#131313]" : "text-white")
                              : (isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-400 hover:text-white")
                         }`}>
                         {group.name}
                         {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
-                      </Link>
+                      </button>
                     </div>
                   );
                 })}
@@ -759,7 +778,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 const g = categoryGroups.find((x) => x.name === gnbGroup) || categoryGroups[0];
                 return (
                   <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 opacity-0 invisible group-hover/gnb:opacity-100 group-hover/gnb:visible group-focus-within/gnb:opacity-100 group-focus-within/gnb:visible transition-opacity duration-150"
-                       style={{ width: "min(92vw, 900px)" }}>
+                       style={{ width: "min(92vw, 900px)", ...(gnbOpen ? { opacity: 1, visibility: "visible" as const } : {}) }}>
                     <div className={`rounded-b-2xl border-x border-b backdrop-blur-2xl ${isLightPage ? "border-[#ededed] bg-white/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]" : "border-white/[0.08] bg-[#0c0c0c]/97 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.7)]"}`}>
                       <div className="flex items-center justify-center flex-wrap gap-x-10 gap-y-2 px-9 py-5">
                         {g?.items.map((it) => {

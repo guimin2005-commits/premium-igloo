@@ -839,8 +839,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         {r.playerIdx === -1 && <span className="shrink-0 text-[8px] font-black text-gray-600">리더</span>}
                         {r.golden && <span className="shrink-0 text-[8px] font-black text-amber-300">ALL</span>}
                       </span>
+                      {/* 📌 리더 줄도 가격 줄 자리를 비워 둔다 — 비우면 그 칸만 낮아져 옆 포지션 단과 줄이 어긋난다 */}
                       <span className="block text-[9px] font-bold text-gray-600 tabular-nums mt-0.5">
-                        {r.playerIdx === -1 ? "" : `${r.price.toLocaleString()} Pt`}
+                        {r.playerIdx === -1 ? "\u00a0" : `${r.price.toLocaleString()} Pt`}
                       </span>
                     </button>
                   );
@@ -852,7 +853,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     type="button"
                     disabled={!canAssignHere}
                     onClick={() => canAssignHere && act({ action: "assignSlot", slot, byLeaderIdx: myLeaderIdx })}
-                    className={`w-full text-left border-b border-dashed py-1.5 h-[42px] transition-colors ${canAssignHere ? "border-[#e91e3f] bg-[#e91e3f]/[0.07] animate-pulse cursor-pointer hover:bg-[#e91e3f]/15" : "border-white/[0.09]"}`}
+                    /* 📌 빈 칸 높이 = 채워진 칸 높이(45px) — 달랐을 때는 한 명 배정될 때마다 아래 빈 칸들이 3px씩 밀렸다 */
+                    className={`w-full text-left border-b border-dashed py-1.5 h-[45px] transition-colors ${canAssignHere ? "border-[#e91e3f] bg-[#e91e3f]/[0.07] animate-pulse cursor-pointer hover:bg-[#e91e3f]/15" : "border-white/[0.09]"}`}
                   >
                     <span className={`text-[10px] font-black tracking-[0.12em] ${canAssignHere ? "text-[#ff5c77]" : "text-white/15"}`}>{canAssignHere ? "여기에 배정" : "—"}</span>
                   </button>
@@ -1082,8 +1084,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   <p className="auc-label-xs text-gray-700 mt-1">Point</p>
                 </div>
 
+                {/* 📌 Ready/Wait 폭이 달라 준비를 누를 때마다 옆 포인트 칸이 밀렸다 → 두 글자를 한 칸에 겹쳐 폭 고정 */}
                 {auction.status === "준비중" && (
-                  <span className={`shrink-0 auc-label-xs ${l.ready ? "text-emerald-400" : "text-gray-600"}`}>{l.ready ? "Ready" : "Wait"}</span>
+                  <span className="shrink-0 grid auc-label-xs">
+                    <span className={`col-start-1 row-start-1 text-emerald-400 ${l.ready ? "" : "invisible"}`}>Ready</span>
+                    <span className={`col-start-1 row-start-1 text-gray-600 ${l.ready ? "invisible" : ""}`}>Wait</span>
+                  </span>
                 )}
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3 h-3 text-gray-700 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
               </button>
@@ -1218,11 +1224,12 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           <div
             key={i}
             style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }}
-            className={`auc-in relative border p-2 ${
+            className={`auc-in relative flex flex-col border p-2 ${
               live ? "border-[#e91e3f] bg-[#e91e3f]/[0.10]" : gold ? "border-amber-400/35 bg-amber-400/[0.05]" : sold ? "border-white/[0.07] opacity-70" : "border-white/12"
             }`}
           >
-            <div className="flex gap-2">
+            {/* 📌 위쪽이 늘어나 상태 띠를 바닥으로 민다 — 티어·포지션 줄 유무가 달라도 같은 줄 카드의 띠 높이가 같다 */}
+            <div className="flex flex-1 gap-2">
               {/* 실루엣 썸네일 */}
               <span className={`shrink-0 w-8 h-11 rounded border flex items-center justify-center ${gold ? "border-amber-400/40 bg-amber-400/10" : "border-white/10 bg-white/[0.04]"}`}>
                 {prof ? (
@@ -1254,7 +1261,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* 상태 띠 */}
-            <div className="flex items-center gap-1.5 mt-1.5 pt-1.5 border-t border-white/[0.07]">
+            {/* 📌 진행자 화면은 '호명' 버튼 높이만큼 띠를 잡아둔다 — 버튼 있는 카드만 구분선이 4px 높았다 */}
+            <div className={`flex items-center gap-1.5 mt-1.5 pt-1.5 border-t border-white/[0.07] ${role === "host" && auction.status !== "준비중" ? "min-h-[24.5px]" : ""}`}>
               <span className="text-[8px] font-black text-gray-700 tabular-nums">{String(i + 1).padStart(2, "0")}</span>
               {sold ? (
                 <>
@@ -1442,7 +1450,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           아직 팔리지 않아 표시할 게 없으면 선 하나만 그어 카드 바닥을 맞춘다. */}
                       {/* 아직 팔리지 않았으면 선만 긋되, 낙찰 줄이 들어갈 높이는 미리 잡아둔다 —
                           한 명이 낙찰될 때마다 카드 전체가 커지지 않도록 */}
-                      <div className="mt-auto border-t border-white/[0.05] pt-1.5 min-h-[22px]">
+                      {/* 📌 진행자 화면은 버튼(호명·낙찰 취소) 높이까지 잡아둔다 — 카드마다 구분선 높이가 달랐고,
+                             호명·낙찰 때마다 그 카드의 선만 오르내렸다 */}
+                      <div className={`mt-auto border-t border-white/[0.05] pt-1.5 ${role === "host" && auction.status !== "준비중" ? "min-h-[36px]" : "min-h-[22px]"}`}>
                         {p.status === "낙찰" ? (
                           <div className="flex items-center gap-1.5">
                             <p className="text-[10px] font-bold text-gray-500 truncate flex-1">{auction.leaders[p.soldTo]?.name} · {p.soldPrice?.toLocaleString()} Pt</p>
@@ -1564,7 +1574,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 if (!d.success && d.notReady) {
                   setConfirmCfg({ title: "강제 시작", message: `${d.message}\n\n그래도 경매를 시작하시겠습니까?`, confirmLabel: "강제 시작", onConfirm: () => act({ action: "host:start", force: true }) });
                 }
-              }} className={`text-xs font-black px-4 py-1.5 transition-colors ${allReady ? "bg-emerald-500/90 hover:bg-emerald-500 text-white" : "bg-white/10 hover:bg-white/20 text-gray-300"}`}>
+              }} className={`text-xs font-black tabular-nums px-4 py-1.5 transition-colors ${allReady ? "bg-emerald-500/90 hover:bg-emerald-500 text-white" : "bg-white/10 hover:bg-white/20 text-gray-300"}`}>
                 경매 시작 ({readyCount}/{auction.leaders.length} 준비)
               </button>
             );
@@ -1576,7 +1586,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               {strategyLeft > 0 ? (
                 <button onClick={async () => { const d = await act({ action: "host:strategy", seconds: 0 }); if (d?.success) patchAuction((a) => { a.strategyUntil = null; }); }} className="text-xs font-black bg-blue-500/80 hover:bg-blue-500 text-white px-4 py-1.5 transition-colors">전략 타임 종료</button>
               ) : (
-                <button onClick={() => setStrategyModalOpen(true)} className="text-xs font-black bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 transition-colors">전략 타임</button>
+                /* 📌 '전략 타임 종료'와 폭을 맞춘다 — 켜고 끌 때마다 왼쪽 볼륨·시점 선택이 좌우로 밀렸다 */
+                <button onClick={() => setStrategyModalOpen(true)} className="text-xs font-black bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 transition-colors">
+                  <span className="grid">
+                    <span aria-hidden className="invisible col-start-1 row-start-1">전략 타임 종료</span>
+                    <span className="col-start-1 row-start-1">전략 타임</span>
+                  </span>
+                </button>
               )}
               {invMode && <button onClick={async () => { const d = await act({ action: "host:assignTime", seconds: 180 }); if (d?.success) { sfxStrategy(); patchAuction((a) => { a.assignUntil = new Date(serverNow() + 180 * 1000).toISOString(); }); showToast("팀원 배정 시간 3분이 시작되었습니다"); } else showToast(d?.message || "배정 시간 부여에 실패했습니다"); }} className="text-xs font-black bg-blue-500/80 hover:bg-blue-500 text-white px-4 py-1.5 transition-colors">팀원 배정 시간(3분)</button>}
               <button onClick={() => setConfirmCfg({ title: "경매 종료", message: invMode ? "경매를 종료합니다. 종료 후에는 인벤토리·포지션 조정이 불가합니다. 계속할까요?" : "모든 경매를 종료하시겠습니까?", confirmLabel: "종료", onConfirm: () => act({ action: "host:end" }) })} className="text-xs font-black bg-white/10 hover:bg-red-500/80 text-white px-4 py-1.5 transition-colors">종료</button>
@@ -1622,7 +1638,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     {myLeader.ready ? (
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.8} className="w-4 h-4 shrink-0 text-emerald-400"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
                     ) : (
-                      <span className="w-1.5 h-1.5 rounded-full bg-white/90 shrink-0" />
+                      /* 📌 점도 체크(w-4)와 같은 폭의 자리에 둔다 — 누를 때마다 버튼 폭이 10px 바뀌었다 */
+                      <span className="w-4 h-4 shrink-0 flex items-center justify-center"><span className="w-1.5 h-1.5 rounded-full bg-white/90" /></span>
                     )}
                     {myLeader.ready ? "준비 해제" : "준비 완료"}
                   </span>
@@ -1817,11 +1834,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         </span>
                       </button>
                     ) : scoutLeft > 0 ? (
-                      <p className="mt-3 py-2.5 border-t border-white/10 text-[11px] font-bold text-gray-500 text-center">스카우터 타임 종료 후 입찰이 시작됩니다</p>
+                      /* 📌 안내 문구도 입찰 칸(94px) 높이를 차지한다 — 스카우터 타임이 끝나 입찰 칸이 뜰 때마다
+                            바로 아래 스카우터 버튼이 누르려는 순간 아래로 밀려났다 */
+                      <p className="mt-3 min-h-[94px] py-2.5 border-t border-white/10 text-[11px] font-bold text-gray-500 text-center">스카우터 타임 종료 후 입찰이 시작됩니다</p>
                     ) : strategyLeft > 0 ? (
-                      <p className="mt-3 py-2.5 border-t border-white/10 text-[11px] font-bold text-blue-400 text-center">전략 타임 중 — 입찰 일시 중지</p>
+                      <p className="mt-3 min-h-[94px] py-2.5 border-t border-white/10 text-[11px] font-bold text-blue-400 text-center">전략 타임 중 — 입찰 일시 중지</p>
                     ) : timeLeft === 0 ? (
-                      <p className="mt-3 py-2.5 border-t border-white/10 text-[11px] font-black text-gray-400 text-center">입찰 마감 — 진행자의 처리를 기다리는 중</p>
+                      <p className="mt-3 min-h-[94px] py-2.5 border-t border-white/10 text-[11px] font-black text-gray-400 text-center">입찰 마감 — 진행자의 처리를 기다리는 중</p>
                     ) : (
                       // ⚠️ bidBarOn 으로 한 번 더 거르지 않는다. bidBarOn 은 timeLeft !== null 을 요구하는데
                       //    cur.endsAt 이 아직 없는 구간(호명 직후 등)에서는 timeLeft 가 null 이라
@@ -2010,7 +2029,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       >
                         {(cur.leaderIdx === null ? basePrice : cur.price).toLocaleString()}<span className="text-base text-gray-400 ml-2">Point</span>
                       </p>
-                      {curLeader && <p className="text-xs font-bold text-white mt-1.5">{curLeader.name}</p>}
+                      {/* 📌 첫 입찰 전에도 최고가 리더 줄 자리를 잡아둔다 — 아래 정렬이라 이 줄이 생기는 순간 호가 숫자가 위로 튀었다 */}
+                      <p className="text-xs font-bold text-white mt-1.5">{curLeader ? curLeader.name : "\u00a0"}</p>
                     </div>
 
                     {/* 리더: 스카우터 + 입찰 (관전자는 열람만) */}
@@ -2018,7 +2038,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       <div className="w-full sm:w-auto sm:min-w-[380px]">
                         {/* ── 스카우터 — 아직 안 썼을 때만 버튼을 둔다.
                                쓰고 나면 결과가 위 정보 밴드에 그대로 뜨므로 '사용함' 안내는 군더더기였다 ── */}
-                        {myLeaderIdx !== null && curPlayer.scoutedBy.includes(myLeaderIdx) ? null
+                        {/* 📌 다만 자리는 남긴다 — 줄이 빠지면 바로 아래 입찰 칸과 왼쪽 호가가 통째로 튄다 */}
+                        {myLeaderIdx !== null && curPlayer.scoutedBy.includes(myLeaderIdx) ? (
+                          <div aria-hidden className="invisible w-full flex items-baseline gap-2 pb-2 mb-3 border-b">
+                            <span className="auc-label-xs">Scouter</span>
+                            <span className="ml-auto text-[12px] font-black tabular-nums">−{scoutCostOf(curPlayer).toLocaleString()} Pt</span>
+                          </div>
+                        )
                         : myLeaderIdx !== null && (!curPlayer.isAllPos || curPlayer.hasMost) ? (
                           /* 황금카드는 공개할 모스트가 없으면 스카우터 자체를 제공하지 않음 */
                           <button
@@ -2048,11 +2074,13 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                             </button>
                           </div>
                         ) : scoutLeft > 0 ? (
-                          <p className="text-[11px] font-bold text-gray-500 text-right">스카우터 타임 종료 후 입찰이 시작됩니다</p>
+                          /* 📌 안내 문구도 입찰 칸(빠른 입찰 + 직접 입력 = 106.75px) 높이를 차지한다 —
+                                스카우터 타임이 끝나 입찰 칸이 뜰 때마다 왼쪽 호가·아래 콘솔이 통째로 내려앉았다 */
+                          <p className="min-h-[106.75px] text-[11px] font-bold text-gray-500 text-right">스카우터 타임 종료 후 입찰이 시작됩니다</p>
                         ) : timeLeft === 0 ? (
-                          <p className="text-xs font-black text-gray-400 text-right border-t border-white/10 pt-2.5">입찰 마감 — 진행자의 처리를 기다리는 중</p>
+                          <p className="min-h-[106.75px] text-xs font-black text-gray-400 text-right border-t border-white/10 pt-2.5">입찰 마감 — 진행자의 처리를 기다리는 중</p>
                         ) : strategyLeft > 0 ? (
-                          <p className="text-[11px] font-bold text-blue-400 text-right">전략 타임 중 — 입찰 일시 중지</p>
+                          <p className="min-h-[106.75px] text-[11px] font-bold text-blue-400 text-right">전략 타임 중 — 입찰 일시 중지</p>
                         ) : (
                           <>
                             {/* ── 빠른 입찰 — 세로 헤어라인으로 나뉜 눈금 ── */}
@@ -2105,28 +2133,28 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     {role === "host" && (
                       <div className="flex flex-wrap items-center gap-2">
                         {/* 입찰 시간 조절 — 긴장감 조절용 (남은 시간 즉시 반영) */}
-                        {timeLeft !== null && timeLeft > 0 && (
-                          <div className="flex items-center gap-1 mr-1">
-                            {[-5, -3, +5].map((d) => (
-                              <button
-                                key={d}
-                                onClick={async () => {
-                                  const r = await act({ action: "host:timer", delta: d });
-                                  if (r?.success) {
-                                    sfxSelect();
-                                    // 서버가 알려준 남은 초를 그대로 로컬 타이머에 즉시 반영
-                                    patchAuction((a) => { a.current.endsAt = new Date(serverNow() + r.left * 1000).toISOString(); });
-                                    showToast(`입찰 시간 ${d > 0 ? "+" : ""}${d}초 · 남은 ${r.left}초`);
-                                  }
-                                  else showToast(r?.message || "타이머 조절에 실패했습니다");
-                                }}
-                                className={`px-2.5 py-2 text-[11px] font-black rounded-lg border transition-all ${d < 0 ? "border-white/25 text-gray-200 hover:bg-white/10" : "border-white/15 text-gray-300 hover:bg-white/10"}`}
-                              >
-                                {d > 0 ? `+${d}` : d}초
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                        {/* 📌 시간이 다 돼도 빼지 않고 숨기기만 한다 — 줄이 접힌 화면에서 이 묶음이 빠지면
+                               바로 옆 낙찰·유찰 버튼이 누르려는 순간 왼쪽으로 튀었다 */}
+                        <div className={`flex items-center gap-1 mr-1 ${timeLeft !== null && timeLeft > 0 ? "" : "invisible"}`}>
+                          {[-5, -3, +5].map((d) => (
+                            <button
+                              key={d}
+                              onClick={async () => {
+                                const r = await act({ action: "host:timer", delta: d });
+                                if (r?.success) {
+                                  sfxSelect();
+                                  // 서버가 알려준 남은 초를 그대로 로컬 타이머에 즉시 반영
+                                  patchAuction((a) => { a.current.endsAt = new Date(serverNow() + r.left * 1000).toISOString(); });
+                                  showToast(`입찰 시간 ${d > 0 ? "+" : ""}${d}초 · 남은 ${r.left}초`);
+                                }
+                                else showToast(r?.message || "타이머 조절에 실패했습니다");
+                              }}
+                              className={`px-2.5 py-2 text-[11px] font-black rounded-lg border transition-all ${d < 0 ? "border-white/25 text-gray-200 hover:bg-white/10" : "border-white/15 text-gray-300 hover:bg-white/10"}`}
+                            >
+                              {d > 0 ? `+${d}` : d}초
+                            </button>
+                          ))}
+                        </div>
                         <button onClick={() => { if (cur.leaderIdx !== null) setConfirmCfg({ title: "낙찰 확정", message: `${curLeader?.name} — ${cur.price.toLocaleString()} Point 낙찰을 확정합니다.${auction.phase === 1 && p1Role ? ` (1페이즈: ${p1Role} 슬롯 자동 배정)` : " 슬롯은 리더이 배정합니다."}`, confirmLabel: "낙찰", onConfirm: () => act({ action: "host:sold" }) }); }} disabled={cur.leaderIdx === null} className="px-5 py-2.5 text-xs font-black bg-emerald-500/90 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl transition-colors">낙찰</button>
                         <button onClick={() => act({ action: "host:pass", playerIdx: cur.playerIdx })} className="px-5 py-2.5 text-xs font-black bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors">유찰</button>
                       </div>
@@ -2168,11 +2196,14 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             const invCount = myLeader.inventory?.length || 0;
             const needAct = isMyPending || isMyOverflow;
             return (
-              <section className={`hidden lg:block transition-colors ${needAct ? "bg-[#e91e3f]/[0.04]" : ""}`}>
+              <section className="hidden lg:block relative isolate">
+                {/* 📌 조치가 필요할 때 안쪽 여백(px-4 pb-4)을 주던 방식은 콘솔 전체를 — 눌러야 할 배정 칸까지 —
+                       옆으로 밀고 좁혔다. 내용은 제자리에 두고 강조 배경·선만 바깥으로 넓힌다 */}
+                <span aria-hidden className={`absolute -inset-x-4 top-0 -bottom-4 -z-10 pointer-events-none transition-colors ${needAct ? "bg-[#e91e3f]/[0.04]" : ""}`} />
                 {/* 콘솔 시작을 알리는 굵은 선 */}
-                <span className={`block h-[2px] transition-colors ${needAct ? "bg-[#e91e3f]" : "bg-white/25"}`} />
+                <span className={`block h-[2px] transition-colors ${needAct ? "-mx-4 bg-[#e91e3f]" : "bg-white/25"}`} />
 
-                <div className={needAct ? "px-4 pb-4" : ""}>
+                <div>
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-4 py-4">
                   {/* 내 프로필 — 제3자 시점에서는 좌측 레일에, 리더 본인은 이곳 중앙에 */}
                   <div className="flex items-center gap-3 min-w-0">
@@ -2194,7 +2225,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {/* POINT — 남은 예산. 내 자원은 화이트, 레드는 경매 호가·LIVE 전용 */}
                   <div>
                     <p className="auc-label text-gray-500">Point</p>
-                    <p className="text-3xl font-black text-white tabular-nums leading-none mt-1.5">{myLeader.points.toLocaleString()}</p>
+                    {/* 📌 시작 포인트 자릿수만큼 폭을 잡아둔다 — 100,000 → 99,900 처럼 자릿수가 줄 때 옆 ROSTER 가 밀렸다 */}
+                    <p className="grid text-3xl font-black text-white tabular-nums leading-none mt-1.5">
+                      <span aria-hidden className="invisible col-start-1 row-start-1">{(S.leaderPoints || 0).toLocaleString()}</span>
+                      <span className="col-start-1 row-start-1">{myLeader.points.toLocaleString()}</span>
+                    </p>
                   </div>
 
                   <span className="hidden sm:block w-px h-11 bg-white/12" />
@@ -2347,7 +2382,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 className={`ml-auto flex items-center gap-1.5 px-2 py-1 border text-[9px] font-black transition-colors ${showSystemChat ? "border-white/25 text-gray-300 hover:border-white hover:text-white" : "border-white/10 text-gray-600 hover:text-gray-300"}`}
               >
                 <MegaphoneIcon className="w-2.5 h-2.5 shrink-0" />
-                공지 {showSystemChat ? "ON" : "OFF"}
+                {/* 📌 ON/OFF 를 한 칸에 겹쳐 폭 고정 — 누를 때마다 버튼 폭이 바뀌어 아이콘이 좌우로 움직였다 */}
+                <span>공지 <span className="inline-grid">
+                  <span className={`col-start-1 row-start-1 ${showSystemChat ? "" : "invisible"}`}>ON</span>
+                  <span className={`col-start-1 row-start-1 ${showSystemChat ? "invisible" : ""}`}>OFF</span>
+                </span></span>
               </button>
             </div>
             <div ref={chatBoxRef} className="flex-1 overflow-y-auto overscroll-contain p-3 space-y-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
@@ -3089,7 +3128,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                       ) : swapMode ? (
                         <button
                           onClick={() => { setSwapMode(false); setSwapPick([]); }}
-                          className="w-full flex items-center justify-center gap-2 px-2.5 py-2 rounded-lg border border-white/25 bg-white/[0.06] text-[10px] font-black text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+                          /* 📌 '포지션 체인지' 버튼과 같은 높이(34.5px) — 누를 때마다 아래 버튼이 1~2px 오르내렸다 */
+                          className="w-full min-h-[34.5px] flex items-center justify-center gap-2 px-2.5 py-2 rounded-lg border border-white/25 bg-white/[0.06] text-[10px] font-black text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
                         >
                           교환 취소
                         </button>

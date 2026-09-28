@@ -1,12 +1,14 @@
 // ── 출석 한 번 처리 — /출석체크(commands.js)와 음성 자동 출석(features/voiceXp.js)이 같이 쓴다 ──
 //    📌 하루(KST) 한 번 자물쇠(lastAttendDate)를 조건부로 세운 쪽만 지급한다 — 두 길이 겹쳐도 합쳐서 한 번.
-//    지급 XP = 출석 XP(attendXp) + 역할 버프(getAttendBuffXp) + 아이템 효과(getAttendEffectXp) + 연속 출석 보너스
+//    지급 XP = 출석 XP(attendXp) + 역할 버프(getAttendBuffXp) + 아이템 효과(getAttendEffectXp · 럭키 출석 attendLuckyXp) + 연속 출석 보너스
 //    연속 출석 보너스 빙옥은 UserXp.point 에 넣고 원장(WalletLog kind "streak")에 남긴다. 보너스 XP 는 출석 XP 와 같은 XpLog("attend")로.
-//    (출석 빙옥 attendPoint 는 지금 어디서도 지급하지 않는다 — 동작을 바꾸지 않으려고 여기서도 주지 않는다)
+//    아이템 효과 출석 빙옥(attendPoint)도 같은 쓰기로 넣고 원장(kind "attend-point")에 따로 남긴다.
+//    (BotSetting.attendPoint 설정값은 지금 어디서도 지급하지 않는다 — 동작을 바꾸지 않으려고 여기서도 주지 않는다)
+//    📌 연속 출석 보호막(아이템 효과 streakShield) — 어제 하루만 빠졌으면(마지막 출석이 그제) 보호막 구매 하나를 소모하고 연속을 잇는다.
 import { UserXp } from "./db.js";
 import { kstToday } from "./leveling.js";
 import { getAttendBuffXp } from "./roleConfigs.js";
-import { getAttendEffectXp } from "./itemEffects.js";
+import { getAttendEffectXp, attendLuckyXp, attendPointOf, consumeStreakShield } from "./itemEffects.js";
 import { getSettings, isLevelOpen } from "./botSettings.js";
 import { grantXp } from "./xp.js";
 import { logWallet } from "./wallet.js";
@@ -47,8 +49,10 @@ function streakBonusOf(s, streak) {
  * @returns {{ closed: true }
  *   | { already: true, streak: number }
  *   | { ok: true, amount: number, attendCount: number, streak: number, bestStreak: number,
- *       streakBonus: { xp: number, point: number, days: number } | null }}
- *   amount = 출석 XP(버프 · 효과 포함, 연속 보너스 제외) — 보너스는 streakBonus 에 따로. 실제 지급 XP 는 amount + streakBonus.xp
+ *       streakBonus: { xp: number, point: number, days: number } | null, lucky: number, point: number, shieldUsed: boolean }}
+ *   amount = 출석 XP(버프 · 효과 · 럭키 포함, 연속 보너스 제외) — 보너스는 streakBonus 에 따로. 실제 지급 XP 는 amount + streakBonus.xp
+ *   lucky = 럭키 출석으로 더해진 XP(amount 안에 들어 있다, 없으면 0) · point = 아이템 효과 출석 빙옥(연속 보너스 빙옥 제외, 없으면 0)
+ *   shieldUsed = 오늘 보호막을 써서 연속을 이었는지
  */
 export async function claimAttendance(member, { source = "command" } = {}) {
   // 📌 레벨 비공개면 자물쇠도 세우지 않는다 — 공개된 날 그날 출석을 받을 수 있게
@@ -81,47 +85,78 @@ export async function claimAttendance(member, { source = "command" } = {}) {
 
   const attendCount = Math.max(0, Math.floor(Number(prev.attendCount) || 0)) + 1;
   // 어제 출석이면 이어서 +1, 아니면 1 부터. 어제 출석했는데 기록이 0 인 옛 문서는 어제를 1일로 본다
-  const streak =
-    prev.lastAttendDate === dayBefore(today) ? Math.max(1, Math.floor(Number(prev.attendStreak) || 0)) + 1 : 1;
+  const yesterday = dayBefore(today);
+  const prevStreak = Math.max(1, Math.floor(Number(prev.attendStreak) || 0));
+  let streak = prev.lastAttendDate === yesterday ? prevStreak + 1 : 1;
+  // 📌 보호막 — 끊긴 지 하루(마지막 출석이 그제)일 때만. 자물쇠를 통과한 쪽만 여기 오므로 하루 한 번만 본다.
+  //    소모는 consumedAt 조건부 갱신 — 소모할 게 없거나 오류면 그냥 끊긴다(출석 자체는 계속)
+  let shieldUsed = false;
+  if (streak === 1 && prev.lastAttendDate && prev.lastAttendDate === dayBefore(yesterday)) {
+    try {
+      if (await consumeStreakShield(member)) {
+        streak = prevStreak + 1;
+        shieldUsed = true;
+        console.log(`🛡 연속 출석 보호막 사용: ${member.displayName} · 연속 ${streak}일`);
+      }
+    } catch (e) {
+      console.error(`연속 출석 보호막 오류 (${member.displayName}):`, e.message);
+    }
+  }
   const bestStreak = Math.max(streak, Math.floor(Number(prev.attendBestStreak) || 0));
   // 자물쇠를 통과한 쪽만 여기 온다 — 같은 날 두 번 쓰지 않는다
   await UserXp.updateOne({ userId }, { $set: { attendStreak: streak }, $max: { attendBestStreak: streak } });
 
-  // 아이템 효과 "출석 시" · "출석 N번째마다"(방금 올린 누적 출석 수 기준)도 같은 지급에 더한다
+  // 아이템 효과 "출석 시" · "출석 N번째마다"(방금 올린 누적 출석 수 기준) · 럭키 출석(확률로 기본 출석 XP 의 N%)도 같은 지급에 더한다
+  const lucky = attendLuckyXp(member, Number(s.attendXp) || 0);
   const amount = Math.max(
     0,
-    (Number(s.attendXp) || 0) + getAttendBuffXp(member) + getAttendEffectXp(member, attendCount)
+    (Number(s.attendXp) || 0) + getAttendBuffXp(member) + getAttendEffectXp(member, attendCount) + lucky
   );
   const streakBonus = streakBonusOf(s, streak);
 
   const totalXp = amount + (streakBonus?.xp || 0);
   if (totalXp > 0) await grantXp(member, totalXp, { reason: "attend" });
 
-  // 연속 보너스 빙옥 — XP 는 이미 들어갔으니 실패해도 던지지 않는다(출석 자체를 실패로 보이지 않게)
-  if (streakBonus?.point > 0) {
+  // 빙옥 — 연속 보너스 + 아이템 효과 출석 빙옥을 한 번에. XP 는 이미 들어갔으니 실패해도 던지지 않는다(출석 자체를 실패로 보이지 않게)
+  //    📌 출석 빙옥도 레벨 비공개면 주지 않는다(맨 위에서 막히지만 그 사이 설정이 바뀐 경우까지)
+  const point = isLevelOpen() ? attendPointOf(member) : 0;
+  const streakPoint = streakBonus?.point > 0 ? streakBonus.point : 0;
+  if (streakPoint + point > 0) {
     try {
-      const paid = await UserXp.updateOne({ userId }, { $inc: { point: streakBonus.point }, $set: { updatedAt: new Date() } });
-      // 실제로 들어간 경우에만 원장에 남긴다 (사이트 lib/points.js addPoints 와 같은 규칙)
-      if (paid.matchedCount) await logWallet({
-        userId,
-        currency: "point",
-        amount: streakBonus.point,
-        kind: "streak",
-        label: `연속 출석 ${streak}일 보너스`,
-        refId: today,
-        meta: { streak, source },
-      });
+      const paid = await UserXp.updateOne({ userId }, { $inc: { point: streakPoint + point }, $set: { updatedAt: new Date() } });
+      // 실제로 들어간 경우에만 원장에 남긴다 (사이트 lib/points.js addPoints 와 같은 규칙) — 출처별로 한 줄씩
+      if (paid.matchedCount) {
+        if (streakPoint) await logWallet({
+          userId,
+          currency: "point",
+          amount: streakPoint,
+          kind: "streak",
+          label: `연속 출석 ${streak}일 보너스`,
+          refId: today,
+          meta: { streak, source },
+        });
+        if (point) await logWallet({
+          userId,
+          currency: "point",
+          amount: point,
+          kind: "attend-point",
+          label: "출석 빙옥",
+          refId: today,
+          meta: { source },
+        });
+      }
     } catch (e) {
-      console.error(`연속 출석 빙옥 지급 오류 (${member.displayName}):`, e.message);
+      console.error(`출석 빙옥 지급 오류 (${member.displayName}):`, e.message);
     }
   }
 
   const bonusText = streakBonus
     ? ` · 연속 ${streak}일 보너스 +${streakBonus.xp.toLocaleString()} XP${streakBonus.point ? ` +${streakBonus.point.toLocaleString()} 빙옥` : ""}`
     : "";
+  const extraText = `${lucky ? ` · 럭키 +${lucky.toLocaleString()}` : ""}${point ? ` · 빙옥 +${point.toLocaleString()}` : ""}${shieldUsed ? " · 보호막" : ""}`;
   console.log(
-    `✅ 출석(${source === "voice" ? "음성 자동" : "명령어"}): ${member.displayName} +${amount.toLocaleString()} · 연속 ${streak}일${bonusText}`
+    `✅ 출석(${source === "voice" ? "음성 자동" : "명령어"}): ${member.displayName} +${amount.toLocaleString()} · 연속 ${streak}일${bonusText}${extraText}`
   );
 
-  return { ok: true, amount, attendCount, streak, bestStreak, streakBonus };
+  return { ok: true, amount, attendCount, streak, bestStreak, streakBonus, lucky, point, shieldUsed };
 }

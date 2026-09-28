@@ -5,7 +5,7 @@ import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import { SEASON } from "@/lib/season";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
-import { POINT_RATE } from "@/lib/pointRate";
+import { POINT_RATE, xpToPoint } from "@/lib/pointRate";
 import {
   AdminPage,
   Panel,
@@ -37,29 +37,31 @@ import {
 //        표는 한 줄 요약만 두고, 줄(또는 편집)을 누르면 상세 칸에서 고친다
 //      · 저장 — 불러온 스냅샷과 다를 때만 뜨는 저장 줄(SaveBar). 무엇이 바뀌었는지 한 줄씩 보여 준다
 //    입력칸 · 알림 모달 · 확인 모달 · 권한 화면은 전부 ../ui 의 공용 컴포넌트를 쓴다.
+//    📌 2026-09 — 티어의 무료 · 프리미엄 칸은 보상 목록(칸마다 최대 4개)이다. 해금가는 빙옥으로 받아 ×1,000(XP)으로 저장한다.
 
-type RewardKind = "xp" | "point" | "role" | "item" | "none";
+type RewardKind = "xp" | "point" | "role" | "item";
 type Reward = { kind: RewardKind; amount: number; roleId: string; roleName: string; itemId: string; itemName: string };
 // 📌 tid — 서버가 발급하는 티어 고유 식별자("t7"). 유저 수령 기록이 이 값으로 남으므로
 //    편집 · 정렬 · 삭제 어느 경로에서도 잃어버리면 안 된다 (잃으면 서버가 새 tid 를 발급해
 //    이미 받은 티어가 미수령으로 되살아난다). 새로 만든 티어만 빈 문자열로 보내 서버가 발급하게 한다.
 //    key 는 React 목록 전용 로컬 키 — 아직 tid 가 없는 새 티어도 행을 구분해야 해서 따로 둔다. 서버로 보내지 않는다.
-type Tier = { key: string; tid: string; level: number; need: number; free: Reward; paid: Reward };
+type Tier = { key: string; tid: string; level: number; need: number; free: Reward[]; paid: Reward[] };
 // 상세 칸에서는 숫자 칸을 비울 수 있어야 해서 문자열로 들고 있다가 확인할 때 숫자로 바꾼다
-type DraftReward = { kind: RewardKind; amount: string; roleId: string; roleName: string; itemId: string; itemName: string };
-type Draft = { index: number; need: string; free: DraftReward; paid: DraftReward };
+//    key 는 보상 줄의 로컬 키(순서 바꾸기 · 삭제 뒤에도 입력칸이 제 줄을 따라가게) — 서버로 보내지 않는다
+type DraftReward = { key: string; kind: RewardKind; amount: string; roleId: string; roleName: string; itemId: string; itemName: string };
+type Draft = { index: number; need: string; free: DraftReward[]; paid: DraftReward[] };
 // 표 한 줄 — 티어 번호(i)는 목록 순서에서 나온다
 type Row = { t: Tier; i: number };
 
+// 칸마다 보상 수 상한 — lib/seasonPass.js 의 MAX_REWARDS 와 같아야 한다(서버가 넘치는 것은 잘라 버린다)
+const MAX_REWARDS = 4;
+
 const KIND_OPTIONS: { v: RewardKind; l: string }[] = [
-  { v: "none", l: "없음" },
   { v: "xp", l: "XP" },
   { v: "point", l: "빙옥" },
   { v: "role", l: "역할" },
   { v: "item", l: "아이템" },
 ];
-
-const EMPTY_REWARD: Reward = { kind: "none", amount: 0, roleId: "", roleName: "", itemId: "", itemName: "" };
 
 // 불러오기에 실패한 채로 저장하면 빈 구성이 운영 중인 설정을 통째로 덮어쓴다
 const LOAD_FAILED_MSG = "현재 설정을 불러오지 못해 저장할 수 없습니다. [다시 불러오기] 후에 저장해 주세요.";
@@ -71,14 +73,23 @@ const toInt = (v: any) => {
   return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
-const normReward = (r: any): Reward => ({
-  kind: (["xp", "point", "role", "item"] as string[]).includes(r?.kind) ? r.kind : "none",
-  amount: toInt(r?.amount),
-  roleId: r?.roleId || "",
-  roleName: r?.roleName || "",
-  itemId: r?.itemId || "",
-  itemName: r?.itemName || "",
-});
+const normReward = (r: any): Reward | null =>
+  (["xp", "point", "role", "item"] as string[]).includes(r?.kind)
+    ? {
+        kind: r.kind,
+        amount: toInt(r?.amount),
+        roleId: r?.roleId || "",
+        roleName: r?.roleName || "",
+        itemId: r?.itemId || "",
+        itemName: r?.itemName || "",
+      }
+    : null;
+
+// 한 칸의 보상 목록 — 옛 모양(객체 하나)도 목록으로 읽는다. 빈 보상(none)은 뺀다
+const normRewards = (v: any): Reward[] => {
+  const list = Array.isArray(v) ? v : v && typeof v === "object" ? [v] : [];
+  return list.map(normReward).filter((r): r is Reward => !!r).slice(0, MAX_REWARDS);
+};
 
 // 목록에 뿌릴 한 줄 요약 — 서버가 만드는 label 과 같은 모양으로 맞춘다
 const rewardLabel = (r: Reward, roleNameOf: (id: string) => string, itemOf: (id: string) => any) => {
@@ -91,6 +102,9 @@ const rewardLabel = (r: Reward, roleNameOf: (id: string) => string, itemOf: (id:
   }
   return "-";
 };
+// 칸 하나(보상 목록)를 한 줄로 — 저장 줄의 변경 목록용
+const listLabel = (list: Reward[], roleNameOf: (id: string) => string, itemOf: (id: string) => any) =>
+  list.length ? list.map((r) => rewardLabel(r, roleNameOf, itemOf)).join(" · ") : "없음";
 
 // 저장 여부를 비교할 지문 — 서버로 나가는 값만 담는다 (로컬 전용 key 는 빼야 헛된 "변경됨"이 안 뜬다)
 const sig = (enabled: boolean, price: number, list: Tier[]) =>
@@ -139,89 +153,137 @@ function NoteLine({
 //    같은 높이 · 테두리로 맞춘다. Dropdown 파일은 다른 화면도 쓰므로 여기서 덮어쓰기만 한다.
 const DROPDOWN_BTN = "!px-3 !py-2 min-h-10 !border-[#a3a3a3] hover:!border-[#131313] focus-visible:!border-[#131313]";
 
-function RewardEditor({
+// 보상 한 줄의 값 칸 — 종류에 따라 수량 · 역할 · 아이템 (옛 한 칸 편집 부품을 줄마다 쓴다)
+//    지급 경로 안내는 표 아래 한 줄이 맡는다 — 줄마다 같은 문장을 반복하지 않는다
+function RewardFields({
   title,
-  hint,
-  tone,
   value,
   roles,
   items,
   onChange,
 }: {
   title: string;
-  hint: string;
-  tone: string;
   value: DraftReward;
   roles: any[];
   items: any[];
   onChange: (next: DraftReward) => void;
 }) {
+  if (value.kind === "xp" || value.kind === "point") {
+    return (
+      <input
+        type="number"
+        min={0}
+        value={value.amount}
+        onChange={(e) => onChange({ ...value, amount: e.target.value })}
+        placeholder={value.kind === "xp" ? "예: 1000" : "예: 50"}
+        aria-label={`${title} 수량`}
+        className={inputClass}
+      />
+    );
+  }
+  if (value.kind === "role") {
+    return (
+      <Dropdown
+        theme="light"
+        value={value.roleId}
+        placeholder="지급할 역할을 선택하세요"
+        buttonClassName={DROPDOWN_BTN}
+        onChange={(v) => onChange({ ...value, roleId: v, roleName: roles.find((r: any) => r.id === v)?.name || "" })}
+        options={roles.map((r: any) => ({ value: r.id, label: r.name, color: r.color }))}
+      />
+    );
+  }
+  return (
+    <Dropdown
+      theme="light"
+      value={value.itemId}
+      placeholder={items.length ? "지급할 아이템을 선택하세요" : "등록된 아이템이 없습니다"}
+      buttonClassName={DROPDOWN_BTN}
+      onChange={(v) => onChange({ ...value, itemId: v, itemName: items.find((it: any) => it._id === v)?.name || "" })}
+      options={items.map((it: any) => ({
+        value: it._id,
+        label: it.name,
+        hint: itemTypeLabel(it.type),
+        icon: <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.type} size={18} color={it.color || itemTypeColor(it.type)} />,
+      }))}
+    />
+  );
+}
+
+// 줄 조작 단추 — 폭을 고정해 첫 줄 · 끝 줄에서 단추가 꺼져도 자리가 움직이지 않는다
+const ROW_BTN = "!px-0 w-8 shrink-0";
+const RowIcon = ({ d }: { d: string }) => (
+  <svg aria-hidden viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d={d} />
+  </svg>
+);
+
+// ── 트랙 편집 — 무료 / 프리미엄 칸의 보상 목록(최대 4줄) ─────────
+//    줄마다 종류 + 값, 오른쪽 위에 위로 · 아래로 · 삭제. 받기는 칸 단위라 유저는 이 목록을 한 번에 받는다.
+function TrackEditor({
+  title,
+  tone,
+  rows,
+  roles,
+  items,
+  nextKey,
+  onChange,
+}: {
+  title: string;
+  tone: string;
+  rows: DraftReward[];
+  roles: any[];
+  items: any[];
+  nextKey: () => string;
+  onChange: (next: DraftReward[]) => void;
+}) {
+  const set = (j: number, v: DraftReward) => onChange(rows.map((r, i) => (i === j ? v : r)));
+  const move = (j: number, d: -1 | 1) => {
+    const next = [...rows];
+    [next[j], next[j + d]] = [next[j + d], next[j]];
+    onChange(next);
+  };
+  const add = () => {
+    if (rows.length >= MAX_REWARDS) return;
+    onChange([...rows, { key: nextKey(), kind: "xp", amount: "", roleId: "", roleName: "", itemId: "", itemName: "" }]);
+  };
   return (
     <div className="mt-5 pt-5 border-t border-[#ededed]">
       <div className="flex items-center gap-2 mb-3">
         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tone }} />
         <span className="text-[14px] font-black">{title}</span>
-        <span className="ml-auto text-[12px] text-[#5a5a5a] break-keep text-right">{hint}</span>
+        <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">
+          {rows.length}/{MAX_REWARDS}
+        </span>
+        <Btn variant="secondary" size="sm" className="ml-auto" onClick={add} disabled={rows.length >= MAX_REWARDS}>
+          보상 추가
+        </Btn>
       </div>
 
-      {/* 보상 종류 — 관리자 화면 공통 알약 토글 */}
-      <Segmented
-        options={KIND_OPTIONS}
-        value={value.kind}
-        onChange={(v) => onChange({ ...value, kind: v as RewardKind })}
-        className="mb-3"
-      />
-
-      {(value.kind === "xp" || value.kind === "point") && (
-        <div>
-          <input
-            type="number"
-            min={0}
-            value={value.amount}
-            onChange={(e) => onChange({ ...value, amount: e.target.value })}
-            placeholder={value.kind === "xp" ? "예: 1000" : "예: 50"}
-            aria-label={`${title} 수량`}
-            className={inputClass}
-          />
-          <p className={fieldNote}>
-            {value.kind === "xp" ? "봇 큐를 거쳐 30초 이내 지급 (레벨 재계산 포함)" : "즉시 지급"}
-          </p>
-        </div>
-      )}
-
-      {value.kind === "role" && (
-        <div>
-          <Dropdown
-            theme="light"
-            value={value.roleId}
-            placeholder="지급할 역할을 선택하세요"
-            buttonClassName={DROPDOWN_BTN}
-            onChange={(v) =>
-              onChange({ ...value, roleId: v, roleName: roles.find((r: any) => r.id === v)?.name || "" })
-            }
-            options={roles.map((r: any) => ({ value: r.id, label: r.name, color: r.color }))}
-          />
-          <p className={fieldNote}>수령하면 봇이 30초 이내에 역할을 붙입니다</p>
-        </div>
-      )}
-
-      {value.kind === "item" && (
-        <div>
-          <Dropdown
-            theme="light"
-            value={value.itemId}
-            placeholder={items.length ? "지급할 아이템을 선택하세요" : "등록된 아이템이 없습니다"}
-            buttonClassName={DROPDOWN_BTN}
-            onChange={(v) => onChange({ ...value, itemId: v, itemName: items.find((it: any) => it._id === v)?.name || "" })}
-            options={items.map((it: any) => ({
-              value: it._id,
-              label: it.name,
-              hint: itemTypeLabel(it.type),
-              icon: <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.type} size={18} color={it.color || itemTypeColor(it.type)} />,
-            }))}
-          />
-          <p className={fieldNote}>인벤토리에 들어가고, 역할이 연결돼 있으면 봇이 역할도 붙입니다</p>
-        </div>
+      {rows.length === 0 ? (
+        <p className="py-3 text-center text-[12px] font-bold text-[#a3a3a3] bg-[#f2f2f2]">없음</p>
+      ) : (
+        rows.map((r, j) => (
+          <div key={r.key} className={j > 0 ? "mt-4 pt-4 border-t border-dashed border-[#ededed]" : ""}>
+            <div className="flex items-center gap-1 mb-2">
+              <span className="text-[12px] font-black text-[#5a5a5a] tabular-nums">보상 {j + 1}</span>
+              <span className="ml-auto inline-flex items-center gap-0.5">
+                <Btn variant="ghost" size="sm" className={ROW_BTN} aria-label={`보상 ${j + 1} 위로`} disabled={j === 0} onClick={() => move(j, -1)}>
+                  <RowIcon d="M6 15l6-6 6 6" />
+                </Btn>
+                <Btn variant="ghost" size="sm" className={ROW_BTN} aria-label={`보상 ${j + 1} 아래로`} disabled={j === rows.length - 1} onClick={() => move(j, 1)}>
+                  <RowIcon d="M6 9l6 6 6-6" />
+                </Btn>
+                <Btn variant="ghost" size="sm" className={ROW_BTN} aria-label={`보상 ${j + 1} 삭제`} onClick={() => onChange(rows.filter((_, i) => i !== j))}>
+                  <RowIcon d="M6 6l12 12M18 6L6 18" />
+                </Btn>
+              </span>
+            </div>
+            {/* 보상 종류 — 관리자 화면 공통 알약 토글 */}
+            <Segmented options={KIND_OPTIONS} value={r.kind} onChange={(v) => set(j, { ...r, kind: v as RewardKind })} className="mb-2.5" />
+            <RewardFields title={`${title} 보상 ${j + 1}`} value={r} roles={roles} items={items} onChange={(v) => set(j, v)} />
+          </div>
+        ))
       )}
     </div>
   );
@@ -244,12 +306,15 @@ export default function AdminPassPage() {
   const [rolesFailed, setRolesFailed] = useState(false);
   // 아직 tid 가 없는 새 티어에 붙일 로컬 키 발급기 (저장 body 에는 나가지 않는다)
   const newKeyRef = useRef(0);
+  // 보상 줄 로컬 키 — 상세 칸의 줄마다 붙인다(서버로 보내지 않는다)
+  const nextRowKey = useCallback(() => `r:${++newKeyRef.current}`, []);
   // 해금가 칸을 비웠을 때 되돌릴 직전 값 — 빈칸이 0 으로 저장되는 사고를 막는다
-  const lastPriceRef = useRef("50000");
+  const lastPriceRef = useRef("50");
   // 📌 기본 꺼짐 — 티어를 다 채우기 전에 보상이 새 나가지 않게 (모델 기본값과 같음).
   //    불러오기에 실패했을 때 실수로 켜진 채 저장되는 일도 막는다.
   const [enabled, setEnabled] = useState(false);
-  const [unlockPrice, setUnlockPrice] = useState("50000");
+  // 📌 해금가는 빙옥으로 받는다(결제가 빙옥 전용). 저장은 XP 단위 — ×POINT_RATE 해서 보낸다
+  const [unlockPoint, setUnlockPoint] = useState("50");
   const [tiers, setTiers] = useState<Tier[]>([]);
   // 저장 시점의 스냅샷 — 안 바꾼 채 나가는 걸 막기 위한 비교용
   const [snapshot, setSnapshot] = useState("");
@@ -296,17 +361,19 @@ export default function AdminPassPage() {
         tid,
         level: toInt(t?.level) || i + 1,
         need: toInt(t?.need),
-        free: normReward(t?.free),
-        paid: normReward(t?.paid),
+        free: normRewards(t?.free),
+        paid: normRewards(t?.paid),
       };
     });
     const on = cfg?.enabled === true;
-    const price = toInt(cfg?.unlockPrice);
+    // 저장값(XP)을 빙옥으로 — 1,000 으로 나누어떨어지지 않던 옛 값은 올림(결제와 같은 값)
+    const point = xpToPoint(toInt(cfg?.unlockPrice));
     setEnabled(on);
-    setUnlockPrice(String(price));
-    lastPriceRef.current = String(price);
+    setUnlockPoint(String(point));
+    lastPriceRef.current = String(point);
     setTiers(list);
-    setSnapshot(sig(on, price, list));
+    // 스냅샷도 화면이 보낼 값(빙옥 × 환율)으로 — 옛 값이 나누어떨어지지 않아도 헛된 "변경됨"이 뜨지 않게
+    setSnapshot(sig(on, point * POINT_RATE, list));
   }, []);
 
   // 📌 역할 목록만 다시 받는다. 전체 재조회로 하면 서버 저장본이 applyConfig 로 덮어써져
@@ -354,28 +421,29 @@ export default function AdminPassPage() {
     if (isAdmin) fetchAll();
   }, [isAdmin, fetchAll]);
 
-  const current = sig(enabled, toInt(unlockPrice), tiers);
+  const priceXp = toInt(unlockPoint) * POINT_RATE;
+  const current = sig(enabled, priceXp, tiers);
   const isDirty = !isLoading && current !== snapshot;
 
   // need 가 오름차순이 아니면 유저 진행도가 티어를 건너뛰거나 영영 못 넘는다
   const badOrder = tiers.some((t, i) => i > 0 && t.need <= tiers[i - 1].need);
   const badZero = tiers.some((t) => t.need <= 0);
-  const missingRole =
-    tiers.some((t) => (t.free.kind === "role" && !t.free.roleId) || (t.paid.kind === "role" && !t.paid.roleId));
-  const missingItem =
-    tiers.some((t) => (t.free.kind === "item" && !t.free.itemId) || (t.paid.kind === "item" && !t.paid.itemId));
+  const allRewards = (t: Tier) => [...t.free, ...t.paid];
+  const missingRole = tiers.some((t) => allRewards(t).some((r) => r.kind === "role" && !r.roleId));
+  const missingItem = tiers.some((t) => allRewards(t).some((r) => r.kind === "item" && !r.itemId));
   // 📌 사다리를 먼저 깔고 보상을 나중에 채우는 흐름이 정상이라 저장을 막지는 않는다 — 세어서 보여만 준다
-  const emptyTierCount = tiers.filter((t) => t.free.kind === "none" && t.paid.kind === "none").length;
+  const emptyTierCount = tiers.filter((t) => !t.free.length && !t.paid.length).length;
 
   // ── 저장 줄에 띄울 변경 목록 ─────────────────
   // 📌 스냅샷과 지금 값을 맞대어 "이름 이전 → 이후" 한 줄씩. 티어는 tid 로 짝을 지어
   //    추가 · 삭제 · 수정 · 순서를 가린다 (보여 주기 전용 — 못 가린 변경은 "변경사항 있음"으로 뜬다)
   const enabledChanged = !!snap && snap.enabled !== enabled;
-  const priceChanged = !!snap && snap.unlockPrice !== toInt(unlockPrice);
+  const priceChanged = !!snap && snap.unlockPrice !== priceXp;
   const changes: string[] = [];
   if (snap && isDirty) {
     if (enabledChanged) changes.push(`상태 ${onOffLabel(!!snap.enabled)} → ${onOffLabel(enabled)}`);
-    if (priceChanged) changes.push(`해금가 ${toInt(snap.unlockPrice).toLocaleString()} → ${toInt(unlockPrice).toLocaleString()}`);
+    if (priceChanged)
+      changes.push(`해금가 ${xpToPoint(snap.unlockPrice).toLocaleString()} → ${toInt(unlockPoint).toLocaleString()} 빙옥`);
     const before: any[] = Array.isArray(snap.tiers) ? snap.tiers : [];
     const byTid = new Map<string, any>(before.filter((b) => b?.tid).map((b) => [b.tid, b]));
     const nowTids = new Set(tiers.map((t) => t.tid).filter(Boolean));
@@ -388,9 +456,9 @@ export default function AdminPassPage() {
       }
       if (b.need !== t.need) changes.push(`티어 ${i + 1} 필요 XP ${toInt(b.need).toLocaleString()} → ${t.need.toLocaleString()}`);
       if (!same(b.free, t.free))
-        changes.push(`티어 ${i + 1} 무료 ${rewardLabel(normReward(b.free), roleNameOf, itemOf)} → ${rewardLabel(t.free, roleNameOf, itemOf)}`);
+        changes.push(`티어 ${i + 1} 무료 ${listLabel(normRewards(b.free), roleNameOf, itemOf)} → ${listLabel(t.free, roleNameOf, itemOf)}`);
       if (!same(b.paid, t.paid))
-        changes.push(`티어 ${i + 1} 프리미엄 ${rewardLabel(normReward(b.paid), roleNameOf, itemOf)} → ${rewardLabel(t.paid, roleNameOf, itemOf)}`);
+        changes.push(`티어 ${i + 1} 프리미엄 ${listLabel(normRewards(b.paid), roleNameOf, itemOf)} → ${listLabel(t.paid, roleNameOf, itemOf)}`);
     });
     before.forEach((b, i) => {
       if (b?.tid && !nowTids.has(b.tid)) changes.push(`티어 ${toInt(b.level) || i + 1} 삭제`);
@@ -414,7 +482,7 @@ export default function AdminPassPage() {
       const step = last && prev2 ? Math.max(1, last.need - prev2.need) : 5000;
       const need = last ? last.need + step : 5000;
       // tid 는 빈 문자열 — 저장할 때 서버가 새로 발급한다 (화면이 임의로 짓지 않는다)
-      return [...prev, { key, tid: "", level: prev.length + 1, need, free: { ...EMPTY_REWARD }, paid: { ...EMPTY_REWARD } }];
+      return [...prev, { key, tid: "", level: prev.length + 1, need, free: [], paid: [] }];
     });
     setFlash("티어를 추가했습니다.");
   };
@@ -434,6 +502,7 @@ export default function AdminPassPage() {
   const openEditor = (i: number) => {
     const t = tiers[i];
     const toDraft = (r: Reward): DraftReward => ({
+      key: nextRowKey(),
       kind: r.kind,
       amount: r.amount ? String(r.amount) : "",
       roleId: r.roleId,
@@ -441,7 +510,7 @@ export default function AdminPassPage() {
       itemId: r.itemId,
       itemName: r.itemName,
     });
-    setDraft({ index: i, need: String(t.need), free: toDraft(t.free), paid: toDraft(t.paid) });
+    setDraft({ index: i, need: String(t.need), free: t.free.map(toDraft), paid: t.paid.map(toDraft) });
   };
 
   const applyDraft = () => {
@@ -458,18 +527,25 @@ export default function AdminPassPage() {
       itemName: d.kind === "item" ? itemOf(d.itemId)?.name || d.itemName : "",
     });
 
-    for (const [d, who] of [
+    for (const [list, who] of [
       [draft.free, "무료"],
       [draft.paid, "프리미엄"],
-    ] as [DraftReward, string][]) {
-      if (d.kind === "role" && !d.roleId) return notify(`${who} 보상의 역할을 선택해 주세요.`, true);
-      if (d.kind === "item" && !d.itemId) return notify(`${who} 보상의 아이템을 선택해 주세요.`, true);
-      if ((d.kind === "xp" || d.kind === "point") && toInt(d.amount) <= 0)
-        return notify(`${who} 보상의 수량을 1 이상으로 입력해 주세요.`, true);
+    ] as [DraftReward[], string][]) {
+      for (const [j, d] of list.entries()) {
+        const at = list.length > 1 ? `${who} 보상 ${j + 1}` : `${who} 보상`;
+        if (d.kind === "role" && !d.roleId) return notify(`${at}의 역할을 선택해 주세요.`, true);
+        if (d.kind === "item" && !d.itemId) return notify(`${at}의 아이템을 선택해 주세요.`, true);
+        if ((d.kind === "xp" || d.kind === "point") && toInt(d.amount) <= 0)
+          return notify(`${at}의 수량을 1 이상으로 입력해 주세요.`, true);
+      }
     }
 
     setTiers((prev) =>
-      prev.map((t, i) => (i === draft.index ? { ...t, need, free: fromDraft(draft.free), paid: fromDraft(draft.paid) } : t))
+      prev.map((t, i) =>
+        i === draft.index
+          ? { ...t, need, free: draft.free.slice(0, MAX_REWARDS).map(fromDraft), paid: draft.paid.slice(0, MAX_REWARDS).map(fromDraft) }
+          : t
+      )
     );
     setDraft(null);
   };
@@ -504,28 +580,27 @@ export default function AdminPassPage() {
     // 어느 경로(정렬 확인 모달 포함)로 들어와도 불러오기 실패 상태에서는 저장하지 않는다
     if (loadFailed) return notify(LOAD_FAILED_MSG, true);
     setIsSaving(true);
+    // 표시용 이름 스냅샷 — 지금 목록의 이름으로 채워 보낸다(역할 · 아이템 이름이 바뀌어도 라벨이 남게)
+    const named = (r: Reward): Reward => ({
+      ...r,
+      roleName: r.kind === "role" ? roleNameOf(r.roleId) || r.roleName : "",
+      itemName: r.kind === "item" ? itemOf(r.itemId)?.name || r.itemName : "",
+    });
     const res = await fetch("/api/admin/pass", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         enabled,
-        unlockPrice: toInt(unlockPrice),
+        // 빙옥 입력 × 환율 — 서버는 XP 단위로 저장한다
+        unlockPrice: priceXp,
         tiers: tiers.map((t, i) => ({
           // 📌 기존 티어의 tid 를 그대로 되돌려 보낸다 — 이 값이 빠지면 서버가 새 tid 를 발급해
           //    이미 받은 티어가 미수령으로 되살아난다. 새 티어만 빈 문자열(서버가 발급).
           tid: t.tid || "",
           level: i + 1,
           need: t.need,
-          free: {
-            ...t.free,
-            roleName: t.free.kind === "role" ? roleNameOf(t.free.roleId) || t.free.roleName : "",
-            itemName: t.free.kind === "item" ? itemOf(t.free.itemId)?.name || t.free.itemName : "",
-          },
-          paid: {
-            ...t.paid,
-            roleName: t.paid.kind === "role" ? roleNameOf(t.paid.roleId) || t.paid.roleName : "",
-            itemName: t.paid.kind === "item" ? itemOf(t.paid.itemId)?.name || t.paid.itemName : "",
-          },
+          free: t.free.map(named),
+          paid: t.paid.map(named),
         })),
       }),
     }).catch(() => null);
@@ -550,7 +625,7 @@ export default function AdminPassPage() {
     // 저장 버튼도 막아 두지만, 키보드 · 재시도 등 다른 경로를 대비해 여기서 한 번 더 세운다
     if (loadFailed) return notify(LOAD_FAILED_MSG, true);
     // 📌 해금가가 0 이면 프리미엄 트랙이 전원 무료로 열린다 — 빈칸이 조용히 0 으로 저장되던 사고를 막는다
-    if (toInt(unlockPrice) <= 0) return notify("프리미엄 해금가를 1 이상으로 입력하세요.", true);
+    if (toInt(unlockPoint) <= 0) return notify("프리미엄 해금가를 1 빙옥 이상으로 입력하세요.", true);
     if (missingRole) return notify("역할 보상 중 역할이 지정되지 않은 티어가 있습니다.", true);
     if (missingItem) return notify("아이템 보상 중 아이템이 지정되지 않은 티어가 있습니다.", true);
     if (badZero) return notify("필요 XP가 0인 티어가 있습니다. 1 이상으로 고쳐 주세요.", true);
@@ -583,14 +658,24 @@ export default function AdminPassPage() {
         ? flash
         : undefined;
 
-  const rewardCell = (r: Reward, dot: string, track: string) => (
-    <span className="inline-flex items-center gap-2">
-      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+  // 칸 하나 = 보상 목록. PC 는 한 줄에 하나씩 쌓고, 모바일 줄 카드는 " · " 로 이어 한 덩어리로 흐르게 한다
+  const rewardCell = (list: Reward[], dot: string, track: string) => (
+    <span className="inline-flex items-start gap-2 max-w-full">
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-[7px] ${dot}`} />
       {/* 모바일 줄 카드에는 머리줄이 없어 트랙 이름을 앞에 붙인다 */}
-      <span className="md:hidden">{track}</span>
-      <span className={`font-bold break-keep ${r.kind === "none" ? "text-[#a3a3a3]" : "text-[#131313]"}`}>
-        {rewardLabel(r, roleNameOf, itemOf)}
-      </span>
+      <span className="md:hidden shrink-0">{track}</span>
+      {list.length === 0 ? (
+        <span className="font-bold text-[#a3a3a3]">-</span>
+      ) : (
+        <span className="min-w-0 font-bold text-[#131313] break-keep">
+          {list.map((r, j) => (
+            <span key={j} className="md:block">
+              {j > 0 && <span className="md:hidden text-[#a3a3a3]"> · </span>}
+              {rewardLabel(r, roleNameOf, itemOf)}
+            </span>
+          ))}
+        </span>
+      )}
     </span>
   );
 
@@ -655,7 +740,7 @@ export default function AdminPassPage() {
         section="SYSTEM : LEVEL"
         title="시즌 패스"
         // desc 에는 어느 시즌을 만지는지와, 화면에 안 보이는 초기화 시점만 남긴다
-        desc={`시즌 ${SEASON.number} ‘${SEASON.name}’ · 새 시즌이 시작되면 수령 기록과 해금 상태가 초기화됩니다.`}
+        desc={`시즌 ${SEASON.number} ‘${SEASON.name}’ · 새 시즌이 시작되면 수령 기록과 해금 상태가 초기화됩니다. 서버 부스터는 프리미엄이 자동으로 열립니다.`}
         footer={
           <SaveBar
             dirty={isDirty && !loadFailed && !draft}
@@ -703,29 +788,35 @@ export default function AdminPassPage() {
                 flash === PRICE_REVERT_MSG ? (
                   <span className="font-bold text-[#d01634]">{flash}</span>
                 ) : (
-                  `XP 기준이며, 빙옥 결제는 ÷${POINT_RATE.toLocaleString()} 올림입니다 (1 이상)`
+                  // 📌 빙옥 계산이 헷갈린다는 요청으로 둔 환산 한 줄(TMI 예외)
+                  <span className="tabular-nums">
+                    {toInt(unlockPoint).toLocaleString()} 빙옥 = {priceXp.toLocaleString()} XP 상당
+                  </span>
                 )
               }
               changed={priceChanged}
             >
-              <input
-                type="number"
-                min={1}
-                value={unlockPrice}
-                onChange={(e) => setUnlockPrice(e.target.value)}
-                // 📌 비운 채 저장하면 0 이 되어 프리미엄이 전원 무료로 열린다 — 칸을 벗어날 때 직전 값으로 되돌린다
-                onBlur={() => {
-                  if (toInt(unlockPrice) <= 0) {
-                    setUnlockPrice(lastPriceRef.current);
-                    setFlash(PRICE_REVERT_MSG);
-                  } else {
-                    lastPriceRef.current = String(toInt(unlockPrice));
-                  }
-                }}
-                placeholder="예: 50000"
-                aria-label="프리미엄 트랙 해금가"
-                className={numClass}
-              />
+              <Inline>
+                <input
+                  type="number"
+                  min={1}
+                  value={unlockPoint}
+                  onChange={(e) => setUnlockPoint(e.target.value)}
+                  // 📌 비운 채 저장하면 0 이 되어 프리미엄이 전원 무료로 열린다 — 칸을 벗어날 때 직전 값으로 되돌린다
+                  onBlur={() => {
+                    if (toInt(unlockPoint) <= 0) {
+                      setUnlockPoint(lastPriceRef.current);
+                      setFlash(PRICE_REVERT_MSG);
+                    } else {
+                      lastPriceRef.current = String(toInt(unlockPoint));
+                    }
+                  }}
+                  placeholder="예: 300"
+                  aria-label="프리미엄 트랙 해금가 (빙옥)"
+                  className={numClass}
+                />
+                <span className="font-bold">빙옥</span>
+              </Inline>
             </FieldRow>
           </Panel>
 
@@ -735,7 +826,7 @@ export default function AdminPassPage() {
             items={[
               { label: "티어 수", value: tiers.length.toLocaleString() },
               { label: "만렙 필요 XP", value: maxNeed.toLocaleString() },
-              { label: "해금가 XP", value: toInt(unlockPrice).toLocaleString() },
+              { label: "해금가 빙옥", value: toInt(unlockPoint).toLocaleString() },
               { label: "상태", value: onOffLabel(enabled) },
             ]}
           />
@@ -838,22 +929,22 @@ export default function AdminPassPage() {
               <p className={fieldNote}>시즌 시작 이후 누적한 XP가 이 값을 넘으면 도달합니다</p>
             </div>
 
-            <RewardEditor
+            <TrackEditor
               title="무료 트랙"
-              hint="해금 없이 지급"
               tone="#3f83b8"
-              value={draft.free}
+              rows={draft.free}
               roles={grantableRoles}
               items={regItems}
+              nextKey={nextRowKey}
               onChange={(v) => setDraft({ ...draft, free: v })}
             />
-            <RewardEditor
+            <TrackEditor
               title="프리미엄 트랙"
-              hint="해금한 유저 전용"
               tone="#e91e3f"
-              value={draft.paid}
+              rows={draft.paid}
               roles={grantableRoles}
               items={regItems}
+              nextKey={nextRowKey}
               onChange={(v) => setDraft({ ...draft, paid: v })}
             />
           </>

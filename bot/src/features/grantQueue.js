@@ -46,6 +46,7 @@ export function sameThing(p) {
 //   · pending 연장분 — 같은 역할 · 같은 아이템 · 이 구매를 이은 것
 //   📌 시즌 전환으로 표기를 뗀 구매(siteOnly)는 근거가 아니다. 빼먹으면 근거가 하나도 없는데 역할만 영구히 남는다.
 //      detach 라우트 · processDetachments 와 반드시 같은 표현($ne: true — 필드가 없는 옛 문서까지 잡는다)을 쓴다.
+//   📌 소모된 구매(consumedAt — 다 쓴 보호막 등)도 근거가 아니다 — 사이트 보유 판정(lib/ownedItems.js)과 같게
 async function findRoleHolder(p, now = new Date()) {
   const renewOr = [{ renewOf: String(p._id) }, { roleId: p.roleId }];
   if (p.itemRef) renewOr.push({ itemRef: p.itemRef });
@@ -53,6 +54,7 @@ async function findRoleHolder(p, now = new Date()) {
     userId: p.userId,
     _id: { $ne: p._id },
     siteOnly: { $ne: true },
+    consumedAt: null, // 필드가 없는 옛 문서도 잡힌다
     $or: [
       { roleId: p.roleId, status: "completed", $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] },
       // renewOf $gt "" — 빈 글 · 필드가 없는 옛 문서는 연장분이 아니다
@@ -63,11 +65,13 @@ async function findRoleHolder(p, now = new Date()) {
 
 // 이 구매가 끝나도 같은 물건이 이어지는지 — after 보다 늦게 끝나는(또는 영구) completed · pending 구매
 //   만료 DM · 만료 임박 DM(expiryReminder.js)을 건너뛰는 기준. 소유가 이어지는지만 보므로 siteOnly 는 가리지 않는다
+//   📌 소모된 구매(consumedAt)는 이어지는 게 아니다 — 다 쓴 보호막이 아직 쓸 수 있는 건의 알림을 막지 않게
 export async function findContinuation(p, after = new Date()) {
   return Purchase.findOne({
     userId: p.userId,
     _id: { $ne: p._id },
     status: { $in: ["completed", "pending"] },
+    consumedAt: null,
     $and: [{ $or: sameThing(p) }, { $or: [{ expiresAt: null }, { expiresAt: { $gt: after } }] }],
   }).lean();
 }
@@ -312,7 +316,8 @@ async function processExpiries(guild) {
 
       // 📌 DM 은 expired 로 바꾼 뒤에 한 번만 — 연장분이 이어 가거나 같은 역할 · 아이템이 남아 있으면 끝난 게 아니라 보내지 않는다.
       //    (역할 없는 아이템도 이어지는 구매가 없으면 알린다)
-      if (member && !holder) {
+      //    📌 이미 소모한 건(consumedAt — 쓴 보호막 등)은 역할 회수 · expired 전환만 하고 알리지 않는다
+      if (member && !holder && !p.consumedAt) {
         try {
           if (!(await findContinuation(p, now))) sendDm(member, "expired", { item: p.itemName, days: p.days });
         } catch (e) {
@@ -438,6 +443,7 @@ async function processDetachments(guild) {
         roleId: p.roleId,
         status: "completed",
         siteOnly: { $ne: true },
+        consumedAt: null, // 소모된 구매는 근거가 아니다 (findRoleHolder 와 같게)
         _id: { $ne: p._id },
         $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
       }).lean();
