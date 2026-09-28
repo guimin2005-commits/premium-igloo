@@ -446,7 +446,7 @@ export const MESSAGE_DEFS = {
     label: "/퀘스트",
     desc: "/퀘스트 응답",
     vars: [
-      { name: "daily", label: "일일 목록", sample: "`완료` 출석 체크 · 7,000 XP\n`12/30` 채팅 30회 · 1,500 XP" },
+      { name: "daily", label: "일일 목록", sample: "`완료` 출석 체크 · 10,000 XP\n`12/30` 채팅 30회 · 1,500 XP" },
       { name: "weekly", label: "주간 목록", sample: "`3/5` 음성 5시간 · 20,000 XP" },
       { name: "monthly", label: "월간 목록", sample: "`8/20` 출석 20일 · 빙옥 100" },
       { name: "claimable", label: "받을 보상 개수", sample: 1 },
