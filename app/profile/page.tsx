@@ -166,6 +166,8 @@ export default function MyInfoPage() {
   const rows: Row[] = [
     { k: "inquiry", g: "account", l: "1:1 문의", icon: ICON_PATHS.chat, href: `/profile/inquiry${q}`, n: pendingInquiries },
     { k: "recruit", g: "account", l: "구인 지원", icon: ICON_PATHS.briefcase, href: `/profile/recruit${q}`, n: pendingApplies },
+    // 📌 쿠폰함은 계정 묶음 — 보상 코드 등록도 여기서 하고, 상단 바 쿠폰 아이콘처럼 상점 공개와 상관없이 연다(개수는 상점을 볼 수 있을 때만 읽는다)
+    { k: "coupons", g: "account", l: "쿠폰함", icon: ICON_PATHS.ticket, href: `/profile/coupons${q}`, n: canSeeShop ? shopWallet.length : undefined },
   ];
   // 📌 인벤토리 줄은 뺐다(사용자 요청) — 레벨 대시보드 카드 · ARCTIC 상점 줄의 가방 단추가 같은 팝업을 연다
   // 📌 ARCTIC 하위 화면은 ?from=me 를 달고 간다 — 경로 줄 · 뒤로가기가 "내 정보"로 돌아온다 (ARCTIC 맥락이면 &via=arctic)
@@ -174,7 +176,6 @@ export default function MyInfoPage() {
     rows.push({ k: "orders", g: "arctic", l: "구매 내역", icon: ICON_PATHS.receipt, href: `/arctic/orders?${meQ}`, n: shopOrders.length, accent: shopPendingCount > 0 });
     rows.push({ k: "cart", g: "arctic", l: "장바구니", icon: ICON_PATHS.cart, href: `/arctic/cart?${meQ}`, n: shopCartCount });
     rows.push({ k: "wish", g: "arctic", l: "찜", icon: ICON_PATHS.heart, href: `/arctic/wish?${meQ}`, n: shopWish.length });
-    rows.push({ k: "coupons", g: "arctic", l: "쿠폰함", icon: ICON_PATHS.ticket, href: `/profile/coupons${q}`, n: shopWallet.length });
   }
   rows.push({ k: "booster", g: "member", l: "서버 부스터", icon: ICON_PATHS.sparkles, href: `/profile/booster${q}`, pill: isBooster ? "적용 중" : undefined, pillCls: "bg-[#e91e3f]/[0.08] text-[#e91e3f]" });
   if (canSeeSupporter) rows.push({ k: "supporter", g: "member", l: "서포터즈", icon: ICON_PATHS.shieldCheck, href: "/supporters", pill: isSupporter ? "활동 중" : undefined, pillCls: "bg-[#3f83b8]/[0.1] text-[#3f83b8]" });
