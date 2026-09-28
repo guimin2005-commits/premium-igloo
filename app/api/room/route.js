@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { connectToDatabase } from "@/lib/mongodb";
+import { requireAdmin, denyIfMaintenance } from "@/lib/apiAuth";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import { ScrimSeason, ScrimTeam, ScrimAvailability, ScrimFixture, ScrimNotice, ScrimNudge } from "@/models/Scrim";
@@ -64,11 +65,6 @@ const sendAtOf = (v) => {
   return d;
 };
 
-const requireAdmin = async () => {
-  const session = await getServerSession(authOptions);
-  return { session, ok: isAdminName(session?.user?.name) };
-};
-
 export async function GET() {
   try {
     await connectToDatabase();
@@ -122,6 +118,9 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    // 📌 점검 중에는 팀·일정 쓰기를 막는다 (관리자는 통과)
+    const maint = await denyIfMaintenance();
+    if (maint) return maint;
     await connectToDatabase();
     const body = await request.json();
     const action = body.action || "";
@@ -131,8 +130,8 @@ export async function POST(request) {
     switch (action) {
       /* ── 통합 시간 조정 (관리자) ── */
       case "season:update": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         const from = clamp(body.fromHour, 0, 29, season.fromHour);
         const to = clamp(body.toHour, 1, 30, season.toHour);
         if (to <= from) return NextResponse.json({ success: false, message: "종료 시각은 시작 시각보다 뒤여야 합니다." }, { status: 400 });
@@ -161,8 +160,8 @@ export async function POST(request) {
 
       /* ── 대회 공지 (관리자) — 소식(Notice)과 달리 이 대회 참가자만 본다 ── */
       case "notice:create": {
-        const { ok, session } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny, session } = await requireAdmin();
+        if (deny) return deny;
         const title = String(body.title || "").trim();
         if (!title) return NextResponse.json({ success: false, message: "제목을 입력해 주세요." }, { status: 400 });
         await ScrimNotice.create({
@@ -176,8 +175,8 @@ export async function POST(request) {
       }
 
       case "notice:update": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         const n = await ScrimNotice.findById(body.noticeId);
         if (!n) return NextResponse.json({ success: false, message: "공지를 찾을 수 없습니다." }, { status: 404 });
         if (body.title !== undefined) n.title = String(body.title).trim().slice(0, 80) || n.title;
@@ -190,8 +189,8 @@ export async function POST(request) {
       }
 
       case "notice:delete": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         await ScrimNotice.findByIdAndDelete(body.noticeId);
         return NextResponse.json({ success: true });
       }
@@ -233,8 +232,8 @@ export async function POST(request) {
          양 팀 전원에게 각자 기준(우리 팀 / 상대)으로 DM 을 보낸다.
          재촉과 같은 대기열을 타고, 봇이 임베드 모양만 다르게 만든다. */
       case "fixture:notify": {
-        const { ok, session } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny, session } = await requireAdmin();
+        if (deny) return deny;
 
         const f = await ScrimFixture.findById(body.fixtureId);
         if (!f) return NextResponse.json({ success: false, message: "경기를 찾을 수 없습니다." }, { status: 404 });
@@ -280,8 +279,8 @@ export async function POST(request) {
 
       // 경기 알림을 본인에게 먼저 보내보기
       case "fixture:notifyTest": {
-        const { ok, session } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny, session } = await requireAdmin();
+        if (deny) return deny;
         const uid = session?.user?.id;
         if (!uid) return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
 
@@ -363,8 +362,8 @@ export async function POST(request) {
 
       /* ── 팀 ── */
       case "team:create": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         const name = String(body.name || "").trim();
         if (!name) return NextResponse.json({ success: false, message: "팀 이름을 입력해 주세요." }, { status: 400 });
         const t = await ScrimTeam.create({
@@ -376,8 +375,8 @@ export async function POST(request) {
       }
 
       case "team:update": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         const t = await ScrimTeam.findById(body.teamId);
         if (!t) return NextResponse.json({ success: false, message: "팀을 찾을 수 없습니다." }, { status: 404 });
         if (body.name !== undefined) t.name = String(body.name).trim().slice(0, 30) || t.name;
@@ -391,8 +390,8 @@ export async function POST(request) {
       }
 
       case "team:delete": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         await ScrimTeam.findByIdAndDelete(body.teamId);
         await ScrimAvailability.deleteMany({ teamId: body.teamId });
         await ScrimFixture.deleteMany({ $or: [{ teamAId: body.teamId }, { teamBId: body.teamId }] });
@@ -400,8 +399,8 @@ export async function POST(request) {
       }
 
       case "team:addMember": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         const t = await ScrimTeam.findById(body.teamId);
         if (!t) return NextResponse.json({ success: false, message: "팀을 찾을 수 없습니다." }, { status: 404 });
         const discordId = String(body.discordId || "").trim();
@@ -417,8 +416,8 @@ export async function POST(request) {
 
       // 팀원 정보 수정 — 이름·포지션·디스코드 ID·리더 여부
       case "team:updateMember": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         const t = await ScrimTeam.findById(body.teamId);
         if (!t) return NextResponse.json({ success: false, message: "팀을 찾을 수 없습니다." }, { status: 404 });
         const m = t.members[body.idx];
@@ -443,8 +442,8 @@ export async function POST(request) {
 
       // 디스코드 닉네임으로 팀 전체 이름을 다시 맞춘다 (경매 예명이 남아 있을 때)
       case "team:syncNames": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         const t = await ScrimTeam.findById(body.teamId);
         if (!t) return NextResponse.json({ success: false, message: "팀을 찾을 수 없습니다." }, { status: 404 });
         let changed = 0;
@@ -458,8 +457,8 @@ export async function POST(request) {
       }
 
       case "team:removeMember": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         const t = await ScrimTeam.findById(body.teamId);
         if (!t) return NextResponse.json({ success: false, message: "팀을 찾을 수 없습니다." }, { status: 404 });
         const m = t.members[body.idx];
@@ -472,8 +471,8 @@ export async function POST(request) {
 
       /* ── 경매 결과에서 팀 통째로 가져오기 ── */
       case "team:importAuction": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         const a = await Auction.findById(body.auctionId).lean();
         if (!a) return NextResponse.json({ success: false, message: "경매를 찾을 수 없습니다." }, { status: 404 });
         const palette = ["#7dd3fc", "#a5b4fc", "#fcd34d", "#f0abfc", "#6ee7b7", "#fca5a5", "#c4b5fd", "#fdba74"];
@@ -542,16 +541,16 @@ export async function POST(request) {
       }
 
       case "avail:reset": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         await ScrimAvailability.deleteOne({ seasonId: sid, teamId: body.teamId, userId: body.userId });
         return NextResponse.json({ success: true });
       }
 
       /* ── 경기 ── */
       case "fixture:create": {
-        const { ok, session } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny, session } = await requireAdmin();
+        if (deny) return deny;
         if (!body.teamAId || !body.teamBId || body.teamAId === body.teamBId) {
           return NextResponse.json({ success: false, message: "서로 다른 두 팀을 골라주세요." }, { status: 400 });
         }
@@ -568,8 +567,8 @@ export async function POST(request) {
 
       // 용병 인원 — 팀당 몇 명까지 데려올 수 있는지 (경기마다 다르다)
       case "fixture:mercs": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         const f = await ScrimFixture.findById(body.fixtureId);
         if (!f) return NextResponse.json({ success: false, message: "경기를 찾을 수 없습니다." }, { status: 404 });
         // 한쪽만 고쳐도 다른 쪽 값이 사라지지 않도록, 옛 공통 값을 먼저 양쪽으로 옮긴다
@@ -586,8 +585,8 @@ export async function POST(request) {
 
       // 결과 입력 — 승패는 여기서만 움직인다 (팀 전적을 손으로 고치다 어긋나지 않게)
       case "fixture:result": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         const f = await ScrimFixture.findById(body.fixtureId);
         if (!f) return NextResponse.json({ success: false, message: "경기를 찾을 수 없습니다." }, { status: 404 });
         const [A, B] = await Promise.all([ScrimTeam.findById(f.teamAId), ScrimTeam.findById(f.teamBId)]);
@@ -617,8 +616,8 @@ export async function POST(request) {
       }
 
       case "fixture:delete": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         const f = await ScrimFixture.findById(body.fixtureId);
         if (f?.winnerId && f.winnerId !== "draw") {
           const [A, B] = await Promise.all([ScrimTeam.findById(f.teamAId), ScrimTeam.findById(f.teamBId)]);
@@ -632,8 +631,8 @@ export async function POST(request) {
 
       /* 아직 안 나간 예약을 취소한다 — 취소할 수 없는 예약은 함정이다 */
       case "nudge:cancel": {
-        const { ok } = await requireAdmin();
-        if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        const { deny } = await requireAdmin();
+        if (deny) return deny;
         const q = { seasonId: sid, status: "pending" };
         if (body.fixtureId) q.fixtureId = String(body.fixtureId);
         else if (body.nudgeId) q._id = body.nudgeId;

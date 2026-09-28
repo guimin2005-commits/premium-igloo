@@ -7,7 +7,7 @@ import { LuxStyles } from "../../components/Lux";
 import { AuctionStyles } from "../../components/AuctionStyles";
 import { roleNames, totalSlots as totalSlotsFn, slotLimitOf as slotLimitOfFn, phase1RoleOf } from "@/lib/auctionGames";
 
-const ADMIN_USERS = ["elahw.06"];
+import { ADMIN_USERS } from "@/lib/admins";
 const POLL_MS = 1500;      // 평상시
 const POLL_FAST_MS = 600;  // 매물이 호명돼 입찰이 오가는 동안
 

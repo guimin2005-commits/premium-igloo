@@ -13,7 +13,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     const { id } = await params;
     await connectToDatabase();
     const p: any = await Post.findById(id).lean();
-    if (!p || p.hidden) return fallback;
+    // 공개 시각 전인 예약 글도 제목을 흘리지 않는다
+    if (!p || p.hidden || (p.publishAt && new Date(p.publishAt) > new Date())) return fallback;
 
     const phase = phaseMeta(phaseOf(p));
     const bits = [

@@ -23,7 +23,7 @@ import { useArcticOrigin } from "./fromLevel";
 import { ownedIdsOf } from "./owned";
 import { InventoryPopup } from "../components/Inventory";
 
-const ADMIN_USERS = ["elahw.06"];
+import { ADMIN_USERS } from "@/lib/admins";
 
 // 📌 ARCTIC 본문 — /shop 라우트와 SYSTEM:LEVEL 의 ARCTIC 탭이 이 한 벌을 함께 쓴다.
 //    공개 전에는 관리자만 볼 수 있다 (레벨 대시보드 → 기본 정책 → ARCTIC 공개)

@@ -10,8 +10,9 @@ import { pointToXp } from "@/lib/pointRate";
 import { ITEM_TYPE_LABEL } from "@/lib/items";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
+import { isRenewal } from "../owned";
 
-const ADMIN_USERS = ["elahw.06"];
+import { ADMIN_USERS } from "@/lib/admins";
 
 // 유형 라벨 — lib/items.js 가 단일 원천. 색은 ITEM_TYPE_COLOR 와 같은 값
 const TYPE_LABEL: Record<string, string> = ITEM_TYPE_LABEL;
@@ -27,6 +28,8 @@ export default function CartPage() {
   const [items, setItems] = useState<any[]>([]);
   const [myXp, setMyXp] = useState<number | null>(null);
   const [myPoint, setMyPoint] = useState(0);
+  // 내 구매 — 기간제를 가진 상품을 기간제로 담았으면 '연장'으로 표시한다 (owned.ts)
+  const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // 저장된 장바구니를 먼저 읽고, 그 뒤부터만 저장한다
@@ -51,11 +54,13 @@ export default function CartPage() {
     Promise.all([
       fetch(`/api/shop/items${isAdmin ? "?all=1" : ""}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
-    ]).then(([it, me]) => {
+      fetch("/api/shop/purchase", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+    ]).then(([it, me, ord]) => {
       const list = Array.isArray(it?.data) ? it.data : [];
       setItems(list);
       if (it?.success && Array.isArray(it?.data)) setValidIds(new Set(list.map((i: any) => String(i._id))));
       if (me?.success) { setMyXp(me.data.xp); setMyPoint(me.data.point || 0); }
+      setOrders(Array.isArray(ord?.data) ? ord.data : []);
     }).finally(() => setIsLoading(false));
   }, [status, isAdmin]);
 
@@ -182,6 +187,7 @@ export default function CartPage() {
                   const on = selected.includes(r.itemId);
                   const list = basePrice(r.item, r.days);
                   const discounted = sp < list;
+                  const renew = isRenewal(orders, r.item, r.days);
                   return (
                     <div key={r.itemId} className={`p-5 flex gap-4 items-center transition-colors ${on ? "" : "bg-[#f2f2f2]"}`}>
                       <button onClick={() => toggleOne(r.itemId)} aria-label="선택" className="shrink-0">
@@ -201,7 +207,8 @@ export default function CartPage() {
                         </span>
                         <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">
                         {r.item.name}
-                        {(r.days ?? 0) > 0 && <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#131313] text-white text-[10px] font-black">{durationLabel(r.days)}</span>}
+                        {/* 기간제를 가진 상품이면 "30일 연장" — 지금 만료 뒤에 이어 붙는다 */}
+                        {(r.days ?? 0) > 0 && <span className={`shrink-0 px-1.5 py-0.5 rounded ${renew ? "bg-[#e91e3f]" : "bg-[#131313]"} text-white text-[10px] font-black`}>{durationLabel(r.days)}{renew ? " 연장" : ""}</span>}
                       </h3>
                         {r.item.description && (
                           <p className="text-[11px] text-[#8a8a8a] truncate mt-0.5">{r.item.description}</p>

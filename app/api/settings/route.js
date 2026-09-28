@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { denyIfNotAdmin } from "@/lib/apiAuth";
+import { denyIfNotAdmin, forgetMaintenanceCache } from "@/lib/apiAuth";
 import Setting from "@/models/Setting";
 
 export async function GET() {
@@ -27,6 +27,8 @@ export async function POST(request) {
       { value: !!maintenance, updatedAt: new Date() },
       { upsert: true }
     );
+    // 📌 쓰기 API 점검 가드(denyIfMaintenance)의 10초 캐시를 비운다 — 같은 서버에서는 바로 반영
+    forgetMaintenanceCache();
     return NextResponse.json({ success: true, maintenance: !!maintenance });
   } catch (e) {
     return NextResponse.json({ success: false }, { status: 500 });

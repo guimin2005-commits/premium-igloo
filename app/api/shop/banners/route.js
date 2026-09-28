@@ -1,17 +1,10 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import { getShopAccess } from "@/lib/shopAccess";
 import ShopBanner from "@/models/ShopBanner";
-
-const requireAdmin = async () => {
-  const session = await getServerSession(authOptions);
-  return isAdminName(session?.user?.name);
-};
 
 // ── [조회] 배너 목록 — 공개 전에는 관리자만 ──
 export async function GET(request) {
@@ -33,9 +26,8 @@ export async function GET(request) {
 // ── [등록·수정] 관리자 전용 ──
 export async function POST(request) {
   try {
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const b = await request.json();
     if (!b.imageUrl?.trim()) {
@@ -64,9 +56,8 @@ export async function POST(request) {
 // ── [삭제] 관리자 전용 ──
 export async function DELETE(request) {
   try {
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return NextResponse.json({ success: false }, { status: 400 });

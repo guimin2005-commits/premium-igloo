@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useLayoutEffect, useRef, FormEvent, RefObject, ReactNode } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, Suspense, FormEvent, RefObject, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
@@ -10,6 +10,7 @@ import AdminNav from "./admin/AdminNav";
 import ScrollLock from "./components/ScrollLock";
 import { useArcticFromLevel, ARCTIC_FROM_KEY, ARCTIC_ORIGIN_KEY } from "./arctic/fromLevel";
 import { agoLabel } from "@/lib/ago";
+import { ADMIN_USERS } from "@/lib/admins";
 
 // 서버에서는 layout effect 가 돌지 않으므로 경고 없이 effect 로 대신한다
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -64,12 +65,126 @@ function HeaderPopover({
   );
 }
 
-const ADMIN_USERS = ["elahw.06"];
-
 // 📌 관리자 패널(좌측)을 띄울 경로 — /admin 하위 + 관리자만 쓰는 외부 페이지들
 const ADMIN_SURFACE_PATHS = ["/write"];
 // ?admin=1 일 때만 관리자 화면이 되는 페이지
 const ADMIN_QUERY_PATHS = ["/support", "/recruit", "/auction"];
+
+// 관리자 패널(좌측)을 붙일 화면인지 — 관리자 전용 화면에서만
+const isAdminSurfaceOf = (isAdmin: boolean, pathname: string, adminParam: string | null) =>
+  isAdmin && (pathname.startsWith("/admin") || ADMIN_SURFACE_PATHS.includes(pathname) || (ADMIN_QUERY_PATHS.includes(pathname) && adminParam === "1"));
+
+// 📌 로그인 오류(next-auth ?error=코드) → 한국어 안내. 로그인 · 오류 화면을 "/" 로 돌려 두었다(lib/authOptions.js pages)
+//    디스코드에서 취소하면 Callback, 상태 확인 · 토큰 교환이 실패하면 OAuthCallback 으로 온다
+const AUTH_ERROR_TEXT: Record<string, string> = {
+  Callback: "로그인이 취소되었습니다.",
+  OAuthCallback: "로그인하지 못했습니다. 다시 시도해 주세요.",
+  OAuthSignin: "로그인하지 못했습니다. 다시 시도해 주세요.",
+  AccessDenied: "접근이 거부되었습니다.",
+  CredentialsSignin: "로그인 정보가 올바르지 않습니다.",
+  SessionRequired: "로그인이 필요합니다.",
+};
+const authErrorText = (code: string) =>
+  Object.prototype.hasOwnProperty.call(AUTH_ERROR_TEXT, code) ? AUTH_ERROR_TEXT[code] : null;
+
+// 같은 사이트의 주소(경로+쿼리)만 — ?callbackUrl=https://… 로 밖으로 내보내는 링크가 되지 않게. 오류 표시용 쿼리는 뺀다
+function sameSitePath(raw: string | null | undefined) {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw, window.location.origin);
+    // 📌 경로가 "//" 로 시작하면(https://우리주소//evil.com) 이동할 때 다른 사이트 주소로 읽힌다 — 받지 않는다
+    if (u.origin !== window.location.origin || u.pathname.startsWith("//") || u.pathname.startsWith("/api/")) return null;
+    u.searchParams.delete("error");
+    u.searchParams.delete("callbackUrl");
+    return `${u.pathname}${u.search}${u.hash}`;
+  } catch {
+    return null;
+  }
+}
+// 📌 로그인 뒤 돌아올 곳 — 지금 보던 주소(경로+쿼리). 예전엔 늘 "/" 라 보던 페이지를 잃었다
+const loginReturnPath = () => sameSitePath(window.location.href) || "/";
+
+// 페이지 자리 표시 — 바탕은 레이아웃 색 그대로
+const PagePlaceholder = () => <div aria-hidden className="flex-1" />;
+
+type RouteQuery = { qs: string; fromLevel: boolean };
+
+// 📌 페이지 영역 + 주소 쿼리(?tab · ?from · ?admin · ?error)를 읽는 자리.
+//    useSearchParams 는 미리 그리는(정적) 페이지에서 가장 가까운 Suspense 까지를 브라우저 렌더로 돌린다.
+//    예전엔 레이아웃 전체가 그 Suspense(fallback null) 안이라 첫 HTML 본문이 통째로 비었다(JS 가 돌기 전까지 흰 화면).
+//    쿼리를 읽는 일을 여기 모아 이 자리만 Suspense 로 감싼다 — 헤더 · 푸터는 서버 HTML 에 나온다.
+//    ⚠️ 페이지는 마운트 뒤에 그린다(예전과 같게 브라우저 렌더). 홈 · 레벨 · ARCTIC 등이 렌더 중에 오늘 날짜
+//       (시즌 D-day · N 배지 · 진행 중 이벤트)를 계산해, 서버에서 그린 HTML 과 방문 시점 값이 달라 hydration 오류가 난다.
+//    크롬(헤더 · 독 · 푸터)이 쓰는 쿼리 값은 onQuery 로 부모에 알린다. 페이지 틀(관리자 패널 여부)은 여기서 같은 렌더로 정해
+//    쿼리가 한 박자 늦게 도착해도 페이지가 다시 마운트되지 않게 한다.
+function RouteBody({
+  children, mounted, isAdmin, maintenance, onQuery, onAuthLanding,
+}: {
+  children: ReactNode;
+  mounted: boolean;
+  isAdmin: boolean;
+  maintenance: ReactNode;
+  onQuery: (q: RouteQuery) => void;
+  onAuthLanding: (code: string | null) => void;
+}) {
+  const pathname = usePathname() || "";
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const qs = searchParams.toString();
+  const fromLevel = useArcticFromLevel();
+
+  const isShopPage = pathname === "/arctic" || pathname.startsWith("/arctic/");
+  const isArcticProfile = (pathname === "/profile" || pathname.startsWith("/profile/")) && searchParams.get("from") === "arctic";
+  // ARCTIC 을 벗어나면 "레벨에서 왔다" 표시를 지운다 (ARCTIC 에서 넘어간 내 정보는 ARCTIC 의 연장이라 둔다)
+  useEffect(() => {
+    if (isShopPage || isArcticProfile) return;
+    try { sessionStorage.removeItem(ARCTIC_FROM_KEY); } catch {}
+  }, [isShopPage, isArcticProfile]);
+  // 📌 ARCTIC 에 들어온 곳을 적는다 (app/arctic/fromLevel.ts useArcticOrigin 이 읽는다).
+  //    ARCTIC 밖 → 안으로 넘어오는 순간 직전 주소를 적고, ARCTIC 을 벗어나면 지운다. ARCTIC 에서 넘어간 내 정보는 ARCTIC 의 연장.
+  //    상점 화면(자식)이 effect 에서 읽기 전에 적혀 있도록 layout effect 로. 경로와 쿼리를 같은 렌더에서 읽어야 해서 여기 둔다.
+  const lastPathRef = useRef<{ path: string; arctic: boolean } | null>(null);
+  const fullPath = `${pathname}${qs ? `?${qs}` : ""}`;
+  useIsoLayoutEffect(() => {
+    const inArctic = isShopPage || isArcticProfile;
+    const prev = lastPathRef.current;
+    try {
+      if (inArctic && prev && !prev.arctic) sessionStorage.setItem(ARCTIC_ORIGIN_KEY, prev.path);
+      if (!inArctic) sessionStorage.removeItem(ARCTIC_ORIGIN_KEY);
+    } catch {}
+    lastPathRef.current = { path: fullPath, arctic: inArctic };
+  }, [fullPath, isShopPage, isArcticProfile]);
+
+  useIsoLayoutEffect(() => { onQuery({ qs, fromLevel }); }, [qs, fromLevel, onQuery]);
+
+  // 📌 로그인 취소 · 실패로 "/?error=코드&callbackUrl=보던 주소" 에 떨어졌을 때 — 토스트를 띄우고 보던 곳으로 돌려보낸다.
+  //    돌아가는 동안 홈을 그리지 않는다(홈이 번쩍 보였다 넘어가지 않게). ?callbackUrl 만 있으면 로그인 화면 자리 → 로그인 창을 연다
+  const authError = searchParams.get("error");
+  const authBack = pathname === "/" ? searchParams.get("callbackUrl") : null;
+  const authLanding = (!!authError && (pathname === "/" || !!authErrorText(authError))) || !!authBack;
+  useEffect(() => {
+    if (!authLanding) return;
+    onAuthLanding(authError);
+    const target = sameSitePath(authBack) || sameSitePath(window.location.href) || "/";
+    // 📌 같은 경로에서 쿼리(?error)만 지울 때는 router.replace 가 주소를 바꾸지 않아 자리 표시만 남았다(홈이 빈 화면) —
+    //    replaceState 는 Next 라우터와 이어져 useSearchParams 도 함께 바뀐다
+    if (new URL(target, window.location.origin).pathname === window.location.pathname) window.history.replaceState(null, "", target);
+    else router.replace(target);
+  }, [authLanding, authError, authBack, onAuthLanding, router]);
+
+  if (!mounted || authLanding) return <PagePlaceholder />;
+  if (maintenance) return <>{maintenance}</>;
+  // 📌 관리자 화면 — 좌측 메뉴(PC) / 페이지 단추 + 메뉴 판(모바일) + 전체 폭 본문. 사이트 푸터는 숨긴다
+  if (isAdminSurfaceOf(isAdmin, pathname, searchParams.get("admin"))) {
+    return (
+      <div className="w-full flex-1 flex flex-col lg:flex-row">
+        <AdminNav />
+        <div className="flex-1 min-w-0 flex flex-col">{children}</div>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
 
 // 📌 페이지 전환 시 상단 크림슨 프로그레스 바
 function RouteProgress({ pathname }: { pathname: string }) {
@@ -119,11 +234,35 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [mounted, setMounted] = useState(false);
   
   const { data: session, status } = useSession();
-  const searchParams = useSearchParams();
-  const error = searchParams.get("error");
+  // 📌 주소 쿼리는 페이지 영역(RouteBody)이 읽어 알려 준다 — 여기서 useSearchParams 를 쓰면 첫 HTML 에서 헤더 · 푸터까지 빠진다.
+  //    서버 · 첫 렌더는 빈 쿼리로 같게 그리고, 마운트 뒤 곧바로(그리기 전에) 실제 값으로 바뀐다
+  const [routeQuery, setRouteQuery] = useState<RouteQuery>({ qs: "", fromLevel: false });
+  const onQuery = useCallback((q: RouteQuery) => {
+    setRouteQuery((p) => (p.qs === q.qs && p.fromLevel === q.fromLevel ? p : q));
+  }, []);
+  const searchParams = useMemo(() => new URLSearchParams(routeQuery.qs), [routeQuery.qs]);
   const pathname = usePathname();
   const router = useRouter();
-  
+
+  // 📌 토스트 — 로그인 취소 · 실패 안내, 비회원 문의 결과
+  const [toast, setToast] = useState("");
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(""), 3200);
+  }, []);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+  // 로그인 오류로 "/" 에 떨어졌을 때(RouteBody 가 보던 곳으로 돌려보낸다) — 오류면 안내, 로그인 화면 자리면 로그인 창
+  const onAuthLanding = useCallback((code: string | null) => {
+    if (code) {
+      setIsLoginModalOpen(false);
+      showToast(authErrorText(code) || "로그인하지 못했습니다. 다시 시도해 주세요.");
+    } else {
+      setIsLoginModalOpen(true);
+    }
+  }, [showToast]);
+
   const profileDropdownRef = useRef<HTMLDivElement>(null);
   const profilePanelRef = useRef<HTMLDivElement>(null);
 
@@ -143,7 +282,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   const isShopPage = pathname === "/arctic" || pathname?.startsWith("/arctic/");
-  const arcticFromLevel = useArcticFromLevel();
+  const arcticFromLevel = routeQuery.fromLevel;
   // 📌 지금 있는 세계 — 브랜드 옆 한 칸. 줄을 따로 만들지 않는다.
   //    레벨 탭에서 ARCTIC 으로 들어왔을 때만 넓은 화면에서 앞에 "LEVEL ›" 을 붙여 돌아갈 길을 둔다
   //    (상단 메뉴에서는 둘이 나란한 곳이라 붙이지 않는다 — app/arctic/fromLevel.ts)
@@ -164,27 +303,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // 알약 변형은 없앴다 — 내리면 로고 줄과 카테고리 줄이 한 줄로 접힌다
   const scrolled = scrolledRaw;
   // ARCTIC 에서 넘어온 내 정보(와 그 하위) — 스토어 독을 그대로 두므로 전역 독은 숨긴다
+  //    (ARCTIC 들어온 곳 · "레벨에서 왔다" 표시를 적고 지우는 일은 경로와 쿼리를 같은 렌더에서 읽는 RouteBody 가 맡는다)
   const isArcticProfile = (pathname === "/profile" || !!pathname?.startsWith("/profile/")) && searchParams.get("from") === "arctic";
-  // ARCTIC 을 벗어나면 "레벨에서 왔다" 표시를 지운다 (ARCTIC 에서 넘어간 내 정보는 ARCTIC 의 연장이라 둔다)
-  useEffect(() => {
-    if (isShopPage || isArcticProfile) return;
-    try { sessionStorage.removeItem(ARCTIC_FROM_KEY); } catch {}
-  }, [isShopPage, isArcticProfile]);
-  // 📌 ARCTIC 에 들어온 곳을 적는다 (app/arctic/fromLevel.ts useArcticOrigin 이 읽는다).
-  //    ARCTIC 밖 → 안으로 넘어오는 순간 직전 주소를 적고, ARCTIC 을 벗어나면 지운다. ARCTIC 에서 넘어간 내 정보는 ARCTIC 의 연장.
-  //    상점 화면(자식)이 effect 에서 읽기 전에 적혀 있도록 layout effect 로.
-  const lastPathRef = useRef<{ path: string; arctic: boolean } | null>(null);
-  const qsNow = searchParams.toString();
-  const fullPath = `${pathname || ""}${qsNow ? `?${qsNow}` : ""}`;
-  useIsoLayoutEffect(() => {
-    const inArctic = isShopPage || isArcticProfile;
-    const prev = lastPathRef.current;
-    try {
-      if (inArctic && prev && !prev.arctic) sessionStorage.setItem(ARCTIC_ORIGIN_KEY, prev.path);
-      if (!inArctic) sessionStorage.removeItem(ARCTIC_ORIGIN_KEY);
-    } catch {}
-    lastPathRef.current = { path: fullPath, arctic: inArctic };
-  }, [fullPath, isShopPage, isArcticProfile]);
   const isLightPage = isWhitePage || pathname === "/profile" || pathname?.startsWith("/profile/") || pathname === "/level" || pathname?.startsWith("/level/") || (pathname?.startsWith("/admin") && !pathname.startsWith("/admin/room")) || pathname === "/write" || pathname === "/supporters" || pathname?.startsWith("/supporters/");   // 라이트 톤만 따라가는 페이지 (SYSTEM:LEVEL·관리자 화면은 ARCTIC 테마)
   // 📌 경매방 안에서는 모바일 하단 탭을 숨긴다.
   //    입찰·채팅 바가 화면 아래에 붙는데 그 위에 전역 탭까지 있으면 잘못 눌러 방을 나가게 된다.
@@ -206,12 +326,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       .catch(() => {});
   }, []);
 
-  // 📌 관리자 패널 표시 여부 — 관리자 전용 화면에서만 좌측 패널을 붙인다
-  const isAdminSurface =
-    isAdmin &&
-    (pathname?.startsWith("/admin") ||
-      ADMIN_SURFACE_PATHS.includes(pathname || "") ||
-      (ADMIN_QUERY_PATHS.includes(pathname || "") && searchParams.get("admin") === "1"));
+  // 📌 관리자 패널 표시 여부 — 관리자 전용 화면에서만 좌측 패널을 붙인다 (여기선 상단 바 폭 · 푸터만, 본문 틀은 RouteBody)
+  const isAdminSurface = isAdminSurfaceOf(!!isAdmin, pathname || "", searchParams.get("admin"));
 
 
   // 📌 카테고리 그룹화: 큰 카테고리 → 세부 카테고리 (메가 메뉴)
@@ -283,7 +399,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.name) return;
-    fetch(`/api/inquiry?user=${encodeURIComponent(session.user.name)}`, { cache: "no-store" })
+    fetch("/api/inquiry?mine=1", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         const list = Array.isArray(data?.data) ? data.data : [];
@@ -360,10 +476,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => { document.removeEventListener("mousedown", handleClickOutside); };
   }, [isProfileOpen]);
 
-  useEffect(() => {
-    setMounted(true);
-    if (error === "AccessDenied") { alert("접근이 거부되었습니다."); setIsLoginModalOpen(false); }
-  }, [error]);
+  // 로그인 오류 안내(?error=)는 RouteBody → onAuthLanding 이 토스트로 띄운다
+  useEffect(() => { setMounted(true); }, []);
 
   // 📌 모바일 메뉴 닫힘 애니메이션 — 바로 언마운트하면 옆으로 사라지는 모션이 안 보이므로
   //    isMenuClosing 동안 slide-out을 재생한 뒤 실제로 닫는다.
@@ -414,10 +528,29 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const handleGuestInquiry = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const inquiryData = { user: "비회원 (게스트)", mainType: "비회원 문의", content: guestContent, email: guestEmail };
-    const res = await fetch("/api/inquiry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(inquiryData) });
-    if (res.ok) { alert("문의가 접수되었습니다."); setIsGuestInquiryOpen(false); setGuestContent(""); setGuestEmail(""); } 
-    else { alert("오류가 발생했습니다."); }
+    try {
+      const res = await fetch("/api/inquiry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(inquiryData) });
+      if (res.ok) { showToast("문의가 접수되었습니다."); setIsGuestInquiryOpen(false); setGuestContent(""); setGuestEmail(""); }
+      // 📌 점검 중(503)엔 서버 문구 그대로 — 점검 화면에서도 상단의 비회원 문의는 열린다
+      else if (res.status === 503) showToast((await res.json().catch(() => null))?.message || "점검 중입니다.");
+      else showToast("문의를 접수하지 못했습니다.");
+    } catch {
+      showToast("서버와 통신하지 못했습니다.");
+    }
   };
+
+  // 📌 점검 모드 화면 (관리자는 정상 이용 가능) — 페이지 자리에 대신 그린다
+  const maintenanceScreen = isMaintenance && mounted && !isAdmin && status !== "loading" ? (
+    <div className="flex-1 flex items-center justify-center px-6 py-32 relative overflow-hidden">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-[#e91e3f]/[0.06] blur-[120px] rounded-full pointer-events-none"></div>
+      <div className="relative z-10 text-center max-w-md">
+        <p className="text-5xl mb-8">🔧</p>
+        <h1 className={`text-2xl md:text-3xl font-black tracking-tight mb-4 ${isLightPage ? "text-[#131313]" : "text-white"}`}>더 나은 이글루를 짓는 중입니다</h1>
+        <p className={`text-sm leading-relaxed mb-8 ${isLightPage ? "text-[#5a5a5a]" : "text-gray-400"}`}>현재 사이트 점검이 진행 중입니다.<br />잠시 후 다시 방문해 주세요.</p>
+        <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="inline-block px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드에서 소식 받기</a>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div className={`flex flex-col min-h-screen ${isWhitePage ? "bg-white" : isLightPage ? "bg-[#f4f3f2]" : "bg-[#090909]"}`}>
@@ -658,26 +791,18 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
       {/* pb-24 — 떠 있는 알약 독(12px 여백 + 약 58px 높이)에 콘텐츠 끝이 가리지 않게 */}
       <main className={`flex-1 flex flex-col w-full relative ${isShopPage ? "" : "pb-24 md:pb-0"}`}>
-        {isMaintenance && mounted && !isAdmin && status !== "loading" ? (
-          /* 📌 점검 모드 화면 (관리자는 정상 이용 가능) */
-          <div className="flex-1 flex items-center justify-center px-6 py-32 relative overflow-hidden">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-[#e91e3f]/[0.06] blur-[120px] rounded-full pointer-events-none"></div>
-            <div className="relative z-10 text-center max-w-md">
-              <p className="text-5xl mb-8">🔧</p>
-              <h1 className={`text-2xl md:text-3xl font-black tracking-tight mb-4 ${isLightPage ? "text-[#131313]" : "text-white"}`}>더 나은 이글루를 짓는 중입니다</h1>
-              <p className={`text-sm leading-relaxed mb-8 ${isLightPage ? "text-[#5a5a5a]" : "text-gray-400"}`}>현재 사이트 점검이 진행 중입니다.<br />잠시 후 다시 방문해 주세요.</p>
-              <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className="inline-block px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드에서 소식 받기</a>
-            </div>
-          </div>
-        ) : isAdminSurface ? (
-          /* 📌 관리자 화면 — 좌측 메뉴(PC) / 페이지 단추 + 메뉴 판(모바일) + 전체 폭 본문. 사이트 푸터는 숨긴다 */
-          <div className="w-full flex-1 flex flex-col lg:flex-row">
-            <AdminNav />
-            <div className="flex-1 min-w-0 flex flex-col">{children}</div>
-          </div>
-        ) : (
-          children
-        )}
+        {/* 📌 페이지 영역만 Suspense — 쿼리를 읽는 RouteBody 가 서버에서 멈춰도 헤더 · 푸터는 첫 HTML 에 남는다 */}
+        <Suspense fallback={<PagePlaceholder />}>
+          <RouteBody
+            mounted={mounted}
+            isAdmin={!!isAdmin}
+            onQuery={onQuery}
+            onAuthLanding={onAuthLanding}
+            maintenance={maintenanceScreen}
+          >
+            {children}
+          </RouteBody>
+        </Suspense>
       </main>
 
       {/* 📌 모바일 하단 독 바 — 화면에 붙은 사각 바 대신 떠 있는 알약 독.
@@ -725,7 +850,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </div>
       </footer>
 
-      {isLoginModalOpen && !isGuestInquiryOpen && (
+      {isLoginModalOpen && !isGuestInquiryOpen && status !== "authenticated" && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl ring-1 ring-white/5 w-full max-w-md overflow-hidden shadow-2xl relative">
             <button onClick={() => setIsLoginModalOpen(false)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/20 rounded-full transition-colors outline-none focus:outline-none">
@@ -734,7 +859,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <div className="p-8 text-center">
               <h2 className="text-2xl font-bold text-white mb-2">로그인</h2>
               <p className="text-sm text-gray-400 mb-8 leading-relaxed">고급 이글루의 모든 기능을 이용하시려면<br/>디스코드 계정으로 로그인해주세요.</p>
-              <button onClick={() => signIn("discord", { callbackUrl: "/" })} className="w-full flex items-center justify-center gap-3 py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">Discord 로그인</button>
+              <button onClick={() => signIn("discord", { callbackUrl: loginReturnPath() })} className="w-full flex items-center justify-center gap-3 py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">Discord 로그인</button>
               <button onClick={() => setIsGuestInquiryOpen(true)} className="mt-6 text-sm text-gray-400 hover:text-white underline underline-offset-4 outline-none focus:outline-none transition-colors">비회원으로 문의하시겠습니까?</button>
             </div>
           </div>
@@ -871,7 +996,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               {status === "authenticated" && session ? (
                 <button onClick={() => { closeMobileMenu(); signOut(); }} className={`w-full h-11 px-3 rounded-xl text-left text-[15px] font-bold transition-colors outline-none ${L ? "text-[#d01634] active:bg-[#e91e3f]/[0.06]" : "text-[#ff5c77] active:bg-[#e91e3f]/10"}`}>로그아웃</button>
               ) : (
-                <button onClick={() => { closeMobileMenu(); signIn("discord", { callbackUrl: "/" }); }} className="w-full h-11 rounded-full bg-[#5865F2] active:bg-[#4752C4] text-white text-sm font-bold transition-colors outline-none">Discord 로그인</button>
+                <button onClick={() => { closeMobileMenu(); signIn("discord", { callbackUrl: loginReturnPath() }); }} className="w-full h-11 rounded-full bg-[#5865F2] active:bg-[#4752C4] text-white text-sm font-bold transition-colors outline-none">Discord 로그인</button>
               )}
               <div className={`flex flex-wrap items-center gap-x-3.5 gap-y-1 px-3 pt-2.5 pb-1 text-[11px] font-bold ${L ? "text-[#8a8a8a]" : "text-gray-500"}`}>
                 <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className={L ? "active:text-[#131313]" : "active:text-white"}>Discord</a>
@@ -884,6 +1009,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </div>
         );
       })()}
+
+      {/* 토스트 — 사이트 공통 알약(가운데 아래, 모바일 독 위). 창 · 메뉴보다 위 */}
+      {toast && (
+        <div role="status" aria-live="polite" className="fixed left-1/2 -translate-x-1/2 bottom-24 md:bottom-10 z-[210] w-max max-w-[calc(100vw-2rem)] px-5 py-3 rounded-full bg-[#131313] text-white text-[12px] font-bold break-keep shadow-[0_18px_44px_-14px_rgba(0,0,0,0.4)] pointer-events-none">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

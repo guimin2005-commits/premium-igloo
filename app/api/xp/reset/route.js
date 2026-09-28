@@ -1,10 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { requireUser } from "@/lib/apiAuth";
 import { addPoints } from "@/lib/points";
 import { getLevelByXp } from "@/lib/leveling";
 import UserXp from "@/models/UserXp";
@@ -42,11 +40,10 @@ async function refund(userId, xp, point) {
 
 export async function POST(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
-    }
-    if (!isAdminName(session.user.name)) {
+    // 📌 로그인·관리자 판정은 공용 가드 — 초기화 대상은 관리자 본인 계정
+    const auth = await requireUser();
+    if (auth.deny) return auth.deny;
+    if (!auth.isAdmin || !auth.userId) {
       return NextResponse.json({ success: false, message: "관리자만 초기화할 수 있습니다." }, { status: 403 });
     }
 
@@ -57,7 +54,7 @@ export async function POST(request) {
     }
 
     await connectToDatabase();
-    const userId = session.user.id;
+    const userId = auth.userId;
 
     // 단계 · 해금 표시를 한 번에 내리면서 이전 값을 받아 온다 — 두 번 눌려도 환불은 한 번만 된다
     if (what === "enhance") {

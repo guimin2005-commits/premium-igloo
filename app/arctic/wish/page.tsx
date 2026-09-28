@@ -9,7 +9,7 @@ import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { isAdminName } from "@/lib/admins";
 import ArcticStoreBar from "../ArcticStoreBar";
 import CardArt from "../CardArt";
-import { ownedIdsOf } from "../owned";
+import { ownedIdsOf, renewableIdsOf } from "../owned";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 
@@ -91,8 +91,11 @@ export default function WishPage() {
     });
   }, [ready, validIds]);
 
-  // 서버와 같은 기준 — 만료 · 환불 건은 보유가 아니다 (owned.ts)
+  // 서버와 같은 기준 — 만료 · 환불 건은 보유가 아니다 (owned.ts).
+  //    기간제만 가진 상품은 다시 담을 수 있다(기간제는 연장 · 무제한은 업그레이드) — 막는 건 무제한 보유뿐
   const owned = useMemo(() => ownedIdsOf(orders, items), [orders, items]);
+  const renewable = useMemo(() => renewableIdsOf(orders, items), [orders, items]);
+  const locked = (id: string) => owned.has(id) && !renewable.has(id);
   // 찜한 순서대로 — 최근에 찜한 것이 앞에 오게
   const rows = useMemo(() => [...wish].reverse().map((id) => items.find((i) => i._id === id)).filter(Boolean), [wish, items]);
 
@@ -106,7 +109,7 @@ export default function WishPage() {
   };
   const toggleCart = (it: any) => {
     if (!isLoggedIn) return signIn("discord");
-    if (owned.has(it._id)) return say("이미 구매하신 상품입니다");
+    if (locked(it._id)) return say("이미 구매하신 상품입니다");
     if (cart.some((c) => c.itemId === it._id)) {
       setCart((prev) => prev.filter((c) => c.itemId !== it._id));
       return say(`${it.name} 상품을 장바구니에서 뺐습니다`);
@@ -114,7 +117,7 @@ export default function WishPage() {
     // 카드에 보이는 기간(기본 무제한)으로 담는다 — 보이는 값과 담기는 값이 같게
     const days = isTimed(it) ? (cardPick(it)?.days ?? durationOptions(it)[0]?.days ?? 0) : 0;
     setCart((prev) => [...prev, { itemId: it._id, qty: 1, days }]);
-    say(`${it.name}${days > 0 ? ` (${durationLabel(days)})` : ""} 상품을 장바구니에 담았습니다`);
+    say(`${it.name}${days > 0 ? ` (${durationLabel(days)})` : ""} ${days > 0 && renewable.has(it._id) ? "연장을" : "상품을"} 장바구니에 담았습니다`);
   };
 
   // 개수는 상품 목록에 있는 것만 — 저장소 원본을 세면 장바구니 화면엔 없는 상품까지 센다
@@ -157,7 +160,7 @@ export default function WishPage() {
               const listPrice = pick.list;
               const finalPrice = pick.price;
               const pct = finalPrice < listPrice ? discountPctOf(it) : 0;
-              const has = owned.has(it._id);
+              const has = locked(it._id);
               const inCart = cart.some((c) => c.itemId === it._id);
               return (
                 <div key={it._id} className="group relative flex flex-col">

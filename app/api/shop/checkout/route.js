@@ -14,6 +14,8 @@ import ShopLock from "@/models/ShopLock";
 import { salePrice, couponDiscount, couponError, couponClaimFilter, couponReleaseUpdate, isTimed, durationPrice } from "@/lib/shopPricing";
 import { getLevelByXp } from "@/lib/leveling";
 import { xpToPoint, POINT_RATE } from "@/lib/pointRate";
+import { denyIfMaintenance } from "@/lib/apiAuth";
+import { liveHoldings, planPurchase, timingOf } from "../_lib/renewal";
 import mongoose from "mongoose";
 
 // 📌 실제 차감액(amount)을 줄 가격(prices) 비율로 나눈다 — 합이 amount 와 정확히 같다(최대 나머지 방식).
@@ -45,6 +47,9 @@ export async function POST(request) {
     if (!userId) {
       return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
     }
+    // 📌 점검 중에는 결제를 서버에서 막는다 (관리자는 통과)
+    const maintenance = await denyIfMaintenance(session);
+    if (maintenance) return maintenance;
 
     await connectToDatabase();
     const { canView } = await getShopAccess();
@@ -90,7 +95,7 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "수령 정보를 입력해주세요." }, { status: 400 });
     }
 
-    // 📌 모든 상품은 1인 1개 — 수량 초과·기보유 모두 차단
+    // 📌 모든 상품은 1인 1개 — 수량 초과 · 무제한 기보유 차단 (기간제 보유는 연장 · 업그레이드로 받는다 — 아래)
     for (const d of docs) {
       if (wanted.get(String(d._id)) > 1) {
         return NextResponse.json({ success: false, message: `"${d.name}"은(는) 1인 1개만 구매할 수 있습니다.` }, { status: 400 });
@@ -113,23 +118,16 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "처리 중인 결제가 있습니다. 잠시 후 다시 시도해 주세요." }, { status: 409 });
     }
 
-    // 📌 기간제는 기간이 끝나면 다시 살 수 있어야 하므로, 아직 살아 있는 건만 막는다
-    const linkedIds = docs.map((d) => d.itemId).filter(Boolean);
-    const owned = await Purchase.find({
-      userId,
-      status: { $in: ["pending", "completed"] },
-      $and: [
-        { $or: [{ itemId: { $in: docs.map((d) => String(d._id)) } }, ...(linkedIds.length ? [{ itemRef: { $in: linkedIds } }] : [])] },
-        { $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] },
-      ],
-    }, { itemName: 1, expiresAt: 1 }).lean();
-    if (owned.length > 0) {
-      return NextResponse.json({
-        success: false,
-        message: owned[0].expiresAt
-          ? `"${owned[0].itemName}"은(는) 아직 이용 기간이 남아 있습니다.`
-          : `이미 구매한 상품이 있습니다: ${owned[0].itemName}`,
-      }, { status: 409 });
+    // 📌 기보유 판정 — 살아 있는 보유(같은 상품 · 같은 아이템)만 본다. 무제한 보유는 막고,
+    //    기간제만 가졌으면 기간제는 연장(가장 늦은 만료 뒤에 이어 붙임) · 무제한은 업그레이드로 받는다 (_lib/renewal.js — 바로 구매와 같은 규칙)
+    const holdings = await liveHoldings(userId, docs);
+    const plans = new Map();
+    for (const d of docs) {
+      const plan = planPurchase(d, daysOf.get(String(d._id)) || 0, holdings);
+      if (plan.block) {
+        return NextResponse.json({ success: false, message: `이미 구매한 상품이 있습니다: ${plan.block.itemName || d.name}` }, { status: 409 });
+      }
+      plans.set(String(d._id), plan);
     }
 
     // 📌 단가는 여기서 한 번만 — 할인 종료 시각이 요청 도중에 지나도 청구액과 기록(Purchase.price)이 같은 값이 되게
@@ -248,6 +246,7 @@ export async function POST(request) {
     for (const d of docs) {
       const qty = wanted.get(String(d._id));
       const days = daysOf.get(String(d._id)) || 0;
+      const timing = timingOf(plans.get(String(d._id)), days);
       for (let i = 0; i < qty; i++) {
         rows.push({
           _id: new mongoose.Types.ObjectId(),
@@ -264,8 +263,10 @@ export async function POST(request) {
           paidPoint: 0,
           billed: true,
           days,
-          // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다
-          expiresAt: days > 0 ? new Date(Date.now() + days * 86400000) : null,
+          // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다. 연장이면 이어 붙인 건의 만료부터(renewOf · startsAt)
+          expiresAt: timing.expiresAt,
+          renewOf: timing.renewOf,
+          startsAt: timing.startsAt,
           contact: d.type === "physical" ? contact.trim() : "",
           status: "pending",
         });
@@ -309,6 +310,9 @@ export async function POST(request) {
     // 기프트카드만 운영진이 발송한다 — 나머지 유형(역할 · 권한 · 아이템)은 봇이 자동 지급한다
     const hasGift = docs.some((d) => d.type === "physical");
     const hasAuto = docs.some((d) => d.type !== "physical");
+    // 전부 연장이면 지급 안내 대신 연장 안내
+    const renewed = rows.filter((r) => r.renewOf);
+    const allRenew = !hasGift && renewed.length === rows.length;
 
     return NextResponse.json({
       success: true,
@@ -316,7 +320,9 @@ export async function POST(request) {
         ? "결제가 완료되었습니다. 기프트카드는 운영진 확인 후 발송해 드리고, 나머지 상품은 잠시 후 자동으로 지급됩니다."
         : hasGift
           ? "결제가 완료되었습니다. 운영진 확인 후 발송해 드립니다."
-          : "결제가 완료되었습니다. 잠시 후 자동으로 지급됩니다.",
+          : allRenew
+            ? "결제가 완료되었습니다. 이용 기간이 연장되었습니다."
+            : "결제가 완료되었습니다. 잠시 후 자동으로 지급됩니다.",
       // subtotal · discount · total 은 XP 기준. usedPoint 는 뺀 빙옥, chargedXp 는 뺀 XP.
       // charged 는 옛 필드 — 한쪽으로만 냈을 때의 그 화폐 값. 섞어 냈으면 XP 몫이다(usedPoint · chargedXp 를 본다)
       data: {
@@ -324,6 +330,8 @@ export async function POST(request) {
         charged: payMethod === "point" ? pointUse : chargedXp,
         usedPoint: pointUse, chargedXp,
         remain, remainXp: remain.xp, remainPoint: remain.point,
+        // 연장된 건 — 상품 id · 새 만료 시각
+        renewed: renewed.map((r) => ({ itemId: r.itemId, expiresAt: r.expiresAt })),
       },
     });
   } catch (e) {

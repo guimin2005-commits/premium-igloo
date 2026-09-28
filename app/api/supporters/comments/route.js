@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
+import { denyIfMaintenance } from "@/lib/apiAuth";
 import { authOptions } from "@/lib/authOptions";
 import { isSupporterSession } from "@/lib/supporters";
 import { isAdminName } from "@/lib/admins";
@@ -95,6 +96,8 @@ export async function POST(request) {
   try {
     const g = await gate();
     if (g.deny) return g.deny;
+    const maint = await denyIfMaintenance(g.session);
+    if (maint) return maint;
     await connectToDatabase();
 
     const b = await request.json().catch(() => ({}));
@@ -138,6 +141,8 @@ export async function DELETE(request) {
   try {
     const g = await gate();
     if (g.deny) return g.deny;
+    const maint = await denyIfMaintenance(g.session);
+    if (maint) return maint;
     await connectToDatabase();
 
     const id = str(new URL(request.url).searchParams.get("id") || "", 32);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { playTone } from "@/lib/sfx";
 import ItemIcon from "./ItemIcon";
@@ -140,9 +141,9 @@ const InvSlot = ({ it, on, onClick }) => {
   );
 };
 
-// 📌 가방 왼쪽 상세 — 큰 아이콘 · 이름 · 설명(줄바꿈 그대로) · 상태 · 기간 · 효과.
-//    compact 는 아이템 등록 미리보기용으로 크기만 줄인다(내용 · 순서는 같다)
-const InvDetail = ({ it, compact = false }) => {
+// 📌 가방 왼쪽 상세 — 큰 아이콘 · 이름 · 설명(줄바꿈 그대로) · 상태 · 기간 · (기간제면) 연장 · 효과.
+//    compact 는 아이템 등록 미리보기용으로 크기만 줄인다(내용 · 순서는 같다). onGo 는 연장으로 떠날 때 가방을 닫는다
+const InvDetail = ({ it, compact = false, onGo }) => {
   const accent = invAccentOf(it);
   const dday = ddayOf(it);
   const lines = Array.isArray(it.effectLines) ? it.effectLines.filter(Boolean) : [];
@@ -183,6 +184,13 @@ const InvDetail = ({ it, compact = false }) => {
               </span>
             </div>
           </>
+        )}
+        {/* 📌 연장 — 상품 상세에서 기간을 이어 산다(지금 만료 뒤에 붙는다). 연장할 판매 상품이 있을 때만 서버(my-items)가 renewId 를 준다 */}
+        {it.expiresAt && it.renewId && !compact && (
+          <Link href={`/arctic/item/${it.renewId}`} onClick={onGo}
+            className="mt-1 w-full h-9 rounded-full border border-white/20 hover:border-white/45 text-[11px] font-black text-white/80 hover:text-white flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+            기간 연장
+          </Link>
         )}
         {it.rewardLevel != null && (
           <div className="flex items-center justify-between gap-3">
@@ -274,7 +282,7 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
       left={
         <>
         {selItem ? (
-          <InvDetail it={selItem} />
+          <InvDetail it={selItem} onGo={onClose} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center py-6 sm:py-0">
             <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-white/15 flex items-center justify-center mb-3">

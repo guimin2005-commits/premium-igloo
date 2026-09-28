@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { Inter, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 import Providers from "./Providers";
@@ -55,12 +54,13 @@ export default function RootLayout({
         // body에 overflow를 주면 사이트 전역 sticky가 죽으므로 여기엔 절대 넣지 않는다.
         className={`min-h-screen flex flex-col bg-[#090909] text-white font-sans antialiased selection:bg-[#e91e3f] selection:text-white ${inter.variable} ${notoKr.variable}`}
       >
+        {/* 📌 루트를 Suspense(fallback null)로 감싸지 않는다 — ClientLayout 이 useSearchParams 를 쓰던 때는 그 탓에
+               첫 HTML 본문이 통째로 비었다(JS 가 돌기 전까지 흰 화면). 쿼리를 읽는 자리는 ClientLayout 안(RouteBody)에서
+               따로 Suspense 로 감싸고, 헤더 · 푸터는 서버 HTML 에 그대로 나온다. */}
         <Providers>
-          <Suspense fallback={null}>
-            <ClientLayout>
-              {children}
-            </ClientLayout>
-          </Suspense>
+          <ClientLayout>
+            {children}
+          </ClientLayout>
         </Providers>
       </body>
     </html>

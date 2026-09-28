@@ -9,6 +9,7 @@ import Coupon from "@/models/Coupon";
 import UserCoupon from "@/models/UserCoupon";
 import CodeGrant from "@/models/CodeGrant";
 import Payout from "@/models/Payout";
+import { denyIfMaintenance } from "@/lib/apiAuth";
 
 // 디스코드에서 역할 보유 여부 확인 (보상형 쿠폰의 사용 조건)
 async function hasRole(userId, roleId) {
@@ -80,6 +81,9 @@ export async function POST(request) {
     if (!userId) {
       return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
     }
+    // 📌 점검 중에는 쿠폰 등록(보상형은 즉시 지급)을 서버에서 막는다 (관리자는 통과)
+    const maintenance = await denyIfMaintenance(session);
+    if (maintenance) return maintenance;
 
     await connectToDatabase();
     const { code } = await request.json();

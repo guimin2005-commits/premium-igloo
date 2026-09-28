@@ -41,3 +41,23 @@ export const VOICE_TIME_START = "2026-10-01";
 
 export const kstToday = () =>
   new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+// 📌 시즌 목록 — lib/season.js 의 SEASONS 와 같아야 한다 (봇은 별도 배포라 import 불가).
+//    날짜는 KST "YYYY-MM-DD" (시작일 00:00 ~ 종료일 23:59:59.999)
+export const SEASONS = [
+  { number: 1, name: "UP!", start: "2026-05-01", end: "2026-09-30" },
+  { number: 2, name: "A new world", start: "2026-10-01", end: "2026-12-31" },
+];
+const SEASONS_ORDERED = [...SEASONS].sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
+
+// 지금 시즌 — 진행 중인 시즌. 없으면 마지막으로 시작한 시즌(= 가장 최근에 끝난 시즌), 첫 시즌 전이면 첫 시즌
+export const currentSeason = (now = Date.now()) => {
+  const today = new Date(Number(now) + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  let cur = SEASONS_ORDERED[0];
+  for (const s of SEASONS_ORDERED) if (s.start <= today) cur = s;
+  return cur;
+};
+
+// 시즌 시작·끝 시각(ms) — KST 시작일 00:00:00.000 · 종료일 23:59:59.999
+export const seasonStartMs = (s) => Date.parse(`${s.start}T00:00:00.000+09:00`);
+export const seasonEndMs = (s) => Date.parse(`${s.end}T23:59:59.999+09:00`);

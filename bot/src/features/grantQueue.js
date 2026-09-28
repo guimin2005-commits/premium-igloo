@@ -4,16 +4,72 @@
 //  · 코드 역할 지급 요청 → 역할 자동 지급
 //  · 사이트에서 XP가 바뀐 유저 → 레벨 보상 역할 재동기화(지급·회수)
 //  · 시즌 전환으로 사이트 보유(siteOnly)가 된 구매 → 디스코드 역할 표기만 떼기
+//  · 지급 · 연장 · 만료 · 환불 DM 은 관리자 화면의 봇 메시지 디자인(buildMessage)으로 보낸다
 import { Purchase, Payout, CodeGrant, UserXp, BotSetting } from "../db.js";
 import { syncRewardRoles } from "../xp.js";
+import { refreshRoleConfigs } from "../roleConfigs.js";
 import { getLevelByXp } from "../leveling.js";
 import { config } from "../config.js";
+import { buildMessage, commonVars, formatUntil } from "../botMessages.js";
 
 const TICK_MS = 30 * 1000;
 
 // 길드 멤버 조회 (캐시에 없으면 fetch)
 async function fetchMember(guild, userId) {
   return guild.members.cache.get(userId) || (await guild.members.fetch(userId).catch(() => null));
+}
+
+// DM 한 통 — 관리자가 끈 메시지(null)는 보내지 않고, DM 이 막혀 있으면 조용히 넘어간다
+function sendDm(member, key, vars) {
+  const msg = buildMessage(key, { ...commonVars(member, member.guild), ...vars });
+  if (msg) member.send(msg).catch(() => {});
+}
+
+// ── 살아 있는 다른 구매 ─────────────────────────
+// 📌 연장은 새 Purchase 문서(renewOf = 이어 붙인 원래 구매 _id)다. 봇이 꺼져 있다 켜지면 원래 구매의 만료와
+//    연장분 지급이 한꺼번에 몰리는데, 연장분이 아직 pending(지급 실패 · 25건 한도에 밀림)이면 만료 쪽이 역할을 떼 버린다.
+//    그래서 pending 연장분도 역할의 근거로 본다 — 지급되면 어차피 같은 역할이 다시 붙는다.
+const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
+
+// 같은 물건을 가리키는 조건 — 이 구매를 이은 연장분 · 같은 역할 · 같은 아이템(itemRef) · 같은 상품(itemId)
+//   itemId 는 ShopItem id 일 때만 — "grant"(운영진 지급) · "season-pass" 는 표시 값이라 서로 다른 물건이다
+export function sameThing(p) {
+  const or = [{ renewOf: String(p._id) }];
+  if (p.roleId) or.push({ roleId: p.roleId });
+  if (p.itemRef) or.push({ itemRef: p.itemRef });
+  if (OBJECT_ID_RE.test(String(p.itemId || ""))) or.push({ itemId: String(p.itemId) });
+  return or;
+}
+
+// 역할을 떼면 안 되는 근거 — 같은 역할을 주는 살아 있는 다른 구매
+//   · completed 이고 영구이거나 기간이 남은 같은 역할 구매 (예전 기준 그대로)
+//   · pending 연장분 — 같은 역할 · 같은 아이템 · 이 구매를 이은 것
+//   📌 시즌 전환으로 표기를 뗀 구매(siteOnly)는 근거가 아니다. 빼먹으면 근거가 하나도 없는데 역할만 영구히 남는다.
+//      detach 라우트 · processDetachments 와 반드시 같은 표현($ne: true — 필드가 없는 옛 문서까지 잡는다)을 쓴다.
+async function findRoleHolder(p, now = new Date()) {
+  const renewOr = [{ renewOf: String(p._id) }, { roleId: p.roleId }];
+  if (p.itemRef) renewOr.push({ itemRef: p.itemRef });
+  return Purchase.findOne({
+    userId: p.userId,
+    _id: { $ne: p._id },
+    siteOnly: { $ne: true },
+    $or: [
+      { roleId: p.roleId, status: "completed", $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] },
+      // renewOf $gt "" — 빈 글 · 필드가 없는 옛 문서는 연장분이 아니다
+      { status: "pending", renewOf: { $gt: "" }, $or: renewOr },
+    ],
+  }).lean();
+}
+
+// 이 구매가 끝나도 같은 물건이 이어지는지 — after 보다 늦게 끝나는(또는 영구) completed · pending 구매
+//   만료 DM · 만료 임박 DM(expiryReminder.js)을 건너뛰는 기준. 소유가 이어지는지만 보므로 siteOnly 는 가리지 않는다
+export async function findContinuation(p, after = new Date()) {
+  return Purchase.findOne({
+    userId: p.userId,
+    _id: { $ne: p._id },
+    status: { $in: ["completed", "pending"] },
+    $and: [{ $or: sameThing(p) }, { $or: [{ expiresAt: null }, { expiresAt: { $gt: after } }] }],
+  }).lean();
 }
 
 // ── 역할 상품 구매 처리 ──────────────────────
@@ -44,26 +100,19 @@ async function processPurchases(guild) {
       if (!done.modifiedCount) {
         // 그 사이 취소됨 — 방금 붙인 역할을 되돌린다 (원래 있던 역할이거나 같은 역할을 주는 다른 살아 있는 구매가 있으면 둔다)
         if (p.roleId && !hadRole) {
-          const alive = await Purchase.findOne({
-            userId: p.userId,
-            roleId: p.roleId,
-            status: "completed",
-            siteOnly: { $ne: true },
-            _id: { $ne: p._id },
-            $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
-          }).lean();
-          if (!alive) await member.roles.remove(p.roleId, `지급 중 취소됨: ${p.itemName}`).catch(() => {});
+          const holder = await findRoleHolder(p);
+          if (!holder) await member.roles.remove(p.roleId, `지급 중 취소됨: ${p.itemName}`).catch(() => {});
         }
         console.log(`🛒 지급 중 취소된 구매: ${p.userName} ← ${p.itemName}`);
         continue;
       }
-      console.log(`🛒 역할 지급 완료: ${p.userName} ← ${p.itemName}${p.days > 0 ? ` (${p.days}일)` : ""}`);
+      console.log(`🛒 역할 지급 완료: ${p.userName} ← ${p.itemName}${p.days > 0 ? ` (${p.days}일)` : ""}${p.renewOf ? " · 연장" : ""}`);
 
-      // 기간제는 언제까지인지 본인에게 알려 준다 (DM이 막혀 있으면 조용히 넘어간다)
-      if (p.days > 0 && p.expiresAt) {
-        const until = new Date(p.expiresAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
-        member.send(`🎫 **${p.itemName}** 역할이 지급되었습니다.\n이용 기간 ${p.days}일 — ${until}까지 유지되며, 기간이 끝나면 자동으로 회수됩니다.`).catch(() => {});
-      }
+      // 본인에게 알린다 — 연장 · 기간제(언제까지) · 영구
+      const until = formatUntil(p.expiresAt);
+      if (p.renewOf) sendDm(member, "renewed", { item: p.itemName, days: p.days, until });
+      else if (p.days > 0 && p.expiresAt) sendDm(member, "purchaseGrantedTimed", { item: p.itemName, days: p.days, until });
+      else sendDm(member, "purchaseGranted", { item: p.itemName });
     } catch (e) {
       // 50013(봇 역할보다 위) · 10011(삭제된 역할)은 다시 해도 같다 — 표시만 남기고 pending 은 둔다.
       // failed 로 확정하면 주문 관리의 취소(환불)가 pending 만 받아 환불할 길이 없어지고 보유 판정에서도 빠진다.
@@ -211,15 +260,19 @@ async function processCodeGrants(guild) {
 }
 
 // ── 레벨 역할 재동기화 ────────────────────────
-//    사이트에서 XP를 깎거나(ARCTIC 구매) 초기화하면 needsRoleSync가 세워진다.
+//    사이트에서 XP를 깎거나(ARCTIC 구매) 초기화 · 환불하거나 티어 설정을 저장하면(전원) needsRoleSync가 세워진다.
 //    봇만 디스코드 역할을 만질 수 있으므로 이곳에서 현재 레벨에 맞춰 지급·회수한다.
 async function processRoleSyncs(guild) {
   const rows = await UserXp.find({ needsRoleSync: true }, { userId: 1, level: 1, displayName: 1 }).limit(50).lean();
+  if (!rows.length) return;
+  // 📌 티어 설정을 저장하면 사이트가 전원에게 표시를 세운다 — 1분 캐시의 옛 설정으로 맞추고 표시를 내리지 않게 먼저 새로 읽는다
+  await refreshRoleConfigs();
 
   for (const r of rows) {
     try {
       const member = await fetchMember(guild, r.userId);
-      if (member) await syncRewardRoles(member, r.level || 0);
+      // 📌 알림 없이 역할만 맞춘다 — 전원 재동기화 · 환불로 되찾은 역할이 "NEW ROLE" 로 채널을 도배하지 않게
+      if (member) await syncRewardRoles(member, r.level || 0, { notify: false });
       // 서버에 없는 유저는 다시 들어올 때 레벨업 흐름에서 처리되므로 표시만 내린다
       // 📌 읽은 레벨 그대로일 때만 내린다 — 맞추는 사이 사이트가 레벨을 바꾸고 다시 세웠으면 남겨 다음 틱에 다시 맞춘다
       await UserXp.updateOne({ userId: r.userId, needsRoleSync: true, level: r.level ?? null }, { $set: { needsRoleSync: false } });
@@ -243,33 +296,29 @@ async function processExpiries(guild) {
 
   for (const p of rows) {
     try {
+      const now = new Date();
       const member = await fetchMember(guild, p.userId);
-      if (member && p.roleId) {
-        // 같은 역할을 주는, 아직 살아 있는 다른 구매가 있으면 회수하지 않는다
-        // 📌 시즌 전환으로 표기를 뗀 구매(siteOnly)는 "역할을 정당화하는 살아 있는 구매"가 아니다.
-        //    빼먹으면 근거가 하나도 없는데 역할만 영구히 남는다. detach 라우트·processDetachments 와
-        //    반드시 같은 표현($ne: true — 필드가 없는 옛 문서까지 잡는다)을 써야 한다.
-        const alive = await Purchase.findOne({
-          userId: p.userId,
-          roleId: p.roleId,
-          status: "completed",
-          siteOnly: { $ne: true },
-          _id: { $ne: p._id },
-          $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
-        }).lean();
-        if (!alive) {
-          await member.roles.remove(p.roleId, `ARCTIC 기간 만료: ${p.itemName}`);
-          member.send(`⌛ **${p.itemName}** 이용 기간(${p.days}일)이 끝나 역할이 회수되었습니다.\nARCTIC에서 다시 구매하면 계속 이용할 수 있습니다.`).catch(() => {});
-        }
-      }
+      // 같은 역할을 주는, 아직 살아 있는 다른 구매(pending 연장분 포함)가 있으면 회수하지 않는다
+      const holder = member && p.roleId ? await findRoleHolder(p, now) : null;
+      if (member && p.roleId && !holder) await member.roles.remove(p.roleId, `ARCTIC 기간 만료: ${p.itemName}`);
 
       // 📌 completed 일 때만 expired 로 — 그 사이 관리자가 환불(refunded)했으면 덮어쓰지 않는다 (역할은 환불 큐가 뗀다)
       const done = await Purchase.updateOne(
         { _id: p._id, status: "completed" },
-        { $set: { status: "expired", revokedAt: new Date(), error: "" } }
+        { $set: { status: "expired", revokedAt: now, error: "" } }
       );
       if (!done.modifiedCount) continue;
       console.log(`⌛ 기간제 역할 회수: ${p.userName} → ${p.itemName} (${p.days}일)`);
+
+      // 📌 DM 은 expired 로 바꾼 뒤에 한 번만 — 연장분이 이어 가거나 같은 역할 · 아이템이 남아 있으면 끝난 게 아니라 보내지 않는다.
+      //    (역할 없는 아이템도 이어지는 구매가 없으면 알린다)
+      if (member && !holder) {
+        try {
+          if (!(await findContinuation(p, now))) sendDm(member, "expired", { item: p.itemName, days: p.days });
+        } catch (e) {
+          console.error(`⌛ 만료 DM 확인 실패 (${p.userName} / ${p.itemName}):`, e.message);
+        }
+      }
     } catch (e) {
       // 50013 · 10011 은 다시 해도 같다 — 기간은 이미 끝났으니 expired 로 확정하고 사유를 남긴다 (봇이 못 뗀 역할은 관리자가 뗀다)
       const permanent = e?.code === 50013 || e?.code === 10011;
@@ -302,28 +351,26 @@ async function processRefunds(guild) {
   for (const p of rows) {
     try {
       const hasRole = p.roleId && ["role", "perk", "item"].includes(p.itemType);
-      if (hasRole) {
-        const member = await fetchMember(guild, p.userId);
-        if (member) {
-          // 같은 역할을 정당하게 주는 다른 구매가 살아 있으면 남긴다 (만료 처리와 같은 기준)
-          const alive = await Purchase.findOne({
-            userId: p.userId,
-            roleId: p.roleId,
-            status: "completed",
-            siteOnly: { $ne: true },
-            _id: { $ne: p._id },
-            $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
-          }).lean();
-          if (!alive) {
-            await member.roles.remove(p.roleId, `ARCTIC 환불: ${p.itemName}`);
-            member.send(`↩️ **${p.itemName}** 구매가 환불되어 역할이 회수되었습니다. 결제한 XP·POINT 는 돌려드렸습니다.`).catch(() => {});
-          }
-        }
+      const member = await fetchMember(guild, p.userId);
+      if (hasRole && member) {
+        // 같은 역할을 정당하게 주는 다른 구매(pending 연장분 포함)가 살아 있으면 남긴다 (만료 처리와 같은 기준)
+        const holder = await findRoleHolder(p);
+        if (!holder) await member.roles.remove(p.roleId, `ARCTIC 환불: ${p.itemName}`);
       }
-      p.roleDetached = true;
-      p.error = "";
-      await p.save();
+      // 📌 아직 처리 전인 건만 확정 — 봇이 둘 떠 있거나 저장이 겹쳐도 환불 DM 은 한 번만 간다
+      const done = await Purchase.updateOne(
+        { _id: p._id, status: "refunded", roleDetached: { $ne: true } },
+        { $set: { roleDetached: true, error: "" } }
+      );
+      if (!done.modifiedCount) continue;
       console.log(`↩️ 환불 역할 회수: ${p.userName} → ${p.itemName}`);
+
+      // 환불은 역할이 남아도(다른 구매가 같은 역할을 줌) 사실이라 알린다.
+      //   📌 오래된 환불 건(7일 넘음)은 뒤늦게 보내지 않고, 낸 것이 없는 건(운영진 지급 · 패스 보상 회수)은
+      //      "결제한 XP · 빙옥을 돌려드렸습니다" 가 틀린 말이라 보내지 않는다 (orders 라우트의 환불 금액 판정과 같은 기준)
+      const recent = p.revokedAt && Date.now() - new Date(p.revokedAt).getTime() < 7 * 86400e3;
+      const paid = !!p.billed || (p.paidXp || 0) > 0 || (p.paidPoint || 0) > 0 || (p.price || 0) > 0;
+      if (member && recent && paid) sendDm(member, "refunded", { item: p.itemName });
     } catch (e) {
       // 50013 · 10011 은 다시 해도 같다 — 큐에서 확정해 빼고 사유를 남긴다 (processDetachments 와 같은 방식)
       const permanent = e?.code === 50013 || e?.code === 10011;

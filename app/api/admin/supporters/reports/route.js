@@ -2,17 +2,9 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import SupporterReport from "@/models/SupporterReport";
-
-const requireAdmin = async () => {
-  const session = await getServerSession(authOptions);
-  return isAdminName(session?.user?.name);
-};
-const denied = () => NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
 
 const STATUSES = ["open", "done"];
 const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -34,7 +26,8 @@ const pick = (r) => ({
 // ── [조회] 신고·피드백 목록 — ?status=open|done|all (기본 open), 최신 200건 + 상태별 건수 ──
 export async function GET(request) {
   try {
-    if (!(await requireAdmin())) return denied();
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
 
     const sp = new URL(request.url).searchParams;
@@ -62,7 +55,8 @@ export async function GET(request) {
 //    adminReply 를 보내면 repliedAt 을 지금으로 굳힌다(빈 문자열로 지우는 것도 답변 갱신으로 본다).
 export async function PATCH(request) {
   try {
-    if (!(await requireAdmin())) return denied();
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
 
     const b = await request.json().catch(() => ({}));
@@ -104,7 +98,8 @@ export async function PATCH(request) {
 // ── [삭제] 관리자만 — 작성자는 답변이 달리면 못 지우므로, 답변한 테스트 글·악성 글은 여기서만 정리된다 ──
 export async function DELETE(request) {
   try {
-    if (!(await requireAdmin())) return denied();
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const id = new URL(request.url).searchParams.get("id") || "";
     if (!mongoose.isValidObjectId(id)) {

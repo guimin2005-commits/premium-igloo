@@ -1,33 +1,25 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import InventoryRole from "@/models/InventoryRole";
 
 // 📌 인벤토리 역할 CRUD — 관리자 전용 (role-config 라우트와 같은 형태)
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return isAdminName(session?.user?.name);
-}
 
 const CATEGORIES = ["perk", "title", "notify", "etc"];
 
 export async function GET() {
-  if (!(await requireAdmin())) {
-    return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-  }
+  const deny = await denyIfNotAdmin();
+  if (deny) return deny;
   await connectToDatabase();
   const data = await InventoryRole.find().sort({ sortOrder: 1, createdAt: 1 }).lean();
   return NextResponse.json({ success: true, data });
 }
 
 export async function POST(request) {
-  if (!(await requireAdmin())) {
-    return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-  }
+  const deny = await denyIfNotAdmin();
+  if (deny) return deny;
   const b = await request.json().catch(() => ({}));
   const roleId = String(b?.roleId || "").trim();
   if (!roleId) {
@@ -54,9 +46,8 @@ export async function POST(request) {
 }
 
 export async function DELETE(request) {
-  if (!(await requireAdmin())) {
-    return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-  }
+  const deny = await denyIfNotAdmin();
+  if (deny) return deny;
   const id = new URL(request.url).searchParams.get("id");
   if (!id) {
     return NextResponse.json({ success: false, error: "삭제할 항목을 지정해 주세요." }, { status: 400 });

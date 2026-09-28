@@ -1,26 +1,19 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import { getSupporterSettings, fetchRoleHolders } from "@/lib/supporters";
 import SupporterAck from "@/models/SupporterAck";
 import Post from "@/models/Post";
-
-const requireAdmin = async () => {
-  const session = await getServerSession(authOptions);
-  return isAdminName(session?.user?.name);
-};
-const denied = () => NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
 
 // ── [조회] 서포터즈 공지별 확인 현황 — 공지 전체를 키로 싣는다(확인 0건인 공지도 count 0 으로) ──
 //    total 은 관리자 표와 같은 역할 보유자 명단(10분 캐시)에서 센다. ?refresh=1 이면 캐시를 무시한다.
 //    디스코드 조회가 실패해도 확인 현황은 보여야 하므로 그때는 total 을 null 로 두고 message 를 덧붙인다.
 export async function GET(request) {
   try {
-    if (!(await requireAdmin())) return denied();
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
 
     const sp = new URL(request.url).searchParams;

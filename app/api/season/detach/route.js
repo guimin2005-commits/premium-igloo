@@ -1,10 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import BotSetting from "@/models/BotSetting";
 import ShopItem from "@/models/ShopItem";
 import Item from "@/models/Item";
@@ -17,10 +15,8 @@ import Purchase from "@/models/Purchase";
 //    여기서는 "뗄 대상" 표시만 하고 디스코드는 건드리지 않는다.
 export async function POST(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!isAdminName(session?.user?.name)) {
-      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
 
     await connectToDatabase();
     const body = await request.json().catch(() => ({}));

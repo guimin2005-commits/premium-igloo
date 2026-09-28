@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 
-// 📌 디스코드 서버 상세 통계 (관리자 대시보드용, 5분 캐시)
+// 📌 디스코드 서버 상세 통계 (관리자 대시보드용, 5분 캐시) — 봇 토큰으로 길드를 읽으므로 관리자만
 export async function GET() {
   try {
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     const headers = { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` };
     const GUILD = process.env.DISCORD_GUILD_ID;
 

@@ -1,10 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import {
   isMonthKey,
   monthKeyKST,
@@ -15,12 +13,6 @@ import {
   defaultAvatar,
 } from "@/lib/supporters";
 import SupporterEval from "@/models/SupporterEval";
-
-const requireAdmin = async () => {
-  const session = await getServerSession(authOptions);
-  return isAdminName(session?.user?.name);
-};
-const denied = () => NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
 
 const pickEval = (e) =>
   e
@@ -38,7 +30,8 @@ const pickEval = (e) =>
 //    ?month=YYYY-MM (없으면 이번 달), ?refresh=1 이면 멤버 캐시를 무시한다
 export async function GET(request) {
   try {
-    if (!(await requireAdmin())) return denied();
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
 
     const sp = new URL(request.url).searchParams;
@@ -103,7 +96,8 @@ const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 //    body { userId, userName, month, grade, xp, point, note }
 export async function PUT(request) {
   try {
-    if (!(await requireAdmin())) return denied();
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const b = await request.json().catch(() => ({}));
 

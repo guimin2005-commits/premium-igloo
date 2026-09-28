@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "../../lib/mongodb";
-import { requireUser } from "@/lib/apiAuth";
+import { requireUser, denyIfMaintenance } from "@/lib/apiAuth";
 import Apply from "../../models/Apply";
 
 export async function POST(req) {
@@ -8,13 +8,17 @@ export async function POST(req) {
     // ⚠️ 지원자 식별은 세션 기준 — body의 discordTag를 믿으면 타인 명의로 지원서를 넣을 수 있다
     const auth = await requireUser();
     if (auth.deny) return auth.deny;
+    const maint = await denyIfMaintenance(auth.session);
+    if (maint) return maint;
 
     const data = await req.json();
     const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
 
     await connectToDatabase();
+    // 📌 ID 를 함께 저장한다 — 본인 조회 · 취소는 ID 로 한다(이름은 바뀔 수 있다). 이름(discordTag)은 표시용
     await Apply.create({
       discordTag: auth.name,
+      userId: String(auth.userId || ""),
       position: data.position || " ",
       age: data.age ? Number(data.age) : 0,
       intro: data.intro || " ",

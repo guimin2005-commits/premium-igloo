@@ -2,6 +2,15 @@ import mongoose from "mongoose";
 
 // 📌 봇 XP 기본 정책 — 레벨 대시보드(기본 정책 탭)에서 설정, 봇이 1분 주기 자동 반영
 //    단일 문서(key: "main")로 관리. bot/src/db.js 와 동일해야 함
+
+// 연속 출석 보너스 규칙 한 줄 — 정리(days 1~365 · 최대 10줄)는 app/api/bot-settings 가 한다
+const AttendStreakRuleSchema = new mongoose.Schema({
+  days: { type: Number, default: 1 },       // 연속 일수
+  xp: { type: Number, default: 0 },
+  point: { type: Number, default: 0 },      // 빙옥
+  repeat: { type: Boolean, default: false }, // true 면 days 의 배수마다
+}, { _id: false });
+
 const BotSettingSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true, default: "main" },
 
@@ -26,6 +35,9 @@ const BotSettingSchema = new mongoose.Schema({
   attendPoint: { type: Number, default: 0 },      // 출석 1회 POINT
   attendPassPoint: { type: Number, default: 0 },  // 출석 1회 패스 포인트
   attendVoiceMin: { type: Number, default: 60 },   // 일일 출석 인정 기준 — 음성 접속 누적 분       // 출석 1회 지급량
+  // 📌 연속 출석 보너스 — 기본 꺼짐. days 일 연속 달성 시 xp·point 지급, repeat 면 days 의 배수마다 (bot/src/attend.js)
+  attendStreakEnabled: { type: Boolean, default: false },
+  attendStreakRules: { type: [AttendStreakRuleSchema], default: [] },
 
   muteMode: { type: String, default: "reduce" },   // "off"(제한 없음) | "reduce"(감소) | "block"(차단)
   muteReducePct: { type: Number, default: 90 },    // reduce일 때 감소율 %
@@ -58,6 +70,13 @@ const BotSettingSchema = new mongoose.Schema({
   roleGrantChannelId: { type: String, default: "" },
   roleGrantMessage: { type: String, default: "🎖 {user} 님에게 **{role}** 역할이 지급되었습니다! (Lv.{level})" },
   roleGrantEnabled: { type: Boolean, default: true },
+
+  // 📌 시즌 결산 — RANKER 역할(상위 3인). 비우면 결산 기록(SeasonResult)만 하고 역할은 주지 않는다
+  rankerRoleId: { type: String, default: "" },
+
+  // 📌 기간제 만료 임박 DM — 만료 N시간 전에 한 번 (bot/src/features/expiryReminder.js)
+  expiryReminderEnabled: { type: Boolean, default: true },
+  expiryReminderHours: { type: Number, default: 24 }, // 1~168
 
   // 📌 서포터즈 — 역할 보유자만 /supporters 입장. 봇은 읽지 않지만 같은 문서라 스키마를 맞춰 둔다
   //    (bot/src/db.js 와 이름·기본값이 반드시 같아야 한다 — 빠지면 봇 upsert 때 기본값이 사라진다)

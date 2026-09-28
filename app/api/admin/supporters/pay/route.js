@@ -1,20 +1,12 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import { isMonthKey } from "@/lib/supporters";
 import { addPoints } from "@/lib/points";
 import SupporterEval from "@/models/SupporterEval";
 import Payout from "@/models/Payout";
-
-const requireAdmin = async () => {
-  const session = await getServerSession(authOptions);
-  return isAdminName(session?.user?.name);
-};
-const denied = () => NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
 
 // ── [지급] draft → paid 조건부 갱신 후 XP(Payout 큐)·POINT(즉시) 지급 ──
 //    body { userId, month }
@@ -24,7 +16,8 @@ const denied = () => NextResponse.json({ success: false, error: "권한이 없�
 //    큐 문서는 봇이 집어 가기 전(status pending)이면 확실히 지울 수 있다.
 export async function POST(request) {
   try {
-    if (!(await requireAdmin())) return denied();
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const b = await request.json().catch(() => ({}));
 
@@ -71,7 +64,8 @@ export async function POST(request) {
           source: "supporter",
         });
       }
-      if (point > 0) await addPoints(userId, point);
+      // 📌 빙옥은 Payout 을 거치지 않으므로 원장(WalletLog)에 따로 남긴다 — 내 XP · 빙옥 내역에 보이게
+      if (point > 0) await addPoints(userId, point, { kind: "admin", label: `서포터즈 활동 보상 ${month}` });
     } catch (e) {
       // 지급이 어긋나면 상태를 되돌려 다시 시도할 수 있게 한다. 봇이 아직 안 가져간 큐 문서는 지운다.
       if (queued) await Payout.deleteOne({ _id: queued._id, status: "pending" }).catch(() => {});

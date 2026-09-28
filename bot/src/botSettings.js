@@ -31,6 +31,13 @@ const DEFAULTS = {
   roleGrantChannelId: "",
   roleGrantMessage: "🎖 {user} 님에게 **{role}** 역할이 지급되었습니다! (Lv.{level})",
   roleGrantEnabled: true,
+  // 📌 .lean() 은 스키마 기본값을 채우지 않는다 — 이 필드가 생기기 전 문서에서 undefined 로 읽히지 않게 여기 둔다 (db.js 와 같은 기본값)
+  levelPublic: false, // 비공개면 봇이 XP 를 주지 않는다 (isLevelOpen)
+  rankerRoleId: "",
+  attendStreakEnabled: false,
+  attendStreakRules: [],
+  expiryReminderEnabled: true,
+  expiryReminderHours: 24,
 };
 
 let settings = { ...DEFAULTS };
@@ -54,6 +61,10 @@ export function startBotSettingLoop() {
 }
 
 export const getSettings = () => settings;
+
+// 📌 SYSTEM : LEVEL 공개 여부 — 비공개(false · 없음)면 봇이 스스로 만드는 XP(채팅 · 음성 · 출석 · 아이템 효과)를 주지 않는다.
+//    부팅 뒤 설정을 아직 못 읽었으면 비공개로 본다. 지급 대기열(Payout)은 이 값과 무관하다
+export const isLevelOpen = () => settings.levelPublic === true;
 
 // 지금 유효한 기간제 부스트 합산
 //  · 역할·채널 조건은 각각 비어 있으면 "제한 없음", 둘 다 있으면 모두 만족해야 적용

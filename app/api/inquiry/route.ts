@@ -2,8 +2,17 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { denyIfNotAdmin, requireSelfOrAdmin, getSession } from "@/lib/apiAuth";
+import { denyIfNotAdmin, denyIfMaintenance, requireSelfOrAdmin, requireUser, getSession } from "@/lib/apiAuth";
 import Inquiry from "../../models/Inquiry"; // (아까 해결하신 경로)
+
+// 📌 내 문의 — 디스코드 ID 로 찾는다(이름은 바뀔 수 있다). ID 가 비어 있는 옛 문서만 이름으로 찾는다
+//    (이름 폴백을 ID 있는 문서까지 넓히면, 같은 이름을 예전에 쓰던 다른 사람의 문의가 섞인다)
+function mineQuery(userId: string, name: string) {
+  const or: any[] = [];
+  if (userId) or.push({ userId });
+  if (name) or.push({ user: name, userId: { $in: ["", null] } });
+  return or.length ? { $or: or } : null;
+}
 
 // 1:1 문의는 사적인 내용(연락처·환불 정보 등)을 담으므로 열람 권한을 엄격히 나눈다.
 export async function GET(request: Request) {
@@ -11,10 +20,18 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const user = searchParams.get("user");
 
-    if (user) {
-      // 본인 문의 내역 — 남의 것은 볼 수 없다
-      const auth = await requireSelfOrAdmin(user);
+    let filter: any = {};
+    if (searchParams.get("mine") === "1") {
+      // 📌 내 문의 — 대상은 세션으로만 정한다. 이름을 넘기지 않으므로, 이름이 막 바뀌어 화면의 세션 이름이 옛것이어도 그대로 보인다
+      const auth: any = await requireUser();
       if (auth.deny) return auth.deny;
+      filter = mineQuery(String(auth.userId || ""), auth.name) || { _id: null };
+    } else if (user) {
+      // 본인 문의 내역 — 남의 것은 볼 수 없다
+      const auth: any = await requireSelfOrAdmin(user);
+      if (auth.deny) return auth.deny;
+      // 내 이름으로 물으면 ID 우선(이름을 바꿔도 내 문의가 그대로 보인다). 관리자가 남의 이름으로 물으면 이름으로
+      filter = user === auth.name ? mineQuery(String(auth.userId || ""), auth.name) || { _id: null } : { user };
     } else {
       // 파라미터가 없으면 전체 목록이므로 관리자만
       const deny = await denyIfNotAdmin();
@@ -22,9 +39,7 @@ export async function GET(request: Request) {
     }
 
     await connectToDatabase();
-    const inquiries = user
-      ? await Inquiry.find({ user }).sort({ createdAt: -1 })
-      : await Inquiry.find().sort({ createdAt: -1 });
+    const inquiries = await Inquiry.find(filter).sort({ createdAt: -1 });
     return NextResponse.json({ success: true, data: inquiries });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -54,6 +69,9 @@ export async function POST(request: Request) {
     // ⚠️ 작성자는 세션으로만 정한다 — 본문의 user · userId 를 믿으면 남의 이름으로 문의를 남기고
     //    답변 DM 을 엉뚱한 사람에게 보내게 할 수 있다. 비로그인은 상단의 비회원 문의로 들어온다.
     const session: any = await getSession();
+    // 📌 점검 중에는 접수하지 않는다 (관리자는 통과)
+    const maint = await denyIfMaintenance(session);
+    if (maint) return maint;
     const me = session?.user?.name ? session.user : null;
     const str = (k: string, n = 200) => (typeof data?.[k] === "string" ? data[k].trim().slice(0, n) : "");
     const mainType = str("mainType", 50);

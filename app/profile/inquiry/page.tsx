@@ -21,7 +21,7 @@ export default function MyInquiriesPage() {
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.name) return;
-    fetch(`/api/inquiry?user=${encodeURIComponent(session.user.name)}`, { cache: "no-store" })
+    fetch("/api/inquiry?mine=1", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => setRows(d?.success && Array.isArray(d.data) ? d.data.map((item: any) => ({
         id: item._id, type: item.mainType || "일반 문의", title: item.title || "제목 없음",

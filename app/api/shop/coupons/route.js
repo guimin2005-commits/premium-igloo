@@ -3,22 +3,16 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
 import { couponDiscount, couponError } from "@/lib/shopPricing";
 import Coupon from "@/models/Coupon";
-
-const requireAdmin = async () => {
-  const session = await getServerSession(authOptions);
-  return isAdminName(session?.user?.name);
-};
 
 // ── [조회] 쿠폰 목록 (관리자) ──
 export async function GET() {
   try {
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const coupons = await Coupon.find().sort({ createdAt: -1 }).lean();
     return NextResponse.json({ success: true, data: coupons });
@@ -53,9 +47,8 @@ export async function POST(request) {
     }
 
     // 관리자: 등록·수정
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     if (!b.code?.trim()) {
       return NextResponse.json({ success: false, message: "쿠폰 코드를 입력해주세요." }, { status: 400 });
     }
@@ -132,9 +125,8 @@ export async function POST(request) {
 // ── [삭제] (관리자) ──
 export async function DELETE(request) {
   try {
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return NextResponse.json({ success: false }, { status: 400 });

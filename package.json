@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "audit:api": "node scripts/audit-api-auth.mjs"
   },
   "dependencies": {
     "mongoose": "^9.7.1",

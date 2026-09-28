@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
+import { denyIfMaintenance } from "@/lib/apiAuth";
 import { authOptions } from "@/lib/authOptions";
 import { isSupporterSession } from "@/lib/supporters";
 import SupporterReaction from "@/models/SupporterReaction";
@@ -66,6 +67,8 @@ export async function POST(request) {
   try {
     const g = await gate();
     if (g.deny) return g.deny;
+    const maint = await denyIfMaintenance(g.session);
+    if (maint) return maint;
     await connectToDatabase();
 
     const b = await request.json().catch(() => ({}));

@@ -8,7 +8,7 @@ import { Reveal, LuxStyles } from "../components/Lux";
 import { AuctionStyles } from "../components/AuctionStyles";
 
 
-const ADMIN_USERS = ["elahw.06"];
+import { ADMIN_USERS } from "@/lib/admins";
 
 // 📌 공개 경매 화면 — 보는 곳이다(티켓 무대 · 지난 경매). 경매 개최 · 제목 수정 · 공개 전환 · 삭제는
 //    관리자 화면(/admin/auction)으로 옮겼다. 옛 주소 ?admin=1 은 그리로 보낸다.

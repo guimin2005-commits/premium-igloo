@@ -8,6 +8,8 @@ import { getPassState } from "@/lib/seasonPass";
 import { SEASON, getSeasonDday } from "@/lib/season";
 import { addPoints } from "@/lib/points";
 import { denyIfLevelClosed } from "@/lib/levelAccess";
+import { denyIfMaintenance } from "@/lib/apiAuth";
+import { logWallet } from "@/lib/wallet";
 import { xpToPoint } from "@/lib/pointRate";
 import { getLevelByXp } from "@/lib/leveling";
 import UserXp from "@/models/UserXp";
@@ -30,6 +32,9 @@ export async function POST(request) {
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
     }
+    // 점검 중에는 해금을 막는다 (관리자 통과)
+    const maint = await denyIfMaintenance(session);
+    if (maint) return maint;
 
     const body = await request.json().catch(() => ({}));
     const payMethod = body?.payMethod === "point" ? "point" : body?.payMethod === "xp" ? "xp" : "";
@@ -46,8 +51,10 @@ export async function POST(request) {
     if (!state.enabled) {
       return NextResponse.json({ success: false, message: "시즌 패스가 열려 있지 않습니다." }, { status: 403 });
     }
-    // 📌 끝난 시즌은 해금을 받지 않는다 — 시즌 번호(lib/season.js)는 손으로 올리므로 종료일 뒤에도 잠시 같은 시즌이 남는데,
-    //    그 사이 해금하면 번호가 바뀌는 순간 롤오버(getPassState)가 해금을 환불 없이 비운다. 수령은 막지 않는다(이미 번 보상)
+    // 📌 끝난 시즌은 해금을 받지 않는다 — 시즌은 lib/season.js 의 날짜로 자동으로 넘어가지만,
+    //    마지막 시즌이 끝난 뒤 다음 시즌을 SEASONS 에 넣기 전까지는 끝난 시즌이 지금 시즌으로 남는다(currentSeason).
+    //    그 사이 해금하면 새 시즌이 들어오는 순간 롤오버(getPassState)가 해금을 환불 없이 비운다. 수령은 막지 않는다(이미 번 보상)
+    //    시즌 경계(자정)에 걸친 요청은 아래 해금 표시 조건(passSeason)이 걸러 환불한다
     if (getSeasonDday().ended) {
       return NextResponse.json({ success: false, message: "시즌이 종료되었습니다." }, { status: 403 });
     }
@@ -87,8 +94,10 @@ export async function POST(request) {
     }
 
     // 2) 해금 표시 — 조건부로 세우고, 못 세웠으면 방금 받은 값을 되돌린다
+    //    시즌 번호는 한 번만 읽는다 — 조건과 원장 기록이 같은 시즌을 가리키게
+    const seasonNo = SEASON.number;
     const lock = await UserXp.updateOne(
-      { userId, passSeason: SEASON.number, passUnlocked: { $ne: true } },
+      { userId, passSeason: seasonNo, passUnlocked: { $ne: true } },
       { $set: { passUnlocked: true, passUnlockPaid: { method: payMethod, amount: charge }, updatedAt: new Date() } }
     );
     if (!lock.modifiedCount) {
@@ -111,6 +120,19 @@ export async function POST(request) {
         },
         { status: 409 }
       );
+    }
+
+    // 📌 해금 비용은 Payout · Purchase 에 남지 않으므로 원장에 남긴다 — 해금 표시까지 확정된 뒤에만
+    //    (위에서 되돌린 요청은 차감도 환불도 기록하지 않는다 — 내역에서 서로 상쇄될 줄을 만들지 않게)
+    if (charge > 0) {
+      await logWallet({
+        userId,
+        currency: payMethod,
+        amount: -charge,
+        kind: "pass-unlock",
+        label: `시즌 ${seasonNo} 패스 프리미엄 해금`,
+        meta: { season: seasonNo },
+      });
     }
 
     const bal = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();

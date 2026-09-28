@@ -2,7 +2,9 @@
 // 고급 이글루 레벨링 봇 v2
 //  · 채팅 / 음성 / 출석 XP — 지급량·쿨타임·주기 모두 대시보드에서 설정
 //  · 역할·채널·기간제 부스트, 음소거 정책, 퇴장 시 초기화
-//  · /레벨 /랭크 · 레벨업 알림 · 보상 역할 자동 지급 · XP 로그 (출석은 사이트에서 수령)
+//  · /레벨 /랭크 /출석체크 /퀘스트 /인벤토리 /시즌패스 · 레벨업 알림 · 보상 역할 자동 지급 · XP 로그
+//  · 출석은 /출석체크 또는 음성 누적 자동 출석 (attend.js) · 레벨 비공개(levelPublic) 동안은 XP 를 주지 않는다
+//  · 상점 지급 큐 · 만료 임박 DM · 시즌 결산(RANKER) · 생존 신호(대시보드 봇 상태)
 //  사이트와 동일한 MongoDB 사용 → 웹 레벨 대시보드·랭킹과 실시간 연동
 // ═══════════════════════════════════════════════════════
 import { Client, GatewayIntentBits, Events } from "discord.js";
@@ -17,6 +19,10 @@ import { startVoiceXpLoop } from "./features/voiceXp.js";
 import { registerLeaveReset } from "./features/leaveReset.js";
 import { startGrantQueue } from "./features/grantQueue.js";
 import { startScrimNudge } from "./features/scrimNudge.js";
+import { startHeartbeat, recordBotError } from "./features/heartbeat.js";
+import { startExpiryReminder } from "./features/expiryReminder.js";
+import { startSeasonSettle } from "./features/seasonSettle.js";
+import { refreshBotMessages, startBotMessageLoop } from "./botMessages.js";
 import { registerCommandDefinitions, registerCommandHandlers } from "./commands.js";
 
 const client = new Client({
@@ -37,6 +43,8 @@ if (!nudgeOnly) {
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`✅ 봇 로그인: ${c.user.tag}`);
+  // 생존 신호는 모드와 상관없이 가장 먼저 — 아래 등록 · 설정 로드가 늦어도 대시보드가 켜짐을 본다
+  startHeartbeat();
 
   if (nudgeOnly) {
     console.log("⚙️  재촉 DM 전용 모드 — 레벨링·출석·상점 지급은 켜지 않습니다");
@@ -52,15 +60,19 @@ client.once(Events.ClientReady, async (c) => {
     console.error("❌ 슬래시 커맨드 등록 실패 — 나머지는 계속 시작합니다:", e.message);
   }
 
-  await Promise.all([refreshRoleConfigs(), refreshItemEffects(), refreshChannelConfigs(), refreshBotSettings()]);
+  // 📌 봇 메시지 디자인도 여기서 먼저 읽는다 — 지급 큐 · 레벨업이 첫 메시지부터 저장된 디자인으로 나가게
+  await Promise.all([refreshRoleConfigs(), refreshItemEffects(), refreshChannelConfigs(), refreshBotSettings(), refreshBotMessages()]);
   startRoleConfigLoop();
   startItemEffectLoop(); // 보유 아이템 효과 — 아이템 등록 · 구매 변경을 1분 주기로 반영
   startChannelConfigLoop();
   startBotSettingLoop();
-  console.log("✅ 설정 로드 완료 — 역할·아이템 효과·채널·기본 정책 (1분 주기 갱신)");
+  startBotMessageLoop(c); // 봇 메시지 디자인 1분 주기 갱신 + 관리자 테스트 발송
+  console.log("✅ 설정 로드 완료 — 역할·아이템 효과·채널·기본 정책·봇 메시지 (1분 주기 갱신)");
 
   startVoiceXpLoop(c);
   startGrantQueue(c);
+  startExpiryReminder(c); // 기간제 만료 임박 DM (10분 주기)
+  startSeasonSettle(c); // 끝난 시즌 결산 · RANKER (5분 주기)
   startScrimNudge(c);
 });
 
@@ -86,5 +98,12 @@ const shutdown = async (signal) => {
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
-process.on("unhandledRejection", (e) => console.error("unhandledRejection:", e));
-process.on("uncaughtException", (e) => console.error("uncaughtException:", e));
+// 처리되지 않은 오류는 대시보드에서도 보이게 BotStatus.lastError 에 남긴다
+process.on("unhandledRejection", (e) => {
+  console.error("unhandledRejection:", e);
+  recordBotError(e);
+});
+process.on("uncaughtException", (e) => {
+  console.error("uncaughtException:", e);
+  recordBotError(e);
+});

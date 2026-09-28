@@ -1,10 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import { normalizeColor } from "@/lib/items";
 import Item from "@/models/Item";
 import InventoryRole from "@/models/InventoryRole";
@@ -15,10 +13,8 @@ import InventoryRole from "@/models/InventoryRole";
 //    가져온 InventoryRole 은 지우지 않고 visible=false 로만 내린다 (my-items 의 호환 fallback 이 더는 잡지 않게).
 export async function POST() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!isAdminName(session?.user?.name)) {
-      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
 
     const [rows, existing] = await Promise.all([

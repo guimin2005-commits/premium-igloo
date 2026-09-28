@@ -29,6 +29,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "운영",
     items: [
+      { title: "유저 조회", href: "/admin/users", icon: ICON_PATHS.user },
       { title: "1:1 문의", href: "/support?admin=1", icon: ICON_PATHS.chat, count: "inquiry" },
       { title: "구인 지원자", href: "/recruit?admin=1", icon: ICON_PATHS.briefcase, count: "apply" },
       { title: "알림 발송", href: "/admin/notify", icon: ICON_PATHS.bell },
@@ -43,6 +44,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { title: "레벨 설정", href: "/admin/bot", icon: ICON_PATHS.chart },
       { title: "시즌 패스", href: "/admin/pass", icon: ICON_PATHS.star },
+      { title: "봇 메시지", href: "/admin/messages", icon: ICON_PATHS.sparkles },
     ],
   },
   {

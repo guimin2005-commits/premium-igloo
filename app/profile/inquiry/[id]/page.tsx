@@ -17,7 +17,7 @@ export default function InquiryDetailPage() {
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.name) return;
-    fetch(`/api/inquiry?user=${encodeURIComponent(session.user.name)}`, { cache: "no-store" })
+    fetch("/api/inquiry?mine=1", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         const rows = d?.success && Array.isArray(d.data) ? d.data : [];

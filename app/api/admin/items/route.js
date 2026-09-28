@@ -1,10 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import mongoose from "mongoose";
 import { normalizeItemPayload, itemSnapshot } from "@/lib/items";
 import { normalizeEffects } from "@/lib/itemEffects";
@@ -55,17 +53,12 @@ async function passUsageOf() {
 }
 
 // 📌 아이템 등록 CRUD — 관리자 전용. 인벤토리 / 상점 상품 / 시즌 패스 보상 표기의 원천.
-const requireAdmin = async () => {
-  const session = await getServerSession(authOptions);
-  return isAdminName(session?.user?.name);
-};
 
 // ── [조회] 전체 목록 — ?withUsage=1 이면 이 아이템을 쓰는 상품 수를 함께 준다 ──
 export async function GET(request) {
   try {
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const withUsage = new URL(request.url).searchParams.get("withUsage") === "1";
     const rows = await Item.find({}).sort({ sortOrder: 1, createdAt: 1 }).lean();
@@ -96,9 +89,8 @@ export async function GET(request) {
 //    수정 시 이 아이템을 참조하는 상품(ShopItem.itemId)의 스냅샷도 함께 갱신한다.
 export async function POST(request) {
   try {
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const b = await request.json().catch(() => ({}));
     const n = normalizeItemPayload(b);
@@ -137,9 +129,8 @@ export async function POST(request) {
 //    상점 관리에서 끌어 놓은 순서를 한 번에 쓴다. 인벤토리 · 상품 연결 목록이 이 순서를 따른다. 목록에 없는 아이템은 그대로 둔다.
 export async function PATCH(request) {
   try {
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     const b = await request.json().catch(() => ({}));
     const ids = [...new Set((Array.isArray(b?.order) ? b.order : []).map((v) => String(v || "")))].filter((v) => mongoose.isValidObjectId(v)).slice(0, 999);
     if (ids.length === 0) return NextResponse.json({ success: false, message: "순서를 받지 못했습니다." }, { status: 400 });
@@ -155,9 +146,8 @@ export async function PATCH(request) {
 // ── [삭제] ?id= — 참조 상품이 있으면 409 ──
 export async function DELETE(request) {
   try {
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const id = String(new URL(request.url).searchParams.get("id") || "").trim();
     if (!id) return NextResponse.json({ success: false, message: "삭제할 아이템을 지정해 주세요." }, { status: 400 });

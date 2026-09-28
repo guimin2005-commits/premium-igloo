@@ -7,6 +7,7 @@ import Post from "@/models/Post";
 import SurveyResponse from "@/models/SurveyResponse";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
+import { requireAdmin, denyIfMaintenance } from "@/lib/apiAuth";
 
 // [조회] ?postId=... — 본인 제출 여부 / 관리자는 전체 응답
 export async function GET(request) {
@@ -45,6 +46,8 @@ export async function POST(request) {
     await connectToDatabase();
     const session = await getServerSession(authOptions);
     if (!session?.user) return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
+    const maint = await denyIfMaintenance(session);
+    if (maint) return maint;
 
     const { postId, answers, privacyAgreed } = await request.json();
     if (!postId) return NextResponse.json({ success: false, message: "postId가 필요합니다." }, { status: 400 });
@@ -113,10 +116,8 @@ export async function POST(request) {
 // [삭제] 관리자 — 응답 삭제
 export async function DELETE(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!isAdminName(session?.user?.name)) {
-      return NextResponse.json({ success: false, message: "관리자만 삭제할 수 있습니다." }, { status: 403 });
-    }
+    const { deny } = await requireAdmin();
+    if (deny) return NextResponse.json({ success: false, message: "관리자만 삭제할 수 있습니다." }, { status: 403 });
     await connectToDatabase();
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return NextResponse.json({ success: false }, { status: 400 });

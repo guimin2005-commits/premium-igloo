@@ -12,6 +12,7 @@ import { itemTypeLabel } from "@/lib/items";
 import ArcticFooter from "../ArcticFooter";
 import ArcticDock from "../ArcticDock";
 import CardArt from "../CardArt";
+import { renewBaseOf, expiryLabel } from "../owned";
 
 // 📌 결제 — 장바구니에서 고른 상품을 확인하고 약관 동의 후 결제
 export default function CheckoutPage() {
@@ -23,6 +24,8 @@ export default function CheckoutPage() {
   const [items, setItems] = useState<any[]>([]);
   const [myXp, setMyXp] = useState<number | null>(null);
   const [myPoint, setMyPoint] = useState<number | null>(null);
+  // 내 구매 — 기간제를 가진 상품을 기간제로 사면 '연장'(지금 만료 뒤에 이어 붙음)으로 표시한다 (owned.ts)
+  const [orders, setOrders] = useState<any[]>([]);
   // 📌 쓸 빙옥 개수 — 나머지는 XP 로 낸다. 화면 · 요청은 0 ~ 최대로 자른 값(usePoint)만 쓴다
   const [pointUse, setPointUse] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -58,9 +61,11 @@ export default function CheckoutPage() {
     Promise.all([
       fetch("/api/shop/items", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
-    ]).then(([it, me]) => {
+      fetch("/api/shop/purchase", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+    ]).then(([it, me, ord]) => {
       setItems(Array.isArray(it?.data) ? it.data : []);
       if (me?.success) { setMyXp(me.data.xp); setMyPoint(me.data.point ?? 0); }
+      setOrders(Array.isArray(ord?.data) ? ord.data : []);
     }).finally(() => setIsLoading(false));
   }, [status, reloadKey]);
 
@@ -293,7 +298,10 @@ export default function CheckoutPage() {
                 <h2 className="text-sm font-black text-[#131313]">주문 상품 <span className="text-[#e91e3f]">{count}</span></h2>
               </div>
               <div className="divide-y divide-[#ededed]">
-                {rows.map((r) => (
+                {rows.map((r) => {
+                  // 연장 — 기간제를 가진 상품을 기간제로 산다. 새 만료 = 지금 가장 늦은 만료 + 고른 일수 (서버와 같은 계산)
+                  const base = (r.days ?? 0) > 0 ? renewBaseOf(orders, r.item) : null;
+                  return (
                   <div key={r.itemId} className="px-6 py-4 flex gap-4 items-center">
                     {/* 썸네일 — 상점 카드와 같은 그림(이미지 없으면 등록 색 + 아이콘) */}
                     <div className="relative w-14 h-14 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
@@ -302,10 +310,10 @@ export default function CheckoutPage() {
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">
                         {r.item.name}
-                        {(r.days ?? 0) > 0 && <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#131313] text-white text-[10px] font-black">{durationLabel(r.days)}</span>}
+                        {(r.days ?? 0) > 0 && <span className={`shrink-0 px-1.5 py-0.5 rounded ${base != null ? "bg-[#e91e3f]" : "bg-[#131313]"} text-white text-[10px] font-black`}>{durationLabel(r.days)}{base != null ? " 연장" : ""}</span>}
                       </h3>
-                      <p className="text-[10px] font-bold text-[#8a8a8a] mt-0.5">
-                        {itemTypeLabel(r.item.type)} · 수량 {r.qty}
+                      <p className="text-[10px] font-bold text-[#8a8a8a] mt-0.5 truncate">
+                        {itemTypeLabel(r.item.type)} · 수량 {r.qty}{base != null && <> · <span className="tabular-nums">{expiryLabel(base + (r.days ?? 0) * 86400000)}까지</span></>}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
@@ -316,7 +324,8 @@ export default function CheckoutPage() {
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

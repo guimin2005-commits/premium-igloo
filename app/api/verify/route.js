@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/apiAuth";
+import { requireUser, denyIfMaintenance } from "@/lib/apiAuth";
 import { forgetGuildMember } from "@/lib/discordMember";
 
 export async function POST(request) {
@@ -8,6 +8,8 @@ export async function POST(request) {
     //    body의 userId를 믿으면 누구나 임의 계정에 서버 인증·내전 역할을 붙일 수 있다.
     const auth = await requireUser();
     if (auth.deny) return auth.deny;
+    const maint = await denyIfMaintenance(auth.session);
+    if (maint) return maint;
 
     const { acceptScrim } = await request.json();
     const userId = auth.userId;

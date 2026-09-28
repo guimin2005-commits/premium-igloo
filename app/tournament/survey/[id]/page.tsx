@@ -6,7 +6,7 @@ import { useRouter, useParams } from "next/navigation";
 import { LuxStyles } from "../../../components/Lux";
 import { EsportsStyles } from "../../../components/Esports";
 
-const ADMIN_USERS = ["elahw.06"];
+import { ADMIN_USERS } from "@/lib/admins";
 
 const TYPE_LABEL: Record<string, string> = { short: "단답형", long: "장문형", single: "객관식", multi: "복수선택" };
 

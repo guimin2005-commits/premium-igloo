@@ -1,16 +1,9 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import BotSetting from "@/models/BotSetting";
-
-const requireAdmin = async () => {
-  const session = await getServerSession(authOptions);
-  return isAdminName(session?.user?.name);
-};
 
 // 숫자 필드는 음수/NaN을 막고 상한을 둔다 (봇이 그대로 지급에 사용하므로)
 const num = (v, def, { min = 0, max = 10_000_000 } = {}) => {
@@ -21,11 +14,31 @@ const num = (v, def, { min = 0, max = 10_000_000 } = {}) => {
   return Math.min(max, Math.max(min, Math.floor(n)));
 };
 
+// 📌 새로 붙은 칸은 본문에 없으면(이 칸을 모르는 옛 화면이 저장) 저장된 값을 그대로 둔다 — 기본값으로 덮지 않게
+const bool = (v, cur, def) => (typeof v === "boolean" ? v : typeof cur === "boolean" ? cur : def);
+
+// 연속 출석 보너스 규칙 정리 — days 1~365 정수 · xp/point 0~10,000,000 · 보상 없는 줄과 같은 일수 중복은 버림 · 최대 10줄
+const MAX_STREAK_RULES = 10;
+const cleanStreakRules = (rows) => {
+  const seen = new Set();
+  const out = [];
+  for (const r of (Array.isArray(rows) ? rows : []).slice(0, 50)) {
+    // 📌 일수는 자르지 않고 범위 밖이면 버린다 — 400 을 365 로 바꾸면 관리자가 적은 365 줄이 중복으로 밀려난다
+    const days = num(r?.days, 0, { min: 0, max: Infinity });
+    const xp = num(r?.xp, 0);
+    const point = num(r?.point, 0);
+    if (days < 1 || days > 365 || (xp <= 0 && point <= 0) || seen.has(days)) continue;
+    seen.add(days);
+    out.push({ days, xp, point, repeat: r?.repeat === true });
+    if (out.length >= MAX_STREAK_RULES) break;
+  }
+  return out.sort((a, b) => a.days - b.days);
+};
+
 export async function GET() {
   try {
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     // 없으면 스키마 기본값으로 생성
     const doc = await BotSetting.findOneAndUpdate(
@@ -41,9 +54,8 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const b = await request.json();
     // 📌 숫자 칸을 비우고 저장하면 "" 가 온다 — 기본값으로 되돌리지 않고 지금 저장된 값을 그대로 둔다
@@ -101,6 +113,14 @@ export async function POST(request) {
         supporterBaseXp: num(b.supporterBaseXp, 150000),
         supporterGoalChat: num(b.supporterGoalChat, 0),
         supporterGoalVoiceMin: num(b.supporterGoalVoiceMin, 0),
+        // 시즌 결산 RANKER 역할 — "" 는 '역할 주지 않음'. 본문에 없으면 저장값 유지
+        rankerRoleId: typeof b.rankerRoleId === "string" ? b.rankerRoleId.trim().slice(0, 32) : cur?.rankerRoleId || "",
+        // 연속 출석 보너스 — 본문에 배열이 없으면 저장된 규칙 유지
+        attendStreakEnabled: bool(b.attendStreakEnabled, cur?.attendStreakEnabled, false),
+        attendStreakRules: cleanStreakRules(Array.isArray(b.attendStreakRules) ? b.attendStreakRules : cur?.attendStreakRules),
+        // 만료 임박 DM — 1~168시간 전
+        expiryReminderEnabled: bool(b.expiryReminderEnabled, cur?.expiryReminderEnabled, true),
+        expiryReminderHours: num(b.expiryReminderHours, cur?.expiryReminderHours ?? 24, { min: 1, max: 168 }),
         updatedAt: new Date(),
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }

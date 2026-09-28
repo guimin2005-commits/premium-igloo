@@ -21,6 +21,7 @@ import {
   labelClass,
   fieldNote,
   Toggle,
+  Switch,
   Btn,
   SaveBar,
   Toolbar,
@@ -87,8 +88,8 @@ const TAB_ORDER: { id: string; short: string }[] = [
 //    sec 가 오면 그 묶음이 옮겨 간 패널(id="sec-…")로 스크롤해 준다.
 //    mute 는 예전 '음소거 · 퇴장' 묶음에 공개 토글이 함께 있었고, 그 주소로 오는 쪽은 전부 공개 토글을 찾는다.
 const SEC_ANCHOR: Record<string, Record<string, string>> = {
-  policy: { xp: "xp", enhance: "enhance", mute: "public", public: "public", levelup: "levelup", rolegrant: "rolegrant" },
-  roles: { reward: "reward", tier: "tier", inventory: "inventory", supporter: "supporter", protected: "protected" },
+  policy: { xp: "xp", enhance: "enhance", mute: "public", public: "public", levelup: "levelup", rolegrant: "rolegrant", streak: "streak", expiry: "expiry" },
+  roles: { reward: "reward", tier: "tier", inventory: "inventory", supporter: "supporter", protected: "protected", ranker: "ranker" },
   content: { channels: "channels", quests: "quests", boosts: "boosts" },
   ledger: { grant: "grant", logs: "logs", reset: "reset" },
 };
@@ -158,6 +159,34 @@ const EMPTY_CHANNEL = { channelId: "", boostXp: "", excluded: false };
 const EMPTY_BOOST = { id: "", name: "", targetRoleId: "", targetChannelId: "", boostXp: "", startAt: "", endAt: "" };
 const EMPTY_QUEST = { id: "", name: "", desc: "", period: "daily", reason: "chat", metric: "count", target: 1, rewardXp: 0, rewardPoint: 0, enabled: true, order: 0 };
 
+// 📌 연속 출석 보너스 규칙 — BotSetting.attendStreakRules 한 줄. 입력 중엔 글자로 들고, 정리는 app/api/bot-settings 가 한다
+const EMPTY_STREAK_RULE = { days: "", xp: "", point: "", repeat: false };
+const MAX_STREAK_RULES = 10; // app/api/bot-settings 와 같은 상한
+const STREAK_COLS = ["연속 일수", "XP", "빙옥", "배수마다 반복"];
+// 서버는 잘못된 줄(일수 범위 밖 · 보상 없음 · 같은 일수)을 말없이 버린다 — 저장 전에 알려 준다
+const streakRuleError = (rows: any): string => {
+  if (!Array.isArray(rows)) return "";
+  const seen = new Set<number>();
+  for (const r of rows) {
+    const days = Number(r?.days);
+    if (!Number.isInteger(days) || days < 1 || days > 365) return "연속 일수는 1~365 사이로 입력해 주세요.";
+    // 서버는 소수점을 버린다(0.5 → 0) — 같은 기준으로 본다
+    if (!(Math.floor(Number(r?.xp)) > 0) && !(Math.floor(Number(r?.point)) > 0)) return `${days}일 규칙에 보상이 없습니다.`;
+    if (seen.has(days)) return `${days}일 규칙이 두 개입니다.`;
+    seen.add(days);
+  }
+  return "";
+};
+
+// 시즌 결과의 RANKER 역할 지급 상태
+//    📌 봇(seasonSettle)은 요청된 것뿐 아니라 결산 때 역할이 정해진(rankerRoleId) 결과도 스스로 집는다 — 둘 다 '대기'
+const rankerQueued = (r: any) => !r.roleGrantedAt && !r.error && (!!r.roleGrantRequested || !!r.rankerRoleId);
+const rankerStatus = (r: any): { l: string; tone: "ok" | "warn" | "bad" | "neutral" } =>
+  r.roleGrantedAt ? { l: "지급 완료", tone: "ok" }
+  : r.error ? { l: "지급 실패", tone: "bad" }
+  : rankerQueued(r) ? { l: "지급 대기", tone: "warn" }
+  : { l: "미지급", tone: "neutral" };
+
 // ── 저장 줄(SaveBar) 용 ─────────────────────────────────────
 //    설정은 BotSetting 단일 문서 하나라 정책 · 서포터즈 · 보호 역할 · 퀘스트 노출이 모두 같은 저장을 탄다.
 //    그래서 저장 줄도 하나 — 불러온 값(스냅샷)과 지금 값을 비교해 바뀐 게 있으면 어느 탭에서든 뜬다
@@ -170,6 +199,10 @@ const SETTING_LABEL: Record<string, string> = {
   voiceIntervalSec: "음성 지급 주기",
   attendXp: "출석체크 XP",
   attendVoiceMin: "출석 인정 시간",
+  attendStreakEnabled: "연속 출석 보너스",
+  attendStreakRules: "연속 출석 규칙",
+  expiryReminderEnabled: "만료 알림",
+  expiryReminderHours: "만료 알림 시점",
   ...Object.fromEntries(ENHANCE_FIELDS.flatMap((g) => g.fields.map((f) => [f.key, `${g.label} 강화 ${f.label}`]))),
   muteMode: "음소거 처리",
   muteReducePct: "감소 비율",
@@ -187,6 +220,7 @@ const SETTING_LABEL: Record<string, string> = {
   supporterGoalChat: "서포터즈 월 목표 채팅",
   supporterGoalVoiceMin: "서포터즈 월 목표 음성",
   protectedRoleIds: "보호 역할",
+  rankerRoleId: "RANKER 역할",
   questPickDaily: "일일 노출 개수",
   questPickWeekly: "주간 노출 개수",
   questPickMonthly: "월간 노출 개수",
@@ -202,15 +236,22 @@ const SETTING_DEFAULT: Record<string, number> = {
   questPickDaily: 0,
   questPickWeekly: 0,
   questPickMonthly: 0,
+  expiryReminderHours: 24,
   ...Object.fromEntries(ENHANCE_FIELDS.flatMap((g) => g.fields.map((f) => [f.key, f.def]))),
 };
-const SETTING_TEXT = new Set(["levelupMessage", "roleGrantMessage"]);
+const SETTING_TEXT = new Set(["levelupMessage", "roleGrantMessage", "attendStreakRules"]);
 // 입력칸은 문자열, 서버 값은 숫자 · 빈 값은 기본값처럼 — 겉보기가 같으면 같은 값으로 본다
 const normSetting = (k: string, v: any) => {
-  if (k === "roleGrantEnabled") return String(v !== false);
-  if (k === "resetOnLeave" || k === "shopPublic" || k === "levelPublic") return String(!!v);
+  if (k === "roleGrantEnabled" || k === "expiryReminderEnabled") return String(v !== false);
+  if (k === "resetOnLeave" || k === "shopPublic" || k === "levelPublic" || k === "attendStreakEnabled") return String(!!v);
   if (k === "muteMode") return v || "off";
   if (k === "muteTarget") return v || "both";
+  // 규칙 표 — 입력 중엔 글자("7"), 서버 값은 숫자(7)라 칸 모양으로 맞춰 비교한다
+  if (k === "attendStreakRules") {
+    return Array.isArray(v) && v.length
+      ? JSON.stringify(v.map((r: any) => [String(r?.days ?? ""), String(r?.xp ?? ""), String(r?.point ?? ""), !!r?.repeat]))
+      : "";
+  }
   if (Array.isArray(v)) return v.length ? JSON.stringify(v) : "";
   if (v == null && k in SETTING_DEFAULT) return String(SETTING_DEFAULT[k]);
   return v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
@@ -376,6 +417,12 @@ export default function AdminBotPage() {
   const [pickSnapshot, setPickSnapshot] = useState<Record<string, any> | null>(null);
   const [isProtectedRoleOpen, setIsProtectedRoleOpen] = useState(false);
 
+  // 시즌 결과(봇 결산) — 역할 탭의 RANKER 패널. rankerConfirm: 지급을 확인 중인 시즌 번호
+  const [seasonResults, setSeasonResults] = useState<any[]>([]);
+  const [seasonLoading, setSeasonLoading] = useState(true);
+  const [rankerConfirm, setRankerConfirm] = useState<number | null>(null);
+  const [rankerBusy, setRankerBusy] = useState(false);
+
   // ── 데이터 로드 ─────────────────────────────
   const fetchCore = useCallback(() => {
     Promise.all([
@@ -429,6 +476,18 @@ export default function AdminBotPage() {
       .catch(() => {});
   }, [isAdmin, tab, logPage, ledgerFilter, logQuery]);
 
+  // 시즌 결과 — 역할 탭에서만
+  const loadSeasonResults = useCallback(() => {
+    fetch("/api/admin/season-results", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setSeasonResults(Array.isArray(d?.data) ? d.data : []))
+      .catch(() => {})
+      .finally(() => setSeasonLoading(false));
+  }, []);
+  useEffect(() => {
+    if (isAdmin && tab === "roles") loadSeasonResults();
+  }, [isAdmin, tab, loadSeasonResults]);
+
   // ── 설정 저장 ───────────────────────────────
   const postSettings = async () => {
     const res = await fetch("/api/bot-settings", {
@@ -442,6 +501,8 @@ export default function AdminBotPage() {
   // 저장 줄의 '저장' — 설정 문서 전체를 기존 postSettings 로 보낸다
   const saveSettings = async () => {
     if (savingSettings) return;
+    const ruleErr = streakRuleError(settings?.attendStreakRules);
+    if (ruleErr) { notify(ruleErr, true); return; }
     setSavingSettings(true);
     try { await postSettings(); } finally { setSavingSettings(false); }
   };
@@ -799,7 +860,10 @@ export default function AdminBotPage() {
     if (k === "muteTarget") return MUTE_TARGETS.find((o) => o.v === (v || "both"))?.l || String(v);
     if (k === "levelupChannelId") return v ? `#${channelNameOf(v)}` : "알림 끄기";
     if (k === "roleGrantChannelId") return v ? `#${channelNameOf(v)}` : "레벨업 채널과 동일";
-    if (k === "supporterRoleId") return v ? roleNameOf(v) || v : "지정 안 함";
+    if (k === "supporterRoleId" || k === "rankerRoleId") return v ? roleNameOf(v) || v : "지정 안 함";
+    if (k === "attendStreakEnabled") return v ? "사용" : "사용 안 함";
+    if (k === "expiryReminderEnabled") return v !== false ? "사용" : "사용 안 함";
+    if (k === "expiryReminderHours") return v === "" ? "비움" : `${v ?? 24}시간 전`;
     if (k === "protectedRoleIds") return `${Array.isArray(v) ? v.length : 0}개`;
     const raw = v == null && k in SETTING_DEFAULT ? SETTING_DEFAULT[k] : v;
     if (raw == null || raw === "") return "비움";
@@ -811,6 +875,41 @@ export default function AdminBotPage() {
         .filter((k) => chg(k))
         .map((k) => (SETTING_TEXT.has(k) ? `${SETTING_LABEL[k]} 수정` : `${SETTING_LABEL[k]} ${fmtSetting(k, settingsSnap[k])} → ${fmtSetting(k, settings[k])}`))
     : [];
+
+  // ── 연속 출석 규칙 표 — 설정 문서의 배열이라 저장은 저장 줄(postSettings)을 탄다 ──
+  const streakRules: any[] = Array.isArray(settings?.attendStreakRules) ? settings.attendStreakRules : [];
+  const setStreakRule = (i: number, patch: Record<string, any>) =>
+    setSettings({ ...settings, attendStreakRules: streakRules.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
+  const addStreakRule = () => setSettings({ ...settings, attendStreakRules: [...streakRules, { ...EMPTY_STREAK_RULE }] });
+  const removeStreakRule = (i: number) => setSettings({ ...settings, attendStreakRules: streakRules.filter((_, j) => j !== i) });
+
+  // ── RANKER 역할 지급 — 저장된 역할(없으면 결산 때 역할)로 봇에 요청한다 ──
+  //    서버는 DB 의 설정을 읽는다 — 고르고 저장 안 한 역할로 지급된 줄 알면 안 된다
+  const rankerRoleFor = (r: any) => settingsSnap?.rankerRoleId || r?.rankerRoleId || "";
+  const askRankerGrant = (r: any) => {
+    if (chg("rankerRoleId")) return notify("RANKER 역할을 먼저 저장해 주세요.", true);
+    if (!rankerRoleFor(r)) return notify("RANKER 역할을 먼저 선택해 주세요.", true);
+    setRankerConfirm(r.season);
+  };
+  const requestRankerGrant = async (season: number) => {
+    if (rankerBusy) return;
+    setRankerBusy(true);
+    try {
+      const res = await fetch("/api/admin/season-results", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ season }),
+      });
+      const d = await res.json().catch(() => null);
+      if (res.ok && d?.success) notify(d.message || "지급을 요청했습니다.");
+      else notify(d?.message || "요청에 실패했습니다.", true);
+      loadSeasonResults();
+    } catch {
+      notify("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setRankerBusy(false);
+      setRankerConfirm(null);
+    }
+  };
+  const rankerTarget = rankerConfirm !== null ? seasonResults.find((r) => r.season === rankerConfirm) : null;
   // 노출 방식 칸은 자기 저장 · 취소가 있다 — 그 칸이 열린 동안 저장 줄까지 띄우면 저장 단추가 둘이 된다
   const showSaveBar = settingsDirty && !isFormOpen("questPick");
 
@@ -1108,6 +1207,70 @@ export default function AdminBotPage() {
                 </FieldRow>
               </Panel>
 
+              {/* 📌 연속 출석 보너스 — 켜기 + 규칙 표(설정 문서의 배열). 강화 표와 같은 모양: PC 는 네 칸 한 줄, 모바일은 두 칸씩 */}
+              <Panel
+                id="sec-streak"
+                className="scroll-mt-24"
+                title={<>연속 출석 보너스<Count n={streakRules.length} /></>}
+                right={<Btn variant="secondary" size="sm" onClick={addStreakRule} disabled={streakRules.length >= MAX_STREAK_RULES}>＋ 규칙</Btn>}
+                flush
+              >
+                <FieldRow label="보너스 사용" changed={chg("attendStreakEnabled")}>
+                  <Toggle
+                    on={!!settings.attendStreakEnabled}
+                    onClick={() => setSettings({ ...settings, attendStreakEnabled: !settings.attendStreakEnabled })}
+                    onLabel="사용 중"
+                    offLabel="사용 안 함"
+                  />
+                </FieldRow>
+                {streakRules.length === 0 ? (
+                  <PanelEmpty>규칙이 없습니다.</PanelEmpty>
+                ) : (
+                  <div className="px-5 py-4">
+                    <div className="hidden md:flex items-center gap-3 pb-2 text-[12px] font-bold text-[#5a5a5a]">
+                      <div className="flex-1 min-w-0 grid grid-cols-4 gap-3">
+                        {STREAK_COLS.map((c) => <span key={c} className="min-w-0 truncate">{c}</span>)}
+                      </div>
+                      <span className="w-8 shrink-0" />
+                    </div>
+                    {streakRules.map((r, i) => (
+                      <div key={i} className={`flex items-start md:items-center gap-3 py-3 border-[#ededed] ${i > 0 ? "border-t" : "md:border-t"}`}>
+                        <div className="flex-1 min-w-0 grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {(["days", "xp", "point"] as const).map((f, j) => (
+                            <label key={f} className="block min-w-0">
+                              <span className="md:hidden block mb-1 text-[12px] text-[#5a5a5a]">{STREAK_COLS[j]}</span>
+                              <input
+                                type="number"
+                                min={f === "days" ? 1 : 0}
+                                max={f === "days" ? 365 : 10_000_000}
+                                aria-label={`${i + 1}번째 규칙 ${STREAK_COLS[j]}`}
+                                value={r?.[f] ?? ""}
+                                onChange={(e) => setStreakRule(i, { [f]: e.target.value })}
+                                className={`${inputClass} tabular-nums`}
+                              />
+                            </label>
+                          ))}
+                          <div className="min-w-0">
+                            <span className="md:hidden block mb-1 text-[12px] text-[#5a5a5a]">{STREAK_COLS[3]}</span>
+                            <div className="h-10 flex items-center">
+                              <Switch on={!!r?.repeat} onChange={(v) => setStreakRule(i, { repeat: v })} label={`${i + 1}번째 규칙 ${STREAK_COLS[3]}`} />
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label={`${i + 1}번째 규칙 삭제`}
+                          onClick={() => removeStreakRule(i)}
+                          className="w-8 h-10 shrink-0 mt-5 md:mt-0 inline-flex items-center justify-center text-[#5a5a5a] hover:text-[#d01634] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Panel>
+
               <Panel title="음소거 처리" flush>
                 <FieldRow label="음소거 시 처리" changed={chg("muteMode")} hint="차단은 지급 자체를 건너뜁니다">
                   <Segmented options={MUTE_MODES} value={settings.muteMode || "off"} onChange={(v) => setSettings({ ...settings, muteMode: v })} />
@@ -1167,13 +1330,9 @@ export default function AdminBotPage() {
                     options={[{ value: "", label: "알림 끄기" }, ...textChannelOptions]}
                   />
                 </FieldRow>
-                <FieldRow
-                  label="알림 문구"
-                  top
-                  changed={chg("levelupMessage")}
-                  hint={<><b className="text-[#131313]">{"{user}"}</b> 멘션 · <b className="text-[#131313]">{"{level}"}</b> 도달 레벨 · <b className="text-[#131313]">{"{xp}"}</b> 누적 XP · 디스코드 마크다운(**굵게**) 사용 가능</>}
-                >
-                  <textarea rows={2} value={settings.levelupMessage} onChange={(e) => setSettings({ ...settings, levelupMessage: e.target.value })} className={`${inputClass} resize-none`} />
+                {/* 📌 문구는 봇 메시지 화면(임베드 디자인 · 문구)으로 옮겼다 — 여기엔 채널만 */}
+                <FieldRow label="알림 문구">
+                  <Link href="/admin/messages?key=levelUp" className={LINK_PILL}>문구·디자인 편집 →</Link>
                 </FieldRow>
               </Panel>
 
@@ -1196,13 +1355,33 @@ export default function AdminBotPage() {
                       options={[{ value: "", label: "레벨업 알림 채널과 동일" }, ...textChannelOptions]}
                     />
                   </FieldRow>
-                  <FieldRow
-                    label="알림 문구"
-                    top
-                    changed={chg("roleGrantMessage")}
-                    hint={<><b className="text-[#131313]">{"{user}"}</b> 멘션 · <b className="text-[#131313]">{"{role}"}</b> 지급된 역할명 · <b className="text-[#131313]">{"{level}"}</b> 도달 레벨</>}
-                  >
-                    <textarea rows={2} value={settings.roleGrantMessage || ""} onChange={(e) => setSettings({ ...settings, roleGrantMessage: e.target.value })} className={`${inputClass} resize-none`} />
+                  <FieldRow label="알림 문구">
+                    <Link href="/admin/messages?key=roleGrant" className={LINK_PILL}>문구·디자인 편집 →</Link>
+                  </FieldRow>
+                </div>
+              </Panel>
+
+              {/* 📌 기간제 만료 임박 DM — 만료 N시간 전에 한 번 (봇 expiryReminder). 1~168시간 */}
+              <Panel id="sec-expiry" className="scroll-mt-24" title="기간제 만료 알림" flush>
+                <FieldRow label="알림 사용" changed={chg("expiryReminderEnabled")}>
+                  <Toggle
+                    on={settings.expiryReminderEnabled !== false}
+                    onClick={() => setSettings({ ...settings, expiryReminderEnabled: settings.expiryReminderEnabled === false })}
+                    onLabel="사용 중"
+                    offLabel="사용 안 함"
+                  />
+                </FieldRow>
+                <div className={settings.expiryReminderEnabled === false ? "opacity-40 pointer-events-none" : ""}>
+                  <FieldRow label="보내는 시점" changed={chg("expiryReminderHours")}>
+                    <Inline>
+                      만료
+                      <input type="number" min={1} max={168} aria-label="만료 몇 시간 전" value={settings.expiryReminderHours ?? 24}
+                        onChange={(e) => setSettings({ ...settings, expiryReminderHours: e.target.value })} className={numClass} />
+                      시간 전
+                    </Inline>
+                  </FieldRow>
+                  <FieldRow label="DM 문구">
+                    <Link href="/admin/messages?key=expiryReminder" className={LINK_PILL}>문구·디자인 편집 →</Link>
                   </FieldRow>
                 </div>
               </Panel>
@@ -1401,6 +1580,68 @@ export default function AdminBotPage() {
                   )}
                 </FieldRow>
               )}
+            </Panel>
+
+            {/* 📌 RANKER — 역할은 설정 문서(저장 줄), 시즌 결과는 봇 결산(SeasonResult) 목록. 지급은 봇이 한다 */}
+            <Panel id="sec-ranker" className="scroll-mt-24" title="RANKER" flush>
+              {!settings ? loadingRow : (
+                <FieldRow label="RANKER 역할" changed={chg("rankerRoleId")}>
+                  <Dropdown
+                    theme="light"
+                    buttonClassName={DD}
+                    value={settings.rankerRoleId || ""}
+                    onChange={(v) => setSettings({ ...settings, rankerRoleId: v })}
+                    placeholder="역할을 선택하세요"
+                    options={[{ value: "", label: "지정 안 함" }, ...roleOptions(grantableRoles)]}
+                  />
+                </FieldRow>
+              )}
+              <div className="px-5 py-3 border-b border-[#ededed] text-[13px] font-bold">
+                시즌 결과<Count n={seasonResults.length} />
+              </div>
+              {seasonLoading ? loadingRow
+                : seasonResults.length === 0 ? <PanelEmpty>결산 기록이 없습니다.</PanelEmpty>
+                : (
+                  <div className="divide-y divide-[#ededed]">
+                    {seasonResults.map((r) => {
+                      const st = rankerStatus(r);
+                      const top: any[] = Array.isArray(r.top) ? r.top : [];
+                      // 지급 전이고, 봇 대기열에 없거나 지난 시도가 실패한 것만 요청할 수 있다 (app/api/admin/season-results 와 같은 조건)
+                      const canGrant = !r.roleGrantedAt && !rankerQueued(r) && top.length > 0;
+                      return (
+                        <div key={r.season} className="px-5 py-4 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="shrink-0 text-[12px] font-black text-[#8a8a8a] tabular-nums">S{r.season}</span>
+                            <span className="min-w-0 flex-1 truncate text-[14px] font-bold">{r.name || `시즌 ${r.season}`}</span>
+                            <StatusChip tone={st.tone} className="shrink-0">{st.l}</StatusChip>
+                          </div>
+                          {top.length > 0 && (
+                            <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              {top.map((t) => (
+                                <div key={t.rank} title={`${Number(t.xp || 0).toLocaleString()} XP`} className="min-w-0 flex items-center gap-2 px-3 py-2 bg-[#f2f2f2]">
+                                  <span className={`shrink-0 text-[12px] font-black tabular-nums ${t.rank === 1 ? "text-[#e91e3f]" : "text-[#5a5a5a]"}`}>{t.rank}</span>
+                                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{t.name || t.userId}</span>
+                                  <span className="shrink-0 text-[11px] font-bold text-[#8a8a8a] tabular-nums">Lv.{t.level}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {(r.error || canGrant) && (
+                            <div className="mt-2.5 flex items-center gap-3 min-w-0">
+                              {/* 📌 지급을 마친 뒤 남은 error 는 실패가 아니라 메모(서버에 없던 랭커 · 발표 실패 등) — 빨강 대신 회색 */}
+                              {r.error && <p className={`min-w-0 flex-1 text-[12px] break-keep ${r.roleGrantedAt ? "text-[#5a5a5a]" : "text-[#d01634]"}`}>{r.error}</p>}
+                              {canGrant && (
+                                <Btn variant="secondary" size="sm" className="ml-auto" disabled={rankerBusy} onClick={() => askRankerGrant(r)}>
+                                  RANKER 역할 지급
+                                </Btn>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
             </Panel>
 
             {/* 📌 표기는 이제 아이템 등록 한 곳에서 관리한다 — 여기 남은 옛 데이터는 그쪽의 가져오기 버튼이 옮긴다 */}
@@ -1999,6 +2240,23 @@ export default function AdminBotPage() {
             XP 기록이 있는 <strong className="text-[#131313]">모든 유저</strong>에게{" "}
             <strong className="text-[#e91e3f]">{grantItems.find((it) => it._id === itemGrant.itemId)?.name || "아이템"}</strong>
             을 지급합니다. 이미 보유한 유저는 건너뜁니다.
+          </p>
+        }
+      />
+
+      {/* RANKER 역할 지급 — 디스코드 역할이 바로 붙으므로 대상 · 역할을 보여 주고 한 번 확인 */}
+      <ConfirmDialog
+        open={rankerConfirm !== null}
+        title="RANKER 역할 지급"
+        confirmLabel="지급"
+        busy={rankerBusy}
+        onCancel={() => setRankerConfirm(null)}
+        onConfirm={() => { if (rankerConfirm !== null) requestRankerGrant(rankerConfirm); }}
+        body={
+          <p className="break-keep">
+            시즌 {rankerConfirm} 상위 {(rankerTarget?.top || []).map((t: any) => t.name || t.userId).join(" · ") || "-"} 님에게{" "}
+            <strong className="text-[#131313]">{roleNameOf(rankerRoleFor(rankerTarget)) || rankerRoleFor(rankerTarget) || "-"}</strong>
+            {" "}역할을 지급합니다.
           </p>
         }
       />

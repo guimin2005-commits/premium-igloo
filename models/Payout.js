@@ -13,4 +13,7 @@ const PayoutSchema = new mongoose.Schema({
   paidAt: { type: Date },
 });
 
+// 📌 내 XP · 빙옥 내역(/api/xp/ledger)과 관리자 유저 조회가 한 사람의 지급 기록을 최신순으로 읽는다 — 없으면 매번 전체를 훑는다
+PayoutSchema.index({ userId: 1, status: 1, paidAt: -1 });
+
 export default mongoose.models.Payout || mongoose.model("Payout", PayoutSchema);

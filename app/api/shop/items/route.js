@@ -1,20 +1,13 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import { getShopAccess } from "@/lib/shopAccess";
 import { isItemType, itemSnapshot, normalizeIcon, normalizeColor, normalizeDescription } from "@/lib/items";
 import mongoose from "mongoose";
 import ShopItem from "@/models/ShopItem";
 import Item from "@/models/Item";
-
-const requireAdmin = async () => {
-  const session = await getServerSession(authOptions);
-  return isAdminName(session?.user?.name);
-};
 
 // ── [조회] 상품 목록 — 공개 전에는 관리자만, 일반 유저는 판매 중인 상품만 ──
 export async function GET(request) {
@@ -38,9 +31,8 @@ export async function GET(request) {
 // ── [등록·수정] 관리자 전용 ──
 export async function POST(request) {
   try {
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     let b = await request.json();
 
@@ -155,9 +147,8 @@ export async function POST(request) {
 //    상점 관리에서 끌어 놓은 순서를 한 번에 쓴다. 목록에 없는 상품(그 사이 새로 생긴 것)은 건드리지 않는다.
 export async function PATCH(request) {
   try {
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     const b = await request.json().catch(() => ({}));
     const ids = [...new Set((Array.isArray(b?.order) ? b.order : []).map((v) => String(v || "")))].filter((v) => mongoose.isValidObjectId(v)).slice(0, 1000);
     if (ids.length === 0) return NextResponse.json({ success: false, message: "순서를 받지 못했습니다." }, { status: 400 });
@@ -173,9 +164,8 @@ export async function PATCH(request) {
 // ── [삭제] 관리자 전용 ──
 export async function DELETE(request) {
   try {
-    if (!(await requireAdmin())) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return NextResponse.json({ success: false }, { status: 400 });

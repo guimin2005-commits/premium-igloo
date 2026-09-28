@@ -1,10 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import Post from "@/models/Post";
 import SurveyResponse from "@/models/SurveyResponse";
 
@@ -42,10 +40,8 @@ const matchRole = (value, roleNames) => {
 
 export async function GET(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!isAdminName(session?.user?.name)) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
 
     await connectToDatabase();
     const { searchParams } = new URL(request.url);

@@ -11,7 +11,10 @@ const UserXpSchema = new mongoose.Schema({
   lastAttendDate: { type: String, default: "" }, // "2026-07-05" (KST)
   // 스키마에 없으면 strict 모드에서 $inc 가 조용히 버려진다 — 사이트가 이 값을 보여주므로 반드시 필요
   attendCount: { type: Number, default: 0 },
-  // POINT 관련 — 봇은 쓰지 않지만 upsert 로 문서를 만들 때 default 가 필요하다
+  // 📌 연속 출석 — claimAttendance(attend.js)가 씀. 어제 출석이면 +1, 끊기면 1 부터 (models/UserXp.js 와 같아야 한다)
+  attendStreak: { type: Number, default: 0 },     // 지금 연속 일수
+  attendBestStreak: { type: Number, default: 0 }, // 최고 연속 일수
+  // POINT 관련 — 봇은 연속 출석 보너스 빙옥(attend.js)만 $inc 한다. upsert 로 문서를 만들 때 default 도 필요하다
   point: { type: Number, default: 0 },
   pointTierPaid: { type: Number, default: 0 },
   // 누적 음성 참여 시간(초) — 시즌 무관 통산 기록 (VOICE_TIME_START 이후부터 적립)
@@ -108,6 +111,14 @@ const ChannelConfigSchema = new mongoose.Schema({
 });
 export const ChannelConfig = mongoose.models.ChannelConfig || mongoose.model("ChannelConfig", ChannelConfigSchema);
 
+// 연속 출석 보너스 규칙 한 줄 (models/BotSetting.js 의 AttendStreakRuleSchema 와 같아야 한다)
+const AttendStreakRuleSchema = new mongoose.Schema({
+  days: { type: Number, default: 1 },       // 연속 일수
+  xp: { type: Number, default: 0 },
+  point: { type: Number, default: 0 },      // 빙옥
+  repeat: { type: Boolean, default: false }, // true 면 days 의 배수마다
+}, { _id: false });
+
 // 대시보드에서 관리하는 XP 기본 정책 (단일 문서 key:"main")
 const BotSettingSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true, default: "main" },
@@ -133,9 +144,17 @@ const BotSettingSchema = new mongoose.Schema({
   attendVoiceMin: { type: Number, default: 60 },
   attendPoint: { type: Number, default: 0 },      // 출석 1회 POINT
   attendPassPoint: { type: Number, default: 0 },  // 출석 1회 패스 포인트
+  // 📌 연속 출석 보너스 — 기본 꺼짐. days 일 연속 달성 시 xp·point, repeat 면 days 의 배수마다 (attend.js)
+  attendStreakEnabled: { type: Boolean, default: false },
+  attendStreakRules: { type: [AttendStreakRuleSchema], default: [] },
+  // 📌 시즌 결산 RANKER 역할 — 비우면 결산 기록만 하고 역할은 주지 않는다
+  rankerRoleId: { type: String, default: "" },
+  // 📌 기간제 만료 임박 DM — 만료 N시간 전에 한 번 (features/expiryReminder.js)
+  expiryReminderEnabled: { type: Boolean, default: true },
+  expiryReminderHours: { type: Number, default: 24 },
   // 봇은 안 쓰지만 사이트와 같은 문서라 빠지면 저장 때 날아갈 수 있다
   shopPublic: { type: Boolean, default: false },
-  levelPublic: { type: Boolean, default: false }, // SYSTEM : LEVEL 공개 (봇은 읽지 않지만 스키마 동기화)
+  levelPublic: { type: Boolean, default: false }, // SYSTEM : LEVEL 공개 — false 면 봇이 XP 를 주지 않는다 (botSettings.js isLevelOpen)
   // 시즌 전환 때도 절대 떼지 않는 역할 (펭귄 등급 등) — 표기 떼기가 이 목록을 먼저 읽는다
   protectedRoleIds: { type: [String], default: [] },
   muteMode: { type: String, default: "reduce" },  // "off" | "reduce" | "block"
@@ -206,6 +225,11 @@ const PurchaseSchema = new mongoose.Schema({
   days: { type: Number, default: 0 },
   expiresAt: { type: Date, default: null, index: true },
   revokedAt: { type: Date, default: null },
+  // 📌 만료 임박 DM 을 보낸 시각 — 조건부로 세워 한 번만 보낸다. 연장은 새 구매 문서라 연장분은 자기 값으로 따로 알린다
+  reminderSentAt: { type: Date, default: null },
+  // 📌 연장 구매 — 이어 붙인 원래 구매 _id("" 이면 새 구매) · 연장분이 시작되는 시각(표시용) (models/Purchase.js 와 같아야 한다)
+  renewOf: { type: String, default: "" },
+  startsAt: { type: Date, default: null },
   // 📌 사이트 보유 — 소유는 그대로 두고 디스코드 역할 표기만 뗀 상태.
   //    시즌이 바뀌면 디스코드가 역할로 지저분해지므로 표기를 사이트로 옮긴다.
   //    만료(expired)와는 다르다 — 물건은 계속 갖고 있고 인벤토리에도 그대로 뜬다.
@@ -250,6 +274,56 @@ const CodeGrantSchema = new mongoose.Schema({
   processedAt: { type: Date },
 });
 export const CodeGrant = mongoose.models.CodeGrant || mongoose.model("CodeGrant", CodeGrantSchema);
+
+// 📌 XP·빙옥 입출금 원장(보충분) — XpLog·Payout·Purchase 에 남지 않는 움직임만 (연속 출석 보너스 등).
+//    기록은 wallet.js 의 logWallet 으로만. 사이트 models/WalletLog.js 와 같아야 한다
+const WalletLogSchema = new mongoose.Schema({
+  userId: { type: String, required: true },   // (userId, createdAt) 인덱스의 앞머리로 조회된다
+  currency: { type: String, default: "xp" },   // "xp" | "point"(빙옥)
+  amount: { type: Number, default: 0 },        // + 들어옴 / - 나감
+  // enhance | pass-unlock | pass-point | tier-point | attend-point | streak | quest-point | admin | etc
+  kind: { type: String, default: "etc" },
+  label: { type: String, default: "" },
+  refId: { type: String, default: "" },
+  meta: { type: mongoose.Schema.Types.Mixed },
+  createdAt: { type: Date, default: Date.now, index: true },
+});
+WalletLogSchema.index({ userId: 1, createdAt: -1 });
+export const WalletLog = mongoose.models.WalletLog || mongoose.model("WalletLog", WalletLogSchema);
+
+// 📌 봇 생존 신호 (단일 문서 key:"main") — 관리자 대시보드가 lastSeen 으로 켜짐/꺼짐을 본다. 사이트 models/BotStatus.js 와 같아야 한다
+const BotStatusSchema = new mongoose.Schema({
+  key: { type: String, required: true, unique: true, default: "main" },
+  lastSeen: { type: Date, default: null },
+  startedAt: { type: Date, default: null },
+  version: { type: String, default: "" },
+  lastError: { type: String, default: "" },
+  lastErrorAt: { type: Date, default: null },
+});
+export const BotStatus = mongoose.models.BotStatus || mongoose.model("BotStatus", BotStatusSchema);
+
+// 📌 시즌 결산 — 시즌당 한 문서(season unique)라 두 번 결산되지 않는다. 사이트 models/SeasonResult.js 와 같아야 한다
+const SeasonTopSchema = new mongoose.Schema({
+  rank: { type: Number, default: 0 },
+  userId: { type: String, default: "" },
+  name: { type: String, default: "" },
+  xp: { type: Number, default: 0 },
+  level: { type: Number, default: 0 },
+}, { _id: false });
+const SeasonResultSchema = new mongoose.Schema({
+  season: { type: Number, required: true, unique: true },
+  name: { type: String, default: "" },
+  start: { type: String, default: "" }, // "YYYY-MM-DD" (KST)
+  end: { type: String, default: "" },
+  settledAt: { type: Date, default: Date.now },
+  top: { type: [SeasonTopSchema], default: [] },
+  rankerRoleId: { type: String, default: "" },
+  roleGrantRequested: { type: Boolean, default: false },
+  roleGrantedAt: { type: Date, default: null },
+  announcedAt: { type: Date, default: null },
+  error: { type: String, default: "" },
+});
+export const SeasonResult = mongoose.models.SeasonResult || mongoose.model("SeasonResult", SeasonResultSchema);
 
 /* ── 대회 룸 (사이트와 공유) ──────────────────
    ⚠️ 컬렉션 이름은 사이트의 models/Scrim.js 와 반드시 같아야 한다.

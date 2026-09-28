@@ -12,7 +12,7 @@ import ItemIcon from "../../../components/ItemIcon";
 import ArcticDock from "../../ArcticDock";
 import ArcticStoreBar from "../../ArcticStoreBar";
 import ArcticFooter from "../../ArcticFooter";
-import { ownsItem } from "../../owned";
+import { ownStateOf, renewBaseOf, renewPickOf, expiryLabel } from "../../owned";
 
 // 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천
 const TypeBadge = ({ type, className = "" }: { type: string; className?: string }) => (
@@ -133,13 +133,18 @@ export default function ItemDetailPage() {
   }
 
   const timed = isTimed(item);
-  // 안 골랐으면 카드와 같은 기간(무제한, 없으면 가장 긴 기간) — 카드에서 본 값과 상세 첫 값이 같게
-  const days = timed ? (pickedDays ?? cardPick(item)?.days ?? durationOptions(item)[0]?.days ?? 0) : 0;
+  // 기간제만 가졌으면 지금 만료(ms) — 기간제를 사면 이 뒤에 이어 붙는다 (owned.ts, 서버와 같은 기준)
+  const renewBase = renewBaseOf(orders, item);
+  // 안 골랐으면 카드와 같은 기간(무제한, 없으면 가장 긴 기간) — 카드에서 본 값과 상세 첫 값이 같게.
+  //    기간제를 가졌으면 연장이 기본 — 지금 가진 기간(없으면 가장 긴 기간제)으로 연다
+  const days = timed ? (pickedDays ?? (renewBase != null ? renewPickOf(orders, item) : null) ?? cardPick(item)?.days ?? durationOptions(item)[0]?.days ?? 0) : 0;
   const sp = salePrice(item, days);
   const listPrice = basePrice(item, days);
   const discounted = sp < listPrice;
-  // 서버와 같은 기준 — 연결된 아이템을 수동 지급 · 시즌 패스로 받은 건(itemRef)도 보유다 (owned.ts)
-  const owned = ownsItem(orders, item);
+  // 📌 보유 상태 — 서버와 같은 기준(owned.ts). 연결된 아이템을 수동 지급 · 시즌 패스로 받은 건(itemRef)도 보유다.
+  //    무제한 보유면 더 살 수 없다(보유 중). 기간제만 가졌으면 기간제는 연장(지금 만료 뒤에 이어 붙음) · 무제한은 업그레이드로 산다
+  const owned = ownStateOf(orders, item) === "forever";
+  const renewing = renewBase != null && days > 0;
   const inCart = cart.some((c) => c.itemId === item._id);
   // 📌 장바구니 개수 — 장바구니 화면과 같은 기준: 목록에 없는(삭제·숨김) 상품 · 같은 상품 중복은 세지 않는다.
   //    목록을 못 받았으면 저장된 그대로 센다
@@ -172,7 +177,7 @@ export default function ItemDetailPage() {
       return;
     }
     saveCart([...cart, { itemId: item._id, qty: 1, days }]);
-    flash("장바구니에 담았습니다");
+    flash(renewing ? "기간 연장을 장바구니에 담았습니다" : "장바구니에 담았습니다");
   };
 
   const toggleWish = () => {
@@ -253,7 +258,7 @@ export default function ItemDetailPage() {
                     );
                   })}
                 </div>
-                <p className="text-[11px] text-[#8a8a8a] mt-2">기간이 끝나면 역할이 자동으로 회수되며, 그 뒤 다시 구매할 수 있습니다.</p>
+                {renewBase == null && <p className="text-[11px] text-[#8a8a8a] mt-2">기간이 끝나면 역할이 자동으로 회수되며, 그 뒤 다시 구매할 수 있습니다.</p>}
               </div>
             )}
 
@@ -288,6 +293,18 @@ export default function ItemDetailPage() {
                 </div>
               ))}
             </div>
+
+            {/* 📌 기간제 보유 — 지금 만료 → 고른 기간으로 산 뒤의 만료(무제한을 고르면 무제한) */}
+            {isLoggedIn && renewBase != null && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-white border border-[#ededed] mb-2 text-[13px]">
+                <span className="shrink-0 text-[#5a5a5a]">만료</span>
+                <span className="text-right font-black tabular-nums text-[#131313] break-keep">
+                  <span className="font-bold text-[#8a8a8a]">{expiryLabel(renewBase)}</span>
+                  <span className="mx-1.5 font-bold text-[#a3a3a3]">→</span>
+                  {days > 0 ? expiryLabel(renewBase + days * 86400000) : "무제한"}
+                </span>
+              </div>
+            )}
 
             {/* 보유 XP · 빙옥 — 둘 다 결제에 쓸 수 있다 */}
             {isLoggedIn && (
@@ -329,7 +346,7 @@ export default function ItemDetailPage() {
                     ? "bg-[#f2f2f2] text-[#8a8a8a]"
                     : "bg-[#e91e3f] text-white hover:bg-[#d01634]"
                 }`}>
-                {owned ? "보유 중" : soldOut ? "품절" : !isLoggedIn ? "로그인" : affordable ? "구매" : "XP 부족"}
+                {owned ? "보유 중" : soldOut ? "품절" : !isLoggedIn ? "로그인" : !affordable ? "XP 부족" : renewing ? "기간 연장" : "구매"}
               </button>
             </div>
           </div>

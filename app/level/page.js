@@ -23,6 +23,7 @@ import { ICON_PATHS } from "../components/Icons";
 // 팝업 틀 · 인벤토리 팝업 · 효과음은 내 정보 · ARCTIC 도 같이 쓴다 (app/components/PopShell · Inventory, lib/sfx)
 import { PopShell, PopTab, AdminReset } from "../components/PopShell";
 import { BagOverlay, buildInvGroups, mergeMyItems } from "../components/Inventory";
+import WalletHistory from "../components/WalletHistory";
 import { playTone } from "@/lib/sfx";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
@@ -1532,6 +1533,7 @@ export default function LevelPage() {
   const [quests, setQuests] = useState(null);
   const [questPeriod, setQuestPeriod] = useState("daily");
   const [tierOpen, setTierOpen] = useState(false);   // 등급 안내 모달
+  const [walletOpen, setWalletOpen] = useState(false); // XP · 빙옥 내역 팝업
   const [myItems, setMyItems] = useState(null);      // 보유 아이템 (디스코드 역할 대조)
   const [claiming, setClaiming] = useState("");
   const [pass, setPass] = useState(null);            // /api/pass — 시즌 패스 상태 (비활성/비로그인이면 null)
@@ -1846,6 +1848,12 @@ export default function LevelPage() {
     setTierOpen(true);
     playTone(660, 0.06, "sine", 0.03);
   };
+  // XP · 빙옥 내역 — 그 자리 팝업. 닫기는 부모가 다시 그려도 같은 함수(팝업의 Esc 처리가 흔들리지 않게)
+  const openWallet = () => {
+    setWalletOpen(true);
+    playTone(660, 0.06, "sine", 0.03);
+  };
+  const closeWallet = useCallback(() => setWalletOpen(false), []);
   // 시즌 패스 창 여닫는 소리 — 강화 · 가방과 겹치지 않게 한 옥타브 위에서
   const openPass = () => {
     setPassOpen(true);
@@ -2228,6 +2236,7 @@ export default function LevelPage() {
         resetBusy={resetBusy === "pass"}
       />
       <ConfirmDialog state={confirmState} onDone={closeConfirm} />
+      <WalletHistory open={walletOpen} onClose={closeWallet} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
       <BagOverlay
         open={bagOpen}
         onClose={closeBag}
@@ -2331,7 +2340,7 @@ export default function LevelPage() {
                       <svg viewBox="0 0 24 24" className="w-6 h-6 mx-auto mb-4" fill="none" stroke="rgba(0,0,0,0.4)" strokeWidth="1.5"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
                       <p className="text-[10px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase mb-2.5">관전 모드</p>
                       <p className="text-sm font-bold text-[#131313] mb-7">내 대시보드가 잠겨 있습니다</p>
-                      <button onClick={() => signIn("discord", { callbackUrl: "/level" })} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors shadow-[0_10px_30px_rgba(233,30,63,0.35)] outline-none focus:outline-none">Discord로 로그인</button>
+                      <button onClick={() => signIn("discord", { callbackUrl: window.location.pathname + window.location.search })} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors shadow-[0_10px_30px_rgba(233,30,63,0.35)] outline-none focus:outline-none">Discord로 로그인</button>
                       {process.env.NODE_ENV === "development" && (
                         <button onClick={() => signIn("devlogin", { callbackUrl: "/level" })} className="mt-3.5 text-[11px] font-bold text-[#a3a3a3] hover:text-[#131313] underline underline-offset-4 transition-colors outline-none focus:outline-none">로컬 확인용 로그인 (dev)</button>
                       )}
@@ -2523,7 +2532,7 @@ export default function LevelPage() {
                         {/* 스탯 — 모바일에서 XP 테이블 · 시뮬레이터를 볼 때는 접는다 (화면이 너무 길어진다) */}
                         <div className={`${deskOverview ? "grid" : "hidden lg:grid"} grid-cols-2 mt-4 pt-2 border-t border-white/10`}>
                           {[
-                            { l: "누적 XP", v: (me.xp || 0).toLocaleString() },
+                            { l: "누적 XP", v: (me.xp || 0).toLocaleString(), wallet: true },
                             { l: "오늘 획득", v: `+${todayTotal.toLocaleString()}`, hot: todayTotal > 0 },
                             { l: "누적 출석", v: `${(me.attendCount || 0).toLocaleString()}일` },
                             voiceTracked
@@ -2531,7 +2540,22 @@ export default function LevelPage() {
                               : { l: "누적 음성 시간", v: `${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터`, dim: true },
                           ].map((st, i) => (
                             <div key={i} className={`min-w-0 py-3 ${i % 2 === 0 ? "pr-4 border-r border-white/10" : "pl-4"}`}>
-                              <p className="text-[11px] font-bold text-white/45 mb-2 truncate">{st.l}</p>
+                              {st.wallet ? (
+                                // 📌 XP · 빙옥 내역 — 라벨 줄 안의 작은 알약. 음수 여백으로 줄 높이를 키우지 않아 옆 칸과 높이가 그대로다
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                  <p className="min-w-0 text-[11px] font-bold text-white/45 truncate">{st.l}</p>
+                                  <button
+                                    type="button"
+                                    onClick={openWallet}
+                                    aria-label="XP · 빙옥 내역"
+                                    className="shrink-0 -my-1 inline-flex items-center h-5 px-2 rounded-full border border-white/20 text-[10px] font-bold text-white/60 hover:text-white hover:border-white/45 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                                  >
+                                    내역
+                                  </button>
+                                </div>
+                              ) : (
+                                <p className="text-[11px] font-bold text-white/45 mb-2 truncate">{st.l}</p>
+                              )}
                               <p className={`text-lg font-black tabular-nums tracking-tight leading-none truncate ${st.hot ? "text-[#ff5c77]" : st.dim ? "text-white/30" : "text-white"}`}>
                                 {st.v}
                               </p>

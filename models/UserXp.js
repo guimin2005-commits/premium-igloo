@@ -11,6 +11,9 @@ const UserXpSchema = new mongoose.Schema({
   lastChatXpAt: { type: Date, default: null },
   lastAttendDate: { type: String, default: "" }, // "2026-07-05" (KST)
   attendCount: { type: Number, default: 0 },
+  // 📌 연속 출석 — 봇 claimAttendance(bot/src/attend.js)가 씀. 어제 출석이면 +1, 끊기면 1 부터
+  attendStreak: { type: Number, default: 0 },     // 지금 연속 일수
+  attendBestStreak: { type: Number, default: 0 }, // 최고 연속 일수
   // 📌 POINT — 상점에서 XP 와 1:1 로 쓰는 소비 재화.
   //    레벨·등급에 영향을 주지 않으므로 봇 큐를 타지 않고 사이트가 직접 쓴다.
   point: { type: Number, default: 0 },

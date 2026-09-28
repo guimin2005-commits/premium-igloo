@@ -7,8 +7,34 @@ import { useAdminGuard, AdminPage, StatRow, Panel, PanelGrid, Switch, DefRow, St
 
 // 📌 대시보드 (2026-09 개편)
 //    예전엔 가운데 좁은 폭(max-w-5xl)에 번호 섹션(01 · 02)을 세로로 쌓고, 지표 · 차트가 전부 빨강이었다.
-//    지금은 전체 폭에 네 줄 — 숫자 줄 → [확인할 일 · 서버 현황] → [골든타임 · 멤버 증감] → [문의 · 콘텐츠].
+//    지금은 전체 폭에 다섯 줄 — 숫자 줄 → 봇 → [확인할 일 · 서버 현황] → [골든타임 · 멤버 증감] → [문의 · 콘텐츠].
 //    넓은 화면에서는 패널 두 개가 나란히, 좁으면 하나씩. 빨강은 "처리할 게 남았다"는 표시에만 쓴다.
+
+// 📌 봇 상태 (/api/admin/bot-status) — 봇이 꺼진 채 대기열이 쌓이는 걸 대시보드에서 바로 보게 한다
+type BotState = {
+  online: boolean;
+  agoSec: number | null;
+  lastError: string;
+  lastErrorAt: string | null;
+  pending: Record<string, number>;
+  pendingTotal: number;
+};
+const BOT_CELLS: { k: string; l: string }[] = [
+  { k: "payout", l: "XP 지급" },
+  { k: "purchase", l: "상품 역할" },
+  { k: "codeGrant", l: "코드 역할" },
+  { k: "roleSync", l: "레벨 역할" },
+  { k: "refund", l: "환불 회수" },
+  { k: "expired", l: "기간 만료" },
+  { k: "messageTest", l: "테스트 DM" },
+];
+const agoText = (sec: number | null) => {
+  if (sec == null) return "없음"; // "마지막 신호 없음"
+  if (sec < 60) return "방금";
+  if (sec < 3600) return `${Math.floor(sec / 60)}분 전`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}시간 전`;
+  return `${Math.floor(sec / 86400)}일 전`;
+};
 
 // 📌 히트맵 칸 강도 — 빨강 농도 대신 잉크(#131313) 알파 다섯 단계. 0 은 가장 옅게, 데이터 없는 칸은 더 옅게
 const HEAT_ALPHA = [0.05, 0.14, 0.3, 0.48, 0.68, 0.9];
@@ -36,6 +62,7 @@ export default function AdminHubPage() {
   const [activitySamples, setActivitySamples] = useState<any[]>([]);
   const [maintenance, setMaintenance] = useState(false);
   const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+  const [bot, setBot] = useState<BotState | null>(null);
 
   const toggleMaintenance = async () => {
     if (maintenanceLoading) return;
@@ -129,6 +156,25 @@ export default function AdminHubPage() {
       .catch(() => {});
   }, [isAdmin]);
 
+  // 📌 봇 상태 — 켜 둔 채 보는 화면이라 1분마다 다시 읽는다(탭이 가려져 있으면 건너뜀)
+  useEffect(() => {
+    if (!isAdmin) return;
+    let alive = true;
+    const load = () => {
+      if (document.hidden) return;
+      fetch("/api/admin/bot-status", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => { if (alive && d?.success) setBot(d.data); })
+        .catch(() => {});
+    };
+    load();
+    const t = setInterval(load, 60_000);
+    // 가려져 있다 돌아오면 바로 다시 — 한참 전의 "작동 중"이 최대 1분 동안 남지 않게
+    const onVis = () => { if (!document.hidden) load(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { alive = false; clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
+  }, [isAdmin]);
+
   // 📌 요일×시간대 온라인 히트맵 (KST, 최근 7일 평균)
   const heatmap = (() => {
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -182,6 +228,10 @@ export default function AdminHubPage() {
     { l: "이모지·스티커", n: ds ? ds.emojiCount + ds.stickerCount : undefined },
   ];
 
+  // 📌 봇이 꺼져 있는데 대기 건이 있으면 경고 톤 — 판 테두리 · 숫자를 빨강으로
+  const botAlert = !!bot && !bot.online && bot.pendingTotal > 0;
+  const botCells = [{ k: "total", l: "대기 합계", n: bot?.pendingTotal }, ...BOT_CELLS.map((c) => ({ ...c, n: bot?.pending?.[c.k] }))];
+
   const inquiryMax = Math.max(...stats.inquiryDaily.map((x) => x.count), 1);
 
   // 📌 멤버 증감 선 — 칸 폭을 끝까지 쓰도록 늘여 그리고(preserveAspectRatio none), 선 굵기는 고정
@@ -225,6 +275,32 @@ export default function AdminHubPage() {
           { label: "지급 대기", value: statLink("/payouts", stats.payoutPending), tone: stats.payoutPending > 0 ? "bad" : undefined },
         ]}
       />
+
+      {/* 1.5 — 봇 작동 여부 · 봇이 처리할 대기 건수 (칸 8개: 2 · 4 · 8 열 어디서든 빈 칸 없이 맞는다) */}
+      <Panel
+        title="봇"
+        right={
+          <>
+            <span className={META}>마지막 신호 {bot ? agoText(bot.agoSec) : "—"}</span>
+            <span title={bot?.lastError ? `최근 오류: ${bot.lastError}` : undefined}>
+              <StatusChip tone={!bot ? "neutral" : bot.online ? "ok" : "bad"}>{!bot ? "—" : bot.online ? "작동 중" : "꺼짐"}</StatusChip>
+            </span>
+          </>
+        }
+        flush
+        className={botAlert ? "!border-[#e91e3f]/50" : ""}
+      >
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-px bg-[#ededed] rounded-b-2xl overflow-hidden">
+          {botCells.map((c) => (
+            <div key={c.k} className="px-4 md:px-5 py-4 bg-white min-w-0">
+              <p className="text-[12px] font-bold text-[#5a5a5a] truncate">{c.l}</p>
+              <p className={`mt-1.5 text-[20px] font-black tracking-[-0.02em] tabular-nums leading-none ${!c.n ? "text-[#a3a3a3]" : botAlert ? "text-[#d01634]" : ""}`}>
+                {c.n != null ? c.n.toLocaleString() : "—"}
+              </p>
+            </div>
+          ))}
+        </div>
+      </Panel>
 
       {/* 2 — 확인할 일 · 서버 현황 (두 판 높이를 맞춘다: 그리드 칸 안에서 h-full) */}
       <PanelGrid>

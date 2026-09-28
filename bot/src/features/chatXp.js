@@ -9,7 +9,7 @@ import { UserXp, isDuplicateKeyError } from "../db.js";
 import { getBuffXp } from "../roleConfigs.js";
 import { effectXp } from "../itemEffects.js";
 import { getChannelPolicy } from "../channelConfigs.js";
-import { getSettings, getActiveBoostXp } from "../botSettings.js";
+import { getSettings, getActiveBoostXp, isLevelOpen } from "../botSettings.js";
 import { grantXp, grantOnceEffects } from "../xp.js";
 import { config } from "../config.js";
 
@@ -17,6 +17,8 @@ export function registerChatXp(client) {
   client.on(Events.MessageCreate, async (message) => {
     try {
       if (message.author.bot || !message.member || message.guild?.id !== config.guildId) return;
+      // 📌 레벨 비공개면 채팅 XP 없음 — 쿨타임 · 문서도 건드리지 않는다 (grantXp 입구도 한 번 더 막는다)
+      if (!isLevelOpen()) return;
 
       // 채널/카테고리 정책 (지급 제외 채널이면 쿨타임도 소모하지 않음)
       const channelPolicy = getChannelPolicy(message.channel);

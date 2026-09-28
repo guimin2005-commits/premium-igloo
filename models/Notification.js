@@ -3,8 +3,9 @@ import mongoose from "mongoose";
 // 📌 관리자 → 특정 유저 알림(사이트 알림함의 원본)
 //  · 사이트 알림함이 본문/기록의 원본이며, 디스코드 DM은 "새 알림 도착" 핑 용도
 const NotificationSchema = new mongoose.Schema({
-  recipientName: { type: String, required: true, index: true }, // 디스코드 닉네임(수신자)
-  recipientId: { type: String, index: true },                   // 디스코드 ID (조회되면 DM/매칭에 사용)
+  recipientName: { type: String, required: true, index: true }, // 디스코드 사용자명(수신자) — 표시용
+  // 📌 디스코드 ID — 발송 때 반드시 채운다(app/api/notifications). 내 알림은 ID 로 찾고, ID 가 없는 옛 문서만 이름으로 찾는다
+  recipientId: { type: String, index: true },
   type: { type: String, default: "안내" },                       // 경고 | 제재 | 안내 | 축하 | 일반
   title: { type: String, required: true },
   content: { type: String, required: true },

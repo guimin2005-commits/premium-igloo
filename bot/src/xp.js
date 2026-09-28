@@ -1,23 +1,22 @@
 // ── XP 지급 · 레벨업 감지 · 보상 역할 지급 · 로그 기록 ──────
-import { EmbedBuilder } from "discord.js";
 import { UserXp, XpLog } from "./db.js";
-import { getLevelByXp, kstToday } from "./leveling.js";
+import { getLevelByXp, getCumulativeXpByLevel, kstToday } from "./leveling.js";
 import { getRoleConfigs } from "./roleConfigs.js";
 import { heldEffects, effectXp, effectTimeOk, claimDaily, kstNow } from "./itemEffects.js";
-import { getSettings } from "./botSettings.js";
+import { getSettings, isLevelOpen } from "./botSettings.js";
+import { buildMessage, commonVars, tierOf, progressBar } from "./botMessages.js";
 import { config } from "./config.js";
 
 export const EMBED_COLOR = 0xe91e3f;
 export const EMBED_FOOTER = "고급 이글루 · SYSTEM : LEVEL";
 
-// 지정 채널에 임베드 알림 전송 (채널 미설정·미존재 시 조용히 무시)
-function sendNotice(guild, channelId, text) {
-  if (!channelId) return;
+// 지정 채널에 알림 전송 — 메시지는 buildMessage 결과 그대로 (채널 미설정 · 미존재 · 꺼진 메시지(null)면 조용히 넘어간다)
+function sendNotice(guild, channelId, payload) {
+  if (!channelId || !payload) return;
   const channel = guild.channels.cache.get(channelId);
   if (!channel?.isTextBased()) return;
 
-  const embed = new EmbedBuilder().setColor(EMBED_COLOR).setDescription(text).setFooter({ text: EMBED_FOOTER });
-  channel.send({ embeds: [embed] }).catch(() => {});
+  channel.send(payload).catch((e) => console.error(`알림 전송 실패 (${channelId}):`, e.message));
 }
 
 // 배타 역할(티어) 중 지금 레벨에서 유지해야 할 최상위 하나를 고른다.
@@ -33,7 +32,8 @@ function topExclusive(level) {
 
 // 도달한 레벨 이하의 보상 역할 중 미보유분 지급 + 알림
 //    배타 역할은 최상위 하나만 지급한다 (하위 티어는 아래 revoke가 거둬간다)
-async function grantRewardRoles(member, level) {
+//    📌 notify=false 면 알림 없이 역할만 맞춘다 — 티어 설정 저장 뒤 전원 재동기화(needsRoleSync)가 채널을 도배하지 않게
+async function grantRewardRoles(member, level, { notify = true } = {}) {
   const s = getSettings();
   const top = topExclusive(level);
 
@@ -45,14 +45,13 @@ async function grantRewardRoles(member, level) {
         await member.roles.add(cfg.roleId, `레벨 ${cfg.rewardLevel} 도달 보상`);
         console.log(`🎖 ${member.displayName} → ${cfg.roleName || cfg.roleId} 지급 (Lv.${level})`);
 
-        if (s.roleGrantEnabled) {
+        if (notify && s.roleGrantEnabled) {
           const roleName = cfg.roleName || member.guild.roles.cache.get(cfg.roleId)?.name || "역할";
-          const text = (s.roleGrantMessage || "🎖 {user} 님에게 **{role}** 역할이 지급되었습니다! (Lv.{level})")
-            .replaceAll("{user}", `<@${member.id}>`)
-            .replaceAll("{role}", roleName)
-            .replaceAll("{level}", String(level));
+          // 📌 문구 · 디자인은 관리자 봇 메시지 설정(roleGrant). {level} 은 이 역할의 지급 레벨 — 기본 문구가 "Lv.{level} 달성 보상" 이고
+          //    레벨이 한 번에 크게 올라도 역할과 맞는 숫자 · 등급 색이 나오게 (지금 레벨을 넣으면 브론즈에 "Lv.450 달성 보상" 이 된다)
+          const payload = buildMessage("roleGrant", { ...commonVars(member), role: roleName, level: cfg.rewardLevel });
           // 역할 지급 전용 채널이 없으면 레벨업 채널을 함께 사용
-          sendNotice(member.guild, s.roleGrantChannelId || s.levelupChannelId || config.levelupChannelId, text);
+          sendNotice(member.guild, s.roleGrantChannelId || s.levelupChannelId || config.levelupChannelId, payload);
         }
       } catch (e) {
         console.error(`역할 지급 실패 (${cfg.roleName || cfg.roleId}):`, e.message);
@@ -83,26 +82,52 @@ export async function revokeRewardRoles(member, level) {
 }
 
 // 보상 역할을 현재 레벨에 맞춘다 — 모자란 건 주고, 넘치는 건 거둔다
-export async function syncRewardRoles(member, level) {
-  await grantRewardRoles(member, level);
+//    opts.notify=false: 역할 지급 알림 없이 (전원 재동기화용)
+export async function syncRewardRoles(member, level, opts = {}) {
+  await grantRewardRoles(member, level, opts);
   await revokeRewardRoles(member, level);
 }
 
-// 대시보드에서 지정한 채널·문구로 레벨업 알림 ({user}, {level}, {xp} 치환)
-function announceLevelUp(member, newLevel, totalXp) {
+// 레벨업 알림 — 채널은 대시보드 설정, 문구 · 디자인은 관리자 봇 메시지 설정(levelUp)
+function announceLevelUp(member, prevLevel, newLevel, totalXp) {
   const s = getSettings();
-  const text = (s.levelupMessage || "🎉 {user} 님이 **Lv.{level}** 에 도달했습니다!")
-    .replaceAll("{user}", `<@${member.id}>`)
-    .replaceAll("{level}", String(newLevel))
-    .replaceAll("{xp}", totalXp.toLocaleString());
+  const cur = getCumulativeXpByLevel(newLevel);
+  const next = getCumulativeXpByLevel(newLevel + 1);
+  const span = next - cur;
+  const payload = buildMessage("levelUp", {
+    ...commonVars(member),
+    level: newLevel,
+    prevLevel,
+    xp: totalXp,
+    nextXp: Math.max(0, next - totalXp),
+    tier: tierOf(newLevel).name,
+    progressBar: progressBar(span > 0 ? (totalXp - cur) / span : 1),
+  });
 
-  sendNotice(member.guild, s.levelupChannelId || config.levelupChannelId, text);
+  sendNotice(member.guild, s.levelupChannelId || config.levelupChannelId, payload);
 }
 
 // XP 지급 + 레벨 재계산. 레벨업 시 알림·보상 역할까지 처리
 // meta: { reason, channelId, channelName } — 로그 기록용
+//   📌 봇이 스스로 만드는 XP(채팅 · 음성 · 출석 · 아이템 효과 · 레벨업 효과)는 전부 이 함수로 들어온다 — 레벨 비공개면 여기서 막는다.
+//      (지급 대기열 Payout 은 grantQueue.js 가 따로 넣으므로 막히지 않는다)
 export async function grantXp(member, amount, meta = {}) {
   if (!amount) return null;
+
+  if (!isLevelOpen()) {
+    // 음성 참여 시간은 비공개여도 그대로 쌓는다 — 문서가 없으면 만들어 둔다(오늘 누적 분 · 자동 출석 판정이 이 문서를 쓴다)
+    if (meta.voiceSeconds != null) {
+      await UserXp.updateOne(
+        { userId: member.id },
+        {
+          $inc: { voiceSeconds: Math.max(0, Number(meta.voiceSeconds) || 0) },
+          $set: { username: member.user.username, displayName: member.displayName, updatedAt: new Date() },
+        },
+        { upsert: true }
+      ).catch((e) => console.error(`음성 시간 기록 오류 (${member.displayName}):`, e.message));
+    }
+    return null;
+  }
 
   const doc = await UserXp.findOneAndUpdate(
     { userId: member.id },
@@ -142,7 +167,7 @@ export async function grantXp(member, amount, meta = {}) {
       // 지급하면서 하위 티어(배타 역할)도 함께 거둔다
       syncRewardRoles(member, newLevel).catch(() => {});
       // 레벨 0(아직 계산 전인 새 문서) → 1 은 시작 레벨이라 알리지 않는다 (역할 지급은 그대로)
-      if (newLevel > Math.max(1, before)) announceLevelUp(member, newLevel, doc.xp);
+      if (newLevel > Math.max(1, before)) announceLevelUp(member, Math.max(1, before), newLevel, doc.xp);
       // 📌 최고 도달 레벨(maxLevel)은 어떤 지급으로 올랐든 $max 로 원자적으로 기록한다 — 효과 지급으로 오른 레벨 포함.
       //    📌 아이템 효과 "레벨이 오를 때마다" — 효과 지급으로 오른 레벨에는 다시 붙이지 않는다(재귀 방지).
       //       레벨 0(아직 계산 전인 새 문서) → 1 은 레벨업으로 치지 않는다.
@@ -180,6 +205,8 @@ async function grantLevelUpEffects(member, gained) {
 //    요일 · 시간대 조건과 test(e) 를 통과한 효과마다 claimDaily 자물쇠("<itemId>:<effectId>")를 세우고, 통과한 것만 따로 지급한다.
 //    meta: XpLog 에 남길 채널 정보. 오류는 효과별로 삼킨다 — 기존 지급을 막지 않게.
 export async function grantOnceEffects(member, on, { test = () => true, meta = {} } = {}) {
+  // 📌 레벨 비공개면 "하루 1번" 자물쇠도 세우지 않는다 — 세우고 grantXp 에서 막히면 공개된 그날 효과를 못 받는다
+  if (!isLevelOpen()) return;
   let effects = [];
   try {
     effects = heldEffects(member, on);

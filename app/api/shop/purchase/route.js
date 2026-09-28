@@ -12,6 +12,8 @@ import ShopItem from "@/models/ShopItem";
 import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
 import ShopLock from "@/models/ShopLock";
+import { denyIfMaintenance } from "@/lib/apiAuth";
+import { liveHoldings, planPurchase, timingOf, kstStamp } from "../_lib/renewal";
 import mongoose from "mongoose";
 
 // ── [구매] 본인 XP · 빙옥을 소모해 상품 구매 — pointUse: 쓸 빙옥 개수(나머지는 XP) ──
@@ -24,6 +26,9 @@ export async function POST(request) {
     if (!userId) {
       return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
     }
+    // 📌 점검 중에는 구매를 서버에서 막는다 (관리자는 통과)
+    const maintenance = await denyIfMaintenance(session);
+    if (maintenance) return maintenance;
 
     await connectToDatabase();
 
@@ -61,21 +66,11 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "처리 중인 결제가 있습니다. 잠시 후 다시 시도해 주세요." }, { status: 409 });
     }
 
-    // 📌 모든 상품은 1인 1개 — 이미 구매(대기·완료)한 건이 있으면 재구매 불가
-    // 기간제는 기간이 끝나면 다시 살 수 있어야 하므로, 아직 살아 있는 건만 막는다
-    const owned = await Purchase.findOne({
-      userId,
-      status: { $in: ["pending", "completed"] },
-      $and: [
-        { $or: [{ itemId: String(item._id) }, ...(item.itemId ? [{ itemRef: item.itemId }] : [])] },
-        { $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] },
-      ],
-    }).lean();
-    if (owned) {
-      return NextResponse.json({
-        success: false,
-        message: owned.expiresAt ? "아직 이용 기간이 남아 있습니다. 기간이 끝난 뒤 다시 구매할 수 있습니다." : "이미 구매한 상품입니다. 상품은 1인 1개만 구매할 수 있습니다.",
-      }, { status: 409 });
+    // 📌 모든 상품은 1인 1개 — 살아 있는 보유(같은 상품 · 같은 아이템) 중 무제한이 있으면 재구매 불가.
+    //    기간제만 가졌으면 기간제는 연장(가장 늦은 만료 뒤에 이어 붙임) · 무제한은 업그레이드로 받는다 (_lib/renewal.js — 장바구니 결제와 같은 규칙)
+    const plan = planPurchase(item, days, await liveHoldings(userId, [item]));
+    if (plan.block) {
+      return NextResponse.json({ success: false, message: "이미 구매한 상품입니다. 상품은 1인 1개만 구매할 수 있습니다." }, { status: 409 });
     }
 
     // 📌 가격은 재고를 잡기 전에 정한다 — 화면에서 본 값과 다르면(보는 사이 할인이 끝남) 결제하지 않는다
@@ -148,6 +143,7 @@ export async function POST(request) {
     //    📌 기록이 안 남으면 값만 빠지고 물건은 없는 상태가 된다 — 미리 정한 _id 로 넣다 만 건을 지우고 지갑 · 재고를 되돌린다.
     //       지우기부터 실패하면 되돌리지 않는다(기록이 남았을 수 있어 공짜가 된다) — 바깥 catch 로 넘긴다
     const purchaseId = new mongoose.Types.ObjectId();
+    const timing = timingOf(plan, days);
     let purchase;
     try {
       purchase = await Purchase.create({
@@ -165,8 +161,10 @@ export async function POST(request) {
         paidPoint: pointUse,
         billed: true,
         days,
-        // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다
-        expiresAt: days > 0 ? new Date(Date.now() + days * 86400000) : null,
+        // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다. 연장이면 이어 붙인 건의 만료부터(renewOf · startsAt)
+        expiresAt: timing.expiresAt,
+        renewOf: timing.renewOf,
+        startsAt: timing.startsAt,
         contact: item.type === "physical" ? contact.trim() : "",
         status: "pending",
       });
@@ -187,7 +185,9 @@ export async function POST(request) {
     }
     const remain = { xp: doc?.xp ?? 0, point: doc?.point ?? 0 };
     // 역할이 없는 아이템(사이트 인벤토리 전용)도 봇이 자동 지급한다 — 역할 문구는 역할이 있을 때만
-    const autoMsg = item.roleId
+    const autoMsg = timing.renewOf
+      ? `기간이 연장되었습니다. ${kstStamp(timing.expiresAt)}까지 이용할 수 있습니다.`
+      : item.roleId
       ? (days > 0 ? `구매가 완료되었습니다. ${days}일 동안 역할이 유지되며, 잠시 후 자동으로 지급됩니다.` : "구매가 완료되었습니다. 잠시 후 역할이 자동으로 지급됩니다.")
       : (days > 0 ? `구매가 완료되었습니다. ${days}일 동안 이용할 수 있으며, 잠시 후 자동으로 지급됩니다.` : "구매가 완료되었습니다. 잠시 후 자동으로 지급됩니다.");
 
@@ -200,6 +200,8 @@ export async function POST(request) {
       // charged 는 옛 필드 — 한쪽으로만 냈을 때의 그 화폐 값. 섞어 냈으면 XP 몫이다(usedPoint · chargedXp 를 본다)
       data: {
         purchaseId: purchase._id, payMethod,
+        // 연장이면 이어 붙인 구매 id · 새 만료 시각
+        renewOf: timing.renewOf, expiresAt: timing.expiresAt,
         charged: payMethod === "point" ? pointUse : chargedXp,
         usedPoint: pointUse, chargedXp,
         remain, remainXp: remain.xp, remainPoint: remain.point,

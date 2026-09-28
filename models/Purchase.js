@@ -28,6 +28,11 @@ const PurchaseSchema = new mongoose.Schema({
   days: { type: Number, default: 0 },
   expiresAt: { type: Date, default: null, index: true },
   revokedAt: { type: Date, default: null },
+  // 📌 만료 임박 DM 을 보낸 시각 — 봇(expiryReminder)이 조건부로 세워 한 번만 보낸다. 연장으로 만료가 밀리면 다시 비운다
+  reminderSentAt: { type: Date, default: null },
+  // 📌 연장 구매 — 이어 붙인 원래 구매 _id("" 이면 새 구매) · 연장분이 시작되는 시각(표시용)
+  renewOf: { type: String, default: "" },
+  startsAt: { type: Date, default: null },
   // 📌 사이트 보유 — 소유는 그대로 두고 디스코드 역할 표기만 뗀 상태.
   //    시즌이 바뀌면 디스코드가 역할로 지저분해지므로 표기를 사이트로 옮긴다.
   //    만료(expired)와는 다르다 — 물건은 계속 갖고 있고 인벤토리에도 그대로 뜬다.

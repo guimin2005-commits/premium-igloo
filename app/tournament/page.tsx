@@ -8,7 +8,7 @@ import { BracketView } from "../components/BracketView";
 import { EsportsStyles, STATUS_META } from "../components/Esports";
 import { PHASES, phaseOf, phaseMeta, phaseShows, statusOf } from "@/lib/tournamentPhase";
 
-const ADMIN_USERS = ["elahw.06"];
+import { ADMIN_USERS } from "@/lib/admins";
 
 const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => void }) => {
   if (!text) return null;

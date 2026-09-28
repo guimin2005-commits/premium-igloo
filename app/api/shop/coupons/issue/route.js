@@ -1,10 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import Coupon from "@/models/Coupon";
 import UserCoupon from "@/models/UserCoupon";
 import UserXp from "@/models/UserXp";
@@ -13,10 +11,8 @@ import UserXp from "@/models/UserXp";
 //    target: 디스코드 닉네임 또는 유저 ID · "all"이면 XP 기록이 있는 전원
 export async function POST(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!isAdminName(session?.user?.name)) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
 
     await connectToDatabase();
     const { couponId, target } = await request.json();

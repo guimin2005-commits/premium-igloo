@@ -7,6 +7,8 @@ import { authOptions } from "@/lib/authOptions";
 import { getPassState, grantReward } from "@/lib/seasonPass";
 import { SEASON } from "@/lib/season";
 import { denyIfLevelClosed } from "@/lib/levelAccess";
+import { denyIfMaintenance } from "@/lib/apiAuth";
+import { logWallet } from "@/lib/wallet";
 import UserXp from "@/models/UserXp";
 
 // ── [수령] 티어 보상 받기 — body { tid, track } ──
@@ -19,6 +21,9 @@ export async function POST(request) {
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
     }
+    // 점검 중에는 수령을 막는다 (관리자 통과)
+    const maint = await denyIfMaintenance(session);
+    if (maint) return maint;
 
     const body = await request.json().catch(() => ({}));
     const tid = String(body?.tid || "").trim();
@@ -113,6 +118,19 @@ export async function POST(request) {
     } catch (e) {
       await UserXp.updateOne({ userId }, { $pull: { [field]: tid } }).catch(() => {});
       throw e;
+    }
+
+    // 📌 빙옥 보상은 grantReward 가 잔액에 바로 넣고 Payout 을 남기지 않는다 — 원장에 여기서 한 줄 남긴다.
+    //    XP 보상은 Payout(source "pass"), 역할 · 아이템은 재화가 아니다. lib/seasonPass.js 가 따로 기록하면 두 번 보인다
+    if (granted.kind === "point" && granted.amount > 0) {
+      await logWallet({
+        userId,
+        currency: "point",
+        amount: granted.amount,
+        kind: "pass-point",
+        label: tierLabel,
+        refId: tid,
+      });
     }
 
     // POINT 잔액은 화면 상단 HUD가 바로 갱신할 수 있게 늘 함께 내려 준다

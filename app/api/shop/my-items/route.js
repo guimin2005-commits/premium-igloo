@@ -13,6 +13,8 @@ import Item from "@/models/Item";
 import { fetchMemberRoleInfo } from "@/lib/discordMember";
 import { describeRoleBuff, itemEffectLines } from "@/lib/itemEffects";
 import { channelNames } from "@/lib/channelNames";
+import { durationOptions } from "@/lib/shopPricing";
+import { getShopAccess } from "@/lib/shopAccess";
 
 // 📌 내 보유 아이템 — 구매 내역이 아니라 "지금 실제로 들고 있는 것"을 보여준다.
 //    표기는 아이템 등록(models/Item)이 단일 원천이다:
@@ -37,15 +39,18 @@ export async function GET() {
     await connectToDatabase();
     const userId = session.user.id;
 
-    const [purchases, shopItems, itemsAll, roleConfigs, invRoles, roleInfo] = await Promise.all([
-      Purchase.find({ userId, status: { $nin: ["cancelled", "refunded"] } }).sort({ createdAt: -1 }).lean(),
-      ShopItem.find({}, { name: 1, description: 1, imageUrl: 1, itemImageUrl: 1, icon: 1, color: 1, type: 1, roleId: 1, itemId: 1, active: 1, sortOrder: 1 }).lean(),
+    // 📌 환불 · 취소된 건도 함께 읽는다 — 보유로 치지는 않고, 연장 묶음(renewOf)을 이을 때만 쓴다(아래 rootOf)
+    const [purchaseRows, shopItems, itemsAll, roleConfigs, invRoles, roleInfo, access] = await Promise.all([
+      Purchase.find({ userId }).sort({ createdAt: -1 }).lean(),
+      ShopItem.find({}, { name: 1, description: 1, imageUrl: 1, itemImageUrl: 1, icon: 1, color: 1, type: 1, roleId: 1, itemId: 1, active: 1, sortOrder: 1, durations: 1 }).lean(),
       Item.find({}).sort({ sortOrder: 1, createdAt: 1 }).lean(),
       RoleConfig.find({}, { roleId: 1, roleName: 1, rewardLevel: 1, exclusive: 1, buffXp: 1, attendBuffXp: 1 }).lean(),
       InventoryRole.find({ visible: true }).sort({ sortOrder: 1 }).lean(),
       fetchMemberRoleInfo(userId),
+      getShopAccess(),
     ]);
 
+    const purchases = purchaseRows.filter((p) => p.status !== "cancelled" && p.status !== "refunded");
     const held = roleInfo.roles === null ? null : new Set(roleInfo.roles);
     const shopById = new Map(shopItems.map((s) => [String(s._id), s]));
     const itemById = new Map(itemsAll.map((i) => [String(i._id), i]));
@@ -70,10 +75,58 @@ export async function GET() {
     const owned = [];
     const seenRoles = new Set();
 
+    // 📌 연장으로 이어진 구매(renewOf)는 한 아이템으로 묶는다 — renewOf 를 따라 올라간 맨 앞 구매가 묶음 키(uid 가 연장 · 만료에도 그대로).
+    //    만료는 가장 늦은 것, 상태 · 표기는 지금 쓰고 있는 칸(살아 있는 것 중 가장 먼저 끝나는 것), 기간은 이어진 일수 합.
+    //    📌 환불 · 취소된 건도 고리로는 따라간다 — 가운데 구간을 환불해도 앞뒤가 한 칸으로 남게(둘로 갈라져 같은 아이템이 두 번 뜨지 않게).
+    //       보유 · 일수 · 받은 날에는 넣지 않는다
+    const isExpired = (p) => p.status === "expired" || (p.expiresAt && new Date(p.expiresAt).getTime() < now);
+    const byPid = new Map(purchaseRows.map((p) => [String(p._id), p]));
+    const rootOf = (p) => {
+      let cur = p;
+      const seen = new Set([String(p._id)]);
+      while (cur.renewOf && byPid.has(cur.renewOf) && !seen.has(cur.renewOf)) {
+        seen.add(cur.renewOf);
+        cur = byPid.get(cur.renewOf);
+      }
+      return cur;
+    };
+    const chains = new Map(); // 맨 앞 구매 id → { first: 가장 먼저 산 유효 건, live: [], days }
     for (const p of purchases) {
-      const expired = p.status === "expired" || (p.expiresAt && new Date(p.expiresAt).getTime() < now);
+      const key = String(rootOf(p)._id);
+      if (!chains.has(key)) chains.set(key, { first: p, live: [], days: 0 });
+      const c = chains.get(key);
+      c.first = p; // 최신순으로 도므로 마지막에 남는 것이 가장 먼저 산 건
+      c.days += p.days || 0;
+      if (!isExpired(p)) c.live.push(p);
+    }
+    const tms = (d) => new Date(d).getTime();
+
+    // 📌 연장할 상품 — 산 상품이 판매 중인 기간제면 그것, 아니면 같은 아이템(itemRef)을 가리키는 판매 중 기간제 상품(정렬 순 첫 번째).
+    //    결제 API 의 연장 판정(같은 상품 · 같은 itemRef)과 같은 짝만 고른다. 상점을 못 보는 유저에게는 주지 않는다
+    const canRenew = (s) => !!s && !!s.active && durationOptions(s).some((o) => o.days > 0);
+    const renewByRef = new Map();
+    for (const s of [...shopItems].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))) {
+      if (s.itemId && canRenew(s) && !renewByRef.has(s.itemId)) renewByRef.set(s.itemId, s);
+    }
+    const renewIdOf = (p) => {
+      if (!access?.canView || !p.expiresAt || p.itemType === "physical") return "";
+      const own = shopById.get(p.itemId);
+      if (canRenew(own)) return String(own._id);
+      const ref = p.itemRef ? renewByRef.get(p.itemRef) : null;
+      return ref ? String(ref._id) : "";
+    };
+
+    const emitted = new Set();
+    for (const row of purchases) {
       // 기간이 지난 기간제는 정상 만료 — 목록에서 뺀다
-      if (expired) continue;
+      if (isExpired(row)) continue;
+      const rootId = String(rootOf(row)._id);
+      if (emitted.has(rootId)) continue;
+      emitted.add(rootId);
+      const chain = chains.get(rootId);
+      // 지금 쓰고 있는 칸 — 무제한(만료 없음)이 섞였으면 그것, 아니면 가장 먼저 끝나는 것
+      const p = chain.live.reduce((a, b) => (!a.expiresAt ? a : !b.expiresAt ? b : tms(b.expiresAt) < tms(a.expiresAt) ? b : a));
+      const lastEnd = chain.live.some((x) => !x.expiresAt) ? null : new Date(Math.max(...chain.live.map((x) => tms(x.expiresAt))));
 
       const shopItem = shopById.get(p.itemId) || null;
       const item =
@@ -104,8 +157,8 @@ export async function GET() {
       const kind = disp.type === "physical" ? "physical" : roleLike ? disp.type : "item";
 
       owned.push({
-        // 갱신돼도 같은 것을 가리키도록 하는 키 (구매 건 단위)
-        uid: `p:${p._id}`,
+        // 갱신돼도 같은 것을 가리키도록 하는 키 (연장 묶음 단위 — 맨 앞 구매 id. 연장이 없으면 그 구매 id)
+        uid: `p:${rootId}`,
         kind,
         type: kind,
         name: disp.name,
@@ -114,9 +167,12 @@ export async function GET() {
         imageUrl: disp.imageUrl,
         color: disp.color,
         status,
-        days: p.days || 0,
-        expiresAt: p.expiresAt || null,
-        acquiredAt: p.processedAt || p.createdAt,
+        // 연장으로 이어졌으면 일수 합 · 가장 늦은 만료 · 처음 받은 날 (연장이 없으면 그 구매 값 그대로)
+        days: chain.days,
+        expiresAt: lastEnd,
+        acquiredAt: chain.first.processedAt || chain.first.createdAt,
+        // 기간제면 연장하러 갈 상품 id ("" 이면 연장 링크 없음)
+        renewId: lastEnd ? renewIdOf(p) : "",
         // 시즌 전환으로 디스코드 표기만 떼고 사이트에서 들고 있는 것
         siteOnly: !!p.siteOnly,
         source: p.itemId === "season-pass" ? "pass" : p.itemId === "grant" ? "grant" : "shop",
@@ -126,10 +182,20 @@ export async function GET() {
         effectItem: p.itemType !== "physical" ? item || fallbackItem : null,
         // 순서 — 상점 관리(아이템 등록)에서 정한 자리를 따른다
         orderRef: (item || fallbackItem)?._id ? String((item || fallbackItem)._id) : "",
+        // 같은 물건 키 — 등록 아이템이면 그 id, 아니면 상품 id (아래 업그레이드 중복 숨김용)
+        _thing: (item || fallbackItem)?._id ? `i:${(item || fallbackItem)._id}` : shopItem ? `s:${shopItem._id}` : "",
         // 역할 버프(RoleConfig)는 그 디스코드 역할을 지금 실제로 가진 동안만 봇이 더한다
         buffRoleId: p.roleId && held !== null && held.has(p.roleId) ? p.roleId : "",
       });
     }
+
+    // 📌 기간제를 무제한으로 업그레이드하면 남은 기간제 구매도 기간 끝까지 살아 있다 — 같은 물건의 무제한 칸이 있으면 기간제 칸은 숨긴다.
+    //    등록 아이템이 아닌 상품도 같은 상품끼리는 묶는다(업그레이드는 같은 상품 · 같은 아이템에서만 일어난다 — _lib/renewal.js)
+    const foreverThings = new Set(owned.filter((it) => it._thing && !it.expiresAt).map((it) => it._thing));
+    for (let i = owned.length - 1; i >= 0; i--) {
+      if (owned[i]._thing && owned[i].expiresAt && foreverThings.has(owned[i]._thing)) owned.splice(i, 1);
+    }
+    for (const it of owned) delete it._thing;
 
     // ── (B) 구매 기록 없이 들고 있는 역할 (아이템 등록·레벨 보상) ──
     if (held) {

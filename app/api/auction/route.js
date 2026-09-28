@@ -1,20 +1,19 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
+import { denyIfNotAdmin, getSession } from "@/lib/apiAuth";
+import { isAdminName } from "@/lib/admins";
 import Auction from "@/models/Auction";
 import AuctionChat from "@/models/AuctionChat";
 import { phase1RoleOf } from "@/lib/auctionGames";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
 
 // [목록]
 export async function GET() {
   try {
     await connectToDatabase();
     // 📌 테스트 방은 관리자에게만 노출
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     // 테스트 방과 비공개 방은 관리자에게만 목록에 보인다
     const query = isAdminName(session?.user?.name) ? {} : { isTest: { $ne: true }, isPrivate: { $ne: true } };
     const auctions = await Auction.find(query).sort({ createdAt: -1 }).select("title status createdAt leaders players game isTest isPrivate settings");
@@ -41,10 +40,8 @@ export async function GET() {
 // [생성] (관리자만)
 export async function POST(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!isAdminName(session?.user?.name)) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const body = await request.json();
     if (!body.title?.trim()) {
@@ -92,10 +89,8 @@ export async function POST(request) {
 // [전환] 공개 ↔ 비공개 (관리자만)
 export async function PATCH(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!isAdminName(session?.user?.name)) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const { id, isPrivate, title } = await request.json();
     if (!id) return NextResponse.json({ success: false, message: "대상이 없습니다." }, { status: 400 });
@@ -125,10 +120,8 @@ export async function PATCH(request) {
 // [삭제] (관리자만)
 export async function DELETE(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!isAdminName(session?.user?.name)) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return NextResponse.json({ success: false }, { status: 400 });

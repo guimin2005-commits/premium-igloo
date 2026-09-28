@@ -75,7 +75,7 @@ export default function CouponBoxPage() {
       <main className="w-full flex-1 flex flex-col items-center justify-center px-6 py-40 text-center text-[#131313] break-keep">
         <h2 className="text-2xl font-black mb-4 tracking-tight">로그인 필요</h2>
         <p className="text-[#5a5a5a] mb-8 text-sm">쿠폰함을 보려면 로그인해 주세요.</p>
-        <button onClick={() => signIn("discord", { callbackUrl: "/profile/coupons" })}
+        <button onClick={() => signIn("discord", { callbackUrl: window.location.pathname + window.location.search })}
           className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#5865F2]/40 focus-visible:ring-offset-2">
           디스코드 로그인
         </button>

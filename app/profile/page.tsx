@@ -103,11 +103,11 @@ export default function MyInfoPage() {
   // 문의·구인은 진행 중인 건수만 (목록은 각자 페이지)
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.name) return;
-    const u = encodeURIComponent(session.user.name);
-    fetch(`/api/inquiry?user=${u}`, { cache: "no-store" }).then((r) => r.json())
+    // 대상은 서버가 세션(ID)으로 정한다 — 이름을 넘기지 않는다
+    fetch("/api/inquiry?mine=1", { cache: "no-store" }).then((r) => r.json())
       .then((d) => setPendingInquiries(Array.isArray(d?.data) ? d.data.filter((i: any) => i.status === "접수 중").length : 0))
       .catch(() => {});
-    fetch(`/api/user/applies?user=${u}`, { cache: "no-store" }).then((r) => r.json())
+    fetch("/api/user/applies?mine=1", { cache: "no-store" }).then((r) => r.json())
       .then((d) => setPendingApplies(Array.isArray(d?.data) ? d.data.filter((a: any) => (a.status || "심사 중") === "심사 중").length : 0))
       .catch(() => {});
   }, [status, session]);
@@ -148,7 +148,7 @@ export default function MyInfoPage() {
       <main className="w-full text-[#131313] flex-1 flex flex-col justify-center items-center px-6 py-40 text-center break-keep">
         <h2 className="text-2xl font-black text-[#131313] mb-4 tracking-tight">로그인 필요</h2>
         <p className="text-[#5a5a5a] mb-8 text-sm">내 정보를 확인하시려면 로그인이 필요합니다.</p>
-        <button onClick={() => signIn("discord", { callbackUrl: "/profile" })} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">
+        <button onClick={() => signIn("discord", { callbackUrl: window.location.pathname + window.location.search })} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">
           Discord 로그인
         </button>
       </main>

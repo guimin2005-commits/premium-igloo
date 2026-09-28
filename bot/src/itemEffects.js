@@ -187,6 +187,68 @@ function ownedItemIds(member, now = Date.now()) {
   return owned;
 }
 
+// 📌 보유 아이템 목록 — /인벤토리(views/inventory.js)가 쓴다.
+//    위 캐시 판정(refreshItemEffects · ownedItemIds)과 같은 (A)(B) 규칙을, 캐시 대신 넘겨받은 이 유저의 최신 문서로 한다
+//    (방금 산 것 · 방금 환불된 것도 바로 맞게). 사이트 lib/ownedItems.js 의 ownedItems 와 같아야 한다 — 한쪽을 고치면 같이 고칠 것.
+//    보유는 효과와 무관하다 — 기프트카드(physical)도 보유로 센다(효과만 없다).
+//    입력: purchases(이 유저의 구매 건) · items(전체 Item, sortOrder · createdAt 순) · shopItems(전체 ShopItem) · heldRoles(디스코드 역할 id, 모르면 null)
+//    반환: [{ item, expiresAt: Date | null(영구), pending }] — items 순서. 같은 아이템은 한 번(기간은 가장 늦게 끝나는 것, 영구가 있으면 영구)
+//          pending 은 그 아이템을 준 구매 건이 전부 지급 대기(pending)일 때만 true
+export function ownedItemList({ purchases, items, shopItems, heldRoles = null, now = Date.now() } = {}) {
+  const nowMs = now instanceof Date ? now.getTime() : Number(now);
+  const itemById = new Map();
+  const itemByRole = new Map();        // (A) fallback — 숨김 포함 첫 아이템
+  const visibleItemByRole = new Map(); // (B) — 보이는 것 중 첫 아이템
+  for (const i of Array.isArray(items) ? items : []) {
+    if (!i) continue;
+    itemById.set(String(i._id), i);
+    if (!i.roleId) continue;
+    if (!itemByRole.has(i.roleId)) itemByRole.set(i.roleId, i);
+    if (i.visible !== false && !visibleItemByRole.has(i.roleId)) visibleItemByRole.set(i.roleId, i);
+  }
+  const shopById = new Map((Array.isArray(shopItems) ? shopItems : []).map((s) => [String(s._id), s]));
+
+  const owned = new Map(); // 아이템 id → { exp(ms, 0 = 영구), pending }
+  const seenRoles = new Set();
+  const add = (id, exp, pending) => {
+    const cur = owned.get(id);
+    if (!cur) return owned.set(id, { exp, pending });
+    cur.exp = cur.exp === 0 || exp === 0 ? 0 : Math.max(cur.exp, exp);
+    cur.pending = cur.pending && pending;
+  };
+
+  // ── (A) 구매 건 — 디스코드 역할 유무와 무관 ──
+  for (const p of Array.isArray(purchases) ? purchases : []) {
+    if (!p || (p.status !== "pending" && p.status !== "completed")) continue;
+    const exp = p.expiresAt ? new Date(p.expiresAt).getTime() : 0;
+    if (exp && exp <= nowMs) continue;
+    const shop = shopById.get(String(p.itemId)) || null;
+    let item =
+      (p.itemRef && itemById.get(String(p.itemRef))) ||
+      (shop?.itemId && itemById.get(String(shop.itemId))) ||
+      null;
+    if (!item && !shop && p.roleId) item = itemByRole.get(p.roleId) || null;
+    if (item) add(String(item._id), exp, p.status === "pending");
+    if (p.roleId && ROLE_LIKE.has(p.itemType)) seenRoles.add(String(p.roleId));
+  }
+
+  // ── (B) 구매로 보지 못한 실보유 역할 → 그 역할의 첫 보이는 아이템 (역할을 들고 있는 동안이라 영구로 본다) ──
+  if (heldRoles) {
+    for (const roleId of heldRoles) {
+      if (seenRoles.has(roleId)) continue;
+      const item = visibleItemByRole.get(roleId);
+      if (item) add(String(item._id), 0, false);
+    }
+  }
+
+  const out = [];
+  for (const [id, item] of itemById) {
+    const o = owned.get(id);
+    if (o) out.push({ item, expiresAt: o.exp ? new Date(o.exp) : null, pending: o.pending });
+  }
+  return out;
+}
+
 // KST 지금 — { day: 0~6(일~토), hour: 0~23 }
 export function kstNow(date = new Date()) {
   const d = new Date(date.getTime() + 9 * 60 * 60 * 1000);

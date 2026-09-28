@@ -1,10 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { requireAdmin } from "@/lib/apiAuth";
 import Item from "@/models/Item";
 import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
@@ -12,18 +10,14 @@ import UserXp from "@/models/UserXp";
 // 📌 아이템 수동 지급 — 관리자가 등록된 아이템을 유저에게 바로 준다.
 //    상점 구매와 같은 Purchase 행(itemId "grant")을 만들어 인벤토리·봇 지급 큐가 그대로 처리한다.
 //    역할이 연결된 아이템은 pending 으로 두어 봇이 30초 안에 역할을 붙이고, 없으면 바로 completed.
-const requireAdmin = async () => {
-  const session = await getServerSession(authOptions);
-  return { ok: isAdminName(session?.user?.name), session };
-};
 
 const MAX_DAYS = 3650;
 
 // ── [조회] 최근 수동 아이템 지급 50건 ──
 export async function GET() {
   try {
-    const { ok } = await requireAdmin();
-    if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+    const { deny } = await requireAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const rows = await Purchase.find(
       { itemId: "grant" },
@@ -42,8 +36,8 @@ export async function GET() {
 // ── [지급] { itemId, target, days, reason } ──
 export async function POST(request) {
   try {
-    const { ok, session } = await requireAdmin();
-    if (!ok) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+    const { deny, session } = await requireAdmin();
+    if (deny) return deny;
     await connectToDatabase();
 
     const b = await request.json().catch(() => ({}));

@@ -8,6 +8,7 @@ import { totalSlots, slotLimitOf, phase1RoleOf, roleNames } from "@/lib/auctionG
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
+import { denyIfMaintenance } from "@/lib/apiAuth";
 
 const slotCount = (leader, slot) => leader.roster.filter((r) => r.slot === slot).length;
 
@@ -97,6 +98,9 @@ export async function POST(request, { params }) {
     if (typeof action === "string" && action.startsWith("host:") && action !== "host:posSwap" && !isAdmin) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
+    // 📌 점검 중에는 입찰·채팅 등 쓰기를 막는다 (진행자인 관리자는 통과)
+    const maint = await denyIfMaintenance(session);
+    if (maint) return maint;
 
     // ── 입장 알림 (최소화 표시용) — 이름은 세션 기준 ──
     if (action === "enter") {
@@ -313,8 +317,7 @@ export async function POST(request, { params }) {
         if (!leader || !roleNames(S).includes(position)) return NextResponse.json({ success: false }, { status: 400 });
 
         // 남의 리더 자리를 대신 고르지 못하게 — ID가 등록된 리더는 본인(또는 진행자)만
-        const session = await getServerSession(authOptions);
-        if (leader.discordId && leader.discordId !== session?.user?.id && !isAdminName(session?.user?.name)) {
+        if (leader.discordId && leader.discordId !== myId && !isAdmin) {
           return NextResponse.json({ success: false, message: "본인 리더만 선택할 수 있습니다." }, { status: 403 });
         }
         // 📌 최초 선택은 자유, 그 뒤 변경은 팀당 단 한 번.
@@ -375,10 +378,7 @@ export async function POST(request, { params }) {
 
       // 개최자: 경매 제목 수정
       case "host:title": {
-        const session = await getServerSession(authOptions);
-        if (!isAdminName(session?.user?.name)) {
-          return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
-        }
+        if (!isAdmin) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
         const title = String(body.title || "").trim().slice(0, 60);
         if (!title) return NextResponse.json({ success: false, message: "제목을 입력해 주세요." }, { status: 400 });
         if (title === auction.title) return NextResponse.json({ success: true, title });
@@ -887,10 +887,7 @@ export async function POST(request, { params }) {
       // 개최자: 인벤토리에 있는 카드를 직접 회수 (환불 + 선수 대기 복귀)
       //  낙찰 취소와 결과는 같지만, PLAYERS 를 찾지 않고 인벤토리에서 바로 지울 수 있다.
       case "host:invRemove": {
-        const session = await getServerSession(authOptions);
-        if (!isAdminName(session?.user?.name)) {
-          return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
-        }
+        if (!isAdmin) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
         const { leaderIdx, invIdx } = body;
         const leader = auction.leaders[leaderIdx];
         const card = leader?.inventory?.[invIdx];

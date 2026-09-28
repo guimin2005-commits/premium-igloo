@@ -1,18 +1,11 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { requireAdmin } from "@/lib/apiAuth";
 import UserXp from "@/models/UserXp";
 import Payout from "@/models/Payout";
 import { addPoints } from "@/lib/points";
-
-const requireAdmin = async () => {
-  const session = await getServerSession(authOptions);
-  return { ok: isAdminName(session?.user?.name), session };
-};
 
 // 📌 대상 찾기 — 유저 ID 가 맞으면 그 한 명만. 아니면 사용자명 · 표시 이름으로 찾는다.
 //    표시 이름은 고유하지 않아(남의 사용자명과 같을 수도 있다) 여러 명이 걸리면 호출부가 아무에게도 적용하지 않는다.
@@ -31,8 +24,8 @@ const ambiguous = (rows) =>
 // ── [조회] 최근 수동 지급 이력 ──
 export async function GET() {
   try {
-    const { ok } = await requireAdmin();
-    if (!ok) return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
+    const { deny } = await requireAdmin();
+    if (deny) return deny;
 
     await connectToDatabase();
     const rows = await Payout.find({ source: { $in: ["manual", "admin"] } })
@@ -49,8 +42,8 @@ export async function GET() {
 //    실제 반영은 봇의 자동 지급 큐가 30초 안에 처리한다 (레벨 재계산 포함)
 export async function POST(request) {
   try {
-    const { ok, session } = await requireAdmin();
-    if (!ok) return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
+    const { deny, session } = await requireAdmin();
+    if (deny) return deny;
 
     await connectToDatabase();
     const { target, amount, reason, mode, currency } = await request.json();

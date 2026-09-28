@@ -23,7 +23,7 @@ export default function MyAppliesPage() {
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.name) return;
-    fetch(`/api/user/applies?user=${encodeURIComponent(session.user.name)}`, { cache: "no-store" })
+    fetch("/api/user/applies?mine=1", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => setRows(d?.success && Array.isArray(d.data) ? d.data.map((item: any) => ({
         id: item._id, title: `${item.position || "스태프"} 지원서`, role: item.position || "스태프",
@@ -45,7 +45,7 @@ export default function MyAppliesPage() {
     try {
       const res = await fetch(`/api/user/applies?id=${cancelId}`, { method: "DELETE" });
       if (res.ok) { setRows((prev) => (prev ? prev.filter((r) => r.id !== cancelId) : prev)); setToast("지원을 취소했습니다."); }
-      else setToast("지원 취소 중 오류가 발생했습니다.");
+      else setToast((await res.json().catch(() => null))?.error || "지원 취소 중 오류가 발생했습니다.");
     } catch {
       setToast("서버와 통신 중 오류가 발생했습니다.");
     } finally {

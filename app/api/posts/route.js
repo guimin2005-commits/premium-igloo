@@ -1,6 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { getServerSession } from "next-auth";
 import { connectToDatabase } from "@/lib/mongodb";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import { isSupporterSession } from "@/lib/supporters";
@@ -106,16 +107,12 @@ async function announceNoticeOnce(filter) {
 
 // 📌 글 쓰기·수정·삭제는 관리자만 — 대회 설문에 개인정보(실명·계좌번호)가 붙으므로
 //    화면 단 차단만으로는 부족하다. 서버에서 반드시 다시 확인한다.
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return isAdminName(session?.user?.name);
-}
-const denied = () => NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
 
 // 📌 2. 창고에 글 밀어넣기 (작성용)
 export async function POST(request) {
   try {
-    if (!(await requireAdmin())) return denied();
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
     await connectToDatabase();
     const body = await request.json();
     delete body.noticeWebhookAt; // 발송 표시는 서버만 쓴다

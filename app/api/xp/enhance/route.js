@@ -8,6 +8,8 @@ import { getLevelByXp } from "@/lib/leveling";
 import { buildEnhanceView, enhancePolicy, enhanceCost, ENHANCE_LABEL } from "@/lib/enhance";
 import { xpToPoint } from "@/lib/pointRate";
 import { denyIfLevelClosed } from "@/lib/levelAccess";
+import { denyIfMaintenance } from "@/lib/apiAuth";
+import { logWallet } from "@/lib/wallet";
 import BotSetting from "@/models/BotSetting";
 import UserXp from "@/models/UserXp";
 
@@ -50,6 +52,9 @@ export async function POST(request) {
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
     }
+    // 점검 중에는 강화를 막는다 (관리자 통과)
+    const maint = await denyIfMaintenance(session);
+    if (maint) return maint;
 
     const body = await request.json().catch(() => ({}));
     const kind = body?.kind === "voice" ? "voice" : body?.kind === "chat" ? "chat" : "";
@@ -121,6 +126,19 @@ export async function POST(request) {
         );
       }
       return NextResponse.json({ success: false, message: shortMsg, view, balance: balanceOf(now) }, { status: 400 });
+    }
+
+    // 📌 강화 비용은 다른 기록(Payout · Purchase)에 남지 않으므로 원장에 남긴다 — 차감이 확정된 바로 뒤에(되돌리는 경로 없음).
+    //    아래 레벨 재계산이 터져도 이미 빠진 값은 내역에 보여야 한다
+    if (charged > 0) {
+      await logWallet({
+        userId,
+        currency: field,
+        amount: -charged,
+        kind: "enhance",
+        label: `강화 · ${ENHANCE_LABEL[kind]} ${cur + 1}단계`,
+        meta: { kind, level: cur + 1 },
+      });
     }
 
     // XP 결제면 레벨이 내려갔을 수 있다 — 다시 계산하고 봇이 보상 역할을 다시 맞추도록 표시 (checkout 과 동일)

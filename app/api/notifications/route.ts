@@ -4,8 +4,9 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin, requireAdmin } from "@/lib/apiAuth";
 import Notification from "@/models/Notification";
+import UserXp from "@/models/UserXp";
 
 // ── 디스코드 사용자명(핸들) 또는 ID → 유저 조회 (길드 멤버 검색) ─────────────
 // ⚠️ 사용자명이 정확히 같은 사람(또는 입력한 ID 의 멤버)만 인정한다 — 검색은 앞글자 일치라,
@@ -103,11 +104,28 @@ async function sendDiscordDM(userId: string, type: string, title: string, siteUr
 
 // 📌 본인 알림 조건 — 요청이 보낸 닉네임 · ID 가 아니라 서버 세션으로 정한다.
 //    예전엔 쿼리의 user · id 를 그대로 믿어서, 닉네임만 알면 남의 알림을 읽고 읽음 처리할 수 있었다.
+//    ID 로 찾고, 이름은 ID 가 비어 있는 옛 알림에만 쓴다 — 이름으로 넓게 찾으면 같은 이름을 예전에 쓰던
+//    다른 사람(ID 가 다른)에게 간 경고 · 제재가 내 알림함에 섞였다.
 function mineFilter(session: any) {
   const or: any[] = [];
-  if (session?.user?.name) or.push({ recipientName: session.user.name });
-  if (session?.user?.id) or.push({ recipientId: session.user.id });
+  if (session?.user?.id) or.push({ recipientId: String(session.user.id) });
+  if (session?.user?.name) or.push({ recipientName: session.user.name, recipientId: { $in: ["", null] } });
   return or.length ? { $or: or } : null;
+}
+
+// 📌 디스코드 조회가 실패했을 때(봇 권한 · 네트워크) — 봇이 적어 둔 XP 문서(UserXp.username)로 ID 를 찾는다.
+//    같은 이름이 둘 이상이면(이름을 바꾼 사람의 옛 기록) 누구인지 알 수 없으므로 찾지 못한 것으로 본다
+async function recipientFromDb(input: string): Promise<{ id: string; name: string } | null> {
+  try {
+    if (/^\d{17,20}$/.test(input)) {
+      const d: any = await UserXp.findOne({ userId: input }, { username: 1 }).lean();
+      return { id: input, name: d?.username || input };
+    }
+    const rows: any[] = await UserXp.find({ username: { $in: [input, input.toLowerCase()] } }, { userId: 1, username: 1 }).limit(2).lean();
+    return rows.length === 1 && rows[0].userId ? { id: String(rows[0].userId), name: rows[0].username || input } : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── [조회] 내 알림 목록 (또는 관리자 발송 이력) ──────────────
@@ -121,10 +139,8 @@ export async function GET(request: Request) {
 
     // 관리자 발송 이력
     if (sent) {
-      const session: any = await getServerSession(authOptions);
-      if (!isAdminName(session?.user?.name)) {
-        return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-      }
+      const deny = await denyIfNotAdmin();
+      if (deny) return deny;
       const list = await Notification.find().sort({ createdAt: -1 }).limit(100);
       return NextResponse.json({ success: true, data: list });
     }
@@ -147,8 +163,8 @@ export async function GET(request: Request) {
 // ── [발송] 관리자 → 특정 유저 알림 발송 ──────────────────────
 export async function POST(request: Request) {
   try {
-    const session: any = await getServerSession(authOptions);
-    if (!isAdminName(session?.user?.name)) {
+    const auth: any = await requireAdmin();
+    if (auth.deny) {
       return NextResponse.json({ success: false, error: "관리자만 발송할 수 있습니다." }, { status: 403 });
     }
 
@@ -164,24 +180,26 @@ export async function POST(request: Request) {
     if (found === "missing") {
       return NextResponse.json({ success: false, error: "디스코드 서버에서 해당 사용자명(핸들)을 찾지 못했습니다." }, { status: 404 });
     }
-    // 조회 자체가 실패하면(봇 권한 · 네트워크) 입력값 그대로 저장한다 — 알림함은 로그인 이름(또는 ID)이 정확히 같은 사람에게만 보인다
-    const recipientName = found ? found.name : input;
-    const recipientId = found ? found.id : /^\d{17,20}$/.test(input) ? input : null;
-
-    // 디스코드 ID를 찾은 경우에만 DM 핑 발송 (본문은 사이트에 저장)
-    let dmSent = false;
-    if (recipientId) {
-      dmSent = await sendDiscordDM(recipientId, type || "안내", title.trim(), getBaseUrl(request));
+    // 📌 알림은 반드시 디스코드 ID 로 저장한다(알림함은 ID 로 찾는다 — 이름은 바뀔 수 있다).
+    //    디스코드 조회 자체가 실패하면(봇 권한 · 네트워크) 봇 XP 기록에서 ID 를 찾고, 그래도 없으면 보내지 않는다
+    const who = found || (await recipientFromDb(input));
+    if (!who) {
+      return NextResponse.json({ success: false, error: "수신자를 확인하지 못했습니다. 잠시 후 다시 시도하거나 디스코드 ID 로 입력해 주세요." }, { status: 502 });
     }
+    const recipientName = who.name;
+    const recipientId = who.id;
+
+    // DM 핑 발송 (본문은 사이트에 저장)
+    const dmSent = await sendDiscordDM(recipientId, type || "안내", title.trim(), getBaseUrl(request));
 
     const doc = await Notification.create({
       recipientName,
-      recipientId: recipientId || undefined,
+      recipientId,
       type: type || "안내",
       title: title.trim(),
       content: content.trim(),
       dmSent,
-      sentBy: session.user.name,
+      sentBy: auth.name,
     });
 
     return NextResponse.json({
@@ -201,6 +219,8 @@ export async function PATCH(request: Request) {
     const session: any = await getServerSession(authOptions);
     const mine = mineFilter(session);
     if (!mine) return NextResponse.json({ success: false, error: "로그인이 필요합니다." }, { status: 401 });
+    // 📌 읽음 · 숨김(아래 DELETE ?mine=all)은 점검 중에도 막지 않는다 — 내 알림함 정리일 뿐이고,
+    //    점검 화면에서도 상단 종은 보여 '전체 삭제'를 누를 수 있다(막으면 화면만 비고 새로고침하면 되살아난다)
     await connectToDatabase();
     const body = await request.json();
 
@@ -245,7 +265,7 @@ export async function DELETE(request: Request) {
       const r = await Notification.updateMany({ ...mine, hiddenAt: null }, { hiddenAt: now });
       return NextResponse.json({ success: true, deleted: r.modifiedCount || 0 });
     }
-    if (!isAdminName(session?.user?.name)) {
+    if ((await requireAdmin()).deny) {
       return NextResponse.json({ success: false, error: "관리자만 삭제할 수 있습니다." }, { status: 403 });
     }
     await connectToDatabase();

@@ -1,10 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+import { denyIfNotAdmin } from "@/lib/apiAuth";
 import Code from "@/models/Code";
 import Coupon from "@/models/Coupon";
 
@@ -12,10 +10,8 @@ import Coupon from "@/models/Coupon";
 //    같은 code가 이미 쿠폰에 있으면 건너뛰므로 여러 번 눌러도 안전하다
 export async function POST() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!isAdminName(session?.user?.name)) {
-      return NextResponse.json({ success: false, error: "권한이 없습니다." }, { status: 403 });
-    }
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
 
     await connectToDatabase();
     const codes = await Code.find().lean();

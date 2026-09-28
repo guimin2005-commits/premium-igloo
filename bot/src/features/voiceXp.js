@@ -2,13 +2,15 @@
 //    📌 아이템 효과: "음성 1회당"은 이 1회 지급에 더하고(percent 는 기본 음성 XP 기준, 음소거 배율은 전체에),
 //       "하루 음성 N분"은 오늘 누적 분이 N 이상이 되면 하루 1번 따로, "출석 · 출석 N번째"는 출석 지급에 더한다.
 //       효과는 디스코드 역할이 아니라 인벤토리 보유 아이템 기준이다(itemEffects.js — 아이템 기본 효과 포함).
+//    📌 레벨 비공개면 XP · 출석 · 효과는 주지 않고(grantXp · claimAttendance 가 막는다) 음성 시간 · 오늘 누적 분만 쌓는다.
 import { UserXp } from "../db.js";
 import { getVoiceBracketBonus, kstToday, VOICE_TIME_START } from "../leveling.js";
-import { getBuffXp, getAttendBuffXp } from "../roleConfigs.js";
-import { effectXp, getAttendEffectXp } from "../itemEffects.js";
+import { getBuffXp } from "../roleConfigs.js";
+import { effectXp } from "../itemEffects.js";
 import { getChannelPolicy } from "../channelConfigs.js";
-import { getSettings, getActiveBoostXp, getMuteMultiplier } from "../botSettings.js";
+import { getSettings, getActiveBoostXp, getMuteMultiplier, isLevelOpen } from "../botSettings.js";
 import { grantXp, grantOnceEffects } from "../xp.js";
+import { claimAttendance } from "../attend.js";
 import { config } from "../config.js";
 
 async function voiceXpTick(client) {
@@ -81,20 +83,13 @@ async function voiceXpTick(client) {
         { new: true, projection: { voiceTodayMin: 1, lastAttendDate: 1 } }
       );
 
-      if (upd && upd.voiceTodayMin >= attendMin && upd.lastAttendDate !== today) {
-        // 자물쇠부터 — 오늘 미출석인 경우에만 통과하는 조건부 갱신 (틱이 겹쳐도 한 번만)
-        //    갱신된 누적 출석 수를 돌려받는다 — "출석 N번째마다" 효과가 이 값으로 판정한다
-        const lock = await UserXp.findOneAndUpdate(
-          { userId: member.id, lastAttendDate: { $ne: today } },
-          { $set: { lastAttendDate: today }, $inc: { attendCount: 1 } },
-          { new: true, projection: { attendCount: 1 } }
-        );
-        if (lock) {
-          const attendAmount = (s.attendXp || 0) + getAttendBuffXp(member) + getAttendEffectXp(member, lock.attendCount);
-          if (attendAmount > 0) {
-            await grantXp(member, attendAmount, { reason: "attend" });
-            console.log(`✅ 출석 자동 지급: ${member.displayName} +${attendAmount.toLocaleString()} (음성 ${upd.voiceTodayMin}분)`);
-          }
+      //    📌 자물쇠 · 지급 · 연속 출석은 claimAttendance(attend.js) 한 곳에서 — /출석체크와 같은 규칙, 합쳐서 하루 한 번.
+      //       레벨 비공개면 자물쇠를 세우지 않는다(공개된 날 다시 받을 수 있게). 한 명의 오류가 이번 틱의 다른 사람을 막지 않게 따로 잡는다.
+      if (upd && upd.voiceTodayMin >= attendMin && upd.lastAttendDate !== today && isLevelOpen()) {
+        try {
+          await claimAttendance(member, { source: "voice" });
+        } catch (e) {
+          console.error(`출석 자동 지급 오류 (${member.displayName}):`, e.message);
         }
       }
 

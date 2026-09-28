@@ -11,6 +11,7 @@ import Payout from "@/models/Payout";
 import UserXp from "@/models/UserXp";
 import { applyTierMultiplier, addPoints } from "@/lib/points";
 import { denyIfLevelClosed } from "@/lib/levelAccess";
+import { denyIfMaintenance } from "@/lib/apiAuth";
 
 // ── [조회] 오늘의 일일 퀘스트 + 내 진행도 ─────────────────────
 export async function GET() {
@@ -39,6 +40,9 @@ export async function POST(request) {
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, error: "로그인이 필요합니다." }, { status: 401 });
     }
+    // 점검 중에는 수령을 막는다 (관리자 통과)
+    const maint = await denyIfMaintenance(session);
+    if (maint) return maint;
 
     const body = await request.json().catch(() => ({}));
     const questId = String(body?.questId || "").trim();
@@ -121,9 +125,14 @@ export async function POST(request) {
     // POINT 는 큐를 타지 않는다 — 디스코드 부작용이 없으므로 사이트가 바로 쓴다.
     //    자물쇠(QuestClaim)를 이미 잡았으므로 중복 지급은 구조적으로 막혀 있다.
     //    다만 실패를 삼키면 안 된다 — POINT 전용 퀘스트는 이게 유일한 지급이라 자물쇠만 남으면 그 주기 보상을 통째로 잃는다.
+    //    📌 POINT 는 Payout 에 남지 않으므로 반영된 뒤 원장(WalletLog)에 한 줄 남긴다 — XP 몫은 위 Payout 이 센다
     if (payPoint > 0) {
       try {
-        await addPoints(userId, payPoint);
+        await addPoints(userId, payPoint, {
+          kind: "quest-point",
+          label: `${PERIOD_LABEL[quest.period] || "일일"} 퀘스트: ${quest.name}`,
+          refId: String(claim._id),
+        });
       } catch (e) {
         // 자물쇠만 풀면 방금 넣은 XP 예약이 남아 다시 수령할 때 XP 가 두 번 나간다 — 봇이 아직 집지 않았으면 함께 지운다.
         //    이미 집어 갔으면(처리 중 · 지급) XP 는 나간 것이라 자물쇠를 남겨 둔다
