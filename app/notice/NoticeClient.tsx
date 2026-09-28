@@ -105,12 +105,12 @@ export default function NoticeClient() {
   return (
     <main className="w-full flex-1 flex flex-col text-[#131313]">
       <section className="w-full max-w-5xl mx-auto px-5 md:px-8 pt-10 md:pt-12 pb-24 flex-1">
-        {/* 제목 줄 — 📌 min-h-9: 관리자 글쓰기 단추(h-9)가 세션을 읽은 뒤 붙어도 줄 높이가 그대로라 아래 탭 줄이 밀리지 않는다 */}
-        <div className="flex items-end justify-between gap-4 mb-5 min-h-9">
+        {/* 제목 줄 — 📌 관리자 글쓰기 단추(h-9)는 위쪽 음수 여백으로 제목 높이 안에 들인다 — 세션을 읽은 뒤 단추가 붙어도 줄 높이가 제목 그대로라 아래 탭 줄이 밀리지 않는다 */}
+        <div className="flex items-end justify-between gap-4 mb-5">
           <h1 className="text-[30px] md:text-[34px] font-black tracking-tight leading-none">공지사항</h1>
           {isAdmin && (
             <button onClick={() => router.push("/write?category=공지사항")}
-              className="h-9 px-4 rounded-full bg-[#131313] hover:bg-black text-white text-[12px] font-extrabold transition-colors">글쓰기</button>
+              className="h-9 -mt-1.5 md:-mt-0.5 px-4 rounded-full bg-[#131313] hover:bg-black text-white text-[12px] font-extrabold transition-colors">글쓰기</button>
           )}
         </div>
 

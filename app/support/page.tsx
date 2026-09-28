@@ -499,8 +499,7 @@ export default function SupportPage() {
                   />
                 ))}
               </div>
-              {/* 📌 설명 줄은 고르기 전에도 자리를 잡아 둔다 — 처음 고를 때 줄이 생기며 왼쪽 '문의 유형' 이름이 아래로 내려앉지 않게 */}
-              <p aria-hidden={!typeDesc} className={`mt-1.5 text-[12px] text-[#5a5a5a] ${typeDesc ? "" : "invisible"}`}>{typeDesc || " "}</p>
+              {typeDesc && <p className="mt-1.5 text-[12px] text-[#5a5a5a]">{typeDesc}</p>}
             </FormRow>
 
             {/* 유형을 고르면 아래 줄이 높이째 열린다 */}

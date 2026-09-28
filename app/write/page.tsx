@@ -971,11 +971,7 @@ export default function AdminWritePage() {
                       {survey.questions.length > 0 && (
                         <div className="ml-auto flex items-center gap-1">
                           <Btn variant="ghost" size="sm" onClick={() => setSurvey({ ...survey, questions: survey.questions.map((q) => ({ ...q, required: !survey.questions.every((x) => x.required) })) })}>
-                            {/* 📌 두 글자를 한 칸에 겹쳐 폭을 긴 쪽에 고정 — 누를 때마다 단추 폭이 바뀌어 흔들리지 않게 */}
-                            <span className="grid place-items-center">
-                              <span className={`col-start-1 row-start-1 ${survey.questions.every((q) => q.required) ? "" : "invisible"}`}>필수 전체 해제</span>
-                              <span className={`col-start-1 row-start-1 ${survey.questions.every((q) => q.required) ? "invisible" : ""}`}>전체 필수로</span>
-                            </span>
+                            {survey.questions.every((q) => q.required) ? "필수 전체 해제" : "전체 필수로"}
                           </Btn>
                           <Btn variant="ghost" size="sm" onClick={() => { if (confirm("작성한 문항을 모두 삭제할까요?")) setSurvey({ ...survey, questions: [] }); }}>전체 삭제</Btn>
                         </div>
@@ -1095,11 +1091,7 @@ export default function AdminWritePage() {
                                   ))}
                                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-2">
                                     <button type="button" onClick={() => updateQuestion(qi, { options: [...q.options, ""] })} className="text-[12px] font-bold text-[#e91e3f] hover:text-[#d01634]">+ 선택지 추가</button>
-                                    {/* 📌 두 글자를 한 칸에 겹쳐 폭을 긴 쪽에 고정 — 누를 때 글자 폭이 바뀌어 옆 '가나다 정렬'이 밀리지 않게 */}
-                                    <button type="button" onClick={() => updateQuestion(qi, { etc: !q.etc })} className={`inline-grid text-left text-[12px] font-bold ${q.etc ? "text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
-                                      <span aria-hidden={!q.etc} className={`col-start-1 row-start-1 ${q.etc ? "" : "invisible"}`}>기타(직접 입력) 사용 중</span>
-                                      <span aria-hidden={q.etc} className={`col-start-1 row-start-1 ${q.etc ? "invisible" : ""}`}>기타(직접 입력) 추가</span>
-                                    </button>
+                                    <button type="button" onClick={() => updateQuestion(qi, { etc: !q.etc })} className={`text-[12px] font-bold ${q.etc ? "text-[#e91e3f]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>기타(직접 입력) {q.etc ? "사용 중" : "추가"}</button>
                                     <button type="button" onClick={() => updateQuestion(qi, { options: [...q.options].sort((a, b) => a.localeCompare(b, "ko")) })} className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313]">가나다 정렬</button>
                                     <span className="text-[12px] text-[#8a8a8a]">Enter=추가 · 여러 줄 붙여넣기=일괄 등록</span>
                                   </div>

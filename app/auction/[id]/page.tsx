@@ -839,9 +839,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                         {r.playerIdx === -1 && <span className="shrink-0 text-[8px] font-black text-gray-600">리더</span>}
                         {r.golden && <span className="shrink-0 text-[8px] font-black text-amber-300">ALL</span>}
                       </span>
-                      {/* 📌 리더 줄도 가격 줄 자리를 비워 둔다 — 비우면 그 칸만 낮아져 옆 포지션 단과 줄이 어긋난다 */}
                       <span className="block text-[9px] font-bold text-gray-600 tabular-nums mt-0.5">
-                        {r.playerIdx === -1 ? "\u00a0" : `${r.price.toLocaleString()} Pt`}
+                        {r.playerIdx === -1 ? "" : `${r.price.toLocaleString()} Pt`}
                       </span>
                     </button>
                   );
@@ -1086,7 +1085,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
 
                 {/* 📌 Ready/Wait 폭이 달라 준비를 누를 때마다 옆 포인트 칸이 밀렸다 → 두 글자를 한 칸에 겹쳐 폭 고정 */}
                 {auction.status === "준비중" && (
-                  <span className="shrink-0 grid auc-label-xs">
+                  <span className="shrink-0 grid justify-items-end auc-label-xs">
                     <span className={`col-start-1 row-start-1 text-emerald-400 ${l.ready ? "" : "invisible"}`}>Ready</span>
                     <span className={`col-start-1 row-start-1 text-gray-600 ${l.ready ? "invisible" : ""}`}>Wait</span>
                   </span>
@@ -1224,12 +1223,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           <div
             key={i}
             style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }}
-            className={`auc-in relative flex flex-col border p-2 ${
+            className={`auc-in relative border p-2 ${
               live ? "border-[#e91e3f] bg-[#e91e3f]/[0.10]" : gold ? "border-amber-400/35 bg-amber-400/[0.05]" : sold ? "border-white/[0.07] opacity-70" : "border-white/12"
             }`}
           >
-            {/* 📌 위쪽이 늘어나 상태 띠를 바닥으로 민다 — 티어·포지션 줄 유무가 달라도 같은 줄 카드의 띠 높이가 같다 */}
-            <div className="flex flex-1 gap-2">
+            <div className="flex gap-2">
               {/* 실루엣 썸네일 */}
               <span className={`shrink-0 w-8 h-11 rounded border flex items-center justify-center ${gold ? "border-amber-400/40 bg-amber-400/10" : "border-white/10 bg-white/[0.04]"}`}>
                 {prof ? (
@@ -1261,8 +1259,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* 상태 띠 */}
-            {/* 📌 진행자 화면은 '호명' 버튼 높이만큼 띠를 잡아둔다 — 버튼 있는 카드만 구분선이 4px 높았다 */}
-            <div className={`flex items-center gap-1.5 mt-1.5 pt-1.5 border-t border-white/[0.07] ${role === "host" && auction.status !== "준비중" ? "min-h-[24.5px]" : ""}`}>
+            <div className="flex items-center gap-1.5 mt-1.5 pt-1.5 border-t border-white/[0.07]">
               <span className="text-[8px] font-black text-gray-700 tabular-nums">{String(i + 1).padStart(2, "0")}</span>
               {sold ? (
                 <>
@@ -1450,9 +1447,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                           아직 팔리지 않아 표시할 게 없으면 선 하나만 그어 카드 바닥을 맞춘다. */}
                       {/* 아직 팔리지 않았으면 선만 긋되, 낙찰 줄이 들어갈 높이는 미리 잡아둔다 —
                           한 명이 낙찰될 때마다 카드 전체가 커지지 않도록 */}
-                      {/* 📌 진행자 화면은 버튼(호명·낙찰 취소) 높이까지 잡아둔다 — 카드마다 구분선 높이가 달랐고,
-                             호명·낙찰 때마다 그 카드의 선만 오르내렸다 */}
-                      <div className={`mt-auto border-t border-white/[0.05] pt-1.5 ${role === "host" && auction.status !== "준비중" ? "min-h-[36px]" : "min-h-[22px]"}`}>
+                      <div className="mt-auto border-t border-white/[0.05] pt-1.5 min-h-[22px]">
                         {p.status === "낙찰" ? (
                           <div className="flex items-center gap-1.5">
                             <p className="text-[10px] font-bold text-gray-500 truncate flex-1">{auction.leaders[p.soldTo]?.name} · {p.soldPrice?.toLocaleString()} Pt</p>
@@ -1586,13 +1581,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
               {strategyLeft > 0 ? (
                 <button onClick={async () => { const d = await act({ action: "host:strategy", seconds: 0 }); if (d?.success) patchAuction((a) => { a.strategyUntil = null; }); }} className="text-xs font-black bg-blue-500/80 hover:bg-blue-500 text-white px-4 py-1.5 transition-colors">전략 타임 종료</button>
               ) : (
-                /* 📌 '전략 타임 종료'와 폭을 맞춘다 — 켜고 끌 때마다 왼쪽 볼륨·시점 선택이 좌우로 밀렸다 */
-                <button onClick={() => setStrategyModalOpen(true)} className="text-xs font-black bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 transition-colors">
-                  <span className="grid">
-                    <span aria-hidden className="invisible col-start-1 row-start-1">전략 타임 종료</span>
-                    <span className="col-start-1 row-start-1">전략 타임</span>
-                  </span>
-                </button>
+                <button onClick={() => setStrategyModalOpen(true)} className="text-xs font-black bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 transition-colors">전략 타임</button>
               )}
               {invMode && <button onClick={async () => { const d = await act({ action: "host:assignTime", seconds: 180 }); if (d?.success) { sfxStrategy(); patchAuction((a) => { a.assignUntil = new Date(serverNow() + 180 * 1000).toISOString(); }); showToast("팀원 배정 시간 3분이 시작되었습니다"); } else showToast(d?.message || "배정 시간 부여에 실패했습니다"); }} className="text-xs font-black bg-blue-500/80 hover:bg-blue-500 text-white px-4 py-1.5 transition-colors">팀원 배정 시간(3분)</button>}
               <button onClick={() => setConfirmCfg({ title: "경매 종료", message: invMode ? "경매를 종료합니다. 종료 후에는 인벤토리·포지션 조정이 불가합니다. 계속할까요?" : "모든 경매를 종료하시겠습니까?", confirmLabel: "종료", onConfirm: () => act({ action: "host:end" }) })} className="text-xs font-black bg-white/10 hover:bg-red-500/80 text-white px-4 py-1.5 transition-colors">종료</button>
@@ -1638,8 +1627,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                     {myLeader.ready ? (
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.8} className="w-4 h-4 shrink-0 text-emerald-400"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
                     ) : (
-                      /* 📌 점도 체크(w-4)와 같은 폭의 자리에 둔다 — 누를 때마다 버튼 폭이 10px 바뀌었다 */
-                      <span className="w-4 h-4 shrink-0 flex items-center justify-center"><span className="w-1.5 h-1.5 rounded-full bg-white/90" /></span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/90 shrink-0" />
                     )}
                     {myLeader.ready ? "준비 해제" : "준비 완료"}
                   </span>
@@ -2225,11 +2213,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                   {/* POINT — 남은 예산. 내 자원은 화이트, 레드는 경매 호가·LIVE 전용 */}
                   <div>
                     <p className="auc-label text-gray-500">Point</p>
-                    {/* 📌 시작 포인트 자릿수만큼 폭을 잡아둔다 — 100,000 → 99,900 처럼 자릿수가 줄 때 옆 ROSTER 가 밀렸다 */}
-                    <p className="grid text-3xl font-black text-white tabular-nums leading-none mt-1.5">
-                      <span aria-hidden className="invisible col-start-1 row-start-1">{(S.leaderPoints || 0).toLocaleString()}</span>
-                      <span className="col-start-1 row-start-1">{myLeader.points.toLocaleString()}</span>
-                    </p>
+                    <p className="text-3xl font-black text-white tabular-nums leading-none mt-1.5">{myLeader.points.toLocaleString()}</p>
                   </div>
 
                   <span className="hidden sm:block w-px h-11 bg-white/12" />
@@ -2382,11 +2366,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
                 className={`ml-auto flex items-center gap-1.5 px-2 py-1 border text-[9px] font-black transition-colors ${showSystemChat ? "border-white/25 text-gray-300 hover:border-white hover:text-white" : "border-white/10 text-gray-600 hover:text-gray-300"}`}
               >
                 <MegaphoneIcon className="w-2.5 h-2.5 shrink-0" />
-                {/* 📌 ON/OFF 를 한 칸에 겹쳐 폭 고정 — 누를 때마다 버튼 폭이 바뀌어 아이콘이 좌우로 움직였다 */}
-                <span>공지 <span className="inline-grid">
-                  <span className={`col-start-1 row-start-1 ${showSystemChat ? "" : "invisible"}`}>ON</span>
-                  <span className={`col-start-1 row-start-1 ${showSystemChat ? "invisible" : ""}`}>OFF</span>
-                </span></span>
+                공지 {showSystemChat ? "ON" : "OFF"}
               </button>
             </div>
             <div ref={chatBoxRef} className="flex-1 overflow-y-auto overscroll-contain p-3 space-y-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">

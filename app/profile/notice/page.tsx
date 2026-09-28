@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { LuxStyles } from "../../components/Lux";
@@ -48,15 +48,12 @@ export default function NoticeInboxPage() {
   };
 
   // 들어오면 안 읽은 알림을 읽음 처리
-  //    📌 서버에만 알리고 화면의 빨간 점은 이번에 보는 동안 그대로 둔다 — 응답이 오자마자 점을 지우면
-  //       들어온 직후 점 자리만큼 제목들이 왼쪽으로 당겨져 목록이 움직인다 (다시 들어오면 점 없이 나온다)
-  const markedRef = useRef(false);
   useEffect(() => {
-    if (markedRef.current || status !== "authenticated" || !session?.user?.name || !rows?.some((n) => !n.read)) return;
-    markedRef.current = true;
+    if (status !== "authenticated" || !session?.user?.name || !rows?.some((n) => !n.read)) return;
     const uid = (session.user as any)?.id;
     fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ markAll: true, user: session.user.name, id: uid }) })
-      .catch(() => { markedRef.current = false; });
+      .then(() => setRows((prev) => (prev ? prev.map((n) => ({ ...n, read: true })) : prev)))
+      .catch(() => {});
   }, [rows, status, session]);
 
   return (
@@ -84,8 +81,9 @@ export default function NoticeInboxPage() {
                 <Link key={n._id} href={`/profile/notice/${n._id}${q}`} className="w-full text-left py-3.5 px-1 flex items-center gap-3.5 hover:bg-black/[0.02] transition-colors group outline-none">
                   <span className={`shrink-0 text-[10px] font-black tracking-wider border px-2 py-1 rounded ${NOTI_TYPE_STYLES[n.type] || NOTI_TYPE_STYLES["일반"]}`}>{n.type}</span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] shrink-0"></span>}
+                    {/* 📌 안 읽음 점은 제목 앞 틈(칩과의 사이)에 걸어 둔다 — 자리를 차지하지 않아, 들어오자마자 읽음 처리로 점이 사라져도 제목들이 왼쪽으로 당겨지지 않는다 */}
+                    <div className="relative flex items-center gap-2">
+                      {!n.read && <span aria-hidden className="absolute -left-2.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>}
                       <h4 className="text-sm font-bold truncate text-[#131313]">{n.title}</h4>
                     </div>
                     <p className="text-xs text-[#8a8a8a] truncate mt-0.5">{stripMd(n.content)}</p>

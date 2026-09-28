@@ -335,15 +335,13 @@ export default function CheckoutPage() {
                         {itemTypeLabel(r.item.type)} · 수량 {r.qty}{base != null && <> · <span className="tabular-nums">{expiryLabel(base + (r.days ?? 0) * 86400000)}까지</span></>}
                       </p>
                     </div>
-                    <div className="text-right shrink-0">
+                    <div className="relative text-right shrink-0">
                       {/* 고른 기간의 값 — 합계(subtotal · listTotal)와 같은 기준 */}
                       {/* 빙옥 전용 상품은 빙옥으로 (카드 · 장바구니와 같은 올림) */}
                       <div className="text-sm font-black tabular-nums">{(shownPrice(r.item, salePrice(r.item, r.days)) * r.qty).toLocaleString()} {priceUnit(r.item)}</div>
-                      {/* 📌 취소선 줄은 할인이 없어도 자리를 잡는다 — 줄마다 가격 높이가 같게 (줄 높이는 썸네일이 정해 그대로) */}
-                      {salePrice(r.item, r.days) < basePrice(r.item, r.days) ? (
-                        <div className="text-[10px] text-[#a3a3a3] line-through tabular-nums">{(shownPrice(r.item, basePrice(r.item, r.days)) * r.qty).toLocaleString()} {priceUnit(r.item)}</div>
-                      ) : (
-                        <div aria-hidden className="invisible text-[10px]">{"\u00a0"}</div>
+                      {/* 📌 가격은 할인이 없을 때와 같은 자리(줄 가운데) — 취소선 정가는 그 아래로 늘어뜨려 줄마다 가격 높이가 같게 */}
+                      {salePrice(r.item, r.days) < basePrice(r.item, r.days) && (
+                        <div className="absolute right-0 top-full whitespace-nowrap text-[10px] text-[#a3a3a3] line-through tabular-nums">{(shownPrice(r.item, basePrice(r.item, r.days)) * r.qty).toLocaleString()} {priceUnit(r.item)}</div>
                       )}
                     </div>
                   </div>

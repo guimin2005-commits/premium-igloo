@@ -11,7 +11,6 @@ import {
   Segmented,
   SearchInput,
   Btn,
-  SwapLabel,
   DataTable,
   DetailPane,
   StatusChip,
@@ -286,16 +285,7 @@ export default function AdminHonorsPage() {
 
       {/* ── 수동/대회 토글 · 검색 · 등재 ── */}
       <Toolbar
-        // 📌 '대회 우승'에서는 등재 단추를 숨기되 자리는 지킨다 — 모바일에서 단추 줄이 생겼다 없어지며 아래 표가 위아래로 뛰던 것
-        right={
-          <Btn
-            className={tab === "manual" ? "" : "invisible"}
-            aria-hidden={tab !== "manual" || undefined}
-            onClick={() => openForm({ mode: "create", data: { ...EMPTY } })}
-          >
-            + 새 기록 등재
-          </Btn>
-        }
+        right={tab === "manual" && <Btn onClick={() => openForm({ mode: "create", data: { ...EMPTY } })}>+ 새 기록 등재</Btn>}
       >
         <Segmented
           options={[
@@ -351,7 +341,7 @@ export default function AdminHonorsPage() {
               )}
               <div className="ml-auto flex items-center gap-2">
                 <Btn variant="secondary" onClick={() => setForm(null)}>취소</Btn>
-                <Btn onClick={submitNearest} disabled={isSaving}><SwapLabel swap={isSaving} to="저장 중…">{form.mode === "create" ? "등재" : "저장"}</SwapLabel></Btn>
+                <Btn onClick={submitNearest} disabled={isSaving}>{isSaving ? "저장 중…" : form.mode === "create" ? "등재" : "저장"}</Btn>
               </div>
             </>
           )
@@ -411,7 +401,7 @@ export default function AdminHonorsPage() {
               <Link href={`/write?id=${winnerEdit._id}`} className={linkBtn("md")}>대회 글 ↗</Link>
               <div className="ml-auto flex items-center gap-2">
                 <Btn variant="secondary" onClick={() => setWinnerEdit(null)}>취소</Btn>
-                <Btn onClick={submitNearest} disabled={isSaving}><SwapLabel swap={isSaving} to="저장 중…">저장</SwapLabel></Btn>
+                <Btn onClick={submitNearest} disabled={isSaving}>{isSaving ? "저장 중…" : "저장"}</Btn>
               </div>
             </>
           )

@@ -64,15 +64,15 @@ export default function ProductCard({
         <TypeBadge type={it.type} className="inline-block mb-1.5 px-2 py-[3px] text-[10px] leading-none align-middle" />
         {/* 이름은 작고 가볍게, 가격이 주인공 — 둘이 같은 크기면 값이 안 읽힌다 */}
         <h3 className="text-[13px] font-semibold text-[#5a5a5a] leading-snug line-clamp-2 break-keep">{it.name}</h3>
-        {/* 가격은 늘 이름 바로 아래 — 할인율은 빨간 글자, 큰 숫자는 할인가.
-            취소선 정가 · "…부터" 는 가격 아래 작은 줄이라, 있든 없든 같은 줄 카드의 가격 높이가 같다 */}
+        {/* 할인 중이면 정가는 취소선으로 가격 위에(사용자 결정 — 아래로 내리면 어색), 할인율은 빨간 글자, 큰 숫자는 할인가.
+            가격 줄 높이를 맞추려고 할인 없는 카드에 빈 줄을 두지는 않는다(이름-가격 사이가 떠 보여 반려) */}
         {/* 빙옥 전용 상품은 같은 규칙에 단위만 빙옥 (priceText · shownPrice — 올림) */}
-        <p className="mt-2 text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none">
+        {pct > 0 && <s className="block mt-2 text-[11.5px] text-[#a3a3a3] tabular-nums leading-none">{priceText(it, Number(pick.list || 0))}</s>}
+        <p className={`${pct > 0 ? "mt-1" : "mt-2"} text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none`}>
           {pct > 0 && <span className="mr-1.5 text-[14px] font-black text-[#e91e3f]">{pct}%</span>}
           {shownPrice(it, pick.price).toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">{priceUnit(it)}</span>
           {isTimed(it) && pick.days != null && pick.days > 0 && <span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">/ {durationLabel(pick.days)}</span>}
         </p>
-        {pct > 0 && <s className="block mt-1.5 text-[11.5px] text-[#a3a3a3] tabular-nums leading-none">{priceText(it, Number(pick.list || 0))}</s>}
         {from && <p className="mt-1.5 text-[11.5px] font-bold text-[#8a8a8a] tabular-nums leading-none">{durationLabel(from.days)} {priceText(it, from.price)}부터</p>}
       </Link>
 

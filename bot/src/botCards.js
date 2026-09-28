@@ -43,14 +43,15 @@ export const CARD_FIELDS = {
   rankerAnnounce: ["season", "seasonName", "top: [{ name, avatar, xp }] — 1위부터 최대 3명"],
 };
 
-// 📌 카드 스킨 — 아이템 효과 cardSkin 의 skin 키. 테두리 · 바탕 톤만 바꾼다(글자 · 사진 링 · 막대 · 등급 빛은 그대로).
+// 📌 카드 스킨 — 아이템 효과 cardSkin 의 skin 키. 테두리 · 무늬만 바꾼다(바탕 톤 · 글자 · 사진 링 · 막대 · 등급 빛은 그대로).
+//    ⚠️ 등급 색(오른쪽 위 빛 · 링 · 문장)과 헷갈리지 않게 스킨은 카드를 색으로 물들이거나 번지는 빛을 얹지 않는다
 //    레벨업 · /레벨 · /랭크 · /출석체크 카드에만 — RANKER 발표는 스킨 없음. 모르는 키 · 빈 값은 기본 카드.
-//    top/ink: 바탕 위 · 아래 색(ink 는 엠블럼 받침 원에도) · grid: 무늬("line" 격자 · "dot" 도트 · "hatch" 빗금) · tint/gridOp: 무늬 색 · 진하기
+//    grid: 무늬("line" 격자 · "dot" 도트 · "hatch" 빗금) · tint/gridOp: 무늬 색 · 진하기
 export const CARD_SKINS = {
-  gold: { label: "골드", top: "#241c0e", ink: "#15110a", grid: "line", tint: "#f0cf7e", gridOp: 0.055 },
-  aurora: { label: "오로라", top: "#0a1b21", ink: "#0a1016", grid: "line", tint: "#9ff0ff", gridOp: 0.04 },
-  ice: { label: "아이스", top: "#11222f", ink: "#0a131b", grid: "dot", tint: "#bfe6ff", gridOp: 0.1 },
-  crimson: { label: "크림슨", top: "#270c13", ink: "#16090c", grid: "hatch", tint: "#ff5a76", gridOp: 0.045 },
+  gold: { label: "골드", grid: "line", tint: "#f0cf7e", gridOp: 0.055 },
+  aurora: { label: "오로라", grid: "line", tint: "#9ff0ff", gridOp: 0.04 },
+  ice: { label: "아이스", grid: "dot", tint: "#bfe6ff", gridOp: 0.1 },
+  crimson: { label: "크림슨", grid: "hatch", tint: "#ff5a76", gridOp: 0.045 },
 };
 export const CARD_SKIN_KEYS = Object.keys(CARD_SKINS);
 export const SKIN_CARD_KINDS = ["levelUp", "cmdLevel", "cmdRank", "cmdAttend"];
@@ -305,7 +306,7 @@ function ringSvg(size, stroke, pct, color) {
 }
 
 // 바탕 — 잉크 + 등급 빛(오른쪽 위) + 왼쪽 위에서 번지는 옅은 격자. 레벨 대시보드 프로필 카드와 같은 문법
-//   skin(cardSkinOf) 이 있으면 바탕 톤 · 무늬를 바꾸고 스킨 장식(SKIN_DECO — 테두리 등)을 얹는다
+//   skin(cardSkinOf) 이 있으면 무늬를 바꾸고 스킨 장식(SKIN_DECO — 테두리 등)을 얹는다(바탕 톤은 그대로)
 function bgSvg(w, h, glow, skin) {
   const grid = skin ? skin.grid : "line";
   let d = "";
@@ -325,7 +326,7 @@ function bgSvg(w, h, glow, skin) {
   const deco = skin && SKIN_DECO[skin.key] ? SKIN_DECO[skin.key](w, h) : null;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
 <defs>
-<linearGradient id="base" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${skin ? skin.top : "#1c1c1c"}"/><stop offset="0.6" stop-color="${skin ? skin.ink : INK}"/></linearGradient>
+<linearGradient id="base" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1c1c"/><stop offset="0.6" stop-color="${INK}"/></linearGradient>
 <radialGradient id="glow" gradientUnits="userSpaceOnUse" cx="${w * 0.86}" cy="${h * 0.3}" r="${w * 0.48}"><stop offset="0" stop-color="${glow}" stop-opacity="0.3"/><stop offset="0.72" stop-color="${glow}" stop-opacity="0"/></radialGradient>
 <radialGradient id="fade" gradientUnits="userSpaceOnUse" cx="${w * 0.3}" cy="0" r="${w * 0.75}"><stop offset="0.3" stop-color="#ffffff"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
 <mask id="m"><rect width="${w}" height="${h}" fill="url(#fade)"/></mask>
@@ -339,40 +340,36 @@ ${deco ? deco.over : ""}</svg>`;
 }
 
 // ── 스킨 장식 — (w, h) → { defs, under(무늬 아래), over(맨 위 — 테두리) }. 글자가 없는 가장자리(안쪽 14~40px)에만 그린다 ──
+//    ⚠️ 카드 전체를 칠하는 번짐(방사형 빛 · 틴트 · 굵은 빛 띠)은 넣지 않는다 — 등급 빛(오른쪽 위)과 헷갈린다. 테두리 · 무늬 · 가는 선만
 const rectPath = (x, y, ww, hh) => `M${x} ${y}h${ww}v${hh}h${-ww}z`;
 const SKIN_DECO = {
-  // 골드 — 금빛 이중 테 + 모서리 마름모, 왼쪽 위에서 옅은 금빛
+  // 골드 — 금빛 이중 테 + 모서리 마름모
   gold: (w, h) => {
     const o = 14;
     const i = 24;
     const dia = (x, y, r) => `M${x} ${y - r}L${x + r} ${y}L${x} ${y + r}L${x - r} ${y}Z`;
     return {
-      defs: `<linearGradient id="gd" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${w}" y2="${h}"><stop offset="0" stop-color="#f7de9c"/><stop offset="0.45" stop-color="#b8862b"/><stop offset="0.7" stop-color="#e9c46a"/><stop offset="1" stop-color="#9c6e1e"/></linearGradient>
-<radialGradient id="sheen" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="${w * 0.6}"><stop offset="0" stop-color="#f0cf7e" stop-opacity="0.12"/><stop offset="1" stop-color="#f0cf7e" stop-opacity="0"/></radialGradient>`,
-      under: `<rect width="${w}" height="${h}" fill="url(#sheen)"/>`,
+      defs: `<linearGradient id="gd" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${w}" y2="${h}"><stop offset="0" stop-color="#f7de9c"/><stop offset="0.45" stop-color="#b8862b"/><stop offset="0.7" stop-color="#e9c46a"/><stop offset="1" stop-color="#9c6e1e"/></linearGradient>`,
+      under: "",
       over: `<rect x="${o}" y="${o}" width="${w - o * 2}" height="${h - o * 2}" fill="none" stroke="url(#gd)" stroke-width="3"/>
 <rect x="${i}" y="${i}" width="${w - i * 2}" height="${h - i * 2}" fill="none" stroke="#f0cf7e" stroke-opacity="0.3" stroke-width="1.2"/>
 <path d="${[[i, i], [w - i, i], [i, h - i], [w - i, h - i]].map(([x, y]) => dia(x, y, 7)).join("")}" fill="url(#gd)"/>`,
     };
   },
-  // 오로라 — 맨 위 하늘을 흐르는 초록 · 파랑 · 보라 빛 띠(굵기를 겹쳐 번지게, 숫자 뒤로는 내려오지 않게) + 같은 빛의 가는 테
+  // 오로라 — 맨 위를 흐르는 초록 · 파랑 · 보라 가는 빛 선(숫자 뒤로는 내려오지 않게) + 같은 빛의 가는 테.
+  //   굵게 겹쳐 번지게 하면 등급 빛(플래티넘 · 다이아 · 마스터 색)처럼 보여 가는 선 하나만
   aurora: (w, h) => {
-    const ribbon = (d, a) =>
-      [[120, 0.05], [70, 0.06], [34, 0.08], [12, 0.11], [3, 0.16]]
-        .map(([sw, op]) => `<path d="${d}" fill="none" stroke="url(#au)" stroke-width="${sw}" stroke-opacity="${(op * a).toFixed(3)}"/>`)
-        .join("");
+    const ribbon = (d, a) => `<path d="${d}" fill="none" stroke="url(#au)" stroke-width="3" stroke-opacity="${(0.16 * a).toFixed(3)}"/>`;
     return {
-      defs: `<linearGradient id="au" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${w}" y2="0"><stop offset="0" stop-color="#2fe3a0"/><stop offset="0.5" stop-color="#38b4ff"/><stop offset="1" stop-color="#a879ff"/></linearGradient>
-<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#38b4ff" stop-opacity="0.08"/><stop offset="0.35" stop-color="#38b4ff" stop-opacity="0"/></linearGradient>`,
+      defs: `<linearGradient id="au" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${w}" y2="0"><stop offset="0" stop-color="#2fe3a0"/><stop offset="0.5" stop-color="#38b4ff"/><stop offset="1" stop-color="#a879ff"/></linearGradient>`,
       under:
-        `<rect width="${w}" height="${h}" fill="url(#sky)"/>` +
         ribbon(`M-80 ${h * 0.13}C${w * 0.2} ${h * 0.0} ${w * 0.42} ${h * 0.24} ${w * 0.64} ${h * 0.09}S${w * 0.93} ${h * 0.01} ${w + 80} ${h * 0.12}`, 1) +
         ribbon(`M-80 ${h * 0.24}C${w * 0.24} ${h * 0.12} ${w * 0.5} ${h * 0.3} ${w * 0.76} ${h * 0.17}S${w * 0.98} ${h * 0.13} ${w + 80} ${h * 0.2}`, 0.45),
       over: `<rect x="16" y="16" width="${w - 32}" height="${h - 32}" fill="none" stroke="url(#au)" stroke-opacity="0.7" stroke-width="2"/>`,
     };
   },
   // 아이스 — 도트 스킨. 도트 바탕 + 모서리를 두 칸 깎은 8px 픽셀 액자(위 · 왼쪽 밝게, 아래 · 오른쪽 어둡게) + 안쪽 4px 픽셀 선
-  //   + 네 모서리 픽셀 눈송이, 위에서 옅은 서리
+  //   + 네 모서리 픽셀 눈송이
   ice: (w, h) => {
     // 모서리를 steps 칸 깎은 픽셀 테 — 칸 크기 P, 바깥 여백 o. { lt: 위 · 왼쪽, rb: 아래 · 오른쪽 } 경로
     const pixelFrame = (o, P, steps) => {
@@ -404,15 +401,15 @@ const SKIN_DECO = {
     const q = 52;
     const flakes = flake(q, q) + flake(w - q, q) + flake(q, h - q) + flake(w - q, h - q);
     return {
-      defs: `<linearGradient id="frost" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d6f1ff" stop-opacity="0.1"/><stop offset="0.4" stop-color="#d6f1ff" stop-opacity="0"/></linearGradient>`,
-      under: `<rect width="${w}" height="${h}" fill="url(#frost)"/>`,
+      defs: "",
+      under: "",
       over:
         `<path d="${outer.lt}" fill="#cdeeff" fill-opacity="0.75"/><path d="${outer.rb}" fill="#79b4d8" fill-opacity="0.7"/>` +
         `<path d="${inner.lt + inner.rb}" fill="#b4e3ff" fill-opacity="0.18"/>` +
         `<path d="${flakes}" fill="#e6f6ff" fill-opacity="0.55"/>`,
     };
   },
-  // 크림슨 — 붉은 빗금 바탕 + 가는 붉은 테 + 모서리 꺾쇠, 왼쪽 아래에서 번지는 불씨
+  // 크림슨 — 붉은 빗금 무늬 + 가는 붉은 테 + 모서리 꺾쇠 (테 색은 이글루 등급색 #e91e3f 와 다르게)
   crimson: (w, h) => {
     const o = 14;
     const L = 48;
@@ -420,9 +417,9 @@ const SKIN_DECO = {
       `M${o} ${o + L}V${o}H${o + L}M${w - o - L} ${o}H${w - o}V${o + L}` +
       `M${w - o} ${h - o - L}V${h - o}H${w - o - L}M${o + L} ${h - o}H${o}V${h - o - L}`;
     return {
-      defs: `<radialGradient id="ember" gradientUnits="userSpaceOnUse" cx="${w * 0.06}" cy="${h}" r="${w * 0.5}"><stop offset="0" stop-color="#e91e3f" stop-opacity="0.18"/><stop offset="1" stop-color="#e91e3f" stop-opacity="0"/></radialGradient>`,
-      under: `<rect width="${w}" height="${h}" fill="url(#ember)"/>`,
-      over: `<rect x="${o}" y="${o}" width="${w - o * 2}" height="${h - o * 2}" fill="none" stroke="#e91e3f" stroke-opacity="0.45" stroke-width="1.5"/>
+      defs: "",
+      under: "",
+      over: `<rect x="${o}" y="${o}" width="${w - o * 2}" height="${h - o * 2}" fill="none" stroke="#ff5a76" stroke-opacity="0.45" stroke-width="1.5"/>
 <path d="${br}" fill="none" stroke="#ff3a5c" stroke-width="5" stroke-linecap="square"/>`,
     };
   },
@@ -504,7 +501,7 @@ function emblemBadge(k, ringSize, ti, size) {
       width: outer,
       height: outer,
       borderRadius: outer / 2,
-      backgroundColor: k.skin ? k.skin.ink : INK,
+      backgroundColor: INK,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -519,11 +516,11 @@ const brand = (k, style) =>
     "고급 이글루 · SYSTEM : LEVEL"
   );
 
-// 카드 틀 — k.skin(buildCard 가 정한 스킨)이 있으면 바탕 · 테두리를 그 스킨으로
+// 카드 틀 — k.skin(buildCard 가 정한 스킨)이 있으면 무늬 · 테두리를 그 스킨으로
 function frame(k, kind, glow, ...children) {
   const { width, height } = CARD_SIZE[kind];
   return k.box(
-    { width, height, position: "relative", backgroundColor: k.skin ? k.skin.ink : INK, color: "#ffffff", fontFamily: CARD_FONT, overflow: "hidden" },
+    { width, height, position: "relative", backgroundColor: INK, color: "#ffffff", fontFamily: CARD_FONT, overflow: "hidden" },
     k.img(svgUri(bgSvg(width, height, glow, k.skin)), width, height, { position: "absolute", left: 0, top: 0 }),
     children
   );

@@ -16,7 +16,7 @@ import { settleTierPoints } from "@/lib/points";
 import { fetchMemberRoles } from "@/lib/discordMember";
 import { ownedItems } from "@/lib/ownedItems";
 import { OWN_PURCHASE_QUERY, OWN_PURCHASE_FIELDS, PERK_ITEM_FIELDS } from "@/lib/itemPerks";
-import { perksOfItems, discountedCost } from "@/lib/itemEffects";
+import { perksOfItems, discountedCost, pickCardSkin } from "@/lib/itemEffects";
 import { buildEnhanceView } from "@/lib/enhance";
 
 // ── [조회] 로그인한 유저 본인의 XP·레벨·순위 ──────────────────
@@ -85,7 +85,9 @@ export async function GET() {
       chat: enh.chat.nextCost == null ? null : discountedCost(enh.chat.nextCost, perks.enhanceDiscount),
       voice: enh.voice.nextCost == null ? null : discountedCost(enh.voice.nextCost, perks.enhanceDiscount),
     };
-    const { badges, cardSkin, ...perkSums } = perks;
+    const { badges, cardSkin: _firstSkin, cardSkins, ...perkSums } = perks;
+    // 📌 카드 스킨 — 유저가 인벤토리에서 고른 것(cardSkinPick), 안 골랐으면 관리자 순서상 첫 스킨, 끔이면 "" (봇 카드와 같은 규칙)
+    const cardSkin = pickCardSkin(cardSkins, doc?.cardSkinPick || "");
 
     return NextResponse.json({
       success: true,

@@ -26,7 +26,6 @@ import {
   FieldRow,
   Switch,
   Btn,
-  SwapLabel,
   EmptyRow,
   inputClass,
   labelClass,
@@ -538,7 +537,7 @@ export default function AdminAuctionPage() {
                           className={`${inputClass} flex-1 min-w-0`}
                         />
                         <Btn onClick={renameAuction} disabled={!renameTarget.title.trim() || renameTarget.title.trim() === sel.title || isRenaming}>
-                          <SwapLabel swap={isRenaming} to="저장 중…">저장</SwapLabel>
+                          {isRenaming ? "저장 중…" : "저장"}
                         </Btn>
                       </div>
                       <p className="mt-1.5 text-right text-[12px] text-[#8a8a8a] tabular-nums">{renameTarget.title.length}/60</p>
@@ -809,7 +808,7 @@ export default function AdminAuctionPage() {
                       </p>
                     </div>
                     <span className="text-[12px] font-bold text-[#d01634] shrink-0">
-                      <SwapLabel swap={isImporting} to="불러오는 중" align="end">불러오기</SwapLabel>
+                      {isImporting ? "불러오는 중" : "불러오기"}
                     </span>
                   </button>
                 ))

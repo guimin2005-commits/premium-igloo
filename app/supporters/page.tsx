@@ -129,8 +129,7 @@ const InkGoal = ({ cur, goal, curLabel, goalLabel }: { cur: number; goal: number
           style={{ width: `${pct}%` }}
         />
       </div>
-      {/* 📌 min-h-5: '달성' 알약(h-5)이 붙어도 줄 높이가 같게 — 게이지를 바닥에 맞추므로 한쪽만 달성하면 막대 높이가 어긋났다 */}
-      <div className="flex items-center justify-between gap-3 mt-2 min-h-5 text-[11px] font-bold tabular-nums">
+      <div className="flex items-center justify-between gap-3 mt-2 text-[11px] font-bold tabular-nums">
         <span className="text-white/50">
           {curLabel} <span className="text-white/25">/ {goalLabel}</span>
         </span>
@@ -618,31 +617,26 @@ export default function SupportersPage() {
                 </div>
 
                 {/* 오른쪽 — 이번 달 채팅 / 음성 큰 숫자 + 목표 게이지 */}
-                {/* 📌 두 칸의 게이지는 바닥에 맞춘다(mt-auto) — "12시간 30분"처럼 음성 숫자가 두 줄로 접히면 음성 쪽 게이지만 내려가 채팅과 어긋났다 */}
                 <div className="mt-8 pt-7 border-t border-white/10 md:mt-0 md:pt-0 md:border-t-0 md:w-1/2 md:pl-10 md:border-l md:border-white/10 grid grid-cols-2 gap-x-6 md:gap-x-10">
-                  <div className="min-w-0 flex flex-col">
+                  <div className="min-w-0">
                     <p className="text-[11px] font-bold text-white/40">채팅</p>
                     <Big dark size="panel" parts={[{ n: act.chatCount || 0, u: "회" }]} />
-                    <div className="mt-auto">
-                      <InkGoal
-                        cur={act.chatCount || 0}
-                        goal={goals.chat || 0}
-                        curLabel={`${(act.chatCount || 0).toLocaleString()}회`}
-                        goalLabel={`${(goals.chat || 0).toLocaleString()}회`}
-                      />
-                    </div>
+                    <InkGoal
+                      cur={act.chatCount || 0}
+                      goal={goals.chat || 0}
+                      curLabel={`${(act.chatCount || 0).toLocaleString()}회`}
+                      goalLabel={`${(goals.chat || 0).toLocaleString()}회`}
+                    />
                   </div>
-                  <div className="min-w-0 flex flex-col">
+                  <div className="min-w-0">
                     <p className="text-[11px] font-bold text-white/40">음성</p>
                     <Big dark size="panel" parts={hmParts(act.voiceMin || 0)} />
-                    <div className="mt-auto">
-                      <InkGoal
-                        cur={act.voiceMin || 0}
-                        goal={goals.voiceMin || 0}
-                        curLabel={fmtHm(act.voiceMin || 0)}
-                        goalLabel={fmtHm(goals.voiceMin || 0)}
-                      />
-                    </div>
+                    <InkGoal
+                      cur={act.voiceMin || 0}
+                      goal={goals.voiceMin || 0}
+                      curLabel={fmtHm(act.voiceMin || 0)}
+                      goalLabel={fmtHm(goals.voiceMin || 0)}
+                    />
                   </div>
                 </div>
               </div>
@@ -1006,11 +1000,9 @@ export default function SupportersPage() {
                   type="button"
                   onClick={submitReport}
                   disabled={!canSend}
-                  className="inline-grid place-items-center h-10 px-5 rounded-full bg-[#131313] enabled:hover:bg-[#2a2a2a] text-white text-[13px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+                  className="h-10 px-5 rounded-full bg-[#131313] enabled:hover:bg-[#2a2a2a] text-white text-[13px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
                 >
-                  {/* 📌 두 글자를 한 칸에 겹쳐 폭을 긴 쪽에 고정 — 보내는 동안 단추 폭이 바뀌지 않게 */}
-                  <span className={`col-start-1 row-start-1 ${sending ? "invisible" : ""}`}>보내기</span>
-                  <span aria-hidden={!sending} className={`col-start-1 row-start-1 ${sending ? "" : "invisible"}`}>보내는 중…</span>
+                  {sending ? "보내는 중…" : "보내기"}
                 </button>
               </div>
               <p className="text-[11px] text-[#a3a3a3] mt-4 break-keep">관리자에게만 전달되며, 하루 10건까지 보낼 수 있습니다.</p>
@@ -1096,11 +1088,9 @@ export default function SupportersPage() {
                                   type="button"
                                   onClick={saveEdit}
                                   disabled={!canSaveEdit}
-                                  className="inline-grid place-items-center h-9 px-4 rounded-full bg-[#131313] enabled:hover:bg-[#2a2a2a] text-white text-[12px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+                                  className="h-9 px-4 rounded-full bg-[#131313] enabled:hover:bg-[#2a2a2a] text-white text-[12px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
                                 >
-                                  {/* 📌 두 글자를 한 칸에 겹쳐 폭을 긴 쪽에 고정 — "저장 중…"으로 넓어지며 옆 취소 단추를 밀지 않게 */}
-                                  <span className={`col-start-1 row-start-1 ${editSaving ? "invisible" : ""}`}>저장</span>
-                                  <span aria-hidden={!editSaving} className={`col-start-1 row-start-1 ${editSaving ? "" : "invisible"}`}>저장 중…</span>
+                                  {editSaving ? "저장 중…" : "저장"}
                                 </button>
                               </span>
                             </div>

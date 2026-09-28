@@ -1794,25 +1794,18 @@ export default function AdminBotPage() {
                         placeholder="예: 이벤트 우승 보상" className={inputClass} />
                     </Field>
 
-                    {/* 📌 지급 · 회수 미리보기 줄은 값이 없을 때도 자리를 지킨다 — 입력하면 줄이 생겨 아래 단추가 내려가고,
-                        지급하고 칸이 비면 줄이 빠져 방금 누른 단추가 위로 튀어 오르던 것 */}
-                    {(() => {
-                      const show = Number(grantForm.amount) !== 0 && grantForm.amount !== "";
-                      return (
-                        <p aria-hidden={!show || undefined} className={`mb-4 px-3 py-2.5 rounded-lg text-[13px] font-bold break-keep ${
-                          !show ? "invisible" : Number(grantForm.amount) > 0 ? "bg-[#e91e3f]/[0.08] text-[#d01634]" : "bg-amber-50 text-amber-700"
-                        }`}>
-                          {!show
-                            ? "\u00a0"
-                            : Number(grantForm.amount) > 0
-                            ? `${Number(grantForm.amount).toLocaleString()} ${grantUnit} 지급${grantKind === "xp" ? " — 레벨이 올라갈 수 있습니다" : ""}`
-                            : `${Math.abs(Number(grantForm.amount)).toLocaleString()} ${grantUnit} 회수${grantKind === "xp" ? " — 레벨이 내려갈 수 있습니다" : ""}`}
-                        </p>
-                      );
-                    })()}
+                    {Number(grantForm.amount) !== 0 && grantForm.amount !== "" && (
+                      <p className={`mb-4 px-3 py-2.5 rounded-lg text-[13px] font-bold break-keep ${
+                        Number(grantForm.amount) > 0 ? "bg-[#e91e3f]/[0.08] text-[#d01634]" : "bg-amber-50 text-amber-700"
+                      }`}>
+                        {Number(grantForm.amount) > 0
+                          ? `${Number(grantForm.amount).toLocaleString()} ${grantUnit} 지급${grantKind === "xp" ? " — 레벨이 올라갈 수 있습니다" : ""}`
+                          : `${Math.abs(Number(grantForm.amount)).toLocaleString()} ${grantUnit} 회수${grantKind === "xp" ? " — 레벨이 내려갈 수 있습니다" : ""}`}
+                      </p>
+                    )}
 
                     <div className="flex flex-wrap gap-2">
-                      <Btn type="submit" variant="primary" disabled={isGranting}><SwapLabel swap={isGranting} to="처리 중…">지급</SwapLabel></Btn>
+                      <Btn type="submit" variant="primary" disabled={isGranting}>{isGranting ? "처리 중…" : "지급"}</Btn>
                       <Btn type="button" variant="danger" onClick={submitRemove} disabled={isGranting || !grantForm.amount}>{grantUnit} 제거</Btn>
                       <Btn type="button" variant="secondary" onClick={() => setConfirmAll(true)} disabled={isGranting || !grantForm.amount}>전체 유저에게 지급</Btn>
                     </div>
@@ -1859,7 +1852,7 @@ export default function AdminBotPage() {
                     </Field>
 
                     <div className="flex flex-wrap gap-2">
-                      <Btn type="submit" variant="primary" disabled={isGranting || !itemGrant.itemId}><SwapLabel swap={isGranting} to="처리 중…">지급</SwapLabel></Btn>
+                      <Btn type="submit" variant="primary" disabled={isGranting || !itemGrant.itemId}>{isGranting ? "처리 중…" : "지급"}</Btn>
                       <Btn type="button" variant="secondary" onClick={() => setConfirmAllItem(true)} disabled={isGranting || !itemGrant.itemId}>전체 유저에게 지급</Btn>
                     </div>
                   </form>

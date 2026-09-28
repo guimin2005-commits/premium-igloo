@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { playTone } from "@/lib/sfx";
@@ -9,6 +9,7 @@ import TierEmblem from "./TierEmblem";
 import { VOICE_TIERS } from "@/lib/voiceTiers";
 import { ICON_PATHS } from "./Icons";
 import { PopShell, PopTab, AdminReset } from "./PopShell";
+import { SKIN_OF, SKIN_NONE } from "@/lib/itemEffects";
 
 // 📌 인벤토리 — 레벨 대시보드의 가방 팝업을 내 정보 · ARCTIC 에서도 그 자리에 띄운다 (다른 화면으로 넘기지 않는다)
 
@@ -166,7 +167,8 @@ const InvSlot = ({ it, on, onClick }) => {
 
 // 📌 가방 왼쪽 상세 — 큰 아이콘 · 이름 · 설명(줄바꿈 그대로) · 상태 · 기간 · (기간제면) 연장 · 효과.
 //    compact 는 아이템 등록 미리보기용으로 크기만 줄인다(내용 · 순서는 같다). onGo 는 연장으로 떠날 때 가방을 닫는다
-const InvDetail = ({ it, compact = false, onGo }) => {
+//    카드 스킨 아이템(it.skinKey)이면 착용 · 해제 버튼 — skinOn: 지금 이 스킨을 쓰는 중, onSkin(키 | "none")
+const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy = false }) => {
   const accent = invAccentOf(it);
   const dday = ddayOf(it);
   const lines = Array.isArray(it.effectLines) ? it.effectLines.filter(Boolean) : [];
@@ -214,6 +216,17 @@ const InvDetail = ({ it, compact = false, onGo }) => {
             className="mt-1 w-full h-9 rounded-full border border-white/20 hover:border-white/45 text-[11px] font-black text-white/80 hover:text-white flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60">
             기간 연장
           </Link>
+        )}
+        {/* 📌 카드 스킨 — 가진 스킨 중 하나를 골라 봇 이미지 카드(레벨업 · /레벨 · /랭크 · /출석체크)와 내 프로필 카드에 씌운다.
+               해제하면 기본 카드. 착용 여부는 버튼 글자로만(스킨 이름은 아래 효과 줄 — 같은 말을 두 번 쓰지 않는다).
+               버튼은 전체 폭이라 글자가 바뀌어도 자리가 그대로 */}
+        {it.skinKey && !compact && (
+          <button type="button" disabled={skinBusy} onClick={() => onSkin?.(skinOn ? SKIN_NONE : it.skinKey)}
+            className={`mt-1 w-full h-9 rounded-full text-[11px] font-black flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60 ${
+              skinOn ? "border border-white/20 hover:border-white/45 text-white/80 hover:text-white" : "bg-white text-[#131313] hover:bg-white/90"
+            }`}>
+            {skinOn ? "착용 해제" : "착용"}
+          </button>
         )}
         {it.rewardLevel != null && (
           <div className="flex items-center justify-between gap-3">
@@ -265,8 +278,42 @@ export function InventoryItemPreview({ item, effectLines }) {
 //    껍데기는 TierModal 과 같은 문법(모바일 바텀시트 / 데스크톱 모달, 잉크 패널).
 //    스크롤 잠금은 손대지 않는다 — 루트 className 에 "fixed inset-0" 이 붙어 있고
 //    z-index 가 50 이상이면 ScrollLock 이 알아서 건다(iOS 대응 포함).
-export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, onReset, resetBusy, loading = false, error = "" }) => {
+// 📌 cardSkin: 서버(my-items)가 준 지금 쓰는 스킨 키("" 이면 기본 카드). 착용 · 해제는 가방이 직접 저장하고(POST /api/xp/card-skin)
+//    결과를 바로 보여 준다 — 다음 폴링으로 같은 값이 오면 그대로. onSkinChange(키) 가 있으면 부모에도 알린다(프로필 카드 장식)
+export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, onReset, resetBusy, loading = false, error = "", cardSkin = "", onSkinChange }) => {
   const [sel, setSel] = useState(null); // 선택한 아이템 uid
+  const [skinNow, setSkinNow] = useState(null); // 방금 저장한 값(서버 값이 오기 전까지)
+  const [skinBusy, setSkinBusy] = useState(false);
+  const [toast, setToast] = useState("");
+  useEffect(() => { setSkinNow(null); }, [cardSkin]);
+  const curSkin = skinNow ?? cardSkin;
+  const say = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast((t) => (t === msg ? "" : t)), 1800);
+  };
+  const saveSkin = async (skin) => {
+    if (skinBusy) return;
+    setSkinBusy(true);
+    try {
+      const res = await fetch("/api/xp/card-skin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skin }),
+      }).then((r) => r.json()).catch(() => null);
+      if (res?.success) {
+        const next = res.data?.cardSkin || "";
+        setSkinNow(next);
+        onSkinChange?.(next);
+        playTone(skin === SKIN_NONE ? 523 : 784, 0.07, "sine", 0.03);
+        say(skin === SKIN_NONE ? "카드 스킨을 해제했습니다" : `${SKIN_OF[skin]?.l || ""} 스킨을 착용했습니다`);
+      } else {
+        playTone(220, 0.09, "square", 0.02);
+        say(res?.error || "저장하지 못했습니다");
+      }
+    } finally {
+      setSkinBusy(false);
+    }
+  };
   // 정렬 — 보는 사람 브라우저에 기억(편의용). 못 읽으면 기본
   const [sort, setSort] = useState("default");
   useEffect(() => {
@@ -293,6 +340,7 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
   const slots = Math.max(20, Math.ceil(rows.length / 5) * 5); // 5열 × 4줄 — 커진 창을 채운다
 
   return (
+    <>
     <PopShell
       open={open}
       onClose={onClose}
@@ -306,7 +354,7 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
       left={
         <>
         {selItem ? (
-          <InvDetail it={selItem} onGo={onClose} />
+          <InvDetail it={selItem} onGo={onClose} skinOn={!!selItem.skinKey && selItem.skinKey === curSkin} onSkin={saveSkin} skinBusy={skinBusy} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center py-6 sm:py-0">
             <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-white/15 flex items-center justify-center mb-3">
@@ -357,6 +405,13 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
         <p className="text-[12px] font-bold text-white/35 text-center mt-6">{loading ? "불러오는 중…" : error || "아직 보유한 아이템이 없습니다"}</p>
       )}
     </PopShell>
+    {/* 착용 · 해제 알림 — 가방 창 밖(뷰포트 기준)에 띄운다 */}
+    {toast && (
+      <div className="fixed left-1/2 -translate-x-1/2 bottom-24 md:bottom-10 z-[400] px-5 py-3 rounded-full bg-white text-[#131313] text-[12px] font-bold shadow-[0_18px_44px_-14px_rgba(0,0,0,0.5)] pointer-events-none">
+        {toast}
+      </div>
+    )}
+    </>
   );
 };
 
@@ -374,25 +429,33 @@ export function mergeMyItems(prev, next) {
   return { ...next, items: [...top, ...(next.items || []), ...rest] };
 }
 
+// 📌 카드 스킨 저장보다 먼저 떠난 조회(폴링 · 가방 열기)가 늦게 도착하면 cardSkin 만 저장한 값으로 둔다 — 옛 스킨으로 되돌리지 않게.
+//    t0: 조회를 시작한 시각, saved: { at: 저장 시각, v: 저장 결과 스킨 키 }
+export function keepSavedSkin(data, t0, saved) {
+  return data && saved && t0 < saved.at ? { ...data, cardSkin: saved.v } : data;
+}
+
 // 📌 그 자리에서 여는 인벤토리 — 내 정보 · ARCTIC 이 쓴다. 열 때마다 /api/shop/my-items 를 새로 읽는다.
 //    처음 읽기 전에는 빈 가방 문구 대신 불러오는 중. 여닫는 소리는 레벨 가방과 같다(낮은음 → 높은음 / 반대).
 export function InventoryPopup({ open, onClose }) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("all");
+  const skinSaved = useRef({ at: 0, v: "" }); // 마지막 스킨 저장(keepSavedSkin)
   useEffect(() => {
     if (!open) return;
     playTone(392, 0.06, "sine", 0.03);
     const t = setTimeout(() => playTone(587, 0.08, "sine", 0.03), 90);
     let alive = true;
+    const t0 = Date.now();
     fetch("/api/shop/my-items", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         if (!alive) return;
-        // 실패는 빈 가방과 구분한다 — 받아 둔 목록이 있으면 그대로 두고 문구만 바꾼다
-        if (d?.success) setData((cur) => mergeMyItems(cur, d.data));
-        else setData((cur) => ({ items: cur?.items || [], error: d?.error || "불러오지 못했습니다" }));
+        // 실패는 빈 가방과 구분한다 — 받아 둔 목록(과 지금 스킨 · 연동 여부)이 있으면 그대로 두고 문구만 바꾼다
+        if (d?.success) setData((cur) => mergeMyItems(cur, keepSavedSkin(d.data, t0, skinSaved.current)));
+        else setData((cur) => ({ ...(cur || {}), items: cur?.items || [], error: d?.error || "불러오지 못했습니다" }));
       })
-      .catch(() => { if (alive) setData((cur) => ({ items: cur?.items || [], error: "불러오지 못했습니다" })); });
+      .catch(() => { if (alive) setData((cur) => ({ ...(cur || {}), items: cur?.items || [], error: "불러오지 못했습니다" })); });
     return () => { alive = false; clearTimeout(t); };
   }, [open]);
   const groups = useMemo(() => buildInvGroups(data?.items || []), [data]);
@@ -412,6 +475,11 @@ export function InventoryPopup({ open, onClose }) {
       loading={data === null}
       error={data?.error}
       onTone={() => playTone(620, 0.04, "sine", 0.025)}
+      cardSkin={data?.cardSkin || ""}
+      onSkinChange={(k) => {
+        skinSaved.current = { at: Date.now(), v: k };
+        setData((cur) => (cur ? { ...cur, cardSkin: k } : cur));
+      }}
     />
   );
 }

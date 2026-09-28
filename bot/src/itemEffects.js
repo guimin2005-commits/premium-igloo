@@ -73,6 +73,13 @@ const EFFECT_TRIGGERS = {
 };
 // 📌 카드 스킨 키 — 사이트 lib/itemEffects.js SKINS · botCards.js CARD_SKINS 와 같아야 한다(모르는 키는 저장 때처럼 버린다)
 const SKIN_KEYS = new Set(["gold", "aurora", "ice", "crimson"]);
+// 📌 유저가 고른 스킨 적용 — 사이트 lib/itemEffects.js pickCardSkin 과 같은 규칙
+//    pick: "" 안 고름(첫 스킨) · "none" 끔 · 스킨 키(더 이상 없으면 첫 스킨)
+export function pickCardSkin(skins, pick) {
+  const list = Array.isArray(skins) ? skins : [];
+  if (pick === "none") return "";
+  return pick && list.includes(pick) ? pick : list[0] || "";
+}
 const MAX_EFFECTS = 20;
 const LIMIT = { add: 1_000_000, percent: 500, minutes: 1440, everyN: 365 };
 // 새 칸의 범위 — 사이트 FIELD_RANGE 와 같다
@@ -135,6 +142,7 @@ function cleanEffects(list) {
     if (t.needs === "skin") {
       const s = String(raw?.skin || "");
       if (!SKIN_KEYS.has(s)) return;
+      if (out.some((x) => x.skin)) return; // 카드 스킨은 아이템 하나에 하나 — 사이트 normalizeEffects 와 같다
       e.skin = s;
     }
     // 요일 · 시간대는 발동형에만 — 상시 · 소모 · 꾸미기는 가지고 있는 동안 늘 붙는다
@@ -471,11 +479,12 @@ export function attendPointOf(member, kst = kstNow()) {
  * 📌 들고 있는 동안 붙는 효과의 합 — 사이트 lib/itemPerks.js getPerks 의 봇 쪽 사본(봇이 쓰는 칸만). 캐시만 본다.
  *    같은 효과는 합산 후 상한: cooldownCut ≤ 채팅 쿨타임의 절반(초), muteRelief ≤ 음소거 감소율(%p), passBoost ≤ 50(%)
  *    cardSkin: 스킨 키 — 여러 개면 관리자 순서(아이템 sortOrder · createdAt)상 첫 번째. 없으면 ""
+ *    cardSkins: 가진 스킨 전부(관리자 순서) — 유저가 고른 스킨은 pickCardSkin 으로 (botMessages withSkin)
  *    오류가 나도 0 · "" 을 돌려준다.
- * @returns {{ cooldownCut: number, muteRelief: number, passBoost: number, cardSkin: string }}
+ * @returns {{ cooldownCut: number, muteRelief: number, passBoost: number, cardSkin: string, cardSkins: string[] }}
  */
 export function perksOf(member) {
-  const out = { cooldownCut: 0, muteRelief: 0, passBoost: 0, cardSkin: "" };
+  const out = { cooldownCut: 0, muteRelief: 0, passBoost: 0, cardSkin: "", cardSkins: [] };
   try {
     if (!state.effectsById.size) return out;
     const owned = ownedItemIds(member);
@@ -483,21 +492,22 @@ export function perksOf(member) {
     let cut = 0;
     let relief = 0;
     let boost = 0;
-    let skin = "";
+    const skins = [];
     for (const [itemId, list] of state.effectsById) {
       if (!owned.has(itemId)) continue;
       for (const e of list) {
         if (e.on === "cooldownCut") cut += e.seconds || e.amount;
         else if (e.on === "muteRelief") relief += e.amount;
         else if (e.on === "passBoost") boost += e.amount;
-        else if (e.on === "cardSkin" && !skin) skin = e.skin;
+        else if (e.on === "cardSkin" && !skins.includes(e.skin)) skins.push(e.skin);
       }
     }
     const s = getSettings();
     out.cooldownCut = Math.min(cut, EFFECT_TRIGGERS.cooldownCut.cap, Math.floor(Math.max(0, Number(s.chatCooldownSec) || 0) / 2));
     out.muteRelief = Math.min(relief, EFFECT_TRIGGERS.muteRelief.cap, Math.max(0, Number(s.muteReducePct) || 0));
     out.passBoost = Math.min(boost, EFFECT_TRIGGERS.passBoost.cap);
-    out.cardSkin = skin;
+    out.cardSkin = skins[0] || "";
+    out.cardSkins = skins;
   } catch (e) {
     console.error("아이템 효과 계산 오류 (perks):", e.message);
   }

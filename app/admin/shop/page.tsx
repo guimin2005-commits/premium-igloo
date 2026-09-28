@@ -1299,7 +1299,7 @@ export default function AdminShopPage() {
               title={itemForm.id ? "아이템 수정" : "아이템 등록"}
               footer={
                 <>
-                  <Btn onClick={submitNearest} disabled={isSavingReg}><SwapLabel swap={isSavingReg} to="저장 중...">{itemForm.id ? "수정 저장" : "등록"}</SwapLabel></Btn>
+                  <Btn onClick={submitNearest} disabled={isSavingReg}>{isSavingReg ? "저장 중..." : itemForm.id ? "수정 저장" : "등록"}</Btn>
                   {itemForm.id && <Btn variant="ghost" className={DEL_BTN} onClick={() => setDeleteTarget({ kind: "reg", id: itemForm.id })}>삭제</Btn>}
                 </>
               }
@@ -1563,11 +1563,9 @@ export default function AdminShopPage() {
                   {/* 📌 할인 종료 — 그 시각(KST)이 지나면 할인이 저절로 끝난다. 비우면 계속 */}
                   {discountPct > 0 && (
                     <Field label="할인 종료" hint={form.discountUntil && new Date(`${form.discountUntil}:00+09:00`).getTime() <= Date.now() ? <span className="font-bold text-[#d01634]">이미 지난 시각입니다</span> : "비우면 계속"}>
-                      {/* 📌 '지우기'는 값이 없을 때도 자리를 지킨다 — 시각을 고르는 순간 단추가 붙으며 입력칸이 줄어들던 것 */}
                       <div className="flex items-center gap-2">
                         <input type="datetime-local" value={form.discountUntil} onChange={(e) => setForm({ ...form, discountUntil: e.target.value })} className={inputClass} />
-                        <Btn variant="ghost" size="sm" className={form.discountUntil ? "" : "invisible"} aria-hidden={!form.discountUntil || undefined}
-                          onClick={() => setForm({ ...form, discountUntil: "" })}>지우기</Btn>
+                        {form.discountUntil && <Btn variant="ghost" size="sm" onClick={() => setForm({ ...form, discountUntil: "" })}>지우기</Btn>}
                       </div>
                     </Field>
                   )}
@@ -2143,7 +2141,7 @@ export default function AdminShopPage() {
             <div className="mt-6 flex justify-end gap-2">
               <Btn variant="ghost" onClick={() => setIssueTarget(null)}>닫기</Btn>
               <Btn onClick={() => issueCoupon(issueInput.trim())} disabled={!issueInput.trim() || isIssuing}>
-                <SwapLabel swap={isIssuing} to="지급 중...">지급</SwapLabel>
+                {isIssuing ? "지급 중..." : "지급"}
               </Btn>
             </div>
             {/* 바로 실행하지 않는다 — 확인 모달을 거친다 */}

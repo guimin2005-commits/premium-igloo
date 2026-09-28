@@ -220,12 +220,13 @@ export default function CartPage() {
                         {/* 기간제를 가진 상품이면 "30일 연장" — 지금 만료 뒤에 이어 붙는다 */}
                         {(r.days ?? 0) > 0 && <span className={`shrink-0 px-1.5 py-0.5 rounded ${renew ? "bg-[#e91e3f]" : "bg-[#131313]"} text-white text-[10px] font-black`}>{durationLabel(r.days)}{renew ? " 연장" : ""}</span>}
                       </h3>
-                        {/* 📌 설명 줄 · 취소선 줄은 없어도 자리를 잡는다 — 줄마다 이름 · 가격 · 삭제 위치가 같게 (줄 높이는 썸네일이 정해 그대로) */}
-                        <p className={`text-[11px] text-[#8a8a8a] truncate mt-0.5 ${r.item.description ? "" : "invisible"}`} aria-hidden={!r.item.description}>{r.item.description || "\u00a0"}</p>
+                        {r.item.description && (
+                          <p className="text-[11px] text-[#8a8a8a] truncate mt-0.5">{r.item.description}</p>
+                        )}
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-base font-black text-[#131313] tabular-nums">{priceText(r.item, sp)}</div>
-                        <div className={`text-[11px] text-[#a3a3a3] line-through tabular-nums ${discounted ? "" : "invisible"}`} aria-hidden={!discounted}>{discounted ? priceText(r.item, list) : "\u00a0"}</div>
+                        {discounted && <div className="text-[11px] text-[#a3a3a3] line-through tabular-nums">{priceText(r.item, list)}</div>}
                         <button onClick={() => removeItem(r.itemId)}
                           className="mt-2 text-[11px] font-bold text-[#a3a3a3] hover:text-[#d01634] transition-colors">
                           삭제

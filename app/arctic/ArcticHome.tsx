@@ -247,19 +247,17 @@ export default function ArcticHome({
           <div className="py-16 text-center text-sm text-[#8a8a8a]">등록된 상품이 없습니다.</div>
         ) : (
           <div className="grid md:grid-cols-2 gap-10 md:gap-0">
-            {/* 📌 PC 에서는 두 갈래 카드 네 장이 한 줄로 보인다 — 두 칸을 같은 높이로 늘리고(flex-col + 카드 묶음 flex-1)
-                   카드의 가격 묶음이 아래에 붙으므로, 이름 줄 수 · 할인 유무가 갈래마다 달라도 가격 줄이 같은 높이 */}
-            <div className="md:pr-10 flex flex-col">
+            <div className="md:pr-10">
               <div className={secHead}>
                 <h2 className={secTitle}>지금 잘 나가는</h2>
                 <button onClick={() => goProducts("all")} className={secLink}>전체 ›</button>
               </div>
-              <div className="flex-1 grid grid-cols-2 gap-3 md:gap-5">{hot.map((it) => renderCard(it))}</div>
+              <div className="grid grid-cols-2 gap-3 md:gap-5">{hot.map((it) => renderCard(it))}</div>
               <div className="mt-5 text-right">
                 <button onClick={() => goProducts("all")} className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">다른 상품 보기 →</button>
               </div>
             </div>
-            <div className="md:border-l md:border-[#ededed] md:pl-10 flex flex-col">
+            <div className="md:border-l md:border-[#ededed] md:pl-10">
               <div className={secHead}>
                 <h2 className={secTitle}>{forMe.title}</h2>
                 <span className="text-[12px] font-bold text-[#8a8a8a] shrink-0">{forMe.basis === "co" ? "내 아이템 기준" : tier ? "내 등급 기준" : "가장 많이 고른"}</span>
@@ -267,7 +265,7 @@ export default function ArcticHome({
               {forMe.picks.length === 0 ? (
                 <p className="py-10 text-center text-sm text-[#a3a3a3]">준비 중</p>
               ) : (
-                <div className="flex-1 grid grid-cols-2 gap-3 md:gap-5">{forMe.picks.map((it) => renderCard(it))}</div>
+                <div className="grid grid-cols-2 gap-3 md:gap-5">{forMe.picks.map((it) => renderCard(it))}</div>
               )}
               <div className="mt-5 text-right">
                 <button onClick={() => goProducts("perk")} className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">권한 전체 보기 →</button>

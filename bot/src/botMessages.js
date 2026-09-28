@@ -8,7 +8,8 @@
 import mongoose from "mongoose";
 import { EmbedBuilder } from "discord.js";
 import { getSettings } from "./botSettings.js";
-import { perksOf } from "./itemEffects.js";
+import { perksOf, pickCardSkin } from "./itemEffects.js";
+import { UserXp } from "./db.js";
 import { config } from "./config.js";
 
 // ⚠️ 사이트 lib/voiceTiers.js 의 VOICE_TIERS(이름 · 시작 레벨 · 색)를 옮긴 사본 — 한쪽만 고치지 말 것
@@ -1018,6 +1019,7 @@ function avatarOf(x) {
 
 // 📌 카드 스킨(아이템 효과 cardSkin) — commonVars 가 심볼 칸에 실어 둔 멤버로 스킨을 찾아 카드 data 에 넣는다.
 //    레벨업 · /레벨 · /랭크 · /출석체크만(RANKER 제외). data 에 skin 이 이미 있으면 그대로 둔다. 부르는 쪽은 고칠 게 없다
+//    가진 스킨이 여럿이면 유저가 인벤토리에서 고른 것(UserXp.cardSkinPick — pickCardSkin), 못 읽으면 관리자 순서상 첫 스킨
 //    (vars 를 { ...commonVars(member), … } 로 만들면 심볼 칸도 함께 복사된다 — 템플릿 치환 · JSON 에는 드러나지 않는다)
 const VARS_MEMBER = Symbol("member");
 const SKIN_KEYS = new Set(["levelUp", "cmdLevel", "cmdRank", "cmdAttend"]);
@@ -1027,7 +1029,14 @@ function withSkin(key, vars, cardData) {
   return async (m) => {
     const data = typeof cardData === "function" ? await cardData(m) : cardData;
     if (!data || data.skin !== undefined) return data;
-    const skin = perksOf(member).cardSkin;
+    const { cardSkins } = perksOf(member);
+    if (!cardSkins.length) return data;
+    let pick = "";
+    try {
+      const uid = member.id || member.user?.id;
+      if (uid) pick = (await UserXp.findOne({ userId: uid }, { cardSkinPick: 1 }).lean())?.cardSkinPick || "";
+    } catch {}
+    const skin = pickCardSkin(cardSkins, pick);
     return skin ? { ...data, skin } : data;
   };
 }

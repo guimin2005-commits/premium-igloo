@@ -1250,8 +1250,9 @@ export default function AdminBotMessagesPage() {
                   className="overflow-hidden"
                   title="미리보기"
                   right={
-                    // 📌 칩 자리 높이(h-6)를 늘 잡아 둔다 — 칩(24px)이 제목 줄(22.5px)보다 커서, '보내기'를 끄고 켤 때마다 미리보기가 1~2px 오르내리던 것
-                    <span className="flex items-center gap-2 h-6">
+                    // 📌 칩 자리는 높이 0 — 칩(24px)이 제목 줄(22.5px)보다 커서, '보내기'를 끄고 켤 때마다 미리보기가 1~2px 오르내리던 것.
+                    //    칩은 제목 줄 가운데에 겹쳐 뜨고, 칩이 없는 평소 모습(제목 줄 22.5px)은 예전 그대로
+                    <span className="flex items-center gap-2 h-0">
                       {overTotal && <StatusChip tone="warn">6,000자 초과</StatusChip>}
                       {!draft.enabled && <StatusChip>꺼짐</StatusChip>}
                     </span>

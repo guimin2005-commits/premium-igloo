@@ -23,8 +23,9 @@ import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 // 팝업 틀 · 인벤토리 팝업 · 효과음은 내 정보 · ARCTIC 도 같이 쓴다 (app/components/PopShell · Inventory, lib/sfx)
 import { PopShell, PopTab, AdminReset } from "../components/PopShell";
-import { BagOverlay, buildInvGroups, mergeMyItems } from "../components/Inventory";
+import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin } from "../components/Inventory";
 import WalletHistory from "../components/WalletHistory";
+import SkinFrame from "../components/SkinFrame";
 import { playTone } from "@/lib/sfx";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
@@ -272,9 +273,7 @@ const XpTableView = ({ myLevel = 0, myXp = null, onTone }) => {
               </div>
             </div>
 
-            {/* 📌 PC 는 폭을 글자 대신 자리로 정한다(남는 칸을 채우되 최대 24rem, 내 레벨 칸이 있으면 "N XP 남음" 이 칸 밖으로 넘치지 않게 32rem) —
-                레벨을 넘길 때 자릿수 · "도달함 ↔ N XP 남음" 에 따라 세 칸이 통째로 좌우로 튀던 것 */}
-            <div className={`grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-5 md:flex-1 ${mine ? "md:max-w-[32rem]" : "md:max-w-[24rem]"}`}>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-5">
               <div>
                 <p className="text-[11px] font-bold text-white/45">필요 XP</p>
                 <p className="mt-2 text-[22px] font-black text-[#ff5c77] tabular-nums tracking-tight leading-none">{req.toLocaleString()}</p>
@@ -804,10 +803,8 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
           <span className="shrink-0 text-white/45">빙옥 {fmt(balance?.point)}</span>
         </span>
       }
-      // 📌 단계 숫자 칸은 최대 단계 자릿수만큼 폭을 잡는다 — +9 → +10 이 되며 옆 탭이 밀리지 않게
       tabs={kinds.length > 1 ? kinds.map((k) => (
-        <PopTab key={k} on={k === kind} onClick={() => { setPick(k); onTone?.(); }} label={k === "chat" ? "채팅" : "음성"}
-          n={<>+<span className="inline-block text-left" style={{ minWidth: `${String(enh[k].max).length}ch` }}>{enh[k].level}</span></>} />
+        <PopTab key={k} on={k === kind} onClick={() => { setPick(k); onTone?.(); }} label={k === "chat" ? "채팅" : "음성"} n={`+${enh[k].level}`} />
       )) : null}
       left={
         <>
@@ -895,8 +892,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
               type="button"
               onClick={() => onEnhance(kind, "point", cost)}
               disabled={!canPoint}
-              // 📌 최소 폭("9,999 빙옥"까지) + tabular-nums — 강화할 때마다 · 채팅↔음성마다 빙옥 자릿수가 바뀌어도 옆 XP 단추 폭이 흔들리지 않게
-              className="shrink-0 min-w-[108px] h-12 px-5 rounded-full bg-white/[0.07] border border-white/15 enabled:hover:bg-white/[0.13] text-white text-[13px] font-black tabular-nums transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+              className="shrink-0 h-12 px-5 rounded-full bg-white/[0.07] border border-white/15 enabled:hover:bg-white/[0.13] text-white text-[13px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
             >
               {fmt(pointCost)} 빙옥
             </button>
@@ -1637,9 +1633,11 @@ export default function LevelPage() {
   const [claiming, setClaiming] = useState("");
   const [pass, setPass] = useState(null);            // /api/pass — 시즌 패스 상태 (비활성/비로그인이면 null)
   const [passBusy, setPassBusy] = useState("");      // 수령·해금 진행 중 키 ("t2:free" / "unlock") — 티어는 인덱스가 아니라 tid 로 잡는다
+  const skinSavedRef = useRef({ at: 0, v: "" });      // 마지막 카드 스킨 저장 — 그 전에 떠난 조회가 옛 스킨으로 되돌리지 않게(keepSavedSkin)
 
   const loadMe = useCallback(async () => {
     try {
+      const t0 = Date.now();
       const [meRes, logRes, qRes, itemRes, passRes] = await Promise.all([
         fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/xp/my-logs", { cache: "no-store" }).then((r) => r.json()),
@@ -1656,7 +1654,7 @@ export default function LevelPage() {
       if (passRes?.body?.success) setPass(passRes.body);
       else if (passRes && (passRes.status === 401 || passRes.status === 403)) setPass(null);
       if (meRes?.success) {
-        const d = meRes.data;
+        const d = keepSavedSkin(meRes.data, t0, skinSavedRef.current);
         const prev = prevXpRef.current;
         if (prev && d.xp > prev.xp) { pushToast(`+${(d.xp - prev.xp).toLocaleString()} XP 획득`); sfxXp(); }
         if (prev && d.level > prev.level) { pushToast(`레벨 업! Lv.${prev.level} → Lv.${d.level}`, true); sfxLevelUp(); }
@@ -1666,7 +1664,7 @@ export default function LevelPage() {
       }
       if (logRes?.success) setMyLogs(logRes.data);
       if (qRes?.success) setQuests(qRes.data);
-      if (itemRes?.success) setMyItems((cur) => mergeMyItems(cur, itemRes.data));
+      if (itemRes?.success) setMyItems((cur) => mergeMyItems(cur, keepSavedSkin(itemRes.data, t0, skinSavedRef.current)));
     } catch {}
     setMeLoaded(true);
   }, [pushToast]);
@@ -1674,9 +1672,10 @@ export default function LevelPage() {
   // 📌 가방을 열 때 보유 목록만 새로 읽는다 — 30초 폴링을 기다리면 방금 받은 것이 안 보이거나,
   //    직전 조회가 실패했을 때 빈 가방이 새로고침 전까지 남는다
   const refreshItems = useCallback(() => {
+    const t0 = Date.now();
     fetch("/api/shop/my-items", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => { if (d?.success) setMyItems((cur) => mergeMyItems(cur, d.data)); })
+      .then((d) => { if (d?.success) setMyItems((cur) => mergeMyItems(cur, keepSavedSkin(d.data, t0, skinSavedRef.current))); })
       .catch(() => {});
   }, []);
 
@@ -2354,6 +2353,13 @@ export default function LevelPage() {
         onTone={() => playTone(620, 0.04, "sine", 0.025)}
         onReset={isAdminUser ? () => resetTest("shop") : null}
         resetBusy={resetBusy === "shop"}
+        cardSkin={myItems?.cardSkin || ""}
+        // 착용 · 해제 즉시 프로필 카드 장식도 바꾼다(다음 폴링을 기다리지 않게)
+        onSkinChange={(k) => {
+          skinSavedRef.current = { at: Date.now(), v: k };
+          setMyItems((cur) => (cur ? { ...cur, cardSkin: k } : cur));
+          setMe((cur) => (cur ? { ...cur, cardSkin: k } : cur));
+        }}
       />
 
       {/* ── 탭 줄 — 어떤 탭이든 헤더 바로 아래 같은 자리. 여기가 움직이면 안 된다. ── */}
@@ -2513,6 +2519,8 @@ export default function LevelPage() {
                       style={{ background: `radial-gradient(420px 320px at 86% 30%, ${hexA(tierCur.c, 0.26)} 0%, ${hexA(tierCur.c, 0)} 72%), linear-gradient(180deg, #1b1b1b 0%, #131313 55%)` }}
                     >
                       <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
+                      {/* 📌 착용한 카드 스킨 — 봇 이미지 카드와 같은 액자를 옅게(등급 색과 헷갈리지 않게 색이 아니라 테두리 · 무늬로) */}
+                      {me.cardSkin && <SkinFrame skin={me.cardSkin} />}
                       <span aria-hidden className="hidden lg:block absolute -right-3 -bottom-10 text-[150px] font-black text-white/[0.035] leading-none tracking-tighter tabular-nums select-none pointer-events-none">{me.level}</span>
 
                       <div className="relative z-10 p-5 md:p-7">
@@ -2760,11 +2768,10 @@ export default function LevelPage() {
                           const on = questPeriod === t.v;
                           const n = claimableBy[t.v];
                           return (
-                            // 📌 받을 보상 수 배지 자리까지 잡은 같은 폭 — 보상을 받아 배지가 사라져도 옆 탭이 당겨지지 않게
                             <button
                               key={t.v}
                               onClick={() => setQuestPeriod(t.v)}
-                              className={`inline-flex items-center justify-center gap-1.5 min-w-[76px] px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
+                              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
                                 on ? "bg-[#131313] text-white" : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"
                               }`}
                             >

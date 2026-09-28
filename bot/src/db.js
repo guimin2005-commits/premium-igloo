@@ -49,6 +49,8 @@ const UserXpSchema = new mongoose.Schema({
   passSeason: { type: Number, default: 0 },        // SEASON.number 와 다르면 새 시즌 — 사이트가 진행도를 다시 스냅샷한다
   passBaseXp: { type: Number, default: 0 },        // 시즌 시작 시점의 누적 XP (진행도 = xp - passBaseXp)
   passUnlocked: { type: Boolean, default: false }, // 프리미엄 트랙 해금 여부 (시즌마다 초기화)
+  // 고른 카드 스킨 — "" 안 고름 · "none" 끔 · 스킨 키 (models/UserXp.js 와 같은 칸). 이미지 카드 그릴 때 읽는다(botMessages withSkin)
+  cardSkinPick: { type: String, default: "" },
   // 해금 때 낸 값 — 사이트의 관리자 테스트 초기화가 환불에 쓴다 (models/UserXp.js 와 같은 모양)
   passUnlockPaid: {
     method: { type: String, default: "" },
