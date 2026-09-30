@@ -19,6 +19,7 @@ export const INV_GROUPS = [
   { id: "role", label: "역할" },
   { id: "perk", label: "권한" },
   { id: "item", label: "아이템" },
+  { id: "cosmetic", label: "꾸미기" },
   { id: "physical", label: "실물" },
   { id: "level", label: "레벨 보상" },
 ];
@@ -35,9 +36,11 @@ export const invSubLabel = (it) => {
   return base;
 };
 
+// 📌 자리 번호 말고 id 로 찾는다 — 분류가 늘면 번호가 밀린다
+const invGroup = (id) => INV_GROUPS.find((g) => g.id === id);
 export const invGroupOf = (it) => {
-  if (it.source === "level") return INV_GROUPS[4];
-  return INV_GROUPS.find((g) => g.id === (it.type || it.kind)) || INV_GROUPS[2];
+  if (it.source === "level") return invGroup("level");
+  return invGroup(it.type || it.kind) || invGroup("item");
 };
 
 // 가진 항목으로 탭을 만든다 — 전체 · 유형별(INV_GROUPS 순) · 기간제. 하나도 없으면 [] (탭 없이 빈 가방)

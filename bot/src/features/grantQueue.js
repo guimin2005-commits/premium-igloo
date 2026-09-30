@@ -81,7 +81,8 @@ async function processPurchases(guild) {
   // 아이템 유형도 결국 디스코드 역할을 주는 상품이다 — 여기서 빠지면 사도 영영 지급되지 않는다
   // 📌 error 오름차순 — 아직 시도 안 한 건("")이 먼저, 실패한 건은 뒤로 (processDetachments 와 같은 이유)
   //    영구 실패는 error 가 "영구 실패…"(한글)로 시작해 일시 오류(영문)보다도 뒤에 온다
-  const rows = await Purchase.find({ status: "pending", itemType: { $in: ["role", "perk", "item"] } })
+  //    꾸미기(cosmetic)는 역할이 없지만 여기서 completed · 지급 DM 을 거친다 — 빠지면 영영 지급 대기로 남는다
+  const rows = await Purchase.find({ status: "pending", itemType: { $in: ["role", "perk", "item", "cosmetic"] } })
     .sort({ error: 1, createdAt: 1 })
     .limit(25);
 
@@ -292,7 +293,7 @@ async function processRoleSyncs(guild) {
 async function processExpiries(guild) {
   const rows = await Purchase.find({
     status: "completed",
-    itemType: { $in: ["role", "perk", "item"] }, // 기간제 아이템도 기간이 지나면 회수한다
+    itemType: { $in: ["role", "perk", "item", "cosmetic"] }, // 기간제 아이템 · 꾸미기도 기간이 지나면 회수한다
     expiresAt: { $ne: null, $lte: new Date() },
   })
     .sort({ error: 1, expiresAt: 1 }) // 실패한 건은 뒤로 — 앞자리 실패 건이 뒤의 회수를 막지 않게

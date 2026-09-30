@@ -49,8 +49,11 @@ const TYPES = [
   { v: "role", l: "역할" },
   { v: "perk", l: "권한" },
   { v: "item", l: "아이템" },
+  { v: "cosmetic", l: "꾸미기" },
   { v: "physical", l: "기프트카드" },
   { v: "timed", l: "기간제" },
+  // 📌 빙옥 — 빙옥 전용(pointOnly) 상품만 모은 프리미엄 스토어(시즌 상품). 유형이 아니라 결제 방식으로 거른다. 탭 줄에서는 구분선 뒤 맨 끝
+  { v: "binok", l: "빙옥" },
 ];
 
 // 상품 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천 (역할·권한은 자동 지급, 기프트카드는 운영진 발송)
@@ -487,14 +490,14 @@ export default function ArcticShopBody({
     //    가격대는 XP 값(빙옥 전용은 XP 로 친 값) 기준 — 정렬과 같은 값
     const inRange = (p: number) => p >= range.min && p < range.max;
     const filtered = items.flatMap((it) => {
-      if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : it.type !== typeFilter)) return [];
+      if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : typeFilter === "binok" ? !isPointOnly(it) : it.type !== typeFilter)) return [];
       const afford = affordableOnly && myXp != null ? affordFor(it, myXp, myPoint ?? 0) : null;
       const priceOk = range.v === "all" && !afford ? undefined : (p: number) => inRange(p) && (!afford || afford(p));
       const pick = cardPick(it, priceOk);
       if (!pick) return [];
       if (inStockOnly && it.stock === 0) return [];
       if (wishOnly && !wish.includes(it._id)) return [];
-      if (q && !`${it.name} ${it.description} ${it.roleName || ""}`.toLowerCase().includes(q)) return [];
+      if (q && !`${it.name} ${it.description} ${it.roleName || ""} ${itemTypeLabel(it.type)}${isTimed(it) ? " 기간제" : ""}${isPointOnly(it) ? " 빙옥" : ""}`.toLowerCase().includes(q)) return [];
       return [{ ...it, _pick: pick }];
     });
 
@@ -712,8 +715,9 @@ export default function ArcticShopBody({
              ARCTIC 표기와 브랜드 · 쿠폰함 · 알림 · 프로필은 전역 상단 바가 갖고 있다. ── */}
       <div className="w-full bg-white border-b border-[#ededed]">
         <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center gap-4 md:gap-6 h-[56px] md:h-[60px]">
-          {/* 유형 탭 — 고른 것만 빨간 밑줄 */}
-          <nav className="flex items-center gap-5 md:gap-7 overflow-x-auto no-bar h-full min-w-0 flex-1 md:flex-none">
+          {/* 유형 탭 — 고른 것만 빨간 밑줄
+               📌 넓은 간격은 xl 부터 — 꾸미기 탭이 늘어 768~1279 에서 검색창이 눌리지 않게 */}
+          <nav className="flex items-center gap-5 xl:gap-7 overflow-x-auto no-bar h-full min-w-0 flex-1 md:flex-initial">
             {/* 모바일 — 들어온 곳으로 돌아갈 길 (독 · 메뉴 · 레벨 탭 어디서 왔든). 넓은 화면은 상단 바 · 브라우저 뒤로 */}
             {origin && (
               <>
@@ -726,7 +730,10 @@ export default function ArcticShopBody({
             {[{ v: "home", l: "홈" }, ...TYPES].map((t) => {
               const on = t.v === "home" ? showing === "home" : showing === "products" && typeFilter === t.v;
               return (
-                <button key={t.v}
+                <React.Fragment key={t.v}>
+                {/* 빙옥 스토어는 유형 탭과 한 칸 떨어뜨린다 */}
+                {t.v === "binok" && <span aria-hidden className="shrink-0 w-px h-4 bg-[#e0e0e0]" />}
+                <button
                   onClick={() => {
                     if (t.v === "home") { setView("home"); clearSearch(); window.scrollTo({ top: 0, behavior: "smooth" }); }
                     else goProducts(t.v);
@@ -735,12 +742,13 @@ export default function ArcticShopBody({
                   {t.l}
                   {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
                 </button>
+                </React.Fragment>
               );
             })}
           </nav>
 
           {/* 검색 — 남는 폭을 가져간다 */}
-          <div className="hidden md:flex flex-1 justify-end min-w-0">
+          <div className="hidden md:flex flex-1 justify-end min-w-0 md:min-w-[180px]">
             <div className="relative w-full max-w-[300px] lg:max-w-[360px]">
               <div className="relative h-10 rounded-full border-2 border-[#131313] bg-white overflow-hidden">
                 <input type="text" value={query}
@@ -951,7 +959,7 @@ export default function ArcticShopBody({
           <div className="py-24 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
         ) : visible.length === 0 ? (
           <div className="py-24 text-center break-keep">
-            <p className="text-sm font-bold text-[#5a5a5a]">조건에 맞는 상품이 없습니다.</p>
+            <p className="text-sm font-bold text-[#5a5a5a]">{typeFilter === "binok" && !items.some((it) => isPointOnly(it)) ? "시즌 상품 준비 중입니다." : "조건에 맞는 상품이 없습니다."}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 lg:gap-6">
@@ -1143,7 +1151,7 @@ export default function ArcticShopBody({
                           );
                         })}
                       </div>
-                      <p className="text-[10px] text-[#8a8a8a] mt-1.5">기간이 끝나면 역할이 자동으로 회수됩니다.</p>
+                      <p className="text-[10px] text-[#8a8a8a] mt-1.5">기간이 끝나면 {buyTarget.roleId ? "역할이 " : ""}자동으로 회수됩니다.</p>
                     </div>
                   )}
 
@@ -1193,9 +1201,11 @@ export default function ArcticShopBody({
                   {/* 화면에 안 보이는 것만 남긴다 — 지급까지 걸리는 시간과 되돌릴 수 없다는 경고
                       (기간 만료 회수는 위 '이용 기간' 칸이 이미 말한다) */}
                   <p className="text-[11px] text-[#8a8a8a] leading-relaxed mb-5 break-keep">
-                    {buyTarget.type !== "physical"
-                      ? "역할은 30초 이내에 지급되며, 구매 후 취소할 수 없습니다."
-                      : "운영진 확인 후 발송되며, 구매 후 취소할 수 없습니다."}
+                    {buyTarget.type === "physical"
+                      ? "운영진 확인 후 발송되며, 구매 후 취소할 수 없습니다."
+                      : (buyTarget.type === "item" || buyTarget.type === "cosmetic") && !buyTarget.roleId
+                      ? "인벤토리에 보관되며, 구매 후 취소할 수 없습니다."
+                      : "역할은 30초 이내에 지급되며, 구매 후 취소할 수 없습니다."}
                   </p>
 
                   <div className="flex gap-3">
@@ -1276,7 +1286,7 @@ export default function ArcticShopBody({
 
                     <div>
                       <label className={F_LABEL}>상품 유형 <span className="text-[#d01634]">*</span></label>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-3 lg:grid-cols-5 gap-2">
                         {ITEM_TYPE_OPTIONS.map((o) => (
                           <button key={o.v} type="button" disabled={efLinked} onClick={() => pickType(o.v)}
                             className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors disabled:cursor-default ${editForm.type === o.v ? "bg-[#e91e3f] text-white border-[#e91e3f]" : `bg-white text-[#5a5a5a] border-[#ededed] ${efLinked ? "opacity-40" : "hover:border-[#a3a3a3]"}`}`}>
@@ -1433,9 +1443,9 @@ export default function ArcticShopBody({
                     </div>
                   </FormGroup>
 
-                  {/* ── 시즌 동작 ── 기프트카드는 시즌과 무관하고,
-                       권한은 역할이 곧 디스코드 기능이라 떼면 기능이 사라진다 — 둘 다 감춘다 */}
-                  {editForm.type !== "physical" && editForm.type !== "perk" && (
+                  {/* ── 시즌 동작 ── 기프트카드 · 꾸미기는 뗄 역할이 없고,
+                       권한은 역할이 곧 디스코드 기능이라 떼면 기능이 사라진다 — 모두 감춘다 */}
+                  {editForm.type !== "physical" && editForm.type !== "perk" && editForm.type !== "cosmetic" && (
                     <FormGroup title="시즌 동작" summary={efSeasonSummary} open={openGroups.season} onToggle={() => toggleGroup("season")}>
                       <FormToggle on={!!editForm.detachOnSeason} disabled={efLinked} onClick={() => setEditForm({ ...editForm, detachOnSeason: !editForm.detachOnSeason })}
                         onLabel="시즌 바뀌면 디스코드 표기 뗌" offLabel="디스코드 역할 계속 유지" />

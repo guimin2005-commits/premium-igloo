@@ -9,8 +9,8 @@ import { ICON_PATHS } from "./Icons";
 //    우선순위: 이미지(둥근 사각) > 일러스트("art:<key>") > 프리셋 SVG("svg:<key>") > 이모지·텍스트 > 유형 기본 SVG.
 //    프리셋 목록·검증은 lib/items.js (서버도 같이 씀), 선 프리셋 그림은 여기, 일러스트 그림은 lib/itemArt.js.
 
-// 유형별 기본 모양 — role 방패 · perk 열쇠 · item 큐브 · physical 상자 · level(레벨 보상) 메달
-const TYPE_DEFAULT: Record<string, string> = { role: "shield", perk: "key", item: "cube", physical: "box", level: "medal" };
+// 유형별 기본 모양 — role 방패 · perk 열쇠 · item 큐브 · cosmetic 반짝이 · physical 상자 · level(레벨 보상) 메달
+const TYPE_DEFAULT: Record<string, string> = { role: "shield", perk: "key", item: "cube", cosmetic: "sparkles", physical: "box", level: "medal" };
 export const defaultPresetOf = (type?: string) => TYPE_DEFAULT[type || ""] || "cube";
 
 // 24×24 · 선 굵기 1.7. 채움형(번개·방패)은 fill, 나머지는 stroke — 기존 인벤토리 톤 그대로.

@@ -5,6 +5,7 @@ import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import { ADMIN_USERS } from "@/lib/admins";
 import { priceText } from "@/lib/shopPricing";
+import { ITEM_TYPE_LABEL } from "@/lib/items";
 import { ICON_PATHS } from "../components/Icons";
 
 // 📌 1:1 문의 — 화이트 & 블랙.
@@ -20,7 +21,7 @@ const TYPE_META = [
 ];
 const SUB_TYPES = ["일반", "이용", "건의/제안", "기타"];
 const REPORT_TYPES = ["운영정책 위반", "테러", "분쟁", "기타"];
-const ORDER_TYPE_LABEL: Record<string, string> = { role: "역할", perk: "권한", physical: "기프트카드" };
+const ORDER_TYPE_LABEL: Record<string, string> = ITEM_TYPE_LABEL;
 
 // 관리자가 자주 쓰는 답변 서식
 const ANSWER_TEMPLATES = [

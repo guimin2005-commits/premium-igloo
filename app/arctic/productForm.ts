@@ -177,9 +177,9 @@ export const pickType = (f: ProductForm, v: string): ProductForm => {
   return {
     ...base,
     type: v,
-    roleId: v === "physical" ? "" : f.roleId,
+    roleId: v === "physical" || v === "cosmetic" ? "" : f.roleId,
     timed: v === "physical" ? false : f.timed,
-    detachOnSeason: v === "physical" || v === "perk" ? false : f.detachOnSeason,
+    detachOnSeason: v === "physical" || v === "perk" || v === "cosmetic" ? false : f.detachOnSeason,
   };
 };
 

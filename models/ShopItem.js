@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 // 📌 ARCTIC 상품 — 레벨 대시보드(상품 관리)에서 등록, /shop 에서 판매
 //    type "role"    : 역할 상품 — 구매 즉시 봇이 역할 자동 지급
 //    type "perk"    : 권한 상품 — 역할 지급으로 특정 권한을 부여 (역할과 동일 동작, 분류만 다름)
+//    type "item"    : 아이템 — 역할이 있으면 역할 지급, 없으면 사이트 인벤토리 보유
+//    type "cosmetic": 꾸미기 — 역할 없음, 사이트 인벤토리 보유 (카드 스킨·프로필 배지 등)
 //    type "physical": 기프트카드 — 구매 후 관리자가 확인·발송
 const ShopItemSchema = new mongoose.Schema({
   name: { type: String, required: true },
@@ -15,7 +17,7 @@ const ShopItemSchema = new mongoose.Schema({
   itemImageUrl: { type: String, default: "" },   // Item.imageUrl 스냅샷 — 상품 이미지가 비었을 때 카드에 쓴다
   icon: { type: String, default: "" },           // 이모지·짧은 텍스트 — 이미지가 없을 때 카드에 크게 찍힌다
   color: { type: String, default: "" },          // "#rrggbb" — 비면 유형 기본색 (lib/items.js)
-  type: { type: String, default: "role" },       // "role" | "perk" | "item" | "physical"
+  type: { type: String, default: "role" },       // "role" | "perk" | "item" | "cosmetic" | "physical"
   roleId: { type: String, default: "" },         // role·perk 일 때 지급할 역할
   roleName: { type: String, default: "" },       // 표시용
   price: { type: Number, required: true },       // 정가 (소모 XP) — 기간제면 표시·정렬용 기준가

@@ -109,7 +109,7 @@ export async function POST(request) {
       discountPct,
       discountUntil: discountPct > 0 ? discountUntil : null,
       // 시즌 전환 때 디스코드 역할만 뗄 대상인지 (권한 상품에는 켜면 안 된다)
-      detachOnSeason: type !== "perk" && type !== "physical" && !!b.detachOnSeason,
+      detachOnSeason: type !== "perk" && type !== "physical" && type !== "cosmetic" && !!b.detachOnSeason,
       // 빈 값이면 무제한(-1)
       stock: b.stock === "" || b.stock == null ? -1 : Math.max(-1, Math.floor(Number(b.stock))),
       active: b.active !== false,

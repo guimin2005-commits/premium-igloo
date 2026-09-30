@@ -1,5 +1,5 @@
 // ── 기간제 만료 임박 DM (10분 주기) ──────────────
-//  · completed 기간제(역할 · 퍽 · 아이템) 중 N시간 안에 끝나는 건에 한 번만 DM (reminderSentAt 조건부 선점)
+//  · completed 기간제(역할 · 퍽 · 아이템 · 꾸미기) 중 N시간 안에 끝나는 건에 한 번만 DM (reminderSentAt 조건부 선점)
 //  · 같은 역할 · 아이템이 더 늦게까지 이어지면(연장분 · 다른 구매) 보내지 않는다
 //  · 소모된 건(consumedAt)은 대상도, 이어지는 구매도 아니다
 //  · 설정: BotSetting.expiryReminderEnabled(기본 켜짐) · expiryReminderHours(기본 24)
@@ -56,7 +56,7 @@ async function tick(client) {
   const windowMs = hours * 3600e3;
   const rows = await Purchase.find({
     status: "completed",
-    itemType: { $in: ["role", "perk", "item"] },
+    itemType: { $in: ["role", "perk", "item", "cosmetic"] },
     expiresAt: { $gt: now, $lte: new Date(now.getTime() + windowMs) },
     reminderSentAt: null, // 필드가 없는 옛 문서도 잡힌다
     consumedAt: null, // 📌 이미 소모한 건(쓴 보호막 등)은 끝날 것도 연장할 것도 없다

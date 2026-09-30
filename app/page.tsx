@@ -377,7 +377,7 @@ export default function Home() {
             shopOpen && (
               <InkBanner key="arctic" href="/arctic" eyebrow="ARCTIC" glow="rgba(79,182,216,0.22)" dot="#4fb6d8"
                 title={<>XP로 사는 <span className="text-[#e91e3f]">상점</span></>}
-                sub="역할 · 권한 · 아이템 · 기프트카드" mark="XP"
+                sub="역할 · 권한 · 아이템 · 꾸미기 · 기프트카드" mark="XP"
                 pill="XP · 빙옥으로 결제" />
             ),
             <InkBanner key="tournament" href="/tournament" eyebrow="e스포츠 대회" glow="rgba(233,30,63,0.2)" dot="#e91e3f"

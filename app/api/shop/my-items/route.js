@@ -156,8 +156,8 @@ export async function GET() {
         }
       }
 
-      // kind — 표기 유형을 따르되, 역할이 없는 것은 실물이 아니면 사이트 보유 아이템이다
-      const kind = disp.type === "physical" ? "physical" : roleLike ? disp.type : "item";
+      // kind — 표기 유형을 따르되, 역할이 없는 것은 실물 · 꾸미기가 아니면 사이트 보유 아이템이다
+      const kind = disp.type === "physical" || disp.type === "cosmetic" ? disp.type : roleLike ? disp.type : "item";
 
       owned.push({
         // 갱신돼도 같은 것을 가리키도록 하는 키 (연장 묶음 단위 — 맨 앞 구매 id. 연장이 없으면 그 구매 id)

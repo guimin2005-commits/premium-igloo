@@ -270,7 +270,7 @@ export default function ItemDetailPage() {
                     );
                   })}
                 </div>
-                {renewBase == null && <p className="text-[11px] text-[#8a8a8a] mt-2">기간이 끝나면 역할이 자동으로 회수되며, 그 뒤 다시 구매할 수 있습니다.</p>}
+                {renewBase == null && <p className="text-[11px] text-[#8a8a8a] mt-2">기간이 끝나면 {item.roleId ? "역할이 " : ""}자동으로 회수되며, 그 뒤 다시 구매할 수 있습니다.</p>}
               </div>
             )}
 
@@ -294,7 +294,7 @@ export default function ItemDetailPage() {
                   l: "지급 방식",
                   v: item.type === "physical"
                     ? "운영진 확인 후 발송"
-                    : item.type === "item" && !item.roleId
+                    : (item.type === "item" || item.type === "cosmetic") && !item.roleId
                     ? "결제 후 인벤토리에 보관"
                     : "결제 후 30초 이내 자동 지급",
                 },

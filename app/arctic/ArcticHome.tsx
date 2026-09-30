@@ -124,7 +124,7 @@ export default function ArcticHome({
     return out.slice(0, 2);
   }, [active, byId, rec]);
 
-  // ○○에게 맞는 — 기본 규칙: 내 등급·소지 XP 기준. 안 산 것, 살 수 있는 것, 권한·아이템 우선.
+  // ○○에게 맞는 — 기본 규칙: 내 등급·소지 XP 기준. 안 산 것, 살 수 있는 것, 권한·아이템·꾸미기 우선.
   //    추천: 같은 등급의 최근 구매 · 함께 산 상품 · 예산 적합도 (제목도 근거에 따라 "○○에게 인기" · "함께 많이 산")
   const tier = isLoggedIn ? getTier(myLevel || 0) : null;
   const forMe = useMemo(() => {
@@ -138,7 +138,7 @@ export default function ArcticHome({
       ? cands.flatMap((it) => { const pick = cardPick(it, okFor(it)); return pick ? [{ ...it, _pick: pick }] : []; })
       : cands;
     const pool = [...(afford.length >= 2 ? afford : cands)];
-    const score = (it: any) => (it.type === "perk" || it.type === "item" ? 1 : 0);
+    const score = (it: any) => (it.type === "perk" || it.type === "item" || it.type === "cosmetic" ? 1 : 0);
     pool.sort((a, b) => score(b) - score(a) || (a.sortOrder || 0) - (b.sortOrder || 0));
     let picks = pool.slice(0, 2);
     let title = tier ? `${tier.name}에게 맞는` : "처음이라면";
@@ -268,7 +268,8 @@ export default function ArcticHome({
                 <div className="grid grid-cols-2 gap-3 md:gap-5">{forMe.picks.map((it) => renderCard(it))}</div>
               )}
               <div className="mt-5 text-right">
-                <button onClick={() => goProducts("perk")} className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">권한 전체 보기 →</button>
+                {/* 추천 칸은 권한 · 아이템 · 꾸미기가 섞여 있어 유형 하나로 보내지 않는다 — 전체(추천순)로 */}
+                <button onClick={() => goProducts("all")} className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">추천 더 보기 →</button>
               </div>
             </div>
           </div>

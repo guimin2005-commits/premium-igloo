@@ -11,7 +11,7 @@ const PurchaseSchema = new mongoose.Schema({
   //    인벤토리(my-items)가 이 값으로 Item 을 먼저 찾아 표기를 그린다. "" 이면 상품·구매 스냅샷으로 그린다.
   itemRef: { type: String, default: "" },
   itemName: { type: String, default: "" },
-  itemType: { type: String, default: "role" }, // "role" | "perk" | "item" | "physical"
+  itemType: { type: String, default: "role" }, // "role" | "perk" | "item" | "cosmetic" | "physical"
   roleId: { type: String, default: "" },
   price: { type: Number, default: 0 },
   // 결제 수단 — 가격은 XP 하나만 두고, 빙옥(1 빙옥 = 1,000 XP — lib/pointRate.js)을 원하는 만큼 쓰고 나머지를 XP 로 낸다.

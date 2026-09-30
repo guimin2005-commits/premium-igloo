@@ -13,7 +13,7 @@ import BotMessageTest from "@/models/BotMessageTest";
 // 📌 봇 상태 — 생존 신호(BotStatus, 봇 heartbeat 가 찍는다) + 봇이 처리해야 할 대기 건수.
 //    대시보드가 "꺼져 있는데 쌓이고 있다"를 한눈에 보게 한다. 조건은 봇 대기열(bot/src/features/grantQueue.js)이 집는 것과 같게.
 const ONLINE_MS = 90_000; // 이 안에 신호가 있으면 작동 중
-const BOT_ITEM_TYPES = ["role", "perk", "item"]; // 봇이 역할로 지급 · 회수하는 상품(실물은 관리자가 발송)
+const BOT_ITEM_TYPES = ["role", "perk", "item", "cosmetic"]; // 봇이 역할로 지급 · 회수하는 상품(실물은 관리자가 발송)
 
 export async function GET() {
   try {

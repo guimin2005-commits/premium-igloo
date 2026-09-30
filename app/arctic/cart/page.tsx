@@ -8,16 +8,15 @@ import CardArt from "../CardArt";
 import { basePrice, salePrice, durationLabel, isPointOnly, priceText } from "@/lib/shopPricing";
 import { pointToXp } from "@/lib/pointRate";
 import { planPayment } from "@/lib/shopPay";
-import { ITEM_TYPE_LABEL } from "@/lib/items";
+import { ITEM_TYPE_LABEL, itemTypeColor } from "@/lib/items";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 import { isRenewal } from "../owned";
 
 import { ADMIN_USERS } from "@/lib/admins";
 
-// 유형 라벨 — lib/items.js 가 단일 원천. 색은 ITEM_TYPE_COLOR 와 같은 값
+// 유형 라벨 · 색 — lib/items.js 가 단일 원천
 const TYPE_LABEL: Record<string, string> = ITEM_TYPE_LABEL;
-const TYPE_CLS: Record<string, string> = { role: "bg-[#e91e3f] text-white", perk: "bg-[#2f6fb0] text-white", item: "bg-[#3f9e93] text-white", physical: "bg-[#131313] text-white" };
 
 // 📌 장바구니 페이지 — 담은 상품 확인·삭제 후 주문서로 이동
 export default function CartPage() {
@@ -212,7 +211,7 @@ export default function CartPage() {
                         <CardArt it={r.item} iconSize={36} />
                       </Link>
                       <div className="flex-1 min-w-0">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black mb-1.5 ${TYPE_CLS[r.item.type] || TYPE_CLS.physical}`}>
+                        <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-black text-white mb-1.5" style={{ backgroundColor: itemTypeColor(r.item.type) }}>
                           {TYPE_LABEL[r.item.type] || "상품"}
                         </span>
                         <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">

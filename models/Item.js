@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 //    type  role     : 디스코드 역할 표기 (시즌 전환 때 떼는 대상이 될 수 있다)
 //          perk     : 권한 역할 — 역할이 곧 기능이라 시즌 전환에도 떼지 않는다 (detachOnSeason 항상 false)
 //          item     : 수집품 — roleId 가 있으면 보유자 인벤토리에 자동 표시 + 지급 시 역할 부여, 없으면 사이트 보유
+//          cosmetic : 꾸미기 (카드 스킨·프로필 배지 등) — 역할 없음, 사이트 보유. 효과는 가질 수 있다
 //          physical : 기프트카드 — 역할 없음
 const ItemSchema = new mongoose.Schema({
   name: { type: String, required: true, maxlength: 40 },
@@ -15,7 +16,7 @@ const ItemSchema = new mongoose.Schema({
   icon: { type: String, default: "" },            // 이모지 또는 짧은 텍스트(≤8자). 비면 유형별 기본 SVG
   imageUrl: { type: String, default: "" },        // 있으면 icon 대신 이미지
   color: { type: String, default: "" },           // "#rrggbb". 비면 유형 기본색 (lib/items.js ITEM_TYPE_COLOR)
-  type: { type: String, default: "item", enum: ["role", "perk", "item", "physical"] },
+  type: { type: String, default: "item", enum: ["role", "perk", "item", "cosmetic", "physical"] },
   roleId: { type: String, default: "" },
   roleName: { type: String, default: "" },
   detachOnSeason: { type: Boolean, default: false }, // role 유형만 의미. perk 는 항상 false

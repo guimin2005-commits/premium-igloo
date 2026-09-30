@@ -82,7 +82,7 @@ export const RoleConfig = mongoose.models.RoleConfig || mongoose.model("RoleConf
 //    효과 칸의 모양 · 규칙 원본은 사이트 lib/itemEffects.js — 키를 바꾸면 사이트 모델과 같이 고칠 것.
 const ItemSchema = new mongoose.Schema({
   name: { type: String, default: "" },
-  type: { type: String, default: "item" },       // "role" | "perk" | "item" | "physical"(기프트카드 — 효과 없음)
+  type: { type: String, default: "item" },       // "role" | "perk" | "item" | "cosmetic"(꾸미기 — 역할 없음) | "physical"(기프트카드 — 효과 없음)
   roleId: { type: String, default: "" },
   visible: { type: Boolean, default: true },     // false 면 (B) 역할 보유 판정에서 "없는 것"으로 본다
   sortOrder: { type: Number, default: 0 },

@@ -1116,7 +1116,7 @@ export default function AdminShopPage() {
       ),
     },
     { key: "status", label: "상태", mobile: "title", render: (it) => <StatusChip tone={it.active ? "ok" : "neutral"}>{it.active ? "판매 중" : "숨김"}</StatusChip> },
-    { key: "type", label: "유형 · 역할", render: (it) => <span className="text-[#5a5a5a]">{it.type === "physical" ? "기프트카드" : `${typeLabel(it.type)} · ${it.roleName || it.roleId || "역할 없음"}`}</span> },
+    { key: "type", label: "유형 · 역할", render: (it) => <span className="text-[#5a5a5a]">{it.type === "physical" || it.type === "cosmetic" ? typeLabel(it.type) : `${typeLabel(it.type)} · ${it.roleName || it.roleId || "역할 없음"}`}</span> },
     {
       key: "price", label: "가격", align: "right",
       render: (it) => (
@@ -1320,10 +1320,10 @@ export default function AdminShopPage() {
                 </Field>
                 <Field label={<>유형<Req /></>}>
                   <Segmented options={ITEM_TYPE_OPTIONS} value={itemForm.type}
-                    onChange={(v) => setItemForm({ ...itemForm, type: v, roleId: v === "physical" ? "" : itemForm.roleId, detachOnSeason: v === "role" ? itemForm.detachOnSeason : false })} />
+                    onChange={(v) => setItemForm({ ...itemForm, type: v, roleId: v === "physical" || v === "cosmetic" ? "" : itemForm.roleId, detachOnSeason: v === "role" ? itemForm.detachOnSeason : false })} />
                 </Field>
 
-                {itemForm.type !== "physical" && (
+                {itemForm.type !== "physical" && itemForm.type !== "cosmetic" && (
                   <Field
                     label={<>연결 역할{itemForm.type === "item" ? <Opt /> : <Req />}</>}
                     hint={itemForm.type === "item" ? "역할이 있으면 보유자 인벤토리에 자동 표시되고 지급 시 역할도 붙습니다." : undefined}
@@ -1624,8 +1624,8 @@ export default function AdminShopPage() {
                   </Two>
                 </PaneSection>
 
-                {/* ── 시즌 동작 ── 기프트카드는 시즌과 무관하므로 아예 감춘다 */}
-                {form.type !== "physical" && (
+                {/* ── 시즌 동작 ── 기프트카드 · 꾸미기는 뗄 역할이 없으므로 아예 감춘다 */}
+                {form.type !== "physical" && form.type !== "cosmetic" && (
                   <PaneSection title="시즌 동작">
                     {/* 시즌 전환 때 디스코드 역할만 떼고 사이트 인벤토리에는 남긴다 (등록된 아이템이면 아이템 설정을 따른다) */}
                     <div className="mb-4">
