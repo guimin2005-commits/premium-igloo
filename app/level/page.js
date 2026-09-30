@@ -16,14 +16,14 @@ import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { buildEnhanceView, chatRange, voiceBonus, enhanceCost } from "@/lib/enhance";
 // 빙옥 가격 = XP 가격 ÷ 1,000 올림 — 서버와 같은 식 (lib/pointRate)
 import { xpToPoint } from "@/lib/pointRate";
-import { discountedCost } from "@/lib/itemEffects";
+import { discountedCost, effectParts, describeEffect, PERK_KEYS, SKINS } from "@/lib/itemEffects";
 import TierEmblem from "../components/TierEmblem";
 import SystemGuide from "./SystemGuide";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 // 팝업 틀 · 인벤토리 팝업 · 효과음은 내 정보 · ARCTIC 도 같이 쓴다 (app/components/PopShell · Inventory, lib/sfx)
 import { PopShell, PopTab, AdminReset } from "../components/PopShell";
-import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedBadges } from "../components/Inventory";
+import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedBadges, invTierOf, invIconType, invAccentOf } from "../components/Inventory";
 import WalletHistory from "../components/WalletHistory";
 import SkinFrame from "../components/SkinFrame";
 import { playTone } from "@/lib/sfx";
@@ -931,6 +931,135 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
   );
 };
 
+// 📌 세부 효과 창 — 카드의 "1회 획득" 줄로 연다. 틀은 PopShell(잉크).
+//    왼쪽: 채팅 · 음성 · 출석 1회 획득과 그 내역(기본 · 강화 · 등급 · 역할 · 부스트 · 아이템). 출석은 연속 출석 보너스 규칙까지.
+//    오른쪽: 카드 숫자에 안 잡히는 것 — 보유 아이템의 효과 문장(서버 my-items 의 effectLines: "매일 음성 120분 +1,000 XP" 같은 발동형,
+//    역할 버프, 등급 보상)과 상시 효과(me.perks). 빈 묶음은 그리지 않는다.
+const fxFmt = (n) => (Number(n) || 0).toLocaleString();
+// 📌 꾸미기 문장(카드 스킨 · 프로필 배지)은 뺀다 — XP 효과가 아니고 아이템 이름과 같은 말이 한 번 더 붙는다("카드 스킨 · 골드" 아래 "카드 스킨 · 골드").
+//    서버가 만든 문장(lib/itemEffects describeEffect)과 같은 식으로 만들어 비교한다
+const FX_COSMETIC_LINES = new Set([
+  describeEffect({ on: "profileBadge" }),
+  describeEffect({ on: "cardSkin" }),
+  ...SKINS.map((s) => describeEffect({ on: "cardSkin", skin: s.v })),
+]);
+const fxLinesOf = (it) => (Array.isArray(it.effectLines) ? it.effectLines.filter((l) => l && !FX_COSMETIC_LINES.has(l)) : []);
+const FxRow = ({ l, v, dim }) => (
+  <div className="flex items-center justify-between gap-3">
+    <span className={`min-w-0 truncate text-[11px] font-bold ${dim ? "text-white/35" : "text-white/45"}`}>{l}</span>
+    <span className={`shrink-0 text-[12px] font-black tabular-nums ${dim ? "text-white/55" : "text-white/80"}`}>{v}</span>
+  </div>
+);
+const GainFxModal = ({ open, onClose, gain, voiceMin = 5, items, loading, perks, policy }) => {
+  if (!open) return null;
+  const blocks = [
+    { k: "chat", icon: "chat", l: "채팅 1회", v: `+${fxFmt(gain.chatLo)}~${fxFmt(gain.chatHi)}`, parts: gain.chatParts },
+    { k: "voice", icon: "mic", l: `음성 ${voiceMin}분`, v: `+${fxFmt(gain.voice)}`, parts: gain.voiceParts },
+    { k: "attend", icon: "calendar", l: "출석", v: `+${fxFmt(gain.attend)}`, parts: gain.attendParts, extra: gain.streakParts },
+  ];
+  // 아이템 효과 — 효과 문장이 있는 것만. 같은 아이템을 두 번 샀으면(효과는 한 번) 이름 · 문장이 같은 칸을 하나로
+  const seen = new Set();
+  const fxItems = [];
+  for (const it of items || []) {
+    const lines = fxLinesOf(it);
+    const key = `${it.name}|${lines.join("|")}`;
+    if (!lines.length || seen.has(key)) continue;
+    seen.add(key);
+    fxItems.push({ it, lines });
+  }
+  // 📌 상시 효과 — 0 인 것은 뺀다. 봇이 실제로 거는 상한까지 줄여 적는다(bot/src/itemEffects.js perksOf):
+  //    쿨타임 단축은 쿨타임의 절반, 음소거 완화는 감소율까지 · 감소 모드가 아니면 효과가 없어 뺀다. 문구는 아이템 효과와 같은 조각(effectParts)
+  const perkRows = PERK_KEYS.map((k) => {
+    let v = Math.max(0, Number(perks?.[k]) || 0);
+    if (k === "cooldownCut") v = Math.min(v, Math.floor(Math.max(0, policy.chatCooldownSec) / 2));
+    if (k === "muteRelief") v = policy.muteMode === "reduce" ? Math.min(v, policy.muteReducePct) : 0;
+    if (!v) return null;
+    const p = effectParts({ on: k, mode: k === "cooldownCut" ? "add" : "percent", amount: v, seconds: v });
+    return p && { k, l: p.label, v: `${p.amount}${p.unit}` };
+  }).filter(Boolean);
+  const empty = !fxItems.length && !perkRows.length;
+
+  return (
+    <PopShell
+      open={open}
+      onClose={onClose}
+      title="세부 효과"
+      icon="sparkles"
+      left={blocks.map((b, i) => (
+        <div key={b.k} className={i ? "mt-5 pt-5 border-t border-white/[0.08]" : ""}>
+          <p className="flex items-center gap-1.5 text-[11px] font-bold text-white/45">
+            <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9">
+              <path d={ICON_PATHS[b.icon]} strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {b.l}
+          </p>
+          <p className="mt-2 text-[20px] font-black text-white tabular-nums tracking-tight leading-none">
+            {b.v}<span className="text-[11px] text-white/40 ml-1">XP</span>
+          </p>
+          <div className="mt-3 space-y-1.5">
+            {b.parts.map((p) => <FxRow key={p.l} l={p.l} v={p.v} />)}
+          </div>
+          {b.extra?.length > 0 && (
+            <div className="mt-2.5 pt-2.5 border-t border-dashed border-white/10 space-y-1.5">
+              {b.extra.map((p) => <FxRow key={p.l} l={p.l} v={p.v} dim />)}
+            </div>
+          )}
+        </div>
+      ))}
+    >
+      {/* 모바일은 왼쪽 묶음 바로 아래로 이어지므로 선 하나로 가른다 */}
+      <div className="border-t border-white/[0.08] pt-5 sm:border-t-0 sm:pt-0">
+        {fxItems.length > 0 && (
+          <section>
+            <p className="text-[11px] font-bold text-white/45 mb-3">아이템 효과</p>
+            <ul className="space-y-4">
+              {fxItems.map(({ it, lines }) => {
+                const accent = invAccentOf(it);
+                const tier = invTierOf(it);
+                return (
+                  <li key={it.uid} className="flex items-start gap-3">
+                    <span
+                      aria-hidden
+                      className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center"
+                      style={{ background: `linear-gradient(160deg, ${accent}33, ${accent}0f)`, boxShadow: `inset 0 0 0 1px ${accent}55` }}
+                    >
+                      {tier
+                        ? <TierEmblem tier={tier} size={20} />
+                        : <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={18} color={accent} />}
+                    </span>
+                    <div className="min-w-0 flex-1 pt-0.5">
+                      <p className="text-[13px] font-black text-white leading-snug break-keep break-words">{it.name}</p>
+                      <ul className="mt-1 space-y-0.5">
+                        {lines.map((l, j) => (
+                          <li key={j} className="text-[12px] font-bold text-white/70 leading-relaxed break-keep break-words">{l}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+        {perkRows.length > 0 && (
+          <section className={fxItems.length ? "mt-8" : ""}>
+            <p className="text-[11px] font-bold text-white/45 mb-3">상시 효과</p>
+            <div className="space-y-2">
+              {perkRows.map((p) => (
+                <div key={p.k} className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate text-[12px] font-bold text-white/70">{p.l}</span>
+                  <span className="shrink-0 text-[12px] font-black text-white tabular-nums">{p.v}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+        {empty && <p className="text-[12px] font-bold text-white/35">{loading ? "불러오는 중…" : "보유 효과 없음"}</p>}
+      </div>
+    </PopShell>
+  );
+};
+
 // 📌 확인 창 — 브라우저 기본 confirm 대신. 팝업 틀과 같은 잉크 카드에 창마다의 색(시즌 패스 보라 · 강화 불씨 · 기본 빨강)
 //    금액을 크게, 그 아래 바뀌는 값(잔액 · 레벨)을 줄로 보여 준다. Esc · 바깥 누르기는 취소, 확인 버튼에 처음 초점
 const CONFIRM_TONE = {
@@ -1632,6 +1761,7 @@ export default function LevelPage() {
   const [questPeriod, setQuestPeriod] = useState("daily");
   const [tierOpen, setTierOpen] = useState(false);   // 등급 안내 모달
   const [walletOpen, setWalletOpen] = useState(false); // XP · 빙옥 내역 팝업
+  const [fxOpen, setFxOpen] = useState(false);         // 세부 효과 팝업 (1회 획득 줄)
   const [myItems, setMyItems] = useState(null);      // 보유 아이템 (디스코드 역할 대조)
   const [claiming, setClaiming] = useState("");
   const [pass, setPass] = useState(null);            // /api/pass — 시즌 패스 상태 (비활성/비로그인이면 null)
@@ -1952,6 +2082,13 @@ export default function LevelPage() {
     playTone(660, 0.06, "sine", 0.03);
   };
   const closeWallet = useCallback(() => setWalletOpen(false), []);
+  // 세부 효과 — 그 자리 팝업. 아이템 효과 문장이 방금 산 것까지 보이게 보유 목록을 새로 읽는다(가방과 같게)
+  const openFx = () => {
+    setFxOpen(true);
+    refreshItems();
+    playTone(660, 0.06, "sine", 0.03);
+  };
+  const closeFx = useCallback(() => setFxOpen(false), []);
   // 시즌 패스 창 여닫는 소리 — 강화 · 가방과 겹치지 않게 한 옥타브 위에서
   const openPass = () => {
     setPassOpen(true);
@@ -2106,6 +2243,8 @@ export default function LevelPage() {
     attendXp: policy?.attendXp ?? 7000,
     // 출석 인정 기준 (음성 누적 분) — 빠져 있어서 안내 탭에 숫자가 통째로 비어 나왔다
     attendVoiceMin: policy?.attendVoiceMin ?? 60,
+    // 연속 출석 보너스 규칙 — 꺼져 있으면 [] (api/xp/policy)
+    attendStreakRules: Array.isArray(policy?.attendStreakRules) ? policy.attendStreakRules : [],
     muteMode: policy?.muteMode ?? "reduce",
     muteReducePct: policy?.muteReducePct ?? 90,
     muteTarget: policy?.muteTarget ?? "both",
@@ -2134,6 +2273,9 @@ export default function LevelPage() {
     const chatEnh = enh.chat.level * enh.chat.step;
     const tier = getVoiceBonus(me?.level || 0);
     const voiceEnh = enh.voice.bonus || 0;
+    const attendBuff = Math.max(0, Number(me?.attendBuffXp) || 0);
+    const attendItem = Math.min(attendBuff, Math.max(0, Number(me?.attendItemXp) || 0));
+    const attendRole = attendBuff - attendItem;
     const fmt = (n) => n.toLocaleString();
     const extra = [buff > 0 && { l: "역할", v: `+${fmt(buff)}` }, boost > 0 && { l: "부스트", v: `+${fmt(boost)}` }].filter(Boolean);
     return {
@@ -2142,6 +2284,14 @@ export default function LevelPage() {
       chatParts: [{ l: "기본", v: `${fmt(P_chatBase[0])}~${fmt(P_chatBase[1])}` }, chatEnh > 0 && { l: "강화", v: `+${fmt(chatEnh)}` }, ...extra, itemChat > 0 && { l: "아이템", v: `+${fmt(itemChat)}` }].filter(Boolean),
       voice: P.voiceXp + tier + voiceEnh + buff + boost + itemVoice,
       voiceParts: [{ l: "기본", v: fmt(P.voiceXp) }, tier > 0 && { l: "등급", v: `+${fmt(tier)}` }, voiceEnh > 0 && { l: "강화", v: `+${fmt(voiceEnh)}` }, ...extra, itemVoice > 0 && { l: "아이템", v: `+${fmt(itemVoice)}` }].filter(Boolean),
+      // 📌 출석 1회 — 시뮬레이터 출석 줄과 같은 값(기본 + 역할 · 아이템 출석 가산). 아이템 몫은 서버가 따로 준다(attendItemXp)
+      attend: P.attendXp + attendBuff,
+      attendParts: [{ l: "기본", v: fmt(P.attendXp) }, attendRole > 0 && { l: "역할", v: `+${fmt(attendRole)}` }, attendItem > 0 && { l: "아이템", v: `+${fmt(attendItem)}` }].filter(Boolean),
+      // 연속 출석 보너스 — 합계에는 넣지 않는다(그날 연속 일수가 맞을 때만). 봇 streakBonusOf 와 같은 규칙: days 일째 한 번, repeat 면 배수마다
+      streakParts: P.attendStreakRules.map((r) => ({
+        l: `연속 ${fmt(r.days)}일${r.repeat ? "마다" : ""}`,
+        v: [r.xp > 0 && `+${fmt(r.xp)}`, r.point > 0 && `+${fmt(r.point)} 빙옥`].filter(Boolean).join(" · "),
+      })),
     };
   })();
 
@@ -2346,6 +2496,7 @@ export default function LevelPage() {
       />
       <ConfirmDialog state={confirmState} onDone={closeConfirm} />
       <WalletHistory open={walletOpen} onClose={closeWallet} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
+      <GainFxModal open={fxOpen && !!me} onClose={closeFx} gain={gain} voiceMin={P_voiceMin} items={myItems?.items} loading={myItems === null} perks={me?.perks} policy={P} />
       <BagOverlay
         open={bagOpen}
         onClose={closeBag}
@@ -2689,25 +2840,43 @@ export default function LevelPage() {
                           ))}
                         </div>
 
-                        {/* 1회 획득 — 강화 · 등급 · 역할 · 부스트를 다 더한 값(내역은 강화 창). 스탯과 같은 두 칸 */}
-                        <div className={`${deskOverview ? "grid" : "hidden lg:grid"} grid-cols-2 border-t border-white/10`}>
+                        {/* 1회 획득 — 채팅 · 음성 · 출석. 강화 · 등급 · 역할 · 부스트 · 아이템을 다 더한 값.
+                               줄 전체가 버튼 — 누르면 세부 효과 창(항목별 내역 · 아이템 효과 · 상시 효과). 표시는 출석 칸의 › 하나 */}
+                        {/* 📌 세 칸 폭은 고정 비율(채팅 1.35 : 음성 1.1 : 출석 1, 인라인 — 임의 grid-cols 는 이 빌드에서 안 먹는다)이라 값이 바뀌어도 칸이 움직이지 않는다.
+                               음성은 칸 양쪽에 여백이 있어 출석보다 조금 넓게 줘야 다섯 자리("+10,300")가 들어간다.
+                               값 글자는 스탯(18px)보다 한 단계 작게, 줄 높이는 스탯과 같은 18px(카드 높이 그대로). 실측(Inter 900, 칸 여백 8px):
+                               360 폰 14px · 375 폰부터 15px · PC 1280 부터 16px 에서 "+550~1,000 · +10,300 · +17,000XP" 가 잘리지 않는다.
+                               360 미만(카드 안쪽 240~279px)과 lg ~ xl 사이(1024~1279, 234~319px, 13px)는 라벨 아이콘 · "XP" 꼬리를 접는다(말줄임 대신) */}
+                        <button
+                          type="button"
+                          onClick={openFx}
+                          aria-haspopup="dialog"
+                          className={`${deskOverview ? "grid" : "hidden lg:grid"} group w-full text-left border-t border-white/10 outline-none focus-visible:ring-2 focus-visible:ring-white/40`}
+                          style={{ gridTemplateColumns: "minmax(0,1.35fr) minmax(0,1.1fr) minmax(0,1fr)" }}
+                        >
                           {[
                             { icon: "chat", l: "채팅 1회", v: `+${gain.chatLo.toLocaleString()}~${gain.chatHi.toLocaleString()}` },
                             { icon: "mic", l: `음성 ${P_voiceMin}분`, v: `+${gain.voice.toLocaleString()}` },
+                            { icon: "calendar", l: "출석", v: `+${gain.attend.toLocaleString()}` },
                           ].map((g, i) => (
-                            <div key={g.icon} className={`min-w-0 py-3 ${i === 0 ? "pr-4 border-r border-white/10" : "pl-4"}`}>
-                              <p className="flex items-center gap-1.5 text-[11px] font-bold text-white/45 mb-2">
-                                <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9">
+                            <span key={g.icon} className={`block min-w-0 py-3 ${i === 0 ? "pr-2 border-r border-white/10" : i === 1 ? "px-2 border-r border-white/10" : "pl-2"}`}>
+                              <span className="flex items-center gap-1.5 text-[11px] font-bold text-white/45 group-hover:text-white/70 transition-colors mb-2">
+                                <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0 max-[360px]:hidden lg:max-xl:hidden" fill="none" stroke="currentColor" strokeWidth="1.9">
                                   <path d={ICON_PATHS[g.icon]} strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
-                                {g.l}
-                              </p>
-                              <p className="text-lg font-black text-white tabular-nums tracking-tight leading-none truncate">
-                                {g.v}<span className="text-[11px] text-white/40 ml-1">XP</span>
-                              </p>
-                            </div>
+                                <span className="min-w-0 truncate">{g.l}</span>
+                                {i === 2 && (
+                                  <svg aria-hidden viewBox="0 0 24 24" className="ml-auto w-3 h-3 shrink-0 text-white/35 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="2.4">
+                                    <path d={ICON_PATHS.chevronRight} strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                )}
+                              </span>
+                              <span className="block text-[14px] min-[375px]:text-[15px] lg:text-[13px] xl:text-base font-black text-white tabular-nums tracking-tight leading-[18px] truncate">
+                                {g.v}<span className="text-[10px] text-white/40 ml-0.5 leading-none max-[360px]:hidden lg:max-xl:hidden">XP</span>
+                              </span>
+                            </span>
                           ))}
-                        </div>
+                        </button>
 
                       </div>
                     </div>

@@ -35,6 +35,13 @@ export async function GET() {
         voiceIntervalSec: doc?.voiceIntervalSec ?? 300,
         attendXp: doc?.attendXp ?? 7000,
         attendVoiceMin: doc?.attendVoiceMin ?? 60,
+        // 📌 연속 출석 보너스 — 켜져 있을 때만 규칙을 내보낸다(꺼져 있으면 []). 봇 streakBonusOf(bot/src/attend.js)가 읽는 규칙 그대로:
+        //    days 일째에 한 번, repeat 면 days 의 배수마다 xp · point. 레벨 대시보드 세부 효과 창이 읽는다
+        attendStreakRules: doc?.attendStreakEnabled === true && Array.isArray(doc?.attendStreakRules)
+          ? doc.attendStreakRules
+              .map((r) => ({ days: Math.floor(Number(r?.days) || 0), xp: Math.max(0, Number(r?.xp) || 0), point: Math.max(0, Number(r?.point) || 0), repeat: r?.repeat === true }))
+              .filter((r) => r.days >= 1 && (r.xp > 0 || r.point > 0))
+          : [],
         muteMode: doc?.muteMode ?? "reduce",
         muteReducePct: doc?.muteReducePct ?? 90,
         muteTarget: doc?.muteTarget ?? "both",

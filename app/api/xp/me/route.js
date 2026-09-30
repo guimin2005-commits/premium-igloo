@@ -65,13 +65,15 @@ export async function GET() {
     //    같은 아이템은 몇 번 사도 한 번. 역할 조회에 실패하면(null) 구매 건(A)만 본다. 조건 효과는 상황마다 달라 뺀다
     //    채팅 · 음성을 따로 정하므로 역할 버프(buffs — 둘 다에 붙는다)와 나눠 준다
     const itemBuffs = [];
+    let attendItemXp = 0; // 출석 가산 중 보유 아이템 몫 — 세부 효과 창이 역할 · 아이템을 나눠 적는다
     for (const it of owned) {
       if (it.type === "physical") continue;
       const chat = Math.max(0, Number(it.chatBuffXp) || 0);
       const voice = Math.max(0, Number(it.voiceBuffXp) || 0);
       if (chat > 0 || voice > 0) itemBuffs.push({ name: it.name || "아이템", chat, voice });
-      attendBuffXp += Math.max(0, Number(it.attendBuffXp) || 0);
+      attendItemXp += Math.max(0, Number(it.attendBuffXp) || 0);
     }
+    attendBuffXp += attendItemXp;
     const boosts = boostRows
       .filter((b) => !b.targetChannelId && (!b.targetRoleId || held.has(b.targetRoleId)))
       .map((b) => ({ name: b.name || "부스트", xp: Math.max(0, Number(b.boostXp) || 0) }));
@@ -118,6 +120,7 @@ export async function GET() {
         itemVoiceXp: itemBuffs.reduce((s, b) => s + b.voice, 0),
         itemBuffs,
         attendBuffXp,
+        attendItemXp,
         boostXp: boosts.reduce((s, b) => s + b.xp, 0),
         boosts,
         // 상시 효과 합(상한 적용) — { enhanceDiscount, shopCashback, tierPointBonus, questBonus, passBoost, cooldownCut, muteRelief }
