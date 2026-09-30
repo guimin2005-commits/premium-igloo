@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import Dropdown from "../components/Dropdown";
@@ -56,6 +56,9 @@ const TYPES = [
   // 📌 시즌 — 빙옥 전용(pointOnly) 상품만 모은 프리미엄 스토어(시즌 상품). 유형이 아니라 결제 방식으로 거른다. 탭 줄에서는 구분선 뒤 맨 끝
   { v: "season", l: "시즌" },
 ];
+// 📌 모바일 유형 줄은 홈 · 전체 · 시즌만 두고 나머지는 "카테고리 ▾" 칩 패널로 접는다
+const MOBILE_TABS = [{ v: "home", l: "홈" }, ...TYPES.filter((t) => t.v === "all" || t.v === "season")];
+const PANEL_TYPES = TYPES.filter((t) => t.v !== "all" && t.v !== "season");
 
 // 상품 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천 (역할·권한은 자동 지급, 기프트카드는 운영진 발송)
 function TypeBadge({ type, className = "" }: { type: string; className?: string }) {
@@ -221,6 +224,29 @@ export default function ArcticShopBody({
   //  (알림·프로필은 전역 상단 바가 가져갔다)
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  // 모바일 "카테고리 ▾" 칩 패널 — 바깥을 누르거나 Esc 면 닫힌다
+  const [catOpen, setCatOpen] = useState(false);
+  const catBtnRef = useRef<HTMLButtonElement>(null);
+  const catPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!catOpen) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (catBtnRef.current?.contains(t) || catPanelRef.current?.contains(t)) return;
+      setCatOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setCatOpen(false);
+      catBtnRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [catOpen]);
 
   // 저장된 장바구니를 먼저 읽고, 그 뒤부터만 저장한다 (첫 렌더에 빈 배열로 덮어쓰지 않게)
   const [cartLoaded, setCartLoaded] = useState(false);
@@ -710,116 +736,187 @@ export default function ArcticShopBody({
   const efStockSummary = `${editForm?.stock === "" ? "재고 무제한" : `재고 ${editForm?.stock}`} · 추천 ${editForm?.sortOrder || 0} · ${editForm?.active ? "판매 중" : "숨김"}`;
   const efSeasonSummary = editForm?.detachOnSeason ? "시즌 바뀌면 디스코드 표기 뗌" : "디스코드 역할 계속 유지";
 
+  // ── 스토어 줄 부품 (PC 두 줄 · 모바일 한 줄이 같이 쓴다) ──
+  const tabOn = (v: string) => (v === "home" ? showing === "home" : showing === "products" && typeFilter === v);
+  const pickTab = (v: string) => {
+    if (v === "home") { setView("home"); clearSearch(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+    else goProducts(v);
+  };
+  // 유형 탭 — 고른 것만 빨간 밑줄. 고르든 말든 굵기 · 크기 · 여백이 같다(탭 줄이 안 움직이게)
+  const tabButton = (t: { v: string; l: string }) => {
+    const on = tabOn(t.v);
+    return (
+      <button key={t.v} onClick={() => pickTab(t.v)}
+        className={`relative shrink-0 h-full flex items-center text-[14px] md:text-[15px] font-extrabold transition-colors ${on ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
+        {t.l}
+        {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
+      </button>
+    );
+  };
+  // 모바일 카테고리 단추에 걸 이름 — 패널 쪽 유형을 보고 있을 때만
+  const catType = PANEL_TYPES.find((t) => tabOn(t.v));
+  // 인벤토리 — 산 것 · 받은 것을 그 자리에서 팝업으로. PC 도구 칸 · 모바일 줄 끝 두 곳에 건다 (하단바 다섯 칸은 찼다)
+  const invButton = (
+    <button type="button" onClick={() => setInvOpen(true)} aria-label="인벤토리" title="인벤토리"
+      className="relative flex items-center justify-center w-9 h-9 rounded-full transition-colors text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">
+      <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.bag} />
+      </svg>
+    </button>
+  );
+  // 📌 PC 첫 줄 좌우 칸의 최소 폭 = 오른쪽 도구 폭. 아이콘 3개(36) + 사이 8 = 124, xl 는 재화 188 + 선(좌우 12 · 1) 을 더해 337.
+  //    좌우가 같은 최소 폭이라 검색창이 정가운데에 남는다 (도구 모양을 바꾸면 이 값도 같이)
+  //    재화는 xl 부터 — lg(1024~) 에 두면 좌우 337 씩 빠져 검색창이 300px 로 줄었다
+  const storeSide = isLoggedIn ? "min-w-[124px] xl:min-w-[337px]" : "";
+
   return (
     <div className={`w-full flex-1 bg-white text-[#131313] ${embedded ? "" : "min-h-screen"}`}>
-      {/* ── 스토어 줄 하나 — 왼쪽 유형 탭, 오른쪽 스토어에만 있는 것(검색 · 재화 · 찜 · 장바구니).
-             ARCTIC 표기와 브랜드 · 쿠폰함 · 알림 · 프로필은 전역 상단 바가 갖고 있다. ── */}
-      <div className="w-full bg-white border-b border-[#ededed]">
-        <div className="max-w-7xl mx-auto px-5 md:px-6 flex items-center gap-4 md:gap-6 h-[56px] md:h-[60px]">
-          {/* 유형 탭 — 고른 것만 빨간 밑줄
-               📌 넓은 간격은 xl 부터 — 꾸미기 탭이 늘어 768~1279 에서 검색창이 눌리지 않게 */}
-          <nav className="flex items-center gap-5 xl:gap-7 overflow-x-auto no-bar h-full min-w-0 flex-1 md:flex-initial">
-            {/* 모바일 — 들어온 곳으로 돌아갈 길 (독 · 메뉴 · 레벨 탭 어디서 왔든). 넓은 화면은 상단 바 · 브라우저 뒤로 */}
-            {origin && (
-              <>
-                <Link href={origin.href} className="md:hidden shrink-0 flex items-center gap-1 text-[13px] font-extrabold text-[#5a5a5a] hover:text-[#131313] transition-colors">
-                  <span aria-hidden>‹</span>{origin.label}
-                </Link>
-                <span aria-hidden className="md:hidden shrink-0 w-px h-4 bg-[#e0e0e0] -ml-1"></span>
-              </>
-            )}
-            {[{ v: "home", l: "홈" }, ...TYPES].map((t) => {
-              const on = t.v === "home" ? showing === "home" : showing === "products" && typeFilter === t.v;
-              return (
-                <React.Fragment key={t.v}>
-                {/* 시즌 스토어는 유형 탭과 한 칸 떨어뜨린다 */}
-                {t.v === "season" && <span aria-hidden className="shrink-0 w-px h-4 bg-[#e0e0e0]" />}
-                <button
-                  onClick={() => {
-                    if (t.v === "home") { setView("home"); clearSearch(); window.scrollTo({ top: 0, behavior: "smooth" }); }
-                    else goProducts(t.v);
-                  }}
-                  className={`relative shrink-0 h-full flex items-center text-[14px] md:text-[15px] font-extrabold transition-colors ${on ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
-                  {t.l}
-                  {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
-                </button>
-                </React.Fragment>
-              );
-            })}
-          </nav>
+      {/* ── 스토어 줄 — ARCTIC 표기와 브랜드 · 쿠폰함 · 알림 · 프로필은 전역 상단 바가 갖고 있다.
+             PC(md~) 두 줄: ① 가운데 검색 · 오른쪽 재화 · 인벤토리 · 찜 · 장바구니 ② 가운데 유형 탭.
+             모바일 한 줄: 돌아갈 길 · 홈 · 전체 · 시즌 | 카테고리 ▾ (나머지 유형은 칩 패널). 검색은 독에서 연다. ── */}
+      <div className="relative w-full bg-white border-b border-[#ededed]">
+        {/* ① PC — 검색 · 재화 · 도구
+             📌 좌우 칸은 flex-1 basis-0 에 같은 최소 폭(오른쪽 도구가 차지하는 폭)을 준다 → 검색창은 늘 정가운데.
+                검색창은 560px 에서 시작해 좌우 최소 폭이 모자랄 때만 줄어든다. 재화 칸이 폭 고정이라 자릿수가 바뀌어도 안 움직인다 */}
+        <div className="hidden md:flex max-w-7xl mx-auto px-6 h-[60px] items-center">
+          <div aria-hidden className={`flex-1 basis-0 ${storeSide}`} />
 
-          {/* 검색 — 남는 폭을 가져간다 */}
-          <div className="hidden md:flex flex-1 justify-end min-w-0 md:min-w-[180px]">
-            <div className="relative w-full max-w-[300px] lg:max-w-[360px]">
-              <div className="relative h-10 rounded-full border-2 border-[#131313] bg-white overflow-hidden">
-                <input type="text" value={query}
-                  onChange={(e) => { setQuery(e.target.value); setSearchOpen(true); }}
-                  onFocus={() => setSearchOpen(true)}
-                  onBlur={() => setSearchOpen(false)}
-                  onKeyDown={(e) => { if (e.key === "Enter") submitSearch(); if (e.key === "Escape") setSearchOpen(false); }}
-                  placeholder="상품, 유형, 역할 검색"
-                  className="absolute inset-0 w-full h-full bg-transparent pl-4 pr-10 text-[13px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
-                {query ? (
-                  <button onClick={clearSearch} aria-label="검색어 지우기"
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-[#a3a3a3] hover:text-[#131313] transition-colors outline-none">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
-                  </button>
-                ) : (
-                  <svg className="absolute right-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#131313] pointer-events-none" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.search} />
-                  </svg>
-                )}
-              </div>
-              {searchOpen && searchPanel}
+          <div className="relative basis-[560px] min-w-0">
+            <div className="relative h-10 rounded-full border-2 border-[#131313] bg-white overflow-hidden">
+              <input type="text" value={query}
+                onChange={(e) => { setQuery(e.target.value); setSearchOpen(true); }}
+                onFocus={() => setSearchOpen(true)}
+                onBlur={() => setSearchOpen(false)}
+                onKeyDown={(e) => { if (e.key === "Enter") submitSearch(); if (e.key === "Escape") setSearchOpen(false); }}
+                placeholder="상품, 유형, 역할 검색"
+                className="absolute inset-0 w-full h-full bg-transparent pl-4 pr-10 text-[13px] text-[#131313] outline-none placeholder:text-[#a3a3a3]" />
+              {query ? (
+                <button onClick={clearSearch} aria-label="검색어 지우기"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-[#a3a3a3] hover:text-[#131313] transition-colors outline-none">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
+                </button>
+              ) : (
+                <svg className="absolute right-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#131313] pointer-events-none" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.search} />
+                </svg>
+              )}
             </div>
+            {searchOpen && searchPanel}
           </div>
 
-          <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-auto md:ml-0">
+          <div className={`flex-1 basis-0 ${storeSide} flex items-center justify-end`}>
             {isLoggedIn && (
               <>
                 {/* 소지 — 보는 값이라 조용하게. 도구와는 가는 선으로 나눈다.
-                    📌 폭 고정 · 오른쪽 정렬 — 숫자 자릿수가 늘 때 칸이 커져 옆의 검색창이 밀리던 것(메모: tabs-never-move). 1억 XP · 10만 빙옥까지 한 칸에 든다 */}
-                <span className="hidden lg:inline-flex w-[188px] shrink-0 justify-end items-baseline gap-3 text-[12px] font-bold text-[#5a5a5a] tabular-nums whitespace-nowrap overflow-hidden">
+                    📌 폭 고정 · 오른쪽 정렬 — 자릿수가 늘어도 칸이 그대로다(메모: tabs-never-move). 1억 XP · 10만 빙옥까지 한 칸에 든다 */}
+                <span className="hidden xl:inline-flex w-[188px] shrink-0 justify-end items-baseline gap-3 text-[12px] font-bold text-[#5a5a5a] tabular-nums whitespace-nowrap overflow-hidden">
                   <span>{(myXp ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#a3a3a3]">XP</span></span>
                   <span>{(myPoint ?? 0).toLocaleString()}<span className="ml-[3px] text-[9.5px] text-[#a3a3a3]">빙옥</span></span>
                 </span>
-                <span className="hidden lg:block w-px h-4 bg-[#e0e0e0]" />
+                <span className="hidden xl:block shrink-0 w-px h-4 mx-3 bg-[#e0e0e0]" />
 
-                {/* 인벤토리 — 산 것 · 받은 것을 그 자리에서 팝업으로. 모바일도 여기서 연다 (하단바 다섯 칸은 찼다) */}
-                <button type="button" onClick={() => setInvOpen(true)} aria-label="인벤토리" title="인벤토리"
-                  className="relative flex items-center justify-center w-9 h-9 rounded-full transition-colors text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">
-                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.bag} />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {invButton}
 
-                {/* 찜 · 장바구니 — 같은 모양: 테두리 아이콘 + 빨간 개수 점. 개수가 바뀌면 점이 한 번 튄다 */}
-                <Link href="/arctic/wish" aria-label={`찜한 상품 보기${wish.length ? ` (${wish.length})` : ""}`}
-                  className="relative hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-colors text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]">
-                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.heart} />
-                  </svg>
-                  {wish.length > 0 && (
-                    <span key={wish.length} className="count-pop absolute top-0 right-0 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{wish.length}</span>
-                  )}
-                </Link>
-
-                <Link href="/arctic/cart" aria-label={`장바구니${cartCount ? ` (${cartCount})` : ""}`}
-                  className="relative hidden md:flex items-center justify-center w-9 h-9 rounded-full text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] transition-colors">
-                  <span>
+                  {/* 찜 · 장바구니 — 같은 모양: 테두리 아이콘 + 빨간 개수 점. 개수가 바뀌면 점이 한 번 튄다 */}
+                  <Link href="/arctic/wish" aria-label={`찜한 상품 보기${wish.length ? ` (${wish.length})` : ""}`}
+                    className="relative flex items-center justify-center w-9 h-9 rounded-full transition-colors text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05]">
                     <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.heart} />
                     </svg>
-                  </span>
-                  {cartCount > 0 && (
-                    <span key={cartCount} className="count-pop absolute top-0 right-0 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{cartCount}</span>
-                  )}
-                </Link>
+                    {wish.length > 0 && (
+                      <span key={wish.length} className="count-pop absolute top-0 right-0 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{wish.length}</span>
+                    )}
+                  </Link>
+
+                  <Link href="/arctic/cart" aria-label={`장바구니${cartCount ? ` (${cartCount})` : ""}`}
+                    className="relative flex items-center justify-center w-9 h-9 rounded-full text-[#5a5a5a] hover:text-[#131313] hover:bg-black/[0.05] transition-colors">
+                    <span>
+                      <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                      </svg>
+                    </span>
+                    {cartCount > 0 && (
+                      <span key={cartCount} className="count-pop absolute top-0 right-0 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{cartCount}</span>
+                    )}
+                  </Link>
+                </div>
               </>
             )}
-
           </div>
         </div>
+
+        {/* ② PC — 유형 탭, 가운데. 고른 것만 빨간 밑줄
+             📌 w-max + mx-auto — 들어가면 가운데, 모자라면(768~) 왼쪽부터 가로 스크롤 (justify-center 는 넘칠 때 앞쪽이 잘려 못 간다).
+                overflow-y-hidden — 밑줄이 1px 삐져나가 세로로 1px 굴러가며 탭 줄이 들썩이던 것을 막는다 */}
+        <div className="hidden md:block max-w-7xl mx-auto px-6">
+          <div className="overflow-x-auto overflow-y-hidden no-bar">
+            <nav className="w-max mx-auto flex items-center gap-7 h-[46px]">
+              {[{ v: "home", l: "홈" }, ...TYPES].map((t) => (
+                <React.Fragment key={t.v}>
+                  {/* 시즌 스토어는 유형 탭과 한 칸 떨어뜨린다 */}
+                  {t.v === "season" && <span aria-hidden className="shrink-0 w-px h-4 bg-[#e0e0e0]" />}
+                  {tabButton(t)}
+                </React.Fragment>
+              ))}
+            </nav>
+          </div>
+        </div>
+
+        {/* 모바일 — 한 줄 */}
+        <div className="md:hidden px-5 h-[56px] flex items-center gap-3">
+          {/* 돌아갈 길 · 홈 · 전체 · 시즌 — 카테고리는 늘 보이게 밖에 둔다
+               📌 좁은 폰(360 · 로그인 · "명예의 전당" 등 긴 이름)에선 돌아갈 길 이름이 먼저 … 으로 줄어 시즌이 잘리지 않는다. 그래도 넘치면 이 칸만 가로로 민다 */}
+          <nav className="flex items-center gap-3 overflow-x-auto overflow-y-hidden no-bar h-full min-w-0">
+            {/* 들어온 곳으로 돌아갈 길 (독 · 메뉴 · 레벨 탭 어디서 왔든). 넓은 화면은 상단 바 · 브라우저 뒤로 */}
+            {origin && (
+              <>
+                <Link href={origin.href} className="min-w-0 flex items-center gap-1 text-[13px] font-extrabold text-[#5a5a5a] hover:text-[#131313] transition-colors">
+                  <span aria-hidden>‹</span><span className="truncate">{origin.label}</span>
+                </Link>
+                <span aria-hidden className="shrink-0 w-px h-4 bg-[#e0e0e0] -ml-1"></span>
+              </>
+            )}
+            {MOBILE_TABS.map((t) => tabButton(t))}
+          </nav>
+          <span aria-hidden className="shrink-0 w-px h-4 bg-[#e0e0e0]" />
+          {/* 📌 카테고리 — 패널의 유형을 고르면 그 이름 + 밑줄. 폭은 가장 긴 "기프트카드" + ▾ (실측 약 81px) 로 고정 → 이름이 바뀌어도 줄이 안 움직인다.
+                 밑줄은 bottom-0 · 1px — 옆 탭은 스크롤 칸이 밑줄 아래 1px 을 잘라 1px 로 보인다, 같은 굵기로 */}
+          <button ref={catBtnRef} type="button" onClick={() => setCatOpen((o) => !o)}
+            aria-expanded={catOpen} aria-controls="arctic-cat-panel"
+            className={`shrink-0 w-[84px] h-full flex items-center whitespace-nowrap text-[14px] font-extrabold transition-colors ${catType || catOpen ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
+            <span className="relative h-full flex items-center">
+              {catType ? catType.l : "카테고리"}
+              {catType && <span className="absolute left-0 right-0 bottom-0 h-px bg-[#e91e3f]" />}
+            </span>
+            <svg className={`ml-1 w-3 h-3 shrink-0 transition-transform duration-200 ${catOpen ? "rotate-180" : ""}`}
+              fill="none" viewBox="0 0 24 24" strokeWidth={2.6} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+            </svg>
+          </button>
+          {isLoggedIn && <div className="ml-auto shrink-0">{invButton}</div>}
+        </div>
+
+        {/* 모바일 — 카테고리 칩 패널. 줄 아래에 겹쳐 띄운다 (유형 줄은 그대로)
+             📌 본문을 밀어내면 바깥 탭(pointerdown)에 닫히는 순간 본문이 패널 높이만큼 올라와, 손가락 밑에 들어온 다른 카드가 눌렸다 */}
+        {catOpen && (
+          <div ref={catPanelRef} id="arctic-cat-panel" className="md:hidden absolute left-0 right-0 top-full z-30 bg-white border-y border-[#ededed] px-5 py-3 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.22)]"
+            style={{ animation: "menuDrop 0.22s cubic-bezier(0.16,1,0.3,1)" }}>
+            <div className="flex flex-wrap gap-2">
+              {PANEL_TYPES.map((t) => {
+                const on = tabOn(t.v);
+                return (
+                  <button key={t.v} type="button" onClick={() => { goProducts(t.v); setCatOpen(false); }}
+                    className={`h-8 px-3.5 rounded-full border text-[13px] font-bold transition-colors ${
+                      on ? "bg-[#131313] border-[#131313] text-white" : "bg-white border-[#ededed] text-[#5a5a5a] hover:border-[#a3a3a3]"
+                    }`}>
+                    {t.l}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {topSlot}

@@ -241,6 +241,25 @@ const submitNearest = (e: React.MouseEvent<HTMLButtonElement>) => {
 // 폼 안 숨은 제출 단추 — 입력칸에서 Enter 로 저장되던 것을 그대로 둔다
 const HiddenSubmit = () => <button type="submit" hidden aria-hidden tabIndex={-1} />;
 
+// 📌 넣은 이미지의 실제 크기를 읽어 권장 크기와 견줘 준다 (등록하고 나서야 잘린 걸 아는 일을 막는다) — 배너 PC · 모바일 이미지가 같이 쓴다
+function useImageSize(src: string) {
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    const url = (src || "").trim();
+    if (!url) { setSize(null); return; }
+    let alive = true;
+    const img = new Image();
+    img.onload = () => { if (alive) setSize({ w: img.naturalWidth, h: img.naturalHeight }); };
+    img.onerror = () => { if (alive) setSize(null); };
+    img.src = url;
+    return () => { alive = false; };
+  }, [src]);
+  return size;
+}
+// 모바일 배너 틀 비율 범위 — ArcticHome 의 모바일 틀과 같은 값
+const M_BANNER_MIN = 0.8;
+const M_BANNER_MAX = 3;
+
 // Dropdown(라이트) 단추를 inputClass 높이 · 테두리에 맞춘다
 const DD_BTN = "min-h-10 !py-2 !px-3 !border-[#a3a3a3] !text-[14px]";
 // 상세 칸 아래 줄의 삭제 — 저장 옆에 빨간 덩어리를 두지 않고 글자만
@@ -766,21 +785,12 @@ export default function AdminShopPage() {
   }, []);
 
   // ── 이미지 배너 ──────────────────────────────
-  const EMPTY_BANNER = { id: "", imageUrl: "", title: "", subtitle: "", link: "", sortOrder: "", active: true };
+  const EMPTY_BANNER = { id: "", imageUrl: "", mobileImageUrl: "", title: "", subtitle: "", link: "", sortOrder: "", active: true };
   const [banners, setBanners] = useState<any[]>([]);
   const [bannerForm, setBannerForm] = useState<any>(EMPTY_BANNER);
-  // 📌 넣은 이미지의 실제 크기를 읽어 권장 크기와 견줘 준다 (등록하고 나서야 잘린 걸 아는 일을 막는다)
-  const [bannerSize, setBannerSize] = useState<{ w: number; h: number } | null>(null);
-  useEffect(() => {
-    const url = (bannerForm.imageUrl || "").trim();
-    if (!url) { setBannerSize(null); return; }
-    let alive = true;
-    const img = new Image();
-    img.onload = () => { if (alive) setBannerSize({ w: img.naturalWidth, h: img.naturalHeight }); };
-    img.onerror = () => { if (alive) setBannerSize(null); };
-    img.src = url;
-    return () => { alive = false; };
-  }, [bannerForm.imageUrl]);
+  const bannerSize = useImageSize(bannerForm.imageUrl);
+  const mBannerSize = useImageSize(bannerForm.mobileImageUrl);
+  const mBannerRatio = mBannerSize ? Math.min(M_BANNER_MAX, Math.max(M_BANNER_MIN, mBannerSize.w / mBannerSize.h)) : 2;
 
   const saveBanner = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -794,7 +804,7 @@ export default function AdminShopPage() {
 
   // 목록 줄 → 배너 폼 (예전 '수정' 단추 안의 값 그대로)
   const fillBannerForm = (b: any) =>
-    setBannerForm({ id: b._id, imageUrl: b.imageUrl, title: b.title || "", subtitle: b.subtitle || "", link: b.link || "", sortOrder: String(b.sortOrder || 0), active: b.active });
+    setBannerForm({ id: b._id, imageUrl: b.imageUrl, mobileImageUrl: b.mobileImageUrl || "", title: b.title || "", subtitle: b.subtitle || "", link: b.link || "", sortOrder: String(b.sortOrder || 0), active: b.active });
 
   // ── 쿠폰 ────────────────────────────────────
   const EMPTY_COUPON = { id: "", code: "", name: "", kind: "discount", reward: "", rewardRoleId: "", rewardRoleName: "", rewardXp: "", requiredRoleId: "", requiredRoleName: "", type: "percent", value: "", maxDiscount: "", minTotal: "", maxUses: "", perUserLimit: "1", active: true, expiresAt: "" };
@@ -1734,6 +1744,23 @@ export default function AdminShopPage() {
                   })()}
                 </Field>
 
+                {/* 📌 모바일 이미지 — 틀은 이미지 비율 그대로(0.8:1 ~ 3:1). 범위를 벗어나면 그 끝 비율로 잘린다 */}
+                <Field label={<>모바일 이미지 URL<Opt /></>}>
+                  <input type="text" value={bannerForm.mobileImageUrl} onChange={(e) => setBannerForm({ ...bannerForm, mobileImageUrl: e.target.value })}
+                    placeholder="https://..." className={inputClass} />
+                  {mBannerSize && (() => {
+                    const ratio = mBannerSize.w / mBannerSize.h;
+                    const tooSmall = mBannerSize.w < 750;
+                    const ok = !tooSmall && ratio >= M_BANNER_MIN && ratio <= M_BANNER_MAX;
+                    return (
+                      <p className={`mt-1.5 text-[12px] font-bold ${ok ? "text-emerald-700" : "text-amber-700"}`}>
+                        현재 이미지 <span className="tabular-nums">{mBannerSize.w} × {mBannerSize.h} px</span> ({ratio.toFixed(2)}:1)
+                        {ok ? " · 적당합니다" : tooSmall ? " · 가로가 750px보다 작아 흐리게 보일 수 있습니다" : ratio > M_BANNER_MAX ? " · 3:1보다 넓어 좌우가 잘립니다" : " · 0.8:1보다 좁아 위아래가 잘립니다"}
+                      </p>
+                    );
+                  })()}
+                </Field>
+
                 <Two>
                   <Field label={<>제목<Opt /></>}>
                     <input type="text" value={bannerForm.title} onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })}
@@ -1772,6 +1799,20 @@ export default function AdminShopPage() {
                         <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-5">
                           {bannerForm.title && <h3 className="text-[16px] font-black tracking-tight text-[#131313] mb-1">{bannerForm.title}</h3>}
                           {bannerForm.subtitle && <p className="text-[12px] text-[#131313]/85">{bannerForm.subtitle}</p>}
+                        </div>
+                      )}
+                    </div>
+                  </Field>
+                )}
+                {bannerForm.mobileImageUrl && (
+                  <Field label="모바일 미리보기">
+                    <div className="relative w-[280px] max-w-full rounded-lg overflow-hidden border border-[#ededed] bg-white" style={{ aspectRatio: String(mBannerRatio) }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={bannerForm.mobileImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                      {(bannerForm.title || bannerForm.subtitle) && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-5">
+                          {bannerForm.title && <h3 className="text-[16px] font-black tracking-tight text-[#131313] mb-1">{bannerForm.title}</h3>}
+                          {bannerForm.subtitle && <p className="text-[11px] text-[#131313]/85">{bannerForm.subtitle}</p>}
                         </div>
                       )}
                     </div>

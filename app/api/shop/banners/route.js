@@ -33,9 +33,14 @@ export async function POST(request) {
     if (!b.imageUrl?.trim()) {
       return NextResponse.json({ success: false, message: "배너 이미지 URL을 입력해주세요." }, { status: 400 });
     }
+    // 📌 모바일 이미지는 선택 — 비워 두면 모바일도 PC 이미지를 쓴다
+    if (b.mobileImageUrl != null && typeof b.mobileImageUrl !== "string") {
+      return NextResponse.json({ success: false, message: "모바일 이미지 URL을 확인해주세요." }, { status: 400 });
+    }
 
     const payload = {
       imageUrl: b.imageUrl.trim(),
+      mobileImageUrl: (b.mobileImageUrl || "").trim(),
       title: (b.title || "").trim(),
       subtitle: (b.subtitle || "").trim(),
       link: (b.link || "").trim(),

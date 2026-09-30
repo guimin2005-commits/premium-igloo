@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import ItemIcon from "../components/ItemIcon";
 import { isTimed, durationLabel, cardPick, discountActive, affordFor, shownPrice, priceText } from "@/lib/shopPricing";
@@ -49,6 +49,22 @@ function weekRange() {
 
 const created = (it: any) => new Date(it?.createdAt || 0).getTime();
 
+// 📌 768px 미만(모바일)인가 — 배너는 클라이언트에서 받아 오므로 첫 화면(SSR)과 어긋나 번쩍일 일이 없다.
+//    컨테이너 단위 · round() 는 일부 브라우저에서 안 먹었다 — 폭 판정은 matchMedia 로만 한다.
+//    (옛 Safari 는 MediaQueryList.addEventListener 가 없어 addListener 로 받는다)
+const NARROW_MQ = "(max-width: 767.98px)";
+const subNarrow = (cb: () => void) => {
+  const mq = window.matchMedia(NARROW_MQ);
+  if (mq.addEventListener) { mq.addEventListener("change", cb); return () => mq.removeEventListener("change", cb); }
+  mq.addListener(cb);
+  return () => mq.removeListener(cb);
+};
+const useNarrow = () => useSyncExternalStore(subNarrow, () => window.matchMedia(NARROW_MQ).matches, () => false);
+// 모바일 배너 틀 비율 범위 (관리자 배너 편집의 모바일 미리보기와 같은 값)
+const M_RATIO_MIN = 0.8;
+const M_RATIO_MAX = 3;
+const hasMobileArt = (b: any) => typeof b?.mobileImageUrl === "string" && b.mobileImageUrl.trim() !== "";
+
 // 📌 추천 결과 — 서버가 고른 상품 id 와 제목만 온다
 type Rec = {
   hot: string[];
@@ -69,6 +85,23 @@ export default function ArcticHome({
   banners, bannersLoaded, bannerIdx, setBannerIdx, bannerRatio, fitRatio, renderCard, goProducts, openEdit, adminTools,
 }: Props) {
   const dday = getSeasonDday();
+
+  // 📌 모바일 배너 — 보이는 배너가 전부 모바일 이미지를 가졌을 때만 바꿔 건다(한 장이라도 없으면 오늘처럼 PC 이미지).
+  //    틀 비율은 PC(fitRatio)와 같은 규칙 — 불러온 모바일 이미지 중 가장 넓은 비율에 맞춰 어느 것도 좌우가 잘리지 않게.
+  const narrow = useNarrow();
+  const mobileArt = narrow && banners.length > 0 && banners.every(hasMobileArt);
+  const [mRatios, setMRatios] = useState<Record<string, number>>({}); // 이미지 주소 → 실제 비율
+  const fitMobile = (url: string, img: HTMLImageElement) => {
+    const r = img.naturalWidth / img.naturalHeight;
+    if (!Number.isFinite(r) || r <= 0) return;
+    setMRatios((prev) => (prev[url] === r ? prev : { ...prev, [url]: r }));
+  };
+  const mRatio = useMemo(() => {
+    const rs = banners.map((b) => mRatios[String(b.mobileImageUrl || "").trim()]).filter((r): r is number => !!r);
+    // 아직 한 장도 안 불러왔으면 2:1 자리만 잡아 둔다
+    return rs.length ? Math.min(M_RATIO_MAX, Math.max(M_RATIO_MIN, Math.max(...rs))) : 2;
+  }, [banners, mRatios]);
+
   const active = useMemo(() => items.filter((it) => it.active !== false), [items]);
   const byId = useMemo(() => new Map(active.map((it) => [String(it._id), it])), [active]);
 
@@ -195,12 +228,14 @@ export default function ArcticHome({
         <div className="relative overflow-hidden bg-[#f2f2f2]">
           {banners.length > 0 ? (
             <>
-              <div className="relative" style={{ aspectRatio: String(bannerRatio) }}>
+              <div className="relative" style={{ aspectRatio: String(mobileArt ? mRatio : bannerRatio) }}>
                 {banners.map((b, i) => {
+                  const mUrl = String(b.mobileImageUrl || "").trim();
                   const inner = (
                     <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={b.imageUrl} alt={b.title || ""} onLoad={(e) => fitRatio(e.currentTarget)}
+                      <img src={mobileArt ? mUrl : b.imageUrl} alt={b.title || ""}
+                        onLoad={(e) => (mobileArt ? fitMobile(mUrl, e.currentTarget) : fitRatio(e.currentTarget))}
                         className="absolute inset-0 w-full h-full object-cover" />
                       {(b.title || b.subtitle) && (
                         <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-5 sm:px-10 md:px-12">
