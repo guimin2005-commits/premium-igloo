@@ -7,6 +7,7 @@ import { getShopAccess } from "@/lib/shopAccess";
 import { isItemType, itemSnapshot, normalizeIcon, normalizeColor, normalizeDescription } from "@/lib/items";
 import { POINT_RATE } from "@/lib/pointRate";
 import { unitSaleAllowed, clampPerOrder } from "@/lib/unitSale";
+import { isBackdropKey } from "@/lib/itemBackdrops";
 import mongoose from "mongoose";
 import ShopItem from "@/models/ShopItem";
 import Item from "@/models/Item";
@@ -113,6 +114,8 @@ export async function POST(request) {
       imageUrl: (b.imageUrl || "").trim(),
       icon: normalizeIcon(b.icon),
       color: normalizeColor(b.color),
+      // 📌 카드 배경 장면 — 목록(lib/itemBackdrops.js)에 있는 키만, 아니면 "" (기본 바탕). 상품 고유 값이라 아이템 연동과 무관
+      backdrop: isBackdropKey(b.backdrop) ? String(b.backdrop) : "",
       type,
       roleId: roleIdIn,
       roleName: grantsRole ? (b.roleName || "").trim() : "",

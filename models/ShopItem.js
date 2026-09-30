@@ -16,6 +16,9 @@ const ShopItemSchema = new mongoose.Schema({
   itemId: { type: String, default: "" },
   itemImageUrl: { type: String, default: "" },   // Item.imageUrl 스냅샷 — 상품 이미지가 비었을 때 카드에 쓴다
   icon: { type: String, default: "" },           // 이모지·짧은 텍스트 — 이미지가 없을 때 카드에 크게 찍힌다
+  // 📌 카드 배경 장면 — lib/itemBackdrops.js 의 키(public/backdrops/<key>.png). "" 이면 지금처럼 등록 색을 옅게 깐 바탕.
+  //    상품 고유 값이라 아이템 연동(itemId)과 무관하게 관리자가 고른다. 이미지(imageUrl · itemImageUrl)가 있으면 이미지가 이긴다
+  backdrop: { type: String, default: "" },
   color: { type: String, default: "" },          // "#rrggbb" — 비면 유형 기본색 (lib/items.js)
   type: { type: String, default: "role" },       // "role" | "perk" | "item" | "cosmetic" | "physical"
   roleId: { type: String, default: "" },         // role·perk 일 때 지급할 역할

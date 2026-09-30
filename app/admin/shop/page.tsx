@@ -7,6 +7,8 @@ import { discountPctOf, discountUntilLabel, priceText } from "@/lib/shopPricing"
 import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import IconPicker from "../../components/IconPicker";
+import BackdropPicker from "../../components/BackdropPicker";
+import ShopCardArt from "../../arctic/CardArt";
 import { InventoryItemPreview } from "../../components/Inventory";
 import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor } from "@/lib/items";
 import {
@@ -1576,6 +1578,12 @@ export default function AdminShopPage() {
                     </div>
                   </Field>
 
+                  {/* 📌 카드 배경 장면(lib/itemBackdrops.js) — 상품 고유 값이라 아이템을 연동해도 고른다. 상품 이미지가 있으면 이미지가 보인다 */}
+                  <Field label="배경">
+                    <BackdropPicker value={form.backdrop} onChange={(v) => setForm({ ...form, backdrop: v })}
+                      color={form.color || itemTypeColor(form.type)} buttonClassName={inputClass} />
+                  </Field>
+
                   {/* 역할 상품일 때만 역할 선택 — 드롭다운이 아래 요소를 덮도록 열릴 때 z를 올린다 */}
                   {(form.type === "role" || form.type === "perk" || form.type === "item") && (
                     <Field label={<>지급할 역할{form.type === "item" ? <Opt /> : <Req />}</>}>
@@ -2338,7 +2346,9 @@ export default function AdminShopPage() {
             <div className="bg-[#f4f3f2] rounded-2xl p-5">
               <div className="bg-white rounded-2xl border border-[#ededed] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col">
                 <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
-                  <CardArt it={form} iconSize={60} />
+                  {/* 📌 상점 카드 그림(CardArt stage — 아이콘 칸 폭 46% + 도트 그림자, 배경 장면이면 장면 위 땅에)을 그대로 쓴다.
+                         배경 없음 · 장면을 오갈 때 아이콘 크기가 달라지지 않게 두 경우 모두 같은 그림 (상점 안 편집기 미리보기와 같음) */}
+                  <ShopCardArt it={form} stage />
                   <TypeBadge type={form.type} className="absolute top-3 left-3 px-2.5 py-1 text-[10px] tracking-wide" />
                   {form.stock === "0" && (
                     <div className="absolute inset-0 bg-black/35 flex items-center justify-center">

@@ -5,6 +5,7 @@
 import { isItemType } from "@/lib/items";
 import { POINT_RATE, xpToPoint, pointToXp } from "@/lib/pointRate";
 import { unitSaleAllowed, clampPerOrder, DEFAULT_PER_ORDER } from "@/lib/unitSale";
+import { isBackdropKey } from "@/lib/itemBackdrops";
 
 export type ProductForm = {
   id: string;
@@ -18,6 +19,8 @@ export type ProductForm = {
   imageUrl: string;
   icon: string;
   color: string;
+  // 📌 카드 배경 장면 키(lib/itemBackdrops.js) — "" 이면 기본 바탕. 상품 고유 값이라 아이템을 연동해도 잠그지 않는다
+  backdrop: string;
   type: string;
   roleId: string;
   roleName: string;
@@ -52,6 +55,7 @@ export const EMPTY_PRODUCT_FORM: ProductForm = {
   imageUrl: "",
   icon: "",
   color: "",
+  backdrop: "",
   type: "role",
   roleId: "",
   roleName: "",
@@ -123,6 +127,8 @@ export const formFromShopItem = (it: any): ProductForm => ({
   imageUrl: it.imageUrl || "",
   icon: it.icon || "",
   color: it.color || "",
+  // 목록에서 빠진 옛 키는 비운다 — 고를 수 없는 장면이 선택된 채로 남지 않게
+  backdrop: isBackdropKey(it.backdrop) ? String(it.backdrop) : "",
   type: isItemType(it.type) ? it.type : "role",
   roleId: it.roleId || "",
   roleName: it.roleName || "",
@@ -245,6 +251,7 @@ export const unlinkItem = (f: ProductForm): ProductForm => ({ ...f, itemId: "", 
 export const toPayload = (f: ProductForm, roleName: string) => ({
   ...f,
   pointOnly: !!f.pointOnly,
+  backdrop: isBackdropKey(f.backdrop) ? f.backdrop : "",
   // 1개 단위 — 못 고르는 폼(역할 · 유형)이면 끈다. 기간제 가격표는 buildDurations 가 비운다(timed 가 꺼져 있다)
   unitSale: !!f.unitSale && unitSaleOk(f),
   maxPerOrder: f.unitSale ? clampPerOrder(f.maxPerOrder) : 0,

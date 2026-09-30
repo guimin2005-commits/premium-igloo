@@ -7,6 +7,7 @@ import Dropdown from "../components/Dropdown";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 import IconPicker from "../components/IconPicker";
+import BackdropPicker from "../components/BackdropPicker";
 import { salePrice, isTimed, durationOptions, durationLabel, cardPick, cardFrom, discountPctOf, isPointOnly, shownPrice, priceUnit, priceText, affordFor } from "@/lib/shopPricing";
 import { POINT_RATE } from "@/lib/pointRate";
 import { planPayment } from "@/lib/shopPay";
@@ -1480,6 +1481,13 @@ export default function ArcticShopBody({
                           placeholder={itemTypeColor(editForm.type)} className={`${F_INPUT_SM} disabled:bg-[#f2f2f2] disabled:text-[#8a8a8a]`} />
                       </div>
                       <p className={F_NOTE}>비우면 유형 기본색</p>
+                    </div>
+
+                    {/* 📌 카드 배경 장면(lib/itemBackdrops.js) — 상품 고유 값이라 아이템을 연동해도 고른다. 오른쪽 미리보기에 바로 깔린다 */}
+                    <div>
+                      <label className={F_LABEL}>배경</label>
+                      <BackdropPicker value={editForm.backdrop || ""} onChange={(v) => setEditForm({ ...editForm, backdrop: v })}
+                        color={editForm.color || itemTypeColor(editForm.type)} buttonClassName={F_INPUT_SM} />
                     </div>
                   </FormGroup>
 
