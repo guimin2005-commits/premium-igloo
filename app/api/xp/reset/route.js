@@ -131,8 +131,8 @@ export async function POST(request) {
       return NextResponse.json({ success: true, message: "되돌릴 상점 구매가 없습니다." });
     }
     const msg = await refund(userId, backXp, backPoint);
-    // 고른 카드 스킨도 처음으로 — 다시 사면 첫 구매처럼 스킨이 바로 붙게(남은 "none" · 키가 다음 테스트를 가리지 않게)
-    await UserXp.updateOne({ userId }, { $set: { cardSkinPick: "" } });
+    // 고른 카드 스킨 · 단 배지도 처음으로 — 다시 사면 첫 구매처럼 스킨 · 배지가 바로 붙게(남은 "none" · 키 · [] 가 다음 테스트를 가리지 않게)
+    await UserXp.updateOne({ userId }, { $set: { cardSkinPick: "" }, $unset: { badgePick: "" } });
     // 회수한 캐시백은 원장에 따로 남긴다 — 환불(+paidXp)은 구매 기록이 세므로, 빼고 돌려준 몫을 여기서 맞춘다
     for (const c of claws) {
       await logWallet({ userId, currency: "xp", amount: -c.claw, kind: "cashback", label: `캐시백 회수 · ${c.name || "상품"}`, refId: c.refId });

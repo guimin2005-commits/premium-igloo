@@ -23,7 +23,7 @@ import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 // 팝업 틀 · 인벤토리 팝업 · 효과음은 내 정보 · ARCTIC 도 같이 쓴다 (app/components/PopShell · Inventory, lib/sfx)
 import { PopShell, PopTab, AdminReset } from "../components/PopShell";
-import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin } from "../components/Inventory";
+import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedBadges } from "../components/Inventory";
 import WalletHistory from "../components/WalletHistory";
 import SkinFrame from "../components/SkinFrame";
 import { playTone } from "@/lib/sfx";
@@ -1553,6 +1553,9 @@ const RankBadges = ({ badges }) =>
     </span>
   ) : null;
 
+// 조회 결과에 방금 저장한 카드 스킨 · 배지를 지킨다 — 저장보다 먼저 떠난 조회가 옛 값으로 되돌리지 않게(keepSavedSkin · keepSavedBadges)
+const keepSaved = (data, t0, skin, badge) => keepSavedBadges(keepSavedSkin(data, t0, skin), t0, badge);
+
 export default function LevelPage() {
   // 리뉴얼: 정적 안내 대신 '내 대시보드'가 첫 화면
   // 탭은 URL 이 기준 — 외부에서 /level?tab=pass 처럼 바로 들어올 수 있어야 한다.
@@ -1634,6 +1637,7 @@ export default function LevelPage() {
   const [pass, setPass] = useState(null);            // /api/pass — 시즌 패스 상태 (비활성/비로그인이면 null)
   const [passBusy, setPassBusy] = useState("");      // 수령·해금 진행 중 키 ("t2:free" / "unlock") — 티어는 인덱스가 아니라 tid 로 잡는다
   const skinSavedRef = useRef({ at: 0, v: "" });      // 마지막 카드 스킨 저장 — 그 전에 떠난 조회가 옛 스킨으로 되돌리지 않게(keepSavedSkin)
+  const badgeSavedRef = useRef({ at: 0, v: [] });     // 마지막 배지 저장 — 같은 이유(keepSavedBadges)
 
   const loadMe = useCallback(async () => {
     try {
@@ -1654,7 +1658,7 @@ export default function LevelPage() {
       if (passRes?.body?.success) setPass(passRes.body);
       else if (passRes && (passRes.status === 401 || passRes.status === 403)) setPass(null);
       if (meRes?.success) {
-        const d = keepSavedSkin(meRes.data, t0, skinSavedRef.current);
+        const d = keepSaved(meRes.data, t0, skinSavedRef.current, badgeSavedRef.current);
         const prev = prevXpRef.current;
         if (prev && d.xp > prev.xp) { pushToast(`+${(d.xp - prev.xp).toLocaleString()} XP 획득`); sfxXp(); }
         if (prev && d.level > prev.level) { pushToast(`레벨 업! Lv.${prev.level} → Lv.${d.level}`, true); sfxLevelUp(); }
@@ -1664,7 +1668,7 @@ export default function LevelPage() {
       }
       if (logRes?.success) setMyLogs(logRes.data);
       if (qRes?.success) setQuests(qRes.data);
-      if (itemRes?.success) setMyItems((cur) => mergeMyItems(cur, keepSavedSkin(itemRes.data, t0, skinSavedRef.current)));
+      if (itemRes?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(itemRes.data, t0, skinSavedRef.current, badgeSavedRef.current)));
     } catch {}
     setMeLoaded(true);
   }, [pushToast]);
@@ -1675,7 +1679,7 @@ export default function LevelPage() {
     const t0 = Date.now();
     fetch("/api/shop/my-items", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => { if (d?.success) setMyItems((cur) => mergeMyItems(cur, keepSavedSkin(d.data, t0, skinSavedRef.current))); })
+      .then((d) => { if (d?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(d.data, t0, skinSavedRef.current, badgeSavedRef.current))); })
       .catch(() => {});
   }, []);
 
@@ -2359,6 +2363,14 @@ export default function LevelPage() {
           skinSavedRef.current = { at: Date.now(), v: k };
           setMyItems((cur) => (cur ? { ...cur, cardSkin: k } : cur));
           setMe((cur) => (cur ? { ...cur, cardSkin: k } : cur));
+        }}
+        badges={myItems?.badges}
+        // 배지 착용 · 해제 즉시 내 정보 배지도 바꾼다(다음 폴링을 기다리지 않게).
+        // 📌 랭킹 줄은 건드리지 않는다 — 랭킹은 구매 기준 배지만 보여서(lib/itemPerks badgesOfUsers) 이 목록을 넣으면 남에게 안 보이는 배지가 잠깐 뜬다
+        onBadgesChange={(list) => {
+          badgeSavedRef.current = { at: Date.now(), v: list };
+          setMyItems((cur) => (cur ? { ...cur, badges: list } : cur));
+          setMe((cur) => (cur ? { ...cur, badges: list } : cur));
         }}
       />
 

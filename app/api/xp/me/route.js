@@ -16,7 +16,7 @@ import { settleTierPoints } from "@/lib/points";
 import { fetchMemberRoles } from "@/lib/discordMember";
 import { ownedItems } from "@/lib/ownedItems";
 import { OWN_PURCHASE_QUERY, OWN_PURCHASE_FIELDS, PERK_ITEM_FIELDS } from "@/lib/itemPerks";
-import { perksOfItems, discountedCost, pickCardSkin } from "@/lib/itemEffects";
+import { perksOfItems, discountedCost, pickCardSkin, pickBadges, PERK_KEYS } from "@/lib/itemEffects";
 import { buildEnhanceView } from "@/lib/enhance";
 
 // ── [조회] 로그인한 유저 본인의 XP·레벨·순위 ──────────────────
@@ -85,9 +85,13 @@ export async function GET() {
       chat: enh.chat.nextCost == null ? null : discountedCost(enh.chat.nextCost, perks.enhanceDiscount),
       voice: enh.voice.nextCost == null ? null : discountedCost(enh.voice.nextCost, perks.enhanceDiscount),
     };
-    const { badges, cardSkin: _firstSkin, cardSkins, ...perkSums } = perks;
+    const { allBadges, cardSkins } = perks;
+    // 상시 효과 합만 — 배지 · 카드 스킨은 아래에서 유저가 고른 것으로 따로 준다
+    const perkSums = Object.fromEntries(PERK_KEYS.map((k) => [k, perks[k]]));
     // 📌 카드 스킨 — 유저가 인벤토리에서 고른 것(cardSkinPick), 안 골랐으면 관리자 순서상 첫 스킨, 끔이면 "" (봇 카드와 같은 규칙)
     const cardSkin = pickCardSkin(cardSkins, doc?.cardSkinPick || "");
+    // 📌 프로필 배지 — 유저가 인벤토리에서 단 것(badgePick), 안 골랐으면 관리자 순서상 앞의 3개, 전부 뗐으면 []
+    const badges = pickBadges(allBadges, doc?.badgePick);
 
     return NextResponse.json({
       success: true,
@@ -121,7 +125,7 @@ export async function GET() {
         // 강화 비용 할인 % 와 할인을 반영한 다음 단계 비용 { chat, voice } (최대 단계면 null) — 강화 창 비용 표시가 이 값을 쓴다
         enhanceDiscount: perks.enhanceDiscount,
         enhanceNextCost,
-        // 프로필 배지(최대 3, 관리자 순서) [{ itemId, name, icon, imageUrl, color, type }] · 카드 스킨 키("" 이면 기본)
+        // 단 프로필 배지(최대 3, 관리자 순서) [{ itemId, name, icon, imageUrl, color, type }] · 카드 스킨 키("" 이면 기본)
         badges,
         cardSkin,
         rolesSynced: heldRoles !== null,

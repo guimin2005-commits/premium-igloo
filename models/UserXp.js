@@ -36,6 +36,10 @@ const UserXpSchema = new mongoose.Schema({
   // 📌 고른 카드 스킨 — "" 안 고름(가진 스킨 중 관리자 순서상 첫 번째) · "none" 끔(기본 카드) · 스킨 키. 인벤토리에서 착용 · 해제 (app/api/xp/card-skin)
   //    봇(bot/src/db.js)도 같은 칸 — 이미지 카드를 그릴 때 읽는다
   cardSkinPick: { type: String, default: "" },
+  // 📌 단 프로필 배지 — 아이템 id 배열(최대 3). 칸이 없으면 안 고름(가진 배지 중 관리자 순서상 앞의 3개), [] 는 전부 뗌.
+  //    인벤토리에서 착용 · 해제 (app/api/xp/badge — 규칙은 lib/itemEffects pickBadges).
+  //    default: undefined — 배열 칸은 기본값이 [] 라 그대로 두면 기존 유저가 "전부 뗌"이 된다. 봇(bot/src/db.js)도 같은 칸(읽지는 않는다)
+  badgePick: { type: [String], default: undefined },
   // 해금 때 낸 값 — 관리자 테스트 초기화(app/api/xp/reset)가 이만큼 돌려준다. 시즌이 바뀌면 함께 비운다
   passUnlockPaid: {
     method: { type: String, default: "" }, // "xp" | "point"

@@ -11,7 +11,7 @@ import { InventoryItemPreview } from "../../components/Inventory";
 import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor } from "@/lib/items";
 import {
   TRIGGERS, TRIGGER_OF, EFFECT_KINDS, SKINS, FIELD_RANGE, DAY_LABELS, MAX_EFFECTS, amountMaxOf,
-  normalizeEffects, describeEffect, describeItemBasic, describeRoleBuff,
+  normalizeEffects, describeEffect, describeItemBasic, describeRoleBuff, itemEffectLines,
 } from "@/lib/itemEffects";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
@@ -1462,10 +1462,28 @@ export default function AdminShopPage() {
                           onChange={(v) => { const it = regItems.find((x) => x._id === v); if (it) setForm(applyItem(form, it)); }}
                           placeholder="아이템을 선택하세요"
                           options={regItems.map((x) => ({
-                            value: x._id, label: x.name, hint: itemTypeLabel(x.type),
+                            value: x._id, label: x.name, hint: (() => { const ls = itemEffectLines(x); return ls.length ? `${itemTypeLabel(x.type)} · ${ls[0]}${ls.length > 1 ? ` 외 ${ls.length - 1}` : ""}` : itemTypeLabel(x.type); })(),
                             icon: <ItemIcon icon={x.icon} imageUrl={x.imageUrl} type={x.type} size={18} color={x.color || itemTypeColor(x.type)} />,
                           }))}
                         />
+                        {/* 📌 고른 아이템의 효과 — 상품을 만들 때 무엇을 파는지 바로 보이게(인벤토리 · 상세와 같은 문장) */}
+                        {(() => {
+                          const itA = regItems.find((x) => x._id === form.itemId);
+                          if (!itA) return null;
+                          const lines = itemEffectLines(itA);
+                          return (
+                            <div className="mt-2 rounded-lg bg-[#f7f7f7] px-3 py-2.5">
+                              <p className="text-[11px] font-bold text-[#8a8a8a] mb-1">효과</p>
+                              {lines.length ? (
+                                <ul className="space-y-0.5">
+                                  {lines.map((l, i) => <li key={i} className="text-[12px] font-bold text-[#131313] leading-relaxed break-keep">{l}</li>)}
+                                </ul>
+                              ) : (
+                                <p className="text-[12px] text-[#a3a3a3]">효과 없음</p>
+                              )}
+                            </div>
+                          );
+                        })()}
                         <p className={fieldNote}>
                           <Link href="/admin/shop?tab=items" className="font-bold text-[#e91e3f] hover:underline">아이템 등록에서 수정</Link>
                         </p>

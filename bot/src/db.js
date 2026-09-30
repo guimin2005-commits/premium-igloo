@@ -51,6 +51,9 @@ const UserXpSchema = new mongoose.Schema({
   passUnlocked: { type: Boolean, default: false }, // 프리미엄 트랙 해금 여부 (시즌마다 초기화)
   // 고른 카드 스킨 — "" 안 고름 · "none" 끔 · 스킨 키 (models/UserXp.js 와 같은 칸). 이미지 카드 그릴 때 읽는다(botMessages withSkin)
   cardSkinPick: { type: String, default: "" },
+  // 단 프로필 배지 — 아이템 id 배열, 칸 없음 = 안 고름(자동) · [] = 전부 뗌 (models/UserXp.js 와 같은 칸). 봇은 읽지 않는다
+  //    📌 default: undefined — 배열 칸 기본값([])이 봇 upsert 로 들어가면 기존 유저가 "전부 뗌"이 된다
+  badgePick: { type: [String], default: undefined },
   // 해금 때 낸 값 — 사이트의 관리자 테스트 초기화가 환불에 쓴다 (models/UserXp.js 와 같은 모양)
   passUnlockPaid: {
     method: { type: String, default: "" },

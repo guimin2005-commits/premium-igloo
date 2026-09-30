@@ -171,10 +171,17 @@ const InvSlot = ({ it, on, onClick }) => {
 // 📌 가방 왼쪽 상세 — 큰 아이콘 · 이름 · 설명(줄바꿈 그대로) · 상태 · 기간 · (기간제면) 연장 · 효과.
 //    compact 는 아이템 등록 미리보기용으로 크기만 줄인다(내용 · 순서는 같다). onGo 는 연장으로 떠날 때 가방을 닫는다
 //    카드 스킨 아이템(it.skinKey)이면 착용 · 해제 버튼 — skinOn: 지금 이 스킨을 쓰는 중, onSkin(키 | "none")
-const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy = false }) => {
+//    프로필 배지 아이템(it.badgeId)이면 착용 · 해제 버튼 — badgeOn: 지금 단 배지, onBadge(아이템 id, 착용 여부)
+const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy = false, badgeOn = false, onBadge, badgeBusy = false }) => {
   const accent = invAccentOf(it);
   const dday = ddayOf(it);
   const lines = Array.isArray(it.effectLines) ? it.effectLines.filter(Boolean) : [];
+  // 📌 스킨이면서 배지인 아이템은 버튼이 둘 — 어느 쪽인지 앞에 붙여 가른다(하나뿐이면 그냥 착용 · 착용 해제)
+  const both = !!it.skinKey && !!it.badgeId;
+  const wearBtn = (on) =>
+    `mt-1 w-full h-9 rounded-full text-[11px] font-black flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60 ${
+      on ? "border border-white/20 hover:border-white/45 text-white/80 hover:text-white" : "bg-white text-[#131313] hover:bg-white/90"
+    }`;
   return (
     <div className="min-w-0">
       <div
@@ -224,11 +231,14 @@ const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy
                해제하면 기본 카드. 착용 여부는 버튼 글자로만(스킨 이름은 아래 효과 줄 — 같은 말을 두 번 쓰지 않는다).
                버튼은 전체 폭이라 글자가 바뀌어도 자리가 그대로 */}
         {it.skinKey && !compact && (
-          <button type="button" disabled={skinBusy} onClick={() => onSkin?.(skinOn ? SKIN_NONE : it.skinKey)}
-            className={`mt-1 w-full h-9 rounded-full text-[11px] font-black flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60 ${
-              skinOn ? "border border-white/20 hover:border-white/45 text-white/80 hover:text-white" : "bg-white text-[#131313] hover:bg-white/90"
-            }`}>
-            {skinOn ? "착용 해제" : "착용"}
+          <button type="button" disabled={skinBusy} onClick={() => onSkin?.(skinOn ? SKIN_NONE : it.skinKey)} className={wearBtn(skinOn)}>
+            {both ? (skinOn ? "스킨 해제" : "스킨 착용") : skinOn ? "착용 해제" : "착용"}
+          </button>
+        )}
+        {/* 📌 프로필 배지 — 이름 옆(내 정보 · 랭킹)에 최대 3개. 안 고른 유저는 관리자 순서상 앞의 3개가 자동으로 달려 있다 */}
+        {it.badgeId && !compact && (
+          <button type="button" disabled={badgeBusy} onClick={() => onBadge?.(it.badgeId, !badgeOn)} className={wearBtn(badgeOn)}>
+            {both ? (badgeOn ? "배지 해제" : "배지 착용") : badgeOn ? "착용 해제" : "착용"}
           </button>
         )}
         {it.rewardLevel != null && (
@@ -283,13 +293,17 @@ export function InventoryItemPreview({ item, effectLines }) {
 //    z-index 가 50 이상이면 ScrollLock 이 알아서 건다(iOS 대응 포함).
 // 📌 cardSkin: 서버(my-items)가 준 지금 쓰는 스킨 키("" 이면 기본 카드). 착용 · 해제는 가방이 직접 저장하고(POST /api/xp/card-skin)
 //    결과를 바로 보여 준다 — 다음 폴링으로 같은 값이 오면 그대로. onSkinChange(키) 가 있으면 부모에도 알린다(프로필 카드 장식)
-export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, onReset, resetBusy, loading = false, error = "", cardSkin = "", onSkinChange }) => {
+// 📌 badges: 서버(my-items)가 준 지금 단 배지 목록. 착용 · 해제는 POST /api/xp/badge 로 저장하고 onBadgesChange(목록) 로 부모에 알린다(스킨과 같은 흐름)
+export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, onReset, resetBusy, loading = false, error = "", cardSkin = "", onSkinChange, badges, onBadgesChange }) => {
   const [sel, setSel] = useState(null); // 선택한 아이템 uid
   const [skinNow, setSkinNow] = useState(null); // 방금 저장한 값(서버 값이 오기 전까지)
   const [skinBusy, setSkinBusy] = useState(false);
+  const [badgeBusy, setBadgeBusy] = useState(false);
   const [toast, setToast] = useState("");
   useEffect(() => { setSkinNow(null); }, [cardSkin]);
   const curSkin = skinNow ?? cardSkin;
+  // 📌 단 배지는 부모 값 그대로 — 저장 결과는 onBadgesChange 로 부모가 바로 반영한다(옛 조회가 덮지 않게 막는 건 keepSavedBadges)
+  const wornIds = new Set((Array.isArray(badges) ? badges : []).map((b) => b.itemId));
   const say = (msg) => {
     setToast(msg);
     setTimeout(() => setToast((t) => (t === msg ? "" : t)), 1800);
@@ -315,6 +329,29 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
       }
     } finally {
       setSkinBusy(false);
+    }
+  };
+  const saveBadge = async (itemId, on) => {
+    if (badgeBusy) return;
+    setBadgeBusy(true);
+    try {
+      const res = await fetch("/api/xp/badge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, on }),
+      }).then((r) => r.json()).catch(() => null);
+      if (res?.success) {
+        const next = Array.isArray(res.data?.badges) ? res.data.badges : [];
+        onBadgesChange?.(next);
+        playTone(on ? 784 : 523, 0.07, "sine", 0.03);
+        say(on ? "배지를 달았습니다" : "배지를 뗐습니다");
+      } else {
+        // 3개를 넘기면 서버가 409 와 안내 문구를 준다
+        playTone(220, 0.09, "square", 0.02);
+        say(res?.error || "저장하지 못했습니다");
+      }
+    } finally {
+      setBadgeBusy(false);
     }
   };
   // 정렬 — 보는 사람 브라우저에 기억(편의용). 못 읽으면 기본
@@ -357,7 +394,8 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
       left={
         <>
         {selItem ? (
-          <InvDetail it={selItem} onGo={onClose} skinOn={!!selItem.skinKey && selItem.skinKey === curSkin} onSkin={saveSkin} skinBusy={skinBusy} />
+          <InvDetail it={selItem} onGo={onClose} skinOn={!!selItem.skinKey && selItem.skinKey === curSkin} onSkin={saveSkin} skinBusy={skinBusy}
+            badgeOn={!!selItem.badgeId && wornIds.has(selItem.badgeId)} onBadge={saveBadge} badgeBusy={badgeBusy} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center py-6 sm:py-0">
             <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-white/15 flex items-center justify-center mb-3">
@@ -437,6 +475,10 @@ export function mergeMyItems(prev, next) {
 export function keepSavedSkin(data, t0, saved) {
   return data && saved && t0 < saved.at ? { ...data, cardSkin: saved.v } : data;
 }
+// 📌 배지도 같은 규칙 — 저장보다 먼저 떠난 조회는 badges 만 저장한 목록으로 둔다. saved: { at: 저장 시각, v: 저장 결과 배지 목록 }
+export function keepSavedBadges(data, t0, saved) {
+  return data && saved && t0 < saved.at ? { ...data, badges: saved.v } : data;
+}
 
 // 📌 그 자리에서 여는 인벤토리 — 내 정보 · ARCTIC 이 쓴다. 열 때마다 /api/shop/my-items 를 새로 읽는다.
 //    처음 읽기 전에는 빈 가방 문구 대신 불러오는 중. 여닫는 소리는 레벨 가방과 같다(낮은음 → 높은음 / 반대).
@@ -444,6 +486,7 @@ export function InventoryPopup({ open, onClose }) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("all");
   const skinSaved = useRef({ at: 0, v: "" }); // 마지막 스킨 저장(keepSavedSkin)
+  const badgeSaved = useRef({ at: 0, v: [] }); // 마지막 배지 저장(keepSavedBadges)
   useEffect(() => {
     if (!open) return;
     playTone(392, 0.06, "sine", 0.03);
@@ -455,7 +498,7 @@ export function InventoryPopup({ open, onClose }) {
       .then((d) => {
         if (!alive) return;
         // 실패는 빈 가방과 구분한다 — 받아 둔 목록(과 지금 스킨 · 연동 여부)이 있으면 그대로 두고 문구만 바꾼다
-        if (d?.success) setData((cur) => mergeMyItems(cur, keepSavedSkin(d.data, t0, skinSaved.current)));
+        if (d?.success) setData((cur) => mergeMyItems(cur, keepSavedBadges(keepSavedSkin(d.data, t0, skinSaved.current), t0, badgeSaved.current)));
         else setData((cur) => ({ ...(cur || {}), items: cur?.items || [], error: d?.error || "불러오지 못했습니다" }));
       })
       .catch(() => { if (alive) setData((cur) => ({ ...(cur || {}), items: cur?.items || [], error: "불러오지 못했습니다" })); });
@@ -482,6 +525,11 @@ export function InventoryPopup({ open, onClose }) {
       onSkinChange={(k) => {
         skinSaved.current = { at: Date.now(), v: k };
         setData((cur) => (cur ? { ...cur, cardSkin: k } : cur));
+      }}
+      badges={data?.badges}
+      onBadgesChange={(list) => {
+        badgeSaved.current = { at: Date.now(), v: list };
+        setData((cur) => (cur ? { ...cur, badges: list } : cur));
       }}
     />
   );
