@@ -24,7 +24,7 @@ export const CARD_FONT_FILES = [
 export const CARD_SIZE = {
   levelUp: { width: 1200, height: 630 },
   cmdLevel: { width: 1200, height: 630 },
-  cmdRank: { width: 1200, height: 630 },
+  cmdRank: { width: 1200, height: 900 }, // 서버 순위표 — 10줄 + 내 줄이라 세로로 길다
   cmdAttend: { width: 1200, height: 630 },
   rankerAnnounce: { width: 1200, height: 675 },
 };
@@ -38,7 +38,7 @@ export const isCardKind = (k) => Object.prototype.hasOwnProperty.call(CARD_SIZE,
 export const CARD_FIELDS = {
   levelUp: ["avatar", "name", "level", "prevLevel", "xp", "need", "progress", "skin?"],
   cmdLevel: ["avatar", "name", "level", "xp", "need", "progress", "rank?", "total?", "skin?"],
-  cmdRank: ["avatar", "name", "level", "xp", "need", "progress", "rank?", "total?", "skin?"],
+  cmdRank: ["season", "seasonName", "total", "top: [{ rank, name, avatar, level, xp }] — 1위부터 최대 10명", "me?: { rank, name, avatar, level, xp }", "skin?"],
   cmdAttend: ["avatar", "name", "amount", "streak", "bestStreak", "attendCount", "streakBonus?", "skin?"],
   rankerAnnounce: ["season", "seasonName", "top: [{ name, avatar, xp }] — 1위부터 최대 3명"],
 };
@@ -701,8 +701,8 @@ function levelUpCard(k, kind, d, text) {
   );
 }
 
-// 프로필(/레벨 · /랭크) — 내 정보의 잉크 헤더 게임 프로필. 사진 링 + 엠블럼 · 이름 · 등급, 오른쪽 큰 LEVEL,
-//   아래 칸: 서버 순위(있을 때만) · 누적 XP · 다음 레벨까지, 맨 아래 막대(Lv.n → Lv.n+1)
+// 프로필(/레벨) — 내 정보의 잉크 헤더 게임 프로필. 사진 링 + 엠블럼 · 이름 · 등급, 오른쪽 큰 LEVEL,
+//   아래 칸: 서버 순위(있을 때만 — #n 옆에 '상위 n%') · 누적 XP · 다음 레벨까지, 맨 아래 막대(Lv.n → Lv.n+1)
 function profileCard(k, kind, d, text) {
   const level = Math.max(1, int(d.level));
   const ti = cardTierIndex(level);
@@ -715,7 +715,8 @@ function profileCard(k, kind, d, text) {
   const RING = 236;
   const INNER = 1200 - 144;
   const cells = [
-    hasRank ? { l: "서버 순위", v: `#${num(d.rank)}`, sub: int(d.total) > 0 ? `/ ${num(d.total)}` : "" } : null,
+    // 상위 % — 레벨 페이지 프로필과 같은 식(올림, 최소 1%)
+    hasRank ? { l: "서버 순위", v: `#${num(d.rank)}`, sub: int(d.total) > 0 ? `상위 ${Math.max(1, Math.ceil((int(d.rank) / int(d.total)) * 100))}%` : "" } : null,
     { l: "누적 XP", v: num(d.xp), sub: "" },
     maxed ? { l: "다음 레벨까지", v: "MAX", sub: "" } : { l: "다음 레벨까지", v: num(d.need), sub: "XP" },
   ].filter(Boolean);
@@ -945,6 +946,103 @@ function rankerCard(k, kind, d, text) {
   );
 }
 
+// /랭크 — 서버 순위표. 머리(SEASON n · 이름 / 순위 / 전체 인원) → 1~10위 줄(순위 · 사진 · 이름 · 등급 문장 + Lv · 누적 XP)
+//   → 구분선 → 맨 아래 '나' 줄(10위 안이면 위 목록의 내 줄도 옅게 칠한다). 1~3위 순위 숫자는 RANKER 메달 색
+function rankBoardCard(k, kind, d, text) {
+  const top = Array.isArray(d.top) ? d.top.slice(0, 10) : [];
+  const me = d.me && int(d.me.rank) > 0 ? d.me : null;
+  const season = int(d.season);
+  const seasonName = text(d.seasonName);
+  const INNER = 1200 - 144;
+  const ROW = 56;
+  const NUM_W = 76;
+  const AV = 40;
+  const LV_W = 168;
+  const XP_W = 250;
+  const nameW = INNER - NUM_W - AV - 20 - LV_W - XP_W - 16;
+  const row = (p, i, mine, big) => {
+    const rank = int(p.rank) || i + 1;
+    const raw = text(p.name);
+    const label = raw || "이름 없음";
+    const level = Math.max(1, int(p.level));
+    const ti = cardTierIndex(level);
+    const medal = rank <= 3 ? MEDAL[rank - 1] : null;
+    const h = big ? 72 : ROW;
+    // '나' 줄은 앞에 알약(약 90px)이 붙어 그만큼 좁다 — 이름 칸에서 뺀다
+    const rowW = big ? INNER - 90 : INNER + 32;
+    const nW = big ? nameW - 90 - 32 + 16 : nameW;
+    return k.box(
+      {
+        width: rowW,
+        height: h,
+        alignItems: "center",
+        paddingLeft: big ? 0 : 16,
+        paddingRight: big ? 0 : 16,
+        marginLeft: big ? 0 : -16,
+        borderRadius: 14,
+        backgroundColor: mine && !big ? W(0.06) : "transparent",
+      },
+      k.box(
+        { width: NUM_W, fontSize: big ? 34 : 30, fontWeight: 900, color: medal || (mine ? "#ffffff" : W(0.5)), letterSpacing: -1 },
+        big ? `#${num(rank)}` : String(rank)
+      ),
+      avatarEl(k, p.avatar, big ? 48 : AV, raw),
+      k.line(label, { width: nW, marginLeft: 20, fontSize: fitSize(label, nW, big ? 34 : 30, 0, 24), fontWeight: mine ? 900 : 700, color: mine ? "#ffffff" : W(0.85) }),
+      k.box(
+        { width: LV_W, alignItems: "center", justifyContent: "flex-end" },
+        k.img(svgUri(emblemSvg(ti, 30)), 30, 30),
+        k.box({ marginLeft: 10, fontSize: 26, fontWeight: 700, color: W(0.6), whiteSpace: "nowrap" }, `Lv.${num(level)}`)
+      ),
+      k.box(
+        { width: XP_W, justifyContent: "flex-end", alignItems: "flex-end", whiteSpace: "nowrap" },
+        k.box({ fontSize: big ? 32 : 28, fontWeight: 900, letterSpacing: -0.5, color: mine ? "#ffffff" : W(0.9) }, num(p.xp)),
+        k.box({ fontSize: 22, fontWeight: 700, color: W(0.45), marginLeft: 8, marginBottom: 2 }, "XP")
+      )
+    );
+  };
+  return frame(
+    k,
+    kind,
+    MEDAL[0],
+    k.box(
+      { position: "absolute", left: 72, right: 72, top: 56, alignItems: "flex-end", justifyContent: "space-between" },
+      k.box(
+        { flexDirection: "column", minWidth: 0, flexShrink: 1 },
+        season
+          ? k.box(
+              { alignItems: "center", fontSize: 26, fontWeight: 900, color: W(0.5), whiteSpace: "nowrap" },
+              k.box({ letterSpacing: 6, flexShrink: 0 }, `SEASON ${season}`),
+              seasonName ? k.line(`· ${seasonName}`, { marginLeft: 8, letterSpacing: 1, minWidth: 0, flexShrink: 1 }) : null
+            )
+          : null,
+        k.box({ marginTop: 6, fontSize: 64, fontWeight: 900, letterSpacing: -1, lineHeight: 1.05 }, "서버 순위")
+      ),
+      int(d.total) > 0
+        ? k.box({ fontSize: 30, fontWeight: 700, color: W(0.5), marginBottom: 8, whiteSpace: "nowrap", flexShrink: 0 }, `${num(d.total)}명`)
+        : null
+    ),
+    k.box(
+      { position: "absolute", left: 72, right: 72, top: 190, flexDirection: "column" },
+      top.length
+        ? top.map((p, i) => row(p, i, !!me && int(p.rank || i + 1) === int(me.rank), false))
+        : k.box({ height: ROW, alignItems: "center", fontSize: 30, fontWeight: 700, color: W(0.4) }, "아직 순위가 없습니다")
+    ),
+    me
+      ? k.box(
+          { position: "absolute", left: 72, right: 72, bottom: 44, flexDirection: "column", borderTop: `2px solid ${W(0.1)}`, paddingTop: 18 },
+          k.box(
+            { alignItems: "center" },
+            k.box(
+              { height: 36, paddingLeft: 16, paddingRight: 16, marginRight: 18, borderRadius: 18, backgroundColor: ACCENT, alignItems: "center", fontSize: 22, fontWeight: 900, color: "#ffffff", flexShrink: 0 },
+              "나"
+            ),
+            row(me, 0, true, true)
+          )
+        )
+      : null
+  );
+}
+
 /**
  * 카드 요소 트리 — kind: CARD_KINDS 중 하나, data: CARD_FIELDS 모양, h: (type, props, ...children) => 요소
  * opts.has(codePoint): 글꼴에 있는 글자인지(fontCoverage) — 주면 없는 글자를 빼고 그린다
@@ -958,7 +1056,8 @@ export function buildCard(kind, data, h, opts = {}) {
   k.skin = SKIN_CARD_KINDS.includes(kind) ? cardSkinOf(d.skin) : null;
   const text = (s) => cardText(s, opts.has);
   if (kind === "levelUp") return levelUpCard(k, kind, d, text);
-  if (kind === "cmdLevel" || kind === "cmdRank") return profileCard(k, kind, d, text);
+  if (kind === "cmdLevel") return profileCard(k, kind, d, text);
+  if (kind === "cmdRank") return rankBoardCard(k, kind, d, text);
   if (kind === "cmdAttend") return attendCard(k, kind, d, text);
   return rankerCard(k, kind, d, text);
 }
@@ -977,8 +1076,15 @@ export function sampleCardData(kind, tierIndex = 1, avatar = null, skin = "") {
   const cur = Math.floor(step * 0.38);
   const me = { avatar, name: "펭귄", level, xp: base + cur, need: step - cur, progress: cur / step };
   if (kind === "levelUp") return { ...me, prevLevel: level - 1, xp: base + Math.floor(step * 0.06), need: step - Math.floor(step * 0.06), progress: 0.06 };
-  if (kind === "cmdLevel") return me;
-  if (kind === "cmdRank") return { ...me, rank: 12, total: 1284 };
+  if (kind === "cmdLevel") return { ...me, rank: 12, total: 1284 };
+  if (kind === "cmdRank") {
+    const names = ["북극곰", "물범", "바다표범", "해달", "흰올빼미", "순록", "북극여우", "일각고래", "바다코끼리", "흰곰"];
+    const top = names.map((name, i) => {
+      const lv = Math.max(1, level + 220 - i * 23);
+      return { rank: i + 1, name, avatar: null, level: lv, xp: sampleXp(lv) + 12345 };
+    });
+    return { season: 2, seasonName: "A new world", total: 1284, top, me: { rank: 12, name: "펭귄", avatar, level, xp: base + cur } };
+  }
   if (kind === "cmdAttend") return { avatar, name: "펭귄", amount: 10000, streak: 5, bestStreak: 12, attendCount: 42, streakBonus: "연속 5일 보너스 +3,000 XP" };
   return {
     season: 1,

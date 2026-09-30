@@ -5,7 +5,7 @@ import {
   Events, REST, Routes, SlashCommandBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 } from "discord.js";
 import { UserXp } from "./db.js";
-import { getCumulativeXpByLevel, getLevelByXp } from "./leveling.js";
+import { getCumulativeXpByLevel, getLevelByXp, currentSeason } from "./leveling.js";
 import { config } from "./config.js";
 import { getSettings } from "./botSettings.js";
 import { claimAttendance } from "./attend.js";
@@ -18,7 +18,7 @@ const MAX_LEVEL = 1000; // leveling.js getLevelByXp 의 끝
 
 const definitions = [
   new SlashCommandBuilder().setName("레벨").setDescription("다음 레벨까지 필요한 XP를 확인합니다."),
-  new SlashCommandBuilder().setName("랭크").setDescription("내 XP, 레벨, 서버 내 순위를 확인합니다."),
+  new SlashCommandBuilder().setName("랭크").setDescription("서버 순위표(1~10위)와 내 순위를 확인합니다."),
   new SlashCommandBuilder().setName("출석체크").setDescription("오늘 출석을 체크합니다. 하루 한 번 받을 수 있습니다."),
   new SlashCommandBuilder().setName("퀘스트").setDescription("일일 · 주간 · 월간 퀘스트 진행도를 확인합니다."),
   new SlashCommandBuilder().setName("인벤토리").setDescription("보유한 아이템을 확인합니다."),
@@ -133,6 +133,9 @@ async function handleAttend(interaction, r) {
 async function handleLevel(interaction, r) {
   const doc = await UserXp.findOne({ userId: interaction.user.id }, { xp: 1 }).lean();
   const xp = doc?.xp || 0;
+  // 📌 /레벨 = 내 카드 — 순위 · 상위 % 까지 여기서 보여 준다(/랭크 는 서버 순위표)
+  const [above, total] = await Promise.all([UserXp.countDocuments({ xp: { $gt: xp } }), UserXp.countDocuments()]);
+  const rank = above + 1;
   // 저장된 level 은 새 문서 · 초기화 직후 0 일 수 있다 — xp 로 계산한다 (0 XP = Lv.1, 사이트와 같은 기준)
   const level = getLevelByXp(xp);
   const { need, progress } = levelSpan(level, xp);
@@ -150,27 +153,63 @@ async function handleLevel(interaction, r) {
       progressBar: progressBar(progress),
       tier: tierOf(level).name,
     },
-    async () => ({ avatar: await avatarOf(interaction), name: base.name, level, xp, need, progress }),
+    async () => ({ avatar: await avatarOf(interaction), name: base.name, level, xp, need, progress, rank, total }),
     `Lv.${level} · 누적 ${xp.toLocaleString("ko-KR")} XP · Lv.${nextLevel}까지 ${need.toLocaleString("ko-KR")} XP`
   );
   return r.send({ ...payload, components: [linkRow("대시보드", "/level?tab=my")] });
 }
 
+// 📌 /랭크 = 서버 순위표 — 1~10위 + 맨 아래 내 줄(카드). 글(임베드)은 템플릿 그대로({rank} · {total} 등 내 순위)
+const RANK_TOP = 10;
 async function handleRank(interaction, r) {
   const doc = await UserXp.findOne({ userId: interaction.user.id }, { xp: 1 }).lean();
   const xp = doc?.xp || 0;
-  const [above, total] = await Promise.all([
+  const [above, total, topDocs] = await Promise.all([
     UserXp.countDocuments({ xp: { $gt: xp } }),
     UserXp.countDocuments(),
+    UserXp.find({}, { userId: 1, xp: 1, username: 1, displayName: 1 }).sort({ xp: -1, _id: 1 }).limit(RANK_TOP).lean(),
   ]);
   const level = getLevelByXp(xp);
   const rank = above + 1;
   const base = commonVars(interaction.member, interaction.guild);
+  const season = currentSeason();
 
   const payload = await msgCard(
     "cmdRank",
     { ...base, rank, total, level, xp, tier: tierOf(level).name },
-    async () => ({ avatar: await avatarOf(interaction), name: base.name, level, xp, ...levelSpan(level, xp), rank, total }),
+    async () => {
+      // 이름 · 사진 — 서버 멤버(캐시 → 없는 사람만 한 번에 받아 오기, 최대 2초) > 저장된 이름. 사진을 못 받으면 첫 글자 원형
+      const ids = topDocs.map((d) => d.userId);
+      const members = new Map();
+      try {
+        const g = interaction.guild;
+        const missing = ids.filter((id) => !g?.members?.cache?.has(id));
+        if (g && missing.length) await Promise.race([g.members.fetch({ user: missing }).catch(() => null), new Promise((res) => setTimeout(res, 2000))]);
+        for (const id of ids) {
+          const m = g?.members?.cache?.get(id);
+          if (m) members.set(id, m);
+        }
+      } catch {}
+      const top = await Promise.all(
+        topDocs.map(async (d, i) => {
+          const m = members.get(d.userId);
+          return {
+            rank: i + 1,
+            name: m?.displayName || d.displayName || d.username || "",
+            avatar: m ? await cardAvatar(m) : null,
+            level: getLevelByXp(d.xp || 0),
+            xp: d.xp || 0,
+          };
+        })
+      );
+      return {
+        season: season.number,
+        seasonName: season.name,
+        total,
+        top,
+        me: { rank, name: base.name, avatar: await avatarOf(interaction), level, xp },
+      };
+    },
     `#${rank} / ${total.toLocaleString("ko-KR")} · Lv.${level} · 누적 ${xp.toLocaleString("ko-KR")} XP`
   );
   return r.send({ ...payload, components: [linkRow("랭킹", "/level?tab=rank")] });
