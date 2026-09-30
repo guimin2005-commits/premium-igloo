@@ -52,8 +52,8 @@ const TYPES = [
   { v: "cosmetic", l: "꾸미기" },
   { v: "physical", l: "기프트카드" },
   { v: "timed", l: "기간제" },
-  // 📌 빙옥 — 빙옥 전용(pointOnly) 상품만 모은 프리미엄 스토어(시즌 상품). 유형이 아니라 결제 방식으로 거른다. 탭 줄에서는 구분선 뒤 맨 끝
-  { v: "binok", l: "빙옥" },
+  // 📌 시즌 — 빙옥 전용(pointOnly) 상품만 모은 프리미엄 스토어(시즌 상품). 유형이 아니라 결제 방식으로 거른다. 탭 줄에서는 구분선 뒤 맨 끝
+  { v: "season", l: "시즌" },
 ];
 
 // 상품 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천 (역할·권한은 자동 지급, 기프트카드는 운영진 발송)
@@ -490,14 +490,14 @@ export default function ArcticShopBody({
     //    가격대는 XP 값(빙옥 전용은 XP 로 친 값) 기준 — 정렬과 같은 값
     const inRange = (p: number) => p >= range.min && p < range.max;
     const filtered = items.flatMap((it) => {
-      if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : typeFilter === "binok" ? !isPointOnly(it) : it.type !== typeFilter)) return [];
+      if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : typeFilter === "season" ? !isPointOnly(it) : it.type !== typeFilter)) return [];
       const afford = affordableOnly && myXp != null ? affordFor(it, myXp, myPoint ?? 0) : null;
       const priceOk = range.v === "all" && !afford ? undefined : (p: number) => inRange(p) && (!afford || afford(p));
       const pick = cardPick(it, priceOk);
       if (!pick) return [];
       if (inStockOnly && it.stock === 0) return [];
       if (wishOnly && !wish.includes(it._id)) return [];
-      if (q && !`${it.name} ${it.description} ${it.roleName || ""} ${itemTypeLabel(it.type)}${isTimed(it) ? " 기간제" : ""}${isPointOnly(it) ? " 빙옥" : ""}`.toLowerCase().includes(q)) return [];
+      if (q && !`${it.name} ${it.description} ${it.roleName || ""} ${itemTypeLabel(it.type)}${isTimed(it) ? " 기간제" : ""}${isPointOnly(it) ? " 빙옥 시즌" : ""}`.toLowerCase().includes(q)) return [];
       return [{ ...it, _pick: pick }];
     });
 
@@ -731,8 +731,8 @@ export default function ArcticShopBody({
               const on = t.v === "home" ? showing === "home" : showing === "products" && typeFilter === t.v;
               return (
                 <React.Fragment key={t.v}>
-                {/* 빙옥 스토어는 유형 탭과 한 칸 떨어뜨린다 */}
-                {t.v === "binok" && <span aria-hidden className="shrink-0 w-px h-4 bg-[#e0e0e0]" />}
+                {/* 시즌 스토어는 유형 탭과 한 칸 떨어뜨린다 */}
+                {t.v === "season" && <span aria-hidden className="shrink-0 w-px h-4 bg-[#e0e0e0]" />}
                 <button
                   onClick={() => {
                     if (t.v === "home") { setView("home"); clearSearch(); window.scrollTo({ top: 0, behavior: "smooth" }); }
@@ -959,7 +959,7 @@ export default function ArcticShopBody({
           <div className="py-24 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
         ) : visible.length === 0 ? (
           <div className="py-24 text-center break-keep">
-            <p className="text-sm font-bold text-[#5a5a5a]">{typeFilter === "binok" && !items.some((it) => isPointOnly(it)) ? "시즌 상품 준비 중입니다." : "조건에 맞는 상품이 없습니다."}</p>
+            <p className="text-sm font-bold text-[#5a5a5a]">{typeFilter === "season" && !items.some((it) => isPointOnly(it)) ? "시즌 상품 준비 중입니다." : "조건에 맞는 상품이 없습니다."}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 lg:gap-6">
