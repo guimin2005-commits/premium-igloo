@@ -342,35 +342,87 @@ ${deco ? deco.over : ""}</svg>`;
 // ── 스킨 장식 — (w, h) → { defs, under(무늬 아래), over(맨 위 — 테두리) }. 글자가 없는 가장자리(안쪽 14~40px)에만 그린다 ──
 //    ⚠️ 카드 전체를 칠하는 번짐(방사형 빛 · 틴트 · 굵은 빛 띠)은 넣지 않는다 — 등급 빛(오른쪽 위)과 헷갈린다. 테두리 · 무늬 · 가는 선만
 const rectPath = (x, y, ww, hh) => `M${x} ${y}h${ww}v${hh}h${-ww}z`;
+// 스킨 장식 도구 — 사이트 프로필 카드(app/components/SkinFrame.js)와 같은 모양 말. 카드는 1200 폭이라 디스코드에서 약 0.4배로 보인다 —
+//   장식 크기는 SK 배로 키워 프로필 카드와 같은 크기로 보이게
+const SK = 2.2;
+const r1 = (n) => Math.round(n * 10) / 10;
+const diaPath = (x, y, r) => `M${r1(x)} ${r1(y - r)}L${r1(x + r)} ${r1(y)}L${r1(x)} ${r1(y + r)}L${r1(x - r)} ${r1(y)}Z`;
+const star4 = (x, y, r) => `M${x} ${y - r}Q${x} ${y} ${x + r} ${y}Q${x} ${y} ${x} ${y + r}Q${x} ${y} ${x - r} ${y}Q${x} ${y} ${x} ${y - r}Z`;
+// 스킨마다 같은 자리에 찍히도록 씨앗 고정 난수
+function seeded(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 const SKIN_DECO = {
-  // 골드 — 금빛 이중 테 + 모서리 마름모
+  // 골드 — 금빛 이중 테 + 모서리 마름모 · 둥근 L 장식, 위아래 문장, 아래 두 모서리 부챗살, 반짝임
   gold: (w, h) => {
     const o = 14;
     const i = 24;
-    const dia = (x, y, r) => `M${x} ${y - r}L${x + r} ${y}L${x} ${y + r}L${x - r} ${y}Z`;
+    const corner = `M0 38V12Q0 0 12 0H38M7 24V16Q7 7 16 7H24`;
+    const corners = [[i + 6, i + 6, 1, 1], [w - i - 6, i + 6, -1, 1], [i + 6, h - i - 6, 1, -1], [w - i - 6, h - i - 6, -1, -1]]
+      .map(([x, y, sx, sy]) => `<g transform="translate(${x} ${y}) scale(${sx * SK} ${sy * SK})"><path d="${corner}" fill="none" stroke="url(#gd)" stroke-opacity="0.8" stroke-width="1.3"/><circle cx="42" cy="0" r="1.3" fill="#f0cf7e" fill-opacity="0.75"/><circle cx="0" cy="42" r="1.3" fill="#f0cf7e" fill-opacity="0.75"/></g>`)
+      .join("");
+    const crest = (y, s) => {
+      const ly = y + s * 5 * SK;
+      return `<path d="M${w / 2 - 46 * SK} ${ly}H${w / 2 - 12 * SK}M${w / 2 + 12 * SK} ${ly}H${w / 2 + 46 * SK}" stroke="url(#gd)" stroke-opacity="0.6" stroke-width="2"/>` +
+        `<circle cx="${w / 2 - 48 * SK}" cy="${ly}" r="${1.4 * SK}" fill="#f0cf7e" fill-opacity="0.75"/><circle cx="${w / 2 + 48 * SK}" cy="${ly}" r="${1.4 * SK}" fill="#f0cf7e" fill-opacity="0.75"/>` +
+        `<path d="${diaPath(w / 2, y, 7 * SK)}" fill="url(#gd)"/><path d="${diaPath(w / 2, y, 2.6 * SK)}" fill="#1b1b1b" fill-opacity="0.85"/>`;
+    };
+    const rays = [10, 22, 34, 46, 58, 70, 80].map((a) => { const t = (a * Math.PI) / 180; return `M0 0L${r1(Math.cos(t) * 64)} ${r1(-Math.sin(t) * 64)}`; }).join("");
+    const fans = [[i + 2, h - i - 2, 1], [w - i - 2, h - i - 2, -1]]
+      .map(([x, y, sx]) => `<g transform="translate(${x} ${y}) scale(${sx * SK} ${SK})"><path d="${rays}" stroke="url(#gd)" stroke-opacity="0.3" stroke-width="0.8"/><path d="M52 0A52 52 0 0 0 0 -52M40 0A40 40 0 0 0 0 -40" fill="none" stroke="#f0cf7e" stroke-opacity="0.24" stroke-width="0.8"/></g>`)
+      .join("");
     return {
       defs: `<linearGradient id="gd" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${w}" y2="${h}"><stop offset="0" stop-color="#f7de9c"/><stop offset="0.45" stop-color="#b8862b"/><stop offset="0.7" stop-color="#e9c46a"/><stop offset="1" stop-color="#9c6e1e"/></linearGradient>`,
-      under: "",
+      under: fans + `<path d="${star4(w - 70, h * 0.5, 14) + star4(w - 40, h * 0.58, 8) + star4(64, h * 0.66, 10)}" fill="#f7de9c" fill-opacity="0.5"/>`,
       over: `<rect x="${o}" y="${o}" width="${w - o * 2}" height="${h - o * 2}" fill="none" stroke="url(#gd)" stroke-width="3"/>
 <rect x="${i}" y="${i}" width="${w - i * 2}" height="${h - i * 2}" fill="none" stroke="#f0cf7e" stroke-opacity="0.3" stroke-width="1.2"/>
-<path d="${[[i, i], [w - i, i], [i, h - i], [w - i, h - i]].map(([x, y]) => dia(x, y, 7)).join("")}" fill="url(#gd)"/>`,
+${corners}<path d="${[[i, i], [w - i, i], [i, h - i], [w - i, h - i]].map(([x, y]) => diaPath(x, y, 7)).join("")}" fill="url(#gd)"/>${crest(o, 1)}${crest(h - o, -1)}`,
     };
   },
-  // 오로라 — 맨 위를 흐르는 초록 · 파랑 · 보라 가는 빛 선(숫자 뒤로는 내려오지 않게) + 같은 빛의 가는 테.
-  //   굵게 겹쳐 번지게 하면 등급 빛(플래티넘 · 다이아 · 마스터 색)처럼 보여 가는 선 하나만
+  // 오로라 — 밤하늘 별 · 위 테 아래를 흐르는 물결 선에서 드리우는 짧은 빛 커튼(가는 세로 빛줄) · 빛 테.
+  //   굵게 겹쳐 번지게 하면 등급 빛(플래티넘 · 다이아 · 마스터 색)처럼 보여 가는 선 · 점만
   aurora: (w, h) => {
-    const ribbon = (d, a) => `<path d="${d}" fill="none" stroke="url(#au)" stroke-width="3" stroke-opacity="${(0.16 * a).toFixed(3)}"/>`;
+    const rand = seeded(7);
+    const o = 16;
+    const wave = (x) => o + 12 * SK + Math.sin((x / w) * Math.PI * 2.2 + 0.6) * 6 * SK;
+    const wavePath = (dy) => {
+      let d = "";
+      for (let x = -10; x <= w + 10; x += 12) d += `${d ? "L" : "M"}${x} ${r1(wave(x) + dy)}`;
+      return d;
+    };
+    let rays = "";
+    for (let x = o + 18; x < w - o - 8; x += 11 * SK) {
+      const len = (8 + rand() * 16) * SK;
+      const band = x < w / 3 ? "g" : x < (w * 2) / 3 ? "b" : "p";
+      rays += `<rect x="${r1(x - 0.9 * SK)}" y="${r1(wave(x))}" width="${r1(1.8 * SK)}" height="${r1(len)}" fill="url(#ray${band})"/>`;
+    }
+    let stars = "";
+    for (let n = 0; n < 40; n++) {
+      const x = o + 20 + rand() * (w - o * 2 - 40);
+      const y = o + 30 + rand() * (h * 0.6);
+      stars += `<circle cx="${r1(x)}" cy="${r1(y)}" r="${r1((0.6 + rand() * 0.9) * SK)}" fill="#ffffff" fill-opacity="${r1(0.2 + rand() * 0.4)}"/>`;
+    }
+    const rayGrad = (id, c) => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity="0.5"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient>`;
     return {
-      defs: `<linearGradient id="au" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${w}" y2="0"><stop offset="0" stop-color="#2fe3a0"/><stop offset="0.5" stop-color="#38b4ff"/><stop offset="1" stop-color="#a879ff"/></linearGradient>`,
-      under:
-        ribbon(`M-80 ${h * 0.13}C${w * 0.2} ${h * 0.0} ${w * 0.42} ${h * 0.24} ${w * 0.64} ${h * 0.09}S${w * 0.93} ${h * 0.01} ${w + 80} ${h * 0.12}`, 1) +
-        ribbon(`M-80 ${h * 0.24}C${w * 0.24} ${h * 0.12} ${w * 0.5} ${h * 0.3} ${w * 0.76} ${h * 0.17}S${w * 0.98} ${h * 0.13} ${w + 80} ${h * 0.2}`, 0.45),
-      over: `<rect x="16" y="16" width="${w - 32}" height="${h - 32}" fill="none" stroke="url(#au)" stroke-opacity="0.7" stroke-width="2"/>`,
+      defs: `<linearGradient id="au" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${w}" y2="0"><stop offset="0" stop-color="#2fe3a0"/><stop offset="0.5" stop-color="#38b4ff"/><stop offset="1" stop-color="#a879ff"/></linearGradient>${rayGrad("rayg", "#2fe3a0")}${rayGrad("rayb", "#38b4ff")}${rayGrad("rayp", "#a879ff")}`,
+      under: stars + rays +
+        `<path d="${wavePath(0)}" fill="none" stroke="url(#au)" stroke-opacity="0.55" stroke-width="${1.4 * SK}"/>` +
+        `<path d="${wavePath(9 * SK)}" fill="none" stroke="url(#au)" stroke-opacity="0.25" stroke-width="${0.8 * SK}"/>`,
+      over: `<rect x="${o}" y="${o}" width="${w - o * 2}" height="${h - o * 2}" fill="none" stroke="url(#au)" stroke-opacity="0.7" stroke-width="2"/>` +
+        `<path d="${star4(w - 70, h - 74, 11) + star4(w - 100, h - 58, 6)}" fill="#ffffff" fill-opacity="0.55"/>`,
     };
   },
   // 아이스 — 도트 스킨. 도트 바탕 + 모서리를 두 칸 깎은 8px 픽셀 액자(위 · 왼쪽 밝게, 아래 · 오른쪽 어둡게) + 안쪽 4px 픽셀 선
-  //   + 네 모서리 픽셀 눈송이
+  //   + 네 모서리 픽셀 눈송이 · 위 테에 매달린 고드름 · 흩날리는 도트 눈 · 바닥 눈 둔덕
   ice: (w, h) => {
+    const rand = seeded(11);
     // 모서리를 steps 칸 깎은 픽셀 테 — 칸 크기 P, 바깥 여백 o. { lt: 위 · 왼쪽, rb: 아래 · 오른쪽 } 경로
     const pixelFrame = (o, P, steps) => {
       const L = o;
@@ -398,29 +450,74 @@ const SKIN_DECO = {
       FLAKE.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === "#") d += rectPath(cx + (x - 3.5) * 4, cy + (y - 3.5) * 4, 4, 4); }));
       return d;
     };
-    const q = 52;
+    const q = 58;
     const flakes = flake(q, q) + flake(w - q, q) + flake(q, h - q) + flake(w - q, h - q);
+    // 고드름 — 위는 굵고 끝은 가늘게(한 칸 4px), 모서리 눈송이 자리는 비운다
+    let icicles = "";
+    for (let x = 110; x < w - 110; x += 60 + Math.floor(rand() * 70)) {
+      const len = 3 + Math.floor(rand() * 5);
+      icicles += rectPath(x, 22, 18, 6) + rectPath(x + 3, 28, 12, 6);
+      for (let k = 0; k < len; k++) icicles += rectPath(x + 6, 34 + k * 6, 6, 6);
+    }
+    // 도트 눈
+    let snow = "";
+    for (let n = 0; n < 60; n++) {
+      const x = Math.round(40 + rand() * (w - 80));
+      const y = Math.round(40 + rand() * (h - 80));
+      const s = rand() < 0.3 ? 6 : 4;
+      snow += rectPath(x, y, s, s);
+    }
+    // 바닥 눈 둔덕 — 아래 테 안쪽에 높낮이가 다른 계단
+    let drift = "";
+    for (let x = 30; x < w - 30; x += 8) {
+      const hh = Math.round((2 + Math.sin(x / 50) * 1.2 + Math.sin(x / 20) * 0.8 + 1.2) * 2) * 2; // 막대 아래로 낮게
+      drift += rectPath(x, h - 22 - hh, 8, hh);
+    }
     return {
       defs: "",
-      under: "",
+      under: `<path d="${snow}" fill="#e6f6ff" fill-opacity="0.26"/><path d="${drift}" fill="#e6f6ff" fill-opacity="0.14"/>`,
       over:
         `<path d="${outer.lt}" fill="#cdeeff" fill-opacity="0.75"/><path d="${outer.rb}" fill="#79b4d8" fill-opacity="0.7"/>` +
         `<path d="${inner.lt + inner.rb}" fill="#b4e3ff" fill-opacity="0.18"/>` +
+        `<path d="${icicles}" fill="#cdeeff" fill-opacity="0.5"/>` +
         `<path d="${flakes}" fill="#e6f6ff" fill-opacity="0.55"/>`,
     };
   },
-  // 크림슨 — 붉은 빗금 무늬 + 가는 붉은 테 + 모서리 꺾쇠 (테 색은 이글루 등급색 #e91e3f 와 다르게)
+  // 크림슨 — 붉은 빗금 무늬 + 가는 붉은 테 + 모서리 꺾쇠 두 겹 · 위아래 문장 · 바닥 불꽃 실루엣 · 떠오르는 불씨
+  //   (테 색은 이글루 등급색 #e91e3f 와 다르게, 불꽃은 선 + 아주 옅은 채움 — 카드 전체를 칠하지 않는다)
   crimson: (w, h) => {
+    const rand = seeded(23);
     const o = 14;
-    const L = 48;
-    const br =
-      `M${o} ${o + L}V${o}H${o + L}M${w - o - L} ${o}H${w - o}V${o + L}` +
-      `M${w - o} ${h - o - L}V${h - o}H${w - o - L}M${o + L} ${h - o}H${o}V${h - o - L}`;
+    const br = (m, L) =>
+      `M${m} ${m + L}V${m}H${m + L}M${w - m - L} ${m}H${w - m}V${m + L}` +
+      `M${w - m} ${h - m - L}V${h - m}H${w - m - L}M${m + L} ${h - m}H${m}V${h - m - L}`;
+    let flames = "";
+    const base = h - o - 4;
+    const n = Math.max(6, Math.round((w - o * 2) / (34 * SK)));
+    const tw = (w - o * 2 - 16) / n;
+    for (let k = 0; k < n; k++) {
+      const x0 = o + 8 + k * tw - tw * 0.25;
+      const ww = tw * 1.5;
+      const th = (8 + rand() * 9) * SK; // 막대(카드 아래 56~70px)를 가리지 않게 낮게
+      const lean = (rand() - 0.5) * ww * 0.5;
+      flames += `M${r1(x0)} ${base}C${r1(x0 + ww * 0.1)} ${r1(base - th * 0.45)} ${r1(x0 + ww * 0.35 + lean * 0.3)} ${r1(base - th * 0.6)} ${r1(x0 + ww * 0.5 + lean)} ${r1(base - th)}` +
+        `C${r1(x0 + ww * 0.55 + lean * 0.3)} ${r1(base - th * 0.55)} ${r1(x0 + ww * 0.95)} ${r1(base - th * 0.4)} ${r1(x0 + ww)} ${base}Z`;
+    }
+    const colors = ["#ff5a76", "#ffae3c", "#ffd8a0"];
+    let embers = "";
+    for (let m = 0; m < 44; m++) {
+      const x = o + 20 + rand() * (w - o * 2 - 40);
+      const y = h * 0.42 + rand() * (h * 0.58 - o - 30);
+      const near = (y - h * 0.42) / (h * 0.58);
+      embers += `<path d="${diaPath(x, y, (1 + rand() * 2.2) * SK)}" fill="${colors[m % 3]}" fill-opacity="${r1(0.15 + near * 0.5)}"/>`;
+    }
+    const crest = (y) => `<path d="${diaPath(w / 2, y, 6 * SK)}" fill="#ff3a5c"/><path d="${diaPath(w / 2, y, 2.4 * SK)}" fill="#1b1b1b" fill-opacity="0.85"/>`;
     return {
       defs: "",
-      under: "",
+      under: embers + `<path d="${flames}" fill="#ff3a5c" fill-opacity="0.07" stroke="#ff5a76" stroke-opacity="0.38" stroke-width="${1.1 * SK}" stroke-linejoin="round"/>`,
       over: `<rect x="${o}" y="${o}" width="${w - o * 2}" height="${h - o * 2}" fill="none" stroke="#ff5a76" stroke-opacity="0.45" stroke-width="1.5"/>
-<path d="${br}" fill="none" stroke="#ff3a5c" stroke-width="5" stroke-linecap="square"/>`,
+<path d="${br(o, 48)}" fill="none" stroke="#ff3a5c" stroke-width="5" stroke-linecap="square"/>
+<path d="${br(o + 7 * SK, 18 * SK)}" fill="none" stroke="#ff5a76" stroke-opacity="0.5" stroke-width="2"/>${crest(o)}${crest(h - o)}`,
     };
   },
 };
