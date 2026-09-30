@@ -8,6 +8,7 @@ import ItemIcon from "../../components/ItemIcon";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { VOICE_TIERS } from "@/lib/voiceTiers";
 import { POINT_RATE } from "@/lib/pointRate";
+import { groupOrders } from "@/lib/orderGroups";
 import {
   AdminPage,
   AdminTabs,
@@ -146,7 +147,7 @@ type LedgerRow = {
 type GrantKind = "xp" | "point" | "item";
 const GRANT_KINDS = [{ v: "xp", l: "XP" }, { v: "point", l: "빙옥" }, { v: "item", l: "아이템" }];
 const ITEM_GRANT_DAYS = [{ v: "0", l: "영구" }, { v: "7", l: "7일" }, { v: "30", l: "30일" }, { v: "custom", l: "직접 입력" }];
-const EMPTY_ITEM_GRANT = { itemId: "", daysMode: "0", days: "", target: "", reason: "" };
+const EMPTY_ITEM_GRANT = { itemId: "", daysMode: "0", days: "", target: "", reason: "", qty: "1" };
 const GRANT_STATUS: Record<string, { l: string; tone: "ok" | "warn" | "neutral" }> = {
   pending: { l: "지급 대기", tone: "warn" },
   completed: { l: "보유", tone: "ok" },
@@ -588,7 +589,8 @@ export default function AdminBotPage() {
     try {
       const res = await fetch("/api/admin/items/grant", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: itemGrant.itemId, target, days, reason: itemGrant.reason }),
+        // 수량 — ×N 으로 쌓이는 아이템(stackable)만. 나머지는 늘 1개(서버도 다시 판정한다)
+        body: JSON.stringify({ itemId: itemGrant.itemId, target, days, reason: itemGrant.reason, qty: grantQty }),
       });
       const d = await res.json();
       if (res.ok && d.success) {
@@ -605,6 +607,11 @@ export default function AdminBotPage() {
       setConfirmAllItem(false);
     }
   };
+
+  // 📌 고른 아이템이 ×N 으로 쌓이는지(1개 단위 상품이 가리키거나 역할 없는 소모형 — /api/admin/items 의 stackable)
+  const grantStackable = !!grantItems.find((it: any) => it._id === itemGrant.itemId)?.stackable;
+  // 보낼 수량 — 1 ~ 99 로 자른 값. 확인 창 · 요청 · 서버가 같은 수를 쓴다
+  const grantQty = grantStackable ? Math.min(99, Math.max(1, Math.trunc(Number(itemGrant.qty) || 1))) : 1;
 
   const submitItemGrant = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1842,6 +1849,15 @@ export default function AdminBotPage() {
                         </Inline>
                       )}
                     </Field>
+                    {/* 📌 수량 — ×N 으로 쌓이는 아이템만 고칠 수 있다. 칸은 늘 두어(흐리게) 아이템을 바꿔도 아래 칸이 밀리지 않게 */}
+                    <Field label="수량">
+                      <Inline>
+                        <input type="number" min={1} max={99} value={grantStackable ? itemGrant.qty : "1"} disabled={!grantStackable}
+                          onChange={(e) => setItemGrant({ ...itemGrant, qty: e.target.value === "" ? "" : String(Math.min(99, Math.max(1, Math.trunc(Number(e.target.value) || 0)))) })}
+                          onBlur={() => setItemGrant((g) => ({ ...g, qty: String(grantQty) }))} className={numClass} />
+                        개
+                      </Inline>
+                    </Field>
                     <Field label={<>대상 <Req /></>} hint="XP 기록이 있는 유저만 검색됩니다">
                       <input type="text" value={itemGrant.target} onChange={(e) => setItemGrant({ ...itemGrant, target: e.target.value })}
                         placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
@@ -1862,9 +1878,10 @@ export default function AdminBotPage() {
             </Panel>
 
             {grantKind === "item" && itemGrants.length > 0 && (
-              <Panel title={<>최근 아이템 지급<Count n={itemGrants.length} /></>} flush>
+              <Panel title={<>최근 아이템 지급<Count n={groupOrders(itemGrants).length} /></>} flush>
                 <div className="divide-y divide-[#ededed]">
-                  {itemGrants.map((g: any) => {
+                  {/* 한 사람에게 여러 개 준 건(같은 orderId)은 한 줄 ×N — lib/orderGroups.js */}
+                  {groupOrders(itemGrants).map((g: any) => {
                     const st = GRANT_STATUS[g.status] || { l: g.status, tone: "neutral" as const };
                     return (
                       <div key={g._id} className="px-5 py-3 min-w-0">
@@ -1873,7 +1890,7 @@ export default function AdminBotPage() {
                           <StatusChip tone={st.tone}>{st.l}</StatusChip>
                         </div>
                         <p className="mt-1 text-[12px] text-[#5a5a5a] truncate">
-                          {g.itemName}{g.adminNote ? ` · ${g.adminNote}` : ""} · {g.days > 0 ? `${g.days}일` : "영구"}
+                          {g.itemName}{g.qty > 1 ? ` ×${g.qty}` : ""}{g.adminNote ? ` · ${g.adminNote}` : ""} · {g.days > 0 ? `${g.days}일` : "영구"}
                           <span className="ml-2 text-[#8a8a8a] tabular-nums">{fmtDateTime(g.createdAt)}</span>
                         </p>
                       </div>
@@ -2240,7 +2257,7 @@ export default function AdminBotPage() {
           <p className="break-keep">
             XP 기록이 있는 <strong className="text-[#131313]">모든 유저</strong>에게{" "}
             <strong className="text-[#e91e3f]">{grantItems.find((it) => it._id === itemGrant.itemId)?.name || "아이템"}</strong>
-            을 지급합니다. 이미 보유한 유저는 건너뜁니다.
+            을 {grantQty > 1 ? `${grantQty}개씩 ` : ""}지급합니다.{grantStackable ? "" : " 이미 보유한 유저는 건너뜁니다."}
           </p>
         }
       />

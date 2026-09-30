@@ -121,8 +121,9 @@ const untilOf = (it) =>
     ? new Date(it.expiresAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
     : "";
 
-// 칸 이름 아래 상태 · 기간 줄이 있는 항목 (지급 대기 · 확인 필요 · 기간제)
-const hasSlotStatus = (it) => it.status === "pending" || it.status === "missing" || !!it.expiresAt;
+// 칸 이름 아래 상태 · 기간 줄이 있는 항목 (지급 대기 · 확인 필요 · 기간제 · 여러 개 묶음)
+//    📌 ×N — 1개 단위 상품 · 소모품 묶음(서버 my-items 의 count). 모서리 배지 대신 이 줄 맨 앞에 글자로
+const hasSlotStatus = (it) => it.status === "pending" || it.status === "missing" || !!it.expiresAt || it.count > 1;
 
 // 📌 가방 칸 하나 — 가방 격자와 아이템 등록 미리보기가 같은 칸을 쓴다(onClick 이 없으면 누를 수 없는 칸)
 const InvSlot = ({ it, on, onClick }) => {
@@ -159,7 +160,7 @@ const InvSlot = ({ it, on, onClick }) => {
           {/* 상태 · 기간 — 모서리 배지 · 점 대신 이름 아래 한 줄 글자로 (3일 이하 · 확인 필요는 빨강) */}
           {hasSlotStatus(it) && (
             <span className={`mt-1 text-[9px] font-bold tabular-nums leading-none ${it.status === "missing" || (dday !== null && dday <= 3) ? "text-[#ff5c77]" : "text-white/45"}`}>
-              {[it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "", dday !== null ? `D-${dday}` : ""].filter(Boolean).join(" · ")}
+              {[it.count > 1 ? `×${it.count}` : "", it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "", dday !== null ? `D-${dday}` : ""].filter(Boolean).join(" · ")}
             </span>
           )}
         </span>
@@ -200,10 +201,13 @@ const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy
             {it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "보유 중"}
           </span>
         </div>
+        {/* 📌 여러 개 묶음(count — 1개 단위 · 소모품)은 기간 줄 자리에 수량 — 줄 수가 그대로라 상세가 늘지 않는다 */}
         <div className="flex items-center justify-between gap-3">
-          <span className="text-[11px] font-bold text-white/45">기간</span>
+          <span className="text-[11px] font-bold text-white/45">{it.count != null ? "수량" : "기간"}</span>
           <span className="text-[12px] font-black text-white/80 tabular-nums">
-            {it.expiresAt ? `${it.days > 0 ? `${it.days}일 · ` : ""}기간제` : "영구"}
+            {it.count != null
+              ? `×${it.count}${it.pendingCount > 0 ? ` · 지급 대기 ${it.pendingCount}` : ""}`
+              : it.expiresAt ? `${it.days > 0 ? `${it.days}일 · ` : ""}기간제` : "영구"}
           </span>
         </div>
         {it.expiresAt && (

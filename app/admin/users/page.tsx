@@ -2,10 +2,10 @@
 
 // 📌 유저 조회 — 이름 · 디스코드 ID 로 찾아 한 유저의 지갑 · 구매 · 지급 · 쿠폰 · 알림 · 문의 · XP 내역을 한 자리에서 본다.
 //    목록 화면 틀: 머리 → 검색 한 줄 → 결과 표 → 줄을 누르면 오른쪽 상세 칸(모바일은 아래에서 올라오는 판).
-//    조회 전용(쓰기 없음). 주소에 ?q= · ?userId= 를 실어 새로고침해도 같은 화면이 다시 열린다.
+//    조회 전용 — 쓰기는 구매 탭의 1회 소모권 "1개 사용"(app/api/admin/users/consume) 하나. 주소에 ?q= · ?userId= 를 실어 새로고침해도 같은 화면이 다시 열린다.
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AdminPage, SearchInput, Segmented, Btn, DataTable, DetailPane, StatusChip, EmptyRow, useAdminGuard, useNotice, type Column } from "../ui";
+import { AdminPage, SearchInput, Segmented, Btn, SwapLabel, DataTable, DetailPane, StatusChip, EmptyRow, useAdminGuard, useNotice, type Column } from "../ui";
 import { getTier } from "@/lib/voiceTiers";
 
 type Row = { userId: string; username: string; displayName: string; xp: number; level: number; point: number; noXp?: boolean };
@@ -21,8 +21,11 @@ type UserSum = {
   voiceSeconds: number; needsRoleSync: boolean; updatedAt: string | null;
   pass: Pass;
 };
+// ×N 묶음(1회 소모권 · 소모품) — thing: 묶음 키, pending: 그중 지급 대기
+type Stack = { thing: string; name: string; count: number; pending: number };
 type Detail = {
   names: string[];
+  stacks?: Stack[];
   user: UserSum | null;
   purchases: any[]; payouts: any[]; coupons: any[];
   notifications: any[]; inquiries: any[]; applies: any[];
@@ -147,6 +150,7 @@ export default function AdminUsersPage() {
   const [ledgerCur, setLedgerCur] = useState<LedgerCur>("xp");
   const [ledger, setLedger] = useState<Ledger | null>(null); // key = "<userId>:<currency>"
   const reqRef = useRef(0); // 빠르게 다른 줄을 누르면 늦게 온 이전 응답을 버린다
+  const [spendBusy, setSpendBusy] = useState(""); // 1개 사용 중인 묶음 키
   const selectedRef = useRef<string | null>(null); // 검색을 다시 해도 열어 둔 유저를 주소에 남기려고
 
   const openUser = useCallback(async (id: string) => {
@@ -226,6 +230,41 @@ export default function AdminUsersPage() {
     loadLedger(selectedId, ledgerCur, null);
   }, [tab, selectedId, ledgerCur, ledger?.key, loadLedger]);
 
+  // 📌 1회 소모권 1개 사용 — 먼저 끝나는 것 · 먼저 받은 것부터 1개(lib/itemConsume.js). 결과는 알림 창으로,
+  //    목록은 다시 읽지 않고 그 자리에서 고친다(상세 칸이 "불러오는 중"으로 깜빡이며 줄이 튀지 않게)
+  const spendOne = useCallback(async (userId: string, s: Stack) => {
+    if (spendBusy) return;
+    setSpendBusy(s.thing);
+    try {
+      const r = await fetch("/api/admin/users/consume", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, thing: s.thing }),
+      });
+      const d = await r.json().catch(() => null);
+      const stacks: Stack[] | null = Array.isArray(d?.data?.stacks) ? d.data.stacks : null;
+      const usedId = d?.data?.id ? String(d.data.id) : "";
+      // 📌 다 쓴 묶음도 ×0 으로 자리를 지킨다(버튼만 잠김) — 줄 · 소제목이 사라져 아래 구매 목록이 커서 밑에서 튀어 오르지 않게.
+      //    유저를 다시 열면 서버 목록 그대로(0 인 것은 없다)
+      const keep = (old: Stack[] | undefined): Stack[] | null => (stacks && old
+        ? [
+            ...old.map((o) => stacks.find((x) => x.thing === o.thing) || { ...o, count: 0, pending: 0 }),
+            ...stacks.filter((x) => !old.some((o) => o.thing === x.thing)),
+          ]
+        : stacks);
+      setDetail((prev) => (prev && selectedRef.current === userId ? {
+        ...prev,
+        ...(stacks ? { stacks: keep(prev.stacks) || stacks } : {}),
+        purchases: usedId ? prev.purchases.map((p: any) => (String(p._id) === usedId ? { ...p, consumedAt: new Date().toISOString() } : p)) : prev.purchases,
+      } : prev));
+      if (r.ok && d?.success) notify(`${s.name} 1개를 사용했습니다.\n남은 수량 ${Number(d.data.left) || 0}개`);
+      else notify(d?.message || "처리에 실패했습니다.", true);
+    } catch {
+      notify("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setSpendBusy("");
+    }
+  }, [spendBusy, notify]);
+
   const closeUser = useCallback(() => {
     reqRef.current++;
     selectedRef.current = null;
@@ -298,7 +337,28 @@ export default function AdminUsersPage() {
   const tabBody = (() => {
     if (!detail) return null;
     if (tab === "purchase") {
+      const stacks = detail.stacks || [];
       return (
+        <>
+        {/* 📌 1회 소모권 — 가진 수량(×N)과 1개 사용. 수량 칸 · 버튼 폭 고정이라 숫자 · 글자가 바뀌어도 줄이 흔들리지 않는다 */}
+        {stacks.length > 0 && (
+          <>
+            <SubHead label="소모권" n={stacks.length} />
+            <ul className="divide-y divide-[#ededed] mb-2">
+              {stacks.map((s) => (
+                <li key={s.thing} className="py-2.5 flex items-center gap-3">
+                  <span className="min-w-0 flex-1 truncate text-[14px] font-bold">{s.name}</span>
+                  <span className="shrink-0 w-14 text-right text-[14px] font-black tabular-nums">×{num(s.count)}</span>
+                  <Btn variant="secondary" size="sm" className="shrink-0 w-[84px]" disabled={!!spendBusy || !selectedId || s.count <= 0}
+                    onClick={() => selectedId && spendOne(selectedId, s)}>
+                    <SwapLabel swap={spendBusy === s.thing} to="처리 중…">1개 사용</SwapLabel>
+                  </Btn>
+                </li>
+              ))}
+            </ul>
+            <SubHead label="구매" n={detail.purchases.length} />
+          </>
+        )}
         <List items={detail.purchases}>
           {detail.purchases.map((p: any) => {
             const st = PURCHASE_STATUS[p.status] || { l: p.status || "—", t: "neutral" as Tone };
@@ -313,6 +373,7 @@ export default function AdminUsersPage() {
                   <>
                     <StatusChip tone={st.t} className="shrink-0">{st.l}</StatusChip>
                     {p.renewOf && <StatusChip tone="info" className="shrink-0">연장</StatusChip>}
+                    {p.consumedAt && <StatusChip className="shrink-0">사용</StatusChip>}
                   </>
                 }
                 meta={joinMeta([
@@ -328,6 +389,7 @@ export default function AdminUsersPage() {
             );
           })}
         </List>
+        </>
       );
     }
     if (tab === "payout") {

@@ -17,6 +17,7 @@ import { channelNames } from "@/lib/channelNames";
 import { durationOptions } from "@/lib/shopPricing";
 import { getShopAccess } from "@/lib/shopAccess";
 import { VOICE_TIERS } from "@/lib/voiceTiers";
+import { unitThingSet } from "@/lib/unitSale";
 
 // 📌 내 보유 아이템 — 구매 내역이 아니라 "지금 실제로 들고 있는 것"을 보여준다.
 //    표기는 아이템 등록(models/Item)이 단일 원천이다:
@@ -44,7 +45,7 @@ export async function GET() {
     // 📌 환불 · 취소된 건도 함께 읽는다 — 보유로 치지는 않고, 연장 묶음(renewOf)을 이을 때만 쓴다(아래 rootOf)
     const [purchaseRows, shopItems, itemsAll, roleConfigs, invRoles, roleInfo, access] = await Promise.all([
       Purchase.find({ userId }).sort({ createdAt: -1 }).lean(),
-      ShopItem.find({}, { name: 1, description: 1, imageUrl: 1, itemImageUrl: 1, icon: 1, color: 1, type: 1, roleId: 1, itemId: 1, active: 1, sortOrder: 1, durations: 1 }).lean(),
+      ShopItem.find({}, { name: 1, description: 1, imageUrl: 1, itemImageUrl: 1, icon: 1, color: 1, type: 1, roleId: 1, itemId: 1, active: 1, sortOrder: 1, durations: 1, unitSale: 1 }).lean(),
       Item.find({}).sort({ sortOrder: 1, createdAt: 1 }).lean(),
       RoleConfig.find({}, { roleId: 1, roleName: 1, rewardLevel: 1, exclusive: 1, buffXp: 1, attendBuffXp: 1 }).lean(),
       InventoryRole.find({ visible: true }).sort({ sortOrder: 1 }).lean(),
@@ -119,6 +120,9 @@ export async function GET() {
       return ref ? String(ref._id) : "";
     };
 
+    // 📌 ×N 묶음 — 1개 단위 상품 · 역할 없는 소모형 아이템(lib/unitSale.js unitThingSet)은 같은 물건끼리 한 칸으로 모아 개수를 단다(아래)
+    const units = unitThingSet(shopItems, itemsAll);
+
     const emitted = new Set();
     for (const row of purchases) {
       // 기간이 지난 기간제는 정상 만료 — 목록에서 뺀다
@@ -158,6 +162,9 @@ export async function GET() {
 
       // kind — 표기 유형을 따르되, 역할이 없는 것은 실물 · 꾸미기가 아니면 사이트 보유 아이템이다
       const kind = disp.type === "physical" || disp.type === "cosmetic" ? disp.type : roleLike ? disp.type : "item";
+      const thing = (item || fallbackItem)?._id ? `i:${(item || fallbackItem)._id}` : shopItem ? `s:${shopItem._id}` : "";
+      // 묶을 칸 — 역할 없는 ×N 물건만(역할 건은 여러 개가 될 수 없다). 기프트카드는 빼고
+      const stack = thing && units.has(thing) && !p.roleId && p.itemType !== "physical" ? thing : "";
 
       owned.push({
         // 갱신돼도 같은 것을 가리키도록 하는 키 (연장 묶음 단위 — 맨 앞 구매 id. 연장이 없으면 그 구매 id)
@@ -185,20 +192,50 @@ export async function GET() {
         effectItem: p.itemType !== "physical" ? item || fallbackItem : null,
         // 순서 — 상점 관리(아이템 등록)에서 정한 자리를 따른다
         orderRef: (item || fallbackItem)?._id ? String((item || fallbackItem)._id) : "",
-        // 같은 물건 키 — 등록 아이템이면 그 id, 아니면 상품 id (아래 업그레이드 중복 숨김용)
-        _thing: (item || fallbackItem)?._id ? `i:${(item || fallbackItem)._id}` : shopItem ? `s:${shopItem._id}` : "",
+        // 같은 물건 키 — 등록 아이템이면 그 id, 아니면 상품 id (아래 업그레이드 중복 숨김 · ×N 묶음용)
+        _thing: thing,
+        _stack: stack,
+        // 개수 — 이 칸의 살아 있는 건 수 · 그중 지급 대기(×N 묶음이 더한다)
+        ...(stack ? { count: chain.live.length, pendingCount: chain.live.filter((x) => x.status === "pending").length } : {}),
         // 역할 버프(RoleConfig)는 그 디스코드 역할을 지금 실제로 가진 동안만 봇이 더한다
         buffRoleId: p.roleId && held !== null && held.has(p.roleId) ? p.roleId : "",
       });
+    }
+
+    // 📌 ×N 묶음 — 같은 물건(_stack)의 칸을 첫 칸 하나로 합친다. 무기한 숨김보다 먼저 한다(묶음 칸은 그 숨김에서 뺀다).
+    //    count 는 살아 있는 건 수 · pendingCount 는 그중 지급 대기. 하나라도 받았으면 보유 중, 무기한이 하나라도 있으면 만료 없음,
+    //    모두 기간제면 가장 빠른 만료(먼저 쓰이는 것 — lib/itemConsume.js 소모 순서와 같다), 받은 날은 가장 이른 날.
+    //    uid 는 "u:<물건>" 으로 고정 — 1개를 써서 줄어도 가방에서 고른 칸이 튀지 않는다(1개일 때도 같은 uid)
+    const stacks = new Map();
+    for (let i = 0; i < owned.length; i++) {
+      const it = owned[i];
+      if (!it._stack) continue;
+      const s = stacks.get(it._stack);
+      if (!s) {
+        it.uid = `u:${it._stack}`;
+        stacks.set(it._stack, it);
+        continue;
+      }
+      s.count += it.count;
+      s.pendingCount += it.pendingCount;
+      if (it.status === "completed") s.status = "completed";
+      s.expiresAt = !s.expiresAt || !it.expiresAt ? null : new Date(Math.min(tms(s.expiresAt), tms(it.expiresAt)));
+      if (it.acquiredAt && (!s.acquiredAt || tms(it.acquiredAt) < tms(s.acquiredAt))) s.acquiredAt = it.acquiredAt;
+      owned.splice(i, 1);
+      i--;
+    }
+    for (const s of stacks.values()) {
+      if (s.count > 1) s.renewId = ""; // 여러 개 묶음은 연장 대상이 아니다
+      if (!s.expiresAt) s.days = 0;
     }
 
     // 📌 기간제를 무제한으로 업그레이드하면 남은 기간제 구매도 기간 끝까지 살아 있다 — 같은 물건의 무제한 칸이 있으면 기간제 칸은 숨긴다.
     //    등록 아이템이 아닌 상품도 같은 상품끼리는 묶는다(업그레이드는 같은 상품 · 같은 아이템에서만 일어난다 — _lib/renewal.js)
     const foreverThings = new Set(owned.filter((it) => it._thing && !it.expiresAt).map((it) => it._thing));
     for (let i = owned.length - 1; i >= 0; i--) {
-      if (owned[i]._thing && owned[i].expiresAt && foreverThings.has(owned[i]._thing)) owned.splice(i, 1);
+      if (owned[i]._thing && !owned[i]._stack && owned[i].expiresAt && foreverThings.has(owned[i]._thing)) owned.splice(i, 1);
     }
-    for (const it of owned) delete it._thing;
+    for (const it of owned) { delete it._thing; delete it._stack; }
 
     // ── (B) 구매 기록 없이 들고 있는 역할 (아이템 등록·레벨 보상) ──
     if (held) {

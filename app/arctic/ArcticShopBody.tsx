@@ -16,7 +16,9 @@ import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
   buildDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload,
   setPointOnly, formUnit, formSalePrice, priceCalc, durationsCalc,
+  SALE_MODES, saleModeOf, setSaleMode, unitSaleOk, pickRole,
 } from "./productForm";
+import { MAX_PER_ORDER, clampPerOrder } from "@/lib/unitSale";
 import ArcticFooter from "./ArcticFooter";
 import ArcticDock from "./ArcticDock";
 import ArcticHome from "./ArcticHome";
@@ -387,6 +389,9 @@ export default function ArcticShopBody({
   const [regItems, setRegItems] = useState<any[]>([]);
   const [isSavingItem, setIsSavingItem] = useState(false);
   const [editError, setEditError] = useState("");
+  // 수정 폼 안내 토스트 — 누른 자리와 먼 오류 줄 대신 화면 위에 잠깐(상점 토스트와 같은 모양, 느낌표)
+  const [editNote, setEditNote] = useState("");
+  const noteEdit = (t: string) => { setEditNote(t); setTimeout(() => setEditNote((cur) => (cur === t ? "" : cur)), 1800); };
   const [openGroups, setOpenGroups] = useState({ basic: true, price: false, stock: false, season: false });
   const toggleGroup = (k: "basic" | "price" | "stock" | "season") => setOpenGroups((p) => ({ ...p, [k]: !p[k] }));
 
@@ -731,9 +736,9 @@ export default function ArcticShopBody({
   const efLinked = isLinked(editForm);
   const efBasicSummary = [efLinked ? "등록된 아이템" : "", editForm?.name || "이름 없음", itemTypeLabel(editForm?.type), efRoleName].filter(Boolean).join(" · ");
   const efPriceSummary = Number(editForm?.price) > 0
-    ? `${efSale.toLocaleString()} ${efUnit}${efDiscount > 0 ? ` (-${efDiscount}%)` : ""}${editForm?.pointOnly ? " · 빙옥 전용" : ""}${editForm?.timed ? ` · 기간제 ${efDurations.length}종` : ""}`
+    ? `${efSale.toLocaleString()} ${efUnit}${efDiscount > 0 ? ` (-${efDiscount}%)` : ""}${editForm?.pointOnly ? " · 빙옥 전용" : ""}${editForm?.timed ? ` · 기간제 ${efDurations.length}종` : ""}${editForm?.unitSale ? " · 1개 단위" : ""}`
     : "가격 미입력";
-  const efStockSummary = `${editForm?.stock === "" ? "재고 무제한" : `재고 ${editForm?.stock}`} · 추천 ${editForm?.sortOrder || 0} · ${editForm?.active ? "판매 중" : "숨김"}`;
+  const efStockSummary = `${editForm?.stock === "" ? "재고 무제한" : `재고 ${editForm?.stock}`}${editForm?.unitSale ? ` · 1회 최대 ${clampPerOrder(editForm?.maxPerOrder)}` : ""} · 추천 ${editForm?.sortOrder || 0} · ${editForm?.active ? "판매 중" : "숨김"}`;
   const efSeasonSummary = editForm?.detachOnSeason ? "시즌 바뀌면 디스코드 표기 뗌" : "디스코드 역할 계속 유지";
 
   // ── 스토어 줄 부품 (PC 두 줄 · 모바일 한 줄이 같이 쓴다) ──
@@ -1157,6 +1162,17 @@ export default function ArcticShopBody({
           </div>
         </div>
       )}
+      {editNote && (
+        <div key={editNote} className="fixed top-20 left-1/2 z-[150] pointer-events-none" style={{ animation: "toastPop 0.42s cubic-bezier(0.16,1,0.3,1)" }}>
+          {/* 문구가 길어 폰 폭을 넘으면 줄을 바꾼다(가로 넘침 없이) */}
+          <div className="-translate-x-1/2 w-max max-w-[calc(100vw-32px)] flex items-center gap-2.5 px-5 py-3 bg-[#131313] text-white rounded-full shadow-[0_14px_36px_rgba(0,0,0,0.32)]">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+            <span className="text-[12px] font-bold break-keep">{editNote}</span>
+          </div>
+        </div>
+      )}
 
       {/* 상점 전용 마이크로 애니메이션 */}
       <style dangerouslySetInnerHTML={{ __html: `
@@ -1424,7 +1440,7 @@ export default function ArcticShopBody({
                           <Dropdown
                             theme="light"
                             value={editForm.roleId}
-                            onChange={(v) => setEditForm({ ...editForm, roleId: v })}
+                            onChange={(v) => setEditForm(pickRole(editForm, v))}
                             placeholder="역할을 선택하세요"
                             options={guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))}
                           />
@@ -1506,12 +1522,28 @@ export default function ArcticShopBody({
                       </div>
                     )}
 
-                    {/* 📌 기간제 — 기프트카드는 기간 개념이 없어 아예 감춘다 */}
+                    {/* 📌 판매 방식 — 영구 보유 · 기간제 · 1개 단위(수량 판매, lib/unitSale.js). 기프트카드는 기간 · 수량 개념이 없어 아예 감춘다.
+                           세 칸 고정 — 1개 단위를 못 고르는 상품(역할 · 권한 · 역할 있는 아이템)은 흐리게 두고 누르면 알린다 */}
                     {editForm.type !== "physical" && (
                       <div>
                         <label className={F_LABEL}>판매 방식</label>
-                        <FormToggle on={!!editForm.timed} onClick={() => setEditForm({ ...editForm, timed: !editForm.timed })}
-                          onLabel="기간제" offLabel="영구 보유" />
+                        <div className="grid grid-cols-3 gap-2">
+                          {SALE_MODES.map((o) => {
+                            const on = saleModeOf(editForm) === o.v;
+                            const off = o.v === "unit" && !unitSaleOk(editForm);
+                            return (
+                              <button key={o.v} type="button" aria-pressed={on}
+                                onClick={() => {
+                                  // 못 고르는 칸은 누른 자리에서 보이게 토스트로 — 폼 맨 아래 오류 줄은 화면 밖이라 안 보이고, 저장 오류를 지우지도 않는다
+                                  if (off) { noteEdit("1개 단위 판매는 역할이 없는 아이템 · 꾸미기만 할 수 있습니다."); return; }
+                                  setEditForm(setSaleMode(editForm, o.v));
+                                }}
+                                className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors ${on ? "bg-[#e91e3f] text-white border-[#e91e3f]" : `bg-white text-[#5a5a5a] border-[#ededed] ${off ? "opacity-40 cursor-default" : "hover:border-[#a3a3a3]"}`}`}>
+                                {o.l}
+                              </button>
+                            );
+                          })}
+                        </div>
                         {editForm.timed && (
                           <>
                             <div className="grid grid-cols-3 gap-2 mt-3">
@@ -1552,6 +1584,16 @@ export default function ArcticShopBody({
                         <p className={F_NOTE}>작을수록 상점 앞쪽</p>
                       </div>
                     </div>
+                    {/* 1개 단위 — 한 결제에서 살 수 있는 최대 개수 */}
+                    {editForm.unitSale && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className={F_LABEL}>1회 최대</label>
+                          <input type="number" min={1} max={MAX_PER_ORDER} value={editForm.maxPerOrder} onChange={(e) => setEditForm({ ...editForm, maxPerOrder: e.target.value })}
+                            placeholder="10" className={F_INPUT_SM} />
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <label className={F_LABEL}>판매 상태</label>
                       <FormToggle on={!!editForm.active} onClick={() => setEditForm({ ...editForm, active: !editForm.active })}

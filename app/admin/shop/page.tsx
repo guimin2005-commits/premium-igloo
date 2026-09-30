@@ -17,7 +17,10 @@ import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
   buildDurations as buildFormDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload, toKstInput,
   setPointOnly, formUnit, formSalePrice, priceCalc, durationsCalc,
+  SALE_MODES, saleModeOf, setSaleMode, unitSaleOk, pickRole,
 } from "../../arctic/productForm";
+import { isUnitSale, maxPerOrderOf, MAX_PER_ORDER } from "@/lib/unitSale";
+import { groupOrders, orderSummary } from "@/lib/orderGroups";
 import type { ProductForm } from "../../arctic/productForm";
 import {
   AdminPage,
@@ -638,7 +641,9 @@ export default function AdminShopPage() {
   const [orderFilter, setOrderFilter] = useState("");
   const [noteTarget, setNoteTarget] = useState<any>(null);
   const [noteText, setNoteText] = useState("");
+  // 취소 · 환불 확인 — 주문 묶음 하나(1개 단위면 여러 건). pool: 돌려줄 수 있는 건(안 쓴 것, 최근 것부터) · cancelCount: 그중 몇 개
   const [cancelTarget, setCancelTarget] = useState<any>(null);
+  const [cancelCount, setCancelCount] = useState("");
   const [showPreview, setShowPreview] = useState(false);
 
   // 📌 상세 칸 — 한 번에 하나만 연다. 폼 탭은 그 탭의 폼 상태(id 유무)가 새로 만들기 / 수정을 가른다
@@ -963,15 +968,35 @@ export default function AdminShopPage() {
     setDeleteTarget(null);
   };
 
-  const processOrder = async (id: string, newStatus: "completed" | "cancelled" | "refunded", note = "") => {
+  // 📌 주문 처리 — 건 id 여러 개를 한 번에(1개 단위 주문 한 줄의 N건). 서버가 건마다 조건부로 처리하고 처리 · 건너뜀 수를 준다
+  const processOrder = async (ids: string[], newStatus: "completed" | "cancelled" | "refunded", note = "") => {
     const res = await fetch("/api/shop/orders", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, status: newStatus, adminNote: note }),
+      body: JSON.stringify({ ids, status: newStatus, adminNote: note }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    if (res?.ok && d?.success) { fetchAll(); notify(newStatus === "completed" ? "발송 처리했습니다." : newStatus === "refunded" ? "환불했습니다. 디스코드 역할은 봇이 1분 안에 회수합니다." : "취소하고 환불했습니다."); }
+    if (res?.ok && d?.success) {
+      fetchAll();
+      const n = Number(d.done) || 1;
+      const many = n > 1 ? `${n}개를 ` : "";
+      const skip = Number(d.skipped) > 0 ? `\n이미 처리했거나 사용한 ${d.skipped}개는 건너뛰었습니다.` : "";
+      notify((newStatus === "completed" ? "발송 처리했습니다." : newStatus === "refunded" ? `${many}환불했습니다. 디스코드 역할은 봇이 1분 안에 회수합니다.` : `${many}취소하고 환불했습니다.`) + skip);
+    }
     else notify(d?.message || "처리에 실패했습니다.", true);
     setNoteTarget(null); setNoteText(""); setCancelTarget(null);
+  };
+  // 돌려줄 수 있는 건 — 대기는 취소, 완료는 환불(기프트카드 제외). 이미 쓴 건은 빼고, 최근 것부터
+  const cancelPoolOf = (g: any) => {
+    const want = g.status === "pending" ? "pending" : "completed";
+    return (g.rows || [])
+      .filter((r: any) => r.status === want && !r.consumedAt && (want === "pending" || r.itemType !== "physical"))
+      .sort((a: any, b: any) => String(b._id).localeCompare(String(a._id)));
+  };
+  const openCancel = (g: any) => {
+    const pool = cancelPoolOf(g);
+    if (!pool.length) return notify("돌려줄 수 있는 건이 없습니다. 이미 사용했거나 처리한 건입니다.", true);
+    setCancelCount(String(pool.length));
+    setCancelTarget({ ...g, pool });
   };
 
   // ── 순서 바꾸기 ──
@@ -1020,8 +1045,10 @@ export default function AdminShopPage() {
   if (gate) return gate;
 
   const meta = TAB_META[tab];
-  const pendingCount = orders.filter((o) => o.status === "pending").length;
-  const shownOrdersByStatus = orderFilter ? orders.filter((o) => o.status === orderFilter) : orders;
+  // 📌 주문은 묶음(orderId + 상품 — lib/orderGroups.js)으로 센다 · 보인다. 1개 단위 상품 3개를 한 번에 샀으면 한 줄 "×3"
+  const groupCount = (s: string) => groupOrders(orders.filter((o) => o.status === s)).length;
+  const pendingCount = groupCount("pending");
+  const shownOrdersByStatus = groupOrders(orderFilter ? orders.filter((o) => o.status === orderFilter) : orders);
 
   const discountPct = Math.min(100, Math.max(0, Number(form.discountPct) || 0));
   // 입력칸 단위 그대로(빙옥 전용이면 빙옥 — XP 로 할인한 뒤 올림, 상점 · 결제와 같은 계산)
@@ -1045,7 +1072,7 @@ export default function AdminShopPage() {
   const shownOrders = shownOrdersByStatus.filter((o) => hit(o.itemName, o.userName, o.contact, o.adminNote));
 
   const noResult = "검색 결과가 없습니다.";
-  const orderSel = orderSelId ? orders.find((o) => o._id === orderSelId) : null;
+  const orderSel = orderSelId ? shownOrdersByStatus.find((o) => o._id === orderSelId) || null : null;
   const couponSel = couponForm.id ? coupons.find((c) => c._id === couponForm.id) : null;
 
   // 📌 아이템 등록 — 인벤토리 미리보기는 폼 값을 그대로 따라간다. 효과 줄은 서버(/api/shop/my-items)와 같은 규칙
@@ -1120,7 +1147,12 @@ export default function AdminShopPage() {
           <Thumb it={it} />
           <span className="block min-w-0 max-w-[320px]">
             <span className="block truncate font-bold">{it.name}</span>
-            {it.itemId && <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a]">등록 아이템</span>}
+            {/* 등록 아이템 · 1개 단위(1회 최대) — 목록에서 판매 방식이 보이게 */}
+            {(it.itemId || isUnitSale(it)) && (
+              <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a] tabular-nums">
+                {[it.itemId && "등록 아이템", isUnitSale(it) && `1개 단위 · 1회 최대 ${maxPerOrderOf(it)}개`].filter(Boolean).join(" · ")}
+              </span>
+            )}
           </span>
         </span>
       ),
@@ -1204,11 +1236,19 @@ export default function AdminShopPage() {
 
   const orderCols: Column<any>[] = [
     { key: "status", label: "상태", mobile: "title", render: (o) => <StatusChip tone={STATUS_TONE[o.status] || "neutral"}>{STATUS_LABEL[o.status]}</StatusChip> },
-    { key: "item", label: "상품", mobile: "title", render: (o) => <span className="block truncate max-w-[280px] font-bold">{o.itemName}</span> },
+    {
+      key: "item", label: "상품", mobile: "title",
+      render: (o) => (
+        <span className="block min-w-0 max-w-[280px]">
+          <span className="block truncate font-bold">{o.itemName}{o.qty > 1 && <span className="tabular-nums"> ×{o.qty}</span>}</span>
+          {orderSummary(o) && <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a] truncate tabular-nums">{orderSummary(o)}</span>}
+        </span>
+      ),
+    },
     { key: "type", label: "유형", render: (o) => <span className="text-[#5a5a5a]">{typeLabel(o.itemType)}</span> },
     { key: "user", label: "구매자", render: (o) => <span className="font-bold text-[#5a5a5a]">{o.userName}</span> },
-    // 빙옥 전용 상품을 산 건은 빙옥으로 (o.pointOnly — 구매 시점 스냅샷)
-    { key: "price", label: "금액", align: "right", render: (o) => <span className="font-bold tabular-nums whitespace-nowrap">{priceText(o, o.price)}</span> },
+    // 빙옥 전용 상품을 산 건은 빙옥으로 (o.pointOnly — 구매 시점 스냅샷). 여러 개는 돌려주지 않은 개수만큼(paidQty — lib/orderGroups.js)
+    { key: "price", label: "금액", align: "right", render: (o) => <span className="font-bold tabular-nums whitespace-nowrap">{priceText(o, (o.price || 0) * (o.paidQty || o.qty || 1))}</span> },
     { key: "at", label: "일시", render: (o) => <span className="text-[#8a8a8a] tabular-nums whitespace-nowrap">{fmtDateTime(o.createdAt)}</span> },
     {
       key: "memo", label: "메모",
@@ -1558,7 +1598,7 @@ export default function AdminShopPage() {
                             <div className="fixed inset-0 z-40" onClick={() => setIsRoleOpen(false)}></div>
                             <div className="absolute top-full left-0 w-full mt-1.5 bg-white border border-[#ededed] rounded-lg overflow-hidden shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] z-50 max-h-64 overflow-y-auto">
                               {guildRoles.map((r) => (
-                                <button key={r.id} type="button" onClick={() => { setForm({ ...form, roleId: r.id }); setIsRoleOpen(false); }}
+                                <button key={r.id} type="button" onClick={() => { setForm(pickRole(form, r.id)); setIsRoleOpen(false); }}
                                   className={`w-full text-left px-3 py-2.5 text-[14px] flex items-center gap-2.5 transition-colors ${form.roleId === r.id ? "bg-[#f2f2f2] text-[#131313] font-bold" : "text-[#5a5a5a] hover:bg-[#f7f7f7] hover:text-[#131313]"}`}>
                                   <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: r.color }}></span>
                                   {r.name}
@@ -1598,11 +1638,15 @@ export default function AdminShopPage() {
                     </Field>
                   )}
 
-                  {/* 📌 기간제 역할 — 역할·권한·아이템만 (기프트카드는 기간 개념이 없다) */}
+                  {/* 📌 판매 방식 — 영구 보유 · 기간제 · 1개 단위(수량 판매, lib/unitSale.js). 역할·권한·아이템·꾸미기만 (기프트카드는 기간 · 수량 개념이 없다).
+                         1개 단위는 역할 없는 아이템 · 꾸미기만 — 못 고르는 상품이면 칸은 그대로 두고 누르면 알린다(칸 수가 바뀌어 줄이 흔들리지 않게) */}
                   {form.type !== "physical" && (
                     <div className="mb-4">
-                      <Toggle on={form.timed} onClick={() => setForm({ ...form, timed: !form.timed })}
-                        onLabel="기간제 역할" offLabel="영구 보유" />
+                      <Segmented options={SALE_MODES} value={saleModeOf(form)} disabledValues={unitSaleOk(form) ? undefined : ["unit"]}
+                        onChange={(v) => {
+                          if (v === "unit" && !unitSaleOk(form)) return notify("1개 단위 판매는 역할이 없는 아이템 · 꾸미기만 할 수 있습니다.", true);
+                          setForm(setSaleMode(form, v as any));
+                        }} />
                       {/* 회수는 화면 밖에서 일어나는 일이라 이것만 남긴다 */}
                       {form.timed && (
                         <>
@@ -1649,6 +1693,12 @@ export default function AdminShopPage() {
                     <Field label="재고">
                       <input type="number" min={-1} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="비우면 무제한" className={inputClass} />
                     </Field>
+                    {/* 1개 단위 — 한 결제에서 살 수 있는 최대 개수(재고 옆 칸이라 켜고 꺼도 줄 높이가 같다) */}
+                    {form.unitSale && (
+                      <Field label="1회 최대">
+                        <input type="number" min={1} max={MAX_PER_ORDER} value={form.maxPerOrder} onChange={(e) => setForm({ ...form, maxPerOrder: e.target.value })} placeholder="10" className={inputClass} />
+                      </Field>
+                    )}
                   </Two>
                 </PaneSection>
 
@@ -1999,12 +2049,12 @@ export default function AdminShopPage() {
               <SearchInput value={q} onChange={setQ} placeholder="상품 · 구매자 · 메모" />
               <Segmented
                 options={[
-                  { v: "", l: "전체", n: orders.length },
+                  { v: "", l: "전체", n: groupOrders(orders).length },
                   { v: "pending", l: "대기", n: pendingCount },
-                  { v: "completed", l: "완료", n: orders.filter((o) => o.status === "completed").length },
-                  { v: "cancelled", l: "취소", n: orders.filter((o) => o.status === "cancelled").length },
-                  { v: "refunded", l: "환불", n: orders.filter((o) => o.status === "refunded").length },
-                  { v: "expired", l: "만료", n: orders.filter((o) => o.status === "expired").length },
+                  { v: "completed", l: "완료", n: groupCount("completed") },
+                  { v: "cancelled", l: "취소", n: groupCount("cancelled") },
+                  { v: "refunded", l: "환불", n: groupCount("refunded") },
+                  { v: "expired", l: "만료", n: groupCount("expired") },
                 ]}
                 value={orderFilter}
                 onChange={setOrderFilter}
@@ -2025,7 +2075,7 @@ export default function AdminShopPage() {
             <DetailPane
               open={pane === "order" && !!orderSel}
               onClose={closePane}
-              title={orderSel?.itemName || ""}
+              title={orderSel ? `${orderSel.itemName}${orderSel.qty > 1 ? ` ×${orderSel.qty}` : ""}` : ""}
               sub={orderSel ? `${orderSel.userName} · ${fmtDateTime(orderSel.createdAt)}` : undefined}
               badge={orderSel ? <StatusChip tone={STATUS_TONE[orderSel.status] || "neutral"}>{STATUS_LABEL[orderSel.status]}</StatusChip> : undefined}
               footer={
@@ -2035,10 +2085,10 @@ export default function AdminShopPage() {
                       <Btn onClick={() => { setNoteTarget(orderSel); setNoteText(""); }}>발송 처리</Btn>
                     )}
                     {orderSel.status === "pending" && (
-                      <Btn variant="secondary" onClick={() => setCancelTarget(orderSel)}>취소·환불</Btn>
+                      <Btn variant="secondary" onClick={() => openCancel(orderSel)}>취소·환불</Btn>
                     )}
                     {orderSel.status === "completed" && orderSel.itemType !== "physical" && (
-                      <Btn variant="secondary" onClick={() => setCancelTarget(orderSel)}>환불</Btn>
+                      <Btn variant="secondary" onClick={() => openCancel(orderSel)}>환불</Btn>
                     )}
                   </>
                 ) : undefined
@@ -2048,7 +2098,10 @@ export default function AdminShopPage() {
                 <dl>
                   <DefRow k="유형">{typeLabel(orderSel.itemType)}</DefRow>
                   <DefRow k="구매자">{orderSel.userName}</DefRow>
-                  <DefRow k="금액"><span className="tabular-nums">{priceText(orderSel, orderSel.price)}</span></DefRow>
+                  {/* 1개 단위 주문 — 수량과 쓴 · 돌려준 개수 */}
+                  {orderSel.qty > 1 && <DefRow k="수량"><span className="tabular-nums">{orderSel.qty}개{orderSummary(orderSel) ? ` · ${orderSummary(orderSel)}` : ""}</span></DefRow>}
+                  {orderSel.qty === 1 && orderSel.consumedAt && <DefRow k="사용"><span className="tabular-nums">{fmtDateTime(orderSel.consumedAt)}</span></DefRow>}
+                  <DefRow k="금액"><span className="tabular-nums">{priceText(orderSel, (orderSel.price || 0) * (orderSel.paidQty || orderSel.qty || 1))}</span></DefRow>
                   <DefRow k="일시"><span className="tabular-nums">{fmtDateTime(orderSel.createdAt)}</span></DefRow>
                   {orderSel.error && <DefRow k="지급 실패"><span className="text-[#d01634]">{orderSel.error}</span></DefRow>}
                   {orderSel.contact && <DefRow k="수령 정보"><span className="font-normal whitespace-pre-wrap break-words">{orderSel.contact}</span></DefRow>}
@@ -2127,25 +2180,45 @@ export default function AdminShopPage() {
         danger
         title={cancelTarget?.status === "completed" ? "환불" : "구매 취소 · 환불"}
         confirmLabel={cancelTarget?.status === "completed" ? "환불" : "취소하고 환불"}
-        body={cancelTarget ? (
-          <>
-            <span className="block font-bold text-[#131313]">{cancelTarget.itemName}</span>
-            <span className="block mb-3">
-              {cancelTarget.userName} · {
-                // 서버(orders)는 billed 면 몫이 0 이어도 그 몫을 돌려준다 — 확인창도 같은 값을 보여야 한다
-                cancelTarget.billed || (cancelTarget.paidXp || 0) > 0 || (cancelTarget.paidPoint || 0) > 0
-                  ? [cancelTarget.paidXp > 0 && `${cancelTarget.paidXp.toLocaleString()} XP`, cancelTarget.paidPoint > 0 && `${cancelTarget.paidPoint.toLocaleString()} 빙옥`].filter(Boolean).join(" + ") || (cancelTarget.pointOnly ? "0 빙옥" : "0 XP")
-                  : `${(cancelTarget.price || 0).toLocaleString()} XP`
-              } 환불
-              {/* 결제 때 돌려준 캐시백은 환불에서 뺀다(app/api/shop/orders) */}
-              {(cancelTarget.cashbackXp || 0) > 0 && ` · 캐시백 ${cancelTarget.cashbackXp.toLocaleString()} XP 회수`}
-            </span>
-            {cancelTarget.status === "completed"
-              ? "결제한 XP·빙옥을 돌려주고 디스코드 역할은 봇이 회수합니다."
-              : "결제한 XP·빙옥을 돌려주고 재고를 되돌립니다."}
-          </>
-        ) : null}
-        onConfirm={() => cancelTarget && processOrder(cancelTarget._id, cancelTarget.status === "completed" ? "refunded" : "cancelled")}
+        body={cancelTarget ? (() => {
+          // 📌 1개 단위 주문은 개수를 고른다(기본 전부) — 안 쓴 건 중 최근 것부터 그만큼. 금액 · 캐시백은 고른 건들의 합
+          const pool: any[] = cancelTarget.pool || [];
+          const n = Math.min(pool.length, Math.max(1, Math.floor(Number(cancelCount) || 0)));
+          const picked = pool.slice(0, n);
+          // 서버(orders)는 billed 면 몫이 0 이어도 그 몫을 돌려준다 — 확인창도 같은 값을 보여야 한다
+          const split = (r: any) => !!r.billed || (r.paidXp || 0) > 0 || (r.paidPoint || 0) > 0;
+          const xp = picked.reduce((s, r) => s + (split(r) ? r.paidXp || 0 : r.price || 0), 0);
+          const pt = picked.reduce((s, r) => s + (split(r) ? r.paidPoint || 0 : 0), 0);
+          const cb = picked.reduce((s, r) => s + (r.cashbackXp || 0), 0);
+          return (
+            <>
+              <span className="block font-bold text-[#131313]">{cancelTarget.itemName}{cancelTarget.qty > 1 ? ` ×${cancelTarget.qty}` : ""}</span>
+              <span className="block mb-3">
+                {cancelTarget.userName} · {[xp > 0 && `${xp.toLocaleString()} XP`, pt > 0 && `${pt.toLocaleString()} 빙옥`].filter(Boolean).join(" + ") || (cancelTarget.pointOnly ? "0 빙옥" : "0 XP")} 환불
+                {/* 결제 때 돌려준 캐시백은 환불에서 뺀다(app/api/shop/orders) */}
+                {cb > 0 && ` · 캐시백 ${cb.toLocaleString()} XP 회수`}
+              </span>
+              {pool.length > 1 && (
+                <span className="flex items-center gap-2 mb-3">
+                  {/* 칸의 값 = 실제로 돌려줄 개수 — 1 ~ 돌려줄 수 있는 개수로 자른다(지우는 중인 빈칸은 두고, 칸을 떠나면 채운다) */}
+                  <input type="number" min={1} max={pool.length} value={cancelCount}
+                    onChange={(e) => setCancelCount(e.target.value === "" ? "" : String(Math.min(pool.length, Math.max(1, Math.floor(Number(e.target.value) || 0)))))}
+                    onBlur={() => setCancelCount(String(n))} className={numClass} aria-label="개수" />
+                  <span className="tabular-nums">/ {pool.length}개</span>
+                </span>
+              )}
+              {cancelTarget.status === "completed"
+                ? "결제한 XP·빙옥을 돌려주고 디스코드 역할은 봇이 회수합니다."
+                : "결제한 XP·빙옥을 돌려주고 재고를 되돌립니다."}
+            </>
+          );
+        })() : null}
+        onConfirm={() => {
+          if (!cancelTarget) return;
+          const pool: any[] = cancelTarget.pool || [];
+          const n = Math.min(pool.length, Math.max(1, Math.floor(Number(cancelCount) || 0)));
+          processOrder(pool.slice(0, n).map((r) => String(r._id)), cancelTarget.status === "completed" ? "refunded" : "cancelled");
+        }}
         onCancel={() => setCancelTarget(null)}
       />
 
@@ -2244,7 +2317,7 @@ export default function AdminShopPage() {
               className={`${inputClass} mt-4`} />
             <div className="mt-6 flex justify-end gap-2">
               <Btn variant="ghost" onClick={() => setNoteTarget(null)}>닫기</Btn>
-              <Btn onClick={() => processOrder(noteTarget._id, "completed", noteText)}>완료 처리</Btn>
+              <Btn onClick={() => processOrder(noteTarget.ids || [noteTarget._id], "completed", noteText)}>완료 처리</Btn>
             </div>
           </div>
         </div>

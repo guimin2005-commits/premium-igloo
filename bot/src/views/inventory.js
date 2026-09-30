@@ -22,16 +22,21 @@ export async function inventoryView(member) {
       { userId, status: { $in: ["pending", "completed"] }, consumedAt: null }, // 다 쓴 보호막은 목록에서 뺀다
       { status: 1, itemRef: 1, itemId: 1, roleId: 1, itemType: 1, expiresAt: 1 }
     ).lean(),
-    Item.find({}, { name: 1, type: 1, roleId: 1, visible: 1, sortOrder: 1, createdAt: 1 }).sort({ sortOrder: 1, createdAt: 1 }).lean(),
-    ShopItem.find({}, { itemId: 1 }).lean(),
+    // effects · unitSale · durations — ×N 묶음 판정용(ownedItemList)
+    Item.find({}, { name: 1, type: 1, roleId: 1, visible: 1, sortOrder: 1, createdAt: 1, effects: 1 }).sort({ sortOrder: 1, createdAt: 1 }).lean(),
+    ShopItem.find({}, { itemId: 1, type: 1, roleId: 1, unitSale: 1, durations: 1 }).lean(),
   ]);
   const roles = member?.roles?.cache;
   const heldRoles = roles ? [...roles.keys()] : Array.isArray(member?.roles) ? member.roles.map(String) : null;
   const owned = ownedItemList({ purchases, items, shopItems, heldRoles });
 
-  const lines = owned.slice(0, MAX_LINES).map(({ item, expiresAt, pending }) => {
+  // 📌 여러 개 가진 것(1개 단위 상품 · 소모품 — count)은 "**이름** ×N" — 쓰면 줄어드는 것이라 "영구"는 붙이지 않는다(사이트 인벤토리와 같은 표기).
+  //    모두 기간제면 가장 빠른 만료(먼저 쓰이는 것)를 붙인다
+  const lines = owned.slice(0, MAX_LINES).map(({ item, expiresAt, pending, count }) => {
+    const name = `**${esc(item.name) || "아이템"}**`;
+    if (count > 1) return `${name} ×${count}${expiresAt ? ` · ${formatUntil(expiresAt).slice(0, 10)} 까지` : ""}${pending ? " · 지급 대기" : ""}`;
     const until = expiresAt ? `${formatUntil(expiresAt).slice(0, 10)} 까지` : "영구";
-    return `**${esc(item.name) || "아이템"}** · ${until}${pending ? " · 지급 대기" : ""}`;
+    return `${name} · ${until}${pending ? " · 지급 대기" : ""}`;
   });
   if (owned.length > MAX_LINES) lines.push(`외 ${(owned.length - MAX_LINES).toLocaleString("ko-KR")}개`);
 

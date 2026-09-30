@@ -15,11 +15,12 @@ import Notification from "@/models/Notification";
 import SeasonResult from "@/models/SeasonResult";
 import Inquiry from "@/app/models/Inquiry";
 import Apply from "@/app/models/Apply";
+import { unitStacksOf } from "@/lib/itemConsume";
 
 // 📌 관리자 '유저 조회' — 한 유저의 지갑 · 구매 · 지급 · 쿠폰 · 알림 · 문의 · 지원서를 한 번에 묶어 준다.
 //    GET ?q=      검색 — 디스코드 ID 는 정확히, 이름(username · displayName)은 부분 일치. 최대 20명
 //    GET ?userId= 상세 묶음 — 목록마다 최근 50건
-//    조회만 한다(쓰기 없음). 관리자 전용.
+//    조회만 한다(쓰기 없음 — 소모권 1개 사용은 ./consume). 관리자 전용.
 
 const LIMIT = 50;
 const SEARCH_LIMIT = 20;
@@ -93,9 +94,12 @@ async function detail(userId) {
 
   const couponById = new Map(coupons.map((c) => [String(c._id), c]));
   const premiumBy = !passCurrent ? null : user.passUnlocked ? "purchase" : booster === true ? "booster" : null;
+  // 📌 ×N 묶음(1회 소모권 · 소모품) — [{ thing, name, count, pending }]. 구매 탭에서 "1개 사용"(app/api/admin/users/consume)으로 쓴다
+  const stacks = await unitStacksOf(userId).catch((e) => { console.error("소모권 조회 실패:", e); return []; });
 
   return {
     names,
+    stacks,
     user: user
       ? {
           userId: user.userId,

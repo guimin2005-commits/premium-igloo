@@ -76,6 +76,17 @@ export async function findContinuation(p, after = new Date()) {
   }).lean();
 }
 
+// 📌 지급 실패 표시 — 주문 묶음(bundleFilter)이면 묶음의 대기 건 전부에 적는다. 머리 건에만 적으면 나머지 건이 error "" 로
+//    대기열 앞자리(error 오름차순)를 계속 차지해, 틱마다 한 건만 처리하고 25칸을 버려 다른 유저의 지급이 밀린다
+async function markError(p, bundleFilter, error) {
+  if (bundleFilter) {
+    await Purchase.updateMany(bundleFilter, { $set: { error } });
+    return;
+  }
+  p.error = error;
+  await p.save();
+}
+
 // ── 역할 상품 구매 처리 ──────────────────────
 async function processPurchases(guild) {
   // 아이템 유형도 결국 디스코드 역할을 주는 상품이다 — 여기서 빠지면 사도 영영 지급되지 않는다
@@ -86,22 +97,35 @@ async function processPurchases(guild) {
     .sort({ error: 1, createdAt: 1 })
     .limit(25);
 
+  // 📌 주문 묶음 — 1개 단위 상품(여러 개 사면 1개가 한 건)은 역할이 없고 한 결제의 건이 같은 orderId 다.
+  //    같은 유저 · 주문 · 상품의 대기 건을 한 번에 완료하고 DM 은 한 통("이름 ×N"). 25건 한도에 밀린 같은 묶음의 건도 같이 처리된다.
+  //    이번 틱에 이미 처리한 묶음의 다른 건은 건너뛴다 — 안 건너뛰면 "지급 중 취소됨" 분기로 잘못 들어간다.
+  //    역할 건(roleId)과 orderId 가 없는 옛 건은 지금처럼 한 건씩
+  const handled = new Set();
   for (const p of rows) {
+    const bundle = !p.roleId && !!p.orderId;
+    const bundleFilter = bundle
+      ? { userId: p.userId, orderId: p.orderId, itemId: p.itemId, roleId: { $in: ["", null] }, status: "pending" }
+      : null;
+    if (bundle) {
+      const key = `${p.userId}|${p.orderId}|${p.itemId}`;
+      if (handled.has(key)) continue;
+      handled.add(key);
+    }
     try {
       const member = await fetchMember(guild, p.userId);
       if (!member) {
-        p.error = "서버에서 유저를 찾을 수 없습니다.";
-        await p.save();
+        await markError(p, bundleFilter, "서버에서 유저를 찾을 수 없습니다.");
         continue;
       }
       const hadRole = !!p.roleId && member.roles.cache.has(p.roleId);
       if (p.roleId) await member.roles.add(p.roleId, p.itemId === "grant" ? `운영진 지급: ${p.itemName}` : `ARCTIC 구매: ${p.itemName}`);
 
       // 📌 pending 일 때만 completed 로 — 역할을 붙이는 사이 관리자가 취소(환불)했으면 덮어쓰지 않는다
-      const done = await Purchase.updateOne(
-        { _id: p._id, status: "pending" },
-        { $set: { status: "completed", processedAt: new Date(), error: "" } }
-      );
+      const set = { $set: { status: "completed", processedAt: new Date(), error: "" } };
+      const done = bundle
+        ? await Purchase.updateMany(bundleFilter, set)
+        : await Purchase.updateOne({ _id: p._id, status: "pending" }, set);
       if (!done.modifiedCount) {
         // 그 사이 취소됨 — 방금 붙인 역할을 되돌린다 (원래 있던 역할이거나 같은 역할을 주는 다른 살아 있는 구매가 있으면 둔다)
         if (p.roleId && !hadRole) {
@@ -111,19 +135,21 @@ async function processPurchases(guild) {
         console.log(`🛒 지급 중 취소된 구매: ${p.userName} ← ${p.itemName}`);
         continue;
       }
-      console.log(`🛒 역할 지급 완료: ${p.userName} ← ${p.itemName}${p.days > 0 ? ` (${p.days}일)` : ""}${p.renewOf ? " · 연장" : ""}`);
+      // 묶음이면 완료한 개수만큼 "이름 ×N" — 메시지 틀(botMessages)은 그대로, 이름만 바꾼다
+      const n = done.modifiedCount;
+      const itemName = n > 1 ? `${p.itemName} ×${n}` : p.itemName;
+      console.log(`🛒 역할 지급 완료: ${p.userName} ← ${itemName}${p.days > 0 ? ` (${p.days}일)` : ""}${p.renewOf ? " · 연장" : ""}`);
 
       // 본인에게 알린다 — 연장 · 기간제(언제까지) · 영구
       const until = formatUntil(p.expiresAt);
-      if (p.renewOf) sendDm(member, "renewed", { item: p.itemName, days: p.days, until });
-      else if (p.days > 0 && p.expiresAt) sendDm(member, "purchaseGrantedTimed", { item: p.itemName, days: p.days, until });
-      else sendDm(member, "purchaseGranted", { item: p.itemName });
+      if (p.renewOf) sendDm(member, "renewed", { item: itemName, days: p.days, until });
+      else if (p.days > 0 && p.expiresAt) sendDm(member, "purchaseGrantedTimed", { item: itemName, days: p.days, until });
+      else sendDm(member, "purchaseGranted", { item: itemName });
     } catch (e) {
       // 50013(봇 역할보다 위) · 10011(삭제된 역할)은 다시 해도 같다 — 표시만 남기고 pending 은 둔다.
       // failed 로 확정하면 주문 관리의 취소(환불)가 pending 만 받아 환불할 길이 없어지고 보유 판정에서도 빠진다.
       const permanent = e?.code === 50013 || e?.code === 10011;
-      p.error = permanent ? `영구 실패(${e.code}): ${e.message}` : e.message;
-      await p.save();
+      await markError(p, bundleFilter, permanent ? `영구 실패(${e.code}): ${e.message}` : e.message);
       console.error(`🛒 역할 지급 실패 (${p.userName} / ${p.itemName}):`, e.message);
     }
   }
@@ -354,7 +380,16 @@ async function processRefunds(guild) {
     .sort({ error: 1, revokedAt: 1 }) // 실패한 건은 뒤로 — 앞자리 실패 건이 뒤의 회수를 막지 않게
     .limit(50);
 
+  // 📌 환불 묶음 — 1개 단위 상품을 한 번에 여러 개 환불하면(역할 없음 · 같은 orderId · 같은 상품 · 같은 revokedAt) 한 번에 확정하고
+  //    DM 은 한 통("이름 ×N") — 지급(processPurchases)과 같은 묶음. 역할 건 · orderId 없는 옛 건은 한 건씩
+  const handled = new Set();
   for (const p of rows) {
+    const bundle = !p.roleId && !!p.orderId && !!p.revokedAt;
+    if (bundle) {
+      const key = `${p.userId}|${p.orderId}|${p.itemId}|${new Date(p.revokedAt).getTime()}`;
+      if (handled.has(key)) continue;
+      handled.add(key);
+    }
     try {
       const hasRole = p.roleId && ["role", "perk", "item"].includes(p.itemType);
       const member = await fetchMember(guild, p.userId);
@@ -364,19 +399,23 @@ async function processRefunds(guild) {
         if (!holder) await member.roles.remove(p.roleId, `ARCTIC 환불: ${p.itemName}`);
       }
       // 📌 아직 처리 전인 건만 확정 — 봇이 둘 떠 있거나 저장이 겹쳐도 환불 DM 은 한 번만 간다
-      const done = await Purchase.updateOne(
-        { _id: p._id, status: "refunded", roleDetached: { $ne: true } },
-        { $set: { roleDetached: true, error: "" } }
-      );
+      const set = { $set: { roleDetached: true, error: "" } };
+      const done = bundle
+        ? await Purchase.updateMany(
+            { userId: p.userId, orderId: p.orderId, itemId: p.itemId, revokedAt: p.revokedAt, roleId: { $in: ["", null] }, status: "refunded", roleDetached: { $ne: true } },
+            set
+          )
+        : await Purchase.updateOne({ _id: p._id, status: "refunded", roleDetached: { $ne: true } }, set);
       if (!done.modifiedCount) continue;
-      console.log(`↩️ 환불 역할 회수: ${p.userName} → ${p.itemName}`);
+      const itemName = done.modifiedCount > 1 ? `${p.itemName} ×${done.modifiedCount}` : p.itemName;
+      console.log(`↩️ 환불 역할 회수: ${p.userName} → ${itemName}`);
 
       // 환불은 역할이 남아도(다른 구매가 같은 역할을 줌) 사실이라 알린다.
       //   📌 오래된 환불 건(7일 넘음)은 뒤늦게 보내지 않고, 낸 것이 없는 건(운영진 지급 · 패스 보상 회수)은
       //      "결제한 XP · 빙옥을 돌려드렸습니다" 가 틀린 말이라 보내지 않는다 (orders 라우트의 환불 금액 판정과 같은 기준)
       const recent = p.revokedAt && Date.now() - new Date(p.revokedAt).getTime() < 7 * 86400e3;
       const paid = !!p.billed || (p.paidXp || 0) > 0 || (p.paidPoint || 0) > 0 || (p.price || 0) > 0;
-      if (member && recent && paid) sendDm(member, "refunded", { item: p.itemName });
+      if (member && recent && paid) sendDm(member, "refunded", { item: itemName });
     } catch (e) {
       // 50013 · 10011 은 다시 해도 같다 — 큐에서 확정해 빼고 사유를 남긴다 (processDetachments 와 같은 방식)
       const permanent = e?.code === 50013 || e?.code === 10011;

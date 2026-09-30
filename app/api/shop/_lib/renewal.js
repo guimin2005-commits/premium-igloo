@@ -1,4 +1,5 @@
 import Purchase from "@/models/Purchase";
+import { isUnitSale } from "@/lib/unitSale";
 
 // 📌 기간제 연장 · 업그레이드 규칙 — 바로 구매(api/shop/purchase) · 장바구니 결제(api/shop/checkout)가 같은 판정을 쓴다.
 //    화면 판정(app/arctic/owned.ts 의 ownStateOf · renewBaseOf)과 같은 기준이어야 한다.
@@ -27,6 +28,8 @@ export async function liveHoldings(userId, docs) {
 
 // 상품 하나의 판정 — { block: 막은 보유 건 } | { renew: 이어 붙일 보유 건 } | {} (새 구매 · 업그레이드)
 export function planPurchase(doc, days, holdings) {
+  // 📌 1개 단위 상품(lib/unitSale.js)은 1인 1개 제한이 없다 — 늘 새 구매(만료 없음). 가진 만큼 인벤토리에 ×N 으로 쌓인다
+  if (isUnitSale(doc)) return {};
   const id = String(doc._id);
   const live = holdings.filter((p) => String(p.itemId) === id || (!!doc.itemId && p.itemRef === doc.itemId));
   if (!live.length) return {};

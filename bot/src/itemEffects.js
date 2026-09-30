@@ -289,8 +289,11 @@ function ownedItemIds(member, now = Date.now()) {
 //    (방금 산 것 · 방금 환불된 것도 바로 맞게). 사이트 lib/ownedItems.js 의 ownedItems 와 같아야 한다 — 한쪽을 고치면 같이 고칠 것.
 //    보유는 효과와 무관하다 — 기프트카드(physical)도 보유로 센다(효과만 없다).
 //    입력: purchases(이 유저의 구매 건 — consumedAt 도 함께 읽어 올 것) · items(전체 Item, sortOrder · createdAt 순) · shopItems(전체 ShopItem) · heldRoles(디스코드 역할 id, 모르면 null)
-//    반환: [{ item, expiresAt: Date | null(영구), pending }] — items 순서. 같은 아이템은 한 번(기간은 가장 늦게 끝나는 것, 영구가 있으면 영구)
+//    반환: [{ item, expiresAt: Date | null(영구), pending, count }] — items 순서. 같은 아이템은 한 번(기간은 가장 늦게 끝나는 것, 영구가 있으면 영구)
 //          pending 은 그 아이템을 준 구매 건이 전부 지급 대기(pending)일 때만 true
+//          📌 count — ×N 묶음 아이템(아래 stackIds)이면 역할 없는 살아 있는 건 수(기간제 포함 — 기간제부터 쓴다), 아니면 1.
+//             묶음은 사이트 인벤토리(app/api/shop/my-items)와 같다: 무기한이 하나라도 있으면 만료 없음, 모두 기간제면 가장 빠른 만료
+//          shopItems 에 unitSale · type · roleId · durations, items 에 effects 가 있어야 묶음을 안다(views/inventory.js 가 읽는다)
 export function ownedItemList({ purchases, items, shopItems, heldRoles = null, now = Date.now() } = {}) {
   const nowMs = now instanceof Date ? now.getTime() : Number(now);
   const itemById = new Map();
@@ -305,13 +308,35 @@ export function ownedItemList({ purchases, items, shopItems, heldRoles = null, n
   }
   const shopById = new Map((Array.isArray(shopItems) ? shopItems : []).map((s) => [String(s._id), s]));
 
-  const owned = new Map(); // 아이템 id → { exp(ms, 0 = 영구), pending }
+  // 📌 ×N 묶음 아이템 — 사이트 lib/unitSale.js unitThingSet 과 같은 기준(봇 인벤토리는 등록 아이템만 보이므로 아이템 쪽만):
+  //    1개 단위 상품(unitSale · 아이템/꾸미기 · 역할 없음 · 기간제 아님)이 가리키는 아이템 + 역할 없는 소모형 효과 아이템(보호막)
+  const UNIT_TYPES = ["item", "cosmetic"];
+  const stackIds = new Set();
+  for (const s of shopById.values()) {
+    const timedShop = Array.isArray(s.durations) && s.durations.length > 0;
+    if (s.unitSale && s.itemId && UNIT_TYPES.includes(s.type) && !s.roleId && !timedShop) stackIds.add(String(s.itemId));
+  }
+  for (const [id, i] of itemById) {
+    const consumable = (Array.isArray(i.effects) ? i.effects : []).some((e) => EFFECT_TRIGGERS[e?.on]?.kind === "consumable");
+    if (consumable && UNIT_TYPES.includes(i.type) && !i.roleId) stackIds.add(id);
+  }
+
+  const owned = new Map(); // 아이템 id → { exp(ms, 0 = 영구), pending, units: 묶음 건 수, perm: 무기한 묶음 건 있음, first: 가장 빠른 만료 }
   const seenRoles = new Set();
-  const add = (id, exp, pending) => {
-    const cur = owned.get(id);
-    if (!cur) return owned.set(id, { exp, pending });
-    cur.exp = cur.exp === 0 || exp === 0 ? 0 : Math.max(cur.exp, exp);
-    cur.pending = cur.pending && pending;
+  const add = (id, exp, pending, unit = false) => {
+    let cur = owned.get(id);
+    if (!cur) {
+      cur = { exp, pending, units: 0, perm: false, first: 0 };
+      owned.set(id, cur);
+    } else {
+      cur.exp = cur.exp === 0 || exp === 0 ? 0 : Math.max(cur.exp, exp);
+      cur.pending = cur.pending && pending;
+    }
+    if (unit) {
+      cur.units += 1;
+      if (!exp) cur.perm = true;
+      else cur.first = cur.first ? Math.min(cur.first, exp) : exp;
+    }
   };
 
   // ── (A) 구매 건 — 디스코드 역할 유무와 무관 ──
@@ -326,7 +351,7 @@ export function ownedItemList({ purchases, items, shopItems, heldRoles = null, n
       (shop?.itemId && itemById.get(String(shop.itemId))) ||
       null;
     if (!item && !shop && p.roleId) item = itemByRole.get(p.roleId) || null;
-    if (item) add(String(item._id), exp, p.status === "pending");
+    if (item) add(String(item._id), exp, p.status === "pending", stackIds.has(String(item._id)) && !p.roleId && p.itemType !== "physical");
     if (p.roleId && ROLE_LIKE.has(p.itemType)) seenRoles.add(String(p.roleId));
   }
 
@@ -342,7 +367,10 @@ export function ownedItemList({ purchases, items, shopItems, heldRoles = null, n
   const out = [];
   for (const [id, item] of itemById) {
     const o = owned.get(id);
-    if (o) out.push({ item, expiresAt: o.exp ? new Date(o.exp) : null, pending: o.pending });
+    if (!o) continue;
+    // 묶음 — 개수는 묶음 건 수, 만료는 무기한이 있으면 없음 · 모두 기간제면 가장 빠른 것(먼저 쓰이는 것)
+    if (o.units > 0) out.push({ item, expiresAt: o.perm || !o.first ? null : new Date(o.first), pending: o.pending, count: o.units });
+    else out.push({ item, expiresAt: o.exp ? new Date(o.exp) : null, pending: o.pending, count: 1 });
   }
   return out;
 }
@@ -514,26 +542,38 @@ export function perksOf(member) {
   return out;
 }
 
-// ── 소모형 — 연속 출석 보호막 ─────────────────────
+// ── 소모형 — 연속 출석 보호막 등 ─────────────────────
 /**
- * 📌 보호막 하나 소모 — 이 유저의 살아 있는 구매 중 보호막(streakShield) 아이템인 것 하나(먼저 산 것부터)에
- *    consumedAt 을 조건부로 세운다(consumedAt 이 비어 있을 때만 — 두 번 쓰지 않게). 성공하면 그 구매 _id, 없으면 null.
+ * 📌 소모형 효과(effectKey — 예: "streakShield") 아이템 하나 소모 — 이 유저의 살아 있는 구매 중 그 효과가 있는 아이템인 것 하나에
+ *    consumedAt 을 조건부로 세운다. 성공하면 그 구매 _id, 없으면 null.
+ *    사이트 lib/itemConsume.js consumeOne(관리자 1개 사용)과 같은 규칙 — 한쪽을 고치면 같이 고칠 것:
+ *      · 후보: 보유 건(대기 · 완료, 소모 안 됨, 기간 남음, 기프트카드 아님 — ownFilter) 중 역할 없는 것
+ *      · 순서: 만료가 있는 것(먼저 끝나는 것부터) → 먼저 받은 것(createdAt 오름차순). 여러 개(×N)를 가져도 하나씩 줄어든다
+ *      · 갱신: { _id, consumedAt: null, status: 대기 · 완료 } 조건부 — 두 번 쓰지 않고, 읽은 뒤 그 사이 환불 · 취소된 건은 쓰지 않는다
  *    구매 건은 캐시가 아니라 DB 에서 바로 읽는다(방금 산 것 · 방금 쓴 것도 맞게). 역할만 들고 있는 (B) 보유는 소모할 구매가 없어 막지 못한다.
  */
-export async function consumeStreakShield(member) {
+export async function consumeOne(member, effectKey) {
   const userId = member?.id || member?.user?.id;
-  if (!userId) return null;
-  const shieldItems = new Set();
-  for (const [itemId, list] of state.effectsById) if (list.some((e) => e.on === "streakShield")) shieldItems.add(itemId);
-  if (!shieldItems.size) return null;
+  if (!userId || !effectKey) return null;
+  const targets = new Set();
+  for (const [itemId, list] of state.effectsById) if (list.some((e) => e.on === effectKey)) targets.add(itemId);
+  if (!targets.size) return null;
 
   const now = new Date();
-  const rows = await Purchase.find({ userId, ...ownFilter(now) }, { itemRef: 1, itemId: 1, roleId: 1 })
-    .sort({ createdAt: 1 })
-    .lean();
+  const tms = (d) => (d ? new Date(d).getTime() : 0);
+  const rows = (await Purchase.find({ userId, ...ownFilter(now) }, { itemRef: 1, itemId: 1, roleId: 1, expiresAt: 1, createdAt: 1 }).lean())
+    // 역할 건은 쓰면 역할만 남는다 — 소모품 · 1개 단위는 역할이 없다(사이트와 같은 후보)
+    .filter((p) => !p.roleId && targets.has(purchaseItemId(p, state.itemIds, state.shopRef, state.itemByRole)))
+    .sort((a, b) => {
+      const ea = tms(a.expiresAt), eb = tms(b.expiresAt);
+      if (!!ea !== !!eb) return ea ? -1 : 1; // 만료가 있는 것 먼저
+      return (ea - eb) || (tms(a.createdAt) - tms(b.createdAt)) || String(a._id).localeCompare(String(b._id));
+    });
   for (const p of rows) {
-    if (!shieldItems.has(purchaseItemId(p, state.itemIds, state.shopRef, state.itemByRole))) continue;
-    const r = await Purchase.updateOne({ _id: p._id, consumedAt: null }, { $set: { consumedAt: now } });
+    const r = await Purchase.updateOne(
+      { _id: p._id, consumedAt: null, status: { $in: ["pending", "completed"] } },
+      { $set: { consumedAt: now, consumedBy: `bot:${effectKey}` } }
+    );
     if (r.modifiedCount === 1) {
       consumedPids.set(String(p._id), Date.now()); // 다음 캐시 갱신 전까지도 보유에서 빼 둔다
       return String(p._id);
@@ -541,6 +581,9 @@ export async function consumeStreakShield(member) {
   }
   return null;
 }
+
+// 보호막 하나 소모 — attend.js 가 부른다(옛 이름 그대로)
+export const consumeStreakShield = (member) => consumeOne(member, "streakShield");
 
 // 📌 "하루 1번" 자물쇠 — effectDaily.<key> 가 오늘이 아닐 때만 오늘로 바꾸는 조건부 갱신.
 //    키는 "<itemId>:<effectId>". 틱 · 메시지가 겹쳐도 한 번만 통과한다. 통과하면 true.

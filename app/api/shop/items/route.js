@@ -6,6 +6,7 @@ import { denyIfNotAdmin } from "@/lib/apiAuth";
 import { getShopAccess } from "@/lib/shopAccess";
 import { isItemType, itemSnapshot, normalizeIcon, normalizeColor, normalizeDescription } from "@/lib/items";
 import { POINT_RATE } from "@/lib/pointRate";
+import { unitSaleAllowed, clampPerOrder } from "@/lib/unitSale";
 import mongoose from "mongoose";
 import ShopItem from "@/models/ShopItem";
 import Item from "@/models/Item";
@@ -81,10 +82,19 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "역할·권한 상품은 지급할 역할을 선택해야 합니다." }, { status: 400 });
     }
 
+    // 📌 1개 단위 판매(lib/unitSale.js) — 역할 없는 아이템 · 꾸미기만. 연결 아이템이면 위에서 덮어쓴 스냅샷(유형 · 역할)으로 본다.
+    //    켜면 기간제 가격표는 비운다(함께 켤 수 없다). 조건이 안 맞는데 켜서 보내면 조용히 끄지 않고 알린다
+    const roleIdIn = grantsRole ? String(b.roleId || "").trim() : "";
+    const unitSale = !!b.unitSale;
+    if (unitSale && !unitSaleAllowed(type, roleIdIn)) {
+      return NextResponse.json({ success: false, message: "1개 단위 판매는 역할이 없는 아이템 · 꾸미기만 할 수 있습니다." }, { status: 400 });
+    }
+    const maxPerOrder = unitSale ? clampPerOrder(b.maxPerOrder) : 0;
+
     // 📌 기간제 역할 — 기간(일)과 값이 모두 있는 것만 판매 목록에 올린다.
-    //    기프트카드는 기간 개념이 없으므로 무시한다.
+    //    기프트카드 · 1개 단위는 기간 개념이 없으므로 무시한다.
     //    days 0 은 무제한(영구) 옵션이다. 기간 옵션과 나란히 팔 수 있다.
-    const durations = type !== "physical" && Array.isArray(b.durations)
+    const durations = type !== "physical" && !unitSale && Array.isArray(b.durations)
       ? b.durations
           .map((d) => ({ days: Math.max(0, Math.floor(Number(d?.days) || 0)), price: toXp(d?.price) }))
           .filter((d) => d.price > 0)
@@ -93,6 +103,8 @@ export async function POST(request) {
 
     const payload = {
       durations,
+      unitSale,
+      maxPerOrder,
       itemId: linked ? String(linked._id) : "",
       itemImageUrl: linked ? String(linked.imageUrl || "").trim() : "",
       name: b.name.trim(),
@@ -102,7 +114,7 @@ export async function POST(request) {
       icon: normalizeIcon(b.icon),
       color: normalizeColor(b.color),
       type,
-      roleId: grantsRole ? b.roleId.trim() : "",
+      roleId: roleIdIn,
       roleName: grantsRole ? (b.roleName || "").trim() : "",
       price,
       pointOnly,

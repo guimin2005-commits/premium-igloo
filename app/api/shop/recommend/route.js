@@ -70,7 +70,7 @@ export async function GET(request) {
       loadStats(),
       ShopItem.find(
         { active: true },
-        { _id: 1, type: 1, itemId: 1, price: 1, durations: 1, discountPct: 1, discountUntil: 1, pointOnly: 1, stock: 1, soldCount: 1, sortOrder: 1, createdAt: 1, active: 1 }
+        { _id: 1, type: 1, itemId: 1, roleId: 1, unitSale: 1, price: 1, durations: 1, discountPct: 1, discountUntil: 1, pointOnly: 1, stock: 1, soldCount: 1, sortOrder: 1, createdAt: 1, active: 1 }
       ).lean(),
       userId ? UserXp.findOne({ userId }, { _id: 0, level: 1, xp: 1, point: 1 }).lean() : null,
       userId

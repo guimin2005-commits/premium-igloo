@@ -126,6 +126,7 @@ export function Segmented({
   hrefOf,
   className = "",
   disabled = false,
+  disabledValues,
 }: {
   options: SegOption[];
   value: string;
@@ -133,12 +134,15 @@ export function Segmented({
   hrefOf?: (v: string) => string;
   className?: string;
   disabled?: boolean;
+  // 📌 지금 못 고르는 보기 — 흐리게만 그린다(폭 · 칸 수 그대로라 줄이 흔들리지 않는다). 눌림은 onChange 로 그대로 가서 화면이 이유를 알린다
+  disabledValues?: string[];
 }) {
   return (
     <div className={`inline-flex max-w-full overflow-x-auto no-bar p-1 rounded-full bg-[#f2f2f2] ${disabled ? "opacity-50 pointer-events-none" : ""} ${className}`} role="tablist">
       {options.map((o) => {
         const on = value === o.v;
-        const cls = `shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full text-[13px] font-bold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 ${on ? "bg-white text-[#131313] ring-1 ring-black/[0.06]" : "text-[#5a5a5a] hover:text-[#131313]"}`;
+        const off = !on && !!disabledValues?.includes(o.v);
+        const cls = `shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full text-[13px] font-bold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 ${on ? "bg-white text-[#131313] ring-1 ring-black/[0.06]" : off ? "text-[#5a5a5a] opacity-40 cursor-default" : "text-[#5a5a5a] hover:text-[#131313]"}`;
         const inner = (
           <>
             {o.l}
@@ -148,7 +152,7 @@ export function Segmented({
         return hrefOf ? (
           <Link key={o.v} href={hrefOf(o.v)} scroll={false} role="tab" aria-selected={on} className={cls}>{inner}</Link>
         ) : (
-          <button key={o.v} type="button" role="tab" aria-selected={on} onClick={() => onChange?.(o.v)} className={cls}>{inner}</button>
+          <button key={o.v} type="button" role="tab" aria-selected={on} aria-disabled={off || undefined} onClick={() => onChange?.(o.v)} className={cls}>{inner}</button>
         );
       })}
     </div>

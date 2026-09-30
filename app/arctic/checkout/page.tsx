@@ -14,6 +14,10 @@ import ArcticFooter from "../ArcticFooter";
 import ArcticDock from "../ArcticDock";
 import CardArt from "../CardArt";
 import { renewBaseOf, expiryLabel } from "../owned";
+import { isUnitSale, qtyCapOf } from "@/lib/unitSale";
+
+const ORDER_KEY = "iglooShopOrderId";
+const ORDER_TTL = 60 * 60 * 1000;
 
 // 📌 결제 — 장바구니에서 고른 상품을 확인하고 약관 동의 후 결제
 export default function CheckoutPage() {
@@ -36,6 +40,20 @@ export default function CheckoutPage() {
   const [agreeFinal, setAgreeFinal] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  // 📌 주문 id — 같은 결제(상품 · 수량 · 기간이 같은 요청)면 같은 값을 보낸다. 응답을 못 받고 다시 눌러도,
+  //    새로고침 · 다른 탭에서 다시 결제해도 서버가 같은 결제를 두 번 빼지 않는다(app/api/shop/checkout — 1개 단위 상품은 1인 1개 차단이 없다).
+  //    저장소(ORDER_KEY)에 { id, sig: 요청 서명, at } 로 두고, 서명이 같고 1시간 안이면 다시 쓴다. 성공 · 중복 응답이면 지운다
+  const orderIdFor = (sig: string) => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(ORDER_KEY) || "null");
+      if (saved?.sig === sig && typeof saved.id === "string" && Date.now() - Number(saved.at) < ORDER_TTL) return saved.id as string;
+    } catch {}
+    let id = "";
+    try { if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") id = crypto.randomUUID(); } catch {}
+    if (!id) id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+    try { localStorage.setItem(ORDER_KEY, JSON.stringify({ id, sig, at: Date.now() })); } catch {}
+    return id;
+  };
 
   // 쿠폰 — 보유 쿠폰에서 고르거나 코드를 입력 (둘 다 선택 사항)
   const [couponInput, setCouponInput] = useState("");
@@ -70,8 +88,16 @@ export default function CheckoutPage() {
     }).finally(() => setIsLoading(false));
   }, [status, reloadKey]);
 
+  // 📌 수량은 결제 직전에도 한 번 더 맞춘다 — 1개 단위 상품은 1 ~ min(1회 최대, 재고), 나머지는 1(lib/unitSale.js).
+  //    담아 둔 사이 관리자가 1회 최대를 줄였어도 화면 금액과 청구 금액이 같게(서버도 넘으면 400 으로 막는다)
   const rows = useMemo(
-    () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item),
+    () => cart
+      .map((c) => {
+        const item = items.find((i) => i._id === c.itemId);
+        const q = Math.max(1, Math.floor(Number(c.qty) || 1));
+        return { ...c, item, qty: item && isUnitSale(item) ? Math.min(Math.max(1, qtyCapOf(item)), q) : 1 };
+      })
+      .filter((r) => r.item),
     [cart, items]
   );
   // 상품 합계(쿠폰 전, 일반 + 빙옥 전용 — XP 로 친 값). 쿠폰 조건 · 서버의 가격 확인(expectedSubtotal)이 이 값을 본다
@@ -194,19 +220,22 @@ export default function CheckoutPage() {
   const pay = async () => {
     if (!canPay) return;
     setIsPaying(true);
+    const lines = rows.map((r) => ({ itemId: r.itemId, qty: r.qty, days: r.days || 0 }));
+    const orderId = orderIdFor(JSON.stringify([...lines].sort((a, b) => a.itemId.localeCompare(b.itemId) || a.days - b.days)));
     try {
       const res = await fetch("/api/shop/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // 화면에 보이는 줄만 보낸다 — 저장소에 남은 옛 항목(지금은 없는 상품)이 결제 요청에 섞이지 않게
         // pointOnlyIds — 화면이 빙옥 전용으로 본 상품. 보는 사이 바뀌었으면 서버가 409(PRICE_CHANGED)로 돌려보낸다
-        body: JSON.stringify({ items: rows.map((r) => ({ itemId: r.itemId, qty: r.qty, days: r.days || 0 })), contact, couponCode: coupon?.code || "", pointUse: usePoint, expectedSubtotal: subtotal, pointOnlyIds: poRows.map((r) => r.itemId) }),
+        body: JSON.stringify({ orderId, items: lines, contact, couponCode: coupon?.code || "", pointUse: usePoint, expectedSubtotal: subtotal, pointOnlyIds: poRows.map((r) => r.itemId) }),
       });
       const d = await res.json();
       setResult({ ok: !!d.success, message: d.message || (d.success ? "결제가 완료되었습니다." : "결제에 실패했습니다.") });
       if (d.code === "PRICE_CHANGED") { setPointUse(0); setReloadKey((k) => k + 1); }
       if (d.success) {
         try {
+          localStorage.removeItem(ORDER_KEY);
           const paidIds = new Set(cart.map((c) => c.itemId));
           const all: { itemId: string; qty: number }[] = JSON.parse(localStorage.getItem("iglooShopCart") || "[]");
           localStorage.setItem("iglooShopCart", JSON.stringify(all.filter((c) => !paidIds.has(c.itemId))));

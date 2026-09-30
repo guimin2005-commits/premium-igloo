@@ -122,19 +122,41 @@ async function payoutRows(userId, currency, { before, since, limit }) {
   });
 }
 
-const itemLabel = (p) => `${p.itemName || "상품"}${p.days > 0 ? ` (${p.days}일)` : ""}`;
+const itemLabel = (p) => `${p.itemName || "상품"}${p.days > 0 ? ` (${p.days}일)` : ""}${p.n > 1 ? ` ×${p.n}` : ""}`;
 
-// Purchase 결제 — 낸 값이 있는 건만 (시즌 패스 · 관리자 지급 아이템은 0 이라 빠진다)
+// 📌 주문 묶음 키 — 1개 단위 상품은 1개가 한 건이라, 한 결제(orderId)의 같은 상품은 한 줄로 묶는다(lib/orderGroups.js 와 같은 기준).
+//    orderId 가 없는 옛 건은 건마다 한 줄. extra: 묶음을 더 나눌 값(환불은 처리 시각까지 같아야 한 줄)
+const orderKey = (extra = {}) => ({
+  $cond: [
+    { $gt: [{ $ifNull: ["$orderId", ""] }, ""] },
+    { o: "$orderId", i: "$itemId", ...extra },
+    { p: "$_id" },
+  ],
+});
+
+// Purchase 결제 — 낸 값이 있는 건만 (시즌 패스 · 관리자 지급 아이템은 0 이라 빠진다). 한 주문의 같은 상품은 한 줄(합계 · ×N).
+//    📌 한 결제의 건은 createdAt 이 같다(app/api/shop/checkout) — 쪽 넘김(at < before)으로 한 주문이 갈라지지 않는다
 async function purchaseRows(userId, currency, { before, since, limit }) {
   const createdAt = range(before, since);
   const pipe = [
     { $match: { userId, ...(createdAt ? { createdAt } : {}) } },
     { $addFields: { amt: paidOf(currency) } },
+    // 📌 묶은 뒤에 거른다 — ×N 은 산 개수 전부(이 화폐 몫이 0 인 건 — 빙옥을 조금만 쓴 주문의 나머지 건 등 — 도 센다)
+    {
+      $group: {
+        _id: orderKey(),
+        createdAt: { $max: "$createdAt" },
+        amt: { $sum: "$amt" },
+        n: { $sum: 1 },
+        itemName: { $first: "$itemName" },
+        days: { $first: "$days" },
+        renewOf: { $first: "$renewOf" },
+      },
+    },
     { $match: { amt: { $gt: 0 } } },
     { $sort: { createdAt: -1 } },
   ];
   if (limit) pipe.push({ $limit: limit });
-  pipe.push({ $project: { createdAt: 1, amt: 1, itemName: 1, days: 1, renewOf: 1 } });
   const rows = await Purchase.aggregate(pipe);
   return rows.map((p) => ({
     at: p.createdAt,
@@ -159,15 +181,27 @@ async function refundRows(userId, currency, { before, since, limit }) {
     },
     {
       $match: {
-        amt: { $gt: 0 },
         ...(at ? { at } : {}),
         $nor: [{ adminNote: "관리자 테스트 초기화", billed: { $ne: true } }],
       },
     },
+    // 한 요청으로 돌려준 같은 주문 · 같은 상품은 한 줄 — 관리자 주문 처리(app/api/shop/orders)가 처리 시각을 하나로 적는다.
+    //    구매 줄처럼 묶은 뒤에 거른다(×N 은 돌려준 개수 전부)
+    {
+      $group: {
+        _id: orderKey({ s: "$status", t: "$at" }),
+        at: { $max: "$at" },
+        amt: { $sum: "$amt" },
+        n: { $sum: 1 },
+        status: { $first: "$status" },
+        itemName: { $first: "$itemName" },
+        days: { $first: "$days" },
+      },
+    },
+    { $match: { amt: { $gt: 0 } } },
     { $sort: { at: -1 } },
   ];
   if (limit) pipe.push({ $limit: limit });
-  pipe.push({ $project: { at: 1, amt: 1, status: 1, itemName: 1, days: 1 } });
   const rows = await Purchase.aggregate(pipe);
   return rows.map((p) => ({
     at: p.at,

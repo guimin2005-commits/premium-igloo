@@ -166,6 +166,8 @@ export async function POST(request) {
     try {
       purchase = await Purchase.create({
         _id: purchaseId,
+        // 한 건짜리 주문 — 주문 내역 · 원장이 장바구니 결제와 같은 방식으로 묶는다
+        orderId: String(purchaseId),
         userId,
         userName: session.user.name || "",
         itemId: String(item._id),
@@ -272,14 +274,16 @@ export async function GET() {
       return NextResponse.json({ success: false, data: [] }, { status: 401 });
     }
     await connectToDatabase();
-    // 📌 최근 50건 + 그 밖의 살아 있는 보유 건(대기 · 완료, 기간이 없거나 남음) — 화면의 보유 판정(app/arctic/owned.ts)이 이 목록을 쓴다.
-    //    최근 건만 주면 구매가 50건을 넘은 유저는 오래된 영구 구매가 빠져 이미 산 상품이 미보유로 보인다.
-    //    최근 50건 밖의 건은 모두 그보다 오래됐으므로 뒤에 붙여도 최신순이 유지된다
+    // 📌 최근 200건 + 그 밖의 살아 있는 보유 건(대기 · 완료, 소모 안 됨, 기간이 없거나 남음) — 화면의 보유 판정(app/arctic/owned.ts)이 이 목록을 쓴다.
+    //    최근 건만 주면 구매가 많은 유저는 오래된 영구 구매가 빠져 이미 산 상품이 미보유로 보인다.
+    //    1개 단위 상품은 1개가 한 건이라 건 수가 빨리 는다 — 최근 창을 넓히고, 다 쓴 소모권(consumedAt)은 보유 창을 채우지 않게 뺀다.
+    //    최근 창 밖의 건은 모두 그보다 오래됐으므로 뒤에 붙여도 최신순이 유지된다
     const [recent, live] = await Promise.all([
-      Purchase.find({ userId }).sort({ createdAt: -1 }).limit(50).lean(),
+      Purchase.find({ userId }).sort({ createdAt: -1 }).limit(200).lean(),
       Purchase.find({
         userId,
         status: { $in: ["pending", "completed"] },
+        consumedAt: null,
         $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
       }).sort({ createdAt: -1 }).limit(500).lean(),
     ]);

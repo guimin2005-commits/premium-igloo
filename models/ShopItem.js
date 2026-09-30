@@ -27,6 +27,11 @@ const ShopItemSchema = new mongoose.Schema({
     type: [{ days: Number, price: Number }],
     default: [],
   },
+  // 📌 1개 단위 판매(수량 판매 — "1회 소모권" 같은 것) — 켜면 한 번에 여러 개를 사고 인벤토리에 ×N 으로 쌓인다(1인 1개 제한 없음).
+  //    역할이 없는 아이템 · 꾸미기만 켤 수 있고 기간제(durations)와 함께 켤 수 없다 — 규칙은 lib/unitSale.js 한 곳(상품 저장 API 가 최종 판정).
+  //    maxPerOrder: 한 결제에서 살 수 있는 최대 개수(1~99). 1개 단위가 아니면 0(= 1개)
+  unitSale: { type: Boolean, default: false },
+  maxPerOrder: { type: Number, default: 0 },
   // 📌 시즌이 바뀔 때 디스코드 역할만 떼고 사이트 인벤토리에는 그대로 남길지.
   //    표시용 역할 상품에만 켠다. 권한 상품(perk)은 역할이 곧 디스코드 기능이라
   //    떼면 기능이 사라지므로 켜면 안 된다. 기본값 false — 실수로 권한이 날아가지 않게.

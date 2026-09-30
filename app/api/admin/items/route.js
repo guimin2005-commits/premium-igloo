@@ -5,7 +5,8 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { denyIfNotAdmin } from "@/lib/apiAuth";
 import mongoose from "mongoose";
 import { normalizeItemPayload, itemSnapshot } from "@/lib/items";
-import { normalizeEffects, TRIGGER_OF } from "@/lib/itemEffects";
+import { normalizeEffects, hasConsumable } from "@/lib/itemEffects";
+import { unitSaleAllowed } from "@/lib/unitSale";
 import Item from "@/models/Item";
 import ShopItem from "@/models/ShopItem";
 import SeasonPass from "@/models/SeasonPass";
@@ -62,10 +63,19 @@ export async function GET(request) {
     if (deny) return deny;
     await connectToDatabase();
     const withUsage = new URL(request.url).searchParams.get("withUsage") === "1";
-    const rows = await Item.find({}).sort({ sortOrder: 1, createdAt: 1 }).lean();
+    const [rows, unitLinked] = await Promise.all([
+      Item.find({}).sort({ sortOrder: 1, createdAt: 1 }).lean(),
+      ShopItem.distinct("itemId", { unitSale: true, itemId: { $ne: "" } }),
+    ]);
+    const unitSet = new Set(unitLinked.map(String));
 
     // 효과 — 아이템 문서에 든 값을 화면 모양(effects 객체)으로 바꿔 붙인다
-    for (const r of rows) attachEffects(r);
+    for (const r of rows) {
+      attachEffects(r);
+      // 📌 여러 개 지급할 수 있는 아이템인가(수동 지급의 수량 칸) — 역할 없는 아이템 · 꾸미기 중 소모형이거나 1개 단위 상품이 가리키는 것.
+      //    인벤토리 ×N 묶음(lib/unitSale.js unitThingSet)과 같은 기준. 수동 지급 API 가 다시 판정한다
+      r.stackable = unitSaleAllowed(r.type, r.roleId) && (hasConsumable(r) || unitSet.has(String(r._id)));
+    }
 
     if (withUsage) {
       const usage = await ShopItem.aggregate([
@@ -106,8 +116,13 @@ export async function POST(request) {
     //    역할 기준 보유(lib/ownedItems.js (B))로 다시 '보유'가 되어 소모가 되살아난다. 효과를 안 보냈으면(표시 토글) 저장된 효과로 본다
     if (data.roleId) {
       const list = ef ? ef.effects : id && mongoose.isValidObjectId(id) ? (await Item.findById(id, { effects: 1 }).lean())?.effects : [];
-      if ((Array.isArray(list) ? list : []).some((e) => TRIGGER_OF[e?.on]?.kind === "consumable")) {
+      if (hasConsumable({ effects: list })) {
         return NextResponse.json({ success: false, message: "소모품에는 역할을 연결할 수 없습니다." }, { status: 400 });
+      }
+      // 📌 1개 단위로 파는 상품이 이 아이템을 가리키면 역할을 붙이지 않는다 — 여러 개를 가진 사람에게 역할 하나만 붙어
+      //    쓰고 나도 역할이 남는다(소모품과 같은 이유). 상품의 판매 방식을 먼저 바꾸게 한다(lib/unitSale.js)
+      if (id && mongoose.isValidObjectId(id) && (await ShopItem.exists({ itemId: id, unitSale: true }))) {
+        return NextResponse.json({ success: false, message: "1개 단위로 파는 상품이 있어 역할을 연결할 수 없습니다." }, { status: 400 });
       }
     }
     let doc;
@@ -118,6 +133,8 @@ export async function POST(request) {
       //    기프트카드가 되면 기간제 가격표는 뜻이 없으므로 같이 비운다 (상품 POST 경로와 같은 규칙)
       const snap = itemSnapshot(doc);
       if (doc.type === "physical") snap.durations = [];
+      // 1개 단위가 안 되는 유형(기프트카드 등)으로 바뀌면 연결 상품의 1개 단위도 끈다 — 상품 저장 API 와 같은 규칙(lib/unitSale.js)
+      if (!unitSaleAllowed(doc.type, doc.roleId)) { snap.unitSale = false; snap.maxPerOrder = 0; }
       await ShopItem.updateMany({ itemId: id }, { $set: snap });
     } else {
       // 순서를 안 보냈으면 맨 뒤에 붙인다 — 순서는 상점 관리 목록에서 끌어서 정한다(아래 PATCH)

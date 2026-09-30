@@ -102,8 +102,11 @@ const ShopItemSchema = new mongoose.Schema({
   itemId: { type: String, default: "" },         // 아이템 등록(Item) 참조 — "" 이면 직접 설정한 상품
   roleId: { type: String, default: "" },
   type: { type: String, default: "role" },
+  // 1개 단위 판매 · 기간제 가격표 — 봇은 읽기만(/인벤토리 ×N 묶음 판정 — itemEffects.js ownedItemList). 사이트 models/ShopItem.js 가 원천
+  unitSale: { type: Boolean, default: false },
+  durations: { type: [mongoose.Schema.Types.Mixed], default: [] },
 });
-export const ShopItem = mongoose.models.ShopItem || mongoose.model("ShopItem", ShopItemSchema);
+export const ShopItem =mongoose.models.ShopItem || mongoose.model("ShopItem", ShopItemSchema);
 
 // 레벨 대시보드에서 관리하는 채널/카테고리별 XP 정책
 const ChannelConfigSchema = new mongoose.Schema({
@@ -238,9 +241,14 @@ const PurchaseSchema = new mongoose.Schema({
   // 📌 연장 구매 — 이어 붙인 원래 구매 _id("" 이면 새 구매) · 연장분이 시작되는 시각(표시용) (models/Purchase.js 와 같아야 한다)
   renewOf: { type: String, default: "" },
   startsAt: { type: Date, default: null },
-  // 📌 소모형 아이템(연속 출석 보호막)을 쓴 시각 — 세워지면 보유에서 빠진다(itemEffects.js · 사이트 lib/ownedItems.js).
-  //    attend.js 가 consumedAt 이 비어 있을 때만 세운다(조건부 — 두 번 쓰지 않게). models/Purchase.js 와 같아야 한다
+  // 📌 소모형 아이템(연속 출석 보호막 · 1회 소모권)을 쓴 시각 — 세워지면 보유에서 빠진다(itemEffects.js · 사이트 lib/ownedItems.js).
+  //    itemEffects.js consumeOne(attend.js 보호막) · 사이트 관리자 1개 사용이 consumedAt 이 비어 있을 때만 세운다(조건부 — 두 번 쓰지 않게).
+  //    consumedBy: 누가 썼는지("bot:<효과 키>" · "admin:<이름>"). models/Purchase.js 와 같아야 한다
   consumedAt: { type: Date, default: null },
+  consumedBy: { type: String, default: "" },
+  // 📌 주문 묶음 — 한 결제(장바구니 · 수동 지급 한 사람분)의 건들이 같은 값. 1개 단위 상품은 1개가 한 건이라
+  //    지급 큐(features/grantQueue.js)가 이 값 + 상품으로 한 번에 완료하고 DM 을 한 통만 보낸다. "" 이면 옛 건. models/Purchase.js 와 같아야 한다
+  orderId: { type: String, default: "" },
   // 📌 사이트 보유 — 소유는 그대로 두고 디스코드 역할 표기만 뗀 상태.
   //    시즌이 바뀌면 디스코드가 역할로 지저분해지므로 표기를 사이트로 옮긴다.
   //    만료(expired)와는 다르다 — 물건은 계속 갖고 있고 인벤토리에도 그대로 뜬다.

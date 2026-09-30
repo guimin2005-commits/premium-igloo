@@ -12,7 +12,8 @@ import ArcticStoreBar from "../../ArcticStoreBar";
 import ArcticFooter from "../../ArcticFooter";
 import ProductCard from "../../ProductCard";
 import CardArt from "../../CardArt";
-import { ownStateOf, renewBaseOf, renewPickOf, expiryLabel } from "../../owned";
+import { ownStateOf, renewBaseOf, renewPickOf, expiryLabel, ownedCountOf } from "../../owned";
+import { isUnitSale, maxPerOrderOf, qtyCapOf } from "@/lib/unitSale";
 
 // 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천
 const TypeBadge = ({ type, className = "" }: { type: string; className?: string }) => (
@@ -46,6 +47,8 @@ export default function ItemDetailPage() {
   const [pickedDays, setPickedDays] = useState<number | null>(null);
   const [wish, setWish] = useState<string[]>([]);
   const [toast, setToast] = useState("");
+  // 📌 1개 단위 상품의 수량 — 고르기 전엔 null(장바구니에 담겨 있으면 그 수량, 아니면 1)
+  const [qtyPick, setQtyPick] = useState<number | null>(null);
   // 📌 다른 상품 — 서버 추천(/api/shop/recommend?related=, lib/shopRecommend related)의 id 4개. 오기 전 · 실패면 null(지금 규칙으로 그린다)
   const [relIds, setRelIds] = useState<string[] | null>(null);
 
@@ -145,6 +148,20 @@ export default function ItemDetailPage() {
   const owned = ownStateOf(orders, item) === "forever";
   const renewing = renewBase != null && days > 0;
   const inCart = cart.some((c) => c.itemId === item._id);
+  // 📌 1개 단위(lib/unitSale.js) — 1부터 min(1회 최대, 재고)까지. 장바구니에 담긴 상품이면 그 수량에서 시작하고, 바꾸면 장바구니 줄도 같이 바꾼다
+  const unit = isUnitSale(item);
+  const perOrder = maxPerOrderOf(item);
+  const cap = Math.max(1, qtyCapOf(item));
+  const cartQty = Math.floor(Number(cart.find((c) => c.itemId === item._id)?.qty) || 1);
+  const qty = unit ? Math.min(cap, Math.max(1, qtyPick ?? cartQty)) : 1;
+  const heldCount = unit && isLoggedIn ? ownedCountOf(orders, item) : 0;
+  const stepQty = (d: number) => {
+    const next = qty + d;
+    if (next < 1) return;
+    if (next > cap) return flash(item.stock >= 0 && item.stock < next ? (item.stock > 0 ? `재고 ${item.stock}개` : "품절") : `한 번에 ${perOrder}개까지`);
+    setQtyPick(next);
+    if (inCart) saveCart(cart.map((c) => (c.itemId === item._id ? { ...c, qty: next } : c)));
+  };
   // 📌 장바구니 개수 — 장바구니 화면과 같은 기준: 목록에 없는(삭제·숨김) 상품 · 같은 상품 중복은 세지 않는다.
   //    목록을 못 받았으면 저장된 그대로 센다
   const cartSeen = new Set<string>();
@@ -158,7 +175,8 @@ export default function ItemDetailPage() {
   const wished = wish.includes(item._id);
   // 📌 빙옥도 함께 낼 수 있다(결제 화면에서 고른다) — XP + 빙옥 × 1,000 으로 판정. 빙옥 전용 상품은 빙옥만(affordFor)
   const po = isPointOnly(item);
-  const affordable = myXp != null && affordFor(item, myXp, myPoint ?? 0)(sp);
+  // 1개 단위는 고른 수량만큼 — 빙옥 전용은 1개 값(올림) × 수량(결제 · 장바구니와 같은 계산)
+  const affordable = myXp != null && (po ? shownPrice(item, sp) * qty <= (myPoint ?? 0) : affordFor(item, myXp, myPoint ?? 0)(sp * qty));
   // 빙옥 전용인데 빙옥이 모자라면 담기 · 구매를 잠근다 (지갑을 읽은 뒤에만)
   const pointShort = isLoggedIn && po && myXp != null && !affordable;
   const cartLocked = soldOut || owned || (pointShort && !inCart);
@@ -179,12 +197,14 @@ export default function ItemDetailPage() {
     if (owned) return flash("이미 구매하신 상품입니다");
     if (!inCart && pointShort) return flash("빙옥이 부족합니다");
     if (inCart) {
+      // 보이던 수량(장바구니 줄 값)을 그대로 둔다 — 빼자마자 1로 돌아가 다시 담으면 1개만 담기지 않게
+      if (unit) setQtyPick(qty);
       saveCart(cart.filter((c) => c.itemId !== item._id));
       flash("장바구니에서 삭제했습니다");
       return;
     }
-    saveCart([...cart, { itemId: item._id, qty: 1, days }]);
-    flash(renewing ? "기간 연장을 장바구니에 담았습니다" : "장바구니에 담았습니다");
+    saveCart([...cart, { itemId: item._id, qty, days }]);
+    flash(renewing ? "기간 연장을 장바구니에 담았습니다" : unit && qty > 1 ? `${qty}개를 장바구니에 담았습니다` : "장바구니에 담았습니다");
   };
 
   // 이 상품과 아래 '다른 상품' 카드의 하트가 같이 쓴다
@@ -200,7 +220,7 @@ export default function ItemDetailPage() {
   const openBuy = () => {
     if (!isLoggedIn) return signIn("discord");
     if (pointShort) return flash("빙옥이 부족합니다");
-    try { localStorage.setItem("iglooShopCheckout", JSON.stringify([{ itemId: item._id, qty: 1, days }])); } catch {}
+    try { localStorage.setItem("iglooShopCheckout", JSON.stringify([{ itemId: item._id, qty, days }])); } catch {}
     router.push("/arctic/checkout");
   };
 
@@ -289,7 +309,9 @@ export default function ItemDetailPage() {
                   v: item.stock < 0 ? "제한 없음" : item.stock === 0 ? "품절" : `${item.stock}개 남음`,
                   accent: item.stock >= 0 && item.stock > 0 && item.stock <= 5,
                 },
-                { l: "구매 제한", v: "1인 1개" },
+                // 1개 단위는 한 번에 살 수 있는 개수, 나머지는 1인 1개
+                { l: "구매 제한", v: unit ? `1회 최대 ${perOrder}개` : "1인 1개" },
+                ...(heldCount > 0 ? [{ l: "보유 수량", v: `${heldCount.toLocaleString()}개` }] : []),
                 {
                   l: "지급 방식",
                   v: item.type === "physical"
@@ -298,7 +320,30 @@ export default function ItemDetailPage() {
                     ? "결제 후 인벤토리에 보관"
                     : "결제 후 30초 이내 자동 지급",
                 },
-              ].map((row, i) => (
+                // 📌 수량 · 합계(1개 단위만) — 조절 칸은 폭 고정(숫자 칸 w-9, 99까지 두 자리)이라 숫자가 바뀌어도 줄이 흔들리지 않는다.
+                //    합계는 따로 한 줄 — 조절 칸 옆에 두면 자릿수가 늘 때 조절 칸이 밀린다. 빙옥 전용은 1개 값(올림) × 수량(결제와 같은 계산)
+                ...(unit
+                  ? [
+                      {
+                        l: "수량",
+                        v: (
+                          <span className="inline-flex items-center h-8 rounded-full border border-[#ededed] overflow-hidden">
+                            <button type="button" onClick={() => stepQty(-1)} aria-label="수량 빼기"
+                              className={`w-8 h-8 flex items-center justify-center transition-colors ${qty <= 1 ? "text-[#d4d4d4] cursor-default" : "text-[#131313] hover:bg-[#f2f2f2]"}`}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden><path strokeLinecap="round" d="M5 12h14" /></svg>
+                            </button>
+                            <span className="w-9 text-center text-[13px] font-black tabular-nums">{qty}</span>
+                            <button type="button" onClick={() => stepQty(1)} aria-label="수량 더하기"
+                              className={`w-8 h-8 flex items-center justify-center transition-colors ${qty >= cap ? "text-[#d4d4d4]" : "text-[#131313] hover:bg-[#f2f2f2]"}`}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+                            </button>
+                          </span>
+                        ),
+                      },
+                      { l: "합계", v: <span className="tabular-nums">{(shownPrice(item, sp) * qty).toLocaleString()} {priceUnit(item)}</span> },
+                    ]
+                  : []),
+              ].map((row: { l: string; v: React.ReactNode; accent?: boolean }, i) => (
                 <div key={i} className="flex items-center justify-between gap-4 px-4 py-3">
                   <span className="text-[12px] font-bold text-[#8a8a8a] shrink-0">{row.l}</span>
                   <span className={`text-[13px] font-bold text-right ${row.accent ? "text-[#e91e3f]" : "text-[#131313]"}`}>{row.v}</span>

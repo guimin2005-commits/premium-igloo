@@ -13,13 +13,17 @@ import UserCoupon from "@/models/UserCoupon";
 import ShopLock from "@/models/ShopLock";
 import { salePrice, couponDiscount, couponError, couponClaimFilter, couponReleaseUpdate, isTimed, durationPrice } from "@/lib/shopPricing";
 import { getLevelByXp } from "@/lib/leveling";
-import { planPayment } from "@/lib/shopPay";
+import { planPayment, splitByPrice } from "@/lib/shopPay";
 import { denyIfMaintenance } from "@/lib/apiAuth";
 import { getPerks } from "@/lib/itemPerks";
 import { cashbackOf } from "@/lib/itemEffects";
 import { logWallet } from "@/lib/wallet";
 import { liveHoldings, planPurchase, timingOf } from "../_lib/renewal";
+import { isUnitSale, maxPerOrderOf } from "@/lib/unitSale";
 import mongoose from "mongoose";
+
+// 결제 화면이 만든 주문 id — crypto.randomUUID() 또는 그 대체값(영문 · 숫자 · - _ 8~64자)
+const ORDER_ID_RE = /^[\w-]{8,64}$/;
 
 // 📌 금액 나누기(쿠폰 몫 · 빙옥 전용 줄 · 일반 줄의 XP/빙옥 · 줄별 기록)는 lib/shopPay.js planPayment 한 곳에서 정한다 —
 //    결제 화면(app/arctic/checkout)이 같은 함수로 미리 보여 준다.
@@ -47,6 +51,25 @@ export async function POST(request) {
 
     const body = await request.json();
     const { items, contact, couponCode } = body;
+
+    // 📌 같은 결제가 두 번 들어오지 않게 — 결제 화면이 연 순간 정한 orderId 를 보낸다(다시 시도해도 같은 값).
+    //    1개 단위 상품은 1인 1개 차단이 없어서, 응답을 못 받고 다시 누르면 실제로 두 번 빠진다. 이미 있으면
+    //    돈을 빼지 않고 성공으로 답한다(화면은 장바구니를 비운다). 상품 확인보다 먼저 본다 — 그 사이 상품이 내려가도 첫 결제는 성공으로.
+    //    동시에 온 두 요청은 아래 자물쇠 안에서 한 번 더 본다. 옛 화면처럼 안 보내면 서버가 새로 정한다(중복 확인 없음)
+    const orderId = typeof body?.orderId === "string" && ORDER_ID_RE.test(body.orderId) ? body.orderId : new mongoose.Types.ObjectId().toString();
+    const duplicate = async () => {
+      if (!(await Purchase.exists({ userId, orderId }))) return null;
+      const w = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
+      const remain = { xp: w?.xp ?? 0, point: w?.point ?? 0 };
+      return NextResponse.json({
+        success: true,
+        duplicate: true,
+        message: "이미 처리된 결제입니다.",
+        data: { orderId, remain, remainXp: remain.xp, remainPoint: remain.point },
+      });
+    };
+    const dupEarly = await duplicate();
+    if (dupEarly) return dupEarly;
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ success: false, message: "장바구니가 비어 있습니다." }, { status: 400 });
     }
@@ -83,10 +106,15 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "수령 정보를 입력해주세요." }, { status: 400 });
     }
 
-    // 📌 모든 상품은 1인 1개 — 수량 초과 · 무제한 기보유 차단 (기간제 보유는 연장 · 업그레이드로 받는다 — 아래)
+    // 📌 수량 — 1개 단위 상품(lib/unitSale.js)은 1회 최대(maxPerOrder)까지, 나머지는 1인 1개(무제한 기보유 차단은 아래 planPurchase —
+    //    기간제 보유는 연장 · 업그레이드로 받는다). 관리자가 1회 최대를 줄였으면 여기서 막고 화면이 이 문구를 그대로 보여 준다
     for (const d of docs) {
-      if (wanted.get(String(d._id)) > 1) {
-        return NextResponse.json({ success: false, message: `"${d.name}"은(는) 1인 1개만 구매할 수 있습니다.` }, { status: 400 });
+      const max = maxPerOrderOf(d);
+      if (wanted.get(String(d._id)) > max) {
+        return NextResponse.json({
+          success: false,
+          message: isUnitSale(d) ? `"${d.name}"은(는) 한 번에 ${max}개까지 살 수 있습니다.` : `"${d.name}"은(는) 1인 1개만 구매할 수 있습니다.`,
+        }, { status: 400 });
       }
     }
     // 같은 아이템을 가리키는 상품 둘(예: 7일 · 30일 상품)을 함께 사면 값만 두 번 빠진다 — 효과 · 인벤토리는 하나로 합쳐진다
@@ -105,6 +133,10 @@ export async function POST(request) {
     if (!lock) {
       return NextResponse.json({ success: false, message: "처리 중인 결제가 있습니다. 잠시 후 다시 시도해 주세요." }, { status: 409 });
     }
+
+    // 📌 자물쇠 안에서 한 번 더 — 동시에 보낸 같은 결제의 둘째 요청은 여기서 성공으로 돌려보낸다
+    const dupLocked = await duplicate();
+    if (dupLocked) return dupLocked;
 
     // 📌 기보유 판정 — 살아 있는 보유(같은 상품 · 같은 아이템)만 본다. 무제한 보유는 막고,
     //    기간제만 가졌으면 기간제는 연장(가장 늦은 만료 뒤에 이어 붙임) · 무제한은 업그레이드로 받는다 (_lib/renewal.js — 바로 구매와 같은 규칙)
@@ -249,12 +281,20 @@ export async function POST(request) {
     //       빙옥 전용 건은 paidXp 0 · paidPoint 제 빙옥, 일반 건은 뺀 XP · 빙옥을 판매가 비율로 나눈 몫 —
     //       건별 합계가 차감액과 정확히 같다. 환불(app/api/shop/orders)이 이 값을 그대로 돌려준다.
     //    _id 를 미리 정해 두어, 넣다 만 경우 그 건들만 골라 지울 수 있게 한다.
+    //    📌 한 결제의 건은 orderId · createdAt 이 모두 같다 — 주문 내역 · 원장이 orderId + 상품으로 한 줄에 묶고,
+    //       원장의 쪽 넘김(같은 시각은 한 쪽에)에서 한 주문이 두 쪽으로 갈라지지 않게
+    //    📌 캐시백은 결제 전체 XP 로 한 번 계산(버림)해 건마다 낸 XP 비율로 나눈다 — 여러 개를 살 때 건마다 버려 덜 돌려주지 않게.
+    //       건별 몫의 합이 전체와 같고, 환불은 그 건 몫만 회수한다(app/api/shop/orders)
+    const createdAt = new Date();
+    const cashShares = splitByPrice(cashbackOf(pay.lines.reduce((s, l) => s + (l.paidXp || 0), 0), cashPct), pay.lines.map((l) => l.paidXp || 0));
     const rows = units.map(({ d }, i) => {
       const days = daysOf.get(String(d._id)) || 0;
       const timing = timingOf(plans.get(String(d._id)), days);
       const line = pay.lines[i];
       return {
         _id: new mongoose.Types.ObjectId(),
+        orderId,
+        createdAt,
         userId,
         userName: session.user.name || "",
         itemId: String(d._id),
@@ -268,8 +308,8 @@ export async function POST(request) {
         paidXp: line.paidXp,
         paidPoint: line.paidPoint,
         billed: true,
-        // 이 건에 돌려줄 캐시백 — 이 건에서 실제로 낸 XP 의 % (버림). 지급에 실패하면 아래에서 0 으로 되돌린다
-        cashbackXp: cashbackOf(line.paidXp, cashPct),
+        // 이 건에 돌려줄 캐시백 — 결제 전체 캐시백의 이 건 몫(위 cashShares). 지급에 실패하면 아래에서 0 으로 되돌린다
+        cashbackXp: cashShares[i] || 0,
         days,
         // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다. 연장이면 이어 붙인 건의 만료부터(renewOf · startsAt)
         expiresAt: timing.expiresAt,
@@ -314,7 +354,8 @@ export async function POST(request) {
           currency: "xp",
           amount: cashbackXp,
           kind: "cashback",
-          label: `캐시백 · ${rows.length > 1 ? `${rows[0].itemName} 외 ${rows.length - 1}건` : rows[0].itemName}`,
+          // 같은 상품 여러 개는 "이름 ×N" — 상품이 여럿이면 "첫 상품 외 N건"(상품 수 기준)
+          label: `캐시백 · ${docs.length > 1 ? `${rows[0].itemName} 외 ${docs.length - 1}건` : rows.length > 1 ? `${rows[0].itemName} ×${rows.length}` : rows[0].itemName}`,
           refId: String(rows[0]._id),
           meta: { pct: cashPct, purchaseIds: rows.filter((r) => r.cashbackXp > 0).map((r) => String(r._id)) },
         });
@@ -353,7 +394,7 @@ export async function POST(request) {
       // subtotal · discount · total 은 XP 기준. usedPoint 는 뺀 빙옥 전부(빙옥 전용 몫 pointOnlyPoint 포함), chargedXp 는 뺀 XP.
       // charged 는 옛 필드 — 한쪽으로만 냈을 때의 그 화폐 값. 섞어 냈으면 XP 몫이다(usedPoint · chargedXp 를 본다)
       data: {
-        count: rows.length, subtotal, discount, total, payMethod,
+        orderId, count: rows.length, subtotal, discount, total, payMethod,
         charged: payMethod === "point" ? pointUse : chargedXp,
         usedPoint: pointUse, chargedXp, pointOnlyPoint: pay.pointOnlyPoint,
         // 돌려받은 캐시백 XP(remain 에 이미 들어 있다) · 그때의 캐시백 %

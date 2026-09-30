@@ -4,6 +4,7 @@
 
 import { isItemType } from "@/lib/items";
 import { POINT_RATE, xpToPoint, pointToXp } from "@/lib/pointRate";
+import { unitSaleAllowed, clampPerOrder, DEFAULT_PER_ORDER } from "@/lib/unitSale";
 
 export type ProductForm = {
   id: string;
@@ -36,6 +37,10 @@ export type ProductForm = {
   price7: string;
   price30: string;
   priceInf: string;
+  // 📌 1개 단위 판매(lib/unitSale.js) — 기간제(timed)와 함께 켤 수 없다. 판매 방식 세 갈래(saleModeOf)로 고른다
+  unitSale: boolean;
+  // 1회 최대 수량(1~99) — 1개 단위일 때만 저장된다
+  maxPerOrder: string;
 };
 
 export const EMPTY_PRODUCT_FORM: ProductForm = {
@@ -63,7 +68,27 @@ export const EMPTY_PRODUCT_FORM: ProductForm = {
   price7: "",
   price30: "",
   priceInf: "",
+  unitSale: false,
+  maxPerOrder: String(DEFAULT_PER_ORDER),
 };
+
+// 📌 판매 방식 — 영구 보유 · 기간제 · 1개 단위(수량 판매). 세 칸 고정(고를 수 없는 칸도 자리를 지킨다)
+export type SaleMode = "forever" | "timed" | "unit";
+export const SALE_MODES: { v: SaleMode; l: string }[] = [
+  { v: "forever", l: "영구 보유" },
+  { v: "timed", l: "기간제" },
+  { v: "unit", l: "1개 단위" },
+];
+export const saleModeOf = (f: ProductForm | null | undefined): SaleMode => (f?.unitSale ? "unit" : f?.timed ? "timed" : "forever");
+// 1개 단위로 팔 수 있는 폼인가 — 역할 없는 아이템 · 꾸미기만(연결 아이템이면 그 아이템의 유형 · 역할)
+export const unitSaleOk = (f: ProductForm | null | undefined) => !!f && unitSaleAllowed(f.type, f.roleId);
+// 판매 방식 바꾸기 — 1개 단위를 못 고르는 폼이면 그대로 둔다(부르는 쪽이 알림을 띄운다)
+export const setSaleMode = (f: ProductForm, mode: SaleMode): ProductForm => {
+  if (mode === "unit" && !unitSaleOk(f)) return f;
+  return { ...f, timed: mode === "timed", unitSale: mode === "unit" };
+};
+// 지급할 역할 고르기 — 역할이 생기면 1개 단위는 끈다(역할은 여러 개 가질 수 없다)
+export const pickRole = (f: ProductForm, roleId: string): ProductForm => ({ ...f, roleId, unitSale: roleId ? false : f.unitSale });
 
 // 폼 소스 — 직접 설정 | 등록된 아이템
 export const SOURCE_OPTIONS = [
@@ -110,10 +135,12 @@ export const formFromShopItem = (it: any): ProductForm => ({
   stockBase: String(it.stock ?? -1),
   sortOrder: String(it.sortOrder || 0),
   active: it.active !== false,
-  timed: Array.isArray(it.durations) && it.durations.length > 0,
+  timed: !it.unitSale && Array.isArray(it.durations) && it.durations.length > 0,
   price7: toField(it.durations?.find((d: any) => d.days === 7)?.price, !!it.pointOnly),
   price30: toField(it.durations?.find((d: any) => d.days === 30)?.price, !!it.pointOnly),
   priceInf: toField(it.durations?.find((d: any) => d.days === 0)?.price, !!it.pointOnly),
+  unitSale: !!it.unitSale,
+  maxPerOrder: String(it.unitSale ? clampPerOrder(it.maxPerOrder || DEFAULT_PER_ORDER) : DEFAULT_PER_ORDER),
 });
 
 // 📌 빙옥 전용 켜기 · 끄기 — 입력해 둔 값은 같은 값어치로 바꿔 둔다(XP → 빙옥은 올림, 빙옥 → XP 는 ×1,000)
@@ -174,12 +201,15 @@ const autoPointOnly = (f: ProductForm, v: string): ProductForm =>
   f.id || f.type === v ? f : v === "physical" ? setPointOnly(f, true) : f.type === "physical" ? setPointOnly(f, false) : f;
 export const pickType = (f: ProductForm, v: string): ProductForm => {
   const base = autoPointOnly(f, v);
+  const roleId = v === "physical" || v === "cosmetic" ? "" : f.roleId;
   return {
     ...base,
     type: v,
-    roleId: v === "physical" || v === "cosmetic" ? "" : f.roleId,
+    roleId,
     timed: v === "physical" ? false : f.timed,
     detachOnSeason: v === "physical" || v === "perk" || v === "cosmetic" ? false : f.detachOnSeason,
+    // 1개 단위는 역할 없는 아이템 · 꾸미기만 — 다른 유형으로 옮기면 끈다
+    unitSale: f.unitSale && unitSaleAllowed(v, roleId),
   };
 };
 
@@ -202,6 +232,8 @@ export const applyItem = (f: ProductForm, item: any): ProductForm => {
     roleName: item?.roleName || "",
     detachOnSeason: type === "role" ? !!item?.detachOnSeason : false,
     timed: type === "physical" ? false : f.timed,
+    // 역할이 연결된 아이템 · 1개 단위가 안 되는 유형이면 끈다
+    unitSale: f.unitSale && unitSaleAllowed(type, item?.roleId || ""),
   };
 };
 
@@ -213,6 +245,9 @@ export const unlinkItem = (f: ProductForm): ProductForm => ({ ...f, itemId: "", 
 export const toPayload = (f: ProductForm, roleName: string) => ({
   ...f,
   pointOnly: !!f.pointOnly,
+  // 1개 단위 — 못 고르는 폼(역할 · 유형)이면 끈다. 기간제 가격표는 buildDurations 가 비운다(timed 가 꺼져 있다)
+  unitSale: !!f.unitSale && unitSaleOk(f),
+  maxPerOrder: f.unitSale ? clampPerOrder(f.maxPerOrder) : 0,
   price: String(toXpValue(f.price, !!f.pointOnly) || ""),
   roleName: roleName || f.roleName || "",
   durations: buildDurations(f).map((d) => ({ ...d, price: toXpValue(String(d.price), !!f.pointOnly) })),

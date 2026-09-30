@@ -5,7 +5,8 @@ import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import ArcticStoreBar from "../ArcticStoreBar";
 import CardArt from "../CardArt";
-import { basePrice, salePrice, durationLabel, isPointOnly, priceText } from "@/lib/shopPricing";
+import { basePrice, salePrice, durationLabel, isPointOnly, priceText, shownPrice, priceUnit } from "@/lib/shopPricing";
+import { isUnitSale, maxPerOrderOf, qtyCapOf } from "@/lib/unitSale";
 import { pointToXp } from "@/lib/pointRate";
 import { planPayment } from "@/lib/shopPay";
 import { ITEM_TYPE_LABEL, itemTypeColor } from "@/lib/items";
@@ -66,18 +67,38 @@ export default function CartPage() {
 
   // 📌 목록에 없는(삭제·숨김) 상품 · 같은 상품 중복은 장바구니에서 뺀다 — 목록엔 없는데 배지만 "1" 로 남던 원인.
   //    목록을 제대로 받았을 때만 정리한다 (실패로 장바구니를 날리지 않게). 저장은 위 저장 effect 가 한다.
+  //    수량은 1개 단위 상품만 1 ~ min(1회 최대, 재고) — 1개 단위가 꺼졌거나 1회 최대가 줄었으면 거기에 맞춰 줄인다(lib/unitSale.js)
   useEffect(() => {
     if (!cartLoaded || !validIds) return;
     setCart((prev) => {
       const seen = new Set<string>();
+      let changed = false;
       const next = prev.filter((c) => {
         if (!c || !validIds.has(String(c.itemId)) || seen.has(String(c.itemId))) return false;
         seen.add(String(c.itemId));
         return true;
+      }).map((c) => {
+        const it = items.find((i) => String(i._id) === String(c.itemId));
+        const q = Math.floor(Number(c.qty) || 1);
+        const fit = isUnitSale(it) ? Math.min(Math.max(1, qtyCapOf(it)), Math.max(1, q)) : 1;
+        if (fit === c.qty) return c;
+        changed = true;
+        return { ...c, qty: fit };
       });
-      return next.length === prev.length ? prev : next;
+      return next.length === prev.length && !changed ? prev : next;
     });
-  }, [cartLoaded, validIds]);
+  }, [cartLoaded, validIds, items]);
+
+  const [toast, setToast] = useState("");
+  const flash = (t: string) => { setToast(t); setTimeout(() => setToast((cur) => (cur === t ? "" : cur)), 1800); };
+  // 1개 단위 수량 조절 — 끝에 닿으면 알린다(1회 최대 · 재고)
+  const stepQty = (item: any, cur: number, d: number) => {
+    const next = cur + d;
+    if (next < 1) return;
+    const cap = Math.max(1, qtyCapOf(item));
+    if (next > cap) return flash(item.stock >= 0 && item.stock < next ? (item.stock > 0 ? `재고 ${item.stock}개` : "품절") : `한 번에 ${maxPerOrderOf(item)}개까지`);
+    setCart((prev) => prev.map((c) => (c.itemId === item._id ? { ...c, qty: next } : c)));
+  };
 
   const rows = useMemo(
     () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item),
@@ -147,7 +168,8 @@ export default function CartPage() {
 
         <div className="flex items-baseline justify-between gap-4 mb-8">
           <h1 className="text-3xl md:text-4xl font-black tracking-tighter">
-            장바구니 {rows.length > 0 && <span className="text-[#e91e3f]">{rows.length}</span>}
+            {/* 개수는 수량 합 — 위 장바구니 배지와 같은 기준 */}
+            장바구니 {rows.length > 0 && <span className="text-[#e91e3f]">{rows.reduce((n, r) => n + (r.qty || 1), 0)}</span>}
           </h1>
         </div>
 
@@ -180,7 +202,7 @@ export default function CartPage() {
                 </button>
                 <div className="flex items-center gap-3">
                   {picked.length > 0 && picked.length < rows.length && (
-                    <span className="hidden sm:inline text-[11px] font-bold text-[#e91e3f]">선택한 {picked.length}개만 결제</span>
+                    <span className="hidden sm:inline text-[11px] font-bold text-[#e91e3f]">선택한 {picked.reduce((n, r) => n + (r.qty || 1), 0)}개만 결제</span>
                   )}
                   {picked.length > 0 && picked.length < rows.length && (
                     <button onClick={() => setCart((prev) => prev.filter((c) => !selected.includes(c.itemId)))}
@@ -197,8 +219,40 @@ export default function CartPage() {
                   const list = basePrice(r.item, r.days);
                   const discounted = sp < list;
                   const renew = isRenewal(orders, r.item, r.days);
+                  // 📌 1개 단위 — 줄 값은 판매가 × 수량(빙옥 전용은 1개 값(올림) × 수량 — 결제와 같은 계산).
+                  //    값 칸은 1회 최대 수량일 때의 값 폭을 미리 잡아 둔다(보이지 않는 글자) — 수량을 바꿔 자릿수가 늘어도 칸 · 이름이 밀리지 않게
+                  const unit = isUnitSale(r.item);
+                  const q = r.qty || 1;
+                  const lineText = (xp: number, n: number) => `${(shownPrice(r.item, xp) * n).toLocaleString()} ${priceUnit(r.item)}`;
+                  const capQ = unit ? Math.max(1, qtyCapOf(r.item)) : 1;
+                  // 줄 합계(1회 최대 폭을 미리 잡은 칸) · 수량 조절 — PC 는 오른쪽 칸, 폰은 아래 한 줄(아래 참고)에 같은 것을 둔다
+                  const lineTotal = unit && (
+                    <>
+                      <div className="grid justify-items-end text-base font-black text-[#131313] tabular-nums">
+                        <span aria-hidden className="col-start-1 row-start-1 invisible">{lineText(sp, capQ)}</span>
+                        <span className="col-start-1 row-start-1">{lineText(sp, q)}</span>
+                      </div>
+                      {discounted && <div className="text-[11px] text-[#a3a3a3] line-through tabular-nums">{lineText(list, q)}</div>}
+                    </>
+                  );
+                  // 수량 조절 — 폭 고정(숫자 칸 w-7, 99까지 두 자리)
+                  const stepper = unit && (
+                    <span className="inline-flex items-center h-7 rounded-full border border-[#ededed] overflow-hidden">
+                      <button type="button" onClick={() => stepQty(r.item, q, -1)} aria-label="수량 빼기"
+                        className={`w-7 h-7 flex items-center justify-center transition-colors ${q <= 1 ? "text-[#d4d4d4] cursor-default" : "text-[#131313] hover:bg-[#f2f2f2]"}`}>
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden><path strokeLinecap="round" d="M5 12h14" /></svg>
+                      </button>
+                      <span className="w-7 text-center text-[12px] font-black tabular-nums">{q}</span>
+                      <button type="button" onClick={() => stepQty(r.item, q, 1)} aria-label="수량 더하기"
+                        className={`w-7 h-7 flex items-center justify-center transition-colors ${q >= capQ ? "text-[#d4d4d4]" : "text-[#131313] hover:bg-[#f2f2f2]"}`}>
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+                      </button>
+                    </span>
+                  );
                   return (
-                    <div key={r.itemId} className={`p-5 flex gap-4 items-center transition-colors ${on ? "" : "bg-[#f2f2f2]"}`}>
+                    // 📌 flex-wrap(폰만) — 1개 단위 줄은 합계 · 수량 조절을 아래 한 줄(basis-full)로 내린다. 오른쪽 칸에 두면 1회 최대 폭을
+                    //    잡은 합계 칸이 375px 에서 이름을 두세 글자로 줄인다. PC(sm~)는 한 줄 그대로
+                    <div key={r.itemId} className={`p-5 flex flex-wrap sm:flex-nowrap gap-4 items-center transition-colors ${on ? "" : "bg-[#f2f2f2]"}`}>
                       <button onClick={() => toggleOne(r.itemId)} aria-label="선택" className="shrink-0">
                         <span className={`w-[18px] h-[18px] rounded-md border flex items-center justify-center transition-colors ${
                           on ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#ededed]"
@@ -222,20 +276,36 @@ export default function CartPage() {
                         {r.item.description && (
                           <p className="text-[11px] text-[#8a8a8a] truncate mt-0.5">{r.item.description}</p>
                         )}
+                        {unit && <p className="text-[11px] font-bold text-[#8a8a8a] tabular-nums truncate mt-0.5">개당 {priceText(r.item, sp)}</p>}
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="text-base font-black text-[#131313] tabular-nums">{priceText(r.item, sp)}</div>
-                        {discounted && <div className="text-[11px] text-[#a3a3a3] line-through tabular-nums">{priceText(r.item, list)}</div>}
+                        {unit ? (
+                          <div className="hidden sm:block">
+                            {lineTotal}
+                            <div className="mt-2">{stepper}</div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-base font-black text-[#131313] tabular-nums">{priceText(r.item, sp)}</div>
+                            {discounted && <div className="text-[11px] text-[#a3a3a3] line-through tabular-nums">{priceText(r.item, list)}</div>}
+                          </>
+                        )}
                         <button onClick={() => removeItem(r.itemId)}
-                          className="mt-2 text-[11px] font-bold text-[#a3a3a3] hover:text-[#d01634] transition-colors">
+                          className={`${unit ? "sm:mt-2" : "mt-2"} text-[11px] font-bold text-[#a3a3a3] hover:text-[#d01634] transition-colors`}>
                           삭제
                         </button>
                       </div>
+                      {/* 폰 — 썸네일 줄 아래에 수량 조절(왼쪽, 썸네일과 같은 시작선) · 합계(오른쪽) */}
+                      {unit && (
+                        <div className="sm:hidden basis-full min-w-0 flex items-center justify-between gap-3 pl-[34px]">
+                          <span className="shrink-0">{stepper}</span>
+                          <div className="min-w-0 text-right">{lineTotal}</div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-              <p className="mt-4 text-[11px] text-[#8a8a8a]">모든 상품은 1인 1개만 구매할 수 있어 수량은 조절되지 않습니다.</p>
             </div>
 
             {/* 우 — 요약 */}
@@ -244,7 +314,7 @@ export default function CartPage() {
                 <h2 className="text-sm font-black text-[#131313] mb-5">주문 요약</h2>
 
                 <div className="space-y-2.5 text-[13px] mb-4">
-                  <div className="flex justify-between"><span className="text-[#5a5a5a]">선택한 상품</span><span className="font-bold tabular-nums">{picked.length}개</span></div>
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">선택한 상품</span><span className="font-bold tabular-nums">{picked.reduce((n, r) => n + (r.qty || 1), 0)}개</span></div>
                   {(!hasPO || normal.length > 0) && (
                     <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 금액</span><span className="font-bold tabular-nums">{listTotal.toLocaleString()} XP</span></div>
                   )}
@@ -289,6 +359,13 @@ export default function CartPage() {
           </div>
         )}
       </section>
+
+      {/* 토스트 — 수량 끝에 닿았을 때 */}
+      {toast && (
+        <div key={toast} className="fixed top-20 left-1/2 -translate-x-1/2 z-[150] px-5 py-3 bg-[#131313] text-white rounded-full shadow-lg text-[12px] font-bold whitespace-nowrap">
+          {toast}
+        </div>
+      )}
       <ArcticFooter />
       <ArcticDock />
     </div>

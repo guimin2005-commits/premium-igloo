@@ -25,11 +25,19 @@ const PurchaseSchema = new mongoose.Schema({
   // 📌 지갑에서 실제로 빠졌는지. 관리자가 무료로 사던 시절 기록에도 paidXp 가 적혀 있어서,
   //    관리자 테스트 초기화(app/api/xp/reset)는 이 표시가 있는 건만 돌려준다 (없으면 공짜 XP 가 생긴다)
   billed: { type: Boolean, default: false },
-  // 📌 캐시백(아이템 효과 shopCashback)으로 돌려준 XP — 결제 뒤 이 건의 paidXp × 캐시백 %(버림). 환불 · 취소 때 이만큼 회수한다
+  // 📌 캐시백(아이템 효과 shopCashback)으로 돌려준 XP — 결제 뒤 이 건의 몫. 장바구니 결제는 결제 전체 XP × 캐시백 %(버림)를
+  //    건마다 낸 XP 비율로 나눠 적는다(여러 개를 사도 한 번에 계산한 값과 같게). 환불 · 취소 때 이만큼 회수한다
   cashbackXp: { type: Number, default: 0 },
-  // 📌 소모형 아이템(연속 출석 보호막 — 효과 streakShield)을 쓴 시각. 있으면 보유에서 빠진다(lib/ownedItems.js · 봇 사본 둘 다).
-  //    봇(attend)이 { consumedAt: null } 조건부 갱신으로 한 번만 세운다. bot/src/db.js 의 Purchase 스키마에도 같은 칸이 있어야 한다
+  // 📌 소모형 아이템(연속 출석 보호막 · 1회 소모권)을 쓴 시각. 있으면 보유에서 빠진다(lib/ownedItems.js · 봇 사본 둘 다).
+  //    { consumedAt: null } 조건부 갱신으로 한 번만 세운다 — 봇(attend · itemEffects consumeOne) · 관리자 1개 사용(lib/itemConsume.js).
+  //    bot/src/db.js 의 Purchase 스키마에도 같은 칸이 있어야 한다
   consumedAt: { type: Date, default: null },
+  // 📌 누가 썼는지 — "bot:<효과 키>"(봇 자동 소모) · "admin:<관리자 이름>"(관리자 유저 조회의 1개 사용). "" 이면 옛 기록
+  consumedBy: { type: String, default: "" },
+  // 📌 주문 묶음 — 한 결제(장바구니 결제 · 수동 지급 한 사람분)의 건들이 같은 값을 가진다. 1개 단위 상품은 1개가 한 건이라
+  //    주문 내역 · 원장 · 관리자 주문 목록 · 봇 지급 DM 이 이 값 + 상품(itemId)으로 한 줄로 묶는다. "" 이면 옛 건(한 건이 한 줄).
+  //    장바구니 결제는 화면이 보낸 값으로 같은 결제가 두 번 들어오지 않게 막는다(app/api/shop/checkout). bot/src/db.js 에도 같은 칸
+  orderId: { type: String, default: "" },
   // 📌 기간제 역할 — days가 0이면 영구. 지급 시각 기준으로 expiresAt을 세우고,
   //    기간이 지나면 봇이 역할을 회수하며 status를 expired로 바꾼다.
   days: { type: Number, default: 0 },
@@ -57,5 +65,7 @@ const PurchaseSchema = new mongoose.Schema({
 
 // 📌 상점 추천 집계(app/api/shop/recommend) — 최근 N일 · 구매로 세는 상태만 최신순으로 읽는다
 PurchaseSchema.index({ createdAt: -1, status: 1 });
+// 📌 결제 중복 확인(같은 orderId 가 이미 있나) — 장바구니 결제가 자물쇠 안에서 한 번 읽는다
+PurchaseSchema.index({ userId: 1, orderId: 1 });
 
 export default mongoose.models.Purchase || mongoose.model("Purchase", PurchaseSchema);

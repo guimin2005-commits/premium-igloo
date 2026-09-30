@@ -1,4 +1,5 @@
 import { durationOptions } from "@/lib/shopPricing";
+import { isUnitSale } from "@/lib/unitSale";
 
 // 📌 보유 판정 — 서버(api/shop/purchase · checkout 의 _lib/renewal.js)의 1인 1개 · 연장 규칙과 같은 기준.
 //    대기 · 완료이면서 기간이 남은 구매만 보유로 본다(만료 · 환불 · 취소, 기간이 지났는데 아직 완료인 건은 제외).
@@ -11,8 +12,10 @@ const liveOf = (orders: any[], item: any) =>
   item ? orders.filter((o) => isLiveOwn(o) && (o.itemId === item._id || (!!item.itemId && o.itemRef === item.itemId))) : [];
 
 // 📌 보유 상태 — "none" 보유 없음 · "timed" 기간제만 보유(기간제를 사면 연장, 무제한을 사면 업그레이드) · "forever" 무제한 보유(더 살 수 없음)
+//    📌 1개 단위 상품(lib/unitSale.js)은 가져도 늘 "none" — 1인 1개 제한이 없어 더 살 수 있다(서버 planPurchase 와 같다). 개수는 ownedCountOf
 export type OwnState = "none" | "timed" | "forever";
 export const ownStateOf = (orders: any[], item: any): OwnState => {
+  if (isUnitSale(item)) return "none";
   const live = liveOf(orders, item);
   if (!live.length) return "none";
   return live.some((o) => !o.expiresAt) ? "forever" : "timed";
@@ -53,12 +56,16 @@ export const expiryLabel = (ms: number) => {
 // 상품 하나를 보유했는가(기간제 포함) — 상세 화면용
 export const ownsItem = (orders: any[], item: any) => liveOf(orders, item).length > 0;
 
-// 보유한 상품 id 모음(기간제 포함) — 목록 화면(찜 · 홈 추천)용
+// 📌 가진 개수 — 1개 단위 상품의 "보유 N개"(살아 있는 건 수. 같은 아이템을 수동 지급 · 패스로 받은 것도 센다)
+export const ownedCountOf = (orders: any[], item: any) => liveOf(orders, item).length;
+
+// 보유한 상품 id 모음(기간제 포함) — 목록 화면(찜 · 홈 추천)용. 1개 단위 상품은 넣지 않는다(가져도 더 살 수 있다)
 export const ownedIdsOf = (orders: any[], items: any[]) => {
   const live = orders.filter(isLiveOwn);
   const ids = new Set<string>(live.map((o) => String(o.itemId)));
   const refs = new Set<string>(live.map((o) => o.itemRef).filter(Boolean));
   for (const it of items) if (it?.itemId && refs.has(it.itemId)) ids.add(String(it._id));
+  for (const it of items) if (isUnitSale(it)) ids.delete(String(it._id));
   return ids;
 };
 

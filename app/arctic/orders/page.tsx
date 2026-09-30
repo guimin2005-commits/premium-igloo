@@ -7,6 +7,7 @@ import ArcticStoreBar from "../ArcticStoreBar";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 import { ITEM_TYPE_LABEL } from "@/lib/items";
+import { groupOrders, orderSummary } from "@/lib/orderGroups";
 
 const STATUS_META: Record<string, { label: string; cls: string; desc: string }> = {
   pending: { label: "처리 대기", cls: "bg-[#fdf3e3] text-[#a8763a]", desc: "지급·발송을 준비하고 있습니다" },
@@ -47,16 +48,18 @@ export default function OrdersPage() {
     }).finally(() => setIsLoading(false));
   }, [status]);
 
+  // 📌 주문 묶음 — 한 결제의 같은 상품(1개 단위 여러 개)은 한 줄 "수량 N"(lib/orderGroups.js). 상태로 거른 뒤 묶는다
   const shown = useMemo(
-    () => (filter ? orders.filter((o) => o.status === filter) : orders),
+    () => groupOrders(filter ? orders.filter((o) => o.status === filter) : orders),
     [orders, filter]
   );
+  const groups = useMemo(() => groupOrders(orders), [orders]);
   // 실제로 낸 값 — 빙옥을 섞어 낸 건은 XP 몫만 XP 합계에 (옛 건은 결제 기록이 없어 price)
   const paidXpOf = (o: any) => (o.billed || o.paidXp > 0 || o.paidPoint > 0 ? o.paidXp || 0 : o.price || 0);
   const totalSpent = orders.filter((o) => !REFUNDED.includes(o.status)).reduce((n, o) => n + paidXpOf(o), 0);
   // 📌 빙옥으로 적을 건 — 빙옥 전용 상품(o.pointOnly — 늘 빙옥, 0 이어도)이거나 XP 없이 빙옥만 낸 건
   const inPoint = (o: any) => !!o.pointOnly || (!(paidXpOf(o) > 0) && o.paidPoint > 0);
-  const pendingCount = orders.filter((o) => o.status === "pending").length;
+  const pendingCount = groupOrders(orders.filter((o) => o.status === "pending")).length;
 
   const chip = (active: boolean) =>
     `px-3.5 py-1.5 rounded-full text-[12px] font-bold border transition-colors ${
@@ -94,7 +97,7 @@ export default function OrdersPage() {
         {orders.length > 0 && (
           <div className="grid grid-cols-3 bg-white rounded-2xl border border-[#ededed] divide-x divide-[#ededed] mb-6 overflow-hidden">
             {[
-              { n: orders.length.toLocaleString(), l: "전체 주문" },
+              { n: groups.length.toLocaleString(), l: "전체 주문" },
               { n: pendingCount.toLocaleString(), l: "처리 대기", accent: pendingCount > 0 },
               { n: totalSpent.toLocaleString(), l: "사용한 XP" },
             ].map((s, i) => (
@@ -133,6 +136,7 @@ export default function OrdersPage() {
           <div className="bg-white rounded-2xl border border-[#ededed] overflow-hidden divide-y divide-[#ededed]">
             {shown.map((o) => {
               const meta = STATUS_META[o.status] || STATUS_META.pending;
+              const sum = orderSummary(o);
               return (
                 <div key={o._id} className="p-5">
                   <div className="flex items-start justify-between gap-4 mb-2">
@@ -142,7 +146,13 @@ export default function OrdersPage() {
                         <span className="text-[10px] font-bold text-[#8a8a8a]">{TYPE_LABEL[o.itemType] || "상품"}</span>
                       </div>
                       <h3 className="text-sm font-bold text-[#131313] truncate">{o.itemName}</h3>
-                      <p className="text-[11px] text-[#a3a3a3] mt-0.5">{fmtDate(o.createdAt)}</p>
+                      {/* 여러 개 산 줄 — 수량과 쓴 · 돌려받은 개수. 한 개짜리 소모권은 썼으면 "사용함" */}
+                      <p className="text-[11px] text-[#a3a3a3] mt-0.5 tabular-nums">
+                        {fmtDate(o.createdAt)}
+                        {o.qty > 1 && ` · 수량 ${o.qty}`}
+                        {sum && ` · ${sum}`}
+                        {o.qty === 1 && o.consumedAt && " · 사용함"}
+                      </p>
                     </div>
                     <div className="text-right shrink-0">
                       <div className={`text-base font-black tabular-nums ${REFUNDED.includes(o.status) ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>
