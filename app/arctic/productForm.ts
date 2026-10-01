@@ -36,9 +36,13 @@ export type ProductForm = {
   stockBase: string;
   sortOrder: string;
   active: boolean;
+  // 📌 기간 판매 — timed: 7일 · 30일 기간을 판다. withInf: 기간과 나란히 무제한도 판다(timed 일 때만 뜻이 있다).
+  //    판매 방식(saleModeOf): 무제한 = 둘 다 꺼짐 · 기간제 = timed · 기간제 + 무제한 = timed + withInf
   timed: boolean;
+  withInf: boolean;
   price7: string;
   price30: string;
+  // 기간제 + 무제한일 때 무제한 가격. 무제한만 팔 때는 price(정가)가 그 값이다
   priceInf: string;
   // 📌 1개 단위 판매(lib/unitSale.js) — 기간제(timed)와 함께 켤 수 없다. 판매 방식 세 갈래(saleModeOf)로 고른다
   unitSale: boolean;
@@ -69,6 +73,7 @@ export const EMPTY_PRODUCT_FORM: ProductForm = {
   sortOrder: "",
   active: true,
   timed: false,
+  withInf: false,
   price7: "",
   price30: "",
   priceInf: "",
@@ -76,20 +81,27 @@ export const EMPTY_PRODUCT_FORM: ProductForm = {
   maxPerOrder: String(DEFAULT_PER_ORDER),
 };
 
-// 📌 판매 방식 — 영구 보유 · 기간제 · 1개 단위(수량 판매). 세 칸 고정(고를 수 없는 칸도 자리를 지킨다)
-export type SaleMode = "forever" | "timed" | "unit";
+// 📌 판매 방식 — 무제한 · 기간제 · 기간제 + 무제한 · 1개 단위(수량 판매). 네 칸 고정(고를 수 없는 칸도 자리를 지킨다)
+//    무제한 = 정가 한 값(durations 비움) · 기간제 = 7일 · 30일만 · 기간제 + 무제한 = 7일 · 30일 + 무제한(days 0)
+export type SaleMode = "forever" | "timed" | "both" | "unit";
 export const SALE_MODES: { v: SaleMode; l: string }[] = [
-  { v: "forever", l: "영구 보유" },
+  { v: "forever", l: "무제한" },
   { v: "timed", l: "기간제" },
+  { v: "both", l: "기간제 + 무제한" },
   { v: "unit", l: "1개 단위" },
 ];
-export const saleModeOf = (f: ProductForm | null | undefined): SaleMode => (f?.unitSale ? "unit" : f?.timed ? "timed" : "forever");
+export const saleModeOf = (f: ProductForm | null | undefined): SaleMode =>
+  f?.unitSale ? "unit" : f?.timed ? (f.withInf ? "both" : "timed") : "forever";
 // 1개 단위로 팔 수 있는 폼인가 — 역할 없는 아이템 · 꾸미기만(연결 아이템이면 그 아이템의 유형 · 역할)
 export const unitSaleOk = (f: ProductForm | null | undefined) => !!f && unitSaleAllowed(f.type, f.roleId);
-// 판매 방식 바꾸기 — 1개 단위를 못 고르는 폼이면 그대로 둔다(부르는 쪽이 알림을 띄운다)
+// 판매 방식 바꾸기 — 1개 단위를 못 고르는 폼이면 그대로 둔다(부르는 쪽이 알림을 띄운다).
+//    무제한 값은 정가(무제한만) ↔ 무제한 칸(기간제 + 무제한)을 오가므로, 옮겨 갈 칸이 비어 있으면 넣어 둔 값을 옮겨 준다
 export const setSaleMode = (f: ProductForm, mode: SaleMode): ProductForm => {
   if (mode === "unit" && !unitSaleOk(f)) return f;
-  return { ...f, timed: mode === "timed", unitSale: mode === "unit" };
+  const next: ProductForm = { ...f, timed: mode === "timed" || mode === "both", withInf: mode === "both", unitSale: mode === "unit" };
+  if (mode === "both" && !String(f.priceInf ?? "").trim() && !f.timed) next.priceInf = f.price;
+  if ((mode === "forever" || mode === "unit") && !String(f.price ?? "").trim() && f.timed && f.withInf) next.price = f.priceInf;
+  return next;
 };
 // 지급할 역할 고르기 — 역할이 생기면 1개 단위는 끈다(역할은 여러 개 가질 수 없다)
 export const pickRole = (f: ProductForm, roleId: string): ProductForm => ({ ...f, roleId, unitSale: roleId ? false : f.unitSale });
@@ -116,6 +128,12 @@ const toXpValue = (v: string, pointOnly: boolean) => {
   return pointOnly ? pointToXp(n) : n;
 };
 
+// 저장된 상품의 기간 옵션 — 값이 있는 것만. 기간(1일 이상) · 무제한(days 0)
+type SavedDuration = { days?: number; price?: number };
+const savedDurations = (it: { durations?: SavedDuration[] } | null | undefined): SavedDuration[] => (Array.isArray(it?.durations) ? it.durations : []);
+const timedDurations = (it: { durations?: SavedDuration[] } | null | undefined) => savedDurations(it).filter((d) => Number(d?.days) > 0 && Number(d?.price) > 0);
+const infDuration = (it: { durations?: SavedDuration[] } | null | undefined) => savedDurations(it).find((d) => Number(d?.days) === 0 && Number(d?.price) > 0) || null;
+
 // 저장된 상품 → 폼. 기존 기간·시즌 설정을 입력칸으로 되돌린다 (안 채우면 수정 저장할 때마다 조용히 꺼진다)
 //    빙옥 전용이면 가격 칸은 빙옥으로 되돌린다
 export const formFromShopItem = (it: any): ProductForm => ({
@@ -141,10 +159,12 @@ export const formFromShopItem = (it: any): ProductForm => ({
   stockBase: String(it.stock ?? -1),
   sortOrder: String(it.sortOrder || 0),
   active: it.active !== false,
-  timed: !it.unitSale && Array.isArray(it.durations) && it.durations.length > 0,
+  // 기간(7일 · 30일)이 하나라도 있어야 기간제 — 무제한(days 0) 하나만 있는 옛 값은 무제한 판매로 읽는다(정가가 그 값)
+  timed: !it.unitSale && timedDurations(it).length > 0,
+  withInf: !it.unitSale && timedDurations(it).length > 0 && infDuration(it) != null,
   price7: toField(it.durations?.find((d: any) => d.days === 7)?.price, !!it.pointOnly),
   price30: toField(it.durations?.find((d: any) => d.days === 30)?.price, !!it.pointOnly),
-  priceInf: toField(it.durations?.find((d: any) => d.days === 0)?.price, !!it.pointOnly),
+  priceInf: toField(infDuration(it)?.price, !!it.pointOnly),
   unitSale: !!it.unitSale,
   maxPerOrder: String(it.unitSale ? clampPerOrder(it.maxPerOrder || DEFAULT_PER_ORDER) : DEFAULT_PER_ORDER),
 });
@@ -173,8 +193,8 @@ export const priceCalc = (f: ProductForm | null | undefined, raw: string | numbe
 // 기간별 가격 칸이 좁을 때의 한 줄 요약 — "빙옥으로 내면 7일 30 · 30일 100 빙옥" / "7일 30,000 · 30일 100,000 XP 상당"
 export const durationsCalc = (f: ProductForm | null | undefined) => {
   if (!f) return "";
-  const list = ([["price7", "7일"], ["price30", "30일"], ["priceInf", "무제한"]] as const)
-    .map(([k, l]) => ({ l, n: Math.max(0, Math.floor(Number(f[k]) || 0)) }))
+  const list = ([["price7", "7일"], ["price30", "30일"], ...(f.withInf ? [["priceInf", "무제한"]] : [])] as const)
+    .map(([k, l]) => ({ l, n: Math.max(0, Math.floor(Number(f[k as "price7" | "price30" | "priceInf"]) || 0)) }))
     .filter((x) => x.n > 0);
   if (!list.length) return "";
   return f.pointOnly
@@ -188,15 +208,36 @@ export const formSalePrice = (f: ProductForm | null | undefined, raw: string | n
   return f?.pointOnly ? xpToPoint(sale) : sale;
 };
 
-// 📌 기간제 — 값을 매긴 기간만 판매 목록에 올린다 (days 0 = 무제한, 기간 옵션과 나란히 팔 수 있다)
+// 📌 기간제 — 값을 매긴 기간만 판매 목록에 올린다. 기간제 + 무제한이면 무제한(days 0)을 나란히 붙인다
 //    값은 입력칸 단위 그대로다(빙옥 전용이면 빙옥) — 서버로 보낼 때 toPayload 가 XP 로 바꾼다
+const intOf = (v: string) => Math.max(0, Math.floor(Number(v) || 0));
 export const buildDurations = (f: ProductForm | null | undefined) => {
-  if (!f?.timed || f.type === "physical") return [];
+  if (!f?.timed || f.unitSale || f.type === "physical") return [];
   return [
-    { days: 7, price: Math.max(0, Math.floor(Number(f.price7) || 0)) },
-    { days: 30, price: Math.max(0, Math.floor(Number(f.price30) || 0)) },
-    { days: 0, price: Math.max(0, Math.floor(Number(f.priceInf) || 0)) },
+    { days: 7, price: intOf(f.price7) },
+    { days: 30, price: intOf(f.price30) },
+    ...(f.withInf ? [{ days: 0, price: intOf(f.priceInf) }] : []),
   ].filter((d) => d.price > 0);
+};
+
+// 📌 저장 전 확인 — 판매 방식마다 꼭 필요한 값. 두 폼(관리자 상품 관리 · 상점 인라인)이 같은 문구로 막는다. 문제가 없으면 ""
+export const saleModeError = (f: ProductForm | null | undefined) => {
+  if (!f) return "";
+  const mode = f.type === "physical" ? "forever" : saleModeOf(f);
+  if (mode === "forever" || mode === "unit") return intOf(f.price) > 0 ? "" : "가격을 입력해 주세요.";
+  if (!(intOf(f.price7) > 0 || intOf(f.price30) > 0)) return "기간 가격(7일 · 30일)을 하나 이상 입력해 주세요.";
+  if (mode === "both" && !(intOf(f.priceInf) > 0)) return "무제한 가격을 입력해 주세요.";
+  return "";
+};
+
+// 📌 저장할 정가(price) — 무제한 · 1개 단위는 입력한 정가. 기간제는 따로 입력하지 않는다:
+//    상점 카드가 크게 거는 값(무제한, 없으면 가장 긴 기간 — lib/shopPricing cardPick)을 표시 · 정렬 기준가로 넣는다
+export const basePriceOf = (f: ProductForm) => {
+  const list = buildDurations(f);
+  if (!list.length) return f.price;
+  const inf = list.find((d) => d.days === 0);
+  const longest = list.filter((d) => d.days > 0).sort((a, b) => b.days - a.days)[0];
+  return String((inf || longest)?.price ?? f.price);
 };
 
 // 유형을 바꾸면 그 유형에 없는 설정을 함께 끈다 — 감춰진 채로 저장되면 안 된다.
@@ -213,6 +254,7 @@ export const pickType = (f: ProductForm, v: string): ProductForm => {
     type: v,
     roleId,
     timed: v === "physical" ? false : f.timed,
+    withInf: v === "physical" ? false : f.withInf,
     detachOnSeason: v === "physical" || v === "perk" || v === "cosmetic" ? false : f.detachOnSeason,
     // 1개 단위는 역할 없는 아이템 · 꾸미기만 — 다른 유형으로 옮기면 끈다
     unitSale: f.unitSale && unitSaleAllowed(v, roleId),
@@ -238,6 +280,7 @@ export const applyItem = (f: ProductForm, item: any): ProductForm => {
     roleName: item?.roleName || "",
     detachOnSeason: type === "role" ? !!item?.detachOnSeason : false,
     timed: type === "physical" ? false : f.timed,
+    withInf: type === "physical" ? false : f.withInf,
     // 역할이 연결된 아이템 · 1개 단위가 안 되는 유형이면 끈다
     unitSale: f.unitSale && unitSaleAllowed(type, item?.roleId || ""),
   };
@@ -255,7 +298,8 @@ export const toPayload = (f: ProductForm, roleName: string) => ({
   // 1개 단위 — 못 고르는 폼(역할 · 유형)이면 끈다. 기간제 가격표는 buildDurations 가 비운다(timed 가 꺼져 있다)
   unitSale: !!f.unitSale && unitSaleOk(f),
   maxPerOrder: f.unitSale ? clampPerOrder(f.maxPerOrder) : 0,
-  price: String(toXpValue(f.price, !!f.pointOnly) || ""),
+  // 기간제는 정가 칸이 없다 — 카드 기준가(무제한, 없으면 가장 긴 기간)를 넣는다(basePriceOf)
+  price: String(toXpValue(basePriceOf(f), !!f.pointOnly) || ""),
   roleName: roleName || f.roleName || "",
   durations: buildDurations(f).map((d) => ({ ...d, price: toXpValue(String(d.price), !!f.pointOnly) })),
   // 입력칸 값은 KST 벽시계 — 서버가 헷갈리지 않게 시간대를 붙여 보낸다

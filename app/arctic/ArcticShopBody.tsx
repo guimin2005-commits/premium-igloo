@@ -17,7 +17,7 @@ import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
   buildDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload,
   setPointOnly, formUnit, formSalePrice, priceCalc, durationsCalc,
-  SALE_MODES, saleModeOf, setSaleMode, unitSaleOk, pickRole,
+  SALE_MODES, saleModeOf, setSaleMode, saleModeError, basePriceOf, unitSaleOk, pickRole,
 } from "./productForm";
 import { MAX_PER_ORDER, clampPerOrder } from "@/lib/unitSale";
 import ArcticFooter from "./ArcticFooter";
@@ -391,9 +391,10 @@ export default function ArcticShopBody({
 
   const saveItem = async () => {
     if (!editForm || isSavingItem) return;
-    const durations = buildDurations(editForm);
-    if (editForm.timed && editForm.type !== "physical" && durations.length === 0) {
-      setEditError("기간 가격을 하나 이상 입력해주세요.");
+    // 📌 판매 방식마다 꼭 필요한 가격 — 관리자 상품 관리와 같은 문구(productForm saleModeError)
+    const bad = saleModeError(editForm);
+    if (bad) {
+      setEditError(bad);
       return;
     }
     setIsSavingItem(true);
@@ -711,14 +712,17 @@ export default function ArcticShopBody({
   const efUntilPast = !!editForm?.discountUntil && new Date(`${editForm.discountUntil}:00+09:00`).getTime() <= Date.now();
   const efDiscount = efUntilPast ? 0 : Math.min(100, Math.max(0, Number(editForm?.discountPct) || 0));
   // 입력칸 단위 그대로(빙옥 전용이면 빙옥)
-  const efSale = formSalePrice(editForm, editForm?.price, efDiscount);
+  //    기간제는 정가 칸이 없다 — 저장될 기준가(무제한, 없으면 가장 긴 기간)로 요약 · 미리보기를 그린다
+  const efBase = editForm ? basePriceOf(editForm) : "";
+  const efSale = formSalePrice(editForm, efBase, efDiscount);
   const efUnit = formUnit(editForm);
   const efDurations = buildDurations(editForm);
+  const efMode = saleModeOf(editForm);
   const efRoleName = guildRoles.find((r) => r.id === editForm?.roleId)?.name || editForm?.roleName || "";
   const efLinked = isLinked(editForm);
   const efBasicSummary = [efLinked ? "등록된 아이템" : "", editForm?.name || "이름 없음", itemTypeLabel(editForm?.type), efRoleName].filter(Boolean).join(" · ");
-  const efPriceSummary = Number(editForm?.price) > 0
-    ? `${efSale.toLocaleString()} ${efUnit}${efDiscount > 0 ? ` (-${efDiscount}%)` : ""}${editForm?.pointOnly ? " · 빙옥 전용" : ""}${editForm?.timed ? ` · 기간제 ${efDurations.length}종` : ""}${editForm?.unitSale ? " · 1개 단위" : ""}`
+  const efPriceSummary = Number(efBase) > 0
+    ? `${efSale.toLocaleString()} ${efUnit}${efDiscount > 0 ? ` (-${efDiscount}%)` : ""}${editForm?.pointOnly ? " · 빙옥 전용" : ""}${efMode === "both" ? ` · 기간제 + 무제한 ${efDurations.length}종` : efMode === "timed" ? ` · 기간제 ${efDurations.length}종` : ""}${editForm?.unitSale ? " · 1개 단위" : ""}`
     : "가격 미입력";
   const efStockSummary = `${editForm?.stock === "" ? "재고 무제한" : `재고 ${editForm?.stock}`}${editForm?.unitSale ? ` · 1회 최대 ${clampPerOrder(editForm?.maxPerOrder)}` : ""} · 추천 ${editForm?.sortOrder || 0} · ${editForm?.active ? "판매 중" : "숨김"}`;
   const efSeasonSummary = editForm?.detachOnSeason ? "시즌 바뀌면 디스코드 표기 뗌" : "디스코드 역할 계속 유지";
@@ -1422,21 +1426,73 @@ export default function ArcticShopBody({
                       <FormToggle on={!!editForm.pointOnly} onClick={() => setEditForm(setPointOnly(editForm, !editForm.pointOnly))}
                         onLabel="빙옥 전용" offLabel="XP · 빙옥" />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    {/* 📌 판매 방식 — 무제한 · 기간제 · 기간제 + 무제한 · 1개 단위(수량 판매, lib/unitSale.js). 기프트카드는 기간 · 수량 개념이 없어 아예 감춘다.
+                           네 칸 고정 — 1개 단위를 못 고르는 상품(역할 · 권한 · 역할 있는 아이템)은 흐리게 두고 누르면 알린다. 고른 방식의 가격 칸만 아래에 나온다 */}
+                    {editForm.type !== "physical" && (
                       <div>
-                        <label className={F_LABEL}>정가 ({efUnit}) <span className="text-[#d01634]">*</span></label>
-                        <input type="number" min={1} value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
-                          placeholder={editForm.pointOnly ? "500" : "500000"} className={F_INPUT_SM} />
-                        {/* 가격 칸 바로 아래 계산 한 줄 — 사용자가 요청한 빙옥 계산 안내 */}
-                        {priceCalc(editForm, editForm.price) && <p className={F_NOTE}>{priceCalc(editForm, editForm.price)}</p>}
+                        <label className={F_LABEL}>판매 방식</label>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {SALE_MODES.map((o) => {
+                            const on = efMode === o.v;
+                            const off = o.v === "unit" && !unitSaleOk(editForm);
+                            return (
+                              <button key={o.v} type="button" aria-pressed={on}
+                                onClick={() => {
+                                  // 못 고르는 칸은 누른 자리에서 보이게 토스트로 — 폼 맨 아래 오류 줄은 화면 밖이라 안 보이고, 저장 오류를 지우지도 않는다
+                                  if (off) { noteEdit("1개 단위 판매는 역할이 없는 아이템 · 꾸미기만 할 수 있습니다."); return; }
+                                  setEditForm(setSaleMode(editForm, o.v));
+                                }}
+                                className={`py-2.5 px-1 rounded-lg text-[12px] font-bold whitespace-nowrap border transition-colors ${on ? "bg-[#e91e3f] text-white border-[#e91e3f]" : `bg-white text-[#5a5a5a] border-[#ededed] ${off ? "opacity-40 cursor-default" : "hover:border-[#a3a3a3]"}`}`}>
+                                {o.l}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div>
-                        <label className={F_LABEL}>할인율 (%)</label>
-                        <input type="number" min={0} max={100} value={editForm.discountPct} onChange={(e) => setEditForm({ ...editForm, discountPct: e.target.value })}
-                          placeholder="0" className={F_INPUT_SM} />
+                    )}
+                    {!editForm.timed ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className={F_LABEL}>정가 ({efUnit}) <span className="text-[#d01634]">*</span></label>
+                          <input type="number" min={1} value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+                            placeholder={editForm.pointOnly ? "500" : "500000"} className={F_INPUT_SM} />
+                          {/* 가격 칸 바로 아래 계산 한 줄 — 사용자가 요청한 빙옥 계산 안내 */}
+                          {priceCalc(editForm, editForm.price) && <p className={F_NOTE}>{priceCalc(editForm, editForm.price)}</p>}
+                        </div>
+                        <div>
+                          <label className={F_LABEL}>할인율 (%)</label>
+                          <input type="number" min={0} max={100} value={editForm.discountPct} onChange={(e) => setEditForm({ ...editForm, discountPct: e.target.value })}
+                            placeholder="0" className={F_INPUT_SM} />
+                        </div>
                       </div>
-                    </div>
-                    {efDiscount > 0 && Number(editForm.price) > 0 && (
+                    ) : (
+                      <>
+                        {/* 기간제 — 7일 · 30일(+ 무제한). 값을 넣은 기간만 판다 */}
+                        <div className={`grid ${editForm.withInf ? "grid-cols-3" : "grid-cols-2"} gap-2`}>
+                          {([{ k: "price7", l: "7일" }, { k: "price30", l: "30일" }, ...(editForm.withInf ? [{ k: "priceInf", l: "무제한" }] : [])] as { k: "price7" | "price30" | "priceInf"; l: string }[]).map(({ k, l }) => (
+                            <div key={k}>
+                              <label className="block text-[11px] font-bold text-[#5a5a5a] mb-1.5">{l} ({efUnit}){k === "priceInf" && <span className="text-[#d01634]"> *</span>}</label>
+                              {/* 세 칸이 나란히 서므로 좌우 여백·글자를 한 단계 줄인다
+                                  (v4 는 ! 접두 important 를 안 먹어 클래스를 따로 쓴다) */}
+                              <input type="number" min={0} value={editForm[k]}
+                                onChange={(e) => setEditForm({ ...editForm, [k]: e.target.value })}
+                                placeholder="0" className="w-full bg-white border border-[#ededed] rounded-lg px-2.5 py-3 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
+                            </div>
+                          ))}
+                        </div>
+                        {/* 칸이 좁아 계산은 한 줄 요약으로 */}
+                        {durationsCalc(editForm) && <p className={F_NOTE}>{durationsCalc(editForm)}</p>}
+                        <p className={F_NOTE}>비운 기간은 팔지 않습니다. 기간이 끝나면 봇이 역할을 회수합니다.</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className={F_LABEL}>할인율 (%)</label>
+                            <input type="number" min={0} max={100} value={editForm.discountPct} onChange={(e) => setEditForm({ ...editForm, discountPct: e.target.value })}
+                              placeholder="0" className={F_INPUT_SM} />
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {efDiscount > 0 && !editForm.timed && Number(editForm.price) > 0 && (
                       <p className="text-[11px] font-bold text-[#e91e3f]">판매가 {efSale.toLocaleString()} {efUnit}</p>
                     )}
                     {/* 📌 할인 종료 — 관리자 상점 관리와 같은 칸. 지난 시각이 남아 있으면 새 할인이 붙지 않으므로 여기서도 보이고 지울 수 있게 */}
@@ -1453,50 +1509,6 @@ export default function ArcticShopBody({
                       </div>
                     )}
 
-                    {/* 📌 판매 방식 — 영구 보유 · 기간제 · 1개 단위(수량 판매, lib/unitSale.js). 기프트카드는 기간 · 수량 개념이 없어 아예 감춘다.
-                           세 칸 고정 — 1개 단위를 못 고르는 상품(역할 · 권한 · 역할 있는 아이템)은 흐리게 두고 누르면 알린다 */}
-                    {editForm.type !== "physical" && (
-                      <div>
-                        <label className={F_LABEL}>판매 방식</label>
-                        <div className="grid grid-cols-3 gap-2">
-                          {SALE_MODES.map((o) => {
-                            const on = saleModeOf(editForm) === o.v;
-                            const off = o.v === "unit" && !unitSaleOk(editForm);
-                            return (
-                              <button key={o.v} type="button" aria-pressed={on}
-                                onClick={() => {
-                                  // 못 고르는 칸은 누른 자리에서 보이게 토스트로 — 폼 맨 아래 오류 줄은 화면 밖이라 안 보이고, 저장 오류를 지우지도 않는다
-                                  if (off) { noteEdit("1개 단위 판매는 역할이 없는 아이템 · 꾸미기만 할 수 있습니다."); return; }
-                                  setEditForm(setSaleMode(editForm, o.v));
-                                }}
-                                className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors ${on ? "bg-[#e91e3f] text-white border-[#e91e3f]" : `bg-white text-[#5a5a5a] border-[#ededed] ${off ? "opacity-40 cursor-default" : "hover:border-[#a3a3a3]"}`}`}>
-                                {o.l}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {editForm.timed && (
-                          <>
-                            <div className="grid grid-cols-3 gap-2 mt-3">
-                              {([{ k: "price7", l: "7일" }, { k: "price30", l: "30일" }, { k: "priceInf", l: "무제한" }] as const).map(({ k, l }) => (
-                                <div key={k}>
-                                  <label className="block text-[11px] font-bold text-[#5a5a5a] mb-1.5">{l}</label>
-                                  {/* 세 칸이 나란히 서므로 좌우 여백·글자를 한 단계 줄인다
-                                      (v4 는 ! 접두 important 를 안 먹어 클래스를 따로 쓴다) */}
-                                  <input type="number" min={0} value={editForm[k]}
-                                    onChange={(e) => setEditForm({ ...editForm, [k]: e.target.value })}
-                                    placeholder="0" className="w-full bg-white border border-[#ededed] rounded-lg px-2.5 py-3 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
-                                </div>
-                              ))}
-                            </div>
-                            {/* 세 칸이 좁아 계산은 한 줄 요약으로 */}
-                            {durationsCalc(editForm) && <p className={F_NOTE}>{durationsCalc(editForm)}</p>}
-                            {/* 값이 0이면 그 기간은 안 판다는 뜻이라, 아무것도 안 넣으면 저장이 막힌다 */}
-                            <p className={F_NOTE}>값을 넣은 기간만 판매합니다. 기간이 끝나면 봇이 역할을 회수합니다.</p>
-                          </>
-                        )}
-                      </div>
-                    )}
                   </FormGroup>
 
                   {/* ── 재고 · 노출 ── */}
@@ -1570,7 +1582,7 @@ export default function ArcticShopBody({
                     </div>
                     <div className="mt-auto flex items-end justify-between gap-3">
                       <div>
-                        <div className="text-xl font-black text-[#131313] tracking-tight tabular-nums">{(Number(editForm.price) || 0).toLocaleString()}</div>
+                        <div className="text-xl font-black text-[#131313] tracking-tight tabular-nums">{(Number(efBase) || 0).toLocaleString()}</div>
                         <div className="text-[10px] font-bold text-[#8a8a8a] tracking-wider">{efUnit}</div>
                       </div>
                       <span className="px-5 py-2.5 rounded-full text-[12px] font-bold bg-[#e91e3f] text-white shadow-[0_4px_12px_rgba(233,30,63,0.25)]">구매하기</span>

@@ -17,9 +17,9 @@ import {
 } from "@/lib/itemEffects";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
-  buildDurations as buildFormDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload, toKstInput,
+  pickType as pickProductType, applyItem, unlinkItem, toPayload, toKstInput,
   setPointOnly, formUnit, formSalePrice, priceCalc, durationsCalc,
-  SALE_MODES, saleModeOf, setSaleMode, unitSaleOk, pickRole,
+  SALE_MODES, saleModeOf, setSaleMode, saleModeError, unitSaleOk, pickRole,
 } from "../../arctic/productForm";
 import { isUnitSale, maxPerOrderOf, MAX_PER_ORDER } from "@/lib/unitSale";
 import { groupOrders, orderSummary } from "@/lib/orderGroups";
@@ -973,11 +973,11 @@ export default function AdminShopPage() {
     setIsRoleOpen(false);
   }
 
-  // 📌 기간제 역할 — 켠 기간(값이 들어 있는 칸)만 판매 목록에 올린다 (공용 규칙)
-  const buildDurations = () => buildFormDurations(form);
-
   const saveItem = async (e: React.FormEvent) => {
     e.preventDefault();
+    // 📌 판매 방식마다 꼭 필요한 가격 — 상점 인라인 폼과 같은 문구(productForm saleModeError)
+    const bad = saleModeError(form);
+    if (bad) return notify(bad, true);
     const res = await fetch("/api/shop/items", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...toPayload(form, selectedRole?.name || ""), sortOrder: undefined }),
@@ -1665,15 +1665,54 @@ export default function AdminShopPage() {
                     <Toggle on={!!form.pointOnly} onClick={() => setForm(setPointOnly(form, !form.pointOnly))}
                       onLabel="빙옥 전용" offLabel="XP · 빙옥 결제" />
                   </div>
+                  {/* 📌 판매 방식 — 무제한 · 기간제 · 기간제 + 무제한 · 1개 단위(수량 판매, lib/unitSale.js). 역할·권한·아이템·꾸미기만 (기프트카드는 기간 · 수량 개념이 없다).
+                         고른 방식의 가격 칸만 아래에 나온다. 1개 단위는 역할 없는 아이템 · 꾸미기만 — 못 고르는 상품이면 칸은 그대로 두고 누르면 알린다(칸 수가 바뀌어 줄이 흔들리지 않게) */}
+                  {form.type !== "physical" && (
+                    <div className="mb-4">
+                      <Segmented options={SALE_MODES} value={saleModeOf(form)} disabledValues={unitSaleOk(form) ? undefined : ["unit"]}
+                        onChange={(v) => {
+                          if (v === "unit" && !unitSaleOk(form)) return notify("1개 단위 판매는 역할이 없는 아이템 · 꾸미기만 할 수 있습니다.", true);
+                          setForm(setSaleMode(form, v as any));
+                        }} />
+                    </div>
+                  )}
                   <Two>
-                    {/* 가격 칸 바로 아래 계산 한 줄 — 사용자가 요청한 빙옥 계산 안내 */}
-                    <Field label={<>정가 ({unit})<Req /></>} hint={priceCalc(form, form.price) || undefined}>
-                      <input type="number" min={1} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder={form.pointOnly ? "예: 500" : "예: 500000"} className={inputClass} />
-                    </Field>
-                    <Field label="할인율 (%)" hint={discountPct > 0 && Number(form.price) > 0 ? <span className="font-bold text-[#e91e3f]">판매가 {salePreview.toLocaleString()} {unit}</span> : undefined}>
+                    {/* 무제한 · 1개 단위 · 기프트카드 — 정가 한 칸. 칸 바로 아래 계산 한 줄은 사용자가 요청한 빙옥 계산 안내 */}
+                    {!form.timed && (
+                      <Field label={<>정가 ({unit})<Req /></>} hint={priceCalc(form, form.price) || undefined}>
+                        <input type="number" min={1} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder={form.pointOnly ? "예: 500" : "예: 500000"} className={inputClass} />
+                      </Field>
+                    )}
+                    {/* 기간제 — 7일 · 30일(+ 무제한). 비운 기간은 팔지 않는다 */}
+                    {form.timed && ([
+                      { k: "price7", l: "7일", ex: form.pointOnly ? "예: 30" : "예: 30000" },
+                      { k: "price30", l: "30일", ex: form.pointOnly ? "예: 100" : "예: 100000" },
+                      ...(form.withInf ? [{ k: "priceInf", l: "무제한", ex: form.pointOnly ? "예: 500" : "예: 500000" }] : []),
+                    ] as { k: "price7" | "price30" | "priceInf"; l: string; ex: string }[]).map(({ k, l, ex }) => {
+                      const raw = Number(form[k]) || 0;
+                      return (
+                        <Field key={k} label={<>{l} 가격 ({unit}){k === "priceInf" && <Req />}</>}
+                          hint={raw > 0
+                            ? discountPct > 0
+                              ? `판매가 ${formSalePrice(form, raw, discountPct).toLocaleString()} ${unit} (${discountPct}% 할인)`
+                              : `판매가 ${raw.toLocaleString()} ${unit}`
+                            : k === "priceInf" ? undefined : "비우면 이 기간은 팔지 않습니다"}>
+                          <input type="number" min={0} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} placeholder={ex} className={inputClass} />
+                        </Field>
+                      );
+                    })}
+                    <Field label="할인율 (%)" hint={!form.timed && discountPct > 0 && Number(form.price) > 0 ? <span className="font-bold text-[#e91e3f]">판매가 {salePreview.toLocaleString()} {unit}</span> : undefined}>
                       <input type="number" min={0} max={100} value={form.discountPct} onChange={(e) => setForm({ ...form, discountPct: e.target.value })} placeholder="0" className={inputClass} />
                     </Field>
                   </Two>
+                  {form.timed && (
+                    <>
+                      {/* 기간 칸은 반 폭이라 계산은 한 줄 요약으로 · 회수는 화면 밖에서 일어나는 일이라 이것만 남긴다 */}
+                      {durationsCalc(form) && <p className={`${fieldNote} -mt-2`}>{durationsCalc(form)}</p>}
+                      <p className={`${fieldNote} mb-3`}>기간이 지나면 봇이 역할을 자동 회수합니다{form.withInf ? " (무제한은 회수하지 않습니다)" : ""}.</p>
+                      {saleModeError(form) && <p className="-mt-1 mb-3 text-[12px] font-bold text-amber-700">{saleModeError(form)}</p>}
+                    </>
+                  )}
                   {/* 📌 할인 종료 — 그 시각(KST)이 지나면 할인이 저절로 끝난다. 비우면 계속 */}
                   {discountPct > 0 && (
                     <Field label="할인 종료" hint={form.discountUntil && new Date(`${form.discountUntil}:00+09:00`).getTime() <= Date.now() ? <span className="font-bold text-[#d01634]">이미 지난 시각입니다</span> : "비우면 계속"}>
@@ -1684,53 +1723,6 @@ export default function AdminShopPage() {
                     </Field>
                   )}
 
-                  {/* 📌 판매 방식 — 영구 보유 · 기간제 · 1개 단위(수량 판매, lib/unitSale.js). 역할·권한·아이템·꾸미기만 (기프트카드는 기간 · 수량 개념이 없다).
-                         1개 단위는 역할 없는 아이템 · 꾸미기만 — 못 고르는 상품이면 칸은 그대로 두고 누르면 알린다(칸 수가 바뀌어 줄이 흔들리지 않게) */}
-                  {form.type !== "physical" && (
-                    <div className="mb-4">
-                      <Segmented options={SALE_MODES} value={saleModeOf(form)} disabledValues={unitSaleOk(form) ? undefined : ["unit"]}
-                        onChange={(v) => {
-                          if (v === "unit" && !unitSaleOk(form)) return notify("1개 단위 판매는 역할이 없는 아이템 · 꾸미기만 할 수 있습니다.", true);
-                          setForm(setSaleMode(form, v as any));
-                        }} />
-                      {/* 회수는 화면 밖에서 일어나는 일이라 이것만 남긴다 */}
-                      {form.timed && (
-                        <>
-                          <p className={fieldNote}>기간이 지나면 봇이 역할을 자동 회수합니다 (무제한은 회수하지 않습니다).</p>
-                          <div className="mt-4">
-                            <Two>
-                              {([{ k: "price7", d: 7 }, { k: "price30", d: 30 }] as const).map(({ k, d }) => {
-                                const raw = Number((form as any)[k]) || 0;
-                                return (
-                                  <Field key={k} label={`${d}일 가격 (${unit})`}
-                                    hint={raw > 0
-                                      ? discountPct > 0
-                                        ? `판매가 ${formSalePrice(form, raw, discountPct).toLocaleString()} ${unit} (${discountPct}% 할인)`
-                                        : `판매가 ${raw.toLocaleString()} ${unit}`
-                                      : "비우면 이 기간은 팔지 않습니다"}>
-                                    <input type="number" min={0} value={(form as any)[k]}
-                                      onChange={(e) => setForm({ ...form, [k]: e.target.value })}
-                                      placeholder={form.pointOnly ? (d === 7 ? "예: 30" : "예: 100") : d === 7 ? "예: 30000" : "예: 100000"} className={inputClass} />
-                                  </Field>
-                                );
-                              })}
-                            </Two>
-                            {/* 기간 칸은 반 폭이라 계산은 한 줄 요약으로 */}
-                            {durationsCalc(form) && <p className={`${fieldNote} -mt-2 mb-3`}>{durationsCalc(form)}</p>}
-                          </div>
-                          {/* 무제한(days 0)은 이 화면에 입력 칸이 없다 — 저장 때 값은 그대로 유지되므로 보이기라도 한다 */}
-                          {Number(form.priceInf) > 0 && (
-                            <p className={fieldNote}>
-                              무제한 옵션 <span className="font-bold tabular-nums">{Number(form.priceInf).toLocaleString()} {unit}</span> — 기존 값이 그대로 유지됩니다
-                            </p>
-                          )}
-                          {buildDurations().length === 0 && (
-                            <p className="mt-1.5 text-[12px] font-bold text-amber-700">기간 가격을 하나 이상 넣어야 기간제로 저장됩니다.</p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
                 </PaneSection>
 
                 {/* ── 재고 ── 순서는 목록의 '순서 바꾸기'로 끌어서 정한다 */}
