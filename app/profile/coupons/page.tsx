@@ -8,12 +8,13 @@ import BackLink from "../../components/BackLink";
 import ArcticDock from "../../arctic/ArcticDock";
 import { ICON_PATHS } from "../../components/Icons";
 import { isAdminName } from "@/lib/admins";
+import { couponScopeTail } from "@/lib/shopPricing";
 
 // 📌 쿠폰함 — 전역 바의 쿠폰 아이콘 · 내 정보 · 모바일 메뉴가 모두 여기로 온다 (예전엔 레이아웃 위의 모달).
 //    코드 하나로 두 가지를 받는다: 할인 쿠폰은 아래 목록에 남고, 보상 코드(XP · 역할)는 입력 즉시 지급 대기로 넘어간다.
 //    그래서 ARCTIC 이 닫혀 있어도 열리는 내 정보 쪽에 둔다 (알림함 /profile/notice 와 같은 자리).
 
-type Coupon = { id: string; name: string; type: string; value: number; maxDiscount?: number; minTotal?: number; expiresAt?: string | null };
+type Coupon = { id: string; name: string; type: string; value: number; maxDiscount?: number; payScope?: string; minTotal?: number; expiresAt?: string | null };
 
 // 조작 요소 테두리는 #a3a3a3, 글자는 16px — 그보다 작으면 iOS 가 입력칸을 누를 때 화면을 확대한다
 const INPUT_CLS = "flex-1 min-w-0 h-12 px-4 bg-white border border-[#a3a3a3] text-[16px] font-bold uppercase outline-none focus:border-[#131313] transition-colors placeholder:normal-case placeholder:font-medium placeholder:text-[#8a8a8a]";
@@ -23,7 +24,7 @@ const benefitOf = (c: Coupon) => {
   const base = c.type === "percent" ? `${c.value}% 할인` : `${(c.value || 0).toLocaleString()} XP 할인`;
   const cap = c.type === "percent" && (c.maxDiscount || 0) > 0 ? ` · 최대 ${c.maxDiscount!.toLocaleString()} XP` : "";
   const min = (c.minTotal || 0) > 0 ? ` · ${c.minTotal!.toLocaleString()} XP 이상` : "";
-  return base + cap + min;
+  return base + couponScopeTail(c) + cap + min;
 };
 const ddayOf = (s?: string | null) => (s ? Math.max(0, Math.ceil((new Date(s).getTime() - Date.now()) / 86400000)) : null);
 const untilOf = (s?: string | null) =>

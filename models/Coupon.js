@@ -25,6 +25,9 @@ const CouponSchema = new mongoose.Schema({
   type: { type: String, default: "percent" },       // "percent" | "flat"
   value: { type: Number, default: 0 },              // percent면 %, flat이면 XP
   maxDiscount: { type: Number, default: 0 },        // percent 상한 (0 = 무제한)
+  // 📌 할인 범위 — "both"(XP · 빙옥, 주문 전체) · "xp"(XP 전용 — XP 로 내는 금액만) · "point"(빙옥 전용 — 빙옥으로 내는 금액만).
+  //    실제 할인액은 결제 수단을 나눈 뒤 lib/shopPay.js planPayment 가 잰다(lib/shopPricing couponScope)
+  payScope: { type: String, default: "both" },
   minTotal: { type: Number, default: 0 },           // 최소 주문 금액
   maxUses: { type: Number, default: 0 },            // 전체 사용 한도 (0 = 무제한)
   usedCount: { type: Number, default: 0 },

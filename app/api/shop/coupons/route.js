@@ -42,7 +42,8 @@ export async function POST(request) {
       const discount = couponDiscount(coupon, total);
       return NextResponse.json({
         success: true,
-        data: { code: coupon.code, name: coupon.name, type: coupon.type, value: coupon.value, discount },
+        // 범위가 있는 쿠폰은 결제 수단을 나눈 뒤 할인액이 정해진다 — 화면이 planPayment 에 이 값들을 그대로 넘긴다(discount 는 주문 전체 기준 참고값)
+        data: { code: coupon.code, name: coupon.name, type: coupon.type, value: coupon.value, maxDiscount: coupon.maxDiscount || 0, payScope: coupon.payScope || "both", discount },
       });
     }
 
@@ -101,6 +102,7 @@ export async function POST(request) {
       type: b.type === "flat" ? "flat" : "percent",
       value: kind === "discount" ? value : 0,
       maxDiscount: Math.max(0, Math.floor(Number(b.maxDiscount) || 0)),
+      payScope: kind === "discount" && (b.payScope === "xp" || b.payScope === "point") ? b.payScope : "both",
       minTotal: Math.max(0, Math.floor(Number(b.minTotal) || 0)),
 
       maxUses: Math.max(0, Math.floor(Number(b.maxUses) || 0)),

@@ -5,7 +5,7 @@ import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BackLink from "../../components/BackLink";
-import { salePrice, basePrice, durationLabel, isPointOnly, shownPrice, priceUnit } from "@/lib/shopPricing";
+import { salePrice, basePrice, durationLabel, isPointOnly, shownPrice, priceUnit, couponScopeTail } from "@/lib/shopPricing";
 import { POINT_RATE } from "@/lib/pointRate";
 import { planPayment } from "@/lib/shopPay";
 import { getLevelByXp } from "@/lib/leveling";
@@ -105,18 +105,21 @@ export default function CheckoutPage() {
   const count = rows.reduce((n, r) => n + r.qty, 0);
   const needsContact = rows.some((r) => r.item.type === "physical");
   // 📌 빙옥 전용 줄은 빙옥으로만, 나머지 줄은 XP + 고른 빙옥 — 서버(api/shop/checkout)와 같은 함수(lib/shopPay planPayment)
-  //    쿠폰 할인은 주문 전체 판매가 비율로 줄마다 나뉜다(빙옥 전용 줄 몫은 빙옥이 그만큼 줄어든다 — 올림)
+  //    쿠폰은 planPayment 가 범위대로 잰다 — XP · 빙옥은 주문 전체 판매가 비율로 줄마다(빙옥 전용 줄 몫은 빙옥이 그만큼 줄어든다 — 올림),
+  //    XP 전용은 XP 로 내는 금액에서만, 빙옥 전용은 빙옥으로 내는 금액에서만(서버와 같은 계산)
   const normalRows = rows.filter((r) => !isPointOnly(r.item));
   const poRows = rows.filter((r) => isPointOnly(r.item));
   const hasNormal = normalRows.length > 0;
   const hasPO = poRows.length > 0;
-  const couponDiscount = coupon?.discount || 0;
-  const plan = planPayment({
-    lines: rows.flatMap((r) => Array.from({ length: r.qty }, () => ({ price: salePrice(r.item, r.days), pointOnly: isPointOnly(r.item) }))),
-    discount: couponDiscount,
-    pointUse,
-    pointBalance: myPoint ?? 0,
-  });
+  const planLines = rows.flatMap((r) => Array.from({ length: r.qty }, () => ({ price: salePrice(r.item, r.days), pointOnly: isPointOnly(r.item) })));
+  type CouponSpecIn = { type: string; value: number; maxDiscount?: number; payScope?: string } | null | undefined;
+  const couponSpec = (c: CouponSpecIn) => (c ? { type: c.type, value: c.value, maxDiscount: c.maxDiscount || 0, payScope: c.payScope || "both" } : null);
+  const plan = planPayment({ lines: planLines, coupon: couponSpec(coupon), pointUse, pointBalance: myPoint ?? 0 });
+  const couponDiscount = coupon ? plan.discount : 0;
+  // 📌 범위 쿠폰(XP 전용 · 빙옥 전용)은 그 수단으로 낼 금액이 없으면 0 — 결제 API 도 거절한다. 카드에 짧게 알린다
+  const couponIdle = !!coupon && plan.couponScope !== "both" && plan.discount <= 0;
+  // 보유 쿠폰 목록의 예상 할인 — 지금 장바구니 · 고른 빙옥으로 같은 계산(범위 쿠폰은 서버의 주문 전체 값과 다르다)
+  const walletDisc = (w: CouponSpecIn) => planPayment({ lines: planLines, coupon: couponSpec(w), pointUse, pointBalance: myPoint ?? 0 });
   const listTotal = normalRows.reduce((n, r) => n + basePrice(r.item, r.days) * r.qty, 0);
   const itemDiscount = listTotal - plan.normalSubtotal;
   const couponXp = plan.normalDiscount; // 쿠폰 할인 중 일반 줄 몫(XP)
@@ -124,7 +127,8 @@ export default function CheckoutPage() {
   const poPoint = plan.pointOnlyPoint;
   // 📌 빙옥 — 일반 줄에 쓸 최대 = min(보유 − 빙옥 전용 몫, 일반 줄 합계를 빙옥으로 친 값)
   const maxPoint = plan.maxPoint;
-  const usePoint = plan.pointUse;
+  // 📌 쓰겠다고 고른 빙옥(쿠폰 전) — 입력 칸 · 요청은 이 값. 빙옥 전용 쿠폰이 줄인 몫은 '쿠폰 할인' 줄에 따로 보인다
+  const usePoint = plan.pointAsked ?? plan.pointUse;
   const chargedXp = plan.chargedXp;
   const pointAll = plan.point; // 뺄 빙옥 전부
   const pointShort = myXp != null && poPoint > (myPoint ?? 0);
@@ -206,7 +210,7 @@ export default function CheckoutPage() {
 
   const pickCoupon = (w: any) => {
     if (!w.usable) return;
-    setCoupon({ code: w.code, name: w.name, type: w.type, value: w.value, discount: w.discount });
+    setCoupon({ code: w.code, name: w.name, type: w.type, value: w.value, maxDiscount: w.maxDiscount || 0, payScope: w.payScope || "both", discount: w.discount });
     setCouponMsg("");
     setShowCouponPicker(false);
   };
@@ -430,8 +434,9 @@ export default function CheckoutPage() {
                     <div className="min-w-0">
                       <div className="text-[12px] font-black text-[#e91e3f] truncate">{coupon.name || "할인 쿠폰"}</div>
                       <div className="text-[10px] font-bold text-[#8a8a8a]">
-                        {coupon.type === "percent" ? `${coupon.value}% 할인` : `${coupon.value.toLocaleString()} XP 할인`}
+                        {coupon.type === "percent" ? `${coupon.value}% 할인` : `${coupon.value.toLocaleString()} XP 할인`}{couponScopeTail(coupon)}
                       </div>
+                      {couponIdle && <div className="text-[10px] font-bold text-[#d01634]">{plan.couponScope === "xp" ? "XP로 결제할 때 적용됩니다" : "빙옥으로 결제할 때 적용됩니다"}</div>}
                     </div>
                     <button onClick={() => { setCoupon(null); setCouponInput(""); }} className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] shrink-0">해제</button>
                   </div>
@@ -483,11 +488,14 @@ export default function CheckoutPage() {
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center justify-between gap-2">
                                     <span className={`text-[12px] font-bold truncate ${picked ? "text-[#e91e3f]" : "text-[#131313]"}`}>{w.name}</span>
-                                    {w.usable && <span className="text-[12px] font-black text-[#e91e3f] tabular-nums shrink-0">-{w.discount.toLocaleString()}</span>}
+                                    {w.usable && (() => {
+                                      const wp = walletDisc(w);
+                                      return <span className="text-[12px] font-black text-[#e91e3f] tabular-nums shrink-0">-{wp.couponScope === "point" ? `${(wp.discount / POINT_RATE).toLocaleString()} 빙옥` : wp.discount.toLocaleString()}</span>;
+                                    })()}
                                   </div>
                                   <div className="text-[10px] text-[#8a8a8a] mt-0.5 break-keep">
                                     {w.usable
-                                      ? w.type === "percent" ? `${w.value}% 할인` : `${w.value.toLocaleString()} XP 할인`
+                                      ? `${w.type === "percent" ? `${w.value}% 할인` : `${w.value.toLocaleString()} XP 할인`}${couponScopeTail(w)}`
                                       : w.reason}
                                   </div>
                                 </div>
@@ -564,7 +572,11 @@ export default function CheckoutPage() {
                     <span className="shrink-0 text-[#5a5a5a]">쿠폰 할인</span>
                     <span className="text-right font-bold text-[#d01634] tabular-nums">
                       {/* 빙옥 전용만 담았으면 0 이어도 빙옥으로 (끝전 올림에 묻힌 작은 쿠폰) */}
-                      {[hasNormal && (couponXp > 0 || couponPoint <= 0) ? `-${couponXp.toLocaleString()} XP` : "", couponPoint > 0 || !hasNormal ? `-${couponPoint.toLocaleString()} 빙옥` : ""].filter(Boolean).join(" · ")}
+                      {plan.couponScope === "xp"
+                        ? `-${plan.discount.toLocaleString()} XP`
+                        : plan.couponScope === "point"
+                          ? `-${(plan.discount / POINT_RATE).toLocaleString()} 빙옥`
+                          : [hasNormal && (couponXp > 0 || couponPoint <= 0) ? `-${couponXp.toLocaleString()} XP` : "", couponPoint > 0 || !hasNormal ? `-${couponPoint.toLocaleString()} 빙옥` : ""].filter(Boolean).join(" · ")}
                     </span>
                   </div>
                 )}

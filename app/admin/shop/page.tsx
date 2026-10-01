@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { discountPctOf, discountUntilLabel, priceText } from "@/lib/shopPricing";
+import { discountPctOf, discountUntilLabel, priceText, COUPON_SCOPES, couponScopeTail } from "@/lib/shopPricing";
 import Dropdown, { type DropdownOption } from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import IconPicker from "../../components/IconPicker";
@@ -843,7 +843,7 @@ export default function AdminShopPage() {
     setBannerForm({ id: b._id, imageUrl: b.imageUrl, mobileImageUrl: b.mobileImageUrl || "", title: b.title || "", subtitle: b.subtitle || "", link: b.link || "", placement: b.placement === "season" ? "season" : "home", sortOrder: String(b.sortOrder || 0), active: b.active });
 
   // ── 쿠폰 ────────────────────────────────────
-  const EMPTY_COUPON = { id: "", code: "", name: "", kind: "discount", reward: "", rewardRoleId: "", rewardRoleName: "", rewardXp: "", requiredRoleId: "", requiredRoleName: "", type: "percent", value: "", maxDiscount: "", minTotal: "", maxUses: "", perUserLimit: "1", active: true, expiresAt: "" };
+  const EMPTY_COUPON = { id: "", code: "", name: "", kind: "discount", reward: "", rewardRoleId: "", rewardRoleName: "", rewardXp: "", requiredRoleId: "", requiredRoleName: "", type: "percent", value: "", maxDiscount: "", payScope: "both", minTotal: "", maxUses: "", perUserLimit: "1", active: true, expiresAt: "" };
   const [coupons, setCoupons] = useState<any[]>([]);
   const [couponForm, setCouponForm] = useState<any>(EMPTY_COUPON);
 
@@ -891,7 +891,7 @@ export default function AdminShopPage() {
 
   // 목록 줄 → 쿠폰 폼 (예전 '수정' 단추 안의 값 그대로 — 만료 일시는 KST 로 바꿔 넣는다. 서버도 KST 로 읽는다)
   const fillCouponForm = (c: any) =>
-    setCouponForm({ id: c._id, code: c.code, name: c.name || "", kind: c.kind || "discount", reward: c.reward || "", rewardRoleId: c.rewardRoleId || "", rewardRoleName: c.rewardRoleName || "", rewardXp: c.rewardXp ? String(c.rewardXp) : "", requiredRoleId: c.requiredRoleId || "", requiredRoleName: c.requiredRoleName || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: toKstInput(c.expiresAt) });
+    setCouponForm({ id: c._id, code: c.code, name: c.name || "", kind: c.kind || "discount", reward: c.reward || "", rewardRoleId: c.rewardRoleId || "", rewardRoleName: c.rewardRoleName || "", rewardXp: c.rewardXp ? String(c.rewardXp) : "", requiredRoleId: c.requiredRoleId || "", requiredRoleName: c.requiredRoleName || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", payScope: c.payScope || "both", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: toKstInput(c.expiresAt) });
 
   // ── 시즌 전환 (디스코드 표기 떼기) ────────────
   //    되돌리려면 역할을 손으로 다시 붙여야 하므로, 미리보기를 통과해야 실행 버튼이 열린다
@@ -1251,6 +1251,7 @@ export default function AdminShopPage() {
             : <>
                 {c.type === "percent" ? `${c.value}% 할인` : `${c.value.toLocaleString()} XP 할인`}
                 {c.type === "percent" && c.maxDiscount > 0 && ` (최대 ${c.maxDiscount.toLocaleString()})`}
+                {couponScopeTail(c)}
               </>}
         </span>
       ),
@@ -2049,6 +2050,10 @@ export default function AdminShopPage() {
                         value={couponForm.type}
                         onChange={(v) => setCouponForm({ ...couponForm, type: v })}
                       />
+                    </Field>
+                    {/* 📌 할인 범위 — 결제 수단 기준(lib/shopPricing COUPON_SCOPES · lib/shopPay planPayment) */}
+                    <Field label="적용 결제">
+                      <Segmented options={COUPON_SCOPES} value={couponForm.payScope || "both"} onChange={(v) => setCouponForm({ ...couponForm, payScope: v })} />
                     </Field>
                     <Two>
                       <Field label={<>할인 값<Req /></>} hint={couponForm.type === "percent" ? "주문 금액의 %" : "차감할 XP"}>

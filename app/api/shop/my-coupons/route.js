@@ -57,6 +57,7 @@ export async function GET(request) {
           type: c.type,
           value: c.value,
           maxDiscount: c.maxDiscount,
+          payScope: c.payScope || "both",
           minTotal: c.minTotal,
           expiresAt: c.expiresAt,
           source: w.source,

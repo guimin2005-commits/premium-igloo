@@ -11,7 +11,7 @@ import UserXp from "@/models/UserXp";
 import Coupon from "@/models/Coupon";
 import UserCoupon from "@/models/UserCoupon";
 import ShopLock from "@/models/ShopLock";
-import { salePrice, couponDiscount, couponError, couponClaimFilter, couponReleaseUpdate, isTimed, durationPrice } from "@/lib/shopPricing";
+import { salePrice, couponError, couponClaimFilter, couponReleaseUpdate, isTimed, durationPrice } from "@/lib/shopPricing";
 import { getLevelByXp } from "@/lib/leveling";
 import { planPayment, splitByPrice } from "@/lib/shopPay";
 import { denyIfMaintenance } from "@/lib/apiAuth";
@@ -175,14 +175,30 @@ export async function POST(request) {
 
     // 쿠폰 검증 (사용권은 재고를 잡은 뒤 선점한다)
     let coupon = null;
-    let discount = 0;
     if (couponCode?.trim()) {
       coupon = await Coupon.findOne({ code: couponCode.trim().toUpperCase() });
       const err = couponError(coupon, subtotal, userId);
       if (err) return NextResponse.json({ success: false, message: err }, { status: 400 });
-      discount = couponDiscount(coupon, subtotal);
     }
-    const total = Math.max(0, subtotal - discount);
+
+    // 2) 결제 계획 — 빙옥 전용 줄은 빙옥으로만, 나머지 줄은 빙옥을 원하는 만큼(pointUse 개) 쓰고 나머지를 XP 로 낸다 (lib/shopPay.js planPayment)
+    //    📌 관리자도 일반 유저와 똑같이 차감한다 — 테스트로 쓴 건 관리자 초기화로 되돌린다
+    //    XP 는 화폐이므로 쓰면 레벨도 함께 내려간다. 빙옥은 레벨과 무관하다.
+    //    가격은 XP 하나만 둔다. 쿠폰은 planPayment 가 범위(couponScope)대로 잰다 — XP · 빙옥이면 주문 전체 판매가 비율로 줄마다,
+    //    XP 전용이면 XP 로 내는 금액에서만, 빙옥 전용이면 빙옥으로 내는 금액에서만.
+    //    빙옥 전용 줄: XP 로는 절대 내지 않는다. 일반 줄: 합계에서 빙옥 몫(1 빙옥 = 10,000 XP)을 한 번만 뺀다. 상한은 xpToPoint(일반 줄 합계)(올림).
+    //    옛 요청의 payMethod "point" 는 일반 줄을 전부 빙옥으로 친다.
+    //    수량만큼 한 건씩 풀어 둔다 — 아래 구매 기록(rows)과 같은 순서. 재고 · 쿠폰을 잡기 전에 세워 둔다(범위 쿠폰이 이 주문에 안 맞으면 잡지 않고 거절)
+    const units = [];
+    for (const d of docs) {
+      for (let i = 0; i < wanted.get(String(d._id)); i++) units.push({ d, price: unitPrice.get(String(d._id)), pointOnly: !!d.pointOnly });
+    }
+    const pay = planPayment({ lines: units, coupon, pointUse: body?.payMethod === "point" ? "max" : body?.pointUse });
+    if (coupon && pay.couponScope !== "both" && pay.discount <= 0) {
+      return NextResponse.json({ success: false, message: pay.couponScope === "xp" ? "XP로 결제할 때 쓸 수 있는 쿠폰입니다." : "빙옥으로 결제할 때 쓸 수 있는 쿠폰입니다." }, { status: 400 });
+    }
+    const discount = pay.discount;
+    const total = pay.total;
 
     // 1) 재고 선점 — 실패하면 이미 잡은 것까지 되돌린다
     const claimed = [];
@@ -221,19 +237,7 @@ export async function POST(request) {
       if (coupon) await Coupon.updateOne({ _id: coupon._id }, couponReleaseUpdate(userId), { updatePipeline: true });
     };
 
-    // 2) 결제 — 빙옥 전용 줄은 빙옥으로만, 나머지 줄은 빙옥을 원하는 만큼(pointUse 개) 쓰고 나머지를 XP 로 낸다 (lib/shopPay.js planPayment)
-    //    📌 관리자도 일반 유저와 똑같이 차감한다 — 테스트로 쓴 건 관리자 초기화로 되돌린다
-    //    XP 는 화폐이므로 쓰면 레벨도 함께 내려간다. 빙옥은 레벨과 무관하다.
-    //    가격은 XP 하나만 둔다. 쿠폰 할인(XP)은 주문 전체 판매가 비율로 줄마다 나눈다(빙옥 전용 줄도 제 몫만큼 싸진다).
-    //    빙옥 전용 줄: 줄마다 (판매가 − 쿠폰 몫)을 빙옥으로 올림 — pointUse 와 무관하게 먼저 뗀다. XP 로는 절대 내지 않는다.
-    //    일반 줄: 합계(쿠폰 몫 뺀 XP)에서 빙옥 몫(1 빙옥 = 10,000 XP)을 한 번만 뺀다. 상한은 xpToPoint(일반 줄 합계)(올림).
-    //    옛 요청의 payMethod "point" 는 일반 줄을 전부 빙옥으로 친다.
-    //    수량만큼 한 건씩 풀어 둔다 — 아래 구매 기록(rows)과 같은 순서
-    const units = [];
-    for (const d of docs) {
-      for (let i = 0; i < wanted.get(String(d._id)); i++) units.push({ d, price: unitPrice.get(String(d._id)), pointOnly: !!d.pointOnly });
-    }
-    const pay = planPayment({ lines: units, discount, pointUse: body?.payMethod === "point" ? "max" : body?.pointUse });
+    // 2-2) 결제 — 위에서 세운 계획(pay) 그대로
     const chargedXp = pay.chargedXp;
     const pointUse = pay.point; // 뺄 빙옥 전부 — 빙옥 전용 줄 몫 + 일반 줄에 고른 빙옥
     const payMethod = pay.payMethod;
