@@ -675,6 +675,10 @@ export default function AdminBotPage() {
   const [grantItems, setGrantItems] = useState<any[]>([]);
   const [itemGrants, setItemGrants] = useState<any[]>([]);
   const [confirmAllItem, setConfirmAllItem] = useState(false);
+  // 📌 최근 아이템 지급 — 줄마다 사유 수정 · 회수. 역할 이전 · 역할 환불 기록은 그 도구가 다루므로 단추를 두지 않는다(API 도 막는다)
+  const [noteEdit, setNoteEdit] = useState<{ key: string; ids: string[]; text: string } | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<{ _id: string; ids?: string[]; userName?: string; userId?: string; itemName?: string; qty?: number } | null>(null);
+  const [grantRowBusy, setGrantRowBusy] = useState(false);
   const [grantLogs, setGrantLogs] = useState<any[]>([]);
   const [isGranting, setIsGranting] = useState(false);
   const [confirmAll, setConfirmAll] = useState(false);
@@ -704,6 +708,28 @@ export default function AdminBotPage() {
       .then((d) => setGrantItems((Array.isArray(d?.data) ? d.data : []).filter((it: any) => it.type !== "physical")))
       .catch(() => {});
   }, [isAdmin, tab, loadGrantLogs, loadItemGrants]);
+
+  const patchItemGrant = async (body: Record<string, unknown>, okMsg: string) => {
+    if (grantRowBusy) return false;
+    setGrantRowBusy(true);
+    try {
+      const res = await fetch("/api/admin/items/grant", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const d = await res.json().catch(() => null);
+      if (res.ok && d?.success) { notify(d.message || okMsg); loadItemGrants(); return true; }
+      notify(d?.message || "처리에 실패했습니다.", true);
+      return false;
+    } catch {
+      notify("서버와 통신 중 오류가 발생했습니다.", true);
+      return false;
+    } finally {
+      setGrantRowBusy(false);
+    }
+  };
+  const saveGrantNote = async () => {
+    if (!noteEdit) return;
+    if (!noteEdit.text.trim()) return notify("사유를 입력해주세요.", true);
+    if (await patchItemGrant({ ids: noteEdit.ids, adminNote: noteEdit.text }, "사유를 고쳤습니다.")) setNoteEdit(null);
+  };
 
   const runItemGrant = async (target: string) => {
     if (isGranting) return;
@@ -2018,16 +2044,38 @@ export default function AdminBotPage() {
                   {/* 한 사람에게 여러 개 준 건(같은 orderId)은 한 줄 ×N — lib/orderGroups.js */}
                   {groupOrders(itemGrants).map((g: any) => {
                     const st = GRANT_STATUS[g.status] || { l: g.status, tone: "neutral" as const };
+                    const tool = /^역할 (이전|환불)/.test(String(g.adminNote || ""));
+                    const live = g.status === "pending" || g.status === "completed";
+                    const editing = noteEdit?.key === g._id;
                     return (
                       <div key={g._id} className="px-5 py-3 min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{g.userName || g.userId}</span>
                           <StatusChip tone={st.tone}>{st.l}</StatusChip>
                         </div>
-                        <p className="mt-1 text-[12px] text-[#5a5a5a] truncate">
-                          {g.itemName}{g.qty > 1 ? ` ×${g.qty}` : ""}{g.adminNote ? ` · ${g.adminNote}` : ""} · {g.days > 0 ? `${g.days}일` : "영구"}
-                          <span className="ml-2 text-[#8a8a8a] tabular-nums">{fmtDateTime(g.createdAt)}</span>
-                        </p>
+                        {editing && noteEdit ? (
+                          <div className="mt-2 flex items-center gap-1.5 min-w-0">
+                            <input autoFocus type="text" maxLength={100} value={noteEdit.text}
+                              onChange={(e) => setNoteEdit((n) => (n ? { ...n, text: e.target.value } : n))}
+                              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveGrantNote(); } if (e.key === "Escape") setNoteEdit(null); }}
+                              placeholder="사유" className={`${inputClass} min-w-0 flex-1`} />
+                            <Btn size="sm" variant="primary" onClick={saveGrantNote} disabled={grantRowBusy}>저장</Btn>
+                            <Btn size="sm" variant="ghost" onClick={() => setNoteEdit(null)} disabled={grantRowBusy}>취소</Btn>
+                          </div>
+                        ) : (
+                          <div className="mt-1 flex items-center gap-2 min-w-0">
+                            <p className="min-w-0 flex-1 text-[12px] text-[#5a5a5a] truncate">
+                              {g.itemName}{g.qty > 1 ? ` ×${g.qty}` : ""}{g.adminNote ? ` · ${g.adminNote}` : ""} · {g.days > 0 ? `${g.days}일` : "영구"}
+                              <span className="ml-2 text-[#8a8a8a] tabular-nums">{fmtDateTime(g.createdAt)}</span>
+                            </p>
+                            {!tool && (
+                              <span className="shrink-0 flex items-center gap-1">
+                                <Btn size="sm" variant="ghost" onClick={() => setNoteEdit({ key: g._id, ids: g.ids || [String(g._id)], text: g.adminNote || "" })} disabled={grantRowBusy}>사유</Btn>
+                                {live && <Btn size="sm" variant="ghost" onClick={() => setRevokeTarget(g)} disabled={grantRowBusy}>회수</Btn>}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -2413,6 +2461,20 @@ export default function AdminBotPage() {
         }
       />
 
+      <ConfirmDialog
+        open={!!revokeTarget}
+        danger
+        title="아이템 회수"
+        confirmLabel="회수"
+        busy={grantRowBusy}
+        onCancel={() => setRevokeTarget(null)}
+        onConfirm={async () => {
+          const g = revokeTarget;
+          if (!g) return;
+          if (await patchItemGrant({ ids: g.ids || [String(g._id)], revoke: true }, "회수했습니다.")) setRevokeTarget(null);
+        }}
+        body={revokeTarget ? <p className="break-keep">{revokeTarget.userName || revokeTarget.userId} · {revokeTarget.itemName}{(revokeTarget.qty || 1) > 1 ? ` ×${revokeTarget.qty}` : ""}</p> : null}
+      />
       <ConfirmDialog
         open={confirmAllItem}
         title="전체 유저에게 아이템 지급"

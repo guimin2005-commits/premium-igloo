@@ -156,6 +156,11 @@ async function processPurchases(guild) {
 }
 
 // ── XP 지급 대기열 처리 ──────────────────────
+// 시즌 패스 진행도를 올리지 않는 지급 — 기준선(passBaseXp)을 같은 폭으로 함께 올린다(아래)
+const PASS_NEUTRAL = new Set(["pass", "role-refund"]);
+// 📌 보상 역할을 알림 없이 맞추는 지급 — 역할 환불(관리자 역할 이전)은 한 번에 수십 명이 들어온다.
+//    지난 시즌 역할 값을 돌려준 것이라 "NEW ROLE" 알림이 채널을 도배하지 않게(processRoleSyncs 와 같은 notify:false). 역할은 그대로 맞춘다
+const QUIET_ROLE_SYNC = new Set(["role-refund"]);
 async function processPayouts(guild) {
   // 빙옥(currency "point") 건은 사이트가 즉시 반영한 것 — 어떤 경우에도 XP 로 지급하지 않는다
   const rows = await Payout.find({ status: "pending", currency: { $ne: "point" } }).limit(50);
@@ -204,7 +209,9 @@ async function processPayouts(guild) {
             //    보상이 다음 티어 게이지를 스스로 밀어 올려 관리자가 정한 need 간격이 무의미해진다.
             //    사이트가 미리 올려 두면 봇이 지급하기 전까지 진행도만 깎여 이미 도달한 티어가 잠기므로,
             //    실제로 xp 가 들어오는 이 순간에 기준선을 같은 폭으로 함께 올린다.
-            p.source === "pass"
+            //    📌 역할 환불(source "role-refund" — 관리자 역할 이전)도 같다 — 지난 시즌 역할 값을 돌려준 것이라 이번 시즌 진행이 아니다.
+            //       레벨 · 누적 랭킹에는 들어간다(아래 레벨 재계산). 사이트 seasonStartBaseXp(시즌 기준선)도 두 source 를 같이 뺀다
+            PASS_NEUTRAL.has(p.source)
               ? { $inc: { xp: p.amount, passBaseXp: p.amount }, $set: { updatedAt: new Date() } }
               : { $inc: { xp: p.amount }, $set: { updatedAt: new Date() } },
             { upsert: true, new: true }
@@ -236,7 +243,9 @@ async function processPayouts(guild) {
         const member = await fetchMember(guild, userId);
         if (member) {
           // 레벨을 못 썼으면(그 사이 xp 가 바뀜) 옛 레벨로 역할을 맞추지 않는다 — 바꾼 쪽이 맞춘다
-          if (lv.matchedCount) await syncRewardRoles(member, newLevel).catch(() => {});
+          if (lv.matchedCount) {
+            await syncRewardRoles(member, newLevel, QUIET_ROLE_SYNC.has(p.source) ? { notify: false } : {}).catch(() => {});
+          }
           // 큐로만 XP 가 들어온 계정은 이름이 비어 있어 랭킹에 "이름 없음" 으로 뜬다.
           // grantXp 와 달리 여기서는 이름을 채우지 않았기 때문 — 멤버를 이미 받아왔으니 같이 채운다.
           if (!doc.displayName || !doc.username) {
@@ -405,8 +414,23 @@ async function processRefunds(guild) {
       handled.add(key);
     }
     try {
-      const hasRole = p.roleId && ["role", "perk", "item"].includes(p.itemType);
-      const member = await fetchMember(guild, p.userId);
+      // 📌 꾸미기는 상점 구매에 역할이 없다(roleId "") — 역할을 담은 꾸미기는 사이트 역할 이전 기록(옛 역할 id)뿐이라 그 역할도 뗀다
+      const hasRole = p.roleId && ["role", "perk", "item", "cosmetic"].includes(p.itemType);
+      // 📌 역할을 뗄 건은 멤버를 직접 조회한다 — 공용 fetchMember 는 일시 장애(시간 초과 · 5xx · 재연결)도 null 로 삼켜,
+      //    서버에 있는 사람을 '없음'으로 보고 역할을 떼지 않은 채 확정해 버린다(역할 · 효과가 남고 다시 시도도 없다).
+      //    확실한 탈퇴(10007 Unknown Member)만 없음으로 보고, 다른 오류는 바깥 catch 로 넘겨 다음 틱에 다시 시도한다(processDetachments 와 같다)
+      let member;
+      if (hasRole) {
+        member = guild.members.cache.get(p.userId) || null;
+        if (!member) {
+          try {
+            member = await guild.members.fetch(p.userId);
+          } catch (e) {
+            if (e?.code !== 10007) throw e;
+            member = null;
+          }
+        }
+      } else member = await fetchMember(guild, p.userId);
       if (hasRole && member) {
         // 같은 역할을 정당하게 주는 다른 구매(pending 연장분 포함)가 살아 있으면 남긴다 (만료 처리와 같은 기준)
         const holder = await findRoleHolder(p);

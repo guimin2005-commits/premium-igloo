@@ -184,6 +184,8 @@ const BotSettingSchema = new mongoose.Schema({
   supporterBaseXp:      { type: Number, default: 150000 },  // 월 기본 지급 XP (평가 입력의 기본값)
   supporterGoalChat:    { type: Number, default: 0 },       // 월 목표 채팅 횟수 (0 = 목표 없음)
   supporterGoalVoiceMin:{ type: Number, default: 0 },       // 월 목표 음성 분 (0 = 목표 없음)
+  // 📌 내역 기준 시각 — 사이트 원장(/api/xp/ledger)이 이 시각 이전 움직임을 보이지 않는다. 봇은 읽지 않지만 같은 문서라 맞춰 둔다
+  ledgerSince: { type: Date, default: null },
   updatedAt: { type: Date, default: Date.now },
 });
 export const BotSetting = mongoose.models.BotSetting || mongoose.model("BotSetting", BotSettingSchema);
@@ -275,6 +277,9 @@ const PayoutSchema = new mongoose.Schema({
   status: { type: String, default: "pending" }, // pending | processing(봇이 선점해 지급 중) | paid | failed
   // "xp" | "point" — 빙옥(point) 건은 사이트가 즉시 반영하고 paid 로 남기므로 봇은 집지 않는다 (models/Payout.js 와 동일)
   currency: { type: String, default: "xp" },
+  // 📌 "reset" = 관리자 초기화 기록(사이트가 paid 로만 남긴다 — 봇은 집지 않는다) · 처리한 관리자 이름(감사용). 봇은 읽지 않지만 models/Payout.js 와 맞춰 둔다
+  kind: { type: String, default: "" },
+  by: { type: String, default: "" },
   error: { type: String, default: "" },
   createdAt: { type: Date, default: Date.now },
   paidAt: { type: Date },

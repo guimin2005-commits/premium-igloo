@@ -86,14 +86,17 @@ export async function POST(request) {
       // 감사 기록 — 이미 반영했으므로 봇 큐가 다시 집지 않도록 paid로 남긴다
       //    userName 은 required — 이름 없는 문서(큐로만 XP 를 받은 계정)는 ID 로 채운다.
       //    초기화는 위에서 이미 끝났다. 기록이 실패해도 실패로 응답하지 않는다(다시 누르면 같은 일을 또 하게 된다)
+      //    📌 kind "reset" — 유저 내역(/api/xp/ledger)에 보이지 않는다(사유를 바꿔 적어도). 관리자 이름은 사유가 아니라 by 에
       const who = session?.user?.name || "admin";
       await Payout.insertMany(
         rows.map((r) => ({
           userName: r.displayName || r.username || r.userId,
           userId: r.userId,
           amount: -(r.xp || 0),
-          reason: (reason || "").trim() || `관리자 초기화 (${who})`,
+          reason: (reason || "").trim() || "관리자 초기화",
           source: "manual",
+          kind: "reset",
+          by: who,
           status: "paid",
           paidAt: new Date(),
         })),
@@ -131,8 +134,9 @@ export async function POST(request) {
       if (targets.length > 1) return ambiguous(targets);
     }
 
+    // 📌 기본 사유는 유저 내역에 그대로 보인다 — 관리자 이름을 붙이지 않고 by 에 따로 남긴다(감사용)
     const who = session?.user?.name || "admin";
-    const baseReason = (reason || "").trim() || `관리자 ${value > 0 ? "지급" : "회수"} (${who})`;
+    const baseReason = (reason || "").trim() || `관리자 ${value > 0 ? "지급" : "회수"}`;
 
     // ── 빙옥 — 봇 큐 없이 즉시 반영하고, 감사 기록은 paid 로 남긴다 ──
     if (isPoint) {
@@ -153,6 +157,7 @@ export async function POST(request) {
           amount: give,
           reason: baseReason,
           source: "manual",
+          by: who,
           status: "paid",
           paidAt: new Date(),
           currency: "point",
@@ -196,6 +201,7 @@ export async function POST(request) {
         amount: give,
         reason: baseReason,
         source: "manual",
+        by: who,
         currency: "xp",
       });
     }

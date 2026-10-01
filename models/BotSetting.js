@@ -85,6 +85,10 @@ const BotSettingSchema = new mongoose.Schema({
   supporterGoalChat:    { type: Number, default: 0 },       // 월 목표 채팅 횟수 (0 = 목표 없음)
   supporterGoalVoiceMin:{ type: Number, default: 0 },       // 월 목표 음성 분 (0 = 목표 없음)
 
+  // 📌 내역 기준 시각 — 값이 있으면 XP · 빙옥 내역(/api/xp/ledger)은 이 시각 이전 움직임을 모든 출처에서 빼고, 이번 달 합계도 이 시각부터 센다.
+  //    기록은 지우지 않는다(되돌리려면 null). 설정 저장(app/api/bot-settings POST)은 이 칸을 건드리지 않는다. bot/src/db.js 와 같아야 한다
+  ledgerSince: { type: Date, default: null },
+
   updatedAt: { type: Date, default: Date.now },
 });
 

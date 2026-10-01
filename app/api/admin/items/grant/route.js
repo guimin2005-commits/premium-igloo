@@ -44,7 +44,7 @@ export async function GET() {
 //       그런 아이템은 이미 가진 사람도 건너뛰지 않고 사람마다 qty 건을 만든다(한 사람의 건은 같은 orderId). 나머지는 1개 · 1인 1개 그대로
 export async function POST(request) {
   try {
-    const { deny, session } = await requireAdmin();
+    const { deny } = await requireAdmin();
     if (deny) return deny;
     await connectToDatabase();
 
@@ -106,7 +106,6 @@ export async function POST(request) {
     ).lean();
     const has = new Set(alive.map((a) => a.userId));
 
-    const who = session?.user?.name || "admin";
     const rows = [];
     for (const t of targets) {
       if (has.has(t.userId)) continue;
@@ -129,7 +128,8 @@ export async function POST(request) {
         days,
         expiresAt: days > 0 ? new Date(now.getTime() + days * 86400000) : null,
         contact: "",
-        adminNote: reason || `관리자 지급 (${who})`,
+        // 📌 메모는 유저 구매 내역에 "운영진 메모" 로 보인다 — 관리자 이름을 붙이지 않는다
+        adminNote: reason || "관리자 지급",
         // 역할이 있으면 봇이 붙인 뒤 completed 로 바꾼다. 없으면 사이트 보유라 바로 완료.
         status: item.roleId ? "pending" : "completed",
         processedAt: item.roleId ? null : now,
@@ -149,6 +149,49 @@ export async function POST(request) {
     });
   } catch (e) {
     console.error("아이템 수동 지급 오류:", e);
+    return NextResponse.json({ success: false, message: "처리 중 오류가 발생했습니다." }, { status: 500 });
+  }
+}
+
+// ── [사유 수정 · 회수] { ids, adminNote } 사유만 바꾼다 / { ids, revoke: true } 회수 ──
+//    📌 운영진 지급 건(itemId "grant")만 — 상점 구매는 낸 값이 걸려 관리자 주문 처리(app/api/shop/orders)에서 한다.
+//    📌 역할 이전 · 역할 환불 기록은 손대지 않는다 — 그 도구가 adminNote 머리("역할 이전" · "역할 환불")로 자기 기록을 찾고,
+//       회수 상태도 "그 도구로 환불함"으로 읽는다(lib/roleMigrationTerms MARK_RE · REFUND_MARK_RE). 그 기록은 관리 › 역할 이전에서 다룬다.
+//    회수: 봇이 아직 안 붙인 대기 건은 취소, 보유 중인 건은 refunded(revokedAt · roleDetached false) — 봇 processRefunds 가
+//       다른 근거가 없을 때 역할을 떼고, 낸 값이 없어 환불 DM 은 보내지 않는다. 인벤토리 · 효과는 바로 빠진다(my-items · ownedItems 가 refunded 를 뺀다)
+const MAX_IDS = 99;
+const TOOL_NOTE_RE = /^역할 (이전|환불)/;
+export async function PATCH(request) {
+  try {
+    const { deny } = await requireAdmin();
+    if (deny) return deny;
+    await connectToDatabase();
+    const { ids, adminNote, revoke } = await request.json();
+    const list = [...new Set((Array.isArray(ids) ? ids : []).map((v) => String(v || "")))]
+      .filter((v) => mongoose.isValidObjectId(v))
+      .slice(0, MAX_IDS);
+    if (!list.length) return NextResponse.json({ success: false, message: "잘못된 요청입니다." }, { status: 400 });
+    const base = { _id: { $in: list }, itemId: "grant", adminNote: { $not: TOOL_NOTE_RE } };
+
+    if (revoke) {
+      const at = new Date();
+      const cancelled = await Purchase.updateMany({ ...base, status: "pending" }, { $set: { status: "cancelled", processedAt: at } });
+      const revoked = await Purchase.updateMany(
+        { ...base, status: "completed" },
+        { $set: { status: "refunded", revokedAt: at, processedAt: at, roleDetached: false } }
+      );
+      const done = (cancelled.modifiedCount || 0) + (revoked.modifiedCount || 0);
+      if (!done) return NextResponse.json({ success: false, message: "회수할 수 있는 지급이 없습니다." }, { status: 409 });
+      return NextResponse.json({ success: true, done, message: `${done}건을 회수했습니다.` });
+    }
+
+    const note = String(adminNote ?? "").trim().slice(0, 100);
+    if (!note) return NextResponse.json({ success: false, message: "사유를 입력해주세요." }, { status: 400 });
+    const r = await Purchase.updateMany(base, { $set: { adminNote: note } });
+    if (!r.matchedCount) return NextResponse.json({ success: false, message: "바꿀 수 있는 지급이 없습니다." }, { status: 409 });
+    return NextResponse.json({ success: true, done: r.modifiedCount || 0, message: "사유를 고쳤습니다." });
+  } catch (e) {
+    console.error("아이템 지급 수정 오류:", e);
     return NextResponse.json({ success: false, message: "처리 중 오류가 발생했습니다." }, { status: 500 });
   }
 }

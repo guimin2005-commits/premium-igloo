@@ -17,6 +17,8 @@ import { getPerks } from "@/lib/itemPerks";
 import { cashbackOf } from "@/lib/itemEffects";
 import { logWallet } from "@/lib/wallet";
 import { liveHoldings, planPurchase, timingOf, kstStamp } from "../_lib/renewal";
+import { stripAdminTag } from "@/lib/admins";
+import { REFUND_MARK_RE } from "@/lib/roleMigrationTerms";
 import mongoose from "mongoose";
 
 // ── [구매] 본인 XP · 빙옥을 소모해 상품 구매 — pointUse: 쓸 빙옥 개수(나머지는 XP) ──
@@ -278,8 +280,9 @@ export async function GET() {
     //    최근 건만 주면 구매가 많은 유저는 오래된 영구 구매가 빠져 이미 산 상품이 미보유로 보인다.
     //    1개 단위 상품은 1개가 한 건이라 건 수가 빨리 는다 — 최근 창을 넓히고, 다 쓴 소모권(consumedAt)은 보유 창을 채우지 않게 뺀다.
     //    최근 창 밖의 건은 모두 그보다 오래됐으므로 뒤에 붙여도 최신순이 유지된다
+    //    📌 역할 환불 표시 기록(관리자 역할 이전 — 산 적 없는 역할을 XP · 빙옥으로 돌려준 표시, 낸 값 0)은 구매가 아니라 뺀다. 환불 금액은 내역(원장)에 보인다
     const [recent, live] = await Promise.all([
-      Purchase.find({ userId }).sort({ createdAt: -1 }).limit(200).lean(),
+      Purchase.find({ userId, $nor: [{ itemId: "grant", status: "refunded", adminNote: REFUND_MARK_RE }] }).sort({ createdAt: -1 }).limit(200).lean(),
       Purchase.find({
         userId,
         status: { $in: ["pending", "completed"] },
@@ -288,7 +291,10 @@ export async function GET() {
       }).sort({ createdAt: -1 }).limit(500).lean(),
     ]);
     const seen = new Set(recent.map((r) => String(r._id)));
-    const rows = [...recent, ...live.filter((r) => !seen.has(String(r._id)))];
+    // 📌 운영진 메모는 구매 내역에 그대로 보인다 — 예전 수동 지급 메모 끝의 관리자 이름(" (elahw.06)")은 떼고 내보낸다
+    const rows = [...recent, ...live.filter((r) => !seen.has(String(r._id)))].map((r) =>
+      r.adminNote ? { ...r, adminNote: stripAdminTag(r.adminNote) } : r
+    );
     return NextResponse.json({ success: true, data: rows });
   } catch (e) {
     return NextResponse.json({ success: false, data: [] }, { status: 500 });

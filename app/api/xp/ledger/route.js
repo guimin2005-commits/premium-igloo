@@ -9,6 +9,8 @@ import Payout from "@/models/Payout";
 import Purchase from "@/models/Purchase";
 import WalletLog from "@/models/WalletLog";
 import UserXp from "@/models/UserXp";
+import BotSetting from "@/models/BotSetting";
+import { stripAdminTag } from "@/lib/admins";
 
 // 📌 XP · 빙옥 입출금 내역(원장) — 같은 움직임이 두 번 보이지 않게 출처를 나눈다 (계약서 5절)
 //    XpLog     : 채팅 · 음성 · 출석 · 아이템 효과로 번 XP. KST 하루 · 사유별로 묶어 한 줄 (60일 TTL — 그 전 것은 없다)
@@ -18,6 +20,10 @@ import UserXp from "@/models/UserXp";
 //    GET ?currency=xp|point&before=<ISO>&limit=50 → 최신순 [{ at, currency, amount, label, kind, count? }]
 //        kind: XpLog 사유(chat · voice · attend · effect · effect-levelup) | payout-<source> | purchase · renew · cancel · refund | WalletLog kind
 //    관리자는 ?userId= 로 남의 원장을 본다(관리자 유저 조회). 첫 쪽(before 없음)에만 이번 달 합계 · 잔액을 싣는다
+//    📌 내역 기준 시각(BotSetting.ledgerSince) — 값이 있으면 그 시각 이전 움직임은 모든 출처에서 빼고, 이번 달 합계도 그 시각부터 센다.
+//       기록은 지우지 않는다(구매는 보유 근거, WalletLog · Payout 은 퀘스트 셈에도 쓴다). 관리자 원본 목록(구매 · 지급 이력)은 이 값과 무관하다
+//    📌 관리자 초기화(app/api/xp/grant mode reset)는 내역에 보이지 않는다 — Payout.kind "reset", 그 표시가 없던 예전 기록은 사유 "관리자 초기화…"
+//    📌 지급 · 회수 사유 끝의 관리자 이름(" (elahw.06)" — 예전 기본 사유)은 떼고 보인다(lib/admins.js stripAdminTag)
 const XPLOG_DAYS = 60; // models/XpLog.js TTL 과 같아야 한다
 const MAX_LIMIT = 100;
 const KST = 9 * 60 * 60 * 1000;
@@ -37,6 +43,8 @@ const PAYOUT_SOURCE = {
   code: "쿠폰 보상",
   supporter: "서포터즈 보상",
   referral: "초대 보상",
+  // 📌 관리자 역할 이전의 환불(app/api/admin/role-migration) — 사유 "역할 환불 · <역할>"이 줄 이름이다. 표시 기록(Purchase)은 낸 값 0 이라 줄이 없다
+  "role-refund": "역할 환불",
 };
 
 // 날짜의 KST 다음 날 00:00 (UTC Date) — 그날 하루치 XpLog 를 통째로 묶기 위한 상한
@@ -97,11 +105,23 @@ async function xpLogRows(userId, { before, since, limit }) {
   }));
 }
 
+// 📌 관리자 초기화 기록 — 내역에 보이지 않는다. 새 기록은 kind "reset"(사유를 바꿔 적어도 가려진다),
+//    그 표시가 없던 예전 기록(실사이트 옛 코드가 남긴 것 포함)은 수동 지급 중 사유가 "관리자 초기화" 로 시작하는 것
+const HIDDEN_PAYOUT = [{ kind: "reset" }, { source: "manual", reason: /^관리자 초기화/ }];
+
 // Payout — 실제로 반영된(paid) 것만. 대기 · 처리 중은 아직 움직이지 않았다
 async function payoutRows(userId, currency, { before, since, limit }) {
   const at = range(before, since);
   const pipe = [
-    { $match: { userId, status: "paid", currency: currency === "point" ? "point" : { $ne: "point" }, amount: { $ne: 0 } } },
+    {
+      $match: {
+        userId,
+        status: "paid",
+        currency: currency === "point" ? "point" : { $ne: "point" },
+        amount: { $ne: 0 },
+        $nor: HIDDEN_PAYOUT,
+      },
+    },
     { $addFields: { at: { $ifNull: ["$paidAt", "$createdAt"] } } },
     ...(at ? [{ $match: { at } }] : []),
     { $sort: { at: -1 } },
@@ -116,7 +136,8 @@ async function payoutRows(userId, currency, { before, since, limit }) {
       at: r.at,
       currency,
       amount: r.amount,
-      label: String(r.reason || "").trim() || fallback,
+      // 예전 기본 사유("관리자 지급 (elahw.06)")의 관리자 이름은 떼고 보인다
+      label: stripAdminTag(String(r.reason || "").trim()) || fallback,
       kind: `payout-${source}`,
     };
   });
@@ -266,11 +287,17 @@ export async function GET(request) {
 
     await connectToDatabase();
 
+    // 📌 내역 기준 시각 — 값이 있으면 그 시각 이전 움직임은 어느 쪽에서도 보이지 않는다(이번 달 합계 포함)
+    const setting = await BotSetting.findOne({ key: "main" }, { ledgerSince: 1 }).lean();
+    const floorAt = setting?.ledgerSince ? new Date(setting.ledgerSince) : null;
+    const floor = floorAt && !Number.isNaN(floorAt.getTime()) ? floorAt : null;
+
     // 출처마다 limit+1 개씩 받아 합친 뒤 자른다 — 전체 상위 limit 개가 반드시 이 안에 있다
     const first = !before;
-    const since = kstMonthStart();
+    const monthStart = kstMonthStart();
+    const since = floor && floor > monthStart ? floor : monthStart;
     const [all, monthRows, wallet] = await Promise.all([
-      fetchAll(userId, currency, { before, limit: limit + 1 }),
+      fetchAll(userId, currency, { before, since: floor, limit: limit + 1 }),
       // 이번 달 합계는 첫 쪽에서만 — 더 보기마다 다시 셀 필요가 없다 (한 달치 묶음 · 기록이라 양이 작다)
       first ? fetchAll(userId, currency, { since, limit: 0 }) : Promise.resolve(null),
       first ? UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean() : Promise.resolve(null),
@@ -306,7 +333,7 @@ export async function GET(request) {
         items: items.map((r) => ({ ...r, at: new Date(r.at).toISOString() })),
         hasMore,
         nextBefore: hasMore ? new Date(items[items.length - 1].at).toISOString() : null,
-        month, // { since, plus, minus(음수) } — 첫 쪽에만
+        month, // { since(이번 달 1일 · 내역 기준 시각 중 늦은 쪽), plus, minus(음수) } — 첫 쪽에만
         balance: wallet ? { xp: wallet.xp || 0, point: wallet.point || 0 } : first ? { xp: 0, point: 0 } : null,
         retentionDays: XPLOG_DAYS, // 채팅 · 음성 · 출석 XP 는 이 기간만 남는다 (XP 쪽 안내용)
       },

@@ -69,6 +69,8 @@ export async function POST(request) {
     const chatXpMin = num(b.chatXpMin, 50);
     const chatXpMax = Math.max(chatXpMin, num(b.chatXpMax, 500));
 
+    // 📌 연산자 없는 본문은 mongoose 가 $set 으로 감싼다 — 아래에 적은 칸만 바뀌고 문서를 통째로 덮지 않는다.
+    //    내역 기준 시각(ledgerSince)은 여기서 받지 않으므로 화면이 GET 으로 받은 값을 되돌려 보내도 그대로 남는다
     const doc = await BotSetting.findOneAndUpdate(
       { key: "main" },
       {

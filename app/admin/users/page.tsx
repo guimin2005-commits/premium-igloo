@@ -58,7 +58,7 @@ const PAYOUT_STATUS: Record<string, { l: string; t: Tone }> = {
 };
 const PAYOUT_SOURCE: Record<string, string> = {
   referral: "초대", code: "코드", manual: "수동 지급", pass: "시즌 패스", quest: "퀘스트", shop: "상점",
-  supporter: "서포터즈", level: "레벨", item: "아이템", admin: "운영진", etc: "기타",
+  supporter: "서포터즈", level: "레벨", item: "아이템", admin: "운영진", etc: "기타", "role-refund": "역할 환불",
 };
 const ITEM_TYPE: Record<string, string> = { role: "역할", perk: "혜택", item: "아이템", cosmetic: "꾸미기", physical: "실물" };
 const NOTI_TONE: Record<string, Tone> = { 경고: "bad", 제재: "warn", 안내: "info", 축하: "ok", 일반: "neutral" };
