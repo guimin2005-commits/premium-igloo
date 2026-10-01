@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import { presetKeyOf, isPresetKey, itemTypeColor, artKeyOf } from "@/lib/items";
-import { itemArtBody, ART_GRID } from "@/lib/itemArt";
+import { itemArtBody, artGridOf, ART_GRID } from "@/lib/itemArt";
 import { ICON_PATHS } from "./Icons";
 
 // 📌 아이템 아이콘 한 곳 — 인벤토리 슬롯·상점 카드·상품 상세·관리자 목록이 전부 이걸로 그린다.
@@ -112,15 +112,24 @@ export function ArtIcon({
 }) {
   // 📌 그림 문자열은 key 가 같으면 그대로 — 목록이 다시 그려질 때마다 새로 만들지 않게
   const html = useMemo(() => ({ __html: itemArtBody(k) }), [k]);
-  let n = Math.max(1, Math.round(size / ART_GRID));
-  if (n > 1 && n * ART_GRID > size + 6) n -= 1;
-  const px = n * ART_GRID;
+  // 📌 칸 수는 아이콘마다(artGridOf) — 대부분 16, 배너 그림 그대로인 큰 아이콘(나침반 19 · 비공정 28)은 더 크다.
+  //    16칸은 예전 그대로(정수 배율, 작게 부르면 16 으로 넘침). 큰 아이콘은 자리 크기에 맞춘다 —
+  //    두 배 이상 자리면 정수 배율, 그보다 작으면 자리 그대로 줄인다(16 · 28 · 48px 자리에서 넘치거나 혼자 작아 보이지 않게)
+  const grid = artGridOf(k);
+  let px: number;
+  if (grid <= ART_GRID) {
+    let n = Math.max(1, Math.round(size / grid));
+    if (n > 1 && n * grid > size + 6) n -= 1;
+    px = n * grid;
+  } else {
+    px = size >= grid * 2 ? Math.floor(size / grid) * grid : size;
+  }
   // 홀수 차이는 한쪽에 1px 더 — 반 픽셀 위치에 놓이면 칸 경계가 흐려진다
   const lead = Math.floor((size - px) / 2);
   const trail = size - px - lead;
   return (
     <svg
-      viewBox={`0 0 ${ART_GRID} ${ART_GRID}`}
+      viewBox={`0 0 ${grid} ${grid}`}
       width={px}
       height={px}
       shapeRendering="crispEdges"
