@@ -187,6 +187,8 @@ export async function PATCH(request) {
 
     const note = String(adminNote ?? "").trim().slice(0, 100);
     if (!note) return NextResponse.json({ success: false, message: "사유를 입력해주세요." }, { status: 400 });
+    // 도구 머리로 시작하면 그 기록이 역할 이전 · 환불 도구의 기록으로 읽힌다
+    if (TOOL_NOTE_RE.test(note)) return NextResponse.json({ success: false, message: "'역할 이전' · '역할 환불'로 시작하는 사유는 쓸 수 없습니다." }, { status: 400 });
     const r = await Purchase.updateMany(base, { $set: { adminNote: note } });
     if (!r.matchedCount) return NextResponse.json({ success: false, message: "바꿀 수 있는 지급이 없습니다." }, { status: 409 });
     return NextResponse.json({ success: true, done: r.modifiedCount || 0, message: "사유를 고쳤습니다." });
