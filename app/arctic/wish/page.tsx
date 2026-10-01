@@ -139,7 +139,7 @@ export default function WishPage() {
         </div>
 
         {!loaded ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-10">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 sm:gap-x-4 gap-y-8 md:gap-y-10">
             {Array.from({ length: 4 }, (_, i) => <div key={i} className="aspect-square rounded-md bg-[#f2f2f2] animate-pulse"></div>)}
           </div>
         ) : rows.length === 0 ? (
@@ -153,7 +153,8 @@ export default function WishPage() {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-10">
+          // 📌 칸 수는 상점 목록과 같은 기준(카드 폭 약 220~230px) — 폰 2 · 태블릿 3 · lg 4 (본문 폭이 max-w-5xl 이라 4열이면 232px)
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 sm:gap-x-4 gap-y-8 md:gap-y-10">
             {rows.map((it: any) => {
               const soldOut = it.stock === 0;
               const has = locked(it._id);

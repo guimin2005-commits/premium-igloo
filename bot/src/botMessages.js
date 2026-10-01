@@ -483,16 +483,20 @@ export const MESSAGE_DEFS = {
     ],
     defaults: {
       enabled: true,
+      card: true,
       content: "",
       embed: embed({
-        authorName: "{name}",
-        authorIcon: "{avatar}",
-        title: "퀘스트",
-        url: "{site}/level",
-        description: "받을 보상 **{claimable}개**",
-        fields: [f("일일", "{daily}", false), f("주간", "{weekly}", false), f("월간", "{monthly}", false)],
+        description: "퀘스트 · 받을 보상 **{claimable}개**",
       }),
     },
+    plainEmbed: embed({
+      authorName: "{name}",
+      authorIcon: "{avatar}",
+      title: "퀘스트",
+      url: "{site}/level",
+      description: "받을 보상 **{claimable}개**",
+      fields: [f("일일", "{daily}", false), f("주간", "{weekly}", false), f("월간", "{monthly}", false)],
+    }),
   },
   cmdInventory: {
     group: "command",
@@ -504,17 +508,22 @@ export const MESSAGE_DEFS = {
     ],
     defaults: {
       enabled: true,
+      card: true,
       content: "",
       embed: embed({
-        authorName: "{name}",
-        authorIcon: "{avatar}",
-        title: "인벤토리 · {itemCount}개",
-        // 📌 레벨 쪽 가방으로 — /arctic/inventory 는 상점 비공개(shopPublic false)면 닫힌 화면이 나온다
-        url: "{site}/level?tab=my&bag=1",
-        description: "{items}",
+        description: "인벤토리 · **{itemCount}개**",
         footerText: FOOTER_ARCTIC,
       }),
     },
+    plainEmbed: embed({
+      authorName: "{name}",
+      authorIcon: "{avatar}",
+      title: "인벤토리 · {itemCount}개",
+      // 📌 레벨 쪽 가방으로 — /arctic/inventory 는 상점 비공개(shopPublic false)면 닫힌 화면이 나온다
+      url: "{site}/level?tab=my&bag=1",
+      description: "{items}",
+      footerText: FOOTER_ARCTIC,
+    }),
   },
   cmdPass: {
     group: "command",
@@ -532,16 +541,20 @@ export const MESSAGE_DEFS = {
     ],
     defaults: {
       enabled: true,
+      card: true,
       content: "",
       embed: embed({
-        authorName: "SEASON {season} · {seasonName}",
-        title: "시즌 패스",
-        url: "{site}/level?tab=pass",
-        description: "**{passTier}** / {passMax} 티어\n`{passProgressBar}`",
-        thumbnail: "{avatar}",
-        fields: [f("프리미엄", "{premium}"), f("받을 보상", "{claimable}개"), f("다음 보상", "{nextReward}")],
+        description: "시즌 패스 · **{passTier}** / {passMax} 티어",
       }),
     },
+    plainEmbed: embed({
+      authorName: "SEASON {season} · {seasonName}",
+      title: "시즌 패스",
+      url: "{site}/level?tab=pass",
+      description: "**{passTier}** / {passMax} 티어\n`{passProgressBar}`",
+      thumbnail: "{avatar}",
+      fields: [f("프리미엄", "{premium}"), f("받을 보상", "{claimable}개"), f("다음 보상", "{nextReward}")],
+    }),
   },
   levelClosed: {
     group: "command",
@@ -564,7 +577,7 @@ export const MESSAGE_KEYS = Object.keys(MESSAGE_DEFS);
 
 // 📌 이미지 카드를 붙일 수 있는 키 — lib/botCards.js · bot/src/botCards.js 의 CARD_KINDS 와 같다.
 //    카드가 켜져 있으면(card) 봇이 PNG 를 그려 임베드 큰 이미지 자리에(임베드가 없으면 본문 아래 첨부로) 붙인다.
-export const CARD_KEYS = ["levelUp", "cmdLevel", "cmdRank", "cmdAttend", "rankerAnnounce"];
+export const CARD_KEYS = ["levelUp", "cmdLevel", "cmdRank", "cmdAttend", "rankerAnnounce", "cmdQuest", "cmdInventory", "cmdPass"];
 export const isCardKey = (key) => CARD_KEYS.includes(key);
 
 // 📌 예전 BotSetting 한 줄 문구의 기본값 — 이것과 같으면 관리자가 바꾼 적이 없는 것이라 새 기본 디자인을 쓴다
@@ -969,7 +982,7 @@ function compose(key, vars) {
   const make = (tpl) => {
     const card = isCardKey(key) && tpl.card === true;
     const payload = toPayload(tpl, v, { keepEmpty: card });
-    return payload ? { payload, card } : null;
+    return payload ? { payload, card, tpl, v } : null;
   };
   try {
     const tpl = mergeTemplate(key, cache.get(key), { legacy: getSettings() });
@@ -1005,8 +1018,27 @@ export async function buildMessageWithCard(key, vars = {}, cardData = null) {
   if (c.card && cardData) {
     const card = await drawCard(key, withSkin(key, vars, cardData));
     if (card) return attachCard(c.payload, card);
+    const plain = plainFallback(key, c);
+    if (plain) return plain;
   }
   return sendable(c.payload) ? c.payload : null;
+}
+
+// 📌 카드를 못 그렸을 때(그리기 실패 · 3초 초과 · 그림 모듈 없음) 카드 전의 글 모양(MESSAGE_DEFS plainEmbed)으로 보내는 키.
+//    이 셋은 카드와 쓰는 짧은 임베드(한 줄)만으로는 목록 · 보상이 빠진다 — 그래서 카드가 없으면 예전 글 응답 그대로.
+//    관리자가 임베드를 고쳐 저장했으면(기본 카드 모양과 다르면) 고친 그대로 보낸다. 던지지 않는다
+const PLAIN_ON_CARD_FAIL = new Set(["cmdQuest", "cmdInventory", "cmdPass"]);
+function plainFallback(key, c) {
+  const plainEmbed = MESSAGE_DEFS[key]?.plainEmbed;
+  if (!PLAIN_ON_CARD_FAIL.has(key) || !plainEmbed || !c?.tpl) return null;
+  try {
+    if (JSON.stringify(c.tpl.embed) !== JSON.stringify(defaultTemplate(key).embed)) return null;
+    const payload = toPayload({ ...c.tpl, card: false, embed: sanitizeTemplate({ embed: plainEmbed }, key).embed }, c.v);
+    return sendable(payload) ? payload : null;
+  } catch (e) {
+    console.error(`봇 메시지 글 모양 만들기 오류 (${key}):`, e?.message || e);
+    return null;
+  }
 }
 
 function avatarOf(x) {
@@ -1018,11 +1050,12 @@ function avatarOf(x) {
 }
 
 // 📌 카드 스킨(아이템 효과 cardSkin) — commonVars 가 심볼 칸에 실어 둔 멤버로 스킨을 찾아 카드 data 에 넣는다.
-//    레벨업 · /레벨 · /랭크 · /출석체크만(RANKER 제외). data 에 skin 이 이미 있으면 그대로 둔다. 부르는 쪽은 고칠 게 없다
+//    레벨업 · /레벨 · /랭크 · /출석체크 · /퀘스트 · /인벤토리 · /시즌패스만(RANKER 제외 — botCards.js SKIN_CARD_KINDS 와 같다).
+//    data 에 skin 이 이미 있으면 그대로 둔다. 부르는 쪽은 고칠 게 없다
 //    가진 스킨이 여럿이면 유저가 인벤토리에서 고른 것(UserXp.cardSkinPick — pickCardSkin), 못 읽으면 관리자 순서상 첫 스킨
 //    (vars 를 { ...commonVars(member), … } 로 만들면 심볼 칸도 함께 복사된다 — 템플릿 치환 · JSON 에는 드러나지 않는다)
 const VARS_MEMBER = Symbol("member");
-const SKIN_KEYS = new Set(["levelUp", "cmdLevel", "cmdRank", "cmdAttend"]);
+const SKIN_KEYS = new Set(["levelUp", "cmdLevel", "cmdRank", "cmdAttend", "cmdQuest", "cmdInventory", "cmdPass"]);
 function withSkin(key, vars, cardData) {
   const member = vars?.[VARS_MEMBER];
   if (!SKIN_KEYS.has(key) || !member) return cardData;

@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import ItemIcon from "../components/ItemIcon";
+import BannerSlider from "./BannerSlider";
 import { isTimed, durationLabel, cardPick, discountActive, affordFor, shownPrice, priceText } from "@/lib/shopPricing";
 import { pointToXp } from "@/lib/pointRate";
 import { isUnitSale, maxPerOrderOf } from "@/lib/unitSale";
 import { SEASON, getSeasonDday } from "@/lib/season";
 import { getTier } from "@/lib/voiceTiers";
-import { siteHref } from "@/lib/siteLink";
 
 // 📌 ARCTIC 홈 — 배너 → 유형 타일 4장 → 두 갈래 큐레이션 → 이번 주.
 //    헤더·유형 줄·독·푸터는 ArcticShopBody 가 그린다. 여기는 홈 본문만.
@@ -51,21 +51,10 @@ function weekRange() {
 
 const created = (it: any) => new Date(it?.createdAt || 0).getTime();
 
-// 📌 768px 미만(모바일)인가 — 배너는 클라이언트에서 받아 오므로 첫 화면(SSR)과 어긋나 번쩍일 일이 없다.
-//    컨테이너 단위 · round() 는 일부 브라우저에서 안 먹었다 — 폭 판정은 matchMedia 로만 한다.
-//    (옛 Safari 는 MediaQueryList.addEventListener 가 없어 addListener 로 받는다)
-const NARROW_MQ = "(max-width: 767.98px)";
-const subNarrow = (cb: () => void) => {
-  const mq = window.matchMedia(NARROW_MQ);
-  if (mq.addEventListener) { mq.addEventListener("change", cb); return () => mq.removeEventListener("change", cb); }
-  mq.addListener(cb);
-  return () => mq.removeListener(cb);
-};
-const useNarrow = () => useSyncExternalStore(subNarrow, () => window.matchMedia(NARROW_MQ).matches, () => false);
-// 모바일 배너 틀 비율 범위 (관리자 배너 편집의 모바일 미리보기와 같은 값)
-const M_RATIO_MIN = 0.8;
-const M_RATIO_MAX = 3;
-const hasMobileArt = (b: any) => typeof b?.mobileImageUrl === "string" && b.mobileImageUrl.trim() !== "";
+// 📌 섹션 머리 — 홈 큐레이션 · 시즌 탭(ArcticSeason)이 같은 모양을 쓴다
+export const secHead = "flex items-baseline justify-between gap-4 mb-5";
+export const secTitle = "text-xl md:text-2xl font-black text-[#131313] tracking-tight";
+export const secLink = "text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors shrink-0";
 
 // 📌 추천 결과 — 서버가 고른 상품 id 와 제목만 온다
 type Rec = {
@@ -87,22 +76,6 @@ export default function ArcticHome({
   banners, bannersLoaded, bannerIdx, setBannerIdx, bannerRatio, fitRatio, renderCard, goProducts, openEdit, adminTools,
 }: Props) {
   const dday = getSeasonDday();
-
-  // 📌 모바일 배너 — 보이는 배너가 전부 모바일 이미지를 가졌을 때만 바꿔 건다(한 장이라도 없으면 오늘처럼 PC 이미지).
-  //    틀 비율은 PC(fitRatio)와 같은 규칙 — 불러온 모바일 이미지 중 가장 넓은 비율에 맞춰 어느 것도 좌우가 잘리지 않게.
-  const narrow = useNarrow();
-  const mobileArt = narrow && banners.length > 0 && banners.every(hasMobileArt);
-  const [mRatios, setMRatios] = useState<Record<string, number>>({}); // 이미지 주소 → 실제 비율
-  const fitMobile = (url: string, img: HTMLImageElement) => {
-    const r = img.naturalWidth / img.naturalHeight;
-    if (!Number.isFinite(r) || r <= 0) return;
-    setMRatios((prev) => (prev[url] === r ? prev : { ...prev, [url]: r }));
-  };
-  const mRatio = useMemo(() => {
-    const rs = banners.map((b) => mRatios[String(b.mobileImageUrl || "").trim()]).filter((r): r is number => !!r);
-    // 아직 한 장도 안 불러왔으면 2:1 자리만 잡아 둔다
-    return rs.length ? Math.min(M_RATIO_MAX, Math.max(M_RATIO_MIN, Math.max(...rs))) : 2;
-  }, [banners, mRatios]);
 
   const active = useMemo(() => items.filter((it) => it.active !== false), [items]);
   const byId = useMemo(() => new Map(active.map((it) => [String(it._id), it])), [active]);
@@ -216,66 +189,11 @@ export default function ArcticHome({
     return fresh ? { it: fresh, kind: "new" as const } : null;
   }, [active, byId, rec, ready]);
 
-  const secHead = "flex items-baseline justify-between gap-4 mb-5";
-  const secTitle = "text-xl md:text-2xl font-black text-[#131313] tracking-tight";
-  const secLink = "text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors shrink-0";
-
   return (
     <>
-      {/* ── 배너 (관리자 등록) — 등록된 배너가 없으면 이 자리는 아예 없다.
-             예전엔 시즌 히어로(민트 화면)를 대신 깔았는데 들어올 때마다 튀어나와 없앴다.
-             모서리는 각지게, 폭은 본문 폭 안에 (화면 끝까지 채우면 너무 꽉 찬다) ── */}
-      {banners.length > 0 && (
-      <section className="max-w-7xl mx-auto px-5 md:px-8 pt-5 md:pt-6">
-        <div className="relative overflow-hidden bg-[#f2f2f2]">
-          {banners.length > 0 ? (
-            <>
-              <div className="relative" style={{ aspectRatio: String(mobileArt ? mRatio : bannerRatio) }}>
-                {banners.map((b, i) => {
-                  const mUrl = String(b.mobileImageUrl || "").trim();
-                  const inner = (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={mobileArt ? mUrl : b.imageUrl} alt={b.title || ""}
-                        onLoad={(e) => (mobileArt ? fitMobile(mUrl, e.currentTarget) : fitRatio(e.currentTarget))}
-                        className="absolute inset-0 w-full h-full object-cover" />
-                      {(b.title || b.subtitle) && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-5 sm:px-10 md:px-12">
-                          {b.title && <h2 className="text-base sm:text-2xl md:text-3xl font-black tracking-tight text-white mb-0.5 sm:mb-1 break-keep line-clamp-2">{b.title}</h2>}
-                          {b.subtitle && <p className="text-[11px] sm:text-sm text-white/85 break-keep line-clamp-1 sm:line-clamp-2">{b.subtitle}</p>}
-                        </div>
-                      )}
-                    </>
-                  );
-                  return (
-                    <div key={b._id}
-                      className={`absolute inset-0 transition-opacity duration-700 ${i === bannerIdx ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-                      {/* 우리 사이트 전체 주소로 넣은 링크도 지금 화면 안에서 연다(siteHref) */}
-                      {b.link ? <Link href={siteHref(b.link)} className="block w-full h-full relative">{inner}</Link> : inner}
-                    </div>
-                  );
-                })}
-              </div>
-              {banners.length > 1 && (
-                <div className="absolute bottom-4 right-5 flex gap-1.5 z-10">
-                  {banners.map((b, i) => (
-                    <button key={b._id} onClick={() => setBannerIdx(i)} aria-label={`배너 ${i + 1}`}
-                      className={`h-1.5 rounded-full transition-all duration-300 ${i === bannerIdx ? "w-6 bg-white" : "w-1.5 bg-white/50 hover:bg-white/80"}`}></button>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : null}
-
-          {isAdmin && (
-            <Link href="/admin/shop?tab=banners"
-              className="absolute top-4 right-4 z-10 px-3 py-1.5 rounded-full text-[11px] font-bold bg-white/95 text-[#131313] border border-[#ededed] hover:bg-white shadow-sm transition-colors">
-              배너 관리
-            </Link>
-          )}
-        </div>
-      </section>
-      )}
+      {/* ── 배너 (관리자 등록 · 노출 위치 '홈') — 등록된 배너가 없으면 이 자리는 아예 없다.
+             모양 · 넘김은 시즌 탭과 한 벌(BannerSlider) ── */}
+      <BannerSlider banners={banners} bannerIdx={bannerIdx} setBannerIdx={setBannerIdx} bannerRatio={bannerRatio} fitRatio={fitRatio} isAdmin={isAdmin} />
 
       {/* ── 두 갈래 큐레이션 ── */}
       <section ref={curRef} className="max-w-7xl mx-auto px-5 md:px-8 pt-12 md:pt-14" style={lockH ? { minHeight: lockH } : undefined}>
@@ -284,8 +202,9 @@ export default function ArcticHome({
         ) : active.length === 0 ? (
           <div className="py-16 text-center text-sm text-[#8a8a8a]">등록된 상품이 없습니다.</div>
         ) : (
+          // 📌 넓은 화면(xl)은 가운데 여백을 넓혀 카드 폭을 상점 목록(약 225px)과 비슷하게 — 반반에 두 장씩이면 270px 넘게 커졌다
           <div className="grid md:grid-cols-2 gap-10 md:gap-0">
-            <div className="md:pr-10">
+            <div className="md:pr-10 xl:pr-28">
               <div className={secHead}>
                 <h2 className={secTitle}>지금 잘 나가는</h2>
                 <button onClick={() => goProducts("all")} className={secLink}>전체 ›</button>
@@ -295,7 +214,7 @@ export default function ArcticHome({
                 <button onClick={() => goProducts("all")} className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors">다른 상품 보기 →</button>
               </div>
             </div>
-            <div className="md:border-l md:border-[#ededed] md:pl-10">
+            <div className="md:border-l md:border-[#ededed] md:pl-10 xl:pl-28">
               <div className={secHead}>
                 <h2 className={secTitle}>{forMe.title}</h2>
                 <span className="text-[12px] font-bold text-[#8a8a8a] shrink-0">{forMe.basis === "co" ? "내 아이템 기준" : tier ? "내 등급 기준" : "가장 많이 고른"}</span>

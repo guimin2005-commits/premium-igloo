@@ -4,7 +4,7 @@
 //    봇은 읽기만 한다. 시즌이 바뀐 문서(passSeason ≠ 지금 시즌)도 봇은 다시 찍지 않고(그건 사이트가 조회 때 한다),
 //    사이트가 찍을 값과 같은 기준(시즌 시작 시점 기준선 · 해금 · 수령 초기화)으로 보여 주기만 한다.
 import mongoose from "mongoose";
-import { UserXp, XpLog, Payout } from "../db.js";
+import { UserXp, XpLog, Payout, Item } from "../db.js";
 import { currentSeason } from "../leveling.js";
 import { progressBar } from "../botMessages.js";
 
@@ -23,6 +23,7 @@ const REWARD_KINDS = ["none", "xp", "point", "role", "item"];
 const MAX_TIERS = 100;
 const MAX_REWARDS = 4; // lib/seasonPass.js 의 MAX_REWARDS 와 같아야 한다
 const NEXT_REWARD_SHOW = 3; // "다음 보상" 에 이름을 적는 개수 — 넘으면 "외 N개"
+const PASS_CARD_SHOW = 4; // 이미지 카드의 다음 보상 칸 수 — botCards.js PASS_SHOW 와 같다
 
 const num = (v, { min = 0, max = 1_000_000_000 } = {}) => {
   const n = Number(v);
@@ -191,11 +192,19 @@ export async function passView(userId, member = null) {
 
   let tierIndex = -1;
   let claimable = 0; // 받기 단위(티어 · 트랙) 개수 — 사이트 "받을 보상" 탭 수와 같다
+  let claimFree = 0; // 그중 무료 트랙 · 프리미엄 트랙 (이미지 카드)
+  let claimPaid = 0;
   tiers.forEach((t, i) => {
     if (progress < t.need) return;
     tierIndex = i; // need 오름차순 — 마지막으로 넘은 인덱스가 남는다
-    if (pending(t, t.free, freeSet)) claimable += 1;
-    if (premiumBy && pending(t, t.paid, paidSet)) claimable += 1;
+    if (pending(t, t.free, freeSet)) {
+      claimable += 1;
+      claimFree += 1;
+    }
+    if (premiumBy && pending(t, t.paid, paidSet)) {
+      claimable += 1;
+      claimPaid += 1;
+    }
   });
 
   // 진행 막대 — 사이트 패스 창의 링과 같다: 지금 티어에서 다음 티어까지 얼마나 찼나 (다 넘었으면 가득)
@@ -214,6 +223,25 @@ export async function passView(userId, member = null) {
     nextReward = `T${t.level} · ${parts.slice(0, NEXT_REWARD_SHOW).join(" · ")}${rest > 0 ? ` 외 ${rest}개` : ""}`;
   }
 
+  // 다음 보상 칸 — 아직 못 넘은 티어부터 티어마다 무료 → 프리미엄 순으로 PASS_CARD_SHOW 개 (이미지 카드)
+  const upcoming = [];
+  for (let i = tierIndex + 1; i < tiers.length && upcoming.length < PASS_CARD_SHOW; i++) {
+    const t = tiers[i];
+    for (const [list, premium] of [[t.free, false], [t.paid, true]]) {
+      for (const r of list) {
+        if (upcoming.length >= PASS_CARD_SHOW) break;
+        upcoming.push({
+          tier: t.level,
+          kind: r.kind,
+          amount: r.amount,
+          label: r.kind === "role" ? r.roleName : r.kind === "item" ? r.itemName : "",
+          itemId: r.itemId,
+          premium,
+        });
+      }
+    }
+  }
+
   return {
     enabled: true,
     season: season.number,
@@ -225,5 +253,44 @@ export async function passView(userId, member = null) {
     claimable,
     premium: premiumBy ? "해금" : "미해금", // 부스터 자동 해금도 "해금"
     premiumBy,
+    // ── 이미지 카드용(passCardData) ──
+    ratio,
+    need: nextTier ? Math.max(0, nextTier.need - progress) : 0,
+    claimFree,
+    claimPaid,
+    upcoming,
+  };
+}
+
+/**
+ * 📌 /시즌패스 이미지 카드 data(botCards.js cmdPass 모양) — passView 결과로 만든다(같은 계산 · 읽기만).
+ *    아이템 보상은 등록 아이템(Item)의 아이콘 · 이미지로 — 이미지는 1.5초 · 캐시, 못 받으면 유형 기본 아이콘
+ * @param {object} v passView 결과(enabled true)
+ * @param {object} cards 그림 모듈(botCards.js) — buildMessageWithCard 가 넘겨준다
+ */
+export async function passCardData(v, cards) {
+  const ids = [...new Set(v.upcoming.filter((r) => r.kind === "item" && mongoose.isValidObjectId(r.itemId)).map((r) => r.itemId))];
+  const docs = ids.length ? await Item.find({ _id: { $in: ids } }, { name: 1, type: 1, icon: 1, imageUrl: 1, color: 1 }).lean() : [];
+  const byId = new Map(docs.map((d) => [String(d._id), d]));
+  const next = await Promise.all(
+    v.upcoming.map(async (r) => {
+      if (r.kind !== "item") return r;
+      const it = byId.get(String(r.itemId));
+      if (!it) return { ...r, type: "item" };
+      const image = it.imageUrl && cards?.fetchImageDataUri ? await cards.fetchImageDataUri(it.imageUrl).catch(() => null) : null;
+      return { ...r, label: r.label || it.name || "", type: it.type || "item", color: it.color || "", icon: it.imageUrl && !image ? "" : it.icon || "", image };
+    })
+  );
+  return {
+    season: v.season,
+    seasonName: v.seasonName,
+    tier: v.passTier,
+    maxTier: v.passMax,
+    progress: v.ratio,
+    need: v.need,
+    claimFree: v.claimFree,
+    claimPaid: v.claimPaid,
+    premium: !!v.premiumBy,
+    next,
   };
 }

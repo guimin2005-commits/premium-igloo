@@ -12,7 +12,7 @@ import { itemTypeColor } from "@/lib/items";
 import { MAX_BADGES } from "@/lib/itemEffects";
 import { COSMETIC_SAMPLE } from "@/lib/cosmeticSample";
 
-// 📌 꾸미기 상품의 '적용 모습' 부품 — 상품 상세 갤러리(ItemGallery)가 큰 칸 · 썸네일에 같은 부품을 줄여 넣는다.
+// 📌 꾸미기 상품의 '적용 모습' 부품 — 상품 상세 '적용 미리보기'(AppliedPreview, 효과 아래)가 쓴다.
 //    레벨 페이지 프로필 카드 · 프로필 헤더 · 랭킹 줄과 같은 모양을 가볍게 다시 그린 것(그 화면들을 통째로 옮기지 않는다 — 고칠 때 모양만 맞춘다).
 //    크기는 고정 폭(PC 모양) 한 벌 — 칸에 맞추는 건 FitBox 가 transform 으로 줄인다(글자 줄바꿈이 칸마다 달라지지 않게).
 

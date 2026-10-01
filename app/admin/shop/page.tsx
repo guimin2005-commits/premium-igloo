@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { discountPctOf, discountUntilLabel, priceText } from "@/lib/shopPricing";
-import Dropdown from "../../components/Dropdown";
+import Dropdown, { type DropdownOption } from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import IconPicker from "../../components/IconPicker";
 import BackdropPicker from "../../components/BackdropPicker";
@@ -64,7 +64,8 @@ import type { Column } from "../ui";
 const TAB_META: Record<string, { desc: string }> = {
   items: { desc: "여기서 등록한 표기가 인벤토리 · 상점 상품 · 시즌 패스 보상에 그대로 쓰입니다." },
   products: { desc: "역할 상품은 구매 시 봇이 자동 지급합니다." },
-  banners: { desc: "배너가 여럿이면 5초마다 자동 전환됩니다." },
+  // 넘김 주기는 app/arctic/BannerSlider.tsx (2026-10-01 5초 → 8초). 노출 위치(홈 · 시즌 탭)마다 따로 돈다
+  banners: { desc: "같은 노출 위치의 배너가 여럿이면 8초마다 자동 전환됩니다." },
   coupons: { desc: "" },
   // 예전 목록 아래 한 줄 안내를 머리로 올렸다
   orders: { desc: "역할 상품은 봇이 30초 주기로 자동 지급합니다. 취소하면 XP가 환불되고 재고가 복구됩니다." },
@@ -267,6 +268,33 @@ const M_BANNER_MAX = 3;
 
 // Dropdown(라이트) 단추를 inputClass 높이 · 테두리에 맞춘다
 const DD_BTN = "min-h-10 !py-2 !px-3 !border-[#a3a3a3] !text-[14px]";
+
+// 📌 배너 '클릭 시 이동' 바로 고르기 — 고르면 아래 링크 칸이 그 주소로 채워진다(2026-10-01 "배너 클릭하면 어느 카테고리로 갈 수 있게 선택").
+//    스토어 유형은 app/arctic/ArcticShopBody.tsx TYPES 와 같은 값(/arctic?type=<v> — 상점이 이 값으로 그 탭을 연다). 바꾸면 거기도.
+const BANNER_STORE_TYPES = [
+  { v: "all", l: "전체" },
+  { v: "role", l: "역할" },
+  { v: "perk", l: "권한" },
+  { v: "item", l: "아이템" },
+  { v: "cosmetic", l: "꾸미기" },
+  { v: "physical", l: "기프트카드" },
+  { v: "timed", l: "기간제" },
+  { v: "season", l: "시즌" },
+];
+const BANNER_LINK_CUSTOM = "__custom";
+const bannerLinkOptions = (items: any[]): DropdownOption[] => [
+  { value: "", label: "이동 없음" },
+  { value: "g:store", label: "스토어", group: true },
+  { value: "/arctic", label: "스토어 홈", indent: true },
+  ...BANNER_STORE_TYPES.map((t) => ({ value: `/arctic?type=${t.v}`, label: t.l, indent: true })),
+  { value: "g:site", label: "사이트", group: true },
+  { value: "/level?tab=pass", label: "시즌 패스", indent: true },
+  { value: "/level", label: "SYSTEM : LEVEL", indent: true },
+  { value: "/event", label: "이벤트", indent: true },
+  ...(items.length ? [{ value: "g:item", label: "상품", group: true }] : []),
+  ...items.map((it) => ({ value: `/arctic/item/${it._id}`, label: it.name || "이름 없음", hint: it.active === false ? "숨김" : undefined, indent: true })),
+  { value: BANNER_LINK_CUSTOM, label: "직접 입력" },
+];
 // 상세 칸 아래 줄의 삭제 — 저장 옆에 빨간 덩어리를 두지 않고 글자만
 const DEL_BTN = "ml-auto !text-[#d01634]";
 
@@ -779,7 +807,8 @@ export default function AdminShopPage() {
       fetch("/api/shop/items?all=1", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/discord-roles", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/shop/orders", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch("/api/shop/banners?all=1", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      // 배너는 노출 위치(홈 · 시즌 탭) 구분 없이 전부 — 위치를 안 붙이면 홈 배너만 온다
+      fetch("/api/shop/banners?all=1&placement=any", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/shop/coupons", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
     ]).then(([it, roles, ord, ban, cou]) => {
       setItems(Array.isArray(it?.data) ? it.data : []);
@@ -791,7 +820,8 @@ export default function AdminShopPage() {
   }, []);
 
   // ── 이미지 배너 ──────────────────────────────
-  const EMPTY_BANNER = { id: "", imageUrl: "", mobileImageUrl: "", title: "", subtitle: "", link: "", sortOrder: "", active: true };
+  // 📌 placement — 노출 위치. home: ARCTIC 홈 맨 위 · season: 스토어 시즌 탭 맨 위 (값이 없는 옛 배너는 홈)
+  const EMPTY_BANNER = { id: "", imageUrl: "", mobileImageUrl: "", title: "", subtitle: "", link: "", placement: "home", sortOrder: "", active: true };
   const [banners, setBanners] = useState<any[]>([]);
   const [bannerForm, setBannerForm] = useState<any>(EMPTY_BANNER);
   const bannerSize = useImageSize(bannerForm.imageUrl);
@@ -810,7 +840,7 @@ export default function AdminShopPage() {
 
   // 목록 줄 → 배너 폼 (예전 '수정' 단추 안의 값 그대로)
   const fillBannerForm = (b: any) =>
-    setBannerForm({ id: b._id, imageUrl: b.imageUrl, mobileImageUrl: b.mobileImageUrl || "", title: b.title || "", subtitle: b.subtitle || "", link: b.link || "", sortOrder: String(b.sortOrder || 0), active: b.active });
+    setBannerForm({ id: b._id, imageUrl: b.imageUrl, mobileImageUrl: b.mobileImageUrl || "", title: b.title || "", subtitle: b.subtitle || "", link: b.link || "", placement: b.placement === "season" ? "season" : "home", sortOrder: String(b.sortOrder || 0), active: b.active });
 
   // ── 쿠폰 ────────────────────────────────────
   const EMPTY_COUPON = { id: "", code: "", name: "", kind: "discount", reward: "", rewardRoleId: "", rewardRoleName: "", rewardXp: "", requiredRoleId: "", requiredRoleName: "", type: "percent", value: "", maxDiscount: "", minTotal: "", maxUses: "", perUserLimit: "1", active: true, expiresAt: "" };
@@ -1193,6 +1223,8 @@ export default function AdminShopPage() {
         </span>
       ),
     },
+    // 노출 위치 — 값이 없는 옛 배너는 홈
+    { key: "placement", label: "위치", render: (b) => <span className="font-bold text-[#5a5a5a]"><ML>위치</ML>{b.placement === "season" ? "시즌 탭" : "홈"}</span> },
     { key: "status", label: "상태", mobile: "title", render: (b) => <StatusChip tone={b.active ? "ok" : "neutral"}>{b.active ? "노출 중" : "숨김"}</StatusChip> },
     { key: "link", label: "이동", render: (b) => (b.link ? <span className="font-bold text-[#5a5a5a]">→ {b.link}</span> : null) },
     { key: "sort", label: "순서", align: "right", render: (b) => <span className="text-[#5a5a5a] tabular-nums"><ML>순서</ML>{b.sortOrder || 0}</span> },
@@ -1785,6 +1817,12 @@ export default function AdminShopPage() {
               }
             >
               <form onSubmit={saveBanner}>
+                {/* 📌 노출 위치 — 홈: ARCTIC 홈 맨 위 · 시즌 탭: 스토어 시즌 탭 맨 위. 같은 위치의 배너끼리 한 슬라이드로 돈다 */}
+                <Field label="노출 위치">
+                  <Segmented options={[{ v: "home", l: "홈" }, { v: "season", l: "시즌 탭" }]} value={bannerForm.placement}
+                    onChange={(v) => setBannerForm({ ...bannerForm, placement: v })} />
+                </Field>
+
                 <Field label={<>배너 이미지 URL<Req /></>}>
                   <input type="text" value={bannerForm.imageUrl} onChange={(e) => setBannerForm({ ...bannerForm, imageUrl: e.target.value })}
                     placeholder="https://..." className={inputClass} />
@@ -1839,8 +1877,17 @@ export default function AdminShopPage() {
 
                 <Two>
                   <Field label={<>클릭 시 이동<Opt /></>}>
+                    {/* 바로 고르기 — 고르면 아래 칸이 그 주소로 채워진다. 목록에 없는 주소면 "직접 입력" */}
+                    <Dropdown
+                      theme="light"
+                      buttonClassName={DD_BTN}
+                      value={!bannerForm.link ? "" : bannerLinkOptions(items).some((o) => !o.group && o.value === bannerForm.link) ? bannerForm.link : BANNER_LINK_CUSTOM}
+                      onChange={(v) => { if (v !== BANNER_LINK_CUSTOM) setBannerForm({ ...bannerForm, link: v }); }}
+                      options={bannerLinkOptions(items)}
+                      maxHeight={320}
+                    />
                     <input type="text" value={bannerForm.link} onChange={(e) => setBannerForm({ ...bannerForm, link: e.target.value })}
-                      placeholder="/arctic 또는 /event" className={inputClass} />
+                      placeholder="/arctic?type=cosmetic 또는 https://…" className={`${inputClass} mt-2`} />
                   </Field>
                   <Field label="노출 순서" hint="작을수록 먼저 노출">
                     <input type="number" value={bannerForm.sortOrder} onChange={(e) => setBannerForm({ ...bannerForm, sortOrder: e.target.value })}

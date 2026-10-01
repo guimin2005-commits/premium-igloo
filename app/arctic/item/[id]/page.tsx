@@ -11,7 +11,8 @@ import ArcticDock from "../../ArcticDock";
 import ArcticStoreBar from "../../ArcticStoreBar";
 import ArcticFooter from "../../ArcticFooter";
 import ProductCard from "../../ProductCard";
-import ItemGallery from "../../ItemGallery";
+import CardArt from "../../CardArt";
+import AppliedPreview from "../../AppliedPreview";
 import { ownStateOf, renewBaseOf, renewPickOf, expiryLabel, ownedCountOf } from "../../owned";
 import { isUnitSale, maxPerOrderOf, qtyCapOf } from "@/lib/unitSale";
 
@@ -36,7 +37,7 @@ export default function ItemDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [myXp, setMyXp] = useState<number | null>(null);
   const [myPoint, setMyPoint] = useState<number | null>(null);
-  // 📌 내 레벨 카드 값(/api/xp/me data) — 꾸미기 상품의 '적용 모습'을 내 이름 · 레벨로 그린다(ItemGallery). 없으면 예시
+  // 📌 내 레벨 카드 값(/api/xp/me data) — 꾸미기 상품의 '적용 모습'을 내 이름 · 레벨로 그린다(AppliedPreview). 없으면 예시
   const [meData, setMeData] = useState<Record<string, unknown> | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [allItems, setAllItems] = useState<any[]>([]);
@@ -236,8 +237,15 @@ export default function ItemDetailPage() {
       <section className="max-w-5xl mx-auto px-6 pt-8 pb-32 md:pb-24">
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* 좌 — 이미지. 꾸미기 상품은 아래 썸네일 줄로 적용 모습(카드 스킨 · 디스코드 카드 · 프로필 배지)을 넘겨 본다 — 상품이 바뀌면 처음(상품 그림)부터 */}
-          <ItemGallery key={item._id} item={item} soldOut={soldOut} user={isLoggedIn ? session?.user : null} me={isLoggedIn ? meData : null} />
+          {/* 좌 — 이미지. 꾸미기 상품의 적용 모습은 효과 아래 '적용 미리보기'에(AppliedPreview) */}
+          <div className="relative aspect-square rounded-2xl bg-[#f2f2f2] border border-[#ededed] overflow-hidden">
+            <CardArt it={item} stage />
+            {soldOut && (
+              <div className="absolute inset-0 bg-[#131313]/55 flex items-center justify-center">
+                <span className="text-lg font-black text-white tracking-wider">SOLD OUT</span>
+              </div>
+            )}
+          </div>
 
           {/* 우 — 정보 */}
           <div className="flex flex-col">
@@ -430,6 +438,9 @@ export default function ItemDetailPage() {
             </div>
           </div>
         )}
+
+        {/* ── 적용 미리보기 — 꾸미기 상품만(카드 스킨 · 프로필 배지). 로그인했으면 내 프로필로 ── */}
+        <AppliedPreview key={item._id} item={item} user={isLoggedIn ? session?.user : null} me={isLoggedIn ? meData : null} />
 
         {/* ── 다른 상품 — 한 줄. PC 4칸, 모바일은 옆으로 넘기는 한 줄(스냅 · 카드 폭 고정).
                가로 넘침은 이 줄 안에서만 — -mx-6 로 화면 끝까지 붙이되 섹션 여백(px-6) 안이라 페이지는 넓어지지 않는다 ── */}

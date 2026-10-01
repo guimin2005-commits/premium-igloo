@@ -7,12 +7,18 @@ import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { SKIN_OF } from "@/lib/itemEffects";
-import { buildCard, CARD_SIZE, CARD_FONT, CARD_SKIN_KEYS, sampleCardData, fontCoverage } from "@/lib/botCards";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/authOptions";
+import { connectToDatabase } from "@/lib/mongodb";
+import UserXp from "@/models/UserXp";
+import { buildCard, CARD_SIZE, CARD_FONT, CARD_SKIN_KEYS, sampleCardData, fontCoverage, fetchAvatarDataUri } from "@/lib/botCards";
 import { getCumulativeXpByLevel } from "@/lib/leveling";
 import { COSMETIC_SAMPLE } from "@/lib/cosmeticSample";
 
 // 📌 상품 상세 '디스코드' 미리보기 — 카드 스킨을 입힌 봇 /레벨 카드(lib/botCards.js cmdLevel)를 PNG 로 그린다.
-//    GET ?skin=<SKINS 키>. 공개 — 예시 사람(lib/cosmeticSample.js)으로만 그리고 사용자 데이터는 쓰지 않는다.
+//    GET ?skin=<SKINS 키>. 로그인 안 했으면 예시 사람(lib/cosmeticSample.js) — 공개 · 길게 캐시.
+//    ?me=1 이고 로그인했으면 **본인**(세션의 이름 · 디스코드 사진 · 레벨 · 순위)으로 그린다(2026-10-01 "미리보기는 개인 프로필이 적용되게").
+//    본인 값은 세션에서만 읽는다 — 다른 사람 값을 그릴 길은 없다. 응답은 private 캐시 5분 + 메모리 5분(사람 · 스킨별).
 //    스킨마다 그림이 하나뿐이라 길게 캐시한다(브라우저 · CDN) + 같은 스킨을 다시 그리지 않게 메모리에도 둔다(스킨 수만큼만 — 키는 검증된 것뿐).
 //    봇 카드가 아직 그리지 못하는 스킨(CARD_SKINS 에 없음)도 400 — 기본 카드를 그 스킨인 것처럼 보이면 안 된다.
 
@@ -74,6 +80,52 @@ function sampleData(skin, avatar) {
   };
 }
 
+// 카드 값 → PNG 바이트
+async function render(data) {
+  const { fonts, has } = await loadFonts();
+  const { width, height } = CARD_SIZE.cmdLevel;
+  const res = new ImageResponse(buildCard("cmdLevel", data, createElement, { has }), { width, height, fonts });
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+// 📌 본인 /레벨 카드 값 — /api/xp/me 와 같은 계산(레벨 구간 진행 · 순위 = 나보다 XP 많은 사람 + 1)
+async function myData(session, skin) {
+  await connectToDatabase();
+  const doc = await UserXp.findOne({ userId: session.user.id }, { xp: 1, level: 1 }).lean();
+  const xp = doc?.xp || 0;
+  const level = doc?.level || 0;
+  const [above, total, avatar] = await Promise.all([
+    UserXp.countDocuments({ xp: { $gt: xp } }),
+    UserXp.countDocuments(),
+    fetchAvatarDataUri(session.user.image).catch(() => null),
+  ]);
+  const cur = getCumulativeXpByLevel(level);
+  const next = getCumulativeXpByLevel(level + 1);
+  return {
+    ...sampleCardData("cmdLevel", 0, avatar, skin),
+    name: String(session.user.name || ""),
+    level,
+    xp,
+    need: Math.max(0, next - xp),
+    progress: Math.min(1, Math.max(0, (xp - cur) / Math.max(1, next - cur))),
+    rank: above + 1,
+    total,
+  };
+}
+// 본인 카드 메모리 캐시 — 사람 · 스킨별 5분, 많아야 200장(오래된 것부터 버린다)
+const MINE_TTL = 5 * 60 * 1000;
+const mineCache = new Map();
+async function minePng(session, skin) {
+  const key = `${session.user.id}:${skin}`;
+  const hit = mineCache.get(key);
+  if (hit && Date.now() - hit.at < MINE_TTL) return hit.png;
+  const png = await render(await myData(session, skin));
+  mineCache.delete(key);
+  mineCache.set(key, { at: Date.now(), png });
+  if (mineCache.size > 200) mineCache.delete(mineCache.keys().next().value);
+  return png;
+}
+
 // 스킨 → PNG 바이트(Promise). 실패하면 지워 다음 요청에서 다시 그린다
 const pngCache = new Map();
 function pngOf(skin) {
@@ -96,6 +148,13 @@ export async function GET(request) {
   if (!Object.prototype.hasOwnProperty.call(SKIN_OF, skin) || !CARD_SKIN_KEYS.includes(skin)) return fail("잘못된 스킨입니다.");
 
   try {
+    if (request.nextUrl.searchParams.get("me") === "1") {
+      const session = await getServerSession(authOptions);
+      if (session?.user?.id) {
+        const png = await minePng(session, skin);
+        return new NextResponse(png, { headers: { "Content-Type": "image/png", "Cache-Control": "private, max-age=300" } });
+      }
+    }
     const png = await pngOf(skin);
     return new NextResponse(png, {
       headers: {

@@ -1,6 +1,7 @@
 // ── 슬래시 커맨드 정의 + 핸들러 ────────────────
 //    📌 응답 모양 · 문구는 관리자 화면(봇 메시지)의 템플릿 — buildMessage(키, 변수). 관리자가 끈 키(null)면 짧은 기본 글로 답한다.
-//       /레벨 · /랭크 · /출석체크는 이미지 카드를 붙인다(buildMessageWithCard — 카드를 끄거나 못 그리면 글만).
+//       /레벨 · /랭크 · /출석체크 · /퀘스트 · /인벤토리 · /시즌패스는 이미지 카드를 붙인다(buildMessageWithCard — 카드를 끄거나 못 그리면 글만.
+//       /퀘스트 · /인벤토리 · /시즌패스는 못 그리면 카드 전의 글 응답 그대로 — botMessages.js plainFallback).
 import {
   Events, REST, Routes, SlashCommandBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 } from "discord.js";
@@ -10,9 +11,9 @@ import { config } from "./config.js";
 import { getSettings } from "./botSettings.js";
 import { claimAttendance } from "./attend.js";
 import { buildMessage, buildMessageWithCard, cardAvatar, commonVars, progressBar, tierOf, SITE_URL } from "./botMessages.js";
-import { questView } from "./views/quests.js";
-import { inventoryView } from "./views/inventory.js";
-import { passView } from "./views/pass.js";
+import { questView, questCardData } from "./views/quests.js";
+import { inventoryView, inventoryCardData } from "./views/inventory.js";
+import { passView, passCardData } from "./views/pass.js";
 
 const MAX_LEVEL = 1000; // leveling.js getLevelByXp 의 끝
 
@@ -218,9 +219,11 @@ async function handleRank(interaction, r) {
 async function handleQuest(interaction, r) {
   if (!levelOpen()) return sendClosed(interaction, r);
   const v = await questView(interaction.user.id);
-  const payload = msg(
+  const base = commonVars(interaction.member, interaction.guild);
+  const payload = await msgCard(
     "cmdQuest",
-    { ...commonVars(interaction.member, interaction.guild), ...v },
+    { ...base, daily: v.daily, weekly: v.weekly, monthly: v.monthly, claimable: v.claimable },
+    async () => questCardData(v, base.name),
     `받을 보상 ${v.claimable}개`
   );
   return r.send({ ...payload, components: [linkRow("퀘스트", "/level?tab=my")] });
@@ -229,9 +232,11 @@ async function handleQuest(interaction, r) {
 async function handleInventory(interaction, r) {
   if (!levelOpen()) return sendClosed(interaction, r);
   const v = await inventoryView(interaction.member);
-  const payload = msg(
+  const base = commonVars(interaction.member, interaction.guild);
+  const payload = await msgCard(
     "cmdInventory",
-    { ...commonVars(interaction.member, interaction.guild), ...v },
+    { ...base, items: v.items, itemCount: v.itemCount },
+    async (cards) => inventoryCardData(v, base.name, cards),
     `보유 아이템 ${v.itemCount}개`
   );
   // 📌 인벤토리는 레벨 대시보드 위 팝업 — ?bag=1 이면 바로 열린다 (ARCTIC 은 비공개일 수 있어 레벨 쪽으로 보낸다)
@@ -242,7 +247,7 @@ async function handlePass(interaction, r) {
   if (!levelOpen()) return sendClosed(interaction, r);
   const v = await passView(interaction.user.id, interaction.member);
   if (!v.enabled) return r.send({ content: "시즌 패스 준비 중입니다.", allowedMentions: { parse: [] } }, { ephemeral: true });
-  const payload = msg(
+  const payload = await msgCard(
     "cmdPass",
     {
       ...commonVars(interaction.member, interaction.guild),
@@ -255,6 +260,7 @@ async function handlePass(interaction, r) {
       claimable: v.claimable,
       premium: v.premium,
     },
+    async (cards) => passCardData(v, cards),
     `시즌 패스 T${v.passTier} / T${v.passMax} · 받을 보상 ${v.claimable}개`
   );
   // 📌 옛 주소 ?tab=pass 는 대시보드로 가면서 시즌 패스 창을 연다 (app/level/page.js)

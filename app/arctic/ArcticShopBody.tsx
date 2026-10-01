@@ -23,6 +23,8 @@ import { MAX_PER_ORDER, clampPerOrder } from "@/lib/unitSale";
 import ArcticFooter from "./ArcticFooter";
 import ArcticDock from "./ArcticDock";
 import ArcticHome from "./ArcticHome";
+import BannerSlider, { useBanners } from "./BannerSlider";
+import { SeasonHead, SeasonPicks, seasonPicks } from "./ArcticSeason";
 import CardArt from "./CardArt";
 import ProductCard from "./ProductCard";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -352,36 +354,13 @@ export default function ArcticShopBody({
     setTimeout(() => setCartToast(""), 1600);
   };
 
-  // 📌 상단 이미지 배너 — 관리자가 등록, 5초마다 자동 전환
-  const [banners, setBanners] = useState<any[]>([]);
-  // 배너를 다 불러오기 전에는 자리만 비워 둔다 — 시즌 히어로가 먼저 떴다 사라지면 튀어 보인다
-  const [bannersLoaded, setBannersLoaded] = useState(false);
-  const [bannerIdx, setBannerIdx] = useState(0);
-  /* 📌 배너 틀 비율 — 이미지가 실제로 가진 비율에 맞춘다.
-     틀을 3/1(모바일)·4/1(PC) 로 고정해 두면 object-cover 가 남는 쪽을 잘라내
-     같은 배너가 기기마다 다르게 보인다(모바일에서 좌우가 잘렸다).
-     여러 장이면 가장 넓은 비율에 맞춰 어느 것도 좌우가 잘리지 않게 한다. */
-  const [bannerRatio, setBannerRatio] = useState(4);
-  const fitRatio = (img: HTMLImageElement) => {
-    const r = img.naturalWidth / img.naturalHeight;
-    if (!Number.isFinite(r) || r <= 0) return;
-    setBannerRatio((prev) => Math.min(8, Math.max(2.5, Math.max(prev, r))));
-  };
-
-  useEffect(() => {
-    if (status === "loading") return;
-    fetch(`/api/shop/banners${isAdmin ? "?all=1" : ""}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => { setBannerRatio(4); setBanners(Array.isArray(d?.data) ? d.data : []); })
-      .catch(() => {})
-      .finally(() => setBannersLoaded(true));
-  }, [status, isAdmin]);
-
-  useEffect(() => {
-    if (banners.length < 2) return;
-    const t = setInterval(() => setBannerIdx((i) => (i + 1) % banners.length), 5000);
-    return () => clearInterval(t);
-  }, [banners.length]);
+  // 📌 상단 이미지 배너 — 관리자가 노출 위치(홈 · 시즌 탭)를 골라 등록, 한 장에 8초씩 자동 전환.
+  //    위치마다 한 벌씩 여기서 들고 있다(목록 · 지금 장 · 틀 비율 · 불러오기 · 자동 넘김은 BannerSlider 의 useBanners)
+  const homeBanner = useBanners("home", status, isAdmin);
+  // 📌 시즌 탭 첫 화면 — 맨 위 시즌 배너 · 시즌 머리줄. 검색 중이면 결과가 먼저라 뺀다
+  const seasonTop = showing === "products" && typeFilter === "season" && !submitted.trim();
+  // 시즌 배너는 처음부터 같이 받아 둔다(탭을 열 때 늦게 떠 아래가 밀리지 않게). 넘김은 시즌 탭이 보일 때만
+  const seasonBanner = useBanners("season", status, isAdmin, seasonTop);
 
   // 관리자 — 상점 안에서 바로 상품 추가·수정 (폼 상태·기간·유형·아이템 적용 규칙은 ./productForm 공용)
   const [editForm, setEditForm] = useState<any>(null);
@@ -542,6 +521,11 @@ export default function ArcticShopBody({
     else sorted.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return sorted;
   }, [items, typeFilter, priceFilter, inStockOnly, affordableOnly, wishOnly, wish, submitted, sort, myXp, myPoint]);
+
+  // 📌 시즌 탭 두 갈래 큐레이션 — 기본 상태(필터 · 정렬을 안 건)에서만. 무엇이든 걸면 지금처럼 격자 결과만.
+  //    시즌 상품이 적으면 null → 바로 격자 (ArcticSeason)
+  const seasonPlain = seasonTop && priceFilter === "all" && !inStockOnly && !affordableOnly && !wishOnly && sort === "recommended";
+  const seasonCur = useMemo(() => (seasonPlain ? seasonPicks(visible) : null), [seasonPlain, visible]);
 
   // 📌 이미 장바구니에 있는 상품을 '구매'로 누르면, 낱개 구매인지
   //    장바구니와 함께 결제할지 먼저 물어본다 (모르고 따로 사는 걸 막는다)
@@ -713,7 +697,7 @@ export default function ArcticShopBody({
     return (
       <ProductCard key={it._id} it={it} href={href} pick={it._pick} wished={wish.includes(it._id)} onWish={() => toggleWish(it)}
         overlay={isAdmin && !it.active ? (
-          <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">숨김</span>
+          <span className="absolute top-2 left-2 @min-[180px]:top-2.5 @min-[180px]:left-2.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">숨김</span>
         ) : null}>
         {isAdmin && (
           <div className="mt-2 flex gap-2 text-[11px] font-bold">
@@ -932,7 +916,7 @@ export default function ArcticShopBody({
         <ArcticHome
           items={items} isLoading={isLoading} isAdmin={isAdmin} isLoggedIn={isLoggedIn}
           myXp={myXp} myPoint={myPoint} myLevel={myLevel} ownedItemIds={ownedItemIds}
-          banners={banners} bannersLoaded={bannersLoaded} bannerIdx={bannerIdx} setBannerIdx={setBannerIdx} bannerRatio={bannerRatio} fitRatio={fitRatio}
+          banners={homeBanner.banners} bannersLoaded={homeBanner.loaded} bannerIdx={homeBanner.idx} setBannerIdx={homeBanner.setIdx} bannerRatio={homeBanner.ratio} fitRatio={homeBanner.fitRatio}
           renderCard={renderCard} goProducts={goProducts} openEdit={() => openEdit()}
           adminTools={
             <>
@@ -960,7 +944,14 @@ export default function ArcticShopBody({
 
       {/* ── 상품 · 검색 · 필터 ── */}
       {showing === "products" && (<>
+      {/* 시즌 탭 — 맨 위 시즌 배너(노출 위치 '시즌 탭'). 홈과 같은 한 벌 · 같은 규칙(없으면 이 자리 없음) */}
+      {seasonTop && (
+        <BannerSlider banners={seasonBanner.banners} bannerIdx={seasonBanner.idx} setBannerIdx={seasonBanner.setIdx}
+          bannerRatio={seasonBanner.ratio} fitRatio={seasonBanner.fitRatio} isAdmin={isAdmin} />
+      )}
       <section className="max-w-7xl mx-auto px-5 md:px-8 pt-8">
+        {/* 시즌 탭 — 시즌 번호 · 이름 · D-day 머리줄. 필터 줄은 그 아래 (큐레이션이 빠져도 필터 줄이 안 움직이게) */}
+        {seasonTop && <SeasonHead />}
         {/* 📌 아이콘 상태로 접혀 있다가 호버·포커스·입력 시 펼쳐지는 검색창
                (모바일은 터치라 호버가 없으므로 항상 펼친 상태) */}
         {/* 검색어 표시 (검색은 헤더에서) */}
@@ -1065,11 +1056,14 @@ export default function ArcticShopBody({
           <div className="py-24 text-center break-keep">
             <p className="text-sm font-bold text-[#5a5a5a]">{typeFilter === "season" && !items.some((it) => isPointOnly(it)) ? "시즌 상품 준비 중입니다." : "조건에 맞는 상품이 없습니다."}</p>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 lg:gap-6">
+        ) : (<>
+          {/* 시즌 탭 기본 상태 — 두 갈래 큐레이션 + '전체' 머리, 그 아래 전체 격자 */}
+          {seasonCur && <SeasonPicks picks={seasonCur} renderCard={renderCard} />}
+          {/* 📌 칸 수 — 카드 폭이 PC · 태블릿 약 220~230px(국내 쇼핑몰 기준)이 되게: 폰 2 · 태블릿 3 · lg 4 · xl 5 (예전 3열은 카드가 386px 라 너무 컸다) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-3 gap-y-7 sm:gap-x-4 lg:gap-x-5 lg:gap-y-9">
             {visible.map((it) => renderCard(it))}
           </div>
-        )}
+        </>)}
       </section>
       </>)}
 

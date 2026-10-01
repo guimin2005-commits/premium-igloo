@@ -1,4 +1,4 @@
-/* 📌 봇 메시지 이미지 카드 — 레벨업 · /레벨 · /랭크 · /출석체크 · 시즌 RANKER 발표를 PNG 로 그려 메시지에 붙인다(attachment://card.png).
+/* 📌 봇 메시지 이미지 카드 — 레벨업 · /레벨 · /랭크 · /출석체크 · /퀘스트 · /인벤토리 · /시즌패스 · 시즌 RANKER 발표를 PNG 로 그려 메시지에 붙인다(attachment://card.png).
    ⚠️ 아래 "공용 블록" 은 사이트 lib/botCards.js 와 글자 하나까지 같아야 한다 (봇은 별도 배포라 import 불가).
    renderCard(kind, data) → PNG Buffer | null — satori(요소 → SVG) → @resvg/resvg-js(SVG → PNG). 3초 안에 못 끝내면 null(글만 보낸다).
    fetchAvatarDataUri(url) → 디스코드 아바타 png 256 data URI | null (2초).
@@ -8,6 +8,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import satori from "satori";
 import { renderAsync } from "@resvg/resvg-js";
+import { itemArtSvg } from "./itemArt.js";
+
+// 시즌 2 카드 스킨 그림(문자열 함수) — 사이트 lib/cardSkins 의 사본
+import { STRING_SKINS } from "./cardSkins/index.js";
 
 // ═══ 공용 블록 시작 — lib/botCards.js 와 bot/src/botCards.js 의 이 구간은 글자 하나까지 같아야 한다 ═══
 
@@ -27,6 +31,9 @@ export const CARD_SIZE = {
   cmdRank: { width: 1200, height: 900 }, // 서버 순위표 — 10줄 + 내 줄이라 세로로 길다
   cmdAttend: { width: 1200, height: 630 },
   rankerAnnounce: { width: 1200, height: 675 },
+  cmdQuest: { width: 1200, height: 904 }, // 일일 · 주간 · 월간 세 칸 — 높이는 퀘스트가 가장 많은 칸에 맞춰 준다(cardSizeOf). 이 값은 가장 클 때(칸마다 4개)
+  cmdInventory: { width: 1200, height: 690 }, // 가방 6칸 × 2줄
+  cmdPass: { width: 1200, height: 675 },
 };
 export const CARD_KINDS = Object.keys(CARD_SIZE);
 export const isCardKind = (k) => Object.prototype.hasOwnProperty.call(CARD_SIZE, k);
@@ -41,20 +48,28 @@ export const CARD_FIELDS = {
   cmdRank: ["season", "seasonName", "total", "top: [{ rank, name, avatar, level, xp }] — 1위부터 최대 10명", "me?: { rank, name, avatar, level, xp }", "skin?"],
   cmdAttend: ["avatar", "name", "amount", "streak", "bestStreak", "attendCount", "streakBonus?", "skin?"],
   rankerAnnounce: ["season", "seasonName", "top: [{ name, avatar, xp }] — 1위부터 최대 3명"],
+  //  item: { name, type, icon("art:키" · "svg:키" · 짧은 글자), image?(png · jpeg data URI — 원격 주소는 받지 않는다), color? } — 그림은 itemIconEl
+  cmdQuest: ["name", "claimable", "periods: [{ key: daily|weekly|monthly, left: 초기화까지 ms, quests: [{ name, metric: count|minute|xp, current, target, rewardXp, rewardPoint, done, claimed, claimable }] }]", "skin?"],
+  cmdInventory: ["name", "total", "items: [item + { count, days?: 남은 일수(영구면 없음), pending?, worn? }] — 앞에서 BAG_SLOTS 칸까지", "skin?"],
+  cmdPass: ["season", "seasonName", "tier", "maxTier", "progress — 다음 티어까지 0~1", "need — 다음 티어까지 남은 XP", "claimFree", "claimPaid", "premium", "next: [{ tier, kind: xp|point|role|item, amount?, label?, premium, ...item }] — 최대 4"],
 };
 
 // 📌 카드 스킨 — 아이템 효과 cardSkin 의 skin 키. 테두리 · 무늬만 바꾼다(바탕 톤 · 글자 · 사진 링 · 막대 · 등급 빛은 그대로).
 //    ⚠️ 등급 색(오른쪽 위 빛 · 링 · 문장)과 헷갈리지 않게 스킨은 카드를 색으로 물들이거나 번지는 빛을 얹지 않는다
-//    레벨업 · /레벨 · /랭크 · /출석체크 카드에만 — RANKER 발표는 스킨 없음. 모르는 키 · 빈 값은 기본 카드.
+//    레벨업 · /레벨 · /랭크 · /출석체크 · /퀘스트 · /인벤토리 · /시즌패스 카드에만 — RANKER 발표는 스킨 없음. 모르는 키 · 빈 값은 기본 카드.
 //    grid: 무늬("line" 격자 · "dot" 도트 · "hatch" 빗금) · tint/gridOp: 무늬 색 · 진하기
 export const CARD_SKINS = {
   gold: { label: "골드", grid: "line", tint: "#f0cf7e", gridOp: 0.055 },
   aurora: { label: "오로라", grid: "line", tint: "#9ff0ff", gridOp: 0.04 },
   ice: { label: "아이스", grid: "dot", tint: "#bfe6ff", gridOp: 0.1 },
   crimson: { label: "크림슨", grid: "hatch", tint: "#ff5a76", gridOp: 0.045 },
+  // 시즌 2 「A New World」 — 그림은 cardSkins(사이트 lib/cardSkins · 봇 bot/src/cardSkins 같은 파일)
+  newworld: { label: "새로운 세계", grid: "line", tint: "#ffe3c4", gridOp: 0.045 },
+  chart: { label: "항해도", grid: "line", tint: "#e9d6ae", gridOp: 0.05 },
+  airship: { label: "비공정", grid: "line", tint: "#b9c8ce", gridOp: 0.045 },
 };
 export const CARD_SKIN_KEYS = Object.keys(CARD_SKINS);
-export const SKIN_CARD_KINDS = ["levelUp", "cmdLevel", "cmdRank", "cmdAttend"];
+export const SKIN_CARD_KINDS = ["levelUp", "cmdLevel", "cmdRank", "cmdAttend", "cmdQuest", "cmdInventory", "cmdPass"];
 export function cardSkinOf(key) {
   const k = String(key ?? "").trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(CARD_SKINS, k) ? { key: k, ...CARD_SKINS[k] } : null;
@@ -520,6 +535,10 @@ ${corners}<path d="${[[i, i], [w - i, i], [i, h - i], [w - i, h - i]].map(([x, y
 <path d="${br(o + 7 * SK, 18 * SK)}" fill="none" stroke="#ff5a76" stroke-opacity="0.5" stroke-width="2"/>${crest(o)}${crest(h - o)}`,
     };
   },
+  // 시즌 2 — 사이트 프로필 카드(SkinFrame)와 같은 그림 함수(S=SK 배율)
+  newworld: (w, h) => STRING_SKINS.newworld.deco(w, h, SK, false),
+  chart: (w, h) => STRING_SKINS.chart.deco(w, h, SK, false),
+  airship: (w, h) => STRING_SKINS.airship.deco(w, h, SK, false),
 };
 
 const checkSvg = (color, sw = 3.2) =>
@@ -547,7 +566,11 @@ function kit(h) {
   const img = (src, w, hh, style) => h("img", { src, width: w, height: hh, style: { width: w, height: hh, ...style } });
   // 한 줄 글자 — 넘치면 말줄임
   const line = (text, style) => box({ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...style }, text);
-  return { box, img, line };
+  // 여러 줄 글자(최대 lines 줄, 넘치면 말줄임) — 줄이 바뀌어야 해서 WORD JOINER 를 끼우지 않는다(커닝 폭 차이는 숫자 정렬에서만 문제). 띄어쓰기에서만 줄을 바꾼다
+  //    📌 가운데 맞춤은 textAlign 과 justifyContent 를 함께 — satori 는 한 줄짜리 글에 textAlign 만으로는 가운데로 보내지 않는다
+  const para = (text, lines, style) =>
+    h("div", { style: { display: "block", lineClamp: lines, wordBreak: "keep-all", overflow: "hidden", ...style } }, String(text ?? ""));
+  return { box, img, line, para };
 }
 
 const initialOf = (name) => (Array.from(String(name || "").trim())[0] || "?").toUpperCase();
@@ -613,9 +636,9 @@ const brand = (k, style) =>
     "고급 이글루 · SYSTEM : LEVEL"
   );
 
-// 카드 틀 — k.skin(buildCard 가 정한 스킨)이 있으면 무늬 · 테두리를 그 스킨으로
+// 카드 틀 — k.skin(buildCard 가 정한 스킨)이 있으면 무늬 · 테두리를 그 스킨으로. 크기는 k.size(buildCard 가 정한 cardSizeOf)
 function frame(k, kind, glow, ...children) {
-  const { width, height } = CARD_SIZE[kind];
+  const { width, height } = k.size || CARD_SIZE[kind];
   return k.box(
     { width, height, position: "relative", backgroundColor: INK, color: "#ffffff", fontFamily: CARD_FONT, overflow: "hidden" },
     k.img(svgUri(bgSvg(width, height, glow, k.skin)), width, height, { position: "absolute", left: 0, top: 0 }),
@@ -624,11 +647,13 @@ function frame(k, kind, glow, ...children) {
 }
 
 // 막대 — 바탕 흰 10%, 채움은 강조색(대시보드와 같다). 아주 조금이라도 진행했으면 둥근 끝이 보이게 최소 폭
+//   color 가 "linear-gradient(…)" 면 그 결로 채운다(시즌 패스)
 function bar(k, pct, height, color) {
   const p = clamp01(pct);
+  const fill = String(color).startsWith("linear-gradient") ? { backgroundImage: color } : { backgroundColor: color };
   return k.box(
     { width: "100%", height, borderRadius: height / 2, backgroundColor: W(0.1), overflow: "hidden" },
-    p > 0 ? k.box({ width: `${Math.max(p * 100, 1.6)}%`, height, borderRadius: height / 2, backgroundColor: color }) : null
+    p > 0 ? k.box({ width: `${Math.max(p * 100, 1.6)}%`, height, borderRadius: height / 2, ...fill }) : null
   );
 }
 
@@ -1043,22 +1068,551 @@ function rankBoardCard(k, kind, d, text) {
   );
 }
 
+// ── 아이템 · 보상 아이콘 (/인벤토리 · /시즌패스) ──
+// 📌 선 아이콘(24×24 · 선 1.7) — app/components/ItemIcon.tsx 의 SHAPES(프리셋 "svg:<키>") 사본 + 카드 전용 몇 개(shieldCheck · crownFill · clock).
+//    ItemIcon.tsx(· Icons.tsx ICON_PATHS)의 프리셋 그림을 고치거나 늘리면 여기도 같이 고칠 것 — 여기 없는 키는 유형 기본 모양으로 그린다.
+//    fill: 채움형 · f: 연하게(28%) 채우는 면 · dash: 마지막 선 점선
+const GLYPHS = {
+  bolt: { d: ["M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"] },
+  shield: { fill: true, d: ["M12 2.6 20 5.4V12c0 4.6-3.4 7.6-8 9.2C7.4 19.6 4 16.6 4 12V5.4Z"] },
+  key: { d: ["M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"] },
+  cube: { d: ["M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6Z", "M4 7.6 12 12l8-4.4M12 12v8.8"], f: ["M4 7.6 12 3.2 20 7.6 12 12Z"] },
+  box: { d: ["M4 10.5V8a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v2.5", "M3.5 10.5h17v8.5a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5Z", "M10.5 10.5V14h3v-3.5"], f: ["M4 10.5V8a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v2.5Z"] },
+  medal: { d: ["M12 9a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z", "M8.5 9 6.5 3h11l-2 6"] },
+  star: { d: ["M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"] },
+  crown: { d: ["M4.5 18.5h15", "M4.5 18.5 3.2 7.5l4.9 3.6L12 5l3.9 6.1 4.9-3.6-1.3 11Z"] },
+  gem: { d: ["M7 4h10l4 5.2L12 20 3 9.2Z", "M3 9.2h18", "M9.5 9.2 12 20l2.5-10.8"] },
+  flame: { d: ["M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1A3.75 3.75 0 0012 18z"] },
+  bell: { d: ["M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"] },
+  ribbon: { d: ["M7 3h10v11l-5-3-5 3Z", "M9 16.5 7 21l5-2.6L17 21l-2-4.5"] },
+  ticket: { d: ["M3.5 9V7.5A1.5 1.5 0 0 1 5 6h14a1.5 1.5 0 0 1 1.5 1.5V9a3 3 0 0 0 0 6v1.5A1.5 1.5 0 0 1 19 18H5a1.5 1.5 0 0 1-1.5-1.5V15a3 3 0 0 0 0-6Z", "M14.5 6.5v11"], dash: "2 2" },
+  gift: { d: ["M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"] },
+  music: { d: ["M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z"] },
+  mic: { d: ["M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"] },
+  heart: { d: ["M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"] },
+  snow: { d: ["M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9", "M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"] },
+  unlock: { d: ["M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"] },
+  lock: { d: ["M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"] },
+  badge: { d: ["M12 3.8A3.9 3.9 0 0 1 17.8 6.2A3.9 3.9 0 0 1 20.2 12A3.9 3.9 0 0 1 17.8 17.8A3.9 3.9 0 0 1 12 20.2A3.9 3.9 0 0 1 6.2 17.8A3.9 3.9 0 0 1 3.8 12A3.9 3.9 0 0 1 6.2 6.2A3.9 3.9 0 0 1 12 3.8Z", "M8.8 12.2l2.2 2.2 4.4-4.6"] },
+  door: { d: ["M6 21V4h10v17", "M3 21h18", "M13 12v.8"] },
+  eye: { d: ["M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z M15 12a3 3 0 11-6 0 3 3 0 016 0z"] },
+  chat: { d: ["M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"] },
+  image: { d: ["M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"] },
+  link: { d: ["M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"] },
+  pin: { d: ["M15 10.5a3 3 0 11-6 0 3 3 0 016 0z M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"] },
+  video: { d: ["M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"] },
+  speaker: { d: ["M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z"] },
+  headset: { d: ["M4.5 14v-2a7.5 7.5 0 0 1 15 0v2", "M4.5 14H7v5H4.5ZM17 14h2.5v5H17Z", "M19.5 19a3 3 0 0 1-3 2.5H14"] },
+  gear: { d: ["M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z", "M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"] },
+  flag: { d: ["M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5"] },
+  sparkles: { d: ["M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"] },
+  clock: { d: ["M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"] },
+  hand: { d: ["M7 11.5V6.5a1.5 1.5 0 0 1 3 0V11", "M10 11V4.5a1.5 1.5 0 0 1 3 0V11", "M13 11V5.5a1.5 1.5 0 0 1 3 0v6", "M16 11.5V8a1.5 1.5 0 0 1 3 0v6.5a6.5 6.5 0 0 1-6.5 6.5H11a6 6 0 0 1-4.9-2.5L3.8 15a1.6 1.6 0 0 1 2.5-2L7 14"] },
+  // ── 카드 전용 ──
+  shieldCheck: { d: ["M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"] },
+  crownFill: { fill: true, d: ["M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8z"] }, // 시즌 패스 프리미엄 왕관(사이트 패스 창 CROWN)
+};
+function glyphSvg(name, color, size, sw = 1.7) {
+  const g = GLYPHS[name] || GLYPHS.cube;
+  if (g.fill) return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}">${g.d.map((p) => `<path d="${p}" fill="${color}"/>`).join("")}</svg>`;
+  const faces = (g.f || []).map((p) => `<path d="${p}" fill="${color}" fill-opacity="0.28" stroke="none"/>`).join("");
+  const lines = g.d.map((p, i) => `<path d="${p}"${g.dash && i === g.d.length - 1 ? ` stroke-dasharray="${g.dash}"` : ""}/>`).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${faces}${lines}</svg>`;
+}
+const glyph = (k, name, color, size, style) => k.img(svgUri(glyphSvg(name, color, size)), size, size, { flexShrink: 0, ...style });
+
+// 유형 기본 모양 · 색 — app/components/ItemIcon.tsx TYPE_DEFAULT · lib/items.js ITEM_TYPE_COLOR 와 같다
+const TYPE_GLYPH = { role: "shield", perk: "key", item: "cube", cosmetic: "sparkles", physical: "box", level: "medal" };
+const TYPE_COLOR = { role: "#e91e3f", perk: "#2f6fb0", item: "#3f9e93", cosmetic: "#8557b0", physical: "#131313" };
+// 아이템 색 — 등록한 색 > 유형 기본색. 잉크 바탕이라 너무 어두우면(기프트카드 #131313 등) 밝은 회색 (app/components/Inventory.js invAccentOf 와 같은 기준)
+function itemAccent(it) {
+  const c = /^#[0-9a-f]{6}$/i.test(String(it?.color || "")) ? it.color : TYPE_COLOR[it?.type] || TYPE_COLOR.item;
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
+  const lum = (parseInt(m[1], 16) * 0.299 + parseInt(m[2], 16) * 0.587 + parseInt(m[3], 16) * 0.114) / 255;
+  return lum < 0.18 ? "#d4d4d4" : c;
+}
+
+// 📌 아이템 아이콘 — 이미지(png · jpeg data URI) > 도트 그림("art:<키>" — art(키) → SVG 문자열, buildCard 의 opts.art) > 선 프리셋("svg:<키>")
+//    > 짧은 글자 > 유형 기본 모양. app/components/ItemIcon.tsx 와 같은 순서. 이모지만인 아이콘 · 목록에 없는 키는 유형 기본 모양.
+//    도트 그림은 16칸 그림이라 size 를 16 의 배수로 줘야 칸이 번지지 않는다. dim: 35%(지급 대기)
+function itemIconEl(k, it, size, text, art, dim = false) {
+  const style = { flexShrink: 0, ...(dim ? { opacity: 0.35 } : null) };
+  const icon = String(it?.icon || "");
+  if (typeof it?.image === "string" && /^data:image\/(png|jpeg);base64,/i.test(it.image)) {
+    return k.img(it.image, size, size, { ...style, borderRadius: Math.max(6, Math.round(size * 0.28)), objectFit: "cover" });
+  }
+  const ak = icon.startsWith("art:") ? icon.slice(4) : "";
+  const svg = ak && typeof art === "function" ? art(ak) : "";
+  if (svg) return k.img(svgUri(svg), size, size, style);
+  const color = itemAccent(it);
+  const pk = icon.startsWith("svg:") ? icon.slice(4) : "";
+  if (pk && GLYPHS[pk]) return glyph(k, pk, color, size, style);
+  const t = icon && !/^(art|svg):/.test(icon) ? text(icon) : "";
+  if (t) {
+    return k.box(
+      { ...style, width: size, height: size, alignItems: "center", justifyContent: "center", overflow: "hidden", whiteSpace: "nowrap", fontSize: fitSize(t, size, Math.round(size * 0.6)), fontWeight: 900, color },
+      t
+    );
+  }
+  return glyph(k, TYPE_GLYPH[it?.type] || "cube", color, size, style);
+}
+
+// 남은 시간 → "3일 5시간" · "5시간" · "12분"
+const leftText = (ms) => {
+  const m = Math.max(1, Math.floor((Number(ms) || 0) / 60000));
+  if (m >= 1440) {
+    const dd = Math.floor(m / 1440);
+    const hh = Math.floor((m % 1440) / 60);
+    return hh ? `${dd}일 ${hh}시간` : `${dd}일`;
+  }
+  return m >= 60 ? `${Math.floor(m / 60)}시간` : `${m}분`;
+};
+// 큰 수 줄여 쓰기 — 1만 이상 "12.3만" · 100만 이상 "1234만" · 1억 이상 "1.2억"(내림 — 진행이 다 찬 것처럼 보이지 않게). 좁은 칸에서만
+const shortNum = (v) => {
+  const n = int(v);
+  if (Math.abs(n) >= 1e8) return `${Math.floor(n / 1e7) / 10}억`;
+  if (Math.abs(n) >= 1e6) return `${Math.floor(n / 1e4)}만`;
+  if (Math.abs(n) >= 1e4) return `${Math.floor(n / 1e3) / 10}만`;
+  return num(n);
+};
+
+// 칸 바탕 — 거의 불투명한 잉크 판 위에 옅은 결. 스킨 장식 · 격자가 칸 안으로 비쳐 글자를 흐리지 않게
+const PANEL = "rgba(25,25,25,0.9)";
+const panelBg = (a, b = a) => ({ backgroundColor: PANEL, backgroundImage: `linear-gradient(160deg, ${a} 0%, ${b} 100%)` });
+
+// 새 카드 머리(/퀘스트 · /인벤토리 · /시즌패스) — 위 작은 줄(caption) + 큰 제목, 오른쪽 right(아래 맞춤). /랭크 머리와 같은 크기
+function cardHead(k, caption, title, right) {
+  return k.box(
+    { position: "absolute", left: 72, right: 72, top: 56, alignItems: "flex-end", justifyContent: "space-between" },
+    k.box(
+      { flexDirection: "column", minWidth: 0, flexShrink: 1 },
+      caption,
+      k.box({ marginTop: caption ? 6 : 0, fontSize: 64, fontWeight: 900, letterSpacing: -1, lineHeight: 1.05, whiteSpace: "nowrap" }, title)
+    ),
+    right
+  );
+}
+const nameCaption = (k, name) => (name ? k.line(name, { maxWidth: 620, fontSize: 28, fontWeight: 700, color: W(0.5) }) : null);
+// 오른쪽 큰 숫자 + 단위 (머리 오른쪽)
+const headStat = (k, value, unit, color = "#ffffff") =>
+  k.box(
+    { alignItems: "flex-end", flexShrink: 0, marginLeft: 32, marginBottom: 2 },
+    k.box({ fontSize: 64, fontWeight: 900, letterSpacing: -1, lineHeight: 1, color }, value),
+    k.box({ fontSize: 30, fontWeight: 700, color: W(0.5), marginLeft: 4, marginBottom: 4 }, unit)
+  );
+
+// /퀘스트 — 머리(이름 · 퀘스트 · 받을 보상 n개) → 일일 · 주간 · 월간 세 칸. 칸 머리에 받을 수 있는 수(빨간 알) · 초기화까지 남은 시간,
+//   퀘스트마다 이름 · 상태(받기 · 완료 · 달성) · 진행 막대 · 진행/목표 · 보상. 칸마다 QUEST_SHOW 개까지 — 넘으면 마지막 자리에 "외 n개".
+//   상태 색은 사이트 퀘스트 목록(app/level)과 같은 말 — 받을 수 있으면 강조색, 끝났으면 초록. 카드 높이는 가장 긴 칸에 맞춘다(cardSizeOf)
+export const QUEST_SHOW = 4;
+const QUEST_TOP = 194; // 세 칸이 시작하는 높이
+const QUEST_HEAD = 62; // 칸 머리 + 아래 여백
+const QUEST_TILE = 138;
+const QUEST_GAP = 14;
+const QUEST_W = 336; // (1056 - 24 × 2) / 3
+const QUEST_IN = QUEST_W - 16 * 2 - 4; // 타일 안쪽 폭(좌우 여백 · 테두리 뺀 것)
+const GREEN = "#3ecf8e";
+const XP_C = "#ff7d93"; // 보상 XP — 강조색을 잉크 위에서 읽히게 밝힌 것
+const POINT_C = "#5ce0b2"; // 보상 빙옥 — 사이트 퀘스트 목록의 청록을 잉크 위에서 읽히게 밝힌 것
+const PERIOD_LABEL = { daily: "일일", weekly: "주간", monthly: "월간" };
+const questTiles = (n) => Math.min(QUEST_SHOW, Math.max(1, int(n))); // 칸 하나의 타일 수(비었으면 "—" 한 칸)
+function questHeight(d) {
+  const periods = Array.isArray(d?.periods) ? d.periods.slice(0, 3) : [];
+  const n = Math.max(1, ...periods.map((p) => questTiles(Array.isArray(p?.quests) ? p.quests.length : 0)));
+  return QUEST_TOP + QUEST_HEAD + n * QUEST_TILE + (n - 1) * QUEST_GAP + 54;
+}
+// 진행/목표 — 회 · 분은 단위까지, XP 는 칸이 좁아 1만 이상을 줄여 쓰고 단위는 뺀다.
+//   회 · 분도 PROG_MAX 를 넘으면(예: 59,940/59,940분) 1만 이상을 줄여 쓴다 — 글자가 왼쪽 막대 위로 넘치지 않게
+const PROG_MAX = 196; // 진행 글자 칸 최대 폭 — 막대가 90px 아래로 줄지 않게(타일 안쪽 300 - 14 - 196)
+const progWidth = (s) => emWidth(s) * 26 * 0.95;
+function questProg(q) {
+  const target = Math.max(1, int(q.target));
+  const cur = Math.min(target, Math.max(0, int(q.current)));
+  if (q.metric === "xp") return `${shortNum(cur)}/${shortNum(target)}`;
+  const unit = q.metric === "minute" ? "분" : "회";
+  const full = `${num(cur)}/${num(target)}${unit}`;
+  return progWidth(full) <= PROG_MAX ? full : `${shortNum(cur)}/${shortNum(target)}${unit}`;
+}
+// progW: 진행 글자 칸 폭 — 한 칸(일일 · 주간 · 월간) 안에서 같게 둬 막대 길이를 맞춘다
+function questTile(k, q, text, progW) {
+  const target = Math.max(1, int(q.target));
+  const cur = Math.min(target, Math.max(0, int(q.current)));
+  const name = text(q.name) || "퀘스트";
+  const status = q.claimable ? "받기" : q.claimed ? "완료" : q.done ? "달성" : "";
+  const dim = !!q.claimed;
+  const prog = questProg(q);
+  let rw = [
+    int(q.rewardXp) > 0 ? { v: int(q.rewardXp), u: "XP", c: XP_C } : null,
+    int(q.rewardPoint) > 0 ? { v: int(q.rewardPoint), u: "빙옥", c: POINT_C } : null,
+  ].filter(Boolean);
+  // 보상 줄이 칸 안쪽(QUEST_IN)을 넘으면 1만 이상을 줄여 쓴다(emWidth 는 넉넉히 잡은 폭이라 조금 덜어 본다)
+  const long = rw.reduce((a, r, i) => a + (emWidth(`+${num(r.v)}`) + emWidth(r.u)) * 26 * 0.95 + 5 + (i ? 14 : 0), 0) > QUEST_IN;
+  rw = rw.map((r) => ({ ...r, t: `+${long ? shortNum(r.v) : num(r.v)}` }));
+  return k.box(
+    {
+      width: QUEST_W,
+      height: QUEST_TILE,
+      flexDirection: "column",
+      justifyContent: "space-between",
+      paddingTop: 16,
+      paddingBottom: 16,
+      paddingLeft: 16,
+      paddingRight: 16,
+      borderRadius: 20,
+      ...panelBg(q.claimable ? rgba(ACCENT, 0.14) : W(0.045)),
+      border: `2px solid ${q.claimable ? rgba(ACCENT, 0.65) : W(0.07)}`,
+    },
+    // 이름 · 상태
+    k.box(
+      { alignItems: "center", height: 38 },
+      k.line(name, { flexGrow: 1, flexShrink: 1, minWidth: 0, fontSize: 28, fontWeight: 900, color: dim ? W(0.42) : "#ffffff" }),
+      status === "받기"
+        ? k.box({ marginLeft: 12, height: 38, paddingLeft: 15, paddingRight: 15, borderRadius: 19, backgroundColor: ACCENT, alignItems: "center", flexShrink: 0, fontSize: 26, fontWeight: 900, color: "#ffffff" }, "받기")
+        : status
+          ? k.box(
+              { marginLeft: 12, alignItems: "center", flexShrink: 0, fontSize: 26, fontWeight: 900, color: dim ? rgba(GREEN, 0.7) : GREEN },
+              k.img(svgUri(checkSvg(dim ? rgba(GREEN, 0.7) : GREEN, 3.4)), 28, 28, { marginRight: 4 }),
+              status
+            )
+          : null
+    ),
+    // 막대 · 진행/목표
+    k.box(
+      { alignItems: "center", height: 32 },
+      k.box({ flexGrow: 1, flexShrink: 1, minWidth: 0 }, bar(k, cur / target, 10, q.done || q.claimed ? (dim ? rgba(GREEN, 0.5) : GREEN) : ACCENT)),
+      k.box({ width: progW, marginLeft: 14, flexShrink: 0, justifyContent: "flex-end", fontSize: 26, fontWeight: 700, color: W(dim ? 0.35 : 0.6), whiteSpace: "nowrap" }, prog)
+    ),
+    // 보상 — 재화는 글자만
+    k.box(
+      { alignItems: "flex-end", height: 32, whiteSpace: "nowrap", overflow: "hidden" },
+      rw.length
+        ? rw.map((r, i) =>
+            k.box(
+              { alignItems: "flex-end", marginLeft: i ? 14 : 0, flexShrink: 0 },
+              k.box({ fontSize: 26, fontWeight: 900, color: dim ? W(0.4) : r.c }, r.t),
+              k.box({ fontSize: 26, fontWeight: 700, color: W(dim ? 0.3 : 0.5), marginLeft: 5 }, r.u)
+            )
+          )
+        : k.box({ fontSize: 26, fontWeight: 700, color: W(0.3) }, "—")
+    )
+  );
+}
+function questCard(k, kind, d, text) {
+  const periods = (Array.isArray(d.periods) ? d.periods : []).slice(0, 3);
+  const claimable = Math.max(0, int(d.claimable));
+  const faint = (child) =>
+    k.box(
+      { width: QUEST_W, height: QUEST_TILE, borderRadius: 20, border: `2px solid ${W(0.05)}`, backgroundColor: PANEL, alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, color: W(0.4) },
+      child
+    );
+  const column = (p, i) => {
+    const list = Array.isArray(p?.quests) ? p.quests : [];
+    const over = list.length > QUEST_SHOW;
+    const shown = list.slice(0, over ? QUEST_SHOW - 1 : QUEST_SHOW);
+    const n = list.filter((q) => q?.claimable).length;
+    const progW = Math.min(PROG_MAX, Math.ceil(Math.max(...shown.map((q) => progWidth(questProg(q))), 40)) + 4);
+    return k.box(
+      { width: QUEST_W, flexDirection: "column", marginLeft: i ? 24 : 0 },
+      // 칸 머리 — 이름 · (받을 수 있는 수) · 초기화까지
+      k.box(
+        { alignItems: "center", height: 44, marginBottom: QUEST_HEAD - 44 },
+        k.box({ fontSize: 32, fontWeight: 900, color: "#ffffff" }, PERIOD_LABEL[p?.key] || "퀘스트"),
+        n > 0
+          ? k.box({ marginLeft: 10, minWidth: 36, height: 36, paddingLeft: 10, paddingRight: 10, borderRadius: 18, backgroundColor: ACCENT, alignItems: "center", justifyContent: "center", fontSize: 26, fontWeight: 900, color: "#ffffff" }, String(n))
+          : null,
+        Number(p?.left) > 0
+          ? k.box(
+              { marginLeft: "auto", alignItems: "center", fontSize: 26, fontWeight: 700, color: W(0.5), whiteSpace: "nowrap" },
+              glyph(k, "clock", W(0.45), 26, { marginRight: 6 }),
+              leftText(p.left)
+            )
+          : null
+      ),
+      list.length
+        ? [
+            shown.map((q, j) => k.box({ marginTop: j ? QUEST_GAP : 0 }, questTile(k, q, text, progW))),
+            over ? k.box({ marginTop: QUEST_GAP }, faint(`외 ${num(list.length - shown.length)}개`)) : null,
+          ]
+        : faint("—")
+    );
+  };
+  return frame(
+    k,
+    kind,
+    ACCENT,
+    cardHead(
+      k,
+      nameCaption(k, text(d.name)),
+      "퀘스트",
+      k.box(
+        { flexDirection: "column", alignItems: "flex-end", flexShrink: 0, marginLeft: 32 },
+        k.box({ fontSize: 26, fontWeight: 700, color: W(0.45), whiteSpace: "nowrap" }, "받을 보상"),
+        headStat(k, num(claimable), "개", claimable > 0 ? "#ffffff" : W(0.4))
+      )
+    ),
+    k.box({ position: "absolute", left: 72, right: 72, top: QUEST_TOP, alignItems: "flex-start" }, periods.map(column))
+  );
+}
+
+// /인벤토리 — 머리(이름 · 인벤토리 · 보유 n개) → 가방 BAG_COLS × 2줄. 사이트 가방 칸(app/components/Inventory.js InvSlot)과 같은 말:
+//   칸 바탕은 아이템 색 결, 아이콘 · 이름, 그 아래 상태 줄(착용 · ×N · 지급 대기 · D-n — 3일 이하 빨강). 착용 중(카드 스킨 · 단 배지)이면 칸 테두리 강조색.
+//   남는 칸은 빈 칸, 보유가 칸보다 많으면 마지막 칸에 "+n". 칸에 들어갈 아이템 고르기 · 순서는 부르는 쪽(봇 views/inventory.js)이 정한다
+export const BAG_SLOTS = 12;
+const BAG_COLS = 6;
+const BAG_W = 160;
+const BAG_H = 212; // 아이콘 80 + 이름 두 줄 + 상태 한 줄
+const BAG_GAP = 19; // (1056 - 160 × 6) / 5
+function bagCard(k, kind, d, text, art) {
+  const items = Array.isArray(d.items) ? d.items : [];
+  const total = Math.max(items.length, int(d.total));
+  const over = total > BAG_SLOTS;
+  const shown = items.slice(0, over ? BAG_SLOTS - 1 : BAG_SLOTS);
+  const cell = (style, ...children) => k.box({ width: BAG_W, height: BAG_H, borderRadius: 22, flexShrink: 0, ...style }, ...children);
+  const slot = (it) => {
+    const accent = itemAccent(it);
+    const dead = !!it.pending;
+    const days = it.days == null || it.days === "" ? null : Math.max(0, int(it.days));
+    let status = [
+      it.worn ? { k: "worn", t: "착용", c: "#ff7d93" } : null,
+      int(it.count) > 1 ? { k: "count", t: `×${num(it.count)}`, c: W(0.6) } : null,
+      dead ? { k: "pending", t: "지급 대기", c: W(0.45) } : null,
+      days != null ? { k: "days", t: `D-${days}`, c: days <= 3 ? "#ff5c77" : W(0.6) } : null,
+    ].filter(Boolean);
+    // 한 줄(칸 안쪽 140)을 넘으면 차례로 줄인다 — '착용' 빼기(착용 칸은 테두리가 이미 강조색) → '지급 대기'를 '대기'로 → ×N 빼기 → 뒤에서부터 빼기.
+    //   글자가 칸 끝에서 반쯤 잘려 보이지 않게
+    const statusW = (list) => list.reduce((a, x, j) => a + emWidth(x.t) * 26 * 0.95 + (j ? 8 : 0), 0);
+    const wide = () => statusW(status) > BAG_W - 20;
+    if (wide() && it.worn) status = status.filter((x) => x.k !== "worn");
+    if (wide() && dead) status = status.map((x) => (x.k === "pending" ? { ...x, t: "대기" } : x));
+    if (wide()) status = status.filter((x) => x.k !== "count");
+    while (status.length > 1 && wide()) status = status.slice(0, -1);
+    return cell(
+      {
+        flexDirection: "column",
+        alignItems: "center",
+        paddingTop: 22, // 아이콘이 모든 칸에서 같은 높이에 오게 위에서부터 쌓는다
+        paddingLeft: 10,
+        paddingRight: 10,
+        ...(dead ? { backgroundColor: PANEL } : panelBg(rgba(accent, 0.2), rgba(accent, 0.05))),
+        border: it.worn ? `3px solid ${ACCENT}` : `2px solid ${dead ? W(0.07) : rgba(accent, 0.3)}`,
+      },
+      itemIconEl(k, it, 80, text, art, dead),
+      // 이름은 두 줄까지 — "카드 스킨 · 골드" 처럼 뒤에서 갈리는 이름이 한 줄 말줄임이면 모두 같아 보인다
+      k.para(text(it.name) || "아이템", 2, { marginTop: 10, width: BAG_W - 20, textAlign: "center", justifyContent: "center", fontSize: 26, fontWeight: 900, lineHeight: 1.15, color: dead ? W(0.4) : W(0.9) }),
+      status.length
+        ? k.box(
+            { marginTop: 2, maxWidth: BAG_W - 20, overflow: "hidden", whiteSpace: "nowrap", fontSize: 26, fontWeight: 700 },
+            status.map((s, j) => k.box({ color: s.c, marginLeft: j ? 8 : 0, flexShrink: 0 }, s.t))
+          )
+        : null
+    );
+  };
+  const cells = Array.from({ length: BAG_SLOTS }, (_, i) => {
+    if (i < shown.length) return slot(shown[i] || {});
+    if (over && i === BAG_SLOTS - 1) {
+      return cell(
+        { alignItems: "center", justifyContent: "center", ...panelBg(W(0.05)), border: `2px solid ${W(0.1)}`, fontSize: 44, fontWeight: 900, color: W(0.6) },
+        `+${num(total - shown.length)}`
+      );
+    }
+    return cell({ backgroundColor: "rgba(22,22,22,0.75)", border: `2px solid ${W(0.05)}` });
+  });
+  const rows = [cells.slice(0, BAG_COLS), cells.slice(BAG_COLS, BAG_COLS * 2)];
+  return frame(
+    k,
+    kind,
+    ACCENT,
+    cardHead(k, nameCaption(k, text(d.name)), "인벤토리", headStat(k, num(total), "개")),
+    k.box(
+      { position: "absolute", left: 72, right: 72, top: 190, flexDirection: "column" },
+      rows.map((r, i) => k.box({ marginTop: i ? 20 : 0 }, r.map((c, j) => k.box({ marginLeft: j ? BAG_GAP : 0 }, c))))
+    )
+  );
+}
+
+// /시즌패스 — 머리(SEASON n · 이름 · 시즌 패스 · 프리미엄 알약) → 티어(지금 / 전체) · 다음 티어까지 · 받을 보상(무료 · 프리미엄)
+//   → 막대(지금 티어 → 다음 티어 — 이번 시즌에 번 XP 기준) → 다음 보상 칸(최대 PASS_SHOW — XP · 빙옥은 글자만, 역할 · 아이템은 아이콘 + 이름).
+//   색은 사이트 시즌 패스 창의 보라 → 분홍 결. 프리미엄 보상 칸은 왕관, 해금 전이면 자물쇠 + 흐리게
+export const PASS_SHOW = 4;
+const PASS_A = "#9b6bff";
+const PASS_B = "#e05bb5";
+const PASS_GRAD = `linear-gradient(90deg, ${PASS_A} 0%, ${PASS_B} 100%)`;
+function passCard(k, kind, d, text, art) {
+  const maxTier = Math.max(0, int(d.maxTier));
+  const tier = Math.max(0, int(d.tier));
+  const maxed = maxTier > 0 && tier >= maxTier;
+  const none = maxTier === 0; // 티어를 아직 안 만든 패스
+  const premium = !!d.premium;
+  const season = int(d.season);
+  const seasonName = text(d.seasonName);
+  const next = (Array.isArray(d.next) ? d.next : []).slice(0, PASS_SHOW);
+  const INNER = 1056;
+  const LEFT_W = 330;
+  const cellW = Math.floor((INNER - LEFT_W) / 2);
+  const tierSize = fitSize(String(tier), 200, 120, -4);
+  const needV = none ? "—" : maxed ? "MAX" : num(d.need);
+  const needSize = fitSize(needV, cellW - 36 - (maxed || none ? 0 : 52), 56, -1);
+  const claim = [
+    { l: "무료", v: Math.max(0, int(d.claimFree)) },
+    { l: "프리미엄", v: Math.max(0, int(d.claimPaid)) },
+  ];
+  // 받을 보상 숫자 크기 — 두 자리 · 세 자리(안 받고 쌓인 티어)여도 칸(cellW - 왼쪽 여백 36) 안에 들게 줄인다
+  const claimW = (fs) => claim.reduce((a, c, i) => a + (i ? 26 : 0) + emWidth(c.l) * 28 * 0.95 + 10 + emWidth(num(c.v)) * fs, 0);
+  let claimSize = 56;
+  while (claimSize > 36 && claimW(claimSize) > cellW - 36) claimSize -= 2;
+  const TILE_W = Math.floor((INNER - 16 * (PASS_SHOW - 1)) / PASS_SHOW);
+  const tile = (r, i) => {
+    const paid = !!r.premium;
+    const locked = paid && !premium;
+    const label = text(r.label) || (r.kind === "role" ? "역할" : "아이템");
+    const money = r.kind === "xp" || r.kind === "point";
+    const v = num(r.amount);
+    return k.box(
+      {
+        width: TILE_W,
+        height: 132,
+        marginLeft: i ? 16 : 0,
+        flexDirection: "column",
+        justifyContent: "space-between",
+        paddingTop: 16,
+        paddingBottom: 18,
+        paddingLeft: 20,
+        paddingRight: 20,
+        borderRadius: 20,
+        ...(paid
+          ? { ...panelBg(rgba(PASS_A, 0.24), rgba(PASS_B, 0.12)), border: `2px solid ${rgba("#d6b4ff", 0.4)}` }
+          : { ...panelBg(W(0.05)), border: `2px solid ${W(0.09)}` }),
+      },
+      k.box(
+        { alignItems: "center", height: 30 },
+        k.box({ fontSize: 26, fontWeight: 900, color: W(0.55) }, `T${num(r.tier)}`),
+        paid ? glyph(k, "crownFill", "#d6b4ff", 26, { marginLeft: 8 }) : null,
+        locked ? glyph(k, "lock", W(0.5), 28, { marginLeft: "auto" }) : null
+      ),
+      k.box(
+        { alignItems: money ? "flex-end" : "center", opacity: locked ? 0.45 : 1, height: 56 },
+        money
+          ? [
+              k.box({ flexShrink: 0, fontSize: fitSize(v, TILE_W - 40 - Math.ceil(emWidth(r.kind === "xp" ? "XP" : "빙옥") * 26) - 8 - 14, 44, -1), fontWeight: 900, letterSpacing: -1, lineHeight: 1 }, v),
+              k.box({ flexShrink: 0, fontSize: 26, fontWeight: 700, color: W(0.55), marginLeft: 8, marginBottom: 2 }, r.kind === "xp" ? "XP" : "빙옥"),
+            ]
+          : [
+              r.kind === "role" ? glyph(k, "shieldCheck", "#ffffff", 48) : itemIconEl(k, r, 48, text, art),
+              k.line(label, { marginLeft: 14, flexGrow: 1, flexShrink: 1, minWidth: 0, fontSize: 28, fontWeight: 900 }),
+            ]
+      )
+    );
+  };
+  return frame(
+    k,
+    kind,
+    PASS_A,
+    cardHead(
+      k,
+      season
+        ? k.box(
+            { alignItems: "center", fontSize: 26, fontWeight: 900, color: W(0.5), whiteSpace: "nowrap", maxWidth: 680 },
+            k.box({ letterSpacing: 6, flexShrink: 0 }, `SEASON ${season}`),
+            seasonName ? k.line(`· ${seasonName}`, { marginLeft: 8, letterSpacing: 1, minWidth: 0, flexShrink: 1 }) : null
+          )
+        : null,
+      "시즌 패스",
+      premium
+        ? k.box(
+            { height: 60, paddingLeft: 22, paddingRight: 26, borderRadius: 30, backgroundImage: PASS_GRAD, alignItems: "center", flexShrink: 0, marginLeft: 32, marginBottom: 4 },
+            glyph(k, "crownFill", "#ffffff", 30, { marginRight: 10 }),
+            k.box({ fontSize: 28, fontWeight: 900, color: "#ffffff", whiteSpace: "nowrap" }, "프리미엄")
+          )
+        : k.box(
+            { height: 60, paddingLeft: 22, paddingRight: 26, borderRadius: 30, border: `2px solid ${W(0.2)}`, alignItems: "center", flexShrink: 0, marginLeft: 32, marginBottom: 4 },
+            glyph(k, "lock", W(0.55), 30, { marginRight: 10 }),
+            k.box({ fontSize: 28, fontWeight: 900, color: W(0.6), whiteSpace: "nowrap" }, "프리미엄 미해금")
+          )
+    ),
+    // 티어 · 다음 티어까지 · 받을 보상
+    k.box(
+      { position: "absolute", left: 72, right: 72, top: 196, alignItems: "flex-end" },
+      k.box(
+        { width: LEFT_W, flexDirection: "column", flexShrink: 0 },
+        k.box({ fontSize: 26, fontWeight: 900, letterSpacing: 8, color: W(0.42) }, "TIER"),
+        k.box(
+          { alignItems: "flex-end", marginTop: 12 },
+          k.box({ fontSize: tierSize, fontWeight: 900, lineHeight: 0.84, letterSpacing: -4 }, String(tier)),
+          k.box({ fontSize: 44, fontWeight: 700, color: W(0.4), marginLeft: 14, whiteSpace: "nowrap" }, `/ ${num(maxTier)}`)
+        )
+      ),
+      k.box(
+        { width: cellW, flexDirection: "column", paddingLeft: 36, borderLeft: `2px solid ${W(0.1)}` },
+        k.box({ fontSize: 28, fontWeight: 700, color: W(0.45) }, "다음 티어까지"),
+        k.box(
+          { alignItems: "flex-end", marginTop: 12, height: 56 },
+          k.box({ fontSize: needSize, fontWeight: 900, letterSpacing: -1, lineHeight: 1 }, needV),
+          maxed || none ? null : k.box({ fontSize: 28, fontWeight: 700, color: W(0.5), marginLeft: 10, marginBottom: 2 }, "XP")
+        )
+      ),
+      k.box(
+        { width: cellW, flexDirection: "column", paddingLeft: 36, borderLeft: `2px solid ${W(0.1)}` },
+        k.box({ fontSize: 28, fontWeight: 700, color: W(0.45) }, "받을 보상"),
+        k.box(
+          { alignItems: "flex-end", marginTop: 12, height: 56 },
+          claim.map((c, i) =>
+            k.box(
+              { alignItems: "flex-end", marginLeft: i ? 26 : 0, flexShrink: 0 },
+              k.box({ fontSize: 28, fontWeight: 700, color: W(0.5), marginRight: 10, marginBottom: 2 }, c.l),
+              k.box({ fontSize: claimSize, fontWeight: 900, lineHeight: 1, color: c.v > 0 ? "#ffffff" : W(0.35) }, num(c.v))
+            )
+          )
+        )
+      )
+    ),
+    // 막대 — 지금 티어 → 다음 티어 (양쪽 글자 칸 폭 고정)
+    k.box(
+      { position: "absolute", left: 72, right: 72, top: 374, alignItems: "center" },
+      k.box({ width: 96, fontSize: 28, fontWeight: 900, color: W(0.75) }, `T${num(tier)}`),
+      k.box({ width: INNER - 192 }, bar(k, maxed ? 1 : d.progress, 16, PASS_GRAD)),
+      k.box({ width: 96, justifyContent: "flex-end", fontSize: 28, fontWeight: 900, color: W(0.4) }, none ? "—" : maxed ? "MAX" : `T${num(tier + 1)}`)
+    ),
+    // 다음 보상
+    k.box(
+      { position: "absolute", left: 72, right: 72, top: 438, flexDirection: "column" },
+      k.box({ fontSize: 28, fontWeight: 700, color: W(0.45), marginBottom: 16 }, "다음 보상"),
+      next.length
+        ? k.box({}, next.map(tile))
+        : k.box({ height: 132, borderRadius: 20, border: `2px solid ${W(0.06)}`, backgroundColor: PANEL, alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, color: W(0.35) }, "—")
+    )
+  );
+}
+
+// 📌 카드 크기 — /퀘스트는 칸에 든 퀘스트 수에 따라 높이가 준다(가장 긴 칸 기준, CARD_SIZE 가 최대). 나머지는 CARD_SIZE 그대로.
+//    봇 renderCard · 사이트 미리보기가 그릴 때 이 값을 쓴다
+export function cardSizeOf(kind, data) {
+  const base = CARD_SIZE[kind];
+  if (kind === "cmdQuest" && base) return { width: base.width, height: Math.min(base.height, questHeight(data)) };
+  return base;
+}
+
 /**
  * 카드 요소 트리 — kind: CARD_KINDS 중 하나, data: CARD_FIELDS 모양, h: (type, props, ...children) => 요소
  * opts.has(codePoint): 글꼴에 있는 글자인지(fontCoverage) — 주면 없는 글자를 빼고 그린다
- * data.skin: 카드 스킨 키(CARD_SKINS) — 레벨업 · /레벨 · /랭크 · /출석체크에만
+ * opts.art(key): 도트 아이콘 SVG 문자열("art:<키>" 아이템 아이콘 — 사이트 lib/itemArt.js itemArtSvg, 봇은 그 사본). 없으면 유형 기본 모양
+ * data.skin: 카드 스킨 키(CARD_SKINS) — SKIN_CARD_KINDS 에만
  */
 export function buildCard(kind, data, h, opts = {}) {
   if (!isCardKind(kind)) throw new Error(`알 수 없는 카드: ${kind}`);
   const k = kit(h);
   const d = data && typeof data === "object" ? data : {};
-  // 스킨은 레벨업 · 프로필 · 출석 카드에만 (RANKER 발표는 기본)
+  // 스킨은 SKIN_CARD_KINDS 에만 (RANKER 발표는 기본)
   k.skin = SKIN_CARD_KINDS.includes(kind) ? cardSkinOf(d.skin) : null;
+  k.size = cardSizeOf(kind, d);
   const text = (s) => cardText(s, opts.has);
+  const art = typeof opts.art === "function" ? opts.art : null;
   if (kind === "levelUp") return levelUpCard(k, kind, d, text);
   if (kind === "cmdLevel") return profileCard(k, kind, d, text);
   if (kind === "cmdRank") return rankBoardCard(k, kind, d, text);
   if (kind === "cmdAttend") return attendCard(k, kind, d, text);
+  if (kind === "cmdQuest") return questCard(k, kind, d, text);
+  if (kind === "cmdInventory") return bagCard(k, kind, d, text, art);
+  if (kind === "cmdPass") return passCard(k, kind, d, text, art);
   return rankerCard(k, kind, d, text);
 }
 
@@ -1086,6 +1640,73 @@ export function sampleCardData(kind, tierIndex = 1, avatar = null, skin = "") {
     return { season: 2, seasonName: "A new world", total: 1284, top, me: { rank: 12, name: "펭귄", avatar, level, xp: base + cur } };
   }
   if (kind === "cmdAttend") return { avatar, name: "펭귄", amount: 10000, streak: 5, bestStreak: 12, attendCount: 42, streakBonus: "연속 5일 보너스 +3,000 XP" };
+  if (kind === "cmdQuest") {
+    const H = 3600e3;
+    const q = (name, metric, current, target, rewardXp, rewardPoint = 0, more = {}) => {
+      const done = current >= target;
+      return { name, metric, current, target, rewardXp, rewardPoint, done, claimed: false, claimable: done, ...more };
+    };
+    return {
+      name: "펭귄",
+      claimable: 2,
+      periods: [
+        {
+          key: "daily",
+          left: 5 * H + 42 * 60e3,
+          quests: [
+            q("출석", "minute", 60, 60, 10000, 0, { claimed: true, claimable: false }),
+            q("오늘의 수다", "count", 5, 5, 1500),
+            q("음성 1시간", "minute", 35, 60, 3000, 20),
+            q("채팅 30회", "count", 12, 30, 2000),
+          ],
+        },
+        {
+          key: "weekly",
+          left: 3 * 24 * H + 7 * H,
+          quests: [q("주간 정수기", "count", 32, 50, 20000), q("출석 5일", "count", 5, 5, 0, 100), q("음성 5시간", "minute", 300, 300, 15000, 0, { claimed: true, claimable: false })],
+        },
+        { key: "monthly", left: 18 * 24 * H + 3 * H, quests: [q("월간 이글루인", "xp", 423100, 1000000, 100000)] },
+      ],
+    };
+  }
+  if (kind === "cmdInventory") {
+    const it = (name, type, icon, more = {}) => ({ name, type, icon, count: 1, ...more });
+    const items = [
+      it("XP 물약", "item", "art:xp-potion", { count: 3 }),
+      it("카드 스킨 · 골드", "cosmetic", "art:card-skin", { worn: true }),
+      it("배지 · 섬", "cosmetic", "art:sky-island", { worn: true }),
+      it("불꽃 방패", "item", "art:streak-shield", { count: 2, days: 2 }),
+      it("음악 티켓", "perk", "art:music-ticket", { days: 27 }),
+      it("게이머 헤드셋", "item", "art:gamer-headset"),
+      it("네잎클로버", "item", "art:lucky-clover", { pending: true }),
+      it("카드 스킨 · 오로라", "cosmetic", "art:card-skin"),
+      it("로켓", "item", "art:pass-rocket", { days: 12 }),
+      it("이글루 VIP", "role", "svg:crown"),
+      it("출석 물약", "item", "art:attend-potion"),
+      it("기프트카드", "physical", ""),
+      it("개근 도장", "item", "art:attend-stamp"),
+    ];
+    return { avatar, name: "펭귄", total: items.length, items };
+  }
+  if (kind === "cmdPass") {
+    return {
+      season: 2,
+      seasonName: "A new world",
+      tier: 7,
+      maxTier: 30,
+      progress: 0.42,
+      need: 17400,
+      claimFree: 1,
+      claimPaid: 2,
+      premium: true,
+      next: [
+        { tier: 8, kind: "xp", amount: 20000, premium: false },
+        { tier: 8, kind: "item", label: "XP 물약", icon: "art:xp-potion", type: "item", premium: true },
+        { tier: 9, kind: "point", amount: 300, premium: false },
+        { tier: 10, kind: "role", label: "개척자", premium: true },
+      ],
+    };
+  }
   return {
     season: 1,
     seasonName: "UP!",
@@ -1125,9 +1746,57 @@ const h = (type, props, ...children) => ({
   props: { ...(props || {}), children: children.length === 0 ? undefined : children.length === 1 ? children[0] : children },
 });
 
+// 도트 아이콘("art:<키>") — 96px(16 × 6) SVG. 칸 크기(80 · 48)로 줄여 그려도 정수 배율이 아니면 resvg 가 칸 경계를 맞춘다
+const art = (key) => itemArtSvg(key, { size: 96 });
+
+// ── 아이템 이미지(관리자가 등록한 imageUrl) → data URI | null ──
+//    📌 https 만 · png · jpeg 만(파일 머리로 본다) · 2MB 까지 · timeoutMs 안에 못 받으면 null(카드는 유형 기본 아이콘).
+//    같은 아이템 그림을 여러 사람이 부르므로 10분 들고 있는다(최대 40장 · 합 16MB — 넘으면 오래된 것부터 버린다). 실패도 1분 기억해 매번 기다리지 않는다
+const IMG_TTL = 10 * 60 * 1000;
+const IMG_FAIL_TTL = 60 * 1000;
+const IMG_MAX = 40;
+const IMG_BYTES = 2 * 1024 * 1024;
+const IMG_TOTAL = 16 * 1024 * 1024; // data URI 글자 수 합
+const imgCache = new Map(); // url → { at, uri | null, ttl }
+let imgTotal = 0;
+const dropImg = (key) => {
+  const e = imgCache.get(key);
+  if (!e) return;
+  imgTotal -= e.uri ? e.uri.length : 0;
+  imgCache.delete(key);
+};
+export async function fetchImageDataUri(url, timeoutMs = 1500) {
+  const u = String(url || "").trim();
+  if (!/^https:\/\/[^\s<>"]+$/i.test(u) || u.length > 1000) return null;
+  const hit = imgCache.get(u);
+  if (hit && Date.now() - hit.at < hit.ttl) return hit.uri;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  let uri = null;
+  try {
+    const res = await fetch(u, { signal: ctrl.signal, redirect: "follow" });
+    const len = Number(res.headers.get("content-length")) || 0;
+    if (res.ok && len <= IMG_BYTES) {
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+      const jpg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+      if (bytes.length >= 8 && bytes.length <= IMG_BYTES && (png || jpg)) uri = `data:image/${png ? "png" : "jpeg"};base64,${Buffer.from(bytes).toString("base64")}`;
+    }
+  } catch {
+    uri = null;
+  } finally {
+    clearTimeout(timer);
+  }
+  dropImg(u);
+  imgCache.set(u, { at: Date.now(), uri, ttl: uri ? IMG_TTL : IMG_FAIL_TTL });
+  imgTotal += uri ? uri.length : 0;
+  while (imgCache.size > 1 && (imgCache.size > IMG_MAX || imgTotal > IMG_TOTAL)) dropImg(imgCache.keys().next().value);
+  return uri;
+}
+
 /**
  * 카드 → PNG Buffer. 실패하거나 timeoutMs 안에 못 끝내면 null — 부르는 쪽은 글(임베드)만 보낸다.
- * data 의 avatar 는 data URI 여야 한다(fetchAvatarDataUri 로 먼저 받는다).
+ * data 의 avatar · 아이템 image 는 data URI 여야 한다(fetchAvatarDataUri · fetchImageDataUri 로 먼저 받는다).
  */
 export async function renderCard(kind, data, { timeoutMs = 3000 } = {}) {
   if (!isCardKind(kind)) return null;
@@ -1135,8 +1804,8 @@ export async function renderCard(kind, data, { timeoutMs = 3000 } = {}) {
   let timer;
   const work = (async () => {
     const { fonts, has } = loadFonts();
-    const { width, height } = CARD_SIZE[kind];
-    const svg = await satori(buildCard(kind, data, h, { has }), { width, height, fonts });
+    const { width, height } = cardSizeOf(kind, data);
+    const svg = await satori(buildCard(kind, data, h, { has, art }), { width, height, fonts });
     if (ctrl.signal.aborted) return null;
     // 📌 시스템 글꼴을 읽지 않는다 — 글자는 satori 가 이미 도형으로 바꿨고, 윈도우에서는 글꼴 목록을 훑느라 2초가 걸린다
     const img = await renderAsync(svg, { fitTo: { mode: "width", value: width }, font: { loadSystemFonts: false } }, ctrl.signal);

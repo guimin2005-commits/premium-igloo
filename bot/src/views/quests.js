@@ -229,9 +229,20 @@ function listText(rows) {
   return out.join("\n");
 }
 
+// 다음 초기화 시각(ms) — 일일: 다음 KST 자정 · 주간: 다음 월요일 0시 · 월간: 다음 달 1일 0시 (lib/kst.js 경계와 같다)
+function nextResets() {
+  const n = kstNow();
+  return {
+    daily: kstDayStart().getTime() + 86400000,
+    weekly: kstWeekStart().getTime() + 7 * 86400000,
+    monthly: toUtc(n.getUTCFullYear(), n.getUTCMonth() + 1, 1).getTime(),
+  };
+}
+
 /**
  * @param {string} userId
- * @returns {Promise<{ daily: string, weekly: string, monthly: string, claimable: number }>}
+ * @returns {Promise<{ daily: string, weekly: string, monthly: string, claimable: number, list: object[], resets: { daily: number, weekly: number, monthly: number } }>}
+ *   list · resets — 이미지 카드용(questCardData). 글(템플릿 변수)은 daily · weekly · monthly · claimable
  */
 export async function questView(userId) {
   const list = await questState(userId);
@@ -241,5 +252,21 @@ export async function questView(userId) {
     weekly: listText(of("weekly")),
     monthly: listText(of("monthly")),
     claimable: list.filter((q) => q.claimable).length,
+    list,
+    resets: nextResets(),
+  };
+}
+
+// 📌 /퀘스트 이미지 카드 data(botCards.js cmdQuest 모양) — questView 결과 그대로(같은 계산 · 읽기만). 남은 시간은 지금 기준
+export function questCardData(v, name) {
+  const now = Date.now();
+  return {
+    name,
+    claimable: v.claimable,
+    periods: PERIODS.map((key) => ({
+      key,
+      left: Math.max(0, (v.resets?.[key] || now) - now),
+      quests: (v.list || []).filter((q) => q.period === key),
+    })),
   };
 }

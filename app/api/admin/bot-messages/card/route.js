@@ -7,10 +7,11 @@ import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { requireAdmin } from "@/lib/apiAuth";
-import { buildCard, CARD_SIZE, CARD_FONT, CARD_TIERS, isCardKind, sampleCardData, fontCoverage, fetchAvatarDataUri } from "@/lib/botCards";
+import { buildCard, cardSizeOf, CARD_FONT, CARD_TIERS, isCardKind, sampleCardData, fontCoverage, fetchAvatarDataUri } from "@/lib/botCards";
+import { itemArtSvg } from "@/lib/itemArt";
 
 // 📌 관리자 '봇 메시지' 이미지 카드 미리보기 — 봇이 붙이는 PNG 와 같은 템플릿(lib/botCards.js)을 샘플 값으로 그린다
-//    GET ?key=levelUp|cmdLevel|cmdRank|cmdAttend|rankerAnnounce&tier=<0-9, 없으면 브론즈>
+//    GET ?key=levelUp|cmdLevel|cmdRank|cmdAttend|cmdQuest|cmdInventory|cmdPass|rankerAnnounce&tier=<0-9, 없으면 브론즈>
 //    한 사람 카드는 미리보기를 여는 관리자 이름 · 사진으로 그린다(사진을 못 받으면 첫 글자 원형).
 
 const fail = (message, status = 400) => NextResponse.json({ success: false, message, error: message }, { status });
@@ -54,8 +55,10 @@ export async function GET(request) {
     const [{ fonts, has }, avatar] = await Promise.all([loadFonts(), one ? fetchAvatarDataUri(auth.session?.user?.image) : null]);
     const data = sampleCardData(key, tier, avatar);
     if (one && auth.name) data.name = auth.name;
-    const { width, height } = CARD_SIZE[key];
-    return new ImageResponse(buildCard(key, data, createElement, { has }), {
+    const { width, height } = cardSizeOf(key, data);
+    // 도트 아이콘("art:<키>") — 봇과 같은 96px 그림
+    const art = (k) => itemArtSvg(k, { size: 96 });
+    return new ImageResponse(buildCard(key, data, createElement, { has, art }), {
       width,
       height,
       fonts,
