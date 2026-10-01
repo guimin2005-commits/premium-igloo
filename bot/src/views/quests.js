@@ -202,30 +202,10 @@ async function questState(userId) {
   const today = kstToday();
   const tickMin = Math.max(1, Math.round((setting?.voiceIntervalSec ?? 300) / 60));
 
-  // ── 내장 출석 퀘스트 — 음성 누적 N분 또는 /출석체크 (자동 지급이라 수령 버튼 없음) ──
-  const attendXp = setting?.attendXp ?? 7000;
-  const targetMin = Math.max(1, setting?.attendVoiceMin ?? 60);
-  const voiceMin = logProgress(logs, { reason: "voice", metric: "minute" }, startKey.daily, tickMin);
-  const attendClaimed = user?.lastAttendDate === today;
-  const attendQuest = {
-    period: "daily",
-    name: "출석",
-    reason: "voice",
-    metric: "minute",
-    unit: "분",
-    target: targetMin,
-    current: Math.min(voiceMin, targetMin),
-    rewardXp: attendXp,
-    rewardPoint: 0,
-    done: voiceMin >= targetMin || attendClaimed,
-    claimed: attendClaimed,
-    claimable: false,
-  };
+  // 📌 출석은 퀘스트 목록에 넣지 않는다(사이트 lib/quests.js 와 같다) — 출석 XP 는 attend.js 가 그대로 준다
 
-  // 📌 일일 노출 개수는 내장 출석 퀘스트를 포함한 개수 — 무작위로는 하나 덜 뽑는다(사이트 lib/quests.js 와 같다)
-  const dailyPick = Math.max(0, Math.floor(Number(setting?.questPickDaily) || 0));
   const picks = {
-    daily: dailyPick > 0 ? dailyPick - 1 : 0,
+    daily: setting?.questPickDaily || 0,
     weekly: setting?.questPickWeekly || 0,
     monthly: setting?.questPickMonthly || 0,
   };
@@ -234,8 +214,7 @@ async function questState(userId) {
 
   const selected = [];
   for (const per of PERIODS) {
-    // 일일 1개 = 출석만 — pickQuests 는 개수 0 을 "전부"로 읽으므로 따로 비운다
-    const chosen = per === "daily" && dailyPick === 1 ? [] : pickQuests(grouped[per], picks[per], `${per}:${keys[per]}`);
+    const chosen = pickQuests(grouped[per], picks[per], `${per}:${keys[per]}`);
     chosen.sort((a, b) => (a.order || 0) - (b.order || 0) || (String(a._id) < String(b._id) ? -1 : 1));
     selected.push(...chosen);
   }
@@ -298,7 +277,7 @@ async function questState(userId) {
     };
   });
 
-  return [attendQuest, ...rows];
+  return rows;
 }
 
 // ── 표시 ──
