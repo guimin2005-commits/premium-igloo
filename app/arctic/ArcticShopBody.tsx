@@ -27,6 +27,8 @@ import BannerSlider, { useBanners } from "./BannerSlider";
 import { SeasonHead, SeasonPicks, seasonPicks } from "./ArcticSeason";
 import CardArt from "./CardArt";
 import ProductCard from "./ProductCard";
+import ShopFilterBar from "./ShopFilterBar";
+import { priceBuckets, inBucket } from "./priceBuckets";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useArcticOrigin } from "./fromLevel";
 import { ownedIdsOf } from "./owned";
@@ -74,15 +76,7 @@ function TypeBadge({ type, className = "" }: { type: string; className?: string 
   );
 }
 
-// 상품가는 천만·오천만 단위까지 올라간다
-const PRICE_RANGES = [
-  { v: "all", l: "전체", min: 0, max: Infinity },
-  { v: "u1m", l: "100만 미만", min: 0, max: 1_000_000 },
-  { v: "1m-5m", l: "100만 ~ 500만", min: 1_000_000, max: 5_000_000 },
-  { v: "5m-10m", l: "500만 ~ 1000만", min: 5_000_000, max: 10_000_000 },
-  { v: "10m-30m", l: "1000만 ~ 3000만", min: 10_000_000, max: 30_000_000 },
-  { v: "o30m", l: "3000만 이상", min: 30_000_000, max: Infinity },
-];
+// 📌 가격 필터 구간은 고정 값이 아니라 지금 탭 상품의 가격 분포로 만든다 (./priceBuckets — 시즌 탭은 빙옥 구간)
 
 const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "지급 완료", cancelled: "취소됨" };
 
@@ -169,6 +163,7 @@ export default function ArcticShopBody({
   // 📌 홈(브랜드·배너·추천) / 상품(전체 목록) 두 화면으로 나눈다
   const [view, setView] = useState<"home" | "products">("home");
   const goProducts = (t = "all") => { setView("products"); setTypeFilter(t); setWishOnly(false); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  // 고른 가격 구간의 v (./priceBuckets), 없으면 "all" — 탭이 바뀌어 그 탭 구간에 없으면 풀린다
   const [priceFilter, setPriceFilter] = useState("all");
   const [inStockOnly, setInStockOnly] = useState(false);
   const [affordableOnly, setAffordableOnly] = useState(false);
@@ -225,10 +220,9 @@ export default function ArcticShopBody({
   const [cart, setCart] = useState<{ itemId: string; qty: number; days?: number }[]>([]);
   const [cartToast, setCartToast] = useState("");
 
-  // 스토어 줄 — 모바일 검색 시트 · 필터 접기
-  //  (알림·프로필은 전역 상단 바가 가져갔다)
+  // 스토어 줄 — 모바일 검색 시트
+  //  (알림·프로필은 전역 상단 바가 가져갔다 · 필터 시트는 ShopFilterBar 가 들고 있다)
   const [showMobileSearch, setShowMobileSearch] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   // 모바일 "카테고리 ▾" 칩 패널 — 바깥을 누르거나 Esc 면 닫힌다
   const [catOpen, setCatOpen] = useState(false);
   const catBtnRef = useRef<HTMLButtonElement>(null);
@@ -492,24 +486,35 @@ export default function ArcticShopBody({
 
   useEffect(() => { loadMine(); }, [loadMine]);
 
-  const visible = useMemo(() => {
-    const range = PRICE_RANGES.find((r) => r.v === priceFilter) || PRICE_RANGES[0];
+  // 📌 지금 탭(유형) · 검색 · 찜에 걸린 상품 — 가격 구간은 이 목록의 가격 분포로 만든다.
+  //    재고 · 구매 가능 토글은 여기 넣지 않는다(토글을 켤 때마다 구간이 바뀌면 고른 구간이 풀리고 칩 목록이 출렁인다)
+  const scoped = useMemo(() => {
     const q = submitted.trim().toLowerCase();
+    return items.filter((it) => {
+      if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : typeFilter === "season" ? !isPointOnly(it) : it.type !== typeFilter)) return false;
+      if (wishOnly && !wish.includes(it._id)) return false;
+      if (q && !`${it.name} ${it.description} ${it.roleName || ""} ${itemTypeLabel(it.type)}${isTimed(it) ? " 기간제" : ""}${isPointOnly(it) ? " 빙옥 시즌" : ""}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [items, typeFilter, wishOnly, wish, submitted]);
+  const buckets = useMemo(() => priceBuckets(scoped), [scoped]);
+  // 고른 구간 — 탭 · 검색이 바뀌어 지금 구간 목록에 없으면 풀린다.
+  //    effect 를 기다리지 않고 그리는 중에 바로 '전체'로 되돌린다(React 의 '이전 값에 맞춰 상태 고치기' 방식) —
+  //    한 번이라도 맞지 않는 구간이 걸린 채 그려지지 않고, 다른 탭에 갔다 돌아와도 옛 구간이 되살아나지 않는다
+  const priceBucket = buckets.find((b) => b.v === priceFilter) || null;
+  if (priceFilter !== "all" && !priceBucket) setPriceFilter("all");
 
+  const visible = useMemo(() => {
     // 📌 카드 가격은 기본 무제한. 가격 필터 · "살 수 있는 것만" 을 켜면 그 조건을 통과하는 기간(무제한 > 가장 긴 기간)의 값을 건다 —
     //    필터 · 정렬 · 카드 표기가 모두 그 값(_pick)을 본다. 조건을 통과하는 기간이 하나도 없으면 목록에서 빠진다
     // 빙옥도 함께 낼 수 있으니 XP + 빙옥 × 10,000 까지 산다 — 빙옥 전용 상품은 빙옥만 (affordFor)
-    //    가격대는 XP 값(빙옥 전용은 XP 로 친 값) 기준 — 정렬과 같은 값
-    const inRange = (p: number) => p >= range.min && p < range.max;
-    const filtered = items.flatMap((it) => {
-      if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : typeFilter === "season" ? !isPointOnly(it) : it.type !== typeFilter)) return [];
+    //    가격 구간은 단위별(XP 구간엔 일반 상품, 빙옥 구간엔 빙옥 전용 상품) · 카드에 적힌 값 기준 (inBucket)
+    const filtered = scoped.flatMap((it) => {
       const afford = affordableOnly && myXp != null ? affordFor(it, myXp, myPoint ?? 0) : null;
-      const priceOk = range.v === "all" && !afford ? undefined : (p: number) => inRange(p) && (!afford || afford(p));
+      const priceOk = !priceBucket && !afford ? undefined : (p: number) => (!priceBucket || inBucket(priceBucket, it, p)) && (!afford || afford(p));
       const pick = cardPick(it, priceOk);
       if (!pick) return [];
       if (inStockOnly && it.stock === 0) return [];
-      if (wishOnly && !wish.includes(it._id)) return [];
-      if (q && !`${it.name} ${it.description} ${it.roleName || ""} ${itemTypeLabel(it.type)}${isTimed(it) ? " 기간제" : ""}${isPointOnly(it) ? " 빙옥 시즌" : ""}`.toLowerCase().includes(q)) return [];
       return [{ ...it, _pick: pick }];
     });
 
@@ -520,11 +525,11 @@ export default function ArcticShopBody({
     else if (sort === "popular") sorted.sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
     else sorted.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return sorted;
-  }, [items, typeFilter, priceFilter, inStockOnly, affordableOnly, wishOnly, wish, submitted, sort, myXp, myPoint]);
+  }, [scoped, priceBucket, inStockOnly, affordableOnly, sort, myXp, myPoint]);
 
   // 📌 시즌 탭 두 갈래 큐레이션 — 기본 상태(필터 · 정렬을 안 건)에서만. 무엇이든 걸면 지금처럼 격자 결과만.
   //    시즌 상품이 적으면 null → 바로 격자 (ArcticSeason)
-  const seasonPlain = seasonTop && priceFilter === "all" && !inStockOnly && !affordableOnly && !wishOnly && sort === "recommended";
+  const seasonPlain = seasonTop && !priceBucket && !inStockOnly && !affordableOnly && !wishOnly && sort === "recommended";
   const seasonCur = useMemo(() => (seasonPlain ? seasonPicks(visible) : null), [seasonPlain, visible]);
 
   // 📌 이미 장바구니에 있는 상품을 '구매'로 누르면, 낱개 구매인지
@@ -590,9 +595,6 @@ export default function ArcticShopBody({
       setIsBuying(false);
     }
   };
-
-  // 적용 중인 필터 개수 (모바일 필터 버튼 배지용)
-  const activeFilterCount = (priceFilter !== "all" ? 1 : 0) + (inStockOnly ? 1 : 0) + (affordableOnly ? 1 : 0);
 
   // 추천 단어 — 지금 있는 상품의 이름 · 역할 이름 · 유형에서 뽑는다
   const suggestions = useMemo(() => {
@@ -660,11 +662,6 @@ export default function ArcticShopBody({
       )}
     </div>
   );
-
-  const chip = (active: boolean) =>
-    `px-3.5 py-1.5 rounded-full text-[12px] font-bold border transition-colors ${
-      active ? "bg-[#e91e3f] text-[#ffffff] border-[#e91e3f]" : "bg-white/70 text-[#5a5a5a] border-[#ededed] hover:border-[#a3a3a3]"
-    }`;
 
   // 공개 전 · 비관리자 → 준비 중 안내
   if (status === "loading" || shopPublic === null) {
@@ -962,86 +959,18 @@ export default function ArcticShopBody({
           </div>
         )}
 
-        {/* 📌 모바일은 필터 칩이 너무 많아지므로 접어 두고, 필요할 때만 편다 */}
-        <div className="md:hidden flex items-center justify-between gap-3 pb-4 border-b border-[#ededed]">
-          <button onClick={() => setShowFilters(!showFilters)}
-            className={`inline-flex items-center gap-1.5 px-4 h-9 rounded-full border text-[12px] font-bold transition-colors ${
-              activeFilterCount > 0 ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#5a5a5a] border-[#ededed]"
-            }`}>
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
-            </svg>
-            필터{activeFilterCount > 0 ? ` ${activeFilterCount}` : ""}
-          </button>
-
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[11px] font-bold text-[#8a8a8a] shrink-0">{visible.length}개</span>
-            <Dropdown
-              theme="light"
-              value={sort}
-              onChange={setSort}
-              options={SORTS.map((s) => ({ value: s.v, label: s.l }))}
-              className="w-[116px]"
-              buttonClassName="!rounded-full !py-1.5 !px-3 !text-[12px] !font-bold"
-            />
-          </div>
-        </div>
-
-        {/* 모바일 — 펼친 필터 */}
-        {showFilters && (
-          <div className="md:hidden pt-4 pb-5 border-b border-[#ededed] space-y-4" style={{ animation: "menuDrop 0.24s cubic-bezier(0.16,1,0.3,1)" }}>
-            <div>
-              <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mb-2">가격대</p>
-              <div className="flex flex-wrap gap-2">
-                {PRICE_RANGES.map((r) => (
-                  <button key={r.v} onClick={() => setPriceFilter(r.v)} className={chip(priceFilter === r.v)}>{r.l}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mb-2">조건</p>
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => setInStockOnly(!inStockOnly)} className={chip(inStockOnly)}>재고 있는 상품만</button>
-                {isLoggedIn && (
-                  <button onClick={() => setAffordableOnly(!affordableOnly)} className={chip(affordableOnly)}>구매 가능한 상품만</button>
-                )}
-              </div>
-            </div>
-            {activeFilterCount > 0 && (
-              <button onClick={() => { setPriceFilter("all"); setInStockOnly(false); setAffordableOnly(false); }}
-                className="text-[11px] font-bold text-[#e91e3f]">필터 초기화</button>
-            )}
-          </div>
-        )}
-
-        {/* 데스크톱 — 필터를 그대로 펼쳐 둔다 */}
-        <div className="hidden md:block">
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            {PRICE_RANGES.map((r) => (
-              <button key={r.v} onClick={() => setPriceFilter(r.v)} className={chip(priceFilter === r.v)}>{r.l}</button>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-6 border-b border-[#ededed]">
-            <div className="flex flex-wrap items-center gap-2">
-              <button onClick={() => setInStockOnly(!inStockOnly)} className={chip(inStockOnly)}>재고 있는 상품만</button>
-              {isLoggedIn && (
-                <button onClick={() => setAffordableOnly(!affordableOnly)} className={chip(affordableOnly)}>구매 가능한 상품만</button>
-              )}
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] font-bold text-[#8a8a8a]">{visible.length}개</span>
-              <Dropdown
-                theme="light"
-                value={sort}
-                onChange={setSort}
-                options={SORTS.map((s) => ({ value: s.v, label: s.l }))}
-                className="w-36"
-                buttonClassName="!rounded-full !py-2 !text-[12px] !font-bold"
-              />
-            </div>
-          </div>
-        </div>
+        {/* 📌 필터 줄 — 일반 탭 · 시즌 탭 같은 한 벌(ShopFilterBar). PC 는 한 줄 칩 바, 폰은 "필터" 버튼 → 아래 시트.
+               가격 구간은 지금 탭 상품의 가격으로 만든다(buckets — 시즌 탭은 빙옥 구간, 상품 3개 미만이면 가격 칩 없음) */}
+        <ShopFilterBar
+          buckets={buckets}
+          value={{ price: priceBucket ? priceBucket.v : "all", inStock: inStockOnly, afford: affordableOnly }}
+          onChange={(v) => { setPriceFilter(v.price); setInStockOnly(v.inStock); setAffordableOnly(v.afford); }}
+          showAfford={isLoggedIn}
+          count={visible.length}
+          sort={sort}
+          sorts={SORTS}
+          onSort={setSort}
+        />
       </section>
 
       {/* ── 상품 목록 ── */}
