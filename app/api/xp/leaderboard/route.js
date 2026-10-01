@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import UserXp from "@/models/UserXp";
 import XpLog from "@/models/XpLog";
+import Payout from "@/models/Payout";
 import { kstMonthStart } from "@/lib/kst";
 import { requireAdmin } from "@/lib/apiAuth";
 import BotSetting from "@/models/BotSetting";
@@ -93,9 +94,151 @@ async function finish(rows, skip) {
   return out.map((r) => (badgeMap.has(r.userId) ? { ...r, badges: badgeMap.get(r.userId) } : r));
 }
 
+// 📌 관리자가 없앤 XP — [XP 제거] · 음수 수동 지급(app/api/xp/grant → 봇 processPayouts 가 반영해 paid) · 관리자 초기화(같은 라우트 mode reset).
+//    누적(UserXp.xp)은 봇 · 초기화가 이미 깎는다. 이번 달은 XpLog 합이라 여기서 따로 뺀다.
+//    XpLog 에 음수 줄을 쓰지 않는다 — 원장(app/api/xp/ledger)에 Payout 줄과 두 번 보이고, 퀘스트 · 패스 · 서포터즈도 XpLog 를 같이 센다.
+//    유저가 쓴 XP(상점 결제 · 강화 · 패스 해금)와 다른 지급은 빼지 않는다 — 대기 · 처리 중은 아직 깎이지 않았으므로 paid 만
+//    초기화는 kind "reset", 그 표시가 없던 예전 기록은 수동 지급 중 사유 "관리자 초기화…"(원장 HIDDEN_PAYOUT 과 같은 기준). 보유 0 이던 사람의 기록은 금액 0 이라 따로 잡는다
+const ADMIN_TAKE = [
+  { source: { $in: ["manual", "admin"] }, amount: { $lt: 0 } },
+  { kind: "reset" },
+  { source: "manual", reason: /^관리자 초기화/ },
+];
+const IS_RESET = {
+  $and: [
+    { $lte: ["$amount", 0] },
+    {
+      $or: [
+        { $eq: ["$kind", "reset"] },
+        { $and: [{ $eq: ["$source", "manual"] }, { $regexMatch: { input: { $ifNull: ["$reason", ""] }, regex: "^관리자 초기화" } }] },
+      ],
+    },
+  ],
+};
+
+// 📌 이번 달 값에서 관리자 회수분 빼기 — 시각 순으로 쌓다가 0 아래로는 내리지 않는다
+//    (이번 달에 번 것보다 많이 없애도 0 까지만 — 그 뒤에 번 XP 는 다시 쌓인다. 보유 XP 가 0 에서 멈추는 것과 같다)
+//    📌 이번 달 값에 처음부터 없는 XP — 양수 XP 지급(관리자 지급 · 패스 · 퀘스트 · 쿠폰 · 서포터즈 · 역할 환불).
+//       봇 processPayouts 는 UserXp.xp 만 올리고 XpLog 를 쓰지 않는다. 그 몫(u)을 따로 쌓아 두고 회수는 u 에서 먼저 뺀다 —
+//       잘못 준 XP 를 [XP 제거]로 되돌려도 채팅 · 음성으로 번 이번 달 XP 는 깎이지 않는다. u 를 넘는 만큼만 이번 달 값(v)에서 뺀다
+//    📌 초기화는 금액과 상관없이 그 순간까지의 v · u 를 둘 다 0 으로 — 보유 XP 를 통째로 지운 것이라 이번 달에 번 것도 남지 않는다
+//    0 이 된 사람은 이번 달 순위에서 빠진다. 반환 null = 회수 기록 없음(예전 계산 그대로)
+async function monthCuts(monthStart) {
+  const cuts = await Payout.aggregate([
+    {
+      $match: {
+        userId: { $nin: ["", null] },
+        status: "paid",
+        currency: { $ne: "point" },
+        $and: [
+          { $or: [{ paidAt: { $gte: monthStart } }, { createdAt: { $gte: monthStart } }] },
+          { $or: [{ amount: { $gt: 0 } }, ...ADMIN_TAKE] },
+        ],
+      },
+    },
+    { $addFields: { at: { $ifNull: ["$paidAt", "$createdAt"] } } },
+    { $match: { at: { $gte: monthStart } } },
+    { $sort: { at: 1, _id: 1 } },
+    {
+      $group: {
+        _id: "$userId",
+        at: { $push: "$at" },
+        amt: { $push: "$amount" },
+        reset: { $push: IS_RESET },
+        takes: { $sum: { $cond: [{ $lte: ["$amount", 0] }, 1, 0] } },
+      },
+    },
+    // 양수 지급만 있는 사람은 그대로 — 회수 · 초기화가 한 번이라도 있는 사람만 다시 센다
+    { $match: { takes: { $gt: 0 } } },
+  ]);
+  if (!cuts.length) return null;
+
+  // 지급 · 회수 시각으로 이번 달 XpLog 를 구간별로 나눠 합한다 — 구간 번호 = 그 로그 시각까지 지난 지급 · 회수 수
+  const users = cuts.map((c) => c._id);
+  const times = cuts.map((c) => c.at);
+  const segs = await XpLog.aggregate([
+    { $match: { userId: { $in: users }, createdAt: { $gte: monthStart } } },
+    {
+      $group: {
+        _id: {
+          u: "$userId",
+          s: {
+            $size: {
+              $filter: {
+                input: { $arrayElemAt: [{ $literal: times }, { $indexOfArray: [{ $literal: users }, "$userId"] }] },
+                as: "t",
+                cond: { $lte: ["$$t", "$createdAt"] },
+              },
+            },
+          },
+        },
+        xp: { $sum: "$amount" },
+      },
+    },
+  ]);
+  const segBy = new Map();
+  for (const r of segs) {
+    if (!segBy.has(r._id.u)) segBy.set(r._id.u, new Map());
+    segBy.get(r._id.u).set(r._id.s, r.xp);
+  }
+
+  const ids = [];
+  const deltas = [];
+  const zero = [];
+  for (const c of cuts) {
+    const sums = segBy.get(c._id);
+    if (!sums) continue; // 이번 달에 번 XP 가 없다 — 원래도 이번 달 순위에 없다
+    let v = 0; // 이번 달 값(회수 반영)
+    let u = 0; // 이번 달 값에 없는 지급 중 아직 회수되지 않은 몫
+    let plain = 0; // 예전 계산(XpLog 합)
+    for (let i = 0; i <= c.amt.length; i++) {
+      const s = sums.get(i) || 0;
+      v += s;
+      plain += s;
+      if (i === c.amt.length) break;
+      const a = c.amt[i];
+      if (c.reset[i]) { v = 0; u = 0; }
+      else if (a > 0) u += a;
+      else {
+        const take = Math.min(u, -a);
+        u -= take;
+        v = Math.max(0, v + a + take);
+      }
+    }
+    if (v <= 0) zero.push(c._id);
+    else if (v !== plain) { ids.push(c._id); deltas.push(v - plain); }
+  }
+  return { ids, deltas, zero };
+}
+
+// 이번 달 묶음($group 뒤)에 끼울 단계 — 0 이 된 사람은 빼고, 깎인 사람은 그만큼 낮춘다
+const cutStages = (cut, withXp) => {
+  if (!cut) return [];
+  const st = [];
+  if (cut.zero.length) st.push({ $match: { _id: { $nin: cut.zero } } });
+  if (withXp && cut.ids.length) {
+    st.push({
+      $addFields: {
+        xp: {
+          $add: [
+            "$xp",
+            {
+              $let: {
+                vars: { i: { $indexOfArray: [{ $literal: cut.ids }, "$_id"] } },
+                in: { $cond: [{ $gte: ["$$i", 0] }, { $arrayElemAt: [{ $literal: cut.deltas }, "$$i"] }, 0] },
+              },
+            },
+          ],
+        },
+      },
+    });
+  }
+  return st;
+};
+
 // ── [조회] 랭킹 ──────────────────────────────────────────────
-//   period=all   누적 XP        (UserXp.xp)
-//   period=month 이번 달 획득   (XpLog 합산 — 봇 가동 이후분만 잡힌다)
+//   period=all   누적 XP        (UserXp.xp — 관리자 회수 · 초기화는 이미 빠져 있다)
+//   period=month 이번 달 획득   (XpLog 합산 − 이번 달 관리자 회수 · 초기화(monthCuts) — 봇 가동 이후분만 잡힌다)
 //   period=voice 누적 음성 시간 (UserXp.voiceSeconds — 시즌 2 개시일부터 적립)
 //   skip/limit 으로 페이지를 넘긴다. 순위는 skip 을 더해 이어진다.
 export async function GET(request) {
@@ -114,12 +257,14 @@ export async function GET(request) {
 
     if (period === "month") {
       const monthStart = kstMonthStart();
-      // 이번 달 지급 로그를 유저별로 합산한 뒤 잘라 낸다.
+      // 이번 달 지급 로그를 유저별로 합산한 뒤(관리자 회수분은 뺀 뒤) 잘라 낸다.
       // 총원은 자른 뒤 길이가 아니라 그룹 수 전체여야 페이지 수가 맞는다.
+      const cut = await monthCuts(monthStart);
       const [rows, countRows] = await Promise.all([
         XpLog.aggregate([
           { $match: { createdAt: { $gte: monthStart } } },
           { $group: { _id: "$userId", xp: { $sum: "$amount" }, displayName: { $last: "$displayName" } } },
+          ...cutStages(cut, true),
           { $sort: { xp: -1, _id: 1 } },
           { $skip: skip },
           { $limit: limit },
@@ -127,6 +272,7 @@ export async function GET(request) {
         XpLog.aggregate([
           { $match: { createdAt: { $gte: monthStart } } },
           { $group: { _id: "$userId" } },
+          ...cutStages(cut, false),
           { $count: "n" },
         ]),
       ]);
