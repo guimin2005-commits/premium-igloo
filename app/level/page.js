@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { signIn, useSession } from "next-auth/react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
@@ -1282,18 +1282,63 @@ const PassTileBody = ({ r, big = false }) => {
 
 // 📌 다음 보상 한 칸 — 봇 /시즌패스 카드의 "다음 보상" 타일. 머리: 무료 / 왕관 프리미엄(잠겨 있으면 자물쇠 · 흐리게)
 //    티어 번호는 줄 이름("다음 보상 · T8")에 한 번만 — 다음 티어 한 칸의 보상만 늘어놓으니 타일마다 되풀이하지 않는다
-const PassNextTile = ({ r, premium = false, locked = false }) => (
-  <div className="min-w-0 rounded-2xl px-3.5 pt-2.5 pb-3" style={passChipBg(premium)} title={r.label}>
-    <div className={`flex items-center h-4 text-[11px] font-black ${premium ? "text-[#d9c6ff]" : "text-white/50"}`}>
-      {premium && <svg aria-hidden viewBox="0 0 24 24" className="mr-1 w-3 h-3 shrink-0" fill="currentColor"><path d={CROWN} /></svg>}
-      {premium ? "프리미엄" : "무료"}
-      {locked && <span className="ml-auto inline-flex text-white/45">{PASS_LOCK}</span>}
+const PassNextTile = ({ r, premium = false, locked = false, peekKey = "", onPeek }) => {
+  const pk = `next:${premium ? "p" : "f"}:${r.key}`;
+  const named = passNamed(r);
+  const Tag = named ? "button" : "div";
+  return (
+    <Tag
+      {...(named ? { type: "button", "aria-label": r.label, onClick: (e) => onPeek?.(e, pk, r) } : { title: r.label })}
+      className={`block w-full min-w-0 text-left rounded-2xl px-3.5 pt-2.5 pb-3 ${named ? PASS_PEEK_BTN : ""}`}
+      style={{ ...passChipBg(premium), ...(peekKey === pk ? PASS_PEEK_ON : null) }}
+    >
+      <div className={`flex items-center h-4 text-[11px] font-black ${premium ? "text-[#d9c6ff]" : "text-white/50"}`}>
+        {premium && <svg aria-hidden viewBox="0 0 24 24" className="mr-1 w-3 h-3 shrink-0" fill="currentColor"><path d={CROWN} /></svg>}
+        {premium ? "프리미엄" : "무료"}
+        {locked && <span className="ml-auto inline-flex text-white/45">{PASS_LOCK}</span>}
+      </div>
+      <div className={`mt-2 h-8 flex items-center min-w-0 ${locked ? "opacity-45" : ""}`}>
+        <PassTileBody r={r} big />
+      </div>
+    </Tag>
+  );
+};
+
+// 📌 이름 말풍선 — 이름이 긴 보상(아이템 · 역할)은 칸 안에서 두 줄로 잘린다. 칸을 누르면 그 자리 위(위가 좁으면 아래)에 전체 이름을 띄운다.
+//    칸 크기는 그대로라 트랙이 밀리지 않는다. 다른 곳 누르기 · 트랙 넘기기 · Esc 로 닫힌다(PassModal)
+const passNamed = (r) => r.kind !== "xp" && r.kind !== "point";
+const PASS_PEEK_BTN = "cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white/60 transition-[filter] hover:brightness-125";
+const PASS_PEEK_ON = { boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.55)" };
+const PASS_PEEK_BG = "#2b1f52";
+const PassPeek = ({ peek, boxW }) => {
+  const ref = useRef(null);
+  const [w, setW] = useState(0);
+  // 너비를 재고 나서 창 안으로 맞춰 놓는다(재기 전에는 숨김) — 꼬리는 누른 칸 가운데를 가리킨다
+  useLayoutEffect(() => { setW(ref.current?.offsetWidth || 0); }, [peek]);
+  const M = 12;
+  const sx = peek.sx || 0;
+  const left = w ? Math.max(sx + M, Math.min(sx + boxW - M - w, peek.cx - w / 2)) : 0;
+  const tail = Math.max(14, Math.min(w - 14, peek.cx - left));
+  return (
+    <div
+      ref={ref}
+      role="tooltip"
+      className="absolute z-40 w-max max-w-[240px] px-3 py-2 rounded-xl text-[13px] font-black text-white leading-[1.35] break-keep pointer-events-none"
+      style={{
+        left,
+        top: peek.y,
+        transform: peek.below ? undefined : "translateY(-100%)",
+        visibility: w ? "visible" : "hidden",
+        overflowWrap: "anywhere",
+        background: PASS_PEEK_BG,
+        boxShadow: "0 12px 30px -10px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(214,180,255,0.3)",
+      }}
+    >
+      {peek.r.short || peek.r.label}
+      <span aria-hidden className="absolute w-2.5 h-2.5 rotate-45" style={{ left: tail - 5, [peek.below ? "top" : "bottom"]: -5, background: PASS_PEEK_BG }}></span>
     </div>
-    <div className={`mt-2 h-8 flex items-center min-w-0 ${locked ? "opacity-45" : ""}`}>
-      <PassTileBody r={r} big />
-    </div>
-  </div>
-);
+  );
+};
 
 // 📌 가로 트랙 치수(px) — 칸 폭은 고정(보상 수가 달라도 옆 칸이 밀리지 않게), 무료 · 프리미엄 줄 높이는 전 티어 중 가장 많은 칸 기준.
 //    높이를 여기서 셈해 두면 탭(전체 / 받을 보상)을 바꿔도 트랙 높이가 그대로라 창이 출렁이지 않는다
@@ -1306,7 +1351,7 @@ const PASS_VERTICAL = { writingMode: "vertical-rl", letterSpacing: "0.14em" };
 // 📌 트랙 칸 — 한 티어의 무료(또는 프리미엄) 보상 전부를 위 → 아래로 쌓는다("+N" 으로 접지 않는다, 2026-10-01 "보상도 +1 표기 말고 다 보여주게").
 //    맨 아래는 받기 자리(고정 높이) — 받을 수 있으면 받기, 다 받았으면 받음. 받기는 칸 단위(그 칸 보상 전부)
 //    모서리 표시: 일부만 받음 ✓ · 잠김 자물쇠 · 프리미엄 왕관 — 글자는 타일 가운데 줄이라 겹치지 않는다
-const PassCell = ({ track, premium = false, locked = false, busy = false, onClaim }) => {
+const PassCell = ({ track, premium = false, locked = false, busy = false, onClaim, peekKey = "", onPeek }) => {
   const list = track?.rewards || [];
   if (!list.length) return <div className="h-full flex items-center justify-center text-[12px] font-bold text-white/15">—</div>;
   // 📌 받을 수 있는 칸은 분홍 테두리 — 일부만 받은 칸이면 이미 받은 타일은 빼고(받은 것까지 빛나 헷갈리지 않게)
@@ -1315,18 +1360,21 @@ const PassCell = ({ track, premium = false, locked = false, busy = false, onClai
     <div className="h-full flex flex-col">
       {list.map((r, j) => {
         const dim = r.claimed || locked;
+        const pk = `${premium ? "p" : "f"}:${r.key}`;
+        const named = passNamed(r);
+        const Tag = named ? "button" : "div";
         return (
-          <div
+          <Tag
             key={r.key}
-            title={r.label}
-            className="relative shrink-0 flex items-center min-w-0 px-2.5 rounded-xl"
-            style={{ height: PT.tile, marginTop: j ? PT.tileGap : 0, ...passChipBg(premium), ...(track.claimable && !r.claimed ? glow : null) }}
+            {...(named ? { type: "button", "aria-label": r.label, onClick: (e) => onPeek?.(e, pk, r) } : { title: r.label })}
+            className={`relative shrink-0 flex items-center w-full min-w-0 px-2.5 rounded-xl text-left ${named ? PASS_PEEK_BTN : ""}`}
+            style={{ height: PT.tile, marginTop: j ? PT.tileGap : 0, ...passChipBg(premium), ...(track.claimable && !r.claimed ? glow : null), ...(peekKey === pk ? PASS_PEEK_ON : null) }}
           >
             <span className={`min-w-0 flex ${dim ? "opacity-40" : ""}`}><PassTileBody r={r} /></span>
             <span className={`absolute top-1.5 right-1.5 inline-flex ${dim ? "text-white/45" : "text-[#d6b4ff]"}`}>
               {r.claimed && !track.claimed ? PASS_CHECK : locked ? PASS_LOCK : premium ? PASS_CROWN_SM : null}
             </span>
-          </div>
+          </Tag>
         );
       })}
       <div className="mt-auto shrink-0 flex items-end" style={{ height: PT.slot }}>
@@ -1355,18 +1403,57 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
   const trackRef = useRef(null);
   const bodyRef = useRef(null);
   const closeRef = useRef(null);
+  const dialogRef = useRef(null);
   const nextIdx = (pass?.tierIndex ?? -1) + 1;
   // 📌 관리자가 패스를 꺼 두면 카드 단추가 없다 — 옛 주소(?tab=pass)로 들어와도 창을 띄우지 않는다
   const ready = !!open && !!pass?.enabled;
 
-  // 열리면 닫기 단추에 포커스 · Esc 로 닫기 — PopShell 과 같다
+  // 📌 이름 말풍선(PassPeek) — 누른 칸의 자리를 창 기준 좌표로 잡아 둔다. 같은 칸을 다시 누르면 닫힌다
+  const [peek, setPeek] = useState(null);
+  const showPeek = (e, key, r) => {
+    e.stopPropagation();
+    if (peek?.key === key) { setPeek(null); return; }
+    const dlg = dialogRef.current;
+    const box = dlg?.getBoundingClientRect();
+    const t = e.currentTarget.getBoundingClientRect();
+    if (!dlg || !box) return;
+    // 위로 띄울 자리(말풍선 두 줄 + 꼬리)가 창 머리에 걸리면 아래로.
+    //    📌 창(overflow hidden)도 장식 빛 무늬 때문에 스크롤 여유가 있어 포커스 등으로 밀릴 수 있다 — 창 안 좌표에 그 스크롤을 더한다
+    const below = t.top - box.top < 96;
+    const sx = dlg.scrollLeft, sy = dlg.scrollTop;
+    setPeek({ key, r, cx: t.left + t.width / 2 - box.left + sx, y: (below ? t.bottom - box.top + 8 : t.top - box.top - 8) + sy, below, sx, boxW: dlg.clientWidth });
+    onTone?.();
+  };
+  const close = () => { setPeek(null); onClose(); };
+
+  // 열리면 닫기 단추에 포커스 · Esc 로 닫기 — PopShell 과 같다. 말풍선이 떠 있으면 Esc 는 말풍선만 닫는다
   useEffect(() => { if (ready) closeRef.current?.focus({ preventScroll: true }); }, [ready]);
   useEffect(() => {
     if (!ready) return;
-    const onKey = (e) => e.key === "Escape" && onClose();
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      setPeek(null);
+      if (!peek) onClose();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ready, onClose]);
+  }, [ready, onClose, peek]);
+
+  // 말풍선은 누른 자리에 붙어 있다 — 트랙 · 본문을 넘기거나 창 크기가 바뀌면 자리가 어긋나므로 닫는다
+  useEffect(() => {
+    if (!peek) return;
+    const off = () => setPeek(null);
+    const track = trackRef.current;
+    const body = bodyRef.current;
+    track?.addEventListener("scroll", off, { passive: true });
+    body?.addEventListener("scroll", off, { passive: true });
+    window.addEventListener("resize", off);
+    return () => {
+      track?.removeEventListener("scroll", off);
+      body?.removeEventListener("scroll", off);
+      window.removeEventListener("resize", off);
+    };
+  }, [peek]);
 
   // 📌 열 때 · 탭을 바꿀 때 — 다음 티어 칸이 트랙 가운데 오게 가로로만 맞춘다(scrollIntoView 는 창 세로 스크롤까지 건드린다).
   //    받을 보상 탭은 처음부터(다음 티어는 아직 못 넘어 거기 없다), 만렙이면 끝으로
@@ -1516,14 +1603,15 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
     <div
       className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
       style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
-      onClick={onClose}
+      onClick={close}
     >
       {/* 📌 PC 는 내용 높이만큼(트랙 높이가 탭과 무관하게 고정이라 탭을 바꿔도 창이 그대로), 넘치면 본문이 세로로 스크롤 */}
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="시즌 패스"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); setPeek(null); }}
         className="relative w-full sm:max-w-3xl h-[86dvh] sm:h-auto sm:max-h-[min(900px,94vh)] overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
         style={{ background: th.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
       >
@@ -1547,7 +1635,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
               {premiumChip}
               <button
                 ref={closeRef}
-                onClick={onClose}
+                onClick={close}
                 aria-label="닫기"
                 className="shrink-0 w-9 h-9 rounded-full border border-white/15 text-white/55 hover:text-white hover:border-white/35 transition-colors flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-white/60"
               >
@@ -1599,7 +1687,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
                 {nextRewards.length > 0 ? (
                   <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                     {nextRewards.map((u) => (
-                      <PassNextTile key={`${u.premium ? "paid" : "free"}:${u.r.key}`} r={u.r} premium={u.premium} locked={u.premium && !pass.unlocked} />
+                      <PassNextTile key={`${u.premium ? "paid" : "free"}:${u.r.key}`} r={u.r} premium={u.premium} locked={u.premium && !pass.unlocked} peekKey={peek?.key} onPeek={showPeek} />
                     ))}
                   </div>
                 ) : (
@@ -1613,8 +1701,8 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
 
           {/* 탭 — 폰에서는 스크롤해도 위에 붙어 있다(바탕을 깔아 아래 트랙이 비치지 않게) */}
           <div className="sticky top-0 z-20 sm:static px-5 sm:px-7 py-2.5 flex items-center gap-1.5 border-y border-white/[0.08] bg-[#1c1338] sm:bg-transparent">
-            <PopTab on={tab === "all"} onClick={() => { setTab("all"); onTone?.(); }} label="전체 티어" n={tiers.length} />
-            <PopTab on={tab === "claim"} onClick={() => { setTab("claim"); onTone?.(); }} label="받을 보상" n={claimable} />
+            <PopTab on={tab === "all"} onClick={() => { setTab("all"); setPeek(null); onTone?.(); }} label="전체 티어" n={tiers.length} />
+            <PopTab on={tab === "claim"} onClick={() => { setTab("claim"); setPeek(null); onTone?.(); }} label="받을 보상" n={claimable} />
             {/* 관리자 테스트 초기화 — 탭 줄 오른쪽 작은 알약(따로 한 줄을 두면 PC 에서도 창에 세로 스크롤이 생겼다) */}
             {onReset && <span className="ml-auto"><AdminReset compact onReset={onReset} busy={resetBusy} label="초기화 (관리자)" /></span>}
           </div>
@@ -1676,10 +1764,10 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
                             ></span>
                           </div>
                           <div className="shrink-0 px-1.5" style={{ height: hFree }}>
-                            <PassCell track={t.free} busy={busyKey === `${t.tid}:free`} onClaim={() => onClaim(t.tid, "free")} />
+                            <PassCell track={t.free} busy={busyKey === `${t.tid}:free`} onClaim={() => onClaim(t.tid, "free")} peekKey={peek?.key} onPeek={showPeek} />
                           </div>
                           <div className="shrink-0 px-1.5" style={{ height: hPaid, marginTop: PT.rowGap }}>
-                            <PassCell track={t.paid} premium locked={!pass.unlocked} busy={busyKey === `${t.tid}:paid`} onClaim={() => onClaim(t.tid, "paid")} />
+                            <PassCell track={t.paid} premium locked={!pass.unlocked} busy={busyKey === `${t.tid}:paid`} onClaim={() => onClaim(t.tid, "paid")} peekKey={peek?.key} onPeek={showPeek} />
                           </div>
                         </div>
                       );
@@ -1690,6 +1778,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
             </div>
           </div>
         </div>
+        {peek && <PassPeek peek={peek} boxW={peek.boxW} />}
       </div>
     </div>
   );
