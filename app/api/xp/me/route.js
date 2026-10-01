@@ -12,7 +12,6 @@ import Purchase from "@/models/Purchase";
 import Item from "@/models/Item";
 import ShopItem from "@/models/ShopItem";
 import BotSetting from "@/models/BotSetting";
-import { settleTierPoints } from "@/lib/points";
 import { fetchMemberRoles } from "@/lib/discordMember";
 import { ownedItems } from "@/lib/ownedItems";
 import { OWN_PURCHASE_QUERY, OWN_PURCHASE_FIELDS, PERK_ITEM_FIELDS } from "@/lib/itemPerks";
@@ -49,12 +48,9 @@ export async function GET() {
       BotSetting.findOne({ key: "main" }).lean(),
     ]);
     const owned = ownedItems({ purchases: myPurchases, items: itemsAll, shopItems, heldRoles });
-    // 📌 상시 효과(강화 할인 · 캐시백 · 승급 빙옥 · 퀘스트 보상 …) · 프로필 배지 · 카드 스킨 — lib/itemPerks.js getPerks 와 같은 계산
+    // 📌 상시 효과(강화 할인 · 캐시백 · 퀘스트 보상 …) · 프로필 배지 · 카드 스킨 — lib/itemPerks.js getPerks 와 같은 계산
     const perks = perksOfItems(owned);
 
-    // 승급 보상 정산 — 봇이 레벨을 올리고, 그에 따른 POINT 는 사이트가 여기서 갚는다.
-    //    pointTierPaid 조건부 갱신이라 몇 번을 불러도 한 번만 지급된다. 승급 빙옥 보너스(tierPointBonus)는 지급할 때 얹는다
-    const tierGain = await settleTierPoints(session.user.id, level, { bonusPct: perks.tierPointBonus }).catch(() => 0);
     // 📌 획득 XP 계산 재료 — 봇 chatXp/voiceXp 의 가산 항목과 같은 것만 (채널 부스트는 채널마다 달라 뺀다)
     const held = new Set(heldRoles || []);
     const heldCfgs = buffCfgs.filter((c) => held.has(c.roleId));
@@ -102,9 +98,7 @@ export async function GET() {
         level,
         rank: above + 1,
         total,
-        point: (doc?.point || 0) + tierGain,
-        // 이번 조회에서 새로 정산된 승급 보상 — 화면에서 알림으로 쓸 수 있다
-        pointGain: tierGain,
+        point: doc?.point || 0,
         attendCount: doc?.attendCount || 0,
         // 통산 음성 참여 시간(초) — 시즌이 바뀌어도 이어진다
         voiceSeconds: doc?.voiceSeconds || 0,
@@ -123,7 +117,7 @@ export async function GET() {
         attendItemXp,
         boostXp: boosts.reduce((s, b) => s + b.xp, 0),
         boosts,
-        // 상시 효과 합(상한 적용) — { enhanceDiscount, shopCashback, tierPointBonus, questBonus, passBoost, cooldownCut, muteRelief }
+        // 상시 효과 합(상한 적용) — { enhanceDiscount, shopCashback, questBonus, passBoost, cooldownCut, muteRelief }
         perks: perkSums,
         // 강화 비용 할인 % 와 할인을 반영한 다음 단계 비용 { chat, voice } (최대 단계면 null) — 강화 창 비용 표시가 이 값을 쓴다
         enhanceDiscount: perks.enhanceDiscount,

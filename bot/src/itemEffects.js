@@ -21,7 +21,7 @@
 //      발동형  — 지급할 때 붙는다. 요일 · 시간대(· 채널) 조건을 탄다
 //               chatJackpot(features/chatXp) · voiceParty(features/voiceXp) · welcomeReply(features/chatXp) · attendLucky · attendPoint(attend.js)
 //      상시형  — 들고 있는 동안. 조건 없음, 같은 효과는 합산 후 상한 — perksOf
-//               봇: passBoost(xp.js grantXp) · cooldownCut(chatXp) · muteRelief(voiceXp) / 사이트만: enhanceDiscount · shopCashback · tierPointBonus · questBonus
+//               봇: passBoost(xp.js grantXp) · cooldownCut(chatXp) · muteRelief(voiceXp) / 사이트만: enhanceDiscount · shopCashback · questBonus
 //      소모형  — streakShield(attend.js) — 구매 하나를 consumeStreakShield 로 소모(Purchase.consumedAt)
 //      꾸미기형 — cardSkin(이미지 카드 스킨 — perksOf().cardSkin) / 사이트만: profileBadge
 //
@@ -61,7 +61,6 @@ const EFFECT_TRIGGERS = {
   // ── 상시형 (합산 후 상한 — perksOf / 사이트 lib/itemPerks.js) ──
   enhanceDiscount: { kind: "perk", modes: ["percent"], cap: 50 },  // 사이트 — 강화 비용 −%
   shopCashback: { kind: "perk", modes: ["percent"], cap: 30 },     // 사이트 — ARCTIC 결제 캐시백 %
-  tierPointBonus: { kind: "perk", modes: ["percent"], cap: 100 },  // 사이트 — 승급 빙옥 +%
   questBonus: { kind: "perk", modes: ["percent"], cap: 100 },      // 사이트 — 퀘스트 보상 +%
   passBoost: { kind: "perk", modes: ["percent"], cap: 50 },        // 시즌 패스 진행 +% (xp.js grantXp)
   cooldownCut: { kind: "perk", modes: ["add"], needs: "seconds", cap: 3600 }, // 채팅 쿨타임 −초 (실제 상한은 쿨타임의 절반 — perksOf)
