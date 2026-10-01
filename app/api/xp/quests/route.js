@@ -78,7 +78,9 @@ export async function POST(request) {
       );
     }
     // 주기별 잠금 키 — 일일/주간/월간이 각자 초기화된다
-    const lockKey = periodKey(quest.period || "daily");
+    //    📌 진행도를 센 그 기간의 키(state.keys)로 잠근다 — 자정 · 월요일 0시 · 1일 0시 직전에 누르면 다시 계산한 키가 새 기간으로 넘어가
+    //       지난 기간 달성분이 새 기간 몫을 잠가 버린다
+    const lockKey = state.keys?.[quest.period] || periodKey(quest.period || "daily");
 
     // 등급이 높을수록 퀘스트 POINT 를 더 받는다 — 지급 시점의 레벨로 곱한다
     //    📌 퀘스트 보상 보너스(아이템 효과 questBonus — 상한 적용 %)는 XP · 빙옥 둘 다에 얹는다(등급 배율 뒤, 버림). 패스 포인트는 그대로

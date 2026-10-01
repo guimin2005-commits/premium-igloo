@@ -3207,7 +3207,8 @@ export default function LevelPage() {
                       {/* 퀘스트 로그 — 카드 하나가 곧 하나의 임무 */}
                       {questRows.map((q) => {
                         const pct = Math.min(100, Math.round((q.current / Math.max(1, q.target)) * 100));
-                        const unit = q.metric === "xp" ? " XP" : q.metric === "minute" ? "분" : "회";
+                        // 📌 단위는 서버가 정한 값(lib/questKinds.js questUnit — 회 · 분 · 일 · 건 · 개 · XP). 옛 응답이면 세는 방식으로
+                        const unit = q.metric === "xp" ? " XP" : q.unit || (q.metric === "minute" ? "분" : "회");
                         const done = q.done;
                         // POINT 보상은 나중에 서버에 실린 값이라 없을 수도 있다 — 없으면 0 으로 본다
                         const rXp = Number(q.rewardXp) || 0;

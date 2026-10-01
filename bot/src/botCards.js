@@ -53,7 +53,7 @@ export const CARD_FIELDS = {
   cmdAttend: ["avatar", "name", "amount", "streak", "bestStreak", "attendCount", "streakBonus?", "skin?"],
   rankerAnnounce: ["season", "seasonName", "top: [{ name, avatar, xp }] — 1위부터 최대 3명"],
   //  item: { name, type, icon("art:키" · "svg:키" · 짧은 글자), image?(png · jpeg data URI — 원격 주소는 받지 않는다), color? } — 그림은 itemIconEl
-  cmdQuest: ["name", "claimable", "periods: [{ key: daily|weekly|monthly, left: 초기화까지 ms, quests: [{ name, metric: count|minute|xp, current, target, rewardXp, rewardPoint, done, claimed, claimable }] }]", "skin?"],
+  cmdQuest: ["name", "claimable", "periods: [{ key: daily|weekly|monthly, left: 초기화까지 ms, quests: [{ name, metric: count|minute|xp|day, unit?: 회|분|일|건|개, current, target, rewardXp, rewardPoint, done, claimed, claimable }] }]", "skin?"],
   cmdInventory: ["name", "total", "items: [item + { count, days?: 남은 일수(영구면 없음), pending?, worn? }] — 앞에서 BAG_SLOTS 칸까지", "skin?"],
   cmdPass: ["season", "seasonName", "tier", "maxTier", "progress — 다음 티어까지 0~1", "need — 다음 티어까지 남은 XP", "claimFree", "claimPaid", "premium", "nextTier — 다음 보상 티어(다 넘었으면 0)", "next: [{ kind: xp|point|role|item, amount?, label?, premium, ...item }] — 그 티어의 무료 → 프리미엄 전부(최대 PASS_MAX)"],
 };
@@ -1359,7 +1359,8 @@ function questProg(q) {
   const target = Math.max(1, int(q.target));
   const cur = Math.min(target, Math.max(0, int(q.current)));
   if (q.metric === "xp") return `${shortNum(cur)}/${shortNum(target)}`;
-  const unit = q.metric === "minute" ? "분" : "회";
+  // unit — 퀘스트 계산이 정한 단위(사이트 lib/questKinds.js questUnit · 봇 views/quests.js 사본). 없으면 세는 방식으로
+  const unit = q.unit && q.unit !== "XP" ? String(q.unit) : q.metric === "minute" ? "분" : "회";
   const full = `${num(cur)}/${num(target)}${unit}`;
   return progWidth(full) <= PROG_MAX ? full : `${shortNum(cur)}/${shortNum(target)}${unit}`;
 }
@@ -1827,7 +1828,7 @@ export function sampleCardData(kind, tierIndex = 1, avatar = null, skin = "") {
         {
           key: "weekly",
           left: 3 * 24 * H + 7 * H,
-          quests: [q("주간 정수기", "count", 32, 50, 20000), q("출석 5일", "count", 5, 5, 0, 100), q("음성 5시간", "minute", 300, 300, 15000, 0, { claimed: true, claimable: false })],
+          quests: [q("주간 정수기", "count", 32, 50, 20000), q("출석 5일", "day", 5, 5, 0, 100, { unit: "일" }), q("음성 5시간", "minute", 300, 300, 15000, 0, { claimed: true, claimable: false })],
         },
         { key: "monthly", left: 18 * 24 * H + 3 * H, quests: [q("월간 이글루인", "xp", 423100, 1000000, 100000)] },
       ],

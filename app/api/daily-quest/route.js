@@ -4,17 +4,9 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { denyIfNotAdmin } from "@/lib/apiAuth";
 import DailyQuest from "@/models/DailyQuest";
+import { normalizeQuestDoc } from "@/lib/questKinds";
 
 // 📌 일일 퀘스트 정의 CRUD — 관리자 전용 (xp-boost 라우트와 같은 형태)
-
-const REASONS = ["chat", "voice", "attend", "any"];
-const PERIODS = ["daily", "weekly", "monthly"];
-const METRICS = ["count", "xp", "minute"];
-const num = (v, def, { min = 0, max = 1_000_000 } = {}) => {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return def;
-  return Math.min(max, Math.max(min, Math.round(n)));
-};
 
 export async function GET() {
   const deny = await denyIfNotAdmin();
@@ -29,25 +21,11 @@ export async function POST(request) {
   if (deny) return deny;
 
   const b = await request.json().catch(() => ({}));
-  const name = String(b?.name || "").trim();
-  if (!name) {
+  // 📌 조건(대상 · 세는 방식 · 시간대) 정리는 lib/questKinds.js — 추천 퀘스트 등록과 같은 함수
+  const doc = { ...normalizeQuestDoc(b), updatedAt: new Date() };
+  if (!doc.name) {
     return NextResponse.json({ success: false, error: "퀘스트 이름을 입력해 주세요." }, { status: 400 });
   }
-
-  const doc = {
-    name: name.slice(0, 40),
-    desc: String(b?.desc || "").trim().slice(0, 120),
-    period: PERIODS.includes(b?.period) ? b.period : "daily",
-    reason: REASONS.includes(b?.reason) ? b.reason : "chat",
-    metric: METRICS.includes(b?.metric) ? b.metric : "count",
-    target: num(b?.target, 1, { min: 1, max: 1_000_000 }),
-    rewardXp: num(b?.rewardXp, 0, { min: 0, max: 1_000_000 }),
-    // 등급 배율은 수령 시점에 곱하므로 여기 저장하는 값은 배율 적용 전 기본값이다
-    rewardPoint: num(b?.rewardPoint, 0, { min: 0, max: 1_000_000 }),
-    enabled: b?.enabled !== false,
-    order: num(b?.order, 0, { min: 0, max: 999 }),
-    updatedAt: new Date(),
-  };
 
   await connectToDatabase();
   const saved = b?.id
