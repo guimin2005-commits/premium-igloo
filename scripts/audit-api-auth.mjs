@@ -36,6 +36,7 @@ const ALLOW = {
   "/api/honors GET": "명예의 전당 공개 페이지",
   "/api/referral POST": "종료된 초대 이벤트 — 항상 410, 아무것도 쓰지 않음",
   "/api/settings GET": "점검 여부 한 값만 — 비로그인 방문자도 점검 화면을 봐야 함",
+  "/api/shop/skin-card GET": "카드 스킨 미리보기 PNG — 목록에 있는 스킨 키만 받고 예시 사람으로만 그림(사용자 데이터 없음) · 길게 캐시",
   "/api/stats GET": "홈 화면 멤버·온라인 수와 활동 그래프 — 공개 지표",
   "/api/xp/policy GET": "공개 XP 정책(관리 전용 값 제외) — 홈·레벨·상점이 비로그인으로 읽음",
 };

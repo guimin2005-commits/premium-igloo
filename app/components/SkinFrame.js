@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { STRING_SKINS } from "@/lib/cardSkins";
 
 // 📌 카드 스킨 장식 — 레벨 페이지 프로필 카드(잉크 판)에 착용한 카드 스킨을 얹는다.
 //    "'카드' 스킨인 만큼 좀 꾸며 달라"(테두리만으론 심심) — 스킨마다 액자 + 장식 요소:
@@ -8,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 //      오로라 밤하늘 별 · 위에서 드리우는 빛 커튼(가는 세로 빛줄) · 물결 선 · 빛 테
 //      아이스 서리 점 무늬 · 픽셀 액자 · 모서리 눈송이 · 흩날리는 도트 눈
 //      크림슨 빗금 · 붉은 테 · 모서리 꺾쇠 · 바닥 불꽃 선 · 떠오르는 불씨
+//    시즌 2(새로운 세계 · 항해도 · 비공정)는 lib/cardSkins 의 SVG 문자열 함수를 그대로 쓴다 — 봇 카드와 한 벌
 //    등급 색(카드 오른쪽 위 번지는 빛 · 링 · 문장)과 헷갈리지 않게 카드를 넓게 번지는 빛으로 칠하지 않는다 — 선 · 점 · 무늬 · 작은 장식만.
 //    아바타(왼쪽 위)와 글자 뒤에는 옅게, 진한 장식은 가장자리 · 모서리(오른쪽 위 · 아래쪽)에. 봇 이미지 카드(lib/botCards.js SKIN_DECO)와 같은 말.
 //    부모는 relative overflow-hidden 이어야 한다. 크기를 재서 그리므로 처음 한 번은 비어 있다가 나타난다(자리를 차지하지 않아 아무것도 밀지 않는다)
@@ -50,6 +52,12 @@ function flake(cx, cy, P) {
 }
 
 export function deco(skin, w, h) {
+  // 📌 시즌 2 스킨 — 문자열 함수(lib/cardSkins)가 그린 SVG 를 그대로 얹는다(그림은 목록에 있는 key 로만 만든다 — 사용자 입력이 섞이지 않음)
+  const s2 = Object.prototype.hasOwnProperty.call(STRING_SKINS, skin) ? STRING_SKINS[skin] : null;
+  if (s2) {
+    const d = s2.deco(w, h, 1, true);
+    return <g dangerouslySetInnerHTML={{ __html: (d.defs ? `<defs>${d.defs}</defs>` : "") + (d.under || "") + (d.over || "") }} />;
+  }
   const o = 12; // 바깥 테 여백 — 카드 모서리(24px 둥근 모서리) 안쪽
 
   if (skin === "gold") {

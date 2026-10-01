@@ -72,7 +72,7 @@ const EFFECT_TRIGGERS = {
   profileBadge: { kind: "cosmetic", modes: ["add"], noAmount: true },            // 사이트 — 프로필 배지
 };
 // 📌 카드 스킨 키 — 사이트 lib/itemEffects.js SKINS · botCards.js CARD_SKINS 와 같아야 한다(모르는 키는 저장 때처럼 버린다)
-const SKIN_KEYS = new Set(["gold", "aurora", "ice", "crimson"]);
+const SKIN_KEYS = new Set(["gold", "aurora", "ice", "crimson", "newworld", "chart", "airship"]);
 // 📌 유저가 고른 스킨 적용 — 사이트 lib/itemEffects.js pickCardSkin 과 같은 규칙
 //    pick: "" 안 고름(첫 스킨) · "none" 끔 · 스킨 키(더 이상 없으면 첫 스킨)
 export function pickCardSkin(skins, pick) {

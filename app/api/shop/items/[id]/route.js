@@ -3,7 +3,8 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { getShopAccess } from "@/lib/shopAccess";
-import { itemEffectPartsOf, roleBuffParts } from "@/lib/itemEffects";
+import { itemEffectPartsOf, roleBuffParts, normalizeEffects } from "@/lib/itemEffects";
+import { CARD_SKIN_KEYS } from "@/lib/botCards";
 import { channelNamesFor } from "@/lib/channelNames";
 import ShopItem from "@/models/ShopItem";
 import Item from "@/models/Item";
@@ -12,6 +13,8 @@ import RoleConfig from "@/models/RoleConfig";
 // ── [조회] 상품 상세 — 공개 전에는 관리자만 ──
 //    📌 effects — 사면 붙는 효과 조각 [{ label, amount, unit, cond, once }] (인벤토리 문장과 같은 원천 — lib/itemEffects):
 //       연결된 등록 아이템의 효과(기본 · 조건) + 지급 역할의 역할 버프(관리자 › 레벨 설정). 없으면 [] (화면은 칸을 그리지 않는다)
+//    📌 cosmetic — 꾸미기 효과가 있을 때만 { skin: 카드 스킨 키 | "", badge: 프로필 배지 여부, botCard: 봇 카드도 그 스킨을 그리는지 }.
+//       상품 상세가 '적용 모습' 미리보기를 그린다(app/arctic/ItemGallery.tsx). 배지 그림은 상품에 복사된 아이템 스냅샷(icon · itemImageUrl · color · type)
 export async function GET(request, { params }) {
   try {
     await connectToDatabase();
@@ -27,6 +30,7 @@ export async function GET(request, { params }) {
     }
 
     let effects = [];
+    let cosmetic = null;
     try {
       const [linked, cfg] = await Promise.all([
         item.itemId ? Item.findById(item.itemId).lean().catch(() => null) : null,
@@ -34,12 +38,17 @@ export async function GET(request, { params }) {
       ]);
       const names = await channelNamesFor([linked?.effects]);
       effects = [...itemEffectPartsOf(linked, (cid) => names.get(cid)), ...roleBuffParts(cfg || {})];
+      // 꾸미기 — 효과 문장과 같은 원천(연결된 등록 아이템). 기프트카드는 효과 없음(itemEffectPartsOf 와 같은 기준)
+      const fx = linked && linked.type !== "physical" ? normalizeEffects(linked.effects) : [];
+      const skin = fx.find((e) => e.on === "cardSkin")?.skin || "";
+      const badge = fx.some((e) => e.on === "profileBadge");
+      if (skin || badge) cosmetic = { skin, badge, botCard: !!skin && CARD_SKIN_KEYS.includes(skin) };
     } catch (e) {
       // 효과 문장이 없다고 상품을 못 보면 안 된다
       console.error("상품 효과 문장 오류:", e);
     }
 
-    return NextResponse.json({ success: true, data: { ...item, effects } });
+    return NextResponse.json({ success: true, data: { ...item, effects, ...(cosmetic ? { cosmetic } : {}) } });
   } catch (e) {
     return NextResponse.json({ success: false, data: null }, { status: 500 });
   }

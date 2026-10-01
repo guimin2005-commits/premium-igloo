@@ -11,7 +11,7 @@ import ArcticDock from "../../ArcticDock";
 import ArcticStoreBar from "../../ArcticStoreBar";
 import ArcticFooter from "../../ArcticFooter";
 import ProductCard from "../../ProductCard";
-import CardArt from "../../CardArt";
+import ItemGallery from "../../ItemGallery";
 import { ownStateOf, renewBaseOf, renewPickOf, expiryLabel, ownedCountOf } from "../../owned";
 import { isUnitSale, maxPerOrderOf, qtyCapOf } from "@/lib/unitSale";
 
@@ -36,6 +36,8 @@ export default function ItemDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [myXp, setMyXp] = useState<number | null>(null);
   const [myPoint, setMyPoint] = useState<number | null>(null);
+  // 📌 내 레벨 카드 값(/api/xp/me data) — 꾸미기 상품의 '적용 모습'을 내 이름 · 레벨로 그린다(ItemGallery). 없으면 예시
+  const [meData, setMeData] = useState<Record<string, unknown> | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [allItems, setAllItems] = useState<any[]>([]);
   // 📌 장바구니 개수 기준 — 상품 목록을 제대로 받았을 때의 id 들. 실패면 null (그때는 저장된 그대로 센다)
@@ -89,7 +91,7 @@ export default function ItemDetailPage() {
         } catch {}
       }
       else setNotFound(true);
-      if (me?.success) { setMyXp(me.data.xp); setMyPoint(me.data.point ?? 0); }
+      if (me?.success) { setMyXp(me.data.xp); setMyPoint(me.data.point ?? 0); setMeData(me.data); }
       setOrders(Array.isArray(ord?.data) ? ord.data : []);
       setAllItems(Array.isArray(all?.data) ? all.data : []);
       if (all?.success && Array.isArray(all?.data)) setValidIds(new Set(all.data.map((x: any) => String(x._id))));
@@ -234,15 +236,8 @@ export default function ItemDetailPage() {
       <section className="max-w-5xl mx-auto px-6 pt-8 pb-32 md:pb-24">
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* 좌 — 이미지 */}
-          <div className="relative aspect-square rounded-2xl bg-[#f2f2f2] border border-[#ededed] overflow-hidden">
-            <CardArt it={item} stage />
-            {soldOut && (
-              <div className="absolute inset-0 bg-[#131313]/55 flex items-center justify-center">
-                <span className="text-lg font-black text-white tracking-wider">SOLD OUT</span>
-              </div>
-            )}
-          </div>
+          {/* 좌 — 이미지. 꾸미기 상품은 아래 썸네일 줄로 적용 모습(카드 스킨 · 디스코드 카드 · 프로필 배지)을 넘겨 본다 — 상품이 바뀌면 처음(상품 그림)부터 */}
+          <ItemGallery key={item._id} item={item} soldOut={soldOut} user={isLoggedIn ? session?.user : null} me={isLoggedIn ? meData : null} />
 
           {/* 우 — 정보 */}
           <div className="flex flex-col">
