@@ -5,7 +5,7 @@
 //    조회 전용 — 쓰기는 구매 탭의 1회 소모권 "1개 사용"(app/api/admin/users/consume) 하나. 주소에 ?q= · ?userId= 를 실어 새로고침해도 같은 화면이 다시 열린다.
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AdminPage, SearchInput, Segmented, Btn, SwapLabel, DataTable, DetailPane, StatusChip, EmptyRow, useAdminGuard, useNotice, type Column } from "../ui";
+import { AdminPage, SearchInput, Segmented, Btn, SwapLabel, DataTable, DetailPane, StatusChip, EmptyRow, ConfirmDialog, useAdminGuard, useNotice, type Column } from "../ui";
 import { getTier } from "@/lib/voiceTiers";
 
 type Row = { userId: string; username: string; displayName: string; xp: number; level: number; point: number; noXp?: boolean };
@@ -31,7 +31,7 @@ type Detail = {
   notifications: any[]; inquiries: any[]; applies: any[];
   seasons: { season: number; name: string; rank: number; xp: number; level: number }[];
 };
-type TabId = "purchase" | "payout" | "coupon" | "inbox" | "xp";
+type TabId = "purchase" | "payout" | "coupon" | "inbox" | "xp" | "role";
 type Tone = "ok" | "warn" | "bad" | "info" | "neutral" | "ink";
 
 const LIST_LIMIT = 50; // API 가 목록마다 최근 50건까지 준다
@@ -41,7 +41,11 @@ const TABS: { id: TabId; l: string }[] = [
   { id: "coupon", l: "쿠폰" },
   { id: "inbox", l: "알림·문의" },
   { id: "xp", l: "XP 내역" },
+  { id: "role", l: "역할" },
 ];
+// 📌 역할 탭 — 디스코드에서 지금 가진 역할(app/api/admin/users/roles). 레벨 보상 · 디스코드 관리 역할은 뗄 수 없다
+type HeldRole = { id: string; name: string; color: string; managed: boolean; rewardLevel: number | null; item: string };
+type RoleState = { key: string; loading: boolean; present: boolean; roles: HeldRole[]; error: string };
 
 const PURCHASE_STATUS: Record<string, { l: string; t: Tone }> = {
   pending: { l: "대기", t: "warn" },
@@ -207,6 +211,44 @@ export default function AdminUsersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
+  // 역할 — 탭을 열 때 · 유저를 바꿀 때 디스코드에 새로 묻는다. 다른 유저로 바뀐 뒤 늦게 온 응답은 key 로 버린다
+  const [roleState, setRoleState] = useState<RoleState | null>(null);
+  const [roleRevoke, setRoleRevoke] = useState<HeldRole | null>(null);
+  const [roleBusy, setRoleBusy] = useState(false);
+  //    불러오는 중은 화면이 key 로 판단한다(roleState 가 이 유저 것이 아니면 불러오는 중) — 효과 안에서 바로 상태를 바꾸지 않게
+  const loadRoles = useCallback(async (id: string) => {
+    try {
+      const r = await fetch(`/api/admin/users/roles?userId=${encodeURIComponent(id)}`, { cache: "no-store" });
+      const d = await r.json().catch(() => null);
+      setRoleState(() => (r.ok && d?.success ? { key: id, loading: false, present: !!d.data?.present, roles: Array.isArray(d.data?.roles) ? d.data.roles : [], error: "" }
+        : { key: id, loading: false, present: true, roles: [], error: d?.message || "역할을 읽지 못했습니다." }));
+    } catch {
+      setRoleState({ key: id, loading: false, present: true, roles: [], error: "역할을 읽지 못했습니다." });
+    }
+  }, []);
+  useEffect(() => {
+    if (tab !== "role" || !selectedId || roleState?.key === selectedId) return;
+    loadRoles(selectedId);
+  }, [tab, selectedId, roleState?.key, loadRoles]);
+  const revokeRole = useCallback(async () => {
+    if (!roleRevoke || !selectedId || roleBusy) return;
+    setRoleBusy(true);
+    try {
+      const r = await fetch("/api/admin/users/roles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: selectedId, roleId: roleRevoke.id }) });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.success) {
+        notify(d.message || "회수했습니다.");
+        // 그 자리에서 뺀다(디스코드 반영을 기다리지 않게)
+        setRoleState((prev) => (prev?.key === selectedId ? { ...prev, roles: prev.roles.filter((x) => x.id !== roleRevoke.id) } : prev));
+        setRoleRevoke(null);
+      } else notify(d?.message || "처리에 실패했습니다.", true);
+    } catch {
+      notify("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setRoleBusy(false);
+    }
+  }, [roleRevoke, selectedId, roleBusy, notify]);
+
   // XP 내역 — 첫 쪽(before 없음) 또는 더 보기(before). 다른 유저 · 재화로 바뀐 뒤 늦게 온 응답은 key 로 버린다
   const loadLedger = useCallback(async (id: string, c: LedgerCur, before: string | null) => {
     const key = `${id}:${c}`;
@@ -312,6 +354,7 @@ export default function AdminUsersPage() {
     coupon: detail ? detail.coupons.length : null,
     inbox: detail ? detail.notifications.length + detail.inquiries.length + detail.applies.length : null,
     xp: null, // 원장은 쪽 단위라 개수를 달지 않는다
+    role: roleState && roleState.key === selectedId && !roleState.loading ? roleState.roles.length : null,
   };
 
   const summary: { l: string; v: string; s?: React.ReactNode }[] = u
@@ -485,6 +528,29 @@ export default function AdminUsersPage() {
         </div>
       );
     }
+    if (tab === "role") {
+      const rs = roleState && roleState.key === selectedId ? roleState : null;
+      if (!rs || rs.loading) return <p className="py-10 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</p>;
+      if (rs.error) return <p className="py-10 text-center text-[13px] text-[#d01634]">{rs.error}</p>;
+      if (!rs.present) return <p className="py-10 text-center text-[13px] text-[#8a8a8a]">서버에 없는 유저</p>;
+      return (
+        <List items={rs.roles} empty="역할 없음" capped={false}>
+          {rs.roles.map((r) => {
+            const locked = r.managed || r.rewardLevel != null;
+            return (
+              <li key={r.id} className="py-2.5 flex items-center gap-3 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: r.color }}></span>
+                <span className="min-w-0 flex-1 truncate text-[14px] font-bold">{r.name}</span>
+                {r.rewardLevel != null && <StatusChip className="shrink-0">레벨 보상 Lv.{r.rewardLevel}</StatusChip>}
+                {r.managed && <StatusChip className="shrink-0">디스코드 관리</StatusChip>}
+                {r.item && <StatusChip tone="info" className="shrink-0 max-w-[40%] truncate">보유 · {r.item}</StatusChip>}
+                <Btn variant="secondary" size="sm" className="shrink-0" disabled={locked || roleBusy} onClick={() => setRoleRevoke(r)}>회수</Btn>
+              </li>
+            );
+          })}
+        </List>
+      );
+    }
     // XP 내역 — XP · 빙옥은 원장이 따로 준다. 50줄씩, 더 보기로 이어 받는다
     const lg = ledger && ledger.key === `${selectedId}:${ledgerCur}` ? ledger : null;
     return (
@@ -583,9 +649,9 @@ export default function AdminUsersPage() {
               </div>
             )}
 
-            {/* 하위 탭 — 칸 폭 고정(5등분). 개수는 넓은 화면에서만 옆에 옅게 → 글자 · 숫자가 바뀌어도 탭 줄이 움직이지 않는다 */}
+            {/* 하위 탭 — 칸 폭 고정(6등분). 개수는 넓은 화면에서만 옆에 옅게 → 글자 · 숫자가 바뀌어도 탭 줄이 움직이지 않는다 */}
             <div className="sticky top-0 z-[1] -mx-5 px-5 pt-5 pb-2 bg-white">
-              <div role="tablist" className="grid grid-cols-5 p-1 rounded-full bg-[#f2f2f2]">
+              <div role="tablist" className="grid grid-cols-6 p-1 rounded-full bg-[#f2f2f2]">
                 {TABS.map((t) => {
                   const on = tab === t.id;
                   const n = counts[t.id];
@@ -610,6 +676,16 @@ export default function AdminUsersPage() {
         )}
       </DetailPane>
 
+      <ConfirmDialog
+        open={!!roleRevoke}
+        danger
+        title="역할 회수"
+        confirmLabel="회수"
+        busy={roleBusy}
+        onCancel={() => setRoleRevoke(null)}
+        onConfirm={revokeRole}
+        body={roleRevoke ? <p className="break-keep">{detail?.user?.displayName || detail?.user?.username || selectedId} · {roleRevoke.name}</p> : null}
+      />
       {noticeEl}
     </AdminPage>
   );
