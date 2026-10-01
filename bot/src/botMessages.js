@@ -189,15 +189,21 @@ export const MESSAGE_DEFS = {
     ],
     defaults: {
       enabled: true,
+      card: true,
       content: "",
       embed: embed({
         color: "tier",
-        title: "NEW ROLE",
-        description: "{user} 님에게 **{role}** 역할이 지급되었습니다.\n> Lv.{level} 달성 보상",
-        thumbnail: "{avatar}",
+        description: "{user} 님에게 **{role}** 역할이 지급되었습니다.",
         timestamp: true,
       }),
     },
+    plainEmbed: embed({
+      color: "tier",
+      title: "NEW ROLE",
+      description: "{user} 님에게 **{role}** 역할이 지급되었습니다.\n> Lv.{level} 달성 보상",
+      thumbnail: "{avatar}",
+      timestamp: true,
+    }),
   },
   rankerAnnounce: {
     group: "channel",
@@ -577,7 +583,7 @@ export const MESSAGE_KEYS = Object.keys(MESSAGE_DEFS);
 
 // 📌 이미지 카드를 붙일 수 있는 키 — lib/botCards.js · bot/src/botCards.js 의 CARD_KINDS 와 같다.
 //    카드가 켜져 있으면(card) 봇이 PNG 를 그려 임베드 큰 이미지 자리에(임베드가 없으면 본문 아래 첨부로) 붙인다.
-export const CARD_KEYS = ["levelUp", "cmdLevel", "cmdRank", "cmdAttend", "rankerAnnounce", "cmdQuest", "cmdInventory", "cmdPass"];
+export const CARD_KEYS = ["levelUp", "roleGrant", "cmdLevel", "cmdRank", "cmdAttend", "rankerAnnounce", "cmdQuest", "cmdInventory", "cmdPass"];
 export const isCardKey = (key) => CARD_KEYS.includes(key);
 
 // 📌 예전 BotSetting 한 줄 문구의 기본값 — 이것과 같으면 관리자가 바꾼 적이 없는 것이라 새 기본 디자인을 쓴다
@@ -1025,9 +1031,9 @@ export async function buildMessageWithCard(key, vars = {}, cardData = null) {
 }
 
 // 📌 카드를 못 그렸을 때(그리기 실패 · 3초 초과 · 그림 모듈 없음) 카드 전의 글 모양(MESSAGE_DEFS plainEmbed)으로 보내는 키.
-//    이 셋은 카드와 쓰는 짧은 임베드(한 줄)만으로는 목록 · 보상이 빠진다 — 그래서 카드가 없으면 예전 글 응답 그대로.
+//    이 키들은 카드와 쓰는 짧은 임베드(한 줄)만으로는 목록 · 보상(역할 지급은 달성 레벨 · 사진)이 빠진다 — 그래서 카드가 없으면 예전 글 응답 그대로.
 //    관리자가 임베드를 고쳐 저장했으면(기본 카드 모양과 다르면) 고친 그대로 보낸다. 던지지 않는다
-const PLAIN_ON_CARD_FAIL = new Set(["cmdQuest", "cmdInventory", "cmdPass"]);
+const PLAIN_ON_CARD_FAIL = new Set(["roleGrant", "cmdQuest", "cmdInventory", "cmdPass"]);
 function plainFallback(key, c) {
   const plainEmbed = MESSAGE_DEFS[key]?.plainEmbed;
   if (!PLAIN_ON_CARD_FAIL.has(key) || !plainEmbed || !c?.tpl) return null;
@@ -1050,12 +1056,12 @@ function avatarOf(x) {
 }
 
 // 📌 카드 스킨(아이템 효과 cardSkin) — commonVars 가 심볼 칸에 실어 둔 멤버로 스킨을 찾아 카드 data 에 넣는다.
-//    레벨업 · /레벨 · /랭크 · /출석체크 · /퀘스트 · /인벤토리 · /시즌패스만(RANKER 제외 — botCards.js SKIN_CARD_KINDS 와 같다).
+//    레벨업 · 역할 지급 · /레벨 · /랭크 · /출석체크 · /퀘스트 · /인벤토리 · /시즌패스만(RANKER 제외 — botCards.js SKIN_CARD_KINDS 와 같다).
 //    data 에 skin 이 이미 있으면 그대로 둔다. 부르는 쪽은 고칠 게 없다
 //    가진 스킨이 여럿이면 유저가 인벤토리에서 고른 것(UserXp.cardSkinPick — pickCardSkin), 못 읽으면 관리자 순서상 첫 스킨
 //    (vars 를 { ...commonVars(member), … } 로 만들면 심볼 칸도 함께 복사된다 — 템플릿 치환 · JSON 에는 드러나지 않는다)
 const VARS_MEMBER = Symbol("member");
-const SKIN_KEYS = new Set(["levelUp", "cmdLevel", "cmdRank", "cmdAttend", "cmdQuest", "cmdInventory", "cmdPass"]);
+const SKIN_KEYS = new Set(["levelUp", "roleGrant", "cmdLevel", "cmdRank", "cmdAttend", "cmdQuest", "cmdInventory", "cmdPass"]);
 function withSkin(key, vars, cardData) {
   const member = vars?.[VARS_MEMBER];
   if (!SKIN_KEYS.has(key) || !member) return cardData;

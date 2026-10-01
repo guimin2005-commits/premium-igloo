@@ -33,7 +33,7 @@ import { AdminPage, Panel, Btn, Switch, SaveBar, StatusChip, ConfirmDialog, Segm
 const API = "/api/admin/bot-messages";
 const CARD_API = "/api/admin/bot-messages/card";
 // 등급에 따라 그림이 바뀌는 카드 — 출석(강조색 하나) · RANKER(금은동)는 등급 칩이 없다
-const TIER_CARD_KEYS = new Set(["levelUp", "cmdLevel", "cmdRank"]);
+const TIER_CARD_KEYS = new Set(["levelUp", "roleGrant", "cmdLevel", "cmdRank"]);
 const TIER_OPTIONS = (CARD_TIERS as { name: string }[]).map((t, i) => ({ v: String(i), l: t.name }));
 const DEFAULT_CARD_TIER = 1; // 브론즈 — 예시 레벨(128)의 등급
 const JSON_HEADERS = { "Content-Type": "application/json" };
@@ -375,10 +375,14 @@ function fieldRows(fields: Field[], hasThumb: boolean) {
 function previewVars(key: string, cardTier: number | null = null) {
   const v = { ...(sampleVars(key) as Record<string, unknown>) };
   if (cardTier != null && TIER_CARD_KEYS.has(key)) {
-    const d = sampleCardData(key, cardTier, null) as { level: number; prevLevel?: number; xp: number; need: number; progress: number; rank?: number; total?: number };
+    const d = sampleCardData(key, cardTier, null) as { level: number; prevLevel?: number; xp: number; need: number; progress: number; rank?: number; total?: number; role?: string };
     v.level = d.level;
-    v.xp = d.xp;
-    v.tier = (CARD_TIERS as { name: string }[])[cardTier]?.name;
+    // 역할 지급 — 그 등급 역할 · 시작 레벨(카드 샘플과 같다). 다른 등급 카드만 XP · 등급 이름
+    if (key === "roleGrant") v.role = d.role;
+    else {
+      v.xp = d.xp;
+      v.tier = (CARD_TIERS as { name: string }[])[cardTier]?.name;
+    }
     if (key === "levelUp") Object.assign(v, { prevLevel: d.prevLevel, nextXp: d.need, progressBar: progressBar(d.progress) });
     if (key === "cmdLevel") Object.assign(v, { need: d.need, nextLevel: d.level + 1, progressBar: progressBar(d.progress) });
     if (key === "cmdRank") Object.assign(v, { rank: d.rank, total: d.total });
@@ -1258,7 +1262,7 @@ export default function AdminBotMessagesPage() {
                     </span>
                   }
                 >
-                  {/* 등급 칩 — 등급 카드(레벨업 · /레벨 · /랭크)에서 카드가 켜져 있을 때만. 한 줄 가로 스크롤 */}
+                  {/* 등급 칩 — 등급 카드(레벨업 · 역할 지급 · /레벨 · /랭크)에서 카드가 켜져 있을 때만. 한 줄 가로 스크롤 */}
                   {tierCard && (
                     <div className="flex items-center px-4 py-2.5 border-b border-[#ededed]">
                       <span className="shrink-0 mr-3 text-[12px] font-bold text-[#5a5a5a]">등급</span>

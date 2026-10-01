@@ -4,13 +4,13 @@ import { getLevelByXp, getCumulativeXpByLevel, kstToday } from "./leveling.js";
 import { getRoleConfigs } from "./roleConfigs.js";
 import { heldEffects, effectXp, effectTimeOk, claimDaily, kstNow, perksOf } from "./itemEffects.js";
 import { getSettings, isLevelOpen } from "./botSettings.js";
-import { buildMessage, buildMessageWithCard, cardAvatar, commonVars, tierOf, progressBar } from "./botMessages.js";
+import { buildMessageWithCard, cardAvatar, commonVars, tierOf, progressBar } from "./botMessages.js";
 import { config } from "./config.js";
 
 export const EMBED_COLOR = 0xe91e3f;
 export const EMBED_FOOTER = "고급 이글루 · SYSTEM : LEVEL";
 
-// 지정 채널에 알림 전송 — 메시지는 buildMessage 결과 그대로 (채널 미설정 · 미존재 · 꺼진 메시지(null)면 조용히 넘어간다)
+// 지정 채널에 알림 전송 — 메시지는 buildMessageWithCard 결과 그대로 (채널 미설정 · 미존재 · 꺼진 메시지(null)면 조용히 넘어간다)
 function sendNotice(guild, channelId, payload) {
   if (!channelId || !payload) return;
   const channel = guild.channels.cache.get(channelId);
@@ -45,19 +45,49 @@ async function grantRewardRoles(member, level, { notify = true } = {}) {
         await member.roles.add(cfg.roleId, `레벨 ${cfg.rewardLevel} 도달 보상`);
         console.log(`🎖 ${member.displayName} → ${cfg.roleName || cfg.roleId} 지급 (Lv.${level})`);
 
-        if (notify && s.roleGrantEnabled) {
-          const roleName = cfg.roleName || member.guild.roles.cache.get(cfg.roleId)?.name || "역할";
-          // 📌 문구 · 디자인은 관리자 봇 메시지 설정(roleGrant). {level} 은 이 역할의 지급 레벨 — 기본 문구가 "Lv.{level} 달성 보상" 이고
-          //    레벨이 한 번에 크게 올라도 역할과 맞는 숫자 · 등급 색이 나오게 (지금 레벨을 넣으면 브론즈에 "Lv.450 달성 보상" 이 된다)
-          const payload = buildMessage("roleGrant", { ...commonVars(member), role: roleName, level: cfg.rewardLevel });
-          // 역할 지급 전용 채널이 없으면 레벨업 채널을 함께 사용
-          sendNotice(member.guild, s.roleGrantChannelId || s.levelupChannelId || config.levelupChannelId, payload);
-        }
+        if (notify && s.roleGrantEnabled) announceRoleGrant(member, cfg);
       } catch (e) {
         console.error(`역할 지급 실패 (${cfg.roleName || cfg.roleId}):`, e.message);
       }
     }
   }
+}
+
+// 역할 지급 알림 — 문구 · 디자인은 관리자 봇 메시지 설정(roleGrant). 카드가 켜져 있으면 이미지 카드(레벨업 카드와 한 벌)를 붙인다
+//   📌 다음 역할 지급을 기다리게 하지 않는다 — 아바타 받기 · 카드 그리기는 따로 돈다. 못 그리면(실패 · 3초 초과) 글 임베드만
+function announceRoleGrant(member, cfg) {
+  sendRoleGrant(member, cfg).catch((e) => console.error(`역할 지급 알림 오류 (${member.displayName}):`, e?.message || e));
+}
+
+// 📌 역할 색 "#rrggbb" — discord.js 의 hexColor 는 role.colors 가 없으면 던진다. 그때 카드를 통째로 잃지 않게 빈 값(흰색)
+function roleHex(role) {
+  try {
+    return role?.hexColor || "";
+  } catch {
+    return "";
+  }
+}
+
+async function sendRoleGrant(member, cfg) {
+  const s = getSettings();
+  // 역할 지급 전용 채널이 없으면 레벨업 채널을 함께 사용 — 보낼 채널이 없으면 카드도 그리지 않는다
+  const channelId = s.roleGrantChannelId || s.levelupChannelId || config.levelupChannelId;
+  if (!channelId || !member.guild.channels.cache.get(channelId)?.isTextBased()) return;
+  const role = member.guild.roles.cache.get(cfg.roleId);
+  const roleName = cfg.roleName || role?.name || "역할";
+  // 📌 {level} 은 이 역할의 지급 레벨 — 기본 문구가 "Lv.{level} 달성 보상" 이고
+  //    레벨이 한 번에 크게 올라도 역할과 맞는 숫자 · 등급 색이 나오게 (지금 레벨을 넣으면 브론즈에 "Lv.450 달성 보상" 이 된다)
+  const vars = { ...commonVars(member), role: roleName, level: cfg.rewardLevel };
+  const payload = await buildMessageWithCard("roleGrant", vars, async (m) => ({
+    avatar: await cardAvatar(member),
+    name: vars.name,
+    role: roleName,
+    roleColor: roleHex(role), // "#000000" 은 색 없음 — 카드가 흰색으로 그린다
+    level: cfg.rewardLevel,
+    // 배타 역할(티어)이 등급 시작 레벨에 걸려 있으면 그 등급(색 · 엠블럼). 아니면 카드가 역할 이름으로 등급인지 본다
+    tier: cfg.exclusive && m.CARD_TIERS.some((t) => t.min === cfg.rewardLevel) ? m.cardTierIndex(cfg.rewardLevel) : undefined,
+  }));
+  sendNotice(member.guild, channelId, payload);
 }
 
 // 들고 있으면 안 되는 보상 역할을 회수한다

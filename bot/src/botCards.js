@@ -1,4 +1,4 @@
-/* 📌 봇 메시지 이미지 카드 — 레벨업 · /레벨 · /랭크 · /출석체크 · /퀘스트 · /인벤토리 · /시즌패스 · 시즌 RANKER 발표를 PNG 로 그려 메시지에 붙인다(attachment://card.png).
+/* 📌 봇 메시지 이미지 카드 — 레벨업 · 역할 지급 · /레벨 · /랭크 · /출석체크 · /퀘스트 · /인벤토리 · /시즌패스 · 시즌 RANKER 발표를 PNG 로 그려 메시지에 붙인다(attachment://card.png).
    ⚠️ 아래 "공용 블록" 은 사이트 lib/botCards.js 와 글자 하나까지 같아야 한다 (봇은 별도 배포라 import 불가).
    renderCard(kind, data) → PNG Buffer | null — satori(요소 → SVG) → @resvg/resvg-js(SVG → PNG). 3초 안에 못 끝내면 null(글만 보낸다).
    fetchAvatarDataUri(url) → 디스코드 아바타 png 256 data URI | null (2초).
@@ -27,13 +27,14 @@ export const CARD_FONT_FILES = [
 //    그래서 가장 작은 글자도 26px 이상, 핵심 숫자는 크게 둔다. /레벨 · /랭크는 같은 프로필 카드.
 export const CARD_SIZE = {
   levelUp: { width: 1200, height: 630 },
+  roleGrant: { width: 1200, height: 630 }, // 레벨업 카드와 한 벌
   cmdLevel: { width: 1200, height: 630 },
   cmdRank: { width: 1200, height: 900 }, // 서버 순위표 — 10줄 + 내 줄이라 세로로 길다
   cmdAttend: { width: 1200, height: 630 },
   rankerAnnounce: { width: 1200, height: 675 },
   cmdQuest: { width: 1200, height: 904 }, // 일일 · 주간 · 월간 세 칸 — 높이는 퀘스트가 가장 많은 칸에 맞춰 준다(cardSizeOf). 이 값은 가장 클 때(칸마다 4개)
   cmdInventory: { width: 1200, height: 690 }, // 가방 6칸 × 2줄
-  cmdPass: { width: 1200, height: 675 },
+  cmdPass: { width: 1200, height: 823 }, // 다음 보상 칸이 한 줄(PASS_SHOW)을 넘으면 두 줄 — 높이는 칸 수에 맞춰 준다(cardSizeOf). 이 값은 두 줄일 때
 };
 export const CARD_KINDS = Object.keys(CARD_SIZE);
 export const isCardKind = (k) => Object.prototype.hasOwnProperty.call(CARD_SIZE, k);
@@ -44,6 +45,9 @@ export const isCardKind = (k) => Object.prototype.hasOwnProperty.call(CARD_SIZE,
 //    skin: 카드 스킨 키(CARD_SKINS) — 아이템 효과 cardSkin. 없거나 모르는 키면 기본 카드
 export const CARD_FIELDS = {
   levelUp: ["avatar", "name", "level", "prevLevel", "xp", "need", "progress", "skin?"],
+  //  roleColor: 디스코드 역할 색 "#rrggbb"(role.hexColor — "#000000" 은 색 없음 = 흰색) · level: 그 역할의 지급 레벨
+  //  tier: 등급 키 · 번호(CARD_TIERS) — 없으면 역할 이름이 등급 이름일 때 그 등급. 등급 역할이면 역할 색 대신 등급 색 · 엠블럼
+  roleGrant: ["avatar", "name", "role", "roleColor?", "level?", "tier?", "skin?"],
   cmdLevel: ["avatar", "name", "level", "xp", "need", "progress", "rank?", "total?", "skin?"],
   cmdRank: ["season", "seasonName", "total", "top: [{ rank, name, avatar, level, xp }] — 1위부터 최대 10명", "me?: { rank, name, avatar, level, xp }", "skin?"],
   cmdAttend: ["avatar", "name", "amount", "streak", "bestStreak", "attendCount", "streakBonus?", "skin?"],
@@ -51,12 +55,12 @@ export const CARD_FIELDS = {
   //  item: { name, type, icon("art:키" · "svg:키" · 짧은 글자), image?(png · jpeg data URI — 원격 주소는 받지 않는다), color? } — 그림은 itemIconEl
   cmdQuest: ["name", "claimable", "periods: [{ key: daily|weekly|monthly, left: 초기화까지 ms, quests: [{ name, metric: count|minute|xp, current, target, rewardXp, rewardPoint, done, claimed, claimable }] }]", "skin?"],
   cmdInventory: ["name", "total", "items: [item + { count, days?: 남은 일수(영구면 없음), pending?, worn? }] — 앞에서 BAG_SLOTS 칸까지", "skin?"],
-  cmdPass: ["season", "seasonName", "tier", "maxTier", "progress — 다음 티어까지 0~1", "need — 다음 티어까지 남은 XP", "claimFree", "claimPaid", "premium", "next: [{ tier, kind: xp|point|role|item, amount?, label?, premium, ...item }] — 최대 4"],
+  cmdPass: ["season", "seasonName", "tier", "maxTier", "progress — 다음 티어까지 0~1", "need — 다음 티어까지 남은 XP", "claimFree", "claimPaid", "premium", "nextTier — 다음 보상 티어(다 넘었으면 0)", "next: [{ kind: xp|point|role|item, amount?, label?, premium, ...item }] — 그 티어의 무료 → 프리미엄 전부(최대 PASS_MAX)"],
 };
 
 // 📌 카드 스킨 — 아이템 효과 cardSkin 의 skin 키. 테두리 · 무늬만 바꾼다(바탕 톤 · 글자 · 사진 링 · 막대 · 등급 빛은 그대로).
 //    ⚠️ 등급 색(오른쪽 위 빛 · 링 · 문장)과 헷갈리지 않게 스킨은 카드를 색으로 물들이거나 번지는 빛을 얹지 않는다
-//    레벨업 · /레벨 · /랭크 · /출석체크 · /퀘스트 · /인벤토리 · /시즌패스 카드에만 — RANKER 발표는 스킨 없음. 모르는 키 · 빈 값은 기본 카드.
+//    레벨업 · 역할 지급 · /레벨 · /랭크 · /출석체크 · /퀘스트 · /인벤토리 · /시즌패스 카드에만 — RANKER 발표는 스킨 없음. 모르는 키 · 빈 값은 기본 카드.
 //    grid: 무늬("line" 격자 · "dot" 도트 · "hatch" 빗금) · tint/gridOp: 무늬 색 · 진하기
 export const CARD_SKINS = {
   gold: { label: "골드", grid: "line", tint: "#f0cf7e", gridOp: 0.055 },
@@ -69,7 +73,7 @@ export const CARD_SKINS = {
   airship: { label: "비공정", grid: "line", tint: "#b9c8ce", gridOp: 0.045 },
 };
 export const CARD_SKIN_KEYS = Object.keys(CARD_SKINS);
-export const SKIN_CARD_KINDS = ["levelUp", "cmdLevel", "cmdRank", "cmdAttend", "cmdQuest", "cmdInventory", "cmdPass"];
+export const SKIN_CARD_KINDS = ["levelUp", "roleGrant", "cmdLevel", "cmdRank", "cmdAttend", "cmdQuest", "cmdInventory", "cmdPass"];
 export function cardSkinOf(key) {
   const k = String(key ?? "").trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(CARD_SKINS, k) ? { key: k, ...CARD_SKINS[k] } : null;
@@ -609,8 +613,8 @@ function ringAvatar(k, o) {
   );
 }
 
-// 링 아래에 걸치는 등급 엠블럼 — 잉크 원(스킨이면 스킨 바탕색)을 깔아 링을 끊는다
-function emblemBadge(k, ringSize, ti, size) {
+// 링 아래에 걸치는 등급 엠블럼 — 잉크 원(스킨이면 스킨 바탕색)을 깔아 링을 끊는다. icon 을 주면 엠블럼 대신 그것(역할 지급 — 등급이 아닌 역할의 방패)
+function emblemBadge(k, ringSize, ti, size, icon) {
   const pad = Math.round(size * 0.16);
   const outer = size + pad * 2;
   return k.box(
@@ -625,7 +629,7 @@ function emblemBadge(k, ringSize, ti, size) {
       alignItems: "center",
       justifyContent: "center",
     },
-    k.img(svgUri(emblemSvg(ti, size)), size, size)
+    icon || k.img(svgUri(emblemSvg(ti, size)), size, size)
   );
 }
 
@@ -723,6 +727,132 @@ function levelUpCard(k, kind, d, text) {
       )
     ),
     k.box({ position: "absolute", left: 88, right: 88, bottom: 56 }, bar(k, pct, 14, ACCENT))
+  );
+}
+
+// 상대 휘도(0~1) — sRGB 감마를 풀어 잰다
+const lumOf = (hex) => {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+  if (!m) return 1;
+  const ch = (h) => {
+    const v = parseInt(h, 16) / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * ch(m[1]) + 0.7152 * ch(m[2]) + 0.0722 * ch(m[3]);
+};
+// HSL 밝기(l)만 바꾼 색 — 색상 · 채도는 그대로
+function withLightness(hex, l) {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  const [r, g, b] = [m[1], m[2], m[3]].map((x) => parseInt(x, 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l0 = (max + min) / 2;
+  const d = max - min;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l0 - 1));
+  let h = 0;
+  if (d) h = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs((h % 2) - 1));
+  const [r1, g1, b1] = h < 1 ? [c, x, 0] : h < 2 ? [x, c, 0] : h < 3 ? [0, c, x] : h < 4 ? [0, x, c] : h < 5 ? [x, 0, c] : [c, 0, x];
+  const o = l - c / 2;
+  return `#${[r1, g1, b1].map((v) => Math.round(Math.min(1, Math.max(0, v + o)) * 255).toString(16).padStart(2, "0")).join("")}`;
+}
+// 📌 잉크 바탕에서 보이는 역할 색 — "#rgb" · "#rrggbb" 만. "#000000"(디스코드 '색 없음') · 잘못된 값은 null(흰색으로 그린다).
+//    휘도 0.15(잉크와 대비 약 3.5:1) 아래면 색상 · 채도는 두고 밝기만 4%씩 올린다(흰색을 섞으면 회색이 된다).
+//    등급 색은 이 함수를 거치지 않는다(CARD_TIERS 그대로)
+function visibleColor(v) {
+  let c = String(v ?? "").trim().toLowerCase();
+  if (/^#[0-9a-f]{3}$/.test(c)) c = `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`;
+  if (!/^#[0-9a-f]{6}$/.test(c) || c === "#000000") return null;
+  if (lumOf(c) >= 0.15) return c;
+  const n = [1, 2, 3].map((i) => parseInt(c.slice(i * 2 - 1, i * 2 + 1), 16) / 255);
+  let l = (Math.max(...n) + Math.min(...n)) / 2;
+  let out = c;
+  while (lumOf(out) < 0.15 && l < 0.96) {
+    l = Math.min(0.96, l + 0.04);
+    out = withLightness(c, l);
+  }
+  return out;
+}
+// 📌 오른쪽 위 빛 — 밝은 역할 색(노랑 · 흰색 · 파스텔)은 같은 진하기로도 카드가 뿌옇게 떠서, 휘도 0.3(등급 빛 가운데 밝은 골드 · 실버 정도)까지
+//    밝기만 4%씩 내린다. 색 없는 역할(null)은 회색 빛
+function glowOf(c) {
+  if (!c) return "#737373";
+  if (lumOf(c) <= 0.3) return c;
+  const n = [1, 2, 3].map((i) => parseInt(c.slice(i * 2 - 1, i * 2 + 1), 16) / 255);
+  let l = (Math.max(...n) + Math.min(...n)) / 2;
+  let out = c;
+  while (lumOf(out) > 0.3 && l > 0.04) {
+    l = Math.max(0.04, l - 0.04);
+    out = withLightness(c, l);
+  }
+  return out;
+}
+// 등급 역할인지 → 등급 번호 | -1. tier(키 · 번호 · 이름)를 주면 그것, 없으면 역할 이름이 등급 이름(한글 · 영문)과 같을 때
+function roleTierOf(tier, role) {
+  const byName = (s) => {
+    const v = String(s ?? "").trim().toLowerCase();
+    return v ? CARD_TIERS.findIndex((t) => t.key === v || t.name === v || t.en.toLowerCase() === v) : -1;
+  };
+  const n = typeof tier === "number" ? tier : /^\d+$/.test(String(tier ?? "").trim()) ? Number(String(tier).trim()) : NaN;
+  if (Number.isInteger(n) && n >= 0 && n < CARD_TIERS.length) return n;
+  const a = byName(tier);
+  return a >= 0 ? a : byName(role);
+}
+
+// 역할 지급 — 레벨업 카드와 한 벌(2026-10). 가운데 사진(역할 색 테두리 + 등급 역할이면 등급 엠블럼, 아니면 역할 색 방패) ·
+//   NEW ROLE(레벨업의 LEVEL UP 자리) · 역할 이름 크게(앞에 역할 색 점) · 맨 아래 "Lv.n 달성 보상" 한 줄(레벨업 막대 자리).
+//   역할 색: 등급 역할이면 등급 색 > 디스코드 역할 색(어두우면 밝혀서) > 흰색. 빛(오른쪽 위)도 그 색(너무 밝으면 낮춰서 — glowOf)
+function roleGrantCard(k, kind, d, text) {
+  const role = text(d.role) || "역할";
+  const ti = roleTierOf(d.tier, role);
+  const t = ti >= 0 ? CARD_TIERS[ti] : null;
+  const tinted = t ? t.c : visibleColor(d.roleColor);
+  const color = tinted || "#ffffff";
+  const level = int(d.level);
+  const raw = text(d.name);
+  const R = 250;
+  const DOT = 30;
+  const GAP = 26;
+  // 역할 이름 — 점 반대쪽에도 같은 폭을 비워 이름이 한가운데 오게. 88 에서 남은 폭(1024 - 56 × 2)에 맞춰 줄이고 52 아래로는 말줄임
+  const nameSize = fitSize(role, 1200 - 88 * 2 - (DOT + GAP) * 2, 88, -2, 52);
+  return frame(
+    k,
+    kind,
+    // 등급 색은 그대로, 역할 색은 너무 밝으면 낮춰서, 색 없는 역할은 회색 빛 — 흰 빛은 카드 전체가 뿌옇게 뜬다
+    t ? t.c : glowOf(tinted),
+    k.box(
+      { position: "absolute", left: 0, right: 0, top: 46, justifyContent: "center" },
+      ringAvatar(k, {
+        size: R,
+        stroke: 12,
+        gap: 14,
+        pct: 1,
+        color,
+        avatar: d.avatar,
+        name: raw,
+        badge: t ? emblemBadge(k, R, ti, 72) : emblemBadge(k, R, 0, 72, glyph(k, "shield", color, 60)),
+      })
+    ),
+    k.box(
+      { position: "absolute", left: 88, right: 88, bottom: 100, flexDirection: "column", alignItems: "center" },
+      k.box({ alignItems: "center", height: 44 }, k.box({ fontSize: 30, fontWeight: 900, letterSpacing: 9, color: ACCENT, marginRight: -9 }, "NEW ROLE")),
+      k.box(
+        { alignItems: "center", justifyContent: "center", maxWidth: "100%", height: 106, marginTop: 6, paddingRight: DOT + GAP },
+        k.box({ width: DOT, height: DOT, borderRadius: DOT / 2, backgroundColor: color, marginRight: GAP, flexShrink: 0 }),
+        k.line(role, { fontSize: nameSize, fontWeight: 900, letterSpacing: -2, color: "#ffffff", minWidth: 0, flexShrink: 1 })
+      )
+    ),
+    // 📌 Lv 줄 — 레벨업 막대보다 글자가 높아 아래 스킨 장식(크림슨 산 · 새로운 세계 구름)에 닿지 않게 bottom 58
+    level > 0
+      ? k.box(
+          { position: "absolute", left: 88, right: 88, bottom: 58, height: 40, alignItems: "center" },
+          k.box({ flexGrow: 1, height: 2, backgroundColor: W(0.1) }),
+          k.box({ marginLeft: 28, fontSize: 30, fontWeight: 900, color: W(0.8), whiteSpace: "nowrap" }, `Lv.${num(level)}`),
+          k.box({ marginLeft: 12, marginRight: 28, fontSize: 30, fontWeight: 700, color: W(0.45), whiteSpace: "nowrap" }, "달성 보상"),
+          k.box({ flexGrow: 1, height: 2, backgroundColor: W(0.1) })
+        )
+      : null
   );
 }
 
@@ -1431,9 +1561,26 @@ function bagCard(k, kind, d, text, art) {
 }
 
 // /시즌패스 — 머리(SEASON n · 이름 · 시즌 패스 · 프리미엄 알약) → 티어(지금 / 전체) · 다음 티어까지 · 받을 보상(무료 · 프리미엄)
-//   → 막대(지금 티어 → 다음 티어 — 이번 시즌에 번 XP 기준) → 다음 보상 칸(최대 PASS_SHOW — XP · 빙옥은 글자만, 역할 · 아이템은 아이콘 + 이름).
-//   색은 사이트 시즌 패스 창의 보라 → 분홍 결. 프리미엄 보상 칸은 왕관, 해금 전이면 자물쇠 + 흐리게
-export const PASS_SHOW = 4;
+//   → 막대(지금 티어 → 다음 티어 — 이번 시즌에 번 XP 기준) → 다음 보상(다음 티어 하나의 무료 → 프리미엄 전부 — XP · 빙옥은 글자만, 역할 · 아이템은 아이콘 + 이름).
+//   📌 다음 보상 머리에 티어를 한 번만 적고("다음 보상 · T8"), 칸은 한 줄 PASS_SHOW 칸 — 넘으면 무료 줄 · 프리미엄 줄 두 줄(사이트 티어 표의 트랙 결)로
+//      카드가 길어진다(cardSizeOf). 색은 사이트 시즌 패스 창의 보라 → 분홍 결. 칸 머리는 사이트 티어 표와 같은 말(무료 · 왕관 프리미엄), 해금 전이면 자물쇠 + 흐리게
+export const PASS_SHOW = 4; // 한 줄 칸 수 — 한 트랙 최대 보상 수(lib/seasonPass.js MAX_REWARDS)와 같다
+export const PASS_MAX = PASS_SHOW * 2; // 다음 보상 칸 최대 — 한 티어의 무료 4 + 프리미엄 4 (bot/src/views/pass.js PASS_CARD_MAX 와 같다)
+const PASS_TILE_H = 132;
+const PASS_GAP = 16;
+const PASS_H1 = 675; // 다음 보상이 한 줄일 때 카드 높이
+// 📌 다음 보상 줄 — 다 합쳐 PASS_SHOW 칸 이하면 한 줄(무료 → 프리미엄), 넘으면 무료 줄 · 프리미엄 줄(트랙마다 최대 PASS_SHOW).
+//    다 넘었거나(MAX) 티어가 없으면 비운다. 카드 크기(passHeight)와 그림(passCard)이 같은 줄을 본다
+const passRows = (d) => {
+  const maxTier = Math.max(0, int(d?.maxTier));
+  if (maxTier === 0 || Math.max(0, int(d?.tier)) >= maxTier) return [];
+  const list = (Array.isArray(d?.next) ? d.next : []).filter((r) => r && typeof r === "object");
+  const free = list.filter((r) => !r.premium).slice(0, PASS_SHOW);
+  const paid = list.filter((r) => !!r.premium).slice(0, PASS_SHOW);
+  const all = [...free, ...paid];
+  return !all.length ? [] : all.length <= PASS_SHOW ? [all] : [free, paid];
+};
+const passHeight = (d) => PASS_H1 + (passRows(d).length > 1 ? PASS_TILE_H + PASS_GAP : 0);
 const PASS_A = "#9b6bff";
 const PASS_B = "#e05bb5";
 const PASS_GRAD = `linear-gradient(90deg, ${PASS_A} 0%, ${PASS_B} 100%)`;
@@ -1445,7 +1592,8 @@ function passCard(k, kind, d, text, art) {
   const premium = !!d.premium;
   const season = int(d.season);
   const seasonName = text(d.seasonName);
-  const next = (Array.isArray(d.next) ? d.next : []).slice(0, PASS_SHOW);
+  const nextRows = passRows(d);
+  const nextTier = maxed || none ? 0 : Math.max(0, int(d.nextTier)) || tier + 1;
   const INNER = 1056;
   const LEFT_W = 330;
   const cellW = Math.floor((INNER - LEFT_W) / 2);
@@ -1460,18 +1608,21 @@ function passCard(k, kind, d, text, art) {
   const claimW = (fs) => claim.reduce((a, c, i) => a + (i ? 26 : 0) + emWidth(c.l) * 28 * 0.95 + 10 + emWidth(num(c.v)) * fs, 0);
   let claimSize = 56;
   while (claimSize > 36 && claimW(claimSize) > cellW - 36) claimSize -= 2;
-  const TILE_W = Math.floor((INNER - 16 * (PASS_SHOW - 1)) / PASS_SHOW);
+  const TILE_W = Math.floor((INNER - PASS_GAP * (PASS_SHOW - 1)) / PASS_SHOW);
+  const LABEL_W = TILE_W - 40 - 4 - 48 - 14; // 이름 칸 폭 — 칸 안쪽(좌우 여백 · 테두리 뺀 것) - 아이콘 - 사이
   const tile = (r, i) => {
     const paid = !!r.premium;
     const locked = paid && !premium;
     const label = text(r.label) || (r.kind === "role" ? "역할" : "아이템");
+    // 📌 이름이 한 줄(28px)에 안 들면 두 줄(24px)로 — 잘라 숨기지 않게
+    const oneLine = emWidth(label) * 28 <= LABEL_W;
     const money = r.kind === "xp" || r.kind === "point";
     const v = num(r.amount);
     return k.box(
       {
         width: TILE_W,
-        height: 132,
-        marginLeft: i ? 16 : 0,
+        height: PASS_TILE_H,
+        marginLeft: i ? PASS_GAP : 0,
         flexDirection: "column",
         justifyContent: "space-between",
         paddingTop: 16,
@@ -1483,10 +1634,11 @@ function passCard(k, kind, d, text, art) {
           ? { ...panelBg(rgba(PASS_A, 0.24), rgba(PASS_B, 0.12)), border: `2px solid ${rgba("#d6b4ff", 0.4)}` }
           : { ...panelBg(W(0.05)), border: `2px solid ${W(0.09)}` }),
       },
+      // 📌 칸 머리 — 같은 티어뿐이라 T 번호 대신 트랙(무료 · 왕관 프리미엄)
       k.box(
         { alignItems: "center", height: 30 },
-        k.box({ fontSize: 26, fontWeight: 900, color: W(0.55) }, `T${num(r.tier)}`),
-        paid ? glyph(k, "crownFill", "#d6b4ff", 26, { marginLeft: 8 }) : null,
+        paid ? glyph(k, "crownFill", "#d6b4ff", 26, { marginRight: 8 }) : null,
+        k.box({ fontSize: 26, fontWeight: 900, color: paid ? rgba("#d6b4ff", 0.85) : W(0.5), whiteSpace: "nowrap" }, paid ? "프리미엄" : "무료"),
         locked ? glyph(k, "lock", W(0.5), 28, { marginLeft: "auto" }) : null
       ),
       k.box(
@@ -1498,7 +1650,9 @@ function passCard(k, kind, d, text, art) {
             ]
           : [
               r.kind === "role" ? glyph(k, "shieldCheck", "#ffffff", 48) : itemIconEl(k, r, 48, text, art),
-              k.line(label, { marginLeft: 14, flexGrow: 1, flexShrink: 1, minWidth: 0, fontSize: 28, fontWeight: 900 }),
+              oneLine
+                ? k.line(label, { marginLeft: 14, flexGrow: 1, flexShrink: 1, minWidth: 0, fontSize: 28, fontWeight: 900 })
+                : k.para(label, 2, { marginLeft: 14, width: LABEL_W, flexShrink: 0, fontSize: 24, fontWeight: 900, lineHeight: 1.15, ...(/\s/.test(label) ? null : { wordBreak: "break-all" }) }),
             ]
       )
     );
@@ -1572,22 +1726,29 @@ function passCard(k, kind, d, text, art) {
       k.box({ width: INNER - 192 }, bar(k, maxed ? 1 : d.progress, 16, PASS_GRAD)),
       k.box({ width: 96, justifyContent: "flex-end", fontSize: 28, fontWeight: 900, color: W(0.4) }, none ? "—" : maxed ? "MAX" : `T${num(tier + 1)}`)
     ),
-    // 다음 보상
+    // 다음 보상 — 머리에 티어 한 번("다음 보상 · T8"), 한 줄이거나 무료 줄 · 프리미엄 줄(passRows). 없으면 "—"(다 넘었으면 MAX)
     k.box(
       { position: "absolute", left: 72, right: 72, top: 438, flexDirection: "column" },
-      k.box({ fontSize: 28, fontWeight: 700, color: W(0.45), marginBottom: 16 }, "다음 보상"),
-      next.length
-        ? k.box({}, next.map(tile))
-        : k.box({ height: 132, borderRadius: 20, border: `2px solid ${W(0.06)}`, backgroundColor: PANEL, alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, color: W(0.35) }, "—")
+      k.box(
+        { alignItems: "center", marginBottom: 16, fontSize: 28, whiteSpace: "nowrap" },
+        k.box({ fontWeight: 700, color: W(0.45) }, "다음 보상"),
+        nextTier ? k.box({ marginLeft: 10, fontWeight: 700, color: W(0.3) }, "·") : null,
+        nextTier ? k.box({ marginLeft: 10, fontWeight: 900, color: W(0.75) }, `T${num(nextTier)}`) : null
+      ),
+      nextRows.length
+        ? k.box({ flexDirection: "column" }, nextRows.map((row, ri) => k.box({ marginTop: ri ? PASS_GAP : 0 }, row.map(tile))))
+        : k.box({ height: PASS_TILE_H, borderRadius: 20, border: `2px solid ${W(0.06)}`, backgroundColor: PANEL, alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: maxed ? 900 : 700, color: W(0.35) }, maxed ? "MAX" : "—")
     )
   );
 }
 
-// 📌 카드 크기 — /퀘스트는 칸에 든 퀘스트 수에 따라 높이가 준다(가장 긴 칸 기준, CARD_SIZE 가 최대). 나머지는 CARD_SIZE 그대로.
+// 📌 카드 크기 — /퀘스트는 칸에 든 퀘스트 수에 따라 높이가 준다(가장 긴 칸 기준, CARD_SIZE 가 최대).
+//    /시즌패스는 다음 보상이 한 줄이면 PASS_H1, 두 줄이면 CARD_SIZE. 나머지는 CARD_SIZE 그대로.
 //    봇 renderCard · 사이트 미리보기가 그릴 때 이 값을 쓴다
 export function cardSizeOf(kind, data) {
   const base = CARD_SIZE[kind];
   if (kind === "cmdQuest" && base) return { width: base.width, height: Math.min(base.height, questHeight(data)) };
+  if (kind === "cmdPass" && base) return { width: base.width, height: Math.min(base.height, passHeight(data)) };
   return base;
 }
 
@@ -1607,6 +1768,7 @@ export function buildCard(kind, data, h, opts = {}) {
   const text = (s) => cardText(s, opts.has);
   const art = typeof opts.art === "function" ? opts.art : null;
   if (kind === "levelUp") return levelUpCard(k, kind, d, text);
+  if (kind === "roleGrant") return roleGrantCard(k, kind, d, text);
   if (kind === "cmdLevel") return profileCard(k, kind, d, text);
   if (kind === "cmdRank") return rankBoardCard(k, kind, d, text);
   if (kind === "cmdAttend") return attendCard(k, kind, d, text);
@@ -1630,6 +1792,8 @@ export function sampleCardData(kind, tierIndex = 1, avatar = null, skin = "") {
   const cur = Math.floor(step * 0.38);
   const me = { avatar, name: "펭귄", level, xp: base + cur, need: step - cur, progress: cur / step };
   if (kind === "levelUp") return { ...me, prevLevel: level - 1, xp: base + Math.floor(step * 0.06), need: step - Math.floor(step * 0.06), progress: 0.06 };
+  // 역할 지급 — 그 등급 역할을 그 등급 시작 레벨에 받은 것(관리자 미리보기 등급 칩 · 테스트 발송의 예시 변수 role · level 과 같다)
+  if (kind === "roleGrant") return { avatar, name: "펭귄", role: t.name, roleColor: "", level: t.min, tier: t.key };
   if (kind === "cmdLevel") return { ...me, rank: 12, total: 1284 };
   if (kind === "cmdRank") {
     const names = ["북극곰", "물범", "바다표범", "해달", "흰올빼미", "순록", "북극여우", "일각고래", "바다코끼리", "흰곰"];
@@ -1699,11 +1863,15 @@ export function sampleCardData(kind, tierIndex = 1, avatar = null, skin = "") {
       claimFree: 1,
       claimPaid: 2,
       premium: true,
+      nextTier: 8,
+      // 📌 두 줄(무료 줄 · 프리미엄 줄) — 관리자 미리보기 자리가 CARD_SIZE(두 줄 높이) 비율이라 샘플도 두 줄로 채운다
       next: [
-        { tier: 8, kind: "xp", amount: 20000, premium: false },
-        { tier: 8, kind: "item", label: "XP 물약", icon: "art:xp-potion", type: "item", premium: true },
-        { tier: 9, kind: "point", amount: 300, premium: false },
-        { tier: 10, kind: "role", label: "개척자", premium: true },
+        { kind: "xp", amount: 20000, premium: false },
+        { kind: "point", amount: 300, premium: false },
+        { kind: "item", label: "XP 물약", icon: "art:xp-potion", type: "item", premium: true },
+        { kind: "role", label: "개척자", premium: true },
+        { kind: "xp", amount: 50000, premium: true },
+        { kind: "item", label: "로켓", icon: "art:pass-rocket", type: "item", premium: true },
       ],
     };
   }

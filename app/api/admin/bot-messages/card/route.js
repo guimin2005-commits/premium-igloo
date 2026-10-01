@@ -11,7 +11,7 @@ import { buildCard, cardSizeOf, CARD_FONT, CARD_TIERS, isCardKind, sampleCardDat
 import { itemArtSvg } from "@/lib/itemArt";
 
 // 📌 관리자 '봇 메시지' 이미지 카드 미리보기 — 봇이 붙이는 PNG 와 같은 템플릿(lib/botCards.js)을 샘플 값으로 그린다
-//    GET ?key=levelUp|cmdLevel|cmdRank|cmdAttend|cmdQuest|cmdInventory|cmdPass|rankerAnnounce&tier=<0-9, 없으면 브론즈>
+//    GET ?key=levelUp|roleGrant|cmdLevel|cmdRank|cmdAttend|cmdQuest|cmdInventory|cmdPass|rankerAnnounce&tier=<0-9, 없으면 브론즈>
 //    한 사람 카드는 미리보기를 여는 관리자 이름 · 사진으로 그린다(사진을 못 받으면 첫 글자 원형).
 
 const fail = (message, status = 400) => NextResponse.json({ success: false, message, error: message }, { status });
