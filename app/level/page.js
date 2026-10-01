@@ -11,9 +11,9 @@ import {
 } from "../components/Hud";
 import { SEASON, getSeasonProgress, getSeasonDday, isVoiceTimeTracked, VOICE_TIME_START } from "@/lib/season";
 import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel } from "@/lib/voiceTiers";
-import { getCumulativeXpByLevel, getLevelByXp } from "@/lib/leveling";
+import { getCumulativeXpByLevel } from "@/lib/leveling";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
-import { buildEnhanceView, chatRange, voiceBonus, enhanceCost } from "@/lib/enhance";
+import { buildEnhanceView, chatRange, enhanceCost } from "@/lib/enhance";
 // 빙옥 가격 = XP 가격 ÷ 10,000 올림 — 서버와 같은 식 (lib/pointRate)
 import { xpToPoint } from "@/lib/pointRate";
 import { discountedCost, effectParts, describeEffect, PERK_KEYS, SKINS } from "@/lib/itemEffects";
@@ -387,332 +387,6 @@ const XpTableView = ({ myLevel = 0, myXp = null, onTone }) => {
           </div>
         </div>
       </section>
-    </div>
-  );
-};
-
-// 📌 시뮬레이터 부품 — 밝은 바탕용 스위치 · 단계 조절 · 칩 · 줄
-const SimToggle = ({ on, onChange, disabled = false, label }) => (
-  <button
-    type="button"
-    role="switch"
-    aria-checked={on}
-    aria-label={label}
-    disabled={disabled}
-    onClick={() => onChange(!on)}
-    className={`relative w-11 h-6 shrink-0 rounded-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 disabled:opacity-40 disabled:cursor-default ${on && !disabled ? "bg-[#131313]" : "bg-[#e0e0e0]"}`}
-  >
-    <span className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform duration-200 ${on && !disabled ? "translate-x-5" : ""}`}></span>
-  </button>
-);
-const SimStepper = ({ value, min = 0, max = 10, onChange, label }) => (
-  <div className="flex items-center gap-2 shrink-0" aria-label={label}>
-    <button type="button" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min} aria-label={`${label} 낮추기`} className="w-8 h-8 rounded-full border border-[#a3a3a3] text-[#131313] font-black flex items-center justify-center transition-colors hover:border-[#131313] disabled:opacity-30 outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">−</button>
-    <span className="w-8 text-center text-[15px] font-black text-[#131313] tabular-nums">+{value}</span>
-    <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max} aria-label={`${label} 올리기`} className="w-8 h-8 rounded-full border border-[#a3a3a3] text-[#131313] font-black flex items-center justify-center transition-colors hover:border-[#131313] disabled:opacity-30 outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">+</button>
-  </div>
-);
-// 칩 한 줄 — 슬라이더 대신 자주 쓰는 값을 바로 고른다 (미선택 칩 테두리 #a3a3a3).
-//    칸을 똑같이 나눠 모바일에서도 두 줄로 넘어가지 않게 한다 (임의 grid 클래스는 v4 에서 안 먹어 인라인)
-const SimChips = ({ value, options, onChange, label }) => (
-  <div role="radiogroup" aria-label={label} className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
-    {options.map((o) => {
-      const on = value === o.v;
-      return (
-        <button
-          key={o.v}
-          type="button"
-          role="radio"
-          aria-checked={on}
-          onClick={() => onChange(o.v)}
-          className={`h-8 px-1 rounded-full border text-[12px] font-bold tabular-nums whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 ${
-            on ? "bg-[#131313] border-[#131313] text-white" : "bg-white border-[#a3a3a3] text-[#5a5a5a] hover:text-[#131313] hover:border-[#131313]"
-          }`}
-        >
-          {o.l}
-        </button>
-      );
-    })}
-  </div>
-);
-// stack: 칩처럼 폭이 필요한 조작은 이름 아래 한 줄로
-const SimRow = ({ label, sub, children, stack = false }) => (
-  <div className="py-4">
-    <div className={stack ? "" : "flex items-start justify-between gap-4"}>
-      <div className="min-w-0">
-        <p className="text-[14px] font-black text-[#131313]">{label}</p>
-        {sub && <p className="text-[11px] font-bold text-[#5a5a5a] mt-1 tabular-nums break-keep">{sub}</p>}
-      </div>
-      {/* 📌 조작부는 이름 + 설명 한 줄 높이(21 + 4 + 16.5px)의 가운데에 고정 — 강화를 올려 설명에 비용이 붙어 두 줄이 돼도
-          방금 누른 −/+ 가 아래로 내려가지 않게 */}
-      {stack ? <div className="mt-3">{children}</div> : <div className={`shrink-0 flex items-center ${sub ? "h-[41.5px]" : "self-center"}`}>{children}</div>}
-    </div>
-  </div>
-);
-const SimGroup = ({ title }) => <p className="pt-5 first:pt-4 text-[12px] font-black text-[#5a5a5a]">{title}</p>;
-const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ""}` : `${m}분`);
-
-// 📌 XP 시뮬레이터 — 봇 지급식(bot/src/features/chatXp.js · voiceXp.js · commands.js 출석)을 그대로 굴린다.
-//    · 채팅: 인정 횟수 × (강화 구간 평균 + 역할·부스트). 쿨타임이 지나서 보낸 메시지만 인정되므로 "시간"이 아니라 "횟수".
-//    · 음성: 지급 주기마다 1회, 1회 = floor((기본 + 그 순간 레벨의 등급 보너스 + 강화 + 역할·부스트) × 음소거 배율).
-//      봇은 매 지급마다 저장된 레벨을 다시 읽으므로 하루 안에서도 등급이 바뀌는 순간부터 보너스가 커진다 — 여기도 지급마다 센다.
-//    · 출석: 하루 1회, 출석 XP + 역할 출석 버프.
-//    · 강화: 지금 단계보다 올린 만큼의 비용은 XP 로 낸다고 보고 시작 XP 에서 뺀다.
-//    화면은 "하루 활동 프리셋 → 하루 XP · 30일 뒤 → 다음 등급까지 며칠(타임라인) → 목표 레벨" 순.
-//    강화 · 추가 XP · 음소거 · 시작 레벨은 세부 조건으로 접어 둔다.
-const SIM_CHAT = [0, 30, 60, 120, 240].map((v) => ({ v, l: v ? `${v}회` : "0" }));
-const SIM_VOICE = [0, 60, 120, 240, 480].map((v) => ({ v, l: v ? fmtMin(v) : "0" }));
-const SIM_PRESETS = [
-  { k: "light", l: "가볍게", chat: 20, voice: 60 },
-  { k: "normal", l: "보통", chat: 60, voice: 120 },
-  { k: "hard", l: "열심히", chat: 150, voice: 300 },
-  { k: "custom", l: "직접" },
-];
-const SIM_HORIZON = 3650; // 10년 — 그 안에 못 닿으면 "10년+"
-const XpSimulator = ({ me, P, ready, onTone }) => {
-  const [preset, setPreset] = useState("normal");
-  const [chatC, setChatC] = useState(60);    // "직접" 일 때만 쓰는 값
-  const [voiceC, setVoiceC] = useState(120);
-  const [attend, setAttend] = useState(true);
-  const [open, setOpen] = useState(false);   // 세부 조건
-  const [start, setStart] = useState("");     // 비우면 내 레벨
-  const [muted, setMuted] = useState(false);
-  const [chatEnh, setChatEnh] = useState(0);
-  const [voiceEnh, setVoiceEnh] = useState(0);
-  const [extra, setExtra] = useState(0);
-  const [goal, setGoal] = useState("");
-
-  // 로그인하면 내 강화 단계 · 추가 XP(역할 · 부스트)를 한 번 채운다
-  const mySeed = () => {
-    setChatEnh(me?.chatEnhance || 0);
-    setVoiceEnh(me?.voiceEnhance || 0);
-    setExtra(Math.max(0, (Number(me?.buffXp) || 0) + (Number(me?.boostXp) || 0)));
-  };
-  const seeded = useRef(false);
-  useEffect(() => {
-    if (!me || seeded.current) return;
-    seeded.current = true;
-    mySeed();
-  }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 시뮬레이터를 연 채로 강화하면 — 강화는 영구라 지금 단계 아래로는 둘 수 없다. 내 단계가 오르면 따라 올린다
-  useEffect(() => {
-    if (!me) return;
-    setChatEnh((v) => Math.max(v, me.chatEnhance || 0));
-    setVoiceEnh((v) => Math.max(v, me.voiceEnhance || 0));
-  }, [me?.chatEnhance, me?.voiceEnhance]); // eslint-disable-line react-hooks/exhaustive-deps
-  const reset = () => {
-    setStart(""); setMuted(false); setGoal("");
-    mySeed();
-    onTone?.();
-  };
-  const pickTone = (fn) => (v) => { fn(v); onTone?.(); };
-
-  const cur = SIM_PRESETS.find((p) => p.k === preset) || SIM_PRESETS[1];
-  const chatN = preset === "custom" ? chatC : cur.chat;
-  const voiceMin = preset === "custom" ? voiceC : cur.voice;
-  const attendOn = preset === "custom" ? attend : true;
-
-  // ── 강화 비용 — 지금 단계보다 올린 칸만 (XP 로 낸다고 본다) ──
-  //    📌 강화 비용 할인(아이템 효과)은 서버(app/api/xp/enhance)처럼 단계마다 따로 올림해 더한다 — 강화 창 금액과 같게
-  const enhDisc = Number(me?.enhanceDiscount) || 0;
-  const costOf = (base, growth, from, to) => {
-    let s = 0;
-    for (let k = from + 1; k <= to; k++) s += discountedCost(enhanceCost(base, growth, k), enhDisc);
-    return s;
-  };
-  const chatCost = costOf(P.chatEnhanceBaseCost, P.chatEnhanceCostGrowthPct, me?.chatEnhance || 0, chatEnh);
-  const voiceCost = costOf(P.voiceEnhanceBaseCost, P.voiceEnhanceCostGrowthPct, me?.voiceEnhance || 0, voiceEnh);
-
-  // ── 시작점 ──
-  const useMine = !start && !!me;
-  const baseXp = useMine ? Math.max(0, me.xp || 0) : getCumulativeXpByLevel(clampLv(start || 1));
-  const startXp = Math.max(0, baseXp - chatCost - voiceCost);
-  const startLv = Math.max(1, Math.min(1000, getLevelByXp(startXp)));
-  const startTi = getTierIndex(startLv);
-
-  // ── 1회 지급량 ──
-  const [cLo, cHi] = chatRange(P, chatEnh);
-  // 보유 아이템 기본 효과 — 채팅 · 음성 따로 붙는 고정 가산(봇 basic-chat · basic-voice). 손으로 바꾸는 '추가 XP' 와는 따로 둔다
-  const itemChat = Math.max(0, Number(me?.itemChatXp) || 0);
-  const itemVoice = Math.max(0, Number(me?.itemVoiceXp) || 0);
-  const chatPer = (cLo + cHi) / 2 + extra + itemChat; // 기댓값 — 구간 안 균등 랜덤
-  const muteMult = !muted || P.muteMode === "off" ? 1 : P.muteMode === "block" ? 0 : Math.max(0, 1 - P.muteReducePct / 100);
-  const vEnh = voiceBonus(P, voiceEnh);
-  const voiceTickAt = (l) => Math.floor((P.voiceXp + getVoiceBonus(l) + vEnh + extra + itemVoice) * muteMult);
-  const voiceN = Math.floor((voiceMin * 60) / Math.max(30, P.voiceIntervalSec));
-  const attendXp = attendOn ? P.attendXp + Math.max(0, Number(me?.attendBuffXp) || 0) : 0;
-  const goalLv = goal ? clampLv(goal) : 0;
-
-  // 하루씩 굴리며 — 30일 뒤 레벨, 다음 등급(최대 셋)에 닿는 날, 목표 레벨에 닿는 날
-  const sim = useMemo(() => {
-    const chatDay = chatN * chatPer;
-    let xp = startXp;
-    let l = startLv;
-    let ti = getTierIndex(l);
-    const edgeOf = (i) => (i + 1 < VOICE_TIERS.length ? getCumulativeXpByLevel(VOICE_TIERS[i + 1].min) : Infinity);
-    let edge = edgeOf(ti);
-    let tick = voiceTickAt(l);
-    // 다음 등급 문턱을 넘은 순간에만 레벨을 다시 잰다 (지급마다 레벨 계산을 돌리지 않게)
-    const bump = () => {
-      if (xp < edge) return;
-      l = Math.min(1000, getLevelByXp(xp));
-      ti = getTierIndex(l);
-      edge = edgeOf(ti);
-      tick = voiceTickAt(l);
-    };
-    const tiers = VOICE_TIERS.slice(startTi + 1, startTi + 4).map((t) => ({ t, day: null }));
-    let goalDay = goalLv && goalLv <= startLv ? 0 : null;
-    let lv30 = startLv;
-    for (let d = 1; d <= SIM_HORIZON; d++) {
-      xp += attendXp;
-      bump();
-      // 채팅은 음성 지급 사이사이에 고르게 흩어 넣는다 — 등급이 바뀌는 시점이 실제와 가깝게
-      if (voiceN > 0) {
-        const share = chatDay / voiceN;
-        for (let i = 0; i < voiceN; i++) {
-          xp += share + tick;
-          bump();
-        }
-      } else {
-        xp += chatDay;
-        bump();
-      }
-      const lvNow = Math.min(1000, getLevelByXp(xp));
-      if (d === 30) lv30 = lvNow;
-      for (const x of tiers) if (x.day === null && lvNow >= x.t.min) x.day = d;
-      if (goalLv && goalDay === null && lvNow >= goalLv) goalDay = d;
-      const pending = tiers.some((x) => x.day === null) || (goalLv && goalDay === null);
-      if (d >= 30 && (!pending || lvNow >= 1000)) break;
-    }
-    return { lv30, tiers, goalDay };
-  }, [startXp, startLv, startTi, goalLv, chatN, chatPer, voiceN, vEnh, extra, itemVoice, muteMult, attendXp, P.voiceXp]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!ready) {
-    return <div className="py-24 text-center text-sm text-[#8a8a8a]">설정값을 불러오는 중...</div>;
-  }
-
-  const won = (n) => n.toLocaleString();
-  const perDay = Math.round(chatN * chatPer) + voiceN * voiceTickAt(startLv) + attendXp;
-  const gained30 = sim.lv30 - startLv;
-  const dayLabel = (d) => (d === null ? "10년+" : d === 0 ? "도달" : `D+${won(d)}`);
-  const activity = [chatN ? `채팅 ${won(chatN)}회` : null, voiceMin ? `음성 ${fmtMin(voiceMin)}` : null, attendOn ? "출석" : null].filter(Boolean).join(" · ") || "활동 없음";
-  const nodes = [{ t: VOICE_TIERS[startTi], label: "지금" }, ...sim.tiers.map((x) => ({ t: x.t, label: dayLabel(x.day) }))];
-  const inputCls = "w-20 h-9 px-3 rounded-full border border-[#a3a3a3] text-center text-[16px] font-black text-[#131313] tabular-nums outline-none focus:border-[#131313] placeholder:text-[#a3a3a3]";
-
-  return (
-    // 글자색을 직접 둔다 — 레벨 페이지 안에서는 흐린 색을 물려받는다
-    <div className="rounded-2xl border border-[#ededed] bg-white overflow-hidden text-[#131313]">
-      {/* ① 하루 활동 — 프리셋 */}
-      <div className="px-5 md:px-7 pt-5 md:pt-6 pb-5">
-        <SimChips value={preset} options={SIM_PRESETS.map((p) => ({ v: p.k, l: p.l }))} onChange={pickTone(setPreset)} label="하루 활동" />
-        {preset === "custom" ? (
-          <div className="mt-4 space-y-4">
-            <div>
-              <p className="text-[12px] font-bold text-[#5a5a5a] mb-2">채팅 <span className="tabular-nums">· 1회 {won(cLo + extra + itemChat)}~{won(cHi + extra + itemChat)} XP</span></p>
-              <SimChips value={chatC} options={SIM_CHAT} onChange={pickTone(setChatC)} label="하루 채팅 인정 횟수" />
-            </div>
-            <div>
-              <p className="text-[12px] font-bold text-[#5a5a5a] mb-2">음성 <span className="tabular-nums">· 1회 {won(voiceTickAt(startLv))} XP</span></p>
-              <SimChips value={voiceC} options={SIM_VOICE} onChange={pickTone(setVoiceC)} label="하루 음성 시간" />
-            </div>
-            <div className="flex items-center justify-between">
-              <p className="text-[12px] font-bold text-[#5a5a5a]">출석 <span className="tabular-nums">· +{won(P.attendXp + Math.max(0, Number(me?.attendBuffXp) || 0))} XP</span></p>
-              <SimToggle on={attend} onChange={pickTone(setAttend)} label="매일 출석" />
-            </div>
-          </div>
-        ) : (
-          <p className="mt-3 text-[13px] font-bold text-[#5a5a5a] tabular-nums">{activity}</p>
-        )}
-      </div>
-
-      {/* ② 하루 XP · 30일 뒤 */}
-      {/* 모바일은 위아래로 — 7자리 숫자 · "Lv 1000 +N" 이 반 칸에서 잘리지 않게 */}
-      <div className="px-5 md:px-7 py-5 border-t border-[#ededed] grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold text-[#5a5a5a]">하루</p>
-          <p className="mt-1.5 text-[28px] md:text-[34px] font-black tracking-[-0.03em] leading-none tabular-nums truncate">{won(perDay)}<span className="ml-1 text-[12px] font-bold text-[#8a8a8a]">XP</span></p>
-        </div>
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold text-[#5a5a5a]">30일 뒤</p>
-          <p className="mt-1.5 text-[28px] md:text-[34px] font-black tracking-[-0.03em] leading-none tabular-nums truncate">
-            Lv {sim.lv30}
-            {gained30 > 0 && <span className="ml-2 text-[13px] font-black text-[#d01634] tracking-normal">+{won(gained30)}</span>}
-          </p>
-        </div>
-      </div>
-
-      {/* ③ 등급 타임라인 — 지금 등급에서 다음 셋까지 며칠 */}
-      <div className="px-5 md:px-7 py-6 border-t border-[#ededed]">
-        {nodes.length > 1 ? (
-          <div className="relative grid" style={{ gridTemplateColumns: `repeat(${nodes.length}, minmax(0, 1fr))` }}>
-            {/* 잇는 선 — 첫 엠블럼 가운데에서 마지막 엠블럼 가운데까지 */}
-            <span aria-hidden className="absolute left-[11px] top-[11px] h-px bg-[#d4d4d4]" style={{ right: `calc(${100 / nodes.length}% - 11px)` }} />
-            {nodes.map((n, i) => (
-              <div key={n.t.key} className="relative min-w-0">
-                <span className="relative inline-flex bg-white"><TierEmblem tier={n.t} size={22} muted={i > 0 && n.label === "10년+"} /></span>
-                <p className="mt-2 text-[12px] sm:text-[13px] font-extrabold leading-tight break-keep">{n.t.name}</p>
-                <p className={`mt-0.5 text-[12px] font-black tabular-nums ${i === 0 ? "text-[#8a8a8a]" : n.label === "10년+" ? "text-[#a3a3a3]" : "text-[#d01634]"}`}>{n.label}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-[13px] font-bold text-[#5a5a5a]">최고 등급입니다</p>
-        )}
-      </div>
-
-      {/* ④ 목표 레벨 */}
-      <div className="px-5 md:px-7 py-4 border-t border-[#ededed] flex items-center justify-between gap-4">
-        <label className="flex items-center gap-3">
-          <span className="text-[13px] font-extrabold">목표 레벨</span>
-          <input type="number" inputMode="numeric" aria-label="목표 레벨" value={goal} placeholder={String(Math.min(1000, startLv + 50))}
-            onChange={(e) => setGoal(e.target.value === "" ? "" : String(clampLv(e.target.value)))} className={inputCls} />
-        </label>
-        <p className="text-[18px] font-black tabular-nums">
-          {!goalLv ? <span className="text-[#a3a3a3]">—</span> : sim.goalDay === 0 ? "도달" : sim.goalDay === null ? "10년+" : `약 ${won(sim.goalDay)}일`}
-        </p>
-      </div>
-
-      {/* ⑤ 세부 조건 — 접어 둔다 */}
-      <div className="border-t border-[#ededed]">
-        <button type="button" onClick={() => { setOpen(!open); onTone?.(); }} aria-expanded={open}
-          className="w-full px-5 md:px-7 h-12 flex items-center justify-between text-[13px] font-extrabold text-[#5a5a5a] hover:text-[#131313] outline-none focus-visible:bg-[#f2f2f2]">
-          세부 조건
-          <svg aria-hidden viewBox="0 0 24 24" className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </button>
-        {open && (
-          <div className="px-5 md:px-7 pb-3 md:grid md:grid-cols-2 md:gap-x-10">
-            <SimRow label="시작 레벨" sub={useMine ? `내 레벨 · ${won(me.xp || 0)} XP` : `${won(baseXp)} XP`}>
-              <div className="flex items-center gap-2 shrink-0">
-                {me && !useMine && (
-                  <button type="button" onClick={() => setStart("")} className="h-8 px-3 rounded-full border border-[#a3a3a3] text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] hover:border-[#131313] outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">내 레벨</button>
-                )}
-                <input type="number" inputMode="numeric" aria-label="시작 레벨" placeholder={String(me?.level || 1)} value={start}
-                  onChange={(e) => setStart(e.target.value === "" ? "" : String(clampLv(e.target.value)))} className={inputCls} />
-              </div>
-            </SimRow>
-            <SimRow label="추가 XP" sub="역할 · 부스트">
-              <input type="number" inputMode="numeric" aria-label="추가 XP" value={extra}
-                onChange={(e) => setExtra(Math.max(0, Math.min(99999, parseInt(e.target.value, 10) || 0)))} className={`${inputCls} w-24`} />
-            </SimRow>
-            <SimRow label="채팅 강화" sub={`1회 ${won(cLo)}~${won(cHi)} XP${chatCost > 0 ? ` · 비용 −${won(chatCost)} XP` : ""}`}>
-              <SimStepper value={chatEnh} min={me?.chatEnhance || 0} max={P.chatEnhanceMax} onChange={pickTone(setChatEnh)} label="채팅 강화" />
-            </SimRow>
-            <SimRow label="음성 강화" sub={`1회 +${won(vEnh)} XP${voiceCost > 0 ? ` · 비용 −${won(voiceCost)} XP` : ""}`}>
-              <SimStepper value={voiceEnh} min={me?.voiceEnhance || 0} max={P.voiceEnhanceMax} onChange={pickTone(setVoiceEnh)} label="음성 강화" />
-            </SimRow>
-            {P.muteMode !== "off" && (
-              <SimRow label="음소거로 참여" sub={P.muteMode === "block" ? "음성 XP 없음" : `음성 XP −${P.muteReducePct}%`}>
-                <SimToggle on={muted} onChange={pickTone(setMuted)} label="음소거로 참여" />
-              </SimRow>
-            )}
-            <div className="py-4 md:col-span-2">
-              <button type="button" onClick={reset} className="w-full h-10 rounded-full border border-[#a3a3a3] text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] hover:border-[#131313] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">
-                {me ? "내 조건으로 되돌리기" : "처음으로"}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 };
@@ -2478,16 +2152,16 @@ export default function LevelPage() {
     ...(events.length > 0 ? [{ k: "event", l: "이벤트", icon: "gift", n: 0 }] : []),
     { k: "feed", l: "획득 피드", icon: "clock", n: 0 },
     { k: "table", l: "XP 테이블", icon: "receipt", n: 0 },
-    { k: "sim", l: "시뮬레이터", icon: "sparkles", n: 0 },
   ];
   const mSecOn = mobSecs.some((x) => x.k === mSec) ? mSec : "quest";
-  // PC — 오른쪽 카테고리(현황 · XP 테이블 · 시뮬레이터). 현황이면 퀘스트 · 랭킹 · 피드를 다 펼치고, 아니면 그 카테고리 하나만
-  const deskOverview = mSecOn !== "table" && mSecOn !== "sim";
+  // PC — 오른쪽 카테고리(현황 · XP 테이블). 현황이면 퀘스트 · 랭킹 · 피드를 다 펼치고, 아니면 그 카테고리 하나만
+  //    📌 시뮬레이터는 2026-10-01 뺐다(나중에 다시 만들 예정 — 옛 코드는 14ae06a 이전 git 기록)
+  const deskOverview = mSecOn !== "table";
   const secCls = (k) => `${mSecOn === k ? "block" : "hidden"} ${deskOverview ? "lg:block" : "lg:hidden"}`;
-  // 📌 옛 주소(?tab=table · ?tab=sim) — 대시보드의 그 카테고리로 연다
+  // 📌 옛 주소(?tab=table · ?tab=sim) — 테이블은 그 카테고리로, 시뮬레이터(없어짐)는 현황으로 연다
   useEffect(() => {
     if (tabParam !== "table" && tabParam !== "sim") return;
-    setMSec(tabParam);
+    setMSec(tabParam === "table" ? "table" : "quest");
     const q = new URLSearchParams(Array.from(searchParams.entries()));
     q.delete("tab");
     router.replace(`${pathname}${q.toString() ? `?${q.toString()}` : ""}`, { scroll: false });
@@ -2935,11 +2609,11 @@ export default function LevelPage() {
                   </div>
                 </div>
 
-                {/* 로그인 없이도 — XP 테이블 · 시뮬레이터 (예전 탭) */}
+                {/* 로그인 없이도 — XP 테이블 (예전 탭) */}
                 <div className="mt-14">
                   <div role="tablist" aria-label="XP 도구" className="flex border-b border-[#ededed] mb-8">
-                    {[{ k: "table", l: "XP 테이블" }, { k: "sim", l: "시뮬레이터" }].map((t) => {
-                      const on = (mSecOn === "sim" ? "sim" : "table") === t.k;
+                    {[{ k: "table", l: "XP 테이블" }].map((t) => {
+                      const on = true;
                       return (
                         <button key={t.k} type="button" role="tab" aria-selected={on} onClick={() => setMSec(t.k)}
                           className={`relative py-3 mr-7 text-[15px] font-extrabold transition-colors outline-none focus-visible:text-[#131313] ${on ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
@@ -2949,11 +2623,7 @@ export default function LevelPage() {
                       );
                     })}
                   </div>
-                  {mSecOn === "sim" ? (
-                    <XpSimulator me={null} P={P} ready={!!policy} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
-                  ) : (
-                    <XpTableView myLevel={0} myXp={null} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
-                  )}
+                  <XpTableView myLevel={0} myXp={null} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
                 </div>
 
                 {/* 공개 섹션 — 관전자에게도 실데이터 */}
@@ -3225,7 +2895,7 @@ export default function LevelPage() {
 
                     {/* PC 카테고리 — 사이트 공통 밑줄 탭. 모바일은 위 아이콘 줄이 같은 일을 한다 */}
                     <div role="tablist" aria-label="대시보드 카테고리" className="hidden lg:flex lg:col-span-2 lg:-mb-6 border-b border-[#ededed]">
-                      {[{ k: "quest", l: "현황" }, { k: "table", l: "XP 테이블" }, { k: "sim", l: "시뮬레이터" }].map((t) => {
+                      {[{ k: "quest", l: "현황" }, { k: "table", l: "XP 테이블" }].map((t) => {
                         const on = t.k === "quest" ? deskOverview : mSecOn === t.k;
                         return (
                           <button key={t.k} type="button" role="tab" aria-selected={on} onClick={() => { setMSec(t.k); playTone(620, 0.04, "sine", 0.025); }}
@@ -3519,12 +3189,9 @@ export default function LevelPage() {
 
                     </div>
 
-                    {/* XP 테이블 · 시뮬레이터 — 예전엔 탭, 이제 대시보드 카테고리. 왼쪽 카드와 나란히 오른쪽 8칸 */}
+                    {/* XP 테이블 — 예전엔 탭, 이제 대시보드 카테고리. 왼쪽 카드와 나란히 오른쪽 8칸 */}
                     <section className={`${mSecOn === "table" ? "block" : "hidden"} lg:col-span-2 min-w-0`}>
                       <XpTableView myLevel={me?.level || 0} myXp={me?.xp ?? null} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
-                    </section>
-                    <section className={`${mSecOn === "sim" ? "block" : "hidden"} lg:col-span-2 min-w-0`}>
-                      <XpSimulator me={me} P={P} ready={!!policy} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
                     </section>
                 </div>
               </div>
