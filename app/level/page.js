@@ -179,6 +179,12 @@ const fmtVoiceTime = (sec) => {
   if (min < 60) return `${min}분`;
   return `${Math.floor(min / 60).toLocaleString()}시간`;
 };
+// 📌 서버 랭킹 음성 시간 — 분까지("3시간 25분", 1시간 전에는 "25분"). 대시보드 '누적 음성 시간' 칸은 위 fmtVoiceTime 그대로
+const fmtVoiceTimeMin = (sec) => {
+  const min = Math.floor((sec || 0) / 60);
+  if (min < 60) return `${min}분`;
+  return `${Math.floor(min / 60).toLocaleString()}시간 ${min % 60}분`;
+};
 
 // 음성 티어 경계·이름·색은 lib/voiceTiers.js 단일 소스 (봇 지급표와 1:1)
 
@@ -3345,7 +3351,7 @@ export default function LevelPage() {
                             </span>
 
                             <p className={`font-black text-[#131313] tabular-nums mt-2 ${first ? "text-[15px]" : "text-[12px]"}`}>
-                              {rankMode === "voice" ? fmtVoiceTime(r.voiceSeconds) : `${(r.xp || 0).toLocaleString()} XP`}
+                              {rankMode === "voice" ? fmtVoiceTimeMin(r.voiceSeconds) : `${(r.xp || 0).toLocaleString()} XP`}
                             </p>
 
                             {/* 단상 */}
@@ -3392,7 +3398,7 @@ export default function LevelPage() {
                         {/* 값 */}
                         <span className="shrink-0 text-[13px] font-black text-[#131313] tabular-nums">
                           {rankMode === "voice"
-                            ? fmtVoiceTime(r.voiceSeconds)
+                            ? fmtVoiceTimeMin(r.voiceSeconds)
                             : `${(r.xp || 0).toLocaleString()} XP`}
                         </span>
                       </div>
