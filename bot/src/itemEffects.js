@@ -322,12 +322,14 @@ export function ownedItemList({ purchases, items, shopItems, heldRoles = null, n
 
   const owned = new Map(); // 아이템 id → { exp(ms, 0 = 영구), pending, units: 묶음 건 수, perm: 무기한 묶음 건 있음, first: 가장 빠른 만료 }
   const seenRoles = new Set();
-  const add = (id, exp, pending, unit = false) => {
+  // 📌 bought — 상점에서 산 건이 하나라도 있으면(사이트 lib/ownedItems _bought 와 같다). 배지 자동 표시는 산 것만(views/inventory.js)
+  const add = (id, exp, pending, unit = false, bought = false) => {
     let cur = owned.get(id);
     if (!cur) {
-      cur = { exp, pending, units: 0, perm: false, first: 0 };
+      cur = { exp, pending, units: 0, perm: false, first: 0, bought };
       owned.set(id, cur);
     } else {
+      if (bought) cur.bought = true;
       cur.exp = cur.exp === 0 || exp === 0 ? 0 : Math.max(cur.exp, exp);
       cur.pending = cur.pending && pending;
     }
@@ -350,7 +352,7 @@ export function ownedItemList({ purchases, items, shopItems, heldRoles = null, n
       (shop?.itemId && itemById.get(String(shop.itemId))) ||
       null;
     if (!item && !shop && p.roleId) item = itemByRole.get(p.roleId) || null;
-    if (item) add(String(item._id), exp, p.status === "pending", stackIds.has(String(item._id)) && !p.roleId && p.itemType !== "physical");
+    if (item) add(String(item._id), exp, p.status === "pending", stackIds.has(String(item._id)) && !p.roleId && p.itemType !== "physical", !!shop);
     if (p.roleId && ROLE_LIKE.has(p.itemType)) seenRoles.add(String(p.roleId));
   }
 
@@ -368,8 +370,8 @@ export function ownedItemList({ purchases, items, shopItems, heldRoles = null, n
     const o = owned.get(id);
     if (!o) continue;
     // 묶음 — 개수는 묶음 건 수, 만료는 무기한이 있으면 없음 · 모두 기간제면 가장 빠른 것(먼저 쓰이는 것)
-    if (o.units > 0) out.push({ item, expiresAt: o.perm || !o.first ? null : new Date(o.first), pending: o.pending, count: o.units });
-    else out.push({ item, expiresAt: o.exp ? new Date(o.exp) : null, pending: o.pending, count: 1 });
+    if (o.units > 0) out.push({ item, expiresAt: o.perm || !o.first ? null : new Date(o.first), pending: o.pending, count: o.units, bought: !!o.bought });
+    else out.push({ item, expiresAt: o.exp ? new Date(o.exp) : null, pending: o.pending, count: 1, bought: !!o.bought });
   }
   return out;
 }
