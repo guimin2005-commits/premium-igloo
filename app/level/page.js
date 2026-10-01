@@ -14,7 +14,7 @@ import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel }
 import { getCumulativeXpByLevel, getLevelByXp } from "@/lib/leveling";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { buildEnhanceView, chatRange, voiceBonus, enhanceCost } from "@/lib/enhance";
-// 빙옥 가격 = XP 가격 ÷ 1,000 올림 — 서버와 같은 식 (lib/pointRate)
+// 빙옥 가격 = XP 가격 ÷ 10,000 올림 — 서버와 같은 식 (lib/pointRate)
 import { xpToPoint } from "@/lib/pointRate";
 import { discountedCost, effectParts, describeEffect, PERK_KEYS, SKINS } from "@/lib/itemEffects";
 import TierEmblem from "../components/TierEmblem";
@@ -22,7 +22,7 @@ import SystemGuide from "./SystemGuide";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 // 팝업 틀 · 인벤토리 팝업 · 효과음은 내 정보 · ARCTIC 도 같이 쓴다 (app/components/PopShell · Inventory, lib/sfx)
-import { PopShell, PopTab, AdminReset } from "../components/PopShell";
+import { PopShell, PopTab, AdminReset, POP_THEME } from "../components/PopShell";
 import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedBadges, invTierOf, invIconType, invAccentOf } from "../components/Inventory";
 import WalletHistory from "../components/WalletHistory";
 import SkinFrame from "../components/SkinFrame";
@@ -732,10 +732,53 @@ const hexLift = (hex, t) => {
 };
 
 // 📌 강화 창 — 카드의 "강화" 로 연다. 틀은 PopShell, 바탕은 불씨(다홍 · 주황).
-//    머리: 보유 XP · 빙옥 배지. 왼쪽: +N 링 메달(단계가 오르면 번쩍) · 지금 1회 획득 → 강화 후.
+//    채팅 · 음성은 제 아이콘 · 제 색(ENH_KIND)으로 탭 · 링 · 이름 · 1회 카드 · 강화 버튼 · 레일 노드를 한 벌로 칠한다
+//    (2026-10-01 "채팅 강화인지 음성 강화인지 구분이 잘 안 된다": 예전엔 탭 글자만 달랐고 나머지는 둘 다 불씨 색이었다).
+//    머리: 보유 XP · 빙옥 배지. 왼쪽: 아이콘 + +N 링 메달(단계가 오르면 번쩍) · 이름 · 지금 1회 획득 → 강화 후.
 //    오른쪽: 다음 단계와 강화 버튼, 전 단계 레일(지난 단계는 채운 노드, 다음은 고리, 남은 건 빈 노드 · 1회 획득 · 비용).
+//    최대 단계도 같은 높이(버튼 자리에 MAX 알약) — 탭을 바꿔도 칸 · 버튼 · 레일이 움직이지 않는다.
 //    비용은 서버와 같은 식(lib/enhance enhanceCost). 최대 단계가 0 인 쪽은 탭을 만들지 않는다.
-const EMBER = "linear-gradient(135deg, #ff4d3a 0%, #ff9a3c 100%)";
+// 📌 채팅 · 음성 색 — 불씨 바탕(다홍)과 등급색(아이언~이글루, 중간 밝기 색 덩어리)에 안 묻히게 밝은 하늘 · 라벤더.
+//    켜진 탭 · 강화 버튼은 밝은 바탕에 잉크 글자(흰 글자는 대비가 모자란다). 성공음도 갈린다 — 채팅은 높고 맑게, 음성은 낮고 둥글게
+const ENH_KIND = {
+  chat: {
+    label: "채팅", icon: "chat", c: "#7dd8ff", soft: "rgba(110,205,255,0.12)", line: "rgba(125,216,255,0.36)",
+    grad: "linear-gradient(135deg, #4cc3ff 0%, #a6e9ff 100%)", ring: ["#4cc3ff", "#a6e9ff"], sparks: ["#ffffff", "#a6e9ff", "#4cc3ff"],
+    tone: 783.99, sfx: [783.99, 987.77, 1174.66, 1567.98], wave: "triangle",
+  },
+  voice: {
+    label: "음성", icon: "mic", c: "#c4b0ff", soft: "rgba(176,150,255,0.13)", line: "rgba(196,176,255,0.38)",
+    grad: "linear-gradient(135deg, #a084ff 0%, #ddd0ff 100%)", ring: ["#a084ff", "#ddd0ff"], sparks: ["#ffffff", "#ddd0ff", "#a084ff"],
+    tone: 523.25, sfx: [392, 493.88, 587.33, 783.99], wave: "sine",
+  },
+};
+const sfxEnhance = (kind) => {
+  const t = ENH_KIND[kind] || ENH_KIND.chat;
+  t.sfx.forEach((f, i) => setTimeout(() => playTone(f, 0.16, t.wave, 0.05), i * 110));
+};
+const EnhIcon = ({ k, className = "w-4 h-4", style }) => (
+  <svg aria-hidden viewBox="0 0 24 24" className={`${className} shrink-0`} style={style} fill="none" stroke="currentColor" strokeWidth="1.9">
+    <path d={ICON_PATHS[ENH_KIND[k].icon]} strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+// 📌 채팅 · 음성 탭 — 아이콘 + 이름 + 단계. 켜진 쪽은 제 색 바탕 · 잉크 글자, 꺼진 쪽도 아이콘 · 테두리는 제 색.
+//    폭 · 굵기 · 높이는 켜짐 · 꺼짐이 같다(고정 폭) — 고르는 쪽을 바꾸거나 단계가 두 자리가 돼도 탭 줄이 안 밀린다
+const EnhKindTab = ({ k, on, n, onClick }) => {
+  const t = ENH_KIND[k];
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={`shrink-0 inline-flex items-center justify-center gap-1.5 w-[104px] h-8 rounded-full text-[13px] font-black transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${on ? "text-[#131313]" : "text-white/65 hover:text-white"}`}
+      style={on ? { background: t.grad } : { background: "rgba(255,255,255,0.05)", boxShadow: `inset 0 0 0 1px ${t.line}` }}
+    >
+      <EnhIcon k={k} className="w-4 h-4" style={on ? undefined : { color: t.c }} />
+      {t.label}
+      <span className={`tabular-nums text-[11px] ${on ? "text-[#131313]/55" : "text-white/40"}`}>+{n}</span>
+    </button>
+  );
+};
 const GOLD_TEXT = { backgroundImage: "linear-gradient(110deg, #ffb040 20%, #fff3c4 45%, #ffb040 70%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 3s linear infinite" };
 const sparksOf = (n, r0) => Array.from({ length: n }, (_, i) => {
   const a = (i / n) * Math.PI * 2 + (i % 2) * 0.2;
@@ -771,9 +814,11 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
 
   const v = enh[kind];
   const isChat = kind === "chat";
+  const kt = ENH_KIND[kind];
+  const perLabel = isChat ? "채팅 1회" : `음성 ${voiceMin}분`;
   const atMax = v.level >= v.max;
   const cost = v.nextCost || 0;
-  // 📌 빙옥으로 낼 때는 XP 비용이 아니라 환산값(÷1,000 올림)과 비교한다
+  // 📌 빙옥으로 낼 때는 XP 비용이 아니라 환산값(÷10,000 올림)과 비교한다
   const pointCost = xpToPoint(cost);
   const canXp = !atMax && !busy && (balance?.xp || 0) >= cost;
   const canPoint = !atMax && !busy && (balance?.point || 0) >= pointCost;
@@ -804,7 +849,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
         </span>
       }
       tabs={kinds.length > 1 ? kinds.map((k) => (
-        <PopTab key={k} on={k === kind} onClick={() => { setPick(k); onTone?.(); }} label={k === "chat" ? "채팅" : "음성"} n={`+${enh[k].level}`} />
+        <EnhKindTab key={k} k={k} on={k === kind} n={enh[k].level} onClick={() => { setPick(k); onTone?.(k); }} />
       )) : null}
       left={
         <>
@@ -816,8 +861,10 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
                   <span aria-hidden className="absolute inset-[6px] rounded-full bg-[#1f0d0c]"></span>
                 </>
               )}
+              {/* 📌 링은 고른 쪽 색(최대 단계만 금빛), 숫자 위에 그쪽 아이콘 — 링만 봐도 채팅인지 음성인지 */}
               <div className="absolute inset-0">
-                <GlowRing id="enhRing" from={atMax ? "#ffe08a" : "#ff4d3a"} to={atMax ? "#ff9a3c" : "#ffb040"} pct={(v.level / Math.max(1, v.max)) * 100} pop={pop === kind}>
+                <GlowRing id={`enhRing-${kind}`} from={atMax ? "#ffe08a" : kt.ring[0]} to={atMax ? "#ff9a3c" : kt.ring[1]} pct={(v.level / Math.max(1, v.max)) * 100} pop={pop === kind}>
+                  <EnhIcon k={kind} className="w-5 h-5 mb-1.5" style={{ color: kt.c }} />
                   <span
                     key={`${kind}-${v.level}`}
                     className="enh-anim text-[42px] font-black text-white tabular-nums tracking-[-0.03em] leading-none"
@@ -830,27 +877,34 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
                     : <span className="mt-1.5 text-[11px] font-bold text-white/40 tabular-nums">/ +{v.max}</span>}
                 </GlowRing>
               </div>
+              {/* 불티 — 보통은 고른 쪽 색, 최대 단계는 금빛 */}
               {pop === kind && (atMax ? SPARKS_MAX : SPARKS).map((p, i) => (
                 <span
                   key={i}
                   aria-hidden
                   className="enh-anim absolute left-1/2 top-1/2 w-1.5 h-1.5 rounded-full pointer-events-none opacity-0"
-                  style={{ background: p.c, "--dx": `${p.dx}px`, "--dy": `${p.dy}px`, animation: `sparkFly .85s ${p.delay}ms cubic-bezier(0.16,1,0.3,1) forwards` }}
+                  style={{ background: atMax ? p.c : kt.sparks[i % 3], "--dx": `${p.dx}px`, "--dy": `${p.dy}px`, animation: `sparkFly .85s ${p.delay}ms cubic-bezier(0.16,1,0.3,1) forwards` }}
                 ></span>
               ))}
             </div>
-            <p className="mt-4 text-[13px] font-black text-white">{isChat ? "채팅 강화" : "음성 강화"}</p>
+            <p className="mt-4 text-[20px] font-black tracking-tight leading-none" style={{ color: kt.c }}>{kt.label} 강화</p>
           </div>
 
-          {/* 지금 → 강화 후 — 이 창에서 유일한 카드 */}
+          {/* 지금 → 강화 후 — 이 창에서 유일한 카드. 고른 쪽 색 테두리 · 아이콘으로 어느 쪽 값인지 묶는다.
+                 최대 단계도 화살표 줄 자리를 MAX 로 채워 높이가 같다(탭을 바꿔도 아래가 안 움직인다) */}
           <div
             className="mt-7 sm:mt-auto rounded-2xl p-4"
-            style={{ background: "linear-gradient(135deg, rgba(255,90,60,0.18), rgba(255,170,64,0.1))", boxShadow: "inset 0 0 0 1px rgba(255,140,90,0.28)" }}
+            style={{ background: kt.soft, boxShadow: `inset 0 0 0 1px ${kt.line}` }}
           >
-            <p className="text-[11px] font-bold text-white/50">{isChat ? "채팅 1회" : `음성 ${voiceMin}분`}</p>
+            <p className="flex items-center gap-1.5 text-[11px] font-bold text-white/55">
+              <EnhIcon k={kind} className="w-3.5 h-3.5" style={{ color: kt.c }} />
+              {perLabel}
+            </p>
             <p className="mt-2 text-[20px] font-black text-white tabular-nums tracking-tight leading-none">{gainAt(0)}<span className="text-[11px] text-white/40 ml-1">XP</span></p>
-            {!atMax && (
-              <p className="mt-2.5 flex items-center gap-1.5 text-[12px] font-black text-[#ffb38a] tabular-nums">
+            {atMax ? (
+              <p className="mt-2.5 h-[18px] flex items-center text-[11px] font-black tracking-[0.2em]"><span style={GOLD_TEXT}>MAX</span></p>
+            ) : (
+              <p className="mt-2.5 h-[18px] flex items-center gap-1.5 text-[12px] font-black tabular-nums" style={{ color: kt.c }}>
                 <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
                 {gainAt(stepXp)} XP
               </p>
@@ -860,51 +914,66 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
         </>
       }
     >
-      {/* 다음 단계 */}
-      {atMax ? (
-        <div className="py-2">
-          <p className="text-[11px] font-bold text-white/45">최대 단계</p>
-          <p key={`max-${kind}`} className="enh-anim mt-2 text-[32px] font-black tracking-tight leading-none" style={{ ...GOLD_TEXT, transformOrigin: "left center", ...(pop === kind ? { animation: "numPop .8s cubic-bezier(0.16,1,0.3,1), shimmer 3s linear infinite" } : {}) }}>+{v.max} MAX</p>
+      {/* 다음 단계 — 최대 단계도 같은 틀(라벨 · 큰 글자 · 버튼 줄 높이)이라 탭을 바꿔도 레일이 제자리 */}
+      <div className="flex items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold text-white/45">{atMax ? "최대 단계" : "다음 단계"}</p>
+          {atMax ? (
+            <p key={`max-${kind}`} className="enh-anim mt-2 text-[28px] font-black tracking-tight leading-none" style={{ ...GOLD_TEXT, transformOrigin: "left center", ...(pop === kind ? { animation: "numPop .8s cubic-bezier(0.16,1,0.3,1), shimmer 3s linear infinite" } : {}) }}>+{v.max} MAX</p>
+          ) : (
+            <p className="mt-2 text-[28px] font-black tabular-nums tracking-tight leading-none" style={{ color: kt.c }}>+{v.level + 1}</p>
+          )}
         </div>
-      ) : (
-        <>
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-bold text-white/45">다음 단계</p>
-              <p className="mt-2 text-[28px] font-black text-white tabular-nums tracking-tight leading-none">+{v.level + 1}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-[11px] font-bold text-white/45">{isChat ? "채팅 1회" : `음성 ${voiceMin}분`}</p>
-              <p className="mt-2 text-[15px] font-black text-white tabular-nums leading-none">{gainAt(stepXp)} XP</p>
-            </div>
+        <div className="min-w-0 text-right">
+          <p className="inline-flex items-center gap-1.5 text-[11px] font-bold text-white/45">
+            <EnhIcon k={kind} className="w-3.5 h-3.5" style={{ color: kt.c }} />
+            {perLabel}
+          </p>
+          <p className="mt-2 text-[15px] font-black text-white tabular-nums leading-none">{gainAt(atMax ? 0 : stepXp)} XP</p>
+        </div>
+      </div>
+      <div className="mt-5 flex gap-2">
+        {atMax ? (
+          <div className="flex-1 h-12 rounded-full flex items-center justify-center text-[14px] font-black tracking-[0.2em] bg-white/[0.05]" style={{ boxShadow: "inset 0 0 0 1px rgba(255,224,138,0.3)" }}>
+            <span style={GOLD_TEXT}>MAX</span>
           </div>
-          <div className="mt-5 flex gap-2">
+        ) : (
+          <>
+            {/* 📌 버튼도 그쪽 아이콘 · 색. 이름("채팅 강화")은 768px 부터 — 그보다 좁으면 8자리 비용("29,646,969 XP")이 잘려서 아이콘 + "강화" 로 줄인다
+                   (실측: 360 · 375 · 640 폭에서 안 잘림, 탭 줄은 늘 보여 어느 쪽인지 바로 확인된다). 빙옥 칸은 108px — 여섯 자리 빙옥("29,647 빙옥")까지 폭이 같아 탭을 바꿔도 XP 버튼이 안 밀린다 */}
             <button
               type="button"
               onClick={() => onEnhance(kind, "xp", cost)}
               disabled={!canXp}
-              className="flex-1 h-12 rounded-full text-white text-[14px] font-black tabular-nums transition-transform enabled:hover:-translate-y-px outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
-              style={{ background: EMBER }}
+              aria-label={`${kt.label} 강화 · ${fmt(cost)} XP`}
+              className="flex-1 min-w-0 h-12 px-3 rounded-full inline-flex items-center justify-center gap-1.5 text-[#131313] text-[14px] font-black tabular-nums transition-transform enabled:hover:-translate-y-px outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-35 disabled:cursor-default"
+              style={{ background: kt.grad }}
             >
-              강화 · {fmt(cost)} XP
+              <EnhIcon k={kind} className="w-4 h-4" />
+              <span className="truncate"><span className="hidden md:inline">{kt.label} </span>강화 · {fmt(cost)} XP</span>
             </button>
             <button
               type="button"
               onClick={() => onEnhance(kind, "point", cost)}
               disabled={!canPoint}
-              className="shrink-0 h-12 px-5 rounded-full bg-white/[0.07] border border-white/15 enabled:hover:bg-white/[0.13] text-white text-[13px] font-black transition-colors outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
+              aria-label={`${kt.label} 강화 · ${fmt(pointCost)} 빙옥`}
+              className="shrink-0 min-w-[108px] h-12 px-4 rounded-full bg-white/[0.07] enabled:hover:bg-white/[0.13] text-white text-[13px] font-black tabular-nums transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-35 disabled:cursor-default"
+              style={{ boxShadow: `inset 0 0 0 1px ${kt.line}` }}
             >
               {fmt(pointCost)} 빙옥
             </button>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
 
-      {/* 단계 레일 */}
+      {/* 단계 레일 — 노드 · 다음 줄 · 1회 칸 머리를 고른 쪽 색 · 아이콘으로 */}
       <div className="mt-7 grid items-center gap-x-3 px-2 -mx-2 pb-2" style={COLS}>
         <span></span>
         <span className="text-[11px] font-bold text-white/40">단계</span>
-        <span className="text-[11px] font-bold text-white/40">1회 획득</span>
+        <span className="min-w-0 flex items-center gap-1.5 text-[11px] font-bold text-white/40">
+          <EnhIcon k={kind} className="w-3.5 h-3.5" style={{ color: kt.c }} />
+          <span className="truncate">{perLabel}</span>
+        </span>
         <span className="text-[11px] font-bold text-white/40 text-right">비용</span>
       </div>
       <div className="relative">
@@ -913,16 +982,16 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
           const done = r.n <= v.level;
           const next = r.n === v.level + 1;
           return (
-            <div key={r.n} className={`relative grid items-center gap-x-3 h-10 px-2 -mx-2 rounded-xl tabular-nums ${next ? "bg-white/[0.07]" : ""}`} style={COLS}>
+            <div key={r.n} className="relative grid items-center gap-x-3 h-10 px-2 -mx-2 rounded-xl tabular-nums" style={next ? { ...COLS, background: kt.soft } : COLS}>
               <span className="relative z-10 flex justify-center">
                 <span
-                  className={`enh-anim w-3 h-3 rounded-full ${done ? "" : next ? "ring-2 ring-[#ff7a4a] bg-[#1f0d0c]" : "ring-1 ring-white/25 bg-[#1f0d0c]"}`}
-                  style={done ? { background: EMBER, ...(pop === kind && r.n === v.level ? { animation: "nodeFill .7s cubic-bezier(0.16,1,0.3,1)" } : {}) } : undefined}
+                  className={`enh-anim w-3 h-3 rounded-full ${done ? "" : next ? "bg-[#1f0d0c]" : "ring-1 ring-white/25 bg-[#1f0d0c]"}`}
+                  style={done ? { background: kt.grad, "--nf": hexA(kt.ring[0], 0.8), ...(pop === kind && r.n === v.level ? { animation: "nodeFill .7s cubic-bezier(0.16,1,0.3,1)" } : {}) } : next ? { boxShadow: `0 0 0 2px ${kt.c}` } : undefined}
                 ></span>
               </span>
               <span className={`text-[13px] font-black ${done ? "text-white/45" : next ? "text-white" : "text-white/40"}`}>+{r.n}</span>
               <span className={`text-[12px] font-bold ${done ? "text-white/35" : next ? "text-white" : "text-white/55"}`}>{r.g} XP</span>
-              <span className={`text-[12px] font-black text-right ${done ? "text-white/30" : next ? "text-[#ffb38a]" : "text-white/40"}`}>{done ? "완료" : fmt(r.c)}</span>
+              <span className={`text-[12px] font-black text-right ${done ? "text-white/30" : next ? "" : "text-white/40"}`} style={next ? { color: kt.c } : undefined}>{done ? "완료" : fmt(r.c)}</span>
             </div>
           );
         })}
@@ -1140,9 +1209,13 @@ const ConfirmDialog = ({ state, onDone }) => {
   );
 };
 
-// 📌 시즌 패스 창 — 카드의 "시즌 패스" 로 연다. 틀은 PopShell, 바탕은 보라 · 별빛.
-//    왼쪽: 티어 메달(다음 티어까지 채워지는 보라→분홍 링) · 남은 XP · 프리미엄 카드(잠겨 있으면 해금 버튼)
-//    오른쪽: 티어 레일 — 노드 · 무료 보상 칩 · 프리미엄 보상 칩(보라 · 분홍 결) · 필요 XP. 열면 다음 티어로 스크롤
+// 📌 시즌 패스 창 — 카드의 "시즌 패스" 로 연다. 바탕은 보라 · 별빛(POP_THEME.pass).
+//    위(요약): 봇 /시즌패스 카드 문법 + 티어 링 (2026-10-01 "봇 카드랑 동그란 디자인 합치기")
+//      눈썹(SEASON · 이름 · D-day) · 큰 제목 · 프리미엄 칩(잠겨 있으면 그 자리가 해금 단추)
+//      → 티어 링 | 다음 티어까지 | 받을 보상 → T7 ━ T8 막대 → 다음 보상 · T8(그 티어 보상 전부 — 무료 → 프리미엄)
+//    아래: 탭(전체 티어 / 받을 보상) + 가로 트랙 — 게임 배틀패스처럼 티어가 왼쪽 → 오른쪽(2026-10-01 "이 부분을 가로로 바꾸던지").
+//      칸 하나 = 티어 하나: T 번호 · 필요 XP → 진행선 · 점 → 무료 줄 → 프리미엄 줄. 열면 다음 티어 칸이 가운데 오게 가로로 맞춘다
+//    틀은 PopShell 과 같은 문법이지만 왼쪽 | 오른쪽 두 판이 아니라 위 → 아래라 여기서 직접 짠다(PopShell 은 인벤토리 · 강화가 같이 쓴다)
 //    수령 · 해금 판정은 서버가 다시 한다 — 여기서는 서버가 준 상태만 그린다.
 const PASS_KIND_ICON = { xp: "bolt", point: "sparkles", role: "shieldCheck", item: "gift" };
 const CROWN = "M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8z";
@@ -1171,133 +1244,164 @@ const GlowRing = ({ id, from, to, pct = 0, pop = false, children }) => {
     </div>
   );
 };
-// 📌 보상 아이콘 — 아이템은 등록된 아이콘(ItemIcon), 나머지는 종류 아이콘
-const PassRewardIcon = ({ r }) =>
-  r.kind === "item" ? (
-    <ItemIcon icon={r.icon} imageUrl={r.imageUrl} type={r.itemType} size={14} color={r.color || (r.itemType ? itemTypeColor(r.itemType) : undefined)} />
-  ) : (
-    <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9">
-      <path d={ICON_PATHS[PASS_KIND_ICON[r.kind] || "gift"]} strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
 const PASS_CHECK = <svg aria-label="수령 완료" viewBox="0 0 24 24" className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7" /></svg>;
 const PASS_LOCK = <svg aria-label="잠김" viewBox="0 0 24 24" className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>;
+const PASS_CROWN_SM = <svg aria-label="프리미엄" viewBox="0 0 24 24" className="w-2.5 h-2.5 shrink-0" fill="currentColor"><path d={CROWN} /></svg>;
 const PASS_GRAD = "linear-gradient(135deg, #9b6bff 0%, #e05bb5 100%)";
 const passChipBg = (premium) => premium
   ? { background: "linear-gradient(135deg, rgba(182,156,255,0.22), rgba(255,122,198,0.14))", boxShadow: "inset 0 0 0 1px rgba(214,180,255,0.35)" }
   : { background: "rgba(255,255,255,0.06)", boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.1)" };
 
-// 보상이 하나뿐인 칸 — 칩 하나가 곧 받기 단추(예전 모양 그대로)
-const PassReward = ({ r, claimable = false, claimed = false, premium = false, locked = false, busy = false, onClaim }) => {
-  const chip = "min-w-0 max-w-full inline-flex items-center gap-1.5 h-8 pl-2.5 pr-3 rounded-full text-[12px] font-bold";
-  if (claimable) {
+// 📌 보상 타일 몸 — 봇 /시즌패스 카드 "다음 보상" 타일과 같은 문법: XP · 빙옥은 큰 숫자 + 단위, 역할 · 아이템은 아이콘 + 이름.
+//    big = 위의 "다음 보상" 타일, 아니면 트랙 칸(칸 폭이 고정이라 한 단계 작게). 아이템 아이콘 28 = 도트 32px(정수 배율)
+//    이름은 두 줄까지(긴 이름 · " · 7일" 꼬리가 한 줄 말줄임에 잘려 안 보이던 것) — 타일 높이는 그대로라 칸이 안 밀린다.
+//    트랙 칸은 오른쪽 위 모서리 표시(왕관 · 자물쇠 · ✓)와 첫 줄이 겹치지 않게 오른쪽을 비운다
+const PASS_WRAP = { overflowWrap: "anywhere" };
+const PassTileBody = ({ r, big = false }) => {
+  if (r.kind === "xp" || r.kind === "point") {
     return (
-      <button
-        type="button"
-        onClick={onClaim}
-        disabled={busy}
-        title={r.label}
-        className={`${chip} text-white transition-transform hover:-translate-y-px outline-none focus:outline-none disabled:opacity-60`}
-        style={{ background: PASS_GRAD }}
-      >
-        <PassRewardIcon r={r} />
-        <span className="truncate">{r.short || r.label}</span>
-        {/* 📌 받는 중에도 "받기" 폭은 그대로 — 글자만 가리고 그 자리에 … (누른 칩이 줄어들지 않게) */}
-        <span className="relative shrink-0 ml-0.5 text-[10px] font-black">
-          <span className={busy ? "invisible" : undefined}>받기</span>
-          {busy && <span className="absolute inset-0 flex items-center justify-center">…</span>}
-        </span>
-      </button>
+      <span className="min-w-0 flex items-baseline">
+        <span className={`min-w-0 truncate font-black text-white tabular-nums tracking-[-0.02em] leading-none ${big ? "text-[20px]" : "text-[16px]"}`}>{(r.amount || 0).toLocaleString()}</span>
+        <span className={`ml-1 shrink-0 font-bold text-white/55 ${big ? "text-[11px]" : "text-[10px]"}`}>{r.kind === "xp" ? "XP" : "빙옥"}</span>
+      </span>
     );
   }
   return (
-    <span title={r.label} className={`${chip} ${premium ? "text-[#efe6ff]" : "text-white/80"} ${claimed || locked ? "opacity-45" : ""}`} style={passChipBg(premium)}>
-      <PassRewardIcon r={r} />
-      <span className="truncate">{r.short || r.label}</span>
-      {claimed ? PASS_CHECK : locked ? PASS_LOCK : null}
+    <span className="min-w-0 flex items-center">
+      {r.kind === "item" ? (
+        <ItemIcon icon={r.icon} imageUrl={r.imageUrl} type={r.itemType} size={28} color={r.color || (r.itemType ? itemTypeColor(r.itemType) : undefined)} />
+      ) : (
+        <svg aria-hidden viewBox="0 0 24 24" className={`${big ? "w-6 h-6" : "w-5 h-5"} shrink-0 text-white`} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d={ICON_PATHS[PASS_KIND_ICON[r.kind] || "gift"]} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+      <span className={`min-w-0 line-clamp-2 break-keep font-black text-white leading-[1.2] ${big ? "ml-2 text-[13px]" : "ml-1.5 pr-2 text-[12px]"}`} style={PASS_WRAP}>{r.short || r.label}</span>
     </span>
   );
 };
 
-// 📌 한 트랙(무료 / 프리미엄) 칸 — 보상 목록. 받기는 칸 단위(그 칸의 보상 전부).
-//    여러 개면 칩(아이콘 + 짧은 라벨)을 나란히 두고, 좁으면 다음 줄로 흐른다(줄이 그만큼 길어진다).
-//    2개를 넘으면 "+N" — 누르면 그 자리에서 펼친다. 받을 수 있으면 끝에 "받기" 알약 하나.
-const PASS_CHIP_SHOW = 2;
-const PassTrack = ({ track, premium = false, locked = false, busy = false, onClaim }) => {
-  const [more, setMore] = useState(false);
+// 📌 다음 보상 한 칸 — 봇 /시즌패스 카드의 "다음 보상" 타일. 머리: 무료 / 왕관 프리미엄(잠겨 있으면 자물쇠 · 흐리게)
+//    티어 번호는 줄 이름("다음 보상 · T8")에 한 번만 — 다음 티어 한 칸의 보상만 늘어놓으니 타일마다 되풀이하지 않는다
+const PassNextTile = ({ r, premium = false, locked = false }) => (
+  <div className="min-w-0 rounded-2xl px-3.5 pt-2.5 pb-3" style={passChipBg(premium)} title={r.label}>
+    <div className={`flex items-center h-4 text-[11px] font-black ${premium ? "text-[#d9c6ff]" : "text-white/50"}`}>
+      {premium && <svg aria-hidden viewBox="0 0 24 24" className="mr-1 w-3 h-3 shrink-0" fill="currentColor"><path d={CROWN} /></svg>}
+      {premium ? "프리미엄" : "무료"}
+      {locked && <span className="ml-auto inline-flex text-white/45">{PASS_LOCK}</span>}
+    </div>
+    <div className={`mt-2 h-8 flex items-center min-w-0 ${locked ? "opacity-45" : ""}`}>
+      <PassTileBody r={r} big />
+    </div>
+  </div>
+);
+
+// 📌 가로 트랙 치수(px) — 칸 폭은 고정(보상 수가 달라도 옆 칸이 밀리지 않게), 무료 · 프리미엄 줄 높이는 전 티어 중 가장 많은 칸 기준.
+//    높이를 여기서 셈해 두면 탭(전체 / 받을 보상)을 바꿔도 트랙 높이가 그대로라 창이 출렁이지 않는다
+//    col 140 = 타일 128 — "1,000,000 빙옥" 이 잘리지 않는 폭
+//    bar = 가로 스크롤바 자리(얇은 스크롤바 + 여백) — 스크롤바가 생기든 말든 트랙 높이가 같게
+const PT = { col: 140, gap: 8, head: 40, line: 24, tile: 44, tileGap: 6, slot: 28, rowGap: 8, pad: 6, label: 22, bar: 20 };
+const passRowH = (n) => n * PT.tile + (n - 1) * PT.tileGap + PT.tileGap + PT.slot;
+const PASS_VERTICAL = { writingMode: "vertical-rl", letterSpacing: "0.14em" };
+
+// 📌 트랙 칸 — 한 티어의 무료(또는 프리미엄) 보상 전부를 위 → 아래로 쌓는다("+N" 으로 접지 않는다, 2026-10-01 "보상도 +1 표기 말고 다 보여주게").
+//    맨 아래는 받기 자리(고정 높이) — 받을 수 있으면 받기, 다 받았으면 받음. 받기는 칸 단위(그 칸 보상 전부)
+//    모서리 표시: 일부만 받음 ✓ · 잠김 자물쇠 · 프리미엄 왕관 — 글자는 타일 가운데 줄이라 겹치지 않는다
+const PassCell = ({ track, premium = false, locked = false, busy = false, onClaim }) => {
   const list = track?.rewards || [];
-  if (!list.length) return <span className="text-[12px] font-bold text-white/20 pl-1">—</span>;
-  if (list.length === 1) {
-    const r = list[0];
-    return <PassReward r={r} claimable={!!track.claimable} claimed={r.claimed} premium={premium} locked={locked} busy={busy} onClaim={onClaim} />;
-  }
-  const shown = more ? list : list.slice(0, PASS_CHIP_SHOW);
-  const hidden = list.length - shown.length;
-  const chip = "min-w-0 max-w-full inline-flex items-center gap-1 h-7 pl-2 pr-2.5 rounded-full text-[11px] font-bold";
+  if (!list.length) return <div className="h-full flex items-center justify-center text-[12px] font-bold text-white/15">—</div>;
+  // 📌 받을 수 있는 칸은 분홍 테두리 — 일부만 받은 칸이면 이미 받은 타일은 빼고(받은 것까지 빛나 헷갈리지 않게)
+  const glow = { boxShadow: "inset 0 0 0 1px rgba(255,150,214,0.65)" };
   return (
-    <div className="min-w-0 flex flex-wrap items-center gap-1">
-      {shown.map((r) => (
-        <span
-          key={r.key}
-          title={r.label}
-          className={`${chip} ${premium ? "text-[#efe6ff]" : "text-white/80"} ${r.claimed || locked ? "opacity-45" : ""}`}
-          style={passChipBg(premium)}
-        >
-          <PassRewardIcon r={r} />
-          <span className="truncate">{r.short || r.label}</span>
-          {r.claimed && !track.claimed ? PASS_CHECK : null}
-        </span>
-      ))}
-      {hidden > 0 && (
-        <button
-          type="button"
-          onClick={() => setMore(true)}
-          aria-label={`보상 ${hidden}개 더 보기`}
-          className="shrink-0 inline-flex items-center h-7 px-2 rounded-full text-[11px] font-black tabular-nums text-white/70 hover:text-white bg-white/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-        >
-          +{hidden}
-        </button>
-      )}
-      {track.claimable ? (
-        <button
-          type="button"
-          onClick={onClaim}
-          disabled={busy}
-          className="relative shrink-0 inline-flex items-center h-7 px-3 rounded-full text-[11px] font-black text-white transition-transform hover:-translate-y-px outline-none focus:outline-none disabled:opacity-60"
-          style={{ background: PASS_GRAD }}
-        >
-          {/* 📌 받는 중에도 단추 폭은 "받기" 그대로 */}
-          <span className={busy ? "invisible" : undefined}>받기</span>
-          {busy && <span className="absolute inset-0 flex items-center justify-center">…</span>}
-        </button>
-      ) : track.claimed ? (
-        <span className="shrink-0 inline-flex text-white/45">{PASS_CHECK}</span>
-      ) : locked ? (
-        <span className="shrink-0 inline-flex text-white/45">{PASS_LOCK}</span>
-      ) : null}
+    <div className="h-full flex flex-col">
+      {list.map((r, j) => {
+        const dim = r.claimed || locked;
+        return (
+          <div
+            key={r.key}
+            title={r.label}
+            className="relative shrink-0 flex items-center min-w-0 px-2.5 rounded-xl"
+            style={{ height: PT.tile, marginTop: j ? PT.tileGap : 0, ...passChipBg(premium), ...(track.claimable && !r.claimed ? glow : null) }}
+          >
+            <span className={`min-w-0 flex ${dim ? "opacity-40" : ""}`}><PassTileBody r={r} /></span>
+            <span className={`absolute top-1.5 right-1.5 inline-flex ${dim ? "text-white/45" : "text-[#d6b4ff]"}`}>
+              {r.claimed && !track.claimed ? PASS_CHECK : locked ? PASS_LOCK : premium ? PASS_CROWN_SM : null}
+            </span>
+          </div>
+        );
+      })}
+      <div className="mt-auto shrink-0 flex items-end" style={{ height: PT.slot }}>
+        {track.claimable ? (
+          <button
+            type="button"
+            onClick={onClaim}
+            disabled={busy}
+            className="relative w-full h-7 rounded-full text-[11px] font-black text-white transition-transform hover:-translate-y-px outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60"
+            style={{ background: PASS_GRAD }}
+          >
+            {/* 📌 받는 중에도 단추 폭은 그대로 — 글자만 가리고 그 자리에 … */}
+            <span className={busy ? "invisible" : undefined}>받기</span>
+            {busy && <span className="absolute inset-0 flex items-center justify-center">…</span>}
+          </button>
+        ) : track.claimed ? (
+          <span className="w-full h-7 inline-flex items-center justify-center gap-1 text-[11px] font-black text-white/35">{PASS_CHECK}받음</span>
+        ) : null}
+      </div>
     </div>
   );
 };
+
 const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, claimable = 0, busyKey = "", onClaim, onUnlock, balance, dday, onTone, onReset, resetBusy }) => {
   const [tab, setTab] = useState("all");
-  const listRef = useRef(null);
+  const trackRef = useRef(null);
+  const bodyRef = useRef(null);
+  const closeRef = useRef(null);
   const nextIdx = (pass?.tierIndex ?? -1) + 1;
+  // 📌 관리자가 패스를 꺼 두면 카드 단추가 없다 — 옛 주소(?tab=pass)로 들어와도 창을 띄우지 않는다
+  const ready = !!open && !!pass?.enabled;
 
-  // 열 때 · 탭을 바꿀 때 — 다음 티어 줄이 목록 가운데 오게.
-  //    PC 에서 목록 칸이 따로 스크롤될 때만 — 모바일은 창 전체가 한 번에 스크롤돼 위의 티어 메달이 밀려난다
+  // 열리면 닫기 단추에 포커스 · Esc 로 닫기 — PopShell 과 같다
+  useEffect(() => { if (ready) closeRef.current?.focus({ preventScroll: true }); }, [ready]);
   useEffect(() => {
-    if (!open) return;
+    if (!ready) return;
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [ready, onClose]);
+
+  // 📌 열 때 · 탭을 바꿀 때 — 다음 티어 칸이 트랙 가운데 오게 가로로만 맞춘다(scrollIntoView 는 창 세로 스크롤까지 건드린다).
+  //    받을 보상 탭은 처음부터(다음 티어는 아직 못 넘어 거기 없다), 만렙이면 끝으로
+  useEffect(() => {
+    if (!ready) return;
     const id = requestAnimationFrame(() => {
-      const row = listRef.current?.querySelector('[data-next="1"]');
-      const box = row?.closest("[data-pop-list]");
-      if (!row || !box || !/auto|scroll/.test(getComputedStyle(box).overflowY) || box.scrollHeight <= box.clientHeight + 1) return;
-      const a = row.getBoundingClientRect(), b = box.getBoundingClientRect();
-      box.scrollTop += a.top - b.top - (box.clientHeight - a.height) / 2;
+      const box = trackRef.current;
+      if (!box) return;
+      const col = box.querySelector('[data-next="1"]');
+      box.scrollLeft = col ? col.offsetLeft + col.offsetWidth / 2 - box.clientWidth / 2 : tab === "all" && nextIdx >= tiers.length ? box.scrollWidth : 0;
     });
     return () => cancelAnimationFrame(id);
-  }, [open, tab, nextIdx]);
+  }, [ready, tab, nextIdx, tiers.length]);
 
-  // 프리미엄이 막 열리면 — 카드가 번쩍이며 부풀었다 돌아오고, 왕관이 튀고, 불티가 퍼진다
+  // 📌 PC 마우스 휠 — 트랙 위에서 굴리면 가로로 넘긴다. 단 창 본문이 그 방향으로 아직 세로로 갈 수 있으면 세로가 먼저 —
+  //    트랙이 화면 대부분을 차지해 휠이 티어 끝까지 가로로 붙잡히면 위 · 아래로 못 가는 것처럼 느껴진다.
+  //    가로도 끝에 닿으면 막지 않는다. 트랙패드 가로 밀기 · Ctrl 확대는 그대로. React onWheel 은 passive 라 preventDefault 가 안 돼 직접 붙인다
+  useEffect(() => {
+    const box = trackRef.current;
+    if (!ready || !box) return;
+    const onWheel = (e) => {
+      if (e.ctrlKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+      const body = bodyRef.current;
+      if (body && (e.deltaY > 0 ? body.scrollTop + body.clientHeight < body.scrollHeight - 1 : body.scrollTop > 0)) return;
+      const dy = e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? box.clientWidth : 1);
+      const to = Math.max(0, Math.min(box.scrollWidth - box.clientWidth, box.scrollLeft + dy));
+      if (Math.abs(to - box.scrollLeft) < 1) return;
+      e.preventDefault();
+      box.scrollLeft = to;
+    };
+    box.addEventListener("wheel", onWheel, { passive: false });
+    return () => box.removeEventListener("wheel", onWheel);
+  }, [ready]);
+
+  // 프리미엄이 막 열리면 — 칩이 번쩍이고, 왕관이 튀고, 불티가 퍼진다
   const prevUnlocked = useRef(!!pass?.unlocked);
   const [unlockPop, setUnlockPop] = useState(false);
   useEffect(() => {
@@ -1310,169 +1414,284 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
     return () => clearTimeout(t);
   }, [pass?.unlocked]);
 
-  if (!pass) return null;
+  if (!ready) return null;
+  const th = POP_THEME.pass;
   const fmt = (n) => (n || 0).toLocaleString();
   const rows = tab === "claim" ? tiers.filter((t) => t.free?.claimable || t.paid?.claimable) : tiers;
-  // 해금은 빙옥 전용 — 서버가 준 값(unlockPoint)을 쓰고, 없으면(옛 응답) XP 가격을 환율로 (÷1,000 올림)
+  // 해금은 빙옥 전용 — 서버가 준 값(unlockPoint)을 쓰고, 없으면(옛 응답) XP 가격을 환율로 (÷10,000 올림)
   const pointPrice = pass.unlockPoint ?? xpToPoint(pass.unlockPrice || 0);
   const byBooster = pass.premiumBy === "booster";
-  // 링 — 지금 티어에서 다음 티어까지 얼마나 찼나
+  // 링 · 막대 — 지금 티어에서 다음 티어까지 얼마나 찼나
   const prevNeed = pass.tierIndex >= 0 ? tiers[pass.tierIndex]?.need || 0 : 0;
   const nextTier = tiers[nextIdx];
-  const ringPct = nextTier ? Math.max(0, Math.min(100, ((pass.progress || 0) - prevNeed) / Math.max(1, nextTier.need - prevNeed) * 100)) : 100;
-  const COLS = { gridTemplateColumns: "20px 34px minmax(0,1fr) minmax(0,1fr) 60px" };
-  const seasonLabel = `시즌 ${pass.season?.number ?? SEASON.number} · ${pass.season?.name ?? SEASON.name}`;
+  // 📌 티어가 하나도 없으면 0(만렙처럼 꽉 찬 링 · 막대 · "MAX" 로 보이지 않게)
+  const ringPct = !tiers.length ? 0 : nextTier ? Math.max(0, Math.min(100, ((pass.progress || 0) - prevNeed) / Math.max(1, nextTier.need - prevNeed) * 100)) : 100;
+  // 📌 티어마다 필요한 양(앞 티어와의 차이) — 저장은 시즌 누적값(need)이지만 화면은 티어 단위로 보여 준다(2026-10-01 "티어에 필요한 양으로 가야지")
+  const stepOf = new Map(tiers.map((t, i) => [t.tid, t.need - (i > 0 ? tiers[i - 1].need : 0)]));
+  const seasonNo = pass.season?.number ?? SEASON.number;
+  const seasonName = pass.season?.name ?? SEASON.name;
+  const needV = !tiers.length ? "—" : nextTier ? fmt(pass.nextNeed ?? nextTier.need - (pass.progress || 0)) : "MAX";
+  // 받을 보상 — 무료 · 프리미엄 칸 수 (봇 카드 claimFree · claimPaid 와 같은 셈)
+  const claimFree = tiers.filter((t) => t.free?.claimable).length;
+  const claimPaid = tiers.filter((t) => t.paid?.claimable).length;
+  // 📌 다음 보상 — 다음 티어(지금 향해 가는 티어) 한 칸의 보상 전부, 무료 → 프리미엄 (2026-10-01 "이번 티어 보상만 보여주고")
+  const nextRewards = nextTier
+    ? [...(nextTier.free?.rewards || []).map((r) => ({ r, premium: false })), ...(nextTier.paid?.rewards || []).map((r) => ({ r, premium: true }))]
+    : [];
+  // 📌 트랙 줄 높이 — 전 티어 기준(탭과 무관). 진행선은 0 → T1 점 → … → 끝 점, 채움은 지난 티어 점 + 다음 티어 쪽으로 링과 같은 비율
+  const hFree = passRowH(Math.max(1, ...tiers.map((t) => t.free?.rewards?.length || 0)));
+  const hPaid = passRowH(Math.max(1, ...tiers.map((t) => t.paid?.rewards?.length || 0)));
+  const colH = PT.head + PT.line + hFree + PT.rowGap + hPaid + PT.pad;
+  const cx = (k) => k * (PT.col + PT.gap) + PT.col / 2;
+  const lineW = tiers.length ? cx(tiers.length - 1) : 0;
+  const fillW = !tiers.length ? 0 : !nextTier ? lineW : pass.tierIndex < 0 ? (cx(0) * ringPct) / 100 : cx(pass.tierIndex) + ((PT.col + PT.gap) * ringPct) / 100;
+
+  // 📌 프리미엄 칩 — 봇 카드 머리의 칩. 열려 있으면 보라→분홍 칩(서버 부스터면 "부스터" 꼬리 — 부스트를 멈추면 다시 잠긴다),
+  //    잠겨 있으면 같은 자리가 해금 단추 — 값(300 빙옥)은 단추에 한 번만(머리 · 단추에 가격이 두 번 나오지 않게, 사용자 요청)
+  const crown = (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      className="enh-anim w-3.5 h-3.5 shrink-0"
+      fill="currentColor"
+      style={unlockPop ? { animation: "numPop .8s cubic-bezier(0.16,1,0.3,1)" } : undefined}
+    >
+      <path d={CROWN} />
+    </svg>
+  );
+  const premiumChip = pass.unlocked ? (
+    <span
+      className="enh-anim relative inline-flex items-center gap-1.5 h-9 pl-3 pr-3.5 rounded-full text-[12px] font-black text-white whitespace-nowrap"
+      style={{ background: PASS_GRAD, ...(unlockPop ? { animation: "passUnlock .9s cubic-bezier(0.16,1,0.3,1)" } : {}) }}
+    >
+      {unlockPop && PASS_SPARKS.map((p, i) => (
+        <span
+          key={i}
+          aria-hidden
+          className="enh-anim absolute left-1/2 top-1/2 w-1.5 h-1.5 rounded-full pointer-events-none opacity-0"
+          style={{ background: p.c, "--dx": `${p.dx}px`, "--dy": `${p.dy}px`, animation: `sparkFly .9s ${p.delay}ms cubic-bezier(0.16,1,0.3,1) forwards` }}
+        ></span>
+      ))}
+      {crown}
+      프리미엄
+      {byBooster && <span className="text-white/70">부스터</span>}
+    </span>
+  ) : (
+    // 해금은 빙옥 전용 — XP 로 사면 이미 모은 XP 만큼 티어가 올라 있어 사자마자 전부 풀리는 구조였다
+    <button
+      type="button"
+      onClick={onUnlock}
+      disabled={!!busyKey || !!dday?.ended || (balance?.point || 0) < pointPrice}
+      className="inline-flex items-center gap-1.5 h-9 pl-3 pr-3.5 rounded-full text-[12px] font-black text-white whitespace-nowrap transition-[transform,opacity] hover:-translate-y-px disabled:hover:translate-y-0 outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-35 disabled:cursor-default"
+      style={{ background: PASS_GRAD }}
+    >
+      {crown}
+      <span><span className="hidden sm:inline">프리미엄 </span>해금</span>
+      <span aria-hidden className="w-px h-3 bg-white/35"></span>
+      <span className="tabular-nums">{fmt(pointPrice)} 빙옥</span>
+    </button>
+  );
+
+  // T7 ━━━ T8 막대 + 이번 티어 진행(작게). PC 는 링 오른쪽 칸 아래, 폰은 링 줄 아래 — 같은 것을 자리만 바꿔 그린다
+  const bar = (
+    <>
+      <div className="flex items-center">
+        <span className="shrink-0 text-[12px] font-black text-white tabular-nums">T{tierNo}</span>
+        <span className="relative flex-1 mx-3 h-2 rounded-full bg-white/10 overflow-hidden">
+          <span
+            className="absolute inset-y-0 left-0 rounded-full"
+            style={{ width: `${ringPct}%`, background: "linear-gradient(90deg, #9b6bff, #e05bb5)", transition: "width .9s cubic-bezier(0.16,1,0.3,1)" }}
+          ></span>
+        </span>
+        <span className="shrink-0 text-[12px] font-black text-white/45 tabular-nums">{nextTier ? `T${nextTier.level}` : tiers.length ? "MAX" : "—"}</span>
+      </div>
+      <p className="mt-1.5 text-right text-[11px] font-bold text-white/35 tabular-nums">
+        {nextTier ? `${fmt(Math.max(0, (pass.progress || 0) - prevNeed))} / ${fmt(nextTier.need - prevNeed)} XP` : `이번 시즌 ${fmt(pass.progress)} XP`}
+      </p>
+    </>
+  );
+  const claimNum = (n) => <span className={`ml-1.5 text-[24px] sm:text-[28px] font-black tabular-nums tracking-[-0.02em] leading-none ${n > 0 ? "text-white" : "text-white/30"}`}>{n}</span>;
 
   return (
-    <PopShell
-      open={open}
-      onClose={onClose}
-      theme="pass"
-      title="시즌 패스"
-      icon="star"
-      badge={
-        <span
-          className="min-w-0 inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[11px] font-black text-[#e4d4ff] tabular-nums truncate"
-          style={{ background: "rgba(182,156,255,0.14)", boxShadow: "inset 0 0 0 1px rgba(182,156,255,0.3)" }}
-        >
-          <span className="truncate">{seasonLabel}</span>
-          <span className="shrink-0 text-white/45">{dday?.ended ? "종료" : `D-${Math.max(0, dday?.days ?? 0)}`}</span>
-        </span>
-      }
-      tabs={
-        <>
-          <PopTab on={tab === "all"} onClick={() => { setTab("all"); onTone?.(); }} label="전체 티어" n={tiers.length} />
-          <PopTab on={tab === "claim"} onClick={() => { setTab("claim"); onTone?.(); }} label="받을 보상" n={claimable} />
-        </>
-      }
-      left={
-        <>
-          <div className="flex flex-col items-center text-center sm:pt-2">
-            <GlowRing id="passRing" from="#b69cff" to="#ff7ac6" pct={ringPct}>
-              <span className="text-[40px] font-black text-white tabular-nums tracking-[-0.03em] leading-none">T{tierNo}</span>
-              <span className="mt-1.5 text-[11px] font-bold text-white/40 tabular-nums">/ T{maxTier}</span>
-            </GlowRing>
-            <p className="mt-4 text-[12px] font-bold text-white/55 tabular-nums">
-              {pass.nextNeed > 0 ? <>T{tierNo + 1} 까지 <b className="text-white">{fmt(pass.nextNeed)} XP</b></> : "모든 티어 달성"}
-            </p>
-            <p className="mt-1.5 text-[11px] font-bold text-white/35 tabular-nums">이번 시즌 {fmt(pass.progress)} XP</p>
-          </div>
-
-          {/* 프리미엄 — 이 창에서 유일한 카드 */}
-          <div
-            className="enh-anim relative mt-7 sm:mt-auto rounded-2xl p-4"
-            style={{
-              background: "linear-gradient(135deg, rgba(182,156,255,0.2), rgba(255,122,198,0.12))",
-              boxShadow: "inset 0 0 0 1px rgba(214,180,255,0.3)",
-              ...(unlockPop ? { animation: "passUnlock .9s cubic-bezier(0.16,1,0.3,1)" } : {}),
-            }}
-          >
-            {unlockPop && PASS_SPARKS.map((p, i) => (
-              <span
-                key={i}
-                aria-hidden
-                className="enh-anim absolute left-1/2 top-1/2 w-1.5 h-1.5 rounded-full pointer-events-none opacity-0"
-                style={{ background: p.c, "--dx": `${p.dx}px`, "--dy": `${p.dy}px`, animation: `sparkFly .9s ${p.delay}ms cubic-bezier(0.16,1,0.3,1) forwards` }}
-              ></span>
-            ))}
-            <div className="flex items-center gap-2">
-              <svg
-                aria-hidden
-                viewBox="0 0 24 24"
-                className="enh-anim w-4 h-4 shrink-0 text-[#e4d4ff]"
-                fill="currentColor"
-                style={unlockPop ? { animation: "numPop .8s cubic-bezier(0.16,1,0.3,1)" } : undefined}
-              >
-                <path d={CROWN} />
-              </svg>
-              {/* 📌 잠겨 있으면 "프리미엄 해금" 제목 + 단추에 값(300 빙옥)을 바로 적는다 — 머리 · 단추에 가격이 두 번 나오지 않게(사용자 요청) */}
-              <span className="text-[13px] font-black text-white">{pass.unlocked ? "프리미엄" : "프리미엄 해금"}</span>
-              {pass.unlocked && !byBooster && (
-                <span
-                  className="ml-auto text-[12px] font-black"
-                  style={{ backgroundImage: "linear-gradient(90deg, #d9c6ff, #ff9fd6)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}
-                >
-                  해금됨
-                </span>
-              )}
-            </div>
-            {/* 📌 서버 부스터는 사지 않아도 열린다 — 해금 단추 자리에 표시만 (부스트를 멈추면 다시 잠긴다) */}
-            {byBooster && (
-              <div
-                className="mt-3 w-full h-10 rounded-full flex items-center justify-center text-[12px] font-black text-white"
-                style={{ background: "rgba(255,255,255,0.08)", boxShadow: "inset 0 0 0 1px rgba(214,180,255,0.35)" }}
-              >
-                서버 부스터 · 자동 해금
-              </div>
-            )}
-            {/* 해금은 빙옥 전용 — XP 로 사면 이미 모은 XP 만큼 티어가 올라 있어 사자마자 전부 풀리는 구조였다 */}
-            {!pass.unlocked && (
-              <button
-                type="button"
-                onClick={onUnlock}
-                disabled={!!busyKey || !!dday?.ended || (balance?.point || 0) < pointPrice}
-                className="mt-3 w-full h-10 rounded-full text-white text-[12px] font-black tabular-nums transition-opacity outline-none focus:outline-none disabled:opacity-35 disabled:cursor-default"
-                style={{ background: PASS_GRAD }}
-              >
-                {fmt(pointPrice)} 빙옥
-              </button>
-            )}
-          </div>
-          {onReset && <AdminReset onReset={onReset} busy={resetBusy} label="관리자 · 시즌 패스 초기화" />}
-        </>
-      }
+    <div
+      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
+      style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+      onClick={onClose}
     >
-      <div ref={listRef}>
-        <div className="grid items-center gap-x-3 px-2 -mx-2 pb-3" style={COLS}>
-          <span></span>
-          <span></span>
-          <span className="text-[11px] font-bold text-white/40">무료</span>
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#d9c6ff]">
-            <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="currentColor"><path d={CROWN} /></svg>
-            프리미엄
-          </span>
-          <span className="text-[11px] font-bold text-white/40 text-right">필요 XP</span>
+      {/* 📌 PC 는 내용 높이만큼(트랙 높이가 탭과 무관하게 고정이라 탭을 바꿔도 창이 그대로), 넘치면 본문이 세로로 스크롤 */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="시즌 패스"
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full sm:max-w-3xl h-[86dvh] sm:h-auto sm:max-h-[min(900px,94vh)] overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
+        style={{ background: th.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
+      >
+        <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ backgroundImage: th.dots }}></div>
+        <div aria-hidden className="absolute -top-28 -right-16 w-80 h-80 blur-[100px] rounded-full pointer-events-none" style={{ background: th.glow }}></div>
+        <div aria-hidden className="absolute -bottom-32 -left-20 w-80 h-80 blur-[110px] rounded-full pointer-events-none" style={{ background: th.glow2 }}></div>
+
+        {/* 모바일 바텀시트 손잡이 */}
+        <div aria-hidden className="sm:hidden relative z-10 flex justify-center pt-2.5"><span className="w-10 h-1 rounded-full bg-white/20"></span></div>
+
+        {/* 머리 — 눈썹 한 줄(넓게) · 제목 줄(제목 | 프리미엄 칩 · 닫기). 탭 · 상태와 무관하게 늘 같은 높이 */}
+        <div className="relative z-10 shrink-0 px-5 sm:px-7 pt-3 sm:pt-6">
+          <p className="flex items-center min-w-0 text-[11px] font-black text-white/50 whitespace-nowrap">
+            <span className="shrink-0 tracking-[0.28em]">SEASON {seasonNo}</span>
+            {seasonName && <span className="ml-1 min-w-0 truncate tracking-[0.02em]">· {seasonName}</span>}
+            <span className="shrink-0 ml-2 text-white/35 tabular-nums">{dday?.ended ? "종료" : `D-${Math.max(0, dday?.days ?? 0)}`}</span>
+          </p>
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <h3 className="min-w-0 truncate text-[26px] sm:text-[30px] font-black text-white tracking-tight leading-none">시즌 패스</h3>
+            <div className="shrink-0 flex items-center gap-2">
+              {premiumChip}
+              <button
+                ref={closeRef}
+                onClick={onClose}
+                aria-label="닫기"
+                className="shrink-0 w-9 h-9 rounded-full border border-white/15 text-white/55 hover:text-white hover:border-white/35 transition-colors flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d={ICON_PATHS.close} strokeLinecap="round" /></svg>
+              </button>
+            </div>
+          </div>
         </div>
 
-        {rows.length === 0 ? (
-          <p className="py-16 text-center text-[12px] font-bold text-white/35">지금 받을 보상이 없습니다</p>
-        ) : (
-          <div>
-            {rows.map((t, idx) => {
-              const i = tiers.indexOf(t);
-              const next = i === nextIdx;
-              return (
-                <div
-                  key={t.tid || t.level}
-                  data-next={next ? "1" : undefined}
-                  className={`relative grid items-center gap-x-3 min-h-14 py-2 px-2 -mx-2 rounded-xl ${next ? "bg-white/[0.06]" : ""}`}
-                  style={COLS}
-                >
-                  {/* 📌 티어 레일 — 줄마다 제 구간만 긋는다(-top-2 · -bottom-2 는 줄의 py-2 를 넘어 이웃 줄과 잇는 값).
-                      첫 줄은 점 중심부터 아래로, 끝 줄은 위에서 점 중심까지 — 보상이 여러 줄로 흘러 줄이 높아져도 첫 · 끝 점에서 끝난다 */}
-                  <span className="relative self-stretch flex items-center justify-center">
-                    {tab === "all" && rows.length > 1 && (
+        {/* 본문 — 요약 → 탭 → 가로 트랙을 한 번에 세로 스크롤. 폰은 탭이 위에 붙는다. 가로 넘침은 트랙 안에서만 */}
+        <div ref={bodyRef} className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.22) transparent" }}>
+          <div className="px-5 sm:px-7 pt-5 pb-4">
+            {/* 링 | 다음 티어까지 | 받을 보상 — 폰은 두 칸을 링 오른쪽에 위아래로 */}
+            <div className="flex items-center">
+              <GlowRing id="passRing" from="#b69cff" to="#ff7ac6" pct={ringPct}>
+                <span className="text-[40px] font-black text-white tabular-nums tracking-[-0.03em] leading-none">T{tierNo}</span>
+                <span className="mt-1.5 text-[11px] font-bold text-white/40 tabular-nums">/ T{maxTier}</span>
+              </GlowRing>
+              <div className="min-w-0 flex-1 ml-5 sm:ml-7">
+                <div className="flex flex-col sm:flex-row">
+                  <div className="min-w-0 sm:flex-1 sm:pl-6 sm:border-l border-white/10">
+                    <p className="text-[11px] font-bold text-white/45">다음 티어까지</p>
+                    <p className="mt-1.5 flex items-baseline min-w-0">
+                      <span className="min-w-0 truncate text-[24px] sm:text-[28px] font-black text-white tabular-nums tracking-[-0.02em] leading-none">{needV}</span>
+                      {nextTier && <span className="ml-1.5 shrink-0 text-[12px] font-bold text-white/45">XP</span>}
+                    </p>
+                  </div>
+                  <div className="min-w-0 sm:flex-1 mt-3 pt-3 border-t sm:mt-0 sm:pt-0 sm:border-t-0 sm:ml-6 sm:pl-6 sm:border-l border-white/10">
+                    <p className="text-[11px] font-bold text-white/45">받을 보상</p>
+                    <p className="mt-1.5 flex items-baseline whitespace-nowrap">
+                      <span className="text-[12px] font-bold text-white/50">무료</span>
+                      {claimNum(claimFree)}
+                      <span className="ml-4 text-[12px] font-bold text-white/50">프리미엄</span>
+                      {claimNum(claimPaid)}
+                    </p>
+                  </div>
+                </div>
+                <div className="hidden sm:block mt-5">{bar}</div>
+              </div>
+            </div>
+            <div className="sm:hidden mt-4">{bar}</div>
+
+            {/* 다음 보상 · T8 — 그 티어 보상 전부(트랙마다 최대 4개, 많으면 줄을 바꿔 다 보인다). 만렙이면 MAX */}
+            {tiers.length > 0 && (
+              <div className="mt-5">
+                <p className="text-[11px] font-bold text-white/45">
+                  다음 보상{nextTier && <span className="tabular-nums"> · T{nextTier.level}</span>}
+                </p>
+                {nextRewards.length > 0 ? (
+                  <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                    {nextRewards.map((u) => (
+                      <PassNextTile key={`${u.premium ? "paid" : "free"}:${u.r.key}`} r={u.r} premium={u.premium} locked={u.premium && !pass.unlocked} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-2.5 h-[78px] rounded-2xl flex items-center justify-center text-[13px] font-black text-white/30 tracking-[0.2em]" style={passChipBg(false)}>
+                    {nextTier ? "—" : "MAX"}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 탭 — 폰에서는 스크롤해도 위에 붙어 있다(바탕을 깔아 아래 트랙이 비치지 않게) */}
+          <div className="sticky top-0 z-20 sm:static px-5 sm:px-7 py-2.5 flex items-center gap-1.5 border-y border-white/[0.08] bg-[#1c1338] sm:bg-transparent">
+            <PopTab on={tab === "all"} onClick={() => { setTab("all"); onTone?.(); }} label="전체 티어" n={tiers.length} />
+            <PopTab on={tab === "claim"} onClick={() => { setTab("claim"); onTone?.(); }} label="받을 보상" n={claimable} />
+            {/* 관리자 테스트 초기화 — 탭 줄 오른쪽 작은 알약(따로 한 줄을 두면 PC 에서도 창에 세로 스크롤이 생겼다) */}
+            {onReset && <span className="ml-auto"><AdminReset compact onReset={onReset} busy={resetBusy} label="초기화 (관리자)" /></span>}
+          </div>
+
+          {/* 가로 트랙 — 왼쪽 줄 이름(무료 · 프리미엄)은 제자리, 티어 칸만 가로로 넘긴다(폰도 같은 모양) */}
+          <div className="flex px-5 sm:px-7 pt-4 pb-3">
+            {rows.length > 0 && (
+              <div aria-hidden className="shrink-0 mr-2 flex flex-col" style={{ width: PT.label }}>
+                <div className="shrink-0" style={{ height: PT.head + PT.line }}></div>
+                <div className="shrink-0 rounded-lg flex items-center justify-center bg-white/[0.05] text-[11px] font-black text-white/45" style={{ height: hFree }}>
+                  <span style={PASS_VERTICAL}>무료</span>
+                </div>
+                <div className="shrink-0 rounded-lg flex flex-col items-center justify-center text-[11px] font-black text-[#d9c6ff]" style={{ height: hPaid, marginTop: PT.rowGap, ...passChipBg(true) }}>
+                  <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3 mb-1.5 shrink-0" fill="currentColor"><path d={CROWN} /></svg>
+                  <span style={PASS_VERTICAL}>프리미엄</span>
+                </div>
+              </div>
+            )}
+            {/* 📌 높이는 고정(칸 높이 + 가로 스크롤바 자리) — 받을 보상 탭처럼 칸이 적어 스크롤바가 사라져도 창 높이가 그대로(PC 는 창이 가운데 정렬이라 줄면 머리 · 탭이 뜬다) */}
+            <div
+              ref={trackRef}
+              className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
+              style={{ height: colH + PT.bar, scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.22) transparent", overscrollBehaviorX: "contain" }}
+            >
+              {rows.length === 0 ? (
+                <div className="flex items-center justify-center text-[12px] font-bold text-white/35" style={{ height: colH }}>{tab === "claim" ? "지금 받을 보상이 없습니다" : "등록된 티어가 없습니다"}</div>
+              ) : (
+                <div className="relative" style={{ width: rows.length * (PT.col + PT.gap) - PT.gap, height: colH }}>
+                  {/* 진행선 — 전체 티어 탭에서만(받을 보상 탭은 띄엄띄엄이라 잇지 않는다) */}
+                  {tab === "all" && (
+                    <>
+                      <span aria-hidden className="absolute left-0 h-1 rounded-full bg-white/10" style={{ top: PT.head + PT.line / 2 - 2, width: lineW }}></span>
                       <span
                         aria-hidden
-                        className={`absolute left-1/2 -translate-x-1/2 w-px bg-white/12 ${idx === 0 ? "top-1/2" : "-top-2"} ${idx === rows.length - 1 ? "bottom-1/2" : "-bottom-2"}`}
+                        className="absolute left-0 h-1 rounded-full"
+                        style={{ top: PT.head + PT.line / 2 - 2, width: fillW, background: "linear-gradient(90deg, #9b6bff, #e05bb5)", transition: "width .9s cubic-bezier(0.16,1,0.3,1)" }}
                       ></span>
-                    )}
-                    <span
-                      className={`relative z-10 w-3 h-3 rounded-full ${t.reached ? "" : next ? "ring-2 ring-[#b69cff] bg-[#1a1233]" : "ring-1 ring-white/25 bg-[#1a1233]"}`}
-                      style={t.reached ? { background: "linear-gradient(135deg, #b69cff, #ff7ac6)" } : undefined}
-                    ></span>
-                  </span>
-                  <span className={`text-[13px] font-black tabular-nums ${t.reached || next ? "text-white" : "text-white/40"}`}>T{t.level}</span>
-                  <PassTrack track={t.free} busy={busyKey === `${t.tid}:free`} onClaim={() => onClaim(t.tid, "free")} />
-                  <PassTrack track={t.paid} premium locked={!pass.unlocked} busy={busyKey === `${t.tid}:paid`} onClaim={() => onClaim(t.tid, "paid")} />
-                  <span className={`text-[11px] font-black tabular-nums text-right ${next ? "text-[#d9c6ff]" : "text-white/30"}`}>{fmt(t.need)}</span>
+                    </>
+                  )}
+                  <div className="absolute inset-0 flex" style={{ gap: PT.gap }}>
+                    {rows.map((t) => {
+                      const next = tiers.indexOf(t) === nextIdx;
+                      return (
+                        <div
+                          key={t.tid || t.level}
+                          data-next={next ? "1" : undefined}
+                          className={`relative shrink-0 flex flex-col rounded-2xl ${next ? "bg-white/[0.06]" : ""}`}
+                          style={{ width: PT.col, height: colH, ...(next ? { boxShadow: "inset 0 0 0 1px rgba(182,156,255,0.4)" } : {}) }}
+                        >
+                          <div className="shrink-0 flex flex-col items-center justify-end" style={{ height: PT.head }}>
+                            <span className={`text-[14px] font-black tabular-nums leading-none ${t.reached || next ? "text-white" : "text-white/40"}`}>T{t.level}</span>
+                            <span className={`mt-1 text-[10px] font-bold tabular-nums leading-none ${next ? "text-[#d9c6ff]" : "text-white/30"}`}>{fmt(stepOf.get(t.tid) ?? t.need)} XP</span>
+                          </div>
+                          {/* 점 — 넘은 티어는 보라→분홍으로 채우고, 다음 티어는 빛나는 고리 */}
+                          <div className="shrink-0 flex items-center justify-center" style={{ height: PT.line }}>
+                            <span
+                              className={`rounded-full ${t.reached ? "w-3 h-3" : next ? "w-3.5 h-3.5 bg-[#1a1233]" : "w-2.5 h-2.5 ring-1 ring-white/25 bg-[#1a1233]"}`}
+                              style={t.reached ? { background: "linear-gradient(135deg, #b69cff, #ff7ac6)" } : next ? { boxShadow: "0 0 0 2px #b69cff, 0 0 12px rgba(182,156,255,0.7)" } : undefined}
+                            ></span>
+                          </div>
+                          <div className="shrink-0 px-1.5" style={{ height: hFree }}>
+                            <PassCell track={t.free} busy={busyKey === `${t.tid}:free`} onClaim={() => onClaim(t.tid, "free")} />
+                          </div>
+                          <div className="shrink-0 px-1.5" style={{ height: hPaid, marginTop: PT.rowGap }}>
+                            <PassCell track={t.paid} premium locked={!pass.unlocked} busy={busyKey === `${t.tid}:paid`} onClaim={() => onClaim(t.tid, "paid")} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              );
-            })}
+              )}
+            </div>
           </div>
-        )}
+        </div>
       </div>
-    </PopShell>
+    </div>
   );
 };
 
@@ -1891,7 +2110,7 @@ export default function LevelPage() {
 
   // 프리미엄 해금 — 되돌릴 수 없는 지출이라 한 번 확인받는다. 빙옥 전용(XP 로는 사지 않는다 — app/api/pass/unlock)
   const unlockPass = useCallback(async () => {
-    // 가격은 XP 단위로 저장된다 — 서버가 준 빙옥 값(unlockPoint), 없으면 환산값(÷1,000 올림)
+    // 가격은 XP 단위로 저장된다 — 서버가 준 빙옥 값(unlockPoint), 없으면 환산값(÷10,000 올림)
     const price = pass?.unlockPoint ?? xpToPoint(pass?.unlockPrice);
     const bal = me?.point || 0;
     const after = Math.max(0, bal - price);
@@ -1945,6 +2164,8 @@ export default function LevelPage() {
   }, [tabParam, searchParams, router, pathname]);
   const enhance = useCallback(async (kind, payMethod, expectedCost) => {
     const key = `${kind}:${payMethod}`;
+    // 📌 토스트 · 효과음도 어느 쪽 강화였는지 말한다 — "채팅 강화 +3", "음성 강화 · 보유 XP가 부족합니다."
+    const label = `${ENH_KIND[kind]?.label || ""} 강화`;
     setEnhBusy(key);
     try {
       const res = await fetch("/api/xp/enhance", {
@@ -1961,13 +2182,14 @@ export default function LevelPage() {
           chatEnhance: res.view?.chat?.level ?? m.chatEnhance,
           voiceEnhance: res.view?.voice?.level ?? m.voiceEnhance,
         } : m));
-        pushToast(res.message || "강화 완료", true);
-        sfxLevelUp();
+        const lv = res.view?.[kind]?.level;
+        pushToast(Number.isFinite(lv) ? `${label} +${lv}` : `${label} 완료`, true);
+        sfxEnhance(kind);
       } else {
-        pushToast(res?.message || "강화하지 못했습니다.");
+        pushToast(res?.message ? `${label} · ${res.message}` : `${label} 실패`);
       }
     } catch {
-      pushToast("네트워크 오류로 강화하지 못했습니다.");
+      pushToast(`${label} · 네트워크 오류`);
     }
     // 성공이든 실패든 서버 상태로 다시 맞춘 뒤 버튼을 푼다 (낡은 잔액으로 한 번 더 눌리지 않게)
     await loadMe();
@@ -2444,9 +2666,10 @@ export default function LevelPage() {
           0%   { filter: brightness(2); box-shadow: inset 0 0 0 1px rgba(214,180,255,0.7), 0 0 0 0 rgba(182,156,255,0.75); }
           100% { filter: brightness(1); box-shadow: inset 0 0 0 1px rgba(214,180,255,0.3), 0 0 0 18px rgba(182,156,255,0); }
         }
+        /* 노드 번짐 색은 고른 쪽(채팅 하늘 · 음성 라벤더) — 노드의 --nf 를 읽는다 */
         @keyframes nodeFill {
-          0%   { transform: scale(0.3); box-shadow: 0 0 0 0 rgba(255,122,74,0.8); }
-          60%  { transform: scale(1.6); box-shadow: 0 0 0 8px rgba(255,122,74,0); }
+          0%   { transform: scale(0.3); box-shadow: 0 0 0 0 var(--nf, rgba(255,122,74,0.8)); }
+          60%  { transform: scale(1.6); box-shadow: 0 0 0 8px transparent; }
           100% { transform: scale(1); }
         }
         @media (prefers-reduced-motion: reduce) { .enh-anim { animation: none !important; } }
@@ -2476,7 +2699,7 @@ export default function LevelPage() {
       `}} />
 
       <TierModal open={tierOpen} onClose={() => setTierOpen(false)} level={me?.level || 0} baseXp={P.voiceXp} intervalMin={P_voiceMin} enhanceBonus={enh.voice.bonus} />
-      <EnhanceModal open={enhModal} onClose={closeEnh} enh={enh} discount={enhDisc} balance={me} busy={!!enhBusy} onEnhance={enhance} gain={gain} voiceMin={P_voiceMin} policy={P} onTone={() => playTone(620, 0.04, "sine", 0.025)} onReset={isAdminUser ? () => resetTest("enhance") : null} resetBusy={resetBusy === "enhance"} />
+      <EnhanceModal open={enhModal} onClose={closeEnh} enh={enh} discount={enhDisc} balance={me} busy={!!enhBusy} onEnhance={enhance} gain={gain} voiceMin={P_voiceMin} policy={P} onTone={(k) => playTone(ENH_KIND[k]?.tone || 620, 0.04, "sine", 0.025)} onReset={isAdminUser ? () => resetTest("enhance") : null} resetBusy={resetBusy === "enhance"} />
       <PassModal
         open={passOpen}
         onClose={closePass}
@@ -2842,24 +3065,24 @@ export default function LevelPage() {
 
                         {/* 1회 획득 — 채팅 · 음성 · 출석. 강화 · 등급 · 역할 · 부스트 · 아이템을 다 더한 값.
                                줄 전체가 버튼 — 누르면 세부 효과 창(항목별 내역 · 아이템 효과 · 상시 효과). 표시는 출석 칸의 › 하나 */}
-                        {/* 📌 세 칸 폭은 고정 비율(채팅 1.35 : 음성 1.1 : 출석 1, 인라인 — 임의 grid-cols 는 이 빌드에서 안 먹는다)이라 값이 바뀌어도 칸이 움직이지 않는다.
-                               음성은 칸 양쪽에 여백이 있어 출석보다 조금 넓게 줘야 다섯 자리("+10,300")가 들어간다.
-                               값 글자는 스탯(18px)보다 한 단계 작게, 줄 높이는 스탯과 같은 18px(카드 높이 그대로). 실측(Inter 900, 칸 여백 8px):
-                               360 폰 14px · 375 폰부터 15px · PC 1280 부터 16px 에서 "+550~1,000 · +10,300 · +17,000XP" 가 잘리지 않는다.
-                               360 미만(카드 안쪽 240~279px)과 lg ~ xl 사이(1024~1279, 234~319px, 13px)는 라벨 아이콘 · "XP" 꼬리를 접는다(말줄임 대신) */}
+                        {/* 📌 세 칸은 똑같은 폭(1:1:1, 인라인 — 임의 grid-cols 는 이 빌드에서 안 먹는다) — 바로 위 인벤토리 · 시즌 패스 · 강화 줄과 칸이 맞는다
+                               (2026-10-01 "대칭 안 맞는 거 불편": 예전 1.35 : 1.1 : 1 은 세로선이 위 줄과 어긋났다). 값은 숫자만 — "XP" 꼬리는 뺐다(위 스탯도 숫자만).
+                               값 글자는 스탯(18px)보다 한 단계 작게, 줄 높이는 스탯과 같은 18px(카드 높이 그대로). 실측(Inter 900) "+550~1,000"이 잘리지 않는 크기:
+                               360 미만 12px · 360 폰 14px · 375 폰부터 15px · lg~xl(1024~1279, 칸 69~) 12px + 칸 여백 6px · PC 1280 부터 16px.
+                               360 미만과 lg ~ xl 사이는 라벨 아이콘을 접는다(말줄임 대신) */}
                         <button
                           type="button"
                           onClick={openFx}
                           aria-haspopup="dialog"
                           className={`${deskOverview ? "grid" : "hidden lg:grid"} group w-full text-left border-t border-white/10 outline-none focus-visible:ring-2 focus-visible:ring-white/40`}
-                          style={{ gridTemplateColumns: "minmax(0,1.35fr) minmax(0,1.1fr) minmax(0,1fr)" }}
+                          style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
                         >
                           {[
                             { icon: "chat", l: "채팅 1회", v: `+${gain.chatLo.toLocaleString()}~${gain.chatHi.toLocaleString()}` },
                             { icon: "mic", l: `음성 ${P_voiceMin}분`, v: `+${gain.voice.toLocaleString()}` },
                             { icon: "calendar", l: "출석", v: `+${gain.attend.toLocaleString()}` },
                           ].map((g, i) => (
-                            <span key={g.icon} className={`block min-w-0 py-3 ${i === 0 ? "pr-2 border-r border-white/10" : i === 1 ? "px-2 border-r border-white/10" : "pl-2"}`}>
+                            <span key={g.icon} className={`block min-w-0 py-3 ${i === 0 ? "pr-2 lg:max-xl:pr-1.5 border-r border-white/10" : i === 1 ? "px-2 lg:max-xl:px-1.5 border-r border-white/10" : "pl-2 lg:max-xl:pl-1.5"}`}>
                               <span className="flex items-center gap-1.5 text-[11px] font-bold text-white/45 group-hover:text-white/70 transition-colors mb-2">
                                 <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0 max-[360px]:hidden lg:max-xl:hidden" fill="none" stroke="currentColor" strokeWidth="1.9">
                                   <path d={ICON_PATHS[g.icon]} strokeLinecap="round" strokeLinejoin="round" />
@@ -2871,8 +3094,8 @@ export default function LevelPage() {
                                   </svg>
                                 )}
                               </span>
-                              <span className="block text-[14px] min-[375px]:text-[15px] lg:text-[13px] xl:text-base font-black text-white tabular-nums tracking-tight leading-[18px] truncate">
-                                {g.v}<span className="text-[10px] text-white/40 ml-0.5 leading-none max-[360px]:hidden lg:max-xl:hidden">XP</span>
+                              <span className="block text-[12px] min-[360px]:text-[14px] min-[375px]:text-[15px] lg:text-[12px] xl:text-base font-black text-white tabular-nums tracking-tight leading-[18px] truncate">
+                                {g.v}
                               </span>
                             </span>
                           ))}

@@ -84,10 +84,21 @@ type Props = {
 };
 
 export default function BannerSlider({ banners, bannerIdx, setBannerIdx, bannerRatio, fitRatio, isAdmin }: Props) {
-  // 📌 모바일 배너 — 보이는 배너가 전부 모바일 이미지를 가졌을 때만 바꿔 건다(한 장이라도 없으면 오늘처럼 PC 이미지).
+  // 📌 모바일 배너 — 폰에서는 모바일 이미지가 있는 배너만 돈다(2026-10-01 "모바일에서 모바일 배너 적용이 안 된다":
+  //    예전엔 한 장이라도 모바일 이미지가 없으면 전부 PC 이미지로 돌아가, 배너 하나 때문에 다 PC 로 보였다).
+  //    모바일 이미지가 하나도 없으면 PC 이미지 그대로(4:1 이미지를 폰 틀에 억지로 넣으면 위아래가 크게 비거나 잘린다).
   //    틀 비율은 PC(fitRatio)와 같은 규칙 — 불러온 모바일 이미지 중 가장 넓은 비율에 맞춰 어느 것도 좌우가 잘리지 않게.
   const narrow = useNarrow();
-  const mobileArt = narrow && banners.length > 0 && banners.every(hasMobileArt);
+  const mobileArt = narrow && banners.some(hasMobileArt);
+  // 보여 줄 배너인가 — 폰(모바일 이미지 모드)에서는 모바일 이미지가 있는 것만
+  const shows = (b: any) => !mobileArt || hasMobileArt(b);
+  const shownCount = banners.filter(shows).length;
+  // 자동 넘김(useBanners)은 전체 목록 기준이라, 폰에서 안 보이는 배너 차례가 오면 다음 보이는 배너로 바로 넘긴다
+  useEffect(() => {
+    if (!mobileArt || !banners[bannerIdx] || shows(banners[bannerIdx])) return;
+    const next = banners.findIndex((b, i) => i > bannerIdx && shows(b));
+    setBannerIdx(next >= 0 ? next : banners.findIndex(shows));
+  }, [mobileArt, bannerIdx, banners]); // eslint-disable-line react-hooks/exhaustive-deps
   const [mRatios, setMRatios] = useState<Record<string, number>>({}); // 이미지 주소 → 실제 비율
   const fitMobile = (url: string, img: HTMLImageElement) => {
     const r = img.naturalWidth / img.naturalHeight;
@@ -109,6 +120,7 @@ export default function BannerSlider({ banners, bannerIdx, setBannerIdx, bannerR
       <div className="relative overflow-hidden bg-[#f2f2f2]">
         <div className="relative" style={{ aspectRatio: String(mobileArt ? mRatio : bannerRatio) }}>
           {banners.map((b, i) => {
+            if (!shows(b)) return null;
             const mUrl = String(b.mobileImageUrl || "").trim();
             const inner = (
               <>
@@ -133,9 +145,9 @@ export default function BannerSlider({ banners, bannerIdx, setBannerIdx, bannerR
             );
           })}
         </div>
-        {banners.length > 1 && (
+        {shownCount > 1 && (
           <div className="absolute bottom-4 right-5 flex gap-1.5 z-10">
-            {banners.map((b, i) => (
+            {banners.map((b, i) => !shows(b) ? null : (
               <button key={b._id} onClick={() => setBannerIdx(i)} aria-label={`배너 ${i + 1}`}
                 className={`h-1.5 rounded-full transition-all duration-300 ${i === bannerIdx ? "w-6 bg-white" : "w-1.5 bg-white/50 hover:bg-white/80"}`}></button>
             ))}

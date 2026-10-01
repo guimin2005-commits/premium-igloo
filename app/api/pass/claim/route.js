@@ -184,19 +184,23 @@ export async function POST(request) {
     const point = (await UserXp.findOne({ userId }, { point: 1 }).lean())?.point ?? 0;
 
     const queued = granted.some((x) => x.g.queued);
+    // 📌 기간제 아이템을 이미 무기한으로 가진 경우(grantReward 의 kept) — 새 건 없이 받은 것으로 친다(상점 1인 1개와 같은 판단).
+    //    아무것도 늘지 않아 보이므로 이유를 한 줄 붙인다
+    const keptNote = granted.some((x) => x.g.kept) ? " 무기한으로 보유 중인 아이템은 기간이 더해지지 않습니다." : "";
     const message = failed.length
-      ? `보상 ${todo.length}개 중 ${granted.length}개를 받았습니다. 나머지는 잠시 후 다시 받아 주세요.`
+      ? `보상 ${todo.length}개 중 ${granted.length}개를 받았습니다. 나머지는 잠시 후 다시 받아 주세요.${keptNote}`
       : granted.length === 1
         ? queued
           ? `${granted[0].r.label} 보상을 예약했습니다. 잠시 후 자동으로 지급됩니다.`
-          : `${granted[0].r.label} 보상을 받았습니다.`
-        : `T${row.level} ${trackName} 보상 ${granted.length}개를 받았습니다.${queued ? " 일부는 잠시 후 지급됩니다." : ""}`;
+          : `${granted[0].r.label} 보상을 받았습니다.${keptNote}`
+        : `T${row.level} ${trackName} 보상 ${granted.length}개를 받았습니다.${queued ? " 일부는 잠시 후 지급됩니다." : ""}${keptNote}`;
 
     return NextResponse.json({
       success: true,
       partial: failed.length > 0,
       message,
-      rewards: granted.map((x) => ({ kind: x.r.kind, amount: x.r.amount, label: x.r.label })),
+      // days — 아이템 기간(0 = 무기한). label 에도 " · 7일" 로 붙어 있다
+      rewards: granted.map((x) => ({ kind: x.r.kind, amount: x.r.amount, days: x.r.days || 0, label: x.r.label })),
       point,
     });
   } catch (e) {

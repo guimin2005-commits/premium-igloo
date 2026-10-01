@@ -1850,6 +1850,8 @@ export default function AdminShopPage() {
                 <Field label={<>모바일 이미지 URL<Opt /></>}>
                   <input type="text" value={bannerForm.mobileImageUrl} onChange={(e) => setBannerForm({ ...bannerForm, mobileImageUrl: e.target.value })}
                     placeholder="https://..." className={inputClass} />
+                  {/* 📌 폰에서는 모바일 이미지가 있는 배너만 돈다(하나도 없으면 PC 이미지) — app/arctic/BannerSlider.tsx */}
+                  <p className={fieldNote}>권장 <span className="font-bold tabular-nums">1080 × 720 px</span> (3:2) · 비우면 폰에서는 이 배너가 빠집니다</p>
                   {mBannerSize && (() => {
                     const ratio = mBannerSize.w / mBannerSize.h;
                     const tooSmall = mBannerSize.w < 750;

@@ -47,7 +47,8 @@ import {
 //      · 결과는 알림 모달 대신 토스트 + 효과음 — Enter 로 연달아 고칠 때 모달을 닫느라 손이 멈추지 않게
 
 type RewardKind = "xp" | "point" | "role" | "item";
-type Reward = { kind: RewardKind; amount: number; roleId: string; roleName: string; itemId: string; itemName: string };
+// 📌 days — 아이템 보상의 기간(일). 0 = 무기한, 아이템이 아닌 보상은 늘 0 (서버 lib/seasonPass.js normalizeReward 와 같은 모양)
+type Reward = { kind: RewardKind; amount: number; roleId: string; roleName: string; itemId: string; itemName: string; days: number };
 // 📌 tid — 서버가 발급하는 티어 고유 식별자("t7"). 유저 수령 기록이 이 값으로 남으므로
 //    편집 · 정렬 · 삭제 어느 경로에서도 잃어버리면 안 된다 (잃으면 서버가 새 tid 를 발급해
 //    이미 받은 티어가 미수령으로 되살아난다). 새로 만든 티어만 빈 문자열로 보내 서버가 발급하게 한다.
@@ -55,7 +56,8 @@ type Reward = { kind: RewardKind; amount: number; roleId: string; roleName: stri
 type Tier = { key: string; tid: string; level: number; need: number; free: Reward[]; paid: Reward[] };
 // 상세 칸에서는 숫자 칸을 비울 수 있어야 해서 문자열로 들고 있다가 저장할 때 숫자로 바꾼다
 //    key 는 보상 줄의 로컬 키(순서 바꾸기 · 삭제 뒤에도 입력칸이 제 줄을 따라가게) — 서버로 보내지 않는다
-type DraftReward = { key: string; kind: RewardKind; amount: string; roleId: string; roleName: string; itemId: string; itemName: string };
+//    days 는 기간 칸 글자 — "" 이면 무기한
+type DraftReward = { key: string; kind: RewardKind; amount: string; roleId: string; roleName: string; itemId: string; itemName: string; days: string };
 // 📌 초안은 티어를 번호가 아니라 key 로 가리킨다 — 편집 칸이 열린 채 정렬 · 삭제 · 표 안 편집이 일어나도 같은 티어를 따라간다
 type Draft = { key: string; need: string; free: DraftReward[]; paid: DraftReward[] };
 // 필요 XP 일괄 설정 칸 — add: 고정 증가(XP) / pct: 비율 증가(%). 두 값을 따로 들고 있어 방식을 바꿔도 입력이 남는다
@@ -73,6 +75,8 @@ const MAX_REWARDS = 4;
 const MAX_TIERS = 100;
 // 서버가 숫자를 10억에서 자른다 (lib/seasonPass.js num 의 max) — 넘는 값은 조용히 깎이지 않게 화면에서 막는다
 const MAX_NUM = 1_000_000_000;
+// 아이템 보상 기간 상한(일) — lib/seasonPass.js 의 MAX_REWARD_DAYS 와 같아야 한다(넘으면 서버가 저장을 돌려보낸다)
+const MAX_DAYS = 3650;
 
 const KIND_OPTIONS: { v: RewardKind; l: string }[] = [
   { v: "xp", l: "XP" },
@@ -245,6 +249,8 @@ const normReward = (r: any): Reward | null =>
         roleName: r?.roleName || "",
         itemId: r?.itemId || "",
         itemName: r?.itemName || "",
+        // 옛 데이터(칸 없음)는 0 = 무기한. 키 순서는 fromDraft 와 같게 맨 뒤 — 지문(sig) 비교가 글자 비교라서
+        days: r.kind === "item" ? Math.min(MAX_DAYS, toInt(r?.days)) : 0,
       }
     : null;
 
@@ -261,7 +267,7 @@ const rewardLabel = (r: Reward, roleNameOf: (id: string) => string, itemOf: (id:
   if (r.kind === "role") return `역할 · ${roleNameOf(r.roleId) || r.roleName || "미지정"}`;
   if (r.kind === "item") {
     const it = itemOf(r.itemId);
-    return `아이템 · ${it?.name || r.itemName || "미지정"}`;
+    return `아이템 · ${it?.name || r.itemName || "미지정"}${r.days > 0 ? ` · ${r.days.toLocaleString()}일` : ""}`;
   }
   return "-";
 };
@@ -270,6 +276,7 @@ const listLabel = (list: Reward[], roleNameOf: (id: string) => string, itemOf: (
   list.length ? list.map((r) => rewardLabel(r, roleNameOf, itemOf)).join(" · ") : "없음";
 
 // 저장 여부를 비교할 지문 — 서버로 나가는 값만 담는다 (로컬 전용 key 는 빼야 헛된 "변경됨"이 안 뜬다)
+//    보상의 아이템 기간(days)도 free · paid 안에 들어 있어, 기간만 바꿔도 저장 줄이 뜬다
 const sig = (enabled: boolean, price: number, list: Tier[]) =>
   JSON.stringify({
     enabled,
@@ -485,20 +492,53 @@ function RewardFields({
       />
     );
   }
+  // 📌 아이템 + 기간 — 기간 칸은 폭 고정(아이템을 고르든 말든 늘 같은 자리)이라 줄이 움직이지 않는다.
+  //    비우면 무기한, 숫자면 그 일수(1 ~ 3,650). 실물(기프트카드)은 기간이 없어 잠근다. Enter 는 수량 칸처럼 저장
+  const picked = items.find((it) => it._id === value.itemId);
+  const noDays = picked?.type === "physical";
   return (
-    <Dropdown
-      theme="light"
-      value={value.itemId}
-      placeholder={items.length ? "지급할 아이템을 선택하세요" : "등록된 아이템이 없습니다"}
-      buttonClassName={DROPDOWN_BTN}
-      onChange={(v) => onChange({ ...value, itemId: v, itemName: items.find((it: any) => it._id === v)?.name || "" })}
-      options={items.map((it: any) => ({
-        value: it._id,
-        label: it.name,
-        hint: itemTypeLabel(it.type),
-        icon: <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.type} size={18} color={it.color || itemTypeColor(it.type)} />,
-      }))}
-    />
+    <div className="flex items-center gap-2">
+      <div className="min-w-0 flex-1">
+        <Dropdown
+          theme="light"
+          value={value.itemId}
+          placeholder={items.length ? "지급할 아이템을 선택하세요" : "등록된 아이템이 없습니다"}
+          buttonClassName={DROPDOWN_BTN}
+          onChange={(v) => {
+            const it = items.find((x) => x._id === v);
+            onChange({ ...value, itemId: v, itemName: it?.name || "", days: it?.type === "physical" ? "" : value.days });
+          }}
+          options={items.map((it: any) => ({
+            value: it._id,
+            label: it.name,
+            hint: itemTypeLabel(it.type),
+            icon: <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.type} size={18} color={it.color || itemTypeColor(it.type)} />,
+          }))}
+        />
+      </div>
+      <span className="relative shrink-0 w-[104px]">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={noDays ? "" : value.days}
+          disabled={noDays}
+          // 숫자만 — "7일" 을 쳐도 7. 0 은 무기한(빈칸)과 같다
+          onChange={(e) => onChange({ ...value, days: e.target.value.replace(/\D/g, "").replace(/^0+/, "").slice(0, 4) })}
+          onKeyDown={(e) => enterKey(e, onEnter)}
+          placeholder="무기한"
+          aria-label={`${title} 기간(일)`}
+          className={`${inputClass} !pr-8 text-right tabular-nums`}
+        />
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-[#8a8a8a] ${
+            value.days && !noDays ? "" : "invisible"
+          }`}
+        >
+          일
+        </span>
+      </span>
+    </div>
   );
 }
 
@@ -539,7 +579,7 @@ function TrackEditor({
   };
   const add = () => {
     if (rows.length >= MAX_REWARDS) return;
-    onChange([...rows, { key: nextKey(), kind: "xp", amount: "", roleId: "", roleName: "", itemId: "", itemName: "" }]);
+    onChange([...rows, { key: nextKey(), kind: "xp", amount: "", roleId: "", roleName: "", itemId: "", itemName: "", days: "" }]);
   };
   return (
     <div className="mt-5 pt-5 border-t border-[#ededed]">
@@ -1045,6 +1085,7 @@ export default function AdminPassPage() {
       roleName: r.roleName,
       itemId: r.itemId,
       itemName: r.itemName,
+      days: r.days > 0 ? String(r.days) : "",
     });
     setBulk(null);
     setPaneErr("");
@@ -1075,6 +1116,7 @@ export default function AdminPassPage() {
         const at = list.length > 1 ? `${who} 보상 ${j + 1}` : `${who} 보상`;
         if (d.kind === "role" && !d.roleId) return fail(`${at}의 역할을 선택해 주세요.`, "pane");
         if (d.kind === "item" && !d.itemId) return fail(`${at}의 아이템을 선택해 주세요.`, "pane");
+        if (d.kind === "item" && toInt(d.days) > MAX_DAYS) return fail(`${at}의 기간은 ${MAX_DAYS.toLocaleString()}일 이하로 입력해 주세요.`, "pane");
         if (d.kind === "xp" || d.kind === "point") {
           const a = parseAmount(d.amount);
           if (!Number.isFinite(a) || a < 1) return fail(`${at}의 수량을 1 이상으로 입력해 주세요.`, "pane");
@@ -1090,6 +1132,8 @@ export default function AdminPassPage() {
       roleName: d.kind === "role" ? roleNameOf(d.roleId) || d.roleName : "",
       itemId: d.kind === "item" ? d.itemId : "",
       itemName: d.kind === "item" ? itemOf(d.itemId)?.name || d.itemName : "",
+      // 빈칸 = 무기한(0). 실물은 기간이 없다(칸도 잠겨 있다) — 키 순서는 normReward 와 같게 맨 뒤
+      days: d.kind === "item" && itemOf(d.itemId)?.type !== "physical" ? toInt(d.days) : 0,
     });
     // need 칸 = 이 티어의 필요량 — 누적은 withStep 이 다시 맞춘다(뒤 티어 필요량은 그대로)
     const stepped = withStep(tiers, draft.key, need);

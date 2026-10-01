@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 // 📌 시즌 패스 설정 — 관리자가 등록하는 단일 문서(key: "main"). BotSetting 과 같은 방식.
 //    진행도는 새 재화가 아니라 "이번 시즌에 번 XP"(UserXp.xp - passBaseXp)를 그대로 쓴다.
 //    보상 kind — xp(봇 Payout 큐로 지급) | point(사이트가 직접 지급) | role(봇 Purchase 큐로 역할 지급)
-//                | item(아이템 등록의 아이템 — Purchase 로 인벤토리에 들어가고, 역할이 있으면 봇이 붙인다)
+//                | item(아이템 등록의 아이템 — Purchase 로 인벤토리에 들어가고, 역할이 있으면 봇이 붙인다. days > 0 이면 기간제)
 //    📌 티어의 무료 · 프리미엄 칸은 각각 보상 목록이다(트랙당 최대 4개 — lib/seasonPass.js 의 MAX_REWARDS). 빈 보상(none)은 저장하지 않는다.
 //       2026-09 이전 문서는 칸 하나가 보상 객체 하나였다 — 읽는 쪽(normalizeTiers)이 [객체] 로 읽는다(none 이면 []).
 //       그래서 이 문서는 늘 .lean() 으로 읽고 normalizeTiers 를 거친다(스키마로 되살려 쓰지 않는다).
@@ -15,6 +15,9 @@ const RewardSchema = new mongoose.Schema(
     roleName: { type: String, default: "" }, // 표시용 (역할 이름이 바뀌어도 라벨은 남게)
     itemId: { type: String, default: "" },   // item 일 때 지급할 아이템(models/Item)
     itemName: { type: String, default: "" }, // 표시용 스냅샷
+    // 📌 item 일 때 기간(일) — 0 = 무기한(옛 문서는 칸이 없어 0 으로 읽는다). 상한은 lib/seasonPass.js 의 MAX_REWARD_DAYS.
+    //    수령하면 상점 기간제 구매와 같은 Purchase(days · expiresAt · renewOf · startsAt)가 생기고, 만료는 봇이 회수한다
+    days: { type: Number, default: 0 },
   },
   { _id: false } // 티어에 박히는 값일 뿐이라 개별 id 를 만들지 않는다
 );

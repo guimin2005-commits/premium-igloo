@@ -22,13 +22,19 @@ const SeasonPass =
 const REWARD_KINDS = ["none", "xp", "point", "role", "item"];
 const MAX_TIERS = 100;
 const MAX_REWARDS = 4; // lib/seasonPass.js 의 MAX_REWARDS 와 같아야 한다
-const NEXT_REWARD_SHOW = 3; // "다음 보상" 에 이름을 적는 개수 — 넘으면 "외 N개"
-const PASS_CARD_SHOW = 4; // 이미지 카드의 다음 보상 칸 수 — botCards.js PASS_SHOW 와 같다
+const MAX_REWARD_DAYS = 3650; // 📌 아이템 보상 기간 상한(일) — lib/seasonPass.js 와 같아야 한다
+const PASS_CARD_MAX = MAX_REWARDS * 2; // 📌 이미지 카드의 다음 보상 칸 최대 — 한 티어의 무료 + 프리미엄 전부. botCards.js PASS_MAX 와 같다
 
 const num = (v, { min = 0, max = 1_000_000_000 } = {}) => {
   const n = Number(v);
   if (!Number.isFinite(n)) return min;
   return Math.min(max, Math.max(min, Math.floor(n)));
+};
+
+// 아이템 보상 기간 꼬리 — " · 7일"(0 = 무기한이면 없음). lib/seasonPass.js daysTail 과 같다
+const daysTail = (r) => {
+  const days = r?.kind === "item" ? num(r?.days, { max: MAX_REWARD_DAYS }) : 0;
+  return days > 0 ? ` · ${days.toLocaleString("ko-KR")}일` : "";
 };
 
 // 짧은 라벨 — lib/seasonPass.js 의 rewardShort 와 같아야 한다
@@ -37,28 +43,28 @@ const rewardShort = (r) => {
   if (r?.kind === "xp") return `${amount.toLocaleString("ko-KR")} XP`;
   if (r?.kind === "point") return `${amount.toLocaleString("ko-KR")} 빙옥`;
   if (r?.kind === "role") return r?.roleName || "역할";
-  if (r?.kind === "item") return r?.itemName || "아이템";
+  if (r?.kind === "item") return `${r?.itemName || "아이템"}${daysTail(r)}`;
   return "-";
 };
 
-const blankReward = () => ({ kind: "none", amount: 0, roleId: "", roleName: "", itemId: "", itemName: "" });
+const blankReward = () => ({ kind: "none", amount: 0, roleId: "", roleName: "", itemId: "", itemName: "", days: 0 });
 
 const normalizeReward = (r) => {
   const kind = REWARD_KINDS.includes(r?.kind) ? r.kind : "none";
   if (kind === "role") {
     const roleId = String(r?.roleId || "").trim();
     if (!roleId) return blankReward();
-    return { kind, amount: 0, roleId, roleName: String(r?.roleName || "").trim(), itemId: "", itemName: "" };
+    return { kind, amount: 0, roleId, roleName: String(r?.roleName || "").trim(), itemId: "", itemName: "", days: 0 };
   }
   if (kind === "item") {
     const itemId = String(r?.itemId || "").trim();
     if (!itemId) return blankReward();
-    return { kind, amount: 0, roleId: "", roleName: "", itemId, itemName: String(r?.itemName || "").trim() };
+    return { kind, amount: 0, roleId: "", roleName: "", itemId, itemName: String(r?.itemName || "").trim(), days: num(r?.days, { max: MAX_REWARD_DAYS }) };
   }
   if (kind === "xp" || kind === "point") {
     const amount = num(r?.amount);
     if (amount <= 0) return blankReward();
-    return { kind, amount, roleId: "", roleName: "", itemId: "", itemName: "" };
+    return { kind, amount, roleId: "", roleName: "", itemId: "", itemName: "", days: 0 };
   }
   return blankReward();
 };
@@ -212,35 +218,26 @@ export async function passView(userId, member = null) {
   const nextTier = tiers[tierIndex + 1];
   const ratio = nextTier ? (progress - prevNeed) / Math.max(1, nextTier.need - prevNeed) : tiers.length ? 1 : 0;
 
-  // 다음 보상 — 아직 못 넘은 티어 중 보상이 있는 첫 티어. 무료 → 프리미엄 순으로 " · " 로 잇고,
-  //    프리미엄 첫 보상 앞에 "프리미엄" 을 붙인다. NEXT_REWARD_SHOW 개가 넘으면 "외 N개"
-  let nextReward = "";
-  for (let i = tierIndex + 1; i < tiers.length && !nextReward; i++) {
-    const t = tiers[i];
-    const parts = [...t.free.map(rewardShort), ...t.paid.map((r, j) => (j === 0 ? `프리미엄 ${rewardShort(r)}` : rewardShort(r)))];
-    if (!parts.length) continue;
-    const rest = parts.length - NEXT_REWARD_SHOW;
-    nextReward = `T${t.level} · ${parts.slice(0, NEXT_REWARD_SHOW).join(" · ")}${rest > 0 ? ` 외 ${rest}개` : ""}`;
-  }
+  // 📌 다음 보상 — 지금 향해 가는 티어(nextTier) 하나의 보상 전부. 무료 → 프리미엄 순으로 " · " 로 잇고
+  //    프리미엄 첫 보상 앞에 "프리미엄" 을 붙인다. 접지 않는다("외 N개" 없음). 그 티어에 보상이 없거나 다 넘었으면 빈 글자
+  const nextParts = nextTier
+    ? [...nextTier.free.map(rewardShort), ...nextTier.paid.map((r, j) => (j === 0 ? `프리미엄 ${rewardShort(r)}` : rewardShort(r)))]
+    : [];
+  const nextReward = nextParts.length ? `T${nextTier.level} · ${nextParts.join(" · ")}` : "";
 
-  // 다음 보상 칸 — 아직 못 넘은 티어부터 티어마다 무료 → 프리미엄 순으로 PASS_CARD_SHOW 개 (이미지 카드)
-  const upcoming = [];
-  for (let i = tierIndex + 1; i < tiers.length && upcoming.length < PASS_CARD_SHOW; i++) {
-    const t = tiers[i];
-    for (const [list, premium] of [[t.free, false], [t.paid, true]]) {
-      for (const r of list) {
-        if (upcoming.length >= PASS_CARD_SHOW) break;
-        upcoming.push({
-          tier: t.level,
+  // 📌 다음 보상 칸 — 같은 티어의 무료 → 프리미엄 전부(트랙마다 최대 MAX_REWARDS, 합쳐 PASS_CARD_MAX) (이미지 카드)
+  const upcoming = nextTier
+    ? [...nextTier.free.map((r) => [r, false]), ...nextTier.paid.map((r) => [r, true])]
+        .slice(0, PASS_CARD_MAX)
+        .map(([r, premium]) => ({
+          tier: nextTier.level,
           kind: r.kind,
           amount: r.amount,
-          label: r.kind === "role" ? r.roleName : r.kind === "item" ? r.itemName : "",
+          label: r.kind === "role" ? r.roleName : r.kind === "item" ? `${r.itemName}${daysTail(r)}` : "",
           itemId: r.itemId,
           premium,
-        });
-      }
-    }
-  }
+        }))
+    : [];
 
   return {
     enabled: true,
@@ -258,6 +255,7 @@ export async function passView(userId, member = null) {
     need: nextTier ? Math.max(0, nextTier.need - progress) : 0,
     claimFree,
     claimPaid,
+    nextTier: nextTier ? nextTier.level : 0, // 다음 보상 티어 — 다 넘었으면 0
     upcoming,
   };
 }
@@ -291,6 +289,7 @@ export async function passCardData(v, cards) {
     claimFree: v.claimFree,
     claimPaid: v.claimPaid,
     premium: !!v.premiumBy,
+    nextTier: v.nextTier,
     next,
   };
 }

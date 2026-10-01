@@ -52,6 +52,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { title: "상점 관리", href: "/admin/shop", icon: ICON_PATHS.bag, match: (p, tab) => p === "/admin/shop" && tab !== "orders" },
       { title: "구매 내역", href: "/admin/shop?tab=orders", icon: ICON_PATHS.receipt, match: (p, tab) => p === "/admin/shop" && tab === "orders" },
+      // 📌 지난 시즌 디스코드 역할 → 인벤토리 아이템 (app/api/admin/role-migration)
+      { title: "역할 이전", href: "/admin/role-migration", icon: ICON_PATHS.arrowRight, match: (p) => p === "/admin/role-migration" },
     ],
   },
 ];

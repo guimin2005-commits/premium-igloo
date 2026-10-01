@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { denyIfNotAdmin } from "@/lib/apiAuth";
-import { normalizeTiers, DEFAULT_UNLOCK_PRICE } from "@/lib/seasonPass";
+import { normalizeTiers, DEFAULT_UNLOCK_PRICE, MAX_REWARD_DAYS } from "@/lib/seasonPass";
 import SeasonPass from "@/models/SeasonPass";
 
 // 저장한 문서를 화면이 그대로 다시 그릴 수 있는 모양으로 (계약: { enabled, unlockPrice, tiers })
@@ -57,6 +57,11 @@ export async function PUT(request) {
     const $set = { updatedAt: new Date() };
     if (Array.isArray(b?.tiers)) {
       // 칸마다 빈 보상은 빼고 최대 4개까지만 남는다 (normalizeTiers → rewardsOf)
+      // 📌 아이템 기간(days) — 0 = 무기한, 아이템이 아닌 보상은 늘 0. 소수 · 음수는 normalizeTiers 가 0 이상 정수로 고치고,
+      //    상한(MAX_REWARD_DAYS)을 넘는 값은 조용히 깎지 않고 돌려보낸다(화면도 저장 전에 먼저 막는다)
+      if (b.tiers.some((t) => [t?.free, t?.paid].flat().some((r) => r?.kind === "item" && Number(r?.days) > MAX_REWARD_DAYS))) {
+        return NextResponse.json({ success: false, message: `아이템 기간은 ${MAX_REWARD_DAYS.toLocaleString()}일 이하로 입력해 주세요.` }, { status: 400 });
+      }
       const n = normalizeTiers(b.tiers, cur?.nextTid);
       $set.tiers = n.tiers;
       // 발급된 번호를 함께 저장해야 다음 저장 때 같은 tid 를 다시 내주지 않는다

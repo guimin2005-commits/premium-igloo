@@ -137,7 +137,8 @@ export const PopTab = ({ on, onClick, label, n }) => (
 );
 
 // 📌 관리자 테스트 초기화 버튼 — 한 번 누르면 확인 문구로 바뀌고, 3초 안에 한 번 더 누르면 실행한다
-export const AdminReset = ({ onReset, busy, label }) => {
+//    compact: 탭 줄 오른쪽에 붙는 작은 알약(시즌 패스 창 — 아래 따로 한 줄을 두면 창에 세로 스크롤이 생겼다)
+export const AdminReset = ({ onReset, busy, label, compact = false }) => {
   const [armed, setArmed] = useState(false);
   useEffect(() => {
     if (!armed) return;
@@ -149,7 +150,7 @@ export const AdminReset = ({ onReset, busy, label }) => {
       type="button"
       disabled={busy}
       onClick={() => { if (!armed) { setArmed(true); return; } setArmed(false); onReset(); }}
-      className={`mt-3 w-full h-9 shrink-0 rounded-full text-[11px] font-black transition-colors outline-none focus:outline-none disabled:opacity-40 ${
+      className={`${compact ? "h-7 px-3 whitespace-nowrap" : "mt-3 w-full h-9"} shrink-0 rounded-full text-[11px] font-black transition-colors outline-none focus:outline-none disabled:opacity-40 ${
         armed ? "bg-white text-[#131313]" : "border border-dashed border-white/20 text-white/50 hover:text-white hover:border-white/40"
       }`}
     >
