@@ -722,7 +722,8 @@ export function DetailPane({
           <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">{children}</div>
+      {/* 📌 스크롤바 자리를 늘 잡는다 — 내용이 길어져 스크롤바가 생기면 폭이 줄어 탭 줄 · 칸이 옆으로 밀리던 것(인라인: 이 빌드는 임의 값 클래스 일부가 안 먹는다) */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4" style={{ scrollbarGutter: "stable" }}>{children}</div>
       {footer && <div className="shrink-0 border-t border-[#ededed] px-5 py-3.5 flex flex-wrap items-center gap-2">{footer}</div>}
     </>
   );

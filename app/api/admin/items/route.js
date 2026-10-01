@@ -6,7 +6,7 @@ import { denyIfNotAdmin } from "@/lib/apiAuth";
 import mongoose from "mongoose";
 import { normalizeItemPayload, itemSnapshot } from "@/lib/items";
 import { normalizeEffects, hasConsumable } from "@/lib/itemEffects";
-import { unitSaleAllowed } from "@/lib/unitSale";
+import { unitSaleAllowed, unitThingSet } from "@/lib/unitSale";
 import Item from "@/models/Item";
 import ShopItem from "@/models/ShopItem";
 import SeasonPass from "@/models/SeasonPass";
@@ -63,18 +63,19 @@ export async function GET(request) {
     if (deny) return deny;
     await connectToDatabase();
     const withUsage = new URL(request.url).searchParams.get("withUsage") === "1";
-    const [rows, unitLinked] = await Promise.all([
+    const [rows, linkedShops] = await Promise.all([
       Item.find({}).sort({ sortOrder: 1, createdAt: 1 }).lean(),
-      ShopItem.distinct("itemId", { unitSale: true, itemId: { $ne: "" } }),
+      ShopItem.find({ itemId: { $ne: "" } }, { type: 1, roleId: 1, itemId: 1, unitSale: 1, durations: 1 }).lean(),
     ]);
-    const unitSet = new Set(unitLinked.map(String));
+    // 📌 여러 개 지급할 수 있는 아이템인가(수동 지급의 수량 칸) — 수동 지급 API(app/api/admin/items/grant POST)와 같은 판정:
+    //    unitThingSet(이 아이템을 가리키는 상품들, [아이템]).has("i:<id>") — 1개 단위로 파는 상품이 가리키거나 역할 없는 소모형.
+    //    인벤토리 ×N 묶음(lib/unitSale.js)과 같은 키. 효과 모양을 바꾸기 전(attachEffects 앞)에 본다
+    const units = unitThingSet(linkedShops, rows);
 
     // 효과 — 아이템 문서에 든 값을 화면 모양(effects 객체)으로 바꿔 붙인다
     for (const r of rows) {
+      r.stackable = units.has(`i:${r._id}`);
       attachEffects(r);
-      // 📌 여러 개 지급할 수 있는 아이템인가(수동 지급의 수량 칸) — 역할 없는 아이템 · 꾸미기 중 소모형이거나 1개 단위 상품이 가리키는 것.
-      //    인벤토리 ×N 묶음(lib/unitSale.js unitThingSet)과 같은 기준. 수동 지급 API 가 다시 판정한다
-      r.stackable = unitSaleAllowed(r.type, r.roleId) && (hasConsumable(r) || unitSet.has(String(r._id)));
     }
 
     if (withUsage) {

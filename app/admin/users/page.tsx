@@ -1,11 +1,18 @@
 "use client";
 
-// 📌 유저 조회 — 이름 · 디스코드 ID 로 찾아 한 유저의 지갑 · 구매 · 지급 · 쿠폰 · 알림 · 문의 · XP 내역을 한 자리에서 본다.
+// 📌 유저 조회 — 이름 · 디스코드 ID 로 찾아 한 유저의 지갑 · 구매 · 지급 · 쿠폰 · 알림 · 문의 · XP 내역 · 인벤토리 · 역할을 한 자리에서 본다.
 //    목록 화면 틀: 머리 → 검색 한 줄 → 결과 표 → 줄을 누르면 오른쪽 상세 칸(모바일은 아래에서 올라오는 판).
-//    조회 전용 — 쓰기는 구매 탭의 1회 소모권 "1개 사용"(app/api/admin/users/consume) 하나. 주소에 ?q= · ?userId= 를 실어 새로고침해도 같은 화면이 다시 열린다.
+//    쓰기는 넷 — 구매 탭 1회 소모권 "1개 사용"(app/api/admin/users/consume) · 역할 탭 역할 회수(app/api/admin/users/roles) ·
+//    인벤토리 탭 아이템 회수(app/api/admin/users/inventory — 지급 · 패스는 그냥 회수, 구매는 낸 값 환불) · 아이템 지급(app/api/admin/items/grant).
+//    주소에 ?q= · ?userId= 를 실어 새로고침해도 같은 화면이 다시 열린다.
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AdminPage, SearchInput, Segmented, Btn, SwapLabel, DataTable, DetailPane, StatusChip, EmptyRow, ConfirmDialog, useAdminGuard, useNotice, type Column } from "../ui";
+import { AdminPage, SearchInput, Segmented, Btn, SwapLabel, DataTable, DetailPane, StatusChip, EmptyRow, ConfirmDialog, Inline, inputClass, numClass, labelClass, useAdminGuard, useNotice, type Column } from "../ui";
+import Dropdown from "../../components/Dropdown";
+import ItemIcon from "../../components/ItemIcon";
+import TierEmblem from "../../components/TierEmblem";
+import { invIconType, invTierOf } from "../../components/Inventory";
+import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { getTier } from "@/lib/voiceTiers";
 
 type Row = { userId: string; username: string; displayName: string; xp: number; level: number; point: number; noXp?: boolean };
@@ -31,21 +38,99 @@ type Detail = {
   notifications: any[]; inquiries: any[]; applies: any[];
   seasons: { season: number; name: string; rank: number; xp: number; level: number }[];
 };
-type TabId = "purchase" | "payout" | "coupon" | "inbox" | "xp" | "role";
+type TabId = "purchase" | "payout" | "coupon" | "inbox" | "xp" | "inv" | "role";
 type Tone = "ok" | "warn" | "bad" | "info" | "neutral" | "ink";
 
 const LIST_LIMIT = 50; // API 가 목록마다 최근 50건까지 준다
-const TABS: { id: TabId; l: string }[] = [
-  { id: "purchase", l: "구매" },
-  { id: "payout", l: "지급" },
-  { id: "coupon", l: "쿠폰" },
-  { id: "inbox", l: "알림·문의" },
-  { id: "xp", l: "XP 내역" },
-  { id: "role", l: "역할" },
+// 📌 count — 탭 개수 자리(넓은 화면에서만)
+//    fixed: 2자리 폭을 늘 잡는다 — 늦게 읽는 탭(인벤토리 · 역할)은 개수가 떠도, 50건 상한 탭은 자릿수가 바뀌어도 이름이 밀리지 않는다
+//    fit: 숫자만큼 — 알림·문의(최대 150, 3자리 자리를 잡으면 칸에 꽉 차 이름이 한쪽으로 쏠린다). 상세와 함께 처음부터 있다
+//    none: 개수 없음(XP 내역 — 원장은 쪽 단위)
+const TABS: { id: TabId; l: string; count: "fixed" | "fit" | "none" }[] = [
+  { id: "purchase", l: "구매", count: "fixed" },
+  { id: "payout", l: "지급", count: "fixed" },
+  { id: "coupon", l: "쿠폰", count: "fixed" },
+  { id: "inbox", l: "알림·문의", count: "fit" },
+  { id: "xp", l: "XP 내역", count: "none" },
+  { id: "inv", l: "인벤토리", count: "fixed" },
+  { id: "role", l: "역할", count: "fixed" },
 ];
 // 📌 역할 탭 — 디스코드에서 지금 가진 역할(app/api/admin/users/roles). 레벨 보상 · 디스코드 관리 역할은 뗄 수 없다
 type HeldRole = { id: string; name: string; color: string; managed: boolean; rewardLevel: number | null; item: string };
 type RoleState = { key: string; loading: boolean; present: boolean; roles: HeldRole[]; error: string };
+
+// 📌 인벤토리 탭 — 유저 화면 인벤토리와 같은 판정(app/api/admin/users/inventory)에 회수 방법(revoke)이 붙는다.
+//    rows: 그 물건의 기록을 서버가 다시 모아 회수(key 를 그대로 돌려준다) · role: 구매 기록 없이 역할로 가진 것 → 역할 회수 API · locked: 손대지 않는다(lock 라벨)
+//    units: 회수 순서대로 한 건씩 — 지급 · 패스(낸 값 없음) 먼저, 그다음 구매(xp · point = 돌려줄 값)
+type RevokeUnit = { src: "grant" | "pass" | "shop"; xp: number; point: number };
+type Revoke = { mode: "rows" | "role" | "locked"; key: string; roleId: string; lock: string; stack: boolean; max: number; tool: number; units: RevokeUnit[] };
+type InvSource = "shop" | "grant" | "pass" | "item" | "level";
+type InvCard = {
+  uid: string; kind: string; type: string; name: string; description?: string;
+  icon?: string; imageUrl?: string; color?: string;
+  status: "pending" | "completed" | "missing";
+  days?: number; expiresAt?: string | null; acquiredAt?: string | null; siteOnly?: boolean;
+  source: InvSource; rewardLevel?: number | null; exclusive?: boolean;
+  count?: number; pendingCount?: number; effectLines?: string[]; skinKey?: string; badgeId?: string;
+  revoke: Revoke;
+};
+type InvState = { key: string; synced: boolean; canGrant: boolean; items: InvCard[]; error: string };
+const INV_SOURCE: Record<InvSource, string> = { shop: "구매", grant: "지급", pass: "패스", item: "역할", level: "레벨 보상" };
+const UNIT_SRC: { src: RevokeUnit["src"]; l: string }[] = [{ src: "grant", l: "지급" }, { src: "pass", l: "패스" }, { src: "shop", l: "구매" }];
+
+const toInt = (v: unknown) => Math.max(0, Math.trunc(Number(v) || 0));
+// 서버가 빠뜨린 칸이 있어도 화면이 깨지지 않게 — 모르는 회수 방법은 잠금으로
+const normRevoke = (v: unknown): Revoke => {
+  const o = (v && typeof v === "object" ? v : {}) as Partial<Revoke>;
+  return {
+    mode: o.mode === "rows" || o.mode === "role" ? o.mode : "locked",
+    key: String(o.key || ""),
+    roleId: String(o.roleId || ""),
+    lock: String(o.lock || ""),
+    stack: !!o.stack,
+    max: toInt(o.max),
+    tool: toInt(o.tool),
+    units: (Array.isArray(o.units) ? o.units : []).map((u: Partial<RevokeUnit>) => ({
+      src: u?.src === "shop" || u?.src === "pass" ? u.src : "grant",
+      xp: toInt(u?.xp),
+      point: toInt(u?.point),
+    })),
+  };
+};
+// 인벤토리 한 번 읽기 — 상태는 건드리지 않고 결과만 돌려준다(부르는 쪽이 key 로 늦은 응답을 버린다)
+async function fetchInventory(userId: string): Promise<InvState> {
+  const fail = (error: string): InvState => ({ key: userId, synced: true, canGrant: false, items: [], error });
+  try {
+    const r = await fetch(`/api/admin/users/inventory?userId=${encodeURIComponent(userId)}`, { cache: "no-store" });
+    const d = await r.json().catch(() => null);
+    if (!r.ok || !d?.success) return fail(d?.message || d?.error || "인벤토리를 읽지 못했습니다.");
+    const items: InvCard[] = (Array.isArray(d.data?.items) ? d.data.items : []).map((x: InvCard) => ({ ...x, name: String(x?.name || "—"), revoke: normRevoke(x?.revoke) }));
+    return { key: userId, synced: d.data?.synced !== false, canGrant: !!d.data?.canGrant, items, error: "" };
+  } catch {
+    return fail("인벤토리를 읽지 못했습니다.");
+  }
+}
+
+// 썸네일 — 등급 보상은 엠블럼, 그림이 있으면 칸을 꽉 채우고, 나머지는 공용 아이콘
+function InvThumb({ it }: { it: InvCard }) {
+  const tier = invTierOf(it);
+  return (
+    <span className="w-10 h-10 shrink-0 rounded-lg bg-[#f2f2f2] overflow-hidden inline-flex items-center justify-center">
+      {tier ? <TierEmblem tier={tier} size={25} />
+        : it.imageUrl ? <ItemIcon imageUrl={it.imageUrl} size={40} style={{ borderRadius: 0 }} />
+        : <ItemIcon icon={it.icon} type={invIconType(it)} size={22} color={it.color || undefined} />}
+    </span>
+  );
+}
+
+// 📌 아이템 지급 창 — 아이템 목록은 창을 처음 열 때 한 번(GET /api/admin/items, 기프트카드 제외)
+type GrantItem = { _id: string; name: string; type: string; icon?: string; imageUrl?: string; color?: string; stackable?: boolean };
+type GrantForm = { itemId: string; daysMode: string; days: string; qty: string; reason: string };
+const EMPTY_GRANT: GrantForm = { itemId: "", daysMode: "0", days: "", qty: "1", reason: "" };
+const GRANT_DAYS = [{ v: "0", l: "무기한" }, { v: "7", l: "7일" }, { v: "30", l: "30일" }, { v: "custom", l: "직접" }];
+const TOOL_NOTE_RE = /^역할 (이전|환불)/; // 역할 이전 도구 기록으로 읽히는 사유(lib/roleMigrationTerms.js)
+// 공용 Dropdown(라이트)을 입력칸(inputClass)과 같은 높이 · 테두리로 (app/admin/bot 과 같은 값)
+const DD = "!px-3 !py-2 min-h-10 !text-[14px] !border-[#a3a3a3]";
 
 const PURCHASE_STATUS: Record<string, { l: string; t: Tone }> = {
   pending: { l: "대기", t: "warn" },
@@ -156,6 +241,11 @@ export default function AdminUsersPage() {
   const reqRef = useRef(0); // 빠르게 다른 줄을 누르면 늦게 온 이전 응답을 버린다
   const [spendBusy, setSpendBusy] = useState(""); // 1개 사용 중인 묶음 키
   const selectedRef = useRef<string | null>(null); // 검색을 다시 해도 열어 둔 유저를 주소에 남기려고
+  // 인벤토리 — 역할 탭과 같은 틀(key 가 이 유저 것이 아니면 불러오는 중). 상태는 다른 탭의 쓰기(역할 회수 · 1개 사용)도 비운다
+  const [inv, setInv] = useState<InvState | null>(null);
+  const invLoadingRef = useRef(""); // 지금 읽는 중인 유저 — 탭을 오가도 같은 요청을 겹쳐 보내지 않게
+  // 역할 — 탭을 열 때 · 유저를 바꿀 때 디스코드에 새로 묻는다. 다른 유저로 바뀐 뒤 늦게 온 응답은 key 로 버린다
+  const [roleState, setRoleState] = useState<RoleState | null>(null);
 
   const openUser = useCallback(async (id: string) => {
     const my = ++reqRef.current;
@@ -163,6 +253,11 @@ export default function AdminUsersPage() {
     setSelectedId(id);
     setDetail(null);
     setDetailErr("");
+    // 같은 유저를 다시 열어도 새로 — 늦게 읽는 탭(인벤토리 · 역할 · XP 내역)도 열 때 다시 읽게 비운다
+    setInv(null);
+    invLoadingRef.current = "";
+    setRoleState(null);
+    setLedger(null);
     try {
       const r = await fetch(`/api/admin/users?userId=${encodeURIComponent(id)}`, { cache: "no-store" });
       const d = await r.json();
@@ -211,8 +306,7 @@ export default function AdminUsersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
-  // 역할 — 탭을 열 때 · 유저를 바꿀 때 디스코드에 새로 묻는다. 다른 유저로 바뀐 뒤 늦게 온 응답은 key 로 버린다
-  const [roleState, setRoleState] = useState<RoleState | null>(null);
+  // 역할 회수
   const [roleRevoke, setRoleRevoke] = useState<HeldRole | null>(null);
   const [roleBusy, setRoleBusy] = useState(false);
   //    불러오는 중은 화면이 key 로 판단한다(roleState 가 이 유저 것이 아니면 불러오는 중) — 효과 안에서 바로 상태를 바꾸지 않게
@@ -240,6 +334,8 @@ export default function AdminUsersPage() {
         notify(d.message || "회수했습니다.");
         // 그 자리에서 뺀다(디스코드 반영을 기다리지 않게)
         setRoleState((prev) => (prev?.key === selectedId ? { ...prev, roles: prev.roles.filter((x) => x.id !== roleRevoke.id) } : prev));
+        // 역할로 가진 인벤토리 칸이 바뀌었을 수 있다 — 인벤토리 탭을 열 때 다시 읽게
+        setInv((prev) => (prev?.key === selectedId ? null : prev));
         setRoleRevoke(null);
       } else notify(d?.message || "처리에 실패했습니다.", true);
     } catch {
@@ -298,14 +394,169 @@ export default function AdminUsersPage() {
         ...(stacks ? { stacks: keep(prev.stacks) || stacks } : {}),
         purchases: usedId ? prev.purchases.map((p: any) => (String(p._id) === usedId ? { ...p, consumedAt: new Date().toISOString() } : p)) : prev.purchases,
       } : prev));
-      if (r.ok && d?.success) notify(`${s.name} 1개를 사용했습니다.\n남은 수량 ${Number(d.data.left) || 0}개`);
-      else notify(d?.message || "처리에 실패했습니다.", true);
+      if (r.ok && d?.success) {
+        notify(`${s.name} 1개를 사용했습니다.\n남은 수량 ${Number(d.data.left) || 0}개`);
+        // 인벤토리 ×N 이 줄었다 — 인벤토리 탭을 열 때 다시 읽게
+        setInv((prev) => (prev?.key === userId ? null : prev));
+      } else notify(d?.message || "처리에 실패했습니다.", true);
     } catch {
       notify("서버와 통신 중 오류가 발생했습니다.", true);
     } finally {
       setSpendBusy("");
     }
   }, [spendBusy, notify]);
+
+  // ── 인벤토리 ──
+  //    탭을 열 때 · 유저를 바꿀 때 읽는다. 결과는 콜백에서 넣고, 그사이 다른 유저로 바뀌었으면 버린다
+  useEffect(() => {
+    if (tab !== "inv" || !selectedId || inv?.key === selectedId || invLoadingRef.current === selectedId) return;
+    const id = selectedId;
+    invLoadingRef.current = id;
+    fetchInventory(id).then((next) => {
+      if (invLoadingRef.current === id) invLoadingRef.current = "";
+      setInv((prev) => (selectedRef.current === id ? next : prev));
+    });
+  }, [tab, selectedId, inv?.key]);
+  //    조용히 다시 읽기 — 목록을 비우지 않는다(깜빡임 · 줄 튐 없이). 실패하면 보던 목록을 그대로 둔다
+  const reloadInv = useCallback((id: string) => {
+    invLoadingRef.current = id;
+    fetchInventory(id).then((next) => {
+      if (invLoadingRef.current === id) invLoadingRef.current = "";
+      setInv((prev) => (selectedRef.current !== id ? prev : next.error && prev?.key === id && !prev.error ? prev : next));
+    });
+  }, []);
+  //    상세(구매 · 지급 탭)도 조용히 — setDetail(null) 없이. 그사이 다른 유저를 열었으면(reqRef) 버린다
+  const refreshDetail = useCallback(async (id: string) => {
+    const my = reqRef.current;
+    try {
+      const r = await fetch(`/api/admin/users?userId=${encodeURIComponent(id)}`, { cache: "no-store" });
+      const d = await r.json();
+      if (my !== reqRef.current || selectedRef.current !== id) return;
+      if (r.ok && d?.success) {
+        setDetail(d.data);
+        // 검색 결과 표의 같은 줄도 — 환불로 바뀐 XP · 빙옥 · 레벨이 옆 요약과 같게
+        const su: UserSum | null = d.data?.user || null;
+        if (su) setResults((rs) => (rs ? rs.map((x) => (x.userId === id ? { ...x, xp: su.xp, point: su.point, level: su.level } : x)) : rs));
+      }
+    } catch {
+      // 보던 상세를 그대로 둔다
+    }
+  }, []);
+  //    회수 · 지급 뒤 — 인벤토리 · 상세는 조용히 다시 읽고, 역할 · XP 내역 탭은 열 때 다시 읽게 비운다(환불 · 캐시백 회수 줄)
+  const afterWrite = useCallback((id: string) => {
+    reloadInv(id);
+    setRoleState(null);
+    setLedger((prev) => (prev && prev.key.startsWith(`${id}:`) ? null : prev));
+    refreshDetail(id);
+  }, [reloadInv, refreshDetail]);
+
+  // 📌 아이템 회수 — rows: 서버가 그 물건의 기록을 다시 모아 고른다(expect = 화면이 본 max, 다르면 409) · role: 역할 회수 API
+  const [invRevoke, setInvRevoke] = useState<InvCard | null>(null);
+  const [invQty, setInvQty] = useState("1");
+  const [invBusy, setInvBusy] = useState(false);
+  const revokeQty = (rv: Revoke) => (rv.stack ? Math.min(Math.max(1, rv.max), Math.max(1, Math.trunc(Number(invQty)) || 1)) : rv.max);
+  const revokeInv = async () => {
+    const c = invRevoke;
+    const id = selectedId;
+    if (!c || !id || invBusy) return;
+    const rv = c.revoke;
+    if (rv.mode === "locked" || (rv.mode === "rows" && (!rv.key || rv.max < 1)) || (rv.mode === "role" && !rv.roleId)) return;
+    setInvBusy(true);
+    try {
+      const r = rv.mode === "role"
+        ? await fetch("/api/admin/users/roles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: id, roleId: rv.roleId }) })
+        : await fetch("/api/admin/users/inventory", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: id, key: rv.key, qty: rv.stack ? revokeQty(rv) : undefined, expect: rv.max }),
+          });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.success) {
+        notify(d.message || "회수했습니다.");
+        setInvRevoke(null);
+        // 역할로 가진 칸은 그 자리에서 뺀다(디스코드 반영을 기다리지 않게) — 다시 읽기가 맞춘다
+        if (rv.mode === "role") setInv((prev) => (prev?.key === id ? { ...prev, items: prev.items.filter((x) => x.uid !== c.uid) } : prev));
+        afterWrite(id);
+      } else {
+        notify(d?.message || "처리에 실패했습니다.", true);
+        // 목록이 바뀌었다 — 창을 닫고 다시 읽는다
+        if (r.status === 409) {
+          setInvRevoke(null);
+          reloadInv(id);
+        }
+      }
+    } catch {
+      notify("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setInvBusy(false);
+    }
+  };
+
+  // 📌 아이템 지급 — 기존 지급 API 를 그대로(target = 이 유저 id). 창은 페이지 끝에서 그린다
+  const [grantOpen, setGrantOpen] = useState(false);
+  const [grantForm, setGrantForm] = useState<GrantForm>(EMPTY_GRANT);
+  const [grantItems, setGrantItems] = useState<GrantItem[] | null>(null); // null = 아직 못 읽음
+  const [grantItemsErr, setGrantItemsErr] = useState(false);
+  const grantItemsReq = useRef(false);
+  const [granting, setGranting] = useState(false);
+  const openGrant = () => {
+    setGrantForm(EMPTY_GRANT);
+    setGrantOpen(true);
+    if (grantItems || grantItemsReq.current) return;
+    grantItemsReq.current = true;
+    setGrantItemsErr(false);
+    fetch("/api/admin/items", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d?.success || !Array.isArray(d.data)) throw new Error("items");
+        setGrantItems(d.data.filter((it: GrantItem) => it.type !== "physical"));
+      })
+      .catch(() => {
+        grantItemsReq.current = false; // 다음에 열 때 다시 읽는다
+        setGrantItemsErr(true);
+      });
+  };
+  const closeGrant = useCallback(() => {
+    if (!granting) setGrantOpen(false);
+  }, [granting]);
+  // Esc 는 창만 닫는다 — 드롭다운이 먼저 받았거나(preventDefault) 위에 확인 · 알림 창이 떠 있으면 그 차례
+  useEffect(() => {
+    if (!grantOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || document.querySelector('[role="alertdialog"]')) return;
+      closeGrant();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [grantOpen, closeGrant]);
+  const grantPick = grantItems?.find((it) => it._id === grantForm.itemId) || null;
+  const grantStackable = !!grantPick?.stackable;
+  const grantQty = grantStackable ? Math.min(99, Math.max(1, Math.trunc(Number(grantForm.qty)) || 1)) : 1;
+  const grantCustom = grantForm.daysMode === "custom";
+  const grantDays = grantCustom ? Math.trunc(Number(grantForm.days)) : Number(grantForm.daysMode);
+  const grantReady = !!selectedId && !!grantPick && !granting && (!grantCustom || (grantForm.days.trim() !== "" && grantDays >= 1 && grantDays <= 3650));
+  const submitGrant = async () => {
+    const id = selectedId;
+    if (!id || !grantReady || !grantPick) return;
+    const reason = grantForm.reason.trim();
+    if (TOOL_NOTE_RE.test(reason)) return notify("'역할 이전' · '역할 환불'로 시작하는 사유는 쓸 수 없습니다.", true);
+    setGranting(true);
+    try {
+      const r = await fetch("/api/admin/items/grant", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: grantPick._id, target: id, days: grantDays, reason, qty: grantQty }),
+      });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.success) {
+        notify(d.message || "지급했습니다.");
+        setGrantOpen(false);
+        afterWrite(id);
+      } else notify(d?.message || "지급에 실패했습니다.", true);
+    } catch {
+      notify("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setGranting(false);
+    }
+  };
 
   const closeUser = useCallback(() => {
     reqRef.current++;
@@ -354,6 +605,7 @@ export default function AdminUsersPage() {
     coupon: detail ? detail.coupons.length : null,
     inbox: detail ? detail.notifications.length + detail.inquiries.length + detail.applies.length : null,
     xp: null, // 원장은 쪽 단위라 개수를 달지 않는다
+    inv: inv && inv.key === selectedId && !inv.error ? inv.items.length : null,
     role: roleState && roleState.key === selectedId && !roleState.loading ? roleState.roles.length : null,
   };
 
@@ -528,6 +780,62 @@ export default function AdminUsersPage() {
         </div>
       );
     }
+    if (tab === "inv") {
+      const iv = inv && inv.key === selectedId ? inv : null;
+      // 다 읽기 전에는 XP 기록 유무(상세)로 — 지급 버튼이 늦게 켜지며 깜빡이지 않게
+      const canGrant = iv && !iv.error ? iv.canGrant : !!u;
+      return (
+        <>
+          <div className="flex items-center gap-2 min-h-8 mb-1">
+            {iv && !iv.error && !iv.synced && <StatusChip tone="warn" className="shrink-0">역할 확인 불가</StatusChip>}
+            <Btn size="sm" className="ml-auto shrink-0" disabled={!canGrant || !selectedId} title={canGrant ? undefined : "XP 기록 없음"} onClick={openGrant}>지급</Btn>
+          </div>
+          {!iv ? (
+            <p className="py-10 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</p>
+          ) : iv.error ? (
+            <div className="py-10 text-center">
+              <p className="text-[13px] text-[#d01634]">{iv.error}</p>
+              <Btn variant="secondary" size="sm" className="mt-3" onClick={() => selectedId && reloadInv(selectedId)}>다시 시도</Btn>
+            </div>
+          ) : (
+            <List items={iv.items} empty="아이템 없음" capped={false}>
+              {iv.items.map((it) => {
+                const rv = it.revoke;
+                const locked = rv.mode === "locked" || (rv.mode === "rows" && (!rv.key || rv.max < 1)) || (rv.mode === "role" && !rv.roleId);
+                const src = INV_SOURCE[it.source] || "";
+                const lockChip = locked && rv.lock && rv.lock !== src ? rv.lock : "";
+                return (
+                  <li key={it.uid} className="py-2.5 flex items-center gap-3 min-w-0">
+                    <InvThumb it={it} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="min-w-0 truncate text-[14px] font-bold">{it.name}</span>
+                        {src && <StatusChip className="shrink-0">{src}</StatusChip>}
+                        {it.status === "pending" && <StatusChip tone="warn" className="shrink-0">대기</StatusChip>}
+                        {it.status === "missing" && <StatusChip tone="bad" className="shrink-0">확인 필요</StatusChip>}
+                        {lockChip && <StatusChip className="shrink-0">{lockChip}</StatusChip>}
+                      </div>
+                      <p className="mt-1 text-[12px] text-[#8a8a8a] tabular-nums truncate">
+                        {joinMeta([
+                          itemTypeLabel(it.type || it.kind),
+                          (it.count || 0) > 1 && `×${num(it.count)}`,
+                          it.expiresAt ? `~ ${fmt(it.expiresAt)}` : "무기한",
+                          it.siteOnly && "사이트 보유",
+                        ])}
+                      </p>
+                    </div>
+                    <Btn variant="secondary" size="sm" className="shrink-0 w-[64px]" disabled={locked || invBusy}
+                      onClick={() => { setInvQty("1"); setInvRevoke(it); }}>
+                      회수
+                    </Btn>
+                  </li>
+                );
+              })}
+            </List>
+          )}
+        </>
+      );
+    }
     if (tab === "role") {
       const rs = roleState && roleState.key === selectedId ? roleState : null;
       if (!rs || rs.loading) return <p className="py-10 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</p>;
@@ -607,7 +915,7 @@ export default function AdminUsersPage() {
       <DetailPane
         open={!!selectedId}
         onClose={closeUser}
-        width={520}
+        width={560}
         badge={
           detail && (!u || u.needsRoleSync) ? (
             <span className="inline-flex gap-1.5">
@@ -649,9 +957,12 @@ export default function AdminUsersPage() {
               </div>
             )}
 
-            {/* 하위 탭 — 칸 폭 고정(6등분). 개수는 넓은 화면에서만 옆에 옅게 → 글자 · 숫자가 바뀌어도 탭 줄이 움직이지 않는다 */}
+            {/* 하위 탭 — 칸 폭 고정(7등분). 개수는 넓은 화면에서만 옆에 옅게(자리 규칙은 TABS 의 count).
+                📌 폭 실측(굵게, Inter + Noto Sans KR): 가장 긴 "알림·문의" 11px 44.2 · 12px 48.2, 개수 10px 2자리 12.9 · 3자리 19.4, 틈 2.
+                   칸 = 모바일 (화면 − 48) / 7 → 375: 46.7 · 360: 44.6 ≥ 44.2 / PC (상세 560 − 테두리 1 − 여백 40 − 스크롤바 자리 10 − 8) / 7 = 71.6 ≥ 48.2 + 2 + 19.4
+                   📌 360 미만(320 등)은 7등분이 44.2 보다 좁다 — 그 폭만 글자 폭 + 남는 폭 균등(flex-auto). 탭을 골라도 글자 · 굵기가 같아 칸이 그대로 */}
             <div className="sticky top-0 z-[1] -mx-5 px-5 pt-5 pb-2 bg-white">
-              <div role="tablist" className="grid grid-cols-6 p-1 rounded-full bg-[#f2f2f2]">
+              <div role="tablist" className="grid grid-cols-7 max-[360px]:flex p-1 rounded-full bg-[#f2f2f2]">
                 {TABS.map((t) => {
                   const on = tab === t.id;
                   const n = counts[t.id];
@@ -662,10 +973,11 @@ export default function AdminUsersPage() {
                       role="tab"
                       aria-selected={on}
                       onClick={() => setTab(t.id)}
-                      className={`min-w-0 h-8 px-1 inline-flex items-center justify-center gap-1 rounded-full text-[12px] sm:text-[13px] font-bold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 ${on ? "bg-white text-[#131313] ring-1 ring-black/[0.06]" : "text-[#5a5a5a] hover:text-[#131313]"}`}
+                      className={`min-w-0 flex-auto h-8 px-0.5 sm:px-1 inline-flex items-center justify-center gap-0.5 rounded-full text-[11px] sm:text-[12px] font-bold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 ${on ? "bg-white text-[#131313] ring-1 ring-black/[0.06]" : "text-[#5a5a5a] hover:text-[#131313]"}`}
                     >
                       {t.l}
-                      {n != null && <span className={`hidden sm:inline text-[11px] tabular-nums ${on ? "text-[#8a8a8a]" : "text-[#a3a3a3]"}`}>{n}</span>}
+                      {t.count === "fixed" && <span className={`hidden sm:inline-block shrink-0 w-[13px] text-left text-[10px] tabular-nums ${on ? "text-[#8a8a8a]" : "text-[#a3a3a3]"}`}>{n ?? ""}</span>}
+                      {t.count === "fit" && n != null && <span className={`hidden sm:inline text-[10px] tabular-nums ${on ? "text-[#8a8a8a]" : "text-[#a3a3a3]"}`}>{n}</span>}
                     </button>
                   );
                 })}
@@ -686,6 +998,122 @@ export default function AdminUsersPage() {
         onConfirm={revokeRole}
         body={roleRevoke ? <p className="break-keep">{detail?.user?.displayName || detail?.user?.username || selectedId} · {roleRevoke.name}</p> : null}
       />
+      <ConfirmDialog
+        open={!!invRevoke}
+        danger
+        title="아이템 회수"
+        confirmLabel="회수"
+        busy={invBusy}
+        onCancel={() => setInvRevoke(null)}
+        onConfirm={revokeInv}
+        body={invRevoke ? (() => {
+          const rv = invRevoke.revoke;
+          if (rv.mode === "role") {
+            return (
+              <>
+                <p className="font-bold text-[#131313] break-keep">{invRevoke.name}</p>
+                <p className="mt-1">디스코드 역할</p>
+              </>
+            );
+          }
+          // 고른 수량만큼 회수 순서(units) 앞에서부터 센다 — 서버도 같은 순서로 고른다
+          const picked = rv.units.slice(0, revokeQty(rv));
+          const parts = UNIT_SRC.map((g) => ({ l: g.l, n: picked.filter((x) => x.src === g.src).length })).filter((g) => g.n > 0);
+          const xp = picked.reduce((s, x) => s + x.xp, 0);
+          const point = picked.reduce((s, x) => s + x.point, 0);
+          return (
+            <>
+              <p className="font-bold text-[#131313] break-keep">{invRevoke.name}</p>
+              {rv.stack && (
+                <Inline className="mt-3">
+                  <input type="number" min={1} max={rv.max} value={invQty} disabled={invBusy} aria-label="수량"
+                    onChange={(e) => setInvQty(e.target.value === "" ? "" : String(Math.min(Math.max(1, rv.max), Math.max(1, Math.trunc(Number(e.target.value)) || 1))))}
+                    onBlur={() => setInvQty(String(revokeQty(rv)))} className={numClass} />
+                  <span className="tabular-nums">/ {num(rv.max)}</span>
+                </Inline>
+              )}
+              {parts.length > 0 && <p className="mt-2 tabular-nums">{parts.map((g) => `${g.l} ${num(g.n)}`).join(" · ")}</p>}
+              {(xp > 0 || point > 0) && (
+                <p className="mt-1 font-bold text-[#131313] tabular-nums">환불 {joinMeta([xp > 0 && `${num(xp)} XP`, point > 0 && `${num(point)} 빙옥`])}</p>
+              )}
+              {rv.tool > 0 && <p className="mt-1 text-[#8a8a8a] tabular-nums">역할 이전 {num(rv.tool)}건 제외</p>}
+            </>
+          );
+        })() : null}
+      />
+
+      {/* 📌 아이템 지급 창 — 상세 칸 바깥(확인 · 알림 창과 형제). 모바일은 아래에서 올라오는 판, PC 는 가운데 창.
+             아이템 칸을 맨 위에 — 드롭다운 목록이 창 안에서 아래로 펼쳐진다(포털 없음). 기간 · 수량 칸은 늘 두고 잠그기만 해서 칸이 밀리지 않는다 */}
+      {grantOpen && (
+        <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" onClick={granting ? undefined : closeGrant}>
+          <div role="dialog" aria-modal="true" aria-label="아이템 지급" onClick={(e) => e.stopPropagation()}
+            className="w-full min-w-0 sm:max-w-lg max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl sm:rounded-2xl bg-white border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313] pb-[env(safe-area-inset-bottom)] sm:pb-0">
+            <div className="flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[#ededed]">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[17px] font-black tracking-tight">아이템 지급</h2>
+                <p className="mt-0.5 text-[12px] text-[#8a8a8a] truncate">{paneTitle}</p>
+              </div>
+              <button type="button" onClick={closeGrant} disabled={granting} aria-label="닫기" className="shrink-0 w-9 h-9 rounded-full bg-[#f2f2f2] text-[#5a5a5a] hover:text-[#131313] flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 disabled:opacity-40">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <div className="px-5 pt-4 pb-1 min-w-0">
+              <div className="mb-4 min-w-0">
+                <p className={labelClass}>아이템</p>
+                <Dropdown
+                  theme="light"
+                  buttonClassName={DD}
+                  maxHeight={220}
+                  value={grantForm.itemId}
+                  onChange={(v) => setGrantForm((f) => ({ ...f, itemId: v, qty: "1" }))}
+                  placeholder={grantItems ? (grantItems.length ? "아이템 선택" : "등록된 아이템 없음") : grantItemsErr ? "불러오지 못했습니다" : "불러오는 중…"}
+                  options={(grantItems || []).map((it) => ({
+                    value: it._id, label: it.name, hint: itemTypeLabel(it.type),
+                    icon: <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.type} size={18} color={it.color || itemTypeColor(it.type)} />,
+                  }))}
+                />
+              </div>
+              <div className="mb-4 min-w-0">
+                <p className={labelClass}>기간</p>
+                <Segmented options={GRANT_DAYS} value={grantForm.daysMode} onChange={(v) => setGrantForm((f) => ({ ...f, daysMode: v }))} disabled={granting} />
+                <Inline className="mt-2">
+                  <input type="number" min={1} max={3650} aria-label="일수" placeholder="일수" disabled={!grantCustom || granting}
+                    value={grantCustom ? grantForm.days : grantForm.daysMode === "0" ? "" : grantForm.daysMode}
+                    onChange={(e) => setGrantForm((f) => ({ ...f, days: e.target.value === "" ? "" : String(Math.min(3650, Math.max(1, Math.trunc(Number(e.target.value)) || 1))) }))}
+                    className={numClass} />
+                  일
+                </Inline>
+              </div>
+              <div className="mb-4 min-w-0">
+                <p className={labelClass}>수량</p>
+                <Inline>
+                  <input type="number" min={1} max={99} aria-label="수량" disabled={!grantStackable || granting}
+                    value={grantStackable ? grantForm.qty : "1"}
+                    onChange={(e) => setGrantForm((f) => ({ ...f, qty: e.target.value === "" ? "" : String(Math.min(99, Math.max(1, Math.trunc(Number(e.target.value)) || 1))) }))}
+                    onBlur={() => setGrantForm((f) => ({ ...f, qty: String(grantQty) }))}
+                    className={numClass} />
+                  개
+                </Inline>
+              </div>
+              <div className="mb-4 min-w-0">
+                <p className={labelClass}>사유</p>
+                <input type="text" maxLength={100} value={grantForm.reason} disabled={granting} placeholder="관리자 지급"
+                  onChange={(e) => setGrantForm((f) => ({ ...f, reason: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitGrant(); } }}
+                  className={inputClass} />
+              </div>
+            </div>
+
+            <div className="border-t border-[#ededed] px-5 py-3.5 flex items-center justify-end gap-2">
+              <Btn variant="secondary" onClick={closeGrant} disabled={granting}>취소</Btn>
+              <Btn className="w-[88px] shrink-0" onClick={submitGrant} disabled={!grantReady}>
+                <SwapLabel swap={granting} to="처리 중…">지급</SwapLabel>
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
       {noticeEl}
     </AdminPage>
   );

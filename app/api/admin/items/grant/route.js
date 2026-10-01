@@ -9,6 +9,7 @@ import UserXp from "@/models/UserXp";
 import ShopItem from "@/models/ShopItem";
 import mongoose from "mongoose";
 import { unitThingSet, MAX_PER_ORDER } from "@/lib/unitSale";
+import { revokeFreeRows } from "@/lib/itemRevoke";
 
 // 📌 아이템 수동 지급 — 관리자가 등록된 아이템을 유저에게 바로 준다.
 //    상점 구매와 같은 Purchase 행(itemId "grant")을 만들어 인벤토리·봇 지급 큐가 그대로 처리한다.
@@ -18,6 +19,8 @@ const MAX_DAYS = 3650;
 // 📌 여러 개 지급 — "all" 대상에 수량을 곱하면 한 번에 너무 많은 건이 생긴다. 대상 수 × 수량 상한 · 한 번에 넣는 묶음 크기
 const MAX_ROWS = 20000;
 const INSERT_CHUNK = 1000;
+// 📌 역할 이전 · 역할 환불 도구의 기록 머리(lib/roleMigrationTerms TOOL_RE) — 지급 사유로 쓰지 못하게 하고, 수정 · 회수에서도 손대지 않는다
+const TOOL_NOTE_RE = /^역할 (이전|환불)/;
 
 // ── [조회] 최근 수동 아이템 지급 — 여러 개 지급은 1개가 한 건이라 넉넉히 읽고, 화면이 orderId 로 한 줄에 묶는다 ──
 export async function GET() {
@@ -57,6 +60,10 @@ export async function POST(request) {
     }
     const days = Math.min(MAX_DAYS, Math.max(0, Math.trunc(Number(b?.days) || 0)));
     const reason = String(b?.reason || "").trim().slice(0, 120);
+    // 도구 머리로 시작하면 그 지급이 역할 이전 · 환불 도구의 기록으로 읽힌다(회수 · 사유 수정도 막혀 손댈 수 없게 된다)
+    if (TOOL_NOTE_RE.test(reason)) {
+      return NextResponse.json({ success: false, message: "'역할 이전' · '역할 환불'로 시작하는 사유는 쓸 수 없습니다." }, { status: 400 });
+    }
     const qtyIn = Math.max(1, Math.min(MAX_PER_ORDER, Math.trunc(Number(b?.qty) || 1)));
     const linkedShops = await ShopItem.find({ itemId: String(item._id) }, { type: 1, roleId: 1, itemId: 1, unitSale: 1, durations: 1 }).lean();
     const stackable = unitThingSet(linkedShops, [item]).has(`i:${item._id}`);
@@ -159,8 +166,8 @@ export async function POST(request) {
 //       회수 상태도 "그 도구로 환불함"으로 읽는다(lib/roleMigrationTerms MARK_RE · REFUND_MARK_RE). 그 기록은 관리 › 역할 이전에서 다룬다.
 //    회수: 봇이 아직 안 붙인 대기 건은 취소, 보유 중인 건은 refunded(revokedAt · roleDetached false) — 봇 processRefunds 가
 //       다른 근거가 없을 때 역할을 떼고, 낸 값이 없어 환불 DM 은 보내지 않는다. 인벤토리 · 효과는 바로 빠진다(my-items · ownedItems 가 refunded 를 뺀다)
+//       📌 lib/itemRevoke.js revokeFreeRows — 이미 쓴 건(consumedAt)은 건너뛰고, 봇이 역할을 뗀 사이트 보유 건은 roleDetached 를 그대로 둔다
 const MAX_IDS = 99;
-const TOOL_NOTE_RE = /^역할 (이전|환불)/;
 export async function PATCH(request) {
   try {
     const { deny } = await requireAdmin();
@@ -174,13 +181,7 @@ export async function PATCH(request) {
     const base = { _id: { $in: list }, itemId: "grant", adminNote: { $not: TOOL_NOTE_RE } };
 
     if (revoke) {
-      const at = new Date();
-      const cancelled = await Purchase.updateMany({ ...base, status: "pending" }, { $set: { status: "cancelled", processedAt: at } });
-      const revoked = await Purchase.updateMany(
-        { ...base, status: "completed" },
-        { $set: { status: "refunded", revokedAt: at, processedAt: at, roleDetached: false } }
-      );
-      const done = (cancelled.modifiedCount || 0) + (revoked.modifiedCount || 0);
+      const { done } = await revokeFreeRows({ ids: list, extra: { itemId: "grant", adminNote: { $not: TOOL_NOTE_RE } } });
       if (!done) return NextResponse.json({ success: false, message: "회수할 수 있는 지급이 없습니다." }, { status: 409 });
       return NextResponse.json({ success: true, done, message: `${done}건을 회수했습니다.` });
     }
