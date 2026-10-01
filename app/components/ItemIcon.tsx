@@ -1,8 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { presetKeyOf, isPresetKey, itemTypeColor } from "@/lib/items";
 import { ICON_PATHS } from "./Icons";
+import { itemArtBody, artKeyOf, ART_GRID } from "@/lib/itemArt";
 
 // 📌 아이템 아이콘 한 곳 — 인벤토리 슬롯·상점 카드·상품 상세·관리자 목록이 전부 이걸로 그린다.
 //    우선순위: 이미지(둥근 사각) > 프리셋 SVG("svg:<key>") > 이모지·텍스트 > 유형 기본 SVG.
@@ -94,6 +95,22 @@ export function PresetIcon({
   );
 }
 
+// 📌 도트 일러스트(16×16) 한 개 — "art:<키>" 아이콘(lib/itemArt.js). 칸이 번지지 않게 정수 배율로만 그린다:
+//    n = round(size/16), n×16 이 size+6 을 넘으면 한 단계 작게. 자리는 size 그대로, 그림은 가운데(더 크면 음수 여백으로 고르게 넘친다).
+//    그림 문자열은 lib/itemArt.js 가 목록에 있는 key 로만 만든다(사용자 입력이 섞이지 않음).
+export function ArtIcon({ k, size = 24, className = "", style }: { k: string; size?: number; className?: string; style?: React.CSSProperties }) {
+  const html = useMemo(() => ({ __html: itemArtBody(k) }), [k]);
+  let n = Math.max(1, Math.round(size / ART_GRID));
+  if (n > 1 && n * ART_GRID > size + 6) n -= 1;
+  const px = n * ART_GRID;
+  const lead = Math.floor((size - px) / 2);
+  const trail = size - px - lead;
+  return (
+    <svg viewBox={`0 0 ${ART_GRID} ${ART_GRID}`} width={px} height={px} shapeRendering="crispEdges" className={className}
+      style={{ marginLeft: lead, marginRight: trail, marginTop: lead, marginBottom: trail, ...style }} aria-hidden dangerouslySetInnerHTML={html} />
+  );
+}
+
 // 📌 아이템 아이콘 — 인벤토리·카드·상세·관리자 공용.
 //    color 를 안 주면 유형 기본색(레벨 보상은 #ff5c77), dim 이면 35% 로 흐리게(만료·미지급).
 export default function ItemIcon({
@@ -132,10 +149,14 @@ export default function ItemIcon({
     );
   }
 
+  const art = artKeyOf(icon);
+  if (art) return <ArtIcon k={art} size={size} className={`shrink-0 ${className}`} style={{ opacity, ...style }} />;
+
   const key = presetKeyOf(icon);
   if (key) return <PresetIcon k={key} size={size} color={c} className={`shrink-0 ${className}`} style={{ opacity, ...style }} />;
 
-  if (icon) {
+  // 📌 목록에서 빠진 "art:…"/"svg:…" 값은 글자로 찍지 않고 유형 기본 모양으로
+  if (icon && !/^(art|svg):/.test(icon)) {
     return (
       <span
         aria-hidden
