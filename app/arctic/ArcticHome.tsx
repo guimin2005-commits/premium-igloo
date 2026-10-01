@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import ItemIcon from "../components/ItemIcon";
 import BannerSlider from "./BannerSlider";
-import { isTimed, durationLabel, cardPick, discountActive, affordFor, shownPrice, priceText } from "@/lib/shopPricing";
+import { isTimed, durationLabel, cardPick, discountActive, affordFor, shownPrice, priceText, salePrice, basePrice } from "@/lib/shopPricing";
 import { pointToXp } from "@/lib/pointRate";
 import { isUnitSale, maxPerOrderOf } from "@/lib/unitSale";
 import { SEASON, getSeasonDday } from "@/lib/season";
@@ -13,8 +13,8 @@ import { getTier } from "@/lib/voiceTiers";
 // 📌 ARCTIC 홈 — 배너 → 유형 타일 4장 → 두 갈래 큐레이션 → 이번 주.
 //    헤더·유형 줄·독·푸터는 ArcticShopBody 가 그린다. 여기는 홈 본문만.
 //    상품 카드는 부모의 renderCard 를 그대로 받아 쓴다 (찜·장바구니·구매가 한 벌).
-//    📌 무엇을 걸지는 서버 추천(/api/shop/recommend — lib/shopRecommend.js)이 정한다.
-//       결과가 오기 전 · 실패하면 아래 기본 규칙(판매 수 · 관리자 순서)으로 그린다.
+//    📌 무엇을 걸지 · 섹션 제목 · 부제(근거)는 서버 추천(/api/shop/recommend — lib/shopRecommend.js)이 정한다.
+//       결과가 오기 전 · 실패하면 아래 기본 규칙(관리자 순서 · 잔액)으로 그린다 — 판매 수(soldCount)는 근거로 쓰지 않는다.
 
 type Props = {
   items: any[];
@@ -57,9 +57,11 @@ export const secTitle = "text-xl md:text-2xl font-black text-[#131313] tracking-
 export const secLink = "text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] transition-colors shrink-0";
 
 // 📌 추천 결과 — 서버가 고른 상품 id 와 제목만 온다
+//    hotTitle: 왼쪽 제목(근거가 있을 때만 "지금 잘 나가는") · forMe.sub: 오른쪽 부제(실제로 쓴 근거) · forMe.days: 카드에 걸 기간
 type Rec = {
   hot: string[];
-  forMe: { title: string; ids: string[]; basis?: string };
+  hotTitle?: string;
+  forMe: { title: string; ids: string[]; basis?: string; sub?: string; days?: Record<string, number> };
   deal: { id: string; kind: "sale" | "new" } | null;
   renewSoon?: { id: string; expiresAt: string }[];
 };
@@ -122,22 +124,29 @@ export default function ArcticHome({
     return () => window.removeEventListener("resize", onResize);
   }, [lockH]);
 
-  // 지금 잘 나가는 — 추천(최근 14일 구매자 · 시간 감쇠)이 오면 그 순서, 기본은 판매 수 · 추천 순서 · 최신
+  // 왼쪽 — 추천(30일 구매자 · 시간 감쇠 · 2명 이상)이 오면 그 순서와 제목, 기본은 관리자 추천 순서 · 최신("추천 상품")
+  const hotTitle = rec?.hotTitle || "추천 상품";
   const hot = useMemo(() => {
-    const base = [...active].sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0) || (a.sortOrder || 0) - (b.sortOrder || 0) || created(b) - created(a)).slice(0, 2);
-    if (!rec) return base;
+    // 📌 기본 규칙도 가진 상품은 뒤로 — 추천이 늦거나 실패해도 이미 산 것이 맨 앞에 뜨지 않게
+    const all = [...active].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || created(b) - created(a));
+    const ordered = [...all.filter((it) => !ownedItemIds.has(it._id)), ...all.filter((it) => ownedItemIds.has(it._id))];
+    if (!rec) return ordered.slice(0, 2);
     const out = rec.hot.map((id) => byId.get(id)).filter(Boolean);
-    // 목록에 없는 id(그새 내려간 상품 등)로 모자라면 기본 규칙으로 채운다 — 칸 수가 줄지 않게
-    for (const it of base) if (out.length < 2 && !out.some((o) => o._id === it._id)) out.push(it);
+    // 목록에 없는 id(그새 내려간 상품 등)로 모자라면 기본 규칙으로 채운다 — 칸 수가 줄지 않게.
+    //    📌 오른쪽 · 이번 주에 뽑힌 상품은 건너뛴다(칸끼리 겹치지 않게). 상품이 아주 적을 때만 겹쳐서라도 채운다
+    const skip = new Set([...(rec.forMe?.ids || []), ...(rec.deal ? [rec.deal.id] : [])]);
+    for (const it of ordered) if (out.length < 2 && !out.some((o) => o._id === it._id) && !skip.has(it._id)) out.push(it);
+    for (const it of ordered) if (out.length < 2 && !out.some((o) => o._id === it._id)) out.push(it);
     return out.slice(0, 2);
-  }, [active, byId, rec]);
+  }, [active, byId, rec, ownedItemIds]);
 
   // ○○에게 맞는 — 기본 규칙: 내 등급·소지 XP 기준. 안 산 것, 살 수 있는 것, 권한·아이템·꾸미기 우선.
-  //    추천: 같은 등급의 최근 구매 · 함께 산 상품 · 예산 적합도 (제목도 근거에 따라 "○○에게 인기" · "함께 많이 산")
+  //    추천: 함께 산 · 등급 인기 · 활동 · 등급 유지 예산 · 곧 끝나는 내 기간제 (제목 · 부제도 서버가 근거에 맞춰 내려 준다)
   const tier = isLoggedIn ? getTier(myLevel || 0) : null;
   const forMe = useMemo(() => {
-    const hotIds = new Set(hot.map((h) => h._id));
-    const cands = active.filter((it) => !hotIds.has(it._id) && !ownedItemIds.has(it._id));
+    // 📌 위 칸 · 이번 주(추천이 고른 것)에 나온 상품은 이 칸에서 뺀다 — 채움 단계에서도 겹치지 않게
+    const hotIds = new Set([...hot.map((h) => h._id), ...(rec?.deal ? [rec.deal.id] : [])]);
+    const cands = active.filter((it) => !hotIds.has(it._id) && !ownedItemIds.has(it._id) && Number(it.stock) !== 0); // 품절은 권하지 않는다
     const budget = typeof myXp === "number" ? myXp + pointToXp(myPoint ?? 0) : null;
     // 어느 기간이든 살 수 있으면 — 카드에는 그 살 수 있는 기간(무제한 > 가장 긴 기간)이 걸린다(목록 필터와 같은 규칙)
     //    📌 빙옥 전용 상품은 빙옥만으로 산다 (affordFor — 상점 목록 필터와 같은 기준)
@@ -150,27 +159,32 @@ export default function ArcticHome({
     pool.sort((a, b) => score(b) - score(a) || (a.sortOrder || 0) - (b.sortOrder || 0));
     let picks = pool.slice(0, 2);
     let title = tier ? `${tier.name}에게 맞는` : "처음이라면";
+    let sub = isLoggedIn ? "내 잔액 기준" : "";
     if (picks.length < 2) {
       const pickIds = new Set(picks.map((p) => p._id));
-      const timed = active.filter((it) => isTimed(it) && !pickIds.has(it._id) && !hotIds.has(it._id));
-      if (timed.length) { picks = [...picks, ...timed].slice(0, 2); title = "기간제만 모아보기"; }
+      const timed = active.filter((it) => isTimed(it) && !pickIds.has(it._id) && !hotIds.has(it._id) && Number(it.stock) !== 0);
+      if (timed.length) { picks = [...picks, ...timed].slice(0, 2); title = "기간제만 모아보기"; sub = ""; }
     }
-    if (!rec) return { picks, title, basis: "" };
+    if (!rec) return { picks, title, sub, basis: "" };
 
-    // 📌 추천이 오면 그 순서 — 카드에 걸 값(_pick)은 기본 규칙과 같이 예산 안의 기간으로.
-    //    그새 산 상품 · 위 칸과 겹치는 상품은 빼고, 모자라면 기본 규칙으로 채운다
+    // 📌 추천이 오면 그 순서 — 카드에 걸 기간은 서버가 고른 것(예산에 맞춘 기간 · 연장 기간 · 가장 싼 기간),
+    //    없으면 기본 규칙과 같이 예산 안의 기간으로. 그새 산 상품 · 위 칸과 겹치는 상품은 빼고, 모자라면 기본 규칙으로 채운다
     const withPick = (it: (typeof active)[number]) => {
+      const d = rec.forMe.days?.[it._id];
+      if (d != null && isTimed(it)) return { ...it, _pick: { days: d, price: salePrice(it, d), list: basePrice(it, d) } };
       if (!isLoggedIn || budget == null) return it;
       const pick = cardPick(it, okFor(it));
       return pick ? { ...it, _pick: pick } : it;
     };
-    const timedFill = rec.forMe.basis === "timed"; // 기간제 채움은 가진 기간제(연장 대상)도 들어온다
+    // 기간제 채움 · 마지막 채움(거의 다 가졌을 때)은 가진 상품도 들어온다 — 빼면 아래 기본 규칙이 다른 칸 상품으로 채워 겹친다
+    const timedFill = rec.forMe.basis === "timed" || rec.forMe.basis === "fill";
+    const renewIds = new Set((rec.renewSoon || []).map((r) => r.id)); // 곧 끝나는 내 기간제 — 연장 후보라 가져도 들어온다
     const out = rec.forMe.ids
       .map((id) => byId.get(id))
-      .filter((it) => it && !hotIds.has(it._id) && (timedFill || !ownedItemIds.has(it._id)))
+      .filter((it) => it && !hotIds.has(it._id) && (timedFill || renewIds.has(it._id) || !ownedItemIds.has(it._id)))
       .map(withPick);
     for (const it of picks) if (out.length < 2 && !out.some((o) => o._id === it._id)) out.push(it);
-    return { picks: out.slice(0, 2), title: rec.forMe.title || title, basis: rec.forMe.basis || "" };
+    return { picks: out.slice(0, 2), title: rec.forMe.title || title, sub: rec.forMe.sub ?? sub, basis: rec.forMe.basis || "" };
   }, [active, byId, rec, hot, ownedItemIds, isLoggedIn, myXp, myPoint, tier]);
 
   // 이번 주 — 할인 상품(없으면 최신) 한 장 + 시즌 한 장. 추천은 종료 임박 · 할인율 · 요즘 인기를 섞어 고른다
@@ -181,13 +195,18 @@ export default function ArcticHome({
       // 그새 할인이 끝났으면 기본 규칙으로
       if (it && (rec.deal.kind === "new" || discountActive(it))) return { it, kind: rec.deal.kind };
     }
+    // 📌 추천이 '이번 주'를 비웠으면(남은 상품이 없음) 그대로 비운다 — 위 칸 상품을 한 번 더 걸지 않게(시즌 카드가 넓게 그려진다)
+    if (rec && !rec.deal) return null;
+    // 기본 규칙도 위 두 칸에 나온 상품은 건너뛴다
+    const shown = new Set([...hot.map((h) => h._id), ...forMe.picks.map((p) => p._id)]);
+    const left = active.filter((it) => !shown.has(it._id));
     // 할인이 살아 있는 것만(종료 시각이 지난 할인은 빼고)
-    const sale = active.filter((it) => discountActive(it))
-      .sort((a, b) => (b.discountPct || 0) - (a.discountPct || 0) || (b.soldCount || 0) - (a.soldCount || 0))[0];
+    const sale = left.filter((it) => discountActive(it))
+      .sort((a, b) => (b.discountPct || 0) - (a.discountPct || 0) || (a.sortOrder || 0) - (b.sortOrder || 0))[0];
     if (sale) return { it: sale, kind: "sale" as const };
-    const fresh = [...active].sort((a, b) => created(b) - created(a))[0];
+    const fresh = [...left].sort((a, b) => created(b) - created(a))[0];
     return fresh ? { it: fresh, kind: "new" as const } : null;
-  }, [active, byId, rec, ready]);
+  }, [active, byId, rec, ready, hot, forMe]);
 
   return (
     <>
@@ -206,7 +225,7 @@ export default function ArcticHome({
           <div className="grid md:grid-cols-2 gap-10 md:gap-0">
             <div className="md:pr-10 xl:pr-28">
               <div className={secHead}>
-                <h2 className={secTitle}>지금 잘 나가는</h2>
+                <h2 className={secTitle}>{hotTitle}</h2>
                 <button onClick={() => goProducts("all")} className={secLink}>전체 ›</button>
               </div>
               <div className="grid grid-cols-2 gap-3 md:gap-5">{hot.map((it) => renderCard(it))}</div>
@@ -217,7 +236,8 @@ export default function ArcticHome({
             <div className="md:border-l md:border-[#ededed] md:pl-10 xl:pl-28">
               <div className={secHead}>
                 <h2 className={secTitle}>{forMe.title}</h2>
-                <span className="text-[12px] font-bold text-[#8a8a8a] shrink-0">{forMe.basis === "co" ? "내 아이템 기준" : tier ? "내 등급 기준" : "가장 많이 고른"}</span>
+                {/* 📌 부제 = 서버가 실제로 쓴 근거(내 아이템 · 등급 · 활동 · 잔액 기준 등) — 화면에 고정 문구를 두지 않는다 */}
+                <span className="text-[12px] font-bold text-[#8a8a8a] shrink-0">{forMe.sub}</span>
               </div>
               {forMe.picks.length === 0 ? (
                 <p className="py-10 text-center text-sm text-[#a3a3a3]">준비 중</p>
