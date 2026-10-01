@@ -98,6 +98,7 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
     canSeeShop ? { k: "사용하기", big: "ARCTIC" } : enhOpen ? { k: "강화하기", big: "채팅 · 음성" } : null,
   ].filter(Boolean);
 
+  const hasPlus = !!streakV || boosts.length > 0;
   const maxBonus = Math.max(...VOICE_TIERS.map((t) => t.bonus), 1);
 
   return (
@@ -170,7 +171,7 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
 
         {/* 더 붙는 것 | 안 붙는 것 — 값만(설명 문장 없음). 더 붙는 것이 없으면(연속 출석 · 행사 부스트 없음) 왼쪽 상자를 그리지 않는다 */}
         <div className="mt-3 md:mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-          {(streakV || boosts.length > 0) && <div className="rounded-2xl bg-[#f2f2f2] px-5 py-2">
+          {hasPlus && <div className="rounded-2xl bg-[#f2f2f2] px-5 py-2">
             {streakV && <Rule plus k="연속 출석" v={streakV} />}
             {boosts.map((b, i) => {
               const left = b.endAt ? daysLeft(b.endAt) : null;
@@ -178,7 +179,8 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
               return <Rule key={i} plus k={`${b.name} +${fmt(b.boostXp)}`} v={[who ? `${who} 대상` : "전체", left !== null ? `D-${left}` : "진행 중"].join(" · ")} />;
             })}
           </div>}
-          <div className="rounded-2xl bg-[#f2f2f2] px-5 py-2">
+          {/* 혼자면 오른쪽 반이 비어 보인다 — 전체 폭으로 펴고 PC 는 세 줄을 한 줄로 */}
+          <div className={`rounded-2xl bg-[#f2f2f2] px-5 py-2 ${hasPlus ? "" : "md:col-span-2 md:grid md:grid-cols-3 md:gap-x-8 md:[&>*]:border-b-0"}`}>
             <Rule k="잠수 채널" v="음성 XP 없음" />
             <Rule k="제외 채널" v="XP 없음" />
             {muteV && <Rule k="음소거" v={muteV} />}

@@ -981,7 +981,7 @@ const PassNextTile = ({ r, premium = false, locked = false, peekKey = "", onPeek
 // 📌 이름 말풍선 — 이름이 긴 보상(아이템 · 역할)은 칸 안에서 두 줄로 잘린다. 칸을 누르면 그 자리 위(위가 좁으면 아래)에 전체 이름을 띄운다.
 //    칸 크기는 그대로라 트랙이 밀리지 않는다. 다른 곳 누르기 · 트랙 넘기기 · Esc 로 닫힌다(PassModal)
 const passNamed = (r) => r.kind !== "xp" && r.kind !== "point";
-const PASS_PEEK_BTN = "cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white/60 transition-[filter] hover:brightness-125";
+const PASS_PEEK_BTN = "cursor-pointer outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 transition-[filter] hover:brightness-125";
 const PASS_PEEK_ON = { boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.55)" };
 const PASS_PEEK_BG = "#2b1f52";
 const PassPeek = ({ peek, boxW }) => {
@@ -1084,6 +1084,12 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
 
   // 📌 이름 말풍선(PassPeek) — 누른 칸의 자리를 창 기준 좌표로 잡아 둔다. 같은 칸을 다시 누르면 닫힌다
   const [peek, setPeek] = useState(null);
+  // 패스 데이터가 새로 오면(30초 갱신 · 수령) 칸 구성이 바뀔 수 있다 — 말풍선을 닫는다(렌더 중 조정)
+  const [peekFor, setPeekFor] = useState(pass);
+  if (peekFor !== pass) {
+    setPeekFor(pass);
+    if (peek) setPeek(null);
+  }
   const showPeek = (e, key, r) => {
     e.stopPropagation();
     if (peek?.key === key) { setPeek(null); return; }
@@ -3079,8 +3085,8 @@ export default function LevelPage() {
 
 
                       {/* 관리자가 아직 퀘스트를 등록하지 않은 상태 */}
-                      {quests && questRows.length <= (questPeriod === "daily" ? 1 : 0) && (
-                        <EmptySlot>{questPeriod === "daily" ? "추가 퀘스트가 없습니다 — 출석 보상만 진행됩니다" : "등록된 퀘스트가 없습니다"}</EmptySlot>
+                      {quests && questRows.length === 0 && (
+                        <EmptySlot>등록된 퀘스트가 없습니다</EmptySlot>
                       )}
 
                       {/* 화면에 적힌 POINT 는 배율 적용 전 기본값이라 실제 지급액과 다르다 */}
