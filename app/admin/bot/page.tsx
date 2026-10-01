@@ -2352,11 +2352,16 @@ export default function AdminBotPage() {
         {!settings ? loadingRow : QUEST_PICK_FIELDS.map((f) => {
           const total = quests.filter((q) => (q.period || "daily") === f.period && q.enabled).length;
           const pick = Number(settings?.[f.key] ?? 0);
+          // 📌 일일은 출석 포함 개수 — 출석이 한 자리를 차지해 무작위로는 하나 덜 뽑는다(lib/quests.js)
+          const daily = f.period === "daily";
+          const rand = daily ? Math.max(0, pick - 1) : pick;
           return (
             <Field
               key={f.key}
-              label={`${PERIOD_LABEL[f.period]} 노출 개수`}
-              hint={pick > 0 ? `활성 ${total}개 중 ${Math.min(pick, total)}개를 ${f.every}마다 새로 뽑습니다` : `활성 ${total}개를 전부 보여줍니다`}
+              label={`${PERIOD_LABEL[f.period]} 노출 개수${daily ? " (출석 포함)" : ""}`}
+              hint={pick > 0
+                ? daily && rand === 0 ? "출석만 보여줍니다" : `${daily ? "출석 + " : ""}활성 ${total}개 중 ${Math.min(rand, total)}개를 ${f.every}마다 새로 뽑습니다`
+                : `${daily ? "출석 + " : ""}활성 ${total}개를 전부 보여줍니다`}
             >
               <Inline>
                 <input type="number" min={0} max={20} value={settings?.[f.key] ?? 0}

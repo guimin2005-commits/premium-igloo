@@ -222,8 +222,10 @@ async function questState(userId) {
     claimable: false,
   };
 
+  // 📌 일일 노출 개수는 내장 출석 퀘스트를 포함한 개수 — 무작위로는 하나 덜 뽑는다(사이트 lib/quests.js 와 같다)
+  const dailyPick = Math.max(0, Math.floor(Number(setting?.questPickDaily) || 0));
   const picks = {
-    daily: setting?.questPickDaily || 0,
+    daily: dailyPick > 0 ? dailyPick - 1 : 0,
     weekly: setting?.questPickWeekly || 0,
     monthly: setting?.questPickMonthly || 0,
   };
@@ -232,7 +234,8 @@ async function questState(userId) {
 
   const selected = [];
   for (const per of PERIODS) {
-    const chosen = pickQuests(grouped[per], picks[per], `${per}:${keys[per]}`);
+    // 일일 1개 = 출석만 — pickQuests 는 개수 0 을 "전부"로 읽으므로 따로 비운다
+    const chosen = per === "daily" && dailyPick === 1 ? [] : pickQuests(grouped[per], picks[per], `${per}:${keys[per]}`);
     chosen.sort((a, b) => (a.order || 0) - (b.order || 0) || (String(a._id) < String(b._id) ? -1 : 1));
     selected.push(...chosen);
   }
