@@ -13,13 +13,15 @@ import { backdropSrc } from "@/lib/itemBackdrops";
 //           장바구니 · 결제 썸네일처럼 작은 칸은 stage 없이 iconSize 로 그대로.
 //    📌 배경 장면(it.backdrop — lib/itemBackdrops.js, 2026-09-30 "아이콘만 달랑 있어 없어 보인다" → 장면 24종 중 관리자가 고름):
 //       stage 칸에서만 그라데이션 대신 64×64 도트 장면을 꽉 채워 깐다(image-rendering: pixelated — 키워도 도트가 번지지 않게).
-//       상품 이미지가 있으면 이미지가 이긴다. 작은 썸네일(stage 없음 — 장바구니 80px · 결제 56px · 구매 창 80px)은 장면을 쓰지 않는다:
+//       상품 이미지가 있고 장면도 골랐으면(2026-10-01 "내가 등록한 이미지들의 배경도 적용") 장면 위에 이미지를 아이콘처럼 세운다 —
+//       아이콘과 같은 폭 46% · 정사각 · object-contain(투명 PNG 물건 그림이 땅에 선다). 장면을 안 고른 이미지는 예전처럼 칸을 꽉 채운다. 작은 썸네일(stage 없음 — 장바구니 80px · 결제 56px · 구매 창 80px)은 장면을 쓰지 않는다:
 //       깔아서 나란히 비교해 보니 64 → 56 · 80 은 정수 배율이 아니라 도트가 고르게 안 떨어져 자글자글했고,
 //       28~36px 아이콘이 장면 무늬에 묻히며 가운데 정렬이라 땅에 서지도 않았다(2026-09-30 실측 비교 후 결정).
 export default function CardArt({ it, imgClass = "", iconSize = 48, stage = false }: { it: any; imgClass?: string; iconSize?: number; stage?: boolean }) {
   const color = it?.color || itemTypeColor(it?.type);
   const img = it?.imageUrl || it?.itemImageUrl;
-  if (img) {
+  const scene = stage ? backdropSrc(it?.backdrop) : "";
+  if (img && !scene) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={img} alt={it.name || ""} className={`absolute inset-0 w-full h-full object-cover ${imgClass}`} />;
   }
@@ -33,12 +35,14 @@ export default function CardArt({ it, imgClass = "", iconSize = 48, stage = fals
   }
   const icon = String(it?.icon || "");
   const emoji = !!icon && !artKeyOf(icon) && !presetKeyOf(icon) && !/^(art|svg):/.test(icon);
-  const scene = backdropSrc(it?.backdrop);
   // 아이콘 + 도트 그림자 한 덩어리 (배경이 있든 없든 같은 모양)
   const figure = (
     <div className={`flex flex-col items-center ${scene ? "shrink-0" : ""} ${imgClass}`} style={{ width: "46%", marginTop: scene ? "auto" : "-4%" }}>
       {/* 아이콘 — SVG(도트 · 프리셋)는 256 으로 그려 폭 100% 로 맞춘다(여백 없이). 이모지는 96px 고정 */}
-      {emoji ? (
+      {img ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={img} alt={it.name || ""} draggable={false} className="block w-full aspect-square object-contain select-none" />
+      ) : emoji ? (
         <ItemIcon icon={icon} type={it?.type} size={96} color={color} />
       ) : (
         <ItemIcon icon={icon} type={it?.type} size={256} color={color} style={{ width: "100%", height: "auto" }} />

@@ -8,7 +8,7 @@ import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import IconPicker from "../../components/IconPicker";
 import BackdropPicker from "../../components/BackdropPicker";
-import ShopCardArt from "../../arctic/CardArt";
+import ProductCard from "../../arctic/ProductCard";
 import { InventoryItemPreview } from "../../components/Inventory";
 import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor } from "@/lib/items";
 import {
@@ -646,7 +646,6 @@ export default function AdminShopPage() {
   // 취소 · 환불 확인 — 주문 묶음 하나(1개 단위면 여러 건). pool: 돌려줄 수 있는 건(안 쓴 것, 최근 것부터) · cancelCount: 그중 몇 개
   const [cancelTarget, setCancelTarget] = useState<any>(null);
   const [cancelCount, setCancelCount] = useState("");
-  const [showPreview, setShowPreview] = useState(false);
 
   // 📌 상세 칸 — 한 번에 하나만 연다. 폼 탭은 그 탭의 폼 상태(id 유무)가 새로 만들기 / 수정을 가른다
   const [pane, setPane] = useState<PaneKind>("");
@@ -1482,17 +1481,24 @@ export default function AdminShopPage() {
               footer={
                 <>
                   <Btn onClick={submitNearest}>{form.id ? "수정 저장" : "상품 등록"}</Btn>
-                  <Btn variant="secondary" onClick={() => setShowPreview(true)}>
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" aria-hidden>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    카드 미리보기
-                  </Btn>
                   {form.id && <Btn variant="ghost" className={DEL_BTN} onClick={() => setDeleteTarget({ kind: "item", id: form.id })}>삭제</Btn>}
                 </>
               }
             >
+              {/* 📌 카드 미리보기 — 상점 카드(ProductCard)를 폼 값 그대로 늘 보여 준다(아이템 등록의 인벤토리 미리보기와 같은 자리).
+                     예전엔 아래 버튼을 눌러 창으로 열었고, 그 창은 옛 상자형 카드라 실제 상점과 달랐다. 누를 수 없게 막아 둔다 */}
+              <div className="mb-5">
+                <div className={labelClass}>카드 미리보기</div>
+                <div aria-hidden className="rounded-xl border border-[#ededed] bg-white px-4 py-5 flex justify-center pointer-events-none select-none">
+                  <div className="w-[200px]">
+                    <ProductCard
+                      it={{ ...toPayload(form, ""), _id: form.id || "preview", stock: form.stock === "" ? -1 : Number(form.stock) || 0 }}
+                      href="#" wished={false} onWish={() => {}}
+                      overlay={!form.active ? <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">숨김</span> : null}
+                    />
+                  </div>
+                </div>
+              </div>
               <form onSubmit={saveItem}>
                 {/* ── 기본 정보 ── */}
                 <PaneSection title="기본 정보">
@@ -1578,7 +1584,7 @@ export default function AdminShopPage() {
                     </div>
                   </Field>
 
-                  {/* 📌 카드 배경 장면(lib/itemBackdrops.js) — 상품 고유 값이라 아이템을 연동해도 고른다. 상품 이미지가 있으면 이미지가 보인다 */}
+                  {/* 📌 카드 배경 장면(lib/itemBackdrops.js) — 상품 고유 값이라 아이템을 연동해도 고른다. 이미지가 있으면 장면 위에 이미지를 세운다 */}
                   <Field label="배경">
                     <BackdropPicker value={form.backdrop} onChange={(v) => setForm({ ...form, backdrop: v })}
                       color={form.color || itemTypeColor(form.type)} buttonClassName={inputClass} />
@@ -2327,59 +2333,6 @@ export default function AdminShopPage() {
               <Btn variant="ghost" onClick={() => setNoteTarget(null)}>닫기</Btn>
               <Btn onClick={() => processOrder(noteTarget.ids || [noteTarget._id], "completed", noteText)}>완료 처리</Btn>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* 📌 카드 미리보기 — 상점(라이트 톤)에서 실제로 어떻게 보이는지 그대로 렌더 (z-125: 모바일 상세 판 위) */}
-      {showPreview && (
-        <div className="fixed inset-0 z-[125] flex items-center justify-center bg-black/40 p-4 overlay-in" onClick={() => setShowPreview(false)}>
-          <div role="dialog" aria-modal="true" aria-label="카드 미리보기" className="w-full max-w-sm bg-white border border-[#ededed] rounded-2xl p-5 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313]" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[17px] font-black tracking-tight">카드 미리보기</h2>
-              <button type="button" onClick={() => setShowPreview(false)} aria-label="닫기" className="shrink-0 w-9 h-9 rounded-full bg-[#f2f2f2] text-[#5a5a5a] hover:text-[#131313] flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-
-            {/* 상점 배경 위에 실제 카드 마크업 그대로 */}
-            <div className="bg-[#f4f3f2] rounded-2xl p-5">
-              <div className="bg-white rounded-2xl border border-[#ededed] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col">
-                <div className="relative aspect-[4/3] bg-[#e9e8e6] overflow-hidden">
-                  {/* 📌 상점 카드 그림(CardArt stage — 아이콘 칸 폭 46% + 도트 그림자, 배경 장면이면 장면 위 땅에)을 그대로 쓴다.
-                         배경 없음 · 장면을 오갈 때 아이콘 크기가 달라지지 않게 두 경우 모두 같은 그림 (상점 안 편집기 미리보기와 같음) */}
-                  <ShopCardArt it={form} stage />
-                  <TypeBadge type={form.type} className="absolute top-3 left-3 px-2.5 py-1 text-[10px] tracking-wide" />
-                  {form.stock === "0" && (
-                    <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
-                      <span className="text-sm font-black text-[#131313] tracking-wider">SOLD OUT</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-5 flex flex-col flex-1">
-                  <h3 className="text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep">{form.name || "상품명을 입력하세요"}</h3>
-                  {form.description && <p className="text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep whitespace-pre-line">{form.description}</p>}
-
-                  <div className="flex items-center gap-2 mb-4 text-[11px] font-bold text-[#8a8a8a]">
-                    <span>{form.stock === "" ? "재고 무제한" : `남은 수량 ${form.stock}개`}</span>
-                  </div>
-
-                  <div className="mt-auto flex items-end justify-between gap-3">
-                    <div>
-                      <div className="text-xl font-black text-[#131313] tracking-tight tabular-nums">{(Number(form.price) || 0).toLocaleString()}</div>
-                      <div className="text-[10px] font-bold text-[#8a8a8a] tracking-wider">{unit}</div>
-                    </div>
-                    <span className="px-5 py-2.5 rounded-full text-[12px] font-bold bg-[#e91e3f] text-white shadow-[0_4px_12px_rgba(233,30,63,0.25)]">구매하기</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <p className="mt-3 text-center text-[12px] text-[#5a5a5a]">
-              {form.active ? "판매 중 — 상점에 노출됩니다" : "숨김 — 상점에 노출되지 않습니다"}
-              {form.type === "role" && !form.roleId && <span className="block mt-1 font-bold text-[#d01634]">지급할 역할을 선택해야 저장할 수 있습니다</span>}
-            </p>
           </div>
         </div>
       )}
