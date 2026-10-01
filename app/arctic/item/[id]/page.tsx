@@ -251,6 +251,10 @@ export default function ItemDetailPage() {
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-[#131313] mb-3 break-keep">{item.name}</h1>
 
             <div className="mb-6">
+              {/* 정가 취소선은 가격 위에 — 상품 카드(ProductCard)와 같은 순서(사용자: 할인 전 가격이 밑으로 가면 어색) */}
+              {discounted && (
+                <span className="block mb-1.5 text-[14px] text-[#a3a3a3] line-through tabular-nums leading-none">{priceText(item, listPrice)}</span>
+              )}
               <div className="flex items-center gap-2.5 flex-wrap">
                 {discounted && (
                   <span className="px-2 py-1 rounded-md bg-[#e91e3f] text-white text-[12px] font-black leading-none shrink-0">{discountPctOf(item)}% OFF</span>
@@ -264,9 +268,6 @@ export default function ItemDetailPage() {
               {/* 할인 종료 시각이 있으면 언제까지인지 */}
               {discounted && discountUntilLabel(item) && (
                 <span className="block mt-2 text-[12px] font-bold text-[#e91e3f]">할인 {discountUntilLabel(item)}</span>
-              )}
-              {discounted && (
-                <span className="block mt-1 text-[14px] text-[#a3a3a3] line-through tabular-nums">{priceText(item, listPrice)}</span>
               )}
             </div>
 

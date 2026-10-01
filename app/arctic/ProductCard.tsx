@@ -69,9 +69,9 @@ export default function ProductCard({
         {/* 빙옥 전용 상품은 같은 규칙에 단위만 빙옥 (priceText · shownPrice — 올림) */}
         {pct > 0 && <s className="block mt-2 text-[11.5px] text-[#a3a3a3] tabular-nums leading-none">{priceText(it, Number(pick.list || 0))}</s>}
         <p className={`${pct > 0 ? "mt-1" : "mt-2"} text-[19px] md:text-[20px] font-black text-[#131313] tabular-nums leading-none`}>
-          {pct > 0 && <span className="mr-1.5 text-[14px] font-black text-[#e91e3f]">{pct}%</span>}
-          {shownPrice(it, pick.price).toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">{priceUnit(it)}</span>
-          {isTimed(it) && pick.days != null && pick.days > 0 && <span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">/ {durationLabel(pick.days)}</span>}
+          {/* 숫자 · 단위 · 기간은 각각 한 덩어리 — 좁은 칸(폰 2열 · 상세의 다른 상품)에서 "30 / 일"처럼 중간이 끊기지 않게, 넘치면 기간 덩어리째 다음 줄 */}
+          <span className="whitespace-nowrap">{pct > 0 && <span className="mr-1.5 text-[14px] font-black text-[#e91e3f]">{pct}%</span>}{shownPrice(it, pick.price).toLocaleString()}<span className="ml-1 text-[11px] font-bold text-[#8a8a8a]">{priceUnit(it)}</span></span>
+          {isTimed(it) && pick.days != null && pick.days > 0 && <>{" "}<span className="text-[11px] font-bold text-[#8a8a8a] whitespace-nowrap">/ {durationLabel(pick.days)}</span></>}
         </p>
         {from && <p className="mt-1.5 text-[11.5px] font-bold text-[#8a8a8a] tabular-nums leading-none">{durationLabel(from.days)} {priceText(it, from.price)}부터</p>}
       </Link>

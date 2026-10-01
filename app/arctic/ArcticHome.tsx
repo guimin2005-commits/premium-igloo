@@ -8,6 +8,7 @@ import { pointToXp } from "@/lib/pointRate";
 import { isUnitSale, maxPerOrderOf } from "@/lib/unitSale";
 import { SEASON, getSeasonDday } from "@/lib/season";
 import { getTier } from "@/lib/voiceTiers";
+import { siteHref } from "@/lib/siteLink";
 
 // 📌 ARCTIC 홈 — 배너 → 유형 타일 4장 → 두 갈래 큐레이션 → 이번 주.
 //    헤더·유형 줄·독·푸터는 ArcticShopBody 가 그린다. 여기는 홈 본문만.
@@ -249,7 +250,8 @@ export default function ArcticHome({
                   return (
                     <div key={b._id}
                       className={`absolute inset-0 transition-opacity duration-700 ${i === bannerIdx ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-                      {b.link ? <Link href={b.link} className="block w-full h-full relative">{inner}</Link> : inner}
+                      {/* 우리 사이트 전체 주소로 넣은 링크도 지금 화면 안에서 연다(siteHref) */}
+                      {b.link ? <Link href={siteHref(b.link)} className="block w-full h-full relative">{inner}</Link> : inner}
                     </div>
                   );
                 })}
