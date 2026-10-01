@@ -25,7 +25,7 @@ export type ProductForm = {
   roleId: string;
   roleName: string;
   detachOnSeason: boolean;
-  // 📌 빙옥 전용 결제 — 켜면 가격 칸(price · price7 · price30 · priceInf)은 빙옥 단위다. 저장할 때 ×1,000 해 XP 로 보낸다(toPayload)
+  // 📌 빙옥 전용 결제 — 켜면 가격 칸(price · price7 · price30 · priceInf)은 빙옥 단위다. 저장할 때 ×10,000 해 XP 로 보낸다(toPayload)
   pointOnly: boolean;
   price: string;
   discountPct: string;
@@ -105,7 +105,7 @@ export const isLinked = (f: ProductForm | null | undefined) => !!f?.itemId;
 // 📌 가격 칸 단위 — 빙옥 전용이면 빙옥, 아니면 XP. 저장값(XP) ↔ 입력칸 값을 여기서만 바꾼다
 export const formUnit = (f: ProductForm | null | undefined) => (f?.pointOnly ? "빙옥" : "XP");
 const PRICE_KEYS = ["price", "price7", "price30", "priceInf"] as const;
-// 저장값(XP) → 입력칸 값. 빙옥 전용이면 빙옥(저장값은 1,000 의 배수라 끝전이 없다 — 옛 값은 올림)
+// 저장값(XP) → 입력칸 값. 빙옥 전용이면 빙옥(저장값은 10,000 의 배수라 끝전이 없다 — 옛 값은 올림)
 const toField = (xp: any, pointOnly: boolean) => {
   if (xp == null || xp === "") return "";
   return String(pointOnly ? xpToPoint(xp) : xp);
@@ -149,7 +149,7 @@ export const formFromShopItem = (it: any): ProductForm => ({
   maxPerOrder: String(it.unitSale ? clampPerOrder(it.maxPerOrder || DEFAULT_PER_ORDER) : DEFAULT_PER_ORDER),
 });
 
-// 📌 빙옥 전용 켜기 · 끄기 — 입력해 둔 값은 같은 값어치로 바꿔 둔다(XP → 빙옥은 올림, 빙옥 → XP 는 ×1,000)
+// 📌 빙옥 전용 켜기 · 끄기 — 입력해 둔 값은 같은 값어치로 바꿔 둔다(XP → 빙옥은 올림, 빙옥 → XP 는 ×10,000)
 export const setPointOnly = (f: ProductForm, on: boolean): ProductForm => {
   if (!!f.pointOnly === on) return f;
   const next: ProductForm = { ...f, pointOnly: on };
@@ -162,7 +162,7 @@ export const setPointOnly = (f: ProductForm, on: boolean): ProductForm => {
 };
 
 // 📌 가격 칸 아래 계산 한 줄(관리자 화면) — 입력할 때마다 바로 계산한다. 사용자가 직접 요청한 안내(빙옥 계산 방식)
-//    일반: "빙옥으로 내면 N 빙옥 · 1 빙옥 = 1,000 XP" · 빙옥 전용: "N 빙옥 = N×1,000 XP 상당"
+//    일반: "빙옥으로 내면 N 빙옥 · 1 빙옥 = 10,000 XP" · 빙옥 전용: "N 빙옥 = N×10,000 XP 상당"
 export const priceCalc = (f: ProductForm | null | undefined, raw: string | number) => {
   const n = Math.max(0, Math.floor(Number(raw) || 0));
   if (!n) return "";
@@ -247,7 +247,7 @@ export const applyItem = (f: ProductForm, item: any): ProductForm => {
 export const unlinkItem = (f: ProductForm): ProductForm => ({ ...f, itemId: "", itemImageUrl: "" });
 
 // 서버로 보낼 본문 — 등록된 아이템이면 서버가 표기를 다시 복사하므로 여기 값은 참고용이다 (imageUrl 은 항상 이 값이 저장된다)
-//    📌 가격은 늘 XP 로 보낸다 — 빙옥 전용이면 입력칸(빙옥) × 1,000. 서버도 1,000 의 배수로 한 번 더 맞춘다
+//    📌 가격은 늘 XP 로 보낸다 — 빙옥 전용이면 입력칸(빙옥) × 10,000. 서버도 10,000 의 배수로 한 번 더 맞춘다
 export const toPayload = (f: ProductForm, roleName: string) => ({
   ...f,
   pointOnly: !!f.pointOnly,

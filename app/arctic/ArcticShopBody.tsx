@@ -498,7 +498,7 @@ export default function ArcticShopBody({
 
     // 📌 카드 가격은 기본 무제한. 가격 필터 · "살 수 있는 것만" 을 켜면 그 조건을 통과하는 기간(무제한 > 가장 긴 기간)의 값을 건다 —
     //    필터 · 정렬 · 카드 표기가 모두 그 값(_pick)을 본다. 조건을 통과하는 기간이 하나도 없으면 목록에서 빠진다
-    // 빙옥도 함께 낼 수 있으니 XP + 빙옥 × 1,000 까지 산다 — 빙옥 전용 상품은 빙옥만 (affordFor)
+    // 빙옥도 함께 낼 수 있으니 XP + 빙옥 × 10,000 까지 산다 — 빙옥 전용 상품은 빙옥만 (affordFor)
     //    가격대는 XP 값(빙옥 전용은 XP 로 친 값) 기준 — 정렬과 같은 값
     const inRange = (p: number) => p >= range.min && p < range.max;
     const filtered = items.flatMap((it) => {
@@ -1487,7 +1487,7 @@ export default function ArcticShopBody({
 
                   {/* ── 가격 · 기간 ── */}
                   <FormGroup title="가격 · 기간" summary={efPriceSummary} open={openGroups.price} onToggle={() => toggleGroup("price")}>
-                    {/* 📌 빙옥 전용 — 켜면 가격 칸은 빙옥으로 받고 ×1,000 해 XP 로 저장한다. 새 기프트카드는 켜진 채로 시작한다 */}
+                    {/* 📌 빙옥 전용 — 켜면 가격 칸은 빙옥으로 받고 ×10,000 해 XP 로 저장한다. 새 기프트카드는 켜진 채로 시작한다 */}
                     <div>
                       <label className={F_LABEL}>결제 수단</label>
                       <FormToggle on={!!editForm.pointOnly} onClick={() => setEditForm(setPointOnly(editForm, !editForm.pointOnly))}

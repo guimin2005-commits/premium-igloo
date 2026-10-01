@@ -1660,7 +1660,7 @@ export default function AdminShopPage() {
 
                 {/* ── 가격 · 기간 ── */}
                 <PaneSection title="가격 · 기간">
-                  {/* 📌 빙옥 전용 — 켜면 가격 칸은 빙옥으로 받고 ×1,000 해 XP 로 저장한다. 새 기프트카드는 켜진 채로 시작한다 */}
+                  {/* 📌 빙옥 전용 — 켜면 가격 칸은 빙옥으로 받고 ×10,000 해 XP 로 저장한다. 새 기프트카드는 켜진 채로 시작한다 */}
                   <div className="mb-4">
                     <Toggle on={!!form.pointOnly} onClick={() => setForm(setPointOnly(form, !form.pointOnly))}
                       onLabel="빙옥 전용" offLabel="XP · 빙옥 결제" />

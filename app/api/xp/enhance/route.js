@@ -106,7 +106,7 @@ export async function POST(request) {
       );
     }
     // 📌 관리자도 일반 유저와 똑같이 차감한다 — 테스트로 올린 단계는 관리자 초기화로 되돌린다
-    //    비용은 XP 로만 정한다. 빙옥으로 내면 환율(1 빙옥 = 1,000 XP · 올림 — lib/pointRate.js)을 적용한 값을 뺀다
+    //    비용은 XP 로만 정한다. 빙옥으로 내면 환율(1 빙옥 = 10,000 XP · 올림 — lib/pointRate.js)을 적용한 값을 뺀다
     const field = payMethod === "point" ? "point" : "xp";
     const charged = field === "point" ? xpToPoint(cost) : cost;
     const shortMsg = payMethod === "point" ? "보유 빙옥이 부족합니다." : "보유 XP가 부족합니다.";

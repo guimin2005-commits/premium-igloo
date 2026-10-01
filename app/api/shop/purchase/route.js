@@ -110,7 +110,7 @@ export async function POST(request) {
       ShopItem.updateOne({ _id: item._id }, item.stock >= 0 ? { $inc: { stock: 1, soldCount: -1 } } : { $inc: { soldCount: -1 } });
 
     // 2) 결제 — 빙옥은 원하는 만큼(pointUse 개) 쓰고, 나머지를 XP 로 낸다 (장바구니 결제와 같은 계약 — lib/shopPay.js planPayment)
-    //    가격은 XP 하나만 둔다. 가격(XP)에서 빙옥 몫(1 빙옥 = 1,000 XP — lib/pointRate.js)을 뺀 나머지가 XP 차감액이다.
+    //    가격은 XP 하나만 둔다. 가격(XP)에서 빙옥 몫(1 빙옥 = 10,000 XP — lib/pointRate.js)을 뺀 나머지가 XP 차감액이다.
     //    빙옥 상한은 xpToPoint(가격)(올림) — 넘게 보내면 상한으로 깎는다. 끝전 때문에 빙옥 몫이 가격보다 크면 XP 는 0.
     //    옛 요청의 payMethod "point" 는 전부 빙옥으로 친다.
     //    📌 빙옥 전용 상품은 pointUse 를 보지 않는다 — 판매가 전부를 빙옥(xpToPoint, 올림)으로만 뺀다. XP 는 0

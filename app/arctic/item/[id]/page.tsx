@@ -176,7 +176,7 @@ export default function ItemDetailPage() {
   }, 0);
   const soldOut = item.stock === 0;
   const wished = wish.includes(item._id);
-  // 📌 빙옥도 함께 낼 수 있다(결제 화면에서 고른다) — XP + 빙옥 × 1,000 으로 판정. 빙옥 전용 상품은 빙옥만(affordFor)
+  // 📌 빙옥도 함께 낼 수 있다(결제 화면에서 고른다) — XP + 빙옥 × 10,000 으로 판정. 빙옥 전용 상품은 빙옥만(affordFor)
   const po = isPointOnly(item);
   // 1개 단위는 고른 수량만큼 — 빙옥 전용은 1개 값(올림) × 수량(결제 · 장바구니와 같은 계산)
   const affordable = myXp != null && (po ? shownPrice(item, sp) * qty <= (myPoint ?? 0) : affordFor(item, myXp, myPoint ?? 0)(sp * qty));

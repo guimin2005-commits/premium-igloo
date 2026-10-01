@@ -56,8 +56,8 @@ export async function POST(request) {
     if (!b.name?.trim()) {
       return NextResponse.json({ success: false, message: "상품명을 입력해주세요." }, { status: 400 });
     }
-    // 📌 빙옥 전용 — 폼은 빙옥으로 받아 ×1,000 한 XP 를 보낸다(productForm toPayload). 가격은 늘 XP 로 저장하되
-    //    1 빙옥(1,000 XP)의 배수로 맞춘다(올림) — 표기 "N 빙옥"과 저장값이 끝전 없이 같게. 기간별 가격도 같다
+    // 📌 빙옥 전용 — 폼은 빙옥으로 받아 ×10,000 한 XP 를 보낸다(productForm toPayload). 가격은 늘 XP 로 저장하되
+    //    1 빙옥(10,000 XP)의 배수로 맞춘다(올림) — 표기 "N 빙옥"과 저장값이 끝전 없이 같게. 기간별 가격도 같다
     const pointOnly = !!b.pointOnly;
     const toXp = (v) => {
       const n = Math.max(0, Math.floor(Number(v) || 0));

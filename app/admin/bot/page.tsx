@@ -1788,7 +1788,7 @@ export default function AdminBotPage() {
                       <input type="text" value={grantForm.target} onChange={(e) => setGrantForm({ ...grantForm, target: e.target.value })}
                         placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
                     </Field>
-                    {/* 📌 빙옥은 1 = 1,000 XP 단위(lib/pointRate) — XP 숫자를 그대로 넣지 않게 입력 옆에 환율을 둔다 */}
+                    {/* 📌 빙옥은 1 = 10,000 XP 단위(lib/pointRate) — XP 숫자를 그대로 넣지 않게 입력 옆에 환율을 둔다 */}
                     <Field
                       label={<>지급 {grantUnit} <Req /></>}
                       hint={`${grantKind === "point" ? `1 빙옥 = ${POINT_RATE.toLocaleString()} XP · ` : ""}음수를 넣으면 회수됩니다 (보유량을 넘지 않게 잘립니다)`}

@@ -65,7 +65,7 @@ export async function POST(request) {
     }
 
     // 가격은 서버 설정값만 쓴다 — 클라이언트가 보낸 금액은 보지 않는다.
-    //    해금가는 XP 단위로 저장되고, 빙옥 환율(1 빙옥 = 1,000 XP · 올림 — lib/pointRate.js)을 적용한 값을 뺀다.
+    //    해금가는 XP 단위로 저장되고, 빙옥 환율(1 빙옥 = 10,000 XP · 올림 — lib/pointRate.js)을 적용한 값을 뺀다.
     //    📌 XP 로 내지 않으므로 진행도 기준선(passBaseXp)은 건드리지 않는다
     const charge = state.unlockPoint;
     // 📌 화면이 확인창에서 보여 준 금액(expectedPoint)과 다르면 빼지 않는다 — 보는 사이 관리자가 해금가를 바꾼 경우
