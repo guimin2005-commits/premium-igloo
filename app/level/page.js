@@ -1734,6 +1734,10 @@ export default function LevelPage() {
   const [meLoaded, setMeLoaded] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const prevXpRef = useRef(null);              // XP 증가·레벨업 감지용
+  // 📌 레벨업 효과음은 내 대시보드 탭에서만 — 폴링은 랭킹 · 안내 탭에서도 돌지만 거기서는 토스트만 띄운다.
+  //    prevXpRef 는 탭과 상관없이 갱신되므로 다른 탭에서 지나간 레벨업이 대시보드로 돌아왔을 때 뒤늦게 울리지 않는다
+  const onDashRef = useRef(activeMainTab === "my");
+  useEffect(() => { onDashRef.current = activeMainTab === "my"; }, [activeMainTab]);
 
   // 토스트 — XP 획득/레벨업/동기화 피드백
   const [toasts, setToasts] = useState([]);
@@ -1779,7 +1783,7 @@ export default function LevelPage() {
         const d = keepSaved(meRes.data, t0, skinSavedRef.current, badgeSavedRef.current);
         const prev = prevXpRef.current;
         if (prev && d.xp > prev.xp) { pushToast(`+${(d.xp - prev.xp).toLocaleString()} XP 획득`); sfxXp(); }
-        if (prev && d.level > prev.level) { pushToast(`레벨 업! Lv.${prev.level} → Lv.${d.level}`, true); sfxLevelUp(); }
+        if (prev && d.level > prev.level) { pushToast(`레벨 업! Lv.${prev.level} → Lv.${d.level}`, true); if (onDashRef.current) sfxLevelUp(); }
         prevXpRef.current = d;
         setMe(d);
         setLastSync(new Date());
