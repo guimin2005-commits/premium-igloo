@@ -948,7 +948,7 @@ export default function ArcticShopBody({
       {/* 시즌 탭 — 맨 위 시즌 배너(노출 위치 '시즌 탭'). 홈과 같은 한 벌 · 같은 규칙(없으면 이 자리 없음) */}
       {seasonTop && (
         <BannerSlider banners={seasonBanner.banners} bannerIdx={seasonBanner.idx} setBannerIdx={seasonBanner.setIdx}
-          bannerRatio={seasonBanner.ratio} fitRatio={seasonBanner.fitRatio} isAdmin={isAdmin} />
+          bannerRatio={seasonBanner.ratio} fitRatio={seasonBanner.fitRatio} isAdmin={isAdmin} loaded={seasonBanner.loaded} />
       )}
       <section className="max-w-7xl mx-auto px-5 md:px-8 pt-8">
         {/* 시즌 탭 — 시즌 번호 · 이름 · D-day 머리줄. 필터 줄은 그 아래 (큐레이션이 빠져도 필터 줄이 안 움직이게) */}

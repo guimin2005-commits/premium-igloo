@@ -212,7 +212,7 @@ export default function ArcticHome({
     <>
       {/* ── 배너 (관리자 등록 · 노출 위치 '홈') — 등록된 배너가 없으면 이 자리는 아예 없다.
              모양 · 넘김은 시즌 탭과 한 벌(BannerSlider) ── */}
-      <BannerSlider banners={banners} bannerIdx={bannerIdx} setBannerIdx={setBannerIdx} bannerRatio={bannerRatio} fitRatio={fitRatio} isAdmin={isAdmin} />
+      <BannerSlider banners={banners} bannerIdx={bannerIdx} setBannerIdx={setBannerIdx} bannerRatio={bannerRatio} fitRatio={fitRatio} isAdmin={isAdmin} loaded={bannersLoaded} />
 
       {/* ── 두 갈래 큐레이션 ── */}
       <section ref={curRef} className="max-w-7xl mx-auto px-5 md:px-8 pt-12 md:pt-14" style={lockH ? { minHeight: lockH } : undefined}>

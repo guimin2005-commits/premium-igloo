@@ -25,7 +25,16 @@ const useNarrow = () => useSyncExternalStore(subNarrow, () => window.matchMedia(
 // 모바일 배너 틀 비율 범위 (관리자 배너 편집의 모바일 미리보기와 같은 값)
 const M_RATIO_MIN = 0.8;
 const M_RATIO_MAX = 3;
+// 📌 이미지를 불러오기 전 틀 비율 — 관리자 배너 편집의 권장 크기와 같다(PC 2400×600 = 4:1 · 모바일 1080×720 = 3:2).
+//    목록을 받는 동안 잡아 두는 자리도 이 비율이라, 받은 뒤 · 이미지가 뜬 뒤에도 높이가 그대로다
+const PC_RATIO = 4;
+const M_RATIO_DEFAULT = 1.5;
 const hasMobileArt = (b: any) => typeof b?.mobileImageUrl === "string" && b.mobileImageUrl.trim() !== "";
+// 위치마다 지난번에 받은 배너 수 — 모듈에 둔다(화면을 떠났다 돌아와도 남는다). 클라이언트에서 받은 뒤에만 채워진다
+const lastCount: Partial<Record<BannerPlacement, number>> = {};
+// 바탕 · 바깥 여백은 배너와 자리(불러오는 중)가 한 벌 — 둘의 높이가 어긋나지 않게
+const BOX = "max-w-7xl mx-auto px-5 md:px-8 pt-5 md:pt-6";
+const FRAME = "relative overflow-hidden bg-[#f2f2f2]";
 
 // ── 배너 상태 한 벌 (위치 하나) ──
 //    status 는 next-auth 세션 상태 — 세션이 정해진 뒤에 받는다(관리자는 숨김 배너까지 ?all=1).
@@ -33,14 +42,15 @@ const hasMobileArt = (b: any) => typeof b?.mobileImageUrl === "string" && b.mobi
 //    playing 이 false 면 자동 넘김을 멈춘다(시즌 탭이 안 보일 때 뒤에서 넘기며 다시 그리지 않게)
 export function useBanners(placement: BannerPlacement, status: string, isAdmin: boolean, playing = true) {
   const [banners, setBanners] = useState<any[]>([]);
-  // 배너를 다 불러오기 전에는 자리만 비워 둔다 — 시즌 히어로가 먼저 떴다 사라지면 튀어 보인다
-  const [loaded, setLoaded] = useState(false);
+  // 📌 목록을 받기 전에는 배너 자리를 미리 잡아 둔다(BannerSlider) — 받은 뒤 배너가 생기며 아래 내용이 밀리지 않게.
+  //    지난번에 받아 보니 0개였던 자리는 처음부터 '받음'으로 쳐 자리를 잡지 않는다(잡았다 없애면 한 번 줄어든다)
+  const [loaded, setLoaded] = useState(() => lastCount[placement] === 0);
   const [idx, setIdx] = useState(0);
   /* 📌 배너 틀 비율 — 이미지가 실제로 가진 비율에 맞춘다.
      틀을 3/1(모바일)·4/1(PC) 로 고정해 두면 object-cover 가 남는 쪽을 잘라내
      같은 배너가 기기마다 다르게 보인다(모바일에서 좌우가 잘렸다).
      여러 장이면 가장 넓은 비율에 맞춰 어느 것도 좌우가 잘리지 않게 한다. */
-  const [ratio, setRatio] = useState(4);
+  const [ratio, setRatio] = useState(PC_RATIO);
   const fitRatio = (img: HTMLImageElement) => {
     const r = img.naturalWidth / img.naturalHeight;
     if (!Number.isFinite(r) || r <= 0) return;
@@ -54,7 +64,8 @@ export function useBanners(placement: BannerPlacement, status: string, isAdmin: 
       .then((r) => r.json())
       .then((d) => {
         const list = Array.isArray(d?.data) ? d.data : [];
-        setRatio(4);
+        lastCount[placement] = list.length;
+        setRatio(PC_RATIO);
         setBanners(list);
         // 📌 다시 받아 장 수가 줄면(관리자 '유저 화면' 미리보기 → 숨김 배너 빠짐) 보던 장 번호가 목록 밖이라 틀이 회색으로 비었다 — 첫 장으로
         setIdx((i) => (i < list.length ? i : 0));
@@ -81,9 +92,10 @@ type Props = {
   bannerRatio: number;
   fitRatio: (img: HTMLImageElement) => void;
   isAdmin: boolean;
+  loaded: boolean; // useBanners 의 loaded — 목록을 받기 전이면 배너 자리만 잡아 둔다
 };
 
-export default function BannerSlider({ banners, bannerIdx, setBannerIdx, bannerRatio, fitRatio, isAdmin }: Props) {
+export default function BannerSlider({ banners, bannerIdx, setBannerIdx, bannerRatio, fitRatio, isAdmin, loaded }: Props) {
   // 📌 모바일 배너 — 폰에서는 모바일 이미지가 있는 배너만 돈다(2026-10-01 "모바일에서 모바일 배너 적용이 안 된다":
   //    예전엔 한 장이라도 모바일 이미지가 없으면 전부 PC 이미지로 돌아가, 배너 하나 때문에 다 PC 로 보였다).
   //    모바일 이미지가 하나도 없으면 PC 이미지 그대로(4:1 이미지를 폰 틀에 억지로 넣으면 위아래가 크게 비거나 잘린다).
@@ -107,17 +119,29 @@ export default function BannerSlider({ banners, bannerIdx, setBannerIdx, bannerR
   };
   const mRatio = useMemo(() => {
     const rs = banners.map((b) => mRatios[String(b.mobileImageUrl || "").trim()]).filter((r): r is number => !!r);
-    // 아직 한 장도 안 불러왔으면 2:1 자리만 잡아 둔다
-    return rs.length ? Math.min(M_RATIO_MAX, Math.max(M_RATIO_MIN, Math.max(...rs))) : 2;
+    // 아직 한 장도 안 불러왔으면 권장 비율(3:2) 자리를 잡아 둔다 — 목록을 받는 동안의 자리와 같은 높이
+    return rs.length ? Math.min(M_RATIO_MAX, Math.max(M_RATIO_MIN, Math.max(...rs))) : M_RATIO_DEFAULT;
   }, [banners, mRatios]);
 
-  /* ── 등록된 배너가 없으면 이 자리는 아예 없다.
+  /* 📌 목록을 받는 동안 — 배너와 같은 바탕 · 여백 · 비율(모바일 3:2 · PC 4:1)의 빈 자리.
+        폭 판정은 CSS(md) 로 한다 — 첫 화면(SSR)에서도 폰은 폰 비율로 잡히게(useNarrow 는 서버에서 늘 PC). */
+  if (!loaded) {
+    return (
+      <section aria-hidden className={BOX}>
+        <div className={FRAME}>
+          <div className="md:hidden" style={{ aspectRatio: String(M_RATIO_DEFAULT) }}></div>
+          <div className="hidden md:block" style={{ aspectRatio: String(PC_RATIO) }}></div>
+        </div>
+      </section>
+    );
+  }
+  /* ── 받아 보니 등록된 배너가 없으면 이 자리는 아예 없다.
         예전엔 시즌 히어로(민트 화면)를 대신 깔았는데 들어올 때마다 튀어나와 없앴다.
         모서리는 각지게, 폭은 본문 폭 안에 (화면 끝까지 채우면 너무 꽉 찬다) ── */
   if (banners.length === 0) return null;
   return (
-    <section className="max-w-7xl mx-auto px-5 md:px-8 pt-5 md:pt-6">
-      <div className="relative overflow-hidden bg-[#f2f2f2]">
+    <section className={BOX}>
+      <div className={FRAME}>
         <div className="relative" style={{ aspectRatio: String(mobileArt ? mRatio : bannerRatio) }}>
           {banners.map((b, i) => {
             if (!shows(b)) return null;
