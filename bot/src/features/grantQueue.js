@@ -313,6 +313,16 @@ async function processRoleSyncs(guild) {
   }
 }
 
+// 📌 만료 DM 의 이용 일수 — days 가 비어 있는(0) 기록은 시작(연장분은 startsAt) ~ 만료로 잰다(올림, 최소 1).
+//    "이용 기간(0일)" 이 나가지 않게 — 사이트 역할 이전의 기간 적용은 days 를 채우지만 옛 기록 · 다른 경로를 막아 둔다
+const DAY_MS = 86400000;
+function usedDays(p) {
+  if (Number(p.days) > 0) return Number(p.days);
+  const start = new Date(p.startsAt || p.createdAt || p.processedAt).getTime();
+  const end = new Date(p.expiresAt).getTime();
+  return Number.isFinite(start) && Number.isFinite(end) && end > start ? Math.max(1, Math.ceil((end - start) / DAY_MS)) : 1;
+}
+
 // ── 기간제 역할 회수 ──────────────────────────
 //    산 기간이 지난 구매 건을 찾아 역할을 거둬들인다.
 //    같은 역할을 다른 경로(다른 상품·코드 등)로 아직 갖고 있으면 남겨 둔다.
@@ -331,7 +341,11 @@ async function processExpiries(guild) {
       const member = await fetchMember(guild, p.userId);
       // 같은 역할을 주는, 아직 살아 있는 다른 구매(pending 연장분 포함)가 있으면 회수하지 않는다
       const holder = member && p.roleId ? await findRoleHolder(p, now) : null;
-      if (member && p.roleId && !holder) await member.roles.remove(p.roleId, `ARCTIC 기간 만료: ${p.itemName}`);
+      // 📌 이미 떼어 낸 사이트 보유 기록(siteOnly · roleDetached)은 역할을 다시 떼지 않는다 — 떼는 일은 processDetachments 가 끝냈다.
+      //    다시 떼면 그 사이 다른 경로로 다시 받은 같은 역할을 떼고, 옛 역할을 지운 뒤(10011)엔 영구 실패로 빠져 만료 DM 이 사라진다.
+      //    만료 처리(expired) · DM 흐름은 그대로
+      const detached = p.siteOnly === true && p.roleDetached === true;
+      if (member && p.roleId && !holder && !detached) await member.roles.remove(p.roleId, `ARCTIC 기간 만료: ${p.itemName}`);
 
       // 📌 completed 일 때만 expired 로 — 그 사이 관리자가 환불(refunded)했으면 덮어쓰지 않는다 (역할은 환불 큐가 뗀다)
       const done = await Purchase.updateOne(
@@ -339,14 +353,14 @@ async function processExpiries(guild) {
         { $set: { status: "expired", revokedAt: now, error: "" } }
       );
       if (!done.modifiedCount) continue;
-      console.log(`⌛ 기간제 역할 회수: ${p.userName} → ${p.itemName} (${p.days}일)`);
+      console.log(`⌛ 기간제 역할 회수: ${p.userName} → ${p.itemName} (${usedDays(p)}일)`);
 
       // 📌 DM 은 expired 로 바꾼 뒤에 한 번만 — 연장분이 이어 가거나 같은 역할 · 아이템이 남아 있으면 끝난 게 아니라 보내지 않는다.
       //    (역할 없는 아이템도 이어지는 구매가 없으면 알린다)
       //    📌 이미 소모한 건(consumedAt — 쓴 보호막 등)은 역할 회수 · expired 전환만 하고 알리지 않는다
       if (member && !holder && !p.consumedAt) {
         try {
-          if (!(await findContinuation(p, now))) sendDm(member, "expired", { item: p.itemName, days: p.days });
+          if (!(await findContinuation(p, now))) sendDm(member, "expired", { item: p.itemName, days: usedDays(p) });
         } catch (e) {
           console.error(`⌛ 만료 DM 확인 실패 (${p.userName} / ${p.itemName}):`, e.message);
         }

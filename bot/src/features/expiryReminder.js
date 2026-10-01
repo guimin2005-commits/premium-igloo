@@ -25,21 +25,28 @@ async function readSetting() {
   };
 }
 
-// 연장하기 주소 — 상점 상품 상세. 산 상품이 판매 중이면 그것, 아니면 같은 아이템(itemRef)을 파는 판매 중 상품, 없으면 인벤토리
+// 📌 연장할 수 있는 상품 — 기간제 판매 옵션(일수 > 0 · 가격 > 0)이 있어야 한다. 무기한만 파는 상품(예: 출석 XP Boost+)은 연장이 없다.
+//    사이트 인벤토리의 연장 링크(app/api/shop/my-items canRenew = lib/shopPricing durationOptions 에 일수 > 0)와 같은 기준
+const canRenew = (s) => Array.isArray(s?.durations) && s.durations.some((d) => d && Number(d.days) > 0 && Number(d.price) > 0);
+
+// 연장하기 주소 — 상점 상품 상세. 산 상품이 판매 중인 기간제면 그것, 아니면 같은 아이템(itemRef)을 파는 판매 중 기간제 상품(정렬 순 첫 번째).
+//   없으면 "" — 메시지 틀이 [연장하기]() 줄과 제목 링크를 뺀다(botMessages fill · safeUrl). 연장할 수 없는데 '연장하기' 가 가지 않게
 //   📌 판매 중(active)만 — 내린 상품의 상세는 유저에게 "상품을 찾을 수 없습니다" 로 뜬다 (api/shop/items/[id] 와 같은 기준).
-//      운영진 지급 · 패스 보상은 상품 id 가 없어 itemRef 로만 찾는다
+//      운영진 지급 · 패스 보상은 상품 id 가 없어 itemRef 로만 찾는다.
+//      active · sortOrder 는 봇 ShopItem 스키마(db.js)에 없는 칸이지만 조건 · 읽기 칸으로는 그대로 간다(strictQuery 꺼짐 · lean)
 async function renewUrlOf(p) {
   const own = OBJECT_ID_RE.test(String(p.itemId || "")) ? String(p.itemId) : "";
   const ref = OBJECT_ID_RE.test(String(p.itemRef || "")) ? String(p.itemRef) : "";
   const or = [];
   if (own) or.push({ _id: own });
   if (ref) or.push({ itemId: ref });
-  if (or.length) {
-    const rows = await ShopItem.find({ $or: or, active: true }, { _id: 1 }).lean().catch(() => []);
-    const pick = rows.find((r) => String(r._id) === own) || rows[0];
-    if (pick) return `${SITE_URL}/arctic/item/${pick._id}`;
-  }
-  return `${SITE_URL}/arctic/inventory`;
+  if (!or.length) return "";
+  const rows = await ShopItem.find({ $or: or, active: true }, { _id: 1, itemId: 1, durations: 1, sortOrder: 1 }).lean().catch(() => []);
+  const ok = rows.filter(canRenew);
+  const pick =
+    ok.find((r) => String(r._id) === own) ||
+    ok.filter((r) => ref && String(r.itemId || "") === ref).sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0))[0];
+  return pick ? `${SITE_URL}/arctic/item/${pick._id}` : "";
 }
 
 async function fetchMember(guild, userId) {

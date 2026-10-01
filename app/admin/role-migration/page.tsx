@@ -1,30 +1,39 @@
 "use client";
 
 // 📌 역할 이전 — 지난 시즌 디스코드 역할을 사이트 인벤토리 아이템으로 옮긴다(app/api/admin/role-migration).
-//    목록 틀: 머리 + 탭(역할 · 진행) → 검색 · 보기 한 줄 → 역할 표 → 줄을 누르면 오른쪽 상세 칸(이전 방식 고르기).
-//    [미리보기](쓰기 없음) → 역할별 숫자 → [이전 실행] 확인 창 → 결과 · 진행(봇이 역할을 뗀 수 / 남은 수).
+//    목록 틀: 머리 + 탭(역할 · 진행) → 검색 · 보기 한 줄 → 역할 표 → 줄을 누르면 오른쪽 상세 칸(이전 방식 · 기간 고르기).
+//    [미리보기](쓰기 없음) → 역할별 분류 · 숫자 → [이전 실행] 확인 창 → 결과 · 진행(봇이 역할을 뗀 수 / 남은 수).
+//    진행 탭: 역할마다 이전 기록의 기간 → 줄을 누르면 [기간 적용](미리보기 → 확인 창 → 실행).
 //    역할을 실제로 떼는 것은 봇 큐(processDetachments)다 — 이 화면 · API 는 디스코드 역할을 직접 바꾸지 않는다.
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   AdminPage, AdminTabs, Toolbar, SearchInput, Segmented, Btn, SwapLabel, DataTable, DetailPane, DefRow,
-  StatusChip, StatRow, Panel, ConfirmDialog, EmptyRow, Switch, inputClass, labelClass, useAdminGuard, useNotice, type Column,
+  StatusChip, StatRow, Panel, ConfirmDialog, EmptyRow, Switch, inputClass, numClass, labelClass, useAdminGuard, useNotice, type Column,
 } from "../ui";
 import { ITEM_TYPE_LABEL } from "@/lib/items";
 
 type NewType = "item" | "cosmetic" | "perk";
 type ItemRef = { id: string; name: string; type: string; visible?: boolean; linked?: boolean };
+// 기간 — 서버 값(route.js parsePeriod) · 입력 중 값(글자 그대로 — 고치는 중 빈칸 · 지난 날짜도 들고 있는다)
+type Period = { mode: "forever" } | { mode: "days"; days: number } | { mode: "until"; until: string };
+type PeriodMode = Period["mode"];
+type PeriodIn = { mode: PeriodMode; days: string; until: string };
 type Role = {
   id: string; name: string; color: string; position: number; holders: number;
   excluded: string; buff: boolean; item: ItemRef | null; live: number; migrated: number;
+  period: Period; durations: number[];
 };
-type ItemOpt = { id: string; name: string; type: string; roleId: string; color: string; visible: boolean };
+type ItemOpt = { id: string; name: string; type: string; roleId: string; color: string; visible: boolean; durations: number[] };
 type Data = { at: number; members: number; bots: number; botTop: number; roles: Role[]; items: ItemOpt[] };
-type Choice = { mode: "new" | "existing"; type: NewType; name: string; itemId: string };
+type Choice = { mode: "new" | "existing"; type: NewType; name: string; itemId: string; period: PeriodIn };
+type Cls = { timed: number; forever: number; ended: number; pending: number; refund: number; none: number };
 type PlanRow = {
   roleId: string; roleName: string; color: string; excluded: string; error: string; mode: string;
   item: { id: string; name: string; type: string } | null; keepRole: boolean;
+  // terms — 새로 만들 기록(이어 붙인 것 포함)의 기간 요약
+  period: Period; terms: Terms; cls: Cls; roleLeft: number;
   holders: number; insert: number; convert: number; skipped: number;
   inserted?: number; converted?: number; created?: boolean;
 };
@@ -34,9 +43,16 @@ type Totals = {
 };
 type Failed = { roleId: string; roleName: string; userId: string; userName: string; reason: string };
 type Result = { at: number; roles: PlanRow[]; totals: Totals; failed?: Failed[] };
+type Terms = { forever: number; timed: number; minEnd: number | null; maxEnd: number | null };
 type StatusRow = {
   roleId: string; name: string; color: string; gone: boolean; item: ItemRef | null;
+  period: Period; durations: number[]; terms: Terms;
   records: number; kept: number; waiting: number; retrying: number; detached: number; failed: number; holders: number | null;
+};
+// 기간 적용 미리보기 · 결과 — 대상 · 바뀜 · 그대로 · 제외 · 연장 있음(뒤에 연장이 붙어 그대로 둔 것) · 새 만료(가장 이른 / 늦은, 무기한이면 null)
+type TermRes = {
+  roleId: string; period: Period; total: number; change: number; same: number; excluded: number; chained: number;
+  minEnd: number | null; maxEnd: number | null;
 };
 type TabId = "roles" | "progress";
 type View = "target" | "excluded" | "all";
@@ -72,11 +88,84 @@ const MODE_OPTIONS = [
   { v: "existing", l: "기존 아이템" },
 ];
 
+const PERIOD_OPTIONS = [
+  { v: "forever", l: "무기한" },
+  { v: "days", l: "N일" },
+  { v: "until", l: "종료일" },
+];
+// 보유자 분류 — 미리보기 표의 '분류' 칸(0 은 빼고 보인다)
+const CLS_LABEL: [keyof Cls, string][] = [
+  ["none", "기록 없음"],
+  ["timed", "기간제"],
+  ["forever", "무기한"],
+  ["ended", "기간 끝남"],
+  ["pending", "지급 대기"],
+  ["refund", "환불 대기"],
+];
+
 const num = (v: unknown) => (Number(v) || 0).toLocaleString();
 const msgOf = (e: unknown, fallback: string) => (e instanceof Error && e.message) || fallback;
 const typeLabel = (t: string) => (ITEM_TYPE_LABEL as Record<string, string>)[t] || t;
 const clock = (ms: number | null | undefined) =>
   ms ? new Date(ms).toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "—";
+
+// ── 기간 (서버 route.js 와 같은 규칙 — 서버가 최종 판정) ──
+const DAY = 86400000;
+const HOUR = 3600000;
+const KST = 9 * HOUR;
+const MAX_DAYS = 3650;
+// KST 날짜 조각 — { y, m, d, hh, mm }
+const kstParts = (ms: number) => {
+  const k = new Date(ms + KST);
+  return { y: k.getUTCFullYear(), m: k.getUTCMonth() + 1, d: k.getUTCDate(), hh: k.getUTCHours(), mi: k.getUTCMinutes() };
+};
+const p2 = (n: number) => String(n).padStart(2, "0");
+// 종료일("YYYY-MM-DD") → 그날 KST 23:59:59.999. 없는 날짜면 NaN
+const endOfKstDay = (s: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || "");
+  if (!m) return NaN;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const c = new Date(t);
+  if (c.getUTCFullYear() !== Number(m[1]) || c.getUTCMonth() !== Number(m[2]) - 1 || c.getUTCDate() !== Number(m[3])) return NaN;
+  return t + DAY - KST - 1;
+};
+// 오늘(KST) "YYYY-MM-DD" — 날짜 칸의 최소값
+const kstToday = (ms: number) => { const k = kstParts(ms); return `${k.y}-${p2(k.m)}-${p2(k.d)}`; };
+// 짧은 날짜 — 올해면 "10.31", 아니면 "27.06.30"
+const shortDate = (ms: number, nowMs: number) => {
+  const k = kstParts(ms);
+  return `${k.y !== kstParts(nowMs).y ? `${String(k.y).slice(2)}.` : ""}${p2(k.m)}.${p2(k.d)}`;
+};
+// 확인 창용 — "2026.10.31 14:24"
+const fullStamp = (ms: number) => { const k = kstParts(ms); return `${k.y}.${p2(k.m)}.${p2(k.d)} ${p2(k.hh)}:${p2(k.mi)}`; };
+
+const toPeriodIn = (p: Period | undefined, quick: number[]): PeriodIn => ({
+  mode: p?.mode || "forever",
+  days: p?.mode === "days" ? String(p.days) : String(quick[quick.length - 1] || 30),
+  until: p?.mode === "until" ? p.until : "",
+});
+// 입력 → 보낼 기간. 잘못된 값이면 null(종료일은 지금 + 1시간보다 뒤 · 10년 안)
+const periodOut = (v: PeriodIn, nowMs: number): Period | null => {
+  if (v.mode === "forever") return { mode: "forever" };
+  if (v.mode === "days") {
+    const n = Number(v.days);
+    return /^\d+$/.test(v.days.trim()) && n >= 1 && n <= MAX_DAYS ? { mode: "days", days: n } : null;
+  }
+  const end = endOfKstDay(v.until);
+  return Number.isFinite(end) && end > nowMs + HOUR && end <= nowMs + MAX_DAYS * DAY ? { mode: "until", until: v.until } : null;
+};
+// 기간 표기 — "무기한" · "30일" · "~12.31"
+const periodLabel = (p: Period, nowMs: number) =>
+  p.mode === "forever" ? "무기한" : p.mode === "days" ? `${p.days}일` : `~${shortDate(endOfKstDay(p.until), nowMs)}`;
+// 이전 기록의 실제 기간 — "무기한" · "~10.31" · "~10.31–11.02" (섞였으면 뒤에 "무기한 N")
+const termsLabel = (t: Terms, nowMs: number) => {
+  if (!t.timed) return t.forever ? "무기한" : "—";
+  const a = shortDate(t.minEnd as number, nowMs);
+  const b = shortDate(t.maxEnd as number, nowMs);
+  return `~${a === b ? a : `${a}–${b}`}${t.forever ? ` · 무기한 ${num(t.forever)}` : ""}`;
+};
+// 기간 적용 결과의 덧붙임 — 연장 있음은 있을 때만
+const chainedNote = (r: TermRes) => (r.chained ? ` · 연장 있음 ${num(r.chained)}건` : "");
 
 // 역할 색 점 — 색 없는 역할은 옅은 회색 테두리
 function Dot({ color }: { color: string }) {
@@ -109,12 +198,57 @@ const N = ({ v, tone }: { v: number; tone?: "bad" }) => (
 // 역할 처리 칩 — 떼기(봇 큐) · 유지(권한)
 const RoleFate = ({ keep }: { keep: boolean }) => (keep ? <StatusChip tone="info">역할 유지</StatusChip> : <StatusChip>역할 떼기</StatusChip>);
 
+// 기간 고르기 — [무기한 · N일 · 종료일] + 일수 칸(연결 상품의 기간 옵션을 빠른 선택으로) 또는 날짜 칸. 잘못된 값은 칸 테두리만 붉게
+function PeriodPicker({ id, value, onChange, quick, nowMs }: { id: string; value: PeriodIn; onChange: (v: PeriodIn) => void; quick: number[]; nowMs: number }) {
+  const bad = !periodOut(value, nowMs) ? " !border-[#d01634]" : "";
+  return (
+    <>
+      <Segmented className="mb-3" options={PERIOD_OPTIONS} value={value.mode} onChange={(v) => onChange({ ...value, mode: v as PeriodMode })} />
+      {value.mode === "days" && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <input
+            id={id}
+            type="text"
+            inputMode="numeric"
+            aria-label="일수"
+            maxLength={4}
+            className={`${numClass} text-base md:text-[14px]${bad}`}
+            value={value.days}
+            onChange={(e) => onChange({ ...value, days: e.target.value.replace(/\D/g, "") })}
+          />
+          <span className="text-[13px] text-[#5a5a5a]">일</span>
+          {quick.map((d) => (
+            <Btn key={d} size="sm" variant={value.days === String(d) ? "primary" : "secondary"} onClick={() => onChange({ ...value, days: String(d) })}>
+              {d}일
+            </Btn>
+          ))}
+        </div>
+      )}
+      {value.mode === "until" && (
+        <input
+          id={id}
+          type="date"
+          aria-label="종료일"
+          min={kstToday(nowMs)}
+          className={`${inputClass} !w-auto mb-4 text-base md:text-[14px]${bad}`}
+          value={value.until}
+          onChange={(e) => onChange({ ...value, until: e.target.value })}
+        />
+      )}
+    </>
+  );
+}
+
 const defaultChoice = (r: Role): Choice => {
   const type: NewType = FUNCTION_ROLE_RE.test(r.name) ? "perk" : "item";
+  // 기간 — 지난번에 고른 것(이전 표). 없으면 무기한
+  const period = toPeriodIn(r.period, r.durations || []);
   return r.item
-    ? { mode: "existing", type, name: r.name.slice(0, 40), itemId: r.item.id }
-    : { mode: "new", type, name: r.name.slice(0, 40), itemId: "" };
+    ? { mode: "existing", type, name: r.name.slice(0, 40), itemId: r.item.id, period }
+    : { mode: "new", type, name: r.name.slice(0, 40), itemId: "", period };
 };
+// 빠른 선택 일수 — 역할에 연결된 상품 + 고른 기존 아이템을 파는 상품의 기간 옵션
+const uniqSorted = (a: number[]) => [...new Set(a)].sort((x, y) => x - y);
 // 고를 수 있는 역할 — 제외가 아니고 지금 가진 사람이 있는 것(없으면 옮길 것도 없다)
 const pickableRole = (r: Role) => !r.excluded && r.holders > 0;
 
@@ -136,12 +270,30 @@ export default function AdminRoleMigrationPage() {
   // 미리보기는 그때의 계획(key)과 함께 둔다 — 계획이 바뀌면 낡은 숫자라 보이지 않는다
   const [previewState, setPreviewState] = useState<{ key: string; res: Result } | null>(null);
   const [previewing, setPreviewing] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  // 📌 확인 창은 연 때의 계획(key)에 묶는다 — 계획이 바뀌면(1분 시계로 종료일이 1시간 안이 되는 등) 미리보기와 함께 닫히고,
+  //    다음 미리보기 직후 저절로 다시 뜨지 않는다(미리보기를 누르면 비운다)
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
 
   const [status, setStatus] = useState<{ at: number | null; roles: StatusRow[] } | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
+
+  // 기간 적용(진행 탭) — 고른 역할 · 역할별 입력 · 미리보기(확인 창) · 실행 중
+  const [termId, setTermId] = useState<string | null>(null);
+  const [termIn, setTermIn] = useState<Record<string, PeriodIn>>({});
+  const [termBusy, setTermBusy] = useState(false);
+  const [termPreview, setTermPreview] = useState<TermRes | null>(null);
+  const [termRunning, setTermRunning] = useState(false);
+  // 📌 지금 열린 기간 적용 칸(역할 · 탭) — 계산이 끝났을 때 그 사이 다른 줄로 바꿨거나 칸을 닫았으면 확인 창을 띄우지 않는다
+  const termOpenRef = useRef<string | null>(null);
+
+  // 기간 판정 · 짧은 날짜의 기준 시각 — 1분마다 새로(종료일이 1시간 안으로 들어오면 '기간 확인'으로 바뀐다)
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   const loadRoles = useCallback(async (refresh = false) => {
     setLoading(true);
@@ -192,23 +344,27 @@ export default function AdminRoleMigrationPage() {
       return next;
     });
 
-  // 보낼 계획 — 고른 역할 중 제외 아닌 것. 기존 아이템을 골랐는데 아이템이 비면 '선택 필요'로 남긴다
+  // 보낼 계획 — 고른 역할 중 제외 아닌 것. 기존 아이템을 골랐는데 아이템이 비거나 기간이 잘못되면 '선택 필요'로 남긴다
   const chosen = roles.filter((r) => sel[r.id] && pickableRole(r));
-  const incomplete = chosen.filter((r) => { const c = choiceOf(r); return c.mode === "existing" && !c.itemId; });
+  const incomplete = chosen.filter((r) => { const c = choiceOf(r); return (c.mode === "existing" && !c.itemId) || !periodOut(c.period, nowMs); });
   const plan = chosen
     .filter((r) => !incomplete.includes(r))
     .map((r) => {
       const c = choiceOf(r);
+      const period = periodOut(c.period, nowMs) as Period;
       return c.mode === "existing"
-        ? { roleId: r.id, itemId: c.itemId }
-        : { roleId: r.id, create: { name: c.name.trim() || r.name.slice(0, 40), type: c.type, color: r.color } };
+        ? { roleId: r.id, itemId: c.itemId, period }
+        : { roleId: r.id, create: { name: c.name.trim() || r.name.slice(0, 40), type: c.type, color: r.color }, period };
     });
+  const quickOf = (r: Role, c: Choice) =>
+    uniqSorted([...(r.durations || []), ...(c.mode === "existing" ? itemById.get(c.itemId)?.durations || [] : [])]);
   const planKey = JSON.stringify(plan);
   const preview = previewState && previewState.key === planKey ? previewState.res : null;
   const setPreview = (res: Result | null) => setPreviewState(res ? { key: planKey, res } : null);
 
   const runPreview = async () => {
     if (!plan.length) return;
+    setConfirmKey(null);
     setPreviewing(true);
     try {
       const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dryRun: true, plan }) });
@@ -230,13 +386,16 @@ export default function AdminRoleMigrationPage() {
       const d = await r.json().catch(() => null);
       if (!r.ok || !d?.success) throw new Error(d?.message || "이전에 실패했습니다.");
       const res: Result = d.data;
-      setConfirmOpen(false);
+      setConfirmKey(null);
       setResult(res);
       setPreview(null);
       setSel({});
       // 📌 고른 방식도 비운다 — 방금 만든 아이템이 연결돼 다음 목록에선 '기존 아이템'이 기본이 된다(옛 '새 아이템' 선택이 남지 않게)
       setChoices({});
       setOpenId(null);
+      // 진행 탭으로 넘어가며 예전에 열어 둔 기간 적용 칸이 결과를 덮지 않게
+      setTermId(null);
+      setTermPreview(null);
       const t = res.totals;
       const errs = res.roles.filter((x) => x.error).length;
       notify(
@@ -249,10 +408,76 @@ export default function AdminRoleMigrationPage() {
       loadStatus();
       window.history.replaceState(null, "", "/admin/role-migration?tab=progress");
     } catch (e) {
-      setConfirmOpen(false);
+      setConfirmKey(null);
       notify(msgOf(e, "이전에 실패했습니다."), true);
     } finally {
       setRunning(false);
+    }
+  };
+
+  // ── 기간 적용 ──
+  const termRow = termId ? status?.roles.find((s) => s.roleId === termId) || null : null;
+  const termValue = termRow ? termIn[termRow.roleId] || toPeriodIn(termRow.period, termRow.durations || []) : null;
+  const termOpenId = tab === "progress" && termRow ? termRow.roleId : null;
+  useEffect(() => {
+    termOpenRef.current = termOpenId;
+  }, [termOpenId]);
+  // 역할 이름 — 확인 창 · 결과 알림 첫머리(어느 역할에 쓰는지)
+  const termName = (roleId: string) => status?.roles.find((s) => s.roleId === roleId)?.name || roleId;
+
+  const runTermPreview = async () => {
+    if (!termRow || !termValue) return;
+    const period = periodOut(termValue, nowMs);
+    if (!period) return;
+    const roleId = termRow.roleId;
+    setTermBusy(true);
+    try {
+      const r = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "term", dryRun: true, roleId, period }),
+      });
+      const d = await r.json().catch(() => null);
+      if (!r.ok || !d?.success) throw new Error(d?.message || "계산하지 못했습니다.");
+      const res: TermRes = d.data;
+      // 📌 계산하는 사이 다른 줄을 눌렀거나 칸을 닫았으면 띄우지 않는다 — 다른 역할 상세 위에 앞 역할의 확인 창이 뜨지 않게
+      if (termOpenRef.current !== roleId) return;
+      if (!res.change) notify(`바꿀 기록이 없습니다.\n${termName(roleId)} · 그대로 ${num(res.same)}건 · 제외 ${num(res.excluded)}건${chainedNote(res)}`);
+      else setTermPreview(res);
+    } catch (e) {
+      notify(msgOf(e, "계산하지 못했습니다."), true);
+    } finally {
+      setTermBusy(false);
+    }
+  };
+
+  const runTerm = async () => {
+    if (!termPreview) return;
+    setTermRunning(true);
+    try {
+      const r = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "term", dryRun: false, roleId: termPreview.roleId, period: termPreview.period }),
+      });
+      const d = await r.json().catch(() => null);
+      if (!r.ok || !d?.success) throw new Error(d?.message || "기간을 적용하지 못했습니다.");
+      const res: TermRes = d.data;
+      setTermPreview(null);
+      // 입력은 비운다 — 새로 읽은 진행의 저장된 기간이 기본이 된다
+      setTermIn((prev) => {
+        const next = { ...prev };
+        delete next[res.roleId];
+        return next;
+      });
+      notify(`${termName(res.roleId)} 기간을 적용했습니다.\n바뀜 ${num(res.change)}건 · 그대로 ${num(res.same)}건 · 제외 ${num(res.excluded)}건${chainedNote(res)}`);
+      loadStatus();
+      loadRoles(false);
+    } catch (e) {
+      setTermPreview(null);
+      notify(msgOf(e, "기간을 적용하지 못했습니다."), true);
+    } finally {
+      setTermRunning(false);
     }
   };
 
@@ -341,6 +566,19 @@ export default function AdminRoleMigrationPage() {
     },
     { key: "plan", label: "이전", render: planText },
     {
+      key: "period",
+      label: "기간",
+      render: (r) => {
+        if (!sel[r.id] || !pickableRole(r)) return <Empty />;
+        const p = periodOut(choiceOf(r).period, nowMs);
+        return p ? (
+          <span className="tabular-nums"><span className="md:hidden text-[#8a8a8a]">기간 </span>{periodLabel(p, nowMs)}</span>
+        ) : (
+          <span className="text-[#d01634] font-bold">기간 확인</span>
+        );
+      },
+    },
+    {
       key: "state",
       label: "상태",
       render: (r) =>
@@ -371,7 +609,31 @@ export default function AdminRoleMigrationPage() {
           </span>
         ) : null,
     },
+    {
+      // 새로 만들 기록(이어 붙인 것 포함)의 만료 — 새 기록이 없으면 비운다(고른 기간은 기존 기록을 바꾸지 않는다)
+      key: "period",
+      label: "기간",
+      render: (p) =>
+        p.excluded || p.error || !(done ? p.inserted : p.insert) || !p.terms ? (
+          <Empty />
+        ) : (
+          <span className="tabular-nums"><span className="md:hidden text-[#8a8a8a]">기간 </span>{termsLabel(p.terms, nowMs)}</span>
+        ),
+    },
     { key: "holders", label: "보유", align: "right", render: (p) => <span className="tabular-nums">{num(p.holders)}<span className="md:hidden">명</span></span> },
+    {
+      key: "cls",
+      label: "분류",
+      render: (p) =>
+        p.excluded || p.error || !p.cls ? null : (
+          <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            {CLS_LABEL.filter(([k]) => p.cls[k] > 0).map(([k, l]) => (
+              <span key={k} className="whitespace-nowrap"><span className="text-[#8a8a8a]">{l}</span> <span className="tabular-nums font-bold">{num(p.cls[k])}</span></span>
+            ))}
+            {p.roleLeft > 0 && <StatusChip tone="warn">역할 남음 {num(p.roleLeft)}</StatusChip>}
+          </span>
+        ),
+    },
     {
       key: "insert",
       label: done ? "기록" : "새 기록",
@@ -409,6 +671,11 @@ export default function AdminRoleMigrationPage() {
       key: "item",
       label: "아이템",
       render: (s) => (s.item ? <span className="inline-flex items-center gap-1.5"><span className="truncate">{s.item.name}</span><span className="text-[#8a8a8a]">{typeLabel(s.item.type)}</span></span> : <Empty />),
+    },
+    {
+      key: "period",
+      label: "기간",
+      render: (s) => <span className="tabular-nums"><span className="md:hidden text-[#8a8a8a]">기간 </span>{termsLabel(s.terms, nowMs)}</span>,
     },
     { key: "records", label: "기록", align: "right", render: (s) => <span><span className="md:hidden text-[#8a8a8a]">기록 </span><N v={s.records} /></span> },
     { key: "detached", label: "뗌", align: "right", render: (s) => <span><span className="md:hidden text-[#8a8a8a]">뗌 </span><N v={s.detached} /></span> },
@@ -508,7 +775,7 @@ export default function AdminRoleMigrationPage() {
                   right={
                     <>
                       <Btn variant="ghost" size="sm" onClick={() => setPreview(null)}>닫기</Btn>
-                      <Btn size="sm" disabled={running || t.roles === 0 || (t.records === 0 && t.convert === 0 && t.createItems === 0)} onClick={() => setConfirmOpen(true)}>이전 실행</Btn>
+                      <Btn size="sm" disabled={running || t.roles === 0 || (t.records === 0 && t.convert === 0 && t.createItems === 0)} onClick={() => setConfirmKey(planKey)}>이전 실행</Btn>
                     </>
                   }
                 >
@@ -564,14 +831,83 @@ export default function AdminRoleMigrationPage() {
           ) : status.roles.length === 0 ? (
             <EmptyRow>이전한 역할이 없습니다.</EmptyRow>
           ) : (
-            <DataTable columns={statusColumns} rows={status.roles} rowKey={(s) => s.roleId} />
+            <DataTable
+              columns={statusColumns}
+              rows={status.roles}
+              rowKey={(s) => s.roleId}
+              onRowClick={(s) => setTermId(s.roleId)}
+              selectedKey={termId}
+            />
           )}
         </>
       )}
 
+      {/* ── 진행 상세 — 이미 옮긴 기록의 기간 적용 ── */}
+      <DetailPane
+        open={tab === "progress" && !!termRow}
+        onClose={() => setTermId(null)}
+        width={440}
+        badge={termRow?.gone ? <StatusChip>삭제됨</StatusChip> : undefined}
+        title={termRow ? <RoleName name={termRow.name} color={termRow.color} /> : ""}
+        sub={termRow ? <span className="tabular-nums">기록 {num(termRow.records)}건 · 기간 {termsLabel(termRow.terms, nowMs)}</span> : undefined}
+        footer={
+          termRow && termValue ? (
+            <Btn
+              className="ml-auto"
+              disabled={termBusy || termRunning || !periodOut(termValue, nowMs)}
+              onClick={runTermPreview}
+            >
+              <SwapLabel swap={termBusy} to="계산 중…">기간 적용</SwapLabel>
+            </Btn>
+          ) : undefined
+        }
+      >
+        {termRow && termValue && (
+          <>
+            <p className={labelClass}>기간</p>
+            <PeriodPicker
+              id="rm-term"
+              value={termValue}
+              onChange={(v) => setTermIn((prev) => ({ ...prev, [termRow.roleId]: v }))}
+              quick={uniqSorted(termRow.durations || [])}
+              nowMs={nowMs}
+            />
+            <dl className="mt-2">
+              <DefRow k="아이템">{termRow.item ? `${termRow.item.name} · ${typeLabel(termRow.item.type)}` : "—"}</DefRow>
+            </dl>
+          </>
+        )}
+      </DetailPane>
+
+      <ConfirmDialog
+        open={!!termPreview}
+        title="기간 적용"
+        busy={termRunning}
+        confirmLabel="기간 적용"
+        body={
+          termPreview ? (
+            <div className="tabular-nums">
+              <p className="font-bold text-[#131313] break-all">{termName(termPreview.roleId)}</p>
+              <p>대상 {num(termPreview.total)}건 · 바뀜 {num(termPreview.change)}건</p>
+              <p>
+                만료{" "}
+                {termPreview.minEnd == null
+                  ? "무기한"
+                  : termPreview.minEnd === termPreview.maxEnd
+                    ? fullStamp(termPreview.minEnd)
+                    : `${fullStamp(termPreview.minEnd)} ~ ${fullStamp(termPreview.maxEnd as number)}`}
+              </p>
+              <p>제외 {num(termPreview.excluded)}건 · 그대로 {num(termPreview.same)}건{chainedNote(termPreview)}</p>
+            </div>
+          ) : undefined
+        }
+        onConfirm={runTerm}
+        onCancel={() => setTermPreview(null)}
+      />
+
       {/* ── 역할 상세 — 이전 방식 고르기 ── */}
       <DetailPane
-        open={!!open}
+        open={tab === "roles" && !!open}
         onClose={() => setOpenId(null)}
         width={440}
         badge={
@@ -643,6 +979,15 @@ export default function AdminRoleMigrationPage() {
                   </>
                 )}
 
+                <p className={labelClass}>기간</p>
+                <PeriodPicker
+                  id="rm-period"
+                  value={openChoice.period}
+                  onChange={(v) => setChoice(open, { period: v })}
+                  quick={quickOf(open, openChoice)}
+                  nowMs={nowMs}
+                />
+
                 <dl className="mt-2">
                   <DefRow k="디스코드 역할">
                     {(() => {
@@ -671,7 +1016,7 @@ export default function AdminRoleMigrationPage() {
       </DetailPane>
 
       <ConfirmDialog
-        open={confirmOpen && !!t}
+        open={confirmKey === planKey && !!t}
         title="이전 실행"
         busy={running}
         confirmLabel="이전 실행"
@@ -685,7 +1030,7 @@ export default function AdminRoleMigrationPage() {
           ) : undefined
         }
         onConfirm={runMigration}
-        onCancel={() => setConfirmOpen(false)}
+        onCancel={() => setConfirmKey(null)}
       />
       {noticeEl}
     </AdminPage>
