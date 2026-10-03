@@ -55,7 +55,11 @@ export function registerChatXp(client) {
       if (channelPolicy.excluded) return;
 
       const s = getSettings();
-      const where = { channelId: message.channel.id, channelName: message.channel.name || "" };
+      // 📌 pc = 카테고리(스레드는 부모 채널의 카테고리) — 퀘스트 채널 조건이 카테고리로도 맞추게(XpLog.pc)
+      const ch = message.channel;
+      //    pt = 스레드면 부모 채널 — 퀘스트 채널 조건 · 채널 수는 부모로 센다(활동 횟수 activityStats 와 같은 기준)
+      const thread = !!ch.isThread?.();
+      const where = { channelId: ch.id, channelName: ch.name || "", pc: (thread ? ch.parent?.parentId : ch.parentId) || "", ...(thread && ch.parentId ? { pt: ch.parentId } : {}) };
 
       // 새 멤버 첫 답장 — 쿨타임과 따로 (오류는 여기서 삼킨다 — 채팅 지급을 막지 않게)
       await grantWelcomeReply(message, where).catch((e) => console.error("아이템 효과 지급 오류 (welcomeReply):", e.message));

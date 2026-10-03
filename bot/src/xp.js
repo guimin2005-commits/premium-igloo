@@ -6,6 +6,7 @@ import { heldEffects, effectXp, effectTimeOk, claimDaily, kstNow, perksOf } from
 import { getSettings, isLevelOpen } from "./botSettings.js";
 import { buildMessageWithCard, cardAvatar, commonVars, tierOf, progressBar } from "./botMessages.js";
 import { config } from "./config.js";
+import { bumpActivity } from "./features/activityStats.js";
 
 export const EMBED_COLOR = 0xe91e3f;
 export const EMBED_FOOTER = "고급 이글루 · SYSTEM : LEVEL";
@@ -200,6 +201,10 @@ export async function grantXp(member, amount, meta = {}) {
     reason: meta.reason || "",
     channelId: meta.channelId || "",
     channelName: meta.channelName || "",
+    // 📌 채널의 카테고리 — 퀘스트 채널 조건(카테고리로 고른 것)이 맞추게. 채팅 · 음성 지급만 넘긴다
+    ...(meta.pc ? { pc: meta.pc } : {}),
+    // 📌 스레드에서 받은 채팅이면 부모 채널 — 퀘스트가 채널을 부모 기준으로 맞춘다
+    ...(meta.pt ? { pt: meta.pt } : {}),
     ...(passBoost > 0 ? { passBoost } : {}),
     // 📌 음성 상황 — 음성 지급(features/voiceXp.js)만 넘긴다. 다른 지급 줄에는 칸 자체가 없다
     ...(meta.ctx ? { ctx: meta.ctx } : {}),
@@ -236,6 +241,11 @@ export async function grantXp(member, amount, meta = {}) {
         { $max: { maxLevel: newLevel } },
         { new: false, projection: { maxLevel: 1 } }
       ).lean();
+      // 📌 레벨 업 퀘스트(features/activityStats.js "levelup") — 처음 도달한 레벨만(그 전 최고치를 넘은 만큼, 0 → 1 은 시작 레벨이라 제외)
+      {
+        const top = Math.max(1, before, Math.floor(Number(pm?.maxLevel) || 0));
+        if (newLevel > top) bumpActivity(member.id, "levelup", newLevel - top);
+      }
       if (meta.reason !== "effect-levelup") {
         const floor = Math.max(1, before, Math.floor(Number(pm?.maxLevel) || 0));
         await grantLevelUpEffects(member, newLevel - floor);

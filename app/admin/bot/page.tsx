@@ -10,7 +10,7 @@ import { VOICE_TIERS } from "@/lib/voiceTiers";
 import { POINT_RATE } from "@/lib/pointRate";
 import { parseTargetKeys, MAX_TARGETS } from "@/lib/adminTargetKeys";
 import { groupOrders } from "@/lib/orderGroups";
-import { QUEST_REASONS, QUEST_METRICS, questReasonOf, questCondLabel } from "@/lib/questKinds";
+import { QUEST_REASONS, QUEST_METRICS, QUEST_DAY_LABELS, questReasonOf, questCondLabel, questTimed } from "@/lib/questKinds";
 import {
   AdminPage,
   AdminTabs,
@@ -161,14 +161,32 @@ const GRANT_STATUS: Record<string, { l: string; tone: "ok" | "warn" | "neutral" 
 const EMPTY_ROLE = { roleId: "", rewardLevel: "", buffXp: "", attendBuffXp: "", exclusive: false };
 const EMPTY_CHANNEL = { channelId: "", boostXp: "", excluded: false };
 const EMPTY_BOOST = { id: "", name: "", targetRoleId: "", targetChannelId: "", boostXp: "", startAt: "", endAt: "" };
-const EMPTY_QUEST = { id: "", name: "", desc: "", period: "daily", reason: "chat", metric: "count", hourFrom: "", hourTo: "", target: 1, rewardXp: 0, rewardPoint: 0, enabled: true, order: 0 };
+const EMPTY_QUEST = {
+  id: "", name: "", desc: "", period: "daily", reason: "chat", metric: "count", hourFrom: "", hourTo: "",
+  // 📌 2026-10-03 조건 칸 — 요일 · 채널 · 음성 상황 · 하루 기준(lib/questKinds.js normalizeQuestCond 가 대상에 맞게 정리)
+  days: [] as number[], channelIds: [] as string[], minPeople: "", live: false, micOn: false, dayMin: "",
+  target: 1, rewardXp: 0, rewardPoint: 0, enabled: true, order: 0,
+};
+// 저장된 퀘스트 → 편집 칸(빈 칸은 "" 로)
+const questToForm = (q: any) => ({
+  id: q._id, name: q.name, desc: q.desc || "", period: q.period || "daily", reason: q.reason, metric: q.metric,
+  hourFrom: q.hourFrom ?? "", hourTo: q.hourTo ?? "",
+  days: Array.isArray(q.days) ? q.days : [], channelIds: Array.isArray(q.channelIds) ? q.channelIds : [],
+  minPeople: q.minPeople ? String(q.minPeople) : "", live: !!q.live, micOn: !!q.micOn, dayMin: q.dayMin ? String(q.dayMin) : "",
+  target: q.target, rewardXp: q.rewardXp, rewardPoint: q.rewardPoint || 0, enabled: q.enabled, order: q.order,
+});
+const QUEST_WEEKDAYS = [1, 2, 3, 4, 5];
+const QUEST_WEEKEND = [0, 6];
 
-// 📌 퀘스트 측정 대상 고르기 — 로그(채팅 · 음성 · 출석 · 효과 · 전체)와 기록(연속 출석 · 구매 · 강화 · 패스)을 묶어 보여 준다(lib/questKinds.js)
+// 📌 퀘스트 측정 대상 고르기 — XP 지급 기록(채팅 · 음성 · 출석 · 효과 · 전체) · 활동(봇이 세는 메시지 · 답장 · 반응 …) ·
+//    기록(연속 출석 · 구매 · 강화 · 패스 · 퀘스트 완료)을 묶어 보여 준다(lib/questKinds.js)
 const QUEST_REASON_OPTIONS = [
-  { value: "_log", label: "활동 로그", group: true },
-  ...QUEST_REASONS.filter((r) => r.src === "log").map((r) => ({ value: r.v, label: r.l, indent: true })),
+  { value: "_log", label: "XP 지급 기록", group: true },
+  ...QUEST_REASONS.filter((r) => r.src === "log").map((r) => ({ value: r.v, label: r.l, hint: r.hint, indent: true })),
+  { value: "_act", label: "활동", group: true },
+  ...QUEST_REASONS.filter((r) => r.src === "act").map((r) => ({ value: r.v, label: r.l, hint: r.hint, indent: true })),
   { value: "_rec", label: "기록", group: true },
-  ...QUEST_REASONS.filter((r) => r.src !== "log").map((r) => ({ value: r.v, label: r.l, indent: true })),
+  ...QUEST_REASONS.filter((r) => r.src !== "log" && r.src !== "act").map((r) => ({ value: r.v, label: r.l, hint: r.hint, indent: true })),
 ];
 // 📌 대상 · 방식마다 바뀌는 안내(측정 방식 · 목표치)는 늘 두 줄 높이를 잡아 둔다 — 고를 때마다 아래 칸이 오르내리지 않게
 //    (fieldNote 12px × leading-relaxed 1.625 × 2줄 ≈ 39px)
@@ -176,13 +194,34 @@ const HINT_2LINE = "block min-h-[39px]";
 // 목표치 칸 아래 한 줄 — 대상 · 세는 방식마다
 const questTargetHint =(reason: string, metric: string) => {
   if (reason === "streak") return "연속 출석 일수 — 이 주기 안에 출석한 날 기준으로 판정합니다";
+  if (reason === "shop" && metric === "xp") return "ARCTIC 구매에 쓴 XP 합계";
+  if (reason === "shop" && metric === "point") return "ARCTIC 구매에 쓴 빙옥 합계";
   if (reason === "shop") return "ARCTIC 구매 건수 — 운영진 지급 · 시즌 패스 보상 · 환불 · 취소 제외";
   if (reason === "enhance") return "강화 횟수 — 1단계 = 1회";
   if (reason === "pass") return "시즌 패스 보상을 받은 개수";
+  if (reason === "quest") return "이 주기에 보상을 받은 다른 퀘스트 수 (이 퀘스트는 제외)";
   if (metric === "xp") return "달성에 필요한 XP 합계";
   if (metric === "minute") return "달성에 필요한 접속 시간 (분) — 예: 2시간이면 120";
-  if (metric === "day") return "기간 안에서 기록이 있는 날 수 (KST)";
+  if (metric === "day") return "기간 안에서 기록이 있는 날 수 (KST) — 하루 기준을 넣으면 그 이상인 날만";
+  if (metric === "run") return "기록이 끊기지 않고 이어진 날 수 (KST, 가장 긴 구간)";
+  if (metric === "channel") return "기록이 있는 서로 다른 채널 수";
+  if (questReasonOf(reason)?.src === "act") return "달성에 필요한 횟수";
   return "달성에 필요한 지급 횟수";
+};
+// 측정 방식 칸 아래 한 줄 — 대상 · 방식마다
+const questMetricHint = (reason: string, metric: string, tickMin: number) => {
+  const r = questReasonOf(reason);
+  const src = r?.src || "log";
+  if (src !== "log" && src !== "act" && !(r?.metrics.length && r.metrics.length > 1)) return "이 대상은 정해진 방식으로만 판정합니다.";
+  if (metric === "xp") return reason === "shop" ? "쓴 XP의 합계로 판정합니다." : "받은 XP의 합계로 판정합니다.";
+  if (metric === "point") return "쓴 빙옥의 합계로 판정합니다.";
+  if (metric === "minute") return `음성 채널에 머문 시간(분)으로 판정합니다. 지급 주기 ${tickMin}분마다 1분 단위로 쌓입니다.`;
+  if (metric === "day") return "기록이 있는 서로 다른 날 수로 판정합니다. (KST)";
+  if (metric === "run") return "가장 길게 이어진 날 수로 판정합니다. (KST)";
+  if (metric === "channel") return "기록이 있는 서로 다른 채널 수로 판정합니다.";
+  if (src === "act") return reason === "msg" ? "보낸 메시지 수로 판정합니다. 같은 사람은 3초에 한 번만 셉니다." : reason === "vjoin" ? "음성 채널에 들어간 횟수로 판정합니다. 1분에 한 번만 셉니다." : reason === "react" || reason === "reacted" ? "같은 메시지 · 같은 이모지는 하루 한 번만 셉니다." : "횟수로 판정합니다.";
+  if (reason === "shop") return "주문 한 줄 = 1건으로 판정합니다.";
+  return "XP를 받은 횟수로 판정합니다. (음성은 1회 = 지급 주기)";
 };
 
 // 📌 연속 출석 보너스 규칙 — BotSetting.attendStreakRules 한 줄. 입력 중엔 글자로 들고, 정리는 app/api/bot-settings 가 한다
@@ -644,6 +683,8 @@ export default function AdminBotPage() {
   useEffect(() => { settingsSnapRef.current = settingsSnap; }, [settingsSnap]);
   const [savingSettings, setSavingSettings] = useState(false);
   const [quests, setQuests] = useState<any[]>([]);
+  // 📌 퀘스트 표 보기 — 전체 · 일일 · 주간 · 월간(2026-10-03). 알약 글자 · 굵기가 같아 골라도 줄이 밀리지 않는다
+  const [questView, setQuestView] = useState<"all" | "daily" | "weekly" | "monthly">("all");
   // 추천 퀘스트 창 (QuestPresetDialog)
   const [questPresetOpen, setQuestPresetOpen] = useState(false);
   const [invRoles, setInvRoles] = useState<any[]>([]);
@@ -1179,6 +1220,11 @@ export default function AdminBotPage() {
     indent: !!c.parentId,
   }));
   const textChannelOptions = guildChannels.filter((c) => c.type === "text").map((c) => ({ value: c.id, label: `# ${c.name}` }));
+  // 퀘스트 조건 줄의 채널 이름 — 지운 채널이면 null(조건 줄이 "채널 N곳"으로 적는다)
+  const chNameOf = (id: string) => {
+    const c = guildChannels.find((x) => x.id === id);
+    return c ? `${CHANNEL_TYPE_ICON[c.type] || "#"}${c.name}` : "";
+  };
 
   // 📌 등록하지 않아도 인벤토리에 잡히는 역할 — /api/shop/my-items 가 상품·역할 설정 역할을 그대로 인정하기 때문
   // 📌 시즌 전환 보호 역할 — 설정 문서(BotSetting)의 배열 하나라 저장은 기존 postSettings 를 그대로 쓴다
@@ -1400,8 +1446,12 @@ export default function AdminBotPage() {
     },
   ];
 
-  // 퀘스트는 주기 순(일일 → 주간 → 월간)으로 한 표에 — 주기별 요약은 표 위 한 줄에
-  const questRows = QUEST_PICK_FIELDS.flatMap((f) => quests.filter((q) => (q.period || "daily") === f.period));
+  // 퀘스트는 주기 순(일일 → 주간 → 월간)으로 한 표에 — 주기별 요약은 표 위 한 줄에, 보기 알약으로 한 주기만 골라 본다
+  const questRows = QUEST_PICK_FIELDS.flatMap((f) => (questView === "all" || questView === f.period ? quests.filter((q) => (q.period || "daily") === f.period) : []));
+  const questViewOptions = [
+    { v: "all", l: "전체", n: quests.length },
+    ...QUEST_PICK_FIELDS.map((f) => ({ v: f.period, l: PERIOD_LABEL[f.period], n: quests.filter((q) => (q.period || "daily") === f.period).length })),
+  ];
   const questCols: Column<any>[] = [
     { key: "period", label: "주기", className: "w-16", render: (q) => <span className="text-[#5a5a5a]">{PERIOD_LABEL[q.period || "daily"]}</span> },
     {
@@ -1423,7 +1473,7 @@ export default function AdminBotPage() {
     {
       key: "cond", label: "조건",
       // 📌 조건 한 줄은 lib/questKinds.js questCondLabel — 추천 퀘스트 창과 같은 글
-      render: (q) => <span className="text-[#5a5a5a] tabular-nums">{questCondLabel(q)}</span>,
+      render: (q) => <span className="text-[#5a5a5a] tabular-nums">{questCondLabel(q, chNameOf)}</span>,
     },
     {
       key: "reward", label: "보상", align: "right",
@@ -2048,7 +2098,7 @@ export default function AdminBotPage() {
                   <span className="md:hidden">추천</span>
                   <span className="hidden md:inline">추천 퀘스트</span>
                 </Btn>
-                <Btn variant="secondary" size="sm" onClick={() => { setQuestForm(EMPTY_QUEST); openFormAt("quest"); }}>＋ 추가</Btn>
+                <Btn variant="secondary" size="sm" onClick={() => { setQuestForm({ ...EMPTY_QUEST, period: questView === "all" ? "daily" : questView }); openFormAt("quest"); }}>＋ 추가</Btn>
               </>
             }
             flush
@@ -2066,15 +2116,18 @@ export default function AdminBotPage() {
                       {rows.length === 0
                         ? f.every + " 초기화"
                         : pick > 0
-                        ? `${f.every}마다 활성 ${on}개 중 ${Math.min(pick, on)}개 무작위`
+                        ? `${f.every}마다 유저마다 활성 ${on}개 중 ${Math.min(pick, on)}개 무작위`
                         : `활성 ${on}개 전부 노출 · ${f.every} 초기화`}
                     </p>
                   </div>
                 );
               })}
             </div>
+            <div className="px-5 py-3 border-b border-[#ededed]">
+              <Segmented options={questViewOptions} value={questView} onChange={(v) => setQuestView(v as typeof questView)} />
+            </div>
             {isLoading ? loadingRow
-              : questRows.length === 0 ? <PanelEmpty>등록된 퀘스트가 없습니다.</PanelEmpty>
+              : questRows.length === 0 ? <PanelEmpty>{questView === "all" ? "등록된 퀘스트가 없습니다." : `등록된 ${PERIOD_LABEL[questView]} 퀘스트가 없습니다.`}</PanelEmpty>
               : (
                 <DataTable
                   className={tableFlat}
@@ -2083,7 +2136,7 @@ export default function AdminBotPage() {
                   rowKey={(q) => q._id}
                   selectedKey={isFormOpen("quest") ? editId : null}
                   onRowClick={(q) => {
-                    setQuestForm({ id: q._id, name: q.name, desc: q.desc || "", period: q.period || "daily", reason: q.reason, metric: q.metric, hourFrom: q.hourFrom ?? "", hourTo: q.hourTo ?? "", target: q.target, rewardXp: q.rewardXp, rewardPoint: q.rewardPoint || 0, enabled: q.enabled, order: q.order });
+                    setQuestForm(questToForm(q));
                     openFormAt("quest", q._id);
                   }}
                 />
@@ -2485,7 +2538,7 @@ export default function AdminBotPage() {
         open={isFormOpen("quest")}
         width={480}
         title={editId ? "퀘스트 수정" : "퀘스트 추가"}
-        sub="진행도는 XP 지급 로그 · 출석 · 구매 · 강화 · 패스 수령 기록으로 판정합니다 · 출석 기준 시간과 보상은 정책 탭 지급량 · 주기에서"
+        sub="진행도는 XP 지급 기록 · 봇이 세는 활동 · 출석 · 구매 · 강화 · 패스 · 퀘스트 수령 기록으로 판정합니다 · 출석 기준 시간과 보상은 정책 탭 지급량 · 주기에서"
         saveLabel={questForm.id ? "수정 저장" : "퀘스트 등록"}
         onSubmit={saveQuest}
         onCancel={() => { setQuestForm(EMPTY_QUEST); closeForm(); }}
@@ -2503,12 +2556,12 @@ export default function AdminBotPage() {
           <Segmented
             options={[{ v: "daily", l: "일일" }, { v: "weekly", l: "주간" }, { v: "monthly", l: "월간" }]}
             value={questForm.period}
-            onChange={(v) => setQuestForm({ ...questForm, period: v })}
+            onChange={(v) => setQuestForm({ ...questForm, period: v, ...(v === "daily" && questForm.metric === "run" ? { metric: questReasonOf(questForm.reason)?.metrics[0] || "count" } : {}) })}
           />
         </Field>
         {/* 📌 대상 · 방식 · 시간대 — 칸은 늘 같은 자리에 두고, 대상에 맞지 않는 방식 · 시간대는 흐리게만 한다(편집 칸 높이가 흔들리지 않게).
             고를 수 있는 조합은 lib/questKinds.js QUEST_REASONS — 저장 때 서버(normalizeQuestCond)가 한 번 더 맞춘다 */}
-        <Field label="측정 대상" hint="활동 로그는 봇의 XP 지급 기록, 기록은 출석 · 구매 · 강화 · 패스 수령 기록으로 판정합니다.">
+        <Field label="측정 대상" hint="XP 지급 기록은 봇이 XP를 준 기록, 활동은 봇이 세는 메시지 · 답장 · 반응 등(2026-10-03부터), 기록은 출석 · 구매 · 강화 · 패스 · 퀘스트 수령 기록입니다.">
           <Dropdown
             theme="light"
             buttonClassName={DD}
@@ -2516,11 +2569,16 @@ export default function AdminBotPage() {
             onChange={(v) => {
               const r = questReasonOf(v);
               if (!r) return;
+              const metric = r.metrics.includes(questForm.metric) ? questForm.metric : r.metrics[0];
+              const timed = r.src === "log" || r.src === "act";
               setQuestForm({
                 ...questForm,
                 reason: v,
-                metric: r.metrics.includes(questForm.metric) ? questForm.metric : r.metrics[0],
-                ...(r.src === "log" ? {} : { hourFrom: "", hourTo: "" }),
+                metric,
+                ...(timed ? {} : { hourFrom: "", hourTo: "", days: [] }),
+                ...(r.ch ? {} : { channelIds: [] }),
+                ...(r.voice ? {} : { minPeople: "", live: false, micOn: false }),
+                ...(timed && metric === "day" ? {} : { dayMin: "" }),
               });
             }}
             options={QUEST_REASON_OPTIONS}
@@ -2530,44 +2588,119 @@ export default function AdminBotPage() {
           label="측정 방식"
           hint={
             <span className={HINT_2LINE}>
-              {(questReasonOf(questForm.reason)?.src || "log") !== "log"
-                ? "이 대상은 정해진 방식으로만 판정합니다."
-                : questForm.metric === "xp"
-                ? "받은 XP의 합계로 판정합니다."
-                : questForm.metric === "minute"
-                ? `음성 채널에 머문 시간(분)으로 판정합니다. 지급 주기 ${Math.max(1, Math.round((settings?.voiceIntervalSec ?? 300) / 60))}분마다 1분 단위로 쌓입니다.`
-                : questForm.metric === "day"
-                ? "기록이 있는 서로 다른 날 수로 판정합니다. (KST)"
-                : "XP를 받은 횟수로 판정합니다. (음성은 1회 = 지급 주기)"}
+              {questMetricHint(questForm.reason, questForm.metric, Math.max(1, Math.round((settings?.voiceIntervalSec ?? 300) / 60)))}
             </span>
           }
         >
           <Segmented
+            className="flex-wrap !rounded-2xl"
             options={QUEST_METRICS}
             value={questForm.metric}
-            disabledValues={QUEST_METRICS.map((m) => m.v).filter((v) => !(questReasonOf(questForm.reason)?.metrics || []).includes(v))}
+            disabledValues={QUEST_METRICS.map((m) => m.v).filter((v) => !(questReasonOf(questForm.reason)?.metrics || []).includes(v) || (v === "run" && questForm.period === "daily"))}
             onChange={(v) => {
               if (!(questReasonOf(questForm.reason)?.metrics || []).includes(v)) return notify("이 측정 대상에서는 고를 수 없는 방식입니다.", true);
-              setQuestForm({ ...questForm, metric: v });
+              if (v === "run" && questForm.period === "daily") return notify("일일 퀘스트에서는 연속 일수를 고를 수 없습니다.", true);
+              setQuestForm({ ...questForm, metric: v, ...(v === "day" ? {} : { dayMin: "" }) });
             }}
           />
         </Field>
-        <Field label="시간대 (선택)" hint="KST 기준 · 시작 ≤ 시각 < 끝 · 22 ~ 2 처럼 자정을 넘길 수 있습니다 · 비우면 하루 종일 (활동 로그만)">
+        <Field label="시간대 (선택)" hint="KST 기준 · 시작 ≤ 시각 < 끝 · 22 ~ 2 처럼 자정을 넘길 수 있습니다 · 비우면 하루 종일 (XP 지급 기록 · 활동만)">
           <div className="grid grid-cols-2 gap-3">
             <label className="block min-w-0">
               <span className="block mb-1 text-[12px] text-[#5a5a5a]">시작 (시)</span>
               <input type="number" min={0} max={23} value={questForm.hourFrom} placeholder="—"
-                disabled={questReasonOf(questForm.reason)?.src !== "log"}
+                disabled={!questTimed(questForm.reason)}
                 onChange={(e) => setQuestForm({ ...questForm, hourFrom: e.target.value })} className={`${inputClass} disabled:opacity-40`} />
             </label>
             <label className="block min-w-0">
               <span className="block mb-1 text-[12px] text-[#5a5a5a]">끝 (시)</span>
               <input type="number" min={0} max={24} value={questForm.hourTo} placeholder="—"
-                disabled={questReasonOf(questForm.reason)?.src !== "log"}
+                disabled={!questTimed(questForm.reason)}
                 onChange={(e) => setQuestForm({ ...questForm, hourTo: e.target.value })} className={`${inputClass} disabled:opacity-40`} />
             </label>
           </div>
         </Field>
+        {/* 📌 2026-10-03 조건 칸 — 시간대와 같은 규칙: 칸은 늘 같은 자리, 대상에 맞지 않으면 흐리게만(편집 칸 높이가 흔들리지 않게) */}
+        {(() => {
+          const r = questReasonOf(questForm.reason);
+          const timed = questTimed(questForm.reason);
+          const days: number[] = Array.isArray(questForm.days) ? questForm.days : [];
+          const dayKey = [...days].sort((a, b) => a - b).join(",");
+          const dayPreset = days.length === 0 || days.length === 7 ? "all" : dayKey === "1,2,3,4,5" ? "wd" : dayKey === "0,6" ? "we" : "";
+          const chIds: string[] = Array.isArray(questForm.channelIds) ? questForm.channelIds : [];
+          const chPick = channelOptions.filter((o) => !chIds.includes(o.value));
+          const off = "opacity-40 pointer-events-none";
+          return (
+            <>
+              <Field label="요일 (선택)" hint="KST 기준 · 비우면 매일 (XP 지급 기록 · 활동만)">
+                <div className={`flex flex-wrap items-center gap-2 ${timed ? "" : off}`}>
+                  <Segmented
+                    options={[{ v: "all", l: "매일" }, { v: "wd", l: "평일" }, { v: "we", l: "주말" }]}
+                    value={dayPreset}
+                    onChange={(v) => setQuestForm({ ...questForm, days: v === "wd" ? QUEST_WEEKDAYS : v === "we" ? QUEST_WEEKEND : [] })}
+                  />
+                  <div className="inline-flex p-1 rounded-full bg-[#f2f2f2]" role="group" aria-label="요일">
+                    {QUEST_DAY_LABELS.map((l, day) => {
+                      const on = days.includes(day);
+                      return (
+                        <button key={day} type="button" aria-pressed={on}
+                          onClick={() => setQuestForm({ ...questForm, days: on ? days.filter((x) => x !== day) : [...days, day].sort((a, b) => a - b) })}
+                          className={`shrink-0 w-8 h-8 rounded-full text-[13px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 ${on ? "bg-white text-[#131313] ring-1 ring-black/[0.06]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
+                          {l}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </Field>
+              <Field label="채널 (선택)" hint="고른 채널 · 카테고리 안에서만 셉니다 · 비우면 모든 채널 · 최대 20개 (채팅 · 음성 · 활동만)">
+                <div className={r?.ch ? "" : off}>
+                  {chIds.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {chIds.map((id) => (
+                        <span key={id} className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full bg-[#f2f2f2] text-[12px] font-bold text-[#131313] max-w-full">
+                          <span className="min-w-0 truncate">{chNameOf(id) || `삭제된 채널 (${id})`}</span>
+                          <button type="button" aria-label="채널 빼기" onClick={() => setQuestForm({ ...questForm, channelIds: chIds.filter((x) => x !== id) })}
+                            className="shrink-0 w-5 h-5 rounded-full text-[#8a8a8a] hover:text-[#131313] flex items-center justify-center">
+                            <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.6}><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <Dropdown
+                    theme="light"
+                    buttonClassName={DD}
+                    value=""
+                    onChange={(v) => {
+                      if (!v || chIds.includes(v)) return;
+                      if (chIds.length >= 20) return notify("채널은 최대 20개까지 고를 수 있습니다.", true);
+                      setQuestForm({ ...questForm, channelIds: [...chIds, v] });
+                    }}
+                    placeholder={chIds.length ? "채널 추가" : "모든 채널"}
+                    options={chPick}
+                  />
+                </div>
+              </Field>
+              <Field label="음성 조건 (선택)" hint="그 채널 인원(본인 포함) · 화면 공유나 캠 · 마이크와 헤드셋을 켠 때만 셉니다 (음성만 · 2026-10-01 19:05 이후 기록)">
+                <div className={`flex flex-wrap items-center gap-3 ${r?.voice ? "" : off}`}>
+                  <label className="inline-flex items-center gap-2 text-[13px] text-[#5a5a5a]">
+                    <input type="number" min={2} max={50} value={questForm.minPeople} placeholder="—"
+                      onChange={(e) => setQuestForm({ ...questForm, minPeople: e.target.value })} className={numClass} />
+                    명 이상
+                  </label>
+                  <Toggle on={!!questForm.live} onClick={() => setQuestForm({ ...questForm, live: !questForm.live })} onLabel="화면 공유 · 캠 켠 때만" offLabel="화면 공유 · 캠 무관" />
+                  <Toggle on={!!questForm.micOn} onClick={() => setQuestForm({ ...questForm, micOn: !questForm.micOn })} onLabel="마이크 켠 때만" offLabel="마이크 무관" />
+                </div>
+              </Field>
+              <Field label="하루 기준 (선택)" hint={`일수 방식에서 하루에 이만큼 이상인 날만 셉니다 · ${questForm.reason === "voice" ? "음성은 분" : "횟수"} 기준 · 비우면 기록만 있으면`}>
+                <input type="number" min={1} value={questForm.dayMin} placeholder="—"
+                  disabled={!(timed && questForm.metric === "day")}
+                  onChange={(e) => setQuestForm({ ...questForm, dayMin: e.target.value })} className={`${numClass} disabled:opacity-40`} />
+              </Field>
+            </>
+          );
+        })()}
         <Field label="목표치" hint={<span className={HINT_2LINE}>{questTargetHint(questForm.reason, questForm.metric)}</span>}>
           <input type="number" min={1} value={questForm.target} onChange={(e) => setQuestForm({ ...questForm, target: e.target.value })} className={inputClass} />
         </Field>
@@ -2601,7 +2734,7 @@ export default function AdminBotPage() {
       <EditPane
         open={isFormOpen("questPick")}
         title="주기별 노출 방식"
-        sub="뽑기는 날짜로 고정돼 같은 주기 안에서는 모든 유저가 같은 퀘스트를 보며, 뽑히지 않은 퀘스트는 보상도 받을 수 없습니다."
+        sub="유저마다 주기가 시작된 뒤 처음 볼 때 따로 뽑고, 그 주기 끝까지 바뀌지 않습니다 · 직전 주기에 받은 퀘스트는 되도록 다시 뽑지 않습니다 · 주기 중간에 바꾼 개수와 새로 만든 퀘스트는 다음 초기화부터 · 뽑히지 않은 퀘스트는 보상도 받을 수 없습니다."
         saveLabel="노출 방식 저장"
         onSubmit={savePicks}
         onCancel={cancelPicks}
@@ -2613,7 +2746,7 @@ export default function AdminBotPage() {
             <Field
               key={f.key}
               label={`${PERIOD_LABEL[f.period]} 노출 개수`}
-              hint={pick > 0 ? `활성 ${total}개 중 ${Math.min(pick, total)}개를 ${f.every}마다 새로 뽑습니다` : `활성 ${total}개를 전부 보여줍니다`}
+              hint={pick > 0 ? `활성 ${total}개 중 ${Math.min(pick, total)}개를 ${f.every}마다 유저마다 새로 뽑습니다` : `활성 ${total}개를 전부 보여줍니다`}
             >
               <Inline>
                 <input type="number" min={0} max={20} value={settings?.[f.key] ?? 0}

@@ -55,7 +55,7 @@ export const CARD_FIELDS = {
   autoAttend: ["avatar", "name", "amount", "streak", "bestStreak", "attendCount", "streakBonus?", "skin?"],
   rankerAnnounce: ["season", "seasonName", "top: [{ name, avatar, xp }] — 1위부터 최대 3명"],
   //  item: { name, type, icon("art:키" · "svg:키" · 짧은 글자), image?(png · jpeg data URI — 원격 주소는 받지 않는다), color? } — 그림은 itemIconEl
-  cmdQuest: ["name", "claimable", "periods: [{ key: daily|weekly|monthly, left: 초기화까지 ms, quests: [{ name, metric: count|minute|xp|day, unit?: 회|분|일|건|개, current, target, rewardXp, rewardPoint, done, claimed, claimable }] }]", "skin?"],
+  cmdQuest: ["name", "claimable", "periods: [{ key: daily|weekly|monthly, left: 초기화까지 ms, quests: [{ name, metric: count|minute|xp|day|run|channel|point, unit?: 회|분|일|곳|건|개|빙옥, current, target, rewardXp, rewardPoint, done, claimed, claimable }] }]", "skin?"],
   cmdInventory: ["name", "total", "items: [item + { count, days?: 남은 일수(영구면 없음), pending?, worn? }] — 앞에서 BAG_SLOTS 칸까지", "skin?"],
   cmdPass: ["season", "seasonName", "tier", "maxTier", "progress — 다음 티어까지 0~1", "need — 다음 티어까지 남은 XP", "claimFree", "claimPaid", "premium", "nextTier — 다음 보상 티어(다 넘었으면 0)", "next: [{ kind: xp|point|role|item, amount?, label?, premium, ...item }] — 그 티어의 무료 → 프리미엄 전부(최대 PASS_MAX)"],
 };

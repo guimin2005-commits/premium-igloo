@@ -222,6 +222,10 @@ const XpLogSchema = new mongoose.Schema({
   reason: { type: String, default: "" },   // "chat" | "voice" | "attend" | "effect"(아이템 효과 따로 지급) | "effect-levelup"
   channelId: { type: String, default: "" },
   channelName: { type: String, default: "" },
+  // 📌 채널의 카테고리(스레드는 부모 채널의 카테고리) — 퀘스트 채널 조건이 카테고리로도 맞추게(2026-10-03, xp.js). models/XpLog.js 와 같은 칸
+  pc: { type: String, default: "" },
+  // 📌 스레드에서 받은 채팅이면 그 부모 채널(아니면 칸 없음) — 퀘스트 채널 조건 · 채널 수가 부모로 센다. models/XpLog.js 와 같은 칸
+  pt: { type: String },
   // 📌 시즌 패스 가속(아이템 효과 passBoost) — 이 지급과 함께 passBaseXp 를 낮춘 폭(진행도에만 더해진 XP). 없으면 0.
   //    시즌 기준선을 로그로 되짚을 때(seasonStartBaseXp) amount 와 함께 빼야 가속분이 사라지지 않는다
   passBoost: { type: Number, default: 0 },
@@ -345,6 +349,43 @@ const WelcomeReplySchema = new mongoose.Schema({
 });
 WelcomeReplySchema.index({ newcomerId: 1, userId: 1 }, { unique: true });
 export const WelcomeReply = mongoose.models.WelcomeReply || mongoose.model("WelcomeReply", WelcomeReplySchema);
+
+// 📌 활동 횟수 묶음 — features/activityStats.js 가 20초마다 $inc 로 쓴다. 사이트 models/ActivityStat.js 는 읽기만(퀘스트 진행도, lib/questKinds.js).
+//    한 줄 = (유저 u · KST 날짜 d · KST 시 h · 종류 k · 채널 ch) 의 횟수 n. pc = 카테고리. exp 가 지나면 지운다(70일).
+//    ⚠️ 인덱스는 봇 쪽에서만 만든다(사이트 모델은 autoIndex 꺼짐)
+const ActivityStatSchema = new mongoose.Schema(
+  {
+    u: { type: String, required: true },
+    d: { type: String, required: true },
+    h: { type: Number, default: 0 },
+    k: { type: String, required: true },
+    ch: { type: String, default: "" },
+    pc: { type: String, default: "" },
+    n: { type: Number, default: 0 },
+    exp: { type: Date },
+  },
+  { versionKey: false }
+);
+ActivityStatSchema.index({ u: 1, d: 1, h: 1, k: 1, ch: 1 }, { unique: true });
+ActivityStatSchema.index({ exp: 1 }, { expireAfterSeconds: 0 });
+export const ActivityStat = mongoose.models.ActivityStat || mongoose.model("ActivityStat", ActivityStatSchema);
+
+// 📌 유저별 · 주기별 노출 퀘스트(그 주기에 처음 연 순간 뽑아 고정) — 사이트 models/QuestPick.js 와 같은 칸 · 같은 인덱스.
+//    /퀘스트(views/quests.js → questKinds.js computeQuestState)도 처음 열면 $setOnInsert 로 넣는다
+const QuestPickSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true },
+    u: { type: String, required: true },
+    per: { type: String, required: true },
+    ids: { type: [String], default: [] },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { versionKey: false }
+);
+QuestPickSchema.index({ key: 1 }, { unique: true });
+QuestPickSchema.index({ u: 1, per: 1, createdAt: -1 });
+QuestPickSchema.index({ createdAt: 1 }, { expireAfterSeconds: 120 * 24 * 60 * 60 });
+export const QuestPick = mongoose.models.QuestPick || mongoose.model("QuestPick", QuestPickSchema);
 
 // 📌 봇 생존 신호 (단일 문서 key:"main") — 관리자 대시보드가 lastSeen 으로 켜짐/꺼짐을 본다. 사이트 models/BotStatus.js 와 같아야 한다
 const BotStatusSchema = new mongoose.Schema({

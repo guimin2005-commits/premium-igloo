@@ -1,8 +1,6 @@
-// 📌 퀘스트 규칙 한 벌 — 무엇을 세나(reason) · 어떻게 세나(metric) · 조건(시간대 · 요일 · 채널 · 음성 상황 · 하루 기준) · 진행도 계산.
-//    모델(models/DailyQuest.js) · 진행 계산(lib/quests.js) · 저장 정리(app/api/daily-quest) · 관리 화면(app/admin/bot 퀘스트 탭) ·
-//    추천 목록(lib/questPresets.js) · 봇 /퀘스트(bot/src/views/quests.js)가 이 규칙 하나를 본다.
-//    ⚠️ 아래 "공용 블록" 구간은 bot/src/questKinds.js 와 글자 하나까지 같아야 한다(봇은 별도 배포라 import 불가) — 한쪽을 고치면 반드시 다른 쪽도.
-//    서버 · 화면 양쪽에서 import 하므로 DB · React 의존이 없어야 한다(진행도 계산은 모델을 인자로 받는다).
+// ── 퀘스트 규칙 한 벌(봇 사본) — 대상 · 세는 방식 · 조건 · 진행도 계산 ──
+//    ⚠️ 아래 "공용 블록" 은 사이트 lib/questKinds.js 와 글자 하나까지 같아야 한다 (봇은 별도 배포라 import 불가).
+//    봇은 /퀘스트 카드(views/quests.js)에서 computeQuestState 로 읽기만 한다 — 수령 · 지급은 사이트에서.
 
 // ═══ 공용 블록 시작 — lib/questKinds.js 와 bot/src/questKinds.js 의 이 구간은 글자 하나까지 같아야 한다 ═══
 

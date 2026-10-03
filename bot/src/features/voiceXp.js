@@ -143,6 +143,7 @@ async function voiceXpTick(client) {
         reason: "voice",
         channelId: channel.id,
         channelName: channel.name || "",
+        pc: channel.parentId || "", // 카테고리 — 퀘스트 채널 조건(XpLog.pc)
         logSec,
         ctx: voiceCtx(voiceState, countOf(channel), now),
       });

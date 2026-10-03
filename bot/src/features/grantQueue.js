@@ -9,6 +9,7 @@ import { Purchase, Payout, CodeGrant, UserXp, BotSetting } from "../db.js";
 import { syncRewardRoles } from "../xp.js";
 import { refreshRoleConfigs } from "../roleConfigs.js";
 import { getLevelByXp } from "../leveling.js";
+import { bumpActivity } from "./activityStats.js";
 import { config } from "../config.js";
 import { buildMessage, commonVars, formatUntil } from "../botMessages.js";
 
@@ -237,7 +238,10 @@ async function processPayouts(guild) {
         // 지급 직후 xp 그대로일 때만 레벨을 쓴다 — 그 사이 채팅 · 음성 지급이 xp 를 바꿨으면 그쪽이 맞춘다(레벨 역행 방지)
         const lv = await UserXp.updateOne({ userId, xp: doc.xp }, { $set: { level: newLevel } });
         // 최고 도달 레벨 — 큐로 오른 레벨도 기록해야 이미 도달한 레벨에서 레벨업 효과를 다시 주지 않는다(xp.js)
-        await UserXp.updateOne({ userId }, { $max: { maxLevel: newLevel } });
+        const pm = await UserXp.findOneAndUpdate({ userId }, { $max: { maxLevel: newLevel } }, { new: false, projection: { maxLevel: 1 } }).lean();
+        // 📌 레벨 업 퀘스트(features/activityStats.js "levelup") — 처음 도달한 레벨만(그 전 최고치를 넘은 만큼). doc.level 은 이번 지급 전 레벨
+        const top = Math.max(1, Math.floor(Number(doc.level) || 0), Math.floor(Number(pm?.maxLevel) || 0));
+        if (lv.matchedCount && p.amount > 0 && newLevel > top) bumpActivity(userId, "levelup", newLevel - top);
 
         // 지급·회수로 레벨이 달라졌을 수 있으니 보상 역할을 현재 레벨에 맞춘다
         const member = await fetchMember(guild, userId);

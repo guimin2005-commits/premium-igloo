@@ -9,6 +9,10 @@ const XpLogSchema = new mongoose.Schema({
   reason: { type: String, default: "" },      // "chat" | "voice" | "attend"
   channelId: { type: String, default: "" },
   channelName: { type: String, default: "" },
+  // 📌 채널의 카테고리(스레드는 부모 채널의 카테고리) — 퀘스트 채널 조건이 카테고리로도 맞추게(2026-10-03부터, 봇 bot/src/xp.js). bot/src/db.js 와 같은 칸
+  pc: { type: String, default: "" },
+  // 📌 스레드에서 받은 채팅이면 그 부모 채널(아니면 칸 없음) — 퀘스트 채널 조건 · 채널 수가 부모로 센다(lib/questKinds.js). bot/src/db.js 와 같은 칸
+  pt: { type: String },
   // 📌 음성 지급 줄에만 — 그 주기의 음성 상황(봇 features/voiceXp.js). 예전 줄 · 채팅 · 출석 줄에는 없다. bot/src/db.js 와 같은 칸
   //    n: 그 채널의 봇 아닌 사람 수(본인 포함) · mute: 마이크 꺼짐(본인 · 서버) · deaf: 헤드셋 꺼짐(본인 · 서버)
   //    live: 화면 공유 · 캠 · idle: 마지막 활동(채팅 · 음성 상태 바뀜 · 명령 · 버튼) 뒤 지난 분
