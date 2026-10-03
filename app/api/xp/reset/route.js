@@ -39,6 +39,13 @@ async function refund(userId, xp, point) {
   return parts.length ? ` · ${parts.join(" · ")} 환불` : "";
 }
 
+// 📌 강화 · 패스 환불은 원장에 + 줄로 남긴다 — 낸 비용 줄(WalletLog 같은 kind 의 −)과 상쇄돼
+//    내역 · 재화 통계 · 랭킹 누적(쓴 XP 를 더하는 셈)이 돌려받은 값을 두 번 세지 않게. 상점은 구매 기록(환불 상태)이 센다
+async function logBack(userId, kind, label, xp, point) {
+  if (xp > 0) await logWallet({ userId, currency: "xp", amount: xp, kind, label });
+  if (point > 0) await logWallet({ userId, currency: "point", amount: point, kind, label });
+}
+
 export async function POST(request) {
   try {
     // 📌 로그인·관리자 판정은 공용 가드 — 초기화 대상은 관리자 본인 계정
@@ -64,7 +71,10 @@ export async function POST(request) {
         { $set: { chatEnhance: 0, voiceEnhance: 0, enhancePaid: { xp: 0, point: 0 }, updatedAt: new Date() } },
         { new: false, projection: { enhancePaid: 1 } }
       ).lean();
-      const msg = await refund(userId, before?.enhancePaid?.xp || 0, before?.enhancePaid?.point || 0);
+      const xpBack = before?.enhancePaid?.xp || 0;
+      const pointBack = before?.enhancePaid?.point || 0;
+      const msg = await refund(userId, xpBack, pointBack);
+      await logBack(userId, "enhance", "강화 초기화 환불", xpBack, pointBack);
       return NextResponse.json({ success: true, message: `강화 단계를 초기화했습니다${msg}.` });
     }
 
@@ -84,7 +94,10 @@ export async function POST(request) {
       ).lean();
       const paid = before?.passUnlocked ? before?.passUnlockPaid : null;
       const amount = paid?.amount > 0 ? paid.amount : 0;
-      const msg = await refund(userId, paid?.method === "xp" ? amount : 0, paid?.method === "point" ? amount : 0);
+      const xpBack = paid?.method === "xp" ? amount : 0;
+      const pointBack = paid?.method === "point" ? amount : 0;
+      const msg = await refund(userId, xpBack, pointBack);
+      await logBack(userId, "pass-unlock", "패스 초기화 환불", xpBack, pointBack);
       return NextResponse.json({ success: true, message: `시즌 패스를 초기화했습니다${msg}.` });
     }
 

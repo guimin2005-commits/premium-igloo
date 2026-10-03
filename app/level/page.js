@@ -44,12 +44,15 @@ const MAIN_TABS = [
   { id: "intro", name: "시스템 안내", short: "안내" },
 ];
 
-// 📌 랭킹 기준 — 누적 XP / 이번 달 획득 / 누적 음성 시간
+// 📌 랭킹 기준 — 현재(보유 XP) / 누적(이번 시즌 얻은 XP 전부 = 보유 + 쓴 XP) / 이번 달 획득 / 누적 음성 시간
+//    대시보드 서버 랭킹 TOP 10 은 음성 시간을 뺀 셋(LB_MODES)
 const RANK_MODES = [
-  { id: "all", label: "누적" },
+  { id: "all", label: "현재" },
+  { id: "total", label: "누적" },
   { id: "month", label: "이번 달" },
   { id: "voice", label: "음성 시간" },
 ];
+const LB_MODES = RANK_MODES.filter((m) => m.id !== "voice");
 const RANK_PAGE_SIZE = 20;
 
 // 레벨 공식은 lib/leveling.js 단일 소스 (봇 지급 로직과 1:1)
@@ -172,6 +175,8 @@ const kstTodayStr = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString(
 // XP 사유 서브팔레트 — 채팅 모노/음성 아이스/출석 레드 (그 외 유채색 금지)
 const REASON_COLORS = { chat: "#a8adb8", voice: "#6fa8c4", attend: "#e91e3f", effect: "#c39220", "effect-levelup": "#c39220" };
 const REASON_LABELS = { chat: "채팅", voice: "음성", attend: "출석", effect: "아이템 효과", "effect-levelup": "레벨업 효과" };
+// 획득 피드 한 줄의 글자 — 채널 이름이 있으면 그것, 없으면 사유. 대시보드 칸 · 전체 창이 같이 쓴다
+const feedLabel = (l) => l.channelName || (l.reason === "attend" ? "출석 체크" : REASON_LABELS[l.reason] || "—");
 
 // 누적 음성 참여 시간 — 한 시간을 넘기면 시간 단위로, 그 전에는 분 단위로 읽는다
 const fmtVoiceTime = (sec) => {
@@ -808,6 +813,44 @@ const GainFxModal = ({ open, onClose, gain, voiceMin = 5, items, loading, perks,
     </PopShell>
   );
 };
+
+// 📌 획득 피드 전체 창 — 대시보드 피드 칸의 [전체 N건]으로 연다. 틀은 PopShell(잉크) — 칸을 그 자리에서 늘리지 않아 뒤 화면이 움직이지 않는다.
+//    왼쪽: 오늘 획득(/api/xp/my-logs today — 대시보드 "오늘 획득" 칸과 같은 값). 오른쪽: 받아 온 기록 전부(대시보드 칸과 같은 줄, 길면 창 안에서 스크롤)
+//    이번 달 합은 싣지 않는다 — XpLog 만의 합이라 랭킹 "이번 달"(퀘스트 · 패스 · 지급 포함)과 숫자가 달라 보인다
+const FEED_SUM_KEYS = ["chat", "voice", "attend"];
+const FeedModal = ({ open, onClose, logs = [], today }) => (
+  <PopShell
+    open={open}
+    onClose={onClose}
+    title="획득 피드"
+    count={logs.length}
+    icon="bolt"
+    left={
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold text-white/45">오늘</p>
+        <p className="mt-2 text-[20px] font-black text-white tabular-nums tracking-tight leading-none truncate">
+          +{fxFmt(today?.total)}<span className="text-[11px] text-white/40 ml-1">XP</span>
+        </p>
+        {/* 줄 합이 위 숫자와 맞게 — 채팅 · 음성 · 출석 밖(아이템 효과 · 레벨업 효과)은 나머지로 한 줄 */}
+        <div className="mt-3 space-y-1.5">
+          {FEED_SUM_KEYS.map((k) => <FxRow key={k} l={REASON_LABELS[k]} v={`+${fxFmt(today?.[k])}`} />)}
+          <FxRow l={REASON_LABELS.effect} v={`+${fxFmt(Math.max(0, (today?.total || 0) - FEED_SUM_KEYS.reduce((s, k) => s + (today?.[k] || 0), 0)))}`} />
+        </div>
+      </div>
+    }
+  >
+    <div className="border-t border-white/[0.08]">
+      {logs.map((l, i) => (
+        <div key={`${l.createdAt}-${i}`} className="flex items-center h-10 gap-3 border-b border-white/[0.06]">
+          <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: REASON_COLORS[l.reason] || "#6b7280" }}></span>
+          <span className="shrink-0 w-16 text-[13px] font-black text-white tabular-nums">+{(l.amount || 0).toLocaleString()}</span>
+          <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-white/50">{feedLabel(l)}</span>
+          <span className="shrink-0 text-[10px] font-bold text-white/35 tabular-nums">{fmtRel(l.createdAt)}</span>
+        </div>
+      ))}
+    </div>
+  </PopShell>
+);
 
 // 📌 확인 창 — 브라우저 기본 confirm 대신. 팝업 틀과 같은 잉크 카드에 창마다의 색(시즌 패스 보라 · 강화 불씨 · 기본 빨강)
 //    금액을 크게, 그 아래 바뀌는 값(잔액 · 레벨)을 줄로 보여 준다. Esc · 바깥 누르기는 취소, 확인 버튼에 처음 초점
@@ -2205,12 +2248,12 @@ export default function LevelPage() {
   }, [session?.user?.id, authStatus, loadMe]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 리더보드 (공개 데이터, 60초 갱신) ──
-  const [lb, setLb] = useState({ all: null, month: null });
+  const [lb, setLb] = useState({ all: null, total: null, month: null });
   const [lbTab, setLbTab] = useState("all");
   useEffect(() => {
     const load = () => {
       // me=1 — 로그인했으면 내 순위 한 줄(me)이 같이 온다(TOP 10 밖이면 목록 아래 내 줄). 비로그인은 서버가 null
-      ["all", "month"].forEach((period) =>
+      LB_MODES.forEach(({ id: period }) =>
         fetch(`/api/xp/leaderboard?period=${period}&limit=10&me=1`, { cache: "no-store" })
           .then((r) => r.json())
           .then((d) => { if (d?.success) setLb((p) => ({ ...p, [period]: d })); })
@@ -2421,8 +2464,14 @@ export default function LevelPage() {
   // 모두 받기 단추 · 모바일 아이콘 배지 — 주기 상관없이 받을 수 있는 퀘스트 수
   const claimableAll = claimableBy.daily + claimableBy.weekly + claimableBy.monthly;
 
-  // 킬피드 확장 토글 — 내부 스크롤 대신 5건 + 전체 보기 (이중 스크롤 회피)
+  // 📌 획득 피드 전체 — 그 자리 팝업(FeedModal). 대시보드 칸은 늘 5건이라 열고 닫아도 뒤 화면 높이 · 스크롤이 그대로다
+  //    (예전엔 칸을 그 자리에서 늘려 아래 · 옆 화면이 움직였다). 닫기는 같은 함수 — PopShell 의 Esc 처리가 흔들리지 않게
   const [feedOpen, setFeedOpen] = useState(false);
+  const openFeed = () => {
+    setFeedOpen(true);
+    playTone(660, 0.06, "sine", 0.03);
+  };
+  const closeFeed = useCallback(() => setFeedOpen(false), []);
 
   // 진행 중 이벤트 — 대시보드 맨 아래 판(EventBoard). null = 불러오는 중(자리를 잡는다), [] = 없음(판을 숨긴다)
   const [events, setEvents] = useState(null);
@@ -2793,6 +2842,7 @@ export default function LevelPage() {
       />
       <ConfirmDialog state={confirmState} onDone={closeConfirm} />
       <WalletHistory open={walletOpen} onClose={closeWallet} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
+      <FeedModal open={feedOpen && !!myLogs?.logs?.length} onClose={closeFeed} logs={myLogs?.logs} today={myLogs?.today} />
       <GainFxModal open={fxOpen && !!me} onClose={closeFx} gain={gain} voiceMin={P_voiceMin} items={myItems?.items} loading={myItems === null} perks={me?.perks} policy={P} />
       <BagOverlay
         open={bagOpen}
@@ -2945,8 +2995,8 @@ export default function LevelPage() {
                         <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹</h3>
                       </div>
                       <span className="flex items-center gap-3">
-                        {["all", "month"].map((k) => (
-                          <button key={k} onClick={() => setLbTab(k)} className={`text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 border-b-2 ${lbTab === k ? "text-[#131313] border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a] border-transparent"}`}>{k === "all" ? "누적" : "이번 달"}</button>
+                        {LB_MODES.map((m) => (
+                          <button key={m.id} onClick={() => setLbTab(m.id)} className={`text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 border-b-2 ${lbTab === m.id ? "text-[#131313] border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a] border-transparent"}`}>{m.label}</button>
                         ))}
                       </span>
                     </div>
@@ -3426,16 +3476,17 @@ export default function LevelPage() {
                     <section className={secCls("rank")}>
                       <div className="flex items-end justify-between mb-5">
                         <div>
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1">TOP 10</span></h3>
+                          {/* 📌 기준 글자 탭이 셋이라 칸이 좁은 폭(360 미만 · PC 두 칸 lg~xl 약 293px)에서는 TOP 10 꼬리를 접는다 — 제목이 두 줄로 꺾이지 않게 */}
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1 max-[360px]:hidden lg:max-xl:hidden">TOP 10</span></h3>
                         </div>
-                        <span className="flex items-center gap-3">
-                          {["all", "month"].map((k) => (
-                            <button key={k} onClick={() => setLbTab(k)} className={`text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 border-b-2 ${lbTab === k ? "text-[#131313] border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a] border-transparent"}`}>{k === "all" ? "누적" : "이번 달"}</button>
+                        <span className="flex items-center gap-3 shrink-0">
+                          {LB_MODES.map((m) => (
+                            <button key={m.id} onClick={() => setLbTab(m.id)} className={`whitespace-nowrap text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 border-b-2 ${lbTab === m.id ? "text-[#131313] border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a] border-transparent"}`}>{m.label}</button>
                           ))}
                           {/* 전체 순위는 랭킹 탭에서 — 여기는 TOP 10 만 */}
                           <button
                             onClick={() => { setRankMode(lbTab); setRankPage(0); setActiveMainTab("rank"); }}
-                            className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
+                            className="whitespace-nowrap text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
                           >
                             전체 보기 →
                           </button>
@@ -3446,7 +3497,7 @@ export default function LevelPage() {
                       ) : !lb[lbTab].data?.length ? (
                         <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
                       ) : (
-                        // 📌 TOP 10 밖이면 목록 아래 내 줄 — 이번 달은 랭킹 API 의 me. 누적은 순위 숫자만 내 정보(/api/xp/me)의 것으로 —
+                        // 📌 TOP 10 밖이면 목록 아래 내 줄 — 누적 · 이번 달은 랭킹 API 의 me. 현재는 순위 숫자만 내 정보(/api/xp/me)의 것으로 —
                         //    같은 화면 프로필 카드 "랭크 #N" · 봇 /레벨 · /랭크 와 같은 공동 순위(동점은 같은 숫자). 배지 · 이름은 랭킹 API 의 me
                         <RankRows
                           rows={lb[lbTab].data}
@@ -3472,18 +3523,19 @@ export default function LevelPage() {
                       {myLogs?.logs?.length ? (
                         <>
                           <div className="border-t border-black/[0.08]">
-                            {(feedOpen ? myLogs.logs : myLogs.logs.slice(0, 5)).map((l, i) => (
+                            {myLogs.logs.slice(0, 5).map((l, i) => (
                               <div key={`${l.createdAt}-${i}`} className="flex items-center h-10 gap-3 border-b border-black/[0.05]">
                                 <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: REASON_COLORS[l.reason] || "#6b7280" }}></span>
                                 <span className="shrink-0 w-16 text-[13px] font-black text-[#131313] tabular-nums">+{(l.amount || 0).toLocaleString()}</span>
-                                <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-[#8a8a8a]">{l.channelName || (l.reason === "attend" ? "출석 체크" : REASON_LABELS[l.reason] || "—")}</span>
+                                <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-[#8a8a8a]">{feedLabel(l)}</span>
                                 <span className="shrink-0 text-[10px] font-bold text-[#a3a3a3] tabular-nums">{fmtRel(l.createdAt)}</span>
                               </div>
                             ))}
                           </div>
+                          {/* 전체는 그 자리 팝업 — 칸은 늘 5건 */}
                           {(myLogs.logs.length > 5) && (
-                            <button onClick={() => setFeedOpen((v) => !v)} className="block w-full text-center text-[11px] font-bold text-[#a3a3a3] hover:text-[#131313] transition-colors mt-3.5 outline-none focus:outline-none">
-                              {feedOpen ? "접기 ↑" : `전체 ${myLogs.logs.length}건 보기 ↓`}
+                            <button type="button" onClick={openFeed} aria-haspopup="dialog" className="block w-full text-center text-[11px] font-bold text-[#a3a3a3] hover:text-[#131313] transition-colors mt-3.5 outline-none focus:outline-none">
+                              전체 {myLogs.logs.length}건
                             </button>
                           )}
                         </>
@@ -3551,15 +3603,16 @@ export default function LevelPage() {
               }
             />
 
-            {/* 기준 — 누적 / 이번 달 / 음성 시간 */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-bar mb-6">
+            {/* 기준 — 현재 / 누적 / 이번 달 / 음성 시간
+                📌 알약 넷 + [내 순위로]가 폰 한 줄에 들어가게 sm 미만은 글자 11 · 여백 10(360 에서 약 308px / 320), 360 미만은 [내 순위로]를 화살표만 */}
+            <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-bar mb-6">
               {RANK_MODES.map((m) => {
                 const on = rankMode === m.id;
                 return (
                   <button
                     key={m.id}
                     onClick={() => { setRankMode(m.id); setRankPage(0); playTone(620, 0.04, "sine", 0.025); }}
-                    className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
+                    className={`shrink-0 whitespace-nowrap px-2.5 sm:px-3.5 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-colors outline-none focus:outline-none ${
                       on
                         ? "bg-[#131313] text-white"
                         : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"
@@ -3577,9 +3630,10 @@ export default function LevelPage() {
                   // 마지막으로 읽은 결과로만 정한다 — 읽는 동안은 직전 상태 그대로(쪽 · 기준을 넘길 때마다 흐림 ↔ 진함으로 깜빡이지 않게).
                   // 기준을 바꾼 직후(새 기준을 읽는 중) 누르면 다 읽은 뒤 내 쪽으로(goMyRank)
                   disabled={!rankMe.row}
-                  className="ml-auto shrink-0 inline-flex items-center gap-1 px-3.5 py-[5px] rounded-full border border-[#a3a3a3] bg-white text-[12px] font-bold text-[#131313] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 enabled:hover:border-[#131313] disabled:opacity-40 disabled:cursor-default"
+                  aria-label="내 순위로"
+                  className="ml-auto shrink-0 max-[360px]:self-stretch whitespace-nowrap inline-flex items-center gap-1 px-2.5 sm:px-3.5 py-[5px] rounded-full border border-[#a3a3a3] bg-white text-[11px] sm:text-[12px] font-bold text-[#131313] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 enabled:hover:border-[#131313] disabled:opacity-40 disabled:cursor-default"
                 >
-                  내 순위로
+                  <span className="max-[360px]:hidden">내 순위로</span>
                   <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.6"><path d="M12 5v14M6 13l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </button>
               )}
