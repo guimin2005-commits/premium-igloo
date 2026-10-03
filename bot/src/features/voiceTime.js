@@ -45,6 +45,8 @@ let guildRef = null;
 let started = false;
 let restored = false;
 let flushing = null;
+let stopping = false; // 종료 기록을 시작함 — 도는 지급은 멈추고 남은 것은 pend 로
+let halted = false; // 종료 기록이 끝남 — 더 기록하지 않는다
 
 const flagsOf = (vs) => ({
   mu: !!(vs.selfMute || vs.serverMute),
@@ -140,28 +142,25 @@ function ctxOf(c) {
 
 // 밀린 시간을 쓰고 바퀴를 진행 · 지급한다 — 20초 주기 · 종료(final) 때. 겹쳐 부르면 진행 중인 것을 같이 기다린다.
 // 종료 때 이미 도는 기록이 있으면 그것이 끝난 뒤 한 번 더 돌린다(그 사이 구간도 적게)
+//    📌 종료가 시작되면(stopping) 도는 기록의 지급 루프는 멈추고 남은 바퀴를 closing 으로 돌려 종료 기록이 pend 로 적게 하고,
+//       종료 기록 뒤에는 20초 주기 기록을 더 돌리지 않는다(pend 를 덮어쓰지 않게)
 export function flushVoiceTime({ final = false } = {}) {
-  if (!started) return Promise.resolve();
+  if (!started || halted) return Promise.resolve();
+  if (final) stopping = true;
+  else if (stopping) return flushing || Promise.resolve();
   if (flushing) return final ? flushing.then(() => flushVoiceTime({ final })) : flushing;
   flushing = doFlush(final)
     .catch((e) => console.error("음성 시간 기록 오류:", e?.message || e))
     .finally(() => {
       flushing = null;
+      if (final) halted = true;
     });
   return flushing;
 }
 
 async function doFlush(final) {
   const guild = guildRef;
-  // 재시작 전 바퀴를 먼저 읽는다 — 읽기 전에 새 바퀴를 적으면 DB 의 진행분을 덮어쓴다. 실패하면 이번 기록은 통째로 미룬다(구간은 pending 에 그대로)
-  if (!restored) {
-    if (!guild) return;
-    await restoreCycles(guild);
-    restored = true;
-  }
   const now = Date.now();
-  const s = getSettings();
-  const interval = Math.max(30, Number(s.voiceIntervalSec) || 300);
   if (guild) {
     // 열린 구간을 모두 끊어 다시 판정한다. 놓친 이벤트도 여기서 메운다 —
     // 세션은 있는데 음성에 없으면(나감을 놓침) 지난 구간은 버리고, 음성에 있는데 세션이 없으면 지금부터 센다
@@ -175,6 +174,15 @@ async function doFlush(final) {
       cut(userId, vs, now);
     }
   }
+  // 재시작 전 바퀴를 먼저 읽는다 — 읽기 전에 새 바퀴를 적으면 DB 의 진행분을 덮어쓴다. 실패하면 나머지는 통째로 미룬다.
+  // 구간은 위에서 이미 끊어 pending 에 쌓였으니(구간 상한에 걸려 잘리지 않게) 다음 기록 때 그대로 이어 쓴다
+  if (!restored) {
+    if (!guild) return;
+    await restoreCycles(guild);
+    restored = true;
+  }
+  const s = getSettings();
+  const interval = Math.max(30, Number(s.voiceIntervalSec) || 300);
 
   // XP 로 바꿀 구간은 이번에 전부 가져간다
   const pieceOf = new Map();
@@ -296,14 +304,16 @@ async function doFlush(final) {
   // 쓰기 실패는 되돌리지 않는다 — 일부만 들어갔을 수 있어 다시 쓰면 두 번 센다(바퀴 쓰기는 아래에서 따로 한다)
   if (ops.length) await UserXp.bulkWrite(ops, { ordered: false }).catch((e) => console.error("음성 시간 쓰기 오류:", e?.message || e));
 
-  // 지급할 바퀴 — 사람마다 하나로 합친다. 정지된 사람(복원 · 재시도로 넘어온 바퀴 포함) · 퇴장 초기화된 사람 것은 버린다
-  const payBy = new Map();
+  // 지급할 바퀴 — 사람 · 채널마다 하나로 합친다(채널 조건 퀘스트가 채널을 바르게 보게). 정지된 사람(복원 · 재시도로 넘어온 바퀴 포함) · 퇴장 초기화된 사람 것은 버린다
+  const payBy = new Map(); // userId → Map(채널 → { member, list })
   for (const x of closing) {
     if (isOff(x.userId) || gone.has(x.userId)) continue;
-    const g = payBy.get(x.userId) || { userId: x.userId, member: null, list: [] };
+    const byCh = payBy.get(x.userId) || new Map();
+    const g = byCh.get(x.cycle.ch) || { member: null, list: [] };
     g.list.push(x.cycle);
     if (x.member) g.member = x.member;
-    payBy.set(x.userId, g);
+    byCh.set(x.cycle.ch, g);
+    payBy.set(x.userId, byCh);
   }
 
   // ── 쓰기 2: 진행 중인 바퀴(재시작 대비) — 열린 바퀴는 덮어쓰고, 닫았거나 버린 바퀴는 지운다. 몇 번을 다시 해도 같은 결과 ──
@@ -314,7 +324,7 @@ async function doFlush(final) {
   const cycUsers = [];
   for (const userId of touched) {
     const c = cycles.get(userId);
-    const pend = final && payBy.has(userId) ? [snapOf(mergeCycles(payBy.get(userId).list))] : null;
+    const pend = final && payBy.has(userId) ? [...payBy.get(userId).values()].map((g) => snapOf(mergeCycles(g.list))) : null;
     if (c || pend) {
       const doc = { ...(c ? snapOf(c) : { sec: 0 }), ...(pend ? { pend } : {}), at: new Date(now) };
       cycOps.push({ updateOne: { filter: { userId }, update: { $set: { voiceCycle: doc } } } });
@@ -348,10 +358,24 @@ async function doFlush(final) {
   }
 
   // ── 지급 — DB 정리가 끝난 바퀴만(재시작 때 같은 바퀴를 두 번 주지 않게). 실패한 사람은 다음 기록 때 다시. 종료 때는 주지 않는다(pend 로 적었다) ──
-  closing = closing.filter((x) => failed.has(x.userId) && !isOff(x.userId) && !gone.has(x.userId));
+  //    실패했는데 정지 · 퇴장 초기화된 사람 것은 버리되 DB 정리는 다음 기록에 맡긴다(discard)
+  const keep = [];
+  for (const x of closing) {
+    if (!failed.has(x.userId)) continue;
+    if (isOff(x.userId) || gone.has(x.userId)) discard.add(x.userId);
+    else keep.push(x);
+  }
+  closing = keep;
   if (final) return;
-  for (const { userId, member, list } of payBy.values()) {
-    if (failed.has(userId) || !member) continue;
+  const groups = [...payBy].flatMap(([userId, byCh]) => [...byCh.values()].map((g) => ({ userId, ...g })));
+  for (let i = 0; i < groups.length; i++) {
+    const { userId, member, list } = groups[i];
+    if (failed.has(userId) || !member || gone.has(userId)) continue; // 지급 도중 서버를 나가 퇴장 초기화됐으면 문서를 되살리지 않게
+    // 종료가 시작됐다 — 남은 지급은 closing 으로 돌려 종료 기록이 pend 로 적게 한다(DB 는 이미 지웠으니 여기서 멈추면 사라진다)
+    if (stopping) {
+      for (const g of groups.slice(i)) if (!failed.has(g.userId) && !gone.has(g.userId)) for (const cycle of g.list) closing.push({ userId: g.userId, member: g.member, cycle });
+      return;
+    }
     const c = mergeCycles(list);
     const raw = c.xp + (xpCarry.get(userId) || 0);
     const amount = Math.max(0, Math.floor(raw + 1e-6)); // 소수 오차로 2000 이 1999 가 되지 않게
@@ -366,40 +390,47 @@ async function doFlush(final) {
 }
 
 // 📌 처음 기록할 때 — DB 에 남은 바퀴(재시작 전 진행 중이던 것 · 종료 때 적어 둔 닫힌 바퀴 pend)를 읽는다.
-//    같은 채널에 그대로 있으면 이어 가고, 그 사이 나갔으면 그때까지 머문 만큼 준다. 서버에 없는 사람 것은 지우기만
+//    같은 채널에 그대로 있으면 이어 가고, 그 사이 나갔으면 그때까지 머문 만큼 준다. 서버에 없는 사람(Unknown Member) 것은 지우기만.
+//    멤버 조회가 다른 이유로 실패하면 통째로 다시 하게 던진다 — 끝까지 다 읽은 뒤에만 한꺼번에 반영한다(중간에 실패해 다시 해도 두 번 넣지 않게)
 async function restoreCycles(guild) {
   const docs = await UserXp.find({ $or: [{ "voiceCycle.sec": { $gt: 0 } }, { "voiceCycle.pend.0": { $exists: true } }] }, { userId: 1, voiceCycle: 1 }).lean();
-  let kept = 0;
-  let pays = 0;
+  const add = { db: [], cycles: [], closing: [], discard: [] };
   for (const d of docs) {
-    dbCycle.add(d.userId);
+    add.db.push(d.userId);
     const v = d.voiceCycle || {};
     const vs = guild.voiceStates.cache.get(d.userId);
-    const member = vs?.member || guild.members.cache.get(d.userId) || (await guild.members.fetch(d.userId).catch(() => null));
+    let member = vs?.member || guild.members.cache.get(d.userId) || null;
     if (!member) {
-      discard.add(d.userId);
+      try {
+        member = await guild.members.fetch(d.userId);
+      } catch (e) {
+        if (e?.code !== 10007) throw e; // Unknown Member 만 '서버에 없음'
+      }
+    }
+    if (!member) {
+      add.discard.push(d.userId);
       continue;
     }
     let mine = 0;
     for (const p of Array.isArray(v.pend) ? v.pend : []) {
       const c = cycleOf(p, member);
       if (c.sec >= 1) {
-        closing.push({ userId: d.userId, member, cycle: c });
+        add.closing.push({ userId: d.userId, member, cycle: c });
         mine++;
       }
     }
     const c = cycleOf(v, member);
     if (c.sec > 0 && vs?.channelId && vs.channelId === c.ch) {
       c.dirty = true; // pend 를 뺀 모양으로 다시 적는다
-      cycles.set(d.userId, c);
-      kept++;
-    } else if (c.sec >= 1) {
-      closing.push({ userId: d.userId, member, cycle: c });
-      mine++;
-    } else if (!mine) discard.add(d.userId);
-    pays += mine;
+      add.cycles.push([d.userId, c]);
+    } else if (c.sec >= 1) add.closing.push({ userId: d.userId, member, cycle: c });
+    else if (!mine) add.discard.push(d.userId);
   }
-  if (docs.length) console.log(`🔊 음성 바퀴 이어 받기 — ${kept}명 이어 감, ${pays}건 지급 대기`);
+  add.db.forEach((u) => dbCycle.add(u));
+  add.cycles.forEach(([u, c]) => cycles.set(u, c));
+  closing.push(...add.closing);
+  add.discard.forEach((u) => discard.add(u));
+  if (docs.length) console.log(`🔊 음성 바퀴 이어 받기 — ${add.cycles.length}명 이어 감, ${add.closing.length}건 지급 대기`);
 }
 
 // ClientReady 에서 설정 · 채널 정책을 읽은 뒤에 켠다(판정이 그 값을 쓴다)
