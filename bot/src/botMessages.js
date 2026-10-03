@@ -4,6 +4,7 @@
 //  · 60초마다 BotMessage 를 다시 읽는다 — 문서가 없는 키는 기본 디자인
 //  · buildMessage(key, vars) → { content?, embeds?, allowedMentions } | null (꺼져 있거나 보낼 게 없으면 null)
 //  · buildMessageWithCard(key, vars, cardData) → 위 모양 + files(card.png) — 카드 키(CARD_KEYS) · 카드 켜짐일 때 (bot/src/botCards.js)
+//  · loadTemplate(key) · buildMessageFrom(key, template, vars) — DB 에서 바로 읽은 디자인 · 글마다 고친 디자인으로 (사이트 공지 features/noticeAnnounce.js)
 //  · 관리자 테스트 발송(BotMessageTest)을 10초마다 관리자 DM 으로 보낸다
 import mongoose from "mongoose";
 import { EmbedBuilder } from "discord.js";
@@ -271,6 +272,36 @@ export const MESSAGE_DEFS = {
         f("지급 역할", "{role}", false),
       ],
     }),
+  },
+
+  // 📌 사이트 공지 — 글쓰기에서 공지를 올리면 봇이 공지 채널(레벨 설정 noticeChannelId)에 보낸다(bot/src/features/noticeAnnounce.js).
+  //    변수는 사이트가 글에서 만든다(lib/noticeDiscord.js). {mention} 은 글마다 고르는 멘션(없음 · @everyone · @here) — 울리는 건 그 선택만
+  noticePost: {
+    group: "channel",
+    label: "공지",
+    desc: "사이트 공지를 공지 채널에 보냅니다.",
+    vars: [
+      { name: "title", label: "제목", sample: "SYSTEM : LEVEL 시즌 2 안내" },
+      { name: "summary", label: "본문 요약", sample: "시즌 2 **A New World** 가 시작됩니다.\n• 새 시즌 패스 · 스킨 3종\n• 출석 XP 조정" },
+      { name: "url", label: "글 주소", sample: `${SITE_URL}/notice` },
+      { name: "tag", label: "태그", sample: "업데이트" },
+      { name: "banner", label: "배너 주소", sample: `${SITE_URL}/banners/season2-store-pc.png` },
+      { name: "author", label: "작성자", sample: "운영진" },
+      { name: "mention", label: "멘션", sample: "@everyone" },
+    ],
+    defaults: {
+      enabled: true,
+      content: "{mention}",
+      embed: embed({
+        authorName: "NOTICE · {tag}",
+        title: "{title}",
+        url: "{url}",
+        description: "{summary}",
+        image: "{banner}",
+        footerText: "고급 이글루 공식 사이트",
+        timestamp: true,
+      }),
+    },
   },
 
   // ── DM ──
@@ -852,6 +883,19 @@ export function renderTemplate(template, vars = {}) {
   return out;
 }
 
+// 📌 변수 하나를 템플릿 글에서 지운다(바로 뒤 띄어쓰기 하나까지). 값이 비면 그 줄을 통째로 빼는 규칙(fill)을 피할 때 —
+//    사이트 공지의 멘션 '없음': "{mention} 새 공지" 가 줄째 사라지지 않고 "새 공지" 로 남게. 미리보기(사이트)와 봇이 같이 쓴다
+export function dropVar(template, name) {
+  const t = template && typeof template === "object" ? template : {};
+  const e = t.embed && typeof t.embed === "object" ? t.embed : {};
+  const re = new RegExp(`\\{${String(name).replace(/[^a-zA-Z0-9]/g, "")}\\} ?`, "g");
+  const cut = (s) => (typeof s === "string" ? s.replace(re, "") : s);
+  const embed = { ...e };
+  for (const k of ["authorName", "title", "description", "footerText"]) embed[k] = cut(e[k]);
+  if (Array.isArray(e.fields)) embed.fields = e.fields.map((x) => ({ ...x, name: cut(x?.name), value: cut(x?.value) }));
+  return { ...t, content: cut(t.content), embed };
+}
+
 // ═══ 공용 블록 끝 ═══
 
 // ── 모델 — 사이트 models/BotMessage.js · models/BotMessageTest.js 와 이름 · 모양 · 기본값이 같아야 한다 ──
@@ -1059,6 +1103,32 @@ function compose(key, vars) {
     } catch {
       return null;
     }
+  }
+}
+
+// 📌 저장된 디자인을 DB 에서 바로 읽는다 — 1분 캐시를 기다리지 않게(방금 고친 디자인으로 보내야 하는 사이트 공지 등). 못 읽으면 캐시
+export async function loadTemplate(key) {
+  if (!MESSAGE_DEFS[key]) return null;
+  let doc = cache.get(key) || null;
+  try {
+    doc = await BotMessage.findOne({ key }).lean();
+  } catch (e) {
+    console.error(`봇 메시지 읽기 오류 (${key}) — 캐시로 보냅니다:`, e.message);
+  }
+  return mergeTemplate(key, doc, { legacy: getSettings() });
+}
+
+// 📌 정해 준 템플릿으로 만들기 — 글마다 고친 디자인(사이트 공지 noticePost 등). 꺼짐(enabled)은 부르는 쪽이 본다. 카드는 붙이지 않는다.
+//    멘션(allowedMentions)은 템플릿 본문 기준(mentionsFor) — 다르게 울려야 하면 부르는 쪽이 덮어쓴다. 던지지 않는다 → payload | null
+export function buildMessageFrom(key, template, vars = {}) {
+  if (!MESSAGE_DEFS[key]) return null;
+  try {
+    const tpl = mergeTemplate(key, template && typeof template === "object" ? template : null);
+    const payload = toPayload(tpl, withDeclaredVars(key, vars));
+    return sendable(payload) ? payload : null;
+  } catch (e) {
+    console.error(`봇 메시지 만들기 오류 (${key}):`, e.message);
+    return null;
   }
 }
 

@@ -4,7 +4,7 @@
 //  · 역할·채널·기간제 부스트, 음소거 정책, 퇴장 시 초기화
 //  · /레벨 /랭크 /출석체크 /퀘스트 /인벤토리 /시즌패스 · 레벨업 알림 · 보상 역할 자동 지급 · XP 로그
 //  · 출석은 /출석체크 또는 음성 누적 자동 출석 (attend.js) · 레벨 비공개(levelPublic) 동안은 XP 를 주지 않는다
-//  · 상점 지급 큐 · 만료 임박 DM · 시즌 패스 미수령 DM · 시즌 결산(RANKER) · 생존 신호(대시보드 봇 상태)
+//  · 상점 지급 큐 · 만료 임박 DM · 시즌 패스 미수령 DM · 시즌 결산(RANKER) · 사이트 공지 → 공지 채널 · 생존 신호(대시보드 봇 상태)
 //  사이트와 동일한 MongoDB 사용 → 웹 레벨 대시보드·랭킹과 실시간 연동
 // ═══════════════════════════════════════════════════════
 import { Client, GatewayIntentBits, Events } from "discord.js";
@@ -25,6 +25,7 @@ import { startExpiryReminder } from "./features/expiryReminder.js";
 import { startPassReminder } from "./features/passReminder.js";
 import { startScheduledChanges } from "./features/scheduledChanges.js";
 import { startSeasonSettle } from "./features/seasonSettle.js";
+import { startNoticeAnnounce } from "./features/noticeAnnounce.js";
 import { refreshBotMessages, startBotMessageLoop } from "./botMessages.js";
 import { registerCommandDefinitions, registerCommandHandlers } from "./commands.js";
 
@@ -79,6 +80,7 @@ client.once(Events.ClientReady, async (c) => {
   startPassReminder(c); // 시즌 종료 D-7 · D-1 안 받은 시즌 패스 보상 DM (10분 주기)
   startScheduledChanges(); // 예약 변경 — 정한 시각에 설정 · 아이템 값 바꾸기 (1분 주기)
   startSeasonSettle(c); // 끝난 시즌 결산 · RANKER (5분 주기)
+  startNoticeAnnounce(c); // 사이트 공지 → 공지 채널 (20초 주기, 대기열 NoticeAnnounce)
   startScrimNudge(c);
 });
 

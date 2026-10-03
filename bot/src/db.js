@@ -185,6 +185,8 @@ const BotSettingSchema = new mongoose.Schema({
   roleGrantEnabled: { type: Boolean, default: true },
   // 📌 자동 출석 알림 채널 — 비우면 레벨업 채널 (features/voiceXp.js announceAutoAttend). models/BotSetting.js 와 같아야 한다
   attendChannelId: { type: String, default: "" },
+  // 📌 공지 채널 — 사이트 공지를 봇이 보내는 곳(features/noticeAnnounce.js). 비우면 보내지 않고 실패로 남긴다. models/BotSetting.js 와 같아야 한다
+  noticeChannelId: { type: String, default: "" },
   // 📌 서포터즈 — 봇은 읽지 않지만 사이트와 같은 문서라 스키마를 맞춰 둔다
   //    (models/BotSetting.js 와 이름·기본값이 반드시 같아야 한다 — 빠지면 upsert 때 기본값이 사라진다)
   supporterRoleId:      { type: String, default: "" },      // 서포터즈 역할 — 관리자가 /admin/bot 역할 탭에서 지정
@@ -424,6 +426,35 @@ export const ScheduledChange = mongoose.models.ScheduledChange || mongoose.model
   error: { type: String, default: "" },
   createdAt: { type: Date, default: Date.now },
 }, loose));
+
+// 📌 디스코드 공지 대기열 — 사이트 공지 글 하나에 한 문서(features/noticeAnnounce.js). 사이트가 넣고 봇이 보낸다.
+//    models/NoticeAnnounce.js 와 이름 · 모양 · 기본값이 같아야 한다
+const NoticeAnnounceSchema = new mongoose.Schema({
+  postId: { type: String, required: true, unique: true },
+  on: { type: Boolean, default: true },
+  vars: { type: mongoose.Schema.Types.Mixed, default: {} },      // { title, summary, url, tag, banner, author }
+  template: { type: mongoose.Schema.Types.Mixed, default: null }, // 글마다 고친 디자인 — null 이면 봇 메시지 › 공지(noticePost)
+  mention: { type: String, default: "none" },                    // none | everyone | here
+  button: {
+    on: { type: Boolean, default: true },
+    label: { type: String, default: "" },                        // 비우면 "사이트에서 보기"
+  },
+  sendAt: { type: Date, default: Date.now, index: true },        // 예약 글은 공개 시각
+  action: { type: String, default: "send" },                     // send | edit | delete
+  status: { type: String, default: "pending", index: true },     // pending → sending → sent | failed · off · expired
+  channelId: { type: String, default: "" },
+  messageId: { type: String, default: "" },
+  error: { type: String, default: "" },
+  claimedAt: { type: Date, default: null },
+  resync: { type: String, default: "" },                         // sending 중에 사이트가 다시 저장 · 삭제함 — edit | delete
+  tries: { type: Number, default: 0 },                           // 지우기를 다시 한 횟수
+  sentAt: { type: Date, default: null },
+  doneAt: { type: Date, default: null },
+  updatedAt: { type: Date, default: Date.now },
+  updatedBy: { type: String, default: "" },
+  createdAt: { type: Date, default: Date.now },
+});
+export const NoticeAnnounce = mongoose.models.NoticeAnnounce || mongoose.model("NoticeAnnounce", NoticeAnnounceSchema);
 
 export const connectDb = (uri) => mongoose.connect(uri);
 export const disconnectDb = () => mongoose.disconnect();

@@ -112,6 +112,8 @@ export async function POST(request) {
         roleGrantEnabled: b.roleGrantEnabled !== false,
         // 자동 출석 알림 채널 — "" 는 레벨업 채널과 동일. 본문에 없으면(이 칸을 모르는 옛 화면) 저장값 유지
         attendChannelId: typeof b.attendChannelId === "string" ? b.attendChannelId.trim().slice(0, 32) : cur?.attendChannelId || "",
+        // 공지 채널 — "" 는 보내지 않음(봇이 실패로 남긴다). 본문에 없으면 저장값 유지
+        noticeChannelId: typeof b.noticeChannelId === "string" ? b.noticeChannelId.trim().slice(0, 32) : cur?.noticeChannelId || "",
         // 서포터즈 — 화이트리스트에 없으면 조용히 무시되어 역할 탭에서 저장해도 안 남는다
         supporterRoleId: typeof b.supporterRoleId === "string" ? b.supporterRoleId.trim() : "",
         supporterBaseXp: num(b.supporterBaseXp, 150000),

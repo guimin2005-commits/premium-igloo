@@ -36,6 +36,15 @@ const fmtDate = (v: string) => {
 // 예약 발행 글은 공개 시각이 게시일이다 (상세 페이지와 같은 기준)
 const shownAt = (n: any) => n?.publishAt || n?.createdAt;
 
+// 📌 디스코드 공지 상태(관리자만) — 봇이 아직 안 보냈거나 못 보낸 글만 제목 옆에 작게. 보낸 글은 표시하지 않는다
+type DcRow = { status: string; action: string; hasMessage: boolean; error: string };
+const dcLabelOf = (d?: DcRow) =>
+  !d ? null
+  : d.status === "failed" ? { l: "디스코드 실패", cls: "text-[#d01634]" }
+  : d.status === "expired" ? { l: "디스코드 기한 지남", cls: "text-[#8a8a8a]" }
+  : d.status === "pending" || d.status === "sending" ? { l: d.action === "send" ? "디스코드 대기" : "디스코드 처리 중", cls: "text-[#8a8a8a]" }
+  : null;
+
 export default function NoticeClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -49,6 +58,8 @@ export default function NoticeClient() {
   const [searchQuery, setSearchQuery] = useState("");
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [dcMap, setDcMap] = useState<Record<string, DcRow>>({});
+  const [dcAlso, setDcAlso] = useState(false); // 삭제 창 — 봇이 보낸 디스코드 글도 지우기
   const [toast, setToast] = useState("");
 
   // 읽은 공지 (N 배지용)
@@ -73,6 +84,16 @@ export default function NoticeClient() {
       const res = await fetch(`/api/posts?category=공지사항${admin ? "&all=1" : ""}`, { cache: "no-store" });
       if (res.ok) setNotices((await res.json()).data);
     } catch {} finally { setIsLoading(false); }
+    // 관리자 — 디스코드 공지 상태(/api/admin/notice-discord)
+    if (admin) {
+      fetch("/api/admin/notice-discord?list=1", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => {
+          const items: (DcRow & { postId: string })[] = Array.isArray(d?.data?.items) ? d.data.items : [];
+          setDcMap(Object.fromEntries(items.map(({ postId, ...x }) => [postId, x])));
+        })
+        .catch(() => {});
+    }
   };
   useEffect(() => { if (status !== "loading") fetchNotices(!!isAdmin); }, [status, isAdmin]);
 
@@ -84,10 +105,11 @@ export default function NoticeClient() {
 
   const executeDelete = async () => {
     if (!deleteConfirmId) return;
+    const withDc = dcAlso && !!dcMap[deleteConfirmId]?.hasMessage;
     try {
-      const res = await fetch(`/api/posts/${deleteConfirmId}`, { method: "DELETE" });
-      if (res.ok) { setToast("공지사항을 삭제했습니다"); setTimeout(() => setToast(""), 1800); fetchNotices(!!isAdmin); }
-    } catch {} finally { setDeleteConfirmId(null); }
+      const res = await fetch(`/api/posts/${deleteConfirmId}${withDc ? "?discord=delete" : ""}`, { method: "DELETE" });
+      if (res.ok) { setToast(withDc ? "공지사항을 삭제했습니다 · 디스코드 글도 지웁니다" : "공지사항을 삭제했습니다"); setTimeout(() => setToast(""), 1800); fetchNotices(!!isAdmin); }
+    } catch {} finally { setDeleteConfirmId(null); setDcAlso(false); }
   };
 
   const sorted = [...notices].sort((a, b) => {
@@ -160,6 +182,10 @@ export default function NoticeClient() {
                     <span className="truncate group-hover:text-[#e91e3f] transition-colors">{n.title}</span>
                     {isNewNotice(n) && <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-[#e91e3f] text-white text-[9px] font-black leading-none">N</span>}
                     {isAdmin && n.hidden && <span className="shrink-0 text-[10px] font-black text-[#131313]">숨김</span>}
+                    {isAdmin && (() => {
+                      const dc = dcLabelOf(dcMap[n._id]);
+                      return dc ? <span title={dcMap[n._id]?.error || undefined} className={`shrink-0 text-[10px] font-black ${dc.cls}`}>{dc.l}</span> : null;
+                    })()}
                   </span>
                   <span className="flex items-center gap-3 shrink-0">
                     {isAdmin && (
@@ -179,12 +205,19 @@ export default function NoticeClient() {
 
       {/* 삭제 확인 */}
       {deleteConfirmId && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setDeleteConfirmId(null)}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => { setDeleteConfirmId(null); setDcAlso(false); }}>
           <div className="bg-white rounded-3xl w-full max-w-sm p-7 text-center border border-[#ededed] shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-base font-black text-[#131313] mb-2">공지사항을 삭제할까요?</h2>
             <p className="text-[12px] text-[#8a8a8a] mb-6">되돌릴 수 없습니다.</p>
+            {/* 봇이 디스코드에 보낸 공지 — 같이 지울지 고른다 */}
+            {dcMap[deleteConfirmId]?.hasMessage && (
+              <label className="flex items-center justify-center gap-2 -mt-2 mb-5 text-[12px] font-bold text-[#131313] cursor-pointer select-none">
+                <input type="checkbox" checked={dcAlso} onChange={(e) => setDcAlso(e.target.checked)} className="w-4 h-4 accent-[#e91e3f]" />
+                디스코드 공지도 지우기
+              </label>
+            )}
             <div className="flex gap-2">
-              <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 rounded-xl bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] text-[13px] font-bold transition-colors">취소</button>
+              <button onClick={() => { setDeleteConfirmId(null); setDcAlso(false); }} className="flex-1 py-3 rounded-xl bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] text-[13px] font-bold transition-colors">취소</button>
               <button onClick={executeDelete} className="flex-1 py-3 rounded-xl bg-[#e91e3f] hover:bg-[#d01634] text-white text-[13px] font-bold transition-colors">삭제</button>
             </div>
           </div>

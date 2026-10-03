@@ -92,7 +92,7 @@ const TAB_ORDER: { id: string; short: string }[] = [
 //    sec 가 오면 그 묶음이 옮겨 간 패널(id="sec-…")로 스크롤해 준다.
 //    mute 는 예전 '음소거 · 퇴장' 묶음에 공개 토글이 함께 있었고, 그 주소로 오는 쪽은 전부 공개 토글을 찾는다.
 const SEC_ANCHOR: Record<string, Record<string, string>> = {
-  policy: { xp: "xp", enhance: "enhance", mute: "public", public: "public", levelup: "levelup", rolegrant: "rolegrant", streak: "streak", expiry: "expiry" },
+  policy: { xp: "xp", enhance: "enhance", mute: "public", public: "public", levelup: "levelup", rolegrant: "rolegrant", streak: "streak", expiry: "expiry", notice: "notice" },
   roles: { reward: "reward", tier: "tier", inventory: "inventory", supporter: "supporter", protected: "protected", ranker: "ranker" },
   content: { channels: "channels", quests: "quests", boosts: "boosts" },
   ledger: { grant: "grant", logs: "logs", reset: "reset" },
@@ -239,6 +239,7 @@ const SETTING_LABEL: Record<string, string> = {
   roleGrantChannelId: "역할 지급 알림 채널",
   roleGrantMessage: "역할 지급 알림 문구",
   attendChannelId: "자동 출석 알림 채널",
+  noticeChannelId: "공지 채널",
   shopPublic: "ARCTIC 상점 공개",
   levelPublic: "SYSTEM : LEVEL 공개",
   resetOnLeave: "퇴장 시 XP 초기화",
@@ -1203,6 +1204,7 @@ export default function AdminBotPage() {
     if (k === "muteTarget") return MUTE_TARGETS.find((o) => o.v === (v || "both"))?.l || String(v);
     if (k === "levelupChannelId") return v ? `#${channelNameOf(v)}` : "알림 끄기";
     if (k === "roleGrantChannelId" || k === "attendChannelId") return v ? `#${channelNameOf(v)}` : "레벨업 채널과 동일";
+    if (k === "noticeChannelId") return v ? `#${channelNameOf(v)}` : "보내지 않음";
     if (k === "supporterRoleId" || k === "rankerRoleId") return v ? roleNameOf(v) || v : "지정 안 함";
     if (k === "attendStreakEnabled") return v ? "사용" : "사용 안 함";
     if (k === "expiryReminderEnabled") return v !== false ? "사용" : "사용 안 함";
@@ -1712,6 +1714,22 @@ export default function AdminBotPage() {
                 </FieldRow>
                 <FieldRow label="알림 문구">
                   <Link href="/admin/messages?key=autoAttend" className={LINK_PILL}>문구·디자인 편집 →</Link>
+                </FieldRow>
+              </Panel>
+
+              {/* 📌 사이트 공지 → 디스코드 — 채널만 여기, 문구 · 디자인은 봇 메시지(noticePost). 글마다 보내기 · 멘션은 글쓰기에서 */}
+              <Panel id="sec-notice" className="scroll-mt-24" title="공지 알림" flush>
+                <FieldRow label="공지 채널" changed={chg("noticeChannelId")} hint="사이트 공지를 봇이 보낼 채널">
+                  <Dropdown
+                    theme="light"
+                    buttonClassName={DD}
+                    value={settings.noticeChannelId || ""}
+                    onChange={(v) => setSettings({ ...settings, noticeChannelId: v })}
+                    options={[{ value: "", label: "보내지 않음" }, ...textChannelOptions]}
+                  />
+                </FieldRow>
+                <FieldRow label="공지 문구">
+                  <Link href="/admin/messages?key=noticePost" className={LINK_PILL}>문구·디자인 편집 →</Link>
                 </FieldRow>
               </Panel>
 

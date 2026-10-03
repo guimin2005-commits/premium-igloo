@@ -35,6 +35,7 @@ const DEFAULTS = {
   levelPublic: false, // 비공개면 봇이 XP 를 주지 않는다 (isLevelOpen)
   rankerRoleId: "",
   attendChannelId: "", // 자동 출석 알림 채널 — 비우면 레벨업 채널 (features/voiceXp.js)
+  noticeChannelId: "", // 사이트 공지 채널 — 비우면 보내지 않는다 (features/noticeAnnounce.js 는 DB 에서 바로 읽는다)
   attendStreakEnabled: false,
   attendStreakRules: [],
   expiryReminderEnabled: true,

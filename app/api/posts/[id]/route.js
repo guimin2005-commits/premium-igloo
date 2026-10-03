@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { connectToDatabase } from "@/lib/mongodb";
-import { denyIfNotAdmin } from "@/lib/apiAuth";
+import { requireAdmin } from "@/lib/apiAuth";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
 import { isSupporterSession } from "@/lib/supporters";
 import { bracketVisible } from "@/lib/tournamentPhase";
 import Post from "@/models/Post";
+import { readDiscordInput, syncNotice, dropNotice, announceView } from "@/lib/noticeAnnounce";
 import SurveyResponse from "@/models/SurveyResponse";
 import SupporterComment from "@/models/SupporterComment";
 import SupporterAck from "@/models/SupporterAck";
@@ -56,17 +57,32 @@ export async function GET(request, { params }) {
 // 📌 2. 글 수정 완료 버튼을 눌렀을 때 실행되는 기능 (PUT)
 export async function PUT(request, { params }) {
   try {
-    const deny = await denyIfNotAdmin();
-    if (deny) return deny;
+    const auth = await requireAdmin();
+    if (auth.deny) return auth.deny;
     await connectToDatabase();
     const resolvedParams = await params;
     const { id } = resolvedParams;
     
     const body = await request.json();
-    delete body.noticeWebhookAt; // 발송 표시는 서버만 쓴다
+    delete body.noticeWebhookAt; // 옛 웹훅 표시 — 쓰지 않는다
+    // 📌 디스코드 공지 칸(글쓰기)은 글에 저장하지 않고 대기열로 — 잘못된 값이면 글도 고치지 않는다
+    const dc = readDiscordInput(body.discord);
+    delete body.discord;
+    if (dc.error) return NextResponse.json({ error: dc.error, message: dc.error }, { status: 400 });
     const updatedPost = await Post.findByIdAndUpdate(id, body, { new: true });
+
+    // 대기열을 글에 맞춘다 — 다른 화면의 수정(고정 · 우승자 등)은 dc.input 이 없다(lib/noticeAnnounce.js syncNotice)
+    let discord = null;
+    if (updatedPost) {
+      try {
+        discord = announceView(await syncNotice(updatedPost, dc.input, auth.name || ""));
+      } catch (e) {
+        console.error("디스코드 공지 대기열 오류:", e);
+        discord = { error: "디스코드 공지를 맞추지 못했습니다." };
+      }
+    }
     
-    return NextResponse.json({ success: true, data: updatedPost }, { status: 200 });
+    return NextResponse.json({ success: true, data: updatedPost, discord }, { status: 200 });
   } catch (error) {
     console.error("게시글 수정 에러:", error);
     return NextResponse.json({ error: "게시글 수정 중 오류가 발생했습니다." }, { status: 500 });
@@ -76,8 +92,8 @@ export async function PUT(request, { params }) {
 // 📌 3. 삭제 팝업에서 '삭제하기'를 눌렀을 때 실행되는 기능 (DELETE)
 export async function DELETE(request, { params }) {
   try {
-    const deny = await denyIfNotAdmin();
-    if (deny) return deny;
+    const auth = await requireAdmin();
+    if (auth.deny) return auth.deny;
     await connectToDatabase();
     const resolvedParams = await params;
     const { id } = resolvedParams;
@@ -92,6 +108,9 @@ export async function DELETE(request, { params }) {
         SupporterAck.deleteMany({ postId }),
         SupporterReaction.deleteMany({ postId }),
       ]);
+      // 📌 디스코드 공지 — ?discord=delete 면 봇이 보낸 글도 지운다, 아니면 대기열 문서만 지운다(안 보낸 예약 공지는 취소)
+      const removeMessage = new URL(request.url).searchParams.get("discord") === "delete";
+      await dropNotice(postId, removeMessage, auth.name || "").catch((e) => console.error("디스코드 공지 대기열 정리 오류:", e));
     }
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {

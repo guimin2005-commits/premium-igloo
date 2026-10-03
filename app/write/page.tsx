@@ -2,6 +2,11 @@
 import { PHASES, phaseOf, statusFromPhase } from "@/lib/tournamentPhase";
 import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { formatUntil } from "@/lib/botMessages";
+import { MENTIONS, noticeVars } from "@/lib/noticeDiscord";
+import { type Tpl, normTpl, sfxOk } from "../admin/messages/BotMessageEditor";
+import NoticeDiscordDialog, { type NoticeButton } from "./NoticeDiscordDialog";
 import { BracketView } from "../components/BracketView";
 import { DiscordIdInput } from "../components/DiscordIds";
 import { findTableAt, spliceBlock, type Grid } from "../components/mdTable";
@@ -18,6 +23,7 @@ import {
   Toggle,
   Btn,
   EmptyRow,
+  StatusChip,
   inputClass,
   labelClass,
   fieldNote,
@@ -75,9 +81,50 @@ function DateRange({ start, end, always, onStart, onEnd, onAlways, alwaysLabel }
   );
 }
 
+// 📌 디스코드 공지 — 봇이 공지 채널에 보낸다(대기열 NoticeAnnounce · 봇 features/noticeAnnounce.js). 상태는 /api/admin/notice-discord
+type DcItem = {
+  on: boolean; status: string; action: string; sendAt: string | null; sentAt: string | null; error: string;
+  hasMessage: boolean; mention: string; button: NoticeButton; template: unknown;
+};
+type DcInfo = { template: Tpl; enabled: boolean; channel: boolean; botOnline: boolean; item: DcItem | null };
+type ChipTone = "ok" | "warn" | "bad" | "info" | "neutral";
+const DC_API = "/api/admin/notice-discord";
+const DC_SKEW_MS = 60_000; // 보낼 시각은 서버 시계 — PC 시계가 조금 늦어도 바로 보낸 글이 예약으로 보이지 않게
+// 대기열 상태 → 칩 한 개
+function dcChipOf(it: DcItem | null): { tone: ChipTone; l: string } | null {
+  if (!it) return null;
+  const { status, action } = it;
+  if (status === "sending") return { tone: "warn", l: action === "edit" ? "고치는 중" : action === "delete" ? "지우는 중" : "보내는 중" };
+  if (status === "pending") {
+    if (action === "edit") return { tone: "warn", l: "고치기 대기" };
+    if (action === "delete") return { tone: "warn", l: "지우기 대기" };
+    const at = it.sendAt ? new Date(it.sendAt).getTime() : 0;
+    return at - Date.now() > DC_SKEW_MS ? { tone: "info", l: `예약 ${formatUntil(it.sendAt).slice(5)}` } : { tone: "warn", l: "대기" };
+  }
+  if (status === "sent") return { tone: "ok", l: `보냄 ${formatUntil(it.sentAt).slice(5)}` };
+  if (status === "failed") return { tone: "bad", l: action === "edit" ? "고치기 실패" : "실패" };
+  if (status === "expired") return { tone: "neutral", l: "기한 지남" };
+  if (status === "off") return { tone: "neutral", l: "꺼짐" };
+  return null;
+}
+// 봇이 곧 처리할 건(보내는 중 · 시각이 지난 대기) — 이때만 상태를 다시 읽는다
+const dcDue = (it: DcItem | null | undefined) =>
+  !!it && (it.status === "sending" || (it.status === "pending" && (!it.sendAt || new Date(it.sendAt).getTime() - Date.now() <= DC_SKEW_MS)));
+// 저장 결과 알림의 둘째 줄
+function dcResultLine(dc: (Partial<DcItem> & { error?: string }) | null | undefined, botOnline: boolean): string {
+  if (!dc) return "";
+  if (dc.error && !dc.status) return dc.error;
+  // off — 스위치를 켠 채면 가린 글(줄의 칩과 같은 말), 끈 거면 없음
+  if (dc.status === "off") return dc.on ? "디스코드 공지 · 가린 글" : "";
+  const chip = dcChipOf(dc as DcItem);
+  if (!chip || dc.status === "sent") return "";
+  const head = dc.action === "send" ? "디스코드 공지" : "디스코드 글";
+  return `${head} · ${chip.l}${dc.status === "pending" && !botOnline ? " · 봇 꺼짐" : ""}`;
+}
+
 export default function AdminWritePage() {
   // 📌 권한 가드는 관리자 공용(useAdminGuard) — 같은 ADMIN_USERS(lib/admins)로 막고, 막힌 화면도 다른 관리 화면과 같은 모양
-  const { session, gate } = useAdminGuard();
+  const { session, isAdmin, gate } = useAdminGuard();
   const router = useRouter();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
@@ -94,6 +141,17 @@ export default function AdminWritePage() {
   const [hidden, setHidden] = useState(false);    // 📌 글 가리기 (지우지 않고 감추기)
   const [eventTag, setEventTag] = useState("NONE");
   const [bannerUrl, setBannerUrl] = useState("");
+  // 📌 디스코드 공지(공지사항만) — 보낼지 · 멘션 · 글마다 고친 모양(null 이면 봇 메시지 › 공지 디자인) · 링크 버튼 · 보낸 글 같이 고치기
+  const [dcOn, setDcOn] = useState(true);
+  const [dcMention, setDcMention] = useState("none");
+  const [dcTemplate, setDcTemplate] = useState<Tpl | null>(null);
+  const [dcButton, setDcButton] = useState<NoticeButton>({ on: true, label: "" });
+  const [dcSync, setDcSync] = useState(false);
+  const [dcInfo, setDcInfo] = useState<DcInfo | null>(null);
+  const [dcLoadedFor, setDcLoadedFor] = useState<string | null>(null); // 불러온 글 id("" = 새 글) — 수정 글은 불러오기 전엔 보내지 않는다
+  const [dcOpen, setDcOpen] = useState(false);
+  const [dcToast, setDcToast] = useState(""); // 편집 팝업 [적용] 알림
+  const dcToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 본문 이미지 넣기 창
   const [imageOpen, setImageOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
@@ -343,6 +401,7 @@ export default function AdminWritePage() {
 
   const collectDraft = () => ({
     category, title, content, publishAt, hidden, noticeTag, isPinned, bannerUrl,
+    dcOn, dcMention, dcTemplate, dcButton,
     eventTag, eventStartDate, eventEndDate, isEventAlways,
     recruitSubCategory, recruitRole, recruitStartDate, recruitEndDate, isRecruitAlways, recruitQual, recruitTasks, recruitExtra,
     tournamentGame, tournamentPrize, tournamentStatus: statusFromPhase(tournamentPhase), tournamentLink, tournamentBracket: serializeBracket(bracketRounds), tournamentBracketPublic: bracketPublic, tournamentWinner, tournamentWinnerId, tournamentStartDate, tournamentEndDate,
@@ -366,6 +425,8 @@ export default function AdminWritePage() {
       if (!d) return;
       setCategory(d.category || "공지사항"); setTitle(d.title || ""); setContent(d.content || ""); setPublishAt(d.publishAt || ""); setHidden(!!d.hidden);
       setNoticeTag(d.noticeTag || "일반"); setIsPinned(!!d.isPinned); setBannerUrl(d.bannerUrl || "");
+      setDcOn(d.dcOn !== false); setDcMention(MENTIONS.some((m) => m.v === d.dcMention) ? d.dcMention : "none");
+      setDcTemplate(d.dcTemplate ? normTpl(d.dcTemplate) : null); setDcButton({ on: d.dcButton?.on !== false, label: String(d.dcButton?.label || "") });
       setEventTag(d.eventTag || "NONE"); setEventStartDate(d.eventStartDate || ""); setEventEndDate(d.eventEndDate || ""); setIsEventAlways(!!d.isEventAlways);
       setRecruitSubCategory(d.recruitSubCategory || "staff"); setRecruitRole(d.recruitRole || ""); setRecruitStartDate(d.recruitStartDate || ""); setRecruitEndDate(d.recruitEndDate || "");
       setIsRecruitAlways(!!d.isRecruitAlways); setRecruitQual(d.recruitQual || ""); setRecruitTasks(d.recruitTasks || ""); setRecruitExtra(d.recruitExtra || "");
@@ -474,6 +535,54 @@ export default function AdminWritePage() {
       });
     }
   }, [searchParams]);
+
+  // 📌 디스코드 공지 상태 — 처음 읽을 때 수정 글이면 글쓰기 칸(보낼지 · 멘션 · 모양 · 버튼)도 그 글 값으로. 보내는 중 · 대기면 10초마다 상태만 다시
+  const dcPolling = dcDue(dcInfo?.item);
+  useEffect(() => {
+    if (!isAdmin || category !== "공지사항") return;
+    let alive = true;
+    const want = editId;
+    fetch(`${DC_API}${want ? `?postId=${encodeURIComponent(want)}` : ""}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive || !d?.success || !d.data) return;
+        const info: DcInfo = { ...d.data, template: normTpl(d.data.template) };
+        setDcInfo(info);
+        const it = info.item;
+        if (want) {
+          // 수정 글 — 대기열이 없으면(옛 글 · 끈 채 올린 글) 끈 채로. 기한 지난 건 다시 켜야 보낸다
+          setDcOn(!!it && it.on && it.status !== "expired");
+          setDcMention(it?.mention || "none");
+          setDcTemplate(it?.template ? normTpl(it.template) : null);
+          setDcButton(it?.button || { on: true, label: "" });
+          setDcSync(false);
+        }
+        setDcLoadedFor(want);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [isAdmin, category, editId]);
+  // 상태만 다시(칸 값은 그대로) — 보내는 중 · 대기면 10초마다, 새 탭(채널 · 봇 메시지 칩)에서 돌아오면 한 번
+  useEffect(() => {
+    if (!isAdmin || category !== "공지사항") return;
+    const refresh = () => {
+      fetch(`${DC_API}${editId ? `?postId=${encodeURIComponent(editId)}` : ""}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => { if (d?.success && d.data) setDcInfo({ ...d.data, template: normTpl(d.data.template) }); })
+        .catch(() => {});
+    };
+    const t = editId && dcPolling ? setInterval(refresh, 10_000) : null;
+    window.addEventListener("focus", refresh);
+    return () => {
+      if (t) clearInterval(t);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [isAdmin, category, editId, dcPolling]);
+  useEffect(() => () => {
+    if (dcToastTimer.current) clearTimeout(dcToastTimer.current);
+  }, []);
 
   const insertWrap = (symbol: string, placeholder = "텍스트") => {
     const textarea = textareaRef.current;
@@ -612,6 +721,10 @@ export default function AdminWritePage() {
       publishAt: publishAt ? new Date(publishAt).toISOString() : null,
       hidden,
       ...(category === "공지사항" && { content, noticeTag, isPinned, bannerUrl }),
+      // 📌 디스코드 공지 — 수정 글은 상태를 불러온 뒤에만(못 불러왔으면 빼서 서버가 대기열을 글에 맞추기만 한다)
+      ...(category === "공지사항" && (!editId || dcLoadedFor === editId) && {
+        discord: { on: dcOn, sync: dcSync, mention: dcMention, template: dcTemplate, button: dcButton },
+      }),
       ...(category === "이벤트" && { content, eventTag, bannerUrl, eventPeriod: computedEventPeriod }),
       // 서포터즈 글은 본문만 — 태그·배너 없이 /supporters 안에서 펼쳐 읽는다
       ...(category === "서포터즈" && { content }),
@@ -653,8 +766,10 @@ export default function AdminWritePage() {
     };
     try {
       const res = await fetch(editId ? `/api/posts/${editId}` : "/api/posts", { method: editId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(postData) });
-      if (res.ok) setPopupConfig({ isOpen: true, message: editId ? "수정되었습니다." : "등록되었습니다.", isError: false });
-      else setPopupConfig({ isOpen: true, message: "등록 실패", isError: true });
+      const d = await res.json().catch(() => null);
+      const dcLine = category === "공지사항" ? dcResultLine(d?.discord, !!dcInfo?.botOnline) : "";
+      if (res.ok) setPopupConfig({ isOpen: true, message: `${editId ? "수정되었습니다." : "등록되었습니다."}${dcLine ? `\n${dcLine}` : ""}`, isError: false });
+      else setPopupConfig({ isOpen: true, message: d?.message || "등록 실패", isError: true });
     } catch { setPopupConfig({ isOpen: true, message: "서버 통신 오류", isError: true }); }
     finally { setIsSubmitting(false); }
   };
@@ -683,6 +798,63 @@ export default function AdminWritePage() {
   const delBtn = "w-8 h-8 inline-flex items-center justify-center rounded-full text-[#a3a3a3] hover:text-[#d01634] hover:bg-[#f2f2f2] transition-colors";
   const winBtn = (on: boolean) => `h-8 px-3 rounded-full border text-[12px] font-bold transition-colors disabled:opacity-30 ${on ? "bg-emerald-500 border-emerald-500 text-[#131313]" : "border-[#a3a3a3] text-[#5a5a5a] hover:border-emerald-500"}`;
   const validImage = /^https?:\/\/\S+$/i.test(imageUrl.trim());
+
+  // 📌 디스코드 공지 줄 — 안 보낸 글: [스위치] · 멘션 · [편집] / 보낸 글: 보냄 칩 · [같이 고치기] · [편집]
+  const dcItem = dcInfo?.item || null;
+  const dcSent = !!dcItem?.hasMessage;
+  const dcChip = dcChipOf(dcItem);
+  // 수정 글은 상태를 불러온 뒤에 — 첫 화면(editId 가 아직 없음)도 주소의 id 로 본다. 불러온 뒤 아래 칸이 접히며 게시 설정이 뛰지 않게
+  const dcFor = editId || searchParams.get("id") || "";
+  const dcReady = !dcFor || dcLoadedFor === dcFor;
+  const dcActive = dcSent ? dcSync : dcOn;
+  const dcVars = noticeVars({ _id: editId, title, content, bannerUrl, noticeTag, author: session?.user?.name || "관리자" });
+  const dcWarn: { tone: ChipTone; l: string; href?: string }[] = dcActive && dcInfo
+    ? [
+        ...(!dcInfo.enabled ? [{ tone: "bad" as const, l: "봇 메시지 꺼짐", href: "/admin/messages?key=noticePost" }] : []),
+        ...(!dcInfo.channel ? [{ tone: "bad" as const, l: "채널 없음", href: "/admin/bot?tab=policy&sec=notice" }] : []),
+        ...(!dcInfo.botOnline ? [{ tone: "warn" as const, l: "봇 꺼짐" }] : []),
+        ...(!dcSent && hidden ? [{ tone: "neutral" as const, l: "가린 글" }] : []),
+        ...(dcTemplate ? [{ tone: "neutral" as const, l: "직접 고침" }] : []),
+      ]
+    : [];
+  // 아래 칸 — 그릴 게 없으면 children 을 넘기지 않는다(빈 mt-2 칸이 남지 않게)
+  const dcMain = !dcReady ? null : dcSent ? (
+    <div className="flex items-center min-h-8">
+      <Switch on={dcSync} onChange={setDcSync} label="같이 고치기" />
+      <span className={`ml-2.5 text-[13px] font-bold ${dcSync ? "text-[#131313]" : "text-[#5a5a5a]"}`}>같이 고치기</span>
+      {dcSync && <Btn variant="secondary" size="sm" className="ml-auto" disabled={!dcInfo} onClick={() => setDcOpen(true)}>편집</Btn>}
+    </div>
+  ) : dcOn ? (
+    // 좁은 폰(360 이하)에서는 [편집]이 아랫줄로 — 멘션 알약이 잘리지 않게
+    <div className="flex flex-wrap items-center gap-2">
+      <Segmented options={MENTIONS} value={dcMention} onChange={setDcMention} />
+      <Btn variant="secondary" size="sm" className="ml-auto" disabled={!dcInfo} onClick={() => setDcOpen(true)}>편집</Btn>
+    </div>
+  ) : null;
+  // 설정 칩은 새 탭으로 — 쓰던 글이 날아가지 않게(돌아오면 상태를 다시 읽는다)
+  const dcChips = dcReady && dcWarn.length > 0 ? (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {dcWarn.map((w) => (w.href ? (
+        <Link key={w.l} href={w.href} target="_blank" rel="noopener noreferrer" className="outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/20 rounded-full"><StatusChip tone={w.tone}>{w.l} →</StatusChip></Link>
+      ) : (
+        <StatusChip key={w.l} tone={w.tone}>{w.l}</StatusChip>
+      )))}
+    </div>
+  ) : null;
+  const dcFail = dcReady && dcItem?.status === "failed" && dcItem.error ? <p className="mt-1.5 text-[12px] font-bold text-[#d01634] break-keep">{dcItem.error}</p> : null;
+  const dcRow = (
+    <SideRow
+      label="디스코드 공지"
+      right={
+        <>
+          {dcChip && (dcSent || dcItem?.status !== "off") && <StatusChip tone={dcChip.tone}>{dcChip.l}</StatusChip>}
+          {!dcSent && <Switch on={dcOn} onChange={setDcOn} disabled={!dcReady} label="디스코드 공지" />}
+        </>
+      }
+    >
+      {dcMain || dcChips || dcFail ? <>{dcMain}{dcChips}{dcFail}</> : null}
+    </SideRow>
+  );
 
   // 📌 글 종류는 머리 탭 한 줄로 (예전엔 ?category= 로만 바뀌었다). 수정 중에는 종류를 바꿀 수 없으니 지금 것만 보인다
   const kindTabs = (editId ? [category] : categories).map((c) => ({ id: c, short: c }));
@@ -1210,6 +1382,7 @@ export default function AdminWritePage() {
                 <SideRow label={<>상단 배너 URL {optTag}</>}>
                   <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className={inputClass} />
                 </SideRow>
+                {dcRow}
               </>
             )}
 
@@ -1349,6 +1522,31 @@ export default function AdminWritePage() {
       {/* 본문 표 그리기 — 칸 격자 + 실제 모양 미리보기, 넣으면 커서 자리(표 안이면 그 표를 바꾼다) */}
       {tableDlg && (
         <TableDialog initial={tableDlg.grid} replace={!!tableDlg.range} category={category} onClose={() => setTableDlg(null)} onApply={applyTable} />
+      )}
+
+      {/* 디스코드 공지 편집 — 그 자리 팝업. 적용하면 글 저장 때 함께 보낸다 */}
+      {dcOpen && dcInfo && (
+        <NoticeDiscordDialog
+          base={dcInfo.template}
+          vars={dcVars}
+          mention={dcSent ? dcItem?.mention || "none" : dcMention}
+          value={{ template: dcTemplate, button: dcButton }}
+          onApply={(v) => {
+            setDcTemplate(v.template);
+            setDcButton(v.button);
+            setDcOpen(false);
+            sfxOk();
+            setDcToast("적용했습니다.");
+            if (dcToastTimer.current) clearTimeout(dcToastTimer.current);
+            dcToastTimer.current = setTimeout(() => setDcToast(""), 2000);
+          }}
+          onClose={() => setDcOpen(false)}
+        />
+      )}
+      {dcToast && (
+        <div role="status" aria-live="polite" className="pointer-events-none fixed bottom-24 left-1/2 -translate-x-1/2 z-[130] w-max max-w-[calc(100vw-2rem)] px-5 py-3 rounded-full border bg-[#131313] border-[#131313] text-white text-[13px] font-bold break-keep shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">
+          ✓ {dcToast}
+        </div>
       )}
 
       {/* 결과 알림 — 닫으면(성공 시) 해당 게시판으로 이동한다 (handleModalClose). 바깥을 눌러 닫지 않는다 */}

@@ -75,6 +75,10 @@ const BotSettingSchema = new mongoose.Schema({
   //    켜기 · 끄기 · 문구는 봇 메시지(autoAttend). bot/src/db.js 와 같아야 한다
   attendChannelId: { type: String, default: "" },
 
+  // 📌 공지 채널 — 사이트 공지를 봇이 보내는 곳(bot/src/features/noticeAnnounce.js). 비우면 보내지 않고 실패로 남긴다.
+  //    문구 · 디자인은 봇 메시지(noticePost). bot/src/db.js 와 같아야 한다
+  noticeChannelId: { type: String, default: "" },
+
   // 📌 시즌 결산 — RANKER 역할(상위 3인). 비우면 결산 기록(SeasonResult)만 하고 역할은 주지 않는다
   rankerRoleId: { type: String, default: "" },
 
