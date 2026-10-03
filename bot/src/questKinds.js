@@ -95,6 +95,8 @@ const toHour = (v, max) => {
   const n = Math.floor(Number(v));
   return Number.isFinite(n) ? Math.min(max, Math.max(0, n)) : null;
 };
+// 퀘스트 숫자 칸(목표 · 보상 · 하루 기준)의 끝 — 운영 상한이 아니라 소수 · 지수 표기로 숫자가 깨지지 않게 막는 한도
+const QUEST_NUM_MAX = 1_000_000_000_000;
 const num = (v, def, { min = 0, max = 1_000_000 } = {}) => {
   const n = Number(v);
   if (!Number.isFinite(n)) return def;
@@ -137,7 +139,7 @@ export function normalizeQuestCond(b) {
     minPeople: minPeople >= 2 ? minPeople : 0,
     live: !!(r.voice && b?.live === true),
     micOn: !!(r.voice && b?.micOn === true),
-    dayMin: timed && metric === "day" ? num(b?.dayMin, 0, { min: 0, max: 1_000_000 }) : 0,
+    dayMin: timed && metric === "day" ? num(b?.dayMin, 0, { min: 0, max: QUEST_NUM_MAX }) : 0,
   };
 }
 
@@ -152,10 +154,11 @@ export function normalizeQuestDoc(b) {
     desc: String(b?.desc || "").trim().slice(0, 120),
     period,
     ...cond,
-    target: num(b?.target, 1, { min: 1, max: 1_000_000 }),
-    rewardXp: num(b?.rewardXp, 0, { min: 0, max: 1_000_000 }),
+    // 📌 2026-10-04 "왜 백만까지밖에 안 되냐" — 목표 · 보상에 걸어 둔 100만 상한을 없앴다. 남은 끝은 숫자가 깨지지 않는 한도(1조)뿐
+    target: num(b?.target, 1, { min: 1, max: QUEST_NUM_MAX }),
+    rewardXp: num(b?.rewardXp, 0, { min: 0, max: QUEST_NUM_MAX }),
     // 저장하는 값이 지급 기본값이다 — 수령 때 아이템 퀘스트 보너스만 더한다(등급 배율 없음)
-    rewardPoint: num(b?.rewardPoint, 0, { min: 0, max: 1_000_000 }),
+    rewardPoint: num(b?.rewardPoint, 0, { min: 0, max: QUEST_NUM_MAX }),
     enabled: b?.enabled !== false,
     order: num(b?.order, 0, { min: 0, max: 999 }),
   };
