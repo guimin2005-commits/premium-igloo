@@ -411,6 +411,20 @@ export const ScrimNudge = mongoose.models.ScrimNudge || mongoose.model("ScrimNud
   sentAt: Date,
 }, loose));
 
+// 📌 예약 변경 — 정한 시각이 되면 봇이 설정 · 아이템 값을 바꾼다(features/scheduledChanges.js). 한 건 = 한 문서에 $set 하나
+//    target "setting" → BotSetting(key main), "item" → Item(_id = itemId). 적용하면 appliedAt 을 찍어 다시 하지 않는다
+export const ScheduledChange = mongoose.models.ScheduledChange || mongoose.model("ScheduledChange", new mongoose.Schema({
+  at: { type: Date, index: true },
+  target: String, // "setting" | "item"
+  itemId: String,
+  set: mongoose.Schema.Types.Mixed,
+  label: String,
+  appliedAt: { type: Date, default: null, index: true },
+  before: mongoose.Schema.Types.Mixed, // 바꾸기 직전 값(되돌릴 때 쓰려고)
+  error: { type: String, default: "" },
+  createdAt: { type: Date, default: Date.now },
+}, loose));
+
 export const connectDb = (uri) => mongoose.connect(uri);
 export const disconnectDb = () => mongoose.disconnect();
 

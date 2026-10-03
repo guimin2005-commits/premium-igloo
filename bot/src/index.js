@@ -23,6 +23,7 @@ import { startScrimNudge } from "./features/scrimNudge.js";
 import { startHeartbeat, recordBotError } from "./features/heartbeat.js";
 import { startExpiryReminder } from "./features/expiryReminder.js";
 import { startPassReminder } from "./features/passReminder.js";
+import { startScheduledChanges } from "./features/scheduledChanges.js";
 import { startSeasonSettle } from "./features/seasonSettle.js";
 import { refreshBotMessages, startBotMessageLoop } from "./botMessages.js";
 import { registerCommandDefinitions, registerCommandHandlers } from "./commands.js";
@@ -76,6 +77,7 @@ client.once(Events.ClientReady, async (c) => {
   startGrantQueue(c);
   startExpiryReminder(c); // 기간제 만료 임박 DM (10분 주기)
   startPassReminder(c); // 시즌 종료 D-7 · D-1 안 받은 시즌 패스 보상 DM (10분 주기)
+  startScheduledChanges(); // 예약 변경 — 정한 시각에 설정 · 아이템 값 바꾸기 (1분 주기)
   startSeasonSettle(c); // 끝난 시즌 결산 · RANKER (5분 주기)
   startScrimNudge(c);
 });
