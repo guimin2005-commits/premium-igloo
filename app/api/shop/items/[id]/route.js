@@ -3,8 +3,8 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { getShopAccess } from "@/lib/shopAccess";
-import { itemEffectPartsOf, roleBuffParts, normalizeEffects } from "@/lib/itemEffects";
-import { CARD_SKIN_KEYS } from "@/lib/botCards";
+import { itemEffectPartsOf, roleBuffParts } from "@/lib/itemEffects";
+import { cosmeticOf } from "@/lib/itemCosmetic";
 import { channelNamesFor } from "@/lib/channelNames";
 import ShopItem from "@/models/ShopItem";
 import Item from "@/models/Item";
@@ -38,11 +38,8 @@ export async function GET(request, { params }) {
       ]);
       const names = await channelNamesFor([linked?.effects]);
       effects = [...itemEffectPartsOf(linked, (cid) => names.get(cid)), ...roleBuffParts(cfg || {})];
-      // 꾸미기 — 효과 문장과 같은 원천(연결된 등록 아이템). 기프트카드는 효과 없음(itemEffectPartsOf 와 같은 기준)
-      const fx = linked && linked.type !== "physical" ? normalizeEffects(linked.effects) : [];
-      const skin = fx.find((e) => e.on === "cardSkin")?.skin || "";
-      const badge = fx.some((e) => e.on === "profileBadge");
-      if (skin || badge) cosmetic = { skin, badge, botCard: !!skin && CARD_SKIN_KEYS.includes(skin) };
+      // 꾸미기 — 효과 문장과 같은 원천(연결된 등록 아이템). 시즌 패스 보상 칸과 같은 계산(lib/itemCosmetic)
+      cosmetic = cosmeticOf(linked);
     } catch (e) {
       // 효과 문장이 없다고 상품을 못 보면 안 된다
       console.error("상품 효과 문장 오류:", e);

@@ -27,6 +27,7 @@ import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedBadge
 import WalletHistory from "../components/WalletHistory";
 import SkinFrame from "../components/SkinFrame";
 import { playTone } from "@/lib/sfx";
+import PassPreview, { passCosmeticOf } from "./PassPreview";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
 
@@ -970,6 +971,8 @@ const GlowRing = ({ id, from, to, pct = 0, pop = false, children }) => {
 const PASS_CHECK = <svg aria-label="수령 완료" viewBox="0 0 24 24" className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7" /></svg>;
 const PASS_LOCK = <svg aria-label="잠김" viewBox="0 0 24 24" className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>;
 const PASS_CROWN_SM = <svg aria-label="프리미엄" viewBox="0 0 24 24" className="w-2.5 h-2.5 shrink-0" fill="currentColor"><path d={CROWN} /></svg>;
+// 📌 미리보기 표시 — 꾸미기 보상(카드 스킨 · 프로필 배지) 칸 모서리. 누르면 이름 말풍선 대신 적용 미리보기(PassPreview)
+const PASS_EYE = <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={ICON_PATHS.eye} /></svg>;
 const PASS_GRAD = "linear-gradient(135deg, #9b6bff 0%, #e05bb5 100%)";
 const passChipBg = (premium) => premium
   ? { background: "linear-gradient(135deg, rgba(182,156,255,0.22), rgba(255,122,198,0.14))", boxShadow: "inset 0 0 0 1px rgba(214,180,255,0.35)" }
@@ -1008,17 +1011,20 @@ const PassTileBody = ({ r, big = false }) => {
 const PassNextTile = ({ r, premium = false, locked = false, peekKey = "", onPeek }) => {
   const pk = `next:${premium ? "p" : "f"}:${r.key}`;
   const named = passNamed(r);
+  const view = !!passCosmeticOf(r);
   const Tag = named ? "button" : "div";
   return (
     <Tag
-      {...(named ? { type: "button", "aria-label": r.label, onClick: (e) => onPeek?.(e, pk, r) } : { title: r.label })}
+      {...(named ? { type: "button", "aria-label": r.label, ...(view ? { "aria-haspopup": "dialog" } : {}), onClick: (e) => onPeek?.(e, pk, r) } : { title: r.label })}
       className={`block w-full min-w-0 text-left rounded-2xl px-3.5 pt-2.5 pb-3 ${named ? PASS_PEEK_BTN : ""}`}
       style={{ ...passChipBg(premium), ...(peekKey === pk ? PASS_PEEK_ON : null) }}
     >
+      {/* 머리 줄은 높이 고정(h-4) — 눈 · 자물쇠가 붙어도 아래 몸이 밀리지 않는다 */}
       <div className={`flex items-center h-4 text-[11px] font-black ${premium ? "text-[#d9c6ff]" : "text-white/50"}`}>
         {premium && <svg aria-hidden viewBox="0 0 24 24" className="mr-1 w-3 h-3 shrink-0" fill="currentColor"><path d={CROWN} /></svg>}
         {premium ? "프리미엄" : "무료"}
-        {locked && <span className="ml-auto inline-flex text-white/45">{PASS_LOCK}</span>}
+        {view && <span className="ml-auto inline-flex text-white/55">{PASS_EYE}</span>}
+        {locked && <span className={`${view ? "ml-1.5" : "ml-auto"} inline-flex text-white/45`}>{PASS_LOCK}</span>}
       </div>
       <div className={`mt-2 h-8 flex items-center min-w-0 ${locked ? "opacity-45" : ""}`}>
         <PassTileBody r={r} big />
@@ -1085,11 +1091,12 @@ const PassCell = ({ track, premium = false, locked = false, busy = false, onClai
         const dim = r.claimed || locked;
         const pk = `${premium ? "p" : "f"}:${r.key}`;
         const named = passNamed(r);
+        const view = !!passCosmeticOf(r);
         const Tag = named ? "button" : "div";
         return (
           <Tag
             key={r.key}
-            {...(named ? { type: "button", "aria-label": r.label, onClick: (e) => onPeek?.(e, pk, r) } : { title: r.label })}
+            {...(named ? { type: "button", "aria-label": r.label, ...(view ? { "aria-haspopup": "dialog" } : {}), onClick: (e) => onPeek?.(e, pk, r) } : { title: r.label })}
             className={`relative shrink-0 flex items-center w-full min-w-0 px-2.5 rounded-xl text-left ${named ? PASS_PEEK_BTN : ""}`}
             style={{ height: PT.tile, marginTop: j ? PT.tileGap : 0, ...passChipBg(premium), ...(track.claimable && !r.claimed ? glow : null), ...(peekKey === pk ? PASS_PEEK_ON : null) }}
           >
@@ -1097,6 +1104,8 @@ const PassCell = ({ track, premium = false, locked = false, busy = false, onClai
             <span className={`absolute top-1.5 right-1.5 inline-flex ${dim ? "text-white/45" : "text-[#d6b4ff]"}`}>
               {r.claimed && !track.claimed ? PASS_CHECK : locked ? PASS_LOCK : premium ? PASS_CROWN_SM : null}
             </span>
+            {/* 꾸미기 보상 — 오른쪽 아래 모서리 눈(위 모서리 표시와 같은 띠라 이름 줄과 겹치지 않는다). 받음 · 잠김이어도 미리보기는 열린다 */}
+            {view && <span aria-hidden className="absolute bottom-1.5 right-1.5 inline-flex text-white/55">{PASS_EYE}</span>}
           </Tag>
         );
       })}
@@ -1121,7 +1130,7 @@ const PassCell = ({ track, premium = false, locked = false, busy = false, onClai
   );
 };
 
-const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, claimable = 0, busyKey = "", onClaim, onClaimAll, onUnlock, balance, dday, onTone, onReset, resetBusy }) => {
+const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, claimable = 0, busyKey = "", onClaim, onClaimAll, onUnlock, balance, dday, onTone, onViewTone, user, onReset, resetBusy }) => {
   const [tab, setTab] = useState("all");
   const trackRef = useRef(null);
   const bodyRef = useRef(null);
@@ -1139,8 +1148,24 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
     setPeekFor(pass);
     if (peek) setPeek(null);
   }
+  // 📌 꾸미기 보상 미리보기(PassPreview) — 패스 창 위에 겹쳐 뜬다. 30초 갱신에도 닫지 않는다(같은 보상이면 그림도 같다).
+  //    닫으면 누른 칸으로 포커스를 돌려준다
+  const [view, setView] = useState(null);
+  const viewFromRef = useRef(null);
+  const closeView = useCallback(() => {
+    setView(null);
+    viewFromRef.current?.focus?.({ preventScroll: true });
+    viewFromRef.current = null;
+  }, []);
   const showPeek = (e, key, r) => {
     e.stopPropagation();
+    if (passCosmeticOf(r)) {
+      setPeek(null);
+      viewFromRef.current = e.currentTarget;
+      setView({ key, r });
+      onViewTone?.();
+      return;
+    }
     if (peek?.key === key) { setPeek(null); return; }
     const dlg = dialogRef.current;
     const box = dlg?.getBoundingClientRect();
@@ -1153,20 +1178,21 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
     setPeek({ key, r, cx: t.left + t.width / 2 - box.left + sx, y: (below ? t.bottom - box.top + 8 : t.top - box.top - 8) + sy, below, sx, boxW: dlg.clientWidth });
     onTone?.();
   };
-  const close = () => { setPeek(null); onClose(); };
+  const close = () => { setPeek(null); setView(null); onClose(); };
 
-  // 열리면 닫기 단추에 포커스 · Esc 로 닫기 — PopShell 과 같다. 말풍선이 떠 있으면 Esc 는 말풍선만 닫는다
+  // 열리면 닫기 단추에 포커스 · Esc 로 닫기 — PopShell 과 같다. 미리보기 · 말풍선이 떠 있으면 Esc 는 그것만 닫는다
   useEffect(() => { if (ready) closeRef.current?.focus({ preventScroll: true }); }, [ready]);
   useEffect(() => {
     if (!ready) return;
     const onKey = (e) => {
       if (e.key !== "Escape") return;
+      if (view) { closeView(); return; }
       setPeek(null);
       if (!peek) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ready, onClose, peek]);
+  }, [ready, onClose, peek, view, closeView]);
 
   // 말풍선은 누른 자리에 붙어 있다 — 트랙 · 본문을 넘기거나 창 크기가 바뀌면 자리가 어긋나므로 닫는다
   useEffect(() => {
@@ -1230,7 +1256,10 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
     return () => clearTimeout(t);
   }, [pass?.unlocked]);
 
-  if (!ready) return null;
+  if (!ready) {
+    if (view) setView(null); // 창이 닫히면(패스 꺼짐 포함) 미리보기도 — 다시 열 때 겹쳐 뜨지 않게(렌더 중 조정)
+    return null;
+  }
   const th = POP_THEME.pass;
   const fmt = (n) => (n || 0).toLocaleString();
   const rows = tab === "claim" ? tiers.filter((t) => t.free?.claimable || t.paid?.claimable) : tiers;
@@ -1329,6 +1358,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
   const claimNum = (n) => <span className={`ml-1.5 text-[24px] sm:text-[28px] font-black tabular-nums tracking-[-0.02em] leading-none ${n > 0 ? "text-white" : "text-white/30"}`}>{n}</span>;
 
   return (
+    <>
     <div
       className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
       style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
@@ -1526,6 +1556,9 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
         {peek && <PassPeek peek={peek} boxW={peek.boxW} />}
       </div>
     </div>
+    {/* 📌 패스 창 바깥(형제)에 둔다 — 미리보기 바깥을 눌러도 패스 창의 닫기(onClick={close})까지 번지지 않게. balance = /api/xp/me 값 */}
+    {view && <PassPreview key={view.key} r={view.r} user={user} me={balance} onClose={closeView} />}
+    </>
   );
 };
 
@@ -2837,6 +2870,9 @@ export default function LevelPage() {
         balance={me}
         dday={seasonDday}
         onTone={() => playTone(620, 0.04, "sine", 0.025)}
+        // 꾸미기 보상 미리보기 여는 소리 — 그 자리 팝업(내역 · 세부 효과)과 같은 소리
+        onViewTone={() => playTone(660, 0.06, "sine", 0.03)}
+        user={session?.user}
         onReset={isAdminUser ? () => resetTest("pass") : null}
         resetBusy={resetBusy === "pass"}
       />

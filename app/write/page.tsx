@@ -1,9 +1,12 @@
 "use client";
 import { PHASES, phaseOf, statusFromPhase } from "@/lib/tournamentPhase";
-import { useState, useEffect, useRef, type ReactNode } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BracketView } from "../components/BracketView";
 import { DiscordIdInput } from "../components/DiscordIds";
+import { findTableAt, spliceBlock, type Grid } from "../components/mdTable";
+import PostPreview from "./PostPreview";
+import TableDialog from "./TableDialog";
 import {
   AdminPage,
   AdminTabs,
@@ -95,6 +98,14 @@ export default function AdminWritePage() {
   const [imageOpen, setImageOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [imageCap, setImageCap] = useState("");
+  // 📌 본문 [작성 · 미리보기] — 미리보기는 편집 칸 자리를 그대로 덮는다(칸 높이 · 편집 칸 스크롤 그대로)
+  const [editorView, setEditorView] = useState("write");
+  const [previewAt, setPreviewAt] = useState(""); // 미리보기를 연 시각(날짜 · 예약 판정)
+  const [createdAt, setCreatedAt] = useState(""); // 수정 중인 글의 작성 시각 — 미리보기 날짜
+  const previewRef = useRef<HTMLDivElement>(null);
+  const previewRatio = useRef(0); // 편집 칸 스크롤 비율 → 미리보기 스크롤
+  // 📌 표 그리기 창 — range: 고칠 표 덩어리(없으면 at 자리에 새로 넣기)
+  const [tableDlg, setTableDlg] = useState<{ grid: Grid | null; range: { start: number; end: number } | null; at: number } | null>(null);
   const [eventStartDate, setEventStartDate] = useState("");
   const [eventEndDate, setEventEndDate] = useState("");
   const [isEventAlways, setIsEventAlways] = useState(false);
@@ -402,6 +413,7 @@ export default function AdminWritePage() {
           setCategory(post.category);
           setTitle(post.title);
           setHidden(!!post.hidden); // 모든 카테고리 공통 — 빠지면 수정 저장 때 가리기가 풀린다
+          setCreatedAt(post.createdAt || "");
           if (post.publishAt) {
             const d = new Date(post.publishAt);
             const pad = (n: number) => String(n).padStart(2, "0");
@@ -501,30 +513,49 @@ export default function AdminWritePage() {
     }, 0);
   };
 
-  const insertTable = (rows: number = 2, cols: number = 2) => {
+  // 📌 [표] — 커서가 표 안이면 그 표를 불러와 고치고(바꾸기), 아니면 커서 자리에 새 표(넣기).
+  //    | 줄이지만 표 문법이 아닌 덩어리 안이면 그 덩어리 바로 아래에 넣는다(줄 중간을 쪼개 깨뜨리지 않게)
+  const openTable = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
+    const pos = textarea.selectionStart;
+    const hit = findTableAt(textarea.value, pos);
+    if (hit?.grid) setTableDlg({ grid: hit.grid, range: { start: hit.start, end: hit.end }, at: hit.start });
+    else setTableDlg({ grid: null, range: null, at: hit ? hit.end : pos });
+  };
+
+  // 커서는 넣은 표 끝에 — 표를 선택해 두면 다음에 치는 글자 하나가 표를 통째로 덮어쓴다
+  const applyTable = (md: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea || !tableDlg) return;
     const scrollY = window.scrollY;
-    const start = textarea.selectionStart;
-    const currentText = textarea.value;
-
-    const headerRow = Array(cols).fill("헤더").map((h, i) => `${h}${i + 1}`).join(" | ");
-    const separatorRow = Array(cols).fill("---").join(" | ");
-    const dataRow = Array(cols).fill("데이터").map((d, i) => `${d}${i + 1}`).join(" | ");
-
-    let tableLines = [`| ${headerRow} |`, `| ${separatorRow} |`];
-    for (let i = 0; i < rows; i++) {
-      tableLines.push(`| ${dataRow} |`);
-    }
-    const table = tableLines.join("\n");
-    const newContent = currentText.substring(0, start) + (start > 0 ? "\n" : "") + table + (start < currentText.length ? "\n" : "") + currentText.substring(start);
-
-    setContent(newContent);
+    const { start, end } = tableDlg.range || { start: tableDlg.at, end: tableDlg.at };
+    const r = spliceBlock(textarea.value, start, end, md);
+    setContent(r.text);
+    setTableDlg(null);
     setTimeout(() => {
       textarea.focus({ preventScroll: true });
+      textarea.setSelectionRange(r.selEnd, r.selEnd);
       window.scrollTo({ top: scrollY });
     }, 0);
   };
+
+  // 편집 칸 스크롤 비율을 미리보기로 넘긴다 — 보고 있던 부분 근처에서 열린다. 돌아오면 편집 칸은 원래 자리(숨기기만 해서 그대로)
+  const switchView = (v: string) => {
+    if (v === editorView) return;
+    const textarea = textareaRef.current;
+    if (v === "preview") {
+      const max = textarea ? textarea.scrollHeight - textarea.clientHeight : 0;
+      previewRatio.current = textarea && max > 0 ? textarea.scrollTop / max : 0;
+      setPreviewAt(new Date().toISOString());
+    }
+    setEditorView(v);
+  };
+  useLayoutEffect(() => {
+    const el = previewRef.current;
+    if (editorView !== "preview" || !el) return;
+    el.scrollTop = Math.round(previewRatio.current * Math.max(0, el.scrollHeight - el.clientHeight));
+  }, [editorView]);
 
   const handleModalClose = () => {
     setPopupConfig({ ...popupConfig, isOpen: false });
@@ -633,6 +664,19 @@ export default function AdminWritePage() {
   // 구인 세 칸 · 설문 긴 입력 — 공용 입력칸 모양에 줄 수만 늘린다
   const areaClass = `${inputClass} resize-y leading-relaxed`;
   const usesEditor = category === "공지사항" || category === "이벤트" || category === "대회" || category === "서포터즈";
+  const previewing = usesEditor && editorView === "preview";
+  // 📌 미리보기에 넘길 글 — 저장(handleSubmit)이 만드는 값과 같은 규칙으로(기간 · 대표 기간 · 상태 · 작성자)
+  const previewEventPeriod = eventStartDate
+    ? `${eventStartDate.replace(/-/g, ".")} ~ ${!isEventAlways && eventEndDate ? eventEndDate.replace(/-/g, ".") : "상시"}`
+    : "";
+  const previewPost = {
+    category, title, content, author: session?.user?.name || "관리자",
+    publishAt, createdAt, now: previewAt, hidden,
+    noticeTag, isPinned, eventTag, eventPeriod: previewEventPeriod,
+    bannerUrl: category === "서포터즈" && !editId ? "" : bannerUrl, // 서포터즈 새 글은 배너를 저장하지 않는다(다른 탭에서 넣은 값이 남아 있어도)
+    tournamentGame, tournamentPhase, tournamentStatus: statusFromPhase(tournamentPhase), tournamentType,
+    tournamentTeamDay, tournamentEventDay, tournamentDate: dateFromDays(tournamentTeamDay, tournamentEventDay), tournamentSchedule: tournamentSchedule.filter((p) => p.label.trim()),
+  };
   const req = <span className="text-[#e91e3f]">*</span>;
   const optTag = <span className="text-[#8a8a8a] font-normal">(선택)</span>;
   const iconBtn = "w-8 h-8 inline-flex items-center justify-center rounded-full text-[12px] font-bold text-[#8a8a8a] hover:text-[#131313] hover:bg-[#f2f2f2] disabled:opacity-25 disabled:hover:bg-transparent transition-colors";
@@ -670,16 +714,26 @@ export default function AdminWritePage() {
 
             {usesEditor && (
               <>
+                {/* 📌 도구 줄 — 미리보기 중에는 서식 단추를 흐리게만(자리 그대로라 [작성 · 미리보기] 가 움직이지 않는다) */}
                 <div className="flex flex-wrap items-center gap-1 px-3 py-2 border-b border-[#ededed]">
-                  <Btn variant="ghost" size="sm" onClick={() => insertWrap("**")}><span className="text-[14px] font-black">B</span>굵게</Btn>
-                  <Btn variant="ghost" size="sm" onClick={() => insertWrap("__")}><span className="text-[14px] underline">U</span>밑줄</Btn>
-                  <Btn variant="ghost" size="sm" onClick={() => insertWrap("~~")}><span className="text-[14px] line-through">S</span>취소선</Btn>
-                  <Btn variant="ghost" size="sm" onClick={() => insertWrap("==")}><span className="text-[14px] font-black text-[#e91e3f]">A</span>강조</Btn>
+                  <Btn variant="ghost" size="sm" disabled={previewing} onClick={() => insertWrap("**")}><span className="text-[14px] font-black">B</span>굵게</Btn>
+                  <Btn variant="ghost" size="sm" disabled={previewing} onClick={() => insertWrap("__")}><span className="text-[14px] underline">U</span>밑줄</Btn>
+                  <Btn variant="ghost" size="sm" disabled={previewing} onClick={() => insertWrap("~~")}><span className="text-[14px] line-through">S</span>취소선</Btn>
+                  <Btn variant="ghost" size="sm" disabled={previewing} onClick={() => insertWrap("==")}><span className="text-[14px] font-black text-[#e91e3f]">A</span>강조</Btn>
                   <span aria-hidden className="w-px h-4 mx-1 bg-[#ededed]" />
-                  <Btn variant="ghost" size="sm" onClick={() => insertTable(2, 2)}><span className="text-[14px]">⊞</span>표</Btn>
-                  <Btn variant="ghost" size="sm" onClick={() => setImageOpen(true)} title="본문에 넣은 이미지는 글 너비에 맞춰 크게 나옵니다."><span className="text-[14px]">🖼</span>이미지</Btn>
+                  <Btn variant="ghost" size="sm" disabled={previewing} onClick={openTable}><span className="text-[14px]">⊞</span>표</Btn>
+                  <Btn variant="ghost" size="sm" disabled={previewing} onClick={() => setImageOpen(true)} title="본문에 넣은 이미지는 글 너비에 맞춰 크게 나옵니다."><span className="text-[14px]">🖼</span>이미지</Btn>
+                  <Segmented className="ml-auto" options={[{ v: "write", l: "작성" }, { v: "preview", l: "미리보기" }]} value={editorView} onChange={switchView} />
                 </div>
-                <textarea ref={textareaRef} placeholder="내용을 입력하세요..." value={content} onChange={(e) => setContent(e.target.value)} className={`block min-h-[400px] px-5 py-4 ${textareaClass}`} />
+                {/* 📌 미리보기는 편집 칸 상자를 그대로 덮는다(absolute inset-0) — 편집 칸은 숨기기만 해서 높이 · 스크롤 · 커서가 그대로 남는다.
+                       안쪽은 실제 글 폭으로 짜고 상자가 좁으면 줄인다(PostPreview useRealWidth). 글 칸보다 넓은 표는 상자 끝에서 잘리되 옆으로 밀어 볼 수 있다
+                       (글 보기 화면은 같은 표가 오른쪽 여백 · 화면 끝까지 보이고 거기서 잘린다) */}
+                <div className="relative">
+                  <textarea ref={textareaRef} placeholder="내용을 입력하세요..." value={content} onChange={(e) => setContent(e.target.value)} aria-hidden={previewing || undefined} className={`block min-h-[400px] px-5 py-4 ${textareaClass} ${previewing ? "invisible" : ""}`} />
+                  {previewing && (
+                    <PostPreview post={previewPost} boxRef={previewRef} className="absolute inset-0 overflow-auto no-bar rounded-b-[15px]" />
+                  )}
+                </div>
               </>
             )}
 
@@ -1290,6 +1344,11 @@ export default function AdminWritePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 본문 표 그리기 — 칸 격자 + 실제 모양 미리보기, 넣으면 커서 자리(표 안이면 그 표를 바꾼다) */}
+      {tableDlg && (
+        <TableDialog initial={tableDlg.grid} replace={!!tableDlg.range} category={category} onClose={() => setTableDlg(null)} onApply={applyTable} />
       )}
 
       {/* 결과 알림 — 닫으면(성공 시) 해당 게시판으로 이동한다 (handleModalClose). 바깥을 눌러 닫지 않는다 */}

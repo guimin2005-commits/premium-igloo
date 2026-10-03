@@ -18,7 +18,7 @@ import { COSMETIC_SAMPLE } from "@/lib/cosmeticSample";
 // 📌 상품 상세 '디스코드' 미리보기 — 카드 스킨을 입힌 봇 /레벨 카드(lib/botCards.js cmdLevel)를 PNG 로 그린다.
 //    GET ?skin=<SKINS 키>. 로그인 안 했으면 예시 사람(lib/cosmeticSample.js) — 공개 · 길게 캐시.
 //    ?me=1 이고 로그인했으면 **본인**(세션의 이름 · 디스코드 사진 · 레벨 · 순위)으로 그린다(2026-10-01 "미리보기는 개인 프로필이 적용되게").
-//    본인 값은 세션에서만 읽는다 — 다른 사람 값을 그릴 길은 없다. 응답은 private 캐시 5분 + 메모리 5분(사람 · 스킨별).
+//    본인 값은 세션에서만 읽는다 — 다른 사람 값을 그릴 길은 없다. 응답은 브라우저 캐시 없음(no-store) + 메모리 5분(사람 · 스킨별).
 //    스킨마다 그림이 하나뿐이라 길게 캐시한다(브라우저 · CDN) + 같은 스킨을 다시 그리지 않게 메모리에도 둔다(스킨 수만큼만 — 키는 검증된 것뿐).
 //    봇 카드가 아직 그리지 못하는 스킨(CARD_SKINS 에 없음)도 400 — 기본 카드를 그 스킨인 것처럼 보이면 안 된다.
 
@@ -152,7 +152,8 @@ export async function GET(request) {
       const session = await getServerSession(authOptions);
       if (session?.user?.id) {
         const png = await minePng(session, skin);
-        return new NextResponse(png, { headers: { "Content-Type": "image/png", "Cache-Control": "private, max-age=300" } });
+        // 📌 본인 카드는 URL 이 누구든 같다 — 브라우저 캐시에 두면 같은 기기에서 계정을 바꿔도 앞 사람 카드가 보인다. 다시 그리는 비용은 mineCache 가 막는다
+        return new NextResponse(png, { headers: { "Content-Type": "image/png", "Cache-Control": "private, no-store" } });
       }
     }
     const png = await pngOf(skin);
