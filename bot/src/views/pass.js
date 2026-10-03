@@ -3,13 +3,14 @@
 //       봇은 별도 배포라 import 할 수 없다 — 사이트 쪽 규칙을 바꾸면 여기도 같이 고칠 것.
 //    봇은 읽기만 한다. 시즌이 바뀐 문서(passSeason ≠ 지금 시즌)도 봇은 다시 찍지 않고(그건 사이트가 조회 때 한다),
 //    사이트가 찍을 값과 같은 기준(시즌 시작 시점 기준선 · 해금 · 수령 초기화)으로 보여 주기만 한다.
+//    📌 시즌 종료 전 미수령 DM(features/passReminder.js)도 passView 의 claimable 로 대상을 고른다 — 판정을 따로 두지 않는다
 import mongoose from "mongoose";
 import { UserXp, XpLog, Payout, Item } from "../db.js";
 import { currentSeason } from "../leveling.js";
 import { progressBar } from "../botMessages.js";
 
 // 📌 읽기 전용 모델 — 사이트 models/SeasonPass.js 와 같은 컬렉션(seasonpasses). 인덱스 · 컬렉션을 봇이 만들지 않는다
-const SeasonPass =
+export const SeasonPass =
   mongoose.models.SeasonPass ||
   mongoose.model(
     "SeasonPass",
@@ -101,7 +102,7 @@ function isBoosterMember(member) {
 
 // 📌 티어 정리 — lib/seasonPass.js 의 normalizeTiers 와 같아야 한다.
 //    tid 가 없는 옛 티어에 붙는 번호까지 같아야 수령 기록(passClaimed*)이 사이트와 같게 맞는다
-function normalizeTiers(tiers, startTid = 1) {
+export function normalizeTiers(tiers, startTid = 1) {
   const rows = Array.isArray(tiers) ? tiers : [];
   const kept = rows.slice(0, MAX_TIERS);
   const used = new Set();

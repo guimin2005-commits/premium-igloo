@@ -9,7 +9,7 @@ import { UserXp } from "./db.js";
 import { getCumulativeXpByLevel, getLevelByXp, currentSeason } from "./leveling.js";
 import { config } from "./config.js";
 import { getSettings } from "./botSettings.js";
-import { claimAttendance } from "./attend.js";
+import { claimAttendance, streakBonusText } from "./attend.js";
 import { buildMessage, buildMessageWithCard, cardAvatar, commonVars, progressBar, tierOf, SITE_URL } from "./botMessages.js";
 import { questView, questCardData } from "./views/quests.js";
 import { inventoryView, inventoryCardData } from "./views/inventory.js";
@@ -108,10 +108,8 @@ async function handleAttend(interaction, r) {
     );
   }
 
-  // 연속 보너스 한 줄 — 없으면 빈 글(템플릿에서 그 줄이 빠진다)
-  const b = res.streakBonus;
-  const bonusParts = b ? [b.xp > 0 ? `+${b.xp.toLocaleString("ko-KR")} XP` : "", b.point > 0 ? `빙옥 +${b.point.toLocaleString("ko-KR")}` : ""].filter(Boolean) : [];
-  const streakBonus = bonusParts.length ? `연속 ${b.days}일 보너스 ${bonusParts.join(" · ")}` : "";
+  // 연속 보너스 한 줄 — 없으면 빈 글(템플릿에서 그 줄이 빠진다). 자동 출석 알림과 같은 글(attend.js)
+  const streakBonus = streakBonusText(res.streakBonus);
 
   const vars = { ...base, amount: res.amount, attendCount: res.attendCount, streak: res.streak, bestStreak: res.bestStreak, streakBonus };
   const payload = await msgCard(

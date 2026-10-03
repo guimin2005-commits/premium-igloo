@@ -44,6 +44,12 @@ function streakBonusOf(s, streak) {
   return hit && (xp > 0 || point > 0) ? { xp, point, days: streak } : null;
 }
 
+// 📌 연속 보너스 한 줄(봇 메시지 변수 streakBonus) — /출석체크(commands.js)와 자동 출석 알림(features/voiceXp.js)이 같은 글을 쓴다. 없으면 ""
+export function streakBonusText(b) {
+  const parts = b ? [b.xp > 0 ? `+${b.xp.toLocaleString("ko-KR")} XP` : "", b.point > 0 ? `빙옥 +${b.point.toLocaleString("ko-KR")}` : ""].filter(Boolean) : [];
+  return parts.length ? `연속 ${b.days}일 보너스 ${parts.join(" · ")}` : "";
+}
+
 /**
  * 출석 — member 는 GuildMember. source: "command" | "voice" (로그용)
  * @returns {{ closed: true }

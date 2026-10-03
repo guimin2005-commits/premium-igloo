@@ -4,7 +4,7 @@
 //  · 역할·채널·기간제 부스트, 음소거 정책, 퇴장 시 초기화
 //  · /레벨 /랭크 /출석체크 /퀘스트 /인벤토리 /시즌패스 · 레벨업 알림 · 보상 역할 자동 지급 · XP 로그
 //  · 출석은 /출석체크 또는 음성 누적 자동 출석 (attend.js) · 레벨 비공개(levelPublic) 동안은 XP 를 주지 않는다
-//  · 상점 지급 큐 · 만료 임박 DM · 시즌 결산(RANKER) · 생존 신호(대시보드 봇 상태)
+//  · 상점 지급 큐 · 만료 임박 DM · 시즌 패스 미수령 DM · 시즌 결산(RANKER) · 생존 신호(대시보드 봇 상태)
 //  사이트와 동일한 MongoDB 사용 → 웹 레벨 대시보드·랭킹과 실시간 연동
 // ═══════════════════════════════════════════════════════
 import { Client, GatewayIntentBits, Events } from "discord.js";
@@ -16,11 +16,13 @@ import { refreshChannelConfigs, startChannelConfigLoop } from "./channelConfigs.
 import { refreshBotSettings, startBotSettingLoop } from "./botSettings.js";
 import { registerChatXp } from "./features/chatXp.js";
 import { startVoiceXpLoop } from "./features/voiceXp.js";
+import { registerActivity } from "./features/activity.js";
 import { registerLeaveReset } from "./features/leaveReset.js";
 import { startGrantQueue } from "./features/grantQueue.js";
 import { startScrimNudge } from "./features/scrimNudge.js";
 import { startHeartbeat, recordBotError } from "./features/heartbeat.js";
 import { startExpiryReminder } from "./features/expiryReminder.js";
+import { startPassReminder } from "./features/passReminder.js";
 import { startSeasonSettle } from "./features/seasonSettle.js";
 import { refreshBotMessages, startBotMessageLoop } from "./botMessages.js";
 import { registerCommandDefinitions, registerCommandHandlers } from "./commands.js";
@@ -36,6 +38,7 @@ const client = new Client({
 
 // 재촉 DM 전용 모드에서는 XP·역할을 건드리는 것을 아예 붙이지 않는다
 if (!nudgeOnly) {
+  registerActivity(client); // 마지막 활동 시각(채팅 · 음성 상태 · 명령 · 버튼) — 음성 XP 로그 ctx.idle 용
   registerChatXp(client);
   registerLeaveReset(client);
   registerCommandHandlers(client);
@@ -72,6 +75,7 @@ client.once(Events.ClientReady, async (c) => {
   startVoiceXpLoop(c);
   startGrantQueue(c);
   startExpiryReminder(c); // 기간제 만료 임박 DM (10분 주기)
+  startPassReminder(c); // 시즌 종료 D-7 · D-1 안 받은 시즌 패스 보상 DM (10분 주기)
   startSeasonSettle(c); // 끝난 시즌 결산 · RANKER (5분 주기)
   startScrimNudge(c);
 });

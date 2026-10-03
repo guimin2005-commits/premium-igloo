@@ -11,8 +11,139 @@ import { denyIfMaintenance } from "@/lib/apiAuth";
 import { logWallet } from "@/lib/wallet";
 import UserXp from "@/models/UserXp";
 
-// ── [수령] 티어 보상 받기 — body { tid, track } ──
-//    한 번 받기 = 그 티어 · 그 트랙의 보상 전부(최대 4개).
+// 📌 한 칸(티어 · 트랙) 수령 — 한 칸 받기({ tid, track })와 모두 받기({ all: true })가 같은 함수를 칸마다 부른다.
+//    state 는 호출부가 getPassState 로 다시 계산한 것(클라이언트 값은 쓰지 않는다).
+//    반환 { ok: true, row, track, todo, granted, failed } 또는 { ok: false, status, message }
+async function claimCell({ userId, userName, state, row, track }) {
+  // 거절 사유를 하나씩 갈라 준다 — 화면이 "왜 못 받는지"를 그대로 띄울 수 있게
+  const cell = row[track];
+  if (cell.claimed) return { ok: false, status: 409, message: "이미 수령했습니다." };
+  if (!row.reached) return { ok: false, status: 400, message: "아직 이 티어에 도달하지 않았습니다." };
+  if (track === "paid" && !state.unlocked) return { ok: false, status: 403, message: "프리미엄 트랙이 잠겨 있습니다." };
+  if (!cell.rewards.length) return { ok: false, status: 400, message: "받을 보상이 없는 칸입니다." };
+  if (!cell.claimable) return { ok: false, status: 400, message: "지금은 수령할 수 없습니다." };
+
+  const tid = row.tid;
+  // 📌 자물쇠부터 — 수령 기록에 tid 가 없을 때만 넣는 조건부 갱신이라, 동시에 눌러도 한 요청만 잡는다.
+  //    잡은 요청은 갱신된 수령 기록을 함께 받는다 — 앞선 요청이 일부만 주고 남긴 표시(rewardKeys)를
+  //    자물쇠를 잡은 뒤의 값으로 읽어야, 그 사이 바뀐 기록 때문에 같은 보상을 두 번 주지 않는다.
+  //    시즌 번호는 한 번만 읽는다 — 조건과 기록이 같은 시즌을 가리키게
+  const seasonNo = SEASON.number;
+  const field = track === "free" ? "passClaimedFree" : "passClaimedPaid";
+  const takeLock = () =>
+    UserXp.findOneAndUpdate(
+      { userId, passSeason: seasonNo, [field]: { $ne: tid } },
+      { $push: { [field]: tid } },
+      { new: true, projection: { [field]: 1 } }
+    ).lean();
+
+  let held = await takeLock();
+  if (!held && !(await UserXp.exists({ userId }))) {
+    // 📌 디스코드에서 XP 를 한 번도 얻은 적 없는 유저 — 문서가 아직 없다.
+    //    조회 경로(getPassState)는 일부러 만들지 않으므로(랭킹 오염) 쓰기인 여기서 만든다.
+    //    need:0 티어가 있으면 첫 수령이 곧 첫 문서 생성이 된다.
+    await UserXp.updateOne(
+      { userId },
+      {
+        $setOnInsert: {
+          userId,
+          displayName: userName,
+          passSeason: seasonNo,
+          passBaseXp: 0,
+        },
+      },
+      { upsert: true }
+    ).catch((e) => {
+      if (e?.code !== 11000) throw e; // 경합 — 다른 요청이 먼저 만들었으면 그대로 진행
+    });
+    held = await takeLock();
+  }
+  if (!held) {
+    const cur = await UserXp.findOne({ userId }, { passSeason: 1, [field]: 1 }).lean();
+    const already = cur?.passSeason === seasonNo && (cur?.[field] || []).map(String).includes(tid);
+    return {
+      ok: false,
+      status: 409,
+      message: already ? "이미 수령했습니다." : "패스 정보가 갱신되었습니다. 새로고침 후 다시 시도해 주세요.",
+    };
+  }
+
+  // 자물쇠를 잡은 뒤의 기록으로 — 이미 받은 보상(부분 수령 표시)은 건너뛴다
+  const done = new Set((held[field] || []).map(String));
+  const todo = cell.rewards.filter((r) => !done.has(r.key));
+  // 이 칸의 옛 부분 수령 표시 — 전부 받으면 tid 하나로 충분하므로 치운다
+  const partialKeys = [...done].filter((k) => k.startsWith(`${tid}#`));
+  const clearPartial = () =>
+    partialKeys.length
+      ? UserXp.updateOne({ userId }, { $pull: { [field]: { $in: partialKeys } } }).catch(() => {})
+      : null;
+  if (!todo.length) {
+    await clearPartial();
+    return { ok: false, status: 409, message: "이미 수령했습니다." };
+  }
+
+  // 📌 XP 보상은 진행도(xp - passBaseXp)를 채우면 안 되지만, 기준선을 여기서 미리 올리면
+  //    봇이 실제로 지급하기 전까지 진행도만 깎여 이미 도달한 티어가 잠긴다(봇은 30초 주기·로컬 구동).
+  //    그래서 기준선 인상은 봇의 processPayouts 가 source:"pass" 지급과 같은 순간에 함께 한다.
+  const trackName = track === "free" ? "무료" : "프리미엄";
+  const tierLabel = `시즌 패스 ${row.level}티어 · ${trackName}`;
+
+  // 📌 보상마다 따로 지급한다 — 하나가 실패해도(지워진 아이템 · 일시 오류) 나머지는 계속 준다.
+  //    실패분은 아래에서 "받은 것만 표시 + 자물쇠 풀기"로 남겨, 다시 받기가 실패분만 주게 한다.
+  //    (전체 되돌림은 이미 봇 큐에 들어간 XP · 역할이나 써 버린 빙옥을 되돌릴 수 없어 택하지 않았다)
+  const granted = [];
+  const failed = [];
+  for (const r of todo) {
+    try {
+      granted.push({ r, g: await grantReward(userId, r, tierLabel, userName, row.level) });
+    } catch (e) {
+      console.error(`시즌 패스 보상 지급 실패 (${userId} ${tid} ${track} ${r.key}):`, e);
+      failed.push(r);
+    }
+  }
+
+  if (!failed.length) {
+    await clearPartial();
+  } else if (!granted.length) {
+    // 하나도 못 줬다 — 자물쇠만 되돌리면 처음과 같다
+    await UserXp.updateOne({ userId }, { $pull: { [field]: tid } }).catch(() => {});
+  } else {
+    // 일부만 줬다 — 받은 것을 먼저 적고 나서 자물쇠를 푼다(이 순서여야 푸는 순간 다른 요청이 받은 것을 또 주지 않는다).
+    //    적기에 실패하면 자물쇠를 그대로 둔다 — 남은 보상을 못 받는 쪽이 같은 보상을 두 번 주는 쪽보다 낫다(운영진이 수동 지급)
+    try {
+      await UserXp.updateOne({ userId }, { $addToSet: { [field]: { $each: granted.map((x) => x.r.key) } } });
+      await UserXp.updateOne({ userId }, { $pull: { [field]: tid } });
+    } catch (e) {
+      console.error(`시즌 패스 부분 수령 기록 실패 — 자물쇠 유지 (${userId} ${tid} ${track}):`, e);
+    }
+  }
+
+  if (!granted.length) return { ok: false, status: 500, message: "수령 중 오류가 발생했습니다." };
+
+  // 📌 빙옥 보상은 grantReward 가 잔액에 바로 넣고 Payout 을 남기지 않는다 — 원장에 여기서 한 줄 남긴다(이번 수령분 합계 한 줄).
+  //    XP 보상은 Payout(source "pass"), 역할 · 아이템은 재화가 아니다. lib/seasonPass.js 가 따로 기록하면 두 번 보인다
+  const pointSum = granted.reduce((s, x) => s + (x.g.kind === "point" ? x.g.amount : 0), 0);
+  if (pointSum > 0) {
+    await logWallet({
+      userId,
+      currency: "point",
+      amount: pointSum,
+      kind: "pass-point",
+      label: tierLabel,
+      refId: `${tid}:${track}`,
+    });
+  }
+  return { ok: true, row, track, trackName, todo, granted, failed };
+}
+
+// 받은 보상 → 응답 줄. days — 아이템 기간(0 = 무기한). label 에도 " · 7일" 로 붙어 있다
+const rewardRows = (granted) => granted.map((x) => ({ kind: x.r.kind, amount: x.r.amount, days: x.r.days || 0, label: x.r.label }));
+// 📌 기간제 아이템을 이미 무기한으로 가진 경우(grantReward 의 kept) — 새 건 없이 받은 것으로 친다(상점 1인 1개와 같은 판단).
+//    아무것도 늘지 않아 보이므로 이유를 한 줄 붙인다
+const keptNoteOf = (granted) => (granted.some((x) => x.g.kept) ? " 무기한으로 보유 중인 아이템은 기간이 더해지지 않습니다." : "");
+
+// ── [수령] 티어 보상 받기 — body { tid, track } · 모두 받기 { all: true } ──
+//    한 번 받기 = 그 티어 · 그 트랙의 보상 전부(최대 4개). 모두 받기 = 무료 칸 + (프리미엄이면) 유료 칸 중 받을 수 있는 칸 전부.
 //    클라이언트가 보낸 진행도·해금 상태는 쓰지 않는다. getPassState 로 서버가 다시 계산한다(프리미엄 = 구매 또는 서버 부스터).
 //    📌 티어는 배열 인덱스가 아니라 tid("t7")로 지목한다 — 관리자가 시즌 도중 티어를 중간에
 //       끼워 넣으면 인덱스가 밀려 엉뚱한 칸을 받거나 같은 보상을 두 번 받게 된다.
@@ -27,13 +158,16 @@ export async function POST(request) {
     if (maint) return maint;
 
     const body = await request.json().catch(() => ({}));
+    const all = body?.all === true;
     const tid = String(body?.tid || "").trim();
     const track = body?.track;
-    if (!tid) {
-      return NextResponse.json({ success: false, message: "티어를 지정해 주세요." }, { status: 400 });
-    }
-    if (track !== "free" && track !== "paid") {
-      return NextResponse.json({ success: false, message: "보상 트랙이 올바르지 않습니다." }, { status: 400 });
+    if (!all) {
+      if (!tid) {
+        return NextResponse.json({ success: false, message: "티어를 지정해 주세요." }, { status: 400 });
+      }
+      if (track !== "free" && track !== "paid") {
+        return NextResponse.json({ success: false, message: "보상 트랙이 올바르지 않습니다." }, { status: 400 });
+      }
     }
 
     await connectToDatabase();
@@ -46,147 +180,70 @@ export async function POST(request) {
     if (!state.enabled) {
       return NextResponse.json({ success: false, message: "시즌 패스가 열려 있지 않습니다." }, { status: 403 });
     }
+
+    // POINT 잔액은 화면 상단 HUD가 바로 갱신할 수 있게 늘 함께 내려 준다
+    const balance = async () => (await UserXp.findOne({ userId }, { point: 1 }).lean())?.point ?? 0;
+
+    // ── 모두 받기 — 티어 순서대로 무료 → 프리미엄. 칸마다 claimCell(한 칸 받기와 같은 자물쇠 · 지급 · 기록) ──
+    //    한 칸이 실패해도 받은 칸은 그대로 두고 결과에 남긴다
+    if (all) {
+      const cells = [];
+      for (const row of state.tiers) {
+        if (row.free?.claimable) cells.push({ row, track: "free" });
+        if (row.paid?.claimable) cells.push({ row, track: "paid" });
+      }
+      if (!cells.length) {
+        return NextResponse.json({ success: false, message: "지금 받을 보상이 없습니다." }, { status: 409 });
+      }
+      const done = [];
+      const failedCells = [];
+      for (const c of cells) {
+        try {
+          const r = await claimCell({ userId, userName, state, row: c.row, track: c.track });
+          if (r.ok) done.push(r);
+          else failedCells.push({ tid: c.row.tid, level: c.row.level, track: c.track, message: r.message, status: r.status });
+        } catch (e) {
+          console.error(`시즌 패스 모두 받기 중 실패 (${userId} ${c.row.tid} ${c.track}):`, e);
+          failedCells.push({ tid: c.row.tid, level: c.row.level, track: c.track, message: "수령 중 오류가 발생했습니다.", status: 500 });
+        }
+      }
+      const point = await balance();
+      if (!done.length) {
+        return NextResponse.json(
+          { success: false, message: failedCells[0]?.message || "수령하지 못했습니다.", point },
+          { status: failedCells[0]?.status || 500 }
+        );
+      }
+      const granted = done.flatMap((d) => d.granted);
+      // 칸 안에서 일부 보상만 못 받은 것(지워진 아이템 등)도 "덜 받음"으로 센다
+      const missed = failedCells.length + done.filter((d) => d.failed.length).length;
+      const queued = granted.some((x) => x.g.queued);
+      const message = missed
+        ? `보상 ${granted.length}개를 받았습니다. 받지 못한 칸 ${missed}개는 잠시 후 다시 받아 주세요.${keptNoteOf(granted)}`
+        : `보상 ${granted.length}개를 받았습니다.${queued ? " 일부는 잠시 후 지급됩니다." : ""}${keptNoteOf(granted)}`;
+      return NextResponse.json({
+        success: true,
+        partial: missed > 0,
+        message,
+        // cells — 받은 칸(티어 · 트랙 · 개수), failed — 못 받은 칸
+        cells: done.map((d) => ({ tid: d.row.tid, level: d.row.level, track: d.track, count: d.granted.length })),
+        failed: failedCells.map(({ tid: t, level, track: tr, message: m }) => ({ tid: t, level, track: tr, message: m })),
+        rewards: rewardRows(granted),
+        point,
+      });
+    }
+
     const row = state.tiers.find((t) => t.tid === tid);
     if (!row) {
       return NextResponse.json({ success: false, message: "존재하지 않는 티어입니다." }, { status: 404 });
     }
 
-    // 거절 사유를 하나씩 갈라 준다 — 화면이 "왜 못 받는지"를 그대로 띄울 수 있게
-    const cell = row[track];
-    if (cell.claimed) {
-      return NextResponse.json({ success: false, message: "이미 수령했습니다." }, { status: 409 });
-    }
-    if (!row.reached) {
-      return NextResponse.json({ success: false, message: "아직 이 티어에 도달하지 않았습니다." }, { status: 400 });
-    }
-    if (track === "paid" && !state.unlocked) {
-      return NextResponse.json({ success: false, message: "프리미엄 트랙이 잠겨 있습니다." }, { status: 403 });
-    }
-    if (!cell.rewards.length) {
-      return NextResponse.json({ success: false, message: "받을 보상이 없는 칸입니다." }, { status: 400 });
-    }
-    if (!cell.claimable) {
-      return NextResponse.json({ success: false, message: "지금은 수령할 수 없습니다." }, { status: 400 });
-    }
+    const r = await claimCell({ userId, userName, state, row, track });
+    if (!r.ok) return NextResponse.json({ success: false, message: r.message }, { status: r.status });
 
-    // 📌 자물쇠부터 — 수령 기록에 tid 가 없을 때만 넣는 조건부 갱신이라, 동시에 눌러도 한 요청만 잡는다.
-    //    잡은 요청은 갱신된 수령 기록을 함께 받는다 — 앞선 요청이 일부만 주고 남긴 표시(rewardKeys)를
-    //    자물쇠를 잡은 뒤의 값으로 읽어야, 그 사이 바뀐 기록 때문에 같은 보상을 두 번 주지 않는다.
-    //    시즌 번호는 한 번만 읽는다 — 조건과 기록이 같은 시즌을 가리키게
-    const seasonNo = SEASON.number;
-    const field = track === "free" ? "passClaimedFree" : "passClaimedPaid";
-    const takeLock = () =>
-      UserXp.findOneAndUpdate(
-        { userId, passSeason: seasonNo, [field]: { $ne: tid } },
-        { $push: { [field]: tid } },
-        { new: true, projection: { [field]: 1 } }
-      ).lean();
-
-    let held = await takeLock();
-    if (!held && !(await UserXp.exists({ userId }))) {
-      // 📌 디스코드에서 XP 를 한 번도 얻은 적 없는 유저 — 문서가 아직 없다.
-      //    조회 경로(getPassState)는 일부러 만들지 않으므로(랭킹 오염) 쓰기인 여기서 만든다.
-      //    need:0 티어가 있으면 첫 수령이 곧 첫 문서 생성이 된다.
-      await UserXp.updateOne(
-        { userId },
-        {
-          $setOnInsert: {
-            userId,
-            displayName: userName,
-            passSeason: seasonNo,
-            passBaseXp: 0,
-          },
-        },
-        { upsert: true }
-      ).catch((e) => {
-        if (e?.code !== 11000) throw e; // 경합 — 다른 요청이 먼저 만들었으면 그대로 진행
-      });
-      held = await takeLock();
-    }
-    if (!held) {
-      const cur = await UserXp.findOne({ userId }, { passSeason: 1, [field]: 1 }).lean();
-      const already = cur?.passSeason === seasonNo && (cur?.[field] || []).map(String).includes(tid);
-      return NextResponse.json(
-        { success: false, message: already ? "이미 수령했습니다." : "패스 정보가 갱신되었습니다. 새로고침 후 다시 시도해 주세요." },
-        { status: 409 }
-      );
-    }
-
-    // 자물쇠를 잡은 뒤의 기록으로 — 이미 받은 보상(부분 수령 표시)은 건너뛴다
-    const done = new Set((held[field] || []).map(String));
-    const todo = cell.rewards.filter((r) => !done.has(r.key));
-    // 이 칸의 옛 부분 수령 표시 — 전부 받으면 tid 하나로 충분하므로 치운다
-    const partialKeys = [...done].filter((k) => k.startsWith(`${tid}#`));
-    const clearPartial = () =>
-      partialKeys.length
-        ? UserXp.updateOne({ userId }, { $pull: { [field]: { $in: partialKeys } } }).catch(() => {})
-        : null;
-    if (!todo.length) {
-      await clearPartial();
-      return NextResponse.json({ success: false, message: "이미 수령했습니다." }, { status: 409 });
-    }
-
-    // 📌 XP 보상은 진행도(xp - passBaseXp)를 채우면 안 되지만, 기준선을 여기서 미리 올리면
-    //    봇이 실제로 지급하기 전까지 진행도만 깎여 이미 도달한 티어가 잠긴다(봇은 30초 주기·로컬 구동).
-    //    그래서 기준선 인상은 봇의 processPayouts 가 source:"pass" 지급과 같은 순간에 함께 한다.
-    const trackName = track === "free" ? "무료" : "프리미엄";
-    const tierLabel = `시즌 패스 ${row.level}티어 · ${trackName}`;
-
-    // 📌 보상마다 따로 지급한다 — 하나가 실패해도(지워진 아이템 · 일시 오류) 나머지는 계속 준다.
-    //    실패분은 아래에서 "받은 것만 표시 + 자물쇠 풀기"로 남겨, 다시 받기가 실패분만 주게 한다.
-    //    (전체 되돌림은 이미 봇 큐에 들어간 XP · 역할이나 써 버린 빙옥을 되돌릴 수 없어 택하지 않았다)
-    const granted = [];
-    const failed = [];
-    for (const r of todo) {
-      try {
-        granted.push({ r, g: await grantReward(userId, r, tierLabel, userName, row.level) });
-      } catch (e) {
-        console.error(`시즌 패스 보상 지급 실패 (${userId} ${tid} ${track} ${r.key}):`, e);
-        failed.push(r);
-      }
-    }
-
-    if (!failed.length) {
-      await clearPartial();
-    } else if (!granted.length) {
-      // 하나도 못 줬다 — 자물쇠만 되돌리면 처음과 같다
-      await UserXp.updateOne({ userId }, { $pull: { [field]: tid } }).catch(() => {});
-    } else {
-      // 일부만 줬다 — 받은 것을 먼저 적고 나서 자물쇠를 푼다(이 순서여야 푸는 순간 다른 요청이 받은 것을 또 주지 않는다).
-      //    적기에 실패하면 자물쇠를 그대로 둔다 — 남은 보상을 못 받는 쪽이 같은 보상을 두 번 주는 쪽보다 낫다(운영진이 수동 지급)
-      try {
-        await UserXp.updateOne({ userId }, { $addToSet: { [field]: { $each: granted.map((x) => x.r.key) } } });
-        await UserXp.updateOne({ userId }, { $pull: { [field]: tid } });
-      } catch (e) {
-        console.error(`시즌 패스 부분 수령 기록 실패 — 자물쇠 유지 (${userId} ${tid} ${track}):`, e);
-      }
-    }
-
-    if (!granted.length) {
-      return NextResponse.json({ success: false, message: "수령 중 오류가 발생했습니다." }, { status: 500 });
-    }
-
-    // 📌 빙옥 보상은 grantReward 가 잔액에 바로 넣고 Payout 을 남기지 않는다 — 원장에 여기서 한 줄 남긴다(이번 수령분 합계 한 줄).
-    //    XP 보상은 Payout(source "pass"), 역할 · 아이템은 재화가 아니다. lib/seasonPass.js 가 따로 기록하면 두 번 보인다
-    const pointSum = granted.reduce((s, x) => s + (x.g.kind === "point" ? x.g.amount : 0), 0);
-    if (pointSum > 0) {
-      await logWallet({
-        userId,
-        currency: "point",
-        amount: pointSum,
-        kind: "pass-point",
-        label: tierLabel,
-        refId: `${tid}:${track}`,
-      });
-    }
-
-    // POINT 잔액은 화면 상단 HUD가 바로 갱신할 수 있게 늘 함께 내려 준다
-    const point = (await UserXp.findOne({ userId }, { point: 1 }).lean())?.point ?? 0;
-
+    const { todo, granted, failed, trackName } = r;
     const queued = granted.some((x) => x.g.queued);
-    // 📌 기간제 아이템을 이미 무기한으로 가진 경우(grantReward 의 kept) — 새 건 없이 받은 것으로 친다(상점 1인 1개와 같은 판단).
-    //    아무것도 늘지 않아 보이므로 이유를 한 줄 붙인다
-    const keptNote = granted.some((x) => x.g.kept) ? " 무기한으로 보유 중인 아이템은 기간이 더해지지 않습니다." : "";
+    const keptNote = keptNoteOf(granted);
     const message = failed.length
       ? `보상 ${todo.length}개 중 ${granted.length}개를 받았습니다. 나머지는 잠시 후 다시 받아 주세요.${keptNote}`
       : granted.length === 1
@@ -199,9 +256,8 @@ export async function POST(request) {
       success: true,
       partial: failed.length > 0,
       message,
-      // days — 아이템 기간(0 = 무기한). label 에도 " · 7일" 로 붙어 있다
-      rewards: granted.map((x) => ({ kind: x.r.kind, amount: x.r.amount, days: x.r.days || 0, label: x.r.label })),
-      point,
+      rewards: rewardRows(granted),
+      point: await balance(),
     });
   } catch (e) {
     console.error("시즌 패스 수령 오류:", e);

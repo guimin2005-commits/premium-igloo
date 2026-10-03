@@ -21,7 +21,7 @@ const DailyQuestSchema = new mongoose.Schema({
   hourTo: { type: Number, default: null, min: 0, max: 24 },
   target: { type: Number, default: 1, min: 1 },        // 목표치
   rewardXp: { type: Number, default: 0, min: 0 },      // 달성 보상 (0이면 보상 없는 목표)
-  rewardPoint: { type: Number, default: 0, min: 0 },     // 달성 시 주는 POINT (등급 배율은 지급 시점에 곱한다)
+  rewardPoint: { type: Number, default: 0, min: 0 },     // 달성 시 주는 POINT (지급 때 아이템 퀘스트 보너스만 더한다 — 등급 배율 없음)
   rewardPassPoint: { type: Number, default: 0, min: 0 }, // 시즌 패스 진행도
   enabled: { type: Boolean, default: true },
   order: { type: Number, default: 0 },                 // 표시 순서 (작을수록 위)

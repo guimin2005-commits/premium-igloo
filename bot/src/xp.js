@@ -159,7 +159,7 @@ async function sendLevelUp(member, prevLevel, newLevel, totalXp) {
 }
 
 // XP 지급 + 레벨 재계산. 레벨업 시 알림·보상 역할까지 처리
-// meta: { reason, channelId, channelName } — 로그 기록용
+// meta: { reason, channelId, channelName, voiceSeconds?, ctx? } — 로그 기록용 (ctx 는 음성 지급만 — XpLog.ctx)
 //   📌 봇이 스스로 만드는 XP(채팅 · 음성 · 출석 · 아이템 효과 · 레벨업 효과)는 전부 이 함수로 들어온다 — 레벨 비공개면 여기서 막는다.
 //      (지급 대기열 Payout 은 grantQueue.js 가 따로 넣으므로 막히지 않는다)
 export async function grantXp(member, amount, meta = {}) {
@@ -205,6 +205,10 @@ export async function grantXp(member, amount, meta = {}) {
     channelId: meta.channelId || "",
     channelName: meta.channelName || "",
     ...(passBoost > 0 ? { passBoost } : {}),
+    // 📌 음성 상황 — 음성 지급(features/voiceXp.js)만 넘긴다. 다른 지급 줄에는 칸 자체가 없다
+    ...(meta.ctx ? { ctx: meta.ctx } : {}),
+    // 📌 음성 지급의 그 주기(초) — 관리 › 이상 활동이 로그마다 이 값으로 간격 · 시간을 센다(lib/adminActivity.js)
+    ...(meta.voiceSeconds > 0 ? { sec: meta.voiceSeconds } : {}),
   }).catch(() => {});
 
   const newLevel = getLevelByXp(doc.xp);

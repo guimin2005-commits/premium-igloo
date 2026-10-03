@@ -6,7 +6,7 @@ import UserXp from "@/models/UserXp";
 import XpLog from "@/models/XpLog";
 import Payout from "@/models/Payout";
 import { kstMonthStart } from "@/lib/kst";
-import { requireAdmin } from "@/lib/apiAuth";
+import { requireAdmin, getSession } from "@/lib/apiAuth";
 import BotSetting from "@/models/BotSetting";
 import { fetchGuildMember } from "@/lib/discordMember";
 import { badgesOfUsers } from "@/lib/itemPerks";
@@ -95,7 +95,7 @@ async function finish(rows, skip) {
 }
 
 // 📌 관리자가 없앤 XP — [XP 제거] · 음수 수동 지급(app/api/xp/grant → 봇 processPayouts 가 반영해 paid) · 관리자 초기화(같은 라우트 mode reset).
-//    누적(UserXp.xp)은 봇 · 초기화가 이미 깎는다. 이번 달은 XpLog 합이라 여기서 따로 뺀다.
+//    누적(UserXp.xp)은 봇 · 초기화가 이미 깎는다. 이번 달은 XpLog + 지급 합이라 여기서 따로 뺀다(monthBoard).
 //    XpLog 에 음수 줄을 쓰지 않는다 — 원장(app/api/xp/ledger)에 Payout 줄과 두 번 보이고, 퀘스트 · 패스 · 서포터즈도 XpLog 를 같이 센다.
 //    유저가 쓴 XP(상점 결제 · 강화 · 패스 해금)와 다른 지급은 빼지 않는다 — 대기 · 처리 중은 아직 깎이지 않았으므로 paid 만
 //    초기화는 kind "reset", 그 표시가 없던 예전 기록은 수동 지급 중 사유 "관리자 초기화…"(원장 HIDDEN_PAYOUT 과 같은 기준). 보유 0 이던 사람의 기록은 금액 0 이라 따로 잡는다
@@ -116,131 +116,127 @@ const IS_RESET = {
   ],
 };
 
-// 📌 이번 달 값에서 관리자 회수분 빼기 — 시각 순으로 쌓다가 0 아래로는 내리지 않는다
-//    (이번 달에 번 것보다 많이 없애도 0 까지만 — 그 뒤에 번 XP 는 다시 쌓인다. 보유 XP 가 0 에서 멈추는 것과 같다)
-//    📌 이번 달 값에 처음부터 없는 XP — 양수 XP 지급(관리자 지급 · 패스 · 퀘스트 · 쿠폰 · 서포터즈 · 역할 환불).
-//       봇 processPayouts 는 UserXp.xp 만 올리고 XpLog 를 쓰지 않는다. 그 몫(u)을 따로 쌓아 두고 회수는 u 에서 먼저 뺀다 —
-//       잘못 준 XP 를 [XP 제거]로 되돌려도 채팅 · 음성으로 번 이번 달 XP 는 깎이지 않는다. u 를 넘는 만큼만 이번 달 값(v)에서 뺀다
-//    📌 초기화는 금액과 상관없이 그 순간까지의 v · u 를 둘 다 0 으로 — 보유 XP 를 통째로 지운 것이라 이번 달에 번 것도 남지 않는다
-//    0 이 된 사람은 이번 달 순위에서 빠진다. 반환 null = 회수 기록 없음(예전 계산 그대로)
-async function monthCuts(monthStart) {
-  const cuts = await Payout.aggregate([
-    {
-      $match: {
-        userId: { $nin: ["", null] },
-        status: "paid",
-        currency: { $ne: "point" },
-        $and: [
-          { $or: [{ paidAt: { $gte: monthStart } }, { createdAt: { $gte: monthStart } }] },
-          { $or: [{ amount: { $gt: 0 } }, ...ADMIN_TAKE] },
-        ],
-      },
-    },
-    { $addFields: { at: { $ifNull: ["$paidAt", "$createdAt"] } } },
-    { $match: { at: { $gte: monthStart } } },
-    { $sort: { at: 1, _id: 1 } },
-    {
-      $group: {
-        _id: "$userId",
-        at: { $push: "$at" },
-        amt: { $push: "$amount" },
-        reset: { $push: IS_RESET },
-        takes: { $sum: { $cond: [{ $lte: ["$amount", 0] }, 1, 0] } },
-      },
-    },
-    // 양수 지급만 있는 사람은 그대로 — 회수 · 초기화가 한 번이라도 있는 사람만 다시 센다
-    { $match: { takes: { $gt: 0 } } },
-  ]);
-  if (!cuts.length) return null;
-
-  // 지급 · 회수 시각으로 이번 달 XpLog 를 구간별로 나눠 합한다 — 구간 번호 = 그 로그 시각까지 지난 지급 · 회수 수
-  const users = cuts.map((c) => c._id);
-  const times = cuts.map((c) => c.at);
-  const segs = await XpLog.aggregate([
-    { $match: { userId: { $in: users }, createdAt: { $gte: monthStart } } },
-    {
-      $group: {
-        _id: {
-          u: "$userId",
-          s: {
-            $size: {
-              $filter: {
-                input: { $arrayElemAt: [{ $literal: times }, { $indexOfArray: [{ $literal: users }, "$userId"] }] },
-                as: "t",
-                cond: { $lte: ["$$t", "$createdAt"] },
-              },
-            },
-          },
-        },
-        xp: { $sum: "$amount" },
-      },
-    },
-  ]);
-  const segBy = new Map();
-  for (const r of segs) {
-    if (!segBy.has(r._id.u)) segBy.set(r._id.u, new Map());
-    segBy.get(r._id.u).set(r._id.s, r.xp);
-  }
-
-  const ids = [];
-  const deltas = [];
-  const zero = [];
-  for (const c of cuts) {
-    const sums = segBy.get(c._id);
-    if (!sums) continue; // 이번 달에 번 XP 가 없다 — 원래도 이번 달 순위에 없다
-    let v = 0; // 이번 달 값(회수 반영)
-    let u = 0; // 이번 달 값에 없는 지급 중 아직 회수되지 않은 몫
-    let plain = 0; // 예전 계산(XpLog 합)
-    for (let i = 0; i <= c.amt.length; i++) {
-      const s = sums.get(i) || 0;
-      v += s;
-      plain += s;
-      if (i === c.amt.length) break;
-      const a = c.amt[i];
-      if (c.reset[i]) { v = 0; u = 0; }
-      else if (a > 0) u += a;
-      else {
-        const take = Math.min(u, -a);
-        u -= take;
-        v = Math.max(0, v + a + take);
-      }
-    }
-    if (v <= 0) zero.push(c._id);
-    else if (v !== plain) { ids.push(c._id); deltas.push(v - plain); }
-  }
-  return { ids, deltas, zero };
-}
-
-// 이번 달 묶음($group 뒤)에 끼울 단계 — 0 이 된 사람은 빼고, 깎인 사람은 그만큼 낮춘다
-const cutStages = (cut, withXp) => {
-  if (!cut) return [];
-  const st = [];
-  if (cut.zero.length) st.push({ $match: { _id: { $nin: cut.zero } } });
-  if (withXp && cut.ids.length) {
-    st.push({
-      $addFields: {
-        xp: {
-          $add: [
-            "$xp",
-            {
-              $let: {
-                vars: { i: { $indexOfArray: [{ $literal: cut.ids }, "$_id"] } },
-                in: { $cond: [{ $gte: ["$$i", 0] }, { $arrayElemAt: [{ $literal: cut.deltas }, "$$i"] }, 0] },
-              },
-            },
+// 📌 이번 달 값 — 이번 달 XpLog(채팅 · 음성 · 출석 · 아이템 효과) + 이번 달 지급된(paid) 양수 XP 지급
+//    (퀘스트 · 시즌 패스 · 관리자 지급 · 쿠폰 · 서포터즈 · 역할 환불 — 봇 processPayouts 는 UserXp.xp 만 올리고 XpLog 를 쓰지 않는다)
+//    − 관리자 회수 · 초기화. 유저가 쓴 XP(상점 결제 · 강화 · 패스 해금)는 Payout 이 아니라 빼지 않는다.
+//    시각 순으로 쌓는다: 회수는 0 아래로 내리지 않고(그 뒤에 번 XP 는 다시 쌓인다 — 보유 XP 가 0 에서 멈추는 것과 같다),
+//    초기화는 금액과 상관없이 그 순간까지를 0 으로(보유 XP 를 통째로 지운 것).
+//    📌 "회수는 그 달 지급분에서 먼저"(2ffb4b2)와 같은 값이다 — 지급분 u · 번 값 v 로 나눠 u 부터 깎아도 합(u + v)은 max(0, 합 − 회수)라
+//       지급까지 더하는 지금은 한 값으로 센다(잘못 준 지급을 [XP 제거]로 되돌리면 그 지급이 빠질 뿐 채팅 · 음성으로 번 몫은 그대로).
+//    집계는 XpLog 1번 + Payout 1번 + (회수 · 초기화가 있는 사람만) 구간별 XpLog 1번.
+//    반환: [{ userId, xp, displayName }] — xp 내림차순 · userId 오름차순, 0 이하는 빠진다(이번 달 순위에 없음)
+async function monthBoard(monthStart) {
+  const [logs, pays] = await Promise.all([
+    XpLog.aggregate([
+      { $match: { createdAt: { $gte: monthStart } } },
+      { $group: { _id: "$userId", xp: { $sum: "$amount" }, displayName: { $last: "$displayName" } } },
+    ]),
+    Payout.aggregate([
+      {
+        $match: {
+          userId: { $nin: ["", null] },
+          status: "paid",
+          currency: { $ne: "point" },
+          $and: [
+            { $or: [{ paidAt: { $gte: monthStart } }, { createdAt: { $gte: monthStart } }] },
+            { $or: [{ amount: { $gt: 0 } }, ...ADMIN_TAKE] },
           ],
         },
       },
-    });
+      { $addFields: { at: { $ifNull: ["$paidAt", "$createdAt"] } } },
+      { $match: { at: { $gte: monthStart } } },
+      { $sort: { at: 1, _id: 1 } },
+      {
+        $group: {
+          _id: "$userId",
+          at: { $push: "$at" },
+          amt: { $push: "$amount" },
+          reset: { $push: IS_RESET },
+          plus: { $sum: { $cond: [{ $gt: ["$amount", 0] }, "$amount", 0] } },
+          takes: { $sum: { $cond: [{ $lte: ["$amount", 0] }, 1, 0] } },
+        },
+      },
+    ]),
+  ]);
+
+  const byUser = new Map(); // userId → { xp, displayName }
+  for (const l of logs) {
+    if (!l._id) continue;
+    byUser.set(l._id, { xp: l.xp || 0, displayName: l.displayName || "" });
   }
-  return st;
-};
+  // 양수 지급만 있는 사람 — 이번 달 로그 합에 지급 합을 더하면 끝
+  for (const p of pays) {
+    if (p.takes > 0) continue;
+    const cur = byUser.get(p._id);
+    byUser.set(p._id, { xp: (cur?.xp || 0) + p.plus, displayName: cur?.displayName || "" });
+  }
+
+  // 회수 · 초기화가 한 번이라도 있는 사람 — 지급 · 회수 시각으로 이번 달 XpLog 를 구간별로 나눠 합한 뒤 시각 순으로 쌓는다.
+  //    구간 번호 = 그 로그 시각까지 지난 지급 · 회수 수(같은 시각의 로그는 그 지급 · 회수 뒤로 친다)
+  const cuts = pays.filter((p) => p.takes > 0);
+  if (cuts.length) {
+    const users = cuts.map((c) => c._id);
+    const times = cuts.map((c) => c.at);
+    const segs = await XpLog.aggregate([
+      { $match: { userId: { $in: users }, createdAt: { $gte: monthStart } } },
+      {
+        $group: {
+          _id: {
+            u: "$userId",
+            s: {
+              $size: {
+                $filter: {
+                  input: { $arrayElemAt: [{ $literal: times }, { $indexOfArray: [{ $literal: users }, "$userId"] }] },
+                  as: "t",
+                  cond: { $lte: ["$$t", "$createdAt"] },
+                },
+              },
+            },
+          },
+          xp: { $sum: "$amount" },
+        },
+      },
+    ]);
+    const segBy = new Map();
+    for (const r of segs) {
+      if (!segBy.has(r._id.u)) segBy.set(r._id.u, new Map());
+      segBy.get(r._id.u).set(r._id.s, r.xp);
+    }
+    for (const c of cuts) {
+      const sums = segBy.get(c._id);
+      let t = 0;
+      for (let i = 0; i <= c.amt.length; i++) {
+        t += sums?.get(i) || 0;
+        if (i === c.amt.length) break;
+        const a = c.amt[i];
+        if (c.reset[i]) t = 0;
+        else if (a > 0) t += a;
+        else t = Math.max(0, t + a);
+      }
+      byUser.set(c._id, { xp: t, displayName: byUser.get(c._id)?.displayName || "" });
+    }
+  }
+
+  return [...byUser]
+    .map(([userId, v]) => ({ userId, xp: v.xp, displayName: v.displayName }))
+    .filter((r) => r.xp > 0)
+    // 동점은 userId 오름차순 — 누적 · 음성(Mongo sort userId:1)과 같은 규칙(숫자 ID 라 글자 비교가 같다)
+    .sort((a, b) => b.xp - a.xp || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0));
+}
+
+// 📌 내 순위 한 줄(me=1) — 로그인한 본인 것만(세션 기준, 남의 순위는 물을 수 없다). 그 기준에서 순위가 없으면 null.
+//    page = 이 limit 로 넘길 때 내가 있는 쪽(0 부터). 배지는 목록과 같은 판정(badgesOfUsers)
+async function withMyBadges(row) {
+  const map = await badgesOfUsers([row.userId]).catch(() => null);
+  return map?.has(row.userId) ? { ...row, badges: map.get(row.userId) } : row;
+}
 
 // ── [조회] 랭킹 ──────────────────────────────────────────────
 //   period=all   누적 XP        (UserXp.xp — 관리자 회수 · 초기화는 이미 빠져 있다)
-//   period=month 이번 달 획득   (XpLog 합산 − 이번 달 관리자 회수 · 초기화(monthCuts) — 봇 가동 이후분만 잡힌다)
+//   period=month 이번 달 획득   (이번 달 XpLog + 이번 달 지급된 XP − 관리자 회수 · 초기화 — monthBoard)
 //   period=voice 누적 음성 시간 (UserXp.voiceSeconds — 시즌 2 개시일부터 적립)
 //   skip/limit 으로 페이지를 넘긴다. 순위는 skip 을 더해 이어진다.
+//   me=1 이면 로그인한 본인의 순위 · 값 · 쪽(me)을 함께 준다 — 목록에 없을 때 화면이 내 줄을 따로 그린다
 export async function GET(request) {
   try {
     await connectToDatabase();
@@ -254,32 +250,23 @@ export async function GET(request) {
     const skip = Math.max(0, parseInt(sp.get("skip") || "0", 10) || 0);
     const raw = sp.get("period");
     const period = raw === "month" || raw === "voice" ? raw : "all";
+    // 내 순위 — 세션의 본인 ID 만 쓴다(쿼리로 남의 ID 를 받지 않는다)
+    const wantMe = sp.get("me") === "1";
+    const session = wantMe ? await getSession() : null;
+    const myId = session?.user?.id || "";
+    const myName = session?.user?.name || "";
+    const pageOf = (rank) => Math.floor((rank - 1) / limit);
 
     if (period === "month") {
       const monthStart = kstMonthStart();
-      // 이번 달 지급 로그를 유저별로 합산한 뒤(관리자 회수분은 뺀 뒤) 잘라 낸다.
-      // 총원은 자른 뒤 길이가 아니라 그룹 수 전체여야 페이지 수가 맞는다.
-      const cut = await monthCuts(monthStart);
-      const [rows, countRows] = await Promise.all([
-        XpLog.aggregate([
-          { $match: { createdAt: { $gte: monthStart } } },
-          { $group: { _id: "$userId", xp: { $sum: "$amount" }, displayName: { $last: "$displayName" } } },
-          ...cutStages(cut, true),
-          { $sort: { xp: -1, _id: 1 } },
-          { $skip: skip },
-          { $limit: limit },
-        ]),
-        XpLog.aggregate([
-          { $match: { createdAt: { $gte: monthStart } } },
-          { $group: { _id: "$userId" } },
-          ...cutStages(cut, false),
-          { $count: "n" },
-        ]),
-      ]);
+      // 전원 값을 세고(이번 달 활동한 사람만이라 작다) 정렬한 뒤 잘라 낸다. 총원은 0 보다 큰 사람 전체여야 페이지 수가 맞는다
+      const board = await monthBoard(monthStart);
+      const rows = board.slice(skip, skip + limit);
+      const myIdx = myId ? board.findIndex((r) => r.userId === myId) : -1;
 
       // 현재 레벨·이름은 누적 문서에서 채워 넣는다
       const docs = await UserXp.find(
-        { userId: { $in: rows.map((r) => r._id) } },
+        { userId: { $in: [...rows.map((r) => r.userId), ...(myIdx >= 0 ? [myId] : [])] } },
         { userId: 1, level: 1, displayName: 1 }
       ).lean();
       const byId = new Map(docs.map((u) => [u.userId, u]));
@@ -287,63 +274,101 @@ export async function GET(request) {
       const monthData = await finish(
         rows.map((r, i) => ({
           rank: skip + i + 1,
-          userId: r._id,
-          name: byId.get(r._id)?.displayName || r.displayName || "이름 없음",
+          userId: r.userId,
+          name: byId.get(r.userId)?.displayName || r.displayName || NO_NAME,
           xp: r.xp,
-          level: byId.get(r._id)?.level ?? 0,
+          level: byId.get(r.userId)?.level ?? 0,
         })),
         skip
       );
-      return NextResponse.json({ success: true, period, monthStart, data: monthData, total: countRows[0]?.n || 0 });
+      let me = null;
+      if (myIdx >= 0) {
+        const r = board[myIdx];
+        me = await withMyBadges({
+          rank: myIdx + 1,
+          page: pageOf(myIdx + 1),
+          userId: myId,
+          name: byId.get(myId)?.displayName || r.displayName || myName || NO_NAME,
+          xp: r.xp,
+          level: byId.get(myId)?.level ?? 0,
+        });
+      }
+      return NextResponse.json({ success: true, period, monthStart, data: monthData, total: board.length, ...(wantMe ? { me } : {}) });
     }
+
+    // 누적 · 음성 — 내 문서 하나로 내 순위를 센다(정렬과 같은 규칙: 값 내림차순, 동점은 userId 오름차순)
+    const myDoc = myId
+      ? await UserXp.findOne({ userId: myId }, { userId: 1, displayName: 1, username: 1, xp: 1, level: 1, attendCount: 1, voiceSeconds: 1 }).lean()
+      : null;
 
     if (period === "voice") {
       // 음성 시간은 시즌 2 개시일부터 쌓이므로 그 전에는 전원 0이다.
       // 0인 사람까지 줄 세우면 순위가 의미 없으므로 1초라도 있는 사람만 센다.
       const filter = { voiceSeconds: { $gt: 0 } };
-      const [rows, total] = await Promise.all([
+      const myV = myDoc?.voiceSeconds || 0;
+      const [rows, total, myAbove] = await Promise.all([
         UserXp.find(filter, { userId: 1, displayName: 1, username: 1, level: 1, voiceSeconds: 1 })
           .sort({ voiceSeconds: -1, userId: 1 })
           .skip(skip)
           .limit(limit)
           .lean(),
         UserXp.countDocuments(filter),
+        myV > 0 ? UserXp.countDocuments({ $or: [{ voiceSeconds: { $gt: myV } }, { voiceSeconds: myV, userId: { $lt: myId } }] }) : null,
       ]);
 
       const voiceData = await finish(
         rows.map((r, i) => ({
           rank: skip + i + 1,
           userId: r.userId,
-          name: r.displayName || r.username || "이름 없음",
+          name: r.displayName || r.username || NO_NAME,
           level: r.level,
           voiceSeconds: r.voiceSeconds || 0,
         })),
         skip
       );
-      return NextResponse.json({ success: true, period, data: voiceData, total });
+      const me = myAbove == null ? null : await withMyBadges({
+        rank: myAbove + 1,
+        page: pageOf(myAbove + 1),
+        userId: myId,
+        name: myDoc.displayName || myDoc.username || myName || NO_NAME,
+        level: myDoc.level ?? 0,
+        voiceSeconds: myV,
+      });
+      return NextResponse.json({ success: true, period, data: voiceData, total, ...(wantMe ? { me } : {}) });
     }
 
-    const [rows, total] = await Promise.all([
+    const myXp = myDoc?.xp || 0;
+    const [rows, total, myAbove] = await Promise.all([
       UserXp.find({}, { userId: 1, displayName: 1, username: 1, xp: 1, level: 1, attendCount: 1 })
         .sort({ xp: -1, userId: 1 })
         .skip(skip)
         .limit(limit)
         .lean(),
       UserXp.countDocuments(),
+      myDoc ? UserXp.countDocuments({ $or: [{ xp: { $gt: myXp } }, { xp: myXp, userId: { $lt: myId } }] }) : null,
     ]);
 
     const allData = await finish(
       rows.map((r, i) => ({
         rank: skip + i + 1,
         userId: r.userId,
-        name: r.displayName || r.username || "이름 없음",
+        name: r.displayName || r.username || NO_NAME,
         xp: r.xp,
         level: r.level,
         attendCount: r.attendCount || 0,
       })),
       skip
     );
-    return NextResponse.json({ success: true, period, data: allData, total });
+    const me = myAbove == null ? null : await withMyBadges({
+      rank: myAbove + 1,
+      page: pageOf(myAbove + 1),
+      userId: myId,
+      name: myDoc.displayName || myDoc.username || myName || NO_NAME,
+      xp: myXp,
+      level: myDoc.level ?? 0,
+      attendCount: myDoc.attendCount || 0,
+    });
+    return NextResponse.json({ success: true, period, data: allData, total, ...(wantMe ? { me } : {}) });
   } catch (e) {
     console.error("리더보드 조회 오류:", e);
     return NextResponse.json({ success: false, data: [], total: 0 }, { status: 500 });

@@ -34,6 +34,7 @@ const DEFAULTS = {
   // 📌 .lean() 은 스키마 기본값을 채우지 않는다 — 이 필드가 생기기 전 문서에서 undefined 로 읽히지 않게 여기 둔다 (db.js 와 같은 기본값)
   levelPublic: false, // 비공개면 봇이 XP 를 주지 않는다 (isLevelOpen)
   rankerRoleId: "",
+  attendChannelId: "", // 자동 출석 알림 채널 — 비우면 레벨업 채널 (features/voiceXp.js)
   attendStreakEnabled: false,
   attendStreakRules: [],
   expiryReminderEnabled: true,

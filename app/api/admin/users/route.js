@@ -20,7 +20,7 @@ import { unitStacksOf } from "@/lib/itemConsume";
 // 📌 관리자 '유저 조회' — 한 유저의 지갑 · 구매 · 지급 · 쿠폰 · 알림 · 문의 · 지원서를 한 번에 묶어 준다.
 //    GET ?q=      검색 — 디스코드 ID 는 정확히, 이름(username · displayName)은 부분 일치. 최대 20명
 //    GET ?userId= 상세 묶음 — 목록마다 최근 50건
-//    조회만 한다(쓰기 없음 — 소모권 1개 사용은 ./consume). 관리자 전용.
+//    조회만 한다(쓰기 없음 — 소모권 1개 사용은 ./consume · 음성 XP 정지는 ./voice-stop). 관리자 전용.
 
 const LIMIT = 50;
 const SEARCH_LIMIT = 20;
@@ -116,6 +116,9 @@ async function detail(userId) {
           lastAttendDate: user.lastAttendDate || "",
           voiceSeconds: user.voiceSeconds || 0,
           needsRoleSync: !!user.needsRoleSync,
+          // 음성 XP 정지(./voice-stop) — 정지 중인지 · 정지한 시각
+          voiceXpOff: !!user.voiceXpOff,
+          voiceXpOffAt: user.voiceXpOffAt || null,
           updatedAt: user.updatedAt || null,
           // 패스 — 지난 시즌에 멈춘 문서면 진행도 대신 그 시즌 번호만(다음 조회 때 사이트가 새 시즌으로 넘긴다)
           pass: {

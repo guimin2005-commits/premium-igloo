@@ -25,6 +25,11 @@ const UserXpSchema = new mongoose.Schema({
   // 오늘(KST) 음성 누적 분 — 출석 자동 지급 판정용. 날짜가 바뀌면 봇이 리셋한다.
   voiceTodayMin: { type: Number, default: 0 },
   voiceTodayDate: { type: String, default: "" },
+  // 📌 음성 XP 정지 — 관리자가 세운다(POST /api/admin/users/voice-stop). 켜져 있으면 봇이 이 사람의 음성 주기를 통째로 건너뛴다
+  //    (음성 XP · voiceSeconds · 오늘 누적 분 · 자동 출석 · 하루 음성 효과). bot/src/db.js 와 같은 칸
+  voiceXpOff: { type: Boolean, default: false },
+  voiceXpOffAt: { type: Date, default: null },
+  voiceXpOffBy: { type: String, default: "" }, // 세운 관리자 이름
   // 📌 아이템 효과(봇이 씀) — 효과별 "하루 1번" 기록("<roleId>:<effectId>" → 날짜) · 최고 도달 레벨(레벨업 효과 중복 방지)
   effectDaily: { type: Map, of: String, default: {} },
   maxLevel: { type: Number, default: 0 },

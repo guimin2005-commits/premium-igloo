@@ -22,6 +22,11 @@ const UserXpSchema = new mongoose.Schema({
   // 오늘(KST) 음성 누적 분 — 출석 자동 지급 판정용
   voiceTodayMin: { type: Number, default: 0 },
   voiceTodayDate: { type: String, default: "" },
+  // 📌 음성 XP 정지 — 사이트 관리자가 세우고 봇은 읽기만 한다(features/voiceXp.js 가 이 사람의 음성 주기를 통째로 건너뛴다).
+  //    (models/UserXp.js 와 이름·기본값이 반드시 같아야 한다)
+  voiceXpOff: { type: Boolean, default: false },
+  voiceXpOffAt: { type: Date, default: null },
+  voiceXpOffBy: { type: String, default: "" },
   // 📌 아이템 효과 "하루 1번" 기록 — 키 "<itemId>:<effectId>" → 마지막으로 받은 날(KST "YYYY-MM-DD").
   //    하루 첫 채팅 · 하루 음성 N분 효과가 itemEffects.js claimDaily 로 조건부 갱신해 하루 한 번만 지급한다.
   //    (Map 키에 점 · $ 가 들어가면 안 되므로 claimDaily 가 키를 정리해서 쓴다)
@@ -178,6 +183,8 @@ const BotSettingSchema = new mongoose.Schema({
   roleGrantChannelId: { type: String, default: "" },
   roleGrantMessage: { type: String, default: "🎖 {user} 님에게 **{role}** 역할이 지급되었습니다! (Lv.{level})" },
   roleGrantEnabled: { type: Boolean, default: true },
+  // 📌 자동 출석 알림 채널 — 비우면 레벨업 채널 (features/voiceXp.js announceAutoAttend). models/BotSetting.js 와 같아야 한다
+  attendChannelId: { type: String, default: "" },
   // 📌 서포터즈 — 봇은 읽지 않지만 사이트와 같은 문서라 스키마를 맞춰 둔다
   //    (models/BotSetting.js 와 이름·기본값이 반드시 같아야 한다 — 빠지면 upsert 때 기본값이 사라진다)
   supporterRoleId:      { type: String, default: "" },      // 서포터즈 역할 — 관리자가 /admin/bot 역할 탭에서 지정
@@ -216,6 +223,18 @@ const XpLogSchema = new mongoose.Schema({
   // 📌 시즌 패스 가속(아이템 효과 passBoost) — 이 지급과 함께 passBaseXp 를 낮춘 폭(진행도에만 더해진 XP). 없으면 0.
   //    시즌 기준선을 로그로 되짚을 때(seasonStartBaseXp) amount 와 함께 빼야 가속분이 사라지지 않는다
   passBoost: { type: Number, default: 0 },
+  // 📌 음성 지급 줄에만 — 그 주기의 음성 상황(features/voiceXp.js voiceCtx). 다른 줄 · 예전 줄에는 없다. models/XpLog.js 와 같은 칸
+  //    n: 그 채널의 봇 아닌 사람 수(본인 포함) · mute: 마이크 꺼짐(본인 · 서버) · deaf: 헤드셋 꺼짐(본인 · 서버)
+  //    live: 화면 공유 · 캠 · idle: 마지막 활동(features/activity.js) 뒤 지난 분
+  ctx: {
+    n: Number,
+    mute: Boolean,
+    deaf: Boolean,
+    live: Boolean,
+    idle: Number,
+  },
+  // 📌 음성 지급 줄에만 — 그 주기(초). 관리 › 이상 활동이 로그마다 이 값으로 간격 · 시간을 센다(lib/adminActivity.js). models/XpLog.js 와 같은 칸
+  sec: { type: Number },
   createdAt: { type: Date, default: Date.now, index: { expires: 60 * 60 * 24 * 60 } },
 });
 export const XpLog = mongoose.models.XpLog || mongoose.model("XpLog", XpLogSchema);

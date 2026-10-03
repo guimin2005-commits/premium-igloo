@@ -67,6 +67,8 @@ function HeaderPopover({
 
 // 📌 관리자 패널(좌측)을 띄울 경로 — /admin 하위 + 관리자만 쓰는 외부 페이지들
 const ADMIN_SURFACE_PATHS = ["/write"];
+// 모바일 독이 쓰는 공개 여부(LEVEL · ARCTIC) 마지막 값 — 새로고침 첫 그림부터 맞는 칸을 그리려고
+const DOCK_POLICY_KEY = "igloo:dock-policy";
 // ?admin=1 일 때만 관리자 화면이 되는 페이지
 const ADMIN_QUERY_PATHS = ["/support", "/recruit", "/auction"];
 
@@ -336,14 +338,25 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const isAdmin = status === "authenticated" && userSession?.name && ADMIN_USERS.includes(userSession.name);
 
   // 📌 ARCTIC 공개 여부 — 비공개면 관리자에게만 메뉴에 노출한다
-  const [shopPublic, setShopPublic] = useState(false);
-  const [levelPublic, setLevelPublic] = useState(false);
+  //    📌 새로고침 때 독이 "닫힌 세계" 칸(대회 · 소식 · 이벤트)으로 잠깐 그려졌다가 바뀌던 것 — 모르는 동안은 null.
+  //       지난번 값을 이 브라우저에 기억해 두고(마운트와 같은 커밋에 읽어 첫 독부터 맞게), 서버 값이 오면 바꾼다
+  const [policy, setPolicy] = useState<{ shop: boolean; level: boolean } | null>(null);
   useEffect(() => {
+    try {
+      const c = JSON.parse(localStorage.getItem(DOCK_POLICY_KEY) || "null");
+      if (c && typeof c.shop === "boolean" && typeof c.level === "boolean") setPolicy(c);
+    } catch {}
     fetch("/api/xp/policy", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => { setShopPublic(!!d?.data?.shopPublic); setLevelPublic(!!d?.data?.levelPublic); })
-      .catch(() => {});
+      .then((d) => {
+        const p = { shop: !!d?.data?.shopPublic, level: !!d?.data?.levelPublic };
+        setPolicy(p);
+        try { localStorage.setItem(DOCK_POLICY_KEY, JSON.stringify(p)); } catch {}
+      })
+      .catch(() => setPolicy((prev) => prev ?? { shop: false, level: false }));
   }, []);
+  const shopPublic = !!policy?.shop;
+  const levelPublic = !!policy?.level;
 
   // 📌 관리자 패널 표시 여부 — 관리자 전용 화면에서만 좌측 패널을 붙인다 (여기선 상단 바 폭 · 푸터만, 본문 틀은 RouteBody)
   const isAdminSurface = isAdminSurfaceOf(!!isAdmin, pathname || "", searchParams.get("admin"));
@@ -377,6 +390,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     ...dockMid,
     { name: "내 정보", path: "/profile", icon: ICON_PATHS.user },
   ];
+  // 가운데 세 칸을 아직 모르면(공개 여부 · 비공개일 때 관리자 여부) 빈칸으로 자리만 잡는다 — 다른 아이콘이 번쩍이지 않게
+  const dockReady = !!policy && ((policy.level && policy.shop) || status !== "loading");
 
   const categoryGroups = rawCategoryGroups.map((g) => ({
     ...g,
@@ -828,7 +843,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       {!isVerifyPage && !isAuctionRoom && !isShopPage && !isArcticProfile && mounted && (
         <nav style={{ gridTemplateColumns: `repeat(${dockTabs.length}, minmax(0, 1fr))` }}
           className={`md:hidden fixed inset-x-3 mx-auto max-w-md bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 p-1.5 rounded-full border backdrop-blur-2xl grid ${isLightPage ? "border-black/[0.07] bg-white/85 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.22)]" : "border-white/[0.07] bg-[#0b0b0b]/75 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85)]"}`}>
-          {dockTabs.map((tab) => {
+          {dockTabs.map((tab, i) => {
+            if (!dockReady && i > 0 && i < dockTabs.length - 1) {
+              return <span key={`slot-${i}`} aria-hidden className="flex items-center justify-center py-2"><span className="block w-[19px] h-[19px]" /></span>;
+            }
             const isActive = pathname === tab.path;
             return (
               // 라벨 없이 아이콘만 (ARCTIC 하단바와 동일한 형태)

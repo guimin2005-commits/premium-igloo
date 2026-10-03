@@ -77,9 +77,11 @@ const LIM = LIMITS as Record<string, number>;
 const DEST: Record<string, string> = {
   levelUp: "레벨업 채널",
   roleGrant: "역할 지급 채널",
+  autoAttend: "출석 알림 채널",
   rankerAnnounce: "레벨업 채널",
   cmdAttendAlready: "명령어를 쓴 채널 · 나만 보기",
   levelClosed: "명령어를 쓴 채널 · 나만 보기",
+  passUnclaimed: "유저 DM",
 };
 // 📌 DEFS[k] 로만 보면 ?key=constructor 같은 이름도 통과해 빈 화면이 된다 — 자기 키만
 const isKey = (k: string | null): k is string => !!k && KEYS.includes(k);

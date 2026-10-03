@@ -16,7 +16,14 @@ type NavItem = { title: string; href: string; icon: string; match?: (p: string, 
 type NavGroup = { label: string; items: NavItem[] };
 
 const NAV_GROUPS: NavGroup[] = [
-  { label: "허브", items: [{ title: "대시보드", href: "/admin", icon: ICON_PATHS.home }] },
+  {
+    label: "허브",
+    items: [
+      { title: "대시보드", href: "/admin", icon: ICON_PATHS.home },
+      // 📌 XP · 빙옥 발행 · 사용 · 유통 · 상품별 판매 (app/api/admin/economy — 읽기 전용)
+      { title: "재화 통계", href: "/admin/economy", icon: ICON_PATHS.trend },
+    ],
+  },
   {
     label: "작성",
     items: [
@@ -45,6 +52,8 @@ const NAV_GROUPS: NavGroup[] = [
       { title: "레벨 설정", href: "/admin/bot", icon: ICON_PATHS.chart },
       { title: "시즌 패스", href: "/admin/pass", icon: ICON_PATHS.star },
       { title: "봇 메시지", href: "/admin/messages", icon: ICON_PATHS.sparkles },
+      // 📌 잠수 의심 — 음성 연속 · 혼자 · 음소거 (app/api/admin/activity — 읽기 전용)
+      { title: "이상 활동", href: "/admin/activity", icon: ICON_PATHS.clock },
     ],
   },
   {

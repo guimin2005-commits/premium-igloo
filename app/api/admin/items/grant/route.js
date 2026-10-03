@@ -10,6 +10,7 @@ import ShopItem from "@/models/ShopItem";
 import mongoose from "mongoose";
 import { unitThingSet, MAX_PER_ORDER } from "@/lib/unitSale";
 import { revokeFreeRows } from "@/lib/itemRevoke";
+import { parseTargetKeys, resolveTargets, unresolvedMessage, MAX_TARGETS } from "@/lib/adminTargets";
 
 // 📌 아이템 수동 지급 — 관리자가 등록된 아이템을 유저에게 바로 준다.
 //    상점 구매와 같은 Purchase 행(itemId "grant")을 만들어 인벤토리·봇 지급 큐가 그대로 처리한다.
@@ -42,7 +43,7 @@ export async function GET() {
   }
 }
 
-// ── [지급] { itemId, target, days, reason, qty } ──
+// ── [지급] { itemId, target, days, reason, qty } — 여러 명은 target 대신 targets: [...] (최대 200) ──
 //    📌 qty(1~99) — ×N 으로 쌓이는 아이템(1개 단위 상품이 가리키거나 역할 없는 소모형 — lib/unitSale.js unitThingSet)만 여러 개.
 //       그런 아이템은 이미 가진 사람도 건너뛰지 않고 사람마다 qty 건을 만든다(한 사람의 건은 같은 orderId). 나머지는 1개 · 1인 1개 그대로
 export async function POST(request) {
@@ -73,11 +74,31 @@ export async function POST(request) {
     const qty = stackable ? qtyIn : 1;
 
     // 대상 — "all" 이면 XP 기록이 있는 전원, 아니면 ID·닉네임으로 찾는다 (XP 수동 지급과 같은 규칙)
-    const target = b?.target;
+    //    📌 여러 명 — { targets: [...] }(lib/adminTargets.js). 키가 하나면 { target } 한 명 경로와 똑같이(응답도 같다).
+    //       targets 로 온 키는 "all"(전체)로 읽지 않는다 — 이름이 "all" 인 유저로 찾는다
+    const listKeys = Array.isArray(b?.targets) ? parseTargetKeys(b.targets) : [];
+    if (listKeys.length > MAX_TARGETS) {
+      return NextResponse.json({ success: false, message: `한 번에 ${MAX_TARGETS}명까지 지정할 수 있습니다.` }, { status: 400 });
+    }
+    const fromList = listKeys.length > 0;
+    const multi = listKeys.length > 1;
+    const target = fromList ? (multi ? "" : listKeys[0]) : b?.target;
     let targets = [];
-    if (target === "all") {
+    if (!fromList && target === "all") {
       targets = await UserXp.find({}, { userId: 1, username: 1, displayName: 1 }).lean();
       if (targets.length === 0) return NextResponse.json({ success: false, message: "지급 대상이 없습니다." }, { status: 404 });
+    } else if (multi) {
+      // 전부 아니면 없음 — 못 찾은 키 · 겹치는 이름이 하나라도 있으면 아무에게도 주지 않는다. 통과하면 아래는 전체 지급과 같은 길(이미 보유 건너뜀 · 수량)
+      const r = await resolveTargets(listKeys, { userId: 1, username: 1, displayName: 1 });
+      if (r.missing.length || r.ambiguous.length) {
+        return NextResponse.json({
+          success: false,
+          message: unresolvedMessage(r.missing, r.ambiguous),
+          missing: r.missing,
+          ambiguous: r.ambiguous,
+        }, { status: 409 });
+      }
+      targets = r.found;
     } else {
       const key = String(target || "").trim();
       if (!key) return NextResponse.json({ success: false, message: "지급 대상을 입력해주세요." }, { status: 400 });

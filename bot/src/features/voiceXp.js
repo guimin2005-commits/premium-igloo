@@ -4,6 +4,10 @@
 //       "음성 파티"는 그 채널 인원(봇 제외)이 효과의 기준 이상일 때 1회당, "음소거 감소 완화"는 감소율에서 %p 를 뺀다(막기 모드는 그대로).
 //       효과는 디스코드 역할이 아니라 인벤토리 보유 아이템 기준이다(itemEffects.js — 아이템 기본 효과 포함).
 //    📌 레벨 비공개면 XP · 출석 · 효과는 주지 않고(grantXp · claimAttendance 가 막는다) 음성 시간 · 오늘 누적 분만 쌓는다.
+//    📌 음성 XP 정지(UserXp.voiceXpOff — 관리자)인 사람은 주기를 통째로 건너뛴다: 지급 · voiceSeconds · 오늘 누적 분 · 자동 출석 · 하루 음성 효과.
+//    📌 지급 줄(XpLog "voice")에 그 주기의 음성 상황 ctx(인원 · 마이크 · 헤드셋 · 화면 공유/캠 · 마지막 활동 뒤 분)를 같이 남긴다.
+//    📌 자동 출석이 되면 봇 메시지 autoAttend 를 출석 알림 채널(비우면 레벨업 채널)에 보낸다.
+import { PermissionFlagsBits } from "discord.js";
 import { UserXp } from "../db.js";
 import { getVoiceBracketBonus, kstToday, VOICE_TIME_START } from "../leveling.js";
 import { getBuffXp } from "../roleConfigs.js";
@@ -11,8 +15,53 @@ import { effectXp, voicePartyXp, perksOf } from "../itemEffects.js";
 import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getActiveBoostXp, getMuteMultiplier, isLevelOpen } from "../botSettings.js";
 import { grantXp, grantOnceEffects } from "../xp.js";
-import { claimAttendance } from "../attend.js";
+import { claimAttendance, streakBonusText } from "../attend.js";
+import { buildMessageWithCard, cardAvatar, commonVars } from "../botMessages.js";
+import { idleMinutes } from "./activity.js";
 import { config } from "../config.js";
+
+// 📌 음성 상황(XpLog.ctx) — n: 그 채널의 봇 아닌 사람 수(본인 포함) · mute/deaf: 본인 또는 서버가 끈 것 · live: 화면 공유 또는 캠
+function voiceCtx(voiceState, n, now) {
+  return {
+    n,
+    mute: !!(voiceState.selfMute || voiceState.serverMute),
+    deaf: !!(voiceState.selfDeaf || voiceState.serverDeaf),
+    live: !!(voiceState.streaming || voiceState.selfVideo),
+    idle: idleMinutes(voiceState.id, now),
+  };
+}
+
+// 📌 자동 출석 알림 — /출석체크(cmdAttend)와 같은 변수 · 같은 카드. 꺼진 메시지 · 채널 없음 · 권한 없음이면 조용히 넘긴다(출석 지급은 이미 끝났다).
+//    틱을 기다리게 하지 않는다 — 아바타 받기 · 카드 그리기는 따로 돈다. 파일 첨부 권한이 없으면 카드 없이 글만
+function announceAutoAttend(member, res) {
+  sendAutoAttend(member, res).catch((e) => console.error(`자동 출석 알림 오류 (${member.displayName}):`, e?.message || e));
+}
+
+async function sendAutoAttend(member, res) {
+  const s = getSettings();
+  const channelId = s.attendChannelId || s.levelupChannelId || config.levelupChannelId;
+  const channel = channelId ? member.guild.channels.cache.get(channelId) : null;
+  const me = member.guild.members.me;
+  if (!channel?.isTextBased() || !me) return;
+  const perms = channel.permissionsFor(me);
+  if (!perms?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages])) return;
+
+  const streakBonus = streakBonusText(res.streakBonus);
+  const vars = { ...commonVars(member), amount: res.amount, attendCount: res.attendCount, streak: res.streak, bestStreak: res.bestStreak, streakBonus };
+  const cardData = perms.has(PermissionFlagsBits.AttachFiles)
+    ? async () => ({
+        avatar: await cardAvatar(member),
+        name: vars.name,
+        amount: res.amount,
+        streak: res.streak,
+        bestStreak: res.bestStreak,
+        attendCount: res.attendCount,
+        streakBonus,
+      })
+    : null;
+  const payload = await buildMessageWithCard("autoAttend", vars, cardData);
+  if (payload) await channel.send(payload);
+}
 
 // 📌 음소거 감소 완화(아이템 효과 muteRelief) — 감소 모드에서 음소거로 깎일 때만, 감소율에서 합 %p 를 뺀다.
 //    상한(감소율 전체)은 perksOf 가 건다. 막기(block) · 끔(off) 은 그대로
@@ -45,15 +94,33 @@ async function voiceXpTick(client) {
       return headcount.get(channel.id);
     };
 
+    // 대상 먼저 — 봇 · 잠수 채널 · 제외 채널(대시보드 채널/카테고리 정책)을 걸러 둔다
+    const targets = [];
     for (const [, voiceState] of guild.voiceStates.cache) {
       const member = voiceState.member;
       const channel = voiceState.channel;
       if (!member || member.user.bot || !channel) continue;
       if (channel.id === afkChannelId) continue; // 잠수 채널 제외
-
-      // 채널/카테고리 정책 (대시보드 설정)
       const channelPolicy = getChannelPolicy(channel);
       if (channelPolicy.excluded) continue;
+      targets.push({ voiceState, member, channel, channelPolicy });
+    }
+    if (!targets.length) return;
+
+    // 📌 레벨 · 강화 · 음성 XP 정지는 이번 틱에 한 번만($in) 읽는다 — 사람마다 따로 읽지 않는다
+    const docs = await UserXp.find(
+      { userId: { $in: targets.map((t) => t.member.id) } },
+      { userId: 1, level: 1, voiceEnhance: 1, voiceXpOff: 1 }
+    ).lean();
+    const docOf = new Map(docs.map((d) => [d.userId, d]));
+    const now = Date.now();
+
+    for (const { voiceState, member, channel, channelPolicy } of targets) {
+      // 📌 틱 도중 나갔거나 옮긴 사람은 건너뛴다 — voiceState 는 캐시 객체라 그 자리에서 바뀐다(나가면 활동 기록도 지워져 ctx.idle 이 틀어진다)
+      if (voiceState.channelId !== channel.id || !voiceState.member) continue;
+      const doc = docOf.get(member.id);
+      // 📌 음성 XP 정지 — 이 사람만 주기를 통째로 건너뛴다(지급 · voiceSeconds · 오늘 누적 분 · 자동 출석 · 하루 음성 효과)
+      if (doc?.voiceXpOff === true) continue;
 
       // 음소거 정책 — block이면 지급 자체를 건너뜀 (감소 모드는 아이템 효과로 완화될 수 있다)
       const muteMultiplier = relieveMute(getMuteMultiplier(voiceState), member, s);
@@ -61,7 +128,6 @@ async function voiceXpTick(client) {
 
       // 기본 음성 XP — 내전 채널도 따로 두지 않고 같은 값(대시보드 설정)을 쓴다
       const base = s.voiceXp;
-      const doc = await UserXp.findOne({ userId: member.id }, { level: 1, voiceEnhance: 1 }).lean();
 
       // 강화 가산 — 단계(영구) × voiceEnhanceStep. 등급·역할·채널 가산과 같은 자리에서 더하고 음소거 배율을 곱한다
       const enhanceXp = Math.max(0, Math.floor(Number(doc?.voiceEnhance) || 0)) * Math.max(0, Number(s.voiceEnhanceStep) || 0);
@@ -76,6 +142,7 @@ async function voiceXpTick(client) {
         channelId: channel.id,
         channelName: channel.name || "",
         voiceSeconds: tickSec,
+        ctx: voiceCtx(voiceState, countOf(channel), now),
       });
 
       // ── 출석 자동 지급 ──
@@ -104,7 +171,8 @@ async function voiceXpTick(client) {
       //       레벨 비공개면 자물쇠를 세우지 않는다(공개된 날 다시 받을 수 있게). 한 명의 오류가 이번 틱의 다른 사람을 막지 않게 따로 잡는다.
       if (upd && upd.voiceTodayMin >= attendMin && upd.lastAttendDate !== today && isLevelOpen()) {
         try {
-          await claimAttendance(member, { source: "voice" });
+          const res = await claimAttendance(member, { source: "voice" });
+          if (res?.ok) announceAutoAttend(member, res);
         } catch (e) {
           console.error(`출석 자동 지급 오류 (${member.displayName}):`, e.message);
         }

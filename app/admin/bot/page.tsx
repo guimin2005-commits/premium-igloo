@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import Dropdown from "../../components/Dropdown";
@@ -8,6 +8,7 @@ import ItemIcon from "../../components/ItemIcon";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { VOICE_TIERS } from "@/lib/voiceTiers";
 import { POINT_RATE } from "@/lib/pointRate";
+import { parseTargetKeys, MAX_TARGETS } from "@/lib/adminTargetKeys";
 import { groupOrders } from "@/lib/orderGroups";
 import { QUEST_REASONS, QUEST_METRICS, questReasonOf, questCondLabel } from "@/lib/questKinds";
 import {
@@ -237,6 +238,7 @@ const SETTING_LABEL: Record<string, string> = {
   roleGrantEnabled: "역할 지급 알림",
   roleGrantChannelId: "역할 지급 알림 채널",
   roleGrantMessage: "역할 지급 알림 문구",
+  attendChannelId: "자동 출석 알림 채널",
   shopPublic: "ARCTIC 상점 공개",
   levelPublic: "SYSTEM : LEVEL 공개",
   resetOnLeave: "퇴장 시 XP 초기화",
@@ -295,6 +297,144 @@ function Field({ label, hint, children }: { label: React.ReactNode; hint?: React
 }
 
 const Req = () => <span className="text-[#e91e3f]">*</span>;
+
+// 📌 수동 지급 대상 — 한 칸에 여러 명(줄바꿈 · 쉼표). 입력이 멈추면 400ms 뒤 /api/admin/targets 로 미리 확인해 칸 아래 칩으로 보인다.
+//    키 나누기는 서버와 같은 lib/adminTargetKeys.js — 화면이 확인한 키 그대로 targets 로 보낸다(1명이면 서버가 한 명 경로로 받는다).
+type TargetCheck = {
+  found: { userId: string; name: string; username: string }[];
+  missing: string[];
+  ambiguous: { key: string; candidates: { userId: string; name: string }[] }[];
+};
+function useTargetCheck(text: string) {
+  const keys: string[] = parseTargetKeys(text);
+  const sig = keys.join("\n");
+  const [res, setRes] = useState<{ sig: string; data: TargetCheck | null } | null>(null);
+  // 다시 확인 — 지급이 404 · 409(못 찾음 · 이름 겹침)로 막히면 같은 입력이라도 다시 본다(그 사이 이름이 바뀐 경우)
+  const [nonce, setNonce] = useState(0);
+  const recheck = () => { setRes(null); setNonce((n) => n + 1); };
+  // 요청 번호 — 늦게 온 옛 입력의 응답은 버린다
+  const seq = useRef(0);
+  useEffect(() => {
+    const my = ++seq.current;
+    if (!sig) return;
+    const list = sig.split("\n");
+    if (list.length > MAX_TARGETS) return;
+    const t = setTimeout(() => {
+      fetch("/api/admin/targets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keys: list }) })
+        .then((r) => r.json().then((d) => (r.ok && d?.success ? (d.data as TargetCheck) : null)).catch(() => null))
+        .catch(() => null)
+        .then((data) => { if (my === seq.current) setRes({ sig, data }); });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [sig, nonce]);
+  const fresh = res && res.sig === sig ? res : null;
+  const data = fresh?.data || null;
+  const tooMany = keys.length > MAX_TARGETS;
+  const problems = !!data && (data.missing.length > 0 || data.ambiguous.length > 0);
+  // 잠금 — 200명 초과 · 못 찾음 · 이름 겹침 · 여러 명인데 아직 확인 전(확인 창에 보일 이름이 없다). 1명은 확인 전이어도 서버가 다시 본다
+  const locked = tooMany || problems || (keys.length > 1 && !data);
+  return {
+    keys,
+    data,
+    shown: sig ? res?.data || null : null, // 확인 중에는 직전 결과를 흐리게
+    pending: !!sig && !tooMany && !fresh,
+    failed: !!fresh && !fresh.data,
+    tooMany,
+    locked,
+    recheck,
+  };
+}
+type TargetCheckState = ReturnType<typeof useTargetCheck>;
+// 지급 응답이 대상 때문에 막혔나 — 못 찾음(404) · 여러 명 409(missing · ambiguous) · 한 명 이름 겹침 409(candidates)
+//    "이미 모두 보유" 같은 다른 409 는 대상 문제가 아니다
+const targetRejected = (r: Response, d: { missing?: unknown; ambiguous?: unknown; candidates?: unknown } | null) =>
+  r.status === 404 || (r.status === 409 && !!d && (Array.isArray(d.missing) || Array.isArray(d.ambiguous) || Array.isArray(d.candidates)));
+// 겹치는 이름 칩에서 후보를 고르면 그 키를 유저 ID 로 바꾼다
+const pickTargetKey = (keys: string[], key: string, userId: string) => keys.map((k) => (k === key ? userId : k)).join("\n");
+
+// 대상 칸 — 한 줄로 시작해 내용만큼 자라고, 5줄쯤부터는 칸 안에서 스크롤
+const TARGET_MAX_H = 124;
+const fitTarget = (el: HTMLTextAreaElement) => {
+  if (!el.offsetWidth) return; // 숨은 칸(폭 0)은 재지 않는다 — 보일 때 아래 감시가 다시 잰다
+  el.style.height = "auto";
+  const full = el.scrollHeight + (el.offsetHeight - el.clientHeight);
+  el.style.height = `${Math.min(full, TARGET_MAX_H)}px`;
+  el.style.overflowY = full > TARGET_MAX_H ? "auto" : "hidden";
+};
+function TargetInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    if (ref.current) fitTarget(ref.current);
+  }, [value]);
+  // 칸 폭이 바뀌면(창 크기 · 화면 회전) 줄바꿈이 달라진다 — 폭이 바뀔 때만 다시 잰다(높이 변화로는 다시 돌지 않게)
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let w = el.offsetWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.offsetWidth === w) return;
+      w = el.offsetWidth;
+      fitTarget(el);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <textarea ref={ref} rows={1} value={value} onChange={(e) => onChange(e.target.value)} spellCheck={false}
+      placeholder="ID · 이름" className={`${inputClass} block resize-none`} />
+  );
+}
+
+// 대상 칸 아래 한 줄 — 찾은 사람(앞 8명) · 못 찾은 키(✕) · 겹치는 이름(?, 누르면 후보)
+const TARGET_CHIPS = 8;
+const chipBtn = "inline-flex max-w-full min-w-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/20";
+function TargetChips({ check, onPick }: { check: TargetCheckState; onPick: (key: string, userId: string) => void }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const { keys, shown, pending, failed, tooMany } = check;
+  if (!keys.length) return null;
+  if (tooMany) {
+    return (
+      <div className="mt-1.5 flex flex-wrap gap-1 min-w-0">
+        <StatusChip tone="bad">{keys.length.toLocaleString()}명 · 최대 {MAX_TARGETS}명</StatusChip>
+      </div>
+    );
+  }
+  const found = shown?.found || [];
+  const missing = shown?.missing || [];
+  const amb = shown?.ambiguous || [];
+  const openAmb = amb.find((a) => a.key === open);
+  return (
+    <div className={`mt-1.5 min-w-0 transition-opacity ${pending && shown ? "opacity-50" : ""}`}>
+      <div className="flex flex-wrap items-center gap-1 min-w-0">
+        {!shown && (failed ? <StatusChip tone="bad">확인 실패</StatusChip> : <StatusChip>…</StatusChip>)}
+        {found.slice(0, TARGET_CHIPS).map((f) => (
+          <StatusChip key={`f${f.userId}`} tone="ok" className="max-w-full min-w-0"><span className="truncate" title={f.userId}>{f.name}</span></StatusChip>
+        ))}
+        {found.length > TARGET_CHIPS && <StatusChip>외 {(found.length - TARGET_CHIPS).toLocaleString()}명</StatusChip>}
+        {missing.slice(0, TARGET_CHIPS).map((k) => (
+          <StatusChip key={`m${k}`} tone="bad" className="max-w-full min-w-0"><span className="truncate">✕ {k}</span></StatusChip>
+        ))}
+        {missing.length > TARGET_CHIPS && <StatusChip tone="bad">✕ 외 {(missing.length - TARGET_CHIPS).toLocaleString()}개</StatusChip>}
+        {amb.map((a) => (
+          <button key={`a${a.key}`} type="button" className={chipBtn} aria-expanded={open === a.key}
+            title={a.candidates.map((c) => `${c.name || "이름 없음"} ${c.userId}`).join("\n")}
+            onClick={() => setOpen(open === a.key ? null : a.key)}>
+            <StatusChip tone="warn" className="max-w-full min-w-0 cursor-pointer"><span className="truncate">{a.key} ?</span></StatusChip>
+          </button>
+        ))}
+      </div>
+      {openAmb && (
+        <div className="mt-1 flex flex-wrap gap-1 min-w-0">
+          {openAmb.candidates.map((c) => (
+            <button key={c.userId} type="button" className={chipBtn} onClick={() => { onPick(openAmb.key, c.userId); setOpen(null); }}>
+              <StatusChip className="max-w-full min-w-0 cursor-pointer hover:bg-[#e6e6e6]"><span className="truncate">{c.name || "이름 없음"} · {c.userId}</span></StatusChip>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // 📌 목록 편집 칸 — ＋ 추가나 줄을 누르면 PC 는 오른쪽 칸, 모바일은 아래 판으로 같은 폼이 뜬다.
 //    예전의 접이식 폼은 목록을 아래로 밀어내고, 편집하려면 화면을 오르내려야 했다.
@@ -682,7 +822,14 @@ export default function AdminBotPage() {
   const [grantLogs, setGrantLogs] = useState<any[]>([]);
   const [isGranting, setIsGranting] = useState(false);
   const [confirmAll, setConfirmAll] = useState(false);
-  const [confirmReset, setConfirmReset] = useState<string | null>(null);
+  // "all" = 전체 초기화 단추, [키] = 칸에 적은 한 명 — 이름이 "all" 인 유저를 적어도 전체로 읽지 않게 모양을 나눈다
+  const [confirmReset, setConfirmReset] = useState<"all" | [string] | null>(null);
+  // 📌 여러 명 지급 · 제거 — 대상 칸의 미리 확인(useTargetCheck) 결과로 이름을 보여 주고 한 번 확인한 뒤 targets 로 보낸다
+  const grantCheck = useTargetCheck(grantForm.target);
+  const itemCheck = useTargetCheck(itemGrant.target);
+  const [multiConfirm, setMultiConfirm] = useState<{ kind: "grant" | "remove" | "item"; keys: string[]; names: string[]; amount: number } | null>(null);
+  const openMulti = (kind: "grant" | "remove" | "item", check: TargetCheckState, amount = 0) =>
+    setMultiConfirm({ kind, keys: check.keys, names: (check.data?.found || []).map((f) => f.name), amount });
 
   const loadGrantLogs = useCallback(() => {
     fetch("/api/xp/grant", { cache: "no-store" })
@@ -731,15 +878,16 @@ export default function AdminBotPage() {
     if (await patchItemGrant({ ids: noteEdit.ids, adminNote: noteEdit.text }, "사유를 고쳤습니다.")) setNoteEdit(null);
   };
 
-  const runItemGrant = async (target: string) => {
+  // 대상 — "all"(전체 단추) 또는 칸에서 나눈 키 목록(targets, 1명이면 서버가 한 명 경로로 받는다)
+  const runItemGrant = async (target: "all" | string[]) => {
     if (isGranting) return;
-    const days = itemGrant.daysMode === "custom" ? Math.max(1, Math.trunc(Number(itemGrant.days) || 0)) : Number(itemGrant.daysMode);
+    const days = itemGrantDays;
     setIsGranting(true);
     try {
       const res = await fetch("/api/admin/items/grant", {
         method: "POST", headers: { "Content-Type": "application/json" },
         // 수량 — ×N 으로 쌓이는 아이템(stackable)만. 나머지는 늘 1개(서버도 다시 판정한다)
-        body: JSON.stringify({ itemId: itemGrant.itemId, target, days, reason: itemGrant.reason, qty: grantQty }),
+        body: JSON.stringify({ itemId: itemGrant.itemId, ...(target === "all" ? { target } : { targets: target }), days, reason: itemGrant.reason, qty: grantQty }),
       });
       const d = await res.json();
       if (res.ok && d.success) {
@@ -748,12 +896,15 @@ export default function AdminBotPage() {
         loadItemGrants();
       } else {
         notify(d.message || "지급에 실패했습니다.", true);
+        // 못 찾음 · 이름 겹침 — 칩을 서버가 본 대로 다시 맞춘다
+        if (target !== "all" && targetRejected(res, d)) itemCheck.recheck();
       }
     } catch {
       notify("서버와 통신 중 오류가 발생했습니다.", true);
     } finally {
       setIsGranting(false);
       setConfirmAllItem(false);
+      setMultiConfirm(null);
     }
   };
 
@@ -761,22 +912,31 @@ export default function AdminBotPage() {
   const grantStackable = !!grantItems.find((it: any) => it._id === itemGrant.itemId)?.stackable;
   // 보낼 수량 — 1 ~ 99 로 자른 값. 확인 창 · 요청 · 서버가 같은 수를 쓴다
   const grantQty = grantStackable ? Math.min(99, Math.max(1, Math.trunc(Number(itemGrant.qty) || 1))) : 1;
+  // 보낼 기간(일, 0 = 영구) — 확인 창 · 요청이 같은 수를 쓴다
+  const itemGrantDays = itemGrant.daysMode === "custom" ? Math.max(1, Math.trunc(Number(itemGrant.days) || 0)) : Number(itemGrant.daysMode);
 
   const submitItemGrant = (e: React.FormEvent) => {
     e.preventDefault();
     if (!itemGrant.itemId) return notify("지급할 아이템을 선택해 주세요.", true);
-    if (!itemGrant.target.trim()) return notify("지급 대상을 입력해주세요.", true);
-    runItemGrant(itemGrant.target.trim());
+    if (!itemCheck.keys.length) return notify("지급 대상을 입력해주세요.", true);
+    if (itemCheck.locked) return notify("대상을 확인해 주세요.", true);
+    if (itemCheck.keys.length > 1) return openMulti("item", itemCheck);
+    runItemGrant(itemCheck.keys);
   };
 
   // amount를 넘기면 그 값으로, 넘기지 않으면 입력값 그대로 보낸다 (제거는 음수로 뒤집는다)
-  const runGrant = async (target: string, override?: { amount?: number; mode?: "reset" }) => {
+  //    대상 — "all"(전체 단추) 또는 칸에서 나눈 키 목록(targets, 1명이면 서버가 한 명 경로로 받는다)
+  const runGrant = async (target: "all" | string[], override?: { amount?: number; mode?: "reset" }) => {
     if (isGranting) return;
     setIsGranting(true);
     try {
       const res = await fetch("/api/xp/grant", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...grantForm, target, currency: grantKind === "point" ? "point" : "xp", ...override }),
+        body: JSON.stringify({
+          amount: grantForm.amount, reason: grantForm.reason,
+          ...(target === "all" ? { target } : { targets: target }),
+          currency: grantKind === "point" ? "point" : "xp", ...override,
+        }),
       });
       const d = await res.json();
       if (res.ok && d.success) {
@@ -785,6 +945,10 @@ export default function AdminBotPage() {
         loadGrantLogs();
       } else {
         notify(d.message || "처리에 실패했습니다.", true);
+        // 도중에 끊긴 빙옥 지급 — 반영된 사람의 기록이 남았다
+        if (d?.partial) loadGrantLogs();
+        // 못 찾음 · 이름 겹침 — 칩을 서버가 본 대로 다시 맞춘다
+        if (target !== "all" && targetRejected(res, d)) grantCheck.recheck();
       }
     } catch {
       notify("서버와 통신 중 오류가 발생했습니다.", true);
@@ -792,21 +956,31 @@ export default function AdminBotPage() {
       setIsGranting(false);
       setConfirmAll(false);
       setConfirmReset(null);
+      setMultiConfirm(null);
     }
   };
 
   const submitGrant = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!grantForm.target.trim()) return notify("지급 대상을 입력해주세요.", true);
-    runGrant(grantForm.target.trim());
+    if (!grantCheck.keys.length) return notify("지급 대상을 입력해주세요.", true);
+    if (grantCheck.locked) return notify("대상을 확인해 주세요.", true);
+    if (grantCheck.keys.length > 1) {
+      const amount = Math.trunc(Number(grantForm.amount) || 0);
+      if (!amount) return notify(`지급할 ${grantUnit}을 입력해주세요. (회수는 음수)`, true);
+      // 음수는 회수 — [제거] 단추와 같은 확인 창(제목 · danger)으로
+      return openMulti(amount < 0 ? "remove" : "grant", grantCheck, amount);
+    }
+    runGrant(grantCheck.keys);
   };
 
   // 제거 — 입력한 XP만큼 회수한다 (보유량을 넘으면 보유량까지만)
   const submitRemove = () => {
     const amount = Math.abs(Math.trunc(Number(grantForm.amount) || 0));
-    if (!grantForm.target.trim()) return notify("제거할 대상을 입력해주세요.", true);
+    if (!grantCheck.keys.length) return notify("제거할 대상을 입력해주세요.", true);
     if (!amount) return notify(`제거할 ${grantUnit}을 입력해주세요.`, true);
-    runGrant(grantForm.target.trim(), { amount: -amount });
+    if (grantCheck.locked) return notify("대상을 확인해 주세요.", true);
+    if (grantCheck.keys.length > 1) return openMulti("remove", grantCheck, -amount);
+    runGrant(grantCheck.keys, { amount: -amount });
   };
 
   // ── 음성 티어 역할 일괄 등록 ──────────────────
@@ -1028,7 +1202,7 @@ export default function AdminBotPage() {
     if (k === "muteMode") return MUTE_MODES.find((o) => o.v === (v || "off"))?.l || String(v);
     if (k === "muteTarget") return MUTE_TARGETS.find((o) => o.v === (v || "both"))?.l || String(v);
     if (k === "levelupChannelId") return v ? `#${channelNameOf(v)}` : "알림 끄기";
-    if (k === "roleGrantChannelId") return v ? `#${channelNameOf(v)}` : "레벨업 채널과 동일";
+    if (k === "roleGrantChannelId" || k === "attendChannelId") return v ? `#${channelNameOf(v)}` : "레벨업 채널과 동일";
     if (k === "supporterRoleId" || k === "rankerRoleId") return v ? roleNameOf(v) || v : "지정 안 함";
     if (k === "attendStreakEnabled") return v ? "사용" : "사용 안 함";
     if (k === "expiryReminderEnabled") return v !== false ? "사용" : "사용 안 함";
@@ -1525,6 +1699,22 @@ export default function AdminBotPage() {
                 </div>
               </Panel>
 
+              {/* 📌 음성 자동 출석 알림 — 채널만 여기, 켜기 · 끄기 · 문구는 봇 메시지(autoAttend). 비우면 레벨업 채널 */}
+              <Panel id="sec-attendnotice" className="scroll-mt-24" title="자동 출석 알림" flush>
+                <FieldRow label="알림 채널" changed={chg("attendChannelId")} hint="음성 자동 출석 때 메시지를 보낼 채널">
+                  <Dropdown
+                    theme="light"
+                    buttonClassName={DD}
+                    value={settings.attendChannelId || ""}
+                    onChange={(v) => setSettings({ ...settings, attendChannelId: v })}
+                    options={[{ value: "", label: "레벨업 알림 채널과 동일" }, ...textChannelOptions]}
+                  />
+                </FieldRow>
+                <FieldRow label="알림 문구">
+                  <Link href="/admin/messages?key=autoAttend" className={LINK_PILL}>문구·디자인 편집 →</Link>
+                </FieldRow>
+              </Panel>
+
               {/* 📌 기간제 만료 임박 DM — 만료 N시간 전에 한 번 (봇 expiryReminder). 1~168시간 */}
               <Panel id="sec-expiry" className="scroll-mt-24" title="기간제 만료 알림" flush>
                 <FieldRow label="알림 사용" changed={chg("expiryReminderEnabled")}>
@@ -1946,8 +2136,8 @@ export default function AdminBotPage() {
                 <>
                   <form onSubmit={submitGrant}>
                     <Field label={<>대상 <Req /></>} hint="XP 기록이 있는 유저만 검색됩니다">
-                      <input type="text" value={grantForm.target} onChange={(e) => setGrantForm({ ...grantForm, target: e.target.value })}
-                        placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
+                      <TargetInput value={grantForm.target} onChange={(v) => setGrantForm((f) => ({ ...f, target: v }))} />
+                      <TargetChips check={grantCheck} onPick={(k, id) => setGrantForm((f) => ({ ...f, target: pickTargetKey(grantCheck.keys, k, id) }))} />
                     </Field>
                     {/* 📌 빙옥은 1 = 10,000 XP 단위(lib/pointRate) — XP 숫자를 그대로 넣지 않게 입력 옆에 환율을 둔다 */}
                     <Field
@@ -1973,8 +2163,8 @@ export default function AdminBotPage() {
                     )}
 
                     <div className="flex flex-wrap gap-2">
-                      <Btn type="submit" variant="primary" disabled={isGranting}>{isGranting ? "처리 중…" : "지급"}</Btn>
-                      <Btn type="button" variant="danger" onClick={submitRemove} disabled={isGranting || !grantForm.amount}>{grantUnit} 제거</Btn>
+                      <Btn type="submit" variant="primary" disabled={isGranting || grantCheck.locked}>{isGranting ? "처리 중…" : "지급"}</Btn>
+                      <Btn type="button" variant="danger" onClick={submitRemove} disabled={isGranting || !grantForm.amount || grantCheck.locked}>{grantUnit} 제거</Btn>
                       <Btn type="button" variant="secondary" onClick={() => setConfirmAll(true)} disabled={isGranting || !grantForm.amount}>전체 유저에게 지급</Btn>
                     </div>
                   </form>
@@ -2020,8 +2210,8 @@ export default function AdminBotPage() {
                       </Inline>
                     </Field>
                     <Field label={<>대상 <Req /></>} hint="XP 기록이 있는 유저만 검색됩니다">
-                      <input type="text" value={itemGrant.target} onChange={(e) => setItemGrant({ ...itemGrant, target: e.target.value })}
-                        placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
+                      <TargetInput value={itemGrant.target} onChange={(v) => setItemGrant((g) => ({ ...g, target: v }))} />
+                      <TargetChips check={itemCheck} onPick={(k, id) => setItemGrant((g) => ({ ...g, target: pickTargetKey(itemCheck.keys, k, id) }))} />
                     </Field>
                     <Field label="사유">
                       <input type="text" value={itemGrant.reason} onChange={(e) => setItemGrant({ ...itemGrant, reason: e.target.value })}
@@ -2029,7 +2219,7 @@ export default function AdminBotPage() {
                     </Field>
 
                     <div className="flex flex-wrap gap-2">
-                      <Btn type="submit" variant="primary" disabled={isGranting || !itemGrant.itemId}>{isGranting ? "처리 중…" : "지급"}</Btn>
+                      <Btn type="submit" variant="primary" disabled={isGranting || !itemGrant.itemId || itemCheck.locked}>{isGranting ? "처리 중…" : "지급"}</Btn>
                       <Btn type="button" variant="secondary" onClick={() => setConfirmAllItem(true)} disabled={isGranting || !itemGrant.itemId}>전체 유저에게 지급</Btn>
                     </div>
                   </form>
@@ -2091,11 +2281,12 @@ export default function AdminBotPage() {
               desc="되돌릴 수 없습니다 — 레벨 보상 역할도 봇이 30초 이내에 함께 회수하며, ARCTIC에서 구매한 역할만 남습니다."
             >
               <Field label="대상" hint="‘수동 지급’의 XP · 빙옥 대상 칸과 같은 값을 씁니다">
-                <input type="text" value={grantForm.target} onChange={(e) => setGrantForm({ ...grantForm, target: e.target.value })}
-                  placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
+                <TargetInput value={grantForm.target} onChange={(v) => setGrantForm((f) => ({ ...f, target: v }))} />
+                <TargetChips check={grantCheck} onPick={(k, id) => setGrantForm((f) => ({ ...f, target: pickTargetKey(grantCheck.keys, k, id) }))} />
               </Field>
               <div className="flex flex-wrap gap-2">
-                <Btn variant="danger" disabled={isGranting || !grantForm.target.trim()} onClick={() => setConfirmReset(grantForm.target.trim())}>
+                {/* 초기화는 한 명씩 — 2명 이상 적혀 있으면 잠근다(서버도 400) */}
+                <Btn variant="danger" disabled={isGranting || grantCheck.keys.length !== 1 || grantCheck.locked} onClick={() => setConfirmReset([grantCheck.keys[0]])}>
                   위 대상 초기화
                 </Btn>
                 <Btn variant="danger" disabled={isGranting} onClick={() => setConfirmReset("all")}>
@@ -2363,7 +2554,7 @@ export default function AdminBotPage() {
           <input type="number" min={1} value={questForm.target} onChange={(e) => setQuestForm({ ...questForm, target: e.target.value })} className={inputClass} />
         </Field>
         {/* 보상 두 칸은 한 줄로 묶는다 — XP 와 빙옥이 서로 다른 줄로 갈라지지 않게 */}
-        <Field label="보상" hint="빙옥은 등급이 높을수록 배율이 붙어 더 지급됩니다. 둘 다 0이면 보상 없는 ‘목표’가 됩니다.">
+        <Field label="보상" hint="둘 다 0이면 보상 없는 ‘목표’가 됩니다.">
           <div className="grid grid-cols-2 gap-3">
             <label className="block min-w-0">
               <span className="block mb-1 text-[12px] text-[#5a5a5a]">보상 XP</span>
@@ -2491,6 +2682,41 @@ export default function AdminBotPage() {
         }
       />
 
+      {/* 📌 여러 명 지급 · 제거 — 미리 확인한 이름(앞 10명)과 금액 · 아이템을 보여 주고 한 번 확인한다 */}
+      <ConfirmDialog
+        open={!!multiConfirm}
+        danger={multiConfirm?.kind === "remove"}
+        title={multiConfirm ? `${multiConfirm.names.length.toLocaleString()}명${multiConfirm.kind === "remove" ? "에게서 제거" : "에게 지급"}` : ""}
+        confirmLabel={multiConfirm?.kind === "remove" ? "제거" : "지급"}
+        busy={isGranting}
+        onCancel={() => setMultiConfirm(null)}
+        onConfirm={() => {
+          const m = multiConfirm;
+          if (!m) return;
+          if (m.kind === "item") runItemGrant(m.keys);
+          else runGrant(m.keys, { amount: m.amount });
+        }}
+        body={multiConfirm ? (
+          <>
+            <p className="mb-2 break-keep">
+              {multiConfirm.kind === "item" ? (
+                <strong className="text-[#e91e3f]">
+                  {grantItems.find((it) => it._id === itemGrant.itemId)?.name || "아이템"}{grantQty > 1 ? ` ×${grantQty}` : ""} · {itemGrantDays > 0 ? `${itemGrantDays}일` : "영구"}
+                </strong>
+              ) : (
+                <strong className={multiConfirm.amount >= 0 ? "text-[#e91e3f]" : "text-amber-700"}>
+                  {multiConfirm.amount >= 0 ? "+" : ""}{multiConfirm.amount.toLocaleString()} {grantUnit}
+                </strong>
+              )}
+            </p>
+            <p className="text-[12px] break-keep break-words">
+              {multiConfirm.names.slice(0, 10).join(" · ")}
+              {multiConfirm.names.length > 10 ? ` 외 ${(multiConfirm.names.length - 10).toLocaleString()}명` : ""}
+            </p>
+          </>
+        ) : null}
+      />
+
       {/* RANKER 역할 지급 — 디스코드 역할이 바로 붙으므로 대상 · 역할을 보여 주고 한 번 확인 */}
       <ConfirmDialog
         open={rankerConfirm !== null}
@@ -2516,13 +2742,13 @@ export default function AdminBotPage() {
         confirmLabel="초기화"
         busy={isGranting}
         onCancel={() => setConfirmReset(null)}
-        onConfirm={() => runGrant(confirmReset as string, { mode: "reset" })}
+        onConfirm={() => { if (confirmReset) runGrant(confirmReset, { mode: "reset" }); }}
         body={
           <>
             <p className="mb-2 break-keep">
               {confirmReset === "all"
                 ? <>XP 기록이 있는 <strong className="text-[#131313]">모든 유저</strong>의 보유 XP와 레벨이 <strong className="text-[#d01634]">0</strong>이 됩니다.</>
-                : <><strong className="text-[#131313]">{confirmReset}</strong> 님의 보유 XP와 레벨이 <strong className="text-[#d01634]">0</strong>이 됩니다.</>}
+                : <><strong className="text-[#131313]">{confirmReset?.[0]}</strong> 님의 보유 XP와 레벨이 <strong className="text-[#d01634]">0</strong>이 됩니다.</>}
             </p>
             <p className="text-[12px] break-keep">되돌릴 수 없으며, 레벨 보상 역할도 함께 회수됩니다.</p>
           </>

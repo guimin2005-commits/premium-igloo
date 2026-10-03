@@ -9,6 +9,18 @@ const XpLogSchema = new mongoose.Schema({
   reason: { type: String, default: "" },      // "chat" | "voice" | "attend"
   channelId: { type: String, default: "" },
   channelName: { type: String, default: "" },
+  // 📌 음성 지급 줄에만 — 그 주기의 음성 상황(봇 features/voiceXp.js). 예전 줄 · 채팅 · 출석 줄에는 없다. bot/src/db.js 와 같은 칸
+  //    n: 그 채널의 봇 아닌 사람 수(본인 포함) · mute: 마이크 꺼짐(본인 · 서버) · deaf: 헤드셋 꺼짐(본인 · 서버)
+  //    live: 화면 공유 · 캠 · idle: 마지막 활동(채팅 · 음성 상태 바뀜 · 명령 · 버튼) 뒤 지난 분
+  ctx: {
+    n: Number,
+    mute: Boolean,
+    deaf: Boolean,
+    live: Boolean,
+    idle: Number,
+  },
+  // 📌 음성 지급 줄에만 — 그 주기(초, 봇 bot/src/xp.js). 관리 › 이상 활동이 로그마다 센다(lib/adminActivity.js). bot/src/db.js 와 같은 칸
+  sec: { type: Number },
   createdAt: { type: Date, default: Date.now, index: { expires: 60 * 60 * 24 * 60 } },
 });
 

@@ -71,6 +71,10 @@ const BotSettingSchema = new mongoose.Schema({
   roleGrantMessage: { type: String, default: "🎖 {user} 님에게 **{role}** 역할이 지급되었습니다! (Lv.{level})" },
   roleGrantEnabled: { type: Boolean, default: true },
 
+  // 📌 자동 출석 알림 채널 — 음성 누적 자동 출석 때 봇 메시지 autoAttend 를 보낸다. 비우면 레벨업 채널, 그마저 없으면 보내지 않는다.
+  //    켜기 · 끄기 · 문구는 봇 메시지(autoAttend). bot/src/db.js 와 같아야 한다
+  attendChannelId: { type: String, default: "" },
+
   // 📌 시즌 결산 — RANKER 역할(상위 3인). 비우면 결산 기록(SeasonResult)만 하고 역할은 주지 않는다
   rankerRoleId: { type: String, default: "" },
 

@@ -2,12 +2,15 @@
 
 // 📌 유저 조회 — 이름 · 디스코드 ID 로 찾아 한 유저의 지갑 · 구매 · 지급 · 쿠폰 · 알림 · 문의 · XP 내역 · 인벤토리 · 역할을 한 자리에서 본다.
 //    목록 화면 틀: 머리 → 검색 한 줄 → 결과 표 → 줄을 누르면 오른쪽 상세 칸(모바일은 아래에서 올라오는 판).
-//    쓰기는 넷 — 구매 탭 1회 소모권 "1개 사용"(app/api/admin/users/consume) · 역할 탭 역할 회수(app/api/admin/users/roles) ·
-//    인벤토리 탭 아이템 회수(app/api/admin/users/inventory — 지급 · 패스는 그냥 회수, 구매는 낸 값 환불) · 아이템 지급(app/api/admin/items/grant).
+//    쓰기 — 구매 탭 1회 소모권 "1개 사용"(app/api/admin/users/consume) · 역할 탭 역할 회수(app/api/admin/users/roles) ·
+//    인벤토리 탭 아이템 회수(app/api/admin/users/inventory — 지급 · 패스는 그냥 회수, 구매는 낸 값 환불) · 아이템 지급(app/api/admin/items/grant) ·
+//    상세 칸 아래 줄 — XP · 빙옥 지급/제거(app/api/xp/grant) · 쿠폰 지급(app/api/shop/coupons/issue) · 알림 발송(app/api/notifications) ·
+//    음성 XP 정지/해제(app/api/admin/users/voice-stop).
+//    전부 기존 API 를 target / recipient = 이 유저 ID 로 부른다(다른 화면에서 ID 를 다시 넣지 않게).
 //    주소에 ?q= · ?userId= 를 실어 새로고침해도 같은 화면이 다시 열린다.
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AdminPage, SearchInput, Segmented, Btn, SwapLabel, DataTable, DetailPane, StatusChip, EmptyRow, ConfirmDialog, Inline, inputClass, numClass, labelClass, useAdminGuard, useNotice, type Column } from "../ui";
+import { AdminPage, SearchInput, Segmented, Btn, SwapLabel, DataTable, DetailPane, DefRow, StatusChip, EmptyRow, ConfirmDialog, Inline, inputClass, numClass, labelClass, useAdminGuard, useNotice, type Column } from "../ui";
 import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import TierEmblem from "../../components/TierEmblem";
@@ -26,6 +29,7 @@ type UserSum = {
   chatEnhance: number; voiceEnhance: number;
   attendCount: number; attendStreak: number; attendBestStreak: number; lastAttendDate: string;
   voiceSeconds: number; needsRoleSync: boolean; updatedAt: string | null;
+  voiceXpOff?: boolean; voiceXpOffAt?: string | null; // 음성 XP 정지(app/api/admin/users/voice-stop)
   pass: Pass;
 };
 // ×N 묶음(1회 소모권 · 소모품) — thing: 묶음 키, pending: 그중 지급 대기
@@ -132,6 +136,50 @@ const TOOL_NOTE_RE = /^역할 (이전|환불)/; // 역할 이전 도구 기록�
 // 공용 Dropdown(라이트)을 입력칸(inputClass)과 같은 높이 · 테두리로 (app/admin/bot 과 같은 값)
 const DD = "!px-3 !py-2 min-h-10 !text-[14px] !border-[#a3a3a3]";
 
+// 📌 로컬 창 한 벌 — 아이템 지급 · XP · 빙옥 · 쿠폰 · 알림. 상세 칸 바깥(확인 · 알림 창과 형제)에 그린다.
+//    모바일은 아래에서 올라오는 판(88dvh), PC 는 가운데 창. 처리 중(busy)에는 바깥 클릭 · Esc · 닫기가 막힌다.
+//    Esc 는 창만 닫는다 — 드롭다운이 먼저 받았거나(preventDefault) 위에 확인 · 알림 창이 떠 있으면 그 차례.
+//    bodyStyle: 드롭다운 하나뿐인 창은 목록(아래로 펼쳐짐 · 포털 없음)이 창 안에 다 들어가게 높이를 잡는다
+function Sheet({ label, sub, busy, onClose, actions, bodyStyle, children }: {
+  label: string; sub?: React.ReactNode; busy: boolean; onClose: () => void;
+  actions: React.ReactNode; bodyStyle?: React.CSSProperties; children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || busy || document.querySelector('[role="alertdialog"]')) return;
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, onClose]);
+  // 📌 누르기 · 떼기가 둘 다 바깥일 때만 닫는다 — 창 안에서 글을 끌어 선택하다 바깥에서 떼면 click 이 바깥에 와 쓰던 글이 날아간다
+  const downOut = useRef(false);
+  return (
+    <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in"
+      onPointerDown={(e) => { downOut.current = e.target === e.currentTarget; }}
+      onClick={(e) => {
+        const out = downOut.current && e.target === e.currentTarget;
+        downOut.current = false;
+        if (out && !busy) onClose();
+      }}>
+      <div role="dialog" aria-modal="true" aria-label={label} onClick={(e) => e.stopPropagation()}
+        className="w-full min-w-0 sm:max-w-lg max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl sm:rounded-2xl bg-white border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313] pb-[env(safe-area-inset-bottom)] sm:pb-0">
+        <div className="flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[#ededed]">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[17px] font-black tracking-tight">{label}</h2>
+            {sub && <p className="mt-0.5 text-[12px] text-[#8a8a8a] truncate">{sub}</p>}
+          </div>
+          <button type="button" onClick={onClose} disabled={busy} aria-label="닫기" className="shrink-0 w-9 h-9 rounded-full bg-[#f2f2f2] text-[#5a5a5a] hover:text-[#131313] flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 disabled:opacity-40">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div className="px-5 pt-4 pb-1 min-w-0" style={bodyStyle}>{children}</div>
+        <div className="border-t border-[#ededed] px-5 py-3.5 flex items-center justify-end gap-2">{actions}</div>
+      </div>
+    </div>
+  );
+}
+
 const PURCHASE_STATUS: Record<string, { l: string; t: Tone }> = {
   pending: { l: "대기", t: "warn" },
   completed: { l: "완료", t: "ok" },
@@ -213,6 +261,40 @@ const SubHead = ({ label, n }: { label: string; n: number }) => (
 type LedgerCur = "xp" | "point";
 type Ledger = { key: string; items: any[]; loading: boolean; more: string | null };
 const LEDGER_CUR = [{ v: "xp", l: "XP" }, { v: "point", l: "빙옥" }];
+
+// 📌 XP · 빙옥 지급/제거 — POST /api/xp/grant { target: 유저 ID, amount(제거는 음수), reason, currency: "xp" | "point" }.
+//    XP 는 봇 큐가 30초 안에 반영 · 빙옥은 바로. 제거는 서버가 보유량까지만 자른다. XP 기록(UserXp)이 없는 유저는 서버가 404
+type MoneyDir = "give" | "take";
+type MoneyForm = { cur: LedgerCur; dir: MoneyDir; amount: string; reason: string };
+const EMPTY_MONEY: MoneyForm = { cur: "xp", dir: "give", amount: "", reason: "" };
+const MONEY_DIR = [{ v: "give", l: "지급" }, { v: "take", l: "제거" }];
+
+// 📌 쿠폰 지급 — 목록은 창을 처음 열 때 한 번(GET /api/shop/coupons), 지급은 POST /api/shop/coupons/issue { couponId, target: 유저 ID }.
+//    서버는 같은 쿠폰을 미사용으로 가진 유저를 건너뛴다(성공 + "0명에게 …") — 화면도 보유 중이면 잠근다. XP 기록이 없는 유저는 서버가 404
+//    off: 목록을 받은 때 기준 중지 · 만료 · 소진(관리 › 상점 쿠폰 상태와 같은 규칙). 쓸 수 있으면 ""
+//    📌 할인형만 — 보상형(코드 입력으로 받는 쿠폰)은 목록에서 뺀다(openCoupon)
+type CouponOpt = {
+  _id: string; code: string; name?: string; kind?: string; type?: string; value?: number; maxDiscount?: number;
+  active?: boolean; expiresAt?: string | null; maxUses?: number; usedCount?: number; off: string;
+};
+const couponOff = (c: Omit<CouponOpt, "off">, now: number) =>
+  !c.active ? "중지"
+    : c.expiresAt && new Date(c.expiresAt).getTime() < now ? "만료"
+    : (c.maxUses || 0) > 0 && (c.usedCount || 0) >= (c.maxUses || 0) ? "소진"
+    : "";
+const couponShort = (c: CouponOpt) => (c.type === "flat" ? `${num(c.value)} XP` : `${num(c.value)}%`);
+const couponBenefit = (c: CouponOpt) =>
+  c.type === "flat" ? `${num(c.value)} XP 할인`
+    : `${num(c.value)}% 할인${(c.maxDiscount || 0) > 0 ? ` · 최대 ${num(c.maxDiscount)}` : ""}`;
+
+// 📌 알림 발송 — POST /api/notifications { recipient: 유저 ID, type, title, content } (관리 › 회원 통지 발송과 같은 칸).
+//    DM 핑은 서버가 늘 보낸다(응답 dmSent). 서버 오류 글은 message 가 아니라 error 에 온다
+type MsgForm = { type: string; title: string; content: string };
+const EMPTY_MSG: MsgForm = { type: "안내", title: "", content: "" };
+const NOTI_TYPES = Object.keys(NOTI_TONE).map((t) => ({ v: t, l: t }));
+type ActKind = "money" | "coupon" | "notice";
+// 상세 칸 아래 줄 단추 — 모바일은 폭을 나눠 갖고(여백 8px) · PC 는 글자 폭
+const FOOT_BTN = "flex-1 sm:flex-none max-sm:!px-2";
 
 // 주소 맞추기 — 새로고침해도 같은 검색 · 같은 유저가 열리게 (쿼리만 바꾸고 이동은 하지 않는다)
 const syncUrl = (q: string, userId: string | null) => {
@@ -515,19 +597,10 @@ export default function AdminUsersPage() {
         setGrantItemsErr(true);
       });
   };
+  // Esc · 바깥 클릭 · 처리 중 잠금은 창(Sheet)이 한다
   const closeGrant = useCallback(() => {
     if (!granting) setGrantOpen(false);
   }, [granting]);
-  // Esc 는 창만 닫는다 — 드롭다운이 먼저 받았거나(preventDefault) 위에 확인 · 알림 창이 떠 있으면 그 차례
-  useEffect(() => {
-    if (!grantOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented || document.querySelector('[role="alertdialog"]')) return;
-      closeGrant();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [grantOpen, closeGrant]);
   const grantPick = grantItems?.find((it) => it._id === grantForm.itemId) || null;
   const grantStackable = !!grantPick?.stackable;
   const grantQty = grantStackable ? Math.min(99, Math.max(1, Math.trunc(Number(grantForm.qty)) || 1)) : 1;
@@ -555,6 +628,178 @@ export default function AdminUsersPage() {
       notify("서버와 통신 중 오류가 발생했습니다.", true);
     } finally {
       setGranting(false);
+    }
+  };
+
+  // ── 상세 칸 아래 줄 — XP · 빙옥 · 쿠폰 · 알림. 창은 한 번에 하나(act), 처리 중 잠금(actBusy)은 셋이 같이 쓴다 ──
+  //    XP · 쿠폰은 XP 기록(detail.user)이 있어야 서버가 대상을 찾는다 — 없으면 단추를 잠근다. 알림은 디스코드 ID 로 찾아 기록이 없어도 된다
+  const [act, setAct] = useState<ActKind | null>(null);
+  const [actBusy, setActBusy] = useState(false);
+  const closeAct = useCallback(() => {
+    if (!actBusy) setAct(null);
+  }, [actBusy]);
+  const hasXp = !!detail?.user;
+
+  // XP · 빙옥
+  const [money, setMoney] = useState<MoneyForm>(EMPTY_MONEY);
+  const [moneyConfirm, setMoneyConfirm] = useState(false); // 제거 확인 창
+  const moneyAmount = Number(money.amount) || 0; // 숫자만 받는 칸(앞자리 0 없음)
+  const moneyTake = money.dir === "take";
+  const moneyUnit = cur(money.cur);
+  const moneyHeld = (money.cur === "point" ? detail?.user?.point : detail?.user?.xp) || 0;
+  // 보유 0 인 제거는 서버가 400(회수할 것 없음) — 화면도 같이 잠근다
+  const moneyReady = !!selectedId && hasXp && moneyAmount > 0 && (!moneyTake || moneyHeld > 0) && !actBusy;
+  const openMoney = () => {
+    setMoney(EMPTY_MONEY);
+    setMoneyConfirm(false);
+    setAct("money");
+  };
+  const runMoney = async () => {
+    const id = selectedId;
+    if (!id || !moneyReady) return;
+    setActBusy(true);
+    try {
+      const r = await fetch("/api/xp/grant", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: id, amount: moneyTake ? -moneyAmount : moneyAmount, reason: money.reason.trim(), currency: money.cur }),
+      });
+      const d = await r.json().catch(() => null);
+      setMoneyConfirm(false);
+      if (r.ok && d?.success) {
+        notify(d.message || "처리했습니다.");
+        setAct(null);
+        // 지급 탭(대기 줄) · 요약 · XP 내역 · 인벤토리(레벨 보상)
+        afterWrite(id);
+      } else notify(d?.message || "처리에 실패했습니다.", true); // 400 금액 · 보유 0 · 404 기록 없음 · 409 동명이인(ID 라 나오지 않는다)
+    } catch {
+      setMoneyConfirm(false);
+      notify("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setActBusy(false);
+    }
+  };
+  // 제거는 확인 창을 한 번 거친다
+  const submitMoney = () => {
+    if (!moneyReady) return;
+    if (moneyTake) setMoneyConfirm(true);
+    else runMoney();
+  };
+
+  // 쿠폰
+  const [couponList, setCouponList] = useState<CouponOpt[] | null>(null); // null = 아직 못 읽음
+  const [couponListErr, setCouponListErr] = useState(false);
+  const couponReq = useRef(false);
+  const [couponId, setCouponId] = useState("");
+  const couponPick = couponList?.find((c) => c._id === couponId) || null;
+  // 이 유저가 미사용으로 가진 쿠폰 — 서버가 건너뛰는 조건(status unused)과 같게
+  const couponHeld = new Set((detail?.coupons || []).filter((c) => c?.status === "unused").map((c) => String(c?.couponId || "")));
+  const couponPickHeld = !!couponPick && couponHeld.has(couponPick._id);
+  const couponReady = !!selectedId && hasXp && !!couponPick && !couponPickHeld && !actBusy;
+  const openCoupon = () => {
+    setCouponId("");
+    setAct("coupon");
+    if (couponList || couponReq.current) return;
+    couponReq.current = true;
+    setCouponListErr(false);
+    fetch("/api/shop/coupons", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d?.success || !Array.isArray(d.data)) throw new Error("coupons");
+        const now = Date.now();
+        // 📌 보상형은 빼고 — 지갑(api/shop/my-coupons)이 보상형을 보이지 않아 지급해도 못 쓴다(관리 › 상점도 보상형은 지급 단추 없음)
+        const list: CouponOpt[] = d.data
+          .filter((c: Omit<CouponOpt, "off">) => c.kind !== "reward")
+          .map((c: Omit<CouponOpt, "off">) => ({ ...c, _id: String(c._id), code: String(c.code || ""), off: couponOff(c, now) }));
+        // 쓸 수 있는 것 먼저(중지 · 만료 · 소진은 뒤로) — 그 안은 서버 순서(최근 등록 먼저) 그대로
+        setCouponList([...list.filter((c) => !c.off), ...list.filter((c) => c.off)]);
+      })
+      .catch(() => {
+        couponReq.current = false; // 다음에 열 때 다시 읽는다
+        setCouponListErr(true);
+      });
+  };
+  const runCoupon = async () => {
+    const id = selectedId;
+    if (!id || !couponReady || !couponPick) return;
+    setActBusy(true);
+    try {
+      const r = await fetch("/api/shop/coupons/issue", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ couponId: couponPick._id, target: id }),
+      });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.success) {
+        // 화면이 모르는 보유분(최근 50건 밖)이면 서버가 건너뛰고 "0명" — 오류로 알리고 창은 둔다(다시 읽은 상세가 보유 칩을 맞춘다)
+        const skipped = /^0명/.test(String(d.message || ""));
+        notify(d.message || "지급했습니다.", skipped);
+        if (!skipped) setAct(null);
+        refreshDetail(id); // 쿠폰 탭
+      } else notify(d?.message || "지급에 실패했습니다.", true);
+    } catch {
+      notify("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setActBusy(false);
+    }
+  };
+
+  // 알림
+  const [msg, setMsg] = useState<MsgForm>(EMPTY_MSG);
+  const msgReady = !!selectedId && !!msg.title.trim() && !!msg.content.trim() && !actBusy;
+  const openMsg = () => {
+    setMsg(EMPTY_MSG);
+    setAct("notice");
+  };
+  const runMsg = async () => {
+    const id = selectedId;
+    if (!id || !msgReady) return;
+    setActBusy(true);
+    try {
+      const r = await fetch("/api/notifications", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipient: id, type: msg.type, title: msg.title.trim(), content: msg.content.trim() }),
+      });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.success) {
+        // 알림함 저장은 됐는데 DM 만 실패할 수 있다 — 어디까지 갔는지 알린다
+        notify(d.dmSent ? "통지를 발송했습니다." : "통지를 저장했습니다.\nDM 발송 실패");
+        setAct(null);
+        refreshDetail(id); // 알림·문의 탭
+      } else notify(d?.error || d?.message || "발송에 실패했습니다.", true);
+    } catch {
+      notify("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setActBusy(false);
+    }
+  };
+
+  // 📌 음성 XP 정지 · 해제 — POST /api/admin/users/voice-stop { userId, off }. 확인 창을 한 번 거친다(정지는 danger).
+  //    voiceTarget: 확인 창이 열릴 때 정한 바꿀 값(null = 닫힘) — 그사이 상세를 다시 읽어도 창 제목 · 보낼 값이 뒤집히지 않게
+  const voiceOff = !!detail?.user?.voiceXpOff;
+  const [voiceTarget, setVoiceTarget] = useState<boolean | null>(null);
+  const runVoice = async () => {
+    const id = selectedId;
+    const off = voiceTarget;
+    if (!id || off === null || !hasXp || actBusy) return;
+    setActBusy(true);
+    try {
+      const r = await fetch("/api/admin/users/voice-stop", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: id, off }),
+      });
+      const d = await r.json().catch(() => null);
+      setVoiceTarget(null);
+      if (r.ok && d?.success) {
+        notify(d.message || "처리했습니다.");
+        // 칩 · 단추는 그 자리에서 바꾸고, 상세는 조용히 다시 읽는다
+        const now = !!d.data?.off;
+        setDetail((prev) => (prev?.user && selectedRef.current === id ? { ...prev, user: { ...prev.user, voiceXpOff: now } } : prev));
+        refreshDetail(id);
+      } else notify(d?.message || "처리에 실패했습니다.", true); // 404 XP 기록 없음
+    } catch {
+      setVoiceTarget(null);
+      notify("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setActBusy(false);
     }
   };
 
@@ -912,20 +1157,35 @@ export default function AdminUsersPage() {
         />
       )}
 
+      {/* 📌 상세 칸 아래 동작 줄(footer) — 칸이 열릴 때부터 늘 있다(상세를 읽는 동안은 잠금만). 다 읽은 뒤 줄이 생기며 본문 높이가 바뀌지 않게.
+             모바일은 네 단추가 폭을 나눠 갖고, PC 는 글자 폭. 탭 줄과는 따로라 탭 칸 폭에 영향이 없다
+             📌 모바일 단추 여백 8px — 글자 폭(13px 굵게) 53 · 26 · 26 · 55 + 여백 16 × 4 + 틈 8 × 3 = 248 ≤ 320 − 40 이라 한 줄(375 · 360 · 320).
+                [음성 정지] ↔ [정지 해제]는 SwapLabel 로 두 글자 중 긴 쪽 폭을 늘 잡는다 */}
       <DetailPane
         open={!!selectedId}
         onClose={closeUser}
         width={560}
         badge={
-          detail && (!u || u.needsRoleSync) ? (
+          detail && (!u || u.needsRoleSync || u.voiceXpOff) ? (
             <span className="inline-flex gap-1.5">
               {!u && <StatusChip>XP 기록 없음</StatusChip>}
               {u?.needsRoleSync && <StatusChip tone="warn">역할 맞춤 대기</StatusChip>}
+              {u?.voiceXpOff && <StatusChip tone="bad">음성 XP 정지</StatusChip>}
             </span>
           ) : undefined
         }
         title={paneTitle}
         sub={<span className="tabular-nums">{paneUsername && `@${paneUsername} · `}{selectedId}</span>}
+        footer={selectedId ? (
+          <>
+            <Btn variant="secondary" className={FOOT_BTN} disabled={!hasXp} title={detail && !hasXp ? "XP 기록 없음" : undefined} onClick={openMoney}>XP · 빙옥</Btn>
+            <Btn variant="secondary" className={FOOT_BTN} disabled={!hasXp} title={detail && !hasXp ? "XP 기록 없음" : undefined} onClick={openCoupon}>쿠폰</Btn>
+            <Btn variant="secondary" className={FOOT_BTN} disabled={!detail} onClick={openMsg}>알림</Btn>
+            <Btn variant="secondary" className={FOOT_BTN} disabled={!hasXp} title={detail && !hasXp ? "XP 기록 없음" : undefined} onClick={() => setVoiceTarget(!voiceOff)}>
+              <SwapLabel swap={voiceOff} to="정지 해제">음성 정지</SwapLabel>
+            </Btn>
+          </>
+        ) : undefined}
       >
         {detailErr ? (
           <div className="py-10 text-center">
@@ -1042,77 +1302,200 @@ export default function AdminUsersPage() {
         })() : null}
       />
 
-      {/* 📌 아이템 지급 창 — 상세 칸 바깥(확인 · 알림 창과 형제). 모바일은 아래에서 올라오는 판, PC 는 가운데 창.
-             아이템 칸을 맨 위에 — 드롭다운 목록이 창 안에서 아래로 펼쳐진다(포털 없음). 기간 · 수량 칸은 늘 두고 잠그기만 해서 칸이 밀리지 않는다 */}
+      {/* 📌 아이템 지급 창 — 아이템 칸을 맨 위에(드롭다운 목록이 창 안에서 아래로 펼쳐진다 · 포털 없음).
+             기간 · 수량 칸은 늘 두고 잠그기만 해서 칸이 밀리지 않는다 */}
       {grantOpen && (
-        <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" onClick={granting ? undefined : closeGrant}>
-          <div role="dialog" aria-modal="true" aria-label="아이템 지급" onClick={(e) => e.stopPropagation()}
-            className="w-full min-w-0 sm:max-w-lg max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl sm:rounded-2xl bg-white border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313] pb-[env(safe-area-inset-bottom)] sm:pb-0">
-            <div className="flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[#ededed]">
-              <div className="min-w-0 flex-1">
-                <h2 className="text-[17px] font-black tracking-tight">아이템 지급</h2>
-                <p className="mt-0.5 text-[12px] text-[#8a8a8a] truncate">{paneTitle}</p>
-              </div>
-              <button type="button" onClick={closeGrant} disabled={granting} aria-label="닫기" className="shrink-0 w-9 h-9 rounded-full bg-[#f2f2f2] text-[#5a5a5a] hover:text-[#131313] flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 disabled:opacity-40">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor"><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-
-            <div className="px-5 pt-4 pb-1 min-w-0">
-              <div className="mb-4 min-w-0">
-                <p className={labelClass}>아이템</p>
-                <Dropdown
-                  theme="light"
-                  buttonClassName={DD}
-                  maxHeight={220}
-                  value={grantForm.itemId}
-                  onChange={(v) => setGrantForm((f) => ({ ...f, itemId: v, qty: "1" }))}
-                  placeholder={grantItems ? (grantItems.length ? "아이템 선택" : "등록된 아이템 없음") : grantItemsErr ? "불러오지 못했습니다" : "불러오는 중…"}
-                  options={(grantItems || []).map((it) => ({
-                    value: it._id, label: it.name, hint: itemTypeLabel(it.type),
-                    icon: <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.type} size={18} color={it.color || itemTypeColor(it.type)} />,
-                  }))}
-                />
-              </div>
-              <div className="mb-4 min-w-0">
-                <p className={labelClass}>기간</p>
-                <Segmented options={GRANT_DAYS} value={grantForm.daysMode} onChange={(v) => setGrantForm((f) => ({ ...f, daysMode: v }))} disabled={granting} />
-                <Inline className="mt-2">
-                  <input type="number" min={1} max={3650} aria-label="일수" placeholder="일수" disabled={!grantCustom || granting}
-                    value={grantCustom ? grantForm.days : grantForm.daysMode === "0" ? "" : grantForm.daysMode}
-                    onChange={(e) => setGrantForm((f) => ({ ...f, days: e.target.value === "" ? "" : String(Math.min(3650, Math.max(1, Math.trunc(Number(e.target.value)) || 1))) }))}
-                    className={numClass} />
-                  일
-                </Inline>
-              </div>
-              <div className="mb-4 min-w-0">
-                <p className={labelClass}>수량</p>
-                <Inline>
-                  <input type="number" min={1} max={99} aria-label="수량" disabled={!grantStackable || granting}
-                    value={grantStackable ? grantForm.qty : "1"}
-                    onChange={(e) => setGrantForm((f) => ({ ...f, qty: e.target.value === "" ? "" : String(Math.min(99, Math.max(1, Math.trunc(Number(e.target.value)) || 1))) }))}
-                    onBlur={() => setGrantForm((f) => ({ ...f, qty: String(grantQty) }))}
-                    className={numClass} />
-                  개
-                </Inline>
-              </div>
-              <div className="mb-4 min-w-0">
-                <p className={labelClass}>사유</p>
-                <input type="text" maxLength={100} value={grantForm.reason} disabled={granting} placeholder="관리자 지급"
-                  onChange={(e) => setGrantForm((f) => ({ ...f, reason: e.target.value }))}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitGrant(); } }}
-                  className={inputClass} />
-              </div>
-            </div>
-
-            <div className="border-t border-[#ededed] px-5 py-3.5 flex items-center justify-end gap-2">
+        <Sheet label="아이템 지급" sub={paneTitle} busy={granting} onClose={closeGrant}
+          actions={
+            <>
               <Btn variant="secondary" onClick={closeGrant} disabled={granting}>취소</Btn>
               <Btn className="w-[88px] shrink-0" onClick={submitGrant} disabled={!grantReady}>
                 <SwapLabel swap={granting} to="처리 중…">지급</SwapLabel>
               </Btn>
-            </div>
+            </>
+          }>
+          <div className="mb-4 min-w-0">
+            <p className={labelClass}>아이템</p>
+            <Dropdown
+              theme="light"
+              buttonClassName={DD}
+              maxHeight={220}
+              value={grantForm.itemId}
+              onChange={(v) => setGrantForm((f) => ({ ...f, itemId: v, qty: "1" }))}
+              placeholder={grantItems ? (grantItems.length ? "아이템 선택" : "등록된 아이템 없음") : grantItemsErr ? "불러오지 못했습니다" : "불러오는 중…"}
+              options={(grantItems || []).map((it) => ({
+                value: it._id, label: it.name, hint: itemTypeLabel(it.type),
+                icon: <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.type} size={18} color={it.color || itemTypeColor(it.type)} />,
+              }))}
+            />
           </div>
-        </div>
+          <div className="mb-4 min-w-0">
+            <p className={labelClass}>기간</p>
+            <Segmented options={GRANT_DAYS} value={grantForm.daysMode} onChange={(v) => setGrantForm((f) => ({ ...f, daysMode: v }))} disabled={granting} />
+            <Inline className="mt-2">
+              <input type="number" min={1} max={3650} aria-label="일수" placeholder="일수" disabled={!grantCustom || granting}
+                value={grantCustom ? grantForm.days : grantForm.daysMode === "0" ? "" : grantForm.daysMode}
+                onChange={(e) => setGrantForm((f) => ({ ...f, days: e.target.value === "" ? "" : String(Math.min(3650, Math.max(1, Math.trunc(Number(e.target.value)) || 1))) }))}
+                className={numClass} />
+              일
+            </Inline>
+          </div>
+          <div className="mb-4 min-w-0">
+            <p className={labelClass}>수량</p>
+            <Inline>
+              <input type="number" min={1} max={99} aria-label="수량" disabled={!grantStackable || granting}
+                value={grantStackable ? grantForm.qty : "1"}
+                onChange={(e) => setGrantForm((f) => ({ ...f, qty: e.target.value === "" ? "" : String(Math.min(99, Math.max(1, Math.trunc(Number(e.target.value)) || 1))) }))}
+                onBlur={() => setGrantForm((f) => ({ ...f, qty: String(grantQty) }))}
+                className={numClass} />
+              개
+            </Inline>
+          </div>
+          <div className="mb-4 min-w-0">
+            <p className={labelClass}>사유</p>
+            <input type="text" maxLength={100} value={grantForm.reason} disabled={granting} placeholder="관리자 지급"
+              onChange={(e) => setGrantForm((f) => ({ ...f, reason: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitGrant(); } }}
+              className={inputClass} />
+          </div>
+        </Sheet>
+      )}
+
+      {/* 📌 XP · 빙옥 창 — 재화 · 지급/제거 알약은 한 줄. 금액은 숫자만(빈 값 · 0 이면 잠금), 옆에 지금 보유량.
+             단추 글자(지급 ↔ 제거)는 폭 고정이라 바꿔도 줄이 흔들리지 않는다. 제거는 확인 창을 한 번 거친다 */}
+      {act === "money" && (
+        <Sheet label="XP · 빙옥" sub={paneTitle} busy={actBusy} onClose={closeAct}
+          actions={
+            <>
+              <Btn variant="secondary" onClick={closeAct} disabled={actBusy}>취소</Btn>
+              <Btn className="w-[88px] shrink-0" onClick={submitMoney} disabled={!moneyReady}>
+                <SwapLabel swap={actBusy} to="처리 중…">{moneyTake ? "제거" : "지급"}</SwapLabel>
+              </Btn>
+            </>
+          }>
+          <div className="mb-4 min-w-0 flex flex-wrap items-center gap-2">
+            <Segmented options={LEDGER_CUR} value={money.cur} onChange={(v) => setMoney((f) => ({ ...f, cur: v as LedgerCur }))} disabled={actBusy} />
+            <Segmented options={MONEY_DIR} value={money.dir} onChange={(v) => setMoney((f) => ({ ...f, dir: v as MoneyDir }))} disabled={actBusy} />
+          </div>
+          <div className="mb-4 min-w-0">
+            <p className={labelClass}>금액</p>
+            <Inline>
+              <input type="text" inputMode="numeric" maxLength={9} aria-label="금액" placeholder="0" value={money.amount} disabled={actBusy}
+                onChange={(e) => setMoney((f) => ({ ...f, amount: e.target.value.replace(/\D/g, "").replace(/^0+/, "") }))}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitMoney(); } }}
+                className={numClass} />
+              {moneyUnit}
+              <span className="ml-auto tabular-nums text-[#8a8a8a]">보유 {num(moneyHeld)}</span>
+            </Inline>
+          </div>
+          <div className="mb-4 min-w-0">
+            <p className={labelClass}>사유</p>
+            <input type="text" maxLength={100} value={money.reason} disabled={actBusy} placeholder={moneyTake ? "관리자 회수" : "관리자 지급"}
+              onChange={(e) => setMoney((f) => ({ ...f, reason: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitMoney(); } }}
+              className={inputClass} />
+          </div>
+        </Sheet>
+      )}
+      <ConfirmDialog
+        open={moneyConfirm}
+        danger
+        title={`${moneyUnit} 제거`}
+        confirmLabel="제거"
+        busy={actBusy}
+        onCancel={() => setMoneyConfirm(false)}
+        onConfirm={runMoney}
+        body={moneyConfirm ? (
+          <>
+            <p className="font-bold text-[#131313] break-keep">{paneTitle}</p>
+            <p className="mt-1 tabular-nums">−{num(moneyAmount)} {moneyUnit} · 보유 {num(moneyHeld)}</p>
+          </>
+        ) : null}
+      />
+      <ConfirmDialog
+        open={voiceTarget !== null}
+        danger={voiceTarget === true}
+        title={voiceTarget ? "음성 XP 정지" : "음성 XP 정지 해제"}
+        confirmLabel={voiceTarget ? "정지" : "해제"}
+        busy={actBusy}
+        onCancel={() => setVoiceTarget(null)}
+        onConfirm={runVoice}
+        body={voiceTarget !== null ? (
+          <>
+            <p className="font-bold text-[#131313] break-keep">{paneTitle}</p>
+            {voiceTarget === false && u?.voiceXpOffAt && <p className="mt-1 tabular-nums">정지 {fmt(u.voiceXpOffAt)}</p>}
+          </>
+        ) : null}
+      />
+
+      {/* 📌 쿠폰 창 — 드롭다운 하나라 목록(최대 180)이 창 안에 다 들어가게 본문 높이를 잡는다.
+             이름 줄 오른쪽 칩(보유 중 · 중지 · 만료 · 소진)은 칩 높이를 늘 잡아 골라도 아래 칸이 밀리지 않는다 */}
+      {act === "coupon" && (
+        <Sheet label="쿠폰 지급" sub={paneTitle} busy={actBusy} onClose={closeAct} bodyStyle={{ minHeight: 280 }}
+          actions={
+            <>
+              <Btn variant="secondary" onClick={closeAct} disabled={actBusy}>취소</Btn>
+              <Btn className="w-[88px] shrink-0" onClick={runCoupon} disabled={!couponReady}>
+                <SwapLabel swap={actBusy} to="처리 중…">지급</SwapLabel>
+              </Btn>
+            </>
+          }>
+          <div className="mb-4 min-w-0">
+            <div className="flex items-center gap-1.5 min-h-6 mb-1.5">
+              <span className="text-[13px] font-bold">쿠폰</span>
+              {couponPick && (couponPickHeld || couponPick.off) && (
+                <StatusChip tone={couponPickHeld ? "warn" : "neutral"} className="ml-auto shrink-0">{couponPickHeld ? "보유 중" : couponPick.off}</StatusChip>
+              )}
+            </div>
+            <Dropdown
+              theme="light"
+              buttonClassName={DD}
+              maxHeight={180}
+              value={couponId}
+              onChange={setCouponId}
+              placeholder={couponList ? (couponList.length ? "쿠폰 선택" : "등록된 쿠폰 없음") : couponListErr ? "불러오지 못했습니다" : "불러오는 중…"}
+              options={(couponList || []).map((c) => ({
+                value: c._id,
+                label: c.name ? `${c.code} · ${c.name}` : c.code,
+                hint: couponHeld.has(c._id) ? "보유 중" : c.off || couponShort(c),
+              }))}
+            />
+          </div>
+          <dl className="mb-3">
+            <DefRow k="혜택">{couponPick ? couponBenefit(couponPick) : "—"}</DefRow>
+            <DefRow k="만료"><span className="tabular-nums">{couponPick ? (couponPick.expiresAt ? `~ ${fmt(couponPick.expiresAt)}` : "무기한") : "—"}</span></DefRow>
+          </dl>
+        </Sheet>
+      )}
+
+      {/* 📌 알림 창 — 관리 › 회원 통지 발송과 같은 칸(종류 · 제목 · 내용). 수신자는 이 유저 ID, DM 핑은 서버가 늘 보낸다 */}
+      {act === "notice" && (
+        <Sheet label="알림 발송" sub={paneTitle} busy={actBusy} onClose={closeAct}
+          actions={
+            <>
+              <Btn variant="secondary" onClick={closeAct} disabled={actBusy}>취소</Btn>
+              <Btn className="w-[88px] shrink-0" onClick={runMsg} disabled={!msgReady}>
+                <SwapLabel swap={actBusy} to="발송 중…">발송</SwapLabel>
+              </Btn>
+            </>
+          }>
+          <div className="mb-4 min-w-0">
+            <p className={labelClass}>종류</p>
+            <Segmented options={NOTI_TYPES} value={msg.type} onChange={(v) => setMsg((f) => ({ ...f, type: v }))} disabled={actBusy} />
+          </div>
+          <div className="mb-4 min-w-0">
+            <p className={labelClass}>제목</p>
+            <input type="text" maxLength={100} value={msg.title} disabled={actBusy} aria-label="제목"
+              onChange={(e) => setMsg((f) => ({ ...f, title: e.target.value }))}
+              className={inputClass} />
+          </div>
+          <div className="mb-4 min-w-0">
+            <p className={labelClass}>내용</p>
+            <textarea rows={6} value={msg.content} disabled={actBusy} aria-label="내용"
+              onChange={(e) => setMsg((f) => ({ ...f, content: e.target.value }))}
+              className={`${inputClass} block resize-none leading-relaxed`} />
+          </div>
+        </Sheet>
       )}
       {noticeEl}
     </AdminPage>

@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/apiAuth";
 import UserXp from "@/models/UserXp";
 import Payout from "@/models/Payout";
 import { addPoints } from "@/lib/points";
+import { parseTargetKeys, resolveTargets, unresolvedMessage, MAX_TARGETS } from "@/lib/adminTargets";
 
 // 📌 대상 찾기 — 유저 ID 가 맞으면 그 한 명만. 아니면 사용자명 · 표시 이름으로 찾는다.
 //    표시 이름은 고유하지 않아(남의 사용자명과 같을 수도 있다) 여러 명이 걸리면 호출부가 아무에게도 적용하지 않는다.
@@ -40,32 +41,49 @@ export async function GET() {
 
 // ── [지급] 관리자가 XP를 직접 주거나 회수 ──
 //    실제 반영은 봇의 자동 지급 큐가 30초 안에 처리한다 (레벨 재계산 포함)
+//    대상: { target } 한 명(또는 "all") · { targets: [...] } 여러 명(최대 200, 초기화는 안 됨)
 export async function POST(request) {
   try {
     const { deny, session } = await requireAdmin();
     if (deny) return deny;
 
     await connectToDatabase();
-    const { target, amount, reason, mode, currency } = await request.json();
+    const body = await request.json();
+    const { amount, reason, mode, currency } = body;
     const isPoint = currency === "point";
+
+    // 📌 여러 명 — { targets: [...] }(lib/adminTargets.js). 키가 하나면 { target } 한 명 경로와 똑같이 처리한다(응답도 같다).
+    //    targets 로 온 키는 "all"(전체)로 읽지 않는다 — 이름이 "all" 인 유저로 찾는다(붙여 넣은 칸이 전체 지급이 되지 않게)
+    const listKeys = Array.isArray(body?.targets) ? parseTargetKeys(body.targets) : [];
+    if (listKeys.length > MAX_TARGETS) {
+      return NextResponse.json({ success: false, message: `한 번에 ${MAX_TARGETS}명까지 지정할 수 있습니다.` }, { status: 400 });
+    }
+    const fromList = listKeys.length > 0;
+    const multi = listKeys.length > 1;
+    const target = fromList ? (multi ? "" : listKeys[0]) : body.target;
+    const isAll = !fromList && target === "all";
 
     // ── [초기화] 보유 XP를 0으로, 레벨을 시작점(Lv.1)으로 되돌린다 ──
     //    큐를 거치지 않고 즉시 반영한다 (누적값을 지우는 작업이라 증감으로는 표현할 수 없다)
     if (mode === "reset") {
-      if (target !== "all" && !(target || "").trim()) {
+      // 초기화는 되돌릴 수 없다 — 여러 명을 한 번에 지우지 않는다
+      if (multi) {
+        return NextResponse.json({ success: false, message: "초기화는 한 명 또는 전체만 할 수 있습니다." }, { status: 400 });
+      }
+      if (!isAll && !(target || "").trim()) {
         return NextResponse.json({ success: false, message: "초기화할 대상을 입력해주세요." }, { status: 400 });
       }
 
       const proj = { userId: 1, username: 1, displayName: 1, xp: 1 };
-      const rows = target === "all"
+      const rows = isAll
         ? await UserXp.find({}, proj).lean()
         : await findTargets((target || "").trim(), proj);
       if (rows.length === 0) {
         return NextResponse.json({ success: false, message: "해당 유저를 찾을 수 없습니다." }, { status: 404 });
       }
-      if (target !== "all" && rows.length > 1) return ambiguous(rows);
+      if (!isAll && rows.length > 1) return ambiguous(rows);
       // 찾은 문서만 정확히 — 이름 조건으로 다시 걸면 확인한 대상 밖의 문서까지 초기화된다
-      const filter = target === "all" ? {} : { userId: { $in: rows.map((r) => r.userId) } };
+      const filter = isAll ? {} : { userId: { $in: rows.map((r) => r.userId) } };
 
       // 📌 passBaseXp 를 같이 0 으로 되돌린다. 진행도가 xp - passBaseXp 이므로
       //    xp 만 0 으로 만들면 기준선(예전 누적치)이 남아 진행도가 남은 시즌 내내 0 에 얼어붙는다.
@@ -116,18 +134,32 @@ export async function POST(request) {
     }
 
     // 대상 확인 — "all"이면 XP 기록이 있는 전원
+    //    📌 회수는 보유량을 대상 찾기에서 같이 읽는다 — 사람마다 다시 읽으면 200명에 왕복 200번이 더 든다
+    const tProj = { userId: 1, username: 1, displayName: 1, ...(value < 0 ? (isPoint ? { point: 1 } : { xp: 1 }) : {}) };
     let targets = [];
-    if (target === "all") {
-      targets = await UserXp.find({}, { userId: 1, username: 1, displayName: 1 }).lean();
+    if (isAll) {
+      targets = await UserXp.find({}, tProj).lean();
       if (targets.length === 0) {
         return NextResponse.json({ success: false, message: "지급 대상이 없습니다." }, { status: 404 });
       }
+    } else if (multi) {
+      // 📌 전부 아니면 없음 — 못 찾은 키 · 겹치는 이름이 하나라도 있으면 아무에게도 주지 않는다. 통과하면 아래는 전체 지급과 같은 길
+      const r = await resolveTargets(listKeys, tProj);
+      if (r.missing.length || r.ambiguous.length) {
+        return NextResponse.json({
+          success: false,
+          message: unresolvedMessage(r.missing, r.ambiguous),
+          missing: r.missing,
+          ambiguous: r.ambiguous,
+        }, { status: 409 });
+      }
+      targets = r.found;
     } else {
       const key = (target || "").trim();
       if (!key) {
         return NextResponse.json({ success: false, message: "지급 대상을 입력해주세요." }, { status: 400 });
       }
-      targets = await findTargets(key, { userId: 1, username: 1, displayName: 1 });
+      targets = await findTargets(key, tProj);
       if (targets.length === 0) {
         return NextResponse.json({ success: false, message: "해당 유저를 찾을 수 없습니다." }, { status: 404 });
       }
@@ -141,27 +173,40 @@ export async function POST(request) {
     // ── 빙옥 — 봇 큐 없이 즉시 반영하고, 감사 기록은 paid 로 남긴다 ──
     if (isPoint) {
       const paidDocs = [];
-      for (const t of targets) {
-        let give = value;
-        if (value < 0) {
-          const cur = await UserXp.findOne({ userId: t.userId }, { point: 1 }).lean();
-          // 잔액이 이미 0 아래인 옛 문서에서 회수가 지급으로 뒤집히지 않게 0 에서 자른다
-          give = -Math.min(Math.abs(value), Math.max(0, cur?.point ?? 0));
-          if (give === 0) continue;
+      try {
+        for (const t of targets) {
+          let give = value;
+          if (value < 0) {
+            // 잔액이 이미 0 아래인 옛 문서에서 회수가 지급으로 뒤집히지 않게 0 에서 자른다
+            //    (대상 찾기에서 읽은 잔액 — 실제 차감은 addPoints 가 조건부로 다시 본다)
+            give = -Math.min(Math.abs(value), Math.max(0, t.point ?? 0));
+            if (give === 0) continue;
+          }
+          const applied = await addPoints(t.userId, give);
+          if (!applied) continue; // 동시에 써서 잔액이 모자라면 건너뛴다 (마이너스 금지)
+          paidDocs.push({
+            userName: t.displayName || t.username || t.userId,
+            userId: t.userId,
+            amount: give,
+            reason: baseReason,
+            source: "manual",
+            by: who,
+            status: "paid",
+            paidAt: new Date(),
+            currency: "point",
+          });
         }
-        const applied = await addPoints(t.userId, give);
-        if (!applied) continue; // 동시에 써서 잔액이 모자라면 건너뛴다 (마이너스 금지)
-        paidDocs.push({
-          userName: t.displayName || t.username || t.userId,
-          userId: t.userId,
-          amount: give,
-          reason: baseReason,
-          source: "manual",
-          by: who,
-          status: "paid",
-          paidAt: new Date(),
-          currency: "point",
-        });
+      } catch (e) {
+        // 📌 도중에 끊기면 이미 반영된 사람의 기록부터 남기고 몇 명까지 됐는지 알린다 — 그냥 실패로 답하면 다시 눌러 두 번 들어간다
+        if (paidDocs.length === 0) throw e;
+        console.error("빙옥 지급 도중 중단:", e);
+        await Payout.insertMany(paidDocs, { ordered: false }).catch((err) => console.error("빙옥 지급 기록 실패:", err));
+        return NextResponse.json({
+          success: false,
+          partial: true,
+          message: `${paidDocs.length}명까지 빙옥을 ${value > 0 ? "지급" : "회수"}하고 중단했습니다. 지급 내역을 확인해 주세요.`,
+          data: { count: paidDocs.length },
+        }, { status: 500 });
       }
       if (paidDocs.length === 0) {
         return NextResponse.json({ success: false, message: value < 0 ? "회수할 빙옥이 있는 유저가 없습니다." : "지급 대상이 없습니다." }, { status: 400 });
@@ -189,9 +234,9 @@ export async function POST(request) {
     for (const t of targets) {
       let give = value;
       if (value < 0) {
-        const cur = await UserXp.findOne({ userId: t.userId }, { xp: 1 }).lean();
         // 보유량이 이미 0 아래인 옛 문서(과거 회수 경합)에서 회수가 지급으로 뒤집히지 않게 0 에서 자른다
-        const room = Math.max(0, Math.max(0, cur?.xp ?? 0) + (pendingCut.get(t.userId) || 0));
+        //    보유량은 대상 찾기에서 같이 읽은 값(tProj)
+        const room = Math.max(0, Math.max(0, t.xp ?? 0) + (pendingCut.get(t.userId) || 0));
         give = -Math.min(Math.abs(value), room);
         if (give === 0) continue;
       }

@@ -31,8 +31,9 @@ export const CARD_SIZE = {
   cmdLevel: { width: 1200, height: 630 },
   cmdRank: { width: 1200, height: 900 }, // 서버 순위표 — 10줄 + 내 줄이라 세로로 길다
   cmdAttend: { width: 1200, height: 630 },
+  autoAttend: { width: 1200, height: 630 }, // 음성 자동 출석 — /출석체크 카드와 같은 그림(attendCard)
   rankerAnnounce: { width: 1200, height: 675 },
-  cmdQuest: { width: 1200, height: 904 }, // 일일 · 주간 · 월간 세 칸 — 높이는 퀘스트가 가장 많은 칸에 맞춰 준다(cardSizeOf). 이 값은 가장 클 때(칸마다 4개)
+  cmdQuest: { width: 1200, height: 698 }, // 일일 · 주간 · 월간 세 칸 — 높이는 퀘스트가 가장 많은 칸에 맞춰 준다(cardSizeOf). 이 값은 가장 클 때(한 칸 4줄 — questHeight)
   cmdInventory: { width: 1200, height: 690 }, // 가방 6칸 × 2줄
   cmdPass: { width: 1200, height: 823 }, // 다음 보상 칸이 한 줄(PASS_SHOW)을 넘으면 두 줄 — 높이는 칸 수에 맞춰 준다(cardSizeOf). 이 값은 두 줄일 때
 };
@@ -51,6 +52,7 @@ export const CARD_FIELDS = {
   cmdLevel: ["avatar", "name", "level", "xp", "need", "progress", "rank?", "total?", "skin?"],
   cmdRank: ["season", "seasonName", "total", "top: [{ rank, name, avatar, level, xp }] — 1위부터 최대 10명", "me?: { rank, name, avatar, level, xp }", "skin?"],
   cmdAttend: ["avatar", "name", "amount", "streak", "bestStreak", "attendCount", "streakBonus?", "skin?"],
+  autoAttend: ["avatar", "name", "amount", "streak", "bestStreak", "attendCount", "streakBonus?", "skin?"],
   rankerAnnounce: ["season", "seasonName", "top: [{ name, avatar, xp }] — 1위부터 최대 3명"],
   //  item: { name, type, icon("art:키" · "svg:키" · 짧은 글자), image?(png · jpeg data URI — 원격 주소는 받지 않는다), color? } — 그림은 itemIconEl
   cmdQuest: ["name", "claimable", "periods: [{ key: daily|weekly|monthly, left: 초기화까지 ms, quests: [{ name, metric: count|minute|xp|day, unit?: 회|분|일|건|개, current, target, rewardXp, rewardPoint, done, claimed, claimable }] }]", "skin?"],
@@ -73,7 +75,7 @@ export const CARD_SKINS = {
   airship: { label: "비공정", grid: "line", tint: "#b9c8ce", gridOp: 0.045 },
 };
 export const CARD_SKIN_KEYS = Object.keys(CARD_SKINS);
-export const SKIN_CARD_KINDS = ["levelUp", "roleGrant", "cmdLevel", "cmdRank", "cmdAttend", "cmdQuest", "cmdInventory", "cmdPass"];
+export const SKIN_CARD_KINDS = ["levelUp", "roleGrant", "cmdLevel", "cmdRank", "cmdAttend", "autoAttend", "cmdQuest", "cmdInventory", "cmdPass"];
 export function cardSkinOf(key) {
   const k = String(key ?? "").trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(CARD_SKINS, k) ? { key: k, ...CARD_SKINS[k] } : null;
@@ -1332,116 +1334,153 @@ const headStat = (k, value, unit, color = "#ffffff") =>
   );
 
 // /퀘스트 — 머리(이름 · 퀘스트 · 받을 보상 n개) → 일일 · 주간 · 월간 세 칸. 칸 머리에 받을 수 있는 수(빨간 알) · 초기화까지 남은 시간,
-//   퀘스트마다 이름 · 상태(받기 · 완료 · 달성) · 진행 막대 · 진행/목표 · 보상. 칸마다 QUEST_SHOW 개까지 — 넘으면 마지막 자리에 "외 n개".
+//   그 아래 줄 목록(상자 없이 가는 선으로 나눔). 한 줄 = 왼쪽(이름 · 얇은 막대 · 진행/목표) · 오른쪽(보상 — 둘이면 XP 위 · 빙옥 아래, 하나면 가운데).
+//   받을 수 있으면 이름 앞 빨간 점 · 보상 색, 끝났으면 초록 체크, 받은 줄은 흐리게. 칸마다 QUEST_SHOW 줄까지 — 넘으면 마지막 줄 "외 n개", 비었으면 "—".
 //   상태 색은 사이트 퀘스트 목록(app/level)과 같은 말 — 받을 수 있으면 강조색, 끝났으면 초록. 카드 높이는 가장 긴 칸에 맞춘다(cardSizeOf)
 export const QUEST_SHOW = 4;
 const QUEST_TOP = 194; // 세 칸이 시작하는 높이
 const QUEST_HEAD = 62; // 칸 머리 + 아래 여백
-const QUEST_TILE = 138;
-const QUEST_GAP = 14;
+const QUEST_LINE = 2; // 목록 위 · 줄 사이 선
+const QUEST_ROW = 96; // 퀘스트 한 줄(아래 선 포함)
+const QUEST_SUB = 64; // "외 n개" · "—" 줄
+const QUEST_BOTTOM = 56;
 const QUEST_W = 336; // (1056 - 24 × 2) / 3
-const QUEST_IN = QUEST_W - 16 * 2 - 4; // 타일 안쪽 폭(좌우 여백 · 테두리 뺀 것)
 const GREEN = "#3ecf8e";
 const XP_C = "#ff7d93"; // 보상 XP — 강조색을 잉크 위에서 읽히게 밝힌 것
 const POINT_C = "#5ce0b2"; // 보상 빙옥 — 사이트 퀘스트 목록의 청록을 잉크 위에서 읽히게 밝힌 것
 const PERIOD_LABEL = { daily: "일일", weekly: "주간", monthly: "월간" };
-const questTiles = (n) => Math.min(QUEST_SHOW, Math.max(1, int(n))); // 칸 하나의 타일 수(비었으면 "—" 한 칸)
+// 칸 하나의 목록 높이 — 비었으면 "—" 한 줄, QUEST_SHOW 를 넘으면 (QUEST_SHOW - 1)줄 + "외 n개"
+const questListH = (n) => {
+  const len = int(n);
+  if (len <= 0) return QUEST_SUB;
+  return len > QUEST_SHOW ? (QUEST_SHOW - 1) * QUEST_ROW + QUEST_SUB : len * QUEST_ROW;
+};
+// 가장 긴 칸의 목록 높이(위 선 포함)
+const questListMax = (periods) => QUEST_LINE + Math.max(QUEST_SUB, ...periods.map((p) => questListH(Array.isArray(p?.quests) ? p.quests.length : 0)));
 function questHeight(d) {
   const periods = Array.isArray(d?.periods) ? d.periods.slice(0, 3) : [];
-  const n = Math.max(1, ...periods.map((p) => questTiles(Array.isArray(p?.quests) ? p.quests.length : 0)));
-  return QUEST_TOP + QUEST_HEAD + n * QUEST_TILE + (n - 1) * QUEST_GAP + 54;
+  return QUEST_TOP + QUEST_HEAD + questListMax(periods) + QUEST_BOTTOM;
 }
-// 진행/목표 — 회 · 분은 단위까지, XP 는 칸이 좁아 1만 이상을 줄여 쓰고 단위는 뺀다.
-//   회 · 분도 PROG_MAX 를 넘으면(예: 59,940/59,940분) 1만 이상을 줄여 쓴다 — 글자가 왼쪽 막대 위로 넘치지 않게
-const PROG_MAX = 196; // 진행 글자 칸 최대 폭 — 막대가 90px 아래로 줄지 않게(타일 안쪽 300 - 14 - 196)
-const progWidth = (s) => emWidth(s) * 26 * 0.95;
-function questProg(q) {
+
+// 📌 줄 폭 — 칸 폭 336 = 왼쪽(막대 + PROG_GAP + 진행 PW) + RW_GAP + 보상 RW. 한 칸 안에서 RW · PW 를 같게 둬 막대 길이 · 글자 끝을 맞춘다.
+//    보상은 shortNum("+1,500" · "+1.5만" · "+99.9만"), RW 는 그 칸에서 가장 긴 보상 폭(RW_MAX 까지 — 넘는 보상은 글자를 줄인다).
+//    진행은 다 쓴 글("8,423/12,000분")이 남는 폭(막대 BAR_MIN 을 뺀 것)을 넘으면 줄여 쓰고("8,423/1.2만분"), 그래도 넘으면 글자를 줄인다(PROG_MIN 까지)
+const RW_MAX = 140;
+const RW_GAP = 14;
+const RW_UNIT = 20; // 보상 단위(XP · 빙옥) 글자 크기
+const rwSize = (n) => (n > 1 ? 24 : 26); // 보상 숫자 글자 크기 — 둘이면 조금 작게
+const BAR_MIN = 56;
+const PROG_GAP = 10;
+const PROG_SIZE = 22;
+const PROG_MIN = 16;
+// 폭 어림 — emWidth 는 Black 실측보다 숫자가 2~3% 좁아 보상은 4% 넉넉히, "/" 는 기본값(0.9em)이 실측(0.4em)의 두 배라 따로 센다
+const rwNumW = (t, size) => emWidth(t) * size * 1.04;
+const rwW = (r, size) => rwNumW(r.t, size) + 4 + emWidth(r.u) * RW_UNIT;
+const progW = (s, size = PROG_SIZE) => {
+  const str = String(s);
+  return (emWidth(str.replace(/\//g, "")) + 0.42 * (str.split("/").length - 1)) * size;
+};
+// 진행/목표 — 회 · 분은 단위까지, XP 는 1만 이상을 줄여 쓰고 단위는 뺀다. 회 · 분도 max 를 넘으면 1만 이상을 줄여 쓴다
+function questProg(q, max = Infinity) {
   const target = Math.max(1, int(q.target));
   const cur = Math.min(target, Math.max(0, int(q.current)));
   if (q.metric === "xp") return `${shortNum(cur)}/${shortNum(target)}`;
   // unit — 퀘스트 계산이 정한 단위(사이트 lib/questKinds.js questUnit · 봇 views/quests.js 사본). 없으면 세는 방식으로
   const unit = q.unit && q.unit !== "XP" ? String(q.unit) : q.metric === "minute" ? "분" : "회";
   const full = `${num(cur)}/${num(target)}${unit}`;
-  return progWidth(full) <= PROG_MAX ? full : `${shortNum(cur)}/${shortNum(target)}${unit}`;
+  return progW(full) <= max ? full : `${shortNum(cur)}/${shortNum(target)}${unit}`;
 }
-// progW: 진행 글자 칸 폭 — 한 칸(일일 · 주간 · 월간) 안에서 같게 둬 막대 길이를 맞춘다
-function questTile(k, q, text, progW) {
+// 보상 — 재화는 글자만. 0 이면 뺀다
+const questRewards = (q) =>
+  [
+    int(q.rewardXp) > 0 ? { t: `+${shortNum(q.rewardXp)}`, u: "XP", c: XP_C } : null,
+    int(q.rewardPoint) > 0 ? { t: `+${shortNum(q.rewardPoint)}`, u: "빙옥", c: POINT_C } : null,
+  ].filter(Boolean);
+// 한 칸의 폭 — rw: 보상 칸 · pw: 진행 글자 칸 · progs: 줄마다 진행 글
+function questLayout(list) {
+  const need = Math.max(
+    Math.ceil(emWidth("—") * 26),
+    ...list.map((q) => {
+      const rs = questRewards(q);
+      return Math.max(0, ...rs.map((r) => rwW(r, rwSize(rs.length))));
+    })
+  );
+  const rw = Math.min(RW_MAX, Math.ceil(need));
+  const progMax = QUEST_W - RW_GAP - rw - PROG_GAP - BAR_MIN;
+  const progs = list.map((q) => questProg(q, progMax));
+  const pw = Math.min(progMax, Math.ceil(Math.max(0, ...progs.map((s) => progW(s)))));
+  return { rw, pw, progs };
+}
+function questRow(k, q, text, L, prog, last) {
   const target = Math.max(1, int(q.target));
   const cur = Math.min(target, Math.max(0, int(q.current)));
-  const name = text(q.name) || "퀘스트";
-  const status = q.claimable ? "받기" : q.claimed ? "완료" : q.done ? "달성" : "";
   const dim = !!q.claimed;
-  const prog = questProg(q);
-  let rw = [
-    int(q.rewardXp) > 0 ? { v: int(q.rewardXp), u: "XP", c: XP_C } : null,
-    int(q.rewardPoint) > 0 ? { v: int(q.rewardPoint), u: "빙옥", c: POINT_C } : null,
-  ].filter(Boolean);
-  // 보상 줄이 칸 안쪽(QUEST_IN)을 넘으면 1만 이상을 줄여 쓴다(emWidth 는 넉넉히 잡은 폭이라 조금 덜어 본다)
-  const long = rw.reduce((a, r, i) => a + (emWidth(`+${num(r.v)}`) + emWidth(r.u)) * 26 * 0.95 + 5 + (i ? 14 : 0), 0) > QUEST_IN;
-  rw = rw.map((r) => ({ ...r, t: `+${long ? shortNum(r.v) : num(r.v)}` }));
+  const fin = !!(q.done || q.claimed);
+  const rs = questRewards(q);
+  const size = rwSize(rs.length);
+  const unitW = (r) => emWidth(r.u) * RW_UNIT;
+  // 칸보다 긴 보상 · 진행은 글자를 줄인다
+  const rSize = (r) => (rwW(r, size) <= L.rw ? size : Math.max(16, Math.floor((L.rw - 4 - unitW(r)) / Math.max(rwNumW(r.t, 1), 0.1))));
+  const pSize = progW(prog) <= L.pw ? PROG_SIZE : Math.max(PROG_MIN, Math.floor(L.pw / Math.max(progW(prog, 1), 0.1)));
   return k.box(
-    {
-      width: QUEST_W,
-      height: QUEST_TILE,
-      flexDirection: "column",
-      justifyContent: "space-between",
-      paddingTop: 16,
-      paddingBottom: 16,
-      paddingLeft: 16,
-      paddingRight: 16,
-      borderRadius: 20,
-      ...panelBg(q.claimable ? rgba(ACCENT, 0.14) : W(0.045)),
-      border: `2px solid ${q.claimable ? rgba(ACCENT, 0.65) : W(0.07)}`,
-    },
-    // 이름 · 상태
+    { width: QUEST_W, height: QUEST_ROW, flexShrink: 0, alignItems: "center", borderBottom: last ? "none" : `${QUEST_LINE}px solid ${W(0.07)}` },
+    // 왼쪽 — 이름(받을 수 있으면 빨간 점 · 끝났으면 초록 체크) · 막대 · 진행/목표
     k.box(
-      { alignItems: "center", height: 38 },
-      k.line(name, { flexGrow: 1, flexShrink: 1, minWidth: 0, fontSize: 28, fontWeight: 900, color: dim ? W(0.42) : "#ffffff" }),
-      status === "받기"
-        ? k.box({ marginLeft: 12, height: 38, paddingLeft: 15, paddingRight: 15, borderRadius: 19, backgroundColor: ACCENT, alignItems: "center", flexShrink: 0, fontSize: 26, fontWeight: 900, color: "#ffffff" }, "받기")
-        : status
-          ? k.box(
-              { marginLeft: 12, alignItems: "center", flexShrink: 0, fontSize: 26, fontWeight: 900, color: dim ? rgba(GREEN, 0.7) : GREEN },
-              k.img(svgUri(checkSvg(dim ? rgba(GREEN, 0.7) : GREEN, 3.4)), 28, 28, { marginRight: 4 }),
-              status
-            )
-          : null
+      { flexDirection: "column", width: QUEST_W - RW_GAP - L.rw, flexShrink: 0 },
+      k.box(
+        { alignItems: "center", height: 40 },
+        q.claimable
+          ? k.box({ width: 12, height: 12, borderRadius: 6, backgroundColor: ACCENT, marginRight: 10, flexShrink: 0 })
+          : fin
+            ? k.img(svgUri(checkSvg(dim ? rgba(GREEN, 0.6) : GREEN, 3.4)), 26, 26, { marginRight: 8, flexShrink: 0 })
+            : null,
+        k.line(text(q.name) || "퀘스트", { flexGrow: 1, flexShrink: 1, minWidth: 0, fontSize: 28, fontWeight: 900, color: dim ? W(0.4) : "#ffffff" })
+      ),
+      k.box(
+        { alignItems: "center", height: 30 },
+        k.box({ flexGrow: 1, flexShrink: 1, minWidth: 0 }, bar(k, cur / target, 6, fin ? (dim ? rgba(GREEN, 0.45) : GREEN) : ACCENT)),
+        k.box({ width: L.pw, marginLeft: PROG_GAP, flexShrink: 0, justifyContent: "flex-end", fontSize: pSize, fontWeight: 700, color: W(dim ? 0.3 : 0.5), whiteSpace: "nowrap" }, prog)
+      )
     ),
-    // 막대 · 진행/목표
+    // 오른쪽 — 보상. 받을 수 있는 줄만 보상 색
     k.box(
-      { alignItems: "center", height: 32 },
-      k.box({ flexGrow: 1, flexShrink: 1, minWidth: 0 }, bar(k, cur / target, 10, q.done || q.claimed ? (dim ? rgba(GREEN, 0.5) : GREEN) : ACCENT)),
-      k.box({ width: progW, marginLeft: 14, flexShrink: 0, justifyContent: "flex-end", fontSize: 26, fontWeight: 700, color: W(dim ? 0.35 : 0.6), whiteSpace: "nowrap" }, prog)
-    ),
-    // 보상 — 재화는 글자만
-    k.box(
-      { alignItems: "flex-end", height: 32, whiteSpace: "nowrap", overflow: "hidden" },
-      rw.length
-        ? rw.map((r, i) =>
+      { width: L.rw, marginLeft: RW_GAP, flexShrink: 0, flexDirection: "column", alignItems: "flex-end", justifyContent: "center" },
+      rs.length
+        ? rs.map((r) =>
             k.box(
-              { alignItems: "flex-end", marginLeft: i ? 14 : 0, flexShrink: 0 },
-              k.box({ fontSize: 26, fontWeight: 900, color: dim ? W(0.4) : r.c }, r.t),
-              k.box({ fontSize: 26, fontWeight: 700, color: W(dim ? 0.3 : 0.5), marginLeft: 5 }, r.u)
+              { alignItems: "flex-end", height: rs.length > 1 ? 32 : 36, whiteSpace: "nowrap" },
+              k.box({ fontSize: rSize(r), fontWeight: 900, color: dim ? W(0.35) : q.claimable ? r.c : W(0.75) }, r.t),
+              k.box({ fontSize: RW_UNIT, fontWeight: 700, color: W(dim ? 0.3 : 0.45), marginLeft: 4 }, r.u)
             )
           )
         : k.box({ fontSize: 26, fontWeight: 700, color: W(0.3) }, "—")
     )
   );
 }
+// 잉크 막 — 목록 자리(가로 72 ~ cw - 72, 세로 top ~ top + h)보다 VEIL_M 넓은 둥근 판을 흐려 가장자리를 번지게.
+//   SVG 그림으로 그린다 — satori boxShadow 는 판 둘레에 밝은 실금이 남는다
+const VEIL_M = 16;
+const VEIL_B = 8; // 흐림 표준편차 — 판 밖 3배까지 번진다
+function questVeil(k, cw, top, h) {
+  const e = VEIL_B * 3;
+  const w = cw - 72 * 2 + VEIL_M * 2;
+  const vh = h + VEIL_M * 2;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w + e * 2}" height="${vh + e * 2}" viewBox="0 0 ${w + e * 2} ${vh + e * 2}">` +
+    `<defs><filter id="v" x="0" y="0" width="${w + e * 2}" height="${vh + e * 2}" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="${VEIL_B}"/></filter></defs>` +
+    `<rect x="${e}" y="${e}" width="${w}" height="${vh}" rx="24" fill="${INK}" fill-opacity="0.9" filter="url(#v)"/></svg>`;
+  return k.img(svgUri(svg), w + e * 2, vh + e * 2, { position: "absolute", left: 72 - VEIL_M - e, top: top - VEIL_M - e });
+}
 function questCard(k, kind, d, text) {
   const periods = (Array.isArray(d.periods) ? d.periods : []).slice(0, 3);
   const claimable = Math.max(0, int(d.claimable));
-  const faint = (child) =>
-    k.box(
-      { width: QUEST_W, height: QUEST_TILE, borderRadius: 20, border: `2px solid ${W(0.05)}`, backgroundColor: PANEL, alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, color: W(0.4) },
-      child
-    );
+  const sub = (child) => k.box({ height: QUEST_SUB, flexShrink: 0, alignItems: "center", fontSize: 26, fontWeight: 700, color: W(0.4) }, child);
   const column = (p, i) => {
     const list = Array.isArray(p?.quests) ? p.quests : [];
     const over = list.length > QUEST_SHOW;
     const shown = list.slice(0, over ? QUEST_SHOW - 1 : QUEST_SHOW);
     const n = list.filter((q) => q?.claimable).length;
-    const progW = Math.min(PROG_MAX, Math.ceil(Math.max(...shown.map((q) => progWidth(questProg(q))), 40)) + 4);
+    const L = questLayout(shown);
     return k.box(
       { width: QUEST_W, flexDirection: "column", marginLeft: i ? 24 : 0 },
       // 칸 머리 — 이름 · (받을 수 있는 수) · 초기화까지
@@ -1459,12 +1498,16 @@ function questCard(k, kind, d, text) {
             )
           : null
       ),
-      list.length
-        ? [
-            shown.map((q, j) => k.box({ marginTop: j ? QUEST_GAP : 0 }, questTile(k, q, text, progW))),
-            over ? k.box({ marginTop: QUEST_GAP }, faint(`외 ${num(list.length - shown.length)}개`)) : null,
-          ]
-        : faint("—")
+      // 줄 목록
+      k.box(
+        { flexDirection: "column", borderTop: `${QUEST_LINE}px solid ${W(0.1)}` },
+        list.length
+          ? [
+              shown.map((q, j) => questRow(k, q, text, L, L.progs[j], j === shown.length - 1 && !over)),
+              over ? sub(`외 ${num(list.length - shown.length)}개`) : null,
+            ]
+          : sub("—")
+      )
     );
   };
   return frame(
@@ -1481,6 +1524,8 @@ function questCard(k, kind, d, text) {
         headStat(k, num(claimable), "개", claimable > 0 ? "#ffffff" : W(0.4))
       )
     ),
+    // 📌 스킨 카드 — 줄에는 칸 바탕이 없어 스킨 장식(항해도 배 · 항로 · 해안 등)이 글자 뒤로 비친다. 목록 자리에만 잉크 막(가장자리는 흐리게)
+    k.skin ? questVeil(k, k.size.width, QUEST_TOP + QUEST_HEAD, questListMax(periods)) : null,
     k.box({ position: "absolute", left: 72, right: 72, top: QUEST_TOP, alignItems: "flex-start" }, periods.map(column))
   );
 }
@@ -1772,7 +1817,7 @@ export function buildCard(kind, data, h, opts = {}) {
   if (kind === "roleGrant") return roleGrantCard(k, kind, d, text);
   if (kind === "cmdLevel") return profileCard(k, kind, d, text);
   if (kind === "cmdRank") return rankBoardCard(k, kind, d, text);
-  if (kind === "cmdAttend") return attendCard(k, kind, d, text);
+  if (kind === "cmdAttend" || kind === "autoAttend") return attendCard(k, kind, d, text);
   if (kind === "cmdQuest") return questCard(k, kind, d, text);
   if (kind === "cmdInventory") return bagCard(k, kind, d, text, art);
   if (kind === "cmdPass") return passCard(k, kind, d, text, art);
@@ -1804,7 +1849,7 @@ export function sampleCardData(kind, tierIndex = 1, avatar = null, skin = "") {
     });
     return { season: 2, seasonName: "A new world", total: 1284, top, me: { rank: 12, name: "펭귄", avatar, level, xp: base + cur } };
   }
-  if (kind === "cmdAttend") return { avatar, name: "펭귄", amount: 10000, streak: 5, bestStreak: 12, attendCount: 42, streakBonus: "연속 5일 보너스 +3,000 XP" };
+  if (kind === "cmdAttend" || kind === "autoAttend") return { avatar, name: "펭귄", amount: 10000, streak: 5, bestStreak: 12, attendCount: 42, streakBonus: "연속 5일 보너스 +3,000 XP" };
   if (kind === "cmdQuest") {
     const H = 3600e3;
     const q = (name, metric, current, target, rewardXp, rewardPoint = 0, more = {}) => {
@@ -1830,7 +1875,7 @@ export function sampleCardData(kind, tierIndex = 1, avatar = null, skin = "") {
           left: 3 * 24 * H + 7 * H,
           quests: [q("주간 정수기", "count", 32, 50, 20000), q("출석 5일", "day", 5, 5, 0, 100, { unit: "일" }), q("음성 5시간", "minute", 300, 300, 15000, 0, { claimed: true, claimable: false })],
         },
-        { key: "monthly", left: 18 * 24 * H + 3 * H, quests: [q("월간 이글루인", "xp", 423100, 1000000, 100000)] },
+        { key: "monthly", left: 18 * 24 * H + 3 * H, quests: [q("월간 이글루인", "xp", 423100, 1000000, 100000, 2), q("이글루 스타", "minute", 8423, 12000, 100000, 2)] },
       ],
     };
   }
