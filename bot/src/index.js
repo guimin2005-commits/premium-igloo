@@ -106,8 +106,8 @@ const shutdown = async (signal) => {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`\n${signal} 수신 — 종료 중…`);
-  // 📌 밀린 음성 시간 · 활동 횟수(최대 20초)를 마저 쓴다 — 오래 걸리면 5초에서 끊는다. Railway 는 기본이 SIGTERM 뒤 곧바로 SIGKILL 이라 못 마칠 수 있다(features/voiceTime.js)
-  await Promise.race([Promise.all([flushVoiceTime(), flushActivity()]), new Promise((r) => setTimeout(r, 5000))]).catch(() => {});
+  // 📌 밀린 음성 시간 · 활동 횟수(최대 20초)를 마저 쓴다 — 음성 XP 는 주지 않고 진행 중 · 닫힌 바퀴를 DB 에 적어 다음 기동 때 준다. 오래 걸리면 5초에서 끊는다. Railway 는 기본이 SIGTERM 뒤 곧바로 SIGKILL 이라 못 마칠 수 있다(features/voiceTime.js)
+  await Promise.race([Promise.all([flushVoiceTime({ final: true }), flushActivity()]), new Promise((r) => setTimeout(r, 5000))]).catch(() => {});
   client.destroy();
   await disconnectDb().catch(() => {});
   process.exit(0);

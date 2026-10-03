@@ -21,8 +21,8 @@ const DailyQuestSchema = new mongoose.Schema({
     ],
   },
   // 세는 방식 — count: 지급 건수 / xp: XP 합계 / minute: 실제 접속 분 / day: 서로 다른 날 수(KST)
-  //   minute 은 음성에만 의미가 있다 — 봇이 지급 주기마다 로그를 1건 남기므로
-  //   (로그 건수 × 지급 주기 분) 이 곧 접속 시간이다.
+  //   minute 은 음성에만 의미가 있다 — 음성 지급 줄마다 실제 머문 초(XpLog.sec)가 있어 그 합 ÷ 60 이 곧 접속 시간이다(2026-10-04 — 사람마다 5분 · 못 채우면 머문 만큼).
+  //   음성 count 는 머문 초 ÷ 지급 주기, day · run · channel 은 그 날 · 채널에 1회분 이상 머문 것만 센다(lib/questKinds.js questMeasure)
   //   대상마다 고를 수 있는 방식은 lib/questKinds.js QUEST_REASONS.metrics (저장 때 normalizeQuestCond 가 맞춘다)
   //   📌 2026-10-03 추가: run(가장 길게 이어진 날 수) · channel(서로 다른 채널 수) · point(ARCTIC 에서 쓴 빙옥)
   metric: { type: String, default: "count", enum: ["count", "xp", "minute", "day", "run", "channel", "point"] },

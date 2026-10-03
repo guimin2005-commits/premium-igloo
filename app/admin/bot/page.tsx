@@ -216,9 +216,10 @@ const questMetricHint = (reason: string, metric: string) => {
   if (metric === "xp") return reason === "shop" ? "쓴 XP의 합계로 판정합니다." : "받은 XP의 합계로 판정합니다.";
   if (metric === "point") return "쓴 빙옥의 합계로 판정합니다.";
   if (metric === "minute") return "음성 채널에 머문 시간(분)으로 판정합니다.";
-  if (metric === "day") return "기록이 있는 서로 다른 날 수로 판정합니다. (KST)";
-  if (metric === "run") return "가장 길게 이어진 날 수로 판정합니다. (KST)";
-  if (metric === "channel") return "기록이 있는 서로 다른 채널 수로 판정합니다.";
+  const voiceUnit = reason === "voice" ? " 음성은 지급 주기만큼 머문 것만 셉니다." : "";
+  if (metric === "day") return `기록이 있는 서로 다른 날 수로 판정합니다. (KST)${voiceUnit}`;
+  if (metric === "run") return `가장 길게 이어진 날 수로 판정합니다. (KST)${voiceUnit}`;
+  if (metric === "channel") return `기록이 있는 서로 다른 채널 수로 판정합니다.${voiceUnit}`;
   if (src === "act") return reason === "msg" ? "보낸 메시지 수로 판정합니다. 같은 사람은 3초에 한 번만 셉니다." : reason === "vjoin" ? "음성 채널에 들어간 횟수로 판정합니다. 1분에 한 번만 셉니다." : reason === "react" || reason === "reacted" ? "같은 메시지 · 같은 이모지는 하루 한 번만 셉니다." : "횟수로 판정합니다.";
   if (reason === "shop") return "주문 한 줄 = 1건으로 판정합니다.";
   return "XP를 받은 횟수로 판정합니다. (음성은 머문 시간 ÷ 지급 주기)";

@@ -137,7 +137,7 @@ export default function AdminActivityPage() {
       render: (r) => (
         <span className="tabular-nums">
           {ml("음성")}{dur(r.voiceSec)}
-          <span className={`ml-1.5 ${META}`}>{r.voiceN.toLocaleString()}회</span>
+          <span className={`ml-1.5 ${META}`}>{r.voiceN.toLocaleString()}건</span>
         </span>
       ),
     },

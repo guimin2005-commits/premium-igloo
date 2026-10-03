@@ -77,18 +77,19 @@ export function voiceRate(member, channel, doc, s, count) {
 }
 
 // 📌 한 바퀴(5분을 채웠거나 · 다 못 채우고 나감 · 옮김) 지급 — XP · 오늘 누적 분 · 자동 출석 · 하루 음성 효과.
-//    c: { ch, chName, pc, sec(실제 초), xp(구간마다 계산한 합, 소수), ctx }. 1초 미만은 부르는 쪽이 버린다
+//    c: { ch, chName, pc, sec(실제 초), amount(줄 XP — 부르는 쪽이 1 XP 미만을 사람마다 이월해 정수로 맞춘다), ctx }. 1초 미만은 부르는 쪽이 버린다
 export async function payVoiceCycle(member, c) {
   const s = getSettings();
   const today = kstToday();
   const attendMin = Math.max(1, s.attendVoiceMin || 60);
 
-  await grantXp(member, Math.round(c.xp), {
+  await grantXp(member, Math.max(0, Math.floor(Number(c.amount) || 0)), {
     reason: "voice",
     channelId: c.ch,
     channelName: c.chName || "",
     pc: c.pc || "", // 카테고리 — 퀘스트 채널 조건(XpLog.pc)
-    logSec: Math.max(1, Math.round(c.sec)),
+    // 실제 초를 0.1초까지 — 퀘스트 · 서포터즈 음성 분이 이 합으로 센다(반올림해 정수로 남기면 짧은 줄이 쌓여 부풀어진다)
+    logSec: Math.max(0.1, Math.round(c.sec * 10) / 10),
     ctx: c.ctx,
   });
 

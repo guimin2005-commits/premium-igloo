@@ -287,7 +287,8 @@ const longestRun = (keys) => {
 // 📌 로그 · 활동 대상 진행도 — bks 는 (대상 · KST 날짜 · KST 시 · 채널 · 카테고리 · 음성 상황) 묶음. 퀘스트마다 DB 를 다시 읽지 않고 여기서 거른다.
 //    fromKey: 기간 시작의 KST 날짜("YYYY-MM-DD") — 날짜 글자끼리 견준다
 //    📌 음성은 2026-10-04 부터 사람마다 실제 초로 준다(5분을 채우면 1회분, 못 채우고 나가면 머문 만큼) — 지급 줄 수가 아니라 줄의 초(b.s)로 센다.
-//       횟수 = 머문 초 ÷ 지급 주기(tickSec), 분 = 머문 초 ÷ 60. 짧게 들락거려 줄이 늘어도 횟수가 부풀지 않는다
+//       횟수 = 머문 초 ÷ 지급 주기(tickSec), 분 = 머문 초 ÷ 60. 짧게 들락거려 줄이 늘어도 횟수가 부풀지 않는다.
+//       일수 · 연속 · 채널 수는 그 날 · 그 채널에 1회분(지급 주기만큼) 이상 머문 것만 센다 — 1초 들렀다 나간 줄로 채워지지 않게(예전엔 지급 1회가 있어야 셌다)
 export function questMeasure(bks, q, fromKey, tickSec) {
   const r = questReasonOf(q?.reason);
   const src = r?.src || "log";
@@ -304,7 +305,7 @@ export function questMeasure(bks, q, fromKey, tickSec) {
   let sec = 0;
   const perDay = new Map();
   const perDaySec = new Map();
-  const chans = new Set();
+  const chans = new Map();
   for (const b of bks) {
     if (b.d < fromKey) continue;
     if (src === "log" ? want !== "any" && logReason(b.r) !== want : b.r !== want) continue;
@@ -324,21 +325,22 @@ export function questMeasure(bks, q, fromKey, tickSec) {
       perDaySec.set(b.d, (perDaySec.get(b.d) || 0) + (Number(b.s) || 0));
     }
     perDay.set(b.d, (perDay.get(b.d) || 0) + unit);
-    if (b.ch) chans.add(String(b.ch));
+    if (b.ch) chans.set(String(b.ch), (chans.get(String(b.ch)) || 0) + unit);
   }
+  const whole = (v) => v >= 1 - 1e-9; // 1회 이상 — 음성은 지급 주기만큼 머묾, 나머지는 1건
   if (q.metric === "xp") return xp;
   if (q.metric === "minute") return Math.floor(sec / 60);
   if (q.metric === "day") {
     const min = Math.floor(Number(q.dayMin) || 0);
-    if (!(min > 0)) return perDay.size;
+    if (!(min > 0)) return [...perDay.values()].filter(whole).length;
     // 하루 기준 — 음성은 분, 나머지는 횟수
     let c = 0;
     if (want === "voice") for (const v of perDaySec.values()) { if (v / 60 >= min) c++; }
     else for (const v of perDay.values()) if (v >= min) c++;
     return c;
   }
-  if (q.metric === "run") return longestRun([...perDay.keys()]);
-  if (q.metric === "channel") return chans.size;
+  if (q.metric === "run") return longestRun([...perDay].filter(([, v]) => whole(v)).map(([d]) => d));
+  if (q.metric === "channel") return [...chans.values()].filter(whole).length;
   return Math.floor(n + 1e-9);
 }
 
