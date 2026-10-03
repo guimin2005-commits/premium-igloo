@@ -209,19 +209,19 @@ const questTargetHint =(reason: string, metric: string) => {
   return "달성에 필요한 지급 횟수";
 };
 // 측정 방식 칸 아래 한 줄 — 대상 · 방식마다
-const questMetricHint = (reason: string, metric: string, tickMin: number) => {
+const questMetricHint = (reason: string, metric: string) => {
   const r = questReasonOf(reason);
   const src = r?.src || "log";
   if (src !== "log" && src !== "act" && !(r?.metrics.length && r.metrics.length > 1)) return "이 대상은 정해진 방식으로만 판정합니다.";
   if (metric === "xp") return reason === "shop" ? "쓴 XP의 합계로 판정합니다." : "받은 XP의 합계로 판정합니다.";
   if (metric === "point") return "쓴 빙옥의 합계로 판정합니다.";
-  if (metric === "minute") return `음성 채널에 머문 시간(분)으로 판정합니다. 지급 주기 ${tickMin}분마다 1분 단위로 쌓입니다.`;
+  if (metric === "minute") return "음성 채널에 머문 시간(분)으로 판정합니다.";
   if (metric === "day") return "기록이 있는 서로 다른 날 수로 판정합니다. (KST)";
   if (metric === "run") return "가장 길게 이어진 날 수로 판정합니다. (KST)";
   if (metric === "channel") return "기록이 있는 서로 다른 채널 수로 판정합니다.";
   if (src === "act") return reason === "msg" ? "보낸 메시지 수로 판정합니다. 같은 사람은 3초에 한 번만 셉니다." : reason === "vjoin" ? "음성 채널에 들어간 횟수로 판정합니다. 1분에 한 번만 셉니다." : reason === "react" || reason === "reacted" ? "같은 메시지 · 같은 이모지는 하루 한 번만 셉니다." : "횟수로 판정합니다.";
   if (reason === "shop") return "주문 한 줄 = 1건으로 판정합니다.";
-  return "XP를 받은 횟수로 판정합니다. (음성은 1회 = 지급 주기)";
+  return "XP를 받은 횟수로 판정합니다. (음성은 머문 시간 ÷ 지급 주기)";
 };
 
 // 📌 연속 출석 보너스 규칙 — BotSetting.attendStreakRules 한 줄. 입력 중엔 글자로 들고, 정리는 app/api/bot-settings 가 한다
@@ -1577,7 +1577,7 @@ export default function AdminBotPage() {
                     XP
                   </Inline>
                 </FieldRow>
-                <FieldRow label="음성 지급 주기" changed={chg("voiceIntervalSec")} hint="음성 채널 접속자에게 이 주기마다 지급 (기본 300초 = 5분)">
+                <FieldRow label="음성 지급 주기" changed={chg("voiceIntervalSec")} hint="사람마다 이 시간을 채울 때마다 1회분 · 못 채우고 나가면 머문 만큼 (기본 300초 = 5분)">
                   <Inline>
                     <input type="number" min={30} value={settings.voiceIntervalSec} onChange={(e) => setSettings({ ...settings, voiceIntervalSec: e.target.value })} className={numClass} />
                     초
@@ -2588,7 +2588,7 @@ export default function AdminBotPage() {
           label="측정 방식"
           hint={
             <span className={HINT_2LINE}>
-              {questMetricHint(questForm.reason, questForm.metric, Math.max(1, Math.round((settings?.voiceIntervalSec ?? 300) / 60)))}
+              {questMetricHint(questForm.reason, questForm.metric)}
             </span>
           }
         >

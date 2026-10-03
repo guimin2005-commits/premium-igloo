@@ -51,7 +51,7 @@ export async function GET(request) {
 
     // 그 달 평가는 역할을 이미 잃은 사람 것도 함께 본다 — 지급 기록이 표에서 사라지면 안 된다
     const [activity, evals] = await Promise.all([
-      getActivityMany(ids, month, settings.tickMin),
+      getActivityMany(ids, month),
       SupporterEval.find({ month }).lean(),
     ]);
     const evalBy = new Map(evals.map((e) => [e.userId, e]));
@@ -109,7 +109,7 @@ export async function PUT(request) {
 
     // 활동 스냅샷 — XpLog 는 60일 뒤 사라지므로 평가 시점 값을 함께 굳힌다
     const settings = await getSupporterSettings();
-    const activity = await getActivity(userId, month, settings.tickMin);
+    const activity = await getActivity(userId, month);
     const now = new Date();
 
     let doc;

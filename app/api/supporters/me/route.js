@@ -29,9 +29,9 @@ export async function GET() {
     // XpLog 는 60일 TTL — 지난 달까지만 셀 수 있고 그 이전 달은 평가 스냅샷(SupporterEval)에만 남는다
     const since = shiftMonthKey(month, -11); // 최근 12개월
     const [activity, prevActivity, daily, user, evals] = await Promise.all([
-      getActivity(userId, month, settings.tickMin),
-      getActivity(userId, prev, settings.tickMin),
-      getActivityDaily(userId, month, settings.tickMin),
+      getActivity(userId, month),
+      getActivity(userId, prev),
+      getActivityDaily(userId, month),
       UserXp.findOne({ userId }, { voiceSeconds: 1 }).lean(),
       SupporterEval.find({ userId, month: { $gte: since } }).sort({ month: -1 }).limit(12).lean(),
     ]);

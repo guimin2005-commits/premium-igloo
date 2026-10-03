@@ -15,7 +15,6 @@ import { refreshItemEffects, startItemEffectLoop } from "./itemEffects.js";
 import { refreshChannelConfigs, startChannelConfigLoop } from "./channelConfigs.js";
 import { refreshBotSettings, startBotSettingLoop } from "./botSettings.js";
 import { registerChatXp } from "./features/chatXp.js";
-import { startVoiceXpLoop } from "./features/voiceXp.js";
 import { startVoiceTime, flushVoiceTime } from "./features/voiceTime.js";
 import { startActivityStats, flushActivity } from "./features/activityStats.js";
 import { registerActivity } from "./features/activity.js";
@@ -78,8 +77,7 @@ client.once(Events.ClientReady, async (c) => {
   startBotMessageLoop(c); // 봇 메시지 디자인 1분 주기 갱신 + 관리자 테스트 발송
   console.log("✅ 설정 로드 완료 — 역할·아이템 효과·채널·기본 정책·봇 메시지 (1분 주기 갱신)");
 
-  startVoiceXpLoop(c);
-  startVoiceTime(c); // 누적 음성 시간 — 실제 접속 초(들어옴 · 나감 · 옮김 · 마이크 변경), 20초마다 기록
+  startVoiceTime(c); // 음성 시간 · 음성 XP — 사람마다 실제 접속 초(들어옴 · 나감 · 옮김 · 마이크 변경), 5분 채우면 1회분 · 못 채우고 나가면 머문 만큼, 20초마다 기록
   startActivityStats(c); // 퀘스트용 활동 횟수 — 메시지 · 답장 · 멘션 · 반응 · 스레드 · 스티커 · 명령어 · 음성 입장 · 레벨 업, 20초마다 기록
   startGrantQueue(c);
   startExpiryReminder(c); // 기간제 만료 임박 DM (10분 주기)

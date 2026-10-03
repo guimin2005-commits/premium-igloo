@@ -17,11 +17,14 @@ const UserXpSchema = new mongoose.Schema({
   // POINT 관련 — 봇은 출석 때 빙옥(연속 출석 보너스 · 아이템 효과 출석 빙옥, attend.js)만 $inc 한다. upsert 로 문서를 만들 때 default 도 필요하다
   point: { type: Number, default: 0 },
   pointTierPaid: { type: Number, default: 0 },
-  // 누적 음성 참여 시간(초) — 시즌 무관 통산 기록 (VOICE_TIME_START 이후부터 적립). 실제 접속 초 — features/voiceTime.js 가 1분마다 더한다
+  // 누적 음성 참여 시간(초) — 시즌 무관 통산 기록 (VOICE_TIME_START 이후부터 적립). 실제 접속 초 — features/voiceTime.js 가 20초마다 더한다
   voiceSeconds: { type: Number, default: 0 },
   // 오늘(KST) 음성 누적 분 — 출석 자동 지급 판정용
   voiceTodayMin: { type: Number, default: 0 },
   voiceTodayDate: { type: String, default: "" },
+  // 📌 진행 중인 음성 XP 바퀴 — 봇이 20초마다 적고 다 주면 지운다(features/voiceTime.js). 재시작 뒤 이어 가거나 그 사이 나갔으면 머문 만큼 준다.
+  //    { ch, chName, pc, sec, xp, muS, dfS, lvS, nS, at } (models/UserXp.js 와 같은 칸)
+  voiceCycle: { type: mongoose.Schema.Types.Mixed, default: undefined },
   // 📌 음성 XP 정지 — 사이트 관리자가 세우고 봇은 읽기만 한다(features/voiceXp.js 가 이 사람의 음성 주기를 통째로 건너뛴다).
   //    (models/UserXp.js 와 이름·기본값이 반드시 같아야 한다)
   voiceXpOff: { type: Boolean, default: false },
