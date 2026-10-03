@@ -93,7 +93,7 @@ export async function POST(request) {
       // ⚠️ 강화 단계(chatEnhance/voiceEnhance)는 영구 값이다 — 이 $set 목록에 넣지 않는다 (lib/enhance.js).
       // 📌 레벨은 0 이 아니라 1 — 0 XP 도 Lv.1(getLevelByXp(0))이다. 0 으로 두면 봇 역할 동기화가
       //    지급 레벨 1 인 아이언 티어까지 회수한다. 최고 도달 레벨(maxLevel)도 비운다 —
-      //    남겨 두면 봇의 레벨업 효과 기준(bot/src/xp.js floor)이 예전 최고 레벨이라 다시 넘기 전까지 효과가 멈춘다.
+      //    남겨 두면 레벨 업 퀘스트 기준(bot/src/xp.js top)이 예전 최고 레벨이라 다시 넘기 전까지 세지 않는다.
       await UserXp.updateMany(filter, {
         $set: {
           xp: 0, level: 1, maxLevel: 0, needsRoleSync: true, updatedAt: new Date(),

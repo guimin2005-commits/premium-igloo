@@ -315,6 +315,20 @@ function EffectsEditor({
 }) {
   const setRow = (i: number, patch: Partial<EffectDraft>) => onChange({ effects: list.map((d, j) => (j === i ? { ...d, ...patch } : d)) });
   const chName = (id: string) => channels.find((c) => c.id === id)?.name as string | undefined;
+  // 📌 2026-10-04 "상시 효과 숨은 상한은 관리자만 표기" — 상한은 관리자 편집 칸에만 적는다(유저 화면에는 없다).
+  //    쿨타임 단축 · 음소거 완화는 상한이 설정값에 따라 바뀐다(채팅 쿨타임의 절반 · 지금 음소거 감소율) — 지금 설정으로 계산해 적는다
+  const [botCaps, setBotCaps] = useState<{ cooldown: number; mute: number } | null>(null);
+  useEffect(() => {
+    fetch("/api/bot-settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (d?.data) setBotCaps({ cooldown: Number(d.data.chatCooldownSec) || 0, mute: Math.min(100, Math.max(0, Number(d.data.muteReducePct) || 0)) }); })
+      .catch(() => {});
+  }, []);
+  const capText = (t: { v: string; cap?: number; unit?: string }) => {
+    if (t.v === "cooldownCut") return botCaps ? `합 최대 ${Math.min(3600, Math.floor(botCaps.cooldown / 2)).toLocaleString()}초 (채팅 쿨타임의 절반)` : "합 최대 채팅 쿨타임의 절반";
+    if (t.v === "muteRelief") return botCaps ? `합 최대 ${botCaps.mute}%p (지금 음소거 감소율)` : "합 최대 지금 음소거 감소율";
+    return `합 최대 ${t.cap}${t.unit}`;
+  };
   // 상황을 바꾸면 — 없는 방식(%)은 첫 방식으로, 채팅 ↔ 음성이면 맞지 않는 종류의 채널은 뺀다(카테고리 · 모르는 ID 는 둔다).
   //    채널 종류는 TRIGGERS 의 channels("voice" 면 음성, true 면 텍스트)
   //    발동형이 아니면(상시 · 소모 · 꾸미기) 요일 · 시간대 · 채널 조건이 없다 — 비우고 접는다. 카드 스킨은 첫 스킨을 골라 둔다
@@ -452,7 +466,7 @@ function EffectsEditor({
                   </>
                 )}
                 {/* 상시형은 아이템끼리 합한 뒤 상한으로 자른다 */}
-                {t.kind === "perk" && t.cap && t.needs !== "seconds" && <span className="text-[#8a8a8a] tabular-nums">합 최대 {t.cap}{t.unit}</span>}
+                {t.kind === "perk" && t.cap && <span className="text-[#8a8a8a] tabular-nums">{capText(t)}</span>}
               </Inline>
             )}
 

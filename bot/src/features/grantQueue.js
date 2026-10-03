@@ -6,7 +6,8 @@
 //  · 시즌 전환으로 사이트 보유(siteOnly)가 된 구매 → 디스코드 역할 표기만 떼기
 //  · 지급 · 연장 · 만료 · 환불 DM 은 관리자 화면의 봇 메시지 디자인(buildMessage)으로 보낸다
 import { Purchase, Payout, CodeGrant, UserXp, BotSetting } from "../db.js";
-import { syncRewardRoles } from "../xp.js";
+import { syncRewardRoles, announceLevelUp, grantLevelUpEffects } from "../xp.js";
+import { isLevelOpen } from "../botSettings.js";
 import { refreshRoleConfigs } from "../roleConfigs.js";
 import { getLevelByXp } from "../leveling.js";
 import { bumpActivity } from "./activityStats.js";
@@ -237,7 +238,7 @@ async function processPayouts(guild) {
         const newLevel = getLevelByXp(doc.xp);
         // 지급 직후 xp 그대로일 때만 레벨을 쓴다 — 그 사이 채팅 · 음성 지급이 xp 를 바꿨으면 그쪽이 맞춘다(레벨 역행 방지)
         const lv = await UserXp.updateOne({ userId, xp: doc.xp }, { $set: { level: newLevel } });
-        // 최고 도달 레벨 — 큐로 오른 레벨도 기록해야 이미 도달한 레벨에서 레벨업 효과를 다시 주지 않는다(xp.js)
+        // 최고 도달 레벨 — 큐로 오른 레벨도 기록한다(레벨 업 퀘스트가 쓴다)
         const pm = await UserXp.findOneAndUpdate({ userId }, { $max: { maxLevel: newLevel } }, { new: false, projection: { maxLevel: 1 } }).lean();
         // 📌 레벨 업 퀘스트(features/activityStats.js "levelup") — 처음 도달한 레벨만(그 전 최고치를 넘은 만큼). doc.level 은 이번 지급 전 레벨
         const top = Math.max(1, Math.floor(Number(doc.level) || 0), Math.floor(Number(pm?.maxLevel) || 0));
@@ -249,6 +250,16 @@ async function processPayouts(guild) {
           // 레벨을 못 썼으면(그 사이 xp 가 바뀜) 옛 레벨로 역할을 맞추지 않는다 — 바꾼 쪽이 맞춘다
           if (lv.matchedCount) {
             await syncRewardRoles(member, newLevel, QUIET_ROLE_SYNC.has(p.source) ? { notify: false } : {}).catch(() => {});
+          }
+          // 📌 2026-10-04 "지급 대기열로 오른 레벨에도 레벨업 알림 · 레벨업 아이템 효과" — 퀘스트 · 패스 · 관리자 지급으로 올라도 채팅 · 음성과 똑같이.
+          //    레벨 0 → 1(시작 레벨)은 빼고, 오른 레벨마다 매번(XP 를 써서 내려갔다가 다시 올라도) — 채팅 · 음성 grantXp 와 같은 규칙.
+          //    레벨 비공개 중이면 없다. 역할 환불(source "role-refund")은 돌려준 값이라 상점 주문 환불처럼 알림 · 효과 둘 다 없다
+          if (lv.matchedCount && p.amount > 0 && isLevelOpen() && !QUIET_ROLE_SYNC.has(p.source)) {
+            const before = Math.max(1, Math.floor(Number(doc.level) || 0));
+            if (newLevel > before) {
+              announceLevelUp(member, before, newLevel, doc.xp);
+              await grantLevelUpEffects(member, newLevel - before);
+            }
           }
           // 큐로만 XP 가 들어온 계정은 이름이 비어 있어 랭킹에 "이름 없음" 으로 뜬다.
           // grantXp 와 달리 여기서는 이름을 채우지 않았기 때문 — 멤버를 이미 받아왔으니 같이 채운다.

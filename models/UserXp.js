@@ -30,7 +30,7 @@ const UserXpSchema = new mongoose.Schema({
   voiceXpOff: { type: Boolean, default: false },
   voiceXpOffAt: { type: Date, default: null },
   voiceXpOffBy: { type: String, default: "" }, // 세운 관리자 이름
-  // 📌 아이템 효과(봇이 씀) — 효과별 "하루 1번" 기록("<roleId>:<effectId>" → 날짜) · 최고 도달 레벨(레벨업 효과 중복 방지)
+  // 📌 아이템 효과(봇이 씀) — 효과별 "하루 1번" 기록("<roleId>:<effectId>" → 날짜) · 최고 도달 레벨(레벨 업 퀘스트가 처음 도달한 레벨만 센다)
   effectDaily: { type: Map, of: String, default: {} },
   maxLevel: { type: Number, default: 0 },
   // 📌 시즌 패스 — 새 재화를 만들지 않고 "이번 시즌에 번 XP"(xp - passBaseXp)를 진행도로 쓴다.

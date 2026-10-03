@@ -121,7 +121,7 @@ export async function syncRewardRoles(member, level, opts = {}) {
 
 // 레벨업 알림 — 채널은 대시보드 설정, 문구 · 디자인은 관리자 봇 메시지 설정(levelUp). 카드가 켜져 있으면 이미지 카드를 붙인다
 //   📌 지급(grantXp)은 기다리지 않는다 — 아바타 받기 · 카드 그리기로 지급이 늦어지지 않게
-function announceLevelUp(member, prevLevel, newLevel, totalXp) {
+export function announceLevelUp(member, prevLevel, newLevel, totalXp) {
   sendLevelUp(member, prevLevel, newLevel, totalXp).catch((e) =>
     console.error(`레벨업 알림 오류 (${member.displayName}):`, e?.message || e)
   );
@@ -231,11 +231,7 @@ export async function grantXp(member, amount, meta = {}) {
       syncRewardRoles(member, newLevel).catch(() => {});
       // 레벨 0(아직 계산 전인 새 문서) → 1 은 시작 레벨이라 알리지 않는다 (역할 지급은 그대로)
       if (newLevel > Math.max(1, before)) announceLevelUp(member, Math.max(1, before), newLevel, doc.xp);
-      // 📌 최고 도달 레벨(maxLevel)은 어떤 지급으로 올랐든 $max 로 원자적으로 기록한다 — 효과 지급으로 오른 레벨 포함.
-      //    📌 아이템 효과 "레벨이 오를 때마다" — 효과 지급으로 오른 레벨에는 다시 붙이지 않는다(재귀 방지).
-      //       레벨 0(아직 계산 전인 새 문서) → 1 은 레벨업으로 치지 않는다.
-      //       그 전 최고치를 넘은 만큼만 준다 — 상점 · 강화에 XP 를 써서 레벨이 내려갔다가 다시 오를 때 같은 레벨업 효과를 또 받지 않게.
-      //       (옛 문서는 maxLevel 이 없어 직전 레벨로 본다)
+      // 📌 최고 도달 레벨(maxLevel)은 어떤 지급으로 올랐든 $max 로 원자적으로 기록한다 — 효과 지급으로 오른 레벨 포함(레벨 업 퀘스트가 쓴다)
       const pm = await UserXp.findOneAndUpdate(
         { userId: member.id },
         { $max: { maxLevel: newLevel } },
@@ -246,10 +242,9 @@ export async function grantXp(member, amount, meta = {}) {
         const top = Math.max(1, before, Math.floor(Number(pm?.maxLevel) || 0));
         if (newLevel > top) bumpActivity(member.id, "levelup", newLevel - top);
       }
-      if (meta.reason !== "effect-levelup") {
-        const floor = Math.max(1, before, Math.floor(Number(pm?.maxLevel) || 0));
-        await grantLevelUpEffects(member, newLevel - floor);
-      }
+      // 📌 아이템 효과 "레벨이 오를 때마다" — 2026-10-04 오른 레벨마다 매번 준다. 상점 · 강화에 XP 를 써서 내려갔다가 다시 올라도 또 받는다.
+      //    효과 지급으로 오른 레벨에는 다시 붙이지 않는다(재귀 방지). 레벨 0(아직 계산 전인 새 문서) → 1 은 레벨업으로 치지 않는다
+      if (meta.reason !== "effect-levelup") await grantLevelUpEffects(member, newLevel - Math.max(1, before));
     } else if (newLevel < before) {
       // 회수(음수 지급)로 레벨이 내려가면 그만큼 보상 역할도 거둔다
       revokeRewardRoles(member, newLevel).catch(() => {});
@@ -259,7 +254,7 @@ export async function grantXp(member, amount, meta = {}) {
 }
 
 // 레벨업 효과 — (효과 합 × 오른 레벨 수) 를 따로 지급. 오류는 로그만 남긴다(원래 지급은 이미 끝났다)
-async function grantLevelUpEffects(member, gained) {
+export async function grantLevelUpEffects(member, gained) {
   if (!(gained > 0)) return;
   try {
     const per = effectXp(member, "levelUp");

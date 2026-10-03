@@ -31,7 +31,7 @@ const UserXpSchema = new mongoose.Schema({
   //    하루 첫 채팅 · 하루 음성 N분 효과가 itemEffects.js claimDaily 로 조건부 갱신해 하루 한 번만 지급한다.
   //    (Map 키에 점 · $ 가 들어가면 안 되므로 claimDaily 가 키를 정리해서 쓴다)
   effectDaily: { type: Map, of: String, default: {} },
-  // 지금까지 도달한 최고 레벨 — 레벨업 효과를 같은 레벨에서 두 번 주지 않으려고(xp.js). 사이트 models/UserXp.js 와 같이
+  // 지금까지 도달한 최고 레벨 — 레벨 업 퀘스트가 처음 도달한 레벨만 세려고(xp.js · grantQueue.js). 사이트 models/UserXp.js 와 같이
   maxLevel: { type: Number, default: 0 },
 
   // 사이트에서 XP·레벨을 바꿨을 때 레벨 역할을 다시 맞추도록 세우는 표시
