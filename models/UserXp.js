@@ -20,7 +20,7 @@ const UserXpSchema = new mongoose.Schema({
   // 승급 보상을 이미 지급한 최고 등급 인덱스 — 같은 등급에 두 번 주지 않기 위한 표시
   pointTierPaid: { type: Number, default: 0 },
   // 누적 음성 참여 시간(초) — 시즌이 바뀌어도 초기화하지 않는 통산 기록.
-  // 봇이 음성 XP를 지급할 때 그 주기만큼 함께 더한다 (lib/season.js VOICE_TIME_START 이후부터).
+  // 봇이 실제 접속 초를 1분마다 더한다(bot/src/features/voiceTime.js, 2026-10-03 — 그 전엔 음성 XP 주기마다 300초씩. lib/season.js VOICE_TIME_START 이후부터).
   voiceSeconds: { type: Number, default: 0 },
   // 오늘(KST) 음성 누적 분 — 출석 자동 지급 판정용. 날짜가 바뀌면 봇이 리셋한다.
   voiceTodayMin: { type: Number, default: 0 },

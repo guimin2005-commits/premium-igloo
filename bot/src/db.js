@@ -17,7 +17,7 @@ const UserXpSchema = new mongoose.Schema({
   // POINT 관련 — 봇은 출석 때 빙옥(연속 출석 보너스 · 아이템 효과 출석 빙옥, attend.js)만 $inc 한다. upsert 로 문서를 만들 때 default 도 필요하다
   point: { type: Number, default: 0 },
   pointTierPaid: { type: Number, default: 0 },
-  // 누적 음성 참여 시간(초) — 시즌 무관 통산 기록 (VOICE_TIME_START 이후부터 적립)
+  // 누적 음성 참여 시간(초) — 시즌 무관 통산 기록 (VOICE_TIME_START 이후부터 적립). 실제 접속 초 — features/voiceTime.js 가 1분마다 더한다
   voiceSeconds: { type: Number, default: 0 },
   // 오늘(KST) 음성 누적 분 — 출석 자동 지급 판정용
   voiceTodayMin: { type: Number, default: 0 },

@@ -362,7 +362,7 @@ async function withMyBadges(row) {
 //   period=all   현재 XP        (UserXp.xp — 관리자 회수 · 초기화는 이미 빠져 있다)
 //   period=total 누적 XP        (이번 시즌 얻은 XP 전부 = 현재 + 이번 시즌에 쓴 XP — totalBoard)
 //   period=month 이번 달 획득   (이번 달 XpLog + 이번 달 지급된 XP − 관리자 회수 · 초기화 — monthBoard)
-//   period=voice 누적 음성 시간 (UserXp.voiceSeconds — 시즌 2 개시일부터 적립)
+//   period=voice 누적 음성 시간 (UserXp.voiceSeconds — 시즌 2 개시일부터 적립, 10/3부터 실제 접속 초 · 봇 features/voiceTime.js)
 //   skip/limit 으로 페이지를 넘긴다. 순위는 skip 을 더해 이어진다.
 //   me=1 이면 로그인한 본인의 순위 · 값 · 쪽(me)을 함께 준다 — 목록에 없을 때 화면이 내 줄을 따로 그린다
 export async function GET(request) {

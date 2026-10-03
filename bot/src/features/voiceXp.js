@@ -3,13 +3,15 @@
 //       "하루 음성 N분"은 오늘 누적 분이 N 이상이 되면 하루 1번 따로, "출석 · 출석 N번째"는 출석 지급에 더한다.
 //       "음성 파티"는 그 채널 인원(봇 제외)이 효과의 기준 이상일 때 1회당, "음소거 감소 완화"는 감소율에서 %p 를 뺀다(막기 모드는 그대로).
 //       효과는 디스코드 역할이 아니라 인벤토리 보유 아이템 기준이다(itemEffects.js — 아이템 기본 효과 포함).
-//    📌 레벨 비공개면 XP · 출석 · 효과는 주지 않고(grantXp · claimAttendance 가 막는다) 음성 시간 · 오늘 누적 분만 쌓는다.
-//    📌 음성 XP 정지(UserXp.voiceXpOff — 관리자)인 사람은 주기를 통째로 건너뛴다: 지급 · voiceSeconds · 오늘 누적 분 · 자동 출석 · 하루 음성 효과.
+//    📌 레벨 비공개면 XP · 출석 · 효과는 주지 않고(grantXp · claimAttendance 가 막는다) 오늘 누적 분만 쌓는다.
+//    📌 음성 XP 정지(UserXp.voiceXpOff — 관리자)인 사람은 주기를 통째로 건너뛴다: 지급 · 오늘 누적 분 · 자동 출석 · 하루 음성 효과.
+//    📌 누적 음성 시간(UserXp.voiceSeconds · 랭킹 "음성 시간")은 이 주기가 아니라 features/voiceTime.js 가 실제 접속 초로 센다(2026-10-03 — 예전엔 주기마다 300초).
+//       같은 대상 · 음소거 판정을 쓰도록 relieveMute 를 내보낸다
 //    📌 지급 줄(XpLog "voice")에 그 주기의 음성 상황 ctx(인원 · 마이크 · 헤드셋 · 화면 공유/캠 · 마지막 활동 뒤 분)를 같이 남긴다.
 //    📌 자동 출석이 되면 봇 메시지 autoAttend 를 출석 알림 채널(비우면 레벨업 채널)에 보낸다.
 import { PermissionFlagsBits } from "discord.js";
 import { UserXp } from "../db.js";
-import { getVoiceBracketBonus, kstToday, VOICE_TIME_START } from "../leveling.js";
+import { getVoiceBracketBonus, kstToday } from "../leveling.js";
 import { getBuffXp } from "../roleConfigs.js";
 import { effectXp, voicePartyXp, perksOf } from "../itemEffects.js";
 import { getChannelPolicy } from "../channelConfigs.js";
@@ -65,7 +67,7 @@ async function sendAutoAttend(member, res) {
 
 // 📌 음소거 감소 완화(아이템 효과 muteRelief) — 감소 모드에서 음소거로 깎일 때만, 감소율에서 합 %p 를 뺀다.
 //    상한(감소율 전체)은 perksOf 가 건다. 막기(block) · 끔(off) 은 그대로
-function relieveMute(multiplier, member, s) {
+export function relieveMute(multiplier, member, s) {
   if (!(multiplier < 1) || s.muteMode !== "reduce") return multiplier;
   const relief = perksOf(member).muteRelief;
   if (!(relief > 0)) return multiplier;
@@ -80,9 +82,9 @@ async function voiceXpTick(client) {
 
     const s = getSettings();
     const afkChannelId = guild.afkChannelId;
-    // 이번 틱이 대표하는 접속 시간 — XP를 준 틱만 시간으로 인정하므로
-    // 잠수·제외 채널·음소거 차단으로 지급을 건너뛴 시간은 쌓이지 않는다.
-    const tickSec = kstToday() >= VOICE_TIME_START ? s.voiceIntervalSec || 300 : 0;
+    // 이번 틱의 주기(초) — 지급 줄(XpLog.sec)에만 남긴다. 관리 › 이상 활동이 이 값으로 간격 · 시간을 센다(lib/adminActivity.js).
+    //    📌 누적 음성 시간(voiceSeconds)은 여기서 더하지 않는다 — features/voiceTime.js 가 실제 초로 센다
+    const logSec = s.voiceIntervalSec || 300;
     // 출석 자동 지급 판정에 쓰는 값 — 시간 집계와 달리 시즌 2 게이트를 타지 않는다
     const today = kstToday();
     const tickMin = Math.max(1, Math.round((s.voiceIntervalSec || 300) / 60));
@@ -119,7 +121,7 @@ async function voiceXpTick(client) {
       // 📌 틱 도중 나갔거나 옮긴 사람은 건너뛴다 — voiceState 는 캐시 객체라 그 자리에서 바뀐다(나가면 활동 기록도 지워져 ctx.idle 이 틀어진다)
       if (voiceState.channelId !== channel.id || !voiceState.member) continue;
       const doc = docOf.get(member.id);
-      // 📌 음성 XP 정지 — 이 사람만 주기를 통째로 건너뛴다(지급 · voiceSeconds · 오늘 누적 분 · 자동 출석 · 하루 음성 효과)
+      // 📌 음성 XP 정지 — 이 사람만 주기를 통째로 건너뛴다(지급 · 오늘 누적 분 · 자동 출석 · 하루 음성 효과. 음성 시간도 voiceTime.js 가 뺀다)
       if (doc?.voiceXpOff === true) continue;
 
       // 음소거 정책 — block이면 지급 자체를 건너뜀 (감소 모드는 아이템 효과로 완화될 수 있다)
@@ -141,7 +143,7 @@ async function voiceXpTick(client) {
         reason: "voice",
         channelId: channel.id,
         channelName: channel.name || "",
-        voiceSeconds: tickSec,
+        logSec,
         ctx: voiceCtx(voiceState, countOf(channel), now),
       });
 

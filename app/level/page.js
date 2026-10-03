@@ -185,9 +185,11 @@ const fmtVoiceTime = (sec) => {
   if (min < 60) return `${min}분`;
   return `${Math.floor(min / 60).toLocaleString()}시간`;
 };
-// 📌 서버 랭킹 음성 시간 — 분까지("3시간 25분", 1시간 전에는 "25분"). 대시보드 '누적 음성 시간' 칸은 위 fmtVoiceTime 그대로
+// 📌 서버 랭킹 음성 시간 — 분까지("3시간 27분", 1시간 전에는 "27분", 1분 전에는 "42초"). 대시보드 '누적 음성 시간' 칸은 위 fmtVoiceTime 그대로
+//    2026-10-03부터 실제 접속 초(봇 features/voiceTime.js) — 그 전 기록은 5분 단위로 쌓여 있다
 const fmtVoiceTimeMin = (sec) => {
   const min = Math.floor((sec || 0) / 60);
+  if (min < 1) return `${Math.max(0, Math.floor(sec || 0))}초`;
   if (min < 60) return `${min}분`;
   return `${Math.floor(min / 60).toLocaleString()}시간 ${min % 60}분`;
 };
@@ -814,44 +816,6 @@ const GainFxModal = ({ open, onClose, gain, voiceMin = 5, items, loading, perks,
     </PopShell>
   );
 };
-
-// 📌 획득 피드 전체 창 — 대시보드 피드 칸의 [전체 N건]으로 연다. 틀은 PopShell(잉크) — 칸을 그 자리에서 늘리지 않아 뒤 화면이 움직이지 않는다.
-//    왼쪽: 오늘 획득(/api/xp/my-logs today — 대시보드 "오늘 획득" 칸과 같은 값). 오른쪽: 받아 온 기록 전부(대시보드 칸과 같은 줄, 길면 창 안에서 스크롤)
-//    이번 달 합은 싣지 않는다 — XpLog 만의 합이라 랭킹 "이번 달"(퀘스트 · 패스 · 지급 포함)과 숫자가 달라 보인다
-const FEED_SUM_KEYS = ["chat", "voice", "attend"];
-const FeedModal = ({ open, onClose, logs = [], today }) => (
-  <PopShell
-    open={open}
-    onClose={onClose}
-    title="획득 피드"
-    count={logs.length}
-    icon="bolt"
-    left={
-      <div className="min-w-0">
-        <p className="text-[11px] font-bold text-white/45">오늘</p>
-        <p className="mt-2 text-[20px] font-black text-white tabular-nums tracking-tight leading-none truncate">
-          +{fxFmt(today?.total)}<span className="text-[11px] text-white/40 ml-1">XP</span>
-        </p>
-        {/* 줄 합이 위 숫자와 맞게 — 채팅 · 음성 · 출석 밖(아이템 효과 · 레벨업 효과)은 나머지로 한 줄 */}
-        <div className="mt-3 space-y-1.5">
-          {FEED_SUM_KEYS.map((k) => <FxRow key={k} l={REASON_LABELS[k]} v={`+${fxFmt(today?.[k])}`} />)}
-          <FxRow l={REASON_LABELS.effect} v={`+${fxFmt(Math.max(0, (today?.total || 0) - FEED_SUM_KEYS.reduce((s, k) => s + (today?.[k] || 0), 0)))}`} />
-        </div>
-      </div>
-    }
-  >
-    <div className="border-t border-white/[0.08]">
-      {logs.map((l, i) => (
-        <div key={`${l.createdAt}-${i}`} className="flex items-center h-10 gap-3 border-b border-white/[0.06]">
-          <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: REASON_COLORS[l.reason] || "#6b7280" }}></span>
-          <span className="shrink-0 w-16 text-[13px] font-black text-white tabular-nums">+{(l.amount || 0).toLocaleString()}</span>
-          <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-white/50">{feedLabel(l)}</span>
-          <span className="shrink-0 text-[10px] font-bold text-white/35 tabular-nums">{fmtRel(l.createdAt)}</span>
-        </div>
-      ))}
-    </div>
-  </PopShell>
-);
 
 // 📌 확인 창 — 브라우저 기본 confirm 대신. 팝업 틀과 같은 잉크 카드에 창마다의 색(시즌 패스 보라 · 강화 불씨 · 기본 빨강)
 //    금액을 크게, 그 아래 바뀌는 값(잔액 · 레벨)을 줄로 보여 준다. Esc · 바깥 누르기는 취소, 확인 버튼에 처음 초점
@@ -2214,6 +2178,16 @@ export default function LevelPage() {
     window.history.replaceState(null, "", u.pathname + u.search + u.hash);
     setPassOpen(true);
   }, [tabParam]);
+  // 📌 ?tab=enhance — ARCTIC 홈 배너 「강화」가 여기로 온다(2026-10-03). 주소는 위 패스처럼 정리하고,
+  //    창은 내 정보 · 강화 설정을 받은 뒤(아래 enhOpen 효과) 연다 — 받기 전에 열면 빈 창이 뜬다
+  const [enhFromUrl, setEnhFromUrl] = useState(false);
+  useEffect(() => {
+    if (tabParam !== "enhance") return;
+    const u = new URL(window.location.href);
+    u.searchParams.set("tab", "my");
+    window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+    setEnhFromUrl(true);
+  }, [tabParam]);
   const enhance = useCallback(async (kind, payMethod, expectedCost) => {
     const key = `${kind}:${payMethod}`;
     // 📌 토스트 · 효과음도 어느 쪽 강화였는지 말한다 — "채팅 강화 +3", "음성 강화 · 보유 XP가 부족합니다."
@@ -2497,14 +2471,21 @@ export default function LevelPage() {
   // 모두 받기 단추 · 모바일 아이콘 배지 — 주기 상관없이 받을 수 있는 퀘스트 수
   const claimableAll = claimableBy.daily + claimableBy.weekly + claimableBy.monthly;
 
-  // 📌 획득 피드 전체 — 그 자리 팝업(FeedModal). 대시보드 칸은 늘 5건이라 열고 닫아도 뒤 화면 높이 · 스크롤이 그대로다
-  //    (예전엔 칸을 그 자리에서 늘려 아래 · 옆 화면이 움직였다). 닫기는 같은 함수 — PopShell 의 Esc 처리가 흔들리지 않게
+  // 📌 획득 피드 펼치기 — 5건 ↔ 전체를 그 자리에서(2026-10-03 팝업 → 다시 펼치기, "퀘스트 UI까지 움직이니까").
+  //    펼칠 때는 아래로만 늘어난다(위 퀘스트 · 옆 랭킹은 그대로 — 2026-10-03 PC 1440 · 폰 375 실측 이동 0).
+  //    📌 접을 때 — 문서가 짧아지면 브라우저가 스크롤을 당겨 화면 전체가 튄다(폰: 붙어 있던 아이콘 줄이 56 → 339px 로 내려앉았다).
+  //       보던 자리를 그대로 두거나(피드 머리가 보이던 때), 머리가 바 뒤로 지나가 있었으면 머리를 바 바로 아래로 맞추고,
+  //       그 자리까지 내려갈 문서 길이가 모자라면 피드 칸에 모자란 만큼 최소 높이를 잠깐 준다(다시 펼치거나 섹션을 바꾸면 푼다)
   const [feedOpen, setFeedOpen] = useState(false);
-  const openFeed = () => {
-    setFeedOpen(true);
-    playTone(660, 0.06, "sine", 0.03);
+  const feedRef = useRef(null);
+  const feedFixRef = useRef(null); // 접기 직전 { top: 피드 머리 화면 위치, scroll }
+  const toggleFeed = () => {
+    const sec = feedRef.current;
+    feedFixRef.current = feedOpen && sec ? { top: sec.getBoundingClientRect().top, scroll: window.scrollY } : null;
+    if (!feedOpen && sec) sec.style.minHeight = "";
+    setFeedOpen(!feedOpen);
+    playTone(620, 0.04, "sine", 0.025);
   };
-  const closeFeed = useCallback(() => setFeedOpen(false), []);
 
   // 진행 중 이벤트 — 대시보드 맨 아래 판(EventBoard). null = 불러오는 중(자리를 잡는다), [] = 없음(판을 숨긴다)
   const [events, setEvents] = useState(null);
@@ -2524,6 +2505,25 @@ export default function LevelPage() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [meLoaded]);
+  // 피드 머리를 둘 자리 — 접힌 상단 바(폰 56 · md 이상 60, 아이콘 줄 sticky top-14 · md:top-[60px] 와 같은 값) 아래,
+  //    폰은 그 아래 붙는 아이콘 줄까지. 지금 위치가 아니라 "붙어 있을 때" 기준(스크롤이 당겨지면 줄이 떨어져 있다). 16 은 숨 쉴 틈
+  const feedTopLimit = () => {
+    const n = mNavRef.current;
+    const bar = window.innerWidth >= 768 ? 60 : 56;
+    return bar + (n && n.offsetParent ? n.offsetHeight : 0) + 16;
+  };
+  useLayoutEffect(() => {
+    const fix = feedFixRef.current;
+    if (feedOpen || !fix) return;
+    feedFixRef.current = null;
+    const sec = feedRef.current;
+    if (!sec) return;
+    const lim = feedTopLimit();
+    const target = fix.top < lim ? sec.getBoundingClientRect().top + window.scrollY - lim : fix.scroll;
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    if (target > max) sec.style.minHeight = `${sec.offsetHeight + Math.ceil(target - max)}px`;
+    window.scrollTo({ top: target });
+  }, [feedOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const dashCardRef = useRef(null);
   const mobSecs = [
     { k: "quest", l: "퀘스트", icon: "flag", n: claimableAll },
@@ -2533,6 +2533,10 @@ export default function LevelPage() {
     { k: "table", l: "XP 테이블", icon: "receipt", n: 0 },
   ];
   const mSecOn = mobSecs.some((x) => x.k === mSec) ? mSec : "quest";
+  // 피드를 접을 때 잠깐 준 최소 높이(toggleFeed)는 섹션을 바꾸면 푼다
+  useEffect(() => {
+    if (feedRef.current) feedRef.current.style.minHeight = "";
+  }, [mSecOn]);
   // PC — 오른쪽 카테고리(현황 · XP 테이블). 현황이면 퀘스트 · 랭킹 · 피드를 다 펼치고, 아니면 그 카테고리 하나만
   //    📌 시뮬레이터는 2026-10-01 뺐다(나중에 다시 만들 예정 — 옛 코드는 14ae06a 이전 git 기록)
   const deskOverview = mSecOn !== "table";
@@ -2628,6 +2632,11 @@ export default function LevelPage() {
     return { ...v, chat: d(v.chat), voice: d(v.voice) };
   })();
   const enhOpen = enh.chat.max > 0 || enh.voice.max > 0;
+  // 렌더 중에 바로 넘긴다(위 tabSeen 과 같은 방식) — 효과로 미루면 한 번 더 그린다
+  if (enhFromUrl && me && enhOpen) {
+    setEnhFromUrl(false);
+    setEnhModal(true);
+  }
   // 📌 지금 내 조건으로 1회에 받는 XP — 봇 chatXp/voiceXp 의 식과 같은 항목만 더한다
   //    (채널별 부스트·음소거 감소는 상황마다 달라 뺀다). 내역 칩은 0 인 항목을 생략한다.
   const gain = (() => {
@@ -2878,7 +2887,6 @@ export default function LevelPage() {
       />
       <ConfirmDialog state={confirmState} onDone={closeConfirm} />
       <WalletHistory open={walletOpen} onClose={closeWallet} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
-      <FeedModal open={feedOpen && !!myLogs?.logs?.length} onClose={closeFeed} logs={myLogs?.logs} today={myLogs?.today} />
       <GainFxModal open={fxOpen && !!me} onClose={closeFx} gain={gain} voiceMin={P_voiceMin} items={myItems?.items} loading={myItems === null} perks={me?.perks} policy={P} />
       <BagOverlay
         open={bagOpen}
@@ -3548,8 +3556,8 @@ export default function LevelPage() {
                     {/* 아래 오른쪽 — 획득 피드 (진행 중 이벤트는 2026-10-03 대시보드 맨 아래 전체 폭 판으로 옮겼다 — EventBoard) */}
                     {/* 피드 묶음 — 현황이 아닐 때는 빈 틀도 숨긴다 (남겨 두면 빈 줄 하나만큼 간격이 벌어진다) */}
                     <div className={`contents ${deskOverview ? "lg:block" : "lg:hidden"} lg:space-y-14 min-w-0`}>
-                    {/* 획득 피드 — 최근 5건만, 줄을 낮게 */}
-                    <section className={secCls("feed")}>
+                    {/* 획득 피드 — 5건, [전체 N건 보기]로 그 자리에서 펼친다. 줄을 낮게 */}
+                    <section ref={feedRef} className={secCls("feed")}>
                       <div className="flex items-end justify-between mb-4">
                         <div>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">획득 피드</h3>
@@ -3558,8 +3566,9 @@ export default function LevelPage() {
                       </div>
                       {myLogs?.logs?.length ? (
                         <>
-                          <div className="border-t border-black/[0.08]">
-                            {myLogs.logs.slice(0, 5).map((l, i) => (
+                          {/* 📌 [overflow-anchor:none] — 늘어나는 줄이 스크롤 기준점으로 잡혀 위 화면(퀘스트 · 랭킹)이 밀려 보이지 않게 */}
+                          <div className="border-t border-black/[0.08] [overflow-anchor:none]">
+                            {(feedOpen ? myLogs.logs : myLogs.logs.slice(0, 5)).map((l, i) => (
                               <div key={`${l.createdAt}-${i}`} className="flex items-center h-10 gap-3 border-b border-black/[0.05]">
                                 <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: REASON_COLORS[l.reason] || "#6b7280" }}></span>
                                 <span className="shrink-0 w-16 text-[13px] font-black text-[#131313] tabular-nums">+{(l.amount || 0).toLocaleString()}</span>
@@ -3568,10 +3577,9 @@ export default function LevelPage() {
                               </div>
                             ))}
                           </div>
-                          {/* 전체는 그 자리 팝업 — 칸은 늘 5건 */}
                           {(myLogs.logs.length > 5) && (
-                            <button type="button" onClick={openFeed} aria-haspopup="dialog" className="block w-full text-center text-[11px] font-bold text-[#a3a3a3] hover:text-[#131313] transition-colors mt-3.5 outline-none focus:outline-none">
-                              전체 {myLogs.logs.length}건
+                            <button type="button" onClick={toggleFeed} aria-expanded={feedOpen} className="block w-full text-center text-[11px] font-bold text-[#a3a3a3] hover:text-[#131313] transition-colors mt-3.5 outline-none focus:outline-none [overflow-anchor:none]">
+                              {feedOpen ? "접기 ↑" : `전체 ${myLogs.logs.length}건 보기 ↓`}
                             </button>
                           )}
                         </>

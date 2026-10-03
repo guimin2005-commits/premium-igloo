@@ -16,6 +16,7 @@ import { refreshChannelConfigs, startChannelConfigLoop } from "./channelConfigs.
 import { refreshBotSettings, startBotSettingLoop } from "./botSettings.js";
 import { registerChatXp } from "./features/chatXp.js";
 import { startVoiceXpLoop } from "./features/voiceXp.js";
+import { startVoiceTime, flushVoiceTime } from "./features/voiceTime.js";
 import { registerActivity } from "./features/activity.js";
 import { registerLeaveReset } from "./features/leaveReset.js";
 import { startGrantQueue } from "./features/grantQueue.js";
@@ -75,6 +76,7 @@ client.once(Events.ClientReady, async (c) => {
   console.log("✅ 설정 로드 완료 — 역할·아이템 효과·채널·기본 정책·봇 메시지 (1분 주기 갱신)");
 
   startVoiceXpLoop(c);
+  startVoiceTime(c); // 누적 음성 시간 — 실제 접속 초(들어옴 · 나감 · 옮김 · 마이크 변경), 20초마다 기록
   startGrantQueue(c);
   startExpiryReminder(c); // 기간제 만료 임박 DM (10분 주기)
   startPassReminder(c); // 시즌 종료 D-7 · D-1 안 받은 시즌 패스 보상 DM (10분 주기)
@@ -97,8 +99,13 @@ client.once(Events.ClientReady, async (c) => {
 })();
 
 // ── 종료·오류 처리 ─────────────────────────
+let shuttingDown = false;
 const shutdown = async (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log(`\n${signal} 수신 — 종료 중…`);
+  // 📌 밀린 음성 시간(최대 20초)을 마저 쓴다 — 오래 걸리면 5초에서 끊는다. Railway 는 기본이 SIGTERM 뒤 곧바로 SIGKILL 이라 못 마칠 수 있다(features/voiceTime.js)
+  await Promise.race([flushVoiceTime(), new Promise((r) => setTimeout(r, 5000))]).catch(() => {});
   client.destroy();
   await disconnectDb().catch(() => {});
   process.exit(0);

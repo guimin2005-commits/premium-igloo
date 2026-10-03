@@ -64,8 +64,8 @@ import type { Column } from "../ui";
 const TAB_META: Record<string, { desc: string }> = {
   items: { desc: "여기서 등록한 표기가 인벤토리 · 상점 상품 · 시즌 패스 보상에 그대로 쓰입니다." },
   products: { desc: "역할 상품은 구매 시 봇이 자동 지급합니다." },
-  // 넘김 주기는 app/arctic/BannerSlider.tsx (2026-10-01 5초 → 8초). 노출 위치(홈 · 시즌 탭)마다 따로 돈다
-  banners: { desc: "같은 노출 위치의 배너가 여럿이면 8초마다 자동 전환됩니다." },
+  // 넘김 주기는 app/arctic/BannerSlider.tsx (2026-10-01 5초 → 8초, 10-03 → 7초). 노출 위치(홈 · 시즌 탭)마다 따로 돈다
+  banners: { desc: "같은 노출 위치의 배너가 여럿이면 7초마다 자동 전환됩니다." },
   coupons: { desc: "" },
   // 예전 목록 아래 한 줄 안내를 머리로 올렸다
   orders: { desc: "역할 상품은 봇이 30초 주기로 자동 지급합니다. 취소하면 XP가 환불되고 재고가 복구됩니다." },

@@ -159,23 +159,21 @@ async function sendLevelUp(member, prevLevel, newLevel, totalXp) {
 }
 
 // XP 지급 + 레벨 재계산. 레벨업 시 알림·보상 역할까지 처리
-// meta: { reason, channelId, channelName, voiceSeconds?, ctx? } — 로그 기록용 (ctx 는 음성 지급만 — XpLog.ctx)
+// meta: { reason, channelId, channelName, logSec?, ctx? } — 로그 기록용 (logSec · ctx 는 음성 지급만 — XpLog.sec · XpLog.ctx)
+//   📌 누적 음성 시간(voiceSeconds)은 여기서 올리지 않는다 — features/voiceTime.js 가 실제 접속 초로 센다(2026-10-03)
 //   📌 봇이 스스로 만드는 XP(채팅 · 음성 · 출석 · 아이템 효과 · 레벨업 효과)는 전부 이 함수로 들어온다 — 레벨 비공개면 여기서 막는다.
 //      (지급 대기열 Payout 은 grantQueue.js 가 따로 넣으므로 막히지 않는다)
 export async function grantXp(member, amount, meta = {}) {
   if (!amount) return null;
 
   if (!isLevelOpen()) {
-    // 음성 참여 시간은 비공개여도 그대로 쌓는다 — 문서가 없으면 만들어 둔다(오늘 누적 분 · 자동 출석 판정이 이 문서를 쓴다)
-    if (meta.voiceSeconds != null) {
+    // 음성 주기는 비공개여도 문서가 없으면 만들어 둔다(오늘 누적 분 · 자동 출석 판정이 이 문서를 쓴다. 음성 시간은 voiceTime.js 가 따로 쌓는다)
+    if (meta.reason === "voice") {
       await UserXp.updateOne(
         { userId: member.id },
-        {
-          $inc: { voiceSeconds: Math.max(0, Number(meta.voiceSeconds) || 0) },
-          $set: { username: member.user.username, displayName: member.displayName, updatedAt: new Date() },
-        },
+        { $set: { username: member.user.username, displayName: member.displayName, updatedAt: new Date() } },
         { upsert: true }
-      ).catch((e) => console.error(`음성 시간 기록 오류 (${member.displayName}):`, e.message));
+      ).catch((e) => console.error(`음성 문서 만들기 오류 (${member.displayName}):`, e.message));
     }
     return null;
   }
@@ -183,9 +181,7 @@ export async function grantXp(member, amount, meta = {}) {
   // 📌 시즌 패스 가속(아이템 효과 passBoost, 상한 50%) — 이 지급 XP 의 합% 만큼 기준선(passBaseXp)을 같은 쓰기에서 낮춘다.
   //    진행도(xp - passBaseXp)만 더 오르고 레벨 · XP 는 그대로다. 회수(음수)에는 붙이지 않는다
   const passBoost = amount > 0 ? Math.floor((amount * perksOf(member).passBoost) / 100) : 0;
-  // 음성 지급이면 그 주기만큼 누적 참여 시간도 같은 쓰기에서 올린다 (추가 왕복 없음)
   const inc = { xp: amount };
-  if (meta.voiceSeconds) inc.voiceSeconds = meta.voiceSeconds;
   if (passBoost > 0) inc.passBaseXp = -passBoost;
   const doc = await UserXp.findOneAndUpdate(
     { userId: member.id },
@@ -208,7 +204,7 @@ export async function grantXp(member, amount, meta = {}) {
     // 📌 음성 상황 — 음성 지급(features/voiceXp.js)만 넘긴다. 다른 지급 줄에는 칸 자체가 없다
     ...(meta.ctx ? { ctx: meta.ctx } : {}),
     // 📌 음성 지급의 그 주기(초) — 관리 › 이상 활동이 로그마다 이 값으로 간격 · 시간을 센다(lib/adminActivity.js)
-    ...(meta.voiceSeconds > 0 ? { sec: meta.voiceSeconds } : {}),
+    ...(meta.logSec > 0 ? { sec: meta.logSec } : {}),
   }).catch(() => {});
 
   const newLevel = getLevelByXp(doc.xp);

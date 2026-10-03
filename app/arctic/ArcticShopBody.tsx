@@ -348,7 +348,7 @@ export default function ArcticShopBody({
     setTimeout(() => setCartToast(""), 1600);
   };
 
-  // 📌 상단 이미지 배너 — 관리자가 노출 위치(홈 · 시즌 탭)를 골라 등록, 한 장에 8초씩 자동 전환.
+  // 📌 상단 이미지 배너 — 관리자가 노출 위치(홈 · 시즌 탭)를 골라 등록, 한 장에 7초씩 자동 전환.
   //    위치마다 한 벌씩 여기서 들고 있다(목록 · 지금 장 · 틀 비율 · 불러오기 · 자동 넘김은 BannerSlider 의 useBanners)
   const homeBanner = useBanners("home", status, isAdmin);
   // 📌 시즌 탭 첫 화면 — 맨 위 시즌 배너 · 시즌 머리줄. 검색 중이면 결과가 먼저라 뺀다

@@ -74,11 +74,11 @@ export function useBanners(placement: BannerPlacement, status: string, isAdmin: 
       .finally(() => setLoaded(true));
   }, [status, isAdmin, placement]);
 
-  // 📌 배너 자동 넘김 — 한 장에 8초(2026-10-01 "교체 시간이 짧다": 5초 → 8초).
+  // 📌 배너 자동 넘김 — 한 장에 7초(2026-10-01 "교체 시간이 짧다": 5초 → 8초, 2026-10-03 8초 → 7초).
   //    지금 장이 바뀔 때마다 새로 잰다 — 점을 눌러 넘긴 직후 바로 다음 장으로 튀지 않게
   useEffect(() => {
     if (!playing || banners.length < 2) return;
-    const t = setTimeout(() => setIdx((i) => (i + 1) % banners.length), 8000);
+    const t = setTimeout(() => setIdx((i) => (i + 1) % banners.length), 7000);
     return () => clearTimeout(t);
   }, [playing, banners.length, idx]);
 
