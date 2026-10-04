@@ -65,7 +65,8 @@ export function startBotSettingLoop() {
 export const getSettings = () => settings;
 
 // 📌 SYSTEM : LEVEL 공개 여부 — 비공개(false · 없음)면 봇이 스스로 만드는 XP(채팅 · 음성 · 출석 · 아이템 효과)를 주지 않는다.
-//    부팅 뒤 설정을 아직 못 읽었으면 비공개로 본다. 지급 대기열(Payout)은 이 값과 무관하다
+//    2026-10-04 부터 오늘 누적 음성 분(자동 출석 · 하루 음성 효과 — features/voiceXp.js) · 활동 횟수(퀘스트 — features/activityStats.js)도 쌓지 않는다.
+//    부팅 뒤 설정을 아직 못 읽었으면 비공개로 본다. 지급 대기열(Payout)의 XP 지급은 이 값과 무관하다
 export const isLevelOpen = () => settings.levelPublic === true;
 
 // 지금 유효한 기간제 부스트 합산

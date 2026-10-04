@@ -1,6 +1,5 @@
 // ── 역할 설정 캐시 (대시보드 변경을 1분 주기로 반영) ──
 import { RoleConfig } from "./db.js";
-import { config } from "./config.js";
 
 const REFRESH_MS = 60 * 1000;
 let cache = [];
@@ -19,21 +18,13 @@ export function startRoleConfigLoop() {
 
 export const getRoleConfigs = () => cache;
 
-// 채팅/음성 공통 버프 합산 — 대시보드 설정 우선, env는 하위 호환
+// 채팅/음성 공통 버프 합산 (대시보드 설정 기반)
+//   📌 2026-10-04 "옛 장치를 지우고, 가산은 관리 화면(역할 버프·부스트)으로만 함" — 환경 변수 역할 버프 · EVENT_BONUS_XP 는 없앴다
 export function getBuffXp(member) {
   let buff = 0;
-  const inDashboard = new Set();
-
   for (const cfg of cache) {
-    inDashboard.add(cfg.roleId);
     if (cfg.buffXp > 0 && member.roles.cache.has(cfg.roleId)) buff += cfg.buffXp;
   }
-
-  for (const { id, buff: legacyBuff } of config.legacyRoleBuffs) {
-    if (!inDashboard.has(id) && member.roles.cache.has(id)) buff += legacyBuff;
-  }
-
-  buff += config.eventBonusXp;
   return buff;
 }
 

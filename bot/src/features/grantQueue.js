@@ -9,6 +9,7 @@ import { Purchase, Payout, CodeGrant, UserXp, BotSetting } from "../db.js";
 import { syncRewardRoles, announceLevelUp, grantLevelUpEffects } from "../xp.js";
 import { isLevelOpen } from "../botSettings.js";
 import { refreshRoleConfigs } from "../roleConfigs.js";
+import { perksOf } from "../itemEffects.js";
 import { getLevelByXp } from "../leveling.js";
 import { bumpActivity } from "./activityStats.js";
 import { config } from "../config.js";
@@ -163,6 +164,10 @@ const PASS_NEUTRAL = new Set(["pass", "role-refund"]);
 // 📌 보상 역할을 알림 없이 맞추는 지급 — 역할 환불(관리자 역할 이전)은 한 번에 수십 명이 들어온다.
 //    지난 시즌 역할 값을 돌려준 것이라 "NEW ROLE" 알림이 채널을 도배하지 않게(processRoleSyncs 와 같은 notify:false). 역할은 그대로 맞춘다
 const QUIET_ROLE_SYNC = new Set(["role-refund"]);
+// 📌 시즌 패스 가속(아이템 효과 passBoost)을 붙이는 지급 — 2026-10-04 "퀘스트 보상 XP에도 똑같이 가속을 붙임(운영진 지급은 지금처럼 뺌)".
+//    채팅 · 음성 grantXp(xp.js)와 같은 식: 지급 XP 의 합% 만큼 기준선(passBaseXp)을 XP 와 같은 쓰기에서 낮춘다(진행도만 더 오르고 레벨 · XP 는 그대로).
+//    운영진 지급(manual) · 코드 · 초대 등 다른 대기열 지급에는 붙이지 않는다
+const PASS_BOOSTED = new Set(["quest"]);
 async function processPayouts(guild) {
   // 빙옥(currency "point") 건은 사이트가 즉시 반영한 것 — 어떤 경우에도 XP 로 지급하지 않는다
   const rows = await Payout.find({ status: "pending", currency: { $ne: "point" } }).limit(50);
@@ -190,6 +195,7 @@ async function processPayouts(guild) {
 
       let doc;
       let applied = p.amount;
+      let passBoost = 0; // 패스 가속으로 기준선을 낮춘 폭(PASS_BOOSTED) — 지급 기록에도 남긴다(아래 paid)
       try {
         if (p.amount < 0) {
           // 📌 회수는 0 아래로 내리지 않는다 — 사이트는 예약 시점 잔액으로만 자르므로, 그 사이 쓴 만큼은 여기서 다시 자른다
@@ -205,6 +211,12 @@ async function processPayouts(guild) {
           applied = afterXp - beforeXp;
           doc = before ? { xp: afterXp, displayName: before.displayName, username: before.username } : null;
         } else {
+          // 📌 패스 가속(PASS_BOOSTED) — 보유는 지급 직전 멤버로 본다(채팅 · 음성과 같은 캐시 판정).
+          //    서버에서 멤버를 못 찾으면 구매 건만으로 본다(역할로만 가진 아이템은 빠진다)
+          if (PASS_BOOSTED.has(p.source)) {
+            const holder = (await fetchMember(guild, userId)) || { id: userId };
+            passBoost = Math.floor((p.amount * perksOf(holder).passBoost) / 100);
+          }
           doc = await UserXp.findOneAndUpdate(
             { userId },
             // 📌 시즌 패스 보상 XP 는 진행도(xp - passBaseXp)를 채우면 안 된다 —
@@ -213,9 +225,10 @@ async function processPayouts(guild) {
             //    실제로 xp 가 들어오는 이 순간에 기준선을 같은 폭으로 함께 올린다.
             //    📌 역할 환불(source "role-refund" — 관리자 역할 이전)도 같다 — 지난 시즌 역할 값을 돌려준 것이라 이번 시즌 진행이 아니다.
             //       레벨 · 누적 랭킹에는 들어간다(아래 레벨 재계산). 사이트 seasonStartBaseXp(시즌 기준선)도 두 source 를 같이 뺀다
+            //    📌 패스 가속분은 같은 $inc 에서 기준선을 낮춘다 — XP 만 들어가고 가속이 빠지거나, 가속만 두 번 붙는 일이 없다
             PASS_NEUTRAL.has(p.source)
               ? { $inc: { xp: p.amount, passBaseXp: p.amount }, $set: { updatedAt: new Date() } }
-              : { $inc: { xp: p.amount }, $set: { updatedAt: new Date() } },
+              : { $inc: { xp: p.amount, ...(passBoost > 0 ? { passBaseXp: -passBoost } : {}) }, $set: { updatedAt: new Date() } },
             { upsert: true, new: true }
           );
         }
@@ -227,22 +240,32 @@ async function processPayouts(guild) {
       }
 
       // XP 가 들어간 즉시 paid — 아래 부가 작업(레벨 · 역할 · 이름)이 실패해도 다시 지급하지 않는다
+      //    📌 passBoost — 이 지급과 함께 기준선을 낮춘 폭(XpLog.passBoost 와 같은 뜻). 시즌 기준선을 로그로 되짚을 때(seasonStartBaseXp)
+      //       amount 와 함께 더해야 가속분이 사라지지 않는다. strict:false — Payout 스키마에 칸이 없어도 조용히 버려지지 않게
       await Payout.updateOne(
         { _id: p._id },
-        { $set: { status: "paid", paidAt: new Date(), error: "", ...(applied !== p.amount ? { amount: applied } : {}) } }
+        { $set: { status: "paid", paidAt: new Date(), error: "", ...(applied !== p.amount ? { amount: applied } : {}), ...(passBoost > 0 ? { passBoost } : {}) } },
+        { strict: false }
       );
-      console.log(`💰 XP 지급 완료: ${p.userName} ${applied >= 0 ? "+" : ""}${applied.toLocaleString()} (${p.reason || p.source})`);
+      console.log(
+        `💰 XP 지급 완료: ${p.userName} ${applied >= 0 ? "+" : ""}${applied.toLocaleString()} (${p.reason || p.source})${passBoost > 0 ? ` · 패스 가속 +${passBoost.toLocaleString()}` : ""}`
+      );
       if (!doc) continue; // 회수 대상 문서가 없었다 — 뺄 것도 맞출 것도 없다
 
       try {
         const newLevel = getLevelByXp(doc.xp);
         // 지급 직후 xp 그대로일 때만 레벨을 쓴다 — 그 사이 채팅 · 음성 지급이 xp 를 바꿨으면 그쪽이 맞춘다(레벨 역행 방지)
         const lv = await UserXp.updateOne({ userId, xp: doc.xp }, { $set: { level: newLevel } });
-        // 최고 도달 레벨 — 큐로 오른 레벨도 기록한다(레벨 업 퀘스트가 쓴다)
-        const pm = await UserXp.findOneAndUpdate({ userId }, { $max: { maxLevel: newLevel } }, { new: false, projection: { maxLevel: 1 } }).lean();
-        // 📌 레벨 업 퀘스트(features/activityStats.js "levelup") — 처음 도달한 레벨만(그 전 최고치를 넘은 만큼). doc.level 은 이번 지급 전 레벨
-        const top = Math.max(1, Math.floor(Number(doc.level) || 0), Math.floor(Number(pm?.maxLevel) || 0));
-        if (lv.matchedCount && p.amount > 0 && newLevel > top) bumpActivity(userId, "levelup", newLevel - top);
+        // 최고 도달 레벨 — 큐로 오른 레벨도 기록한다(기록으로만 둔다 — 레벨 업 퀘스트는 2026-10-04 부터 이 값을 보지 않는다)
+        await UserXp.updateOne({ userId }, { $max: { maxLevel: newLevel } });
+        // 📌 레벨이 오른 것으로 치는 기준 — 레벨 업 퀘스트 · 레벨업 알림 · 레벨업 효과가 같이 쓴다(채팅 · 음성 grantXp 와 같은 규칙).
+        //    doc.level 은 이번 지급 전 레벨. 레벨 0 → 1(시작 레벨)은 빼고, 오른 레벨마다 매번(XP 를 써서 내려갔다가 다시 올라도).
+        //    레벨을 못 썼으면(그 사이 xp 가 바뀜) 바꾼 쪽이 센다. 레벨 비공개 중 · 역할 환불(source "role-refund")은 치지 않는다
+        const before = Math.max(1, Math.floor(Number(doc.level) || 0));
+        const leveled = !!lv.matchedCount && p.amount > 0 && isLevelOpen() && !QUIET_ROLE_SYNC.has(p.source) && newLevel > before;
+        // 📌 레벨 업 퀘스트(features/activityStats.js "levelup") — 2026-10-04 "XP를 써서 내려갔다가 다시 오른 레벨도 레벨이다 / 시작 레벨은 동일 유지".
+        //    예전엔 처음 도달한 레벨(그 전 최고치를 넘은 만큼)만 셌다
+        if (leveled) bumpActivity(userId, "levelup", newLevel - before);
 
         // 지급·회수로 레벨이 달라졌을 수 있으니 보상 역할을 현재 레벨에 맞춘다
         const member = await fetchMember(guild, userId);
@@ -252,14 +275,10 @@ async function processPayouts(guild) {
             await syncRewardRoles(member, newLevel, QUIET_ROLE_SYNC.has(p.source) ? { notify: false } : {}).catch(() => {});
           }
           // 📌 2026-10-04 "지급 대기열로 오른 레벨에도 레벨업 알림 · 레벨업 아이템 효과" — 퀘스트 · 패스 · 관리자 지급으로 올라도 채팅 · 음성과 똑같이.
-          //    레벨 0 → 1(시작 레벨)은 빼고, 오른 레벨마다 매번(XP 를 써서 내려갔다가 다시 올라도) — 채팅 · 음성 grantXp 와 같은 규칙.
-          //    레벨 비공개 중이면 없다. 역할 환불(source "role-refund")은 돌려준 값이라 상점 주문 환불처럼 알림 · 효과 둘 다 없다
-          if (lv.matchedCount && p.amount > 0 && isLevelOpen() && !QUIET_ROLE_SYNC.has(p.source)) {
-            const before = Math.max(1, Math.floor(Number(doc.level) || 0));
-            if (newLevel > before) {
-              announceLevelUp(member, before, newLevel, doc.xp);
-              await grantLevelUpEffects(member, newLevel - before);
-            }
+          //    기준은 위 leveled — 역할 환불(source "role-refund")은 돌려준 값이라 상점 주문 환불처럼 알림 · 효과 둘 다 없다
+          if (leveled) {
+            announceLevelUp(member, before, newLevel, doc.xp);
+            await grantLevelUpEffects(member, newLevel - before);
           }
           // 큐로만 XP 가 들어온 계정은 이름이 비어 있어 랭킹에 "이름 없음" 으로 뜬다.
           // grantXp 와 달리 여기서는 이름을 채우지 않았기 때문 — 멤버를 이미 받아왔으니 같이 채운다.
