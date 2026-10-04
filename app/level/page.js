@@ -509,8 +509,10 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
   const canPoint = !atMax && !busy && (balance?.point || 0) >= pointCost;
   const fmt = (n) => (n || 0).toLocaleString();
   const stepXp = isChat ? policy.chatEnhanceStep : policy.voiceEnhanceStep;
-  // 지금 내 조건으로 1회에 받는 양 — add 만큼 더 강화했을 때
-  const gainAt = (add) => (isChat ? `${fmt(gain.chatLo + add)}~${fmt(gain.chatHi + add)}` : fmt(gain.voice + add));
+  // 📌 강화는 '기본 XP'를 올리는 것 — 기본 + 강화만 보인다(등급 · 역할 · 부스트 · 아이템 효과는 빼고). add 만큼 더 강화했을 때
+  const gainAt = (add) => (isChat
+    ? `${fmt(enh.chat.range[0] + add)}~${fmt(enh.chat.range[1] + add)}`
+    : fmt((policy.voiceXp || 0) + (enh.voice.bonus || 0) + add));
   const base = isChat ? policy.chatEnhanceBaseCost : policy.voiceEnhanceBaseCost;
   const growth = isChat ? policy.chatEnhanceCostGrowthPct : policy.voiceEnhanceCostGrowthPct;
   const steps = [];
