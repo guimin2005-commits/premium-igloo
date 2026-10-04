@@ -34,7 +34,15 @@ const BotSettingSchema = new mongoose.Schema({
   attendXp: { type: Number, default: 7000 },
   attendPoint: { type: Number, default: 0 },      // 출석 1회 POINT
   attendPassPoint: { type: Number, default: 0 },  // 출석 1회 패스 포인트
-  attendVoiceMin: { type: Number, default: 60 },   // 일일 출석 인정 기준 — 음성 접속 누적 분       // 출석 1회 지급량
+  attendVoiceMin: { type: Number, default: 60 },
+  // 📌 2026-10-04 잠수 확인 — 음성 채널에 혼자인 사람에게 [확인] 버튼(그 음성 채널 채팅, 본인만 누름). 첫 확인은 혼자 afkCheckFirstMin 분,
+  //    그 뒤는 afkCheckMinMin~afkCheckMaxMin 분 사이 무작위. afkCheckReplyMin 분 안에 안 누르면 서버 잠수 채널로 옮긴다(bot/src/features/afkCheck.js)
+  afkCheckOn: { type: Boolean, default: true },
+  afkCheckFirstMin: { type: Number, default: 60 }, // 2026-10-04 "최소 시간 1시간"
+  afkCheckSanctionMin: { type: Number, default: 30 }, // 제재받은 사람(음성 XP 정지 · XP 획득 중단 기록)의 첫 확인 — "제재 먹은 인원은 최소 시간 30분"
+  afkCheckMinMin: { type: Number, default: 20 },
+  afkCheckMaxMin: { type: Number, default: 60 },
+  afkCheckReplyMin: { type: Number, default: 5 },   // 일일 출석 인정 기준 — 음성 접속 누적 분       // 출석 1회 지급량
   // 📌 연속 출석 보너스 — 기본 꺼짐. days 일 연속 달성 시 xp·point 지급, repeat 면 days 의 배수마다 (bot/src/attend.js)
   attendStreakEnabled: { type: Boolean, default: false },
   attendStreakRules: { type: [AttendStreakRuleSchema], default: [] },

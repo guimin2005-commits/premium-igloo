@@ -287,6 +287,12 @@ const SETTING_LABEL: Record<string, string> = {
   muteMode: "음소거 처리",
   muteReducePct: "감소 비율",
   muteTarget: "적용 기준",
+  afkCheckOn: "잠수 확인",
+  afkCheckFirstMin: "잠수 확인 첫 확인",
+  afkCheckSanctionMin: "잠수 확인 첫 확인(제재 이력)",
+  afkCheckMinMin: "잠수 확인 다음 확인 최소",
+  afkCheckMaxMin: "잠수 확인 다음 확인 최대",
+  afkCheckReplyMin: "잠수 확인 응답 시간",
   levelupChannelId: "레벨업 알림 채널",
   levelupMessage: "레벨업 알림 문구",
   roleGrantEnabled: "역할 지급 알림",
@@ -1714,6 +1720,45 @@ export default function AdminBotPage() {
                 </FieldRow>
                 <FieldRow label="적용 기준" changed={chg("muteTarget")} hint="어떤 상태를 ‘음소거’로 볼지">
                   <Segmented options={MUTE_TARGETS} value={settings.muteTarget || "both"} onChange={(v) => setSettings({ ...settings, muteTarget: v })} />
+                </FieldRow>
+              </Panel>
+
+              {/* 📌 2026-10-04 잠수 확인 — 음성 채널에 혼자인 사람에게 그 채널 채팅으로 [확인] 버튼(본인만 누름). 관리자 · 서포터즈는 빠진다(bot/src/features/afkCheck.js) */}
+              <Panel title="잠수 확인" flush>
+                <FieldRow label="사용" changed={chg("afkCheckOn")} hint="음성 채널에 혼자인 사람만 · 관리자 · 서포터즈 제외">
+                  <Toggle
+                    on={settings.afkCheckOn !== false}
+                    onClick={() => setSettings({ ...settings, afkCheckOn: settings.afkCheckOn === false })}
+                    onLabel="사용 중"
+                    offLabel="사용 안 함"
+                  />
+                </FieldRow>
+                <FieldRow label="첫 확인" changed={chg("afkCheckFirstMin") || chg("afkCheckSanctionMin")} hint="혼자가 된 뒤 · 제재 이력(음성 XP 정지 · XP 획득 중단)은 오른쪽 값">
+                  <Inline>
+                    <input type="number" min={1} aria-label="첫 확인" value={settings.afkCheckFirstMin ?? 60} disabled={settings.afkCheckOn === false}
+                      onChange={(e) => setSettings({ ...settings, afkCheckFirstMin: e.target.value })} className={`${inputClass} !w-20 tabular-nums`} />
+                    분 · 제재 이력
+                    <input type="number" min={1} aria-label="첫 확인(제재 이력)" value={settings.afkCheckSanctionMin ?? 30} disabled={settings.afkCheckOn === false}
+                      onChange={(e) => setSettings({ ...settings, afkCheckSanctionMin: e.target.value })} className={`${inputClass} !w-20 tabular-nums`} />
+                    분
+                  </Inline>
+                </FieldRow>
+                <FieldRow label="다음 확인" changed={chg("afkCheckMinMin") || chg("afkCheckMaxMin")} hint="확인 뒤에도 혼자면 이 사이 무작위">
+                  <Inline>
+                    <input type="number" min={1} aria-label="다음 확인 최소" value={settings.afkCheckMinMin ?? 20} disabled={settings.afkCheckOn === false}
+                      onChange={(e) => setSettings({ ...settings, afkCheckMinMin: e.target.value })} className={`${inputClass} !w-20 tabular-nums`} />
+                    ~
+                    <input type="number" min={1} aria-label="다음 확인 최대" value={settings.afkCheckMaxMin ?? 60} disabled={settings.afkCheckOn === false}
+                      onChange={(e) => setSettings({ ...settings, afkCheckMaxMin: e.target.value })} className={`${inputClass} !w-20 tabular-nums`} />
+                    분
+                  </Inline>
+                </FieldRow>
+                <FieldRow label="응답 시간" changed={chg("afkCheckReplyMin")} hint="안 누르면 서버 잠수 채널로 이동">
+                  <Inline>
+                    <input type="number" min={1} max={60} value={settings.afkCheckReplyMin ?? 5} disabled={settings.afkCheckOn === false}
+                      onChange={(e) => setSettings({ ...settings, afkCheckReplyMin: e.target.value })} className={numClass} />
+                    분
+                  </Inline>
                 </FieldRow>
               </Panel>
             </div>

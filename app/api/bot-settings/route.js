@@ -91,6 +91,13 @@ export async function POST(request) {
         voiceIntervalSec: num(b.voiceIntervalSec, 300, { min: 30, max: 86400 }),
         attendXp: num(b.attendXp, 7000),
         attendVoiceMin: num(b.attendVoiceMin, 60, { min: 1, max: 1440 }),
+        // 잠수 확인 — 무작위 범위는 최대가 최소보다 작으면 최소로 맞춘다
+        afkCheckOn: b.afkCheckOn !== false,
+        afkCheckFirstMin: num(b.afkCheckFirstMin, 60, { min: 1, max: 1440 }),
+        afkCheckSanctionMin: num(b.afkCheckSanctionMin, 30, { min: 1, max: 1440 }),
+        afkCheckMinMin: num(b.afkCheckMinMin, 20, { min: 1, max: 1440 }),
+        afkCheckMaxMin: Math.max(num(b.afkCheckMinMin, 20, { min: 1, max: 1440 }), num(b.afkCheckMaxMin, 60, { min: 1, max: 1440 })),
+        afkCheckReplyMin: num(b.afkCheckReplyMin, 5, { min: 1, max: 60 }),
         muteMode: ["off", "reduce", "block"].includes(b.muteMode) ? b.muteMode : "reduce",
         muteReducePct: num(b.muteReducePct, 90, { min: 0, max: 100 }),
         muteTarget: ["both", "any"].includes(b.muteTarget) ? b.muteTarget : "both",

@@ -19,6 +19,7 @@ import { refreshXpStops, startXpStopLoop } from "./xpStop.js";
 import { registerChatXp } from "./features/chatXp.js";
 import { startVoiceTime, flushVoiceTime } from "./features/voiceTime.js";
 import { startActivityStats, flushActivity } from "./features/activityStats.js";
+import { startAfkCheck } from "./features/afkCheck.js";
 import { registerActivity, startActivity, flushLastActive } from "./features/activity.js";
 import { registerLeaveReset } from "./features/leaveReset.js";
 import { startGrantQueue } from "./features/grantQueue.js";
@@ -83,6 +84,7 @@ client.once(Events.ClientReady, async (c) => {
 
   startActivity(c); // 마지막 활동 시각 — 적어 둔 값을 읽어 재시작 뒤에도 무활동을 이어 세고, 음성에 있는 사람 것만 20초마다 기록
   startVoiceTime(c); // 음성 시간 · 음성 XP — 사람마다 실제 접속 초(들어옴 · 나감 · 옮김 · 마이크 변경), 5분 채우면 1회분 · 못 채우고 나가면 머문 만큼, 20초마다 기록
+  startAfkCheck(c); // 잠수 확인 — 음성 채널에 혼자 1시간이면 [확인] 버튼, 이후 20~60분 무작위, 5분 안에 안 누르면 잠수 채널로(관리자 · 서포터즈 제외)
   startActivityStats(c); // 퀘스트용 활동 횟수 — 메시지 · 답장 · 멘션 · 반응 · 스레드 · 스티커 · 명령어 · 음성 입장 · 레벨 업, 20초마다 기록
   startGrantQueue(c);
   startExpiryReminder(c); // 기간제 만료 임박 DM (10분 주기)

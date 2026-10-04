@@ -23,6 +23,13 @@ const DEFAULTS = {
   voiceEnhanceCostGrowthPct: 50,
   attendXp: fallback.attendXp,
   muteMode: "reduce",
+  // 잠수 확인(features/afkCheck.js) — 사이트 models/BotSetting.js 와 같은 기본값
+  afkCheckOn: true,
+  afkCheckFirstMin: 60,
+  afkCheckSanctionMin: 30,
+  afkCheckMinMin: 20,
+  afkCheckMaxMin: 60,
+  afkCheckReplyMin: 5,
   muteReducePct: 90,
   muteTarget: "both",
   resetOnLeave: false,
