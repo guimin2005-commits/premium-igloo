@@ -35,7 +35,8 @@ const UserXpSchema = new mongoose.Schema({
   voiceXpOff: { type: Boolean, default: false },
   voiceXpOffAt: { type: Date, default: null },
   voiceXpOffBy: { type: String, default: "" }, // 세운 관리자 이름
-  // 📌 아이템 효과(봇이 씀) — 효과별 "하루 1번" 기록("<roleId>:<effectId>" → 날짜) · 최고 도달 레벨(레벨 업 퀘스트가 처음 도달한 레벨만 센다)
+  // 📌 아이템 효과(봇이 씀) — 효과별 "하루 1번" 기록("<roleId>:<effectId>" → 날짜) · 최고 도달 레벨(기록으로만 — 봇이 $max 로 적는다.
+  //    2026-10-04 레벨 업 퀘스트는 이 값을 보지 않고 다시 오른 레벨도 매번 센다)
   effectDaily: { type: Map, of: String, default: {} },
   maxLevel: { type: Number, default: 0 },
   // 📌 시즌 패스 — 새 재화를 만들지 않고 "이번 시즌에 번 XP"(xp - passBaseXp)를 진행도로 쓴다.
@@ -43,12 +44,12 @@ const UserXpSchema = new mongoose.Schema({
   passSeason: { type: Number, default: 0 },        // SEASON.number 와 다르면 새 시즌 — 조회 시점에 다시 스냅샷한다
   passBaseXp: { type: Number, default: 0 },        // 시즌 시작 시점의 누적 XP
   passUnlocked: { type: Boolean, default: false }, // 프리미엄 트랙 해금 여부 (시즌마다 초기화)
-  // 📌 고른 카드 스킨 — "" 안 고름(가진 스킨 중 관리자 순서상 첫 번째) · "none" 끔(기본 카드) · 스킨 키. 인벤토리에서 착용 · 해제 (app/api/xp/card-skin)
+  // 📌 고른 카드 스킨 — "" 안 고름(기본 카드 — 2026-10-04 자동 착용 없음) · "none" 끔(기본 카드) · 스킨 키. 인벤토리에서 착용 · 해제 (app/api/xp/card-skin)
   //    봇(bot/src/db.js)도 같은 칸 — 이미지 카드를 그릴 때 읽는다
   cardSkinPick: { type: String, default: "" },
-  // 📌 단 프로필 배지 — 아이템 id 배열(최대 3). 칸이 없으면 안 고름(가진 배지 중 관리자 순서상 앞의 3개), [] 는 전부 뗌.
+  // 📌 단 프로필 배지 — 아이템 id 배열(최대 3). 칸이 없으면 안 고름(배지 없음 — 2026-10-04 자동 착용 없음), [] 는 전부 뗌.
   //    인벤토리에서 착용 · 해제 (app/api/xp/badge — 규칙은 lib/itemEffects pickBadges).
-  //    default: undefined — 배열 칸은 기본값이 [] 라 그대로 두면 기존 유저가 "전부 뗌"이 된다. 봇(bot/src/db.js)도 같은 칸(읽지는 않는다)
+  //    default: undefined — 배열 칸은 기본값이 [] 라 그대로 두면 기존 유저가 "전부 뗌"이 된다. 봇(bot/src/db.js)도 같은 칸(/인벤토리 '착용' 표시에만 읽는다)
   badgePick: { type: [String], default: undefined },
   // 해금 때 낸 값 — 관리자 테스트 초기화(app/api/xp/reset)가 이만큼 돌려준다. 시즌이 바뀌면 함께 비운다
   passUnlockPaid: {

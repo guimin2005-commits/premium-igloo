@@ -225,8 +225,8 @@ export async function grantXp(member, amount, meta = {}) {
       // 레벨 0(아직 계산 전인 새 문서) → 1 은 시작 레벨이라 알리지 않는다 (역할 지급은 그대로)
       if (newLevel > Math.max(1, before)) announceLevelUp(member, Math.max(1, before), newLevel, doc.xp);
       // 📌 최고 도달 레벨(maxLevel)은 어떤 지급으로 올랐든 $max 로 원자적으로 기록한다 — 효과 지급으로 오른 레벨 포함.
-      //    기록으로만 둔다(레벨 업 퀘스트는 2026-10-04 부터 이 값을 보지 않는다 — 아래)
-      await UserXp.updateOne({ userId: member.id }, { $max: { maxLevel: newLevel } });
+      //    기록으로만 둔다(레벨 업 퀘스트는 2026-10-04 부터 이 값을 보지 않는다 — 아래). 기록이 잠깐 실패해도 퀘스트 · 레벨업 효과를 막지 않게 오류는 삼킨다
+      await UserXp.updateOne({ userId: member.id }, { $max: { maxLevel: newLevel } }).catch(() => {});
       // 📌 레벨 업 퀘스트(features/activityStats.js "levelup") — 2026-10-04 "XP를 써서 내려갔다가 다시 오른 레벨도 레벨이다 / 시작 레벨은 동일 유지".
       //    오른 레벨마다 매번 센다(레벨업 알림 · 레벨업 효과와 같은 기준 — 예전엔 처음 도달한 레벨만). 레벨 0(아직 계산 전인 새 문서) → 1 은 시작 레벨이라 제외
       if (newLevel > Math.max(1, before)) bumpActivity(member.id, "levelup", newLevel - Math.max(1, before));

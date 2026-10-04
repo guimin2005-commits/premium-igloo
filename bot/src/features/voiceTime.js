@@ -34,7 +34,7 @@ const SEG_MAX_MS = FLUSH_MS * 3;
 const sessions = new Map();
 // userId → { ms: 아직 voiceSeconds 에 안 쓴 시간(1초 미만은 이월), member, pieces: 아직 XP 로 안 바꾼 구간 [{ ms, ch, n, mult, mu, df, lv }] }
 const pending = new Map();
-// userId → 열린 바퀴 { ch, chName, pc, sec, xp, muS, dfS, lvS, nS: { 인원: 초 }, idle: 그 바퀴 동안 가장 긴 무활동(분), member, dirty }
+// userId → 열린 바퀴 { ch, chName, pc, sec, xp, muS, dfS, lvS, nS: { 인원: 초 }, idle: 그 바퀴 동안 가장 긴 무활동(분 — null 모름), member, dirty }
 const cycles = new Map();
 const dbCycle = new Set(); // DB(UserXp.voiceCycle)에 바퀴가 적혀 있(을 수 있)는 사람 — 다 주면 지운다
 let closing = []; // 닫았지만 아직 못 준 바퀴 [{ userId, member, cycle }] — DB 정리가 실패하면 다음 기록 때 다시
@@ -95,7 +95,11 @@ function cut(userId, vs, now = Date.now()) {
   sessions.set(userId, { since: mult > 0 ? now : null, member: vs.member || s?.member || null, ch: vs.channelId, n: headcount(vs.channel), mult, ...flagsOf(vs) });
 }
 
-const newCycle = (ch, channel, member) => ({ ch, chName: channel?.name || "", pc: channel?.parentId || "", sec: 0, xp: 0, muS: 0, dfS: 0, lvS: 0, nS: {}, idle: 0, member, dirty: true });
+// 📌 2026-10-04 "재시작 뒤 기록이 아직 없는 사람은 무활동을 '모름'으로 표시" — 무활동은 잰 값이 하나라도 있어야 숫자, 없으면 null(모름).
+//    0 으로 시작하면 모르는 사람이 '무활동 0분'으로 찍힌다(features/activity.js idleMinutes 가 null 을 돌려준다)
+const idleOf = (v) => (v == null || !Number.isFinite(Number(v)) ? null : Math.max(0, Number(v)));
+const maxIdle = (a, b) => (a == null ? b ?? null : b == null ? a : Math.max(a, b)); // null(모름)은 건너뛴다 — 둘 다 모르면 null
+const newCycle = (ch, channel, member) => ({ ch, chName: channel?.name || "", pc: channel?.parentId || "", sec: 0, xp: 0, muS: 0, dfS: 0, lvS: 0, nS: {}, idle: null, member, dirty: true });
 const cycleOf = (v, member) => ({
   ch: String(v?.ch || ""),
   chName: v?.chName || "",
@@ -106,7 +110,7 @@ const cycleOf = (v, member) => ({
   dfS: Number(v?.dfS) || 0,
   lvS: Number(v?.lvS) || 0,
   nS: v?.nS && typeof v.nS === "object" ? { ...v.nS } : {},
-  idle: Math.max(0, Number(v?.idle) || 0),
+  idle: idleOf(v?.idle),
   member,
   dirty: false,
 });
@@ -122,7 +126,7 @@ function mergeCycles(list) {
     out.muS += c.muS;
     out.dfS += c.dfS;
     out.lvS += c.lvS;
-    out.idle = Math.max(out.idle, c.idle);
+    out.idle = maxIdle(out.idle, c.idle);
     for (const [k, v] of Object.entries(c.nS)) out.nS[k] = (out.nS[k] || 0) + v;
     if (c.sec > best.sec) best = c;
     if (c.member) out.member = c.member;
@@ -131,13 +135,14 @@ function mergeCycles(list) {
 }
 
 // 그 바퀴 동안 가장 오래였던 상황 — 퀘스트 음성 조건 · 관리 › 이상 활동이 이 값을 본다.
-// 무활동(idle)은 그 바퀴 동안 음성에 있으면서 잰 가장 긴 값 — 나간 뒤에 재면 활동 기록이 지워져 봇이 켜진 시각부터로 잘못 잰다
+// 무활동(idle)은 그 바퀴 동안 음성에 있으면서 잰 가장 긴 값 — 나간 뒤에 재면 활동 기록이 지워져 모름으로 잘못 잰다.
+// 끝까지 모르면(재시작 뒤 아직 활동 기록이 없음) idle 칸을 빼고 적는다 — 관리 › 이상 활동이 "모름"으로 보여 준다(lib/adminActivity.js)
 function ctxOf(c) {
   const half = c.sec / 2;
   let n = 0;
   let best = -1;
   for (const [k, v] of Object.entries(c.nS)) if (v > best) [best, n] = [v, Number(k)];
-  return { n, mute: c.muS > half, deaf: c.dfS > half, live: c.lvS > half, idle: Math.floor(c.idle) };
+  return { n, mute: c.muS > half, deaf: c.dfS > half, live: c.lvS > half, ...(c.idle == null ? {} : { idle: Math.floor(c.idle) }) };
 }
 
 // 밀린 시간을 쓰고 바퀴를 진행 · 지급한다 — 20초 주기 · 종료(final) 때. 겹쳐 부르면 진행 중인 것을 같이 기다린다.
@@ -230,7 +235,9 @@ async function doFlush(final) {
 
   // ── 음성 XP 바퀴 진행 ──
   const touchIdle = (userId, c) => {
-    if (sessions.get(userId)?.ch === c.ch) c.idle = Math.max(c.idle, idleMinutes(userId, now));
+    if (sessions.get(userId)?.ch !== c.ch) return;
+    const m = idleMinutes(userId, now); // null = 모름 — 잰 값이 없으면 바퀴 값을 그대로 둔다
+    if (m != null) c.idle = Math.max(c.idle ?? 0, m);
   };
   const close = (userId, c) => {
     touchIdle(userId, c);

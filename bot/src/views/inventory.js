@@ -12,8 +12,9 @@ const MAX_BADGES = 3; // 사이트 lib/itemEffects.js MAX_BADGES 와 같다
 const esc = (s) => String(s || "").replace(/([\\*_~|`>])/g, "\\$1");
 
 // 📌 착용 중 — 사이트 app/api/shop/my-items 와 같은 규칙(lib/itemEffects.js perksOfItems · pickCardSkin · pickBadges).
-//    카드 스킨: 가진 스킨(관리자 순서 · 기프트카드 제외) 중 UserXp.cardSkinPick("" 안 고름 → 첫 스킨, "none" 끔). 같은 스킨 키 아이템은 모두 착용
-//    배지: 배지 효과 아이템(관리자 순서) — badgePick 이 배열이 아니면 산 것(bought) 중 앞의 3개, 배열이면 그중 가진 것(최대 3)
+//    카드 스킨: 가진 스킨(관리자 순서 · 기프트카드 제외) 중 UserXp.cardSkinPick 으로 직접 고른 것("" 안 고름 · "none" 끔 → 착용 없음). 같은 스킨 키 아이템은 모두 착용
+//    배지: 배지 효과 아이템(관리자 순서) 중 UserXp.badgePick 으로 직접 단 것만(최대 3). 배열이 아니면(안 고름) · [] 는 착용 없음
+//    📌 2026-10-04 "3개까지만 달 수 있고, 직접 안 고른 유저는 자동으로도 달리지 않게" — 산 배지도 직접 달기 전에는 착용으로 치지 않는다
 const effectsOf = (item) => (Array.isArray(item?.effects) ? item.effects : []);
 const skinOf = (item) => (item?.type === "physical" ? "" : String(effectsOf(item).find((e) => e?.on === "cardSkin" && e.skin)?.skin || ""));
 const isBadge = (item) => item?.type !== "physical" && effectsOf(item).some((e) => e?.on === "profileBadge");
@@ -24,13 +25,12 @@ async function wornOf(userId, owned) {
     if (s && !skins.includes(s)) skins.push(s);
   }
   const badges = owned.filter(({ item }) => isBadge(item)).map(({ item }) => String(item._id));
-  // 안 고른 유저의 자동 표시는 상점에서 산 배지만(사이트 lib/itemEffects pickBadges 와 같다)
-  const boughtBadges = owned.filter(({ item, bought }) => isBadge(item) && bought).map(({ item }) => String(item._id));
   if (!skins.length && !badges.length) return { skin: "", badges: new Set() };
   const pick = await UserXp.findOne({ userId }, { cardSkinPick: 1, badgePick: 1 }).lean();
   const skin = pickCardSkin(skins, pick?.cardSkinPick || "");
+  // 직접 단 배지만 — 안 골랐으면 자동으로 달지 않는다(사이트 lib/itemEffects pickBadges 와 같다)
   const on = Array.isArray(pick?.badgePick) ? new Set(pick.badgePick.map(String)) : null;
-  return { skin, badges: new Set((on ? badges.filter((id) => on.has(id)) : boughtBadges).slice(0, MAX_BADGES)) };
+  return { skin, badges: new Set((on ? badges.filter((id) => on.has(id)) : []).slice(0, MAX_BADGES)) };
 }
 
 /**

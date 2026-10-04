@@ -5,6 +5,8 @@
 //       켜질 때 읽어 이어 센다. 메시지마다 쓰지 않는다 — 20초마다 바뀐 사람만 마지막 값 하나씩 한 번에 쓰고, 종료(SIGTERM) 때 마저 쓴다.
 //       음성에 없는 사람은 적지 않는다(들어오는 것 자체가 활동이라 그때 새로 찍힌다). 음성에서 나가면 DB 값도 지운다 —
 //       봇이 꺼진 사이 다시 들어온 사람이 예전 값으로 길게 잡히지 않게. 켜질 때 음성에 없는 사람의 남은 값도 지운다.
+//       ⚠ 나감과 재입장이 둘 다 봇이 꺼진 사이에 있었거나, 나감을 적기 전에 꺼졌다가(SIGKILL) 켜질 때 다시 음성에 있으면 예전 값을 이어 받는다 —
+//          그 사람의 무활동은 꺼져 있던 동안만큼 길게 잡힐 수 있다(꺼진 사이의 재입장은 알 길이 없다. 보통 배포 몇십 초)
 //    📌 2026-10-04 "재시작 뒤 기록이 아직 없는 사람은 무활동을 '모름'으로 표시" — 기록이 없으면 null(모름). 예전처럼 봇이 켜진 시각부터 세지 않는다
 import { Events } from "discord.js";
 import { UserXp } from "../db.js";
@@ -61,19 +63,38 @@ async function load() {
 }
 
 // 바뀐 사람만 한 번에 — 음성에 있으면 마지막 값, 없으면 null. 같은 값이면 쓰지 않는다
+//    📌 문서를 새로 만들지 않는다 — 퇴장 초기화(features/leaveReset.js)로 지운 문서를 되살리지 않게.
+//       그래서 문서가 있는 사람만 쓰고 "적었다(stored)"로 친다. 아직 문서가 없는 사람(새 멤버 · 퇴장 초기화 뒤 재입장 — 문서는 음성 시간 기록
+//       features/voiceTime.js 가 처음 만든다)은 다음 번에 다시 본다 — 못 쓴 채 적은 것으로 치면 다음 활동 전까지 DB 에 값이 남지 않는다
 async function doFlush() {
   if (!dirty.size) return;
   const guild = guildOf();
   if (!guild) return; // 음성에 있는지 모른다 — 지우지 않게 다음 번에
   const ids = [...dirty];
   dirty.clear();
-  const ops = [];
-  const next = [];
+  const wants = new Map();
   for (const userId of ids) {
     const at = lastAt.get(userId);
     const want = at != null && guild.voiceStates.cache.get(userId)?.channelId ? at : null;
     if ((stored.get(userId) ?? null) === want) continue;
-    // 문서를 새로 만들지 않는다 — 퇴장 초기화(features/leaveReset.js)로 지운 문서를 되살리지 않게
+    wants.set(userId, want);
+  }
+  if (!wants.size) return;
+  let have;
+  try {
+    have = new Set((await UserXp.find({ userId: { $in: [...wants.keys()] } }, { _id: 0, userId: 1 }).lean()).map((d) => d.userId));
+  } catch (e) {
+    wants.forEach((_, userId) => dirty.add(userId)); // 읽기 실패 — 아무것도 안 썼으니 다음 번에 다시
+    throw e;
+  }
+  const ops = [];
+  const next = [];
+  for (const [userId, want] of wants) {
+    if (!have.has(userId)) {
+      if (want != null) dirty.add(userId); // 문서가 생기면 쓴다
+      else stored.delete(userId); // 지울 문서가 없다
+      continue;
+    }
     ops.push({ updateOne: { filter: { userId }, update: { $set: { lastActiveAt: want == null ? null : new Date(want) } } } });
     next.push([userId, want]);
   }
