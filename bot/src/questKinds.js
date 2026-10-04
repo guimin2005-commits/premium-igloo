@@ -1,6 +1,7 @@
 // ── 퀘스트 규칙 한 벌(봇 사본) — 대상 · 세는 방식 · 조건 · 진행도 계산 ──
 //    ⚠️ 아래 "공용 블록" 은 사이트 lib/questKinds.js 와 글자 하나까지 같아야 한다 (봇은 별도 배포라 import 불가).
-//    봇은 /퀘스트 카드(views/quests.js)에서 computeQuestState 로 읽기만 한다 — 수령 · 지급은 사이트에서.
+//    봇은 /퀘스트 카드(views/quests.js)에서 computeQuestState 로 읽는다 — 수령 · 지급은 사이트에서.
+//    저장은 공용 블록이 하는 노출 목록(QuestPick — 주기마다 처음 열 때 · 끄거나 지운 퀘스트 자리를 채울 때)뿐(사이트와 같다).
 
 // ═══ 공용 블록 시작 — lib/questKinds.js 와 bot/src/questKinds.js 의 이 구간은 글자 하나까지 같아야 한다 ═══
 
@@ -470,13 +471,17 @@ export async function computeQuestState(M, userId) {
     //    이 유저 목록에 저장해 주기 끝까지 그대로 둔다(예전엔 다음 초기화까지 비어 3개가 2개로 보였다).
     //    후보는 처음 뽑을 때와 같다(주기 중간에 만든 퀘스트는 다음 초기화부터) · 남은 후보가 없으면 빈 채로.
     //    다른 유저 목록 · 예전 공용 목록(u "*")은 건드리지 않는다
-    const holes = ids.filter((id) => !live.has(id)).length;
+    //    📌 2026-10-04 검토 반영 — 이번 주기에 이미 보상을 받은 자리는 빈자리가 아니다(그 자리 보상은 받았다). 그 퀘스트를 나중에 끄거나 지워도
+    //       채우지 않는다(3개짜리 주기에 보상 4번이 되지 않게). 이번 주기에 받은 퀘스트는 채우는 후보로도 쓰지 않는다(받을 수 없는 자리가 되지 않게)
+    const claimedNow = (id) => claimed.has(`${keys[per]}::${id}`);
+    const isHole = (id) => !live.has(id) && !claimedNow(id);
+    const holes = ids.filter(isHole).length;
     if (holes > 0) {
       const taken = new Set(ids);
-      const fill = ranked().map((q) => String(q._id)).filter((id) => !taken.has(id)).slice(0, holes);
+      const fill = ranked().map((q) => String(q._id)).filter((id) => !taken.has(id) && !claimedNow(id)).slice(0, holes);
       if (fill.length) {
         let k = 0;
-        const next = ids.map((id) => (live.has(id) || k >= fill.length ? id : fill[k++]));
+        const next = ids.map((id) => (!isHole(id) || k >= fill.length ? id : fill[k++]));
         if (M.QuestPick) {
           try {
             // 읽은 목록 그대로일 때만 바꾼다 — 사이트 · 봇이 동시에 채워도 한 번만, 저장된 목록을 다시 읽어 쓴다
@@ -561,6 +566,9 @@ export async function computeQuestState(M, userId) {
   //    기간 밖 출석으로는 세지 않는다. 연속 기록이 생기기 전 문서(0)는 출석한 날을 1일로 본다(봇 attend.js 와 같다)
   //    📌 2026-10-04 "10월에 출석하던 게 11월로 넘어가서 퀘스트가 한 방에 깨질 수 있다는 거 같은데 그러면 수정해야지" — 주간 · 월간은
   //       이 기간 안에서 이어진 날만 센다(기간 첫날부터 마지막 출석 날까지의 날 수를 넘지 않는다). 일일은 그대로 지금 연속 일수("연속 출석 4일째")
+  //    📌 2026-10-04 검토 — 알고 둔 차이: 연속 출석 보호막(봇 attend.js — 하루 빠져도 연속을 잇는다)으로 넘긴 빠진 날도 위 날 수에 들어가,
+  //       기간 전부터 이어 온 연속이면 기간 안 출석보다 많게 셀 수 있다(보호막 1번에 하루까지. 예: 월요일 빠지고 화요일 보호막 → 주간 2).
+  //       보호막이 그날을 지켜 준 것으로 보고 그대로 둔다(출석 기록을 날마다 다시 읽지 않는다)
   const streakIn = (per) => {
     const last = user?.lastAttendDate;
     if (!last || last < startKey[per]) return 0;
