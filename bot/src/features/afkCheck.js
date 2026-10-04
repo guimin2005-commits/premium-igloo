@@ -3,6 +3,7 @@
 //       "그 후는 랜덤하게" · "안 누르면 잠수 채널로 이동" · 버튼은 그 음성 채널 채팅(본인만 누를 수 있음).
 //    · 대상: 같은 음성 채널에 봇 말고 아무도 없는 사람. 잠수 채널 · XP 제외 채널은 원래 XP · 음성 시간이 없어 보지 않는다.
 //      서포터즈(역할 보유자)는 자동으로 뺀다 — 운영자 "서포터즈들은 자동으로 제외". 역할 ID 는 사이트와 같은 순서(환경변수 → 관리 설정)
+//      마이크 · 헤드셋을 끈 사람도 뺀다 — 운영자 "어차피 잠수인 거니까 냅두고 · 90% XP 감소라서 의미 없음"(음소거 감소가 이미 걸린다).
 //      관리자도 뺀다 — 운영자 "관리자들도 제외". 디스코드 관리자 · 서버 관리 권한이 있거나 사이트 관리자 계정(lib/admins.js ADMIN_USERS 와 같게)
 //    · 혼자가 된 뒤 afkCheckFirstMin 분(기본 60)이 되면 그 음성 채널 채팅에 본인 멘션 + [확인] 버튼을 띄운다.
 //      제재받은 사람은 afkCheckSanctionMin 분(기본 30) — 운영자 "제재 먹은 인원의 경우는 최소 시간을 30분으로".
@@ -60,6 +61,7 @@ const randomGap = (s) => {
 function aloneHere(vs, supporterRoleId) {
   const ch = vs?.channel;
   if (!ch || !vs.member || vs.member.user?.bot) return false;
+  if (vs.selfMute || vs.selfDeaf || vs.serverMute || vs.serverDeaf) return false; // 마이크 · 헤드셋 끔 — 음소거 감소로 이미 거의 안 쌓인다
   if (isStaff(vs.member)) return false;
   if (supporterRoleId && vs.member.roles?.cache?.has(supporterRoleId)) return false;
   if (ch.id === vs.guild?.afkChannelId) return false;
