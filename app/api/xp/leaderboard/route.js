@@ -224,7 +224,8 @@ async function monthBoard(monthStart) {
   return [...byUser]
     .map(([userId, v]) => ({ userId, xp: v.xp, displayName: v.displayName }))
     .filter((r) => r.xp > 0)
-    // 동점은 userId 오름차순 — 현재 · 음성(Mongo sort userId:1)과 같은 규칙(숫자 ID 라 글자 비교가 같다)
+    // 동점은 userId 오름차순 — 현재 · 음성(Mongo sort userId:1)과 같은 규칙(글자 비교 — Mongo 정렬 · $lt 와 같은 순서)
+    // 📌 2026-10-04 "규칙 하나로 맞추면, 같은 사람이 화면마다 다른 순위로 보이는 일이 없습니다" — 내 정보(app/api/xp/me) · 봇 /레벨 · /랭크도 이 규칙
     .sort((a, b) => b.xp - a.xp || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0));
 }
 

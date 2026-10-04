@@ -55,6 +55,9 @@ function levelSpan(level, xp) {
   const next = getCumulativeXpByLevel(level + 1);
   return { need: Math.max(0, next - xp), progress: (xp - cur) / Math.max(1, next - cur) };
 }
+// 📌 나보다 위인 사람 — XP 내림차순, 동점은 userId 오름차순. 사이트 랭킹(app/api/xp/leaderboard) · 내 정보(app/api/xp/me)와 같은 규칙
+//    2026-10-04 "규칙 하나로 맞추면, 같은 사람이 화면마다 다른 순위로 보이는 일이 없습니다" — /랭크 목록도 같은 순서(xp -1, userId 1)
+const rankAbove = (userId, xp) => ({ $or: [{ xp: { $gt: xp } }, { xp, userId: { $lt: userId } }] });
 
 // 📌 응답 도우미 — 3초 안에 첫 응답이 없으면 디스코드가 명령을 실패로 끝낸다.
 //    1.5초 안에 끝나면 그냥 reply, 늦어지면 먼저 공개로 defer 해 두고 결과를 editReply 로 채운다.
@@ -133,7 +136,7 @@ async function handleLevel(interaction, r) {
   const doc = await UserXp.findOne({ userId: interaction.user.id }, { xp: 1 }).lean();
   const xp = doc?.xp || 0;
   // 📌 /레벨 = 내 카드 — 순위 · 상위 % 까지 여기서 보여 준다(/랭크 는 서버 순위표)
-  const [above, total] = await Promise.all([UserXp.countDocuments({ xp: { $gt: xp } }), UserXp.countDocuments()]);
+  const [above, total] = await Promise.all([UserXp.countDocuments(rankAbove(interaction.user.id, xp)), UserXp.countDocuments()]);
   const rank = above + 1;
   // 저장된 level 은 새 문서 · 초기화 직후 0 일 수 있다 — xp 로 계산한다 (0 XP = Lv.1, 사이트와 같은 기준)
   const level = getLevelByXp(xp);
@@ -164,9 +167,9 @@ async function handleRank(interaction, r) {
   const doc = await UserXp.findOne({ userId: interaction.user.id }, { xp: 1 }).lean();
   const xp = doc?.xp || 0;
   const [above, total, topDocs] = await Promise.all([
-    UserXp.countDocuments({ xp: { $gt: xp } }),
+    UserXp.countDocuments(rankAbove(interaction.user.id, xp)),
     UserXp.countDocuments(),
-    UserXp.find({}, { userId: 1, xp: 1, username: 1, displayName: 1 }).sort({ xp: -1, _id: 1 }).limit(RANK_TOP).lean(),
+    UserXp.find({}, { userId: 1, xp: 1, username: 1, displayName: 1 }).sort({ xp: -1, userId: 1 }).limit(RANK_TOP).lean(),
   ]);
   const level = getLevelByXp(xp);
   const rank = above + 1;

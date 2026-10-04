@@ -17,7 +17,38 @@ type Agreement = {
   sections: { heading: string; items: { term?: string; desc: string }[]; note?: string }[];
 };
 
-const AGREEMENTS: Agreement[] = [
+// 📌 XP 획득 기준의 숫자 · 조건은 실제 설정값(/api/xp/policy)으로 — /policy 레벨 규정과 같은 규칙(app/policy/page.js).
+//    2026-10-04 "약관·인증 화면·FAQ의 숫자와 조건을 지금 실제 동작에 맞게". 받기 전 · 못 받으면 "—"
+type XpPolicy = {
+  chatXpMin: number; chatXpMax: number; chatCooldownSec: number;
+  voiceXp: number; voiceIntervalSec: number; attendXp: number;
+  muteMode: string; muteReducePct: number; muteTarget: string;
+};
+const num = (v: number) => Number(v).toLocaleString("ko-KR");
+const fmtSec = (sec: number) => {
+  const s = Math.max(0, Math.round(Number(sec) || 0));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return m && r ? `${m}분 ${r}초` : m ? `${m}분` : `${r}초`;
+};
+const eul = (w: string) => (/초$/.test(w) ? "를" : "을");
+const levelRules = (p: XpPolicy | null): { term?: string; desc: string }[] => {
+  if (!p) return [{ term: "채팅", desc: "—" }, { term: "음성", desc: "—" }, { term: "출석 체크", desc: "—" }, { desc: "—" }];
+  const range = p.chatXpMin === p.chatXpMax ? `${num(p.chatXpMin)} XP` : `${num(p.chatXpMin)}~${num(p.chatXpMax)} XP 중 무작위`;
+  const per = fmtSec(p.voiceIntervalSec);
+  // 음소거 — 봇 getMuteMultiplier: both = 마이크 · 헤드셋 둘 다, any = 하나라도. 끔(off)이면 잠수 채널 문장만
+  const who = p.muteTarget === "any" ? "마이크 또는 헤드셋을 음소거하면" : "마이크와 헤드셋을 모두 음소거하면";
+  const mute = p.muteMode === "off" ? "" : p.muteMode === "block" ? `, ${who} XP가 지급되지 않습니다.` : `, ${who} 획득량이 ${num(p.muteReducePct)}% 감소합니다.`;
+  return [
+    { term: "채팅", desc: `메시지 전송 시 ${range}${p.chatCooldownSec > 0 ? ` · 쿨타임 ${fmtSec(p.chatCooldownSec)}` : ""}` },
+    // 내전 음성 채널 3,500 XP 는 2026-10-04 뺐다 — 내전 채널만 더 주는 지급이 없다
+    { term: "음성", desc: `머문 시간 ${per}마다 ${num(p.voiceXp)} XP · ${per}${eul(per)} 채우지 못하고 나가면 머문 시간만큼` },
+    { term: "출석 체크", desc: `1일 1회 ${num(p.attendXp)} XP` },
+    { desc: mute ? `잠수 전용 음성 채널에서는 XP가 지급되지 않으며${mute}` : "잠수 전용 음성 채널에서는 XP가 지급되지 않습니다." },
+  ];
+};
+
+const buildAgreements = (xp: XpPolicy | null): Agreement[] => [
   {
     key: "rules",
     title: "커뮤니티 이용 규칙",
@@ -28,7 +59,8 @@ const AGREEMENTS: Agreement[] = [
         heading: "효력",
         items: [
           { desc: "운영정책은 서버에 입장하는 즉시 효력이 발생하며, 입장 시 동의한 것으로 봅니다." },
-          { desc: "정책 변경 시 최소 7일 전 서버·사이트 공지로 알리며, 변경 이후의 이용은 개정된 정책에 동의한 것으로 봅니다." },
+          // 📌 2026-10-04 "'최소 7일 전'을 '사전 공지'로 바꿉니다" — /policy 운영정책 제2조와 같게
+          { desc: "정책 변경 시 서버·사이트 공지로 사전에 알리며, 변경 이후의 이용은 개정된 정책에 동의한 것으로 봅니다." },
         ],
       },
       {
@@ -127,12 +159,7 @@ const AGREEMENTS: Agreement[] = [
       },
       {
         heading: "획득 기준과 제한",
-        items: [
-          { term: "채팅", desc: "메시지 전송 시 50~500 XP 중 무작위 · 쿨타임 1분" },
-          { term: "음성", desc: "머문 시간 5분마다 3,000 XP (내전 음성 채널은 3,500 XP) · 5분을 채우지 못하고 나가면 머문 시간만큼" },
-          { term: "출석 체크", desc: "1일 1회 10,000 XP" },
-          { desc: "잠수 전용 음성 채널에서는 XP가 지급되지 않으며, 음소거 상태에서는 획득량이 90% 감소합니다." },
-        ],
+        items: levelRules(xp),
       },
       {
         heading: "부정 획득 및 제재",
@@ -216,6 +243,15 @@ export default function VerifyPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [openTab, setOpenTab] = useState<AgreementKey | null>(null);
   const [savedScrimChoice, setSavedScrimChoice] = useState(false);
+  // 지금 XP 정책 — 레벨 운영 규정 요약의 숫자 · 조건(받기 전에는 null → "—")
+  const [xpPolicy, setXpPolicy] = useState<XpPolicy | null>(null);
+  useEffect(() => {
+    fetch("/api/xp/policy", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (d?.success && d.data) setXpPolicy(d.data); })
+      .catch(() => {});
+  }, []);
+  const AGREEMENTS = buildAgreements(xpPolicy);
 
   const checkedCount = AGREEMENTS.filter((a) => agreements[a.key]).length;
   const isAllChecked = checkedCount === AGREEMENTS.length;

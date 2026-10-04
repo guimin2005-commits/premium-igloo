@@ -33,8 +33,10 @@ export async function GET() {
     const level = doc?.level || 0;
 
     const now = new Date();
+    // 📌 순위 = 나보다 위인 사람 + 1. 동점은 userId 오름차순 — 서버 랭킹(app/api/xp/leaderboard) · 봇 /레벨 · /랭크와 같은 규칙
+    //    2026-10-04 "규칙 하나로 맞추면, 같은 사람이 화면마다 다른 순위로 보이는 일이 없습니다" — 예전엔 동점이면 모두 같은 순위였다
     const [above, total, heldRoles, buffCfgs, boostRows, myPurchases, itemsAll, shopItems, setting] = await Promise.all([
-      UserXp.countDocuments({ xp: { $gt: xp } }),
+      UserXp.countDocuments({ $or: [{ xp: { $gt: xp } }, { xp, userId: { $lt: session.user.id } }] }),
       UserXp.countDocuments(),
       fetchMemberRoles(session.user.id),
       RoleConfig.find({ $or: [{ buffXp: { $gt: 0 } }, { attendBuffXp: { $gt: 0 } }] }, { roleId: 1, roleName: 1, buffXp: 1, attendBuffXp: 1 }).lean(),

@@ -140,7 +140,10 @@ export async function POST(request: Request) {
 }
 
 // 📌 답변 알림 — 유저에게 디스코드 DM으로 보낸다 (동의한 문의에만)
-async function sendAnswerDm(inquiry: any) {
+//    2026-10-04 "처음 답변할 때만 보내거나 '답변 수정됨'으로 보냅니다. 잘린 경우에는 '…(사이트에서 전체 보기)'를 붙입니다"
+//    edited: 이미 답변이 있던 문의를 고친 것 — 제목을 '답변이 수정되었습니다'로. DM 본문은 1,500자에서 자르고, 잘렸으면 끝에 표시
+const DM_ANSWER_MAX = 1500;
+async function sendAnswerDm(inquiry: any, edited = false) {
   const token = process.env.DISCORD_BOT_TOKEN;
   if (!token || !inquiry?.userId || inquiry.notifyDiscord === false) return;
 
@@ -156,13 +159,15 @@ async function sendAnswerDm(inquiry: any) {
     if (!dm?.id) return;
 
     // 2) 답변 내용을 보낸다 (DM이 막혀 있으면 디스코드가 거절하므로 조용히 넘어간다)
+    const full = String(inquiry.answer || "");
+    const body = full.length > DM_ANSWER_MAX ? `${full.slice(0, DM_ANSWER_MAX).trimEnd()}…(사이트에서 전체 보기)` : full;
     await fetch(`https://discord.com/api/v10/channels/${dm.id}/messages`, {
       method: "POST",
       headers: { Authorization: `Bot ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         embeds: [{
-          title: "1:1 문의 답변이 도착했습니다",
-          description: `**${inquiry.title || "문의"}**\n\n${String(inquiry.answer || "").slice(0, 1500)}`,
+          title: edited ? "1:1 문의 답변이 수정되었습니다" : "1:1 문의 답변이 도착했습니다",
+          description: `**${inquiry.title || "문의"}**\n\n${body}`,
           color: 15286591,
           footer: { text: "고급 이글루 · 내 정보에서도 확인할 수 있습니다" },
           timestamp: new Date().toISOString(),
@@ -182,12 +187,15 @@ export async function PUT(request: Request) {
     if (deny) return deny;
     await connectToDatabase();
     const { id, answer } = await request.json();
-    const updatedInquiry = await Inquiry.findByIdAndUpdate(
-      id,
-      { answer: answer, status: "답변 완료", answeredAt: new Date() },
-      { new: true }
-    );
-    await sendAnswerDm(updatedInquiry);
+    const next = { answer: answer, status: "답변 완료", answeredAt: new Date() };
+    // 📌 고치기 전 문서를 같은 쓰기에서 받아 첫 답변인지 본다 — 이미 답변이 있었으면 '수정됨' DM, 같은 답을 다시 저장하면 DM 없음
+    const prev: any = await Inquiry.findByIdAndUpdate(id, next, { returnDocument: "before" }).lean();
+    const updatedInquiry = prev ? { ...prev, ...next } : null;
+    if (prev) {
+      const before = String(prev.answer || "");
+      if (!before.trim()) await sendAnswerDm(updatedInquiry);
+      else if (before !== String(answer || "")) await sendAnswerDm(updatedInquiry, true);
+    }
     return NextResponse.json({ success: true, data: updatedInquiry });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
