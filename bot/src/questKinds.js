@@ -8,7 +8,7 @@
 //   log     : XpLog(봇 XP 지급 로그) — 채팅(쿨타임을 지나 XP 받은 메시지) · 음성(지급 주기 1회분 = 머문 초 ÷ 주기) · 출석 · 아이템 효과 · 전체
 //   act     : ActivityStat(봇이 세는 활동 — bot/src/features/activityStats.js) — 메시지(쿨타임 무관) · 답장 · 멘션 · 반응 · 스레드 · 스티커 ·
 //             봇 명령어 · 음성 입장 · 레벨 업. 2026-10-03부터 쌓인다
-//   streak  : UserXp.attendStreak — 이 기간 안에 출석한 경우 마지막 출석 날의 연속 출석 일수(기간 안 출석이 없으면 0)
+//   streak  : UserXp.attendStreak — 이 기간 안에 출석한 경우 마지막 출석 날의 연속 출석 일수(기간 안 출석이 없으면 0) · 주간 · 월간은 기간 안에서 이어진 날만
 //   shop    : Purchase — ARCTIC 상품 구매 줄(주문 묶음 + 상품 = 1건). 운영진 지급 · 패스 보상 · 환불 · 취소 제외. 쓴 XP · 빙옥 합도
 //   enhance : WalletLog kind "enhance" — 강화 1단계 = 1회
 //   pass    : 시즌 패스 보상 받은 개수 — Payout(source "pass") · Purchase("season-pass") · WalletLog("pass-point")
@@ -365,7 +365,7 @@ function shopTimes(rows) {
 // 📌 퀘스트 상태 — 사이트 조회(GET) · 수령 검증(POST) · 봇 /퀘스트 카드가 모두 이 함수 하나를 쓴다(M = 각자의 mongoose 모델).
 //    클라이언트가 보낸 진행도는 절대 믿지 않고 기록으로 매번 다시 센다.
 //    M: { DailyQuest, QuestClaim, XpLog, UserXp, BotSetting, Purchase, WalletLog, Payout, ActivityStat, QuestPick }
-//    📌 쓰기는 QuestPick(유저별 노출 목록, 주기마다 처음 열 때 한 번) 하나뿐 — 나머지는 읽기만
+//    📌 쓰기는 QuestPick(유저별 노출 목록, 주기마다 처음 열 때 한 번 · 끄거나 지운 퀘스트 자리를 채울 때) 하나뿐 — 나머지는 읽기만
 //    읽기: 1차(퀘스트 · 수령 · 유저 · 설정) → 뽑기 → 2차(뽑힌 퀘스트가 필요로 하는 기록만 — 채널 · 음성 조건이 있으면 그 칸까지 묶는다)
 export async function computeQuestState(M, userId) {
   const PERIODS = QUEST_PERIODS;
@@ -379,7 +379,7 @@ export async function computeQuestState(M, userId) {
   const since = new Date(Math.min(startMs.monthly, startMs.weekly));
   const sinceKey = kstDateKey(since);
 
-  const [quests, claims, user, setting, snaps, legacy] = await Promise.all([
+  const [quests, claims, user, setting, snapList, legacy] = await Promise.all([
     M.DailyQuest.find({ enabled: true }).sort({ order: 1, createdAt: 1 }).lean(),
     M.QuestClaim.find({ userId, date: { $in: Object.values(keys) } }, { questId: 1, date: 1 }).lean(),
     M.UserXp.findOne({ userId }, { lastAttendDate: 1, attendCount: 1, attendStreak: 1 }).lean(),
@@ -387,11 +387,18 @@ export async function computeQuestState(M, userId) {
       { key: "main" },
       { attendXp: 1, attendVoiceMin: 1, voiceIntervalSec: 1, questPickDaily: 1, questPickWeekly: 1, questPickMonthly: 1 }
     ).lean(),
-    // 이번 주기 내 목록 + 주기마다 직전 기록(겹치지 않게 고르는 데 쓴다) — 최근 것부터
-    M.QuestPick ? M.QuestPick.find({ u: userId }, { _id: 0, key: 1, per: 1, ids: 1, createdAt: 1 }).sort({ createdAt: -1 }).limit(12).lean() : [],
+    // 주기마다 이번 주기 내 목록 + 직전 2번(겹치지 않게 고르는 데 쓴다) — 최근 것부터
+    //    📌 2026-10-04 일일 · 주간 · 월간 기록을 따로 읽는다 — 셋을 합쳐 최근 12개만 읽던 때는 매일 여는 유저의 일일 기록이 자리를 다 차지해
+    //       지난달 월간 · 지지난 주 주간 목록을 못 보고 그대로 또 뽑을 수 있었다
+    Promise.all(
+      PERIODS.map((per) =>
+        M.QuestPick ? M.QuestPick.find({ u: userId, per }, { _id: 0, key: 1, per: 1, ids: 1, createdAt: 1 }).sort({ createdAt: -1 }).limit(3).lean() : []
+      )
+    ),
     // 📌 바꾸기 전(모두 같은 목록) 방식으로 이미 보여 주던 주기 — 배포 때 그 목록을 u "*" 로 고정해 뒀다. 그 주기가 끝날 때까지 그대로 이어 쓴다
     M.QuestPick ? M.QuestPick.find({ key: { $in: PERIODS.map((per) => `${per}:${keys[per]}:*`) } }, { _id: 0, key: 1, ids: 1 }).lean() : [],
   ]);
+  const snaps = Object.fromEntries(PERIODS.map((per, i) => [per, snapList[i] || []]));
   const claimed = new Set(claims.map((c) => `${c.date}::${c.questId}`));
   const tickSec = Math.max(30, Number(setting?.voiceIntervalSec) || 300);
 
@@ -401,7 +408,8 @@ export async function computeQuestState(M, userId) {
   //       · 그 주기에 처음 연 순간 뽑아 저장한다 — 이후 퀘스트를 추가 · 켜거나 노출 개수를 바꿔도 이 주기 목록은 그대로(다음 초기화부터)
   //       · 후보는 이 주기가 시작되기 전에 만든 퀘스트만 — 주기 중간에 만든 퀘스트는 아직 안 연 유저에게도 다음 초기화부터
   //       · 직전 주기에 받은 퀘스트는 맨 뒤, 그 전 주기에 받은 것은 그다음으로 미룬 뒤 무작위(유저 · 주기 시드) — 후보가 넉넉하면 연달아 겹치지 않는다
-  //       · 일일 퀘스트에 요일 조건이 있으면 그 요일이 아닌 날은 뽑지 않는다 · 끄거나 지운 퀘스트는 그 자리에서 빠진다(채우지 않는다)
+  //       · 일일 퀘스트에 요일 조건이 있으면 그 요일이 아닌 날은 뽑지 않는다
+  //       · 끄거나 지운 퀘스트는 그 자리에서 빠지고, 빈자리는 남은 후보로 채운다(아래 📌 2026-10-04)
   //       · 이름 · 목표 · 보상 수정은 바로 반영(같은 퀘스트라서)
   const picks = { daily: setting?.questPickDaily || 0, weekly: setting?.questPickWeekly || 0, monthly: setting?.questPickMonthly || 0 };
   const grouped = { daily: [], weekly: [], monthly: [] };
@@ -417,11 +425,13 @@ export async function computeQuestState(M, userId) {
   for (const per of PERIODS) {
     const key = `${per}:${keys[per]}:${userId}`;
     const all = grouped[per];
-    const mine = snaps.filter((s) => s.per === per);
-    let ids = mine.find((s) => s.key === key)?.ids;
-    const carried = legacy.find((s) => s.key === `${per}:${keys[per]}:*`)?.ids;
-    if (!Array.isArray(ids) && Array.isArray(carried)) ids = carried.map(String);
-    else if (!Array.isArray(ids)) {
+    const live = new Set(all.map((q) => String(q._id)));
+    const mine = snaps[per];
+    const own = mine.find((s) => s.key === key);
+    // 후보 순서 — 처음 뽑을 때와 빈자리를 채울 때 같은 순서(필요할 때 한 번만 만든다)
+    let order = null;
+    const ranked = () => {
+      if (order) return order;
       const cand = all.filter((q) => {
         if (madeAt(q) >= startMs[per]) return false;
         if (per !== "daily") return true;
@@ -432,14 +442,21 @@ export async function computeQuestState(M, userId) {
       const past = mine.filter((s) => s.key !== key).slice(0, 2);
       const seen = new Map();
       past.forEach((s, i) => (s.ids || []).forEach((id) => { if (!seen.has(String(id))) seen.set(String(id), 2 - i); }));
+      order = shuffleQuests(cand, key); // 유저 · 주기 시드로 섞기
+      order.sort((x, y) => (seen.get(String(x._id)) || 0) - (seen.get(String(y._id)) || 0)); // 안정 정렬 — 같은 칸 안은 섞인 순서 그대로
+      return order;
+    };
+    let ids = own?.ids;
+    const carried = legacy.find((s) => s.key === `${per}:${keys[per]}:*`)?.ids;
+    if (!Array.isArray(ids) && Array.isArray(carried)) ids = carried.map(String);
+    else if (!Array.isArray(ids)) {
+      const cand = ranked();
       const n = picks[per] > 0 ? picks[per] : cand.length;
-      const mixed = shuffleQuests(cand, key); // 유저 · 주기 시드로 섞기
-      mixed.sort((x, y) => (seen.get(String(x._id)) || 0) - (seen.get(String(y._id)) || 0)); // 안정 정렬 — 같은 칸 안은 섞인 순서 그대로
-      ids = mixed.slice(0, n).map((q) => String(q._id));
+      ids = cand.slice(0, n).map((q) => String(q._id));
     }
     // 이 주기 내 목록이 아직 없으면 저장한다(이어 쓴 목록도 — 다음 주기에 겹치지 않게 고를 때 쓴다).
     //    먼저 넣은 쪽이 이긴다($setOnInsert) — 사이트 · 봇이 동시에 처음 열어도 같은 목록을 쓰게 다시 읽는다
-    if (!mine.some((s) => s.key === key) && M.QuestPick) {
+    if (!own && M.QuestPick) {
       try {
         await M.QuestPick.updateOne({ key }, { $setOnInsert: { key, u: userId, per, ids, createdAt: new Date() } }, { upsert: true });
         const saved = await M.QuestPick.findOne({ key }, { ids: 1 }).lean();
@@ -448,7 +465,31 @@ export async function computeQuestState(M, userId) {
         // 저장 실패 — 이번 응답은 방금 뽑은 목록으로(다음 요청이 다시 저장한다)
       }
     }
-    const idSet = new Set(ids.map(String));
+    ids = ids.map(String);
+    // 📌 2026-10-04 "그 빈 자리는 새로 채워야지" — 주기 중간에 끄거나 지운(다른 주기로 옮긴) 퀘스트 자리는 남은 후보 중 위 순서로 채우고
+    //    이 유저 목록에 저장해 주기 끝까지 그대로 둔다(예전엔 다음 초기화까지 비어 3개가 2개로 보였다).
+    //    후보는 처음 뽑을 때와 같다(주기 중간에 만든 퀘스트는 다음 초기화부터) · 남은 후보가 없으면 빈 채로.
+    //    다른 유저 목록 · 예전 공용 목록(u "*")은 건드리지 않는다
+    const holes = ids.filter((id) => !live.has(id)).length;
+    if (holes > 0) {
+      const taken = new Set(ids);
+      const fill = ranked().map((q) => String(q._id)).filter((id) => !taken.has(id)).slice(0, holes);
+      if (fill.length) {
+        let k = 0;
+        const next = ids.map((id) => (live.has(id) || k >= fill.length ? id : fill[k++]));
+        if (M.QuestPick) {
+          try {
+            // 읽은 목록 그대로일 때만 바꾼다 — 사이트 · 봇이 동시에 채워도 한 번만, 저장된 목록을 다시 읽어 쓴다
+            await M.QuestPick.updateOne({ key, ids }, { $set: { ids: next } });
+            const saved = await M.QuestPick.findOne({ key }, { ids: 1 }).lean();
+            ids = Array.isArray(saved?.ids) ? saved.ids.map(String) : next;
+          } catch {
+            ids = next; // 저장 실패 — 이번 응답은 채운 목록으로(다음 요청이 다시 채운다)
+          }
+        } else ids = next;
+      }
+    }
+    const idSet = new Set(ids);
     const chosen = all.filter((q) => idSet.has(String(q._id)));
     // 표시 순서는 관리자가 정한 order 그대로
     chosen.sort((a, b) => (a.order || 0) - (b.order || 0) || (String(a._id) < String(b._id) ? -1 : 1));
@@ -518,8 +559,16 @@ export async function computeQuestState(M, userId) {
   const shopSum = (field, start) => shopRows.reduce((s, p) => s + (ms(p.createdAt) >= start ? Math.max(0, Number(p[field]) || 0) : 0), 0);
   // 📌 연속 출석 — 이 기간 안에 출석했을 때만 마지막 출석 날의 연속 일수(attendStreak 는 다음 출석 때까지 그 날 값 그대로다).
   //    기간 밖 출석으로는 세지 않는다. 연속 기록이 생기기 전 문서(0)는 출석한 날을 1일로 본다(봇 attend.js 와 같다)
-  const streakIn = (per) =>
-    user?.lastAttendDate && user.lastAttendDate >= startKey[per] ? Math.max(1, Math.floor(Number(user.attendStreak) || 0)) : 0;
+  //    📌 2026-10-04 "10월에 출석하던 게 11월로 넘어가서 퀘스트가 한 방에 깨질 수 있다는 거 같은데 그러면 수정해야지" — 주간 · 월간은
+  //       이 기간 안에서 이어진 날만 센다(기간 첫날부터 마지막 출석 날까지의 날 수를 넘지 않는다). 일일은 그대로 지금 연속 일수("연속 출석 4일째")
+  const streakIn = (per) => {
+    const last = user?.lastAttendDate;
+    if (!last || last < startKey[per]) return 0;
+    const streak = Math.max(1, Math.floor(Number(user.attendStreak) || 0));
+    if (per === "daily") return streak;
+    const inPeriod = Math.round((Date.parse(`${last}T00:00:00Z`) - Date.parse(`${startKey[per]}T00:00:00Z`)) / DAY_MS) + 1;
+    return Math.min(streak, Math.max(1, inPeriod || 1));
+  };
 
   const rows = selected.map((q) => {
     const per = PERIODS.includes(q.period) ? q.period : "daily";

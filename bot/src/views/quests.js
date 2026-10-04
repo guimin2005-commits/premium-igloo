@@ -1,6 +1,6 @@
 // ── /퀘스트 표시용 계산 — 일일 · 주간 · 월간 진행도와 받을 보상 개수 ──
 //    📌 계산은 ../questKinds.js 공용 블록의 computeQuestState(사이트 lib/questKinds.js 와 글자 하나까지 같은 사본) — 2026-10-03 부터 손으로 옮긴 사본을 없앴다.
-//    봇은 읽기만 한다(수령 · 지급은 사이트에서). 절대 저장하지 않는다.
+//    봇은 읽기만 한다(수령 · 지급은 사이트에서). 저장은 공용 블록이 하는 노출 목록(QuestPick — 주기마다 처음 열 때 · 끄거나 지운 퀘스트 자리를 채울 때)뿐.
 import mongoose from "mongoose";
 import { UserXp, BotSetting, XpLog, Purchase, WalletLog, Payout, ActivityStat, QuestPick } from "../db.js";
 import { computeQuestState, QUEST_PERIODS } from "../questKinds.js";
