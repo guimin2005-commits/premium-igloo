@@ -15,7 +15,7 @@ import BotSetting from "@/models/BotSetting";
 import { fetchMemberRoles } from "@/lib/discordMember";
 import { ownedItems } from "@/lib/ownedItems";
 import { OWN_PURCHASE_QUERY, OWN_PURCHASE_FIELDS, PERK_ITEM_FIELDS } from "@/lib/itemPerks";
-import { perksOfItems, discountedCost, pickCardSkin, pickBadges, PERK_KEYS } from "@/lib/itemEffects";
+import { perksOfItems, discountedCost, pickCardSkin, pickBadges, PERK_KEYS, cashbackRuleOf } from "@/lib/itemEffects";
 import { buildEnhanceView } from "@/lib/enhance";
 
 // ── [조회] 로그인한 유저 본인의 XP·레벨·순위 ──────────────────
@@ -88,9 +88,12 @@ export async function GET() {
     const { allBadges, cardSkins } = perks;
     // 상시 효과 합만 — 배지 · 카드 스킨은 아래에서 유저가 고른 것으로 따로 준다
     const perkSums = Object.fromEntries(PERK_KEYS.map((k) => [k, perks[k]]));
-    // 📌 카드 스킨 — 유저가 인벤토리에서 고른 것(cardSkinPick), 안 골랐으면 관리자 순서상 첫 스킨, 끔이면 "" (봇 카드와 같은 규칙)
+    // 📌 캐시백은 관리자 설정 상한(상점 관리 › 설정 — cashbackRuleOf)까지 — 결제 API 가 실제로 돌려주는 값과 같게(세부 효과 창이 이 값을 보인다).
+    //    10/4 결정: 숨은 상한은 관리자 칸에만 적고 유저 화면에는 실제 값. 설정을 못 읽었으면(null) 기본 상한(30%)
+    perkSums.shopCashback = Math.min(perkSums.shopCashback || 0, cashbackRuleOf(setting).cap);
+    // 📌 카드 스킨 — 유저가 인벤토리에서 고른 것(cardSkinPick)만. 안 골랐거나 끔이거나 더 이상 없으면 "" (기본 카드 — 봇 카드와 같은 규칙, 2026-10-04 자동 착용 없음)
     const cardSkin = pickCardSkin(cardSkins, doc?.cardSkinPick || "");
-    // 📌 프로필 배지 — 유저가 인벤토리에서 단 것(badgePick), 안 골랐으면 관리자 순서상 앞의 3개, 전부 뗐으면 []
+    // 📌 프로필 배지 — 유저가 인벤토리에서 단 것(badgePick) 중 지금 가진 것만(최대 3). 안 골랐거나 전부 뗐으면 [] (2026-10-04 자동으로 달지 않음)
     const badges = pickBadges(allBadges, doc?.badgePick);
 
     return NextResponse.json({

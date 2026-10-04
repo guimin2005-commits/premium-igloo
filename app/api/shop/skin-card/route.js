@@ -88,14 +88,15 @@ async function render(data) {
   return new Uint8Array(await res.arrayBuffer());
 }
 
-// 📌 본인 /레벨 카드 값 — /api/xp/me 와 같은 계산(레벨 구간 진행 · 순위 = 나보다 XP 많은 사람 + 1)
+// 📌 본인 /레벨 카드 값 — /api/xp/me 와 같은 계산(레벨 구간 진행 · 순위 = 나보다 위인 사람 + 1).
+//    동점은 userId 오름차순 — 서버 랭킹 · 내 정보 · 봇 /레벨 · /랭크와 같은 규칙(2026-10-04 "규칙 하나로 맞추면")
 async function myData(session, skin) {
   await connectToDatabase();
   const doc = await UserXp.findOne({ userId: session.user.id }, { xp: 1, level: 1 }).lean();
   const xp = doc?.xp || 0;
   const level = doc?.level || 0;
   const [above, total, avatar] = await Promise.all([
-    UserXp.countDocuments({ xp: { $gt: xp } }),
+    UserXp.countDocuments({ $or: [{ xp: { $gt: xp } }, { xp, userId: { $lt: session.user.id } }] }),
     UserXp.countDocuments(),
     fetchAvatarDataUri(session.user.image).catch(() => null),
   ]);

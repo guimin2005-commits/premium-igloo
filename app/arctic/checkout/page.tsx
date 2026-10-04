@@ -104,6 +104,8 @@ export default function CheckoutPage() {
   const subtotal = rows.reduce((n, r) => n + salePrice(r.item, r.days) * r.qty, 0);
   const count = rows.reduce((n, r) => n + r.qty, 0);
   const needsContact = rows.some((r) => r.item.type === "physical");
+  // 📌 소모품(1회 소모권 · 보호막 — 상품 목록 API consumable)이 있으면 [필수] 확인 줄에 '사용 후 환불 불가'를 붙인다(바로 구매 창 · 상품 상세와 같은 안내)
+  const hasConsumable = rows.some((r) => !!r.item.consumable);
   // 📌 빙옥 전용 줄은 빙옥으로만, 나머지 줄은 XP + 고른 빙옥 — 서버(api/shop/checkout)와 같은 함수(lib/shopPay planPayment)
   //    쿠폰은 planPayment 가 범위대로 잰다 — XP · 빙옥은 주문 전체 판매가 비율로 줄마다(빙옥 전용 줄 몫은 빙옥이 그만큼 줄어든다 — 올림),
   //    XP 전용은 XP 로 내는 금액에서만, 빙옥 전용은 빙옥으로 내는 금액에서만(서버와 같은 계산)
@@ -117,6 +119,7 @@ export default function CheckoutPage() {
   const plan = planPayment({ lines: planLines, coupon: couponSpec(coupon), pointUse, pointBalance: myPoint ?? 0 });
   const couponDiscount = coupon ? plan.discount : 0;
   // 📌 범위 쿠폰(XP 전용 · 빙옥 전용)은 그 수단으로 낼 금액이 없으면 0 — 결제 API 도 거절한다. 카드에 짧게 알린다
+  //    빙옥 전용 쿠폰의 할인이 1 빙옥이 안 되고 올릴 수도 없으면 그 이유(plan.couponReject — 결제 API 와 같은 문구)
   const couponIdle = !!coupon && plan.couponScope !== "both" && plan.discount <= 0;
   // 보유 쿠폰 목록의 예상 할인 — 지금 장바구니 · 고른 빙옥으로 같은 계산(범위 쿠폰은 서버의 주문 전체 값과 다르다)
   const walletDisc = (w: CouponSpecIn) => planPayment({ lines: planLines, coupon: couponSpec(w), pointUse, pointBalance: myPoint ?? 0 });
@@ -414,7 +417,7 @@ export default function CheckoutPage() {
                   {agreeFinal && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                 </span>
                 <span className="text-[13px] text-[#5a5a5a] leading-relaxed">
-                  <span className="font-bold text-[#131313]">[필수]</span> 결제 후에는 직접 취소할 수 없으며, XP·빙옥은 즉시 차감됨을 확인했습니다.
+                  <span className="font-bold text-[#131313]">[필수]</span> 결제 후에는 직접 취소할 수 없으며, XP·빙옥은 즉시 차감됨을 확인했습니다.{hasConsumable && " 사용한 소모품은 환불되지 않습니다."}
                 </span>
               </button>
             </div>
@@ -436,7 +439,7 @@ export default function CheckoutPage() {
                       <div className="text-[10px] font-bold text-[#8a8a8a]">
                         {coupon.type === "percent" ? `${coupon.value}% 할인` : `${coupon.value.toLocaleString()} XP 할인`}{couponScopeTail(coupon)}
                       </div>
-                      {couponIdle && <div className="text-[10px] font-bold text-[#d01634]">{plan.couponScope === "xp" ? "XP로 결제할 때 적용됩니다" : "빙옥으로 결제할 때 적용됩니다"}</div>}
+                      {couponIdle && <div className="text-[10px] font-bold text-[#d01634]">{plan.couponReject ? plan.couponReject.replace(/\.$/, "") : plan.couponScope === "xp" ? "XP로 결제할 때 적용됩니다" : "빙옥으로 결제할 때 적용됩니다"}</div>}
                     </div>
                     <button onClick={() => { setCoupon(null); setCouponInput(""); }} className="text-[11px] font-bold text-[#8a8a8a] hover:text-[#131313] shrink-0">해제</button>
                   </div>

@@ -16,6 +16,7 @@ import { salePrice, couponError, couponClaimFilter, couponReleaseUpdate, isTimed
 import { getLevelByXp } from "@/lib/leveling";
 import { planPayment, splitByPrice } from "@/lib/shopPay";
 import { denyIfMaintenance } from "@/lib/apiAuth";
+import { isAdminName } from "@/lib/admins";
 import { getPerks } from "@/lib/itemPerks";
 import { cashbackOf, cashbackRuleOf, cashbackBaseOf } from "@/lib/itemEffects";
 import { logWallet } from "@/lib/wallet";
@@ -39,6 +40,11 @@ export async function POST(request) {
     const userId = session?.user?.id;
     if (!userId) {
       return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
+    }
+    // 📌 서버 인증(디스코드 인증 역할 — lib/authOptions isVerified) 회원만 결제한다(약관 'ARCTIC 서버 인증 회원만'). 관리자는 통과.
+    //    화면은 인증 전 유저를 /verify 로 보내지만(app/ClientLayout) API 를 직접 부르면 그대로 사졌다 — 바로 구매와 같은 검사
+    if (session.user.isVerified !== true && !isAdminName(session.user.name)) {
+      return NextResponse.json({ success: false, message: "서버 인증 후 이용할 수 있습니다." }, { status: 403 });
     }
     // 📌 점검 중에는 결제를 서버에서 막는다 (관리자는 통과)
     const maintenance = await denyIfMaintenance(session);
@@ -202,6 +208,10 @@ export async function POST(request) {
       for (let i = 0; i < wanted.get(String(d._id)); i++) units.push({ d, price: unitPrice.get(String(d._id)), pointOnly: !!d.pointOnly });
     }
     const pay = planPayment({ lines: units, coupon, pointUse: body?.payMethod === "point" ? "max" : body?.pointUse });
+    // 📌 빙옥 전용 쿠폰의 할인이 1 빙옥이 안 되는데 올려 줄 수도 없는 경우(lib/shopPay couponReachesPoint) — 그 이유로 거절
+    if (coupon && pay.couponReject) {
+      return NextResponse.json({ success: false, message: pay.couponReject }, { status: 400 });
+    }
     if (coupon && pay.couponScope !== "both" && pay.discount <= 0) {
       return NextResponse.json({ success: false, message: pay.couponScope === "xp" ? "XP로 결제할 때 쓸 수 있는 쿠폰입니다." : "빙옥으로 결제할 때 쓸 수 있는 쿠폰입니다." }, { status: 400 });
     }

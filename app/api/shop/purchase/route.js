@@ -18,8 +18,8 @@ import { getPerks } from "@/lib/itemPerks";
 import { cashbackOf, cashbackRuleOf, cashbackBaseOf } from "@/lib/itemEffects";
 import { logWallet } from "@/lib/wallet";
 import { liveHoldings, planPurchase, timingOf, kstStamp } from "../_lib/renewal";
-import { stripAdminTag } from "@/lib/admins";
-import { REFUND_MARK_RE } from "@/lib/roleMigrationTerms";
+import { stripAdminTag, isAdminName } from "@/lib/admins";
+import { REFUND_MARK_RE, CLEANUP_MARK_RE } from "@/lib/roleMigrationTerms";
 import mongoose from "mongoose";
 
 // ── [구매] 본인 XP · 빙옥을 소모해 상품 구매 — pointUse: 쓸 빙옥 개수(나머지는 XP) ──
@@ -31,6 +31,11 @@ export async function POST(request) {
     const userId = session?.user?.id;
     if (!userId) {
       return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
+    }
+    // 📌 서버 인증(디스코드 인증 역할 — lib/authOptions isVerified) 회원만 구매한다(약관 'ARCTIC 서버 인증 회원만'). 관리자는 통과.
+    //    화면은 인증 전 유저를 /verify 로 보내지만(app/ClientLayout) API 를 직접 부르면 그대로 사졌다 — 장바구니 결제와 같은 검사
+    if (session.user.isVerified !== true && !isAdminName(session.user.name)) {
+      return NextResponse.json({ success: false, message: "서버 인증 후 이용할 수 있습니다." }, { status: 403 });
     }
     // 📌 점검 중에는 구매를 서버에서 막는다 (관리자는 통과)
     const maintenance = await denyIfMaintenance(session);
@@ -289,8 +294,15 @@ export async function GET() {
     //    1개 단위 상품은 1개가 한 건이라 건 수가 빨리 는다 — 최근 창을 넓히고, 다 쓴 소모권(consumedAt)은 보유 창을 채우지 않게 뺀다.
     //    최근 창 밖의 건은 모두 그보다 오래됐으므로 뒤에 붙여도 최신순이 유지된다
     //    📌 역할 환불 표시 기록(관리자 역할 이전 — 산 적 없는 역할을 XP · 빙옥으로 돌려준 표시, 낸 값 0)은 구매가 아니라 뺀다. 환불 금액은 내역(원장)에 보인다
+    //    📌 역할 정리 표시 기록(역할 이전 '기간 끝남' — 남은 역할만 떼는 표시, 낸 값 0)도 구매가 아니라 뺀다
     const [recent, live] = await Promise.all([
-      Purchase.find({ userId, $nor: [{ itemId: "grant", status: "refunded", adminNote: REFUND_MARK_RE }] }).sort({ createdAt: -1 }).limit(200).lean(),
+      Purchase.find({
+        userId,
+        $nor: [
+          { itemId: "grant", status: "refunded", adminNote: REFUND_MARK_RE },
+          { itemId: "grant", status: "refunded", adminNote: CLEANUP_MARK_RE },
+        ],
+      }).sort({ createdAt: -1 }).limit(200).lean(),
       Purchase.find({
         userId,
         status: { $in: ["pending", "completed"] },

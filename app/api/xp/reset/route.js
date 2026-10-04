@@ -9,6 +9,7 @@ import { getLevelByXp } from "@/lib/leveling";
 import UserXp from "@/models/UserXp";
 import Purchase from "@/models/Purchase";
 import ShopItem from "@/models/ShopItem";
+import { refundValueOf, clawFromWallet, returnOrderCoupon } from "@/lib/orderRefund";
 
 // 📌 관리자 테스트 초기화 — 관리자 본인 계정만 되돌린다. body { what: "enhance" | "pass" | "shop" }
 //    관리자도 일반 유저와 똑같이 차감되므로(상점 · 강화 · 시즌 패스) 초기화는 낸 값을 돌려준다.
@@ -111,6 +112,7 @@ export async function POST(request) {
     let backPoint = 0;
     let count = 0;
     const claws = [];
+    const orders = new Map(); // 쿠폰을 쓴 주문 — 전부 되돌린 뒤 쿠폰도 돌려준다(주문 환불과 같은 returnOrderCoupon)
     for (const r of rows) {
       // 대기 건은 역할이 아직 없으니 취소, 지급된 건은 환불 — 봇이 roleDetached 를 보고 역할을 뗀다.
       //    만료 건은 봇이 이미 역할을 뗐으므로 roleDetached 를 세워 둔다 (다시 떼며 알림을 보내지 않게)
@@ -130,13 +132,15 @@ export async function POST(request) {
       if (!p) continue;
       count++;
       if (p.billed) {
-        // 📌 캐시백 회수 — 결제 때 받은 캐시백은 돌려줄 XP 에서 뺀다(돌려줄 XP 까지만). 관리자 환불(app/api/shop/orders)과 같은 규칙
-        const paid = p.paidXp || 0;
-        const claw = Math.min(Math.max(0, Math.floor(Number(p.cashbackXp) || 0)), paid);
-        backXp += paid - claw;
-        backPoint += p.paidPoint || 0;
-        if (claw > 0) claws.push({ claw, name: p.itemName, refId: String(p._id) });
+        // 📌 돌려줄 값 · 캐시백 회수는 관리자 환불(app/api/shop/orders)과 같은 식 — lib/orderRefund refundValueOf.
+        //    받은 캐시백은 돌려줄 XP 에서 빼고(claw), 빙옥 몫 캐시백(상점 관리 › 설정)처럼 돌려줄 XP 로 다 못 뺀 몫(clawRest)은
+        //    환불 뒤 지갑 XP 에서 있는 만큼 뺀다(clawFromWallet)
+        const v = refundValueOf(p);
+        backXp += v.xp;
+        backPoint += v.point;
+        if (v.claw > 0 || v.clawRest > 0) claws.push({ claw: v.claw, rest: v.clawRest, name: p.itemName, refId: String(p._id) });
       }
+      if (p.orderId && p.couponId) orders.set(String(p.orderId), { userId, orderId: p.orderId, couponId: p.couponId });
       await ShopItem.updateOne({ _id: p.itemId, stock: { $gte: 0 } }, { $inc: { stock: 1 } });
       await ShopItem.updateOne({ _id: p.itemId, soldCount: { $gt: 0 } }, { $inc: { soldCount: -1 } });
     }
@@ -144,13 +148,29 @@ export async function POST(request) {
       return NextResponse.json({ success: true, message: "되돌릴 상점 구매가 없습니다." });
     }
     const msg = await refund(userId, backXp, backPoint);
-    // 고른 카드 스킨 · 단 배지도 처음으로 — 다시 사면 첫 구매처럼 스킨 · 배지가 바로 붙게(남은 "none" · 키 · [] 가 다음 테스트를 가리지 않게)
+    // 고른 카드 스킨 · 단 배지도 처음(안 고름)으로 — 되돌린 아이템을 가리키는 고른 값("none" · 키 · 배열)이 다음 테스트에 남지 않게.
+    //    2026-10-04 부터 자동 착용이 없어 다시 사면 인벤토리에서 직접 착용한다
     await UserXp.updateOne({ userId }, { $set: { cardSkinPick: "" }, $unset: { badgePick: "" } });
-    // 회수한 캐시백은 원장에 따로 남긴다 — 환불(+paidXp)은 구매 기록이 세므로, 빼고 돌려준 몫을 여기서 맞춘다
+    // 회수한 캐시백은 원장에 따로 남긴다 — 환불(+paidXp)은 구매 기록이 세므로, 빼고 돌려준 몫(claw) · 지갑에서 뺀 몫(rest)을 여기서 맞춘다
+    let restXp = 0;
     for (const c of claws) {
-      await logWallet({ userId, currency: "xp", amount: -c.claw, kind: "cashback", label: `캐시백 회수 · ${c.name || "상품"}`, refId: c.refId });
+      const rest = c.rest > 0 ? await clawFromWallet(userId, c.rest) : 0;
+      restXp += rest;
+      const amount = c.claw + rest;
+      if (amount > 0) await logWallet({ userId, currency: "xp", amount: -amount, kind: "cashback", label: `캐시백 회수 · ${c.name || "상품"}`, refId: c.refId });
     }
-    return NextResponse.json({ success: true, message: `상점 구매 ${count}건을 되돌렸습니다${msg}.` });
+    // 지갑에서 캐시백을 뺐으면 레벨이 내려갈 수 있다 — 봇이 보상 역할을 다시 맞추도록 표시한다
+    if (restXp > 0) {
+      const w = await UserXp.findOne({ userId }, { xp: 1 }).lean();
+      await UserXp.updateOne({ userId }, { $set: { level: getLevelByXp(w?.xp ?? 0), needsRoleSync: true } });
+    }
+    // 주문에 쓴 쿠폰 — 그 주문을 전부 되돌렸으면 다시 쓸 수 있게 돌려준다. 실패해도 초기화는 끝난 것이라 막지 않는다
+    let couponBack = 0;
+    for (const o of orders.values()) {
+      if (await returnOrderCoupon(o).catch((e) => { console.error("주문 쿠폰 반환 실패:", o.orderId, e?.message || e); return false; })) couponBack++;
+    }
+    const tail = [restXp > 0 ? `캐시백 XP ${restXp.toLocaleString()} 회수` : "", couponBack > 0 ? `쿠폰 ${couponBack}장 반환` : ""].filter(Boolean).map((s) => ` · ${s}`).join("");
+    return NextResponse.json({ success: true, message: `상점 구매 ${count}건을 되돌렸습니다${msg}${tail}.` });
   } catch (e) {
     console.error("관리자 초기화 오류:", e);
     return NextResponse.json({ success: false, message: "초기화 중 오류가 발생했습니다." }, { status: 500 });
