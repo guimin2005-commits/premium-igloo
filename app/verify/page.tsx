@@ -32,19 +32,22 @@ const fmtSec = (sec: number) => {
   return m && r ? `${m}분 ${r}초` : m ? `${m}분` : `${r}초`;
 };
 const eul = (w: string) => (/초$/.test(w) ? "를" : "을");
+const AFK_RULE = "잠수 전용 음성 채널에서는 XP가 지급되지 않습니다.";
 const levelRules = (p: XpPolicy | null): { term?: string; desc: string }[] => {
-  if (!p) return [{ term: "채팅", desc: "—" }, { term: "음성", desc: "—" }, { term: "출석 체크", desc: "—" }, { desc: "—" }];
+  // 설정값이 없는 잠수 채널 문장은 받기 전에도 그대로 — 음소거 구절만 값을 받은 뒤 붙는다
+  if (!p) return [{ term: "채팅", desc: "—" }, { term: "음성", desc: "—" }, { term: "출석 체크", desc: "—" }, { desc: AFK_RULE }];
   const range = p.chatXpMin === p.chatXpMax ? `${num(p.chatXpMin)} XP` : `${num(p.chatXpMin)}~${num(p.chatXpMax)} XP 중 무작위`;
   const per = fmtSec(p.voiceIntervalSec);
-  // 음소거 — 봇 getMuteMultiplier: both = 마이크 · 헤드셋 둘 다, any = 하나라도. 끔(off)이면 잠수 채널 문장만
+  // 음소거 — 봇 getMuteMultiplier: both = 마이크 · 헤드셋 둘 다, any = 하나라도. 끔(off) · 감소율 0%(배수 1)면 잠수 채널 문장만
   const who = p.muteTarget === "any" ? "마이크 또는 헤드셋을 음소거하면" : "마이크와 헤드셋을 모두 음소거하면";
-  const mute = p.muteMode === "off" ? "" : p.muteMode === "block" ? `, ${who} XP가 지급되지 않습니다.` : `, ${who} 획득량이 ${num(p.muteReducePct)}% 감소합니다.`;
+  const none = p.muteMode === "off" || (p.muteMode !== "block" && !(Number(p.muteReducePct) > 0));
+  const mute = none ? "" : p.muteMode === "block" ? `, ${who} XP가 지급되지 않습니다.` : `, ${who} 획득량이 ${num(p.muteReducePct)}% 감소합니다.`;
   return [
     { term: "채팅", desc: `메시지 전송 시 ${range}${p.chatCooldownSec > 0 ? ` · 쿨타임 ${fmtSec(p.chatCooldownSec)}` : ""}` },
     // 내전 음성 채널 3,500 XP 는 2026-10-04 뺐다 — 내전 채널만 더 주는 지급이 없다
     { term: "음성", desc: `머문 시간 ${per}마다 ${num(p.voiceXp)} XP · ${per}${eul(per)} 채우지 못하고 나가면 머문 시간만큼` },
     { term: "출석 체크", desc: `1일 1회 ${num(p.attendXp)} XP` },
-    { desc: mute ? `잠수 전용 음성 채널에서는 XP가 지급되지 않으며${mute}` : "잠수 전용 음성 채널에서는 XP가 지급되지 않습니다." },
+    { desc: mute ? `잠수 전용 음성 채널에서는 XP가 지급되지 않으며${mute}` : AFK_RULE },
   ];
 };
 

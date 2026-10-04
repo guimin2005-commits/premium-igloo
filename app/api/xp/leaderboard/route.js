@@ -103,18 +103,21 @@ async function finish(rows, skip) {
 //    XpLog 에 음수 줄을 쓰지 않는다 — 원장(app/api/xp/ledger)에 Payout 줄과 두 번 보이고, 퀘스트 · 패스 · 서포터즈도 XpLog 를 같이 센다.
 //    유저가 쓴 XP(상점 결제 · 강화 · 패스 해금)와 다른 지급은 빼지 않는다 — 대기 · 처리 중은 아직 깎이지 않았으므로 paid 만
 //    초기화는 kind "reset", 그 표시가 없던 예전 기록은 수동 지급 중 사유 "관리자 초기화…"(원장 HIDDEN_PAYOUT 과 같은 기준). 보유 0 이던 사람의 기록은 금액 0 이라 따로 잡는다
+//    📌 2026-10-04 퇴장 초기화(봇 features/leaveReset.js)도 kind "reset" 을 남긴다 — 금액 0 · source "etc" · by "bot" · paid, 나간 시각.
+//       kind "reset" 은 금액 부호와 상관없이 '그 시각까지 0'이고 획득(plus)에 넣지 않는다. 사유로만 잡는 예전 기록은 금액 0 이하일 때만 초기화
 const ADMIN_TAKE = [
   { source: { $in: ["manual", "admin"] }, amount: { $lt: 0 } },
   { kind: "reset" },
   { source: "manual", reason: /^관리자 초기화/ },
 ];
 const IS_RESET = {
-  $and: [
-    { $lte: ["$amount", 0] },
+  $or: [
+    { $eq: ["$kind", "reset"] },
     {
-      $or: [
-        { $eq: ["$kind", "reset"] },
-        { $and: [{ $eq: ["$source", "manual"] }, { $regexMatch: { input: { $ifNull: ["$reason", ""] }, regex: "^관리자 초기화" } }] },
+      $and: [
+        { $lte: ["$amount", 0] },
+        { $eq: ["$source", "manual"] },
+        { $regexMatch: { input: { $ifNull: ["$reason", ""] }, regex: "^관리자 초기화" } },
       ],
     },
   ],
@@ -124,7 +127,7 @@ const IS_RESET = {
 //    (퀘스트 · 시즌 패스 · 관리자 지급 · 쿠폰 · 서포터즈 · 역할 환불 — 봇 processPayouts 는 UserXp.xp 만 올리고 XpLog 를 쓰지 않는다)
 //    − 관리자 회수 · 초기화. 유저가 쓴 XP(상점 결제 · 강화 · 패스 해금)는 Payout 이 아니라 빼지 않는다.
 //    시각 순으로 쌓는다: 회수는 0 아래로 내리지 않고(그 뒤에 번 XP 는 다시 쌓인다 — 보유 XP 가 0 에서 멈추는 것과 같다),
-//    초기화는 금액과 상관없이 그 순간까지를 0 으로(보유 XP 를 통째로 지운 것).
+//    초기화(관리자 · 퇴장)는 금액과 상관없이 그 순간까지를 0 으로(보유 XP 를 통째로 지운 것 — 같은 달에 다시 들어와도 나가기 전 몫은 안 잡힌다).
 //    📌 "회수는 그 달 지급분에서 먼저"(2ffb4b2)와 같은 값이다 — 지급분 u · 번 값 v 로 나눠 u 부터 깎아도 합(u + v)은 max(0, 합 − 회수)라
 //       지급까지 더하는 지금은 한 값으로 센다(잘못 준 지급을 [XP 제거]로 되돌리면 그 지급이 빠질 뿐 채팅 · 음성으로 번 몫은 그대로).
 //    집계는 XpLog 1번 + Payout 1번 + (회수 · 초기화가 있는 사람만) 구간별 XpLog 1번.
@@ -156,8 +159,8 @@ async function monthBoard(monthStart) {
           at: { $push: "$at" },
           amt: { $push: "$amount" },
           reset: { $push: IS_RESET },
-          plus: { $sum: { $cond: [{ $gt: ["$amount", 0] }, "$amount", 0] } },
-          takes: { $sum: { $cond: [{ $lte: ["$amount", 0] }, 1, 0] } },
+          plus: { $sum: { $cond: [{ $and: [{ $gt: ["$amount", 0] }, { $not: [IS_RESET] }] }, "$amount", 0] } },
+          takes: { $sum: { $cond: [{ $or: [{ $lte: ["$amount", 0] }, IS_RESET] }, 1, 0] } },
         },
       },
     ]),
@@ -224,7 +227,7 @@ async function monthBoard(monthStart) {
   return [...byUser]
     .map(([userId, v]) => ({ userId, xp: v.xp, displayName: v.displayName }))
     .filter((r) => r.xp > 0)
-    // 동점은 userId 오름차순 — 현재 · 음성(Mongo sort userId:1)과 같은 규칙(글자 비교 — Mongo 정렬 · $lt 와 같은 순서)
+    // 동점은 userId 오름차순 — 현재 · 음성(Mongo sort userId:1)과 같은 규칙(글자 비교 — Mongo 정렬 · $lt 와 같은 순서, 가입 순서 아님)
     // 📌 2026-10-04 "규칙 하나로 맞추면, 같은 사람이 화면마다 다른 순위로 보이는 일이 없습니다" — 내 정보(app/api/xp/me) · 봇 /레벨 · /랭크도 이 규칙
     .sort((a, b) => b.xp - a.xp || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0));
 }
@@ -236,15 +239,16 @@ async function monthBoard(monthStart) {
 //    빙옥으로 낸 몫은 XP 가 아니라 빠진다. ⚠ 원장 쪽 식을 바꾸면 여기도 같이 바꾼다.
 //    관리자 회수 · 캐시백 회수는 더하지 않는다 — 보유 XP 에서 빠진 그대로 누적에서도 빠진다(10/1 결정).
 //    세는 구간: 시즌 시작(lib/season)과 내역 기준 시각(BotSetting.ledgerSince) 중 늦은 쪽부터.
-//    관리자 초기화가 있었던 사람은 마지막 초기화 시각부터, 퇴장 초기화로 문서가 다시 생긴 사람은 그 생성 시각부터 —
-//    초기화가 보유 XP 를 통째로 지웠으므로 그 전에 쓴 것은 지금 값에 없다.
+//    초기화(관리자 · 퇴장 — Payout kind "reset")가 있었던 사람은 마지막 초기화 시각부터, 퇴장 초기화로 문서가 다시 생긴 사람은 그 생성 시각부터(늦은 쪽) —
+//    초기화가 보유 XP 를 통째로 지웠으므로 그 전에 쓴 것은 지금 값에 없다. 초기화 기록은 시작 시각으로만 쓰고 얻은 XP 에 더하지 않는다.
 //    📌 검산: 전원 합 = 구간 안 발행(XpLog + 양수 지급 + 캐시백) − 관리자 회수 · 캐시백 회수 — 구간 시작 때 보유가 0 이고 구간 안 초기화가 없으면 같은 값(10/3 실측 차이 0)
 //    집계는 Payout 1번(초기화 시각) + UserXp 2번(구간 안 생성 · 보유) + Purchase 2번 + WalletLog 1번, 30초 메모리 캐시.
 //    반환: [{ userId, xp(누적), name, level, attendCount }] — xp 내림차순 · userId 오름차순, 0 이하는 빠진다
 const TOTAL_TTL = 30 * 1000;
 let totalCache = { at: 0, key: "", board: null };
 
-const HIDDEN_PAYOUT = [{ kind: "reset" }, { source: "manual", reason: /^관리자 초기화/ }];
+// 초기화 기록 — 원장 HIDDEN_PAYOUT 과 같은 두 표시. kind "reset" 은 금액과 상관없이, 사유로만 잡는 예전 기록은 금액 0 이하만(monthBoard IS_RESET 과 같다)
+const RESET_PAYOUT = [{ kind: "reset" }, { source: "manual", reason: /^관리자 초기화/, amount: { $lte: 0 } }];
 const hasSplit = {
   $or: [
     { $eq: ["$billed", true] },
@@ -267,12 +271,13 @@ async function totalBoard(since) {
   const key = since.toISOString();
   if (totalCache.board && totalCache.key === key && Date.now() - totalCache.at < TOTAL_TTL) return totalCache.board;
 
-  // 1) 사람마다 세기 시작하는 시각 — 구간 안의 마지막 관리자 초기화(XP 쪽 · 반영된 것만)와 지금 문서가 생긴 시각 중 늦은 쪽
-  //    📌 퇴장 초기화(bot leaveReset)는 문서를 통째로 지우고 Payout 을 남기지 않는다 — 다시 생긴 문서의 생성 시각(_id)부터 센다.
+  // 1) 사람마다 세기 시작하는 시각 — 구간 안의 마지막 초기화(XP 쪽 · 반영된 것만)와 지금 문서가 생긴 시각 중 늦은 쪽
+  //    📌 2026-10-04 퇴장 초기화(bot features/leaveReset.js)도 문서를 지운 시각에 Payout(kind "reset" · 금액 0 · paid)을 남긴다 — 관리자 초기화와 같이 여기서 잡힌다.
+  //       그 기록이 없던 예전 퇴장(또는 기록 쓰기가 실패한 퇴장)은 다시 생긴 문서의 생성 시각(_id)부터 센다.
   //       XP 를 쓰려면 잔액이 든 문서가 먼저 있어야 하므로 정상 지출은 생성 시각보다 앞서지 않는다(_id 는 초 단위로 내림)
   const [resets, born] = await Promise.all([
     Payout.aggregate([
-      { $match: { userId: { $nin: ["", null] }, status: "paid", currency: { $ne: "point" }, amount: { $lte: 0 }, $or: HIDDEN_PAYOUT } },
+      { $match: { userId: { $nin: ["", null] }, status: "paid", currency: { $ne: "point" }, $or: RESET_PAYOUT } },
       { $addFields: { at: { $ifNull: ["$paidAt", "$createdAt"] } } },
       { $match: { at: { $gte: since } } },
       { $group: { _id: "$userId", at: { $max: "$at" } } },

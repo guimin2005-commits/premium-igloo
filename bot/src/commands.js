@@ -57,6 +57,7 @@ function levelSpan(level, xp) {
 }
 // 📌 나보다 위인 사람 — XP 내림차순, 동점은 userId 오름차순. 사이트 랭킹(app/api/xp/leaderboard) · 내 정보(app/api/xp/me)와 같은 규칙
 //    2026-10-04 "규칙 하나로 맞추면, 같은 사람이 화면마다 다른 순위로 보이는 일이 없습니다" — /랭크 목록도 같은 순서(xp -1, userId 1)
+//    userId 는 글자 비교(Mongo 정렬 · $lt 와 같은 순서)라 가입 순서가 아니다 — ID 자리 수(17~19)가 다르면 늦게 만든 계정이 앞설 수 있다
 const rankAbove = (userId, xp) => ({ $or: [{ xp: { $gt: xp } }, { xp, userId: { $lt: userId } }] });
 
 // 📌 응답 도우미 — 3초 안에 첫 응답이 없으면 디스코드가 명령을 실패로 끝낸다.

@@ -67,6 +67,7 @@ const VALID_TABS = DOCS.map((d) => d.id);
 // 📌 XP 획득 기준의 숫자 · 조건은 실제 설정값(/api/xp/policy — 봇이 읽는 BotSetting)으로 그린다.
 //    2026-10-04 "약관·인증 화면·FAQ의 숫자와 조건을 지금 실제 동작에 맞게" — 손으로 적은 숫자(출석 10,000 · 내전 3,500 · 음소거 '마이크 또는 헤드셋')가
 //    실제 지급과 어긋났다. 값을 받기 전 · 못 받으면 그 줄은 "—" (틀린 숫자를 먼저 보이지 않게). 인증 화면(app/verify) · FAQ 도 같은 규칙
+//    (설정과 상관없는 잠수 채널 문장은 그대로 두고, FAQ 문장 속 음소거 구절은 값을 받은 뒤에만 붙는다)
 const num = (v) => Number(v).toLocaleString("ko-KR");
 const fmtSec = (sec) => {
   const s = Math.max(0, Math.round(Number(sec) || 0));
@@ -84,8 +85,10 @@ const voiceRule = (p) => {
   return `머문 시간 ${per}마다 ${num(p.voiceXp)} XP · ${per}${eul(per)} 채우지 못하고 나가면 머문 시간만큼`;
 };
 // 음소거 — 봇 getMuteMultiplier(bot/src/botSettings.js): 적용 기준 both = 마이크 · 헤드셋 둘 다, any = 하나라도. 끔(off)이면 이 항이 없다
+//    감소율 0% 도 봇 배수가 1(끔과 같다)이라 항을 뺀다 — "0% 감소" 로 보이지 않게
+const muteNone = (p) => p.muteMode === "off" || (p.muteMode !== "block" && !(Number(p.muteReducePct) > 0));
 const muteRule = (p) => {
-  if (p.muteMode === "off") return null;
+  if (muteNone(p)) return null;
   const who = p.muteTarget === "any" ? "마이크 또는 헤드셋을 음소거한" : "마이크와 헤드셋을 모두 음소거한";
   return p.muteMode === "block"
     ? `음성 채널에서 ${who} 상태에서는 XP가 지급되지 않습니다.`
