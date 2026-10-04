@@ -113,9 +113,8 @@ export function LoginSheet({
         </div>
       )}
       <h2 className="text-[22px] font-black text-[#131313] tracking-tight leading-tight md:text-center">로그인</h2>
-      <p className="mt-1.5 text-[12px] text-[#5a5a5a] md:text-center">고급 이글루 디스코드 계정</p>
       <button type="button" onClick={onDiscord}
-        className="mt-7 w-full h-12 rounded-full bg-[#5865F2] hover:bg-[#4752C4] text-white text-[14px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#5865F2]/40">
+        className="mt-6 w-full h-12 rounded-full bg-[#5865F2] hover:bg-[#4752C4] text-white text-[14px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#5865F2]/40">
         Discord로 계속하기
       </button>
       <div className="mt-4 flex items-center justify-center gap-2 text-[12px] text-[#5a5a5a]">
