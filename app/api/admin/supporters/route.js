@@ -82,8 +82,11 @@ export async function GET(request) {
   }
 }
 
-// 숫자 입력은 0 이상 정수로 (지급액이므로 상한도 둔다)
-const num = (v, def, max = 10_000_000) => {
+// 숫자 입력은 0 이상 정수로
+//    📌 2026-10-04 "상한을 없앱니다(숫자가 깨지지 않는 한도만)" — 1,000만을 넘게 적으면 말없이 1,000만으로 잘라 저장하던 것을 없앴다.
+//       남은 끝은 소수 · 지수 표기로 숫자가 깨지지 않게 막는 한도(1조 — 퀘스트 숫자 칸과 같은 값)뿐
+const EVAL_NUM_MAX = 1_000_000_000_000;
+const num = (v, def, max = EVAL_NUM_MAX) => {
   // 빈 칸·null 은 "입력 안 함" — 0 이 아니라 기본값으로 (Number("") 은 0 이라 그냥 두면 0 XP 가 저장·지급된다)
   if (v === "" || v == null) return def;
   const n = Number(v);

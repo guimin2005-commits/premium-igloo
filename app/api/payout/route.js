@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { denyIfNotAdmin } from "@/lib/apiAuth";
 import Payout from "@/models/Payout";
@@ -76,7 +77,13 @@ export async function PUT(request) {
   }
 }
 
-// [삭제] 지급 항목 제거
+// [삭제] 아직 지급되지 않은 XP 건만 — 지급 취소
+//    📌 2026-10-04 "아직 대기 중인 건만 지울 수 있게(=지급 취소) 하고, 완료 기록은 남김" —
+//       지급된 건을 지우면 XP 는 그대로 남고 내역 · 이번 달 랭킹에서만 빠진다. 그래서 봇이 집기 전(pending)인 XP 건만 지운다.
+//       대상을 찾지 못한 실패 건(failed — XP 가 들어가지 않았다)도 같이 지울 수 있다. 처리 중(processing)은 봇이 지급하는 중이라 막는다.
+//       빙옥 건은 사이트가 이미 반영한 기록이라 대기로 남았어도 지우지 않는다(완료로 되돌리기만 — PUT).
+//       조건부 삭제 — 지우는 사이 봇이 집어 갔으면 지우지 않는다
+const CANCELABLE = { currency: { $ne: "point" }, status: { $in: ["pending", "failed"] } };
 export async function DELETE(request) {
   try {
     const deny = await denyIfNotAdmin();
@@ -85,7 +92,17 @@ export async function DELETE(request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ success: false, error: "ID가 없습니다." }, { status: 400 });
-    await Payout.findByIdAndDelete(id);
+    if (!mongoose.isValidObjectId(id)) return NextResponse.json({ success: false, error: "ID가 올바르지 않습니다." }, { status: 400 });
+    const gone = await Payout.findOneAndDelete({ _id: id, ...CANCELABLE });
+    if (!gone) {
+      const cur = await Payout.findById(id, { status: 1, currency: 1 }).lean();
+      if (!cur) return NextResponse.json({ success: false, error: "이미 없는 항목입니다." }, { status: 404 });
+      const error =
+        cur.status === "processing" ? "봇이 지급하는 중입니다." :
+        cur.currency === "point" ? "빙옥 기록은 취소할 수 없습니다." :
+        "지급된 기록은 취소할 수 없습니다.";
+      return NextResponse.json({ success: false, error }, { status: 409 });
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
