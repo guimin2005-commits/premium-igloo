@@ -12,7 +12,7 @@ import {
   MARK, MARK_RE, FOREVER, parsePeriod, mapEntry, mapValue, termFrom, timedDays,
   CLASSIFY_FIELDS, REFUND_LAG_MS, classifyQuery, classifyHolders, TERM_FIELDS, termQuery, liveChildQuery, termPlanFrom,
   TOOL_RE, REFUND_SOURCE, parseRefund, toolRefundQuery, isToolRefund, REFUND_FIELDS, refundPlanFrom,
-  roleNameOf, refundReason, refundGapsFrom, keyOf,
+  roleNameOf, refundReason, refundGapsFrom, keyOf, CLEANUP_MARK, CLEANUP_MARK_RE, isCleanup,
 } from "@/lib/roleMigrationTerms";
 import { addPoints } from "@/lib/points";
 import Item from "@/models/Item";
@@ -34,7 +34,7 @@ import Setting from "@/models/Setting";
 //          환불 대기(같은 역할의 환불 건 · 봇이 아직 안 뗌) — 건너뛴다. 기록을 주면 환불 회수가 막힌다
 //          지급 대기(pending 근거)   — 건너뛴다. 봇이 지급한 뒤 다음 실행에서 본다
 //          같은 역할의 살아 있는 근거 — 새 기록 없이 그 기록의 기간을 그대로 쓴다(아이템 · 꾸미기는 완료 건을 사이트 보유로 · 아이템을 못 찾는 건은 itemRef 채움)
-//          같은 역할의 근거가 전부 끝남(기간 끝남) — 아이템을 주지 않는다(새 무기한 기록이 끝난 기간을 되살리지 않게). 역할을 떼는 봇 경로가 없어 수만 센다
+//          같은 역할의 근거가 전부 끝남(기간 끝남) — 아이템을 주지 않는다(새 무기한 기록이 끝난 기간을 되살리지 않게). 역할만 뗀다(아래 (8))
 //          같은 아이템(itemRef)만 — 다른 역할로 받은 살아 있는 기록 · 이번 계획의 앞 역할이 줄 기록.
 //                                   무기한이면 건너뜀(옛 역할 남음으로 센다). 기간제면 상점 연장과 같은 모양으로 이어 붙인 기록(renewOf)을 만든다 —
 //                                   옛 역할을 담은 기록이 있어야 봇이 그 역할을 뗀다(없으면 옛 역할이 디스코드에 영영 남는다)
@@ -49,7 +49,7 @@ import Setting from "@/models/Setting";
 //        뒤에 살아 있는 연장(renewOf)이 붙은 기록도 바꾸지 않고 '연장 있음'으로 센다 — 결제한 연장분이 묻히거나 의미를 잃지 않게.
 //        변경 DM 은 없다(만료 24시간 전 알림 · 만료 DM 은 봇의 기존 흐름).
 //    (5) 환불 — 역할마다 '아이템으로 옮기기' 대신 XP · 빙옥 1인당 금액으로 돌려준다. 대상은 보유자 분류의 '기록 없음'(역할만 가진 사람)뿐 —
-//        사이트에 이미 가진 사람 · 기간 끝남 · 지급 대기 · 환불 대기 · 환불함(이 도구가 이미 환불)은 수만 센다.
+//        사이트에 이미 가진 사람 · 지급 대기 · 환불 대기 · 환불함(이 도구가 이미 환불)은 수만 센다(기간 끝남은 역할만 뗀다 — (8)).
 //        사람마다: 표시 기록(Purchase — itemId "grant" · status "refunded" · 낸 값 0 · roleDetached false · adminNote "역할 환불 · <역할>")을 먼저 넣고,
 //        들어간 사람에게만 지급한다(표시 기록이 '이미 환불'의 근거 — 다시 눌러도 · 중간에 끊겨도 두 번 나가지 않는다).
 //        지급은 관리자 수동 지급(app/api/xp/grant)과 같은 길 — XP 는 Payout(대기, source "role-refund") → 봇이 반영 · 레벨 재계산
@@ -62,6 +62,10 @@ import Setting from "@/models/Setting";
 //        📌 서버에 없는 사람(디스코드 명단에 없음)은 바꾸지도 주지도 않는다 — 퇴장 초기화로 지운 지갑을 되살리지 않게. 명단을 못 받으면 막는다
 //    (7) 빠진 지급 — 이 도구의 환불 근거는 있는데 지급 기록이 없는 사람(중간에 끊긴 실행)에게만 지급한다(lib refundGapsFrom).
 //        근거와 지급은 Payout._id = 근거 기록 _id 로 이어, 같은 묶음에 두 번 들어가지 않는다. 서버에 없는 사람은 주지 않는다
+//    (8) 역할 정리 — 📌 2026-10-04 "아이템은 주지 않고 역할만 떼어 정리합니다". 보유자 분류의 '기간 끝남'(구매 기간이 끝났는데 역할이 남은 사람)마다
+//        역할 정리 표시 기록(Purchase — itemId "grant" · status "refunded" · 낸 값 0 · roleDetached false · adminNote "역할 정리 · <역할>")을 넣어
+//        봇 환불 회수(processRefunds)가 역할을 뗀다(같은 역할의 살아 있는 다른 구매가 있으면 남긴다 · 낸 값이 없어 DM 없음). 아이템 · 지급은 없다.
+//        처리(아이템 · 환불) · 역할 유지(권한)와 무관하게 한다. 진행 탭은 이 기록도 뗌 · 남음 · 실패에 함께 센다
 //    📌 확인 창의 대상 그대로일 때만 쓴다 — 환불이 든 실행 · 환불로 바꾸기 · 빠진 지급은 미리보기의 key(대상 · 1인당 금액의 요약)를
 //       expect 로 보내야 하고, 실행 때 다시 센 대상이 다르면 쓰지 않고 409(code "stale") + 새 미리보기를 돌려준다
 //    제외: @everyone · 연동(봇 · 부스터) · 보호 역할(펭귄 — BotSetting.protectedRoleIds) · 레벨 보상(RoleConfig.rewardLevel) ·
@@ -75,7 +79,7 @@ import Setting from "@/models/Setting";
 //    POST { action: "repay", dryRun, roleId, refund, expect? }  — 빠진 지급
 //                     — 모두 dryRun 을 false 로 명시해야만 쓴다(기본은 미리보기). 실행은 잠금(Setting roleMigrationLock)으로 하나씩.
 //    period: { mode: "forever" } | { mode: "days", days: 1~3650 } | { mode: "until", until: "YYYY-MM-DD" } — 빠지면 무기한
-//    refund: { currency: "xp" | "point", amount: 1~1,000,000,000 XP · 1~100,000 빙옥 }
+//    refund: { currency: "xp" | "point", amount: 1 이상 정수(끝은 숫자가 깨지지 않는 한도 1조 — lib REFUND_MAX) }
 
 // 📌 기간 · 보유자 분류 · 기간 적용 · 환불 계산은 lib/roleMigrationTerms.js(순수 함수) — 이 라우트는 읽고 쓰기만 한다
 // Setting.value = { 역할 id: { item: 아이템 id, period, mode?: "refund", refund? } } — 예전 형식 { 역할 id: 아이템 id }(기간 없음)는 무기한,
@@ -284,12 +288,20 @@ export async function GET(request) {
 //    환불(표시 기록 · 환불로 바꾼 이전 기록)은 '환불'로 세고, 봇 환불 회수가 역할을 뗐는지(roleDetached)를 뗌 · 남음 · 실패에 함께 센다
 async function statusData() {
   const ctx = await loadContext();
-  const fromRecords = await Purchase.distinct("roleId", { itemId: "grant", adminNote: TOOL_RE });
+  // 이 도구의 기록 — 이전 · 환불 · 역할 정리(정리만 한 역할도 진행에 보이게)
+  const fromRecords = await Purchase.distinct("roleId", { itemId: "grant", $or: [{ adminNote: TOOL_RE }, { adminNote: CLEANUP_MARK_RE }] });
   const ids = [...new Set([...Object.keys(ctx.map), ...fromRecords.map(String)])].filter(Boolean);
   if (ids.length === 0) return { at: null, roles: [] };
 
   const rows = await Purchase.find(
-    { roleId: { $in: ids }, $or: [{ status: "completed" }, toolRefundQuery({ roleIds: ids })] },
+    {
+      roleId: { $in: ids },
+      $or: [
+        { status: "completed" },
+        toolRefundQuery({ roleIds: ids }),
+        { itemId: "grant", status: "refunded", adminNote: CLEANUP_MARK_RE },
+      ],
+    },
     {
       roleId: 1, status: 1, siteOnly: 1, roleDetached: 1, error: 1, itemId: 1, adminNote: 1, expiresAt: 1, renewOf: 1, consumedAt: 1,
       userId: 1, userName: 1, revokedAt: 1,
@@ -328,6 +340,12 @@ async function statusData() {
   for (const p of rows) {
     const s = stat.get(p.roleId);
     if (!s) continue;
+    if (isCleanup(p)) {
+      // 역할 정리 — 아이템 · 지급 없이 역할만 뗀다. 봇 환불 회수가 뗐는지만 센다
+      if (!s.note) s.note = String(p.adminNote || "");
+      countDetach(s, p);
+      continue;
+    }
     if (p.status === "refunded") {
       // 이 도구의 환불 — 표시 기록 · 환불로 바꾼 이전 기록
       s.refunded++;
@@ -437,7 +455,7 @@ async function evaluate(list, roster, ctx, now) {
       roleId: p.roleId, roleName: role?.name || "", color: hexOf(role?.color),
       excluded: "", error: "", mode: "", item: null, create: null, keepRole: false,
       period: p.period, term, refund: p.refund || null, refundType: "role",
-      holders: [], insert: [], convert: [], fill: [], payees: [], convertUsers: 0, skipped: 0,
+      holders: [], insert: [], convert: [], fill: [], payees: [], cleanup: [], convertUsers: 0, skipped: 0,
       cls: { timed: 0, forever: 0, ended: 0, pending: 0, refund: 0, refunded: 0, none: 0 }, roleLeft: 0,
     };
     if (!role) { e.excluded = "missing"; return e; }
@@ -530,8 +548,12 @@ function summarize(entries, executed) {
     // 환불 — 1인당(화폐 · 금액) · 환불할 사람 수(기록 없음)
     refund: e.refund || null,
     payees: e.payees.length,
-    // 실행 결과 — paid 는 오류가 난 역할도 실제로 지급한 사람 수. warn = 지급은 끝났는데 뒤 작업(이전 표 저장)이 실패
-    ...(executed ? { inserted: e.inserted || 0, converted: e.converted || 0, created: !!e.created, paid: e.paid || 0, warn: e.warn || "" } : {}),
+    // 역할 정리 — 기간 끝남 중 역할만 뗄 사람 수
+    cleanup: e.cleanup.length,
+    // 실행 결과 — paid 는 오류가 난 역할도 실제로 지급한 사람 수. warn = 지급은 끝났는데 뒤 작업(이전 표 저장)이 실패. cleaned = 정리 기록이 들어간 사람
+    ...(executed
+      ? { inserted: e.inserted || 0, converted: e.converted || 0, created: !!e.created, paid: e.paid || 0, cleaned: e.cleaned || 0, warn: e.warn || "" }
+      : {}),
   }));
   const active = entries.filter((e) => !e.excluded && !e.error);
   const sum = (f, list = active) => list.reduce((n, e) => n + f(e), 0);
@@ -546,9 +568,10 @@ function summarize(entries, executed) {
     records: sum((e) => e.insert.length),
     convert: sum((e) => e.convertUsers),
     skipped: sum((e) => e.skipped),
-    // 역할 떼기 — 새 기록 · 사이트 보유 전환(권한 아님) + 환불(권한도 뗀다)
-    detach: sum((e) => (e.keepRole ? 0 : e.insert.length + e.convertUsers) + e.payees.length),
+    // 역할 떼기 — 새 기록 · 사이트 보유 전환(권한 아님) + 환불(권한도 뗀다) + 역할 정리(기간 끝남 — 권한도 뗀다)
+    detach: sum((e) => (e.keepRole ? 0 : e.insert.length + e.convertUsers) + e.payees.length + e.cleanup.length),
     keep: sum((e) => (e.keepRole ? e.insert.length : 0)),
+    cleanup: sum((e) => e.cleanup.length),
     // 환불 — 건수(역할 × 사람) · 화폐별 합계
     refunds: sum((e) => e.payees.length),
     refundXp: money("xp", (e) => e.payees.length),
@@ -556,6 +579,7 @@ function summarize(entries, executed) {
     ...(executed
       ? {
           inserted: sum((e) => e.inserted || 0), converted: sum((e) => e.converted || 0), created: active.filter((e) => e.created).length,
+          cleaned: sum((e) => e.cleaned || 0, ran),
           paid: sum((e) => e.paid || 0, ran), paidXp: money("xp", (e) => e.paid || 0, ran), paidPoint: money("point", (e) => e.paid || 0, ran),
         }
       : {}),
@@ -773,7 +797,63 @@ async function executeRefund(e, nowDate, failed, by) {
   for (const f of [...r.failed, ...r.unsure]) failed.push({ roleId: e.roleId, roleName: e.roleName, ...f });
 }
 
-// ── 실행 — 역할마다: 아이템 만들기(필요하면) → 이전 표(아이템 · 기간) → 새 기록 → 기존 구매 사이트 보유 ──
+// ── 역할 정리(계획의 한 역할) — 기간 끝남인 사람마다 역할 정리 표시 기록을 넣는다. 아이템 · 지급은 없다 ──
+//    📌 2026-10-04 "아이템은 주지 않고 역할만 떼어 정리합니다" — 봇 환불 회수(processRefunds)가 이 기록으로 역할을 뗀다.
+//       낸 값 0 이라 원장 줄 · 환불 DM 이 없다. 들어갔는지 다시 세어 못 넣은 사람은 실패 목록으로(다음 실행에서 다시 기간 끝남으로 잡힌다)
+async function executeCleanup(e, nowDate, failed) {
+  e.cleaned = 0;
+  if (!e.cleanup.length) return;
+  const rows = e.cleanup.map((h) => ({
+    _id: new mongoose.Types.ObjectId(),
+    orderId: new mongoose.Types.ObjectId().toString(),
+    createdAt: nowDate,
+    processedAt: nowDate,
+    userId: h.id,
+    userName: h.name,
+    itemId: "grant",
+    itemRef: "",
+    itemName: e.roleName.slice(0, 80),
+    // 봇 환불 회수가 역할을 떼는 유형 — 표시 기록이라 역할로 적는다
+    itemType: "role",
+    roleId: e.roleId,
+    price: 0,
+    payMethod: "xp",
+    paidXp: 0,
+    paidPoint: 0,
+    billed: false,
+    days: 0,
+    expiresAt: null,
+    revokedAt: nowDate,
+    contact: "",
+    adminNote: `${CLEANUP_MARK} · ${e.roleName}`.slice(0, 120),
+    status: "refunded",
+    siteOnly: false,
+    roleDetached: false,
+    error: "",
+  }));
+  for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
+    const chunk = rows.slice(i, i + INSERT_CHUNK);
+    try {
+      await Purchase.insertMany(chunk, { ordered: false });
+    } catch (err) {
+      console.error(`역할 정리 기록 일부 실패 (${e.roleName}):`, err?.message || err);
+    }
+    let ok;
+    try {
+      ok = new Set((await Purchase.find({ _id: { $in: chunk.map((r) => r._id) } }, { _id: 1 }).lean()).map((r) => String(r._id)));
+    } catch (err) {
+      console.error(`역할 정리 기록 확인 실패 (${e.roleName}):`, err?.message || err);
+      for (const r of chunk) failed.push({ roleId: e.roleId, roleName: e.roleName, userId: r.userId, userName: r.userName, reason: "확인 못 함" });
+      continue;
+    }
+    for (const r of chunk) {
+      if (ok.has(String(r._id))) e.cleaned++;
+      else failed.push({ roleId: e.roleId, roleName: e.roleName, userId: r.userId, userName: r.userName, reason: "정리 기록 저장 실패" });
+    }
+  }
+}
+
+// ── 실행 — 역할마다: 역할 정리(기간 끝남) → 아이템 만들기(필요하면) → 이전 표(아이템 · 기간) → 새 기록 → 기존 구매 사이트 보유 ──
 //    nowMs — evaluate 와 같은 시각(새 기록의 만료를 그 시각으로 쟀다)
 async function execute(entries, ctx, nowMs, by) {
   const now = new Date(nowMs);
@@ -788,6 +868,8 @@ async function execute(entries, ctx, nowMs, by) {
   for (const e of entries) {
     if (e.excluded || e.error) continue;
     const prev = mapEntry(map[e.roleId]);
+    // 역할 정리는 처리(아이템 · 환불)와 무관하다 — 아이템 만들기 · 지급이 실패해도 정리 기록은 남긴다(쓰기 오류는 안에서 사람마다 실패로 남긴다)
+    await executeCleanup(e, now, failed);
     if (e.refund) {
       try {
         await executeRefund(e, now, failed, by);
@@ -1231,7 +1313,7 @@ export async function POST(request) {
     const failed = await execute(entries, ctx, now, name || "admin");
     const out = summarize(entries, true);
     console.log(
-      `🧊 역할 이전 (${name}): 역할 ${out.totals.roles}개 · 새 아이템 ${out.totals.created}개 · 기록 ${out.totals.inserted}건 · 사이트 보유 전환 ${out.totals.converted}건 · 환불 ${out.totals.paid}건 · 실패 ${failed.length}건`
+      `🧊 역할 이전 (${name}): 역할 ${out.totals.roles}개 · 새 아이템 ${out.totals.created}개 · 기록 ${out.totals.inserted}건 · 사이트 보유 전환 ${out.totals.converted}건 · 환불 ${out.totals.paid}건 · 역할 정리 ${out.totals.cleaned}건 · 실패 ${failed.length}건`
     );
     return NextResponse.json({ success: true, dryRun: false, data: { at: roster.at, ...out, failed } });
   } catch (e) {

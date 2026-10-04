@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { isAdminName } from "@/lib/admins";
 
-// 📌 XP 지급은 봇 큐가 30초마다 자동으로 한다 — 이 화면은 기록 조회와 삭제만.
+// 📌 XP 지급은 봇 큐가 30초마다 자동으로 한다 — 이 화면은 기록 조회와 아직 지급되지 않은 건의 취소만.
 //    예전의 명령어 복사 · '지급 완료/되돌리기' 토글은 봇 큐와 부딪혀(이미 준 건 재지급 · 안 준 건 닫힘) 걷어냈다.
 //    남은 상태 변경은 대기로 남은 빙옥 기록을 완료로 되돌리는 것뿐이다 (app/api/payout PUT).
+//    📌 2026-10-04 "아직 대기 중인 건만 지울 수 있게(=지급 취소) 하고, 완료 기록은 남김" — 취소는 대기 · 실패한 XP 건만(app/api/payout DELETE)
 
 export default function PayoutAdminPage() {
   const { data: session, status } = useSession();
@@ -18,6 +19,14 @@ export default function PayoutAdminPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<"pending" | "paid" | "all">("pending");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; err: boolean } | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notify = (text: string, err = false) => {
+    setNotice({ text, err });
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 3000);
+  };
+  useEffect(() => () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); }, []);
 
   const fetchPayouts = async () => {
     setIsLoading(true);
@@ -41,11 +50,23 @@ export default function PayoutAdminPage() {
 
   const executeDelete = async () => {
     if (!deleteId) return;
+    const id = deleteId;
     try {
-      const res = await fetch(`/api/payout?id=${deleteId}`, { method: "DELETE" });
-      if (res.ok) setPayouts(prev => prev.filter(x => x._id !== deleteId));
-    } catch { /* noop */ } finally { setDeleteId(null); }
+      const res = await fetch(`/api/payout?id=${id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => null);
+      if (res.ok) {
+        setPayouts(prev => prev.filter(x => x._id !== id));
+        notify("지급을 취소했습니다.");
+      } else {
+        notify(json?.error || "취소하지 못했습니다.", true);
+        fetchPayouts();
+      }
+    } catch {
+      notify("취소하지 못했습니다.", true);
+    } finally { setDeleteId(null); }
   };
+  // 취소할 수 있는 건 — 아직 지급되지 않은 XP 건(대기 · 실패). 빙옥 · 처리 중 · 완료는 기록으로 남는다
+  const cancelable = (p: { currency?: string; status?: string }) => p.currency !== "point" && (p.status === "pending" || p.status === "failed");
 
   if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
   if (!isAdmin) {
@@ -108,7 +129,9 @@ export default function PayoutAdminPage() {
                 {p.status === "pending" && p.currency === "point" && (
                   <button onClick={() => markPointPaid(p)} className="px-3 py-2 text-xs font-bold rounded-lg transition-colors bg-[#e91e3f] text-white hover:bg-[#d01634]">지급 완료</button>
                 )}
-                <button onClick={() => setDeleteId(p._id)} className="px-3 py-2 bg-white/5 hover:bg-red-500/10 text-red-500/70 hover:text-red-500 text-xs font-bold rounded-lg transition-colors">삭제</button>
+                {cancelable(p) && (
+                  <button onClick={() => setDeleteId(p._id)} className="px-3 py-2 bg-white/5 hover:bg-red-500/10 text-red-500/70 hover:text-red-500 text-xs font-bold rounded-lg transition-colors">지급 취소</button>
+                )}
               </div>
             </div>
           ))}
@@ -118,13 +141,19 @@ export default function PayoutAdminPage() {
       {deleteId && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overlay-in">
           <div className="bg-[#1e1e1e] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl">
-            <h2 className="text-xl font-bold text-white mb-3">지급 항목 삭제</h2>
-            <p className="text-sm text-gray-400 mb-8 leading-relaxed">해당 지급 항목을 삭제하시겠습니까?</p>
+            <h2 className="text-xl font-bold text-white mb-3">지급 취소</h2>
+            <p className="text-sm text-gray-400 mb-8 leading-relaxed">해당 지급을 취소하시겠습니까?</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteId(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">취소</button>
-              <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-colors">삭제</button>
+              <button onClick={() => setDeleteId(null)} className="flex-1 py-3 bg-[#2a2a2a] hover:bg-[#333] text-white font-bold rounded-xl transition-colors">닫기</button>
+              <button onClick={executeDelete} className="flex-1 py-3 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-colors">지급 취소</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {notice && (
+        <div role="status" className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[130] max-w-[calc(100vw-32px)] px-4 py-2.5 rounded-xl text-sm font-bold shadow-2xl ${notice.err ? "bg-[#e91e3f] text-white" : "bg-white text-black"}`}>
+          {notice.text}
         </div>
       )}
     </main>

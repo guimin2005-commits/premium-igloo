@@ -15,7 +15,7 @@ import {
   StatusChip, StatRow, Panel, ConfirmDialog, EmptyRow, Switch, inputClass, numClass, labelClass, useAdminGuard, useNotice, type Column,
 } from "../ui";
 import { ITEM_TYPE_LABEL } from "@/lib/items";
-import { REFUND_MAX, REFUND_UNIT } from "@/lib/roleMigrationTerms";
+import { REFUND_MAX, REFUND_UNIT, isLargeRefund } from "@/lib/roleMigrationTerms";
 import { xpToPoint } from "@/lib/pointRate";
 
 // 환불 — 화폐 · 1인당 금액(서버 lib/roleMigrationTerms.js parseRefund 가 최종 판정) · 연결 상품 정가(빠른 선택, XP · days 0 = 무제한)
@@ -47,12 +47,15 @@ type PlanRow = {
   holders: number; insert: number; convert: number; skipped: number;
   // 환불 — 1인당 · 환불할 사람(기록 없음) · 지급한 사람(실행 결과 — 오류가 난 역할도 실제 지급) · 지급 뒤 경고(이전 표 저장 실패)
   refund: Refund | null; payees: number; paid?: number; warn?: string;
+  // 역할 정리 — 기간 끝남 중 역할만 뗄 사람 · 정리 기록이 들어간 사람(실행 결과)
+  cleanup: number; cleaned?: number;
   inserted?: number; converted?: number; created?: boolean;
 };
 type Totals = {
   roles: number; excluded: number; createItems: number; people: number; records: number; convert: number;
   skipped: number; detach: number; keep: number; inserted?: number; converted?: number; created?: number;
   refunds: number; refundXp: number; refundPoint: number; paid?: number; paidXp?: number; paidPoint?: number;
+  cleanup: number; cleaned?: number;
 };
 type Failed = { roleId: string; roleName: string; userId: string; userName: string; reason: string };
 // refundKey — 환불 대상의 요약(서버가 실행 때 다시 센 값과 맞춰 본다 — 다르면 409 stale + 새 미리보기)
@@ -550,6 +553,7 @@ export default function AdminRoleMigrationPage() {
       notify(
         `이전했습니다.\n새 아이템 ${num(t.created)}개 · 기록 ${num(t.inserted)}건 · 사이트 보유 전환 ${num(t.converted)}건` +
           (t.refunds || t.paid ? `\n환불 ${num(t.paid)}건 · ${moneyPair(t.paidXp || 0, t.paidPoint || 0)}` : "") +
+          (t.cleanup || t.cleaned ? `\n역할만 떼기 ${num(t.cleaned)}건` : "") +
           (res.failed?.length ? `\n실패 ${num(res.failed.length)}건` : "") +
           (errs ? `\n처리 못 한 역할 ${errs}개` : "") +
           (warns ? `\n이전 표 저장 실패 ${warns}개` : ""),
@@ -997,6 +1001,8 @@ export default function AdminRoleMigrationPage() {
   const itemOptions = (data?.items || []).filter((i) => !i.roleId || (open && i.roleId === open.id));
 
   const t = preview?.totals;
+  // 📌 2026-10-04 "상한을 없애고, 아주 큰 값이면 확인 창만 띄웁니다" — 예전 상한(XP 10억 · 빙옥 10만)을 넘는 1인당 환불은 확인 창에 빨간 줄로
+  const largeRefunds = (preview?.roles || []).filter((p) => !p.excluded && !p.error && p.payees > 0 && isLargeRefund(p.refund));
   // 📌 인원(명)은 '대상 인원' 하나 — 나머지는 역할 × 사람 건수(한 사람이 역할 둘이면 2건)라 '건'으로 적는다
   const statItems = (x: Totals, done: boolean) => [
     { label: "새 아이템", value: num(done ? x.created : x.createItems) },
@@ -1065,7 +1071,7 @@ export default function AdminRoleMigrationPage() {
                   right={
                     <>
                       <Btn variant="ghost" size="sm" onClick={() => setPreview(null)}>닫기</Btn>
-                      <Btn size="sm" disabled={running || t.roles === 0 || (t.records === 0 && t.convert === 0 && t.createItems === 0 && t.refunds === 0)} onClick={() => setConfirmKey(planKey)}>이전 실행</Btn>
+                      <Btn size="sm" disabled={running || t.roles === 0 || (t.records === 0 && t.convert === 0 && t.createItems === 0 && t.refunds === 0 && !t.cleanup)} onClick={() => setConfirmKey(planKey)}>이전 실행</Btn>
                     </>
                   }
                 >
@@ -1228,6 +1234,7 @@ export default function AdminRoleMigrationPage() {
         title={moneyPreview ? moneyTitle(moneyPreview.kind) : ""}
         busy={moneyRunning}
         confirmLabel={moneyPreview ? moneyTitle(moneyPreview.kind) : "확인"}
+        danger={!!moneyPreview && isLargeRefund(moneyPreview.res.refund)}
         body={
           moneyPreview ? (
             (() => {
@@ -1237,7 +1244,7 @@ export default function AdminRoleMigrationPage() {
               return (
                 <div className="tabular-nums">
                   <p className="font-bold text-[#131313] break-all">{termName(r.roleId)}</p>
-                  <p>대상 {num(r.people)}명 · 1인 {money(r.refund.amount, r.refund.currency)}</p>
+                  <p>대상 {num(r.people)}명 · <span className={isLargeRefund(r.refund) ? "text-[#d01634] font-bold" : ""}>1인 {money(r.refund.amount, r.refund.currency)}</span></p>
                   <p>합계 {money(r.sum, r.refund.currency)}</p>
                   {hint && (
                     <p className={hint.currency !== r.refund.currency || hint.amount !== r.refund.amount ? "text-[#d01634] font-bold" : ""}>
@@ -1433,10 +1440,14 @@ export default function AdminRoleMigrationPage() {
               <p>역할 {num(t.roles)}개 · 새 아이템 {num(t.createItems)}개 · 대상 {num(t.people)}명</p>
               <p>새 기록 {num(t.records)}건 · 사이트 보유 전환 {num(t.convert)}건</p>
               {t.refunds > 0 && <p>환불 {num(t.refunds)}건 · {moneyPair(t.refundXp, t.refundPoint)}</p>}
-              <p>역할 떼기 {num(t.detach)}건 · 역할 유지 {num(t.keep)}건</p>
+              <p>역할 떼기 {num(t.detach)}건{t.cleanup > 0 ? ` (역할만 ${num(t.cleanup)}건)` : ""} · 역할 유지 {num(t.keep)}건</p>
+              {largeRefunds.map((p) => (
+                <p key={p.roleId} className="text-[#d01634] font-bold break-all">{p.roleName} · 1인 {money(p.refund!.amount, p.refund!.currency)}</p>
+              ))}
             </div>
           ) : undefined
         }
+        danger={largeRefunds.length > 0}
         onConfirm={runMigration}
         onCancel={() => setConfirmKey(null)}
       />

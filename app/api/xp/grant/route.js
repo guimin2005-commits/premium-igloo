@@ -88,8 +88,9 @@ export async function POST(request) {
       // 📌 passBaseXp 를 같이 0 으로 되돌린다. 진행도가 xp - passBaseXp 이므로
       //    xp 만 0 으로 만들면 기준선(예전 누적치)이 남아 진행도가 남은 시즌 내내 0 에 얼어붙는다.
       //    시즌 롤오버는 passSeason 이 바뀔 때만 재스냅샷하므로 스스로 풀리지도 않는다.
-      //    수령 기록·해금도 함께 지운다. 남겨 두면 진행도 0 인 화면에 "미도달인데 수령완료" 칸이
-      //    그대로 남고, 시즌 롤오버는 passSeason 이 바뀔 때만 도므로 스스로 풀리지도 않는다.
+      // 📌 2026-10-04 "해금과 받은 기록은 그대로 두고 진행도만 0으로 돌립니다" — 프리미엄 해금(passUnlocked · passUnlockPaid)과
+      //    수령 기록(passClaimedFree · passClaimedPaid)은 건드리지 않는다. 지우면 빙옥을 내고 연 해금이 환불 없이 풀리고,
+      //    XP 를 다시 모았을 때 이미 받은 보상을 또 받는다. 진행도 0 인 화면에 받은 칸이 '수령 완료'로 남는 것은 그대로 둔다
       // ⚠️ 강화 단계(chatEnhance/voiceEnhance)는 영구 값이다 — 이 $set 목록에 넣지 않는다 (lib/enhance.js).
       // 📌 레벨은 0 이 아니라 1 — 0 XP 도 Lv.1(getLevelByXp(0))이다. 0 으로 두면 봇 역할 동기화가
       //    지급 레벨 1 인 아이언 티어까지 회수한다. 최고 도달 레벨(maxLevel)도 비운다 —
@@ -97,7 +98,7 @@ export async function POST(request) {
       await UserXp.updateMany(filter, {
         $set: {
           xp: 0, level: 1, maxLevel: 0, needsRoleSync: true, updatedAt: new Date(),
-          passBaseXp: 0, passUnlocked: false, passClaimedFree: [], passClaimedPaid: [],
+          passBaseXp: 0,
         },
       });
 
