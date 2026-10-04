@@ -21,7 +21,8 @@ const MAX_DAYS = 3650;
 const MAX_ROWS = 20000;
 const INSERT_CHUNK = 1000;
 // 📌 역할 이전 · 역할 환불 도구의 기록 머리(lib/roleMigrationTerms TOOL_RE) — 지급 사유로 쓰지 못하게 하고, 수정 · 회수에서도 손대지 않는다
-const TOOL_NOTE_RE = /^역할 (이전|환불)/;
+//    2026-10-04 '역할 정리'(기간 끝남 역할만 떼기 — CLEANUP_MARK_RE)도 같이 막는다. 사유를 고치면 정리 기록이 '환불 대기'로 읽힌다
+const TOOL_NOTE_RE = /^역할 (이전|환불|정리)/;
 
 // 📌 쪽 넘김(더 보기) — 최신순(createdAt · _id 내림차순)으로 limit 건씩. before 는 앞 쪽 응답의 next("<시각 ms>_<_id>") — 그보다 오래된 것부터.
 //    limit 기본 300(예전 한 번에 읽던 양) · 최대 3,000(회수 뒤 화면이 '더 보기'로 펼친 깊이만큼 다시 읽을 때). 관리자 주문 목록(app/api/shop/orders)과 같은 방식
@@ -87,7 +88,7 @@ export async function POST(request) {
     const reason = String(b?.reason || "").trim().slice(0, 120);
     // 도구 머리로 시작하면 그 지급이 역할 이전 · 환불 도구의 기록으로 읽힌다(회수 · 사유 수정도 막혀 손댈 수 없게 된다)
     if (TOOL_NOTE_RE.test(reason)) {
-      return NextResponse.json({ success: false, message: "'역할 이전' · '역할 환불'로 시작하는 사유는 쓸 수 없습니다." }, { status: 400 });
+      return NextResponse.json({ success: false, message: "'역할 이전' · '역할 환불' · '역할 정리'로 시작하는 사유는 쓸 수 없습니다." }, { status: 400 });
     }
     const qtyIn = Math.max(1, Math.min(MAX_PER_ORDER, Math.trunc(Number(b?.qty) || 1)));
     const linkedShops = await ShopItem.find({ itemId: String(item._id) }, { type: 1, roleId: 1, itemId: 1, unitSale: 1, durations: 1 }).lean();
@@ -207,7 +208,7 @@ export async function POST(request) {
 
 // ── [사유 수정 · 회수] { ids, adminNote } 사유만 바꾼다 / { ids, revoke: true } 회수 ──
 //    📌 운영진 지급 건(itemId "grant")만 — 상점 구매는 낸 값이 걸려 관리자 주문 처리(app/api/shop/orders)에서 한다.
-//    📌 역할 이전 · 역할 환불 기록은 손대지 않는다 — 그 도구가 adminNote 머리("역할 이전" · "역할 환불")로 자기 기록을 찾고,
+//    📌 역할 이전 · 역할 환불 · 역할 정리 기록은 손대지 않는다 — 그 도구가 adminNote 머리("역할 이전" · "역할 환불" · "역할 정리")로 자기 기록을 찾고,
 //       회수 상태도 "그 도구로 환불함"으로 읽는다(lib/roleMigrationTerms MARK_RE · REFUND_MARK_RE). 그 기록은 관리 › 역할 이전에서 다룬다.
 //    회수: 봇이 아직 안 붙인 대기 건은 취소, 보유 중인 건은 refunded(revokedAt · roleDetached false) — 봇 processRefunds 가
 //       다른 근거가 없을 때 역할을 떼고, 낸 값이 없어 환불 DM 은 보내지 않는다. 인벤토리 · 효과는 바로 빠진다(my-items · ownedItems 가 refunded 를 뺀다)
@@ -234,7 +235,7 @@ export async function PATCH(request) {
     const note = String(adminNote ?? "").trim().slice(0, 100);
     if (!note) return NextResponse.json({ success: false, message: "사유를 입력해주세요." }, { status: 400 });
     // 도구 머리로 시작하면 그 기록이 역할 이전 · 환불 도구의 기록으로 읽힌다
-    if (TOOL_NOTE_RE.test(note)) return NextResponse.json({ success: false, message: "'역할 이전' · '역할 환불'로 시작하는 사유는 쓸 수 없습니다." }, { status: 400 });
+    if (TOOL_NOTE_RE.test(note)) return NextResponse.json({ success: false, message: "'역할 이전' · '역할 환불' · '역할 정리'로 시작하는 사유는 쓸 수 없습니다." }, { status: 400 });
     const r = await Purchase.updateMany(base, { $set: { adminNote: note } });
     if (!r.matchedCount) return NextResponse.json({ success: false, message: "바꿀 수 있는 지급이 없습니다." }, { status: 409 });
     return NextResponse.json({ success: true, done: r.modifiedCount || 0, message: "사유를 고쳤습니다." });

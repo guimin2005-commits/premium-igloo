@@ -7,6 +7,7 @@ import UserXp from "@/models/UserXp";
 import Payout from "@/models/Payout";
 import { addPoints } from "@/lib/points";
 import { parseTargetKeys, resolveTargets, unresolvedMessage, MAX_TARGETS } from "@/lib/adminTargets";
+import { currentSeason, passRolloverSet } from "@/lib/season";
 
 // 📌 대상 찾기 — 유저 ID 가 맞으면 그 한 명만. 아니면 사용자명 · 표시 이름으로 찾는다.
 //    표시 이름은 고유하지 않아(남의 사용자명과 같을 수도 있다) 여러 명이 걸리면 호출부가 아무에게도 적용하지 않는다.
@@ -95,12 +96,15 @@ export async function POST(request) {
       // 📌 레벨은 0 이 아니라 1 — 0 XP 도 Lv.1(getLevelByXp(0))이다. 0 으로 두면 봇 역할 동기화가
       //    지급 레벨 1 인 아이언 티어까지 회수한다. 최고 도달 레벨(maxLevel)도 비운다 —
       //    남겨 두면 레벨 업 퀘스트 기준(bot/src/xp.js top)이 예전 최고 레벨이라 다시 넘기 전까지 세지 않는다.
-      await UserXp.updateMany(filter, {
-        $set: {
-          xp: 0, level: 1, maxLevel: 0, needsRoleSync: true, updatedAt: new Date(),
-          passBaseXp: 0,
-        },
-      });
+      // 📌 2026-10-04 검토 반영 — 이번 시즌 기준선이 아직 없는 문서(passSeason ≠ 지금 시즌)는 그 자리에서 이번 시즌 기준선 0 으로 찍는다(passRolloverSet).
+      //    그냥 두면 나중 기준선 계산(lib/seasonPass.js)이 초기화 전 XP 를 시즌에 번 것으로 되짚어, 진행도가 0 이 아니게 잡히거나 시즌 내내 0 에 묶인다.
+      //    그 문서의 해금 · 수령 기록은 지난 시즌 것이라 어차피 새 시즌 롤오버가 비운다(이번 시즌 것은 위 결정대로 둔다).
+      //    순서 — 기준선 없는 문서를 먼저 찍고, 그다음 이번 시즌 문서의 진행도만 0(먼저 찍힌 문서도 같은 값이 한 번 더 들어갈 뿐). 그 사이 다른 요청이 찍어도 빠지는 문서가 없다
+      const season = currentSeason();
+      const now = new Date();
+      const resetSet = { xp: 0, level: 1, maxLevel: 0, needsRoleSync: true, updatedAt: now };
+      await UserXp.updateMany({ ...filter, passSeason: { $ne: season.number } }, { $set: { ...resetSet, ...passRolloverSet(season, 0, now) } });
+      await UserXp.updateMany({ ...filter, passSeason: season.number }, { $set: { ...resetSet, passBaseXp: 0 } });
 
       // 감사 기록 — 이미 반영했으므로 봇 큐가 다시 집지 않도록 paid로 남긴다
       //    userName 은 required — 이름 없는 문서(큐로만 XP 를 받은 계정)는 ID 로 채운다.
