@@ -17,7 +17,7 @@ import { refreshBotSettings, startBotSettingLoop } from "./botSettings.js";
 import { registerChatXp } from "./features/chatXp.js";
 import { startVoiceTime, flushVoiceTime } from "./features/voiceTime.js";
 import { startActivityStats, flushActivity } from "./features/activityStats.js";
-import { registerActivity } from "./features/activity.js";
+import { registerActivity, startActivity, flushLastActive } from "./features/activity.js";
 import { registerLeaveReset } from "./features/leaveReset.js";
 import { startGrantQueue } from "./features/grantQueue.js";
 import { startScrimNudge } from "./features/scrimNudge.js";
@@ -77,6 +77,7 @@ client.once(Events.ClientReady, async (c) => {
   startBotMessageLoop(c); // 봇 메시지 디자인 1분 주기 갱신 + 관리자 테스트 발송
   console.log("✅ 설정 로드 완료 — 역할·아이템 효과·채널·기본 정책·봇 메시지 (1분 주기 갱신)");
 
+  startActivity(c); // 마지막 활동 시각 — 적어 둔 값을 읽어 재시작 뒤에도 무활동을 이어 세고, 음성에 있는 사람 것만 20초마다 기록
   startVoiceTime(c); // 음성 시간 · 음성 XP — 사람마다 실제 접속 초(들어옴 · 나감 · 옮김 · 마이크 변경), 5분 채우면 1회분 · 못 채우고 나가면 머문 만큼, 20초마다 기록
   startActivityStats(c); // 퀘스트용 활동 횟수 — 메시지 · 답장 · 멘션 · 반응 · 스레드 · 스티커 · 명령어 · 음성 입장 · 레벨 업, 20초마다 기록
   startGrantQueue(c);
@@ -106,8 +107,8 @@ const shutdown = async (signal) => {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`\n${signal} 수신 — 종료 중…`);
-  // 📌 밀린 음성 시간 · 활동 횟수(최대 20초)를 마저 쓴다 — 음성 XP 는 주지 않고 진행 중 · 닫힌 바퀴를 DB 에 적어 다음 기동 때 준다. 오래 걸리면 5초에서 끊는다. Railway 는 기본이 SIGTERM 뒤 곧바로 SIGKILL 이라 못 마칠 수 있다(features/voiceTime.js)
-  await Promise.race([Promise.all([flushVoiceTime({ final: true }), flushActivity()]), new Promise((r) => setTimeout(r, 5000))]).catch(() => {});
+  // 📌 밀린 음성 시간 · 활동 횟수 · 마지막 활동 시각(최대 20초)을 마저 쓴다 — 음성 XP 는 주지 않고 진행 중 · 닫힌 바퀴를 DB 에 적어 다음 기동 때 준다. 오래 걸리면 5초에서 끊는다. Railway 는 기본이 SIGTERM 뒤 곧바로 SIGKILL 이라 못 마칠 수 있다(features/voiceTime.js)
+  await Promise.race([Promise.all([flushVoiceTime({ final: true }), flushActivity(), flushLastActive({ final: true })]), new Promise((r) => setTimeout(r, 5000))]).catch(() => {});
   client.destroy();
   await disconnectDb().catch(() => {});
   process.exit(0);

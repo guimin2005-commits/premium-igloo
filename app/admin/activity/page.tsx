@@ -4,6 +4,7 @@
 //    목록 틀: 머리 → 기간 한 줄(모바일은 정렬 한 줄 더) → 전체 폭 표(PC 는 머리를 눌러 정렬) → 줄을 누르면 유저 조회(/admin/users?userId=)
 //    봇이 음성 상황(ctx)을 실은 줄은 정확한 값, 그 전 줄은 혼자 · 음소거를 미루어 센다 — 그런 줄이 섞인 기간만 칩 하나로 근사치임을 알린다.
 //    헤드셋 · 무활동 · 화면·캠은 ctx 줄에서만 센다(ctx 줄이 없는 유저는 "—"). 음성 XP 정지 중인 유저는 이름 옆 "정지" 칩.
+//    📌 2026-10-04 "재시작 뒤 기록이 아직 없는 사람은 무활동을 '모름'으로 표시" — 무활동을 모르는 줄뿐이면(idleSec null) "모름".
 //    주소에 ?period= · ?sort= 를 실어 새로고침해도 같은 보기가 열린다.
 
 import React, { useEffect, useState } from "react";
@@ -16,7 +17,7 @@ type Row = {
   userId: string; displayName: string; username: string;
   voiceN: number; voiceSec: number; dayMaxSec: number; streakSec: number;
   aloneN: number; aloneSec: number; aloneRate: number; mutedSec: number; mutedRate: number;
-  exactN: number; approx: boolean; deafSec: number; deafRate: number; liveRate: number; idleSec: number;
+  exactN: number; approx: boolean; deafSec: number; deafRate: number; liveRate: number; idleSec: number | null;
   chatN: number; voiceXp: number; score: number; voiceOff?: boolean;
 };
 type Data = { period: Period; sort: SortKey; since: string; approx?: boolean; total: number; rows: Row[] };
@@ -176,7 +177,7 @@ export default function AdminActivityPage() {
         </span>
       ),
     },
-    { key: "idle", label: head("idle", "무활동"), align: "right", render: (r) => <span className="tabular-nums">{ml("무활동")}{r.exactN ? dur(r.idleSec) : "—"}</span> },
+    { key: "idle", label: head("idle", "무활동"), align: "right", render: (r) => <span className="tabular-nums">{ml("무활동")}{r.exactN ? (r.idleSec == null ? "모름" : dur(r.idleSec)) : "—"}</span> },
     { key: "live", label: head("live", "화면·캠"), align: "right", render: (r) => <span className="tabular-nums">{ml("화면·캠")}{r.exactN ? pct(r.liveRate) : "—"}</span> },
     { key: "chat", label: head("chat", "채팅"), align: "right", render: (r) => <span className="tabular-nums">{ml("채팅")}{r.chatN.toLocaleString()}</span> },
     { key: "xp", label: head("xp", "음성 XP"), align: "right", render: (r) => <span className="tabular-nums">{ml("음성 XP")}{r.voiceXp.toLocaleString()}</span> },
