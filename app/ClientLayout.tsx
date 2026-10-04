@@ -885,17 +885,28 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </div>
       </footer>
 
+      {/* 📌 2026-10-04 로그인 창 리뉴얼 — 흰 패널(모서리 16px · 패널 그림자), 위에 PREMIUM IGLOO · 닫기, 가운데 로그인 · 한 줄 · Discord로 계속하기(로고 없음),
+             아래 비회원 문의 · 이용약관. 모바일은 아래에서 올라오는 시트. 바깥을 누르면 닫힌다 */}
       {isLoginModalOpen && !isGuestInquiryOpen && status !== "authenticated" && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl ring-1 ring-white/5 w-full max-w-md overflow-hidden shadow-2xl relative">
-            <button onClick={() => setIsLoginModalOpen(false)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/20 rounded-full transition-colors outline-none focus:outline-none">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
-            </button>
-            <div className="p-8 text-center">
-              <h2 className="text-2xl font-bold text-white mb-2">로그인</h2>
-              <p className="text-sm text-gray-400 mb-8 leading-relaxed">고급 이글루의 모든 기능을 이용하시려면<br/>디스코드 계정으로 로그인해주세요.</p>
-              <button onClick={() => signIn("discord", { callbackUrl: loginReturnPath() })} className="w-full flex items-center justify-center gap-3 py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">Discord 로그인</button>
-              <button onClick={() => setIsGuestInquiryOpen(true)} className="mt-6 text-sm text-gray-400 hover:text-white underline underline-offset-4 outline-none focus:outline-none transition-colors">비회원으로 문의하시겠습니까?</button>
+        <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center bg-black/45 md:p-4" onClick={() => setIsLoginModalOpen(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="login-title" onClick={(e) => e.stopPropagation()}
+            className="w-full md:max-w-[360px] bg-white rounded-t-2xl md:rounded-2xl shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] overflow-hidden pb-[env(safe-area-inset-bottom)]">
+            <div aria-hidden className="md:hidden w-9 h-1 rounded-full bg-[#e0e0e0] mx-auto mt-2" />
+            <div className="flex items-center justify-between h-12 px-4 border-b border-[#ededed]">
+              <span className="text-[12px] font-bold tracking-[0.08em] text-[#131313]">PREMIUM IGLOO</span>
+              <button type="button" aria-label="닫기" onClick={() => setIsLoginModalOpen(false)} className="w-8 h-8 -mr-1.5 flex items-center justify-center rounded-full text-[#8a8a8a] hover:text-[#131313] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
+              </button>
+            </div>
+            <div className="px-6 pt-8 pb-6 text-center">
+              <h2 id="login-title" className="text-[22px] font-black text-[#131313]">로그인</h2>
+              <p className="mt-1 text-[12px] text-[#5a5a5a]">고급 이글루 디스코드 계정</p>
+              <button type="button" onClick={() => signIn("discord", { callbackUrl: loginReturnPath() })} className="mt-6 w-full h-12 rounded-full bg-[#5865F2] hover:bg-[#4752C4] text-white text-[14px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#5865F2]/40">Discord로 계속하기</button>
+              <div className="mt-5 flex items-center justify-center gap-3 text-[12px] text-[#5a5a5a]">
+                <button type="button" onClick={() => setIsGuestInquiryOpen(true)} className="underline underline-offset-[3px] hover:text-[#131313] transition-colors outline-none">비회원 문의</button>
+                <span aria-hidden className="text-[#a3a3a3]">·</span>
+                <Link href="/policy" onClick={() => setIsLoginModalOpen(false)} className="underline underline-offset-[3px] hover:text-[#131313] transition-colors">이용약관</Link>
+              </div>
             </div>
           </div>
         </div>
