@@ -132,7 +132,7 @@ type GrantItem = { _id: string; name: string; type: string; icon?: string; image
 type GrantForm = { itemId: string; daysMode: string; days: string; qty: string; reason: string };
 const EMPTY_GRANT: GrantForm = { itemId: "", daysMode: "0", days: "", qty: "1", reason: "" };
 const GRANT_DAYS = [{ v: "0", l: "무기한" }, { v: "7", l: "7일" }, { v: "30", l: "30일" }, { v: "custom", l: "직접" }];
-const TOOL_NOTE_RE = /^역할 (이전|환불)/; // 역할 이전 도구 기록으로 읽히는 사유(lib/roleMigrationTerms.js)
+const TOOL_NOTE_RE = /^역할 (이전|환불|정리)/; // 역할 이전 도구 기록으로 읽히는 사유(lib/roleMigrationTerms.js — 정리 기록 포함)
 // 공용 Dropdown(라이트)을 입력칸(inputClass)과 같은 높이 · 테두리로 (app/admin/bot 과 같은 값)
 const DD = "!px-3 !py-2 min-h-10 !text-[14px] !border-[#a3a3a3]";
 
@@ -611,7 +611,7 @@ export default function AdminUsersPage() {
     const id = selectedId;
     if (!id || !grantReady || !grantPick) return;
     const reason = grantForm.reason.trim();
-    if (TOOL_NOTE_RE.test(reason)) return notify("'역할 이전' · '역할 환불'로 시작하는 사유는 쓸 수 없습니다.", true);
+    if (TOOL_NOTE_RE.test(reason)) return notify("'역할 이전' · '역할 환불' · '역할 정리'로 시작하는 사유는 쓸 수 없습니다.", true);
     setGranting(true);
     try {
       const r = await fetch("/api/admin/items/grant", {

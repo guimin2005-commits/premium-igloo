@@ -116,7 +116,8 @@ export async function POST(request) {
         noticeChannelId: typeof b.noticeChannelId === "string" ? b.noticeChannelId.trim().slice(0, 32) : cur?.noticeChannelId || "",
         // 서포터즈 — 화이트리스트에 없으면 조용히 무시되어 역할 탭에서 저장해도 안 남는다
         supporterRoleId: typeof b.supporterRoleId === "string" ? b.supporterRoleId.trim() : "",
-        supporterBaseXp: num(b.supporterBaseXp, 150000),
+        // 📌 2026-10-04 서포터즈 평가 XP 상한 없앰(app/api/admin/supporters EVAL_NUM_MAX) — 평가 칸의 기본값인 이 칸도 같은 끝(1조, 숫자가 깨지지 않는 한도)만
+        supporterBaseXp: num(b.supporterBaseXp, 150000, { max: 1_000_000_000_000 }),
         supporterGoalChat: num(b.supporterGoalChat, 0),
         supporterGoalVoiceMin: num(b.supporterGoalVoiceMin, 0),
         // 시즌 결산 RANKER 역할 — "" 는 '역할 주지 않음'. 본문에 없으면 저장값 유지

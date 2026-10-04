@@ -121,6 +121,20 @@ const fmtDateTime = (v: string | Date) => {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
+// 같은 건(_id)은 한 번만 — 앞의 것을 남긴다(아이템 지급 내역 더 보기의 겹친 건 · app/admin/shop 과 같은 함수)
+const uniqById = <T extends { _id?: unknown }>(rows: T[]) => {
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    const k = String(r?._id);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+};
+// 📌 아이템 지급 내역 쪽 크기 · 다시 읽기 한도 — app/api/admin/items/grant 의 PAGE · PAGE_MAX 와 같은 값
+const ITEM_GRANT_PAGE = 300;
+const ITEM_GRANT_MAX = 3000;
+
 // datetime-local 입력값 ↔ Date 변환 (로컬 시간 기준)
 const toLocalInput = (v: string | Date) => {
   const d = new Date(v);
@@ -193,7 +207,7 @@ const QUEST_REASON_OPTIONS = [
 const HINT_2LINE = "block min-h-[39px]";
 // 목표치 칸 아래 한 줄 — 대상 · 세는 방식마다
 const questTargetHint =(reason: string, metric: string) => {
-  if (reason === "streak") return "연속 출석 일수 — 이 주기 안에 출석한 날 기준으로 판정합니다";
+  if (reason === "streak") return "연속 출석 일수 — 주간 · 월간은 이 주기 안에서 이어진 날만 셉니다";
   if (reason === "shop" && metric === "xp") return "ARCTIC 구매에 쓴 XP 합계";
   if (reason === "shop" && metric === "point") return "ARCTIC 구매에 쓴 빙옥 합계";
   if (reason === "shop") return "ARCTIC 구매 건수 — 운영진 지급 · 시즌 패스 보상 · 환불 · 취소 제외";
@@ -858,7 +872,7 @@ export default function AdminBotPage() {
   const [grantItems, setGrantItems] = useState<any[]>([]);
   const [itemGrants, setItemGrants] = useState<any[]>([]);
   const [confirmAllItem, setConfirmAllItem] = useState(false);
-  // 📌 최근 아이템 지급 — 줄마다 사유 수정 · 회수. 역할 이전 · 역할 환불 기록은 그 도구가 다루므로 단추를 두지 않는다(API 도 막는다)
+  // 📌 최근 아이템 지급 — 줄마다 사유 수정 · 회수. 역할 이전 · 역할 환불 · 역할 정리 기록은 그 도구가 다루므로 단추를 두지 않는다(API 도 막는다)
   const [noteEdit, setNoteEdit] = useState<{ key: string; ids: string[]; text: string } | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<{ _id: string; ids?: string[]; userName?: string; userId?: string; itemName?: string; qty?: number } | null>(null);
   const [grantRowBusy, setGrantRowBusy] = useState(false);
@@ -881,12 +895,37 @@ export default function AdminBotPage() {
       .catch(() => {});
   }, []);
 
+  // 📌 2026-10-04 추천대로: 아이템 지급 내역 '더 보기' — 오래된 지급도 이 목록에서 찾아 회수할 수 있게(한 번에 300건, 관리 › 상점 구매 내역과 같은 방식).
+  //    itemGrantsNext: 다음 쪽 커서("" 이면 끝). itemGrantsDepth: 펼친 건 수 — 지급 · 회수 · 사유 수정 뒤 다시 읽을 때 그만큼(최대 3,000) 읽어 찾은 옛 건이 사라지지 않게
+  const [itemGrantsNext, setItemGrantsNext] = useState("");
+  const [itemGrantsBusy, setItemGrantsBusy] = useState(false);
+  const itemGrantsDepth = useRef(0);
   const loadItemGrants = useCallback(() => {
-    fetch("/api/admin/items/grant", { cache: "no-store" })
+    const depth = itemGrantsDepth.current;
+    fetch(`/api/admin/items/grant${depth > ITEM_GRANT_PAGE ? `?limit=${Math.min(ITEM_GRANT_MAX, depth)}` : ""}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => setItemGrants(Array.isArray(d?.data) ? d.data : []))
+      .then((d) => {
+        const rows = Array.isArray(d?.data) ? uniqById(d.data) : [];
+        setItemGrants(rows);
+        itemGrantsDepth.current = rows.length;
+        setItemGrantsNext(d?.hasMore && d?.next ? String(d.next) : "");
+      })
       .catch(() => {});
   }, []);
+  // 다음 쪽 — 쪽 끝에 걸친 한 사람분 지급(같은 orderId)은 서버가 나머지 건까지 붙여 주므로 다음 쪽과 겹칠 수 있다(_id 로 뺀다)
+  const loadMoreItemGrants = async () => {
+    if (itemGrantsBusy || !itemGrantsNext) return;
+    setItemGrantsBusy(true);
+    const d = await fetch(`/api/admin/items/grant?before=${encodeURIComponent(itemGrantsNext)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+    setItemGrantsBusy(false);
+    if (!d?.success || !Array.isArray(d.data)) return notify("지급 내역을 더 불러오지 못했습니다.", true);
+    setItemGrants((prev) => {
+      const next = uniqById([...prev, ...d.data]);
+      itemGrantsDepth.current = next.length;
+      return next;
+    });
+    setItemGrantsNext(d.hasMore && d.next ? String(d.next) : "");
+  };
 
   useEffect(() => {
     if (!isAdmin || tab !== "ledger") return;
@@ -2306,7 +2345,7 @@ export default function AdminBotPage() {
                   {/* 한 사람에게 여러 개 준 건(같은 orderId)은 한 줄 ×N — lib/orderGroups.js */}
                   {groupOrders(itemGrants).map((g: any) => {
                     const st = GRANT_STATUS[g.status] || { l: g.status, tone: "neutral" as const };
-                    const tool = /^역할 (이전|환불)/.test(String(g.adminNote || ""));
+                    const tool = /^역할 (이전|환불|정리)/.test(String(g.adminNote || ""));
                     const live = g.status === "pending" || g.status === "completed";
                     const editing = noteEdit?.key === g._id;
                     return (
@@ -2342,6 +2381,12 @@ export default function AdminBotPage() {
                     );
                   })}
                 </div>
+                {/* 📌 더 보기 — 2026-10-04 추천대로: 오래된 지급도 이 목록에서 찾아 회수할 수 있게(한 번에 300건) */}
+                {itemGrantsNext && (
+                  <div className="px-5 py-3 border-t border-[#ededed] flex justify-center">
+                    <Btn variant="secondary" className="w-[116px]" onClick={loadMoreItemGrants} disabled={itemGrantsBusy}>더 보기</Btn>
+                  </div>
+                )}
               </Panel>
             )}
 
@@ -2375,7 +2420,7 @@ export default function AdminBotPage() {
               id="sec-logs"
               className="scroll-mt-24"
               title="지급 내역"
-              desc="봇 기록은 60일까지만 보관 · 수동 기록은 최근 50건"
+              desc="봇 기록은 100일까지만 보관 · 수동 기록은 최근 50건"
               right={
                 <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">
                   {ledgerFilter === "manual"
@@ -2735,7 +2780,7 @@ export default function AdminBotPage() {
       <EditPane
         open={isFormOpen("questPick")}
         title="주기별 노출 방식"
-        sub="유저마다 주기가 시작된 뒤 처음 볼 때 따로 뽑고, 그 주기 끝까지 바뀌지 않습니다 · 직전 주기에 받은 퀘스트는 되도록 다시 뽑지 않습니다 · 주기 중간에 바꾼 개수와 새로 만든 퀘스트는 다음 초기화부터 · 뽑히지 않은 퀘스트는 보상도 받을 수 없습니다."
+        sub="유저마다 주기가 시작된 뒤 처음 볼 때 따로 뽑고, 주기 중간에는 끄거나 지운 퀘스트 자리만 다시 채웁니다 · 직전 주기에 받은 퀘스트는 되도록 다시 뽑지 않습니다 · 바꾼 개수와 새로 만든 퀘스트는 다음 초기화부터 · 뽑히지 않은 퀘스트는 보상도 받을 수 없습니다."
         saveLabel="노출 방식 저장"
         onSubmit={savePicks}
         onCancel={cancelPicks}
