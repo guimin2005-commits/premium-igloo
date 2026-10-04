@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef, use, useCallback } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { LuxStyles } from "../../components/Lux";
 import { AuctionStyles } from "../../components/AuctionStyles";
+import { openLogin, LOGIN_CTX } from "../../components/LoginPrompt";
 import { roleNames, totalSlots as totalSlotsFn, slotLimitOf as slotLimitOfFn, phase1RoleOf } from "@/lib/auctionGames";
 
 import { ADMIN_USERS } from "@/lib/admins";
@@ -598,17 +599,15 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
     } else if (d?.message && typeof d.message === "string") showToast(d.message);
   };
 
+  // 📌 2026-10-04 로그인 전에 방 주소로 바로 들어오면 — 방 겉모습(Admit One)만 두고 로그인 창(경매 · 입장). 닫으면 경매장 목록으로
+  //    (목록에서 누른 입장은 목록이 그 자리에서 창을 연다 — app/auction/page.tsx enter)
+  useEffect(() => {
+    if (status !== "unauthenticated") return;
+    openLogin({ context: LOGIN_CTX.auction, onClose: () => router.replace("/auction") });
+  }, [status, router]);
+
   if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
-  if (status === "unauthenticated") {
-    return (
-      <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-xl font-black text-white mb-2">로그인 필요</h2>
-        <p className="text-gray-400 text-sm mb-4">경매장 입장을 위해 디스코드 로그인이 필요합니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
-      </main>
-    );
-  }
-  if (!auction) return <div className="min-h-[60vh] flex items-center justify-center text-gray-700 text-xs font-black tracking-[0.3em] uppercase">Admit One</div>;
+  if (status === "unauthenticated" || !auction) return <div className="min-h-[60vh] flex items-center justify-center text-gray-700 text-xs font-black tracking-[0.3em] uppercase">Admit One</div>;
 
   // 📌 입장 권한: 관리자(진행자) / 등록된 리더 / 그 외 로그인 유저는 관전자로 입장
   //  · 실제 시점 판별은 아래 role 기반(isSpec/isThird) — 관리자는 시점을 자유 전환할 수 있다

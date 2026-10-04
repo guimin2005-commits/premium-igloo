@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { isAdminName } from "@/lib/admins";
 import {
@@ -28,6 +28,7 @@ import WalletHistory from "../components/WalletHistory";
 import SkinFrame from "../components/SkinFrame";
 import { playTone } from "@/lib/sfx";
 import PassPreview, { passCosmeticOf } from "./PassPreview";
+import { openLogin } from "../components/LoginPrompt";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
 
@@ -1848,6 +1849,25 @@ const EventBoard = ({ events, className = "" }) => {
   );
 };
 
+// 📌 2026-10-04 로그인 전 대시보드 부품 — 프로필 카드의 빈 아바타 · 내 것(퀘스트 · 피드) 자리의 잠김 칸.
+//    잠김 칸은 빈 슬롯(EmptySlot)과 같은 틀에 자물쇠만 더한다 — 로그인 단추는 프로필 카드에 하나만(같은 일을 하는 단추를 두지 않는다)
+const GuestAvatar = ({ className = "" }) => (
+  <svg aria-hidden viewBox="0 0 24 24" className={className} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5">
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5" />
+  </svg>
+);
+const LockedSlot = () => (
+  <EmptySlot>
+    <span className="inline-flex items-center gap-1.5">
+      <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d={ICON_PATHS.lock} strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      로그인 필요
+    </span>
+  </EmptySlot>
+);
+
 export default function LevelPage() {
   // 리뉴얼: 정적 안내 대신 '내 대시보드'가 첫 화면
   // 탭은 URL 이 기준 — 외부에서 /level?tab=pass 처럼 바로 들어올 수 있어야 한다.
@@ -1911,6 +1931,8 @@ export default function LevelPage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const authReady = mounted && authStatus !== "loading";
+  // 📌 2026-10-04 로그인 전 — 로그인한 사람과 같은 대시보드를 잠긴 채로 그린다(아래 '내 프로필')
+  const guest = authReady && !session?.user;
 
   // ── 내 대시보드: 실시간 데이터 (30초 폴링 + 창 포커스 시 갱신) ──
   const [me, setMe] = useState(null);          // /api/xp/me
@@ -2959,101 +2981,12 @@ export default function LevelPage() {
               </div>
             )}
 
-            {/* ── 비로그인 · 관전 모드 락 스크린 ── */}
-            {authReady && !session?.user && (
-              <div>
-                <div className="relative">
-                  <div aria-hidden className="opacity-40 pointer-events-none select-none">
-                    {/* 플레이어 배너 셸 — 수치는 전부 — (가짜 수치 금지) */}
-                    <div className="relative rounded-3xl overflow-hidden bg-[#131313] p-6 md:p-10">
-                      <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
-                      <div className="relative z-10 flex items-center gap-5 md:gap-7">
-                        <RingGauge pct={0} size={112} stroke={6} trackClass="rgba(255,255,255,0.12)">
-                          <span className="w-[78px] h-[78px] rounded-full bg-white/[0.07] flex items-center justify-center">
-                            <svg viewBox="0 0 24 24" className="w-9 h-9" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5" /></svg>
-                          </span>
-                        </RingGauge>
-                        <div>
-                          <p className="text-[10px] font-black tracking-[0.35em] text-white/20 uppercase mb-2">Player</p>
-                          <p className="text-2xl md:text-4xl font-black text-white/15 leading-none">— — —</p>
-                          <div className="flex gap-2 mt-3.5">
-                            <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/12 text-[10px] font-black tracking-[0.12em] uppercase text-white/25">Rank —</span>
-                            <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/12 text-[10px] font-black tracking-[0.12em] uppercase text-white/25">Top —%</span>
-                          </div>
-                        </div>
-                        <p className="ml-auto text-7xl md:text-8xl font-black text-white/[0.08] tabular-nums leading-[0.85]">—</p>
-                      </div>
-                      <div className="relative z-10 mt-9">
-                        <SegBar pct={0} segments={20} h="h-3.5" track="bg-white/10" tick="rgba(19,19,19,0.92)" />
-                      </div>
-                      <div className="relative z-10 grid grid-cols-2 md:grid-cols-4 border-t border-white/10 mt-8 pt-6 md:divide-x md:divide-white/10">
-                        {["TOTAL", "TODAY", "STREAK", "VOICE"].map((s, i) => (
-                          <div key={i} className={`px-0 md:px-6 ${i < 2 ? "pb-5 md:pb-0" : ""} ${i === 0 ? "md:pl-0" : ""}`}>
-                            <p className="text-[9px] font-black tracking-[0.28em] text-white/20 uppercase mb-2">{s}</p>
-                            <p className="text-xl md:text-2xl font-black text-white/15 tabular-nums leading-none">—</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  {/* 락 카드 */}
-                  <div className="absolute inset-0 z-10 flex items-center justify-center px-4">
-                    <HudPanel accent glow corners={false} className="w-full max-w-sm bg-[#ffffff] px-7 py-8 md:px-9 text-center">
-                      <svg viewBox="0 0 24 24" className="w-6 h-6 mx-auto mb-4" fill="none" stroke="rgba(0,0,0,0.4)" strokeWidth="1.5"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
-                      <p className="text-[10px] font-black tracking-[0.3em] text-[#8a8a8a] uppercase mb-2.5">관전 모드</p>
-                      <p className="text-sm font-bold text-[#131313] mb-7">내 대시보드가 잠겨 있습니다</p>
-                      <button onClick={() => signIn("discord", { callbackUrl: window.location.pathname + window.location.search })} className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors shadow-[0_10px_30px_rgba(233,30,63,0.35)] outline-none focus:outline-none">Discord로 로그인</button>
-                      {process.env.NODE_ENV === "development" && (
-                        <button onClick={() => signIn("devlogin", { callbackUrl: "/level" })} className="mt-3.5 text-[11px] font-bold text-[#a3a3a3] hover:text-[#131313] underline underline-offset-4 transition-colors outline-none focus:outline-none">로컬 확인용 로그인 (dev)</button>
-                      )}
-                    </HudPanel>
-                  </div>
-                </div>
-
-                {/* 로그인 없이도 — XP 테이블 (예전 탭) */}
-                <div className="mt-14">
-                  <div role="tablist" aria-label="XP 도구" className="flex border-b border-[#ededed] mb-8">
-                    {[{ k: "table", l: "XP 테이블" }].map((t) => {
-                      const on = true;
-                      return (
-                        <button key={t.k} type="button" role="tab" aria-selected={on} onClick={() => setMSec(t.k)}
-                          className={`relative py-3 mr-7 text-[15px] font-extrabold transition-colors outline-none focus-visible:text-[#131313] ${on ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
-                          {t.l}
-                          {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <XpTableView myLevel={0} myXp={null} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
-                </div>
-
-                {/* 공개 섹션 — 관전자에게도 실데이터 */}
-                <div className="mt-14">
-                  <div className="max-w-2xl mx-auto min-w-0">
-                    <div className="flex items-end justify-between mb-5">
-                      <div>
-                        <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹</h3>
-                      </div>
-                      <span className="flex items-center gap-3">
-                        {LB_MODES.map((m) => (
-                          <button key={m.id} onClick={() => setLbTab(m.id)} className={`text-[11px] font-black transition-colors outline-none focus:outline-none pb-0.5 border-b-2 ${lbTab === m.id ? "text-[#131313] border-[#e91e3f]" : "text-[#a3a3a3] hover:text-[#5a5a5a] border-transparent"}`}>{m.label}</button>
-                        ))}
-                      </span>
-                    </div>
-                    {!lb[lbTab] ? (
-                      <div className="py-10 text-center text-[11px] font-bold text-[#a3a3a3]">불러오는 중…</div>
-                    ) : !lb[lbTab].data?.length ? (
-                      <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
-                    ) : (
-                      <RankRows rows={lb[lbTab].data} />
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── 로그인 · 내 프로필 ── */}
-            {authReady && session?.user && meLoaded && me && (
+            {/* ── 내 프로필 — 로그인 · 로그인 전(잠김)이 같은 판 ──
+                   📌 2026-10-04 로그인 전에도 로그인한 사람과 같은 대시보드(프로필 카드 · 퀘스트 · 랭킹 · 피드 · XP 테이블 · 이벤트)를 그린다.
+                      예전 회색 '관전 모드' 카드 + 어두운 XP 테이블은 지금 화면과 따로 놀아 걷었다.
+                      값은 지어내지 않는다(— 로 비움). 프로필 카드 위에 자물쇠 + 로그인(사이트 공통 로그인 창), 퀘스트 · 피드는 잠김 칸.
+                      랭킹 · XP 테이블 · 이벤트 · 1회 획득(정책 기본값)은 누구에게나 같은 공개 값이라 그대로 */}
+            {authReady && (guest || (session?.user && meLoaded && me)) && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-10 gap-y-5 lg:gap-y-14 items-start">
 
                 {/* 왼쪽 기둥 — 세로 프로필 카드. PC 에서는 스크롤을 따라 내려온다 */}
@@ -3062,43 +2995,61 @@ export default function LevelPage() {
                     <div
                       ref={dashCardRef}
                       className="order-first relative rounded-3xl overflow-hidden shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]"
-                      style={{ background: `radial-gradient(420px 320px at 86% 30%, ${hexA(tierCur.c, 0.26)} 0%, ${hexA(tierCur.c, 0)} 72%), linear-gradient(180deg, #1b1b1b 0%, #131313 55%)` }}
+                      style={{ background: `radial-gradient(420px 320px at 86% 30%, ${hexA(tierCur.c, guest ? 0.1 : 0.26)} 0%, ${hexA(tierCur.c, 0)} 72%), linear-gradient(180deg, #1b1b1b 0%, #131313 55%)` }}
                     >
                       <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
                       {/* 📌 착용한 카드 스킨 — 봇 이미지 카드와 같은 액자를 옅게(등급 색과 헷갈리지 않게 색이 아니라 테두리 · 무늬로) */}
-                      {me.cardSkin && <SkinFrame skin={me.cardSkin} />}
-                      <span aria-hidden className="hidden lg:block absolute -right-3 -bottom-10 text-[150px] font-black text-white/[0.035] leading-none tracking-tighter tabular-nums select-none pointer-events-none">{me.level}</span>
+                      {me?.cardSkin && <SkinFrame skin={me.cardSkin} />}
+                      {!guest && <span aria-hidden className="hidden lg:block absolute -right-3 -bottom-10 text-[150px] font-black text-white/[0.035] leading-none tracking-tighter tabular-nums select-none pointer-events-none">{me.level}</span>}
 
-                      <div className="relative z-10 p-5 md:p-7">
+                      {/* 📌 로그인 전 — 카드는 그대로 두고 흐리게, 위에 자물쇠 + 로그인 하나(누르면 사이트 공통 로그인 창) */}
+                      {guest && (
+                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#131313]/45">
+                          <span aria-hidden className="mb-4 w-12 h-12 rounded-full border border-white/25 bg-[#131313]/60 flex items-center justify-center text-white">
+                            <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="1.8">
+                              <path d={ICON_PATHS.lock} strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => { playTone(660, 0.06, "sine", 0.03); openLogin(); }}
+                            className="inline-flex items-center h-10 px-7 rounded-full bg-white hover:bg-[#f2f2f2] text-[#131313] text-[13px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                          >
+                            로그인
+                          </button>
+                        </div>
+                      )}
+
+                      <div className={`relative z-10 p-5 md:p-7 ${guest ? "opacity-45 pointer-events-none select-none" : ""}`} aria-hidden={guest || undefined}>
                         {/* 정체성 — 아바타 옆에 이름 */}
                         <div className="flex items-center gap-4 lg:gap-5">
                           <span className="shrink-0 lg:hidden">
                             <RingGauge pct={progPct} size={76} stroke={5} trackClass="rgba(255,255,255,0.12)">
-                              {session.user.image ? (
+                              {session?.user?.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={session.user.image} alt="" className="w-[54px] h-[54px] rounded-full object-cover" />
                               ) : (
-                                <span className="w-[54px] h-[54px] rounded-full bg-white/10 flex items-center justify-center text-lg font-black text-white/60">{(session.user.name || "?").slice(0, 1)}</span>
+                                <span className="w-[54px] h-[54px] rounded-full bg-white/10 flex items-center justify-center text-lg font-black text-white/60">{guest ? <GuestAvatar className="w-7 h-7" /> : (session.user.name || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
                           </span>
                           <span className="hidden lg:block">
                             <RingGauge pct={progPct} size={96} stroke={6} trackClass="rgba(255,255,255,0.12)">
-                              {session.user.image ? (
+                              {session?.user?.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={session.user.image} alt="" className="w-[68px] h-[68px] rounded-full object-cover" />
                               ) : (
-                                <span className="w-[68px] h-[68px] rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60">{(session.user.name || "?").slice(0, 1)}</span>
+                                <span className="w-[68px] h-[68px] rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60">{guest ? <GuestAvatar className="w-9 h-9" /> : (session.user.name || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
                           </span>
                           <div className="min-w-0 flex-1">
-                          <p className="max-w-full text-xl lg:text-[26px] font-black text-white truncate tracking-tight leading-none">{session.user.name}</p>
+                          <p className="max-w-full text-xl lg:text-[26px] font-black text-white truncate tracking-tight leading-none">{guest ? "— — —" : session.user.name}</p>
                           <div className="flex flex-wrap items-center gap-2 mt-3">
                             <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/20 text-[11px] font-bold text-white/75 tabular-nums">
-                              랭크 #{me.rank.toLocaleString()}<span className="text-white/40 ml-1">/ {me.total.toLocaleString()}</span>
+                              {guest ? "랭크 —" : <>랭크 #{me.rank.toLocaleString()}<span className="text-white/40 ml-1">/ {me.total.toLocaleString()}</span></>}
                             </span>
-                            <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-[#e91e3f] text-[11px] font-bold text-white tabular-nums">상위 {rankPct}%</span>
+                            <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-[#e91e3f] text-[11px] font-bold text-white tabular-nums">상위 {guest ? "—" : rankPct}%</span>
                             {todayTotal > 0 && (
                               <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-[#e91e3f]/55 text-[11px] font-bold text-[#ff5c77] tabular-nums">
                                 <LiveDot color="bg-[#ff5c77]" />오늘 +{todayTotal.toLocaleString()} XP
@@ -3111,10 +3062,18 @@ export default function LevelPage() {
                         {/* 레벨 — 카드의 얼굴. 등급은 바로 아래 한 줄, 안내는 버튼으로 연다 */}
                         <div className="mt-6 lg:mt-7 pt-5 lg:pt-6 border-t border-white/10">
                           <p className="text-[10px] font-black tracking-[0.35em] text-white/40 uppercase mb-2.5">LEVEL</p>
-                          <p className="text-[52px] lg:text-6xl font-black text-white tabular-nums tracking-[-0.04em] leading-[0.85]">{me.level}</p>
+                          <p className="text-[52px] lg:text-6xl font-black text-white tabular-nums tracking-[-0.04em] leading-[0.85]">{guest ? "—" : me.level}</p>
                           <div className="mt-4 flex items-center gap-3">
-                            <span className="tier-emblem shrink-0 cursor-default"><TierEmblem tier={tierCur} size={32} /></span>
+                            {guest ? (
+                              // 로그인 전 — 등급은 모른다. 문장 대신 빈 자리(같은 크기)만
+                              <span aria-hidden className="shrink-0 w-8 h-8 rounded-full bg-white/10"></span>
+                            ) : (
+                              <span className="tier-emblem shrink-0 cursor-default"><TierEmblem tier={tierCur} size={32} /></span>
+                            )}
                             <div className="min-w-0 flex-1">
+                              {guest ? (
+                                <p className="text-[18px] font-black tracking-tight leading-none truncate text-white/40">—</p>
+                              ) : (
                               <p
                                 className="text-[18px] font-black tracking-tight leading-none truncate"
                                 // 📌 background 줄임말이 아니라 backgroundImage — 등급이 바뀌어(구매로 레벨 하락 등) 색만 다시 쓰일 때
@@ -3123,7 +3082,8 @@ export default function LevelPage() {
                               >
                                 {tierCur.name}
                               </p>
-                              {tierNext && tierNextBound !== null && (
+                              )}
+                              {!guest && tierNext && tierNextBound !== null && (
                                 <p className="text-[11px] font-bold text-white/50 mt-1.5 truncate tabular-nums">
                                   <span style={{ color: hexLift(tierNext.c, 0.15) }}>{tierNext.name}</span>까지 {Math.max(0, tierNextBound - me.level)}레벨
                                 </p>
@@ -3145,15 +3105,20 @@ export default function LevelPage() {
                             <div className="h-full rounded-full bg-[#e91e3f]" style={{ width: `${progPct}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}></div>
                           </div>
                           <div className="flex justify-between items-baseline mt-2.5">
-                            <span className="text-[11px] font-bold text-white/45 tabular-nums">{prog.current.toLocaleString()} / {prog.required.toLocaleString()} XP</span>
-                            <span className="text-[11px] font-bold text-white/60">Lv {me.level + 1} 까지 <b className="text-white tabular-nums">{prog.needToNext.toLocaleString()} XP</b></span>
+                            <span className="text-[11px] font-bold text-white/45 tabular-nums">{guest ? "— / — XP" : `${prog.current.toLocaleString()} / ${prog.required.toLocaleString()} XP`}</span>
+                            {guest ? (
+                              <span className="text-[11px] font-bold text-white/60">Lv — 까지 <b className="text-white tabular-nums">— XP</b></span>
+                            ) : (
+                              <span className="text-[11px] font-bold text-white/60">Lv {me.level + 1} 까지 <b className="text-white tabular-nums">{prog.needToNext.toLocaleString()} XP</b></span>
+                            )}
                           </div>
                         </div>
 
                         {/* 인벤토리 · 시즌 패스 · 강화 — 한 줄에 셋. 상자도 선도 없이 아이콘과 이름만 */}
-                        {(myItems || passEnabled || enhOpen) && (
+                        {/* 로그인 전에도 인벤토리 칸은 자리를 둔다(잠긴 카드 안이라 눌리지 않는다) — 로그인한 화면과 같은 줄이 보이게 */}
+                        {(guest || myItems || passEnabled || enhOpen) && (
                           <div className="grid grid-flow-col auto-cols-fr mt-6">
-                            {myItems && (
+                            {(guest || myItems) && (
                               <button onClick={openBag} aria-label="인벤토리 열기" className="group min-w-0 flex flex-col items-center justify-center gap-2 py-3 outline-none focus:outline-none">
                                 <span aria-hidden className="relative">
                                   <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/55 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -3192,11 +3157,11 @@ export default function LevelPage() {
                         {/* 스탯 — 모바일에서 XP 테이블 · 시뮬레이터를 볼 때는 접는다 (화면이 너무 길어진다) */}
                         <div className={`${deskOverview ? "grid" : "hidden lg:grid"} grid-cols-2 mt-4 pt-2 border-t border-white/10`}>
                           {[
-                            { l: "누적 XP", v: (me.xp || 0).toLocaleString(), wallet: true },
-                            { l: "오늘 획득", v: `+${todayTotal.toLocaleString()}`, hot: todayTotal > 0 },
-                            { l: "누적 출석", v: `${(me.attendCount || 0).toLocaleString()}일` },
+                            { l: "누적 XP", v: guest ? "—" : (me.xp || 0).toLocaleString(), wallet: true },
+                            { l: "오늘 획득", v: guest ? "—" : `+${todayTotal.toLocaleString()}`, hot: todayTotal > 0 },
+                            { l: "누적 출석", v: guest ? "—" : `${(me.attendCount || 0).toLocaleString()}일` },
                             voiceTracked
-                              ? { l: "누적 음성 시간", v: fmtVoiceTimeMin(me.voiceSeconds) }
+                              ? { l: "누적 음성 시간", v: guest ? "—" : fmtVoiceTimeMin(me.voiceSeconds) }
                               : { l: "누적 음성 시간", v: `${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터`, dim: true },
                           ].map((st, i) => (
                             <div key={i} className={`min-w-0 py-3 ${i % 2 === 0 ? "pr-4 border-r border-white/10" : "pl-4"}`}>
@@ -3330,7 +3295,7 @@ export default function LevelPage() {
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-lg font-black text-[#131313] tabular-nums leading-none">
-                            {questDone}<span className="text-[#a3a3a3]"> / {questTotal}</span>
+                            {guest ? "—" : questDone}<span className="text-[#a3a3a3]"> / {guest ? "—" : questTotal}</span>
                           </p>
                           <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mt-1">Complete</p>
                         </div>
@@ -3497,6 +3462,8 @@ export default function LevelPage() {
                       {quests && questRows.length === 0 && (
                         <EmptySlot>등록된 퀘스트가 없습니다</EmptySlot>
                       )}
+                      {/* 로그인 전 — 내 퀘스트는 잠김 칸 하나(로그인은 프로필 카드의 단추 하나만) */}
+                      {guest && <LockedSlot />}
 
                       {/* 지급 안내 — 보상은 봇 대기열을 거치므로 즉시가 아닐 수 있다 */}
                       {questRows.some((q) => q.claimed) && (
@@ -3504,8 +3471,8 @@ export default function LevelPage() {
                       )}
 
                       <div className={`${questPeriod === "daily" ? "flex" : "hidden"} items-center justify-between border-t border-black/[0.08] mt-5 pt-4`}>
-                        <span className="text-[11px] font-bold text-[#8a8a8a]">누적 출석 <b className="text-[#131313] tabular-nums">{(me.attendCount || 0).toLocaleString()}일</b></span>
-                        <span className="text-[11px] font-bold text-[#8a8a8a]">마지막 <b className="text-[#131313] tabular-nums">{me.lastAttendDate ? me.lastAttendDate.replace(/-/g, ".") : "—"}</b></span>
+                        <span className="text-[11px] font-bold text-[#8a8a8a]">누적 출석 <b className="text-[#131313] tabular-nums">{guest ? "—" : `${(me.attendCount || 0).toLocaleString()}일`}</b></span>
+                        <span className="text-[11px] font-bold text-[#8a8a8a]">마지막 <b className="text-[#131313] tabular-nums">{me?.lastAttendDate ? me.lastAttendDate.replace(/-/g, ".") : "—"}</b></span>
                       </div>
                     </section>
 
@@ -3540,12 +3507,17 @@ export default function LevelPage() {
                         // 📌 TOP 10 밖이면 목록 아래 내 줄 — 누적 · 이번 달은 랭킹 API 의 me. 현재는 순위 숫자만 내 정보(/api/xp/me)의 것으로 —
                         //    같은 화면 프로필 카드 "랭크 #N" · 봇 /레벨 · /랭크 와 같은 순위. 배지 · 이름은 랭킹 API 의 me
                         //    2026-10-04 동점 규칙 하나 — XP 내림차순, 동점은 userId 오름차순(글자 비교 — 가입 순서 아님. 목록 · 내 정보 · 봇이 모두 같다)
+                        guest ? (
+                          // 로그인 전 — 공개 TOP 10 만(내 줄 없음)
+                          <RankRows rows={lb[lbTab].data} />
+                        ) : (
                         <RankRows
                           rows={lb[lbTab].data}
                           myId={session.user.id}
                           me={lbTab === "all" ? (lb.all.me ? { ...lb.all.me, rank: me.rank ?? lb.all.me.rank } : me) : lb[lbTab].me}
                           myName={lb[lbTab].me?.name || session.user.name}
                         />
+                        )
                       )}
                     </section>
                     </div>
@@ -3559,9 +3531,11 @@ export default function LevelPage() {
                         <div>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">획득 피드</h3>
                         </div>
-                        <span className="flex items-center gap-1.5"><LiveDot /><span className="text-[10px] font-bold text-[#a3a3a3] tabular-nums">{myLogs?.logs?.length || 0}건</span></span>
+                        {!guest && <span className="flex items-center gap-1.5"><LiveDot /><span className="text-[10px] font-bold text-[#a3a3a3] tabular-nums">{myLogs?.logs?.length || 0}건</span></span>}
                       </div>
-                      {myLogs?.logs?.length ? (
+                      {guest ? (
+                        <LockedSlot />
+                      ) : myLogs?.logs?.length ? (
                         <>
                           {/* 📌 [overflow-anchor:none] — 늘어나는 줄이 스크롤 기준점으로 잡혀 위 화면(퀘스트 · 랭킹)이 밀려 보이지 않게 */}
                           <div className="border-t border-black/[0.08] [overflow-anchor:none]">

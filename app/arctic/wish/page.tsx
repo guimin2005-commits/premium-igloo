@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ICON_PATHS } from "../../components/Icons";
+import { openLogin, LOGIN_CTX } from "../../components/LoginPrompt";
 import { isTimed, durationOptions, durationLabel, cardPick, isPointOnly, affordFor } from "@/lib/shopPricing";
 import { isAdminName } from "@/lib/admins";
 import ArcticStoreBar from "../ArcticStoreBar";
@@ -11,20 +12,13 @@ import ProductCard from "../ProductCard";
 import { ownedIdsOf, renewableIdsOf } from "../owned";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
+import { CART_KEY, WISH_KEY, readShopList, writeShopList, useShopUid } from "../shopStore";
+import { useGuestShopLogin } from "../useGuestShopLogin";
 
 // 📌 찜한 상품 — 상점 메인의 팝업 패널을 따로 뗀 페이지.
 //    상품 카드는 상점 목록과 같은 모양(그림 · 유형 · 이름 · 가격 · 찜)에, 찜 목록답게 아래에 '담기' 한 줄을 더한다.
-//    찜 · 장바구니는 상점 메인과 같은 저장소(iglooShopWish · iglooShopCart)를 쓴다 — 여기서 바꾸면 메인에도 그대로다.
+//    찜 · 장바구니는 상점 메인과 같은 저장소(iglooShopWish · iglooShopCart — 계정마다, ../shopStore)를 쓴다 — 여기서 바꾸면 메인에도 그대로다.
 type CartRow = { itemId: string; qty: number; days?: number };
-
-const readList = <T,>(key: string): T[] => {
-  try {
-    const v = JSON.parse(localStorage.getItem(key) || "[]");
-    return Array.isArray(v) ? v : [];
-  } catch {
-    return [];
-  }
-};
 
 export default function WishPage() {
   const { data: session, status } = useSession();
@@ -36,18 +30,26 @@ export default function WishPage() {
   const [wish, setWish] = useState<string[]>([]);
   const [cart, setCart] = useState<CartRow[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
-  const [ready, setReady] = useState(false); // 저장소를 읽기 전에는 쓰지 않는다 (빈 값으로 덮지 않게)
   const [toast, setToast] = useState("");
   // 내 빙옥 — 빙옥 전용 상품은 모자라면 담기를 잠근다 (지갑을 못 읽었으면 null — 잠그지 않는다)
   const [myPoint, setMyPoint] = useState<number | null>(null);
 
+  // 📌 2026-10-04 로그인 전 — 빈 찜 목록 위에 로그인 창(ARCTIC · 구매), 닫으면 상점 메인으로 (../useGuestShopLogin)
+  useGuestShopLogin();
+
+  // 저장소를 읽기 전에는 쓰지 않는다 (빈 값으로 덮지 않게) — 📌 2026-10-04 계정마다(../shopStore), 읽은 계정과 지금 계정이 같을 때만 저장
+  const { uid: shopUid, ready: shopReady } = useShopUid();
+  const [shopOwner, setShopOwner] = useState<string | null>(null);
+  const ready = shopOwner !== null;
   useEffect(() => {
-    setWish(readList<string>("iglooShopWish"));
-    setCart(readList<CartRow>("iglooShopCart"));
-    setReady(true);
-  }, []);
-  useEffect(() => { if (ready) try { localStorage.setItem("iglooShopWish", JSON.stringify(wish)); } catch {} }, [wish, ready]);
-  useEffect(() => { if (ready) try { localStorage.setItem("iglooShopCart", JSON.stringify(cart)); } catch {} }, [cart, ready]);
+    if (!shopReady) return;
+    setWish(readShopList<string>(WISH_KEY, shopUid));
+    setCart(readShopList<CartRow>(CART_KEY, shopUid));
+    setShopOwner(shopUid);
+  }, [shopUid, shopReady]);
+  const owns = shopOwner !== null && shopOwner === shopUid;
+  useEffect(() => { if (owns) writeShopList(WISH_KEY, shopUid, wish); }, [wish, owns, shopUid]);
+  useEffect(() => { if (owns) writeShopList(CART_KEY, shopUid, cart); }, [cart, owns, shopUid]);
 
   // 📌 장바구니 정리 기준 — 상품 목록을 제대로 받아 왔을 때의 id 들. 받기 전·실패면 null
   const [validIds, setValidIds] = useState<Set<string> | null>(null);
@@ -109,7 +111,7 @@ export default function WishPage() {
   // 📌 빙옥 전용 상품 — 카드에 걸린 값(담길 값)을 빙옥으로 낼 수 없으면 담기 잠금
   const pointShort = (it: any) => isLoggedIn && isPointOnly(it) && myPoint != null && !affordFor(it, 0, myPoint)(cardPick(it)?.price ?? 0);
   const toggleCart = (it: any) => {
-    if (!isLoggedIn) return signIn("discord");
+    if (!isLoggedIn) return openLogin({ context: LOGIN_CTX.arcticBuy });
     if (locked(it._id)) return say("이미 구매하신 상품입니다");
     if (cart.some((c) => c.itemId === it._id)) {
       setCart((prev) => prev.filter((c) => c.itemId !== it._id));

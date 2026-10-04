@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BackLink from "../../components/BackLink";
@@ -15,6 +15,8 @@ import ArcticDock from "../ArcticDock";
 import CardArt from "../CardArt";
 import { renewBaseOf, expiryLabel } from "../owned";
 import { isUnitSale, qtyCapOf } from "@/lib/unitSale";
+import { CART_KEY, CHECKOUT_KEY, readShopList, readShopRaw, writeShopList, removeShopKey, useShopUid } from "../shopStore";
+import { useGuestShopLogin } from "../useGuestShopLogin";
 
 const ORDER_KEY = "iglooShopOrderId";
 const ORDER_TTL = 60 * 60 * 1000;
@@ -23,7 +25,6 @@ const ORDER_TTL = 60 * 60 * 1000;
 export default function CheckoutPage() {
   const { status } = useSession();
   const router = useRouter();
-  const isLoggedIn = status === "authenticated";
 
   const [cart, setCart] = useState<{ itemId: string; qty: number; days?: number }[]>([]);
   const [items, setItems] = useState<any[]>([]);
@@ -64,14 +65,16 @@ export default function CheckoutPage() {
   const [wallet, setWallet] = useState<any[]>([]);
   const [showCouponPicker, setShowCouponPicker] = useState(false);
 
+  // 📌 2026-10-04 로그인 전 — 빈 결제 화면 위에 로그인 창(ARCTIC · 구매), 닫으면 상점 메인으로 (../useGuestShopLogin)
+  useGuestShopLogin();
+
   // 장바구니에서 고른 항목이 있으면 그것만, 없으면 장바구니 전체를 결제 대상으로
+  //    📌 2026-10-04 둘 다 계정마다(../shopStore) — 로그인 전은 빈 목록
+  const { uid: shopUid, ready: shopReady } = useShopUid();
   useEffect(() => {
-    try {
-      const picked = localStorage.getItem("iglooShopCheckout");
-      const raw = picked || localStorage.getItem("iglooShopCart");
-      if (raw) setCart(JSON.parse(raw));
-    } catch {}
-  }, []);
+    if (!shopReady) return;
+    setCart(readShopRaw(CHECKOUT_KEY, shopUid) ? readShopList(CHECKOUT_KEY, shopUid) : readShopList(CART_KEY, shopUid));
+  }, [shopUid, shopReady]);
 
   // 가격이 바뀌었다는 답을 받으면 올려서 상품 · 지갑을 다시 읽는다
   const [reloadKey, setReloadKey] = useState(0);
@@ -241,13 +244,11 @@ export default function CheckoutPage() {
       setResult({ ok: !!d.success, message: d.message || (d.success ? "결제가 완료되었습니다." : "결제에 실패했습니다.") });
       if (d.code === "PRICE_CHANGED") { setPointUse(0); setReloadKey((k) => k + 1); }
       if (d.success) {
-        try {
-          localStorage.removeItem(ORDER_KEY);
-          const paidIds = new Set(cart.map((c) => c.itemId));
-          const all: { itemId: string; qty: number }[] = JSON.parse(localStorage.getItem("iglooShopCart") || "[]");
-          localStorage.setItem("iglooShopCart", JSON.stringify(all.filter((c) => !paidIds.has(c.itemId))));
-          localStorage.removeItem("iglooShopCheckout");
-        } catch {}
+        try { localStorage.removeItem(ORDER_KEY); } catch {}
+        const paidIds = new Set(cart.map((c) => c.itemId));
+        const all = readShopList<{ itemId: string; qty: number }>(CART_KEY, shopUid);
+        writeShopList(CART_KEY, shopUid, all.filter((c) => !paidIds.has(c.itemId)));
+        removeShopKey(CHECKOUT_KEY, shopUid);
         setCart([]);
         // 결제 뒤 잔액 — remain { xp, point } (옛 응답의 remainXp · remainPoint 도 받는다)
         const remain = d.data?.remain ?? d.remain;
@@ -268,18 +269,6 @@ export default function CheckoutPage() {
     return (
       <div className="w-full flex-1 bg-white min-h-screen">
         <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
-      </div>
-    );
-  }
-
-  if (!isLoggedIn) {
-    return (
-      <div className="w-full flex-1 bg-white min-h-screen">
-        <div className="py-32 text-center break-keep px-6">
-          <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
-          <p className="text-sm text-[#5a5a5a] mb-7">결제하려면 로그인해주세요.</p>
-          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
-        </div>
       </div>
     );
   }
