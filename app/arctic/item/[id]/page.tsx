@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { salePrice, basePrice, isTimed, durationOptions, durationLabel, cardPick, discountPctOf, discountUntilLabel, isPointOnly, shownPrice, priceUnit, priceText, affordFor } from "@/lib/shopPricing";
@@ -15,6 +15,8 @@ import CardArt from "../../CardArt";
 import AppliedPreview from "../../AppliedPreview";
 import { ownStateOf, renewBaseOf, renewPickOf, expiryLabel, ownedCountOf } from "../../owned";
 import { isUnitSale, maxPerOrderOf, qtyCapOf } from "@/lib/unitSale";
+import { openLogin, LOGIN_CTX } from "../../../components/LoginPrompt";
+import { CART_KEY, WISH_KEY, CHECKOUT_KEY, readShopList, writeShopList, useShopUid } from "../../shopStore";
 
 // 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천
 const TypeBadge = ({ type, className = "" }: { type: string; className?: string }) => (
@@ -55,23 +57,24 @@ export default function ItemDetailPage() {
   // 📌 다른 상품 — 서버 추천(/api/shop/recommend?related=, lib/shopRecommend related)의 id 4개. 오기 전 · 실패면 null(지금 규칙으로 그린다)
   const [relIds, setRelIds] = useState<string[] | null>(null);
 
+  // 📌 2026-10-04 장바구니 · 찜은 계정마다(../../shopStore) — 로그인 전은 빈 목록(배지 0)
+  const { uid: shopUid, ready: shopReady } = useShopUid();
   useEffect(() => {
-    try {
-      const c = localStorage.getItem("iglooShopCart");
-      if (c) setCart(JSON.parse(c));
-      const w = localStorage.getItem("iglooShopWish");
-      if (w) setWish(JSON.parse(w));
-    } catch {}
-  }, []);
+    if (!shopReady) return;
+    setCart(readShopList(CART_KEY, shopUid));
+    setWish(readShopList<string>(WISH_KEY, shopUid));
+  }, [shopUid, shopReady]);
 
   const saveCart = (next: { itemId: string; qty: number; days?: number }[]) => {
     setCart(next);
-    try { localStorage.setItem("iglooShopCart", JSON.stringify(next)); } catch {}
+    writeShopList(CART_KEY, shopUid, next);
   };
   const saveWish = (next: string[]) => {
     setWish(next);
-    try { localStorage.setItem("iglooShopWish", JSON.stringify(next)); } catch {}
+    writeShopList(WISH_KEY, shopUid, next);
   };
+  // 📌 2026-10-04 로그인 전에는 상품을 보기만 — 기간 · 수량 고르기 · 담기 · 찜 · 구매는 로그인 창(ARCTIC · 구매)
+  const askLogin = () => openLogin({ context: LOGIN_CTX.arcticBuy });
 
   const load = useCallback(() => {
     if (status === "loading" || !id) return;
@@ -159,6 +162,7 @@ export default function ItemDetailPage() {
   const qty = unit ? Math.min(cap, Math.max(1, qtyPick ?? cartQty)) : 1;
   const heldCount = unit && isLoggedIn ? ownedCountOf(orders, item) : 0;
   const stepQty = (d: number) => {
+    if (!isLoggedIn) return askLogin();
     const next = qty + d;
     if (next < 1) return;
     if (next > cap) return flash(item.stock >= 0 && item.stock < next ? (item.stock > 0 ? `재고 ${item.stock}개` : "품절") : `한 번에 ${perOrder}개까지`);
@@ -196,7 +200,7 @@ export default function ItemDetailPage() {
 
   // 담기 ↔ 삭제 토글
   const toggleCart = () => {
-    if (!isLoggedIn) return signIn("discord");
+    if (!isLoggedIn) return askLogin();
     if (owned) return flash("이미 구매하신 상품입니다");
     if (!inCart && pointShort) return flash("빙옥이 부족합니다");
     if (inCart) {
@@ -212,6 +216,7 @@ export default function ItemDetailPage() {
 
   // 이 상품과 아래 '다른 상품' 카드의 하트가 같이 쓴다
   const toggleWishOf = (id: string) => {
+    if (!isLoggedIn) return askLogin();
     const on = wish.includes(id);
     saveWish(on ? wish.filter((x) => x !== id) : [...wish, id]);
     flash(on ? "찜을 해제했습니다" : "찜 목록에 추가했습니다");
@@ -221,9 +226,9 @@ export default function ItemDetailPage() {
   // 구매 — 팝업 대신 결제 화면으로 넘어간다. 이 상품 하나만 결제 대상으로 넘기고(장바구니는 그대로),
   //    쿠폰 · 약관 동의 · 수령 정보는 결제 화면(app/arctic/checkout)이 맡는다
   const openBuy = () => {
-    if (!isLoggedIn) return signIn("discord");
+    if (!isLoggedIn) return askLogin();
     if (pointShort) return flash("빙옥이 부족합니다");
-    try { localStorage.setItem("iglooShopCheckout", JSON.stringify([{ itemId: item._id, qty, days }])); } catch {}
+    writeShopList(CHECKOUT_KEY, shopUid, [{ itemId: item._id, qty, days }]);
     router.push("/arctic/checkout");
   };
 
@@ -282,7 +287,7 @@ export default function ItemDetailPage() {
                   {durationOptions(item).map((o: any) => {
                     const on = o.days === days;
                     return (
-                      <button key={o.days} type="button" onClick={() => setPickedDays(o.days)}
+                      <button key={o.days} type="button" onClick={() => (isLoggedIn ? setPickedDays(o.days) : askLogin())}
                         className={`flex-1 py-3 rounded-xl border text-[13px] font-bold transition-colors ${
                           on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#ededed] hover:border-[#131313]"
                         }`}>
@@ -411,7 +416,8 @@ export default function ItemDetailPage() {
                     ? "bg-[#f2f2f2] text-[#8a8a8a]"
                     : "bg-[#e91e3f] text-white hover:bg-[#d01634]"
                 }`}>
-                {owned ? "보유 중" : soldOut ? "품절" : !isLoggedIn ? "로그인" : !affordable ? (po ? "빙옥 부족" : "XP 부족") : renewing ? "기간 연장" : "구매"}
+                {/* 로그인 전에도 '구매' — 누르면 로그인 창(ARCTIC · 구매)이 맥락을 말한다 */}
+                {owned ? "보유 중" : soldOut ? "품절" : !isLoggedIn ? "구매" : !affordable ? (po ? "빙옥 부족" : "XP 부족") : renewing ? "기간 연장" : "구매"}
               </button>
             </div>
           </div>

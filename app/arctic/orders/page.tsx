@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import ArcticStoreBar from "../ArcticStoreBar";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 import { ITEM_TYPE_LABEL } from "@/lib/items";
 import { groupOrders, orderSummary } from "@/lib/orderGroups";
+import { useGuestShopLogin } from "../useGuestShopLogin";
 
 const STATUS_META: Record<string, { label: string; cls: string; desc: string }> = {
   pending: { label: "처리 대기", cls: "bg-[#fdf3e3] text-[#a8763a]", desc: "지급·발송을 준비하고 있습니다" },
@@ -29,13 +30,14 @@ const fmtDate = (v: string | Date) => {
 
 // 📌 구매 내역 페이지 — 상태별 필터와 진행 안내
 export default function OrdersPage() {
-  const { data: session, status } = useSession();
-  const isLoggedIn = status === "authenticated";
+  const { status } = useSession();
 
   const [orders, setOrders] = useState<any[]>([]);
   const [myXp, setMyXp] = useState<number | null>(null);
   const [filter, setFilter] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  // 📌 2026-10-04 로그인 전 — 예전 '로그인이 필요합니다' 면 대신 빈 내역 위에 로그인 창(장바구니 · 찜 · 결제와 같게), 닫으면 상점 메인으로
+  useGuestShopLogin();
 
   useEffect(() => {
     if (status === "loading") return;
@@ -70,18 +72,6 @@ export default function OrdersPage() {
     return (
       <div className="w-full flex-1 bg-white min-h-screen">
         <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
-      </div>
-    );
-  }
-
-  if (!isLoggedIn) {
-    return (
-      <div className="w-full flex-1 bg-white min-h-screen">
-        <div className="py-32 text-center px-6 break-keep">
-          <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
-          <p className="text-sm text-[#5a5a5a] mb-7">구매 내역을 보려면 로그인해주세요.</p>
-          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
-        </div>
       </div>
     );
   }

@@ -8,6 +8,7 @@ import Link from "next/link";
 import { ICON_PATHS } from "./components/Icons";
 import AdminNav from "./admin/AdminNav";
 import ScrollLock from "./components/ScrollLock";
+import { LoginSheet, GuestInquirySheet, onLoginRequest, type LoginContext } from "./components/LoginPrompt";
 import { useArcticFromLevel, ARCTIC_FROM_KEY, ARCTIC_ORIGIN_KEY } from "./arctic/fromLevel";
 import { agoLabel } from "@/lib/ago";
 import { ADMIN_USERS } from "@/lib/admins";
@@ -274,15 +275,47 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     toastTimer.current = setTimeout(() => setToast(""), 3200);
   }, []);
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+  // 📌 2026-10-04 로그인 창 한 벌(app/components/LoginPrompt) — 어디서든 openLogin({ context, onClose }) 으로 연다.
+  //    맥락 칩(ARCTIC · 구매 등) · 닫을 때 할 일(경매방 직접 주소 → /auction) · 연 화면을 같이 기억한다.
+  //    연 화면을 벗어나면(링크 · 뒤로가기) 할 일 없이 조용히 닫는다 — 다른 화면에 남은 창이 엉뚱한 곳으로 보내지 않게
+  const [loginCtx, setLoginCtx] = useState<LoginContext | null>(null);
+  const loginOnCloseRef = useRef<(() => void) | null>(null);
+  const loginAtRef = useRef<string | null>(null);
+  const openLoginModal = useCallback((ctx: LoginContext | null = null, onClose: (() => void) | null = null, at: string | null = null) => {
+    setLoginCtx(ctx);
+    loginOnCloseRef.current = onClose;
+    loginAtRef.current = at;
+    setIsGuestInquiryOpen(false);
+    setIsLoginModalOpen(true);
+  }, []);
+  useEffect(() => onLoginRequest((o) => openLoginModal(o.context || null, o.onClose || null, window.location.pathname)), [openLoginModal]);
   // 로그인 오류로 "/" 에 떨어졌을 때(RouteBody 가 보던 곳으로 돌려보낸다) — 오류면 안내, 로그인 화면 자리면 로그인 창
+  //    (돌려보내며 주소가 바뀌므로 연 화면은 적지 않는다 — 바뀐 화면에서도 창이 남게)
   const onAuthLanding = useCallback((code: string | null) => {
     if (code) {
       setIsLoginModalOpen(false);
       showToast(authErrorText(code) || "로그인하지 못했습니다. 다시 시도해 주세요.");
     } else {
-      setIsLoginModalOpen(true);
+      openLoginModal();
     }
-  }, [showToast]);
+  }, [showToast, openLoginModal]);
+  // 닫기(X · 바깥 · Esc) — 로그인 · 비회원 문의 둘 다 닫고, 연 쪽이 맡긴 할 일을 한 번 한다
+  const closeLoginModal = useCallback(() => {
+    setIsLoginModalOpen(false);
+    setIsGuestInquiryOpen(false);
+    const done = loginOnCloseRef.current;
+    loginOnCloseRef.current = null;
+    loginAtRef.current = null;
+    done?.();
+  }, []);
+  useEffect(() => {
+    const at = loginAtRef.current;
+    if (!at || at === pathname) return;
+    loginOnCloseRef.current = null;
+    loginAtRef.current = null;
+    setIsLoginModalOpen(false);
+    setIsGuestInquiryOpen(false);
+  }, [pathname]);
 
   const profileDropdownRef = useRef<HTMLDivElement>(null);
   const profilePanelRef = useRef<HTMLDivElement>(null);
@@ -752,7 +785,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               </div>
               </>
             ) : (
-              <button onClick={() => setIsLoginModalOpen(true)} className="flex items-center px-4 py-1.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-[13px] font-bold rounded-full transition-colors outline-none focus:outline-none">로그인</button>
+              <button onClick={() => openLoginModal(null, null, window.location.pathname)} className="flex items-center px-4 py-1.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-[13px] font-bold rounded-full transition-colors outline-none focus:outline-none">로그인</button>
             )}
 
             {!isVerifyPage && mounted && (
@@ -885,47 +918,26 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </div>
       </footer>
 
-      {/* 📌 2026-10-04 로그인 창 리뉴얼 — 흰 패널(모서리 16px · 패널 그림자), 위에 PREMIUM IGLOO · 닫기, 가운데 로그인 · 한 줄 · Discord로 계속하기(로고 없음),
-             아래 비회원 문의 · 이용약관. 모바일은 아래에서 올라오는 시트. 바깥을 누르면 닫힌다 */}
+      {/* 📌 로그인 창 — 사이트 공통 흰 판 한 벌(app/components/LoginPrompt). 비회원 문의도 같은 판으로 이어진다 */}
       {isLoginModalOpen && !isGuestInquiryOpen && status !== "authenticated" && (
-        <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center bg-black/45 md:p-4" onClick={() => setIsLoginModalOpen(false)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="login-title" onClick={(e) => e.stopPropagation()}
-            className="w-full md:max-w-[360px] bg-white rounded-t-2xl md:rounded-2xl shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] overflow-hidden pb-[env(safe-area-inset-bottom)]">
-            <div aria-hidden className="md:hidden w-9 h-1 rounded-full bg-[#e0e0e0] mx-auto mt-2" />
-            <div className="flex items-center justify-between h-12 px-4 border-b border-[#ededed]">
-              <span className="text-[12px] font-bold tracking-[0.08em] text-[#131313]">PREMIUM IGLOO</span>
-              <button type="button" aria-label="닫기" onClick={() => setIsLoginModalOpen(false)} className="w-8 h-8 -mr-1.5 flex items-center justify-center rounded-full text-[#8a8a8a] hover:text-[#131313] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
-              </button>
-            </div>
-            <div className="px-6 pt-8 pb-6 text-center">
-              <h2 id="login-title" className="text-[22px] font-black text-[#131313]">로그인</h2>
-              <p className="mt-1 text-[12px] text-[#5a5a5a]">고급 이글루 디스코드 계정</p>
-              <button type="button" onClick={() => signIn("discord", { callbackUrl: loginReturnPath() })} className="mt-6 w-full h-12 rounded-full bg-[#5865F2] hover:bg-[#4752C4] text-white text-[14px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#5865F2]/40">Discord로 계속하기</button>
-              <div className="mt-5 flex items-center justify-center gap-3 text-[12px] text-[#5a5a5a]">
-                <button type="button" onClick={() => setIsGuestInquiryOpen(true)} className="underline underline-offset-[3px] hover:text-[#131313] transition-colors outline-none">비회원 문의</button>
-                <span aria-hidden className="text-[#a3a3a3]">·</span>
-                <Link href="/policy" onClick={() => setIsLoginModalOpen(false)} className="underline underline-offset-[3px] hover:text-[#131313] transition-colors">이용약관</Link>
-              </div>
-            </div>
-          </div>
-        </div>
+        <LoginSheet
+          context={loginCtx}
+          onClose={closeLoginModal}
+          onDiscord={() => signIn("discord", { callbackUrl: loginReturnPath() })}
+          onGuest={() => setIsGuestInquiryOpen(true)}
+          onDev={process.env.NODE_ENV === "development" ? () => signIn("devlogin", { callbackUrl: loginReturnPath() }) : null}
+        />
       )}
 
       {isGuestInquiryOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-gradient-to-b from-[#1c1c1c] to-[#121212] border border-white/10 rounded-3xl ring-1 ring-white/5 w-full max-w-md overflow-hidden shadow-2xl relative p-8">
-            <button onClick={() => {setIsGuestInquiryOpen(false); setIsLoginModalOpen(false);}} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/20 rounded-full transition-colors outline-none focus:outline-none">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
-            </button>
-            <h2 className="text-xl font-bold text-white mb-2">비회원 문의</h2>
-            <form onSubmit={handleGuestInquiry} className="flex flex-col gap-4 mt-6">
-              <input type="email" required placeholder="답변 받을 이메일 주소" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} className="w-full px-4 py-3 bg-[#121212] border border-white/10 rounded-xl text-white text-sm outline-none focus:border-[#e91e3f] transition-colors" />
-              <textarea required placeholder="문의 내용을 상세히 적어주세요." rows={4} value={guestContent} onChange={(e) => setGuestContent(e.target.value)} className="w-full px-4 py-3 bg-[#121212] border border-white/10 rounded-xl text-white text-sm outline-none resize-none focus:border-[#e91e3f] transition-colors" />
-              <button type="submit" className="w-full py-3 mt-2 bg-[#e91e3f] hover:bg-[#d01634] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#e91e3f]/20 outline-none focus:outline-none">문의 접수하기</button>
-            </form>
-          </div>
-        </div>
+        <GuestInquirySheet
+          email={guestEmail}
+          content={guestContent}
+          onEmail={setGuestEmail}
+          onContent={setGuestContent}
+          onSubmit={handleGuestInquiry}
+          onClose={closeLoginModal}
+        />
       )}
 
       {/* 📌 모바일 슬라이드 메뉴 — 장식 없이 담백하게. 우측에서 통째로 밀려 나오고, 닫을 때도

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import ArcticStoreBar from "../ArcticStoreBar";
 import CardArt from "../CardArt";
@@ -13,6 +13,8 @@ import { ITEM_TYPE_LABEL, itemTypeColor } from "@/lib/items";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 import { isRenewal } from "../owned";
+import { CART_KEY, CHECKOUT_KEY, readShopList, writeShopList, useShopUid } from "../shopStore";
+import { useGuestShopLogin } from "../useGuestShopLogin";
 
 import { ADMIN_USERS } from "@/lib/admins";
 
@@ -33,19 +35,23 @@ export default function CartPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // 📌 2026-10-04 로그인 전 — 빈 장바구니 위에 로그인 창(ARCTIC · 구매), 닫으면 상점 메인으로 (../useGuestShopLogin)
+  useGuestShopLogin();
+
   // 저장된 장바구니를 먼저 읽고, 그 뒤부터만 저장한다
-  const [cartLoaded, setCartLoaded] = useState(false);
+  //    📌 2026-10-04 계정마다(../shopStore) — 읽은 계정과 지금 계정이 같을 때만 저장한다
+  const { uid: shopUid, ready: shopReady } = useShopUid();
+  const [shopOwner, setShopOwner] = useState<string | null>(null);
+  const cartLoaded = shopOwner !== null;
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("iglooShopCart");
-      if (raw) setCart(JSON.parse(raw));
-    } catch {}
-    setCartLoaded(true);
-  }, []);
+    if (!shopReady) return;
+    setCart(readShopList(CART_KEY, shopUid));
+    setShopOwner(shopUid);
+  }, [shopUid, shopReady]);
   useEffect(() => {
-    if (!cartLoaded) return;
-    try { localStorage.setItem("iglooShopCart", JSON.stringify(cart)); } catch {}
-  }, [cart, cartLoaded]);
+    if (shopOwner === null || shopOwner !== shopUid) return;
+    writeShopList(CART_KEY, shopUid, cart);
+  }, [cart, shopOwner, shopUid]);
 
   // 📌 장바구니 정리 기준 — 상품 목록을 제대로 받아 왔을 때의 id 들. 받기 전·실패면 null
   const [validIds, setValidIds] = useState<Set<string> | null>(null);
@@ -134,7 +140,7 @@ export default function CartPage() {
 
   // 선택한 항목만 결제로 넘긴다 (나머지는 장바구니에 남는다)
   const goCheckout = () => {
-    try { localStorage.setItem("iglooShopCheckout", JSON.stringify(picked.map((r) => ({ itemId: r.itemId, qty: r.qty, days: r.days || 0 })))); } catch {}
+    writeShopList(CHECKOUT_KEY, shopUid, picked.map((r) => ({ itemId: r.itemId, qty: r.qty, days: r.days || 0 })));
   };
 
   const removeItem = (itemId: string) => setCart((prev) => prev.filter((c) => c.itemId !== itemId));
@@ -144,18 +150,6 @@ export default function CartPage() {
     return (
       <div className="w-full flex-1 bg-white min-h-screen">
         <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
-      </div>
-    );
-  }
-
-  if (!isLoggedIn) {
-    return (
-      <div className="w-full flex-1 bg-white min-h-screen">
-        <div className="py-32 text-center px-6 break-keep">
-          <h1 className="text-2xl font-black text-[#131313] mb-3">로그인이 필요합니다</h1>
-          <p className="text-sm text-[#5a5a5a] mb-7">장바구니를 보려면 로그인해주세요.</p>
-          <button onClick={() => signIn("discord")} className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors">디스코드 로그인</button>
-        </div>
       </div>
     );
   }

@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { ICON_PATHS } from "../components/Icons";
+import { openLogin, LOGIN_CTX } from "../components/LoginPrompt";
 
 // 📌 ARCTIC 모바일 하단바 — 상점 메인과 하위 페이지(내 정보·장바구니·주문 내역·상품 상세)가 같은 모양을 쓴다
 //    상점 메인에서만 열 수 있는 찜·검색은 쿼리로 넘겨 메인에서 열도록 한다
@@ -53,6 +55,14 @@ export default function ArcticDock({
   wishCount?: number;
 }) {
   const pathname = usePathname();
+  // 📌 2026-10-04 로그인 전 — 찜 · 장바구니는 그 자리에서 로그인 창(ARCTIC · 구매), 내 정보는 그냥 로그인 창. 화면을 옮기지 않는다
+  const { status } = useSession();
+  const guestLogin = (key: string) => {
+    if (status !== "unauthenticated") return false;
+    if (key === "wish" || key === "cart") { openLogin({ context: LOGIN_CTX.arcticBuy }); return true; }
+    if (key === "me") { openLogin(); return true; }
+    return false;
+  };
 
   const isActive = (it: Item) => {
     if (activeKey) return activeKey === it.key;
@@ -90,13 +100,14 @@ export default function ArcticDock({
         if (onSelect) {
           return (
             <button key={it.key} type="button" aria-label={it.label} title={it.label} className={cls}
-              onClick={() => { if (!onSelect(it.key)) window.location.href = it.href; }}>
+              onClick={() => { if (!onSelect(it.key) && !guestLogin(it.key)) window.location.href = it.href; }}>
               {icon}
             </button>
           );
         }
         return (
-          <Link key={it.key} href={it.href} aria-label={it.label} title={it.label} className={cls}>
+          <Link key={it.key} href={it.href} aria-label={it.label} title={it.label} className={cls}
+            onClick={(e) => { if (guestLogin(it.key)) e.preventDefault(); }}>
             {icon}
           </Link>
         );

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Dropdown from "../components/Dropdown";
 import ItemIcon from "../components/ItemIcon";
@@ -33,6 +33,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useArcticOrigin } from "./fromLevel";
 import { ownedIdsOf } from "./owned";
 import { InventoryPopup } from "../components/Inventory";
+import { openLogin, LOGIN_CTX } from "../components/LoginPrompt";
+import { CART_KEY, WISH_KEY, readShopList, writeShopList, useShopUid } from "./shopStore";
 
 import { ADMIN_USERS } from "@/lib/admins";
 
@@ -248,18 +250,22 @@ export default function ArcticShopBody({
   }, [catOpen]);
 
   // 저장된 장바구니를 먼저 읽고, 그 뒤부터만 저장한다 (첫 렌더에 빈 배열로 덮어쓰지 않게)
-  const [cartLoaded, setCartLoaded] = useState(false);
+  //    📌 2026-10-04 계정마다(./shopStore) — 세션을 다 읽은 뒤 그 계정 것을 읽는다. 로그인 전은 빈 장바구니(배지 0) · 저장 안 함.
+  //       읽은 계정(shopOwner)과 지금 계정이 같을 때만 저장한다 — 계정이 바뀌는 순간 옛 목록을 새 계정 키에 쓰지 않게
+  const { uid: shopUid, ready: shopReady } = useShopUid();
+  const [shopOwner, setShopOwner] = useState<string | null>(null);
+  const [wish, setWish] = useState<string[]>([]);
+  const cartLoaded = shopOwner !== null;
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("iglooShopCart");
-      if (raw) setCart(JSON.parse(raw));
-    } catch {}
-    setCartLoaded(true);
-  }, []);
+    if (!shopReady) return;
+    setCart(readShopList(CART_KEY, shopUid));
+    setWish(readShopList<string>(WISH_KEY, shopUid));
+    setShopOwner(shopUid);
+  }, [shopUid, shopReady]);
   useEffect(() => {
-    if (!cartLoaded) return;
-    try { localStorage.setItem("iglooShopCart", JSON.stringify(cart)); } catch {}
-  }, [cart, cartLoaded]);
+    if (shopOwner === null || shopOwner !== shopUid) return;
+    writeShopList(CART_KEY, shopUid, cart);
+  }, [cart, shopOwner, shopUid]);
 
   // 📌 상품은 1인 1개 — 이미 구매한 상품은 다시 담거나 살 수 없다 (만료 · 환불 건은 보유가 아니다 — owned.ts)
   const ownedItemIds = useMemo(
@@ -272,7 +278,7 @@ export default function ArcticShopBody({
   const daysFor = (item: any) => (isTimed(item) ? (pickDays[item._id] ?? item._pick?.days ?? cardPick(item)?.days ?? durationOptions(item)[0]?.days ?? 0) : 0);
 
   const addToCart = (item: any) => {
-    if (!isLoggedIn) return signIn("discord");
+    if (!isLoggedIn) return openLogin({ context: LOGIN_CTX.arcticBuy });
     if (ownedItemIds.has(item._id)) {
       setCartToast("이미 구매하신 상품입니다");
       setTimeout(() => setCartToast(""), 1800);
@@ -302,8 +308,7 @@ export default function ArcticShopBody({
   );
   const cartCount = cartRows.reduce((n, r) => n + r.qty, 0);
 
-  // 📌 찜 — 로컬에 보관 (상품 id 목록)
-  const [wish, setWish] = useState<string[]>([]);
+  // 📌 찜 — 로컬에 보관 (상품 id 목록 — state 는 위 장바구니 옆에 둔다, 같이 읽는다)
   const [wishOnly, setWishOnly] = useState(false);
   const [invOpen, setInvOpen] = useState(false); // 인벤토리 팝업 — 옛 주소 /arctic/inventory 는 ?panel=bag 로 여기서 연다
 
@@ -318,7 +323,7 @@ export default function ArcticShopBody({
     if (panel === "search") setShowMobileSearch(true);
     if (panel === "bag" && status !== "loading") {
       if (isLoggedIn) setInvOpen(true);
-      else signIn("discord");
+      else openLogin();
       // 레벨의 ?bag=1 과 같이 — 남겨 두면 뒤로가기 · 새로고침 때 팝업이 제멋대로 다시 열린다
       const u = new URL(window.location.href);
       u.searchParams.delete("panel");
@@ -331,18 +336,16 @@ export default function ArcticShopBody({
     if (q) submitSearch(q);
   }, [searchParams, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 찜도 장바구니와 같이 계정마다 — 읽기는 위 장바구니 effect 가 함께 한다
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("iglooShopWish");
-      if (raw) setWish(JSON.parse(raw));
-    } catch {}
-  }, []);
-  useEffect(() => {
-    try { localStorage.setItem("iglooShopWish", JSON.stringify(wish)); } catch {}
-  }, [wish]);
+    if (shopOwner === null || shopOwner !== shopUid) return;
+    writeShopList(WISH_KEY, shopUid, wish);
+  }, [wish, shopOwner, shopUid]);
 
 
   const toggleWish = (item: any) => {
+    // 📌 2026-10-04 로그인 전에는 상품을 보기만 — 찜 · 담기 · 구매는 로그인 창(ARCTIC · 구매)
+    if (!isLoggedIn) return openLogin({ context: LOGIN_CTX.arcticBuy });
     setWish((prev) => (prev.includes(item._id) ? prev.filter((x) => x !== item._id) : [...prev, item._id]));
     setCartToast(wish.includes(item._id) ? `${item.name} 상품의 찜을 해제했습니다` : `${item.name} 상품을 찜했습니다`);
     setTimeout(() => setCartToast(""), 1600);
@@ -556,7 +559,7 @@ export default function ArcticShopBody({
   const buyEnough = myXp != null && myXp >= buyXp && buyPointAll <= (myPoint ?? 0);
 
   const openBuy = (item: any) => {
-    if (!isLoggedIn) return signIn("discord");
+    if (!isLoggedIn) return openLogin({ context: LOGIN_CTX.arcticBuy });
     // 고른 기간을 그대로 들고 모달로 넘어간다
     item = isTimed(item) ? { ...item, _days: daysFor(item) } : item;
     if (cart.some((c) => c.itemId === item._id)) {
@@ -1049,8 +1052,7 @@ export default function ArcticShopBody({
         onSelect={(key) => {
           if (key === "home") { setView("home"); clearSearch(); window.scrollTo({ top: 0, behavior: "smooth" }); return true; }
           if (key === "search") { setShowMobileSearch(true); return true; }
-          if (key === "me" && !isLoggedIn) { signIn("discord"); return true; }
-          return false; // 장바구니·내 정보는 이동
+          return false; // 장바구니·내 정보는 이동 (로그인 전이면 독이 로그인 창을 연다 — ArcticDock)
         }}
       />
 

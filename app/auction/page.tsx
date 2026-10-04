@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Reveal, LuxStyles } from "../components/Lux";
 import { AuctionStyles } from "../components/AuctionStyles";
+import { openLogin, LOGIN_CTX } from "../components/LoginPrompt";
 
 
 import { ADMIN_USERS } from "@/lib/admins";
@@ -95,24 +96,18 @@ export default function AuctionListPage() {
 
   // 📌 입장 — 티켓이 절취선을 따라 찢어지고 사라진 뒤 이동한다
   //    종료된 경매는 이미 찢긴 티켓이라 연출 없이 바로 들어간다
+  //    📌 2026-10-04 로그인 전에는 목록만 — 들어가려 하면 그 자리에서 로그인 창(경매 · 입장). 티켓은 찢지 않는다
   const enter = (id: string, skipTear = false) => {
     if (tearing) return;
+    if (status === "unauthenticated") { openLogin({ context: LOGIN_CTX.auction }); return; }
     if (skipTear) { router.push(`/auction/${id}`); return; }
     setTearing(id);
     playTear();
     setTimeout(() => router.push(`/auction/${id}`), 720);
   };
 
+  // 📌 2026-10-04 로그인 전에도 경매장(목록)은 연다 — 예전엔 화면 전체가 '로그인 필요'였다. 입장만 로그인 창(위 enter)
   if (status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500">로딩 중...</div>;
-  if (status === "unauthenticated") {
-    return (
-      <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
-        <h2 className="text-2xl font-black text-white mb-4 tracking-tight">로그인 필요</h2>
-        <p className="text-gray-400 mb-8 text-sm">경매를 보시려면 로그인이 필요합니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#5865F2]/20">Discord 로그인</button>
-      </main>
-    );
-  }
 
   return (
     <main className="w-full flex-1 flex flex-col relative auc">
@@ -279,7 +274,7 @@ export default function AuctionListPage() {
             {past.map((a, i) => (
               <Reveal key={a._id} delay={Math.min(i, 8) * 70}>
                 <div
-                  onClick={() => router.push(`/auction/${a._id}`)}
+                  onClick={() => enter(a._id, true)}
                   className="auc-past group cursor-pointer border-b border-white/[0.07] py-5 flex items-center gap-5"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-white/15 shrink-0 group-hover:bg-white transition-colors" />
