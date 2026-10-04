@@ -25,6 +25,9 @@ const UserXpSchema = new mongoose.Schema({
   // 📌 진행 중인 음성 XP 바퀴 — 봇이 20초마다 적고 다 주면 지운다(features/voiceTime.js). 재시작 뒤 이어 가거나 그 사이 나갔으면 머문 만큼 준다.
   //    { ch, chName, pc, sec, xp, muS, dfS, lvS, nS, at } (models/UserXp.js 와 같은 칸)
   voiceCycle: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  // 📌 마지막 활동 시각 — 음성에 있는 동안의 마지막 채팅 · 음성 상태 바뀜 · 명령 · 버튼. features/activity.js 가 20초마다 적고 음성에서 나가면 비운다.
+  //    재시작 뒤 읽어 음성 XP 로그의 무활동(ctx.idle)을 이어 센다 (models/UserXp.js 와 같은 칸)
+  lastActiveAt: { type: Date, default: null },
   // 📌 음성 XP 정지 — 사이트 관리자가 세우고 봇은 읽기만 한다(features/voiceXp.js 가 이 사람의 음성 주기를 통째로 건너뛴다).
   //    (models/UserXp.js 와 이름·기본값이 반드시 같아야 한다)
   voiceXpOff: { type: Boolean, default: false },
@@ -217,7 +220,9 @@ const XpBoostSchema = new mongoose.Schema({
 });
 export const XpBoost = mongoose.models.XpBoost || mongoose.model("XpBoost", XpBoostSchema);
 
-// XP 지급 로그 (60일 TTL — 월간 랭킹 집계에도 사용)
+// XP 지급 로그 (100일 TTL — 월간 랭킹 집계에도 사용)
+//    📌 2026-10-04 "보관 기간을 시즌 길이(약 92일)보다 길게, 예를 들어 100일로" — 60일 → 100일. 패스 진행도 · 내역이 시즌 전체로 잡히게.
+//       이미 있는 TTL 인덱스는 스키마만 바꿔서는 안 바뀐다(옵션이 다른 같은 인덱스) — scripts/rules-review-botstate-xplog-ttl.mjs 로 collMod. models/XpLog.js 와 같은 값
 const XpLogSchema = new mongoose.Schema({
   userId: { type: String, index: true },
   displayName: { type: String, default: "" },
@@ -244,7 +249,7 @@ const XpLogSchema = new mongoose.Schema({
   },
   // 📌 음성 지급 줄에만 — 그 주기(초). 관리 › 이상 활동이 로그마다 이 값으로 간격 · 시간을 센다(lib/adminActivity.js). models/XpLog.js 와 같은 칸
   sec: { type: Number },
-  createdAt: { type: Date, default: Date.now, index: { expires: 60 * 60 * 24 * 60 } },
+  createdAt: { type: Date, default: Date.now, index: { expires: 60 * 60 * 24 * 100 } },
 });
 export const XpLog = mongoose.models.XpLog || mongoose.model("XpLog", XpLogSchema);
 

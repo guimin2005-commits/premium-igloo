@@ -1,7 +1,9 @@
 import mongoose from "mongoose";
 
 // 📌 XP 지급 로그 — 봇이 기록, 레벨 대시보드(로그 탭)·월간 랭킹에서 사용
-//    60일 후 자동 삭제 (TTL 인덱스, DB 용량 보호 / 월간 집계에 한 달치가 온전히 남도록)
+//    100일 후 자동 삭제 (TTL 인덱스, DB 용량 보호 / 월간 집계에 한 달치가 온전히 남도록)
+//    📌 2026-10-04 "보관 기간을 시즌 길이(약 92일)보다 길게, 예를 들어 100일로" — 60일 → 100일. 패스 진행도 · 내역이 시즌 전체로 잡히게.
+//       이미 있는 TTL 인덱스는 스키마만 바꿔서는 안 바뀐다(옵션이 다른 같은 인덱스) — scripts/rules-review-botstate-xplog-ttl.mjs 로 collMod. bot/src/db.js 와 같은 값
 const XpLogSchema = new mongoose.Schema({
   userId: { type: String, index: true },
   displayName: { type: String, default: "" },
@@ -25,7 +27,7 @@ const XpLogSchema = new mongoose.Schema({
   },
   // 📌 음성 지급 줄에만 — 그 주기(초, 봇 bot/src/xp.js). 관리 › 이상 활동이 로그마다 센다(lib/adminActivity.js). bot/src/db.js 와 같은 칸
   sec: { type: Number },
-  createdAt: { type: Date, default: Date.now, index: { expires: 60 * 60 * 24 * 60 } },
+  createdAt: { type: Date, default: Date.now, index: { expires: 60 * 60 * 24 * 100 } },
 });
 
 export default mongoose.models.XpLog || mongoose.model("XpLog", XpLogSchema);

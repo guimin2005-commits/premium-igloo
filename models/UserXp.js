@@ -27,6 +27,9 @@ const UserXpSchema = new mongoose.Schema({
   voiceTodayDate: { type: String, default: "" },
   // 📌 진행 중인 음성 XP 바퀴 — 봇만 쓴다(bot/src/features/voiceTime.js). 사람마다 5분을 채우면 1회분, 못 채우고 나가면 머문 만큼 주고 지운다
   voiceCycle: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  // 📌 마지막 활동 시각 — 봇만 쓴다(bot/src/features/activity.js). 음성에 있는 동안의 마지막 채팅 · 음성 상태 바뀜 · 명령 · 버튼을 20초마다 적고 음성에서 나가면 비운다.
+  //    봇이 재시작돼도 음성 XP 로그의 무활동(ctx.idle)을 이어 센다. bot/src/db.js 와 같은 칸
+  lastActiveAt: { type: Date, default: null },
   // 📌 음성 XP 정지 — 관리자가 세운다(POST /api/admin/users/voice-stop). 켜져 있으면 봇이 이 사람의 음성 주기를 통째로 건너뛴다
   //    (음성 XP · voiceSeconds · 오늘 누적 분 · 자동 출석 · 하루 음성 효과). bot/src/db.js 와 같은 칸
   voiceXpOff: { type: Boolean, default: false },
@@ -36,7 +39,7 @@ const UserXpSchema = new mongoose.Schema({
   effectDaily: { type: Map, of: String, default: {} },
   maxLevel: { type: Number, default: 0 },
   // 📌 시즌 패스 — 새 재화를 만들지 않고 "이번 시즌에 번 XP"(xp - passBaseXp)를 진행도로 쓴다.
-  //    XpLog 는 60일 TTL 이라 시즌 전체를 셀 수 없으므로, 시즌 시작 시점의 누적 XP를 찍어두고 뺀다.
+  //    XpLog 는 TTL(100일)로 지워지므로 지난 기록에 기대지 않고, 시즌 시작 시점의 누적 XP를 찍어두고 뺀다.
   passSeason: { type: Number, default: 0 },        // SEASON.number 와 다르면 새 시즌 — 조회 시점에 다시 스냅샷한다
   passBaseXp: { type: Number, default: 0 },        // 시즌 시작 시점의 누적 XP
   passUnlocked: { type: Boolean, default: false }, // 프리미엄 트랙 해금 여부 (시즌마다 초기화)
