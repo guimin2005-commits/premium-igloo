@@ -76,7 +76,6 @@ export default function NoticeDetailPage() {
 
             <div className="flex items-center gap-3 mt-5 pb-5 border-b border-[#ededed]">
               <span className="text-[11px] font-bold text-[#8a8a8a] tabular-nums">{fmt(shown)}</span>
-              {post.author && <span className="text-[11px] font-bold text-[#a3a3a3]">{post.author}</span>}
               <button
                 onClick={() => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 1600); }}
                 className="ml-auto inline-grid place-items-center rounded-full px-3.5 py-1.5 text-[10px] font-bold bg-[#f2f2f2] hover:bg-[#e0e0e0] text-[#5a5a5a] transition-colors">

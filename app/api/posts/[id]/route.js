@@ -38,10 +38,11 @@ export async function GET(request, { params }) {
         return NextResponse.json({ error: "존재하지 않는 글입니다." }, { status: 404 });
       }
     }
-    // 📌 비공개 대진표는 관리자에게만 — 목록 API 와 같은 기준
-    if (post.tournamentBracket && !bracketVisible(post) && !isAdminName((await getSession())?.user?.name)) {
+    // 📌 관리자가 아니면 — 비공개 대진표는 비우고(목록 API 와 같은 기준), 작성자(관리자 디스코드 이름)는 빼고 보낸다(2026-10-04)
+    if (!isAdminName((await getSession())?.user?.name)) {
       const o = post.toObject();
-      o.tournamentBracket = "";
+      if (o.tournamentBracket && !bracketVisible(post)) o.tournamentBracket = "";
+      delete o.author;
       return NextResponse.json({ success: true, data: o }, { status: 200 });
     }
     return NextResponse.json({ success: true, data: post }, { status: 200 });
