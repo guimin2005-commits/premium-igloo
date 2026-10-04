@@ -370,6 +370,26 @@ export const MESSAGE_DEFS = {
       }),
     },
   },
+  // 📌 2026-10-04 AFK 방지 시스템(bot/src/features/afkCheck.js) — 태그(멘션)는 글, 내용은 임베드. 버튼은 봇이 붙인다
+  afkCheck: {
+    group: "channel",
+    label: "AFK 방지 시스템",
+    desc: "음성 채널에 혼자 오래 있으면 그 음성 채널 채팅에 접속 확인 버튼과 함께 보냅니다.",
+    vars: [
+      { name: "minutes", label: "응답 시간(분)", sample: 5 },
+      { name: "channel", label: "음성 채널", sample: "🎧┆VOICE #2" },
+    ],
+    defaults: {
+      enabled: true,
+      content: "{user}",
+      embed: embed({
+        color: "#e91e3f",
+        title: "AFK 방지 시스템",
+        description: "접속 확인 · {minutes}분 안에 아래 버튼을 눌러 주세요",
+        footerText: FOOTER_LEVEL,
+      }),
+    },
+  },
   expiryReminder: {
     group: "dm",
     label: "만료 임박",

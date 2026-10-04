@@ -18,6 +18,7 @@ import { Events, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, Per
 import { getSettings } from "../botSettings.js";
 import { UserXp } from "../db.js";
 import { getChannelPolicy } from "../channelConfigs.js";
+import { buildMessage, commonVars } from "../botMessages.js";
 import { config } from "../config.js";
 
 const TICK_MS = 30_000;
@@ -87,8 +88,11 @@ async function sendPrompt(userId, vs, s) {
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`${PREFIX}${userId}:${nonce}`).setLabel("확인").setStyle(ButtonStyle.Primary)
   );
+  // 📌 2026-10-04 "태그 제외하고 내용은 임베드로" — 관리 › 봇 메시지 디자인의 afkCheck(글 = 멘션, 임베드 = 내용). 꺼 두면 확인을 보내지 않는다(옮기지도 않는다)
+  const payload = buildMessage("afkCheck", { ...commonVars(vs.member, vs.guild), minutes: reply, channel: ch.name || "" });
+  if (!payload) return null;
   const msg = await ch
-    .send({ content: `<@${userId}> 접속 확인 · ${reply}분 안에 눌러 주세요`, components: [row], allowedMentions: { users: [userId] } })
+    .send({ ...payload, components: [row], allowedMentions: { users: [userId] } })
     .catch((e) => {
       console.error(`잠수 확인 보내기 실패 (${userId}):`, e?.message || e);
       return null;
