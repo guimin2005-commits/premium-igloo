@@ -91,15 +91,18 @@ export default function AdminScrimPage() {
       .catch(() => {});
   }, []);
 
-  const post = async (payload: any) => {
+  /* 📌 2026-10-04 실패 문구 — onFail 을 넘기면 토스트 대신 부른 쪽이 띄운다.
+     창(z-[120]) 위에서 보낸 요청은 토스트(z-[60])가 창 뒤에 깔려 안 보이기 때문. */
+  const post = async (payload: any, onFail?: (m: string) => void) => {
     setBusy(true);
+    const fail = (m: string) => { if (onFail) onFail(m); else setToast(m); return null; };
     try {
       const r = await fetch("/api/room", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const d = await r.json();
-      if (!d?.success) { setToast(d?.message || "처리하지 못했습니다"); return null; }
+      if (!d?.success) return fail(d?.message || "처리하지 못했습니다");
       await load();
       return d;
-    } catch { setToast("서버 통신 오류"); return null; }
+    } catch { return fail("서버 통신 오류"); }
     finally { setBusy(false); }
   };
 
@@ -621,7 +624,7 @@ function NoticeView({ data, busy, post, setToast }: { data: any; busy: boolean; 
 
 /* ── 스크림 매칭 — 두 팀을 골라 겹치는 시간을 계산하고 경기를 확정한다.
       한 팀의 룸이 아니라 여기 있는 이유: 매칭은 두 팀 사이의 일이다. ── */
-function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; post: (p: any) => Promise<any>; setToast: (m: string) => void }) {
+function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; post: (p: any, onFail?: (m: string) => void) => Promise<any>; setToast: (m: string) => void }) {
   const G2 = "#00e07b";
   const teams: any[] = data?.teams || [];
   const fixtures: any[] = data?.fixtures || [];
@@ -643,6 +646,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
   // 일정 알림을 보내기 전에 무엇이 누구에게 가는지 보여주는 창
   const [notifyFx, setNotifyFx] = useState<any>(null);
   const [notifyAt, setNotifyAt] = useState<Date | null>(null);   // 예약 시각 (null = 지금)
+  const [notifyErr, setNotifyErr] = useState<string | null>(null); // 서버가 거절한 이유 — 창을 닫지 않고 보여 준다
 
   const DAYS = useMemo(() => {
     if (!season) return [];
@@ -1070,7 +1074,7 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                   </span>
                 );
               })}
-              <button disabled={busy} onClick={() => { setNotifyFx(f); setNotifyAt(null); }}
+              <button disabled={busy} onClick={() => { setNotifyFx(f); setNotifyAt(null); setNotifyErr(null); }}
                 className="shrink-0 esp-cut-sm px-2.5 py-1 text-[10px] font-black border transition-colors disabled:opacity-40"
                 style={{ borderColor: "rgba(56,189,248,.4)", background: "rgba(56,189,248,.12)", color: "#7dd3fc" }}>알림</button>
               <button disabled={busy}
@@ -1105,16 +1109,23 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                 at={notifyFx.at} matchKind={notifyFx.kind} copy={season?.fixtureMsg} />
               <p className="mt-2 text-[11px] font-bold text-gray-600">받는 사람마다 '우리 팀' 과 '상대' 가 각자 기준으로 바뀝니다.</p>
 
-              <SendWhen value={notifyAt} onChange={setNotifyAt} anchor={new Date(notifyFx.at)} />
+              <SendWhen value={notifyAt} onChange={(d) => { setNotifyAt(d); setNotifyErr(null); }} anchor={new Date(notifyFx.at)} />
+
+              {/* 📌 2026-10-04 거절되면 창을 열어 둔 채 서버 문구를 보여 준다 — 시각만 다시 고르면 된다 */}
+              {notifyErr && (
+                <p role="alert" className="mt-4 esp-cut-sm px-3 py-2 text-[11px] font-black border border-rose-400/30 bg-rose-400/[0.08] text-rose-300">{notifyErr}</p>
+              )}
 
               <div className="flex gap-2 mt-5">
                 <button onClick={() => setNotifyFx(null)}
                   className="flex-1 esp-cut-sm py-3 text-[12px] font-black bg-white/[0.05] text-gray-400 hover:text-white transition-colors">취소</button>
                 <button disabled={busy} onClick={async () => {
-                  const r = await post({ action: "fixture:notify", fixtureId: notifyFx._id, sendAt: notifyAt?.toISOString() });
+                  setNotifyErr(null);
+                  const r = await post({ action: "fixture:notify", fixtureId: notifyFx._id, sendAt: notifyAt?.toISOString() }, setNotifyErr);
+                  if (!r) return; // 실패 — 닫지 않는다
                   const when = notifyAt ? `${dF(notifyAt)} ${pad(notifyAt.getHours())}:${pad(notifyAt.getMinutes())} 에 ` : "";
                   setNotifyFx(null);
-                  if (r) setToast(r.queued ? `${when}${r.queued}명에게 DM 을 보냅니다${r.skipped ? ` (${r.skipped}명은 이미 받음)` : ""}` : "이미 모두 받았습니다");
+                  setToast(r.queued ? `${when}${r.queued}명에게 DM 을 보냅니다${r.skipped ? ` (${r.skipped}명은 이미 받음)` : ""}` : "이미 모두 받았습니다");
                 }}
                   className="flex-[1.4] esp-cut-sm py-3 text-[12px] font-black transition-all active:scale-[.98] disabled:opacity-40"
                   style={{ background: "#38bdf8", color: "#04121a" }}>
@@ -1122,7 +1133,8 @@ function MatchView({ data, busy, post, setToast }: { data: any; busy: boolean; p
                 </button>
               </div>
               <button disabled={busy} onClick={async () => {
-                const r = await post({ action: "fixture:notifyTest", fixtureId: notifyFx._id });
+                setNotifyErr(null);
+                const r = await post({ action: "fixture:notifyTest", fixtureId: notifyFx._id }, setNotifyErr);
                 if (r) setToast("내 디스코드 DM 으로 보냈습니다");
               }}
                 className="w-full mt-2 esp-cut-sm py-2.5 text-[11px] font-black border border-white/12 bg-white/[0.03] text-gray-400 hover:text-white transition-colors disabled:opacity-40">

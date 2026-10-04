@@ -3539,7 +3539,7 @@ export default function LevelPage() {
                       ) : (
                         // 📌 TOP 10 밖이면 목록 아래 내 줄 — 누적 · 이번 달은 랭킹 API 의 me. 현재는 순위 숫자만 내 정보(/api/xp/me)의 것으로 —
                         //    같은 화면 프로필 카드 "랭크 #N" · 봇 /레벨 · /랭크 와 같은 순위. 배지 · 이름은 랭킹 API 의 me
-                        //    2026-10-04 동점 규칙 하나 — XP 내림차순, 동점은 userId 오름차순(목록 · 내 정보 · 봇이 모두 같다)
+                        //    2026-10-04 동점 규칙 하나 — XP 내림차순, 동점은 userId 오름차순(글자 비교 — 가입 순서 아님. 목록 · 내 정보 · 봇이 모두 같다)
                         <RankRows
                           rows={lb[lbTab].data}
                           myId={session.user.id}

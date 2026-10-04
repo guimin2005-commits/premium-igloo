@@ -23,7 +23,8 @@ const kstMonthStart = () => {
 // 📌 보상 XP — 퀘스트 · 시즌 패스 · 운영진 지급 · 쿠폰 · 서포터즈 등 지급 대기열(Payout)로 들어온 XP.
 //    봇 processPayouts 는 UserXp.xp 만 올리고 XpLog 를 쓰지 않아, XpLog 만 보면 피드 · '오늘 획득'에서 빠진다.
 //    2026-10-04 "보상 XP도 같이 보여서 'XP가 어디서 늘었는지' 바로 알 수 있습니다" — 반영된(paid) 양수 XP 지급만 더한다.
-//    운영진 회수 · 초기화(음수 · 0)는 '획득'이 아니라 넣지 않는다. 빙옥(currency "point")은 XP 가 아니라 뺀다.
+//    운영진 회수 · 초기화(음수 · 0)는 '획득'이 아니라 넣지 않는다 — 초기화 기록(kind "reset" · 관리자 · 퇴장)은 금액과 상관없이 뺀다(랭킹 monthBoard 와 같다).
+//    빙옥(currency "point")은 XP 가 아니라 뺀다.
 //    줄 이름은 내역(app/api/xp/ledger)과 같다 — 사유(관리자 이름 꼬리는 뗀다), 비었으면 출처 이름
 const FEED_LIMIT = 15;
 const PAYOUT_SOURCE = {
@@ -36,10 +37,10 @@ const PAYOUT_SOURCE = {
   referral: "초대 보상",
   "role-refund": "역할 환불",
 };
-const GAIN_PAYOUT = (userId) => ({ userId, status: "paid", currency: { $ne: "point" }, amount: { $gt: 0 } });
+const GAIN_PAYOUT = (userId) => ({ userId, status: "paid", currency: { $ne: "point" }, amount: { $gt: 0 }, kind: { $ne: "reset" } });
 
 // ── [조회] 로그인한 유저 본인의 최근 XP 로그 + 오늘/이번 달 획득 합산 ──
-//    내 대시보드(/level) 실시간 위젯용. 로그는 봇이 기록하며 60일 TTL. 보상 XP(Payout)는 위 GAIN_PAYOUT 을 함께 센다.
+//    내 대시보드(/level) 실시간 위젯용. 로그는 봇이 기록하며 100일 TTL(models/XpLog). 보상 XP(Payout)는 위 GAIN_PAYOUT 을 함께 센다.
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);

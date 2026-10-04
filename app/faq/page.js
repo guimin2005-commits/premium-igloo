@@ -16,10 +16,11 @@ const RATE = POINT_RATE.toLocaleString("ko-KR");
 const RATE_EX_XP = POINT_RATE * 2.5;
 
 // 📌 음소거 문장 — 옛 FAQ 에 있던 감소율을 실제 설정값(/api/xp/policy · 봇 getMuteMultiplier)으로. 2026-10-04 "약관·인증 화면·FAQ의 숫자와 조건을 지금 실제 동작에 맞게"
-//    적용 기준 both = 둘 다 꺼야, any = 하나라도. 막기면 획득 불가, 끔이면 그 구절이 빠진다. 받기 전 · 못 받으면 감소율은 "—"
+//    적용 기준 both = 둘 다 꺼야, any = 하나라도. 막기면 획득 불가, 끔 · 감소율 0%(봇 배수 1)면 그 구절이 빠진다.
+//    받기 전 · 못 받으면 구절을 빼고 잠수 채널 문장만 — 설정을 모르는 채로 기준 · 감소율을 단정하지 않게("—%" 가 문장 안에 보이지 않게)
 const muteClause = (p) => {
-  if (!p) return "마이크 및 헤드셋 모두 음소거 시 XP 획득량이 —% 감소되며, ";
-  if (p.muteMode === "off") return "";
+  if (!p) return "";
+  if (p.muteMode === "off" || (p.muteMode !== "block" && !(Number(p.muteReducePct) > 0))) return "";
   const who = p.muteTarget === "any" ? "마이크 또는 헤드셋 음소거 시" : "마이크 및 헤드셋 모두 음소거 시";
   return p.muteMode === "block" ? `${who} XP 획득이 불가하며, ` : `${who} XP 획득량이 ${Number(p.muteReducePct).toLocaleString("ko-KR")}% 감소되며, `;
 };
