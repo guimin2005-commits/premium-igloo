@@ -59,6 +59,15 @@ export async function GET(request) {
       });
     }
 
+    // 📌 2026-10-04 "공지사항에 elahw.06 적혀있는 거 좀 빼" — 작성자(관리자 디스코드 이름)는 관리자 요청에만 싣는다. 화면에도 그리지 않는다
+    if (!isAdminName((await getSession())?.user?.name)) {
+      data = data.map((p) => {
+        const o = typeof p.toObject === "function" ? p.toObject() : { ...p };
+        delete o.author;
+        return o;
+      });
+    }
+
     return NextResponse.json({ success: true, data }, { status: 200 });
   } catch (error) {
     console.error("조회 에러:", error);

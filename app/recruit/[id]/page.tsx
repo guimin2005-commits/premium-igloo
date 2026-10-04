@@ -144,7 +144,6 @@ export default function RecruitDetailPage() {
             <h1 className="text-[24px] md:text-[32px] font-black tracking-tight leading-snug break-keep">{post.title}</h1>
 
             <div className="flex items-center gap-3 mt-5 pb-5 border-b border-[#ededed]">
-              {post.author && <span className="text-[11px] font-bold text-[#a3a3a3]">{post.author}</span>}
               <span className="text-[11px] font-bold text-[#8a8a8a] tabular-nums">{fmt(post.publishAt || post.createdAt)}</span>
             </div>
 

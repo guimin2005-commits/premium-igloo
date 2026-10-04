@@ -157,7 +157,6 @@ function NoticeArticle({ p }: { p: PreviewPost }) {
 
         <div className="flex items-center gap-3 mt-5 pb-5 border-b border-[#ededed]">
           <span className="text-[11px] font-bold text-[#8a8a8a] tabular-nums">{fmtWd(shownAt(p))}</span>
-          {p.author && <span className="text-[11px] font-bold text-[#a3a3a3]">{p.author}</span>}
           <CopyChip />
         </div>
 
@@ -190,7 +189,6 @@ function EventArticle({ p }: { p: PreviewPost }) {
         <h1 className="text-[24px] md:text-[32px] font-black tracking-tight leading-snug break-keep"><Title p={p} /></h1>
 
         <div className="flex items-center gap-3 mt-5 pb-5 border-b border-[#ededed]">
-          {p.author && <span className="text-[11px] font-bold text-[#a3a3a3]">{p.author}</span>}
           <CopyChip />
         </div>
 
